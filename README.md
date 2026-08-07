@@ -7,35 +7,36 @@
 [![Agent Plugins 1.0](https://img.shields.io/badge/Agent%20Plugins-1.0.0-7257FF)](https://agent-plugins.org/specification)
 [![License](https://img.shields.io/badge/license-Apache--2.0-20A4C8)](LICENSE)
 
-26 community-maintained plugins packaged for the
-[Agent Plugins 1.0](https://agent-plugins.org/specification) open standard.
-Context7 is verified through a Codex marketplace install, Cursor local load, and
-Kiro folder import. VS Code and GitHub Copilot support the standard, but this
-release has no repository-specific adapter or runtime evidence for those clients.
+Give your AI agent ready-made abilities: search current documentation, navigate
+code, debug browsers, work with cloud tools, and more. Pick one plugin and add
+others only when you need them.
 
-## Start in one minute
+This repository contains 26 open-source plugins packaged for the
+[Agent Plugins 1.0](https://agent-plugins.org/specification) standard.
 
-You only need **one** plugin. Context7 is a simple first choice and requires no
-account. It requires a current Codex CLI and Node.js with `npx`:
+## Try one plugin
+
+Context7 is an easy first choice. It finds up-to-date library documentation and
+requires no account. With a current Codex CLI and Node.js installed, run:
 
 ```bash
 codex plugin marketplace add 777genius/universal-agent-plugins --ref v0.1.1
 codex plugin add context7@universal-agent-plugins
 ```
 
-Start a new Codex session and try:
+Open a new Codex session and ask:
 
 ```text
 Use Context7 to find the current Playwright quick start and summarize it with source links.
 ```
 
-That is the complete first run. Agent Code Navigator, Context7, and the other
-plugins are independent alternatives, not required steps in a sequence.
+That's it. Every plugin is independent, so you never need to install the whole
+catalog or follow a chain of plugins.
 
-Using another agent? Follow the short [client compatibility and setup guide](docs/QUICKSTART.md)
-for Cursor, VS Code, GitHub Copilot, Kiro, and ChatGPT.
+Not using Codex? Choose Cursor, Kiro, ChatGPT, VS Code, or GitHub Copilot in the
+[client setup guide](docs/QUICKSTART.md).
 
-## Pick what you need
+## Popular choices
 
 | Plugin | What it adds | Login |
 | --- | --- | --- |
@@ -44,40 +45,25 @@ for Cursor, VS Code, GitHub Copilot, Kiro, and ChatGPT.
 | [`cloudflare-docs`](plugins/cloudflare-docs) | Cloudflare documentation search | No |
 | [`chrome-devtools`](plugins/chrome-devtools) | Browser debugging tools | Local browser |
 
-More copy-ready examples are in [plugins to try first](docs/HERO_PLUGINS.md).
-Installation status and authentication requirements are tracked in the
-[test matrix](docs/TEST_MATRIX.md).
+Each one installs separately. See [plugins to try first](docs/HERO_PLUGINS.md)
+for copy-ready examples, or browse all 26 packages in [`plugins/`](plugins).
 
-## Catalog
+## Use them with your agent
 
-The repository includes plugins for code intelligence, browser automation,
-design, cloud platforms, deployment, source control, project management,
-databases, observability, payments, and analytics.
+Agent Plugins 1.0 gives every package a shared structure. Compatible clients can
+reuse the parts they support, while installation, permissions, and OAuth remain
+client-specific.
 
-All 26 packages pass the standard schemas. Runtime depth is tracked separately:
-Context7 has an automated public Codex install and tool call, plus Cursor
-local-load and Kiro folder-import evidence. Other runtime and OAuth checks are
-listed per package instead of being inferred from schema validation.
+| Client | Context7 check |
+| --- | --- |
+| Codex | Public marketplace install and real tool call |
+| Cursor | Local plugin load |
+| Kiro | Folder import |
 
-Browse all 26 packages in [`plugins/`](plugins) or check
-[compatibility and authentication](docs/COMPATIBILITY.md) before connecting a
-private service.
-
-## How it works
-
-Each portable package contains a standard `plugin.json` plus optional `mcp.json`
-and Agent Skills. No package stores credentials. The portable packages under
-`plugins/` are the source of truth; the OpenAI-specific layout under
-[`compat/openai`](compat/openai) is generated from them.
-
-Marketplace manifests are client adapters, not part of Agent Plugins 1.0. The
-OpenAI marketplace file in this repository wraps the same portable packages;
-other clients may require different catalog adapters.
-
-Agent Plugins 1.0 standardizes packaging. Installation, OAuth, permissions, and
-marketplace review are still managed by each client. The 1.0.0 specification is
-published; verified behavior and current limits are recorded in
-[verification](docs/VERIFICATION.md) and the [client matrix](docs/CLIENTS.md).
+All 26 packages pass the standard schemas. That does not mean every service or
+OAuth flow has been tested in every client, and the standard is not a universal
+marketplace. See the [test matrix](docs/TEST_MATRIX.md) for exact results and the
+[compatibility guide](docs/COMPATIBILITY.md) before connecting a private service.
 
 ## Safety
 
@@ -88,7 +74,7 @@ published; verified behavior and current limits are recorded in
 
 See [SECURITY.md](SECURITY.md) for reporting and security boundaries.
 
-## Project
+## About this project
 
 This repository rebuilds the portable subset of
 [`universal-plugins-for-ai-agents`](https://github.com/777genius/universal-plugins-for-ai-agents)
