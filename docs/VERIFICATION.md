@@ -29,11 +29,11 @@ in `plugins/docker-hub/mcp.json`.
 
 ## Runtime E2E
 
-- Codex CLI 0.147.0 completed the automated public-marketplace preflight on
-  Linux: pinned `v0.1.0`, installed Context7 into a fresh `CODEX_HOME`, and
-  called `resolve-library-id` from the installed package. The sanitized artifact
-  records source/workflow commits, reproduction commands, and the marker
-  `/microsoft/playwright`; see [workflow run 31211963015](https://github.com/777genius/universal-agent-plugins/actions/runs/31211963015).
+- Codex CLI 0.147.0 completed the release-gated public install on Linux: pinned
+  `v0.1.1`, installed Context7 into a fresh `CODEX_HOME`, and called
+  `resolve-library-id` from the installed package. The sanitized artifact records
+  source/workflow commits, reproduction commands, and `/microsoft/playwright`;
+  see [workflow run 31212969183](https://github.com/777genius/universal-agent-plugins/actions/runs/31212969183).
 - MCP Inspector 2.1.0 completed 12 expected checks with zero unexpected
   results. Context7 and Cloudflare Docs passed representative read calls;
   Chrome DevTools exposed 29 tools from a disposable sandbox.

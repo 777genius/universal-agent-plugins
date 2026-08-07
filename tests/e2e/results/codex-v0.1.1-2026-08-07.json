@@ -2,18 +2,18 @@
   "client": "Codex CLI",
   "version": "0.147.0",
   "date": "2026-08-07",
-  "observed_at_utc": "2026-08-07T19:33:46+00:00",
+  "observed_at_utc": "2026-08-07T19:47:24+00:00",
   "evidence_type": "automated_public_install",
   "sandbox": "fresh disposable git repository and isolated CODEX_HOME",
   "source": {
     "repository": "https://github.com/777genius/universal-agent-plugins",
-    "ref": "v0.1.0",
-    "commit_sha": "0173847e9777628cdac4358da716eb858d5ca0c7"
+    "ref": "v0.1.1",
+    "commit_sha": "f929538eb1c73b128ffac42a40998cc646a883ef"
   },
   "workflow": {
-    "url": "https://github.com/777genius/universal-agent-plugins/actions/runs/31211963015",
-    "commit_sha": "4974cc9bd05fff62003978b3be87317820702ed2",
-    "event": "workflow_dispatch"
+    "url": "https://github.com/777genius/universal-agent-plugins/actions/runs/31212969183",
+    "commit_sha": "f929538eb1c73b128ffac42a40998cc646a883ef",
+    "event": "push"
   },
   "reproduction": {
     "requirements": [
@@ -21,17 +21,17 @@
       "Node.js 24"
     ],
     "commands": [
-      "codex plugin marketplace add 777genius/universal-agent-plugins --ref v0.1.0 --json",
+      "codex plugin marketplace add 777genius/universal-agent-plugins --ref v0.1.1 --json",
       "codex plugin add context7@universal-agent-plugins --json",
-      "python3 scripts/run_codex_install_e2e.py --marketplace-ref v0.1.0"
+      "python3 scripts/run_codex_install_e2e.py --marketplace-ref v0.1.1"
     ]
   },
   "checks": [
     {
       "scenario": "add the public GitHub marketplace at an explicit ref",
       "status": "passed",
-      "ref": "v0.1.0",
-      "commit_sha": "0173847e9777628cdac4358da716eb858d5ca0c7"
+      "ref": "v0.1.1",
+      "commit_sha": "f929538eb1c73b128ffac42a40998cc646a883ef"
     },
     {
       "scenario": "install Context7 from the Codex marketplace cache",
@@ -47,7 +47,7 @@
     }
   ],
   "transcript": [
-    "marketplace.add passed ref=v0.1.0 commit=0173847e9777628cdac4358da716eb858d5ca0c7",
+    "marketplace.add passed ref=v0.1.1 commit=f929538eb1c73b128ffac42a40998cc646a883ef",
     "plugin.add passed id=context7@universal-agent-plugins version=0.1.0",
     "tools.call passed name=resolve-library-id marker=/microsoft/playwright"
   ],
