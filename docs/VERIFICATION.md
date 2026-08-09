@@ -1,6 +1,6 @@
 # Verification record
 
-Date: 2026-08-08.
+Updated: 2026-08-09.
 
 ## Package conformance
 
@@ -29,16 +29,15 @@ in `plugins/docker-hub/mcp.json`.
 
 ## Runtime E2E
 
-- The public npm release `universal-agent-plugins@0.1.2` completed transactional
-  add/remove for all 26 pinned packages and 25/25 hero package projections
-  across Codex, Cursor, Copilot, VS Code, and Kiro in disposable profiles. See
-  [`agentplugins-cli-0.1.2-2026-08-08.json`](../tests/e2e/results/agentplugins-cli-0.1.2-2026-08-08.json)
-  and [`agentplugins-hero-package-matrix-0.1.2-2026-08-08.json`](../tests/e2e/results/agentplugins-hero-package-matrix-0.1.2-2026-08-08.json).
-- The public npm release `universal-agent-plugins@0.1.2` and GitHub Copilot CLI
-  1.0.78 completed automatic native add, verification, remove, and managed
-  marketplace cleanup for all five hero plugins in a fresh isolated HOME. No
-  real project or inherited credential was used; see
-  [`agentplugins-copilot-native-0.1.2-2026-08-08.json`](../tests/e2e/results/agentplugins-copilot-native-0.1.2-2026-08-08.json).
+- Public post-merge run
+  [`31332320890`](https://github.com/777genius/universal-agent-plugins/actions/runs/31332320890)
+  tested `universal-agent-plugins@0.1.5` at merge
+  [`8c2be5a`](https://github.com/777genius/universal-agent-plugins/commit/8c2be5a4740f0cef8b8dd8e57e51757e1f1167ea).
+  It completed 26/26 transactional package lifecycles, 25/25 hero projections
+  across Codex, Cursor, Copilot, VS Code, and Kiro, and 5/5 native Copilot
+  marketplace install/list/remove lifecycles in disposable profiles. These
+  checks do not prove client tool runtime or OAuth. Sanitized Actions evidence
+  artifacts are retained for 30 days on the linked run.
 - Codex CLI 0.144.1, Cursor Agent 2026.07.09, and Kiro CLI 2.16.0 each
   completed real agent-to-plugin checks for Context7, Cloudflare Docs, Chrome
   DevTools, and Agent Code Navigator in one disposable project. That is 12/12

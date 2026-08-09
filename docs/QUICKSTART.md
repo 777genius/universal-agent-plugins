@@ -1,6 +1,7 @@
 # Client quick start
 
-Install one Agent Plugins 1.0 package, not the whole catalog:
+Install one Agent Plugins 1.0 package, not the whole catalog. You need Node.js
+22 or newer:
 
 ```bash
 npx universal-agent-plugins add context7

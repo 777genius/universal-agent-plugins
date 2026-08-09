@@ -1,6 +1,6 @@
 # Plugin verification matrix
 
-Verified on 2026-08-08. Each column is independent: a schema pass is not an
+Updated on 2026-08-09. Each column is independent: a schema pass is not an
 install, an auth challenge is not OAuth success, and tool discovery is not a
 tool call. `Direct harness` means MCP Inspector, not a client installation.
 
@@ -41,12 +41,14 @@ transcript. All client records are under [`tests/e2e/results`](../tests/e2e/resu
 
 | Installer | Catalog | Package add/remove | Client runtime | OAuth |
 | --- | --- | --- | --- | --- |
-| `agentplugins 0.1.2` release binary | 26/26 pinned | 26/26 passed in an isolated Cursor provider HOME | Not implied | Not tested |
-| `agentplugins 0.1.2` release binary, hero matrix | 5 pinned hero packages | 25/25 add/remove flows across isolated Codex, Cursor, Copilot, VS Code, and Kiro projections | Not implied | Not tested |
-| `agentplugins 0.1.2` + Copilot CLI 1.0.78 | 5 pinned hero packages | 5/5 automatic marketplace registration, native install, verification, uninstall, and marketplace cleanup in an isolated HOME | Not implied | Not tested |
+| [`agentplugins 0.1.5` post-merge run](https://github.com/777genius/universal-agent-plugins/actions/runs/31332320890) | 26/26 pinned | 26/26 passed in an isolated Cursor provider HOME | Not implied | Not tested |
+| `agentplugins 0.1.5`, hero projections | 5 pinned hero packages | 25/25 add/remove flows across isolated Codex, Cursor, Copilot, VS Code, and Kiro projections | Not implied | Not tested |
+| `agentplugins 0.1.5` + Copilot CLI 1.0.78 | 5 pinned hero packages | 5/5 automatic marketplace registration, native install, verification, uninstall, and marketplace cleanup in an isolated HOME | Not implied | Not tested |
 | Interactive hero runtime matrix | 5 local packages | Client-specific test loading in Codex, Cursor, and Kiro | 15/15 checks passed across 3 clients | 3/3 Notion OAuth + read-only runtime passed |
 
-The first two rows prove source resolution, package validation, transactional
-materialization, and removal; they do not imply client launch or tool calls.
-Those claims are tracked independently in the interactive runtime row, and an
-auth challenge is still not counted as OAuth success.
+The first three rows come from public run `31332320890` at merge
+[`8c2be5a`](https://github.com/777genius/universal-agent-plugins/commit/8c2be5a4740f0cef8b8dd8e57e51757e1f1167ea).
+They prove source resolution, package validation, transactional lifecycle, and
+native Copilot lifecycle only. They do not prove client tool runtime or OAuth;
+those claims stay separate in the interactive row. Sanitized GitHub Actions
+evidence artifacts are retained for 30 days on the linked run.

@@ -13,11 +13,16 @@ others only when you need them.
 
 This repository contains 26 open-source plugins packaged for the
 [Agent Plugins 1.0](https://agent-plugins.org/specification) standard.
+Portable packages use a root `plugin.json`. For Codex and ChatGPT, CI generates
+official-layout `.codex-plugin/plugin.json` packages under
+[`compat/openai`](compat/openai), validates them with OpenAI's `plugin-creator`,
+and follows the [OpenAI plugin build guide](https://developers.openai.com/plugins/build/plugins).
+The installer below is a community CLI, not an OpenAI product.
 
 ## Try one plugin
 
 Context7 is an easy first choice. It finds current library documentation and
-requires no account:
+requires no account. You need Node.js 22 or newer:
 
 ```bash
 npx universal-agent-plugins add context7
@@ -83,10 +88,10 @@ flows across Codex, Cursor, Copilot, VS Code, and Kiro projections. The new
 `agentplugins 0.1.5` CI covers package lifecycle and projections, not client
 process, tool, or OAuth runtime. Separately, audited interactive evidence proves
 15/15 real runtime checks across Codex, Cursor, and Kiro, including authenticated
-read-only Notion calls in all three. Live run
-[`31330156598`](https://github.com/777genius/universal-agent-plugins/actions/runs/31330156598)
-also proves native Copilot 0.1.5 install/list/remove lifecycle for the five starter
-plugins; it does not prove Copilot tool runtime or OAuth.
+read-only Notion calls in all three. Post-merge live run
+[`31332320890`](https://github.com/777genius/universal-agent-plugins/actions/runs/31332320890)
+also proves native Copilot 0.1.5 install/list/remove lifecycle for the five
+starter plugins; it does not prove Copilot tool runtime or OAuth.
 
 ## Safety
 
