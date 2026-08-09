@@ -1,0 +1,65 @@
+{
+  "client": "Codex CLI",
+  "version": "0.144.1",
+  "date": "2026-08-09",
+  "evidence_type": "interactive_oauth_runtime",
+  "sandbox": "fresh disposable git project and isolated CODEX_HOME under /tmp",
+  "source": {
+    "repository": "https://github.com/777genius/universal-agent-plugins",
+    "installer": "universal-agent-plugins",
+    "installer_version": "0.1.5",
+    "plugin": "figma",
+    "plugin_version": "0.1.0",
+    "target": "codex"
+  },
+  "checks": [
+    {
+      "scenario": "add the Figma package for target codex in an isolated profile",
+      "status": "passed"
+    },
+    {
+      "scenario": "install and enable the generated Codex plugin",
+      "status": "passed"
+    },
+    {
+      "scenario": "complete Figma OAuth with explicit user consent",
+      "status": "passed"
+    },
+    {
+      "scenario": "call mcp__figma__whoami through the installed plugin",
+      "status": "passed",
+      "detail": "The read-only identity call succeeded. No design, project, team, or workspace was opened or listed, and no returned account fields were recorded."
+    }
+  ],
+  "authentication_handling": "OAuth was completed interactively through Codex and Figma. No credential, token, authorization URL, OAuth code, or OAuth state was read or recorded.",
+  "cleanup": {
+    "managed_package_removed": true,
+    "temporary_credentials_removed": true,
+    "temporary_profiles_removed": true,
+    "temporary_project_removed": true
+  },
+  "secrets_recorded": false,
+  "real_user_project_used": false,
+  "screenshots_committed": false,
+  "privacy": {
+    "sanitized": true,
+    "excluded": [
+      "credentials",
+      "tokens",
+      "cookies",
+      "OAuth codes",
+      "OAuth state",
+      "account identifiers",
+      "team identifiers",
+      "project identifiers",
+      "workspace identifiers",
+      "authorization URLs",
+      "absolute temporary paths",
+      "raw tool output",
+      "design names",
+      "project names",
+      "team names",
+      "workspace names"
+    ]
+  }
+}

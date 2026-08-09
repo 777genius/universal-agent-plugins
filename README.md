@@ -88,7 +88,9 @@ flows across Codex, Cursor, Copilot, VS Code, and Kiro projections. The new
 `agentplugins 0.1.5` CI covers package lifecycle and projections, not client
 process, tool, or OAuth runtime. Separately, audited interactive evidence proves
 15/15 real runtime checks across Codex, Cursor, and Kiro, including authenticated
-read-only Notion calls in all three. Post-merge live run
+read-only Notion calls in all three. A separate sanitized Codex check also
+passed Figma OAuth and read-only `whoami`; it does not cover other clients.
+Post-merge live run
 [`31332320890`](https://github.com/777genius/universal-agent-plugins/actions/runs/31332320890)
 also proves native Copilot 0.1.5 install/list/remove lifecycle for the five
 starter plugins; it does not prove Copilot tool runtime or OAuth.
