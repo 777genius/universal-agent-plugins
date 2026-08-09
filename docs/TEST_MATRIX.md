@@ -16,7 +16,7 @@ tool call. `Direct harness` means MCP Inspector, not a client installation.
 | `cloudflare-radar` | Pass | No | No | Discovery passed; consent not tested | Direct harness |
 | `context7` | Pass | Codex; Kiro import; Cursor local load | `resolve-library-id`; `query-docs` | None | Codex; Kiro; Cursor; direct harness |
 | `docker-hub` | Pass | No | No | Optional credentials - not tested | None |
-| `figma` | Pass | Codex | `mcp__figma__whoami` (read-only) | Passed in Codex | Codex; direct harness |
+| `figma` | Pass | Codex | Figma MCP `whoami` (read-only) | Passed in Codex | Codex; direct harness |
 | `firebase` | Pass | No | No | Local CLI login - not tested | None |
 | `github` | Pass | No | No | Discovery passed; consent not tested | Direct harness |
 | `gitlab` | Pass | No | No | Required - not tested | None |
@@ -45,7 +45,7 @@ transcript. All client records are under [`tests/e2e/results`](../tests/e2e/resu
 | `agentplugins 0.1.5`, hero projections | 5 pinned hero packages | 25/25 add/remove flows across isolated Codex, Cursor, Copilot, VS Code, and Kiro projections | Not implied | Not tested |
 | `agentplugins 0.1.5` + Copilot CLI 1.0.78 | 5 pinned hero packages | 5/5 automatic marketplace registration, native install, verification, uninstall, and marketplace cleanup in an isolated HOME | Not implied | Not tested |
 | Interactive hero runtime matrix | 5 local packages | Client-specific test loading in Codex, Cursor, and Kiro | 15/15 checks passed across 3 clients | 3/3 Notion OAuth + read-only runtime passed |
-| [Interactive Codex Figma check](../tests/e2e/results/codex-figma-oauth-2026-08-09.json) | `figma 0.1.0` via `agentplugins 0.1.5` | Add, install/enable, and cleanup passed in isolated profiles | Read-only `mcp__figma__whoami` passed | Figma OAuth passed in Codex only |
+| [Interactive Codex Figma check](../tests/e2e/results/codex-figma-oauth-2026-08-09.json) | `figma 0.1.0` via `agentplugins 0.1.5` | Add, install/enable, and cleanup passed in isolated profiles | Read-only Figma MCP `whoami` passed | Figma OAuth passed in Codex only |
 
 The first three rows come from public run `31332320890` at merge
 [`8c2be5a`](https://github.com/777genius/universal-agent-plugins/commit/8c2be5a4740f0cef8b8dd8e57e51757e1f1167ea).

@@ -40,8 +40,8 @@ in `plugins/docker-hub/mcp.json`.
   artifacts are retained for 30 days on the linked run.
 - Codex CLI 0.144.1 used `universal-agent-plugins@0.1.5` to add `figma 0.1.0`
   for target Codex in a fresh git project and isolated `CODEX_HOME`. The
-  generated plugin installed and enabled, Figma OAuth completed with explicit
-  consent, and the read-only `mcp__figma__whoami` call succeeded. No design,
+  generated plugin installed and enabled, Figma OAuth login completed
+  interactively, and the read-only Figma MCP `whoami` call succeeded. No design,
   project, team, or workspace was opened or listed; no returned identity fields
   or secrets were recorded. The managed package and disposable profiles were
   removed. This proves Figma OAuth/runtime in Codex only; see

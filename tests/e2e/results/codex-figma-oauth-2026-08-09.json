@@ -3,7 +3,7 @@
   "version": "0.144.1",
   "date": "2026-08-09",
   "evidence_type": "interactive_oauth_runtime",
-  "sandbox": "fresh disposable git project and isolated CODEX_HOME under /tmp",
+  "sandbox": "fresh disposable git project and isolated CODEX_HOME",
   "source": {
     "repository": "https://github.com/777genius/universal-agent-plugins",
     "installer": "universal-agent-plugins",
@@ -22,11 +22,11 @@
       "status": "passed"
     },
     {
-      "scenario": "complete Figma OAuth with explicit user consent",
+      "scenario": "complete Figma OAuth login interactively",
       "status": "passed"
     },
     {
-      "scenario": "call mcp__figma__whoami through the installed plugin",
+      "scenario": "call Figma MCP whoami through the installed plugin",
       "status": "passed",
       "detail": "The read-only identity call succeeded. No design, project, team, or workspace was opened or listed, and no returned account fields were recorded."
     }
