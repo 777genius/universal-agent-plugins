@@ -16,7 +16,7 @@ const heroTarget = ref<ClientID>('cursor')
 const selectedHeroClient = computed(() => heroTargets.value.find(client => client.id === heroTarget.value) ?? heroTargets.value[0]!)
 const heroCommand = computed(() => pluginCommands(demoPlugin.value, selectedHeroClient.value.id).add)
 const heroClientLabel = (id: ClientID, name: string) => id === 'copilot' ? 'Copilot' : name
-const description = 'Discover and manage Agent Plugins 1.0 across Codex, ChatGPT, Cursor, GitHub Copilot CLI, VS Code, and Kiro with one community CLI.'
+const description = 'Install, update, and remove Agent Plugins 1.0 across Codex, ChatGPT, Cursor, GitHub Copilot CLI, VS Code, and Kiro with one community CLI.'
 
 useSeoMeta({
   title: 'A clearer way to use Agent Plugins',
@@ -33,8 +33,8 @@ useHead({ link: [{ rel: 'canonical', href: `${useRuntimeConfig().public.siteUrl}
   <div>
     <section class="hero container">
       <div class="hero__copy">
-        <h1>One command.<br /><em>Every supported client.</em></h1>
-        <p class="hero__lead">Add, update, or remove portable agent abilities across the tools you already use. Choose a plugin, choose a target, and let the community CLI handle the client-specific layout.</p>
+        <h1>One command.<br /><em>Every supported agent</em></h1>
+        <p class="hero__lead">Install, update, or remove Agent Plugins across the AI agents you already use. Pick a plugin and an agent, then run the generated command.</p>
         <div class="hero__actions">
           <NuxtLink class="button button--primary" to="/plugins">Explore {{ registry.plugins.length }} plugins <span aria-hidden="true">→</span></NuxtLink>
           <a class="button button--secondary" :href="`${repositoryUrl}/blob/main/registry/README.md#submit-an-external-package`" target="_blank" rel="noreferrer">Submit a plugin</a>
@@ -46,7 +46,7 @@ useHead({ link: [{ rel: 'canonical', href: `${useRuntimeConfig().public.siteUrl}
           <div class="hero__window-top"><span /><span /><span /><b>Quick start</b></div>
           <div class="hero__window-body">
             <fieldset class="hero-targets">
-              <legend>Choose one target for this command</legend>
+              <legend>Choose your agent</legend>
               <div class="hero-targets__grid">
                 <label v-for="client in heroTargets" :key="client.id" class="hero-target" :class="{ 'hero-target--selected': heroTarget === client.id }" :title="client.name">
                   <input v-model="heroTarget" class="sr-only" type="radio" name="hero-target" :value="client.id" />
@@ -59,7 +59,7 @@ useHead({ link: [{ rel: 'canonical', href: `${useRuntimeConfig().public.siteUrl}
             <CommandSnippet :command="heroCommand" />
             <div class="hero__success">
               <span>✓</span>
-              <div><strong>Ready for {{ selectedHeroClient.name }}</strong><small>Run one command per client you want to use.</small></div>
+              <div><strong>Command ready for {{ selectedHeroClient.name }}</strong><small>Repeat it for any other agent you use.</small></div>
             </div>
           </div>
         </div>
@@ -69,28 +69,28 @@ useHead({ link: [{ rel: 'canonical', href: `${useRuntimeConfig().public.siteUrl}
     </section>
 
     <section class="client-section container" aria-labelledby="clients-title">
-      <p id="clients-title">Select a target, keep your workflow</p>
+      <p id="clients-title">Supported agents</p>
       <ClientStrip />
-      <p class="client-section__note">Compatibility describes supported package components—not identical marketplaces or proof that every runtime and OAuth path was tested.</p>
+      <p class="client-section__note">Each agent uses the plugin components it supports. Marketplaces, activation, runtime, and OAuth can still differ.</p>
     </section>
 
     <section id="how-it-works" class="how container" aria-labelledby="how-title">
       <div class="section-heading section-heading--center">
         <p class="eyebrow">A small, explicit workflow</p>
-        <h2 id="how-title">From directory to client in three steps</h2>
+        <h2 id="how-title">From directory to agent in three steps</h2>
       </div>
       <ol class="step-grid">
         <li><span>01</span><div><h3>Pick a plugin</h3><p>Review its source, components, permissions, and validation status.</p></div></li>
-        <li><span>02</span><div><h3>Choose a target</h3><p>Generate the exact command for Codex, ChatGPT, Cursor, Copilot, VS Code, or Kiro.</p></div></li>
-        <li><span>03</span><div><h3>Stay in control</h3><p>Use the same CLI to update or remove it. Follow any client activation or OAuth prompt.</p></div></li>
+        <li><span>02</span><div><h3>Choose an agent</h3><p>Generate the exact command for Codex, ChatGPT, Cursor, Copilot, VS Code, or Kiro.</p></div></li>
+        <li><span>03</span><div><h3>Stay in control</h3><p>Use the same CLI to update or remove it. Follow any agent activation or OAuth prompt.</p></div></li>
       </ol>
     </section>
 
     <div class="container catalog-wrap">
       <PluginCatalog
         :plugins="registry.plugins"
-        :heading="`${registry.plugins.length} plugins, one generated index`"
-        :intro="externalCount ? `${builtInCount} reviewed built-ins and ${externalCount} pinned external ${externalCount === 1 ? 'entry' : 'entries'}.` : `${builtInCount} reviewed built-ins today, with commit-pinned external submissions supported next.`"
+        :heading="`Explore ${registry.plugins.length} plugins`"
+        :intro="externalCount ? `${builtInCount} reviewed built-ins and ${externalCount} community ${externalCount === 1 ? 'submission' : 'submissions'}, all linked to reviewable source.` : `${builtInCount} reviewed built-ins. Anyone can submit a plugin from a public GitHub repository.`"
       />
     </div>
 
@@ -101,7 +101,7 @@ useHead({ link: [{ rel: 'canonical', href: `${useRuntimeConfig().public.siteUrl}
       </div>
       <div class="validation-section__cards">
         <article><span class="validation-badge"><span>✓</span> Schema validated</span><p>The manifest and declared components passed the repository’s structural checks.</p></article>
-        <article><span class="runtime-badge">◇ Runtime evidence</span><p>Runtime, authentication, and OAuth coverage varies by plugin and client. Check the linked evidence before relying on a path.</p></article>
+        <article><span class="runtime-badge">◇ Runtime evidence</span><p>Runtime, authentication, and OAuth coverage varies by plugin and agent. Check the linked evidence before relying on a path.</p></article>
       </div>
     </section>
 

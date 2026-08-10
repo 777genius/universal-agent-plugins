@@ -15,11 +15,11 @@ watch(availableClients, (next) => {
 <template>
   <aside class="install-panel" aria-labelledby="install-title">
     <div class="install-panel__heading">
-      <div><p class="eyebrow">Installer</p><h2 id="install-title">Use with your client</h2></div>
+      <div><p class="eyebrow">Installer</p><h2 id="install-title">Use with your agent</h2></div>
       <span>Node.js 22+</span>
     </div>
     <label class="target-select">
-      Target client
+      Target agent
       <select v-model="target">
         <option v-for="client in availableClients" :key="client.id" :value="client.id">{{ client.name }}</option>
       </select>
@@ -31,6 +31,6 @@ watch(availableClients, (next) => {
     </div>
     <p v-if="!plugin.built_in" class="install-panel__notice"><strong>Pinned external source.</strong> Add uses the full commit pin. Update and remove use the installed manifest name; the directory provides no alias or automatic latest-version lookup.</p>
     <p v-if="plugin.client_support.resolution === 'install_time'" class="install-panel__notice"><strong>Checked at install time.</strong> The CLI validates the package and selected target before it changes managed files.</p>
-    <p class="install-panel__footnote">Built-in targets come from the pinned compatibility catalog. Client UI activation, permissions, runtime behavior, or OAuth may still require separate confirmation.</p>
+    <p class="install-panel__footnote">Built-in targets come from the pinned compatibility catalog. Agent UI activation, permissions, runtime behavior, or OAuth may still require separate confirmation.</p>
   </aside>
 </template>

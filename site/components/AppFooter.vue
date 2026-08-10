@@ -16,6 +16,6 @@ const { repositoryUrl } = useSite()
         <a :href="repositoryUrl" target="_blank" rel="noreferrer">Source</a>
       </nav>
     </div>
-    <div class="container site-footer__legal">Apache-2.0 project. Client and product marks belong to their owners. No analytics or tracking scripts.</div>
+    <div class="container site-footer__legal">Apache-2.0 project. Third-party product marks belong to their owners. No analytics or tracking scripts.</div>
   </footer>
 </template>

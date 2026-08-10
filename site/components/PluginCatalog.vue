@@ -4,7 +4,7 @@ import type { RegistryPlugin } from '~/types/registry'
 
 const props = withDefaults(defineProps<{ plugins: RegistryPlugin[], heading?: string, intro?: string }>(), {
   heading: 'Explore plugins',
-  intro: 'Browse schema-validated packages from the generated registry.',
+  intro: 'Search by capability, component, or source.',
 })
 const { repositoryUrl } = useSite()
 const query = ref('')
@@ -59,7 +59,7 @@ const visible = computed(() => filterPlugins(props.plugins, {
     <div class="catalog-meta">
       <div class="catalog-count" aria-live="polite">Showing {{ visible.length }} of {{ plugins.length }} plugins</div>
       <a class="button button--secondary catalog-submit" :href="`${repositoryUrl}/blob/main/registry/README.md#submit-an-external-package`" target="_blank" rel="noreferrer">
-        <span aria-hidden="true">＋</span> Add a plugin
+        <span aria-hidden="true">＋</span> Add your plugin
       </a>
     </div>
     <div v-if="visible.length" class="plugin-grid">
