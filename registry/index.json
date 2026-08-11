@@ -1457,6 +1457,53 @@
       }
     },
     {
+      "name": "submission-e2e",
+      "version": "0.1.0",
+      "description": "A harmless skill-only fixture for testing external Agent Plugins 1.0 registry submissions from a pinned GitHub commit.",
+      "author": {
+        "name": "agent-teams-ai",
+        "url": "https://github.com/agent-teams-ai"
+      },
+      "license": "Apache-2.0",
+      "categories": [
+        "developer-tools"
+      ],
+      "keywords": [
+        "agent-plugins",
+        "e2e",
+        "registry",
+        "testing"
+      ],
+      "components": [
+        "skills"
+      ],
+      "source": {
+        "repository": "agent-teams-ai/agent-plugin-submission-e2e",
+        "revision": "92c2118ebb138769692f998e78717ef5f6e7454c",
+        "path": "plugins/submission-e2e",
+        "manifest_sha256": "sha256:ba1d4f270391a970f196661de053b6db9c1b70ddbd14157e3a892b0a95083a66",
+        "tree_sha256": "sha256:f81b68887096e8c97f3037f54822434eca6d69fc5c96922c22c656ad07cec9d8"
+      },
+      "install_source": "agent-teams-ai/agent-plugin-submission-e2e@92c2118ebb138769692f998e78717ef5f6e7454c//plugins/submission-e2e",
+      "built_in": false,
+      "client_support": {
+        "resolution": "install_time",
+        "clients": [
+          "codex",
+          "chatgpt",
+          "cursor",
+          "copilot",
+          "vscode",
+          "kiro"
+        ]
+      },
+      "validation": {
+        "level": "schema_only",
+        "schema": "agent-plugins-1.0",
+        "runtime_evidence": []
+      }
+    },
+    {
       "name": "supabase",
       "version": "0.1.0",
       "description": "Community package for the official Supabase MCP integration for development and database operations from agent workflows.",

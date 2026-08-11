@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "repository": "agent-teams-ai/agent-plugin-submission-e2e",
+  "revision": "92c2118ebb138769692f998e78717ef5f6e7454c",
+  "path": "plugins/submission-e2e",
+  "categories": [
+    "developer-tools"
+  ]
+}
