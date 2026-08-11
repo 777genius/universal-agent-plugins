@@ -43,10 +43,13 @@ const visible = computed(() => filterPlugins(props.plugins, {
     <div class="catalog-controls" role="search" aria-label="Filter plugins">
       <label class="search-field">
         <span class="sr-only">Search plugins</span>
-        <span aria-hidden="true">⌕</span>
+        <svg class="search-field__icon" aria-hidden="true" viewBox="0 0 24 24" fill="none">
+          <circle cx="11" cy="11" r="6.5" />
+          <path d="m16 16 4 4" />
+        </svg>
         <input v-model="query" type="search" placeholder="Search by name, author, or capability…" />
       </label>
-      <AppSelect v-model="category" label="Filter by category" :options="categoryOptions" />
+      <AppCombobox v-model="category" label="Filter by category" search-placeholder="Search categories…" :options="categoryOptions" />
       <AppSelect v-model="component" label="Filter by component" :options="componentOptions" />
       <AppSelect v-model="source" label="Filter by source" :options="sourceOptions" />
     </div>

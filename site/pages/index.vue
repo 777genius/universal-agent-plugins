@@ -17,6 +17,26 @@ const selectedHeroClient = computed(() => heroTargets.value.find(client => clien
 const heroCommand = computed(() => pluginCommands(demoPlugin.value, selectedHeroClient.value.id).add)
 const heroClientLabel = (id: ClientID, name: string) => id === 'copilot' ? 'Copilot' : name
 const description = 'Install, update, and remove Agent Plugins 1.0 across Codex, ChatGPT, Cursor, GitHub Copilot CLI, VS Code, and Kiro with one community CLI.'
+const workflowPath = ref<HTMLElement>()
+const workflowAnimated = ref(false)
+const workflowVisible = ref(false)
+let workflowObserver: IntersectionObserver | undefined
+
+onMounted(() => {
+  workflowAnimated.value = true
+  const element = workflowPath.value
+  if (!element) return
+
+  workflowObserver = new IntersectionObserver(([entry]) => {
+    if (!entry?.isIntersecting) return
+    workflowVisible.value = true
+    workflowObserver?.disconnect()
+  }, { threshold: 0.22 })
+
+  workflowObserver.observe(element)
+})
+
+onBeforeUnmount(() => workflowObserver?.disconnect())
 
 useSeoMeta({
   title: 'A clearer way to use Agent Plugins',
@@ -64,7 +84,10 @@ useHead({ link: [{ rel: 'canonical', href: `${useRuntimeConfig().public.siteUrl}
           </div>
         </div>
         <div class="hero__float hero__float--schema"><span>✓</span> Schema validated</div>
-        <div class="hero__float hero__float--portable">1.0<br /><small>portable</small></div>
+        <div class="hero__float hero__float--standard">
+          <a href="https://agent-plugins.org/specification" target="_blank" rel="noreferrer">Agent Plugins 1.0</a>
+          <span>standard</span>
+        </div>
       </div>
     </section>
 
@@ -79,19 +102,34 @@ useHead({ link: [{ rel: 'canonical', href: `${useRuntimeConfig().public.siteUrl}
         <p class="eyebrow">A small, explicit workflow</p>
         <h2 id="how-title">From directory to agent in three steps</h2>
       </div>
-      <ol class="workflow-path">
+      <ol ref="workflowPath" class="workflow-path" :class="{ 'workflow-path--animate': workflowAnimated, 'workflow-path--visible': workflowVisible }">
         <li class="workflow-step workflow-step--plugin">
-          <div class="workflow-step__head"><span class="workflow-step__number">01</span><span class="workflow-step__icon" aria-hidden="true">◆</span></div>
+          <div class="workflow-step__head">
+            <span class="workflow-step__number">01</span>
+            <span class="workflow-step__icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none"><path d="m4.5 8 7.5-4 7.5 4-7.5 4-7.5-4Z" /><path d="m4.5 8v8l7.5 4 7.5-4V8M12 12v8" /></svg>
+            </span>
+          </div>
           <div><h3>Pick a plugin</h3><p>Review its source, components, permissions, and validation status.</p></div>
           <div class="workflow-step__tags" aria-hidden="true"><span>Source</span><span>Permissions</span></div>
         </li>
         <li class="workflow-step workflow-step--agent">
-          <div class="workflow-step__head"><span class="workflow-step__number">02</span><span class="workflow-step__icon" aria-hidden="true">↗</span></div>
+          <div class="workflow-step__head">
+            <span class="workflow-step__number">02</span>
+            <span class="workflow-step__icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="6" r="2.5" /><circle cx="6" cy="17" r="2.5" /><circle cx="18" cy="17" r="2.5" /><path d="m10.8 8.2-3.6 6.6m6-6.6 3.6 6.6M8.5 17h7" /></svg>
+            </span>
+          </div>
           <div><h3>Choose an agent</h3><p>Generate the exact command for Codex, ChatGPT, Cursor, Copilot, VS Code, or Kiro.</p></div>
           <div class="workflow-step__tags" aria-hidden="true"><span>One target</span><span>Exact command</span></div>
         </li>
         <li class="workflow-step workflow-step--control">
-          <div class="workflow-step__head"><span class="workflow-step__number">03</span><span class="workflow-step__icon" aria-hidden="true">✓</span></div>
+          <div class="workflow-step__head">
+            <span class="workflow-step__number">03</span>
+            <span class="workflow-step__icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none"><path d="M19 8a7.5 7.5 0 1 0 .4 7" /><path d="M19 4v4h-4" /><path d="m9 12 2 2 4-4" /></svg>
+            </span>
+          </div>
           <div><h3>Stay in control</h3><p>Use the same CLI to update or remove it. Follow any agent activation or OAuth prompt.</p></div>
           <div class="workflow-step__tags" aria-hidden="true"><span>Update</span><span>Remove</span></div>
         </li>
