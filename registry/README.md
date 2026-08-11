@@ -7,6 +7,13 @@ receives a short-name alias.
 
 ## Submit an external package
 
+Before opening the PR, the package directory at the pinned revision must contain:
+
+- a valid Agent Plugins 1.0 `plugin.json` with author and license metadata;
+- a package `README.md`;
+- at least one declared component: root `mcp.json` or `skills/*/SKILL.md`;
+- no client-specific `.mcp.json` or `.codex-plugin` output.
+
 Add exactly one file at `registry/entries/<plugin-name>.json`:
 
 ```json
