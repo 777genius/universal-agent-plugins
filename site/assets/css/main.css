@@ -139,17 +139,37 @@ code, pre { font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospac
 .client-section__note { max-width: 730px; margin: 0 auto; color: var(--subtle); font-size: .73rem; }
 
 .how { padding-block: 85px 95px; }
-.step-grid { margin: 40px 0 0; padding: 0; display: grid; grid-template-columns: repeat(3, 1fr); border: 1px solid var(--line); border-radius: 18px; list-style: none; background: var(--surface); overflow: hidden; }
-.step-grid li { min-height: 220px; padding: 30px; display: flex; gap: 18px; border-right: 1px solid var(--line); }
-.step-grid li:last-child { border: 0; }
-.step-grid li > span { color: var(--primary-bright); font: 700 .72rem "SFMono-Regular", monospace; }
-.step-grid h3 { margin: 0 0 10px; }.step-grid p { color: var(--muted); font-size: .88rem; }
+.workflow-path { position: relative; margin: 48px 0 36px; padding: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; list-style: none; }
+.workflow-path::before { content: ""; position: absolute; z-index: 0; left: 8%; right: 8%; top: 54%; height: 2px; background: linear-gradient(90deg, var(--primary), var(--cyan), var(--green)); opacity: .42; }
+.workflow-step { --step-accent: var(--primary); position: relative; z-index: 1; min-height: 265px; padding: 25px; display: flex; flex-direction: column; gap: 22px; overflow: hidden; border: 1px solid color-mix(in srgb, var(--step-accent) 24%, var(--line)); border-radius: 22px; background: radial-gradient(circle at 100% 0, color-mix(in srgb, var(--step-accent) 15%, transparent), transparent 42%), var(--surface-solid); box-shadow: 0 20px 48px color-mix(in srgb, var(--step-accent) 9%, transparent); }
+.workflow-step::before { content: ""; position: absolute; inset: 0 auto auto 0; width: 100%; height: 3px; background: linear-gradient(90deg, var(--step-accent), transparent 78%); }
+.workflow-step:nth-child(2) { translate: 0 18px; }.workflow-step:nth-child(3) { translate: 0 36px; }
+.workflow-step--agent { --step-accent: var(--cyan); }.workflow-step--control { --step-accent: var(--green); }
+.workflow-step__head { display: flex; align-items: center; justify-content: space-between; }
+.workflow-step__number { color: var(--step-accent); font: 750 .72rem "SFMono-Regular", monospace; letter-spacing: .08em; }
+.workflow-step__icon { width: 46px; height: 46px; display: grid; place-items: center; border: 1px solid color-mix(in srgb, var(--step-accent) 34%, var(--line)); border-radius: 14px; color: var(--step-accent); background: color-mix(in srgb, var(--step-accent) 8%, var(--surface-raised)); font-size: 1.15rem; font-weight: 850; }
+.workflow-step h3 { margin: 0 0 10px; }.workflow-step p { margin: 0; color: var(--muted); font-size: .88rem; }
+.workflow-step__tags { margin-top: auto; display: flex; flex-wrap: wrap; gap: 7px; }
+.workflow-step__tags span { padding: 5px 8px; border: 1px solid var(--line); border-radius: 999px; color: var(--subtle); background: color-mix(in srgb, var(--surface-raised) 65%, transparent); font: 650 .6rem "SFMono-Regular", monospace; }
 
 .catalog-wrap { padding-block: 90px; }
 .catalog-controls { padding: 12px; display: grid; grid-template-columns: minmax(260px, 1.7fr) repeat(3, minmax(140px, .7fr)); gap: 9px; border: 1px solid var(--line); border-radius: 15px; background: var(--surface); }
-.catalog-controls input, .catalog-controls select, .target-select select { width: 100%; min-height: 44px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface-solid); color: var(--text); }
-.catalog-controls select, .target-select select { padding: 0 33px 0 12px; cursor: pointer; }
+.catalog-controls input { width: 100%; min-height: 44px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface-solid); color: var(--text); }
 .search-field { position: relative; }.search-field > span:not(.sr-only) { position: absolute; left: 14px; top: 9px; color: var(--subtle); font-size: 1.2rem; }.search-field input { padding: 0 12px 0 42px; }
+.app-select__trigger { width: 100%; min-width: 0; min-height: 44px; padding: 0 11px 0 12px; display: flex; align-items: center; justify-content: space-between; gap: 10px; border: 1px solid var(--line); border-radius: 10px; color: var(--text); background: linear-gradient(180deg, color-mix(in srgb, var(--surface-solid) 96%, #fff 4%), var(--surface-solid)); cursor: pointer; transition: border-color .16s ease, box-shadow .16s ease, background .16s ease; }
+.app-select__trigger:hover { border-color: color-mix(in srgb, var(--primary) 48%, var(--line)); background: color-mix(in srgb, var(--primary) 5%, var(--surface-solid)); }
+.app-select__trigger[data-state="open"] { border-color: color-mix(in srgb, var(--primary) 68%, var(--line)); box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 13%, transparent); }
+.app-select__value { min-width: 0; display: flex; align-items: center; gap: 9px; overflow: hidden; font-size: .82rem; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
+.app-select__value-icon, .app-select__item-icon { width: 28px; height: 28px; flex: 0 0 auto; display: grid; place-items: center; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
+.app-select__value-icon img, .app-select__item-icon img { width: 20px; height: 20px; object-fit: contain; }
+.app-select__chevron { color: var(--subtle); font-size: 1.05rem; line-height: 1; transition: rotate .16s ease; }.app-select__trigger[data-state="open"] .app-select__chevron { rotate: 180deg; }
+.app-select__content { z-index: 100; min-width: var(--reka-select-trigger-width, 210px); max-height: min(360px, var(--reka-select-content-available-height, 360px)); overflow: hidden; padding: 6px; border: 1px solid var(--line-strong); border-radius: 13px; color: var(--text); background: color-mix(in srgb, var(--surface-solid) 96%, transparent); box-shadow: 0 22px 65px rgba(0,0,0,.34); backdrop-filter: blur(18px); }
+.app-select__viewport { display: grid; gap: 2px; }
+.app-select__item { position: relative; min-height: 42px; padding: 7px 34px 7px 10px; display: flex; align-items: center; gap: 9px; border-radius: 9px; outline: none; color: var(--muted); font-size: .8rem; font-weight: 620; cursor: pointer; user-select: none; }
+.app-select__item[data-highlighted] { color: var(--text); background: color-mix(in srgb, var(--primary) 12%, var(--surface-raised)); }
+.app-select__item[data-state="checked"] { color: var(--text); }
+.app-select__indicator { position: absolute; right: 11px; color: var(--green); font-weight: 850; }
+.app-select__scroll { width: 100%; min-height: 25px; border: 0; color: var(--subtle); background: transparent; cursor: default; }
 .catalog-meta { margin: 15px 2px 18px; display: flex; align-items: center; justify-content: space-between; gap: 15px; }
 .catalog-count { color: var(--subtle); font-size: .72rem; }
 .catalog-submit { min-height: 38px; padding-inline: 13px; border-radius: 10px; font-size: .72rem; }
@@ -194,7 +214,7 @@ code, pre { font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospac
 .status-card { margin-top: 36px; padding: 20px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); }.status-card p { margin: 13px 0; color: var(--muted); font-size: .78rem; }.status-card a { color: var(--primary-bright); font-size: .75rem; font-weight: 700; }
 .install-panel { position: sticky; top: 96px; padding: 24px; border: 1px solid var(--line-strong); border-radius: 19px; background: var(--surface); box-shadow: var(--shadow); }
 .install-panel__heading { display: flex; justify-content: space-between; gap: 15px; align-items: flex-start; }.install-panel__heading h2 { margin-bottom: 0; font-size: 1.35rem; }.install-panel__heading > span { padding: 5px 8px; border: 1px solid var(--line); border-radius: 7px; color: var(--subtle); font: .61rem "SFMono-Regular", monospace; }
-.target-select { margin: 22px 0; display: grid; gap: 8px; color: var(--muted); font-size: .7rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; }
+.target-select { margin: 22px 0; display: grid; gap: 8px; color: var(--muted); font-size: .7rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; }.target-select .app-select__trigger { min-height: 52px; text-transform: none; letter-spacing: normal; }
 .command-stack { display: grid; gap: 10px; }
 .install-panel__notice { margin: 17px 0 0; padding: 12px; border-left: 2px solid var(--coral); background: color-mix(in srgb, var(--coral) 6%, transparent); color: var(--muted); font-size: .7rem; }.install-panel__notice strong { color: var(--coral); }
 .install-panel__footnote { margin: 18px 0 0; color: var(--subtle); font-size: .68rem; }
@@ -218,7 +238,7 @@ code, pre { font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospac
   .hero { min-height: auto; padding-block: 58px 80px; }.hero h1 { font-size: clamp(2.65rem, 13vw, 4rem); }.hero__actions { display: grid; }.hero__window { transform: none; }.hero__window-body { padding: 18px 14px; }.hero__float { display: none; }
   .hero-targets__grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .client-strip { grid-template-columns: repeat(2, 1fr); }.client-strip li { min-height: 74px; }.client-strip li:nth-child(3) { border-right: 1px solid var(--line); }.client-strip li:nth-child(2n) { border-right: 0; }.client-strip li:nth-child(-n+4) { border-bottom: 1px solid var(--line); }
-  .how, .catalog-wrap, .validation-section { padding-block: 65px; }.step-grid { grid-template-columns: 1fr; }.step-grid li { min-height: auto; border-right: 0; border-bottom: 1px solid var(--line); }
+  .how, .catalog-wrap, .validation-section { padding-block: 65px; }.workflow-path { grid-template-columns: 1fr; gap: 13px; margin-bottom: 0; }.workflow-path::before { left: 24px; right: auto; top: 8%; bottom: 8%; width: 2px; height: auto; }.workflow-step { min-height: auto; margin-left: 18px; }.workflow-step:nth-child(2), .workflow-step:nth-child(3) { translate: none; }
   .plugin-grid { grid-template-columns: 1fr; }.catalog-controls { grid-template-columns: 1fr; }.search-field { grid-column: auto; }
   .catalog-meta { align-items: stretch; flex-direction: column; }.catalog-submit { width: 100%; }
   .validation-section__cards { grid-template-columns: 1fr; }.submit-cta { margin-block: 70px; padding: 28px 22px; flex-direction: column; align-items: stretch; }

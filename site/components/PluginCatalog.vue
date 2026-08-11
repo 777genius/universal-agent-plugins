@@ -8,15 +8,28 @@ const props = withDefaults(defineProps<{ plugins: RegistryPlugin[], heading?: st
 })
 const { repositoryUrl } = useSite()
 const query = ref('')
-const category = ref('')
-const component = ref<RegistryPlugin['components'][number] | ''>('')
-const source = ref<'all' | 'built-in' | 'external'>('all')
+const category = ref('all')
+const component = ref('all')
+const source = ref('all')
 const filters = computed(() => availableFilters(props.plugins))
+const categoryOptions = computed(() => [
+  { value: 'all', label: 'All categories' },
+  ...filters.value.categories.map(item => ({ value: item, label: item })),
+])
+const componentOptions = computed(() => [
+  { value: 'all', label: 'All components' },
+  ...filters.value.components.map(item => ({ value: item, label: item })),
+])
+const sourceOptions = [
+  { value: 'all', label: 'All sources' },
+  { value: 'built-in', label: 'Built-ins' },
+  { value: 'external', label: 'External' },
+]
 const visible = computed(() => filterPlugins(props.plugins, {
   query: query.value,
-  category: category.value,
-  component: component.value || undefined,
-  source: source.value,
+  category: category.value === 'all' ? '' : category.value,
+  component: component.value === 'all' ? undefined : component.value as RegistryPlugin['components'][number],
+  source: source.value as 'all' | 'built-in' | 'external',
 }))
 </script>
 
@@ -33,28 +46,9 @@ const visible = computed(() => filterPlugins(props.plugins, {
         <span aria-hidden="true">⌕</span>
         <input v-model="query" type="search" placeholder="Search by name, author, or capability…" />
       </label>
-      <label>
-        <span class="sr-only">Filter by category</span>
-        <select v-model="category">
-          <option value="">All categories</option>
-          <option v-for="item in filters.categories" :key="item" :value="item">{{ item }}</option>
-        </select>
-      </label>
-      <label>
-        <span class="sr-only">Filter by component</span>
-        <select v-model="component">
-          <option value="">All components</option>
-          <option v-for="item in filters.components" :key="item" :value="item">{{ item }}</option>
-        </select>
-      </label>
-      <label>
-        <span class="sr-only">Filter by source</span>
-        <select v-model="source">
-          <option value="all">All sources</option>
-          <option value="built-in">Built-ins</option>
-          <option value="external">External</option>
-        </select>
-      </label>
+      <AppSelect v-model="category" label="Filter by category" :options="categoryOptions" />
+      <AppSelect v-model="component" label="Filter by component" :options="componentOptions" />
+      <AppSelect v-model="source" label="Filter by source" :options="sourceOptions" />
     </div>
     <div class="catalog-meta">
       <div class="catalog-count" aria-live="polite">Showing {{ visible.length }} of {{ plugins.length }} plugins</div>
@@ -68,7 +62,7 @@ const visible = computed(() => filterPlugins(props.plugins, {
     <div v-else class="empty-state">
       <h3>No matching plugins</h3>
       <p>Try a broader search or clear one of the filters.</p>
-      <button class="button button--secondary" type="button" @click="query = ''; category = ''; component = ''; source = 'all'">Clear filters</button>
+      <button class="button button--secondary" type="button" @click="query = ''; category = 'all'; component = 'all'; source = 'all'">Clear filters</button>
     </div>
   </section>
 </template>
