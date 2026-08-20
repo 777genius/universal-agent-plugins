@@ -727,7 +727,11 @@ def validate_directory(source: dict[str, object], *, verify_packages: bool = Tru
             if distribution["kind"] == "upstream":
                 publisher = str(distribution["id"]).split("/", 1)[0]
                 require(str(package_source["repository"]).split("/", 1)[0] == publisher, f"{distribution['id']}@{sequence}: upstream package must be sourced from the upstream publisher namespace")
-            if verify_packages and package_source["repository"] == "777genius/universal-agent-plugins":
+            # Only an unresolved in-repository release represents the package
+            # bytes in this checkout. Bound historical releases are immutable
+            # at their recorded commit and may intentionally differ after the
+            # canonical product path moves to a newer distribution.
+            if verify_packages and package_source["repository"] == "777genius/universal-agent-plugins" and package_source["revision"] is None:
                 package_root = ROOT / package_source["path"]
                 require(package_root.is_dir(), f"{distribution['id']}@{sequence}: package path is missing")
                 fields = package_fields(package_root, [])
@@ -907,14 +911,13 @@ def main() -> int:
         search = encoded(directory_search(source))
         _validate_document(json.loads(preview), "directory-preview.schema.json", "review preview")
         _validate_document(json.loads(search), "directory-search.schema.json", "review search")
-        output = encoded(build())
         if args.check:
-            require(OUTPUT.is_file() and OUTPUT.read_bytes() == output, f"{OUTPUT}: generated index is stale; run scripts/build_registry.py")
             require(REVIEW_PREVIEW.is_file() and REVIEW_PREVIEW.read_bytes() == preview, f"{REVIEW_PREVIEW}: deterministic review preview is stale")
             require(REVIEW_SEARCH.is_file() and REVIEW_SEARCH.read_bytes() == search, f"{REVIEW_SEARCH}: deterministic preview search data is stale")
         else:
-            OUTPUT.parent.mkdir(parents=True, exist_ok=True)
-            OUTPUT.write_bytes(output)
+            # The legacy flat index is byte-frozen. Directory evolution writes
+            # only the review outputs; old clients keep their exact feed.
+            REVIEW_PREVIEW.parent.mkdir(parents=True, exist_ok=True)
             REVIEW_PREVIEW.write_bytes(preview)
             REVIEW_SEARCH.write_bytes(search)
     except RegistryError as error:

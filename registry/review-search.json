@@ -11,7 +11,7 @@
     },
     {
       "product_id": "chrome-devtools",
-      "text": "chrome devtools portable agent plugins package for chrome devtools mcp. inspect pages, automate flows, analyze performance, and debug browser state. chrome-devtools agent-plugins ai-agents browser chrome debugging mcp performance"
+      "text": "chrome devtools community package for chrome devtools mcp. inspect pages, automate flows, analyze performance, and debug browser state. chrome-devtools agent-plugins ai-agents browser chrome debugging mcp performance"
     },
     {
       "product_id": "cloudflare",
@@ -23,7 +23,7 @@
     },
     {
       "product_id": "cloudflare-docs",
-      "text": "cloudflare docs community package for the official cloudflare hosted mcp plugin for up-to-date cloudflare documentation and reference lookups through cloudflare's remote documentation server. cloudflare-docs agent-plugins ai-agents cloud cloudflare docs mcp plugins research"
+      "text": "cloudflare docs community package for cloudflare docs mcp. search current cloudflare documentation through cloudflare's hosted documentation server. cloudflare-docs agent-plugins ai-agents cloud cloudflare docs mcp plugins research"
     },
     {
       "product_id": "cloudflare-observability",
@@ -51,7 +51,7 @@
     },
     {
       "product_id": "github",
-      "text": "github community agent plugin for repository, issue, pull request, review, and search workflows through github's mcp server. github agent-plugins ai-agents auth github mcp plugins"
+      "text": "github community package for github mcp server. work with repositories, issues, pull requests, reviews, and code search through github's hosted mcp endpoint. github agent-plugins ai-agents auth github mcp plugins"
     },
     {
       "product_id": "gitlab",

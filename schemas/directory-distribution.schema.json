@@ -24,7 +24,7 @@
       "type": "object",
       "required": ["repository", "revision", "path"],
       "properties": {
-        "repository": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]*/[a-z0-9][a-z0-9._-]*$"},
+        "repository": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9][A-Za-z0-9._-]*$"},
         "revision": {"type": ["string", "null"], "pattern": "^[0-9a-f]{40}$"},
         "path": {"type": "string", "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.?/)[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)*$"}
       },
@@ -44,7 +44,7 @@
           "type": "object",
           "required": ["upstream_repository", "upstream_revision"],
           "properties": {
-            "upstream_repository": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]*/[a-z0-9][a-z0-9._-]*$"},
+            "upstream_repository": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9][A-Za-z0-9._-]*$"},
             "upstream_revision": {"type": "string", "pattern": "^[0-9a-f]{40}$"}
           },
           "additionalProperties": false

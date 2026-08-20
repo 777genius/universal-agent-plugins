@@ -1,0 +1,24 @@
+schema_version: 1
+product_id: chrome-devtools
+distribution_id: 777genius/chrome-devtools-bridge
+upstream:
+  repository: ChromeDevTools/chrome-devtools-mcp
+  revision: 774d78f5eef5e610407a0c92fa6ec5ed74b027e8
+  license:
+    spdx: Apache-2.0
+    attribution_paths:
+      - path: LICENSE
+        sha256: sha256:58d1e17ffe5109a7ae296caafcadfdbe6a7d176f0bc4ab01e12a689b0499d8bd
+  provenance:
+    paths:
+      - path: package.json
+        sha256: sha256:19833012ab8f2a697349190a85fd617a7961a2a3a1ac4c996e7c16424bb8df29
+copy: []
+overlay: overlay
+overlay_replacements: []
+output: plugins/chrome-devtools
+executable_paths: []
+expected_version: 1.7.0
+components:
+  mcp_servers: [chrome-devtools]
+  skills: []

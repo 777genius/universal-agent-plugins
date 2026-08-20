@@ -105,7 +105,7 @@
     {
       "id": "chrome-devtools",
       "display_name": "Chrome Devtools",
-      "description": "Portable Agent Plugins package for Chrome DevTools MCP. Inspect pages, automate flows, analyze performance, and debug browser state.",
+      "description": "Community package for Chrome DevTools MCP. Inspect pages, automate flows, analyze performance, and debug browser state.",
       "aliases": [
         "chrome-devtools"
       ],
@@ -118,8 +118,9 @@
         "mcp",
         "performance"
       ],
-      "default_distribution": "777genius/chrome-devtools",
+      "default_distribution": "777genius/chrome-devtools-bridge",
       "fallback_order": [
+        "777genius/chrome-devtools-bridge",
         "777genius/chrome-devtools"
       ],
       "distributions": [
@@ -148,6 +149,32 @@
           "tree_digest_algorithm": "uap-tree-sha256-v1",
           "tree_digest": "sha256:c98acc2cccecb5398af73d453ec97a2f46dec70ba3cdb3cd3daed0f4b743bd3a",
           "manifest_digest": "sha256:e7d43a8e39b0e83f2c05777e297f6a3884002dc2601d70528b55a44132db8091"
+        },
+        {
+          "id": "777genius/chrome-devtools-bridge",
+          "kind": "community_bridge",
+          "status": "active",
+          "release_sequence": 1,
+          "package_version": "1.7.0",
+          "components": [
+            "mcp"
+          ],
+          "eligible_targets": [
+            "codex",
+            "cursor",
+            "copilot",
+            "vscode",
+            "kiro"
+          ],
+          "current_evidence": [],
+          "source": {
+            "repository": "777genius/universal-agent-plugins",
+            "revision": null,
+            "path": "plugins/chrome-devtools"
+          },
+          "tree_digest_algorithm": "uap-tree-sha256-v1",
+          "tree_digest": "sha256:3a98671d9e4052d0df4a326d04a2b028f187c19f881fcdad663d562d5fc83f33",
+          "manifest_digest": "sha256:02a77a0509681567df75e941175b148c1bcdfe0001cec24cfef8300b85547850"
         }
       ]
     },
@@ -254,7 +281,7 @@
     {
       "id": "cloudflare-docs",
       "display_name": "Cloudflare Docs",
-      "description": "Community package for the official Cloudflare hosted MCP plugin for up-to-date Cloudflare documentation and reference lookups through Cloudflare's remote documentation server.",
+      "description": "Community package for Cloudflare Docs MCP. Search current Cloudflare documentation through Cloudflare's hosted documentation server.",
       "aliases": [
         "cloudflare-docs"
       ],
@@ -268,8 +295,9 @@
         "plugins",
         "research"
       ],
-      "default_distribution": "777genius/cloudflare-docs",
+      "default_distribution": "777genius/cloudflare-docs-bridge",
       "fallback_order": [
+        "777genius/cloudflare-docs-bridge",
         "777genius/cloudflare-docs"
       ],
       "distributions": [
@@ -299,6 +327,33 @@
           "tree_digest_algorithm": "uap-tree-sha256-v1",
           "tree_digest": "sha256:6606abd32baac63bb5d01d7a249880e9020e60e80ae7923a180812ed10cb332b",
           "manifest_digest": "sha256:6b575562e527194ccd31238fde8c5f764409ecc98e211e92dfb81455eef88bdd"
+        },
+        {
+          "id": "777genius/cloudflare-docs-bridge",
+          "kind": "community_bridge",
+          "status": "active",
+          "release_sequence": 1,
+          "package_version": "0.4.13",
+          "components": [
+            "mcp"
+          ],
+          "eligible_targets": [
+            "codex",
+            "chatgpt",
+            "cursor",
+            "copilot",
+            "vscode",
+            "kiro"
+          ],
+          "current_evidence": [],
+          "source": {
+            "repository": "777genius/universal-agent-plugins",
+            "revision": null,
+            "path": "plugins/cloudflare-docs"
+          },
+          "tree_digest_algorithm": "uap-tree-sha256-v1",
+          "tree_digest": "sha256:0e63134f8a02ca8151939bea6bd67d029de482456e50ee8d432d9cc0047f68dd",
+          "manifest_digest": "sha256:7d1ada5818ced00257f39edd0bea371630ad5167dbfa572fbf01d7504012119c"
         }
       ]
     },
@@ -421,7 +476,8 @@
       ],
       "default_distribution": "777genius/context7",
       "fallback_order": [
-        "777genius/context7"
+        "777genius/context7",
+        "upstash/context7"
       ],
       "distributions": [
         {
@@ -449,6 +505,33 @@
           "tree_digest_algorithm": "uap-tree-sha256-v1",
           "tree_digest": "sha256:c166377ad416b972254801ecb455f790ac94d5f69e3beab90c44e3923155c38e",
           "manifest_digest": "sha256:341c54728c2f50d3876b12a6e94ba06751c94d2be215037846d06f93a018434e"
+        },
+        {
+          "id": "upstash/context7",
+          "kind": "upstream",
+          "status": "active",
+          "release_sequence": 1,
+          "package_version": "1.0.0",
+          "components": [
+            "mcp",
+            "skills"
+          ],
+          "eligible_targets": [
+            "codex",
+            "cursor",
+            "copilot",
+            "vscode",
+            "kiro"
+          ],
+          "current_evidence": [],
+          "source": {
+            "repository": "upstash/context7",
+            "revision": "769c6cd22c3d95462d1f55d789e9532cabefa5a9",
+            "path": "plugins/agent-plugins/context7"
+          },
+          "tree_digest_algorithm": "uap-tree-sha256-v1",
+          "tree_digest": "sha256:a4507f7326b10a9627b8030e6292df16710b33975cc53246992d239a172f45c8",
+          "manifest_digest": "sha256:d01781acd899aefa9445a290cf43a481230321934d62f9c8a2aab06a89718236"
         }
       ]
     },
@@ -601,7 +684,7 @@
     {
       "id": "github",
       "display_name": "GitHub",
-      "description": "Community Agent Plugin for repository, issue, pull request, review, and search workflows through GitHub's MCP server.",
+      "description": "Community package for GitHub MCP Server. Work with repositories, issues, pull requests, reviews, and code search through GitHub's hosted MCP endpoint.",
       "aliases": [
         "github"
       ],
@@ -613,8 +696,9 @@
         "mcp",
         "plugins"
       ],
-      "default_distribution": "777genius/github",
+      "default_distribution": "777genius/github-bridge",
       "fallback_order": [
+        "777genius/github-bridge",
         "777genius/github"
       ],
       "distributions": [
@@ -643,6 +727,32 @@
           "tree_digest_algorithm": "uap-tree-sha256-v1",
           "tree_digest": "sha256:30f1a3be5d5e8fa4665af2f84f42eb532c618484d9426807a19ee775f2585690",
           "manifest_digest": "sha256:091e37c5f33c0a92f77070cfcb1b03759b2637927281c04d989e6c8fef888cae"
+        },
+        {
+          "id": "777genius/github-bridge",
+          "kind": "community_bridge",
+          "status": "active",
+          "release_sequence": 1,
+          "package_version": "1.10.1",
+          "components": [
+            "mcp"
+          ],
+          "eligible_targets": [
+            "codex",
+            "cursor",
+            "copilot",
+            "vscode",
+            "kiro"
+          ],
+          "current_evidence": [],
+          "source": {
+            "repository": "777genius/universal-agent-plugins",
+            "revision": null,
+            "path": "plugins/github"
+          },
+          "tree_digest_algorithm": "uap-tree-sha256-v1",
+          "tree_digest": "sha256:453cdf8504990fb63a4cb27a0154488a9ddc2b0f808b9a47308a4efb38180e11",
+          "manifest_digest": "sha256:90f940c0f656bdf83fa8cccd5515bf4df9211c5a1d9cb095b84c30ee0f4f6efe"
         }
       ]
     },

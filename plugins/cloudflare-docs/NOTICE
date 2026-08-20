@@ -1,0 +1,16 @@
+Cloudflare Docs community bridge
+
+This Agent Plugins package was independently assembled by 777genius. It is not
+authored, published, sponsored, or endorsed by Cloudflare.
+
+Upstream project: cloudflare/mcp-server-cloudflare
+Pinned revision: 0c51a6fbcf9a2fae80120287e8238fb947cdc2df
+Upstream package path: apps/docs-ai-search
+Upstream version: 0.4.13
+Upstream license: Apache-2.0
+License evidence: LICENSE (SHA-256 62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a)
+Endpoint evidence: README.md (SHA-256 84b2dee1731e41cff42c7116d64f01b4e6834f8b3f6f21bace90d628d47dfa2b)
+Version evidence: apps/docs-ai-search/package.json (SHA-256 c9234965a870cdd6bd2100c3571ff861dd37d8a307d8187fda999d41d6a32538)
+
+No upstream source or executable bytes are copied into this package. The
+upstream files above are provenance evidence only.

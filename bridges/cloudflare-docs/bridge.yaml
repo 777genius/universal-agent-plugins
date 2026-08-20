@@ -1,0 +1,26 @@
+schema_version: 1
+product_id: cloudflare-docs
+distribution_id: 777genius/cloudflare-docs-bridge
+upstream:
+  repository: cloudflare/mcp-server-cloudflare
+  revision: 0c51a6fbcf9a2fae80120287e8238fb947cdc2df
+  license:
+    spdx: Apache-2.0
+    attribution_paths:
+      - path: LICENSE
+        sha256: sha256:62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a
+  provenance:
+    paths:
+      - path: README.md
+        sha256: sha256:84b2dee1731e41cff42c7116d64f01b4e6834f8b3f6f21bace90d628d47dfa2b
+      - path: apps/docs-ai-search/package.json
+        sha256: sha256:c9234965a870cdd6bd2100c3571ff861dd37d8a307d8187fda999d41d6a32538
+copy: []
+overlay: overlay
+overlay_replacements: []
+output: plugins/cloudflare-docs
+executable_paths: []
+expected_version: 0.4.13
+components:
+  mcp_servers: [cloudflare-docs]
+  skills: []

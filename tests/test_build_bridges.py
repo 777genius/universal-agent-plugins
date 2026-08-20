@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import hashlib
 import importlib.util
+import io
 import json
 import os
 import shutil
 import stat
 import subprocess
 import sys
+import tarfile
 import tempfile
 import unittest
 from pathlib import Path
@@ -22,6 +24,7 @@ assert SPEC and SPEC.loader
 bridges = importlib.util.module_from_spec(SPEC)
 sys.modules[SPEC.name] = bridges
 SPEC.loader.exec_module(bridges)
+from build_registry import directory_tree_digest
 
 
 FIXTURE_SHA = "9ec238505ab95b2e07222e69a893f0bbac201ae6"
@@ -250,6 +253,91 @@ class BridgeBuilderTests(unittest.TestCase):
     def test_only_build_and_check_commands_are_accepted(self) -> None:
         with self.assertRaises(SystemExit):
             bridges.main(["list"])
+
+
+class RealBridgeCohortTests(unittest.TestCase):
+    def test_recipes_are_zero_copy_exactly_pinned_and_outputs_are_complete(self) -> None:
+        expected = {
+            "chrome-devtools": ("777genius/chrome-devtools-bridge", "ChromeDevTools/chrome-devtools-mcp", "774d78f5eef5e610407a0c92fa6ec5ed74b027e8", "Apache-2.0"),
+            "cloudflare-docs": ("777genius/cloudflare-docs-bridge", "cloudflare/mcp-server-cloudflare", "0c51a6fbcf9a2fae80120287e8238fb947cdc2df", "Apache-2.0"),
+            "github": ("777genius/github-bridge", "github/github-mcp-server", "fcdd664099f957c4a7dc183d9381cef191e8c8a9", "MIT"),
+        }
+        for bridge_id, values in expected.items():
+            with self.subTest(bridge=bridge_id):
+                _path, recipe = bridges.load_recipe(ROOT, bridge_id)
+                distribution, repository, revision, license_id = values
+                self.assertEqual(recipe["distribution_id"], distribution)
+                self.assertEqual(recipe["copy"], [])
+                self.assertEqual(recipe["upstream"]["repository"], repository)
+                self.assertEqual(recipe["upstream"]["revision"], revision)
+                self.assertEqual(recipe["upstream"]["license"]["spdx"], license_id)
+                self.assertTrue(recipe["upstream"]["license"]["attribution_paths"])
+                self.assertTrue(recipe["upstream"]["provenance"]["paths"])
+                output = ROOT / "plugins" / bridge_id
+                self.assertEqual(sorted(path.name for path in output.iterdir()), ["NOTICE", "README.md", "mcp.json", "plugin.json"])
+                manifest = json.loads((output / "plugin.json").read_text())
+                self.assertTrue(manifest["description"].startswith("Community package for "))
+
+    def test_runtime_identity_is_exact_and_non_floating(self) -> None:
+        chrome = json.loads((ROOT / "plugins/chrome-devtools/mcp.json").read_text())["mcpServers"]["chrome-devtools"]
+        cloudflare = json.loads((ROOT / "plugins/cloudflare-docs/mcp.json").read_text())["mcpServers"]["cloudflare-docs"]
+        github = json.loads((ROOT / "plugins/github/mcp.json").read_text())["mcpServers"]["github"]
+        self.assertEqual(chrome["args"], ["-y", "chrome-devtools-mcp@1.7.0"])
+        self.assertEqual(cloudflare["url"], "https://docs.mcp.cloudflare.com/mcp")
+        self.assertEqual(github["url"], "https://api.githubcopilot.com/mcp/")
+
+    def test_claimed_targets_materialize_complete_packages_in_disposable_roots(self) -> None:
+        directory = json.loads((ROOT / "registry/directory.json").read_text())
+        distributions = {item["id"]: item for item in directory["distributions"]}
+        bridge_ids = [
+            "777genius/chrome-devtools-bridge",
+            "777genius/cloudflare-docs-bridge",
+            "777genius/github-bridge",
+        ]
+        with tempfile.TemporaryDirectory(prefix="bridge-materialization-") as temporary:
+            sandbox = Path(temporary)
+            for distribution_id in bridge_ids:
+                distribution = distributions[distribution_id]
+                product_id = distribution["product_id"]
+                targets = distribution["release_policies"][0]["targets"]
+                for target in targets:
+                    with self.subTest(distribution=distribution_id, target=target["client"]):
+                        materialized = sandbox / target["client"] / product_id
+                        shutil.copytree(ROOT / "plugins" / product_id, materialized)
+                        self.assertEqual(bridges.validate_plugin(materialized), (1, 0))
+                        bridges.compare_trees(ROOT / "plugins" / product_id, materialized)
+
+    @unittest.skipUnless(os.environ.get("UAP_UPSTREAM_MIRROR"), "offline upstream mirror not configured")
+    def test_complete_upstream_context7_package_validates_and_matches_directory_digest(self) -> None:
+        revision = "769c6cd22c3d95462d1f55d789e9532cabefa5a9"
+        prefix = "plugins/agent-plugins/context7"
+        mirror = Path(os.environ["UAP_UPSTREAM_MIRROR"]) / "upstash/context7.git"
+        archive = subprocess.run(
+            ["git", f"--git-dir={mirror}", "archive", revision, prefix],
+            check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=30,
+        ).stdout
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary) / "context7"
+            root.mkdir()
+            with tarfile.open(fileobj=io.BytesIO(archive), mode="r:") as package:
+                for member in package.getmembers():
+                    if not member.isfile():
+                        continue
+                    relative = Path(member.name).relative_to(prefix)
+                    target = root / relative
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    extracted = package.extractfile(member)
+                    assert extracted is not None
+                    target.write_bytes(extracted.read())
+                    target.chmod(member.mode)
+                self.assertEqual(bridges.validate_plugin(root), (1, 1))
+                self.assertEqual(directory_tree_digest(root), "sha256:a4507f7326b10a9627b8030e6292df16710b33975cc53246992d239a172f45c8")
+                self.assertEqual(sorted(path.relative_to(root).as_posix() for path in root.rglob("*") if path.is_file()), ["LICENSE", "README.md", "mcp.json", "plugin.json", "skills/context7-mcp/SKILL.md"])
+                upstream_mcp = json.loads((root / "mcp.json").read_text())["mcpServers"]["context7"]
+                self.assertEqual(upstream_mcp, {"type": "streamable-http", "url": "https://mcp.context7.com/mcp/oauth"})
+                community_mcp = json.loads((ROOT / "plugins/context7/mcp.json").read_text())["mcpServers"]["context7"]
+                self.assertEqual(community_mcp["type"], "stdio")
+                self.assertEqual(community_mcp["args"], ["-y", "@upstash/context7-mcp@4.0.0"])
 
 
 if __name__ == "__main__":

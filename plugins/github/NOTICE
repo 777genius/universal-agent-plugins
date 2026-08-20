@@ -1,0 +1,14 @@
+GitHub MCP Server community bridge
+
+This Agent Plugins package was independently assembled by 777genius. It is not
+authored, published, sponsored, or endorsed by GitHub.
+
+Upstream project: github/github-mcp-server
+Pinned revision: fcdd664099f957c4a7dc183d9381cef191e8c8a9
+Upstream version: 1.10.1
+Upstream license: MIT
+License evidence: LICENSE (SHA-256 9e48ecfa18e2b15169746a3c97beda4d1d6c6796097038498ca434ca7e0ccd44)
+Endpoint evidence: README.md (SHA-256 90ee58fb7901826df015d98468507886103e03275d91cb60b158f46d9b30418f)
+
+No upstream source or executable bytes are copied into this package. The
+upstream files above are provenance evidence only.

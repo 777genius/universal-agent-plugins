@@ -420,11 +420,9 @@ class ExternalPackageTests(unittest.TestCase):
 
 
 class GeneratedIndexTests(unittest.TestCase):
-    def test_committed_index_is_deterministic_complete_and_sorted(self) -> None:
-        first = registry.encoded(registry.build())
-        second = registry.encoded(registry.build())
-        self.assertEqual(first, second)
-        self.assertEqual(first, registry.OUTPUT.read_bytes())
+    def test_committed_legacy_index_is_byte_frozen_complete_and_sorted(self) -> None:
+        registry.validate_legacy_catalog_freeze()
+        first = registry.OUTPUT.read_bytes()
         index = json.loads(first)
         self.assertEqual(index["schema_version"], 1)
         self.assertGreaterEqual(len(index["plugins"]), 26)
@@ -462,7 +460,8 @@ class GeneratedIndexTests(unittest.TestCase):
             }
             (entries / "demo.json").write_text(json.dumps(descriptor))
             opener = external_opener(archive_bytes(valid_entries()))
-            with mock.patch.object(registry, "ENTRIES", entries):
+            frozen_builtins = json.loads(registry.OUTPUT.read_bytes())["plugins"]
+            with mock.patch.object(registry, "ENTRIES", entries), mock.patch.object(registry, "builtin_entries", return_value=frozen_builtins):
                 index = registry.build(opener)
 
         self.assertEqual(len(index["plugins"]), 27)
@@ -491,36 +490,83 @@ class DirectoryDomainTests(unittest.TestCase):
     def fixture(self):
         return json.loads((Path(__file__).parent / "fixtures" / "directory" / "domain-source.json").read_text())
 
-    def test_all_26_packages_are_separate_products_distributions_releases_and_policies(self) -> None:
+    def test_26_products_include_the_first_bridge_cohort_and_context7_alternative(self) -> None:
         source = self.source()
         registry.validate_directory(source)
         self.assertEqual(len(source["products"]), 26)
-        self.assertEqual(len(source["distributions"]), 26)
+        self.assertEqual(len(source["distributions"]), 30)
         self.assertEqual({item["id"] for item in source["products"]}, {path.name for path in registry.ROOT.joinpath("plugins").iterdir() if path.is_dir()})
+        alternatives = {
+            "chrome-devtools": ["777genius/chrome-devtools", "777genius/chrome-devtools-bridge"],
+            "cloudflare-docs": ["777genius/cloudflare-docs", "777genius/cloudflare-docs-bridge"],
+            "context7": ["777genius/context7", "upstash/context7"],
+            "github": ["777genius/github", "777genius/github-bridge"],
+        }
         for product in source["products"]:
             self.assertEqual(product["aliases"], [product["id"]])
             self.assertEqual(product["reserved_aliases"], [product["id"]])
-            self.assertEqual(len(product["distributions"]), 1)
-            self.assertEqual(product["default_distribution"], product["distributions"][0])
+            expected = alternatives.get(product["id"], [f"777genius/{product['id']}"])
+            self.assertEqual(product["distributions"], expected)
         for distribution in source["distributions"]:
-            self.assertEqual(distribution["kind"], "community")
             self.assertEqual(distribution["status"], "active")
             self.assertEqual([item["sequence"] for item in distribution["releases"]], [1])
             self.assertEqual([item["release_sequence"] for item in distribution["release_policies"]], [1])
 
-    def test_committed_migration_is_reproducible_from_the_frozen_catalog(self) -> None:
-        self.assertEqual(self.source(), registry.migrated_directory_source())
+    def test_bridge_cohort_preserves_every_migrated_legacy_distribution(self) -> None:
+        source = self.source()
+        actual = {item["id"]: item for item in source["distributions"]}
+        expected_digests = {
+            "777genius/chrome-devtools": ("sha256:c98acc2cccecb5398af73d453ec97a2f46dec70ba3cdb3cd3daed0f4b743bd3a", "sha256:e7d43a8e39b0e83f2c05777e297f6a3884002dc2601d70528b55a44132db8091"),
+            "777genius/cloudflare-docs": ("sha256:6606abd32baac63bb5d01d7a249880e9020e60e80ae7923a180812ed10cb332b", "sha256:6b575562e527194ccd31238fde8c5f764409ecc98e211e92dfb81455eef88bdd"),
+            "777genius/github": ("sha256:30f1a3be5d5e8fa4665af2f84f42eb532c618484d9426807a19ee775f2585690", "sha256:091e37c5f33c0a92f77070cfcb1b03759b2637927281c04d989e6c8fef888cae"),
+        }
+        for distribution_id, digests in expected_digests.items():
+            release = actual[distribution_id]["releases"][0]
+            self.assertEqual(release["package_source"]["revision"], "2ddbb99dd190c1792b79904f9875e6322bccd243")
+            self.assertEqual((release["tree_digest"], release["manifest_digest"]), digests)
+            self.assertEqual(release["published_at"], "2026-08-09T22:28:33Z")
 
     def test_migration_preserves_exact_package_bytes_and_provenance(self) -> None:
         source = self.source()
         for distribution in source["distributions"]:
             release = distribution["releases"][0]
-            self.assertEqual(release["package_source"]["repository"], "777genius/universal-agent-plugins")
-            self.assertRegex(release["package_source"]["revision"], r"^[0-9a-f]{40}$")
+            if release["package_source"]["revision"] is not None:
+                continue
             root = registry.ROOT / release["package_source"]["path"]
             self.assertEqual(release["tree_digest_algorithm"], "uap-tree-sha256-v1")
             self.assertEqual(release["tree_digest"], registry.directory_tree_digest(root))
             self.assertEqual(release["manifest_digest"], registry.digest_bytes((root / "plugin.json").read_bytes()))
+
+    def test_real_bridge_defaults_qualified_history_and_context7_source_stickiness(self) -> None:
+        source = self.source()
+        expected_defaults = {
+            "chrome-devtools": "777genius/chrome-devtools-bridge",
+            "cloudflare-docs": "777genius/cloudflare-docs-bridge",
+            "github": "777genius/github-bridge",
+        }
+        for product, bridge in expected_defaults.items():
+            self.assertEqual(registry.resolve_directory(source, product, ["codex"])["distribution_id"], bridge)
+            legacy = f"777genius/{product}"
+            self.assertEqual(registry.resolve_directory(source, legacy, ["codex"])["distribution_id"], legacy)
+        self.assertEqual(registry.resolve_directory(source, "context7", ["codex"])["distribution_id"], "777genius/context7")
+        self.assertEqual(registry.resolve_directory(source, "upstash/context7", ["codex"])["distribution_id"], "upstash/context7")
+
+    def test_real_bridge_and_upstream_context7_provenance_is_exact(self) -> None:
+        source = self.source()
+        distributions = {item["id"]: item for item in source["distributions"]}
+        expected = {
+            "777genius/chrome-devtools-bridge": ("ChromeDevTools/chrome-devtools-mcp", "774d78f5eef5e610407a0c92fa6ec5ed74b027e8"),
+            "777genius/cloudflare-docs-bridge": ("cloudflare/mcp-server-cloudflare", "0c51a6fbcf9a2fae80120287e8238fb947cdc2df"),
+            "777genius/github-bridge": ("github/github-mcp-server", "fcdd664099f957c4a7dc183d9381cef191e8c8a9"),
+        }
+        for distribution_id, provenance in expected.items():
+            release = distributions[distribution_id]["releases"][0]
+            self.assertEqual((release["build_provenance"]["upstream_repository"], release["build_provenance"]["upstream_revision"]), provenance)
+            self.assertIsNone(release["package_source"]["revision"])
+        context7 = distributions["upstash/context7"]["releases"][0]
+        self.assertEqual(context7["package_source"], {"repository": "upstash/context7", "revision": "769c6cd22c3d95462d1f55d789e9532cabefa5a9", "path": "plugins/agent-plugins/context7"})
+        self.assertEqual(context7["tree_digest"], "sha256:a4507f7326b10a9627b8030e6292df16710b33975cc53246992d239a172f45c8")
+        self.assertEqual(context7["manifest_digest"], "sha256:d01781acd899aefa9445a290cf43a481230321934d62f9c8a2aab06a89718236")
 
     def test_distribution_kind_and_evidence_contract_fixture(self) -> None:
         fixture = self.fixture()

@@ -1,0 +1,14 @@
+Chrome DevTools community bridge
+
+This Agent Plugins package was independently assembled by 777genius. It is not
+authored, published, sponsored, or endorsed by ChromeDevTools or Google.
+
+Upstream project: ChromeDevTools/chrome-devtools-mcp
+Pinned revision: 774d78f5eef5e610407a0c92fa6ec5ed74b027e8
+Upstream version: 1.7.0
+Upstream license: Apache-2.0
+License evidence: LICENSE (SHA-256 58d1e17ffe5109a7ae296caafcadfdbe6a7d176f0bc4ab01e12a689b0499d8bd)
+Command/version evidence: package.json (SHA-256 19833012ab8f2a697349190a85fd617a7961a2a3a1ac4c996e7c16424bb8df29)
+
+No upstream source or executable bytes are copied into this package. The
+upstream files above are provenance evidence only.

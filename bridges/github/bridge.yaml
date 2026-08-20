@@ -1,0 +1,24 @@
+schema_version: 1
+product_id: github
+distribution_id: 777genius/github-bridge
+upstream:
+  repository: github/github-mcp-server
+  revision: fcdd664099f957c4a7dc183d9381cef191e8c8a9
+  license:
+    spdx: MIT
+    attribution_paths:
+      - path: LICENSE
+        sha256: sha256:9e48ecfa18e2b15169746a3c97beda4d1d6c6796097038498ca434ca7e0ccd44
+  provenance:
+    paths:
+      - path: README.md
+        sha256: sha256:90ee58fb7901826df015d98468507886103e03275d91cb60b158f46d9b30418f
+copy: []
+overlay: overlay
+overlay_replacements: []
+output: plugins/github
+executable_paths: []
+expected_version: 1.10.1
+components:
+  mcp_servers: [github]
+  skills: []

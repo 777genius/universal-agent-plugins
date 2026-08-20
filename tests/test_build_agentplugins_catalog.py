@@ -25,22 +25,17 @@ SPEC.loader.exec_module(builder)
 
 
 class AgentpluginsCatalogBuilderTests(unittest.TestCase):
-    def test_committed_catalog_is_reproducible(self) -> None:
-        for schema_version in (1, 2):
+    def test_committed_legacy_catalogs_are_byte_frozen(self) -> None:
+        expected = {
+            1: "9ed64038a8a1b1eab6956008f94b3ffa16f1b6ddf01e8b2809b202656423f183",
+            2: "66199c87bd68c65e39d15aa2c5c6e6c7830c9b116d8ed3590123031b32357050",
+        }
+        for schema_version, digest in expected.items():
             with self.subTest(schema_version=schema_version):
-                current = json.loads(
-                    (
-                        ROOT
-                        / "catalog"
-                        / f"v{schema_version}"
-                        / "catalog.json"
-                    ).read_text()
-                )
-                rebuilt = builder.build(
-                    current["revision"], current["published_at"], schema_version
-                )
-                self.assertEqual(rebuilt, current)
-                self.assertEqual(len(rebuilt["plugins"]), 26)
+                body = (ROOT / "catalog" / f"v{schema_version}" / "catalog.json").read_bytes()
+                self.assertEqual(hashlib.sha256(body).hexdigest(), digest)
+                current = json.loads(body)
+                self.assertEqual(len(current["plugins"]), 26)
 
     def test_released_catalog_v1_contract_is_byte_for_byte_unchanged(self) -> None:
         self.assertEqual(

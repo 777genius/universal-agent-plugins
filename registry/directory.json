@@ -71,7 +71,7 @@
       "schema_version": 1,
       "id": "chrome-devtools",
       "display_name": "Chrome Devtools",
-      "description": "Portable Agent Plugins package for Chrome DevTools MCP. Inspect pages, automate flows, analyze performance, and debug browser state.",
+      "description": "Community package for Chrome DevTools MCP. Inspect pages, automate flows, analyze performance, and debug browser state.",
       "manifest_name": "chrome-devtools",
       "aliases": [
         "chrome-devtools"
@@ -92,9 +92,10 @@
         "skills": "optional",
         "mcp": "required"
       },
-      "default_distribution": "777genius/chrome-devtools",
+      "default_distribution": "777genius/chrome-devtools-bridge",
       "distributions": [
-        "777genius/chrome-devtools"
+        "777genius/chrome-devtools",
+        "777genius/chrome-devtools-bridge"
       ],
       "icon": {
         "path": "assets/plugin-icons/googlechrome.svg",
@@ -171,7 +172,7 @@
       "schema_version": 1,
       "id": "cloudflare-docs",
       "display_name": "Cloudflare Docs",
-      "description": "Community package for the official Cloudflare hosted MCP plugin for up-to-date Cloudflare documentation and reference lookups through Cloudflare's remote documentation server.",
+      "description": "Community package for Cloudflare Docs MCP. Search current Cloudflare documentation through Cloudflare's hosted documentation server.",
       "manifest_name": "cloudflare-docs",
       "aliases": [
         "cloudflare-docs"
@@ -193,9 +194,10 @@
         "skills": "optional",
         "mcp": "required"
       },
-      "default_distribution": "777genius/cloudflare-docs",
+      "default_distribution": "777genius/cloudflare-docs-bridge",
       "distributions": [
-        "777genius/cloudflare-docs"
+        "777genius/cloudflare-docs",
+        "777genius/cloudflare-docs-bridge"
       ]
     },
     {
@@ -288,7 +290,8 @@
       },
       "default_distribution": "777genius/context7",
       "distributions": [
-        "777genius/context7"
+        "777genius/context7",
+        "upstash/context7"
       ],
       "icon": {
         "path": "assets/plugin-icons/context7.png",
@@ -400,7 +403,7 @@
       "schema_version": 1,
       "id": "github",
       "display_name": "GitHub",
-      "description": "Community Agent Plugin for repository, issue, pull request, review, and search workflows through GitHub's MCP server.",
+      "description": "Community package for GitHub MCP Server. Work with repositories, issues, pull requests, reviews, and code search through GitHub's hosted MCP endpoint.",
       "manifest_name": "github",
       "aliases": [
         "github"
@@ -420,9 +423,10 @@
         "skills": "optional",
         "mcp": "required"
       },
-      "default_distribution": "777genius/github",
+      "default_distribution": "777genius/github-bridge",
       "distributions": [
-        "777genius/github"
+        "777genius/github",
+        "777genius/github-bridge"
       ],
       "icon": {
         "path": "assets/plugin-icons/github.svg",
@@ -1096,6 +1100,50 @@
     },
     {
       "schema_version": 1,
+      "id": "777genius/chrome-devtools-bridge",
+      "product_id": "chrome-devtools",
+      "kind": "community_bridge",
+      "status": "active",
+      "packager": "777genius",
+      "releases": [
+        {
+          "sequence": 1,
+          "package_version": "1.7.0",
+          "manifest_name": "chrome-devtools",
+          "agent_plugins_schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+          "package_source": {
+            "repository": "777genius/universal-agent-plugins",
+            "revision": null,
+            "path": "plugins/chrome-devtools"
+          },
+          "build_provenance": {
+            "upstream_repository": "ChromeDevTools/chrome-devtools-mcp",
+            "upstream_revision": "774d78f5eef5e610407a0c92fa6ec5ed74b027e8"
+          },
+          "tree_digest_algorithm": "uap-tree-sha256-v1",
+          "tree_digest": "sha256:3a98671d9e4052d0df4a326d04a2b028f187c19f881fcdad663d562d5fc83f33",
+          "manifest_digest": "sha256:02a77a0509681567df75e941175b148c1bcdfe0001cec24cfef8300b85547850",
+          "components": ["mcp"]
+        }
+      ],
+      "release_policies": [
+        {
+          "release_sequence": 1,
+          "status": "active",
+          "minimum_installer_version": "0.1.6",
+          "targets": [
+            {"client": "codex", "scopes": ["user"], "delivery": "managed"},
+            {"client": "cursor", "scopes": ["user"], "delivery": "managed"},
+            {"client": "copilot", "scopes": ["user"], "delivery": "managed"},
+            {"client": "vscode", "scopes": ["user"], "delivery": "prepared"},
+            {"client": "kiro", "scopes": ["user"], "delivery": "managed"}
+          ],
+          "current_evidence": []
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
       "id": "777genius/cloudflare",
       "product_id": "cloudflare",
       "kind": "community",
@@ -1320,6 +1368,51 @@
               ],
               "delivery": "managed"
             }
+          ],
+          "current_evidence": []
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "777genius/cloudflare-docs-bridge",
+      "product_id": "cloudflare-docs",
+      "kind": "community_bridge",
+      "status": "active",
+      "packager": "777genius",
+      "releases": [
+        {
+          "sequence": 1,
+          "package_version": "0.4.13",
+          "manifest_name": "cloudflare-docs",
+          "agent_plugins_schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+          "package_source": {
+            "repository": "777genius/universal-agent-plugins",
+            "revision": null,
+            "path": "plugins/cloudflare-docs"
+          },
+          "build_provenance": {
+            "upstream_repository": "cloudflare/mcp-server-cloudflare",
+            "upstream_revision": "0c51a6fbcf9a2fae80120287e8238fb947cdc2df"
+          },
+          "tree_digest_algorithm": "uap-tree-sha256-v1",
+          "tree_digest": "sha256:0e63134f8a02ca8151939bea6bd67d029de482456e50ee8d432d9cc0047f68dd",
+          "manifest_digest": "sha256:7d1ada5818ced00257f39edd0bea371630ad5167dbfa572fbf01d7504012119c",
+          "components": ["mcp"]
+        }
+      ],
+      "release_policies": [
+        {
+          "release_sequence": 1,
+          "status": "active",
+          "minimum_installer_version": "0.1.6",
+          "targets": [
+            {"client": "codex", "scopes": ["user"], "delivery": "managed"},
+            {"client": "chatgpt", "scopes": ["user"], "delivery": "manual_activation", "app_binding": {"app_key": "cloudflare-docs", "id": "plugin_asdk_app_6a78e90cf73481918ef10cdb87cd4bb4", "mcp_server": "cloudflare-docs"}},
+            {"client": "cursor", "scopes": ["user"], "delivery": "managed"},
+            {"client": "copilot", "scopes": ["user"], "delivery": "managed"},
+            {"client": "vscode", "scopes": ["user"], "delivery": "prepared"},
+            {"client": "kiro", "scopes": ["user"], "delivery": "managed"}
           ],
           "current_evidence": []
         }
@@ -1831,6 +1924,50 @@
               ],
               "delivery": "managed"
             }
+          ],
+          "current_evidence": []
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "777genius/github-bridge",
+      "product_id": "github",
+      "kind": "community_bridge",
+      "status": "active",
+      "packager": "777genius",
+      "releases": [
+        {
+          "sequence": 1,
+          "package_version": "1.10.1",
+          "manifest_name": "github",
+          "agent_plugins_schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+          "package_source": {
+            "repository": "777genius/universal-agent-plugins",
+            "revision": null,
+            "path": "plugins/github"
+          },
+          "build_provenance": {
+            "upstream_repository": "github/github-mcp-server",
+            "upstream_revision": "fcdd664099f957c4a7dc183d9381cef191e8c8a9"
+          },
+          "tree_digest_algorithm": "uap-tree-sha256-v1",
+          "tree_digest": "sha256:453cdf8504990fb63a4cb27a0154488a9ddc2b0f808b9a47308a4efb38180e11",
+          "manifest_digest": "sha256:90f940c0f656bdf83fa8cccd5515bf4df9211c5a1d9cb095b84c30ee0f4f6efe",
+          "components": ["mcp"]
+        }
+      ],
+      "release_policies": [
+        {
+          "release_sequence": 1,
+          "status": "active",
+          "minimum_installer_version": "0.1.6",
+          "targets": [
+            {"client": "codex", "scopes": ["user"], "delivery": "managed"},
+            {"client": "cursor", "scopes": ["user"], "delivery": "managed"},
+            {"client": "copilot", "scopes": ["user"], "delivery": "managed"},
+            {"client": "vscode", "scopes": ["user"], "delivery": "prepared"},
+            {"client": "kiro", "scopes": ["user"], "delivery": "managed"}
           ],
           "current_evidence": []
         }
@@ -2780,6 +2917,46 @@
               ],
               "delivery": "managed"
             }
+          ],
+          "current_evidence": []
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "upstash/context7",
+      "product_id": "context7",
+      "kind": "upstream",
+      "status": "active",
+      "packager": "upstash",
+      "releases": [
+        {
+          "sequence": 1,
+          "package_version": "1.0.0",
+          "manifest_name": "context7",
+          "agent_plugins_schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+          "package_source": {
+            "repository": "upstash/context7",
+            "revision": "769c6cd22c3d95462d1f55d789e9532cabefa5a9",
+            "path": "plugins/agent-plugins/context7"
+          },
+          "tree_digest_algorithm": "uap-tree-sha256-v1",
+          "tree_digest": "sha256:a4507f7326b10a9627b8030e6292df16710b33975cc53246992d239a172f45c8",
+          "manifest_digest": "sha256:d01781acd899aefa9445a290cf43a481230321934d62f9c8a2aab06a89718236",
+          "components": ["mcp", "skills"]
+        }
+      ],
+      "release_policies": [
+        {
+          "release_sequence": 1,
+          "status": "active",
+          "minimum_installer_version": "0.1.6",
+          "targets": [
+            {"client": "codex", "scopes": ["user"], "delivery": "managed"},
+            {"client": "cursor", "scopes": ["user"], "delivery": "managed"},
+            {"client": "copilot", "scopes": ["user"], "delivery": "managed"},
+            {"client": "vscode", "scopes": ["user"], "delivery": "prepared"},
+            {"client": "kiro", "scopes": ["user"], "delivery": "managed"}
           ],
           "current_evidence": []
         }
