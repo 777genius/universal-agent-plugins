@@ -1,0 +1,99 @@
+{
+  "schema_version": 1,
+  "products": [
+    {
+      "schema_version": 1,
+      "id": "demo",
+      "display_name": "Demo",
+      "description": "Contract fixture for all supported Directory distribution kinds.",
+      "manifest_name": "demo",
+      "aliases": ["demo"],
+      "reserved_aliases": ["demo", "demo-old"],
+      "categories": ["developer-tools"],
+      "minimum_capabilities": {"skills": "optional", "mcp": "required"},
+      "default_distribution": "packager/demo-bridge",
+      "distributions": ["community/demo", "packager/demo-bridge", "upstream/demo"]
+    }
+  ],
+  "distributions": [
+    {
+      "schema_version": 1,
+      "id": "community/demo",
+      "product_id": "demo",
+      "kind": "community",
+      "status": "active",
+      "packager": "community",
+      "releases": [{
+        "sequence": 1,
+        "package_version": "one",
+        "manifest_name": "demo",
+        "agent_plugins_schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+        "package_source": {"repository": "community/packages", "revision": "cccccccccccccccccccccccccccccccccccccccc", "path": "plugins/demo"},
+        "tree_digest_algorithm": "uap-tree-sha256-v1",
+        "tree_digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "manifest_digest": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "components": ["mcp"]
+      }],
+      "release_policies": [{"release_sequence": 1, "status": "active", "minimum_installer_version": "0.1.6", "targets": [{"client": "codex", "scopes": ["user"], "delivery": "managed"}], "current_evidence": []}]
+    },
+    {
+      "schema_version": 1,
+      "id": "packager/demo-bridge",
+      "product_id": "demo",
+      "kind": "community_bridge",
+      "status": "active",
+      "packager": "packager",
+      "releases": [{
+        "sequence": 3,
+        "package_version": "0.0.0+git.aaaaaaaa",
+        "manifest_name": "demo",
+        "agent_plugins_schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+        "package_source": {"repository": "777genius/universal-agent-plugins", "revision": null, "path": "plugins/demo"},
+        "build_provenance": {"upstream_repository": "upstream/demo", "upstream_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},
+        "tree_digest_algorithm": "uap-tree-sha256-v1",
+        "tree_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "manifest_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "components": ["mcp"]
+      }],
+      "release_policies": [{"release_sequence": 3, "status": "active", "minimum_installer_version": "0.1.6", "targets": [{"client": "codex", "scopes": ["user"], "delivery": "managed"}, {"client": "cursor", "scopes": ["user"], "delivery": "managed"}], "current_evidence": ["evidence/demo-bridge-runtime"]}]
+    },
+    {
+      "schema_version": 1,
+      "id": "upstream/demo",
+      "product_id": "demo",
+      "kind": "upstream",
+      "status": "candidate",
+      "packager": "upstream",
+      "releases": [{
+        "sequence": 1,
+        "package_version": "1.0",
+        "manifest_name": "demo",
+        "agent_plugins_schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+        "package_source": {"repository": "upstream/demo", "revision": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee", "path": "plugin"},
+        "tree_digest_algorithm": "uap-tree-sha256-v1",
+        "tree_digest": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "manifest_digest": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+        "components": ["mcp"]
+      }],
+      "release_policies": [{"release_sequence": 1, "status": "active", "minimum_installer_version": "0.1.6", "targets": [{"client": "codex", "scopes": ["user"], "delivery": "managed"}, {"client": "cursor", "scopes": ["user"], "delivery": "managed"}], "current_evidence": []}]
+    }
+  ],
+  "evidence": [
+    {
+      "schema_version": 1,
+      "id": "evidence/demo-bridge-runtime",
+      "distribution_id": "packager/demo-bridge",
+      "release_sequence": 3,
+      "package_tree_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "level": "runtime",
+      "outcome": "passed",
+      "client": "cursor",
+      "client_version": "1.0.0",
+      "installer_version": "0.1.6",
+      "os": "linux",
+      "architecture": "amd64",
+      "observed_at": "2026-08-20T00:00:00Z",
+      "artifact": {"repository": "packager/packages", "revision": "9999999999999999999999999999999999999999", "path": "evidence/demo.json", "digest": "sha256:9999999999999999999999999999999999999999999999999999999999999999"}
+    }
+  ]
+}

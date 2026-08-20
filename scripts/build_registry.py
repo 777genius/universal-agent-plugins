@@ -34,6 +34,14 @@ from validate_catalog import ValidationError, validate_plugin
 ROOT = Path(__file__).resolve().parents[1]
 ENTRIES = ROOT / "registry" / "entries"
 OUTPUT = ROOT / "registry" / "index.json"
+DIRECTORY_SOURCE = ROOT / "registry" / "directory.json"
+REVIEW_PREVIEW = ROOT / "registry" / "review-preview.json"
+REVIEW_SEARCH = ROOT / "registry" / "review-search.json"
+LEGACY_CATALOG_DIGESTS = {
+    ROOT / "catalog" / "v1" / "catalog.json": "sha256:9ed64038a8a1b1eab6956008f94b3ffa16f1b6ddf01e8b2809b202656423f183",
+    ROOT / "catalog" / "v2" / "catalog.json": "sha256:66199c87bd68c65e39d15aa2c5c6e6c7830c9b116d8ed3590123031b32357050",
+    ROOT / "registry" / "index.json": "sha256:c38141953857be29383813e56e58383457c8b14ac8e2bdfcbcdec31bcd4b7207",
+}
 REPOSITORY_RE = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,37}[a-z0-9])?/[a-z0-9](?:[a-z0-9._-]{0,98}[a-z0-9])?$")
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 CATEGORY_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
@@ -55,6 +63,8 @@ MAX_PATH_DEPTH = 32
 MAX_CATEGORIES = 8
 ICON_NAMES = {"chrome-devtools": "googlechrome.svg", "docker-hub": "docker.svg", "hubspot-crm": "hubspot.svg", "hubspot-developer": "hubspot.svg"}
 CLIENT_IDS = ("codex", "chatgpt", "cursor", "copilot", "vscode", "kiro")
+KIND_PRIORITY = {"upstream": 0, "community_bridge": 1, "community": 2}
+DIRECTORY_TREE_DIGEST_ALGORITHM = "uap-tree-sha256-v1"
 
 
 class RegistryError(Exception):
@@ -68,6 +78,32 @@ def require(condition: bool, message: str) -> None:
 
 def digest_bytes(body: bytes) -> str:
     return "sha256:" + hashlib.sha256(body).hexdigest()
+
+
+def directory_tree_digest(root: Path) -> str:
+    """Hash a package closure with an explicit domain and length framing."""
+    validate_tree(root)
+    entries: list[tuple[bytes, bytes, bytes, bytes, bytes]] = []
+    for path in root.rglob("*"):
+        relative = path.relative_to(root)
+        if ".git" in relative.parts or path.name == ".plugin-kit-ai.lock":
+            continue
+        relative_bytes = relative.as_posix().encode("utf-8")
+        if path.is_dir():
+            entries.append((relative_bytes, b"directory", b"0755", b"", b""))
+        elif path.is_file():
+            mode = b"0755" if path.stat().st_mode & 0o111 else b"0644"
+            entries.append((relative_bytes, b"file", mode, b"", path.read_bytes()))
+        else:
+            raise RegistryError(f"unsupported package entry for Directory digest: {relative.as_posix()}")
+    entries.sort(key=lambda entry: entry[0])
+    digest = hashlib.sha256()
+    digest.update(b"Universal Agent Plugins Directory tree digest\x00v1\x00")
+    for entry in entries:
+        for field in entry:
+            digest.update(len(field).to_bytes(8, "big"))
+            digest.update(field)
+    return "sha256:" + digest.hexdigest()
 
 
 def parse_json_bytes(body: bytes, source: str) -> object:
@@ -488,25 +524,403 @@ def build(opener=None) -> dict[str, object]:  # type: ignore[no-untyped-def]
     return {"schema_version": 1, "plugins": plugins}
 
 
+def _schema(name: str) -> dict[str, object]:
+    return read_object(ROOT / "schemas" / name)
+
+
+def _validate_document(document: object, schema_name: str, label: str) -> None:
+    schema = _schema(schema_name)
+    try:
+        jsonschema.Draft202012Validator.check_schema(schema)
+        error = next(jsonschema.Draft202012Validator(schema).iter_errors(document), None)
+    except jsonschema.SchemaError as schema_error:
+        raise RegistryError(f"schemas/{schema_name}: invalid schema: {schema_error.message}") from schema_error
+    if error is not None:
+        location = "/".join(str(part) for part in error.absolute_path) or "<root>"
+        raise RegistryError(f"{label}: schema error at {location}: {error.message}")
+
+
+def _validate_source_schema(source: object) -> None:
+    schema_names = (
+        "directory-source.schema.json", "directory-product.schema.json",
+        "directory-distribution.schema.json", "directory-evidence.schema.json",
+    )
+    schemas = [_schema(name) for name in schema_names]
+    store = {schema["$id"]: schema for schema in schemas}
+    try:
+        resolver = jsonschema.RefResolver.from_schema(schemas[0], store=store)
+        error = next(jsonschema.Draft202012Validator(schemas[0], resolver=resolver).iter_errors(source), None)
+    except (jsonschema.SchemaError, jsonschema.exceptions.RefResolutionError) as schema_error:
+        raise RegistryError(f"Directory source schema cannot be resolved locally: {schema_error}") from schema_error
+    if error is not None:
+        location = "/".join(str(part) for part in error.absolute_path) or "<root>"
+        raise RegistryError(f"Directory source: schema error at {location}: {error.message}")
+
+
+def _display_name(name: str) -> str:
+    special = {"api": "API", "crm": "CRM", "github": "GitHub", "gitlab": "GitLab"}
+    return " ".join(special.get(part, part.capitalize()) for part in name.split("-"))
+
+
+def migrated_directory_source() -> dict[str, object]:
+    """Create the one-time, reviewable migration from the byte-frozen catalog."""
+    catalog = read_object(ROOT / "catalog" / "v2" / "catalog.json")
+    published_at = catalog.get("published_at")
+    require(isinstance(published_at, str), "catalog/v2 published_at is missing")
+    products: list[dict[str, object]] = []
+    distributions: list[dict[str, object]] = []
+    for item in builtin_entries():
+        name = str(item["name"])
+        distribution_id = f"777genius/{name}"
+        components = list(item["components"])
+        source = dict(item["source"])
+        compatibility = next(
+            value["compatibility"]
+            for value in catalog["plugins"]
+            if isinstance(value, dict) and value.get("name") == name
+        )
+        targets = []
+        for client in CLIENT_IDS:
+            if client not in compatibility:
+                continue
+            package = compatibility[client]["package"]
+            delivery = "manual_activation" if client == "chatgpt" else ("prepared" if package == "prepared" else "managed")
+            target = {"client": client, "scopes": ["user"], "delivery": delivery}
+            if client == "chatgpt":
+                binding = compatibility[client]["app_binding"]
+                target["app_binding"] = {key: binding[key] for key in ("app_key", "id", "mcp_server")}
+            targets.append(target)
+        minimum = {
+            "skills": "required" if "skills" in components else "optional",
+            "mcp": "required" if "mcp" in components else "optional",
+        }
+        product: dict[str, object] = {
+            "schema_version": 1,
+            "id": name,
+            "display_name": _display_name(name),
+            "description": item["description"],
+            "manifest_name": name,
+            "aliases": [name],
+            "reserved_aliases": [name],
+            "categories": item["categories"] or ["agent-plugins"],
+            "minimum_capabilities": minimum,
+            "default_distribution": distribution_id,
+            "distributions": [distribution_id],
+        }
+        if "icon" in item:
+            product["icon"] = {"path": item["icon"]["path"], "digest": item["icon"]["sha256"]}
+        products.append(product)
+        distributions.append({
+            "schema_version": 1,
+            "id": distribution_id,
+            "product_id": name,
+            "kind": "community",
+            "status": "active",
+            "packager": "777genius",
+            "releases": [{
+                "sequence": 1,
+                "package_version": item["version"],
+                "manifest_name": name,
+                "agent_plugins_schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+                "package_source": {"repository": source["repository"], "revision": source["revision"], "path": source["path"]},
+                "tree_digest_algorithm": DIRECTORY_TREE_DIGEST_ALGORITHM,
+                "tree_digest": directory_tree_digest(ROOT / source["path"]),
+                "manifest_digest": source["manifest_sha256"],
+                "components": components,
+                "published_at": published_at,
+            }],
+            "release_policies": [{
+                "release_sequence": 1,
+                "status": "active",
+                "minimum_installer_version": "0.1.6",
+                "targets": targets,
+                "current_evidence": [],
+            }],
+        })
+    require(len(products) == 26, f"migration must contain exactly 26 products, found {len(products)}")
+    return {"schema_version": 1, "products": products, "distributions": distributions, "evidence": []}
+
+
+def load_directory_source(path: Path = DIRECTORY_SOURCE) -> dict[str, object]:
+    source = read_object(path)
+    require(set(source) == {"schema_version", "products", "distributions", "evidence"}, f"{path}: unexpected top-level fields")
+    require(source.get("schema_version") == 1, f"{path}: schema_version must be 1")
+    for key in ("products", "distributions", "evidence"):
+        require(isinstance(source.get(key), list), f"{path}: {key} must be an array")
+    return source
+
+
+def _policy_for(distribution: dict[str, object], sequence: int) -> dict[str, object]:
+    policies = [policy for policy in distribution["release_policies"] if policy["release_sequence"] == sequence]
+    require(len(policies) == 1, f"{distribution['id']}: release {sequence} must have exactly one mutable policy")
+    return policies[0]
+
+
+def validate_directory(source: dict[str, object], *, verify_packages: bool = True) -> None:
+    _validate_source_schema(source)
+    products = source["products"]
+    distributions = source["distributions"]
+    evidence = source["evidence"]
+    for index, product in enumerate(products):
+        _validate_document(product, "directory-product.schema.json", f"product[{index}]")
+    for index, distribution in enumerate(distributions):
+        _validate_document(distribution, "directory-distribution.schema.json", f"distribution[{index}]")
+    for index, observation in enumerate(evidence):
+        _validate_document(observation, "directory-evidence.schema.json", f"evidence[{index}]")
+    product_ids = [product["id"] for product in products]
+    distribution_ids = [distribution["id"] for distribution in distributions]
+    evidence_ids = [observation["id"] for observation in evidence]
+    require(product_ids == sorted(product_ids) and len(set(product_ids)) == len(product_ids), "products must have unique sorted IDs")
+    require(distribution_ids == sorted(distribution_ids) and len(set(distribution_ids)) == len(distribution_ids), "distributions must have unique sorted IDs")
+    require(evidence_ids == sorted(evidence_ids) and len(set(evidence_ids)) == len(evidence_ids), "evidence must have unique sorted IDs")
+    products_by_id = {product["id"]: product for product in products}
+    distributions_by_id = {distribution["id"]: distribution for distribution in distributions}
+    evidence_by_id = {observation["id"]: observation for observation in evidence}
+    alias_owner: dict[str, str] = {}
+    for product in products:
+        require(product["aliases"] == sorted(product["aliases"]), f"{product['id']}: aliases must be sorted")
+        require(product["reserved_aliases"] == sorted(product["reserved_aliases"]), f"{product['id']}: reserved_aliases must be sorted")
+        require(set(product["aliases"]).issubset(product["reserved_aliases"]), f"{product['id']}: active aliases must remain reserved")
+        require(product["categories"] == sorted(product["categories"]), f"{product['id']}: categories must be sorted")
+        for alias in product["reserved_aliases"]:
+            require(alias not in alias_owner, f"reserved alias {alias!r} is owned by both {alias_owner.get(alias)} and {product['id']}")
+            alias_owner[alias] = product["id"]
+        listed = product["distributions"]
+        require(listed == sorted(listed), f"{product['id']}: distributions must be sorted")
+        require(product["default_distribution"] in listed, f"{product['id']}: default distribution is not listed")
+        for distribution_id in listed:
+            require(distribution_id in distributions_by_id, f"{product['id']}: unknown distribution {distribution_id}")
+            require(distributions_by_id[distribution_id]["product_id"] == product["id"], f"{distribution_id}: product ownership mismatch")
+    for distribution in distributions:
+        product_id = distribution["product_id"]
+        require(product_id in products_by_id and distribution["id"] in products_by_id[product_id]["distributions"], f"{distribution['id']}: distribution is not owned by its product")
+        releases = distribution["releases"]
+        sequences = [release["sequence"] for release in releases]
+        require(sequences == sorted(sequences) and len(set(sequences)) == len(sequences), f"{distribution['id']}: release sequences must be unique and increasing")
+        require([policy["release_sequence"] for policy in distribution["release_policies"]] == sequences, f"{distribution['id']}: policies must be sorted one-for-one with releases")
+        for release in releases:
+            sequence = release["sequence"]
+            require(release["manifest_name"] == products_by_id[product_id]["manifest_name"], f"{distribution['id']}@{sequence}: manifest identity mismatch")
+            require(release["tree_digest_algorithm"] == DIRECTORY_TREE_DIGEST_ALGORITHM, f"{distribution['id']}@{sequence}: unsupported tree digest algorithm")
+            require(release["components"] == sorted(release["components"]), f"{distribution['id']}@{sequence}: components must be sorted")
+            policy = _policy_for(distribution, sequence)
+            target_ids = [target["client"] for target in policy["targets"]]
+            require(target_ids == [client for client in CLIENT_IDS if client in target_ids] and len(set(target_ids)) == len(target_ids), f"{distribution['id']}@{sequence}: targets must be unique and in canonical order")
+            require(policy["current_evidence"] == sorted(policy["current_evidence"]), f"{distribution['id']}@{sequence}: evidence pointers must be sorted")
+            current_tuples: set[tuple[object, ...]] = set()
+            for evidence_id in policy["current_evidence"]:
+                require(evidence_id in evidence_by_id, f"{distribution['id']}@{sequence}: unknown evidence {evidence_id}")
+                observation = evidence_by_id[evidence_id]
+                require(observation["distribution_id"] == distribution["id"] and observation["release_sequence"] == sequence and observation["package_tree_digest"] == release["tree_digest"], f"{evidence_id}: evidence identity does not match release")
+                evidence_tuple = tuple(observation.get(field) for field in ("level", "client", "dependency_identity", "client_version", "installer_version", "os", "architecture"))
+                require(evidence_tuple not in current_tuples, f"{distribution['id']}@{sequence}: multiple current evidence pointers for one applicability tuple")
+                current_tuples.add(evidence_tuple)
+            package_source = release["package_source"]
+            if package_source["revision"] is None:
+                require(package_source["repository"] == "777genius/universal-agent-plugins", f"{distribution['id']}@{sequence}: only an in-repository release may await post-merge revision binding")
+                require(package_source["path"] == f"plugins/{product_id}", f"{distribution['id']}@{sequence}: unresolved in-repository release must use the canonical product package path")
+                require("published_at" not in release, f"{distribution['id']}@{sequence}: unresolved release cannot claim a publication time")
+            if distribution["kind"] == "community_bridge":
+                require("build_provenance" in release, f"{distribution['id']}@{sequence}: community bridge release requires pinned upstream build provenance")
+            else:
+                require("build_provenance" not in release, f"{distribution['id']}@{sequence}: build provenance is reserved for community bridge releases")
+            if distribution["kind"] == "upstream":
+                publisher = str(distribution["id"]).split("/", 1)[0]
+                require(str(package_source["repository"]).split("/", 1)[0] == publisher, f"{distribution['id']}@{sequence}: upstream package must be sourced from the upstream publisher namespace")
+            if verify_packages and package_source["repository"] == "777genius/universal-agent-plugins":
+                package_root = ROOT / package_source["path"]
+                require(package_root.is_dir(), f"{distribution['id']}@{sequence}: package path is missing")
+                fields = package_fields(package_root, [])
+                require(directory_tree_digest(package_root) == release["tree_digest"], f"{distribution['id']}@{sequence}: package tree digest drift")
+                require(fields["manifest_sha256"] == release["manifest_digest"], f"{distribution['id']}@{sequence}: manifest digest drift")
+    for product in products:
+        default = distributions_by_id[product["default_distribution"]]
+        require(default["status"] == "active", f"{product['id']}: default distribution is not active")
+        eligible = []
+        for release in default["releases"]:
+            policy = _policy_for(default, release["sequence"])
+            required = {component for component, state in product["minimum_capabilities"].items() if state == "required"}
+            if policy["status"] == "active" and required.issubset(release["components"]):
+                eligible.append(release)
+        require(eligible, f"{product['id']}: default has no publishable active release satisfying minimum capabilities")
+
+
+def _eligible_release(distribution: dict[str, object], product: dict[str, object], targets: set[str], evidence: dict[str, dict[str, object]] | None = None) -> tuple[dict[str, object] | None, str | None]:
+    if distribution["status"] != "active":
+        return None, f"distribution is {distribution['status']}"
+    required = {component for component, state in product["minimum_capabilities"].items() if state == "required"}
+    reasons = []
+    for release in reversed(distribution["releases"]):
+        policy = _policy_for(distribution, release["sequence"])
+        supported = {target["client"] for target in policy["targets"]}
+        if policy["status"] != "active":
+            reasons.append(f"release {release['sequence']} is {policy['status']}")
+        elif not required.issubset(release["components"]):
+            reasons.append(f"release {release['sequence']} misses required components")
+        elif not targets.issubset(supported):
+            reasons.append(f"release {release['sequence']} does not support {','.join(sorted(targets - supported))}")
+        elif evidence is not None:
+            failures = sorted({
+                observation["client"]
+                for evidence_id in policy["current_evidence"]
+                for observation in [evidence[evidence_id]]
+                if observation.get("client") in targets
+                and observation["level"] in {"materialization", "discovery", "runtime"}
+                and observation["outcome"] == "failed"
+            })
+            if failures:
+                reasons.append(f"release {release['sequence']} has blocking trusted failure for {','.join(failures)}")
+                continue
+            return release, None
+        else:
+            return release, None
+    return None, "; ".join(reasons) or "no releases"
+
+
+def resolve_directory(source: dict[str, object], selector: str, targets: list[str]) -> dict[str, object]:
+    """Resolve one release for the complete target set; never mix distributions."""
+    require(targets and len(targets) == len(set(targets)) and set(targets).issubset(CLIENT_IDS), "targets must be unique supported client IDs")
+    products = {product["id"]: product for product in source["products"]}
+    distributions = {distribution["id"]: distribution for distribution in source["distributions"]}
+    aliases = {alias: product for product in source["products"] for alias in product["aliases"]}
+    evidence = {observation["id"]: observation for observation in source["evidence"]}
+    if selector in distributions:
+        distribution = distributions[selector]
+        product = products[distribution["product_id"]]
+        release, reason = _eligible_release(distribution, product, set(targets), evidence)
+        require(release is not None, f"{selector}: {reason}")
+        return {"product_id": product["id"], "distribution_id": selector, "release_sequence": release["sequence"], "fallback_reason": None}
+    require(selector in aliases, f"unknown Directory selector: {selector}")
+    product = aliases[selector]
+    default_id = product["default_distribution"]
+    default = distributions[default_id]
+    release, reason = _eligible_release(default, product, set(targets), evidence)
+    if release is not None:
+        return {"product_id": product["id"], "distribution_id": default_id, "release_sequence": release["sequence"], "fallback_reason": None}
+    candidates = [distributions[item] for item in product["distributions"] if item != default_id]
+    candidates.sort(key=lambda item: (KIND_PRIORITY[item["kind"]], item["id"]))
+    for distribution in candidates:
+        fallback_release, _ = _eligible_release(distribution, product, set(targets), evidence)
+        if fallback_release is not None:
+            return {"product_id": product["id"], "distribution_id": distribution["id"], "release_sequence": fallback_release["sequence"], "fallback_reason": f"declared default {default_id} was ineligible: {reason}"}
+    raise RegistryError(f"{selector}: no distribution supports the complete target set ({reason})")
+
+
+def is_direct_source(selector: str) -> bool:
+    if selector.startswith("./") or selector.startswith("../") or selector.startswith("/"):
+        return True
+    prefix, separator, path = selector.partition("//")
+    repository, marker, revision = prefix.partition("@")
+    return bool(separator and path and marker and REPOSITORY_RE.fullmatch(repository) and SHA_RE.fullmatch(revision))
+
+
+def directory_preview(source: dict[str, object]) -> dict[str, object]:
+    distributions = {distribution["id"]: distribution for distribution in source["distributions"]}
+    evidence = {observation["id"]: observation for observation in source["evidence"]}
+    products = []
+    for product in source["products"]:
+        choices = []
+        for distribution_id in product["distributions"]:
+            distribution = distributions[distribution_id]
+            release = distribution["releases"][-1]
+            policy = _policy_for(distribution, release["sequence"])
+            blocking_clients = {
+                evidence[evidence_id]["client"]
+                for evidence_id in policy["current_evidence"]
+                if evidence[evidence_id].get("client")
+                and evidence[evidence_id]["level"] in {"materialization", "discovery", "runtime"}
+                and evidence[evidence_id]["outcome"] == "failed"
+            }
+            choices.append({
+                "id": distribution_id,
+                "kind": distribution["kind"],
+                "status": distribution["status"],
+                "release_sequence": release["sequence"],
+                "package_version": release["package_version"],
+                "components": release["components"],
+                "eligible_targets": [target["client"] for target in policy["targets"] if target["client"] not in blocking_clients] if policy["status"] == "active" and distribution["status"] == "active" else [],
+                "current_evidence": policy["current_evidence"],
+                "source": release["package_source"],
+                "tree_digest_algorithm": release["tree_digest_algorithm"],
+                "tree_digest": release["tree_digest"],
+                "manifest_digest": release["manifest_digest"],
+            })
+        products.append({
+            "id": product["id"], "display_name": product["display_name"], "description": product["description"],
+            "aliases": product["aliases"], "categories": product["categories"], "default_distribution": product["default_distribution"],
+            "fallback_order": [item["id"] for item in sorted((distributions[value] for value in product["distributions"]), key=lambda item: (item["id"] != product["default_distribution"], KIND_PRIORITY[item["kind"]], item["id"]))],
+            "distributions": choices,
+        })
+    return {"schema_version": 1, "product_count": len(products), "products": products}
+
+
+def directory_search(source: dict[str, object]) -> dict[str, object]:
+    return {"schema_version": 1, "entries": [{"product_id": product["id"], "text": " ".join([product["display_name"], product["description"], *product["aliases"], *product["categories"]]).casefold()} for product in source["products"]]}
+
+
+def validate_readme_blocks(source: dict[str, object]) -> None:
+    for product in source["products"]:
+        package_root = ROOT / "plugins" / product["id"]
+        if not package_root.is_dir():
+            continue
+        readme = package_root / "README.md"
+        require(readme.is_file(), f"{readme}: missing package README")
+        body = readme.read_text(encoding="utf-8")
+        start, end = "<!-- agentplugins-install:start -->", "<!-- agentplugins-install:end -->"
+        require(body.count(start) == body.count(end) == 1, f"{readme}: expected one delimited install block")
+        block = body.split(start, 1)[1].split(end, 1)[0]
+        expected = f"npx universal-agent-plugins add {product['id']}"
+        require(expected in block, f"{readme}: install block must contain {expected!r}")
+
+
+def validate_legacy_catalog_freeze() -> None:
+    for path, expected in LEGACY_CATALOG_DIGESTS.items():
+        require(path.is_file() and digest_bytes(path.read_bytes()) == expected, f"{path}: byte-frozen legacy catalog changed")
+
+
+def validate_no_flat_directory_entries() -> None:
+    if not ENTRIES.exists():
+        return
+    descriptors = sorted(path.name for path in ENTRIES.iterdir() if path.suffix == ".json")
+    require(not descriptors, "flat registry entries are frozen; submit products and distributions in registry/directory.json")
+
+
 def encoded(index: dict[str, object]) -> bytes:
     return (json.dumps(index, indent=2, ensure_ascii=False, sort_keys=False) + "\n").encode("utf-8")
 
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--check", action="store_true", help="fail if registry/index.json is stale")
+    parser.add_argument("--check", action="store_true", help="validate source and fail if deterministic outputs are stale")
+    parser.add_argument("--migrate-legacy", action="store_true", help="write the initial 26-product Directory source from the frozen catalog")
     args = parser.parse_args()
     try:
+        if args.migrate_legacy:
+            require(not DIRECTORY_SOURCE.exists(), f"{DIRECTORY_SOURCE}: refusing to overwrite review source")
+            DIRECTORY_SOURCE.write_bytes(encoded(migrated_directory_source()))
+        source = load_directory_source()
+        validate_directory(source)
+        validate_readme_blocks(source)
+        validate_legacy_catalog_freeze()
+        validate_no_flat_directory_entries()
+        preview = encoded(directory_preview(source))
+        search = encoded(directory_search(source))
+        _validate_document(json.loads(preview), "directory-preview.schema.json", "review preview")
+        _validate_document(json.loads(search), "directory-search.schema.json", "review search")
         output = encoded(build())
         if args.check:
             require(OUTPUT.is_file() and OUTPUT.read_bytes() == output, f"{OUTPUT}: generated index is stale; run scripts/build_registry.py")
+            require(REVIEW_PREVIEW.is_file() and REVIEW_PREVIEW.read_bytes() == preview, f"{REVIEW_PREVIEW}: deterministic review preview is stale")
+            require(REVIEW_SEARCH.is_file() and REVIEW_SEARCH.read_bytes() == search, f"{REVIEW_SEARCH}: deterministic preview search data is stale")
         else:
             OUTPUT.parent.mkdir(parents=True, exist_ok=True)
             OUTPUT.write_bytes(output)
+            REVIEW_PREVIEW.write_bytes(preview)
+            REVIEW_SEARCH.write_bytes(search)
     except RegistryError as error:
-        print(f"registry build failed: {error}", file=sys.stderr)
+        print(f"Directory build failed: {error}", file=sys.stderr)
         return 1
-    print(f"registry index valid ({len(json.loads(output)['plugins'])} plugins)")
+    print(f"Universal Agent Plugins Directory valid ({len(source['products'])} products)")
     return 0
 
 

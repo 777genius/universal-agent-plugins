@@ -1,0 +1,2790 @@
+{
+  "schema_version": 1,
+  "products": [
+    {
+      "schema_version": 1,
+      "id": "agent-code-navigator",
+      "display_name": "Agent Code Navigator",
+      "description": "Route code discovery across exact search, semantic search, LSP navigation, and call-graph analysis.",
+      "manifest_name": "agent-code-navigator",
+      "aliases": [
+        "agent-code-navigator"
+      ],
+      "reserved_aliases": [
+        "agent-code-navigator"
+      ],
+      "categories": [
+        "agent-plugins",
+        "code-intelligence",
+        "code-search",
+        "codegraph",
+        "codex",
+        "lsp"
+      ],
+      "minimum_capabilities": {
+        "skills": "required",
+        "mcp": "optional"
+      },
+      "default_distribution": "777genius/agent-code-navigator",
+      "distributions": [
+        "777genius/agent-code-navigator"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "atlassian",
+      "display_name": "Atlassian",
+      "description": "Community package for the official Atlassian Rovo MCP plugin for Jira, Confluence, and Compass workflows through Atlassian's hosted remote MCP service.",
+      "manifest_name": "atlassian",
+      "aliases": [
+        "atlassian"
+      ],
+      "reserved_aliases": [
+        "atlassian"
+      ],
+      "categories": [
+        "agent-plugins",
+        "ai-agents",
+        "atlassian",
+        "collaboration",
+        "compass",
+        "confluence",
+        "jira",
+        "mcp",
+        "planning",
+        "plugins"
+      ],
+      "minimum_capabilities": {
+        "skills": "optional",
+        "mcp": "required"
+      },
+      "default_distribution": "777genius/atlassian",
+      "distributions": [
+        "777genius/atlassian"
+      ],
+      "icon": {
+        "path": "assets/plugin-icons/atlassian.svg",
+        "digest": "sha256:5b2b712e8a9bb65fc7207f8273f586c325507f3f7c79b2a04e31da1dedd5f3b4"
+      }
+    },
+    {
+      "schema_version": 1,
+      "id": "chrome-devtools",
+      "display_name": "Chrome Devtools",
+      "description": "Portable Agent Plugins package for Chrome DevTools MCP. Inspect pages, automate flows, analyze performance, and debug browser state.",
+      "manifest_name": "chrome-devtools",
+      "aliases": [
+        "chrome-devtools"
+      ],
+      "reserved_aliases": [
+        "chrome-devtools"
+      ],
+      "categories": [
+        "agent-plugins",
+        "ai-agents",
+        "browser",
+        "chrome",
+        "debugging",
+        "mcp",
+        "performance"
+      ],
+      "minimum_capabilities": {
+        "skills": "optional",
+        "mcp": "required"
+      },
+      "default_distribution": "777genius/chrome-devtools",
+      "distributions": [
+        "777genius/chrome-devtools"
+      ],
+      "icon": {
+        "path": "assets/plugin-icons/googlechrome.svg",
+        "digest": "sha256:6f466b9a8da5314737ca5213367cfbf4a8ff75c1dbf58c30db9396cff3b16dd0"
+      }
+    },
+    {
+      "schema_version": 1,
+      "id": "cloudflare",
+      "display_name": "Cloudflare",
+      "description": "Community package for the official Cloudflare API MCP plugin for token-efficient access to the Cloudflare API through Cloudflare's hosted Code Mode server.",
+      "manifest_name": "cloudflare",
+      "aliases": [
+        "cloudflare"
+      ],
+      "reserved_aliases": [
+        "cloudflare"
+      ],
+      "categories": [
+        "agent-plugins",
+        "ai-agents",
+        "api",
+        "cloud",
+        "cloudflare",
+        "devops",
+        "mcp",
+        "plugins",
+        "workers"
+      ],
+      "minimum_capabilities": {
+        "skills": "optional",
+        "mcp": "required"
+      },
+      "default_distribution": "777genius/cloudflare",
+      "distributions": [
+        "777genius/cloudflare"
+      ],
+      "icon": {
+        "path": "assets/plugin-icons/cloudflare.svg",
+        "digest": "sha256:32876bda81542203316d67b9623818ac60986897cac79f70e03e8f31f7b7f160"
+      }
+    },
+    {
+      "schema_version": 1,
+      "id": "cloudflare-bindings",
+      "display_name": "Cloudflare Bindings",
+      "description": "Community package for the official Cloudflare Workers Bindings MCP integration for storage, AI, and compute primitives.",
+      "manifest_name": "cloudflare-bindings",
+      "aliases": [
+        "cloudflare-bindings"
+      ],
+      "reserved_aliases": [
+        "cloudflare-bindings"
+      ],
+      "categories": [
+        "agent-plugins",
+        "ai-agents",
+        "bindings",
+        "cloudflare",
+        "mcp",
+        "plugins",
+        "workers"
+      ],
+      "minimum_capabilities": {
+        "skills": "optional",
+        "mcp": "required"
+      },
+      "default_distribution": "777genius/cloudflare-bindings",
+      "distributions": [
+        "777genius/cloudflare-bindings"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "cloudflare-docs",
+      "display_name": "Cloudflare Docs",
+      "description": "Community package for the official Cloudflare hosted MCP plugin for up-to-date Cloudflare documentation and reference lookups through Cloudflare's remote documentation server.",
+      "manifest_name": "cloudflare-docs",
+      "aliases": [
+        "cloudflare-docs"
+      ],
+      "reserved_aliases": [
+        "cloudflare-docs"
+      ],
+      "categories": [
+        "agent-plugins",
+        "ai-agents",
+        "cloud",
+        "cloudflare",
+        "docs",
+        "mcp",
+        "plugins",
+        "research"
+      ],
+      "minimum_capabilities": {
+        "skills": "optional",
+        "mcp": "required"
+      },
+      "default_distribution": "777genius/cloudflare-docs",
+      "distributions": [
+        "777genius/cloudflare-docs"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "cloudflare-observability",
+      "display_name": "Cloudflare Observability",
+      "description": "Community package for the official Cloudflare hosted MCP plugin for logs, analytics, and production debugging through Cloudflare's remote observability server.",
+      "manifest_name": "cloudflare-observability",
+      "aliases": [
+        "cloudflare-observability"
+      ],
+      "reserved_aliases": [
+        "cloudflare-observability"
+      ],
+      "categories": [
+        "agent-plugins",
+        "ai-agents",
+        "analytics",
+        "cloud",
+        "cloudflare",
+        "debugging",
+        "devops",
+        "mcp",
+        "observability",
+        "plugins"
+      ],
+      "minimum_capabilities": {
+        "skills": "optional",
+        "mcp": "required"
+      },
+      "default_distribution": "777genius/cloudflare-observability",
+      "distributions": [
+        "777genius/cloudflare-observability"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "cloudflare-radar",
+      "display_name": "Cloudflare Radar",
+      "description": "Community package for the official Cloudflare Radar MCP plugin for internet telemetry, traffic trends, and network intelligence through Cloudflare's hosted Radar server.",
+      "manifest_name": "cloudflare-radar",
+      "aliases": [
+        "cloudflare-radar"
+      ],
+      "reserved_aliases": [
+        "cloudflare-radar"
+      ],
+      "categories": [
+        "agent-plugins",
+        "ai-agents",
+        "analytics",
+        "cloudflare",
+        "mcp",
+        "network",
+        "plugins",
+        "radar"
+      ],
+      "minimum_capabilities": {
+        "skills": "optional",
+        "mcp": "required"
+      },
+      "default_distribution": "777genius/cloudflare-radar",
+      "distributions": [
+        "777genius/cloudflare-radar"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "context7",
+      "display_name": "Context7",
+      "description": "Portable Agent Plugins package for Context7. Pull up-to-date, version-specific documentation and code examples directly from source repositories into agent context.",
+      "manifest_name": "context7",
+      "aliases": [
+        "context7"
+      ],
+      "reserved_aliases": [
+        "context7"
+      ],
+      "categories": [
+        "agent-plugins",
+        "ai-agents",
+        "context7",
+        "documentation",
+        "mcp",
+        "plugins"
+      ],
+      "minimum_capabilities": {
+        "skills": "optional",
+        "mcp": "required"
+      },
+      "default_distribution": "777genius/context7",
+      "distributions": [
+        "777genius/context7"
+      ],
+      "icon": {
+        "path": "assets/plugin-icons/context7.png",
+        "digest": "sha256:3ba6504a9d361cb43e71afa0a7666bc6f36853f0a0847812b4b2d6479afe21f6"
+      }
+    },
+    {
+      "schema_version": 1,
+      "id": "docker-hub",
+      "display_name": "Docker Hub",
+      "description": "Community package for the official Docker Hub MCP plugin for repository, image, and Docker Hub workflows through Docker's containerized stdio server.",
+      "manifest_name": "docker-hub",
+      "aliases": [
+        "docker-hub"
+      ],
+      "reserved_aliases": [
+        "docker-hub"
+      ],
+      "categories": [
+        "agent-plugins",
+        "ai-agents",
+        "containers",
+        "docker",
+        "mcp",
+        "plugins",
+        "registry"
+      ],
+      "minimum_capabilities": {
+        "skills": "optional",
+        "mcp": "required"
+      },
+      "default_distribution": "777genius/docker-hub",
+      "distributions": [
+        "777genius/docker-hub"
+      ],
+      "icon": {
+        "path": "assets/plugin-icons/docker.svg",
+        "digest": "sha256:ba1fb157870b2ec02e054aed42154ac7418e25af91ec321fd328d17cad4023cd"
+      }
+    },
+    {
+      "schema_version": 1,
+      "id": "figma",
+      "display_name": "Figma",
+      "description": "Community package for the official Figma MCP plugin for design context, code-to-design workflows, and authenticated access to Figma Design, Make, and FigJam through Figma's remote MCP service.",
+      "manifest_name": "figma",
+      "aliases": [
+        "figma"
+      ],
+      "reserved_aliases": [
+        "figma"
+      ],
+      "categories": [
+        "agent-plugins",
+        "ai-agents",
+        "design",
+        "figma",
+        "mcp",
+        "plugins",
+        "ui"
+      ],
+      "minimum_capabilities": {
+        "skills": "optional",
+        "mcp": "required"
+      },
+      "default_distribution": "777genius/figma",
+      "distributions": [
+        "777genius/figma"
+      ],
+      "icon": {
+        "path": "assets/plugin-icons/figma.svg",
+        "digest": "sha256:b9171110637bb953781a04044d9957478ae84f6a7ac597a25c0bfdfb3292a45e"
+      }
+    },
+    {
+      "schema_version": 1,
+      "id": "firebase",
+      "display_name": "Firebase",
+      "description": "Google Firebase MCP integration. Manage Firestore databases, authentication, cloud functions, hosting, and storage. Build and manage your Firebase backend directly from your development workflow.",
+      "manifest_name": "firebase",
+      "aliases": [
+        "firebase"
+      ],
+      "reserved_aliases": [
+        "firebase"
+      ],
+      "categories": [
+        "agent-plugins",
+        "ai-agents",
+        "firebase",
+        "firestore",
+        "mcp",
+        "plugins"
+      ],
+      "minimum_capabilities": {
+        "skills": "optional",
+        "mcp": "required"
+      },
+      "default_distribution": "777genius/firebase",
+      "distributions": [
+        "777genius/firebase"
+      ],
+      "icon": {
+        "path": "assets/plugin-icons/firebase.svg",
+        "digest": "sha256:abbf47a2efb5468324769adb713211d1611f16550440bb3ca9d224462e2f44c3"
+      }
+    },
+    {
+      "schema_version": 1,
+      "id": "github",
+      "display_name": "GitHub",
+      "description": "Community Agent Plugin for repository, issue, pull request, review, and search workflows through GitHub's MCP server.",
+      "manifest_name": "github",
+      "aliases": [
+        "github"
+      ],
+      "reserved_aliases": [
+        "github"
+      ],
+      "categories": [
+        "agent-plugins",
+        "ai-agents",
+        "auth",
+        "github",
+        "mcp",
+        "plugins"
+      ],
+      "minimum_capabilities": {
+        "skills": "optional",
+        "mcp": "required"
+      },
+      "default_distribution": "777genius/github",
+      "distributions": [
+        "777genius/github"
+      ],
+      "icon": {
+        "path": "assets/plugin-icons/github.svg",
+        "digest": "sha256:7355ca8b501686639280d23ab673dbfe55edaca09daa7eb0d45c6526ec570e6a"
+      }
+    },
+    {
+      "schema_version": 1,
+      "id": "gitlab",
+      "display_name": "GitLab",
+      "description": "Portable Agent Plugins package for GitLab MCP. Inspect projects, issues, merge requests, and related DevOps workflows through GitLab's HTTP server.",
+      "manifest_name": "gitlab",
+      "aliases": [
+        "gitlab"
+      ],
+      "reserved_aliases": [
+        "gitlab"
+      ],
+      "categories": [
+        "agent-plugins",
+        "ai-agents",
+        "gitlab",
+        "mcp",
+        "oauth",
+        "plugins"
+      ],
+      "minimum_capabilities": {
+        "skills": "optional",
+        "mcp": "required"
+      },
+      "default_distribution": "777genius/gitlab",
+      "distributions": [
+        "777genius/gitlab"
+      ],
+      "icon": {
+        "path": "assets/plugin-icons/gitlab.svg",
+        "digest": "sha256:3bbfcd2707b9cd5bc6d68d561da605c520a707ceaecf3912aede560bb0990e27"
+      }
+    },
+    {
+      "schema_version": 1,
+      "id": "greptile",
+      "display_name": "Greptile",
+      "description": "Community package for the official Greptile MCP integration for repository search and code intelligence tooling.",
+      "manifest_name": "greptile",
+      "aliases": [
+        "greptile"
+      ],
+      "reserved_aliases": [
+        "greptile"
+      ],
+      "categories": [
+        "agent-plugins",
+        "ai-agents",
+        "code-search",
+        "greptile",
+        "mcp",
+        "plugins",
+        "repository"
+      ],
+      "minimum_capabilities": {
+        "skills": "optional",
+        "mcp": "required"
+      },
+      "default_distribution": "777genius/greptile",
+      "distributions": [
+        "777genius/greptile"
+      ],
+      "icon": {
+        "path": "assets/plugin-icons/greptile.png",
+        "digest": "sha256:1222f4a9a6f6979452947f4c59cf1a34f059fc933270b898e3cf049bbd882898"
+      }
+    },
+    {
+      "schema_version": 1,
+      "id": "heroku",
+      "display_name": "Heroku",
+      "description": "Community package for the official Heroku hosted MCP plugin for apps, add-ons, logs, Postgres, and operational workflows through Heroku's remote MCP service.",
+      "manifest_name": "heroku",
+      "aliases": [
+        "heroku"
+      ],
+      "reserved_aliases": [
+        "heroku"
+      ],
+      "categories": [
+        "agent-plugins",
+        "ai-agents",
+        "apps",
+        "backend",
+        "cloud",
+        "devops",
+        "heroku",
+        "mcp",
+        "plugins"
+      ],
+      "minimum_capabilities": {
+        "skills": "optional",
+        "mcp": "required"
+      },
+      "default_distribution": "777genius/heroku",
+      "distributions": [
+        "777genius/heroku"
+      ],
+      "icon": {
+        "path": "assets/plugin-icons/heroku.png",
+        "digest": "sha256:368a7d40a8f57c2bdd0ffef591f1ca613d8323bedaeb9aac54a4b7dd1c98b229"
+      }
+    },
+    {
+      "schema_version": 1,
+      "id": "hubspot-crm",
+      "display_name": "Hubspot CRM",
+      "description": "Community package for the official HubSpot remote MCP integration for beta, read-only CRM object access through HubSpot's hosted MCP server.",
+      "manifest_name": "hubspot-crm",
+      "aliases": [
+        "hubspot-crm"
+      ],
+      "reserved_aliases": [
+        "hubspot-crm"
+      ],
+      "categories": [
+        "agent-plugins",
+        "ai-agents",
+        "crm",
+        "hubspot",
+        "mcp",
+        "plugins",
+        "sales"
+      ],
+      "minimum_capabilities": {
+        "skills": "optional",
+        "mcp": "required"
+      },
+      "default_distribution": "777genius/hubspot-crm",
+      "distributions": [
+        "777genius/hubspot-crm"
+      ],
+      "icon": {
+        "path": "assets/plugin-icons/hubspot.svg",
+        "digest": "sha256:5e3d32c06f065e541829e34c2d2429b1fee686a49020b1974b3fec228916f55e"
+      }
+    },
+    {
+      "schema_version": 1,
+      "id": "hubspot-developer",
+      "display_name": "Hubspot Developer",
+      "description": "Local HubSpot Developer MCP integration for project scaffolding, CMS, builds, logs, and app workflows via the HubSpot CLI.",
+      "manifest_name": "hubspot-developer",
+      "aliases": [
+        "hubspot-developer"
+      ],
+      "reserved_aliases": [
+        "hubspot-developer"
+      ],
+      "categories": [
+        "agent-plugins",
+        "ai-agents",
+        "cms",
+        "developer-tools",
+        "hubspot",
+        "mcp",
+        "plugins"
+      ],
+      "minimum_capabilities": {
+        "skills": "optional",
+        "mcp": "required"
+      },
+      "default_distribution": "777genius/hubspot-developer",
+      "distributions": [
+        "777genius/hubspot-developer"
+      ],
+      "icon": {
+        "path": "assets/plugin-icons/hubspot.svg",
+        "digest": "sha256:5e3d32c06f065e541829e34c2d2429b1fee686a49020b1974b3fec228916f55e"
+      }
+    },
+    {
+      "schema_version": 1,
+      "id": "linear",
+      "display_name": "Linear",
+      "description": "Community package for the official Linear MCP integration for workspace management, issues, and project workflows.",
+      "manifest_name": "linear",
+      "aliases": [
+        "linear"
+      ],
+      "reserved_aliases": [
+        "linear"
+      ],
+      "categories": [
+        "agent-plugins",
+        "ai-agents",
+        "issues",
+        "linear",
+        "mcp",
+        "plugins",
+        "project-management"
+      ],
+      "minimum_capabilities": {
+        "skills": "optional",
+        "mcp": "required"
+      },
+      "default_distribution": "777genius/linear",
+      "distributions": [
+        "777genius/linear"
+      ],
+      "icon": {
+        "path": "assets/plugin-icons/linear.svg",
+        "digest": "sha256:3700486fede168b1fbaf0987eda06621d0e54dd30968578b857fd7360cb2029e"
+      }
+    },
+    {
+      "schema_version": 1,
+      "id": "neon",
+      "display_name": "Neon",
+      "description": "Community package for the official Neon hosted MCP plugin for database, branch, and project workflows through Neon's remote MCP server.",
+      "manifest_name": "neon",
+      "aliases": [
+        "neon"
+      ],
+      "reserved_aliases": [
+        "neon"
+      ],
+      "categories": [
+        "agent-plugins",
+        "ai-agents",
+        "database",
+        "mcp",
+        "neon",
+        "plugins",
+        "postgres"
+      ],
+      "minimum_capabilities": {
+        "skills": "optional",
+        "mcp": "required"
+      },
+      "default_distribution": "777genius/neon",
+      "distributions": [
+        "777genius/neon"
+      ],
+      "icon": {
+        "path": "assets/plugin-icons/neon.svg",
+        "digest": "sha256:1efb65dc651fea608e77c090df6a6113fdb186a3ca3643d2800db34bea9a72b2"
+      }
+    },
+    {
+      "schema_version": 1,
+      "id": "notion",
+      "display_name": "Notion",
+      "description": "Community package for the official Notion hosted MCP plugin for user-authorized workspace access. Search pages, read docs, edit content, and work with Notion knowledge directly from AI agents.",
+      "manifest_name": "notion",
+      "aliases": [
+        "notion"
+      ],
+      "reserved_aliases": [
+        "notion"
+      ],
+      "categories": [
+        "agent-plugins",
+        "ai-agents",
+        "collaboration",
+        "knowledge",
+        "mcp",
+        "notion",
+        "planning",
+        "plugins"
+      ],
+      "minimum_capabilities": {
+        "skills": "optional",
+        "mcp": "required"
+      },
+      "default_distribution": "777genius/notion",
+      "distributions": [
+        "777genius/notion"
+      ],
+      "icon": {
+        "path": "assets/plugin-icons/notion.svg",
+        "digest": "sha256:81f54dd0d8bc6dd8d01c56acd8cb67a60bc66f0b1fa48754e9d28f9f6c3d83f9"
+      }
+    },
+    {
+      "schema_version": 1,
+      "id": "sentry",
+      "display_name": "Sentry",
+      "description": "Community package for the official Sentry hosted MCP plugin for human-in-the-loop debugging, issue triage, and incident workflows through Sentry's remote MCP service.",
+      "manifest_name": "sentry",
+      "aliases": [
+        "sentry"
+      ],
+      "reserved_aliases": [
+        "sentry"
+      ],
+      "categories": [
+        "agent-plugins",
+        "ai-agents",
+        "debugging",
+        "incidents",
+        "mcp",
+        "plugins",
+        "sentry"
+      ],
+      "minimum_capabilities": {
+        "skills": "optional",
+        "mcp": "required"
+      },
+      "default_distribution": "777genius/sentry",
+      "distributions": [
+        "777genius/sentry"
+      ],
+      "icon": {
+        "path": "assets/plugin-icons/sentry.svg",
+        "digest": "sha256:24ac56868a3b5dd440c4de2a3cf8f6864591ba81067eedd8d6be0b0690b136eb"
+      }
+    },
+    {
+      "schema_version": 1,
+      "id": "statsig",
+      "display_name": "Statsig",
+      "description": "Community package for the official Statsig MCP plugin for experiments, feature flags, configs, metrics, and console workflows through Statsig's hosted MCP service.",
+      "manifest_name": "statsig",
+      "aliases": [
+        "statsig"
+      ],
+      "reserved_aliases": [
+        "statsig"
+      ],
+      "categories": [
+        "agent-plugins",
+        "ai-agents",
+        "experimentation",
+        "feature-flags",
+        "mcp",
+        "plugins",
+        "statsig"
+      ],
+      "minimum_capabilities": {
+        "skills": "optional",
+        "mcp": "required"
+      },
+      "default_distribution": "777genius/statsig",
+      "distributions": [
+        "777genius/statsig"
+      ],
+      "icon": {
+        "path": "assets/plugin-icons/statsig.png",
+        "digest": "sha256:d5d78848f86767a6bb2d54326621f864b20a42e12de3dfba7d40dd2981129d0e"
+      }
+    },
+    {
+      "schema_version": 1,
+      "id": "stripe",
+      "display_name": "Stripe",
+      "description": "Community package for the official Stripe hosted MCP plugin for payments, billing, customer, and documentation workflows through Stripe's remote MCP service.",
+      "manifest_name": "stripe",
+      "aliases": [
+        "stripe"
+      ],
+      "reserved_aliases": [
+        "stripe"
+      ],
+      "categories": [
+        "agent-plugins",
+        "ai-agents",
+        "billing",
+        "commerce",
+        "mcp",
+        "payments",
+        "plugins",
+        "stripe"
+      ],
+      "minimum_capabilities": {
+        "skills": "optional",
+        "mcp": "required"
+      },
+      "default_distribution": "777genius/stripe",
+      "distributions": [
+        "777genius/stripe"
+      ],
+      "icon": {
+        "path": "assets/plugin-icons/stripe.svg",
+        "digest": "sha256:7576775bf9915b696bbb9162268f5c56147d2b4221a76ac6a9ca92835239b7e9"
+      }
+    },
+    {
+      "schema_version": 1,
+      "id": "supabase",
+      "display_name": "Supabase",
+      "description": "Community package for the official Supabase MCP integration for development and database operations from agent workflows.",
+      "manifest_name": "supabase",
+      "aliases": [
+        "supabase"
+      ],
+      "reserved_aliases": [
+        "supabase"
+      ],
+      "categories": [
+        "agent-plugins",
+        "ai-agents",
+        "backend",
+        "mcp",
+        "plugins",
+        "postgres",
+        "supabase"
+      ],
+      "minimum_capabilities": {
+        "skills": "optional",
+        "mcp": "required"
+      },
+      "default_distribution": "777genius/supabase",
+      "distributions": [
+        "777genius/supabase"
+      ],
+      "icon": {
+        "path": "assets/plugin-icons/supabase.svg",
+        "digest": "sha256:75f9566421d97d4f1d8d7f34526189fd6e727ca83987432fc2477c2fc8388086"
+      }
+    },
+    {
+      "schema_version": 1,
+      "id": "vercel",
+      "display_name": "Vercel",
+      "description": "Community package for the official Vercel hosted MCP plugin for project, deployment, log, and documentation workflows through Vercel's remote MCP service.",
+      "manifest_name": "vercel",
+      "aliases": [
+        "vercel"
+      ],
+      "reserved_aliases": [
+        "vercel"
+      ],
+      "categories": [
+        "agent-plugins",
+        "ai-agents",
+        "deployments",
+        "mcp",
+        "plugins",
+        "vercel"
+      ],
+      "minimum_capabilities": {
+        "skills": "optional",
+        "mcp": "required"
+      },
+      "default_distribution": "777genius/vercel",
+      "distributions": [
+        "777genius/vercel"
+      ],
+      "icon": {
+        "path": "assets/plugin-icons/vercel.svg",
+        "digest": "sha256:6217577e71250f65a47fa6d738dfd32aef81446c0708c146415ec2b04622a768"
+      }
+    }
+  ],
+  "distributions": [
+    {
+      "schema_version": 1,
+      "id": "777genius/agent-code-navigator",
+      "product_id": "agent-code-navigator",
+      "kind": "community",
+      "status": "active",
+      "packager": "777genius",
+      "releases": [
+        {
+          "sequence": 1,
+          "package_version": "0.1.0",
+          "manifest_name": "agent-code-navigator",
+          "agent_plugins_schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+          "package_source": {
+            "repository": "777genius/universal-agent-plugins",
+            "revision": "2ddbb99dd190c1792b79904f9875e6322bccd243",
+            "path": "plugins/agent-code-navigator"
+          },
+          "tree_digest_algorithm": "uap-tree-sha256-v1",
+          "tree_digest": "sha256:00955f92fc2f5a1628359de7e34a09a4f80c14efdb2492c7ac15f53dcd8810e4",
+          "manifest_digest": "sha256:675fb48dff9431f75e2986211039b3bfb04860a84d6a5bd157b9658514a2394e",
+          "components": [
+            "skills"
+          ],
+          "published_at": "2026-08-09T22:28:33Z"
+        }
+      ],
+      "release_policies": [
+        {
+          "release_sequence": 1,
+          "status": "active",
+          "minimum_installer_version": "0.1.6",
+          "targets": [
+            {
+              "client": "codex",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed"
+            },
+            {
+              "client": "cursor",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed"
+            },
+            {
+              "client": "copilot",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed"
+            },
+            {
+              "client": "vscode",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "prepared"
+            },
+            {
+              "client": "kiro",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed"
+            }
+          ],
+          "current_evidence": []
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "777genius/atlassian",
+      "product_id": "atlassian",
+      "kind": "community",
+      "status": "active",
+      "packager": "777genius",
+      "releases": [
+        {
+          "sequence": 1,
+          "package_version": "0.1.0",
+          "manifest_name": "atlassian",
+          "agent_plugins_schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+          "package_source": {
+            "repository": "777genius/universal-agent-plugins",
+            "revision": "2ddbb99dd190c1792b79904f9875e6322bccd243",
+            "path": "plugins/atlassian"
+          },
+          "tree_digest_algorithm": "uap-tree-sha256-v1",
+          "tree_digest": "sha256:0cd3fb43e91422751f8aa615c649e0fd74762e3429ef7f1c397313760e596064",
+          "manifest_digest": "sha256:e83ade754f1251554622e4b48d596ebf72510bd7292b19a7793df4de8e546d04",
+          "components": [
+            "mcp"
+          ],
+          "published_at": "2026-08-09T22:28:33Z"
+        }
+      ],
+      "release_policies": [
+        {
+          "release_sequence": 1,
+          "status": "active",
+          "minimum_installer_version": "0.1.6",
+          "targets": [
+            {
+              "client": "codex",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed"
+            },
+            {
+              "client": "cursor",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed"
+            },
+            {
+              "client": "copilot",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed"
+            },
+            {
+              "client": "vscode",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "prepared"
+            },
+            {
+              "client": "kiro",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed"
+            }
+          ],
+          "current_evidence": []
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "777genius/chrome-devtools",
+      "product_id": "chrome-devtools",
+      "kind": "community",
+      "status": "active",
+      "packager": "777genius",
+      "releases": [
+        {
+          "sequence": 1,
+          "package_version": "0.1.0",
+          "manifest_name": "chrome-devtools",
+          "agent_plugins_schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+          "package_source": {
+            "repository": "777genius/universal-agent-plugins",
+            "revision": "2ddbb99dd190c1792b79904f9875e6322bccd243",
+            "path": "plugins/chrome-devtools"
+          },
+          "tree_digest_algorithm": "uap-tree-sha256-v1",
+          "tree_digest": "sha256:c98acc2cccecb5398af73d453ec97a2f46dec70ba3cdb3cd3daed0f4b743bd3a",
+          "manifest_digest": "sha256:e7d43a8e39b0e83f2c05777e297f6a3884002dc2601d70528b55a44132db8091",
+          "components": [
+            "mcp"
+          ],
+          "published_at": "2026-08-09T22:28:33Z"
+        }
+      ],
+      "release_policies": [
+        {
+          "release_sequence": 1,
+          "status": "active",
+          "minimum_installer_version": "0.1.6",
+          "targets": [
+            {
+              "client": "codex",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed"
+            },
+            {
+              "client": "cursor",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed"
+            },
+            {
+              "client": "copilot",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed"
+            },
+            {
+              "client": "vscode",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "prepared"
+            },
+            {
+              "client": "kiro",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed"
+            }
+          ],
+          "current_evidence": []
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "777genius/cloudflare",
+      "product_id": "cloudflare",
+      "kind": "community",
+      "status": "active",
+      "packager": "777genius",
+      "releases": [
+        {
+          "sequence": 1,
+          "package_version": "0.1.0",
+          "manifest_name": "cloudflare",
+          "agent_plugins_schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+          "package_source": {
+            "repository": "777genius/universal-agent-plugins",
+            "revision": "2ddbb99dd190c1792b79904f9875e6322bccd243",
+            "path": "plugins/cloudflare"
+          },
+          "tree_digest_algorithm": "uap-tree-sha256-v1",
+          "tree_digest": "sha256:41ebd05b2d4870268e58694f0d729708ae403ab86a89b03d239d3e357d002cb2",
+          "manifest_digest": "sha256:9bec7cfed2ecb217145c2a02658296670a328416566433518b4da0246e91d382",
+          "components": [
+            "mcp"
+          ],
+          "published_at": "2026-08-09T22:28:33Z"
+        }
+      ],
+      "release_policies": [
+        {
+          "release_sequence": 1,
+          "status": "active",
+          "minimum_installer_version": "0.1.6",
+          "targets": [
+            {
+              "client": "codex",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed"
+            },
+            {
+              "client": "cursor",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed"
+            },
+            {
+              "client": "copilot",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed"
+            },
+            {
+              "client": "vscode",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "prepared"
+            },
+            {
+              "client": "kiro",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed"
+            }
+          ],
+          "current_evidence": []
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "777genius/cloudflare-bindings",
+      "product_id": "cloudflare-bindings",
+      "kind": "community",
+      "status": "active",
+      "packager": "777genius",
+      "releases": [
+        {
+          "sequence": 1,
+          "package_version": "0.1.0",
+          "manifest_name": "cloudflare-bindings",
+          "agent_plugins_schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+          "package_source": {
+            "repository": "777genius/universal-agent-plugins",
+            "revision": "2ddbb99dd190c1792b79904f9875e6322bccd243",
+            "path": "plugins/cloudflare-bindings"
+          },
+          "tree_digest_algorithm": "uap-tree-sha256-v1",
+          "tree_digest": "sha256:b9b7139972ccf889b8164a3276fb0ca7636fc101ed1d0a704bfb6dc6dbe7f6ae",
+          "manifest_digest": "sha256:6b945cf035f784216e71425cf7b6ca477b27a2069d2580e9713a65f5ec2ca0bf",
+          "components": [
+            "mcp"
+          ],
+          "published_at": "2026-08-09T22:28:33Z"
+        }
+      ],
+      "release_policies": [
+        {
+          "release_sequence": 1,
+          "status": "active",
+          "minimum_installer_version": "0.1.6",
+          "targets": [
+            {
+              "client": "codex",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed"
+            },
+            {
+              "client": "cursor",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed"
+            },
+            {
+              "client": "copilot",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed"
+            },
+            {
+              "client": "vscode",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "prepared"
+            },
+            {
+              "client": "kiro",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed"
+            }
+          ],
+          "current_evidence": []
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "777genius/cloudflare-docs",
+      "product_id": "cloudflare-docs",
+      "kind": "community",
+      "status": "active",
+      "packager": "777genius",
+      "releases": [
+        {
+          "sequence": 1,
+          "package_version": "0.1.0",
+          "manifest_name": "cloudflare-docs",
+          "agent_plugins_schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+          "package_source": {
+            "repository": "777genius/universal-agent-plugins",
+            "revision": "2ddbb99dd190c1792b79904f9875e6322bccd243",
+            "path": "plugins/cloudflare-docs"
+          },
+          "tree_digest_algorithm": "uap-tree-sha256-v1",
+          "tree_digest": "sha256:6606abd32baac63bb5d01d7a249880e9020e60e80ae7923a180812ed10cb332b",
+          "manifest_digest": "sha256:6b575562e527194ccd31238fde8c5f764409ecc98e211e92dfb81455eef88bdd",
+          "components": [
+            "mcp"
+          ],
+          "published_at": "2026-08-09T22:28:33Z"
+        }
+      ],
+      "release_policies": [
+        {
+          "release_sequence": 1,
+          "status": "active",
+          "minimum_installer_version": "0.1.6",
+          "targets": [
+            {
+              "client": "codex",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed"
+            },
+            {
+              "client": "chatgpt",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "manual_activation",
+              "app_binding": {
+                "app_key": "cloudflare-docs",
+                "id": "plugin_asdk_app_6a78e90cf73481918ef10cdb87cd4bb4",
+                "mcp_server": "cloudflare-docs"
+              }
+            },
+            {
+              "client": "cursor",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed"
+            },
+            {
+              "client": "copilot",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed"
+            },
+            {
+              "client": "vscode",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "prepared"
+            },
+            {
+              "client": "kiro",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed"
+            }
+          ],
+          "current_evidence": []
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "777genius/cloudflare-observability",
+      "product_id": "cloudflare-observability",
+      "kind": "community",
+      "status": "active",
+      "packager": "777genius",
+      "releases": [
+        {
+          "sequence": 1,
+          "package_version": "0.1.0",
+          "manifest_name": "cloudflare-observability",
+          "agent_plugins_schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+          "package_source": {
+            "repository": "777genius/universal-agent-plugins",
+            "revision": "2ddbb99dd190c1792b79904f9875e6322bccd243",
+            "path": "plugins/cloudflare-observability"
+          },
+          "tree_digest_algorithm": "uap-tree-sha256-v1",
+          "tree_digest": "sha256:e57f3c3034d1bbaac0a0287e25ca6115041a897bc22f9245f076b7bf126b189b",
+          "manifest_digest": "sha256:41573bb020202619d72fe2cbbf35c56cb5ed4b885b17867ffd2e4a74ebcb5064",
+          "components": [
+            "mcp"
+          ],
+          "published_at": "2026-08-09T22:28:33Z"
+        }
+      ],
+      "release_policies": [
+        {
+          "release_sequence": 1,
+          "status": "active",
+          "minimum_installer_version": "0.1.6",
+          "targets": [
+            {
+              "client": "codex",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed"
+            },
+            {
+              "client": "cursor",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed"
+            },
+            {
+              "client": "copilot",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed"
+            },
+            {
+              "client": "vscode",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "prepared"
+            },
+            {
+              "client": "kiro",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed"
+            }
+          ],
+          "current_evidence": []
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "777genius/cloudflare-radar",
+      "product_id": "cloudflare-radar",
+      "kind": "community",
+      "status": "active",
+      "packager": "777genius",
+      "releases": [
+        {
+          "sequence": 1,
+          "package_version": "0.1.0",
+          "manifest_name": "cloudflare-radar",
+          "agent_plugins_schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+          "package_source": {
+            "repository": "777genius/universal-agent-plugins",
+            "revision": "2ddbb99dd190c1792b79904f9875e6322bccd243",
+            "path": "plugins/cloudflare-radar"
+          },
+          "tree_digest_algorithm": "uap-tree-sha256-v1",
+          "tree_digest": "sha256:cca12b833a1be6c6c89d5573d33d2608255be851931de59243cb40481ccdc44f",
+          "manifest_digest": "sha256:cf94d10bad7d902f4ed171d2363854fb93409ac79a1c5e02d152be6448d66fc2",
+          "components": [
+            "mcp"
+          ],
+          "published_at": "2026-08-09T22:28:33Z"
+        }
+      ],
+      "release_policies": [
+        {
+          "release_sequence": 1,
+          "status": "active",
+          "minimum_installer_version": "0.1.6",
+          "targets": [
+            {
+              "client": "codex",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed"
+            },
+            {
+              "client": "cursor",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed"
+            },
+            {
+              "client": "copilot",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed"
+            },
+            {
+              "client": "vscode",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "prepared"
+            },
+            {
+              "client": "kiro",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed"
+            }
+          ],
+          "current_evidence": []
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "777genius/context7",
+      "product_id": "context7",
+      "kind": "community",
+      "status": "active",
+      "packager": "777genius",
+      "releases": [
+        {
+          "sequence": 1,
+          "package_version": "0.1.0",
+          "manifest_name": "context7",
+          "agent_plugins_schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+          "package_source": {
+            "repository": "777genius/universal-agent-plugins",
+            "revision": "2ddbb99dd190c1792b79904f9875e6322bccd243",
+            "path": "plugins/context7"
+          },
+          "tree_digest_algorithm": "uap-tree-sha256-v1",
+          "tree_digest": "sha256:c166377ad416b972254801ecb455f790ac94d5f69e3beab90c44e3923155c38e",
+          "manifest_digest": "sha256:341c54728c2f50d3876b12a6e94ba06751c94d2be215037846d06f93a018434e",
+          "components": [
+            "mcp"
+          ],
+          "published_at": "2026-08-09T22:28:33Z"
+        }
+      ],
+      "release_policies": [
+        {
+          "release_sequence": 1,
+          "status": "active",
+          "minimum_installer_version": "0.1.6",
+          "targets": [
+            {
+              "client": "codex",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed"
+            },
+            {
+              "client": "cursor",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed"
+            },
+            {
+              "client": "copilot",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed"
+            },
+            {
+              "client": "vscode",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "prepared"
+            },
+            {
+              "client": "kiro",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed"
+            }
+          ],
+          "current_evidence": []
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "777genius/docker-hub",
+      "product_id": "docker-hub",
+      "kind": "community",
+      "status": "active",
+      "packager": "777genius",
+      "releases": [
+        {
+          "sequence": 1,
+          "package_version": "0.1.0",
+          "manifest_name": "docker-hub",
+          "agent_plugins_schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+          "package_source": {
+            "repository": "777genius/universal-agent-plugins",
+            "revision": "2ddbb99dd190c1792b79904f9875e6322bccd243",
+            "path": "plugins/docker-hub"
+          },
+          "tree_digest_algorithm": "uap-tree-sha256-v1",
+          "tree_digest": "sha256:be00e2ff39c67e033214f19793d55bab6a852da31303713461756aff86a84f28",
+          "manifest_digest": "sha256:413347fe45d0dbcbd5b4d5cf88eb7e0ec5c0cd080486ea4cb8c3f61f0bd7a95d",
+          "components": [
+            "mcp"
+          ],
+          "published_at": "2026-08-09T22:28:33Z"
+        }
+      ],
+      "release_policies": [
+        {
+          "release_sequence": 1,
+          "status": "active",
+          "minimum_installer_version": "0.1.6",
+          "targets": [
+            {
+              "client": "codex",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed"
+            },
+            {
+              "client": "cursor",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed"
+            },
+            {
+              "client": "copilot",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed"
+            },
+            {
+              "client": "vscode",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "prepared"
+            },
+            {
+              "client": "kiro",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed"
+            }
+          ],
+          "current_evidence": []
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "777genius/figma",
+      "product_id": "figma",
+      "kind": "community",
+      "status": "active",
+      "packager": "777genius",
+      "releases": [
+        {
+          "sequence": 1,
+          "package_version": "0.1.0",
+          "manifest_name": "figma",
+          "agent_plugins_schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+          "package_source": {
+            "repository": "777genius/universal-agent-plugins",
+            "revision": "2ddbb99dd190c1792b79904f9875e6322bccd243",
+            "path": "plugins/figma"
+          },
+          "tree_digest_algorithm": "uap-tree-sha256-v1",
+          "tree_digest": "sha256:65eb949c37a3c937d5fc00684d01cec1e3eb966c9af5b6f529656ba62de485c1",
+          "manifest_digest": "sha256:67fbfd8062a7f3d965ee63cc68f392a6afb1e8861e3bcc5fe1f70e7e9fadabba",
+          "components": [
+            "mcp"
+          ],
+          "published_at": "2026-08-09T22:28:33Z"
+        }
+      ],
+      "release_policies": [
+        {
+          "release_sequence": 1,
+          "status": "active",
+          "minimum_installer_version": "0.1.6",
+          "targets": [
+            {
+              "client": "codex",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed"
+            },
+            {
+              "client": "cursor",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed"
+            },
+            {
+              "client": "copilot",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed"
+            },
+            {
+              "client": "vscode",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "prepared"
+            },
+            {
+              "client": "kiro",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed"
+            }
+          ],
+          "current_evidence": []
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "777genius/firebase",
+      "product_id": "firebase",
+      "kind": "community",
+      "status": "active",
+      "packager": "777genius",
+      "releases": [
+        {
+          "sequence": 1,
+          "package_version": "0.1.0",
+          "manifest_name": "firebase",
+          "agent_plugins_schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+          "package_source": {
+            "repository": "777genius/universal-agent-plugins",
+            "revision": "2ddbb99dd190c1792b79904f9875e6322bccd243",
+            "path": "plugins/firebase"
+          },
+          "tree_digest_algorithm": "uap-tree-sha256-v1",
+          "tree_digest": "sha256:bc84b0d610e6eee51d4106e99f534b3c9ab552b659437813ed75eb302696b186",
+          "manifest_digest": "sha256:9883d7c5b0472304f799df862f52d3cdae3120b3324633d6a58fceceb78da7b7",
+          "components": [
+            "mcp"
+          ],
+          "published_at": "2026-08-09T22:28:33Z"
+        }
+      ],
+      "release_policies": [
+        {
+          "release_sequence": 1,
+          "status": "active",
+          "minimum_installer_version": "0.1.6",
+          "targets": [
+            {
+              "client": "codex",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed"
+            },
+            {
+              "client": "cursor",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed"
+            },
+            {
+              "client": "copilot",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed"
+            },
+            {
+              "client": "vscode",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "prepared"
+            },
+            {
+              "client": "kiro",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed"
+            }
+          ],
+          "current_evidence": []
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "777genius/github",
+      "product_id": "github",
+      "kind": "community",
+      "status": "active",
+      "packager": "777genius",
+      "releases": [
+        {
+          "sequence": 1,
+          "package_version": "0.1.0",
+          "manifest_name": "github",
+          "agent_plugins_schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+          "package_source": {
+            "repository": "777genius/universal-agent-plugins",
+            "revision": "2ddbb99dd190c1792b79904f9875e6322bccd243",
+            "path": "plugins/github"
+          },
+          "tree_digest_algorithm": "uap-tree-sha256-v1",
+          "tree_digest": "sha256:30f1a3be5d5e8fa4665af2f84f42eb532c618484d9426807a19ee775f2585690",
+          "manifest_digest": "sha256:091e37c5f33c0a92f77070cfcb1b03759b2637927281c04d989e6c8fef888cae",
+          "components": [
+            "mcp"
+          ],
+          "published_at": "2026-08-09T22:28:33Z"
+        }
+      ],
+      "release_policies": [
+        {
+          "release_sequence": 1,
+          "status": "active",
+          "minimum_installer_version": "0.1.6",
+          "targets": [
+            {
+              "client": "codex",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed"
+            },
+            {
+              "client": "cursor",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed"
+            },
+            {
+              "client": "copilot",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed"
+            },
+            {
+              "client": "vscode",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "prepared"
+            },
+            {
+              "client": "kiro",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed"
+            }
+          ],
+          "current_evidence": []
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "777genius/gitlab",
+      "product_id": "gitlab",
+      "kind": "community",
+      "status": "active",
+      "packager": "777genius",
+      "releases": [
+        {
+          "sequence": 1,
+          "package_version": "0.1.0",
+          "manifest_name": "gitlab",
+          "agent_plugins_schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+          "package_source": {
+            "repository": "777genius/universal-agent-plugins",
+            "revision": "2ddbb99dd190c1792b79904f9875e6322bccd243",
+            "path": "plugins/gitlab"
+          },
+          "tree_digest_algorithm": "uap-tree-sha256-v1",
+          "tree_digest": "sha256:ad09f599b3042dce2e91c8581f1bde5d0a347914bc9b3197e99557a4e18cc842",
+          "manifest_digest": "sha256:1a181fab20d9520f5f006f4237e88d67cf58d29b9994dbc45ee4c80d2474e080",
+          "components": [
+            "mcp"
+          ],
+          "published_at": "2026-08-09T22:28:33Z"
+        }
+      ],
+      "release_policies": [
+        {
+          "release_sequence": 1,
+          "status": "active",
+          "minimum_installer_version": "0.1.6",
+          "targets": [
+            {
+              "client": "codex",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed"
+            },
+            {
+              "client": "cursor",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed"
+            },
+            {
+              "client": "copilot",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed"
+            },
+            {
+              "client": "vscode",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "prepared"
+            },
+            {
+              "client": "kiro",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed"
+            }
+          ],
+          "current_evidence": []
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "777genius/greptile",
+      "product_id": "greptile",
+      "kind": "community",
+      "status": "active",
+      "packager": "777genius",
+      "releases": [
+        {
+          "sequence": 1,
+          "package_version": "0.1.0",
+          "manifest_name": "greptile",
+          "agent_plugins_schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+          "package_source": {
+            "repository": "777genius/universal-agent-plugins",
+            "revision": "2ddbb99dd190c1792b79904f9875e6322bccd243",
+            "path": "plugins/greptile"
+          },
+          "tree_digest_algorithm": "uap-tree-sha256-v1",
+          "tree_digest": "sha256:f222dadd068938615382ed12c689803c4b318964dba5892592a96e374ef71944",
+          "manifest_digest": "sha256:05b29500564aede5274a6d21c0cf5bb4727e995045b04de170913b7ef2ae07bb",
+          "components": [
+            "mcp"
+          ],
+          "published_at": "2026-08-09T22:28:33Z"
+        }
+      ],
+      "release_policies": [
+        {
+          "release_sequence": 1,
+          "status": "active",
+          "minimum_installer_version": "0.1.6",
+          "targets": [
+            {
+              "client": "codex",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed"
+            },
+            {
+              "client": "cursor",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed"
+            },
+            {
+              "client": "copilot",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed"
+            },
+            {
+              "client": "vscode",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "prepared"
+            },
+            {
+              "client": "kiro",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed"
+            }
+          ],
+          "current_evidence": []
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "777genius/heroku",
+      "product_id": "heroku",
+      "kind": "community",
+      "status": "active",
+      "packager": "777genius",
+      "releases": [
+        {
+          "sequence": 1,
+          "package_version": "0.1.0",
+          "manifest_name": "heroku",
+          "agent_plugins_schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+          "package_source": {
+            "repository": "777genius/universal-agent-plugins",
+            "revision": "2ddbb99dd190c1792b79904f9875e6322bccd243",
+            "path": "plugins/heroku"
+          },
+          "tree_digest_algorithm": "uap-tree-sha256-v1",
+          "tree_digest": "sha256:f96527f99e6e9e21ba7947a73afc6fd2c5bf79dd3fb850837a49d7923b584198",
+          "manifest_digest": "sha256:5b7c088e290ed04b0eafe0275dc806e7c2153dd7cbe6b74d1c5f1d2961e9355a",
+          "components": [
+            "mcp"
+          ],
+          "published_at": "2026-08-09T22:28:33Z"
+        }
+      ],
+      "release_policies": [
+        {
+          "release_sequence": 1,
+          "status": "active",
+          "minimum_installer_version": "0.1.6",
+          "targets": [
+            {
+              "client": "codex",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed"
+            },
+            {
+              "client": "cursor",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed"
+            },
+            {
+              "client": "copilot",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed"
+            },
+            {
+              "client": "vscode",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "prepared"
+            },
+            {
+              "client": "kiro",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed"
+            }
+          ],
+          "current_evidence": []
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "777genius/hubspot-crm",
+      "product_id": "hubspot-crm",
+      "kind": "community",
+      "status": "active",
+      "packager": "777genius",
+      "releases": [
+        {
+          "sequence": 1,
+          "package_version": "0.1.0",
+          "manifest_name": "hubspot-crm",
+          "agent_plugins_schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+          "package_source": {
+            "repository": "777genius/universal-agent-plugins",
+            "revision": "2ddbb99dd190c1792b79904f9875e6322bccd243",
+            "path": "plugins/hubspot-crm"
+          },
+          "tree_digest_algorithm": "uap-tree-sha256-v1",
+          "tree_digest": "sha256:81649889c14a7f78a6283508f022cab9378b829dd8e47103e588d9fc3fc67b9b",
+          "manifest_digest": "sha256:20334e86a1b599d2759e04bfaef37dc2ddb7f6b0f3994b5d66d4eca12fbec941",
+          "components": [
+            "mcp"
+          ],
+          "published_at": "2026-08-09T22:28:33Z"
+        }
+      ],
+      "release_policies": [
+        {
+          "release_sequence": 1,
+          "status": "active",
+          "minimum_installer_version": "0.1.6",
+          "targets": [
+            {
+              "client": "codex",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed"
+            },
+            {
+              "client": "cursor",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed"
+            },
+            {
+              "client": "copilot",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed"
+            },
+            {
+              "client": "vscode",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "prepared"
+            },
+            {
+              "client": "kiro",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed"
+            }
+          ],
+          "current_evidence": []
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "777genius/hubspot-developer",
+      "product_id": "hubspot-developer",
+      "kind": "community",
+      "status": "active",
+      "packager": "777genius",
+      "releases": [
+        {
+          "sequence": 1,
+          "package_version": "0.1.0",
+          "manifest_name": "hubspot-developer",
+          "agent_plugins_schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+          "package_source": {
+            "repository": "777genius/universal-agent-plugins",
+            "revision": "2ddbb99dd190c1792b79904f9875e6322bccd243",
+            "path": "plugins/hubspot-developer"
+          },
+          "tree_digest_algorithm": "uap-tree-sha256-v1",
+          "tree_digest": "sha256:622250b370be6779228fd1e0c97a8d4672d27888c4e431b38198b88a590c27d4",
+          "manifest_digest": "sha256:257a75ed2e473945a26afa102152f866bd8269bb41c998f6d87fbdf43ed1a6b9",
+          "components": [
+            "mcp"
+          ],
+          "published_at": "2026-08-09T22:28:33Z"
+        }
+      ],
+      "release_policies": [
+        {
+          "release_sequence": 1,
+          "status": "active",
+          "minimum_installer_version": "0.1.6",
+          "targets": [
+            {
+              "client": "codex",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed"
+            },
+            {
+              "client": "cursor",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed"
+            },
+            {
+              "client": "copilot",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed"
+            },
+            {
+              "client": "vscode",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "prepared"
+            },
+            {
+              "client": "kiro",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed"
+            }
+          ],
+          "current_evidence": []
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "777genius/linear",
+      "product_id": "linear",
+      "kind": "community",
+      "status": "active",
+      "packager": "777genius",
+      "releases": [
+        {
+          "sequence": 1,
+          "package_version": "0.1.0",
+          "manifest_name": "linear",
+          "agent_plugins_schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+          "package_source": {
+            "repository": "777genius/universal-agent-plugins",
+            "revision": "2ddbb99dd190c1792b79904f9875e6322bccd243",
+            "path": "plugins/linear"
+          },
+          "tree_digest_algorithm": "uap-tree-sha256-v1",
+          "tree_digest": "sha256:9f20ea2e40efa4ca76615bf70fa23f6663ae157456d11567091f40d8323f5122",
+          "manifest_digest": "sha256:0b8ed223c21d206d802130ace7219b5c78af1903675640cc77f5195e4f86ef70",
+          "components": [
+            "mcp"
+          ],
+          "published_at": "2026-08-09T22:28:33Z"
+        }
+      ],
+      "release_policies": [
+        {
+          "release_sequence": 1,
+          "status": "active",
+          "minimum_installer_version": "0.1.6",
+          "targets": [
+            {
+              "client": "codex",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed"
+            },
+            {
+              "client": "cursor",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed"
+            },
+            {
+              "client": "copilot",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed"
+            },
+            {
+              "client": "vscode",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "prepared"
+            },
+            {
+              "client": "kiro",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed"
+            }
+          ],
+          "current_evidence": []
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "777genius/neon",
+      "product_id": "neon",
+      "kind": "community",
+      "status": "active",
+      "packager": "777genius",
+      "releases": [
+        {
+          "sequence": 1,
+          "package_version": "0.1.0",
+          "manifest_name": "neon",
+          "agent_plugins_schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+          "package_source": {
+            "repository": "777genius/universal-agent-plugins",
+            "revision": "2ddbb99dd190c1792b79904f9875e6322bccd243",
+            "path": "plugins/neon"
+          },
+          "tree_digest_algorithm": "uap-tree-sha256-v1",
+          "tree_digest": "sha256:51a41ee5b5a16ce6ca8e294992ded9ce9e371c7487e34f9fb699a9e420c4d5e9",
+          "manifest_digest": "sha256:6787894c7d3e033db05deee5e36358caf387493a98a78716d6db4b343e9c0698",
+          "components": [
+            "mcp"
+          ],
+          "published_at": "2026-08-09T22:28:33Z"
+        }
+      ],
+      "release_policies": [
+        {
+          "release_sequence": 1,
+          "status": "active",
+          "minimum_installer_version": "0.1.6",
+          "targets": [
+            {
+              "client": "codex",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed"
+            },
+            {
+              "client": "cursor",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed"
+            },
+            {
+              "client": "copilot",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed"
+            },
+            {
+              "client": "vscode",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "prepared"
+            },
+            {
+              "client": "kiro",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed"
+            }
+          ],
+          "current_evidence": []
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "777genius/notion",
+      "product_id": "notion",
+      "kind": "community",
+      "status": "active",
+      "packager": "777genius",
+      "releases": [
+        {
+          "sequence": 1,
+          "package_version": "0.1.0",
+          "manifest_name": "notion",
+          "agent_plugins_schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+          "package_source": {
+            "repository": "777genius/universal-agent-plugins",
+            "revision": "2ddbb99dd190c1792b79904f9875e6322bccd243",
+            "path": "plugins/notion"
+          },
+          "tree_digest_algorithm": "uap-tree-sha256-v1",
+          "tree_digest": "sha256:7b02c506409ab96d1991a5323c0b7d06a39b0764aaefae2a9c854020df273e35",
+          "manifest_digest": "sha256:bbab30a4f062218d7a5fce2f6c818680d3c7adfaebdbaa3e523e15942a2f57e5",
+          "components": [
+            "mcp"
+          ],
+          "published_at": "2026-08-09T22:28:33Z"
+        }
+      ],
+      "release_policies": [
+        {
+          "release_sequence": 1,
+          "status": "active",
+          "minimum_installer_version": "0.1.6",
+          "targets": [
+            {
+              "client": "codex",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed"
+            },
+            {
+              "client": "cursor",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed"
+            },
+            {
+              "client": "copilot",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed"
+            },
+            {
+              "client": "vscode",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "prepared"
+            },
+            {
+              "client": "kiro",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed"
+            }
+          ],
+          "current_evidence": []
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "777genius/sentry",
+      "product_id": "sentry",
+      "kind": "community",
+      "status": "active",
+      "packager": "777genius",
+      "releases": [
+        {
+          "sequence": 1,
+          "package_version": "0.1.0",
+          "manifest_name": "sentry",
+          "agent_plugins_schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+          "package_source": {
+            "repository": "777genius/universal-agent-plugins",
+            "revision": "2ddbb99dd190c1792b79904f9875e6322bccd243",
+            "path": "plugins/sentry"
+          },
+          "tree_digest_algorithm": "uap-tree-sha256-v1",
+          "tree_digest": "sha256:1effc7067821e77c97788dc3de04225364efe405871a236e95592408d889c142",
+          "manifest_digest": "sha256:7606b1f8af700ea76590f0ae586ff8586f4dc370f536ceedbeab8d934494e42e",
+          "components": [
+            "mcp"
+          ],
+          "published_at": "2026-08-09T22:28:33Z"
+        }
+      ],
+      "release_policies": [
+        {
+          "release_sequence": 1,
+          "status": "active",
+          "minimum_installer_version": "0.1.6",
+          "targets": [
+            {
+              "client": "codex",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed"
+            },
+            {
+              "client": "cursor",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed"
+            },
+            {
+              "client": "copilot",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed"
+            },
+            {
+              "client": "vscode",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "prepared"
+            },
+            {
+              "client": "kiro",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed"
+            }
+          ],
+          "current_evidence": []
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "777genius/statsig",
+      "product_id": "statsig",
+      "kind": "community",
+      "status": "active",
+      "packager": "777genius",
+      "releases": [
+        {
+          "sequence": 1,
+          "package_version": "0.1.0",
+          "manifest_name": "statsig",
+          "agent_plugins_schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+          "package_source": {
+            "repository": "777genius/universal-agent-plugins",
+            "revision": "2ddbb99dd190c1792b79904f9875e6322bccd243",
+            "path": "plugins/statsig"
+          },
+          "tree_digest_algorithm": "uap-tree-sha256-v1",
+          "tree_digest": "sha256:a6406168061bef438d359719b914643e319361a2e43f9d0f8648f0fa40e502fa",
+          "manifest_digest": "sha256:5100526dca8f8e53e42d1d53f8acc1879ea8a2d8b0982df3f00be5e95bf3e465",
+          "components": [
+            "mcp"
+          ],
+          "published_at": "2026-08-09T22:28:33Z"
+        }
+      ],
+      "release_policies": [
+        {
+          "release_sequence": 1,
+          "status": "active",
+          "minimum_installer_version": "0.1.6",
+          "targets": [
+            {
+              "client": "codex",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed"
+            },
+            {
+              "client": "cursor",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed"
+            },
+            {
+              "client": "copilot",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed"
+            },
+            {
+              "client": "vscode",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "prepared"
+            },
+            {
+              "client": "kiro",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed"
+            }
+          ],
+          "current_evidence": []
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "777genius/stripe",
+      "product_id": "stripe",
+      "kind": "community",
+      "status": "active",
+      "packager": "777genius",
+      "releases": [
+        {
+          "sequence": 1,
+          "package_version": "0.1.0",
+          "manifest_name": "stripe",
+          "agent_plugins_schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+          "package_source": {
+            "repository": "777genius/universal-agent-plugins",
+            "revision": "2ddbb99dd190c1792b79904f9875e6322bccd243",
+            "path": "plugins/stripe"
+          },
+          "tree_digest_algorithm": "uap-tree-sha256-v1",
+          "tree_digest": "sha256:ff615b602680af68b79b43c2127a3b2cd1b953338a2d488cd3527aeda09225a5",
+          "manifest_digest": "sha256:e70885fda5a4ce50c302891229e204bbf22904ec3f227670e5916d69f9b8b80d",
+          "components": [
+            "mcp"
+          ],
+          "published_at": "2026-08-09T22:28:33Z"
+        }
+      ],
+      "release_policies": [
+        {
+          "release_sequence": 1,
+          "status": "active",
+          "minimum_installer_version": "0.1.6",
+          "targets": [
+            {
+              "client": "codex",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed"
+            },
+            {
+              "client": "cursor",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed"
+            },
+            {
+              "client": "copilot",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed"
+            },
+            {
+              "client": "vscode",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "prepared"
+            },
+            {
+              "client": "kiro",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed"
+            }
+          ],
+          "current_evidence": []
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "777genius/supabase",
+      "product_id": "supabase",
+      "kind": "community",
+      "status": "active",
+      "packager": "777genius",
+      "releases": [
+        {
+          "sequence": 1,
+          "package_version": "0.1.0",
+          "manifest_name": "supabase",
+          "agent_plugins_schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+          "package_source": {
+            "repository": "777genius/universal-agent-plugins",
+            "revision": "2ddbb99dd190c1792b79904f9875e6322bccd243",
+            "path": "plugins/supabase"
+          },
+          "tree_digest_algorithm": "uap-tree-sha256-v1",
+          "tree_digest": "sha256:43138602e21a79eb54c13cd6145b16dfe1459f1a40e324d4f03c010617d064fa",
+          "manifest_digest": "sha256:bb0672e8cd411b1c8e0872a5f7f0abc95f9c68f008802d42a2cd16a689deeb11",
+          "components": [
+            "mcp"
+          ],
+          "published_at": "2026-08-09T22:28:33Z"
+        }
+      ],
+      "release_policies": [
+        {
+          "release_sequence": 1,
+          "status": "active",
+          "minimum_installer_version": "0.1.6",
+          "targets": [
+            {
+              "client": "codex",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed"
+            },
+            {
+              "client": "cursor",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed"
+            },
+            {
+              "client": "copilot",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed"
+            },
+            {
+              "client": "vscode",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "prepared"
+            },
+            {
+              "client": "kiro",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed"
+            }
+          ],
+          "current_evidence": []
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "777genius/vercel",
+      "product_id": "vercel",
+      "kind": "community",
+      "status": "active",
+      "packager": "777genius",
+      "releases": [
+        {
+          "sequence": 1,
+          "package_version": "0.1.0",
+          "manifest_name": "vercel",
+          "agent_plugins_schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+          "package_source": {
+            "repository": "777genius/universal-agent-plugins",
+            "revision": "2ddbb99dd190c1792b79904f9875e6322bccd243",
+            "path": "plugins/vercel"
+          },
+          "tree_digest_algorithm": "uap-tree-sha256-v1",
+          "tree_digest": "sha256:4ef30009c5d85e005485b5e7c4450fc90664b0d714cf69a5b9c5a78658e4c3f5",
+          "manifest_digest": "sha256:23f7cd28573c4ab10943178db05a47f2af3639518a334449c23d89b19562ef74",
+          "components": [
+            "mcp"
+          ],
+          "published_at": "2026-08-09T22:28:33Z"
+        }
+      ],
+      "release_policies": [
+        {
+          "release_sequence": 1,
+          "status": "active",
+          "minimum_installer_version": "0.1.6",
+          "targets": [
+            {
+              "client": "codex",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed"
+            },
+            {
+              "client": "cursor",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed"
+            },
+            {
+              "client": "copilot",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed"
+            },
+            {
+              "client": "vscode",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "prepared"
+            },
+            {
+              "client": "kiro",
+              "scopes": [
+                "user"
+              ],
+              "delivery": "managed"
+            }
+          ],
+          "current_evidence": []
+        }
+      ]
+    }
+  ],
+  "evidence": []
+}

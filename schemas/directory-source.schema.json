@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-plugins.org/schemas/directory-source.schema.json",
+  "title": "Universal Agent Plugins Directory review source",
+  "type": "object",
+  "required": ["schema_version", "products", "distributions", "evidence"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "products": {"type": "array", "items": {"$ref": "directory-product.schema.json"}},
+    "distributions": {"type": "array", "items": {"$ref": "directory-distribution.schema.json"}},
+    "evidence": {"type": "array", "items": {"$ref": "directory-evidence.schema.json"}}
+  },
+  "additionalProperties": false
+}

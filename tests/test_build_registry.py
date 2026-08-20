@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import gzip
+import copy
 import importlib.util
 import io
 import json
@@ -481,6 +482,135 @@ class GeneratedIndexTests(unittest.TestCase):
             builtin = {"name": "demo"}
             with mock.patch.object(registry, "ENTRIES", entries), mock.patch.object(registry, "builtin_entries", return_value=[builtin]), self.assertRaises(registry.RegistryError):
                 registry.build()
+
+
+class DirectoryDomainTests(unittest.TestCase):
+    def source(self):
+        return registry.load_directory_source()
+
+    def fixture(self):
+        return json.loads((Path(__file__).parent / "fixtures" / "directory" / "domain-source.json").read_text())
+
+    def test_all_26_packages_are_separate_products_distributions_releases_and_policies(self) -> None:
+        source = self.source()
+        registry.validate_directory(source)
+        self.assertEqual(len(source["products"]), 26)
+        self.assertEqual(len(source["distributions"]), 26)
+        self.assertEqual({item["id"] for item in source["products"]}, {path.name for path in registry.ROOT.joinpath("plugins").iterdir() if path.is_dir()})
+        for product in source["products"]:
+            self.assertEqual(product["aliases"], [product["id"]])
+            self.assertEqual(product["reserved_aliases"], [product["id"]])
+            self.assertEqual(len(product["distributions"]), 1)
+            self.assertEqual(product["default_distribution"], product["distributions"][0])
+        for distribution in source["distributions"]:
+            self.assertEqual(distribution["kind"], "community")
+            self.assertEqual(distribution["status"], "active")
+            self.assertEqual([item["sequence"] for item in distribution["releases"]], [1])
+            self.assertEqual([item["release_sequence"] for item in distribution["release_policies"]], [1])
+
+    def test_committed_migration_is_reproducible_from_the_frozen_catalog(self) -> None:
+        self.assertEqual(self.source(), registry.migrated_directory_source())
+
+    def test_migration_preserves_exact_package_bytes_and_provenance(self) -> None:
+        source = self.source()
+        for distribution in source["distributions"]:
+            release = distribution["releases"][0]
+            self.assertEqual(release["package_source"]["repository"], "777genius/universal-agent-plugins")
+            self.assertRegex(release["package_source"]["revision"], r"^[0-9a-f]{40}$")
+            root = registry.ROOT / release["package_source"]["path"]
+            self.assertEqual(release["tree_digest_algorithm"], "uap-tree-sha256-v1")
+            self.assertEqual(release["tree_digest"], registry.directory_tree_digest(root))
+            self.assertEqual(release["manifest_digest"], registry.digest_bytes((root / "plugin.json").read_bytes()))
+
+    def test_distribution_kind_and_evidence_contract_fixture(self) -> None:
+        fixture = self.fixture()
+        registry.validate_directory(fixture, verify_packages=False)
+        self.assertEqual({item["kind"] for item in fixture["distributions"]}, {"upstream", "community_bridge", "community"})
+        bridge = next(item for item in fixture["distributions"] if item["kind"] == "community_bridge")
+        self.assertIsNone(bridge["releases"][0]["package_source"]["revision"])
+        self.assertIn("build_provenance", bridge["releases"][0])
+        self.assertEqual(bridge["release_policies"][0]["current_evidence"], ["evidence/demo-bridge-runtime"])
+
+    def test_declared_default_and_candidate_do_not_implicitly_promote(self) -> None:
+        fixture = self.fixture()
+        result = registry.resolve_directory(fixture, "demo", ["codex", "cursor"])
+        self.assertEqual(result["distribution_id"], "packager/demo-bridge")
+        self.assertIsNone(result["fallback_reason"])
+        qualified = registry.resolve_directory(fixture, "packager/demo-bridge", ["cursor"])
+        self.assertEqual(qualified["release_sequence"], 3)
+        with self.assertRaisesRegex(registry.RegistryError, "candidate"):
+            registry.resolve_directory(fixture, "upstream/demo", ["cursor"])
+
+    def test_fallback_uses_one_distribution_for_the_complete_target_set(self) -> None:
+        fixture = self.fixture()
+        product = fixture["products"][0]
+        product["default_distribution"] = "community/demo"
+        result = registry.resolve_directory(fixture, "demo", ["codex", "cursor"])
+        self.assertEqual(result["distribution_id"], "packager/demo-bridge")
+        self.assertIn("does not support cursor", result["fallback_reason"])
+        bridge = next(item for item in fixture["distributions"] if item["id"] == "packager/demo-bridge")
+        bridge["release_policies"][0]["targets"] = bridge["release_policies"][0]["targets"][:1]
+        with self.assertRaisesRegex(registry.RegistryError, "complete target set"):
+            registry.resolve_directory(fixture, "demo", ["codex", "cursor"])
+
+    def test_policy_is_mutable_without_changing_release_identity_or_bytes(self) -> None:
+        fixture = self.fixture()
+        bridge = next(item for item in fixture["distributions"] if item["id"] == "packager/demo-bridge")
+        release_before = copy.deepcopy(bridge["releases"])
+        bridge["release_policies"][0]["minimum_installer_version"] = "0.2.0"
+        bridge["release_policies"][0]["current_evidence"] = []
+        registry.validate_directory(fixture, verify_packages=False)
+        self.assertEqual(bridge["releases"], release_before)
+        self.assertEqual((bridge["id"], bridge["releases"][0]["sequence"]), ("packager/demo-bridge", 3))
+
+    def test_current_trusted_failure_blocks_only_its_applicable_client(self) -> None:
+        fixture = self.fixture()
+        fixture["evidence"][0]["outcome"] = "failed"
+        self.assertEqual(registry.resolve_directory(fixture, "demo", ["codex"])["distribution_id"], "packager/demo-bridge")
+        with self.assertRaisesRegex(registry.RegistryError, "blocking trusted failure for cursor"):
+            registry.resolve_directory(fixture, "demo", ["cursor"])
+
+    def test_release_sequences_and_alias_reservations_are_enforced(self) -> None:
+        fixture = self.fixture()
+        duplicate = copy.deepcopy(fixture["distributions"][0]["releases"][0])
+        fixture["distributions"][0]["releases"].append(duplicate)
+        fixture["distributions"][0]["release_policies"].append(copy.deepcopy(fixture["distributions"][0]["release_policies"][0]))
+        with self.assertRaisesRegex(registry.RegistryError, "release sequences"):
+            registry.validate_directory(fixture, verify_packages=False)
+        fixture = self.fixture()
+        fixture["products"][0]["aliases"] = ["unreserved"]
+        with self.assertRaisesRegex(registry.RegistryError, "remain reserved"):
+            registry.validate_directory(fixture, verify_packages=False)
+
+    def test_preview_and_search_are_deterministic_and_have_one_product_card(self) -> None:
+        source = self.source()
+        preview = registry.encoded(registry.directory_preview(source))
+        search = registry.encoded(registry.directory_search(source))
+        self.assertEqual(preview, registry.REVIEW_PREVIEW.read_bytes())
+        self.assertEqual(search, registry.REVIEW_SEARCH.read_bytes())
+        document = json.loads(preview)
+        self.assertEqual(document["product_count"], 26)
+        self.assertEqual(len(document["products"]), 26)
+        self.assertEqual(len({item["id"] for item in document["products"]}), 26)
+        self.assertNotIn("snapshot_sequence", document)
+        self.assertNotIn("expires_at", document)
+        self.assertEqual(len(json.loads(search)["entries"]), 26)
+
+    def test_direct_sources_are_recognized_without_directory_resolution(self) -> None:
+        sha = "a" * 40
+        self.assertTrue(registry.is_direct_source("./plugin"))
+        self.assertTrue(registry.is_direct_source(f"owner/repo@{sha}//plugin"))
+        self.assertFalse(registry.is_direct_source("context7"))
+        self.assertFalse(registry.is_direct_source("owner/repo@main//plugin"))
+
+    def test_legacy_catalogs_and_package_readme_blocks_are_frozen_or_valid(self) -> None:
+        registry.validate_legacy_catalog_freeze()
+        registry.validate_readme_blocks(self.source())
+
+    def test_public_outputs_never_use_registry_v3_branding(self) -> None:
+        for path in [registry.DIRECTORY_SOURCE, registry.REVIEW_PREVIEW, registry.REVIEW_SEARCH]:
+            prohibited = "registry " + "v3"
+            self.assertNotIn(prohibited, path.read_text(encoding="utf-8").casefold())
 
 
 if __name__ == "__main__":

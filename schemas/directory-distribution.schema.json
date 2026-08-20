@@ -1,0 +1,95 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-plugins.org/schemas/directory-distribution.schema.json",
+  "title": "Universal Agent Plugins Directory distribution",
+  "type": "object",
+  "required": ["schema_version", "id", "product_id", "kind", "status", "packager", "releases", "release_policies"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "id": {"$ref": "#/$defs/distributionId"},
+    "product_id": {"$ref": "#/$defs/id"},
+    "kind": {"enum": ["upstream", "community_bridge", "community"]},
+    "status": {"enum": ["candidate", "active", "suspended"]},
+    "packager": {"$ref": "#/$defs/id"},
+    "releases": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/release"}},
+    "release_policies": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/policy"}}
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "id": {"type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"},
+    "distributionId": {"type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*/[a-z0-9]+(?:-[a-z0-9]+)*$"},
+    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "component": {"enum": ["extensions", "mcp", "skills"]},
+    "packageSource": {
+      "type": "object",
+      "required": ["repository", "revision", "path"],
+      "properties": {
+        "repository": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]*/[a-z0-9][a-z0-9._-]*$"},
+        "revision": {"type": ["string", "null"], "pattern": "^[0-9a-f]{40}$"},
+        "path": {"type": "string", "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.?/)[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)*$"}
+      },
+      "additionalProperties": false
+    },
+    "release": {
+      "type": "object",
+      "required": ["sequence", "package_version", "manifest_name", "agent_plugins_schema", "package_source", "tree_digest_algorithm", "tree_digest", "manifest_digest", "components"],
+      "properties": {
+        "sequence": {"type": "integer", "minimum": 1},
+        "package_version": {"type": "string"},
+        "manifest_name": {"$ref": "#/$defs/id"},
+        "agent_plugins_schema": {"const": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json"},
+        "package_source": {"$ref": "#/$defs/packageSource"},
+        "tree_digest_algorithm": {"const": "uap-tree-sha256-v1"},
+        "build_provenance": {
+          "type": "object",
+          "required": ["upstream_repository", "upstream_revision"],
+          "properties": {
+            "upstream_repository": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]*/[a-z0-9][a-z0-9._-]*$"},
+            "upstream_revision": {"type": "string", "pattern": "^[0-9a-f]{40}$"}
+          },
+          "additionalProperties": false
+        },
+        "tree_digest": {"$ref": "#/$defs/digest"},
+        "manifest_digest": {"$ref": "#/$defs/digest"},
+        "components": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"$ref": "#/$defs/component"}},
+        "published_at": {"type": "string", "format": "date-time"}
+      },
+      "additionalProperties": false
+    },
+    "target": {
+      "type": "object",
+      "required": ["client", "scopes", "delivery"],
+      "properties": {
+        "client": {"enum": ["codex", "chatgpt", "cursor", "copilot", "vscode", "kiro"]},
+        "scopes": {"const": ["user"]},
+        "delivery": {"enum": ["managed", "prepared", "manual_activation"]},
+        "app_binding": {
+          "type": "object",
+          "required": ["app_key", "id", "mcp_server"],
+          "properties": {
+            "app_key": {"type": "string", "minLength": 1},
+            "id": {"type": "string", "minLength": 1},
+            "mcp_server": {"type": "string", "minLength": 1}
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false,
+      "allOf": [
+        {"if": {"properties": {"client": {"const": "chatgpt"}}, "required": ["client"]}, "then": {"required": ["app_binding"]}, "else": {"not": {"required": ["app_binding"]}}}
+      ]
+    },
+    "policy": {
+      "type": "object",
+      "required": ["release_sequence", "status", "minimum_installer_version", "targets", "current_evidence"],
+      "properties": {
+        "release_sequence": {"type": "integer", "minimum": 1},
+        "status": {"enum": ["active", "superseded", "revoked"]},
+        "minimum_installer_version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
+        "targets": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/target"}},
+        "current_evidence": {"type": "array", "uniqueItems": true, "items": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._/-]*$"}}
+      },
+      "additionalProperties": false
+    }
+  }
+}

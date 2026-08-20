@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-plugins.org/schemas/directory-product.schema.json",
+  "title": "Universal Agent Plugins Directory product",
+  "type": "object",
+  "required": ["schema_version", "id", "display_name", "description", "manifest_name", "aliases", "reserved_aliases", "categories", "minimum_capabilities", "default_distribution", "distributions"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "id": {"$ref": "#/$defs/id"},
+    "display_name": {"type": "string", "minLength": 1, "maxLength": 100},
+    "description": {"type": "string", "minLength": 1, "maxLength": 500},
+    "manifest_name": {"$ref": "#/$defs/id"},
+    "aliases": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"$ref": "#/$defs/id"}},
+    "reserved_aliases": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"$ref": "#/$defs/id"}},
+    "categories": {"type": "array", "minItems": 1, "maxItems": 20, "uniqueItems": true, "items": {"$ref": "#/$defs/id"}},
+    "icon": {
+      "type": "object",
+      "required": ["path", "digest"],
+      "properties": {
+        "path": {"type": "string", "pattern": "^assets/plugin-icons/[A-Za-z0-9._-]+$"},
+        "digest": {"$ref": "#/$defs/digest"}
+      },
+      "additionalProperties": false
+    },
+    "minimum_capabilities": {
+      "type": "object",
+      "required": ["skills", "mcp"],
+      "properties": {"skills": {"enum": ["required", "optional"]}, "mcp": {"enum": ["required", "optional"]}},
+      "additionalProperties": false,
+      "not": {"properties": {"skills": {"const": "optional"}, "mcp": {"const": "optional"}}, "required": ["skills", "mcp"]}
+    },
+    "default_distribution": {"$ref": "#/$defs/distributionId"},
+    "distributions": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"$ref": "#/$defs/distributionId"}}
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "id": {"type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"},
+    "distributionId": {"type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*/[a-z0-9]+(?:-[a-z0-9]+)*$"},
+    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+  }
+}

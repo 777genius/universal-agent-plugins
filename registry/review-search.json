@@ -1,0 +1,109 @@
+{
+  "schema_version": 1,
+  "entries": [
+    {
+      "product_id": "agent-code-navigator",
+      "text": "agent code navigator route code discovery across exact search, semantic search, lsp navigation, and call-graph analysis. agent-code-navigator agent-plugins code-intelligence code-search codegraph codex lsp"
+    },
+    {
+      "product_id": "atlassian",
+      "text": "atlassian community package for the official atlassian rovo mcp plugin for jira, confluence, and compass workflows through atlassian's hosted remote mcp service. atlassian agent-plugins ai-agents atlassian collaboration compass confluence jira mcp planning plugins"
+    },
+    {
+      "product_id": "chrome-devtools",
+      "text": "chrome devtools portable agent plugins package for chrome devtools mcp. inspect pages, automate flows, analyze performance, and debug browser state. chrome-devtools agent-plugins ai-agents browser chrome debugging mcp performance"
+    },
+    {
+      "product_id": "cloudflare",
+      "text": "cloudflare community package for the official cloudflare api mcp plugin for token-efficient access to the cloudflare api through cloudflare's hosted code mode server. cloudflare agent-plugins ai-agents api cloud cloudflare devops mcp plugins workers"
+    },
+    {
+      "product_id": "cloudflare-bindings",
+      "text": "cloudflare bindings community package for the official cloudflare workers bindings mcp integration for storage, ai, and compute primitives. cloudflare-bindings agent-plugins ai-agents bindings cloudflare mcp plugins workers"
+    },
+    {
+      "product_id": "cloudflare-docs",
+      "text": "cloudflare docs community package for the official cloudflare hosted mcp plugin for up-to-date cloudflare documentation and reference lookups through cloudflare's remote documentation server. cloudflare-docs agent-plugins ai-agents cloud cloudflare docs mcp plugins research"
+    },
+    {
+      "product_id": "cloudflare-observability",
+      "text": "cloudflare observability community package for the official cloudflare hosted mcp plugin for logs, analytics, and production debugging through cloudflare's remote observability server. cloudflare-observability agent-plugins ai-agents analytics cloud cloudflare debugging devops mcp observability plugins"
+    },
+    {
+      "product_id": "cloudflare-radar",
+      "text": "cloudflare radar community package for the official cloudflare radar mcp plugin for internet telemetry, traffic trends, and network intelligence through cloudflare's hosted radar server. cloudflare-radar agent-plugins ai-agents analytics cloudflare mcp network plugins radar"
+    },
+    {
+      "product_id": "context7",
+      "text": "context7 portable agent plugins package for context7. pull up-to-date, version-specific documentation and code examples directly from source repositories into agent context. context7 agent-plugins ai-agents context7 documentation mcp plugins"
+    },
+    {
+      "product_id": "docker-hub",
+      "text": "docker hub community package for the official docker hub mcp plugin for repository, image, and docker hub workflows through docker's containerized stdio server. docker-hub agent-plugins ai-agents containers docker mcp plugins registry"
+    },
+    {
+      "product_id": "figma",
+      "text": "figma community package for the official figma mcp plugin for design context, code-to-design workflows, and authenticated access to figma design, make, and figjam through figma's remote mcp service. figma agent-plugins ai-agents design figma mcp plugins ui"
+    },
+    {
+      "product_id": "firebase",
+      "text": "firebase google firebase mcp integration. manage firestore databases, authentication, cloud functions, hosting, and storage. build and manage your firebase backend directly from your development workflow. firebase agent-plugins ai-agents firebase firestore mcp plugins"
+    },
+    {
+      "product_id": "github",
+      "text": "github community agent plugin for repository, issue, pull request, review, and search workflows through github's mcp server. github agent-plugins ai-agents auth github mcp plugins"
+    },
+    {
+      "product_id": "gitlab",
+      "text": "gitlab portable agent plugins package for gitlab mcp. inspect projects, issues, merge requests, and related devops workflows through gitlab's http server. gitlab agent-plugins ai-agents gitlab mcp oauth plugins"
+    },
+    {
+      "product_id": "greptile",
+      "text": "greptile community package for the official greptile mcp integration for repository search and code intelligence tooling. greptile agent-plugins ai-agents code-search greptile mcp plugins repository"
+    },
+    {
+      "product_id": "heroku",
+      "text": "heroku community package for the official heroku hosted mcp plugin for apps, add-ons, logs, postgres, and operational workflows through heroku's remote mcp service. heroku agent-plugins ai-agents apps backend cloud devops heroku mcp plugins"
+    },
+    {
+      "product_id": "hubspot-crm",
+      "text": "hubspot crm community package for the official hubspot remote mcp integration for beta, read-only crm object access through hubspot's hosted mcp server. hubspot-crm agent-plugins ai-agents crm hubspot mcp plugins sales"
+    },
+    {
+      "product_id": "hubspot-developer",
+      "text": "hubspot developer local hubspot developer mcp integration for project scaffolding, cms, builds, logs, and app workflows via the hubspot cli. hubspot-developer agent-plugins ai-agents cms developer-tools hubspot mcp plugins"
+    },
+    {
+      "product_id": "linear",
+      "text": "linear community package for the official linear mcp integration for workspace management, issues, and project workflows. linear agent-plugins ai-agents issues linear mcp plugins project-management"
+    },
+    {
+      "product_id": "neon",
+      "text": "neon community package for the official neon hosted mcp plugin for database, branch, and project workflows through neon's remote mcp server. neon agent-plugins ai-agents database mcp neon plugins postgres"
+    },
+    {
+      "product_id": "notion",
+      "text": "notion community package for the official notion hosted mcp plugin for user-authorized workspace access. search pages, read docs, edit content, and work with notion knowledge directly from ai agents. notion agent-plugins ai-agents collaboration knowledge mcp notion planning plugins"
+    },
+    {
+      "product_id": "sentry",
+      "text": "sentry community package for the official sentry hosted mcp plugin for human-in-the-loop debugging, issue triage, and incident workflows through sentry's remote mcp service. sentry agent-plugins ai-agents debugging incidents mcp plugins sentry"
+    },
+    {
+      "product_id": "statsig",
+      "text": "statsig community package for the official statsig mcp plugin for experiments, feature flags, configs, metrics, and console workflows through statsig's hosted mcp service. statsig agent-plugins ai-agents experimentation feature-flags mcp plugins statsig"
+    },
+    {
+      "product_id": "stripe",
+      "text": "stripe community package for the official stripe hosted mcp plugin for payments, billing, customer, and documentation workflows through stripe's remote mcp service. stripe agent-plugins ai-agents billing commerce mcp payments plugins stripe"
+    },
+    {
+      "product_id": "supabase",
+      "text": "supabase community package for the official supabase mcp integration for development and database operations from agent workflows. supabase agent-plugins ai-agents backend mcp plugins postgres supabase"
+    },
+    {
+      "product_id": "vercel",
+      "text": "vercel community package for the official vercel hosted mcp plugin for project, deployment, log, and documentation workflows through vercel's remote mcp service. vercel agent-plugins ai-agents deployments mcp plugins vercel"
+    }
+  ]
+}

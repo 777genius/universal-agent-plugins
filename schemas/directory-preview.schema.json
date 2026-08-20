@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-plugins.org/schemas/directory-preview.schema.json",
+  "title": "Deterministic Universal Agent Plugins Directory review preview",
+  "type": "object",
+  "required": ["schema_version", "product_count", "products"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "product_count": {"type": "integer", "minimum": 0},
+    "products": {"type": "array", "items": {"$ref": "#/$defs/product"}}
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "id": {"type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"},
+    "distributionId": {"type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*/[a-z0-9]+(?:-[a-z0-9]+)*$"},
+    "source": {
+      "type": "object",
+      "required": ["repository", "revision", "path"],
+      "properties": {
+        "repository": {"type": "string", "minLength": 1},
+        "revision": {"type": ["string", "null"], "pattern": "^[0-9a-f]{40}$"},
+        "path": {"type": "string", "minLength": 1}
+      },
+      "additionalProperties": false
+    },
+    "distribution": {
+      "type": "object",
+      "required": ["id", "kind", "status", "release_sequence", "package_version", "components", "eligible_targets", "current_evidence", "source", "tree_digest_algorithm", "tree_digest", "manifest_digest"],
+      "properties": {
+        "id": {"$ref": "#/$defs/distributionId"},
+        "kind": {"enum": ["upstream", "community_bridge", "community"]},
+        "status": {"enum": ["candidate", "active", "suspended"]},
+        "release_sequence": {"type": "integer", "minimum": 1},
+        "package_version": {"type": "string"},
+        "components": {"type": "array", "uniqueItems": true, "items": {"enum": ["extensions", "mcp", "skills"]}},
+        "eligible_targets": {"type": "array", "uniqueItems": true, "items": {"enum": ["codex", "chatgpt", "cursor", "copilot", "vscode", "kiro"]}},
+        "current_evidence": {"type": "array", "uniqueItems": true, "items": {"type": "string"}},
+        "source": {"$ref": "#/$defs/source"},
+        "tree_digest_algorithm": {"const": "uap-tree-sha256-v1"},
+        "tree_digest": {"$ref": "#/$defs/digest"},
+        "manifest_digest": {"$ref": "#/$defs/digest"}
+      },
+      "additionalProperties": false
+    },
+    "product": {
+      "type": "object",
+      "required": ["id", "display_name", "description", "aliases", "categories", "default_distribution", "fallback_order", "distributions"],
+      "properties": {
+        "id": {"$ref": "#/$defs/id"},
+        "display_name": {"type": "string", "minLength": 1},
+        "description": {"type": "string", "minLength": 1},
+        "aliases": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"$ref": "#/$defs/id"}},
+        "categories": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"$ref": "#/$defs/id"}},
+        "default_distribution": {"$ref": "#/$defs/distributionId"},
+        "fallback_order": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"$ref": "#/$defs/distributionId"}},
+        "distributions": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/distribution"}}
+      },
+      "additionalProperties": false
+    }
+  }
+}
