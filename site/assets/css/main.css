@@ -129,6 +129,7 @@ code, pre { font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospac
 .command-snippet { --command-accent: #a999ff; overflow: hidden; border: 1px solid var(--line); border-radius: 11px; background: color-mix(in srgb, #050710 74%, var(--surface-solid)); }
 .command-snippet--add { --command-accent: #50d5a3; }
 .command-snippet--update { --command-accent: #61c6ff; }
+.command-snippet--repair { --command-accent: #f2bd5a; }
 .command-snippet--remove { --command-accent: #ff8178; }
 :root[data-theme="light"] .command-snippet { background: #20243a; color: #f5f6ff; }
 .command-snippet__header { min-height: 35px; padding-inline: 12px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,.08); color: #8790aa; font-size: .63rem; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; }

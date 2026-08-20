@@ -3,7 +3,7 @@
   See site/NOTICE.md for the complete attribution.
 -->
 <script setup lang="ts">
-type CommandKind = 'terminal' | 'add' | 'update' | 'remove'
+type CommandKind = 'terminal' | 'add' | 'update' | 'repair' | 'remove'
 
 const props = withDefaults(defineProps<{
   command: string
@@ -48,6 +48,10 @@ async function copyCommand() {
           <template v-else-if="kind === 'update'">
             <path d="M20 7v5h-5M4 17v-5h5" />
             <path d="M18.5 12a6.5 6.5 0 0 0-11.2-4.5L4 12M5.5 12a6.5 6.5 0 0 0 11.2 4.5L20 12" />
+          </template>
+          <template v-else-if="kind === 'repair'">
+            <path d="M14.7 6.3a4 4 0 0 0-5 5L4 17l3 3 5.7-5.7a4 4 0 0 0 5-5l-2.5 2.5-3-3 2.5-2.5Z" />
+            <path d="m5.5 17.5 1 1" />
           </template>
           <template v-else-if="kind === 'remove'">
             <path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 11v5M14 11v5" />

@@ -52,7 +52,7 @@ describe('registry parsing', () => {
 
   it('requires publication identity only at the signed production boundary', () => {
     const raw = snapshotFixture as Record<string, unknown>
-    const unresolved = structuredClone({ ...raw, snapshot_schema_version: undefined, sequence: undefined, generated_at: undefined, expires_at: undefined, schema_version: 1 })
+    const unresolved = structuredClone({ ...raw, snapshot_schema_version: undefined, sequence: undefined, generated_at: undefined, expires_at: undefined, schema_version: 1 }) as Record<string, unknown>
     ;(unresolved.distributions as Array<{ releases: Array<{ package_source: { revision: string | null } }> }>)[0]!.releases[0]!.package_source.revision = null
     const preview = parseDirectoryData(unresolved, 'review_preview')
     assert.equal(preview.data_source, 'review_preview')
