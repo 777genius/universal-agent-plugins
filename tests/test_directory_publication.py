@@ -71,15 +71,14 @@ class CanonicalAndSignatureTests(unittest.TestCase):
                 publication.validate_with_schema(value, schema)
 
         malformed = fixture_json("candidate.json")
-        malformed["products"][0]["distributions"][0]["releases"][0]["unexpected"] = True
+        malformed["distributions"][0]["releases"][0]["unexpected"] = True
         with self.assertRaises(publication.PublicationError):
             publication.validate_with_schema(malformed, publication.CANDIDATE_SCHEMA)
 
-        snapshot_schema = json.loads(publication.SNAPSHOT_SCHEMA.read_bytes())
-        candidate_schema = json.loads(publication.CANDIDATE_SCHEMA.read_bytes())
-        candidate_defs = copy.deepcopy(candidate_schema["$defs"])
-        candidate_defs["release"]["properties"]["published_at"] = snapshot_schema["$defs"]["release"]["properties"]["published_at"]
-        self.assertEqual(candidate_defs, snapshot_schema["$defs"])
+        signed_with_null_time = fixture_json("snapshot.json")
+        signed_with_null_time["distributions"][0]["releases"][0]["published_at"] = None
+        with self.assertRaises(publication.PublicationError):
+            publication.validate_with_schema(signed_with_null_time, publication.SNAPSHOT_SCHEMA)
 
     def test_signature_domain_digest_and_two_key_overlap(self) -> None:
         snapshot = fixture("snapshot.json")
@@ -185,26 +184,29 @@ class PublicationLifecycleTests(unittest.TestCase):
             first_snapshot = json.loads((feed / "snapshots" / "00000000000000000001.json").read_bytes())
 
             value = json.loads(candidate.read_bytes())
-            evidence = value["products"][0]["distributions"][0]["releases"][0]["policy"]["current_evidence"][0]
-            evidence["evidence_id"] = "runtime-demo-codex-retest"
-            evidence["digest"] = "sha256:" + "6" * 64
+            evidence = value["evidence"][0]
+            evidence["id"] = "runtime-demo-codex-retest"
+            evidence["artifact"]["digest"] = "sha256:" + "6" * 64
             evidence["outcome"] = "inconclusive"
+            value["distributions"][0]["release_policies"][0]["current_evidence"] = [evidence["id"]]
             candidate.write_bytes(publication.canonical_json(value))
             second = self.signer(root, candidate, "run-101", "2026-08-27T00:00:00Z")
             self.assertEqual(second.returncode, 0, second.stderr)
             second_snapshot = json.loads((feed / "snapshots" / "00000000000000000002.json").read_bytes())
-            old_release = first_snapshot["products"][0]["distributions"][0]["releases"][0]
-            new_release = second_snapshot["products"][0]["distributions"][0]["releases"][0]
+            old_release = first_snapshot["distributions"][0]["releases"][0]
+            new_release = second_snapshot["distributions"][0]["releases"][0]
             self.assertEqual(old_release["sequence"], new_release["sequence"])
             self.assertEqual(old_release["package_source"], new_release["package_source"])
             self.assertEqual(old_release["published_at"], new_release["published_at"])
-            self.assertNotEqual(old_release["policy"]["current_evidence"], new_release["policy"]["current_evidence"])
+            self.assertNotEqual(first_snapshot["evidence"], second_snapshot["evidence"])
+            self.assertEqual(len(second_snapshot["products"][0]["distributions"]), 2)
+            self.assertEqual(len(second_snapshot["distributions"]), 2)
 
             original_first_artifact = (feed / "snapshots" / "00000000000000000001.json").read_bytes()
             weekly = self.signer(root, candidate, "run-102", "2026-09-03T00:00:00Z")
             self.assertEqual(weekly.returncode, 0, weekly.stderr)
             weekly_snapshot = json.loads((feed / "snapshots" / "00000000000000000003.json").read_bytes())
-            weekly_release = weekly_snapshot["products"][0]["distributions"][0]["releases"][0]
+            weekly_release = weekly_snapshot["distributions"][0]["releases"][0]
             self.assertEqual(weekly_snapshot["expires_at"], "2026-10-03T00:00:00Z")
             self.assertEqual(weekly_release["sequence"], new_release["sequence"])
             self.assertEqual(weekly_release["package_source"], new_release["package_source"])
@@ -220,10 +222,11 @@ class PublicationLifecycleTests(unittest.TestCase):
             self.assertEqual(json.loads((root / "result.json").read_bytes())["reused"], True)
 
             recycled = json.loads(candidate.read_bytes())
-            recycled_evidence = recycled["products"][0]["distributions"][0]["releases"][0]["policy"]["current_evidence"][0]
-            recycled_evidence["evidence_id"] = "runtime-demo-codex"
-            recycled_evidence["digest"] = "sha256:" + "3" * 64
+            recycled_evidence = recycled["evidence"][0]
+            recycled_evidence["id"] = "runtime-demo-codex"
+            recycled_evidence["artifact"]["digest"] = "sha256:" + "3" * 64
             recycled_evidence["outcome"] = "inconclusive"
+            recycled["distributions"][0]["release_policies"][0]["current_evidence"] = [recycled_evidence["id"]]
             candidate.write_bytes(publication.canonical_json(recycled))
             recycled_result = self.signer(root, candidate, "run-103", "2026-09-10T00:00:00Z")
             self.assertNotEqual(recycled_result.returncode, 0)
@@ -244,7 +247,7 @@ class PublicationLifecycleTests(unittest.TestCase):
         changed_evidence["publication_id"] = "fixture-evidence-tamper"
         changed_evidence["generated_at"] = "2026-08-27T00:00:00Z"
         changed_evidence["expires_at"] = "2026-09-26T00:00:00Z"
-        changed_evidence["products"][0]["distributions"][0]["releases"][0]["policy"]["current_evidence"][0]["outcome"] = "inconclusive"
+        changed_evidence["evidence"][0]["outcome"] = "inconclusive"
         with self.assertRaisesRegex(publication.PublicationError, "immutable evidence"):
             publication.validate_snapshot_semantics(changed_evidence, previous)
 
@@ -253,44 +256,47 @@ class PublicationLifecycleTests(unittest.TestCase):
         newer["publication_id"] = "fixture-2"
         newer["generated_at"] = "2026-08-27T00:00:00Z"
         newer["expires_at"] = "2026-09-26T00:00:00Z"
-        revoked = newer["products"][0]["distributions"][1]["releases"][0]
-        revoked["policy"]["status"] = "active"
+        newer["distributions"][1]["release_policies"][0]["status"] = "active"
+        newer["revocations"] = []
         with self.assertRaisesRegex(publication.PublicationError, "cannot be restored"):
             publication.validate_snapshot_semantics(newer, previous)
         removed = copy.deepcopy(newer)
+        removed["distributions"].pop()
         removed["products"][0]["distributions"].pop()
         removed["products"][0]["default_distribution"] = "example/demo"
         with self.assertRaisesRegex(publication.PublicationError, "was removed"):
             publication.validate_snapshot_semantics(removed, previous)
 
     def test_post_merge_sha_binding_and_unchanged_release_reuse(self) -> None:
-        index = json.loads((ROOT / "registry" / "index.json").read_bytes())
         config = prepare.load_config(ROOT / "registry" / "publication" / "config.json")
         source_commit = subprocess.check_output(["/usr/bin/git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
-        first = prepare.build_candidate(index, config, source_commit, "prepare-1", None)
-        for product in first["products"]:
-            release = product["distributions"][0]["releases"][0]
+        with tempfile.TemporaryDirectory() as tmp:
+            package = Path(tmp) / "plugins" / "demo"
+            package.mkdir(parents=True)
+            (package / "plugin.json").write_text('{"name":"demo"}\n')
+            tree = prepare.package_tree_digest(package)
+            manifest = "sha256:" + __import__("hashlib").sha256((package / "plugin.json").read_bytes()).hexdigest()
+            source = {
+                "schema_version": 1,
+                "products": [{"schema_version": 1, "id": "demo", "display_name": "Demo", "description": "Demo package.", "manifest_name": "demo", "aliases": ["demo"], "reserved_aliases": ["demo"], "categories": ["demo"], "minimum_capabilities": {"skills": "optional", "mcp": "required"}, "default_distribution": "777genius/demo", "distributions": ["777genius/demo"]}],
+                "distributions": [{"schema_version": 1, "id": "777genius/demo", "product_id": "demo", "kind": "community", "status": "active", "packager": "777genius", "releases": [{"sequence": 1, "package_version": "1.0.0", "manifest_name": "demo", "agent_plugins_schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json", "package_source": {"repository": config["repository"], "revision": None, "path": "plugins/demo"}, "tree_digest_algorithm": "uap-tree-sha256-v1", "tree_digest": tree, "manifest_digest": manifest, "components": ["mcp"]}], "release_policies": [{"release_sequence": 1, "status": "active", "minimum_installer_version": "0.1.6", "targets": [{"client": "codex", "scopes": ["user"], "delivery": "managed"}], "current_evidence": []}]}],
+                "evidence": [],
+            }
+            first = prepare.build_candidate(source, config, source_commit, "prepare-1", None, repository_root=Path(tmp))
+            release = first["distributions"][0]["releases"][0]
             self.assertEqual(release["package_source"]["revision"], source_commit)
             self.assertIsNone(release["published_at"])
-        signed_products = copy.deepcopy(first["products"])
-        for product in signed_products:
-            for distribution in product["distributions"]:
-                for release in distribution["releases"]:
-                    release["published_at"] = "2026-08-20T00:00:00Z"
-        previous = {
-            "products": signed_products,
-        }
-        later_commit = "e" * 40
-        second = prepare.build_candidate(index, config, later_commit, "prepare-2", previous)
-        for product in second["products"]:
-            release = product["distributions"][0]["releases"][0]
+            previous = {"products": first["products"], "distributions": copy.deepcopy(first["distributions"]), "evidence": [], "revocations": []}
+            previous["distributions"][0]["releases"][0]["published_at"] = "2026-08-20T00:00:00Z"
+            second = prepare.build_candidate(source, config, "e" * 40, "prepare-2", previous, repository_root=Path(tmp))
+            release = second["distributions"][0]["releases"][0]
             self.assertEqual(release["package_source"]["revision"], source_commit)
             self.assertEqual(release["published_at"], "2026-08-20T00:00:00Z")
 
         with tempfile.TemporaryDirectory() as tmp:
             rejected = run_script(
                 "prepare_directory_publication.py",
-                "--index", str(ROOT / "registry" / "index.json"),
+                "--directory", str(ROOT / "registry" / "directory.json"),
                 "--config", str(ROOT / "registry" / "publication" / "config.json"),
                 "--source-commit", "f" * 40,
                 "--publication-id", "wrong-head",
@@ -299,6 +305,63 @@ class PublicationLifecycleTests(unittest.TestCase):
             )
             self.assertNotEqual(rejected.returncode, 0)
             self.assertIn("does not match --source-commit", rejected.stderr)
+
+    def test_external_reacquisition_mismatch_fails_before_output_mutation(self) -> None:
+        config = prepare.load_config(ROOT / "registry" / "publication" / "config.json")
+        source_commit = subprocess.check_output(["/usr/bin/git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            external = root / "external"
+            package = external / "plugins" / "demo"
+            package.mkdir(parents=True)
+            (package / "plugin.json").write_text('{"name":"demo"}\n')
+            subprocess.run(["git", "init", "-q", str(external)], check=True)
+            subprocess.run(["git", "-C", str(external), "add", "."], check=True)
+            subprocess.run(["git", "-C", str(external), "-c", "user.name=Fixture", "-c", "user.email=fixture@example.test", "commit", "-qm", "fixture"], check=True)
+            revision = subprocess.check_output(["git", "-C", str(external), "rev-parse", "HEAD"], text=True).strip()
+            source = {
+                "schema_version": 1,
+                "products": [{"schema_version": 1, "id": "demo", "display_name": "Demo", "description": "External demo package.", "manifest_name": "demo", "aliases": ["demo"], "reserved_aliases": ["demo"], "categories": ["demo"], "minimum_capabilities": {"skills": "optional", "mcp": "required"}, "default_distribution": "example/demo", "distributions": ["example/demo"]}],
+                "distributions": [{"schema_version": 1, "id": "example/demo", "product_id": "demo", "kind": "upstream", "status": "active", "packager": "example", "releases": [{"sequence": 1, "package_version": "1.0.0", "manifest_name": "demo", "agent_plugins_schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json", "package_source": {"repository": "example/external", "revision": revision, "path": "plugins/demo"}, "tree_digest_algorithm": "uap-tree-sha256-v1", "tree_digest": "sha256:" + "0" * 64, "manifest_digest": "sha256:" + "0" * 64, "components": ["mcp"]}], "release_policies": [{"release_sequence": 1, "status": "active", "minimum_installer_version": "0.1.6", "targets": [{"client": "codex", "scopes": ["user"], "delivery": "managed"}], "current_evidence": []}]}],
+                "evidence": [],
+            }
+            source_path = root / "directory.json"
+            source_path.write_text(json.dumps(source))
+            output = root / "candidate.json"
+            digest_output = root / "candidate.digest"
+            output.write_text("unchanged-candidate")
+            digest_output.write_text("unchanged-digest")
+            result = run_script(
+                "prepare_directory_publication.py",
+                "--directory", str(source_path),
+                "--config", str(ROOT / "registry" / "publication" / "config.json"),
+                "--source-commit", source_commit,
+                "--publication-id", "external-mismatch",
+                "--external-repository", f"example/external={external}",
+                "--output", str(output),
+                "--digest-output", str(digest_output),
+            )
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("reacquired tree digest differs", result.stderr)
+            self.assertEqual(output.read_text(), "unchanged-candidate")
+            self.assertEqual(digest_output.read_text(), "unchanged-digest")
+
+            release = source["distributions"][0]["releases"][0]
+            release["tree_digest"] = prepare.package_tree_digest(package)
+            release["manifest_digest"] = "sha256:" + __import__("hashlib").sha256((package / "plugin.json").read_bytes()).hexdigest()
+            first = prepare.build_candidate(source, config, source_commit, "external-first", None, external_overrides={"example/external": external})
+            previous = {"products": first["products"], "distributions": copy.deepcopy(first["distributions"]), "evidence": [], "revocations": []}
+            previous_release = previous["distributions"][0]["releases"][0]
+            previous_release["published_at"] = "2026-08-20T00:00:00Z"
+            missing = root / "unavailable"
+            unchanged = prepare.build_candidate(source, config, "f" * 40, "external-refresh", previous, external_overrides={"example/external": missing})
+            unchanged_release = unchanged["distributions"][0]["releases"][0]
+            self.assertEqual(unchanged_release["package_source"]["revision"], revision)
+            self.assertEqual(unchanged_release["published_at"], "2026-08-20T00:00:00Z")
+            broadened = copy.deepcopy(source)
+            broadened["distributions"][0]["release_policies"][0]["targets"].append({"client": "cursor", "scopes": ["user"], "delivery": "managed"})
+            with self.assertRaisesRegex(publication.PublicationError, "reacquisition failed"):
+                prepare.build_candidate(broadened, config, "f" * 40, "external-broadened", previous, external_overrides={"example/external": missing})
 
 
 class PublicationWorkflowTests(unittest.TestCase):
@@ -320,8 +383,12 @@ class PublicationWorkflowTests(unittest.TestCase):
         self.assertNotIn("plugins/", signer_commands)
         self.assertIn("for attempt in 1 2 3", signer_commands)
         self.assertIn("git diff --name-status", signer_commands)
+        site_job = workflow["jobs"]["materialize_site"]
+        site_commands = "\n".join(step.get("run", "") for step in site_job["steps"] if isinstance(step, dict))
+        self.assertIn("UAP_SIGNED_SNAPSHOT_PATH", site_commands)
+        self.assertIn("git -C ledger diff --exit-code -- registry", site_commands)
         deploy_commands = "\n".join(step.get("run", "") for step in workflow["jobs"]["deploy"]["steps"] if isinstance(step, dict))
-        self.assertIn("needs.sign.outputs.ledger_commit", text)
+        self.assertIn("needs.materialize_site.outputs.ledger_commit", text)
         self.assertIn("git -C exact-pages-tree rev-parse HEAD", deploy_commands)
         for match in __import__("re").findall(r"uses:\s+([^\s]+)", text):
             self.assertRegex(match, r"@[0-9a-f]{40}$")

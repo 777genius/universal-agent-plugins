@@ -46,27 +46,25 @@ def public_bytes(private_key) -> bytes:  # type: ignore[no-untyped-def]
 
 
 def assign_release_publication_times(
-    products: list[dict[str, object]], previous: dict[str, object] | None, now: str
+    distributions: list[dict[str, object]], previous: dict[str, object] | None, now: str
 ) -> list[dict[str, object]]:
     """Assign new-release times while preserving signed historical provenance."""
     prior: dict[tuple[str, int], str] = {}
     if previous is not None:
-        for product in previous["products"]:  # type: ignore[index]
-            for distribution in product["distributions"]:
-                for release in distribution["releases"]:
-                    prior[(release["distribution_id"], release["sequence"])] = release["published_at"]
-    assigned = copy.deepcopy(products)
-    for product in assigned:
-        for distribution in product["distributions"]:  # type: ignore[index]
+        for distribution in previous["distributions"]:  # type: ignore[index]
             for release in distribution["releases"]:
-                identity = (release["distribution_id"], release["sequence"])
-                if release["published_at"] is None:
-                    release["published_at"] = prior.get(identity, now)
-                elif identity in prior:
-                    require(
-                        release["published_at"] == prior[identity],
-                        f"published release {identity} timestamp changed in candidate",
-                    )
+                prior[(distribution["id"], release["sequence"])] = release["published_at"]
+    assigned = copy.deepcopy(distributions)
+    for distribution in assigned:
+        for release in distribution["releases"]:  # type: ignore[index]
+            identity = (distribution["id"], release["sequence"])
+            if release["published_at"] is None:
+                release["published_at"] = prior.get(identity, now)
+            elif identity in prior:
+                require(
+                    release["published_at"] == prior[identity],
+                    f"published release {identity} timestamp changed in candidate",
+                )
     return assigned
 
 
@@ -98,12 +96,12 @@ def main() -> int:
         loaded = load_ledger_latest(args.ledger, trusted)
         previous = loaded[0] if loaded else None
         historical_evidence = loaded[2] if loaded else {}
-        products = assign_release_publication_times(
-            candidate["products"], previous, format_timestamp(now)
+        distributions = assign_release_publication_times(
+            candidate["distributions"], previous, format_timestamp(now)
         )
         if previous is not None and previous["publication_id"] == candidate["publication_id"]:
             require(previous["source_commit"] == candidate["source_commit"], "publication ID was reused for another source commit")
-            require(previous["products"] == products, "publication ID was reused for different candidate content")
+            require(previous["products"] == candidate["products"] and previous["distributions"] == distributions and previous["evidence"] == candidate["evidence"] and previous["revocations"] == candidate["revocations"], "publication ID was reused for different candidate content")
             result = {"reused": True, "sequence": previous["sequence"], "snapshot_digest": sha256_digest(canonical_json(previous))}
             atomic_write(args.result, canonical_json(result))
             print(f"reused sequence {previous['sequence']}")
@@ -117,7 +115,10 @@ def main() -> int:
             "source_commit": candidate["source_commit"],
             "generated_at": format_timestamp(now),
             "expires_at": format_timestamp(now + timedelta(days=candidate["lifetime_days"])),
-            "products": products,
+            "products": candidate["products"],
+            "distributions": distributions,
+            "evidence": candidate["evidence"],
+            "revocations": candidate["revocations"],
         }
         validate_snapshot_semantics(snapshot, previous, historical_evidence)
         snapshot_body = canonical_json(snapshot)

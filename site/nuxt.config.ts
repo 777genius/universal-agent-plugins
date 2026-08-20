@@ -3,7 +3,8 @@ import { loadRegistryIndex } from './build/load-registry'
 
 const signedSnapshotPath = process.env.UAP_SIGNED_SNAPSHOT_PATH
 const previewPath = process.env.UAP_DIRECTORY_PREVIEW_PATH
-const defaultRegistryPath = resolve(process.cwd(), '../registry/index.json')
+const defaultRegistryPath = resolve(process.cwd(), '../registry/directory.json')
+const implicitPreview = !signedSnapshotPath && !previewPath && !process.env.UAP_REGISTRY_PATH
 const registryPath = signedSnapshotPath
   ? resolve(process.cwd(), signedSnapshotPath)
   : previewPath
@@ -11,11 +12,9 @@ const registryPath = signedSnapshotPath
     : process.env.UAP_REGISTRY_PATH
       ? resolve(process.cwd(), process.env.UAP_REGISTRY_PATH)
       : defaultRegistryPath
-const registryIndex = loadRegistryIndex(registryPath, signedSnapshotPath ? 'published_snapshot' : previewPath ? 'review_preview' : undefined)
-const builtInCount = registryIndex.plugins.filter(plugin => plugin.built_in).length
-
-if (!signedSnapshotPath && !previewPath && !process.env.UAP_REGISTRY_PATH && builtInCount !== 26) {
-  throw new Error(`Production registry must contain exactly 26 built-in plugins; found ${builtInCount}`)
+const registryIndex = loadRegistryIndex(registryPath, signedSnapshotPath ? 'published_snapshot' : (previewPath || implicitPreview) ? 'review_preview' : undefined)
+if (implicitPreview && process.env.CI && process.env.GITHUB_EVENT_NAME !== 'pull_request') {
+  throw new Error('Production builds require UAP_SIGNED_SNAPSHOT_PATH; canonical source is allowed only for explicitly unsigned pull-request previews')
 }
 
 const siteUrl = (process.env.NUXT_PUBLIC_SITE_URL

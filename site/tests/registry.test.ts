@@ -38,23 +38,26 @@ describe('registry parsing', () => {
     assert.equal(directory.data_source, 'published_snapshot')
     assert.equal(directory.snapshot_sequence, 42)
     assert.equal(directory.plugins.length, 1)
-    assert.equal(directory.plugins[0]?.display_name, 'Context7')
+    assert.equal(directory.plugins[0]?.display_name, 'Demo')
     assert.equal(directory.plugins[0]?.distributions.length, 2)
-    assert.equal(directory.plugins[0]?.default_distribution, 'upstash/context7')
+    assert.equal(directory.plugins[0]?.default_distribution, 'example/demo')
     assert.deepEqual(directory.plugins[0]?.client_support.clients, ['codex', 'cursor', 'kiro'])
-    assert.equal(expectedDistribution(directory.plugins[0]!, ['codex', 'cursor'])?.id, 'upstash/context7')
-    assert.equal(expectedDistribution(directory.plugins[0]!, ['codex', 'kiro'])?.id, '777genius/context7-bridge')
+    assert.equal(expectedDistribution(directory.plugins[0]!, ['codex', 'cursor'])?.id, 'example/demo')
+    assert.equal(expectedDistribution(directory.plugins[0]!, ['codex', 'kiro'])?.id, 'example/demo-bridge')
     assert.deepEqual(directory.plugins[0]?.evidence[0], {
-      client: 'cursor', level: 'runtime', outcome: 'passed', client_version: 'Cursor 3.9.16', os: 'linux', architecture: 'amd64', tested_at: '2026-08-20T10:00:00Z', evidence_url: 'https://example.test/evidence.json',
+      client: 'codex', level: 'runtime', outcome: 'passed', client_version: '0.200.0', os: 'linux', architecture: 'amd64', tested_at: '2026-08-19T00:00:00Z', evidence_url: `https://github.com/example/evidence/blob/${'e'.repeat(40)}/evidence/demo.json`,
     })
     assert.equal(validationLabel(directory.plugins[0]!), 'Runtime tested')
   })
 
   it('requires publication identity only at the signed production boundary', () => {
     const raw = snapshotFixture as Record<string, unknown>
-    const unresolved = { ...raw, snapshot_sequence: undefined, generated_at: undefined }
-    assert.equal(parseDirectoryData(unresolved, 'review_preview').data_source, 'review_preview')
-    assert.throws(() => parseDirectoryData(unresolved, 'published_snapshot'), /snapshot_sequence and generated_at/)
+    const unresolved = structuredClone({ ...raw, snapshot_schema_version: undefined, sequence: undefined, generated_at: undefined, expires_at: undefined, schema_version: 1 })
+    ;(unresolved.distributions as Array<{ releases: Array<{ package_source: { revision: string | null } }> }>)[0]!.releases[0]!.package_source.revision = null
+    const preview = parseDirectoryData(unresolved, 'review_preview')
+    assert.equal(preview.data_source, 'review_preview')
+    assert.equal(preview.plugins[0]?.source.revision, null)
+    assert.throws(() => parseDirectoryData(unresolved, 'published_snapshot'), /signed sequence, generated_at, and expires_at/)
   })
 
   it('normalizes valid built-in and external entries', () => {

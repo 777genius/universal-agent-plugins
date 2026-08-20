@@ -5,7 +5,7 @@ on:
     branches: [main]
     paths:
       - "plugins/**"
-      - "registry/index.json"
+      - "registry/directory.json"
       - "registry/publication/**"
       - "schemas/directory-*.schema.json"
       - "scripts/directory_publication.py"
@@ -59,7 +59,7 @@ jobs:
           SOURCE_COMMIT: ${{ github.sha }}
         run: |
           python3 scripts/prepare_directory_publication.py \
-            --index registry/index.json \
+            --directory registry/directory.json \
             --config registry/publication/config.json \
             --source-commit "${SOURCE_COMMIT}" \
             --publication-id "${PUBLICATION_ID}" \
@@ -162,9 +162,74 @@ jobs:
           fi
           echo "ledger_commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
+  materialize_site:
+    name: Materialize exact-sequence production site
+    needs: sign
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    outputs:
+      ledger_commit: ${{ steps.commit.outputs.ledger_commit }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.sign.outputs.ledger_commit }}
+          path: ledger
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          path: trusted-source
+          persist-credentials: false
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+        with:
+          version: 10.34.5
+          run_install: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22"
+          cache: pnpm
+          cache-dependency-path: trusted-source/site/pnpm-lock.yaml
+      - name: Generate from the exact signed snapshot
+        working-directory: trusted-source/site
+        env:
+          NUXT_APP_BASE_URL: /universal-agent-plugins/
+          NUXT_PUBLIC_SITE_URL: https://777genius.github.io/universal-agent-plugins
+        run: |
+          test "$(git -C ../../ledger rev-parse HEAD)" = "${{ needs.sign.outputs.ledger_commit }}"
+          snapshot_path="$(python3 -c 'import json; p=json.load(open("../../ledger/registry/schemas/1/latest.json")); print(p["snapshot_path"])')"
+          export UAP_SIGNED_SNAPSHOT_PATH="../../ledger/registry/schemas/1/${snapshot_path}"
+          pnpm install --frozen-lockfile --ignore-scripts
+          pnpm generate
+          pnpm check:generated
+      - name: Commit the exact production tree without touching the ledger
+        id: commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          rsync -a --delete --exclude=.git --exclude=registry trusted-source/site/.output/public/ ledger/
+          git -C ledger diff --exit-code -- registry
+          if test -n "$(git -C ledger status --porcelain)"; then
+            git -C ledger config user.name "uap-directory-publisher[bot]"
+            git -C ledger config user.email "uap-directory-publisher[bot]@users.noreply.github.com"
+            git -C ledger add -A
+            git -C ledger commit -m "chore(directory): materialize signed production site"
+            pushed=false
+            for attempt in 1 2 3; do
+              if git -C ledger -c http.https://github.com/.extraheader="AUTHORIZATION: basic $(printf 'x-access-token:%s' "${GH_TOKEN}" | base64 -w0)" push origin "HEAD:${LEDGER_BRANCH}"; then
+                pushed=true
+                break
+              fi
+            done
+            test "${pushed}" = true
+          fi
+          echo "ledger_commit=$(git -C ledger rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
   deploy:
     name: Deploy exact committed Pages tree
-    needs: sign
+    needs: materialize_site
     runs-on: ubuntu-latest
     timeout-minutes: 10
     environment:
@@ -177,12 +242,12 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ needs.sign.outputs.ledger_commit }}
+          ref: ${{ needs.materialize_site.outputs.ledger_commit }}
           path: exact-pages-tree
           persist-credentials: false
       - name: Archive exact ledger commit
         run: |
-          test "$(git -C exact-pages-tree rev-parse HEAD)" = "${{ needs.sign.outputs.ledger_commit }}"
+          test "$(git -C exact-pages-tree rev-parse HEAD)" = "${{ needs.materialize_site.outputs.ledger_commit }}"
           tar --directory exact-pages-tree -cvf "$RUNNER_TEMP/artifact.tar" --exclude=.git --exclude=.github .
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:

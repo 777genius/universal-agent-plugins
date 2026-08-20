@@ -29,13 +29,15 @@ remain possible. Evidence pointer or compatibility-policy changes advance only
 the snapshot sequence. Weekly refresh advances snapshot sequence and expiry
 without allocating a package release. Unchanged releases reuse their original
 signed source revision and `published_at` value even if `main` has advanced.
-The no-secret preparer leaves new release timestamps unset; the privileged
-signer assigns them from its own publication clock exactly once.
-`release_sequences` and `distribution_status` in `config.json` use a
-distribution ID such as `777genius/context7`. Release policy and current
-evidence overrides use the complete immutable identity, for example
-`777genius/context7@2`. A package-byte change must allocate exactly the next
-distribution release sequence; unchanged bytes are rejected as a new release.
+The no-secret preparer reads only canonical `registry/directory.json`, validates
+every new in-repository release against the checked-out post-merge tree, and
+reacquires every new or newly eligible external release at its reviewed full
+SHA. It leaves new release timestamps unset; the privileged signer assigns them
+from its own publication clock exactly once. Products, distributions, release
+sequences, policies, current evidence pointers, and revocations come from the
+canonical Directory model rather than publication configuration. A package-byte
+change must allocate a higher distribution release sequence; unchanged signed
+releases retain their exact source revision and original `published_at`.
 
 ## Required repository configuration
 
@@ -57,10 +59,11 @@ Before enabling `.github/workflows/directory-publication.yml`:
    schemas, workflow, and this configuration, dismiss stale approvals, require
    conversation resolution and status checks, and forbid bypass/force push.
 5. Configure GitHub Pages for GitHub Actions. Grant the workflow its declared
-   `pages: write` and `id-token: write` permissions. The deployment job archives
-   the exact ledger commit emitted by the signing job; it never rebuilds a
-   different tree. Disable the legacy `Pages` workflow when this workflow is
-   enabled so two workflows cannot race to deploy different source trees.
+   permissions. After signing, the no-secret site job generates production from
+   that exact versioned snapshot, commits the static result without modifying
+   `registry/`, and the deployment job archives that exact resulting ledger
+   commit. Disable the legacy `Pages` workflow for production when this workflow
+   is enabled; it remains suitable for explicitly unsigned pull-request previews.
 6. Keep Actions restricted to immutable action SHAs and disallow workflows from
    approving pull requests. Do not add publication secrets to pull-request or
    `pull_request_target` workflows.

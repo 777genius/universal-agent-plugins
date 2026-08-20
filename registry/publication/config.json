@@ -1,9 +1,4 @@
 {
-  "current_evidence": {},
-  "distribution_status": {},
-  "publisher_namespace": "777genius",
-  "release_sequences": {},
-  "release_status": {},
   "repository": "777genius/universal-agent-plugins",
   "schema_version": 1,
   "snapshot_lifetime_days": 30

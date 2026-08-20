@@ -6,7 +6,7 @@ export interface PluginAuthor {
 
 export interface PluginSource {
   repository: string
-  revision: string
+  revision: string | null
   path: string
   manifest_sha256: string
   tree_sha256: string

@@ -160,7 +160,7 @@ def validate_with_schema(value: Any, schema_path: Path) -> None:
         raise PublicationError("jsonschema is required for publication validation") from error
     schema = read_json(schema_path, max_bytes=1 << 20)
     local_schemas = {}
-    for local_path in (SNAPSHOT_SCHEMA, ENVELOPE_SCHEMA, LATEST_SCHEMA, CANDIDATE_SCHEMA):
+    for local_path in (ROOT / "schemas").glob("*.schema.json"):
         local = read_json(local_path, max_bytes=1 << 20)
         if isinstance(local, dict) and isinstance(local.get("$id"), str):
             local_schemas[local["$id"]] = local
@@ -225,19 +225,22 @@ def verify_envelope(snapshot: bytes, envelope: dict[str, Any], trusted_keys: dic
         raise PublicationError("invalid Ed25519 snapshot signature") from error
 
 
-def release_identity(release: dict[str, Any]) -> tuple[str, int]:
-    return release["distribution_id"], release["sequence"]
+def release_identity(distribution: dict[str, Any], release: dict[str, Any]) -> tuple[str, int]:
+    return distribution["id"], release["sequence"]
 
 
 def immutable_release(release: dict[str, Any]) -> dict[str, Any]:
-    return {key: value for key, value in release.items() if key not in ("published_at", "policy")}
+    return {key: value for key, value in release.items() if key != "published_at"}
 
 
 def iter_releases(snapshot: dict[str, Any]):  # type: ignore[no-untyped-def]
-    for product in snapshot["products"]:
-        for distribution in product["distributions"]:
-            for release in distribution["releases"]:
-                yield distribution, release
+    for distribution in snapshot["distributions"]:
+        for release in distribution["releases"]:
+            yield distribution, release
+
+
+def distribution_policies(distribution: dict[str, Any]) -> dict[int, dict[str, Any]]:
+    return {policy["release_sequence"]: policy for policy in distribution["release_policies"]}
 
 
 def validate_snapshot_semantics(
@@ -252,48 +255,62 @@ def validate_snapshot_semantics(
     require(expires - generated <= __import__("datetime").timedelta(days=31), "snapshot lifetime exceeds 31 days")
     product_ids: set[str] = set()
     aliases: set[str] = set()
+    distribution_map: dict[str, dict[str, Any]] = {}
     release_map: dict[tuple[str, int], dict[str, Any]] = {}
+    policy_map: dict[tuple[str, int], dict[str, Any]] = {}
     evidence_map: dict[str, dict[str, Any]] = {}
     for product in snapshot["products"]:
         require(product["id"] not in product_ids, f"duplicate product {product['id']}")
         product_ids.add(product["id"])
-        distribution_ids = {item["id"] for item in product["distributions"]}
+        distribution_ids = set(product["distributions"])
         require(len(distribution_ids) == len(product["distributions"]), f"{product['id']}: duplicate distribution")
         require(product["default_distribution"] in distribution_ids, f"{product['id']}: default distribution missing")
         for alias in product["aliases"]:
             require(alias not in aliases, f"duplicate alias {alias}")
             aliases.add(alias)
-        for distribution in product["distributions"]:
-            sequences: set[int] = set()
-            for release in distribution["releases"]:
-                require(release["distribution_id"] == distribution["id"], "release distribution identity mismatch")
-                require(release["sequence"] not in sequences, f"{distribution['id']}: duplicate release sequence")
-                sequences.add(release["sequence"])
-                identity = release_identity(release)
-                require(identity not in release_map, f"duplicate release identity {identity}")
-                release_map[identity] = release
-                published = parse_timestamp(release["published_at"], f"{identity}.published_at")
-                require(published <= generated, f"{identity}: publication timestamp is in the future")
-                policy = release["policy"]
-                require(policy["release_sequence"] == release["sequence"], f"{identity}: policy identity mismatch")
-                evidence_ids = [item["evidence_id"] for item in policy["current_evidence"]]
-                require(len(evidence_ids) == len(set(evidence_ids)), f"{identity}: duplicate current evidence")
-                tuples: set[tuple[Any, ...]] = set()
-                for evidence in policy["current_evidence"]:
-                    evidence_id = evidence["evidence_id"]
-                    require(evidence_id not in evidence_map, f"duplicate evidence identity {evidence_id}")
-                    evidence_map[evidence_id] = evidence
-                    applicability = tuple(
-                        evidence.get(field)
-                        for field in (
-                            "level", "client", "client_version", "installer_version",
-                            "dependency_identity", "os", "architecture",
-                        )
-                    )
-                    require(applicability not in tuples, f"{identity}: multiple current evidence records for one applicability tuple")
-                    tuples.add(applicability)
-                    observed = parse_timestamp(evidence["observed_at"], f"{identity}.{evidence['evidence_id']}.observed_at")
-                    require(observed <= generated, f"{identity}: evidence timestamp is in the future")
+    for distribution in snapshot["distributions"]:
+        require(distribution["id"] not in distribution_map, f"duplicate distribution {distribution['id']}")
+        distribution_map[distribution["id"]] = distribution
+        sequences: set[int] = set()
+        policies = distribution_policies(distribution)
+        require(len(policies) == len(distribution["release_policies"]), f"{distribution['id']}: duplicate release policy")
+        for release in distribution["releases"]:
+            require(release["sequence"] not in sequences, f"{distribution['id']}: duplicate release sequence")
+            sequences.add(release["sequence"])
+            identity = release_identity(distribution, release)
+            require(identity not in release_map, f"duplicate release identity {identity}")
+            release_map[identity] = release
+            published = parse_timestamp(release["published_at"], f"{identity}.published_at")
+            require(published <= generated, f"{identity}: publication timestamp is in the future")
+            require(release["sequence"] in policies, f"{identity}: release policy is missing")
+            policy_map[identity] = policies[release["sequence"]]
+        require(set(policies) == sequences, f"{distribution['id']}: release policies do not match releases")
+    for product in snapshot["products"]:
+        for distribution_id in product["distributions"]:
+            require(distribution_id in distribution_map, f"{product['id']}: distribution {distribution_id} is missing")
+            require(distribution_map[distribution_id]["product_id"] == product["id"], f"{product['id']}: distribution product mismatch")
+    selected_ids = {item for policy in policy_map.values() for item in policy["current_evidence"]}
+    applicability_by_release: dict[tuple[str, int], set[tuple[Any, ...]]] = {}
+    for evidence in snapshot["evidence"]:
+        evidence_id = evidence["id"]
+        require(evidence_id not in evidence_map, f"duplicate evidence identity {evidence_id}")
+        evidence_map[evidence_id] = evidence
+        identity = (evidence["distribution_id"], evidence["release_sequence"])
+        require(identity in release_map, f"{evidence_id}: evidence release is missing")
+        require(evidence["package_tree_digest"] == release_map[identity]["tree_digest"], f"{evidence_id}: evidence package digest mismatch")
+        applicability = tuple(evidence.get(field) for field in ("level", "client", "client_version", "installer_version", "dependency_identity", "os", "architecture"))
+        seen_applicability = applicability_by_release.setdefault(identity, set())
+        require(applicability not in seen_applicability, f"{identity}: multiple current evidence records for one applicability tuple")
+        seen_applicability.add(applicability)
+        if "observed_at" in evidence:
+            require(parse_timestamp(evidence["observed_at"], f"{evidence_id}.observed_at") <= generated, f"{evidence_id}: evidence timestamp is in the future")
+    require(set(evidence_map) == selected_ids, "snapshot evidence must exactly match current signed evidence pointers")
+    expected_revocations = {
+        (identity[0], identity[1]) for identity, policy in policy_map.items() if policy["status"] == "revoked"
+    }
+    actual_revocations = {(item["distribution_id"], item["release_sequence"]) for item in snapshot["revocations"]}
+    require(len(actual_revocations) == len(snapshot["revocations"]), "duplicate revocation")
+    require(actual_revocations == expected_revocations, "revocation summary does not match signed release policies")
 
     if historical_evidence is not None:
         for evidence_id, evidence in evidence_map.items():
@@ -306,12 +323,16 @@ def validate_snapshot_semantics(
     require(snapshot["snapshot_schema_version"] == previous["snapshot_schema_version"], "snapshot schema feed changed")
     require(snapshot["sequence"] > previous["sequence"], "snapshot sequence did not increase")
     require(generated > parse_timestamp(previous["generated_at"], "previous.generated_at"), "snapshot generation time did not increase")
-    previous_map = {release_identity(release): release for _, release in iter_releases(previous)}
+    previous_map = {release_identity(distribution, release): release for distribution, release in iter_releases(previous)}
+    previous_policies = {
+        (distribution["id"], sequence): policy
+        for distribution in previous["distributions"]
+        for sequence, policy in distribution_policies(distribution).items()
+    }
     previous_evidence: dict[str, dict[str, Any]] = {}
-    for _, old_release in iter_releases(previous):
-        for evidence in old_release["policy"]["current_evidence"]:
-            old = previous_evidence.setdefault(evidence["evidence_id"], evidence)
-            require(old == evidence, f"previous snapshot reused evidence identity {evidence['evidence_id']} with different fields")
+    for evidence in previous["evidence"]:
+        old = previous_evidence.setdefault(evidence["id"], evidence)
+        require(old == evidence, f"previous snapshot reused evidence identity {evidence['id']} with different fields")
     for evidence_id, evidence in evidence_map.items():
         if evidence_id in previous_evidence:
             require(evidence == previous_evidence[evidence_id], f"immutable evidence {evidence_id} changed")
@@ -320,10 +341,16 @@ def validate_snapshot_semantics(
         new_release = release_map[identity]
         require(immutable_release(new_release) == immutable_release(old_release), f"published release {identity} immutable fields changed")
         require(new_release["published_at"] == old_release["published_at"], f"published release {identity} timestamp changed")
-        old_status = old_release["policy"]["status"]
-        new_status = new_release["policy"]["status"]
+        old_status = previous_policies[identity]["status"]
+        new_status = policy_map[identity]["status"]
         if old_status == "revoked":
             require(new_status == "revoked", f"revoked release {identity} cannot be restored")
+    previous_highest: dict[str, int] = {}
+    for distribution_id, sequence in previous_map:
+        previous_highest[distribution_id] = max(previous_highest.get(distribution_id, 0), sequence)
+    for distribution_id, sequence in release_map:
+        if (distribution_id, sequence) not in previous_map and distribution_id in previous_highest:
+            require(sequence > previous_highest[distribution_id], f"new release {(distribution_id, sequence)} is not above the published sequence floor")
 
 
 def validate_relative_artifact(path: str, expected: str) -> None:

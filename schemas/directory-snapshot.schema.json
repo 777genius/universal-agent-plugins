@@ -3,123 +3,40 @@
   "$id": "https://agent-plugins.org/schemas/directory-snapshot.schema.json",
   "title": "Universal Agent Plugins Directory signed snapshot",
   "type": "object",
-  "required": ["snapshot_schema_version", "sequence", "publication_id", "source_commit", "generated_at", "expires_at", "products"],
+  "required": ["snapshot_schema_version", "sequence", "publication_id", "source_commit", "generated_at", "expires_at", "products", "distributions", "evidence", "revocations"],
   "properties": {
     "snapshot_schema_version": {"const": 1},
     "sequence": {"type": "integer", "minimum": 1},
     "publication_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"},
-    "source_commit": {"$ref": "#/$defs/sha"},
+    "source_commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
     "generated_at": {"$ref": "#/$defs/timestamp"},
     "expires_at": {"$ref": "#/$defs/timestamp"},
-    "products": {
-      "type": "array",
-      "items": {"$ref": "#/$defs/product"}
-    }
+    "products": {"type": "array", "items": {"$ref": "directory-publication-candidate.schema.json#/$defs/product"}},
+    "distributions": {"type": "array", "items": {"$ref": "#/$defs/distribution"}},
+    "evidence": {"type": "array", "items": {"$ref": "directory-publication-candidate.schema.json#/$defs/evidence"}},
+    "revocations": {"type": "array", "items": {"$ref": "directory-publication-candidate.schema.json#/$defs/revocation"}}
   },
   "additionalProperties": false,
   "$defs": {
-    "id": {"type": "string", "pattern": "^[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?$"},
-    "distributionId": {"type": "string", "pattern": "^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?/[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?$"},
-    "sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
-    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
     "timestamp": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"},
-    "evidence": {
-      "type": "object",
-      "required": ["evidence_id", "digest", "level", "outcome", "observed_at"],
-      "properties": {
-        "evidence_id": {"$ref": "#/$defs/id"},
-        "digest": {"$ref": "#/$defs/digest"},
-        "level": {"enum": ["schema", "materialization", "discovery", "runtime", "oauth"]},
-        "outcome": {"enum": ["passed", "failed", "inconclusive", "not_tested", "not_applicable"]},
-        "observed_at": {"$ref": "#/$defs/timestamp"},
-        "client": {"enum": ["codex", "chatgpt", "cursor", "copilot", "vscode", "kiro"]},
-        "client_version": {"type": "string", "minLength": 1},
-        "installer_version": {"type": "string", "minLength": 1},
-        "dependency_identity": {"type": "string", "minLength": 1},
-        "os": {"type": "string", "minLength": 1},
-        "architecture": {"type": "string", "minLength": 1}
-      },
-      "additionalProperties": false,
-      "allOf": [
-        {
-          "if": {"properties": {"level": {"enum": ["materialization", "discovery", "runtime", "oauth"]}}},
-          "then": {"required": ["client", "client_version", "installer_version", "os", "architecture"]}
-        }
-      ]
-    },
-    "policy": {
-      "type": "object",
-      "required": ["release_sequence", "status", "compatible_clients", "scopes", "current_evidence"],
-      "properties": {
-        "release_sequence": {"type": "integer", "minimum": 1},
-        "status": {"enum": ["active", "superseded", "revoked"]},
-        "compatible_clients": {
-          "type": "array",
-          "uniqueItems": true,
-          "items": {"enum": ["codex", "chatgpt", "cursor", "copilot", "vscode", "kiro"]}
-        },
-        "scopes": {"type": "array", "const": ["user"]},
-        "minimum_installer_version": {"type": "string", "minLength": 1},
-        "current_evidence": {"type": "array", "items": {"$ref": "#/$defs/evidence"}}
-      },
-      "additionalProperties": false
-    },
-    "source": {
-      "type": "object",
-      "required": ["repository", "revision", "path"],
-      "properties": {
-        "repository": {"type": "string", "pattern": "^[a-z0-9](?:[a-z0-9-]{0,37}[a-z0-9])?/[a-z0-9](?:[a-z0-9._-]{0,98}[a-z0-9])?$"},
-        "revision": {"$ref": "#/$defs/sha"},
-        "path": {"type": "string", "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*\\\\)[A-Za-z0-9._/-]+$"}
-      },
-      "additionalProperties": false
-    },
     "release": {
-      "type": "object",
-      "required": ["distribution_id", "sequence", "package_version", "package_source", "tree_digest", "manifest_digest", "components", "published_at", "policy"],
-      "properties": {
-        "distribution_id": {"$ref": "#/$defs/distributionId"},
-        "sequence": {"type": "integer", "minimum": 1},
-        "package_version": {"type": ["string", "null"]},
-        "package_source": {"$ref": "#/$defs/source"},
-        "build_provenance": {
-          "type": "object",
-          "required": ["upstream_repository", "upstream_revision"],
-          "properties": {
-            "upstream_repository": {"type": "string", "minLength": 3},
-            "upstream_revision": {"$ref": "#/$defs/sha"}
-          },
-          "additionalProperties": false
-        },
-        "tree_digest": {"$ref": "#/$defs/digest"},
-        "manifest_digest": {"$ref": "#/$defs/digest"},
-        "components": {"type": "array", "uniqueItems": true, "items": {"enum": ["extensions", "mcp", "skills"]}},
-        "published_at": {"$ref": "#/$defs/timestamp"},
-        "policy": {"$ref": "#/$defs/policy"}
-      },
-      "additionalProperties": false
+      "allOf": [
+        {"$ref": "directory-publication-candidate.schema.json#/$defs/release"},
+        {"type": "object", "properties": {"published_at": {"$ref": "#/$defs/timestamp"}}}
+      ]
     },
     "distribution": {
       "type": "object",
-      "required": ["id", "kind", "status", "releases"],
+      "required": ["schema_version", "id", "product_id", "kind", "status", "packager", "releases", "release_policies"],
       "properties": {
-        "id": {"$ref": "#/$defs/distributionId"},
+        "schema_version": {"const": 1},
+        "id": {"$ref": "directory-publication-candidate.schema.json#/$defs/distributionId"},
+        "product_id": {"$ref": "directory-publication-candidate.schema.json#/$defs/id"},
         "kind": {"enum": ["upstream", "community_bridge", "community"]},
         "status": {"enum": ["active", "suspended"]},
-        "releases": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/release"}}
-      },
-      "additionalProperties": false
-    },
-    "product": {
-      "type": "object",
-      "required": ["id", "display_name", "manifest_name", "aliases", "default_distribution", "distributions"],
-      "properties": {
-        "id": {"$ref": "#/$defs/id"},
-        "display_name": {"type": "string", "minLength": 1},
-        "manifest_name": {"$ref": "#/$defs/id"},
-        "aliases": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"$ref": "#/$defs/id"}},
-        "default_distribution": {"$ref": "#/$defs/distributionId"},
-        "distributions": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/distribution"}}
+        "packager": {"$ref": "directory-publication-candidate.schema.json#/$defs/id"},
+        "releases": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/release"}},
+        "release_policies": {"type": "array", "minItems": 1, "items": {"$ref": "directory-publication-candidate.schema.json#/$defs/policy"}}
       },
       "additionalProperties": false
     }

@@ -57,12 +57,12 @@ function author(value: unknown, context: string): PluginAuthor {
   return result
 }
 
-function source(value: unknown, context: string): PluginSource {
+function source(value: unknown, context: string, allowUnresolved = false): PluginSource {
   if (!record(value)) throw new Error(`${context}: source must be an object`)
   const repository = requiredString(value, 'repository', `${context} source`)
-  const revision = requiredString(value, 'revision', `${context} source`)
+  const revision = value.revision === null && allowUnresolved ? null : requiredString(value, 'revision', `${context} source`)
   if (!REPOSITORY.test(repository)) throw new Error(`${context}: source repository is invalid`)
-  if (!REVISION.test(revision)) throw new Error(`${context}: source revision must be a full commit SHA`)
+  if (revision !== null && !REVISION.test(revision)) throw new Error(`${context}: source revision must be a full commit SHA`)
   return {
     repository,
     revision,
@@ -184,11 +184,12 @@ function parseLegacyIndex(input: Record<string, unknown>): RegistryIndex {
   return { schema_version: 1, data_source: 'legacy_compatibility', plugins }
 }
 
-function evidenceFromSnapshot(input: unknown, distributionID: string, releaseSequence: number): ClientEvidence[] {
+function evidenceFromSnapshot(input: unknown, distributionID: string, releaseSequence: number, selectedIDs?: readonly string[]): ClientEvidence[] {
   if (!Array.isArray(input)) return []
   return input.flatMap((item): ClientEvidence[] => {
     if (!record(item)) return []
     if (item.distribution_id !== distributionID || item.release_sequence !== releaseSequence) return []
+    if (selectedIDs && !selectedIDs.includes(String(item.id))) return []
     if (!CLIENTS.has(item.client as ClientID)) return []
     const level = item.level
     const outcome = item.outcome
@@ -201,18 +202,20 @@ function evidenceFromSnapshot(input: unknown, distributionID: string, releaseSeq
       client_version: optionalString(item, 'client_version'),
       os: optionalString(item, 'os'),
       architecture: optionalString(item, 'architecture'),
-      tested_at: optionalString(item, 'tested_at') ?? optionalString(item, 'timestamp'),
-      evidence_url: optionalString(item, 'evidence_url'),
+      tested_at: optionalString(item, 'observed_at') ?? optionalString(item, 'tested_at') ?? optionalString(item, 'timestamp'),
+      evidence_url: record(item.artifact) ? `https://github.com/${String(item.artifact.repository)}/blob/${String(item.artifact.revision)}/${String(item.artifact.path)}` : optionalString(item, 'evidence_url'),
     }]
   })
 }
 
 function parseSnapshot(input: Record<string, unknown>, mode: 'published_snapshot' | 'review_preview'): RegistryIndex {
-  if (input.schema_version !== 1 || !Array.isArray(input.products) || !Array.isArray(input.distributions)) {
-    throw new Error('Directory data must have schema_version 1, products, and distributions')
+  const isSigned = input.snapshot_schema_version === 1
+  if ((!isSigned && input.schema_version !== 1) || !Array.isArray(input.products) || !Array.isArray(input.distributions)) {
+    throw new Error('Directory data must have schema version 1, products, and distributions')
   }
-  if (mode === 'published_snapshot' && (!Number.isInteger(input.snapshot_sequence) || typeof input.generated_at !== 'string')) {
-    throw new Error('published snapshot requires snapshot_sequence and generated_at')
+  const snapshotSequence = isSigned ? input.sequence : input.snapshot_sequence
+  if (mode === 'published_snapshot' && (!isSigned || !Number.isInteger(snapshotSequence) || typeof input.generated_at !== 'string' || typeof input.expires_at !== 'string')) {
+    throw new Error('published snapshot requires one signed sequence, generated_at, and expires_at')
   }
   const distributionRecords = new Map<string, Record<string, unknown>>()
   for (const raw of input.distributions) {
@@ -237,19 +240,23 @@ function parseSnapshot(input: Record<string, unknown>, mode: 'published_snapshot
       const kind = requiredString(item, 'kind', `distribution ${id}`) as DistributionKind
       if (!KINDS.has(kind)) throw new Error(`distribution ${id}: unsupported kind`)
       if (!Array.isArray(item.releases) || !item.releases.length) throw new Error(`distribution ${id}: releases are required`)
-      const activeReleases = item.releases.filter(record).filter(release => release.status === undefined || release.status === 'active')
+      const policies = Array.isArray(item.release_policies) ? item.release_policies.filter(record) : []
+      const activeSequences = new Set(policies.filter(policy => policy.status === undefined || policy.status === 'active').map(policy => policy.release_sequence))
+      const activeReleases = item.releases.filter(record).filter(release => activeSequences.has(release.sequence))
       const release = activeReleases.sort((a, b) => Number(b.sequence) - Number(a.sequence))[0]
       if (!release || !Number.isInteger(release.sequence)) throw new Error(`distribution ${id}: active release sequence is required`)
       const packageSource = source({
         ...(record(release.package_source) ? release.package_source : {}),
         manifest_digest: release.manifest_digest,
         tree_digest: release.tree_digest,
-      }, `distribution ${id}`)
-      const policies = Array.isArray(item.release_policies) ? item.release_policies.filter(record) : []
+      }, `distribution ${id}`, mode === 'review_preview')
       const policy = policies.find(candidate => candidate.release_sequence === release.sequence) ?? release
-      const compatible = clientIDs(policy.compatible_clients ?? [], `distribution ${id} compatible clients`)
+      const compatible = Array.isArray(policy.targets)
+        ? clientIDs(policy.targets.filter(record).map(target => target.client), `distribution ${id} compatible clients`)
+        : clientIDs(policy.compatible_clients ?? [], `distribution ${id} compatible clients`)
       if (!compatible.length) throw new Error(`distribution ${id}: at least one compatible client is required`)
-      const evidence = evidenceFromSnapshot(input.verification_summaries ?? input.current_verification, id, release.sequence as number)
+      const selectedEvidence = Array.isArray(policy.current_evidence) ? policy.current_evidence.filter(value => typeof value === 'string') as string[] : undefined
+      const evidence = evidenceFromSnapshot(input.evidence ?? input.verification_summaries ?? input.current_verification, id, release.sequence as number, selectedEvidence)
       return {
         id,
         kind,
@@ -263,7 +270,11 @@ function parseSnapshot(input: Record<string, unknown>, mode: 'published_snapshot
       }
     })
     const selected = distributions.find(item => item.id === defaultID)!
-    const components = stringArray(raw.components ?? raw.component_inventory ?? [], 'components', context) as ComponentID[]
+    const defaultRecord = distributionRecords.get(defaultID)
+    const defaultRelease = defaultRecord && Array.isArray(defaultRecord.releases)
+      ? defaultRecord.releases.filter(record).sort((a, b) => Number(b.sequence) - Number(a.sequence))[0]
+      : undefined
+    const components = stringArray(raw.components ?? raw.component_inventory ?? defaultRelease?.components ?? [], 'components', context) as ComponentID[]
     if (components.some(component => !COMPONENTS.has(component))) throw new Error(`${context}: unsupported component`)
     const productAuthor = record(raw.author) ? author(raw.author, context) : { name: selected.publisher }
     const auth = raw.authentication
@@ -280,7 +291,7 @@ function parseSnapshot(input: Record<string, unknown>, mode: 'published_snapshot
       install_source: name,
       built_in: true,
       components,
-      ...(raw.icon === undefined ? {} : { icon: icon(raw.icon, context) }),
+      ...(raw.icon === undefined ? {} : { icon: icon(record(raw.icon) && raw.icon.sha256 === undefined ? { path: raw.icon.path, sha256: raw.icon.digest } : raw.icon, context) }),
       default_distribution: defaultID,
       distributions,
       evidence: selected.evidence,
@@ -296,7 +307,7 @@ function parseSnapshot(input: Record<string, unknown>, mode: 'published_snapshot
   return {
     schema_version: 1,
     data_source: mode,
-    ...(typeof input.snapshot_sequence === 'number' ? { snapshot_sequence: input.snapshot_sequence } : {}),
+    ...(typeof snapshotSequence === 'number' ? { snapshot_sequence: snapshotSequence } : {}),
     ...(typeof input.generated_at === 'string' ? { generated_at: input.generated_at } : {}),
     plugins,
   }
@@ -346,6 +357,7 @@ export function expectedDistribution(plugin: RegistryPlugin, targets: readonly C
 }
 
 export function githubSourceUrl(plugin: RegistryPlugin, distribution = defaultDistribution(plugin)): string {
+  if (distribution.source.revision === null) return `https://github.com/${distribution.source.repository}`
   const path = distribution.source.path.split('/').map(encodeURIComponent).join('/')
   return `https://github.com/${distribution.source.repository}/tree/${distribution.source.revision}/${path}`
 }
