@@ -1,6 +1,6 @@
 # Plugin icon sources
 
-These icons identify the products represented in the catalog. Product names and
+These icons identify the products represented in the Directory. Product names and
 marks belong to their respective owners. Their inclusion does not imply
 affiliation or endorsement.
 

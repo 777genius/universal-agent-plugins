@@ -53,7 +53,7 @@ binding. It does not prove ChatGPT Work UI activation or package-routed runtime.
 
 | Installer | Catalog | Package add/remove | Client runtime | OAuth |
 | --- | --- | --- | --- | --- |
-| [`agentplugins 0.1.6` release](https://github.com/777genius/plugin-kit-ai/actions/runs/31343240686) + [npm verification](https://github.com/777genius/plugin-kit-ai/actions/runs/31343525895) | Embedded catalog v2, digest `66199c87...357050` | Public cold bootstrap passed on macOS, Linux, and Windows for x64/arm64; native lifecycle and published-registry verification passed | Not implied | Not tested |
+| [`agentplugins 0.1.6` release](https://github.com/777genius/plugin-kit-ai/actions/runs/31343240686) + [npm verification](https://github.com/777genius/plugin-kit-ai/actions/runs/31343525895) | Embedded legacy compatibility data, digest `66199c87...357050` | Public cold bootstrap passed on macOS, Linux, and Windows for x64/arm64; native lifecycle and published-Directory verification passed | Not implied | Not tested |
 | [`agentplugins 0.1.6` post-merge run](https://github.com/777genius/universal-agent-plugins/actions/runs/31363316668) | Catalog v1 26/26 plus catalog-v2 Cloudflare Docs | 26/26 Cursor lifecycle; ChatGPT v2 dry-run, projection, State v3 repair, guarded removal, and cleanup passed | Not implied | Not tested |
 | `agentplugins 0.1.6`, hero projections | 5 pinned hero packages | 25/25 add/remove flows across isolated Codex, Cursor, Copilot, VS Code, and Kiro projections | Not implied | Not tested |
 | `agentplugins 0.1.6` + Copilot CLI 1.0.78 | 5 pinned hero packages | 5/5 automatic marketplace registration, native install, verification, uninstall, and marketplace cleanup in an isolated HOME | Not implied | Not tested |

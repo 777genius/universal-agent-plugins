@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "snapshot_sequence": 42,
+  "generated_at": "2026-08-20T12:00:00Z",
+  "products": [{
+    "id": "context7",
+    "display_name": "Context7",
+    "description": "Current library documentation.",
+    "categories": ["documentation"],
+    "keywords": ["docs"],
+    "components": ["mcp"],
+    "authentication": "none",
+    "default_distribution": "upstash/context7",
+    "distributions": ["upstash/context7", "777genius/context7-bridge"],
+    "delivery": { "codex": "prepared", "cursor": "installed" },
+    "chatgpt_binding": false
+  }],
+  "distributions": [{
+    "id": "upstash/context7",
+    "product_id": "context7",
+    "kind": "upstream",
+    "publisher": "Upstash",
+    "releases": [{
+      "sequence": 2,
+      "status": "active",
+      "version": "2.0.0",
+      "package_source": { "repository": "upstash/context7", "revision": "1111111111111111111111111111111111111111", "path": "plugins/context7" },
+      "manifest_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "tree_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    }],
+    "release_policies": [{ "release_sequence": 2, "compatible_clients": ["codex", "cursor"] }]
+  }, {
+    "id": "777genius/context7-bridge",
+    "product_id": "context7",
+    "kind": "community_bridge",
+    "packager": "777genius",
+    "releases": [{
+      "sequence": 3,
+      "status": "active",
+      "version": "2.0.0",
+      "package_source": { "repository": "777genius/universal-agent-plugins", "revision": "2222222222222222222222222222222222222222", "path": "plugins/context7" },
+      "manifest_digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "tree_digest": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+    }],
+    "release_policies": [{ "release_sequence": 3, "compatible_clients": ["codex", "cursor", "kiro"] }]
+  }],
+  "verification_summaries": [{
+    "distribution_id": "upstash/context7",
+    "release_sequence": 2,
+    "client": "cursor",
+    "level": "runtime",
+    "outcome": "passed",
+    "client_version": "Cursor 3.9.16",
+    "os": "linux",
+    "architecture": "amd64",
+    "tested_at": "2026-08-20T10:00:00Z",
+    "evidence_url": "https://example.test/evidence.json"
+  }]
+}

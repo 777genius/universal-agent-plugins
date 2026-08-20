@@ -4,34 +4,37 @@ import { pluginCommands } from '~/utils/commands'
 
 const registry = useRegistry()
 const { asset, repositoryUrl } = useSite()
-const builtInCount = computed(() => registry.plugins.filter(plugin => plugin.built_in).length)
-const externalCount = computed(() => registry.plugins.length - builtInCount.value)
 const demoPlugin = computed(() => {
   const plugin = registry.plugins.find(item => item.name === 'context7')
   if (!plugin) throw new Error('Context7 is required for the homepage quick start')
   return plugin
 })
 const heroTargets = computed(() => clients.filter(client => demoPlugin.value.client_support.clients.includes(client.id)))
+const heroTargetOptions = computed(() => clients.map(client => ({
+  value: client.id,
+  label: heroClientLabel(client.id, client.name),
+  icon: asset(`client-icons/${client.icon}`),
+  disabled: !demoPlugin.value.client_support.clients.includes(client.id) || (client.id === 'chatgpt' && !demoPlugin.value.client_support.chatgpt_binding),
+  description: client.id === 'chatgpt' && !demoPlugin.value.client_support.chatgpt_binding
+    ? 'Unavailable: Context7 has no registered app binding'
+    : !demoPlugin.value.client_support.clients.includes(client.id) ? 'Not compatible with this release' : undefined,
+})))
 const heroClientLabel = (id: ClientID, name: string) => id === 'copilot' ? 'Copilot' : name
 const initialHeroTarget = heroTargets.value.find(client => client.id === 'cursor')?.id ?? heroTargets.value[0]!.id
 const heroTargetIDs = ref<ClientID[]>([initialHeroTarget])
 const selectedHeroClients = computed(() => heroTargets.value.filter(client => heroTargetIDs.value.includes(client.id)))
 const selectedHeroNames = computed(() => selectedHeroClients.value.map(client => heroClientLabel(client.id, client.name)).join(' + '))
 const heroCommand = computed(() => pluginCommands(demoPlugin.value, selectedHeroClients.value.map(client => client.id)).add)
-const description = 'Install, update, and remove Agent Plugins 1.0 across Codex, ChatGPT, Cursor, GitHub Copilot CLI, VS Code, and Kiro with one community CLI.'
+const description = 'Install one Agent Plugins 1.0 package into one or several explicitly selected supported clients, then inspect, update, repair, switch, or remove it with the same community CLI.'
 const workflowPath = ref<HTMLElement>()
 const workflowAnimated = ref(false)
 const workflowVisible = ref(false)
 let workflowObserver: IntersectionObserver | undefined
 
-function toggleHeroTarget(id: ClientID) {
-  if (heroTargetIDs.value.includes(id)) {
-    if (heroTargetIDs.value.length === 1) return
-    heroTargetIDs.value = heroTargetIDs.value.filter(target => target !== id)
-    return
-  }
-  const selected = new Set([...heroTargetIDs.value, id])
-  heroTargetIDs.value = heroTargets.value.filter(client => selected.has(client.id)).map(client => client.id)
+function updateHeroTargets(values: string[]) {
+  const allowed = new Set(heroTargets.value.map(client => client.id))
+  const next = values.filter((value): value is ClientID => allowed.has(value as ClientID))
+  if (next.length) heroTargetIDs.value = next
 }
 
 onMounted(() => {
@@ -65,11 +68,11 @@ useHead({ link: [{ rel: 'canonical', href: `${useRuntimeConfig().public.siteUrl}
   <div>
     <section class="hero container">
       <div class="hero__copy">
-        <h1>One command.<br /><em>Every supported agent</em></h1>
-        <p class="hero__lead">Install, update, or remove Agent Plugins across the AI agents you already use. Pick a plugin and an agent, then run the generated command.</p>
+        <h1>One package.<br /><em>Your selected clients</em></h1>
+        <p class="hero__lead">One command installs an Agent Plugins 1.0 package into one or several explicitly selected compatible clients. The same CLI inspects, updates, repairs, switches, and removes it.</p>
         <div class="hero__actions">
           <NuxtLink class="button button--primary" to="/plugins">Explore {{ registry.plugins.length }} plugins <span aria-hidden="true">→</span></NuxtLink>
-          <a class="button button--secondary" :href="`${repositoryUrl}/blob/main/registry/README.md#submit-an-external-package`" target="_blank" rel="noreferrer">Submit a plugin</a>
+          <a class="button button--secondary" :href="`${repositoryUrl}/blob/main/registry/README.md#submit-an-external-package`" target="_blank" rel="noreferrer">Add a plugin</a>
         </div>
         <p class="hero__fine-print">Open source · No tracking · Review before enabling</p>
       </div>
@@ -77,19 +80,11 @@ useHead({ link: [{ rel: 'canonical', href: `${useRuntimeConfig().public.siteUrl}
         <div class="hero__window">
           <div class="hero__window-top"><span /><span /><span /><b>Quick start</b></div>
           <div class="hero__window-body">
-            <fieldset class="hero-targets">
-              <legend>Choose one or more agents</legend>
-              <div class="hero-targets__grid">
-                <label v-for="client in heroTargets" :key="client.id" class="hero-target" :class="{ 'hero-target--selected': heroTargetIDs.includes(client.id) }" :title="client.name">
-                  <input class="sr-only" type="checkbox" name="hero-target" :value="client.id" :checked="heroTargetIDs.includes(client.id)" :disabled="heroTargetIDs.length === 1 && heroTargetIDs.includes(client.id)" @change="toggleHeroTarget(client.id)" />
-                  <span class="hero-target__check" aria-hidden="true">✓</span>
-                  <span class="hero-target__icon"><img :src="asset(`client-icons/${client.icon}`)" alt="" width="19" height="19" /></span>
-                  <span class="hero-target__name">{{ heroClientLabel(client.id, client.name) }}</span>
-                </label>
-              </div>
-            </fieldset>
             <p>Install Context7 for {{ selectedHeroNames }}</p>
-            <CommandSnippet :command="heroCommand" />
+            <div class="hero-command-row">
+              <AppMultiSelect :model-value="heroTargetIDs" label="Choose target clients" :options="heroTargetOptions" @update:model-value="updateHeroTargets" />
+              <CommandSnippet :command="heroCommand" />
+            </div>
             <div class="hero__success">
               <span>✓</span>
               <div><strong>Command ready for {{ selectedHeroClients.length === 1 ? selectedHeroNames : `${selectedHeroClients.length} agents` }}</strong><small>One command installs each selected target in order.</small></div>
@@ -107,7 +102,7 @@ useHead({ link: [{ rel: 'canonical', href: `${useRuntimeConfig().public.siteUrl}
     <section class="client-section container" aria-labelledby="clients-title">
       <p id="clients-title">Supported agents</p>
       <ClientStrip />
-      <p class="client-section__note">Each agent uses the plugin components it supports. Marketplaces, activation, runtime, and OAuth can still differ.</p>
+      <p class="client-section__note">Compatibility is release-specific. “Prepared” and “manual activation required” remain visible; ChatGPT is selectable only with a registered app binding.</p>
     </section>
 
     <section id="how-it-works" class="how container" aria-labelledby="how-title">
@@ -143,8 +138,8 @@ useHead({ link: [{ rel: 'canonical', href: `${useRuntimeConfig().public.siteUrl}
               <svg viewBox="0 0 24 24" fill="none"><path d="M19 8a7.5 7.5 0 1 0 .4 7" /><path d="M19 4v4h-4" /><path d="m9 12 2 2 4-4" /></svg>
             </span>
           </div>
-          <div><h3>Stay in control</h3><p>Use the same CLI to update or remove it. Follow any agent activation or OAuth prompt.</p></div>
-          <div class="workflow-step__tags" aria-hidden="true"><span>Update</span><span>Remove</span></div>
+          <div><h3>Stay in control</h3><p>Inspect, update, repair, switch source, or remove it. Follow any client activation or OAuth prompt.</p></div>
+          <div class="workflow-step__tags" aria-hidden="true"><span>Repair</span><span>Switch</span><span>Remove</span></div>
         </li>
       </ol>
     </section>
@@ -153,7 +148,7 @@ useHead({ link: [{ rel: 'canonical', href: `${useRuntimeConfig().public.siteUrl}
       <PluginCatalog
         :plugins="registry.plugins"
         :heading="`Explore ${registry.plugins.length} plugins`"
-        :intro="externalCount ? `${builtInCount} reviewed built-ins and ${externalCount} community ${externalCount === 1 ? 'submission' : 'submissions'}, all linked to reviewable source.` : `${builtInCount} reviewed built-ins. Anyone can submit a plugin from a public GitHub repository.`"
+        :intro="`${registry.plugins.length} reviewed products, each with one Default source and immutable provenance. Alternatives stay on the same product page.`"
       />
     </div>
 
@@ -170,7 +165,7 @@ useHead({ link: [{ rel: 'canonical', href: `${useRuntimeConfig().public.siteUrl}
 
     <section class="submit-cta container">
       <div><p class="eyebrow">Built in the open</p><h2>Have a useful Agent Plugin?</h2><p>Submit a schema-valid package with a reviewable source. External entries stay pinned to an immutable commit.</p></div>
-      <a class="button button--primary" :href="`${repositoryUrl}/blob/main/registry/README.md#submit-an-external-package`" target="_blank" rel="noreferrer">Submit a plugin <span aria-hidden="true">↗</span></a>
+      <a class="button button--primary" :href="`${repositoryUrl}/blob/main/registry/README.md#submit-an-external-package`" target="_blank" rel="noreferrer">Add a plugin by pull request <span aria-hidden="true">↗</span></a>
     </section>
   </div>
 </template>

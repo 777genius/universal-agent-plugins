@@ -28,13 +28,19 @@ class ReadmeClientTableTests(unittest.TestCase):
 
         for document in (readme, quickstart, contributing):
             with self.subTest(document=document[:40]):
-                self.assertIn("owner/repo@FULL_COMMIT_SHA//path/to/plugin", document)
+                self.assertRegex(
+                    document,
+                    r"(?:owner/repo@FULL_COMMIT_SHA|[a-z0-9-]+/[a-z0-9._-]+@[a-f0-9]{40})//[^\s\\]+",
+                )
                 self.assertIn("--target cursor", document)
 
         self.assertIn("add ./my-plugin --target cursor", readme)
-        self.assertIn("not limited to this catalog", readme)
+        self.assertIn("not limited to this Directory", readme)
         self.assertIn("do not need to be copied into it", readme)
-        self.assertIn("Catalog membership is needed only for a reviewed short name", quickstart)
+        self.assertIn("Directory membership is needed only for a reviewed short name", quickstart)
+        self.assertIn("add context7 --target codex,cursor,kiro", readme)
+        self.assertIn("switch context7 --to upstash/context7", readme)
+        self.assertNotIn("--yes", readme)
 
     def test_every_supported_client_has_a_sourced_logo(self) -> None:
         readme = README_PATH.read_text()

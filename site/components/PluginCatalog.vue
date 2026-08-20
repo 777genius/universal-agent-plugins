@@ -22,14 +22,15 @@ const componentOptions = computed(() => [
 ])
 const sourceOptions = [
   { value: 'all', label: 'All sources' },
-  { value: 'built-in', label: 'Built-ins' },
-  { value: 'external', label: 'External' },
+  { value: 'upstream', label: 'Upstream packages' },
+  { value: 'community', label: 'Community packages' },
+  { value: 'direct', label: 'Direct sources' },
 ]
 const visible = computed(() => filterPlugins(props.plugins, {
   query: query.value,
   category: category.value === 'all' ? '' : category.value,
   component: component.value === 'all' ? undefined : component.value as RegistryPlugin['components'][number],
-  source: source.value as 'all' | 'built-in' | 'external',
+  source: source.value as 'all' | 'upstream' | 'community' | 'direct',
 }))
 </script>
 
@@ -56,7 +57,7 @@ const visible = computed(() => filterPlugins(props.plugins, {
     <div class="catalog-meta">
       <div class="catalog-count" aria-live="polite">Showing {{ visible.length }} of {{ plugins.length }} plugins</div>
       <a class="button button--secondary catalog-submit" :href="`${repositoryUrl}/blob/main/registry/README.md#submit-an-external-package`" target="_blank" rel="noreferrer">
-        <span aria-hidden="true">＋</span> Add your plugin
+        <span aria-hidden="true">＋</span> Add a plugin
       </a>
     </div>
     <div v-if="visible.length" class="plugin-grid">
@@ -67,5 +68,6 @@ const visible = computed(() => filterPlugins(props.plugins, {
       <p>Try a broader search or clear one of the filters.</p>
       <button class="button button--secondary" type="button" @click="query = ''; category = 'all'; component = 'all'; source = 'all'">Clear filters</button>
     </div>
+    <div class="catalog-end-submit"><a class="button button--secondary" :href="`${repositoryUrl}/blob/main/registry/README.md#submit-an-external-package`" target="_blank" rel="noreferrer">Add a plugin by pull request <span aria-hidden="true">↗</span></a></div>
   </section>
 </template>

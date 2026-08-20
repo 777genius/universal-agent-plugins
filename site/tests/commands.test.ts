@@ -13,6 +13,8 @@ describe('command generation', () => {
     assert.deepEqual(pluginCommands(plugins[0]!, 'cursor'), {
       add: 'npx universal-agent-plugins add context7 --target cursor',
       update: 'npx universal-agent-plugins update context7 --target cursor',
+      repair: 'npx universal-agent-plugins repair context7 --target cursor',
+      switch: 'npx universal-agent-plugins switch context7 --to <distribution-id>',
       remove: 'npx universal-agent-plugins remove context7 --target cursor',
     })
   })
@@ -22,6 +24,8 @@ describe('command generation', () => {
     assert.deepEqual(pluginCommands(plugins[1]!, 'copilot'), {
       add: `npx universal-agent-plugins add ${source} --target copilot`,
       update: 'npx universal-agent-plugins update example-external --target copilot',
+      repair: 'npx universal-agent-plugins repair example-external --target copilot',
+      switch: 'npx universal-agent-plugins switch example-external --to <distribution-id>',
       remove: 'npx universal-agent-plugins remove example-external --target copilot',
     })
   })
@@ -30,6 +34,8 @@ describe('command generation', () => {
     assert.deepEqual(pluginCommands(plugins[0]!, ['codex', 'cursor', 'codex']), {
       add: 'npx universal-agent-plugins add context7 --target codex,cursor',
       update: 'npx universal-agent-plugins update context7 --target codex,cursor',
+      repair: 'npx universal-agent-plugins repair context7 --target codex,cursor',
+      switch: 'npx universal-agent-plugins switch context7 --to <distribution-id>',
       remove: 'npx universal-agent-plugins remove context7 --target codex,cursor',
     })
   })

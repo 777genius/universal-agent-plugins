@@ -1,30 +1,33 @@
 # Client quick start
 
-Install one Agent Plugins 1.0 package, not the whole catalog. You need Node.js
+Install one Agent Plugins 1.0 package, not the whole Directory. You need Node.js
 22 or newer:
 
 ```bash
-npx universal-agent-plugins add context7
+npx universal-agent-plugins add context7 --target codex,cursor,kiro
 ```
 
-The CLI shows the exact package plan and asks before changing anything. If it
-finds several clients, select one. You can also name the target directly:
+The CLI shows the exact package, source, and complete target plan before
+changing anything. Explicit commands and targets are consent; there is no
+hidden `--yes` flag. In an interactive terminal you can use the accessible
+multiselect, or name targets directly:
 
 ```bash
 npx universal-agent-plugins add context7 --target cursor
 npx universal-agent-plugins add context7 --target codex,cursor
 ```
 
-Comma-separated targets install in the order shown. Each target keeps its own
-result; if one fails, successful targets are not silently rolled back and the
-command exits non-zero with a per-target summary.
+Comma-separated targets use one resolved package. Complete preflight happens
+before mutation. Managed commit failures roll back safely owned changes;
+external activation failures keep valid preparation and return a non-zero
+per-target result with an exact repair step.
 
 Supported targets:
 
 | Target | What the CLI does | Remaining user step |
 | --- | --- | --- |
 | `codex` | Generates a personal OpenAI marketplace package | Runs no hidden UI actions; prints exact Codex activation steps |
-| `chatgpt` (`agentplugins >=0.1.6`) | Prepares a projected package only when catalog v2 has a verified app binding | Install or select the registered personal app manually in ChatGPT Plugins, then start a new chat |
+| `chatgpt` | Prepares a projected package only when the selected release has a verified app binding | Install or select the registered personal app manually in ChatGPT Plugins, then start a new chat |
 | `cursor` | Places the native package in Cursor's local plugin directory | Reload Cursor, then verify the plugin appears |
 | `copilot` | Registers a managed marketplace, installs, and verifies through Copilot CLI | Nothing when successful |
 | `vscode` | Installs automatically through Copilot CLI when available | Otherwise prints the exact `chat.pluginLocations` setting |
@@ -36,6 +39,8 @@ Lifecycle commands use the same explicit target or comma-separated targets:
 npx universal-agent-plugins info context7
 npx universal-agent-plugins doctor context7
 npx universal-agent-plugins update context7 --target cursor
+npx universal-agent-plugins repair context7 --target cursor
+npx universal-agent-plugins switch context7 --to upstash/context7
 npx universal-agent-plugins remove context7 --target cursor
 npx universal-agent-plugins update context7 --target codex,cursor
 ```
@@ -44,7 +49,7 @@ npx universal-agent-plugins update context7 --target codex,cursor
 installed. OAuth stays inside the client; the CLI never stores tokens or accepts
 trust prompts automatically.
 
-## Install a package outside the catalog
+## Install a package outside the Directory
 
 Any valid Agent Plugins 1.0 package can be installed directly. Use a local
 folder while developing it, or pin a GitHub source to a full commit SHA:
@@ -52,16 +57,16 @@ folder while developing it, or pin a GitHub source to a full commit SHA:
 ```bash
 npx universal-agent-plugins add ./my-plugin --target cursor
 npx universal-agent-plugins add \
-  owner/repo@FULL_COMMIT_SHA//path/to/plugin \
+  777genius/universal-agent-plugins@2ddbb99dd190c1792b79904f9875e6322bccd243//plugins/context7 \
   --target cursor
 ```
 
-Catalog membership is needed only for a reviewed short name such as `context7`;
+Directory membership is needed only for a reviewed short name such as `context7`;
 it is not required for installation. Review an external package's skills, MCP
 servers, hooks, permissions, and source before enabling it.
 
-ChatGPT target support starts with `agentplugins 0.1.6`. Cloudflare Docs is the
-only catalog-v2-verified target:
+Cloudflare Docs is currently the only Directory release with a verified ChatGPT
+app binding:
 
 ```bash
 npx universal-agent-plugins add cloudflare-docs --target chatgpt

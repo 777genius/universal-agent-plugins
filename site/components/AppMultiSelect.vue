@@ -11,6 +11,8 @@ type MultiSelectOption = {
   value: string
   label: string
   icon?: string
+  disabled?: boolean
+  description?: string
 }
 
 const props = defineProps<{
@@ -35,6 +37,7 @@ watchEffect(() => {
 })
 
 function toggle(value: string) {
+  if (props.options.find(option => option.value === value)?.disabled) return
   if (props.modelValue.includes(value)) {
     if (props.modelValue.length === 1) return
     emit('update:modelValue', props.modelValue.filter(item => item !== value))
@@ -68,11 +71,11 @@ function toggle(value: string) {
             :class="{ 'app-multiselect__item--selected': modelValue.includes(option.value) }"
             role="checkbox"
             :aria-checked="modelValue.includes(option.value)"
-            :disabled="modelValue.length === 1 && modelValue.includes(option.value)"
+            :disabled="option.disabled || (modelValue.length === 1 && modelValue.includes(option.value))"
             @click="toggle(option.value)"
           >
             <span class="app-multiselect__item-icon"><img v-if="option.icon" :src="option.icon" alt="" width="20" height="20" /></span>
-            <span>{{ option.label }}</span>
+            <span><span>{{ option.label }}</span><small v-if="option.description">{{ option.description }}</small></span>
             <span class="app-multiselect__check" aria-hidden="true">✓</span>
           </button>
         </div>

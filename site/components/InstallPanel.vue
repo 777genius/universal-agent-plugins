@@ -1,18 +1,29 @@
 <script setup lang="ts">
 import type { RegistryPlugin } from '~/types/registry'
 import { pluginCommands } from '~/utils/commands'
+import { defaultDistribution, expectedDistribution } from '~/utils/registry'
 
 const props = defineProps<{ plugin: RegistryPlugin }>()
 const { asset } = useSite()
 const availableClients = computed(() => clients.filter(client => props.plugin.client_support.clients.includes(client.id)))
 const initialTarget = availableClients.value.find(client => client.id === 'cursor')?.id ?? availableClients.value[0]!.id
 const targets = ref<(typeof clients)[number]['id'][]>([initialTarget])
-const targetOptions = computed(() => availableClients.value.map(client => ({
+const targetOptions = computed(() => clients.map(client => ({
   value: client.id,
   label: client.name,
   icon: asset(`client-icons/${client.icon}`),
+  disabled: !props.plugin.client_support.clients.includes(client.id) || (client.id === 'chatgpt' && !props.plugin.client_support.chatgpt_binding),
+  description: client.id === 'chatgpt' && !props.plugin.client_support.chatgpt_binding
+    ? 'Unavailable: no registered app binding'
+    : !props.plugin.client_support.clients.includes(client.id)
+      ? 'Not compatible with this release'
+      : props.plugin.client_support.delivery[client.id]?.replaceAll('_', ' '),
 })))
 const commands = computed(() => pluginCommands(props.plugin, targets.value))
+const declaredSource = computed(() => defaultDistribution(props.plugin))
+const expectedSource = computed(() => expectedDistribution(props.plugin, targets.value))
+const usesFallback = computed(() => expectedSource.value && expectedSource.value.id !== declaredSource.value.id)
+const hasCompleteSource = computed(() => Boolean(expectedSource.value))
 
 function updateTargets(values: string[]) {
   const allowed = new Set(availableClients.value.map(client => client.id))
@@ -33,17 +44,20 @@ watch(availableClients, (next) => {
       <div><p class="eyebrow">Installer</p><h2 id="install-title">Use with your agent</h2></div>
       <span>Node.js 22+</span>
     </div>
-    <div class="target-select">
-      <span>Target agents</span>
-      <AppMultiSelect :model-value="targets" label="Choose target agents" :options="targetOptions" @update:model-value="updateTargets" />
-    </div>
     <div class="command-stack">
-      <CommandSnippet label="Add" kind="add" :command="commands.add" />
+      <div class="install-command-row">
+        <div class="target-select"><span>Targets</span><AppMultiSelect :model-value="targets" label="Choose target agents" :options="targetOptions" @update:model-value="updateTargets" /></div>
+        <CommandSnippet label="Add" kind="add" :command="commands.add" />
+      </div>
       <CommandSnippet label="Update" kind="update" :command="commands.update" />
+      <CommandSnippet label="Repair" kind="repair" :command="commands.repair" />
       <CommandSnippet label="Remove" kind="remove" :command="commands.remove" />
     </div>
-    <p v-if="!plugin.built_in" class="install-panel__notice"><strong>Pinned external source.</strong> Add uses the full commit pin. Update and remove use the installed manifest name; the directory provides no alias or automatic latest-version lookup.</p>
+    <p class="install-panel__notice"><strong>Honest client outcomes.</strong> “Prepared” and “manual activation required” mean a package is ready but a client UI step remains. OAuth and runtime are reported separately.</p>
+    <p v-if="usesFallback" class="install-panel__notice"><strong>Expected source fallback: {{ expectedSource?.label }}.</strong> The Default source cannot serve the complete selected target set, so the CLI is expected to evaluate {{ expectedSource?.id }}. The CLI recomputes eligibility from its signed snapshot.</p>
+    <p v-else-if="!hasCompleteSource" class="install-panel__notice"><strong>No single source serves this target set.</strong> The CLI will fail before mutation and suggest compatible target/source combinations; it never mixes distributions across clients.</p>
+    <p v-if="!plugin.built_in" class="install-panel__notice"><strong>Pinned direct source.</strong> Add uses the full commit pin. Update and remove use the installed manifest name.</p>
     <p v-if="plugin.client_support.resolution === 'install_time'" class="install-panel__notice"><strong>Checked at install time.</strong> The CLI validates the package and selected target before it changes managed files.</p>
-    <p class="install-panel__footnote">Built-in targets come from the pinned compatibility catalog. Agent UI activation, permissions, runtime behavior, or OAuth may still require separate confirmation.</p>
+    <p class="install-panel__footnote">The CLI plans all selected targets before mutation. Use <code>switch</code> to change source; update and repair stay on the recorded distribution.</p>
   </aside>
 </template>

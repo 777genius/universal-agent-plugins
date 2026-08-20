@@ -16,8 +16,8 @@ describe('catalog filtering', () => {
   })
 
   it('combines category, component, and source filters', () => {
-    assert.deepEqual(filterPlugins(plugins, { category: 'documentation', component: 'mcp', source: 'built-in' }), [plugins[0]])
-    assert.deepEqual(filterPlugins(plugins, { source: 'external' }), [plugins[1]])
+    assert.deepEqual(filterPlugins(plugins, { category: 'documentation', component: 'mcp', source: 'community' }), [plugins[0]])
+    assert.deepEqual(filterPlugins(plugins, { source: 'direct' }), [plugins[1]])
   })
 
   it('derives stable filter options from registry data', () => {

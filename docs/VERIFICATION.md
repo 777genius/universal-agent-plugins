@@ -9,8 +9,8 @@ Updated: 2026-08-10.
 - 4 skills pass `skills-ref` 0.1.1.
 - The repository semantic validator reports 26 plugins, 25 MCP servers, and 4
   skills.
-- Released catalog v1 and its schema remain byte-for-byte unchanged. Catalog v2
-  adds the optional ChatGPT binding and pins its evidence path to an immutable
+- Released legacy compatibility outputs remain byte-for-byte unchanged. The
+  later compatibility output adds the optional ChatGPT binding and pins its evidence path to an immutable
   full Git revision whose exact blob is verified before generation.
 - All 26 generated OpenAI compatibility packages pass the repository validator
   and OpenAI's `plugin-creator` validator in CI. The latter is fetched from a

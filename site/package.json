@@ -28,8 +28,10 @@
     "generate": "nuxt generate",
     "lint": "nuxt prepare && eslint .",
     "test": "node --test --experimental-strip-types tests/*.test.ts",
+    "test:a11y": "node --test --experimental-strip-types tests/accessibility.test.ts",
     "typecheck": "nuxt prepare && vue-tsc --noEmit",
-    "check:generated": "node scripts/check-generated.mjs"
+    "check:generated": "node scripts/check-generated.mjs",
+    "check:links": "node scripts/check-generated.mjs"
   },
   "dependencies": {
     "nuxt": "3.21.11",

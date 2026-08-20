@@ -103,6 +103,9 @@ code, pre { font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospac
 .hero__window-top b { margin-left: auto; color: var(--subtle); font-size: .68rem; letter-spacing: .12em; text-transform: uppercase; }
 .hero__window-body { padding: 26px; }
 .hero__window-body > p { margin: 0 0 11px; color: var(--muted); font-size: .78rem; }
+.preview-banner { padding: 9px 20px; border-bottom: 1px solid color-mix(in srgb, var(--coral) 55%, var(--line)); background: color-mix(in srgb, var(--coral) 10%, var(--surface-solid)); color: var(--text); text-align: center; font-size: .76rem; }
+.hero-command-row { display: grid; grid-template-columns: minmax(150px, .45fr) minmax(0, 1fr); gap: 8px; align-items: stretch; }
+.hero-command-row .app-multiselect__trigger { height: 100%; min-height: 48px; }
 .hero-targets { min-width: 0; margin: 0 0 20px; padding: 0; border: 0; }
 .hero-targets legend { margin-bottom: 9px; color: var(--subtle); font-size: .62rem; font-weight: 750; letter-spacing: .1em; text-transform: uppercase; }
 .hero-targets__grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 7px; }
@@ -213,11 +216,12 @@ code, pre { font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospac
 .catalog-meta { margin: 15px 2px 18px; display: flex; align-items: center; justify-content: space-between; gap: 15px; }
 .catalog-count { color: var(--subtle); font-size: .72rem; }
 .catalog-submit { min-height: 38px; padding-inline: 13px; border-radius: 10px; font-size: .72rem; }
+.catalog-end-submit { margin-top: 24px; display: flex; justify-content: center; }
 .plugin-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 15px; }
-.plugin-card { position: relative; min-height: 330px; padding: 22px; display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 17px; background: radial-gradient(circle at 100% 0, color-mix(in srgb, var(--primary) 10%, transparent), transparent 35%), var(--surface); transition: transform .22s ease, border-color .22s ease, box-shadow .22s ease; }
+.plugin-card { position: relative; min-height: 430px; padding: 22px; display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 17px; background: radial-gradient(circle at 100% 0, color-mix(in srgb, var(--primary) 10%, transparent), transparent 35%), var(--surface); transition: transform .22s ease, border-color .22s ease, box-shadow .22s ease; }
 .plugin-card:hover { z-index: 1; transform: translateY(-4px); border-color: color-mix(in srgb, var(--primary) 48%, var(--line)); box-shadow: 0 20px 45px rgba(0,0,0,.16); }
 .plugin-card:focus-within { border-color: var(--cyan); }
-.plugin-card__main-link { position: absolute; inset: 0; border-radius: inherit; }
+.plugin-card__title-link { color: inherit; text-decoration: none; }.plugin-card__title-link:hover { color: var(--primary-bright); }
 .plugin-card__top { display: flex; justify-content: space-between; align-items: flex-start; }
 .plugin-card__icon, .plugin-profile__icon { display: grid; place-items: center; border: 1px solid var(--line); background: #fff; box-shadow: 0 8px 24px rgba(0,0,0,.14); }
 .plugin-card__icon { width: 50px; height: 50px; border-radius: 13px; }.plugin-card__icon img { max-width: 32px; max-height: 32px; object-fit: contain; }
@@ -225,7 +229,9 @@ code, pre { font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospac
 .plugin-card h3 { margin: 21px 0 11px; font-size: 1.22rem; text-transform: capitalize; }
 .plugin-card__description { color: var(--muted); font-size: .86rem; line-height: 1.65; }
 .plugin-card__author { position: relative; z-index: 2; margin-bottom: 22px; color: var(--subtle); font-size: .7rem; }.plugin-card__author a { color: var(--primary-bright); }
+.plugin-card__auth { margin: -12px 0 18px; color: var(--muted); font-size: .68rem; }
 .plugin-card__bottom { margin-top: auto; display: flex; flex-direction: column; align-items: flex-start; gap: 13px; }
+.plugin-card__install { width: 100%; display: grid; grid-template-columns: minmax(130px, .42fr) minmax(0, 1fr); gap: 7px; align-items: stretch; }.plugin-card__install .app-multiselect__trigger { height: 100%; min-height: 44px; }
 .badge-list, .tag-list { margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; list-style: none; }
 .badge-list li { padding: 4px 8px; border-radius: 6px; background: color-mix(in srgb, var(--cyan) 7%, var(--surface-raised)); color: var(--cyan); font: 700 .62rem "SFMono-Regular", monospace; text-transform: uppercase; }
 .tag-list li { padding: 5px 9px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); font-size: .7rem; }
@@ -254,6 +260,15 @@ code, pre { font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospac
 .status-card { margin-top: 36px; padding: 20px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); }.status-card p { margin: 13px 0; color: var(--muted); font-size: .78rem; }.status-card a { color: var(--primary-bright); font-size: .75rem; font-weight: 700; }
 .install-panel { position: sticky; top: 96px; padding: 24px; border: 1px solid var(--line-strong); border-radius: 19px; background: var(--surface); box-shadow: var(--shadow); }
 .install-panel__heading { display: flex; justify-content: space-between; gap: 15px; align-items: flex-start; }.install-panel__heading h2 { margin-bottom: 0; font-size: 1.35rem; }.install-panel__heading > span { padding: 5px 8px; border: 1px solid var(--line); border-radius: 7px; color: var(--subtle); font: .61rem "SFMono-Regular", monospace; }
+.install-command-row { display: grid; grid-template-columns: minmax(130px, .4fr) minmax(0, 1fr); gap: 8px; align-items: end; }
+.install-command-row .target-select { margin: 0; }
+.install-command-row .app-multiselect__trigger { min-height: 48px; }
+.app-multiselect__item > span:nth-child(2) { min-width: 0; display: grid; gap: 2px; text-align: left; }
+.app-multiselect__item small { color: var(--subtle); font-size: .6rem; font-weight: 500; }
+.app-multiselect__item:disabled { opacity: .56; cursor: not-allowed; }
+.distribution-list, .evidence-list { margin: 0; padding-left: 20px; color: var(--muted); font-size: .76rem; }
+.distribution-list li, .evidence-list li { margin-block: 8px; }
+.distribution-list small { overflow-wrap: anywhere; }
 .target-select { margin: 22px 0; display: grid; gap: 8px; color: var(--muted); font-size: .7rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; }.target-select .app-select__trigger { min-height: 52px; text-transform: none; letter-spacing: normal; }
 .command-stack { display: grid; gap: 10px; }
 .install-panel__notice { margin: 17px 0 0; padding: 12px; border-left: 2px solid var(--coral); background: color-mix(in srgb, var(--coral) 6%, transparent); color: var(--muted); font-size: .7rem; }.install-panel__notice strong { color: var(--coral); }
@@ -276,6 +291,8 @@ code, pre { font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospac
   .container { width: min(calc(100% - 28px), var(--max-width)); }
   .site-header { height: 64px; }.site-header__inner { gap: 10px; }.site-nav { position: absolute; top: 63px; left: 0; right: 0; display: none; padding: 14px; flex-direction: column; align-items: stretch; gap: 0; border-bottom: 1px solid var(--line); background: var(--surface-solid); }.site-nav--open { display: flex; }.site-nav a { padding: 12px; border-radius: 8px; }.site-nav a:hover { background: var(--surface-raised); }.site-header__actions { margin-left: auto; }.menu-button { display: grid; }.brand span { font-size: .78rem; }
   .hero { min-height: auto; padding-block: 58px 80px; }.hero h1 { font-size: clamp(2.65rem, 13vw, 4rem); }.hero__actions { display: grid; }.hero__window { transform: none; }.hero__window-body { padding: 18px 14px; }.hero__float { display: none; }
+  .hero-command-row, .install-command-row { grid-template-columns: 1fr; }
+  .plugin-card__install { grid-template-columns: 1fr; }
   .hero-targets__grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .client-strip { grid-template-columns: repeat(2, 1fr); }.client-strip li { min-height: 74px; }.client-strip li:nth-child(3) { border-right: 1px solid var(--line); }.client-strip li:nth-child(2n) { border-right: 0; }.client-strip li:nth-child(-n+4) { border-bottom: 1px solid var(--line); }
   .how, .catalog-wrap, .validation-section { padding-block: 65px; }.workflow-path { grid-template-columns: 1fr; gap: 13px; margin-bottom: 0; }.workflow-path::before { left: 24px; right: auto; top: 8%; bottom: 8%; width: 2px; height: auto; }.workflow-path--animate::before { transform: scaleY(0); transform-origin: top; }.workflow-path--visible::before { animation-name: workflow-path-in-mobile; }.workflow-step { min-height: auto; margin-left: 18px; }.workflow-step:nth-child(2), .workflow-step:nth-child(3) { translate: none; }

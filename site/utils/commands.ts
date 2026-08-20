@@ -9,6 +9,8 @@ export function pluginCommands(plugin: RegistryPlugin, targets: string | readonl
   return {
     add: `npx universal-agent-plugins add ${plugin.install_source} --target ${target}`,
     update: `npx universal-agent-plugins update ${plugin.name} --target ${target}`,
+    repair: `npx universal-agent-plugins repair ${plugin.name} --target ${target}`,
+    switch: `npx universal-agent-plugins switch ${plugin.name} --to <distribution-id>`,
     remove: `npx universal-agent-plugins remove ${plugin.name} --target ${target}`,
   }
 }

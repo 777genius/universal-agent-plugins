@@ -3,9 +3,10 @@ import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { describe, it } from 'node:test'
 import { fileURLToPath } from 'node:url'
-import { githubSourceUrl, isPinnedExternalSource, mirroredIconPath, parseRegistryIndex, validationLabel } from '../utils/registry.ts'
+import { expectedDistribution, githubSourceUrl, isPinnedExternalSource, mirroredIconPath, parseDirectoryData, parseRegistryIndex, validationLabel } from '../utils/registry.ts'
 
 const fixture = JSON.parse(readFileSync(fileURLToPath(new URL('./fixtures/registry.valid.json', import.meta.url)), 'utf8')) as unknown
+const snapshotFixture = JSON.parse(readFileSync(fileURLToPath(new URL('./fixtures/directory.snapshot.json', import.meta.url)), 'utf8')) as unknown
 const stylesheet = readFileSync(fileURLToPath(new URL('../assets/css/main.css', import.meta.url)), 'utf8')
 
 type RGB = [number, number, number]
@@ -32,16 +33,40 @@ function mix(first: RGB, second: RGB, firstWeight: number): RGB {
 }
 
 describe('registry parsing', () => {
+  it('normalizes a signed snapshot into one product with source alternatives and exact evidence', () => {
+    const directory = parseDirectoryData(snapshotFixture, 'published_snapshot')
+    assert.equal(directory.data_source, 'published_snapshot')
+    assert.equal(directory.snapshot_sequence, 42)
+    assert.equal(directory.plugins.length, 1)
+    assert.equal(directory.plugins[0]?.display_name, 'Context7')
+    assert.equal(directory.plugins[0]?.distributions.length, 2)
+    assert.equal(directory.plugins[0]?.default_distribution, 'upstash/context7')
+    assert.deepEqual(directory.plugins[0]?.client_support.clients, ['codex', 'cursor', 'kiro'])
+    assert.equal(expectedDistribution(directory.plugins[0]!, ['codex', 'cursor'])?.id, 'upstash/context7')
+    assert.equal(expectedDistribution(directory.plugins[0]!, ['codex', 'kiro'])?.id, '777genius/context7-bridge')
+    assert.deepEqual(directory.plugins[0]?.evidence[0], {
+      client: 'cursor', level: 'runtime', outcome: 'passed', client_version: 'Cursor 3.9.16', os: 'linux', architecture: 'amd64', tested_at: '2026-08-20T10:00:00Z', evidence_url: 'https://example.test/evidence.json',
+    })
+    assert.equal(validationLabel(directory.plugins[0]!), 'Runtime tested')
+  })
+
+  it('requires publication identity only at the signed production boundary', () => {
+    const raw = snapshotFixture as Record<string, unknown>
+    const unresolved = { ...raw, snapshot_sequence: undefined, generated_at: undefined }
+    assert.equal(parseDirectoryData(unresolved, 'review_preview').data_source, 'review_preview')
+    assert.throws(() => parseDirectoryData(unresolved, 'published_snapshot'), /snapshot_sequence and generated_at/)
+  })
+
   it('normalizes valid built-in and external entries', () => {
     const registry = parseRegistryIndex(fixture)
-    assert.equal(registry.schema_version, 1)
+    assert.equal(registry.data_source, 'legacy_compatibility')
     assert.equal(registry.plugins.length, 2)
     assert.equal(registry.plugins[0]?.author.name, 'Community package for Upstash')
     assert.equal(registry.plugins[0]?.source.path, 'plugins/context7')
     assert.deepEqual(registry.plugins[0]?.client_support.clients, ['codex', 'cursor', 'copilot', 'vscode', 'kiro'])
     assert.equal(registry.plugins[1]?.client_support.resolution, 'install_time')
-    assert.deepEqual(registry.plugins[0]?.validation.runtime_evidence, ['codex', 'cursor'])
-    assert.equal(validationLabel(registry.plugins[0]!.validation), 'Runtime evidence')
+    assert.deepEqual(registry.plugins[0]?.evidence.map(item => item.client), ['codex', 'cursor'])
+    assert.equal(validationLabel(registry.plugins[0]!), 'Schema validated')
     assert.deepEqual(registry.plugins[1]?.components, ['skills'])
   })
 
@@ -64,8 +89,8 @@ describe('registry parsing', () => {
   })
 
   it('rejects duplicate names', () => {
-    const registry = parseRegistryIndex(fixture)
-    assert.throws(() => parseRegistryIndex({ schema_version: 1, plugins: [registry.plugins[0], registry.plugins[0]] }), /duplicate name/)
+    const raw = fixture as { plugins: unknown[] }
+    assert.throws(() => parseRegistryIndex({ schema_version: 1, plugins: [raw.plugins[0], raw.plugins[0]] }), /duplicate name/)
   })
 
   it('parses the authoritative production index with exactly 26 built-ins', () => {
@@ -76,7 +101,7 @@ describe('registry parsing', () => {
     for (const plugin of registry.plugins) {
       if (plugin.built_in) {
         assert.equal(plugin.install_source, plugin.name)
-        assert.equal(plugin.client_support.resolution, 'catalog')
+        assert.equal(plugin.client_support.resolution, 'directory')
       } else {
         assert.equal(plugin.install_source, `${plugin.source.repository}@${plugin.source.revision}//${plugin.source.path}`)
         assert.equal(plugin.client_support.resolution, 'install_time')
@@ -92,8 +117,7 @@ describe('registry parsing', () => {
   it('accepts a generated index with 26 built-ins plus a valid external entry', () => {
     const real = JSON.parse(readFileSync(fileURLToPath(new URL('../../registry/index.json', import.meta.url)), 'utf8')) as { plugins: unknown[] }
     const fixtureIndex = fixture as { plugins: unknown[] }
-    const production = parseRegistryIndex({ schema_version: 1, plugins: real.plugins })
-    const builtIns = production.plugins.filter(plugin => plugin.built_in)
+    const builtIns = real.plugins.filter((plugin) => (plugin as { built_in?: boolean }).built_in)
     const registry = parseRegistryIndex({ schema_version: 1, plugins: [...builtIns, fixtureIndex.plugins[1]] })
 
     assert.equal(registry.plugins.length, 27)

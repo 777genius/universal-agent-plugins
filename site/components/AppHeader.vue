@@ -27,7 +27,7 @@ function toggleTheme() {
       <nav id="site-navigation" class="site-nav" :class="{ 'site-nav--open': menuOpen }" aria-label="Main navigation">
         <NuxtLink to="/plugins">Directory</NuxtLink>
         <NuxtLink to="/#how-it-works">How it works</NuxtLink>
-        <a :href="`${repositoryUrl}/blob/main/registry/README.md#submit-an-external-package`" target="_blank" rel="noreferrer">Submit a plugin</a>
+        <a :href="`${repositoryUrl}/blob/main/registry/README.md#submit-an-external-package`" target="_blank" rel="noreferrer">Add a plugin</a>
         <a :href="repositoryUrl" target="_blank" rel="noreferrer">GitHub</a>
       </nav>
       <div class="site-header__actions">

@@ -7,6 +7,12 @@ will succeed in every client, or that every client exposes the same tools.
 The standard-compatible launch clients and supported transports are maintained
 at [agent-plugins.org](https://agent-plugins.org/compatible-clients).
 
+Directory compatibility is release- and environment-specific. The website
+shows one product card even when upstream and community distributions coexist,
+labels the reviewed **Default source**, and links alternatives and immutable
+provenance. Existing installs stay on their recorded distribution during
+update; changing source is an explicit `switch`.
+
 ## Package matrix
 
 | Plugin | Component | Authentication and scope |
@@ -53,7 +59,9 @@ Plugins UI discovery, user-attested manual activation, and the same read-only
 runtime. Separate evidence proves repository marketplace ingestion, official
 manager installation, cache materialization, and exact `.app.json` linkage. It
 does not yet prove ChatGPT Work UI activation or package-routed runtime. No other
-remote package is claimed as ChatGPT-installable.
+remote package is claimed as ChatGPT-installable. The website keeps ChatGPT
+visible but disabled for those releases and explains that a registered app
+binding is required.
 
 ## Dependency pins
 

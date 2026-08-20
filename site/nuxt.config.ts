@@ -1,14 +1,20 @@
 import { resolve } from 'node:path'
 import { loadRegistryIndex } from './build/load-registry'
 
+const signedSnapshotPath = process.env.UAP_SIGNED_SNAPSHOT_PATH
+const previewPath = process.env.UAP_DIRECTORY_PREVIEW_PATH
 const defaultRegistryPath = resolve(process.cwd(), '../registry/index.json')
-const registryPath = process.env.UAP_REGISTRY_PATH
-  ? resolve(process.cwd(), process.env.UAP_REGISTRY_PATH)
-  : defaultRegistryPath
-const registryIndex = loadRegistryIndex(registryPath)
+const registryPath = signedSnapshotPath
+  ? resolve(process.cwd(), signedSnapshotPath)
+  : previewPath
+    ? resolve(process.cwd(), previewPath)
+    : process.env.UAP_REGISTRY_PATH
+      ? resolve(process.cwd(), process.env.UAP_REGISTRY_PATH)
+      : defaultRegistryPath
+const registryIndex = loadRegistryIndex(registryPath, signedSnapshotPath ? 'published_snapshot' : previewPath ? 'review_preview' : undefined)
 const builtInCount = registryIndex.plugins.filter(plugin => plugin.built_in).length
 
-if (!process.env.UAP_REGISTRY_PATH && builtInCount !== 26) {
+if (!signedSnapshotPath && !previewPath && !process.env.UAP_REGISTRY_PATH && builtInCount !== 26) {
   throw new Error(`Production registry must contain exactly 26 built-in plugins; found ${builtInCount}`)
 }
 
@@ -16,6 +22,7 @@ const siteUrl = (process.env.NUXT_PUBLIC_SITE_URL
   ?? 'https://777genius.github.io/universal-agent-plugins').replace(/\/$/, '')
 const baseURL = process.env.NUXT_APP_BASE_URL ?? '/'
 const repositoryUrl = 'https://github.com/777genius/universal-agent-plugins'
+const contentSecurityPolicy = "default-src 'self'; base-uri 'none'; connect-src 'self'; font-src 'self'; form-action 'none'; frame-ancestors 'none'; img-src 'self' data:; object-src 'none'; script-src 'self' 'sha256-Q4T/XMHn/odWukj6AIkZHweal0DWU07X4J5cKLflf4M='; style-src 'self' 'unsafe-inline'; upgrade-insecure-requests"
 
 export default defineNuxtConfig({
   compatibilityDate: '2026-08-10',
@@ -28,6 +35,10 @@ export default defineNuxtConfig({
     head: {
       htmlAttrs: { lang: 'en' },
       titleTemplate: '%s · Universal Agent Plugins',
+      meta: [
+        { 'http-equiv': 'Content-Security-Policy', content: contentSecurityPolicy },
+        { name: 'referrer', content: 'strict-origin-when-cross-origin' },
+      ],
       link: [
         { rel: 'icon', type: 'image/svg+xml', href: `${baseURL}logo.svg` },
       ],
@@ -58,7 +69,14 @@ export default defineNuxtConfig({
     },
   },
   routeRules: {
-    '/**': { prerender: true },
+    '/**': {
+      prerender: true,
+      headers: {
+        'content-security-policy': contentSecurityPolicy,
+        'referrer-policy': 'strict-origin-when-cross-origin',
+        'x-content-type-options': 'nosniff',
+      },
+    },
     '/_nuxt/**': { headers: { 'cache-control': 'public, max-age=31536000, immutable' } },
   },
   typescript: {
