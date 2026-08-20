@@ -1,0 +1,34 @@
+schema_version: 1
+product_id: fixture-bridge
+distribution_id: 777genius/fixture-bridge
+upstream:
+  repository: fixture/upstream
+  revision: 9ec238505ab95b2e07222e69a893f0bbac201ae6
+  license:
+    spdx: MIT
+    attribution_paths:
+      - path: LICENSE
+        sha256: sha256:6f7302ff6732bd38c7fea8c257cef9085d7830915e884ef66c13a0faddd570b0
+      - path: NOTICE
+        sha256: sha256:960d8c3e9155cc27dc18f801609cb6d2d4e1528a969b5b03d2b2d6d09b3a07fb
+  provenance:
+    paths:
+      - path: package-metadata.json
+        sha256: sha256:a5c6543aaf774f7633bde79e6bc7b591cc2b385150d6f40d8ddb42fa0fdaad54
+copy:
+  - source: LICENSE
+    destination: LICENSE
+  - source: NOTICE
+    destination: NOTICE
+  - source: skills
+    destination: skills
+overlay: overlay
+overlay_replacements: []
+output: plugins/fixture-bridge
+expected_version: 1.2.3
+executable_paths:
+  - skills/fixture-skill/tool.sh
+components:
+  mcp_servers: []
+  skills:
+    - fixture-skill

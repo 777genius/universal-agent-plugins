@@ -1,0 +1,25 @@
+schema_version: 1
+product_id: fixture-mcp-bridge
+distribution_id: 777genius/fixture-mcp-bridge
+upstream:
+  repository: fixture/upstream
+  revision: 9ec238505ab95b2e07222e69a893f0bbac201ae6
+  license:
+    spdx: MIT
+    attribution_paths:
+      - path: LICENSE
+        sha256: sha256:6f7302ff6732bd38c7fea8c257cef9085d7830915e884ef66c13a0faddd570b0
+  provenance:
+    paths:
+      - path: mcp-package.json
+        sha256: sha256:039d3c96ba64fd40e2d0b11c52a0365f39e73430326c8a50b80aaac8536ec85e
+copy: []
+overlay: overlay
+overlay_replacements: []
+output: plugins/fixture-mcp-bridge
+expected_version: 1.2.3
+executable_paths: []
+components:
+  mcp_servers:
+    - fixture-mcp
+  skills: []

@@ -1,0 +1,140 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/777genius/universal-agent-plugins/schemas/bridge-recipe.schema.json",
+  "title": "Build-time bridge recipe",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "product_id",
+    "distribution_id",
+    "upstream",
+    "copy",
+    "overlay",
+    "overlay_replacements",
+    "output",
+    "executable_paths",
+    "components"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "product_id": { "$ref": "#/$defs/id" },
+    "distribution_id": {
+      "type": "string",
+      "pattern": "^(?!.*(?:--|\\.\\.))[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?/[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$"
+    },
+    "upstream": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository", "revision", "license", "provenance"],
+      "properties": {
+        "repository": {
+          "type": "string",
+          "pattern": "^(?!.*(?:--|\\.\\.|\\.git$))[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?/[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?$"
+        },
+        "revision": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "license": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["spdx", "attribution_paths"],
+          "properties": {
+            "spdx": { "type": "string", "minLength": 1, "maxLength": 100 },
+            "attribution_paths": {
+              "type": "array",
+              "minItems": 1,
+              "items": { "$ref": "#/$defs/evidence" }
+            }
+          }
+        },
+        "provenance": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["paths"],
+          "properties": {
+            "paths": {
+              "type": "array",
+              "items": { "$ref": "#/$defs/evidence" }
+            }
+          }
+        }
+      }
+    },
+    "copy": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["source", "destination"],
+        "properties": {
+          "source": { "$ref": "#/$defs/path" },
+          "destination": { "$ref": "#/$defs/path" }
+        }
+      }
+    },
+    "overlay": { "$ref": "#/$defs/path" },
+    "overlay_replacements": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "upstream_sha256"],
+        "properties": {
+          "path": { "$ref": "#/$defs/path" },
+          "upstream_sha256": { "$ref": "#/$defs/sha256" }
+        }
+      }
+    },
+    "output": { "$ref": "#/$defs/path" },
+    "executable_paths": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/path" }
+    },
+    "expected_version": { "type": "string", "minLength": 1 },
+    "components": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mcp_servers", "skills"],
+      "properties": {
+        "mcp_servers": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/id" }
+        },
+        "skills": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/id" }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^(?!.*(?:--|\\.\\.))[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$"
+    },
+    "path": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512,
+      "pattern": "^(?!/)(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*\\\\)[^%]+$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": { "$ref": "#/$defs/path" },
+        "sha256": { "$ref": "#/$defs/sha256" }
+      }
+    }
+  }
+}
