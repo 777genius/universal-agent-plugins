@@ -1,0 +1,409 @@
+#!/usr/bin/env python3
+"""Security primitives and contracts for static Directory publication.
+
+This module intentionally has no network client.  The preparation process reads
+reviewed repository data, while the signer accepts only a bounded canonical
+candidate and an already-existing publication ledger.
+"""
+
+from __future__ import annotations
+
+import base64
+import hashlib
+import json
+import os
+import re
+import unicodedata
+from datetime import datetime, timezone
+from pathlib import Path, PurePosixPath
+from typing import Any
+
+
+ROOT = Path(__file__).resolve().parents[1]
+SNAPSHOT_SCHEMA = ROOT / "schemas" / "directory-snapshot.schema.json"
+ENVELOPE_SCHEMA = ROOT / "schemas" / "directory-envelope.schema.json"
+LATEST_SCHEMA = ROOT / "schemas" / "directory-latest.schema.json"
+CANDIDATE_SCHEMA = ROOT / "schemas" / "directory-publication-candidate.schema.json"
+
+SIGNATURE_DOMAIN = b"UAP-DIRECTORY-SNAPSHOT-ED25519-V1\x00"
+CANDIDATE_DOMAIN = b"UAP-DIRECTORY-PUBLICATION-CANDIDATE-V1\x00"
+DIGEST_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
+SHA_RE = re.compile(r"^[0-9a-f]{40}$")
+ID_RE = re.compile(r"^[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?$")
+DIST_ID_RE = re.compile(r"^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?/[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?$")
+MAX_CANDIDATE_BYTES = 4 << 20
+MAX_SNAPSHOT_BYTES = 4 << 20
+MAX_ENVELOPE_BYTES = 16 << 10
+MAX_LATEST_BYTES = 16 << 10
+MAX_LEDGER_SNAPSHOTS = 100_000
+
+
+class PublicationError(Exception):
+    """A fail-closed publication contract violation."""
+
+
+def require(condition: bool, message: str) -> None:
+    if not condition:
+        raise PublicationError(message)
+
+
+def parse_json_bytes(body: bytes, source: str, *, max_bytes: int) -> Any:
+    require(len(body) <= max_bytes, f"{source}: exceeds {max_bytes} bytes")
+
+    def object_pairs(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+        result: dict[str, Any] = {}
+        normalized: set[str] = set()
+        for key, value in pairs:
+            require(key not in result, f"{source}: duplicate JSON key {key!r}")
+            folded = unicodedata.normalize("NFC", key).casefold()
+            require(folded not in normalized, f"{source}: case/Unicode-colliding key {key!r}")
+            require(key == unicodedata.normalize("NFC", key), f"{source}: non-NFC key {key!r}")
+            normalized.add(folded)
+            result[key] = value
+        return result
+
+    def reject_float(value: str) -> None:
+        raise PublicationError(f"{source}: non-integer JSON number {value!r} is forbidden")
+
+    try:
+        return json.loads(
+            body.decode("utf-8"),
+            object_pairs_hook=object_pairs,
+            parse_float=reject_float,
+            parse_constant=reject_float,
+        )
+    except (UnicodeError, json.JSONDecodeError) as error:
+        raise PublicationError(f"{source}: invalid UTF-8 JSON: {error}") from error
+
+
+def read_json(path: Path, *, max_bytes: int = MAX_CANDIDATE_BYTES) -> Any:
+    body = read_bytes_bounded(path, max_bytes)
+    return parse_json_bytes(body, str(path), max_bytes=max_bytes)
+
+
+def read_bytes_bounded(path: Path, max_bytes: int) -> bytes:
+    try:
+        with path.open("rb") as source:
+            body = source.read(max_bytes + 1)
+    except OSError as error:
+        raise PublicationError(f"{path}: cannot read: {error}") from error
+    require(len(body) <= max_bytes, f"{path}: exceeds {max_bytes} bytes")
+    return body
+
+
+def canonical_json(value: Any) -> bytes:
+    """Return the repository's integer-only canonical JSON profile.
+
+    Inputs are NFC-normalized and floats are forbidden.  A trailing LF is part
+    of the canonical bytes and therefore of every digest and signature.
+    """
+
+    def walk(item: Any, location: str) -> None:
+        if item is None or isinstance(item, (bool, int)):
+            return
+        if isinstance(item, float):
+            raise PublicationError(f"{location}: floating-point values are forbidden")
+        if isinstance(item, str):
+            require(item == unicodedata.normalize("NFC", item), f"{location}: string must be NFC")
+            return
+        if isinstance(item, list):
+            for index, child in enumerate(item):
+                walk(child, f"{location}[{index}]")
+            return
+        if isinstance(item, dict):
+            folded: set[str] = set()
+            for key, child in item.items():
+                require(isinstance(key, str), f"{location}: object key must be a string")
+                require(key == unicodedata.normalize("NFC", key), f"{location}: key must be NFC")
+                normalized = key.casefold()
+                require(normalized not in folded, f"{location}: case/Unicode-colliding key {key!r}")
+                folded.add(normalized)
+                walk(child, f"{location}.{key}")
+            return
+        raise PublicationError(f"{location}: unsupported JSON value {type(item).__name__}")
+
+    walk(value, "$")
+    return (json.dumps(value, ensure_ascii=False, allow_nan=False, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
+
+
+def sha256_digest(body: bytes) -> str:
+    return "sha256:" + hashlib.sha256(body).hexdigest()
+
+
+def candidate_digest(body: bytes) -> str:
+    return "sha256:" + hashlib.sha256(CANDIDATE_DOMAIN + len(body).to_bytes(8, "big") + body).hexdigest()
+
+
+def signature_message(snapshot: bytes) -> bytes:
+    return SIGNATURE_DOMAIN + len(snapshot).to_bytes(8, "big") + snapshot
+
+
+def parse_timestamp(value: str, field: str) -> datetime:
+    require(isinstance(value, str) and value.endswith("Z"), f"{field}: must be UTC RFC 3339 with Z")
+    try:
+        parsed = datetime.fromisoformat(value[:-1] + "+00:00")
+    except ValueError as error:
+        raise PublicationError(f"{field}: invalid timestamp") from error
+    require(parsed.tzinfo is not None and parsed.utcoffset().total_seconds() == 0, f"{field}: must be UTC")
+    require(parsed.microsecond == 0, f"{field}: subsecond precision is forbidden")
+    return parsed
+
+
+def format_timestamp(value: datetime) -> str:
+    return value.astimezone(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+def validate_with_schema(value: Any, schema_path: Path) -> None:
+    try:
+        import jsonschema
+    except ImportError as error:  # pragma: no cover - workflow installs it
+        raise PublicationError("jsonschema is required for publication validation") from error
+    schema = read_json(schema_path, max_bytes=1 << 20)
+    local_schemas = {}
+    for local_path in (SNAPSHOT_SCHEMA, ENVELOPE_SCHEMA, LATEST_SCHEMA, CANDIDATE_SCHEMA):
+        local = read_json(local_path, max_bytes=1 << 20)
+        if isinstance(local, dict) and isinstance(local.get("$id"), str):
+            local_schemas[local["$id"]] = local
+            local_schemas[local_path.resolve().as_uri()] = local
+    resolver = jsonschema.RefResolver.from_schema(schema, store=local_schemas)
+    validator = jsonschema.Draft202012Validator(schema, resolver=resolver)
+    errors = sorted(validator.iter_errors(value), key=lambda item: list(item.absolute_path))
+    if errors:
+        error = errors[0]
+        where = ".".join(str(part) for part in error.absolute_path) or "$"
+        raise PublicationError(f"{schema_path.name}: {where}: {error.message}")
+
+
+def b64decode_exact(value: str, size: int, field: str) -> bytes:
+    require(isinstance(value, str), f"{field}: must be base64")
+    try:
+        decoded = base64.b64decode(value, validate=True)
+    except (ValueError, base64.binascii.Error) as error:
+        raise PublicationError(f"{field}: invalid base64") from error
+    require(len(decoded) == size, f"{field}: must decode to {size} bytes")
+    return decoded
+
+
+def load_public_keys(path: Path) -> dict[str, bytes]:
+    value = read_json(path, max_bytes=64 << 10)
+    require(isinstance(value, dict) and value.get("schema_version") == 1, "trusted keys: invalid schema version")
+    entries = value.get("keys")
+    require(isinstance(entries, list), "trusted keys: keys must be an array")
+    result: dict[str, bytes] = {}
+    for entry in entries:
+        require(isinstance(entry, dict) and set(entry) == {"key_id", "public_key"}, "trusted keys: invalid entry")
+        key_id = entry["key_id"]
+        require(isinstance(key_id, str) and ID_RE.fullmatch(key_id), "trusted keys: invalid key ID")
+        require(key_id not in result, f"trusted keys: duplicate key ID {key_id}")
+        result[key_id] = b64decode_exact(entry["public_key"], 32, f"trusted key {key_id}")
+    return result
+
+
+def ed25519_private_key(encoded: str):  # type: ignore[no-untyped-def]
+    try:
+        from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+    except ImportError as error:  # pragma: no cover - workflow installs it
+        raise PublicationError("cryptography is required for Ed25519 signing") from error
+    raw = b64decode_exact(encoded, 32, "private signing seed")
+    return Ed25519PrivateKey.from_private_bytes(raw)
+
+
+def verify_envelope(snapshot: bytes, envelope: dict[str, Any], trusted_keys: dict[str, bytes]) -> None:
+    validate_with_schema(envelope, ENVELOPE_SCHEMA)
+    require(len(snapshot) <= MAX_SNAPSHOT_BYTES, "snapshot exceeds size limit")
+    require(canonical_json(parse_json_bytes(snapshot, "snapshot", max_bytes=MAX_SNAPSHOT_BYTES)) == snapshot, "snapshot is not canonical JSON")
+    require(envelope["snapshot_digest"] == sha256_digest(snapshot), "snapshot digest mismatch")
+    key_id = envelope["key_id"]
+    require(key_id in trusted_keys, f"unknown signing key ID {key_id}")
+    signature = b64decode_exact(envelope["signature"], 64, "signature")
+    try:
+        from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
+        Ed25519PublicKey.from_public_bytes(trusted_keys[key_id]).verify(signature, signature_message(snapshot))
+    except ImportError as error:  # pragma: no cover
+        raise PublicationError("cryptography is required for Ed25519 verification") from error
+    except Exception as error:
+        raise PublicationError("invalid Ed25519 snapshot signature") from error
+
+
+def release_identity(release: dict[str, Any]) -> tuple[str, int]:
+    return release["distribution_id"], release["sequence"]
+
+
+def immutable_release(release: dict[str, Any]) -> dict[str, Any]:
+    return {key: value for key, value in release.items() if key not in ("published_at", "policy")}
+
+
+def iter_releases(snapshot: dict[str, Any]):  # type: ignore[no-untyped-def]
+    for product in snapshot["products"]:
+        for distribution in product["distributions"]:
+            for release in distribution["releases"]:
+                yield distribution, release
+
+
+def validate_snapshot_semantics(
+    snapshot: dict[str, Any],
+    previous: dict[str, Any] | None = None,
+    historical_evidence: dict[str, dict[str, Any]] | None = None,
+) -> None:
+    validate_with_schema(snapshot, SNAPSHOT_SCHEMA)
+    generated = parse_timestamp(snapshot["generated_at"], "generated_at")
+    expires = parse_timestamp(snapshot["expires_at"], "expires_at")
+    require(expires > generated, "expires_at must be later than generated_at")
+    require(expires - generated <= __import__("datetime").timedelta(days=31), "snapshot lifetime exceeds 31 days")
+    product_ids: set[str] = set()
+    aliases: set[str] = set()
+    release_map: dict[tuple[str, int], dict[str, Any]] = {}
+    evidence_map: dict[str, dict[str, Any]] = {}
+    for product in snapshot["products"]:
+        require(product["id"] not in product_ids, f"duplicate product {product['id']}")
+        product_ids.add(product["id"])
+        distribution_ids = {item["id"] for item in product["distributions"]}
+        require(len(distribution_ids) == len(product["distributions"]), f"{product['id']}: duplicate distribution")
+        require(product["default_distribution"] in distribution_ids, f"{product['id']}: default distribution missing")
+        for alias in product["aliases"]:
+            require(alias not in aliases, f"duplicate alias {alias}")
+            aliases.add(alias)
+        for distribution in product["distributions"]:
+            sequences: set[int] = set()
+            for release in distribution["releases"]:
+                require(release["distribution_id"] == distribution["id"], "release distribution identity mismatch")
+                require(release["sequence"] not in sequences, f"{distribution['id']}: duplicate release sequence")
+                sequences.add(release["sequence"])
+                identity = release_identity(release)
+                require(identity not in release_map, f"duplicate release identity {identity}")
+                release_map[identity] = release
+                published = parse_timestamp(release["published_at"], f"{identity}.published_at")
+                require(published <= generated, f"{identity}: publication timestamp is in the future")
+                policy = release["policy"]
+                require(policy["release_sequence"] == release["sequence"], f"{identity}: policy identity mismatch")
+                evidence_ids = [item["evidence_id"] for item in policy["current_evidence"]]
+                require(len(evidence_ids) == len(set(evidence_ids)), f"{identity}: duplicate current evidence")
+                tuples: set[tuple[Any, ...]] = set()
+                for evidence in policy["current_evidence"]:
+                    evidence_id = evidence["evidence_id"]
+                    require(evidence_id not in evidence_map, f"duplicate evidence identity {evidence_id}")
+                    evidence_map[evidence_id] = evidence
+                    applicability = tuple(
+                        evidence.get(field)
+                        for field in (
+                            "level", "client", "client_version", "installer_version",
+                            "dependency_identity", "os", "architecture",
+                        )
+                    )
+                    require(applicability not in tuples, f"{identity}: multiple current evidence records for one applicability tuple")
+                    tuples.add(applicability)
+                    observed = parse_timestamp(evidence["observed_at"], f"{identity}.{evidence['evidence_id']}.observed_at")
+                    require(observed <= generated, f"{identity}: evidence timestamp is in the future")
+
+    if historical_evidence is not None:
+        for evidence_id, evidence in evidence_map.items():
+            if evidence_id in historical_evidence:
+                require(evidence == historical_evidence[evidence_id], f"immutable evidence {evidence_id} changed")
+        historical_evidence.update(evidence_map)
+
+    if previous is None:
+        return
+    require(snapshot["snapshot_schema_version"] == previous["snapshot_schema_version"], "snapshot schema feed changed")
+    require(snapshot["sequence"] > previous["sequence"], "snapshot sequence did not increase")
+    require(generated > parse_timestamp(previous["generated_at"], "previous.generated_at"), "snapshot generation time did not increase")
+    previous_map = {release_identity(release): release for _, release in iter_releases(previous)}
+    previous_evidence: dict[str, dict[str, Any]] = {}
+    for _, old_release in iter_releases(previous):
+        for evidence in old_release["policy"]["current_evidence"]:
+            old = previous_evidence.setdefault(evidence["evidence_id"], evidence)
+            require(old == evidence, f"previous snapshot reused evidence identity {evidence['evidence_id']} with different fields")
+    for evidence_id, evidence in evidence_map.items():
+        if evidence_id in previous_evidence:
+            require(evidence == previous_evidence[evidence_id], f"immutable evidence {evidence_id} changed")
+    for identity, old_release in previous_map.items():
+        require(identity in release_map, f"published release {identity} was removed")
+        new_release = release_map[identity]
+        require(immutable_release(new_release) == immutable_release(old_release), f"published release {identity} immutable fields changed")
+        require(new_release["published_at"] == old_release["published_at"], f"published release {identity} timestamp changed")
+        old_status = old_release["policy"]["status"]
+        new_status = new_release["policy"]["status"]
+        if old_status == "revoked":
+            require(new_status == "revoked", f"revoked release {identity} cannot be restored")
+
+
+def validate_relative_artifact(path: str, expected: str) -> None:
+    require(isinstance(path, str) and path == expected, f"artifact path must be exactly {expected!r}")
+    parsed = PurePosixPath(path)
+    require(not parsed.is_absolute() and ".." not in parsed.parts and ":" not in path and "\\" not in path, "unsafe artifact path")
+
+
+def validate_latest(latest: dict[str, Any]) -> None:
+    validate_with_schema(latest, LATEST_SCHEMA)
+    sequence = latest["sequence"]
+    stem = f"{sequence:020d}"
+    validate_relative_artifact(latest["snapshot_path"], f"snapshots/{stem}.json")
+    validate_relative_artifact(latest["envelope_path"], f"snapshots/{stem}.envelope.json")
+    limits = latest["fetch_contract"]
+    require(limits["max_redirects"] <= 2, "redirect limit exceeds implementation maximum")
+    require(limits["retry_attempts"] <= 3, "retry limit exceeds implementation maximum")
+    require(limits["latest_max_bytes"] <= MAX_LATEST_BYTES, "latest response limit exceeds implementation maximum")
+    require(limits["snapshot_max_bytes"] <= MAX_SNAPSHOT_BYTES, "snapshot response limit exceeds implementation maximum")
+    require(limits["envelope_max_bytes"] <= MAX_ENVELOPE_BYTES, "envelope response limit exceeds implementation maximum")
+
+
+def load_ledger_latest(
+    ledger_root: Path, trusted_keys: dict[str, bytes]
+) -> tuple[dict[str, Any], dict[str, Any], dict[str, dict[str, Any]]] | None:
+    feed = ledger_root / "registry" / "schemas" / "1"
+    latest_path = feed / "latest.json"
+    if not latest_path.exists():
+        return None
+    latest_body = read_bytes_bounded(latest_path, MAX_LATEST_BYTES)
+    latest = parse_json_bytes(latest_body, str(latest_path), max_bytes=MAX_LATEST_BYTES)
+    require(isinstance(latest, dict), "latest pointer must be an object")
+    require(canonical_json(latest) == latest_body, "latest pointer is not canonical JSON")
+    validate_latest(latest)
+    highest = latest["sequence"]
+    require(highest <= MAX_LEDGER_SNAPSHOTS, "publication ledger exceeds supported history bound")
+    snapshots_dir = feed / "snapshots"
+    actual_files = {path.name for path in snapshots_dir.iterdir()}
+    expected_files: set[str] = set()
+    previous: dict[str, Any] | None = None
+    historical_evidence: dict[str, dict[str, Any]] = {}
+    for sequence in range(1, highest + 1):
+        stem = f"{sequence:020d}"
+        snapshot_name = f"{stem}.json"
+        envelope_name = f"{stem}.envelope.json"
+        expected_files.update((snapshot_name, envelope_name))
+        snapshot_path = snapshots_dir / snapshot_name
+        envelope_path = snapshots_dir / envelope_name
+        require(snapshot_path.is_file() and envelope_path.is_file(), f"publication ledger sequence {sequence} is incomplete")
+        snapshot_bytes = read_bytes_bounded(snapshot_path, MAX_SNAPSHOT_BYTES)
+        envelope_body = read_bytes_bounded(envelope_path, MAX_ENVELOPE_BYTES)
+        envelope = parse_json_bytes(envelope_body, str(envelope_path), max_bytes=MAX_ENVELOPE_BYTES)
+        require(isinstance(envelope, dict), "signature envelope must be an object")
+        require(canonical_json(envelope) == envelope_body, "signature envelope is not canonical JSON")
+        verify_envelope(snapshot_bytes, envelope, trusted_keys)
+        snapshot = parse_json_bytes(snapshot_bytes, str(snapshot_path), max_bytes=MAX_SNAPSHOT_BYTES)
+        require(isinstance(snapshot, dict), "snapshot must be an object")
+        validate_snapshot_semantics(snapshot, previous, historical_evidence)
+        require(snapshot["sequence"] == sequence == envelope["sequence"], f"publication ledger sequence {sequence} identity mismatch")
+        previous = snapshot
+    require(actual_files == expected_files, "publication ledger contains unexpected or non-contiguous historical artifacts")
+    require(previous is not None and previous["sequence"] == highest, "publication ledger latest sequence mismatch")
+    return previous, latest, historical_evidence
+
+
+def atomic_write(path: Path, body: bytes, mode: int = 0o644) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    try:
+        with temporary.open("xb") as output:
+            output.write(body)
+            output.flush()
+            os.fsync(output.fileno())
+        os.chmod(temporary, mode)
+        os.replace(temporary, path)
+        descriptor = os.open(path.parent, os.O_RDONLY)
+        try:
+            os.fsync(descriptor)
+        finally:
+            os.close(descriptor)
+    except Exception:
+        temporary.unlink(missing_ok=True)
+        raise

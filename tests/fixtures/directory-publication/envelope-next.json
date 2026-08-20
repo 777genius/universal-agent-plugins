@@ -1,0 +1,1 @@
+{"algorithm":"Ed25519","envelope_schema_version":1,"key_id":"test-next","sequence":7,"signature":"5seaBOeVFPVjI7lPugpVIVbqUnW4/y86ksKXvjJn3Tw7khlgUW3IV9ECsiMguwhOrf2GvyhkhepHd7km+s82DA==","signature_domain":"UAP-DIRECTORY-SNAPSHOT-ED25519-V1","snapshot_digest":"sha256:8c7593aa25167fbf156304724c20def174b989e0ccf7c14d33010b1dea378c01","snapshot_schema_version":1}

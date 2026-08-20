@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-plugins.org/schemas/directory-latest.schema.json",
+  "title": "Universal Agent Plugins Directory same-origin latest pointer",
+  "type": "object",
+  "required": ["pointer_schema_version", "snapshot_schema_version", "sequence", "snapshot_path", "envelope_path", "fetch_contract"],
+  "properties": {
+    "pointer_schema_version": {"const": 1},
+    "snapshot_schema_version": {"const": 1},
+    "sequence": {"type": "integer", "minimum": 1},
+    "snapshot_path": {"type": "string", "pattern": "^snapshots/[0-9]{20}\\.json$"},
+    "envelope_path": {"type": "string", "pattern": "^snapshots/[0-9]{20}\\.envelope\\.json$"},
+    "fetch_contract": {
+      "type": "object",
+      "required": ["https_required", "same_origin_redirects_only", "forward_credentials_on_redirect", "max_redirects", "latest_max_bytes", "snapshot_max_bytes", "envelope_max_bytes", "retry_attempts"],
+      "properties": {
+        "https_required": {"const": true},
+        "same_origin_redirects_only": {"const": true},
+        "forward_credentials_on_redirect": {"const": false},
+        "max_redirects": {"type": "integer", "minimum": 0, "maximum": 2},
+        "latest_max_bytes": {"type": "integer", "minimum": 1, "maximum": 16384},
+        "snapshot_max_bytes": {"type": "integer", "minimum": 1, "maximum": 4194304},
+        "envelope_max_bytes": {"type": "integer", "minimum": 1, "maximum": 16384},
+        "retry_attempts": {"type": "integer", "minimum": 1, "maximum": 3}
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

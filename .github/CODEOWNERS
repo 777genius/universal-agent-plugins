@@ -6,3 +6,7 @@
 /scripts/build_openai_compat.py @777genius
 /scripts/validate_openai_compat.py @777genius
 /tests/e2e/results/chatgpt-*.json @777genius
+/scripts/*directory_publication.py @777genius
+/schemas/directory-*.schema.json @777genius
+/.github/workflows/directory-publication.yml @777genius
+/registry/publication/ @777genius

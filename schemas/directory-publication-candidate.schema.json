@@ -1,0 +1,123 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-plugins.org/schemas/directory-publication-candidate.schema.json",
+  "title": "No-secret Directory publication candidate",
+  "type": "object",
+  "required": ["candidate_schema_version", "snapshot_schema_version", "publication_id", "source_commit", "lifetime_days", "products"],
+  "properties": {
+    "candidate_schema_version": {"const": 1},
+    "snapshot_schema_version": {"const": 1},
+    "publication_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"},
+    "source_commit": {"$ref": "#/$defs/sha"},
+    "lifetime_days": {"type": "integer", "minimum": 1, "maximum": 30},
+    "products": {"type": "array", "items": {"$ref": "#/$defs/product"}}
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "id": {"type": "string", "pattern": "^[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?$"},
+    "distributionId": {"type": "string", "pattern": "^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?/[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?$"},
+    "sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "timestamp": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"},
+    "evidence": {
+      "type": "object",
+      "required": ["evidence_id", "digest", "level", "outcome", "observed_at"],
+      "properties": {
+        "evidence_id": {"$ref": "#/$defs/id"},
+        "digest": {"$ref": "#/$defs/digest"},
+        "level": {"enum": ["schema", "materialization", "discovery", "runtime", "oauth"]},
+        "outcome": {"enum": ["passed", "failed", "inconclusive", "not_tested", "not_applicable"]},
+        "observed_at": {"$ref": "#/$defs/timestamp"},
+        "client": {"enum": ["codex", "chatgpt", "cursor", "copilot", "vscode", "kiro"]},
+        "client_version": {"type": "string", "minLength": 1},
+        "installer_version": {"type": "string", "minLength": 1},
+        "dependency_identity": {"type": "string", "minLength": 1},
+        "os": {"type": "string", "minLength": 1},
+        "architecture": {"type": "string", "minLength": 1}
+      },
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {"properties": {"level": {"enum": ["materialization", "discovery", "runtime", "oauth"]}}},
+          "then": {"required": ["client", "client_version", "installer_version", "os", "architecture"]}
+        }
+      ]
+    },
+    "policy": {
+      "type": "object",
+      "required": ["release_sequence", "status", "compatible_clients", "scopes", "current_evidence"],
+      "properties": {
+        "release_sequence": {"type": "integer", "minimum": 1},
+        "status": {"enum": ["active", "superseded", "revoked"]},
+        "compatible_clients": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"enum": ["codex", "chatgpt", "cursor", "copilot", "vscode", "kiro"]}
+        },
+        "scopes": {"type": "array", "const": ["user"]},
+        "minimum_installer_version": {"type": "string", "minLength": 1},
+        "current_evidence": {"type": "array", "items": {"$ref": "#/$defs/evidence"}}
+      },
+      "additionalProperties": false
+    },
+    "source": {
+      "type": "object",
+      "required": ["repository", "revision", "path"],
+      "properties": {
+        "repository": {"type": "string", "pattern": "^[a-z0-9](?:[a-z0-9-]{0,37}[a-z0-9])?/[a-z0-9](?:[a-z0-9._-]{0,98}[a-z0-9])?$"},
+        "revision": {"$ref": "#/$defs/sha"},
+        "path": {"type": "string", "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*\\\\)[A-Za-z0-9._/-]+$"}
+      },
+      "additionalProperties": false
+    },
+    "release": {
+      "type": "object",
+      "required": ["distribution_id", "sequence", "package_version", "package_source", "tree_digest", "manifest_digest", "components", "published_at", "policy"],
+      "properties": {
+        "distribution_id": {"$ref": "#/$defs/distributionId"},
+        "sequence": {"type": "integer", "minimum": 1},
+        "package_version": {"type": ["string", "null"]},
+        "package_source": {"$ref": "#/$defs/source"},
+        "build_provenance": {
+          "type": "object",
+          "required": ["upstream_repository", "upstream_revision"],
+          "properties": {
+            "upstream_repository": {"type": "string", "minLength": 3},
+            "upstream_revision": {"$ref": "#/$defs/sha"}
+          },
+          "additionalProperties": false
+        },
+        "tree_digest": {"$ref": "#/$defs/digest"},
+        "manifest_digest": {"$ref": "#/$defs/digest"},
+        "components": {"type": "array", "uniqueItems": true, "items": {"enum": ["extensions", "mcp", "skills"]}},
+        "published_at": {"anyOf": [{"$ref": "#/$defs/timestamp"}, {"type": "null"}]},
+        "policy": {"$ref": "#/$defs/policy"}
+      },
+      "additionalProperties": false
+    },
+    "distribution": {
+      "type": "object",
+      "required": ["id", "kind", "status", "releases"],
+      "properties": {
+        "id": {"$ref": "#/$defs/distributionId"},
+        "kind": {"enum": ["upstream", "community_bridge", "community"]},
+        "status": {"enum": ["active", "suspended"]},
+        "releases": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/release"}}
+      },
+      "additionalProperties": false
+    },
+    "product": {
+      "type": "object",
+      "required": ["id", "display_name", "manifest_name", "aliases", "default_distribution", "distributions"],
+      "properties": {
+        "id": {"$ref": "#/$defs/id"},
+        "display_name": {"type": "string", "minLength": 1},
+        "manifest_name": {"$ref": "#/$defs/id"},
+        "aliases": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"$ref": "#/$defs/id"}},
+        "default_distribution": {"$ref": "#/$defs/distributionId"},
+        "distributions": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/distribution"}}
+      },
+      "additionalProperties": false
+    }
+  }
+}

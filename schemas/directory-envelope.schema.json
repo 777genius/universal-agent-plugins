@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-plugins.org/schemas/directory-envelope.schema.json",
+  "title": "Universal Agent Plugins Directory detached signature envelope",
+  "type": "object",
+  "required": ["envelope_schema_version", "snapshot_schema_version", "sequence", "key_id", "algorithm", "signature_domain", "snapshot_digest", "signature"],
+  "properties": {
+    "envelope_schema_version": {"const": 1},
+    "snapshot_schema_version": {"const": 1},
+    "sequence": {"type": "integer", "minimum": 1},
+    "key_id": {"type": "string", "pattern": "^[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?$"},
+    "algorithm": {"const": "Ed25519"},
+    "signature_domain": {"const": "UAP-DIRECTORY-SNAPSHOT-ED25519-V1"},
+    "snapshot_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "signature": {"type": "string", "pattern": "^[A-Za-z0-9+/]{86}==$"}
+  },
+  "additionalProperties": false
+}
