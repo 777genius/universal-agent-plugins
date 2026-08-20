@@ -1,0 +1,86 @@
+name: launch evidence E2E
+
+on:
+  workflow_dispatch:
+    inputs:
+      enforce_release_gates:
+        description: Fail unless every automated and human-consent launch gate has evidence
+        required: true
+        default: false
+        type: boolean
+  pull_request:
+    paths:
+      - "scripts/run_launch_evidence_e2e.py"
+      - "tests/e2e/**"
+      - "tests/test_run_*e2e*.py"
+      - ".github/workflows/launch-evidence-e2e.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: launch-evidence-e2e-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  harness-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13"
+      - run: python -m unittest tests.test_run_launch_evidence_e2e
+
+  disposable-cli-matrix:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      AGENTPLUGINS_VERSION: "0.1.6"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13"
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24"
+      - name: Install exact lifecycle CLI
+        run: npm install --global "universal-agent-plugins@${AGENTPLUGINS_VERSION}"
+      - name: Run disposable launch evidence matrix
+        env:
+          CATALOG_URL: https://raw.githubusercontent.com/${{ github.repository }}/${{ github.sha }}/catalog/v1/catalog.json
+        run: |
+          catalog_digest="sha256:$(sha256sum catalog/v1/catalog.json | cut -d ' ' -f 1)"
+          attestation_args=()
+          if [[ -f tests/e2e/attestations/launch.json ]]; then
+            attestation_args=(--attestations tests/e2e/attestations/launch.json)
+          fi
+          scenario_args=()
+          if [[ -x tests/e2e/drivers/launch-scenarios ]]; then
+            scenario_args=(--scenario-driver tests/e2e/drivers/launch-scenarios)
+          fi
+          python scripts/run_launch_evidence_e2e.py \
+            --binary "$(command -v agentplugins)" \
+            --catalog-url "${CATALOG_URL}" \
+            --catalog-digest "${catalog_digest}" \
+            "${attestation_args[@]}" \
+            "${scenario_args[@]}" \
+            --output /tmp/launch-evidence.json \
+            ${{ inputs.enforce_release_gates && '--require-gates' || '' }}
+      - name: Validate redacted evidence schema
+        run: |
+          python -m pip install check-jsonschema==0.37.4
+          check-jsonschema --schemafile tests/e2e/schemas/launch-evidence.schema.json /tmp/launch-evidence.json
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: launch-evidence-${{ github.run_id }}
+          path: /tmp/launch-evidence.json
+          if-no-files-found: error
+          retention-days: 30

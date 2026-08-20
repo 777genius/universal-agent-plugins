@@ -1,0 +1,19 @@
+{
+  "schema_version": 2,
+  "installations": [
+    {
+      "id": "fixture-context7",
+      "declared_name": "context7",
+      "source": {"kind": "local", "locator": "fixture://packages/context7"},
+      "clients": {
+        "cursor:user": {
+          "client": "cursor",
+          "scope": "user",
+          "materialization": "materialized",
+          "target_locator": "fixture://cursor/context7",
+          "receipts": []
+        }
+      }
+    }
+  ]
+}

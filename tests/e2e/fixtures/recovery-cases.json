@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "cases": [
+    {"id": "crash_journal_recovery", "fixture": "journal_staged", "expected": "recover_or_refuse_without_partial_state"},
+    {"id": "directory_offline", "fixture": "network_unavailable", "expected": "unexpired_cache_or_fail_closed"},
+    {"id": "directory_expired", "fixture": "expired_snapshot", "expected": "fail_short_name_resolution"},
+    {"id": "directory_tampered", "fixture": "digest_mismatch", "expected": "reject_before_resolution"},
+    {"id": "directory_sequence_rollback", "fixture": "lower_sequence", "expected": "reject_rollback"},
+    {"id": "managed_package_tamper", "fixture": "receipt_digest_mismatch", "expected": "refuse_mutation"}
+  ]
+}

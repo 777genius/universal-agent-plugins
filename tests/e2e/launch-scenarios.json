@@ -1,0 +1,50 @@
+{
+  "schema_version": 1,
+  "catalog": "catalog/v1/catalog.json",
+  "all_package_client": "cursor",
+  "all_package_operations": ["add", "info", "remove"],
+  "heroes": [
+    "agent-code-navigator",
+    "context7",
+    "cloudflare-docs",
+    "chrome-devtools",
+    "notion"
+  ],
+  "runtime_clients": ["codex", "cursor", "kiro"],
+  "context7_targets": ["codex", "cursor", "kiro"],
+  "context7_lifecycle": ["add", "update", "repair", "remove"],
+  "shared_backend_targets": ["copilot", "vscode"],
+  "manual_consent_gates": [
+    "notion/codex/oauth",
+    "notion/cursor/oauth",
+    "notion/kiro/oauth",
+    "cloudflare-docs/chatgpt/oauth_runtime"
+  ],
+  "fault_scenarios": [
+    "state_schema_2_migration",
+    "crash_journal_recovery",
+    "directory_offline",
+    "directory_expired",
+    "directory_tampered",
+    "directory_sequence_rollback",
+    "managed_package_tamper"
+  ],
+  "adapter_repair_faults": ["repair_codex", "repair_cursor", "repair_kiro"],
+  "advanced_scenarios": [
+    "upstream_owned_short_name",
+    "community_bridge_short_name",
+    "plugin_data_update_repair_switch_remove_purge",
+    "stdio_environment_and_containment",
+    "missing_runtime_zero_mutation",
+    "explicit_source_switch",
+    "managed_rollback",
+    "external_activation_failure",
+    "promotion_gate_digest_match",
+    "promotion_gate_digest_mismatch",
+    "cross_platform_binary_npm_install"
+  ],
+  "journeys": [
+    "direct_external_package",
+    "fork_submission"
+  ]
+}

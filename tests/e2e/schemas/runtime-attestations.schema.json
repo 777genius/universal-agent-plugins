@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Reviewed runtime and OAuth attestation input",
+  "type": "object",
+  "required": ["schema_version", "attestations"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "attestations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["plugin", "client", "level", "outcome", "reason", "tuple"],
+        "properties": {
+          "plugin": {"type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"},
+          "client": {"enum": ["codex", "cursor", "kiro", "chatgpt"]},
+          "level": {"enum": ["runtime", "oauth"]},
+          "outcome": {"enum": ["passed", "failed", "inconclusive", "not_tested", "not_applicable"]},
+          "reason": {"type": "string", "minLength": 1},
+          "consent_attested": {"type": "boolean"},
+          "isolated_identity": {"type": "boolean"},
+          "tuple": {
+            "type": "object",
+            "required": ["package_digest", "dependency_identity", "installer_version", "adapter_version", "client_version", "os", "architecture", "observed_at"],
+            "properties": {
+              "package_digest": {"type": ["string", "null"], "pattern": "^sha256:[a-f0-9]{64}$"},
+              "dependency_identity": {"type": ["string", "null"]},
+              "installer_version": {"type": ["string", "null"]},
+              "adapter_version": {"type": ["string", "null"]},
+              "client_version": {"type": ["string", "null"]},
+              "os": {"type": "string", "minLength": 1},
+              "architecture": {"type": "string", "minLength": 1},
+              "observed_at": {"type": "string", "format": "date-time"}
+            },
+            "additionalProperties": false
+          }
+        },
+        "allOf": [
+          {
+            "if": {"properties": {"outcome": {"const": "passed"}}, "required": ["outcome"]},
+            "then": {"properties": {"tuple": {"properties": {
+              "package_digest": {"type": "string"}, "dependency_identity": {"type": "string", "minLength": 1},
+              "installer_version": {"type": "string", "minLength": 1}, "adapter_version": {"type": "string", "minLength": 1},
+              "client_version": {"type": "string", "minLength": 1}
+            }}}}
+          },
+          {
+            "if": {"properties": {"outcome": {"const": "passed"}, "plugin": {"const": "notion"}}, "required": ["outcome", "plugin"]},
+            "then": {"required": ["consent_attested", "isolated_identity"], "properties": {"consent_attested": {"const": true}, "isolated_identity": {"const": true}}}
+          },
+          {
+            "if": {"properties": {"outcome": {"const": "passed"}, "client": {"const": "chatgpt"}}, "required": ["outcome", "client"]},
+            "then": {"required": ["consent_attested", "isolated_identity"], "properties": {"consent_attested": {"const": true}, "isolated_identity": {"const": true}}}
+          }
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

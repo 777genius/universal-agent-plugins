@@ -1,0 +1,3296 @@
+{
+  "matrix": [
+    {
+      "client": null,
+      "details": {
+        "external_package_digest": "sha256:11c659080a0c55478e6cb93e722989f9c9465820d25e22b1f18ad3a027278f6c",
+        "fault_case_count": 6
+      },
+      "id": "a6bce546e331ff9b7d2969ba",
+      "level": "harness",
+      "outcome": "passed",
+      "plugin": null,
+      "reason": "scenario fixtures are structurally complete",
+      "scenario": "fixture_contracts",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": null,
+        "dependency_identity": null,
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "cursor",
+      "details": {
+        "operation": "add",
+        "receipt_reconciliation_required": false
+      },
+      "id": "7c1c4459b1947ef8dade1889",
+      "level": "materialization",
+      "outcome": "not_tested",
+      "plugin": "agent-code-navigator",
+      "reason": "Agent Plugins CLI binary is unavailable",
+      "scenario": "all_26_add",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": "isolated-layout-fixture/v1",
+        "dependency_identity": "pinned-directory-catalog",
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "cursor",
+      "details": {
+        "operation": "info",
+        "receipt_reconciliation_required": true
+      },
+      "id": "711e34096c56a5fac61533df",
+      "level": "discovery",
+      "outcome": "not_tested",
+      "plugin": "agent-code-navigator",
+      "reason": "Agent Plugins CLI binary is unavailable",
+      "scenario": "all_26_info",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": "isolated-layout-fixture/v1",
+        "dependency_identity": "pinned-directory-catalog",
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "cursor",
+      "details": {
+        "operation": "remove",
+        "receipt_reconciliation_required": false
+      },
+      "id": "ec624a0eb33ebcdb564d5054",
+      "level": "materialization",
+      "outcome": "not_tested",
+      "plugin": "agent-code-navigator",
+      "reason": "Agent Plugins CLI binary is unavailable",
+      "scenario": "all_26_remove",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": "isolated-layout-fixture/v1",
+        "dependency_identity": "pinned-directory-catalog",
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "cursor",
+      "details": {
+        "operation": "add",
+        "receipt_reconciliation_required": false
+      },
+      "id": "83dbf9adae6df693c728ea45",
+      "level": "materialization",
+      "outcome": "not_tested",
+      "plugin": "atlassian",
+      "reason": "Agent Plugins CLI binary is unavailable",
+      "scenario": "all_26_add",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": "isolated-layout-fixture/v1",
+        "dependency_identity": "pinned-directory-catalog",
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "cursor",
+      "details": {
+        "operation": "info",
+        "receipt_reconciliation_required": true
+      },
+      "id": "7f3ae28207fea481883d210c",
+      "level": "discovery",
+      "outcome": "not_tested",
+      "plugin": "atlassian",
+      "reason": "Agent Plugins CLI binary is unavailable",
+      "scenario": "all_26_info",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": "isolated-layout-fixture/v1",
+        "dependency_identity": "pinned-directory-catalog",
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "cursor",
+      "details": {
+        "operation": "remove",
+        "receipt_reconciliation_required": false
+      },
+      "id": "24669509097e05cf8a0340c5",
+      "level": "materialization",
+      "outcome": "not_tested",
+      "plugin": "atlassian",
+      "reason": "Agent Plugins CLI binary is unavailable",
+      "scenario": "all_26_remove",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": "isolated-layout-fixture/v1",
+        "dependency_identity": "pinned-directory-catalog",
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "cursor",
+      "details": {
+        "operation": "add",
+        "receipt_reconciliation_required": false
+      },
+      "id": "1e26fbcaf8e2bd868a6b73ca",
+      "level": "materialization",
+      "outcome": "not_tested",
+      "plugin": "chrome-devtools",
+      "reason": "Agent Plugins CLI binary is unavailable",
+      "scenario": "all_26_add",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": "isolated-layout-fixture/v1",
+        "dependency_identity": "pinned-directory-catalog",
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "cursor",
+      "details": {
+        "operation": "info",
+        "receipt_reconciliation_required": true
+      },
+      "id": "ce25a444bc2196fa5d81cfe8",
+      "level": "discovery",
+      "outcome": "not_tested",
+      "plugin": "chrome-devtools",
+      "reason": "Agent Plugins CLI binary is unavailable",
+      "scenario": "all_26_info",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": "isolated-layout-fixture/v1",
+        "dependency_identity": "pinned-directory-catalog",
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "cursor",
+      "details": {
+        "operation": "remove",
+        "receipt_reconciliation_required": false
+      },
+      "id": "a9219a2db38a4db7c66a5aeb",
+      "level": "materialization",
+      "outcome": "not_tested",
+      "plugin": "chrome-devtools",
+      "reason": "Agent Plugins CLI binary is unavailable",
+      "scenario": "all_26_remove",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": "isolated-layout-fixture/v1",
+        "dependency_identity": "pinned-directory-catalog",
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "cursor",
+      "details": {
+        "operation": "add",
+        "receipt_reconciliation_required": false
+      },
+      "id": "84a2a0b71a76913d7e61698f",
+      "level": "materialization",
+      "outcome": "not_tested",
+      "plugin": "cloudflare",
+      "reason": "Agent Plugins CLI binary is unavailable",
+      "scenario": "all_26_add",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": "isolated-layout-fixture/v1",
+        "dependency_identity": "pinned-directory-catalog",
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "cursor",
+      "details": {
+        "operation": "info",
+        "receipt_reconciliation_required": true
+      },
+      "id": "2cb3c6da6a6f802e25af62f1",
+      "level": "discovery",
+      "outcome": "not_tested",
+      "plugin": "cloudflare",
+      "reason": "Agent Plugins CLI binary is unavailable",
+      "scenario": "all_26_info",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": "isolated-layout-fixture/v1",
+        "dependency_identity": "pinned-directory-catalog",
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "cursor",
+      "details": {
+        "operation": "remove",
+        "receipt_reconciliation_required": false
+      },
+      "id": "4705c561bf3758b87167cb2d",
+      "level": "materialization",
+      "outcome": "not_tested",
+      "plugin": "cloudflare",
+      "reason": "Agent Plugins CLI binary is unavailable",
+      "scenario": "all_26_remove",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": "isolated-layout-fixture/v1",
+        "dependency_identity": "pinned-directory-catalog",
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "cursor",
+      "details": {
+        "operation": "add",
+        "receipt_reconciliation_required": false
+      },
+      "id": "f5a52974f0abe9b835a1ce9c",
+      "level": "materialization",
+      "outcome": "not_tested",
+      "plugin": "cloudflare-bindings",
+      "reason": "Agent Plugins CLI binary is unavailable",
+      "scenario": "all_26_add",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": "isolated-layout-fixture/v1",
+        "dependency_identity": "pinned-directory-catalog",
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "cursor",
+      "details": {
+        "operation": "info",
+        "receipt_reconciliation_required": true
+      },
+      "id": "21537089d35d1f384dfe8e90",
+      "level": "discovery",
+      "outcome": "not_tested",
+      "plugin": "cloudflare-bindings",
+      "reason": "Agent Plugins CLI binary is unavailable",
+      "scenario": "all_26_info",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": "isolated-layout-fixture/v1",
+        "dependency_identity": "pinned-directory-catalog",
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "cursor",
+      "details": {
+        "operation": "remove",
+        "receipt_reconciliation_required": false
+      },
+      "id": "b8bb80d9a769957d1c4c3884",
+      "level": "materialization",
+      "outcome": "not_tested",
+      "plugin": "cloudflare-bindings",
+      "reason": "Agent Plugins CLI binary is unavailable",
+      "scenario": "all_26_remove",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": "isolated-layout-fixture/v1",
+        "dependency_identity": "pinned-directory-catalog",
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "cursor",
+      "details": {
+        "operation": "add",
+        "receipt_reconciliation_required": false
+      },
+      "id": "ecf5398f01a5a310115ea3bd",
+      "level": "materialization",
+      "outcome": "not_tested",
+      "plugin": "cloudflare-docs",
+      "reason": "Agent Plugins CLI binary is unavailable",
+      "scenario": "all_26_add",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": "isolated-layout-fixture/v1",
+        "dependency_identity": "pinned-directory-catalog",
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "cursor",
+      "details": {
+        "operation": "info",
+        "receipt_reconciliation_required": true
+      },
+      "id": "14e5a2e5bcdb2fe51007bbca",
+      "level": "discovery",
+      "outcome": "not_tested",
+      "plugin": "cloudflare-docs",
+      "reason": "Agent Plugins CLI binary is unavailable",
+      "scenario": "all_26_info",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": "isolated-layout-fixture/v1",
+        "dependency_identity": "pinned-directory-catalog",
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "cursor",
+      "details": {
+        "operation": "remove",
+        "receipt_reconciliation_required": false
+      },
+      "id": "b38e6919458da7a2ea02c7e7",
+      "level": "materialization",
+      "outcome": "not_tested",
+      "plugin": "cloudflare-docs",
+      "reason": "Agent Plugins CLI binary is unavailable",
+      "scenario": "all_26_remove",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": "isolated-layout-fixture/v1",
+        "dependency_identity": "pinned-directory-catalog",
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "cursor",
+      "details": {
+        "operation": "add",
+        "receipt_reconciliation_required": false
+      },
+      "id": "2a1fc3ac67d1babad3ab9db7",
+      "level": "materialization",
+      "outcome": "not_tested",
+      "plugin": "cloudflare-observability",
+      "reason": "Agent Plugins CLI binary is unavailable",
+      "scenario": "all_26_add",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": "isolated-layout-fixture/v1",
+        "dependency_identity": "pinned-directory-catalog",
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "cursor",
+      "details": {
+        "operation": "info",
+        "receipt_reconciliation_required": true
+      },
+      "id": "c811ab8c4d188c7cc4eec129",
+      "level": "discovery",
+      "outcome": "not_tested",
+      "plugin": "cloudflare-observability",
+      "reason": "Agent Plugins CLI binary is unavailable",
+      "scenario": "all_26_info",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": "isolated-layout-fixture/v1",
+        "dependency_identity": "pinned-directory-catalog",
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "cursor",
+      "details": {
+        "operation": "remove",
+        "receipt_reconciliation_required": false
+      },
+      "id": "fc3b2ffde624ab2f9e3bdb4d",
+      "level": "materialization",
+      "outcome": "not_tested",
+      "plugin": "cloudflare-observability",
+      "reason": "Agent Plugins CLI binary is unavailable",
+      "scenario": "all_26_remove",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": "isolated-layout-fixture/v1",
+        "dependency_identity": "pinned-directory-catalog",
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "cursor",
+      "details": {
+        "operation": "add",
+        "receipt_reconciliation_required": false
+      },
+      "id": "baefe07bba9fda40cdac505c",
+      "level": "materialization",
+      "outcome": "not_tested",
+      "plugin": "cloudflare-radar",
+      "reason": "Agent Plugins CLI binary is unavailable",
+      "scenario": "all_26_add",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": "isolated-layout-fixture/v1",
+        "dependency_identity": "pinned-directory-catalog",
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "cursor",
+      "details": {
+        "operation": "info",
+        "receipt_reconciliation_required": true
+      },
+      "id": "f7c5fe894a645f7d87795619",
+      "level": "discovery",
+      "outcome": "not_tested",
+      "plugin": "cloudflare-radar",
+      "reason": "Agent Plugins CLI binary is unavailable",
+      "scenario": "all_26_info",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": "isolated-layout-fixture/v1",
+        "dependency_identity": "pinned-directory-catalog",
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "cursor",
+      "details": {
+        "operation": "remove",
+        "receipt_reconciliation_required": false
+      },
+      "id": "7ceda8635d15688928bcc850",
+      "level": "materialization",
+      "outcome": "not_tested",
+      "plugin": "cloudflare-radar",
+      "reason": "Agent Plugins CLI binary is unavailable",
+      "scenario": "all_26_remove",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": "isolated-layout-fixture/v1",
+        "dependency_identity": "pinned-directory-catalog",
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "cursor",
+      "details": {
+        "operation": "add",
+        "receipt_reconciliation_required": false
+      },
+      "id": "b5c0f2d1d1f217a7ce9bab41",
+      "level": "materialization",
+      "outcome": "not_tested",
+      "plugin": "context7",
+      "reason": "Agent Plugins CLI binary is unavailable",
+      "scenario": "all_26_add",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": "isolated-layout-fixture/v1",
+        "dependency_identity": "pinned-directory-catalog",
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "cursor",
+      "details": {
+        "operation": "info",
+        "receipt_reconciliation_required": true
+      },
+      "id": "4ed22ff4802f973110f9e78c",
+      "level": "discovery",
+      "outcome": "not_tested",
+      "plugin": "context7",
+      "reason": "Agent Plugins CLI binary is unavailable",
+      "scenario": "all_26_info",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": "isolated-layout-fixture/v1",
+        "dependency_identity": "pinned-directory-catalog",
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "cursor",
+      "details": {
+        "operation": "remove",
+        "receipt_reconciliation_required": false
+      },
+      "id": "f38c36bdc2283c066fd18dd0",
+      "level": "materialization",
+      "outcome": "not_tested",
+      "plugin": "context7",
+      "reason": "Agent Plugins CLI binary is unavailable",
+      "scenario": "all_26_remove",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": "isolated-layout-fixture/v1",
+        "dependency_identity": "pinned-directory-catalog",
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "cursor",
+      "details": {
+        "operation": "add",
+        "receipt_reconciliation_required": false
+      },
+      "id": "b9a84dc99cca5d798332b2a6",
+      "level": "materialization",
+      "outcome": "not_tested",
+      "plugin": "docker-hub",
+      "reason": "Agent Plugins CLI binary is unavailable",
+      "scenario": "all_26_add",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": "isolated-layout-fixture/v1",
+        "dependency_identity": "pinned-directory-catalog",
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "cursor",
+      "details": {
+        "operation": "info",
+        "receipt_reconciliation_required": true
+      },
+      "id": "ed0ce37b10031b00dad00bea",
+      "level": "discovery",
+      "outcome": "not_tested",
+      "plugin": "docker-hub",
+      "reason": "Agent Plugins CLI binary is unavailable",
+      "scenario": "all_26_info",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": "isolated-layout-fixture/v1",
+        "dependency_identity": "pinned-directory-catalog",
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "cursor",
+      "details": {
+        "operation": "remove",
+        "receipt_reconciliation_required": false
+      },
+      "id": "48a5c6c677ed0eae7a052c9f",
+      "level": "materialization",
+      "outcome": "not_tested",
+      "plugin": "docker-hub",
+      "reason": "Agent Plugins CLI binary is unavailable",
+      "scenario": "all_26_remove",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": "isolated-layout-fixture/v1",
+        "dependency_identity": "pinned-directory-catalog",
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "cursor",
+      "details": {
+        "operation": "add",
+        "receipt_reconciliation_required": false
+      },
+      "id": "0a96a23139bf37da2f3fd4d4",
+      "level": "materialization",
+      "outcome": "not_tested",
+      "plugin": "figma",
+      "reason": "Agent Plugins CLI binary is unavailable",
+      "scenario": "all_26_add",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": "isolated-layout-fixture/v1",
+        "dependency_identity": "pinned-directory-catalog",
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "cursor",
+      "details": {
+        "operation": "info",
+        "receipt_reconciliation_required": true
+      },
+      "id": "619852aa46dd25801247e0f5",
+      "level": "discovery",
+      "outcome": "not_tested",
+      "plugin": "figma",
+      "reason": "Agent Plugins CLI binary is unavailable",
+      "scenario": "all_26_info",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": "isolated-layout-fixture/v1",
+        "dependency_identity": "pinned-directory-catalog",
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "cursor",
+      "details": {
+        "operation": "remove",
+        "receipt_reconciliation_required": false
+      },
+      "id": "6954599a2f21efc7a923e08f",
+      "level": "materialization",
+      "outcome": "not_tested",
+      "plugin": "figma",
+      "reason": "Agent Plugins CLI binary is unavailable",
+      "scenario": "all_26_remove",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": "isolated-layout-fixture/v1",
+        "dependency_identity": "pinned-directory-catalog",
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "cursor",
+      "details": {
+        "operation": "add",
+        "receipt_reconciliation_required": false
+      },
+      "id": "7927fe85c02aa7583aeca854",
+      "level": "materialization",
+      "outcome": "not_tested",
+      "plugin": "firebase",
+      "reason": "Agent Plugins CLI binary is unavailable",
+      "scenario": "all_26_add",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": "isolated-layout-fixture/v1",
+        "dependency_identity": "pinned-directory-catalog",
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "cursor",
+      "details": {
+        "operation": "info",
+        "receipt_reconciliation_required": true
+      },
+      "id": "2e4a67174e71ead76a891f59",
+      "level": "discovery",
+      "outcome": "not_tested",
+      "plugin": "firebase",
+      "reason": "Agent Plugins CLI binary is unavailable",
+      "scenario": "all_26_info",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": "isolated-layout-fixture/v1",
+        "dependency_identity": "pinned-directory-catalog",
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "cursor",
+      "details": {
+        "operation": "remove",
+        "receipt_reconciliation_required": false
+      },
+      "id": "fdfec64ec80a10e88bc2d85b",
+      "level": "materialization",
+      "outcome": "not_tested",
+      "plugin": "firebase",
+      "reason": "Agent Plugins CLI binary is unavailable",
+      "scenario": "all_26_remove",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": "isolated-layout-fixture/v1",
+        "dependency_identity": "pinned-directory-catalog",
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "cursor",
+      "details": {
+        "operation": "add",
+        "receipt_reconciliation_required": false
+      },
+      "id": "594be33255eb1c9044c2d67d",
+      "level": "materialization",
+      "outcome": "not_tested",
+      "plugin": "github",
+      "reason": "Agent Plugins CLI binary is unavailable",
+      "scenario": "all_26_add",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": "isolated-layout-fixture/v1",
+        "dependency_identity": "pinned-directory-catalog",
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "cursor",
+      "details": {
+        "operation": "info",
+        "receipt_reconciliation_required": true
+      },
+      "id": "51f79aa8cf50c00bc13bb3d7",
+      "level": "discovery",
+      "outcome": "not_tested",
+      "plugin": "github",
+      "reason": "Agent Plugins CLI binary is unavailable",
+      "scenario": "all_26_info",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": "isolated-layout-fixture/v1",
+        "dependency_identity": "pinned-directory-catalog",
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "cursor",
+      "details": {
+        "operation": "remove",
+        "receipt_reconciliation_required": false
+      },
+      "id": "ebf4af1c0ab71fd4d3bd772f",
+      "level": "materialization",
+      "outcome": "not_tested",
+      "plugin": "github",
+      "reason": "Agent Plugins CLI binary is unavailable",
+      "scenario": "all_26_remove",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": "isolated-layout-fixture/v1",
+        "dependency_identity": "pinned-directory-catalog",
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "cursor",
+      "details": {
+        "operation": "add",
+        "receipt_reconciliation_required": false
+      },
+      "id": "d8784ab3828f5dc4b197bc25",
+      "level": "materialization",
+      "outcome": "not_tested",
+      "plugin": "gitlab",
+      "reason": "Agent Plugins CLI binary is unavailable",
+      "scenario": "all_26_add",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": "isolated-layout-fixture/v1",
+        "dependency_identity": "pinned-directory-catalog",
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "cursor",
+      "details": {
+        "operation": "info",
+        "receipt_reconciliation_required": true
+      },
+      "id": "6fb74a363f60b4f2f1c27090",
+      "level": "discovery",
+      "outcome": "not_tested",
+      "plugin": "gitlab",
+      "reason": "Agent Plugins CLI binary is unavailable",
+      "scenario": "all_26_info",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": "isolated-layout-fixture/v1",
+        "dependency_identity": "pinned-directory-catalog",
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "cursor",
+      "details": {
+        "operation": "remove",
+        "receipt_reconciliation_required": false
+      },
+      "id": "96203804d6faabd380b98758",
+      "level": "materialization",
+      "outcome": "not_tested",
+      "plugin": "gitlab",
+      "reason": "Agent Plugins CLI binary is unavailable",
+      "scenario": "all_26_remove",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": "isolated-layout-fixture/v1",
+        "dependency_identity": "pinned-directory-catalog",
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "cursor",
+      "details": {
+        "operation": "add",
+        "receipt_reconciliation_required": false
+      },
+      "id": "938758d9921dbad97c53b5ba",
+      "level": "materialization",
+      "outcome": "not_tested",
+      "plugin": "greptile",
+      "reason": "Agent Plugins CLI binary is unavailable",
+      "scenario": "all_26_add",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": "isolated-layout-fixture/v1",
+        "dependency_identity": "pinned-directory-catalog",
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "cursor",
+      "details": {
+        "operation": "info",
+        "receipt_reconciliation_required": true
+      },
+      "id": "51624d0535fdd8617d49977b",
+      "level": "discovery",
+      "outcome": "not_tested",
+      "plugin": "greptile",
+      "reason": "Agent Plugins CLI binary is unavailable",
+      "scenario": "all_26_info",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": "isolated-layout-fixture/v1",
+        "dependency_identity": "pinned-directory-catalog",
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "cursor",
+      "details": {
+        "operation": "remove",
+        "receipt_reconciliation_required": false
+      },
+      "id": "25fa86aadaa11db0daf3990c",
+      "level": "materialization",
+      "outcome": "not_tested",
+      "plugin": "greptile",
+      "reason": "Agent Plugins CLI binary is unavailable",
+      "scenario": "all_26_remove",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": "isolated-layout-fixture/v1",
+        "dependency_identity": "pinned-directory-catalog",
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "cursor",
+      "details": {
+        "operation": "add",
+        "receipt_reconciliation_required": false
+      },
+      "id": "5f9d893e2d58deb00d8784db",
+      "level": "materialization",
+      "outcome": "not_tested",
+      "plugin": "heroku",
+      "reason": "Agent Plugins CLI binary is unavailable",
+      "scenario": "all_26_add",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": "isolated-layout-fixture/v1",
+        "dependency_identity": "pinned-directory-catalog",
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "cursor",
+      "details": {
+        "operation": "info",
+        "receipt_reconciliation_required": true
+      },
+      "id": "75967350711896e7e43ee397",
+      "level": "discovery",
+      "outcome": "not_tested",
+      "plugin": "heroku",
+      "reason": "Agent Plugins CLI binary is unavailable",
+      "scenario": "all_26_info",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": "isolated-layout-fixture/v1",
+        "dependency_identity": "pinned-directory-catalog",
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "cursor",
+      "details": {
+        "operation": "remove",
+        "receipt_reconciliation_required": false
+      },
+      "id": "18f736196182bcf6bdd13f89",
+      "level": "materialization",
+      "outcome": "not_tested",
+      "plugin": "heroku",
+      "reason": "Agent Plugins CLI binary is unavailable",
+      "scenario": "all_26_remove",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": "isolated-layout-fixture/v1",
+        "dependency_identity": "pinned-directory-catalog",
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "cursor",
+      "details": {
+        "operation": "add",
+        "receipt_reconciliation_required": false
+      },
+      "id": "a9ac3da338a4867ea029fda3",
+      "level": "materialization",
+      "outcome": "not_tested",
+      "plugin": "hubspot-crm",
+      "reason": "Agent Plugins CLI binary is unavailable",
+      "scenario": "all_26_add",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": "isolated-layout-fixture/v1",
+        "dependency_identity": "pinned-directory-catalog",
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "cursor",
+      "details": {
+        "operation": "info",
+        "receipt_reconciliation_required": true
+      },
+      "id": "939c6a97d2cc486901da53f6",
+      "level": "discovery",
+      "outcome": "not_tested",
+      "plugin": "hubspot-crm",
+      "reason": "Agent Plugins CLI binary is unavailable",
+      "scenario": "all_26_info",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": "isolated-layout-fixture/v1",
+        "dependency_identity": "pinned-directory-catalog",
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "cursor",
+      "details": {
+        "operation": "remove",
+        "receipt_reconciliation_required": false
+      },
+      "id": "d6e6b0a3c79e0fee1db7d415",
+      "level": "materialization",
+      "outcome": "not_tested",
+      "plugin": "hubspot-crm",
+      "reason": "Agent Plugins CLI binary is unavailable",
+      "scenario": "all_26_remove",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": "isolated-layout-fixture/v1",
+        "dependency_identity": "pinned-directory-catalog",
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "cursor",
+      "details": {
+        "operation": "add",
+        "receipt_reconciliation_required": false
+      },
+      "id": "2cacea2ee1f9d717b4580504",
+      "level": "materialization",
+      "outcome": "not_tested",
+      "plugin": "hubspot-developer",
+      "reason": "Agent Plugins CLI binary is unavailable",
+      "scenario": "all_26_add",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": "isolated-layout-fixture/v1",
+        "dependency_identity": "pinned-directory-catalog",
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "cursor",
+      "details": {
+        "operation": "info",
+        "receipt_reconciliation_required": true
+      },
+      "id": "e43cd5ce69dd986ee8e8ec0f",
+      "level": "discovery",
+      "outcome": "not_tested",
+      "plugin": "hubspot-developer",
+      "reason": "Agent Plugins CLI binary is unavailable",
+      "scenario": "all_26_info",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": "isolated-layout-fixture/v1",
+        "dependency_identity": "pinned-directory-catalog",
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "cursor",
+      "details": {
+        "operation": "remove",
+        "receipt_reconciliation_required": false
+      },
+      "id": "bbd1d3510e948dbd0cd4b001",
+      "level": "materialization",
+      "outcome": "not_tested",
+      "plugin": "hubspot-developer",
+      "reason": "Agent Plugins CLI binary is unavailable",
+      "scenario": "all_26_remove",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": "isolated-layout-fixture/v1",
+        "dependency_identity": "pinned-directory-catalog",
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "cursor",
+      "details": {
+        "operation": "add",
+        "receipt_reconciliation_required": false
+      },
+      "id": "e4cc53fef5750752d78bf307",
+      "level": "materialization",
+      "outcome": "not_tested",
+      "plugin": "linear",
+      "reason": "Agent Plugins CLI binary is unavailable",
+      "scenario": "all_26_add",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": "isolated-layout-fixture/v1",
+        "dependency_identity": "pinned-directory-catalog",
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "cursor",
+      "details": {
+        "operation": "info",
+        "receipt_reconciliation_required": true
+      },
+      "id": "ec2a6fcaa6ef23c96b7a3f0d",
+      "level": "discovery",
+      "outcome": "not_tested",
+      "plugin": "linear",
+      "reason": "Agent Plugins CLI binary is unavailable",
+      "scenario": "all_26_info",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": "isolated-layout-fixture/v1",
+        "dependency_identity": "pinned-directory-catalog",
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "cursor",
+      "details": {
+        "operation": "remove",
+        "receipt_reconciliation_required": false
+      },
+      "id": "dd0960de904f27152d8f1026",
+      "level": "materialization",
+      "outcome": "not_tested",
+      "plugin": "linear",
+      "reason": "Agent Plugins CLI binary is unavailable",
+      "scenario": "all_26_remove",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": "isolated-layout-fixture/v1",
+        "dependency_identity": "pinned-directory-catalog",
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "cursor",
+      "details": {
+        "operation": "add",
+        "receipt_reconciliation_required": false
+      },
+      "id": "d8934f28f5e2aeca79593480",
+      "level": "materialization",
+      "outcome": "not_tested",
+      "plugin": "neon",
+      "reason": "Agent Plugins CLI binary is unavailable",
+      "scenario": "all_26_add",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": "isolated-layout-fixture/v1",
+        "dependency_identity": "pinned-directory-catalog",
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "cursor",
+      "details": {
+        "operation": "info",
+        "receipt_reconciliation_required": true
+      },
+      "id": "1bae3ed9a821ccd16dcaaaec",
+      "level": "discovery",
+      "outcome": "not_tested",
+      "plugin": "neon",
+      "reason": "Agent Plugins CLI binary is unavailable",
+      "scenario": "all_26_info",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": "isolated-layout-fixture/v1",
+        "dependency_identity": "pinned-directory-catalog",
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "cursor",
+      "details": {
+        "operation": "remove",
+        "receipt_reconciliation_required": false
+      },
+      "id": "cd946f5fe78af71ca6d6fcc0",
+      "level": "materialization",
+      "outcome": "not_tested",
+      "plugin": "neon",
+      "reason": "Agent Plugins CLI binary is unavailable",
+      "scenario": "all_26_remove",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": "isolated-layout-fixture/v1",
+        "dependency_identity": "pinned-directory-catalog",
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "cursor",
+      "details": {
+        "operation": "add",
+        "receipt_reconciliation_required": false
+      },
+      "id": "06173e2f0930cd116679494b",
+      "level": "materialization",
+      "outcome": "not_tested",
+      "plugin": "notion",
+      "reason": "Agent Plugins CLI binary is unavailable",
+      "scenario": "all_26_add",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": "isolated-layout-fixture/v1",
+        "dependency_identity": "pinned-directory-catalog",
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "cursor",
+      "details": {
+        "operation": "info",
+        "receipt_reconciliation_required": true
+      },
+      "id": "eae5744bde085c48cf589767",
+      "level": "discovery",
+      "outcome": "not_tested",
+      "plugin": "notion",
+      "reason": "Agent Plugins CLI binary is unavailable",
+      "scenario": "all_26_info",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": "isolated-layout-fixture/v1",
+        "dependency_identity": "pinned-directory-catalog",
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "cursor",
+      "details": {
+        "operation": "remove",
+        "receipt_reconciliation_required": false
+      },
+      "id": "ae2ac0846461ed14b3955d46",
+      "level": "materialization",
+      "outcome": "not_tested",
+      "plugin": "notion",
+      "reason": "Agent Plugins CLI binary is unavailable",
+      "scenario": "all_26_remove",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": "isolated-layout-fixture/v1",
+        "dependency_identity": "pinned-directory-catalog",
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "cursor",
+      "details": {
+        "operation": "add",
+        "receipt_reconciliation_required": false
+      },
+      "id": "0d87d93b87c83cfeaf27a836",
+      "level": "materialization",
+      "outcome": "not_tested",
+      "plugin": "sentry",
+      "reason": "Agent Plugins CLI binary is unavailable",
+      "scenario": "all_26_add",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": "isolated-layout-fixture/v1",
+        "dependency_identity": "pinned-directory-catalog",
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "cursor",
+      "details": {
+        "operation": "info",
+        "receipt_reconciliation_required": true
+      },
+      "id": "1a6aae5ebfbae03c8cad313a",
+      "level": "discovery",
+      "outcome": "not_tested",
+      "plugin": "sentry",
+      "reason": "Agent Plugins CLI binary is unavailable",
+      "scenario": "all_26_info",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": "isolated-layout-fixture/v1",
+        "dependency_identity": "pinned-directory-catalog",
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "cursor",
+      "details": {
+        "operation": "remove",
+        "receipt_reconciliation_required": false
+      },
+      "id": "6aa9c5faf6b10361b9dcfdd8",
+      "level": "materialization",
+      "outcome": "not_tested",
+      "plugin": "sentry",
+      "reason": "Agent Plugins CLI binary is unavailable",
+      "scenario": "all_26_remove",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": "isolated-layout-fixture/v1",
+        "dependency_identity": "pinned-directory-catalog",
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "cursor",
+      "details": {
+        "operation": "add",
+        "receipt_reconciliation_required": false
+      },
+      "id": "61b76c69a34517ee2c86c5a5",
+      "level": "materialization",
+      "outcome": "not_tested",
+      "plugin": "statsig",
+      "reason": "Agent Plugins CLI binary is unavailable",
+      "scenario": "all_26_add",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": "isolated-layout-fixture/v1",
+        "dependency_identity": "pinned-directory-catalog",
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "cursor",
+      "details": {
+        "operation": "info",
+        "receipt_reconciliation_required": true
+      },
+      "id": "c5f2ac96bf2cfbdc27b7fd99",
+      "level": "discovery",
+      "outcome": "not_tested",
+      "plugin": "statsig",
+      "reason": "Agent Plugins CLI binary is unavailable",
+      "scenario": "all_26_info",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": "isolated-layout-fixture/v1",
+        "dependency_identity": "pinned-directory-catalog",
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "cursor",
+      "details": {
+        "operation": "remove",
+        "receipt_reconciliation_required": false
+      },
+      "id": "043f3f3a2f4a117f1599bf78",
+      "level": "materialization",
+      "outcome": "not_tested",
+      "plugin": "statsig",
+      "reason": "Agent Plugins CLI binary is unavailable",
+      "scenario": "all_26_remove",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": "isolated-layout-fixture/v1",
+        "dependency_identity": "pinned-directory-catalog",
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "cursor",
+      "details": {
+        "operation": "add",
+        "receipt_reconciliation_required": false
+      },
+      "id": "010252fdd88b904cd1bbdd42",
+      "level": "materialization",
+      "outcome": "not_tested",
+      "plugin": "stripe",
+      "reason": "Agent Plugins CLI binary is unavailable",
+      "scenario": "all_26_add",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": "isolated-layout-fixture/v1",
+        "dependency_identity": "pinned-directory-catalog",
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "cursor",
+      "details": {
+        "operation": "info",
+        "receipt_reconciliation_required": true
+      },
+      "id": "251ea620fd2b6f0f6c352d29",
+      "level": "discovery",
+      "outcome": "not_tested",
+      "plugin": "stripe",
+      "reason": "Agent Plugins CLI binary is unavailable",
+      "scenario": "all_26_info",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": "isolated-layout-fixture/v1",
+        "dependency_identity": "pinned-directory-catalog",
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "cursor",
+      "details": {
+        "operation": "remove",
+        "receipt_reconciliation_required": false
+      },
+      "id": "baf00dcb50c05ee9d0e28e8f",
+      "level": "materialization",
+      "outcome": "not_tested",
+      "plugin": "stripe",
+      "reason": "Agent Plugins CLI binary is unavailable",
+      "scenario": "all_26_remove",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": "isolated-layout-fixture/v1",
+        "dependency_identity": "pinned-directory-catalog",
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "cursor",
+      "details": {
+        "operation": "add",
+        "receipt_reconciliation_required": false
+      },
+      "id": "0de7e555e9af07e0b3b8be6c",
+      "level": "materialization",
+      "outcome": "not_tested",
+      "plugin": "supabase",
+      "reason": "Agent Plugins CLI binary is unavailable",
+      "scenario": "all_26_add",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": "isolated-layout-fixture/v1",
+        "dependency_identity": "pinned-directory-catalog",
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "cursor",
+      "details": {
+        "operation": "info",
+        "receipt_reconciliation_required": true
+      },
+      "id": "6bc575cf4551bc8a70f44f38",
+      "level": "discovery",
+      "outcome": "not_tested",
+      "plugin": "supabase",
+      "reason": "Agent Plugins CLI binary is unavailable",
+      "scenario": "all_26_info",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": "isolated-layout-fixture/v1",
+        "dependency_identity": "pinned-directory-catalog",
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "cursor",
+      "details": {
+        "operation": "remove",
+        "receipt_reconciliation_required": false
+      },
+      "id": "36b682a5eca42234269ceb59",
+      "level": "materialization",
+      "outcome": "not_tested",
+      "plugin": "supabase",
+      "reason": "Agent Plugins CLI binary is unavailable",
+      "scenario": "all_26_remove",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": "isolated-layout-fixture/v1",
+        "dependency_identity": "pinned-directory-catalog",
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "cursor",
+      "details": {
+        "operation": "add",
+        "receipt_reconciliation_required": false
+      },
+      "id": "37a207896d10417964a929ad",
+      "level": "materialization",
+      "outcome": "not_tested",
+      "plugin": "vercel",
+      "reason": "Agent Plugins CLI binary is unavailable",
+      "scenario": "all_26_add",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": "isolated-layout-fixture/v1",
+        "dependency_identity": "pinned-directory-catalog",
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "cursor",
+      "details": {
+        "operation": "info",
+        "receipt_reconciliation_required": true
+      },
+      "id": "ad5759857cfb55abdcb486f6",
+      "level": "discovery",
+      "outcome": "not_tested",
+      "plugin": "vercel",
+      "reason": "Agent Plugins CLI binary is unavailable",
+      "scenario": "all_26_info",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": "isolated-layout-fixture/v1",
+        "dependency_identity": "pinned-directory-catalog",
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "cursor",
+      "details": {
+        "operation": "remove",
+        "receipt_reconciliation_required": false
+      },
+      "id": "5ec4682ea12e2562de6b8af8",
+      "level": "materialization",
+      "outcome": "not_tested",
+      "plugin": "vercel",
+      "reason": "Agent Plugins CLI binary is unavailable",
+      "scenario": "all_26_remove",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": "isolated-layout-fixture/v1",
+        "dependency_identity": "pinned-directory-catalog",
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "codex,cursor,kiro",
+      "details": {
+        "operation": "add",
+        "single_process_invocation": true,
+        "target_argument": "codex,cursor,kiro"
+      },
+      "id": "57598099e3c86a7b9ffa02aa",
+      "level": "materialization",
+      "outcome": "not_tested",
+      "plugin": "context7",
+      "reason": "Agent Plugins CLI binary is unavailable",
+      "scenario": "context7_three_target_add",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": "isolated-layout-fixture/v1",
+        "dependency_identity": "pinned-directory-catalog",
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "codex,cursor,kiro",
+      "details": {
+        "operation": "update",
+        "single_process_invocation": true,
+        "target_argument": "codex,cursor,kiro"
+      },
+      "id": "7696bd7b3d17b14adeb64d12",
+      "level": "materialization",
+      "outcome": "not_tested",
+      "plugin": "context7",
+      "reason": "Agent Plugins CLI binary is unavailable",
+      "scenario": "context7_three_target_update",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": "isolated-layout-fixture/v1",
+        "dependency_identity": "pinned-directory-catalog",
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "codex,cursor,kiro",
+      "details": {
+        "operation": "repair",
+        "single_process_invocation": true,
+        "target_argument": "codex,cursor,kiro"
+      },
+      "id": "c9784b7172914b9f9b7c648f",
+      "level": "materialization",
+      "outcome": "not_tested",
+      "plugin": "context7",
+      "reason": "Agent Plugins CLI binary is unavailable",
+      "scenario": "context7_three_target_repair",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": "isolated-layout-fixture/v1",
+        "dependency_identity": "pinned-directory-catalog",
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "codex,cursor,kiro",
+      "details": {
+        "operation": "remove",
+        "single_process_invocation": true,
+        "target_argument": "codex,cursor,kiro"
+      },
+      "id": "77f0736dbac418509d54efb1",
+      "level": "materialization",
+      "outcome": "not_tested",
+      "plugin": "context7",
+      "reason": "Agent Plugins CLI binary is unavailable",
+      "scenario": "context7_three_target_remove",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": "isolated-layout-fixture/v1",
+        "dependency_identity": "pinned-directory-catalog",
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "codex",
+      "details": {
+        "operation_outcomes": {
+          "add": "not_tested",
+          "info": "not_tested",
+          "remove": "not_tested",
+          "update": "not_tested"
+        },
+        "operations": [
+          "add",
+          "info",
+          "update",
+          "remove"
+        ]
+      },
+      "id": "12486b95fdf267ec9be6aafa",
+      "level": "discovery",
+      "outcome": "not_tested",
+      "plugin": "agent-code-navigator",
+      "reason": "add: Agent Plugins CLI binary is unavailable",
+      "scenario": "hero_5x3_lifecycle",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": "isolated-layout-fixture/v1",
+        "dependency_identity": "pinned-directory-catalog",
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "cursor",
+      "details": {
+        "operation_outcomes": {
+          "add": "not_tested",
+          "info": "not_tested",
+          "remove": "not_tested",
+          "update": "not_tested"
+        },
+        "operations": [
+          "add",
+          "info",
+          "update",
+          "remove"
+        ]
+      },
+      "id": "f7e2e87c21f07bad249516b6",
+      "level": "discovery",
+      "outcome": "not_tested",
+      "plugin": "agent-code-navigator",
+      "reason": "add: Agent Plugins CLI binary is unavailable",
+      "scenario": "hero_5x3_lifecycle",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": "isolated-layout-fixture/v1",
+        "dependency_identity": "pinned-directory-catalog",
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "kiro",
+      "details": {
+        "operation_outcomes": {
+          "add": "not_tested",
+          "info": "not_tested",
+          "remove": "not_tested",
+          "update": "not_tested"
+        },
+        "operations": [
+          "add",
+          "info",
+          "update",
+          "remove"
+        ]
+      },
+      "id": "7360ff4c82d5e87d7dbbfa81",
+      "level": "discovery",
+      "outcome": "not_tested",
+      "plugin": "agent-code-navigator",
+      "reason": "add: Agent Plugins CLI binary is unavailable",
+      "scenario": "hero_5x3_lifecycle",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": "isolated-layout-fixture/v1",
+        "dependency_identity": "pinned-directory-catalog",
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "codex",
+      "details": {
+        "operation_outcomes": {
+          "add": "not_tested",
+          "info": "not_tested",
+          "remove": "not_tested",
+          "update": "not_tested"
+        },
+        "operations": [
+          "add",
+          "info",
+          "update",
+          "remove"
+        ]
+      },
+      "id": "f8059682ce9cdd1aafbb5bad",
+      "level": "discovery",
+      "outcome": "not_tested",
+      "plugin": "context7",
+      "reason": "add: Agent Plugins CLI binary is unavailable",
+      "scenario": "hero_5x3_lifecycle",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": "isolated-layout-fixture/v1",
+        "dependency_identity": "pinned-directory-catalog",
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "cursor",
+      "details": {
+        "operation_outcomes": {
+          "add": "not_tested",
+          "info": "not_tested",
+          "remove": "not_tested",
+          "update": "not_tested"
+        },
+        "operations": [
+          "add",
+          "info",
+          "update",
+          "remove"
+        ]
+      },
+      "id": "bb6055ff1ccb212878d7a43b",
+      "level": "discovery",
+      "outcome": "not_tested",
+      "plugin": "context7",
+      "reason": "add: Agent Plugins CLI binary is unavailable",
+      "scenario": "hero_5x3_lifecycle",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": "isolated-layout-fixture/v1",
+        "dependency_identity": "pinned-directory-catalog",
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "kiro",
+      "details": {
+        "operation_outcomes": {
+          "add": "not_tested",
+          "info": "not_tested",
+          "remove": "not_tested",
+          "update": "not_tested"
+        },
+        "operations": [
+          "add",
+          "info",
+          "update",
+          "remove"
+        ]
+      },
+      "id": "0294c0d82282e56d5eb416b9",
+      "level": "discovery",
+      "outcome": "not_tested",
+      "plugin": "context7",
+      "reason": "add: Agent Plugins CLI binary is unavailable",
+      "scenario": "hero_5x3_lifecycle",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": "isolated-layout-fixture/v1",
+        "dependency_identity": "pinned-directory-catalog",
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "codex",
+      "details": {
+        "operation_outcomes": {
+          "add": "not_tested",
+          "info": "not_tested",
+          "remove": "not_tested",
+          "update": "not_tested"
+        },
+        "operations": [
+          "add",
+          "info",
+          "update",
+          "remove"
+        ]
+      },
+      "id": "0ca942988ee306a415a7bb9c",
+      "level": "discovery",
+      "outcome": "not_tested",
+      "plugin": "cloudflare-docs",
+      "reason": "add: Agent Plugins CLI binary is unavailable",
+      "scenario": "hero_5x3_lifecycle",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": "isolated-layout-fixture/v1",
+        "dependency_identity": "pinned-directory-catalog",
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "cursor",
+      "details": {
+        "operation_outcomes": {
+          "add": "not_tested",
+          "info": "not_tested",
+          "remove": "not_tested",
+          "update": "not_tested"
+        },
+        "operations": [
+          "add",
+          "info",
+          "update",
+          "remove"
+        ]
+      },
+      "id": "1ef847d3c7815335a25a995b",
+      "level": "discovery",
+      "outcome": "not_tested",
+      "plugin": "cloudflare-docs",
+      "reason": "add: Agent Plugins CLI binary is unavailable",
+      "scenario": "hero_5x3_lifecycle",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": "isolated-layout-fixture/v1",
+        "dependency_identity": "pinned-directory-catalog",
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "kiro",
+      "details": {
+        "operation_outcomes": {
+          "add": "not_tested",
+          "info": "not_tested",
+          "remove": "not_tested",
+          "update": "not_tested"
+        },
+        "operations": [
+          "add",
+          "info",
+          "update",
+          "remove"
+        ]
+      },
+      "id": "da7a8a7bc10bbcd806b9ac11",
+      "level": "discovery",
+      "outcome": "not_tested",
+      "plugin": "cloudflare-docs",
+      "reason": "add: Agent Plugins CLI binary is unavailable",
+      "scenario": "hero_5x3_lifecycle",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": "isolated-layout-fixture/v1",
+        "dependency_identity": "pinned-directory-catalog",
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "codex",
+      "details": {
+        "operation_outcomes": {
+          "add": "not_tested",
+          "info": "not_tested",
+          "remove": "not_tested",
+          "update": "not_tested"
+        },
+        "operations": [
+          "add",
+          "info",
+          "update",
+          "remove"
+        ]
+      },
+      "id": "3f6cf16ef2bc359572a56b09",
+      "level": "discovery",
+      "outcome": "not_tested",
+      "plugin": "chrome-devtools",
+      "reason": "add: Agent Plugins CLI binary is unavailable",
+      "scenario": "hero_5x3_lifecycle",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": "isolated-layout-fixture/v1",
+        "dependency_identity": "pinned-directory-catalog",
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "cursor",
+      "details": {
+        "operation_outcomes": {
+          "add": "not_tested",
+          "info": "not_tested",
+          "remove": "not_tested",
+          "update": "not_tested"
+        },
+        "operations": [
+          "add",
+          "info",
+          "update",
+          "remove"
+        ]
+      },
+      "id": "17397a08a9b1aa458d3541b3",
+      "level": "discovery",
+      "outcome": "not_tested",
+      "plugin": "chrome-devtools",
+      "reason": "add: Agent Plugins CLI binary is unavailable",
+      "scenario": "hero_5x3_lifecycle",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": "isolated-layout-fixture/v1",
+        "dependency_identity": "pinned-directory-catalog",
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "kiro",
+      "details": {
+        "operation_outcomes": {
+          "add": "not_tested",
+          "info": "not_tested",
+          "remove": "not_tested",
+          "update": "not_tested"
+        },
+        "operations": [
+          "add",
+          "info",
+          "update",
+          "remove"
+        ]
+      },
+      "id": "ca65475e6fafccc11e5ac3af",
+      "level": "discovery",
+      "outcome": "not_tested",
+      "plugin": "chrome-devtools",
+      "reason": "add: Agent Plugins CLI binary is unavailable",
+      "scenario": "hero_5x3_lifecycle",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": "isolated-layout-fixture/v1",
+        "dependency_identity": "pinned-directory-catalog",
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "codex",
+      "details": {
+        "operation_outcomes": {
+          "add": "not_tested",
+          "info": "not_tested",
+          "remove": "not_tested",
+          "update": "not_tested"
+        },
+        "operations": [
+          "add",
+          "info",
+          "update",
+          "remove"
+        ]
+      },
+      "id": "f2b1a76db353ea1d983b9327",
+      "level": "discovery",
+      "outcome": "not_tested",
+      "plugin": "notion",
+      "reason": "add: Agent Plugins CLI binary is unavailable",
+      "scenario": "hero_5x3_lifecycle",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": "isolated-layout-fixture/v1",
+        "dependency_identity": "pinned-directory-catalog",
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "cursor",
+      "details": {
+        "operation_outcomes": {
+          "add": "not_tested",
+          "info": "not_tested",
+          "remove": "not_tested",
+          "update": "not_tested"
+        },
+        "operations": [
+          "add",
+          "info",
+          "update",
+          "remove"
+        ]
+      },
+      "id": "9607b6f08dfa8440df280ecd",
+      "level": "discovery",
+      "outcome": "not_tested",
+      "plugin": "notion",
+      "reason": "add: Agent Plugins CLI binary is unavailable",
+      "scenario": "hero_5x3_lifecycle",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": "isolated-layout-fixture/v1",
+        "dependency_identity": "pinned-directory-catalog",
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "kiro",
+      "details": {
+        "operation_outcomes": {
+          "add": "not_tested",
+          "info": "not_tested",
+          "remove": "not_tested",
+          "update": "not_tested"
+        },
+        "operations": [
+          "add",
+          "info",
+          "update",
+          "remove"
+        ]
+      },
+      "id": "6a3a8b92653cd4c668eef9c9",
+      "level": "discovery",
+      "outcome": "not_tested",
+      "plugin": "notion",
+      "reason": "add: Agent Plugins CLI binary is unavailable",
+      "scenario": "hero_5x3_lifecycle",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": "isolated-layout-fixture/v1",
+        "dependency_identity": "pinned-directory-catalog",
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "codex",
+      "id": "4690f0a81a9a841e947f492d",
+      "level": "runtime",
+      "outcome": "not_tested",
+      "plugin": "agent-code-navigator",
+      "reason": "client runtime attestation was not supplied",
+      "scenario": "hero_5x3_runtime",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": null,
+        "dependency_identity": null,
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "cursor",
+      "id": "a402552413833b79acc5428c",
+      "level": "runtime",
+      "outcome": "not_tested",
+      "plugin": "agent-code-navigator",
+      "reason": "client runtime attestation was not supplied",
+      "scenario": "hero_5x3_runtime",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": null,
+        "dependency_identity": null,
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "kiro",
+      "id": "f7571f5d5be33f36e5cf14ba",
+      "level": "runtime",
+      "outcome": "not_tested",
+      "plugin": "agent-code-navigator",
+      "reason": "client runtime attestation was not supplied",
+      "scenario": "hero_5x3_runtime",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": null,
+        "dependency_identity": null,
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "codex",
+      "id": "0689fa99ad388787e6a17a1f",
+      "level": "runtime",
+      "outcome": "not_tested",
+      "plugin": "context7",
+      "reason": "client runtime attestation was not supplied",
+      "scenario": "hero_5x3_runtime",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": null,
+        "dependency_identity": null,
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "cursor",
+      "id": "822b9c505164f8b1ddca5764",
+      "level": "runtime",
+      "outcome": "not_tested",
+      "plugin": "context7",
+      "reason": "client runtime attestation was not supplied",
+      "scenario": "hero_5x3_runtime",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": null,
+        "dependency_identity": null,
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "kiro",
+      "id": "86e6f2d4d99e5e0ce0aa7001",
+      "level": "runtime",
+      "outcome": "not_tested",
+      "plugin": "context7",
+      "reason": "client runtime attestation was not supplied",
+      "scenario": "hero_5x3_runtime",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": null,
+        "dependency_identity": null,
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "codex",
+      "id": "a4b95a8f0ca3ff7ba1be6108",
+      "level": "runtime",
+      "outcome": "not_tested",
+      "plugin": "cloudflare-docs",
+      "reason": "client runtime attestation was not supplied",
+      "scenario": "hero_5x3_runtime",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": null,
+        "dependency_identity": null,
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "cursor",
+      "id": "63cd2cfa4ebdc569af0976a1",
+      "level": "runtime",
+      "outcome": "not_tested",
+      "plugin": "cloudflare-docs",
+      "reason": "client runtime attestation was not supplied",
+      "scenario": "hero_5x3_runtime",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": null,
+        "dependency_identity": null,
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "kiro",
+      "id": "432bb791fd4e4038b326010d",
+      "level": "runtime",
+      "outcome": "not_tested",
+      "plugin": "cloudflare-docs",
+      "reason": "client runtime attestation was not supplied",
+      "scenario": "hero_5x3_runtime",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": null,
+        "dependency_identity": null,
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "codex",
+      "id": "274db9e15247811c8663fb44",
+      "level": "runtime",
+      "outcome": "not_tested",
+      "plugin": "chrome-devtools",
+      "reason": "client runtime attestation was not supplied",
+      "scenario": "hero_5x3_runtime",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": null,
+        "dependency_identity": null,
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "cursor",
+      "id": "b6f0d5e6064134b15674a42a",
+      "level": "runtime",
+      "outcome": "not_tested",
+      "plugin": "chrome-devtools",
+      "reason": "client runtime attestation was not supplied",
+      "scenario": "hero_5x3_runtime",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": null,
+        "dependency_identity": null,
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "kiro",
+      "id": "642f08392438550e9653eefc",
+      "level": "runtime",
+      "outcome": "not_tested",
+      "plugin": "chrome-devtools",
+      "reason": "client runtime attestation was not supplied",
+      "scenario": "hero_5x3_runtime",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": null,
+        "dependency_identity": null,
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "codex",
+      "id": "08c9601cfd07c19ff51e569b",
+      "level": "runtime",
+      "outcome": "not_tested",
+      "plugin": "notion",
+      "reason": "runtime client/isolated identity attestation was not supplied",
+      "scenario": "hero_5x3_runtime",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": null,
+        "dependency_identity": null,
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "cursor",
+      "id": "037b91f8affec4a4bfe8534e",
+      "level": "runtime",
+      "outcome": "not_tested",
+      "plugin": "notion",
+      "reason": "runtime client/isolated identity attestation was not supplied",
+      "scenario": "hero_5x3_runtime",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": null,
+        "dependency_identity": null,
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "kiro",
+      "id": "9121c3d71f4187a42096cd32",
+      "level": "runtime",
+      "outcome": "not_tested",
+      "plugin": "notion",
+      "reason": "runtime client/isolated identity attestation was not supplied",
+      "scenario": "hero_5x3_runtime",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": null,
+        "dependency_identity": null,
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "chatgpt",
+      "id": "94131e24552716978bcb4353",
+      "level": "oauth",
+      "outcome": "not_tested",
+      "plugin": "cloudflare-docs",
+      "reason": "registered app binding and human UI consent attestation were not supplied",
+      "scenario": "chatgpt_registered_binding",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": null,
+        "dependency_identity": null,
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "copilot,vscode",
+      "details": {
+        "expected_physical_mutations_per_operation": 1,
+        "operations": [
+          "add",
+          "remove"
+        ]
+      },
+      "id": "97478849250d45e905b92279",
+      "level": "materialization",
+      "outcome": "not_tested",
+      "plugin": "context7",
+      "reason": "Agent Plugins CLI binary is unavailable",
+      "scenario": "shared_copilot_vscode_backend",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": "isolated-layout-fixture/v1",
+        "dependency_identity": "copilot-shared-backend",
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "cursor",
+      "details": {
+        "fixture_contract_present": true,
+        "scenario_driver_required": true
+      },
+      "id": "35fdad49378d264f4c9e13ad",
+      "level": "materialization",
+      "outcome": "not_tested",
+      "plugin": "context7",
+      "reason": "compatible CLI/scenario fault driver was not supplied",
+      "scenario": "state_schema_2_migration",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": null,
+        "dependency_identity": null,
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "cursor",
+      "details": {
+        "fixture_contract_present": true,
+        "scenario_driver_required": true
+      },
+      "id": "36ce8f817450eb6905ff9bff",
+      "level": "materialization",
+      "outcome": "not_tested",
+      "plugin": "context7",
+      "reason": "compatible CLI/scenario fault driver was not supplied",
+      "scenario": "crash_journal_recovery",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": null,
+        "dependency_identity": null,
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "cursor",
+      "details": {
+        "fixture_contract_present": true,
+        "scenario_driver_required": true
+      },
+      "id": "33f1e0098e598162bc931100",
+      "level": "materialization",
+      "outcome": "not_tested",
+      "plugin": "context7",
+      "reason": "compatible CLI/scenario fault driver was not supplied",
+      "scenario": "directory_offline",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": null,
+        "dependency_identity": null,
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "cursor",
+      "details": {
+        "fixture_contract_present": true,
+        "scenario_driver_required": true
+      },
+      "id": "e27957d22d9a0cee2f870ee6",
+      "level": "materialization",
+      "outcome": "not_tested",
+      "plugin": "context7",
+      "reason": "compatible CLI/scenario fault driver was not supplied",
+      "scenario": "directory_expired",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": null,
+        "dependency_identity": null,
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "cursor",
+      "details": {
+        "fixture_contract_present": true,
+        "scenario_driver_required": true
+      },
+      "id": "f135f4d8dce5aa9bb4b3a715",
+      "level": "materialization",
+      "outcome": "not_tested",
+      "plugin": "context7",
+      "reason": "compatible CLI/scenario fault driver was not supplied",
+      "scenario": "directory_tampered",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": null,
+        "dependency_identity": null,
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "cursor",
+      "details": {
+        "fixture_contract_present": true,
+        "scenario_driver_required": true
+      },
+      "id": "2c598025e637c3566f7044ce",
+      "level": "materialization",
+      "outcome": "not_tested",
+      "plugin": "context7",
+      "reason": "compatible CLI/scenario fault driver was not supplied",
+      "scenario": "directory_sequence_rollback",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": null,
+        "dependency_identity": null,
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "cursor",
+      "details": {
+        "fixture_contract_present": true,
+        "scenario_driver_required": true
+      },
+      "id": "25b3ba31f7a6268b898fbc28",
+      "level": "materialization",
+      "outcome": "not_tested",
+      "plugin": "context7",
+      "reason": "compatible CLI/scenario fault driver was not supplied",
+      "scenario": "managed_package_tamper",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": null,
+        "dependency_identity": null,
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "codex",
+      "details": {
+        "fixture_contract_present": false,
+        "scenario_driver_required": true
+      },
+      "id": "652997f49817ca95c408eb72",
+      "level": "materialization",
+      "outcome": "not_tested",
+      "plugin": "context7",
+      "reason": "compatible CLI/scenario fault driver was not supplied",
+      "scenario": "repair_codex",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": null,
+        "dependency_identity": null,
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "cursor",
+      "details": {
+        "fixture_contract_present": false,
+        "scenario_driver_required": true
+      },
+      "id": "9bb3d20ac29574e3923aec83",
+      "level": "materialization",
+      "outcome": "not_tested",
+      "plugin": "context7",
+      "reason": "compatible CLI/scenario fault driver was not supplied",
+      "scenario": "repair_cursor",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": null,
+        "dependency_identity": null,
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "kiro",
+      "details": {
+        "fixture_contract_present": false,
+        "scenario_driver_required": true
+      },
+      "id": "df5b5a018cfa40f0cc17d638",
+      "level": "materialization",
+      "outcome": "not_tested",
+      "plugin": "context7",
+      "reason": "compatible CLI/scenario fault driver was not supplied",
+      "scenario": "repair_kiro",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": null,
+        "dependency_identity": null,
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "cursor",
+      "details": {
+        "fixture_contract_present": false,
+        "scenario_driver_required": true
+      },
+      "id": "f505228e4f5576ae5e31fe8a",
+      "level": "materialization",
+      "outcome": "not_tested",
+      "plugin": "context7",
+      "reason": "compatible CLI/scenario fault driver was not supplied",
+      "scenario": "upstream_owned_short_name",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": null,
+        "dependency_identity": null,
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "cursor",
+      "details": {
+        "fixture_contract_present": false,
+        "scenario_driver_required": true
+      },
+      "id": "5e4ebe4bc2d55442c9d36acf",
+      "level": "materialization",
+      "outcome": "not_tested",
+      "plugin": "context7",
+      "reason": "compatible CLI/scenario fault driver was not supplied",
+      "scenario": "community_bridge_short_name",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": null,
+        "dependency_identity": null,
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "cursor",
+      "details": {
+        "fixture_contract_present": false,
+        "scenario_driver_required": true
+      },
+      "id": "d991172681b472b3b2e78681",
+      "level": "materialization",
+      "outcome": "not_tested",
+      "plugin": "context7",
+      "reason": "compatible CLI/scenario fault driver was not supplied",
+      "scenario": "plugin_data_update_repair_switch_remove_purge",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": null,
+        "dependency_identity": null,
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "cursor",
+      "details": {
+        "fixture_contract_present": false,
+        "scenario_driver_required": true
+      },
+      "id": "697a454526258536fb75561e",
+      "level": "materialization",
+      "outcome": "not_tested",
+      "plugin": "context7",
+      "reason": "compatible CLI/scenario fault driver was not supplied",
+      "scenario": "stdio_environment_and_containment",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": null,
+        "dependency_identity": null,
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "cursor",
+      "details": {
+        "fixture_contract_present": false,
+        "scenario_driver_required": true
+      },
+      "id": "6a0b04f836963ab48f7ed7be",
+      "level": "materialization",
+      "outcome": "not_tested",
+      "plugin": "context7",
+      "reason": "compatible CLI/scenario fault driver was not supplied",
+      "scenario": "missing_runtime_zero_mutation",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": null,
+        "dependency_identity": null,
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "cursor",
+      "details": {
+        "fixture_contract_present": false,
+        "scenario_driver_required": true
+      },
+      "id": "5ee087e6372e6e74bb43ade0",
+      "level": "materialization",
+      "outcome": "not_tested",
+      "plugin": "context7",
+      "reason": "compatible CLI/scenario fault driver was not supplied",
+      "scenario": "explicit_source_switch",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": null,
+        "dependency_identity": null,
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "cursor",
+      "details": {
+        "fixture_contract_present": false,
+        "scenario_driver_required": true
+      },
+      "id": "36eeec879e035cb3b03f1779",
+      "level": "materialization",
+      "outcome": "not_tested",
+      "plugin": "context7",
+      "reason": "compatible CLI/scenario fault driver was not supplied",
+      "scenario": "managed_rollback",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": null,
+        "dependency_identity": null,
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "cursor",
+      "details": {
+        "fixture_contract_present": false,
+        "scenario_driver_required": true
+      },
+      "id": "22b944ec229ebf7bbb706a62",
+      "level": "materialization",
+      "outcome": "not_tested",
+      "plugin": "context7",
+      "reason": "compatible CLI/scenario fault driver was not supplied",
+      "scenario": "external_activation_failure",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": null,
+        "dependency_identity": null,
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "cursor",
+      "details": {
+        "fixture_contract_present": false,
+        "scenario_driver_required": true
+      },
+      "id": "87e5e0491a70ea1dc8530005",
+      "level": "materialization",
+      "outcome": "not_tested",
+      "plugin": "context7",
+      "reason": "compatible CLI/scenario fault driver was not supplied",
+      "scenario": "promotion_gate_digest_match",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": null,
+        "dependency_identity": null,
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "cursor",
+      "details": {
+        "fixture_contract_present": false,
+        "scenario_driver_required": true
+      },
+      "id": "ad728eaf95e0ccd3049ccf2e",
+      "level": "materialization",
+      "outcome": "not_tested",
+      "plugin": "context7",
+      "reason": "compatible CLI/scenario fault driver was not supplied",
+      "scenario": "promotion_gate_digest_mismatch",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": null,
+        "dependency_identity": null,
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "cursor",
+      "details": {
+        "fixture_contract_present": false,
+        "scenario_driver_required": true
+      },
+      "id": "86775ef9228a31f975b47fa1",
+      "level": "materialization",
+      "outcome": "not_tested",
+      "plugin": "context7",
+      "reason": "compatible CLI/scenario fault driver was not supplied",
+      "scenario": "cross_platform_binary_npm_install",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": null,
+        "dependency_identity": null,
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": null
+      }
+    },
+    {
+      "client": "cursor",
+      "details": {
+        "directory_submission_used": false,
+        "source_locator": "fixture://external-package"
+      },
+      "id": "2dacbd173a23207b36e4032c",
+      "level": "materialization",
+      "outcome": "not_tested",
+      "plugin": "e2e-external-package",
+      "reason": "Agent Plugins CLI binary is unavailable",
+      "scenario": "direct_external_package",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": "isolated-layout-fixture/v1",
+        "dependency_identity": "direct-local-source",
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": "sha256:11c659080a0c55478e6cb93e722989f9c9465820d25e22b1f18ad3a027278f6c"
+      }
+    },
+    {
+      "client": null,
+      "details": {
+        "publication_or_pr_created": false
+      },
+      "id": "7b50ae9498a07b47201ef4b8",
+      "level": "harness",
+      "outcome": "not_tested",
+      "plugin": "e2e-external-package",
+      "reason": "compatible CLI/scenario fault driver was not supplied",
+      "scenario": "fork_submission",
+      "tuple": {
+        "adapter_version": null,
+        "architecture": "x86_64",
+        "client_version": null,
+        "dependency_identity": null,
+        "installer_version": null,
+        "observed_at": "2026-08-20T21:46:02Z",
+        "os": "Linux",
+        "package_digest": "sha256:11c659080a0c55478e6cb93e722989f9c9465820d25e22b1f18ad3a027278f6c"
+      }
+    }
+  ],
+  "privacy": {
+    "contains_absolute_home_paths": false,
+    "contains_credentials": false,
+    "real_user_project_used": false,
+    "redacted_export": true
+  },
+  "run": {
+    "architecture": "x86_64",
+    "cli": {
+      "available": false,
+      "version": null
+    },
+    "disposable": true,
+    "id": "830f6ef6de81fe8b",
+    "observed_at": "2026-08-20T21:46:02Z",
+    "platform": "Linux"
+  },
+  "schema_version": 1,
+  "summary": {
+    "failed": 0,
+    "inconclusive": 0,
+    "not_applicable": 0,
+    "not_tested": 137,
+    "passed": 1,
+    "required_gates_complete": false
+  }
+}

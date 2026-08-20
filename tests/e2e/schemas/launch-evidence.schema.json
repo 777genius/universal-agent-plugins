@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Redacted launch E2E evidence",
+  "type": "object",
+  "required": ["schema_version", "run", "matrix", "summary", "privacy"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "run": {
+      "type": "object",
+      "required": ["id", "observed_at", "platform", "architecture", "disposable", "cli"],
+      "properties": {
+        "id": {"type": "string", "pattern": "^[a-f0-9]{16}$"},
+        "observed_at": {"type": "string", "format": "date-time"},
+        "platform": {"type": "string", "minLength": 1},
+        "architecture": {"type": "string", "minLength": 1},
+        "disposable": {"const": true},
+        "cli": {"type": "object", "required": ["available", "version"], "properties": {"available": {"type": "boolean"}, "version": {"type": ["string", "null"]}}, "additionalProperties": false}
+      },
+      "additionalProperties": false
+    },
+    "matrix": {
+      "type": "array", "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id", "scenario", "plugin", "client", "level", "outcome", "tuple", "reason"],
+        "properties": {
+          "id": {"type": "string", "pattern": "^[a-f0-9]{24}$"},
+          "scenario": {"type": "string", "minLength": 1},
+          "plugin": {"type": ["string", "null"]},
+          "client": {"type": ["string", "null"]},
+          "level": {"enum": ["schema", "materialization", "discovery", "runtime", "oauth", "harness"]},
+          "outcome": {"enum": ["passed", "failed", "inconclusive", "not_tested", "not_applicable"]},
+          "tuple": {
+            "type": "object",
+            "required": ["package_digest", "dependency_identity", "installer_version", "adapter_version", "client_version", "os", "architecture", "observed_at"],
+            "properties": {
+              "package_digest": {"type": ["string", "null"], "pattern": "^sha256:[a-f0-9]{64}$"},
+              "dependency_identity": {"type": ["string", "null"]},
+              "installer_version": {"type": ["string", "null"]},
+              "adapter_version": {"type": ["string", "null"]},
+              "client_version": {"type": ["string", "null"]},
+              "os": {"type": "string", "minLength": 1},
+              "architecture": {"type": "string", "minLength": 1},
+              "observed_at": {"type": "string", "format": "date-time"}
+            }, "additionalProperties": false
+          },
+          "reason": {"type": "string", "minLength": 1},
+          "details": {"type": "object"}
+        },
+        "allOf": [{
+          "if": {"properties": {"outcome": {"const": "passed"}, "level": {"not": {"const": "harness"}}}, "required": ["outcome", "level"]},
+          "then": {"properties": {"tuple": {"properties": {
+            "package_digest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+            "installer_version": {"type": "string", "minLength": 1},
+            "adapter_version": {"type": "string", "minLength": 1},
+            "client_version": {"type": "string", "minLength": 1}
+          }}}}
+        }],
+        "additionalProperties": false
+      }
+    },
+    "summary": {
+      "type": "object",
+      "required": ["passed", "failed", "inconclusive", "not_tested", "not_applicable", "required_gates_complete"],
+      "properties": {
+        "passed": {"type": "integer", "minimum": 0}, "failed": {"type": "integer", "minimum": 0},
+        "inconclusive": {"type": "integer", "minimum": 0}, "not_tested": {"type": "integer", "minimum": 0},
+        "not_applicable": {"type": "integer", "minimum": 0}, "required_gates_complete": {"type": "boolean"}
+      }, "additionalProperties": false
+    },
+    "privacy": {
+      "type": "object",
+      "required": ["redacted_export", "contains_absolute_home_paths", "contains_credentials", "real_user_project_used"],
+      "properties": {"redacted_export": {"const": true}, "contains_absolute_home_paths": {"const": false}, "contains_credentials": {"const": false}, "real_user_project_used": {"const": false}},
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}
