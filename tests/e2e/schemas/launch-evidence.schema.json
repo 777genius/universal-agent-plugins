@@ -119,10 +119,17 @@
     },
     "privacy": {
       "type": "object",
-      "required": ["redacted_export", "consent_artifact_digest", "contains_absolute_home_paths", "contains_credentials", "real_user_project_used", "auth_copied"],
+      "required": ["redacted_export", "consent_artifact_digest", "pseudonymous_identity_id", "pseudonymous_workspace_id", "dedicated_identity", "disposable_project_status", "operation_mode", "auth_origin", "cleanup_outcome", "contains_absolute_home_paths", "contains_credentials", "real_user_project_used", "auth_copied"],
       "properties": {
         "redacted_export": {"const": true},
         "consent_artifact_digest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+        "pseudonymous_identity_id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{2,63}$"},
+        "pseudonymous_workspace_id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{2,63}$"},
+        "dedicated_identity": {"const": true},
+        "disposable_project_status": {"enum": ["disposed", "not-created"]},
+        "operation_mode": {"enum": ["read-only", "synthetic"]},
+        "auth_origin": {"enum": ["fresh-dedicated-identity", "none"]},
+        "cleanup_outcome": {"enum": ["cleaned", "not-created"]},
         "contains_absolute_home_paths": {"const": false},
         "contains_credentials": {"const": false},
         "real_user_project_used": {"const": false},
@@ -173,7 +180,7 @@
   },
   "allOf": [
     {"if": {"properties": {"run": {"properties": {"mode": {"const": "enforced"}}}}}, "then": {"properties": {
-      "summary": {"properties": {"hero_runtime_results": {"const": 15}, "required_gates_complete": {"const": true}}},
+      "summary": {"properties": {"hero_runtime_results": {"const": 15}}},
       "release": {"properties": {"repository": {"type": "string"}, "tag": {"type": "string"}, "tag_commit": {"type": "string"}, "release_id": {"type": "integer"}, "immutable": {"const": true}, "manifest_digest": {"type": "string"}, "checksums_digest": {"type": "string"}}},
       "directory": {"properties": {"origin": {"type": "string"}, "snapshot_digest": {"type": "string"}, "sequence": {"type": "integer"}, "trust_root_digest": {"type": "string"}}}
     }}},

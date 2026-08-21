@@ -373,8 +373,9 @@ class LaunchEvidenceE2ETests(unittest.TestCase):
         harness = self.fixture_harness()
         harness.snapshot = {
             "sequence": 1,
-            "products": [{"id": "context7", "default_distribution": "upstash/context7"}],
-            "distributions": [{"id": "upstash/context7", "kind": "upstream", "release_policies": [{"release_sequence": 1, "status": "active", "targets": [{"client": "codex", "scopes": ["user"]}, {"client": "cursor", "scopes": ["user"]}, {"client": "kiro", "scopes": ["user"]}]}], "releases": [{"sequence": 1, "package_version": "1.0.0", "tree_digest": "sha256:" + "a" * 64, "manifest_digest": "sha256:" + "b" * 64}]}],
+            "evidence": [],
+            "products": [{"id": "context7", "aliases": ["context7"], "default_distribution": "upstash/context7", "distributions": ["upstash/context7"], "minimum_capabilities": {"mcp": "required"}}],
+            "distributions": [{"id": "upstash/context7", "product_id": "context7", "kind": "community", "status": "active", "release_policies": [{"release_sequence": 1, "status": "active", "current_evidence": [], "targets": [{"client": "codex", "scopes": ["user"]}, {"client": "cursor", "scopes": ["user"]}, {"client": "kiro", "scopes": ["user"]}]}], "releases": [{"sequence": 1, "components": ["mcp"], "package_version": "1.0.0", "tree_digest": "sha256:" + "a" * 64, "manifest_digest": "sha256:" + "b" * 64}]}],
         }
         harness.snapshot_digest = "sha256:" + "c" * 64
         harness.binary_digest = "sha256:" + "d" * 64
@@ -384,7 +385,7 @@ class LaunchEvidenceE2ETests(unittest.TestCase):
             "commands": commands, "acquisition_digests": ["sha256:" + "a" * 64],
             "target_outcomes": {client: "passed" for client in ("codex", "cursor", "kiro")},
             "operation_outcomes": {operation: "passed" for operation in ("add", "update", "repair", "remove")},
-            "tuple": harness.evidence_tuple("context7", client_version="driver", dependency="single-acquisition"),
+            "tuple": harness.evidence_tuple("context7", ["codex", "cursor", "kiro"], client_version="driver", dependency="single-acquisition"),
         }
         with mock.patch.object(harness, "driven_scenario", return_value=("passed", value, "proved")):
             harness.context7_multi_target()
@@ -559,6 +560,152 @@ print(json.dumps(value))
         evidence["run"]["runtime_claims"] = True
         with self.assertRaisesRegex(ValueError, "cannot escalate"):
             e2e.assert_redacted(evidence)
+
+    def test_external_pr_gate_fails_closed_for_every_untrustworthy_evidence_class(self) -> None:
+        now = datetime.now(timezone.utc).replace(microsecond=0)
+        challenge = {"value": "a" * 64}
+        snapshot = {"sequence": 9, "publication_id": "publication-9", "source_commit": "b" * 40}
+        binding = {
+            "catalog_repository": e2e.TRUSTED_CATALOG_REPOSITORY,
+            "catalog_sha": "c" * 40,
+            "directory_snapshot_digest": "sha256:" + "d" * 64,
+            "directory_sequence": 9,
+            "directory_publication_id": "publication-9",
+            "directory_source_commit": "b" * 40,
+            "release_repository": e2e.TRUSTED_CLI_RELEASE_REPOSITORY,
+            "release_tag": e2e.TRUSTED_CLI_RELEASE_TAG,
+            "release_commit": "e" * 40,
+            "release_manifest_digest": "sha256:" + "f" * 64,
+        }
+        record = {
+            "schema_version": 1, "challenge": challenge["value"],
+            "catalog_repository": e2e.TRUSTED_CATALOG_REPOSITORY,
+            "fork_owner": "external-contributor", "fork_repository": "external-contributor/universal-agent-plugins",
+            "pr_number": 42, "pr_url": f"https://github.com/{e2e.TRUSTED_CATALOG_REPOSITORY}/pull/42",
+            "head_sha": "1" * 40, "base_sha": "c" * 40, "merge_commit_sha": None,
+            "changed_paths": ["registry/directory.json", "registry/review-preview.json", "registry/review-search.json"],
+            "check_runs": [{"name": "portable-catalog", "conclusion": "success", "head_sha": "1" * 40}],
+            "final_review": {"state": "closed", "decision": "validated", "reviewer_count": 1, "closed_at": now.isoformat().replace("+00:00", "Z"), "merged_at": None},
+            "observed_at": now.isoformat().replace("+00:00", "Z"),
+            "immutable_artifact": {"digest": "sha256:" + "3" * 64, "reference": "urn:sha256:" + "3" * 64},
+            "binding": binding,
+        }
+
+        def verify(value):
+            return e2e.external_pr_evidence_valid(
+                value, challenge=challenge, catalog_repository=e2e.TRUSTED_CATALOG_REPOSITORY,
+                catalog_sha="c" * 40, snapshot=snapshot, snapshot_digest="sha256:" + "d" * 64,
+                release_repository=e2e.TRUSTED_CLI_RELEASE_REPOSITORY,
+                release_tag=e2e.TRUSTED_CLI_RELEASE_TAG, release_commit="e" * 40,
+                release_manifest_digest="sha256:" + "f" * 64, now=now,
+            )
+
+        self.assertEqual(verify(record), (True, "signed immutable external-fork PR evidence verified"))
+        negatives = {
+            "missing": None,
+            "local": {**record, "fork_repository": "local"},
+            "self_owned": {**record, "fork_owner": "777genius", "fork_repository": e2e.TRUSTED_CATALOG_REPOSITORY},
+            "stale": {**record, "observed_at": (now - timedelta(hours=1)).isoformat().replace("+00:00", "Z")},
+            "wrong_challenge": {**record, "challenge": "9" * 64},
+            "wrong_binding": {**record, "binding": {**binding, "directory_sequence": 8}},
+            "wrong_base": {**record, "base_sha": "4" * 40},
+            "unexpected_merge": {**record, "merge_commit_sha": "4" * 40},
+            "wrong_path": {**record, "changed_paths": ["site/index.html"]},
+            "wrong_head": {**record, "check_runs": [{"name": "portable-catalog", "conclusion": "success", "head_sha": "4" * 40}]},
+            "failed_check": {**record, "check_runs": [{"name": "portable-catalog", "conclusion": "failure", "head_sha": "1" * 40}]},
+            "unreviewed": {**record, "final_review": {**record["final_review"], "reviewer_count": 0}},
+            "merged_instead_of_closed": {**record, "final_review": {**record["final_review"], "state": "merged"}},
+            "mutable_reference": {**record, "immutable_artifact": {**record["immutable_artifact"], "reference": "https://example.test/latest.json"}},
+        }
+        for name, value in negatives.items():
+            with self.subTest(name=name):
+                self.assertFalse(verify(value)[0])
+
+        schema_path = ROOT / "tests/e2e/schemas/external-pr-evidence.schema.json"
+        jsonschema.Draft202012Validator(json.loads(schema_path.read_text())).validate(record)
+        with self.assertRaises(jsonschema.ValidationError):
+            jsonschema.Draft202012Validator(json.loads(schema_path.read_text())).validate(negatives["failed_check"])
+
+    def test_authoritative_resolver_preserves_complete_targets_and_exact_fallback_reason(self) -> None:
+        harness = self.fixture_harness()
+        digest = lambda character: "sha256:" + character * 64
+        targets = [{"client": client, "scopes": ["user"]} for client in ("codex", "cursor", "kiro")]
+        harness.snapshot = {
+            "sequence": 1, "evidence": [],
+            "products": [{"id": "context7", "aliases": ["context7"], "default_distribution": "vendor/default", "distributions": ["vendor/default", "community/fallback"], "minimum_capabilities": {"mcp": "required"}}],
+            "distributions": [
+                {"id": "vendor/default", "product_id": "context7", "kind": "upstream", "status": "active", "releases": [{"sequence": 1, "components": ["mcp"], "tree_digest": digest("a"), "manifest_digest": digest("b"), "package_version": "1.0.0"}], "release_policies": [{"release_sequence": 1, "status": "active", "targets": targets[:1], "current_evidence": []}]},
+                {"id": "community/fallback", "product_id": "context7", "kind": "community", "status": "active", "releases": [{"sequence": 7, "components": ["mcp"], "tree_digest": digest("c"), "manifest_digest": digest("d"), "package_version": "2.0.0"}], "release_policies": [{"release_sequence": 7, "status": "active", "targets": targets, "current_evidence": []}]},
+            ],
+        }
+        resolved = harness.directory_release("context7", ["codex", "cursor", "kiro"])
+        self.assertEqual(resolved["distribution_id"], "community/fallback")
+        self.assertEqual(resolved["release_sequence"], 7)
+        self.assertEqual(resolved["resolved_targets"], ["codex", "cursor", "kiro"])
+        self.assertEqual(resolved["fallback_reason"], "declared default vendor/default was ineligible: release 1 does not support cursor,kiro")
+
+    def test_fixture_privacy_output_is_derived_from_verified_consent_fields(self) -> None:
+        evidence = self.fixture_harness().export()
+        consent = json.loads(CONSENT.read_text())
+        self.assertEqual(evidence["privacy"]["pseudonymous_identity_id"], consent["pseudonymous_identity_id"])
+        self.assertEqual(evidence["privacy"]["cleanup_outcome"], consent["cleanup_outcome"])
+        self.assertEqual(evidence["privacy"]["real_user_project_used"], consent["no_real_project_proof"]["real_project_accessed"])
+        for field, invalid in (
+            ("dedicated_identity", False), ("cleanup_outcome", "pending"),
+            ("operation_mode", "write"), ("auth_origin", "copied-user-auth"),
+        ):
+            with self.subTest(field=field), tempfile.TemporaryDirectory() as tmp:
+                path = Path(tmp) / "consent.json"
+                path.write_text(json.dumps({**consent, field: invalid}))
+                with self.assertRaisesRegex(ValueError, "does not authorize"):
+                    e2e.LaunchHarness(None, None, mode="fixture-only", consent=path)
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "consent.json"
+            path.write_text(json.dumps({**consent, "no_real_project_proof": {**consent["no_real_project_proof"], "real_project_accessed": True}}))
+            with self.assertRaisesRegex(ValueError, "does not authorize"):
+                e2e.LaunchHarness(None, None, mode="fixture-only", consent=path)
+
+    def test_runtime_attestations_fail_closed_when_any_privacy_or_run_binding_changes(self) -> None:
+        harness = self.fixture_harness()
+        harness.challenge = {"value": "a" * 64}
+        harness.github_run_id = "17"
+        harness.github_run_attempt = "2"
+        consent = json.loads(CONSENT.read_text())
+        record = {
+            "plugin": "context7", "client": "codex", "level": "runtime",
+            "outcome": "failed", "reason": "fixture negative record", "tuple": {},
+            "challenge": harness.challenge["value"], "run_id": "17", "run_attempt": "2",
+            "scenario_id": "hero_5x3_runtime",
+            "identity_id": consent["pseudonymous_identity_id"],
+            "consent_artifact_digest": harness.consent_digest,
+            **{field: consent[field] for field in (
+                "pseudonymous_identity_id", "pseudonymous_workspace_id", "dedicated_identity",
+                "disposable_project_status", "operation_mode", "auth_origin", "cleanup_outcome",
+                "no_real_project_proof",
+            )},
+        }
+
+        def load(value):
+            with tempfile.TemporaryDirectory() as tmp:
+                path = Path(tmp) / "attestations.json"
+                path.write_text(json.dumps({"schema_version": 1, "attestations": [value]}))
+                return harness._load_attestations(path)
+
+        self.assertIn(("context7", "codex", "runtime"), load(record))
+        negatives = {
+            "challenge": {**record, "challenge": "b" * 64},
+            "run": {**record, "run_id": "18"},
+            "scenario": {**record, "scenario_id": "chatgpt_registered_binding"},
+            "identity": {**record, "identity_id": "different-identity"},
+            "workspace": {**record, "pseudonymous_workspace_id": "different-workspace"},
+            "cleanup": {**record, "cleanup_outcome": "pending"},
+            "operation": {**record, "operation_mode": "write"},
+            "auth": {**record, "auth_origin": "copied-user-auth"},
+            "real_project": {**record, "no_real_project_proof": {**record["no_real_project_proof"], "real_project_accessed": True}},
+        }
+        for name, value in negatives.items():
+            with self.subTest(name=name), self.assertRaisesRegex(ValueError, "bound|privacy|identity"):
+                load(value)
 
     def test_hidden_yes_acceptance_or_mutation_fails_public_scenario(self) -> None:
         fake = '''#!/usr/bin/python3

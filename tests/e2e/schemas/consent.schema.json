@@ -1,13 +1,52 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "Explicit disposable stable-launch consent",
+  "title": "Challenge/run/scenario-bound disposable stable-launch consent",
   "type": "object",
-  "required": ["schema_version", "purpose", "consent", "disposable_only"],
+  "required": [
+    "schema_version", "purpose", "consent", "mode", "challenge", "run_id",
+    "run_attempt", "catalog_sha", "scenario_contract_digest",
+    "pseudonymous_identity_id", "pseudonymous_workspace_id", "dedicated_identity",
+    "disposable_project_status", "operation_mode", "auth_origin", "cleanup_outcome",
+    "no_real_project_proof"
+  ],
   "properties": {
     "schema_version": {"const": 1},
     "purpose": {"const": "stable-launch-e2e"},
     "consent": {"const": true},
-    "disposable_only": {"const": true}
+    "mode": {"enum": ["enforced", "fixture-only"]},
+    "challenge": {"type": ["string", "null"], "pattern": "^[a-f0-9]{64}$"},
+    "run_id": {"type": "string", "minLength": 1},
+    "run_attempt": {"type": "string", "minLength": 1},
+    "catalog_sha": {"type": ["string", "null"], "pattern": "^[a-f0-9]{40}$"},
+    "scenario_contract_digest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+    "pseudonymous_identity_id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{2,63}$"},
+    "pseudonymous_workspace_id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{2,63}$"},
+    "dedicated_identity": {"const": true},
+    "disposable_project_status": {"enum": ["disposed", "not-created"]},
+    "operation_mode": {"enum": ["read-only", "synthetic"]},
+    "auth_origin": {"enum": ["fresh-dedicated-identity", "none"]},
+    "cleanup_outcome": {"enum": ["cleaned", "not-created"]},
+    "no_real_project_proof": {
+      "type": "object",
+      "required": ["real_project_accessed", "absolute_paths_exported", "credential_material_exported", "auth_copied"],
+      "properties": {
+        "real_project_accessed": {"const": false},
+        "absolute_paths_exported": {"const": false},
+        "credential_material_exported": {"const": false},
+        "auth_copied": {"const": false}
+      },
+      "additionalProperties": false
+    }
   },
+  "allOf": [
+    {
+      "if": {"properties": {"mode": {"const": "enforced"}}, "required": ["mode"]},
+      "then": {"properties": {"challenge": {"type": "string"}, "run_id": {"pattern": "^[0-9]+$"}, "run_attempt": {"pattern": "^[0-9]+$"}, "catalog_sha": {"type": "string"}, "disposable_project_status": {"const": "disposed"}, "cleanup_outcome": {"const": "cleaned"}}}
+    },
+    {
+      "if": {"properties": {"mode": {"const": "fixture-only"}}, "required": ["mode"]},
+      "then": {"properties": {"challenge": {"const": null}, "run_id": {"const": "fixture-only"}, "run_attempt": {"const": "0"}, "catalog_sha": {"const": null}, "disposable_project_status": {"const": "not-created"}, "operation_mode": {"const": "synthetic"}, "auth_origin": {"const": "none"}, "cleanup_outcome": {"const": "not-created"}}}
+    }
+  ],
   "additionalProperties": false
 }

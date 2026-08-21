@@ -5,11 +5,12 @@
   "required": ["schema_version", "attestations"],
   "properties": {
     "schema_version": {"const": 1},
+    "external_pr_evidence": {"$ref": "external-pr-evidence.schema.json"},
     "attestations": {
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["plugin", "client", "level", "outcome", "reason", "tuple"],
+        "required": ["plugin", "client", "level", "outcome", "reason", "tuple", "challenge", "run_id", "run_attempt", "scenario_id", "identity_id", "consent_artifact_digest", "pseudonymous_identity_id", "pseudonymous_workspace_id", "dedicated_identity", "disposable_project_status", "operation_mode", "auth_origin", "cleanup_outcome", "no_real_project_proof"],
         "properties": {
           "plugin": {"type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"},
           "client": {"enum": ["codex", "cursor", "kiro", "chatgpt"]},
@@ -27,6 +28,17 @@
           "ui_activation": {"type": "boolean"},
           "read_only": {"type": "boolean"},
           "challenge": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+          "run_id": {"type": "string", "pattern": "^[0-9]+$"},
+          "run_attempt": {"type": "string", "pattern": "^[0-9]+$"},
+          "scenario_id": {"enum": ["hero_5x3_runtime", "chatgpt_registered_binding"]},
+          "pseudonymous_identity_id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{2,63}$"},
+          "pseudonymous_workspace_id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{2,63}$"},
+          "dedicated_identity": {"const": true},
+          "disposable_project_status": {"const": "disposed"},
+          "operation_mode": {"enum": ["read-only", "synthetic"]},
+          "auth_origin": {"enum": ["fresh-dedicated-identity", "none"]},
+          "cleanup_outcome": {"const": "cleaned"},
+          "no_real_project_proof": {"$ref": "consent.schema.json#/properties/no_real_project_proof"},
           "started_at": {"type": "string", "format": "date-time"},
           "observed_at": {"type": "string", "format": "date-time"},
           "client_id": {"type": "string", "minLength": 1},
@@ -46,7 +58,7 @@
         "allOf": [
           {
             "if": {"properties": {"outcome": {"const": "passed"}}, "required": ["outcome"]},
-            "then": {"required": ["challenge", "started_at", "observed_at", "client_id", "application_id", "endpoint", "command_traces", "github_attestation", "identity_id", "consent_artifact_digest", "runtime_invocation", "discovery_verified", "isolated_identity", "manager_observation", "native_observation", "receipt_reconciled", "native_discovery_reconciled"], "properties": {"runtime_invocation": {"const": true}, "discovery_verified": {"const": true}, "isolated_identity": {"const": true}, "receipt_reconciled": {"const": true}, "native_discovery_reconciled": {"const": true}, "tuple": {"$ref": "launch-evidence.schema.json#/$defs/completeTuple"}}}
+            "then": {"required": ["challenge", "run_id", "run_attempt", "scenario_id", "started_at", "observed_at", "client_id", "application_id", "endpoint", "command_traces", "github_attestation", "identity_id", "consent_artifact_digest", "runtime_invocation", "discovery_verified", "isolated_identity", "manager_observation", "native_observation", "receipt_reconciled", "native_discovery_reconciled", "pseudonymous_identity_id", "pseudonymous_workspace_id", "dedicated_identity", "disposable_project_status", "operation_mode", "auth_origin", "cleanup_outcome", "no_real_project_proof"], "properties": {"runtime_invocation": {"const": true}, "discovery_verified": {"const": true}, "isolated_identity": {"const": true}, "receipt_reconciled": {"const": true}, "native_discovery_reconciled": {"const": true}, "tuple": {"$ref": "launch-evidence.schema.json#/$defs/completeTuple"}}}
           },
           {
             "if": {"properties": {"outcome": {"const": "passed"}, "plugin": {"const": "notion"}}, "required": ["outcome", "plugin"]},

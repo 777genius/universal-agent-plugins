@@ -87,6 +87,32 @@ HTTPS endpoint, isolated consent identity, complete release/Directory tuple,
 and a GitHub attestation for this repository/SHA/run/attempt/workflow/job.
 Projection or fixture output cannot become runtime evidence.
 
+Consent and every runtime record are independently bound to the same challenge,
+GitHub run/attempt, and scenario contract. They carry only pseudonymous
+dedicated identity/workspace IDs and signed fields for disposable-project state,
+read-only or synthetic operation, authentication origin, cleanup, and proof that
+no real project, copied auth, credential material, or absolute local path entered
+the export. The top-level privacy result is derived from those verified consent
+fields; it is not a set of unconditional booleans.
+
+The first stable launch additionally requires
+`external_pr_evidence` inside the signed primary runtime artifact. Its schema
+records the catalog and genuinely external fork identities, canonical PR
+number/URL, exact head/base SHAs, an explicit null merge SHA, contributor-flow
+paths, successful head-bound check runs, final validated closure without merge,
+fresh observation time, and an immutable digest/reference. Its binding repeats
+the current challenge, exact catalog base SHA, signed Directory publication
+identity, and exact CLI release identity. Missing, local-only, catalog-owner,
+stale, wrong-head, failed-check, unexpectedly merged, or mismatched evidence
+emits a failed required gate. The repository's local fork-clone
+accepted/rejected journeys remain useful supplemental contract coverage and
+explicitly cannot satisfy this external PR gate.
+
+Lifecycle and runtime expectations are resolved through
+`build_registry.resolve_directory` with the complete target set for that row.
+The evidence preserves the selected single distribution, release sequence,
+resolved targets, and the authoritative resolver's exact fallback reason.
+
 ## Reproduction
 
 PR contract run:

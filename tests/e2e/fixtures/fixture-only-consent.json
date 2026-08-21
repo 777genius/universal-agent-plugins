@@ -2,6 +2,23 @@
   "schema_version": 1,
   "purpose": "stable-launch-e2e",
   "consent": true,
-  "disposable_only": true,
-  "scope": "fixture-only non-runtime contract validation"
+  "mode": "fixture-only",
+  "challenge": null,
+  "run_id": "fixture-only",
+  "run_attempt": "0",
+  "catalog_sha": null,
+  "scenario_contract_digest": "sha256:a796a11141a46754ced8fb7608aa4977d9e3174cf0b61ff43497c267e0975016",
+  "pseudonymous_identity_id": "fixture-contract-identity",
+  "pseudonymous_workspace_id": "fixture-contract-workspace",
+  "dedicated_identity": true,
+  "disposable_project_status": "not-created",
+  "operation_mode": "synthetic",
+  "auth_origin": "none",
+  "cleanup_outcome": "not-created",
+  "no_real_project_proof": {
+    "real_project_accessed": false,
+    "absolute_paths_exported": false,
+    "credential_material_exported": false,
+    "auth_copied": false
+  }
 }

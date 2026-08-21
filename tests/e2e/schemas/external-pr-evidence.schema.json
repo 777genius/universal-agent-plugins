@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Immutable external-fork pull-request stable-launch evidence",
+  "type": "object",
+  "required": ["schema_version", "challenge", "catalog_repository", "fork_owner", "fork_repository", "pr_number", "pr_url", "head_sha", "base_sha", "merge_commit_sha", "changed_paths", "check_runs", "final_review", "observed_at", "immutable_artifact", "binding"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "challenge": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "catalog_repository": {"type": "string", "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"},
+    "fork_owner": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{2,63}$"},
+    "fork_repository": {"type": "string", "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"},
+    "pr_number": {"type": "integer", "minimum": 1},
+    "pr_url": {"type": "string", "pattern": "^https://github\\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/pull/[1-9][0-9]*$"},
+    "head_sha": {"type": "string", "pattern": "^[a-f0-9]{40}$"},
+    "base_sha": {"type": "string", "pattern": "^[a-f0-9]{40}$"},
+    "merge_commit_sha": {"type": "null"},
+    "changed_paths": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "pattern": "^(?:plugins/[a-z0-9]+(?:-[a-z0-9]+)*/[^/].*|bridges/[a-z0-9]+(?:-[a-z0-9]+)*/[^/].*|registry/(?:directory|review-preview|review-search)\\.json)$"}},
+    "check_runs": {"type": "array", "minItems": 1, "items": {"type": "object", "required": ["name", "conclusion", "head_sha"], "properties": {"name": {"type": "string", "minLength": 1}, "conclusion": {"const": "success"}, "head_sha": {"type": "string", "pattern": "^[a-f0-9]{40}$"}}, "additionalProperties": false}},
+    "final_review": {"type": "object", "required": ["state", "decision", "reviewer_count", "closed_at", "merged_at"], "properties": {"state": {"const": "closed"}, "decision": {"const": "validated"}, "reviewer_count": {"type": "integer", "minimum": 1}, "closed_at": {"type": "string", "format": "date-time"}, "merged_at": {"type": "null"}}, "additionalProperties": false},
+    "observed_at": {"type": "string", "format": "date-time"},
+    "immutable_artifact": {"type": "object", "required": ["digest", "reference"], "properties": {"digest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"}, "reference": {"type": "string", "pattern": "^urn:sha256:[a-f0-9]{64}$"}}, "additionalProperties": false},
+    "binding": {"type": "object", "required": ["catalog_repository", "catalog_sha", "directory_snapshot_digest", "directory_sequence", "directory_publication_id", "directory_source_commit", "release_repository", "release_tag", "release_commit", "release_manifest_digest"], "properties": {"catalog_repository": {"type": "string"}, "catalog_sha": {"type": "string", "pattern": "^[a-f0-9]{40}$"}, "directory_snapshot_digest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"}, "directory_sequence": {"type": "integer", "minimum": 1}, "directory_publication_id": {"type": "string", "minLength": 1}, "directory_source_commit": {"type": "string", "pattern": "^[a-f0-9]{40}$"}, "release_repository": {"type": "string"}, "release_tag": {"type": "string"}, "release_commit": {"type": "string", "pattern": "^[a-f0-9]{40}$"}, "release_manifest_digest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"}}, "additionalProperties": false}
+  },
+  "additionalProperties": false
+}
