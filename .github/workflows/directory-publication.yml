@@ -66,6 +66,12 @@ jobs:
           python-version: "3.13"
       - name: Install no-secret validation dependencies
         run: python3 -m pip install --disable-pip-version-check check-jsonschema==0.37.4 cryptography==46.0.3 jsonschema==4.25.1
+      - name: Require event source to remain protected main
+        env:
+          EVENT_SOURCE_COMMIT: ${{ github.sha }}
+        run: |
+          git fetch --no-tags --force origin refs/heads/main:refs/remotes/origin/main
+          test "$(git rev-parse refs/remotes/origin/main)" = "${EVENT_SOURCE_COMMIT}"
       - name: Validate immutable ledger floor and explicit initialization
         id: ledger
         env:
@@ -77,10 +83,18 @@ jobs:
           mapfile -t tags < <(git -C _publication-ledger tag --list "${tag_prefix}*" | LC_ALL=C sort)
           if test "${INITIALIZE_LEDGER}" = "true"; then
             [[ "${REQUESTED_SEED_COMMIT}" =~ ^[0-9a-f]{40}$ ]]
-            test "$(git -C _publication-ledger rev-parse HEAD)" = "${REQUESTED_SEED_COMMIT}"
-            test "${#tags[@]}" -eq 0
-            test ! -e _publication-ledger/registry/schemas/1/latest.json
-            test ! -e _publication-ledger/registry/schemas/1/ledger-contract.json
+            if test "${#tags[@]}" -eq 0; then
+              test "$(git -C _publication-ledger rev-parse HEAD)" = "${REQUESTED_SEED_COMMIT}"
+              test ! -e _publication-ledger/registry/schemas/1/latest.json
+              test ! -e _publication-ledger/registry/schemas/1/ledger-contract.json
+            else
+              test "${#tags[@]}" -eq 1
+              sequence_one_tag="${tag_prefix}00000000000000000001"
+              test "${tags[0]}" = "${sequence_one_tag}"
+              test "$(git -C _publication-ledger rev-parse HEAD)" = "$(git -C _publication-ledger rev-parse "refs/tags/${sequence_one_tag}^{commit}")"
+              test "$(python3 -c 'import json; print(json.load(open("_publication-ledger/registry/schemas/1/ledger-contract.json"))["seed_commit"])')" = "${REQUESTED_SEED_COMMIT}"
+              test "$(python3 -c 'import json; print(json.load(open("_publication-ledger/registry/schemas/1/latest.json"))["sequence"])')" = 1
+            fi
             echo "initialize=true" >> "$GITHUB_OUTPUT"
             echo "seed_commit=${REQUESTED_SEED_COMMIT}" >> "$GITHUB_OUTPUT"
             echo "sequence_floor=" >> "$GITHUB_OUTPUT"
@@ -188,10 +202,21 @@ jobs:
           LEDGER_SEED_COMMIT: ${{ needs.prepare.outputs.ledger_seed_commit }}
           LEDGER_SEQUENCE_FLOOR: ${{ needs.prepare.outputs.ledger_sequence_floor }}
         run: |
+          git fetch --no-tags --force origin refs/heads/main:refs/remotes/origin/main
+          test "$(git rev-parse refs/remotes/origin/main)" = "${{ github.sha }}"
           test "$(tr -d '\n' < ../candidate/candidate.digest)" = "${EXPECTED_CANDIDATE_DIGEST}"
           ledger_args=(--ledger-seed-commit "${LEDGER_SEED_COMMIT}")
           if test "${INITIALIZE_LEDGER}" = "true"; then
-            test "$(git -C ../ledger rev-parse HEAD)" = "${LEDGER_SEED_COMMIT}"
+            sequence_one_tag=directory-publication-schema-1-sequence-00000000000000000001
+            mapfile -t initialization_tags < <(git -C ../ledger tag --list 'directory-publication-schema-1-sequence-*' | LC_ALL=C sort)
+            if test -e ../ledger/registry/schemas/1/latest.json; then
+              test "${#initialization_tags[@]}" -eq 1
+              test "${initialization_tags[0]}" = "${sequence_one_tag}"
+              test "$(git -C ../ledger rev-parse HEAD)" = "$(git -C ../ledger rev-parse "refs/tags/${sequence_one_tag}^{commit}")"
+            else
+              test "$(git -C ../ledger rev-parse HEAD)" = "${LEDGER_SEED_COMMIT}"
+              test "${#initialization_tags[@]}" -eq 0
+            fi
             ledger_args+=(--initialize-ledger)
           else
             git -C ../ledger merge-base --is-ancestor "${LEDGER_SEED_COMMIT}" HEAD
@@ -223,7 +248,10 @@ jobs:
           PUBLISHER_TOKEN: ${{ steps.publisher.outputs.token }}
           PUBLISHED_SEQUENCE: ${{ steps.signed.outputs.sequence }}
           INITIALIZE_LEDGER: ${{ needs.prepare.outputs.initialize_ledger }}
+          EVENT_SOURCE_COMMIT: ${{ github.sha }}
         run: |
+          git -C ../trusted-source fetch --no-tags --force origin refs/heads/main:refs/remotes/origin/main
+          test "$(git -C ../trusted-source rev-parse refs/remotes/origin/main)" = "${EVENT_SOURCE_COMMIT}"
           tag_name="directory-publication-schema-1-sequence-$(printf '%020d' "${PUBLISHED_SEQUENCE}")"
           git add -N registry/schemas/1
           if git diff --name-status -- registry/schemas/1/snapshots | awk '$1 != "A" { exit 1 }'; then :; else
@@ -232,7 +260,7 @@ jobs:
           fi
           contract_status="$(git diff --name-status -- registry/schemas/1/ledger-contract.json)"
           if test "${INITIALIZE_LEDGER}" = "true"; then
-            test "${contract_status}" = $'A\tregistry/schemas/1/ledger-contract.json'
+            test -z "${contract_status}" || test "${contract_status}" = $'A\tregistry/schemas/1/ledger-contract.json'
           else
             test -z "${contract_status}"
           fi
@@ -249,6 +277,8 @@ jobs:
             git tag "${tag_name}" HEAD
             pushed=false
             for attempt in 1 2 3; do
+              git -C ../trusted-source fetch --no-tags --force origin refs/heads/main:refs/remotes/origin/main
+              test "$(git -C ../trusted-source rev-parse refs/remotes/origin/main)" = "${EVENT_SOURCE_COMMIT}"
               if git -c http.https://github.com/.extraheader="AUTHORIZATION: basic $(printf 'x-access-token:%s' "${PUBLISHER_TOKEN}" | base64 -w0)" push --atomic origin "HEAD:${LEDGER_BRANCH}" "refs/tags/${tag_name}:refs/tags/${tag_name}"; then
                 pushed=true
                 break

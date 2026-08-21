@@ -36,15 +36,17 @@ class OpenSSLParityTests(unittest.TestCase):
 
 
 class LedgerFailureTests(unittest.TestCase):
-    def run_signer(self, root: Path, publication_id: str, *ledger_args: str) -> subprocess.CompletedProcess[str]:
+    def run_signer(self, root: Path, publication_id: str, *ledger_args: str, mutate=None, key_id: str = "test-current") -> subprocess.CompletedProcess[str]:
         candidate = root / "candidate.json"
         value = json.loads((FIXTURES / "candidate.json").read_bytes())
         value["publication_id"] = publication_id
+        if mutate is not None:
+            mutate(value)
         candidate.write_bytes(publication.canonical_json(value))
-        seed = json.loads((FIXTURES / "test-private-seeds.json").read_bytes())["test-current"]
+        seed = json.loads((FIXTURES / "test-private-seeds.json").read_bytes())[key_id]
         environment = os.environ.copy()
         environment["DIRECTORY_ED25519_PRIVATE_KEY"] = seed
-        day = {"run-1": "21", "run-2": "22", "run-3": "23"}[publication_id]
+        day = {"50": "20", "100": "22", "200": "23", "run-1": "21", "run-2": "22", "run-3": "23"}.get(publication_id, "24")
         return subprocess.run(
             [
                 sys.executable, "-I", str(SCRIPTS / "sign_directory_publication.py"),
@@ -52,7 +54,7 @@ class LedgerFailureTests(unittest.TestCase):
                 "--candidate-digest", publication.candidate_digest(candidate.read_bytes()),
                 "--ledger", str(root),
                 "--trusted-keys", str(FIXTURES / "trusted-keys.json"),
-                "--key-id", "test-current", "--now", f"2026-08-{day}T00:00:00Z",
+                "--key-id", key_id, "--now", f"2026-08-{day}T00:00:00Z",
                 "--result", str(root / "result.json"), *ledger_args,
             ],
             cwd=ROOT, env=environment, text=True, stdout=subprocess.PIPE,
@@ -71,7 +73,7 @@ class LedgerFailureTests(unittest.TestCase):
             self.assertEqual(initialized.returncode, 0, initialized.stderr)
             repeated = self.run_signer(root, "run-2", "--initialize-ledger", "--ledger-seed-commit", "0" * 40)
             self.assertNotEqual(repeated.returncode, 0)
-            self.assertIn("existing publication ledger", repeated.stderr)
+            self.assertIn("differs from the original sequence 1", repeated.stderr)
             no_floor = self.run_signer(root, "run-2", "--ledger-seed-commit", "0" * 40)
             self.assertNotEqual(no_floor.returncode, 0)
             self.assertIn("immutable tag sequence floor", no_floor.stderr)
@@ -116,8 +118,141 @@ class LedgerFailureTests(unittest.TestCase):
             self.assertNotEqual(rejected.returncode, 0)
             self.assertIn("initial publication feed is not empty", rejected.stderr)
 
+    def test_initialize_rerun_reuses_exact_sequence_one_after_atomic_publication(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            subprocess.run(["/usr/bin/git", "init", "-q"], cwd=root, check=True)
+            subprocess.run(["/usr/bin/git", "config", "user.name", "test"], cwd=root, check=True)
+            subprocess.run(["/usr/bin/git", "config", "user.email", "test@example.com"], cwd=root, check=True)
+            subprocess.run(["/usr/bin/git", "commit", "--allow-empty", "-qm", "ledger seed"], cwd=root, check=True)
+            seed_commit = subprocess.check_output(["/usr/bin/git", "rev-parse", "HEAD"], cwd=root, text=True).strip()
+            first = self.run_signer(root, "run-1", "--initialize-ledger", "--ledger-seed-commit", seed_commit)
+            self.assertEqual(first.returncode, 0, first.stderr)
+            subprocess.run(["/usr/bin/git", "add", "registry/schemas/1"], cwd=root, check=True)
+            subprocess.run(["/usr/bin/git", "commit", "-qm", "publish sequence 1"], cwd=root, check=True)
+            sequence_tag = "directory-publication-schema-1-sequence-00000000000000000001"
+            subprocess.run(["/usr/bin/git", "tag", sequence_tag, "HEAD"], cwd=root, check=True)
+            published_commit = subprocess.check_output(["/usr/bin/git", "rev-parse", f"refs/tags/{sequence_tag}^{{commit}}"], cwd=root, text=True).strip()
+            feed = root / "registry" / "schemas" / "1"
+            before = {path.relative_to(feed): path.read_bytes() for path in feed.rglob("*") if path.is_file()}
+
+            retry = self.run_signer(root, "run-1", "--initialize-ledger", "--ledger-seed-commit", seed_commit)
+            self.assertEqual(retry.returncode, 0, retry.stderr)
+            self.assertTrue(json.loads((root / "result.json").read_bytes())["reused"])
+            after = {path.relative_to(feed): path.read_bytes() for path in feed.rglob("*") if path.is_file()}
+            self.assertEqual(after, before)
+            self.assertEqual(subprocess.check_output(["/usr/bin/git", "rev-parse", f"refs/tags/{sequence_tag}^{{commit}}"], cwd=root, text=True).strip(), published_commit)
+
+            wrong_seed = self.run_signer(root, "run-1", "--initialize-ledger", "--ledger-seed-commit", "1" * 40)
+            self.assertNotEqual(wrong_seed.returncode, 0)
+            self.assertEqual({path.relative_to(feed): path.read_bytes() for path in feed.rglob("*") if path.is_file()}, before)
+
+            wrong_content = self.run_signer(
+                root, "run-1", "--initialize-ledger", "--ledger-seed-commit", seed_commit,
+                mutate=lambda value: value["products"][0].update({"description": "different reviewed content"}),
+            )
+            self.assertNotEqual(wrong_content.returncode, 0)
+            wrong_key = self.run_signer(
+                root, "run-1", "--initialize-ledger", "--ledger-seed-commit", seed_commit,
+                key_id="test-next",
+            )
+            self.assertNotEqual(wrong_key.returncode, 0)
+            self.assertIn("another signer key", wrong_key.stderr)
+            self.assertEqual({path.relative_to(feed): path.read_bytes() for path in feed.rglob("*") if path.is_file()}, before)
+
+    def test_historical_publication_id_and_old_run_after_new_run_fail_without_mutation(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            first = self.run_signer(root, "run-1", "--initialize-ledger", "--ledger-seed-commit", "0" * 40)
+            self.assertEqual(first.returncode, 0, first.stderr)
+            second = self.run_signer(root, "run-2", "--ledger-seed-commit", "0" * 40, "--ledger-sequence-floor", "1")
+            self.assertEqual(second.returncode, 0, second.stderr)
+            feed = root / "registry" / "schemas" / "1"
+            before = {path.relative_to(feed): path.read_bytes() for path in feed.rglob("*") if path.is_file()}
+
+            old = self.run_signer(root, "run-1", "--ledger-seed-commit", "0" * 40, "--ledger-sequence-floor", "2")
+            self.assertNotEqual(old.returncode, 0)
+            self.assertIn("historical publication", old.stderr)
+            self.assertEqual({path.relative_to(feed): path.read_bytes() for path in feed.rglob("*") if path.is_file()}, before)
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            initial = self.run_signer(root, "50", "--initialize-ledger", "--ledger-seed-commit", "0" * 40)
+            self.assertEqual(initial.returncode, 0, initial.stderr)
+            newer = self.run_signer(root, "200", "--ledger-seed-commit", "0" * 40, "--ledger-sequence-floor", "1")
+            self.assertEqual(newer.returncode, 0, newer.stderr)
+            feed = root / "registry" / "schemas" / "1"
+            before = {path.relative_to(feed): path.read_bytes() for path in feed.rglob("*") if path.is_file()}
+            reordered = self.run_signer(root, "100", "--ledger-seed-commit", "0" * 40, "--ledger-sequence-floor", "2")
+            self.assertNotEqual(reordered.returncode, 0)
+            self.assertIn("older than current latest", reordered.stderr)
+            self.assertEqual({path.relative_to(feed): path.read_bytes() for path in feed.rglob("*") if path.is_file()}, before)
+
+    def test_actual_signer_rejects_nested_schema_violations_without_ledger_mutation(self) -> None:
+        mutations = {
+            "forbidden product field": lambda value: value["products"][0].update({"forbidden": True}),
+            "missing product field": lambda value: value["products"][0].pop("description"),
+            "malformed distribution": lambda value: value["distributions"][0].update({"status": "candidate"}),
+            "malformed release": lambda value: value["distributions"][0]["releases"][0].update({"sequence": True}),
+            "malformed release digest": lambda value: value["distributions"][0]["releases"][0].update({"tree_digest": "sha256:nope"}),
+            "malformed policy": lambda value: value["distributions"][0]["release_policies"][0].update({"release_sequence": 0}),
+            "malformed policy target": lambda value: value["distributions"][0]["release_policies"][0]["targets"][0].update({"app_binding": {"app_key": "x", "id": "x", "mcp_server": "x"}}),
+            "malformed evidence artifact": lambda value: value["evidence"][0]["artifact"].update({"unknown": "x"}),
+            "missing evidence field": lambda value: value["evidence"][0].pop("outcome"),
+            "malformed revocation": lambda value: value["revocations"].append({"distribution_id": "INVALID", "release_sequence": 1}),
+        }
+        for label, mutation in mutations.items():
+            with self.subTest(label=label), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                rejected = self.run_signer(root, "run-1", "--initialize-ledger", "--ledger-seed-commit", "0" * 40, mutate=mutation)
+                self.assertNotEqual(rejected.returncode, 0)
+                self.assertFalse((root / "registry").exists())
+
+    def test_actual_signer_rejects_malformed_existing_snapshot_and_envelope_without_mutation(self) -> None:
+        for artifact in ("snapshot", "envelope"):
+            with self.subTest(artifact=artifact), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                initialized = self.run_signer(root, "run-1", "--initialize-ledger", "--ledger-seed-commit", "0" * 40)
+                self.assertEqual(initialized.returncode, 0, initialized.stderr)
+                snapshots = root / "registry" / "schemas" / "1" / "snapshots"
+                snapshot_path = snapshots / "00000000000000000001.json"
+                envelope_path = snapshots / "00000000000000000001.envelope.json"
+                if artifact == "envelope":
+                    envelope = json.loads(envelope_path.read_bytes())
+                    envelope["forbidden"] = True
+                    envelope_path.write_bytes(publication.canonical_json(envelope))
+                else:
+                    snapshot = json.loads(snapshot_path.read_bytes())
+                    snapshot["products"][0]["forbidden"] = True
+                    snapshot_body = publication.canonical_json(snapshot)
+                    snapshot_path.write_bytes(snapshot_body)
+                    envelope = json.loads(envelope_path.read_bytes())
+                    envelope["snapshot_digest"] = publication.sha256_digest(snapshot_body)
+                    seed = json.loads((FIXTURES / "test-private-seeds.json").read_bytes())["test-current"]
+                    signature = publication.ed25519_sign(publication.ed25519_private_key(seed), publication.signature_message(snapshot_body))
+                    envelope["signature"] = base64.b64encode(signature).decode("ascii")
+                    envelope_path.write_bytes(publication.canonical_json(envelope))
+                feed = root / "registry" / "schemas" / "1"
+                before = {path.relative_to(feed): path.read_bytes() for path in feed.rglob("*") if path.is_file()}
+                rejected = self.run_signer(root, "run-2", "--ledger-seed-commit", "0" * 40, "--ledger-sequence-floor", "1")
+                self.assertNotEqual(rejected.returncode, 0)
+                self.assertEqual({path.relative_to(feed): path.read_bytes() for path in feed.rglob("*") if path.is_file()}, before)
+
 
 class WorkflowHardeningTests(unittest.TestCase):
+    def test_reordered_workflow_rechecks_protected_main_before_candidate_sign_and_push(self) -> None:
+        workflow = yaml.load((ROOT / ".github" / "workflows" / "directory-publication.yml").read_text(), Loader=yaml.BaseLoader)
+        prepare_steps = workflow["jobs"]["prepare"]["steps"]
+        prepare_guard = next(step["run"] for step in prepare_steps if step.get("name") == "Require event source to remain protected main")
+        signer = next(step["run"] for step in workflow["jobs"]["sign"]["steps"] if step.get("id") == "signed")
+        publisher = next(step["run"] for step in workflow["jobs"]["sign"]["steps"] if step.get("id") == "commit")
+        for commands in (prepare_guard, signer, publisher):
+            self.assertIn("refs/heads/main:refs/remotes/origin/main", commands)
+            self.assertIn("rev-parse refs/remotes/origin/main", commands)
+        self.assertLess(prepare_guard.index("git fetch"), prepare_guard.index("rev-parse"))
+        self.assertLess(signer.index("rev-parse refs/remotes/origin/main"), signer.index("sign_directory_publication.py"))
+        self.assertLess(publisher.rindex("rev-parse refs/remotes/origin/main"), publisher.index("push --atomic"))
+
     def test_only_app_tokens_write_ledger_and_floor_tags_are_atomic(self) -> None:
         text = (ROOT / ".github" / "workflows" / "directory-publication.yml").read_text()
         workflow = yaml.load(text, Loader=yaml.BaseLoader)
@@ -141,6 +276,10 @@ class WorkflowHardeningTests(unittest.TestCase):
         self.assertIn('test "${tag_sequence}" -eq "$((sequence_floor + 1))"', text)
         self.assertIn("contract_status=", text)
         self.assertIn("test -z \"${contract_status}\"", text)
+        self.assertGreaterEqual(text.count("refs/heads/main:refs/remotes/origin/main"), 4)
+        self.assertGreaterEqual(text.count('rev-parse refs/remotes/origin/main'), 4)
+        self.assertIn('= "${EVENT_SOURCE_COMMIT}"', text)
+        self.assertIn('sequence_one_tag="${tag_prefix}00000000000000000001"', text)
 
     def test_privileged_signer_has_no_downloaded_dependency_install(self) -> None:
         workflow = yaml.load((ROOT / ".github" / "workflows" / "directory-publication.yml").read_text(), Loader=yaml.BaseLoader)
@@ -167,6 +306,8 @@ class WorkflowHardeningTests(unittest.TestCase):
 
     def test_documented_rulesets_leave_no_destructive_bypass(self) -> None:
         documentation = (ROOT / "registry" / "publication" / "README.md").read_text()
+        self.assertIn("`bcd2ba49218906704ab6c1aa796996da409d3eb1` (`v3.2.0`)", documentation)
+        self.assertNotIn("a8d616148505b5069dccd32f177bb87d7f39123b", documentation)
         self.assertIn("four active repository rulesets", documentation)
         self.assertEqual(documentation.count("has **no bypass actors**"), 2)
         self.assertIn("even the publisher cannot reset the branch", documentation)

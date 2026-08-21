@@ -104,7 +104,7 @@ public key from the environment seed and confirm it byte-for-byte against this
 entry.
 
 The App-token action is pinned to immutable commit
-`a8d616148505b5069dccd32f177bb87d7f39123b` (`v2.1.1`). Re-verify a proposed
+`bcd2ba49218906704ab6c1aa796996da409d3eb1` (`v3.2.0`). Re-verify a proposed
 upgrade from a trusted terminal with `gh api` against the action's release tag
 and Git tag object before changing that SHA; do not obtain pins from rendered
 browser pages.

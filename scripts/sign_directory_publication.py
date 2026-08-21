@@ -34,6 +34,7 @@ from directory_publication import (
     sha256_digest,
     signature_message,
     validate_envelope_contract,
+    validate_directory_records,
     validate_latest,
     validate_snapshot_semantics,
 )
@@ -63,12 +64,7 @@ def assign_release_publication_times(
 
 
 def validate_bound_candidate(candidate: dict[str, object]) -> None:
-    """Check the signer-facing root contract using only the standard library.
-
-    The no-secret preparation job performs full JSON Schema and semantic
-    validation. Its output digest binds these bounded bytes before the seed is
-    exposed; the signer repeats the security-critical root/type checks here.
-    """
+    """Validate the complete signer-facing schema using only the standard library."""
     require(set(candidate) == {
         "candidate_schema_version", "snapshot_schema_version", "publication_id",
         "source_commit", "lifetime_days", "products", "distributions", "evidence",
@@ -89,6 +85,7 @@ def validate_bound_candidate(candidate: dict[str, object]) -> None:
     require(type(lifetime_days) is int and 1 <= lifetime_days <= 30, "candidate lifetime is invalid")
     for field in ("products", "distributions", "evidence", "revocations"):
         require(isinstance(candidate[field], list), f"candidate {field} must be an array")
+    validate_directory_records(candidate, snapshot=False)
 
 
 def main() -> int:
@@ -126,16 +123,30 @@ def main() -> int:
         )
         previous = loaded[0] if loaded else None
         historical_evidence = loaded[2] if loaded else {}
+        publications = loaded[3] if loaded else {}
         distributions = assign_release_publication_times(
             candidate["distributions"], previous, format_timestamp(now)
         )
-        if previous is not None and previous["publication_id"] == candidate["publication_id"]:
-            require(previous["source_commit"] == candidate["source_commit"], "publication ID was reused for another source commit")
-            require(previous["products"] == candidate["products"] and previous["distributions"] == distributions and previous["evidence"] == candidate["evidence"] and previous["revocations"] == candidate["revocations"], "publication ID was reused for different candidate content")
-            result = {"reused": True, "sequence": previous["sequence"], "snapshot_digest": sha256_digest(canonical_json(previous))}
+        matches = publications.get(candidate["publication_id"], [])
+        if matches:
+            require(len(matches) == 1, "publication ID occurs more than once in the ledger")
+            matched, matched_envelope = matches[0]
+            require(previous is matched, "publication ID belongs to a historical publication, not current latest")
+            require(matched["source_commit"] == candidate["source_commit"], "publication ID was reused for another source commit")
+            require(matched_envelope["key_id"] == args.key_id, "publication ID was reused with another signer key")
+            require(
+                parse_timestamp(matched["expires_at"], "expires_at") - parse_timestamp(matched["generated_at"], "generated_at")
+                == timedelta(days=candidate["lifetime_days"]),
+                "publication ID was reused with another lifetime",
+            )
+            require(matched["products"] == candidate["products"] and matched["distributions"] == distributions and matched["evidence"] == candidate["evidence"] and matched["revocations"] == candidate["revocations"], "publication ID was reused for different candidate content")
+            result = {"reused": True, "sequence": matched["sequence"], "snapshot_digest": sha256_digest(canonical_json(matched))}
             atomic_write(args.result, canonical_json(result))
-            print(f"reused sequence {previous['sequence']}")
+            print(f"reused sequence {matched['sequence']}")
             return 0
+        if previous is not None and candidate["publication_id"].isdigit() and previous["publication_id"].isdigit():
+            require(int(candidate["publication_id"]) > int(previous["publication_id"]), "publication run ID is older than current latest")
+        require(not args.initialize_ledger or previous is None, "initialization rerun publication ID differs from the original sequence 1 publication")
 
         sequence = 1 if previous is None else previous["sequence"] + 1
         snapshot = {
