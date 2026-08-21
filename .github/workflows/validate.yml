@@ -26,7 +26,7 @@ jobs:
         with:
           python-version: "3.13"
       - name: Install bridge validation dependencies
-        run: python3 -m pip install jsonschema==4.25.1
+        run: python3 -m pip install jsonschema==4.25.1 PyYAML==6.0.3
       - name: Build deterministic offline upstream mirror
         run: |
           cp -a tests/fixtures/bridge_upstream "${RUNNER_TEMP}/bridge-upstream"
