@@ -98,6 +98,10 @@
       "text": "stripe community package for the official stripe hosted mcp plugin for payments, billing, customer, and documentation workflows through stripe's remote mcp service. stripe agent-plugins ai-agents billing commerce mcp payments plugins stripe"
     },
     {
+      "product_id": "submission-e2e",
+      "text": "submission e2e fixture disposable contributor submission fixture for end-to-end directory testing. submission-e2e testing"
+    },
+    {
       "product_id": "supabase",
       "text": "supabase community package for the official supabase mcp integration for development and database operations from agent workflows. supabase agent-plugins ai-agents backend mcp plugins postgres supabase"
     },

@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "product_count": 26,
+  "product_count": 27,
   "products": [
     {
       "id": "agent-code-navigator",
@@ -1721,6 +1721,48 @@
           "tree_digest_algorithm": "agentplugins-tree-sha256-v1",
           "tree_digest": "sha256:37867106f65c2acb5f5c64bebe4e5ce61f7e73dbb05f7d94d2f398dc913833fe",
           "manifest_digest": "sha256:e70885fda5a4ce50c302891229e204bbf22904ec3f227670e5916d69f9b8b80d"
+        }
+      ]
+    },
+    {
+      "id": "submission-e2e",
+      "display_name": "Submission E2E Fixture",
+      "description": "Disposable contributor submission fixture for end-to-end Directory testing.",
+      "aliases": [
+        "submission-e2e"
+      ],
+      "categories": [
+        "testing"
+      ],
+      "default_distribution": "agent-teams-ai/submission-e2e",
+      "fallback_order": [
+        "agent-teams-ai/submission-e2e"
+      ],
+      "distributions": [
+        {
+          "id": "agent-teams-ai/submission-e2e",
+          "kind": "community",
+          "status": "active",
+          "release_sequence": 1,
+          "package_version": "1.0.0",
+          "components": [
+            "skills"
+          ],
+          "eligible_targets": [
+            {
+              "client": "cursor",
+              "authentication": "not_required"
+            }
+          ],
+          "current_evidence": [],
+          "source": {
+            "repository": "agent-teams-ai/uap-external-submission-fixture",
+            "revision": "a5c6f7a5a1615ffd862a65e7b02dc1f56e6f39d9",
+            "path": "submission-e2e"
+          },
+          "tree_digest_algorithm": "agentplugins-tree-sha256-v1",
+          "tree_digest": "sha256:1e401e0bd7423908b4d03677bea484f655dca830c482fb3f51a0a833bfdc9a9c",
+          "manifest_digest": "sha256:f2aa0730572b0eaf4aeb66a7eb2e23107c27f06ab33be8dc8f206ab7618db111"
         }
       ]
     },
