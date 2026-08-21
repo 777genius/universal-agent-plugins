@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { ClientID } from '~/types/registry'
 import { pluginCommands } from '~/utils/commands'
+import { deliveryLabel, expectedDistribution } from '~/utils/registry'
 
 const registry = useRegistry()
 const { asset, repositoryUrl } = useSite()
@@ -14,10 +15,12 @@ const heroTargetOptions = computed(() => clients.map(client => ({
   value: client.id,
   label: heroClientLabel(client.id, client.name),
   icon: asset(`client-icons/${client.icon}`),
-  disabled: !demoPlugin.value.client_support.clients.includes(client.id) || (client.id === 'chatgpt' && !demoPlugin.value.client_support.chatgpt_binding),
-  description: client.id === 'chatgpt' && !demoPlugin.value.client_support.chatgpt_binding
-    ? 'Unavailable: Context7 has no registered app binding'
-    : !demoPlugin.value.client_support.clients.includes(client.id) ? 'Not compatible with this release' : undefined,
+  disabled: !demoPlugin.value.client_support.clients.includes(client.id),
+  description: (() => {
+    const target = expectedDistribution(demoPlugin.value, [client.id])?.targets.find(item => item.client === client.id)
+    if (target) return deliveryLabel(target.delivery)
+    return client.id === 'chatgpt' ? 'Unavailable: Context7 has no registered app binding in signed policy' : 'Not compatible with an active release'
+  })(),
 })))
 const heroClientLabel = (id: ClientID, name: string) => id === 'copilot' ? 'Copilot' : name
 const initialHeroTarget = heroTargets.value.find(client => client.id === 'cursor')?.id ?? heroTargets.value[0]!.id

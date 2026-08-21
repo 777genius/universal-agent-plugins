@@ -92,17 +92,22 @@ in `plugins/docker-hub/mcp.json`.
   or secrets were recorded. The managed package and disposable profiles were
   removed. This proves Figma OAuth/runtime in Codex only; see
   [`codex-figma-oauth-2026-08-09.json`](../tests/e2e/results/codex-figma-oauth-2026-08-09.json).
-- Codex CLI 0.144.1, Cursor Agent 2026.07.09, and Kiro CLI 2.16.0 each
+- At exact repository revision `d3c3155285d37aa555615cf4301e3ab5eb347a17`
+  and catalog digest `sha256:207df0cd3932d305bbc265357d1a7f6b68ef314ff725629db6ebe27d4c403915`,
+  Codex CLI 0.144.1, Cursor Agent 2026.07.09, and Kiro CLI 2.16.0 each
   completed real agent-to-plugin checks for Context7, Cloudflare Docs, Chrome
   DevTools, and Agent Code Navigator in one disposable project. That is 12/12
   no-auth runtime checks across three clients. Codex CLI 0.144.1, Cursor Agent
   2026.08.04, and Kiro CLI 2.16.0 then each completed Notion OAuth and one
   synthetic read-only search, bringing the hero matrix to 15/15. The sanitized
-  records are pinned to exact source commits in
+  records are pinned to that exact historical package revision in
   [`agentplugins-hero-runtime-matrix-2026-08-08.json`](../tests/e2e/results/agentplugins-hero-runtime-matrix-2026-08-08.json).
-  A fail-closed test proves the stable catalog differs from those tested package
-  trees only in `plugins/*/README.md`; separate 26/26 and 25/25 lifecycle runs
-  cover the complete current package trees.
+  The current Chrome DevTools bridge tree
+  (`sha256:3a98671d9e4052d0df4a326d04a2b028f187c19f881fcdad663d562d5fc83f33`)
+  and Cloudflare Docs bridge tree
+  (`sha256:0e63134f8a02ca8151939bea6bd67d029de482456e50ee8d432d9cc0047f68dd`)
+  are newer defaults and are pending fresh launch runtime evidence. Separate
+  lifecycle results remain valid only for the exact package trees they record.
 
 - Codex CLI 0.147.0 completed the release-gated public install on Linux: pinned
   `v0.1.1`, installed Context7 into a fresh `CODEX_HOME`, and called

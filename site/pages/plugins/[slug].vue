@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { defaultDistribution, evidenceLabel, validationLabel } from '~/utils/registry'
+import { defaultDistribution, deliveryLabel, evidenceLabel, validationLabel } from '~/utils/registry'
 const route = useRoute()
 const registry = useRegistry()
 const { pluginIcon, sourceUrl, repositoryUrl } = useSite()
@@ -29,7 +29,7 @@ useHead({ link: [{ rel: 'canonical', href: canonical }] })
       <article class="plugin-profile">
         <div class="plugin-profile__heading">
           <span class="plugin-profile__icon"><img :src="pluginIcon(plugin)" alt="" width="54" height="54" /></span>
-          <div><div class="plugin-profile__meta"><span class="source-pill">Default source · {{ distribution.label }}</span><span>v{{ plugin.version }}</span></div><h1>{{ plugin.display_name }}</h1></div>
+          <div><div class="plugin-profile__meta"><span class="source-pill">{{ plugin.installable ? 'Default source' : 'Unavailable provenance' }} · {{ distribution.label }}</span><span>v{{ plugin.version }}</span></div><h1>{{ plugin.display_name }}</h1></div>
         </div>
         <p class="plugin-profile__description">{{ plugin.description }}</p>
         <dl class="plugin-facts">
@@ -44,13 +44,13 @@ useHead({ link: [{ rel: 'canonical', href: canonical }] })
         <div class="plugin-profile__section">
           <h2>Sources and alternatives</h2>
           <ul class="distribution-list">
-            <li v-for="item in plugin.distributions" :key="item.id"><strong>{{ item.id }}</strong> — {{ item.label }}<span v-if="item.id === plugin.default_distribution"> (Default)</span><br /><small>{{ item.source.repository }}@{{ item.source.revision }}//{{ item.source.path }}</small></li>
+            <li v-for="item in plugin.distributions" :key="item.id"><strong>{{ item.id }}</strong> — {{ item.label }}<span v-if="item.id === plugin.default_distribution"> (Selected default)</span><span v-else-if="item.id === plugin.declared_default_distribution"> (Declared default)</span> · {{ item.status }} / {{ item.release_status }}<br /><small>{{ item.source.repository }}@{{ item.source.revision }}//{{ item.source.path }}</small><ul><li v-for="target in item.targets" :key="target.client">{{ target.client }} — {{ deliveryLabel(target.delivery) }}; scopes: {{ target.scopes.join(', ') }}<template v-if="target.app_binding">; app key <code>{{ target.app_binding.app_key }}</code>, app ID <code>{{ target.app_binding.id }}</code>, MCP server <code>{{ target.app_binding.mcp_server }}</code></template></li></ul></li>
           </ul>
         </div>
         <div class="status-card">
           <span class="validation-badge"><span>✓</span> {{ validationLabel(plugin) }}</span>
           <ul v-if="plugin.evidence.length" class="evidence-list">
-            <li v-for="item in plugin.evidence" :key="`${item.client}-${item.level}`"><strong>{{ item.client }}: {{ evidenceLabel(item) }}</strong><span v-if="item.client_version || item.os || item.architecture || item.tested_at"> — {{ [item.client_version, item.os, item.architecture, item.tested_at].filter(Boolean).join(' · ') }}</span><span v-else> — legacy evidence record; open the report for the exact applicable environment</span> <a v-if="item.evidence_url?.startsWith('https://')" :href="item.evidence_url" target="_blank" rel="noreferrer">Evidence ↗</a></li>
+            <li v-for="item in plugin.evidence" :key="`${item.client}-${item.level}`"><strong>{{ item.client }}: {{ evidenceLabel(item) }}</strong><span v-if="item.client_version || item.os || item.architecture || item.tested_at"> — {{ [item.client_version, item.os, item.architecture, item.installer_version && `installer ${item.installer_version}`, item.dependency_identity, item.tested_at].filter(Boolean).join(' · ') }}</span><span v-else> — legacy evidence record; open the report for the exact applicable environment</span><br v-if="item.package_tree_digest" /><small v-if="item.package_tree_digest">Package {{ item.package_tree_digest }} · artifact {{ item.artifact_digest }}</small> <a v-if="item.evidence_url?.startsWith('https://')" :href="item.evidence_url" target="_blank" rel="noreferrer">Evidence ↗</a></li>
           </ul>
           <p v-else>No client runtime or OAuth evidence is recorded for this exact release. Schema validation covers package structure only.</p>
           <a :href="`${repositoryUrl}/blob/main/docs/VERIFICATION.md`" target="_blank" rel="noreferrer">Read verification evidence →</a>

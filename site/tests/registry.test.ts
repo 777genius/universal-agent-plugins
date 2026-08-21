@@ -3,11 +3,29 @@ import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { describe, it } from 'node:test'
 import { fileURLToPath } from 'node:url'
-import { expectedDistribution, githubSourceUrl, isPinnedExternalSource, mirroredIconPath, parseDirectoryData, parseRegistryIndex, validationLabel } from '../utils/registry.ts'
+import { deliveryLabel, expectedDistribution, githubSourceUrl, isPinnedExternalSource, mirroredIconPath, parseDirectoryData, parseRegistryIndex, validationLabel } from '../utils/registry.ts'
 
 const fixture = JSON.parse(readFileSync(fileURLToPath(new URL('./fixtures/registry.valid.json', import.meta.url)), 'utf8')) as unknown
 const snapshotFixture = JSON.parse(readFileSync(fileURLToPath(new URL('./fixtures/directory.snapshot.json', import.meta.url)), 'utf8')) as unknown
 const stylesheet = readFileSync(fileURLToPath(new URL('../assets/css/main.css', import.meta.url)), 'utf8')
+
+interface SnapshotFixture {
+  products: Array<{ default_distribution: string }>
+  distributions: Array<{
+    id: string
+    status: string
+    release_policies: Array<{
+      status: string
+      targets: Array<{ client: string, delivery: string, scopes: string[], app_binding?: { app_key: string, id: string, mcp_server: string } }>
+    }>
+  }>
+  evidence: Array<{ package_tree_digest: string, installer_version?: string, artifact: { digest: string } }>
+  revocations: Array<{ distribution_id: string, release_sequence: number }>
+}
+
+function signedFixture(): SnapshotFixture & Record<string, unknown> {
+  return structuredClone(snapshotFixture) as SnapshotFixture & Record<string, unknown>
+}
 
 type RGB = [number, number, number]
 
@@ -41,13 +59,82 @@ describe('registry parsing', () => {
     assert.equal(directory.plugins[0]?.display_name, 'Demo')
     assert.equal(directory.plugins[0]?.distributions.length, 2)
     assert.equal(directory.plugins[0]?.default_distribution, 'example/demo')
+    assert.equal(directory.plugins[0]?.declared_default_distribution, 'example/demo')
     assert.deepEqual(directory.plugins[0]?.client_support.clients, ['codex', 'cursor', 'kiro'])
     assert.equal(expectedDistribution(directory.plugins[0]!, ['codex', 'cursor'])?.id, 'example/demo')
     assert.equal(expectedDistribution(directory.plugins[0]!, ['codex', 'kiro'])?.id, 'example/demo-bridge')
     assert.deepEqual(directory.plugins[0]?.evidence[0], {
       client: 'codex', level: 'runtime', outcome: 'passed', client_version: '0.200.0', os: 'linux', architecture: 'amd64', tested_at: '2026-08-19T00:00:00Z', evidence_url: `https://github.com/example/evidence/blob/${'e'.repeat(40)}/evidence/demo.json`,
+      package_tree_digest: `sha256:${'1'.repeat(64)}`, installer_version: '0.1.6', artifact_digest: `sha256:${'3'.repeat(64)}`,
     })
     assert.equal(validationLabel(directory.plugins[0]!), 'Runtime tested')
+  })
+
+  it('selects an active bridge and falls back when the declared default is suspended', () => {
+    const raw = signedFixture()
+    raw.distributions[0]!.status = 'suspended'
+    const directory = parseDirectoryData(raw, 'published_snapshot')
+    const plugin = directory.plugins[0]!
+    assert.equal(plugin.declared_default_distribution, 'example/demo')
+    assert.equal(plugin.default_distribution, 'example/demo-bridge')
+    assert.equal(plugin.default_fallback_reason, 'Declared default is suspended')
+    assert.equal(expectedDistribution(plugin, ['codex', 'kiro'])?.id, 'example/demo-bridge')
+    assert.equal(plugin.distributions.find(item => item.id === 'example/demo')?.selectable, false)
+    assert.equal(plugin.distributions.filter(item => item.selectable).length, 1)
+  })
+
+  it('never selects revoked or superseded releases for a new install', () => {
+    const revoked = signedFixture()
+    revoked.revocations.push({ distribution_id: 'example/demo', release_sequence: 2 })
+    const revokedPlugin = parseDirectoryData(revoked, 'published_snapshot').plugins[0]!
+    assert.equal(revokedPlugin.default_distribution, 'example/demo-bridge')
+    assert.equal(revokedPlugin.distributions[0]?.release_status, 'revoked')
+    assert.equal(revokedPlugin.distributions[0]?.selectable, false)
+
+    const superseded = signedFixture()
+    superseded.distributions[0]!.release_policies[0]!.status = 'superseded'
+    const supersededPlugin = parseDirectoryData(superseded, 'published_snapshot').plugins[0]!
+    assert.equal(supersededPlugin.default_distribution, 'example/demo-bridge')
+    assert.equal(supersededPlugin.distributions[0]?.release_status, 'superseded')
+    assert.equal(expectedDistribution(supersededPlugin, ['codex'])?.id, 'example/demo-bridge')
+  })
+
+  it('preserves signed delivery, scopes, and the exact Cloudflare ChatGPT app binding', () => {
+    const raw = signedFixture()
+    const bridge = raw.distributions[1]!
+    raw.products[0]!.default_distribution = bridge.id
+    bridge.release_policies[0]!.targets = [
+      { client: 'codex', delivery: 'managed', scopes: ['user'] },
+      { client: 'vscode', delivery: 'prepared', scopes: ['user'] },
+      { client: 'chatgpt', delivery: 'manual_activation', scopes: ['user'], app_binding: { app_key: 'cloudflare-docs', id: 'plugin_asdk_app_6a78e90cf73481918ef10cdb87cd4bb4', mcp_server: 'cloudflare-docs' } },
+    ]
+    const plugin = parseDirectoryData(raw, 'published_snapshot').plugins[0]!
+    const selected = expectedDistribution(plugin, ['chatgpt'])!
+    assert.equal(selected.id, bridge.id)
+    assert.deepEqual(selected.targets, bridge.release_policies[0]!.targets)
+    assert.equal(deliveryLabel(selected.targets[0]!.delivery), 'Managed install')
+    assert.equal(deliveryLabel(selected.targets[1]!.delivery), 'Prepared; client import remains')
+    assert.equal(deliveryLabel(selected.targets[2]!.delivery), 'Manual activation required')
+    assert.deepEqual(plugin.client_support.app_bindings.chatgpt, bridge.release_policies[0]!.targets[2]!.app_binding)
+  })
+
+  it('accepts evidence only for the selected release exact package tuple', () => {
+    const raw = signedFixture()
+    raw.evidence[0]!.package_tree_digest = `sha256:${'9'.repeat(64)}`
+    const plugin = parseDirectoryData(raw, 'published_snapshot').plugins[0]!
+    assert.deepEqual(plugin.evidence, [])
+    assert.equal(validationLabel(plugin), 'Schema validated')
+
+    const incomplete = signedFixture()
+    delete incomplete.evidence[0]!.installer_version
+    assert.deepEqual(parseDirectoryData(incomplete, 'published_snapshot').plugins[0]!.evidence, [])
+  })
+
+  it('keeps one product card when signed provenance has alternatives', () => {
+    const directory = parseDirectoryData(signedFixture(), 'published_snapshot')
+    assert.equal(directory.plugins.length, 1)
+    assert.equal(directory.plugins[0]?.distributions.length, 2)
+    assert.deepEqual(directory.plugins.map(plugin => plugin.name), ['demo'])
   })
 
   it('requires publication identity only at the signed production boundary', () => {
@@ -58,6 +145,7 @@ describe('registry parsing', () => {
     assert.equal(preview.data_source, 'review_preview')
     assert.equal(preview.plugins[0]?.source.revision, null)
     assert.throws(() => parseDirectoryData(unresolved, 'published_snapshot'), /signed sequence, generated_at, and expires_at/)
+    assert.throws(() => parseDirectoryData(fixture, 'published_snapshot'), /requires signed snapshot products and distributions/)
   })
 
   it('normalizes valid built-in and external entries', () => {

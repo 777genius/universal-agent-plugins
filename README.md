@@ -126,9 +126,13 @@ client-specific.
 | <img src="assets/client-icons/vscode.svg" width="20" height="20" alt=""> VS Code | Shared Copilot plugin when its CLI is available | Automatic; otherwise the exact setting is shown |
 | <img src="assets/client-icons/kiro.svg" width="20" height="20" alt=""> Kiro | Native folder package | Follow the exact Power import hint |
 
-All 26 packages pass standard schema validation. Five starter plugins passed
-15/15 runtime checks across Codex, Cursor, and Kiro, including Notion OAuth in
-all three; Figma OAuth passed separately in Codex. Installation coverage is
+All 26 packages pass standard schema validation. At historical repository revision
+`d3c3155285d37aa555615cf4301e3ab5eb347a17` (catalog digest
+`sha256:207df0cd3932d305bbc265357d1a7f6b68ef314ff725629db6ebe27d4c403915`),
+five starter plugins passed 15/15 runtime checks across Codex, Cursor, and Kiro,
+including Notion OAuth in all three; Figma OAuth passed separately in Codex.
+The current Chrome DevTools and Cloudflare Docs bridge defaults have different
+tree digests and are pending fresh launch runtime evidence. Installation coverage is
 broader than runtime coverage, and the standard itself is not a universal
 marketplace. See the [test matrix](docs/TEST_MATRIX.md), [verification
 report](docs/VERIFICATION.md), and [compatibility guide](docs/COMPATIBILITY.md)

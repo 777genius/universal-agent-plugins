@@ -57,9 +57,16 @@ binding. It does not prove ChatGPT Work UI activation or package-routed runtime.
 | [`agentplugins 0.1.6` post-merge run](https://github.com/777genius/universal-agent-plugins/actions/runs/31363316668) | Catalog v1 26/26 plus catalog-v2 Cloudflare Docs | 26/26 Cursor lifecycle; ChatGPT v2 dry-run, projection, State v3 repair, guarded removal, and cleanup passed | Not implied | Not tested |
 | `agentplugins 0.1.6`, hero projections | 5 pinned hero packages | 25/25 add/remove flows across isolated Codex, Cursor, Copilot, VS Code, and Kiro projections | Not implied | Not tested |
 | `agentplugins 0.1.6` + Copilot CLI 1.0.78 | 5 pinned hero packages | 5/5 automatic marketplace registration, native install, verification, uninstall, and marketplace cleanup in an isolated HOME | Not implied | Not tested |
-| Interactive hero runtime matrix | 5 local packages | Client-specific test loading in Codex, Cursor, and Kiro | 15/15 checks passed across 3 clients | 3/3 Notion OAuth + read-only runtime passed |
+| [Interactive hero runtime matrix](../tests/e2e/results/agentplugins-hero-runtime-matrix-2026-08-08.json) | 5 packages at exact revision `d3c3155…` and catalog digest `207df0cd…c403915` | Client-specific test loading in Codex, Cursor, and Kiro | 15/15 checks passed across 3 clients for that exact historical revision | 3/3 Notion OAuth + read-only runtime passed |
 | [Interactive Codex Figma check](../tests/e2e/results/codex-figma-oauth-2026-08-09.json) | `figma 0.1.0` via `agentplugins 0.1.5` | Add, install/enable, and cleanup passed in isolated profiles | Read-only Figma MCP `whoami` passed | Figma OAuth passed in Codex only |
 | [ChatGPT desktop package check](../tests/e2e/results/chatgpt-cloudflare-docs-desktop-package-2026-08-10.json) | Public marketplace at merge `d37b49d` | Official manager add, enabled state, cache, and app-server read passed | Not implied | No auth required; Codex backend app snapshot did not include the ChatGPT development binding |
+
+The current bridge-default trees for Chrome DevTools
+(`sha256:3a98671d9e4052d0df4a326d04a2b028f187c19f881fcdad663d562d5fc83f33`)
+and Cloudflare Docs
+(`sha256:0e63134f8a02ca8151939bea6bd67d029de482456e50ee8d432d9cc0047f68dd`)
+are pending new launch runtime evidence; the historical 15/15 row does not
+apply to those changed package digests.
 
 The three `0.1.6` lifecycle/projection rows come from public run `31363316668` at
 main commit [`d3941c0`](https://github.com/777genius/universal-agent-plugins/commit/d3941c0ec097a44123eb9c40df940a3cda2a3406).

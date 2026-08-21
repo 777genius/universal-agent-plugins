@@ -7,6 +7,7 @@ import type {
   PluginAuthor,
   PluginIcon,
   PluginSource,
+  ReleaseTarget,
   RegistryIndex,
   RegistryPlugin,
 } from '../types/registry'
@@ -86,11 +87,11 @@ function clientIDs(value: unknown, context: string): ClientID[] {
 
 const legacyDelivery: RegistryPlugin['client_support']['delivery'] = {
   codex: 'prepared',
-  chatgpt: 'manual_activation_required',
-  cursor: 'installed',
-  copilot: 'installed',
+  chatgpt: 'manual_activation',
+  cursor: 'managed',
+  copilot: 'managed',
   vscode: 'prepared',
-  kiro: 'manual_activation_required',
+  kiro: 'manual_activation',
 }
 
 function legacyAuthentication(name: string): RegistryPlugin['authentication'] {
@@ -154,6 +155,11 @@ function parseLegacyIndex(input: Record<string, unknown>): RegistryIndex {
       version,
       compatible_clients: compatibleClients,
       evidence,
+      status: 'active',
+      release_status: 'active',
+      selectable: true,
+      targets: compatibleClients.map(client => ({ client, delivery: legacyDelivery[client]!, scopes: ['user'] })),
+      components,
     }
     return {
       name,
@@ -167,9 +173,11 @@ function parseLegacyIndex(input: Record<string, unknown>): RegistryIndex {
       source: parsedSource,
       install_source: installSource,
       built_in: raw.built_in,
+      installable: true,
       components,
       ...(raw.icon === undefined ? {} : { icon: icon(raw.icon, context) }),
       default_distribution: distributionID,
+      declared_default_distribution: distributionID,
       distributions: [distribution],
       evidence,
       authentication: legacyAuthentication(name),
@@ -177,33 +185,75 @@ function parseLegacyIndex(input: Record<string, unknown>): RegistryIndex {
         resolution: raw.built_in ? 'directory' : 'install_time',
         clients: compatibleClients,
         delivery: legacyDelivery,
-        chatgpt_binding: compatibleClients.includes('chatgpt'),
+        scopes: Object.fromEntries(compatibleClients.map(client => [client, ['user']])),
+        app_bindings: {},
       },
     }
   })
   return { schema_version: 1, data_source: 'legacy_compatibility', plugins }
 }
 
-function evidenceFromSnapshot(input: unknown, distributionID: string, releaseSequence: number, selectedIDs?: readonly string[]): ClientEvidence[] {
+function releaseTargets(value: unknown, context: string): ReleaseTarget[] {
+  if (!Array.isArray(value) || !value.length) throw new Error(`${context}: targets are required`)
+  const seen = new Set<ClientID>()
+  return value.map((raw, index): ReleaseTarget => {
+    if (!record(raw)) throw new Error(`${context}: target ${index} must be an object`)
+    const client = requiredString(raw, 'client', `${context} target ${index}`) as ClientID
+    if (!CLIENTS.has(client) || seen.has(client)) throw new Error(`${context}: target ${index} has an invalid or duplicate client`)
+    seen.add(client)
+    const delivery = requiredString(raw, 'delivery', `${context} target ${client}`)
+    if (!['managed', 'prepared', 'manual_activation'].includes(delivery)) throw new Error(`${context}: target ${client} has invalid delivery`)
+    const scopes = stringArray(raw.scopes, 'scopes', `${context} target ${client}`)
+    let appBinding: ReleaseTarget['app_binding']
+    if (record(raw.app_binding)) {
+      appBinding = {
+        app_key: requiredString(raw.app_binding, 'app_key', `${context} target ${client} app binding`),
+        id: requiredString(raw.app_binding, 'id', `${context} target ${client} app binding`),
+        mcp_server: requiredString(raw.app_binding, 'mcp_server', `${context} target ${client} app binding`),
+      }
+    }
+    if (client === 'chatgpt' && !appBinding) throw new Error(`${context}: ChatGPT target requires app_binding`)
+    if (client !== 'chatgpt' && appBinding) throw new Error(`${context}: app_binding is valid only for ChatGPT`)
+    return { client, delivery: delivery as ReleaseTarget['delivery'], scopes, ...(appBinding ? { app_binding: appBinding } : {}) }
+  })
+}
+
+function evidenceFromSnapshot(input: unknown, distributionID: string, releaseSequence: number, treeDigest: string, selectedIDs?: readonly string[]): ClientEvidence[] {
   if (!Array.isArray(input)) return []
   return input.flatMap((item): ClientEvidence[] => {
     if (!record(item)) return []
     if (item.distribution_id !== distributionID || item.release_sequence !== releaseSequence) return []
+    if (item.package_tree_digest !== treeDigest) return []
     if (selectedIDs && !selectedIDs.includes(String(item.id))) return []
     if (!CLIENTS.has(item.client as ClientID)) return []
     const level = item.level
     const outcome = item.outcome
     if (!['schema', 'materialization', 'discovery', 'runtime', 'oauth'].includes(String(level))) return []
     if (!['passed', 'failed', 'inconclusive', 'not_tested', 'not_applicable'].includes(String(outcome))) return []
+    const clientVersion = optionalString(item, 'client_version')
+    const installerVersion = optionalString(item, 'installer_version')
+    const os = optionalString(item, 'os')
+    const architecture = optionalString(item, 'architecture')
+    const testedAt = optionalString(item, 'observed_at')
+    if (!clientVersion || !installerVersion || !os || !architecture || !testedAt) return []
+    if (!record(item.artifact)
+      || typeof item.artifact.repository !== 'string' || !REPOSITORY.test(item.artifact.repository)
+      || typeof item.artifact.revision !== 'string' || !REVISION.test(item.artifact.revision)
+      || typeof item.artifact.path !== 'string' || !item.artifact.path
+      || typeof item.artifact.digest !== 'string' || !DIGEST.test(item.artifact.digest)) return []
     return [{
       client: item.client as ClientID,
       level: level as ClientEvidence['level'],
       outcome: outcome as ClientEvidence['outcome'],
-      client_version: optionalString(item, 'client_version'),
-      os: optionalString(item, 'os'),
-      architecture: optionalString(item, 'architecture'),
-      tested_at: optionalString(item, 'observed_at') ?? optionalString(item, 'tested_at') ?? optionalString(item, 'timestamp'),
-      evidence_url: record(item.artifact) ? `https://github.com/${String(item.artifact.repository)}/blob/${String(item.artifact.revision)}/${String(item.artifact.path)}` : optionalString(item, 'evidence_url'),
+      client_version: clientVersion,
+      os,
+      architecture,
+      tested_at: testedAt,
+      evidence_url: `https://github.com/${item.artifact.repository}/blob/${item.artifact.revision}/${item.artifact.path}`,
+      package_tree_digest: treeDigest,
+      ...(optionalString(item, 'dependency_identity') ? { dependency_identity: optionalString(item, 'dependency_identity') } : {}),
+      installer_version: installerVersion,
+      artifact_digest: item.artifact.digest,
     }]
   })
 }
@@ -224,6 +274,7 @@ function parseSnapshot(input: Record<string, unknown>, mode: 'published_snapshot
     if (distributionRecords.has(id)) throw new Error(`duplicate distribution ${id}`)
     distributionRecords.set(id, raw)
   }
+  const revoked = new Set((Array.isArray(input.revocations) ? input.revocations : []).filter(record).map(item => `${String(item.distribution_id)}:${String(item.release_sequence)}`))
   const seen = new Set<string>()
   const plugins = input.products.map((raw, index): RegistryPlugin => {
     const context = `Directory product ${index}`
@@ -240,23 +291,34 @@ function parseSnapshot(input: Record<string, unknown>, mode: 'published_snapshot
       const kind = requiredString(item, 'kind', `distribution ${id}`) as DistributionKind
       if (!KINDS.has(kind)) throw new Error(`distribution ${id}: unsupported kind`)
       if (!Array.isArray(item.releases) || !item.releases.length) throw new Error(`distribution ${id}: releases are required`)
+      const status = requiredString(item, 'status', `distribution ${id}`)
+      if (!['candidate', 'active', 'suspended'].includes(status)) throw new Error(`distribution ${id}: unsupported status`)
       const policies = Array.isArray(item.release_policies) ? item.release_policies.filter(record) : []
-      const activeSequences = new Set(policies.filter(policy => policy.status === undefined || policy.status === 'active').map(policy => policy.release_sequence))
-      const activeReleases = item.releases.filter(record).filter(release => activeSequences.has(release.sequence))
-      const release = activeReleases.sort((a, b) => Number(b.sequence) - Number(a.sequence))[0]
-      if (!release || !Number.isInteger(release.sequence)) throw new Error(`distribution ${id}: active release sequence is required`)
+      const releases = item.releases.filter(record).sort((a, b) => Number(b.sequence) - Number(a.sequence))
+      const activeRelease = status === 'active' ? releases.find((release) => {
+        const policy = policies.find(candidate => candidate.release_sequence === release.sequence)
+        return policy?.status === 'active' && !revoked.has(`${id}:${String(release.sequence)}`)
+      }) : undefined
+      const release = activeRelease ?? releases[0]
+      if (!release || !Number.isInteger(release.sequence)) throw new Error(`distribution ${id}: release sequence is required`)
       const packageSource = source({
         ...(record(release.package_source) ? release.package_source : {}),
         manifest_digest: release.manifest_digest,
         tree_digest: release.tree_digest,
       }, `distribution ${id}`, mode === 'review_preview')
-      const policy = policies.find(candidate => candidate.release_sequence === release.sequence) ?? release
-      const compatible = Array.isArray(policy.targets)
-        ? clientIDs(policy.targets.filter(record).map(target => target.client), `distribution ${id} compatible clients`)
-        : clientIDs(policy.compatible_clients ?? [], `distribution ${id} compatible clients`)
-      if (!compatible.length) throw new Error(`distribution ${id}: at least one compatible client is required`)
-      const selectedEvidence = Array.isArray(policy.current_evidence) ? policy.current_evidence.filter(value => typeof value === 'string') as string[] : undefined
-      const evidence = evidenceFromSnapshot(input.evidence ?? input.verification_summaries ?? input.current_verification, id, release.sequence as number, selectedEvidence)
+      const policy = policies.find(candidate => candidate.release_sequence === release.sequence)
+      if (!policy) throw new Error(`distribution ${id}: release ${String(release.sequence)} has no signed policy`)
+      const targets = releaseTargets(policy.targets, `distribution ${id} release ${String(release.sequence)}`)
+      const compatible = targets.map(target => target.client)
+      const policyStatus = requiredString(policy, 'status', `distribution ${id} release policy`)
+      if (!['active', 'superseded', 'revoked'].includes(policyStatus)) throw new Error(`distribution ${id}: unsupported release status`)
+      const releaseStatus = revoked.has(`${id}:${String(release.sequence)}`) ? 'revoked' : policyStatus
+      if (!Array.isArray(policy.current_evidence) || policy.current_evidence.some(value => typeof value !== 'string')) throw new Error(`distribution ${id}: current_evidence must be an array of evidence IDs`)
+      const selectedEvidence = policy.current_evidence as string[]
+      const treeDigest = digestValue(release.tree_digest, `distribution ${id} tree digest`)
+      const evidence = evidenceFromSnapshot(input.evidence ?? input.verification_summaries ?? input.current_verification, id, release.sequence as number, treeDigest, selectedEvidence)
+      const components = stringArray(release.components ?? [], 'components', `distribution ${id}`) as ComponentID[]
+      if (components.some(component => !COMPONENTS.has(component))) throw new Error(`distribution ${id}: unsupported component`)
       return {
         id,
         kind,
@@ -267,17 +329,18 @@ function parseSnapshot(input: Record<string, unknown>, mode: 'published_snapshot
         version: optionalString(release, 'version') ?? optionalString(release, 'package_version') ?? 'unversioned',
         compatible_clients: compatible,
         evidence,
+        status: status as DistributionView['status'],
+        release_status: releaseStatus as DistributionView['release_status'],
+        selectable: Boolean(activeRelease),
+        targets,
+        components,
       }
     })
-    const selected = distributions.find(item => item.id === defaultID)!
-    const defaultRecord = distributionRecords.get(defaultID)
-    const defaultRelease = defaultRecord && Array.isArray(defaultRecord.releases)
-      ? defaultRecord.releases.filter(record).sort((a, b) => Number(b.sequence) - Number(a.sequence))[0]
-      : undefined
-    const components = stringArray(raw.components ?? raw.component_inventory ?? defaultRelease?.components ?? [], 'components', context) as ComponentID[]
-    if (components.some(component => !COMPONENTS.has(component))) throw new Error(`${context}: unsupported component`)
+    const declared = distributions.find(item => item.id === defaultID)!
+    const priority: Record<DistributionKind, number> = { upstream: 0, community_bridge: 1, community: 2, direct: 3 }
+    const selected = declared.selectable ? declared : distributions.filter(item => item.selectable).sort((a, b) => priority[a.kind] - priority[b.kind])[0] ?? declared
+    const components = selected.components
     const productAuthor = record(raw.author) ? author(raw.author, context) : { name: selected.publisher }
-    const auth = raw.authentication
     return {
       name,
       display_name: optionalString(raw, 'display_name') ?? name,
@@ -290,17 +353,21 @@ function parseSnapshot(input: Record<string, unknown>, mode: 'published_snapshot
       source: selected.source,
       install_source: name,
       built_in: true,
+      installable: selected.selectable,
       components,
       ...(raw.icon === undefined ? {} : { icon: icon(record(raw.icon) && raw.icon.sha256 === undefined ? { path: raw.icon.path, sha256: raw.icon.digest } : raw.icon, context) }),
-      default_distribution: defaultID,
+      default_distribution: selected.id,
+      declared_default_distribution: defaultID,
+      ...(selected.id === defaultID ? {} : { default_fallback_reason: declared.status !== 'active' ? `Declared default is ${declared.status}` : `Declared default release is ${declared.release_status}` }),
       distributions,
       evidence: selected.evidence,
-      authentication: ['none', 'client_managed', 'oauth', 'unknown'].includes(String(auth)) ? auth as RegistryPlugin['authentication'] : 'unknown',
+      authentication: 'unknown',
       client_support: {
         resolution: 'directory',
-        clients: [...new Set(distributions.flatMap(item => item.compatible_clients))],
-        delivery: record(raw.delivery) ? raw.delivery as RegistryPlugin['client_support']['delivery'] : legacyDelivery,
-        chatgpt_binding: raw.chatgpt_binding === true,
+        clients: [...new Set(distributions.filter(item => item.selectable).flatMap(item => item.compatible_clients))],
+        delivery: Object.fromEntries(selected.targets.map(target => [target.client, target.delivery])),
+        scopes: Object.fromEntries(selected.targets.map(target => [target.client, target.scopes])),
+        app_bindings: Object.fromEntries(selected.targets.filter(target => target.app_binding).map(target => [target.client, target.app_binding!])),
       },
     }
   })
@@ -315,7 +382,10 @@ function parseSnapshot(input: Record<string, unknown>, mode: 'published_snapshot
 
 export function parseDirectoryData(input: unknown, mode?: 'published_snapshot' | 'review_preview'): RegistryIndex {
   if (!record(input)) throw new Error('Directory data must be an object')
-  if ('plugins' in input) return parseLegacyIndex(input)
+  if ('plugins' in input) {
+    if (mode === 'published_snapshot') throw new Error('published snapshot mode requires signed snapshot products and distributions')
+    return parseLegacyIndex(input)
+  }
   return parseSnapshot(input, mode ?? 'review_preview')
 }
 
@@ -349,11 +419,17 @@ export function defaultDistribution(plugin: RegistryPlugin): DistributionView {
 }
 
 export function expectedDistribution(plugin: RegistryPlugin, targets: readonly ClientID[]): DistributionView | undefined {
-  const supportsAll = (distribution: DistributionView) => targets.every(target => distribution.compatible_clients.includes(target))
+  const supportsAll = (distribution: DistributionView) => distribution.selectable && targets.every(target => distribution.compatible_clients.includes(target))
   const declared = defaultDistribution(plugin)
   if (supportsAll(declared)) return declared
   const priority: Record<DistributionKind, number> = { upstream: 0, community_bridge: 1, community: 2, direct: 3 }
   return plugin.distributions.filter(supportsAll).sort((a, b) => priority[a.kind] - priority[b.kind])[0]
+}
+
+export function deliveryLabel(delivery: ReleaseTarget['delivery']): string {
+  if (delivery === 'managed') return 'Managed install'
+  if (delivery === 'prepared') return 'Prepared; client import remains'
+  return 'Manual activation required'
 }
 
 export function githubSourceUrl(plugin: RegistryPlugin, distribution = defaultDistribution(plugin)): string {
