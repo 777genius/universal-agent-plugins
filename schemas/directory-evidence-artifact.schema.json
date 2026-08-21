@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-plugins.org/schemas/directory-evidence-artifact.schema.json",
+  "title": "Universal Agent Plugins immutable verification evidence artifact",
+  "type": "object",
+  "required": ["schema_version", "id", "distribution_id", "release_sequence", "package_tree_digest", "level", "outcome"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._/-]*$"},
+    "distribution_id": {"type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*/[a-z0-9]+(?:-[a-z0-9]+)*$"},
+    "release_sequence": {"type": "integer", "minimum": 1},
+    "package_tree_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "level": {"enum": ["schema", "materialization", "discovery", "runtime", "oauth"]},
+    "outcome": {"enum": ["passed", "failed", "inconclusive", "not_tested", "not_applicable"]},
+    "client": {"enum": ["codex", "chatgpt", "cursor", "copilot", "vscode", "kiro"]},
+    "client_version": {"type": "string", "minLength": 1},
+    "installer_version": {"type": "string", "minLength": 1},
+    "os": {"type": "string", "minLength": 1},
+    "architecture": {"type": "string", "minLength": 1},
+    "dependency_identity": {"type": "string", "minLength": 1},
+    "observed_at": {"type": "string", "format": "date-time"}
+  },
+  "additionalProperties": false,
+  "allOf": [
+    {"if": {"properties": {"level": {"const": "schema"}}}, "then": {"not": {"required": ["client"]}}},
+    {"if": {"properties": {"level": {"enum": ["materialization", "discovery", "runtime", "oauth"]}}}, "then": {"required": ["client", "client_version", "installer_version", "os", "architecture", "observed_at"]}}
+  ]
+}

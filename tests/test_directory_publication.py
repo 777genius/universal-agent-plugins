@@ -432,6 +432,7 @@ class PublicationLifecycleTests(unittest.TestCase):
             self.assertEqual(environment["GIT_LFS_SKIP_SMUDGE"], "1")
             self.assertEqual(environment["GIT_CONFIG_GLOBAL"], os.devnull)
             self.assertNotIn("GITHUB_TOKEN", environment)
+            self.assertNotIn("DIRECTORY_ED25519_PRIVATE_KEY", environment)
 
             package = root / "package"
             package.mkdir()
@@ -546,6 +547,91 @@ class PublicationLifecycleTests(unittest.TestCase):
             with self.assertRaisesRegex(publication.PublicationError, "reacquisition failed"):
                 prepare.build_candidate(broadened, config, "f" * 40, "external-broadened", previous, external_overrides={"example/external": missing})
 
+    def test_evidence_is_reacquired_verified_and_derived_before_signing(self) -> None:
+        payload = {
+            "schema_version": 1,
+            "id": "runtime-demo-codex",
+            "distribution_id": "example/demo",
+            "release_sequence": 1,
+            "package_tree_digest": "sha256:" + "1" * 64,
+            "level": "runtime",
+            "outcome": "passed",
+            "client": "codex",
+            "client_version": "0.200.0",
+            "installer_version": "0.1.6",
+            "os": "linux",
+            "architecture": "amd64",
+            "observed_at": "2026-08-19T00:00:00Z",
+        }
+
+        def source_for(pointer):  # type: ignore[no-untyped-def]
+            reviewed = {**payload, **pointer}
+            return {
+                "evidence": [reviewed],
+                "distributions": [{
+                    "id": "example/demo",
+                    "releases": [{"sequence": 1, "tree_digest": payload["package_tree_digest"]}],
+                    "release_policies": [{"release_sequence": 1, "current_evidence": [reviewed["id"]]}],
+                }],
+            }
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            repository = root / "evidence"
+            repository.mkdir()
+            subprocess.run(["/usr/bin/git", "init", "-q", str(repository)], check=True)
+            artifact_path = repository / "evidence.json"
+            artifact_body = publication.canonical_json(payload)
+            artifact_path.write_bytes(artifact_body)
+            subprocess.run(["/usr/bin/git", "-C", str(repository), "add", "evidence.json"], check=True)
+            subprocess.run(["/usr/bin/git", "-C", str(repository), "-c", "user.name=Fixture", "-c", "user.email=fixture@example.test", "commit", "-qm", "evidence"], check=True)
+            revision = subprocess.check_output(["/usr/bin/git", "-C", str(repository), "rev-parse", "HEAD"], text=True).strip()
+            locator = {
+                "repository": "example/evidence",
+                "revision": revision,
+                "path": "evidence.json",
+                "digest": publication.sha256_digest(artifact_body),
+            }
+            pointer = {"id": "runtime-demo-codex", "artifact": locator, "trust": {"kind": "reviewed_external"}}
+            config = prepare.load_config(ROOT / "registry" / "publication" / "config.json")
+            config["trusted_external_evidence"] = [copy.deepcopy(locator)]
+            selected = prepare.selected_evidence(source_for(pointer), {"example/demo"}, config, {"example/evidence": repository})
+            self.assertEqual(selected, [{**payload, "artifact": locator}])
+
+            invented_summary = {**pointer, "outcome": "failed", "repository": "invented/repository"}
+            derived = prepare.selected_evidence(source_for(invented_summary), {"example/demo"}, config, {"example/evidence": repository})
+            self.assertEqual(derived[0]["outcome"], "passed")
+            self.assertNotIn("repository", derived[0])
+
+            cases = []
+            nonexistent = copy.deepcopy(pointer)
+            nonexistent["artifact"]["path"] = "missing.json"
+            cases.append(("nonexistent", nonexistent, config, "unavailable"))
+            mismatched = copy.deepcopy(pointer)
+            mismatched["artifact"]["digest"] = "sha256:" + "0" * 64
+            mismatched_config = copy.deepcopy(config)
+            mismatched_config["trusted_external_evidence"] = [copy.deepcopy(mismatched["artifact"])]
+            cases.append(("digest", mismatched, mismatched_config, "digest mismatch"))
+            untrusted = copy.deepcopy(config)
+            untrusted["trusted_external_evidence"] = []
+            cases.append(("untrusted", pointer, untrusted, "not explicitly trusted"))
+            untrusted_workflow = {**pointer, "trust": {"kind": "github_actions", "workflow": "example/evidence/.github/workflows/evidence.yml"}}
+            cases.append(("untrusted workflow", untrusted_workflow, config, "workflow is not trusted"))
+            for label, changed_pointer, changed_config, error in cases:
+                with self.subTest(label=label), self.assertRaisesRegex(publication.PublicationError, error):
+                    prepare.selected_evidence(source_for(changed_pointer), {"example/demo"}, changed_config, {"example/evidence": repository})
+
+            artifact_path.write_bytes(b"{malformed\n")
+            subprocess.run(["/usr/bin/git", "-C", str(repository), "add", "evidence.json"], check=True)
+            subprocess.run(["/usr/bin/git", "-C", str(repository), "-c", "user.name=Fixture", "-c", "user.email=fixture@example.test", "commit", "-qm", "malformed"], check=True)
+            malformed_revision = subprocess.check_output(["/usr/bin/git", "-C", str(repository), "rev-parse", "HEAD"], text=True).strip()
+            malformed_locator = {**locator, "revision": malformed_revision, "digest": publication.sha256_digest(b"{malformed\n")}
+            malformed_pointer = {**pointer, "artifact": malformed_locator}
+            malformed_config = copy.deepcopy(config)
+            malformed_config["trusted_external_evidence"] = [copy.deepcopy(malformed_locator)]
+            with self.assertRaisesRegex(publication.PublicationError, "invalid UTF-8 JSON"):
+                prepare.selected_evidence(source_for(malformed_pointer), {"example/demo"}, malformed_config, {"example/evidence": repository})
+
 
 class PublicationWorkflowTests(unittest.TestCase):
     def test_workflow_security_and_exact_tree_contract(self) -> None:
@@ -621,6 +707,22 @@ class PublicationWorkflowTests(unittest.TestCase):
         deploy_commands = "\n".join(step.get("run", "") for step in workflow["jobs"]["deploy"]["steps"] if isinstance(step, dict))
         self.assertIn("needs.materialize_site.outputs.ledger_commit", text)
         self.assertIn("git -C exact-pages-tree rev-parse HEAD", deploy_commands)
+        exact_gate = workflow["jobs"]["gate_exact_staged_publication"]
+        gate_step = next(step for step in exact_gate["steps"] if step.get("name") == "Verify staged bytes and immutable identity before promotion")
+        self.assertEqual(exact_gate["needs"], ["sign", "materialize_site"])
+        self.assertEqual(gate_step["env"]["EXPECTED_SEQUENCE"], "${{ needs.sign.outputs.sequence }}")
+        self.assertEqual(gate_step["env"]["EXPECTED_SNAPSHOT_DIGEST"], "${{ needs.sign.outputs.snapshot_digest }}")
+        self.assertEqual(gate_step["env"]["EXPECTED_PUBLICATION_ID"], "${{ needs.sign.outputs.publication_id }}")
+        self.assertEqual(gate_step["env"]["EXPECTED_SOURCE_COMMIT"], "${{ needs.sign.outputs.marker_commit }}")
+        self.assertEqual(gate_step["env"]["EXPECTED_SIGNED_LEDGER_COMMIT"], "${{ needs.sign.outputs.ledger_commit }}")
+        self.assertIn("raw.githubusercontent.com", gate_step["run"])
+        self.assertIn('cmp --silent "${feed}/${relative}"', gate_step["run"])
+        self.assertIn("required_stable_launch_evidence", workflow["jobs"]["deploy"]["needs"])
+        self.assertIn("gate_exact_staged_publication", workflow["jobs"]["deploy"]["needs"])
+        self.assertEqual(workflow["jobs"]["required_stable_launch_evidence"]["needs"], "gate_exact_staged_publication")
+        self.assertIn("EXISTING_MATERIALIZED_COMMIT", site_commands)
+        self.assertIn("rerun site tree differs", site_commands)
+        self.assertIn('--materialized-output ../materialized-ledger.commit', signer_commands)
         for match in __import__("re").findall(r"uses:\s+([^\s]+)", text):
             if match.startswith("./"):
                 self.assertEqual(match, "./.github/workflows/live-e2e.yml")

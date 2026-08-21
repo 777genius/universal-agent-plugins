@@ -439,6 +439,12 @@ def _validate_evidence(value: Any, label: str) -> None:
     _string(artifact["repository"], REPOSITORY_RE, f"{label}.artifact.repository")
     _string(artifact["revision"], SHA_RE, f"{label}.artifact.revision")
     _string(artifact["path"], None, f"{label}.artifact.path", minimum=1)
+    artifact_path = artifact["path"]
+    require(
+        not artifact_path.startswith("/") and "\\" not in artifact_path
+        and ".." not in PurePosixPath(artifact_path).parts and "\x00" not in artifact_path,
+        f"{label}.artifact.path is unsafe",
+    )
     _string(artifact["digest"], DIGEST_RE, f"{label}.artifact.digest")
 
 

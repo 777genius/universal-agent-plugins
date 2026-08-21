@@ -139,10 +139,33 @@ def read_ref_state(repo: Path, remote: str, main_ref: str, ledger_ref: str, tag_
     return RefState(observed.get(main_ref), observed.get(ledger_ref), observed.get(tag_ref))
 
 
+def validate_materialized_descendant(repo: Path, materialized: str, signed: str) -> None:
+    """Authenticate the one allowed post-publication ledger descendant.
+
+    Site materialization is deliberately a separate, single-parent commit.  It
+    may change the Pages tree, but it cannot change any signed registry byte.
+    This lets an exact workflow rerun distinguish its own completed deployment
+    transaction from arbitrary forward movement of the protected ledger.
+    """
+    _require_sha(materialized, "materialized ledger")
+    _require_sha(signed, "signed ledger")
+    if materialized == signed:
+        raise CasError("materialized ledger must differ from the signed ledger")
+    parents = _git(repo, ["show", "-s", "--format=%P", materialized]).stdout.strip().split()
+    if parents != [signed]:
+        raise CasError("materialized ledger is not the exact signed-commit child")
+    if _git(repo, ["diff", "--quiet", signed, materialized, "--", "registry"], check=False).returncode != 0:
+        raise CasError("materialized ledger changed signed registry bytes")
+    message = _git(repo, ["show", "-s", "--format=%B", materialized]).stdout
+    if message != "chore(directory): materialize signed production site\n\n":
+        raise CasError("materialized ledger commit message is invalid")
+
+
 def atomic_transition(
     repo: Path, remote: str, *, source: str, marker: str, ledger_old: str,
     ledger_new: str, sequence_tag: str, attempts: int = 3,
     push_runner: Callable[[Sequence[str]], bool] | None = None,
+    materialized_output: Path | None = None,
 ) -> str:
     """Publish only exact pre-state, accept only exact committed state, else fail."""
     for value, label in ((source, "source"), (marker, "marker"), (ledger_old, "old ledger"), (ledger_new, "new ledger")):
@@ -155,6 +178,23 @@ def atomic_transition(
     ledger_ref = "refs/heads/directory-publication-ledger"
     before = RefState(source, ledger_old, None)
     committed = RefState(marker, ledger_new, ledger_new)
+    if materialized_output is not None:
+        materialized_output.unlink(missing_ok=True)
+
+    def accept(state: RefState) -> str | None:
+        if state == committed:
+            return "committed"
+        if state.main == marker and state.sequence_tag == ledger_new and state.ledger is not None:
+            # ls-remote proves the ref identity, then fetch and inspect that
+            # exact immutable object before treating it as our rerun state.
+            fetched = _git(repo, ["fetch", "--no-tags", remote, state.ledger], check=False)
+            if fetched.returncode != 0:
+                raise CasError("cannot acquire materialized ledger descendant")
+            validate_materialized_descendant(repo, state.ledger, ledger_new)
+            if materialized_output is not None:
+                materialized_output.write_text(state.ledger + "\n", encoding="ascii")
+            return "materialized"
+        return None
 
     def push(arguments: Sequence[str]) -> bool:
         if push_runner is not None:
@@ -174,8 +214,9 @@ def atomic_transition(
             state = read_ref_state(repo, remote, main_ref, ledger_ref, sequence_tag)
         except subprocess.CalledProcessError:
             continue
-        if state == committed:
-            return "committed"
+        accepted = accept(state)
+        if accepted is not None:
+            return accepted
         if state != before:
             raise CasError(f"publication ref conflict: observed {state}")
         push(arguments)
@@ -187,6 +228,9 @@ def atomic_transition(
             continue
         if state == committed:
             return "published"
+        accepted = accept(state)
+        if accepted is not None:
+            return accepted
         if state != before:
             raise CasError(f"publication ref conflict after push: observed {state}")
     raise CasError("publication push failed with exact pre-state still present")
@@ -242,11 +286,16 @@ def main() -> int:
     publish_parser.add_argument("--ledger-old", required=True)
     publish_parser.add_argument("--ledger-new", required=True)
     publish_parser.add_argument("--sequence-tag", required=True)
+    publish_parser.add_argument("--materialized-output", type=Path)
     materialize_parser = subparsers.add_parser("materialize")
     materialize_parser.add_argument("--repo", type=Path, default=Path.cwd())
     materialize_parser.add_argument("--remote", default="origin")
     materialize_parser.add_argument("--ledger-old", required=True)
     materialize_parser.add_argument("--ledger-new", required=True)
+    verify_materialized_parser = subparsers.add_parser("materialize-verify")
+    verify_materialized_parser.add_argument("--repo", type=Path, default=Path.cwd())
+    verify_materialized_parser.add_argument("--signed", required=True)
+    verify_materialized_parser.add_argument("--materialized", required=True)
     args = parser.parse_args()
     try:
         if args.command == "marker":
@@ -258,12 +307,16 @@ def main() -> int:
                 args.repo, args.remote, source=args.source, marker=args.marker,
                 ledger_old=args.ledger_old, ledger_new=args.ledger_new,
                 sequence_tag=args.sequence_tag,
+                materialized_output=args.materialized_output,
             )
-        else:
+        elif args.command == "materialize":
             result = materialize_transition(
                 args.repo, args.remote, ledger_old=args.ledger_old,
                 ledger_new=args.ledger_new,
             )
+        else:
+            validate_materialized_descendant(args.repo, args.materialized, args.signed)
+            result = "valid"
     except (CasError, OSError, subprocess.SubprocessError) as error:
         print(f"directory-publication-cas: {error}", file=sys.stderr)
         return 1

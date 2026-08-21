@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://agent-plugins.org/schemas/directory-evidence.schema.json",
-  "title": "Universal Agent Plugins Directory immutable verification observation",
+  "title": "Universal Agent Plugins Directory reviewed verification observation",
   "type": "object",
   "required": ["schema_version", "id", "distribution_id", "release_sequence", "package_tree_digest", "level", "outcome", "artifact"],
   "properties": {
@@ -25,10 +25,29 @@
       "properties": {
         "repository": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9][A-Za-z0-9._-]*$"},
         "revision": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
-        "path": {"type": "string", "minLength": 1},
+        "path": {"type": "string", "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*\\\\)[^\\u0000]+$"},
         "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
       },
       "additionalProperties": false
+    },
+    "trust": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["kind", "workflow"],
+          "properties": {
+            "kind": {"const": "github_actions"},
+            "workflow": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9][A-Za-z0-9._-]*/\\.github/workflows/[A-Za-z0-9._-]+\\.ya?ml$"}
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": ["kind"],
+          "properties": {"kind": {"const": "reviewed_external"}},
+          "additionalProperties": false
+        }
+      ]
     }
   },
   "additionalProperties": false,

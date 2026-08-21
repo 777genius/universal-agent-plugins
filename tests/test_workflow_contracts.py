@@ -125,13 +125,26 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertNotIn("release_tag", required.get("with", {}))
         self.assertEqual(required["permissions"], {"actions": "read", "contents": "read", "id-token": "write"})
 
-    def test_directory_release_requires_reusable_live_evidence(self) -> None:
+    def test_directory_release_stages_exact_identity_before_reusable_gate_and_promotion(self) -> None:
         workflow = load(ROOT / ".github/workflows/directory-publication.yml")
         required = workflow["jobs"]["required_stable_launch_evidence"]
-        self.assertEqual(required["needs"], "deploy")
+        self.assertEqual(required["needs"], "gate_exact_staged_publication")
         self.assertEqual(required["uses"], "./.github/workflows/live-e2e.yml")
         self.assertEqual(required["with"]["consent"], "true")
         self.assertEqual(required["permissions"], {"actions": "read", "contents": "read", "id-token": "write"})
+        exact = workflow["jobs"]["gate_exact_staged_publication"]
+        verify = next(step for step in exact["steps"] if step.get("name") == "Verify staged bytes and immutable identity before promotion")
+        self.assertEqual(exact["needs"], ["sign", "materialize_site"])
+        for field in (
+            "EXPECTED_SEQUENCE", "EXPECTED_SNAPSHOT_DIGEST", "EXPECTED_PUBLICATION_ID",
+            "EXPECTED_SOURCE_COMMIT", "EXPECTED_SIGNED_LEDGER_COMMIT",
+            "EXPECTED_MATERIALIZED_LEDGER_COMMIT",
+        ):
+            self.assertIn(field, verify["env"])
+        self.assertIn("raw.githubusercontent.com", verify["run"])
+        deploy_needs = workflow["jobs"]["deploy"]["needs"]
+        self.assertIn("gate_exact_staged_publication", deploy_needs)
+        self.assertIn("required_stable_launch_evidence", deploy_needs)
 
     def test_untrusted_pull_request_bridge_reproduction_remains_secretless(self) -> None:
         workflow = load(VALIDATE)

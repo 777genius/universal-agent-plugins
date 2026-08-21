@@ -148,6 +148,10 @@ jobs:
           LEDGER_SEED_COMMIT: ${{ steps.ledger.outputs.seed_commit }}
           LEDGER_SEQUENCE_FLOOR: ${{ steps.ledger.outputs.sequence_floor }}
         run: |
+          test -x /usr/bin/git
+          test -x /usr/bin/gh
+          dpkg-query --show git gh
+          test -z "$(dpkg --verify git gh)"
           ledger_args=(--ledger-seed-commit "${LEDGER_SEED_COMMIT}")
           if test "${INITIALIZE_LEDGER}" = "true"; then
             ledger_args+=(--initialize-ledger)
@@ -190,7 +194,11 @@ jobs:
       contents: read
     outputs:
       ledger_commit: ${{ steps.commit.outputs.ledger_commit }}
+      materialized_ledger_commit: ${{ steps.commit.outputs.materialized_ledger_commit }}
       marker_commit: ${{ steps.marker.outputs.commit }}
+      publication_id: ${{ github.run_id }}
+      sequence: ${{ steps.signed.outputs.sequence }}
+      snapshot_digest: ${{ steps.signed.outputs.snapshot_digest }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -290,6 +298,7 @@ jobs:
             "${ledger_args[@]}" \
             --result ../publication-result.json
           echo "sequence=$(/usr/bin/python3 -c 'import json; print(json.load(open("../publication-result.json"))["sequence"])')" >> "$GITHUB_OUTPUT"
+          echo "snapshot_digest=$(/usr/bin/python3 -c 'import json; print(json.load(open("../publication-result.json"))["snapshot_digest"])')" >> "$GITHUB_OUTPUT"
       - name: Acquire dedicated publisher token
         id: publisher
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
@@ -351,8 +360,16 @@ jobs:
             --marker "${MARKER_COMMIT}" \
             --ledger-old "${ledger_old}" \
             --ledger-new "${ledger_commit}" \
-            --sequence-tag "refs/tags/${tag_name}"
+            --sequence-tag "refs/tags/${tag_name}" \
+            --materialized-output ../materialized-ledger.commit
           echo "ledger_commit=${ledger_commit}" >> "$GITHUB_OUTPUT"
+          if test -f ../materialized-ledger.commit; then
+            materialized_ledger_commit="$(tr -d '\n' < ../materialized-ledger.commit)"
+            [[ "${materialized_ledger_commit}" =~ ^[0-9a-f]{40}$ ]]
+          else
+            materialized_ledger_commit=""
+          fi
+          echo "materialized_ledger_commit=${materialized_ledger_commit}" >> "$GITHUB_OUTPUT"
 
   build_site:
     name: Build exact-sequence site artifact (no write token)
@@ -558,11 +575,24 @@ jobs:
         id: commit
         env:
           EXPECTED_LEDGER_COMMIT: ${{ needs.sign.outputs.ledger_commit }}
+          EXISTING_MATERIALIZED_COMMIT: ${{ needs.sign.outputs.materialized_ledger_commit }}
         run: |
           rsync -a --delete --exclude=.git --exclude=registry "${RUNNER_TEMP}/validated-site/" ledger/
           git -C ledger diff --exit-code -- registry/schemas/1/snapshots
           git -C ledger diff --exit-code -- registry
-          if test -n "$(git -C ledger status --porcelain)"; then
+          if test -n "${EXISTING_MATERIALIZED_COMMIT}"; then
+            git -C ledger fetch --no-tags origin "${EXISTING_MATERIALIZED_COMMIT}"
+            test "$(git -C ledger show -s --format=%P "${EXISTING_MATERIALIZED_COMMIT}")" = "${EXPECTED_LEDGER_COMMIT}"
+            test "$(git -C ledger show -s --format=%B "${EXISTING_MATERIALIZED_COMMIT}")" = "chore(directory): materialize signed production site"
+            git -C ledger diff --exit-code "${EXPECTED_LEDGER_COMMIT}" "${EXISTING_MATERIALIZED_COMMIT}" -- registry
+            git -C ledger add -A -- . ':!registry'
+            test "$(git -C ledger write-tree)" = "$(git -C ledger show -s --format=%T "${EXISTING_MATERIALIZED_COMMIT}")" || {
+              echo "rerun site tree differs from authenticated materialized descendant" >&2
+              exit 1
+            }
+            git -C ledger reset --quiet
+            git -C ledger checkout --quiet --detach "${EXISTING_MATERIALIZED_COMMIT}"
+          elif test -n "$(git -C ledger status --porcelain)"; then
             git -C ledger config user.name "uap-directory-publisher[bot]"
             git -C ledger config user.email "uap-directory-publisher[bot]@users.noreply.github.com"
             git -C ledger add -A -- . ':!registry'
@@ -619,9 +649,84 @@ jobs:
             exit 1
           '
 
+  gate_exact_staged_publication:
+    name: Gate the exact staged publication identity
+    needs: [sign, materialize_site]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.materialize_site.outputs.ledger_commit }}
+          path: staged-publication
+          fetch-depth: 0
+          fetch-tags: true
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          path: trusted-source
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13"
+      - name: Verify staged bytes and immutable identity before promotion
+        env:
+          EXPECTED_SEQUENCE: ${{ needs.sign.outputs.sequence }}
+          EXPECTED_SNAPSHOT_DIGEST: ${{ needs.sign.outputs.snapshot_digest }}
+          EXPECTED_PUBLICATION_ID: ${{ needs.sign.outputs.publication_id }}
+          EXPECTED_SOURCE_COMMIT: ${{ needs.sign.outputs.marker_commit }}
+          EXPECTED_SIGNED_LEDGER_COMMIT: ${{ needs.sign.outputs.ledger_commit }}
+          EXPECTED_MATERIALIZED_LEDGER_COMMIT: ${{ needs.materialize_site.outputs.ledger_commit }}
+        run: |
+          python3 -m pip install --disable-pip-version-check jsonschema==4.25.1
+          test "$(git -C staged-publication rev-parse HEAD)" = "${EXPECTED_MATERIALIZED_LEDGER_COMMIT}"
+          test "$(git -C staged-publication show -s --format=%P HEAD)" = "${EXPECTED_SIGNED_LEDGER_COMMIT}"
+          git -C staged-publication diff --exit-code "${EXPECTED_SIGNED_LEDGER_COMMIT}" HEAD -- registry
+          tag_name="directory-publication-schema-1-sequence-$(printf '%020d' "${EXPECTED_SEQUENCE}")"
+          test "$(git -C staged-publication rev-parse "refs/tags/${tag_name}^{commit}")" = "${EXPECTED_SIGNED_LEDGER_COMMIT}"
+          feed=staged-publication/registry/schemas/1
+          snapshot_path="snapshots/$(printf '%020d' "${EXPECTED_SEQUENCE}").json"
+          envelope_path="snapshots/$(printf '%020d' "${EXPECTED_SEQUENCE}").envelope.json"
+          test "$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["sequence"])' "${feed}/latest.json")" = "${EXPECTED_SEQUENCE}"
+          test "$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["snapshot_path"])' "${feed}/latest.json")" = "${snapshot_path}"
+          test "$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["envelope_path"])' "${feed}/latest.json")" = "${envelope_path}"
+          test "$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["publication_id"])' "${feed}/${snapshot_path}")" = "${EXPECTED_PUBLICATION_ID}"
+          test "$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["source_commit"])' "${feed}/${snapshot_path}")" = "${EXPECTED_SOURCE_COMMIT}"
+          test "sha256:$(sha256sum "${feed}/${snapshot_path}" | cut -d ' ' -f 1)" = "${EXPECTED_SNAPSHOT_DIGEST}"
+          test "$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["sequence"])' "${feed}/${envelope_path}")" = "${EXPECTED_SEQUENCE}"
+          test "$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["snapshot_digest"])' "${feed}/${envelope_path}")" = "${EXPECTED_SNAPSHOT_DIGEST}"
+          python3 trusted-source/scripts/verify_directory_publication.py \
+            --feed "${feed}" --trusted-keys trusted-source/registry/publication/trusted-keys.json \
+            --now "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --minimum-sequence "${EXPECTED_SEQUENCE}"
+          staged_origin="https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/${EXPECTED_MATERIALIZED_LEDGER_COMMIT}/registry/schemas/1"
+          for relative in latest.json "${snapshot_path}" "${envelope_path}"; do
+            for attempt in 1 2 3; do
+              if curl --fail --silent --show-error --location --max-redirs 0 \
+                --output "${RUNNER_TEMP}/public-artifact" "${staged_origin}/${relative}" && \
+                cmp --silent "${feed}/${relative}" "${RUNNER_TEMP}/public-artifact"; then
+                break
+              fi
+              test "${attempt}" -lt 3
+            done
+          done
+
+  required_stable_launch_evidence:
+    name: Require stable launch evidence before production promotion
+    needs: gate_exact_staged_publication
+    uses: ./.github/workflows/live-e2e.yml
+    with:
+      consent: true
+    permissions:
+      actions: read
+      contents: read
+      id-token: write
+
   deploy:
-    name: Deploy exact committed Pages tree
-    needs: materialize_site
+    name: Promote exact gated Pages tree
+    needs: [materialize_site, gate_exact_staged_publication, required_stable_launch_evidence]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     environment:
@@ -650,14 +755,3 @@ jobs:
       - name: Deploy exact ledger tree
         id: deployment
         uses: actions/deploy-pages@cd2ce8fcbc39b97be8ca5fce6e763baed58fa128 # v5.0.0
-
-  required_stable_launch_evidence:
-    name: Require stable launch evidence for the published Directory
-    needs: deploy
-    uses: ./.github/workflows/live-e2e.yml
-    with:
-      consent: true
-    permissions:
-      actions: read
-      contents: read
-      id-token: write

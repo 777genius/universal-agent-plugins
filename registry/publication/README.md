@@ -39,6 +39,19 @@ canonical Directory model rather than publication configuration. A package-byte
 change must allocate a higher distribution release sequence; unchanged signed
 releases retain their exact source revision and original `published_at`.
 
+Evidence entries in review source are pointers, not signed summaries. The
+preparer fetches the artifact blob from the exact repository commit and path,
+checks its SHA-256 and evidence-artifact schema, and derives every signed
+summary field from those verified bytes. A `github_actions` pointer is accepted
+only when `/usr/bin/gh attestation verify` proves the blob was attested by a
+workflow named in the code-owned `trusted_evidence_workflows` list. A
+`reviewed_external` pointer is accepted only when its complete repository,
+revision, path, and digest tuple is present in the code-owned
+`trusted_external_evidence` list. Both lists are empty by default. Missing,
+malformed, digest-mismatched, unattested, or merely self-asserted evidence fails
+before a candidate exists; the signing seed is not present during any fetch or
+attestation operation.
+
 ## Required repository configuration
 
 Before enabling `.github/workflows/directory-publication.yml`:
@@ -144,6 +157,23 @@ ID, so an exact rerun recognizes the already-committed `P`/`Q`/tag state.
 Materialization separately advances the ledger with an explicit exact `Q`
 lease and accepts only exact idempotent readback; a competing ledger child fails
 closed.
+
+The only accepted post-signing state is `(main=P, ledger=M, tag=Q)`, where `M`
+is the single-parent site-materialization child of `Q`, has the fixed
+materialization commit message, and leaves all `registry/` bytes unchanged. An
+exact run retry authenticates that tuple, skips the initial three-ref CAS,
+reuses `Q` and its signed bytes, rebuilds the site, and requires the rebuilt tree
+to equal `M` before reusing it. Any unrelated descendant, registry change,
+moved tag, or different rebuilt tree is terminal.
+
+Pushing `M` is staging, not production promotion. The gate reads `latest.json`
+and both versioned artifacts from the immutable raw-commit origin for `M` and
+requires the exact run publication ID, sequence, snapshot digest, `Q` tag, and
+ledger identity. The stable launch checks and this exact staged identity gate
+must both pass before the Pages deployment promotes `M`. A failed deployment or
+gate therefore leaves the prior GitHub Pages production pointer in place and is
+retried from the already signed `Q` and authenticated `M`; it never allocates a
+new sequence.
 
 The publisher validates the latest ledger signature even after client expiry.
 Expired data can supply only the sequence and immutable provenance for recovery,

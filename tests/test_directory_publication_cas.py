@@ -128,6 +128,58 @@ class BarePublicationCasTests(unittest.TestCase):
         self.assertEqual(self.publish(marker, ledger), "committed")
         self.assertEqual(self.state(), cas.RefState(marker, ledger, ledger))
 
+    def test_exact_rerun_authenticates_materialized_descendant_and_reuses_it(self) -> None:
+        marker, signed = self.objects()
+        self.publish(marker, signed)
+        materialized = self.commit_object(
+            signed, "chore(directory): materialize signed production site"
+        )
+        git(self.publisher, "push", "-q", "origin", f"{materialized}:refs/heads/directory-publication-ledger")
+        output = Path(self.temporary.name) / "materialized.commit"
+        push_attempts = []
+        self.assertEqual(
+            cas.atomic_transition(
+                self.publisher, "origin", source=self.source, marker=marker,
+                ledger_old=self.source, ledger_new=signed, sequence_tag=TAG_ONE,
+                materialized_output=output,
+                push_runner=lambda arguments: push_attempts.append(arguments) is None,
+            ),
+            "materialized",
+        )
+        self.assertEqual(push_attempts, [])
+        self.assertEqual(output.read_text(), materialized + "\n")
+        self.assertEqual(self.state(), cas.RefState(marker, materialized, signed))
+
+    def test_exact_rerun_rejects_unrelated_or_hostile_ledger_descendants(self) -> None:
+        for message, second_child in (("unrelated", False), ("chore(directory): materialize signed production site", True)):
+            with self.subTest(message=message, second_child=second_child):
+                self.tearDown()
+                self.setUp()
+                marker, signed = self.objects()
+                self.publish(marker, signed)
+                moved = self.commit_object(signed, message)
+                if second_child:
+                    moved = self.commit_object(moved, message)
+                git(self.publisher, "push", "-q", "origin", f"{moved}:refs/heads/directory-publication-ledger")
+                with self.assertRaisesRegex(cas.CasError, "materialized ledger"):
+                    self.publish(marker, signed)
+
+        self.tearDown()
+        self.setUp()
+        marker, signed = self.objects()
+        self.publish(marker, signed)
+        (self.publisher / "registry").mkdir()
+        (self.publisher / "registry" / "hostile.json").write_text("{}\n")
+        git(self.publisher, "add", "registry/hostile.json")
+        hostile_tree = git(self.publisher, "write-tree")
+        hostile = git(
+            self.publisher, "commit-tree", hostile_tree, "-p", signed, "-m",
+            "chore(directory): materialize signed production site",
+        )
+        git(self.publisher, "push", "-q", "origin", f"{hostile}:refs/heads/directory-publication-ledger")
+        with self.assertRaisesRegex(cas.CasError, "changed signed registry bytes"):
+            self.publish(marker, signed)
+
     def test_materialization_exact_lease_conflict_and_idempotent_readback(self) -> None:
         marker, ledger = self.objects()
         self.publish(marker, ledger)

@@ -236,6 +236,7 @@ class LedgerFailureTests(unittest.TestCase):
             "false policy sequence": lambda value: value["distributions"][0]["release_policies"][0].update({"release_sequence": False}),
             "malformed policy target": lambda value: value["distributions"][0]["release_policies"][0]["targets"][0].update({"app_binding": {"app_key": "x", "id": "x", "mcp_server": "x"}}),
             "malformed evidence artifact": lambda value: value["evidence"][0]["artifact"].update({"unknown": "x"}),
+            "unsafe evidence artifact path": lambda value: value["evidence"][0]["artifact"].update({"path": "../invented.json"}),
             "true evidence version": lambda value: value["evidence"][0].update({"schema_version": True}),
             "false evidence sequence": lambda value: value["evidence"][0].update({"release_sequence": False}),
             "missing evidence field": lambda value: value["evidence"][0].pop("outcome"),
@@ -413,6 +414,16 @@ class WorkflowHardeningTests(unittest.TestCase):
         signer_source = (SCRIPTS / "sign_directory_publication.py").read_text()
         self.assertNotIn("validate_with_schema", signer_source)
         self.assertNotIn("jsonschema", signer_source)
+
+    def test_evidence_attestation_uses_verified_system_tools_without_signing_seed(self) -> None:
+        workflow = yaml.load((ROOT / ".github" / "workflows" / "directory-publication.yml").read_text(), Loader=yaml.BaseLoader)
+        candidate = next(step for step in workflow["jobs"]["prepare"]["steps"] if step.get("id") == "candidate")
+        self.assertIn("dpkg-query --show git gh", candidate["run"])
+        self.assertIn("dpkg --verify git gh", candidate["run"])
+        self.assertNotIn("DIRECTORY_ED25519_PRIVATE_KEY", json.dumps(workflow["jobs"]["prepare"]))
+        preparer = (SCRIPTS / "prepare_directory_publication.py").read_text()
+        self.assertIn('GH = "/usr/bin/gh"', preparer)
+        self.assertIn('[GH, "attestation", "verify"', preparer)
 
     def test_signing_seed_is_scoped_only_to_the_signer_step(self) -> None:
         workflow = yaml.load((ROOT / ".github" / "workflows" / "directory-publication.yml").read_text(), Loader=yaml.BaseLoader)

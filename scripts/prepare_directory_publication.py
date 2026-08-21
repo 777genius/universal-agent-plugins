@@ -19,6 +19,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from build_registry import directory_tree_digest as package_tree_digest
 from directory_publication import (
     CANDIDATE_SCHEMA,
+    DIGEST_RE,
     PublicationError,
     SHA_RE,
     atomic_write,
@@ -26,6 +27,7 @@ from directory_publication import (
     canonical_json,
     load_ledger_latest,
     load_public_keys,
+    parse_json_bytes,
     read_json,
     require,
     validate_with_schema,
@@ -35,20 +37,47 @@ from directory_publication_cas import CasError, validate_marker
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE_SCHEMA = ROOT / "schemas" / "directory-source.schema.json"
+EVIDENCE_ARTIFACT_SCHEMA = ROOT / "schemas" / "directory-evidence-artifact.schema.json"
 CONFIG_FIELDS = {"schema_version", "repository", "snapshot_lifetime_days"}
+OPTIONAL_CONFIG_FIELDS = {"trusted_evidence_workflows", "trusted_external_evidence"}
 GIT = "/usr/bin/git"
+GH = "/usr/bin/gh"
 ACQUISITION_TIMEOUT_SECONDS = 180
 MAX_PLUGIN_FILES = 10_000
 MAX_PLUGIN_FILE_BYTES = 16 << 20
 MAX_PLUGIN_TREE_BYTES = 64 << 20
+MAX_EVIDENCE_BYTES = 4 << 20
 
 
 def load_config(path: Path) -> dict[str, Any]:
     value = read_json(path, max_bytes=64 << 10)
-    require(isinstance(value, dict) and set(value) == CONFIG_FIELDS, f"{path}: invalid publication config fields")
+    require(
+        isinstance(value, dict)
+        and CONFIG_FIELDS <= set(value) <= CONFIG_FIELDS | OPTIONAL_CONFIG_FIELDS,
+        f"{path}: invalid publication config fields",
+    )
     require(value["schema_version"] == 1, f"{path}: schema_version must be 1")
     require(isinstance(value["repository"], str) and "/" in value["repository"], f"{path}: invalid repository")
     require(isinstance(value["snapshot_lifetime_days"], int) and 1 <= value["snapshot_lifetime_days"] <= 30, f"{path}: invalid lifetime")
+    workflows = value.setdefault("trusted_evidence_workflows", [])
+    require(isinstance(workflows, list) and all(isinstance(item, str) for item in workflows), f"{path}: invalid trusted evidence workflows")
+    require(len(workflows) == len(set(workflows)), f"{path}: duplicate trusted evidence workflow")
+    require(all("/.github/workflows/" in item for item in workflows), f"{path}: invalid trusted evidence workflow")
+    external = value.setdefault("trusted_external_evidence", [])
+    require(isinstance(external, list), f"{path}: invalid trusted external evidence")
+    for item in external:
+        require(
+            isinstance(item, dict) and set(item) == {"repository", "revision", "path", "digest"},
+            f"{path}: invalid trusted external evidence entry",
+        )
+        require(
+            isinstance(item["repository"], str) and item["repository"].count("/") == 1
+            and isinstance(item["revision"], str) and SHA_RE.fullmatch(item["revision"]) is not None
+            and isinstance(item["path"], str) and item["path"]
+            and not item["path"].startswith("/") and "\\" not in item["path"] and ".." not in Path(item["path"]).parts
+            and isinstance(item["digest"], str) and DIGEST_RE.fullmatch(item["digest"]) is not None,
+            f"{path}: invalid trusted external evidence identity",
+        )
     return value
 
 
@@ -207,10 +236,100 @@ def acquire_external(repository: str, revision: str, package_path: str, override
         raise PublicationError(f"{repository}@{revision}//{package_path}: reacquisition failed: {error}") from error
 
 
-def selected_evidence(source: dict[str, Any], published_distributions: set[str]) -> list[dict[str, Any]]:
+def acquire_evidence_bytes(
+    artifact: dict[str, str], override: Path | None = None,
+) -> tuple[tempfile.TemporaryDirectory[str], bytes]:
+    """Acquire one exact evidence blob without executing repository content."""
+    repository, revision, artifact_path = (
+        artifact["repository"], artifact["revision"], artifact["path"]
+    )
+    require(not artifact_path.startswith("/") and "\\" not in artifact_path and ".." not in Path(artifact_path).parts, "evidence artifact path is unsafe")
+    temporary = tempfile.TemporaryDirectory(prefix="directory-evidence-")
+    checkout = Path(temporary.name) / "checkout"
+    source = override.resolve().as_uri() if override is not None else f"https://github.com/{repository}.git"
+    environment = acquisition_environment(Path(temporary.name))
+    label = f"{repository}@{revision}//{artifact_path}"
+    try:
+        subprocess.run([GIT, "init", "--quiet", str(checkout)], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=environment)
+        subprocess.run(
+            [GIT, "-C", str(checkout), "-c", "credential.helper=", "-c", "core.askPass=", "-c", "submodule.recurse=false",
+             "-c", "protocol.file.allow=always", "fetch", "--quiet", "--no-tags", "--no-recurse-submodules", "--depth=1", "--filter=blob:none", source, revision],
+            check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=ACQUISITION_TIMEOUT_SECONDS, env=environment,
+        )
+        resolved = subprocess.check_output([GIT, "-C", str(checkout), "rev-parse", "FETCH_HEAD"], text=True, env=environment).strip()
+        require(resolved == revision, f"{label}: reacquisition resolved {resolved}")
+        object_name = f"FETCH_HEAD:{artifact_path}"
+        kind_result = subprocess.run(
+            [GIT, "-C", str(checkout), "cat-file", "-t", object_name], check=False,
+            text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=environment,
+        )
+        require(kind_result.returncode == 0 and kind_result.stdout.strip() == "blob", f"{label}: evidence artifact is unavailable or not a regular file")
+        size_text = subprocess.check_output([GIT, "-C", str(checkout), "cat-file", "-s", object_name], text=True, env=environment).strip()
+        require(size_text.isdigit() and int(size_text) <= MAX_EVIDENCE_BYTES, f"{label}: evidence artifact exceeds {MAX_EVIDENCE_BYTES} bytes")
+        body = subprocess.check_output([GIT, "-C", str(checkout), "show", object_name], env=environment, timeout=ACQUISITION_TIMEOUT_SECONDS)
+        require(len(body) == int(size_text), f"{label}: evidence artifact size changed during acquisition")
+        return temporary, body
+    except PublicationError:
+        temporary.cleanup()
+        raise
+    except (OSError, subprocess.SubprocessError) as error:
+        temporary.cleanup()
+        raise PublicationError(f"{label}: evidence reacquisition failed: {error}") from error
+
+
+def verify_evidence_trust(
+    pointer: dict[str, Any], config: dict[str, Any], temporary_root: Path, body: bytes,
+) -> None:
+    artifact = pointer["artifact"]
+    trust = pointer["trust"]
+    if trust["kind"] == "reviewed_external":
+        require(
+            any(artifact == allowed for allowed in config["trusted_external_evidence"]),
+            f"{pointer['id']}: external evidence artifact is not explicitly trusted",
+        )
+        return
+    workflow = trust["workflow"]
+    require(workflow in config["trusted_evidence_workflows"], f"{pointer['id']}: evidence workflow is not trusted")
+    require(workflow.startswith(artifact["repository"] + "/.github/workflows/"), f"{pointer['id']}: workflow and artifact repositories differ")
+    require(Path(GH).is_file(), f"reviewed evidence verifier is missing: {GH}")
+    acquired = temporary_root / "verified-evidence.json"
+    acquired.write_bytes(body)
+    completed = subprocess.run(
+        [GH, "attestation", "verify", str(acquired), "--repo", artifact["repository"], "--signer-workflow", workflow],
+        check=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        env=acquisition_environment(temporary_root), timeout=ACQUISITION_TIMEOUT_SECONDS,
+    )
+    require(completed.returncode == 0, f"{pointer['id']}: trusted workflow attestation verification failed")
+
+
+def verified_evidence(
+    pointer: dict[str, Any], config: dict[str, Any], overrides: dict[str, Path],
+) -> dict[str, Any]:
+    require("trust" in pointer, f"{pointer['id']}: evidence has no trusted workflow or external-attestation path")
+    artifact = pointer["artifact"]
+    temporary, body = acquire_evidence_bytes(artifact, overrides.get(artifact["repository"]))
+    try:
+        require("sha256:" + hashlib.sha256(body).hexdigest() == artifact["digest"], f"{pointer['id']}: evidence artifact digest mismatch")
+        # Parse the verified bytes directly; never derive signed fields from the
+        # contributor-authored pointer.
+        payload = parse_json_bytes(body, f"evidence {pointer['id']}", max_bytes=MAX_EVIDENCE_BYTES)
+        require(isinstance(payload, dict), f"{pointer['id']}: evidence artifact must be an object")
+        validate_with_schema(payload, EVIDENCE_ARTIFACT_SCHEMA)
+        require(payload["id"] == pointer["id"], f"{pointer['id']}: evidence artifact identity mismatch")
+        verify_evidence_trust(pointer, config, Path(temporary.name), body)
+        return {**copy.deepcopy(payload), "artifact": copy.deepcopy(artifact)}
+    finally:
+        temporary.cleanup()
+
+
+def selected_evidence(
+    source: dict[str, Any], published_distributions: set[str], config: dict[str, Any],
+    overrides: dict[str, Path],
+) -> list[dict[str, Any]]:
     evidence = {item["id"]: item for item in source["evidence"]}
     require(len(evidence) == len(source["evidence"]), "duplicate evidence identity")
     selected: set[str] = set()
+    verified: dict[str, dict[str, Any]] = {}
     release_digests = {
         (distribution["id"], release["sequence"]): release["tree_digest"]
         for distribution in source["distributions"] for release in distribution["releases"]
@@ -223,11 +342,14 @@ def selected_evidence(source: dict[str, Any], published_distributions: set[str])
             require(identity in release_digests, f"{distribution['id']}: policy references missing release {policy['release_sequence']}")
             for evidence_id in policy["current_evidence"]:
                 require(evidence_id in evidence, f"{distribution['id']}@{policy['release_sequence']}: missing evidence {evidence_id}")
-                record = evidence[evidence_id]
+                record = verified.get(evidence_id)
+                if record is None:
+                    record = verified_evidence(evidence[evidence_id], config, overrides)
+                    verified[evidence_id] = record
                 require((record["distribution_id"], record["release_sequence"]) == identity, f"{evidence_id}: evidence release identity mismatch")
                 require(record["package_tree_digest"] == release_digests[identity], f"{evidence_id}: evidence package digest mismatch")
                 selected.add(evidence_id)
-    return [copy.deepcopy(evidence[item]) for item in sorted(selected)]
+    return [copy.deepcopy(verified[item]) for item in sorted(selected)]
 
 
 def build_candidate(
@@ -366,7 +488,7 @@ def build_candidate(
     for identity in prior:
         require(any(d["id"] == identity[0] and any(r["sequence"] == identity[1] for r in d["releases"]) for d in output_distributions), f"published release {identity} was removed from canonical source")
 
-    evidence = selected_evidence(source, set(distributions_by_id))
+    evidence = selected_evidence(source, set(distributions_by_id), config, overrides)
     revocations = [
         {"distribution_id": distribution["id"], "release_sequence": policy["release_sequence"]}
         for distribution in output_distributions for policy in distribution["release_policies"]
