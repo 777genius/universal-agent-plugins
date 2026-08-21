@@ -1271,6 +1271,9 @@ class LaunchHarness:
         env = isolated_environment(sandbox, ("codex", "cursor", "kiro", "copilot", "vscode"), self.directory_environment)
         challenge_path = sandbox / "config" / "challenge.json"
         product_id = "context7"
+        source_selection = self.config.get("source_identity_scenarios", {}).get(scenario)
+        if source_selection:
+            product_id = source_selection["product_id"]
         if scenario.startswith("hero_lifecycle_"):
             product_id = scenario.removeprefix("hero_lifecycle_").rsplit("_", 1)[0]
         targets: tuple[str, ...]
@@ -1284,7 +1287,12 @@ class LaunchHarness:
             targets = (scenario.removeprefix("repair_"),)
         else:
             targets = ("cursor",)
-        release = self.directory_release(product_id, targets)
+        release = self.configured_source_release(scenario, targets) if source_selection else self.directory_release(product_id, targets)
+        source_identity = {
+            "distribution_id": release["distribution_id"], "distribution_kind": release["distribution_kind"],
+            "release_sequence": release["release_sequence"], "source_revision": release.get("source_revision"),
+            "tree_digest": release["tree_digest"],
+        }
         observer_context = {
             **self.challenge,
             "binary_digest": self.binary_digest,
@@ -1294,6 +1302,7 @@ class LaunchHarness:
             "catalog_repository": read_production_config()["catalog_repository"],
             "directory_product": next(item for item in self.snapshot["products"] if item["id"] == product_id),
             "directory_distribution": next(item for item in self.snapshot["distributions"] if item["id"] == release["distribution_id"]),
+            "source_identity": source_identity,
         }
         challenge_path.write_text(json.dumps(observer_context, sort_keys=True))
         completed = subprocess.run([
@@ -1391,7 +1400,28 @@ class LaunchHarness:
             raise ValueError(f"authoritative Directory resolver selected a missing release for {product_id}")
         policy = policies[release["sequence"]]
         clients = sorted({target["client"] for target in policy.get("targets", []) if "user" in target.get("scopes", [])})
-        return {"product_id": product_id, "distribution_id": distribution["id"], "distribution_kind": distribution["kind"], "release_sequence": release["sequence"], "package_version": release.get("package_version"), "tree_digest": release["tree_digest"], "manifest_digest": release["manifest_digest"], "compatible_clients": clients, "resolved_targets": list(targets), "fallback_reason": resolved["fallback_reason"]}
+        return {"product_id": product_id, "distribution_id": distribution["id"], "distribution_kind": distribution["kind"], "release_sequence": release["sequence"], "package_version": release.get("package_version"), "tree_digest": release["tree_digest"], "manifest_digest": release["manifest_digest"], "source_revision": release.get("package_source", {}).get("revision"), "compatible_clients": clients, "resolved_targets": list(targets), "fallback_reason": resolved["fallback_reason"]}
+
+    def configured_source_release(self, scenario: str, targets: list[str] | tuple[str, ...]) -> dict[str, Any]:
+        selection = self.config["source_identity_scenarios"][scenario]
+        product_id, distribution_id = selection["product_id"], selection["distribution_id"]
+        product = next((item for item in self.snapshot.get("products", []) if item["id"] == product_id), None)
+        distribution = next((item for item in self.snapshot.get("distributions", []) if item["id"] == distribution_id), None)
+        if not product or not distribution or distribution_id not in product.get("distributions", []):
+            raise ValueError(f"source scenario {scenario} is not a reviewed Directory selection")
+        policy = next((item for item in distribution.get("release_policies", []) if item.get("status") == "active" and all(any(target.get("client") == client and "user" in target.get("scopes", []) for target in item.get("targets", [])) for client in targets)), None)
+        release = next((item for item in distribution.get("releases", []) if policy and item["sequence"] == policy["release_sequence"]), None)
+        revision = release.get("package_source", {}).get("revision") if release else None
+        expected_kind = selection["distribution_kind"]
+        if not release or distribution.get("kind") != expected_kind or not FULL_SHA.fullmatch(str(revision)):
+            raise ValueError(f"source scenario {scenario} lacks an immutable reviewed {expected_kind} release")
+        clients = sorted(target["client"] for target in policy["targets"] if "user" in target.get("scopes", []))
+        return {"product_id": product_id, "distribution_id": distribution_id, "distribution_kind": expected_kind, "release_sequence": release["sequence"], "package_version": release.get("package_version"), "tree_digest": release["tree_digest"], "manifest_digest": release["manifest_digest"], "source_revision": revision, "compatible_clients": clients, "resolved_targets": list(targets), "fallback_reason": None}
+
+    @staticmethod
+    def source_identity_matches_release(release: dict[str, Any], observed: Any) -> bool:
+        fields = ("distribution_id", "distribution_kind", "release_sequence", "source_revision", "tree_digest")
+        return isinstance(observed, dict) and set(observed) == set(fields) and all(observed[field] == release[field] for field in fields)
 
     def evidence_tuple(self, product_id: str, targets: list[str] | tuple[str, ...], *, client_version: str | None, dependency: str) -> dict[str, Any]:
         release = self.directory_release(product_id, targets)
@@ -1579,12 +1609,27 @@ class LaunchHarness:
                 outcome, reason = "failed", "scenario driver omitted the required exact proof fields"
             tuple_value = value.get("tuple") if value else None
             client = scenario.removeprefix("repair_") if scenario.startswith("repair_") else "cursor"
-            if outcome == "passed" and tuple_value is not None and (not isinstance(tuple_value, dict) or not self.tuple_matches_release("context7", [client], tuple_value)):
+            source_selection = self.config.get("source_identity_scenarios", {}).get(scenario)
+            product = source_selection["product_id"] if source_selection else "context7"
+            release = self.configured_source_release(scenario, [client]) if source_selection else self.directory_release(product, [client])
+            if source_selection:
+                observed = value.get("source_identity") if value else None
+                exact_source_identity = self.source_identity_matches_release(release, observed)
+                # Source rows are always derived from the manager-state identity;
+                # never retain a tuple supplied by the observer or fill an absent
+                # source authority field from the expected Directory release.
+                tuple_value = None
+                if outcome == "passed" and not exact_source_identity:
+                    outcome, reason = "failed", "scenario observer source identity differs from the exact signed Directory tuple"
+                if outcome == "passed":
+                    observed_client_version = find_value(value, {"client_version"}) if value else None
+                    tuple_value = self.tuple(product_id=product, digest=observed["tree_digest"], manifest_digest=release["manifest_digest"], distribution_id=observed["distribution_id"], distribution_kind=observed["distribution_kind"], release_sequence=observed["release_sequence"], package_version=release["package_version"], client_version=observed_client_version if isinstance(observed_client_version, str) else None, dependency=f"signed-directory-source@{observed['source_revision']}")
+            if outcome == "passed" and not source_selection and tuple_value is not None and (not isinstance(tuple_value, dict) or not self.tuple_matches_release(product, [client], tuple_value)):
                 outcome, reason = "failed", "scenario observer tuple differs from authoritative target-aware resolution"
             if tuple_value is None:
                 observed_client_version = find_value(value, {"client_version"}) if value else None
-                tuple_value = self.evidence_tuple("context7", [client], client_version=observed_client_version if isinstance(observed_client_version, str) else None, dependency="repository-owned-fault-observer")
-            self.add(scenario, "context7", client, "materialization", outcome, reason, tuple_value=tuple_value, details={"fixture_contract_present": scenario in self.config["fault_scenarios"], "repository_observer_required": True, "proof": value.get("proof", {}) if value else {}, "command_traces": value.get("command_traces", []) if value else [], "validator_artifact": value.get("validator_artifact") if value else None, "resolution": self.directory_release("context7", [client])})
+                tuple_value = None if source_selection else self.evidence_tuple(product, [client], client_version=observed_client_version if isinstance(observed_client_version, str) else None, dependency="repository-owned-fault-observer")
+            self.add(scenario, product, client, "materialization", outcome, reason, tuple_value=tuple_value, details={"fixture_contract_present": scenario in self.config["fault_scenarios"], "repository_observer_required": True, "proof": value.get("proof", {}) if value else {}, "command_traces": value.get("command_traces", []) if value else [], "validator_artifact": value.get("validator_artifact") if value else None, "source_identity": value.get("source_identity") if value else None, "resolution": release})
 
     def acceptance_postconditions(self) -> None:
         required: dict[str, dict[str, Any]] = {
@@ -1722,8 +1767,8 @@ class LaunchHarness:
             "directory_tampered": {"tampered_snapshot_rejected": True, "zero_mutation": True},
             "directory_sequence_rollback": {"lower_sequence_rejected": True, "zero_mutation": True},
             "managed_package_tamper": {"tamper_detected": True, "repair_required": True},
-            "upstream_owned_short_name": {"source_kind": "upstream", "immutable_revision": True},
-            "community_bridge_short_name": {"source_kind": "community_bridge", "immutable_revision": True},
+            "upstream_owned_short_name": {"source_kind": "upstream", "immutable_revision": True, "exact_source_identity": True},
+            "community_bridge_short_name": {"source_kind": "community_bridge", "immutable_revision": True, "exact_source_identity": True},
             "plugin_data_update_repair_switch_remove_purge": {"marker_preserved": True, "explicit_purge_deleted": True},
             "stdio_environment_and_containment": {"plugin_root_verified": True, "plugin_data_verified": True, "writable": True, "contained": True},
             "missing_runtime_zero_mutation": {"zero_mutation": True, "copy_ready_requirement": True, "dependency_installed": False},

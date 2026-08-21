@@ -2,14 +2,12 @@ from __future__ import annotations
 
 import hashlib
 import importlib.util
-import io
 import json
 import os
 import shutil
 import stat
 import subprocess
 import sys
-import tarfile
 import tempfile
 import unittest
 from pathlib import Path
@@ -24,7 +22,6 @@ assert SPEC and SPEC.loader
 bridges = importlib.util.module_from_spec(SPEC)
 sys.modules[SPEC.name] = bridges
 SPEC.loader.exec_module(bridges)
-from build_registry import directory_tree_digest
 
 
 FIXTURE_SHA = "9ec238505ab95b2e07222e69a893f0bbac201ae6"
@@ -116,6 +113,9 @@ class BridgeBuilderTests(unittest.TestCase):
         (directory / "directory.json").write_text("{}")
         with mock.patch.object(bridges, "validate_bridge_bindings") as validate:
             reports = bridges.check_all(self.root, self.mirror)
+        report = next(item for item in reports if item["product_id"] == "fixture-bridge")
+        self.assertEqual(report["upstream_revision"], FIXTURE_SHA)
+        self.assertEqual(report["tree_digest"], "sha256:d56b21a056a2e268a0641f09e7b00f6ad1468ac4a6eb10d845bd31068cb569c5")
         validate.assert_called_once_with(
             {}, repository_root=self.root, build_reports=reports,
         )
@@ -317,37 +317,20 @@ class RealBridgeCohortTests(unittest.TestCase):
                         self.assertEqual(bridges.validate_plugin(materialized), (1, 0))
                         bridges.compare_trees(ROOT / "plugins" / product_id, materialized)
 
-    @unittest.skipUnless(os.environ.get("UAP_UPSTREAM_MIRROR"), "offline upstream mirror not configured")
-    def test_complete_upstream_context7_package_validates_and_matches_directory_digest(self) -> None:
-        revision = "769c6cd22c3d95462d1f55d789e9532cabefa5a9"
-        prefix = "plugins/agent-plugins/context7"
-        mirror = Path(os.environ["UAP_UPSTREAM_MIRROR"]) / "upstash/context7.git"
-        archive = subprocess.run(
-            ["git", f"--git-dir={mirror}", "archive", revision, prefix],
-            check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=30,
-        ).stdout
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary) / "context7"
-            root.mkdir()
-            with tarfile.open(fileobj=io.BytesIO(archive), mode="r:") as package:
-                for member in package.getmembers():
-                    if not member.isfile():
-                        continue
-                    relative = Path(member.name).relative_to(prefix)
-                    target = root / relative
-                    target.parent.mkdir(parents=True, exist_ok=True)
-                    extracted = package.extractfile(member)
-                    assert extracted is not None
-                    target.write_bytes(extracted.read())
-                    target.chmod(member.mode)
-                self.assertEqual(bridges.validate_plugin(root), (1, 1))
-                self.assertEqual(directory_tree_digest(root), "sha256:a4507f7326b10a9627b8030e6292df16710b33975cc53246992d239a172f45c8")
-                self.assertEqual(sorted(path.relative_to(root).as_posix() for path in root.rglob("*") if path.is_file()), ["LICENSE", "README.md", "mcp.json", "plugin.json", "skills/context7-mcp/SKILL.md"])
-                upstream_mcp = json.loads((root / "mcp.json").read_text())["mcpServers"]["context7"]
-                self.assertEqual(upstream_mcp, {"type": "streamable-http", "url": "https://mcp.context7.com/mcp/oauth"})
-                community_mcp = json.loads((ROOT / "plugins/context7/mcp.json").read_text())["mcpServers"]["context7"]
-                self.assertEqual(community_mcp["type"], "stdio")
-                self.assertEqual(community_mcp["args"], ["-y", "@upstash/context7-mcp@4.0.0"])
+    def test_upstream_context7_identity_and_pinned_bridge_checks_are_mandatory(self) -> None:
+        directory = json.loads((ROOT / "registry/directory.json").read_text())
+        distribution = next(item for item in directory["distributions"] if item["id"] == "upstash/context7")
+        release = distribution["releases"][0]
+        self.assertEqual(distribution["kind"], "upstream")
+        self.assertEqual(release["package_source"], {
+            "repository": "upstash/context7",
+            "revision": "769c6cd22c3d95462d1f55d789e9532cabefa5a9",
+            "path": "plugins/agent-plugins/context7",
+        })
+        self.assertEqual(release["tree_digest"], "sha256:08eed3b67f2e71a11b68baa594380c2f69ec1bc97584d701deaf7942ac34c0d8")
+        workflow = (ROOT / ".github/workflows/validate.yml").read_text()
+        self.assertIn('scripts/build-bridges --root tests/fixtures --upstream-mirror "${RUNNER_TEMP}/upstream-mirror" check', workflow)
+        self.assertIn("scripts/build-bridges check", workflow)
 
 
 if __name__ == "__main__":

@@ -411,10 +411,10 @@ target = sys.argv[sys.argv.index("--target") + 1]
 home = pathlib.Path(os.environ["HOME"])
 manager = pathlib.Path(os.environ["AGENTPLUGINS_HOME"])
 state_path = manager / "state.json"
-state = json.loads(state_path.read_text()) if state_path.exists() else {"product": product, "receipts": [], "directory": {"distribution_id": "upstash/context7", "desired_release_sequence": 1}, "package": {"tree_digest": "sha256:" + "a" * 64, "manifest_digest": "sha256:" + "e" * 64}}
+state = json.loads(state_path.read_text()) if state_path.exists() else {"installations": [{"declared_name": product, "product_id": product, "receipts": [], "directory": {"distribution_id": "upstash/context7", "distribution_kind": "upstream", "desired_release_sequence": 1}, "package": {"tree_digest": "sha256:" + "a" * 64, "manifest_digest": "sha256:" + "e" * 64}}]}
 roots = {"codex": home / ".codex", "cursor": home / ".cursor", "kiro": home / ".kiro"}
 if operation in {"add", "update", "repair", "remove"}:
-    state["receipts"].append({"phase": "committed", "operation": operation})
+    state["installations"][0]["receipts"].append({"phase": "committed", "operation": operation})
     manager.mkdir(parents=True, exist_ok=True)
     state_path.write_text(json.dumps(state))
 if operation == "add":
@@ -497,6 +497,92 @@ print(json.dumps(value))
         for scenario in config["fault_scenarios"] + config["adapter_repair_faults"] + config["advanced_scenarios"]:
             with self.subTest(scenario=scenario):
                 self.assertFalse(e2e.LaunchHarness.driver_proof_valid(scenario, {"outcome": "passed"}))
+
+    def test_source_identity_rows_fail_closed_for_missing_or_spoofed_manager_identity(self) -> None:
+        expected_release = {
+            "product_id": "context7", "distribution_id": "upstash/context7", "distribution_kind": "upstream",
+            "release_sequence": 1, "source_revision": "1" * 40, "tree_digest": "sha256:" + "a" * 64,
+            "manifest_digest": "sha256:" + "b" * 64, "package_version": "1.0.0",
+        }
+        expected_identity = {key: expected_release[key] for key in (
+            "distribution_id", "distribution_kind", "release_sequence", "source_revision", "tree_digest",
+        )}
+        for name, identity in (
+            ("missing", None),
+            ("spoofed_kind", {**expected_identity, "distribution_kind": "community_bridge"}),
+            ("spoofed_digest", {**expected_identity, "tree_digest": "sha256:" + "9" * 64}),
+        ):
+            with self.subTest(name=name):
+                harness = self.fixture_harness()
+                harness.config = {
+                    **harness.config, "fault_scenarios": [], "adapter_repair_faults": [],
+                    "advanced_scenarios": ["upstream_owned_short_name"],
+                    "source_identity_scenarios": {"upstream_owned_short_name": {
+                        "product_id": "context7", "distribution_id": "upstash/context7", "distribution_kind": "upstream",
+                    }},
+                }
+                value = {
+                    "source_kind": "upstream", "immutable_revision": True, "exact_source_identity": True,
+                    "source_identity": identity, "tuple": {"distribution_id": "spoofed/tuple"},
+                    "client_version": "manager-state-v1", "proof": {}, "command_traces": [],
+                }
+                with mock.patch.object(harness, "driven_scenario", return_value=("passed", value, "claimed")), mock.patch.object(
+                    harness, "configured_source_release", return_value=expected_release,
+                ):
+                    harness.fault_matrix()
+                self.assertEqual(harness.rows[0]["outcome"], "failed")
+                self.assertTrue(all(harness.rows[0]["tuple"][key] is None for key in (
+                    "product_id", "tree_digest", "distribution_id", "distribution_kind", "release_sequence",
+                )))
+
+        bridge_release = {
+            **expected_release, "product_id": "chrome-devtools",
+            "distribution_id": "777genius/chrome-devtools-bridge", "distribution_kind": "community_bridge",
+        }
+        bridge_identity = {key: bridge_release[key] for key in (
+            "distribution_id", "distribution_kind", "release_sequence", "source_revision", "tree_digest",
+        )}
+        self.assertTrue(e2e.LaunchHarness.source_identity_matches_release(bridge_release, bridge_identity))
+        self.assertFalse(e2e.LaunchHarness.source_identity_matches_release(
+            bridge_release, {**bridge_identity, "distribution_id": "upstash/context7"},
+        ))
+        self.assertFalse(e2e.LaunchHarness.source_identity_matches_release(bridge_release, None))
+
+    def test_source_scenarios_select_concrete_reviewed_directory_distributions(self) -> None:
+        harness = self.fixture_harness()
+        harness.snapshot = json.loads((ROOT / "registry/directory.json").read_text())
+        publication_revision = "f" * 40
+        for distribution in harness.snapshot["distributions"]:
+            for release in distribution["releases"]:
+                source = release.get("package_source", {})
+                if source.get("repository") == e2e.TRUSTED_CATALOG_REPOSITORY and source.get("revision") is None:
+                    source["revision"] = publication_revision
+        upstream = harness.configured_source_release("upstream_owned_short_name", ["cursor"])
+        bridge = harness.configured_source_release("community_bridge_short_name", ["cursor"])
+        self.assertEqual(
+            (upstream["product_id"], upstream["distribution_id"], upstream["distribution_kind"], upstream["source_revision"]),
+            ("context7", "upstash/context7", "upstream", "769c6cd22c3d95462d1f55d789e9532cabefa5a9"),
+        )
+        self.assertEqual(
+            (bridge["product_id"], bridge["distribution_id"], bridge["distribution_kind"], bridge["source_revision"]),
+            ("chrome-devtools", "777genius/chrome-devtools-bridge", "community_bridge", publication_revision),
+        )
+
+    def test_manager_identity_does_not_aggregate_authority_across_records(self) -> None:
+        complete = {
+            "declared_name": "context7", "product_id": "context7", "distribution_id": "upstash/context7",
+            "distribution_kind": "upstream", "desired_release_sequence": 1, "resolved_revision": "1" * 40,
+            "tree_digest": "sha256:" + "a" * 64,
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            manager = Path(tmp)
+            (manager / "state.json").write_text(json.dumps({"installations": [complete]}))
+            self.assertEqual(observer.manager_identity(manager, "context7")["distribution_kind"], "upstream")
+            (manager / "state.json").write_text(json.dumps({"installations": [
+                {key: value for key, value in complete.items() if key != "distribution_kind"},
+                {"declared_name": "context7", "product_id": "context7", "distribution_kind": "upstream"},
+            ]}))
+            self.assertEqual(observer.manager_identity(manager, "context7"), {})
 
     def test_promotion_and_fork_observers_execute_exact_local_validators(self) -> None:
         scenarios = (

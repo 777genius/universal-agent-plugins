@@ -207,14 +207,11 @@ def conformance_directory(
     default_alternate: bool = False, revoked: bool = False,
     safe_successor: bool = False, sequence_over_semver: bool = False,
     generated_offset: timedelta = timedelta(0), lifetime: timedelta = timedelta(hours=2),
-    distribution_kind: str | None = None,
     target_delivery: str = "managed",
 ) -> tuple[dict[str, str], str]:
     """Create a visibly non-production signed policy fixture from authenticated release bytes."""
     product = copy.deepcopy(context["directory_product"])
     source_distribution = copy.deepcopy(context["directory_distribution"])
-    if distribution_kind is not None:
-        source_distribution["kind"] = distribution_kind
     selected_sequence = context["release"]["release_sequence"]
     release = copy.deepcopy(next(item for item in source_distribution["releases"] if item["sequence"] == selected_sequence))
     policy = copy.deepcopy(next(item for item in source_distribution["release_policies"] if item["release_sequence"] == selected_sequence))
@@ -539,27 +536,23 @@ def no_hidden_yes_scenario(binary: Path, root: Path, challenge: str) -> tuple[bo
 
 
 def manager_identity(manager: Path, product: str) -> dict[str, Any]:
+    """Return identity fields from exactly one owned installation record."""
     wanted = {"resolved_revision", "canonical_source", "tree_digest", "manifest_digest", "distribution_id", "distribution_kind", "desired_release_sequence", "data_locator", "data_root", "affected_surfaces"}
-    result: dict[str, Any] = {}
+    matches: list[dict[str, Any]] = []
     for path in sorted(manager.rglob("*.json")) if manager.exists() else ():
         try:
             value = json.loads(path.read_text())
         except (OSError, UnicodeError, json.JSONDecodeError):
             continue
-        if product not in json.dumps(value, sort_keys=True):
-            continue
-        stack = [value]
-        while stack:
-            item = stack.pop()
-            if isinstance(item, dict):
-                for key in wanted:
-                    child = item.get(key)
-                    if child not in (None, "") and key not in result:
-                        result[key] = child
-                stack.extend(item.values())
-            elif isinstance(item, list):
-                stack.extend(item)
-    return result
+        installations = value.get("installations", []) if isinstance(value, dict) else []
+        for installation in installations if isinstance(installations, list) else ():
+            if not isinstance(installation, dict):
+                continue
+            if product not in {installation.get("declared_name"), find_value(installation, {"product_id"})}:
+                continue
+            identity = {key: find_value(installation, {key}) for key in wanted}
+            matches.append({key: child for key, child in identity.items() if child not in (None, "")})
+    return matches[0] if len(matches) == 1 else {}
 
 
 def manager_has_flag(manager: Path, product: str, key: str, expected: Any) -> bool:
@@ -953,15 +946,26 @@ def sticky_update_scenario(binary: Path, root: Path, challenge: str, context: di
 def source_kind_scenario(binary: Path, kind: str, root: Path, challenge: str, context: dict[str, Any]) -> tuple[bool, dict[str, Any]]:
     home = Path(os.environ["HOME"])
     manager = Path(os.environ["AGENTPLUGINS_HOME"])
-    environment, fixture_digest = conformance_directory(root, context, sequence=int(context["snapshot_sequence"]) + 3200, distribution_kind=kind)
+    environment, fixture_digest = conformance_directory(root, context, sequence=int(context["snapshot_sequence"]) + 3200)
+    product = context["release"]["product_id"]
     before = observe(home, manager)
-    add, add_trace = traced_with_environment(binary, ["add", "context7", "--target", "cursor", "--format", "json"], root, challenge, environment)
-    identity = manager_identity(manager, "context7")
-    remove, remove_trace = traced_with_environment(binary, ["remove", "context7", "--target", "cursor", "--format", "json"], root, challenge, environment)
+    add, add_trace = traced_with_environment(binary, ["add", product, "--target", "cursor", "--format", "json"], root, challenge, environment)
+    identity = manager_identity(manager, product)
+    remove, remove_trace = traced_with_environment(binary, ["remove", product, "--target", "cursor", "--format", "json"], root, challenge, environment)
     after = observe(home, manager)
-    revision = identity.get("resolved_revision")
-    proof = {"source_kind": identity.get("distribution_kind") or kind, "immutable_revision": isinstance(revision, str) and len(revision) == 40 and all(character in "0123456789abcdef" for character in revision)}
-    return add.returncode == remove.returncode == 0 and proof == {"source_kind": kind, "immutable_revision": True}, {"command_traces": [add_trace, remove_trace], "before": before, "after": after, "proof": proof, **proof, "fixture_digest": fixture_digest}
+    source_identity = {
+        "distribution_id": identity.get("distribution_id"), "distribution_kind": identity.get("distribution_kind"),
+        "release_sequence": identity.get("desired_release_sequence"), "source_revision": identity.get("resolved_revision"),
+        "tree_digest": identity.get("tree_digest"),
+    }
+    revision = source_identity["source_revision"]
+    proof = {
+        "source_kind": source_identity["distribution_kind"],
+        "immutable_revision": isinstance(revision, str) and len(revision) == 40 and all(character in "0123456789abcdef" for character in revision),
+        "exact_source_identity": source_identity == context["source_identity"],
+    }
+    passed = add.returncode == remove.returncode == 0 and proof == {"source_kind": kind, "immutable_revision": True, "exact_source_identity": True}
+    return passed, {"command_traces": [add_trace, remove_trace], "before": before, "after": after, "proof": proof, **proof, "source_identity": source_identity, "fixture_digest": fixture_digest}
 
 
 def fixture_git(repository: Path, *arguments: str, environment: dict[str, str] | None = None) -> str:
