@@ -650,3 +650,14 @@ jobs:
       - name: Deploy exact ledger tree
         id: deployment
         uses: actions/deploy-pages@cd2ce8fcbc39b97be8ca5fce6e763baed58fa128 # v5.0.0
+
+  required_stable_launch_evidence:
+    name: Require stable launch evidence for the published Directory
+    needs: deploy
+    uses: ./.github/workflows/live-e2e.yml
+    with:
+      consent: true
+    permissions:
+      actions: read
+      contents: read
+      id-token: write

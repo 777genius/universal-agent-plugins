@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Immutable Agent Plugins GitHub release manifest",
+  "type": "object",
+  "required": ["schema_version", "tag", "commit", "version", "assets"],
+  "properties": {
+    "schema_version": {"const": 2},
+    "tag": {"type": "string", "pattern": "^agentplugins-v[0-9]+\\.[0-9]+\\.[0-9]+$"},
+    "commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
+    "assets": {
+      "type": "object",
+      "required": ["darwin-amd64", "darwin-arm64", "linux-amd64", "linux-arm64", "windows-amd64", "windows-arm64"],
+      "properties": {
+        "darwin-amd64": {"$ref": "#/$defs/asset"},
+        "darwin-arm64": {"$ref": "#/$defs/asset"},
+        "linux-amd64": {"$ref": "#/$defs/asset"},
+        "linux-arm64": {"$ref": "#/$defs/asset"},
+        "windows-amd64": {"$ref": "#/$defs/asset"},
+        "windows-arm64": {"$ref": "#/$defs/asset"}
+      },
+      "additionalProperties": false
+    }
+  },
+  "$defs": {
+    "asset": {
+        "type": "object",
+        "required": ["file", "sha256", "size"],
+        "properties": {
+          "file": {"type": "string", "pattern": "^agentplugins_[0-9]+\\.[0-9]+\\.[0-9]+_(darwin|linux|windows)_(amd64|arm64)(\\.exe)?$"},
+          "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+          "size": {"type": "integer", "minimum": 1, "maximum": 268435456}
+        },
+        "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

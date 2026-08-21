@@ -2,12 +2,12 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "Redacted stable-launch E2E evidence",
   "type": "object",
-  "required": ["schema_version", "run", "matrix", "summary", "privacy"],
+  "required": ["schema_version", "run", "release", "directory", "scenario_contract", "matrix", "summary", "privacy"],
   "properties": {
-    "schema_version": {"const": 2},
+    "schema_version": {"const": 3},
     "run": {
       "type": "object",
-      "required": ["id", "mode", "runtime_claims", "observed_at", "platform", "architecture", "disposable", "root_id", "cli"],
+      "required": ["id", "mode", "runtime_claims", "observed_at", "platform", "architecture", "disposable", "root_id", "github_sha", "github_run_id", "github_run_attempt", "challenge", "observer_bundle_digest", "cli"],
       "properties": {
         "id": {"type": "string", "pattern": "^[a-f0-9]{16}$"},
         "mode": {"enum": ["enforced", "fixture-only"]},
@@ -17,6 +17,11 @@
         "architecture": {"type": "string", "minLength": 1},
         "disposable": {"const": true},
         "root_id": {"type": "string", "pattern": "^[a-f0-9]{16}$"},
+        "github_sha": {"type": ["string", "null"], "pattern": "^[a-f0-9]{40}$"},
+        "github_run_id": {"type": ["string", "null"], "pattern": "^[0-9]+$"},
+        "github_run_attempt": {"type": ["string", "null"], "pattern": "^[0-9]+$"},
+        "challenge": {"type": ["string", "null"], "pattern": "^[a-f0-9]{64}$"},
+        "observer_bundle_digest": {"type": ["string", "null"], "pattern": "^sha256:[a-f0-9]{64}$"},
         "cli": {
           "type": "object",
           "required": ["available", "version", "binary_digest"],
@@ -29,10 +34,38 @@
         }
       },
       "allOf": [
-        {"if": {"properties": {"mode": {"const": "enforced"}}}, "then": {"properties": {"runtime_claims": {"const": true}, "cli": {"properties": {"available": {"const": true}, "version": {"type": "string", "pattern": "^(?:0\\.1\\.(?:[89]|[1-9][0-9]+)|0\\.(?:[2-9]|[1-9][0-9]+)\\.[0-9]+|[1-9][0-9]*\\.[0-9]+\\.[0-9]+)$"}, "binary_digest": {"type": "string"}}}}}},
+        {"if": {"properties": {"mode": {"const": "enforced"}}}, "then": {"properties": {"runtime_claims": {"const": true}, "github_sha": {"type": "string"}, "github_run_id": {"type": "string"}, "github_run_attempt": {"type": "string"}, "challenge": {"type": "string"}, "observer_bundle_digest": {"type": "string"}, "cli": {"properties": {"available": {"const": true}, "version": {"type": "string", "pattern": "^(?:0\\.1\\.(?:[89]|[1-9][0-9]+)|0\\.(?:[2-9]|[1-9][0-9]+)\\.[0-9]+|[1-9][0-9]*\\.[0-9]+\\.[0-9]+)$"}, "binary_digest": {"type": "string"}}}}}},
         {"if": {"properties": {"mode": {"const": "fixture-only"}}}, "then": {"properties": {"runtime_claims": {"const": false}}}}
       ],
       "additionalProperties": false
+    },
+    "release": {
+      "type": "object", "required": ["repository", "tag", "tag_commit", "manifest_digest", "checksums_digest"],
+      "properties": {
+        "repository": {"type": ["string", "null"], "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"},
+        "tag": {"type": ["string", "null"], "pattern": "^agentplugins-v[0-9]+\\.[0-9]+\\.[0-9]+$"},
+        "tag_commit": {"type": ["string", "null"], "pattern": "^[a-f0-9]{40}$"},
+        "manifest_digest": {"type": ["string", "null"], "pattern": "^sha256:[a-f0-9]{64}$"},
+        "checksums_digest": {"type": ["string", "null"], "pattern": "^sha256:[a-f0-9]{64}$"}
+      }, "additionalProperties": false
+    },
+    "directory": {
+      "type": "object", "required": ["origin", "snapshot_digest", "sequence", "trust_root_digest"],
+      "properties": {
+        "origin": {"type": ["string", "null"], "pattern": "^https://"},
+        "snapshot_digest": {"type": ["string", "null"], "pattern": "^sha256:[a-f0-9]{64}$"},
+        "sequence": {"type": ["integer", "null"], "minimum": 1},
+        "trust_root_digest": {"type": ["string", "null"], "pattern": "^sha256:[a-f0-9]{64}$"}
+      }, "additionalProperties": false
+    },
+    "scenario_contract": {
+      "type": "object", "required": ["id", "digest", "expected_ids", "expected_counts"],
+      "properties": {
+        "id": {"const": "acceptance-26.1-items-14-26-v1"},
+        "digest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+        "expected_ids": {"type": "array", "minItems": 13, "maxItems": 13, "uniqueItems": true, "items": {"type": "string"}},
+        "expected_counts": {"type": "object", "minProperties": 9, "additionalProperties": {"type": "integer", "minimum": 1}}
+      }, "additionalProperties": false
     },
     "matrix": {
       "type": "array",
@@ -136,7 +169,11 @@
     }
   },
   "allOf": [
-    {"if": {"properties": {"run": {"properties": {"mode": {"const": "enforced"}}}}}, "then": {"properties": {"summary": {"properties": {"hero_runtime_results": {"const": 15}}}}}},
+    {"if": {"properties": {"run": {"properties": {"mode": {"const": "enforced"}}}}}, "then": {"properties": {
+      "summary": {"properties": {"hero_runtime_results": {"const": 15}, "required_gates_complete": {"const": true}}},
+      "release": {"properties": {"repository": {"type": "string"}, "tag": {"type": "string"}, "tag_commit": {"type": "string"}, "manifest_digest": {"type": "string"}, "checksums_digest": {"type": "string"}}},
+      "directory": {"properties": {"origin": {"type": "string"}, "snapshot_digest": {"type": "string"}, "sequence": {"type": "integer"}, "trust_root_digest": {"type": "string"}}}
+    }}},
     {"not": {"properties": {"matrix": {"contains": {"type": "object", "properties": {"client": {"const": "chatgpt"}, "plugin": {"not": {"const": "cloudflare-docs"}}}, "required": ["client", "plugin"]}}}, "required": ["matrix"]}}
   ],
   "additionalProperties": false

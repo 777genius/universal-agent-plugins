@@ -36,25 +36,63 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertEqual(job["permissions"], {"contents": "read"})
         self.assertLessEqual(int(job["timeout-minutes"]), 10)
 
-    def test_manual_gate_is_enforced_and_checksum_bound(self) -> None:
+    def test_live_gate_resolves_official_release_and_native_matrix(self) -> None:
         workflow = load(LAUNCH)
-        job = workflow["jobs"]["enforced-stable-gate"]
-        text = commands(job)
+        native = workflow["jobs"]["native-release"]
+        npm = workflow["jobs"]["node22-npm-facade"]
+        aggregate = workflow["jobs"]["aggregate-one-release"]
+        enforced = workflow["jobs"]["enforced-stable-gate"]
         inputs = workflow["on"]["workflow_dispatch"]["inputs"]
-        for name in ("agentplugins_version", "binary_url", "binary_sha256", "directory_origin", "directory_bundle_url", "directory_bundle_sha256", "live_inputs_url", "live_inputs_sha256", "consent"):
-            self.assertEqual(inputs[name]["required"], "true")
-        self.assertIn("--binary-digest", text)
-        self.assertIn("--expected-version", text)
-        self.assertIn("--directory-snapshot", text)
-        self.assertIn("--notion-oauth-attestation", text)
-        self.assertIn("--chatgpt-attestation", text)
-        self.assertIn("sha256sum --check --strict", text)
-        self.assertNotIn("npm install", text)
-        self.assertNotIn("catalog/v1", text)
-        self.assertNotIn("catalog/v2", text)
-        self.assertNotIn("0.1.6", text)
-        self.assertEqual(job["permissions"], {"contents": "read"})
-        self.assertLessEqual(int(job["timeout-minutes"]), 90)
+        self.assertEqual(inputs["consent"]["required"], "true")
+        self.assertNotIn("release_tag", inputs)
+        self.assertIn("workflow_call", workflow["on"])
+        slots = native["strategy"]["matrix"]["include"]
+        self.assertEqual({(slot["os"], slot["architecture"]) for slot in slots}, {
+            ("macos", "arm64"), ("macos", "amd64"), ("linux", "arm64"),
+            ("linux", "amd64"), ("windows", "amd64"), ("windows", "arm64"),
+        })
+        self.assertEqual({slot["asset"] for slot in slots}, {
+            "agentplugins_0.1.8_darwin_arm64", "agentplugins_0.1.8_darwin_amd64",
+            "agentplugins_0.1.8_linux_arm64", "agentplugins_0.1.8_linux_amd64",
+            "agentplugins_0.1.8_windows_amd64.exe", "agentplugins_0.1.8_windows_arm64.exe",
+        })
+        self.assertIn("prepare_launch_evidence.py", commands(native))
+        self.assertIn("node-version: '22'", yaml.safe_dump(npm))
+        self.assertIn("npm install --global", commands(npm))
+        self.assertIn("--npm-facade", commands(npm))
+        self.assertIn("universal-agent-plugins-0.1.8.tgz", commands(npm))
+        self.assertNotIn("universal-agent-plugins.tgz", commands(npm))
+        self.assertNotRegex(commands(npm), r"github\.com/.*\.tgz")
+        self.assertIn("inputs.consent", aggregate["if"])
+        self.assertIn("release_manifest_digest", commands(aggregate))
+        self.assertEqual(set(enforced["needs"]), {"native-release", "node22-npm-facade", "aggregate-one-release"})
+        self.assertEqual(enforced["environment"], "stable-launch-e2e")
+        self.assertIn("--prepared-context", commands(enforced))
+        self.assertIn("--native-observations", commands(enforced))
+        self.assertIn("request_launch_runtime_observations.py", commands(enforced))
+        self.assertIn("--observer-bundle", commands(enforced))
+        self.assertIn("observer-bundle.schema.json", commands(enforced))
+        self.assertIn("STABLE_LAUNCH_OBSERVER_ED25519_PUBLIC_KEY", yaml.safe_dump(enforced))
+        self.assertIn("STABLE_LAUNCH_OBSERVER_KEY_ID", yaml.safe_dump(enforced))
+        body = LAUNCH.read_text()
+        for forbidden in ("binary_url", "binary_sha256", "directory_bundle_url", "directory_bundle_sha256", "live_inputs_url", "scenario-driver"):
+            self.assertNotIn(forbidden, body)
+        self.assertNotIn("inputs.release_tag", body)
+        self.assertNotIn("--release-tag", body)
+        production = (ROOT / "tests/e2e/production-launch.json").read_text()
+        self.assertIn('"cli_release_repository": "777genius/plugin-kit-ai"', production)
+        self.assertIn('"cli_release_tag": "agentplugins-v0.1.8"', production)
+        prepare = (ROOT / "scripts/prepare_launch_evidence.py").read_text()
+        self.assertNotIn('os.environ.get("GITHUB_TOKEN")', prepare)
+        self.assertIn("token=None", prepare)
+
+    def test_false_consent_skips_every_live_and_aggregate_job(self) -> None:
+        workflow = load(LAUNCH)
+        for name in ("native-release", "node22-npm-facade", "aggregate-one-release", "enforced-stable-gate"):
+            with self.subTest(job=name):
+                condition = workflow["jobs"][name]["if"]
+                self.assertIn("inputs.consent", condition)
+        self.assertEqual(workflow["jobs"]["fixture-only-non-runtime"]["if"], "github.event_name == 'pull_request'")
 
     def test_owned_workflows_pin_actions_and_upload_checksums_immutably(self) -> None:
         for path in (LAUNCH, LIVE):
@@ -62,10 +100,11 @@ class WorkflowContractTests(unittest.TestCase):
             with self.subTest(path=path.name):
                 uses = re.findall(r"uses:\s+([^\s#]+)", text)
                 self.assertTrue(uses)
-                self.assertTrue(all(re.search(r"@[0-9a-f]{40}$", item) for item in uses))
+                self.assertTrue(all(item.startswith("./") or re.search(r"@[0-9a-f]{40}$", item) for item in uses))
                 self.assertIn("SHA256SUMS", text)
                 self.assertIn("overwrite: false", text)
-                self.assertNotIn("universal-agent-plugins@", text)
+                if path == LAUNCH:
+                    self.assertIn("universal-agent-plugins@0.1.8", text)
                 self.assertNotIn("AGENTPLUGINS_VERSION: \"0.1.6\"", text)
 
     def test_live_workflow_is_read_only_and_does_not_publish(self) -> None:
@@ -76,6 +115,19 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertNotIn("contents: write", text)
         self.assertNotIn("catalog/v1", text)
         self.assertNotIn("catalog/v2", text)
+        self.assertIn("workflow_call", workflow["on"])
+        required = workflow["jobs"]["required-stable-launch-evidence"]
+        self.assertEqual(required["uses"], "./.github/workflows/launch-evidence-e2e.yml")
+        self.assertNotIn("release_tag", required.get("with", {}))
+        self.assertEqual(required["permissions"], {"actions": "read", "contents": "read", "id-token": "write"})
+
+    def test_directory_release_requires_reusable_live_evidence(self) -> None:
+        workflow = load(ROOT / ".github/workflows/directory-publication.yml")
+        required = workflow["jobs"]["required_stable_launch_evidence"]
+        self.assertEqual(required["needs"], "deploy")
+        self.assertEqual(required["uses"], "./.github/workflows/live-e2e.yml")
+        self.assertEqual(required["with"]["consent"], "true")
+        self.assertEqual(required["permissions"], {"actions": "read", "contents": "read", "id-token": "write"})
 
     def test_untrusted_pull_request_bridge_reproduction_remains_secretless(self) -> None:
         workflow = load(VALIDATE)

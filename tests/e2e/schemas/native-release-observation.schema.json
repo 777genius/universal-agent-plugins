@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Challenge-bound native release facade observation",
+  "type": "object",
+  "required": ["schema_version", "kind", "os", "architecture", "node_major", "executed", "version", "catalog_repository", "catalog_sha", "cli_release_repository", "cli_release_tag", "release_manifest_digest", "release_checksums_digest", "directory_digest", "asset_name", "asset_digest", "challenge", "challenge_context", "started_at", "observed_at", "command_trace", "runner_platform"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "kind": {"enum": ["binary", "npm"]},
+    "os": {"enum": ["macos", "linux", "windows", "any"]},
+    "architecture": {"enum": ["arm64", "amd64", "any"]},
+    "node_major": {"type": ["integer", "null"]},
+    "executed": {"const": true},
+    "version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
+    "catalog_repository": {"const": "777genius/universal-agent-plugins"},
+    "catalog_sha": {"type": "string", "pattern": "^[a-f0-9]{40}$"},
+    "cli_release_repository": {"const": "777genius/plugin-kit-ai"},
+    "cli_release_tag": {"const": "agentplugins-v0.1.8"},
+    "release_manifest_digest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+    "release_checksums_digest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+    "directory_digest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+    "asset_name": {"type": "string", "minLength": 1},
+    "asset_digest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+    "challenge": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "challenge_context": {"type": "object"},
+    "started_at": {"type": "string", "format": "date-time"},
+    "observed_at": {"type": "string", "format": "date-time"},
+    "command_trace": {"type": "object"},
+    "runner_platform": {"type": "string", "minLength": 1},
+    "npm_package": {
+      "type": "object",
+      "required": ["name", "version", "integrity", "tarball", "metadata_digest"],
+      "properties": {
+        "name": {"const": "universal-agent-plugins"},
+        "version": {"const": "0.1.8"},
+        "integrity": {"type": "string", "pattern": "^sha512-[A-Za-z0-9+/]+={0,2}$"},
+        "tarball": {"const": "https://registry.npmjs.org/universal-agent-plugins/-/universal-agent-plugins-0.1.8.tgz"},
+        "metadata_digest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"}
+      },
+      "additionalProperties": false
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"kind": {"const": "npm"}}, "required": ["kind"]},
+      "then": {"required": ["npm_package"]}
+    }
+  ],
+  "additionalProperties": false
+}

@@ -1,7 +1,17 @@
 name: live E2E read-only checks
 
 on:
+  workflow_call:
+    inputs:
+      consent:
+        required: true
+        type: boolean
   workflow_dispatch:
+    inputs:
+      consent:
+        description: Approve disposable live launch checks
+        required: true
+        type: boolean
   schedule:
     - cron: "17 6 * * 1"
 
@@ -13,6 +23,16 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  required-stable-launch-evidence:
+    if: github.event_name != 'schedule'
+    uses: ./.github/workflows/launch-evidence-e2e.yml
+    with:
+      consent: ${{ inputs.consent }}
+    permissions:
+      actions: read
+      contents: read
+      id-token: write
+
   public-read-flows:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
@@ -38,7 +58,8 @@ jobs:
           retention-days: 30
           overwrite: false
 
-  stable-launch-contract:
+  scheduled-fixture-contract:
+    if: github.event_name == 'schedule'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:

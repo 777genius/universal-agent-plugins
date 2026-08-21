@@ -10,19 +10,41 @@ promoted to runtime evidence.
 from __future__ import annotations
 
 import argparse
+import base64
 import hashlib
+import hmac
 import json
 import os
 import platform
 import re
+import secrets
 import shutil
 import subprocess
+import sys
 import tempfile
 from collections import Counter
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
+from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
+from urllib.request import Request, urlopen
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from directory_publication import (  # noqa: E402
+    MAX_ENVELOPE_BYTES,
+    MAX_LATEST_BYTES,
+    MAX_SNAPSHOT_BYTES,
+    PublicationError,
+    canonical_json,
+    load_public_keys,
+    parse_json_bytes,
+    parse_timestamp,
+    validate_latest,
+    validate_snapshot_semantics,
+    verify_envelope,
+)
+from launch_observer_signatures import verify_observer_bundle  # noqa: E402
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -30,6 +52,32 @@ SCENARIOS = ROOT / "tests" / "e2e" / "launch-scenarios.json"
 EXTERNAL_PACKAGE = ROOT / "tests" / "e2e" / "fixtures" / "external-package"
 STATE_FIXTURE = ROOT / "tests" / "e2e" / "fixtures" / "state-schema-2.json"
 RECOVERY_FIXTURE = ROOT / "tests" / "e2e" / "fixtures" / "recovery-cases.json"
+SCENARIO_OBSERVER = ROOT / "scripts" / "observe_launch_scenario.py"
+PRODUCTION_CONFIG = ROOT / "tests" / "e2e" / "production-launch.json"
+PRODUCTION_DIRECTORY_TRUST = ROOT / "registry" / "publication" / "trusted-keys.json"
+RELEASE_MANIFEST_NAME = "release-manifest.json"
+RELEASE_CHECKSUMS_NAME = "checksums.txt"
+RELEASE_MANIFEST_SCHEMA = ROOT / "schemas" / "e2e" / "release-manifest.schema.json"
+TRUSTED_CATALOG_REPOSITORY = "777genius/universal-agent-plugins"
+TRUSTED_CLI_RELEASE_REPOSITORY = "777genius/plugin-kit-ai"
+TRUSTED_CLI_RELEASE_TAG = "agentplugins-v0.1.8"
+CHALLENGE_DOMAIN = b"UAP-STABLE-LAUNCH-CHALLENGE-V1\0"
+ATTESTATION_DOMAIN = b"UAP-STABLE-LAUNCH-OBSERVER-V1\0"
+MAX_ATTESTATION_AGE = timedelta(minutes=30)
+EXPECTED_ACCEPTANCE_SCENARIOS = (
+    "retained_data_readd_before_changed_default", "schema_1_0_0_accepted",
+    "schema_draft_rejected", "schema_unknown_rejected", "project_scope_zero_mutation",
+    "direct_full_sha_immutable", "public_help_no_hidden_yes", "revoked_operations_boundary",
+    "readd_sticky_distribution", "repair_sticky_distribution", "missing_runtime_exact_guidance",
+    "plugin_data_lifecycle_boundary", "signed_sequence_not_semver",
+)
+EXPECTED_COUNTS = {
+    "directory_products": 26, "directory_lifecycle_rows": 78,
+    "hero_lifecycle_rows": 15, "hero_runtime_rows": 15,
+    "context7_grouped_rows": 4, "chatgpt_rows": 1,
+    "shared_backend_rows": 1, "acceptance_postcondition_rows": 13,
+    "native_platform_rows": 7,
+}
 OUTCOMES = {"passed", "failed", "inconclusive", "not_applicable"}
 DIGEST = re.compile(r"^sha256:[a-f0-9]{64}$")
 FULL_SHA = re.compile(r"^[a-f0-9]{40}$")
@@ -46,12 +94,240 @@ CLIENT_ROOTS = {
 SECRET_NAME = re.compile(r"(?i)(token|secret|password|cookie|authorization|oauth[_-]?code)")
 
 
+def read_production_config() -> dict[str, Any]:
+    value = json.loads(PRODUCTION_CONFIG.read_text())
+    if (
+        value.get("schema_version") != 1
+        or value.get("catalog_repository") != TRUSTED_CATALOG_REPOSITORY
+        or value.get("cli_release_repository") != TRUSTED_CLI_RELEASE_REPOSITORY
+        or value.get("cli_release_tag") != TRUSTED_CLI_RELEASE_TAG
+    ):
+        raise ValueError("checked-in production repository configuration is invalid")
+    origin = urlsplit(str(value.get("production_origin", "")))
+    if origin.scheme != "https" or not origin.hostname or origin.query or origin.fragment or origin.username or origin.password:
+        raise ValueError("checked-in production Directory origin is invalid")
+    return value
+
+
+def bounded_https_get(url: str, *, maximum: int, accept: str = "application/octet-stream", token: str | None = None) -> bytes:
+    parsed = urlsplit(url)
+    if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password or parsed.fragment:
+        raise ValueError("launch evidence downloads require credential-free HTTPS URLs")
+    headers = {"Accept": accept, "User-Agent": "uap-stable-launch-evidence/1"}
+    if token:
+        headers["Authorization"] = "Bearer " + token
+    try:
+        with urlopen(Request(url, headers=headers), timeout=60) as response:
+            body = response.read(maximum + 1)
+    except (HTTPError, URLError, TimeoutError) as error:
+        raise ValueError(f"failed to fetch required immutable input from {parsed.hostname}") from error
+    if len(body) > maximum:
+        raise ValueError("download exceeds stable launch size bound")
+    return body
+
+
+def github_json(repository: str, path: str, *, token: str | None = None) -> dict[str, Any]:
+    body = bounded_https_get(
+        f"https://api.github.com/repos/{repository}/{path.lstrip('/')}", maximum=2 << 20,
+        accept="application/vnd.github+json", token=token,
+    )
+    value = json.loads(body)
+    if not isinstance(value, dict):
+        raise ValueError("GitHub API returned an invalid object")
+    return value
+
+
+def resolve_tag_commit(repository: str, tag: str, *, token: str | None = None) -> str:
+    value = github_json(repository, f"git/ref/tags/{tag}", token=token)
+    target = value.get("object", {})
+    for _ in range(4):
+        sha = target.get("sha")
+        kind = target.get("type")
+        if not isinstance(sha, str) or not FULL_SHA.fullmatch(sha):
+            raise ValueError("GitHub tag target has an invalid SHA")
+        if kind == "commit":
+            return sha
+        if kind != "tag":
+            raise ValueError("release tag does not resolve to a commit")
+        target = github_json(repository, f"git/tags/{sha}", token=token).get("object", {})
+    raise ValueError("release tag annotation chain is too deep")
+
+
+def validate_release_manifest(value: dict[str, Any], *, repository: str, tag: str, tag_commit: str) -> None:
+    try:
+        import jsonschema
+        jsonschema.Draft202012Validator(json.loads(RELEASE_MANIFEST_SCHEMA.read_text())).validate(value)
+    except ImportError as error:
+        raise ValueError("jsonschema is required to validate the release manifest") from error
+    except Exception as error:
+        if error.__class__.__module__.startswith("jsonschema"):
+            raise ValueError("release manifest omits a required native asset or has an invalid field") from error
+        raise
+    if repository != TRUSTED_CLI_RELEASE_REPOSITORY:
+        raise ValueError("release manifest was not resolved from the trusted CLI repository")
+    if value.get("tag") != tag or value.get("commit") != tag_commit:
+        raise ValueError("release manifest tag/commit identity does not match GitHub")
+    if tag != "agentplugins-v" + str(value.get("version")):
+        raise ValueError("release manifest tag and version disagree")
+    names = [asset["file"] for asset in value["assets"].values()]
+    if len(names) != len(set(names)):
+        raise ValueError("release manifest contains duplicate asset names")
+    expected = {
+        "darwin-amd64": f"agentplugins_{value['version']}_darwin_amd64",
+        "darwin-arm64": f"agentplugins_{value['version']}_darwin_arm64",
+        "linux-amd64": f"agentplugins_{value['version']}_linux_amd64",
+        "linux-arm64": f"agentplugins_{value['version']}_linux_arm64",
+        "windows-amd64": f"agentplugins_{value['version']}_windows_amd64.exe",
+        "windows-arm64": f"agentplugins_{value['version']}_windows_arm64.exe",
+    }
+    if set(value["assets"]) != set(expected) or any(value["assets"][key]["file"] != name for key, name in expected.items()):
+        raise ValueError("release manifest omits or renames a required native asset")
+
+
+def resolve_github_release(
+    repository: str, tag: str, destination: Path, *, asset_name: str,
+    token: str | None = None, fixture_fetch: Callable[[str, int, str], bytes] | None = None,
+) -> tuple[Path, dict[str, Any], str]:
+    """Resolve one published exact-tag release and checksum its selected asset.
+
+    ``fixture_fetch`` exists solely for direct unit tests. Production callers cannot
+    select URLs, checksums, or versions independently.
+    """
+    if not re.fullmatch(r"agentplugins-v[0-9]+\.[0-9]+\.[0-9]+", tag):
+        raise ValueError("release tag must be an exact stable agentplugins-vX.Y.Z tag")
+    release = github_json(repository, f"releases/tags/{tag}", token=token)
+    if release.get("draft") or release.get("prerelease") or release.get("tag_name") != tag:
+        raise ValueError("GitHub release is not an exact published stable tag")
+    tag_commit = resolve_tag_commit(repository, tag, token=token)
+    api_assets = {item.get("name"): item for item in release.get("assets", []) if isinstance(item, dict)}
+    expected_release_assets = {
+        RELEASE_MANIFEST_NAME, RELEASE_CHECKSUMS_NAME,
+        "agentplugins_" + tag.removeprefix("agentplugins-v") + "_darwin_amd64",
+        "agentplugins_" + tag.removeprefix("agentplugins-v") + "_darwin_arm64",
+        "agentplugins_" + tag.removeprefix("agentplugins-v") + "_linux_amd64",
+        "agentplugins_" + tag.removeprefix("agentplugins-v") + "_linux_arm64",
+        "agentplugins_" + tag.removeprefix("agentplugins-v") + "_windows_amd64.exe",
+        "agentplugins_" + tag.removeprefix("agentplugins-v") + "_windows_arm64.exe",
+    }
+    if set(api_assets) != expected_release_assets:
+        raise ValueError("GitHub release does not contain the exact stable native asset set")
+    manifest_api = api_assets.get(RELEASE_MANIFEST_NAME)
+    checksums_api = api_assets.get(RELEASE_CHECKSUMS_NAME)
+    selected_api = api_assets.get(asset_name)
+    if not manifest_api or not checksums_api or not selected_api:
+        raise ValueError("GitHub release is missing manifest/checksums or selected asset")
+
+    def fetch(asset: dict[str, Any], limit: int) -> bytes:
+        url = str(asset.get("url", ""))
+        if fixture_fetch:
+            return fixture_fetch(url, limit, "application/octet-stream")
+        return bounded_https_get(url, maximum=limit, accept="application/octet-stream", token=token)
+
+    manifest_body = fetch(manifest_api, 1 << 20)
+    manifest = json.loads(manifest_body)
+    validate_release_manifest(manifest, repository=repository, tag=tag, tag_commit=tag_commit)
+    manifest_digest = "sha256:" + hashlib.sha256(manifest_body).hexdigest()
+    checksums_body = fetch(checksums_api, 1 << 20)
+    checksum_entries: dict[str, str] = {}
+    for line in checksums_body.decode("ascii").splitlines():
+        match = re.fullmatch(r"([a-f0-9]{64})  ([A-Za-z0-9_.-]+)", line)
+        if not match or match.group(2) in checksum_entries:
+            raise ValueError("GitHub release checksums.txt is non-canonical")
+        checksum_entries[match.group(2)] = match.group(1)
+    checksum_names = {item["file"] for item in manifest["assets"].values()} | {RELEASE_MANIFEST_NAME}
+    if set(checksum_entries) != checksum_names:
+        raise ValueError("GitHub release checksums.txt does not cover the exact manifest asset set")
+    if checksum_entries[RELEASE_MANIFEST_NAME] != hashlib.sha256(manifest_body).hexdigest():
+        raise ValueError("GitHub release manifest disagrees with checksums.txt")
+    declared = next((item for item in manifest["assets"].values() if item["file"] == asset_name), None)
+    if declared is None:
+        raise ValueError("selected GitHub asset is absent from the immutable release manifest")
+    if selected_api.get("size") != declared["size"]:
+        raise ValueError("GitHub asset size disagrees with the release manifest")
+    body = fetch(selected_api, declared["size"])
+    if (
+        len(body) != declared["size"]
+        or hashlib.sha256(body).hexdigest() != declared["sha256"]
+        or checksum_entries[asset_name] != declared["sha256"]
+    ):
+        raise ValueError("GitHub release asset digest disagrees with the immutable manifest")
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_bytes(body)
+    destination.chmod(0o500)
+    (destination.parent / RELEASE_MANIFEST_NAME).write_bytes(manifest_body)
+    (destination.parent / RELEASE_CHECKSUMS_NAME).write_bytes(checksums_body)
+    return destination, manifest, manifest_digest
+
+
+def resolve_npm_package(
+    package: str, version: str, destination: Path, *,
+    fixture_fetch: Callable[[str, int, str], bytes] | None = None,
+) -> tuple[Path, dict[str, Any]]:
+    """Resolve an exact npm version from the registry and verify its SRI bytes.
+
+    The registry endpoints and package identity are derived here. Production
+    callers cannot pair an arbitrary tarball URL with caller-supplied integrity.
+    ``fixture_fetch`` is reserved for direct tests.
+    """
+    if package != "universal-agent-plugins" or not VERSION.fullmatch(version):
+        raise ValueError("npm facade must be the exact universal-agent-plugins semantic version")
+    metadata_url = f"https://registry.npmjs.org/{package}/{version}"
+
+    def fetch(url: str, limit: int, accept: str) -> bytes:
+        if fixture_fetch:
+            return fixture_fetch(url, limit, accept)
+        return bounded_https_get(url, maximum=limit, accept=accept)
+
+    metadata_body = fetch(metadata_url, 1 << 20, "application/json")
+    metadata = json.loads(metadata_body)
+    dist = metadata.get("dist", {})
+    integrity = dist.get("integrity")
+    tarball_url = dist.get("tarball")
+    expected_tarball = f"https://registry.npmjs.org/{package}/-/{package}-{version}.tgz"
+    if metadata.get("name") != package or metadata.get("version") != version:
+        raise ValueError("npm registry metadata does not match the exact requested package version")
+    if not isinstance(integrity, str) or not integrity.startswith("sha512-") or tarball_url != expected_tarball:
+        raise ValueError("npm registry metadata lacks the expected SHA-512 integrity/tarball identity")
+    try:
+        expected = base64.b64decode(integrity.removeprefix("sha512-"), validate=True)
+    except ValueError as error:
+        raise ValueError("npm registry dist.integrity is invalid") from error
+    body = fetch(expected_tarball, 1 << 28, "application/octet-stream")
+    if not hmac.compare_digest(hashlib.sha512(body).digest(), expected):
+        raise ValueError("npm tarball bytes disagree with registry dist.integrity")
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_bytes(body)
+    destination.chmod(0o400)
+    return destination, {
+        "name": package, "version": version, "integrity": integrity,
+        "tarball": expected_tarball, "sha256": hashlib.sha256(body).hexdigest(),
+        "size": len(body), "metadata_digest": "sha256:" + hashlib.sha256(metadata_body).hexdigest(),
+    }
+
+
 def utc_now() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
 def sha256_file(path: Path) -> str:
     return "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def validate_observer_bundle_files(
+    bundle_path: Path, *, challenge: str, public_key_base64: str,
+    expected_key_id: str, artifact_paths: dict[str, Path | None],
+) -> None:
+    bundle = json.loads(bundle_path.read_text())
+    artifacts = verify_observer_bundle(
+        bundle, challenge=challenge, public_key_base64=public_key_base64,
+        expected_key_id=expected_key_id,
+    )
+    if set(artifact_paths) != set(artifacts) or any(path is None for path in artifact_paths.values()):
+        raise ValueError("signed observer bundle and launch inputs have different artifact sets")
+    for name, path in artifact_paths.items():
+        assert path is not None
+        if json.loads(path.read_text()) != artifacts[name]:
+            raise ValueError(f"launch input differs from signed observer artifact: {name}")
 
 
 def package_digest(path: Path) -> str:
@@ -62,6 +338,61 @@ def package_digest(path: Path) -> str:
         framed.extend(len(relative).to_bytes(8, "big") + relative)
         framed.extend(len(body).to_bytes(8, "big") + body)
     return "sha256:" + hashlib.sha256(framed).hexdigest()
+
+
+def observed_state_identity(environment: dict[str, str], product_id: str, clients: tuple[str, ...]) -> dict[str, Any]:
+    manager = Path(environment["AGENTPLUGINS_HOME"])
+    home = Path(environment["HOME"])
+    installation: dict[str, Any] | None = None
+    for path in sorted(manager.rglob("*.json")) if manager.exists() else ():
+        try:
+            value = json.loads(path.read_text())
+        except (OSError, UnicodeError, json.JSONDecodeError):
+            continue
+        candidates = value.get("installations", []) if isinstance(value, dict) else []
+        for candidate in candidates if isinstance(candidates, list) else ():
+            if isinstance(candidate, dict) and product_id in {candidate.get("declared_name"), find_value(candidate, {"product_id"})}:
+                installation = candidate
+                break
+        if installation is not None:
+            break
+    roots = {client: home / CLIENT_ROOTS[client] for client in clients}
+    native_digests = {client: package_digest(path) for client, path in roots.items()}
+    native_mentions: dict[str, int] = {}
+    for client, root in roots.items():
+        count = 0
+        if root.exists():
+            for path in sorted(root.rglob("*")):
+                if path.is_file() and not path.is_symlink():
+                    relative = path.relative_to(root).as_posix()
+                    body = path.read_text(errors="ignore") if path.stat().st_size <= (1 << 20) else ""
+                    count += int(product_id in relative or product_id in body)
+        native_mentions[client] = count
+    committed = 0
+    if installation:
+        stack = [installation]
+        while stack:
+            item = stack.pop()
+            if isinstance(item, dict):
+                committed += int(item.get("phase") == "committed")
+                stack.extend(item.values())
+            elif isinstance(item, list):
+                stack.extend(item)
+    return {
+        "product_id": find_value(installation, {"product_id"}) if installation else None,
+        "tree_digest": find_value(installation, {"tree_digest"}) if installation else None,
+        "manifest_digest": find_value(installation, {"manifest_digest"}) if installation else None,
+        "distribution_id": find_value(installation, {"distribution_id"}) if installation else None,
+        "distribution_kind": find_value(installation, {"distribution_kind"}) if installation else None,
+        "release_sequence": find_value(installation, {"desired_release_sequence"}) if installation else None,
+        "package_version": find_value(installation.get("package", {}), {"version"}) if installation else None,
+        "snapshot_sequence": find_value(installation, {"snapshot_sequence"}) if installation else None,
+        "snapshot_digest": find_value(installation, {"snapshot_digest"}) if installation else None,
+        "client_version": "native-state-v1@" + hashlib.sha256(json.dumps(native_digests, sort_keys=True, separators=(",", ":")).encode()).hexdigest(),
+        "receipt_reconciled": committed > 0,
+        "native_discovery_reconciled": bool(installation) and all(native_mentions[client] > 0 for client in clients),
+        "manager_digest": package_digest(manager), "native_digests": native_digests,
+    }
 
 
 def parse_stable_version(value: str) -> tuple[int, int, int]:
@@ -81,33 +412,61 @@ def validated_directory_environment(
     if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password or parsed.query or parsed.fragment:
         raise ValueError("Directory origin must be credential-free public HTTPS")
     snapshot_bytes = snapshot_path.read_bytes()
-    snapshot = json.loads(snapshot_bytes)
-    envelope = json.loads(envelope_path.read_text())
-    trust = json.loads(trust_path.read_text())
-    digest = "sha256:" + hashlib.sha256(snapshot_bytes).hexdigest()
-    if envelope.get("snapshot_digest") != digest:
-        raise ValueError("Directory envelope digest does not match snapshot bytes")
-    if envelope.get("algorithm") != "Ed25519" or envelope.get("signature_domain") != "UAP-DIRECTORY-SNAPSHOT-ED25519-V1" or not envelope.get("signature"):
-        raise ValueError("Directory envelope is not a signed Ed25519 fixture")
-    if envelope.get("sequence") != snapshot.get("sequence") or envelope.get("snapshot_schema_version") != snapshot.get("snapshot_schema_version"):
-        raise ValueError("Directory envelope identity does not match snapshot")
-    key_ids = {key.get("id") or key.get("key_id") for key in trust.get("keys", [])}
-    if envelope.get("key_id") not in key_ids:
-        raise ValueError("Directory envelope key is absent from the trust fixture")
-    if not isinstance(snapshot.get("sequence"), int) or snapshot["sequence"] < 1:
-        raise ValueError("Directory snapshot sequence is invalid")
     try:
-        expires_at = datetime.fromisoformat(snapshot["expires_at"].replace("Z", "+00:00"))
-    except (KeyError, TypeError, ValueError) as error:
-        raise ValueError("Directory snapshot expiry is invalid") from error
-    if expires_at <= datetime.now(timezone.utc):
-        raise ValueError("base Directory snapshot is expired")
+        snapshot = parse_json_bytes(snapshot_bytes, "Directory snapshot", max_bytes=MAX_SNAPSHOT_BYTES)
+        envelope_bytes = envelope_path.read_bytes()
+        envelope = parse_json_bytes(envelope_bytes, "Directory envelope", max_bytes=MAX_ENVELOPE_BYTES)
+        if canonical_json(snapshot) != snapshot_bytes or canonical_json(envelope) != envelope_bytes:
+            raise PublicationError("Directory snapshot and envelope must be canonical JSON")
+        verify_envelope(snapshot_bytes, envelope, load_public_keys(trust_path))
+        validate_snapshot_semantics(snapshot)
+        if envelope["sequence"] != snapshot["sequence"] or envelope["snapshot_schema_version"] != snapshot["snapshot_schema_version"]:
+            raise PublicationError("Directory envelope identity does not match snapshot")
+        now = datetime.now(timezone.utc)
+        if now < parse_timestamp(snapshot["generated_at"], "generated_at"):
+            raise PublicationError("Directory snapshot is not yet valid")
+        if now >= parse_timestamp(snapshot["expires_at"], "expires_at"):
+            raise PublicationError("Directory snapshot is expired")
+    except (PublicationError, OSError, KeyError, TypeError) as error:
+        raise ValueError(f"invalid signed production Directory: {error}") from error
+    digest = "sha256:" + hashlib.sha256(snapshot_bytes).hexdigest()
     return ({
         "AGENTPLUGINS_DIRECTORY_ORIGIN": origin,
         "AGENTPLUGINS_DIRECTORY_SNAPSHOT": str(snapshot_path.resolve()),
         "AGENTPLUGINS_DIRECTORY_ENVELOPE": str(envelope_path.resolve()),
         "AGENTPLUGINS_DIRECTORY_TRUST": str(trust_path.resolve()),
     }, snapshot, digest)
+
+
+def fetch_production_directory(destination: Path) -> tuple[dict[str, str], dict[str, Any], str]:
+    """Fetch pointer/envelope/snapshot from the checked-in production origin.
+
+    The trust root is deliberately never fetched. It is copied from the exact
+    checked-out repository revision after real Ed25519 verification.
+    """
+    config = read_production_config()
+    origin = config["production_origin"].rstrip("/") + "/"
+    latest_body = bounded_https_get(origin + "latest.json", maximum=MAX_LATEST_BYTES, accept="application/json")
+    try:
+        latest = parse_json_bytes(latest_body, "production latest pointer", max_bytes=MAX_LATEST_BYTES)
+        if canonical_json(latest) != latest_body:
+            raise PublicationError("production latest pointer is not canonical JSON")
+        validate_latest(latest)
+    except (PublicationError, TypeError) as error:
+        raise ValueError(f"invalid production Directory pointer: {error}") from error
+    snapshot_body = bounded_https_get(origin + latest["snapshot_path"], maximum=latest["fetch_contract"]["snapshot_max_bytes"], accept="application/json")
+    envelope_body = bounded_https_get(origin + latest["envelope_path"], maximum=latest["fetch_contract"]["envelope_max_bytes"], accept="application/json")
+    destination.mkdir(parents=True, exist_ok=False)
+    snapshot_path = destination / "snapshot.json"
+    envelope_path = destination / "envelope.json"
+    trust_path = destination / "trusted-keys.json"
+    snapshot_path.write_bytes(snapshot_body)
+    envelope_path.write_bytes(envelope_body)
+    shutil.copy2(PRODUCTION_DIRECTORY_TRUST, trust_path)
+    environment, snapshot, digest = validated_directory_environment(origin, snapshot_path, envelope_path, trust_path)
+    if snapshot["sequence"] != latest["sequence"]:
+        raise ValueError("production Directory pointer and signed snapshot sequence disagree")
+    return environment, snapshot, digest
 
 
 def isolated_environment(sandbox: Path, clients: tuple[str, ...], directory_environment: dict[str, str] | None = None) -> dict[str, str]:
@@ -175,12 +534,50 @@ def collect_digests(value: Any) -> set[str]:
     return found
 
 
+def make_challenge(github_sha: str, run_id: str, run_attempt: str, release_digest: str, directory_digest: str, run_root: Path) -> dict[str, str]:
+    if not FULL_SHA.fullmatch(github_sha) or not run_id.isdigit() or not run_attempt.isdigit():
+        raise ValueError("enforced evidence requires exact GitHub SHA/run identity")
+    if not DIGEST.fullmatch(release_digest) or not DIGEST.fullmatch(directory_digest):
+        raise ValueError("challenge inputs require release and Directory digests")
+    nonce = secrets.token_hex(32)
+    root_id = hashlib.sha256(str(run_root.resolve()).encode()).hexdigest()
+    framed = json.dumps({
+        "github_sha": github_sha, "run_id": run_id, "run_attempt": run_attempt,
+        "release_manifest_digest": release_digest, "directory_digest": directory_digest,
+        "root_id": root_id, "nonce": nonce,
+    }, sort_keys=True, separators=(",", ":")).encode()
+    return {
+        "value": hashlib.sha256(CHALLENGE_DOMAIN + framed).hexdigest(),
+        "nonce": nonce, "github_sha": github_sha, "run_id": run_id,
+        "run_attempt": run_attempt, "release_manifest_digest": release_digest,
+        "directory_digest": directory_digest, "root_id": root_id,
+    }
+
+
+def challenge_context_valid(value: Any) -> bool:
+    if not isinstance(value, dict) or set(value) != {"value", "nonce", "github_sha", "run_id", "run_attempt", "release_manifest_digest", "directory_digest", "root_id"}:
+        return False
+    if not all(isinstance(value.get(field), str) for field in value):
+        return False
+    if not FULL_SHA.fullmatch(value["github_sha"]) or not value["run_id"].isdigit() or not value["run_attempt"].isdigit():
+        return False
+    if not DIGEST.fullmatch(value["release_manifest_digest"]) or not DIGEST.fullmatch(value["directory_digest"]):
+        return False
+    if not re.fullmatch(r"[a-f0-9]{64}", value["nonce"]) or not re.fullmatch(r"[a-f0-9]{64}", value["root_id"]):
+        return False
+    framed = json.dumps({
+        "github_sha": value["github_sha"], "run_id": value["run_id"], "run_attempt": value["run_attempt"],
+        "release_manifest_digest": value["release_manifest_digest"], "directory_digest": value["directory_digest"],
+        "root_id": value["root_id"], "nonce": value["nonce"],
+    }, sort_keys=True, separators=(",", ":")).encode()
+    return value["value"] == hashlib.sha256(CHALLENGE_DOMAIN + framed).hexdigest()
+
+
 class LaunchHarness:
     def __init__(
         self,
         binary: Path | None,
         attestations: Path | None,
-        scenario_driver: Path | None = None,
         *,
         mode: str = "enforced",
         binary_digest: str | None = None,
@@ -193,15 +590,33 @@ class LaunchHarness:
         consent: Path | None = None,
         notion_oauth: Path | None = None,
         chatgpt_attestation: Path | None = None,
+        release_manifest: dict[str, Any] | None = None,
+        release_manifest_digest: str | None = None,
+        release_checksums_digest: str | None = None,
+        release_tag: str | None = None,
+        github_sha: str | None = None,
+        github_run_id: str | None = None,
+        github_run_attempt: str | None = None,
+        challenge: dict[str, str] | None = None,
+        native_observations: Path | None = None,
+        observer_bundle_digest: str | None = None,
     ) -> None:
         self.config = json.loads(SCENARIOS.read_text())
         if mode not in {"enforced", "fixture-only"}:
             raise ValueError("mode must be enforced or fixture-only")
         self.mode = mode
         self.binary = binary.resolve() if binary else None
-        self.scenario_driver = scenario_driver.resolve() if scenario_driver else None
         self.expected_version = expected_version
         self.binary_digest = binary_digest
+        self.release_manifest = release_manifest or {}
+        self.release_manifest_digest = release_manifest_digest
+        self.release_checksums_digest = release_checksums_digest
+        self.release_tag = release_tag
+        self.github_sha = github_sha
+        self.github_run_id = github_run_id
+        self.github_run_attempt = github_run_attempt
+        self.native_observations = native_observations
+        self.observer_bundle_digest = observer_bundle_digest
         self.directory_environment: dict[str, str] = {}
         self.snapshot: dict[str, Any] = {}
         self.snapshot_digest: str | None = None
@@ -219,6 +634,12 @@ class LaunchHarness:
                 raise ValueError("Directory origin, snapshot, envelope, and trust fixture are required together")
             self.directory_environment, self.snapshot, self.snapshot_digest = validated_directory_environment(
                 str(directory_origin), Path(directory_snapshot), Path(directory_envelope), Path(directory_trust)
+            )
+        self.challenge = challenge
+        if mode == "enforced" and self.challenge is None and self.run_root and self.release_manifest_digest and self.snapshot_digest:
+            self.challenge = make_challenge(
+                str(github_sha), str(github_run_id), str(github_run_attempt),
+                self.release_manifest_digest, self.snapshot_digest, self.run_root,
             )
         self.attestations = self._load_attestations(attestations)
         notion_records = self._load_attestations(notion_oauth)
@@ -251,20 +672,26 @@ class LaunchHarness:
     def _preflight(self) -> None:
         if self.run_root is not None:
             if self.run_root.exists():
-                raise ValueError("disposable run root must not already exist")
+                expected_root_id = hashlib.sha256(str(self.run_root.resolve()).encode()).hexdigest()
+                prepared = self.mode == "enforced" and self.challenge and self.challenge.get("root_id") == expected_root_id
+                if not prepared or (self.run_root / "runs").exists() or (self.run_root / "evidence").exists():
+                    raise ValueError("disposable run root must not already exist unless it is the authenticated prepared root")
             real_home = Path.home().resolve()
             repository = ROOT.resolve()
             if self.run_root == real_home or self.run_root == repository or self.run_root in real_home.parents or self.run_root in repository.parents or repository in self.run_root.parents:
                 raise ValueError("refusing a real existing home/project path as disposable root")
-            self.run_root.mkdir(parents=True)
+            self.run_root.mkdir(parents=True, exist_ok=True)
         if self.mode == "enforced":
             missing = []
             if not self.cli_available: missing.append("exact executable binary")
             if not self.binary_digest: missing.append("binary checksum")
             if not self.expected_version: missing.append("binary version")
+            if not self.release_manifest or not self.release_manifest_digest or not self.release_checksums_digest or not self.release_tag: missing.append("GitHub release manifest/checksums identity")
             if not self.snapshot: missing.append("signed Directory fixture")
-            if not self.scenario_driver or not self.scenario_driver.is_file() or not os.access(self.scenario_driver, os.X_OK): missing.append("scenario driver")
+            if not self.challenge: missing.append("GitHub-bound random challenge")
+            if not self.native_observations or not self.native_observations.is_dir(): missing.append("native macOS/Linux/Windows and Node 22 observations")
             if not self.attestations: missing.append("runtime/OAuth attestations")
+            if not self.observer_bundle_digest: missing.append("signed observer bundle digest")
             if not self.notion_oauth_supplied: missing.append("separate Notion OAuth artifact")
             if not self.chatgpt_attestation_supplied: missing.append("separate ChatGPT Cloudflare artifact")
             if not self.consent_digest: missing.append("consent artifact")
@@ -280,6 +707,14 @@ class LaunchHarness:
                 raise ValueError("binary checksum must be lowercase sha256:<64 hex>")
             if self.cli_available and sha256_file(self.binary) != self.binary_digest:
                 raise ValueError("binary checksum does not match exact executable")
+        if self.mode == "enforced":
+            config = read_production_config()
+            validate_release_manifest(
+                self.release_manifest, repository=config["cli_release_repository"], tag=str(self.release_tag),
+                tag_commit=str(self.release_manifest.get("commit", "")),
+            )
+            if self.expected_version != self.release_manifest.get("version"):
+                raise ValueError("binary version must come from the immutable GitHub release manifest")
 
     def fresh_sandbox(self, label: str) -> Path:
         if self.run_root is None:
@@ -346,6 +781,45 @@ class LaunchHarness:
                 raise ValueError(f"invalid attestation outcome: {key}")
             tuple_value = record.get("tuple", {})
             if record.get("outcome") == "passed":
+                if not self.challenge or record.get("challenge") != self.challenge.get("value"):
+                    raise ValueError(f"passed attestation is not correlated to the current challenge: {key}")
+                try:
+                    started = datetime.fromisoformat(record["started_at"].replace("Z", "+00:00"))
+                    observed = datetime.fromisoformat(record["observed_at"].replace("Z", "+00:00"))
+                except (KeyError, TypeError, ValueError) as error:
+                    raise ValueError(f"passed attestation timestamps are invalid: {key}") from error
+                now = datetime.now(timezone.utc)
+                if started > observed or observed > now + timedelta(minutes=2) or now - observed > MAX_ATTESTATION_AGE:
+                    raise ValueError(f"passed attestation is stale or has an invalid time interval: {key}")
+                traces = record.get("command_traces")
+                if not isinstance(traces, list) or not traces or not all(trace.get("challenge") == self.challenge["value"] and isinstance(trace.get("argv"), list) for trace in traces):
+                    raise ValueError(f"passed attestation lacks challenge-bound command traces: {key}")
+                for trace in traces:
+                    try:
+                        trace_started = datetime.fromisoformat(trace["started_at"].replace("Z", "+00:00"))
+                        trace_ended = datetime.fromisoformat(trace["ended_at"].replace("Z", "+00:00"))
+                    except (KeyError, TypeError, ValueError) as error:
+                        raise ValueError(f"passed attestation has invalid command trace timestamps: {key}") from error
+                    if trace_started < started or trace_started > trace_ended or trace_ended > observed or trace.get("exit_code") != 0:
+                        raise ValueError(f"passed attestation command trace is outside its observation interval or failed: {key}")
+                if not all(isinstance(record.get(field), str) and record[field] for field in ("client_id", "application_id", "endpoint")):
+                    raise ValueError(f"passed attestation lacks exact client/app/endpoint identity: {key}")
+                endpoint = urlsplit(record["endpoint"])
+                if endpoint.scheme != "https" or not endpoint.hostname or endpoint.username or endpoint.password or endpoint.fragment:
+                    raise ValueError(f"passed attestation has an invalid public HTTPS endpoint: {key}")
+                github = record.get("github_attestation")
+                github_valid = bool(
+                    isinstance(github, dict)
+                    and github.get("repository") == read_production_config()["catalog_repository"]
+                    and github.get("sha") == self.github_sha
+                    and str(github.get("run_id")) == str(self.github_run_id)
+                    and str(github.get("run_attempt")) == str(self.github_run_attempt)
+                    and github.get("challenge") == self.challenge["value"]
+                    and github.get("workflow") == "launch-evidence-e2e.yml"
+                    and github.get("job") == "enforced-stable-gate"
+                )
+                if not github_valid:
+                    raise ValueError(f"passed external observation is not GitHub-attested for this run: {key}")
                 required = ("product_id", "tree_digest", "manifest_digest", "distribution_id", "distribution_kind", "release_sequence", "package_version", "snapshot_sequence", "snapshot_digest", "binary_digest", "dependency_identity", "installer_version", "adapter_version", "client_version", "os", "architecture", "observed_at")
                 if any(not tuple_value.get(item) for item in required):
                     raise ValueError(f"passed attestation has incomplete tuple: {key}")
@@ -356,6 +830,8 @@ class LaunchHarness:
                     raise ValueError(f"attestation installer version does not match supplied binary: {key}")
                 if tuple_value["binary_digest"] != self.binary_digest:
                     raise ValueError(f"attestation binary digest does not match supplied binary: {key}")
+                if tuple_value["observed_at"] != record["observed_at"]:
+                    raise ValueError(f"attestation tuple timestamp differs from observer timestamp: {key}")
                 release = self.directory_release(record["plugin"])
                 expected_identity = {
                     "product_id": record["plugin"],
@@ -374,6 +850,14 @@ class LaunchHarness:
                     raise ValueError(f"runtime pass lacks the supplied consent artifact: {key}")
                 if record.get("runtime_invocation") is not True or record.get("discovery_verified") is not True:
                     raise ValueError(f"runtime pass lacks invocation/discovery proof: {key}")
+                for observation_name in ("manager_observation", "native_observation"):
+                    observation = record.get(observation_name)
+                    if not isinstance(observation, dict) or not all(isinstance(observation.get(field), str) and observation[field] for field in ("observer", "before_digest", "after_digest", "observed_at")):
+                        raise ValueError(f"runtime pass lacks independent {observation_name}: {key}")
+                    if not DIGEST.fullmatch(observation["before_digest"]) or not DIGEST.fullmatch(observation["after_digest"]) or observation["observed_at"] != record["observed_at"]:
+                        raise ValueError(f"runtime pass has invalid independent {observation_name}: {key}")
+                if record.get("receipt_reconciled") is not True or record.get("native_discovery_reconciled") is not True:
+                    raise ValueError(f"runtime pass lacks receipt/native discovery reconciliation: {key}")
                 if not isinstance(record.get("identity_id"), str) or not IDENTITY_ID.fullmatch(record["identity_id"]) or record.get("isolated_identity") is not True:
                     raise ValueError(f"runtime pass lacks explicit isolated test identity: {key}")
                 if (record["plugin"] == "notion" or record["client"] == "chatgpt") and not (record.get("consent_attested") is True and record.get("isolated_identity") is True):
@@ -384,6 +868,8 @@ class LaunchHarness:
                     raise ValueError(f"Notion runtime pass lacks approved OAuth artifact: {key}")
                 if record["client"] == "chatgpt" and not all(record.get(field) is True for field in ("registered_app_binding", "ui_activation", "read_only")):
                     raise ValueError(f"ChatGPT pass lacks registered binding/UI/read-only proof: {key}")
+                if record["client"] == "chatgpt" and not all(DIGEST.fullmatch(str(record.get(field, ""))) for field in ("projection_receipt_digest", "native_app_digest", "native_mcp_digest")):
+                    raise ValueError(f"ChatGPT pass lacks exact projection receipt/app/MCP digests: {key}")
             result[key] = record
         return result
 
@@ -404,6 +890,9 @@ class LaunchHarness:
         if not self.cli_available:
             return "inconclusive", None, "fixture-only non-runtime mode: Agent Plugins CLI binary was not supplied"
         env = isolated_environment(sandbox, clients, self.directory_environment)
+        product_id = argv[1] if len(argv) > 1 else "unknown"
+        before_state = observed_state_identity(env, product_id, clients)
+        started_at = utc_now()
         try:
             completed = subprocess.run([str(self.binary), *argv], cwd=sandbox / "workspace", env=env, text=True, capture_output=True, timeout=180, check=False)
         except subprocess.TimeoutExpired:
@@ -415,6 +904,19 @@ class LaunchHarness:
         except json.JSONDecodeError:
             return "failed", None, "CLI did not return structured JSON"
         self._assert_result_paths(value, sandbox)
+        after_state = observed_state_identity(env, product_id, clients)
+        value["_observed_state"] = after_state
+        value["_launch_command_trace"] = {
+            "challenge": self.challenge.get("value") if self.challenge else None,
+            "argv": argv, "started_at": started_at, "ended_at": utc_now(),
+            "exit_code": completed.returncode,
+            "stdout_digest": "sha256:" + hashlib.sha256(completed.stdout.encode()).hexdigest(),
+            "stderr_digest": "sha256:" + hashlib.sha256(completed.stderr.encode()).hexdigest(),
+            "manager_before_digest": before_state["manager_digest"],
+            "manager_after_digest": after_state["manager_digest"],
+            "native_before_digests": before_state["native_digests"],
+            "native_after_digests": after_state["native_digests"],
+        }
         if value.get("schema_version") != 1 or value.get("command") != argv[0]:
             return "failed", value, "CLI returned an invalid command envelope"
         result = value.get("data", {}).get("result", {})
@@ -425,22 +927,59 @@ class LaunchHarness:
         return "passed", value, "isolated CLI command completed"
 
     def driven_scenario(self, scenario: str) -> tuple[str, dict[str, Any] | None, str]:
-        if not self.cli_available or not self.scenario_driver or not self.scenario_driver.is_file() or not os.access(self.scenario_driver, os.X_OK):
-            return "inconclusive", None, "fixture-only non-runtime mode: compatible scenario driver was not supplied"
+        if not self.cli_available or not self.challenge:
+            return "inconclusive", None, "fixture-only non-runtime mode: CLI/challenge was not supplied"
         sandbox = self.fresh_sandbox("driver-" + scenario)
         env = isolated_environment(sandbox, ("codex", "cursor", "kiro", "copilot", "vscode"), self.directory_environment)
-        completed = subprocess.run([str(self.scenario_driver), scenario, str(self.binary)], cwd=sandbox / "workspace", env=env, text=True, capture_output=True, timeout=180, check=False)
-        if completed.returncode:
-            return "failed", None, f"scenario driver returned exit status {completed.returncode}"
+        challenge_path = sandbox / "config" / "challenge.json"
+        product_id = "context7"
+        if scenario.startswith("hero_lifecycle_"):
+            product_id = scenario.removeprefix("hero_lifecycle_").rsplit("_", 1)[0]
+        observer_context = {
+            **self.challenge,
+            "binary_digest": self.binary_digest,
+            "expected_version": self.expected_version,
+            "snapshot_sequence": self.snapshot.get("sequence"),
+            "release": self.directory_release(product_id),
+            "catalog_repository": read_production_config()["catalog_repository"],
+            "directory_product": next(item for item in self.snapshot["products"] if item["id"] == product_id),
+            "directory_distribution": next(item for item in self.snapshot["distributions"] if item["id"] == self.directory_release(product_id)["distribution_id"]),
+        }
+        challenge_path.write_text(json.dumps(observer_context, sort_keys=True))
+        completed = subprocess.run([
+            sys.executable, str(SCENARIO_OBSERVER), "--scenario", scenario,
+            "--binary", str(self.binary), "--root", str(sandbox / "workspace"),
+            "--challenge-context", str(challenge_path),
+        ], cwd=sandbox / "workspace", env=env, text=True, capture_output=True, timeout=240, check=False)
         try:
             value = json.loads(completed.stdout)
         except json.JSONDecodeError:
-            return "failed", None, "scenario driver did not return JSON"
+            return "failed", None, "repository-owned observer did not return JSON"
         outcome = value.get("outcome")
         if outcome not in OUTCOMES:
-            return "failed", None, "scenario driver returned an invalid outcome"
+            return "failed", None, "repository-owned observer returned an invalid outcome"
+        if value.get("scenario_id") != scenario or value.get("challenge") != self.challenge["value"]:
+            return "failed", None, "repository-owned observer result is not challenge-correlated"
+        traces = value.get("command_traces")
+        if not isinstance(traces, list) or not traces or not all(trace.get("challenge") == self.challenge["value"] for trace in traces):
+            return "failed", None, "repository-owned observer omitted challenge-bound command traces"
+        now = datetime.now(timezone.utc)
+        for trace in traces:
+            try:
+                started = datetime.fromisoformat(trace["started_at"].replace("Z", "+00:00"))
+                ended = datetime.fromisoformat(trace["ended_at"].replace("Z", "+00:00"))
+            except (KeyError, TypeError, ValueError):
+                return "failed", None, "repository-owned observer returned an invalid trace timestamp"
+            if started > ended or ended > now + timedelta(minutes=2) or now - ended > MAX_ATTESTATION_AGE:
+                return "failed", None, "repository-owned observer returned a stale trace"
+            if not isinstance(trace.get("argv"), list) or not trace["argv"] or not all(isinstance(argument, str) for argument in trace["argv"]):
+                return "failed", None, "repository-owned observer returned an invalid command trace"
+        if not all(key in value for key in ("before", "after", "started_at", "observed_at", "manager_observer", "native_observer")):
+            return "failed", None, "repository-owned observer omitted independent before/after observations"
         self._assert_result_paths(value, sandbox)
-        return outcome, value, str(value.get("reason") or "scenario driver observation")
+        if completed.returncode not in (0, 2):
+            return "failed", value, f"repository-owned observer returned exit status {completed.returncode}"
+        return outcome, value, str(value.get("reason") or "repository-owned observation")
 
     @staticmethod
     def _assert_result_paths(value: Any, sandbox: Path) -> None:
@@ -473,7 +1012,12 @@ class LaunchHarness:
         recovery = json.loads(RECOVERY_FIXTURE.read_text())
         expected = set(self.config["fault_scenarios"]) - {"state_schema_2_migration"}
         actual = {item["id"] for item in recovery["cases"]}
-        valid = state.get("schema_version") == 2 and expected == actual and (EXTERNAL_PACKAGE / "plugin.json").is_file()
+        valid = (
+            state.get("schema_version") == 2 and expected == actual
+            and (EXTERNAL_PACKAGE / "plugin.json").is_file()
+            and tuple(self.config.get("acceptance_postconditions", ())) == EXPECTED_ACCEPTANCE_SCENARIOS
+            and self.config.get("expected_counts") == EXPECTED_COUNTS
+        )
         self.add("fixture_contracts", None, None, "harness", "passed" if valid else "failed", "scenario fixtures are structurally complete" if valid else "scenario fixture mismatch", details={"fault_case_count": len(actual), "external_package_digest": package_digest(EXTERNAL_PACKAGE)})
 
     def directory_release(self, product_id: str) -> dict[str, Any]:
@@ -578,7 +1122,7 @@ class LaunchHarness:
                         outcome, reason = "failed", "info output did not prove exact owned-receipt and native-discovery reconciliation"
                 if outcome == "passed" and resolved_digest != release["tree_digest"]:
                     outcome, reason = "failed", "CLI package digest does not match the signed Directory release"
-                self.add(f"all_26_{operation}", plugin, client, "discovery" if operation == "info" else "materialization", outcome, reason or "unknown result", tuple_value=self.evidence_tuple(plugin, client_version=resolved_client_version, dependency=f"signed-directory@{self.snapshot_digest}"), details={"operation": operation, **release, "receipt_reconciliation_required": operation == "info"})
+                self.add(f"all_26_{operation}", plugin, client, "discovery" if operation == "info" else "materialization", outcome, reason or "unknown result", tuple_value=self.evidence_tuple(plugin, client_version=resolved_client_version, dependency=f"signed-directory@{self.snapshot_digest}"), details={"operation": operation, **release, "receipt_reconciliation_required": operation == "info", "command_trace": value.get("_launch_command_trace") if value else None})
 
     def context7_multi_target(self) -> None:
         targets = tuple(self.config["context7_targets"])
@@ -601,21 +1145,32 @@ class LaunchHarness:
             self.add(
                 f"context7_three_target_{operation}", "context7", target_arg, "materialization", outcome, reason,
                 tuple_value=value.get("tuple") if value else self.evidence_tuple("context7", client_version=None, dependency="single-acquisition"),
-                details={"operation": operation, "target_argument": target_arg, "single_process_invocation": True, "reported_target_count": len(value.get("target_outcomes", {})) if value else 0},
+                details={"operation": operation, "target_argument": target_arg, "single_process_invocation": True, "reported_target_count": len(value.get("target_outcomes", {})) if value else 0, "command_traces": value.get("command_traces", []) if value else [], "operation_observations": value.get("operation_observations", []) if value else []},
             )
+
+    @staticmethod
+    def runtime_attestation_details(record: dict[str, Any]) -> dict[str, Any]:
+        fields = (
+            "consent_attested", "isolated_identity", "identity_id", "client_id",
+            "application_id", "endpoint", "command_traces", "manager_observation",
+            "native_observation", "receipt_reconciled", "native_discovery_reconciled",
+            "projection_receipt_digest", "native_app_digest", "native_mcp_digest",
+            "registered_app_binding", "ui_activation", "read_only",
+        )
+        return {field: record[field] for field in fields if field in record}
 
     def hero_runtime_matrix(self) -> None:
         for plugin in self.config["heroes"]:
             for client in self.config["runtime_clients"]:
                 record = self.attestations.get((plugin, client, "runtime"))
                 if record:
-                    self.add("hero_5x3_runtime", plugin, client, "runtime", record["outcome"], record.get("reason", "explicit runtime attestation"), tuple_value=record.get("tuple"), details={"consent_attested": bool(record.get("consent_attested")), "isolated_identity": bool(record.get("isolated_identity")), "identity_id": record.get("identity_id")})
+                    self.add("hero_5x3_runtime", plugin, client, "runtime", record["outcome"], record.get("reason", "explicit runtime attestation"), tuple_value=record.get("tuple"), details=self.runtime_attestation_details(record))
                 else:
                     reason = "runtime client/isolated identity attestation was not supplied" if plugin == "notion" else "client runtime attestation was not supplied"
                     self.add("hero_5x3_runtime", plugin, client, "runtime", "failed", reason)
         chatgpt = self.attestations.get(("cloudflare-docs", "chatgpt", "oauth"))
         if chatgpt:
-            self.add("chatgpt_registered_binding", "cloudflare-docs", "chatgpt", "oauth", chatgpt["outcome"], chatgpt.get("reason", "explicit OAuth/runtime attestation"), tuple_value=chatgpt.get("tuple"), details={"consent_attested": bool(chatgpt.get("consent_attested")), "isolated_identity": bool(chatgpt.get("isolated_identity")), "identity_id": chatgpt.get("identity_id"), "registered_app_binding": True, "ui_activation": True, "read_only": True})
+            self.add("chatgpt_registered_binding", "cloudflare-docs", "chatgpt", "oauth", chatgpt["outcome"], chatgpt.get("reason", "explicit OAuth/runtime attestation"), tuple_value=chatgpt.get("tuple"), details=self.runtime_attestation_details(chatgpt))
         else:
             self.add("chatgpt_registered_binding", "cloudflare-docs", "chatgpt", "oauth", "failed", "registered app binding and human UI consent attestation were not supplied")
 
@@ -632,7 +1187,7 @@ class LaunchHarness:
                 valid = valid and self.tuple_matches_release(plugin, tuple_value)
                 if outcome == "passed" and not valid:
                     outcome, reason = "failed", "hero driver omitted exact add/update/remove/discovery proof"
-                self.add("hero_5x3_lifecycle", plugin, client, "discovery", outcome, reason, tuple_value=tuple_value or self.evidence_tuple(plugin, client_version=None, dependency=f"signed-directory@{self.snapshot_digest}"), details={"operations": sorted(required_operations), "operation_outcomes": operation_outcomes})
+                self.add("hero_5x3_lifecycle", plugin, client, "discovery", outcome, reason, tuple_value=tuple_value or self.evidence_tuple(plugin, client_version=None, dependency=f"signed-directory@{self.snapshot_digest}"), details={"operations": sorted(required_operations), "operation_outcomes": operation_outcomes, "command_traces": value.get("command_traces", []) if value else []})
 
     def shared_backend(self) -> None:
         targets = tuple(self.config["shared_backend_targets"])
@@ -642,7 +1197,7 @@ class LaunchHarness:
         valid = valid and self.tuple_matches_release("context7", value.get("tuple") if value else None)
         if outcome == "passed" and not valid:
             outcome, reason = "failed", "shared-backend driver did not prove one add/remove mutation affecting both surfaces"
-        self.add("shared_copilot_vscode_backend", "context7", "copilot,vscode", "materialization", outcome, reason, tuple_value=value.get("tuple") if value else self.evidence_tuple("context7", client_version=None, dependency="copilot-shared-backend"), details={"expected_physical_mutations_per_operation": 1, "operations": ["add", "remove"]})
+        self.add("shared_copilot_vscode_backend", "context7", "copilot,vscode", "materialization", outcome, reason, tuple_value=value.get("tuple") if value else self.evidence_tuple("context7", client_version=None, dependency="copilot-shared-backend"), details={"expected_physical_mutations_per_operation": 1, "operations": ["add", "remove"], "command_traces": value.get("command_traces", []) if value else [], "operation_observations": value.get("operation_observations", []) if value else []})
 
     def fault_matrix(self) -> None:
         for scenario in (*self.config["fault_scenarios"], *self.config["adapter_repair_faults"], *self.config["advanced_scenarios"]):
@@ -651,7 +1206,111 @@ class LaunchHarness:
                 outcome, reason = "failed", "scenario driver omitted the required exact proof fields"
             tuple_value = value.get("tuple") if value else None
             client = scenario.removeprefix("repair_") if scenario.startswith("repair_") else "cursor"
-            self.add(scenario, "context7", client, "materialization", outcome, reason, tuple_value=tuple_value, details={"fixture_contract_present": scenario in self.config["fault_scenarios"], "scenario_driver_required": True})
+            self.add(scenario, "context7", client, "materialization", outcome, reason, tuple_value=tuple_value, details={"fixture_contract_present": scenario in self.config["fault_scenarios"], "repository_observer_required": True, "command_traces": value.get("command_traces", []) if value else []})
+
+    def acceptance_postconditions(self) -> None:
+        required: dict[str, dict[str, Any]] = {
+            "retained_data_readd_before_changed_default": {"data_retained_found_before_resolution": True, "changed_default_ignored": True},
+            "schema_1_0_0_accepted": {"exact_schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json", "accepted": True},
+            "schema_draft_rejected": {"draft_rejected": True, "zero_mutation": True},
+            "schema_unknown_rejected": {"unknown_rejected": True, "zero_mutation": True},
+            "project_scope_zero_mutation": {"project_scope_rejected": True, "manager_unchanged": True, "native_unchanged": True},
+            "direct_full_sha_immutable": {"full_sha": True, "network_refetch_unchanged": True, "mutable_ref_followed": False},
+            "public_help_no_hidden_yes": {"help_exit_zero": True, "hidden_yes_absent": True},
+            "revoked_operations_boundary": {"install_blocked": True, "new_target_blocked": True, "repair_blocked": True, "remove_available": True, "safe_update_available": True},
+            "readd_sticky_distribution": {"recorded_distribution_retained": True, "recorded_revision_retained": True},
+            "repair_sticky_distribution": {"recorded_distribution_retained": True, "recorded_revision_retained": True},
+            "missing_runtime_exact_guidance": {"zero_mutation": True, "dependency_installed": False, "guidance_exact": True},
+            "plugin_data_lifecycle_boundary": {"update_preserved": True, "repair_preserved": True, "switch_preserved": True, "remove_preserved": True, "explicit_owned_purge_deleted": True},
+            "signed_sequence_not_semver": {"higher_sequence_selected": True, "semver_order_ignored": True},
+        }
+        for scenario in EXPECTED_ACCEPTANCE_SCENARIOS:
+            outcome, value, reason = self.driven_scenario(scenario)
+            proof = value.get("proof", {}) if value else {}
+            observations_present = bool(value and isinstance(value.get("before"), dict) and isinstance(value.get("after"), dict))
+            if outcome == "passed" and (not observations_present or any(proof.get(key) != expected for key, expected in required[scenario].items())):
+                outcome, reason = "failed", "repository-owned observer omitted the exact independent postcondition"
+            self.add(
+                scenario, "context7", "cursor", "materialization", outcome, reason,
+                tuple_value=self.evidence_tuple("context7", client_version=find_value(value, {"client_version"}) if value else None, dependency="repository-owned-observer"),
+                details={"expected_postcondition_id": scenario, "command_traces": value.get("command_traces", []) if value else [], "manager_and_native_before_after": observations_present},
+            )
+
+    def native_platform_matrix(self) -> None:
+        expected = {
+            ("binary", "macos", "arm64"), ("binary", "macos", "amd64"),
+            ("binary", "linux", "arm64"), ("binary", "linux", "amd64"),
+            ("binary", "windows", "amd64"), ("binary", "windows", "arm64"),
+            ("npm", "any", "any"),
+        }
+        records: dict[tuple[str, str, str], dict[str, Any]] = {}
+        for path in sorted(self.native_observations.rglob("*.json")):
+            value = json.loads(path.read_text())
+            if value.get("schema_version") != 1:
+                continue
+            kind = value.get("kind", "npm" if value.get("node_major") == 22 else "binary")
+            key = (kind, value.get("os", "any"), value.get("architecture", "any"))
+            if key in expected:
+                if key in records:
+                    raise ValueError(f"duplicate native platform observation: {key}")
+                records[key] = value
+        if set(records) != expected:
+            raise ValueError(f"native observations differ from immutable platform set: {sorted(set(records))}")
+        for kind, os_name, architecture in sorted(expected):
+            value = records[(kind, os_name, architecture)]
+            challenge_context = value.get("challenge_context")
+            trace = value.get("command_trace", {})
+            try:
+                started = datetime.fromisoformat(str(value.get("started_at", "")).replace("Z", "+00:00"))
+                observed = datetime.fromisoformat(str(value.get("observed_at", "")).replace("Z", "+00:00"))
+            except ValueError:
+                started = observed = datetime.min.replace(tzinfo=timezone.utc)
+            declared = next((item for item in self.release_manifest.get("assets", {}).values() if item.get("file") == value.get("asset_name")), None) if kind == "binary" else None
+            npm_package = value.get("npm_package", {}) if kind == "npm" else {}
+            expected_npm_tarball = f"https://registry.npmjs.org/universal-agent-plugins/-/universal-agent-plugins-{self.expected_version}.tgz"
+            distribution_valid = (
+                declared is not None
+                and value.get("asset_digest") == "sha256:" + declared["sha256"]
+                and value.get("asset_name") == f"agentplugins_{self.expected_version}_{'darwin' if os_name == 'macos' else os_name}_{architecture}{'.exe' if os_name == 'windows' else ''}"
+            ) if kind == "binary" else (
+                value.get("asset_name") == f"universal-agent-plugins@{self.expected_version}"
+                and DIGEST.fullmatch(str(value.get("asset_digest", ""))) is not None
+                and npm_package.get("name") == "universal-agent-plugins"
+                and npm_package.get("version") == self.expected_version
+                and npm_package.get("tarball") == expected_npm_tarball
+                and isinstance(npm_package.get("integrity"), str)
+                and re.fullmatch(r"sha512-[A-Za-z0-9+/]+={0,2}", npm_package["integrity"]) is not None
+                and DIGEST.fullmatch(str(npm_package.get("metadata_digest", ""))) is not None
+            )
+            valid = (
+                value.get("catalog_repository") == read_production_config()["catalog_repository"]
+                and value.get("catalog_sha") == self.github_sha
+                and value.get("cli_release_repository") == read_production_config()["cli_release_repository"]
+                and value.get("cli_release_tag") == self.release_tag
+                and value.get("release_manifest_digest") == self.release_manifest_digest
+                and value.get("release_checksums_digest") == self.release_checksums_digest
+                and value.get("directory_digest") == self.snapshot_digest
+                and value.get("executed") is True
+                and value.get("version") == self.expected_version
+                and (kind != "npm" or value.get("node_major") == 22)
+                and challenge_context_valid(challenge_context)
+                and challenge_context.get("github_sha") == self.github_sha
+                and str(challenge_context.get("run_id")) == str(self.github_run_id)
+                and str(challenge_context.get("run_attempt")) == str(self.github_run_attempt)
+                and challenge_context.get("release_manifest_digest") == self.release_manifest_digest
+                and challenge_context.get("directory_digest") == self.snapshot_digest
+                and value.get("challenge") == challenge_context.get("value")
+                and trace.get("challenge") == value.get("challenge") and trace.get("exit_code") == 0
+                and trace.get("argv") == ["agentplugins", "version"]
+                and started <= observed <= datetime.now(timezone.utc) + timedelta(minutes=2)
+                and datetime.now(timezone.utc) - observed <= MAX_ATTESTATION_AGE
+                and distribution_valid
+            )
+            self.add(
+                f"native_{kind}_{os_name}_{architecture}", None, f"{os_name}/{architecture}", "harness",
+                "passed" if valid else "failed", "manifest-bound native execution observed" if valid else "native execution observation is incomplete or bound to another manifest",
+                details={"kind": kind, "os": os_name, "architecture": architecture, "release_manifest_digest": value.get("release_manifest_digest"), "release_checksums_digest": value.get("release_checksums_digest"), "asset_name": value.get("asset_name"), "asset_digest": value.get("asset_digest"), "challenge": value.get("challenge"), "command_trace": trace, "started_at": value.get("started_at"), "observed_at": value.get("observed_at")},
+            )
 
     @staticmethod
     def driver_proof_valid(scenario: str, value: dict[str, Any] | None) -> bool:
@@ -682,6 +1341,7 @@ class LaunchHarness:
             "binary_linux_arm64": {"os": "linux", "architecture": "arm64", "checksum_verified": True},
             "binary_linux_amd64": {"os": "linux", "architecture": "amd64", "checksum_verified": True},
             "binary_windows_amd64": {"os": "windows", "architecture": "amd64", "checksum_verified": True},
+            "binary_windows_arm64": {"os": "windows", "architecture": "arm64", "checksum_verified": True},
             "npm_install_node22": {"node_major": 22, "npm_install_verified": True, "binary_checksum_verified": True},
         }
         if scenario.startswith("repair_"):
@@ -717,20 +1377,23 @@ class LaunchHarness:
             self.add("fixture_only_non_runtime_contract", None, None, "harness", "passed", "fixture-only mode validates contracts and emits no runtime claim")
         else:
             self.discover_version()
+            self.native_platform_matrix()
             self.all_package_matrix()
             self.context7_multi_target()
             self.hero_lifecycle_matrix()
             self.hero_runtime_matrix()
             self.shared_backend()
-            self.fault_matrix()
-            self.journeys()
+            self.acceptance_postconditions()
         counts = Counter(row["outcome"] for row in self.rows)
-        required = [row for row in self.rows if row["level"] != "harness"]
+        required = [row for row in self.rows if row["level"] != "harness" or row["scenario"].startswith("native_")]
         complete = self.mode == "enforced" and bool(required) and all(row["outcome"] == "passed" for row in required)
         run_seed = json.dumps([self.observed_at, self.os_name, self.architecture, sha256_file(SCENARIOS)])
         return {
-            "schema_version": 2,
-            "run": {"id": hashlib.sha256(run_seed.encode()).hexdigest()[:16], "mode": self.mode, "runtime_claims": self.mode == "enforced", "observed_at": self.observed_at, "platform": self.os_name, "architecture": self.architecture, "disposable": True, "root_id": hashlib.sha256(str(self.run_root).encode()).hexdigest()[:16] if self.run_root else None, "cli": {"available": self.cli_available, "version": self.cli_version or self.expected_version, "binary_digest": self.binary_digest}},
+            "schema_version": 3,
+            "run": {"id": hashlib.sha256(run_seed.encode()).hexdigest()[:16], "mode": self.mode, "runtime_claims": self.mode == "enforced", "observed_at": self.observed_at, "platform": self.os_name, "architecture": self.architecture, "disposable": True, "root_id": hashlib.sha256(str(self.run_root).encode()).hexdigest()[:16] if self.run_root else None, "github_sha": self.github_sha, "github_run_id": self.github_run_id, "github_run_attempt": self.github_run_attempt, "challenge": self.challenge.get("value") if self.challenge else None, "observer_bundle_digest": self.observer_bundle_digest, "cli": {"available": self.cli_available, "version": self.cli_version or self.expected_version, "binary_digest": self.binary_digest}},
+            "release": {"repository": read_production_config()["cli_release_repository"] if self.mode == "enforced" else None, "tag": self.release_tag, "tag_commit": self.release_manifest.get("commit"), "manifest_digest": self.release_manifest_digest, "checksums_digest": self.release_checksums_digest},
+            "directory": {"origin": self.directory_environment.get("AGENTPLUGINS_DIRECTORY_ORIGIN"), "snapshot_digest": self.snapshot_digest, "sequence": self.snapshot.get("sequence"), "trust_root_digest": sha256_file(PRODUCTION_DIRECTORY_TRUST) if self.mode == "enforced" else None},
+            "scenario_contract": {"id": self.config["contract_id"], "digest": sha256_file(SCENARIOS), "expected_ids": list(EXPECTED_ACCEPTANCE_SCENARIOS), "expected_counts": EXPECTED_COUNTS},
             "matrix": self.rows,
             "summary": {**{name: counts[name] for name in ("passed", "failed", "inconclusive", "not_applicable")}, "required_gates_complete": complete, "hero_runtime_results": sum(row["scenario"] == "hero_5x3_runtime" and row["outcome"] == "passed" for row in self.rows)},
             "privacy": {"redacted_export": True, "consent_artifact_digest": self.consent_digest, "contains_absolute_home_paths": False, "contains_credentials": False, "real_user_project_used": False, "auth_copied": False},
@@ -755,6 +1418,27 @@ def assert_redacted(value: dict[str, Any]) -> None:
         raise ValueError("evidence contains duplicate tuples")
     if value.get("run", {}).get("mode") == "enforced" and value.get("summary", {}).get("hero_runtime_results") != 15:
         raise ValueError("enforced evidence requires exactly 15 hero runtime results")
+    if value.get("run", {}).get("mode") == "enforced":
+        scenarios = value.get("scenario_contract", {})
+        if tuple(scenarios.get("expected_ids", ())) != EXPECTED_ACCEPTANCE_SCENARIOS or scenarios.get("expected_counts") != EXPECTED_COUNTS:
+            raise ValueError("enforced evidence scenario IDs/counts differ from the immutable contract")
+        challenge = value.get("run", {}).get("challenge")
+        if not isinstance(challenge, str) or not re.fullmatch(r"[a-f0-9]{64}", challenge):
+            raise ValueError("enforced evidence lacks a GitHub/release/Directory/root-bound challenge")
+        rows = value.get("matrix", [])
+        actual_counts = {
+            "directory_products": len({row.get("plugin") for row in rows if row.get("scenario", "").startswith("all_26_")}),
+            "directory_lifecycle_rows": sum(row.get("scenario", "").startswith("all_26_") for row in rows),
+            "hero_lifecycle_rows": sum(row.get("scenario") == "hero_5x3_lifecycle" for row in rows),
+            "hero_runtime_rows": sum(row.get("scenario") == "hero_5x3_runtime" for row in rows),
+            "context7_grouped_rows": sum(row.get("scenario", "").startswith("context7_three_target_") for row in rows),
+            "chatgpt_rows": sum(row.get("scenario") == "chatgpt_registered_binding" for row in rows),
+            "shared_backend_rows": sum(row.get("scenario") == "shared_copilot_vscode_backend" for row in rows),
+            "acceptance_postcondition_rows": sum(row.get("scenario") in EXPECTED_ACCEPTANCE_SCENARIOS for row in rows),
+            "native_platform_rows": sum(row.get("scenario", "").startswith("native_") for row in rows),
+        }
+        if actual_counts != EXPECTED_COUNTS:
+            raise ValueError(f"enforced evidence row counts differ from immutable contract: {actual_counts}")
     if any(row.get("client") == "chatgpt" and row.get("plugin") != "cloudflare-docs" for row in value.get("matrix", [])):
         raise ValueError("evidence makes an unsupported broad ChatGPT inference")
     body = json.dumps(value, sort_keys=True)
@@ -791,28 +1475,102 @@ def main() -> int:
     parser.add_argument("--attestations", type=Path, help="reviewed runtime/OAuth attestation input")
     parser.add_argument("--notion-oauth-attestation", type=Path, help="separate approved Notion OAuth/runtime artifact")
     parser.add_argument("--chatgpt-attestation", type=Path, help="separate Cloudflare Docs ChatGPT binding/UI/runtime artifact")
-    parser.add_argument("--scenario-driver", type=Path, help="isolated fault/fork driver implementing the harness JSON contract")
+    parser.add_argument("--observer-bundle", type=Path, help="Ed25519-signed protected observer response containing all live inputs")
     parser.add_argument("--directory-origin", help="credential-free signed Directory HTTPS origin")
     parser.add_argument("--directory-snapshot", type=Path)
     parser.add_argument("--directory-envelope", type=Path)
     parser.add_argument("--directory-trust", type=Path)
+    parser.add_argument("--prepared-context", type=Path, help="workflow-prepared official release/Directory/challenge context")
+    parser.add_argument("--asset-name", help="manifest-listed native binary asset for this runner")
+    parser.add_argument("--native-observations", type=Path, help="directory containing six native and one Node 22 observations")
     parser.add_argument("--run-root", type=Path, required=True, help="nonexistent path reserved for this disposable run")
     parser.add_argument("--consent", type=Path, required=True, help="explicit stable-launch E2E consent artifact")
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
+    release_manifest = None
+    release_manifest_digest = None
+    release_checksums_digest = None
+    observer_bundle_digest = None
+    release_tag = None
+    challenge = None
+    github: dict[str, str] = {}
+    if args.mode == "enforced":
+        if not args.prepared_context or not args.asset_name or not args.observer_bundle:
+            raise ValueError("enforced mode requires prepared official context and manifest asset name")
+        if any(value is not None for value in (args.binary, args.binary_digest, args.expected_version, args.directory_origin, args.directory_snapshot, args.directory_envelope, args.directory_trust)):
+            raise ValueError("production mode forbids caller-paired binary/version/digest/Directory/driver inputs")
+        prepared = json.loads(args.prepared_context.read_text())
+        prepared_root = args.prepared_context.resolve().parent
+        config = read_production_config()
+        if (
+            prepared.get("catalog_repository") != config["catalog_repository"]
+            or prepared.get("cli_release_repository") != config["cli_release_repository"]
+            or prepared.get("cli_release_tag") != config["cli_release_tag"]
+        ):
+            raise ValueError("prepared context repositories/tag do not match checked-in production identity")
+        release_manifest = prepared["release_manifest"]
+        release_manifest_digest = prepared["release_manifest_digest"]
+        release_checksums_digest = prepared["release_checksums_digest"]
+        release_tag = prepared["cli_release_tag"]
+        github = prepared["github"]
+        challenge = prepared["challenge"]
+        if challenge.get("release_manifest_digest") != release_manifest_digest or challenge.get("directory_digest") != prepared["directory"]["digest"]:
+            raise ValueError("prepared challenge is not bound to release and Directory digests")
+        observer_public_key = os.environ.get("OBSERVER_ED25519_PUBLIC_KEY", "")
+        observer_key_id = os.environ.get("OBSERVER_KEY_ID", "")
+        if not observer_public_key or not observer_key_id:
+            raise ValueError("enforced mode requires an explicit trusted observer Ed25519 key")
+        validate_observer_bundle_files(
+            args.observer_bundle, challenge=challenge["value"],
+            public_key_base64=observer_public_key, expected_key_id=observer_key_id,
+            artifact_paths={
+                "runtime-attestations.json": args.attestations,
+                "notion-oauth-attestations.json": args.notion_oauth_attestation,
+                "chatgpt-cloudflare-attestation.json": args.chatgpt_attestation,
+                "consent.json": args.consent,
+            },
+        )
+        observer_bundle_digest = sha256_file(args.observer_bundle)
+        binary_path, resolved_manifest, resolved_digest = resolve_github_release(
+            config["cli_release_repository"], release_tag, prepared_root / "release" / args.asset_name,
+            asset_name=args.asset_name, token=None,
+        )
+        if resolved_manifest != release_manifest or resolved_digest != release_manifest_digest:
+            raise ValueError("fresh GitHub resolution differs from the prepared immutable release")
+        if sha256_file(prepared_root / "release" / RELEASE_CHECKSUMS_NAME) != release_checksums_digest:
+            raise ValueError("fresh GitHub checksums differ from the prepared immutable release")
+        declared = next(item for item in release_manifest["assets"].values() if item["file"] == args.asset_name)
+        args.binary = binary_path
+        args.binary_digest = "sha256:" + declared["sha256"]
+        args.expected_version = release_manifest["version"]
+        directory = prepared["directory"]
+        args.directory_origin = directory["origin"]
+        args.directory_snapshot = prepared_root / directory["snapshot"]
+        args.directory_envelope = prepared_root / directory["envelope"]
+        args.directory_trust = PRODUCTION_DIRECTORY_TRUST
+        if sha256_file(args.directory_snapshot) != directory["digest"]:
+            raise ValueError("prepared production Directory snapshot digest changed")
     evidence = LaunchHarness(
-        args.binary, args.attestations, args.scenario_driver, mode=args.mode,
+        args.binary, args.attestations, mode=args.mode,
         binary_digest=args.binary_digest, expected_version=args.expected_version,
         directory_origin=args.directory_origin, directory_snapshot=args.directory_snapshot,
         directory_envelope=args.directory_envelope, directory_trust=args.directory_trust,
         run_root=args.run_root, consent=args.consent, notion_oauth=args.notion_oauth_attestation,
         chatgpt_attestation=args.chatgpt_attestation,
+        release_manifest=release_manifest, release_manifest_digest=release_manifest_digest,
+        release_checksums_digest=release_checksums_digest,
+        release_tag=release_tag, github_sha=github.get("sha"), github_run_id=github.get("run_id"),
+        github_run_attempt=github.get("run_attempt"), challenge=challenge,
+        native_observations=args.native_observations,
+        observer_bundle_digest=observer_bundle_digest,
     ).export()
     assert_redacted(evidence)
     if args.run_root and args.output.resolve() != (args.run_root.resolve() / "evidence" / args.output.name):
         raise ValueError("output must be inside the disposable evidence root")
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(evidence, indent=2, sort_keys=True) + "\n")
+    if args.mode == "enforced":
+        shutil.copy2(args.observer_bundle, args.output.parent / "signed-observer-bundle.json")
     print(json.dumps(evidence["summary"], sort_keys=True))
     return 0 if args.mode == "fixture-only" or evidence["summary"]["required_gates_complete"] else 2
 

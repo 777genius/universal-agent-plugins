@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Signed protected stable-launch observer bundle",
+  "type": "object",
+  "required": ["schema_version", "challenge", "signed_at", "key_id", "artifacts", "signature"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "challenge": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "signed_at": {"type": "string", "format": "date-time"},
+    "key_id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{2,63}$"},
+    "artifacts": {
+      "type": "object",
+      "required": ["runtime-attestations.json", "notion-oauth-attestations.json", "chatgpt-cloudflare-attestation.json", "consent.json"],
+      "properties": {
+        "runtime-attestations.json": {"type": "object"},
+        "notion-oauth-attestations.json": {"type": "object"},
+        "chatgpt-cloudflare-attestation.json": {"type": "object"},
+        "consent.json": {"type": "object"}
+      },
+      "additionalProperties": false
+    },
+    "signature": {"type": "string", "pattern": "^[A-Za-z0-9+/]{86}==$"}
+  },
+  "additionalProperties": false
+}

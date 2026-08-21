@@ -622,7 +622,10 @@ class PublicationWorkflowTests(unittest.TestCase):
         self.assertIn("needs.materialize_site.outputs.ledger_commit", text)
         self.assertIn("git -C exact-pages-tree rev-parse HEAD", deploy_commands)
         for match in __import__("re").findall(r"uses:\s+([^\s]+)", text):
-            self.assertRegex(match, r"@[0-9a-f]{40}$")
+            if match.startswith("./"):
+                self.assertEqual(match, "./.github/workflows/live-e2e.yml")
+            else:
+                self.assertRegex(match, r"@[0-9a-f]{40}$")
 
     def test_no_site_or_package_execution_in_contents_write_jobs(self) -> None:
         path = ROOT / ".github" / "workflows" / "directory-publication.yml"

@@ -14,38 +14,43 @@
           "plugin": {"type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"},
           "client": {"enum": ["codex", "cursor", "kiro", "chatgpt"]},
           "level": {"enum": ["runtime", "oauth"]},
-          "outcome": {"enum": ["passed", "failed", "inconclusive", "not_tested", "not_applicable"]},
+          "outcome": {"enum": ["passed", "failed", "inconclusive", "not_applicable"]},
           "reason": {"type": "string", "minLength": 1},
           "consent_attested": {"type": "boolean"},
           "isolated_identity": {"type": "boolean"},
-          "tuple": {
-            "type": "object",
-            "required": ["package_digest", "dependency_identity", "installer_version", "adapter_version", "client_version", "os", "architecture", "observed_at"],
-            "properties": {
-              "package_digest": {"type": ["string", "null"], "pattern": "^sha256:[a-f0-9]{64}$"},
-              "dependency_identity": {"type": ["string", "null"]},
-              "installer_version": {"type": ["string", "null"]},
-              "adapter_version": {"type": ["string", "null"]},
-              "client_version": {"type": ["string", "null"]},
-              "os": {"type": "string", "minLength": 1},
-              "architecture": {"type": "string", "minLength": 1},
-              "observed_at": {"type": "string", "format": "date-time"}
-            },
-            "additionalProperties": false
-          }
+          "identity_id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{2,63}$"},
+          "consent_artifact_digest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+          "runtime_invocation": {"type": "boolean"},
+          "discovery_verified": {"type": "boolean"},
+          "oauth_artifact_approved": {"type": "boolean"},
+          "registered_app_binding": {"type": "boolean"},
+          "ui_activation": {"type": "boolean"},
+          "read_only": {"type": "boolean"},
+          "challenge": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+          "started_at": {"type": "string", "format": "date-time"},
+          "observed_at": {"type": "string", "format": "date-time"},
+          "client_id": {"type": "string", "minLength": 1},
+          "application_id": {"type": "string", "minLength": 1},
+          "endpoint": {"type": "string", "pattern": "^https://"},
+          "command_traces": {"type": "array", "minItems": 1, "items": {"type": "object", "required": ["challenge", "argv", "started_at", "ended_at", "exit_code"], "properties": {"challenge": {"type": "string", "pattern": "^[a-f0-9]{64}$"}, "argv": {"type": "array", "minItems": 1, "items": {"type": "string"}}, "started_at": {"type": "string", "format": "date-time"}, "ended_at": {"type": "string", "format": "date-time"}, "exit_code": {"type": "integer"}}, "additionalProperties": true}},
+          "manager_observation": {"$ref": "#/$defs/stateObservation"},
+          "native_observation": {"$ref": "#/$defs/stateObservation"},
+          "receipt_reconciled": {"type": "boolean"},
+          "native_discovery_reconciled": {"type": "boolean"},
+          "projection_receipt_digest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+          "native_app_digest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+          "native_mcp_digest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+          "github_attestation": {"type": "object", "required": ["repository", "sha", "run_id", "run_attempt", "workflow", "job", "challenge"], "properties": {"repository": {"type": "string"}, "sha": {"type": "string", "pattern": "^[a-f0-9]{40}$"}, "run_id": {"type": ["string", "integer"]}, "run_attempt": {"type": ["string", "integer"]}, "workflow": {"const": "launch-evidence-e2e.yml"}, "job": {"const": "enforced-stable-gate"}, "challenge": {"type": "string", "pattern": "^[a-f0-9]{64}$"}}, "additionalProperties": false},
+          "tuple": {"$ref": "launch-evidence.schema.json#/$defs/tuple"}
         },
         "allOf": [
           {
             "if": {"properties": {"outcome": {"const": "passed"}}, "required": ["outcome"]},
-            "then": {"properties": {"tuple": {"properties": {
-              "package_digest": {"type": "string"}, "dependency_identity": {"type": "string", "minLength": 1},
-              "installer_version": {"type": "string", "minLength": 1}, "adapter_version": {"type": "string", "minLength": 1},
-              "client_version": {"type": "string", "minLength": 1}
-            }}}}
+            "then": {"required": ["challenge", "started_at", "observed_at", "client_id", "application_id", "endpoint", "command_traces", "github_attestation", "identity_id", "consent_artifact_digest", "runtime_invocation", "discovery_verified", "isolated_identity", "manager_observation", "native_observation", "receipt_reconciled", "native_discovery_reconciled"], "properties": {"runtime_invocation": {"const": true}, "discovery_verified": {"const": true}, "isolated_identity": {"const": true}, "receipt_reconciled": {"const": true}, "native_discovery_reconciled": {"const": true}, "tuple": {"$ref": "launch-evidence.schema.json#/$defs/completeTuple"}}}
           },
           {
             "if": {"properties": {"outcome": {"const": "passed"}, "plugin": {"const": "notion"}}, "required": ["outcome", "plugin"]},
-            "then": {"required": ["consent_attested", "isolated_identity"], "properties": {"consent_attested": {"const": true}, "isolated_identity": {"const": true}}}
+            "then": {"required": ["consent_attested", "isolated_identity", "projection_receipt_digest", "native_app_digest", "native_mcp_digest"], "properties": {"consent_attested": {"const": true}, "isolated_identity": {"const": true}}}
           },
           {
             "if": {"properties": {"outcome": {"const": "passed"}, "client": {"const": "chatgpt"}}, "required": ["outcome", "client"]},
@@ -54,6 +59,19 @@
         ],
         "additionalProperties": false
       }
+    }
+  },
+  "$defs": {
+    "stateObservation": {
+      "type": "object",
+      "required": ["observer", "before_digest", "after_digest", "observed_at"],
+      "properties": {
+        "observer": {"type": "string", "minLength": 1},
+        "before_digest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+        "after_digest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+        "observed_at": {"type": "string", "format": "date-time"}
+      },
+      "additionalProperties": false
     }
   },
   "additionalProperties": false

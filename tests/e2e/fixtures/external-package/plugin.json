@@ -1,5 +1,5 @@
 {
-  "$schema": "https://agentplugins.dev/schemas/1.0.0/plugin.json",
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "e2e-external-package",
   "version": "1.0.0",
   "description": "Local direct-source fixture; never published to the Directory."

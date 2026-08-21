@@ -1,0 +1,7 @@
+{
+  "catalog_repository": "777genius/universal-agent-plugins",
+  "cli_release_repository": "777genius/plugin-kit-ai",
+  "cli_release_tag": "agentplugins-v0.1.8",
+  "production_origin": "https://777genius.github.io/universal-agent-plugins/registry/schemas/1/",
+  "schema_version": 1
+}

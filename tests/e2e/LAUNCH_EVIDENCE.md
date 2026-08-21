@@ -1,74 +1,89 @@
-# Launch evidence harness
+# Stable launch evidence
 
-`scripts/run_launch_evidence_e2e.py` is the Phase 6 evidence gate. It always
-uses newly created homes and emits the redacted schema in
-`tests/e2e/schemas/launch-evidence.schema.json`.
+The stable gate is intentionally split into two modes. Pull requests run only
+fixture and contract checks and emit `runtime_claims: false`. A protected release
+caller invokes `.github/workflows/live-e2e.yml`, which requires the reusable
+`launch-evidence-e2e.yml` gate; a manual dispatch is diagnostic, not a substitute
+for that release dependency.
 
-Run the host audit without a lifecycle binary:
+## Official release and Directory identity
+
+Live runs take neither repository nor release-tag identity from the caller.
+`tests/e2e/production-launch.json` fixes the catalog repository to
+`777genius/universal-agent-plugins` and the binary release repository/tag to
+`777genius/plugin-kit-ai` / `agentplugins-v0.1.8`. This makes the immutable
+upstream CLI manifest an explicit prerequisite for evidence at the exact catalog
+commit (`GITHUB_SHA`); the challenge binds both sides of that release sequence.
+`scripts/prepare_launch_evidence.py`
+resolves that published GitHub release without using the catalog repository's
+token,
+dereferences the tag to a commit, downloads `release-manifest.json`,
+`checksums.txt`, and a manifest-listed asset through the GitHub API, then
+requires the exact eight-file release set and verifies repository, tag, version,
+size, and SHA-256 against both authenticated release metadata files. There are no production URL/checksum/version
+inputs. The manifest must contain macOS arm64/amd64, Linux arm64/amd64, and
+Windows arm64/amd64 assets. The separately published exact
+`universal-agent-plugins@0.1.8` npm facade is resolved from the npm registry;
+its fixed registry tarball is verified against `dist.integrity`, installed on
+Node 22, and required to report the same CLI version. There is no GitHub `.tgz`
+input or fallback. Aggregation rejects
+observations bound to different GitHub release manifests.
+
+The same preparation step fetches `latest.json`, the exact snapshot, and its
+envelope from `production_origin` in `tests/e2e/production-launch.json`. Real
+Ed25519 verification and complete Directory semantics use the checked-in
+`registry/publication/trusted-keys.json`. The trust root is never downloaded
+beside the signature. Direct unit tests may inject local publication fixtures;
+enforced mode may not.
+
+## Challenge and observers
+
+Each live execution creates a cryptographically random challenge bound to the
+GitHub SHA, run ID/attempt, release-manifest digest, Directory digest, and fresh
+disposable root. `scripts/observe_launch_scenario.py` is the only scenario
+executor: it has an immutable scenario allowlist, records timestamped argv/exit
+and output-digest traces, and independently hashes manager and native client
+state before and after. An omitted postcondition is a failure, never a boolean
+claim supplied by another executable.
+
+The schema-3 release gate emits only acceptance 26.1 items 14–26: the 26-package
+and hero matrices, grouped Context7 acquisition, shared Copilot/VS Code backend,
+native release slots, runtime/OAuth rows, and the 13 immutable postconditions.
+Older fault/contribution fixtures remain contract-tested but are not silently
+promoted into this narrower release claim.
+
+Runtime/OAuth passes arrive in one canonical, fresh, challenge-bound bundle
+signed with Ed25519. The protected environment fixes
+`STABLE_LAUNCH_OBSERVER_ED25519_PUBLIC_KEY` and
+`STABLE_LAUNCH_OBSERVER_KEY_ID`; both the request client and final harness verify
+the signature over the complete artifact objects. HTTPS endpoint selection or a
+self-asserted GitHub object is therefore insufficient to create a pass.
+The individual artifacts must conform to
+`tests/e2e/schemas/runtime-attestations.schema.json`: current challenge,
+fresh start/end timestamps, command traces, exact client/application IDs and
+HTTPS endpoint, isolated consent identity, complete release/Directory tuple,
+and a GitHub attestation for this repository/SHA/run/attempt/workflow/job.
+Projection or fixture output cannot become runtime evidence.
+
+## Reproduction
+
+PR contract run:
 
 ```bash
-python3 scripts/run_launch_evidence_e2e.py \
-  --output /tmp/launch-evidence.json
+run_root="$(mktemp -u /tmp/uap-fixture-XXXXXXXX)"
+python3 scripts/run_launch_evidence_e2e.py --mode fixture-only \
+  --consent tests/e2e/fixtures/fixture-only-consent.json \
+  --run-root "$run_root" --output "$run_root/evidence/launch-evidence.json"
 ```
 
-Run the disposable CLI matrix against an immutable catalog:
+Live reproduction is the protected reusable workflow after the fixed upstream
+CLI release exists.
+It uses Node 22 for the npm facade and native GitHub runners for every required
+OS/architecture slot. It must end with all immutable scenario IDs/counts and all
+rows passed; missing clients, OAuth consent, observations, runtimes, or release
+assets keep the gate red.
 
-```bash
-catalog_digest="sha256:$(sha256sum catalog/v1/catalog.json | cut -d ' ' -f 1)"
-python3 scripts/run_launch_evidence_e2e.py \
-  --binary /absolute/path/to/agentplugins \
-  --catalog-url https://raw.githubusercontent.com/OWNER/REPO/FULL_SHA/catalog/v1/catalog.json \
-  --catalog-digest "$catalog_digest" \
-  --output /tmp/launch-evidence.json
-```
-
-Add `--require-gates` only for a release gate. It exits `2` when any required
-row is `failed`, `inconclusive`, or `not_tested`. Missing tools, client
-versions, identities, and consent never become passes.
-
-## Runtime and OAuth attestations
-
-Runtime observations are separate from package projection. Supply a reviewed
-JSON file conforming to
-`tests/e2e/schemas/runtime-attestations.schema.json` with `--attestations`.
-Every passed row must identify the package/dependency, installer/adapter,
-client version, OS, architecture, and observation time. Passed Notion and
-ChatGPT rows additionally require both `consent_attested: true` and
-`isolated_identity: true`.
-
-No credentials, authorization URLs, account identifiers, raw transcripts, or
-absolute client-home paths belong in either attestation input or exported
-evidence.
-
-## Fault and contribution driver
-
-State migration, crash recovery, Directory failure modes, adapter repair,
-promotion, persistent data, and fork submission use an optional executable
-passed through `--scenario-driver`. The harness calls it as:
-
-```text
-DRIVER SCENARIO_ID /absolute/path/to/agentplugins
-```
-
-The driver runs inside the disposable environment and returns one JSON object:
-
-```json
-{
-  "outcome": "passed",
-  "reason": "observable invariant was satisfied",
-  "tuple": {
-    "package_digest": "sha256:...",
-    "dependency_identity": "fixture-name@revision",
-    "installer_version": "...",
-    "adapter_version": "...",
-    "client_version": "isolated-fixture/v1",
-    "os": "Linux",
-    "architecture": "x86_64",
-    "observed_at": "2026-08-20T00:00:00Z"
-  }
-}
-```
-
-The driver returns zero with an honest `inconclusive` outcome when the scenario
-was attempted but could not reach a deterministic result. Non-zero means the
-driver itself failed. A missing driver is `not_tested`, not a fixture pass.
+The obsolete host launch artifact was moved unchanged to `tests/e2e/legacy/`
+after exact-head schema validation proved it was not canonical client evidence.
+Other committed files under `tests/e2e/results/` retain their exact historical
+scope. None are rewritten or treated as schema-3 stable-launch passes.

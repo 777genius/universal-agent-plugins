@@ -1,5 +1,17 @@
 {
   "schema_version": 1,
+  "contract_id": "acceptance-26.1-items-14-26-v1",
+  "expected_counts": {
+    "directory_products": 26,
+    "directory_lifecycle_rows": 78,
+    "hero_lifecycle_rows": 15,
+    "hero_runtime_rows": 15,
+    "context7_grouped_rows": 4,
+    "chatgpt_rows": 1,
+    "shared_backend_rows": 1,
+    "acceptance_postcondition_rows": 13,
+    "native_platform_rows": 7
+  },
   "directory_contract": "signed-snapshot-v1",
   "all_package_client": "cursor",
   "all_package_operations": ["add", "info", "remove"],
@@ -48,7 +60,23 @@
     "binary_linux_arm64",
     "binary_linux_amd64",
     "binary_windows_amd64",
+    "binary_windows_arm64",
     "npm_install_node22"
+  ],
+  "acceptance_postconditions": [
+    "retained_data_readd_before_changed_default",
+    "schema_1_0_0_accepted",
+    "schema_draft_rejected",
+    "schema_unknown_rejected",
+    "project_scope_zero_mutation",
+    "direct_full_sha_immutable",
+    "public_help_no_hidden_yes",
+    "revoked_operations_boundary",
+    "readd_sticky_distribution",
+    "repair_sticky_distribution",
+    "missing_runtime_exact_guidance",
+    "plugin_data_lifecycle_boundary",
+    "signed_sequence_not_semver"
   ],
   "journeys": [
     "direct_external_package",

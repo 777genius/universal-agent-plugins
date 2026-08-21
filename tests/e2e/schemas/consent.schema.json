@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Explicit disposable stable-launch consent",
+  "type": "object",
+  "required": ["schema_version", "purpose", "consent", "disposable_only"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "purpose": {"const": "stable-launch-e2e"},
+    "consent": {"const": true},
+    "disposable_only": {"const": true}
+  },
+  "additionalProperties": false
+}
