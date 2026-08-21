@@ -20,7 +20,7 @@ function hash(source: string) {
 }
 
 function page(scripts: string, scriptSources = "'self'") {
-  return `<!doctype html><html><head><meta http-equiv="Content-Security-Policy" content="default-src 'self'; object-src 'none'; script-src ${scriptSources}; style-src 'self'; base-uri 'none'"></head><body>${scripts}</body></html>`
+  return `<!doctype html><html><head><meta http-equiv="Content-Security-Policy" content="default-src 'self'; object-src 'none'; script-src ${scriptSources}; style-src 'self'; style-src-attr 'unsafe-inline'; base-uri 'none'"></head><body>${scripts}</body></html>`
 }
 
 test('finalizes a multi-script page from the exact inline bytes and preserves other directives', () => {
@@ -40,6 +40,19 @@ test('finalization is idempotent', () => {
   const once = finalizeHtmlCsp(page('<style>body { color: CanvasText }</style><script>console.log("stable")</script>'))
   assert.equal(finalizeHtmlCsp(once), once)
   assert.match(once, new RegExp(`style-src 'self' ${hash('body { color: CanvasText }').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`))
+  assert.ok(once.includes("'sha256-0sLsI2a+NIcumVvBF9zD/ArGqlZR2xfnxsALPmK7nj8='"))
+  assert.ok(once.includes("'sha256-60LHlRjW/B3CtzIoE/Lf1/NEDvko9efWMFaGVhHu/cs='"))
+})
+
+test('verification rejects an unreviewed runtime style hash', () => {
+  const authorized = finalizeHtmlCsp(page('<script>allowed()</script>'))
+  assert.throws(
+    () => verifyHtmlCsp(authorized.replace(
+      "'sha256-60LHlRjW/B3CtzIoE/Lf1/NEDvko9efWMFaGVhHu/cs='",
+      "'sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA='",
+    ), 'runtime-style.html'),
+    /style-src does not exactly authorize the inline styles/,
+  )
 })
 
 test('moves the CSP meta policy ahead of executable and styled content', () => {
@@ -84,6 +97,10 @@ test('rejects unsafe or external script sources', () => {
   assert.throws(
     () => finalizeHtmlCsp(page('<script src="https://cdn.example/app.js"></script>'), 'external.html'),
     /external script source is not a same-origin path/,
+  )
+  assert.throws(
+    () => finalizeHtmlCsp(page('<script>one()</script>').replace("style-src-attr 'unsafe-inline'", "style-src-attr 'unsafe-inline' 'self'"), 'wide-style-attr.html'),
+    /style-src-attr must contain only/,
   )
 })
 

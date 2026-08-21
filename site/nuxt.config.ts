@@ -22,8 +22,11 @@ const siteUrl = (process.env.NUXT_PUBLIC_SITE_URL
 const baseURL = process.env.NUXT_APP_BASE_URL ?? '/'
 const repositoryUrl = 'https://github.com/777genius/universal-agent-plugins'
 // Production HTML is finalized after prerendering so script-src contains the
-// hashes of the exact Nuxt-generated inline scripts for each route.
-const contentSecurityPolicy = "default-src 'self'; base-uri 'none'; connect-src 'self'; font-src 'self'; form-action 'none'; img-src 'self' data:; object-src 'none'; script-src 'self'; style-src 'self'; upgrade-insecure-requests"
+// hashes of the exact Nuxt-generated inline scripts and style elements for
+// each route. The finalizer also adds byte-exact hashes for Reka UI's two
+// reviewed viewport rules. Runtime popover positioning needs style attributes;
+// the scoped exception does not allow inline scripts or other style elements.
+const contentSecurityPolicy = "default-src 'self'; base-uri 'none'; connect-src 'self'; font-src 'self'; form-action 'none'; img-src 'self' data:; object-src 'none'; script-src 'self'; style-src 'self'; style-src-attr 'unsafe-inline'; upgrade-insecure-requests"
 const productionMeta = process.env.NODE_ENV === 'production'
   ? [{ 'http-equiv': 'Content-Security-Policy', content: contentSecurityPolicy }]
   : []

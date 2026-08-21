@@ -32,7 +32,10 @@ SHA-256 hashes for its exact inline scripts and style blocks. The policy is
 delivered in HTML because GitHub Pages cannot configure response headers;
 directives unsupported in CSP meta elements are intentionally omitted.
 `check:generated` verifies the final policy and fails if inline content is
-unauthorized or an unsafe source is present.
+unauthorized or an unsafe source is present. A narrowly scoped
+`style-src-attr` exception permits only the runtime CSS positioning used by the
+accessible Reka UI popovers; inline scripts and style elements remain
+hash-authorized.
 
 The site emits no analytics or tracking requests. See `NOTICE.md` and the icon
 README files under `public/` for copied/adapted code and mark attribution.

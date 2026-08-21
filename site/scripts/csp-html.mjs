@@ -8,7 +8,15 @@ const META_UNSUPPORTED_DIRECTIVES = new Set([
   'report-uri',
   'sandbox',
 ])
-const UNSAFE_SCRIPT_SOURCES = new Set(["'unsafe-eval'", "'unsafe-inline'", "'wasm-unsafe-eval'"])
+const SCRIPT_UNSAFE_SOURCES = new Set(["'unsafe-eval'", "'unsafe-inline'", "'wasm-unsafe-eval'"])
+// Reka UI 2.10.3 emits these two deterministic viewport rules when its
+// ComboboxViewport and SelectViewport mount. Keep this allowlist byte-exact:
+// a dependency change that alters either rule must fail browser E2E and receive
+// a fresh source review before its replacement hash is accepted.
+const REVIEWED_RUNTIME_STYLE_HASHES = Object.freeze([
+  "'sha256-0sLsI2a+NIcumVvBF9zD/ArGqlZR2xfnxsALPmK7nj8='",
+  "'sha256-60LHlRjW/B3CtzIoE/Lf1/NEDvko9efWMFaGVhHu/cs='",
+])
 const META_TAG = /<meta\b(?:[^>"']|"[^"]*"|'[^']*')*>/giu
 const SCRIPT_ELEMENT = /<script\b((?:[^>"']|"[^"]*"|'[^']*')*)>([\s\S]*?)<\/script\s*>/giu
 const STYLE_ELEMENT = /<style\b((?:[^>"']|"[^"]*"|'[^']*')*)>([\s\S]*?)<\/style\s*>/giu
@@ -152,7 +160,7 @@ function expectedScriptSources(hashes) {
 function validateHashSources(sources, directive, filename) {
   for (const source of sources) {
     const lower = source.toLowerCase()
-    if (UNSAFE_SCRIPT_SOURCES.has(lower)) fail(`unsafe ${directive} source: ${source}`, filename)
+    if (SCRIPT_UNSAFE_SOURCES.has(lower)) fail(`unsafe ${directive} source: ${source}`, filename)
     if (lower !== "'self'" && !/^'sha256-[a-z0-9+/]+={0,2}'$/iu.test(source)) {
       fail(`unsupported ${directive} source: ${source}`, filename)
     }
@@ -169,10 +177,22 @@ function styleHashes(html, filename) {
   return [...new Set(hashes)]
 }
 
+function expectedStyleSources(hashes) {
+  return ["'self'", ...hashes, ...REVIEWED_RUNTIME_STYLE_HASHES]
+}
+
 function validateNoUnsafeSources(directives, filename) {
+  const styleAttributes = directives.find(({ name }) => name === 'style-src-attr')
+  if (!styleAttributes
+    || styleAttributes.sources.length !== 1
+    || styleAttributes.sources[0].toLowerCase() !== "'unsafe-inline'") {
+    fail("style-src-attr must contain only the reviewed 'unsafe-inline' positioning exception", filename)
+  }
   for (const { name, sources } of directives) {
     for (const source of sources) {
-      if (UNSAFE_SCRIPT_SOURCES.has(source.toLowerCase())) fail(`unsafe ${name} source: ${source}`, filename)
+      if (SCRIPT_UNSAFE_SOURCES.has(source.toLowerCase()) && name !== 'style-src-attr') {
+        fail(`unsafe ${name} source: ${source}`, filename)
+      }
     }
   }
 }
@@ -193,7 +213,7 @@ export function finalizeHtmlCsp(html, filename = '<html>') {
   if (hashes.length && !styleDirective) fail('Content-Security-Policy is missing style-src', filename)
   if (styleDirective) {
     validateHashSources(styleDirective.sources, 'style-src', filename)
-    styleDirective.sources = ["'self'", ...hashes]
+    styleDirective.sources = expectedStyleSources(hashes)
   }
 
   const content = encodeAttribute(serializePolicy(directives))
@@ -220,7 +240,7 @@ export function verifyHtmlCsp(html, filename = '<html>') {
     fail(`script-src does not exactly authorize the inline scripts (expected ${expected.join(' ')})`, filename)
   }
   const styleDirective = directives.find(directive => directive.name === 'style-src')
-  const expectedStyles = ["'self'", ...styleHashes(html, filename)]
+  const expectedStyles = expectedStyleSources(styleHashes(html, filename))
   if (expectedStyles.length > 1 && !styleDirective) fail('Content-Security-Policy is missing style-src', filename)
   if (styleDirective) {
     validateHashSources(styleDirective.sources, 'style-src', filename)
