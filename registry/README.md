@@ -2,8 +2,10 @@
 
 The public directory is Git-native: there is no account database and every
 addition or update is reviewed as a pull request. Built-ins remain the existing
-26 local packages and keep their CLI short names. An external package never
-receives a short-name alias.
+26 local packages and keep their CLI short names. Every accepted product,
+including an external product, has at least one globally unique short-name
+alias for installation. An alias identifies the product; it does not identify
+who packaged a distribution or grant official upstream status.
 
 ## Submit an external package
 
@@ -24,8 +26,9 @@ npx universal-agent-plugins add owner/repository@FULL_40_CHARACTER_SHA//path/to/
 Use a public GitHub repository and the exact lowercase 40-character commit SHA,
 never a branch or tag. Then edit `registry/directory.json` in one focused PR:
 
-1. Add a product with its stable identity, aliases, categories, minimum
-   capabilities, default distribution, and sorted distribution IDs.
+1. Add a product with its stable identity, at least one unique short-name
+   alias, categories, minimum capabilities, default distribution, and sorted
+   distribution IDs.
 2. Add a namespaced distribution such as `owner/plugin-name` and list that ID
    on the product. Its `kind`, `status`, and `packager` are reviewed claims.
 3. Add an immutable release whose `package_source` is the exact
@@ -46,6 +49,22 @@ never a branch or tag. Then edit `registry/directory.json` in one focused PR:
 For an update, append a new monotonically increasing release and matching
 policy. Do not rewrite an existing release tuple or its package bytes; policy
 status and current evidence may change through review.
+
+Product identity, distribution provenance, and default selection are separate:
+
+- The CLI resolves a product alias, then installs that product's reviewed
+  `default_distribution`. Distribution IDs remain publisher-qualified.
+- `kind: upstream` means official upstream provenance and is accepted only when
+  `plugin.json` physically exists at the submitted path in the upstream owner's
+  repository. Otherwise use `community_bridge` for a package built from pinned
+  upstream source, or `community` for an independently packaged alternative.
+  Directory acceptance does not make either one official upstream software.
+- Active and historical product aliases stay reserved. A proposal that collides
+  with or reassigns an alias owned by an official or community product is
+  rejected; adding a distribution to that product grants no new product alias.
+- Accepting an external distribution does not make it the default. A
+  `default_distribution` change requires an explicit, separately reviewed
+  promotion, so a new distribution cannot silently replace the current source.
 
 Generate and verify the deterministic review files:
 

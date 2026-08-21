@@ -1013,7 +1013,7 @@ class DirectoryDomainTests(unittest.TestCase):
             with self.subTest(field=field), self.assertRaisesRegex(registry.RegistryError, r"cursor$"):
                 registry.resolve_directory(fixture, "upstream/demo", ["cursor"])
 
-    def test_contribution_guide_keeps_stable_anchor_and_directory_source_flow(self) -> None:
+    def test_contribution_guide_keeps_alias_and_provenance_contract(self) -> None:
         root = MODULE_PATH.parents[1]
         registry_guide = (root / "registry" / "README.md").read_text()
         contributing = (root / "CONTRIBUTING.md").read_text()
@@ -1021,6 +1021,21 @@ class DirectoryDomainTests(unittest.TestCase):
         self.assertNotIn("registry/entries", registry_guide + contributing)
         self.assertIn("registry/directory.json", registry_guide)
         self.assertIn("registry/directory.json", contributing)
+        self.assertNotIn("external package never", registry_guide.lower())
+        for contract in (
+            "Every accepted product",
+            "at least one globally unique short-name",
+            "An alias identifies the product",
+            "kind: upstream",
+            "plugin.json` physically exists",
+            "Directory acceptance does not make either one official upstream software",
+            "Active and historical product aliases stay reserved",
+            "A proposal that collides",
+            "reassigns an alias",
+            "Accepting an external distribution does not make it the default",
+        ):
+            with self.subTest(contract=contract):
+                self.assertIn(contract, registry_guide)
 
     def test_fallback_uses_one_distribution_for_the_complete_target_set(self) -> None:
         fixture = self.fixture()
