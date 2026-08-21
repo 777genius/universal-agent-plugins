@@ -359,7 +359,9 @@ class WorkflowHardeningTests(unittest.TestCase):
         self.assertNotIn("refs/remotes/origin", signer)
         self.assertIn("OBSERVED_SOURCE_COMMIT", signer)
         self.assertNotIn("DIRECTORY_ED25519_PRIVATE_KEY", json.dumps(freshness))
-        self.assertLess(publisher.rindex("rev-parse refs/remotes/origin/main"), publisher.index("push --atomic"))
+        self.assertLess(publisher.rindex("rev-parse refs/remotes/origin/main"), publisher.index("directory_publication_cas.py publish"))
+        self.assertIn("--source \"${EVENT_SOURCE_COMMIT}\"", publisher)
+        self.assertIn("--marker \"${MARKER_COMMIT}\"", publisher)
 
     def test_only_app_tokens_write_ledger_and_floor_tags_are_atomic(self) -> None:
         text = (ROOT / ".github" / "workflows" / "directory-publication.yml").read_text()
@@ -371,8 +373,14 @@ class WorkflowHardeningTests(unittest.TestCase):
         self.assertEqual(workflow["jobs"]["sign"]["environment"], "directory-publication")
         self.assertEqual(workflow["jobs"]["materialize_site"]["environment"], "directory-publication-materialization")
         self.assertEqual(text.count("actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1"), 2)
-        self.assertIn("push --atomic", text)
-        self.assertIn("refs/tags/${tag_name}:refs/tags/${tag_name}", text)
+        cas_helper = (SCRIPTS / "directory_publication_cas.py").read_text()
+        self.assertIn('"push", "--atomic"', cas_helper)
+        self.assertIn('f"--force-with-lease={main_ref}:{source}"', cas_helper)
+        self.assertIn('f"--force-with-lease={ledger_ref}:{ledger_old}"', cas_helper)
+        self.assertIn('f"--force-with-lease={sequence_tag}:"', cas_helper)
+        self.assertIn('f"{ledger_new}:{sequence_tag}"', cas_helper)
+        self.assertIn('--force-with-lease="${ledger_ref}:${EXPECTED_LEDGER_COMMIT}"', text)
+        self.assertIn('f"--force-with-lease={ledger_ref}:{ledger_old}"', cas_helper)
         self.assertIn("merge-base --is-ancestor", text)
         self.assertEqual(workflow["concurrency"], {
             "group": "directory-publication-schema-1",
@@ -384,8 +392,9 @@ class WorkflowHardeningTests(unittest.TestCase):
         self.assertIn('test "${tag_sequence}" -eq "$((sequence_floor + 1))"', text)
         self.assertIn("contract_status=", text)
         self.assertIn("test -z \"${contract_status}\"", text)
-        self.assertGreaterEqual(text.count("refs/heads/main:refs/remotes/origin/main"), 4)
-        self.assertGreaterEqual(text.count('rev-parse refs/remotes/origin/main'), 4)
+        self.assertGreaterEqual(text.count("refs/heads/main:refs/remotes/origin/main"), 3)
+        self.assertGreaterEqual(text.count('rev-parse refs/remotes/origin/main'), 3)
+        self.assertIn('main_ref = "refs/heads/main"', cas_helper)
         self.assertIn('= "${EVENT_SOURCE_COMMIT}"', text)
         self.assertIn('sequence_one_tag="${tag_prefix}00000000000000000001"', text)
         self.assertGreaterEqual(text.count('merge-base --is-ancestor "${sequence_one_commit}" HEAD'), 2)
@@ -405,6 +414,19 @@ class WorkflowHardeningTests(unittest.TestCase):
         self.assertNotIn("validate_with_schema", signer_source)
         self.assertNotIn("jsonschema", signer_source)
 
+    def test_signing_seed_is_scoped_only_to_the_signer_step(self) -> None:
+        workflow = yaml.load((ROOT / ".github" / "workflows" / "directory-publication.yml").read_text(), Loader=yaml.BaseLoader)
+        sign_steps = workflow["jobs"]["sign"]["steps"]
+        seed_steps = [step for step in sign_steps if "DIRECTORY_ED25519_PRIVATE_KEY" in json.dumps(step)]
+        self.assertEqual(len(seed_steps), 1)
+        self.assertEqual(seed_steps[0].get("id"), "signed")
+        marker = next(step for step in sign_steps if step.get("id") == "marker")
+        publisher = next(step for step in sign_steps if step.get("id") == "publisher")
+        self.assertNotIn("DIRECTORY_ED25519_PRIVATE_KEY", json.dumps(marker))
+        self.assertNotIn("DIRECTORY_ED25519_PRIVATE_KEY", json.dumps(publisher))
+        for job_name in ("prepare", "build_site", "materialize_site", "deploy"):
+            self.assertNotIn("DIRECTORY_ED25519_PRIVATE_KEY", json.dumps(workflow["jobs"][job_name]))
+
     def test_legacy_pages_is_pull_request_validation_only_and_all_workflows_are_owned(self) -> None:
         pages_text = (ROOT / ".github" / "workflows" / "pages.yml").read_text()
         pages = yaml.load(pages_text, Loader=yaml.BaseLoader)
@@ -419,8 +441,8 @@ class WorkflowHardeningTests(unittest.TestCase):
         documentation = (ROOT / "registry" / "publication" / "README.md").read_text()
         self.assertIn("`bcd2ba49218906704ab6c1aa796996da409d3eb1` (`v3.2.0`)", documentation)
         self.assertNotIn("a8d616148505b5069dccd32f177bb87d7f39123b", documentation)
-        self.assertIn("four active repository rulesets", documentation)
-        self.assertEqual(documentation.count("has **no bypass actors**"), 2)
+        self.assertIn("six active repository rulesets", documentation)
+        self.assertEqual(documentation.count("**no bypass actors**"), 3)
         self.assertIn("even the publisher cannot reset the branch", documentation)
         self.assertIn("administrators", documentation)
         self.assertIn("deploy keys", documentation)

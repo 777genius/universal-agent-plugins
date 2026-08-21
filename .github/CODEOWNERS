@@ -8,6 +8,7 @@
 /scripts/validate_openai_compat.py @777genius
 /tests/e2e/results/chatgpt-*.json @777genius
 /scripts/*directory_publication.py @777genius
+/scripts/directory_publication_cas.py @777genius
 /schemas/directory-*.schema.json @777genius
 /.github/workflows/directory-publication.yml @777genius
 /.github/workflows/validate.yml @777genius
@@ -21,4 +22,5 @@
 /scripts/build_registry.py @777genius
 /scripts/validate_catalog.py @777genius
 /tests/test_directory_publication.py @777genius
+/tests/test_directory_publication_cas.py @777genius
 /tests/test_workflow_contracts.py @777genius

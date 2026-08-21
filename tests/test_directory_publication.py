@@ -19,6 +19,7 @@ SCRIPTS = ROOT / "scripts"
 FIXTURES = ROOT / "tests" / "fixtures" / "directory-publication"
 sys.path.insert(0, str(SCRIPTS))
 import directory_publication as publication
+import directory_publication_cas as publication_cas
 import prepare_directory_publication as prepare
 
 
@@ -446,11 +447,15 @@ class PublicationLifecycleTests(unittest.TestCase):
 
     def test_post_merge_sha_binding_and_unchanged_release_reuse(self) -> None:
         config = prepare.load_config(ROOT / "registry" / "publication" / "config.json")
-        source_commit = subprocess.check_output(["/usr/bin/git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
         with tempfile.TemporaryDirectory() as tmp:
             package = Path(tmp) / "plugins" / "demo"
             package.mkdir(parents=True)
             (package / "plugin.json").write_text('{"name":"demo"}\n')
+            subprocess.run(["/usr/bin/git", "init", "-q", tmp], check=True)
+            subprocess.run(["/usr/bin/git", "-C", tmp, "add", "."], check=True)
+            subprocess.run(["/usr/bin/git", "-C", tmp, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.test", "commit", "-qm", "source"], check=True)
+            source_tree_commit = subprocess.check_output(["/usr/bin/git", "-C", tmp, "rev-parse", "HEAD"], text=True).strip()
+            source_commit = publication_cas.create_marker(Path(tmp), source_tree_commit, "prepare-1")
             tree = prepare.package_tree_digest(package)
             manifest = "sha256:" + __import__("hashlib").sha256((package / "plugin.json").read_bytes()).hexdigest()
             source = {
@@ -460,6 +465,7 @@ class PublicationLifecycleTests(unittest.TestCase):
                 "evidence": [],
             }
             first = prepare.build_candidate(source, config, source_commit, "prepare-1", None, repository_root=Path(tmp))
+            self.assertEqual(first["source_commit"], source_commit)
             release = first["distributions"][0]["releases"][0]
             self.assertEqual(release["package_source"]["revision"], source_commit)
             self.assertIsNone(release["published_at"])
@@ -558,7 +564,8 @@ class PublicationWorkflowTests(unittest.TestCase):
         signer_commands = "\n".join(step.get("run", "") for step in signer["steps"] if isinstance(step, dict))
         self.assertNotIn("build_registry.py", signer_commands)
         self.assertNotIn("plugins/", signer_commands)
-        self.assertIn("for attempt in 1 2 3", signer_commands)
+        cas_helper = (SCRIPTS / "directory_publication_cas.py").read_text()
+        self.assertIn("range(attempts)", cas_helper)
         self.assertIn("git diff --name-status", signer_commands)
         build_job = workflow["jobs"]["build_site"]
         build_commands = "\n".join(step.get("run", "") for step in build_job["steps"] if isinstance(step, dict))

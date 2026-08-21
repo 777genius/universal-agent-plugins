@@ -52,7 +52,7 @@ Before enabling `.github/workflows/directory-publication.yml`:
    Administration, Workflows, Environments, or other permission. Its installation
    token is the only credential allowed to update the ledger branch or create
    publication-floor tags; the workflow's generic `GITHUB_TOKEN` stays read-only.
-3. Create four active repository rulesets. The branch update gate targets only
+3. Create six active repository rulesets. The ledger branch update gate targets only
    `directory-publication-ledger`, enables **Restrict updates**, and names only
    the installed `uap-directory-publisher` App as an always-allowed bypass actor.
    A second branch immutability guard targets the same branch, blocks deletion
@@ -65,6 +65,17 @@ Before enabling `.github/workflows/directory-publication.yml`:
    or alter a floor tag. Do not add repository administrators, maintainers,
    teams, users, deploy keys, GitHub Actions, or the repository's generic Actions
    identity as a bypass actor; do not enable administrator bypass.
+   In addition, split `main` protection into two rulesets before enabling
+   publication. The `main` update/review gate must retain required review and
+   required status checks for everyone except the installed dedicated
+   `uap-directory-publisher` App, which is its only always-allowed bypass actor.
+   The separate `main` immutability guard must block deletion and force pushes,
+   require linear history, and have **no bypass actors**. This narrowly permits
+   the App's direct same-tree marker fast-forward while preventing the App from
+   rewriting or deleting `main`. This ruleset split is a production prerequisite;
+   do not run publication until a maintainer has configured and independently
+   reviewed it. No GitHub setting or credential is changed by this repository
+   patch, and a disposable-App test is intentionally deferred.
 4. Create the `directory-publication` and
    `directory-publication-materialization` environments. Require trusted
    maintainer approval, prevent administrator bypass/self-review, and restrict
@@ -83,9 +94,10 @@ Before enabling `.github/workflows/directory-publication.yml`:
    own immutable sequence tag. Missing pointers, a non-descendant branch, or a
    sequence below the highest tag then fails closed. Never delete or recreate
    the initialization marker or publication tags.
-6. Protect `main`, require CODEOWNER review for the publication scripts,
-   schemas, workflow, and this configuration, dismiss stale approvals, require
-   conversation resolution and status checks, and forbid bypass/force push.
+6. Require CODEOWNER review for the publication scripts, schemas, workflow, and
+   this configuration; dismiss stale approvals and require conversation
+   resolution and status checks. Configure the split `main` rulesets from step
+   3 rather than a single rule that would reject the marker fast-forward.
 7. Configure GitHub Pages for GitHub Actions. Grant the workflow its declared
    permissions. After signing, the no-secret site job generates production from
    that exact versioned snapshot, commits the static result without modifying
@@ -112,10 +124,26 @@ browser pages.
 ## Operation and recovery
 
 Pushes to `main`, a weekly schedule, and manual emergency dispatch use one
-non-cancelling concurrency group. `github.run_id` is the publication ID, so a
-rerun after signing reuses the already committed sequence and Pages tree. A
-push is attempted at most three times against the same commit; a competing
-branch change fails closed instead of rebasing and allocating another sequence.
+non-cancelling concurrency group. For source head `S`, the no-secret jobs derive
+a deterministic marker `P` from `S` and `github.run_id`. `P` has exactly parent
+`S`, the same tree, a fixed publisher identity, and a bounded hash-derived UTC
+timestamp. It therefore changes no paths and does not recurse through the
+workflow's path-filtered push trigger. Candidate `source_commit`, new
+in-repository release revisions, generated-site provenance, and downstream
+materialization all bind to `P`.
+
+The publication push is a real GitHub receive-pack update of `main` from `S` to
+`P`. One atomic command updates `main`, advances the ledger from exact `L` to
+signed commit `Q`, and creates the absent immutable sequence tag at `Q`; every
+ref has an explicit expected-old lease. Each of at most three attempts reads all
+three refs and accepts only the exact pre-state or the exact committed state.
+Any mixed state is terminal. An ambiguous or lost response is resolved by the
+same exact multi-ref readback. A retry never recreates the marker, regenerates
+or rebases `Q`, or reallocates the sequence. `github.run_id` is the publication
+ID, so an exact rerun recognizes the already-committed `P`/`Q`/tag state.
+Materialization separately advances the ledger with an explicit exact `Q`
+lease and accepts only exact idempotent readback; a competing ledger child fails
+closed.
 
 The publisher validates the latest ledger signature even after client expiry.
 Expired data can supply only the sequence and immutable provenance for recovery,

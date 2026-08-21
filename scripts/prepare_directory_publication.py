@@ -30,6 +30,7 @@ from directory_publication import (
     require,
     validate_with_schema,
 )
+from directory_publication_cas import CasError, validate_marker
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -399,6 +400,7 @@ def main() -> int:
     parser.add_argument("--directory", type=Path, required=True)
     parser.add_argument("--config", type=Path, required=True)
     parser.add_argument("--source-commit", required=True)
+    parser.add_argument("--source-tree-commit")
     parser.add_argument("--publication-id", required=True)
     parser.add_argument("--ledger", type=Path)
     parser.add_argument("--trusted-keys", type=Path)
@@ -411,7 +413,11 @@ def main() -> int:
     args = parser.parse_args()
     try:
         resolved_head = subprocess.check_output([GIT, "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
-        require(resolved_head == args.source_commit, f"checked-out HEAD {resolved_head} does not match --source-commit {args.source_commit}")
+        checked_out_source = args.source_tree_commit or args.source_commit
+        mismatch_label = "source tree commit" if args.source_tree_commit else "--source-commit"
+        require(resolved_head == checked_out_source, f"checked-out HEAD {resolved_head} does not match {mismatch_label} {checked_out_source}")
+        if args.source_tree_commit:
+            validate_marker(ROOT, args.source_commit, args.source_tree_commit, args.publication_id)
         previous = None
         if args.ledger:
             require(args.trusted_keys is not None, "--trusted-keys is required with --ledger")
@@ -432,7 +438,7 @@ def main() -> int:
         digest = candidate_digest(body)
         atomic_write(args.output, body)
         atomic_write(args.digest_output, (digest + "\n").encode("ascii"))
-    except (OSError, PublicationError, KeyError, TypeError, subprocess.SubprocessError) as error:
+    except (OSError, CasError, PublicationError, KeyError, TypeError, subprocess.SubprocessError) as error:
         print(f"prepare-directory-publication: {error}", file=sys.stderr)
         return 1
     print(digest)
