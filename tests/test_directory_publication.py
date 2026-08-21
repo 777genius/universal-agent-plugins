@@ -166,6 +166,12 @@ class PublicationLifecycleTests(unittest.TestCase):
         candidate.write_bytes(publication.canonical_json(value))
         digest = publication.candidate_digest(candidate.read_bytes())
         seed = fixture_json("test-private-seeds.json")["test-current"]
+        latest = root / "registry" / "schemas" / "1" / "latest.json"
+        ledger_arguments = ["--ledger-seed-commit", "0" * 40]
+        if latest.exists():
+            ledger_arguments.extend(("--ledger-sequence-floor", str(json.loads(latest.read_bytes())["sequence"])))
+        else:
+            ledger_arguments.append("--initialize-ledger")
         return run_script(
             "sign_directory_publication.py",
             "--candidate", str(candidate),
@@ -175,6 +181,7 @@ class PublicationLifecycleTests(unittest.TestCase):
             "--key-id", "test-current",
             "--now", now,
             "--result", str(root / "result.json"),
+            *ledger_arguments,
             env={"DIRECTORY_ED25519_PRIVATE_KEY": seed},
         )
 
@@ -568,14 +575,17 @@ class PublicationWorkflowTests(unittest.TestCase):
         self.assertIn('rm -rf "${RUNNER_TEMP}/site-artifact"', build_commands)
         site_job = workflow["jobs"]["materialize_site"]
         site_commands = "\n".join(step.get("run", "") for step in site_job["steps"] if isinstance(step, dict))
-        self.assertEqual(site_job["permissions"], {"actions": "read", "contents": "write"})
+        self.assertEqual(site_job["permissions"], {"actions": "read", "contents": "read"})
         self.assertEqual(
             {
                 step["uses"]
                 for step in site_job["steps"]
                 if isinstance(step, dict) and "uses" in step
             },
-            {"actions/download-artifact@b14cf4c92620c250e1c0745ffefa574f1c4531a9"},
+            {
+                "actions/download-artifact@b14cf4c92620c250e1c0745ffefa574f1c4531a9",
+                "actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1",
+            },
         )
         step_names = [step.get("name", "") for step in site_job["steps"] if isinstance(step, dict)]
         self.assertLess(
@@ -597,14 +607,10 @@ class PublicationWorkflowTests(unittest.TestCase):
         self.assertIn("manifest.paths", site_commands)
         self.assertIn("core.hooksPath=/dev/null commit", site_commands)
         self.assertIn("git -C ledger diff --exit-code -- registry/schemas/1/snapshots", site_commands)
-        self.assertIn('GH_TOKEN: ${{ github.token }}', text)
-        token_steps = [
-            step
-            for step in site_job["steps"]
-            if isinstance(step, dict) and "github.token" in json.dumps(step)
-        ]
-        self.assertEqual(len(token_steps), 1)
-        self.assertEqual(token_steps[0]["name"], "Push the bounded ledger commit")
+        self.assertNotIn("github.token", text)
+        self.assertNotIn("GH_TOKEN", text)
+        self.assertEqual(signer["permissions"], {"actions": "read", "contents": "read"})
+        self.assertEqual(site_job["environment"], "directory-publication-materialization")
         deploy_commands = "\n".join(step.get("run", "") for step in workflow["jobs"]["deploy"]["steps"] if isinstance(step, dict))
         self.assertIn("needs.materialize_site.outputs.ledger_commit", text)
         self.assertIn("git -C exact-pages-tree rev-parse HEAD", deploy_commands)

@@ -1,4 +1,5 @@
 /.github/CODEOWNERS @777genius
+/.github/workflows/ @777genius
 /compat/openai/app-bindings.json @777genius
 /schemas/openai-app-bindings.schema.json @777genius
 /schemas/e2e/client-evidence.schema.json @777genius

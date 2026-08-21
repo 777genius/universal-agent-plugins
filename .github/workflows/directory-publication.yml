@@ -15,6 +15,16 @@ on:
   schedule:
     - cron: "17 4 * * 1"
   workflow_dispatch:
+    inputs:
+      initialize_ledger:
+        description: Explicitly initialize schema 1 from ledger_seed_commit
+        required: false
+        default: false
+        type: boolean
+      ledger_seed_commit:
+        description: Exact commit currently at the uninitialized ledger branch head
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -35,6 +45,9 @@ jobs:
       contents: read
     outputs:
       candidate_digest: ${{ steps.candidate.outputs.digest }}
+      initialize_ledger: ${{ steps.ledger.outputs.initialize }}
+      ledger_seed_commit: ${{ steps.ledger.outputs.seed_commit }}
+      ledger_sequence_floor: ${{ steps.ledger.outputs.sequence_floor }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -45,19 +58,66 @@ jobs:
         with:
           ref: ${{ env.LEDGER_BRANCH }}
           path: _publication-ledger
-          fetch-depth: 1
+          fetch-depth: 0
+          fetch-tags: true
           persist-credentials: false
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.13"
       - name: Install no-secret validation dependencies
         run: python3 -m pip install --disable-pip-version-check check-jsonschema==0.37.4 cryptography==46.0.3 jsonschema==4.25.1
+      - name: Validate immutable ledger floor and explicit initialization
+        id: ledger
+        env:
+          INITIALIZE_LEDGER: ${{ github.event_name == 'workflow_dispatch' && inputs.initialize_ledger || false }}
+          REQUESTED_SEED_COMMIT: ${{ github.event_name == 'workflow_dispatch' && inputs.ledger_seed_commit || '' }}
+        run: |
+          tag_prefix=directory-publication-schema-1-sequence-
+          git -C _publication-ledger fetch --force --tags origin
+          mapfile -t tags < <(git -C _publication-ledger tag --list "${tag_prefix}*" | LC_ALL=C sort)
+          if test "${INITIALIZE_LEDGER}" = "true"; then
+            [[ "${REQUESTED_SEED_COMMIT}" =~ ^[0-9a-f]{40}$ ]]
+            test "$(git -C _publication-ledger rev-parse HEAD)" = "${REQUESTED_SEED_COMMIT}"
+            test "${#tags[@]}" -eq 0
+            test ! -e _publication-ledger/registry/schemas/1/latest.json
+            test ! -e _publication-ledger/registry/schemas/1/ledger-contract.json
+            echo "initialize=true" >> "$GITHUB_OUTPUT"
+            echo "seed_commit=${REQUESTED_SEED_COMMIT}" >> "$GITHUB_OUTPUT"
+            echo "sequence_floor=" >> "$GITHUB_OUTPUT"
+          else
+            test -f _publication-ledger/registry/schemas/1/latest.json
+            test -f _publication-ledger/registry/schemas/1/ledger-contract.json
+            test "${#tags[@]}" -gt 0
+            seed_commit="$(python3 -c 'import json; print(json.load(open("_publication-ledger/registry/schemas/1/ledger-contract.json"))["seed_commit"])')"
+            [[ "${seed_commit}" =~ ^[0-9a-f]{40}$ ]]
+            git -C _publication-ledger merge-base --is-ancestor "${seed_commit}" HEAD
+            sequence_floor=0
+            for tag in "${tags[@]}"; do
+              [[ "${tag}" =~ ^${tag_prefix}([0-9]{20})$ ]]
+              tag_sequence="$((10#${BASH_REMATCH[1]}))"
+              test "${tag_sequence}" -eq "$((sequence_floor + 1))"
+              git -C _publication-ledger merge-base --is-ancestor "refs/tags/${tag}" HEAD
+              sequence_floor="${tag_sequence}"
+            done
+            echo "initialize=false" >> "$GITHUB_OUTPUT"
+            echo "seed_commit=${seed_commit}" >> "$GITHUB_OUTPUT"
+            echo "sequence_floor=${sequence_floor}" >> "$GITHUB_OUTPUT"
+          fi
       - name: Prepare and bind exact post-merge source
         id: candidate
         env:
           PUBLICATION_ID: ${{ github.run_id }}
           SOURCE_COMMIT: ${{ github.sha }}
+          INITIALIZE_LEDGER: ${{ steps.ledger.outputs.initialize }}
+          LEDGER_SEED_COMMIT: ${{ steps.ledger.outputs.seed_commit }}
+          LEDGER_SEQUENCE_FLOOR: ${{ steps.ledger.outputs.sequence_floor }}
         run: |
+          ledger_args=(--ledger-seed-commit "${LEDGER_SEED_COMMIT}")
+          if test "${INITIALIZE_LEDGER}" = "true"; then
+            ledger_args+=(--initialize-ledger)
+          else
+            ledger_args+=(--ledger-sequence-floor "${LEDGER_SEQUENCE_FLOOR}")
+          fi
           python3 scripts/prepare_directory_publication.py \
             --directory registry/directory.json \
             --config registry/publication/config.json \
@@ -65,6 +125,7 @@ jobs:
             --publication-id "${PUBLICATION_ID}" \
             --ledger _publication-ledger \
             --trusted-keys registry/publication/trusted-keys.json \
+            "${ledger_args[@]}" \
             --output candidate.json \
             --digest-output candidate.digest
           digest="$(tr -d '\n' < candidate.digest)"
@@ -89,7 +150,7 @@ jobs:
     environment: directory-publication
     permissions:
       actions: read
-      contents: write
+      contents: read
     outputs:
       ledger_commit: ${{ steps.commit.outputs.ledger_commit }}
     steps:
@@ -103,62 +164,99 @@ jobs:
           ref: ${{ env.LEDGER_BRANCH }}
           path: ledger
           fetch-depth: 0
+          fetch-tags: true
           persist-credentials: false
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        with:
-          python-version: "3.13"
       - uses: actions/download-artifact@b14cf4c92620c250e1c0745ffefa574f1c4531a9 # v8.0.1
         with:
           name: directory-candidate-${{ github.run_id }}
           path: candidate
-      - name: Install signer-only dependencies
-        working-directory: trusted-source
-        run: python3 -m pip install --disable-pip-version-check cryptography==46.0.3 jsonschema==4.25.1
+      - name: Verify reviewed system-only signer runtime
+        run: |
+          test -x /usr/bin/python3
+          test -x /usr/bin/openssl
+          dpkg-query --show python3 openssl
+          test -z "$(dpkg --verify python3 openssl)"
+          /usr/bin/openssl version
       - name: Validate candidate digest, sequence, and sign
+        id: signed
         working-directory: trusted-source
         env:
           DIRECTORY_ED25519_PRIVATE_KEY: ${{ secrets.DIRECTORY_ED25519_PRIVATE_KEY }}
           DIRECTORY_SIGNING_KEY_ID: ${{ vars.DIRECTORY_SIGNING_KEY_ID }}
           EXPECTED_CANDIDATE_DIGEST: ${{ needs.prepare.outputs.candidate_digest }}
+          INITIALIZE_LEDGER: ${{ needs.prepare.outputs.initialize_ledger }}
+          LEDGER_SEED_COMMIT: ${{ needs.prepare.outputs.ledger_seed_commit }}
+          LEDGER_SEQUENCE_FLOOR: ${{ needs.prepare.outputs.ledger_sequence_floor }}
         run: |
           test "$(tr -d '\n' < ../candidate/candidate.digest)" = "${EXPECTED_CANDIDATE_DIGEST}"
+          ledger_args=(--ledger-seed-commit "${LEDGER_SEED_COMMIT}")
+          if test "${INITIALIZE_LEDGER}" = "true"; then
+            test "$(git -C ../ledger rev-parse HEAD)" = "${LEDGER_SEED_COMMIT}"
+            ledger_args+=(--initialize-ledger)
+          else
+            git -C ../ledger merge-base --is-ancestor "${LEDGER_SEED_COMMIT}" HEAD
+            ledger_args+=(--ledger-sequence-floor "${LEDGER_SEQUENCE_FLOOR}")
+          fi
           now="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          python3 scripts/sign_directory_publication.py \
+          /usr/bin/python3 -I scripts/sign_directory_publication.py \
             --candidate ../candidate/candidate.json \
             --candidate-digest "${EXPECTED_CANDIDATE_DIGEST}" \
             --ledger ../ledger \
             --trusted-keys registry/publication/trusted-keys.json \
             --key-id "${DIRECTORY_SIGNING_KEY_ID}" \
             --now "${now}" \
+            "${ledger_args[@]}" \
             --result ../publication-result.json
+          echo "sequence=$(/usr/bin/python3 -c 'import json; print(json.load(open("../publication-result.json"))["sequence"])')" >> "$GITHUB_OUTPUT"
+      - name: Acquire dedicated publisher token
+        id: publisher
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.DIRECTORY_PUBLISHER_APP_ID }}
+          private-key: ${{ secrets.DIRECTORY_PUBLISHER_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
       - name: Enforce append-only diff and commit atomically
         id: commit
         working-directory: ledger
         env:
-          GH_TOKEN: ${{ github.token }}
+          PUBLISHER_TOKEN: ${{ steps.publisher.outputs.token }}
+          PUBLISHED_SEQUENCE: ${{ steps.signed.outputs.sequence }}
+          INITIALIZE_LEDGER: ${{ needs.prepare.outputs.initialize_ledger }}
         run: |
+          tag_name="directory-publication-schema-1-sequence-$(printf '%020d' "${PUBLISHED_SEQUENCE}")"
           git add -N registry/schemas/1
           if git diff --name-status -- registry/schemas/1/snapshots | awk '$1 != "A" { exit 1 }'; then :; else
             echo "Historical snapshot or envelope was modified" >&2
             exit 1
           fi
-          git diff --exit-code -- . ':!registry/schemas/1/latest.json' ':!registry/schemas/1/snapshots/**' || {
+          contract_status="$(git diff --name-status -- registry/schemas/1/ledger-contract.json)"
+          if test "${INITIALIZE_LEDGER}" = "true"; then
+            test "${contract_status}" = $'A\tregistry/schemas/1/ledger-contract.json'
+          else
+            test -z "${contract_status}"
+          fi
+          git diff --exit-code -- . ':!registry/schemas/1/latest.json' ':!registry/schemas/1/ledger-contract.json' ':!registry/schemas/1/snapshots/**' || {
             echo "Signer changed a path outside the schema-1 ledger" >&2
             exit 1
           }
           if test -n "$(git status --porcelain)"; then
             git config user.name "uap-directory-publisher[bot]"
             git config user.email "uap-directory-publisher[bot]@users.noreply.github.com"
-            git add registry/schemas/1/latest.json registry/schemas/1/snapshots
+            git add registry/schemas/1/latest.json registry/schemas/1/ledger-contract.json registry/schemas/1/snapshots
             git commit -m "chore(directory): publish signed snapshot"
+            test -z "$(git tag --list "${tag_name}")"
+            git tag "${tag_name}" HEAD
             pushed=false
             for attempt in 1 2 3; do
-              if git -c http.https://github.com/.extraheader="AUTHORIZATION: basic $(printf 'x-access-token:%s' "${GH_TOKEN}" | base64 -w0)" push origin "HEAD:${LEDGER_BRANCH}"; then
+              if git -c http.https://github.com/.extraheader="AUTHORIZATION: basic $(printf 'x-access-token:%s' "${PUBLISHER_TOKEN}" | base64 -w0)" push --atomic origin "HEAD:${LEDGER_BRANCH}" "refs/tags/${tag_name}:refs/tags/${tag_name}"; then
                 pushed=true
                 break
               fi
             done
             test "${pushed}" = true
+          else
+            git merge-base --is-ancestor "refs/tags/${tag_name}" HEAD
           fi
           echo "ledger_commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
@@ -283,9 +381,10 @@ jobs:
     needs: [sign, build_site]
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    environment: directory-publication-materialization
     permissions:
       actions: read
-      contents: write
+      contents: read
     outputs:
       ledger_commit: ${{ steps.commit.outputs.ledger_commit }}
     steps:
@@ -379,9 +478,17 @@ jobs:
             test "$(git -C ledger rev-parse HEAD^)" = "${EXPECTED_LEDGER_COMMIT}"
           fi
           echo "ledger_commit=$(git -C ledger rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+      - name: Acquire dedicated publisher token
+        id: publisher
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.DIRECTORY_PUBLISHER_APP_ID }}
+          private-key: ${{ secrets.DIRECTORY_PUBLISHER_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
       - name: Push the bounded ledger commit
         env:
-          GH_TOKEN: ${{ github.token }}
+          PUBLISHER_TOKEN: ${{ steps.publisher.outputs.token }}
           EXPECTED_LEDGER_COMMIT: ${{ needs.sign.outputs.ledger_commit }}
         run: |
           git -C ledger diff --exit-code
@@ -391,7 +498,7 @@ jobs:
           if test "$(git -C ledger rev-parse HEAD)" != "${EXPECTED_LEDGER_COMMIT}"; then
             pushed=false
             for attempt in 1 2 3; do
-              if git -C ledger -c core.hooksPath=/dev/null -c http.https://github.com/.extraheader="AUTHORIZATION: basic $(printf 'x-access-token:%s' "${GH_TOKEN}" | base64 -w0)" push origin "HEAD:${LEDGER_BRANCH}"; then
+              if git -C ledger -c core.hooksPath=/dev/null -c http.https://github.com/.extraheader="AUTHORIZATION: basic $(printf 'x-access-token:%s' "${PUBLISHER_TOKEN}" | base64 -w0)" push origin "HEAD:${LEDGER_BRANCH}"; then
                 pushed=true
                 break
               fi

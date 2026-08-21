@@ -13,6 +13,8 @@ import hashlib
 import json
 import os
 import re
+import subprocess
+import tempfile
 import unicodedata
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
@@ -36,6 +38,10 @@ MAX_SNAPSHOT_BYTES = 4 << 20
 MAX_ENVELOPE_BYTES = 16 << 10
 MAX_LATEST_BYTES = 16 << 10
 MAX_LEDGER_SNAPSHOTS = 100_000
+LEDGER_CONTRACT_NAME = "ledger-contract.json"
+OPENSSL = "/usr/bin/openssl"
+ED25519_PRIVATE_DER_PREFIX = bytes.fromhex("302e020100300506032b657004220420")
+ED25519_PUBLIC_DER_PREFIX = bytes.fromhex("302a300506032b6570032100")
 
 
 class PublicationError(Exception):
@@ -199,17 +205,91 @@ def load_public_keys(path: Path) -> dict[str, bytes]:
     return result
 
 
-def ed25519_private_key(encoded: str):  # type: ignore[no-untyped-def]
+def ed25519_private_key(encoded: str) -> bytes:
+    """Decode a raw Ed25519 seed without importing third-party code."""
+    return b64decode_exact(encoded, 32, "private signing seed")
+
+
+def _openssl(arguments: list[str], *, input_body: bytes | None = None) -> bytes:
+    require(Path(OPENSSL).is_file(), f"reviewed signer runtime is missing: {OPENSSL}")
     try:
-        from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
-    except ImportError as error:  # pragma: no cover - workflow installs it
-        raise PublicationError("cryptography is required for Ed25519 signing") from error
-    raw = b64decode_exact(encoded, 32, "private signing seed")
-    return Ed25519PrivateKey.from_private_bytes(raw)
+        completed = subprocess.run(
+            [OPENSSL, *arguments], input=input_body, stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE, check=False,
+        )
+    except OSError as error:
+        raise PublicationError(f"failed to execute reviewed signer runtime: {error}") from error
+    require(completed.returncode == 0, "OpenSSL Ed25519 operation failed")
+    return completed.stdout
 
 
-def verify_envelope(snapshot: bytes, envelope: dict[str, Any], trusted_keys: dict[str, bytes]) -> None:
-    validate_with_schema(envelope, ENVELOPE_SCHEMA)
+def ed25519_public_bytes(seed: bytes) -> bytes:
+    require(len(seed) == 32, "Ed25519 seed must be 32 bytes")
+    public_der = _openssl(
+        ["pkey", "-inform", "DER", "-pubout", "-outform", "DER"],
+        input_body=ED25519_PRIVATE_DER_PREFIX + seed,
+    )
+    require(public_der.startswith(ED25519_PUBLIC_DER_PREFIX), "OpenSSL returned an invalid Ed25519 public key")
+    public_key = public_der[len(ED25519_PUBLIC_DER_PREFIX):]
+    require(len(public_key) == 32, "OpenSSL returned an invalid Ed25519 public key")
+    return public_key
+
+
+def ed25519_sign(seed: bytes, message: bytes) -> bytes:
+    require(len(seed) == 32, "Ed25519 seed must be 32 bytes")
+    with tempfile.TemporaryDirectory(prefix="uap-directory-ed25519-sign-") as temporary:
+        private_path = Path(temporary) / "private.der"
+        message_path = Path(temporary) / "message.bin"
+        private_path.write_bytes(ED25519_PRIVATE_DER_PREFIX + seed)
+        private_path.chmod(0o600)
+        message_path.write_bytes(message)
+        signature = _openssl([
+            "pkeyutl", "-sign", "-rawin", "-inkey", str(private_path),
+            "-keyform", "DER", "-in", str(message_path),
+        ])
+        require(len(signature) == 64, "OpenSSL returned an invalid Ed25519 signature")
+        return signature
+
+
+def ed25519_verify(public_key: bytes, message: bytes, signature: bytes) -> None:
+    require(len(public_key) == 32, "Ed25519 public key must be 32 bytes")
+    with tempfile.TemporaryDirectory(prefix="uap-directory-ed25519-verify-") as temporary:
+        public_path = Path(temporary) / "public.der"
+        message_path = Path(temporary) / "message.bin"
+        signature_path = Path(temporary) / "signature.bin"
+        public_path.write_bytes(ED25519_PUBLIC_DER_PREFIX + public_key)
+        message_path.write_bytes(message)
+        signature_path.write_bytes(signature)
+        _openssl([
+            "pkeyutl", "-verify", "-pubin", "-inkey", str(public_path),
+            "-keyform", "DER", "-rawin", "-in", str(message_path),
+            "-sigfile", str(signature_path),
+        ])
+
+
+def validate_envelope_contract(envelope: dict[str, Any]) -> None:
+    """Validate the small envelope contract without third-party code."""
+    require(set(envelope) == {
+        "envelope_schema_version", "snapshot_schema_version", "sequence", "key_id",
+        "algorithm", "signature_domain", "snapshot_digest", "signature",
+    }, "signature envelope fields are invalid")
+    require(envelope["envelope_schema_version"] == 1, "signature envelope version is invalid")
+    require(envelope["snapshot_schema_version"] == 1, "signature envelope snapshot version is invalid")
+    require(type(envelope["sequence"]) is int and envelope["sequence"] >= 1, "signature envelope sequence is invalid")
+    require(isinstance(envelope["key_id"], str) and ID_RE.fullmatch(envelope["key_id"]) is not None, "signature envelope key ID is invalid")
+    require(envelope["algorithm"] == "Ed25519", "signature envelope algorithm is invalid")
+    require(envelope["signature_domain"] == "UAP-DIRECTORY-SNAPSHOT-ED25519-V1", "signature envelope domain is invalid")
+    require(isinstance(envelope["snapshot_digest"], str) and DIGEST_RE.fullmatch(envelope["snapshot_digest"]) is not None, "signature envelope digest is invalid")
+    b64decode_exact(envelope["signature"], 64, "signature")
+
+
+def verify_envelope(
+    snapshot: bytes, envelope: dict[str, Any], trusted_keys: dict[str, bytes], *,
+    validate_schema: bool = True,
+) -> None:
+    if validate_schema:
+        validate_with_schema(envelope, ENVELOPE_SCHEMA)
+    validate_envelope_contract(envelope)
     require(len(snapshot) <= MAX_SNAPSHOT_BYTES, "snapshot exceeds size limit")
     require(canonical_json(parse_json_bytes(snapshot, "snapshot", max_bytes=MAX_SNAPSHOT_BYTES)) == snapshot, "snapshot is not canonical JSON")
     require(envelope["snapshot_digest"] == sha256_digest(snapshot), "snapshot digest mismatch")
@@ -217,11 +297,8 @@ def verify_envelope(snapshot: bytes, envelope: dict[str, Any], trusted_keys: dic
     require(key_id in trusted_keys, f"unknown signing key ID {key_id}")
     signature = b64decode_exact(envelope["signature"], 64, "signature")
     try:
-        from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
-        Ed25519PublicKey.from_public_bytes(trusted_keys[key_id]).verify(signature, signature_message(snapshot))
-    except ImportError as error:  # pragma: no cover
-        raise PublicationError("cryptography is required for Ed25519 verification") from error
-    except Exception as error:
+        ed25519_verify(trusted_keys[key_id], signature_message(snapshot), signature)
+    except PublicationError as error:
         raise PublicationError("invalid Ed25519 snapshot signature") from error
 
 
@@ -247,8 +324,20 @@ def validate_snapshot_semantics(
     snapshot: dict[str, Any],
     previous: dict[str, Any] | None = None,
     historical_evidence: dict[str, dict[str, Any]] | None = None,
+    *, validate_schema: bool = True,
 ) -> None:
-    validate_with_schema(snapshot, SNAPSHOT_SCHEMA)
+    if validate_schema:
+        validate_with_schema(snapshot, SNAPSHOT_SCHEMA)
+    require(set(snapshot) == {
+        "snapshot_schema_version", "sequence", "publication_id", "source_commit",
+        "generated_at", "expires_at", "products", "distributions", "evidence", "revocations",
+    }, "snapshot fields are invalid")
+    require(snapshot["snapshot_schema_version"] == 1, "snapshot schema version is invalid")
+    require(type(snapshot["sequence"]) is int and snapshot["sequence"] >= 1, "snapshot sequence is invalid")
+    require(isinstance(snapshot["publication_id"], str) and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}", snapshot["publication_id"]) is not None, "snapshot publication ID is invalid")
+    require(isinstance(snapshot["source_commit"], str) and SHA_RE.fullmatch(snapshot["source_commit"]) is not None, "snapshot source commit is invalid")
+    for field in ("products", "distributions", "evidence", "revocations"):
+        require(isinstance(snapshot[field], list), f"snapshot {field} must be an array")
     generated = parse_timestamp(snapshot["generated_at"], "generated_at")
     expires = parse_timestamp(snapshot["expires_at"], "expires_at")
     require(expires > generated, "expires_at must be later than generated_at")
@@ -375,13 +464,31 @@ def validate_relative_artifact(path: str, expected: str) -> None:
     require(not parsed.is_absolute() and ".." not in parsed.parts and ":" not in path and "\\" not in path, "unsafe artifact path")
 
 
-def validate_latest(latest: dict[str, Any]) -> None:
-    validate_with_schema(latest, LATEST_SCHEMA)
+def validate_latest(latest: dict[str, Any], *, validate_schema: bool = True) -> None:
+    if validate_schema:
+        validate_with_schema(latest, LATEST_SCHEMA)
+    require(set(latest) == {
+        "pointer_schema_version", "snapshot_schema_version", "sequence",
+        "snapshot_path", "envelope_path", "fetch_contract",
+    }, "latest pointer fields are invalid")
+    require(latest["pointer_schema_version"] == 1 and latest["snapshot_schema_version"] == 1, "latest pointer version is invalid")
+    require(type(latest["sequence"]) is int and latest["sequence"] >= 1, "latest pointer sequence is invalid")
     sequence = latest["sequence"]
     stem = f"{sequence:020d}"
     validate_relative_artifact(latest["snapshot_path"], f"snapshots/{stem}.json")
     validate_relative_artifact(latest["envelope_path"], f"snapshots/{stem}.envelope.json")
     limits = latest["fetch_contract"]
+    require(isinstance(limits, dict) and set(limits) == {
+        "https_required", "same_origin_redirects_only", "forward_credentials_on_redirect",
+        "max_redirects", "latest_max_bytes", "snapshot_max_bytes", "envelope_max_bytes",
+        "retry_attempts",
+    }, "latest fetch contract fields are invalid")
+    require(limits["https_required"] is True, "HTTPS is required")
+    require(limits["same_origin_redirects_only"] is True, "redirects must stay same-origin")
+    require(limits["forward_credentials_on_redirect"] is False, "redirect credentials must not be forwarded")
+    for field in ("max_redirects", "latest_max_bytes", "snapshot_max_bytes", "envelope_max_bytes", "retry_attempts"):
+        require(type(limits[field]) is int and limits[field] >= 0, f"{field} must be a non-negative integer")
+    require(limits["latest_max_bytes"] >= 1 and limits["snapshot_max_bytes"] >= 1 and limits["envelope_max_bytes"] >= 1 and limits["retry_attempts"] >= 1, "fetch sizes and retry attempts must be positive")
     require(limits["max_redirects"] <= 2, "redirect limit exceeds implementation maximum")
     require(limits["retry_attempts"] <= 3, "retry limit exceeds implementation maximum")
     require(limits["latest_max_bytes"] <= MAX_LATEST_BYTES, "latest response limit exceeds implementation maximum")
@@ -390,20 +497,51 @@ def validate_latest(latest: dict[str, Any]) -> None:
 
 
 def load_ledger_latest(
-    ledger_root: Path, trusted_keys: dict[str, bytes]
+    ledger_root: Path, trusted_keys: dict[str, bytes], *,
+    allow_initialization: bool = False, seed_commit: str | None = None,
+    minimum_sequence: int | None = None, validate_schema: bool = True,
+    require_external_floor: bool = False,
 ) -> tuple[dict[str, Any], dict[str, Any], dict[str, dict[str, Any]]] | None:
     feed = ledger_root / "registry" / "schemas" / "1"
     latest_path = feed / "latest.json"
     if not latest_path.exists():
+        require(allow_initialization, "publication ledger latest pointer is missing; explicit initialization is required")
+        require(seed_commit is not None and SHA_RE.fullmatch(seed_commit) is not None, "initialization requires an exact seed commit")
+        require(minimum_sequence is None, "initialization cannot accept an existing sequence floor")
+        require(not feed.exists() or not any(feed.iterdir()), "initial publication feed is not empty")
         return None
+    require(not allow_initialization, "initialization was requested for an existing publication ledger")
+    if require_external_floor:
+        require(seed_commit is not None and SHA_RE.fullmatch(seed_commit) is not None, "normal publication requires the protected seed commit")
+        require(type(minimum_sequence) is int and minimum_sequence >= 1, "normal publication requires the immutable tag sequence floor")
+    contract_path = feed / LEDGER_CONTRACT_NAME
+    contract_body = read_bytes_bounded(contract_path, MAX_LATEST_BYTES)
+    contract = parse_json_bytes(contract_body, str(contract_path), max_bytes=MAX_LATEST_BYTES)
+    require(
+        isinstance(contract, dict) and set(contract) == {
+            "contract_version", "initial_sequence", "schema_version", "seed_commit", "sequence_tag_prefix"
+        },
+        "publication ledger contract marker is invalid",
+    )
+    require(canonical_json(contract) == contract_body, "publication ledger contract marker is not canonical JSON")
+    require(contract["contract_version"] == 1 and contract["schema_version"] == 1, "publication ledger contract version is unsupported")
+    require(contract["initial_sequence"] == 1, "publication ledger initial sequence marker is invalid")
+    require(isinstance(contract["seed_commit"], str) and SHA_RE.fullmatch(contract["seed_commit"]) is not None, "publication ledger seed commit marker is invalid")
+    require(contract["sequence_tag_prefix"] == "directory-publication-schema-1-sequence-", "publication ledger tag namespace marker is invalid")
+    if seed_commit is not None:
+        require(contract["seed_commit"] == seed_commit, "publication ledger seed commit differs from the protected contract")
     latest_body = read_bytes_bounded(latest_path, MAX_LATEST_BYTES)
     latest = parse_json_bytes(latest_body, str(latest_path), max_bytes=MAX_LATEST_BYTES)
     require(isinstance(latest, dict), "latest pointer must be an object")
     require(canonical_json(latest) == latest_body, "latest pointer is not canonical JSON")
-    validate_latest(latest)
+    validate_latest(latest, validate_schema=validate_schema)
     highest = latest["sequence"]
+    if minimum_sequence is not None:
+        require(isinstance(minimum_sequence, int) and minimum_sequence >= 1, "publication ledger sequence floor is invalid")
+        require(highest >= minimum_sequence, "publication ledger latest sequence regressed below the immutable tag floor")
     require(highest <= MAX_LEDGER_SNAPSHOTS, "publication ledger exceeds supported history bound")
     snapshots_dir = feed / "snapshots"
+    require(snapshots_dir.is_dir(), "publication ledger snapshots directory is missing")
     actual_files = {path.name for path in snapshots_dir.iterdir()}
     expected_files: set[str] = set()
     previous: dict[str, Any] | None = None
@@ -421,10 +559,10 @@ def load_ledger_latest(
         envelope = parse_json_bytes(envelope_body, str(envelope_path), max_bytes=MAX_ENVELOPE_BYTES)
         require(isinstance(envelope, dict), "signature envelope must be an object")
         require(canonical_json(envelope) == envelope_body, "signature envelope is not canonical JSON")
-        verify_envelope(snapshot_bytes, envelope, trusted_keys)
+        verify_envelope(snapshot_bytes, envelope, trusted_keys, validate_schema=validate_schema)
         snapshot = parse_json_bytes(snapshot_bytes, str(snapshot_path), max_bytes=MAX_SNAPSHOT_BYTES)
         require(isinstance(snapshot, dict), "snapshot must be an object")
-        validate_snapshot_semantics(snapshot, previous, historical_evidence)
+        validate_snapshot_semantics(snapshot, previous, historical_evidence, validate_schema=validate_schema)
         require(snapshot["sequence"] == sequence == envelope["sequence"], f"publication ledger sequence {sequence} identity mismatch")
         previous = snapshot
     require(actual_files == expected_files, "publication ledger contains unexpected or non-contiguous historical artifacts")

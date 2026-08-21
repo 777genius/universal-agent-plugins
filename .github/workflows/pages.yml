@@ -1,4 +1,4 @@
-name: Pages
+name: Pages PR validation (non-production)
 
 on:
   pull_request:
@@ -9,17 +9,6 @@ on:
       - "scripts/build_registry.py"
       - "tests/test_build_registry.py"
       - ".github/workflows/pages.yml"
-  push:
-    branches: [main]
-    paths:
-      - "site/**"
-      - "registry/**"
-      - "schemas/registry-*.schema.json"
-      - "scripts/build_registry.py"
-      - "tests/test_build_registry.py"
-      - ".github/workflows/pages.yml"
-  workflow_dispatch:
-
 permissions:
   contents: read
 
@@ -86,35 +75,3 @@ jobs:
         run: |
           pnpm generate
           pnpm check:generated
-      - name: Archive Pages site
-        run: |
-          tar \
-            --dereference --hard-dereference \
-            --directory site/.output/public \
-            -cvf "$RUNNER_TEMP/artifact.tar" \
-            --exclude=.git \
-            --exclude=.github \
-            .
-      - name: Upload Pages artifact
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: github-pages
-          path: ${{ runner.temp }}/artifact.tar
-          retention-days: 1
-          if-no-files-found: error
-
-  deploy:
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
-    needs: build
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    permissions:
-      pages: write
-      id-token: write
-    steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@cd2ce8fcbc39b97be8ca5fce6e763baed58fa128 # v5.0.0

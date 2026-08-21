@@ -402,6 +402,9 @@ def main() -> int:
     parser.add_argument("--publication-id", required=True)
     parser.add_argument("--ledger", type=Path)
     parser.add_argument("--trusted-keys", type=Path)
+    parser.add_argument("--initialize-ledger", action="store_true")
+    parser.add_argument("--ledger-seed-commit")
+    parser.add_argument("--ledger-sequence-floor", type=int)
     parser.add_argument("--external-repository", action="append", default=[])
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--digest-output", type=Path, required=True)
@@ -412,7 +415,13 @@ def main() -> int:
         previous = None
         if args.ledger:
             require(args.trusted_keys is not None, "--trusted-keys is required with --ledger")
-            loaded = load_ledger_latest(args.ledger, load_public_keys(args.trusted_keys))
+            loaded = load_ledger_latest(
+                args.ledger, load_public_keys(args.trusted_keys),
+                allow_initialization=args.initialize_ledger,
+                seed_commit=args.ledger_seed_commit,
+                minimum_sequence=args.ledger_sequence_floor,
+                require_external_floor=True,
+            )
             previous = loaded[0] if loaded else None
         candidate = build_candidate(
             read_json(args.directory), load_config(args.config), args.source_commit,

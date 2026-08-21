@@ -13,14 +13,16 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from directory_publication import (
-    CANDIDATE_SCHEMA,
     MAX_CANDIDATE_BYTES,
     MAX_SNAPSHOT_BYTES,
+    LEDGER_CONTRACT_NAME,
     PublicationError,
     atomic_write,
     candidate_digest,
     canonical_json,
     ed25519_private_key,
+    ed25519_public_bytes,
+    ed25519_sign,
     format_timestamp,
     load_ledger_latest,
     load_public_keys,
@@ -31,18 +33,10 @@ from directory_publication import (
     require,
     sha256_digest,
     signature_message,
+    validate_envelope_contract,
     validate_latest,
     validate_snapshot_semantics,
-    validate_with_schema,
 )
-
-
-def public_bytes(private_key) -> bytes:  # type: ignore[no-untyped-def]
-    from cryptography.hazmat.primitives import serialization
-    return private_key.public_key().public_bytes(
-        encoding=serialization.Encoding.Raw,
-        format=serialization.PublicFormat.Raw,
-    )
 
 
 def assign_release_publication_times(
@@ -68,6 +62,35 @@ def assign_release_publication_times(
     return assigned
 
 
+def validate_bound_candidate(candidate: dict[str, object]) -> None:
+    """Check the signer-facing root contract using only the standard library.
+
+    The no-secret preparation job performs full JSON Schema and semantic
+    validation. Its output digest binds these bounded bytes before the seed is
+    exposed; the signer repeats the security-critical root/type checks here.
+    """
+    require(set(candidate) == {
+        "candidate_schema_version", "snapshot_schema_version", "publication_id",
+        "source_commit", "lifetime_days", "products", "distributions", "evidence",
+        "revocations",
+    }, "candidate fields are invalid")
+    require(candidate["candidate_schema_version"] == 1, "candidate schema version is invalid")
+    require(candidate["snapshot_schema_version"] == 1, "candidate snapshot schema version is invalid")
+    publication_id = candidate["publication_id"]
+    require(
+        isinstance(publication_id, str) and 1 <= len(publication_id) <= 128
+        and publication_id[0].isalnum()
+        and all(character.isascii() and (character.isalnum() or character in "._-") for character in publication_id),
+        "candidate publication ID is invalid",
+    )
+    source_commit = candidate["source_commit"]
+    require(isinstance(source_commit, str) and len(source_commit) == 40 and all(character in "0123456789abcdef" for character in source_commit), "candidate source commit is invalid")
+    lifetime_days = candidate["lifetime_days"]
+    require(type(lifetime_days) is int and 1 <= lifetime_days <= 30, "candidate lifetime is invalid")
+    for field in ("products", "distributions", "evidence", "revocations"):
+        require(isinstance(candidate[field], list), f"candidate {field} must be an array")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--candidate", type=Path, required=True)
@@ -77,12 +100,15 @@ def main() -> int:
     parser.add_argument("--key-id", required=True)
     parser.add_argument("--now", required=True)
     parser.add_argument("--result", type=Path, required=True)
+    parser.add_argument("--initialize-ledger", action="store_true")
+    parser.add_argument("--ledger-seed-commit")
+    parser.add_argument("--ledger-sequence-floor", type=int)
     args = parser.parse_args()
     try:
         candidate_body = read_bytes_bounded(args.candidate, MAX_CANDIDATE_BYTES)
         candidate = parse_json_bytes(candidate_body, str(args.candidate), max_bytes=4 << 20)
         require(isinstance(candidate, dict), "candidate must be an object")
-        validate_with_schema(candidate, CANDIDATE_SCHEMA)
+        validate_bound_candidate(candidate)
         require(canonical_json(candidate) == candidate_body, "candidate is not canonical JSON")
         require(candidate_digest(candidate_body) == args.candidate_digest, "candidate digest mismatch")
         now = parse_timestamp(args.now, "now")
@@ -91,9 +117,13 @@ def main() -> int:
         encoded_private = os.environ.get("DIRECTORY_ED25519_PRIVATE_KEY")
         require(encoded_private is not None, "DIRECTORY_ED25519_PRIVATE_KEY is not set")
         private_key = ed25519_private_key(encoded_private)
-        require(public_bytes(private_key) == trusted[args.key_id], "private key does not match active trusted key ID")
+        require(ed25519_public_bytes(private_key) == trusted[args.key_id], "private key does not match active trusted key ID")
 
-        loaded = load_ledger_latest(args.ledger, trusted)
+        loaded = load_ledger_latest(
+            args.ledger, trusted, allow_initialization=args.initialize_ledger,
+            seed_commit=args.ledger_seed_commit, minimum_sequence=args.ledger_sequence_floor,
+            validate_schema=False, require_external_floor=True,
+        )
         previous = loaded[0] if loaded else None
         historical_evidence = loaded[2] if loaded else {}
         distributions = assign_release_publication_times(
@@ -120,11 +150,11 @@ def main() -> int:
             "evidence": candidate["evidence"],
             "revocations": candidate["revocations"],
         }
-        validate_snapshot_semantics(snapshot, previous, historical_evidence)
+        validate_snapshot_semantics(snapshot, previous, historical_evidence, validate_schema=False)
         snapshot_body = canonical_json(snapshot)
         require(len(snapshot_body) <= MAX_SNAPSHOT_BYTES, "generated snapshot exceeds response size contract")
         snapshot_digest = sha256_digest(snapshot_body)
-        signature = private_key.sign(signature_message(snapshot_body))
+        signature = ed25519_sign(private_key, signature_message(snapshot_body))
         envelope = {
             "envelope_schema_version": 1,
             "snapshot_schema_version": 1,
@@ -152,9 +182,18 @@ def main() -> int:
                 "retry_attempts": 3,
             },
         }
-        validate_with_schema(envelope, Path(__file__).resolve().parents[1] / "schemas" / "directory-envelope.schema.json")
-        validate_latest(latest)
+        validate_envelope_contract(envelope)
+        validate_latest(latest, validate_schema=False)
         feed = args.ledger / "registry" / "schemas" / "1"
+        if previous is None:
+            contract = {
+                "contract_version": 1,
+                "initial_sequence": 1,
+                "schema_version": 1,
+                "seed_commit": args.ledger_seed_commit,
+                "sequence_tag_prefix": "directory-publication-schema-1-sequence-",
+            }
+            atomic_write(feed / LEDGER_CONTRACT_NAME, canonical_json(contract))
         snapshot_path = feed / latest["snapshot_path"]
         envelope_path = feed / latest["envelope_path"]
         require(not snapshot_path.exists() and not envelope_path.exists(), f"sequence {sequence} artifact already exists")

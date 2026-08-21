@@ -46,31 +46,68 @@ Before enabling `.github/workflows/directory-publication.yml`:
 1. Generate an Ed25519 seed in an approved offline/KMS-backed process. Never
    commit it. Add its 32-byte public key (standard base64) and stable key ID to
    `trusted-keys.json` through trusted CODEOWNER review.
-2. Create the `directory-publication-ledger` branch by seeding it with the exact
-   current Pages tree. Protect it against deletion and force pushes, require
-   linear history, restrict pushes to GitHub Actions for this repository, and
-   require the publication status check. Human and deploy-key pushes stay
-   disabled.
-3. Create the `directory-publication` environment. Require trusted maintainer
-   approval and restrict it to the protected `main` branch. Add the 32-byte seed
-   as base64 secret `DIRECTORY_ED25519_PRIVATE_KEY` and add repository variable
-   `DIRECTORY_SIGNING_KEY_ID` with the reviewed key ID.
-4. Protect `main`, require CODEOWNER review for the publication scripts,
+2. Create a dedicated GitHub App named `uap-directory-publisher`, install it
+   only on this repository, and grant exactly repository **Contents: read and
+   write** (plus GitHub's implicit Metadata read). Grant no Actions, Pages,
+   Administration, Workflows, Environments, or other permission. Its installation
+   token is the only credential allowed to update the ledger branch or create
+   publication-floor tags; the workflow's generic `GITHUB_TOKEN` stays read-only.
+3. Create four active repository rulesets. The branch update gate targets only
+   `directory-publication-ledger`, enables **Restrict updates**, and names only
+   the installed `uap-directory-publisher` App as an always-allowed bypass actor.
+   A second branch immutability guard targets the same branch, blocks deletion
+   and force pushes, requires linear history, and has **no bypass actors**. The
+   tag creation gate targets `directory-publication-schema-1-sequence-*`, enables
+   **Restrict creations**, and names only that App as an always-allowed bypass
+   actor. A second tag immutability guard targets the same pattern, enables
+   **Restrict updates** and **Restrict deletions**, and has **no bypass actors**.
+   Layering the no-bypass guards means even the publisher cannot reset the branch
+   or alter a floor tag. Do not add repository administrators, maintainers,
+   teams, users, deploy keys, GitHub Actions, or the repository's generic Actions
+   identity as a bypass actor; do not enable administrator bypass.
+4. Create the `directory-publication` and
+   `directory-publication-materialization` environments. Require trusted
+   maintainer approval, prevent administrator bypass/self-review, and restrict
+   both to protected `main`. Put `DIRECTORY_PUBLISHER_APP_ID` and
+   `DIRECTORY_PUBLISHER_APP_PRIVATE_KEY` in both as environment secrets. Put the
+   base64 32-byte `DIRECTORY_ED25519_PRIVATE_KEY` seed only in
+   `directory-publication`, and set its environment variable
+   `DIRECTORY_SIGNING_KEY_ID` to the reviewed key ID. Never use repository-level
+   copies of these credentials.
+5. Create `directory-publication-ledger` from the intended Pages seed tree and
+   record its exact 40-character head. For the one and only first publication,
+   manually dispatch with `initialize_ledger=true` and that exact head as
+   `ledger_seed_commit`. Normal push, schedule, and dispatch events cannot
+   initialize. The first signed commit persists `ledger-contract.json` and an
+   immutable sequence-1 tag; every later signed commit atomically creates its
+   own immutable sequence tag. Missing pointers, a non-descendant branch, or a
+   sequence below the highest tag then fails closed. Never delete or recreate
+   the initialization marker or publication tags.
+6. Protect `main`, require CODEOWNER review for the publication scripts,
    schemas, workflow, and this configuration, dismiss stale approvals, require
    conversation resolution and status checks, and forbid bypass/force push.
-5. Configure GitHub Pages for GitHub Actions. Grant the workflow its declared
+7. Configure GitHub Pages for GitHub Actions. Grant the workflow its declared
    permissions. After signing, the no-secret site job generates production from
    that exact versioned snapshot, commits the static result without modifying
    `registry/`, and the deployment job archives that exact resulting ledger
    commit. Disable the legacy `Pages` workflow for production when this workflow
    is enabled; it remains suitable for explicitly unsigned pull-request previews.
-6. Keep Actions restricted to immutable action SHAs and disallow workflows from
+8. Keep Actions restricted to immutable action SHAs and disallow workflows from
    approving pull requests. Do not add publication secrets to pull-request or
    `pull_request_target` workflows.
 
-The checked-in trusted-key set is intentionally empty until a production public
-key completes that review. Test private seeds and rotation keys exist only under
-`tests/fixtures/directory-publication/`.
+The checked-in trusted-key set contains the reviewed launch public key
+`uap-directory-2026-01`; its private seed is not in the repository. Test private
+seeds and rotation keys exist only under
+`tests/fixtures/directory-publication/`. Before launch, independently derive the
+public key from the environment seed and confirm it byte-for-byte against this
+entry.
+
+The App-token action is pinned to immutable commit
+`a8d616148505b5069dccd32f177bb87d7f39123b` (`v2.1.1`). Re-verify a proposed
+upgrade from a trusted terminal with `gh api` against the action's release tag
+and Git tag object before changing that SHA; do not obtain pins from rendered
+browser pages.
 
 ## Operation and recovery
 
@@ -86,9 +123,19 @@ never client eligibility. If Pages is stale or lost, redeploy the exact protecte
 branch commit. A Directory rollback is a newly reviewed, higher-sequence
 snapshot. Never rewrite, delete, or re-serve an older historical artifact.
 
-For key rotation, first release clients trusting both current and next public
-keys, then add the next key here and change `DIRECTORY_SIGNING_KEY_ID`. Remove
-the retired public key from client trust only after the documented overlap
-window. Keep historical public keys in this publisher ledger-trust file so each
-append can verify the complete contiguous snapshot history. No test key is
-permitted in this file.
+Key rotation has one concrete overlap/retirement gate:
+
+1. Add the next reviewed public key and release a stable CLI that embeds both
+   current and next keys. Do not switch the signer yet.
+2. Switch `DIRECTORY_SIGNING_KEY_ID` only after that dual-key CLI is at or below
+   every active release policy's `minimum_installer_version` and its bootstrap,
+   current-key, and next-key verification tests pass in release CI.
+3. Publish at least one next-key snapshot, then retain both keys in new clients
+   for at least one full 30-day maximum snapshot lifetime after the last
+   current-key snapshot expires. Retirement is allowed only when no unexpired
+   current-key snapshot can satisfy the supported client's floor.
+4. A later CLI may remove the retired key. Keep it in this publisher ledger
+   trust file permanently so the append process can verify contiguous history.
+
+No committee or separate key service is required, and no test key is permitted
+in this file.
