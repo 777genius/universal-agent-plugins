@@ -9,6 +9,10 @@ trees. Current stable-launch runtime/OAuth evidence is unavailable until the
 protected launch workflow succeeds against one exact signed production
 publication and the attested `agentplugins-v0.1.8` release.
 
+Current distribution, release sequence, tree digest, and manifest digest are
+generated from [`registry/directory.json`](../registry/directory.json) and are
+checked there rather than duplicated in this historical record.
+
 ## Package conformance
 
 - 26 root `plugin.json` documents pass the Agent Plugins 1.0.0 JSON Schema.
@@ -119,12 +123,11 @@ in `plugins/docker-hub/mcp.json`.
   [`agentplugins-hero-runtime-matrix-2026-08-08.json`](https://github.com/777genius/universal-agent-plugins/blob/75658d84ee84f973818d0e0c6b4619eb1e98b624/tests/e2e/results/agentplugins-hero-runtime-matrix-2026-08-08.json)
   at revision `75658d84ee84f973818d0e0c6b4619eb1e98b624`, SHA-256
   `0c8795a67d223424cb612ea25497982145533a6befb5f64f8f0c1e1192520e2e`.
-  The current Chrome DevTools bridge tree
-  (`sha256:3a98671d9e4052d0df4a326d04a2b028f187c19f881fcdad663d562d5fc83f33`)
-  and Cloudflare Docs bridge tree
-  (`sha256:0e63134f8a02ca8151939bea6bd67d029de482456e50ee8d432d9cc0047f68dd`)
-  are newer defaults and are pending fresh launch runtime evidence. Separate
-  lifecycle results remain valid only for the exact package trees they record.
+  This is historical evidence for that exact package revision only. It does not
+  identify or validate today's Directory defaults; consult
+  [`registry/directory.json`](../registry/directory.json) for current release
+  identity. Separate lifecycle results remain valid only for the exact package
+  trees they record.
 
 - Codex CLI 0.147.0 completed the release-gated public install on Linux: pinned
   `v0.1.1`, installed Context7 into a fresh `CODEX_HOME`, and called

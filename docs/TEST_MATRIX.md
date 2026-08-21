@@ -8,6 +8,10 @@ explicitly unavailable until the protected launch workflow completes against
 the exact signed production publication and attested `agentplugins-v0.1.8`
 release.
 
+Current distribution, release sequence, and digest identity are generated from
+[`registry/directory.json`](../registry/directory.json), not copied into this
+historical matrix.
+
 | Plugin | Schema | Installed | Tool called | OAuth | Clients |
 | --- | --- | --- | --- | --- | --- |
 | `agent-code-navigator` | Pass | Codex; Cursor local load; Kiro CLI resource | Packaged skill route passed | None | Codex; Cursor; Kiro |
@@ -71,12 +75,8 @@ binding. It does not prove ChatGPT Work UI activation or package-routed runtime.
 | [Interactive Codex Figma check](https://github.com/777genius/universal-agent-plugins/blob/2132333206f469fd4adb63beeefe8ddbd4991a62/tests/e2e/results/codex-figma-oauth-2026-08-09.json) (`2132333206f469fd4adb63beeefe8ddbd4991a62`, SHA-256 `854ccb0d1987e7cc978d81d38e95cabcede60c78bb3baffb924987e7b11f2b53`) | `figma 0.1.0` via `agentplugins 0.1.5` | Add, install/enable, and cleanup passed in isolated profiles | Read-only Figma MCP `whoami` passed | Figma OAuth passed in Codex only |
 | [ChatGPT desktop package check](https://github.com/777genius/universal-agent-plugins/blob/fa9d61e1fe49bf3d69f54e451f6320f27930143a/tests/e2e/results/chatgpt-cloudflare-docs-desktop-package-2026-08-10.json) (`fa9d61e1fe49bf3d69f54e451f6320f27930143a`, SHA-256 `85abcc90d50f358eb3d216d73b4dd33dbd6493d39d530070032ae6f50ced9990`) | Public marketplace at merge `d37b49d` | Official manager add, enabled state, cache, and app-server read passed | Not implied | No auth required; Codex backend app snapshot did not include the ChatGPT development binding |
 
-The current bridge-default trees for Chrome DevTools
-(`sha256:3a98671d9e4052d0df4a326d04a2b028f187c19f881fcdad663d562d5fc83f33`)
-and Cloudflare Docs
-(`sha256:0e63134f8a02ca8151939bea6bd67d029de482456e50ee8d432d9cc0047f68dd`)
-are pending new launch runtime evidence; the historical 15/15 row does not
-apply to those changed package digests.
+The historical 15/15 row applies only to its linked revision and catalog
+digest. It does not identify today's Directory defaults or package trees.
 
 The three `0.1.6` lifecycle/projection rows come from public run `31363316668` at
 main commit [`d3941c0`](https://github.com/777genius/universal-agent-plugins/commit/d3941c0ec097a44123eb9c40df940a3cda2a3406).

@@ -40,9 +40,15 @@ npx universal-agent-plugins info context7
 npx universal-agent-plugins doctor context7
 npx universal-agent-plugins update context7 --target cursor
 npx universal-agent-plugins repair context7 --target cursor
-npx universal-agent-plugins switch context7 --to upstash/context7
 npx universal-agent-plugins remove context7 --target cursor
 npx universal-agent-plugins update context7 --target codex,cursor
+```
+
+Switching source is deliberate. For example, move an existing Chrome DevTools
+installation to a qualified community alternative with:
+
+```bash
+npx universal-agent-plugins switch chrome-devtools --to 777genius/chrome-devtools
 ```
 
 `prepared`, `auth_pending`, and `manual_activation_required` are not reported as
@@ -64,6 +70,14 @@ npx universal-agent-plugins add \
 Directory membership is needed only for a reviewed short name such as `context7`;
 it is not required for installation. Review an external package's skills, MCP
 servers, hooks, permissions, and source before enabling it.
+
+Directory source labels are provenance, not endorsements: `upstream` is a
+complete package pinned in the upstream owner's repository; `community bridge`
+is a reproducible community package built from pinned upstream content plus a
+reviewed overlay; and `community` is independently community-authored or
+packaged. Full-SHA GitHub references and local paths are `direct source`
+installs that bypass Directory source selection. Community packages and bridges
+are not official vendor packages.
 
 Cloudflare Docs is currently the only Directory release with a verified ChatGPT
 app binding:

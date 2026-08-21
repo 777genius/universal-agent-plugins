@@ -7,10 +7,10 @@
 [![Agent Plugins 1.0](https://img.shields.io/badge/Agent%20Plugins-1.0.0-7257FF)](https://agent-plugins.org/specification)
 [![License](https://img.shields.io/badge/license-Apache--2.0-20A4C8)](LICENSE)
 
-**One CLI installs one Agent Plugins package into one or several explicitly
-selected supported clients.** It manages add, inspect, update, repair, source
-switching, and remove. A prepared package, manual activation, runtime check, and
-OAuth are reported as separate outcomes—never collapsed into “installed.”
+**One CLI can add, update, remove, repair, and deliberately switch an Agent
+Plugins 1.0 package across one or several explicitly selected supported
+clients.** A prepared package, manual activation, runtime check, and OAuth are
+reported as separate outcomes—never collapsed into “installed.”
 
 Pick from 26 ready-made abilities: search current documentation, navigate code,
 debug browsers, work with cloud tools, and more. Install one plugin and add
@@ -61,8 +61,14 @@ The same CLI manages the rest of the plugin lifecycle:
 ```bash
 npx universal-agent-plugins update context7 --target cursor
 npx universal-agent-plugins repair context7 --target cursor
-npx universal-agent-plugins switch context7 --to upstash/context7
 npx universal-agent-plugins remove context7 --target cursor
+```
+
+Switching source is deliberate. For example, an existing Chrome DevTools
+installation can move to a qualified community alternative:
+
+```bash
+npx universal-agent-plugins switch chrome-devtools --to 777genius/chrome-devtools
 ```
 
 Open a new chat or session in the client you selected and ask:
@@ -92,6 +98,15 @@ The package can use the portable root `plugin.json` layout or the official
 sources to a full commit SHA so every install is reproducible. Short names such
 as `context7` resolve through this repository's reviewed Directory; external
 packages do not need to be copied into it.
+
+Directory source labels describe provenance, not endorsement. **Upstream**
+means the complete package is pinned in its upstream owner's repository;
+**community bridge** means a community-built package reproducibly combines
+pinned upstream content with a reviewed overlay; and **community** means an
+independently community-authored or packaged distribution. A full-SHA GitHub
+reference or local path is a **direct source** that bypasses Directory source
+selection. Community and community-bridge packages are not official vendor
+packages.
 
 ## All plugins
 
@@ -126,17 +141,20 @@ client-specific.
 | <img src="assets/client-icons/vscode.svg" width="20" height="20" alt=""> VS Code | Shared Copilot plugin when its CLI is available | Automatic; otherwise the exact setting is shown |
 | <img src="assets/client-icons/kiro.svg" width="20" height="20" alt=""> Kiro | Native folder package | Follow the exact Power import hint |
 
-All 26 packages pass standard schema validation. At historical repository revision
-`d3c3155285d37aa555615cf4301e3ab5eb347a17` (catalog digest
-`sha256:207df0cd3932d305bbc265357d1a7f6b68ef314ff725629db6ebe27d4c403915`),
-five starter plugins passed 15/15 runtime checks across Codex, Cursor, and Kiro,
-including Notion OAuth in all three; Figma OAuth passed separately in Codex.
-The current Chrome DevTools and Cloudflare Docs bridge defaults have different
-tree digests and are pending fresh launch runtime evidence. Installation coverage is
-broader than runtime coverage, and the standard itself is not a universal
-marketplace. See the [test matrix](docs/TEST_MATRIX.md), [verification
-report](docs/VERIFICATION.md), and [compatibility guide](docs/COMPATIBILITY.md)
-for exact per-client evidence.
+All 26 packages pass standard schema validation; that is schema-only evidence.
+Historical evidence includes 15/15 runtime checks for five starter packages
+across Codex, Cursor, and Kiro, with Notion OAuth tested in those three clients;
+Figma OAuth was tested separately in Codex only. A materialized or installed
+package does not by itself prove activation, tool runtime, or OAuth. ChatGPT and
+Copilot claims are narrower and are not generalized from other clients.
+
+Current Directory identity comes from
+[`registry/directory.json`](registry/directory.json), not copied release IDs or
+digests in this launch overview. Installation coverage is broader than runtime
+coverage, and the standard itself is not a universal marketplace. See the
+[test matrix](docs/TEST_MATRIX.md), [verification report](docs/VERIFICATION.md),
+and [compatibility guide](docs/COMPATIBILITY.md) for the exact schema-only,
+materialized, runtime-tested, OAuth-tested, read-only, and not-proven boundaries.
 
 ## Safety
 

@@ -39,7 +39,9 @@ class ReadmeClientTableTests(unittest.TestCase):
         self.assertIn("do not need to be copied into it", readme)
         self.assertIn("Directory membership is needed only for a reviewed short name", quickstart)
         self.assertIn("add context7 --target codex,cursor,kiro", readme)
-        self.assertIn("switch context7 --to upstash/context7", readme)
+        self.assertIn(
+            "switch chrome-devtools --to 777genius/chrome-devtools", readme
+        )
         self.assertNotIn("--yes", readme)
 
     def test_every_supported_client_has_a_sourced_logo(self) -> None:
@@ -97,6 +99,7 @@ class ReadmeClientTableTests(unittest.TestCase):
 
     def test_chatgpt_claim_matches_recorded_evidence_boundary(self) -> None:
         readme = README_PATH.read_text()
+        normalized_readme = " ".join(readme.split())
         evidence = json.loads(CHATGPT_EVIDENCE_PATH.read_text())
         proved = set(evidence["scope"]["proved"])
         not_proved = set(evidence["scope"]["not_proved"])
@@ -118,8 +121,11 @@ class ReadmeClientTableTests(unittest.TestCase):
             }.issubset(not_proved)
         )
         self.assertIn("All 26 packages pass standard schema validation", readme)
-        self.assertIn("15/15 runtime checks across Codex, Cursor, and Kiro", readme)
-        self.assertIn("Installation coverage is\nbroader than runtime coverage", readme)
+        self.assertIn("15/15 runtime checks", normalized_readme)
+        self.assertIn(
+            "Installation coverage is broader than runtime coverage",
+            normalized_readme,
+        )
         self.assertIn("docs/TEST_MATRIX.md", readme)
         self.assertIn("docs/VERIFICATION.md", readme)
         self.assertNotIn(
