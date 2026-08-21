@@ -730,10 +730,117 @@ jobs:
       contents: read
       id-token: write
 
+  record_launch_approval:
+    name: Record immutable protected launch approval
+    needs: [sign, materialize_site, gate_exact_staged_publication, required_stable_launch_evidence]
+    if: ${{ always() && needs.sign.result == 'success' && needs.materialize_site.result == 'success' && needs.gate_exact_staged_publication.result == 'success' && needs.sign.outputs.sequence == '1' && needs.required_stable_launch_evidence.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: directory-publication
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.materialize_site.outputs.ledger_commit }}
+          path: approved-ledger
+          fetch-depth: 0
+          fetch-tags: true
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          path: trusted-source
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Validate exact launch lineage and fresh protected heads
+        env:
+          EXPECTED_LEDGER_COMMIT: ${{ needs.materialize_site.outputs.ledger_commit }}
+          EXPECTED_PUBLICATION_ID: ${{ needs.sign.outputs.publication_id }}
+          EXPECTED_SNAPSHOT_DIGEST: ${{ needs.sign.outputs.snapshot_digest }}
+          EXPECTED_SOURCE_COMMIT: ${{ needs.sign.outputs.marker_commit }}
+        run: |
+          test "$(git -C approved-ledger rev-parse HEAD)" = "${EXPECTED_LEDGER_COMMIT}"
+          observed_ledger="$(git -C approved-ledger ls-remote --refs origin "refs/heads/${LEDGER_BRANCH}" | awk '{ print $1 }')"
+          test "${observed_ledger}" = "${EXPECTED_LEDGER_COMMIT}"
+          git -C trusted-source fetch --no-tags --force origin refs/heads/main:refs/remotes/origin/main
+          test "$(git -C trusted-source rev-parse refs/remotes/origin/main)" = "${EXPECTED_SOURCE_COMMIT}"
+          python3 trusted-source/registry/publication/launch_approval.py \
+            --repo approved-ledger \
+            --contract trusted-source/registry/publication/launch-approved-marker.json \
+            --repository "${GITHUB_REPOSITORY}" \
+            --environment "directory-publication" \
+            --current-ledger-commit "${EXPECTED_LEDGER_COMMIT}" \
+            --marker-commit "${EXPECTED_LEDGER_COMMIT}" \
+            --expected-publication-id "${EXPECTED_PUBLICATION_ID}" \
+            --expected-snapshot-digest "${EXPECTED_SNAPSHOT_DIGEST}" \
+            --expected-source-commit "${EXPECTED_SOURCE_COMMIT}"
+      - name: Acquire dedicated publisher token
+        id: publisher
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.DIRECTORY_PUBLISHER_APP_ID }}
+          private-key: ${{ secrets.DIRECTORY_PUBLISHER_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+      - name: Create marker once or accept exact idempotent readback
+        env:
+          EXPECTED_LEDGER_COMMIT: ${{ needs.materialize_site.outputs.ledger_commit }}
+          PUBLISHER_TOKEN: ${{ steps.publisher.outputs.token }}
+        run: |
+          marker_ref="$(python3 -c 'import json; print(json.load(open("trusted-source/registry/publication/launch-approved-marker.json"))["marker_ref"])')"
+          observed="$(git -C approved-ledger ls-remote --refs origin "${marker_ref}" | awk '{ print $1 }')"
+          if test -z "${observed}"; then
+            auth_header="AUTHORIZATION: basic $(printf 'x-access-token:%s' "${PUBLISHER_TOKEN}" | base64 -w0)"
+            GIT_CONFIG_COUNT=1 \
+            GIT_CONFIG_KEY_0=http.https://github.com/.extraheader \
+            GIT_CONFIG_VALUE_0="${auth_header}" \
+            git -C approved-ledger -c core.hooksPath=/dev/null push --atomic \
+              --force-with-lease="${marker_ref}:" origin \
+              "${EXPECTED_LEDGER_COMMIT}:${marker_ref}" || true
+            observed="$(git -C approved-ledger ls-remote --refs origin "${marker_ref}" | awk '{ print $1 }')"
+          fi
+          test "${observed}" = "${EXPECTED_LEDGER_COMMIT}"
+
+  gate_launch_approval:
+    name: Require protected launch approval for this ledger lineage
+    needs: [sign, materialize_site, gate_exact_staged_publication, required_stable_launch_evidence, record_launch_approval]
+    if: ${{ always() && needs.sign.result == 'success' && needs.materialize_site.result == 'success' && needs.gate_exact_staged_publication.result == 'success' && ((needs.sign.outputs.sequence == '1' && needs.required_stable_launch_evidence.result == 'success' && needs.record_launch_approval.result == 'success') || (needs.sign.outputs.sequence > 1 && needs.required_stable_launch_evidence.result == 'skipped' && needs.record_launch_approval.result == 'skipped')) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.materialize_site.outputs.ledger_commit }}
+          path: current-ledger
+          fetch-depth: 0
+          fetch-tags: true
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          path: trusted-source
+          persist-credentials: false
+      - name: Reject missing, stale, replayed, or cross-lineage marker
+        env:
+          EXPECTED_LEDGER_COMMIT: ${{ needs.materialize_site.outputs.ledger_commit }}
+        run: |
+          marker_ref="$(python3 -c 'import json; print(json.load(open("trusted-source/registry/publication/launch-approved-marker.json"))["marker_ref"])')"
+          git -C current-ledger fetch --no-tags --force origin "${marker_ref}:${marker_ref}"
+          test "$(git -C current-ledger rev-parse HEAD)" = "${EXPECTED_LEDGER_COMMIT}"
+          python3 trusted-source/registry/publication/launch_approval.py \
+            --repo current-ledger \
+            --contract trusted-source/registry/publication/launch-approved-marker.json \
+            --repository "${GITHUB_REPOSITORY}" \
+            --environment "directory-publication" \
+            --current-ledger-commit "${EXPECTED_LEDGER_COMMIT}"
+
   deploy:
     name: Promote exact gated Pages tree
-    needs: [sign, materialize_site, gate_exact_staged_publication, required_stable_launch_evidence]
-    if: ${{ always() && needs.sign.result == 'success' && needs.materialize_site.result == 'success' && needs.gate_exact_staged_publication.result == 'success' && ((needs.sign.outputs.sequence == '1' && needs.required_stable_launch_evidence.result == 'success') || (needs.sign.outputs.sequence > 1 && needs.required_stable_launch_evidence.result == 'skipped')) }}
+    needs: [sign, materialize_site, gate_exact_staged_publication, gate_launch_approval]
+    if: ${{ always() && needs.sign.result == 'success' && needs.materialize_site.result == 'success' && needs.gate_exact_staged_publication.result == 'success' && needs.gate_launch_approval.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     environment:

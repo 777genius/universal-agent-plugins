@@ -898,7 +898,7 @@ class PublicationWorkflowTests(unittest.TestCase):
         self.assertEqual(gate_step["env"]["EXPECTED_SIGNED_LEDGER_COMMIT"], "${{ needs.sign.outputs.ledger_commit }}")
         self.assertIn("raw.githubusercontent.com", gate_step["run"])
         self.assertIn('cmp --silent "${feed}/${relative}"', gate_step["run"])
-        self.assertIn("required_stable_launch_evidence", workflow["jobs"]["deploy"]["needs"])
+        self.assertIn("gate_launch_approval", workflow["jobs"]["deploy"]["needs"])
         self.assertIn("gate_exact_staged_publication", workflow["jobs"]["deploy"]["needs"])
         self.assertIn("sign", workflow["jobs"]["deploy"]["needs"])
         self.assertEqual(
@@ -907,11 +907,13 @@ class PublicationWorkflowTests(unittest.TestCase):
         )
         launch_gate = workflow["jobs"]["required_stable_launch_evidence"]
         self.assertIn("needs.sign.outputs.sequence == '1'", launch_gate["if"])
+        marker_gate = workflow["jobs"]["gate_launch_approval"]
+        self.assertIn("needs.sign.outputs.sequence > 1", marker_gate["if"])
+        self.assertIn("needs.required_stable_launch_evidence.result == 'success'", marker_gate["if"])
+        self.assertIn("needs.required_stable_launch_evidence.result == 'skipped'", marker_gate["if"])
         deploy_if = workflow["jobs"]["deploy"]["if"]
         self.assertIn("always()", deploy_if)
-        self.assertIn("needs.sign.outputs.sequence > 1", deploy_if)
-        self.assertIn("needs.required_stable_launch_evidence.result == 'success'", deploy_if)
-        self.assertIn("needs.required_stable_launch_evidence.result == 'skipped'", deploy_if)
+        self.assertIn("needs.gate_launch_approval.result == 'success'", deploy_if)
         production_observation = workflow["jobs"]["observe_production_latest"]
         self.assertIn("deploy", production_observation["needs"])
         self.assertEqual(production_observation["permissions"], {"contents": "read"})

@@ -211,7 +211,7 @@ class WorkflowContractTests(unittest.TestCase):
         deploy_needs = workflow["jobs"]["deploy"]["needs"]
         self.assertIn("sign", deploy_needs)
         self.assertIn("gate_exact_staged_publication", deploy_needs)
-        self.assertIn("required_stable_launch_evidence", deploy_needs)
+        self.assertIn("gate_launch_approval", deploy_needs)
         production = workflow["jobs"]["observe_production_latest"]
         self.assertIn("deploy", production["needs"])
         self.assertNotIn("observe_production_latest", required["needs"])
@@ -221,20 +221,27 @@ class WorkflowContractTests(unittest.TestCase):
     def test_sequence_one_cannot_promote_without_launch_ceremony(self) -> None:
         workflow = load(DIRECTORY_PUBLICATION)
         launch_if = workflow["jobs"]["required_stable_launch_evidence"]["if"]
+        record_if = workflow["jobs"]["record_launch_approval"]["if"]
+        marker_if = workflow["jobs"]["gate_launch_approval"]["if"]
         deploy_if = workflow["jobs"]["deploy"]["if"]
         self.assertIn("needs.sign.outputs.sequence == '1'", launch_if)
-        self.assertIn("needs.sign.outputs.sequence == '1'", deploy_if)
-        self.assertIn("needs.required_stable_launch_evidence.result == 'success'", deploy_if)
-        self.assertNotIn("needs.required_stable_launch_evidence.result == 'skipped' && needs.sign.outputs.sequence == '1'", deploy_if)
+        self.assertIn("needs.sign.outputs.sequence == '1'", record_if)
+        self.assertIn("needs.required_stable_launch_evidence.result == 'success'", record_if)
+        self.assertIn("needs.sign.outputs.sequence == '1'", marker_if)
+        self.assertIn("needs.record_launch_approval.result == 'success'", marker_if)
+        self.assertIn("needs.gate_launch_approval.result == 'success'", deploy_if)
 
     def test_normal_refresh_skips_launch_but_keeps_exact_publication_gates(self) -> None:
         workflow = load(DIRECTORY_PUBLICATION)
         launch_if = workflow["jobs"]["required_stable_launch_evidence"]["if"]
+        marker_if = workflow["jobs"]["gate_launch_approval"]["if"]
         deploy_if = workflow["jobs"]["deploy"]["if"]
         self.assertNotIn("needs.sign.outputs.sequence > 1", launch_if)
+        self.assertIn("needs.sign.outputs.sequence > 1", marker_if)
+        self.assertIn("needs.required_stable_launch_evidence.result == 'skipped'", marker_if)
+        self.assertIn("needs.record_launch_approval.result == 'skipped'", marker_if)
         self.assertIn("always()", deploy_if)
-        self.assertIn("needs.sign.outputs.sequence > 1", deploy_if)
-        self.assertIn("needs.required_stable_launch_evidence.result == 'skipped'", deploy_if)
+        self.assertIn("needs.gate_launch_approval.result == 'success'", deploy_if)
         for required_result in (
             "needs.sign.result == 'success'",
             "needs.materialize_site.result == 'success'",
@@ -247,10 +254,9 @@ class WorkflowContractTests(unittest.TestCase):
         deploy = workflow["jobs"]["deploy"]
         self.assertEqual(
             set(deploy["needs"]),
-            {"sign", "materialize_site", "gate_exact_staged_publication", "required_stable_launch_evidence"},
+            {"sign", "materialize_site", "gate_exact_staged_publication", "gate_launch_approval"},
         )
-        self.assertIn("needs.sign.outputs.sequence > 1", deploy["if"])
-        self.assertIn("needs.required_stable_launch_evidence.result == 'skipped'", deploy["if"])
+        self.assertIn("needs.gate_launch_approval.result == 'success'", deploy["if"])
         self.assertIn("gate_exact_staged_publication", deploy["needs"])
 
     def test_untrusted_pull_request_bridge_reproduction_remains_secretless(self) -> None:

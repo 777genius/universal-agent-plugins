@@ -68,7 +68,7 @@ Before enabling `.github/workflows/directory-publication.yml`:
    Administration, Workflows, Environments, or other permission. Its installation
    token is the only credential allowed to update the ledger branch or create
    publication-floor tags; the workflow's generic `GITHUB_TOKEN` stays read-only.
-3. Create six active repository rulesets. The ledger branch update gate targets only
+3. Create eight active repository rulesets. The ledger branch update gate targets only
    `directory-publication-ledger`, enables **Restrict updates**, and names only
    the installed `uap-directory-publisher` App as an always-allowed bypass actor.
    A second branch immutability guard targets the same branch, blocks deletion
@@ -80,7 +80,14 @@ Before enabling `.github/workflows/directory-publication.yml`:
    Layering the no-bypass guards means even the publisher cannot reset the branch
    or alter a floor tag. Do not add repository administrators, maintainers,
    teams, users, deploy keys, GitHub Actions, or the repository's generic Actions
-   identity as a bypass actor; do not enable administrator bypass.
+   identity as a bypass actor; do not enable administrator bypass. The
+   launch-approval tag creation gate targets only
+   `directory-publication-schema-1-launch-approved`, enables **Restrict
+   creations**, and names only the installed App as an always-allowed bypass
+   actor. Its paired immutability guard enables **Restrict updates** and
+   **Restrict deletions** with **no bypass actors**. This fixed tag is absent
+   before launch and may be created only by the post-ceremony job; never create,
+   move, or delete it manually.
    In addition, split `main` protection into two rulesets before enabling
    publication. The `main` update/review gate must retain required review and
    required status checks for everyone except the installed dedicated
@@ -109,7 +116,8 @@ Before enabling `.github/workflows/directory-publication.yml`:
    immutable sequence-1 tag; every later signed commit atomically creates its
    own immutable sequence tag. Missing pointers, a non-descendant branch, or a
    sequence below the highest tag then fails closed. Never delete or recreate
-   the initialization marker or publication tags.
+   the initialization marker or publication tags. Initialization alone does
+   not approve launch and must not create the launch-approval tag.
 6. Require CODEOWNER review for the publication scripts, schemas, workflow, and
    this configuration; dismiss stale approvals and require conversation
    resolution and status checks. Configure the split `main` rulesets from step
@@ -173,16 +181,34 @@ Pushing `M` is staging, not production promotion. The gate reads `latest.json`
 and both versioned artifacts from the immutable raw-commit origin for `M` and
 requires the exact run publication ID, sequence, snapshot digest, `Q` tag, and
 ledger identity. Sequence 1 additionally requires the complete stable-launch
-runtime, OAuth, and external-PR ceremony before Pages may promote `M`; there is
-no skipped-job path that can promote sequence 1. For every sequence greater
-than 1, including weekly expiry refreshes, evidence-only snapshots,
-suspensions, and emergency revocations, the launch-only job is intentionally
-skipped while the exact signed-publication and staged-site gates remain
-mandatory. The deployment condition explicitly accepts that skip only for a
-higher sequence and only after signing, materialization, and exact staging all
-succeed. A failed deployment or gate therefore leaves the prior GitHub Pages
-production pointer in place and is retried from the already signed `Q` and
-authenticated `M`; it never allocates a new sequence.
+runtime, OAuth, and external-PR ceremony before Pages may promote `M`. Only
+after that ceremony succeeds, a job in the protected `directory-publication`
+environment creates the absent, immutable
+`directory-publication-schema-1-launch-approved` tag at that exact `M`. It
+first reacquires protected `main` and the ledger branch, requires both exact
+ceremony heads, and validates the state contract in
+`launch-approved-marker.json`. An exact rerun accepts only the existing tag at
+the same commit.
+
+Every deployment, including sequence 1, separately reacquires and validates
+that protected marker. Its target must be the single-parent materialization
+child of the immutable sequence-1 tag, must leave signed `registry/` bytes
+unchanged, and must be an ancestor of the current materialized ledger head. The
+repository identity, schema, bootstrap seed contract, sequence-tag namespace,
+launch signing key, snapshot paths, and initial sequence must match the
+code-owned marker contract. Thus a failed sequence-1 ceremony followed by any
+number of newly allocated sequences remains blocked: a higher sequence may
+skip the launch-only runtime, but it cannot skip the marker gate. Replayed,
+moved, rollback, cross-repository, unrelated-lineage, and stale-head markers
+fail closed, and pull-request artifacts are not consumed by either marker job.
+
+After approval, weekly expiry refreshes, evidence-only snapshots, suspensions,
+and emergency revocations remain independent of the launch-only runtime. They
+still require signing, materialization, exact staging, and a marker whose
+approved lineage is an ancestor of the current CAS/ledger head. A failed
+deployment or gate leaves the prior GitHub Pages production pointer in place
+and is retried from the already signed `Q` and authenticated `M`; it never
+allocates a new sequence.
 
 The publisher validates the latest ledger signature even after client expiry.
 Expired data can supply only the sequence and immutable provenance for recovery,

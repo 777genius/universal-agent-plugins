@@ -1,0 +1,11 @@
+{
+  "approval_environment": "directory-publication",
+  "contract_version": 1,
+  "launch_sequence": 1,
+  "launch_signing_key_id": "uap-directory-2026-01",
+  "ledger_branch": "directory-publication-ledger",
+  "marker_ref": "refs/tags/directory-publication-schema-1-launch-approved",
+  "repository": "777genius/universal-agent-plugins",
+  "schema_version": 1,
+  "sequence_tag_prefix": "directory-publication-schema-1-sequence-"
+}
