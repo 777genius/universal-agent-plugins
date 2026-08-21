@@ -638,6 +638,61 @@ print(json.dumps(value))
         self.assertEqual(rows["fork_submission"]["outcome"], "passed")
         self.assertEqual(rows["fork_submission_rejected"]["outcome"], "passed")
 
+    def test_direct_external_journey_requires_add_info_and_remove(self) -> None:
+        harness = self.fixture_harness()
+        harness.cli_version = "0.1.8"
+        digest = e2e.package_digest(e2e.EXTERNAL_PACKAGE)
+        command_results = [
+            ("passed", {"package_digest": digest, "client_version": "cursor-test-v1", "mutated": True, "_launch_command_trace": {"argv": ["add"]}}, "added"),
+            ("passed", {"receipt_reconciled": True, "native_discovery_reconciled": True, "_launch_command_trace": {"argv": ["info"]}}, "reconciled"),
+            ("passed", {"mutated": True, "_launch_command_trace": {"argv": ["remove"]}}, "removed"),
+        ]
+        accepted = {"fork_created": True, "branch_submission": True, "submission_validated": True, "publication_performed": False, "pr_created": False, "network_performed": False}
+        rejected = {"fork_created": True, "submission_rejected": True, "no_side_effect": True, "no_candidate": True}
+        with mock.patch.object(harness, "command", side_effect=command_results) as command, mock.patch.object(
+            harness, "driven_scenario", side_effect=[("passed", accepted, "accepted"), ("passed", rejected, "rejected")],
+        ):
+            harness.journeys()
+        row = next(item for item in harness.rows if item["scenario"] == "direct_external_package")
+        self.assertEqual(row["outcome"], "passed")
+        self.assertEqual([call.args[0][0] for call in command.call_args_list], ["add", "info", "remove"])
+        self.assertEqual(row["details"]["operations"]["info"]["outcome"], "passed")
+        self.assertEqual(len(row["details"]["command_traces"]), 3)
+
+    def test_direct_external_journey_fails_when_info_or_cleanup_is_not_proved(self) -> None:
+        digest = e2e.package_digest(e2e.EXTERNAL_PACKAGE)
+        accepted = {"fork_created": True, "branch_submission": True, "submission_validated": True, "publication_performed": False, "pr_created": False, "network_performed": False}
+        rejected = {"fork_created": True, "submission_rejected": True, "no_side_effect": True, "no_candidate": True}
+        cases = (
+            (
+                "missing reconciliation",
+                [
+                    ("passed", {"package_digest": digest, "client_version": "cursor-test-v1", "mutated": True}, "added"),
+                    ("passed", {"receipt_reconciled": True, "native_discovery_reconciled": False}, "partial"),
+                    ("passed", {"mutated": True}, "removed"),
+                ],
+            ),
+            (
+                "failed cleanup",
+                [
+                    ("passed", {"package_digest": digest, "client_version": "cursor-test-v1", "mutated": True}, "added"),
+                    ("passed", {"receipt_reconciled": True, "native_discovery_reconciled": True}, "reconciled"),
+                    ("failed", None, "remove failed"),
+                ],
+            ),
+        )
+        for label, command_results in cases:
+            with self.subTest(label=label):
+                harness = self.fixture_harness()
+                harness.cli_version = "0.1.8"
+                with mock.patch.object(harness, "command", side_effect=command_results) as command, mock.patch.object(
+                    harness, "driven_scenario", side_effect=[("passed", accepted, "accepted"), ("passed", rejected, "rejected")],
+                ):
+                    harness.journeys()
+                row = next(item for item in harness.rows if item["scenario"] == "direct_external_package")
+                self.assertEqual(row["outcome"], "failed")
+                self.assertEqual([call.args[0][0] for call in command.call_args_list], ["add", "info", "remove"])
+
     def test_missing_runtime_proof_requires_zero_mutation_and_no_install(self) -> None:
         proof = {"zero_mutation": True, "copy_ready_requirement": True, "dependency_installed": False}
         self.assertTrue(e2e.LaunchHarness.driver_proof_valid("missing_runtime_zero_mutation", proof))

@@ -1798,12 +1798,39 @@ class LaunchHarness:
         sandbox = self.fresh_sandbox("direct-external")
         disposable_package = sandbox / "workspace" / "external-package"
         shutil.copytree(EXTERNAL_PACKAGE, disposable_package)
-        outcome, value, reason = self.command(["add", "./external-package", "--target", "cursor", "--format", "json"], sandbox, ("cursor",))
-        client_version = find_value(value, {"client_version"}) if value else None
-        observed_digest = find_value(value, {"package_digest", "tree_digest"}) if value else None
-        if outcome == "passed" and (observed_digest != digest or not isinstance(client_version, str) or not client_version):
-            outcome, reason = "failed", "direct-source result omitted or disagreed with exact digest/client version"
-        self.add("direct_external_package", "e2e-external-package", "cursor", "materialization", outcome, reason or "unknown result", tuple_value=self.tuple(product_id="e2e-external-package", digest=digest, manifest_digest=sha256_file(EXTERNAL_PACKAGE / "plugin.json"), distribution_id="direct/e2e-external-package", distribution_kind="direct", release_sequence=1, package_version="1.0.0", client_version=client_version if isinstance(client_version, str) else None, dependency="direct-local-source"), details={"directory_submission_used": False, "source_locator": "fixture://external-package"})
+        add_outcome, add_value, add_reason = self.command(["add", "./external-package", "--target", "cursor", "--format", "json"], sandbox, ("cursor",))
+        client_version = find_value(add_value, {"client_version"}) if add_value else None
+        observed_digest = find_value(add_value, {"package_digest", "tree_digest"}) if add_value else None
+        add_identity_valid = observed_digest == digest and isinstance(client_version, str) and bool(client_version)
+        if add_outcome == "passed" and not add_identity_valid:
+            add_outcome, add_reason = "failed", "direct-source result omitted or disagreed with exact digest/client version"
+
+        info_outcome, info_value, info_reason = "inconclusive", None, "add did not commit; info was not run"
+        remove_outcome, remove_value, remove_reason = "inconclusive", None, "add did not commit; remove was not run"
+        if add_value is not None and find_value(add_value, {"mutated"}) is True:
+            info_outcome, info_value, info_reason = self.command(["info", "e2e-external-package", "--target", "cursor", "--format", "json"], sandbox, ("cursor",))
+            if info_outcome == "passed" and not self.info_reconciled(info_value):
+                info_outcome, info_reason = "failed", "direct-source info omitted receipt or native discovery reconciliation"
+            # Cleanup is mandatory after a committed add, including when identity or info validation fails.
+            remove_outcome, remove_value, remove_reason = self.command(["remove", "e2e-external-package", "--target", "cursor", "--format", "json"], sandbox, ("cursor",))
+
+        operations = {
+            "add": {"outcome": add_outcome, "reason": add_reason},
+            "info": {"outcome": info_outcome, "reason": info_reason},
+            "remove": {"outcome": remove_outcome, "reason": remove_reason},
+        }
+        traces = [
+            value["_launch_command_trace"]
+            for value in (add_value, info_value, remove_value)
+            if isinstance(value, dict) and isinstance(value.get("_launch_command_trace"), dict)
+        ]
+        lifecycle_outcomes = (add_outcome, info_outcome, remove_outcome)
+        if lifecycle_outcomes == ("passed", "passed", "passed"):
+            outcome, reason = "passed", "direct-source add, info reconciliation, and remove completed"
+        else:
+            outcome = "failed" if "failed" in lifecycle_outcomes else "inconclusive"
+            reason = next((str(item["reason"]) for item in operations.values() if item["outcome"] != "passed"), "direct-source lifecycle did not complete")
+        self.add("direct_external_package", "e2e-external-package", "cursor", "materialization", outcome, reason, tuple_value=self.tuple(product_id="e2e-external-package", digest=digest, manifest_digest=sha256_file(EXTERNAL_PACKAGE / "plugin.json"), distribution_id="direct/e2e-external-package", distribution_kind="direct", release_sequence=1, package_version="1.0.0", client_version=client_version if isinstance(client_version, str) else None, dependency="direct-local-source"), details={"directory_submission_used": False, "source_locator": "fixture://external-package", "operations": operations, "command_traces": traces})
         fork_outcome, fork_value, fork_reason = self.driven_scenario("fork_submission")
         if fork_outcome == "passed" and not (
             fork_value
