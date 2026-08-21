@@ -18,6 +18,35 @@ assert SPEC and SPEC.loader
 registry = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(registry)
 
+CANONICAL_PRODUCT_IDS = {
+    "agent-code-navigator",
+    "atlassian",
+    "chrome-devtools",
+    "cloudflare",
+    "cloudflare-bindings",
+    "cloudflare-docs",
+    "cloudflare-observability",
+    "cloudflare-radar",
+    "context7",
+    "docker-hub",
+    "figma",
+    "firebase",
+    "github",
+    "gitlab",
+    "greptile",
+    "heroku",
+    "hubspot-crm",
+    "hubspot-developer",
+    "linear",
+    "neon",
+    "notion",
+    "sentry",
+    "statsig",
+    "stripe",
+    "supabase",
+    "vercel",
+}
+
 
 class FakeResponse:
     def __init__(self, body: bytes, url: str, *, status: int = 200, length: str | None = None):
@@ -536,24 +565,84 @@ class DirectoryDomainTests(unittest.TestCase):
     def fixture(self):
         return json.loads((Path(__file__).parent / "fixtures" / "directory" / "domain-source.json").read_text())
 
-    def test_26_products_include_the_first_bridge_cohort_and_context7_alternative(self) -> None:
+    def external_product_source(self):
+        source = copy.deepcopy(self.source())
+        product = copy.deepcopy(source["products"][0])
+        product.update({
+            "id": "zz-community-product",
+            "display_name": "Community Product",
+            "description": "A valid external community product used only by this in-memory regression fixture.",
+            "manifest_name": "zz-community-product",
+            "aliases": ["zz-community-product"],
+            "reserved_aliases": ["zz-community-product"],
+            "default_distribution": "zz-community/zz-community-product",
+            "distributions": ["zz-community/zz-community-product"],
+        })
+        distribution = copy.deepcopy(source["distributions"][0])
+        distribution.update({
+            "id": "zz-community/zz-community-product",
+            "product_id": "zz-community-product",
+            "packager": "zz-community",
+        })
+        distribution["releases"][0].update({
+            "manifest_name": "zz-community-product",
+            "package_source": {
+                "repository": "zz-community/zz-community-product",
+                "revision": "a" * 40,
+                "path": "packages/zz-community-product",
+            },
+        })
+        source["products"].append(product)
+        source["distributions"].append(distribution)
+        return source
+
+    def assert_canonical_products_present_once(self, source) -> None:
+        product_ids = [item["id"] for item in source["products"]]
+        self.assertEqual(
+            {product_id: product_ids.count(product_id) for product_id in CANONICAL_PRODUCT_IDS},
+            dict.fromkeys(CANONICAL_PRODUCT_IDS, 1),
+        )
+
+    def assert_one_card_per_product(self, source) -> None:
+        source_ids = [item["id"] for item in source["products"]]
+        preview = registry.directory_preview(source)
+        search = registry.directory_search(source)
+        preview_ids = [item["id"] for item in preview["products"]]
+        search_ids = [item["product_id"] for item in search["entries"]]
+        self.assertEqual(preview["product_count"], len(source_ids))
+        self.assertEqual(preview_ids, source_ids)
+        self.assertEqual(search_ids, source_ids)
+        self.assertEqual(len(set(preview_ids)), len(source_ids))
+        self.assertEqual(len(set(search_ids)), len(source_ids))
+
+    def test_canonical_products_include_the_first_bridge_cohort_and_context7_alternative(self) -> None:
         source = self.source()
         registry.validate_directory(source)
-        self.assertEqual(len(source["products"]), 26)
-        self.assertEqual(len(source["distributions"]), 30)
-        self.assertEqual({item["id"] for item in source["products"]}, {path.name for path in registry.ROOT.joinpath("plugins").iterdir() if path.is_dir()})
+        self.assert_canonical_products_present_once(source)
+        self.assertEqual(CANONICAL_PRODUCT_IDS, {path.name for path in registry.ROOT.joinpath("plugins").iterdir() if path.is_dir()})
         alternatives = {
             "chrome-devtools": ["777genius/chrome-devtools", "777genius/chrome-devtools-bridge"],
             "cloudflare-docs": ["777genius/cloudflare-docs", "777genius/cloudflare-docs-bridge"],
             "context7": ["777genius/context7", "upstash/context7"],
             "github": ["777genius/github", "777genius/github-bridge"],
         }
-        for product in source["products"]:
+        products = {item["id"]: item for item in source["products"]}
+        expected_distribution_ids = set()
+        for product_id in CANONICAL_PRODUCT_IDS:
+            product = products[product_id]
             self.assertEqual(product["aliases"], [product["id"]])
             self.assertEqual(product["reserved_aliases"], [product["id"]])
             expected = alternatives.get(product["id"], [f"777genius/{product['id']}"])
             self.assertEqual(product["distributions"], expected)
+            expected_distribution_ids.update(expected)
+        distribution_ids = [item["id"] for item in source["distributions"]]
+        self.assertEqual(
+            {distribution_id: distribution_ids.count(distribution_id) for distribution_id in expected_distribution_ids},
+            dict.fromkeys(expected_distribution_ids, 1),
+        )
         for distribution in source["distributions"]:
+            if distribution["id"] not in expected_distribution_ids:
+                continue
             self.assertEqual(distribution["status"], "active")
             self.assertEqual([item["sequence"] for item in distribution["releases"]], [1])
             self.assertEqual(
@@ -810,12 +899,30 @@ class DirectoryDomainTests(unittest.TestCase):
         self.assertEqual(preview, registry.REVIEW_PREVIEW.read_bytes())
         self.assertEqual(search, registry.REVIEW_SEARCH.read_bytes())
         document = json.loads(preview)
-        self.assertEqual(document["product_count"], 26)
-        self.assertEqual(len(document["products"]), 26)
-        self.assertEqual(len({item["id"] for item in document["products"]}), 26)
+        self.assert_one_card_per_product(source)
         self.assertNotIn("snapshot_sequence", document)
         self.assertNotIn("expires_at", document)
-        self.assertEqual(len(json.loads(search)["entries"]), 26)
+
+    def test_valid_external_product_preserves_count_and_unique_card_contract(self) -> None:
+        committed_source = self.source()
+        source = self.external_product_source()
+        self.assertEqual(len(source["products"]), len(committed_source["products"]) + 1)
+        self.assertEqual(len(source["distributions"]), len(committed_source["distributions"]) + 1)
+        registry.validate_directory(source)
+        self.assert_canonical_products_present_once(source)
+        self.assert_one_card_per_product(source)
+
+    def test_removing_or_duplicating_a_canonical_product_breaks_the_contract(self) -> None:
+        for mutation in ("remove", "duplicate"):
+            with self.subTest(mutation=mutation):
+                source = copy.deepcopy(self.source())
+                canonical = next(item for item in source["products"] if item["id"] == "context7")
+                if mutation == "remove":
+                    source["products"].remove(canonical)
+                else:
+                    source["products"].append(copy.deepcopy(canonical))
+                with self.assertRaises(AssertionError):
+                    self.assert_canonical_products_present_once(source)
 
     def test_direct_sources_are_recognized_without_directory_resolution(self) -> None:
         sha = "a" * 40
