@@ -9,4 +9,15 @@
 /scripts/*directory_publication.py @777genius
 /schemas/directory-*.schema.json @777genius
 /.github/workflows/directory-publication.yml @777genius
+/.github/workflows/validate.yml @777genius
 /registry/publication/ @777genius
+/registry/directory.json @777genius
+/plugins/ @777genius
+/bridges/ @777genius
+/site/ @777genius
+/scripts/build-bridges @777genius
+/scripts/build_bridges.py @777genius
+/scripts/build_registry.py @777genius
+/scripts/validate_catalog.py @777genius
+/tests/test_directory_publication.py @777genius
+/tests/test_workflow_contracts.py @777genius

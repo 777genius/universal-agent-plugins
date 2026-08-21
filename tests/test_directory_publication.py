@@ -553,15 +553,106 @@ class PublicationWorkflowTests(unittest.TestCase):
         self.assertNotIn("plugins/", signer_commands)
         self.assertIn("for attempt in 1 2 3", signer_commands)
         self.assertIn("git diff --name-status", signer_commands)
+        build_job = workflow["jobs"]["build_site"]
+        build_commands = "\n".join(step.get("run", "") for step in build_job["steps"] if isinstance(step, dict))
+        self.assertEqual(build_job["permissions"], {"contents": "read"})
+        self.assertNotIn("secrets.", json.dumps(build_job))
+        self.assertIn("pnpm generate", build_commands)
+        self.assertIn("pnpm check:generated", build_commands)
+        self.assertIn('rm -rf "${GITHUB_WORKSPACE}/ledger"', build_commands)
+        self.assertIn('test ! -e "../../ledger"', build_commands)
+        self.assertIn("site.files.sha256", build_commands)
+        self.assertIn("site.tar.sha256", build_commands)
+        self.assertIn("test \"${total_bytes}\" -le 104857600", build_commands)
+        self.assertIn('test "${snapshot_digest}" = "${EXPECTED_SNAPSHOT_DIGEST}"', build_commands)
+        self.assertIn('rm -rf "${RUNNER_TEMP}/site-artifact"', build_commands)
         site_job = workflow["jobs"]["materialize_site"]
         site_commands = "\n".join(step.get("run", "") for step in site_job["steps"] if isinstance(step, dict))
-        self.assertIn("UAP_SIGNED_SNAPSHOT_PATH", site_commands)
-        self.assertIn("git -C ledger diff --exit-code -- registry", site_commands)
+        self.assertEqual(site_job["permissions"], {"actions": "read", "contents": "write"})
+        self.assertEqual(
+            {
+                step["uses"]
+                for step in site_job["steps"]
+                if isinstance(step, dict) and "uses" in step
+            },
+            {"actions/download-artifact@b14cf4c92620c250e1c0745ffefa574f1c4531a9"},
+        )
+        step_names = [step.get("name", "") for step in site_job["steps"] if isinstance(step, dict)]
+        self.assertLess(
+            step_names.index("Reject unsafe archive entries and verify the artifact"),
+            step_names.index("Fetch the exact ledger commit without credentials"),
+        )
+        for forbidden in ("npm", "pnpm", "node ", "python", "trusted-source"):
+            with self.subTest(forbidden=forbidden):
+                self.assertNotIn(forbidden, site_commands.lower())
+        self.assertIn("EXPECTED_ARCHIVE_DIGEST", json.dumps(site_job))
+        self.assertIn("EXPECTED_MANIFEST_DIGEST", json.dumps(site_job))
+        self.assertIn("EXPECTED_SNAPSHOT_DIGEST", json.dumps(site_job))
+        self.assertIn("expected-artifact.paths", site_commands)
+        self.assertIn("-links +1", site_commands)
+        self.assertIn("--full-time -tvf", site_commands)
+        self.assertIn('substr($0, 1, 1) != "-"', site_commands)
+        self.assertIn(".git[^\\/]*", site_commands)
+        self.assertIn("sha256sum --check", site_commands)
+        self.assertIn("manifest.paths", site_commands)
+        self.assertIn("core.hooksPath=/dev/null commit", site_commands)
+        self.assertIn("git -C ledger diff --exit-code -- registry/schemas/1/snapshots", site_commands)
+        self.assertIn('GH_TOKEN: ${{ github.token }}', text)
+        token_steps = [
+            step
+            for step in site_job["steps"]
+            if isinstance(step, dict) and "github.token" in json.dumps(step)
+        ]
+        self.assertEqual(len(token_steps), 1)
+        self.assertEqual(token_steps[0]["name"], "Push the bounded ledger commit")
         deploy_commands = "\n".join(step.get("run", "") for step in workflow["jobs"]["deploy"]["steps"] if isinstance(step, dict))
         self.assertIn("needs.materialize_site.outputs.ledger_commit", text)
         self.assertIn("git -C exact-pages-tree rev-parse HEAD", deploy_commands)
         for match in __import__("re").findall(r"uses:\s+([^\s]+)", text):
             self.assertRegex(match, r"@[0-9a-f]{40}$")
+
+    def test_no_site_or_package_execution_in_contents_write_jobs(self) -> None:
+        path = ROOT / ".github" / "workflows" / "directory-publication.yml"
+        workflow = yaml.load(path.read_text(), Loader=yaml.BaseLoader)
+        for name, job in workflow["jobs"].items():
+            if job.get("permissions", {}).get("contents") != "write":
+                continue
+            commands = "\n".join(
+                step.get("run", "")
+                for step in job["steps"]
+                if isinstance(step, dict)
+            ).lower()
+            with self.subTest(job=name):
+                self.assertNotIn("pnpm", commands)
+                self.assertNotIn("npm ", commands)
+                self.assertNotIn("node ", commands)
+                self.assertFalse(
+                    any(
+                        "setup-node" in step.get("uses", "")
+                        or "pnpm/action-setup" in step.get("uses", "")
+                        for step in job["steps"]
+                        if isinstance(step, dict)
+                    )
+                )
+
+    def test_security_sensitive_publication_inputs_are_code_owned(self) -> None:
+        codeowners = (ROOT / ".github" / "CODEOWNERS").read_text().splitlines()
+        patterns = {line.split()[0] for line in codeowners if line.strip()}
+        self.assertTrue(
+            {
+                "/.github/workflows/directory-publication.yml",
+                "/.github/workflows/validate.yml",
+                "/registry/directory.json",
+                "/registry/publication/",
+                "/plugins/",
+                "/bridges/",
+                "/site/",
+                "/scripts/*directory_publication.py",
+                "/scripts/build-bridges",
+                "/scripts/build_bridges.py",
+                "/scripts/build_registry.py",
+            }.issubset(patterns)
+        )
 
     def test_all_workflow_yaml_parses(self) -> None:
         for path in (ROOT / ".github" / "workflows").glob("*.yml"):

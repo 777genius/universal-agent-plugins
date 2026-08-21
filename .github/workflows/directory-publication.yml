@@ -162,22 +162,41 @@ jobs:
           fi
           echo "ledger_commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
-  materialize_site:
-    name: Materialize exact-sequence production site
+  build_site:
+    name: Build exact-sequence site artifact (no write token)
     needs: sign
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     permissions:
-      contents: write
+      contents: read
     outputs:
-      ledger_commit: ${{ steps.commit.outputs.ledger_commit }}
+      archive_digest: ${{ steps.artifact.outputs.archive_digest }}
+      manifest_digest: ${{ steps.artifact.outputs.manifest_digest }}
+      provenance_digest: ${{ steps.artifact.outputs.provenance_digest }}
+      signed_snapshot_digest: ${{ steps.snapshot.outputs.digest }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ needs.sign.outputs.ledger_commit }}
           path: ledger
-          fetch-depth: 0
+          fetch-depth: 1
           persist-credentials: false
+      - name: Export the exact signed snapshot and remove the ledger checkout
+        id: snapshot
+        env:
+          EXPECTED_LEDGER_COMMIT: ${{ needs.sign.outputs.ledger_commit }}
+        run: |
+          test "$(git -C ledger rev-parse HEAD)" = "${EXPECTED_LEDGER_COMMIT}"
+          snapshot_path="$(python3 -c 'import json; p=json.load(open("ledger/registry/schemas/1/latest.json")); print(p["snapshot_path"])')"
+          if [[ ! "${snapshot_path}" =~ ^snapshots/[0-9]{20}\.json$ ]]; then
+            echo "Unsafe signed snapshot path: ${snapshot_path}" >&2
+            exit 1
+          fi
+          test -f "ledger/registry/schemas/1/${snapshot_path}"
+          install -m 0444 "ledger/registry/schemas/1/${snapshot_path}" "${RUNNER_TEMP}/signed-snapshot.json"
+          echo "digest=sha256:$(sha256sum "${RUNNER_TEMP}/signed-snapshot.json" | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+          rm -rf "${GITHUB_WORKSPACE}/ledger"
+          test ! -e "${GITHUB_WORKSPACE}/ledger"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.sha }}
@@ -197,35 +216,188 @@ jobs:
         env:
           NUXT_APP_BASE_URL: /universal-agent-plugins/
           NUXT_PUBLIC_SITE_URL: https://777genius.github.io/universal-agent-plugins
+          UAP_SIGNED_SNAPSHOT_PATH: ${{ runner.temp }}/signed-snapshot.json
         run: |
-          test "$(git -C ../../ledger rev-parse HEAD)" = "${{ needs.sign.outputs.ledger_commit }}"
-          snapshot_path="$(python3 -c 'import json; p=json.load(open("../../ledger/registry/schemas/1/latest.json")); print(p["snapshot_path"])')"
-          export UAP_SIGNED_SNAPSHOT_PATH="../../ledger/registry/schemas/1/${snapshot_path}"
+          test ! -e "../../ledger"
           pnpm install --frozen-lockfile --ignore-scripts
           pnpm generate
           pnpm check:generated
-      - name: Commit the exact production tree without touching the ledger
+      - name: Create bounded static artifact and manifest
+        id: artifact
+        working-directory: trusted-source/site
+        env:
+          LEDGER_COMMIT: ${{ needs.sign.outputs.ledger_commit }}
+          SOURCE_COMMIT: ${{ github.sha }}
+          EXPECTED_SNAPSHOT_DIGEST: ${{ steps.snapshot.outputs.digest }}
+        run: |
+          public=.output/public
+          test -d "${public}"
+          test -z "$(find "${public}" \( -type l -o -type b -o -type c -o -type p -o -type s \) -print -quit)"
+          find "${public}" -type f -print0 | while IFS= read -r -d '' file; do
+            relative="${file#${public}/}"
+            case "${relative}" in
+              *[!A-Za-z0-9._~@%+=:,/-]*) echo "Unsafe generated path: ${relative}" >&2; exit 1 ;;
+              -*|*/-*) echo "Generated path has an option-like segment: ${relative}" >&2; exit 1 ;;
+            esac
+          done
+          file_count="$(find "${public}" -type f | wc -l)"
+          total_bytes="$(find "${public}" -type f -printf '%s\n' | awk '{ total += $1 } END { print total + 0 }')"
+          test "${file_count}" -gt 0
+          test "${file_count}" -le 20000
+          test "${total_bytes}" -le 104857600
+          rm -rf "${RUNNER_TEMP}/site-artifact" "${RUNNER_TEMP}/site-files.list"
+          mkdir -p "${RUNNER_TEMP}/site-artifact"
+          (
+            cd "${public}"
+            find . -type f -printf '%P\0' | LC_ALL=C sort -z > "${RUNNER_TEMP}/site-files.list"
+            xargs -0 sha256sum -- < "${RUNNER_TEMP}/site-files.list" > "${RUNNER_TEMP}/site-artifact/site.files.sha256"
+            tar --format=ustar --sort=name --mtime='@0' --owner=0 --group=0 --numeric-owner --no-recursion --verbatim-files-from --null -cf "${RUNNER_TEMP}/site-artifact/site.tar" -T "${RUNNER_TEMP}/site-files.list"
+          )
+          snapshot_digest="sha256:$(sha256sum "${RUNNER_TEMP}/signed-snapshot.json" | cut -d ' ' -f 1)"
+          test "${snapshot_digest}" = "${EXPECTED_SNAPSHOT_DIGEST}"
+          archive_digest="sha256:$(sha256sum "${RUNNER_TEMP}/site-artifact/site.tar" | cut -d ' ' -f 1)"
+          echo "${archive_digest}" > "${RUNNER_TEMP}/site-artifact/site.tar.sha256"
+          {
+            echo "ledger_commit=${LEDGER_COMMIT}"
+            echo "source_commit=${SOURCE_COMMIT}"
+            echo "snapshot_digest=${snapshot_digest}"
+            echo "file_count=${file_count}"
+            echo "total_bytes=${total_bytes}"
+          } > "${RUNNER_TEMP}/site-artifact/site.provenance"
+          test "$(stat -c %s "${RUNNER_TEMP}/site-artifact/site.tar")" -le 110100480
+          test "$(stat -c %s "${RUNNER_TEMP}/site-artifact/site.files.sha256")" -le 4194304
+          test "$(stat -c %s "${RUNNER_TEMP}/site-artifact/site.provenance")" -le 4096
+          test "$(stat -c %s "${RUNNER_TEMP}/site-artifact/site.tar.sha256")" -le 128
+          echo "archive_digest=${archive_digest}" >> "$GITHUB_OUTPUT"
+          echo "manifest_digest=sha256:$(sha256sum "${RUNNER_TEMP}/site-artifact/site.files.sha256" | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+          echo "provenance_digest=sha256:$(sha256sum "${RUNNER_TEMP}/site-artifact/site.provenance" | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: directory-site-${{ github.run_id }}
+          path: ${{ runner.temp }}/site-artifact
+          if-no-files-found: error
+          retention-days: 1
+
+  materialize_site:
+    name: Validate and materialize static artifact
+    needs: [sign, build_site]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      contents: write
+    outputs:
+      ledger_commit: ${{ steps.commit.outputs.ledger_commit }}
+    steps:
+      - uses: actions/download-artifact@b14cf4c92620c250e1c0745ffefa574f1c4531a9 # v8.0.1
+        with:
+          name: directory-site-${{ github.run_id }}
+          path: ${{ runner.temp }}/publication-artifact
+      - name: Reject unsafe archive entries and verify the artifact
+        env:
+          EXPECTED_ARCHIVE_DIGEST: ${{ needs.build_site.outputs.archive_digest }}
+          EXPECTED_MANIFEST_DIGEST: ${{ needs.build_site.outputs.manifest_digest }}
+          EXPECTED_PROVENANCE_DIGEST: ${{ needs.build_site.outputs.provenance_digest }}
+          EXPECTED_SNAPSHOT_DIGEST: ${{ needs.build_site.outputs.signed_snapshot_digest }}
+          EXPECTED_LEDGER_COMMIT: ${{ needs.sign.outputs.ledger_commit }}
+          EXPECTED_SOURCE_COMMIT: ${{ github.sha }}
+        run: |
+          artifact="${RUNNER_TEMP}/publication-artifact"
+          test -z "$(find "${artifact}" -mindepth 1 ! -type f -print -quit)"
+          test -z "$(find "${artifact}" -type f -links +1 -print -quit)"
+          printf '%s\n' site.files.sha256 site.provenance site.tar site.tar.sha256 > "${RUNNER_TEMP}/expected-artifact.paths"
+          find "${artifact}" -type f -printf '%P\n' | LC_ALL=C sort > "${RUNNER_TEMP}/actual-artifact.paths"
+          diff -u "${RUNNER_TEMP}/expected-artifact.paths" "${RUNNER_TEMP}/actual-artifact.paths"
+          test "$(stat -c %s "${artifact}/site.tar")" -le 110100480
+          test "$(stat -c %s "${artifact}/site.files.sha256")" -le 4194304
+          test "$(stat -c %s "${artifact}/site.provenance")" -le 4096
+          test "$(stat -c %s "${artifact}/site.tar.sha256")" -le 128
+          test "$(tr -d '\n' < "${artifact}/site.tar.sha256")" = "${EXPECTED_ARCHIVE_DIGEST}"
+          test "sha256:$(sha256sum "${artifact}/site.tar" | cut -d ' ' -f 1)" = "${EXPECTED_ARCHIVE_DIGEST}"
+          test "sha256:$(sha256sum "${artifact}/site.files.sha256" | cut -d ' ' -f 1)" = "${EXPECTED_MANIFEST_DIGEST}"
+          test "sha256:$(sha256sum "${artifact}/site.provenance" | cut -d ' ' -f 1)" = "${EXPECTED_PROVENANCE_DIGEST}"
+          grep -Fx "ledger_commit=${EXPECTED_LEDGER_COMMIT}" "${artifact}/site.provenance"
+          grep -Fx "source_commit=${EXPECTED_SOURCE_COMMIT}" "${artifact}/site.provenance"
+          grep -Fx "snapshot_digest=${EXPECTED_SNAPSHOT_DIGEST}" "${artifact}/site.provenance"
+          test "$(wc -l < "${artifact}/site.provenance")" -eq 5
+          LC_ALL=C tar -tf "${artifact}/site.tar" > "${RUNNER_TEMP}/archive.paths"
+          LC_ALL=C tar --numeric-owner --full-time -tvf "${artifact}/site.tar" > "${RUNNER_TEMP}/archive.verbose"
+          test "$(wc -l < "${RUNNER_TEMP}/archive.paths")" -le 20000
+          awk 'substr($0, 1, 1) != "-" { exit 1 }' "${RUNNER_TEMP}/archive.verbose"
+          awk '
+            /^\// || /\\/ || /\/\// || /(^|\/)\.\.?($|\/)/ ||
+            /(^|\/)-/ || /[^A-Za-z0-9._~@%+=:,\/-]/ { exit 1 }
+          ' "${RUNNER_TEMP}/archive.paths"
+          test "$(LC_ALL=C sort -u "${RUNNER_TEMP}/archive.paths" | wc -l)" -eq "$(wc -l < "${RUNNER_TEMP}/archive.paths")"
+          awk '{ path = tolower($0); if (path ~ /(^|\/)\.git[^\/]*($|\/)/ || path ~ /(^|\/)(\.github|hooks)($|\/) || seen[path]++) exit 1 }' "${RUNNER_TEMP}/archive.paths"
+          awk 'NF != 2 || $1 !~ /^[0-9a-f]{64}$/ { exit 1 } { print $2 }' "${artifact}/site.files.sha256" > "${RUNNER_TEMP}/manifest.paths"
+          test "$(wc -l < "${RUNNER_TEMP}/manifest.paths")" -eq "$(wc -l < "${RUNNER_TEMP}/archive.paths")"
+          diff -u <(LC_ALL=C sort "${RUNNER_TEMP}/archive.paths") <(LC_ALL=C sort "${RUNNER_TEMP}/manifest.paths")
+          expected_files="$(awk -F= '$1 == "file_count" { print $2 }' "${artifact}/site.provenance")"
+          expected_bytes="$(awk -F= '$1 == "total_bytes" { print $2 }' "${artifact}/site.provenance")"
+          archive_bytes="$(awk '{ total += $3 } END { print total + 0 }' "${RUNNER_TEMP}/archive.verbose")"
+          [[ "${expected_files}" =~ ^[0-9]+$ && "${expected_bytes}" =~ ^[0-9]+$ ]]
+          test "${expected_files}" -gt 0
+          test "${expected_files}" -le 20000
+          test "${expected_bytes}" -le 104857600
+          test "$(wc -l < "${RUNNER_TEMP}/archive.paths")" = "${expected_files}"
+          test "${archive_bytes}" = "${expected_bytes}"
+          mkdir -p "${RUNNER_TEMP}/validated-site"
+          tar --no-same-owner --no-same-permissions -xf "${artifact}/site.tar" -C "${RUNNER_TEMP}/validated-site"
+          (
+            cd "${RUNNER_TEMP}/validated-site"
+            sha256sum --check "${artifact}/site.files.sha256"
+          )
+          test "$(find "${RUNNER_TEMP}/validated-site" -type f | wc -l)" = "$(wc -l < "${RUNNER_TEMP}/archive.paths")"
+          actual_bytes="$(find "${RUNNER_TEMP}/validated-site" -type f -printf '%s\n' | awk '{ total += $1 } END { print total + 0 }')"
+          test "$(find "${RUNNER_TEMP}/validated-site" -type f | wc -l)" = "${expected_files}"
+          test "${actual_bytes}" = "${expected_bytes}"
+      - name: Fetch the exact ledger commit without credentials
+        env:
+          EXPECTED_LEDGER_COMMIT: ${{ needs.sign.outputs.ledger_commit }}
+        run: |
+          git init ledger
+          git -C ledger remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
+          git -C ledger fetch --depth=1 origin "${EXPECTED_LEDGER_COMMIT}"
+          git -C ledger checkout --detach FETCH_HEAD
+          test "$(git -C ledger rev-parse HEAD)" = "${EXPECTED_LEDGER_COMMIT}"
+      - name: Copy only validated static files and commit with hooks disabled
         id: commit
         env:
-          GH_TOKEN: ${{ github.token }}
+          EXPECTED_LEDGER_COMMIT: ${{ needs.sign.outputs.ledger_commit }}
         run: |
-          rsync -a --delete --exclude=.git --exclude=registry trusted-source/site/.output/public/ ledger/
+          rsync -a --delete --exclude=.git --exclude=registry "${RUNNER_TEMP}/validated-site/" ledger/
+          git -C ledger diff --exit-code -- registry/schemas/1/snapshots
           git -C ledger diff --exit-code -- registry
           if test -n "$(git -C ledger status --porcelain)"; then
             git -C ledger config user.name "uap-directory-publisher[bot]"
             git -C ledger config user.email "uap-directory-publisher[bot]@users.noreply.github.com"
-            git -C ledger add -A
-            git -C ledger commit -m "chore(directory): materialize signed production site"
+            git -C ledger add -A -- . ':!registry'
+            git -C ledger diff --cached --exit-code -- registry/schemas/1/snapshots
+            git -C ledger diff --cached --exit-code -- registry
+            git -C ledger -c core.hooksPath=/dev/null commit -m "chore(directory): materialize signed production site"
+            test "$(git -C ledger rev-parse HEAD^)" = "${EXPECTED_LEDGER_COMMIT}"
+          fi
+          echo "ledger_commit=$(git -C ledger rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+      - name: Push the bounded ledger commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_LEDGER_COMMIT: ${{ needs.sign.outputs.ledger_commit }}
+        run: |
+          git -C ledger diff --exit-code
+          git -C ledger diff --cached --exit-code
+          git -C ledger diff --exit-code "${EXPECTED_LEDGER_COMMIT}" HEAD -- registry/schemas/1/snapshots
+          git -C ledger diff --exit-code "${EXPECTED_LEDGER_COMMIT}" HEAD -- registry
+          if test "$(git -C ledger rev-parse HEAD)" != "${EXPECTED_LEDGER_COMMIT}"; then
             pushed=false
             for attempt in 1 2 3; do
-              if git -C ledger -c http.https://github.com/.extraheader="AUTHORIZATION: basic $(printf 'x-access-token:%s' "${GH_TOKEN}" | base64 -w0)" push origin "HEAD:${LEDGER_BRANCH}"; then
+              if git -C ledger -c core.hooksPath=/dev/null -c http.https://github.com/.extraheader="AUTHORIZATION: basic $(printf 'x-access-token:%s' "${GH_TOKEN}" | base64 -w0)" push origin "HEAD:${LEDGER_BRANCH}"; then
                 pushed=true
                 break
               fi
             done
             test "${pushed}" = true
           fi
-          echo "ledger_commit=$(git -C ledger rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
   deploy:
     name: Deploy exact committed Pages tree

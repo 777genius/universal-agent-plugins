@@ -9,6 +9,37 @@ permissions:
   contents: read
 
 jobs:
+  bridge-reproduction:
+    name: Offline bridge reproduction
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    env:
+      GIT_CONFIG_NOSYSTEM: "1"
+      GIT_CONFIG_GLOBAL: /dev/null
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13"
+      - name: Build deterministic offline upstream mirror
+        run: |
+          cp -a tests/fixtures/bridge_upstream "${RUNNER_TEMP}/bridge-upstream"
+          git -C "${RUNNER_TEMP}/bridge-upstream" init -q
+          git -C "${RUNNER_TEMP}/bridge-upstream" add .
+          GIT_AUTHOR_NAME=Fixture GIT_AUTHOR_EMAIL=fixture@example.invalid \
+          GIT_AUTHOR_DATE=2026-01-01T00:00:00Z GIT_COMMITTER_NAME=Fixture \
+          GIT_COMMITTER_EMAIL=fixture@example.invalid GIT_COMMITTER_DATE=2026-01-01T00:00:00Z \
+            git -C "${RUNNER_TEMP}/bridge-upstream" commit -qm fixture
+          test "$(git -C "${RUNNER_TEMP}/bridge-upstream" rev-parse HEAD)" = 9ec238505ab95b2e07222e69a893f0bbac201ae6
+          mkdir -p "${RUNNER_TEMP}/upstream-mirror/fixture"
+          git clone -q --bare "${RUNNER_TEMP}/bridge-upstream" "${RUNNER_TEMP}/upstream-mirror/fixture/upstream.git"
+      - name: Reproduce committed bridges without network or upstream execution
+        run: scripts/build-bridges --root tests/fixtures --upstream-mirror "${RUNNER_TEMP}/upstream-mirror" check
+
   portable-catalog:
     runs-on: ubuntu-latest
     steps:

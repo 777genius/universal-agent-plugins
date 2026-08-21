@@ -208,6 +208,32 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertIn("check-jsonschema --schemafile", commands)
         self.assertIn("scripts/validate_client_evidence.py --file", commands)
 
+    def test_untrusted_pull_request_gate_reproduces_bridges_offline(self) -> None:
+        workflow = yaml.load(VALIDATE_WORKFLOW_PATH.read_text(), Loader=yaml.BaseLoader)
+        self.assertIn("pull_request", workflow["on"])
+        job = workflow["jobs"]["bridge-reproduction"]
+        commands = job_run_commands(job)
+
+        self.assertEqual(job["permissions"], {"contents": "read"})
+        self.assertNotIn("secrets.", yaml.safe_dump(job))
+        self.assertIn("scripts/build-bridges", commands)
+        self.assertIn("--root tests/fixtures", commands)
+        self.assertIn("--upstream-mirror", commands)
+        self.assertIn(" check", commands)
+        self.assertNotIn("curl ", commands)
+        self.assertNotIn("wget ", commands)
+        self.assertEqual(
+            {
+                step["uses"]
+                for step in job["steps"]
+                if isinstance(step, dict) and "uses" in step
+            },
+            {
+                "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+                "actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97",
+            },
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
