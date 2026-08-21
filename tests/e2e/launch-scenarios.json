@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "contract_id": "acceptance-26.1-items-14-26-v1",
+  "contract_id": "acceptance-26.1-stable-release-v2",
   "expected_counts": {
     "directory_products": 26,
     "directory_lifecycle_rows": 78,
@@ -10,7 +10,9 @@
     "chatgpt_rows": 1,
     "shared_backend_rows": 1,
     "acceptance_postcondition_rows": 13,
-    "native_platform_rows": 7
+    "native_platform_rows": 7,
+    "fault_rows": 23,
+    "journey_rows": 2
   },
   "directory_contract": "signed-snapshot-v1",
   "all_package_client": "cursor",
@@ -53,15 +55,7 @@
     "managed_rollback",
     "external_activation_failure",
     "promotion_gate_digest_match",
-    "promotion_gate_digest_mismatch",
-    "cross_platform_binary_npm_install",
-    "binary_macos_arm64",
-    "binary_macos_amd64",
-    "binary_linux_arm64",
-    "binary_linux_amd64",
-    "binary_windows_amd64",
-    "binary_windows_arm64",
-    "npm_install_node22"
+    "promotion_gate_digest_mismatch"
   ],
   "acceptance_postconditions": [
     "retained_data_readd_before_changed_default",

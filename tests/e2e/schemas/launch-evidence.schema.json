@@ -40,11 +40,13 @@
       "additionalProperties": false
     },
     "release": {
-      "type": "object", "required": ["repository", "tag", "tag_commit", "manifest_digest", "checksums_digest"],
+      "type": "object", "required": ["repository", "tag", "tag_commit", "release_id", "immutable", "manifest_digest", "checksums_digest"],
       "properties": {
         "repository": {"type": ["string", "null"], "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"},
         "tag": {"type": ["string", "null"], "pattern": "^agentplugins-v[0-9]+\\.[0-9]+\\.[0-9]+$"},
         "tag_commit": {"type": ["string", "null"], "pattern": "^[a-f0-9]{40}$"},
+        "release_id": {"type": ["integer", "null"], "minimum": 1},
+        "immutable": {"type": ["boolean", "null"]},
         "manifest_digest": {"type": ["string", "null"], "pattern": "^sha256:[a-f0-9]{64}$"},
         "checksums_digest": {"type": ["string", "null"], "pattern": "^sha256:[a-f0-9]{64}$"}
       }, "additionalProperties": false
@@ -59,11 +61,12 @@
       }, "additionalProperties": false
     },
     "scenario_contract": {
-      "type": "object", "required": ["id", "digest", "expected_ids", "expected_counts"],
+      "type": "object", "required": ["id", "digest", "expected_ids", "required_singleton_ids", "expected_counts"],
       "properties": {
-        "id": {"const": "acceptance-26.1-items-14-26-v1"},
+        "id": {"const": "acceptance-26.1-stable-release-v2"},
         "digest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
         "expected_ids": {"type": "array", "minItems": 13, "maxItems": 13, "uniqueItems": true, "items": {"type": "string"}},
+        "required_singleton_ids": {"type": "array", "minItems": 39, "maxItems": 39, "uniqueItems": true, "items": {"type": "string"}},
         "expected_counts": {"type": "object", "minProperties": 9, "additionalProperties": {"type": "integer", "minimum": 1}}
       }, "additionalProperties": false
     },
@@ -171,7 +174,7 @@
   "allOf": [
     {"if": {"properties": {"run": {"properties": {"mode": {"const": "enforced"}}}}}, "then": {"properties": {
       "summary": {"properties": {"hero_runtime_results": {"const": 15}, "required_gates_complete": {"const": true}}},
-      "release": {"properties": {"repository": {"type": "string"}, "tag": {"type": "string"}, "tag_commit": {"type": "string"}, "manifest_digest": {"type": "string"}, "checksums_digest": {"type": "string"}}},
+      "release": {"properties": {"repository": {"type": "string"}, "tag": {"type": "string"}, "tag_commit": {"type": "string"}, "release_id": {"type": "integer"}, "immutable": {"const": true}, "manifest_digest": {"type": "string"}, "checksums_digest": {"type": "string"}}},
       "directory": {"properties": {"origin": {"type": "string"}, "snapshot_digest": {"type": "string"}, "sequence": {"type": "integer"}, "trust_root_digest": {"type": "string"}}}
     }}},
     {"not": {"properties": {"matrix": {"contains": {"type": "object", "properties": {"client": {"const": "chatgpt"}, "plugin": {"not": {"const": "cloudflare-docs"}}}, "required": ["client", "plugin"]}}}, "required": ["matrix"]}}

@@ -19,12 +19,44 @@ on:
         description: Protected release caller approved disposable live observations
         required: true
         type: boolean
+      publication_id:
+        description: Exact signed snapshot publication_id produced by the caller
+        required: true
+        type: string
+      publication_sequence:
+        description: Exact published snapshot sequence produced by the caller
+        required: true
+        type: number
+      publication_snapshot_digest:
+        description: Exact sha256 digest of the caller's signed snapshot bytes
+        required: true
+        type: string
+      publication_source_commit:
+        description: Exact 40-hex source commit embedded in the signed snapshot
+        required: true
+        type: string
   workflow_dispatch:
     inputs:
       consent:
         description: I approve disposable live observations
         required: true
         type: boolean
+      publication_id:
+        description: Exact signed snapshot publication_id to verify
+        required: true
+        type: string
+      publication_sequence:
+        description: Exact published snapshot sequence to verify
+        required: true
+        type: number
+      publication_snapshot_digest:
+        description: Exact sha256 digest of the signed snapshot bytes
+        required: true
+        type: string
+      publication_source_commit:
+        description: Exact 40-hex source commit embedded in the signed snapshot
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -73,6 +105,7 @@ jobs:
     timeout-minutes: 30
     permissions:
       contents: read
+      attestations: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -87,9 +120,15 @@ jobs:
         shell: bash
         env:
           ASSET_NAME: ${{ matrix.asset }}
+          PUBLICATION_ID: ${{ inputs.publication_id }}
+          PUBLICATION_SEQUENCE: ${{ inputs.publication_sequence }}
+          PUBLICATION_SNAPSHOT_DIGEST: ${{ inputs.publication_snapshot_digest }}
+          PUBLICATION_SOURCE_COMMIT: ${{ inputs.publication_source_commit }}
         run: |
           run_root="${RUNNER_TEMP}/uap-native-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           python scripts/prepare_launch_evidence.py --asset-name "$ASSET_NAME" \
+            --publication-id "$PUBLICATION_ID" --publication-sequence "$PUBLICATION_SEQUENCE" \
+            --publication-snapshot-digest "$PUBLICATION_SNAPSHOT_DIGEST" --publication-source-commit "$PUBLICATION_SOURCE_COMMIT" \
             --run-root "$run_root" --output "$run_root/context.json"
           python scripts/observe_release_facade.py --context "$run_root/context.json" \
             --executable "$run_root/release/$ASSET_NAME" --asset-name "$ASSET_NAME" \
@@ -112,6 +151,7 @@ jobs:
     timeout-minutes: 30
     permissions:
       contents: read
+      attestations: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with: {persist-credentials: false}
@@ -121,15 +161,31 @@ jobs:
         with: {node-version: "22"}
       - run: python -m pip install cryptography==46.0.3 jsonschema==4.25.1
       - name: Resolve and install the exact registry-authenticated npm facade
+        env:
+          PUBLICATION_ID: ${{ inputs.publication_id }}
+          PUBLICATION_SEQUENCE: ${{ inputs.publication_sequence }}
+          PUBLICATION_SNAPSHOT_DIGEST: ${{ inputs.publication_snapshot_digest }}
+          PUBLICATION_SOURCE_COMMIT: ${{ inputs.publication_source_commit }}
         run: |
           run_root="${RUNNER_TEMP}/uap-node22-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           python scripts/prepare_launch_evidence.py --asset-name agentplugins_0.1.8_linux_amd64 --npm-facade \
+            --publication-id "$PUBLICATION_ID" --publication-sequence "$PUBLICATION_SEQUENCE" \
+            --publication-snapshot-digest "$PUBLICATION_SNAPSHOT_DIGEST" --publication-source-commit "$PUBLICATION_SOURCE_COMMIT" \
             --run-root "$run_root" --output "$run_root/context.json"
+          mkdir "$run_root/npm-audit"
+          cd "$run_root/npm-audit"
+          npm install --ignore-scripts=false --save-exact universal-agent-plugins@0.1.8
+          npm audit signatures
+          cd "$GITHUB_WORKSPACE"
           npm install --global "$run_root/npm/universal-agent-plugins-0.1.8.tgz" --ignore-scripts=false
+          npm_package_root="$(npm root --global)/universal-agent-plugins"
+          test -d "$npm_package_root"
           test "$(node --version | cut -d. -f1)" = v22
           python scripts/observe_release_facade.py --context "$run_root/context.json" \
-            --executable agentplugins --asset-name universal-agent-plugins@0.1.8 \
-            --kind npm --os any --architecture any --node-major 22 --output npm-observation.json
+            --executable agentplugins --asset-name agentplugins_0.1.8_linux_amd64 \
+            --kind npm --os any --architecture any --node-major 22 --npm-project "$run_root/npm-audit" \
+            --npm-package-root "$npm_package_root" \
+            --output npm-observation.json
           sha256sum npm-observation.json > npm-observation.SHA256SUMS
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -179,6 +235,19 @@ jobs:
           assert {x['catalog_sha'] for x in records} == {'${{ github.sha }}'}
           assert {x['cli_release_repository'] for x in records} == {config['cli_release_repository']}
           assert {x['cli_release_tag'] for x in records} == {config['cli_release_tag']}
+          assert len({json.dumps(x['github_release_identity'],sort_keys=True) for x in records}) == 1
+          release_identity=native[0]['github_release_identity']
+          assert release_identity['repository'] == config['cli_release_repository']
+          assert release_identity['tag'] == config['cli_release_tag'] and release_identity['immutable'] is True
+          expected_assets={
+              'agentplugins_0.1.8_darwin_arm64','agentplugins_0.1.8_darwin_amd64',
+              'agentplugins_0.1.8_linux_arm64','agentplugins_0.1.8_linux_amd64',
+              'agentplugins_0.1.8_windows_arm64.exe','agentplugins_0.1.8_windows_amd64.exe',
+          }
+          attestations=[x['github_asset_attestation'] for x in native]
+          assert {x['asset_name'] for x in attestations} == expected_assets
+          assert all(x['verified'] is True and x['repository'] == config['cli_release_repository'] and x['workflow'] == config['cli_release_workflow'] and x['tag_commit'] == release_identity['tag_commit'] for x in attestations)
+          assert all(x['github_asset_attestation']['asset_name'] == x['asset_name'] and x['github_asset_attestation']['asset_digest'] == x['asset_digest'] for x in native)
           assert len({x['release_manifest_digest'] for x in records}) == 1
           assert len({x['release_checksums_digest'] for x in records}) == 1
           assert len({x['directory_digest'] for x in records}) == 1
@@ -194,6 +263,7 @@ jobs:
       actions: read
       contents: read
       id-token: write
+      attestations: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with: {persist-credentials: false}
@@ -214,9 +284,16 @@ jobs:
           (cd native-observations/npm && sha256sum --check npm-observation.SHA256SUMS)
           find native-observations -name '*observation.json' -print0 | xargs -0 check-jsonschema --schemafile tests/e2e/schemas/native-release-observation.schema.json
       - name: Prepare one fresh release/Directory/challenge context
+        env:
+          PUBLICATION_ID: ${{ inputs.publication_id }}
+          PUBLICATION_SEQUENCE: ${{ inputs.publication_sequence }}
+          PUBLICATION_SNAPSHOT_DIGEST: ${{ inputs.publication_snapshot_digest }}
+          PUBLICATION_SOURCE_COMMIT: ${{ inputs.publication_source_commit }}
         run: |
           run_root="${RUNNER_TEMP}/uap-stable-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           python scripts/prepare_launch_evidence.py --asset-name agentplugins_0.1.8_linux_amd64 \
+            --publication-id "$PUBLICATION_ID" --publication-sequence "$PUBLICATION_SEQUENCE" \
+            --publication-snapshot-digest "$PUBLICATION_SNAPSHOT_DIGEST" --publication-source-commit "$PUBLICATION_SOURCE_COMMIT" \
             --run-root "$run_root" --output "$run_root/context.json"
           echo "RUN_ROOT=$run_root" >> "$GITHUB_ENV"
       - name: Obtain short-lived GitHub OIDC identity

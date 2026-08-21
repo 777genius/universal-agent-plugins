@@ -25,6 +25,10 @@ def main() -> int:
     parser.add_argument("--npm-facade", action="store_true", help="also resolve the exact npm facade matching the release")
     parser.add_argument("--run-root", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--publication-id", required=True)
+    parser.add_argument("--publication-sequence", type=int, required=True)
+    parser.add_argument("--publication-snapshot-digest", required=True)
+    parser.add_argument("--publication-source-commit", required=True)
     args = parser.parse_args()
     if args.run_root.exists():
         raise ValueError("prepared run root must not exist")
@@ -39,7 +43,12 @@ def main() -> int:
         cli_repository, release_tag, args.run_root / "release" / args.asset_name,
         asset_name=args.asset_name, token=None,
     )
-    directory_env, snapshot, directory_digest = fetch_production_directory(args.run_root / "directory")
+    directory_env, snapshot, directory_digest = fetch_production_directory(
+        args.run_root / "directory", expected_publication_id=args.publication_id,
+        expected_sequence=args.publication_sequence,
+        expected_snapshot_digest=args.publication_snapshot_digest,
+        expected_source_commit=args.publication_source_commit,
+    )
     npm_package = None
     if args.npm_facade:
         _, npm_package = resolve_npm_package(
@@ -55,8 +64,10 @@ def main() -> int:
         "cli_release_repository": cli_repository, "cli_release_tag": release_tag,
         "release_manifest": manifest, "release_manifest_digest": release_digest,
         "release_checksums_digest": sha256_file(args.run_root / "release" / "checksums.txt"),
+        "github_release_identity": json.loads((args.run_root / "release" / "github-release-identity.json").read_text()),
         "authenticated_asset": {"name": args.asset_name, "digest": sha256_file(asset)},
-        "directory": {"origin": config["production_origin"], "snapshot": "directory/snapshot.json", "envelope": "directory/envelope.json", "digest": directory_digest, "sequence": snapshot["sequence"]},
+        "github_asset_attestation": json.loads((args.run_root / "release" / f"{args.asset_name}.attestation.json").read_text()),
+        "directory": {"origin": config["production_origin"], "snapshot": "directory/snapshot.json", "envelope": "directory/envelope.json", "digest": directory_digest, "sequence": snapshot["sequence"], "publication_id": snapshot["publication_id"], "source_commit": snapshot["source_commit"]},
         "github": {"sha": os.environ["GITHUB_SHA"], "run_id": os.environ["GITHUB_RUN_ID"], "run_attempt": os.environ["GITHUB_RUN_ATTEMPT"]},
         "challenge": challenge,
     }

@@ -19,14 +19,19 @@ resolves that published GitHub release without using the catalog repository's
 token,
 dereferences the tag to a commit, downloads `release-manifest.json`,
 `checksums.txt`, and a manifest-listed asset through the GitHub API, then
-requires the exact eight-file release set and verifies repository, tag, version,
-size, and SHA-256 against both authenticated release metadata files. There are no production URL/checksum/version
+requires GitHub's `immutable: true`, the exact eight-file release set, and the
+fixed release-workflow artifact attestation for every native asset. The
+attestation verifier pins repository, workflow, tag ref, tag commit, subject
+name, and SHA-256 in addition to verifying repository, tag, version, size, and
+SHA-256 against both authenticated release metadata files. There are no production URL/checksum/version
 inputs. The manifest must contain macOS arm64/amd64, Linux arm64/amd64, and
 Windows arm64/amd64 assets. The separately published exact
 `universal-agent-plugins@0.1.8` npm facade is resolved from the npm registry;
-its fixed registry tarball is verified against `dist.integrity`, installed on
-Node 22, and required to report the same CLI version. There is no GitHub `.tgz`
-input or fallback. Aggregation rejects
+its exact registry tarball URL and bytes are verified against `dist.integrity`,
+its npm provenance/signatures are cryptographically audited, and it is installed
+on Node 22. The resolved installed executable must be byte-for-byte identical to
+the attested native GitHub asset; a postinstall shim that only reports the right
+version fails. There is no GitHub `.tgz` input or fallback. Aggregation rejects
 observations bound to different GitHub release manifests.
 
 The same preparation step fetches `latest.json`, the exact snapshot, and its
@@ -35,6 +40,14 @@ Ed25519 verification and complete Directory semantics use the checked-in
 `registry/publication/trusted-keys.json`. The trust root is never downloaded
 beside the signature. Direct unit tests may inject local publication fixtures;
 enforced mode may not.
+
+The reusable workflow requires the publication caller's exact `publication_id`,
+sequence, snapshot digest, and source commit. Preparation accepts these values
+only as expectations: the canonical public pointer paths, signed snapshot,
+envelope sequence/digest, and signed snapshot fields must independently match.
+A stale public deployment therefore cannot be used as evidence for a newer
+publication. The Directory publication owner must pass these four outputs when
+calling this contract; this evidence patch does not change publication code.
 
 ## Challenge and observers
 
@@ -46,11 +59,17 @@ and output-digest traces, and independently hashes manager and native client
 state before and after. An omitted postcondition is a failure, never a boolean
 claim supplied by another executable.
 
-The schema-3 release gate emits only acceptance 26.1 items 14–26: the 26-package
-and hero matrices, grouped Context7 acquisition, shared Copilot/VS Code backend,
-native release slots, runtime/OAuth rows, and the 13 immutable postconditions.
-Older fault/contribution fixtures remain contract-tested but are not silently
-promoted into this narrower release claim.
+The schema-3 release gate covers every relevant acceptance 26.1 family: the
+26-package and hero matrices, grouped Context7 acquisition, shared Copilot/VS
+Code backend, native release slots, runtime/OAuth rows, all immutable
+postconditions, fault injection/recovery, source selection/switch/promotion,
+and direct/contributor journeys. `fault_matrix()` and `journeys()` are enforced
+runtime paths. Fixture-only mode emits only harness rows and cannot be escalated
+to a runtime or stable-gate claim.
+
+The no-hidden-`--yes` row runs representative add, update, and remove commands
+with `--yes`, requires each parser to report an unknown option, and compares
+manager/native state before and after. Help text alone is not evidence.
 
 Runtime/OAuth passes arrive in one canonical, fresh, challenge-bound bundle
 signed with Ed25519. The protected environment fixes

@@ -26,6 +26,10 @@ OBSERVER_SPEC = importlib.util.spec_from_file_location("observe_launch_scenario"
 assert OBSERVER_SPEC and OBSERVER_SPEC.loader
 observer = importlib.util.module_from_spec(OBSERVER_SPEC)
 OBSERVER_SPEC.loader.exec_module(observer)
+FACADE_SPEC = importlib.util.spec_from_file_location("observe_release_facade", ROOT / "scripts" / "observe_release_facade.py")
+assert FACADE_SPEC and FACADE_SPEC.loader
+facade = importlib.util.module_from_spec(FACADE_SPEC)
+FACADE_SPEC.loader.exec_module(facade)
 CONSENT = ROOT / "tests/e2e/fixtures/fixture-only-consent.json"
 PUBLICATION = ROOT / "tests/fixtures/directory-publication"
 
@@ -147,7 +151,7 @@ class LaunchEvidenceE2ETests(unittest.TestCase):
         api_assets = [{"name": e2e.RELEASE_MANIFEST_NAME, "url": "https://api.github.test/manifest", "size": len(manifest_body)}]
         api_assets.append({"name": e2e.RELEASE_CHECKSUMS_NAME, "url": "https://api.github.test/checksums", "size": len(checksums_body)})
         api_assets += [{"name": name, "url": f"https://api.github.test/{name}", "size": len(body)} for _, name, body in slots]
-        release = {"draft": False, "prerelease": False, "tag_name": "agentplugins-v1.2.3", "assets": api_assets}
+        release = {"id": 123, "draft": False, "prerelease": False, "immutable": True, "tag_name": "agentplugins-v1.2.3", "assets": api_assets}
         bodies = {
             "https://api.github.test/manifest": manifest_body,
             "https://api.github.test/checksums": checksums_body,
@@ -159,6 +163,7 @@ class LaunchEvidenceE2ETests(unittest.TestCase):
                 e2e.TRUSTED_CLI_RELEASE_REPOSITORY, "agentplugins-v1.2.3", Path(tmp) / "agentplugins",
                 asset_name="agentplugins_1.2.3_linux_amd64",
                 fixture_fetch=lambda url, _limit, _accept: bodies[url],
+                attestation_verifier=lambda path, repo, workflow, tag, commit, digest: {"repository": repo, "workflow": workflow, "tag": tag, "tag_commit": commit, "asset_name": path.name, "asset_digest": digest, "verified": True},
             )
             self.assertEqual(destination.read_bytes(), selected)
             self.assertEqual(resolved, manifest)
@@ -171,6 +176,7 @@ class LaunchEvidenceE2ETests(unittest.TestCase):
                     e2e.TRUSTED_CLI_RELEASE_REPOSITORY, "agentplugins-v1.2.3", Path(tmp) / "tampered",
                     asset_name="agentplugins_1.2.3_linux_amd64",
                     fixture_fetch=lambda url, _limit, _accept: tampered[url],
+                    attestation_verifier=lambda *_args: {},
                 )
 
             tampered_checksums = {**bodies, "https://api.github.test/checksums": checksums_body.replace(b"  release-manifest.json", b"  renamed-manifest.json")}
@@ -179,14 +185,44 @@ class LaunchEvidenceE2ETests(unittest.TestCase):
                     e2e.TRUSTED_CLI_RELEASE_REPOSITORY, "agentplugins-v1.2.3", Path(tmp) / "bad-checksums",
                     asset_name="agentplugins_1.2.3_linux_amd64",
                     fixture_fetch=lambda url, _limit, _accept: tampered_checksums[url],
+                    attestation_verifier=lambda *_args: {},
                 )
+
+            with mock.patch.object(e2e, "github_json", return_value={**release, "immutable": False}), self.assertRaisesRegex(ValueError, "mutable"):
+                e2e.resolve_github_release(
+                    e2e.TRUSTED_CLI_RELEASE_REPOSITORY, "agentplugins-v1.2.3", Path(tmp) / "mutable",
+                    asset_name="agentplugins_1.2.3_linux_amd64", fixture_fetch=lambda url, _limit, _accept: bodies[url],
+                    attestation_verifier=lambda *_args: {},
+                )
+
+    def test_github_attestation_rejects_missing_or_wrong_subject(self) -> None:
+        verified = mock.Mock(returncode=0, stdout="[]", stderr="")
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.object(e2e.subprocess, "run", return_value=verified):
+            asset = Path(tmp) / "agentplugins_0.1.8_linux_amd64"
+            asset.write_bytes(b"native")
+            with self.assertRaisesRegex(ValueError, "no verified"):
+                e2e.verify_github_asset_attestation(asset, e2e.TRUSTED_CLI_RELEASE_REPOSITORY, e2e.TRUSTED_CLI_RELEASE_WORKFLOW, e2e.TRUSTED_CLI_RELEASE_TAG, "a" * 40, "sha256:" + e2e.hashlib.sha256(b"native").hexdigest())
+            wrong = [{"verificationResult": {"statement": {"subject": [{"name": "wrong", "digest": {"sha256": "0" * 64}}]}}}]
+            verified.stdout = json.dumps(wrong)
+            with self.assertRaisesRegex(ValueError, "subject name/digest"):
+                e2e.verify_github_asset_attestation(asset, e2e.TRUSTED_CLI_RELEASE_REPOSITORY, e2e.TRUSTED_CLI_RELEASE_WORKFLOW, e2e.TRUSTED_CLI_RELEASE_TAG, "a" * 40, "sha256:" + e2e.hashlib.sha256(b"native").hexdigest())
+
+    def test_npm_installed_executable_must_equal_authenticated_native_asset(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            executable = Path(tmp) / "agentplugins"
+            executable.write_bytes(b"prints-correct-version-but-is-not-release-binary")
+            executable.chmod(0o700)
+            native = {"sha256": e2e.hashlib.sha256(b"real-release-binary").hexdigest(), "size": len(b"real-release-binary")}
+            with self.assertRaisesRegex(RuntimeError, "does not match"):
+                facade.verify_installed_npm_payload(Path(tmp), native)
 
     def test_npm_resolution_binds_exact_registry_integrity_and_tarball(self) -> None:
         body = b"exact npm tarball"
         integrity = "sha512-" + base64.b64encode(e2e.hashlib.sha512(body).digest()).decode()
         metadata_url = "https://registry.npmjs.org/universal-agent-plugins/0.1.8"
         tarball_url = "https://registry.npmjs.org/universal-agent-plugins/-/universal-agent-plugins-0.1.8.tgz"
-        metadata = json.dumps({"name": "universal-agent-plugins", "version": "0.1.8", "dist": {"integrity": integrity, "tarball": tarball_url}}).encode()
+        provenance_url = "https://registry.npmjs.org/-/npm/v1/attestations/universal-agent-plugins@0.1.8"
+        metadata = json.dumps({"name": "universal-agent-plugins", "version": "0.1.8", "dist": {"integrity": integrity, "tarball": tarball_url, "attestations": {"url": provenance_url, "provenance": {"predicateType": "https://slsa.dev/provenance/v1"}}}}).encode()
         bodies = {metadata_url: metadata, tarball_url: body}
         with tempfile.TemporaryDirectory() as tmp:
             path, identity = e2e.resolve_npm_package(
@@ -195,10 +231,17 @@ class LaunchEvidenceE2ETests(unittest.TestCase):
             )
             self.assertEqual(path.read_bytes(), body)
             self.assertEqual(identity["integrity"], integrity)
+            self.assertEqual(identity["provenance_url"], provenance_url)
             with self.assertRaisesRegex(ValueError, "dist.integrity"):
                 e2e.resolve_npm_package(
                     "universal-agent-plugins", "0.1.8", Path(tmp) / "tampered.tgz",
                     fixture_fetch=lambda url, _limit, _accept: b"tampered" if url == tarball_url else metadata,
+                )
+            without_provenance = json.dumps({"name": "universal-agent-plugins", "version": "0.1.8", "dist": {"integrity": integrity, "tarball": tarball_url}}).encode()
+            with self.assertRaisesRegex(ValueError, "provenance"):
+                e2e.resolve_npm_package(
+                    "universal-agent-plugins", "0.1.8", Path(tmp) / "no-provenance.tgz",
+                    fixture_fetch=lambda url, _limit, _accept: body if url == tarball_url else without_provenance,
                 )
 
     def test_production_identity_is_fixed_cross_repository_configuration(self) -> None:
@@ -206,6 +249,7 @@ class LaunchEvidenceE2ETests(unittest.TestCase):
         self.assertEqual(config["catalog_repository"], "777genius/universal-agent-plugins")
         self.assertEqual(config["cli_release_repository"], "777genius/plugin-kit-ai")
         self.assertEqual(config["cli_release_tag"], "agentplugins-v0.1.8")
+        self.assertEqual(config["cli_release_workflow"], "777genius/plugin-kit-ai/.github/workflows/release.yml")
         self.assertNotIn("repository", config)
 
     def test_production_identity_rejects_configured_repository_or_tag_changes(self) -> None:
@@ -214,6 +258,7 @@ class LaunchEvidenceE2ETests(unittest.TestCase):
             ("catalog_repository", "attacker/catalog"),
             ("cli_release_repository", "attacker/binaries"),
             ("cli_release_tag", "agentplugins-v0.1.9"),
+            ("cli_release_workflow", "attacker/repo/.github/workflows/release.yml"),
         ):
             with self.subTest(field=field), tempfile.TemporaryDirectory() as tmp:
                 path = Path(tmp) / "production-launch.json"
@@ -402,7 +447,7 @@ print(json.dumps(value))
             "directory_offline", "directory_expired", "directory_tampered", "directory_sequence_rollback",
             "missing_runtime_zero_mutation", "plugin_data_update_repair_switch_remove_purge",
             "stdio_environment_and_containment", "promotion_gate_digest_mismatch",
-            "cross_platform_binary_npm_install", "distribution_sticky_update",
+            "distribution_sticky_update", "managed_rollback",
         }
         observed = set(config["fault_scenarios"] + config["advanced_scenarios"])
         self.assertTrue(required.issubset(observed))
@@ -414,6 +459,53 @@ print(json.dumps(value))
         proof = {"zero_mutation": True, "copy_ready_requirement": True, "dependency_installed": False}
         self.assertTrue(e2e.LaunchHarness.driver_proof_valid("missing_runtime_zero_mutation", proof))
         self.assertFalse(e2e.LaunchHarness.driver_proof_valid("missing_runtime_zero_mutation", {**proof, "dependency_installed": True}))
+
+    def test_dead_required_scenario_omission_is_rejected(self) -> None:
+        config = json.loads(e2e.SCENARIOS.read_text())
+        required = config["fault_scenarios"] + config["adapter_repair_faults"] + config["advanced_scenarios"] + config["acceptance_postconditions"] + config["journeys"] + ["shared_copilot_vscode_backend"]
+        rows = [{"scenario": scenario} for scenario in required]
+        e2e.validate_enforced_scenario_coverage(rows, config)
+        with self.assertRaisesRegex(ValueError, "omitted or duplicated"):
+            e2e.validate_enforced_scenario_coverage(rows[1:], config)
+
+    def test_fixture_only_claim_escalation_is_rejected(self) -> None:
+        evidence = self.fixture_harness().export()
+        evidence["run"]["runtime_claims"] = True
+        with self.assertRaisesRegex(ValueError, "cannot escalate"):
+            e2e.assert_redacted(evidence)
+
+    def test_hidden_yes_acceptance_or_mutation_fails_public_scenario(self) -> None:
+        fake = '''#!/usr/bin/python3
+import os, pathlib, sys
+if sys.argv[1:] == ["--help"]:
+    print("help")
+    raise SystemExit(0)
+path = pathlib.Path(os.environ["AGENTPLUGINS_HOME"]) / "state"
+path.parent.mkdir(parents=True, exist_ok=True)
+path.write_text("mutated")
+print("accepted")
+'''
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            binary = root / "agentplugins"
+            binary.write_text(fake)
+            binary.chmod(0o700)
+            workspace = root / "workspace"
+            workspace.mkdir()
+            with mock.patch.dict(os.environ, {"HOME": str(root / "home"), "AGENTPLUGINS_HOME": str(root / "manager")}, clear=False):
+                passed, value = observer.no_hidden_yes_scenario(binary, workspace, "a" * 64)
+        self.assertFalse(passed)
+        self.assertFalse(value["proof"]["manager_unchanged"])
+        self.assertFalse(value["proof"]["unknown_option_reported"])
+
+    def test_stale_public_pointer_is_rejected_against_caller_identity(self) -> None:
+        latest = (PUBLICATION / "latest.json").read_bytes()
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.object(e2e, "bounded_https_get", return_value=latest):
+            with self.assertRaisesRegex(ValueError, "exact caller publication identity"):
+                e2e.fetch_production_directory(
+                    Path(tmp) / "directory", expected_publication_id="fixture-1", expected_sequence=8,
+                    expected_snapshot_digest="sha256:" + "b" * 64, expected_source_commit="d" * 40,
+                )
 
 
 if __name__ == "__main__":

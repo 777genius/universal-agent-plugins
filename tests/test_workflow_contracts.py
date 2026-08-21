@@ -45,6 +45,8 @@ class WorkflowContractTests(unittest.TestCase):
         inputs = workflow["on"]["workflow_dispatch"]["inputs"]
         self.assertEqual(inputs["consent"]["required"], "true")
         self.assertNotIn("release_tag", inputs)
+        self.assertEqual(set(workflow["on"]["workflow_call"]["inputs"]), {"consent", "publication_id", "publication_sequence", "publication_snapshot_digest", "publication_source_commit"})
+        self.assertTrue(all(workflow["on"]["workflow_call"]["inputs"][name]["required"] == "true" for name in ("publication_id", "publication_sequence", "publication_snapshot_digest", "publication_source_commit")))
         self.assertIn("workflow_call", workflow["on"])
         slots = native["strategy"]["matrix"]["include"]
         self.assertEqual({(slot["os"], slot["architecture"]) for slot in slots}, {
@@ -59,8 +61,10 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertIn("prepare_launch_evidence.py", commands(native))
         self.assertIn("node-version: '22'", yaml.safe_dump(npm))
         self.assertIn("npm install --global", commands(npm))
+        self.assertIn("npm audit signatures", commands(npm))
         self.assertIn("--npm-facade", commands(npm))
         self.assertIn("universal-agent-plugins-0.1.8.tgz", commands(npm))
+        self.assertIn("--asset-name agentplugins_0.1.8_linux_amd64", commands(npm))
         self.assertNotIn("universal-agent-plugins.tgz", commands(npm))
         self.assertNotRegex(commands(npm), r"github\.com/.*\.tgz")
         self.assertIn("inputs.consent", aggregate["if"])
@@ -104,7 +108,7 @@ class WorkflowContractTests(unittest.TestCase):
                 self.assertIn("SHA256SUMS", text)
                 self.assertIn("overwrite: false", text)
                 if path == LAUNCH:
-                    self.assertIn("universal-agent-plugins@0.1.8", text)
+                    self.assertIn("agentplugins_0.1.8_linux_amd64", text)
                 self.assertNotIn("AGENTPLUGINS_VERSION: \"0.1.6\"", text)
 
     def test_live_workflow_is_read_only_and_does_not_publish(self) -> None:

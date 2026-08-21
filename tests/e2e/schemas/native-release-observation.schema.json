@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "Challenge-bound native release facade observation",
   "type": "object",
-  "required": ["schema_version", "kind", "os", "architecture", "node_major", "executed", "version", "catalog_repository", "catalog_sha", "cli_release_repository", "cli_release_tag", "release_manifest_digest", "release_checksums_digest", "directory_digest", "asset_name", "asset_digest", "challenge", "challenge_context", "started_at", "observed_at", "command_trace", "runner_platform"],
+  "required": ["schema_version", "kind", "os", "architecture", "node_major", "executed", "version", "catalog_repository", "catalog_sha", "cli_release_repository", "cli_release_tag", "github_release_identity", "release_manifest_digest", "release_checksums_digest", "directory_digest", "asset_name", "asset_digest", "github_asset_attestation", "challenge", "challenge_context", "started_at", "observed_at", "command_trace", "runner_platform"],
   "properties": {
     "schema_version": {"const": 1},
     "kind": {"enum": ["binary", "npm"]},
@@ -15,11 +15,13 @@
     "catalog_sha": {"type": "string", "pattern": "^[a-f0-9]{40}$"},
     "cli_release_repository": {"const": "777genius/plugin-kit-ai"},
     "cli_release_tag": {"const": "agentplugins-v0.1.8"},
+    "github_release_identity": {"type": "object", "required": ["repository", "tag", "tag_commit", "release_id", "immutable"], "properties": {"repository": {"const": "777genius/plugin-kit-ai"}, "tag": {"const": "agentplugins-v0.1.8"}, "tag_commit": {"type": "string", "pattern": "^[a-f0-9]{40}$"}, "release_id": {"type": "integer", "minimum": 1}, "immutable": {"const": true}}, "additionalProperties": false},
     "release_manifest_digest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
     "release_checksums_digest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
     "directory_digest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
     "asset_name": {"type": "string", "minLength": 1},
     "asset_digest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+    "github_asset_attestation": {"type": "object", "required": ["repository", "workflow", "tag", "tag_commit", "asset_name", "asset_digest", "verified"], "properties": {"repository": {"const": "777genius/plugin-kit-ai"}, "workflow": {"const": "777genius/plugin-kit-ai/.github/workflows/release.yml"}, "tag": {"const": "agentplugins-v0.1.8"}, "tag_commit": {"type": "string", "pattern": "^[a-f0-9]{40}$"}, "asset_name": {"type": "string", "minLength": 1}, "asset_digest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"}, "verified": {"const": true}}, "additionalProperties": false},
     "challenge": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
     "challenge_context": {"type": "object"},
     "started_at": {"type": "string", "format": "date-time"},
@@ -28,13 +30,20 @@
     "runner_platform": {"type": "string", "minLength": 1},
     "npm_package": {
       "type": "object",
-      "required": ["name", "version", "integrity", "tarball", "metadata_digest"],
+      "required": ["name", "version", "integrity", "tarball", "metadata_digest", "provenance_url", "provenance_predicate_type", "installed_executable_digest", "native_asset_name", "native_asset_digest", "provenance_verified", "provenance_output_digest"],
       "properties": {
         "name": {"const": "universal-agent-plugins"},
         "version": {"const": "0.1.8"},
         "integrity": {"type": "string", "pattern": "^sha512-[A-Za-z0-9+/]+={0,2}$"},
         "tarball": {"const": "https://registry.npmjs.org/universal-agent-plugins/-/universal-agent-plugins-0.1.8.tgz"},
-        "metadata_digest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"}
+        "metadata_digest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+        "provenance_url": {"const": "https://registry.npmjs.org/-/npm/v1/attestations/universal-agent-plugins@0.1.8"},
+        "provenance_predicate_type": {"const": "https://slsa.dev/provenance/v1"},
+        "installed_executable_digest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+        "native_asset_name": {"const": "agentplugins_0.1.8_linux_amd64"},
+        "native_asset_digest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+        "provenance_verified": {"const": true},
+        "provenance_output_digest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"}
       },
       "additionalProperties": false
     }
