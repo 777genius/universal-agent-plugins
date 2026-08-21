@@ -24,7 +24,12 @@ import jsonschema
 import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from build_registry import directory_tree_digest as package_tree_digest
+from build_registry import (
+    RegistryError,
+    directory_tree_digest as package_tree_digest,
+    read_object,
+    validate_bridge_bindings,
+)
 from portable_paths import validate_segment, validate_tree
 from validate_catalog import ValidationError, validate_plugin
 
@@ -341,13 +346,17 @@ def assemble(root: Path, bridge_id: str, destination: Path, mirror_root: Path | 
         manifest_body = (destination / "plugin.json").read_bytes()
         return {
             "bridge_id": bridge_id,
+            "product_id": recipe["product_id"],
             "distribution_id": recipe["distribution_id"],
+            "package_path": recipe["output"],
+            "overlay_path": f"bridges/{bridge_id}/{recipe['overlay']}",
             "upstream_repository": upstream["repository"],
             "upstream_revision": revision,
             "license": upstream["license"]["spdx"],
             "license_evidence": license_evidence,
             "provenance_evidence": provenance_evidence,
             "manifest_digest": sha256(manifest_body),
+            "tree_digest_algorithm": "agentplugins-tree-sha256-v1",
             "tree_digest": package_tree_digest(destination),
             "components": inventory,
         }
@@ -411,6 +420,12 @@ def check_all(root: Path, mirror_root: Path | None) -> list[dict[str, object]]:
             _path, recipe = load_recipe(root, bridge_id)
             compare_trees(root / recipe["output"], destination)
             reports.append(report)
+    directory_source = root / "registry" / "directory.json"
+    if directory_source.is_file():
+        validate_bridge_bindings(
+            read_object(directory_source), repository_root=root,
+            build_reports=reports,
+        )
     return reports
 
 
@@ -429,7 +444,7 @@ def main(argv: list[str] | None = None) -> int:
             reports = [build_one(root, args.id, args.upstream_mirror)]
         else:
             reports = check_all(root, args.upstream_mirror)
-    except (BridgeError, OSError, ValueError, json.JSONDecodeError) as error:
+    except (BridgeError, RegistryError, OSError, ValueError, json.JSONDecodeError) as error:
         print(f"ERROR: {error}", file=sys.stderr)
         return 1
     print(json.dumps({"status": "ok", "command": args.command, "bridges": reports}, sort_keys=True, separators=(",", ":")))

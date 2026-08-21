@@ -110,6 +110,16 @@ class BridgeBuilderTests(unittest.TestCase):
         mode = (second / "skills" / "fixture-skill" / "tool.sh").stat().st_mode
         self.assertTrue(mode & stat.S_IXUSR)
 
+    def test_reproduction_reports_are_bound_to_directory_bridge_releases(self) -> None:
+        directory = self.root / "registry"
+        directory.mkdir()
+        (directory / "directory.json").write_text("{}")
+        with mock.patch.object(bridges, "validate_bridge_bindings") as validate:
+            reports = bridges.check_all(self.root, self.mirror)
+        validate.assert_called_once_with(
+            {}, repository_root=self.root, build_reports=reports,
+        )
+
     def test_builder_invokes_only_git_and_never_upstream_executable(self) -> None:
         marker = self.temp / "executed"
         tool = self.work / "skills" / "fixture-skill" / "tool.sh"

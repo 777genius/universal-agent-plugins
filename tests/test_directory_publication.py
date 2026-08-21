@@ -162,6 +162,58 @@ class ClientContractTests(unittest.TestCase):
 
 
 class PublicationLifecycleTests(unittest.TestCase):
+    def test_publication_rebinds_bridge_recipe_before_accepting_prebuilt_bytes(self) -> None:
+        source = json.loads((ROOT / "registry" / "directory.json").read_bytes())
+        bridge = next(item for item in source["distributions"] if item["kind"] == "community_bridge")
+        # The package and recipe remain fixed; only the contributor-authored
+        # provenance claim is changed.
+        bridge["releases"][0]["build_provenance"]["upstream_revision"] = "0" * 40
+        config = prepare.load_config(ROOT / "registry" / "publication" / "config.json")
+        with self.assertRaisesRegex(publication.PublicationError, "build provenance.*canonical recipe upstream"):
+            prepare.build_candidate(source, config, "a" * 40, "bridge-provenance", None)
+
+        import build_bridges
+
+        source = json.loads((ROOT / "registry" / "directory.json").read_bytes())
+        with mock.patch.object(build_bridges, "check_all", return_value=[]) as reproduce, self.assertRaisesRegex(
+            publication.PublicationError, "build reports.*one-for-one",
+        ):
+            prepare.validate_reproduced_bridges(source, ROOT, config["repository"])
+        reproduce.assert_called_once_with(ROOT, None)
+
+    def test_publication_upstream_positive_evidence_binds_complete_release_tuple(self) -> None:
+        product = {
+            "id": "demo", "default_distribution": "upstream/demo",
+            "minimum_capabilities": {"mcp": "required", "skills": "optional"},
+        }
+        release = {"sequence": 7, "components": ["mcp"], "tree_digest": "sha256:" + "1" * 64}
+        policy = {
+            "release_sequence": 7, "status": "active",
+            "targets": [{"client": "codex"}], "current_evidence": ["materialized"],
+        }
+        distribution = {
+            "id": "upstream/demo", "kind": "upstream",
+            "releases": [release], "release_policies": [policy],
+        }
+        observation = {
+            "id": "materialized", "distribution_id": "upstream/demo", "release_sequence": 7,
+            "package_tree_digest": release["tree_digest"], "client": "codex",
+            "level": "materialization", "outcome": "passed",
+        }
+        prepare.validate_upstream_default_evidence([product], [distribution], [observation])
+        for field, value in (
+            ("distribution_id", "other/demo"),
+            ("release_sequence", 8),
+            ("package_tree_digest", "sha256:" + "2" * 64),
+            ("client", "cursor"),
+            ("level", "runtime"),
+            ("outcome", "failed"),
+        ):
+            changed = copy.deepcopy(observation)
+            changed[field] = value
+            with self.subTest(field=field), self.assertRaisesRegex(publication.PublicationError, "lacks exact passed materialization evidence for codex"):
+                prepare.validate_upstream_default_evidence([product], [distribution], [changed])
+
     def signer(self, root: Path, candidate: Path, publication_id: str, now: str) -> subprocess.CompletedProcess[str]:
         value = json.loads(candidate.read_bytes())
         value["publication_id"] = publication_id
@@ -510,6 +562,9 @@ class PublicationLifecycleTests(unittest.TestCase):
                 "distributions": [{"schema_version": 1, "id": "example/demo", "product_id": "demo", "kind": "upstream", "status": "active", "packager": "example", "releases": [{"sequence": 1, "package_version": "1.0.0", "manifest_name": "demo", "agent_plugins_schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json", "package_source": {"repository": "example/external", "revision": revision, "path": "plugins/demo"}, "tree_digest_algorithm": "agentplugins-tree-sha256-v1", "tree_digest": "sha256:" + "0" * 64, "manifest_digest": "sha256:" + "0" * 64, "components": ["mcp"]}], "release_policies": [{"release_sequence": 1, "status": "active", "minimum_installer_version": "0.1.6", "targets": [{"client": "codex", "scopes": ["user"], "delivery": "managed"}], "current_evidence": []}]}],
                 "evidence": [],
             }
+            # This test isolates external byte reacquisition. Upstream-default
+            # publication additionally requires trusted positive materialization.
+            source["distributions"][0]["kind"] = "community"
             source_path = root / "directory.json"
             source_path.write_text(json.dumps(source))
             output = root / "candidate.json"

@@ -5,11 +5,14 @@ import copy
 import importlib.util
 import io
 import json
+import shutil
 import tarfile
 import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
+
+import yaml
 
 
 MODULE_PATH = Path(__file__).resolve().parents[1] / "scripts" / "build_registry.py"
@@ -710,12 +713,124 @@ class DirectoryDomainTests(unittest.TestCase):
         self.assertEqual(context7["tree_digest"], "sha256:08eed3b67f2e71a11b68baa594380c2f69ec1bc97584d701deaf7942ac34c0d8")
         self.assertEqual(context7["manifest_digest"], "sha256:d01781acd899aefa9445a290cf43a481230321934d62f9c8a2aab06a89718236")
 
+    def bridge_reports(self):
+        import build_bridges
+
+        reports = []
+        for bridge_id in build_bridges.recipe_ids(registry.ROOT):
+            _path, recipe = build_bridges.load_recipe(registry.ROOT, bridge_id)
+            package = registry.ROOT / recipe["output"]
+            inventory = build_bridges.validate_components(package, recipe)
+            reports.append({
+                "bridge_id": bridge_id,
+                "product_id": recipe["product_id"],
+                "distribution_id": recipe["distribution_id"],
+                "package_path": recipe["output"],
+                "overlay_path": f"bridges/{bridge_id}/{recipe['overlay']}",
+                "upstream_repository": recipe["upstream"]["repository"],
+                "upstream_revision": recipe["upstream"]["revision"],
+                "manifest_digest": registry.digest_bytes((package / "plugin.json").read_bytes()),
+                "tree_digest_algorithm": registry.DIRECTORY_TREE_DIGEST_ALGORITHM,
+                "tree_digest": registry.directory_tree_digest(package),
+                "components": inventory,
+            })
+        return reports
+
+    def test_bridge_release_recipe_and_build_report_bind_every_security_field(self) -> None:
+        source = self.source()
+        reports = self.bridge_reports()
+        registry.validate_bridge_bindings(source, build_reports=reports)
+        bridges = [item for item in source["distributions"] if item["kind"] == "community_bridge"]
+        first = bridges[0]
+        mutations = [
+            ("product identity", lambda distribution, release: distribution.__setitem__("product_id", "cloudflare-docs")),
+            ("distribution identity", lambda distribution, release: distribution.__setitem__("id", "777genius/not-the-recipe")),
+            ("package output", lambda distribution, release: release["package_source"].__setitem__("path", "plugins/cloudflare-docs")),
+            ("upstream repository", lambda distribution, release: release["build_provenance"].__setitem__("upstream_repository", "example/wrong")),
+            # Exact review failure probe: only the claimed revision changes;
+            # recipe and committed package bytes remain untouched.
+            ("upstream revision", lambda distribution, release: release["build_provenance"].__setitem__("upstream_revision", "0" * 40)),
+            ("components", lambda distribution, release: release.__setitem__("components", ["mcp", "skills"])),
+            ("manifest digest", lambda distribution, release: release.__setitem__("manifest_digest", "sha256:" + "0" * 64)),
+            ("tree algorithm", lambda distribution, release: release.__setitem__("tree_digest_algorithm", "wrong")),
+            ("tree digest", lambda distribution, release: release.__setitem__("tree_digest", "sha256:" + "0" * 64)),
+        ]
+        for label, mutate in mutations:
+            changed = copy.deepcopy(source)
+            distribution = next(item for item in changed["distributions"] if item["id"] == first["id"])
+            mutate(distribution, distribution["releases"][0])
+            with self.subTest(label=label), self.assertRaises(registry.RegistryError):
+                registry.validate_bridge_bindings(changed, build_reports=reports)
+
+        with self.assertRaisesRegex(registry.RegistryError, "reports.*one-for-one"):
+            registry.validate_bridge_bindings(source, build_reports=reports[:-1])
+        with self.assertRaisesRegex(registry.RegistryError, "duplicate bridge build report"):
+            registry.validate_bridge_bindings(source, build_reports=[*reports, copy.deepcopy(reports[0])])
+        for field in (
+            "product_id", "package_path", "overlay_path", "upstream_repository", "upstream_revision",
+            "manifest_digest", "tree_digest_algorithm", "tree_digest", "components",
+        ):
+            changed_reports = copy.deepcopy(reports)
+            report = changed_reports[0]
+            report[field] = [] if field == "components" else "wrong"
+            with self.subTest(report_field=field), self.assertRaisesRegex(registry.RegistryError, f"report {field} mismatch"):
+                registry.validate_bridge_bindings(source, build_reports=changed_reports)
+
+    def test_bridge_binding_uses_newest_release_without_revalidating_historical_bytes(self) -> None:
+        source = self.source()
+        reports = self.bridge_reports()
+        distribution = next(item for item in source["distributions"] if item["kind"] == "community_bridge")
+        historical = copy.deepcopy(distribution["releases"][0])
+        historical["package_source"]["revision"] = "1" * 40
+        historical["manifest_digest"] = "sha256:" + "1" * 64
+        historical["tree_digest"] = "sha256:" + "2" * 64
+        historical["build_provenance"]["upstream_revision"] = "3" * 40
+        current = copy.deepcopy(distribution["releases"][0])
+        current["sequence"] = historical["sequence"] + 1
+        distribution["releases"] = [historical, current]
+
+        registry.validate_bridge_bindings(source, build_reports=reports)
+
+        historical["package_source"]["revision"] = None
+        with self.assertRaisesRegex(
+            registry.RegistryError,
+            "only the newest bridge release may await revision binding",
+        ):
+            registry.validate_bridge_bindings(source, build_reports=reports)
+
+    def test_bridge_recipe_set_rejects_missing_orphan_and_duplicate(self) -> None:
+        source = self.source()
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            shutil.copytree(registry.ROOT / "bridges", root / "bridges")
+            shutil.rmtree(root / "bridges" / "github")
+            with self.assertRaisesRegex(registry.RegistryError, "one-for-one"):
+                registry.validate_bridge_bindings(source, repository_root=root)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            shutil.copytree(registry.ROOT / "bridges", root / "bridges")
+            recipe = yaml.safe_load((root / "bridges" / "github" / "bridge.yaml").read_text())
+            recipe["product_id"] = "orphan"
+            recipe["distribution_id"] = "777genius/orphan-bridge"
+            recipe["output"] = "plugins/orphan"
+            orphan = root / "bridges" / "orphan"
+            orphan.mkdir()
+            (orphan / "bridge.yaml").write_text(yaml.safe_dump(recipe, sort_keys=False))
+            with self.assertRaisesRegex(registry.RegistryError, "one-for-one"):
+                registry.validate_bridge_bindings(source, repository_root=root)
+
+            recipe["distribution_id"] = "777genius/github-bridge"
+            (orphan / "bridge.yaml").write_text(yaml.safe_dump(recipe, sort_keys=False))
+            with self.assertRaisesRegex(registry.RegistryError, "duplicate canonical bridge recipe"):
+                registry.validate_bridge_bindings(source, repository_root=root)
+
     def test_distribution_kind_and_evidence_contract_fixture(self) -> None:
         fixture = self.fixture()
         registry.validate_directory(fixture, verify_packages=False)
         self.assertEqual({item["kind"] for item in fixture["distributions"]}, {"upstream", "community_bridge", "community"})
         bridge = next(item for item in fixture["distributions"] if item["kind"] == "community_bridge")
-        self.assertIsNone(bridge["releases"][0]["package_source"]["revision"])
+        self.assertEqual(bridge["releases"][0]["package_source"]["revision"], "b" * 40)
         self.assertIn("build_provenance", bridge["releases"][0])
         self.assertEqual(bridge["release_policies"][0]["current_evidence"], ["evidence/demo-bridge-runtime"])
 
@@ -841,6 +956,15 @@ class DirectoryDomainTests(unittest.TestCase):
         observation["package_tree_digest"] = "sha256:" + "0" * 64
         with self.assertRaisesRegex(registry.RegistryError, r"evidence .* for cursor$"):
             registry.resolve_directory(fixture, "upstream/demo", ["cursor"])
+
+        for field, value in (("distribution_id", "other/demo"), ("outcome", "failed"), ("client", "codex")):
+            fixture = self.fixture()
+            upstream = self.promote_upstream(fixture, ("cursor",), set_default=False)
+            evidence_id = upstream["release_policies"][0]["current_evidence"][0]
+            observation = next(item for item in fixture["evidence"] if item["id"] == evidence_id)
+            observation[field] = value
+            with self.subTest(field=field), self.assertRaisesRegex(registry.RegistryError, r"cursor$"):
+                registry.resolve_directory(fixture, "upstream/demo", ["cursor"])
 
     def test_contribution_guide_keeps_stable_anchor_and_directory_source_flow(self) -> None:
         root = MODULE_PATH.parents[1]

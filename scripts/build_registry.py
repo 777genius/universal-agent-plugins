@@ -723,7 +723,147 @@ def _policy_for(distribution: dict[str, object], sequence: int) -> dict[str, obj
     return policies[0]
 
 
-def validate_directory(source: dict[str, object], *, verify_packages: bool = True) -> None:
+def _bridge_component_kinds(inventory: dict[str, list[str]]) -> list[str]:
+    return sorted(
+        component
+        for component, entries in (("mcp", inventory["mcp_servers"]), ("skills", inventory["skills"]))
+        if entries
+    )
+
+
+def validate_bridge_bindings(
+    source: dict[str, object], *, repository_root: Path = ROOT,
+    repository: str = "777genius/universal-agent-plugins",
+    build_reports: list[dict[str, object]] | None = None,
+) -> None:
+    """Bind every local bridge release to one recipe and one build result.
+
+    A caller may provide reports emitted by ``build_bridges.check_all``.  The
+    normal source-validation path derives the same result fields from the
+    committed package, while the independent reproduction gate proves those
+    bytes can be regenerated from the pinned upstream commit.
+    """
+    # Imported lazily because build_bridges uses this module's tree digester.
+    from build_bridges import BridgeError, load_recipe, recipe_ids, validate_components
+
+    local_release_exists = any(
+        release["package_source"]["repository"] == repository
+        for distribution in source["distributions"]
+        for release in distribution["releases"]
+    )
+    if not local_release_exists:
+        return
+    releases: list[tuple[dict[str, object], dict[str, object]]] = []
+    for distribution in source["distributions"]:
+        if distribution["kind"] != "community_bridge":
+            continue
+        local_releases = [
+            release for release in distribution["releases"]
+            if release["package_source"]["repository"] == repository
+        ]
+        if not local_releases:
+            continue
+        current = max(local_releases, key=lambda release: release["sequence"])
+        unresolved = [
+            release for release in local_releases
+            if release["package_source"]["revision"] is None
+        ]
+        require(
+            len(unresolved) <= 1 and (not unresolved or unresolved[0] is current),
+            f"{distribution['id']}: only the newest bridge release may await revision binding",
+        )
+        releases.append((distribution, current))
+    recipes: dict[str, tuple[Path, dict[str, object]]] = {}
+    try:
+        for bridge_id in recipe_ids(repository_root):
+            recipe_path, recipe = load_recipe(repository_root, bridge_id)
+            distribution_id = recipe["distribution_id"]
+            require(distribution_id not in recipes, f"duplicate canonical bridge recipe for {distribution_id}")
+            recipes[distribution_id] = (recipe_path, recipe)
+    except BridgeError as error:
+        raise RegistryError(f"bridge recipe validation failed: {error}") from error
+
+    release_ids = [distribution["id"] for distribution, _release in releases]
+    require(len(release_ids) == len(set(release_ids)), "in-repository community bridge distribution IDs must be unique")
+    require(set(recipes) == set(release_ids), "canonical bridge recipes and current in-repository community bridge releases must match one-for-one")
+
+    expected_reports: dict[str, dict[str, object]] = {}
+    for distribution, release in releases:
+        label = f"{distribution['id']}@{release['sequence']}"
+        recipe_path, recipe = recipes[distribution["id"]]
+        package_source = release["package_source"]
+        provenance = release.get("build_provenance")
+        require(recipe["product_id"] == distribution["product_id"], f"{label}: recipe product identity mismatch")
+        require(recipe["distribution_id"] == distribution["id"], f"{label}: recipe distribution identity mismatch")
+        require(package_source["path"] == recipe["output"], f"{label}: recipe package output path mismatch")
+        overlay = recipe_path.parent / recipe["overlay"]
+        require(overlay.is_dir() and not overlay.is_symlink(), f"{label}: canonical recipe overlay path is missing")
+        upstream = recipe["upstream"]
+        require(
+            provenance == {
+                "upstream_repository": upstream["repository"],
+                "upstream_revision": upstream["revision"],
+            },
+            f"{label}: build provenance does not match the canonical recipe upstream",
+        )
+        package_root = repository_root / package_source["path"]
+        require(package_root.is_dir(), f"{label}: canonical bridge package path is missing")
+        try:
+            inventory = validate_components(package_root, recipe)
+        except (BridgeError, OSError, ValueError, json.JSONDecodeError) as error:
+            raise RegistryError(f"{label}: canonical bridge package is invalid: {error}") from error
+        require(_bridge_component_kinds(inventory) == release["components"], f"{label}: recipe component inventory mismatch")
+        manifest = digest_bytes((package_root / "plugin.json").read_bytes())
+        tree = directory_tree_digest(package_root)
+        require(release["tree_digest_algorithm"] == DIRECTORY_TREE_DIGEST_ALGORITHM, f"{label}: bridge tree digest algorithm mismatch")
+        require(manifest == release["manifest_digest"], f"{label}: bridge manifest digest differs from recipe build result")
+        require(tree == release["tree_digest"], f"{label}: bridge tree digest differs from recipe build result")
+        expected_reports[distribution["id"]] = {
+            "bridge_id": recipe["product_id"],
+            "product_id": recipe["product_id"],
+            "distribution_id": recipe["distribution_id"],
+            "package_path": recipe["output"],
+            "overlay_path": f"bridges/{recipe['product_id']}/{recipe['overlay']}",
+            "upstream_repository": upstream["repository"],
+            "upstream_revision": upstream["revision"],
+            "manifest_digest": manifest,
+            "tree_digest_algorithm": DIRECTORY_TREE_DIGEST_ALGORITHM,
+            "tree_digest": tree,
+            "components": inventory,
+        }
+
+    reports = list(expected_reports.values()) if build_reports is None else build_reports
+    report_ids = [report.get("distribution_id") for report in reports]
+    require(len(report_ids) == len(set(report_ids)), "duplicate bridge build report")
+    require(set(report_ids) == set(expected_reports), "bridge build reports and canonical recipes must match one-for-one")
+    for report in reports:
+        expected = expected_reports[report["distribution_id"]]
+        for field, value in expected.items():
+            require(report.get(field) == value, f"{report['distribution_id']}: bridge build report {field} mismatch")
+
+
+def _positive_materialization_clients(
+    distribution: dict[str, object], release: dict[str, object], policy: dict[str, object],
+    evidence: dict[str, dict[str, object]],
+) -> set[object]:
+    return {
+        observation.get("client")
+        for evidence_id in policy["current_evidence"]
+        for observation in [evidence[evidence_id]]
+        if observation.get("distribution_id") == distribution["id"]
+        and observation.get("release_sequence") == release["sequence"]
+        and observation.get("package_tree_digest") == release["tree_digest"]
+        and observation.get("level") == "materialization"
+        and observation.get("outcome") == "passed"
+    }
+
+
+def validate_directory(
+    source: dict[str, object], *, verify_packages: bool = True,
+    repository_root: Path = ROOT,
+    repository: str = "777genius/universal-agent-plugins",
+    bridge_build_reports: list[dict[str, object]] | None = None,
+) -> None:
     _validate_source_schema(source)
     products = source["products"]
     distributions = source["distributions"]
@@ -784,7 +924,7 @@ def validate_directory(source: dict[str, object], *, verify_packages: bool = Tru
                 current_tuples.add(evidence_tuple)
             package_source = release["package_source"]
             if package_source["revision"] is None:
-                require(package_source["repository"] == "777genius/universal-agent-plugins", f"{distribution['id']}@{sequence}: only an in-repository release may await post-merge revision binding")
+                require(package_source["repository"] == repository, f"{distribution['id']}@{sequence}: only an in-repository release may await post-merge revision binding")
                 require(package_source["path"] == f"plugins/{product_id}", f"{distribution['id']}@{sequence}: unresolved in-repository release must use the canonical product package path")
                 require("published_at" not in release, f"{distribution['id']}@{sequence}: unresolved release cannot claim a publication time")
             if distribution["kind"] == "community_bridge":
@@ -798,8 +938,8 @@ def validate_directory(source: dict[str, object], *, verify_packages: bool = Tru
             # bytes in this checkout. Bound historical releases are immutable
             # at their recorded commit and may intentionally differ after the
             # canonical product path moves to a newer distribution.
-            if verify_packages and package_source["repository"] == "777genius/universal-agent-plugins" and package_source["revision"] is None:
-                package_root = ROOT / package_source["path"]
+            if verify_packages and package_source["repository"] == repository and package_source["revision"] is None:
+                package_root = repository_root / package_source["path"]
                 require(package_root.is_dir(), f"{distribution['id']}@{sequence}: package path is missing")
                 fields = package_fields(package_root, [])
                 require(directory_tree_digest(package_root) == release["tree_digest"], f"{distribution['id']}@{sequence}: package tree digest drift")
@@ -817,12 +957,7 @@ def validate_directory(source: dict[str, object], *, verify_packages: bool = Tru
         if default["kind"] == "upstream":
             candidate = eligible[-1]
             policy = _policy_for(default, candidate["sequence"])
-            passed_targets = {
-                evidence_by_id[evidence_id].get("client")
-                for evidence_id in policy["current_evidence"]
-                if evidence_by_id[evidence_id]["level"] == "materialization"
-                and evidence_by_id[evidence_id]["outcome"] == "passed"
-            }
+            passed_targets = _positive_materialization_clients(default, candidate, policy, evidence_by_id)
             missing_targets = sorted(
                 target["client"] for target in policy["targets"]
                 if target["client"] not in passed_targets
@@ -833,6 +968,10 @@ def validate_directory(source: dict[str, object], *, verify_packages: bool = Tru
                 "lacks current positive package compatibility evidence "
                 f"(passed materialization) for targets: {','.join(missing_targets)}",
             )
+    validate_bridge_bindings(
+        source, repository_root=repository_root, repository=repository,
+        build_reports=bridge_build_reports,
+    )
 
 
 def _eligible_release(distribution: dict[str, object], product: dict[str, object], targets: set[str], evidence: dict[str, dict[str, object]] | None = None) -> tuple[dict[str, object] | None, str | None]:
@@ -862,16 +1001,7 @@ def _eligible_release(distribution: dict[str, object], product: dict[str, object
                 reasons.append(f"release {release['sequence']} has blocking trusted failure for {','.join(failures)}")
                 continue
             if distribution["kind"] == "upstream":
-                passed_targets = {
-                    observation.get("client")
-                    for evidence_id in policy["current_evidence"]
-                    for observation in [evidence[evidence_id]]
-                    if observation.get("distribution_id") == distribution["id"]
-                    and observation.get("release_sequence") == release["sequence"]
-                    and observation.get("package_tree_digest") == release["tree_digest"]
-                    and observation.get("level") == "materialization"
-                    and observation.get("outcome") == "passed"
-                }
+                passed_targets = _positive_materialization_clients(distribution, release, policy, evidence)
                 missing_targets = sorted(targets - passed_targets)
                 if missing_targets:
                     reasons.append(

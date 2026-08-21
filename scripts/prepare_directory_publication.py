@@ -16,7 +16,11 @@ from pathlib import Path
 from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from build_registry import directory_tree_digest as package_tree_digest
+from build_registry import (
+    RegistryError,
+    directory_tree_digest as package_tree_digest,
+    validate_bridge_bindings,
+)
 from directory_publication import (
     CANDIDATE_SCHEMA,
     DIGEST_RE,
@@ -378,6 +382,77 @@ def selected_evidence(
     return [copy.deepcopy(verified[item]) for item in sorted(selected)]
 
 
+def validate_upstream_default_evidence(
+    products: list[dict[str, Any]], distributions: list[dict[str, Any]],
+    evidence: list[dict[str, Any]],
+) -> None:
+    distributions_by_id = {item["id"]: item for item in distributions}
+    evidence_by_id = {item["id"]: item for item in evidence}
+    for product in products:
+        distribution = distributions_by_id[product["default_distribution"]]
+        if distribution["kind"] != "upstream":
+            continue
+        policies = policy_map(distribution)
+        required = {
+            component for component, state in product["minimum_capabilities"].items()
+            if state == "required"
+        }
+        eligible = [
+            release for release in distribution["releases"]
+            if policies[release["sequence"]]["status"] == "active"
+            and required.issubset(release["components"])
+        ]
+        require(eligible, f"{product['id']}: upstream default has no eligible release")
+        release = eligible[-1]
+        policy = policies[release["sequence"]]
+        passed = {
+            observation.get("client")
+            for evidence_id in policy["current_evidence"]
+            for observation in [evidence_by_id[evidence_id]]
+            if observation.get("distribution_id") == distribution["id"]
+            and observation.get("release_sequence") == release["sequence"]
+            and observation.get("package_tree_digest") == release["tree_digest"]
+            and observation.get("level") == "materialization"
+            and observation.get("outcome") == "passed"
+        }
+        missing = sorted(target["client"] for target in policy["targets"] if target["client"] not in passed)
+        require(
+            not missing,
+            f"{product['id']}: upstream default {distribution['id']}@{release['sequence']} lacks exact passed materialization evidence for {','.join(missing)}",
+        )
+
+
+def validate_reproduced_bridges(
+    source: dict[str, Any], repository_root: Path, repository: str,
+) -> None:
+    """Rebuild local bridges and bind the fetched-upstream reports to source."""
+    try:
+        # First reject cheap source/recipe/package mismatches without network.
+        validate_bridge_bindings(
+            source, repository_root=repository_root, repository=repository,
+        )
+        has_local_bridge = any(
+            distribution["kind"] == "community_bridge"
+            and release["package_source"]["repository"] == repository
+            for distribution in source["distributions"]
+            for release in distribution["releases"]
+        )
+        if not has_local_bridge:
+            return
+        from build_bridges import BridgeError, check_all
+
+        try:
+            reports = check_all(repository_root, None)
+        except BridgeError as error:
+            raise PublicationError(f"bridge reproduction failed: {error}") from error
+        validate_bridge_bindings(
+            source, repository_root=repository_root, repository=repository,
+            build_reports=reports,
+        )
+    except RegistryError as error:
+        raise PublicationError(str(error)) from error
+
+
 def build_candidate(
     source: dict[str, Any], config: dict[str, Any], source_commit: str,
     publication_id: str, previous: dict[str, Any] | None,
@@ -386,6 +461,7 @@ def build_candidate(
 ) -> dict[str, Any]:
     validate_with_schema(source, SOURCE_SCHEMA)
     require(SHA_RE.fullmatch(source_commit) is not None, "source commit must be a full lowercase SHA")
+    validate_reproduced_bridges(source, repository_root, config["repository"])
     prior = previous_releases(previous)
     prior_distributions = previous_distributions(previous)
     all_distributions = {item["id"]: item for item in source["distributions"]}
@@ -515,6 +591,7 @@ def build_candidate(
         require(any(d["id"] == identity[0] and any(r["sequence"] == identity[1] for r in d["releases"]) for d in output_distributions), f"published release {identity} was removed from canonical source")
 
     evidence = selected_evidence(source, set(distributions_by_id), config, overrides)
+    validate_upstream_default_evidence(products, output_distributions, evidence)
     revocations = [
         {"distribution_id": distribution["id"], "release_sequence": policy["release_sequence"]}
         for distribution in output_distributions for policy in distribution["release_policies"]
