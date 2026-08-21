@@ -1,6 +1,7 @@
 import { defineConfig } from '@playwright/test'
 
 const baseURL = 'http://127.0.0.1:4173/universal-agent-plugins/'
+const chromiumExecutablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH
 
 export default defineConfig({
   testDir: './tests/browser',
@@ -12,6 +13,9 @@ export default defineConfig({
   use: {
     baseURL,
     trace: 'retain-on-failure',
+    launchOptions: chromiumExecutablePath
+      ? { executablePath: chromiumExecutablePath, args: ['--no-sandbox'] }
+      : undefined,
   },
   projects: [
     {
