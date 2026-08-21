@@ -172,11 +172,17 @@ moved tag, or different rebuilt tree is terminal.
 Pushing `M` is staging, not production promotion. The gate reads `latest.json`
 and both versioned artifacts from the immutable raw-commit origin for `M` and
 requires the exact run publication ID, sequence, snapshot digest, `Q` tag, and
-ledger identity. The stable launch checks and this exact staged identity gate
-must both pass before the Pages deployment promotes `M`. A failed deployment or
-gate therefore leaves the prior GitHub Pages production pointer in place and is
-retried from the already signed `Q` and authenticated `M`; it never allocates a
-new sequence.
+ledger identity. Sequence 1 additionally requires the complete stable-launch
+runtime, OAuth, and external-PR ceremony before Pages may promote `M`; there is
+no skipped-job path that can promote sequence 1. For every sequence greater
+than 1, including weekly expiry refreshes, evidence-only snapshots,
+suspensions, and emergency revocations, the launch-only job is intentionally
+skipped while the exact signed-publication and staged-site gates remain
+mandatory. The deployment condition explicitly accepts that skip only for a
+higher sequence and only after signing, materialization, and exact staging all
+succeed. A failed deployment or gate therefore leaves the prior GitHub Pages
+production pointer in place and is retried from the already signed `Q` and
+authenticated `M`; it never allocates a new sequence.
 
 The publisher validates the latest ledger signature even after client expiry.
 Expired data can supply only the sequence and immutable provenance for recovery,

@@ -209,6 +209,7 @@ class WorkflowContractTests(unittest.TestCase):
             self.assertIn(field, verify["env"])
         self.assertIn("raw.githubusercontent.com", verify["run"])
         deploy_needs = workflow["jobs"]["deploy"]["needs"]
+        self.assertIn("sign", deploy_needs)
         self.assertIn("gate_exact_staged_publication", deploy_needs)
         self.assertIn("required_stable_launch_evidence", deploy_needs)
         production = workflow["jobs"]["observe_production_latest"]
@@ -216,6 +217,41 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertNotIn("observe_production_latest", required["needs"])
         self.assertIn("observe_production_latest.py", commands(production))
         self.assertEqual(production["permissions"], {"contents": "read"})
+
+    def test_sequence_one_cannot_promote_without_launch_ceremony(self) -> None:
+        workflow = load(DIRECTORY_PUBLICATION)
+        launch_if = workflow["jobs"]["required_stable_launch_evidence"]["if"]
+        deploy_if = workflow["jobs"]["deploy"]["if"]
+        self.assertIn("needs.sign.outputs.sequence == '1'", launch_if)
+        self.assertIn("needs.sign.outputs.sequence == '1'", deploy_if)
+        self.assertIn("needs.required_stable_launch_evidence.result == 'success'", deploy_if)
+        self.assertNotIn("needs.required_stable_launch_evidence.result == 'skipped' && needs.sign.outputs.sequence == '1'", deploy_if)
+
+    def test_normal_refresh_skips_launch_but_keeps_exact_publication_gates(self) -> None:
+        workflow = load(DIRECTORY_PUBLICATION)
+        launch_if = workflow["jobs"]["required_stable_launch_evidence"]["if"]
+        deploy_if = workflow["jobs"]["deploy"]["if"]
+        self.assertNotIn("needs.sign.outputs.sequence > 1", launch_if)
+        self.assertIn("always()", deploy_if)
+        self.assertIn("needs.sign.outputs.sequence > 1", deploy_if)
+        self.assertIn("needs.required_stable_launch_evidence.result == 'skipped'", deploy_if)
+        for required_result in (
+            "needs.sign.result == 'success'",
+            "needs.materialize_site.result == 'success'",
+            "needs.gate_exact_staged_publication.result == 'success'",
+        ):
+            self.assertIn(required_result, deploy_if)
+
+    def test_emergency_revocation_uses_the_same_higher_sequence_promotion_contract(self) -> None:
+        workflow = load(DIRECTORY_PUBLICATION)
+        deploy = workflow["jobs"]["deploy"]
+        self.assertEqual(
+            set(deploy["needs"]),
+            {"sign", "materialize_site", "gate_exact_staged_publication", "required_stable_launch_evidence"},
+        )
+        self.assertIn("needs.sign.outputs.sequence > 1", deploy["if"])
+        self.assertIn("needs.required_stable_launch_evidence.result == 'skipped'", deploy["if"])
+        self.assertIn("gate_exact_staged_publication", deploy["needs"])
 
     def test_untrusted_pull_request_bridge_reproduction_remains_secretless(self) -> None:
         workflow = load(VALIDATE)

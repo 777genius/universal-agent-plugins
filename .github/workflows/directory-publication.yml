@@ -714,8 +714,9 @@ jobs:
           done
 
   required_stable_launch_evidence:
-    name: Require stable launch evidence before production promotion
+    name: Require stable launch evidence before initial production promotion
     needs: [sign, materialize_site, gate_exact_staged_publication]
+    if: ${{ needs.sign.result == 'success' && needs.materialize_site.result == 'success' && needs.gate_exact_staged_publication.result == 'success' && needs.sign.outputs.sequence == '1' }}
     uses: ./.github/workflows/live-e2e.yml
     with:
       consent: true
@@ -731,7 +732,8 @@ jobs:
 
   deploy:
     name: Promote exact gated Pages tree
-    needs: [materialize_site, gate_exact_staged_publication, required_stable_launch_evidence]
+    needs: [sign, materialize_site, gate_exact_staged_publication, required_stable_launch_evidence]
+    if: ${{ always() && needs.sign.result == 'success' && needs.materialize_site.result == 'success' && needs.gate_exact_staged_publication.result == 'success' && ((needs.sign.outputs.sequence == '1' && needs.required_stable_launch_evidence.result == 'success') || (needs.sign.outputs.sequence > 1 && needs.required_stable_launch_evidence.result == 'skipped')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     environment:
