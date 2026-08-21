@@ -38,13 +38,23 @@ checked there rather than duplicated in this historical record.
 
 The npm registry stable tags were checked before pinning:
 
-- `chrome-devtools-mcp@1.6.0`
+- `chrome-devtools-mcp@1.7.0`
 - `@upstash/context7-mcp@4.0.0`
 - `firebase-tools@15.26.0`
 - `@hubspot/cli@8.12.0`
 
 The Docker Hub package is pinned to the multi-architecture OCI digest recorded
 in `plugins/docker-hub/mcp.json`.
+
+## Generated-site browser verification
+
+Pages pull requests generate and CSP-finalize the static production HTML before
+loading it in Chromium with `@playwright/test@1.62.1`. Desktop and mobile
+projects exercise the hydrated multi-select, combobox, and select by keyboard;
+they also fail on browser console, page, request, response, or horizontal-overflow
+errors and verify that unsigned review previews expose no copyable install
+command. The separate fast accessibility tests are source-contract assertions,
+not screen-reader or assistive-technology E2E.
 
 ## Runtime E2E
 

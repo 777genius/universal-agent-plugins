@@ -23,6 +23,7 @@ const componentOptions = computed(() => [
 const sourceOptions = [
   { value: 'all', label: 'All sources' },
   { value: 'upstream', label: 'Upstream packages' },
+  { value: 'community_bridge', label: 'Community bridges' },
   { value: 'community', label: 'Community packages' },
   { value: 'direct', label: 'Direct sources' },
 ]
@@ -30,7 +31,7 @@ const visible = computed(() => filterPlugins(props.plugins, {
   query: query.value,
   category: category.value === 'all' ? '' : category.value,
   component: component.value === 'all' ? undefined : component.value as RegistryPlugin['components'][number],
-  source: source.value as 'all' | 'upstream' | 'community' | 'direct',
+  source: source.value as 'all' | 'upstream' | 'community_bridge' | 'community' | 'direct',
 }))
 </script>
 

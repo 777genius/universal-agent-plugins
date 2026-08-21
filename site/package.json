@@ -12,7 +12,8 @@
     "generate": "nuxt generate && node scripts/finalize-csp.mjs",
     "lint": "nuxt prepare && eslint .",
     "test": "node --test --experimental-strip-types tests/*.test.ts",
-    "test:a11y": "node --test --experimental-strip-types tests/accessibility.test.ts",
+    "test:contracts": "node --test --experimental-strip-types tests/accessibility.test.ts",
+    "test:browser": "playwright test",
     "typecheck": "nuxt prepare && vue-tsc --noEmit",
     "check:generated": "node scripts/check-generated.mjs",
     "check:links": "node scripts/check-generated.mjs"
@@ -25,6 +26,7 @@
   },
   "devDependencies": {
     "@nuxt/eslint": "1.15.2",
+    "@playwright/test": "1.62.1",
     "eslint": "9.39.4",
     "typescript": "5.9.3",
     "vue-tsc": "3.3.9"

@@ -5,3 +5,5 @@ dist
 .cache/
 coverage/
 *.log
+test-results/
+playwright-report/

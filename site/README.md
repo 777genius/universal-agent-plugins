@@ -11,9 +11,10 @@ pnpm install --frozen-lockfile
 pnpm lint
 pnpm typecheck
 pnpm test
-pnpm test:a11y
+pnpm test:contracts
 NUXT_APP_BASE_URL=/universal-agent-plugins/ pnpm generate
 NUXT_APP_BASE_URL=/universal-agent-plugins/ pnpm check:links
+pnpm test:browser
 ```
 
 For site-only development and verification while the generated index is not
@@ -36,6 +37,10 @@ unauthorized or an unsafe source is present. A narrowly scoped
 `style-src-attr` exception permits only the runtime CSS positioning used by the
 accessible Reka UI popovers; inline scripts and style elements remain
 hash-authorized.
+
+`test:browser` serves that finalized output and exercises it in desktop and mobile
+Chromium. `test:contracts` remains a fast source-level accessibility contract; it
+does not claim screen-reader or other assistive-technology E2E.
 
 The site emits no analytics or tracking requests. See `NOTICE.md` and the icon
 README files under `public/` for copied/adapted code and mark attribution.

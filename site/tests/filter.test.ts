@@ -20,6 +20,17 @@ describe('catalog filtering', () => {
     assert.deepEqual(filterPlugins(plugins, { source: 'direct' }), [plugins[1]])
   })
 
+  it('keeps community bridges distinct from community packages', () => {
+    const bridge = {
+      ...plugins[0]!,
+      name: 'bridge-product',
+      default_distribution: 'bridge',
+      distributions: [{ ...plugins[0]!.distributions[0]!, id: 'bridge', kind: 'community_bridge' as const }],
+    }
+    assert.deepEqual(filterPlugins([...plugins, bridge], { source: 'community_bridge' }), [bridge])
+    assert.deepEqual(filterPlugins([...plugins, bridge], { source: 'community' }), [plugins[0]])
+  })
+
   it('derives stable filter options from registry data', () => {
     assert.deepEqual(availableFilters(plugins), {
       categories: ['development', 'documentation'],

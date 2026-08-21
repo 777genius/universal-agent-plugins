@@ -69,7 +69,7 @@ Verified against stable registry releases on 2026-08-07:
 
 | Runtime dependency | Pin |
 | --- | --- |
-| `chrome-devtools-mcp` | `1.6.0` |
+| `chrome-devtools-mcp` | `1.7.0` |
 | `@upstash/context7-mcp` | `4.0.0` |
 | `firebase-tools` | `15.26.0` |
 | `@hubspot/cli` | `8.12.0` |

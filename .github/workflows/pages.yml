@@ -75,3 +75,9 @@ jobs:
         run: |
           pnpm generate
           pnpm check:generated
+      - name: Install Chromium for production browser tests
+        working-directory: site
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Exercise finalized Pages output in Chromium
+        working-directory: site
+        run: pnpm test:browser

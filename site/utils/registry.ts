@@ -430,7 +430,11 @@ function parseSnapshot(input: Record<string, unknown>, mode: 'published_snapshot
       return {
         id,
         kind,
-        label: kind === 'upstream' ? 'Upstream package' : 'Community package',
+        label: kind === 'upstream'
+          ? 'Upstream package'
+          : kind === 'community_bridge'
+            ? 'Community bridge'
+            : 'Community package',
         publisher: optionalString(item, 'publisher') ?? optionalString(item, 'packager') ?? id.split('/')[0]!,
         source: selectedRelease.source,
         release_sequence: selectedRelease.release_sequence,
