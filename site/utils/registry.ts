@@ -458,14 +458,14 @@ export function evidenceLabel(value: ClientEvidence | PackageEvidence): string {
   return `${level} ${outcome}`
 }
 
-export function validationLabel(plugin: RegistryPlugin): string {
-  const passed = plugin.evidence.filter(item => item.outcome === 'passed')
+export function validationLabel(view: Pick<RegistryPlugin, 'evidence' | 'package_evidence'>): string {
+  const passed = view.evidence.filter(item => item.outcome === 'passed')
   const hasEnvironment = (item: ClientEvidence) => Boolean(item.client_version && item.os && item.architecture && item.tested_at)
   if (passed.some(item => item.level === 'oauth' && hasEnvironment(item))) return 'OAuth tested'
   if (passed.some(item => item.level === 'runtime' && hasEnvironment(item))) return 'Runtime tested'
   if (passed.some(item => item.level === 'discovery' && hasEnvironment(item))) return 'Discovery tested'
   if (passed.some(item => item.level === 'materialization' && hasEnvironment(item))) return 'Materialization tested'
-  const schema = plugin.package_evidence[0]
+  const schema = view.package_evidence[0]
   return schema ? evidenceLabel(schema) : 'No current evidence'
 }
 

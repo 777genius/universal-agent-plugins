@@ -40,6 +40,9 @@ SOURCE_SCHEMA = ROOT / "schemas" / "directory-source.schema.json"
 EVIDENCE_ARTIFACT_SCHEMA = ROOT / "schemas" / "directory-evidence-artifact.schema.json"
 CONFIG_FIELDS = {"schema_version", "repository", "snapshot_lifetime_days"}
 OPTIONAL_CONFIG_FIELDS = {"trusted_evidence_workflows", "trusted_external_evidence"}
+TRUSTED_WORKFLOW_FIELDS = {
+    "workflow", "protected_source_ref", "source_digest_policy", "allow_self_hosted_runners",
+}
 GIT = "/usr/bin/git"
 GH = "/usr/bin/gh"
 ACQUISITION_TIMEOUT_SECONDS = 180
@@ -60,9 +63,19 @@ def load_config(path: Path) -> dict[str, Any]:
     require(isinstance(value["repository"], str) and "/" in value["repository"], f"{path}: invalid repository")
     require(isinstance(value["snapshot_lifetime_days"], int) and 1 <= value["snapshot_lifetime_days"] <= 30, f"{path}: invalid lifetime")
     workflows = value.setdefault("trusted_evidence_workflows", [])
-    require(isinstance(workflows, list) and all(isinstance(item, str) for item in workflows), f"{path}: invalid trusted evidence workflows")
-    require(len(workflows) == len(set(workflows)), f"{path}: duplicate trusted evidence workflow")
-    require(all("/.github/workflows/" in item for item in workflows), f"{path}: invalid trusted evidence workflow")
+    require(isinstance(workflows, list), f"{path}: invalid trusted evidence workflows")
+    workflow_names: list[str] = []
+    for item in workflows:
+        require(isinstance(item, dict) and set(item) == TRUSTED_WORKFLOW_FIELDS, f"{path}: invalid trusted evidence workflow policy")
+        require(
+            isinstance(item["workflow"], str) and "/.github/workflows/" in item["workflow"]
+            and isinstance(item["protected_source_ref"], str) and item["protected_source_ref"].startswith("refs/heads/")
+            and item["source_digest_policy"] == "artifact_revision"
+            and type(item["allow_self_hosted_runners"]) is bool,
+            f"{path}: invalid trusted evidence workflow policy",
+        )
+        workflow_names.append(item["workflow"])
+    require(len(workflow_names) == len(set(workflow_names)), f"{path}: duplicate trusted evidence workflow")
     external = value.setdefault("trusted_external_evidence", [])
     require(isinstance(external, list), f"{path}: invalid trusted external evidence")
     for item in external:
@@ -289,13 +302,26 @@ def verify_evidence_trust(
         )
         return
     workflow = trust["workflow"]
-    require(workflow in config["trusted_evidence_workflows"], f"{pointer['id']}: evidence workflow is not trusted")
+    policy = next((item for item in config["trusted_evidence_workflows"] if item["workflow"] == workflow), None)
+    require(policy is not None, f"{pointer['id']}: evidence workflow has no reviewed trust policy")
     require(workflow.startswith(artifact["repository"] + "/.github/workflows/"), f"{pointer['id']}: workflow and artifact repositories differ")
+    require(trust["source_ref"] == policy["protected_source_ref"], f"{pointer['id']}: evidence source ref is not trusted")
+    require(
+        policy["source_digest_policy"] == "artifact_revision" and trust["source_digest"] == artifact["revision"],
+        f"{pointer['id']}: evidence source digest does not match the exact artifact revision",
+    )
     require(Path(GH).is_file(), f"reviewed evidence verifier is missing: {GH}")
     acquired = temporary_root / "verified-evidence.json"
     acquired.write_bytes(body)
+    command = [
+        GH, "attestation", "verify", str(acquired), "--repo", artifact["repository"],
+        "--signer-workflow", workflow, "--source-ref", trust["source_ref"],
+        "--source-digest", trust["source_digest"],
+    ]
+    if not policy["allow_self_hosted_runners"]:
+        command.append("--deny-self-hosted-runners")
     completed = subprocess.run(
-        [GH, "attestation", "verify", str(acquired), "--repo", artifact["repository"], "--signer-workflow", workflow],
+        command,
         check=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
         env=acquisition_environment(temporary_root), timeout=ACQUISITION_TIMEOUT_SECONDS,
     )

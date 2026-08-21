@@ -423,7 +423,10 @@ class WorkflowHardeningTests(unittest.TestCase):
         self.assertNotIn("DIRECTORY_ED25519_PRIVATE_KEY", json.dumps(workflow["jobs"]["prepare"]))
         preparer = (SCRIPTS / "prepare_directory_publication.py").read_text()
         self.assertIn('GH = "/usr/bin/gh"', preparer)
-        self.assertIn('[GH, "attestation", "verify"', preparer)
+        self.assertIn('GH, "attestation", "verify"', preparer)
+        self.assertIn('"--source-ref"', preparer)
+        self.assertIn('"--source-digest"', preparer)
+        self.assertIn('"--deny-self-hosted-runners"', preparer)
 
     def test_signing_seed_is_scoped_only_to_the_signer_step(self) -> None:
         workflow = yaml.load((ROOT / ".github" / "workflows" / "directory-publication.yml").read_text(), Loader=yaml.BaseLoader)

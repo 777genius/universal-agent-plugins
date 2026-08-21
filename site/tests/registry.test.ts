@@ -4,9 +4,11 @@ import { readFileSync } from 'node:fs'
 import { describe, it } from 'node:test'
 import { fileURLToPath } from 'node:url'
 import { deliveryLabel, expectedDistribution, githubSourceUrl, isPinnedExternalSource, mirroredIconPath, parseDirectoryData, parseRegistryIndex, validationLabel } from '../utils/registry.ts'
+import { pluginCommands } from '../utils/commands.ts'
 
 const fixture = JSON.parse(readFileSync(fileURLToPath(new URL('./fixtures/registry.valid.json', import.meta.url)), 'utf8')) as unknown
 const snapshotFixture = JSON.parse(readFileSync(fileURLToPath(new URL('./fixtures/directory.snapshot.json', import.meta.url)), 'utf8')) as unknown
+const blockedNewestFixture = JSON.parse(readFileSync(fileURLToPath(new URL('./fixtures/directory.blocked-newest.snapshot.json', import.meta.url)), 'utf8')) as unknown
 const stylesheet = readFileSync(fileURLToPath(new URL('../assets/css/main.css', import.meta.url)), 'utf8')
 
 interface SnapshotFixture {
@@ -170,6 +172,27 @@ describe('registry parsing', () => {
     assert.equal(selected?.id, 'example/demo')
     assert.equal(selected?.release_sequence, 1)
     assert.equal(selected?.version, '0.8.0')
+  })
+
+  it('uses the exact older Codex release for the command and every install-candidate field', () => {
+    const plugin = parseDirectoryData(blockedNewestFixture, 'published_snapshot').plugins[0]!
+    const candidate = expectedDistribution(plugin, ['codex'])!
+
+    assert.equal(plugin.distributions[0]!.releases[0]!.version, '2.0.0', 'fixture history keeps blocked release 2 newest')
+    assert.equal(candidate.release_sequence, 1)
+    assert.equal(candidate.version, '1.0.0')
+    assert.deepEqual(candidate.components, ['mcp', 'skills'])
+    assert.equal(candidate.source.revision, '1'.repeat(40))
+    assert.equal(candidate.source.path, 'plugins/release-fallback-v1')
+    assert.deepEqual(candidate.package_evidence.map(item => item.id), ['schema-release-1'])
+    assert.deepEqual(candidate.evidence.map(item => item.id), ['runtime-release-1-codex'])
+    assert.equal(validationLabel(candidate), 'Runtime tested')
+    assert.equal(githubSourceUrl(plugin, candidate), `https://github.com/example/plugins/tree/${'1'.repeat(40)}/plugins/release-fallback-v1`)
+    assert.equal(pluginCommands(plugin, ['codex']).add, 'npx universal-agent-plugins add release-fallback --target codex')
+
+    assert.notEqual(candidate.version, plugin.distributions[0]!.releases[0]!.version)
+    assert.equal(candidate.evidence.some(item => item.id === 'runtime-release-2-codex'), false)
+    assert.equal(candidate.package_evidence.some(item => item.id === 'schema-release-2'), false)
   })
 
   it('preserves signed delivery, scopes, and the exact Cloudflare ChatGPT app binding', () => {

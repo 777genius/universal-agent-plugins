@@ -1,0 +1,53 @@
+{
+  "snapshot_schema_version": 1,
+  "sequence": 43,
+  "generated_at": "2026-08-21T00:00:00Z",
+  "expires_at": "2026-09-20T00:00:00Z",
+  "products": [{
+    "schema_version": 1,
+    "id": "release-fallback",
+    "display_name": "Release fallback",
+    "description": "Fixture whose newest Codex release has blocking evidence.",
+    "default_distribution": "example/release-fallback",
+    "distributions": ["example/release-fallback"],
+    "minimum_capabilities": {"mcp": "required", "skills": "optional"},
+    "categories": ["fixture"]
+  }],
+  "distributions": [{
+    "schema_version": 1,
+    "id": "example/release-fallback",
+    "product_id": "release-fallback",
+    "kind": "upstream",
+    "status": "active",
+    "packager": "example",
+    "releases": [
+      {
+        "sequence": 2,
+        "package_version": "2.0.0",
+        "components": ["extensions", "mcp"],
+        "manifest_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+        "tree_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+        "package_source": {"repository": "example/plugins", "revision": "2222222222222222222222222222222222222222", "path": "plugins/release-fallback"}
+      },
+      {
+        "sequence": 1,
+        "package_version": "1.0.0",
+        "components": ["mcp", "skills"],
+        "manifest_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        "tree_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        "package_source": {"repository": "example/plugins", "revision": "1111111111111111111111111111111111111111", "path": "plugins/release-fallback-v1"}
+      }
+    ],
+    "release_policies": [
+      {"release_sequence": 2, "status": "active", "targets": [{"client": "codex", "delivery": "managed", "scopes": ["user"]}], "current_evidence": ["schema-release-2", "runtime-release-2-codex"]},
+      {"release_sequence": 1, "status": "active", "targets": [{"client": "codex", "delivery": "managed", "scopes": ["user"]}], "current_evidence": ["schema-release-1", "runtime-release-1-codex"]}
+    ]
+  }],
+  "evidence": [
+    {"schema_version": 1, "id": "schema-release-2", "distribution_id": "example/release-fallback", "release_sequence": 2, "package_tree_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222", "level": "schema", "outcome": "passed", "artifact": {"repository": "example/evidence", "revision": "2222222222222222222222222222222222222222", "path": "release-2-schema.json", "digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222"}},
+    {"schema_version": 1, "id": "runtime-release-2-codex", "distribution_id": "example/release-fallback", "release_sequence": 2, "package_tree_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222", "level": "runtime", "outcome": "failed", "client": "codex", "client_version": "0.202.0", "installer_version": "0.1.6", "os": "linux", "architecture": "amd64", "observed_at": "2026-08-21T00:00:00Z", "artifact": {"repository": "example/evidence", "revision": "2222222222222222222222222222222222222222", "path": "release-2-runtime.json", "digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222"}},
+    {"schema_version": 1, "id": "schema-release-1", "distribution_id": "example/release-fallback", "release_sequence": 1, "package_tree_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111", "level": "schema", "outcome": "passed", "artifact": {"repository": "example/evidence", "revision": "1111111111111111111111111111111111111111", "path": "release-1-schema.json", "digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111"}},
+    {"schema_version": 1, "id": "runtime-release-1-codex", "distribution_id": "example/release-fallback", "release_sequence": 1, "package_tree_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111", "level": "runtime", "outcome": "passed", "client": "codex", "client_version": "0.201.0", "installer_version": "0.1.6", "os": "linux", "architecture": "amd64", "observed_at": "2026-08-20T00:00:00Z", "artifact": {"repository": "example/evidence", "revision": "1111111111111111111111111111111111111111", "path": "release-1-runtime.json", "digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111"}}
+  ],
+  "revocations": []
+}

@@ -51,10 +51,27 @@ describe('focused catalog accessibility contract', () => {
 
   it('renders package evidence once with its exact immutable artifact identity', () => {
     const detail = source('../pages/plugins/[slug].vue')
-    assert.equal([...detail.matchAll(/v-for="item in plugin\.package_evidence"/g)].length, 1)
+    assert.equal([...detail.matchAll(/v-for="item in installCandidate\.package_evidence"/g)].length, 1)
     assert.match(detail, /item\.artifact\.repository.*item\.artifact\.revision.*item\.artifact\.path/s)
     assert.match(detail, /item\.artifact\.digest/)
     assert.match(detail, /item\.package_tree_digest/)
     assert.match(detail, /item\.artifact\.url/)
+  })
+
+  it('binds every target-dependent install field to the exact resolved release', () => {
+    const card = source('../components/PluginCard.vue')
+    const detail = source('../pages/plugins/[slug].vue')
+    assert.match(card, /selectedDistribution\.version/)
+    assert.match(card, /selectedDistribution\.components/)
+    assert.match(card, /validationLabel\(selectedDistribution\)/)
+    assert.match(card, /githubSourceUrl\(plugin, selectedDistribution\)/)
+    assert.doesNotMatch(card, /plugin\.(?:version|components|evidence|package_evidence)/)
+    for (const field of ['version', 'components', 'source', 'package_evidence', 'evidence']) {
+      assert.match(detail, new RegExp(`installCandidate\\.${field}`))
+    }
+    assert.match(detail, /v-model:targets="targets"/)
+    assert.match(detail, /Product release history/)
+    assert.match(detail, /not the selected install candidate/)
+    assert.doesNotMatch(detail, /plugin\.(?:version|components|evidence|package_evidence)/)
   })
 })

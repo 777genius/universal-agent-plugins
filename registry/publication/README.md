@@ -44,7 +44,10 @@ preparer fetches the artifact blob from the exact repository commit and path,
 checks its SHA-256 and evidence-artifact schema, and derives every signed
 summary field from those verified bytes. A `github_actions` pointer is accepted
 only when `/usr/bin/gh attestation verify` proves the blob was attested by a
-workflow named in the code-owned `trusted_evidence_workflows` list. A
+workflow with a code-owned `trusted_evidence_workflows` policy. That policy
+binds the attestation to one protected source ref and requires its source digest
+to equal the evidence artifact commit. Self-hosted runner attestations are
+denied unless the reviewed policy explicitly permits them. A
 `reviewed_external` pointer is accepted only when its complete repository,
 revision, path, and digest tuple is present in the code-owned
 `trusted_external_evidence` list. Both lists are empty by default. Missing,

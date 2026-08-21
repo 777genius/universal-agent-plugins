@@ -10,6 +10,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 import yaml
 
@@ -616,7 +617,7 @@ class PublicationLifecycleTests(unittest.TestCase):
             untrusted["trusted_external_evidence"] = []
             cases.append(("untrusted", pointer, untrusted, "not explicitly trusted"))
             untrusted_workflow = {**pointer, "trust": {"kind": "github_actions", "workflow": "example/evidence/.github/workflows/evidence.yml"}}
-            cases.append(("untrusted workflow", untrusted_workflow, config, "workflow is not trusted"))
+            cases.append(("untrusted workflow", untrusted_workflow, config, "no reviewed trust policy"))
             for label, changed_pointer, changed_config, error in cases:
                 with self.subTest(label=label), self.assertRaisesRegex(publication.PublicationError, error):
                     prepare.selected_evidence(source_for(changed_pointer), {"example/demo"}, changed_config, {"example/evidence": repository})
@@ -631,6 +632,66 @@ class PublicationLifecycleTests(unittest.TestCase):
             malformed_config["trusted_external_evidence"] = [copy.deepcopy(malformed_locator)]
             with self.assertRaisesRegex(publication.PublicationError, "invalid UTF-8 JSON"):
                 prepare.selected_evidence(source_for(malformed_pointer), {"example/demo"}, malformed_config, {"example/evidence": repository})
+
+    def test_github_evidence_policy_binds_ref_digest_and_runner_environment(self) -> None:
+        revision = "a" * 40
+        workflow = "example/evidence/.github/workflows/evidence.yml"
+        pointer = {
+            "id": "runtime-demo-codex",
+            "artifact": {
+                "repository": "example/evidence", "revision": revision,
+                "path": "evidence.json", "digest": "sha256:" + "1" * 64,
+            },
+            "trust": {
+                "kind": "github_actions", "workflow": workflow,
+                "source_ref": "refs/heads/main", "source_digest": revision,
+            },
+        }
+        policy = {
+            "workflow": workflow,
+            "protected_source_ref": "refs/heads/main",
+            "source_digest_policy": "artifact_revision",
+            "allow_self_hosted_runners": False,
+        }
+        config = {"trusted_evidence_workflows": [policy]}
+
+        with tempfile.TemporaryDirectory() as temporary, mock.patch.object(
+            prepare.subprocess, "run", return_value=subprocess.CompletedProcess([], 0, b"", b""),
+        ) as run:
+            prepare.verify_evidence_trust(pointer, config, Path(temporary), b"{}")
+            command = run.call_args.args[0]
+            self.assertIn("--source-ref", command)
+            self.assertEqual(command[command.index("--source-ref") + 1], "refs/heads/main")
+            self.assertIn("--source-digest", command)
+            self.assertEqual(command[command.index("--source-digest") + 1], revision)
+            self.assertIn("--deny-self-hosted-runners", command)
+
+        wrong_ref = copy.deepcopy(pointer)
+        wrong_ref["trust"]["source_ref"] = "refs/heads/unprotected"
+        with tempfile.TemporaryDirectory() as temporary, self.assertRaisesRegex(publication.PublicationError, "source ref is not trusted"):
+            prepare.verify_evidence_trust(wrong_ref, config, Path(temporary), b"{}")
+
+        wrong_digest = copy.deepcopy(pointer)
+        wrong_digest["trust"]["source_digest"] = "b" * 40
+        with tempfile.TemporaryDirectory() as temporary, self.assertRaisesRegex(publication.PublicationError, "source digest does not match"):
+            prepare.verify_evidence_trust(wrong_digest, config, Path(temporary), b"{}")
+
+        with tempfile.TemporaryDirectory() as temporary, self.assertRaisesRegex(publication.PublicationError, "no reviewed trust policy"):
+            prepare.verify_evidence_trust(pointer, {"trusted_evidence_workflows": []}, Path(temporary), b"{}")
+
+        def reject_self_hosted(command, **_kwargs):  # type: ignore[no-untyped-def]
+            return subprocess.CompletedProcess(command, 1 if "--deny-self-hosted-runners" in command else 0, b"", b"")
+
+        with tempfile.TemporaryDirectory() as temporary, mock.patch.object(prepare.subprocess, "run", side_effect=reject_self_hosted), self.assertRaisesRegex(
+            publication.PublicationError, "attestation verification failed",
+        ):
+            prepare.verify_evidence_trust(pointer, config, Path(temporary), b"{}")
+
+        reviewed_self_hosted = copy.deepcopy(config)
+        reviewed_self_hosted["trusted_evidence_workflows"][0]["allow_self_hosted_runners"] = True
+        with tempfile.TemporaryDirectory() as temporary, mock.patch.object(prepare.subprocess, "run", side_effect=reject_self_hosted) as run:
+            prepare.verify_evidence_trust(pointer, reviewed_self_hosted, Path(temporary), b"{}")
+            self.assertNotIn("--deny-self-hosted-runners", run.call_args.args[0])
 
 
 class PublicationWorkflowTests(unittest.TestCase):

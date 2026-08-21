@@ -4,17 +4,15 @@
 -->
 <script setup lang="ts">
 import type { RegistryPlugin } from '~/types/registry'
-import { defaultDistribution, deliveryLabel, expectedDistribution, githubSourceUrl, validationLabel } from '~/utils/registry'
+import { deliveryLabel, expectedDistribution, githubSourceUrl, validationLabel } from '~/utils/registry'
 import { pluginCommands } from '~/utils/commands'
 
 const props = defineProps<{ plugin: RegistryPlugin }>()
 const { asset, pluginIcon } = useSite()
-const distribution = computed(() => defaultDistribution(props.plugin))
 const availableClients = computed(() => clients.filter(client => props.plugin.client_support.clients.includes(client.id)))
 const initialTarget = availableClients.value.find(client => client.id === 'cursor')?.id ?? availableClients.value[0]?.id
 const targets = ref<(typeof clients)[number]['id'][]>(initialTarget ? [initialTarget] : [])
 const selectedDistribution = computed(() => expectedDistribution(props.plugin, targets.value))
-const displayedDistribution = computed(() => selectedDistribution.value ?? distribution.value)
 const command = computed(() => selectedDistribution.value ? pluginCommands(props.plugin, targets.value).add : '')
 const targetOptions = computed(() => clients.map(client => ({
   value: client.id,
@@ -40,18 +38,19 @@ function updateTargets(values: string[]) {
   <article class="plugin-card">
     <div class="plugin-card__top">
       <span class="plugin-card__icon"><img :src="pluginIcon(plugin)" alt="" width="32" height="32" loading="lazy" /></span>
-      <span class="source-pill">{{ plugin.installable ? 'Expected source' : 'Unavailable provenance' }} · {{ displayedDistribution.label }}</span>
+      <span class="source-pill">{{ selectedDistribution ? `Install candidate · ${selectedDistribution.label}` : 'No install candidate' }}</span>
     </div>
     <h3><NuxtLink class="plugin-card__title-link" :to="`/plugins/${plugin.name}`">{{ plugin.display_name }}</NuxtLink></h3>
+    <p v-if="selectedDistribution" class="plugin-card__author">Install candidate v{{ selectedDistribution.version }} · release {{ selectedDistribution.release_sequence }}</p>
     <p class="plugin-card__description">{{ plugin.description }}</p>
-    <p class="plugin-card__author">Expected source by {{ displayedDistribution.publisher }}<template v-if="displayedDistribution.id !== plugin.declared_default_distribution"> (signed fallback for selected clients)</template> · <a :href="githubSourceUrl(plugin, displayedDistribution)" target="_blank" rel="noreferrer">provenance <span class="sr-only">for {{ plugin.name }}</span></a><template v-if="plugin.distributions.length > 1"> · {{ plugin.distributions.length - 1 }} {{ plugin.distributions.length === 2 ? 'alternative' : 'alternatives' }}</template></p>
+    <p v-if="selectedDistribution" class="plugin-card__author">Install source by {{ selectedDistribution.publisher }}<template v-if="selectedDistribution.id !== plugin.declared_default_distribution"> (signed fallback for selected clients)</template> · <a :href="githubSourceUrl(plugin, selectedDistribution)" target="_blank" rel="noreferrer">exact provenance <span class="sr-only">for {{ plugin.name }}</span></a><template v-if="plugin.distributions.length > 1"> · {{ plugin.distributions.length - 1 }} historical {{ plugin.distributions.length === 2 ? 'alternative' : 'alternatives' }}</template></p>
     <p class="plugin-card__auth">{{ authLabel }}</p>
     <div class="plugin-card__bottom">
-      <ul class="badge-list" aria-label="Plugin components">
-        <li v-for="component in plugin.components" :key="component">{{ component }}</li>
+      <ul v-if="selectedDistribution" class="badge-list" aria-label="Install candidate components">
+        <li v-for="component in selectedDistribution.components" :key="component">{{ component }}</li>
       </ul>
-      <span class="validation-badge">
-        <span aria-hidden="true">✓</span> {{ validationLabel(plugin) }}
+      <span v-if="selectedDistribution" class="validation-badge">
+        <span aria-hidden="true">✓</span> {{ validationLabel(selectedDistribution) }}
       </span>
       <div class="plugin-card__install">
         <AppMultiSelect :model-value="targets" :label="`Choose clients for ${plugin.display_name}`" :options="targetOptions" @update:model-value="updateTargets" />

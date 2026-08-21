@@ -1,13 +1,12 @@
 <script setup lang="ts">
-import type { RegistryPlugin } from '~/types/registry'
+import type { ClientID, RegistryPlugin } from '~/types/registry'
 import { pluginCommands } from '~/utils/commands'
 import { deliveryLabel, expectedDistribution } from '~/utils/registry'
 
 const props = defineProps<{ plugin: RegistryPlugin }>()
+const targets = defineModel<ClientID[]>('targets', { required: true })
 const { asset } = useSite()
 const availableClients = computed(() => clients.filter(client => props.plugin.client_support.clients.includes(client.id)))
-const initialTarget = availableClients.value.find(client => client.id === 'cursor')?.id ?? availableClients.value[0]?.id
-const targets = ref<(typeof clients)[number]['id'][]>(initialTarget ? [initialTarget] : [])
 const targetOptions = computed(() => clients.map(client => ({
   value: client.id,
   label: client.name,
