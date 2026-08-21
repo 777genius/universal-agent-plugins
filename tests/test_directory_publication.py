@@ -47,6 +47,26 @@ def run_script(name: str, *arguments: str, env: dict[str, str] | None = None) ->
     )
 
 
+def write_valid_package(package: Path, *, name: str = "demo", version: str = "1.0.0") -> None:
+    package.mkdir(parents=True, exist_ok=True)
+    (package / "plugin.json").write_text(json.dumps({
+        "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+        "name": name,
+        "version": version,
+        "description": "Deterministic publication validation fixture.",
+        "author": {"name": "Fixture"},
+        "license": "MIT",
+        "keywords": ["fixture"],
+    }, sort_keys=True) + "\n")
+    (package / "README.md").write_text("# Fixture\n")
+    (package / "mcp.json").write_text(json.dumps({
+        "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
+        "mcpServers": {
+            "demo": {"type": "streamable-http", "url": "https://example.test/mcp"},
+        },
+    }, sort_keys=True) + "\n")
+
+
 def install_fixture_feed(root: Path, envelope: str = "envelope-current.json") -> Path:
     feed = root / "registry" / "schemas" / "1"
     snapshots = feed / "snapshots"
@@ -550,8 +570,7 @@ class PublicationLifecycleTests(unittest.TestCase):
             root = Path(tmp)
             external = root / "external"
             package = external / "plugins" / "demo"
-            package.mkdir(parents=True)
-            (package / "plugin.json").write_text('{"name":"demo"}\n')
+            write_valid_package(package)
             subprocess.run(["/usr/bin/git", "init", "-q", str(external)], check=True)
             subprocess.run(["/usr/bin/git", "-C", str(external), "add", "."], check=True)
             subprocess.run(["/usr/bin/git", "-C", str(external), "-c", "user.name=Fixture", "-c", "user.email=fixture@example.test", "commit", "-qm", "fixture"], check=True)
@@ -602,6 +621,52 @@ class PublicationLifecycleTests(unittest.TestCase):
             broadened["distributions"][0]["release_policies"][0]["targets"].append({"client": "cursor", "scopes": ["user"], "delivery": "managed", "authentication": "unknown"})
             with self.assertRaisesRegex(publication.PublicationError, "reacquisition failed"):
                 prepare.build_candidate(broadened, config, "f" * 40, "external-broadened", previous, external_overrides={"example/external": missing})
+
+    def test_external_package_validation_derives_identity_version_and_components(self) -> None:
+        config = prepare.load_config(ROOT / "registry" / "publication" / "config.json")
+        source_commit = subprocess.check_output(["/usr/bin/git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
+        with tempfile.TemporaryDirectory() as tmp:
+            external = Path(tmp) / "external"
+            package = external / "plugins" / "demo"
+            write_valid_package(package)
+            subprocess.run(["/usr/bin/git", "init", "-q", str(external)], check=True)
+            subprocess.run(["/usr/bin/git", "-C", str(external), "add", "."], check=True)
+            subprocess.run(["/usr/bin/git", "-C", str(external), "-c", "user.name=Fixture", "-c", "user.email=fixture@example.test", "commit", "-qm", "valid package"], check=True)
+            revision = subprocess.check_output(["/usr/bin/git", "-C", str(external), "rev-parse", "HEAD"], text=True).strip()
+            source = {
+                "schema_version": 1,
+                "products": [{"schema_version": 1, "id": "demo", "display_name": "Demo", "description": "External demo package.", "manifest_name": "demo", "aliases": ["demo"], "reserved_aliases": ["demo"], "categories": ["demo"], "minimum_capabilities": {"skills": "optional", "mcp": "required"}, "default_distribution": "example/demo", "distributions": ["example/demo"]}],
+                "distributions": [{"schema_version": 1, "id": "example/demo", "product_id": "demo", "kind": "community", "status": "active", "packager": "example", "releases": [{"sequence": 1, "package_version": "1.0.0", "manifest_name": "demo", "agent_plugins_schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json", "package_source": {"repository": "example/external", "revision": revision, "path": "plugins/demo"}, "tree_digest_algorithm": "agentplugins-tree-sha256-v1", "tree_digest": prepare.package_tree_digest(package), "manifest_digest": prepare.manifest_digest(package), "components": ["mcp"]}], "release_policies": [{"release_sequence": 1, "status": "active", "minimum_installer_version": "0.1.6", "targets": [{"client": "codex", "scopes": ["user"], "delivery": "managed", "authentication": "unknown"}], "current_evidence": []}]}],
+                "evidence": [],
+            }
+            candidate = prepare.build_candidate(source, config, source_commit, "valid-external", None, external_overrides={"example/external": external})
+            self.assertEqual(candidate["distributions"][0]["releases"][0]["components"], ["mcp"])
+
+            release = source["distributions"][0]["releases"][0]
+            substitutions = (
+                ("manifest_name", "substituted", "manifest identity"),
+                ("package_version", "9.9.9", "package version"),
+                ("components", ["mcp", "skills"], "component inventory"),
+            )
+            for field, substituted, message in substitutions:
+                with self.subTest(field=field):
+                    changed = copy.deepcopy(source)
+                    changed["distributions"][0]["releases"][0][field] = substituted
+                    if field == "manifest_name":
+                        changed["products"][0]["manifest_name"] = substituted
+                    with self.assertRaisesRegex(publication.PublicationError, message):
+                        prepare.build_candidate(changed, config, source_commit, "substituted", None, external_overrides={"example/external": external})
+
+            (package / "plugin.json").write_text('{"name":"demo"}\n')
+            subprocess.run(["/usr/bin/git", "-C", str(external), "add", "."], check=True)
+            subprocess.run(["/usr/bin/git", "-C", str(external), "-c", "user.name=Fixture", "-c", "user.email=fixture@example.test", "commit", "-qm", "malformed package"], check=True)
+            malformed = copy.deepcopy(source)
+            malformed_release = malformed["distributions"][0]["releases"][0]
+            malformed_release["package_source"]["revision"] = subprocess.check_output(["/usr/bin/git", "-C", str(external), "rev-parse", "HEAD"], text=True).strip()
+            malformed_release["tree_digest"] = prepare.package_tree_digest(package)
+            malformed_release["manifest_digest"] = prepare.manifest_digest(package)
+            with self.assertRaisesRegex(publication.PublicationError, "reacquired package validation failed"):
+                prepare.build_candidate(malformed, config, source_commit, "malformed", None, external_overrides={"example/external": external})
 
     def test_evidence_is_reacquired_verified_and_derived_before_signing(self) -> None:
         payload = {

@@ -19,6 +19,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from build_registry import (
     RegistryError,
     directory_tree_digest as package_tree_digest,
+    validated_package_facts,
     validate_bridge_bindings,
 )
 from directory_publication import (
@@ -149,12 +150,31 @@ def manifest_digest(package_root: Path) -> str:
     return "sha256:" + hashlib.sha256(manifest.read_bytes()).hexdigest()
 
 
-def verify_package(package_root: Path, release: dict[str, Any], identity: str) -> None:
+def verify_package(
+    package_root: Path, release: dict[str, Any], identity: str, *, strict_manifest: bool = False,
+) -> None:
     require(package_root.is_dir(), f"{identity}: package path is unavailable")
     actual_tree = package_tree_digest(package_root)
     actual_manifest = manifest_digest(package_root)
     require(actual_tree == release["tree_digest"], f"{identity}: reacquired tree digest differs from reviewed digest")
     require(actual_manifest == release["manifest_digest"], f"{identity}: reacquired manifest digest differs from reviewed digest")
+    if not strict_manifest:
+        return
+    try:
+        facts = validated_package_facts(package_root)
+    except RegistryError as error:
+        raise PublicationError(f"{identity}: reacquired package validation failed: {error}") from error
+    comparisons = {
+        "manifest identity": (facts["manifest_name"], release["manifest_name"]),
+        "package version": (facts["package_version"], release["package_version"]),
+        "Agent Plugins schema": (facts["agent_plugins_schema"], release["agent_plugins_schema"]),
+        "component inventory": (facts["components"], release["components"]),
+    }
+    for field, (actual, reviewed) in comparisons.items():
+        require(
+            actual == reviewed,
+            f"{identity}: validated {field} differs from release metadata: {actual!r} != {reviewed!r}",
+        )
 
 
 def acquisition_environment(temporary_root: Path) -> dict[str, str]:
@@ -553,7 +573,10 @@ def build_candidate(
                         repository_root if in_repository else overrides.get(package_source["repository"]),
                     )
                     try:
-                        verify_package(Path(temporary.name) / "checkout" / package_source["path"], release, label)
+                        verify_package(
+                            Path(temporary.name) / "checkout" / package_source["path"], release, label,
+                            strict_manifest=not in_repository,
+                        )
                     finally:
                         temporary.cleanup()
                 elif in_repository:
@@ -579,7 +602,10 @@ def build_candidate(
             if reacquire and not (old is None and release.get("published_at") is not None):
                 temporary = acquire_external(package_source["repository"], package_source["revision"], package_source["path"], overrides.get(package_source["repository"]))
                 try:
-                    verify_package(Path(temporary.name) / "checkout" / package_source["path"], release, label)
+                    verify_package(
+                        Path(temporary.name) / "checkout" / package_source["path"], release, label,
+                        strict_manifest=True,
+                    )
                 finally:
                     temporary.cleanup()
         distribution["releases"].sort(key=lambda item: item["sequence"])

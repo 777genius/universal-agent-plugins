@@ -465,7 +465,8 @@ def validate_schema(document: object, document_path: Path, schema_name: str) -> 
         raise RegistryError(f"{document_path}: Agent Plugins 1.0 schema error at {location}: {error.message}")
 
 
-def package_fields(root: Path, categories: list[str]) -> dict[str, object]:
+def validated_package_facts(root: Path) -> dict[str, object]:
+    """Validate package data without executing it and return manifest-derived facts."""
     # json.load silently accepts duplicate object keys. Parse every submitted
     # JSON file with the registry's fail-closed reader before schema validation.
     for json_path in sorted(root.rglob("*.json")):
@@ -477,17 +478,47 @@ def package_fields(root: Path, categories: list[str]) -> dict[str, object]:
     if mcp_path.is_file():
         validate_schema(read_object(mcp_path), mcp_path, "mcp")
     try:
-        validate_plugin(root)
+        mcp_count, skill_count = validate_plugin(root)
     except (ValidationError, ValueError) as error:
         raise RegistryError(str(error)) from error
+    components = []
+    if manifest.get("extensions"):
+        components.append("extensions")
+    if mcp_count:
+        components.append("mcp")
+    if skill_count:
+        components.append("skills")
     license_value = manifest.get("license")
     require(isinstance(license_value, str) and license_value.strip(), f"{manifest_path}: license required")
     author = manifest.get("author")
     require(isinstance(author, dict) and isinstance(author.get("name"), str) and author["name"], f"{manifest_path}: author metadata required")
     return {
-        "name": manifest["name"], "version": manifest["version"], "description": manifest["description"],
-        "author": author, "license": license_value, "categories": sorted(set(categories)),
-        "keywords": sorted(set(manifest.get("keywords", []))), "components": component_names(root, manifest),
+        "manifest_name": manifest["name"],
+        "package_version": manifest["version"],
+        "agent_plugins_schema": manifest["$schema"],
+        "description": manifest["description"],
+        "author": author,
+        "license": license_value,
+        "keywords": sorted(set(manifest.get("keywords", []))),
+        "components": sorted(components),
+        "component_paths": component_names(root, manifest),
+        "component_inventory": {
+            "extensions": sorted(manifest.get("extensions", {})),
+            "mcp_servers": sorted(read_object(mcp_path)["mcpServers"]) if mcp_path.is_file() else [],
+            "skills": sorted(
+                path.name for path in (root / "skills").iterdir() if path.is_dir()
+            ) if (root / "skills").is_dir() else [],
+        },
+    }
+
+
+def package_fields(root: Path, categories: list[str]) -> dict[str, object]:
+    facts = validated_package_facts(root)
+    manifest_path = root / "plugin.json"
+    return {
+        "name": facts["manifest_name"], "version": facts["package_version"], "description": facts["description"],
+        "author": facts["author"], "license": facts["license"], "categories": sorted(set(categories)),
+        "keywords": facts["keywords"], "components": facts["component_paths"],
         "manifest_sha256": digest_bytes(manifest_path.read_bytes()), "tree_sha256": package_tree_digest(root),
     }
 
