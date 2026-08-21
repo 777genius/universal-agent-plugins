@@ -21,7 +21,7 @@
     "directory_digest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
     "asset_name": {"type": "string", "minLength": 1},
     "asset_digest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
-    "github_asset_attestation": {"type": "object", "required": ["repository", "workflow", "tag", "tag_commit", "asset_name", "asset_digest", "verified"], "properties": {"repository": {"const": "777genius/plugin-kit-ai"}, "workflow": {"const": "777genius/plugin-kit-ai/.github/workflows/release.yml"}, "tag": {"const": "agentplugins-v0.1.8"}, "tag_commit": {"type": "string", "pattern": "^[a-f0-9]{40}$"}, "asset_name": {"type": "string", "minLength": 1}, "asset_digest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"}, "verified": {"const": true}}, "additionalProperties": false},
+    "github_asset_attestation": {"type": "object", "required": ["repository", "workflow", "tag", "tag_commit", "asset_name", "asset_digest", "verified"], "properties": {"repository": {"const": "777genius/plugin-kit-ai"}, "workflow": {"const": "777genius/plugin-kit-ai/.github/workflows/agentplugins-release.yml"}, "tag": {"const": "agentplugins-v0.1.8"}, "tag_commit": {"type": "string", "pattern": "^[a-f0-9]{40}$"}, "asset_name": {"type": "string", "minLength": 1}, "asset_digest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"}, "verified": {"const": true}}, "additionalProperties": false},
     "challenge": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
     "challenge_context": {"type": "object"},
     "started_at": {"type": "string", "format": "date-time"},

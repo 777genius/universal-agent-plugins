@@ -12,7 +12,7 @@
       "propertyNames": { "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$" },
       "additionalProperties": {
         "type": "object",
-        "required": ["app_key", "id", "mcp_server", "mcp_url", "runtime_evidence", "personal_app_evidence", "personal_app_evidence_revision", "registration"],
+        "required": ["app_key", "id", "mcp_server", "mcp_url", "runtime_evidence", "runtime_evidence_revision", "runtime_evidence_digest", "personal_app_evidence", "personal_app_evidence_revision", "personal_app_evidence_digest", "registration"],
         "properties": {
           "app_key": { "type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$" },
           "id": {
@@ -29,6 +29,14 @@
             "type": "string",
             "pattern": "^tests/e2e/results/[a-z0-9-]+-[0-9]{4}-[0-9]{2}-[0-9]{2}\\.json$"
           },
+          "runtime_evidence_revision": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{40}$"
+          },
+          "runtime_evidence_digest": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$"
+          },
           "personal_app_evidence": {
             "type": "string",
             "pattern": "^tests/e2e/results/[a-z0-9-]+-[0-9]{4}-[0-9]{2}-[0-9]{2}\\.json$"
@@ -36,6 +44,10 @@
           "personal_app_evidence_revision": {
             "type": "string",
             "pattern": "^[0-9a-f]{40}$"
+          },
+          "personal_app_evidence_digest": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$"
           },
           "registration": {
             "type": "object",

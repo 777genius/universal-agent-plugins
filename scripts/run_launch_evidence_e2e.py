@@ -62,7 +62,7 @@ RELEASE_MANIFEST_SCHEMA = ROOT / "schemas" / "e2e" / "release-manifest.schema.js
 TRUSTED_CATALOG_REPOSITORY = "777genius/universal-agent-plugins"
 TRUSTED_CLI_RELEASE_REPOSITORY = "777genius/plugin-kit-ai"
 TRUSTED_CLI_RELEASE_TAG = "agentplugins-v0.1.8"
-TRUSTED_CLI_RELEASE_WORKFLOW = "777genius/plugin-kit-ai/.github/workflows/release.yml"
+TRUSTED_CLI_RELEASE_WORKFLOW = "777genius/plugin-kit-ai/.github/workflows/agentplugins-release.yml"
 CHALLENGE_DOMAIN = b"UAP-STABLE-LAUNCH-CHALLENGE-V1\0"
 ATTESTATION_DOMAIN = b"UAP-STABLE-LAUNCH-OBSERVER-V1\0"
 MAX_ATTESTATION_AGE = timedelta(minutes=30)

@@ -136,6 +136,35 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertNotIn("release_tag", required.get("with", {}))
         self.assertEqual(required["permissions"], {"actions": "read", "contents": "read", "id-token": "write"})
 
+    def test_scheduled_live_workflow_never_calls_staged_publication_gate(self) -> None:
+        workflow = load(LIVE)
+        required = workflow["jobs"]["required-stable-launch-evidence"]
+        self.assertEqual(
+            required["if"],
+            "github.event_name == 'workflow_call' || github.event_name == 'workflow_dispatch'",
+        )
+        scheduled = {
+            name: job
+            for name, job in workflow["jobs"].items()
+            if job.get("if") == "github.event_name == 'schedule'"
+        }
+        self.assertEqual(
+            set(scheduled),
+            {"scheduled-fixture-contract", "scheduled-production-directory-observation"},
+        )
+        scheduled_body = yaml.safe_dump(scheduled)
+        self.assertNotIn("inputs.publication_", scheduled_body)
+        self.assertNotIn("launch-evidence-e2e.yml", scheduled_body)
+        observation = commands(scheduled["scheduled-production-directory-observation"])
+        self.assertIn("fetch_production_directory", observation)
+        self.assertIn('"runtime_claims": False', observation)
+        self.assertIn('"oauth_claims": False', observation)
+        self.assertIn("SHA256SUMS", observation)
+        public_reads = workflow["jobs"]["public-read-flows"]
+        self.assertEqual(
+            public_reads["if"], "github.event_name == 'schedule' || inputs.consent"
+        )
+
     def test_publication_identity_contract_matches_across_both_reusable_edges(self) -> None:
         launch = load(LAUNCH)
         live = load(LIVE)

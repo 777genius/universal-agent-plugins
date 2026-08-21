@@ -8,8 +8,11 @@
       "mcp_server": "cloudflare-docs",
       "mcp_url": "https://docs.mcp.cloudflare.com/mcp",
       "runtime_evidence": "tests/e2e/results/chatgpt-cloudflare-docs-direct-2026-08-10.json",
+      "runtime_evidence_revision": "fd77a74fa85724a57b328157ab82ef4dd991cda5",
+      "runtime_evidence_digest": "sha256:050a18c56cf3f6b98d12ad35ac3c4642bd18d9e862956447dc3dad8e3189bcc5",
       "personal_app_evidence": "tests/e2e/results/chatgpt-cloudflare-docs-personal-app-2026-08-10.json",
       "personal_app_evidence_revision": "2ddbb99dd190c1792b79904f9875e6322bccd243",
+      "personal_app_evidence_digest": "sha256:97ddb41b887eebb7629bff1ae88937448b0c23073688122ab8939c3d96372b37",
       "registration": {
         "surface": "chatgpt_developer_mode",
         "status": "development",

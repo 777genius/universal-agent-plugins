@@ -249,7 +249,12 @@ class LaunchEvidenceE2ETests(unittest.TestCase):
         self.assertEqual(config["catalog_repository"], "777genius/universal-agent-plugins")
         self.assertEqual(config["cli_release_repository"], "777genius/plugin-kit-ai")
         self.assertEqual(config["cli_release_tag"], "agentplugins-v0.1.8")
-        self.assertEqual(config["cli_release_workflow"], "777genius/plugin-kit-ai/.github/workflows/release.yml")
+        self.assertEqual(config["cli_release_workflow"], "777genius/plugin-kit-ai/.github/workflows/agentplugins-release.yml")
+        schema = json.loads((ROOT / "tests/e2e/schemas/native-release-observation.schema.json").read_text())
+        self.assertEqual(
+            schema["properties"]["github_asset_attestation"]["properties"]["workflow"]["const"],
+            e2e.TRUSTED_CLI_RELEASE_WORKFLOW,
+        )
         self.assertNotIn("repository", config)
 
     def test_production_identity_rejects_configured_repository_or_tag_changes(self) -> None:
@@ -258,7 +263,7 @@ class LaunchEvidenceE2ETests(unittest.TestCase):
             ("catalog_repository", "attacker/catalog"),
             ("cli_release_repository", "attacker/binaries"),
             ("cli_release_tag", "agentplugins-v0.1.9"),
-            ("cli_release_workflow", "attacker/repo/.github/workflows/release.yml"),
+            ("cli_release_workflow", "attacker/repo/.github/workflows/agentplugins-release.yml"),
         ):
             with self.subTest(field=field), tempfile.TemporaryDirectory() as tmp:
                 path = Path(tmp) / "production-launch.json"

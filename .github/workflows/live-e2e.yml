@@ -59,7 +59,7 @@ concurrency:
 
 jobs:
   required-stable-launch-evidence:
-    if: github.event_name != 'schedule'
+    if: github.event_name == 'workflow_call' || github.event_name == 'workflow_dispatch'
     uses: ./.github/workflows/launch-evidence-e2e.yml
     with:
       consent: ${{ inputs.consent }}
@@ -74,6 +74,7 @@ jobs:
       id-token: write
 
   public-read-flows:
+    if: github.event_name == 'schedule' || inputs.consent
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
@@ -119,3 +120,54 @@ jobs:
             --run-root "$run_root" \
             --output "$run_root/evidence/launch-evidence.json"
           python -m unittest tests.test_run_launch_evidence_e2e tests.test_workflow_contracts
+
+  scheduled-production-directory-observation:
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13"
+      - name: Observe the current signed production identity without runtime claims
+        run: |
+          python - <<'PY'
+          import json
+          import tempfile
+          from pathlib import Path
+          from scripts.run_launch_evidence_e2e import fetch_production_directory, read_production_config
+
+          config = read_production_config()
+          with tempfile.TemporaryDirectory(prefix="uap-scheduled-production-") as tmp:
+              environment, snapshot, digest = fetch_production_directory(Path(tmp) / "directory")
+          if environment["AGENTPLUGINS_DIRECTORY_ORIGIN"] != config["production_origin"]:
+              raise ValueError("production observation resolved an unexpected origin")
+          observation = {
+              "schema_version": 1,
+              "origin": environment["AGENTPLUGINS_DIRECTORY_ORIGIN"],
+              "publication_id": snapshot["publication_id"],
+              "sequence": snapshot["sequence"],
+              "snapshot_digest": digest,
+              "source_commit": snapshot["source_commit"],
+              "runtime_claims": False,
+              "oauth_claims": False,
+          }
+          Path("/tmp/scheduled-production-directory.json").write_text(
+              json.dumps(observation, indent=2, sort_keys=True) + "\n"
+          )
+          PY
+          (cd /tmp && sha256sum scheduled-production-directory.json > scheduled-production-directory.SHA256SUMS)
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: scheduled-production-directory-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            /tmp/scheduled-production-directory.json
+            /tmp/scheduled-production-directory.SHA256SUMS
+          if-no-files-found: error
+          retention-days: 30
+          overwrite: false

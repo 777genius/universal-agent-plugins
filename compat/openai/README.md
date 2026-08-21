@@ -19,7 +19,8 @@ the generator instead. OpenAI-only auth metadata is maintained explicitly in
 the generator. Registered ChatGPT development connections are separately
 allowlisted in `app-bindings.json`; this host-only sidecar is not part of the
 portable package and must match one exact Streamable HTTP endpoint. Each entry
-also pins repository-relative direct and personal-app runtime records. The
+also pins repository-relative direct and personal-app runtime records by exact
+Git revision and SHA-256 digest. The
 loader requires the exact public app ID, plugin, endpoint, UI observations, call
 counts, and read-only runtime checks to agree before any package is generated.
 The portable catalog mirrors only the public binding fields plus an evidence
@@ -32,7 +33,11 @@ That ownership is a human review boundary: `@777genius` must confirm the ID was
 created in the intended ChatGPT workspace. `CODEOWNERS` requests that review;
 whether GitHub enforces it depends on repository branch-protection settings.
 
-Only `cloudflare-docs` currently has a registered no-auth development binding.
+Only `cloudflare-docs` has a registered no-auth development binding backed by
+the cited historical observations. Current stable-launch runtime/OAuth evidence
+is unavailable until the protected launch workflow succeeds for an exact signed
+production publication and attested CLI release; these records do not satisfy
+that prerequisite.
 The generated package passes static validation, and the direct connection has a
 sanitized read-only runtime record. The registered personal app also passed
 Plugins UI discovery, user-attested manual activation, and read-only runtime.

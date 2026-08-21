@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 from datetime import date, datetime
@@ -25,8 +26,11 @@ ENTRY_FIELDS = {
     "mcp_server",
     "mcp_url",
     "runtime_evidence",
+    "runtime_evidence_revision",
+    "runtime_evidence_digest",
     "personal_app_evidence",
     "personal_app_evidence_revision",
+    "personal_app_evidence_digest",
     "registration",
 }
 DIRECT_RUNTIME_CHECKS = {
@@ -91,6 +95,22 @@ def _runtime_evidence_path(value: object, root: Path, field: str) -> Path:
     if not resolved.is_relative_to(resolved_root) or not resolved.is_file():
         raise ValueError(f"{field} must reference an existing in-repository file")
     return resolved
+
+
+def _validate_evidence_identity(
+    binding: dict[str, object], evidence_field: str, evidence_path: Path, prefix: str
+) -> None:
+    revision_field = f"{evidence_field}_revision"
+    digest_field = f"{evidence_field}_digest"
+    revision = binding.get(revision_field)
+    digest = binding.get(digest_field)
+    if not isinstance(revision, str) or not re.fullmatch(r"[0-9a-f]{40}", revision):
+        raise ValueError(f"{prefix}.{revision_field}: expected a full commit SHA")
+    if not isinstance(digest, str) or not re.fullmatch(r"sha256:[0-9a-f]{64}", digest):
+        raise ValueError(f"{prefix}.{digest_field}: expected a SHA-256 digest")
+    actual = "sha256:" + hashlib.sha256(evidence_path.read_bytes()).hexdigest()
+    if actual != digest:
+        raise ValueError(f"{prefix}.{digest_field}: evidence digest does not match")
 
 
 def _validate_evidence_date(
@@ -290,17 +310,14 @@ def load_app_bindings(
         evidence_path = _runtime_evidence_path(
             raw["runtime_evidence"], root, f"{prefix}.runtime_evidence"
         )
+        _validate_evidence_identity(raw, "runtime_evidence", evidence_path, prefix)
         _validate_runtime_evidence(plugin_name, raw, evidence_path)
         personal_evidence_path = _runtime_evidence_path(
             raw["personal_app_evidence"], root, f"{prefix}.personal_app_evidence"
         )
-        personal_evidence_revision = raw["personal_app_evidence_revision"]
-        if not isinstance(personal_evidence_revision, str) or not re.fullmatch(
-            r"[0-9a-f]{40}", personal_evidence_revision
-        ):
-            raise ValueError(
-                f"{prefix}.personal_app_evidence_revision: expected a full commit SHA"
-            )
+        _validate_evidence_identity(
+            raw, "personal_app_evidence", personal_evidence_path, prefix
+        )
         _validate_personal_app_evidence(plugin_name, raw, personal_evidence_path)
         validated[plugin_name] = raw
     return validated

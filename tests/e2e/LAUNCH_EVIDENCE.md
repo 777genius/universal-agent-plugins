@@ -21,6 +21,9 @@ dereferences the tag to a commit, downloads `release-manifest.json`,
 `checksums.txt`, and a manifest-listed asset through the GitHub API, then
 requires GitHub's `immutable: true`, the exact eight-file release set, and the
 fixed release-workflow artifact attestation for every native asset. The
+trusted signer workflow is exactly
+`777genius/plugin-kit-ai/.github/workflows/agentplugins-release.yml`; similarly
+named or legacy workflow paths are rejected. The
 attestation verifier pins repository, workflow, tag ref, tag commit, subject
 name, and SHA-256 in addition to verifying repository, tag, version, size, and
 SHA-256 against both authenticated release metadata files. There are no production URL/checksum/version

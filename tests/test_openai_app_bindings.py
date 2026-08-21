@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import copy
+import hashlib
 import json
 import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -47,8 +49,11 @@ def valid_document() -> dict[str, object]:
                 "mcp_server": "cloudflare-docs",
                 "mcp_url": MCP_URL,
                 "runtime_evidence": EVIDENCE_PATH,
+                "runtime_evidence_revision": "fd77a74fa85724a57b328157ab82ef4dd991cda5",
+                "runtime_evidence_digest": "sha256:050a18c56cf3f6b98d12ad35ac3c4642bd18d9e862956447dc3dad8e3189bcc5",
                 "personal_app_evidence": PERSONAL_APP_EVIDENCE_PATH,
                 "personal_app_evidence_revision": PERSONAL_APP_EVIDENCE_REVISION,
+                "personal_app_evidence_digest": "sha256:97ddb41b887eebb7629bff1ae88937448b0c23073688122ab8939c3d96372b37",
                 "registration": {
                     "surface": "chatgpt_developer_mode",
                     "status": "development",
@@ -200,9 +205,7 @@ class OpenAIAppBindingTests(unittest.TestCase):
     ) -> Path:
         evidence_path = root / evidence_path_value
         evidence_path.parent.mkdir(parents=True, exist_ok=True)
-        evidence_path.write_text(
-            json.dumps(valid_evidence() if evidence is None else evidence)
-        )
+        evidence_path.write_text(json.dumps(valid_evidence() if evidence is None else evidence))
         personal_path = root / PERSONAL_APP_EVIDENCE_PATH
         personal_path.parent.mkdir(parents=True, exist_ok=True)
         personal_path.write_text(
@@ -212,6 +215,15 @@ class OpenAIAppBindingTests(unittest.TestCase):
                 else personal_evidence
             )
         )
+        binding = (
+            document.get("bindings", {}).get("cloudflare-docs", {})
+            if isinstance(document, dict)
+            else {}
+        )
+        if "runtime_evidence_digest" in binding:
+            binding["runtime_evidence_digest"] = "sha256:" + hashlib.sha256(evidence_path.read_bytes()).hexdigest()
+        if "personal_app_evidence_digest" in binding:
+            binding["personal_app_evidence_digest"] = "sha256:" + hashlib.sha256(personal_path.read_bytes()).hexdigest()
         path = root / "app-bindings.json"
         path.write_text(json.dumps(document))
         return path
@@ -296,12 +308,23 @@ class OpenAIAppBindingTests(unittest.TestCase):
             short_revision,
             "expected a full commit SHA",
         )
-
         for name, (document, message) in cases.items():
             with self.subTest(name=name), tempfile.TemporaryDirectory() as tmp:
                 path = self.write_document(Path(tmp), document)
                 with self.assertRaisesRegex(ValueError, message):
                     load_app_bindings(path, Path(tmp))
+
+    def test_sidecar_rejects_evidence_digest_mismatch(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            path = self.write_document(root, valid_document())
+            document = json.loads(path.read_text())
+            document["bindings"]["cloudflare-docs"]["runtime_evidence_digest"] = (
+                "sha256:" + "0" * 64
+            )
+            path.write_text(json.dumps(document))
+            with self.assertRaisesRegex(ValueError, "evidence digest does not match"):
+                load_app_bindings(path, root)
 
     def test_evidence_schema_accepts_opaque_safe_app_ids(self) -> None:
         schema = json.loads(
@@ -324,6 +347,20 @@ class OpenAIAppBindingTests(unittest.TestCase):
                 self.assertEqual(list(validator.iter_errors(document)), [])
         evidence["binding"]["app_id"] = "unsafe app id"
         self.assertNotEqual(list(validator.iter_errors(evidence)), [])
+
+    def test_committed_sidecar_evidence_is_revision_and_digest_bound(self) -> None:
+        document = json.loads((ROOT / "compat/openai/app-bindings.json").read_text())
+        binding = document["bindings"]["cloudflare-docs"]
+        for field in ("runtime_evidence", "personal_app_evidence"):
+            revision = binding[f"{field}_revision"]
+            pinned = subprocess.check_output(
+                ["git", "show", f"{revision}:{binding[field]}"], cwd=ROOT
+            )
+            self.assertEqual(
+                binding[f"{field}_digest"],
+                "sha256:" + hashlib.sha256(pinned).hexdigest(),
+            )
+            self.assertEqual(pinned, (ROOT / binding[field]).read_bytes())
 
     def test_sidecar_rejects_duplicate_app_id(self) -> None:
         document = valid_document()
