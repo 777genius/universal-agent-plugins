@@ -13,6 +13,7 @@ import hashlib
 import json
 import os
 import re
+import stat
 import sys
 import tarfile
 import tempfile
@@ -27,7 +28,13 @@ import jsonschema
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from build_agentplugins_catalog import package_tree_digest
-from portable_paths import validate_segment, validate_tree
+from portable_paths import (
+    MAX_DEPTH as PORTABLE_MAX_DEPTH,
+    MAX_FILES as PORTABLE_MAX_FILES,
+    MAX_FILE_BYTES as PORTABLE_MAX_FILE_BYTES,
+    MAX_TREE_BYTES as PORTABLE_MAX_TREE_BYTES,
+    validate_segment,
+)
 from validate_catalog import ValidationError, validate_plugin
 
 
@@ -64,7 +71,8 @@ MAX_CATEGORIES = 8
 ICON_NAMES = {"chrome-devtools": "googlechrome.svg", "docker-hub": "docker.svg", "hubspot-crm": "hubspot.svg", "hubspot-developer": "hubspot.svg"}
 CLIENT_IDS = ("codex", "chatgpt", "cursor", "copilot", "vscode", "kiro")
 KIND_PRIORITY = {"upstream": 0, "community_bridge": 1, "community": 2}
-DIRECTORY_TREE_DIGEST_ALGORITHM = "uap-tree-sha256-v1"
+DIRECTORY_TREE_DIGEST_ALGORITHM = "agentplugins-tree-sha256-v1"
+DIRECTORY_TREE_DIGEST_DOMAIN = b"agentplugins.package-tree\x00sha256\x00v1"
 
 
 class RegistryError(Exception):
@@ -80,30 +88,88 @@ def digest_bytes(body: bytes) -> str:
     return "sha256:" + hashlib.sha256(body).hexdigest()
 
 
-def directory_tree_digest(root: Path) -> str:
-    """Hash a package closure with an explicit domain and length framing."""
-    validate_tree(root)
-    entries: list[tuple[bytes, bytes, bytes, bytes, bytes]] = []
-    for path in root.rglob("*"):
-        relative = path.relative_to(root)
-        if ".git" in relative.parts or path.name == ".plugin-kit-ai.lock":
-            continue
-        relative_bytes = relative.as_posix().encode("utf-8")
-        if path.is_dir():
-            entries.append((relative_bytes, b"directory", b"0755", b"", b""))
-        elif path.is_file():
-            mode = b"0755" if path.stat().st_mode & 0o111 else b"0644"
-            entries.append((relative_bytes, b"file", mode, b"", path.read_bytes()))
-        else:
-            raise RegistryError(f"unsupported package entry for Directory digest: {relative.as_posix()}")
-    entries.sort(key=lambda entry: entry[0])
+def _directory_tree_digest_entries(entries: list[tuple[bytes, bytes, bytes, bytes, bytes]]) -> str:
+    """Hash already-normalized entries with the Go v1 byte framing."""
+    ordered = sorted(entries, key=lambda entry: entry[0])
     digest = hashlib.sha256()
-    digest.update(b"Universal Agent Plugins Directory tree digest\x00v1\x00")
-    for entry in entries:
-        for field in entry:
+    digest.update(len(DIRECTORY_TREE_DIGEST_DOMAIN).to_bytes(8, "big"))
+    digest.update(DIRECTORY_TREE_DIGEST_DOMAIN)
+    for relative, kind, mode, target, content in ordered:
+        for field in (b"entry", relative, kind, mode, target):
             digest.update(len(field).to_bytes(8, "big"))
             digest.update(field)
+        digest.update(len(content).to_bytes(8, "big"))
+        if kind == b"file":
+            digest.update(content)
     return "sha256:" + digest.hexdigest()
+
+
+def directory_tree_digest(root: Path) -> str:
+    """Reproduce the Go agentplugins-tree-sha256-v1 package digest exactly.
+
+    Directory publishing remains stricter than the Go snapshotter by rejecting
+    every symlink. The byte framing below is still the Go contract for every
+    file, directory, and executable mode that Directory publishing accepts.
+    """
+    entries: list[tuple[bytes, bytes, bytes, bytes, bytes]] = []
+    seen: dict[str, str] = {}
+    file_count = 0
+    total_bytes = 0
+    if root.is_symlink() or not root.is_dir():
+        raise ValueError("portable package root must be a real directory")
+    def raise_walk_error(error: OSError) -> None:
+        raise error
+
+    for current, directory_names, file_names in os.walk(root, topdown=True, onerror=raise_walk_error, followlinks=False):
+        current_path = Path(current)
+        if current_path == root:
+            # filepath.WalkDir excludes only the root metadata entries. A
+            # nested or differently-cased spelling remains invalid below.
+            directory_names[:] = [
+                name for name in directory_names
+                if name != ".git" and not (name == ".plugin-kit-ai.lock" and (root / name).is_symlink())
+            ]
+            file_names = [name for name in file_names if name not in {".git", ".plugin-kit-ai.lock"}]
+        for name in [*directory_names, *file_names]:
+            path = current_path / name
+            relative_path = path.relative_to(root)
+            relative = relative_path.as_posix()
+            if path.is_symlink():
+                raise ValueError(f"portable package contains a symlink: {relative!r}")
+            path_mode = path.stat().st_mode
+            is_directory = stat.S_ISDIR(path_mode)
+            is_file = stat.S_ISREG(path_mode)
+            if not (is_directory or is_file):
+                raise ValueError(f"portable package contains a special file: {relative!r}")
+            if len(relative_path.parts) > PORTABLE_MAX_DEPTH:
+                raise ValueError(f"portable package path exceeds depth {PORTABLE_MAX_DEPTH}: {relative!r}")
+            for part in relative_path.parts:
+                validate_segment(part)
+                if part.casefold() == ".git":
+                    raise ValueError(f"portable package contains reserved Git metadata path: {relative!r}")
+            if relative.casefold() == ".plugin-kit-ai.lock":
+                raise ValueError(f"portable package contains reserved ownership-marker path: {relative!r}")
+            folded = relative.casefold()
+            previous = seen.get(folded)
+            if previous is not None and previous != relative:
+                raise ValueError(f"portable path collision: {previous!r} and {relative!r}")
+            seen[folded] = relative
+            relative_bytes = relative.encode("utf-8")
+            if is_directory:
+                entries.append((relative_bytes, b"directory", b"040000", b"", b""))
+                continue
+            file_count += 1
+            if file_count > PORTABLE_MAX_FILES:
+                raise ValueError(f"portable package exceeds {PORTABLE_MAX_FILES} files")
+            size = path.stat().st_size
+            if size > PORTABLE_MAX_FILE_BYTES:
+                raise ValueError(f"portable package file exceeds {PORTABLE_MAX_FILE_BYTES} bytes: {relative!r}")
+            total_bytes += size
+            if total_bytes > PORTABLE_MAX_TREE_BYTES:
+                raise ValueError(f"portable package exceeds {PORTABLE_MAX_TREE_BYTES} total bytes")
+            mode = b"100755" if path_mode & 0o111 else b"100644"
+            entries.append((relative_bytes, b"file", mode, b"", path.read_bytes()))
+    return _directory_tree_digest_entries(entries)
 
 
 def parse_json_bytes(body: bytes, source: str) -> object:

@@ -1,0 +1,42 @@
+{
+  "algorithm": "agentplugins-tree-sha256-v1",
+  "authoritative_go_test": "install/integrationctl/agentplugins/adapters/packagedigest/snapshot_test.go:TestDigestFramingGoldenIncludesEmptyPrefixModeAndSymlink",
+  "expected_digest": "sha256:3f80c5a7d3a7e9a4446f2e49f6de414645643bd5d2ac63192df2686035b59f33",
+  "entries": [
+    {
+      "path": "a",
+      "kind": "file",
+      "mode": "100644",
+      "target": "",
+      "content": ""
+    },
+    {
+      "path": "a-prefix",
+      "kind": "file",
+      "mode": "100644",
+      "target": "",
+      "content": "prefix"
+    },
+    {
+      "path": "bin",
+      "kind": "directory",
+      "mode": "040000",
+      "target": "",
+      "content": ""
+    },
+    {
+      "path": "bin/x",
+      "kind": "file",
+      "mode": "100755",
+      "target": "",
+      "content": "x"
+    },
+    {
+      "path": "link",
+      "kind": "symlink",
+      "mode": "120000",
+      "target": "a",
+      "content": ""
+    }
+  ]
+}

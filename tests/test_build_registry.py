@@ -483,6 +483,52 @@ class GeneratedIndexTests(unittest.TestCase):
                 registry.build()
 
 
+class DirectoryTreeDigestTests(unittest.TestCase):
+    def fixture(self):
+        return json.loads((Path(__file__).parent / "fixtures" / "directory" / "tree-digest-golden.json").read_text())
+
+    def framed_entries(self, fixture):
+        return [
+            tuple(item[field].encode("utf-8") for field in ("path", "kind", "mode", "target", "content"))
+            for item in fixture["entries"]
+        ]
+
+    def test_cross_language_go_golden_framing(self) -> None:
+        fixture = self.fixture()
+        self.assertEqual(fixture["algorithm"], registry.DIRECTORY_TREE_DIGEST_ALGORITHM)
+        entries = self.framed_entries(fixture)
+        self.assertEqual(registry._directory_tree_digest_entries(entries.copy()), fixture["expected_digest"])
+        self.assertEqual(registry._directory_tree_digest_entries(entries.copy()), fixture["expected_digest"])
+
+    def test_publishable_files_directories_and_modes_match_golden_subset(self) -> None:
+        fixture = self.fixture()
+        publishable = [item for item in fixture["entries"] if item["kind"] != "symlink"]
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for item in publishable:
+                path = root / item["path"]
+                if item["kind"] == "directory":
+                    path.mkdir(parents=True, exist_ok=True)
+                    continue
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(item["content"].encode("utf-8"))
+                path.chmod(0o755 if item["mode"] == "100755" else 0o644)
+            (root / ".git").mkdir()
+            (root / ".git" / "ignored").write_bytes(b"not package content")
+            (root / ".plugin-kit-ai.lock").write_bytes(b"not package content")
+            expected = registry._directory_tree_digest_entries(self.framed_entries({"entries": publishable}))
+            self.assertEqual(registry.directory_tree_digest(root), expected)
+            self.assertEqual(registry.directory_tree_digest(root), expected)
+
+    def test_publishing_keeps_stricter_symlink_rejection(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "target").write_bytes(b"")
+            (root / "link").symlink_to("target")
+            with self.assertRaisesRegex(ValueError, "symlink"):
+                registry.directory_tree_digest(root)
+
+
 class DirectoryDomainTests(unittest.TestCase):
     def source(self):
         return registry.load_directory_source()
@@ -510,15 +556,19 @@ class DirectoryDomainTests(unittest.TestCase):
         for distribution in source["distributions"]:
             self.assertEqual(distribution["status"], "active")
             self.assertEqual([item["sequence"] for item in distribution["releases"]], [1])
+            self.assertEqual(
+                [item["tree_digest_algorithm"] for item in distribution["releases"]],
+                ["agentplugins-tree-sha256-v1"],
+            )
             self.assertEqual([item["release_sequence"] for item in distribution["release_policies"]], [1])
 
     def test_bridge_cohort_preserves_every_migrated_legacy_distribution(self) -> None:
         source = self.source()
         actual = {item["id"]: item for item in source["distributions"]}
         expected_digests = {
-            "777genius/chrome-devtools": ("sha256:c98acc2cccecb5398af73d453ec97a2f46dec70ba3cdb3cd3daed0f4b743bd3a", "sha256:e7d43a8e39b0e83f2c05777e297f6a3884002dc2601d70528b55a44132db8091"),
-            "777genius/cloudflare-docs": ("sha256:6606abd32baac63bb5d01d7a249880e9020e60e80ae7923a180812ed10cb332b", "sha256:6b575562e527194ccd31238fde8c5f764409ecc98e211e92dfb81455eef88bdd"),
-            "777genius/github": ("sha256:30f1a3be5d5e8fa4665af2f84f42eb532c618484d9426807a19ee775f2585690", "sha256:091e37c5f33c0a92f77070cfcb1b03759b2637927281c04d989e6c8fef888cae"),
+            "777genius/chrome-devtools": ("sha256:46e983660fc3fadfcd51465d66a7dfdf18149f907f54e4b190a3ec1b9ec4f9df", "sha256:e7d43a8e39b0e83f2c05777e297f6a3884002dc2601d70528b55a44132db8091"),
+            "777genius/cloudflare-docs": ("sha256:afdb5ca9b565971bbb34dec9fe6e107fcff4af98e0cd51cbc718eb43938a282d", "sha256:6b575562e527194ccd31238fde8c5f764409ecc98e211e92dfb81455eef88bdd"),
+            "777genius/github": ("sha256:2478a68a98982f115b5288c8c8931365635ce827581516ca54e11266e95d28a3", "sha256:091e37c5f33c0a92f77070cfcb1b03759b2637927281c04d989e6c8fef888cae"),
         }
         for distribution_id, digests in expected_digests.items():
             release = actual[distribution_id]["releases"][0]
@@ -533,7 +583,7 @@ class DirectoryDomainTests(unittest.TestCase):
             if release["package_source"]["revision"] is not None:
                 continue
             root = registry.ROOT / release["package_source"]["path"]
-            self.assertEqual(release["tree_digest_algorithm"], "uap-tree-sha256-v1")
+            self.assertEqual(release["tree_digest_algorithm"], "agentplugins-tree-sha256-v1")
             self.assertEqual(release["tree_digest"], registry.directory_tree_digest(root))
             self.assertEqual(release["manifest_digest"], registry.digest_bytes((root / "plugin.json").read_bytes()))
 
@@ -565,7 +615,7 @@ class DirectoryDomainTests(unittest.TestCase):
             self.assertIsNone(release["package_source"]["revision"])
         context7 = distributions["upstash/context7"]["releases"][0]
         self.assertEqual(context7["package_source"], {"repository": "upstash/context7", "revision": "769c6cd22c3d95462d1f55d789e9532cabefa5a9", "path": "plugins/agent-plugins/context7"})
-        self.assertEqual(context7["tree_digest"], "sha256:a4507f7326b10a9627b8030e6292df16710b33975cc53246992d239a172f45c8")
+        self.assertEqual(context7["tree_digest"], "sha256:08eed3b67f2e71a11b68baa594380c2f69ec1bc97584d701deaf7942ac34c0d8")
         self.assertEqual(context7["manifest_digest"], "sha256:d01781acd899aefa9445a290cf43a481230321934d62f9c8a2aab06a89718236")
 
     def test_distribution_kind_and_evidence_contract_fixture(self) -> None:

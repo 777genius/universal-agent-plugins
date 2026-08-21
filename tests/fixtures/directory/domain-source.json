@@ -29,7 +29,7 @@
         "manifest_name": "demo",
         "agent_plugins_schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
         "package_source": {"repository": "community/packages", "revision": "cccccccccccccccccccccccccccccccccccccccc", "path": "plugins/demo"},
-        "tree_digest_algorithm": "uap-tree-sha256-v1",
+        "tree_digest_algorithm": "agentplugins-tree-sha256-v1",
         "tree_digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
         "manifest_digest": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
         "components": ["mcp"]
@@ -50,7 +50,7 @@
         "agent_plugins_schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
         "package_source": {"repository": "777genius/universal-agent-plugins", "revision": null, "path": "plugins/demo"},
         "build_provenance": {"upstream_repository": "upstream/demo", "upstream_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},
-        "tree_digest_algorithm": "uap-tree-sha256-v1",
+        "tree_digest_algorithm": "agentplugins-tree-sha256-v1",
         "tree_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         "manifest_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
         "components": ["mcp"]
@@ -70,7 +70,7 @@
         "manifest_name": "demo",
         "agent_plugins_schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
         "package_source": {"repository": "upstream/demo", "revision": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee", "path": "plugin"},
-        "tree_digest_algorithm": "uap-tree-sha256-v1",
+        "tree_digest_algorithm": "agentplugins-tree-sha256-v1",
         "tree_digest": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
         "manifest_digest": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
         "components": ["mcp"]

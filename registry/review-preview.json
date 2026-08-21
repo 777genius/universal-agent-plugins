@@ -44,8 +44,8 @@
             "revision": "2ddbb99dd190c1792b79904f9875e6322bccd243",
             "path": "plugins/agent-code-navigator"
           },
-          "tree_digest_algorithm": "uap-tree-sha256-v1",
-          "tree_digest": "sha256:00955f92fc2f5a1628359de7e34a09a4f80c14efdb2492c7ac15f53dcd8810e4",
+          "tree_digest_algorithm": "agentplugins-tree-sha256-v1",
+          "tree_digest": "sha256:0087169b1eee5fbdf0d000f4f8b328a89aec5c11bc5d2c129f92c5cd62d33c30",
           "manifest_digest": "sha256:675fb48dff9431f75e2986211039b3bfb04860a84d6a5bd157b9658514a2394e"
         }
       ]
@@ -96,8 +96,8 @@
             "revision": "2ddbb99dd190c1792b79904f9875e6322bccd243",
             "path": "plugins/atlassian"
           },
-          "tree_digest_algorithm": "uap-tree-sha256-v1",
-          "tree_digest": "sha256:0cd3fb43e91422751f8aa615c649e0fd74762e3429ef7f1c397313760e596064",
+          "tree_digest_algorithm": "agentplugins-tree-sha256-v1",
+          "tree_digest": "sha256:61e9343e636c6197067504b59b1a77c5466bad2ca97b59aacd5455d4c5301d7a",
           "manifest_digest": "sha256:e83ade754f1251554622e4b48d596ebf72510bd7292b19a7793df4de8e546d04"
         }
       ]
@@ -146,8 +146,8 @@
             "revision": "2ddbb99dd190c1792b79904f9875e6322bccd243",
             "path": "plugins/chrome-devtools"
           },
-          "tree_digest_algorithm": "uap-tree-sha256-v1",
-          "tree_digest": "sha256:c98acc2cccecb5398af73d453ec97a2f46dec70ba3cdb3cd3daed0f4b743bd3a",
+          "tree_digest_algorithm": "agentplugins-tree-sha256-v1",
+          "tree_digest": "sha256:46e983660fc3fadfcd51465d66a7dfdf18149f907f54e4b190a3ec1b9ec4f9df",
           "manifest_digest": "sha256:e7d43a8e39b0e83f2c05777e297f6a3884002dc2601d70528b55a44132db8091"
         },
         {
@@ -172,8 +172,8 @@
             "revision": null,
             "path": "plugins/chrome-devtools"
           },
-          "tree_digest_algorithm": "uap-tree-sha256-v1",
-          "tree_digest": "sha256:3a98671d9e4052d0df4a326d04a2b028f187c19f881fcdad663d562d5fc83f33",
+          "tree_digest_algorithm": "agentplugins-tree-sha256-v1",
+          "tree_digest": "sha256:58cc1fa2d83a66e8b2df3c6e1c985cd453714fbdbdd5b23645f8afd7b1aea72d",
           "manifest_digest": "sha256:02a77a0509681567df75e941175b148c1bcdfe0001cec24cfef8300b85547850"
         }
       ]
@@ -223,8 +223,8 @@
             "revision": "2ddbb99dd190c1792b79904f9875e6322bccd243",
             "path": "plugins/cloudflare"
           },
-          "tree_digest_algorithm": "uap-tree-sha256-v1",
-          "tree_digest": "sha256:41ebd05b2d4870268e58694f0d729708ae403ab86a89b03d239d3e357d002cb2",
+          "tree_digest_algorithm": "agentplugins-tree-sha256-v1",
+          "tree_digest": "sha256:3c882fefc11319f5f51753786b53fe0da3978f45d6797dccdcc9f283f61424a5",
           "manifest_digest": "sha256:9bec7cfed2ecb217145c2a02658296670a328416566433518b4da0246e91d382"
         }
       ]
@@ -272,8 +272,8 @@
             "revision": "2ddbb99dd190c1792b79904f9875e6322bccd243",
             "path": "plugins/cloudflare-bindings"
           },
-          "tree_digest_algorithm": "uap-tree-sha256-v1",
-          "tree_digest": "sha256:b9b7139972ccf889b8164a3276fb0ca7636fc101ed1d0a704bfb6dc6dbe7f6ae",
+          "tree_digest_algorithm": "agentplugins-tree-sha256-v1",
+          "tree_digest": "sha256:f5355538e1558c47e51f2249a753fc179352a27e17de213ee6763c4eeac763b5",
           "manifest_digest": "sha256:6b945cf035f784216e71425cf7b6ca477b27a2069d2580e9713a65f5ec2ca0bf"
         }
       ]
@@ -324,8 +324,8 @@
             "revision": "2ddbb99dd190c1792b79904f9875e6322bccd243",
             "path": "plugins/cloudflare-docs"
           },
-          "tree_digest_algorithm": "uap-tree-sha256-v1",
-          "tree_digest": "sha256:6606abd32baac63bb5d01d7a249880e9020e60e80ae7923a180812ed10cb332b",
+          "tree_digest_algorithm": "agentplugins-tree-sha256-v1",
+          "tree_digest": "sha256:afdb5ca9b565971bbb34dec9fe6e107fcff4af98e0cd51cbc718eb43938a282d",
           "manifest_digest": "sha256:6b575562e527194ccd31238fde8c5f764409ecc98e211e92dfb81455eef88bdd"
         },
         {
@@ -351,8 +351,8 @@
             "revision": null,
             "path": "plugins/cloudflare-docs"
           },
-          "tree_digest_algorithm": "uap-tree-sha256-v1",
-          "tree_digest": "sha256:0e63134f8a02ca8151939bea6bd67d029de482456e50ee8d432d9cc0047f68dd",
+          "tree_digest_algorithm": "agentplugins-tree-sha256-v1",
+          "tree_digest": "sha256:75c4855a41b6b5008197bfc68a6daab2d9025887b64dd040577ac8fd0c2fc8bf",
           "manifest_digest": "sha256:7d1ada5818ced00257f39edd0bea371630ad5167dbfa572fbf01d7504012119c"
         }
       ]
@@ -403,8 +403,8 @@
             "revision": "2ddbb99dd190c1792b79904f9875e6322bccd243",
             "path": "plugins/cloudflare-observability"
           },
-          "tree_digest_algorithm": "uap-tree-sha256-v1",
-          "tree_digest": "sha256:e57f3c3034d1bbaac0a0287e25ca6115041a897bc22f9245f076b7bf126b189b",
+          "tree_digest_algorithm": "agentplugins-tree-sha256-v1",
+          "tree_digest": "sha256:59d64ca296d700a78c134a5947eacff8f91fa64b07f910f90476c3e4fe03c1e7",
           "manifest_digest": "sha256:41573bb020202619d72fe2cbbf35c56cb5ed4b885b17867ffd2e4a74ebcb5064"
         }
       ]
@@ -453,8 +453,8 @@
             "revision": "2ddbb99dd190c1792b79904f9875e6322bccd243",
             "path": "plugins/cloudflare-radar"
           },
-          "tree_digest_algorithm": "uap-tree-sha256-v1",
-          "tree_digest": "sha256:cca12b833a1be6c6c89d5573d33d2608255be851931de59243cb40481ccdc44f",
+          "tree_digest_algorithm": "agentplugins-tree-sha256-v1",
+          "tree_digest": "sha256:e3209d1a2d7084930cbb19e744e715dcbfe5bc27a72fb9ca3a22f59d8d240d79",
           "manifest_digest": "sha256:cf94d10bad7d902f4ed171d2363854fb93409ac79a1c5e02d152be6448d66fc2"
         }
       ]
@@ -502,8 +502,8 @@
             "revision": "2ddbb99dd190c1792b79904f9875e6322bccd243",
             "path": "plugins/context7"
           },
-          "tree_digest_algorithm": "uap-tree-sha256-v1",
-          "tree_digest": "sha256:c166377ad416b972254801ecb455f790ac94d5f69e3beab90c44e3923155c38e",
+          "tree_digest_algorithm": "agentplugins-tree-sha256-v1",
+          "tree_digest": "sha256:242759b2c2eec4807897d34009fab5655403f7c164a8ec151f7dbf936cc8058b",
           "manifest_digest": "sha256:341c54728c2f50d3876b12a6e94ba06751c94d2be215037846d06f93a018434e"
         },
         {
@@ -529,8 +529,8 @@
             "revision": "769c6cd22c3d95462d1f55d789e9532cabefa5a9",
             "path": "plugins/agent-plugins/context7"
           },
-          "tree_digest_algorithm": "uap-tree-sha256-v1",
-          "tree_digest": "sha256:a4507f7326b10a9627b8030e6292df16710b33975cc53246992d239a172f45c8",
+          "tree_digest_algorithm": "agentplugins-tree-sha256-v1",
+          "tree_digest": "sha256:08eed3b67f2e71a11b68baa594380c2f69ec1bc97584d701deaf7942ac34c0d8",
           "manifest_digest": "sha256:d01781acd899aefa9445a290cf43a481230321934d62f9c8a2aab06a89718236"
         }
       ]
@@ -578,8 +578,8 @@
             "revision": "2ddbb99dd190c1792b79904f9875e6322bccd243",
             "path": "plugins/docker-hub"
           },
-          "tree_digest_algorithm": "uap-tree-sha256-v1",
-          "tree_digest": "sha256:be00e2ff39c67e033214f19793d55bab6a852da31303713461756aff86a84f28",
+          "tree_digest_algorithm": "agentplugins-tree-sha256-v1",
+          "tree_digest": "sha256:5388e4d24222d40c57337f2d4a65559c70e34ecfd803cfe7fd41268ef722e3ba",
           "manifest_digest": "sha256:413347fe45d0dbcbd5b4d5cf88eb7e0ec5c0cd080486ea4cb8c3f61f0bd7a95d"
         }
       ]
@@ -627,8 +627,8 @@
             "revision": "2ddbb99dd190c1792b79904f9875e6322bccd243",
             "path": "plugins/figma"
           },
-          "tree_digest_algorithm": "uap-tree-sha256-v1",
-          "tree_digest": "sha256:65eb949c37a3c937d5fc00684d01cec1e3eb966c9af5b6f529656ba62de485c1",
+          "tree_digest_algorithm": "agentplugins-tree-sha256-v1",
+          "tree_digest": "sha256:3c8672413b34e3570c16bc3a31d8ca77da25d5e7ef302608c9c11da3d8c8a1a8",
           "manifest_digest": "sha256:67fbfd8062a7f3d965ee63cc68f392a6afb1e8861e3bcc5fe1f70e7e9fadabba"
         }
       ]
@@ -675,8 +675,8 @@
             "revision": "2ddbb99dd190c1792b79904f9875e6322bccd243",
             "path": "plugins/firebase"
           },
-          "tree_digest_algorithm": "uap-tree-sha256-v1",
-          "tree_digest": "sha256:bc84b0d610e6eee51d4106e99f534b3c9ab552b659437813ed75eb302696b186",
+          "tree_digest_algorithm": "agentplugins-tree-sha256-v1",
+          "tree_digest": "sha256:29b864edd3e63df79ef93f5aece08c7391676849b7bc63b33fa2504634af617d",
           "manifest_digest": "sha256:9883d7c5b0472304f799df862f52d3cdae3120b3324633d6a58fceceb78da7b7"
         }
       ]
@@ -724,8 +724,8 @@
             "revision": "2ddbb99dd190c1792b79904f9875e6322bccd243",
             "path": "plugins/github"
           },
-          "tree_digest_algorithm": "uap-tree-sha256-v1",
-          "tree_digest": "sha256:30f1a3be5d5e8fa4665af2f84f42eb532c618484d9426807a19ee775f2585690",
+          "tree_digest_algorithm": "agentplugins-tree-sha256-v1",
+          "tree_digest": "sha256:2478a68a98982f115b5288c8c8931365635ce827581516ca54e11266e95d28a3",
           "manifest_digest": "sha256:091e37c5f33c0a92f77070cfcb1b03759b2637927281c04d989e6c8fef888cae"
         },
         {
@@ -750,8 +750,8 @@
             "revision": null,
             "path": "plugins/github"
           },
-          "tree_digest_algorithm": "uap-tree-sha256-v1",
-          "tree_digest": "sha256:453cdf8504990fb63a4cb27a0154488a9ddc2b0f808b9a47308a4efb38180e11",
+          "tree_digest_algorithm": "agentplugins-tree-sha256-v1",
+          "tree_digest": "sha256:eddff170cd0e832120b09c4996c61933b695c4ac19e7f87d747c9230d060b912",
           "manifest_digest": "sha256:90f940c0f656bdf83fa8cccd5515bf4df9211c5a1d9cb095b84c30ee0f4f6efe"
         }
       ]
@@ -798,8 +798,8 @@
             "revision": "2ddbb99dd190c1792b79904f9875e6322bccd243",
             "path": "plugins/gitlab"
           },
-          "tree_digest_algorithm": "uap-tree-sha256-v1",
-          "tree_digest": "sha256:ad09f599b3042dce2e91c8581f1bde5d0a347914bc9b3197e99557a4e18cc842",
+          "tree_digest_algorithm": "agentplugins-tree-sha256-v1",
+          "tree_digest": "sha256:ed37827bf8a1c65a36d6f2983ad9e8f7712f25669bd869970b221dbea3b862c2",
           "manifest_digest": "sha256:1a181fab20d9520f5f006f4237e88d67cf58d29b9994dbc45ee4c80d2474e080"
         }
       ]
@@ -847,8 +847,8 @@
             "revision": "2ddbb99dd190c1792b79904f9875e6322bccd243",
             "path": "plugins/greptile"
           },
-          "tree_digest_algorithm": "uap-tree-sha256-v1",
-          "tree_digest": "sha256:f222dadd068938615382ed12c689803c4b318964dba5892592a96e374ef71944",
+          "tree_digest_algorithm": "agentplugins-tree-sha256-v1",
+          "tree_digest": "sha256:91f27a0beb56a229d213f88dc343d4b7a53a54d189b568f0e98aa119884a620e",
           "manifest_digest": "sha256:05b29500564aede5274a6d21c0cf5bb4727e995045b04de170913b7ef2ae07bb"
         }
       ]
@@ -898,8 +898,8 @@
             "revision": "2ddbb99dd190c1792b79904f9875e6322bccd243",
             "path": "plugins/heroku"
           },
-          "tree_digest_algorithm": "uap-tree-sha256-v1",
-          "tree_digest": "sha256:f96527f99e6e9e21ba7947a73afc6fd2c5bf79dd3fb850837a49d7923b584198",
+          "tree_digest_algorithm": "agentplugins-tree-sha256-v1",
+          "tree_digest": "sha256:b8bf38abe09ad00b1368772a680f60586903113bd13535d643151487c67abb8e",
           "manifest_digest": "sha256:5b7c088e290ed04b0eafe0275dc806e7c2153dd7cbe6b74d1c5f1d2961e9355a"
         }
       ]
@@ -947,8 +947,8 @@
             "revision": "2ddbb99dd190c1792b79904f9875e6322bccd243",
             "path": "plugins/hubspot-crm"
           },
-          "tree_digest_algorithm": "uap-tree-sha256-v1",
-          "tree_digest": "sha256:81649889c14a7f78a6283508f022cab9378b829dd8e47103e588d9fc3fc67b9b",
+          "tree_digest_algorithm": "agentplugins-tree-sha256-v1",
+          "tree_digest": "sha256:09a0b151c384235c3d7b3929398695d24cd7b07c75993a0a73f1a218198ededd",
           "manifest_digest": "sha256:20334e86a1b599d2759e04bfaef37dc2ddb7f6b0f3994b5d66d4eca12fbec941"
         }
       ]
@@ -996,8 +996,8 @@
             "revision": "2ddbb99dd190c1792b79904f9875e6322bccd243",
             "path": "plugins/hubspot-developer"
           },
-          "tree_digest_algorithm": "uap-tree-sha256-v1",
-          "tree_digest": "sha256:622250b370be6779228fd1e0c97a8d4672d27888c4e431b38198b88a590c27d4",
+          "tree_digest_algorithm": "agentplugins-tree-sha256-v1",
+          "tree_digest": "sha256:01778fdb27d89d4d675c48ae1afe1bb3622e6d850d5e2a5c9a514cd6c4323a83",
           "manifest_digest": "sha256:257a75ed2e473945a26afa102152f866bd8269bb41c998f6d87fbdf43ed1a6b9"
         }
       ]
@@ -1045,8 +1045,8 @@
             "revision": "2ddbb99dd190c1792b79904f9875e6322bccd243",
             "path": "plugins/linear"
           },
-          "tree_digest_algorithm": "uap-tree-sha256-v1",
-          "tree_digest": "sha256:9f20ea2e40efa4ca76615bf70fa23f6663ae157456d11567091f40d8323f5122",
+          "tree_digest_algorithm": "agentplugins-tree-sha256-v1",
+          "tree_digest": "sha256:6d74545875e84110fc490981e72527e05e891ed0a67033a716184fb507001978",
           "manifest_digest": "sha256:0b8ed223c21d206d802130ace7219b5c78af1903675640cc77f5195e4f86ef70"
         }
       ]
@@ -1094,8 +1094,8 @@
             "revision": "2ddbb99dd190c1792b79904f9875e6322bccd243",
             "path": "plugins/neon"
           },
-          "tree_digest_algorithm": "uap-tree-sha256-v1",
-          "tree_digest": "sha256:51a41ee5b5a16ce6ca8e294992ded9ce9e371c7487e34f9fb699a9e420c4d5e9",
+          "tree_digest_algorithm": "agentplugins-tree-sha256-v1",
+          "tree_digest": "sha256:eda9ec7ba831b2c6bd689ed57d0862bfe31903fcfbf82410bf8f2c6a3fa2e81a",
           "manifest_digest": "sha256:6787894c7d3e033db05deee5e36358caf387493a98a78716d6db4b343e9c0698"
         }
       ]
@@ -1144,8 +1144,8 @@
             "revision": "2ddbb99dd190c1792b79904f9875e6322bccd243",
             "path": "plugins/notion"
           },
-          "tree_digest_algorithm": "uap-tree-sha256-v1",
-          "tree_digest": "sha256:7b02c506409ab96d1991a5323c0b7d06a39b0764aaefae2a9c854020df273e35",
+          "tree_digest_algorithm": "agentplugins-tree-sha256-v1",
+          "tree_digest": "sha256:860fa6dd1830d0da2b8fed38195fa6ad6307082ac12d708118e5eb1c5d10f9b7",
           "manifest_digest": "sha256:bbab30a4f062218d7a5fce2f6c818680d3c7adfaebdbaa3e523e15942a2f57e5"
         }
       ]
@@ -1193,8 +1193,8 @@
             "revision": "2ddbb99dd190c1792b79904f9875e6322bccd243",
             "path": "plugins/sentry"
           },
-          "tree_digest_algorithm": "uap-tree-sha256-v1",
-          "tree_digest": "sha256:1effc7067821e77c97788dc3de04225364efe405871a236e95592408d889c142",
+          "tree_digest_algorithm": "agentplugins-tree-sha256-v1",
+          "tree_digest": "sha256:cf7816d17894eb8f42db2587eef1ce2a31a145188879545414f840eaa477c5da",
           "manifest_digest": "sha256:7606b1f8af700ea76590f0ae586ff8586f4dc370f536ceedbeab8d934494e42e"
         }
       ]
@@ -1242,8 +1242,8 @@
             "revision": "2ddbb99dd190c1792b79904f9875e6322bccd243",
             "path": "plugins/statsig"
           },
-          "tree_digest_algorithm": "uap-tree-sha256-v1",
-          "tree_digest": "sha256:a6406168061bef438d359719b914643e319361a2e43f9d0f8648f0fa40e502fa",
+          "tree_digest_algorithm": "agentplugins-tree-sha256-v1",
+          "tree_digest": "sha256:4a350c242ed9a4a29f64fa64d9f3a74025c5ee0e9d6a4e4b23eee35d1f9878ed",
           "manifest_digest": "sha256:5100526dca8f8e53e42d1d53f8acc1879ea8a2d8b0982df3f00be5e95bf3e465"
         }
       ]
@@ -1292,8 +1292,8 @@
             "revision": "2ddbb99dd190c1792b79904f9875e6322bccd243",
             "path": "plugins/stripe"
           },
-          "tree_digest_algorithm": "uap-tree-sha256-v1",
-          "tree_digest": "sha256:ff615b602680af68b79b43c2127a3b2cd1b953338a2d488cd3527aeda09225a5",
+          "tree_digest_algorithm": "agentplugins-tree-sha256-v1",
+          "tree_digest": "sha256:37867106f65c2acb5f5c64bebe4e5ce61f7e73dbb05f7d94d2f398dc913833fe",
           "manifest_digest": "sha256:e70885fda5a4ce50c302891229e204bbf22904ec3f227670e5916d69f9b8b80d"
         }
       ]
@@ -1341,8 +1341,8 @@
             "revision": "2ddbb99dd190c1792b79904f9875e6322bccd243",
             "path": "plugins/supabase"
           },
-          "tree_digest_algorithm": "uap-tree-sha256-v1",
-          "tree_digest": "sha256:43138602e21a79eb54c13cd6145b16dfe1459f1a40e324d4f03c010617d064fa",
+          "tree_digest_algorithm": "agentplugins-tree-sha256-v1",
+          "tree_digest": "sha256:4605084fd9f2f773c8eafa3741b31f639f5f5a8771320d8a7a91f5a5e1db1034",
           "manifest_digest": "sha256:bb0672e8cd411b1c8e0872a5f7f0abc95f9c68f008802d42a2cd16a689deeb11"
         }
       ]
@@ -1389,8 +1389,8 @@
             "revision": "2ddbb99dd190c1792b79904f9875e6322bccd243",
             "path": "plugins/vercel"
           },
-          "tree_digest_algorithm": "uap-tree-sha256-v1",
-          "tree_digest": "sha256:4ef30009c5d85e005485b5e7c4450fc90664b0d714cf69a5b9c5a78658e4c3f5",
+          "tree_digest_algorithm": "agentplugins-tree-sha256-v1",
+          "tree_digest": "sha256:d5089e23eccc6fe58e82be33512e25d0ee523d61f21fa42ff1e0f5bc4bad6c9c",
           "manifest_digest": "sha256:23f7cd28573c4ab10943178db05a47f2af3639518a334449c23d89b19562ef74"
         }
       ]

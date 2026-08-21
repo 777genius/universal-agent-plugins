@@ -37,7 +37,7 @@
         "eligible_targets": {"type": "array", "uniqueItems": true, "items": {"enum": ["codex", "chatgpt", "cursor", "copilot", "vscode", "kiro"]}},
         "current_evidence": {"type": "array", "uniqueItems": true, "items": {"type": "string"}},
         "source": {"$ref": "#/$defs/source"},
-        "tree_digest_algorithm": {"const": "uap-tree-sha256-v1"},
+        "tree_digest_algorithm": {"const": "agentplugins-tree-sha256-v1"},
         "tree_digest": {"$ref": "#/$defs/digest"},
         "manifest_digest": {"$ref": "#/$defs/digest"}
       },

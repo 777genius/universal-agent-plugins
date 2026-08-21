@@ -71,7 +71,7 @@
         "manifest_name": {"$ref": "#/$defs/id"},
         "agent_plugins_schema": {"const": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json"},
         "package_source": {"$ref": "#/$defs/source"},
-        "tree_digest_algorithm": {"const": "uap-tree-sha256-v1"},
+        "tree_digest_algorithm": {"const": "agentplugins-tree-sha256-v1"},
         "build_provenance": {
           "type": "object",
           "required": ["upstream_repository", "upstream_revision"],
