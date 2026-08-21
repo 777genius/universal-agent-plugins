@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "base_fixture": "directory.snapshot.json",
+  "vectors": [
+    {
+      "id": "eligible-default",
+      "changes": [],
+      "targets": ["codex", "cursor"],
+      "expected": { "distribution_id": "example/demo", "release_sequence": 2, "fallback_reason": null }
+    },
+    {
+      "id": "newest-eligible-release",
+      "changes": ["add-newer-eligible-upstream-release"],
+      "targets": ["codex", "cursor"],
+      "expected": { "distribution_id": "example/demo", "release_sequence": 3, "fallback_reason": null }
+    },
+    {
+      "id": "community-fallback",
+      "changes": ["suspend-default"],
+      "targets": ["codex"],
+      "expected": { "distribution_id": "example/demo-bridge", "release_sequence": 1, "fallback_reason": "declared default example/demo was ineligible: distribution is suspended" }
+    },
+    {
+      "id": "verified-upstream-fallback",
+      "changes": ["bridge-is-default", "suspend-bridge"],
+      "targets": ["codex", "cursor"],
+      "expected": { "distribution_id": "example/demo", "release_sequence": 2, "fallback_reason": "declared default example/demo-bridge was ineligible: distribution is suspended" }
+    },
+    {
+      "id": "upstream-missing-materialization",
+      "changes": ["bridge-is-default", "suspend-bridge", "remove-upstream-materialization"],
+      "targets": ["codex"],
+      "expected": { "distribution_id": null, "release_sequence": null, "fallback_reason": null, "unavailable_reason": "demo: no eligible distribution supports the complete target set codex; example/demo-bridge: distribution is suspended; example/demo: release 2 lacks current positive package compatibility evidence (passed materialization) for codex" }
+    },
+    {
+      "id": "current-trusted-failure",
+      "changes": ["fail-current-runtime-codex"],
+      "targets": ["codex"],
+      "expected": { "distribution_id": "example/demo-bridge", "release_sequence": 1, "fallback_reason": "declared default example/demo was ineligible: release 2 has blocking trusted failure for codex" }
+    },
+    {
+      "id": "no-eligible-complete-target-set",
+      "changes": ["remove-bridge-kiro"],
+      "targets": ["codex", "kiro"],
+      "expected": { "distribution_id": null, "release_sequence": null, "fallback_reason": null, "unavailable_reason": "demo: no eligible distribution supports the complete target set codex,kiro; example/demo: release 2 does not support kiro; example/demo-bridge: release 1 does not support kiro" }
+    },
+    {
+      "id": "stale-different-tree-current-failure",
+      "changes": ["add-stale-runtime-failure-codex"],
+      "targets": ["codex"],
+      "expected": { "distribution_id": "example/demo", "release_sequence": 2, "fallback_reason": null }
+    }
+  ]
+}

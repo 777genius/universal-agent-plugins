@@ -84,6 +84,7 @@ export interface DistributionReleaseView {
   release_status: ReleaseStatus
   selectable: boolean
   blocking_clients: ClientID[]
+  materialized_clients: ClientID[]
   meets_minimum_capabilities: boolean
 }
 
@@ -104,6 +105,7 @@ export interface DistributionView {
   targets: ReleaseTarget[]
   components: ComponentID[]
   releases: DistributionReleaseView[]
+  fallback_reason?: string
 }
 
 /**
@@ -146,7 +148,15 @@ export interface RegistryIndex {
   data_source: 'published_snapshot' | 'review_preview' | 'legacy_compatibility'
   snapshot_sequence?: number
   generated_at?: string
+  expires_at?: string
   plugins: RegistryPlugin[]
+}
+
+export interface DistributionResolution {
+  distribution?: DistributionView
+  fallback_reason?: string
+  unavailable_reason?: string
+  ineligible_reasons?: Array<{ distribution_id: string, reason: string }>
 }
 
 export interface ClientTarget {

@@ -104,6 +104,8 @@ code, pre { font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospac
 .hero__window-body { padding: 26px; }
 .hero__window-body > p { margin: 0 0 11px; color: var(--muted); font-size: .78rem; }
 .preview-banner { padding: 9px 20px; border-bottom: 1px solid color-mix(in srgb, var(--coral) 55%, var(--line)); background: color-mix(in srgb, var(--coral) 10%, var(--surface-solid)); color: var(--text); text-align: center; font-size: .76rem; }
+.directory-meta { padding: 8px 20px; border-bottom: 1px solid var(--line); background: var(--surface-solid); color: var(--muted); text-align: center; font-size: .72rem; }
+.directory-meta--stale { border-bottom-color: color-mix(in srgb, var(--coral) 55%, var(--line)); background: color-mix(in srgb, var(--coral) 10%, var(--surface-solid)); color: var(--text); }
 .hero-command-row { display: grid; grid-template-columns: minmax(150px, .45fr) minmax(0, 1fr); gap: 8px; align-items: stretch; }
 .hero-command-row .app-multiselect__trigger { height: 100%; min-height: 48px; }
 .hero-targets { min-width: 0; margin: 0 0 20px; padding: 0; border: 0; }

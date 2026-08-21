@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import type { ClientID } from '~/types/registry'
-import { deliveryLabel, evidenceLabel, expectedDistribution, githubSourceUrl, validationLabel } from '~/utils/registry'
+import { deliveryLabel, evidenceLabel, githubSourceUrl, resolveDistribution, validationLabel } from '~/utils/registry'
 const route = useRoute()
 const registry = useRegistry()
+const { current, expired, published } = useDirectoryStatus()
 const { pluginIcon, repositoryUrl } = useSite()
 const plugin = registry.plugins.find(item => item.name === route.params.slug)
 
@@ -12,7 +13,8 @@ if (!plugin) {
 const availableClients = clients.filter(client => plugin.client_support.clients.includes(client.id))
 const initialTarget = availableClients.find(client => client.id === 'cursor')?.id ?? availableClients[0]?.id
 const targets = ref<ClientID[]>(initialTarget ? [initialTarget] : [])
-const installCandidate = computed(() => expectedDistribution(plugin, targets.value))
+const resolution = computed(() => resolveDistribution(plugin, targets.value))
+const installCandidate = computed(() => current.value ? resolution.value.distribution : undefined)
 const authLabel = plugin.authentication === 'none' ? 'No account required' : plugin.authentication === 'oauth' ? 'OAuth required' : plugin.authentication === 'client_managed' ? 'Client-managed authentication' : 'Check package requirements'
 
 const canonical = `${useRuntimeConfig().public.siteUrl}/plugins/${plugin.name}`
@@ -33,7 +35,7 @@ useHead({ link: [{ rel: 'canonical', href: canonical }] })
       <article class="plugin-profile">
         <div class="plugin-profile__heading">
           <span class="plugin-profile__icon"><img :src="pluginIcon(plugin)" alt="" width="54" height="54" /></span>
-          <div><div class="plugin-profile__meta"><span class="source-pill">{{ installCandidate ? 'Install candidate' : 'Unavailable provenance' }}<template v-if="installCandidate"> · {{ installCandidate.label }}</template></span><span v-if="installCandidate">v{{ installCandidate.version }} · release {{ installCandidate.release_sequence }}</span></div><h1>{{ plugin.display_name }}</h1></div>
+          <div><div class="plugin-profile__meta"><span class="source-pill">{{ installCandidate ? 'Install candidate' : expired ? 'Stale Directory · history only' : !published ? 'Review preview · history only' : 'Unavailable provenance' }}<template v-if="installCandidate"> · {{ installCandidate.label }}</template></span><span v-if="installCandidate">v{{ installCandidate.version }} · release {{ installCandidate.release_sequence }}</span></div><h1>{{ plugin.display_name }}</h1></div>
         </div>
         <p class="plugin-profile__description">{{ plugin.description }}</p>
         <dl v-if="installCandidate" class="plugin-facts">
@@ -43,7 +45,10 @@ useHead({ link: [{ rel: 'canonical', href: canonical }] })
           <div><dt>Immutable revision</dt><dd><code>{{ installCandidate.source.revision }}</code></dd></div>
           <div><dt>Provenance</dt><dd><a :href="githubSourceUrl(plugin, installCandidate)" target="_blank" rel="noreferrer">View exact install package source <span aria-hidden="true">↗</span></a></dd></div>
         </dl>
-        <p v-else>No active release serves the selected target set. The entries below are product history, not install candidates.</p>
+        <p v-if="resolution.fallback_reason && current"><strong>Fallback reason:</strong> {{ resolution.fallback_reason }}</p>
+        <p v-if="expired">This signed Directory snapshot is stale. Install-candidate claims and commands are disabled; the entries below remain available as product history.</p>
+        <p v-else-if="!published">This is unresolved review data, not installation authority. Install-candidate claims and commands are disabled; production uses a published signed Directory snapshot.</p>
+        <p v-else-if="!installCandidate">{{ resolution.unavailable_reason }} The entries below are product history, not install candidates.</p>
         <div v-if="installCandidate" class="plugin-profile__section"><h2>Install candidate components</h2><ul class="badge-list"><li v-for="component in installCandidate.components" :key="component">{{ component }}</li></ul></div>
         <div v-if="plugin.categories.length" class="plugin-profile__section"><h2>Categories</h2><ul class="tag-list"><li v-for="category in plugin.categories" :key="category">{{ category }}</li></ul></div>
         <div class="plugin-profile__section">

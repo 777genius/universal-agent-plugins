@@ -35,6 +35,20 @@ describe('focused catalog accessibility contract', () => {
     assert.match(layout, /Pull request preview/)
   })
 
+  it('gates install candidates and copy actions on a current published snapshot', () => {
+    const status = source('../composables/useDirectoryStatus.ts')
+    const home = source('../pages/index.vue')
+    const card = source('../components/PluginCard.vue')
+    const panel = source('../components/InstallPanel.vue')
+    const detail = source('../pages/plugins/[slug].vue')
+    assert.match(status, /registry\.data_source === 'published_snapshot' && !directoryIsExpired/)
+    assert.match(home, /!current\.value.*pluginCommands/)
+    assert.match(card, /current\.value \? resolution\.value\.distribution : undefined/)
+    assert.match(panel, /current\.value && targets\.value\.length \? pluginCommands/)
+    assert.match(detail, /current\.value \? resolution\.value\.distribution : undefined/)
+    for (const view of [home, card, panel, detail]) assert.match(view, /review (?:data|preview)/i)
+  })
+
   it('exposes both Add a plugin pull-request actions', () => {
     const catalog = source('../components/PluginCatalog.vue')
     assert.equal([...catalog.matchAll(/registry\/README\.md#submit-an-external-package/g)].length, 2)

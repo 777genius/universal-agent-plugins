@@ -3,12 +3,15 @@ import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { describe, it } from 'node:test'
 import { fileURLToPath } from 'node:url'
-import { deliveryLabel, expectedDistribution, githubSourceUrl, isPinnedExternalSource, mirroredIconPath, parseDirectoryData, parseRegistryIndex, validationLabel } from '../utils/registry.ts'
+import { deliveryLabel, directoryIsExpired, expectedDistribution, githubSourceUrl, isPinnedExternalSource, mirroredIconPath, parseDirectoryData, parseRegistryIndex, resolveDistribution, validationLabel } from '../utils/registry.ts'
 import { pluginCommands } from '../utils/commands.ts'
 
 const fixture = JSON.parse(readFileSync(fileURLToPath(new URL('./fixtures/registry.valid.json', import.meta.url)), 'utf8')) as unknown
 const snapshotFixture = JSON.parse(readFileSync(fileURLToPath(new URL('./fixtures/directory.snapshot.json', import.meta.url)), 'utf8')) as unknown
 const blockedNewestFixture = JSON.parse(readFileSync(fileURLToPath(new URL('./fixtures/directory.blocked-newest.snapshot.json', import.meta.url)), 'utf8')) as unknown
+const resolverGolden = JSON.parse(readFileSync(fileURLToPath(new URL('./fixtures/resolver-golden.json', import.meta.url)), 'utf8')) as {
+  vectors: Array<{ id: string, changes: string[], targets: Array<'codex' | 'cursor' | 'kiro'>, expected: { distribution_id: string | null, release_sequence: number | null, fallback_reason: string | null, unavailable_reason?: string } }>
+}
 const stylesheet = readFileSync(fileURLToPath(new URL('../assets/css/main.css', import.meta.url)), 'utf8')
 
 interface SnapshotFixture {
@@ -24,7 +27,7 @@ interface SnapshotFixture {
     }>
     releases: Array<Record<string, unknown>>
   }>
-  evidence: Array<{ id: string, client?: string, level: string, outcome: string, package_tree_digest: string, installer_version?: string, artifact: { digest: string } }>
+  evidence: Array<{ id: string, distribution_id: string, release_sequence: number, client?: string, level: string, outcome: string, package_tree_digest: string, installer_version?: string, artifact: { digest: string } }>
   revocations: Array<{ distribution_id: string, release_sequence: number }>
 }
 
@@ -60,6 +63,8 @@ describe('registry parsing', () => {
     const directory = parseDirectoryData(snapshotFixture, 'published_snapshot')
     assert.equal(directory.data_source, 'published_snapshot')
     assert.equal(directory.snapshot_sequence, 42)
+    assert.equal(directory.generated_at, '2026-08-20T00:00:00Z')
+    assert.equal(directory.expires_at, '2026-09-19T00:00:00Z')
     assert.equal(directory.plugins.length, 1)
     assert.equal(directory.plugins[0]?.display_name, 'Demo')
     assert.equal(directory.plugins[0]?.distributions.length, 2)
@@ -161,9 +166,14 @@ describe('registry parsing', () => {
     older.tree_digest = `sha256:${'7'.repeat(64)}`
     ;(older.package_source as Record<string, unknown>).revision = '9'.repeat(40)
     upstream.releases.push(older)
+    const olderMaterialization = structuredClone(raw.evidence.find(item => item.id === 'materialization-demo-codex')!)
+    olderMaterialization.id = 'materialization-demo-codex-release-1'
+    olderMaterialization.release_sequence = 1
+    olderMaterialization.package_tree_digest = `sha256:${'7'.repeat(64)}`
+    raw.evidence.push(olderMaterialization)
     upstream.release_policies.push({
       ...structuredClone(upstream.release_policies[0]!),
-      current_evidence: [],
+      current_evidence: [olderMaterialization.id],
       release_sequence: 1,
     } as typeof upstream.release_policies[number])
     raw.evidence.find(item => item.id === 'runtime-demo-codex')!.outcome = 'failed'
@@ -186,7 +196,7 @@ describe('registry parsing', () => {
     assert.equal(candidate.source.path, 'plugins/release-fallback-v1')
     assert.deepEqual(candidate.package_evidence.map(item => item.id), ['schema-release-1'])
     assert.deepEqual(candidate.evidence.map(item => item.id), ['runtime-release-1-codex'])
-    assert.equal(validationLabel(candidate), 'Runtime tested')
+    assert.equal(validationLabel(candidate), 'Materialization tested')
     assert.equal(githubSourceUrl(plugin, candidate), `https://github.com/example/plugins/tree/${'1'.repeat(40)}/plugins/release-fallback-v1`)
     assert.equal(pluginCommands(plugin, ['codex']).add, 'npx universal-agent-plugins add release-fallback --target codex')
 
@@ -218,12 +228,93 @@ describe('registry parsing', () => {
     const raw = signedFixture()
     raw.evidence.find(item => item.id === 'runtime-demo-codex')!.package_tree_digest = `sha256:${'9'.repeat(64)}`
     const plugin = parseDirectoryData(raw, 'published_snapshot').plugins[0]!
-    assert.deepEqual(plugin.evidence, [])
-    assert.equal(validationLabel(plugin), 'Schema passed')
+    assert.equal(plugin.evidence.some(item => item.id === 'runtime-demo-codex'), false)
+    assert.equal(validationLabel(plugin), 'Materialization tested')
 
     const incomplete = signedFixture()
     delete incomplete.evidence.find(item => item.id === 'runtime-demo-codex')!.installer_version
-    assert.deepEqual(parseDirectoryData(incomplete, 'published_snapshot').plugins[0]!.evidence, [])
+    assert.equal(parseDirectoryData(incomplete, 'published_snapshot').plugins[0]!.evidence.some(item => item.id === 'runtime-demo-codex'), false)
+  })
+
+  it('matches every shared authoritative resolver golden vector', () => {
+    for (const vector of resolverGolden.vectors) {
+      const raw = signedFixture()
+      const upstream = raw.distributions.find(item => item.id === 'example/demo')!
+      const bridge = raw.distributions.find(item => item.id === 'example/demo-bridge')!
+      for (const change of vector.changes) {
+        if (change === 'suspend-default') upstream.status = 'suspended'
+        else if (change === 'add-newer-eligible-upstream-release') {
+          const newer = structuredClone(upstream.releases[0]!)
+          newer.sequence = 3
+          newer.package_version = '3.0.0'
+          newer.tree_digest = `sha256:${'a'.repeat(64)}`
+          ;(newer.package_source as Record<string, unknown>).revision = 'a'.repeat(40)
+          upstream.releases.push(newer)
+          const policy = structuredClone(upstream.release_policies[0]!)
+          policy.release_sequence = 3
+          policy.current_evidence = policy.current_evidence.map((id) => {
+            const observation = structuredClone(raw.evidence.find(item => item.id === id)!)
+            observation.id = `${id}-release-3`
+            observation.release_sequence = 3
+            observation.package_tree_digest = newer.tree_digest as string
+            raw.evidence.push(observation)
+            return observation.id
+          })
+          upstream.release_policies.push(policy)
+        }
+        else if (change === 'bridge-is-default') raw.products[0]!.default_distribution = bridge.id
+        else if (change === 'suspend-bridge') bridge.status = 'suspended'
+        else if (change === 'remove-upstream-materialization') upstream.release_policies[0]!.current_evidence = upstream.release_policies[0]!.current_evidence.filter(id => !id.startsWith('materialization-'))
+        else if (change === 'fail-current-runtime-codex') raw.evidence.find(item => item.id === 'runtime-demo-codex')!.outcome = 'failed'
+        else if (change === 'remove-bridge-kiro') bridge.release_policies[0]!.targets = bridge.release_policies[0]!.targets.filter(target => target.client !== 'kiro')
+        else if (change === 'add-stale-runtime-failure-codex') {
+          const stale = structuredClone(raw.evidence.find(item => item.id === 'runtime-demo-codex')!)
+          stale.id = 'stale-runtime-failure-codex'
+          stale.outcome = 'failed'
+          stale.package_tree_digest = `sha256:${'9'.repeat(64)}`
+          raw.evidence.push(stale)
+          upstream.release_policies[0]!.current_evidence.push(stale.id)
+        } else assert.fail(`unknown golden change ${change}`)
+      }
+      const plugin = parseDirectoryData(raw, 'published_snapshot').plugins[0]!
+      const resolution = resolveDistribution(plugin, vector.targets)
+      assert.equal(resolution.distribution?.id ?? null, vector.expected.distribution_id, vector.id)
+      assert.equal(resolution.distribution?.release_sequence ?? null, vector.expected.release_sequence, vector.id)
+      assert.equal(resolution.fallback_reason ?? null, vector.expected.fallback_reason, vector.id)
+      assert.equal(resolution.unavailable_reason, vector.expected.unavailable_reason, vector.id)
+    }
+  })
+
+  it('uses expiry only to gate current claims, without changing resolver evidence or selection', () => {
+    const directory = parseDirectoryData(snapshotFixture, 'published_snapshot')
+    const before = resolveDistribution(directory.plugins[0]!, ['codex'])
+    assert.equal(directoryIsExpired(directory, Date.parse('2026-09-18T23:59:59Z')), false)
+    assert.equal(directoryIsExpired(directory, Date.parse('2026-09-19T00:00:00Z')), true)
+    const after = resolveDistribution(directory.plugins[0]!, ['codex'])
+    assert.deepEqual(after, before)
+  })
+
+  it('fails closed on malformed or non-increasing publication instants', () => {
+    for (const [field, value] of [
+      ['generated_at', '2026-02-30T00:00:00Z'],
+      ['generated_at', '2026-08-20 00:00:00Z'],
+      ['generated_at', '2026-08-20T00:00:00'],
+      ['expires_at', '2026-09-19T00:00:00+24:00'],
+      ['expires_at', 'not-a-date'],
+    ] as const) {
+      const raw = signedFixture()
+      raw[field] = value
+      assert.throws(() => parseDirectoryData(raw, 'published_snapshot'), /RFC3339/)
+    }
+    for (const expiresAt of ['2026-08-20T00:00:00Z', '2026-08-19T23:59:59.999999999Z']) {
+      const raw = signedFixture()
+      raw.expires_at = expiresAt
+      assert.throws(() => parseDirectoryData(raw, 'published_snapshot'), /must be after generated_at/)
+    }
+    const offset = signedFixture()
+    offset.generated_at = '2026-08-20T01:00:00+01:00'
+    offset.expires_at = '2026-08-20T00:00:00.000000001Z'
+    assert.doesNotThrow(() => parseDirectoryData(offset, 'published_snapshot'))
   })
 
   it('keeps one product card when signed provenance has alternatives', () => {

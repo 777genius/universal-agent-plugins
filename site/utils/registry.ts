@@ -3,6 +3,7 @@ import type {
   ClientID,
   ComponentID,
   DistributionReleaseView,
+  DistributionResolution,
   DistributionKind,
   DistributionView,
   PluginAuthor,
@@ -21,6 +22,7 @@ const PLUGIN_NAME = /^(?!.*(?:--|\.\.))[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$/
 const COMPONENTS = new Set<ComponentID>(['extensions', 'mcp', 'skills'])
 const CLIENTS = new Set<ClientID>(['codex', 'chatgpt', 'cursor', 'copilot', 'vscode', 'kiro'])
 const KINDS = new Set<DistributionKind>(['upstream', 'community_bridge', 'community'])
+const RFC3339_INSTANT = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d+))?(Z|[+-]\d{2}:\d{2})$/
 
 function record(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -48,6 +50,42 @@ function stringArray(value: unknown, field: string, context: string): string[] {
 function digestValue(value: unknown, context: string): string {
   if (typeof value !== 'string' || !DIGEST.test(value)) throw new Error(`${context} must be a sha256 digest`)
   return value
+}
+
+interface ParsedInstant {
+  epochSeconds: number
+  fraction: string
+}
+
+function parseRFC3339Instant(value: unknown, context: string): ParsedInstant {
+  if (typeof value !== 'string') throw new Error(`${context} must be a strict RFC3339 instant`)
+  const match = RFC3339_INSTANT.exec(value)
+  if (!match) throw new Error(`${context} must be a strict RFC3339 instant`)
+  const [, yearText, monthText, dayText, hourText, minuteText, secondText, fraction = '', zone] = match
+  const [year, month, day, hour, minute, second] = [yearText, monthText, dayText, hourText, minuteText, secondText].map(Number)
+  const leapYear = year! % 4 === 0 && (year! % 100 !== 0 || year! % 400 === 0)
+  const monthDays = [31, leapYear ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+  if (month! < 1 || month! > 12 || day! < 1 || day! > monthDays[month! - 1]!
+    || hour! > 23 || minute! > 59 || second! > 59) {
+    throw new Error(`${context} must be a real RFC3339 calendar instant`)
+  }
+  let offsetSeconds = 0
+  if (zone !== 'Z') {
+    const offsetHour = Number(zone!.slice(1, 3))
+    const offsetMinute = Number(zone!.slice(4, 6))
+    if (offsetHour > 23 || offsetMinute > 59) throw new Error(`${context} has an invalid RFC3339 offset`)
+    offsetSeconds = (offsetHour * 60 + offsetMinute) * 60 * (zone![0] === '+' ? 1 : -1)
+  }
+  const calendar = new Date(0)
+  calendar.setUTCFullYear(year!, month! - 1, day!)
+  calendar.setUTCHours(hour!, minute!, second!, 0)
+  return { epochSeconds: calendar.getTime() / 1000 - offsetSeconds, fraction }
+}
+
+function compareInstants(left: ParsedInstant, right: ParsedInstant): number {
+  if (left.epochSeconds !== right.epochSeconds) return left.epochSeconds - right.epochSeconds
+  const width = Math.max(left.fraction.length, right.fraction.length)
+  return left.fraction.padEnd(width, '0').localeCompare(right.fraction.padEnd(width, '0'))
 }
 
 function author(value: unknown, context: string): PluginAuthor {
@@ -176,6 +214,7 @@ function parseLegacyIndex(input: Record<string, unknown>): RegistryIndex {
       release_status: 'active',
       selectable: true,
       blocking_clients: [],
+      materialized_clients: compatibleClients,
       meets_minimum_capabilities: true,
     }]
     return {
@@ -304,6 +343,15 @@ function parseSnapshot(input: Record<string, unknown>, mode: 'published_snapshot
   if (mode === 'published_snapshot' && (!isSigned || !Number.isInteger(snapshotSequence) || typeof input.generated_at !== 'string' || typeof input.expires_at !== 'string')) {
     throw new Error('published snapshot requires one signed sequence, generated_at, and expires_at')
   }
+  let generatedAt: string | undefined
+  let expiresAt: string | undefined
+  if (input.generated_at !== undefined || input.expires_at !== undefined || isSigned) {
+    const generated = parseRFC3339Instant(input.generated_at, 'Directory generated_at')
+    const expires = parseRFC3339Instant(input.expires_at, 'Directory expires_at')
+    if (compareInstants(expires, generated) <= 0) throw new Error('Directory expires_at must be after generated_at')
+    generatedAt = input.generated_at as string
+    expiresAt = input.expires_at as string
+  }
   const distributionRecords = new Map<string, Record<string, unknown>>()
   for (const raw of input.distributions) {
     if (!record(raw)) throw new Error('Directory distribution must be an object')
@@ -324,7 +372,7 @@ function parseSnapshot(input: Record<string, unknown>, mode: 'published_snapshot
     if (!listed.includes(defaultID)) throw new Error(`${context}: default distribution is not listed`)
     if (!record(raw.minimum_capabilities)) throw new Error(`${context}: minimum_capabilities must be an object`)
     const minimumCapabilities = raw.minimum_capabilities
-    const requiredComponents = new Set<ComponentID>((['mcp', 'skills'] as const).filter(component => minimumCapabilities[component] === 'required'))
+    const requiredComponents = new Set<ComponentID>([...COMPONENTS].filter(component => minimumCapabilities[component] === 'required'))
     const distributions = listed.map((id): DistributionView => {
       const item = distributionRecords.get(id)
       if (!item || item.product_id !== name) throw new Error(`${context}: missing or mismatched distribution ${id}`)
@@ -335,8 +383,10 @@ function parseSnapshot(input: Record<string, unknown>, mode: 'published_snapshot
       if (!['candidate', 'active', 'suspended'].includes(status)) throw new Error(`distribution ${id}: unsupported status`)
       const policies = Array.isArray(item.release_policies) ? item.release_policies.filter(record) : []
       const releases = item.releases.filter(record).sort((a, b) => Number(b.sequence) - Number(a.sequence))
+      const releaseSequences = releases.map(release => release.sequence)
+      if (new Set(releaseSequences).size !== releaseSequences.length) throw new Error(`distribution ${id}: release sequences must be unique`)
       const releaseViews = releases.map((release): DistributionReleaseView => {
-        if (!Number.isInteger(release.sequence)) throw new Error(`distribution ${id}: release sequence is required`)
+        if (!Number.isInteger(release.sequence) || Number(release.sequence) < 1) throw new Error(`distribution ${id}: release sequence must be a positive integer`)
         const releaseSequence = release.sequence as number
         const packageSource = source({
           ...(record(release.package_source) ? release.package_source : {}),
@@ -355,6 +405,7 @@ function parseSnapshot(input: Record<string, unknown>, mode: 'published_snapshot
         const components = stringArray(release.components ?? [], 'components', `distribution ${id}`) as ComponentID[]
         if (components.some(component => !COMPONENTS.has(component))) throw new Error(`distribution ${id}: unsupported component`)
         const blockingClients = [...new Set(evidence.client.filter(observation => observation.outcome === 'failed' && ['materialization', 'discovery', 'runtime'].includes(observation.level)).map(observation => observation.client))]
+        const materializedClients = [...new Set(evidence.client.filter(observation => observation.level === 'materialization' && observation.outcome === 'passed').map(observation => observation.client))]
         const meetsMinimumCapabilities = [...requiredComponents].every(component => components.includes(component))
         return {
           release_sequence: releaseSequence,
@@ -367,11 +418,15 @@ function parseSnapshot(input: Record<string, unknown>, mode: 'published_snapshot
           release_status: releaseStatus as DistributionView['release_status'],
           selectable: status === 'active' && releaseStatus === 'active' && meetsMinimumCapabilities,
           blocking_clients: blockingClients,
+          materialized_clients: materializedClients,
           meets_minimum_capabilities: meetsMinimumCapabilities,
         }
       })
-      const selectedRelease = releaseViews.find(release => release.selectable) ?? releaseViews[0]!
-      const compatible = [...new Set(releaseViews.filter(release => release.selectable).flatMap(release => release.targets.filter(target => !release.blocking_clients.includes(target.client)).map(target => target.client)))]
+      const eligibleTargets = (release: DistributionReleaseView) => release.selectable
+        ? release.targets.filter(target => !release.blocking_clients.includes(target.client) && (kind !== 'upstream' || release.materialized_clients.includes(target.client)))
+        : []
+      const selectedRelease = releaseViews.find(release => eligibleTargets(release).length > 0) ?? releaseViews[0]!
+      const compatible = [...new Set(releaseViews.flatMap(release => eligibleTargets(release).map(target => target.client)))]
       return {
         id,
         kind,
@@ -431,7 +486,8 @@ function parseSnapshot(input: Record<string, unknown>, mode: 'published_snapshot
     schema_version: 1,
     data_source: mode,
     ...(typeof snapshotSequence === 'number' ? { snapshot_sequence: snapshotSequence } : {}),
-    ...(typeof input.generated_at === 'string' ? { generated_at: input.generated_at } : {}),
+    ...(generatedAt ? { generated_at: generatedAt } : {}),
+    ...(expiresAt ? { expires_at: expiresAt } : {}),
     plugins,
   }
 }
@@ -475,14 +531,42 @@ export function defaultDistribution(plugin: RegistryPlugin): DistributionView {
   return distribution
 }
 
-export function expectedDistribution(plugin: RegistryPlugin, targets: readonly ClientID[]): DistributionView | undefined {
-  if (!targets.length) return undefined
-  const eligibleRelease = (distribution: DistributionView) => distribution.status === 'active'
-    ? distribution.releases.find(release => release.selectable
-      && targets.every(target => release.targets.some(candidate => candidate.client === target) && !release.blocking_clients.includes(target)))
-    : undefined
+function eligibleRelease(distribution: DistributionView, targets: ReadonlySet<ClientID>): { release?: DistributionReleaseView, reason?: string } {
+  if (distribution.status !== 'active') return { reason: `distribution is ${distribution.status}` }
+  const reasons: string[] = []
+  for (const release of [...distribution.releases].sort((a, b) => b.release_sequence - a.release_sequence)) {
+    const supported = new Set(release.targets.map(target => target.client))
+    if (release.release_status !== 'active') {
+      reasons.push(`release ${release.release_sequence} is ${release.release_status}`)
+    } else if (!release.meets_minimum_capabilities) {
+      reasons.push(`release ${release.release_sequence} misses required components`)
+    } else if ([...targets].some(target => !supported.has(target))) {
+      const missing = [...targets].filter(target => !supported.has(target)).sort()
+      reasons.push(`release ${release.release_sequence} does not support ${missing.join(',')}`)
+    } else {
+      const failures = [...targets].filter(target => release.blocking_clients.includes(target)).sort()
+      if (failures.length) {
+        reasons.push(`release ${release.release_sequence} has blocking trusted failure for ${failures.join(',')}`)
+        continue
+      }
+      if (distribution.kind === 'upstream') {
+        const missing = [...targets].filter(target => !release.materialized_clients.includes(target)).sort()
+        if (missing.length) {
+          reasons.push(`release ${release.release_sequence} lacks current positive package compatibility evidence (passed materialization) for ${missing.join(',')}`)
+          continue
+        }
+      }
+      return { release }
+    }
+  }
+  return { reason: reasons.join('; ') || 'no releases' }
+}
+
+export function resolveDistribution(plugin: RegistryPlugin, targets: readonly ClientID[]): DistributionResolution {
+  if (!targets.length || new Set(targets).size !== targets.length) return { unavailable_reason: 'targets must be unique supported client IDs' }
+  const selectedTargets = new Set(targets)
   const resolved = (distribution: DistributionView): DistributionView | undefined => {
-    const release = eligibleRelease(distribution)
+    const release = eligibleRelease(distribution, selectedTargets).release
     return release ? {
       ...distribution,
       source: release.source,
@@ -500,13 +584,34 @@ export function expectedDistribution(plugin: RegistryPlugin, targets: readonly C
   const declared = plugin.distributions.find(distribution => distribution.id === plugin.declared_default_distribution)
   if (!declared) throw new Error(`${plugin.name}: declared default distribution is unavailable`)
   const selectedDefault = resolved(declared)
-  if (selectedDefault) return selectedDefault
+  if (selectedDefault) return { distribution: selectedDefault }
+  const defaultReason = eligibleRelease(declared, selectedTargets).reason ?? 'no releases'
   const priority: Record<DistributionKind, number> = { upstream: 0, community_bridge: 1, community: 2, direct: 3 }
-  for (const distribution of plugin.distributions.filter(item => item.id !== declared.id).sort((a, b) => priority[a.kind] - priority[b.kind] || a.id.localeCompare(b.id))) {
+  const alternatives = plugin.distributions.filter(item => item.id !== declared.id).sort((a, b) => priority[a.kind] - priority[b.kind] || a.id.localeCompare(b.id))
+  const ineligibleReasons = [{ distribution_id: declared.id, reason: defaultReason }]
+  for (const distribution of alternatives) {
     const release = resolved(distribution)
-    if (release) return release
+    if (release) {
+      const fallbackReason = `declared default ${declared.id} was ineligible: ${defaultReason}`
+      return { distribution: { ...release, fallback_reason: fallbackReason }, fallback_reason: fallbackReason }
+    }
+    ineligibleReasons.push({ distribution_id: distribution.id, reason: eligibleRelease(distribution, selectedTargets).reason ?? 'no releases' })
   }
-  return undefined
+  const targetList = [...selectedTargets].sort().join(',')
+  return {
+    unavailable_reason: `${plugin.name}: no eligible distribution supports the complete target set ${targetList}; ${ineligibleReasons.map(item => `${item.distribution_id}: ${item.reason}`).join('; ')}`,
+    ineligible_reasons: ineligibleReasons,
+  }
+}
+
+export function expectedDistribution(plugin: RegistryPlugin, targets: readonly ClientID[]): DistributionView | undefined {
+  return resolveDistribution(plugin, targets).distribution
+}
+
+export function directoryIsExpired(registry: Pick<RegistryIndex, 'data_source' | 'expires_at'>, now = Date.now()): boolean {
+  if (registry.data_source !== 'published_snapshot' || !registry.expires_at) return false
+  const expiry = parseRFC3339Instant(registry.expires_at, 'Directory expires_at')
+  return now >= expiry.epochSeconds * 1000 + Number(`0.${expiry.fraction || '0'}`) * 1000
 }
 
 export function deliveryLabel(delivery: ReleaseTarget['delivery']): string {

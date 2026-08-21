@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import type { ClientID } from '~/types/registry'
 import { pluginCommands } from '~/utils/commands'
-import { deliveryLabel, expectedDistribution } from '~/utils/registry'
+import { deliveryLabel, expectedDistribution, resolveDistribution } from '~/utils/registry'
 
 const registry = useRegistry()
+const { current, expired, published } = useDirectoryStatus()
 const { asset, repositoryUrl } = useSite()
 const demoPlugin = computed(() => {
   const plugin = registry.plugins.find(item => item.name === 'context7')
@@ -17,6 +18,8 @@ const heroTargetOptions = computed(() => clients.map(client => ({
   icon: asset(`client-icons/${client.icon}`),
   disabled: !demoPlugin.value.client_support.clients.includes(client.id),
   description: (() => {
+    if (!published.value) return 'Unavailable: review data is not installation authority'
+    if (expired.value) return 'Unavailable: signed Directory snapshot expired'
     const target = expectedDistribution(demoPlugin.value, [client.id])?.targets.find(item => item.client === client.id)
     if (target) return deliveryLabel(target.delivery)
     return client.id === 'chatgpt' ? 'Unavailable: Context7 has no registered app binding in signed policy' : 'Not compatible with an active release'
@@ -27,7 +30,8 @@ const initialHeroTarget = heroTargets.value.find(client => client.id === 'cursor
 const heroTargetIDs = ref<ClientID[]>([initialHeroTarget])
 const selectedHeroClients = computed(() => heroTargets.value.filter(client => heroTargetIDs.value.includes(client.id)))
 const selectedHeroNames = computed(() => selectedHeroClients.value.map(client => heroClientLabel(client.id, client.name)).join(' + '))
-const heroCommand = computed(() => pluginCommands(demoPlugin.value, selectedHeroClients.value.map(client => client.id)).add)
+const heroResolution = computed(() => resolveDistribution(demoPlugin.value, selectedHeroClients.value.map(client => client.id)))
+const heroCommand = computed(() => !current.value || !heroResolution.value.distribution ? '' : pluginCommands(demoPlugin.value, selectedHeroClients.value.map(client => client.id)).add)
 const description = 'Install one Agent Plugins 1.0 package into one or several explicitly selected supported clients, then inspect, update, repair, switch, or remove it with the same community CLI.'
 const workflowPath = ref<HTMLElement>()
 const workflowAnimated = ref(false)
@@ -86,9 +90,12 @@ useHead({ link: [{ rel: 'canonical', href: `${useRuntimeConfig().public.siteUrl}
             <p>Install Context7 for {{ selectedHeroNames }}</p>
             <div class="hero-command-row">
               <AppMultiSelect :model-value="heroTargetIDs" label="Choose target clients" :options="heroTargetOptions" @update:model-value="updateHeroTargets" />
-              <CommandSnippet :command="heroCommand" />
+              <CommandSnippet v-if="heroCommand" :command="heroCommand" />
+              <p v-else class="install-panel__notice" role="status"><strong>Command unavailable{{ expired ? ': stale Directory' : !published ? ': review preview' : '' }}.</strong> {{ expired ? 'Browse historical package information while a fresh signed snapshot is published.' : !published ? 'Production commands require a published signed Directory snapshot.' : heroResolution.unavailable_reason }}</p>
             </div>
-            <div class="hero__success">
+            <p v-if="heroResolution.fallback_reason && !expired" class="hero__fine-print">{{ heroResolution.fallback_reason }}</p>
+            <p v-else-if="heroResolution.unavailable_reason && !expired" class="hero__fine-print">{{ heroResolution.unavailable_reason }}</p>
+            <div v-if="heroCommand" class="hero__success">
               <span>✓</span>
               <div><strong>Command ready for {{ selectedHeroClients.length === 1 ? selectedHeroNames : `${selectedHeroClients.length} agents` }}</strong><small>One command installs each selected target in order.</small></div>
             </div>

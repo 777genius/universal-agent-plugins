@@ -13,8 +13,8 @@ const registryPath = signedSnapshotPath
       ? resolve(process.cwd(), process.env.UAP_REGISTRY_PATH)
       : defaultRegistryPath
 const registryIndex = loadRegistryIndex(registryPath, signedSnapshotPath ? 'published_snapshot' : (previewPath || implicitPreview) ? 'review_preview' : undefined)
-if (implicitPreview && process.env.CI && process.env.GITHUB_EVENT_NAME !== 'pull_request') {
-  throw new Error('Production builds require UAP_SIGNED_SNAPSHOT_PATH; canonical source is allowed only for explicitly unsigned pull-request previews')
+if (!signedSnapshotPath && process.env.CI && process.env.GITHUB_EVENT_NAME !== 'pull_request') {
+  throw new Error('Production builds require UAP_SIGNED_SNAPSHOT_PATH; unsigned data is allowed only for pull-request previews')
 }
 
 const siteUrl = (process.env.NUXT_PUBLIC_SITE_URL

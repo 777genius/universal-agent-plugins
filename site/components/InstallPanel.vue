@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import type { ClientID, RegistryPlugin } from '~/types/registry'
 import { pluginCommands } from '~/utils/commands'
-import { deliveryLabel, expectedDistribution } from '~/utils/registry'
+import { deliveryLabel, expectedDistribution, resolveDistribution } from '~/utils/registry'
 
 const props = defineProps<{ plugin: RegistryPlugin }>()
 const targets = defineModel<ClientID[]>('targets', { required: true })
 const { asset } = useSite()
+const { current, expired, published } = useDirectoryStatus()
 const availableClients = computed(() => clients.filter(client => props.plugin.client_support.clients.includes(client.id)))
 const targetOptions = computed(() => clients.map(client => ({
   value: client.id,
@@ -13,16 +14,17 @@ const targetOptions = computed(() => clients.map(client => ({
   icon: asset(`client-icons/${client.icon}`),
   disabled: !props.plugin.client_support.clients.includes(client.id),
   description: (() => {
+    if (!published.value) return 'Unavailable: review data is not installation authority'
+    if (expired.value) return 'Unavailable: signed Directory snapshot expired'
     const source = expectedDistribution(props.plugin, [client.id])
     const target = source?.targets.find(item => item.client === client.id)
     if (target) return deliveryLabel(target.delivery)
     return client.id === 'chatgpt' ? 'Unavailable: no registered app binding in signed policy' : 'No active release supports this client'
   })(),
 })))
-const commands = computed(() => targets.value.length ? pluginCommands(props.plugin, targets.value) : undefined)
-const declaredSource = computed(() => props.plugin.distributions.find(item => item.id === props.plugin.declared_default_distribution))
-const expectedSource = computed(() => expectedDistribution(props.plugin, targets.value))
-const usesFallback = computed(() => expectedSource.value && expectedSource.value.id !== declaredSource.value?.id)
+const commands = computed(() => current.value && targets.value.length ? pluginCommands(props.plugin, targets.value) : undefined)
+const resolution = computed(() => resolveDistribution(props.plugin, targets.value))
+const expectedSource = computed(() => current.value ? resolution.value.distribution : undefined)
 const hasCompleteSource = computed(() => Boolean(expectedSource.value))
 const selectedTargets = computed(() => expectedSource.value?.targets.filter(target => targets.value.includes(target.client)) ?? [])
 const chatgptBinding = computed(() => selectedTargets.value.find(target => target.client === 'chatgpt')?.app_binding)
@@ -55,12 +57,14 @@ watch(availableClients, (next) => {
       <CommandSnippet label="Repair" kind="repair" :command="commands.repair" />
       <CommandSnippet label="Remove" kind="remove" :command="commands.remove" />
     </div>
-    <p v-else class="install-panel__notice"><strong>Commands unavailable.</strong> Signed policy has no active, non-revoked release for this complete target set.</p>
+    <p v-if="expired" class="install-panel__notice" role="status"><strong>Commands unavailable: stale Directory.</strong> This signed snapshot has expired. Browse its history, then return after a fresh snapshot is published.</p>
+    <p v-else-if="!published" class="install-panel__notice" role="status"><strong>Commands unavailable in review preview.</strong> Unresolved data is for review only; production commands require a published signed Directory snapshot.</p>
+    <p v-else-if="!hasCompleteSource" class="install-panel__notice"><strong>Commands unavailable.</strong> {{ resolution.unavailable_reason }}</p>
     <p v-for="target in selectedTargets" :key="target.client" class="install-panel__notice"><strong>{{ target.client }} · {{ deliveryLabel(target.delivery) }}.</strong> Signed scopes: {{ target.scopes.join(', ') }}.</p>
     <p v-if="chatgptBinding" class="install-panel__notice"><strong>Signed ChatGPT app binding.</strong> App key <code>{{ chatgptBinding.app_key }}</code>, app ID <code>{{ chatgptBinding.id }}</code>, MCP server <code>{{ chatgptBinding.mcp_server }}</code>. Activation remains a manual ChatGPT UI step.</p>
     <p class="install-panel__notice"><strong>Honest client outcomes.</strong> “Prepared” and “manual activation required” mean a package is ready but a client UI step remains. OAuth and runtime are reported separately.</p>
-    <p v-if="usesFallback" class="install-panel__notice"><strong>Expected source fallback: {{ expectedSource?.label }}.</strong> The Default source cannot serve the complete selected target set, so the CLI is expected to evaluate {{ expectedSource?.id }}. The CLI recomputes eligibility from its signed snapshot.</p>
-    <p v-else-if="!hasCompleteSource" class="install-panel__notice"><strong>No single source serves this target set.</strong> The CLI will fail before mutation and suggest compatible target/source combinations; it never mixes distributions across clients.</p>
+    <p v-if="resolution.fallback_reason && current" class="install-panel__notice"><strong>Expected source fallback: {{ expectedSource?.label }}.</strong> {{ resolution.fallback_reason }}</p>
+    <p v-else-if="!hasCompleteSource && current" class="install-panel__notice"><strong>No single source serves this target set.</strong> The CLI will fail before mutation and suggest compatible target/source combinations; it never mixes distributions across clients.</p>
     <p v-if="!plugin.built_in" class="install-panel__notice"><strong>Pinned direct source.</strong> Add uses the full commit pin. Update and remove use the installed manifest name.</p>
     <p v-if="plugin.client_support.resolution === 'install_time'" class="install-panel__notice"><strong>Checked at install time.</strong> The CLI validates the package and selected target before it changes managed files.</p>
     <p class="install-panel__footnote">The CLI plans all selected targets before mutation. Use <code>switch</code> to change source; update and repair stay on the recorded distribution.</p>

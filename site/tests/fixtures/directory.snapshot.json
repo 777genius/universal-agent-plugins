@@ -9,7 +9,9 @@
         {
           "current_evidence": [
             "schema-demo",
-            "runtime-demo-codex"
+            "runtime-demo-codex",
+            "materialization-demo-codex",
+            "materialization-demo-cursor"
           ],
           "minimum_installer_version": "0.1.6",
           "release_sequence": 2,
@@ -155,6 +157,16 @@
       "package_tree_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
       "release_sequence": 2,
       "schema_version": 1
+    },
+    {
+      "architecture": "amd64",
+      "artifact": { "digest": "sha256:7777777777777777777777777777777777777777777777777777777777777777", "path": "evidence/demo-codex-materialization.json", "repository": "example/evidence", "revision": "7777777777777777777777777777777777777777" },
+      "client": "codex", "client_version": "0.200.0", "distribution_id": "example/demo", "id": "materialization-demo-codex", "installer_version": "0.1.6", "level": "materialization", "observed_at": "2026-08-19T00:00:00Z", "os": "linux", "outcome": "passed", "package_tree_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111", "release_sequence": 2, "schema_version": 1
+    },
+    {
+      "architecture": "amd64",
+      "artifact": { "digest": "sha256:8888888888888888888888888888888888888888888888888888888888888888", "path": "evidence/demo-cursor-materialization.json", "repository": "example/evidence", "revision": "8888888888888888888888888888888888888888" },
+      "client": "cursor", "client_version": "1.0.0", "distribution_id": "example/demo", "id": "materialization-demo-cursor", "installer_version": "0.1.6", "level": "materialization", "observed_at": "2026-08-19T00:00:00Z", "os": "linux", "outcome": "passed", "package_tree_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111", "release_sequence": 2, "schema_version": 1
     }
   ],
   "expires_at": "2026-09-19T00:00:00Z",
