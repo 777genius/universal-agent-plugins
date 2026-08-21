@@ -239,7 +239,10 @@ def submission_source(record: dict[str, Any], revision: str, facts: dict[str, An
             }],
             "release_policies": [{
                 "release_sequence": 1, "status": "active", "minimum_installer_version": "0.1.8",
-                "targets": [{"client": "codex", "scopes": ["user"], "delivery": "managed"}],
+                "targets": [{
+                    "client": "codex", "scopes": ["user"], "delivery": "managed",
+                    "authentication": "not_required",
+                }],
                 "current_evidence": [],
             }],
         }],

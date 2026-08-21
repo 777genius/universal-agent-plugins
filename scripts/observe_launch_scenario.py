@@ -218,12 +218,21 @@ def conformance_directory(
     selected_sequence = context["release"]["release_sequence"]
     release = copy.deepcopy(next(item for item in source_distribution["releases"] if item["sequence"] == selected_sequence))
     policy = copy.deepcopy(next(item for item in source_distribution["release_policies"] if item["release_sequence"] == selected_sequence))
+    authentication_by_client = {
+        target["client"]: target.get("authentication", "unknown")
+        for target in policy["targets"]
+    }
     release["sequence"] = 1
     release["published_at"] = now()
     policy["release_sequence"] = 1
     policy["minimum_installer_version"] = "0.1.8"
     policy["targets"] = [
-        {"client": client, "delivery": target_delivery, "scopes": ["user"]}
+        {
+            "client": client,
+            "delivery": target_delivery,
+            "scopes": ["user"],
+            "authentication": authentication_by_client.get(client, "unknown"),
+        }
         for client in ("codex", "cursor", "kiro")
     ]
     policy["current_evidence"] = []
