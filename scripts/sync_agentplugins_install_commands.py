@@ -10,6 +10,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 PLUGINS = ROOT / "plugins"
+BRIDGES = ROOT / "bridges"
 START = "<!-- agentplugins-install:start -->"
 END = "<!-- agentplugins-install:end -->"
 NPX_COMMAND = "npx universal-agent-plugins"
@@ -20,7 +21,7 @@ def block(name: str) -> str:
 ## Install
 
 ```bash
-{NPX_COMMAND} add {name}
+{NPX_COMMAND} add {name} --target codex
 ```
 {END}"""
 
@@ -46,7 +47,9 @@ def main() -> int:
     parser.add_argument("--check", action="store_true")
     args = parser.parse_args()
     changed = []
-    for plugin_root in sorted(path for path in PLUGINS.iterdir() if path.is_dir()):
+    package_roots = sorted(path for path in PLUGINS.iterdir() if path.is_dir())
+    overlay_roots = sorted(path / "overlay" for path in BRIDGES.iterdir() if (path / "overlay" / "README.md").is_file())
+    for plugin_root in package_roots + overlay_roots:
         readme = plugin_root / "README.md"
         expected = updated_readme(plugin_root)
         if readme.read_text() != expected:
@@ -65,7 +68,7 @@ def main() -> int:
             "ERROR: public npx examples must not pin the installer version: "
             + ", ".join(str(path) for path in pinned_examples)
         )
-    print(f"OK: {len(list(PLUGINS.glob('*/README.md')))} package install commands")
+    print(f"OK: {len(package_roots)} package and {len(overlay_roots)} bridge-source install commands")
     return 0
 
 

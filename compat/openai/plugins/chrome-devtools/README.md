@@ -6,7 +6,7 @@ Community package for Chrome DevTools MCP. Inspect pages, automate flows, analyz
 ## Install
 
 ```bash
-npx universal-agent-plugins add chrome-devtools
+npx universal-agent-plugins add chrome-devtools --target codex
 ```
 <!-- agentplugins-install:end -->
 

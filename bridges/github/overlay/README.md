@@ -6,7 +6,7 @@ Community package for GitHub MCP Server. Work with repositories, issues, pull re
 ## Install
 
 ```bash
-npx universal-agent-plugins add github
+npx universal-agent-plugins add github --target codex
 ```
 <!-- agentplugins-install:end -->
 

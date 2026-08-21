@@ -6,7 +6,7 @@ Local HubSpot Developer MCP integration for project scaffolding, CMS, builds, lo
 ## Install
 
 ```bash
-npx universal-agent-plugins add hubspot-developer
+npx universal-agent-plugins add hubspot-developer --target codex
 ```
 <!-- agentplugins-install:end -->
 

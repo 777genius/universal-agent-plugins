@@ -6,7 +6,7 @@ Community package for the official Neon hosted MCP plugin for database, branch, 
 ## Install
 
 ```bash
-npx universal-agent-plugins add neon
+npx universal-agent-plugins add neon --target codex
 ```
 <!-- agentplugins-install:end -->
 

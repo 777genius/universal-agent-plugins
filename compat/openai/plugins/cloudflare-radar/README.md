@@ -6,7 +6,7 @@ Community package for the official Cloudflare Radar MCP plugin for internet tele
 ## Install
 
 ```bash
-npx universal-agent-plugins add cloudflare-radar
+npx universal-agent-plugins add cloudflare-radar --target codex
 ```
 <!-- agentplugins-install:end -->
 

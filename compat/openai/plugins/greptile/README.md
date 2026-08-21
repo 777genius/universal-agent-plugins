@@ -6,7 +6,7 @@ Community package for the official Greptile MCP integration for repository searc
 ## Install
 
 ```bash
-npx universal-agent-plugins add greptile
+npx universal-agent-plugins add greptile --target codex
 ```
 <!-- agentplugins-install:end -->
 

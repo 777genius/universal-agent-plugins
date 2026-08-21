@@ -6,7 +6,7 @@ Portable Agent Plugins package for GitLab MCP. Inspect projects, issues, merge r
 ## Install
 
 ```bash
-npx universal-agent-plugins add gitlab
+npx universal-agent-plugins add gitlab --target codex
 ```
 <!-- agentplugins-install:end -->
 

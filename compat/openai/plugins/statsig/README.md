@@ -6,7 +6,7 @@ Community package for the official Statsig MCP plugin for experiments, feature f
 ## Install
 
 ```bash
-npx universal-agent-plugins add statsig
+npx universal-agent-plugins add statsig --target codex
 ```
 <!-- agentplugins-install:end -->
 

@@ -6,7 +6,7 @@ Community package for Cloudflare Docs MCP. Search current Cloudflare documentati
 ## Install
 
 ```bash
-npx universal-agent-plugins add cloudflare-docs
+npx universal-agent-plugins add cloudflare-docs --target codex
 ```
 <!-- agentplugins-install:end -->
 

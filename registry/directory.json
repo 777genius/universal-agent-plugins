@@ -1121,7 +1121,7 @@
             "upstream_revision": "774d78f5eef5e610407a0c92fa6ec5ed74b027e8"
           },
           "tree_digest_algorithm": "agentplugins-tree-sha256-v1",
-          "tree_digest": "sha256:58cc1fa2d83a66e8b2df3c6e1c985cd453714fbdbdd5b23645f8afd7b1aea72d",
+          "tree_digest": "sha256:b3696cb3177f120943bb19ad2a9ff48219013c51a2dfbe54dc8478b755374a24",
           "manifest_digest": "sha256:02a77a0509681567df75e941175b148c1bcdfe0001cec24cfef8300b85547850",
           "components": ["mcp"]
         }
@@ -1396,7 +1396,7 @@
             "upstream_revision": "0c51a6fbcf9a2fae80120287e8238fb947cdc2df"
           },
           "tree_digest_algorithm": "agentplugins-tree-sha256-v1",
-          "tree_digest": "sha256:75c4855a41b6b5008197bfc68a6daab2d9025887b64dd040577ac8fd0c2fc8bf",
+          "tree_digest": "sha256:2b1d984194324b50b756a893a576f3d795262bd7edfec6d7167863ca8be93a2c",
           "manifest_digest": "sha256:7d1ada5818ced00257f39edd0bea371630ad5167dbfa572fbf01d7504012119c",
           "components": ["mcp"]
         }
@@ -1952,7 +1952,7 @@
             "upstream_revision": "fcdd664099f957c4a7dc183d9381cef191e8c8a9"
           },
           "tree_digest_algorithm": "agentplugins-tree-sha256-v1",
-          "tree_digest": "sha256:eddff170cd0e832120b09c4996c61933b695c4ac19e7f87d747c9230d060b912",
+          "tree_digest": "sha256:8b4fa6985607be1f503fc98294b1c0af4d4f2c3c55cf089604a3137deaaa53e8",
           "manifest_digest": "sha256:90f940c0f656bdf83fa8cccd5515bf4df9211c5a1d9cb095b84c30ee0f4f6efe",
           "components": ["mcp"]
         }

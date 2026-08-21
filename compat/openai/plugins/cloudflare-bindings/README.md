@@ -6,7 +6,7 @@ Community package for the official Cloudflare Workers Bindings MCP integration f
 ## Install
 
 ```bash
-npx universal-agent-plugins add cloudflare-bindings
+npx universal-agent-plugins add cloudflare-bindings --target codex
 ```
 <!-- agentplugins-install:end -->
 

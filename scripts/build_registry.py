@@ -814,6 +814,25 @@ def validate_directory(source: dict[str, object], *, verify_packages: bool = Tru
             if policy["status"] == "active" and required.issubset(release["components"]):
                 eligible.append(release)
         require(eligible, f"{product['id']}: default has no publishable active release satisfying minimum capabilities")
+        if default["kind"] == "upstream":
+            candidate = eligible[-1]
+            policy = _policy_for(default, candidate["sequence"])
+            passed_targets = {
+                evidence_by_id[evidence_id].get("client")
+                for evidence_id in policy["current_evidence"]
+                if evidence_by_id[evidence_id]["level"] == "materialization"
+                and evidence_by_id[evidence_id]["outcome"] == "passed"
+            }
+            missing_targets = sorted(
+                target["client"] for target in policy["targets"]
+                if target["client"] not in passed_targets
+            )
+            require(
+                not missing_targets,
+                f"{product['id']}: upstream default {default['id']}@{candidate['sequence']} "
+                "lacks current positive package compatibility evidence "
+                f"(passed materialization) for targets: {','.join(missing_targets)}",
+            )
 
 
 def _eligible_release(distribution: dict[str, object], product: dict[str, object], targets: set[str], evidence: dict[str, dict[str, object]] | None = None) -> tuple[dict[str, object] | None, str | None]:
@@ -940,7 +959,7 @@ def validate_readme_blocks(source: dict[str, object]) -> None:
         start, end = "<!-- agentplugins-install:start -->", "<!-- agentplugins-install:end -->"
         require(body.count(start) == body.count(end) == 1, f"{readme}: expected one delimited install block")
         block = body.split(start, 1)[1].split(end, 1)[0]
-        expected = f"npx universal-agent-plugins add {product['id']}"
+        expected = f"npx universal-agent-plugins add {product['id']} --target codex"
         require(expected in block, f"{readme}: install block must contain {expected!r}")
 
 

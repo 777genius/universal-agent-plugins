@@ -6,7 +6,7 @@ Community package for the official Stripe hosted MCP plugin for payments, billin
 ## Install
 
 ```bash
-npx universal-agent-plugins add stripe
+npx universal-agent-plugins add stripe --target codex
 ```
 <!-- agentplugins-install:end -->
 

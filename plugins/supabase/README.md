@@ -6,7 +6,7 @@ Community package for the official Supabase MCP integration for development and 
 ## Install
 
 ```bash
-npx universal-agent-plugins add supabase
+npx universal-agent-plugins add supabase --target codex
 ```
 <!-- agentplugins-install:end -->
 

@@ -6,7 +6,7 @@ Google Firebase MCP integration. Manage Firestore databases, authentication, clo
 ## Install
 
 ```bash
-npx universal-agent-plugins add firebase
+npx universal-agent-plugins add firebase --target codex
 ```
 <!-- agentplugins-install:end -->
 

@@ -6,7 +6,7 @@ Community package for the official Vercel hosted MCP plugin for project, deploym
 ## Install
 
 ```bash
-npx universal-agent-plugins add vercel
+npx universal-agent-plugins add vercel --target codex
 ```
 <!-- agentplugins-install:end -->
 

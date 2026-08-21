@@ -639,6 +639,68 @@ class DirectoryDomainTests(unittest.TestCase):
         with self.assertRaisesRegex(registry.RegistryError, "candidate"):
             registry.resolve_directory(fixture, "upstream/demo", ["cursor"])
 
+    def promote_upstream(self, fixture, evidence_targets=(), *, point_to_evidence=True):
+        product = fixture["products"][0]
+        product["default_distribution"] = "upstream/demo"
+        upstream = next(item for item in fixture["distributions"] if item["id"] == "upstream/demo")
+        upstream["status"] = "active"
+        release = upstream["releases"][0]
+        evidence_ids = []
+        for target in evidence_targets:
+            evidence_id = f"evidence/upstream-demo-materialization-{target}"
+            evidence_ids.append(evidence_id)
+            fixture["evidence"].append({
+                "schema_version": 1,
+                "id": evidence_id,
+                "distribution_id": upstream["id"],
+                "release_sequence": release["sequence"],
+                "package_tree_digest": release["tree_digest"],
+                "level": "materialization",
+                "outcome": "passed",
+                "client": target,
+                "client_version": "1.0.0",
+                "installer_version": "0.1.6",
+                "os": "linux",
+                "architecture": "amd64",
+                "observed_at": "2026-08-20T00:00:00Z",
+                "artifact": {
+                    "repository": "upstream/evidence",
+                    "revision": "8" * 40,
+                    "path": f"evidence/{target}.json",
+                    "digest": "sha256:" + "8" * 64,
+                },
+            })
+        fixture["evidence"].sort(key=lambda item: item["id"])
+        if point_to_evidence:
+            upstream["release_policies"][0]["current_evidence"] = sorted(evidence_ids)
+        return upstream
+
+    def test_upstream_default_rejects_empty_and_stale_positive_evidence(self) -> None:
+        fixture = self.fixture()
+        self.promote_upstream(fixture)
+        with self.assertRaisesRegex(
+            registry.RegistryError,
+            r"upstream default upstream/demo@1 lacks current positive package compatibility evidence .* codex,cursor",
+        ):
+            registry.validate_directory(fixture, verify_packages=False)
+
+        fixture = self.fixture()
+        self.promote_upstream(fixture, ("codex", "cursor"), point_to_evidence=False)
+        with self.assertRaisesRegex(registry.RegistryError, r"evidence .* codex,cursor"):
+            registry.validate_directory(fixture, verify_packages=False)
+
+    def test_upstream_default_rejects_wrong_target_evidence(self) -> None:
+        fixture = self.fixture()
+        self.promote_upstream(fixture, ("cursor",))
+        with self.assertRaisesRegex(registry.RegistryError, r"evidence .* targets: codex$"):
+            registry.validate_directory(fixture, verify_packages=False)
+
+    def test_upstream_default_accepts_exact_current_static_compatibility_evidence(self) -> None:
+        fixture = self.fixture()
+        self.promote_upstream(fixture, ("codex", "cursor"))
+        registry.validate_directory(fixture, verify_packages=False)
+        self.assertEqual(registry.resolve_directory(fixture, "demo", ["codex", "cursor"])["distribution_id"], "upstream/demo")
+
     def test_fallback_uses_one_distribution_for_the_complete_target_set(self) -> None:
         fixture = self.fixture()
         product = fixture["products"][0]
