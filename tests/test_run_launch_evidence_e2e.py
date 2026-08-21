@@ -455,6 +455,60 @@ print(json.dumps(value))
             with self.subTest(scenario=scenario):
                 self.assertFalse(e2e.LaunchHarness.driver_proof_valid(scenario, {"outcome": "passed"}))
 
+    def test_promotion_and_fork_observers_execute_exact_local_validators(self) -> None:
+        scenarios = (
+            "promotion_gate_digest_match", "promotion_gate_digest_mismatch",
+            "fork_submission", "fork_submission_rejected",
+        )
+        match_candidate_digest = None
+        with tempfile.TemporaryDirectory() as tmp:
+            parent = Path(tmp)
+            for scenario in scenarios:
+                with self.subTest(scenario=scenario):
+                    root = parent / scenario
+                    root.mkdir()
+                    environment = {"HOME": str(root / "home"), "AGENTPLUGINS_HOME": str(root / "manager")}
+                    with mock.patch.dict(os.environ, environment, clear=False):
+                        if scenario.startswith("promotion_"):
+                            passed, value = observer.promotion_scenario(Path("/not-used"), scenario, root, "a" * 64)
+                        else:
+                            passed, value = observer.fork_submission_scenario(scenario, root, "a" * 64)
+                    self.assertTrue(passed, value)
+                    artifact = value["validator_artifact"]
+                    if scenario.endswith("mismatch") or scenario.endswith("rejected"):
+                        self.assertEqual(artifact["outcome"], "rejected")
+                    else:
+                        self.assertEqual(artifact["outcome"], "accepted")
+                        self.assertTrue(artifact["gates"])
+                    if scenario == "promotion_gate_digest_match":
+                        match_candidate_digest = artifact["candidate_digest"]
+            repeat = parent / "promotion_gate_digest_match_repeat"
+            repeat.mkdir()
+            with mock.patch.dict(os.environ, {"HOME": str(repeat / "home"), "AGENTPLUGINS_HOME": str(repeat / "manager")}, clear=False):
+                passed, value = observer.promotion_scenario(Path("/not-used"), "promotion_gate_digest_match", repeat, "a" * 64)
+            self.assertTrue(passed, value)
+            self.assertEqual(value["validator_artifact"]["candidate_digest"], match_candidate_digest)
+
+    def test_journey_aggregation_requires_accepted_and_rejected_fork_artifacts(self) -> None:
+        harness = self.fixture_harness()
+        harness.cli_version = "0.1.8"
+        accepted = {
+            "fork_created": True, "branch_submission": True, "submission_validated": True,
+            "publication_performed": False, "pr_created": False, "network_performed": False,
+            "client_version": "fixture-validator-v1",
+        }
+        rejected = {
+            "fork_created": True, "submission_rejected": True, "no_side_effect": True,
+            "no_candidate": True, "client_version": "fixture-validator-v1",
+        }
+        with mock.patch.object(harness, "command", return_value=("failed", None, "not under test")), mock.patch.object(
+            harness, "driven_scenario", side_effect=[("passed", accepted, "accepted"), ("passed", rejected, "rejected")],
+        ):
+            harness.journeys()
+        rows = {row["scenario"]: row for row in harness.rows}
+        self.assertEqual(rows["fork_submission"]["outcome"], "passed")
+        self.assertEqual(rows["fork_submission_rejected"]["outcome"], "passed")
+
     def test_missing_runtime_proof_requires_zero_mutation_and_no_install(self) -> None:
         proof = {"zero_mutation": True, "copy_ready_requirement": True, "dependency_installed": False}
         self.assertTrue(e2e.LaunchHarness.driver_proof_valid("missing_runtime_zero_mutation", proof))

@@ -12,7 +12,7 @@
     "acceptance_postcondition_rows": 13,
     "native_platform_rows": 7,
     "fault_rows": 23,
-    "journey_rows": 2
+    "journey_rows": 3
   },
   "directory_contract": "signed-snapshot-v1",
   "all_package_client": "cursor",
@@ -74,6 +74,7 @@
   ],
   "journeys": [
     "direct_external_package",
-    "fork_submission"
+    "fork_submission",
+    "fork_submission_rejected"
   ]
 }

@@ -66,7 +66,7 @@
         "id": {"const": "acceptance-26.1-stable-release-v2"},
         "digest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
         "expected_ids": {"type": "array", "minItems": 13, "maxItems": 13, "uniqueItems": true, "items": {"type": "string"}},
-        "required_singleton_ids": {"type": "array", "minItems": 39, "maxItems": 39, "uniqueItems": true, "items": {"type": "string"}},
+        "required_singleton_ids": {"type": "array", "minItems": 38, "maxItems": 38, "uniqueItems": true, "items": {"type": "string"}},
         "expected_counts": {"type": "object", "minProperties": 9, "additionalProperties": {"type": "integer", "minimum": 1}}
       }, "additionalProperties": false
     },

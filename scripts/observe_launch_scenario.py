@@ -18,6 +18,7 @@ import os
 import platform
 import shutil
 import subprocess
+import sys
 import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -33,12 +34,14 @@ _CONFIG = json.loads((Path(__file__).resolve().parents[1] / "tests/e2e/launch-sc
 EXPECTED_SCENARIOS = frozenset(
     _CONFIG["acceptance_postconditions"] +
     _CONFIG["fault_scenarios"] + _CONFIG["adapter_repair_faults"] +
-    _CONFIG["advanced_scenarios"] + ["fork_submission"] +
+    _CONFIG["advanced_scenarios"] + [item for item in _CONFIG["journeys"] if item != "direct_external_package"] +
     ["context7_grouped_lifecycle", "shared_copilot_vscode_backend"] +
     [f"hero_lifecycle_{plugin}_{client}" for plugin in _CONFIG["heroes"] for client in _CONFIG["runtime_clients"]]
 )
 NATIVE_ROOTS = (".codex", ".cursor", ".kiro", ".copilot", ".config/Code/User")
 EXTERNAL_PACKAGE = Path(__file__).resolve().parents[1] / "tests/e2e/fixtures/external-package"
+FIXTURE_ROOT = Path(__file__).resolve().parents[1] / "tests/fixtures"
+JOURNEY_VALIDATOR = Path(__file__).resolve().parent / "validate_review_journey.py"
 CONFORMANCE_KEY_ID = "launch-conformance-only"
 CONFORMANCE_SEED = hashlib.sha256(b"UAP launch evidence conformance key; never production").digest()
 
@@ -952,23 +955,147 @@ def source_kind_scenario(binary: Path, kind: str, root: Path, challenge: str, co
     return add.returncode == remove.returncode == 0 and proof == {"source_kind": kind, "immutable_revision": True}, {"command_traces": [add_trace, remove_trace], "before": before, "after": after, "proof": proof, **proof, "fixture_digest": fixture_digest}
 
 
+def fixture_git(repository: Path, *arguments: str, environment: dict[str, str] | None = None) -> str:
+    env = os.environ.copy()
+    env.update({"GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": os.devnull, "GIT_TERMINAL_PROMPT": "0"})
+    if environment:
+        env.update(environment)
+    completed = subprocess.run(["git", *arguments], cwd=repository, env=env, text=True, capture_output=True, check=False, timeout=60)
+    if completed.returncode:
+        raise RuntimeError(completed.stderr.strip() or f"git {arguments[0]} failed")
+    return completed.stdout.strip()
+
+
+def fixture_commit(repository: Path, message: str, timestamp: str) -> str:
+    fixture_git(repository, "add", ".")
+    identity = {
+        "GIT_AUTHOR_NAME": "Journey Fixture", "GIT_AUTHOR_EMAIL": "journey@example.invalid",
+        "GIT_AUTHOR_DATE": timestamp, "GIT_COMMITTER_NAME": "Journey Fixture",
+        "GIT_COMMITTER_EMAIL": "journey@example.invalid", "GIT_COMMITTER_DATE": timestamp,
+    }
+    fixture_git(repository, "commit", "-qm", message, environment=identity)
+    return fixture_git(repository, "rev-parse", "HEAD")
+
+
+def command_artifact(name: str, argv: list[str], cwd: Path) -> dict[str, Any]:
+    completed = subprocess.run(argv, cwd=cwd, env=os.environ.copy(), text=True, capture_output=True, check=False, timeout=180)
+    return {"name": name, "exit_code": completed.returncode, "stdout_digest": "sha256:" + hashlib.sha256(completed.stdout.encode()).hexdigest()}
+
+
 def promotion_scenario(binary: Path, scenario: str, root: Path, challenge: str) -> tuple[bool, dict[str, Any]]:
-    reviewed = root / "reviewed-upstream"
-    merged = root / "merged-upstream"
-    shutil.copytree(EXTERNAL_PACKAGE, reviewed)
-    shutil.copytree(EXTERNAL_PACKAGE, merged)
+    repository = root / "upstream-repository"
+    package = repository / "packages" / "fixture-bridge"
+    package.parent.mkdir(parents=True)
+    shutil.copytree(FIXTURE_ROOT / "plugins" / "fixture-bridge", package)
+    fixture_git(repository, "init", "-q", "-b", "main")
+    reviewed_revision = fixture_commit(repository, "reviewed package", "2026-01-01T00:00:00Z")
+    reviewed_tree = __import__("build_registry").directory_tree_digest(package)
+    reviewed_manifest = "sha256:" + hashlib.sha256((package / "plugin.json").read_bytes()).hexdigest()
     if scenario == "promotion_gate_digest_mismatch":
-        manifest = json.loads((merged / "plugin.json").read_text())
-        manifest["description"] = "Maintainer changed the reviewed package bytes."
-        (merged / "plugin.json").write_text(json.dumps(manifest, sort_keys=True))
-    reviewed_digest, merged_digest = tree_digest(reviewed), tree_digest(merged)
-    completed, trace = traced(binary, ["version"], root, challenge)
-    match = reviewed_digest == merged_digest
-    if scenario == "promotion_gate_digest_match":
-        proof = {"digest_match": match, "promotion_simulated": completed.returncode == 0 and match}
+        manifest = json.loads((package / "plugin.json").read_text())
+        manifest["description"] = "Community package for changed maintainer bytes."
+        (package / "plugin.json").write_text(json.dumps(manifest, indent=2) + "\n")
     else:
-        proof = {"digest_mismatch": not match, "promotion_refused": not match, "zero_mutation": True}
-    return all(proof.values()), {"command_traces": [trace], "before": observe(Path(os.environ["HOME"]), Path(os.environ["AGENTPLUGINS_HOME"])), "after": observe(Path(os.environ["HOME"]), Path(os.environ["AGENTPLUGINS_HOME"])), "proof": proof, **proof, "reviewed_digest": reviewed_digest, "merged_digest": merged_digest}
+        (repository / "MERGE-NOTE.md").write_text("Docs outside the reviewed package.\n")
+    candidate_revision = fixture_commit(repository, "merged candidate", "2026-01-02T00:00:00Z")
+    evidence = sorted([
+        command_artifact("package-validation", [sys.executable, str(Path(__file__).resolve().parent / "validate_catalog.py")], Path(__file__).resolve().parents[1]),
+        command_artifact("registry-policy", [sys.executable, str(Path(__file__).resolve().parent / "build_registry.py"), "--check"], Path(__file__).resolve().parents[1]),
+    ], key=lambda item: item["name"])
+    review_record = root / "promotion-review.json"
+    review_record.write_text(json.dumps({
+        "schema_version": 1, "repository": "fixture/upstream", "path": "packages/fixture-bridge",
+        "reviewed_revision": reviewed_revision, "reviewed_tree_digest": reviewed_tree,
+        "reviewed_manifest_digest": reviewed_manifest, "product_id": "fixture-bridge",
+        "distribution_id": "fixture/fixture-bridge", "required_components": ["skills"],
+        "required_targets": ["codex"], "policy_status": "active", "evidence_artifacts": evidence,
+    }, sort_keys=True))
+    candidate_output = root / "promotion-candidate.json"
+    before = observe(Path(os.environ["HOME"]), Path(os.environ["AGENTPLUGINS_HOME"]))
+    before_repository = tree_digest(repository)
+    argv = [str(JOURNEY_VALIDATOR), "promotion", "--repository", str(repository), "--repository-id", "fixture/upstream", "--reviewed-revision", reviewed_revision, "--candidate-revision", candidate_revision, "--path", "packages/fixture-bridge", "--review-record", str(review_record), "--candidate-output", str(candidate_output)]
+    completed, trace = traced(Path(sys.executable), argv, root, challenge)
+    trace["argv"] = ["validate-review-journey", "promotion", "--repository", "disposable-upstream", "--reviewed-revision", reviewed_revision, "--candidate-revision", candidate_revision, "--path", "packages/fixture-bridge"]
+    result = json.loads(completed.stdout)
+    after_repository = tree_digest(repository)
+    after = observe(Path(os.environ["HOME"]), Path(os.environ["AGENTPLUGINS_HOME"]))
+    gate_names = [item["name"] for item in result.get("gates", [])]
+    if scenario == "promotion_gate_digest_match":
+        deterministic = candidate_output.is_file() and hashlib.sha256(candidate_output.read_bytes()).hexdigest() == result.get("candidate_digest", "").removeprefix("sha256:")
+        proof = {"digest_match": result.get("exact_match") is True, "promotion_simulated": completed.returncode == 0 and deterministic, "identity_gates_complete": gate_names == list(__import__("validate_review_journey").REQUIRED_PROMOTION_GATES), "repository_unchanged": before_repository == after_repository}
+    else:
+        proof = {"digest_mismatch": result.get("outcome") == "rejected" and "bytes differ" in result.get("reason", ""), "promotion_refused": completed.returncode == 2 and not candidate_output.exists(), "zero_mutation": before == after and before_repository == after_repository}
+    return all(proof.values()), {"command_traces": [trace], "before": before, "after": after, "proof": proof, **proof, "validator_artifact": result, "reviewed_revision": reviewed_revision, "candidate_revision": candidate_revision}
+
+
+def fork_submission_scenario(scenario: str, root: Path, challenge: str) -> tuple[bool, dict[str, Any]]:
+    upstream = root / "bridge-upstream"
+    shutil.copytree(FIXTURE_ROOT / "bridge_upstream", upstream)
+    fixture_git(upstream, "init", "-q", "-b", "main")
+    upstream_revision = fixture_commit(upstream, "fixture", "2026-01-01T00:00:00Z")
+    mirror = root / "upstream-mirror" / "fixture"
+    mirror.mkdir(parents=True)
+    subprocess.run(["git", "clone", "-q", "--bare", str(upstream), str(mirror / "upstream.git")], check=True, timeout=60)
+
+    source = root / "contribution-source"
+    source.mkdir()
+    shutil.copytree(FIXTURE_ROOT / "bridges", source / "bridges")
+    shutil.copytree(FIXTURE_ROOT / "plugins", source / "plugins")
+    for recipe in (source / "bridges").glob("*/bridge.yaml"):
+        recipe.write_text(recipe.read_text().replace("9ec238505ab95b2e07222e69a893f0bbac201ae6", upstream_revision))
+    fixture_git(source, "init", "-q", "-b", "main")
+    base_revision = fixture_commit(source, "base contribution repository", "2026-01-03T00:00:00Z")
+    fork = root / "disposable-fork"
+    subprocess.run(["git", "clone", "-q", str(source), str(fork)], check=True, timeout=60)
+    fixture_git(fork, "checkout", "-qb", "contribution/fixture-bridge")
+    readme = fork / "bridges" / "fixture-bridge" / "overlay" / "README.md"
+    readme.write_text(readme.read_text() + "\nValidated through the disposable contributor journey.\n")
+    build = subprocess.run([
+        sys.executable, str(Path(__file__).resolve().parent / "build_bridges.py"),
+        "--root", str(fork), "--upstream-mirror", str(root / "upstream-mirror"), "build", "fixture-bridge",
+    ], cwd=fork, text=True, capture_output=True, check=False, timeout=180)
+    if build.returncode:
+        raise RuntimeError(build.stderr or build.stdout)
+    if scenario == "fork_submission_rejected":
+        manifest = json.loads((fork / "plugins" / "fixture-bridge" / "plugin.json").read_text())
+        manifest["$schema"] = "https://example.invalid/unreviewed.schema.json"
+        (fork / "plugins" / "fixture-bridge" / "plugin.json").write_text(json.dumps(manifest, indent=2) + "\n")
+    branch_revision = fixture_commit(fork, "contribute fixture bridge", "2026-01-04T00:00:00Z")
+    record = root / "submission.json"
+    record.write_text(json.dumps({
+        "schema_version": 1, "fork_repository": "contributor/fixture-fork",
+        "base_revision": base_revision, "branch": "contribution/fixture-bridge",
+        "branch_revision": branch_revision, "package_path": "plugins/fixture-bridge",
+        "bridge_root": ".", "bridge_id": "fixture-bridge", "product_id": "fixture-bridge",
+        "distribution_id": "contributor/fixture-bridge",
+    }, sort_keys=True))
+    before = observe(Path(os.environ["HOME"]), Path(os.environ["AGENTPLUGINS_HOME"]))
+    before_repository = tree_digest(fork)
+    argv = [str(JOURNEY_VALIDATOR), "submission", "--repository", str(fork), "--submission-record", str(record), "--upstream-mirror", str(root / "upstream-mirror")]
+    completed, trace = traced(Path(sys.executable), argv, root, challenge)
+    trace["argv"] = ["validate-review-journey", "submission", "--repository", "disposable-fork", "--branch-revision", branch_revision, "--upstream-mirror", "disposable-upstream-mirror"]
+    result = json.loads(completed.stdout)
+    after = observe(Path(os.environ["HOME"]), Path(os.environ["AGENTPLUGINS_HOME"]))
+    after_repository = tree_digest(fork)
+    if scenario == "fork_submission":
+        gate_names = [item["name"] for item in result.get("gates", [])]
+        side_effects = result.get("side_effects", {})
+        proof = {
+            "fork_created": (fork / ".git").is_dir(), "branch_submission": result.get("branch") == "contribution/fixture-bridge",
+            "submission_validated": completed.returncode == 0 and gate_names == list(__import__("validate_review_journey").REQUIRED_SUBMISSION_GATES),
+            "publication_performed": side_effects.get("publication_created") != 0,
+            "pr_created": side_effects.get("pr_created") != 0, "network_performed": side_effects.get("network_commands") != 0,
+            "repository_unchanged": before_repository == after_repository, "manager_unchanged": before == after,
+        }
+        passed = all((proof["fork_created"], proof["branch_submission"], proof["submission_validated"], not proof["publication_performed"], not proof["pr_created"], not proof["network_performed"], proof["repository_unchanged"], proof["manager_unchanged"]))
+    else:
+        proof = {
+            "fork_created": (fork / ".git").is_dir(), "submission_rejected": completed.returncode == 2 and result.get("outcome") == "rejected",
+            "no_side_effect": before == after and before_repository == after_repository,
+            "no_candidate": not any(root.glob("*publication*")) and not any(root.glob("*pull-request*")),
+        }
+        passed = all(proof.values())
+    return passed, {"command_traces": [trace], "before": before, "after": after, "proof": proof, **proof, "validator_artifact": result, "base_revision": base_revision, "branch_revision": branch_revision, "upstream_revision": upstream_revision}
 
 
 def external_activation_scenario(binary: Path, root: Path, challenge: str, context: dict[str, Any]) -> tuple[bool, dict[str, Any]]:
@@ -1128,6 +1255,7 @@ def run(binary: Path, scenario: str, root: Path, challenge_context: dict[str, st
     before = observe(home, manager)
     traces: list[dict[str, Any]] = []
     proof: dict[str, Any] = {}
+    validator_artifact: dict[str, Any] | None = None
     reason = "repository-owned observer could not establish the postcondition"
 
     if scenario in {"schema_1_0_0_accepted", "schema_draft_rejected", "schema_unknown_rejected"}:
@@ -1223,20 +1351,13 @@ def run(binary: Path, scenario: str, root: Path, challenge_context: dict[str, st
         proof = yes_value["proof"]
         before, after = yes_value["before"], yes_value["after"]
         reason = "mutating parsers reject --yes as unknown before all manager/native mutation" if passed else "--yes was accepted, was not reported unknown, or caused mutation"
-    elif scenario == "fork_submission":
-        completed, trace = traced(binary, ["version"], root, challenge)
-        traces.append(trace)
-        fork_checkout = root / "disposable-fork" / "packages" / "e2e-external-package"
-        fork_checkout.parent.mkdir(parents=True)
-        shutil.copytree(EXTERNAL_PACKAGE, fork_checkout)
-        manifest = json.loads((fork_checkout / "plugin.json").read_text())
-        proof = {
-            "fork_created": fork_checkout.is_dir(),
-            "submission_validated": completed.returncode == 0 and manifest.get("$schema") == "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
-            "publication_performed": False,
-        }
-        passed = all((proof["fork_created"], proof["submission_validated"], not proof["publication_performed"]))
-        reason = "disposable fork-shaped fixture validated without publication" if passed else "submission fixture validation failed"
+    elif scenario in {"fork_submission", "fork_submission_rejected"}:
+        passed, fork_value = fork_submission_scenario(scenario, root, challenge)
+        traces.extend(fork_value["command_traces"])
+        proof = fork_value["proof"]
+        before, after = fork_value["before"], fork_value["after"]
+        validator_artifact = fork_value["validator_artifact"]
+        reason = "local fork branch command artifacts passed contribution CI validators without side effects" if passed else "fork submission validator boundary was not observed"
     elif scenario in {"directory_offline", "directory_expired", "directory_tampered", "directory_sequence_rollback"}:
         passed, fault_value = directory_fault_scenario(binary, scenario, root, challenge, challenge_context)
         traces.extend(fault_value["command_traces"])
@@ -1300,6 +1421,7 @@ def run(binary: Path, scenario: str, root: Path, challenge_context: dict[str, st
         traces.extend(fault_value["command_traces"])
         proof = fault_value["proof"]
         before, after = fault_value["before"], fault_value["after"]
+        validator_artifact = fault_value["validator_artifact"]
         reason = "immutable promotion fixture digest gate produced the required decision" if passed else "promotion digest gate decision was not observed"
     elif scenario in {"upstream_owned_short_name", "community_bridge_short_name"}:
         kind = "upstream" if scenario == "upstream_owned_short_name" else "community_bridge"
@@ -1341,6 +1463,8 @@ def run(binary: Path, scenario: str, root: Path, challenge_context: dict[str, st
         "client_version": "native-observation-v1@" + hashlib.sha256(json.dumps({"before": before, "after": after}, sort_keys=True, separators=(",", ":")).encode()).hexdigest(),
         "manager_observer": "agentplugins-state-tree-v1", "native_observer": "native-client-tree-v1",
     }
+    if validator_artifact is not None:
+        result["validator_artifact"] = validator_artifact
     result.update(proof)
     if scenario.startswith("hero_lifecycle_") or scenario in {"context7_grouped_lifecycle", "shared_copilot_vscode_backend"}:
         result.update({key: value for key, value in proof.items() if key not in {"command_traces"}})

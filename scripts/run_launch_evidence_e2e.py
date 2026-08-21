@@ -50,6 +50,7 @@ from launch_observer_signatures import verify_observer_bundle  # noqa: E402
 ROOT = Path(__file__).resolve().parents[1]
 SCENARIOS = ROOT / "tests" / "e2e" / "launch-scenarios.json"
 EXTERNAL_PACKAGE = ROOT / "tests" / "e2e" / "fixtures" / "external-package"
+FORK_PACKAGE = ROOT / "tests" / "fixtures" / "plugins" / "fixture-bridge"
 STATE_FIXTURE = ROOT / "tests" / "e2e" / "fixtures" / "state-schema-2.json"
 RECOVERY_FIXTURE = ROOT / "tests" / "e2e" / "fixtures" / "recovery-cases.json"
 SCENARIO_OBSERVER = ROOT / "scripts" / "observe_launch_scenario.py"
@@ -77,7 +78,7 @@ EXPECTED_COUNTS = {
     "hero_lifecycle_rows": 15, "hero_runtime_rows": 15,
     "context7_grouped_rows": 4, "chatgpt_rows": 1,
     "shared_backend_rows": 1, "acceptance_postcondition_rows": 13,
-    "native_platform_rows": 7, "fault_rows": 23, "journey_rows": 2,
+    "native_platform_rows": 7, "fault_rows": 23, "journey_rows": 3,
 }
 OUTCOMES = {"passed", "failed", "inconclusive", "not_applicable"}
 DIGEST = re.compile(r"^sha256:[a-f0-9]{64}$")
@@ -1355,7 +1356,7 @@ class LaunchHarness:
                 observed_client_version = find_value(value, {"client_version"}) if value else None
                 tuple_value = self.evidence_tuple("context7", client_version=observed_client_version if isinstance(observed_client_version, str) else None, dependency="repository-owned-fault-observer")
             client = scenario.removeprefix("repair_") if scenario.startswith("repair_") else "cursor"
-            self.add(scenario, "context7", client, "materialization", outcome, reason, tuple_value=tuple_value, details={"fixture_contract_present": scenario in self.config["fault_scenarios"], "repository_observer_required": True, "proof": value.get("proof", {}) if value else {}, "command_traces": value.get("command_traces", []) if value else []})
+            self.add(scenario, "context7", client, "materialization", outcome, reason, tuple_value=tuple_value, details={"fixture_contract_present": scenario in self.config["fault_scenarios"], "repository_observer_required": True, "proof": value.get("proof", {}) if value else {}, "command_traces": value.get("command_traces", []) if value else [], "validator_artifact": value.get("validator_artifact") if value else None})
 
     def acceptance_postconditions(self) -> None:
         required: dict[str, dict[str, Any]] = {
@@ -1534,12 +1535,28 @@ class LaunchHarness:
         if fork_outcome == "passed" and not (
             fork_value
             and fork_value.get("fork_created") is True
+            and fork_value.get("branch_submission") is True
             and fork_value.get("submission_validated") is True
             and fork_value.get("publication_performed") is False
+            and fork_value.get("pr_created") is False
+            and fork_value.get("network_performed") is False
         ):
             fork_outcome, fork_reason = "failed", "fork driver omitted validated non-publication submission proof"
         fork_client_version = find_value(fork_value, {"client_version"}) if fork_value else None
-        self.add("fork_submission", "e2e-external-package", None, "schema", fork_outcome, fork_reason, tuple_value=self.tuple(product_id="e2e-external-package", digest=digest, manifest_digest=sha256_file(EXTERNAL_PACKAGE / "plugin.json"), distribution_id="direct/e2e-external-package", distribution_kind="direct", release_sequence=1, package_version="1.0.0", client_version=fork_client_version if isinstance(fork_client_version, str) else None, dependency="disposable-fork-validation"), details={"publication_or_pr_created": False, "publication_required": False})
+        fork_artifact = fork_value.get("validator_artifact", {}) if fork_value else {}
+        fork_package = fork_artifact.get("package", {})
+        self.add("fork_submission", "fixture-bridge", None, "schema", fork_outcome, fork_reason, tuple_value=self.tuple(product_id="fixture-bridge", digest=fork_package.get("tree_digest") or package_digest(FORK_PACKAGE), manifest_digest=fork_package.get("manifest_digest") or sha256_file(FORK_PACKAGE / "plugin.json"), distribution_id="contributor/fixture-bridge", distribution_kind="community_bridge", release_sequence=1, package_version=fork_package.get("package_version") or "1.2.3", client_version=fork_client_version if isinstance(fork_client_version, str) else None, dependency="disposable-fork-validation"), details={"publication_or_pr_created": False, "publication_required": False, "validator_artifact": fork_artifact, "command_traces": fork_value.get("command_traces", []) if fork_value else []})
+        rejected_outcome, rejected_value, rejected_reason = self.driven_scenario("fork_submission_rejected")
+        if rejected_outcome == "passed" and not (
+            rejected_value
+            and rejected_value.get("fork_created") is True
+            and rejected_value.get("submission_rejected") is True
+            and rejected_value.get("no_side_effect") is True
+            and rejected_value.get("no_candidate") is True
+        ):
+            rejected_outcome, rejected_reason = "failed", "rejected fork driver omitted rejection and zero-side-effect proof"
+        rejected_client_version = find_value(rejected_value, {"client_version"}) if rejected_value else None
+        self.add("fork_submission_rejected", "fixture-bridge", None, "schema", rejected_outcome, rejected_reason, tuple_value=self.tuple(product_id="fixture-bridge", digest=package_digest(FORK_PACKAGE), manifest_digest=sha256_file(FORK_PACKAGE / "plugin.json"), distribution_id="contributor/fixture-bridge", distribution_kind="community_bridge", release_sequence=1, package_version="1.2.3", client_version=rejected_client_version if isinstance(rejected_client_version, str) else None, dependency="disposable-fork-validation"), details={"publication_or_pr_created": False, "publication_required": False, "expected_rejection": True, "validator_artifact": rejected_value.get("validator_artifact") if rejected_value else None, "command_traces": rejected_value.get("command_traces", []) if rejected_value else []})
 
     def export(self) -> dict[str, Any]:
         self.validate_fixtures()
