@@ -91,7 +91,10 @@ jobs:
               test "${#tags[@]}" -eq 1
               sequence_one_tag="${tag_prefix}00000000000000000001"
               test "${tags[0]}" = "${sequence_one_tag}"
-              test "$(git -C _publication-ledger rev-parse HEAD)" = "$(git -C _publication-ledger rev-parse "refs/tags/${sequence_one_tag}^{commit}")"
+              sequence_one_commit="$(git -C _publication-ledger rev-parse "refs/tags/${sequence_one_tag}^{commit}")"
+              git -C _publication-ledger merge-base --is-ancestor "${sequence_one_commit}" HEAD
+              test "$(git -C _publication-ledger rev-parse "${sequence_one_commit}^")" = "${REQUESTED_SEED_COMMIT}"
+              git -C _publication-ledger diff --exit-code "${sequence_one_commit}" HEAD -- registry/schemas/1
               test "$(python3 -c 'import json; print(json.load(open("_publication-ledger/registry/schemas/1/ledger-contract.json"))["seed_commit"])')" = "${REQUESTED_SEED_COMMIT}"
               test "$(python3 -c 'import json; print(json.load(open("_publication-ledger/registry/schemas/1/latest.json"))["sequence"])')" = 1
             fi
@@ -188,9 +191,20 @@ jobs:
         run: |
           test -x /usr/bin/python3
           test -x /usr/bin/openssl
-          dpkg-query --show python3 openssl
-          test -z "$(dpkg --verify python3 openssl)"
+          test -x /usr/bin/git
+          dpkg-query --show python3 openssl git
+          test -z "$(dpkg --verify python3 openssl git)"
           /usr/bin/openssl version
+      - name: Observe protected main freshness without signing seed
+        id: freshness
+        working-directory: trusted-source
+        env:
+          EVENT_SOURCE_COMMIT: ${{ github.sha }}
+        run: |
+          git fetch --no-tags --force origin refs/heads/main:refs/remotes/origin/main
+          observed_source_commit="$(git rev-parse refs/remotes/origin/main)"
+          test "${observed_source_commit}" = "${EVENT_SOURCE_COMMIT}"
+          echo "source_commit=${observed_source_commit}" >> "$GITHUB_OUTPUT"
       - name: Validate candidate digest, sequence, and sign
         id: signed
         working-directory: trusted-source
@@ -201,9 +215,10 @@ jobs:
           INITIALIZE_LEDGER: ${{ needs.prepare.outputs.initialize_ledger }}
           LEDGER_SEED_COMMIT: ${{ needs.prepare.outputs.ledger_seed_commit }}
           LEDGER_SEQUENCE_FLOOR: ${{ needs.prepare.outputs.ledger_sequence_floor }}
+          OBSERVED_SOURCE_COMMIT: ${{ steps.freshness.outputs.source_commit }}
         run: |
-          git fetch --no-tags --force origin refs/heads/main:refs/remotes/origin/main
-          test "$(git rev-parse refs/remotes/origin/main)" = "${{ github.sha }}"
+          test "${OBSERVED_SOURCE_COMMIT}" = "${{ github.sha }}"
+          test "$(git rev-parse HEAD)" = "${OBSERVED_SOURCE_COMMIT}"
           test "$(tr -d '\n' < ../candidate/candidate.digest)" = "${EXPECTED_CANDIDATE_DIGEST}"
           ledger_args=(--ledger-seed-commit "${LEDGER_SEED_COMMIT}")
           if test "${INITIALIZE_LEDGER}" = "true"; then
@@ -212,7 +227,10 @@ jobs:
             if test -e ../ledger/registry/schemas/1/latest.json; then
               test "${#initialization_tags[@]}" -eq 1
               test "${initialization_tags[0]}" = "${sequence_one_tag}"
-              test "$(git -C ../ledger rev-parse HEAD)" = "$(git -C ../ledger rev-parse "refs/tags/${sequence_one_tag}^{commit}")"
+              sequence_one_commit="$(git -C ../ledger rev-parse "refs/tags/${sequence_one_tag}^{commit}")"
+              git -C ../ledger merge-base --is-ancestor "${sequence_one_commit}" HEAD
+              test "$(git -C ../ledger rev-parse "${sequence_one_commit}^")" = "${LEDGER_SEED_COMMIT}"
+              git -C ../ledger diff --exit-code "${sequence_one_commit}" HEAD -- registry/schemas/1
             else
               test "$(git -C ../ledger rev-parse HEAD)" = "${LEDGER_SEED_COMMIT}"
               test "${#initialization_tags[@]}" -eq 0

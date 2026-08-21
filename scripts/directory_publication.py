@@ -53,6 +53,11 @@ def require(condition: bool, message: str) -> None:
         raise PublicationError(message)
 
 
+def require_integer_const(value: Any, expected: int, message: str) -> None:
+    """Require an exact JSON integer constant (``bool`` is not an integer)."""
+    require(type(value) is int and value == expected, message)
+
+
 def parse_json_bytes(body: bytes, source: str, *, max_bytes: int) -> Any:
     require(len(body) <= max_bytes, f"{source}: exceeds {max_bytes} bytes")
 
@@ -192,7 +197,8 @@ def b64decode_exact(value: str, size: int, field: str) -> bytes:
 
 def load_public_keys(path: Path) -> dict[str, bytes]:
     value = read_json(path, max_bytes=64 << 10)
-    require(isinstance(value, dict) and value.get("schema_version") == 1, "trusted keys: invalid schema version")
+    require(isinstance(value, dict) and set(value) == {"schema_version", "keys"}, "trusted keys: invalid document")
+    require_integer_const(value.get("schema_version"), 1, "trusted keys: invalid schema version")
     entries = value.get("keys")
     require(isinstance(entries, list), "trusted keys: keys must be an array")
     result: dict[str, bytes] = {}
@@ -273,8 +279,8 @@ def validate_envelope_contract(envelope: dict[str, Any]) -> None:
         "envelope_schema_version", "snapshot_schema_version", "sequence", "key_id",
         "algorithm", "signature_domain", "snapshot_digest", "signature",
     }, "signature envelope fields are invalid")
-    require(envelope["envelope_schema_version"] == 1, "signature envelope version is invalid")
-    require(envelope["snapshot_schema_version"] == 1, "signature envelope snapshot version is invalid")
+    require_integer_const(envelope["envelope_schema_version"], 1, "signature envelope version is invalid")
+    require_integer_const(envelope["snapshot_schema_version"], 1, "signature envelope snapshot version is invalid")
     require(type(envelope["sequence"]) is int and envelope["sequence"] >= 1, "signature envelope sequence is invalid")
     require(isinstance(envelope["key_id"], str) and ID_RE.fullmatch(envelope["key_id"]) is not None, "signature envelope key ID is invalid")
     require(envelope["algorithm"] == "Ed25519", "signature envelope algorithm is invalid")
@@ -373,7 +379,7 @@ def _validate_release(value: Any, label: str, *, snapshot: bool) -> None:
 
 def _validate_distribution(value: Any, label: str, *, snapshot: bool) -> None:
     distribution = _object(value, {"schema_version", "id", "product_id", "kind", "status", "packager", "releases", "release_policies"}, set(), label)
-    require(distribution["schema_version"] == 1, f"{label}.schema_version is invalid")
+    require_integer_const(distribution["schema_version"], 1, f"{label}.schema_version is invalid")
     _string(distribution["id"], DISTRIBUTION_ID_RE, f"{label}.id")
     for field in ("product_id", "packager"):
         _string(distribution[field], SIMPLE_ID_RE, f"{label}.{field}")
@@ -387,7 +393,7 @@ def _validate_distribution(value: Any, label: str, *, snapshot: bool) -> None:
 
 def _validate_product(value: Any, label: str) -> None:
     product = _object(value, {"schema_version", "id", "display_name", "description", "manifest_name", "aliases", "reserved_aliases", "categories", "minimum_capabilities", "default_distribution", "distributions"}, {"icon"}, label)
-    require(product["schema_version"] == 1, f"{label}.schema_version is invalid")
+    require_integer_const(product["schema_version"], 1, f"{label}.schema_version is invalid")
     for field in ("id", "manifest_name"):
         _string(product[field], SIMPLE_ID_RE, f"{label}.{field}")
     _string(product["display_name"], None, f"{label}.display_name", minimum=1, maximum=100)
@@ -411,7 +417,7 @@ def _validate_evidence(value: Any, label: str) -> None:
     required = {"schema_version", "id", "distribution_id", "release_sequence", "package_tree_digest", "level", "outcome", "artifact"}
     optional = {"client", "client_version", "installer_version", "os", "architecture", "dependency_identity", "observed_at"}
     evidence = _object(value, required, optional, label)
-    require(evidence["schema_version"] == 1, f"{label}.schema_version is invalid")
+    require_integer_const(evidence["schema_version"], 1, f"{label}.schema_version is invalid")
     _string(evidence["id"], EVIDENCE_ID_RE, f"{label}.id")
     _string(evidence["distribution_id"], DISTRIBUTION_ID_RE, f"{label}.distribution_id")
     _positive_integer(evidence["release_sequence"], f"{label}.release_sequence")
@@ -498,7 +504,7 @@ def validate_snapshot_semantics(
         "snapshot_schema_version", "sequence", "publication_id", "source_commit",
         "generated_at", "expires_at", "products", "distributions", "evidence", "revocations",
     }, "snapshot fields are invalid")
-    require(snapshot["snapshot_schema_version"] == 1, "snapshot schema version is invalid")
+    require_integer_const(snapshot["snapshot_schema_version"], 1, "snapshot schema version is invalid")
     require(type(snapshot["sequence"]) is int and snapshot["sequence"] >= 1, "snapshot sequence is invalid")
     require(isinstance(snapshot["publication_id"], str) and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}", snapshot["publication_id"]) is not None, "snapshot publication ID is invalid")
     require(isinstance(snapshot["source_commit"], str) and SHA_RE.fullmatch(snapshot["source_commit"]) is not None, "snapshot source commit is invalid")
@@ -638,7 +644,8 @@ def validate_latest(latest: dict[str, Any], *, validate_schema: bool = True) -> 
         "pointer_schema_version", "snapshot_schema_version", "sequence",
         "snapshot_path", "envelope_path", "fetch_contract",
     }, "latest pointer fields are invalid")
-    require(latest["pointer_schema_version"] == 1 and latest["snapshot_schema_version"] == 1, "latest pointer version is invalid")
+    require_integer_const(latest["pointer_schema_version"], 1, "latest pointer version is invalid")
+    require_integer_const(latest["snapshot_schema_version"], 1, "latest pointer snapshot version is invalid")
     require(type(latest["sequence"]) is int and latest["sequence"] >= 1, "latest pointer sequence is invalid")
     sequence = latest["sequence"]
     stem = f"{sequence:020d}"
@@ -691,8 +698,15 @@ def load_ledger_latest(
         "publication ledger contract marker is invalid",
     )
     require(canonical_json(contract) == contract_body, "publication ledger contract marker is not canonical JSON")
-    require(contract["contract_version"] == 1 and contract["schema_version"] == 1, "publication ledger contract version is unsupported")
-    require(contract["initial_sequence"] == 1, "publication ledger initial sequence marker is invalid")
+    require(
+        {path.name for path in feed.iterdir()} == {
+            LEDGER_CONTRACT_NAME, "latest.json", "snapshots",
+        },
+        "publication ledger feed contains unexpected entries",
+    )
+    require_integer_const(contract["contract_version"], 1, "publication ledger contract version is unsupported")
+    require_integer_const(contract["schema_version"], 1, "publication ledger schema version is unsupported")
+    require_integer_const(contract["initial_sequence"], 1, "publication ledger initial sequence marker is invalid")
     require(isinstance(contract["seed_commit"], str) and SHA_RE.fullmatch(contract["seed_commit"]) is not None, "publication ledger seed commit marker is invalid")
     require(contract["sequence_tag_prefix"] == "directory-publication-schema-1-sequence-", "publication ledger tag namespace marker is invalid")
     if seed_commit is not None:
@@ -704,7 +718,7 @@ def load_ledger_latest(
     validate_latest(latest, validate_schema=validate_schema)
     highest = latest["sequence"]
     if minimum_sequence is not None:
-        require(isinstance(minimum_sequence, int) and minimum_sequence >= 1, "publication ledger sequence floor is invalid")
+        require(type(minimum_sequence) is int and minimum_sequence >= 1, "publication ledger sequence floor is invalid")
         require(highest >= minimum_sequence, "publication ledger latest sequence regressed below the immutable tag floor")
     require(highest <= MAX_LEDGER_SNAPSHOTS, "publication ledger exceeds supported history bound")
     snapshots_dir = feed / "snapshots"

@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -36,7 +37,7 @@ class OpenSSLParityTests(unittest.TestCase):
 
 
 class LedgerFailureTests(unittest.TestCase):
-    def run_signer(self, root: Path, publication_id: str, *ledger_args: str, mutate=None, key_id: str = "test-current") -> subprocess.CompletedProcess[str]:
+    def run_signer(self, root: Path, publication_id: str, *ledger_args: str, mutate=None, key_id: str = "test-current", trusted_keys: Path | None = None) -> subprocess.CompletedProcess[str]:
         candidate = root / "candidate.json"
         value = json.loads((FIXTURES / "candidate.json").read_bytes())
         value["publication_id"] = publication_id
@@ -53,7 +54,7 @@ class LedgerFailureTests(unittest.TestCase):
                 "--candidate", str(candidate),
                 "--candidate-digest", publication.candidate_digest(candidate.read_bytes()),
                 "--ledger", str(root),
-                "--trusted-keys", str(FIXTURES / "trusted-keys.json"),
+                "--trusted-keys", str(trusted_keys or FIXTURES / "trusted-keys.json"),
                 "--key-id", key_id, "--now", f"2026-08-{day}T00:00:00Z",
                 "--result", str(root / "result.json"), *ledger_args,
             ],
@@ -73,7 +74,7 @@ class LedgerFailureTests(unittest.TestCase):
             self.assertEqual(initialized.returncode, 0, initialized.stderr)
             repeated = self.run_signer(root, "run-2", "--initialize-ledger", "--ledger-seed-commit", "0" * 40)
             self.assertNotEqual(repeated.returncode, 0)
-            self.assertIn("differs from the original sequence 1", repeated.stderr)
+            self.assertIn("sequence-1 tag/transaction identity is invalid", repeated.stderr)
             no_floor = self.run_signer(root, "run-2", "--ledger-seed-commit", "0" * 40)
             self.assertNotEqual(no_floor.returncode, 0)
             self.assertIn("immutable tag sequence floor", no_floor.stderr)
@@ -133,6 +134,11 @@ class LedgerFailureTests(unittest.TestCase):
             sequence_tag = "directory-publication-schema-1-sequence-00000000000000000001"
             subprocess.run(["/usr/bin/git", "tag", sequence_tag, "HEAD"], cwd=root, check=True)
             published_commit = subprocess.check_output(["/usr/bin/git", "rev-parse", f"refs/tags/{sequence_tag}^{{commit}}"], cwd=root, text=True).strip()
+            (root / "index.html").write_text("materialized site child\n")
+            subprocess.run(["/usr/bin/git", "add", "index.html"], cwd=root, check=True)
+            subprocess.run(["/usr/bin/git", "commit", "-qm", "materialize site"], cwd=root, check=True)
+            site_commit = subprocess.check_output(["/usr/bin/git", "rev-parse", "HEAD"], cwd=root, text=True).strip()
+            self.assertNotEqual(site_commit, published_commit)
             feed = root / "registry" / "schemas" / "1"
             before = {path.relative_to(feed): path.read_bytes() for path in feed.rglob("*") if path.is_file()}
 
@@ -159,6 +165,31 @@ class LedgerFailureTests(unittest.TestCase):
             self.assertNotEqual(wrong_key.returncode, 0)
             self.assertIn("another signer key", wrong_key.stderr)
             self.assertEqual({path.relative_to(feed): path.read_bytes() for path in feed.rglob("*") if path.is_file()}, before)
+
+            for label, publication_id, mutation in (
+                ("source", "run-1", lambda value: value.update({"source_commit": "1" * 40})),
+                ("publication ID", "run-2", None),
+                ("lifetime", "run-1", lambda value: value.update({"lifetime_days": 29})),
+            ):
+                with self.subTest(changed=label):
+                    changed = self.run_signer(
+                        root, publication_id, "--initialize-ledger", "--ledger-seed-commit", seed_commit,
+                        mutate=mutation,
+                    )
+                    self.assertNotEqual(changed.returncode, 0)
+                    self.assertEqual({path.relative_to(feed): path.read_bytes() for path in feed.rglob("*") if path.is_file()}, before)
+
+            subprocess.run(["/usr/bin/git", "tag", "-f", sequence_tag, "HEAD"], cwd=root, check=True, stdout=subprocess.DEVNULL)
+            moved_tag = self.run_signer(root, "run-1", "--initialize-ledger", "--ledger-seed-commit", seed_commit)
+            self.assertNotEqual(moved_tag.returncode, 0)
+            subprocess.run(["/usr/bin/git", "tag", "-f", sequence_tag, published_commit], cwd=root, check=True, stdout=subprocess.DEVNULL)
+
+            subprocess.run(["/usr/bin/git", "checkout", "-q", "--detach", seed_commit], cwd=root, check=True)
+            subprocess.run(["/usr/bin/git", "checkout", sequence_tag, "--", "registry/schemas/1"], cwd=root, check=True)
+            subprocess.run(["/usr/bin/git", "commit", "-qm", "divergent sequence copy"], cwd=root, check=True)
+            divergent = self.run_signer(root, "run-1", "--initialize-ledger", "--ledger-seed-commit", seed_commit)
+            self.assertNotEqual(divergent.returncode, 0)
+            self.assertIn("sequence-1 tag/transaction identity is invalid", divergent.stderr)
 
     def test_historical_publication_id_and_old_run_after_new_run_fail_without_mutation(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -190,16 +221,26 @@ class LedgerFailureTests(unittest.TestCase):
 
     def test_actual_signer_rejects_nested_schema_violations_without_ledger_mutation(self) -> None:
         mutations = {
+            "true candidate version": lambda value: value.update({"candidate_schema_version": True}),
+            "false snapshot version": lambda value: value.update({"snapshot_schema_version": False}),
+            "true lifetime": lambda value: value.update({"lifetime_days": True}),
+            "false lifetime": lambda value: value.update({"lifetime_days": False}),
             "forbidden product field": lambda value: value["products"][0].update({"forbidden": True}),
+            "true product version": lambda value: value["products"][0].update({"schema_version": True}),
             "missing product field": lambda value: value["products"][0].pop("description"),
             "malformed distribution": lambda value: value["distributions"][0].update({"status": "candidate"}),
+            "false distribution version": lambda value: value["distributions"][0].update({"schema_version": False}),
             "malformed release": lambda value: value["distributions"][0]["releases"][0].update({"sequence": True}),
             "malformed release digest": lambda value: value["distributions"][0]["releases"][0].update({"tree_digest": "sha256:nope"}),
             "malformed policy": lambda value: value["distributions"][0]["release_policies"][0].update({"release_sequence": 0}),
+            "false policy sequence": lambda value: value["distributions"][0]["release_policies"][0].update({"release_sequence": False}),
             "malformed policy target": lambda value: value["distributions"][0]["release_policies"][0]["targets"][0].update({"app_binding": {"app_key": "x", "id": "x", "mcp_server": "x"}}),
             "malformed evidence artifact": lambda value: value["evidence"][0]["artifact"].update({"unknown": "x"}),
+            "true evidence version": lambda value: value["evidence"][0].update({"schema_version": True}),
+            "false evidence sequence": lambda value: value["evidence"][0].update({"release_sequence": False}),
             "missing evidence field": lambda value: value["evidence"][0].pop("outcome"),
             "malformed revocation": lambda value: value["revocations"].append({"distribution_id": "INVALID", "release_sequence": 1}),
+            "true revocation sequence": lambda value: value["revocations"].append({"distribution_id": value["distributions"][0]["id"], "release_sequence": True}),
         }
         for label, mutation in mutations.items():
             with self.subTest(label=label), tempfile.TemporaryDirectory() as temporary:
@@ -207,6 +248,68 @@ class LedgerFailureTests(unittest.TestCase):
                 rejected = self.run_signer(root, "run-1", "--initialize-ledger", "--ledger-seed-commit", "0" * 40, mutate=mutation)
                 self.assertNotEqual(rejected.returncode, 0)
                 self.assertFalse((root / "registry").exists())
+
+    def test_actual_signer_rejects_boolean_integer_contracts_in_trust_and_history(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary) / "base"
+            base.mkdir()
+            initialized = self.run_signer(base, "run-1", "--initialize-ledger", "--ledger-seed-commit", "0" * 40)
+            self.assertEqual(initialized.returncode, 0, initialized.stderr)
+
+            trusted = Path(temporary) / "trusted.json"
+            trusted_value = json.loads((FIXTURES / "trusted-keys.json").read_bytes())
+            trusted_value["schema_version"] = True
+            trusted.write_bytes(publication.canonical_json(trusted_value))
+            trust_root = Path(temporary) / "trust-root"
+            trust_root.mkdir()
+            rejected_trust = self.run_signer(
+                trust_root, "run-1", "--initialize-ledger", "--ledger-seed-commit", "0" * 40,
+                trusted_keys=trusted,
+            )
+            self.assertNotEqual(rejected_trust.returncode, 0)
+            self.assertFalse((trust_root / "registry").exists())
+
+            mutations = {
+                "true contract version": ("contract", lambda value: value.update({"contract_version": True})),
+                "false contract initial sequence": ("contract", lambda value: value.update({"initial_sequence": False})),
+                "true pointer version": ("latest", lambda value: value.update({"pointer_schema_version": True})),
+                "false pointer snapshot version": ("latest", lambda value: value.update({"snapshot_schema_version": False})),
+                "true pointer sequence": ("latest", lambda value: value.update({"sequence": True})),
+                "false pointer size": ("latest", lambda value: value["fetch_contract"].update({"latest_max_bytes": False})),
+                "true envelope version": ("envelope", lambda value: value.update({"envelope_schema_version": True})),
+                "false envelope snapshot version": ("envelope", lambda value: value.update({"snapshot_schema_version": False})),
+                "true envelope sequence": ("envelope", lambda value: value.update({"sequence": True})),
+                "true snapshot version": ("snapshot", lambda value: value.update({"snapshot_schema_version": True})),
+                "false nested product version": ("snapshot", lambda value: value["products"][0].update({"schema_version": False})),
+                "true nested release sequence": ("snapshot", lambda value: value["distributions"][0]["releases"][0].update({"sequence": True})),
+                "false nested policy sequence": ("snapshot", lambda value: value["distributions"][0]["release_policies"][0].update({"release_sequence": False})),
+                "true nested evidence version": ("snapshot", lambda value: value["evidence"][0].update({"schema_version": True})),
+            }
+            for index, (label, (artifact, mutation)) in enumerate(mutations.items()):
+                with self.subTest(label=label):
+                    root = Path(temporary) / f"case-{index}"
+                    shutil.copytree(base, root)
+                    feed = root / "registry" / "schemas" / "1"
+                    paths = {
+                        "contract": feed / publication.LEDGER_CONTRACT_NAME,
+                        "latest": feed / "latest.json",
+                        "snapshot": feed / "snapshots" / "00000000000000000001.json",
+                        "envelope": feed / "snapshots" / "00000000000000000001.envelope.json",
+                    }
+                    value = json.loads(paths[artifact].read_bytes())
+                    mutation(value)
+                    paths[artifact].write_bytes(publication.canonical_json(value))
+                    if artifact == "snapshot":
+                        snapshot_body = paths["snapshot"].read_bytes()
+                        envelope = json.loads(paths["envelope"].read_bytes())
+                        envelope["snapshot_digest"] = publication.sha256_digest(snapshot_body)
+                        seed = json.loads((FIXTURES / "test-private-seeds.json").read_bytes())["test-current"]
+                        envelope["signature"] = base64.b64encode(publication.ed25519_sign(publication.ed25519_private_key(seed), publication.signature_message(snapshot_body))).decode("ascii")
+                        paths["envelope"].write_bytes(publication.canonical_json(envelope))
+                    before = {path.relative_to(feed): path.read_bytes() for path in feed.rglob("*") if path.is_file()}
+                    rejected = self.run_signer(root, "run-2", "--ledger-seed-commit", "0" * 40, "--ledger-sequence-floor", "1")
+                    self.assertNotEqual(rejected.returncode, 0)
+                    self.assertEqual({path.relative_to(feed): path.read_bytes() for path in feed.rglob("*") if path.is_file()}, before)
 
     def test_actual_signer_rejects_malformed_existing_snapshot_and_envelope_without_mutation(self) -> None:
         for artifact in ("snapshot", "envelope"):
@@ -244,13 +347,18 @@ class WorkflowHardeningTests(unittest.TestCase):
         workflow = yaml.load((ROOT / ".github" / "workflows" / "directory-publication.yml").read_text(), Loader=yaml.BaseLoader)
         prepare_steps = workflow["jobs"]["prepare"]["steps"]
         prepare_guard = next(step["run"] for step in prepare_steps if step.get("name") == "Require event source to remain protected main")
+        freshness = next(step for step in workflow["jobs"]["sign"]["steps"] if step.get("id") == "freshness")
         signer = next(step["run"] for step in workflow["jobs"]["sign"]["steps"] if step.get("id") == "signed")
         publisher = next(step["run"] for step in workflow["jobs"]["sign"]["steps"] if step.get("id") == "commit")
-        for commands in (prepare_guard, signer, publisher):
+        for commands in (prepare_guard, freshness["run"], publisher):
             self.assertIn("refs/heads/main:refs/remotes/origin/main", commands)
             self.assertIn("rev-parse refs/remotes/origin/main", commands)
         self.assertLess(prepare_guard.index("git fetch"), prepare_guard.index("rev-parse"))
-        self.assertLess(signer.index("rev-parse refs/remotes/origin/main"), signer.index("sign_directory_publication.py"))
+        self.assertNotIn("DIRECTORY_ED25519_PRIVATE_KEY", freshness.get("env", {}))
+        self.assertNotIn("fetch", signer)
+        self.assertNotIn("refs/remotes/origin", signer)
+        self.assertIn("OBSERVED_SOURCE_COMMIT", signer)
+        self.assertNotIn("DIRECTORY_ED25519_PRIVATE_KEY", json.dumps(freshness))
         self.assertLess(publisher.rindex("rev-parse refs/remotes/origin/main"), publisher.index("push --atomic"))
 
     def test_only_app_tokens_write_ledger_and_floor_tags_are_atomic(self) -> None:
@@ -280,6 +388,8 @@ class WorkflowHardeningTests(unittest.TestCase):
         self.assertGreaterEqual(text.count('rev-parse refs/remotes/origin/main'), 4)
         self.assertIn('= "${EVENT_SOURCE_COMMIT}"', text)
         self.assertIn('sequence_one_tag="${tag_prefix}00000000000000000001"', text)
+        self.assertGreaterEqual(text.count('merge-base --is-ancestor "${sequence_one_commit}" HEAD'), 2)
+        self.assertGreaterEqual(text.count('diff --exit-code "${sequence_one_commit}" HEAD -- registry/schemas/1'), 2)
 
     def test_privileged_signer_has_no_downloaded_dependency_install(self) -> None:
         workflow = yaml.load((ROOT / ".github" / "workflows" / "directory-publication.yml").read_text(), Loader=yaml.BaseLoader)
@@ -288,6 +398,7 @@ class WorkflowHardeningTests(unittest.TestCase):
         self.assertNotIn("pip install", commands)
         self.assertNotIn("setup-python", json.dumps(signer))
         self.assertIn("/usr/bin/openssl", commands)
+        self.assertIn("/usr/bin/git", commands)
         self.assertIn("dpkg --verify", commands)
         self.assertNotIn("jsonschema", commands)
         signer_source = (SCRIPTS / "sign_directory_publication.py").read_text()

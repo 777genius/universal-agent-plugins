@@ -7,6 +7,7 @@ import argparse
 import base64
 import copy
 import os
+import subprocess
 import sys
 from datetime import timedelta
 from pathlib import Path
@@ -31,6 +32,7 @@ from directory_publication import (
     read_json,
     read_bytes_bounded,
     require,
+    require_integer_const,
     sha256_digest,
     signature_message,
     validate_envelope_contract,
@@ -70,8 +72,8 @@ def validate_bound_candidate(candidate: dict[str, object]) -> None:
         "source_commit", "lifetime_days", "products", "distributions", "evidence",
         "revocations",
     }, "candidate fields are invalid")
-    require(candidate["candidate_schema_version"] == 1, "candidate schema version is invalid")
-    require(candidate["snapshot_schema_version"] == 1, "candidate snapshot schema version is invalid")
+    require_integer_const(candidate["candidate_schema_version"], 1, "candidate schema version is invalid")
+    require_integer_const(candidate["snapshot_schema_version"], 1, "candidate snapshot schema version is invalid")
     publication_id = candidate["publication_id"]
     require(
         isinstance(publication_id, str) and 1 <= len(publication_id) <= 128
@@ -86,6 +88,41 @@ def validate_bound_candidate(candidate: dict[str, object]) -> None:
     for field in ("products", "distributions", "evidence", "revocations"):
         require(isinstance(candidate[field], list), f"candidate {field} must be an array")
     validate_directory_records(candidate, snapshot=False)
+
+
+def verify_sequence_one_transaction(ledger: Path, seed_commit: str) -> None:
+    """Bind an initialization retry to its immutable sequence-1 transaction."""
+    git = "/usr/bin/git"
+    tag = "refs/tags/directory-publication-schema-1-sequence-00000000000000000001"
+
+    def run(*arguments: str, capture: bool = False) -> str:
+        try:
+            completed = subprocess.run(
+                [git, "-C", str(ledger), *arguments], check=False,
+                stdout=subprocess.PIPE if capture else subprocess.DEVNULL,
+                stderr=subprocess.PIPE, text=True,
+            )
+        except OSError as error:
+            raise PublicationError(f"cannot inspect sequence-1 git transaction: {error}") from error
+        require(completed.returncode == 0, "sequence-1 tag/transaction identity is invalid")
+        return completed.stdout.strip() if capture else ""
+
+    require(Path(git).is_file(), f"reviewed signer runtime is missing: {git}")
+    tag_commit = run("rev-parse", f"{tag}^{{commit}}", capture=True)
+    head_commit = run("rev-parse", "HEAD", capture=True)
+    require(len(tag_commit) == 40 and len(head_commit) == 40, "sequence-1 git identity is invalid")
+    run("merge-base", "--is-ancestor", tag_commit, head_commit)
+    parents = run("show", "-s", "--format=%P", tag_commit, capture=True).split()
+    require(parents == [seed_commit], "sequence-1 publication commit is not the exact seed transaction")
+    changed = run("diff", "--name-only", seed_commit, tag_commit, capture=True).splitlines()
+    require(sorted(changed) == sorted([
+        "registry/schemas/1/latest.json",
+        "registry/schemas/1/ledger-contract.json",
+        "registry/schemas/1/snapshots/00000000000000000001.envelope.json",
+        "registry/schemas/1/snapshots/00000000000000000001.json",
+    ]), "sequence-1 publication transaction changed unexpected paths")
+    run("diff", "--quiet", tag_commit, head_commit, "--", "registry/schemas/1")
+    run("diff", "--quiet", "HEAD", "--", "registry/schemas/1")
 
 
 def main() -> int:
@@ -121,6 +158,9 @@ def main() -> int:
             seed_commit=args.ledger_seed_commit, minimum_sequence=args.ledger_sequence_floor,
             validate_schema=False, require_external_floor=True,
         )
+        if args.initialize_ledger and loaded is not None:
+            require(args.ledger_seed_commit is not None, "initialization requires an exact seed commit")
+            verify_sequence_one_transaction(args.ledger, args.ledger_seed_commit)
         previous = loaded[0] if loaded else None
         historical_evidence = loaded[2] if loaded else {}
         publications = loaded[3] if loaded else {}
