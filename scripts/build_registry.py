@@ -73,6 +73,7 @@ CLIENT_IDS = ("codex", "chatgpt", "cursor", "copilot", "vscode", "kiro")
 KIND_PRIORITY = {"upstream": 0, "community_bridge": 1, "community": 2}
 DIRECTORY_TREE_DIGEST_ALGORITHM = "agentplugins-tree-sha256-v1"
 DIRECTORY_TREE_DIGEST_DOMAIN = b"agentplugins.package-tree\x00sha256\x00v1"
+DIRECTORY_MINIMUM_INSTALLER_VERSION = "0.1.8"
 
 
 class RegistryError(Exception):
@@ -698,7 +699,7 @@ def migrated_directory_source() -> dict[str, object]:
             "release_policies": [{
                 "release_sequence": 1,
                 "status": "active",
-                "minimum_installer_version": "0.1.6",
+                "minimum_installer_version": DIRECTORY_MINIMUM_INSTALLER_VERSION,
                 "targets": targets,
                 "current_evidence": [],
             }],

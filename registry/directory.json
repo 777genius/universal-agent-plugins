@@ -910,7 +910,7 @@
         {
           "release_sequence": 1,
           "status": "active",
-          "minimum_installer_version": "0.1.6",
+          "minimum_installer_version": "0.1.8",
           "targets": [
             {
               "client": "codex",
@@ -983,7 +983,7 @@
         {
           "release_sequence": 1,
           "status": "active",
-          "minimum_installer_version": "0.1.6",
+          "minimum_installer_version": "0.1.8",
           "targets": [
             {
               "client": "codex",
@@ -1056,7 +1056,7 @@
         {
           "release_sequence": 1,
           "status": "active",
-          "minimum_installer_version": "0.1.6",
+          "minimum_installer_version": "0.1.8",
           "targets": [
             {
               "client": "codex",
@@ -1130,7 +1130,7 @@
         {
           "release_sequence": 1,
           "status": "active",
-          "minimum_installer_version": "0.1.6",
+          "minimum_installer_version": "0.1.8",
           "targets": [
             {"client": "codex", "scopes": ["user"], "delivery": "managed"},
             {"client": "cursor", "scopes": ["user"], "delivery": "managed"},
@@ -1173,7 +1173,7 @@
         {
           "release_sequence": 1,
           "status": "active",
-          "minimum_installer_version": "0.1.6",
+          "minimum_installer_version": "0.1.8",
           "targets": [
             {
               "client": "codex",
@@ -1246,7 +1246,7 @@
         {
           "release_sequence": 1,
           "status": "active",
-          "minimum_installer_version": "0.1.6",
+          "minimum_installer_version": "0.1.8",
           "targets": [
             {
               "client": "codex",
@@ -1319,7 +1319,7 @@
         {
           "release_sequence": 1,
           "status": "active",
-          "minimum_installer_version": "0.1.6",
+          "minimum_installer_version": "0.1.8",
           "targets": [
             {
               "client": "codex",
@@ -1405,7 +1405,7 @@
         {
           "release_sequence": 1,
           "status": "active",
-          "minimum_installer_version": "0.1.6",
+          "minimum_installer_version": "0.1.8",
           "targets": [
             {"client": "codex", "scopes": ["user"], "delivery": "managed"},
             {"client": "chatgpt", "scopes": ["user"], "delivery": "manual_activation", "app_binding": {"app_key": "cloudflare-docs", "id": "plugin_asdk_app_6a78e90cf73481918ef10cdb87cd4bb4", "mcp_server": "cloudflare-docs"}},
@@ -1449,7 +1449,7 @@
         {
           "release_sequence": 1,
           "status": "active",
-          "minimum_installer_version": "0.1.6",
+          "minimum_installer_version": "0.1.8",
           "targets": [
             {
               "client": "codex",
@@ -1522,7 +1522,7 @@
         {
           "release_sequence": 1,
           "status": "active",
-          "minimum_installer_version": "0.1.6",
+          "minimum_installer_version": "0.1.8",
           "targets": [
             {
               "client": "codex",
@@ -1595,7 +1595,7 @@
         {
           "release_sequence": 1,
           "status": "active",
-          "minimum_installer_version": "0.1.6",
+          "minimum_installer_version": "0.1.8",
           "targets": [
             {
               "client": "codex",
@@ -1668,7 +1668,7 @@
         {
           "release_sequence": 1,
           "status": "active",
-          "minimum_installer_version": "0.1.6",
+          "minimum_installer_version": "0.1.8",
           "targets": [
             {
               "client": "codex",
@@ -1741,7 +1741,7 @@
         {
           "release_sequence": 1,
           "status": "active",
-          "minimum_installer_version": "0.1.6",
+          "minimum_installer_version": "0.1.8",
           "targets": [
             {
               "client": "codex",
@@ -1814,7 +1814,7 @@
         {
           "release_sequence": 1,
           "status": "active",
-          "minimum_installer_version": "0.1.6",
+          "minimum_installer_version": "0.1.8",
           "targets": [
             {
               "client": "codex",
@@ -1887,7 +1887,7 @@
         {
           "release_sequence": 1,
           "status": "active",
-          "minimum_installer_version": "0.1.6",
+          "minimum_installer_version": "0.1.8",
           "targets": [
             {
               "client": "codex",
@@ -1961,7 +1961,7 @@
         {
           "release_sequence": 1,
           "status": "active",
-          "minimum_installer_version": "0.1.6",
+          "minimum_installer_version": "0.1.8",
           "targets": [
             {"client": "codex", "scopes": ["user"], "delivery": "managed"},
             {"client": "cursor", "scopes": ["user"], "delivery": "managed"},
@@ -2004,7 +2004,7 @@
         {
           "release_sequence": 1,
           "status": "active",
-          "minimum_installer_version": "0.1.6",
+          "minimum_installer_version": "0.1.8",
           "targets": [
             {
               "client": "codex",
@@ -2077,7 +2077,7 @@
         {
           "release_sequence": 1,
           "status": "active",
-          "minimum_installer_version": "0.1.6",
+          "minimum_installer_version": "0.1.8",
           "targets": [
             {
               "client": "codex",
@@ -2150,7 +2150,7 @@
         {
           "release_sequence": 1,
           "status": "active",
-          "minimum_installer_version": "0.1.6",
+          "minimum_installer_version": "0.1.8",
           "targets": [
             {
               "client": "codex",
@@ -2223,7 +2223,7 @@
         {
           "release_sequence": 1,
           "status": "active",
-          "minimum_installer_version": "0.1.6",
+          "minimum_installer_version": "0.1.8",
           "targets": [
             {
               "client": "codex",
@@ -2296,7 +2296,7 @@
         {
           "release_sequence": 1,
           "status": "active",
-          "minimum_installer_version": "0.1.6",
+          "minimum_installer_version": "0.1.8",
           "targets": [
             {
               "client": "codex",
@@ -2369,7 +2369,7 @@
         {
           "release_sequence": 1,
           "status": "active",
-          "minimum_installer_version": "0.1.6",
+          "minimum_installer_version": "0.1.8",
           "targets": [
             {
               "client": "codex",
@@ -2442,7 +2442,7 @@
         {
           "release_sequence": 1,
           "status": "active",
-          "minimum_installer_version": "0.1.6",
+          "minimum_installer_version": "0.1.8",
           "targets": [
             {
               "client": "codex",
@@ -2515,7 +2515,7 @@
         {
           "release_sequence": 1,
           "status": "active",
-          "minimum_installer_version": "0.1.6",
+          "minimum_installer_version": "0.1.8",
           "targets": [
             {
               "client": "codex",
@@ -2588,7 +2588,7 @@
         {
           "release_sequence": 1,
           "status": "active",
-          "minimum_installer_version": "0.1.6",
+          "minimum_installer_version": "0.1.8",
           "targets": [
             {
               "client": "codex",
@@ -2661,7 +2661,7 @@
         {
           "release_sequence": 1,
           "status": "active",
-          "minimum_installer_version": "0.1.6",
+          "minimum_installer_version": "0.1.8",
           "targets": [
             {
               "client": "codex",
@@ -2734,7 +2734,7 @@
         {
           "release_sequence": 1,
           "status": "active",
-          "minimum_installer_version": "0.1.6",
+          "minimum_installer_version": "0.1.8",
           "targets": [
             {
               "client": "codex",
@@ -2807,7 +2807,7 @@
         {
           "release_sequence": 1,
           "status": "active",
-          "minimum_installer_version": "0.1.6",
+          "minimum_installer_version": "0.1.8",
           "targets": [
             {
               "client": "codex",
@@ -2880,7 +2880,7 @@
         {
           "release_sequence": 1,
           "status": "active",
-          "minimum_installer_version": "0.1.6",
+          "minimum_installer_version": "0.1.8",
           "targets": [
             {
               "client": "codex",
@@ -2950,7 +2950,7 @@
         {
           "release_sequence": 1,
           "status": "active",
-          "minimum_installer_version": "0.1.6",
+          "minimum_installer_version": "0.1.8",
           "targets": [
             {"client": "codex", "scopes": ["user"], "delivery": "managed"},
             {"client": "cursor", "scopes": ["user"], "delivery": "managed"},

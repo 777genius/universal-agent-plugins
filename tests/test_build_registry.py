@@ -579,6 +579,8 @@ class DirectoryDomainTests(unittest.TestCase):
     def test_migration_preserves_exact_package_bytes_and_provenance(self) -> None:
         source = self.source()
         for distribution in source["distributions"]:
+            for policy in distribution["release_policies"]:
+                self.assertEqual(policy["minimum_installer_version"], registry.DIRECTORY_MINIMUM_INSTALLER_VERSION)
             release = distribution["releases"][0]
             if release["package_source"]["revision"] is not None:
                 continue
