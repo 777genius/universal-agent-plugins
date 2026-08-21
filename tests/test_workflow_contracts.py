@@ -216,6 +216,7 @@ class WorkflowContractTests(unittest.TestCase):
 
         self.assertEqual(job["permissions"], {"contents": "read"})
         self.assertNotIn("secrets.", yaml.safe_dump(job))
+        self.assertIn("scripts/build-bridges check", commands)
         self.assertIn("scripts/build-bridges", commands)
         self.assertIn("--root tests/fixtures", commands)
         self.assertIn("--upstream-mirror", commands)

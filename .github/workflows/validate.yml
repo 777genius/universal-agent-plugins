@@ -39,6 +39,8 @@ jobs:
           git clone -q --bare "${RUNNER_TEMP}/bridge-upstream" "${RUNNER_TEMP}/upstream-mirror/fixture/upstream.git"
       - name: Reproduce committed bridges without network or upstream execution
         run: scripts/build-bridges --root tests/fixtures --upstream-mirror "${RUNNER_TEMP}/upstream-mirror" check
+      - name: Reproduce every production bridge from its exact upstream commit
+        run: scripts/build-bridges check
 
   portable-catalog:
     runs-on: ubuntu-latest
