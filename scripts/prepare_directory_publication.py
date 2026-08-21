@@ -6,9 +6,12 @@ from __future__ import annotations
 import argparse
 import copy
 import hashlib
+import os
+import stat
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
 from typing import Any
 
@@ -32,6 +35,11 @@ from directory_publication import (
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE_SCHEMA = ROOT / "schemas" / "directory-source.schema.json"
 CONFIG_FIELDS = {"schema_version", "repository", "snapshot_lifetime_days"}
+GIT = "/usr/bin/git"
+ACQUISITION_TIMEOUT_SECONDS = 180
+MAX_PLUGIN_FILES = 10_000
+MAX_PLUGIN_FILE_BYTES = 16 << 20
+MAX_PLUGIN_TREE_BYTES = 64 << 20
 
 
 def load_config(path: Path) -> dict[str, Any]:
@@ -102,21 +110,97 @@ def verify_package(package_root: Path, release: dict[str, Any], identity: str) -
     require(actual_manifest == release["manifest_digest"], f"{identity}: reacquired manifest digest differs from reviewed digest")
 
 
+def acquisition_environment(temporary_root: Path) -> dict[str, str]:
+    return {
+        "PATH": "/usr/bin:/bin",
+        "HOME": str(temporary_root),
+        "GIT_CONFIG_NOSYSTEM": "1",
+        "GIT_CONFIG_GLOBAL": os.devnull,
+        "GIT_TERMINAL_PROMPT": "0",
+        "GIT_ASKPASS": os.devnull,
+        "SSH_ASKPASS": os.devnull,
+        "GIT_LFS_SKIP_SMUDGE": "1",
+        "GIT_OPTIONAL_LOCKS": "0",
+        "LC_ALL": "C",
+    }
+
+
+def inspect_plugin_root(package_root: Path, identity: str) -> None:
+    require(package_root.is_dir(), f"{identity}: package path is unavailable")
+    file_count = 0
+    total_bytes = 0
+    for path in package_root.rglob("*"):
+        metadata = path.lstat()
+        if stat.S_ISDIR(metadata.st_mode):
+            continue
+        relative = path.relative_to(package_root)
+        require(
+            stat.S_ISREG(metadata.st_mode) or stat.S_ISLNK(metadata.st_mode),
+            f"{identity}: package contains unsupported special file {relative}",
+        )
+        file_count += 1
+        total_bytes += metadata.st_size
+        require(file_count <= MAX_PLUGIN_FILES, f"{identity}: package exceeds {MAX_PLUGIN_FILES} files")
+        require(metadata.st_size <= MAX_PLUGIN_FILE_BYTES, f"{identity}: file {relative} exceeds {MAX_PLUGIN_FILE_BYTES} bytes")
+        require(total_bytes <= MAX_PLUGIN_TREE_BYTES, f"{identity}: package exceeds {MAX_PLUGIN_TREE_BYTES} bytes")
+        if stat.S_ISLNK(metadata.st_mode):
+            continue
+        with path.open("rb") as source:
+            prefix = source.read(256)
+        require(
+            not prefix.startswith(b"version https://git-lfs.github.com/spec/v1\n"),
+            f"{identity}: Git LFS pointer {relative} is unsupported",
+        )
+
+
 def acquire_external(repository: str, revision: str, package_path: str, override: Path | None = None) -> tempfile.TemporaryDirectory[str]:
     temporary = tempfile.TemporaryDirectory(prefix="directory-publication-")
     checkout = Path(temporary.name) / "checkout"
-    source = str(override) if override is not None else f"https://github.com/{repository}.git"
-    try:
-        subprocess.run(["git", "init", "--quiet", str(checkout)], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        subprocess.run(
-            ["git", "-C", str(checkout), "-c", "protocol.file.allow=always", "fetch", "--quiet", "--depth=1", source, revision],
-            check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=180,
+    source = override.resolve().as_uri() if override is not None else f"https://github.com/{repository}.git"
+    environment = acquisition_environment(Path(temporary.name))
+    deadline = time.monotonic() + ACQUISITION_TIMEOUT_SECONDS
+
+    def git(*arguments: str, text: bool = False) -> subprocess.CompletedProcess[Any]:
+        remaining = deadline - time.monotonic()
+        require(remaining > 0, f"{repository}@{revision}//{package_path}: reacquisition timed out")
+        return subprocess.run(
+            [
+                GIT, "-c", "credential.helper=", "-c", "core.askPass=", "-c", "submodule.recurse=false",
+                *arguments,
+            ],
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=remaining,
+            env=environment,
+            text=text,
         )
-        subprocess.run(["git", "-C", str(checkout), "checkout", "--quiet", "--detach", "FETCH_HEAD"], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        resolved = subprocess.check_output(["git", "-C", str(checkout), "rev-parse", "HEAD"], text=True).strip()
+
+    try:
+        git("init", "--quiet", str(checkout))
+        git("-C", str(checkout), "sparse-checkout", "init", "--no-cone")
+        git("-C", str(checkout), "sparse-checkout", "set", "--no-cone", f"/{package_path}/")
+        git(
+            "-C", str(checkout), "-c", "protocol.file.allow=always", "fetch", "--quiet",
+            "--no-tags", "--no-recurse-submodules", "--depth=1", "--filter=blob:none", source, revision,
+        )
+        resolved = git("-C", str(checkout), "rev-parse", "FETCH_HEAD", text=True).stdout.strip()
         require(resolved == revision, f"{repository}@{revision}: reacquisition resolved {resolved}")
-        require((checkout / package_path).is_dir(), f"{repository}@{revision}//{package_path}: package path is unavailable")
+        tree = git("-C", str(checkout), "ls-tree", "-r", "-z", "FETCH_HEAD", "--", package_path).stdout
+        entries = tree.split(b"\0") if isinstance(tree, bytes) else tree.encode().split(b"\0")
+        for entry in entries:
+            if not entry:
+                continue
+            metadata = entry.split(b"\t", 1)[0].split()
+            require(metadata[:2] != [b"160000", b"commit"], f"{repository}@{revision}//{package_path}: Git submodule content is unsupported")
+        kind = git("-C", str(checkout), "cat-file", "-t", f"FETCH_HEAD:{package_path}", text=True).stdout.strip()
+        require(kind == "tree", f"{repository}@{revision}//{package_path}: package path is unavailable")
+        git("-C", str(checkout), "checkout", "--quiet", "--detach", "--no-recurse-submodules", "FETCH_HEAD")
+        inspect_plugin_root(checkout / package_path, f"{repository}@{revision}//{package_path}")
         return temporary
+    except PublicationError:
+        temporary.cleanup()
+        raise
     except (OSError, subprocess.SubprocessError) as error:
         temporary.cleanup()
         raise PublicationError(f"{repository}@{revision}//{package_path}: reacquisition failed: {error}") from error
@@ -159,12 +243,13 @@ def build_candidate(
     require(len(all_distributions) == len(source["distributions"]), "duplicate distribution identity")
     distributions_by_id = {identity: item for identity, item in all_distributions.items() if item["status"] != "candidate"}
     products = sorted((copy.deepcopy(item) for item in source["products"]), key=lambda item: item["id"])
-    aliases: set[str] = set()
+    aliases: dict[str, str] = {}
     referenced_distributions: set[str] = set()
     for product in products:
-        for alias in product["aliases"]:
-            require(alias not in aliases, f"duplicate active alias {alias}")
-            aliases.add(alias)
+        require(set(product["aliases"]).issubset(product["reserved_aliases"]), f"{product['id']}: active aliases must remain reserved")
+        for alias in product["reserved_aliases"]:
+            require(alias not in aliases, f"reserved alias {alias} is assigned to multiple products")
+            aliases[alias] = product["id"]
         referenced_distributions.update(product["distributions"])
         require(all(item in all_distributions for item in product["distributions"]), f"{product['id']}: references an unknown distribution")
         product["distributions"] = [item for item in product["distributions"] if item in distributions_by_id]
@@ -184,6 +269,17 @@ def build_candidate(
         ), f"{product['id']}: default distribution does not satisfy minimum capabilities")
     require(referenced_distributions == set(all_distributions), "every distribution must be owned by exactly one product")
 
+    if previous is not None:
+        product_map = {product["id"]: product for product in products}
+        for old_product in previous["products"]:
+            product_id = old_product["id"]
+            require(product_id in product_map, f"published product {product_id} was removed")
+            product = product_map[product_id]
+            require(product["manifest_name"] == old_product["manifest_name"], f"published product {product_id} manifest name changed")
+            historical_aliases = set(old_product["aliases"]) | set(old_product["reserved_aliases"])
+            require(historical_aliases.issubset(product["reserved_aliases"]), f"published product {product_id} reserved alias was removed")
+            require(set(old_product["distributions"]).issubset(product["distributions"]), f"published product {product_id} distribution was removed")
+
     output_distributions: list[dict[str, Any]] = []
     overrides = external_overrides or {}
     for original in sorted(distributions_by_id.values(), key=lambda item: item["id"]):
@@ -192,6 +288,9 @@ def build_candidate(
         require(len(policies) == len(distribution["release_policies"]), f"{distribution['id']}: duplicate release policy")
         require(set(policies) == {release["sequence"] for release in distribution["releases"]}, f"{distribution['id']}: releases and policies must be one-to-one")
         old_distribution = prior_distributions.get(distribution["id"])
+        if old_distribution is not None:
+            for field in ("id", "product_id", "kind", "packager"):
+                require(distribution[field] == old_distribution[field], f"published distribution {distribution['id']} {field} changed")
         old_policies = policy_map(old_distribution) if old_distribution else {}
         for release in distribution["releases"]:
             owning_product = next(product for product in products if product["id"] == distribution["product_id"])
@@ -219,20 +318,40 @@ def build_candidate(
                         all((release["tree_digest"], release["manifest_digest"]) != (item["tree_digest"], item["manifest_digest"]) for item in prior_for_distribution),
                         f"{label}: unchanged package bytes must reuse their existing release; publish policy/evidence only",
                     )
-                release["published_at"] = None
-                if in_repository:
-                    # Review source cannot author this binding.  Null and stale/guessed
-                    # values are both replaced only after the checked-out merge tree
-                    # passes the reviewed digest checks below.
+                reviewed_revision = package_source["revision"]
+                reviewed_published_at = release.get("published_at")
+                historical = isinstance(reviewed_revision, str) and reviewed_published_at is not None
+                if historical:
+                    require(SHA_RE.fullmatch(reviewed_revision) is not None, f"{label}: historical source requires reviewed full SHA")
+                    temporary = acquire_external(
+                        package_source["repository"], reviewed_revision, package_source["path"],
+                        repository_root if in_repository else overrides.get(package_source["repository"]),
+                    )
+                    try:
+                        verify_package(Path(temporary.name) / "checkout" / package_source["path"], release, label)
+                    finally:
+                        temporary.cleanup()
+                elif in_repository:
+                    require(
+                        reviewed_revision is None and reviewed_published_at is None,
+                        f"{label}: new in-repository release must have an unresolved revision and no published_at",
+                    )
+                    release["published_at"] = None
+                    # Review source cannot author this binding.  Only an unresolved
+                    # revision is bound after the checked-out merge tree passes the
+                    # reviewed digest checks below.
                     verify_package(repository_root / package_source["path"], release, label)
                     package_source["revision"] = source_commit
                 else:
-                    revision = package_source["revision"]
-                    require(isinstance(revision, str) and SHA_RE.fullmatch(revision) is not None, f"{label}: external source requires reviewed full SHA")
+                    require(
+                        isinstance(reviewed_revision, str) and SHA_RE.fullmatch(reviewed_revision) is not None and reviewed_published_at is None,
+                        f"{label}: new external release requires a reviewed full SHA and no published_at",
+                    )
+                    release["published_at"] = None
             reacquire = not in_repository and (
                 old is None or eligibility_broadened(distribution, policies[release["sequence"]], old_distribution, old_policies.get(release["sequence"]))
             )
-            if reacquire:
+            if reacquire and not (old is None and release.get("published_at") is not None):
                 temporary = acquire_external(package_source["repository"], package_source["revision"], package_source["path"], overrides.get(package_source["repository"]))
                 try:
                     verify_package(Path(temporary.name) / "checkout" / package_source["path"], release, label)
@@ -288,7 +407,7 @@ def main() -> int:
     parser.add_argument("--digest-output", type=Path, required=True)
     args = parser.parse_args()
     try:
-        resolved_head = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
+        resolved_head = subprocess.check_output([GIT, "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
         require(resolved_head == args.source_commit, f"checked-out HEAD {resolved_head} does not match --source-commit {args.source_commit}")
         previous = None
         if args.ledger:

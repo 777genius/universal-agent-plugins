@@ -254,7 +254,7 @@ def validate_snapshot_semantics(
     require(expires > generated, "expires_at must be later than generated_at")
     require(expires - generated <= __import__("datetime").timedelta(days=31), "snapshot lifetime exceeds 31 days")
     product_ids: set[str] = set()
-    aliases: set[str] = set()
+    aliases: dict[str, str] = {}
     distribution_map: dict[str, dict[str, Any]] = {}
     release_map: dict[tuple[str, int], dict[str, Any]] = {}
     policy_map: dict[tuple[str, int], dict[str, Any]] = {}
@@ -265,9 +265,10 @@ def validate_snapshot_semantics(
         distribution_ids = set(product["distributions"])
         require(len(distribution_ids) == len(product["distributions"]), f"{product['id']}: duplicate distribution")
         require(product["default_distribution"] in distribution_ids, f"{product['id']}: default distribution missing")
-        for alias in product["aliases"]:
-            require(alias not in aliases, f"duplicate alias {alias}")
-            aliases.add(alias)
+        require(set(product["aliases"]).issubset(product["reserved_aliases"]), f"{product['id']}: active aliases must remain reserved")
+        for alias in product["reserved_aliases"]:
+            require(alias not in aliases, f"reserved alias {alias} is assigned to multiple products")
+            aliases[alias] = product["id"]
     for distribution in snapshot["distributions"]:
         require(distribution["id"] not in distribution_map, f"duplicate distribution {distribution['id']}")
         distribution_map[distribution["id"]] = distribution
@@ -323,6 +324,21 @@ def validate_snapshot_semantics(
     require(snapshot["snapshot_schema_version"] == previous["snapshot_schema_version"], "snapshot schema feed changed")
     require(snapshot["sequence"] > previous["sequence"], "snapshot sequence did not increase")
     require(generated > parse_timestamp(previous["generated_at"], "previous.generated_at"), "snapshot generation time did not increase")
+    product_map = {product["id"]: product for product in snapshot["products"]}
+    previous_products = {product["id"]: product for product in previous["products"]}
+    for product_id, old_product in previous_products.items():
+        require(product_id in product_map, f"published product {product_id} was removed")
+        new_product = product_map[product_id]
+        require(new_product["manifest_name"] == old_product["manifest_name"], f"published product {product_id} manifest name changed")
+        historical_aliases = set(old_product["aliases"]) | set(old_product["reserved_aliases"])
+        require(historical_aliases.issubset(new_product["reserved_aliases"]), f"published product {product_id} reserved alias was removed")
+        require(set(old_product["distributions"]).issubset(new_product["distributions"]), f"published product {product_id} distribution was removed")
+    previous_distribution_map = {distribution["id"]: distribution for distribution in previous["distributions"]}
+    for distribution_id, old_distribution in previous_distribution_map.items():
+        require(distribution_id in distribution_map, f"published distribution {distribution_id} was removed")
+        new_distribution = distribution_map[distribution_id]
+        for field in ("id", "product_id", "kind", "packager"):
+            require(new_distribution[field] == old_distribution[field], f"published distribution {distribution_id} {field} changed")
     previous_map = {release_identity(distribution, release): release for distribution, release in iter_releases(previous)}
     previous_policies = {
         (distribution["id"], sequence): policy

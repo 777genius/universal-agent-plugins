@@ -75,6 +75,11 @@ class CanonicalAndSignatureTests(unittest.TestCase):
         with self.assertRaises(publication.PublicationError):
             publication.validate_with_schema(malformed, publication.CANDIDATE_SCHEMA)
 
+        uppercase_security_identity = fixture_json("candidate.json")
+        uppercase_security_identity["products"][0]["id"] = "Demo"
+        with self.assertRaises(publication.PublicationError):
+            publication.validate_with_schema(uppercase_security_identity, publication.CANDIDATE_SCHEMA)
+
         signed_with_null_time = fixture_json("snapshot.json")
         signed_with_null_time["distributions"][0]["releases"][0]["published_at"] = None
         with self.assertRaises(publication.PublicationError):
@@ -267,6 +272,171 @@ class PublicationLifecycleTests(unittest.TestCase):
         with self.assertRaisesRegex(publication.PublicationError, "was removed"):
             publication.validate_snapshot_semantics(removed, previous)
 
+    def test_higher_sequence_preserves_product_distribution_and_alias_identity(self) -> None:
+        previous = fixture_json("snapshot.json")
+
+        def changed() -> dict:  # type: ignore[type-arg]
+            value = copy.deepcopy(previous)
+            value["sequence"] += 1
+            value["publication_id"] = "identity-change"
+            value["generated_at"] = "2026-08-27T00:00:00Z"
+            value["expires_at"] = "2026-09-26T00:00:00Z"
+            return value
+
+        cases = []
+        relabel = changed()
+        relabel["distributions"][0]["kind"] = "community"
+        cases.append(("upstream to community relabel", relabel))
+        packager = changed()
+        packager["distributions"][0]["packager"] = "another"
+        cases.append(("packager rewrite", packager))
+        product = changed()
+        product["distributions"][0]["product_id"] = "other"
+        cases.append(("distribution product rewrite", product))
+        manifest = changed()
+        manifest["products"][0]["manifest_name"] = "renamed"
+        cases.append(("manifest rename", manifest))
+        reserved = changed()
+        reserved["products"][0]["aliases"] = ["replacement"]
+        reserved["products"][0]["reserved_aliases"] = ["replacement"]
+        cases.append(("reserved alias removal", reserved))
+        removed = changed()
+        removed["products"][0]["distributions"].remove("example/demo-bridge")
+        removed["distributions"].pop(1)
+        cases.append(("distribution removal", removed))
+
+        for label, value in cases:
+            with self.subTest(label), self.assertRaises(publication.PublicationError):
+                publication.validate_snapshot_semantics(value, previous)
+
+        reused = changed()
+        reused["products"][0]["aliases"] = ["replacement"]
+        reused["products"][0]["reserved_aliases"] = ["replacement"]
+        reused["products"].append({
+            "schema_version": 1, "id": "other", "display_name": "Other", "description": "Other product.",
+            "manifest_name": "other", "aliases": ["demo"], "reserved_aliases": ["demo"], "categories": ["other"],
+            "minimum_capabilities": {"skills": "optional", "mcp": "required"},
+            "default_distribution": "example/demo", "distributions": ["example/demo"],
+        })
+        with self.assertRaises(publication.PublicationError):
+            publication.validate_snapshot_semantics(reused, previous)
+
+    def test_case_sensitive_repository_spelling_is_preserved_by_source_and_candidate_schemas(self) -> None:
+        candidate = fixture_json("candidate.json")
+        candidate["distributions"][0]["releases"][0]["package_source"]["repository"] = "ChromeDevTools/chrome-devtools-mcp"
+        candidate["evidence"][0]["artifact"]["repository"] = "ChromeDevTools/chrome-devtools-mcp"
+        publication.validate_with_schema(candidate, publication.CANDIDATE_SCHEMA)
+        encoded = publication.canonical_json(candidate)
+        self.assertIn(b"ChromeDevTools/chrome-devtools-mcp", encoded)
+        self.assertEqual(json.loads(encoded)["distributions"][0]["releases"][0]["package_source"]["repository"], "ChromeDevTools/chrome-devtools-mcp")
+
+        source = fixture_json("initial-source.json")
+        source["distributions"][0]["releases"][0]["package_source"]["repository"] = "ChromeDevTools/chrome-devtools-mcp"
+        publication.validate_with_schema(source, prepare.SOURCE_SCHEMA)
+
+    def test_initial_publication_preserves_historical_binding_and_binds_only_unresolved_release(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repository = Path(tmp) / "repository"
+            package = repository / "plugins" / "demo"
+            package.mkdir(parents=True)
+            (package / "plugin.json").write_text('{"name":"demo","version":"1.0.0"}\n')
+            subprocess.run(["/usr/bin/git", "init", "-q", str(repository)], check=True)
+            subprocess.run(["/usr/bin/git", "-C", str(repository), "config", "uploadpack.allowFilter", "true"], check=True)
+            subprocess.run(["/usr/bin/git", "-C", str(repository), "add", "."], check=True)
+            subprocess.run(["/usr/bin/git", "-C", str(repository), "-c", "user.name=Fixture", "-c", "user.email=fixture@example.test", "commit", "-qm", "old"], check=True)
+            old_revision = subprocess.check_output(["/usr/bin/git", "-C", str(repository), "rev-parse", "HEAD"], text=True).strip()
+            old_tree = prepare.package_tree_digest(package)
+            old_manifest = prepare.manifest_digest(package)
+
+            (package / "plugin.json").write_text('{"name":"demo","version":"2.0.0"}\n')
+            subprocess.run(["/usr/bin/git", "-C", str(repository), "add", "."], check=True)
+            subprocess.run(["/usr/bin/git", "-C", str(repository), "-c", "user.name=Fixture", "-c", "user.email=fixture@example.test", "commit", "-qm", "new"], check=True)
+            current_revision = subprocess.check_output(["/usr/bin/git", "-C", str(repository), "rev-parse", "HEAD"], text=True).strip()
+            current_tree = prepare.package_tree_digest(package)
+            current_manifest = prepare.manifest_digest(package)
+
+            source = fixture_json("initial-source.json")
+            old, new = source["distributions"][0]["releases"]
+            old["package_source"]["revision"] = old_revision
+            old["tree_digest"], old["manifest_digest"] = old_tree, old_manifest
+            new["tree_digest"], new["manifest_digest"] = current_tree, current_manifest
+            config = {"schema_version": 1, "repository": "example/uap", "snapshot_lifetime_days": 30}
+            candidate = prepare.build_candidate(source, config, current_revision, "initial", None, repository_root=repository)
+            bound_old, bound_new = candidate["distributions"][0]["releases"]
+            self.assertEqual(bound_old["package_source"]["revision"], old_revision)
+            self.assertEqual(bound_old["published_at"], "2025-01-02T03:04:05Z")
+            self.assertEqual(bound_new["package_source"]["revision"], current_revision)
+            self.assertIsNone(bound_new["published_at"])
+
+    def test_external_acquisition_is_sparse_and_refuses_lfs_and_submodules(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            repository = root / "monorepo"
+            package = repository / "packages" / "demo"
+            unrelated = repository / "unrelated"
+            package.mkdir(parents=True)
+            unrelated.mkdir()
+            (package / "plugin.json").write_text('{"name":"demo"}\n')
+            (unrelated / "large.bin").write_bytes(b"x" * (2 << 20))
+            subprocess.run(["/usr/bin/git", "init", "-q", str(repository)], check=True)
+            subprocess.run(["/usr/bin/git", "-C", str(repository), "config", "uploadpack.allowFilter", "true"], check=True)
+            subprocess.run(["/usr/bin/git", "-C", str(repository), "add", "."], check=True)
+            subprocess.run(["/usr/bin/git", "-C", str(repository), "-c", "user.name=Fixture", "-c", "user.email=fixture@example.test", "commit", "-qm", "monorepo"], check=True)
+            revision = subprocess.check_output(["/usr/bin/git", "-C", str(repository), "rev-parse", "HEAD"], text=True).strip()
+            unrelated_oid = subprocess.check_output(["/usr/bin/git", "-C", str(repository), "rev-parse", "HEAD:unrelated/large.bin"], text=True).strip()
+            acquired = prepare.acquire_external("Example/Monorepo", revision, "packages/demo", repository)
+            try:
+                checkout = Path(acquired.name) / "checkout"
+                missing_env = os.environ.copy()
+                missing_env["GIT_NO_LAZY_FETCH"] = "1"
+                objects = subprocess.check_output(["/usr/bin/git", "-C", str(checkout), "rev-list", "--objects", "--missing=print", "HEAD"], text=True, env=missing_env)
+                self.assertIn("?" + unrelated_oid, objects)
+                self.assertFalse((checkout / "unrelated" / "large.bin").exists())
+                self.assertEqual(prepare.package_tree_digest(checkout / "packages" / "demo"), prepare.package_tree_digest(package))
+            finally:
+                acquired.cleanup()
+
+            (package / "payload.bin").write_text("version https://git-lfs.github.com/spec/v1\noid sha256:" + "0" * 64 + "\nsize 1\n")
+            subprocess.run(["/usr/bin/git", "-C", str(repository), "add", "."], check=True)
+            subprocess.run(["/usr/bin/git", "-C", str(repository), "-c", "user.name=Fixture", "-c", "user.email=fixture@example.test", "commit", "-qm", "lfs"], check=True)
+            lfs_revision = subprocess.check_output(["/usr/bin/git", "-C", str(repository), "rev-parse", "HEAD"], text=True).strip()
+            with self.assertRaisesRegex(publication.PublicationError, "Git LFS pointer"):
+                prepare.acquire_external("Example/Monorepo", lfs_revision, "packages/demo", repository)
+
+            child = root / "child"
+            child.mkdir()
+            (child / "README").write_text("child\n")
+            subprocess.run(["/usr/bin/git", "init", "-q", str(child)], check=True)
+            subprocess.run(["/usr/bin/git", "-C", str(child), "add", "."], check=True)
+            subprocess.run(["/usr/bin/git", "-C", str(child), "-c", "user.name=Fixture", "-c", "user.email=fixture@example.test", "commit", "-qm", "child"], check=True)
+            child_revision = subprocess.check_output(["/usr/bin/git", "-C", str(child), "rev-parse", "HEAD"], text=True).strip()
+            subprocess.run(["/usr/bin/git", "-C", str(repository), "update-index", "--add", "--cacheinfo", f"160000,{child_revision},packages/demo/vendor"], check=True)
+            subprocess.run(["/usr/bin/git", "-C", str(repository), "-c", "user.name=Fixture", "-c", "user.email=fixture@example.test", "commit", "-qm", "submodule"], check=True)
+            submodule_revision = subprocess.check_output(["/usr/bin/git", "-C", str(repository), "rev-parse", "HEAD"], text=True).strip()
+            with self.assertRaisesRegex(publication.PublicationError, "Git submodule"):
+                prepare.acquire_external("Example/Monorepo", submodule_revision, "packages/demo", repository)
+
+    def test_acquisition_environment_and_plugin_root_limits_fail_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            environment = prepare.acquisition_environment(root)
+            self.assertEqual(environment["GIT_TERMINAL_PROMPT"], "0")
+            self.assertEqual(environment["GIT_LFS_SKIP_SMUDGE"], "1")
+            self.assertEqual(environment["GIT_CONFIG_GLOBAL"], os.devnull)
+            self.assertNotIn("GITHUB_TOKEN", environment)
+
+            package = root / "package"
+            package.mkdir()
+            (package / "plugin.json").write_text('{"name":"demo"}\n')
+            (package / "second.txt").symlink_to("plugin.json")
+            original_limit = prepare.MAX_PLUGIN_FILES
+            prepare.MAX_PLUGIN_FILES = 1
+            try:
+                with self.assertRaisesRegex(publication.PublicationError, "exceeds 1 files"):
+                    prepare.inspect_plugin_root(package, "fixture")
+            finally:
+                prepare.MAX_PLUGIN_FILES = original_limit
+
     def test_post_merge_sha_binding_and_unchanged_release_reuse(self) -> None:
         config = prepare.load_config(ROOT / "registry" / "publication" / "config.json")
         source_commit = subprocess.check_output(["/usr/bin/git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
@@ -315,10 +485,10 @@ class PublicationLifecycleTests(unittest.TestCase):
             package = external / "plugins" / "demo"
             package.mkdir(parents=True)
             (package / "plugin.json").write_text('{"name":"demo"}\n')
-            subprocess.run(["git", "init", "-q", str(external)], check=True)
-            subprocess.run(["git", "-C", str(external), "add", "."], check=True)
-            subprocess.run(["git", "-C", str(external), "-c", "user.name=Fixture", "-c", "user.email=fixture@example.test", "commit", "-qm", "fixture"], check=True)
-            revision = subprocess.check_output(["git", "-C", str(external), "rev-parse", "HEAD"], text=True).strip()
+            subprocess.run(["/usr/bin/git", "init", "-q", str(external)], check=True)
+            subprocess.run(["/usr/bin/git", "-C", str(external), "add", "."], check=True)
+            subprocess.run(["/usr/bin/git", "-C", str(external), "-c", "user.name=Fixture", "-c", "user.email=fixture@example.test", "commit", "-qm", "fixture"], check=True)
+            revision = subprocess.check_output(["/usr/bin/git", "-C", str(external), "rev-parse", "HEAD"], text=True).strip()
             source = {
                 "schema_version": 1,
                 "products": [{"schema_version": 1, "id": "demo", "display_name": "Demo", "description": "External demo package.", "manifest_name": "demo", "aliases": ["demo"], "reserved_aliases": ["demo"], "categories": ["demo"], "minimum_capabilities": {"skills": "optional", "mcp": "required"}, "default_distribution": "example/demo", "distributions": ["example/demo"]}],

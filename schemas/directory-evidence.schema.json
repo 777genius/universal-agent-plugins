@@ -23,7 +23,7 @@
       "type": "object",
       "required": ["repository", "revision", "path", "digest"],
       "properties": {
-        "repository": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]*/[a-z0-9][a-z0-9._-]*$"},
+        "repository": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9][A-Za-z0-9._-]*$"},
         "revision": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
         "path": {"type": "string", "minLength": 1},
         "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
