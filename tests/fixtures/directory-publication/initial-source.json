@@ -49,8 +49,8 @@
         }
       ],
       "release_policies": [
-        {"release_sequence": 1, "status": "superseded", "minimum_installer_version": "0.1.6", "targets": [{"client": "codex", "scopes": ["user"], "delivery": "managed"}], "current_evidence": []},
-        {"release_sequence": 2, "status": "active", "minimum_installer_version": "0.1.6", "targets": [{"client": "codex", "scopes": ["user"], "delivery": "managed"}], "current_evidence": []}
+        {"release_sequence": 1, "status": "superseded", "minimum_installer_version": "0.1.6", "targets": [{"client": "codex", "scopes": ["user"], "delivery": "managed", "authentication": "unknown"}], "current_evidence": []},
+        {"release_sequence": 2, "status": "active", "minimum_installer_version": "0.1.6", "targets": [{"client": "codex", "scopes": ["user"], "delivery": "managed", "authentication": "unknown"}], "current_evidence": []}
       ]
     }
   ],

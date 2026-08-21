@@ -834,6 +834,53 @@ class DirectoryDomainTests(unittest.TestCase):
         self.assertIn("build_provenance", bridge["releases"][0])
         self.assertEqual(bridge["release_policies"][0]["current_evidence"], ["evidence/demo-bridge-runtime"])
 
+    def test_target_authentication_is_required_and_enum_validated(self) -> None:
+        fixture = self.fixture()
+        target = fixture["distributions"][0]["release_policies"][0]["targets"][0]
+        del target["authentication"]
+        with self.assertRaisesRegex(registry.RegistryError, r"'authentication' is a required property"):
+            registry.validate_directory(fixture, verify_packages=False)
+
+        fixture = self.fixture()
+        target = fixture["distributions"][0]["release_policies"][0]["targets"][0]
+        target["authentication"] = "sometimes"
+        with self.assertRaisesRegex(registry.RegistryError, r"'sometimes' is not one of"):
+            registry.validate_directory(fixture, verify_packages=False)
+
+    def test_unknown_authentication_is_honest_and_retained_in_preview(self) -> None:
+        fixture = self.fixture()
+        registry.validate_directory(fixture, verify_packages=False)
+        preview = registry.directory_preview(fixture)
+        community = next(
+            item
+            for item in preview["products"][0]["distributions"]
+            if item["id"] == "community/demo"
+        )
+        self.assertEqual(
+            community["eligible_targets"],
+            [{"client": "codex", "authentication": "unknown"}],
+        )
+
+    def test_evidence_level_and_outcome_do_not_become_authentication(self) -> None:
+        fixture = self.fixture()
+        observation = fixture["evidence"][0]
+        observation["level"] = "oauth"
+        observation["outcome"] = "inconclusive"
+        registry.validate_directory(fixture, verify_packages=False)
+        preview = registry.directory_preview(fixture)
+        bridge = next(
+            item
+            for item in preview["products"][0]["distributions"]
+            if item["id"] == "packager/demo-bridge"
+        )
+        self.assertEqual(
+            bridge["eligible_targets"],
+            [
+                {"client": "codex", "authentication": "required"},
+                {"client": "cursor", "authentication": "required"},
+            ],
+        )
+
     def test_declared_default_and_candidate_do_not_implicitly_promote(self) -> None:
         fixture = self.fixture()
         result = registry.resolve_directory(fixture, "demo", ["codex", "cursor"])
@@ -1047,6 +1094,38 @@ class DirectoryDomainTests(unittest.TestCase):
                     source["products"].append(copy.deepcopy(canonical))
                 with self.assertRaises(AssertionError):
                     self.assert_canonical_products_present_once(source)
+
+    def test_current_source_covers_authentication_for_every_target(self) -> None:
+        source = self.source()
+        expected_not_required = {
+            "agent-code-navigator",
+            "chrome-devtools",
+            "cloudflare-docs",
+            "context7",
+            "docker-hub",
+        }
+        targets = [
+            (distribution, target)
+            for distribution in source["distributions"]
+            if distribution["product_id"] in CANONICAL_PRODUCT_IDS
+            for policy in distribution["release_policies"]
+            for target in policy["targets"]
+        ]
+        self.assertTrue(targets)
+        for distribution, target in targets:
+            expected = "not_required" if distribution["product_id"] in expected_not_required else "required"
+            self.assertEqual(target["authentication"], expected, (distribution["id"], target["client"]))
+
+        notion = [target for distribution, target in targets if distribution["product_id"] == "notion"]
+        self.assertTrue(notion)
+        self.assertEqual({target["authentication"] for target in notion}, {"required"})
+        chatgpt_docs = [
+            target
+            for distribution, target in targets
+            if distribution["product_id"] == "cloudflare-docs" and target["client"] == "chatgpt"
+        ]
+        self.assertTrue(chatgpt_docs)
+        self.assertEqual({target["authentication"] for target in chatgpt_docs}, {"not_required"})
 
     def test_direct_sources_are_recognized_without_directory_resolution(self) -> None:
         sha = "a" * 40

@@ -332,10 +332,11 @@ def _validate_source(value: Any, label: str) -> None:
 
 
 def _validate_target(value: Any, label: str) -> None:
-    target = _object(value, {"client", "scopes", "delivery"}, {"app_binding"}, label)
+    target = _object(value, {"client", "scopes", "delivery", "authentication"}, {"app_binding"}, label)
     require(target["client"] in CLIENTS, f"{label}.client is invalid")
     require(target["scopes"] == ["user"], f"{label}.scopes is invalid")
     require(target["delivery"] in {"managed", "prepared", "manual_activation"}, f"{label}.delivery is invalid")
+    require(target["authentication"] in {"not_required", "required", "unknown"}, f"{label}.authentication is invalid")
     require(("app_binding" in target) == (target["client"] == "chatgpt"), f"{label}.app_binding is invalid")
     if "app_binding" in target:
         binding = _object(target["app_binding"], {"app_key", "id", "mcp_server"}, set(), f"{label}.app_binding")

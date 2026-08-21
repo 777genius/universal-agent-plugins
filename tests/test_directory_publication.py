@@ -515,7 +515,7 @@ class PublicationLifecycleTests(unittest.TestCase):
             source = {
                 "schema_version": 1,
                 "products": [{"schema_version": 1, "id": "demo", "display_name": "Demo", "description": "Demo package.", "manifest_name": "demo", "aliases": ["demo"], "reserved_aliases": ["demo"], "categories": ["demo"], "minimum_capabilities": {"skills": "optional", "mcp": "required"}, "default_distribution": "777genius/demo", "distributions": ["777genius/demo"]}],
-                "distributions": [{"schema_version": 1, "id": "777genius/demo", "product_id": "demo", "kind": "community", "status": "active", "packager": "777genius", "releases": [{"sequence": 1, "package_version": "1.0.0", "manifest_name": "demo", "agent_plugins_schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json", "package_source": {"repository": config["repository"], "revision": None, "path": "plugins/demo"}, "tree_digest_algorithm": "agentplugins-tree-sha256-v1", "tree_digest": tree, "manifest_digest": manifest, "components": ["mcp"]}], "release_policies": [{"release_sequence": 1, "status": "active", "minimum_installer_version": "0.1.6", "targets": [{"client": "codex", "scopes": ["user"], "delivery": "managed"}], "current_evidence": []}]}],
+                "distributions": [{"schema_version": 1, "id": "777genius/demo", "product_id": "demo", "kind": "community", "status": "active", "packager": "777genius", "releases": [{"sequence": 1, "package_version": "1.0.0", "manifest_name": "demo", "agent_plugins_schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json", "package_source": {"repository": config["repository"], "revision": None, "path": "plugins/demo"}, "tree_digest_algorithm": "agentplugins-tree-sha256-v1", "tree_digest": tree, "manifest_digest": manifest, "components": ["mcp"]}], "release_policies": [{"release_sequence": 1, "status": "active", "minimum_installer_version": "0.1.6", "targets": [{"client": "codex", "scopes": ["user"], "delivery": "managed", "authentication": "unknown"}], "current_evidence": []}]}],
                 "evidence": [],
             }
             first = prepare.build_candidate(source, config, source_commit, "prepare-1", None, repository_root=Path(tmp))
@@ -559,7 +559,7 @@ class PublicationLifecycleTests(unittest.TestCase):
             source = {
                 "schema_version": 1,
                 "products": [{"schema_version": 1, "id": "demo", "display_name": "Demo", "description": "External demo package.", "manifest_name": "demo", "aliases": ["demo"], "reserved_aliases": ["demo"], "categories": ["demo"], "minimum_capabilities": {"skills": "optional", "mcp": "required"}, "default_distribution": "example/demo", "distributions": ["example/demo"]}],
-                "distributions": [{"schema_version": 1, "id": "example/demo", "product_id": "demo", "kind": "upstream", "status": "active", "packager": "example", "releases": [{"sequence": 1, "package_version": "1.0.0", "manifest_name": "demo", "agent_plugins_schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json", "package_source": {"repository": "example/external", "revision": revision, "path": "plugins/demo"}, "tree_digest_algorithm": "agentplugins-tree-sha256-v1", "tree_digest": "sha256:" + "0" * 64, "manifest_digest": "sha256:" + "0" * 64, "components": ["mcp"]}], "release_policies": [{"release_sequence": 1, "status": "active", "minimum_installer_version": "0.1.6", "targets": [{"client": "codex", "scopes": ["user"], "delivery": "managed"}], "current_evidence": []}]}],
+                "distributions": [{"schema_version": 1, "id": "example/demo", "product_id": "demo", "kind": "upstream", "status": "active", "packager": "example", "releases": [{"sequence": 1, "package_version": "1.0.0", "manifest_name": "demo", "agent_plugins_schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json", "package_source": {"repository": "example/external", "revision": revision, "path": "plugins/demo"}, "tree_digest_algorithm": "agentplugins-tree-sha256-v1", "tree_digest": "sha256:" + "0" * 64, "manifest_digest": "sha256:" + "0" * 64, "components": ["mcp"]}], "release_policies": [{"release_sequence": 1, "status": "active", "minimum_installer_version": "0.1.6", "targets": [{"client": "codex", "scopes": ["user"], "delivery": "managed", "authentication": "unknown"}], "current_evidence": []}]}],
                 "evidence": [],
             }
             # This test isolates external byte reacquisition. Upstream-default
@@ -599,7 +599,7 @@ class PublicationLifecycleTests(unittest.TestCase):
             self.assertEqual(unchanged_release["package_source"]["revision"], revision)
             self.assertEqual(unchanged_release["published_at"], "2026-08-20T00:00:00Z")
             broadened = copy.deepcopy(source)
-            broadened["distributions"][0]["release_policies"][0]["targets"].append({"client": "cursor", "scopes": ["user"], "delivery": "managed"})
+            broadened["distributions"][0]["release_policies"][0]["targets"].append({"client": "cursor", "scopes": ["user"], "delivery": "managed", "authentication": "unknown"})
             with self.assertRaisesRegex(publication.PublicationError, "reacquisition failed"):
                 prepare.build_candidate(broadened, config, "f" * 40, "external-broadened", previous, external_overrides={"example/external": missing})
 

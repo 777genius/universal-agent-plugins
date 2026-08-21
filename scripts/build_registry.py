@@ -652,7 +652,12 @@ def migrated_directory_source() -> dict[str, object]:
                 continue
             package = compatibility[client]["package"]
             delivery = "manual_activation" if client == "chatgpt" else ("prepared" if package == "prepared" else "managed")
-            target = {"client": client, "scopes": ["user"], "delivery": delivery}
+            target = {
+                "client": client,
+                "scopes": ["user"],
+                "delivery": delivery,
+                "authentication": compatibility[client]["authentication"],
+            }
             if client == "chatgpt":
                 binding = compatibility[client]["app_binding"]
                 target["app_binding"] = {key: binding[key] for key in ("app_key", "id", "mcp_server")}
@@ -1076,7 +1081,11 @@ def directory_preview(source: dict[str, object]) -> dict[str, object]:
                 "release_sequence": release["sequence"],
                 "package_version": release["package_version"],
                 "components": release["components"],
-                "eligible_targets": [target["client"] for target in policy["targets"] if target["client"] not in blocking_clients] if policy["status"] == "active" and distribution["status"] == "active" else [],
+                "eligible_targets": [
+                    {"client": target["client"], "authentication": target["authentication"]}
+                    for target in policy["targets"]
+                    if target["client"] not in blocking_clients
+                ] if policy["status"] == "active" and distribution["status"] == "active" else [],
                 "current_evidence": policy["current_evidence"],
                 "source": release["package_source"],
                 "tree_digest_algorithm": release["tree_digest_algorithm"],

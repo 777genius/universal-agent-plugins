@@ -14,6 +14,15 @@
     "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
     "id": {"type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"},
     "distributionId": {"type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*/[a-z0-9]+(?:-[a-z0-9]+)*$"},
+    "eligibleTarget": {
+      "type": "object",
+      "required": ["client", "authentication"],
+      "properties": {
+        "client": {"enum": ["codex", "chatgpt", "cursor", "copilot", "vscode", "kiro"]},
+        "authentication": {"enum": ["not_required", "required", "unknown"]}
+      },
+      "additionalProperties": false
+    },
     "source": {
       "type": "object",
       "required": ["repository", "revision", "path"],
@@ -34,7 +43,7 @@
         "release_sequence": {"type": "integer", "minimum": 1},
         "package_version": {"type": "string"},
         "components": {"type": "array", "uniqueItems": true, "items": {"enum": ["extensions", "mcp", "skills"]}},
-        "eligible_targets": {"type": "array", "uniqueItems": true, "items": {"enum": ["codex", "chatgpt", "cursor", "copilot", "vscode", "kiro"]}},
+        "eligible_targets": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/eligibleTarget"}},
         "current_evidence": {"type": "array", "uniqueItems": true, "items": {"type": "string"}},
         "source": {"$ref": "#/$defs/source"},
         "tree_digest_algorithm": {"const": "agentplugins-tree-sha256-v1"},

@@ -34,7 +34,14 @@ never a branch or tag. Then edit `registry/directory.json` in one focused PR:
    digest.
 4. Add the one-for-one entry in `release_policies` for that release sequence,
    including status, minimum installer version, supported targets, delivery,
-   and only evidence IDs already present in the Directory source.
+   authentication requirement, and only evidence IDs already present in the
+   Directory source. Every target must set `authentication` to `required`,
+   `not_required`, or `unknown`. This describes whether normal use of that
+   package/client binding requires the user to authenticate: use `unknown`
+   unless reviewed documentation affirmatively supports another value, and
+   never infer `not_required` from missing or failed OAuth evidence. Consumers
+   treat `required` as `auth_pending` until the client or user attests that
+   authentication completed. Manual ChatGPT UI activation alone is not OAuth.
 
 For an update, append a new monotonically increasing release and matching
 policy. Do not rewrite an existing release tuple or its package bytes; policy
@@ -61,4 +68,5 @@ Do not add or promote evidence claims from the direct-package preflight:
 `registry/directory.json`, bound to that distribution, release sequence, tree
 digest, client, and outcome. The builder does not run plugin code, install
 dependencies, start containers, contact an agent runtime, or prove OAuth and
-tool behavior.
+tool behavior. Evidence level and outcome remain separate from the target's
+authentication requirement; neither a pass nor a failure rewrites that field.

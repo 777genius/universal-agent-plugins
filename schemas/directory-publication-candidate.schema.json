@@ -35,11 +35,12 @@
     },
     "target": {
       "type": "object",
-      "required": ["client", "scopes", "delivery"],
+      "required": ["client", "scopes", "delivery", "authentication"],
       "properties": {
         "client": {"enum": ["codex", "chatgpt", "cursor", "copilot", "vscode", "kiro"]},
         "scopes": {"const": ["user"]},
         "delivery": {"enum": ["managed", "prepared", "manual_activation"]},
+        "authentication": {"enum": ["not_required", "required", "unknown"]},
         "app_binding": {
           "type": "object",
           "required": ["app_key", "id", "mcp_server"],

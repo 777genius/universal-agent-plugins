@@ -34,7 +34,7 @@
         "manifest_digest": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
         "components": ["mcp"]
       }],
-      "release_policies": [{"release_sequence": 1, "status": "active", "minimum_installer_version": "0.1.6", "targets": [{"client": "codex", "scopes": ["user"], "delivery": "managed"}], "current_evidence": []}]
+      "release_policies": [{"release_sequence": 1, "status": "active", "minimum_installer_version": "0.1.6", "targets": [{"client": "codex", "scopes": ["user"], "delivery": "managed", "authentication": "unknown"}], "current_evidence": []}]
     },
     {
       "schema_version": 1,
@@ -55,7 +55,7 @@
         "manifest_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
         "components": ["mcp"]
       }],
-      "release_policies": [{"release_sequence": 3, "status": "active", "minimum_installer_version": "0.1.6", "targets": [{"client": "codex", "scopes": ["user"], "delivery": "managed"}, {"client": "cursor", "scopes": ["user"], "delivery": "managed"}], "current_evidence": ["evidence/demo-bridge-runtime"]}]
+      "release_policies": [{"release_sequence": 3, "status": "active", "minimum_installer_version": "0.1.6", "targets": [{"client": "codex", "scopes": ["user"], "delivery": "managed", "authentication": "required"}, {"client": "cursor", "scopes": ["user"], "delivery": "managed", "authentication": "required"}], "current_evidence": ["evidence/demo-bridge-runtime"]}]
     },
     {
       "schema_version": 1,
@@ -75,7 +75,7 @@
         "manifest_digest": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
         "components": ["mcp"]
       }],
-      "release_policies": [{"release_sequence": 1, "status": "active", "minimum_installer_version": "0.1.6", "targets": [{"client": "codex", "scopes": ["user"], "delivery": "managed"}, {"client": "cursor", "scopes": ["user"], "delivery": "managed"}], "current_evidence": []}]
+      "release_policies": [{"release_sequence": 1, "status": "active", "minimum_installer_version": "0.1.6", "targets": [{"client": "codex", "scopes": ["user"], "delivery": "managed", "authentication": "unknown"}, {"client": "cursor", "scopes": ["user"], "delivery": "managed", "authentication": "not_required"}], "current_evidence": []}]
     }
   ],
   "evidence": [
