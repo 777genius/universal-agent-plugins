@@ -21,7 +21,12 @@ const siteUrl = (process.env.NUXT_PUBLIC_SITE_URL
   ?? 'https://777genius.github.io/universal-agent-plugins').replace(/\/$/, '')
 const baseURL = process.env.NUXT_APP_BASE_URL ?? '/'
 const repositoryUrl = 'https://github.com/777genius/universal-agent-plugins'
-const contentSecurityPolicy = "default-src 'self'; base-uri 'none'; connect-src 'self'; font-src 'self'; form-action 'none'; frame-ancestors 'none'; img-src 'self' data:; object-src 'none'; script-src 'self' 'sha256-Q4T/XMHn/odWukj6AIkZHweal0DWU07X4J5cKLflf4M='; style-src 'self' 'unsafe-inline'; upgrade-insecure-requests"
+// Production HTML is finalized after prerendering so script-src contains the
+// hashes of the exact Nuxt-generated inline scripts for each route.
+const contentSecurityPolicy = "default-src 'self'; base-uri 'none'; connect-src 'self'; font-src 'self'; form-action 'none'; img-src 'self' data:; object-src 'none'; script-src 'self'; style-src 'self'; upgrade-insecure-requests"
+const productionMeta = process.env.NODE_ENV === 'production'
+  ? [{ 'http-equiv': 'Content-Security-Policy', content: contentSecurityPolicy }]
+  : []
 
 export default defineNuxtConfig({
   compatibilityDate: '2026-08-10',
@@ -35,7 +40,7 @@ export default defineNuxtConfig({
       htmlAttrs: { lang: 'en' },
       titleTemplate: '%s · Universal Agent Plugins',
       meta: [
-        { 'http-equiv': 'Content-Security-Policy', content: contentSecurityPolicy },
+        ...productionMeta,
         { name: 'referrer', content: 'strict-origin-when-cross-origin' },
       ],
       link: [
@@ -71,7 +76,6 @@ export default defineNuxtConfig({
     '/**': {
       prerender: true,
       headers: {
-        'content-security-policy': contentSecurityPolicy,
         'referrer-policy': 'strict-origin-when-cross-origin',
         'x-content-type-options': 'nosniff',
       },

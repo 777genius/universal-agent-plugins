@@ -27,5 +27,12 @@ Production publication passes `UAP_SIGNED_SNAPSHOT_PATH`. Pull-request review
 deployments pass `UAP_DIRECTORY_PREVIEW_PATH`; the rendered site then carries a
 prominent preview label and never presents unresolved data as production.
 
+Production generation and build finalize every prerendered HTML page with CSP
+SHA-256 hashes for its exact inline scripts and style blocks. The policy is
+delivered in HTML because GitHub Pages cannot configure response headers;
+directives unsupported in CSP meta elements are intentionally omitted.
+`check:generated` verifies the final policy and fails if inline content is
+unauthorized or an unsafe source is present.
+
 The site emits no analytics or tracking requests. See `NOTICE.md` and the icon
 README files under `public/` for copied/adapted code and mark attribution.

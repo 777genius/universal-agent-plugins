@@ -8,8 +8,8 @@
   "packageManager": "pnpm@10.34.5",
   "scripts": {
     "dev": "nuxt dev",
-    "build": "nuxt build",
-    "generate": "nuxt generate",
+    "build": "nuxt build && node scripts/finalize-csp.mjs",
+    "generate": "nuxt generate && node scripts/finalize-csp.mjs",
     "lint": "nuxt prepare && eslint .",
     "test": "node --test --experimental-strip-types tests/*.test.ts",
     "test:a11y": "node --test --experimental-strip-types tests/accessibility.test.ts",

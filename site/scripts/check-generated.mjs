@@ -1,5 +1,6 @@
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { resolve } from 'node:path'
+import { verifyCspDirectory } from './csp-html.mjs'
 
 const output = resolve(process.cwd(), '.output/public')
 const sourcePath = process.env.UAP_SIGNED_SNAPSHOT_PATH
@@ -33,7 +34,8 @@ function targetExists(pathname) {
   return existsSync(direct) || existsSync(`${direct}.html`) || existsSync(resolve(direct, 'index.html'))
 }
 
-for (const file of files(output).filter(path => path.endsWith('.html'))) {
+const htmlFiles = files(output).filter(path => path.endsWith('.html')).sort()
+for (const file of htmlFiles) {
   const html = readFileSync(file, 'utf8')
   for (const match of html.matchAll(/(?:href|src)="([^"]+)"/g)) {
     const value = match[1]
@@ -45,6 +47,13 @@ for (const file of files(output).filter(path => path.endsWith('.html'))) {
       failures.push(`${file.slice(output.length + 1)}: broken internal URL: ${value}`)
     }
   }
+}
+
+try {
+  const verified = await verifyCspDirectory(output)
+  if (verified !== htmlFiles.length) failures.push('CSP verifier did not inspect every generated HTML file')
+} catch (error) {
+  failures.push(error instanceof Error ? error.message : String(error))
 }
 
 if (failures.length) {
