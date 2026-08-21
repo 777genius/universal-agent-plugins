@@ -491,7 +491,7 @@ def validated_directory_environment(
         if now >= parse_timestamp(snapshot["expires_at"], "expires_at"):
             raise PublicationError("Directory snapshot is expired")
     except (PublicationError, OSError, KeyError, TypeError) as error:
-        raise ValueError(f"invalid signed production Directory: {error}") from error
+        raise ValueError(f"invalid signed Directory: {error}") from error
     digest = "sha256:" + hashlib.sha256(snapshot_bytes).hexdigest()
     return ({
         "AGENTPLUGINS_DIRECTORY_ORIGIN": origin,
@@ -548,6 +548,62 @@ def fetch_production_directory(
         or digest != expected_snapshot_digest
     ):
         raise ValueError("signed production Directory snapshot is stale or differs from the exact caller publication identity")
+    return environment, snapshot, digest
+
+
+def fetch_staged_directory(
+    destination: Path, *, repository: str, ledger_commit: str,
+    expected_publication_id: str, expected_sequence: int,
+    expected_snapshot_digest: str, expected_source_commit: str,
+    fixture_fetch: Callable[[str, int, str], bytes] | None = None,
+) -> tuple[dict[str, str], dict[str, Any], str]:
+    """Reacquire and verify one publication from an immutable ledger commit."""
+    if repository != TRUSTED_CATALOG_REPOSITORY or not FULL_SHA.fullmatch(ledger_commit):
+        raise ValueError("staged publication ledger identity is invalid")
+    if expected_sequence < 1 or not expected_publication_id or not FULL_SHA.fullmatch(expected_source_commit) or not DIGEST.fullmatch(expected_snapshot_digest):
+        raise ValueError("caller publication identity is incomplete or invalid")
+    origin = f"https://raw.githubusercontent.com/{repository}/{ledger_commit}/registry/schemas/1/"
+
+    def fetch(relative: str, maximum: int) -> bytes:
+        url = origin + relative
+        if fixture_fetch:
+            return fixture_fetch(url, maximum, "application/json")
+        return bounded_https_get(url, maximum=maximum, accept="application/json")
+
+    latest_body = fetch("latest.json", MAX_LATEST_BYTES)
+    try:
+        latest = parse_json_bytes(latest_body, "staged latest pointer", max_bytes=MAX_LATEST_BYTES)
+        if canonical_json(latest) != latest_body:
+            raise PublicationError("staged latest pointer is not canonical JSON")
+        validate_latest(latest)
+    except (PublicationError, TypeError) as error:
+        raise ValueError(f"invalid staged Directory pointer: {error}") from error
+    expected_snapshot_path = f"snapshots/{expected_sequence:020d}.json"
+    expected_envelope_path = f"snapshots/{expected_sequence:020d}.envelope.json"
+    if (
+        latest.get("sequence") != expected_sequence
+        or latest.get("snapshot_path") != expected_snapshot_path
+        or latest.get("envelope_path") != expected_envelope_path
+    ):
+        raise ValueError("staged Directory pointer does not match the exact caller publication identity")
+    snapshot_body = fetch(latest["snapshot_path"], latest["fetch_contract"]["snapshot_max_bytes"])
+    envelope_body = fetch(latest["envelope_path"], latest["fetch_contract"]["envelope_max_bytes"])
+    destination.mkdir(parents=True, exist_ok=False)
+    snapshot_path = destination / "snapshot.json"
+    envelope_path = destination / "envelope.json"
+    trust_path = destination / "trusted-keys.json"
+    snapshot_path.write_bytes(snapshot_body)
+    envelope_path.write_bytes(envelope_body)
+    shutil.copy2(PRODUCTION_DIRECTORY_TRUST, trust_path)
+    environment, snapshot, digest = validated_directory_environment(origin, snapshot_path, envelope_path, trust_path)
+    if snapshot["sequence"] != latest["sequence"]:
+        raise ValueError("staged Directory pointer and signed snapshot sequence disagree")
+    if (
+        snapshot.get("publication_id") != expected_publication_id
+        or snapshot.get("source_commit") != expected_source_commit
+        or digest != expected_snapshot_digest
+    ):
+        raise ValueError("signed staged Directory snapshot differs from the exact caller publication identity")
     return environment, snapshot, digest
 
 
@@ -1633,7 +1689,7 @@ def main() -> int:
         if not args.prepared_context or not args.asset_name or not args.observer_bundle:
             raise ValueError("enforced mode requires prepared official context and manifest asset name")
         if any(value is not None for value in (args.binary, args.binary_digest, args.expected_version, args.directory_origin, args.directory_snapshot, args.directory_envelope, args.directory_trust)):
-            raise ValueError("production mode forbids caller-paired binary/version/digest/Directory/driver inputs")
+            raise ValueError("enforced mode forbids caller-paired binary/version/digest/Directory/driver inputs")
         prepared = json.loads(args.prepared_context.read_text())
         prepared_root = args.prepared_context.resolve().parent
         config = read_production_config()
@@ -1682,12 +1738,16 @@ def main() -> int:
         args.binary_digest = "sha256:" + declared["sha256"]
         args.expected_version = release_manifest["version"]
         directory = prepared["directory"]
+        ledger_commit = directory.get("ledger_commit", "")
+        expected_staged_origin = f"https://raw.githubusercontent.com/{TRUSTED_CATALOG_REPOSITORY}/{ledger_commit}/registry/schemas/1/"
+        if not FULL_SHA.fullmatch(ledger_commit) or directory.get("origin") != expected_staged_origin:
+            raise ValueError("prepared Directory is not bound to the immutable staged ledger commit")
         args.directory_origin = directory["origin"]
         args.directory_snapshot = prepared_root / directory["snapshot"]
         args.directory_envelope = prepared_root / directory["envelope"]
         args.directory_trust = PRODUCTION_DIRECTORY_TRUST
         if sha256_file(args.directory_snapshot) != directory["digest"]:
-            raise ValueError("prepared production Directory snapshot digest changed")
+            raise ValueError("prepared staged Directory snapshot digest changed")
     evidence = LaunchHarness(
         args.binary, args.attestations, mode=args.mode,
         binary_digest=args.binary_digest, expected_version=args.expected_version,

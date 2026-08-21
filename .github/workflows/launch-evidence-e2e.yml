@@ -24,7 +24,7 @@ on:
         required: true
         type: string
       publication_sequence:
-        description: Exact published snapshot sequence produced by the caller
+        description: Exact staged snapshot sequence produced by the caller
         required: true
         type: number
       publication_snapshot_digest:
@@ -33,6 +33,10 @@ on:
         type: string
       publication_source_commit:
         description: Exact 40-hex source commit embedded in the signed snapshot
+        required: true
+        type: string
+      publication_ledger_commit:
+        description: Exact 40-hex materialized ledger commit containing the staged bytes
         required: true
         type: string
   workflow_dispatch:
@@ -55,6 +59,10 @@ on:
         type: string
       publication_source_commit:
         description: Exact 40-hex source commit embedded in the signed snapshot
+        required: true
+        type: string
+      publication_ledger_commit:
+        description: Exact 40-hex materialized ledger commit containing the staged bytes
         required: true
         type: string
 
@@ -116,7 +124,7 @@ jobs:
           python-version: "3.13"
       - name: Install verification dependencies
         run: python -m pip install cryptography==46.0.3 jsonschema==4.25.1
-      - name: Resolve the fixed upstream CLI release and production Directory
+      - name: Resolve the fixed upstream CLI release and staged Directory
         shell: bash
         env:
           ASSET_NAME: ${{ matrix.asset }}
@@ -124,11 +132,13 @@ jobs:
           PUBLICATION_SEQUENCE: ${{ inputs.publication_sequence }}
           PUBLICATION_SNAPSHOT_DIGEST: ${{ inputs.publication_snapshot_digest }}
           PUBLICATION_SOURCE_COMMIT: ${{ inputs.publication_source_commit }}
+          PUBLICATION_LEDGER_COMMIT: ${{ inputs.publication_ledger_commit }}
         run: |
           run_root="${RUNNER_TEMP}/uap-native-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           python scripts/prepare_launch_evidence.py --asset-name "$ASSET_NAME" \
             --publication-id "$PUBLICATION_ID" --publication-sequence "$PUBLICATION_SEQUENCE" \
             --publication-snapshot-digest "$PUBLICATION_SNAPSHOT_DIGEST" --publication-source-commit "$PUBLICATION_SOURCE_COMMIT" \
+            --publication-ledger-commit "$PUBLICATION_LEDGER_COMMIT" \
             --run-root "$run_root" --output "$run_root/context.json"
           python scripts/observe_release_facade.py --context "$run_root/context.json" \
             --executable "$run_root/release/$ASSET_NAME" --asset-name "$ASSET_NAME" \
@@ -166,11 +176,13 @@ jobs:
           PUBLICATION_SEQUENCE: ${{ inputs.publication_sequence }}
           PUBLICATION_SNAPSHOT_DIGEST: ${{ inputs.publication_snapshot_digest }}
           PUBLICATION_SOURCE_COMMIT: ${{ inputs.publication_source_commit }}
+          PUBLICATION_LEDGER_COMMIT: ${{ inputs.publication_ledger_commit }}
         run: |
           run_root="${RUNNER_TEMP}/uap-node22-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           python scripts/prepare_launch_evidence.py --asset-name agentplugins_0.1.8_linux_amd64 --npm-facade \
             --publication-id "$PUBLICATION_ID" --publication-sequence "$PUBLICATION_SEQUENCE" \
             --publication-snapshot-digest "$PUBLICATION_SNAPSHOT_DIGEST" --publication-source-commit "$PUBLICATION_SOURCE_COMMIT" \
+            --publication-ledger-commit "$PUBLICATION_LEDGER_COMMIT" \
             --run-root "$run_root" --output "$run_root/context.json"
           mkdir "$run_root/npm-audit"
           cd "$run_root/npm-audit"
@@ -289,11 +301,13 @@ jobs:
           PUBLICATION_SEQUENCE: ${{ inputs.publication_sequence }}
           PUBLICATION_SNAPSHOT_DIGEST: ${{ inputs.publication_snapshot_digest }}
           PUBLICATION_SOURCE_COMMIT: ${{ inputs.publication_source_commit }}
+          PUBLICATION_LEDGER_COMMIT: ${{ inputs.publication_ledger_commit }}
         run: |
           run_root="${RUNNER_TEMP}/uap-stable-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           python scripts/prepare_launch_evidence.py --asset-name agentplugins_0.1.8_linux_amd64 \
             --publication-id "$PUBLICATION_ID" --publication-sequence "$PUBLICATION_SEQUENCE" \
             --publication-snapshot-digest "$PUBLICATION_SNAPSHOT_DIGEST" --publication-source-commit "$PUBLICATION_SOURCE_COMMIT" \
+            --publication-ledger-commit "$PUBLICATION_LEDGER_COMMIT" \
             --run-root "$run_root" --output "$run_root/context.json"
           echo "RUN_ROOT=$run_root" >> "$GITHUB_ENV"
       - name: Obtain short-lived GitHub OIDC identity

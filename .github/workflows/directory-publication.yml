@@ -715,10 +715,15 @@ jobs:
 
   required_stable_launch_evidence:
     name: Require stable launch evidence before production promotion
-    needs: gate_exact_staged_publication
+    needs: [sign, materialize_site, gate_exact_staged_publication]
     uses: ./.github/workflows/live-e2e.yml
     with:
       consent: true
+      publication_id: ${{ needs.sign.outputs.publication_id }}
+      publication_sequence: ${{ fromJSON(needs.sign.outputs.sequence) }}
+      publication_snapshot_digest: ${{ needs.sign.outputs.snapshot_digest }}
+      publication_source_commit: ${{ needs.sign.outputs.marker_commit }}
+      publication_ledger_commit: ${{ needs.materialize_site.outputs.ledger_commit }}
     permissions:
       actions: read
       contents: read
@@ -755,3 +760,44 @@ jobs:
       - name: Deploy exact ledger tree
         id: deployment
         uses: actions/deploy-pages@cd2ce8fcbc39b97be8ca5fce6e763baed58fa128 # v5.0.0
+
+  observe_production_latest:
+    name: Observe exact production latest after deployment
+    needs: [sign, materialize_site, deploy]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13"
+      - name: Reacquire and verify production latest
+        env:
+          PUBLICATION_ID: ${{ needs.sign.outputs.publication_id }}
+          PUBLICATION_SEQUENCE: ${{ needs.sign.outputs.sequence }}
+          PUBLICATION_SNAPSHOT_DIGEST: ${{ needs.sign.outputs.snapshot_digest }}
+          PUBLICATION_SOURCE_COMMIT: ${{ needs.sign.outputs.marker_commit }}
+          PUBLICATION_LEDGER_COMMIT: ${{ needs.materialize_site.outputs.ledger_commit }}
+        run: |
+          python3 -m pip install --disable-pip-version-check cryptography==46.0.3 jsonschema==4.25.1
+          python3 scripts/observe_production_latest.py \
+            --publication-id "$PUBLICATION_ID" --publication-sequence "$PUBLICATION_SEQUENCE" \
+            --publication-snapshot-digest "$PUBLICATION_SNAPSHOT_DIGEST" \
+            --publication-source-commit "$PUBLICATION_SOURCE_COMMIT" \
+            --publication-ledger-commit "$PUBLICATION_LEDGER_COMMIT" \
+            --output "$RUNNER_TEMP/production-latest.json"
+          (cd "$RUNNER_TEMP" && sha256sum production-latest.json > production-latest.SHA256SUMS)
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: production-latest-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/production-latest.json
+            ${{ runner.temp }}/production-latest.SHA256SUMS
+          if-no-files-found: error
+          retention-days: 30
+          overwrite: false

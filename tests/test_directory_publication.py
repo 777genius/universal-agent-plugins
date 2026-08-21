@@ -719,7 +719,13 @@ class PublicationWorkflowTests(unittest.TestCase):
         self.assertIn('cmp --silent "${feed}/${relative}"', gate_step["run"])
         self.assertIn("required_stable_launch_evidence", workflow["jobs"]["deploy"]["needs"])
         self.assertIn("gate_exact_staged_publication", workflow["jobs"]["deploy"]["needs"])
-        self.assertEqual(workflow["jobs"]["required_stable_launch_evidence"]["needs"], "gate_exact_staged_publication")
+        self.assertEqual(
+            set(workflow["jobs"]["required_stable_launch_evidence"]["needs"]),
+            {"sign", "materialize_site", "gate_exact_staged_publication"},
+        )
+        production_observation = workflow["jobs"]["observe_production_latest"]
+        self.assertIn("deploy", production_observation["needs"])
+        self.assertEqual(production_observation["permissions"], {"contents": "read"})
         self.assertIn("EXISTING_MATERIALIZED_COMMIT", site_commands)
         self.assertIn("rerun site tree differs", site_commands)
         self.assertIn('--materialized-output ../materialized-ledger.commit', signer_commands)

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Resolve official GitHub release and production Directory identities for one run."""
+"""Resolve official release and an immutable staged Directory identity for one run."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ import tempfile
 from pathlib import Path
 
 from run_launch_evidence_e2e import (
-    fetch_production_directory,
+    fetch_staged_directory,
     make_challenge,
     read_production_config,
     resolve_github_release,
@@ -29,6 +29,7 @@ def main() -> int:
     parser.add_argument("--publication-sequence", type=int, required=True)
     parser.add_argument("--publication-snapshot-digest", required=True)
     parser.add_argument("--publication-source-commit", required=True)
+    parser.add_argument("--publication-ledger-commit", required=True)
     args = parser.parse_args()
     if args.run_root.exists():
         raise ValueError("prepared run root must not exist")
@@ -43,8 +44,10 @@ def main() -> int:
         cli_repository, release_tag, args.run_root / "release" / args.asset_name,
         asset_name=args.asset_name, token=None,
     )
-    directory_env, snapshot, directory_digest = fetch_production_directory(
-        args.run_root / "directory", expected_publication_id=args.publication_id,
+    directory_env, snapshot, directory_digest = fetch_staged_directory(
+        args.run_root / "directory", repository=catalog_repository,
+        ledger_commit=args.publication_ledger_commit,
+        expected_publication_id=args.publication_id,
         expected_sequence=args.publication_sequence,
         expected_snapshot_digest=args.publication_snapshot_digest,
         expected_source_commit=args.publication_source_commit,
@@ -67,7 +70,7 @@ def main() -> int:
         "github_release_identity": json.loads((args.run_root / "release" / "github-release-identity.json").read_text()),
         "authenticated_asset": {"name": args.asset_name, "digest": sha256_file(asset)},
         "github_asset_attestation": json.loads((args.run_root / "release" / f"{args.asset_name}.attestation.json").read_text()),
-        "directory": {"origin": config["production_origin"], "snapshot": "directory/snapshot.json", "envelope": "directory/envelope.json", "digest": directory_digest, "sequence": snapshot["sequence"], "publication_id": snapshot["publication_id"], "source_commit": snapshot["source_commit"]},
+        "directory": {"origin": directory_env["AGENTPLUGINS_DIRECTORY_ORIGIN"], "snapshot": "directory/snapshot.json", "envelope": "directory/envelope.json", "digest": directory_digest, "sequence": snapshot["sequence"], "publication_id": snapshot["publication_id"], "source_commit": snapshot["source_commit"], "ledger_commit": args.publication_ledger_commit},
         "github": {"sha": os.environ["GITHUB_SHA"], "run_id": os.environ["GITHUB_RUN_ID"], "run_attempt": os.environ["GITHUB_RUN_ATTEMPT"]},
         "challenge": challenge,
     }

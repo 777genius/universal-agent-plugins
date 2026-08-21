@@ -10,6 +10,14 @@ LAUNCH = ROOT / ".github/workflows/launch-evidence-e2e.yml"
 LIVE = ROOT / ".github/workflows/live-e2e.yml"
 PAGES = ROOT / ".github/workflows/pages.yml"
 VALIDATE = ROOT / ".github/workflows/validate.yml"
+DIRECTORY_PUBLICATION = ROOT / ".github/workflows/directory-publication.yml"
+PUBLICATION_INPUTS = {
+    "publication_id": "string",
+    "publication_sequence": "number",
+    "publication_snapshot_digest": "string",
+    "publication_source_commit": "string",
+    "publication_ledger_commit": "string",
+}
 
 
 def load(path: Path):
@@ -45,8 +53,8 @@ class WorkflowContractTests(unittest.TestCase):
         inputs = workflow["on"]["workflow_dispatch"]["inputs"]
         self.assertEqual(inputs["consent"]["required"], "true")
         self.assertNotIn("release_tag", inputs)
-        self.assertEqual(set(workflow["on"]["workflow_call"]["inputs"]), {"consent", "publication_id", "publication_sequence", "publication_snapshot_digest", "publication_source_commit"})
-        self.assertTrue(all(workflow["on"]["workflow_call"]["inputs"][name]["required"] == "true" for name in ("publication_id", "publication_sequence", "publication_snapshot_digest", "publication_source_commit")))
+        self.assertEqual(set(workflow["on"]["workflow_call"]["inputs"]), {"consent", *PUBLICATION_INPUTS})
+        self.assertTrue(all(workflow["on"]["workflow_call"]["inputs"][name]["required"] == "true" for name in PUBLICATION_INPUTS))
         self.assertIn("workflow_call", workflow["on"])
         slots = native["strategy"]["matrix"]["include"]
         self.assertEqual({(slot["os"], slot["architecture"]) for slot in slots}, {
@@ -89,6 +97,9 @@ class WorkflowContractTests(unittest.TestCase):
         prepare = (ROOT / "scripts/prepare_launch_evidence.py").read_text()
         self.assertNotIn('os.environ.get("GITHUB_TOKEN")', prepare)
         self.assertIn("token=None", prepare)
+        self.assertNotIn("fetch_production_directory", prepare)
+        self.assertIn("fetch_staged_directory", prepare)
+        self.assertIn("--publication-ledger-commit", commands(native))
 
     def test_false_consent_skips_every_live_and_aggregate_job(self) -> None:
         workflow = load(LAUNCH)
@@ -125,10 +136,36 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertNotIn("release_tag", required.get("with", {}))
         self.assertEqual(required["permissions"], {"actions": "read", "contents": "read", "id-token": "write"})
 
+    def test_publication_identity_contract_matches_across_both_reusable_edges(self) -> None:
+        launch = load(LAUNCH)
+        live = load(LIVE)
+        publication = load(DIRECTORY_PUBLICATION)
+        launch_inputs = launch["on"]["workflow_call"]["inputs"]
+        live_inputs = live["on"]["workflow_call"]["inputs"]
+        live_call = live["jobs"]["required-stable-launch-evidence"]["with"]
+        publication_call = publication["jobs"]["required_stable_launch_evidence"]["with"]
+        expected = {"consent", *PUBLICATION_INPUTS}
+        self.assertEqual(set(launch_inputs), expected)
+        self.assertEqual(set(live_inputs), expected)
+        self.assertEqual(set(live_call), expected)
+        self.assertEqual(set(publication_call), expected)
+        for name, expected_type in PUBLICATION_INPUTS.items():
+            with self.subTest(input=name):
+                self.assertEqual(launch_inputs[name]["required"], "true")
+                self.assertEqual(live_inputs[name]["required"], "true")
+                self.assertEqual(launch_inputs[name]["type"], expected_type)
+                self.assertEqual(live_inputs[name]["type"], expected_type)
+                self.assertEqual(live_call[name], "${{ inputs." + name + " }}")
+        self.assertEqual(publication_call["publication_id"], "${{ needs.sign.outputs.publication_id }}")
+        self.assertEqual(publication_call["publication_sequence"], "${{ fromJSON(needs.sign.outputs.sequence) }}")
+        self.assertEqual(publication_call["publication_snapshot_digest"], "${{ needs.sign.outputs.snapshot_digest }}")
+        self.assertEqual(publication_call["publication_source_commit"], "${{ needs.sign.outputs.marker_commit }}")
+        self.assertEqual(publication_call["publication_ledger_commit"], "${{ needs.materialize_site.outputs.ledger_commit }}")
+
     def test_directory_release_stages_exact_identity_before_reusable_gate_and_promotion(self) -> None:
-        workflow = load(ROOT / ".github/workflows/directory-publication.yml")
+        workflow = load(DIRECTORY_PUBLICATION)
         required = workflow["jobs"]["required_stable_launch_evidence"]
-        self.assertEqual(required["needs"], "gate_exact_staged_publication")
+        self.assertEqual(set(required["needs"]), {"sign", "materialize_site", "gate_exact_staged_publication"})
         self.assertEqual(required["uses"], "./.github/workflows/live-e2e.yml")
         self.assertEqual(required["with"]["consent"], "true")
         self.assertEqual(required["permissions"], {"actions": "read", "contents": "read", "id-token": "write"})
@@ -145,6 +182,11 @@ class WorkflowContractTests(unittest.TestCase):
         deploy_needs = workflow["jobs"]["deploy"]["needs"]
         self.assertIn("gate_exact_staged_publication", deploy_needs)
         self.assertIn("required_stable_launch_evidence", deploy_needs)
+        production = workflow["jobs"]["observe_production_latest"]
+        self.assertIn("deploy", production["needs"])
+        self.assertNotIn("observe_production_latest", required["needs"])
+        self.assertIn("observe_production_latest.py", commands(production))
+        self.assertEqual(production["permissions"], {"contents": "read"})
 
     def test_untrusted_pull_request_bridge_reproduction_remains_secretless(self) -> None:
         workflow = load(VALIDATE)

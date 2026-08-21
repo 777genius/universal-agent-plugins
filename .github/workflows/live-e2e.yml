@@ -6,12 +6,47 @@ on:
       consent:
         required: true
         type: boolean
+      publication_id:
+        required: true
+        type: string
+      publication_sequence:
+        required: true
+        type: number
+      publication_snapshot_digest:
+        required: true
+        type: string
+      publication_source_commit:
+        required: true
+        type: string
+      publication_ledger_commit:
+        required: true
+        type: string
   workflow_dispatch:
     inputs:
       consent:
         description: Approve disposable live launch checks
         required: true
         type: boolean
+      publication_id:
+        description: Exact signed snapshot publication_id to verify
+        required: true
+        type: string
+      publication_sequence:
+        description: Exact staged snapshot sequence to verify
+        required: true
+        type: number
+      publication_snapshot_digest:
+        description: Exact sha256 digest of the staged snapshot bytes
+        required: true
+        type: string
+      publication_source_commit:
+        description: Exact 40-hex source commit embedded in the staged snapshot
+        required: true
+        type: string
+      publication_ledger_commit:
+        description: Exact 40-hex materialized ledger commit containing the staged bytes
+        required: true
+        type: string
   schedule:
     - cron: "17 6 * * 1"
 
@@ -28,6 +63,11 @@ jobs:
     uses: ./.github/workflows/launch-evidence-e2e.yml
     with:
       consent: ${{ inputs.consent }}
+      publication_id: ${{ inputs.publication_id }}
+      publication_sequence: ${{ inputs.publication_sequence }}
+      publication_snapshot_digest: ${{ inputs.publication_snapshot_digest }}
+      publication_source_commit: ${{ inputs.publication_source_commit }}
+      publication_ledger_commit: ${{ inputs.publication_ledger_commit }}
     permissions:
       actions: read
       contents: read
