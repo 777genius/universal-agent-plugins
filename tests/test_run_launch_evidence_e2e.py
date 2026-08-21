@@ -40,6 +40,16 @@ class LaunchEvidenceE2ETests(unittest.TestCase):
             None, None, mode="fixture-only", consent=CONSENT, run_root=root, **kwargs
         )
 
+    def test_direct_external_fixture_is_a_valid_skill_package(self) -> None:
+        skill = (e2e.EXTERNAL_PACKAGE / "skills/fixture/SKILL.md").read_text()
+        self.assertTrue(skill.startswith("---\n"))
+        frontmatter, body = skill.removeprefix("---\n").split("\n---\n", 1)
+        lines = frontmatter.splitlines()
+        self.assertIn("name: fixture", lines)
+        self.assertTrue(any(line.startswith("description: ") for line in lines))
+        self.assertIn("license: Apache-2.0", lines)
+        self.assertIn("# External fixture", body)
+
     def test_fixture_mode_is_explicitly_non_runtime(self) -> None:
         with tempfile.TemporaryDirectory() as tmp, mock.patch.object(e2e, "ROOT", Path("/opt/test-repository")):
             evidence = self.fixture_harness(Path(tmp) / "fresh").export()
