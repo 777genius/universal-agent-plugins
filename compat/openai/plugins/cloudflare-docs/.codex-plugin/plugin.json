@@ -1,22 +1,19 @@
 {
   "name": "cloudflare-docs",
-  "version": "0.1.0",
-  "description": "Community package for the official Cloudflare hosted MCP plugin for up-to-date Cloudflare documentation and reference lookups through Cloudflare's remote documentation server.",
+  "version": "0.4.13",
+  "description": "Community package for Cloudflare Docs MCP. Search current Cloudflare documentation through Cloudflare's hosted documentation server.",
   "author": {
     "name": "777genius",
     "url": "https://github.com/777genius"
   },
-  "homepage": "https://developers.cloudflare.com/agents/model-context-protocol/mcp-servers-for-cloudflare/",
+  "homepage": "https://github.com/cloudflare/mcp-server-cloudflare/tree/main/apps/docs-ai-search",
   "repository": "https://github.com/777genius/universal-agent-plugins",
   "license": "Apache-2.0",
   "keywords": [
-    "agent-plugins",
-    "ai-agents",
     "cloud",
     "cloudflare",
-    "docs",
+    "documentation",
     "mcp",
-    "plugins",
     "research"
   ],
   "mcpServers": "./.mcp.json",
@@ -24,13 +21,13 @@
   "interface": {
     "displayName": "Cloudflare Docs",
     "shortDescription": "Cloudflare docs MCP",
-    "longDescription": "Community package for the official Cloudflare hosted MCP plugin for up-to-date Cloudflare documentation and reference lookups through Cloudflare's remote documentation server.",
+    "longDescription": "Community package for Cloudflare Docs MCP. Search current Cloudflare documentation through Cloudflare's hosted documentation server.",
     "developerName": "777genius",
     "category": "Developer Tools",
     "capabilities": [
       "Read"
     ],
-    "websiteURL": "https://developers.cloudflare.com/agents/model-context-protocol/mcp-servers-for-cloudflare/",
+    "websiteURL": "https://github.com/cloudflare/mcp-server-cloudflare/tree/main/apps/docs-ai-search",
     "defaultPrompt": [
       "Use Cloudflare Docs for this task."
     ],

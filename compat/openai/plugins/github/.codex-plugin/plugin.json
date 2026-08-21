@@ -1,34 +1,33 @@
 {
   "name": "github",
-  "version": "0.1.0",
-  "description": "Community Agent Plugin for repository, issue, pull request, review, and search workflows through GitHub's MCP server.",
+  "version": "1.10.1",
+  "description": "Community package for GitHub MCP Server. Work with repositories, issues, pull requests, reviews, and code search through GitHub's hosted MCP endpoint.",
   "author": {
     "name": "777genius",
     "url": "https://github.com/777genius"
   },
-  "homepage": "https://github.com/features",
+  "homepage": "https://github.com/github/github-mcp-server",
   "repository": "https://github.com/777genius/universal-agent-plugins",
-  "license": "Apache-2.0",
+  "license": "MIT",
   "keywords": [
-    "agent-plugins",
-    "ai-agents",
-    "auth",
+    "code-search",
     "github",
+    "issues",
     "mcp",
-    "plugins"
+    "pull-requests"
   ],
   "mcpServers": "./.mcp.json",
   "interface": {
     "displayName": "GitHub",
     "shortDescription": "GitHub workflows MCP",
-    "longDescription": "Community Agent Plugin for repository, issue, pull request, review, and search workflows through GitHub's MCP server.",
+    "longDescription": "Community package for GitHub MCP Server. Work with repositories, issues, pull requests, reviews, and code search through GitHub's hosted MCP endpoint.",
     "developerName": "777genius",
     "category": "Developer Tools",
     "capabilities": [
       "Read",
       "Write"
     ],
-    "websiteURL": "https://github.com/features",
+    "websiteURL": "https://github.com/github/github-mcp-server",
     "defaultPrompt": [
       "Use GitHub for this task."
     ],

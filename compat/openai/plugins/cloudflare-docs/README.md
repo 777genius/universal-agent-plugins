@@ -1,6 +1,6 @@
 # Cloudflare Docs
 
-Community package for the official Cloudflare hosted MCP plugin for up-to-date Cloudflare documentation and reference lookups through Cloudflare's remote documentation server.
+Community package for Cloudflare Docs MCP. Search current Cloudflare documentation through Cloudflare's hosted documentation server.
 
 <!-- agentplugins-install:start -->
 ## Install
@@ -10,11 +10,12 @@ npx universal-agent-plugins add cloudflare-docs
 ```
 <!-- agentplugins-install:end -->
 
-This is an independent community package for [Agent Plugins 1.0](https://agent-plugins.org/specification). It is not an endorsement or an official package from Cloudflare Docs.
+This package is independently assembled by 777genius from configuration anchored to cloudflare/mcp-server-cloudflare at commit `0c51a6fbcf9a2fae80120287e8238fb947cdc2df`. It is not authored, published, or endorsed by Cloudflare.
 
 - Component: MCP server
 - Transport: `streamable-http`
-- Upstream documentation: https://developers.cloudflare.com/agents/model-context-protocol/mcp-servers-for-cloudflare/
-- Authentication: The documentation server is public; the client manages any connection prompts.
+- Endpoint: `https://docs.mcp.cloudflare.com/mcp`
+- Upstream source: https://github.com/cloudflare/mcp-server-cloudflare/tree/main/apps/docs-ai-search
+- Authentication: No credential is declared by this package.
 
 Review the server's tools, scopes, and write capabilities before enabling it. Agent Plugins 1.0 standardizes packaging, not permissions or sandboxing.

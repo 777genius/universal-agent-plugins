@@ -1,6 +1,6 @@
 # GitHub
 
-Community Agent Plugin for repository, issue, pull request, review, and search workflows through GitHub's MCP server.
+Community package for GitHub MCP Server. Work with repositories, issues, pull requests, reviews, and code search through GitHub's hosted MCP endpoint.
 
 <!-- agentplugins-install:start -->
 ## Install
@@ -10,11 +10,12 @@ npx universal-agent-plugins add github
 ```
 <!-- agentplugins-install:end -->
 
-This is an independent community package for [Agent Plugins 1.0](https://agent-plugins.org/specification). It is not an endorsement or an official package from GitHub.
+This package is independently assembled by 777genius from configuration anchored to github/github-mcp-server at commit `fcdd664099f957c4a7dc183d9381cef191e8c8a9`. It is not authored, published, or endorsed by GitHub.
 
 - Component: MCP server
 - Transport: `streamable-http`
-- Upstream documentation: https://github.com/features
-- Authentication: Authentication is client-managed. No PAT or Authorization header is stored in this package.
+- Endpoint: `https://api.githubcopilot.com/mcp/`
+- Upstream source: https://github.com/github/github-mcp-server
+- Authentication: GitHub manages authentication for the hosted endpoint; no credential is embedded in this package.
 
 Review the server's tools, scopes, and write capabilities before enabling it. Agent Plugins 1.0 standardizes packaging, not permissions or sandboxing.

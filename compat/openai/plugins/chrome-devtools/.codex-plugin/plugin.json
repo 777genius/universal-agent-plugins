@@ -1,7 +1,7 @@
 {
   "name": "chrome-devtools",
-  "version": "0.1.0",
-  "description": "Portable Agent Plugins package for Chrome DevTools MCP. Inspect pages, automate flows, analyze performance, and debug browser state.",
+  "version": "1.7.0",
+  "description": "Community package for Chrome DevTools MCP. Inspect pages, automate flows, analyze performance, and debug browser state.",
   "author": {
     "name": "777genius",
     "url": "https://github.com/777genius"
@@ -10,8 +10,6 @@
   "repository": "https://github.com/777genius/universal-agent-plugins",
   "license": "Apache-2.0",
   "keywords": [
-    "agent-plugins",
-    "ai-agents",
     "browser",
     "chrome",
     "debugging",
@@ -22,7 +20,7 @@
   "interface": {
     "displayName": "Chrome DevTools",
     "shortDescription": "Browser debugging MCP",
-    "longDescription": "Portable Agent Plugins package for Chrome DevTools MCP. Inspect pages, automate flows, analyze performance, and debug browser state.",
+    "longDescription": "Community package for Chrome DevTools MCP. Inspect pages, automate flows, analyze performance, and debug browser state.",
     "developerName": "777genius",
     "category": "Developer Tools",
     "capabilities": [
