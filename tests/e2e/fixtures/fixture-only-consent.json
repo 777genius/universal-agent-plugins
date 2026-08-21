@@ -1,0 +1,7 @@
+{
+  "schema_version": 1,
+  "purpose": "stable-launch-e2e",
+  "consent": true,
+  "disposable_only": true,
+  "scope": "fixture-only non-runtime contract validation"
+}

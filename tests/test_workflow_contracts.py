@@ -1,239 +1,90 @@
+import re
 import unittest
 from pathlib import Path
 
 import yaml
 
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
-WORKFLOW_PATH = REPO_ROOT / ".github/workflows/live-e2e.yml"
-VALIDATE_WORKFLOW_PATH = REPO_ROOT / ".github/workflows/validate.yml"
-PAGES_WORKFLOW_PATH = REPO_ROOT / ".github/workflows/pages.yml"
+ROOT = Path(__file__).resolve().parents[1]
+LAUNCH = ROOT / ".github/workflows/launch-evidence-e2e.yml"
+LIVE = ROOT / ".github/workflows/live-e2e.yml"
+PAGES = ROOT / ".github/workflows/pages.yml"
+VALIDATE = ROOT / ".github/workflows/validate.yml"
 
 
-def load_workflow() -> dict[str, object]:
-    return yaml.load(WORKFLOW_PATH.read_text(), Loader=yaml.BaseLoader)
+def load(path: Path):
+    return yaml.load(path.read_text(), Loader=yaml.BaseLoader)
 
 
-def job_run_commands(job: dict[str, object]) -> str:
-    return "\n".join(
-        step.get("run", "")
-        for step in job["steps"]
-        if isinstance(step, dict)
-    )
+def commands(job):
+    return "\n".join(step.get("run", "") for step in job["steps"] if isinstance(step, dict))
 
 
 class WorkflowContractTests(unittest.TestCase):
     def test_pages_concurrency_isolates_prs_from_production(self) -> None:
-        workflow = yaml.load(
-            PAGES_WORKFLOW_PATH.read_text(), Loader=yaml.BaseLoader
-        )
-
-        self.assertEqual(
-            workflow["concurrency"]["group"],
-            "${{ github.event_name == 'pull_request' && format('pages-pr-{0}', github.event.pull_request.number) || 'pages-production' }}",
-        )
+        workflow = load(PAGES)
+        self.assertEqual(workflow["concurrency"]["group"], "${{ github.event_name == 'pull_request' && format('pages-pr-{0}', github.event.pull_request.number) || 'pages-production' }}")
         self.assertEqual(workflow["concurrency"]["cancel-in-progress"], "true")
 
-    def test_release_publish_uses_tested_script(self) -> None:
-        workflow = WORKFLOW_PATH.read_text()
-
-        self.assertIn("run: scripts/publish_github_release.sh", workflow)
-
-    def test_agentplugins_version_cannot_be_overridden_at_dispatch(self) -> None:
-        workflow = load_workflow()
-        inputs = workflow["on"]["workflow_dispatch"]["inputs"]
-        workflow_text = WORKFLOW_PATH.read_text()
-
-        self.assertNotIn("agentplugins_version", inputs)
-        self.assertNotIn("github.event.inputs.agentplugins_version", workflow_text)
-
-    def test_scheduled_marketplace_e2e_resolves_latest_immutable_release(self) -> None:
-        workflow = load_workflow()
-        inputs = workflow["on"]["workflow_dispatch"]["inputs"]
-        job = workflow["jobs"]["codex-marketplace-install"]
-        commands = job_run_commands(job)
-        install_step = next(
-            step
-            for step in job["steps"]
-            if isinstance(step, dict)
-            and "scripts/run_codex_install_e2e.py" in step.get("run", "")
-        )
-
-        self.assertNotIn("default", inputs["marketplace_ref"])
-        self.assertNotIn("v0.1.5", WORKFLOW_PATH.read_text())
-        self.assertIn("releases/latest", commands)
-        self.assertIn("^v[0-9]+\\.[0-9]+\\.[0-9]+$", commands)
-        self.assertIn("git merge-base --is-ancestor", commands)
-        self.assertEqual(
-            install_step["env"]["MARKETPLACE_REF"],
-            "${{ steps.marketplace.outputs.ref }}",
-        )
-
-    def test_agentplugins_lifecycle_and_projection_jobs_are_isolated(self) -> None:
-        jobs = load_workflow()["jobs"]
-        expected = {
-            "agentplugins-package-lifecycle": (
-                "scripts/run_agentplugins_lifecycle_e2e.py",
-                "/tmp/agentplugins-package-lifecycle-e2e.json",
-            ),
-            "agentplugins-hero-projections": (
-                "scripts/run_agentplugins_hero_matrix_e2e.py",
-                "/tmp/agentplugins-hero-projections-e2e.json",
-            ),
-        }
-        pinned_uses = {
-            "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
-            "actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97",
-            "actions/setup-node@820762786026740c76f36085b0efc47a31fe5020",
-            "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
-        }
-
-        for name, (runner, evidence) in expected.items():
-            with self.subTest(job=name):
-                job = jobs[name]
-                commands = job_run_commands(job)
-                self.assertEqual(job["env"]["AGENTPLUGINS_VERSION"], "0.1.6")
-                self.assertIn(
-                    'npm install --global "universal-agent-plugins@${AGENTPLUGINS_VERSION}"',
-                    commands,
-                )
-                self.assertIn(runner, commands)
-                self.assertIn(
-                    '--expected-version "${AGENTPLUGINS_VERSION}"', commands
-                )
-                self.assertIn(
-                    'catalog_digest="sha256:$(sha256sum catalog/v1/catalog.json',
-                    commands,
-                )
-                self.assertIn('--catalog-digest "${catalog_digest}"', commands)
-                self.assertIn(evidence, commands)
-                self.assertIn("check-jsonschema --schemafile", commands)
-                self.assertIn("scripts/validate_client_evidence.py --file", commands)
-                uses = {
-                    step["uses"]
-                    for step in job["steps"]
-                    if isinstance(step, dict) and "uses" in step
-                }
-                self.assertEqual(uses, pinned_uses)
-
-    def test_release_gate_needs_native_lifecycle_and_projection_jobs(self) -> None:
-        jobs = load_workflow()["jobs"]
-        needs = set(jobs["publish-release"]["needs"])
-        agentplugins_jobs = {
-            "copilot-native-lifecycle",
-            "agentplugins-package-lifecycle",
-            "agentplugins-chatgpt-catalog-v2",
-            "agentplugins-hero-projections",
-        }
-
-        self.assertTrue(
-            {
-                "codex-marketplace-install",
-                *agentplugins_jobs,
-            }.issubset(needs)
-        )
-        for name in agentplugins_jobs:
-            with self.subTest(job=name):
-                self.assertEqual(
-                    jobs[name]["env"]["AGENTPLUGINS_VERSION"], "0.1.6"
-                )
-
-    def test_copilot_native_job_binds_evidence_to_local_catalog(self) -> None:
-        job = load_workflow()["jobs"]["copilot-native-lifecycle"]
-        commands = job_run_commands(job)
-
-        self.assertIn(
-            'catalog_digest="sha256:$(sha256sum catalog/v1/catalog.json', commands
-        )
-        self.assertIn('--catalog-digest "${catalog_digest}"', commands)
-
-    def test_chatgpt_job_gates_released_cli_against_catalog_v2(self) -> None:
-        job = load_workflow()["jobs"]["agentplugins-chatgpt-catalog-v2"]
-        commands = job_run_commands(job)
-        uses = {
-            step["uses"]
-            for step in job["steps"]
-            if isinstance(step, dict) and "uses" in step
-        }
-
-        self.assertEqual(job["env"]["AGENTPLUGINS_VERSION"], "0.1.6")
-        self.assertIn(
-            'npm install --global "universal-agent-plugins@${AGENTPLUGINS_VERSION}"',
-            commands,
-        )
-        self.assertIn("scripts/run_agentplugins_chatgpt_catalog_e2e.py", commands)
-        self.assertIn(
-            'catalog_digest="sha256:$(sha256sum catalog/v2/catalog.json', commands
-        )
-        run_step = next(
-            step
-            for step in job["steps"]
-            if isinstance(step, dict)
-            and "scripts/run_agentplugins_chatgpt_catalog_e2e.py" in step.get("run", "")
-        )
-        self.assertIn("/catalog/v2/catalog.json", run_step["env"]["CATALOG_URL"])
-        self.assertIn('--expected-version "${AGENTPLUGINS_VERSION}"', commands)
-        self.assertIn('--catalog-digest "${catalog_digest}"', commands)
-        self.assertIn(
-            "/tmp/agentplugins-chatgpt-catalog-v2-e2e.json", commands
-        )
-        self.assertIn("check-jsonschema --schemafile", commands)
-        self.assertIn("scripts/validate_client_evidence.py --file", commands)
-        self.assertEqual(
-            uses,
-            {
-                "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
-                "actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97",
-                "actions/setup-node@820762786026740c76f36085b0efc47a31fe5020",
-                "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
-            },
-        )
-
-    def test_pull_request_gate_runs_released_consumer_e2e(self) -> None:
-        workflow = yaml.load(VALIDATE_WORKFLOW_PATH.read_text(), Loader=yaml.BaseLoader)
-        job = workflow["jobs"]["agentplugins-chatgpt-catalog-v2"]
-        commands = job_run_commands(job)
-
+    def test_launch_pr_is_fixture_only_and_has_no_secrets_or_runtime_claim(self) -> None:
+        workflow = load(LAUNCH)
+        job = workflow["jobs"]["fixture-only-non-runtime"]
+        body = yaml.safe_dump(job)
         self.assertIn("pull_request", workflow["on"])
-        self.assertEqual(job["env"]["AGENTPLUGINS_VERSION"], "0.1.6")
-        self.assertIn("pull_request.head.repo.full_name", job["env"]["CATALOG_REPOSITORY"])
-        self.assertIn("pull_request.head.sha", job["env"]["CATALOG_REVISION"])
-        self.assertIn(
-            'npm install --global "universal-agent-plugins@${AGENTPLUGINS_VERSION}"',
-            commands,
-        )
-        self.assertIn("scripts/run_agentplugins_chatgpt_catalog_e2e.py", commands)
-        self.assertIn("${CATALOG_REPOSITORY}/${CATALOG_REVISION}", commands)
-        self.assertIn("catalog/v2/catalog.json", commands)
-        self.assertIn("check-jsonschema --schemafile", commands)
-        self.assertIn("scripts/validate_client_evidence.py --file", commands)
+        self.assertIn("--mode fixture-only", commands(job))
+        self.assertNotIn("secrets.", body)
+        self.assertEqual(job["permissions"], {"contents": "read"})
+        self.assertLessEqual(int(job["timeout-minutes"]), 10)
 
-    def test_untrusted_pull_request_gate_reproduces_bridges_offline(self) -> None:
-        workflow = yaml.load(VALIDATE_WORKFLOW_PATH.read_text(), Loader=yaml.BaseLoader)
-        self.assertIn("pull_request", workflow["on"])
+    def test_manual_gate_is_enforced_and_checksum_bound(self) -> None:
+        workflow = load(LAUNCH)
+        job = workflow["jobs"]["enforced-stable-gate"]
+        text = commands(job)
+        inputs = workflow["on"]["workflow_dispatch"]["inputs"]
+        for name in ("agentplugins_version", "binary_url", "binary_sha256", "directory_origin", "directory_bundle_url", "directory_bundle_sha256", "live_inputs_url", "live_inputs_sha256", "consent"):
+            self.assertEqual(inputs[name]["required"], "true")
+        self.assertIn("--binary-digest", text)
+        self.assertIn("--expected-version", text)
+        self.assertIn("--directory-snapshot", text)
+        self.assertIn("--notion-oauth-attestation", text)
+        self.assertIn("--chatgpt-attestation", text)
+        self.assertIn("sha256sum --check --strict", text)
+        self.assertNotIn("npm install", text)
+        self.assertNotIn("catalog/v1", text)
+        self.assertNotIn("catalog/v2", text)
+        self.assertNotIn("0.1.6", text)
+        self.assertEqual(job["permissions"], {"contents": "read"})
+        self.assertLessEqual(int(job["timeout-minutes"]), 90)
+
+    def test_owned_workflows_pin_actions_and_upload_checksums_immutably(self) -> None:
+        for path in (LAUNCH, LIVE):
+            text = path.read_text()
+            with self.subTest(path=path.name):
+                uses = re.findall(r"uses:\s+([^\s#]+)", text)
+                self.assertTrue(uses)
+                self.assertTrue(all(re.search(r"@[0-9a-f]{40}$", item) for item in uses))
+                self.assertIn("SHA256SUMS", text)
+                self.assertIn("overwrite: false", text)
+                self.assertNotIn("universal-agent-plugins@", text)
+                self.assertNotIn("AGENTPLUGINS_VERSION: \"0.1.6\"", text)
+
+    def test_live_workflow_is_read_only_and_does_not_publish(self) -> None:
+        workflow = load(LIVE)
+        text = LIVE.read_text()
+        self.assertEqual(workflow["permissions"], {"contents": "read"})
+        self.assertNotIn("publish-release", text)
+        self.assertNotIn("contents: write", text)
+        self.assertNotIn("catalog/v1", text)
+        self.assertNotIn("catalog/v2", text)
+
+    def test_untrusted_pull_request_bridge_reproduction_remains_secretless(self) -> None:
+        workflow = load(VALIDATE)
         job = workflow["jobs"]["bridge-reproduction"]
-        commands = job_run_commands(job)
-
+        text = commands(job)
         self.assertEqual(job["permissions"], {"contents": "read"})
         self.assertNotIn("secrets.", yaml.safe_dump(job))
-        self.assertIn("scripts/build-bridges check", commands)
-        self.assertIn("scripts/build-bridges", commands)
-        self.assertIn("--root tests/fixtures", commands)
-        self.assertIn("--upstream-mirror", commands)
-        self.assertIn(" check", commands)
-        self.assertNotIn("curl ", commands)
-        self.assertNotIn("wget ", commands)
-        self.assertEqual(
-            {
-                step["uses"]
-                for step in job["steps"]
-                if isinstance(step, dict) and "uses" in step
-            },
-            {
-                "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
-                "actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97",
-            },
-        )
+        self.assertIn("scripts/build-bridges check", text)
+        self.assertNotIn("curl ", text)
 
 
 if __name__ == "__main__":

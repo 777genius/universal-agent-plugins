@@ -6,6 +6,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+import jsonschema
+
 
 MODULE_PATH = (
     Path(__file__).resolve().parents[1] / "scripts" / "validate_client_evidence.py"
@@ -17,6 +19,34 @@ SPEC.loader.exec_module(validator)
 
 
 class ClientEvidenceValidatorTests(unittest.TestCase):
+    def stable_launch_fixture(self) -> dict:
+        return {
+            "client": "Codex CLI", "date": "2026-08-21", "checks": [{"scenario": "runtime", "status": "passed"}],
+            "secrets_recorded": False, "real_user_project_used": False,
+            "privacy": {"sanitized": True, "excluded": ["credentials"]},
+            "evidence_type": "stable_launch_client_v2", "product_id": "context7",
+            "distribution_id": "upstash/context7", "distribution_kind": "upstream",
+            "release_sequence": 1, "package_version": "1.0.0",
+            "tree_digest": "sha256:" + "a" * 64, "manifest_digest": "sha256:" + "b" * 64,
+            "snapshot_sequence": 8, "snapshot_digest": "sha256:" + "c" * 64,
+            "installer_version": "0.1.8", "adapter_version": "0.1.8",
+            "binary_digest": "sha256:" + "d" * 64, "immutable_source_revision": "e" * 40,
+            "consent_artifact_digest": "sha256:" + "f" * 64, "result_root_id": "1" * 16,
+            "outcome": "passed", "observed_at_utc": "2026-08-21T00:00:00Z",
+        }
+
+    def test_stable_launch_client_schema_rejects_missing_provenance_and_broad_chatgpt(self) -> None:
+        schema = json.loads((Path(__file__).resolve().parents[1] / "schemas/e2e/client-evidence.schema.json").read_text())
+        fixture = self.stable_launch_fixture()
+        jsonschema.Draft202012Validator(schema).validate(fixture)
+        missing = dict(fixture)
+        missing.pop("manifest_digest")
+        with self.assertRaises(jsonschema.ValidationError):
+            jsonschema.Draft202012Validator(schema).validate(missing)
+        broad = dict(fixture, client="ChatGPT web Plugins UI", product_id="notion")
+        with self.assertRaises(jsonschema.ValidationError):
+            jsonschema.Draft202012Validator(schema).validate(broad)
+
     def make_fixture(self, root: Path) -> Path:
         artifact = root / "assets" / "evidence" / "proof.txt"
         artifact.parent.mkdir(parents=True)

@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "catalog": "catalog/v1/catalog.json",
+  "directory_contract": "signed-snapshot-v1",
   "all_package_client": "cursor",
   "all_package_operations": ["add", "info", "remove"],
   "heroes": [
@@ -37,11 +37,18 @@
     "stdio_environment_and_containment",
     "missing_runtime_zero_mutation",
     "explicit_source_switch",
+    "distribution_sticky_update",
     "managed_rollback",
     "external_activation_failure",
     "promotion_gate_digest_match",
     "promotion_gate_digest_mismatch",
-    "cross_platform_binary_npm_install"
+    "cross_platform_binary_npm_install",
+    "binary_macos_arm64",
+    "binary_macos_amd64",
+    "binary_linux_arm64",
+    "binary_linux_amd64",
+    "binary_windows_amd64",
+    "npm_install_node22"
   ],
   "journeys": [
     "direct_external_package",

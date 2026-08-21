@@ -17,6 +17,23 @@
     "date": { "type": "string", "format": "date" },
     "date_timezone": { "const": "Europe/Kyiv" },
     "observed_at_utc": { "type": "string", "format": "date-time" },
+    "evidence_type": { "type": "string", "minLength": 1 },
+    "product_id": { "type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$" },
+    "distribution_id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*/[a-z0-9][a-z0-9-]*$" },
+    "distribution_kind": { "enum": ["upstream", "community_bridge", "community", "direct"] },
+    "release_sequence": { "type": "integer", "minimum": 1 },
+    "package_version": { "type": "string", "minLength": 1 },
+    "tree_digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "manifest_digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "snapshot_sequence": { "type": "integer", "minimum": 1 },
+    "snapshot_digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "installer_version": { "type": "string", "pattern": "^(?:0\\.1\\.(?:[89]|[1-9][0-9]+)|0\\.(?:[2-9]|[1-9][0-9]+)\\.[0-9]+|[1-9][0-9]*\\.[0-9]+\\.[0-9]+)$" },
+    "adapter_version": { "type": "string", "minLength": 1 },
+    "binary_digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "immutable_source_revision": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "consent_artifact_digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "result_root_id": { "type": "string", "pattern": "^[0-9a-f]{16}$" },
+    "outcome": { "enum": ["passed", "failed", "inconclusive", "not_applicable"] },
     "checks": {
       "type": "array",
       "minItems": 1,
@@ -110,6 +127,28 @@
     }
   },
   "allOf": [
+    {
+      "if": {
+        "properties": { "evidence_type": { "const": "stable_launch_client_v2" } },
+        "required": ["evidence_type"]
+      },
+      "then": {
+        "required": [
+          "product_id", "distribution_id", "distribution_kind", "release_sequence", "package_version", "tree_digest",
+          "manifest_digest", "snapshot_sequence", "snapshot_digest",
+          "installer_version", "adapter_version", "binary_digest",
+          "immutable_source_revision", "consent_artifact_digest",
+          "result_root_id", "outcome", "observed_at_utc"
+        ],
+        "allOf": [
+          {
+            "if": { "properties": { "client": { "pattern": "^ChatGPT" } } },
+            "then": { "properties": { "product_id": { "const": "cloudflare-docs" } } }
+          }
+        ],
+        "not": { "anyOf": [{"required": ["ref"]}, {"required": ["revision"]}] }
+      }
+    },
     {
       "if": {
         "properties": {

@@ -1,25 +1,42 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "Redacted launch E2E evidence",
+  "title": "Redacted stable-launch E2E evidence",
   "type": "object",
   "required": ["schema_version", "run", "matrix", "summary", "privacy"],
   "properties": {
-    "schema_version": {"const": 1},
+    "schema_version": {"const": 2},
     "run": {
       "type": "object",
-      "required": ["id", "observed_at", "platform", "architecture", "disposable", "cli"],
+      "required": ["id", "mode", "runtime_claims", "observed_at", "platform", "architecture", "disposable", "root_id", "cli"],
       "properties": {
         "id": {"type": "string", "pattern": "^[a-f0-9]{16}$"},
+        "mode": {"enum": ["enforced", "fixture-only"]},
+        "runtime_claims": {"type": "boolean"},
         "observed_at": {"type": "string", "format": "date-time"},
         "platform": {"type": "string", "minLength": 1},
         "architecture": {"type": "string", "minLength": 1},
         "disposable": {"const": true},
-        "cli": {"type": "object", "required": ["available", "version"], "properties": {"available": {"type": "boolean"}, "version": {"type": ["string", "null"]}}, "additionalProperties": false}
+        "root_id": {"type": "string", "pattern": "^[a-f0-9]{16}$"},
+        "cli": {
+          "type": "object",
+          "required": ["available", "version", "binary_digest"],
+          "properties": {
+            "available": {"type": "boolean"},
+            "version": {"type": ["string", "null"]},
+            "binary_digest": {"type": ["string", "null"], "pattern": "^sha256:[a-f0-9]{64}$"}
+          },
+          "additionalProperties": false
+        }
       },
+      "allOf": [
+        {"if": {"properties": {"mode": {"const": "enforced"}}}, "then": {"properties": {"runtime_claims": {"const": true}, "cli": {"properties": {"available": {"const": true}, "version": {"type": "string", "pattern": "^(?:0\\.1\\.(?:[89]|[1-9][0-9]+)|0\\.(?:[2-9]|[1-9][0-9]+)\\.[0-9]+|[1-9][0-9]*\\.[0-9]+\\.[0-9]+)$"}, "binary_digest": {"type": "string"}}}}}},
+        {"if": {"properties": {"mode": {"const": "fixture-only"}}}, "then": {"properties": {"runtime_claims": {"const": false}}}}
+      ],
       "additionalProperties": false
     },
     "matrix": {
-      "type": "array", "minItems": 1,
+      "type": "array",
+      "minItems": 1,
       "items": {
         "type": "object",
         "required": ["id", "scenario", "plugin", "client", "level", "outcome", "tuple", "reason"],
@@ -29,51 +46,98 @@
           "plugin": {"type": ["string", "null"]},
           "client": {"type": ["string", "null"]},
           "level": {"enum": ["schema", "materialization", "discovery", "runtime", "oauth", "harness"]},
-          "outcome": {"enum": ["passed", "failed", "inconclusive", "not_tested", "not_applicable"]},
-          "tuple": {
-            "type": "object",
-            "required": ["package_digest", "dependency_identity", "installer_version", "adapter_version", "client_version", "os", "architecture", "observed_at"],
-            "properties": {
-              "package_digest": {"type": ["string", "null"], "pattern": "^sha256:[a-f0-9]{64}$"},
-              "dependency_identity": {"type": ["string", "null"]},
-              "installer_version": {"type": ["string", "null"]},
-              "adapter_version": {"type": ["string", "null"]},
-              "client_version": {"type": ["string", "null"]},
-              "os": {"type": "string", "minLength": 1},
-              "architecture": {"type": "string", "minLength": 1},
-              "observed_at": {"type": "string", "format": "date-time"}
-            }, "additionalProperties": false
-          },
+          "outcome": {"enum": ["passed", "failed", "inconclusive", "not_applicable"]},
+          "tuple": {"$ref": "#/$defs/tuple"},
           "reason": {"type": "string", "minLength": 1},
-          "details": {"type": "object"}
+          "details": {
+            "type": "object",
+            "propertyNames": {"not": {"const": "ref"}},
+            "properties": {
+              "revision": {"type": "string", "pattern": "^[a-f0-9]{40}$"},
+              "source_revision": {"type": "string", "pattern": "^[a-f0-9]{40}$"},
+              "commit_sha": {"type": "string", "pattern": "^[a-f0-9]{40}$"}
+            }
+          }
         },
-        "allOf": [{
-          "if": {"properties": {"outcome": {"const": "passed"}, "level": {"not": {"const": "harness"}}}, "required": ["outcome", "level"]},
-          "then": {"properties": {"tuple": {"properties": {
-            "package_digest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
-            "installer_version": {"type": "string", "minLength": 1},
-            "adapter_version": {"type": "string", "minLength": 1},
-            "client_version": {"type": "string", "minLength": 1}
-          }}}}
-        }],
+        "allOf": [
+          {
+            "if": {"properties": {"outcome": {"const": "passed"}, "level": {"not": {"const": "harness"}}}, "required": ["outcome", "level"]},
+            "then": {"properties": {"tuple": {"$ref": "#/$defs/completeTuple"}}}
+          }
+        ],
         "additionalProperties": false
       }
     },
     "summary": {
       "type": "object",
-      "required": ["passed", "failed", "inconclusive", "not_tested", "not_applicable", "required_gates_complete"],
+      "required": ["passed", "failed", "inconclusive", "not_applicable", "required_gates_complete", "hero_runtime_results"],
       "properties": {
-        "passed": {"type": "integer", "minimum": 0}, "failed": {"type": "integer", "minimum": 0},
-        "inconclusive": {"type": "integer", "minimum": 0}, "not_tested": {"type": "integer", "minimum": 0},
-        "not_applicable": {"type": "integer", "minimum": 0}, "required_gates_complete": {"type": "boolean"}
-      }, "additionalProperties": false
+        "passed": {"type": "integer", "minimum": 0},
+        "failed": {"type": "integer", "minimum": 0},
+        "inconclusive": {"type": "integer", "minimum": 0},
+        "not_applicable": {"type": "integer", "minimum": 0},
+        "required_gates_complete": {"type": "boolean"},
+        "hero_runtime_results": {"type": "integer", "minimum": 0, "maximum": 15}
+      },
+      "additionalProperties": false
     },
     "privacy": {
       "type": "object",
-      "required": ["redacted_export", "contains_absolute_home_paths", "contains_credentials", "real_user_project_used"],
-      "properties": {"redacted_export": {"const": true}, "contains_absolute_home_paths": {"const": false}, "contains_credentials": {"const": false}, "real_user_project_used": {"const": false}},
+      "required": ["redacted_export", "consent_artifact_digest", "contains_absolute_home_paths", "contains_credentials", "real_user_project_used", "auth_copied"],
+      "properties": {
+        "redacted_export": {"const": true},
+        "consent_artifact_digest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+        "contains_absolute_home_paths": {"const": false},
+        "contains_credentials": {"const": false},
+        "real_user_project_used": {"const": false},
+        "auth_copied": {"const": false}
+      },
       "additionalProperties": false
     }
   },
+  "$defs": {
+    "tuple": {
+      "type": "object",
+      "required": ["product_id", "tree_digest", "manifest_digest", "distribution_id", "distribution_kind", "release_sequence", "package_version", "snapshot_sequence", "snapshot_digest", "binary_digest", "dependency_identity", "installer_version", "adapter_version", "client_version", "os", "architecture", "observed_at"],
+      "properties": {
+        "product_id": {"type": ["string", "null"], "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"},
+        "tree_digest": {"type": ["string", "null"], "pattern": "^sha256:[a-f0-9]{64}$"},
+        "manifest_digest": {"type": ["string", "null"], "pattern": "^sha256:[a-f0-9]{64}$"},
+        "distribution_id": {"type": ["string", "null"], "pattern": "^[a-z0-9][a-z0-9-]*/[a-z0-9][a-z0-9-]*$"},
+        "distribution_kind": {"type": ["string", "null"], "enum": ["upstream", "community_bridge", "community", "direct", null]},
+        "release_sequence": {"type": ["integer", "null"], "minimum": 1},
+        "package_version": {"type": ["string", "null"], "minLength": 1},
+        "snapshot_sequence": {"type": ["integer", "null"], "minimum": 1},
+        "snapshot_digest": {"type": ["string", "null"], "pattern": "^sha256:[a-f0-9]{64}$"},
+        "binary_digest": {"type": ["string", "null"], "pattern": "^sha256:[a-f0-9]{64}$"},
+        "dependency_identity": {"type": ["string", "null"]},
+        "installer_version": {"type": ["string", "null"]},
+        "adapter_version": {"type": ["string", "null"]},
+        "client_version": {"type": ["string", "null"]},
+        "os": {"type": "string", "minLength": 1},
+        "architecture": {"type": "string", "minLength": 1},
+        "observed_at": {"type": "string", "format": "date-time"}
+      },
+      "additionalProperties": false
+    },
+    "completeTuple": {
+      "allOf": [
+        {"$ref": "#/$defs/tuple"},
+        {"properties": {
+          "product_id": {"type": "string"}, "tree_digest": {"type": "string"}, "manifest_digest": {"type": "string"},
+          "distribution_id": {"type": "string"}, "distribution_kind": {"type": "string"},
+          "release_sequence": {"type": "integer"}, "package_version": {"type": "string"},
+          "snapshot_sequence": {"type": "integer"}, "snapshot_digest": {"type": "string"},
+          "binary_digest": {"type": "string"}, "dependency_identity": {"type": "string", "minLength": 1},
+          "installer_version": {"type": "string", "minLength": 1}, "adapter_version": {"type": "string", "minLength": 1},
+          "client_version": {"type": "string", "minLength": 1}
+        }}
+      ]
+    }
+  },
+  "allOf": [
+    {"if": {"properties": {"run": {"properties": {"mode": {"const": "enforced"}}}}}, "then": {"properties": {"summary": {"properties": {"hero_runtime_results": {"const": 15}}}}}},
+    {"not": {"properties": {"matrix": {"contains": {"type": "object", "properties": {"client": {"const": "chatgpt"}, "plugin": {"not": {"const": "cloudflare-docs"}}}, "required": ["client", "plugin"]}}}, "required": ["matrix"]}}
+  ],
   "additionalProperties": false
 }

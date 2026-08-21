@@ -1,276 +1,60 @@
-name: live E2E
+name: live E2E read-only checks
 
 on:
   workflow_dispatch:
-    inputs:
-      marketplace_ref:
-        description: Optional exact public marketplace release tag to install
-        required: false
   schedule:
     - cron: "17 6 * * 1"
-  push:
-    tags:
-      - "v*"
 
 permissions:
   contents: read
 
 concurrency:
-  group: live-e2e-${{ github.ref }}
+  group: live-e2e-read-only-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
   public-read-flows:
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        with:
-          python-version: "3.13"
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: "24"
-      - run: python3 scripts/run_mcp_e2e.py --profile ci --output /tmp/universal-agent-plugins-e2e.json
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: public-mcp-evidence-${{ github.run_id }}
-          path: /tmp/universal-agent-plugins-e2e.json
-          retention-days: 30
-
-  codex-marketplace-install:
-    runs-on: ubuntu-latest
-    timeout-minutes: 12
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        with:
-          python-version: "3.13"
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: "24"
-      - name: Install pinned Codex CLI
-        run: npm install --global @openai/codex@0.147.0
-      - name: Resolve immutable marketplace release
-        id: marketplace
-        env:
-          GH_TOKEN: ${{ github.token }}
-          REQUESTED_REF: ${{ github.event.inputs.marketplace_ref }}
-        run: |
-          if [[ -n "$REQUESTED_REF" ]]; then
-            marketplace_ref="$REQUESTED_REF"
-          elif [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
-            marketplace_ref="$GITHUB_REF_NAME"
-          else
-            marketplace_ref="$(gh api "repos/${GITHUB_REPOSITORY}/releases/latest" --jq .tag_name)"
-          fi
-          if [[ ! "$marketplace_ref" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "Marketplace ref must be an exact semantic-version release tag." >&2
-            exit 1
-          fi
-          git fetch --force origin "refs/tags/${marketplace_ref}:refs/tags/${marketplace_ref}"
-          git fetch --no-tags origin main:refs/remotes/origin/main
-          marketplace_commit="$(git rev-list -n 1 "${marketplace_ref}^{commit}")"
-          git merge-base --is-ancestor "$marketplace_commit" refs/remotes/origin/main
-          echo "ref=${marketplace_ref}" >> "$GITHUB_OUTPUT"
-      - name: Install public plugin and call Context7
-        env:
-          MARKETPLACE_REF: ${{ steps.marketplace.outputs.ref }}
-        run: >-
-          python3 scripts/run_codex_install_e2e.py
-          --marketplace-ref "$MARKETPLACE_REF"
-          --require-ci-metadata
-          --output /tmp/codex-install-e2e.json
-      - name: Validate sanitized evidence
-        run: |
-          python3 -m pip install check-jsonschema==0.37.4
-          check-jsonschema --schemafile schemas/e2e/client-evidence.schema.json /tmp/codex-install-e2e.json
-          python3 scripts/validate_client_evidence.py --file /tmp/codex-install-e2e.json
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: codex-install-evidence-${{ github.run_id }}
-          path: /tmp/codex-install-e2e.json
-          retention-days: 30
-
-  copilot-native-lifecycle:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
-    env:
-      AGENTPLUGINS_VERSION: "0.1.6"
-      COPILOT_VERSION: "1.0.78"
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        with:
-          python-version: "3.13"
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: "24"
-      - name: Install pinned Agent Plugins and Copilot CLIs
-        run: >-
-          npm install --global
-          "universal-agent-plugins@${AGENTPLUGINS_VERSION}"
-          "@github/copilot@${COPILOT_VERSION}"
-      - name: Run native Copilot lifecycle E2E
-        env:
-          CATALOG_URL: https://raw.githubusercontent.com/${{ github.repository }}/${{ github.sha }}/catalog/v1/catalog.json
-        run: |
-          catalog_digest="sha256:$(sha256sum catalog/v1/catalog.json | cut -d ' ' -f 1)"
-          python3 scripts/run_agentplugins_copilot_native_e2e.py \
-            --binary "$(command -v agentplugins)" \
-            --expected-version "${AGENTPLUGINS_VERSION}" \
-            --copilot-binary "$(command -v copilot)" \
-            --expected-copilot-version "${COPILOT_VERSION}" \
-            --catalog-url "${CATALOG_URL}" \
-            --catalog-digest "${catalog_digest}" \
-            --output /tmp/copilot-native-e2e.json
-      - name: Validate sanitized evidence
-        run: |
-          python3 -m pip install check-jsonschema==0.37.4
-          check-jsonschema --schemafile schemas/e2e/client-evidence.schema.json /tmp/copilot-native-e2e.json
-          python3 scripts/validate_client_evidence.py --file /tmp/copilot-native-e2e.json
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: copilot-native-evidence-${{ github.run_id }}
-          path: /tmp/copilot-native-e2e.json
-          retention-days: 30
-
-  agentplugins-package-lifecycle:
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    env:
-      AGENTPLUGINS_VERSION: "0.1.6"
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        with:
-          python-version: "3.13"
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: "24"
-      - name: Install exact Agent Plugins CLI
-        run: npm install --global "universal-agent-plugins@${AGENTPLUGINS_VERSION}"
-      - name: Run all-package Cursor lifecycle E2E
-        env:
-          CATALOG_URL: https://raw.githubusercontent.com/${{ github.repository }}/${{ github.sha }}/catalog/v1/catalog.json
-        run: |
-          catalog_digest="sha256:$(sha256sum catalog/v1/catalog.json | cut -d ' ' -f 1)"
-          python3 scripts/run_agentplugins_lifecycle_e2e.py \
-            --binary "$(command -v agentplugins)" \
-            --expected-version "${AGENTPLUGINS_VERSION}" \
-            --catalog-url "${CATALOG_URL}" \
-            --catalog-digest "${catalog_digest}" \
-            --output /tmp/agentplugins-package-lifecycle-e2e.json
-      - name: Validate sanitized evidence
-        run: |
-          python3 -m pip install check-jsonschema==0.37.4
-          check-jsonschema --schemafile schemas/e2e/client-evidence.schema.json /tmp/agentplugins-package-lifecycle-e2e.json
-          python3 scripts/validate_client_evidence.py --file /tmp/agentplugins-package-lifecycle-e2e.json
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: agentplugins-package-lifecycle-evidence-${{ github.run_id }}
-          path: /tmp/agentplugins-package-lifecycle-e2e.json
-          retention-days: 30
-
-  agentplugins-chatgpt-catalog-v2:
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    env:
-      AGENTPLUGINS_VERSION: "0.1.6"
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        with:
-          python-version: "3.13"
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: "24"
-      - name: Install exact Agent Plugins CLI
-        run: npm install --global "universal-agent-plugins@${AGENTPLUGINS_VERSION}"
-      - name: Run ChatGPT catalog v2 lifecycle E2E
-        env:
-          CATALOG_URL: https://raw.githubusercontent.com/${{ github.repository }}/${{ github.sha }}/catalog/v2/catalog.json
-        run: |
-          catalog_digest="sha256:$(sha256sum catalog/v2/catalog.json | cut -d ' ' -f 1)"
-          python3 scripts/run_agentplugins_chatgpt_catalog_e2e.py \
-            --binary "$(command -v agentplugins)" \
-            --expected-version "${AGENTPLUGINS_VERSION}" \
-            --catalog-url "${CATALOG_URL}" \
-            --catalog-digest "${catalog_digest}" \
-            --output /tmp/agentplugins-chatgpt-catalog-v2-e2e.json
-      - name: Validate sanitized evidence
-        run: |
-          python3 -m pip install check-jsonschema==0.37.4
-          check-jsonschema --schemafile schemas/e2e/client-evidence.schema.json /tmp/agentplugins-chatgpt-catalog-v2-e2e.json
-          python3 scripts/validate_client_evidence.py --file /tmp/agentplugins-chatgpt-catalog-v2-e2e.json
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: agentplugins-chatgpt-catalog-v2-evidence-${{ github.run_id }}
-          path: /tmp/agentplugins-chatgpt-catalog-v2-e2e.json
-          retention-days: 30
-
-  agentplugins-hero-projections:
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    env:
-      AGENTPLUGINS_VERSION: "0.1.6"
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        with:
-          python-version: "3.13"
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: "24"
-      - name: Install exact Agent Plugins CLI
-        run: npm install --global "universal-agent-plugins@${AGENTPLUGINS_VERSION}"
-      - name: Run five-hero client projection E2E
-        env:
-          CATALOG_URL: https://raw.githubusercontent.com/${{ github.repository }}/${{ github.sha }}/catalog/v1/catalog.json
-        run: |
-          catalog_digest="sha256:$(sha256sum catalog/v1/catalog.json | cut -d ' ' -f 1)"
-          python3 scripts/run_agentplugins_hero_matrix_e2e.py \
-            --binary "$(command -v agentplugins)" \
-            --expected-version "${AGENTPLUGINS_VERSION}" \
-            --catalog-url "${CATALOG_URL}" \
-            --catalog-digest "${catalog_digest}" \
-            --output /tmp/agentplugins-hero-projections-e2e.json
-      - name: Validate sanitized evidence
-        run: |
-          python3 -m pip install check-jsonschema==0.37.4
-          check-jsonschema --schemafile schemas/e2e/client-evidence.schema.json /tmp/agentplugins-hero-projections-e2e.json
-          python3 scripts/validate_client_evidence.py --file /tmp/agentplugins-hero-projections-e2e.json
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: agentplugins-hero-projections-evidence-${{ github.run_id }}
-          path: /tmp/agentplugins-hero-projections-e2e.json
-          retention-days: 30
-
-  publish-release:
-    if: github.ref_type == 'tag'
-    needs:
-      - public-read-flows
-      - codex-marketplace-install
-      - copilot-native-lifecycle
-      - agentplugins-package-lifecycle
-      - agentplugins-chatgpt-catalog-v2
-      - agentplugins-hero-projections
-    runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Publish immutable GitHub release
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: scripts/publish_github_release.sh
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13"
+      - name: Run credential-free public MCP reads
+        run: python scripts/run_mcp_e2e.py --profile ci --output /tmp/public-mcp-evidence.json
+      - run: (cd /tmp && sha256sum public-mcp-evidence.json > public-mcp-evidence.SHA256SUMS)
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: public-read-evidence-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            /tmp/public-mcp-evidence.json
+            /tmp/public-mcp-evidence.SHA256SUMS
+          if-no-files-found: error
+          retention-days: 30
+          overwrite: false
+
+  stable-launch-contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13"
+      - name: Validate fixture-only non-runtime harness
+        run: |
+          run_root="/tmp/uap-live-contract-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          python scripts/run_launch_evidence_e2e.py --mode fixture-only \
+            --consent tests/e2e/fixtures/fixture-only-consent.json \
+            --run-root "$run_root" \
+            --output "$run_root/evidence/launch-evidence.json"
+          python -m unittest tests.test_run_launch_evidence_e2e tests.test_workflow_contracts

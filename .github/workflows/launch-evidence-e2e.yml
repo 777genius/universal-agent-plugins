@@ -1,31 +1,66 @@
-name: launch evidence E2E
+name: stable launch evidence E2E
 
 on:
-  workflow_dispatch:
-    inputs:
-      enforce_release_gates:
-        description: Fail unless every automated and human-consent launch gate has evidence
-        required: true
-        default: false
-        type: boolean
   pull_request:
     paths:
       - "scripts/run_launch_evidence_e2e.py"
       - "tests/e2e/**"
-      - "tests/test_run_*e2e*.py"
+      - "tests/test_run_launch_evidence_e2e.py"
+      - "tests/test_workflow_contracts.py"
       - ".github/workflows/launch-evidence-e2e.yml"
+  workflow_dispatch:
+    inputs:
+      agentplugins_version:
+        description: Exact released/built agentplugins version (0.1.8 or newer)
+        required: true
+        type: string
+      binary_url:
+        description: Immutable public URL for the exact agentplugins binary
+        required: true
+        type: string
+      binary_sha256:
+        description: Lowercase SHA-256 of the exact binary
+        required: true
+        type: string
+      directory_origin:
+        description: Credential-free HTTPS origin represented by the signed fixture
+        required: true
+        type: string
+      directory_bundle_url:
+        description: Immutable public URL for snapshot/envelope/trust bundle
+        required: true
+        type: string
+      directory_bundle_sha256:
+        description: Lowercase SHA-256 of the Directory bundle
+        required: true
+        type: string
+      live_inputs_url:
+        description: Immutable public URL for consented driver/runtime/OAuth bundle
+        required: true
+        type: string
+      live_inputs_sha256:
+        description: Lowercase SHA-256 of the live-input bundle
+        required: true
+        type: string
+      consent:
+        description: I approve disposable runtime/OAuth use by this stable gate
+        required: true
+        type: boolean
 
 permissions:
   contents: read
 
 concurrency:
-  group: launch-evidence-e2e-${{ github.ref }}
+  group: stable-launch-evidence-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
-  harness-contract:
-    runs-on: ubuntu-latest
+  fixture-only-non-runtime:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -33,54 +68,86 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.13"
-      - run: python -m unittest tests.test_run_launch_evidence_e2e
-
-  disposable-cli-matrix:
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
-    env:
-      AGENTPLUGINS_VERSION: "0.1.6"
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        with:
-          python-version: "3.13"
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: "24"
-      - name: Install exact lifecycle CLI
-        run: npm install --global "universal-agent-plugins@${AGENTPLUGINS_VERSION}"
-      - name: Run disposable launch evidence matrix
-        env:
-          CATALOG_URL: https://raw.githubusercontent.com/${{ github.repository }}/${{ github.sha }}/catalog/v1/catalog.json
+      - name: Run fixture-only non-runtime contracts
         run: |
-          catalog_digest="sha256:$(sha256sum catalog/v1/catalog.json | cut -d ' ' -f 1)"
-          attestation_args=()
-          if [[ -f tests/e2e/attestations/launch.json ]]; then
-            attestation_args=(--attestations tests/e2e/attestations/launch.json)
-          fi
-          scenario_args=()
-          if [[ -x tests/e2e/drivers/launch-scenarios ]]; then
-            scenario_args=(--scenario-driver tests/e2e/drivers/launch-scenarios)
-          fi
+          run_root="/tmp/uap-fixture-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           python scripts/run_launch_evidence_e2e.py \
-            --binary "$(command -v agentplugins)" \
-            --catalog-url "${CATALOG_URL}" \
-            --catalog-digest "${catalog_digest}" \
-            "${attestation_args[@]}" \
-            "${scenario_args[@]}" \
-            --output /tmp/launch-evidence.json \
-            ${{ inputs.enforce_release_gates && '--require-gates' || '' }}
-      - name: Validate redacted evidence schema
+            --mode fixture-only \
+            --consent tests/e2e/fixtures/fixture-only-consent.json \
+            --run-root "$run_root" \
+            --output "$run_root/evidence/launch-evidence.json"
+          python -m unittest tests.test_run_launch_evidence_e2e tests.test_workflow_contracts
+
+  enforced-stable-gate:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13"
+      - name: Require explicit live-test consent
+        env:
+          LIVE_TEST_CONSENT: ${{ inputs.consent }}
+        run: test "$LIVE_TEST_CONSENT" = "true"
+      - name: Acquire checksum-bound stable inputs
+        env:
+          BINARY_URL: ${{ inputs.binary_url }}
+          BINARY_SHA256: ${{ inputs.binary_sha256 }}
+          DIRECTORY_BUNDLE_URL: ${{ inputs.directory_bundle_url }}
+          DIRECTORY_BUNDLE_SHA256: ${{ inputs.directory_bundle_sha256 }}
+          LIVE_INPUTS_URL: ${{ inputs.live_inputs_url }}
+          LIVE_INPUTS_SHA256: ${{ inputs.live_inputs_sha256 }}
+        run: |
+          mkdir -p /tmp/uap-inputs/directory /tmp/uap-inputs/live
+          curl --fail --location --proto '=https' --tlsv1.2 --max-time 300 --max-filesize 268435456 --output /tmp/uap-inputs/agentplugins "$BINARY_URL"
+          curl --fail --location --proto '=https' --tlsv1.2 --max-time 300 --max-filesize 16777216 --output /tmp/uap-inputs/directory.tar "$DIRECTORY_BUNDLE_URL"
+          curl --fail --location --proto '=https' --tlsv1.2 --max-time 300 --max-filesize 16777216 --output /tmp/uap-inputs/live.tar "$LIVE_INPUTS_URL"
+          echo "${BINARY_SHA256}  /tmp/uap-inputs/agentplugins" | sha256sum --check --strict
+          echo "${DIRECTORY_BUNDLE_SHA256}  /tmp/uap-inputs/directory.tar" | sha256sum --check --strict
+          echo "${LIVE_INPUTS_SHA256}  /tmp/uap-inputs/live.tar" | sha256sum --check --strict
+          chmod 0500 /tmp/uap-inputs/agentplugins
+          python -c 'import sys,tarfile; tarfile.open(sys.argv[1]).extractall(sys.argv[2], filter="data")' /tmp/uap-inputs/directory.tar /tmp/uap-inputs/directory
+          python -c 'import sys,tarfile; tarfile.open(sys.argv[1]).extractall(sys.argv[2], filter="data")' /tmp/uap-inputs/live.tar /tmp/uap-inputs/live
+          chmod 0500 /tmp/uap-inputs/live/scenario-driver
+      - name: Run enforced stable launch gate
+        env:
+          AGENTPLUGINS_VERSION: ${{ inputs.agentplugins_version }}
+          AGENTPLUGINS_SHA256: ${{ inputs.binary_sha256 }}
+          DIRECTORY_ORIGIN: ${{ inputs.directory_origin }}
+        run: |
+          run_root="/tmp/uap-stable-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          python scripts/run_launch_evidence_e2e.py \
+            --binary /tmp/uap-inputs/agentplugins \
+            --binary-digest "sha256:${AGENTPLUGINS_SHA256}" \
+            --expected-version "$AGENTPLUGINS_VERSION" \
+            --directory-origin "$DIRECTORY_ORIGIN" \
+            --directory-snapshot /tmp/uap-inputs/directory/snapshot.json \
+            --directory-envelope /tmp/uap-inputs/directory/envelope.json \
+            --directory-trust /tmp/uap-inputs/directory/trusted-keys.json \
+            --scenario-driver /tmp/uap-inputs/live/scenario-driver \
+            --attestations /tmp/uap-inputs/live/runtime-attestations.json \
+            --notion-oauth-attestation /tmp/uap-inputs/live/notion-oauth-attestations.json \
+            --chatgpt-attestation /tmp/uap-inputs/live/chatgpt-cloudflare-attestation.json \
+            --consent /tmp/uap-inputs/live/consent.json \
+            --run-root "$run_root" \
+            --output "$run_root/evidence/launch-evidence.json"
+          (cd "$run_root/evidence" && sha256sum launch-evidence.json > SHA256SUMS)
+          echo "RUN_ROOT=$run_root" >> "$GITHUB_ENV"
+      - name: Validate evidence schema
         run: |
           python -m pip install check-jsonschema==0.37.4
-          check-jsonschema --schemafile tests/e2e/schemas/launch-evidence.schema.json /tmp/launch-evidence.json
+          check-jsonschema --schemafile tests/e2e/schemas/launch-evidence.schema.json "$RUN_ROOT/evidence/launch-evidence.json"
+          (cd "$RUN_ROOT/evidence" && sha256sum --check SHA256SUMS)
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        if: always()
         with:
-          name: launch-evidence-${{ github.run_id }}
-          path: /tmp/launch-evidence.json
+          name: stable-launch-evidence-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.RUN_ROOT }}/evidence
           if-no-files-found: error
-          retention-days: 30
+          retention-days: 90
+          overwrite: false
