@@ -7,8 +7,8 @@ const registry = useRegistry()
 const { current, expired, published } = useDirectoryStatus()
 const { asset, repositoryUrl } = useSite()
 const demoPlugin = computed(() => {
-  const plugin = registry.plugins.find(item => item.name === 'context7')
-  if (!plugin) throw new Error('Context7 is required for the homepage quick start')
+  const plugin = registry.plugins.find(item => item.name === 'context7') ?? registry.plugins[0]
+  if (!plugin) throw new Error('The homepage quick start requires at least one Directory product')
   return plugin
 })
 const heroTargets = computed(() => clients.filter(client => demoPlugin.value.client_support.clients.includes(client.id)))
@@ -22,7 +22,7 @@ const heroTargetOptions = computed(() => clients.map(client => ({
     if (expired.value) return 'Unavailable: signed Directory snapshot expired'
     const target = expectedDistribution(demoPlugin.value, [client.id])?.targets.find(item => item.client === client.id)
     if (target) return deliveryLabel(target.delivery)
-    return client.id === 'chatgpt' ? 'Unavailable: Context7 has no registered app binding in signed policy' : 'Not compatible with an active release'
+    return client.id === 'chatgpt' ? `Unavailable: ${demoPlugin.value.display_name} has no registered app binding in signed policy` : 'Not compatible with an active release'
   })(),
 })))
 const heroClientLabel = (id: ClientID, name: string) => id === 'copilot' ? 'Copilot' : name
@@ -87,7 +87,7 @@ useHead({ link: [{ rel: 'canonical', href: `${useRuntimeConfig().public.siteUrl}
         <div class="hero__window">
           <div class="hero__window-top"><span /><span /><span /><b>Quick start</b></div>
           <div class="hero__window-body">
-            <p>Install Context7 for {{ selectedHeroNames }}</p>
+            <p>Install {{ demoPlugin.display_name }} for {{ selectedHeroNames }}</p>
             <div class="hero-command-row">
               <AppMultiSelect :model-value="heroTargetIDs" label="Choose target clients" :options="heroTargetOptions" @update:model-value="updateHeroTargets" />
               <CommandSnippet v-if="heroCommand" :command="heroCommand" />

@@ -35,6 +35,14 @@ describe('focused catalog accessibility contract', () => {
     assert.match(layout, /Pull request preview/)
   })
 
+  it('keeps the homepage buildable when a valid Directory omits Context7', () => {
+    const home = source('../pages/index.vue')
+    assert.match(home, /find\(item => item\.name === 'context7'\) \?\? registry\.plugins\[0\]/)
+    assert.match(home, /Install \{\{ demoPlugin\.display_name \}\}/)
+    assert.doesNotMatch(home, /Context7 is required/)
+    assert.doesNotMatch(home, />Install Context7 for/)
+  })
+
   it('gates install candidates and copy actions on a current published snapshot', () => {
     const status = source('../composables/useDirectoryStatus.ts')
     const home = source('../pages/index.vue')
