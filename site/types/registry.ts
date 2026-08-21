@@ -17,6 +17,7 @@ export type ClientID = 'codex' | 'chatgpt' | 'cursor' | 'copilot' | 'vscode' | '
 export type ComponentID = 'extensions' | 'mcp' | 'skills'
 export type DistributionKind = 'upstream' | 'community_bridge' | 'community' | 'direct'
 export type EvidenceLevel = 'schema' | 'materialization' | 'discovery' | 'runtime' | 'oauth'
+export type ClientEvidenceLevel = Exclude<EvidenceLevel, 'schema'>
 export type EvidenceOutcome = 'passed' | 'failed' | 'inconclusive' | 'not_tested' | 'not_applicable'
 export type DeliveryMode = 'managed' | 'prepared' | 'manual_activation'
 export type DistributionStatus = 'candidate' | 'active' | 'suspended'
@@ -40,19 +41,50 @@ export interface PluginIcon {
   sha256: string
 }
 
-export interface ClientEvidence {
-  client: ClientID
-  level: EvidenceLevel
+export interface EvidenceArtifact {
+  repository: string
+  revision: string
+  path: string
+  digest: string
+  url: string
+}
+
+interface EvidenceDetails {
+  id: string
   outcome: EvidenceOutcome
+  tested_at?: string
+}
+
+export interface PackageEvidence extends EvidenceDetails {
+  level: 'schema'
+  package_tree_digest: string
+  artifact: EvidenceArtifact
+}
+
+export interface ClientEvidence extends EvidenceDetails {
+  client: ClientID
+  level: ClientEvidenceLevel
   client_version?: string
   os?: string
   architecture?: string
-  tested_at?: string
-  evidence_url?: string
-  package_tree_digest?: string
   dependency_identity?: string
   installer_version?: string
-  artifact_digest?: string
+  package_tree_digest?: string
+  artifact?: EvidenceArtifact
+}
+
+export interface DistributionReleaseView {
+  release_sequence: number
+  source: PluginSource
+  version: string
+  targets: ReleaseTarget[]
+  components: ComponentID[]
+  evidence: ClientEvidence[]
+  package_evidence: PackageEvidence[]
+  release_status: ReleaseStatus
+  selectable: boolean
+  blocking_clients: ClientID[]
+  meets_minimum_capabilities: boolean
 }
 
 export interface DistributionView {
@@ -65,11 +97,13 @@ export interface DistributionView {
   version: string
   compatible_clients: ClientID[]
   evidence: ClientEvidence[]
+  package_evidence: PackageEvidence[]
   status: DistributionStatus
   release_status: ReleaseStatus
   selectable: boolean
   targets: ReleaseTarget[]
   components: ComponentID[]
+  releases: DistributionReleaseView[]
 }
 
 /**
@@ -96,6 +130,7 @@ export interface RegistryPlugin {
   default_fallback_reason?: string
   distributions: DistributionView[]
   evidence: ClientEvidence[]
+  package_evidence: PackageEvidence[]
   authentication: 'none' | 'client_managed' | 'oauth' | 'unknown'
   client_support: {
     resolution: 'directory' | 'install_time'

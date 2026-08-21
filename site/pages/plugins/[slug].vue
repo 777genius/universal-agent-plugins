@@ -49,10 +49,20 @@ useHead({ link: [{ rel: 'canonical', href: canonical }] })
         </div>
         <div class="status-card">
           <span class="validation-badge"><span>✓</span> {{ validationLabel(plugin) }}</span>
-          <ul v-if="plugin.evidence.length" class="evidence-list">
-            <li v-for="item in plugin.evidence" :key="`${item.client}-${item.level}`"><strong>{{ item.client }}: {{ evidenceLabel(item) }}</strong><span v-if="item.client_version || item.os || item.architecture || item.tested_at"> — {{ [item.client_version, item.os, item.architecture, item.installer_version && `installer ${item.installer_version}`, item.dependency_identity, item.tested_at].filter(Boolean).join(' · ') }}</span><span v-else> — legacy evidence record; open the report for the exact applicable environment</span><br v-if="item.package_tree_digest" /><small v-if="item.package_tree_digest">Package {{ item.package_tree_digest }} · artifact {{ item.artifact_digest }}</small> <a v-if="item.evidence_url?.startsWith('https://')" :href="item.evidence_url" target="_blank" rel="noreferrer">Evidence ↗</a></li>
+          <h3>Package evidence</h3>
+          <ul v-if="plugin.package_evidence.length" class="evidence-list">
+            <li v-for="item in plugin.package_evidence" :key="item.id">
+              <strong>{{ evidenceLabel(item) }}</strong><span v-if="item.tested_at"> — {{ item.tested_at }}</span><br />
+              <small>Evidence ID <code>{{ item.id }}</code><br />Package <code>{{ item.package_tree_digest }}</code><br />Artifact <code>{{ item.artifact.repository }}@{{ item.artifact.revision }}//{{ item.artifact.path }}</code><br />Artifact digest <code>{{ item.artifact.digest }}</code></small>
+              <a :href="item.artifact.url" target="_blank" rel="noreferrer">Exact evidence ↗</a>
+            </li>
           </ul>
-          <p v-else>No client runtime or OAuth evidence is recorded for this exact release. Schema validation covers package structure only.</p>
+          <p v-else>No package-level schema evidence is selected for this exact release.</p>
+          <h3>Client evidence</h3>
+          <ul v-if="plugin.evidence.length" class="evidence-list">
+            <li v-for="item in plugin.evidence" :key="item.id"><strong>{{ item.client }}: {{ evidenceLabel(item) }}</strong><span v-if="item.client_version || item.os || item.architecture || item.tested_at"> — {{ [item.client_version, item.os, item.architecture, item.installer_version && `installer ${item.installer_version}`, item.dependency_identity, item.tested_at].filter(Boolean).join(' · ') }}</span><span v-else> — legacy evidence record; open the report for the exact applicable environment</span><template v-if="item.package_tree_digest && item.artifact"><br /><small>Evidence ID <code>{{ item.id }}</code><br />Package <code>{{ item.package_tree_digest }}</code><br />Artifact <code>{{ item.artifact.repository }}@{{ item.artifact.revision }}//{{ item.artifact.path }}</code><br />Artifact digest <code>{{ item.artifact.digest }}</code></small> <a :href="item.artifact.url" target="_blank" rel="noreferrer">Exact evidence ↗</a></template></li>
+          </ul>
+          <p v-else>No client materialization, discovery, runtime, or OAuth evidence is selected for this exact release.</p>
           <a :href="`${repositoryUrl}/blob/main/docs/VERIFICATION.md`" target="_blank" rel="noreferrer">Read verification evidence →</a>
         </div>
       </article>

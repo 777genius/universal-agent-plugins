@@ -48,4 +48,13 @@ describe('focused catalog accessibility contract', () => {
     assert.match(config, /object-src 'none'/)
     assert.doesNotMatch(components, /v-html/)
   })
+
+  it('renders package evidence once with its exact immutable artifact identity', () => {
+    const detail = source('../pages/plugins/[slug].vue')
+    assert.equal([...detail.matchAll(/v-for="item in plugin\.package_evidence"/g)].length, 1)
+    assert.match(detail, /item\.artifact\.repository.*item\.artifact\.revision.*item\.artifact\.path/s)
+    assert.match(detail, /item\.artifact\.digest/)
+    assert.match(detail, /item\.package_tree_digest/)
+    assert.match(detail, /item\.artifact\.url/)
+  })
 })

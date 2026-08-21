@@ -15,11 +15,14 @@ interface SnapshotFixture {
     id: string
     status: string
     release_policies: Array<{
+      release_sequence: number
       status: string
+      current_evidence: string[]
       targets: Array<{ client: string, delivery: string, scopes: string[], app_binding?: { app_key: string, id: string, mcp_server: string } }>
     }>
+    releases: Array<Record<string, unknown>>
   }>
-  evidence: Array<{ package_tree_digest: string, installer_version?: string, artifact: { digest: string } }>
+  evidence: Array<{ id: string, client?: string, level: string, outcome: string, package_tree_digest: string, installer_version?: string, artifact: { digest: string } }>
   revocations: Array<{ distribution_id: string, release_sequence: number }>
 }
 
@@ -64,9 +67,15 @@ describe('registry parsing', () => {
     assert.equal(expectedDistribution(directory.plugins[0]!, ['codex', 'cursor'])?.id, 'example/demo')
     assert.equal(expectedDistribution(directory.plugins[0]!, ['codex', 'kiro'])?.id, 'example/demo-bridge')
     assert.deepEqual(directory.plugins[0]?.evidence[0], {
-      client: 'codex', level: 'runtime', outcome: 'passed', client_version: '0.200.0', os: 'linux', architecture: 'amd64', tested_at: '2026-08-19T00:00:00Z', evidence_url: `https://github.com/example/evidence/blob/${'e'.repeat(40)}/evidence/demo.json`,
-      package_tree_digest: `sha256:${'1'.repeat(64)}`, installer_version: '0.1.6', artifact_digest: `sha256:${'3'.repeat(64)}`,
+      id: 'runtime-demo-codex', client: 'codex', level: 'runtime', outcome: 'passed', client_version: '0.200.0', os: 'linux', architecture: 'amd64', tested_at: '2026-08-19T00:00:00Z',
+      package_tree_digest: `sha256:${'1'.repeat(64)}`, installer_version: '0.1.6', artifact: { repository: 'example/evidence', revision: 'e'.repeat(40), path: 'evidence/demo.json', digest: `sha256:${'3'.repeat(64)}`, url: `https://github.com/example/evidence/blob/${'e'.repeat(40)}/evidence/demo.json` },
     })
+    assert.deepEqual(directory.plugins[0]?.package_evidence[0], {
+      id: 'schema-demo', level: 'schema', outcome: 'passed', package_tree_digest: `sha256:${'1'.repeat(64)}`,
+      artifact: { repository: 'example/evidence', revision: 'f'.repeat(40), path: 'evidence/demo-schema.json', digest: `sha256:${'6'.repeat(64)}`, url: `https://github.com/example/evidence/blob/${'f'.repeat(40)}/evidence/demo-schema.json` },
+    })
+    assert.equal('client' in directory.plugins[0]!.package_evidence[0]!, false)
+    assert.equal(directory.plugins[0]!.evidence.some(item => item.id === 'schema-demo'), false)
     assert.equal(validationLabel(directory.plugins[0]!), 'Runtime tested')
   })
 
@@ -99,6 +108,70 @@ describe('registry parsing', () => {
     assert.equal(expectedDistribution(supersededPlugin, ['codex'])?.id, 'example/demo-bridge')
   })
 
+  it('matches authoritative blocking-evidence fallback decisions', () => {
+    for (const level of ['materialization', 'discovery', 'runtime']) {
+      const raw = signedFixture()
+      const runtime = raw.evidence.find(item => item.id === 'runtime-demo-codex')!
+      runtime.level = level
+      runtime.outcome = 'failed'
+      const plugin = parseDirectoryData(raw, 'published_snapshot').plugins[0]!
+      assert.equal(expectedDistribution(plugin, ['codex'])?.id, 'example/demo-bridge', `${level} failure must fall back`)
+      assert.equal(expectedDistribution(plugin, ['cursor'])?.id, 'example/demo', `${level} failure must block only its client`)
+    }
+  })
+
+  it('does not let unsigned, stale, or non-blocking evidence affect eligibility', () => {
+    const baseline = signedFixture()
+    const unsigned = structuredClone(baseline.evidence.find(item => item.id === 'runtime-demo-codex')!)
+    unsigned.id = 'unsigned-failure'
+    unsigned.outcome = 'failed'
+    baseline.evidence.push(unsigned)
+    assert.equal(expectedDistribution(parseDirectoryData(baseline, 'published_snapshot').plugins[0]!, ['codex'])?.id, 'example/demo')
+
+    for (const outcome of ['inconclusive', 'not_tested', 'not_applicable']) {
+      const raw = signedFixture()
+      raw.evidence.find(item => item.id === 'runtime-demo-codex')!.outcome = outcome
+      assert.equal(expectedDistribution(parseDirectoryData(raw, 'published_snapshot').plugins[0]!, ['codex'])?.id, 'example/demo')
+    }
+
+    const oauth = signedFixture()
+    const oauthEvidence = oauth.evidence.find(item => item.id === 'runtime-demo-codex')!
+    oauthEvidence.level = 'oauth'
+    oauthEvidence.outcome = 'failed'
+    assert.equal(expectedDistribution(parseDirectoryData(oauth, 'published_snapshot').plugins[0]!, ['codex'])?.id, 'example/demo')
+
+    const stale = signedFixture()
+    const staleEvidence = structuredClone(stale.evidence.find(item => item.id === 'runtime-demo-codex')!)
+    staleEvidence.id = 'stale-failure'
+    staleEvidence.outcome = 'failed'
+    staleEvidence.package_tree_digest = `sha256:${'9'.repeat(64)}`
+    stale.evidence.push(staleEvidence)
+    stale.distributions[0]!.release_policies[0]!.current_evidence.push(staleEvidence.id)
+    assert.equal(expectedDistribution(parseDirectoryData(stale, 'published_snapshot').plugins[0]!, ['codex'])?.id, 'example/demo')
+  })
+
+  it('falls back to an older eligible release before another distribution', () => {
+    const raw = signedFixture()
+    const upstream = raw.distributions[0]!
+    const older = structuredClone(upstream.releases[0]!)
+    older.sequence = 1
+    older.package_version = '0.8.0'
+    older.tree_digest = `sha256:${'7'.repeat(64)}`
+    ;(older.package_source as Record<string, unknown>).revision = '9'.repeat(40)
+    upstream.releases.push(older)
+    upstream.release_policies.push({
+      ...structuredClone(upstream.release_policies[0]!),
+      current_evidence: [],
+      release_sequence: 1,
+    } as typeof upstream.release_policies[number])
+    raw.evidence.find(item => item.id === 'runtime-demo-codex')!.outcome = 'failed'
+
+    const selected = expectedDistribution(parseDirectoryData(raw, 'published_snapshot').plugins[0]!, ['codex'])
+    assert.equal(selected?.id, 'example/demo')
+    assert.equal(selected?.release_sequence, 1)
+    assert.equal(selected?.version, '0.8.0')
+  })
+
   it('preserves signed delivery, scopes, and the exact Cloudflare ChatGPT app binding', () => {
     const raw = signedFixture()
     const bridge = raw.distributions[1]!
@@ -120,13 +193,13 @@ describe('registry parsing', () => {
 
   it('accepts evidence only for the selected release exact package tuple', () => {
     const raw = signedFixture()
-    raw.evidence[0]!.package_tree_digest = `sha256:${'9'.repeat(64)}`
+    raw.evidence.find(item => item.id === 'runtime-demo-codex')!.package_tree_digest = `sha256:${'9'.repeat(64)}`
     const plugin = parseDirectoryData(raw, 'published_snapshot').plugins[0]!
     assert.deepEqual(plugin.evidence, [])
-    assert.equal(validationLabel(plugin), 'Schema validated')
+    assert.equal(validationLabel(plugin), 'Schema passed')
 
     const incomplete = signedFixture()
-    delete incomplete.evidence[0]!.installer_version
+    delete incomplete.evidence.find(item => item.id === 'runtime-demo-codex')!.installer_version
     assert.deepEqual(parseDirectoryData(incomplete, 'published_snapshot').plugins[0]!.evidence, [])
   })
 
@@ -157,7 +230,7 @@ describe('registry parsing', () => {
     assert.deepEqual(registry.plugins[0]?.client_support.clients, ['codex', 'cursor', 'copilot', 'vscode', 'kiro'])
     assert.equal(registry.plugins[1]?.client_support.resolution, 'install_time')
     assert.deepEqual(registry.plugins[0]?.evidence.map(item => item.client), ['codex', 'cursor'])
-    assert.equal(validationLabel(registry.plugins[0]!), 'Schema validated')
+    assert.equal(validationLabel(registry.plugins[0]!), 'No current evidence')
     assert.deepEqual(registry.plugins[1]?.components, ['skills'])
   })
 

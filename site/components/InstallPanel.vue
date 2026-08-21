@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { RegistryPlugin } from '~/types/registry'
 import { pluginCommands } from '~/utils/commands'
-import { defaultDistribution, deliveryLabel, expectedDistribution } from '~/utils/registry'
+import { deliveryLabel, expectedDistribution } from '~/utils/registry'
 
 const props = defineProps<{ plugin: RegistryPlugin }>()
 const { asset } = useSite()
@@ -21,9 +21,9 @@ const targetOptions = computed(() => clients.map(client => ({
   })(),
 })))
 const commands = computed(() => targets.value.length ? pluginCommands(props.plugin, targets.value) : undefined)
-const declaredSource = computed(() => defaultDistribution(props.plugin))
+const declaredSource = computed(() => props.plugin.distributions.find(item => item.id === props.plugin.declared_default_distribution))
 const expectedSource = computed(() => expectedDistribution(props.plugin, targets.value))
-const usesFallback = computed(() => expectedSource.value && expectedSource.value.id !== declaredSource.value.id)
+const usesFallback = computed(() => expectedSource.value && expectedSource.value.id !== declaredSource.value?.id)
 const hasCompleteSource = computed(() => Boolean(expectedSource.value))
 const selectedTargets = computed(() => expectedSource.value?.targets.filter(target => targets.value.includes(target.client)) ?? [])
 const chatgptBinding = computed(() => selectedTargets.value.find(target => target.client === 'chatgpt')?.app_binding)

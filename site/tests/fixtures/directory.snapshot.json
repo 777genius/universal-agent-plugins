@@ -8,6 +8,7 @@
       "release_policies": [
         {
           "current_evidence": [
+            "schema-demo",
             "runtime-demo-codex"
           ],
           "minimum_installer_version": "0.1.6",
@@ -119,6 +120,21 @@
     }
   ],
   "evidence": [
+    {
+      "artifact": {
+        "digest": "sha256:6666666666666666666666666666666666666666666666666666666666666666",
+        "path": "evidence/demo-schema.json",
+        "repository": "example/evidence",
+        "revision": "ffffffffffffffffffffffffffffffffffffffff"
+      },
+      "distribution_id": "example/demo",
+      "id": "schema-demo",
+      "level": "schema",
+      "outcome": "passed",
+      "package_tree_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "release_sequence": 2,
+      "schema_version": 1
+    },
     {
       "architecture": "amd64",
       "artifact": {
