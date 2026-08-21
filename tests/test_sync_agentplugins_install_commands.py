@@ -18,11 +18,15 @@ class InstallCommandConsistencyTests(unittest.TestCase):
     def test_every_package_has_the_exact_copy_ready_codex_command(self) -> None:
         source = json.loads((ROOT / "registry" / "directory.json").read_text())
         distributions = {item["id"]: item for item in source["distributions"]}
-        for product in source["products"]:
-            plugin_root = ROOT / "plugins" / product["id"]
+        products = {item["id"]: item for item in source["products"]}
+        package_roots = sorted(path for path in (ROOT / "plugins").iterdir() if path.is_dir())
+        for plugin_root in package_roots:
+            product_id = plugin_root.name
+            self.assertIn(product_id, products)
+            product = products[product_id]
             self.assertEqual(sync.updated_readme(plugin_root), (plugin_root / "README.md").read_text())
             self.assertIn(
-                f"npx universal-agent-plugins add {product['id']} --target codex",
+                f"npx universal-agent-plugins add {product_id} --target codex",
                 (plugin_root / "README.md").read_text(),
             )
             self.assertTrue(any(
