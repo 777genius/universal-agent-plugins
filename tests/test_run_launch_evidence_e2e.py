@@ -282,6 +282,33 @@ class LaunchEvidenceE2ETests(unittest.TestCase):
         self.assertEqual(digest, json.loads((PUBLICATION / "envelope-current.json").read_text())["snapshot_digest"])
         self.assertNotIn("CATALOG", " ".join(env))
         self.assertIn("AGENTPLUGINS_DIRECTORY_ORIGIN", env)
+        self.assertEqual(set(env), e2e.DIRECTORY_INPUT_ENVIRONMENT_KEYS)
+
+    def test_real_binary_directory_environment_has_exact_conformance_tuple(self) -> None:
+        directory_environment = {
+            "AGENTPLUGINS_DIRECTORY_ORIGIN": "https://directory.example.test/registry/",
+            "AGENTPLUGINS_DIRECTORY_SNAPSHOT": str(PUBLICATION / "snapshot.json"),
+            "AGENTPLUGINS_DIRECTORY_ENVELOPE": str(PUBLICATION / "envelope-current.json"),
+            "AGENTPLUGINS_DIRECTORY_TRUST": str(PUBLICATION / "trusted-keys.json"),
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            sandbox = Path(tmp) / "scenario"
+            sandbox.mkdir()
+            env = e2e.isolated_environment(sandbox, ("cursor",), directory_environment)
+        directory_keys = {key for key in env if key.startswith("AGENTPLUGINS_DIRECTORY_")}
+        self.assertEqual(directory_keys, e2e.DIRECTORY_LAUNCH_ENVIRONMENT_KEYS)
+        self.assertEqual(env["AGENTPLUGINS_DIRECTORY_CONFORMANCE_ONLY"], "1")
+
+    def test_partial_real_binary_directory_environment_is_rejected(self) -> None:
+        partial = {
+            "AGENTPLUGINS_DIRECTORY_ORIGIN": "https://directory.example.test/registry/",
+            "AGENTPLUGINS_DIRECTORY_SNAPSHOT": str(PUBLICATION / "snapshot.json"),
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            sandbox = Path(tmp) / "scenario"
+            sandbox.mkdir()
+            with self.assertRaisesRegex(ValueError, "complete origin/snapshot/envelope/trust tuple"):
+                e2e.isolated_environment(sandbox, ("cursor",), partial)
 
     def test_disposable_root_must_be_fresh(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

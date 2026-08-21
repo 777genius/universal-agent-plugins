@@ -5,15 +5,11 @@ existing package are welcome.
 
 ## Add or update a plugin
 
-1. Use a folder under `plugins/<plugin-name>/`.
-2. Add a root `plugin.json` targeting the Agent Plugins 1.0.0 schema.
-3. Add `mcp.json` only for a vendor-documented MCP endpoint or a bundled stdio
-   server with a reproducible dependency pin.
-4. Put Agent Skills only in immediate child folders under `skills/`.
-5. Add a package `README.md` with upstream documentation, authentication, scope,
-   and known write capabilities.
-6. Update `SOURCES.md` and `docs/COMPATIBILITY.md`.
-7. Run the validator and unit tests.
+For an existing in-repository package, keep its portable source under
+`plugins/<plugin-name>/`: use a root Agent Plugins 1.0 `plugin.json`, put skills
+only in immediate child folders under `skills/`, and add `mcp.json` only for a
+vendor-documented endpoint or reproducibly pinned bundled server. Keep its
+`README.md`, `SOURCES.md`, and `docs/COMPATIBILITY.md` accurate.
 
 Before opening a pull request, test the package directly from its local folder:
 
@@ -30,11 +26,16 @@ npx universal-agent-plugins add \
   --target cursor --dry-run
 ```
 
-To list one in the public directory, follow the separate [external registry
-submission guide](registry/README.md#submit-an-external-package).
+To add a public Directory listing, do not add a new flat catalog descriptor.
+Follow the [external package submission guide](registry/README.md#submit-an-external-package):
+preflight the exact full-SHA package source, then add its product, namespaced
+distribution, immutable release, and matching policy to
+`registry/directory.json`.
 
 ```bash
 python3 scripts/validate_catalog.py
+python3 scripts/build_registry.py
+python3 scripts/build_registry.py --check
 python3 scripts/build_openai_compat.py --check
 python3 scripts/validate_openai_compat.py
 python3 -m unittest discover -s tests

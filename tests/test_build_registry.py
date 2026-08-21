@@ -601,7 +601,8 @@ class DirectoryDomainTests(unittest.TestCase):
             legacy = f"777genius/{product}"
             self.assertEqual(registry.resolve_directory(source, legacy, ["codex"])["distribution_id"], legacy)
         self.assertEqual(registry.resolve_directory(source, "context7", ["codex"])["distribution_id"], "777genius/context7")
-        self.assertEqual(registry.resolve_directory(source, "upstash/context7", ["codex"])["distribution_id"], "upstash/context7")
+        with self.assertRaisesRegex(registry.RegistryError, r"upstash/context7: .* evidence .* for codex"):
+            registry.resolve_directory(source, "upstash/context7", ["codex"])
 
     def test_real_bridge_and_upstream_context7_provenance_is_exact(self) -> None:
         source = self.source()
@@ -639,9 +640,10 @@ class DirectoryDomainTests(unittest.TestCase):
         with self.assertRaisesRegex(registry.RegistryError, "candidate"):
             registry.resolve_directory(fixture, "upstream/demo", ["cursor"])
 
-    def promote_upstream(self, fixture, evidence_targets=(), *, point_to_evidence=True):
+    def promote_upstream(self, fixture, evidence_targets=(), *, point_to_evidence=True, set_default=True):
         product = fixture["products"][0]
-        product["default_distribution"] = "upstream/demo"
+        if set_default:
+            product["default_distribution"] = "upstream/demo"
         upstream = next(item for item in fixture["distributions"] if item["id"] == "upstream/demo")
         upstream["status"] = "active"
         release = upstream["releases"][0]
@@ -700,6 +702,65 @@ class DirectoryDomainTests(unittest.TestCase):
         self.promote_upstream(fixture, ("codex", "cursor"))
         registry.validate_directory(fixture, verify_packages=False)
         self.assertEqual(registry.resolve_directory(fixture, "demo", ["codex", "cursor"])["distribution_id"], "upstream/demo")
+
+    def test_unqualified_fallback_skips_upstream_without_selected_target_evidence(self) -> None:
+        fixture = self.fixture()
+        fixture["products"][0]["default_distribution"] = "community/demo"
+        self.promote_upstream(fixture, set_default=False)
+        result = registry.resolve_directory(fixture, "demo", ["codex", "cursor"])
+        self.assertEqual(result["distribution_id"], "packager/demo-bridge")
+        self.assertEqual(
+            result["fallback_reason"],
+            "declared default community/demo was ineligible: release 1 does not support cursor",
+        )
+
+    def test_unqualified_fallback_selects_upstream_with_exact_target_evidence(self) -> None:
+        fixture = self.fixture()
+        fixture["products"][0]["default_distribution"] = "community/demo"
+        self.promote_upstream(fixture, ("codex", "cursor"), set_default=False)
+        result = registry.resolve_directory(fixture, "demo", ["codex", "cursor"])
+        self.assertEqual((result["distribution_id"], result["release_sequence"]), ("upstream/demo", 1))
+        self.assertEqual(
+            result["fallback_reason"],
+            "declared default community/demo was ineligible: release 1 does not support cursor",
+        )
+
+    def test_qualified_upstream_selection_requires_evidence_for_selected_targets_only(self) -> None:
+        fixture = self.fixture()
+        self.promote_upstream(fixture, ("cursor",), set_default=False)
+        selected = registry.resolve_directory(fixture, "upstream/demo", ["cursor"])
+        self.assertEqual((selected["distribution_id"], selected["release_sequence"]), ("upstream/demo", 1))
+        with self.assertRaisesRegex(
+            registry.RegistryError,
+            r"upstream/demo: release 1 lacks current positive package compatibility evidence .* for codex$",
+        ):
+            registry.resolve_directory(fixture, "upstream/demo", ["codex"])
+
+    def test_upstream_selection_rejects_stale_release_tuple_evidence(self) -> None:
+        fixture = self.fixture()
+        upstream = self.promote_upstream(fixture, ("cursor",), set_default=False)
+        evidence_id = upstream["release_policies"][0]["current_evidence"][0]
+        observation = next(item for item in fixture["evidence"] if item["id"] == evidence_id)
+        observation["release_sequence"] = 2
+        with self.assertRaisesRegex(
+            registry.RegistryError,
+            r"upstream/demo: release 1 lacks current positive package compatibility evidence .* for cursor$",
+        ):
+            registry.resolve_directory(fixture, "upstream/demo", ["cursor"])
+
+        observation["release_sequence"] = 1
+        observation["package_tree_digest"] = "sha256:" + "0" * 64
+        with self.assertRaisesRegex(registry.RegistryError, r"evidence .* for cursor$"):
+            registry.resolve_directory(fixture, "upstream/demo", ["cursor"])
+
+    def test_contribution_guide_keeps_stable_anchor_and_directory_source_flow(self) -> None:
+        root = MODULE_PATH.parents[1]
+        registry_guide = (root / "registry" / "README.md").read_text()
+        contributing = (root / "CONTRIBUTING.md").read_text()
+        self.assertEqual(registry_guide.count("## Submit an external package"), 1)
+        self.assertNotIn("registry/entries", registry_guide + contributing)
+        self.assertIn("registry/directory.json", registry_guide)
+        self.assertIn("registry/directory.json", contributing)
 
     def test_fallback_uses_one_distribution_for_the_complete_target_set(self) -> None:
         fixture = self.fixture()

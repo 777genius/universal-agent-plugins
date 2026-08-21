@@ -861,6 +861,24 @@ def _eligible_release(distribution: dict[str, object], product: dict[str, object
             if failures:
                 reasons.append(f"release {release['sequence']} has blocking trusted failure for {','.join(failures)}")
                 continue
+            if distribution["kind"] == "upstream":
+                passed_targets = {
+                    observation.get("client")
+                    for evidence_id in policy["current_evidence"]
+                    for observation in [evidence[evidence_id]]
+                    if observation.get("distribution_id") == distribution["id"]
+                    and observation.get("release_sequence") == release["sequence"]
+                    and observation.get("package_tree_digest") == release["tree_digest"]
+                    and observation.get("level") == "materialization"
+                    and observation.get("outcome") == "passed"
+                }
+                missing_targets = sorted(targets - passed_targets)
+                if missing_targets:
+                    reasons.append(
+                        f"release {release['sequence']} lacks current positive package compatibility evidence "
+                        f"(passed materialization) for {','.join(missing_targets)}"
+                    )
+                    continue
             return release, None
         else:
             return release, None

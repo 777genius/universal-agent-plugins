@@ -7,32 +7,13 @@ receives a short-name alias.
 
 ## Submit an external package
 
-Before opening the PR, the package directory at the pinned revision must contain:
+The review source is `registry/directory.json`. Before editing it, confirm that
+the package at the proposed revision contains:
 
 - a valid Agent Plugins 1.0 `plugin.json` with author and license metadata;
 - a package `README.md`;
 - at least one declared component: root `mcp.json` or `skills/*/SKILL.md`;
-- no client-specific `.mcp.json` or `.codex-plugin` output.
-
-Add exactly one file at `registry/entries/<plugin-name>.json`:
-
-```json
-{
-  "schema_version": 1,
-  "repository": "owner/repository",
-  "revision": "0123456789abcdef0123456789abcdef01234567",
-  "path": "path/to/plugin-name",
-  "categories": ["developer-tools"]
-}
-```
-
-The repository must be public on GitHub. `revision` is the full lowercase SHA
-of a commit, not a branch, tag, or release name. The path is a normalized,
-repository-relative POSIX path whose last segment matches the descriptor name.
-Categories are sorted lowercase slugs. No descriptive or trust fields are
-accepted: name, version, description, author, license, keywords, and components
-come from the package at the pinned revision. Submitters cannot assign
-`featured`, `verified`, `official`, `tested`, download, or ranking claims.
+- no client-specific `.mcp.json` or generated `.codex-plugin` output.
 
 Test the same immutable source users will install:
 
@@ -40,20 +21,44 @@ Test the same immutable source users will install:
 npx universal-agent-plugins add owner/repository@FULL_40_CHARACTER_SHA//path/to/plugin-name --target cursor --dry-run
 ```
 
-Then run `python3 scripts/build_registry.py` and commit the updated
-`registry/index.json`. Future releases are updates by PR: change the descriptor
-SHA and regenerate; the directory does not discover versions automatically.
+Use a public GitHub repository and the exact lowercase 40-character commit SHA,
+never a branch or tag. Then edit `registry/directory.json` in one focused PR:
+
+1. Add a product with its stable identity, aliases, categories, minimum
+   capabilities, default distribution, and sorted distribution IDs.
+2. Add a namespaced distribution such as `owner/plugin-name` and list that ID
+   on the product. Its `kind`, `status`, and `packager` are reviewed claims.
+3. Add an immutable release whose `package_source` is the exact
+   `owner/repository`, full SHA, and normalized package path. Record its package
+   version, components, manifest digest, and `agentplugins-tree-sha256-v1` tree
+   digest.
+4. Add the one-for-one entry in `release_policies` for that release sequence,
+   including status, minimum installer version, supported targets, delivery,
+   and only evidence IDs already present in the Directory source.
+
+For an update, append a new monotonically increasing release and matching
+policy. Do not rewrite an existing release tuple or its package bytes; policy
+status and current evidence may change through review.
+
+Generate and verify the deterministic review files:
+
+```bash
+python3 scripts/build_registry.py
+python3 scripts/build_registry.py --check
+python3 -m unittest tests.test_build_registry
+```
+
+Commit `registry/directory.json` and any changed `registry/review-preview.json`
+or `registry/review-search.json`. The legacy catalogs and flat index are frozen
+and must not change.
 
 ## What validation means
 
-`schema_only` means static Agent Plugins 1.0 package validation at that exact
-revision. It is not an endorsement, ownership check, malware verdict, or proof
-that tools behave safely. `runtime_evidence` appears only when the repository
-already contains pinned, reviewable client evidence; it is never supplied by a
-directory descriptor. External entries currently begin at `schema_only`.
-
-The builder downloads only a bounded GitHub source archive. It rejects
-redirects, links, special files, non-portable paths, unsafe MCP auth/URLs,
-unbounded trees, and source/name mismatches. It does not run plugin code,
-install dependencies, invoke lifecycle scripts, start containers, or contact an
-agent runtime.
+Static schema and package checks at the pinned revision are not endorsement,
+ownership verification, a malware verdict, or proof of safe runtime behavior.
+Do not add or promote evidence claims from the direct-package preflight:
+`current_evidence` may reference only exact, reviewable observations already in
+`registry/directory.json`, bound to that distribution, release sequence, tree
+digest, client, and outcome. The builder does not run plugin code, install
+dependencies, start containers, contact an agent runtime, or prove OAuth and
+tool behavior.

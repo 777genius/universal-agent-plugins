@@ -63,6 +63,16 @@ TRUSTED_CATALOG_REPOSITORY = "777genius/universal-agent-plugins"
 TRUSTED_CLI_RELEASE_REPOSITORY = "777genius/plugin-kit-ai"
 TRUSTED_CLI_RELEASE_TAG = "agentplugins-v0.1.8"
 TRUSTED_CLI_RELEASE_WORKFLOW = "777genius/plugin-kit-ai/.github/workflows/agentplugins-release.yml"
+DIRECTORY_INPUT_ENVIRONMENT_KEYS = frozenset({
+    "AGENTPLUGINS_DIRECTORY_ORIGIN",
+    "AGENTPLUGINS_DIRECTORY_SNAPSHOT",
+    "AGENTPLUGINS_DIRECTORY_ENVELOPE",
+    "AGENTPLUGINS_DIRECTORY_TRUST",
+})
+DIRECTORY_LAUNCH_ENVIRONMENT_KEYS = DIRECTORY_INPUT_ENVIRONMENT_KEYS | {
+    "AGENTPLUGINS_DIRECTORY_CACHE",
+    "AGENTPLUGINS_DIRECTORY_CONFORMANCE_ONLY",
+}
 CHALLENGE_DOMAIN = b"UAP-STABLE-LAUNCH-CHALLENGE-V1\0"
 ATTESTATION_DOMAIN = b"UAP-STABLE-LAUNCH-OBSERVER-V1\0"
 MAX_ATTESTATION_AGE = timedelta(minutes=30)
@@ -628,9 +638,13 @@ def isolated_environment(sandbox: Path, clients: tuple[str, ...], directory_envi
         "GIT_TERMINAL_PROMPT": "0", "CI": "true",
     })
     if directory_environment:
-        env["AGENTPLUGINS_DIRECTORY_ORIGIN"] = directory_environment["AGENTPLUGINS_DIRECTORY_ORIGIN"]
+        if set(directory_environment) != DIRECTORY_INPUT_ENVIRONMENT_KEYS:
+            raise ValueError("Directory environment must contain the complete origin/snapshot/envelope/trust tuple")
         fixture_root = sandbox / "config" / "directory-trust"
         fixture_root.mkdir(parents=True, exist_ok=True)
+        launch_directory_environment = {
+            "AGENTPLUGINS_DIRECTORY_ORIGIN": directory_environment["AGENTPLUGINS_DIRECTORY_ORIGIN"],
+        }
         for key, filename in (
             ("AGENTPLUGINS_DIRECTORY_SNAPSHOT", "snapshot.json"),
             ("AGENTPLUGINS_DIRECTORY_ENVELOPE", "envelope.json"),
@@ -638,8 +652,12 @@ def isolated_environment(sandbox: Path, clients: tuple[str, ...], directory_envi
         ):
             target = fixture_root / filename
             shutil.copy2(directory_environment[key], target)
-            env[key] = str(target)
-        env["AGENTPLUGINS_DIRECTORY_CACHE"] = str(sandbox / "cache" / "directory")
+            launch_directory_environment[key] = str(target)
+        launch_directory_environment["AGENTPLUGINS_DIRECTORY_CACHE"] = str(sandbox / "cache" / "directory")
+        launch_directory_environment["AGENTPLUGINS_DIRECTORY_CONFORMANCE_ONLY"] = "1"
+        if set(launch_directory_environment) != DIRECTORY_LAUNCH_ENVIRONMENT_KEYS:
+            raise AssertionError("incomplete Directory launch environment")
+        env.update(launch_directory_environment)
     return env
 
 
