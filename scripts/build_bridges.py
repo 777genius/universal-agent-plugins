@@ -24,7 +24,7 @@ import jsonschema
 import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from build_agentplugins_catalog import package_tree_digest
+from build_registry import directory_tree_digest as package_tree_digest
 from portable_paths import validate_segment, validate_tree
 from validate_catalog import ValidationError, validate_plugin
 
