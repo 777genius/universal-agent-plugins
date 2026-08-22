@@ -12,6 +12,7 @@ export function filterPlugins(plugins: RegistryPlugin[], filters: CatalogFilters
   return plugins.filter((plugin) => {
     const searchable = [
       plugin.name,
+      plugin.display_name,
       plugin.description,
       plugin.author.name,
       ...plugin.categories,
