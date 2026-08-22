@@ -94,6 +94,10 @@ EXPECTED_COUNTS = {
 OUTCOMES = {"passed", "failed", "inconclusive", "not_applicable"}
 DIGEST = re.compile(r"^sha256:[a-f0-9]{64}$")
 FULL_SHA = re.compile(r"^[a-f0-9]{40}$")
+GITHUB_REPOSITORY = re.compile(
+    r"^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})/[A-Za-z0-9](?:[A-Za-z0-9._-]{0,99})$"
+)
+GITHUB_SOURCE_PATH = re.compile(r"^[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)*$")
 VERSION = re.compile(r"^(\d+)\.(\d+)\.(\d+)$")
 MINIMUM_STABLE_VERSION = (0, 1, 8)
 IDENTITY_ID = re.compile(r"^[a-z0-9][a-z0-9._-]{2,63}$")
@@ -110,6 +114,35 @@ CLIENT_ROOTS = {
     "vscode": ".config/Code/User",
 }
 SECRET_NAME = re.compile(r"(?i)(token|secret|password|cookie|authorization|oauth[_-]?code)")
+
+
+def parse_canonical_github_source(value: Any) -> dict[str, str] | None:
+    """Normalize documented and production GitHub canonical source identities."""
+    if not isinstance(value, str) or any(character in value for character in "?#\\%"):
+        return None
+    repository_locator = value.removeprefix("https://github.com/")
+    try:
+        repository, locator = repository_locator.split("@", 1)
+        revision, package_path = locator.split("//", 1)
+    except ValueError:
+        return None
+    if (
+        not GITHUB_REPOSITORY.fullmatch(repository)
+        or not FULL_SHA.fullmatch(revision)
+        or not GITHUB_SOURCE_PATH.fullmatch(package_path)
+        or not package_path
+        or package_path.startswith("/")
+        or package_path.endswith("/")
+        or "//" in package_path
+        or any(part in {"", ".", ".."} for part in package_path.split("/"))
+        or PurePosixPath(package_path).as_posix() != package_path
+    ):
+        return None
+    return {
+        "source_repository": repository,
+        "source_revision": revision,
+        "source_path": package_path,
+    }
 
 
 def authoritative_native_client_evidence(
@@ -1072,7 +1105,7 @@ class LaunchHarness:
         sandbox.mkdir(parents=True)
         return sandbox
 
-    def tuple(self, *, product_id: str | None = None, digest: str | None = None, manifest_digest: str | None = None, distribution_id: str | None = None, distribution_kind: str | None = None, release_sequence: int | None = None, package_version: str | None = None, client_version: str | None = None, dependency: str | None = None) -> dict[str, Any]:
+    def tuple(self, *, product_id: str | None = None, digest: str | None = None, manifest_digest: str | None = None, distribution_id: str | None = None, distribution_kind: str | None = None, release_sequence: int | None = None, package_version: str | None = None, source_repository: str | None = None, source_revision: str | None = None, source_path: str | None = None, client_version: str | None = None, dependency: str | None = None) -> dict[str, Any]:
         return {
             "product_id": product_id,
             "tree_digest": digest,
@@ -1081,6 +1114,9 @@ class LaunchHarness:
             "distribution_kind": distribution_kind,
             "release_sequence": release_sequence,
             "package_version": package_version,
+            "source_repository": source_repository,
+            "source_revision": source_revision,
+            "source_path": source_path,
             "snapshot_sequence": self.snapshot.get("sequence"),
             "snapshot_digest": self.snapshot_digest,
             "binary_digest": self.binary_digest,
@@ -1197,7 +1233,7 @@ class LaunchHarness:
                 )
                 if not github_valid:
                     raise ValueError(f"passed external observation is not GitHub-attested for this run: {key}")
-                required = ("product_id", "tree_digest", "manifest_digest", "distribution_id", "distribution_kind", "release_sequence", "package_version", "snapshot_sequence", "snapshot_digest", "binary_digest", "dependency_identity", "installer_version", "adapter_version", "client_version", "os", "architecture", "observed_at")
+                required = ("product_id", "tree_digest", "manifest_digest", "distribution_id", "distribution_kind", "release_sequence", "package_version", "source_repository", "source_revision", "source_path", "snapshot_sequence", "snapshot_digest", "binary_digest", "dependency_identity", "installer_version", "adapter_version", "client_version", "os", "architecture", "observed_at")
                 if any(not tuple_value.get(item) for item in required):
                     raise ValueError(f"passed attestation has incomplete tuple: {key}")
                 for field in ("tree_digest", "manifest_digest", "snapshot_digest", "binary_digest"):
@@ -1218,6 +1254,9 @@ class LaunchHarness:
                     "package_version": release["package_version"],
                     "tree_digest": release["tree_digest"],
                     "manifest_digest": release["manifest_digest"],
+                    "source_repository": release["source_repository"],
+                    "source_revision": release["source_revision"],
+                    "source_path": release["source_path"],
                     "snapshot_sequence": self.snapshot.get("sequence"),
                     "snapshot_digest": self.snapshot_digest,
                 }
@@ -1260,7 +1299,7 @@ class LaunchHarness:
     def _reject_mutable_refs(value: Any) -> None:
         if isinstance(value, dict):
             for key, child in value.items():
-                if key in {"revision", "source_revision", "commit_sha"} and (not isinstance(child, str) or not FULL_SHA.fullmatch(child)):
+                if key in {"revision", "source_revision", "commit_sha"} and child is not None and (not isinstance(child, str) or not FULL_SHA.fullmatch(child)):
                     raise ValueError("evidence contains a mutable or invalid source revision")
                 if key == "ref":
                     raise ValueError("evidence must not contain mutable refs")
@@ -1341,9 +1380,12 @@ class LaunchHarness:
             targets = ("cursor",)
         release = self.configured_source_release(scenario, targets) if source_selection else self.directory_release(product_id, targets)
         source_identity = {
+            "product_id": release["product_id"],
             "distribution_id": release["distribution_id"], "distribution_kind": release["distribution_kind"],
             "release_sequence": release["release_sequence"], "source_revision": release.get("source_revision"),
-            "tree_digest": release["tree_digest"],
+            "source_repository": release.get("source_repository"), "source_path": release.get("source_path"),
+            "canonical_source": f'https://github.com/{release.get("source_repository")}@{release.get("source_revision")}//{release.get("source_path")}',
+            "tree_digest": release["tree_digest"], "manifest_digest": release["manifest_digest"],
         }
         observer_context = {
             **self.challenge,
@@ -1452,7 +1494,8 @@ class LaunchHarness:
             raise ValueError(f"authoritative Directory resolver selected a missing release for {product_id}")
         policy = policies[release["sequence"]]
         clients = sorted({target["client"] for target in policy.get("targets", []) if "user" in target.get("scopes", [])})
-        return {"product_id": product_id, "distribution_id": distribution["id"], "distribution_kind": distribution["kind"], "release_sequence": release["sequence"], "package_version": release.get("package_version"), "tree_digest": release["tree_digest"], "manifest_digest": release["manifest_digest"], "source_revision": release.get("package_source", {}).get("revision"), "compatible_clients": clients, "resolved_targets": list(targets), "fallback_reason": resolved["fallback_reason"]}
+        source = release.get("package_source", {})
+        return {"product_id": product_id, "distribution_id": distribution["id"], "distribution_kind": distribution["kind"], "release_sequence": release["sequence"], "package_version": release.get("package_version"), "tree_digest": release["tree_digest"], "manifest_digest": release["manifest_digest"], "source_repository": source.get("repository"), "source_revision": source.get("revision"), "source_path": source.get("path"), "compatible_clients": clients, "resolved_targets": list(targets), "fallback_reason": resolved["fallback_reason"]}
 
     def configured_source_release(self, scenario: str, targets: list[str] | tuple[str, ...]) -> dict[str, Any]:
         selection = self.config["source_identity_scenarios"][scenario]
@@ -1463,17 +1506,29 @@ class LaunchHarness:
             raise ValueError(f"source scenario {scenario} is not a reviewed Directory selection")
         policy = next((item for item in distribution.get("release_policies", []) if item.get("status") == "active" and all(any(target.get("client") == client and "user" in target.get("scopes", []) for target in item.get("targets", [])) for client in targets)), None)
         release = next((item for item in distribution.get("releases", []) if policy and item["sequence"] == policy["release_sequence"]), None)
-        revision = release.get("package_source", {}).get("revision") if release else None
+        source = release.get("package_source", {}) if release else {}
+        revision = source.get("revision")
         expected_kind = selection["distribution_kind"]
         if not release or distribution.get("kind") != expected_kind or not FULL_SHA.fullmatch(str(revision)):
             raise ValueError(f"source scenario {scenario} lacks an immutable reviewed {expected_kind} release")
         clients = sorted(target["client"] for target in policy["targets"] if "user" in target.get("scopes", []))
-        return {"product_id": product_id, "distribution_id": distribution_id, "distribution_kind": expected_kind, "release_sequence": release["sequence"], "package_version": release.get("package_version"), "tree_digest": release["tree_digest"], "manifest_digest": release["manifest_digest"], "source_revision": revision, "compatible_clients": clients, "resolved_targets": list(targets), "fallback_reason": None}
+        return {"product_id": product_id, "distribution_id": distribution_id, "distribution_kind": expected_kind, "release_sequence": release["sequence"], "package_version": release.get("package_version"), "tree_digest": release["tree_digest"], "manifest_digest": release["manifest_digest"], "source_repository": source.get("repository"), "source_revision": revision, "source_path": source.get("path"), "compatible_clients": clients, "resolved_targets": list(targets), "fallback_reason": None}
 
     @staticmethod
     def source_identity_matches_release(release: dict[str, Any], observed: Any) -> bool:
-        fields = ("distribution_id", "distribution_kind", "release_sequence", "source_revision", "tree_digest")
-        return isinstance(observed, dict) and set(observed) == set(fields) and all(observed[field] == release[field] for field in fields)
+        fields = (
+            "product_id", "distribution_id", "distribution_kind", "release_sequence",
+            "tree_digest", "manifest_digest", "source_repository", "source_revision", "source_path",
+            "canonical_source",
+        )
+        if not isinstance(observed, dict) or set(observed) != set(fields):
+            return False
+        canonical = parse_canonical_github_source(observed["canonical_source"])
+        return bool(
+            canonical
+            and all(canonical[field] == observed[field] for field in ("source_repository", "source_revision", "source_path"))
+            and all(observed[field] == release[field] for field in fields if field != "canonical_source")
+        )
 
     def evidence_tuple(self, product_id: str, targets: list[str] | tuple[str, ...], *, client_version: str | None, dependency: str) -> dict[str, Any]:
         release = self.directory_release(product_id, targets)
@@ -1482,6 +1537,8 @@ class LaunchHarness:
             digest=release["tree_digest"], manifest_digest=release["manifest_digest"],
             distribution_id=release["distribution_id"], distribution_kind=release["distribution_kind"],
             release_sequence=release["release_sequence"], package_version=release["package_version"],
+            source_repository=release["source_repository"], source_revision=release["source_revision"],
+            source_path=release["source_path"],
             client_version=client_version, dependency=dependency,
         )
 
@@ -1489,28 +1546,37 @@ class LaunchHarness:
         if not value:
             return False
         expected = self.evidence_tuple(product_id, targets, client_version=value.get("client_version"), dependency=value.get("dependency_identity"))
-        identity_fields = ("product_id", "tree_digest", "manifest_digest", "distribution_id", "distribution_kind", "release_sequence", "package_version", "snapshot_sequence", "snapshot_digest", "binary_digest", "installer_version")
+        identity_fields = ("product_id", "tree_digest", "manifest_digest", "distribution_id", "distribution_kind", "release_sequence", "package_version", "source_repository", "source_revision", "source_path", "snapshot_sequence", "snapshot_digest", "binary_digest", "installer_version")
         return all(value.get(field) == expected.get(field) for field in identity_fields)
 
     def command_matches_release(self, product_id: str, targets: list[str] | tuple[str, ...], value: dict[str, Any] | None) -> bool:
         if not value:
             return False
         release = self.directory_release(product_id, targets)
+        canonical = parse_canonical_github_source(find_value(value, {"canonical_source"}))
         expected = {
             "product_id": product_id,
             "distribution_id": release["distribution_id"],
+            "distribution_kind": release["distribution_kind"],
             "release_sequence": release["release_sequence"],
             "tree_digest": release["tree_digest"],
             "manifest_digest": release["manifest_digest"],
+            "source_repository": release["source_repository"],
+            "source_revision": release["source_revision"],
+            "source_path": release["source_path"],
             "snapshot_sequence": self.snapshot.get("sequence"),
             "snapshot_digest": self.snapshot_digest,
         }
         observed = {
             "product_id": find_value(value, {"product_id"}),
             "distribution_id": find_value(value, {"distribution_id"}),
+            "distribution_kind": find_value(value, {"distribution_kind"}),
             "release_sequence": find_value(value, {"release_sequence"}),
             "tree_digest": find_value(value, {"tree_digest", "package_digest"}),
             "manifest_digest": find_value(value, {"manifest_digest"}),
+            "source_repository": canonical.get("source_repository") if canonical else None,
+            "source_revision": canonical.get("source_revision") if canonical else None,
+            "source_path": canonical.get("source_path") if canonical else None,
             "snapshot_sequence": find_value(value, {"snapshot_sequence"}),
             "snapshot_digest": find_value(value, {"snapshot_digest"}),
         }
@@ -1673,13 +1739,16 @@ class LaunchHarness:
                     outcome, reason = "failed", "scenario observer source identity differs from the exact signed Directory tuple"
                 if outcome == "passed":
                     observed_client_version = find_value(value, {"client_version"}) if value else None
-                    tuple_value = self.tuple(product_id=product, digest=observed["tree_digest"], manifest_digest=release["manifest_digest"], distribution_id=observed["distribution_id"], distribution_kind=observed["distribution_kind"], release_sequence=observed["release_sequence"], package_version=release["package_version"], client_version=observed_client_version if isinstance(observed_client_version, str) else None, dependency=f"signed-directory-source@{observed['source_revision']}")
+                    tuple_value = self.tuple(product_id=observed["product_id"], digest=observed["tree_digest"], manifest_digest=observed["manifest_digest"], distribution_id=observed["distribution_id"], distribution_kind=observed["distribution_kind"], release_sequence=observed["release_sequence"], package_version=release["package_version"], source_repository=observed["source_repository"], source_revision=observed["source_revision"], source_path=observed["source_path"], client_version=observed_client_version if isinstance(observed_client_version, str) else None, dependency=f"signed-directory-source@{observed['source_revision']}")
             if outcome == "passed" and not source_selection and tuple_value is not None and (not isinstance(tuple_value, dict) or not self.tuple_matches_release(product, [client], tuple_value)):
                 outcome, reason = "failed", "scenario observer tuple differs from authoritative target-aware resolution"
             if tuple_value is None:
                 observed_client_version = find_value(value, {"client_version"}) if value else None
                 tuple_value = None if source_selection else self.evidence_tuple(product, [client], client_version=observed_client_version if isinstance(observed_client_version, str) else None, dependency="repository-owned-fault-observer")
-            self.add(scenario, product, client, "materialization", outcome, reason, tuple_value=tuple_value, details={"fixture_contract_present": scenario in self.config["fault_scenarios"], "repository_observer_required": True, "proof": value.get("proof", {}) if value else {}, "command_traces": value.get("command_traces", []) if value else [], "validator_artifact": value.get("validator_artifact") if value else None, "source_identity": value.get("source_identity") if value else None, "resolution": release})
+            details = {"fixture_contract_present": scenario in self.config["fault_scenarios"], "repository_observer_required": True, "proof": value.get("proof", {}) if value else {}, "command_traces": value.get("command_traces", []) if value else [], "validator_artifact": value.get("validator_artifact") if value else None, "source_identity": value.get("source_identity") if value else None, "resolution": release}
+            if source_selection:
+                details.update({"evidence_basis": "fixture_materialization", "runtime_proof": False})
+            self.add(scenario, product, client, "materialization", outcome, reason, tuple_value=tuple_value, details=details)
 
     def acceptance_postconditions(self) -> None:
         required: dict[str, dict[str, Any]] = {
@@ -2001,7 +2070,7 @@ def assert_redacted(value: dict[str, Any]) -> None:
                 product_id=row.get("plugin"),
             ):
                 raise ValueError(f"passed native/runtime evidence lacks authoritative client operations: {row.get('id')}")
-        required = ("product_id", "tree_digest", "manifest_digest", "distribution_id", "distribution_kind", "release_sequence", "package_version", "snapshot_sequence", "snapshot_digest", "binary_digest", "installer_version", "adapter_version", "client_version", "os", "architecture", "observed_at")
+        required = ("product_id", "tree_digest", "manifest_digest", "distribution_id", "distribution_kind", "release_sequence", "package_version", "source_repository", "source_revision", "source_path", "snapshot_sequence", "snapshot_digest", "binary_digest", "installer_version", "adapter_version", "client_version", "os", "architecture", "observed_at")
         if any(not tuple_value.get(field) for field in required):
             raise ValueError(f"passed evidence has an incomplete applicability tuple: {row.get('id')}")
         for field in ("tree_digest", "manifest_digest", "snapshot_digest", "binary_digest"):

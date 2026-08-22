@@ -415,14 +415,27 @@ def _validate_product(value: Any, label: str) -> None:
 
 
 def _validate_evidence(value: Any, label: str) -> None:
-    required = {"schema_version", "id", "distribution_id", "release_sequence", "package_tree_digest", "level", "outcome", "artifact"}
+    required = {"schema_version", "id", "product_id", "distribution_id", "release_sequence", "package_tree_digest", "manifest_digest", "source_repository", "source_revision", "source_path", "level", "outcome", "artifact"}
     optional = {"client", "client_version", "installer_version", "os", "architecture", "dependency_identity", "observed_at"}
     evidence = _object(value, required, optional, label)
     require_integer_const(evidence["schema_version"], 1, f"{label}.schema_version is invalid")
     _string(evidence["id"], EVIDENCE_ID_RE, f"{label}.id")
+    _string(evidence["product_id"], SIMPLE_ID_RE, f"{label}.product_id")
     _string(evidence["distribution_id"], DISTRIBUTION_ID_RE, f"{label}.distribution_id")
     _positive_integer(evidence["release_sequence"], f"{label}.release_sequence")
     _string(evidence["package_tree_digest"], DIGEST_RE, f"{label}.package_tree_digest")
+    _string(evidence["manifest_digest"], DIGEST_RE, f"{label}.manifest_digest")
+    _string(evidence["source_repository"], REPOSITORY_RE, f"{label}.source_repository")
+    _string(evidence["source_revision"], SHA_RE, f"{label}.source_revision")
+    _string(evidence["source_path"], None, f"{label}.source_path", minimum=1)
+    source_path = evidence["source_path"]
+    require(
+        not source_path.startswith("/") and not source_path.endswith("/")
+        and "\\" not in source_path and "//" not in source_path
+        and not any(part in {"", ".", ".."} for part in PurePosixPath(source_path).parts)
+        and not any(character in source_path for character in "?#%\x00"),
+        f"{label}.source_path is unsafe",
+    )
     require(evidence["level"] in {"schema", "materialization", "discovery", "runtime", "oauth"}, f"{label}.level is invalid")
     require(evidence["outcome"] in {"passed", "failed", "inconclusive", "not_tested", "not_applicable"}, f"{label}.outcome is invalid")
     if "client" in evidence:
@@ -567,7 +580,17 @@ def validate_snapshot_semantics(
         evidence_map[evidence_id] = evidence
         identity = (evidence["distribution_id"], evidence["release_sequence"])
         require(identity in release_map, f"{evidence_id}: evidence release is missing")
-        require(evidence["package_tree_digest"] == release_map[identity]["tree_digest"], f"{evidence_id}: evidence package digest mismatch")
+        release = release_map[identity]
+        source = release["package_source"]
+        require(
+            evidence["product_id"] == distribution_map[evidence["distribution_id"]]["product_id"]
+            and evidence["package_tree_digest"] == release["tree_digest"]
+            and evidence["manifest_digest"] == release["manifest_digest"]
+            and evidence["source_repository"] == source["repository"]
+            and evidence["source_revision"] == source["revision"]
+            and evidence["source_path"] == source["path"],
+            f"{evidence_id}: evidence source identity does not match release",
+        )
         applicability = tuple(evidence.get(field) for field in ("level", "client", "client_version", "installer_version", "dependency_identity", "os", "architecture"))
         seen_applicability = applicability_by_release.setdefault(identity, set())
         require(applicability not in seen_applicability, f"{identity}: multiple current evidence records for one applicability tuple")

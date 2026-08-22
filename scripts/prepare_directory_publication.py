@@ -381,8 +381,8 @@ def selected_evidence(
     require(len(evidence) == len(source["evidence"]), "duplicate evidence identity")
     selected: set[str] = set()
     verified: dict[str, dict[str, Any]] = {}
-    release_digests = {
-        (distribution["id"], release["sequence"]): release["tree_digest"]
+    releases = {
+        (distribution["id"], release["sequence"]): (distribution["product_id"], release)
         for distribution in source["distributions"] for release in distribution["releases"]
     }
     for distribution in source["distributions"]:
@@ -390,7 +390,7 @@ def selected_evidence(
             continue
         for policy in distribution["release_policies"]:
             identity = (distribution["id"], policy["release_sequence"])
-            require(identity in release_digests, f"{distribution['id']}: policy references missing release {policy['release_sequence']}")
+            require(identity in releases, f"{distribution['id']}: policy references missing release {policy['release_sequence']}")
             for evidence_id in policy["current_evidence"]:
                 require(evidence_id in evidence, f"{distribution['id']}@{policy['release_sequence']}: missing evidence {evidence_id}")
                 record = verified.get(evidence_id)
@@ -398,7 +398,17 @@ def selected_evidence(
                     record = verified_evidence(evidence[evidence_id], config, overrides)
                     verified[evidence_id] = record
                 require((record["distribution_id"], record["release_sequence"]) == identity, f"{evidence_id}: evidence release identity mismatch")
-                require(record["package_tree_digest"] == release_digests[identity], f"{evidence_id}: evidence package digest mismatch")
+                product_id, release = releases[identity]
+                source_identity = release["package_source"]
+                require(
+                    record["product_id"] == product_id
+                    and record["package_tree_digest"] == release["tree_digest"]
+                    and record["manifest_digest"] == release["manifest_digest"]
+                    and record["source_repository"] == source_identity["repository"]
+                    and record["source_revision"] == source_identity["revision"]
+                    and record["source_path"] == source_identity["path"],
+                    f"{evidence_id}: evidence source identity mismatch",
+                )
                 selected.add(evidence_id)
     return [copy.deepcopy(verified[item]) for item in sorted(selected)]
 

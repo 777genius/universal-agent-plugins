@@ -481,7 +481,7 @@ target = sys.argv[sys.argv.index("--target") + 1]
 home = pathlib.Path(os.environ["HOME"])
 manager = pathlib.Path(os.environ["AGENTPLUGINS_HOME"])
 state_path = manager / "state.json"
-state = json.loads(state_path.read_text()) if state_path.exists() else {"installations": [{"declared_name": product, "product_id": product, "receipts": [], "directory": {"distribution_id": "upstash/context7", "distribution_kind": "upstream", "desired_release_sequence": 1}, "package": {"tree_digest": "sha256:" + "a" * 64, "manifest_digest": "sha256:" + "e" * 64}}]}
+state = json.loads(state_path.read_text()) if state_path.exists() else {"installations": [{"declared_name": product, "product_id": product, "receipts": [], "directory": {"distribution_id": "upstash/context7", "distribution_kind": "upstream", "desired_release_sequence": 1}, "source": {"resolved_revision": "1" * 40, "canonical_source": "https://github.com/upstash/context7@" + "1" * 40 + "//plugins/context7"}, "package": {"tree_digest": "sha256:" + "a" * 64, "manifest_digest": "sha256:" + "e" * 64}}]}
 roots = {"codex": home / ".codex", "cursor": home / ".cursor", "kiro": home / ".kiro"}
 if operation in {"add", "repair", "remove"}:
     state["installations"][0]["receipts"].append({"phase": "committed", "operation": operation})
@@ -508,6 +508,8 @@ print(json.dumps(value))
                 "product_id": "context7", "tree_digest": "sha256:" + "a" * 64,
                 "manifest_digest": "sha256:" + "e" * 64, "distribution_id": "upstash/context7",
                 "distribution_kind": "upstream", "release_sequence": 1, "package_version": "1.0.0",
+                "source_repository": "upstash/context7", "source_revision": "1" * 40,
+                "source_path": "plugins/context7",
             },
         }
         with tempfile.TemporaryDirectory() as tmp:
@@ -576,12 +578,27 @@ print(json.dumps(value))
             "product_id": "context7", "distribution_id": "upstash/context7", "distribution_kind": "upstream",
             "release_sequence": 1, "source_revision": "1" * 40, "tree_digest": "sha256:" + "a" * 64,
             "manifest_digest": "sha256:" + "b" * 64, "package_version": "1.0.0",
+            "source_repository": "upstash/context7", "source_path": "plugins/context7",
         }
         expected_identity = {key: expected_release[key] for key in (
-            "distribution_id", "distribution_kind", "release_sequence", "source_revision", "tree_digest",
+            "product_id", "distribution_id", "distribution_kind", "release_sequence", "source_revision",
+            "source_repository", "source_path", "tree_digest", "manifest_digest",
         )}
+        expected_identity["canonical_source"] = "https://github.com/upstash/context7@" + "1" * 40 + "//plugins/context7"
+        self.assertTrue(e2e.LaunchHarness.source_identity_matches_release(expected_release, expected_identity))
+        self.assertTrue(e2e.LaunchHarness.source_identity_matches_release(
+            expected_release,
+            {**expected_identity, "canonical_source": "upstash/context7@" + "1" * 40 + "//plugins/context7"},
+        ))
         for name, identity in (
             ("missing", None),
+            ("missing_product", {key: value for key, value in expected_identity.items() if key != "product_id"}),
+            ("unauthorized_fork", {**expected_identity, "source_repository": "attacker/context7", "canonical_source": "attacker/context7@" + "1" * 40 + "//plugins/context7"}),
+            ("wrong_path", {**expected_identity, "source_path": "plugins/other", "canonical_source": "upstash/context7@" + "1" * 40 + "//plugins/other"}),
+            ("wrong_manifest", {**expected_identity, "manifest_digest": "sha256:" + "8" * 64}),
+            ("canonical_repository_mismatch", {**expected_identity, "canonical_source": "attacker/context7@" + "1" * 40 + "//plugins/context7"}),
+            ("canonical_sha_mismatch", {**expected_identity, "canonical_source": "upstash/context7@" + "2" * 40 + "//plugins/context7"}),
+            ("canonical_path_mismatch", {**expected_identity, "canonical_source": "upstash/context7@" + "1" * 40 + "//plugins/other"}),
             ("spoofed_kind", {**expected_identity, "distribution_kind": "community_bridge"}),
             ("spoofed_digest", {**expected_identity, "tree_digest": "sha256:" + "9" * 64}),
         ):
@@ -613,13 +630,106 @@ print(json.dumps(value))
             "distribution_id": "777genius/cloudflare-docs-bridge", "distribution_kind": "community_bridge",
         }
         bridge_identity = {key: bridge_release[key] for key in (
-            "distribution_id", "distribution_kind", "release_sequence", "source_revision", "tree_digest",
+            "product_id", "distribution_id", "distribution_kind", "release_sequence", "source_revision",
+            "source_repository", "source_path", "tree_digest", "manifest_digest",
         )}
+        bridge_identity["canonical_source"] = "https://github.com/upstash/context7@" + "1" * 40 + "//plugins/context7"
         self.assertTrue(e2e.LaunchHarness.source_identity_matches_release(bridge_release, bridge_identity))
         self.assertFalse(e2e.LaunchHarness.source_identity_matches_release(
             bridge_release, {**bridge_identity, "distribution_id": "upstash/context7"},
         ))
         self.assertFalse(e2e.LaunchHarness.source_identity_matches_release(bridge_release, None))
+
+        harness = self.fixture_harness()
+        harness.config = {
+            **harness.config, "fault_scenarios": [], "adapter_repair_faults": [],
+            "advanced_scenarios": ["upstream_owned_short_name"],
+            "source_identity_scenarios": {"upstream_owned_short_name": {
+                "product_id": "context7", "distribution_id": "upstash/context7", "distribution_kind": "upstream",
+            }},
+        }
+        exact_value = {
+            "source_kind": "upstream", "immutable_revision": True, "exact_source_identity": True,
+            "source_identity": expected_identity, "client_version": "manager-state-v1",
+            "proof": {}, "command_traces": [],
+        }
+        with mock.patch.object(harness, "driven_scenario", return_value=("passed", exact_value, "claimed")), mock.patch.object(
+            harness, "configured_source_release", return_value=expected_release,
+        ):
+            harness.fault_matrix()
+        exact_row = harness.rows[0]
+        self.assertEqual(exact_row["outcome"], "inconclusive")
+        self.assertEqual(exact_row["details"]["evidence_basis"], "fixture_materialization")
+        self.assertFalse(exact_row["details"]["runtime_proof"])
+        self.assertEqual(exact_row["tuple"]["source_repository"], expected_identity["source_repository"])
+
+    def test_canonical_github_source_parser_rejects_noncanonical_identity(self) -> None:
+        revision = "1" * 40
+        shorthand = f"upstash/context7@{revision}//plugins/context7"
+        production = f"https://github.com/upstash/context7@{revision}//plugins/context7"
+        expected = {
+            "source_repository": "upstash/context7",
+            "source_revision": revision,
+            "source_path": "plugins/context7",
+        }
+        for exact in (shorthand, production):
+            with self.subTest(exact=exact):
+                self.assertEqual(observer.parse_canonical_github_source(exact), expected)
+                self.assertEqual(e2e.parse_canonical_github_source(exact), expected)
+        expected_identity = {**expected, "canonical_source": production}
+        observed_identity = {**expected, "canonical_source": shorthand}
+        self.assertTrue(observer.source_identities_match(expected_identity, observed_identity))
+        invalid = (
+            f"http://github.com/upstash/context7@{revision}//plugins/context7",
+            f"https://user@github.com/upstash/context7@{revision}//plugins/context7",
+            f"https://gitlab.com/upstash/context7@{revision}//plugins/context7",
+            f"https://GitHub.com/upstash/context7@{revision}//plugins/context7",
+            f"https://github.com:443/upstash/context7@{revision}//plugins/context7",
+            f"https://github.com//upstash/context7@{revision}//plugins/context7",
+            f"https://github.com/upstash/context7@{revision}///plugins/context7",
+            "upstash/context7@main//plugins/context7",
+            f"upstash/context7@{revision}//plugins/../context7",
+            f"upstash/context7@{revision}//plugins//context7",
+            f"upstash/context7@{revision}//plugins/context7?ref=main",
+            f"upstash/context7@{revision}//plugins/context7#fragment",
+            f"upstash/context7@{revision}//plugins/%2e%2e/context7",
+            f"https:/github.com/upstash/context7@{revision}//plugins/context7",
+            f"https://github.com/upstash/context7@{revision}//plugins/context 7",
+        )
+        for value in invalid:
+            with self.subTest(value=value):
+                self.assertIsNone(observer.parse_canonical_github_source(value))
+                self.assertIsNone(e2e.parse_canonical_github_source(value))
+
+    def test_directory_evidence_artifact_requires_complete_source_identity(self) -> None:
+        schema = json.loads((ROOT / "schemas/directory-evidence-artifact.schema.json").read_text())
+        artifact = {
+            "schema_version": 1,
+            "id": "runtime-context7-cursor",
+            "product_id": "context7",
+            "distribution_id": "upstash/context7",
+            "release_sequence": 1,
+            "package_tree_digest": "sha256:" + "a" * 64,
+            "manifest_digest": "sha256:" + "b" * 64,
+            "source_repository": "upstash/context7",
+            "source_revision": "1" * 40,
+            "source_path": "plugins/context7",
+            "level": "runtime",
+            "outcome": "passed",
+            "client": "cursor",
+            "client_version": "1.0.0",
+            "installer_version": "0.1.8",
+            "os": "linux",
+            "architecture": "amd64",
+            "observed_at": "2026-08-22T00:00:00Z",
+        }
+        jsonschema.Draft202012Validator(schema).validate(artifact)
+        for field in ("product_id", "manifest_digest", "source_repository", "source_revision", "source_path"):
+            with self.subTest(field=field):
+                invalid = dict(artifact)
+                invalid.pop(field)
+                with self.assertRaises(jsonschema.ValidationError):
+                    jsonschema.Draft202012Validator(schema).validate(invalid)
 
     def test_source_scenarios_select_concrete_reviewed_directory_distributions(self) -> None:
         harness = self.fixture_harness()

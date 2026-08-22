@@ -16,12 +16,13 @@ import hashlib
 import json
 import os
 import platform
+import re
 import shutil
 import subprocess
 import sys
 import time
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 from cryptography.hazmat.primitives import serialization
@@ -44,6 +45,11 @@ FIXTURE_ROOT = Path(__file__).resolve().parents[1] / "tests/fixtures"
 JOURNEY_VALIDATOR = Path(__file__).resolve().parent / "validate_review_journey.py"
 CONFORMANCE_KEY_ID = "launch-conformance-only"
 CONFORMANCE_SEED = hashlib.sha256(b"UAP launch evidence conformance key; never production").digest()
+FULL_SHA = re.compile(r"^[0-9a-f]{40}$")
+GITHUB_REPOSITORY = re.compile(
+    r"^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})/[A-Za-z0-9](?:[A-Za-z0-9._-]{0,99})$"
+)
+GITHUB_SOURCE_PATH = re.compile(r"^[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)*$")
 
 
 def now() -> str:
@@ -93,6 +99,53 @@ def json_output(completed: subprocess.CompletedProcess[str]) -> dict[str, Any] |
     except json.JSONDecodeError:
         return None
     return value if isinstance(value, dict) else None
+
+
+def parse_canonical_github_source(value: Any) -> dict[str, str] | None:
+    """Normalize documented and production GitHub canonical source identities."""
+    if not isinstance(value, str) or any(character in value for character in "?#\\%"):
+        return None
+    repository_locator = value.removeprefix("https://github.com/")
+    try:
+        repository, locator = repository_locator.split("@", 1)
+        revision, package_path = locator.split("//", 1)
+    except ValueError:
+        return None
+    path = PurePosixPath(package_path)
+    if (
+        not GITHUB_REPOSITORY.fullmatch(repository)
+        or not FULL_SHA.fullmatch(revision)
+        or not GITHUB_SOURCE_PATH.fullmatch(package_path)
+        or not package_path
+        or package_path.startswith("/")
+        or package_path.endswith("/")
+        or "//" in package_path
+        or any(part in {"", ".", ".."} for part in package_path.split("/"))
+        or path.as_posix() != package_path
+    ):
+        return None
+    return {
+        "source_repository": repository,
+        "source_revision": revision,
+        "source_path": package_path,
+    }
+
+
+def source_identities_match(expected: Any, observed: Any) -> bool:
+    """Compare source identities structurally while preserving the observed spelling."""
+    if not isinstance(expected, dict) or not isinstance(observed, dict) or set(expected) != set(observed):
+        return False
+    expected_canonical = parse_canonical_github_source(expected.get("canonical_source"))
+    observed_canonical = parse_canonical_github_source(observed.get("canonical_source"))
+    return bool(
+        expected_canonical
+        and expected_canonical == observed_canonical
+        and all(
+            observed.get(field) == expected.get(field)
+            for field in expected
+            if field != "canonical_source"
+        )
+    )
 
 
 def manager_facts(manager: Path, product: str) -> dict[str, Any]:
@@ -156,6 +209,9 @@ def evidence_tuple(context: dict[str, Any], value: dict[str, Any], dependency: s
         "manifest_digest": release["manifest_digest"], "distribution_id": release["distribution_id"],
         "distribution_kind": release["distribution_kind"], "release_sequence": release["release_sequence"],
         "package_version": release["package_version"], "snapshot_sequence": context["snapshot_sequence"],
+        "source_repository": release.get("source_repository"),
+        "source_revision": release.get("source_revision"),
+        "source_path": release.get("source_path"),
         "snapshot_digest": context["directory_digest"], "binary_digest": context["binary_digest"],
         "dependency_identity": dependency, "installer_version": context["expected_version"],
         "adapter_version": context["expected_version"],
@@ -167,13 +223,24 @@ def evidence_tuple(context: dict[str, Any], value: dict[str, Any], dependency: s
 
 def identity_matches_release(identity: dict[str, Any], context: dict[str, Any]) -> bool:
     release = context["release"]
+    canonical = parse_canonical_github_source(identity.get("canonical_source"))
+    if not all(release.get(field) for field in ("source_repository", "source_revision", "source_path")):
+        return False
     expected = {
+        "product_id": release["product_id"],
         "distribution_id": release["distribution_id"],
+        "distribution_kind": release["distribution_kind"],
         "desired_release_sequence": release["release_sequence"],
         "tree_digest": release["tree_digest"],
         "manifest_digest": release["manifest_digest"],
+        "resolved_revision": release["source_revision"],
     }
-    return all(identity.get(field) == value for field, value in expected.items())
+    expected_source = {
+        "source_repository": release["source_repository"],
+        "source_revision": release["source_revision"],
+        "source_path": release["source_path"],
+    }
+    return bool(canonical == expected_source and all(identity.get(field) == value for field, value in expected.items()))
 
 
 def traced(binary: Path, argv: list[str], cwd: Path, challenge: str) -> tuple[subprocess.CompletedProcess[str], dict[str, Any]]:
@@ -552,7 +619,7 @@ def no_hidden_yes_scenario(binary: Path, root: Path, challenge: str) -> tuple[bo
 
 def manager_identity(manager: Path, product: str) -> dict[str, Any]:
     """Return identity fields from exactly one owned installation record."""
-    wanted = {"resolved_revision", "canonical_source", "tree_digest", "manifest_digest", "distribution_id", "distribution_kind", "desired_release_sequence", "data_locator", "data_root", "affected_surfaces"}
+    wanted = {"product_id", "resolved_revision", "canonical_source", "tree_digest", "manifest_digest", "distribution_id", "distribution_kind", "desired_release_sequence", "data_locator", "data_root", "affected_surfaces"}
     matches: list[dict[str, Any]] = []
     for path in sorted(manager.rglob("*.json")) if manager.exists() else ():
         try:
@@ -972,16 +1039,20 @@ def source_kind_scenario(binary: Path, kind: str, root: Path, challenge: str, co
     identity = manager_identity(manager, product)
     remove, remove_trace = traced_with_environment(binary, ["remove", product, "--target", "cursor", "--format", "json"], root, challenge, environment)
     after = observe(home, manager)
+    canonical = parse_canonical_github_source(identity.get("canonical_source")) or {}
     source_identity = {
+        "product_id": identity.get("product_id"),
         "distribution_id": identity.get("distribution_id"), "distribution_kind": identity.get("distribution_kind"),
         "release_sequence": identity.get("desired_release_sequence"), "source_revision": identity.get("resolved_revision"),
-        "tree_digest": identity.get("tree_digest"),
+        "source_repository": canonical.get("source_repository"), "source_path": canonical.get("source_path"),
+        "canonical_source": identity.get("canonical_source"),
+        "tree_digest": identity.get("tree_digest"), "manifest_digest": identity.get("manifest_digest"),
     }
     revision = source_identity["source_revision"]
     proof = {
         "source_kind": source_identity["distribution_kind"],
-        "immutable_revision": isinstance(revision, str) and len(revision) == 40 and all(character in "0123456789abcdef" for character in revision),
-        "exact_source_identity": source_identity == context["source_identity"],
+        "immutable_revision": bool(FULL_SHA.fullmatch(str(revision))) and canonical.get("source_revision") == revision,
+        "exact_source_identity": source_identities_match(context["source_identity"], source_identity),
     }
     passed = add.returncode == remove.returncode == 0 and proof == {"source_kind": kind, "immutable_revision": True, "exact_source_identity": True}
     return passed, {"command_traces": [add_trace, remove_trace], "before": before, "after": after, "proof": proof, **proof, "source_identity": source_identity, "fixture_digest": fixture_digest}

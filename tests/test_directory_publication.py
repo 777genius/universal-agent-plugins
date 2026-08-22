@@ -672,9 +672,14 @@ class PublicationLifecycleTests(unittest.TestCase):
         payload = {
             "schema_version": 1,
             "id": "runtime-demo-codex",
+            "product_id": "demo",
             "distribution_id": "example/demo",
             "release_sequence": 1,
             "package_tree_digest": "sha256:" + "1" * 64,
+            "manifest_digest": "sha256:" + "2" * 64,
+            "source_repository": "example/plugins",
+            "source_revision": "a" * 40,
+            "source_path": "plugins/demo",
             "level": "runtime",
             "outcome": "passed",
             "client": "codex",
@@ -691,7 +696,17 @@ class PublicationLifecycleTests(unittest.TestCase):
                 "evidence": [reviewed],
                 "distributions": [{
                     "id": "example/demo",
-                    "releases": [{"sequence": 1, "tree_digest": payload["package_tree_digest"]}],
+                    "product_id": payload["product_id"],
+                    "releases": [{
+                        "sequence": 1,
+                        "tree_digest": payload["package_tree_digest"],
+                        "manifest_digest": payload["manifest_digest"],
+                        "package_source": {
+                            "repository": payload["source_repository"],
+                            "revision": payload["source_revision"],
+                            "path": payload["source_path"],
+                        },
+                    }],
                     "release_policies": [{"release_sequence": 1, "current_evidence": [reviewed["id"]]}],
                 }],
             }

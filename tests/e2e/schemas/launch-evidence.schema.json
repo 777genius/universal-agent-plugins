@@ -141,7 +141,7 @@
   "$defs": {
     "tuple": {
       "type": "object",
-      "required": ["product_id", "tree_digest", "manifest_digest", "distribution_id", "distribution_kind", "release_sequence", "package_version", "snapshot_sequence", "snapshot_digest", "binary_digest", "dependency_identity", "installer_version", "adapter_version", "client_version", "os", "architecture", "observed_at"],
+      "required": ["product_id", "tree_digest", "manifest_digest", "distribution_id", "distribution_kind", "release_sequence", "package_version", "source_repository", "source_revision", "source_path", "snapshot_sequence", "snapshot_digest", "binary_digest", "dependency_identity", "installer_version", "adapter_version", "client_version", "os", "architecture", "observed_at"],
       "properties": {
         "product_id": {"type": ["string", "null"], "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"},
         "tree_digest": {"type": ["string", "null"], "pattern": "^sha256:[a-f0-9]{64}$"},
@@ -150,6 +150,9 @@
         "distribution_kind": {"type": ["string", "null"], "enum": ["upstream", "community_bridge", "community", "direct", null]},
         "release_sequence": {"type": ["integer", "null"], "minimum": 1},
         "package_version": {"type": ["string", "null"], "minLength": 1},
+        "source_repository": {"type": ["string", "null"], "pattern": "^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})/[A-Za-z0-9](?:[A-Za-z0-9._-]{0,99})$"},
+        "source_revision": {"type": ["string", "null"], "pattern": "^[a-f0-9]{40}$"},
+        "source_path": {"type": ["string", "null"], "pattern": "^(?!/)(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*//)(?!.*\\\\)(?!.*[?#%])[^\\u0000]+(?<!/)$"},
         "snapshot_sequence": {"type": ["integer", "null"], "minimum": 1},
         "snapshot_digest": {"type": ["string", "null"], "pattern": "^sha256:[a-f0-9]{64}$"},
         "binary_digest": {"type": ["string", "null"], "pattern": "^sha256:[a-f0-9]{64}$"},
@@ -170,6 +173,8 @@
           "product_id": {"type": "string"}, "tree_digest": {"type": "string"}, "manifest_digest": {"type": "string"},
           "distribution_id": {"type": "string"}, "distribution_kind": {"type": "string"},
           "release_sequence": {"type": "integer"}, "package_version": {"type": "string"},
+          "source_repository": {"type": "string"}, "source_revision": {"type": "string"},
+          "source_path": {"type": "string"},
           "snapshot_sequence": {"type": "integer"}, "snapshot_digest": {"type": "string"},
           "binary_digest": {"type": "string"}, "dependency_identity": {"type": "string", "minLength": 1},
           "installer_version": {"type": "string", "minLength": 1}, "adapter_version": {"type": "string", "minLength": 1},

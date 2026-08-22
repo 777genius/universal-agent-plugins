@@ -1093,7 +1093,18 @@ def validate_directory(
             for evidence_id in policy["current_evidence"]:
                 require(evidence_id in evidence_by_id, f"{distribution['id']}@{sequence}: unknown evidence {evidence_id}")
                 observation = evidence_by_id[evidence_id]
-                require(observation["distribution_id"] == distribution["id"] and observation["release_sequence"] == sequence and observation["package_tree_digest"] == release["tree_digest"], f"{evidence_id}: evidence identity does not match release")
+                evidence_source = release["package_source"]
+                require(
+                    observation["product_id"] == product_id
+                    and observation["distribution_id"] == distribution["id"]
+                    and observation["release_sequence"] == sequence
+                    and observation["package_tree_digest"] == release["tree_digest"]
+                    and observation["manifest_digest"] == release["manifest_digest"]
+                    and observation["source_repository"] == evidence_source["repository"]
+                    and observation["source_revision"] == evidence_source["revision"]
+                    and observation["source_path"] == evidence_source["path"],
+                    f"{evidence_id}: evidence identity does not match release",
+                )
                 evidence_tuple = tuple(observation.get(field) for field in ("level", "client", "dependency_identity", "client_version", "installer_version", "os", "architecture"))
                 require(evidence_tuple not in current_tuples, f"{distribution['id']}@{sequence}: multiple current evidence pointers for one applicability tuple")
                 current_tuples.add(evidence_tuple)
