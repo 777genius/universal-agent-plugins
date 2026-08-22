@@ -68,7 +68,7 @@ jobs:
         with:
           python-version: "3.13"
       - name: Install no-secret validation dependencies
-        run: python3 -m pip install --disable-pip-version-check check-jsonschema==0.37.4 cryptography==46.0.3 jsonschema==4.25.1
+        run: python3 -m pip install --disable-pip-version-check check-jsonschema==0.37.4 cryptography==46.0.3 jsonschema==4.25.1 PyYAML==6.0.3
       - name: Require event source to remain protected main
         env:
           EVENT_SOURCE_COMMIT: ${{ github.sha }}

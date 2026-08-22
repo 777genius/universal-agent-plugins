@@ -29,6 +29,11 @@ def commands(job):
 
 
 class WorkflowContractTests(unittest.TestCase):
+    def test_directory_publication_prepare_installs_bridge_runtime_dependencies(self) -> None:
+        workflow = load(DIRECTORY_PUBLICATION)
+        prepare_commands = commands(workflow["jobs"]["prepare"])
+        self.assertIn("PyYAML==6.0.3", prepare_commands)
+
     def test_pages_concurrency_isolates_prs_from_production(self) -> None:
         workflow = load(PAGES)
         self.assertEqual(workflow["concurrency"]["group"], "${{ github.event_name == 'pull_request' && format('pages-pr-{0}', github.event.pull_request.number) || 'pages-production' }}")
