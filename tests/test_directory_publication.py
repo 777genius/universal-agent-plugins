@@ -47,7 +47,10 @@ def run_script(name: str, *arguments: str, env: dict[str, str] | None = None) ->
     )
 
 
-def write_valid_package(package: Path, *, name: str = "demo", version: str = "1.0.0") -> None:
+def write_valid_package(
+    package: Path, *, name: str = "demo", version: str = "1.0.0",
+    repository: str = "example/external",
+) -> None:
     package.mkdir(parents=True, exist_ok=True)
     (package / "plugin.json").write_text(json.dumps({
         "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
@@ -57,7 +60,7 @@ def write_valid_package(package: Path, *, name: str = "demo", version: str = "1.
         "author": {"name": "Fixture"},
         "license": "MIT",
         "keywords": ["fixture"],
-        "repository": "https://github.com/example/external",
+        "repository": f"https://github.com/{repository}",
     }, sort_keys=True) + "\n")
     (package / "README.md").write_text("# Fixture\n")
     (package / "mcp.json").write_text(json.dumps({
@@ -327,6 +330,45 @@ class PublicationLifecycleTests(unittest.TestCase):
             )
         assemble.assert_not_called()
 
+    def test_capability_relaxation_reproduces_current_bridge_and_rejects_historical_bridge(self) -> None:
+        import build_bridges
+
+        source = json.loads((ROOT / "registry" / "directory.json").read_bytes())
+        bridge = next(
+            item for item in source["distributions"]
+            if item["kind"] == "community_bridge" and item["status"] == "active"
+        )
+        for release in bridge["releases"]:
+            release["package_source"]["revision"] = release["package_source"]["revision"] or "a" * 40
+            release.setdefault("published_at", "2026-08-20T00:00:00Z")
+        previous = copy.deepcopy(source)
+        old_product = next(item for item in previous["products"] if item["id"] == bridge["product_id"])
+        old_product["minimum_capabilities"]["skills"] = "required"
+
+        with mock.patch.object(
+            build_bridges, "assemble", side_effect=build_bridges.BridgeError("upstream unavailable"),
+        ) as assemble, self.assertRaisesRegex(publication.PublicationError, "bridge reproduction failed: upstream unavailable"):
+            prepare.validate_reproduced_bridges(
+                source, ROOT, "777genius/universal-agent-plugins", previous,
+            )
+        assemble.assert_called_once()
+
+        historical = copy.deepcopy(source)
+        historical_bridge = next(item for item in historical["distributions"] if item["id"] == bridge["id"])
+        newer = copy.deepcopy(historical_bridge["releases"][-1])
+        newer["sequence"] += 1
+        historical_bridge["releases"].append(newer)
+        newer_policy = copy.deepcopy(historical_bridge["release_policies"][-1])
+        newer_policy["release_sequence"] = newer["sequence"]
+        historical_bridge["release_policies"].append(newer_policy)
+        with self.assertRaisesRegex(
+            publication.PublicationError,
+            r"active historical bridge requires reproduction.*versioned historical reproduction inputs are unavailable",
+        ):
+            prepare.validate_reproduced_bridges(
+                historical, ROOT, "777genius/universal-agent-plugins", previous,
+            )
+
     def test_publication_upstream_positive_evidence_binds_complete_release_tuple(self) -> None:
         product = {
             "id": "demo", "default_distribution": "upstream/demo",
@@ -545,8 +587,7 @@ class PublicationLifecycleTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             repository = Path(tmp) / "repository"
             package = repository / "plugins" / "demo"
-            package.mkdir(parents=True)
-            (package / "plugin.json").write_text('{"name":"demo","version":"1.0.0"}\n')
+            write_valid_package(package, version="1.0.0", repository="example/uap")
             subprocess.run(["/usr/bin/git", "init", "-q", str(repository)], check=True)
             subprocess.run(["/usr/bin/git", "-C", str(repository), "config", "uploadpack.allowFilter", "true"], check=True)
             subprocess.run(["/usr/bin/git", "-C", str(repository), "add", "."], check=True)
@@ -555,7 +596,7 @@ class PublicationLifecycleTests(unittest.TestCase):
             old_tree = prepare.package_tree_digest(package)
             old_manifest = prepare.manifest_digest(package)
 
-            (package / "plugin.json").write_text('{"name":"demo","version":"2.0.0"}\n')
+            write_valid_package(package, version="2.0.0", repository="example/uap")
             subprocess.run(["/usr/bin/git", "-C", str(repository), "add", "."], check=True)
             subprocess.run(["/usr/bin/git", "-C", str(repository), "-c", "user.name=Fixture", "-c", "user.email=fixture@example.test", "commit", "-qm", "new"], check=True)
             current_revision = subprocess.check_output(["/usr/bin/git", "-C", str(repository), "rev-parse", "HEAD"], text=True).strip()
@@ -649,8 +690,9 @@ class PublicationLifecycleTests(unittest.TestCase):
         config = prepare.load_config(ROOT / "registry" / "publication" / "config.json")
         with tempfile.TemporaryDirectory() as tmp:
             package = Path(tmp) / "plugins" / "demo"
-            package.mkdir(parents=True)
-            (package / "plugin.json").write_text('{"name":"demo"}\n')
+            write_valid_package(
+                package, repository=config["repository"],
+            )
             subprocess.run(["/usr/bin/git", "init", "-q", tmp], check=True)
             subprocess.run(["/usr/bin/git", "-C", tmp, "add", "."], check=True)
             subprocess.run(["/usr/bin/git", "-C", tmp, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.test", "commit", "-qm", "source"], check=True)
@@ -708,8 +750,7 @@ class PublicationLifecycleTests(unittest.TestCase):
         config = prepare.load_config(ROOT / "registry" / "publication" / "config.json")
         with tempfile.TemporaryDirectory() as tmp:
             package = Path(tmp) / "plugins" / "demo"
-            package.mkdir(parents=True)
-            (package / "plugin.json").write_text('{"name":"demo"}\n')
+            write_valid_package(package, repository=config["repository"])
             tree = prepare.package_tree_digest(package)
             manifest = prepare.manifest_digest(package)
             distribution = {
@@ -748,6 +789,7 @@ class PublicationLifecycleTests(unittest.TestCase):
             self.assertEqual(candidate["revocations"], [{"distribution_id": "777genius/demo", "release_sequence": 1}])
 
             (package / "mcp.json").write_text(json.dumps({
+                "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
                 "mcpServers": {"demo": {"type": "stdio", "command": "npx", "args": ["demo@1.0.0"]}},
             }))
             source["distributions"][0]["status"] = "active"
@@ -830,6 +872,79 @@ class PublicationLifecycleTests(unittest.TestCase):
             broadened["distributions"][0]["release_policies"][0]["targets"].append({"client": "cursor", "scopes": ["user"], "delivery": "managed", "authentication": "unknown"})
             with self.assertRaisesRegex(publication.PublicationError, "reacquisition failed"):
                 prepare.build_candidate(broadened, config, "f" * 40, "external-broadened", previous, external_overrides={"example/external": missing})
+
+            capability_previous = copy.deepcopy(previous)
+            capability_previous["products"][0]["minimum_capabilities"]["skills"] = "required"
+            with self.assertRaisesRegex(publication.PublicationError, "reacquisition failed"):
+                prepare.build_candidate(
+                    source, config, "f" * 40, "external-capability-broadened",
+                    capability_previous,
+                    external_overrides={"example/external": missing},
+                )
+
+            metadata_only = copy.deepcopy(source)
+            metadata_only["products"][0]["description"] = "Updated card copy only."
+            offline = prepare.build_candidate(
+                metadata_only, config, "f" * 40, "external-metadata-only",
+                previous, external_overrides={"example/external": missing},
+            )
+            self.assertEqual(
+                offline["distributions"][0]["releases"][0]["package_source"],
+                previous_release["package_source"],
+            )
+
+    def test_newly_eligible_local_binding_uses_pinned_bytes_and_unchanged_binding_is_offline(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repository = Path(tmp) / "repository"
+            package = repository / "plugins" / "demo"
+            write_valid_package(package, version="1.0.0", repository="example/local")
+            subprocess.run(["/usr/bin/git", "init", "-q", str(repository)], check=True)
+            subprocess.run(["/usr/bin/git", "-C", str(repository), "add", "."], check=True)
+            subprocess.run(["/usr/bin/git", "-C", str(repository), "-c", "user.name=Fixture", "-c", "user.email=fixture@example.test", "commit", "-qm", "historical"], check=True)
+            historical_revision = subprocess.check_output(["/usr/bin/git", "-C", str(repository), "rev-parse", "HEAD"], text=True).strip()
+            release = {
+                "sequence": 1, "package_version": "1.0.0", "manifest_name": "demo",
+                "agent_plugins_schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+                "package_source": {"repository": "example/local", "revision": historical_revision, "path": "plugins/demo"},
+                "tree_digest_algorithm": "agentplugins-tree-sha256-v1",
+                "tree_digest": prepare.package_tree_digest(package),
+                "manifest_digest": prepare.manifest_digest(package), "components": ["mcp"],
+                "published_at": "2026-08-20T00:00:00Z",
+            }
+            source = {
+                "schema_version": 1,
+                "products": [{"schema_version": 1, "id": "demo", "display_name": "Demo", "description": "Demo package.", "manifest_name": "demo", "aliases": ["demo"], "reserved_aliases": ["demo"], "categories": ["demo"], "minimum_capabilities": {"skills": "optional", "mcp": "required"}, "default_distribution": "example/demo", "distributions": ["example/demo"]}],
+                "distributions": [{"schema_version": 1, "id": "example/demo", "product_id": "demo", "kind": "community", "status": "active", "packager": "example", "releases": [release], "release_policies": [{"release_sequence": 1, "status": "active", "minimum_installer_version": "0.1.6", "targets": [{"client": "codex", "scopes": ["user"], "delivery": "managed", "authentication": "unknown"}], "current_evidence": []}]}],
+                "evidence": [],
+            }
+            previous = copy.deepcopy(source)
+            previous["products"][0]["minimum_capabilities"]["skills"] = "required"
+            write_valid_package(package, version="2.0.0", repository="example/local")
+            subprocess.run(["/usr/bin/git", "-C", str(repository), "add", "."], check=True)
+            subprocess.run(["/usr/bin/git", "-C", str(repository), "-c", "user.name=Fixture", "-c", "user.email=fixture@example.test", "commit", "-qm", "new working tree"], check=True)
+            current_revision = subprocess.check_output(["/usr/bin/git", "-C", str(repository), "rev-parse", "HEAD"], text=True).strip()
+            config = {"schema_version": 1, "repository": "example/local", "snapshot_lifetime_days": 30}
+
+            candidate = prepare.build_candidate(
+                source, config, current_revision, "local-capability-broadened",
+                previous, repository_root=repository,
+            )
+            self.assertEqual(candidate["distributions"][0]["releases"][0]["package_version"], "1.0.0")
+
+            unavailable = Path(tmp) / "unavailable"
+            with self.assertRaisesRegex(publication.PublicationError, "reacquisition failed"):
+                prepare.build_candidate(
+                    source, config, current_revision, "local-capability-offline",
+                    previous, repository_root=unavailable,
+                )
+            unchanged = prepare.build_candidate(
+                source, config, current_revision, "local-emergency-offline",
+                copy.deepcopy(source), repository_root=unavailable,
+            )
+            self.assertEqual(
+                unchanged["distributions"][0]["releases"][0]["package_source"]["revision"],
+                historical_revision,
+            )
 
     def test_external_package_validation_derives_identity_version_and_components(self) -> None:
         config = prepare.load_config(ROOT / "registry" / "publication" / "config.json")

@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import gzip
 import hashlib
+import itertools
 import json
 import os
 import re
@@ -808,6 +809,204 @@ def external_release_map(
     }
 
 
+def required_components(product: dict[str, object]) -> set[str]:
+    """Return the component contract that can affect release eligibility."""
+    return {
+        component
+        for component, state in product["minimum_capabilities"].items()
+        if state == "required"
+    }
+
+
+def release_eligibility_broadened(
+    product: dict[str, object], distribution: dict[str, object],
+    release: dict[str, object], policy: dict[str, object],
+    old_product: dict[str, object] | None,
+    old_distribution: dict[str, object] | None,
+    old_policy: dict[str, object] | None,
+) -> bool:
+    """Whether an immutable release gained eligibility from product policy.
+
+    Product display metadata is deliberately excluded.  Only the actual set of
+    required components can make previously ineligible bytes eligible.
+    """
+    if old_product is None or old_distribution is None or old_policy is None:
+        return True
+    was_eligible = (
+        old_distribution["status"] == "active"
+        and old_policy["status"] == "active"
+        and required_components(old_product).issubset(release["components"])
+    )
+    is_eligible = (
+        distribution["status"] == "active"
+        and policy["status"] == "active"
+        and required_components(product).issubset(release["components"])
+    )
+    return is_eligible and not was_eligible
+
+
+def policy_eligibility_broadened(
+    distribution: dict[str, object], policy: dict[str, object],
+    old_distribution: dict[str, object] | None,
+    old_policy: dict[str, object] | None,
+) -> bool:
+    """Whether mutable release policy exposes the same bytes more broadly."""
+    if old_distribution is None or old_policy is None:
+        return True
+    if distribution["kind"] != old_distribution["kind"] or distribution["packager"] != old_distribution["packager"]:
+        return True
+    if old_distribution["status"] != "active" and distribution["status"] == "active":
+        return True
+    if old_policy["status"] != "active" and policy["status"] == "active":
+        return True
+    if distribution["status"] != "active" or policy["status"] != "active":
+        return False
+    target_keys = {
+        (target["client"], scope)
+        for target in policy["targets"] for scope in target["scopes"]
+    }
+    old_target_keys = {
+        (target["client"], scope)
+        for target in old_policy["targets"] for scope in target["scopes"]
+    }
+    if not target_keys.issubset(old_target_keys):
+        return True
+    if any(target not in old_policy["targets"] for target in policy["targets"]):
+        return True
+    old_minimum = tuple(int(part) for part in old_policy["minimum_installer_version"].split("."))
+    new_minimum = tuple(int(part) for part in policy["minimum_installer_version"].split("."))
+    if new_minimum < old_minimum:
+        return True
+    return policy["current_evidence"] != old_policy["current_evidence"]
+
+
+def releases_requiring_validation(
+    source: dict[str, object], base_source: dict[str, object] | None,
+) -> set[tuple[str, int]]:
+    """Identify changed, new, or newly eligible immutable release bindings."""
+    current_products = {item["id"]: item for item in source["products"]}
+    current_distributions = {item["id"]: item for item in source["distributions"]}
+    if base_source is None:
+        return {
+            (distribution["id"], release["sequence"])
+            for distribution in source["distributions"]
+            for release in distribution["releases"]
+        }
+    old_products = {item["id"]: item for item in base_source["products"]}
+    old_distributions = {item["id"]: item for item in base_source["distributions"]}
+    required: set[tuple[str, int]] = set()
+    for distribution_id, distribution in current_distributions.items():
+        product = current_products[distribution["product_id"]]
+        old_distribution = old_distributions.get(distribution_id)
+        old_releases = {
+            item["sequence"]: item for item in old_distribution["releases"]
+        } if old_distribution else {}
+        old_policies = {
+            item["release_sequence"]: item
+            for item in old_distribution["release_policies"]
+        } if old_distribution else {}
+        old_product = old_products.get(product["id"])
+        policies = {item["release_sequence"]: item for item in distribution["release_policies"]}
+        for release in distribution["releases"]:
+            sequence = release["sequence"]
+            old_release = old_releases.get(sequence)
+            if old_release != release or policy_eligibility_broadened(
+                distribution, policies[sequence], old_distribution,
+                old_policies.get(sequence),
+            ) or release_eligibility_broadened(
+                product, distribution, release, policies[sequence],
+                old_product, old_distribution, old_policies.get(sequence),
+            ):
+                required.add((distribution_id, sequence))
+    return required
+
+
+def validate_historical_bridge_eligibility(
+    source: dict[str, object], base_source: dict[str, object] | None, *,
+    repository: str = "777genius/universal-agent-plugins",
+) -> None:
+    """Fail closed when a historical local bridge lacks versioned recipes."""
+    if base_source is None:
+        return
+    required = releases_requiring_validation(source, base_source)
+    products = {item["id"]: item for item in source["products"]}
+    for distribution in source["distributions"]:
+        if distribution["kind"] != "community_bridge":
+            continue
+        local = [
+            release for release in distribution["releases"]
+            if release["package_source"]["repository"] == repository
+        ]
+        if not local:
+            continue
+        current_sequence = max(release["sequence"] for release in local)
+        policies = {item["release_sequence"]: item for item in distribution["release_policies"]}
+        required_set = required_components(products[distribution["product_id"]])
+        for release in local:
+            identity = (distribution["id"], release["sequence"])
+            policy = policies[release["sequence"]]
+            eligible = (
+                distribution["status"] == "active"
+                and policy["status"] == "active"
+                and required_set.issubset(release["components"])
+            )
+            require(
+                identity not in required or not eligible or release["sequence"] == current_sequence,
+                f"{distribution['id']}@{release['sequence']}: active historical bridge requires reproduction, "
+                f"but the canonical recipe represents release {current_sequence}; "
+                "versioned historical reproduction inputs are unavailable",
+            )
+
+
+def validate_changed_local_releases(
+    source: dict[str, object], base_source: dict[str, object] | None = None, *,
+    repository_root: Path = ROOT,
+    repository: str = "777genius/universal-agent-plugins",
+    acquirer=None,  # type: ignore[no-untyped-def]
+) -> list[tuple[str, int]]:
+    """Validate changed/newly eligible local bindings from their exact bytes."""
+    if acquirer is None:
+        from prepare_directory_publication import acquire_external
+        acquirer = acquire_external
+    validate_historical_bridge_eligibility(
+        source, base_source, repository=repository,
+    )
+    distributions = {item["id"]: item for item in source["distributions"]}
+    validated: list[tuple[str, int]] = []
+    for identity in sorted(releases_requiring_validation(source, base_source)):
+        distribution = distributions[identity[0]]
+        release = next(item for item in distribution["releases"] if item["sequence"] == identity[1])
+        package_source = release["package_source"]
+        if package_source["repository"] != repository:
+            continue
+        label = f"{identity[0]}@{identity[1]}"
+        revision = package_source["revision"]
+        if revision is None:
+            validate_release_package(
+                repository_root / package_source["path"], release,
+                label=label, allow_unresolved_revision=True,
+            )
+        else:
+            temporary = None
+            try:
+                temporary = acquirer(
+                    repository, revision, package_source["path"], repository_root,
+                )
+                validate_release_package(
+                    Path(temporary.name) / "checkout" / package_source["path"],
+                    release, label=label,
+                )
+            except RegistryError:
+                raise
+            except Exception as error:
+                raise RegistryError(f"{label}: local reacquisition failed closed: {error}") from error
+            finally:
+                if temporary is not None:
+                    temporary.cleanup()
+        validated.append(identity)
+    return validated
+
+
 def validate_changed_external_releases(
     source: dict[str, object], base_source: dict[str, object] | None = None, *,
     repository: str = "777genius/universal-agent-plugins",
@@ -827,8 +1026,10 @@ def validate_changed_external_releases(
         acquirer = acquire_external
     overrides = repository_overrides or {}
     current = external_release_map(source, repository)
-    previous = {} if base_source is None else external_release_map(base_source, repository)
-    changed = sorted(identity for identity, release in current.items() if previous.get(identity) != release)
+    changed = sorted(
+        identity for identity in releases_requiring_validation(source, base_source)
+        if identity in current
+    )
     for identity in changed:
         release = current[identity]
         package_source = release["package_source"]
@@ -842,7 +1043,7 @@ def validate_changed_external_releases(
             temporary = acquirer(source_repository, revision, package_path, overrides.get(source_repository))
             package_root = Path(temporary.name) / "checkout" / package_path
             require(package_root.is_dir(), f"{label}: reacquired package path is unavailable")
-            validate_external_release_package(package_root, release, label=label)
+            validate_release_package(package_root, release, label=label)
         except RegistryError:
             raise
         except Exception as error:
@@ -891,8 +1092,9 @@ def _package_uses_unclosed_live_npx(package_root: Path) -> bool:
     )
 
 
-def validate_external_release_package(
+def validate_release_package(
     package_root: Path, release: dict[str, object], *, label: str | None = None,
+    allow_unresolved_revision: bool = False,
 ) -> None:
     """Validate the complete immutable package boundary used for eligibility.
 
@@ -905,8 +1107,9 @@ def validate_external_release_package(
     source_repository = validate_repository(package_source["repository"])
     revision = package_source["revision"]
     require(
-        isinstance(revision, str) and SHA_RE.fullmatch(revision) is not None,
-        f"{label or source_repository}: external source revision must be a full lowercase commit SHA",
+        (allow_unresolved_revision and revision is None)
+        or (isinstance(revision, str) and SHA_RE.fullmatch(revision) is not None),
+        f"{label or source_repository}: source revision must be unresolved current bytes or a full lowercase commit SHA",
     )
     package_path = validate_registry_path(package_source["path"])
     identity = label or f"{source_repository}@{revision}//{package_path}"
@@ -948,6 +1151,10 @@ def validate_external_release_package(
     )
 
 
+# Compatibility name for focused callers; all package kinds share the boundary.
+validate_external_release_package = validate_release_package
+
+
 def validate_active_local_runtime_closures(
     source: dict[str, object], *, repository_root: Path = ROOT,
     repository: str = "777genius/universal-agent-plugins",
@@ -959,7 +1166,11 @@ def validate_active_local_runtime_closures(
         for release in distribution["releases"]:
             policy = _policy_for(distribution, release["sequence"])
             package_source = release["package_source"]
-            if policy["status"] != "active" or package_source["repository"] != repository:
+            if (
+                policy["status"] != "active"
+                or package_source["repository"] != repository
+                or package_source["revision"] is not None
+            ):
                 continue
             package_root = repository_root / package_source["path"]
             require(package_root.is_dir(), f"{distribution['id']}@{release['sequence']}: package path is missing")
@@ -1191,9 +1402,21 @@ def validate_directory(
             if verify_packages and package_source["repository"] == repository and package_source["revision"] is None:
                 package_root = repository_root / package_source["path"]
                 require(package_root.is_dir(), f"{distribution['id']}@{sequence}: package path is missing")
-                fields = package_fields(package_root, [])
-                require(directory_tree_digest(package_root) == release["tree_digest"], f"{distribution['id']}@{sequence}: package tree digest drift")
-                require(fields["manifest_sha256"] == release["manifest_digest"], f"{distribution['id']}@{sequence}: manifest digest drift")
+                required = required_components(products_by_id[product_id])
+                if (
+                    distribution["status"] == "active"
+                    and policy["status"] == "active"
+                    and required.issubset(release["components"])
+                ):
+                    validate_release_package(
+                        package_root, release,
+                        label=f"{distribution['id']}@{sequence}",
+                        allow_unresolved_revision=True,
+                    )
+                else:
+                    fields = package_fields(package_root, [])
+                    require(directory_tree_digest(package_root) == release["tree_digest"], f"{distribution['id']}@{sequence}: package tree digest drift")
+                    require(fields["manifest_sha256"] == release["manifest_digest"], f"{distribution['id']}@{sequence}: manifest digest drift")
     validate_active_local_runtime_closures(
         source, repository_root=repository_root, repository=repository,
     )
@@ -1324,14 +1547,20 @@ def directory_preview(source: dict[str, object]) -> dict[str, object]:
         choices = []
         for distribution_id in product["distributions"]:
             distribution = distributions[distribution_id]
-            selected_clients: dict[int, list[str]] = {}
-            for client in CLIENT_IDS:
-                candidate, _ = _eligible_release(
-                    distribution, product, {client}, evidence,
-                )
-                if candidate is None:
-                    continue
-                selected_clients.setdefault(candidate["sequence"], []).append(client)
+            selected_clients: dict[int, set[str]] = {}
+            # The review artifact serves a multi-target command.  Record every
+            # target participating in any complete target set for which the
+            # authoritative resolver selects this release, not merely the
+            # winners of independent one-client resolutions.
+            for count in range(1, len(CLIENT_IDS) + 1):
+                target_sets = itertools.combinations(CLIENT_IDS, count)
+                for target_set in target_sets:
+                    candidate, _ = _eligible_release(
+                        distribution, product, set(target_set), evidence,
+                    )
+                    if candidate is None:
+                        continue
+                    selected_clients.setdefault(candidate["sequence"], set()).update(target_set)
             selected_releases = [
                 release for release in reversed(distribution["releases"])
                 if release["sequence"] in selected_clients
@@ -1355,7 +1584,8 @@ def directory_preview(source: dict[str, object]) -> dict[str, object]:
                     "components": release["components"],
                     "eligible_targets": [
                         {"client": client, "authentication": target_authentication[client]}
-                        for client in selected_clients.get(release["sequence"], [])
+                        for client in CLIENT_IDS
+                        if client in selected_clients.get(release["sequence"], set())
                     ],
                     "current_evidence": candidate_policy["current_evidence"],
                     "source": release["package_source"],
@@ -1431,6 +1661,7 @@ def main() -> int:
         if args.external_release_check:
             base_source = load_directory_source_at_revision(args.base_revision) if args.external_release_check == "changed" else None
             validate_changed_external_releases(source, base_source)
+            validate_changed_local_releases(source, base_source)
         validate_readme_blocks(source)
         validate_legacy_catalog_freeze()
         validate_no_flat_directory_entries()

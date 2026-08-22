@@ -19,9 +19,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from build_registry import (
     RegistryError,
     directory_tree_digest as package_tree_digest,
+    policy_eligibility_broadened,
+    release_eligibility_broadened,
+    releases_requiring_validation,
     validate_active_local_runtime_closures,
     validate_bridge_bindings,
     validate_changed_external_releases,
+    validate_release_package,
 )
 from directory_publication import (
     CANDIDATE_SCHEMA,
@@ -118,31 +122,13 @@ def policy_map(distribution: dict[str, Any]) -> dict[int, dict[str, Any]]:
     return {item["release_sequence"]: item for item in distribution["release_policies"]}
 
 
-def target_keys(policy: dict[str, Any]) -> set[tuple[str, str]]:
-    return {(target["client"], scope) for target in policy["targets"] for scope in target["scopes"]}
-
-
 def eligibility_broadened(
     distribution: dict[str, Any], policy: dict[str, Any],
     old_distribution: dict[str, Any] | None, old_policy: dict[str, Any] | None,
 ) -> bool:
-    if old_distribution is None or old_policy is None:
-        return True
-    if distribution["kind"] != old_distribution["kind"] or distribution["packager"] != old_distribution["packager"]:
-        return True
-    if old_distribution["status"] != "active" and distribution["status"] == "active":
-        return True
-    if old_policy["status"] != "active" and policy["status"] == "active":
-        return True
-    if not target_keys(policy).issubset(target_keys(old_policy)):
-        return True
-    if any(target not in old_policy["targets"] for target in policy["targets"]):
-        return True
-    old_minimum = tuple(int(part) for part in old_policy["minimum_installer_version"].split("."))
-    new_minimum = tuple(int(part) for part in policy["minimum_installer_version"].split("."))
-    if new_minimum < old_minimum:
-        return True
-    return policy["current_evidence"] != old_policy["current_evidence"]
+    return policy_eligibility_broadened(
+        distribution, policy, old_distribution, old_policy,
+    )
 
 
 def manifest_digest(package_root: Path) -> str:
@@ -152,11 +138,13 @@ def manifest_digest(package_root: Path) -> str:
 
 
 def verify_package(package_root: Path, release: dict[str, Any], identity: str) -> None:
-    require(package_root.is_dir(), f"{identity}: package path is unavailable")
-    actual_tree = package_tree_digest(package_root)
-    actual_manifest = manifest_digest(package_root)
-    require(actual_tree == release["tree_digest"], f"{identity}: reacquired tree digest differs from reviewed digest")
-    require(actual_manifest == release["manifest_digest"], f"{identity}: reacquired manifest digest differs from reviewed digest")
+    try:
+        validate_release_package(
+            package_root, release, label=identity,
+            allow_unresolved_revision=release["package_source"]["revision"] is None,
+        )
+    except RegistryError as error:
+        raise PublicationError(str(error)) from error
 
 
 def acquisition_environment(temporary_root: Path) -> dict[str, str]:
@@ -450,6 +438,10 @@ def validate_reproduced_bridges(
             source, repository_root=repository_root, repository=repository,
         )
         old_distributions = previous_distributions(previous)
+        products = {item["id"]: item for item in source["products"]}
+        old_products = {
+            item["id"]: item for item in previous["products"]
+        } if previous else {}
         reproduce: set[str] = set()
         for distribution in source["distributions"]:
             if distribution["kind"] != "community_bridge":
@@ -467,6 +459,8 @@ def validate_reproduced_bridges(
                 item["sequence"]: item for item in old_distribution["releases"]
             } if old_distribution else {}
             old_policies = policy_map(old_distribution) if old_distribution else {}
+            product = products[distribution["product_id"]]
+            old_product = old_products.get(distribution["product_id"])
             for release in local:
                 sequence = release["sequence"]
                 policy = policies[sequence]
@@ -480,6 +474,10 @@ def validate_reproduced_bridges(
                     or old_policy != policy
                     or eligibility_broadened(
                         distribution, policy, old_distribution, old_policy,
+                    )
+                    or release_eligibility_broadened(
+                        product, distribution, release, policy,
+                        old_product, old_distribution, old_policy,
                     )
                 )
                 if changed_eligible_binding:
@@ -517,27 +515,39 @@ def validate_signing_boundary_packages(
     repository: str, overrides: dict[str, Path],
 ) -> None:
     """Invoke the centralized package policy at the last pre-signing boundary."""
-    baseline = copy.deepcopy(previous)
-    if baseline is not None:
-        current_distributions = {item["id"]: item for item in source["distributions"]}
-        for old_distribution in baseline["distributions"]:
-            current_distribution = current_distributions.get(old_distribution["id"])
-            if current_distribution is None:
-                continue
-            current_policies = policy_map(current_distribution)
-            old_policies = policy_map(old_distribution)
-            old_distribution["releases"] = [
-                release for release in old_distribution["releases"]
-                if not eligibility_broadened(
-                    current_distribution, current_policies[release["sequence"]],
-                    old_distribution, old_policies.get(release["sequence"]),
-                )
-            ]
     try:
         validate_changed_external_releases(
-            source, baseline, repository=repository,
+            source, previous, repository=repository,
             repository_overrides=overrides,
         )
+        # Existing local bindings normally remain offline-capable.  Reacquire
+        # only a previously signed binding whose eligibility is broadened, and
+        # always from its immutable revision rather than the newest checkout.
+        prior = previous_releases(previous)
+        distributions = {item["id"]: item for item in source["distributions"]}
+        for identity in sorted(releases_requiring_validation(source, previous)):
+            if identity not in prior:
+                continue  # New/current bindings were validated while binding above.
+            distribution = distributions[identity[0]]
+            release = next(item for item in distribution["releases"] if item["sequence"] == identity[1])
+            package_source = release["package_source"]
+            if package_source["repository"] != repository:
+                continue  # Central external reacquisition handled above.
+            revision = package_source["revision"]
+            require(
+                isinstance(revision, str) and SHA_RE.fullmatch(revision) is not None,
+                f"{identity[0]}@{identity[1]}: historical source requires a full pinned revision",
+            )
+            temporary = acquire_external(
+                repository, revision, package_source["path"], repository_root,
+            )
+            try:
+                validate_release_package(
+                    Path(temporary.name) / "checkout" / package_source["path"],
+                    release, label=f"{identity[0]}@{identity[1]}",
+                )
+            finally:
+                temporary.cleanup()
         validate_active_local_runtime_closures(
             source, repository_root=repository_root, repository=repository,
         )
@@ -553,6 +563,15 @@ def build_candidate(
 ) -> dict[str, Any]:
     validate_with_schema(source, SOURCE_SCHEMA)
     require(SHA_RE.fullmatch(source_commit) is not None, "source commit must be a full lowercase SHA")
+    try:
+        # Establish recipe/source binding before package validation so a
+        # contributor cannot substitute provenance while retaining package bytes.
+        validate_bridge_bindings(
+            source, repository_root=repository_root,
+            repository=config["repository"],
+        )
+    except RegistryError as error:
+        raise PublicationError(str(error)) from error
     prior = previous_releases(previous)
     prior_distributions = previous_distributions(previous)
     all_distributions = {item["id"]: item for item in source["distributions"]}

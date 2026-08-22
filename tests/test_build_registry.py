@@ -683,6 +683,105 @@ class DirectoryDomainTests(unittest.TestCase):
             )
             self.assertEqual(changed, [("zz-community/zz-community-product", 1)])
 
+    def test_capability_relaxation_revalidates_external_release_but_display_edits_do_not(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            source, repository, _package, _revision = self.local_external_release(Path(tmp))
+            product = next(item for item in source["products"] if item["id"] == "zz-community-product")
+            product["minimum_capabilities"]["skills"] = "optional"
+            previous = copy.deepcopy(source)
+            old_product = next(item for item in previous["products"] if item["id"] == product["id"])
+            old_product["minimum_capabilities"]["skills"] = "required"
+
+            self.assertEqual(
+                registry.validate_changed_external_releases(
+                    source, previous,
+                    repository_overrides={"example/external": repository},
+                ),
+                [("zz-community/zz-community-product", 1)],
+            )
+            with self.assertRaisesRegex(registry.RegistryError, "reacquisition failed closed"):
+                registry.validate_changed_external_releases(
+                    source, previous,
+                    acquirer=mock.Mock(side_effect=OSError("offline")),
+                )
+
+            metadata_only = copy.deepcopy(source)
+            next(item for item in metadata_only["products"] if item["id"] == product["id"])["description"] = "Updated display copy only."
+            acquirer = mock.Mock(side_effect=AssertionError("display edit fetched package"))
+            self.assertEqual(
+                registry.validate_changed_external_releases(metadata_only, source, acquirer=acquirer),
+                [],
+            )
+            acquirer.assert_not_called()
+
+    def test_pr_validation_rejects_newly_eligible_historical_bridge_without_versioned_recipe(self) -> None:
+        source = self.fixture()
+        bridge = next(item for item in source["distributions"] if item["kind"] == "community_bridge")
+        bridge["releases"][0]["package_source"]["repository"] = "777genius/universal-agent-plugins"
+        older = copy.deepcopy(bridge["releases"][0])
+        older["sequence"] = 2
+        newer = copy.deepcopy(bridge["releases"][0])
+        newer["sequence"] = 3
+        bridge["releases"] = [older, newer]
+        older_policy = copy.deepcopy(bridge["release_policies"][0])
+        older_policy["release_sequence"] = 2
+        newer_policy = copy.deepcopy(older_policy)
+        newer_policy["release_sequence"] = 3
+        bridge["release_policies"] = [older_policy, newer_policy]
+        previous = copy.deepcopy(source)
+        previous["products"][0]["minimum_capabilities"]["skills"] = "required"
+        source["products"][0]["minimum_capabilities"]["skills"] = "optional"
+
+        with self.assertRaisesRegex(
+            registry.RegistryError,
+            r"@2: active historical bridge requires reproduction.*versioned historical reproduction inputs are unavailable",
+        ):
+            registry.validate_historical_bridge_eligibility(source, previous)
+
+        bridge["releases"] = [newer]
+        bridge["release_policies"] = [newer_policy]
+        previous["distributions"] = [
+            item for item in previous["distributions"] if item["id"] != bridge["id"]
+        ] + [copy.deepcopy(bridge)]
+        previous["distributions"].sort(key=lambda item: item["id"])
+        registry.validate_historical_bridge_eligibility(source, previous)
+
+    def test_pr_validation_uses_pinned_local_release_not_newest_worktree_path(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            source, repository, package, _revision = self.local_external_release(Path(tmp))
+            manifest = json.loads((package / "plugin.json").read_text())
+            manifest["repository"] = "https://github.com/777genius/universal-agent-plugins"
+            (package / "plugin.json").write_text(json.dumps(manifest) + "\n")
+            revision = self.commit_fixture_change(repository, "canonical local identity")
+            distribution = source["distributions"][-1]
+            release = distribution["releases"][0]
+            release["package_source"]["repository"] = "777genius/universal-agent-plugins"
+            release["package_source"]["revision"] = revision
+            release["tree_digest"] = registry.directory_tree_digest(package)
+            release["manifest_digest"] = registry.digest_bytes((package / "plugin.json").read_bytes())
+            product = source["products"][-1]
+            product["minimum_capabilities"]["skills"] = "optional"
+            previous = copy.deepcopy(source)
+            previous["products"][-1]["minimum_capabilities"]["skills"] = "required"
+
+            (package / "mcp.json").write_text(json.dumps({
+                "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
+                "mcpServers": {"fixture": {
+                    "type": "stdio", "command": "npx", "args": ["fixture@1.0.0"],
+                }},
+            }) + "\n")
+            self.assertEqual(
+                registry.validate_changed_local_releases(
+                    source, previous, repository_root=repository,
+                ),
+                [("zz-community/zz-community-product", 1)],
+            )
+            with self.assertRaisesRegex(registry.RegistryError, "local reacquisition failed closed"):
+                registry.validate_changed_local_releases(
+                    source, previous, repository_root=repository,
+                    acquirer=mock.Mock(side_effect=OSError("offline")),
+                )
+
     def test_changed_external_release_rejects_live_npx_launcher_aliases(self) -> None:
         commands = ("npx.cmd", "NPX", r"C:\\tools\\npx.exe", "/usr/local/bin/npx")
         for command in commands:
@@ -925,11 +1024,23 @@ class DirectoryDomainTests(unittest.TestCase):
         self.assertEqual(distribution["kind"], "community")
         distribution["status"] = "active"
         distribution["release_policies"][0]["status"] = "active"
+        distribution["releases"][0]["package_source"]["revision"] = None
         with self.assertRaisesRegex(
             registry.RegistryError,
             "active in-repository release uses live npx without a recognized content-addressed runtime closure contract",
         ):
             registry.validate_active_local_runtime_closures(source)
+
+    def test_bound_historical_release_is_not_checked_against_current_path(self) -> None:
+        source = self.source()
+        distribution = next(
+            item for item in source["distributions"]
+            if item["id"] == "777genius/chrome-devtools"
+        )
+        distribution["status"] = "active"
+        distribution["release_policies"][0]["status"] = "active"
+        self.assertIsNotNone(distribution["releases"][0]["package_source"]["revision"])
+        registry.validate_active_local_runtime_closures(source)
 
     def test_real_bridge_and_upstream_context7_provenance_is_exact(self) -> None:
         source = self.source()
@@ -1306,7 +1417,7 @@ class DirectoryDomainTests(unittest.TestCase):
         with self.assertRaisesRegex(registry.RegistryError, "blocking trusted failure for cursor"):
             registry.resolve_directory(fixture, "demo", ["cursor"])
 
-    def test_preview_identifies_older_release_selected_after_newest_trusted_failure(self) -> None:
+    def test_preview_records_complete_multi_target_release_eligibility(self) -> None:
         fixture = self.fixture()
         distribution = next(
             item for item in fixture["distributions"]
@@ -1318,30 +1429,36 @@ class DirectoryDomainTests(unittest.TestCase):
         newest_policy = copy.deepcopy(distribution["release_policies"][0])
         newest_policy["release_sequence"] = 4
         newest_policy["targets"][0]["authentication"] = "not_required"
-        failure = copy.deepcopy(fixture["evidence"][0])
-        failure.update({
-            "id": "evidence/demo-bridge-codex-failure",
-            "release_sequence": 4,
-            "outcome": "failed",
-            "client": "codex",
-        })
-        newest_policy["current_evidence"] = [failure["id"]]
+        newest_policy["targets"] = newest_policy["targets"][:1]
+        newest_policy["current_evidence"] = []
         distribution["release_policies"].append(newest_policy)
-        fixture["evidence"].append(failure)
-        fixture["evidence"].sort(key=lambda item: item["id"])
 
         registry.validate_directory(fixture, verify_packages=False)
-        resolved = registry.resolve_directory(fixture, "packager/demo-bridge", ["codex"])
+        resolved = registry.resolve_directory(fixture, "packager/demo-bridge", ["codex", "cursor"])
         self.assertEqual(resolved["release_sequence"], 3)
         preview = registry.directory_preview(fixture)
-        choice = next(
+        older = next(
             item for item in preview["products"][0]["distributions"]
             if item["id"] == "packager/demo-bridge" and item["release_sequence"] == 3
         )
-        codex = next(target for target in choice["eligible_targets"] if target["client"] == "codex")
+        newer = next(
+            item for item in preview["products"][0]["distributions"]
+            if item["id"] == "packager/demo-bridge" and item["release_sequence"] == 4
+        )
         self.assertEqual(
-            codex,
-            {"client": "codex", "authentication": "required"},
+            older["eligible_targets"],
+            [
+                {"client": "codex", "authentication": "required"},
+                {"client": "cursor", "authentication": "required"},
+            ],
+        )
+        self.assertEqual(
+            newer["eligible_targets"],
+            [{"client": "codex", "authentication": "not_required"}],
+        )
+        self.assertEqual(
+            {(item["id"], item["release_sequence"]) for item in (older, newer)},
+            {("packager/demo-bridge", 3), ("packager/demo-bridge", 4)},
         )
 
     def test_release_sequences_and_alias_reservations_are_enforced(self) -> None:
