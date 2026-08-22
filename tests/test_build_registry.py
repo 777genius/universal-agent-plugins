@@ -647,6 +647,14 @@ class DirectoryDomainTests(unittest.TestCase):
         })
         return source, repository, package, revision
 
+    def isolate_external_product(self, source):
+        product = source["products"][-1]
+        distribution = source["distributions"][-1]
+        source["products"] = [product]
+        source["distributions"] = [distribution]
+        source["evidence"] = []
+        return distribution
+
     def commit_fixture_change(self, repository: Path, message: str) -> str:
         subprocess.run(["/usr/bin/git", "-C", str(repository), "add", "."], check=True)
         subprocess.run([
@@ -682,6 +690,59 @@ class DirectoryDomainTests(unittest.TestCase):
                 source, self.source(), repository_overrides={"example/external": repository},
             )
             self.assertEqual(changed, [("zz-community/zz-community-product", 1)])
+
+    def test_initial_migration_skips_revoked_release_without_acquisition(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            source, repository, _package, _revision = self.local_external_release(Path(tmp))
+            distribution = self.isolate_external_product(source)
+            distribution["releases"][0]["package_source"]["repository"] = "777genius/universal-agent-plugins"
+            distribution["release_policies"][0]["status"] = "revoked"
+            acquirer = mock.Mock(side_effect=AssertionError("revoked release was acquired"))
+
+            self.assertEqual(
+                registry.validate_changed_local_releases(
+                    source, None, repository_root=repository, acquirer=acquirer,
+                ),
+                [],
+            )
+            acquirer.assert_not_called()
+
+    def test_initial_migration_rejects_active_release_with_live_npx(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            source, repository, package, _revision = self.local_external_release(Path(tmp))
+            self.isolate_external_product(source)
+            (package / "mcp.json").write_text(json.dumps({
+                "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
+                "mcpServers": {"fixture": {
+                    "type": "stdio", "command": "npx", "args": ["fixture-runtime@1.2.3"],
+                }},
+            }) + "\n")
+            revision = self.commit_fixture_change(repository, "live npx initial migration")
+            release = source["distributions"][-1]["releases"][0]
+            release["package_source"]["revision"] = revision
+            release["tree_digest"] = registry.directory_tree_digest(package)
+            release["components"] = registry.validated_package_facts(package)["components"]
+
+            with self.assertRaisesRegex(
+                registry.RegistryError,
+                "live npx without a recognized content-addressed runtime closure contract",
+            ):
+                registry.validate_changed_external_releases(
+                    source, None, repository_overrides={"example/external": repository},
+                )
+
+    def test_initial_migration_validates_non_revoked_suspended_and_candidate_releases(self) -> None:
+        for status in ("suspended", "candidate"):
+            with self.subTest(status=status), tempfile.TemporaryDirectory() as tmp:
+                source, repository, _package, _revision = self.local_external_release(Path(tmp))
+                self.isolate_external_product(source)["status"] = status
+
+                self.assertEqual(
+                    registry.validate_changed_external_releases(
+                        source, None, repository_overrides={"example/external": repository},
+                    ),
+                    [("zz-community/zz-community-product", 1)],
+                )
 
     def test_capability_relaxation_revalidates_external_release_but_display_edits_do_not(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

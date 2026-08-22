@@ -887,10 +887,14 @@ def releases_requiring_validation(
     current_products = {item["id"]: item for item in source["products"]}
     current_distributions = {item["id"]: item for item in source["distributions"]}
     if base_source is None:
+        # Terminally revoked bytes are provenance-only and can never be
+        # installed, repaired, or rematerialized.  Non-revoked candidates and
+        # suspended releases still need fail-closed source validation.
         return {
             (distribution["id"], release["sequence"])
             for distribution in source["distributions"]
             for release in distribution["releases"]
+            if _policy_for(distribution, release["sequence"])["status"] != "revoked"
         }
     old_products = {item["id"]: item for item in base_source["products"]}
     old_distributions = {item["id"]: item for item in base_source["distributions"]}
