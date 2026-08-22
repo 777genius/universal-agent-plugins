@@ -92,6 +92,10 @@ Before enabling `.github/workflows/directory-publication.yml`:
    publication. The `main` update/review gate must retain required review and
    required status checks for everyone except the installed dedicated
    `uap-directory-publisher` App, which is its only always-allowed bypass actor.
+   In a solo-maintainer repository, the Repository administrators role may also
+   receive `pull_request`-only bypass so an explicitly approved green PR remains
+   mergeable. It must never receive always-allowed bypass or permission to push
+   directly to `main`.
    The separate `main` immutability guard must block deletion and force pushes,
    require linear history, and have **no bypass actors**. This narrowly permits
    the App's direct same-tree marker fast-forward while preventing the App from
