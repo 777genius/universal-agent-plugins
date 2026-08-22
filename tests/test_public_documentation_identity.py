@@ -13,6 +13,11 @@ DOCUMENTS = (
     ROOT / "docs" / "VERIFICATION.md",
     ROOT / "docs" / "TEST_MATRIX.md",
 )
+INSTALL_DOCUMENTS = (
+    ROOT / "README.md",
+    ROOT / "docs" / "QUICKSTART.md",
+    ROOT / "docs" / "HERO_PLUGINS.md",
+)
 MODULE_PATH = ROOT / "scripts" / "build_registry.py"
 SPEC = importlib.util.spec_from_file_location("build_registry_for_docs", MODULE_PATH)
 assert SPEC and SPEC.loader
@@ -22,6 +27,10 @@ SPEC.loader.exec_module(registry)
 SWITCH_RE = re.compile(
     r"\bswitch\s+(?P<product>[a-z0-9-]+)\s+--to\s+"
     r"(?P<distribution>[a-z0-9-]+/[a-z0-9._-]+)\b"
+)
+ADD_RE = re.compile(
+    r"\bnpx\s+universal-agent-plugins\s+add\s+(?P<product>[a-z0-9-]+)"
+    r"(?:\s+--target\s+(?P<targets>[a-z]+(?:,[a-z]+)*))?\b"
 )
 SHA256_RE = re.compile(r"sha256:[0-9a-f]{64}")
 CURRENT_TUPLE_RE = re.compile(
@@ -69,6 +78,36 @@ class PublicDocumentationIdentityTests(unittest.TestCase):
                     )
                     self.assertEqual(resolved["distribution_id"], distribution_id)
                     self.assertEqual(resolved["release_sequence"], release_sequence)
+
+    def test_every_starter_short_name_has_an_eligible_install_candidate(self) -> None:
+        examples = []
+        for path in INSTALL_DOCUMENTS:
+            examples.extend((path, match) for match in ADD_RE.finditer(path.read_text()))
+        self.assertTrue(examples, "public starter docs must retain a short-name add example")
+
+        for path, match in examples:
+            product = match.group("product")
+            target_value = match.group("targets")
+            if target_value:
+                with self.subTest(path=path, product=product, targets=target_value):
+                    resolved = registry.resolve_directory(
+                        self.directory, product, target_value.split(",")
+                    )
+                    self.assertEqual(resolved["product_id"], product)
+                continue
+
+            resolved_target = None
+            for target in registry.CLIENT_IDS:
+                try:
+                    registry.resolve_directory(self.directory, product, [target])
+                except registry.RegistryError:
+                    continue
+                resolved_target = target
+                break
+            self.assertIsNotNone(
+                resolved_target,
+                f"{path}: {product} has no eligible install candidate for any client",
+            )
 
     def test_readme_preserves_public_cli_and_source_contracts(self) -> None:
         readme = (ROOT / "README.md").read_text()
