@@ -1243,7 +1243,7 @@ class PublicationWorkflowTests(unittest.TestCase):
                 if isinstance(step, dict) and "uses" in step
             },
             {
-                "actions/download-artifact@b14cf4c92620c250e1c0745ffefa574f1c4531a9",
+                "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
                 "actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1",
             },
         )
