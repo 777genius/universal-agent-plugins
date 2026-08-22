@@ -45,7 +45,7 @@ from directory_publication import (  # noqa: E402
     verify_envelope,
 )
 from launch_observer_signatures import verify_observer_bundle  # noqa: E402
-from build_registry import RegistryError, resolve_directory  # noqa: E402
+from build_registry import RegistryError, directory_tree_digest, resolve_directory  # noqa: E402
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -110,6 +110,28 @@ CLIENT_ROOTS = {
     "vscode": ".config/Code/User",
 }
 SECRET_NAME = re.compile(r"(?i)(token|secret|password|cookie|authorization|oauth[_-]?code)")
+
+
+def authoritative_native_client_evidence(
+    evidence: Any, *, client_version: Any, product_id: str | None = None,
+) -> bool:
+    """Validate protected evidence from real client version/discovery commands."""
+    if not isinstance(evidence, dict) or evidence.get("basis") != "protected_external_observer":
+        return False
+    version = evidence.get("version_operation")
+    discovery = evidence.get("discovery_operation")
+    return bool(
+        isinstance(client_version, str) and client_version
+        and isinstance(version, dict)
+        and version.get("operation") in {"version", "list"}
+        and isinstance(version.get("argv"), list) and version["argv"]
+        and version.get("observed_client_version") == client_version
+        and isinstance(discovery, dict)
+        and discovery.get("operation") in {"discovery", "list"}
+        and isinstance(discovery.get("argv"), list) and discovery["argv"]
+        and discovery.get("discovered") is True
+        and (product_id is None or discovery.get("product_id") == product_id)
+    )
 
 
 def read_production_config() -> dict[str, Any]:
@@ -411,12 +433,25 @@ def validate_observer_bundle_files(
 
 
 def package_digest(path: Path) -> str:
-    framed = bytearray(b"uap-e2e-package-v1\0")
-    for item in sorted(p for p in path.rglob("*") if p.is_file()):
+    """Return the Directory/Go CLI package identity, including dirs and modes."""
+    return directory_tree_digest(path)
+
+
+def materialization_digest(path: Path) -> str:
+    """Digest arbitrary observer state; this is not a package identity."""
+    framed = bytearray(b"uap-fixture-materialization-v1\0")
+    if not path.exists():
+        framed.extend(b"absent")
+        return "sha256:" + hashlib.sha256(framed).hexdigest()
+    for item in sorted(path.rglob("*")):
+        if item.is_symlink():
+            continue
         relative = item.relative_to(path).as_posix().encode()
-        body = item.read_bytes()
-        framed.extend(len(relative).to_bytes(8, "big") + relative)
-        framed.extend(len(body).to_bytes(8, "big") + body)
+        kind = b"directory" if item.is_dir() else b"file"
+        mode = b"100755" if item.is_file() and item.stat().st_mode & 0o111 else b"100644"
+        body = item.read_bytes() if item.is_file() else b""
+        for field in (relative, kind, mode, body):
+            framed.extend(len(field).to_bytes(8, "big") + field)
     return "sha256:" + hashlib.sha256(framed).hexdigest()
 
 
@@ -437,17 +472,10 @@ def observed_state_identity(environment: dict[str, str], product_id: str, client
         if installation is not None:
             break
     roots = {client: home / CLIENT_ROOTS[client] for client in clients}
-    native_digests = {client: package_digest(path) for client, path in roots.items()}
-    native_mentions: dict[str, int] = {}
-    for client, root in roots.items():
-        count = 0
-        if root.exists():
-            for path in sorted(root.rglob("*")):
-                if path.is_file() and not path.is_symlink():
-                    relative = path.relative_to(root).as_posix()
-                    body = path.read_text(errors="ignore") if path.stat().st_size <= (1 << 20) else ""
-                    count += int(product_id in relative or product_id in body)
-        native_mentions[client] = count
+    native_digests = {client: materialization_digest(path) for client, path in roots.items()}
+    # Materialized files are not proof that a client discovered a plugin, and
+    # their digest is not a client version. Runtime claims come only from the
+    # protected external observer contract validated by _load_attestations.
     committed = 0
     if installation:
         stack = [installation]
@@ -468,10 +496,11 @@ def observed_state_identity(environment: dict[str, str], product_id: str, client
         "package_version": find_value(installation.get("package", {}), {"version"}) if installation else None,
         "snapshot_sequence": find_value(installation, {"snapshot_sequence"}) if installation else None,
         "snapshot_digest": find_value(installation, {"snapshot_digest"}) if installation else None,
-        "client_version": "native-state-v1@" + hashlib.sha256(json.dumps(native_digests, sort_keys=True, separators=(",", ":")).encode()).hexdigest(),
+        "client_version": None,
         "receipt_reconciled": committed > 0,
-        "native_discovery_reconciled": bool(installation) and all(native_mentions[client] > 0 for client in clients),
-        "manager_digest": package_digest(manager), "native_digests": native_digests,
+        "native_discovery_reconciled": False,
+        "evidence_basis": "fixture_materialization", "runtime_proof": False,
+        "manager_digest": materialization_digest(manager), "native_digests": native_digests,
     }
 
 
@@ -1070,11 +1099,21 @@ class LaunchHarness:
         identity = json.dumps([scenario, plugin, client, level], separators=(",", ":"))
         if any(row["scenario"] == scenario and row["plugin"] == plugin and row["client"] == client and row["level"] == level for row in self.rows):
             raise ValueError(f"duplicate evidence tuple: {scenario}/{plugin}/{client}/{level}")
+        tuple_value = tuple_value or self.tuple()
+        synthetic_version = str(tuple_value.get("client_version") or "").startswith(
+            ("native-state-v1@", "native-observation-v1@")
+        )
+        fixture_basis = isinstance(details, dict) and details.get("evidence_basis") == "fixture_materialization"
+        if synthetic_version or fixture_basis:
+            tuple_value = {**tuple_value, "client_version": None}
+            if outcome == "passed" and level != "harness":
+                outcome = "inconclusive"
+                reason = "fixture/materialization evidence cannot establish native discovery or a real client version"
         row = {
             "id": hashlib.sha256(identity.encode()).hexdigest()[:24],
             "scenario": scenario, "plugin": plugin, "client": client,
             "level": level, "outcome": outcome,
-            "tuple": tuple_value or self.tuple(), "reason": reason,
+            "tuple": tuple_value, "reason": reason,
         }
         if details:
             row["details"] = details
@@ -1188,6 +1227,12 @@ class LaunchHarness:
                     raise ValueError(f"runtime pass lacks the supplied consent artifact: {key}")
                 if record.get("runtime_invocation") is not True or record.get("discovery_verified") is not True:
                     raise ValueError(f"runtime pass lacks invocation/discovery proof: {key}")
+                native_evidence = record.get("native_discovery_evidence")
+                if not authoritative_native_client_evidence(
+                    native_evidence, client_version=tuple_value.get("client_version"),
+                    product_id=record["plugin"],
+                ):
+                    raise ValueError(f"runtime pass lacks authoritative exact-version client discovery evidence: {key}")
                 for observation_name in ("manager_observation", "native_observation"):
                     observation = record.get(observation_name)
                     if not isinstance(observation, dict) or not all(isinstance(observation.get(field), str) and observation[field] for field in ("observer", "before_digest", "after_digest", "observed_at")):
@@ -1258,8 +1303,15 @@ class LaunchHarness:
         if value.get("schema_version") != 1 or value.get("command") != argv[0]:
             return "failed", value, "CLI returned an invalid command envelope"
         result = value.get("data", {}).get("result", {})
-        if argv[0] in {"add", "update", "repair", "remove"} and result.get("mutated") is not True:
+        if argv[0] in {"add", "repair", "remove"} and result.get("mutated") is not True:
             return "failed", value, "CLI did not report a committed mutation"
+        if argv[0] == "update" and not isinstance(result.get("mutated"), bool):
+            return "failed", value, "CLI did not report whether update mutated state"
+        if argv[0] == "update" and result.get("mutated") is False and (
+            before_state["manager_digest"] != after_state["manager_digest"]
+            or before_state["native_digests"] != after_state["native_digests"]
+        ):
+            return "failed", value, "CLI reported a no-op update but changed manager/client materialization"
         if self.cli_version is None:
             return "inconclusive", value, "CLI version could not be recorded for the evidence tuple"
         return "passed", value, "isolated CLI command completed"
@@ -1466,10 +1518,13 @@ class LaunchHarness:
 
     @staticmethod
     def info_reconciled(value: dict[str, Any] | None) -> bool:
+        native_evidence = find_value(value, {"native_discovery_evidence"}) if value else None
+        client_version = find_value(value, {"client_version"}) if value else None
         return bool(
             value
             and find_value(value, {"receipt_reconciled"}) is True
             and find_value(value, {"native_discovery_reconciled"}) is True
+            and authoritative_native_client_evidence(native_evidence, client_version=client_version)
         )
 
     def all_package_matrix(self) -> None:
@@ -1490,13 +1545,9 @@ class LaunchHarness:
             if release is None or client is None:
                 raise ValueError(f"signed Directory release has no isolated launch-gate client for {plugin}")
             resolved_digest: str | None = None
-            resolved_client_version: str | None = None
             for operation in self.config["all_package_operations"]:
                 outcome, value, reason = self.command([operation, plugin, "--target", client, "--format", "json"], sandbox, (client,))
                 digest = find_value(value, {"package_digest", "tree_digest"}) if value else None
-                observed_client_version = find_value(value, {"client_version"}) if value else None
-                if isinstance(observed_client_version, str) and observed_client_version:
-                    resolved_client_version = observed_client_version
                 if digest is not None and not DIGEST.fullmatch(str(digest)):
                     outcome, reason = "failed", "CLI returned an invalid package digest"
                     digest = None
@@ -1504,16 +1555,14 @@ class LaunchHarness:
                     resolved_digest = digest
                 if outcome == "passed" and resolved_digest is None:
                     outcome, reason = "inconclusive", "CLI output did not expose the immutable package digest"
-                if outcome == "passed" and resolved_client_version is None:
-                    outcome, reason = "inconclusive", "CLI output did not expose the exact client version"
                 if outcome == "passed" and not self.command_matches_release(plugin, [client], value):
                     outcome, reason = "failed", "CLI result identity does not match the signed Directory release"
                 if outcome == "passed" and operation == "info":
                     if not self.info_reconciled(value):
-                        outcome, reason = "failed", "info output did not prove exact owned-receipt and native-discovery reconciliation"
+                        outcome, reason = "inconclusive", "fixture info proved no authoritative native client discovery/version operation"
                 if outcome == "passed" and resolved_digest != release["tree_digest"]:
                     outcome, reason = "failed", "CLI package digest does not match the signed Directory release"
-                self.add(f"all_26_{operation}", plugin, client, "discovery" if operation == "info" else "materialization", outcome, reason or "unknown result", tuple_value=self.evidence_tuple(plugin, [client], client_version=resolved_client_version, dependency=f"signed-directory@{self.snapshot_digest}"), details={"operation": operation, **release, "receipt_reconciliation_required": operation == "info", "command_trace": value.get("_launch_command_trace") if value else None})
+                self.add(f"all_26_{operation}", plugin, client, "discovery" if operation == "info" else "materialization", outcome, reason or "unknown result", tuple_value=self.evidence_tuple(plugin, [client], client_version=None, dependency=f"signed-directory@{self.snapshot_digest}"), details={"evidence_basis": "fixture_materialization", "runtime_proof": False, "operation": operation, **release, "receipt_reconciliation_required": operation == "info", "command_trace": value.get("_launch_command_trace") if value else None})
 
     def context7_multi_target(self) -> None:
         targets = tuple(self.config["context7_targets"])
@@ -1537,7 +1586,7 @@ class LaunchHarness:
             self.add(
                 f"context7_three_target_{operation}", "context7", target_arg, "materialization", outcome, reason,
                 tuple_value=value.get("tuple") if value else self.evidence_tuple("context7", targets, client_version=None, dependency="single-acquisition"),
-                details={"operation": operation, "target_argument": target_arg, "single_process_invocation": True, "reported_target_count": len(value.get("target_outcomes", {})) if value else 0, "command_traces": value.get("command_traces", []) if value else [], "operation_observations": value.get("operation_observations", []) if value else [], "resolution": release},
+                details={"evidence_basis": "fixture_materialization", "runtime_proof": False, "operation": operation, "target_argument": target_arg, "single_process_invocation": True, "reported_target_count": len(value.get("target_outcomes", {})) if value else 0, "command_traces": value.get("command_traces", []) if value else [], "operation_observations": value.get("operation_observations", []) if value else [], "resolution": release},
             )
 
     @staticmethod
@@ -1551,6 +1600,7 @@ class LaunchHarness:
             "scenario_id", "run_id", "run_attempt", "pseudonymous_identity_id",
             "pseudonymous_workspace_id", "dedicated_identity", "disposable_project_status",
             "operation_mode", "auth_origin", "cleanup_outcome", "no_real_project_proof",
+            "native_discovery_evidence",
         )
         return {field: record[field] for field in fields if field in record}
 
@@ -1589,7 +1639,7 @@ class LaunchHarness:
                 valid = valid and self.tuple_matches_release(plugin, [client], tuple_value)
                 if outcome == "passed" and not valid:
                     outcome, reason = "failed", "hero driver omitted exact add/update/remove/discovery proof"
-                self.add("hero_5x3_lifecycle", plugin, client, "discovery", outcome, reason, tuple_value=tuple_value or self.evidence_tuple(plugin, [client], client_version=None, dependency=f"signed-directory@{self.snapshot_digest}"), details={"operations": sorted(required_operations), "operation_outcomes": operation_outcomes, "command_traces": value.get("command_traces", []) if value else [], "resolution": release})
+                self.add("hero_5x3_lifecycle", plugin, client, "discovery", outcome, reason, tuple_value=tuple_value or self.evidence_tuple(plugin, [client], client_version=None, dependency=f"signed-directory@{self.snapshot_digest}"), details={"evidence_basis": "fixture_materialization", "runtime_proof": False, "operations": sorted(required_operations), "operation_outcomes": operation_outcomes, "command_traces": value.get("command_traces", []) if value else [], "resolution": release})
 
     def shared_backend(self) -> None:
         targets = tuple(self.config["shared_backend_targets"])
@@ -1799,18 +1849,20 @@ class LaunchHarness:
         disposable_package = sandbox / "workspace" / "external-package"
         shutil.copytree(EXTERNAL_PACKAGE, disposable_package)
         add_outcome, add_value, add_reason = self.command(["add", "./external-package", "--target", "cursor", "--format", "json"], sandbox, ("cursor",))
-        client_version = find_value(add_value, {"client_version"}) if add_value else None
         observed_digest = find_value(add_value, {"package_digest", "tree_digest"}) if add_value else None
-        add_identity_valid = observed_digest == digest and isinstance(client_version, str) and bool(client_version)
+        add_identity_valid = observed_digest == digest
         if add_outcome == "passed" and not add_identity_valid:
-            add_outcome, add_reason = "failed", "direct-source result omitted or disagreed with exact digest/client version"
+            add_outcome, add_reason = "failed", "direct-source result omitted or disagreed with the canonical package digest"
 
         info_outcome, info_value, info_reason = "inconclusive", None, "add did not commit; info was not run"
         remove_outcome, remove_value, remove_reason = "inconclusive", None, "add did not commit; remove was not run"
         if add_value is not None and find_value(add_value, {"mutated"}) is True:
             info_outcome, info_value, info_reason = self.command(["info", "e2e-external-package", "--target", "cursor", "--format", "json"], sandbox, ("cursor",))
             if info_outcome == "passed" and not self.info_reconciled(info_value):
-                info_outcome, info_reason = "failed", "direct-source info omitted receipt or native discovery reconciliation"
+                if find_value(info_value, {"receipt_reconciled"}) is True:
+                    info_outcome, info_reason = "inconclusive", "fixture receipt reconciled; native discovery/version requires protected external observation"
+                else:
+                    info_outcome, info_reason = "failed", "direct-source info omitted owned-receipt reconciliation"
             # Cleanup is mandatory after a committed add, including when identity or info validation fails.
             remove_outcome, remove_value, remove_reason = self.command(["remove", "e2e-external-package", "--target", "cursor", "--format", "json"], sandbox, ("cursor",))
 
@@ -1830,7 +1882,8 @@ class LaunchHarness:
         else:
             outcome = "failed" if "failed" in lifecycle_outcomes else "inconclusive"
             reason = next((str(item["reason"]) for item in operations.values() if item["outcome"] != "passed"), "direct-source lifecycle did not complete")
-        self.add("direct_external_package", "e2e-external-package", "cursor", "materialization", outcome, reason, tuple_value=self.tuple(product_id="e2e-external-package", digest=digest, manifest_digest=sha256_file(EXTERNAL_PACKAGE / "plugin.json"), distribution_id="direct/e2e-external-package", distribution_kind="direct", release_sequence=1, package_version="1.0.0", client_version=client_version if isinstance(client_version, str) else None, dependency="direct-local-source"), details={"directory_submission_used": False, "source_locator": "fixture://external-package", "operations": operations, "command_traces": traces})
+        client_version = find_value(info_value, {"client_version"}) if self.info_reconciled(info_value) else None
+        self.add("direct_external_package", "e2e-external-package", "cursor", "materialization", outcome, reason, tuple_value=self.tuple(product_id="e2e-external-package", digest=digest, manifest_digest=sha256_file(EXTERNAL_PACKAGE / "plugin.json"), distribution_id="direct/e2e-external-package", distribution_kind="direct", release_sequence=1, package_version="1.0.0", client_version=client_version if isinstance(client_version, str) else None, dependency="direct-local-source"), details={"evidence_basis": "fixture_materialization", "runtime_proof": False, "tree_digest_algorithm": "agentplugins-tree-sha256-v1", "directory_submission_used": False, "source_locator": "fixture://external-package", "operations": operations, "command_traces": traces})
         fork_outcome, fork_value, fork_reason = self.driven_scenario("fork_submission")
         if fork_outcome == "passed" and not (
             fork_value
@@ -1937,6 +1990,17 @@ def assert_redacted(value: dict[str, Any]) -> None:
         if row.get("outcome") != "passed" or row.get("level") == "harness":
             continue
         tuple_value = row.get("tuple", {})
+        details = row.get("details", {})
+        client_version = str(tuple_value.get("client_version") or "")
+        if details.get("evidence_basis") == "fixture_materialization" or client_version.startswith(("native-state-v1@", "native-observation-v1@")):
+            raise ValueError(f"fixture/materialization evidence cannot be promoted: {row.get('id')}")
+        if row.get("level") in {"discovery", "runtime", "oauth"}:
+            native_evidence = details.get("native_discovery_evidence")
+            if not authoritative_native_client_evidence(
+                native_evidence, client_version=tuple_value.get("client_version"),
+                product_id=row.get("plugin"),
+            ):
+                raise ValueError(f"passed native/runtime evidence lacks authoritative client operations: {row.get('id')}")
         required = ("product_id", "tree_digest", "manifest_digest", "distribution_id", "distribution_kind", "release_sequence", "package_version", "snapshot_sequence", "snapshot_digest", "binary_digest", "installer_version", "adapter_version", "client_version", "os", "architecture", "observed_at")
         if any(not tuple_value.get(field) for field in required):
             raise ValueError(f"passed evidence has an incomplete applicability tuple: {row.get('id')}")

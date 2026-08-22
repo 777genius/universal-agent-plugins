@@ -50,6 +50,27 @@ class LaunchEvidenceE2ETests(unittest.TestCase):
         self.assertIn("license: Apache-2.0", lines)
         self.assertIn("# External fixture", body)
 
+    def test_direct_package_digest_matches_go_contract_with_directories_and_modes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            package = Path(tmp)
+            (package / "empty").mkdir()
+            (package / "bin").mkdir()
+            executable = package / "bin" / "run"
+            executable.write_bytes(b"run\n")
+            executable.chmod(0o755)
+            (package / "plain").write_bytes(b"x")
+            # Cross-contract vector produced by the Go
+            # agentplugins-tree-sha256-v1 snapshotter.
+            self.assertEqual(
+                e2e.package_digest(package),
+                "sha256:2e8071d58dd150284aebbbe1ec7e830afe7228522aa1c4bf1b2eb7d3f1d40143",
+            )
+            executable.chmod(0o644)
+            self.assertEqual(
+                e2e.package_digest(package),
+                "sha256:ca762bbfbaf48fc3e199ed77dcc61442f42b576c3b9014a642472de8da0879bb",
+            )
+
     def test_fixture_mode_is_explicitly_non_runtime(self) -> None:
         with tempfile.TemporaryDirectory() as tmp, mock.patch.object(e2e, "ROOT", Path("/opt/test-repository")):
             evidence = self.fixture_harness(Path(tmp) / "fresh").export()
@@ -345,9 +366,57 @@ class LaunchEvidenceE2ETests(unittest.TestCase):
                 e2e.LaunchHarness._assert_result_paths({"evidence_path": "/real/project/result.json"}, sandbox)
 
     def test_info_reconciliation_requires_exact_boolean_proofs(self) -> None:
-        self.assertTrue(e2e.LaunchHarness.info_reconciled({"receipt_reconciled": True, "native_discovery_reconciled": True}))
+        authoritative = {
+            "receipt_reconciled": True, "native_discovery_reconciled": True,
+            "client_version": "cursor-1.2.3",
+            "native_discovery_evidence": {
+                "basis": "protected_external_observer",
+                "version_operation": {"operation": "version", "argv": ["cursor", "--version"], "observed_client_version": "cursor-1.2.3"},
+                "discovery_operation": {"operation": "list", "argv": ["cursor", "plugins", "list"], "discovered": True, "product_id": "context7"},
+            },
+        }
+        self.assertTrue(e2e.LaunchHarness.info_reconciled(authoritative))
+        self.assertFalse(e2e.LaunchHarness.info_reconciled({"receipt_reconciled": True, "native_discovery_reconciled": True}))
         self.assertFalse(e2e.LaunchHarness.info_reconciled({"receipts": ["owned"], "discovery": {"state": "found"}}))
         self.assertFalse(e2e.LaunchHarness.info_reconciled({"receipt_reconciled": True, "native_discovery_reconciled": False}))
+
+    def test_empty_or_materialized_client_directories_never_become_native_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            home, manager = root / "home", root / "manager"
+            (home / ".cursor").mkdir(parents=True)
+            environment = {"HOME": str(home), "AGENTPLUGINS_HOME": str(manager)}
+            empty = e2e.observed_state_identity(environment, "context7", ("cursor",))
+            self.assertIsNone(empty["client_version"])
+            self.assertFalse(empty["native_discovery_reconciled"])
+            self.assertEqual(empty["evidence_basis"], "fixture_materialization")
+            (home / ".cursor" / "context7.json").write_text('{"product":"context7"}')
+            materialized = e2e.observed_state_identity(environment, "context7", ("cursor",))
+            self.assertIsNone(materialized["client_version"])
+            self.assertFalse(materialized["native_discovery_reconciled"])
+
+    def test_no_newer_release_update_accepts_only_a_truthful_noop(self) -> None:
+        fake = '''#!/usr/bin/python3
+import json, os, pathlib, sys
+if pathlib.Path(sys.argv[0]).name == "liar":
+    manager = pathlib.Path(os.environ["AGENTPLUGINS_HOME"])
+    manager.mkdir(parents=True, exist_ok=True)
+    (manager / "unexpected").write_text("recommitted")
+print(json.dumps({"schema_version": 1, "command": "update", "data": {"result": {"mutated": False}}}))
+'''
+        harness = self.fixture_harness()
+        harness.cli_version = "0.1.8"
+        for name, expected in (("noop", "passed"), ("liar", "failed")):
+            sandbox = harness.fresh_sandbox("update-" + name)
+            binary = sandbox / name
+            binary.write_text(fake)
+            binary.chmod(0o700)
+            harness.binary = binary
+            outcome, _, reason = harness.command(
+                ["update", "context7", "--target", "cursor", "--format", "json"],
+                sandbox, ("cursor",),
+            )
+            self.assertEqual(outcome, expected, reason)
 
     def test_mutable_refs_and_unknown_outcomes_are_rejected(self) -> None:
         with self.assertRaisesRegex(ValueError, "mutable refs"):
@@ -399,7 +468,8 @@ class LaunchEvidenceE2ETests(unittest.TestCase):
         }
         with mock.patch.object(harness, "driven_scenario", return_value=("passed", value, "proved")):
             harness.context7_multi_target()
-        self.assertEqual([row["outcome"] for row in harness.rows], ["passed"] * 4)
+        self.assertEqual([row["outcome"] for row in harness.rows], ["inconclusive"] * 4)
+        self.assertTrue(all(row["details"]["evidence_basis"] == "fixture_materialization" for row in harness.rows))
         self.assertTrue(all(row["details"]["target_argument"] == "codex,cursor,kiro" for row in harness.rows))
         self.assertNotIn("--yes", commands[0])
 
@@ -413,7 +483,7 @@ manager = pathlib.Path(os.environ["AGENTPLUGINS_HOME"])
 state_path = manager / "state.json"
 state = json.loads(state_path.read_text()) if state_path.exists() else {"installations": [{"declared_name": product, "product_id": product, "receipts": [], "directory": {"distribution_id": "upstash/context7", "distribution_kind": "upstream", "desired_release_sequence": 1}, "package": {"tree_digest": "sha256:" + "a" * 64, "manifest_digest": "sha256:" + "e" * 64}}]}
 roots = {"codex": home / ".codex", "cursor": home / ".cursor", "kiro": home / ".kiro"}
-if operation in {"add", "update", "repair", "remove"}:
+if operation in {"add", "repair", "remove"}:
     state["installations"][0]["receipts"].append({"phase": "committed", "operation": operation})
     manager.mkdir(parents=True, exist_ok=True)
     state_path.write_text(json.dumps(state))
@@ -425,7 +495,7 @@ if operation == "remove":
     for client in target.split(","):
         path = roots[client] / (product + ".json")
         if path.exists(): path.unlink()
-value = {"client_version": "isolated-native-config-v1", "receipt_reconciled": True, "native_discovery_reconciled": True}
+value = {"mutated": operation != "update"}
 if operation == "add":
     value.update({"acquisition_count": 1, "tree_digest": "sha256:" + "a" * 64})
 print(json.dumps(value))
@@ -451,11 +521,14 @@ print(json.dumps(value))
             workspace.mkdir()
             with mock.patch.dict(os.environ, {"HOME": str(home), "AGENTPLUGINS_HOME": str(manager)}, clear=False):
                 value = observer.run(binary, "context7_grouped_lifecycle", workspace, context)
-        self.assertEqual(value["outcome"], "passed")
+        self.assertEqual(value["outcome"], "inconclusive")
+        self.assertEqual(value["evidence_basis"], "fixture_materialization")
+        self.assertIsNone(value["client_version"])
+        self.assertTrue(value["no_newer_release_update_noop"])
         self.assertEqual(value["acquisition_digests"], ["sha256:" + "a" * 64])
         self.assertEqual(set(value["target_outcomes"]), {"codex", "cursor", "kiro"})
         self.assertTrue(all(item["after"]["manager"]["committed_receipts"] >= item["before"]["manager"]["committed_receipts"] for item in value["operation_observations"]))
-        self.assertEqual(value["operation_observations"][-1]["after"]["native_mentions"], {"codex": 0, "cursor": 0, "kiro": 0})
+        self.assertEqual(value["operation_observations"][-1]["after"]["materialized_mentions"], {"codex": 0, "cursor": 0, "kiro": 0})
 
     def test_policy_conformance_directory_is_test_signed_and_never_the_production_root(self) -> None:
         snapshot = json.loads((PUBLICATION / "snapshot.json").read_text())
@@ -644,7 +717,7 @@ print(json.dumps(value))
         digest = e2e.package_digest(e2e.EXTERNAL_PACKAGE)
         command_results = [
             ("passed", {"package_digest": digest, "client_version": "cursor-test-v1", "mutated": True, "_launch_command_trace": {"argv": ["add"]}}, "added"),
-            ("passed", {"receipt_reconciled": True, "native_discovery_reconciled": True, "_launch_command_trace": {"argv": ["info"]}}, "reconciled"),
+            ("passed", {"receipt_reconciled": True, "native_discovery_reconciled": True, "client_version": "cursor-test-v1", "native_discovery_evidence": {"basis": "protected_external_observer", "version_operation": {"operation": "version", "argv": ["cursor", "--version"], "observed_client_version": "cursor-test-v1"}, "discovery_operation": {"operation": "list", "argv": ["cursor", "plugins", "list"], "discovered": True, "product_id": "e2e-external-package"}}, "_launch_command_trace": {"argv": ["info"]}}, "reconciled"),
             ("passed", {"mutated": True, "_launch_command_trace": {"argv": ["remove"]}}, "removed"),
         ]
         accepted = {"fork_created": True, "branch_submission": True, "submission_validated": True, "publication_performed": False, "pr_created": False, "network_performed": False}
@@ -654,7 +727,9 @@ print(json.dumps(value))
         ):
             harness.journeys()
         row = next(item for item in harness.rows if item["scenario"] == "direct_external_package")
-        self.assertEqual(row["outcome"], "passed")
+        self.assertEqual(row["outcome"], "inconclusive")
+        self.assertEqual(row["details"]["evidence_basis"], "fixture_materialization")
+        self.assertEqual(row["details"]["tree_digest_algorithm"], "agentplugins-tree-sha256-v1")
         self.assertEqual([call.args[0][0] for call in command.call_args_list], ["add", "info", "remove"])
         self.assertEqual(row["details"]["operations"]["info"]["outcome"], "passed")
         self.assertEqual(len(row["details"]["command_traces"]), 3)
@@ -666,6 +741,7 @@ print(json.dumps(value))
         cases = (
             (
                 "missing reconciliation",
+                "inconclusive",
                 [
                     ("passed", {"package_digest": digest, "client_version": "cursor-test-v1", "mutated": True}, "added"),
                     ("passed", {"receipt_reconciled": True, "native_discovery_reconciled": False}, "partial"),
@@ -674,6 +750,7 @@ print(json.dumps(value))
             ),
             (
                 "failed cleanup",
+                "failed",
                 [
                     ("passed", {"package_digest": digest, "client_version": "cursor-test-v1", "mutated": True}, "added"),
                     ("passed", {"receipt_reconciled": True, "native_discovery_reconciled": True}, "reconciled"),
@@ -681,7 +758,7 @@ print(json.dumps(value))
                 ],
             ),
         )
-        for label, command_results in cases:
+        for label, expected_outcome, command_results in cases:
             with self.subTest(label=label):
                 harness = self.fixture_harness()
                 harness.cli_version = "0.1.8"
@@ -690,7 +767,7 @@ print(json.dumps(value))
                 ):
                     harness.journeys()
                 row = next(item for item in harness.rows if item["scenario"] == "direct_external_package")
-                self.assertEqual(row["outcome"], "failed")
+                self.assertEqual(row["outcome"], expected_outcome)
                 self.assertEqual([call.args[0][0] for call in command.call_args_list], ["add", "info", "remove"])
 
     def test_missing_runtime_proof_requires_zero_mutation_and_no_install(self) -> None:

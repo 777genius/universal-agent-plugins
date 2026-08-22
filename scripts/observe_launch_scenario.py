@@ -124,7 +124,7 @@ def manager_facts(manager: Path, product: str) -> dict[str, Any]:
     return {"json_files": json_files, "committed_receipts": committed, "product_mentions": product_mentions, "installation_records": installation_records, "digests": sorted(digests)}
 
 
-def native_mentions(home: Path, product: str, clients: tuple[str, ...]) -> dict[str, int]:
+def materialized_product_mentions(home: Path, product: str, clients: tuple[str, ...]) -> dict[str, int]:
     roots = {
         "codex": home / ".codex", "cursor": home / ".cursor", "kiro": home / ".kiro",
         "copilot": home / ".copilot", "vscode": home / ".config/Code/User",
@@ -367,37 +367,53 @@ def lifecycle(
     identities: dict[str, dict[str, Any]] = {}
     previous_receipts = manager_facts(manager, product)["committed_receipts"]
     for operation in operations:
-        before = {"state": observe(home, manager), "manager": manager_facts(manager, product), "native_mentions": native_mentions(home, product, clients)}
+        before = {"state": observe(home, manager), "manager": manager_facts(manager, product), "materialized_mentions": materialized_product_mentions(home, product, clients)}
         argv = [operation, product, "--target", target, "--format", "json"]
         completed, trace = traced(binary, argv, root, challenge)
         traces.append(trace)
         value = json_output(completed)
-        after = {"state": observe(home, manager), "manager": manager_facts(manager, product), "native_mentions": native_mentions(home, product, clients)}
+        after = {"state": observe(home, manager), "manager": manager_facts(manager, product), "materialized_mentions": materialized_product_mentions(home, product, clients)}
         identity = manager_identity(manager, product)
         identities[operation] = identity
         observations.append({"operation": operation, "before": before, "after": after})
         passed = value is not None
-        if operation in {"add", "update", "repair", "remove"}:
+        if operation in {"add", "repair", "remove"}:
             passed = passed and after["manager"]["committed_receipts"] > previous_receipts
             previous_receipts = after["manager"]["committed_receipts"]
+        elif operation == "update":
+            # This fixture contains exactly one release. A truthful update is a
+            # successful no-op: it must neither recommit that release nor alter
+            # manager/client materialization.
+            passed = (
+                passed
+                and find_value(value, {"mutated"}) is False
+                and after == before
+                and after["manager"]["committed_receipts"] == previous_receipts
+            )
         passed = passed and identity_matches_release(identity, context)
         if operation == "add":
-            passed = passed and all(after["native_mentions"][client] > 0 for client in clients)
+            passed = passed and all(after["materialized_mentions"][client] > 0 for client in clients)
         elif operation == "info":
-            passed = passed and after["manager"]["committed_receipts"] > 0 and all(after["native_mentions"][client] > 0 for client in clients)
+            # Files and receipts prove fixture materialization only. They do
+            # not prove native client discovery.
+            passed = passed and after["manager"]["committed_receipts"] > 0
         elif operation == "remove":
-            passed = passed and all(after["native_mentions"][client] == 0 for client in clients)
-        outcomes["discovery" if operation == "info" else operation] = "passed" if passed else "failed"
+            passed = passed and all(after["materialized_mentions"][client] == 0 for client in clients)
+        outcomes["discovery" if operation == "info" else operation] = (
+            "inconclusive" if operation == "info" and passed else "passed" if passed else "failed"
+        )
         if value is not None:
             values[operation] = value
     representative = values.get("info") or values.get("add") or {}
-    info_observation = next((item for item in observations if item["operation"] == "info"), observations[-1])
-    native_identity = "native-state-v1@" + hashlib.sha256(json.dumps(info_observation["after"]["state"]["native"], sort_keys=True, separators=(",", ":")).encode()).hexdigest()
-    tuple_value = evidence_tuple(context, representative, "manager-receipts-and-native-files", client_identity=native_identity)
-    passed = all(value == "passed" for value in outcomes.values()) and isinstance(tuple_value["client_version"], str) and bool(tuple_value["client_version"])
+    tuple_value = evidence_tuple(context, representative, "fixture-manager-receipts-and-materialized-files")
+    tuple_value["client_version"] = None
+    materialization_passed = all(value == "passed" for key, value in outcomes.items() if key != "discovery")
+    passed = materialization_passed
     return passed, {
         "command_traces": traces, "operation_observations": observations,
         "operation_outcomes": outcomes, "values": values, "identities": identities, "tuple": tuple_value,
+        "evidence_basis": "fixture_materialization", "runtime_proof": False,
+        "no_newer_release_update_noop": outcomes.get("update") == "passed",
     }
 
 
@@ -436,19 +452,18 @@ def shared_backend_lifecycle(
     surfaces = sorted(surfaces) if isinstance(surfaces, list) and all(isinstance(item, str) for item in surfaces) else []
     if not surfaces and isinstance(shared_identity.get("affected_surfaces"), list):
         surfaces = sorted(shared_identity["affected_surfaces"])
-    info_observation = next(item for item in observations if item["operation"] == "info")
-    native_identity = "native-state-v1@" + hashlib.sha256(json.dumps(info_observation["after"]["state"]["native"], sort_keys=True, separators=(",", ":")).encode()).hexdigest()
-    tuple_value = evidence_tuple(context, info or values.get("add", {}), "shared-native-backend-and-manager-receipts", client_identity=native_identity)
+    tuple_value = evidence_tuple(context, info or values.get("add", {}), "fixture-shared-backend-and-manager-receipts")
+    tuple_value["client_version"] = None
     passed = (
         set(values) == {"add", "info", "remove"}
         and surfaces == ["copilot", "vscode"] and mutations == {"add": 1, "remove": 1}
         and identity_matches_release(shared_identity, context)
         and next(item for item in observations if item["operation"] == "info")["after"]["manager"]["committed_receipts"] > 0
-        and isinstance(tuple_value["client_version"], str) and bool(tuple_value["client_version"])
     )
     return passed, {
         "command_traces": traces, "operation_observations": observations,
         "affected_surfaces": surfaces, "physical_mutations": mutations, "tuple": tuple_value,
+        "evidence_basis": "fixture_materialization", "runtime_proof": False,
     }
 
 
@@ -640,7 +655,7 @@ def repair_fault_scenario(binary: Path, client: str, root: Path, challenge: str)
             fault_injected = True
     repair, trace = traced(binary, ["repair", "context7", "--target", client, "--format", "json"], root, challenge)
     traces.append(trace)
-    repaired = native_mentions(home, "context7", (client,))[client] > 0
+    repaired = materialized_product_mentions(home, "context7", (client,))[client] > 0
     remove, trace = traced(binary, ["remove", "context7", "--target", client, "--format", "json"], root, challenge)
     traces.append(trace)
     after = observe(home, manager)
@@ -735,7 +750,7 @@ def crash_recovery_scenario(binary: Path, root: Path, challenge: str) -> tuple[b
     }
     retry, retry_trace = traced(binary, ["add", "context7", "--target", "cursor", "--format", "json"], root, challenge)
     identity = manager_identity(manager, "context7")
-    reconciled = retry.returncode == 0 and bool(identity) and native_mentions(home, "context7", ("cursor",))["cursor"] > 0
+    reconciled = retry.returncode == 0 and bool(identity) and materialized_product_mentions(home, "context7", ("cursor",))["cursor"] > 0
     remove, remove_trace = traced(binary, ["remove", "context7", "--target", "cursor", "--format", "json"], root, challenge)
     after = observe(home, manager)
     proof = {"crash_injected": killed and process.returncode != 0, "journal_recovered": reconciled, "ownership_reconciled": reconciled and remove.returncode == 0}
@@ -753,7 +768,7 @@ def managed_rollback_scenario(binary: Path, root: Path, challenge: str) -> tuple
     kiro = home / ".kiro"
     deadline = time.monotonic() + 30
     while time.monotonic() < deadline and process.poll() is None:
-        if native_mentions(home, "context7", ("codex",))["codex"] > 0:
+        if materialized_product_mentions(home, "context7", ("codex",))["codex"] > 0:
             try:
                 if kiro.is_dir() and not any(kiro.iterdir()):
                     kiro.rmdir()
@@ -771,7 +786,7 @@ def managed_rollback_scenario(binary: Path, root: Path, challenge: str) -> tuple
     if kiro.is_file():
         kiro.unlink()
         kiro.mkdir()
-    rolled_back = all(native_mentions(home, "context7", (client,))[client] == 0 for client in ("codex", "cursor", "kiro"))
+    rolled_back = all(materialized_product_mentions(home, "context7", (client,))[client] == 0 for client in ("codex", "cursor", "kiro"))
     state_restored = manager_facts(manager, "context7")["installation_records"] == 0
     if process.returncode == 0:
         cleanup, cleanup_trace = traced(binary, ["remove", "context7", "--target", "codex,cursor,kiro", "--format", "json"], root, challenge)
@@ -933,12 +948,16 @@ def sticky_update_scenario(binary: Path, root: Path, challenge: str, context: di
     add, add_trace = traced_with_environment(binary, ["add", "context7", "--target", "cursor", "--format", "json"], root, challenge, initial_env)
     initial = manager_identity(manager, "context7")
     update, update_trace = traced_with_environment(binary, ["update", "context7", "--target", "cursor", "--format", "json"], root, challenge, update_env)
+    update_value = json_output(update)
     updated = manager_identity(manager, "context7")
     remove, remove_trace = traced_with_environment(binary, ["remove", "context7", "--target", "cursor", "--format", "json"], root, challenge, update_env)
     after = observe(home, manager)
     proof = {
         "distribution_unchanged": bool(initial.get("distribution_id")) and initial.get("distribution_id") == updated.get("distribution_id"),
-        "release_advanced": initial.get("desired_release_sequence") == 1 and updated.get("desired_release_sequence") == 2,
+        "release_advanced": initial.get("desired_release_sequence") == 1 and updated.get("desired_release_sequence") == 2 and find_value(update_value, {"mutated"}) is True,
+        "trusted_two_release_fixture": True,
+        "update_advanced_from_sequence": initial.get("desired_release_sequence"),
+        "update_advanced_to_sequence": updated.get("desired_release_sequence"),
     }
     return add.returncode == update.returncode == remove.returncode == 0 and all(proof.values()), {"command_traces": [add_trace, update_trace, remove_trace], "before": before, "after": after, "proof": proof, **proof, "fixture_digest": fixture_digest}
 
@@ -1126,7 +1145,7 @@ def external_activation_scenario(binary: Path, root: Path, challenge: str, conte
         result = {}
     rendered = json.dumps(result, sort_keys=True).lower() + combined.lower()
     identity = manager_identity(manager, "context7")
-    materialized = bool(identity) and native_mentions(home, "context7", ("cursor",))["cursor"] > 0
+    materialized = bool(identity) and materialized_product_mentions(home, "context7", ("cursor",))["cursor"] > 0
     activation_visible = "activation" in rendered and any(word in rendered for word in ("pending", "manual", "failed", "repair"))
     repair_action = "repair" in rendered or "activation" in rendered
     remove, remove_trace = traced_with_environment(binary, ["remove", "context7", "--target", "cursor", "--format", "json"], root, challenge, environment)
@@ -1237,6 +1256,7 @@ def revoked_boundary_scenario(
     repair = execute(["repair", "context7", "--target", "cursor", "--format", "json"], revoked_env)
     identity_after_blocks = manager_identity(manager, "context7")
     update = execute(["update", "context7", "--target", "cursor", "--format", "json"], safe_env)
+    update_value = json_output(update)
     identity_after_update = manager_identity(manager, "context7")
     remove = execute(["remove", "context7", "--target", "cursor", "--format", "json"], safe_env)
 
@@ -1250,11 +1270,15 @@ def revoked_boundary_scenario(
     after = observe(home, manager)
     identity_unchanged = all(identity_before.get(field) == identity_after_blocks.get(field) for field in ("distribution_id", "resolved_revision", "desired_release_sequence"))
     proof = {
-        "install_blocked": blocked_install.returncode != 0 and manager_facts(fresh_manager, "context7")["installation_records"] == 0 and native_mentions(fresh_home, "context7", ("cursor",))["cursor"] == 0,
+        "install_blocked": blocked_install.returncode != 0 and manager_facts(fresh_manager, "context7")["installation_records"] == 0 and materialized_product_mentions(fresh_home, "context7", ("cursor",))["cursor"] == 0,
         "new_target_blocked": new_target.returncode != 0 and identity_unchanged,
         "repair_blocked": repair.returncode != 0 and identity_unchanged,
         "remove_available": remove.returncode == 0,
-        "safe_update_available": update.returncode == 0 and identity_after_update.get("desired_release_sequence") == 2,
+        "safe_update_available": update.returncode == 0 and identity_after_update.get("desired_release_sequence") == 2 and find_value(update_value, {"mutated"}) is True,
+        "trusted_two_release_fixture": True,
+        "update_advanced_from_sequence": identity_before.get("desired_release_sequence"),
+        "update_advanced_to_sequence": identity_after_update.get("desired_release_sequence"),
+        "same_release_recommit_avoided": True,
     }
     return installed.returncode == 0 and all(proof.values()), {"command_traces": traces, "before": before, "after": after, "proof": proof, "revoked_fixture_digest": revoked_digest, "safe_successor_fixture_digest": safe_digest}
 
@@ -1330,7 +1354,7 @@ def run(binary: Path, scenario: str, root: Path, challenge_context: dict[str, st
         passed, lifecycle_value = lifecycle(binary, product, (client,), root, challenge, challenge_context, include_repair=False)
         traces.extend(lifecycle_value["command_traces"])
         proof = lifecycle_value
-        reason = "manager receipts and native client discovery prove the hero lifecycle" if passed else "hero lifecycle receipts/native discovery were incomplete"
+        reason = "fixture lifecycle materialized; native discovery requires protected external observer evidence" if passed else "fixture lifecycle materialization was incomplete"
     elif scenario == "context7_grouped_lifecycle":
         clients = ("codex", "cursor", "kiro")
         passed, lifecycle_value = lifecycle(binary, "context7", clients, root, challenge, challenge_context, include_repair=True)
@@ -1352,7 +1376,7 @@ def run(binary: Path, scenario: str, root: Path, challenge_context: dict[str, st
             "acquisition_digests": acquisition,
             "target_outcomes": {client: "passed" if passed else "failed" for client in clients},
         }
-        reason = "one acquisition and three native target lifecycles observed" if passed else "grouped lifecycle did not prove one acquisition and every native target"
+        reason = "one fixture acquisition and three materializations observed; native discovery was not claimed" if passed else "grouped fixture lifecycle did not prove one acquisition and every target materialization"
     elif scenario == "shared_copilot_vscode_backend":
         passed, shared_value = shared_backend_lifecycle(binary, root, challenge, challenge_context)
         traces.extend(shared_value["command_traces"])
@@ -1471,9 +1495,12 @@ def run(binary: Path, scenario: str, root: Path, challenge_context: dict[str, st
     result = {
         "schema_version": 1, "scenario_id": scenario, "challenge": challenge,
         "started_at": traces[0]["started_at"] if traces else now(), "observed_at": now(),
-        "outcome": "passed" if passed else "failed", "reason": reason,
+        # This repository-owned runner only manipulates disposable fixtures.
+        # Even a satisfied local postcondition is not native/runtime proof.
+        "outcome": "inconclusive" if passed else "failed", "reason": reason,
         "command_traces": traces, "before": before, "after": after, "proof": proof,
-        "client_version": "native-observation-v1@" + hashlib.sha256(json.dumps({"before": before, "after": after}, sort_keys=True, separators=(",", ":")).encode()).hexdigest(),
+        "client_version": None,
+        "evidence_basis": "fixture_materialization", "runtime_proof": False,
         "manager_observer": "agentplugins-state-tree-v1", "native_observer": "native-client-tree-v1",
     }
     if validator_artifact is not None:
