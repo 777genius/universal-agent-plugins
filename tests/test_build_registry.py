@@ -683,33 +683,67 @@ class DirectoryDomainTests(unittest.TestCase):
             )
             self.assertEqual(changed, [("zz-community/zz-community-product", 1)])
 
-    def test_changed_external_release_rejects_exact_version_live_npx_runtime(self) -> None:
+    def test_changed_external_release_rejects_live_npx_launcher_aliases(self) -> None:
+        commands = ("npx.cmd", "NPX", r"C:\\tools\\npx.exe", "/usr/local/bin/npx")
+        for command in commands:
+            with self.subTest(command=command), tempfile.TemporaryDirectory() as tmp:
+                source, repository, package, _revision = self.local_external_release(Path(tmp))
+                (package / "mcp.json").write_text(json.dumps({
+                    "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
+                    "mcpServers": {
+                        "fixture": {
+                            "type": "stdio",
+                            "command": command,
+                            "args": ["-y", "fixture-runtime@1.2.3"],
+                        },
+                    },
+                }) + "\n")
+                revision = self.commit_fixture_change(repository, "live npx alias")
+                release = source["distributions"][-1]["releases"][0]
+                release["package_source"]["revision"] = revision
+                release["tree_digest"] = registry.directory_tree_digest(package)
+                release["manifest_digest"] = registry.digest_bytes((package / "plugin.json").read_bytes())
+                release["components"] = registry.validated_package_facts(package)["components"]
+                with self.assertRaisesRegex(
+                    registry.RegistryError,
+                    "live npx without a recognized content-addressed runtime closure contract",
+                ):
+                    registry.validate_changed_external_releases(
+                        source, self.source(),
+                        repository_overrides={"example/external": repository},
+                    )
+
+    def test_centralized_external_validator_rejects_npx_alias_and_preserves_digest_checks(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            source, repository, package, _revision = self.local_external_release(Path(tmp))
+            source, _repository, package, _revision = self.local_external_release(Path(tmp))
+            release = source["distributions"][-1]["releases"][0]
             (package / "mcp.json").write_text(json.dumps({
                 "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
-                "mcpServers": {
-                    "fixture": {
-                        "type": "stdio",
-                        "command": "npx",
-                        "args": ["-y", "fixture-runtime@1.2.3"],
-                    },
-                },
+                "mcpServers": {"fixture": {
+                    "type": "stdio", "command": "NPX.BAT",
+                    "args": ["-y", "fixture-runtime@1.2.3"],
+                }},
             }) + "\n")
-            revision = self.commit_fixture_change(repository, "live npx")
-            release = source["distributions"][-1]["releases"][0]
-            release["package_source"]["revision"] = revision
             release["tree_digest"] = registry.directory_tree_digest(package)
-            release["manifest_digest"] = registry.digest_bytes((package / "plugin.json").read_bytes())
             release["components"] = registry.validated_package_facts(package)["components"]
             with self.assertRaisesRegex(
                 registry.RegistryError,
                 "live npx without a recognized content-addressed runtime closure contract",
             ):
-                registry.validate_changed_external_releases(
-                    source, self.source(),
-                    repository_overrides={"example/external": repository},
-                )
+                registry.validate_external_release_package(package, release, label="signing boundary")
+
+            (package / "mcp.json").write_text(json.dumps({
+                "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
+                "mcpServers": {"fixture": {
+                    "type": "stdio", "command": "npx-wrapper.cmd", "args": ["runtime@latest"],
+                }},
+            }) + "\n")
+            release["tree_digest"] = registry.directory_tree_digest(package)
+            release["components"] = registry.validated_package_facts(package)["components"]
+            registry.validate_external_release_package(package, release, label="signing boundary")
+            (package / "README.md").write_text("tampered after review\n")
+            with self.assertRaisesRegex(registry.RegistryError, "tree digest differs"):
+                registry.validate_external_release_package(package, release, label="signing boundary")
 
     def test_external_release_rejects_substituted_and_malformed_local_git_sources(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -1271,6 +1305,44 @@ class DirectoryDomainTests(unittest.TestCase):
         self.assertEqual(registry.resolve_directory(fixture, "demo", ["codex"])["distribution_id"], "packager/demo-bridge")
         with self.assertRaisesRegex(registry.RegistryError, "blocking trusted failure for cursor"):
             registry.resolve_directory(fixture, "demo", ["cursor"])
+
+    def test_preview_identifies_older_release_selected_after_newest_trusted_failure(self) -> None:
+        fixture = self.fixture()
+        distribution = next(
+            item for item in fixture["distributions"]
+            if item["id"] == "packager/demo-bridge"
+        )
+        newest = copy.deepcopy(distribution["releases"][0])
+        newest["sequence"] = 4
+        distribution["releases"].append(newest)
+        newest_policy = copy.deepcopy(distribution["release_policies"][0])
+        newest_policy["release_sequence"] = 4
+        newest_policy["targets"][0]["authentication"] = "not_required"
+        failure = copy.deepcopy(fixture["evidence"][0])
+        failure.update({
+            "id": "evidence/demo-bridge-codex-failure",
+            "release_sequence": 4,
+            "outcome": "failed",
+            "client": "codex",
+        })
+        newest_policy["current_evidence"] = [failure["id"]]
+        distribution["release_policies"].append(newest_policy)
+        fixture["evidence"].append(failure)
+        fixture["evidence"].sort(key=lambda item: item["id"])
+
+        registry.validate_directory(fixture, verify_packages=False)
+        resolved = registry.resolve_directory(fixture, "packager/demo-bridge", ["codex"])
+        self.assertEqual(resolved["release_sequence"], 3)
+        preview = registry.directory_preview(fixture)
+        choice = next(
+            item for item in preview["products"][0]["distributions"]
+            if item["id"] == "packager/demo-bridge" and item["release_sequence"] == 3
+        )
+        codex = next(target for target in choice["eligible_targets"] if target["client"] == "codex")
+        self.assertEqual(
+            codex,
+            {"client": "codex", "authentication": "required"},
+        )
 
     def test_release_sequences_and_alias_reservations_are_enforced(self) -> None:
         fixture = self.fixture()

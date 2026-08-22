@@ -69,7 +69,25 @@ class CatalogValidatorTests(unittest.TestCase):
             with self.assertRaises(validator.ValidationError):
                 validator.validate_catalog(Path(tmp))
 
-    def test_unpinned_npx_package_fails(self) -> None:
+    def test_unpinned_npx_launcher_aliases_fail(self) -> None:
+        for command in ("npx", "npx.cmd", "NPX", r"C:\\tools\\npx.exe", "/usr/local/bin/npx"):
+            with self.subTest(command=command), tempfile.TemporaryDirectory() as tmp:
+                plugin = self.make_plugin(Path(tmp))
+                mcp = {
+                    "$schema": validator.MCP_SCHEMA,
+                    "mcpServers": {
+                        "demo": {
+                            "type": "stdio",
+                            "command": command,
+                            "args": ["-y", "demo@latest"],
+                        }
+                    },
+                }
+                (plugin / "mcp.json").write_text(json.dumps(mcp))
+                with self.assertRaisesRegex(validator.ValidationError, "npx package must be pinned"):
+                    validator.validate_catalog(Path(tmp))
+
+    def test_non_npx_launcher_is_not_subject_to_npx_pinning(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             plugin = self.make_plugin(Path(tmp))
             mcp = {
@@ -77,14 +95,13 @@ class CatalogValidatorTests(unittest.TestCase):
                 "mcpServers": {
                     "demo": {
                         "type": "stdio",
-                        "command": "npx",
-                        "args": ["-y", "demo@latest"],
+                        "command": "npx-wrapper.cmd",
+                        "args": ["demo@latest"],
                     }
                 },
             }
             (plugin / "mcp.json").write_text(json.dumps(mcp))
-            with self.assertRaises(validator.ValidationError):
-                validator.validate_catalog(Path(tmp))
+            self.assertEqual(validator.validate_catalog(Path(tmp)), (1, 1, 0))
 
     def test_invalid_skill_field_fails(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

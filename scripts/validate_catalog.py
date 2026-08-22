@@ -113,6 +113,15 @@ def validate_placeholder_path(value: str, placeholder: str, field: str) -> None:
     require(bool(relative.parts) and ".." not in relative.parts, f"{field}: parent traversal is forbidden")
 
 
+def normalized_executable_basename(command: str) -> str:
+    """Return a platform-independent executable name for launcher policy."""
+    basename = command.replace("\\", "/").rsplit("/", 1)[-1].casefold()
+    for suffix in (".cmd", ".exe", ".bat"):
+        if basename.endswith(suffix):
+            return basename[:-len(suffix)]
+    return basename
+
+
 def validate_stdio(plugin_root: Path, name: str, config: dict[str, object]) -> None:
     allowed = {"type", "command", "args", "env", "cwd"}
     require(not (set(config) - allowed), f"{name}: unknown stdio fields")
@@ -140,7 +149,7 @@ def validate_stdio(plugin_root: Path, name: str, config: dict[str, object]) -> N
             validate_placeholder_path(cwd, "${PLUGIN_ROOT}", f"{name}.cwd")
         else:
             validate_placeholder_path(cwd, "${PLUGIN_DATA}", f"{name}.cwd")
-    if command == "npx":
+    if normalized_executable_basename(command) == "npx":
         packages = [arg for arg in args if not arg.startswith("-") and "@" in arg]
         require(packages and all(not arg.endswith("@latest") for arg in packages), f"{name}: npx package must be pinned")
     if command == "docker":

@@ -36,7 +36,7 @@ from portable_paths import (
     MAX_TREE_BYTES as PORTABLE_MAX_TREE_BYTES,
     validate_segment,
 )
-from validate_catalog import ValidationError, validate_plugin
+from validate_catalog import ValidationError, normalized_executable_basename, validate_plugin
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -885,7 +885,8 @@ def _package_uses_unclosed_live_npx(package_root: Path) -> bool:
     return any(
         isinstance(server, dict)
         and server.get("type") == "stdio"
-        and server.get("command") == "npx"
+        and isinstance(server.get("command"), str)
+        and normalized_executable_basename(server["command"]) == "npx"
         for server in servers.values()
     )
 
@@ -1323,33 +1324,45 @@ def directory_preview(source: dict[str, object]) -> dict[str, object]:
         choices = []
         for distribution_id in product["distributions"]:
             distribution = distributions[distribution_id]
-            release = distribution["releases"][-1]
-            policy = _policy_for(distribution, release["sequence"])
-            eligible_clients = set()
-            for target in policy["targets"]:
+            selected_clients: dict[int, list[str]] = {}
+            for client in CLIENT_IDS:
                 candidate, _ = _eligible_release(
-                    distribution, product, {target["client"]}, evidence,
+                    distribution, product, {client}, evidence,
                 )
-                if candidate is not None and candidate["sequence"] == release["sequence"]:
-                    eligible_clients.add(target["client"])
-            choices.append({
-                "id": distribution_id,
-                "kind": distribution["kind"],
-                "status": distribution["status"],
-                "release_sequence": release["sequence"],
-                "package_version": release["package_version"],
-                "components": release["components"],
-                "eligible_targets": [
-                    {"client": target["client"], "authentication": target["authentication"]}
-                    for target in policy["targets"]
-                    if target["client"] in eligible_clients
-                ],
-                "current_evidence": policy["current_evidence"],
-                "source": release["package_source"],
-                "tree_digest_algorithm": release["tree_digest_algorithm"],
-                "tree_digest": release["tree_digest"],
-                "manifest_digest": release["manifest_digest"],
-            })
+                if candidate is None:
+                    continue
+                selected_clients.setdefault(candidate["sequence"], []).append(client)
+            selected_releases = [
+                release for release in reversed(distribution["releases"])
+                if release["sequence"] in selected_clients
+            ]
+            if not selected_releases:
+                # Retain an ineligible distribution in the review UI, but do
+                # not manufacture any eligible target for its newest release.
+                selected_releases = [distribution["releases"][-1]]
+            for release in selected_releases:
+                candidate_policy = _policy_for(distribution, release["sequence"])
+                target_authentication = {
+                    target["client"]: target["authentication"]
+                    for target in candidate_policy["targets"]
+                }
+                choices.append({
+                    "id": distribution_id,
+                    "kind": distribution["kind"],
+                    "status": distribution["status"],
+                    "release_sequence": release["sequence"],
+                    "package_version": release["package_version"],
+                    "components": release["components"],
+                    "eligible_targets": [
+                        {"client": client, "authentication": target_authentication[client]}
+                        for client in selected_clients.get(release["sequence"], [])
+                    ],
+                    "current_evidence": candidate_policy["current_evidence"],
+                    "source": release["package_source"],
+                    "tree_digest_algorithm": release["tree_digest_algorithm"],
+                    "tree_digest": release["tree_digest"],
+                    "manifest_digest": release["manifest_digest"],
+                })
         products.append({
             "id": product["id"], "display_name": product["display_name"], "description": product["description"],
             "aliases": product["aliases"], "categories": product["categories"], "default_distribution": product["default_distribution"],
