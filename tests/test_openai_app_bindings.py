@@ -721,7 +721,27 @@ class OpenAIAppBindingTests(unittest.TestCase):
         self.assertEqual(generated, expected)
         self.assertNotEqual(generated, (ROOT / package_source["path"] / "README.md").read_bytes())
 
-    def test_codex_and_chatgpt_selections_cannot_be_collapsed(self) -> None:
+    def test_chatgpt_unresolvable_while_codex_eligible_fails_generation(self) -> None:
+        source = copy.deepcopy(registry.load_directory_source())
+        for distribution in source["distributions"]:
+            if distribution["product_id"] != "cloudflare-docs":
+                continue
+            for policy in distribution["release_policies"]:
+                policy["targets"] = [
+                    target for target in policy["targets"]
+                    if target["client"] != "chatgpt"
+                ]
+
+        self.assertTrue(self.resolves(source, "cloudflare-docs", "codex"))
+        self.assertFalse(self.resolves(source, "cloudflare-docs", "chatgpt"))
+        with self.assertRaisesRegex(
+            ValueError,
+            "cloudflare-docs: configured app sidecar.*ChatGPT target cannot resolve.*"
+            "update or remove.*app-bindings.json",
+        ):
+            self.generated_names(source)
+
+    def test_differing_codex_and_chatgpt_immutable_selections_fail_generation(self) -> None:
         source = copy.deepcopy(registry.load_directory_source())
         bridge = next(
             item for item in source["distributions"]
@@ -737,7 +757,73 @@ class OpenAIAppBindingTests(unittest.TestCase):
         self.assertNotEqual(
             builder.selection_identity(codex), builder.selection_identity(chatgpt)
         )
-        self.assertNotIn("cloudflare-docs", self.generated_names(source))
+        with self.assertRaisesRegex(
+            ValueError,
+            "cloudflare-docs: configured app sidecar.*ChatGPT selects.*Codex selects.*"
+            "update or remove.*app-bindings.json",
+        ):
+            self.generated_names(source)
+
+    def test_mismatched_signed_chatgpt_app_binding_fails_generation(self) -> None:
+        source = copy.deepcopy(registry.load_directory_source())
+        selection = registry.resolve_directory(source, "cloudflare-docs", ["chatgpt"])
+        distribution, release = builder.selected_release(source, selection)
+        target = builder.selected_target(distribution, release, "chatgpt")
+        self.assertIsNotNone(target)
+        target["app_binding"]["id"] = "plugin_asdk_app_different"
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "cloudflare-docs: configured app sidecar.*signed ChatGPT target "
+            "app_binding.*does not equal sidecar binding.*update or remove.*"
+            "app-bindings.json",
+        ):
+            self.generated_names(source)
+
+    def test_valid_same_selection_emits_codex_package_and_app_document(self) -> None:
+        source = registry.load_directory_source()
+        codex = registry.resolve_directory(source, "cloudflare-docs", ["codex"])
+        chatgpt = registry.resolve_directory(source, "cloudflare-docs", ["chatgpt"])
+        self.assertEqual(
+            builder.selection_identity(codex), builder.selection_identity(chatgpt)
+        )
+
+        with tempfile.TemporaryDirectory() as tmp, patch.object(
+            registry, "load_directory_source", return_value=source
+        ):
+            root = Path(tmp)
+            plugins = root / "plugins"
+            builder.build(plugins, root / "marketplace.json")
+            package = plugins / "cloudflare-docs"
+            manifest = json.loads(
+                (package / ".codex-plugin" / "plugin.json").read_text()
+            )
+            app = json.loads((package / ".app.json").read_text())
+
+        self.assertEqual(manifest["apps"], "./.app.json")
+        self.assertEqual(app, {"apps": {"cloudflare-docs": {"id": APP_ID}}})
+
+    def test_codex_only_package_without_sidecar_still_emits_normally(self) -> None:
+        source = registry.load_directory_source()
+        self.assertTrue(self.resolves(source, "github", "codex"))
+        self.assertFalse(self.resolves(source, "github", "chatgpt"))
+
+        with tempfile.TemporaryDirectory() as tmp, patch.object(
+            registry, "load_directory_source", return_value=source
+        ):
+            root = Path(tmp)
+            plugins = root / "plugins"
+            builder.build(plugins, root / "marketplace.json")
+            package = plugins / "github"
+            manifest = json.loads(
+                (package / ".codex-plugin" / "plugin.json").read_text()
+            )
+            package_exists = package.is_dir()
+            app_exists = (package / ".app.json").exists()
+
+        self.assertTrue(package_exists)
+        self.assertNotIn("apps", manifest)
+        self.assertFalse(app_exists)
 
 
 if __name__ == "__main__":

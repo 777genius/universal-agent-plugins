@@ -223,6 +223,14 @@ def selection_identity(selection: dict[str, object]) -> tuple[object, object, ob
     )
 
 
+def stale_app_binding(name: str, reason: str) -> ValueError:
+    """Return an actionable error for a sidecar that no longer matches policy."""
+    return ValueError(
+        f"{name}: configured app sidecar is stale or mismatched: {reason}; "
+        "update or remove its entry in compat/openai/app-bindings.json"
+    )
+
+
 def selected_target(
     distribution: dict[str, object], release: dict[str, object], client: str
 ) -> dict[str, object] | None:
@@ -358,25 +366,40 @@ def build(output_root: Path, marketplace_path: Path) -> None:
             except RegistryError:
                 continue
             binding = bindings.get(name)
+            portable_root = exact_selected_package(
+                directory, selection, extracted_root
+            )
+            if portable_root is None:
+                continue
             if binding is not None:
                 try:
                     app_selection = resolve_directory(directory, name, ["chatgpt"])
-                except RegistryError:
-                    continue
+                except RegistryError as error:
+                    raise stale_app_binding(
+                        name, f"ChatGPT target cannot resolve ({error})"
+                    ) from error
                 if selection_identity(app_selection) != selection_identity(selection):
-                    continue
+                    raise stale_app_binding(
+                        name,
+                        "ChatGPT selects "
+                        f"{selection_identity(app_selection)!r}, but Codex selects "
+                        f"{selection_identity(selection)!r}",
+                    )
                 distribution, release = selected_release(directory, app_selection)
                 app_target = selected_target(distribution, release, "chatgpt")
                 expected_binding = {
                     key: binding[key] for key in ("app_key", "id", "mcp_server")
                 }
                 if app_target is None or app_target.get("app_binding") != expected_binding:
-                    continue
-            portable_root = exact_selected_package(
-                directory, selection, extracted_root
-            )
-            if portable_root is None:
-                continue
+                    actual_binding = (
+                        None if app_target is None else app_target.get("app_binding")
+                    )
+                    raise stale_app_binding(
+                        name,
+                        "signed ChatGPT target app_binding "
+                        f"{actual_binding!r} does not equal sidecar binding "
+                        f"{expected_binding!r}",
+                    )
             portable = load(portable_root / "plugin.json")
             if portable.get("name") != product["manifest_name"] or portable["name"] != name:
                 raise ValueError(f"{portable_root}: plugin name does not match directory")
