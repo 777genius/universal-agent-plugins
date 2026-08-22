@@ -6,9 +6,18 @@ import { deliveryLabel, expectedDistribution, resolveDistribution } from '~/util
 const registry = useRegistry()
 const { current, expired, published } = useDirectoryStatus()
 const { asset, repositoryUrl } = useSite()
+const preferredDemoNames = ['cloudflare-docs', 'agent-code-navigator']
 const demoPlugin = computed(() => {
-  const plugin = registry.plugins.find(item => item.name === 'context7') ?? registry.plugins[0]
-  if (!plugin) throw new Error('The homepage quick start requires at least one Directory product')
+  const ranked = [
+    ...preferredDemoNames.flatMap(name => registry.plugins.filter(item => item.name === name)),
+    ...registry.plugins.filter(item => !preferredDemoNames.includes(item.name)),
+  ]
+  const plugin = ranked.find(item => item.client_support.clients.some(client => (
+    Boolean(expectedDistribution(item, [client]))
+  )))
+  if (!plugin) {
+    throw new Error('The homepage quick start requires one installable Directory product')
+  }
   return plugin
 })
 const heroTargets = computed(() => clients.filter(client => demoPlugin.value.client_support.clients.includes(client.id)))

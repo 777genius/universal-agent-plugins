@@ -32,14 +32,16 @@ describe('focused catalog accessibility contract', () => {
     const layout = source('../layouts/default.vue')
     assert.match(home, /class="hero-command-row"[\s\S]*AppMultiSelect[\s\S]*CommandSnippet/)
     assert.match(card, /class="plugin-card__install"[\s\S]*AppMultiSelect[\s\S]*CommandSnippet/)
+    assert.match(card, /AppMultiSelect v-if="targets\.length"/)
     assert.match(layout, /Pull request preview/)
   })
 
-  it('keeps the homepage buildable when a valid Directory omits Context7', () => {
+  it('chooses an installable homepage demo instead of assuming one product', () => {
     const home = source('../pages/index.vue')
-    assert.match(home, /find\(item => item\.name === 'context7'\) \?\? registry\.plugins\[0\]/)
+    assert.match(home, /preferredDemoNames = \['cloudflare-docs', 'agent-code-navigator'\]/)
+    assert.match(home, /Boolean\(expectedDistribution\(item, \[client\]\)\)/)
     assert.match(home, /Install \{\{ demoPlugin\.display_name \}\}/)
-    assert.doesNotMatch(home, /Context7 is required/)
+    assert.doesNotMatch(home, /name === 'context7'/)
     assert.doesNotMatch(home, />Install Context7 for/)
   })
 

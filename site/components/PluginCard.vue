@@ -58,7 +58,7 @@ function updateTargets(values: string[]) {
         <span aria-hidden="true">✓</span> {{ validationLabel(selectedDistribution) }}
       </span>
       <div class="plugin-card__install">
-        <AppMultiSelect :model-value="targets" :label="`Choose clients for ${plugin.display_name}`" :options="targetOptions" @update:model-value="updateTargets" />
+        <AppMultiSelect v-if="targets.length" :model-value="targets" :label="`Choose clients for ${plugin.display_name}`" :options="targetOptions" @update:model-value="updateTargets" />
         <CommandSnippet v-if="selectedDistribution" label="Add" kind="add" :command="command" />
         <span v-else class="plugin-card__author">{{ expired ? 'Commands disabled because the signed Directory snapshot is stale.' : !published ? 'Commands disabled because review data is not installation authority.' : resolution.unavailable_reason }}</span>
       </div>
