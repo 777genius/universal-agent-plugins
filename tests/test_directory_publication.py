@@ -57,6 +57,7 @@ def write_valid_package(package: Path, *, name: str = "demo", version: str = "1.
         "author": {"name": "Fixture"},
         "license": "MIT",
         "keywords": ["fixture"],
+        "repository": "https://github.com/example/external",
     }, sort_keys=True) + "\n")
     (package / "README.md").write_text("# Fixture\n")
     (package / "mcp.json").write_text(json.dumps({
@@ -195,11 +196,90 @@ class PublicationLifecycleTests(unittest.TestCase):
         import build_bridges
 
         source = json.loads((ROOT / "registry" / "directory.json").read_bytes())
-        with mock.patch.object(build_bridges, "check_all", return_value=[]) as reproduce, self.assertRaisesRegex(
-            publication.PublicationError, "build reports.*one-for-one",
+        previous = copy.deepcopy(source)
+        previous["distributions"] = [
+            distribution for distribution in previous["distributions"]
+            if distribution["status"] != "active"
+        ]
+        inactive = next(
+            distribution for distribution in source["distributions"]
+            if distribution["kind"] == "community_bridge" and distribution["status"] != "active"
+        )
+        inactive["releases"][-1]["package_source"]["revision"] = "a" * 40
+        previous_inactive = next(item for item in previous["distributions"] if item["id"] == inactive["id"])
+        previous_inactive["releases"][-1]["package_source"]["revision"] = "a" * 40
+        with mock.patch.object(build_bridges, "assemble", side_effect=build_bridges.BridgeError("upstream unavailable")) as reproduce, self.assertRaisesRegex(
+            publication.PublicationError, "bridge reproduction failed: upstream unavailable",
         ):
-            prepare.validate_reproduced_bridges(source, ROOT, config["repository"])
-        reproduce.assert_called_once_with(ROOT, None)
+            prepare.validate_reproduced_bridges(source, ROOT, config["repository"], previous)
+        self.assertTrue(reproduce.called)
+
+    def test_emergency_bridge_revocation_reuses_signed_binding_but_broadening_reproduces(self) -> None:
+        import build_bridges
+
+        source = json.loads((ROOT / "registry" / "directory.json").read_bytes())
+        for distribution in source["distributions"]:
+            if distribution["kind"] == "community_bridge":
+                for release in distribution["releases"]:
+                    if release["package_source"]["revision"] is None:
+                        release["package_source"]["revision"] = "a" * 40
+                    release.setdefault("published_at", "2026-08-20T00:00:00Z")
+        previous = copy.deepcopy(source)
+        previous["revocations"] = []
+        for distribution in previous["distributions"]:
+            policies = {
+                policy["release_sequence"]: policy
+                for policy in distribution["release_policies"]
+            }
+            for release in distribution["releases"]:
+                release.setdefault("published_at", "2026-08-20T00:00:00Z")
+                if policies[release["sequence"]]["status"] == "revoked":
+                    previous["revocations"].append({
+                        "distribution_id": distribution["id"],
+                        "release_sequence": release["sequence"],
+                    })
+        for distribution in source["distributions"]:
+            if distribution["kind"] == "community_bridge":
+                distribution["status"] = "suspended"
+                for policy in distribution["release_policies"]:
+                    policy["status"] = "revoked"
+
+        with mock.patch.object(build_bridges, "assemble", side_effect=AssertionError("revoked upstream was fetched")) as assemble:
+            prepare.validate_reproduced_bridges(
+                source, ROOT, "777genius/universal-agent-plugins", previous,
+            )
+        assemble.assert_not_called()
+
+        config = prepare.load_config(ROOT / "registry" / "publication" / "config.json")
+        with mock.patch.object(build_bridges, "assemble", side_effect=AssertionError("revoked upstream was fetched")) as assemble:
+            candidate = prepare.build_candidate(
+                source, config, "c" * 40, "emergency-bridge-revocation", previous,
+            )
+        assemble.assert_not_called()
+        self.assertTrue(any(
+            distribution["kind"] == "community_bridge"
+            and distribution["status"] == "suspended"
+            and all(policy["status"] == "revoked" for policy in distribution["release_policies"])
+            for distribution in candidate["distributions"]
+        ))
+
+        broadened = copy.deepcopy(previous)
+        bridge = next(
+            item for item in broadened["distributions"]
+            if item["kind"] == "community_bridge" and item["status"] == "active"
+        )
+        bridge["release_policies"][-1]["targets"].append({
+            "client": "chatgpt", "scopes": ["user"], "delivery": "manual_activation",
+            "authentication": "required",
+            "app_binding": {"app_key": "fixture", "id": "fixture", "mcp_server": "fixture"},
+        })
+        with mock.patch.object(build_bridges, "assemble", side_effect=build_bridges.BridgeError("upstream unavailable")) as assemble, self.assertRaisesRegex(
+            publication.PublicationError, "bridge reproduction failed: upstream unavailable",
+        ):
+            prepare.validate_reproduced_bridges(
+                broadened, ROOT, "777genius/universal-agent-plugins", previous,
+            )
+        assemble.assert_called_once()
 
     def test_publication_upstream_positive_evidence_binds_complete_release_tuple(self) -> None:
         product = {
@@ -212,7 +292,7 @@ class PublicationLifecycleTests(unittest.TestCase):
             "targets": [{"client": "codex"}], "current_evidence": ["materialized"],
         }
         distribution = {
-            "id": "upstream/demo", "kind": "upstream",
+            "id": "upstream/demo", "kind": "upstream", "status": "active",
             "releases": [release], "release_policies": [policy],
         }
         observation = {
@@ -543,12 +623,95 @@ class PublicationLifecycleTests(unittest.TestCase):
             release = first["distributions"][0]["releases"][0]
             self.assertEqual(release["package_source"]["revision"], source_commit)
             self.assertIsNone(release["published_at"])
+
+            artifact = {
+                "repository": "example/evidence", "revision": "b" * 40,
+                "path": "evidence.json", "digest": "sha256:" + "3" * 64,
+            }
+            evidence = {
+                "schema_version": 1, "id": "schema-demo", "product_id": "demo",
+                "distribution_id": "777genius/demo", "release_sequence": 1,
+                "package_tree_digest": tree, "manifest_digest": manifest,
+                "source_repository": config["repository"], "source_revision": source_commit,
+                "source_path": "plugins/demo", "level": "schema", "outcome": "passed",
+                "artifact": artifact,
+            }
+            source["evidence"] = [{**evidence, "trust": {"kind": "reviewed_external"}}]
+            source["distributions"][0]["release_policies"][0]["current_evidence"] = ["schema-demo"]
+            with mock.patch.object(prepare, "verified_evidence", return_value=evidence):
+                evidenced = prepare.build_candidate(
+                    source, config, source_commit, "prepare-evidence", None,
+                    repository_root=Path(tmp),
+                )
+            self.assertEqual(evidenced["evidence"], [evidence])
+            self.assertEqual(
+                evidenced["distributions"][0]["releases"][0]["package_source"]["revision"],
+                evidenced["evidence"][0]["source_revision"],
+            )
+
+            source["evidence"] = []
+            source["distributions"][0]["release_policies"][0]["current_evidence"] = []
             previous = {"products": first["products"], "distributions": copy.deepcopy(first["distributions"]), "evidence": [], "revocations": []}
             previous["distributions"][0]["releases"][0]["published_at"] = "2026-08-20T00:00:00Z"
             second = prepare.build_candidate(source, config, "e" * 40, "prepare-2", previous, repository_root=Path(tmp))
             release = second["distributions"][0]["releases"][0]
             self.assertEqual(release["package_source"]["revision"], source_commit)
             self.assertEqual(release["published_at"], "2026-08-20T00:00:00Z")
+
+    def test_safety_publication_preserves_an_ineligible_default(self) -> None:
+        config = prepare.load_config(ROOT / "registry" / "publication" / "config.json")
+        with tempfile.TemporaryDirectory() as tmp:
+            package = Path(tmp) / "plugins" / "demo"
+            package.mkdir(parents=True)
+            (package / "plugin.json").write_text('{"name":"demo"}\n')
+            tree = prepare.package_tree_digest(package)
+            manifest = prepare.manifest_digest(package)
+            distribution = {
+                "schema_version": 1, "id": "777genius/demo", "product_id": "demo",
+                "kind": "community", "status": "suspended", "packager": "777genius",
+                "releases": [{
+                    "sequence": 1, "package_version": "1.0.0", "manifest_name": "demo",
+                    "agent_plugins_schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+                    "package_source": {"repository": config["repository"], "revision": None, "path": "plugins/demo"},
+                    "tree_digest_algorithm": "agentplugins-tree-sha256-v1", "tree_digest": tree,
+                    "manifest_digest": manifest, "components": ["mcp"],
+                }],
+                "release_policies": [{
+                    "release_sequence": 1, "status": "revoked", "minimum_installer_version": "0.1.6",
+                    "targets": [{"client": "codex", "scopes": ["user"], "delivery": "managed", "authentication": "unknown"}],
+                    "current_evidence": [],
+                }],
+            }
+            source = {
+                "schema_version": 1,
+                "products": [{
+                    "schema_version": 1, "id": "demo", "display_name": "Demo", "description": "Demo.",
+                    "manifest_name": "demo", "aliases": ["demo"], "reserved_aliases": ["demo"],
+                    "categories": ["demo"], "minimum_capabilities": {"skills": "optional", "mcp": "required"},
+                    "default_distribution": "777genius/demo", "distributions": ["777genius/demo"],
+                }],
+                "distributions": [distribution], "evidence": [],
+            }
+            candidate = prepare.build_candidate(
+                source, config, "c" * 40, "emergency-revocation", None,
+                repository_root=Path(tmp),
+            )
+            self.assertEqual(candidate["products"][0]["default_distribution"], "777genius/demo")
+            self.assertEqual(candidate["distributions"][0]["status"], "suspended")
+            self.assertEqual(candidate["distributions"][0]["release_policies"][0]["status"], "revoked")
+            self.assertEqual(candidate["revocations"], [{"distribution_id": "777genius/demo", "release_sequence": 1}])
+
+            (package / "mcp.json").write_text(json.dumps({
+                "mcpServers": {"demo": {"type": "stdio", "command": "npx", "args": ["demo@1.0.0"]}},
+            }))
+            source["distributions"][0]["status"] = "active"
+            source["distributions"][0]["release_policies"][0]["status"] = "active"
+            source["distributions"][0]["releases"][0]["tree_digest"] = prepare.package_tree_digest(package)
+            with self.assertRaisesRegex(publication.PublicationError, "content-addressed runtime closure"):
+                prepare.build_candidate(
+                    source, config, "d" * 40, "unsafe-runtime", None,
+                    repository_root=Path(tmp),
+                )
 
         with tempfile.TemporaryDirectory() as tmp:
             rejected = run_script(
@@ -646,7 +809,7 @@ class PublicationLifecycleTests(unittest.TestCase):
             substitutions = (
                 ("manifest_name", "substituted", "manifest identity"),
                 ("package_version", "9.9.9", "package version"),
-                ("components", ["mcp", "skills"], "component inventory"),
+                ("components", ["mcp", "skills"], "components differs"),
             )
             for field, substituted, message in substitutions:
                 with self.subTest(field=field):
@@ -657,6 +820,22 @@ class PublicationLifecycleTests(unittest.TestCase):
                     with self.assertRaisesRegex(publication.PublicationError, message):
                         prepare.build_candidate(changed, config, source_commit, "substituted", None, external_overrides={"example/external": external})
 
+            manifest_value = json.loads((package / "plugin.json").read_text())
+            manifest_value["repository"] = "https://github.com/attacker/substitute"
+            (package / "plugin.json").write_text(json.dumps(manifest_value, sort_keys=True) + "\n")
+            subprocess.run(["/usr/bin/git", "-C", str(external), "add", "."], check=True)
+            subprocess.run(["/usr/bin/git", "-C", str(external), "-c", "user.name=Fixture", "-c", "user.email=fixture@example.test", "commit", "-qm", "substitute repository"], check=True)
+            substituted_repository = copy.deepcopy(source)
+            substituted_release = substituted_repository["distributions"][0]["releases"][0]
+            substituted_release["package_source"]["revision"] = subprocess.check_output(["/usr/bin/git", "-C", str(external), "rev-parse", "HEAD"], text=True).strip()
+            substituted_release["tree_digest"] = prepare.package_tree_digest(package)
+            substituted_release["manifest_digest"] = prepare.manifest_digest(package)
+            with self.assertRaisesRegex(publication.PublicationError, "manifest repository differs from package source repository"):
+                prepare.build_candidate(
+                    substituted_repository, config, source_commit, "repository-substitution", None,
+                    external_overrides={"example/external": external},
+                )
+
             (package / "plugin.json").write_text('{"name":"demo"}\n')
             subprocess.run(["/usr/bin/git", "-C", str(external), "add", "."], check=True)
             subprocess.run(["/usr/bin/git", "-C", str(external), "-c", "user.name=Fixture", "-c", "user.email=fixture@example.test", "commit", "-qm", "malformed package"], check=True)
@@ -665,7 +844,7 @@ class PublicationLifecycleTests(unittest.TestCase):
             malformed_release["package_source"]["revision"] = subprocess.check_output(["/usr/bin/git", "-C", str(external), "rev-parse", "HEAD"], text=True).strip()
             malformed_release["tree_digest"] = prepare.package_tree_digest(package)
             malformed_release["manifest_digest"] = prepare.manifest_digest(package)
-            with self.assertRaisesRegex(publication.PublicationError, "reacquired package validation failed"):
+            with self.assertRaisesRegex(publication.PublicationError, "Agent Plugins 1.0 schema error"):
                 prepare.build_candidate(malformed, config, source_commit, "malformed", None, external_overrides={"example/external": external})
 
     def test_evidence_is_reacquired_verified_and_derived_before_signing(self) -> None:

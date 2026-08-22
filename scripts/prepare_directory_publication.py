@@ -19,8 +19,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from build_registry import (
     RegistryError,
     directory_tree_digest as package_tree_digest,
-    validated_package_facts,
+    validate_active_local_runtime_closures,
     validate_bridge_bindings,
+    validate_changed_external_releases,
 )
 from directory_publication import (
     CANDIDATE_SCHEMA,
@@ -150,31 +151,12 @@ def manifest_digest(package_root: Path) -> str:
     return "sha256:" + hashlib.sha256(manifest.read_bytes()).hexdigest()
 
 
-def verify_package(
-    package_root: Path, release: dict[str, Any], identity: str, *, strict_manifest: bool = False,
-) -> None:
+def verify_package(package_root: Path, release: dict[str, Any], identity: str) -> None:
     require(package_root.is_dir(), f"{identity}: package path is unavailable")
     actual_tree = package_tree_digest(package_root)
     actual_manifest = manifest_digest(package_root)
     require(actual_tree == release["tree_digest"], f"{identity}: reacquired tree digest differs from reviewed digest")
     require(actual_manifest == release["manifest_digest"], f"{identity}: reacquired manifest digest differs from reviewed digest")
-    if not strict_manifest:
-        return
-    try:
-        facts = validated_package_facts(package_root)
-    except RegistryError as error:
-        raise PublicationError(f"{identity}: reacquired package validation failed: {error}") from error
-    comparisons = {
-        "manifest identity": (facts["manifest_name"], release["manifest_name"]),
-        "package version": (facts["package_version"], release["package_version"]),
-        "Agent Plugins schema": (facts["agent_plugins_schema"], release["agent_plugins_schema"]),
-        "component inventory": (facts["components"], release["components"]),
-    }
-    for field, (actual, reviewed) in comparisons.items():
-        require(
-            actual == reviewed,
-            f"{identity}: validated {field} differs from release metadata: {actual!r} != {reviewed!r}",
-        )
 
 
 def acquisition_environment(temporary_root: Path) -> dict[str, str]:
@@ -421,7 +403,7 @@ def validate_upstream_default_evidence(
     evidence_by_id = {item["id"]: item for item in evidence}
     for product in products:
         distribution = distributions_by_id[product["default_distribution"]]
-        if distribution["kind"] != "upstream":
+        if distribution["kind"] != "upstream" or distribution["status"] != "active":
             continue
         policies = policy_map(distribution)
         required = {
@@ -433,7 +415,11 @@ def validate_upstream_default_evidence(
             if policies[release["sequence"]]["status"] == "active"
             and required.issubset(release["components"])
         ]
-        require(eligible, f"{product['id']}: upstream default has no eligible release")
+        # A safety publication must be able to leave a product with no eligible
+        # release. Resolution remains fail-closed because only an active
+        # distribution with an active release is selectable.
+        if not eligible:
+            continue
         release = eligible[-1]
         policy = policies[release["sequence"]]
         passed = {
@@ -455,30 +441,90 @@ def validate_upstream_default_evidence(
 
 def validate_reproduced_bridges(
     source: dict[str, Any], repository_root: Path, repository: str,
+    previous: dict[str, Any] | None,
 ) -> None:
-    """Rebuild local bridges and bind the fetched-upstream reports to source."""
+    """Reproduce only bridges whose currently eligible binding is new or broader."""
     try:
         # First reject cheap source/recipe/package mismatches without network.
         validate_bridge_bindings(
             source, repository_root=repository_root, repository=repository,
         )
-        has_local_bridge = any(
-            distribution["kind"] == "community_bridge"
-            and release["package_source"]["repository"] == repository
-            for distribution in source["distributions"]
-            for release in distribution["releases"]
-        )
-        if not has_local_bridge:
+        old_distributions = previous_distributions(previous)
+        reproduce: list[str] = []
+        for distribution in source["distributions"]:
+            if distribution["kind"] != "community_bridge":
+                continue
+            local = [
+                release for release in distribution["releases"]
+                if release["package_source"]["repository"] == repository
+            ]
+            if not local:
+                continue
+            release = max(local, key=lambda item: item["sequence"])
+            policy = policy_map(distribution)[release["sequence"]]
+            old_distribution = old_distributions.get(distribution["id"])
+            old_release = next((
+                item for item in old_distribution["releases"]
+                if item["sequence"] == release["sequence"]
+            ), None) if old_distribution else None
+            old_policy = policy_map(old_distribution).get(release["sequence"]) if old_distribution else None
+            eligible = distribution["status"] == "active" and policy["status"] == "active"
+            if eligible and (
+                old_release is None
+                or old_release != release
+                or eligibility_broadened(distribution, policy, old_distribution, old_policy)
+            ):
+                reproduce.append(distribution["product_id"])
+            elif not eligible:
+                require(
+                    old_release is not None and old_release == release,
+                    f"{distribution['id']}@{release['sequence']}: inactive bridge has no unchanged previously signed immutable binding",
+                )
+        if not reproduce:
             return
-        from build_bridges import BridgeError, check_all
+        from build_bridges import BridgeError, assemble, compare_trees
 
-        try:
-            reports = check_all(repository_root, None)
-        except BridgeError as error:
-            raise PublicationError(f"bridge reproduction failed: {error}") from error
-        validate_bridge_bindings(
+        with tempfile.TemporaryDirectory(prefix="bridge-publication-check-") as temporary:
+            for bridge_id in sorted(reproduce):
+                destination = Path(temporary) / bridge_id
+                destination.mkdir()
+                try:
+                    report = assemble(repository_root, bridge_id, destination, None)
+                    compare_trees(repository_root / str(report["package_path"]), destination)
+                except (BridgeError, OSError, ValueError) as error:
+                    raise PublicationError(f"bridge reproduction failed: {error}") from error
+    except RegistryError as error:
+        raise PublicationError(str(error)) from error
+
+
+def validate_signing_boundary_packages(
+    source: dict[str, Any], previous: dict[str, Any] | None, repository_root: Path,
+    repository: str, overrides: dict[str, Path],
+) -> None:
+    """Invoke the centralized package policy at the last pre-signing boundary."""
+    baseline = copy.deepcopy(previous)
+    if baseline is not None:
+        current_distributions = {item["id"]: item for item in source["distributions"]}
+        for old_distribution in baseline["distributions"]:
+            current_distribution = current_distributions.get(old_distribution["id"])
+            if current_distribution is None:
+                continue
+            current_policies = policy_map(current_distribution)
+            old_policies = policy_map(old_distribution)
+            old_distribution["releases"] = [
+                release for release in old_distribution["releases"]
+                if not eligibility_broadened(
+                    current_distribution, current_policies[release["sequence"]],
+                    old_distribution, old_policies.get(release["sequence"]),
+                )
+            ]
+    try:
+        validate_changed_external_releases(
+            source, baseline, repository=repository,
+            repository_overrides=overrides,
+        )
+        validate_active_local_runtime_closures(
             source, repository_root=repository_root, repository=repository,
-            build_reports=reports,
         )
     except RegistryError as error:
         raise PublicationError(str(error)) from error
@@ -492,7 +538,6 @@ def build_candidate(
 ) -> dict[str, Any]:
     validate_with_schema(source, SOURCE_SCHEMA)
     require(SHA_RE.fullmatch(source_commit) is not None, "source commit must be a full lowercase SHA")
-    validate_reproduced_bridges(source, repository_root, config["repository"])
     prior = previous_releases(previous)
     prior_distributions = previous_distributions(previous)
     all_distributions = {item["id"]: item for item in source["distributions"]}
@@ -513,16 +558,6 @@ def build_candidate(
         for distribution_id in product["distributions"]:
             require(distribution_id in distributions_by_id, f"{product['id']}: missing distribution {distribution_id}")
             require(distributions_by_id[distribution_id]["product_id"] == product["id"], f"{product['id']}: mismatched distribution {distribution_id}")
-        default = distributions_by_id[product["default_distribution"]]
-        require(default["status"] == "active", f"{product['id']}: default distribution must be active")
-        active_sequences = {policy["release_sequence"] for policy in default["release_policies"] if policy["status"] == "active"}
-        active_releases = [release for release in default["releases"] if release["sequence"] in active_sequences]
-        require(active_releases, f"{product['id']}: default distribution has no active release")
-        require(any(
-            (product["minimum_capabilities"]["skills"] != "required" or "skills" in release["components"])
-            and (product["minimum_capabilities"]["mcp"] != "required" or "mcp" in release["components"])
-            for release in active_releases
-        ), f"{product['id']}: default distribution does not satisfy minimum capabilities")
     require(referenced_distributions == set(all_distributions), "every distribution must be owned by exactly one product")
 
     if previous is not None:
@@ -579,17 +614,17 @@ def build_candidate(
                 historical = isinstance(reviewed_revision, str) and reviewed_published_at is not None
                 if historical:
                     require(SHA_RE.fullmatch(reviewed_revision) is not None, f"{label}: historical source requires reviewed full SHA")
-                    temporary = acquire_external(
-                        package_source["repository"], reviewed_revision, package_source["path"],
-                        repository_root if in_repository else overrides.get(package_source["repository"]),
-                    )
-                    try:
-                        verify_package(
-                            Path(temporary.name) / "checkout" / package_source["path"], release, label,
-                            strict_manifest=not in_repository,
+                    if in_repository:
+                        temporary = acquire_external(
+                            package_source["repository"], reviewed_revision, package_source["path"],
+                            repository_root,
                         )
-                    finally:
-                        temporary.cleanup()
+                        try:
+                            verify_package(
+                                Path(temporary.name) / "checkout" / package_source["path"], release, label,
+                            )
+                        finally:
+                            temporary.cleanup()
                 elif in_repository:
                     require(
                         reviewed_revision is None and reviewed_published_at is None,
@@ -607,18 +642,6 @@ def build_candidate(
                         f"{label}: new external release requires a reviewed full SHA and no published_at",
                     )
                     release["published_at"] = None
-            reacquire = not in_repository and (
-                old is None or eligibility_broadened(distribution, policies[release["sequence"]], old_distribution, old_policies.get(release["sequence"]))
-            )
-            if reacquire and not (old is None and release.get("published_at") is not None):
-                temporary = acquire_external(package_source["repository"], package_source["revision"], package_source["path"], overrides.get(package_source["repository"]))
-                try:
-                    verify_package(
-                        Path(temporary.name) / "checkout" / package_source["path"], release, label,
-                        strict_manifest=True,
-                    )
-                finally:
-                    temporary.cleanup()
         distribution["releases"].sort(key=lambda item: item["sequence"])
         distribution["release_policies"].sort(key=lambda item: item["release_sequence"])
         output_distributions.append(distribution)
@@ -627,7 +650,14 @@ def build_candidate(
     for identity in prior:
         require(any(d["id"] == identity[0] and any(r["sequence"] == identity[1] for r in d["releases"]) for d in output_distributions), f"published release {identity} was removed from canonical source")
 
-    evidence = selected_evidence(source, set(distributions_by_id), config, overrides)
+    candidate_source = {**source, "distributions": output_distributions}
+    validate_reproduced_bridges(
+        candidate_source, repository_root, config["repository"], previous,
+    )
+    validate_signing_boundary_packages(
+        candidate_source, previous, repository_root, config["repository"], overrides,
+    )
+    evidence = selected_evidence(candidate_source, set(distributions_by_id), config, overrides)
     validate_upstream_default_evidence(products, output_distributions, evidence)
     revocations = [
         {"distribution_id": distribution["id"], "release_sequence": policy["release_sequence"]}
