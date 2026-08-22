@@ -5,10 +5,14 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "scripts"))
+from build_registry import eligible_product_targets, load_directory_source  # noqa: E402
+
 PLUGINS = ROOT / "plugins"
 BRIDGES = ROOT / "bridges"
 START = "<!-- agentplugins-install:start -->"
@@ -16,21 +20,30 @@ END = "<!-- agentplugins-install:end -->"
 NPX_COMMAND = "npx universal-agent-plugins"
 
 
-def block(name: str) -> str:
-    return f"""{START}
-## Install
+def block(name: str, eligible_targets: list[str]) -> str:
+    if eligible_targets:
+        target = "codex" if "codex" in eligible_targets else eligible_targets[0]
+        content = f"""## Install
 
 ```bash
-{NPX_COMMAND} add {name} --target codex
-```
+{NPX_COMMAND} add {name} --target {target}
+```"""
+    else:
+        content = """## Installation unavailable
+
+> Installation is currently unavailable because the Directory has no eligible release target."""
+    return f"""{START}
+{content}
 {END}"""
 
 
-def updated_readme(plugin_root: Path) -> str:
+def updated_readme(plugin_root: Path, source: dict[str, object] | None = None) -> str:
+    if source is None:
+        source = load_directory_source()
     readme = plugin_root / "README.md"
     body = readme.read_text()
     name = json.loads((plugin_root / "plugin.json").read_text())["name"]
-    install = block(name)
+    install = block(name, eligible_product_targets(source, name))
     if START in body:
         before, remainder = body.split(START, 1)
         _, after = remainder.split(END, 1)
@@ -47,11 +60,12 @@ def main() -> int:
     parser.add_argument("--check", action="store_true")
     args = parser.parse_args()
     changed = []
+    source = load_directory_source()
     package_roots = sorted(path for path in PLUGINS.iterdir() if path.is_dir())
     overlay_roots = sorted(path / "overlay" for path in BRIDGES.iterdir() if (path / "overlay" / "README.md").is_file())
     for plugin_root in package_roots + overlay_roots:
         readme = plugin_root / "README.md"
-        expected = updated_readme(plugin_root)
+        expected = updated_readme(plugin_root, source)
         if readme.read_text() != expected:
             changed.append(readme)
             if not args.check:

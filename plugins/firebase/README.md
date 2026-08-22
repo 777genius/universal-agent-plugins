@@ -3,11 +3,9 @@
 Google Firebase MCP integration. Manage Firestore databases, authentication, cloud functions, hosting, and storage. Build and manage your Firebase backend directly from your development workflow.
 
 <!-- agentplugins-install:start -->
-## Install
+## Installation unavailable
 
-```bash
-npx universal-agent-plugins add firebase --target codex
-```
+> Installation is currently unavailable because the Directory has no eligible release target.
 <!-- agentplugins-install:end -->
 
 This is an independent community package for [Agent Plugins 1.0](https://agent-plugins.org/specification). It is not an endorsement or an official package from Firebase.

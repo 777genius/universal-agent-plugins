@@ -23,6 +23,7 @@ from openai_app_bindings import (  # noqa: E402
     validate_binding_target,
 )
 import build_openai_compat as builder  # noqa: E402
+import build_registry as registry  # noqa: E402
 from build_openai_compat import openai_manifest  # noqa: E402
 from validate_openai_compat import ValidationError, validate_plugin  # noqa: E402
 
@@ -588,6 +589,28 @@ class OpenAIAppBindingTests(unittest.TestCase):
             root = Path(tmp)
             with self.assertRaisesRegex(ValueError, "unknown plugins"):
                 builder.build(root / "plugins", root / "marketplace.json")
+
+    def test_marketplace_packages_exactly_follow_directory_product_eligibility(self) -> None:
+        source = registry.load_directory_source()
+        expected = {
+            product["id"] for product in source["products"]
+            if registry.eligible_product_targets(source, product["id"])
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            plugins = root / "plugins"
+            marketplace = root / "marketplace.json"
+            builder.build(plugins, marketplace)
+            generated = {path.name for path in plugins.iterdir() if path.is_dir()}
+            listed = {
+                entry["name"]
+                for entry in json.loads(marketplace.read_text())["plugins"]
+                if entry["policy"]["installation"] == "AVAILABLE"
+            }
+
+        self.assertEqual(generated, expected)
+        self.assertEqual(listed, expected)
+        self.assertTrue({"chrome-devtools", "context7", "firebase", "hubspot-developer"}.isdisjoint(expected))
 
 
 if __name__ == "__main__":

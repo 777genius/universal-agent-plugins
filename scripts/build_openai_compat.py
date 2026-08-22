@@ -194,13 +194,22 @@ def openai_mcp(portable: dict[str, object], plugin_name: str) -> dict[str, objec
 
 def build(output_root: Path, marketplace_path: Path) -> None:
     """Generate all OpenAI packages and their marketplace catalog."""
+    # Lazy to avoid the legacy catalog builder's import of OPENAI_MCP_AUTH
+    # forming a module cycle while keeping Directory resolution authoritative.
+    from build_registry import eligible_product_targets, load_directory_source
+
     bindings = load_app_bindings(APP_BINDINGS)
     portable_roots = sorted(path for path in PORTABLE_ROOT.iterdir() if path.is_dir())
     unknown_bindings = set(bindings) - {path.name for path in portable_roots}
     if unknown_bindings:
         raise ValueError(f"app bindings reference unknown plugins: {sorted(unknown_bindings)}")
+    directory = load_directory_source()
+    eligible_roots = [
+        path for path in portable_roots
+        if eligible_product_targets(directory, path.name)
+    ]
     entries = []
-    for portable_root in portable_roots:
+    for portable_root in eligible_roots:
         portable = load(portable_root / "plugin.json")
         name = str(portable["name"])
         if name != portable_root.name:

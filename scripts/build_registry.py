@@ -842,21 +842,7 @@ def validate_changed_external_releases(
             temporary = acquirer(source_repository, revision, package_path, overrides.get(source_repository))
             package_root = Path(temporary.name) / "checkout" / package_path
             require(package_root.is_dir(), f"{label}: reacquired package path is unavailable")
-            require(release["tree_digest_algorithm"] == DIRECTORY_TREE_DIGEST_ALGORITHM, f"{label}: unsupported tree digest algorithm")
-            require(directory_tree_digest(package_root) == release["tree_digest"], f"{label}: reacquired tree digest differs from submitted metadata")
-            manifest_path = package_root / "plugin.json"
-            require(manifest_path.is_file() and digest_bytes(manifest_path.read_bytes()) == release["manifest_digest"], f"{label}: reacquired manifest digest differs from submitted metadata")
-            facts = validated_package_facts(package_root)
-            manifest = read_object(manifest_path)
-            require(canonical_manifest_repository(manifest.get("repository")) == source_repository, f"{label}: manifest repository differs from package source repository")
-            comparisons = {
-                "manifest identity": (facts["manifest_name"], release["manifest_name"]),
-                "package version": (facts["package_version"], release["package_version"]),
-                "Agent Plugins schema": (facts["agent_plugins_schema"], release["agent_plugins_schema"]),
-                "components": (facts["components"], release["components"]),
-            }
-            for field, (actual, submitted) in comparisons.items():
-                require(actual == submitted, f"{label}: reacquired {field} differs from submitted metadata: {actual!r} != {submitted!r}")
+            validate_external_release_package(package_root, release, label=label)
         except RegistryError:
             raise
         except Exception as error:
@@ -901,6 +887,63 @@ def _package_uses_unclosed_live_npx(package_root: Path) -> bool:
         and server.get("type") == "stdio"
         and server.get("command") == "npx"
         for server in servers.values()
+    )
+
+
+def validate_external_release_package(
+    package_root: Path, release: dict[str, object], *, label: str | None = None,
+) -> None:
+    """Validate the complete immutable package boundary used for eligibility.
+
+    This is deliberately reusable by PR validation and signer preparation.  A
+    pinned Git revision is only immutable source identity: the selected package
+    must also match the submitted bytes, declare that same canonical repository,
+    remain a valid Agent Plugins package, and have a closed runtime.
+    """
+    package_source = release["package_source"]
+    source_repository = validate_repository(package_source["repository"])
+    revision = package_source["revision"]
+    require(
+        isinstance(revision, str) and SHA_RE.fullmatch(revision) is not None,
+        f"{label or source_repository}: external source revision must be a full lowercase commit SHA",
+    )
+    package_path = validate_registry_path(package_source["path"])
+    identity = label or f"{source_repository}@{revision}//{package_path}"
+    require(package_root.is_dir(), f"{identity}: reacquired package path is unavailable")
+    require(
+        release["tree_digest_algorithm"] == DIRECTORY_TREE_DIGEST_ALGORITHM,
+        f"{identity}: unsupported tree digest algorithm",
+    )
+    require(
+        directory_tree_digest(package_root) == release["tree_digest"],
+        f"{identity}: reacquired tree digest differs from submitted metadata",
+    )
+    manifest_path = package_root / "plugin.json"
+    require(
+        manifest_path.is_file()
+        and digest_bytes(manifest_path.read_bytes()) == release["manifest_digest"],
+        f"{identity}: reacquired manifest digest differs from submitted metadata",
+    )
+    facts = validated_package_facts(package_root)
+    manifest = read_object(manifest_path)
+    require(
+        canonical_manifest_repository(manifest.get("repository")) == source_repository,
+        f"{identity}: manifest repository differs from package source repository",
+    )
+    comparisons = {
+        "manifest identity": (facts["manifest_name"], release["manifest_name"]),
+        "package version": (facts["package_version"], release["package_version"]),
+        "Agent Plugins schema": (facts["agent_plugins_schema"], release["agent_plugins_schema"]),
+        "components": (facts["components"], release["components"]),
+    }
+    for field, (actual, submitted) in comparisons.items():
+        require(
+            actual == submitted,
+            f"{identity}: reacquired {field} differs from submitted metadata: {actual!r} != {submitted!r}",
+        )
+    require(
+        not _package_uses_unclosed_live_npx(package_root),
+        f"{identity}: package uses live npx without a recognized content-addressed runtime closure contract",
     )
 
 
@@ -1252,6 +1295,18 @@ def resolve_directory(source: dict[str, object], selector: str, targets: list[st
     raise RegistryError(f"{selector}: no distribution supports the complete target set ({reason})")
 
 
+def eligible_product_targets(source: dict[str, object], selector: str) -> list[str]:
+    """Return targets for which the authoritative Directory resolver succeeds."""
+    eligible = []
+    for client in CLIENT_IDS:
+        try:
+            resolve_directory(source, selector, [client])
+        except RegistryError:
+            continue
+        eligible.append(client)
+    return eligible
+
+
 def is_direct_source(selector: str) -> bool:
     if selector.startswith("./") or selector.startswith("../") or selector.startswith("/"):
         return True
@@ -1270,13 +1325,13 @@ def directory_preview(source: dict[str, object]) -> dict[str, object]:
             distribution = distributions[distribution_id]
             release = distribution["releases"][-1]
             policy = _policy_for(distribution, release["sequence"])
-            blocking_clients = {
-                evidence[evidence_id]["client"]
-                for evidence_id in policy["current_evidence"]
-                if evidence[evidence_id].get("client")
-                and evidence[evidence_id]["level"] in {"materialization", "discovery", "runtime"}
-                and evidence[evidence_id]["outcome"] == "failed"
-            }
+            eligible_clients = set()
+            for target in policy["targets"]:
+                candidate, _ = _eligible_release(
+                    distribution, product, {target["client"]}, evidence,
+                )
+                if candidate is not None and candidate["sequence"] == release["sequence"]:
+                    eligible_clients.add(target["client"])
             choices.append({
                 "id": distribution_id,
                 "kind": distribution["kind"],
@@ -1287,8 +1342,8 @@ def directory_preview(source: dict[str, object]) -> dict[str, object]:
                 "eligible_targets": [
                     {"client": target["client"], "authentication": target["authentication"]}
                     for target in policy["targets"]
-                    if target["client"] not in blocking_clients
-                ] if policy["status"] == "active" and distribution["status"] == "active" else [],
+                    if target["client"] in eligible_clients
+                ],
                 "current_evidence": policy["current_evidence"],
                 "source": release["package_source"],
                 "tree_digest_algorithm": release["tree_digest_algorithm"],
@@ -1319,8 +1374,14 @@ def validate_readme_blocks(source: dict[str, object]) -> None:
         start, end = "<!-- agentplugins-install:start -->", "<!-- agentplugins-install:end -->"
         require(body.count(start) == body.count(end) == 1, f"{readme}: expected one delimited install block")
         block = body.split(start, 1)[1].split(end, 1)[0]
-        expected = f"npx universal-agent-plugins add {product['id']} --target codex"
-        require(expected in block, f"{readme}: install block must contain {expected!r}")
+        eligible_targets = eligible_product_targets(source, product["id"])
+        if eligible_targets:
+            target = "codex" if "codex" in eligible_targets else eligible_targets[0]
+            expected = f"npx universal-agent-plugins add {product['id']} --target {target}"
+            require(expected in block, f"{readme}: install block must contain {expected!r}")
+        else:
+            require("npx universal-agent-plugins add" not in block, f"{readme}: unavailable product must not contain a copyable install command")
+            require("Installation is currently unavailable" in block, f"{readme}: unavailable product must explain its status")
 
 
 def validate_legacy_catalog_freeze() -> None:

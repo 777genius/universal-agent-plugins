@@ -3,11 +3,9 @@
 Community package for Chrome DevTools MCP. Inspect pages, automate flows, analyze performance, and debug browser state.
 
 <!-- agentplugins-install:start -->
-## Install
+## Installation unavailable
 
-```bash
-npx universal-agent-plugins add chrome-devtools --target codex
-```
+> Installation is currently unavailable because the Directory has no eligible release target.
 <!-- agentplugins-install:end -->
 
 ## Suspended

@@ -3,11 +3,9 @@
 Portable Agent Plugins package for Context7. Pull up-to-date, version-specific documentation and code examples directly from source repositories into agent context.
 
 <!-- agentplugins-install:start -->
-## Install
+## Installation unavailable
 
-```bash
-npx universal-agent-plugins add context7 --target codex
-```
+> Installation is currently unavailable because the Directory has no eligible release target.
 <!-- agentplugins-install:end -->
 
 This is an independent community package for [Agent Plugins 1.0](https://agent-plugins.org/specification). It is not an endorsement or an official package from Context7.

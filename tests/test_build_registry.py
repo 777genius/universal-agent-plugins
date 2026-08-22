@@ -683,6 +683,34 @@ class DirectoryDomainTests(unittest.TestCase):
             )
             self.assertEqual(changed, [("zz-community/zz-community-product", 1)])
 
+    def test_changed_external_release_rejects_exact_version_live_npx_runtime(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            source, repository, package, _revision = self.local_external_release(Path(tmp))
+            (package / "mcp.json").write_text(json.dumps({
+                "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
+                "mcpServers": {
+                    "fixture": {
+                        "type": "stdio",
+                        "command": "npx",
+                        "args": ["-y", "fixture-runtime@1.2.3"],
+                    },
+                },
+            }) + "\n")
+            revision = self.commit_fixture_change(repository, "live npx")
+            release = source["distributions"][-1]["releases"][0]
+            release["package_source"]["revision"] = revision
+            release["tree_digest"] = registry.directory_tree_digest(package)
+            release["manifest_digest"] = registry.digest_bytes((package / "plugin.json").read_bytes())
+            release["components"] = registry.validated_package_facts(package)["components"]
+            with self.assertRaisesRegex(
+                registry.RegistryError,
+                "live npx without a recognized content-addressed runtime closure contract",
+            ):
+                registry.validate_changed_external_releases(
+                    source, self.source(),
+                    repository_overrides={"example/external": repository},
+                )
+
     def test_external_release_rejects_substituted_and_malformed_local_git_sources(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             source, repository, package, _revision = self.local_external_release(Path(tmp))
@@ -828,6 +856,15 @@ class DirectoryDomainTests(unittest.TestCase):
             registry.resolve_directory(source, "context7", ["codex"])
         with self.assertRaisesRegex(registry.RegistryError, r"upstash/context7: .* evidence .* for codex"):
             registry.resolve_directory(source, "upstash/context7", ["codex"])
+
+        context7 = next(
+            product for product in registry.directory_preview(source)["products"]
+            if product["id"] == "context7"
+        )
+        self.assertTrue(all(
+            not distribution["eligible_targets"]
+            for distribution in context7["distributions"]
+        ))
 
     def test_both_chrome_distributions_are_suspended_and_all_policies_revoked(self) -> None:
         source = self.source()

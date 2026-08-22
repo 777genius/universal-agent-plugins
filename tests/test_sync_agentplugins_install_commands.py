@@ -15,9 +15,8 @@ SPEC.loader.exec_module(sync)
 
 
 class InstallCommandConsistencyTests(unittest.TestCase):
-    def test_every_package_has_the_exact_copy_ready_codex_command(self) -> None:
+    def test_every_package_install_block_matches_authoritative_eligibility(self) -> None:
         source = json.loads((ROOT / "registry" / "directory.json").read_text())
-        distributions = {item["id"]: item for item in source["distributions"]}
         products = {item["id"]: item for item in source["products"]}
         package_roots = sorted(path for path in (ROOT / "plugins").iterdir() if path.is_dir())
         for plugin_root in package_roots:
@@ -25,16 +24,17 @@ class InstallCommandConsistencyTests(unittest.TestCase):
             self.assertIn(product_id, products)
             product = products[product_id]
             self.assertEqual(sync.updated_readme(plugin_root), (plugin_root / "README.md").read_text())
-            self.assertIn(
-                f"npx universal-agent-plugins add {product_id} --target codex",
-                (plugin_root / "README.md").read_text(),
-            )
-            self.assertTrue(any(
-                target["client"] == "codex" and target["scopes"] == ["user"]
-                for distribution_id in product["distributions"]
-                for policy in distributions[distribution_id]["release_policies"]
-                for target in policy["targets"]
-            ))
+            body = (plugin_root / "README.md").read_text()
+            targets = sync.eligible_product_targets(source, product["id"])
+            if targets:
+                target = "codex" if "codex" in targets else targets[0]
+                self.assertIn(
+                    f"npx universal-agent-plugins add {product_id} --target {target}",
+                    body,
+                )
+            else:
+                self.assertNotIn("npx universal-agent-plugins add", body)
+                self.assertIn("Installation is currently unavailable", body)
 
     def test_bridge_sources_and_generated_packages_share_the_install_block(self) -> None:
         for bridge_root in sorted(path for path in (ROOT / "bridges").iterdir() if path.is_dir()):
