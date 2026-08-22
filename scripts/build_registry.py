@@ -754,8 +754,12 @@ def load_directory_source(path: Path = DIRECTORY_SOURCE) -> dict[str, object]:
     return source
 
 
-def load_directory_source_at_revision(revision: str) -> dict[str, object]:
-    """Read the review source from an exact local Git commit."""
+def load_directory_source_at_revision(revision: str) -> dict[str, object] | None:
+    """Read the review source from an exact local Git commit.
+
+    A valid base commit without the Directory path is the initial-migration
+    case, so callers must treat every current external release as changed.
+    """
     require(SHA_RE.fullmatch(revision) is not None, "base revision must be a full lowercase commit SHA")
     environment = {
         "PATH": "/usr/bin:/bin",
@@ -768,10 +772,26 @@ def load_directory_source_at_revision(revision: str) -> dict[str, object]:
     try:
         result = subprocess.run(
             ["/usr/bin/git", "-C", str(ROOT), "show", f"{revision}:registry/directory.json"],
-            check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=environment,
+            check=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=environment,
         )
-    except (OSError, subprocess.SubprocessError) as error:
+    except OSError as error:
         raise RegistryError(f"cannot read Directory source at base revision {revision}: {error}") from error
+    if result.returncode != 0:
+        try:
+            subprocess.run(
+                ["/usr/bin/git", "-C", str(ROOT), "cat-file", "-e", f"{revision}^{{commit}}"],
+                check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, env=environment,
+            )
+        except (OSError, subprocess.SubprocessError) as error:
+            raise RegistryError(f"cannot read Directory source at base revision {revision}: {error}") from error
+        path = subprocess.run(
+            ["/usr/bin/git", "-C", str(ROOT), "cat-file", "-e", f"{revision}:registry/directory.json"],
+            check=False, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, env=environment,
+        )
+        if path.returncode != 0:
+            return None
+        detail = result.stderr.decode("utf-8", errors="replace").strip()
+        raise RegistryError(f"cannot read Directory source at base revision {revision}: {detail}")
     value = parse_json_bytes(result.stdout, f"{revision}:registry/directory.json")
     require(isinstance(value, dict), "base Directory source must be an object")
     return value

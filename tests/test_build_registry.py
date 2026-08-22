@@ -655,6 +655,26 @@ class DirectoryDomainTests(unittest.TestCase):
         ], check=True)
         return subprocess.check_output(["/usr/bin/git", "-C", str(repository), "rev-parse", "HEAD"], text=True).strip()
 
+    def test_missing_base_directory_is_treated_as_initial_migration(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repository = Path(tmp) / "repository"
+            repository.mkdir()
+            subprocess.run(["/usr/bin/git", "-C", str(repository), "init", "-q"], check=True)
+            (repository / "README.md").write_text("pre-Directory base\n")
+            subprocess.run(["/usr/bin/git", "-C", str(repository), "add", "README.md"], check=True)
+            subprocess.run([
+                "/usr/bin/git", "-C", str(repository), "-c", "user.name=Fixture",
+                "-c", "user.email=fixture@example.test", "commit", "-qm", "base",
+            ], check=True)
+            revision = subprocess.check_output(
+                ["/usr/bin/git", "-C", str(repository), "rev-parse", "HEAD"], text=True,
+            ).strip()
+
+            with mock.patch.object(registry, "ROOT", repository):
+                self.assertIsNone(registry.load_directory_source_at_revision(revision))
+                with self.assertRaisesRegex(registry.RegistryError, "cannot read Directory source"):
+                    registry.load_directory_source_at_revision("f" * 40)
+
     def test_changed_external_release_reacquires_valid_local_git_source(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             source, repository, _package, _revision = self.local_external_release(Path(tmp))
