@@ -443,14 +443,14 @@ def validate_reproduced_bridges(
     source: dict[str, Any], repository_root: Path, repository: str,
     previous: dict[str, Any] | None,
 ) -> None:
-    """Reproduce only bridges whose currently eligible binding is new or broader."""
+    """Reproduce every local bridge binding that gains or changes eligibility."""
     try:
         # First reject cheap source/recipe/package mismatches without network.
         validate_bridge_bindings(
             source, repository_root=repository_root, repository=repository,
         )
         old_distributions = previous_distributions(previous)
-        reproduce: list[str] = []
+        reproduce: set[str] = set()
         for distribution in source["distributions"]:
             if distribution["kind"] != "community_bridge":
                 continue
@@ -460,26 +460,41 @@ def validate_reproduced_bridges(
             ]
             if not local:
                 continue
-            release = max(local, key=lambda item: item["sequence"])
-            policy = policy_map(distribution)[release["sequence"]]
+            current_release = max(local, key=lambda item: item["sequence"])
+            policies = policy_map(distribution)
             old_distribution = old_distributions.get(distribution["id"])
-            old_release = next((
-                item for item in old_distribution["releases"]
-                if item["sequence"] == release["sequence"]
-            ), None) if old_distribution else None
-            old_policy = policy_map(old_distribution).get(release["sequence"]) if old_distribution else None
-            eligible = distribution["status"] == "active" and policy["status"] == "active"
-            if eligible and (
-                old_release is None
-                or old_release != release
-                or eligibility_broadened(distribution, policy, old_distribution, old_policy)
-            ):
-                reproduce.append(distribution["product_id"])
-            elif not eligible:
-                require(
-                    old_release is not None and old_release == release,
-                    f"{distribution['id']}@{release['sequence']}: inactive bridge has no unchanged previously signed immutable binding",
+            old_releases = {
+                item["sequence"]: item for item in old_distribution["releases"]
+            } if old_distribution else {}
+            old_policies = policy_map(old_distribution) if old_distribution else {}
+            for release in local:
+                sequence = release["sequence"]
+                policy = policies[sequence]
+                old_release = old_releases.get(sequence)
+                old_policy = old_policies.get(sequence)
+                eligible = distribution["status"] == "active" and policy["status"] == "active"
+                changed_eligible_binding = eligible and (
+                    old_release is None
+                    or old_release != release
+                    or old_policy is None
+                    or old_policy != policy
+                    or eligibility_broadened(
+                        distribution, policy, old_distribution, old_policy,
+                    )
                 )
+                if changed_eligible_binding:
+                    require(
+                        sequence == current_release["sequence"],
+                        f"{distribution['id']}@{sequence}: active historical bridge requires reproduction, "
+                        f"but the canonical recipe represents release {current_release['sequence']}; "
+                        "versioned historical reproduction inputs are unavailable",
+                    )
+                    reproduce.add(distribution["product_id"])
+                elif not eligible:
+                    require(
+                        old_release is not None and old_release == release,
+                        f"{distribution['id']}@{sequence}: inactive bridge has no unchanged previously signed immutable binding",
+                    )
         if not reproduce:
             return
         from build_bridges import BridgeError, assemble, compare_trees

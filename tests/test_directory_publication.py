@@ -281,6 +281,52 @@ class PublicationLifecycleTests(unittest.TestCase):
             )
         assemble.assert_called_once()
 
+    def test_broadened_active_historical_bridge_fails_closed_when_newer_release_is_revoked(self) -> None:
+        import build_bridges
+
+        source = json.loads((ROOT / "registry" / "directory.json").read_bytes())
+        bridge = next(
+            item for item in source["distributions"]
+            if item["kind"] == "community_bridge" and item["status"] == "active"
+        )
+        release_one = bridge["releases"][0]
+        release_one["package_source"]["revision"] = "a" * 40
+        release_one["published_at"] = "2026-08-20T00:00:00Z"
+        release_two = copy.deepcopy(release_one)
+        release_two["sequence"] = 2
+        bridge["releases"].append(release_two)
+        policy_two = copy.deepcopy(bridge["release_policies"][0])
+        policy_two["release_sequence"] = 2
+        bridge["release_policies"].append(policy_two)
+        previous = copy.deepcopy(source)
+
+        bridge["release_policies"][1]["status"] = "revoked"
+        revocation_only = copy.deepcopy(source)
+        with mock.patch.object(
+            build_bridges, "assemble", side_effect=AssertionError("revoked upstream was fetched"),
+        ) as assemble:
+            prepare.validate_reproduced_bridges(
+                revocation_only, ROOT, "777genius/universal-agent-plugins", previous,
+            )
+        assemble.assert_not_called()
+
+        bridge["release_policies"][0]["targets"].append({
+            "client": "chatgpt", "scopes": ["user"], "delivery": "manual_activation",
+            "authentication": "required",
+            "app_binding": {"app_key": "fixture", "id": "fixture", "mcp_server": "fixture"},
+        })
+
+        with mock.patch.object(
+            build_bridges, "assemble", side_effect=AssertionError("historical release used current recipe"),
+        ) as assemble, self.assertRaisesRegex(
+            publication.PublicationError,
+            r"@1: active historical bridge requires reproduction.*canonical recipe represents release 2.*versioned historical reproduction inputs are unavailable",
+        ):
+            prepare.validate_reproduced_bridges(
+                source, ROOT, "777genius/universal-agent-plugins", previous,
+            )
+        assemble.assert_not_called()
+
     def test_publication_upstream_positive_evidence_binds_complete_release_tuple(self) -> None:
         product = {
             "id": "demo", "default_distribution": "upstream/demo",
