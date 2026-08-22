@@ -1098,7 +1098,7 @@ def _package_uses_unclosed_live_npx(package_root: Path) -> bool:
 
 def validate_release_package(
     package_root: Path, release: dict[str, object], *, label: str | None = None,
-    allow_unresolved_revision: bool = False,
+    allow_unresolved_revision: bool = False, require_closed_runtime: bool = True,
 ) -> None:
     """Validate the complete immutable package boundary used for eligibility.
 
@@ -1149,10 +1149,11 @@ def validate_release_package(
             actual == submitted,
             f"{identity}: reacquired {field} differs from submitted metadata: {actual!r} != {submitted!r}",
         )
-    require(
-        not _package_uses_unclosed_live_npx(package_root),
-        f"{identity}: package uses live npx without a recognized content-addressed runtime closure contract",
-    )
+    if require_closed_runtime:
+        require(
+            not _package_uses_unclosed_live_npx(package_root),
+            f"{identity}: package uses live npx without a recognized content-addressed runtime closure contract",
+        )
 
 
 # Compatibility name for focused callers; all package kinds share the boundary.

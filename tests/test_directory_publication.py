@@ -186,6 +186,28 @@ class ClientContractTests(unittest.TestCase):
 
 
 class PublicationLifecycleTests(unittest.TestCase):
+    def test_initial_inactive_bridge_is_reproduced_before_its_first_signed_binding(self) -> None:
+        import build_bridges
+
+        source = json.loads((ROOT / "registry" / "directory.json").read_bytes())
+        reproduced: list[str] = []
+
+        def assemble(repository_root, bridge_id, destination, _cache):  # type: ignore[no-untyped-def]
+            reproduced.append(bridge_id)
+            shutil.copytree(
+                repository_root / "plugins" / bridge_id,
+                destination,
+                dirs_exist_ok=True,
+            )
+            return {"package_path": f"plugins/{bridge_id}"}
+
+        with mock.patch.object(build_bridges, "assemble", side_effect=assemble):
+            prepare.validate_reproduced_bridges(
+                source, ROOT, "777genius/universal-agent-plugins", None,
+            )
+
+        self.assertIn("chrome-devtools", reproduced)
+
     def test_publication_rebinds_bridge_recipe_before_accepting_prebuilt_bytes(self) -> None:
         source = json.loads((ROOT / "registry" / "directory.json").read_bytes())
         bridge = next(item for item in source["distributions"] if item["kind"] == "community_bridge")
@@ -792,9 +814,18 @@ class PublicationLifecycleTests(unittest.TestCase):
                 "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
                 "mcpServers": {"demo": {"type": "stdio", "command": "npx", "args": ["demo@1.0.0"]}},
             }))
+            source["distributions"][0]["releases"][0]["tree_digest"] = prepare.package_tree_digest(package)
+            revoked = prepare.build_candidate(
+                source, config, "d" * 40, "revoked-runtime", None,
+                repository_root=Path(tmp),
+            )
+            self.assertEqual(
+                revoked["distributions"][0]["releases"][0]["package_source"]["revision"],
+                "d" * 40,
+            )
+
             source["distributions"][0]["status"] = "active"
             source["distributions"][0]["release_policies"][0]["status"] = "active"
-            source["distributions"][0]["releases"][0]["tree_digest"] = prepare.package_tree_digest(package)
             with self.assertRaisesRegex(publication.PublicationError, "content-addressed runtime closure"):
                 prepare.build_candidate(
                     source, config, "d" * 40, "unsafe-runtime", None,

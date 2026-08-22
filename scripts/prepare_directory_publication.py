@@ -137,11 +137,15 @@ def manifest_digest(package_root: Path) -> str:
     return "sha256:" + hashlib.sha256(manifest.read_bytes()).hexdigest()
 
 
-def verify_package(package_root: Path, release: dict[str, Any], identity: str) -> None:
+def verify_package(
+    package_root: Path, release: dict[str, Any], identity: str, *,
+    require_closed_runtime: bool = True,
+) -> None:
     try:
         validate_release_package(
             package_root, release, label=identity,
             allow_unresolved_revision=release["package_source"]["revision"] is None,
+            require_closed_runtime=require_closed_runtime,
         )
     except RegistryError as error:
         raise PublicationError(str(error)) from error
@@ -489,10 +493,17 @@ def validate_reproduced_bridges(
                     )
                     reproduce.add(distribution["product_id"])
                 elif not eligible:
-                    require(
-                        old_release is not None and old_release == release,
-                        f"{distribution['id']}@{sequence}: inactive bridge has no unchanged previously signed immutable binding",
-                    )
+                    if old_release is None:
+                        require(
+                            sequence == current_release["sequence"],
+                            f"{distribution['id']}@{sequence}: inactive historical bridge has no reproducible recipe",
+                        )
+                        reproduce.add(distribution["product_id"])
+                    else:
+                        require(
+                            old_release == release,
+                            f"{distribution['id']}@{sequence}: inactive bridge changed after its signed binding",
+                        )
         if not reproduce:
             return
         from build_bridges import BridgeError, assemble, compare_trees
@@ -620,6 +631,16 @@ def build_candidate(
         for release in distribution["releases"]:
             owning_product = next(product for product in products if product["id"] == distribution["product_id"])
             require(release["manifest_name"] == owning_product["manifest_name"], f"{distribution['id']}@{release['sequence']}: manifest identity differs from product")
+            policy = policies[release["sequence"]]
+            required = {
+                component for component, state in owning_product["minimum_capabilities"].items()
+                if state == "required"
+            }
+            require_closed_runtime = (
+                distribution["status"] == "active"
+                and policy["status"] == "active"
+                and required.issubset(release["components"])
+            )
             identity = (distribution["id"], release["sequence"])
             label = f"{identity[0]}@{identity[1]}"
             old = prior.get(identity)
@@ -656,6 +677,7 @@ def build_candidate(
                         try:
                             verify_package(
                                 Path(temporary.name) / "checkout" / package_source["path"], release, label,
+                                require_closed_runtime=require_closed_runtime,
                             )
                         finally:
                             temporary.cleanup()
@@ -668,7 +690,10 @@ def build_candidate(
                     # Review source cannot author this binding.  Only an unresolved
                     # revision is bound after the checked-out merge tree passes the
                     # reviewed digest checks below.
-                    verify_package(repository_root / package_source["path"], release, label)
+                    verify_package(
+                        repository_root / package_source["path"], release, label,
+                        require_closed_runtime=require_closed_runtime,
+                    )
                     package_source["revision"] = source_commit
                 else:
                     require(
