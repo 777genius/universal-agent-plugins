@@ -134,7 +134,37 @@ class WorkflowContractTests(unittest.TestCase):
         required = workflow["jobs"]["required-stable-launch-evidence"]
         self.assertEqual(required["uses"], "./.github/workflows/launch-evidence-e2e.yml")
         self.assertNotIn("release_tag", required.get("with", {}))
-        self.assertEqual(required["permissions"], {"actions": "read", "contents": "read", "id-token": "write"})
+        self.assertEqual(required["permissions"], {
+            "actions": "read",
+            "attestations": "read",
+            "contents": "read",
+            "id-token": "write",
+        })
+
+    def test_nested_launch_workflow_permissions_never_escalate(self) -> None:
+        publication = load(DIRECTORY_PUBLICATION)
+        live = load(LIVE)
+        launch = load(LAUNCH)
+        expected = {
+            "actions": "read",
+            "attestations": "read",
+            "contents": "read",
+            "id-token": "write",
+        }
+        publication_call = publication["jobs"]["required_stable_launch_evidence"]
+        live_call = live["jobs"]["required-stable-launch-evidence"]
+        self.assertEqual(publication_call["permissions"], expected)
+        self.assertEqual(live_call["permissions"], expected)
+
+        permission_levels = {"none": 0, "read": 1, "write": 2}
+        for job_name, job in launch["jobs"].items():
+            for permission, level in job.get("permissions", {}).items():
+                with self.subTest(job=job_name, permission=permission):
+                    self.assertIn(permission, expected)
+                    self.assertLessEqual(
+                        permission_levels[level],
+                        permission_levels[expected[permission]],
+                    )
 
     def test_scheduled_live_workflow_never_calls_staged_publication_gate(self) -> None:
         workflow = load(LIVE)
@@ -197,7 +227,12 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertEqual(set(required["needs"]), {"sign", "materialize_site", "gate_exact_staged_publication"})
         self.assertEqual(required["uses"], "./.github/workflows/live-e2e.yml")
         self.assertEqual(required["with"]["consent"], "true")
-        self.assertEqual(required["permissions"], {"actions": "read", "contents": "read", "id-token": "write"})
+        self.assertEqual(required["permissions"], {
+            "actions": "read",
+            "attestations": "read",
+            "contents": "read",
+            "id-token": "write",
+        })
         exact = workflow["jobs"]["gate_exact_staged_publication"]
         verify = next(step for step in exact["steps"] if step.get("name") == "Verify staged bytes and immutable identity before promotion")
         self.assertEqual(exact["needs"], ["sign", "materialize_site"])

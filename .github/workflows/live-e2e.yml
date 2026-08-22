@@ -70,6 +70,7 @@ jobs:
       publication_ledger_commit: ${{ inputs.publication_ledger_commit }}
     permissions:
       actions: read
+      attestations: read
       contents: read
       id-token: write
 
