@@ -52,9 +52,20 @@
       },
       "additionalProperties": false
     },
+    "targetResolution": {
+      "type": "object",
+      "required": ["targets", "distribution_id", "release_sequence"],
+      "properties": {
+        "targets": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"$ref": "#/$defs/eligibleTarget"}},
+        "distribution_id": {"$ref": "#/$defs/distributionId"},
+        "release_sequence": {"type": "integer", "minimum": 1},
+        "fallback_reason": {"type": "string", "minLength": 1}
+      },
+      "additionalProperties": false
+    },
     "product": {
       "type": "object",
-      "required": ["id", "display_name", "description", "aliases", "categories", "default_distribution", "fallback_order", "distributions"],
+      "required": ["id", "display_name", "description", "aliases", "categories", "default_distribution", "fallback_order", "target_resolutions", "distributions"],
       "properties": {
         "id": {"$ref": "#/$defs/id"},
         "display_name": {"type": "string", "minLength": 1},
@@ -63,6 +74,7 @@
         "categories": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"$ref": "#/$defs/id"}},
         "default_distribution": {"$ref": "#/$defs/distributionId"},
         "fallback_order": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"$ref": "#/$defs/distributionId"}},
+        "target_resolutions": {"type": "array", "items": {"$ref": "#/$defs/targetResolution"}},
         "distributions": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/distribution"}}
       },
       "additionalProperties": false

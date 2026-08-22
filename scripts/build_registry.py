@@ -1548,6 +1548,32 @@ def directory_preview(source: dict[str, object]) -> dict[str, object]:
     evidence = {observation["id"]: observation for observation in source["evidence"]}
     products = []
     for product in source["products"]:
+        target_resolutions = []
+        for count in range(1, len(CLIENT_IDS) + 1):
+            for target_set in itertools.combinations(CLIENT_IDS, count):
+                try:
+                    resolution = resolve_directory(source, product["aliases"][0], list(target_set))
+                except RegistryError:
+                    continue
+                selected_distribution = distributions[resolution["distribution_id"]]
+                selected_policy = _policy_for(
+                    selected_distribution, resolution["release_sequence"],
+                )
+                authentication = {
+                    target["client"]: target["authentication"]
+                    for target in selected_policy["targets"]
+                }
+                target_resolution = {
+                    "targets": [
+                        {"client": client, "authentication": authentication[client]}
+                        for client in target_set
+                    ],
+                    "distribution_id": resolution["distribution_id"],
+                    "release_sequence": resolution["release_sequence"],
+                }
+                if resolution["fallback_reason"] is not None:
+                    target_resolution["fallback_reason"] = resolution["fallback_reason"]
+                target_resolutions.append(target_resolution)
         choices = []
         for distribution_id in product["distributions"]:
             distribution = distributions[distribution_id]
@@ -1601,6 +1627,7 @@ def directory_preview(source: dict[str, object]) -> dict[str, object]:
             "id": product["id"], "display_name": product["display_name"], "description": product["description"],
             "aliases": product["aliases"], "categories": product["categories"], "default_distribution": product["default_distribution"],
             "fallback_order": [item["id"] for item in sorted((distributions[value] for value in product["distributions"]), key=lambda item: (item["id"] != product["default_distribution"], KIND_PRIORITY[item["kind"]], item["id"]))],
+            "target_resolutions": target_resolutions,
             "distributions": choices,
         })
     return {"schema_version": 1, "product_count": len(products), "products": products}

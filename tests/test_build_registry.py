@@ -1498,6 +1498,9 @@ class DirectoryDomainTests(unittest.TestCase):
         resolved = registry.resolve_directory(fixture, "packager/demo-bridge", ["codex", "cursor"])
         self.assertEqual(resolved["release_sequence"], 3)
         preview = registry.directory_preview(fixture)
+        registry._validate_document(
+            preview, "directory-preview.schema.json", "fixture review preview",
+        )
         older = next(
             item for item in preview["products"][0]["distributions"]
             if item["id"] == "packager/demo-bridge" and item["release_sequence"] == 3
@@ -1520,6 +1523,44 @@ class DirectoryDomainTests(unittest.TestCase):
         self.assertEqual(
             {(item["id"], item["release_sequence"]) for item in (older, newer)},
             {("packager/demo-bridge", 3), ("packager/demo-bridge", 4)},
+        )
+        resolutions = preview["products"][0]["target_resolutions"]
+        codex = next(item for item in resolutions if item["targets"] == [
+            {"client": "codex", "authentication": "not_required"},
+        ])
+        codex_cursor = next(item for item in resolutions if item["targets"] == [
+            {"client": "codex", "authentication": "required"},
+            {"client": "cursor", "authentication": "required"},
+        ])
+        self.assertEqual(
+            (codex["distribution_id"], codex["release_sequence"]),
+            ("packager/demo-bridge", 4),
+        )
+        self.assertNotIn("fallback_reason", codex)
+        self.assertEqual(
+            (codex_cursor["distribution_id"], codex_cursor["release_sequence"]),
+            ("packager/demo-bridge", 3),
+        )
+
+    def test_preview_records_exact_fallback_target_set_resolution(self) -> None:
+        fixture = self.fixture()
+        fixture["products"][0]["default_distribution"] = "community/demo"
+
+        preview = registry.directory_preview(fixture)
+        resolution = next(
+            item for item in preview["products"][0]["target_resolutions"]
+            if item["targets"] == [
+                {"client": "codex", "authentication": "required"},
+                {"client": "cursor", "authentication": "required"},
+            ]
+        )
+        self.assertEqual(
+            (resolution["distribution_id"], resolution["release_sequence"]),
+            ("packager/demo-bridge", 3),
+        )
+        self.assertEqual(
+            resolution["fallback_reason"],
+            "declared default community/demo was ineligible: release 1 does not support cursor",
         )
 
     def test_release_sequences_and_alias_reservations_are_enforced(self) -> None:
