@@ -6,7 +6,7 @@ Community package for the official Linear MCP integration for workspace manageme
 ## Install
 
 ```bash
-npx universal-agent-plugins add linear --target codex
+npx universal-agent-plugins add linear
 ```
 <!-- agentplugins-install:end -->
 

@@ -590,11 +590,11 @@ class OpenAIAppBindingTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "unknown plugins"):
                 builder.build(root / "plugins", root / "marketplace.json")
 
-    def test_marketplace_packages_exactly_follow_directory_product_eligibility(self) -> None:
+    def test_marketplace_packages_exactly_follow_codex_target_eligibility(self) -> None:
         source = registry.load_directory_source()
         expected = {
             product["id"] for product in source["products"]
-            if registry.eligible_product_targets(source, product["id"])
+            if self.resolves(source, product["id"], "codex")
         }
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -611,6 +611,133 @@ class OpenAIAppBindingTests(unittest.TestCase):
         self.assertEqual(generated, expected)
         self.assertEqual(listed, expected)
         self.assertTrue({"chrome-devtools", "context7", "firebase", "hubspot-developer"}.isdisjoint(expected))
+
+    @staticmethod
+    def resolves(source: dict[str, object], product: str, target: str) -> bool:
+        try:
+            registry.resolve_directory(source, product, [target])
+        except registry.RegistryError:
+            return False
+        return True
+
+    def generated_names(self, source: dict[str, object]) -> set[str]:
+        with tempfile.TemporaryDirectory() as tmp, patch.object(
+            registry, "load_directory_source", return_value=source
+        ):
+            root = Path(tmp)
+            plugins = root / "plugins"
+            builder.build(plugins, root / "marketplace.json")
+            return {
+                path.name for path in plugins.iterdir() if path.is_dir()
+            } if plugins.exists() else set()
+
+    def test_upstream_fallback_cannot_substitute_suspended_local_bytes(self) -> None:
+        source = copy.deepcopy(registry.load_directory_source())
+        product = next(item for item in source["products"] if item["id"] == "atlassian")
+        local = next(
+            item for item in source["distributions"]
+            if item["id"] == product["default_distribution"]
+        )
+        local["status"] = "suspended"
+        upstream = copy.deepcopy(local)
+        upstream.update({
+            "id": "atlassian/atlassian",
+            "kind": "upstream",
+            "status": "active",
+            "packager": "atlassian",
+        })
+        release = upstream["releases"][0]
+        release["package_source"] = {
+            "repository": "atlassian/atlassian",
+            "revision": "a" * 40,
+            "path": "agent-plugin",
+        }
+        policy = upstream["release_policies"][0]
+        policy["targets"] = [
+            target for target in policy["targets"] if target["client"] == "codex"
+        ]
+        evidence_id = "atlassian/atlassian/materialization-codex"
+        policy["current_evidence"] = [evidence_id]
+        source["evidence"].append({
+            "id": evidence_id,
+            "distribution_id": upstream["id"],
+            "release_sequence": release["sequence"],
+            "package_tree_digest": release["tree_digest"],
+            "level": "materialization",
+            "outcome": "passed",
+            "client": "codex",
+        })
+        product["distributions"].append(upstream["id"])
+        product["distributions"].sort()
+        source["distributions"].append(upstream)
+        source["distributions"].sort(key=lambda item: item["id"])
+
+        selection = registry.resolve_directory(source, "atlassian", ["codex"])
+        self.assertEqual(selection["distribution_id"], upstream["id"])
+        self.assertNotIn("atlassian", self.generated_names(source))
+
+    def test_non_openai_only_eligibility_cannot_create_marketplace_entry(self) -> None:
+        source = copy.deepcopy(registry.load_directory_source())
+        distribution = next(
+            item for item in source["distributions"]
+            if item["id"] == "777genius/atlassian"
+        )
+        distribution["release_policies"][0]["targets"] = [
+            target for target in distribution["release_policies"][0]["targets"]
+            if target["client"] == "cursor"
+        ]
+
+        self.assertTrue(self.resolves(source, "atlassian", "cursor"))
+        self.assertFalse(self.resolves(source, "atlassian", "codex"))
+        self.assertNotIn("atlassian", self.generated_names(source))
+
+    def test_exact_local_codex_selected_release_still_generates(self) -> None:
+        source = registry.load_directory_source()
+        selection = registry.resolve_directory(source, "cloudflare-docs", ["codex"])
+        _, release = builder.selected_release(source, selection)
+
+        self.assertEqual(release["package_source"]["repository"], builder.LOCAL_REPOSITORY)
+        self.assertIsNone(release["package_source"]["revision"])
+        self.assertIn("cloudflare-docs", self.generated_names(source))
+
+    def test_bound_historical_selection_uses_its_exact_git_bytes(self) -> None:
+        source = registry.load_directory_source()
+        selection = registry.resolve_directory(source, "atlassian", ["codex"])
+        _, release = builder.selected_release(source, selection)
+        package_source = release["package_source"]
+        expected = subprocess.check_output(
+            [
+                "git",
+                "show",
+                f"{package_source['revision']}:{package_source['path']}/README.md",
+            ],
+            cwd=ROOT,
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            builder.build(root / "plugins", root / "marketplace.json")
+            generated = (root / "plugins" / "atlassian" / "README.md").read_bytes()
+
+        self.assertEqual(generated, expected)
+        self.assertNotEqual(generated, (ROOT / package_source["path"] / "README.md").read_bytes())
+
+    def test_codex_and_chatgpt_selections_cannot_be_collapsed(self) -> None:
+        source = copy.deepcopy(registry.load_directory_source())
+        bridge = next(
+            item for item in source["distributions"]
+            if item["id"] == "777genius/cloudflare-docs-bridge"
+        )
+        bridge["release_policies"][0]["targets"] = [
+            target for target in bridge["release_policies"][0]["targets"]
+            if target["client"] != "chatgpt"
+        ]
+        codex = registry.resolve_directory(source, "cloudflare-docs", ["codex"])
+        chatgpt = registry.resolve_directory(source, "cloudflare-docs", ["chatgpt"])
+
+        self.assertNotEqual(
+            builder.selection_identity(codex), builder.selection_identity(chatgpt)
+        )
+        self.assertNotIn("cloudflare-docs", self.generated_names(source))
 
 
 if __name__ == "__main__":

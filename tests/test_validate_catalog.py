@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -12,6 +13,8 @@ SPEC = importlib.util.spec_from_file_location("validate_catalog", MODULE_PATH)
 assert SPEC and SPEC.loader
 validator = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(validator)
+sys.path.insert(0, str(MODULE_PATH.parent))
+import build_registry as registry  # noqa: E402
 
 
 class CatalogValidatorTests(unittest.TestCase):
@@ -70,7 +73,17 @@ class CatalogValidatorTests(unittest.TestCase):
                 validator.validate_catalog(Path(tmp))
 
     def test_unpinned_npx_launcher_aliases_fail(self) -> None:
-        for command in ("npx", "npx.cmd", "NPX", r"C:\\tools\\npx.exe", "/usr/local/bin/npx"):
+        for command in (
+            "npx",
+            "npx.cmd",
+            "NPX",
+            r"C:\\tools\\npx.exe",
+            "/usr/local/bin/npx",
+            "npx.ps1",
+            "NPX.PS1",
+            r"C:\\tools\\npx.ps1",
+            "/path/npx.ps1",
+        ):
             with self.subTest(command=command), tempfile.TemporaryDirectory() as tmp:
                 plugin = self.make_plugin(Path(tmp))
                 mcp = {
@@ -102,6 +115,52 @@ class CatalogValidatorTests(unittest.TestCase):
             }
             (plugin / "mcp.json").write_text(json.dumps(mcp))
             self.assertEqual(validator.validate_catalog(Path(tmp)), (1, 1, 0))
+
+    def test_powershell_npx_shims_inherit_runtime_closure_rejection(self) -> None:
+        commands = ("npx.ps1", "NPX.PS1", r"C:\\tools\\npx.ps1", "/path/npx.ps1")
+        for command in commands:
+            with self.subTest(command=command), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                plugin = self.make_plugin(root)
+                mcp = {
+                    "$schema": validator.MCP_SCHEMA,
+                    "mcpServers": {
+                        "demo": {
+                            "type": "stdio",
+                            "command": command,
+                            "args": ["-y", "demo@1.0.0"],
+                        }
+                    },
+                }
+                (plugin / "mcp.json").write_text(json.dumps(mcp))
+                self.assertEqual(validator.normalized_executable_basename(command), "npx")
+                self.assertEqual(validator.validate_catalog(root), (1, 1, 0))
+                source = {
+                    "distributions": [{
+                        "id": "test/demo",
+                        "status": "active",
+                        "releases": [{
+                            "sequence": 1,
+                            "package_source": {
+                                "repository": "test/repository",
+                                "revision": None,
+                                "path": "plugins/demo",
+                            },
+                        }],
+                        "release_policies": [{
+                            "release_sequence": 1,
+                            "status": "active",
+                        }],
+                    }],
+                }
+                with self.assertRaisesRegex(
+                    registry.RegistryError, "content-addressed runtime closure"
+                ):
+                    registry.validate_active_local_runtime_closures(
+                        source,
+                        repository_root=root,
+                        repository="test/repository",
+                    )
 
     def test_invalid_skill_field_fails(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

@@ -116,7 +116,7 @@ def validate_placeholder_path(value: str, placeholder: str, field: str) -> None:
 def normalized_executable_basename(command: str) -> str:
     """Return a platform-independent executable name for launcher policy."""
     basename = command.replace("\\", "/").rsplit("/", 1)[-1].casefold()
-    for suffix in (".cmd", ".exe", ".bat"):
+    for suffix in (".cmd", ".exe", ".bat", ".ps1"):
         if basename.endswith(suffix):
             return basename[:-len(suffix)]
     return basename

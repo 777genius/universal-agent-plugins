@@ -6,7 +6,7 @@ Community package for the official Cloudflare hosted MCP plugin for logs, analyt
 ## Install
 
 ```bash
-npx universal-agent-plugins add cloudflare-observability --target codex
+npx universal-agent-plugins add cloudflare-observability
 ```
 <!-- agentplugins-install:end -->
 

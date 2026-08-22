@@ -5,10 +5,14 @@ from __future__ import annotations
 
 import argparse
 import filecmp
+import io
 import json
+import os
 import shutil
+import subprocess
+import tarfile
 import tempfile
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 from openai_app_bindings import (
     APP_BINDINGS,
@@ -23,6 +27,8 @@ PORTABLE_ROOT = ROOT / "plugins"
 OPENAI_ROOT = ROOT / "compat" / "openai" / "plugins"
 MARKETPLACE = ROOT / ".agents" / "plugins" / "marketplace.json"
 BRAND_ASSETS = ROOT / "assets"
+LOCAL_REPOSITORY = "777genius/universal-agent-plugins"
+OPENAI_PACKAGE_TARGET = "codex"
 
 CATEGORIES = {
     "atlassian": "Productivity",
@@ -192,68 +198,230 @@ def openai_mcp(portable: dict[str, object], plugin_name: str) -> dict[str, objec
     return {"mcpServers": result}
 
 
+def selected_release(
+    directory: dict[str, object], selection: dict[str, object]
+) -> tuple[dict[str, object], dict[str, object]]:
+    """Return the exact distribution and release named by a resolver result."""
+    distribution = next(
+        item
+        for item in directory["distributions"]
+        if item["id"] == selection["distribution_id"]
+    )
+    release = next(
+        item
+        for item in distribution["releases"]
+        if item["sequence"] == selection["release_sequence"]
+    )
+    return distribution, release
+
+
+def selection_identity(selection: dict[str, object]) -> tuple[object, object, object]:
+    """Return the immutable identity fields from an authoritative selection."""
+    return tuple(
+        selection[key]
+        for key in ("product_id", "distribution_id", "release_sequence")
+    )
+
+
+def selected_target(
+    distribution: dict[str, object], release: dict[str, object], client: str
+) -> dict[str, object] | None:
+    """Return one selected release's explicit client policy target."""
+    policy = next(
+        item
+        for item in distribution["release_policies"]
+        if item["release_sequence"] == release["sequence"]
+    )
+    return next(
+        (item for item in policy["targets"] if item["client"] == client),
+        None,
+    )
+
+
+def extract_git_package(revision: str, package_path: str, destination: Path) -> bool:
+    """Materialize one exact package already present in the reviewed Git clone."""
+    git = shutil.which("git")
+    if git is None:
+        return False
+    environment = {
+        "PATH": os.environ.get("PATH", ""),
+        "GIT_CONFIG_NOSYSTEM": "1",
+        "GIT_CONFIG_GLOBAL": os.devnull,
+        "GIT_OPTIONAL_LOCKS": "0",
+        "LC_ALL": "C",
+    }
+    try:
+        result = subprocess.run(
+            [git, "-C", str(ROOT), "archive", "--format=tar", revision, package_path],
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            env=environment,
+        )
+        if result.returncode != 0:
+            return False
+        prefix = PurePosixPath(package_path)
+        wrote_file = False
+        with tarfile.open(fileobj=io.BytesIO(result.stdout), mode="r:") as archive:
+            for member in archive:
+                path = PurePosixPath(member.name.rstrip("/"))
+                if path == prefix or prefix not in path.parents:
+                    continue
+                relative = path.relative_to(prefix)
+                target = destination.joinpath(*relative.parts)
+                if member.isdir():
+                    target.mkdir(parents=True, exist_ok=True)
+                elif member.isfile():
+                    source = archive.extractfile(member)
+                    if source is None:
+                        return False
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    target.write_bytes(source.read())
+                    target.chmod(0o755 if member.mode & 0o111 else 0o644)
+                    wrote_file = True
+                elif member.issym():
+                    link = PurePosixPath(member.linkname)
+                    resolved = PurePosixPath(*relative.parent.parts, *link.parts)
+                    if link.is_absolute() or ".." in resolved.parts:
+                        return False
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    target.symlink_to(member.linkname)
+                else:
+                    return False
+        return wrote_file
+    except (OSError, tarfile.TarError, ValueError):
+        return False
+
+
+def exact_selected_package(
+    directory: dict[str, object],
+    selection: dict[str, object],
+    extracted_root: Path,
+) -> Path | None:
+    """Return verified exact selected bytes, or None when offline bytes are absent."""
+    from build_registry import RegistryError, validate_registry_path, validate_release_package
+
+    distribution, release = selected_release(directory, selection)
+    package_source = release["package_source"]
+    if package_source["repository"] != LOCAL_REPOSITORY:
+        return None
+    try:
+        package_path = validate_registry_path(package_source["path"])
+    except RegistryError:
+        return None
+    revision = package_source["revision"]
+    if revision is None:
+        package_root = ROOT / package_path
+        allow_unresolved = True
+    elif isinstance(revision, str):
+        package_root = extracted_root / str(selection["product_id"])
+        if not extract_git_package(revision, package_path, package_root):
+            return None
+        allow_unresolved = False
+    else:
+        return None
+    try:
+        validate_release_package(
+            package_root,
+            release,
+            label=(
+                f"{selection['distribution_id']}@{selection['release_sequence']}"
+            ),
+            allow_unresolved_revision=allow_unresolved,
+        )
+    except (RegistryError, OSError):
+        return None
+    return package_root
+
+
 def build(output_root: Path, marketplace_path: Path) -> None:
     """Generate all OpenAI packages and their marketplace catalog."""
     # Lazy to avoid the legacy catalog builder's import of OPENAI_MCP_AUTH
     # forming a module cycle while keeping Directory resolution authoritative.
-    from build_registry import eligible_product_targets, load_directory_source
+    from build_registry import RegistryError, load_directory_source, resolve_directory
 
     bindings = load_app_bindings(APP_BINDINGS)
-    portable_roots = sorted(path for path in PORTABLE_ROOT.iterdir() if path.is_dir())
-    unknown_bindings = set(bindings) - {path.name for path in portable_roots}
+    directory = load_directory_source()
+    products = sorted(directory["products"], key=lambda item: item["id"])
+    unknown_bindings = set(bindings) - {str(product["id"]) for product in products}
     if unknown_bindings:
         raise ValueError(f"app bindings reference unknown plugins: {sorted(unknown_bindings)}")
-    directory = load_directory_source()
-    eligible_roots = [
-        path for path in portable_roots
-        if eligible_product_targets(directory, path.name)
-    ]
     entries = []
-    for portable_root in eligible_roots:
-        portable = load(portable_root / "plugin.json")
-        name = str(portable["name"])
-        if name != portable_root.name:
-            raise ValueError(f"{portable_root}: plugin name does not match directory")
-        output = output_root / name
-        output.mkdir(parents=True, exist_ok=True)
-        has_skills = (portable_root / "skills").is_dir()
-        has_mcp = (portable_root / "mcp.json").is_file()
-        binding = bindings.get(name)
-        portable_mcp = load(portable_root / "mcp.json") if has_mcp else None
-        if binding is not None:
-            if portable_mcp is None:
-                raise ValueError(f"{name}: app binding requires portable mcp.json")
-            validate_binding_target(name, binding, portable_mcp)
-        dump(
-            output / ".codex-plugin" / "plugin.json",
-            openai_manifest(portable, has_skills, has_mcp, binding is not None),
-        )
-        if has_mcp:
-            assert portable_mcp is not None
-            dump(output / ".mcp.json", openai_mcp(portable_mcp, name))
-        if binding is not None:
-            dump(output / ".app.json", app_document(binding))
-        if has_skills:
-            shutil.copytree(portable_root / "skills", output / "skills", dirs_exist_ok=True)
-        assets = output / "assets"
-        assets.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(BRAND_ASSETS / "icon.png", assets / "icon.png")
-        shutil.copy2(BRAND_ASSETS / "logo.png", assets / "logo.png")
-        shutil.copy2(portable_root / "README.md", output / "README.md")
-        entries.append(
-            {
-                "name": name,
-                "source": {
-                    "source": "local",
-                    "path": f"./compat/openai/plugins/{name}",
-                },
-                "policy": {
-                    "installation": "AVAILABLE",
-                    "authentication": "ON_INSTALL",
-                },
-                "category": CATEGORIES.get(name, "Developer Tools"),
-            }
-        )
+    with tempfile.TemporaryDirectory() as tmp:
+        extracted_root = Path(tmp)
+        for product in products:
+            name = str(product["id"])
+            try:
+                selection = resolve_directory(
+                    directory, name, [OPENAI_PACKAGE_TARGET]
+                )
+            except RegistryError:
+                continue
+            binding = bindings.get(name)
+            if binding is not None:
+                try:
+                    app_selection = resolve_directory(directory, name, ["chatgpt"])
+                except RegistryError:
+                    continue
+                if selection_identity(app_selection) != selection_identity(selection):
+                    continue
+                distribution, release = selected_release(directory, app_selection)
+                app_target = selected_target(distribution, release, "chatgpt")
+                expected_binding = {
+                    key: binding[key] for key in ("app_key", "id", "mcp_server")
+                }
+                if app_target is None or app_target.get("app_binding") != expected_binding:
+                    continue
+            portable_root = exact_selected_package(
+                directory, selection, extracted_root
+            )
+            if portable_root is None:
+                continue
+            portable = load(portable_root / "plugin.json")
+            if portable.get("name") != product["manifest_name"] or portable["name"] != name:
+                raise ValueError(f"{portable_root}: plugin name does not match directory")
+            output = output_root / name
+            output.mkdir(parents=True, exist_ok=True)
+            has_skills = (portable_root / "skills").is_dir()
+            has_mcp = (portable_root / "mcp.json").is_file()
+            portable_mcp = load(portable_root / "mcp.json") if has_mcp else None
+            if binding is not None:
+                if portable_mcp is None:
+                    raise ValueError(f"{name}: app binding requires portable mcp.json")
+                validate_binding_target(name, binding, portable_mcp)
+            dump(
+                output / ".codex-plugin" / "plugin.json",
+                openai_manifest(portable, has_skills, has_mcp, binding is not None),
+            )
+            if has_mcp:
+                assert portable_mcp is not None
+                dump(output / ".mcp.json", openai_mcp(portable_mcp, name))
+            if binding is not None:
+                dump(output / ".app.json", app_document(binding))
+            if has_skills:
+                shutil.copytree(
+                    portable_root / "skills", output / "skills",
+                    dirs_exist_ok=True, symlinks=True,
+                )
+            assets = output / "assets"
+            assets.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(BRAND_ASSETS / "icon.png", assets / "icon.png")
+            shutil.copy2(BRAND_ASSETS / "logo.png", assets / "logo.png")
+            shutil.copy2(portable_root / "README.md", output / "README.md")
+            entries.append(
+                {
+                    "name": name,
+                    "source": {
+                        "source": "local",
+                        "path": f"./compat/openai/plugins/{name}",
+                    },
+                    "policy": {
+                        "installation": "AVAILABLE",
+                        "authentication": "ON_INSTALL",
+                    },
+                    "category": CATEGORIES.get(name, "Developer Tools"),
+                }
+            )
     dump(
         marketplace_path,
         {

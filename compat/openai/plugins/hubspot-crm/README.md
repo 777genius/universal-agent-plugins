@@ -6,7 +6,7 @@ Community package for the official HubSpot remote MCP integration for beta, read
 ## Install
 
 ```bash
-npx universal-agent-plugins add hubspot-crm --target codex
+npx universal-agent-plugins add hubspot-crm
 ```
 <!-- agentplugins-install:end -->
 
