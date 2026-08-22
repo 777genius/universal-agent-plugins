@@ -27,8 +27,8 @@
   "devDependencies": {
     "@nuxt/eslint": "1.15.2",
     "@playwright/test": "1.62.1",
-    "eslint": "9.39.4",
-    "typescript": "5.9.3",
+    "eslint": "10.8.1",
+    "typescript": "7.0.2",
     "vue-tsc": "3.3.9"
   }
 }
