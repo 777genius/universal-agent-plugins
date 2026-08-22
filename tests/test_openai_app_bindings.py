@@ -780,6 +780,31 @@ class OpenAIAppBindingTests(unittest.TestCase):
         ):
             self.generated_names(source)
 
+    def test_unavailable_external_codex_selection_still_validates_sidecar(self) -> None:
+        source = copy.deepcopy(registry.load_directory_source())
+        selection = registry.resolve_directory(source, "cloudflare-docs", ["codex"])
+        distribution, release = builder.selected_release(source, selection)
+        release["package_source"] = {
+            "repository": "external/cloudflare-docs",
+            "revision": "a" * 40,
+            "path": "agent-plugin",
+        }
+        target = builder.selected_target(distribution, release, "chatgpt")
+        self.assertIsNotNone(target)
+        target["app_binding"]["id"] = "plugin_asdk_app_different"
+
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertIsNone(
+                builder.exact_selected_package(source, selection, Path(tmp))
+            )
+        with self.assertRaisesRegex(
+            ValueError,
+            "cloudflare-docs: configured app sidecar.*signed ChatGPT target "
+            "app_binding.*does not equal sidecar binding.*update or remove.*"
+            "app-bindings.json",
+        ):
+            self.generated_names(source)
+
     def test_valid_same_selection_emits_codex_package_and_app_document(self) -> None:
         source = registry.load_directory_source()
         codex = registry.resolve_directory(source, "cloudflare-docs", ["codex"])

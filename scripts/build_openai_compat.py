@@ -366,11 +366,6 @@ def build(output_root: Path, marketplace_path: Path) -> None:
             except RegistryError:
                 continue
             binding = bindings.get(name)
-            portable_root = exact_selected_package(
-                directory, selection, extracted_root
-            )
-            if portable_root is None:
-                continue
             if binding is not None:
                 try:
                     app_selection = resolve_directory(directory, name, ["chatgpt"])
@@ -400,6 +395,11 @@ def build(output_root: Path, marketplace_path: Path) -> None:
                         f"{actual_binding!r} does not equal sidecar binding "
                         f"{expected_binding!r}",
                     )
+            portable_root = exact_selected_package(
+                directory, selection, extracted_root
+            )
+            if portable_root is None:
+                continue
             portable = load(portable_root / "plugin.json")
             if portable.get("name") != product["manifest_name"] or portable["name"] != name:
                 raise ValueError(f"{portable_root}: plugin name does not match directory")
