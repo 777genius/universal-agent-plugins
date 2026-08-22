@@ -92,7 +92,7 @@
         "skills": "optional",
         "mcp": "required"
       },
-      "default_distribution": "777genius/chrome-devtools-bridge",
+      "default_distribution": "777genius/chrome-devtools",
       "distributions": [
         "777genius/chrome-devtools",
         "777genius/chrome-devtools-bridge"
@@ -1040,7 +1040,7 @@
       "id": "777genius/chrome-devtools",
       "product_id": "chrome-devtools",
       "kind": "community",
-      "status": "active",
+      "status": "suspended",
       "packager": "777genius",
       "releases": [
         {
@@ -1065,7 +1065,7 @@
       "release_policies": [
         {
           "release_sequence": 1,
-          "status": "active",
+          "status": "revoked",
           "minimum_installer_version": "0.1.8",
           "targets": [
             {
@@ -1118,7 +1118,7 @@
       "id": "777genius/chrome-devtools-bridge",
       "product_id": "chrome-devtools",
       "kind": "community_bridge",
-      "status": "active",
+      "status": "suspended",
       "packager": "777genius",
       "releases": [
         {
@@ -1136,7 +1136,7 @@
             "upstream_revision": "774d78f5eef5e610407a0c92fa6ec5ed74b027e8"
           },
           "tree_digest_algorithm": "agentplugins-tree-sha256-v1",
-          "tree_digest": "sha256:b3696cb3177f120943bb19ad2a9ff48219013c51a2dfbe54dc8478b755374a24",
+          "tree_digest": "sha256:02a552ac0ebf65cf4eb59c793789a48ba2de25ee96d80552def3d25d8f939fb7",
           "manifest_digest": "sha256:02a77a0509681567df75e941175b148c1bcdfe0001cec24cfef8300b85547850",
           "components": ["mcp"]
         }
@@ -1144,7 +1144,7 @@
       "release_policies": [
         {
           "release_sequence": 1,
-          "status": "active",
+          "status": "revoked",
           "minimum_installer_version": "0.1.8",
           "targets": [
             {"client": "codex", "authentication": "not_required", "scopes": ["user"], "delivery": "managed"},
@@ -1610,7 +1610,7 @@
       "id": "777genius/context7",
       "product_id": "context7",
       "kind": "community",
-      "status": "active",
+      "status": "suspended",
       "packager": "777genius",
       "releases": [
         {
@@ -1635,7 +1635,7 @@
       "release_policies": [
         {
           "release_sequence": 1,
-          "status": "active",
+          "status": "revoked",
           "minimum_installer_version": "0.1.8",
           "targets": [
             {
@@ -1844,7 +1844,7 @@
       "id": "777genius/firebase",
       "product_id": "firebase",
       "kind": "community",
-      "status": "active",
+      "status": "suspended",
       "packager": "777genius",
       "releases": [
         {
@@ -1869,7 +1869,7 @@
       "release_policies": [
         {
           "release_sequence": 1,
-          "status": "active",
+          "status": "revoked",
           "minimum_installer_version": "0.1.8",
           "targets": [
             {
@@ -2356,7 +2356,7 @@
       "id": "777genius/hubspot-developer",
       "product_id": "hubspot-developer",
       "kind": "community",
-      "status": "active",
+      "status": "suspended",
       "packager": "777genius",
       "releases": [
         {
@@ -2381,7 +2381,7 @@
       "release_policies": [
         {
           "release_sequence": 1,
-          "status": "active",
+          "status": "revoked",
           "minimum_installer_version": "0.1.8",
           "targets": [
             {

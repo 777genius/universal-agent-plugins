@@ -609,8 +609,8 @@ print(json.dumps(value))
                 )))
 
         bridge_release = {
-            **expected_release, "product_id": "chrome-devtools",
-            "distribution_id": "777genius/chrome-devtools-bridge", "distribution_kind": "community_bridge",
+            **expected_release, "product_id": "cloudflare-docs",
+            "distribution_id": "777genius/cloudflare-docs-bridge", "distribution_kind": "community_bridge",
         }
         bridge_identity = {key: bridge_release[key] for key in (
             "distribution_id", "distribution_kind", "release_sequence", "source_revision", "tree_digest",
@@ -638,7 +638,7 @@ print(json.dumps(value))
         )
         self.assertEqual(
             (bridge["product_id"], bridge["distribution_id"], bridge["distribution_kind"], bridge["source_revision"]),
-            ("chrome-devtools", "777genius/chrome-devtools-bridge", "community_bridge", publication_revision),
+            ("cloudflare-docs", "777genius/cloudflare-docs-bridge", "community_bridge", publication_revision),
         )
 
     def test_manager_identity_does_not_aggregate_authority_across_records(self) -> None:

@@ -861,6 +861,51 @@ def _bridge_component_kinds(inventory: dict[str, list[str]]) -> list[str]:
     )
 
 
+def _package_uses_unclosed_live_npx(package_root: Path) -> bool:
+    """Return whether a package delegates stdio runtime acquisition to npx.
+
+    An exact npm version is not a content-addressed closure: ``npx`` still
+    resolves and downloads the package and its dependency graph at launch.
+    No in-package content-addressed npx closure contract is recognized yet, so
+    every such command must remain ineligible until that contract is designed
+    and validated here.
+    """
+    mcp_path = package_root / "mcp.json"
+    if not mcp_path.is_file():
+        return False
+    mcp = read_object(mcp_path)
+    servers = mcp.get("mcpServers")
+    require(isinstance(servers, dict), f"{mcp_path}: mcpServers must be an object")
+    return any(
+        isinstance(server, dict)
+        and server.get("type") == "stdio"
+        and server.get("command") == "npx"
+        for server in servers.values()
+    )
+
+
+def validate_active_local_runtime_closures(
+    source: dict[str, object], *, repository_root: Path = ROOT,
+    repository: str = "777genius/universal-agent-plugins",
+) -> None:
+    """Fail closed for every active local release that can launch live npx."""
+    for distribution in source["distributions"]:
+        if distribution["status"] != "active":
+            continue
+        for release in distribution["releases"]:
+            policy = _policy_for(distribution, release["sequence"])
+            package_source = release["package_source"]
+            if policy["status"] != "active" or package_source["repository"] != repository:
+                continue
+            package_root = repository_root / package_source["path"]
+            require(package_root.is_dir(), f"{distribution['id']}@{release['sequence']}: package path is missing")
+            require(
+                not _package_uses_unclosed_live_npx(package_root),
+                f"{distribution['id']}@{release['sequence']}: active in-repository release uses live npx "
+                "without a recognized content-addressed runtime closure contract",
+            )
+
+
 def validate_bridge_bindings(
     source: dict[str, object], *, repository_root: Path = ROOT,
     repository: str = "777genius/universal-agent-plugins",
@@ -1074,17 +1119,19 @@ def validate_directory(
                 fields = package_fields(package_root, [])
                 require(directory_tree_digest(package_root) == release["tree_digest"], f"{distribution['id']}@{sequence}: package tree digest drift")
                 require(fields["manifest_sha256"] == release["manifest_digest"], f"{distribution['id']}@{sequence}: manifest digest drift")
+    validate_active_local_runtime_closures(
+        source, repository_root=repository_root, repository=repository,
+    )
     for product in products:
         default = distributions_by_id[product["default_distribution"]]
-        require(default["status"] == "active", f"{product['id']}: default distribution is not active")
         eligible = []
-        for release in default["releases"]:
-            policy = _policy_for(default, release["sequence"])
-            required = {component for component, state in product["minimum_capabilities"].items() if state == "required"}
-            if policy["status"] == "active" and required.issubset(release["components"]):
-                eligible.append(release)
-        require(eligible, f"{product['id']}: default has no publishable active release satisfying minimum capabilities")
-        if default["kind"] == "upstream":
+        if default["status"] == "active":
+            for release in default["releases"]:
+                policy = _policy_for(default, release["sequence"])
+                required = {component for component, state in product["minimum_capabilities"].items() if state == "required"}
+                if policy["status"] == "active" and required.issubset(release["components"]):
+                    eligible.append(release)
+        if eligible and default["kind"] == "upstream":
             candidate = eligible[-1]
             policy = _policy_for(default, candidate["sequence"])
             passed_targets = _positive_materialization_clients(default, candidate, policy, evidence_by_id)

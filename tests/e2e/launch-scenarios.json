@@ -4,8 +4,8 @@
   "expected_counts": {
     "directory_products": 26,
     "directory_lifecycle_rows": 78,
-    "hero_lifecycle_rows": 15,
-    "hero_runtime_rows": 15,
+    "hero_lifecycle_rows": 12,
+    "hero_runtime_rows": 12,
     "context7_grouped_rows": 4,
     "chatgpt_rows": 1,
     "shared_backend_rows": 1,
@@ -21,7 +21,6 @@
     "agent-code-navigator",
     "context7",
     "cloudflare-docs",
-    "chrome-devtools",
     "notion"
   ],
   "runtime_clients": ["codex", "cursor", "kiro"],
@@ -64,8 +63,8 @@
       "distribution_kind": "upstream"
     },
     "community_bridge_short_name": {
-      "product_id": "chrome-devtools",
-      "distribution_id": "777genius/chrome-devtools-bridge",
+      "product_id": "cloudflare-docs",
+      "distribution_id": "777genius/cloudflare-docs-bridge",
       "distribution_kind": "community_bridge"
     }
   },

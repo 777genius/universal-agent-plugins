@@ -293,6 +293,15 @@ class RealBridgeCohortTests(unittest.TestCase):
         cloudflare = json.loads((ROOT / "plugins/cloudflare-docs/mcp.json").read_text())["mcpServers"]["cloudflare-docs"]
         github = json.loads((ROOT / "plugins/github/mcp.json").read_text())["mcpServers"]["github"]
         self.assertEqual(chrome["args"], ["-y", "chrome-devtools-mcp@1.7.0"])
+        directory = json.loads((ROOT / "registry/directory.json").read_text())
+        chrome = {
+            item["id"]: item for item in directory["distributions"]
+            if item["id"] in {"777genius/chrome-devtools", "777genius/chrome-devtools-bridge"}
+        }
+        self.assertEqual(set(chrome), {"777genius/chrome-devtools", "777genius/chrome-devtools-bridge"})
+        for distribution in chrome.values():
+            self.assertEqual(distribution["status"], "suspended")
+            self.assertEqual({policy["status"] for policy in distribution["release_policies"]}, {"revoked"})
         self.assertEqual(cloudflare["url"], "https://docs.mcp.cloudflare.com/mcp")
         self.assertEqual(github["url"], "https://api.githubcopilot.com/mcp/")
 

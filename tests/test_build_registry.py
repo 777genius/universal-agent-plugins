@@ -746,7 +746,15 @@ class DirectoryDomainTests(unittest.TestCase):
         for distribution in source["distributions"]:
             if distribution["id"] not in expected_distribution_ids:
                 continue
-            self.assertEqual(distribution["status"], "active")
+            suspended_live_npx = {
+                "777genius/chrome-devtools",
+                "777genius/chrome-devtools-bridge",
+                "777genius/context7",
+                "777genius/firebase",
+                "777genius/hubspot-developer",
+            }
+            expected_status = "suspended" if distribution["id"] in suspended_live_npx else "active"
+            self.assertEqual(distribution["status"], expected_status)
             self.assertEqual([item["sequence"] for item in distribution["releases"]], [1])
             self.assertEqual(
                 [item["tree_digest_algorithm"] for item in distribution["releases"]],
@@ -781,10 +789,9 @@ class DirectoryDomainTests(unittest.TestCase):
             self.assertEqual(release["tree_digest"], registry.directory_tree_digest(root))
             self.assertEqual(release["manifest_digest"], registry.digest_bytes((root / "plugin.json").read_bytes()))
 
-    def test_real_bridge_defaults_qualified_history_and_context7_source_stickiness(self) -> None:
+    def test_real_bridge_defaults_qualified_history_and_fail_closed_npx_resolution(self) -> None:
         source = self.source()
         expected_defaults = {
-            "chrome-devtools": "777genius/chrome-devtools-bridge",
             "cloudflare-docs": "777genius/cloudflare-docs-bridge",
             "github": "777genius/github-bridge",
         }
@@ -792,9 +799,46 @@ class DirectoryDomainTests(unittest.TestCase):
             self.assertEqual(registry.resolve_directory(source, product, ["codex"])["distribution_id"], bridge)
             legacy = f"777genius/{product}"
             self.assertEqual(registry.resolve_directory(source, legacy, ["codex"])["distribution_id"], legacy)
-        self.assertEqual(registry.resolve_directory(source, "context7", ["codex"])["distribution_id"], "777genius/context7")
+        with self.assertRaisesRegex(registry.RegistryError, r"chrome-devtools: no distribution supports"):
+            registry.resolve_directory(source, "chrome-devtools", ["codex"])
+        for distribution_id in ("777genius/chrome-devtools", "777genius/chrome-devtools-bridge"):
+            with self.assertRaisesRegex(registry.RegistryError, rf"{distribution_id}: distribution is suspended"):
+                registry.resolve_directory(source, distribution_id, ["codex"])
+        with self.assertRaisesRegex(registry.RegistryError, r"context7: no distribution supports"):
+            registry.resolve_directory(source, "context7", ["codex"])
         with self.assertRaisesRegex(registry.RegistryError, r"upstash/context7: .* evidence .* for codex"):
             registry.resolve_directory(source, "upstash/context7", ["codex"])
+
+    def test_both_chrome_distributions_are_suspended_and_all_policies_revoked(self) -> None:
+        source = self.source()
+        chrome_ids = {"777genius/chrome-devtools", "777genius/chrome-devtools-bridge"}
+        chrome = {
+            item["id"]: item for item in source["distributions"]
+            if item["id"] in chrome_ids
+        }
+        self.assertEqual(set(chrome), chrome_ids)
+        for distribution in chrome.values():
+            self.assertEqual(distribution["status"], "suspended")
+            self.assertTrue(distribution["release_policies"])
+            self.assertEqual(
+                {policy["status"] for policy in distribution["release_policies"]},
+                {"revoked"},
+            )
+
+    def test_active_non_bridge_live_npx_distribution_is_rejected(self) -> None:
+        source = self.source()
+        distribution = next(
+            item for item in source["distributions"]
+            if item["id"] == "777genius/chrome-devtools"
+        )
+        self.assertEqual(distribution["kind"], "community")
+        distribution["status"] = "active"
+        distribution["release_policies"][0]["status"] = "active"
+        with self.assertRaisesRegex(
+            registry.RegistryError,
+            "active in-repository release uses live npx without a recognized content-addressed runtime closure contract",
+        ):
+            registry.validate_active_local_runtime_closures(source)
 
     def test_real_bridge_and_upstream_context7_provenance_is_exact(self) -> None:
         source = self.source()
