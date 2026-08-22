@@ -38,9 +38,9 @@ class ReadmeClientTableTests(unittest.TestCase):
         self.assertIn("not limited to this Directory", readme)
         self.assertIn("do not need to be copied into it", readme)
         self.assertIn("Directory membership is needed only for a reviewed short name", quickstart)
-        self.assertIn("add context7 --target codex,cursor,kiro", readme)
+        self.assertIn("add cloudflare-docs --target codex,cursor,kiro", readme)
         self.assertIn(
-            "switch chrome-devtools --to 777genius/chrome-devtools", readme
+            "switch cloudflare-docs --to 777genius/cloudflare-docs", readme
         )
         self.assertNotIn("--yes", readme)
 

@@ -4,7 +4,7 @@ Install one Agent Plugins 1.0 package, not the whole Directory. You need Node.js
 22 or newer:
 
 ```bash
-npx universal-agent-plugins add context7 --target codex,cursor,kiro
+npx universal-agent-plugins add cloudflare-docs --target codex,cursor,kiro
 ```
 
 The CLI shows the exact package, source, and complete target plan before
@@ -13,8 +13,8 @@ hidden `--yes` flag. In an interactive terminal you can use the accessible
 multiselect, or name targets directly:
 
 ```bash
-npx universal-agent-plugins add context7 --target cursor
-npx universal-agent-plugins add context7 --target codex,cursor
+npx universal-agent-plugins add cloudflare-docs --target cursor
+npx universal-agent-plugins add cloudflare-docs --target codex,cursor
 ```
 
 Comma-separated targets use one resolved package. Complete preflight happens
@@ -36,19 +36,19 @@ Supported targets:
 Lifecycle commands use the same explicit target or comma-separated targets:
 
 ```bash
-npx universal-agent-plugins info context7
-npx universal-agent-plugins doctor context7
-npx universal-agent-plugins update context7 --target cursor
-npx universal-agent-plugins repair context7 --target cursor
-npx universal-agent-plugins remove context7 --target cursor
-npx universal-agent-plugins update context7 --target codex,cursor
+npx universal-agent-plugins info cloudflare-docs
+npx universal-agent-plugins doctor cloudflare-docs
+npx universal-agent-plugins update cloudflare-docs --target cursor
+npx universal-agent-plugins repair cloudflare-docs --target cursor
+npx universal-agent-plugins remove cloudflare-docs --target cursor
+npx universal-agent-plugins update cloudflare-docs --target codex,cursor
 ```
 
-Switching source is deliberate. For example, move an existing Chrome DevTools
-installation to a qualified community alternative with:
+Switching source is deliberate. For example, move an existing Cloudflare Docs
+installation from its bridge to the qualified community distribution with:
 
 ```bash
-npx universal-agent-plugins switch chrome-devtools --to 777genius/chrome-devtools
+npx universal-agent-plugins switch cloudflare-docs --to 777genius/cloudflare-docs
 ```
 
 `prepared`, `auth_pending`, and `manual_activation_required` are not reported as
@@ -63,11 +63,11 @@ folder while developing it, or pin a GitHub source to a full commit SHA:
 ```bash
 npx universal-agent-plugins add ./my-plugin --target cursor
 npx universal-agent-plugins add \
-  777genius/universal-agent-plugins@2ddbb99dd190c1792b79904f9875e6322bccd243//plugins/context7 \
+  777genius/universal-agent-plugins@2ddbb99dd190c1792b79904f9875e6322bccd243//plugins/cloudflare-docs \
   --target cursor
 ```
 
-Directory membership is needed only for a reviewed short name such as `context7`;
+Directory membership is needed only for a reviewed short name such as `cloudflare-docs`;
 it is not required for installation. Review an external package's skills, MCP
 servers, hooks, permissions, and source before enabling it.
 

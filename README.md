@@ -37,19 +37,19 @@ pull request. This community directory is not an official OpenAI registry.
 
 ## Try one plugin
 
-Context7 is an easy first choice. It finds current library documentation and
-requires no account. You need Node.js 22 or newer:
+Cloudflare Docs is an easy first choice. It searches current Cloudflare
+documentation and requires no account. You need Node.js 22 or newer:
 
 ```bash
-npx universal-agent-plugins add context7 --target codex,cursor,kiro
+npx universal-agent-plugins add cloudflare-docs --target codex,cursor,kiro
 ```
 
 The npm launcher requires Node.js 22+. Pass every target explicitly in
 non-interactive use as one comma-separated value:
 
 ```bash
-npx universal-agent-plugins add context7 --target cursor
-npx universal-agent-plugins add context7 --target codex,cursor
+npx universal-agent-plugins add cloudflare-docs --target cursor
+npx universal-agent-plugins add cloudflare-docs --target codex,cursor
 ```
 
 The CLI resolves and verifies one immutable package once, preflights the whole
@@ -59,22 +59,22 @@ between clients in one operation.
 The same CLI manages the rest of the plugin lifecycle:
 
 ```bash
-npx universal-agent-plugins update context7 --target cursor
-npx universal-agent-plugins repair context7 --target cursor
-npx universal-agent-plugins remove context7 --target cursor
+npx universal-agent-plugins update cloudflare-docs --target cursor
+npx universal-agent-plugins repair cloudflare-docs --target cursor
+npx universal-agent-plugins remove cloudflare-docs --target cursor
 ```
 
-Switching source is deliberate. For example, an existing Chrome DevTools
-installation can move to a qualified community alternative:
+Switching source is deliberate. For example, an existing Cloudflare Docs
+installation can move from its bridge to the qualified community distribution:
 
 ```bash
-npx universal-agent-plugins switch chrome-devtools --to 777genius/chrome-devtools
+npx universal-agent-plugins switch cloudflare-docs --to 777genius/cloudflare-docs
 ```
 
 Open a new chat or session in the client you selected and ask:
 
 ```text
-Use Context7 to find the current Playwright quick start and summarize it with source links.
+Use Cloudflare Docs to explain the current Workers environment variable and secret storage guidance with source links.
 ```
 
 That's it. Every plugin is independent, so you never need to install the whole
@@ -89,14 +89,14 @@ package from a local directory or an immutable GitHub revision:
 ```bash
 npx universal-agent-plugins add ./my-plugin --target cursor
 npx universal-agent-plugins add \
-  777genius/universal-agent-plugins@2ddbb99dd190c1792b79904f9875e6322bccd243//plugins/context7 \
+  777genius/universal-agent-plugins@2ddbb99dd190c1792b79904f9875e6322bccd243//plugins/cloudflare-docs \
   --target cursor
 ```
 
 The package can use the portable root `plugin.json` layout or the official
 `.codex-plugin/plugin.json` layout with its declared sidecars. Pin GitHub
 sources to a full commit SHA so every install is reproducible. Short names such
-as `context7` resolve through this repository's reviewed Directory; external
+as `cloudflare-docs` resolve through this repository's reviewed Directory; external
 packages do not need to be copied into it.
 
 Directory source labels describe provenance, not endorsement. **Upstream**

@@ -1,13 +1,17 @@
-# Four optional plugins to try first
+# Three optional plugins to try first
 
 These examples avoid account credentials. Choose one: they are independent
 alternatives, not sequential steps. The CLI detects Codex, Cursor,
 GitHub Copilot/VS Code, and Kiro; if several are installed, choose one when
 prompted.
 
-On OpenAI surfaces, Context7 and Chrome DevTools are stdio packages for Codex;
-Agent Code Navigator is skills-only. Cloudflare Docs has a registered ChatGPT
-development binding. Its registered personal app passed Plugins UI discovery,
+Agent Code Navigator is skills-only. Cloudflare Docs uses a public remote MCP
+server and also has a registered ChatGPT development binding. Docker Hub uses a
+digest-pinned container and needs Docker. Context7 and Chrome DevTools stay out
+of this starter list until their current distributions satisfy the Directory's
+runtime-closure and materialization gates.
+
+The registered Cloudflare Docs personal app passed Plugins UI discovery,
 manual activation, and read-only runtime. The repository package separately
 passed marketplace ingestion and official manager installation; package-routed
 ChatGPT Work runtime remains unproved.
@@ -29,24 +33,7 @@ Map this sandbox repository's architecture and explain which search tool you use
 Expected: the agent loads the routing and architecture-map skills without
 starting an MCP server or modifying the repository.
 
-## 2. Context7
-
-Install:
-
-```bash
-npx universal-agent-plugins add context7
-```
-
-Try:
-
-```text
-Use Context7 to find the current official quick start for Playwright locators and summarize it with source links.
-```
-
-Expected: Context7 starts through its pinned stdio package and returns current
-documentation results.
-
-## 3. Cloudflare Docs
+## 2. Cloudflare Docs
 
 Install:
 
@@ -62,22 +49,22 @@ Use Cloudflare Docs to explain the current difference between Workers bindings a
 
 Expected: the public Streamable HTTP MCP server answers without an account.
 
-## 4. Chrome DevTools
+## 3. Docker Hub
 
 Install:
 
 ```bash
-npx universal-agent-plugins add chrome-devtools
+npx universal-agent-plugins add docker-hub
 ```
 
-Try only in a fresh test project and browser profile:
+Try:
 
 ```text
-Open the sandbox page, inspect its title, and report console errors without changing the page.
+Use Docker Hub to find the current official nginx image tags and summarize the available variants.
 ```
 
-Expected: the pinned local MCP package launches and exposes browser-debugging
-tools. Do not point this test at a signed-in browser profile.
+Expected: the digest-pinned Docker Hub MCP container reads public image data.
+Docker must already be installed and running.
 
 ## OAuth follow-up
 
