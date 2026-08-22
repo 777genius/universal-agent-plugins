@@ -39,8 +39,8 @@
       }
     ],
     "release_policies": [
-      {"release_sequence": 2, "status": "active", "targets": [{"client": "codex", "delivery": "managed", "scopes": ["user"]}], "current_evidence": ["schema-release-2", "runtime-release-2-codex"]},
-      {"release_sequence": 1, "status": "active", "targets": [{"client": "codex", "delivery": "managed", "scopes": ["user"]}], "current_evidence": ["schema-release-1", "runtime-release-1-codex"]}
+      {"release_sequence": 2, "status": "active", "targets": [{"client": "codex", "authentication": "required", "delivery": "managed", "scopes": ["user"]}], "current_evidence": ["schema-release-2", "runtime-release-2-codex"]},
+      {"release_sequence": 1, "status": "active", "targets": [{"client": "codex", "authentication": "not_required", "delivery": "managed", "scopes": ["user"]}], "current_evidence": ["schema-release-1", "runtime-release-1-codex"]}
     ]
   }],
   "evidence": [

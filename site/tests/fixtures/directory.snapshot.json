@@ -19,6 +19,7 @@
           "targets": [
             {
               "client": "codex",
+              "authentication": "not_required",
               "delivery": "managed",
               "scopes": [
                 "user"
@@ -26,6 +27,7 @@
             },
             {
               "client": "cursor",
+              "authentication": "required",
               "delivery": "managed",
               "scopes": [
                 "user"
@@ -71,6 +73,7 @@
           "targets": [
             {
               "client": "codex",
+              "authentication": "unknown",
               "scopes": [
                 "user"
               ],
@@ -78,6 +81,7 @@
             },
             {
               "client": "cursor",
+              "authentication": "not_required",
               "scopes": [
                 "user"
               ],
@@ -85,6 +89,7 @@
             },
             {
               "client": "kiro",
+              "authentication": "not_required",
               "scopes": [
                 "user"
               ],

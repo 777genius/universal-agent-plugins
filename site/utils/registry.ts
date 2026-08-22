@@ -11,6 +11,7 @@ import type {
   PackageEvidence,
   PluginSource,
   ReleaseTarget,
+  TargetAuthentication,
   RegistryIndex,
   RegistryPlugin,
 } from '../types/registry'
@@ -141,6 +142,12 @@ function legacyAuthentication(name: string): RegistryPlugin['authentication'] {
   return 'unknown'
 }
 
+function legacyTargetAuthentication(authentication: RegistryPlugin['authentication']): TargetAuthentication {
+  if (authentication === 'none') return 'not_required'
+  if (authentication === 'oauth' || authentication === 'client_managed') return 'required'
+  return 'unknown'
+}
+
 function legacyEvidence(value: unknown, context: string): ClientEvidence[] {
   if (!record(value)) throw new Error(`${context}: validation must be an object`)
   if (value.schema !== 'agent-plugins-1.0') throw new Error(`${context}: validation schema is invalid`)
@@ -186,6 +193,7 @@ function parseLegacyIndex(input: Record<string, unknown>): RegistryIndex {
     const distributionID = raw.built_in ? `777genius/${name}` : parsedSource.repository
     const kind: DistributionKind = raw.built_in ? 'community' : 'direct'
     const version = requiredString(raw, 'version', context)
+    const authentication = legacyAuthentication(name)
     const distribution: DistributionView = {
       id: distributionID,
       kind,
@@ -199,7 +207,7 @@ function parseLegacyIndex(input: Record<string, unknown>): RegistryIndex {
       status: 'active',
       release_status: 'active',
       selectable: true,
-      targets: compatibleClients.map(client => ({ client, delivery: legacyDelivery[client]!, scopes: ['user'] })),
+      targets: compatibleClients.map(client => ({ client, authentication: legacyTargetAuthentication(authentication), delivery: legacyDelivery[client]!, scopes: ['user'] })),
       components,
       releases: [],
     }
@@ -237,7 +245,7 @@ function parseLegacyIndex(input: Record<string, unknown>): RegistryIndex {
       distributions: [distribution],
       evidence,
       package_evidence: [],
-      authentication: legacyAuthentication(name),
+      authentication,
       client_support: {
         resolution: raw.built_in ? 'directory' : 'install_time',
         clients: compatibleClients,
@@ -260,6 +268,8 @@ function releaseTargets(value: unknown, context: string): ReleaseTarget[] {
     seen.add(client)
     const delivery = requiredString(raw, 'delivery', `${context} target ${client}`)
     if (!['managed', 'prepared', 'manual_activation'].includes(delivery)) throw new Error(`${context}: target ${client} has invalid delivery`)
+    const authentication = requiredString(raw, 'authentication', `${context} target ${client}`) as TargetAuthentication
+    if (!['not_required', 'required', 'unknown'].includes(authentication)) throw new Error(`${context}: target ${client} has invalid authentication`)
     const scopes = stringArray(raw.scopes, 'scopes', `${context} target ${client}`)
     let appBinding: ReleaseTarget['app_binding']
     if (record(raw.app_binding)) {
@@ -271,7 +281,7 @@ function releaseTargets(value: unknown, context: string): ReleaseTarget[] {
     }
     if (client === 'chatgpt' && !appBinding) throw new Error(`${context}: ChatGPT target requires app_binding`)
     if (client !== 'chatgpt' && appBinding) throw new Error(`${context}: app_binding is valid only for ChatGPT`)
-    return { client, delivery: delivery as ReleaseTarget['delivery'], scopes, ...(appBinding ? { app_binding: appBinding } : {}) }
+    return { client, authentication, delivery: delivery as ReleaseTarget['delivery'], scopes, ...(appBinding ? { app_binding: appBinding } : {}) }
   })
 }
 
@@ -622,6 +632,31 @@ export function deliveryLabel(delivery: ReleaseTarget['delivery']): string {
   if (delivery === 'managed') return 'Managed install'
   if (delivery === 'prepared') return 'Prepared; client import remains'
   return 'Manual activation required'
+}
+
+export function targetAuthenticationLabel(authentication: TargetAuthentication): string {
+  if (authentication === 'not_required') return 'No account required'
+  if (authentication === 'required') return 'Authentication required'
+  return 'Check package requirements'
+}
+
+export function authenticationLabel(
+  distribution: Pick<DistributionView, 'targets'> | undefined,
+  selectedClients: readonly ClientID[],
+  legacyAuthentication?: RegistryPlugin['authentication'],
+): string {
+  // The flat legacy catalog has only a product-wide value. Keep its established
+  // labels, but never infer OAuth from a signed target's generic `required`.
+  if (legacyAuthentication === 'none') return 'No account required'
+  if (legacyAuthentication === 'oauth') return 'OAuth required'
+  if (legacyAuthentication === 'client_managed') return 'Client-managed authentication'
+
+  if (!distribution || !selectedClients.length) return 'Check package requirements'
+  const selected = distribution.targets.filter(target => selectedClients.includes(target.client))
+  if (selected.length !== selectedClients.length) return 'Check package requirements'
+  const values = new Set(selected.map(target => target.authentication))
+  if (values.size > 1) return 'Authentication varies'
+  return targetAuthenticationLabel(selected[0]!.authentication)
 }
 
 export function githubSourceUrl(plugin: RegistryPlugin, distribution = defaultDistribution(plugin)): string {

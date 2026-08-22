@@ -89,12 +89,15 @@ describe('focused catalog accessibility contract', () => {
     assert.match(card, /selectedDistribution\.components/)
     assert.match(card, /validationLabel\(selectedDistribution\)/)
     assert.match(card, /githubSourceUrl\(plugin, selectedDistribution\)/)
+    assert.match(card, /authenticationLabel\(resolution\.value\.distribution, targets\.value, props\.plugin\.authentication\)/)
     assert.doesNotMatch(card, /plugin\.(?:version|components|evidence|package_evidence)/)
     for (const field of ['version', 'components', 'source', 'package_evidence', 'evidence']) {
       assert.match(detail, new RegExp(`installCandidate\\.${field}`))
     }
     assert.match(detail, /v-model:targets="targets"/)
     assert.match(detail, /Product release history/)
+    assert.match(detail, /authenticationLabel\(installCandidate\.value, targets\.value, plugin\.authentication\)/)
+    assert.match(detail, /targetAuthenticationLabel\(target\.authentication\)/)
     assert.match(detail, /not the selected install candidate/)
     assert.doesNotMatch(detail, /plugin\.(?:version|components|evidence|package_evidence)/)
   })

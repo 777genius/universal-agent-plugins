@@ -4,7 +4,7 @@
 -->
 <script setup lang="ts">
 import type { RegistryPlugin } from '~/types/registry'
-import { deliveryLabel, expectedDistribution, githubSourceUrl, resolveDistribution, validationLabel } from '~/utils/registry'
+import { authenticationLabel, deliveryLabel, expectedDistribution, githubSourceUrl, resolveDistribution, validationLabel } from '~/utils/registry'
 import { pluginCommands } from '~/utils/commands'
 
 const props = defineProps<{ plugin: RegistryPlugin }>()
@@ -29,7 +29,7 @@ const targetOptions = computed(() => clients.map(client => ({
     return target ? deliveryLabel(target.delivery) : client.id === 'chatgpt' ? 'No signed app binding' : 'Not installable from an active release'
   })(),
 })))
-const authLabel = computed(() => props.plugin.authentication === 'none' ? 'No account required' : props.plugin.authentication === 'oauth' ? 'OAuth required' : props.plugin.authentication === 'client_managed' ? 'Client-managed authentication' : 'Authentication varies')
+const authLabel = computed(() => authenticationLabel(resolution.value.distribution, targets.value, props.plugin.authentication))
 
 function updateTargets(values: string[]) {
   const allowed = new Set(availableClients.value.map(client => client.id))

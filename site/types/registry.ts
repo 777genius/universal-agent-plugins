@@ -22,6 +22,7 @@ export type EvidenceOutcome = 'passed' | 'failed' | 'inconclusive' | 'not_tested
 export type DeliveryMode = 'managed' | 'prepared' | 'manual_activation'
 export type DistributionStatus = 'candidate' | 'active' | 'suspended'
 export type ReleaseStatus = 'active' | 'superseded' | 'revoked'
+export type TargetAuthentication = 'not_required' | 'required' | 'unknown'
 
 export interface AppBinding {
   app_key: string
@@ -31,6 +32,7 @@ export interface AppBinding {
 
 export interface ReleaseTarget {
   client: ClientID
+  authentication: TargetAuthentication
   delivery: DeliveryMode
   scopes: string[]
   app_binding?: AppBinding

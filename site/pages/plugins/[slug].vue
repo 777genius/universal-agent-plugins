@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { ClientID } from '~/types/registry'
-import { deliveryLabel, evidenceLabel, githubSourceUrl, resolveDistribution, validationLabel } from '~/utils/registry'
+import { authenticationLabel, deliveryLabel, evidenceLabel, githubSourceUrl, resolveDistribution, targetAuthenticationLabel, validationLabel } from '~/utils/registry'
 const route = useRoute()
 const registry = useRegistry()
 const { current, expired, published } = useDirectoryStatus()
@@ -15,7 +15,7 @@ const initialTarget = availableClients.find(client => client.id === 'cursor')?.i
 const targets = ref<ClientID[]>(initialTarget ? [initialTarget] : [])
 const resolution = computed(() => resolveDistribution(plugin, targets.value))
 const installCandidate = computed(() => current.value ? resolution.value.distribution : undefined)
-const authLabel = plugin.authentication === 'none' ? 'No account required' : plugin.authentication === 'oauth' ? 'OAuth required' : plugin.authentication === 'client_managed' ? 'Client-managed authentication' : 'Check package requirements'
+const authLabel = computed(() => authenticationLabel(installCandidate.value, targets.value, plugin.authentication))
 
 const canonical = `${useRuntimeConfig().public.siteUrl}/plugins/${plugin.name}`
 useSeoMeta({
@@ -55,7 +55,7 @@ useHead({ link: [{ rel: 'canonical', href: canonical }] })
           <h2>Product release history</h2>
           <p>Historical records below are not the selected install candidate.</p>
           <ul class="distribution-list">
-            <li v-for="item in plugin.distributions" :key="item.id"><strong>{{ item.id }}</strong> — {{ item.label }}<span v-if="item.id === plugin.declared_default_distribution"> (Declared default source)</span><ul><li v-for="release in item.releases" :key="release.release_sequence"><strong>Historical release {{ release.release_sequence }} · v{{ release.version }}</strong> — {{ item.status }} / {{ release.release_status }}<br /><small>{{ release.source.repository }}@{{ release.source.revision }}//{{ release.source.path }}</small><ul><li v-for="target in release.targets" :key="target.client">{{ target.client }} — {{ deliveryLabel(target.delivery) }}; scopes: {{ target.scopes.join(', ') }}<template v-if="target.app_binding">; app key <code>{{ target.app_binding.app_key }}</code>, app ID <code>{{ target.app_binding.id }}</code>, MCP server <code>{{ target.app_binding.mcp_server }}</code></template></li></ul></li></ul></li>
+            <li v-for="item in plugin.distributions" :key="item.id"><strong>{{ item.id }}</strong> — {{ item.label }}<span v-if="item.id === plugin.declared_default_distribution"> (Declared default source)</span><ul><li v-for="release in item.releases" :key="release.release_sequence"><strong>Historical release {{ release.release_sequence }} · v{{ release.version }}</strong> — {{ item.status }} / {{ release.release_status }}<br /><small>{{ release.source.repository }}@{{ release.source.revision }}//{{ release.source.path }}</small><ul><li v-for="target in release.targets" :key="target.client">{{ target.client }} — {{ deliveryLabel(target.delivery) }}; {{ targetAuthenticationLabel(target.authentication) }}; scopes: {{ target.scopes.join(', ') }}<template v-if="target.app_binding">; app key <code>{{ target.app_binding.app_key }}</code>, app ID <code>{{ target.app_binding.id }}</code>, MCP server <code>{{ target.app_binding.mcp_server }}</code></template></li></ul></li></ul></li>
           </ul>
         </div>
         <div v-if="installCandidate" class="status-card">

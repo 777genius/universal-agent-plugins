@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { describe, it } from 'node:test'
 import { fileURLToPath } from 'node:url'
-import { deliveryLabel, directoryIsExpired, expectedDistribution, githubSourceUrl, isPinnedExternalSource, mirroredIconPath, parseDirectoryData, parseRegistryIndex, resolveDistribution, validationLabel } from '../utils/registry.ts'
+import { authenticationLabel, deliveryLabel, directoryIsExpired, expectedDistribution, githubSourceUrl, isPinnedExternalSource, mirroredIconPath, parseDirectoryData, parseRegistryIndex, resolveDistribution, targetAuthenticationLabel, validationLabel } from '../utils/registry.ts'
 import { pluginCommands } from '../utils/commands.ts'
 
 const fixture = JSON.parse(readFileSync(fileURLToPath(new URL('./fixtures/registry.valid.json', import.meta.url)), 'utf8')) as unknown
@@ -23,7 +23,7 @@ interface SnapshotFixture {
       release_sequence: number
       status: string
       current_evidence: string[]
-      targets: Array<{ client: string, delivery: string, scopes: string[], app_binding?: { app_key: string, id: string, mcp_server: string } }>
+      targets: Array<{ client: string, authentication: string, delivery: string, scopes: string[], app_binding?: { app_key: string, id: string, mcp_server: string } }>
     }>
     releases: Array<Record<string, unknown>>
   }>
@@ -195,6 +195,8 @@ describe('registry parsing', () => {
     assert.equal(candidate.release_sequence, 1)
     assert.equal(candidate.version, '1.0.0')
     assert.deepEqual(candidate.components, ['mcp', 'skills'])
+    assert.equal(authenticationLabel(candidate, ['codex'], plugin.authentication), 'No account required')
+    assert.equal(targetAuthenticationLabel(plugin.distributions[0]!.releases[0]!.targets[0]!.authentication), 'Authentication required')
     assert.equal(candidate.source.revision, '1'.repeat(40))
     assert.equal(candidate.source.path, 'plugins/release-fallback-v1')
     assert.deepEqual(candidate.package_evidence.map(item => item.id), ['schema-release-1'])
@@ -213,9 +215,9 @@ describe('registry parsing', () => {
     const bridge = raw.distributions[1]!
     raw.products[0]!.default_distribution = bridge.id
     bridge.release_policies[0]!.targets = [
-      { client: 'codex', delivery: 'managed', scopes: ['user'] },
-      { client: 'vscode', delivery: 'prepared', scopes: ['user'] },
-      { client: 'chatgpt', delivery: 'manual_activation', scopes: ['user'], app_binding: { app_key: 'cloudflare-docs', id: 'plugin_asdk_app_6a78e90cf73481918ef10cdb87cd4bb4', mcp_server: 'cloudflare-docs' } },
+      { client: 'codex', authentication: 'not_required', delivery: 'managed', scopes: ['user'] },
+      { client: 'vscode', authentication: 'unknown', delivery: 'prepared', scopes: ['user'] },
+      { client: 'chatgpt', authentication: 'required', delivery: 'manual_activation', scopes: ['user'], app_binding: { app_key: 'cloudflare-docs', id: 'plugin_asdk_app_6a78e90cf73481918ef10cdb87cd4bb4', mcp_server: 'cloudflare-docs' } },
     ]
     const plugin = parseDirectoryData(raw, 'published_snapshot').plugins[0]!
     const selected = expectedDistribution(plugin, ['chatgpt'])!
@@ -225,6 +227,48 @@ describe('registry parsing', () => {
     assert.equal(deliveryLabel(selected.targets[1]!.delivery), 'Prepared; client import remains')
     assert.equal(deliveryLabel(selected.targets[2]!.delivery), 'Manual activation required')
     assert.deepEqual(plugin.client_support.app_bindings.chatgpt, bridge.release_policies[0]!.targets[2]!.app_binding)
+  })
+
+  it('retains signed target authentication and summarizes the exact selected target set honestly', () => {
+    const plugin = parseDirectoryData(snapshotFixture, 'published_snapshot').plugins[0]!
+    const selected = expectedDistribution(plugin, ['codex', 'cursor'])!
+
+    assert.equal(selected.targets.find(target => target.client === 'codex')?.authentication, 'not_required')
+    assert.equal(selected.targets.find(target => target.client === 'cursor')?.authentication, 'required')
+    assert.equal(authenticationLabel(selected, ['codex'], plugin.authentication), 'No account required')
+    assert.equal(authenticationLabel(selected, ['cursor'], plugin.authentication), 'Authentication required')
+    assert.equal(authenticationLabel(selected, ['codex', 'cursor'], plugin.authentication), 'Authentication varies')
+    assert.equal(targetAuthenticationLabel('unknown'), 'Check package requirements')
+  })
+
+  it('retains and distinguishes Agent Code Navigator and Atlassian signed authentication', () => {
+    const raw = JSON.parse(readFileSync(fileURLToPath(new URL('../../registry/directory.json', import.meta.url)), 'utf8')) as Record<string, unknown>
+    raw.products = (raw.products as Array<{ id: string }>).filter(product => ['agent-code-navigator', 'atlassian'].includes(product.id))
+    raw.distributions = (raw.distributions as Array<{ product_id: string }>).filter(distribution => ['agent-code-navigator', 'atlassian'].includes(distribution.product_id))
+    raw.snapshot_schema_version = 1
+    raw.sequence = 44
+    raw.generated_at = '2026-08-22T00:00:00Z'
+    raw.expires_at = '2026-09-22T00:00:00Z'
+    const directory = parseDirectoryData(raw, 'published_snapshot')
+    const navigator = directory.plugins.find(plugin => plugin.name === 'agent-code-navigator')!
+    const atlassian = directory.plugins.find(plugin => plugin.name === 'atlassian')!
+    const navigatorRelease = expectedDistribution(navigator, ['codex', 'cursor'])!
+    const atlassianRelease = expectedDistribution(atlassian, ['codex', 'cursor'])!
+
+    assert.deepEqual(navigatorRelease.targets.filter(target => ['codex', 'cursor'].includes(target.client)).map(target => target.authentication), ['not_required', 'not_required'])
+    assert.deepEqual(atlassianRelease.targets.filter(target => ['codex', 'cursor'].includes(target.client)).map(target => target.authentication), ['required', 'required'])
+    assert.equal(authenticationLabel(navigatorRelease, ['codex', 'cursor'], navigator.authentication), 'No account required')
+    assert.equal(authenticationLabel(atlassianRelease, ['codex', 'cursor'], atlassian.authentication), 'Authentication required')
+  })
+
+  it('rejects missing or invalid signed target authentication', () => {
+    const missing = signedFixture()
+    delete (missing.distributions[0]!.release_policies[0]!.targets[0] as Partial<typeof missing.distributions[0]['release_policies'][0]['targets'][0]>).authentication
+    assert.throws(() => parseDirectoryData(missing, 'published_snapshot'), /authentication must be a non-empty string/)
+
+    const invalid = signedFixture()
+    invalid.distributions[0]!.release_policies[0]!.targets[0]!.authentication = 'oauth'
+    assert.throws(() => parseDirectoryData(invalid, 'published_snapshot'), /invalid authentication/)
   })
 
   it('accepts evidence only for the selected release exact package tuple', () => {
@@ -348,6 +392,7 @@ describe('registry parsing', () => {
     assert.equal(registry.plugins[1]?.client_support.resolution, 'install_time')
     assert.deepEqual(registry.plugins[0]?.evidence.map(item => item.client), ['codex', 'cursor'])
     assert.equal(validationLabel(registry.plugins[0]!), 'No current evidence')
+    assert.equal(authenticationLabel(expectedDistribution(registry.plugins[0]!, ['cursor']), ['cursor'], registry.plugins[0]!.authentication), 'No account required')
     assert.deepEqual(registry.plugins[1]?.components, ['skills'])
   })
 

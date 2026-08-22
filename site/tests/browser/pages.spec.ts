@@ -89,6 +89,32 @@ test('keeps bridge alternatives on one product page', async ({ page }) => {
   expect(failures).toEqual([])
 })
 
+test('renders target authentication distinctly and keeps it tied to multiselect targets', async ({ page }) => {
+  const failures = observeFailures(page)
+  await page.goto('plugins')
+
+  const search = page.getByRole('searchbox', { name: 'Search plugins' })
+  await search.fill('Agent Code Navigator')
+  const navigator = page.locator('.plugin-card').filter({ hasText: 'Agent Code Navigator' })
+  await expect(navigator.locator('.plugin-card__auth')).toHaveText('No account required')
+  await navigator.getByRole('button', { name: /Choose clients for Agent Code Navigator:/ }).click()
+  await page.getByRole('checkbox', { name: /Codex/ }).click()
+  await page.keyboard.press('Escape')
+  await expect(navigator.locator('.plugin-card__auth')).toHaveText('No account required')
+  await expect(navigator.getByRole('button', { name: /Choose clients for Agent Code Navigator: 2 agents/ })).toBeVisible()
+
+  await search.fill('Atlassian')
+  const atlassian = page.locator('.plugin-card').filter({ hasText: 'Atlassian' })
+  await expect(atlassian.locator('.plugin-card__auth')).toHaveText('Authentication required')
+
+  await page.goto('plugins/atlassian')
+  await expect(page.locator('.distribution-list')).toContainText('codex — Managed install; Authentication required')
+  await page.goto('plugins/agent-code-navigator')
+  await expect(page.locator('.distribution-list')).toContainText('codex — Managed install; No account required')
+  await expectNoHorizontalOverflow(page)
+  expect(failures).toEqual([])
+})
+
 test('unsigned pull-request preview exposes no copyable install command', async ({ page }) => {
   const failures = observeFailures(page)
   for (const path of ['./', 'plugins/chrome-devtools']) {
