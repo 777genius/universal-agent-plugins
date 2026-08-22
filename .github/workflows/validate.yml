@@ -66,6 +66,11 @@ jobs:
       - run: check-jsonschema --schemafile schemas/catalog-v1.schema.json catalog/v1/catalog.json
       - run: check-jsonschema --schemafile schemas/catalog-v2.schema.json catalog/v2/catalog.json
       - run: python3 scripts/build_registry.py --check
+      - name: Reacquire and validate changed external releases
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_REVISION: ${{ github.event.pull_request.base.sha }}
+        run: python3 scripts/build_registry.py --check --external-release-check changed --base-revision "${BASE_REVISION}"
       - run: python3 scripts/build_openai_compat.py --check
       - run: python3 scripts/validate_openai_compat.py
       - name: Validate with OpenAI plugin-creator

@@ -268,6 +268,16 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertIn("scripts/build-bridges check", text)
         self.assertNotIn("curl ", text)
 
+    def test_pull_request_ci_reacquires_only_changed_external_releases(self) -> None:
+        workflow = load(VALIDATE)
+        job = workflow["jobs"]["portable-catalog"]
+        step = next(item for item in job["steps"] if item.get("name") == "Reacquire and validate changed external releases")
+        self.assertEqual(step["if"], "github.event_name == 'pull_request'")
+        self.assertEqual(step["env"]["BASE_REVISION"], "${{ github.event.pull_request.base.sha }}")
+        self.assertIn("--external-release-check changed", step["run"])
+        self.assertIn('--base-revision "${BASE_REVISION}"', step["run"])
+        self.assertEqual(next(item for item in job["steps"] if item.get("uses", "").startswith("actions/checkout"))["with"]["fetch-depth"], "0")
+
 
 if __name__ == "__main__":
     unittest.main()

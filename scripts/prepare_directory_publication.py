@@ -233,6 +233,7 @@ def acquire_external(repository: str, revision: str, package_path: str, override
         return subprocess.run(
             [
                 GIT, "-c", "credential.helper=", "-c", "core.askPass=", "-c", "submodule.recurse=false",
+                "-c", "http.followRedirects=false",
                 *arguments,
             ],
             check=True,

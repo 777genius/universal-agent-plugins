@@ -14,6 +14,7 @@ import json
 import os
 import re
 import stat
+import subprocess
 import sys
 import tarfile
 import tempfile
@@ -753,6 +754,99 @@ def load_directory_source(path: Path = DIRECTORY_SOURCE) -> dict[str, object]:
     return source
 
 
+def load_directory_source_at_revision(revision: str) -> dict[str, object]:
+    """Read the review source from an exact local Git commit."""
+    require(SHA_RE.fullmatch(revision) is not None, "base revision must be a full lowercase commit SHA")
+    environment = {
+        "PATH": "/usr/bin:/bin",
+        "HOME": os.devnull,
+        "GIT_CONFIG_NOSYSTEM": "1",
+        "GIT_CONFIG_GLOBAL": os.devnull,
+        "GIT_OPTIONAL_LOCKS": "0",
+        "LC_ALL": "C",
+    }
+    try:
+        result = subprocess.run(
+            ["/usr/bin/git", "-C", str(ROOT), "show", f"{revision}:registry/directory.json"],
+            check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=environment,
+        )
+    except (OSError, subprocess.SubprocessError) as error:
+        raise RegistryError(f"cannot read Directory source at base revision {revision}: {error}") from error
+    value = parse_json_bytes(result.stdout, f"{revision}:registry/directory.json")
+    require(isinstance(value, dict), "base Directory source must be an object")
+    return value
+
+
+def external_release_map(
+    source: dict[str, object], repository: str = "777genius/universal-agent-plugins",
+) -> dict[tuple[str, int], dict[str, object]]:
+    return {
+        (distribution["id"], release["sequence"]): release
+        for distribution in source["distributions"]
+        for release in distribution["releases"]
+        if release["package_source"]["repository"] != repository
+    }
+
+
+def validate_changed_external_releases(
+    source: dict[str, object], base_source: dict[str, object] | None = None, *,
+    repository: str = "777genius/universal-agent-plugins",
+    repository_overrides: dict[str, Path] | None = None,
+    acquirer=None,  # type: ignore[no-untyped-def]
+) -> list[tuple[str, int]]:
+    """Inertly reacquire and validate changed external release tuples.
+
+    With no base source this is the explicit full-check mode. Overrides and an
+    injected acquirer exist only for deterministic local tests; the CLI always
+    acquires the public GitHub repository.
+    """
+    # Imported lazily because publication validation reuses this module's
+    # package validator and tree digest implementation.
+    if acquirer is None:
+        from prepare_directory_publication import acquire_external
+        acquirer = acquire_external
+    overrides = repository_overrides or {}
+    current = external_release_map(source, repository)
+    previous = {} if base_source is None else external_release_map(base_source, repository)
+    changed = sorted(identity for identity, release in current.items() if previous.get(identity) != release)
+    for identity in changed:
+        release = current[identity]
+        package_source = release["package_source"]
+        label = f"{identity[0]}@{identity[1]}"
+        source_repository = validate_repository(package_source["repository"])
+        revision = package_source["revision"]
+        require(isinstance(revision, str) and SHA_RE.fullmatch(revision) is not None, f"{label}: external source revision must be a full lowercase commit SHA")
+        package_path = validate_registry_path(package_source["path"])
+        temporary = None
+        try:
+            temporary = acquirer(source_repository, revision, package_path, overrides.get(source_repository))
+            package_root = Path(temporary.name) / "checkout" / package_path
+            require(package_root.is_dir(), f"{label}: reacquired package path is unavailable")
+            require(release["tree_digest_algorithm"] == DIRECTORY_TREE_DIGEST_ALGORITHM, f"{label}: unsupported tree digest algorithm")
+            require(directory_tree_digest(package_root) == release["tree_digest"], f"{label}: reacquired tree digest differs from submitted metadata")
+            manifest_path = package_root / "plugin.json"
+            require(manifest_path.is_file() and digest_bytes(manifest_path.read_bytes()) == release["manifest_digest"], f"{label}: reacquired manifest digest differs from submitted metadata")
+            facts = validated_package_facts(package_root)
+            manifest = read_object(manifest_path)
+            require(canonical_manifest_repository(manifest.get("repository")) == source_repository, f"{label}: manifest repository differs from package source repository")
+            comparisons = {
+                "manifest identity": (facts["manifest_name"], release["manifest_name"]),
+                "package version": (facts["package_version"], release["package_version"]),
+                "Agent Plugins schema": (facts["agent_plugins_schema"], release["agent_plugins_schema"]),
+                "components": (facts["components"], release["components"]),
+            }
+            for field, (actual, submitted) in comparisons.items():
+                require(actual == submitted, f"{label}: reacquired {field} differs from submitted metadata: {actual!r} != {submitted!r}")
+        except RegistryError:
+            raise
+        except Exception as error:
+            raise RegistryError(f"{label}: external reacquisition failed closed: {error}") from error
+        finally:
+            if temporary is not None:
+                temporary.cleanup()
+    return changed
+
+
 def _policy_for(distribution: dict[str, object], sequence: int) -> dict[str, object]:
     policies = [policy for policy in distribution["release_policies"] if policy["release_sequence"] == sequence]
     require(len(policies) == 1, f"{distribution['id']}: release {sequence} must have exactly one mutable policy")
@@ -1171,13 +1265,20 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--check", action="store_true", help="validate source and fail if deterministic outputs are stale")
     parser.add_argument("--migrate-legacy", action="store_true", help="write the initial 26-product Directory source from the frozen catalog")
+    parser.add_argument("--external-release-check", choices=("changed", "full"), help="reacquire changed PR external releases or all external releases")
+    parser.add_argument("--base-revision", help="full Git SHA used to identify changed external releases")
     args = parser.parse_args()
     try:
+        require(args.external_release_check == "changed" or args.base_revision is None, "--base-revision is only valid with changed external release checking")
+        require(args.external_release_check != "changed" or args.base_revision is not None, "changed external release checking requires --base-revision")
         if args.migrate_legacy:
             require(not DIRECTORY_SOURCE.exists(), f"{DIRECTORY_SOURCE}: refusing to overwrite review source")
             DIRECTORY_SOURCE.write_bytes(encoded(migrated_directory_source()))
         source = load_directory_source()
         validate_directory(source)
+        if args.external_release_check:
+            base_source = load_directory_source_at_revision(args.base_revision) if args.external_release_check == "changed" else None
+            validate_changed_external_releases(source, base_source)
         validate_readme_blocks(source)
         validate_legacy_catalog_freeze()
         validate_no_flat_directory_entries()

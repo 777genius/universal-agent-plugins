@@ -6,6 +6,7 @@ import importlib.util
 import io
 import json
 import shutil
+import subprocess
 import tarfile
 import tempfile
 import unittest
@@ -598,6 +599,105 @@ class DirectoryDomainTests(unittest.TestCase):
         source["products"].append(product)
         source["distributions"].append(distribution)
         return source
+
+    def local_external_release(self, root: Path):
+        repository = root / "external"
+        package = repository / "packages" / "zz-community-product"
+        package.mkdir(parents=True)
+        manifest = {
+            "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+            "name": "zz-community-product",
+            "version": "1.2.3",
+            "description": "Local deterministic external fixture",
+            "author": {"name": "Fixture Author"},
+            "repository": "https://github.com/example/external",
+            "license": "Apache-2.0",
+            "keywords": ["fixture"],
+        }
+        (package / "plugin.json").write_text(json.dumps(manifest) + "\n")
+        (package / "mcp.json").write_text(json.dumps({
+            "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
+            "mcpServers": {"fixture": {"type": "streamable-http", "url": "https://example.test/mcp"}},
+        }) + "\n")
+        (package / "README.md").write_text("# Fixture\n")
+        subprocess.run(["/usr/bin/git", "init", "-q", str(repository)], check=True)
+        subprocess.run(["/usr/bin/git", "-C", str(repository), "config", "uploadpack.allowFilter", "true"], check=True)
+        subprocess.run(["/usr/bin/git", "-C", str(repository), "add", "."], check=True)
+        subprocess.run([
+            "/usr/bin/git", "-C", str(repository), "-c", "user.name=Fixture",
+            "-c", "user.email=fixture@example.test", "commit", "-qm", "valid",
+        ], check=True)
+        revision = subprocess.check_output(["/usr/bin/git", "-C", str(repository), "rev-parse", "HEAD"], text=True).strip()
+        source = self.external_product_source()
+        distribution = source["distributions"][-1]
+        release = distribution["releases"][0]
+        facts = registry.validated_package_facts(package)
+        release.update({
+            "package_version": facts["package_version"],
+            "manifest_name": facts["manifest_name"],
+            "agent_plugins_schema": facts["agent_plugins_schema"],
+            "package_source": {
+                "repository": "example/external", "revision": revision,
+                "path": "packages/zz-community-product",
+            },
+            "tree_digest_algorithm": registry.DIRECTORY_TREE_DIGEST_ALGORITHM,
+            "tree_digest": registry.directory_tree_digest(package),
+            "manifest_digest": registry.digest_bytes((package / "plugin.json").read_bytes()),
+            "components": facts["components"],
+        })
+        return source, repository, package, revision
+
+    def commit_fixture_change(self, repository: Path, message: str) -> str:
+        subprocess.run(["/usr/bin/git", "-C", str(repository), "add", "."], check=True)
+        subprocess.run([
+            "/usr/bin/git", "-C", str(repository), "-c", "user.name=Fixture",
+            "-c", "user.email=fixture@example.test", "commit", "-qm", message,
+        ], check=True)
+        return subprocess.check_output(["/usr/bin/git", "-C", str(repository), "rev-parse", "HEAD"], text=True).strip()
+
+    def test_changed_external_release_reacquires_valid_local_git_source(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            source, repository, _package, _revision = self.local_external_release(Path(tmp))
+            changed = registry.validate_changed_external_releases(
+                source, self.source(), repository_overrides={"example/external": repository},
+            )
+            self.assertEqual(changed, [("zz-community/zz-community-product", 1)])
+
+    def test_external_release_rejects_substituted_and_malformed_local_git_sources(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            source, repository, package, _revision = self.local_external_release(Path(tmp))
+            (package / "README.md").write_text("substituted source bytes\n")
+            substituted_revision = self.commit_fixture_change(repository, "substituted")
+            source["distributions"][-1]["releases"][0]["package_source"]["revision"] = substituted_revision
+            with self.assertRaisesRegex(registry.RegistryError, "tree digest differs"):
+                registry.validate_changed_external_releases(
+                    source, self.source(), repository_overrides={"example/external": repository},
+                )
+
+            (package / "plugin.json").write_text("{malformed\n")
+            malformed_revision = self.commit_fixture_change(repository, "malformed")
+            release = source["distributions"][-1]["releases"][0]
+            release["package_source"]["revision"] = malformed_revision
+            release["tree_digest"] = registry.directory_tree_digest(package)
+            release["manifest_digest"] = registry.digest_bytes((package / "plugin.json").read_bytes())
+            with self.assertRaisesRegex(registry.RegistryError, "invalid UTF-8 JSON"):
+                registry.validate_changed_external_releases(
+                    source, self.source(), repository_overrides={"example/external": repository},
+                )
+
+    def test_unchanged_external_release_is_not_reacquired_and_failures_fail_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            source, repository, _package, _revision = self.local_external_release(Path(tmp))
+            acquirer = mock.Mock(side_effect=AssertionError("unchanged release was fetched"))
+            self.assertEqual(registry.validate_changed_external_releases(source, copy.deepcopy(source), acquirer=acquirer), [])
+            acquirer.assert_not_called()
+
+            release = source["distributions"][-1]["releases"][0]
+            release["package_source"]["revision"] = "f" * 40
+            with self.assertRaisesRegex(registry.RegistryError, "reacquisition failed closed"):
+                registry.validate_changed_external_releases(
+                    source, self.source(), repository_overrides={"example/external": repository},
+                )
 
     def assert_canonical_products_present_once(self, source) -> None:
         product_ids = [item["id"] for item in source["products"]]
