@@ -2,7 +2,7 @@
 import { registryFaqItems } from '~/data/registryFaq';
 import { productSoftwareSchema } from '~/utils/seo';
 
-const registry = useRegistry();
+const registry = await useRegistryPage({ discovery: true });
 const config = useRuntimeConfig();
 const description =
   'Install, update, repair, and remove Agent Plugins 1.0 across supported AI agents with one CLI.';

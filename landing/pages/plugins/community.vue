@@ -2,7 +2,10 @@
 import type { ClientID } from '~/types/registry';
 
 const route = useRoute();
-const registry = useRegistry();
+const registry = await useRegistryPage({
+  projection: { kind: 'empty' },
+  discovery: true,
+});
 const discovery = useDiscoveryStatus();
 const { pluginIcon, sourceUrl } = useSite();
 const requestedSource = computed(() => String(route.query.source ?? ''));

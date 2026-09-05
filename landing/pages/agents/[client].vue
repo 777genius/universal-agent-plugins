@@ -3,7 +3,6 @@ import { mdiArrowLeft, mdiOpenInNew } from '@mdi/js';
 import { clientLandingBySlug } from '~/data/clients';
 
 const route = useRoute();
-const registry = useRegistry();
 const config = useRuntimeConfig();
 const { asset, pluginIcon } = useSite();
 const client = clientLandingBySlug.get(String(route.params.client));
@@ -11,6 +10,8 @@ const client = clientLandingBySlug.get(String(route.params.client));
 if (!client) {
   throw createError({ statusCode: 404, statusMessage: 'Agent not found' });
 }
+
+const registry = await useRegistryPage({ projection: { kind: 'client', value: client.id } });
 
 const reviewedPlugins = registry.plugins.filter(
   (plugin) =>

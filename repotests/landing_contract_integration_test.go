@@ -251,7 +251,7 @@ func TestLandingSurface_LocalesLinksAndBrandingStayAligned(t *testing.T) {
 		t.Fatal(err)
 	}
 	pluginsPage := string(pluginsPageBody)
-	mustContain(t, pluginsPage, `const registry = useRegistry()`)
+	mustContain(t, pluginsPage, `const registry = await useRegistryPage({ discovery: true })`)
 	mustContain(t, pluginsPage, `usePageSeo('Agent Plugins 1.0 Directory | Search 2,500+ Plugins'`)
 	mustContain(t, pluginsPage, `'@type': 'ItemList'`)
 	mustContain(t, pluginsPage, `<PluginCatalog`)
@@ -263,6 +263,7 @@ func TestLandingSurface_LocalesLinksAndBrandingStayAligned(t *testing.T) {
 	}
 	pluginDetailPage := string(pluginDetailPageBody)
 	mustContain(t, pluginDetailPage, `registry.plugins.find`)
+	mustContain(t, pluginDetailPage, `projection: { kind: 'plugin', value: slug }`)
 	mustContain(t, pluginDetailPage, `usePageSeo(`)
 	mustContain(t, pluginDetailPage, `'@type': 'SoftwareSourceCode'`)
 	mustContain(t, pluginDetailPage, `'@type': 'BreadcrumbList'`)
@@ -275,6 +276,7 @@ func TestLandingSurface_LocalesLinksAndBrandingStayAligned(t *testing.T) {
 	}
 	agentPage := string(agentPageBody)
 	mustContain(t, agentPage, `clientLandingBySlug.get`)
+	mustContain(t, agentPage, `projection: { kind: 'client', value: client.id }`)
 	mustContain(t, agentPage, `'@type': 'ItemList'`)
 	mustContain(t, agentPage, `'@type': 'BreadcrumbList'`)
 	mustContain(t, agentPage, `npx universal-agent-plugins add context7 --target`)

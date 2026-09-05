@@ -13,6 +13,7 @@ import {
   restoreCatalogQuery,
 } from '../utils/filter.ts';
 import { mirroredIconPath, parseDirectoryData } from '../utils/registry.ts';
+import { projectRegistry } from '../utils/registryProjection.ts';
 import type { DiscoveryRecord, DiscoverySnapshot } from '../types/discovery.ts';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -54,6 +55,27 @@ const discoveryRecord = {
 } satisfies DiscoveryRecord;
 
 describe('unified registry landing', () => {
+  it('projects only the registry data required by each static route', () => {
+    const plugin = registry.plugins[0]!;
+    const client = plugin.client_support.clients[0]!;
+    assert.deepEqual(projectRegistry(registry, { kind: 'empty' }).plugins, []);
+    assert.deepEqual(
+      projectRegistry(registry, { kind: 'plugin', value: plugin.name }).plugins.map(
+        (item) => item.name,
+      ),
+      [plugin.name],
+    );
+    assert.ok(
+      projectRegistry(registry, { kind: 'client', value: client }).plugins.every((item) =>
+        item.client_support.clients.includes(client),
+      ),
+    );
+    assert.equal(
+      projectRegistry(registry, { kind: 'catalog' }).plugins.length,
+      registry.plugins.filter((item) => item.trust_state !== 'conformant_unreviewed').length,
+    );
+  });
+
   it('groups alternate sources with a deterministic reviewed primary', () => {
     const reviewed = registry.plugins[0]!;
     const other = {
