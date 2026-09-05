@@ -326,4 +326,29 @@ describe('unified registry landing', () => {
     assert.equal(skillOnly.installable, true);
     assert.deepEqual(catalogVisiblePlugins([unavailable, unsupported, skillOnly]), [skillOnly]);
   });
+
+  it('keeps retired registry mirrors out of the catalog without removing current sources', () => {
+    const reviewed = registry.plugins[0]!;
+    const current = discoveryPlugin(
+      {
+        ...discoveryRecord,
+        slug: 'discovery:example/current',
+        components: { extensions: 0, mcp: 0, skills: 1 },
+        compatible_clients: ['codex'],
+      },
+      discoverySnapshot,
+    );
+    const retired = {
+      ...current,
+      install_source:
+        'discovery:777genius/universal-agent-plugins-registry//plugins/agent-code-navigator',
+      source: {
+        ...current.source,
+        repository: '777genius/universal-agent-plugins-registry',
+        path: 'plugins/agent-code-navigator',
+      },
+    };
+
+    assert.deepEqual(catalogVisiblePlugins([retired, current, reviewed]), [current, reviewed]);
+  });
 });

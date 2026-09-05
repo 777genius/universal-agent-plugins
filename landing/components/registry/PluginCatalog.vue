@@ -340,50 +340,12 @@ watch([query, category, component, source, trust, client, authentication, owner]
       </div>
     </div>
     <div v-if="visible.length" class="plugin-grid">
-      <div
+      <RegistryPluginCard
         v-for="group in displayed"
         :key="group.primary.install_source"
-        class="plugin-source-group"
-      >
-        <RegistryPluginCard :plugin="group.primary" />
-        <details v-if="group.alternatives.length" class="plugin-other-sources">
-          <summary>
-            Other sources ({{ group.alternatives.length }})<span class="sr-only">
-              for {{ group.primary.display_name }}</span
-            >
-          </summary>
-          <ul class="plugin-other-sources__list">
-            <li v-for="alternative in group.alternatives" :key="alternative.install_source">
-              <NuxtLink
-                :to="
-                  alternative.trust_state === 'conformant_unreviewed'
-                    ? { path: '/plugins/community/', query: { source: alternative.install_source } }
-                    : `/plugins/${alternative.name}/`
-                "
-              >
-                {{ alternative.source.repository
-                }}{{ alternative.source.path ? `/${alternative.source.path}` : '' }}
-              </NuxtLink>
-              <span
-                >{{
-                  alternative.trust_state === 'conformant_unreviewed'
-                    ? 'Community listing'
-                    : 'Reviewed listing'
-                }}
-                ·
-                {{
-                  alternative.distributions.find(
-                    (item) => item.id === alternative.default_distribution,
-                  )?.kind === 'upstream'
-                    ? 'Upstream'
-                    : 'Community / direct'
-                }}
-                · {{ alternative.installable ? 'Installable' : 'Unavailable' }}</span
-              >
-            </li>
-          </ul>
-        </details>
-      </div>
+        :plugin="group.primary"
+        :alternatives="group.alternatives"
+      />
     </div>
     <div v-else class="empty-state">
       <h3>No matching plugins</h3>

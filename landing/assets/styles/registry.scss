@@ -412,6 +412,25 @@ img {
 .hero-quick-start__step .command-snippet {
   min-width: 0;
 }
+.hero-quick-start__command {
+  min-width: 0;
+}
+.hero-quick-start__more-install {
+  width: fit-content;
+  margin-top: 7px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--subtle);
+  font-size: 0.58rem;
+  font-weight: 650;
+  text-decoration-color: color-mix(in srgb, currentcolor 46%, transparent);
+  text-underline-offset: 3px;
+}
+.hero-quick-start__more-install:hover,
+.hero-quick-start__more-install:focus-visible {
+  color: var(--cyan);
+}
 .hero-quick-start__footer {
   padding: 13px 0 0 152px;
   display: grid;
@@ -1632,22 +1651,29 @@ img {
   outline: 2px solid var(--primary);
   outline-offset: 3px;
 }
-.plugin-source-group {
-  min-width: 0;
-}
 .plugin-other-sources {
-  margin-top: 8px;
+  margin: 0 0 12px;
+  padding-top: 9px;
+  border-top: 1px solid var(--line);
 }
 .plugin-other-sources > summary {
-  padding: 8px;
+  width: fit-content;
+  padding: 2px 0;
   color: var(--subtle);
-  font-size: 0.75rem;
+  font-size: 0.68rem;
+  font-weight: 700;
   cursor: pointer;
+}
+.plugin-other-sources[open] > summary {
+  color: var(--primary-bright);
 }
 .plugin-other-sources__list {
   list-style: none;
-  padding: 0 8px;
-  margin: 0;
+  padding: 5px 10px;
+  margin: 7px 0 0;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--surface-raised) 72%, transparent);
 }
 .plugin-other-sources__list li {
   display: grid;
@@ -1794,6 +1820,15 @@ img {
   font-size: 0.66rem;
   font-weight: 700;
 }
+.plugin-card__source-label a {
+  color: inherit;
+  text-decoration-color: color-mix(in srgb, currentcolor 45%, transparent);
+  text-underline-offset: 2px;
+}
+.plugin-card__source-label a:hover,
+.plugin-card__source-label a:focus-visible {
+  color: var(--cyan);
+}
 .plugin-card__security {
   width: fit-content;
   margin: 8px 0 0;
@@ -1852,7 +1887,7 @@ img {
     monospace;
   letter-spacing: 0.045em;
   text-align: center;
-  text-transform: uppercase;
+  text-transform: none;
 }
 .plugin-card__ribbon::after {
   content: none;
@@ -1882,9 +1917,99 @@ img {
 .plugin-card__author a {
   color: var(--primary-bright);
 }
-.plugin-card__popularity span {
+.plugin-card__popularity-trigger > span {
   color: #f5c451;
   text-shadow: 0 0 14px rgba(245, 196, 81, 0.25);
+}
+.plugin-card__popularity-trigger {
+  all: unset;
+  border-radius: 4px;
+  cursor: help;
+}
+.plugin-card__popularity-trigger:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 3px;
+}
+
+.app-tooltip {
+  z-index: 120;
+  width: min(360px, calc(100vw - 24px));
+  padding: 13px 14px;
+  border: 1px solid color-mix(in srgb, var(--primary) 40%, var(--line));
+  border-radius: 11px;
+  color: var(--text);
+  background: color-mix(in srgb, var(--surface-solid) 96%, #080914);
+  box-shadow: 0 18px 52px rgba(0, 0, 0, 0.38);
+  font-size: 0.69rem;
+  line-height: 1.45;
+  animation: app-tooltip-in 0.14s ease-out;
+}
+.app-tooltip__arrow {
+  fill: color-mix(in srgb, var(--primary) 40%, var(--line));
+}
+.app-tooltip p {
+  margin: 0;
+}
+.app-tooltip__review {
+  display: grid;
+  gap: 7px;
+}
+.app-tooltip__eyebrow {
+  color: var(--primary-bright);
+  font:
+    750 0.55rem SFMono-Regular,
+    monospace;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+.app-tooltip__review > strong {
+  font-size: 0.76rem;
+}
+.app-tooltip__review > p:not(.app-tooltip__eyebrow) {
+  color: var(--muted);
+}
+.app-tooltip__review ul {
+  margin: 1px 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+  list-style: none;
+}
+.app-tooltip__review li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 7px;
+}
+.app-tooltip__review code {
+  color: #f5c451;
+  font-size: 0.61rem;
+}
+.app-tooltip__more,
+.app-tooltip__review small {
+  color: var(--subtle);
+  font-size: 0.61rem;
+}
+.app-tooltip__disclaimer {
+  padding-top: 7px;
+  border-top: 1px solid var(--line);
+}
+.app-tooltip__compact {
+  color: var(--muted);
+}
+@keyframes app-tooltip-in {
+  from {
+    opacity: 0;
+    transform: translateY(3px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .app-tooltip {
+    animation: none;
+  }
 }
 .plugin-card__auth {
   margin: 0;

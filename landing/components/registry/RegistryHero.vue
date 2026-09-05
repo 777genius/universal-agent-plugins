@@ -184,10 +184,19 @@ function updateTargets(values: string[]) {
                 <span class="hero-quick-start__label"
                   ><strong>Copy and run</strong><small>In your terminal</small></span
                 >
-                <CommandSnippet v-if="command" :command="command" kind="add" inline />
-                <p v-else class="install-panel__notice" role="status">
-                  Plugin data is refreshing. Try again shortly.
-                </p>
+                <div class="hero-quick-start__command">
+                  <CommandSnippet v-if="command" :command="command" kind="add" inline />
+                  <p v-else class="install-panel__notice" role="status">
+                    Plugin data is refreshing. Try again shortly.
+                  </p>
+                  <a
+                    class="hero-quick-start__more-install"
+                    href="https://github.com/777genius/universal-agent-plugins#quick-start"
+                    target="_blank"
+                    rel="noreferrer"
+                    >Other installation methods <span aria-hidden="true">↗</span></a
+                  >
+                </div>
               </li>
             </ol>
             <div class="hero-quick-start__footer">
