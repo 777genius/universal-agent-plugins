@@ -20,6 +20,18 @@ const isDiscovered = computed(() => props.plugin.trust_state === 'conformant_unr
 const availableClients = computed(() =>
   clients.filter((client) => props.plugin.client_support.clients.includes(client.id)),
 );
+const deliverySummary = computed(() => {
+  const delivery = props.plugin.client_support.delivery;
+  const managed = availableClients.value.filter(
+    (client) => delivery[client.id] === 'managed',
+  ).length;
+  const prepared = availableClients.value.filter((client) =>
+    ['prepared', 'manual_activation'].includes(delivery[client.id] ?? ''),
+  ).length;
+  if (managed + prepared < availableClients.value.length || !availableClients.value.length)
+    return 'Agent compatibility checked when you run the command';
+  return `${managed} installed automatically · ${prepared} require one final step`;
+});
 const initialTarget =
   availableClients.value.find((client) => client.id === 'cursor')?.id ??
   availableClients.value[0]?.id;
@@ -91,17 +103,17 @@ const provenanceURL = computed(() => {
 });
 const detailURL = computed(() =>
   isDiscovered.value
-    ? { path: '/plugins/community', query: { source: props.plugin.install_source } }
-    : `/plugins/${props.plugin.name}`,
+    ? { path: '/plugins/community/', query: { source: props.plugin.install_source } }
+    : `/plugins/${props.plugin.name}/`,
 );
 const securityDetailURL = computed(() =>
   isDiscovered.value
     ? {
-        path: '/plugins/community',
+        path: '/plugins/community/',
         query: { source: props.plugin.install_source },
         hash: '#security-review',
       }
-    : `/plugins/${props.plugin.name}#security-review`,
+    : `/plugins/${props.plugin.name}/#security-review`,
 );
 
 function updateTargets(values: string[]) {
@@ -130,7 +142,7 @@ function updateAutoDetect(value: boolean) {
       :class="{ 'plugin-card__ribbon--muted': !canInstall }"
       >{{
         canInstall
-          ? 'Reviewed plugin'
+          ? 'Reviewed listing'
           : expired
             ? 'Temporarily paused'
             : !published
@@ -160,10 +172,10 @@ function updateAutoDetect(value: boolean) {
               ? 'Found on GitHub'
               : 'Currently unavailable'
           }}
+          · {{ plugin.source.repository }}{{ plugin.source.path ? `/${plugin.source.path}` : '' }}
         </p>
         <p v-else-if="canInstall" class="plugin-card__source-label">
-          Ready for {{ availableClients.length }} supported
-          {{ availableClients.length === 1 ? 'agent' : 'agents' }}
+          {{ deliverySummary }}
         </p>
       </div>
     </div>

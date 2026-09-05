@@ -1604,6 +1604,62 @@ img {
   justify-content: space-between;
   gap: 15px;
 }
+.catalog-active-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+}
+.catalog-filter-chip,
+.catalog-filter-reset {
+  padding: 7px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.72rem;
+  cursor: pointer;
+}
+.catalog-filter-reset:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.catalog-filter-chip:focus-visible,
+.catalog-filter-reset:focus-visible,
+.plugin-other-sources > summary:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 3px;
+}
+.plugin-source-group {
+  min-width: 0;
+}
+.plugin-other-sources {
+  margin-top: 8px;
+}
+.plugin-other-sources > summary {
+  padding: 8px;
+  color: var(--subtle);
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+.plugin-other-sources__list {
+  list-style: none;
+  padding: 0 8px;
+  margin: 0;
+}
+.plugin-other-sources__list li {
+  display: grid;
+  gap: 4px;
+  padding: 10px 0;
+  border-top: 1px solid var(--line);
+  overflow-wrap: anywhere;
+  font-size: 0.72rem;
+}
+.plugin-other-sources__list span {
+  color: var(--subtle);
+}
 .catalog-count {
   color: var(--subtle);
   font-size: 0.72rem;
@@ -2689,9 +2745,17 @@ img {
     margin: 0;
   }
   .hero-quick-start__step .command-snippet--inline pre {
-    font-size: 0.72rem;
+    font-size: 0.86rem;
     white-space: normal;
     overflow-wrap: anywhere;
+  }
+  .command-snippet pre,
+  .command-snippet--compact pre {
+    font-size: 0.84rem;
+  }
+  .command-snippet__header,
+  .command-snippet button {
+    font-size: 0.7rem;
   }
   .install-command-row {
     grid-template-columns: 1fr;

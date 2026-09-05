@@ -22,12 +22,12 @@ const pageUrl = `${siteUrl}/agents/${client.slug}/`;
 const breadcrumbId = `${pageUrl}#breadcrumb`;
 const listId = `${pageUrl}#plugin-list`;
 const title = `Agent Plugins for ${client.name} | Universal Agent Plugins`;
-const installCommand = `npx universal-agent-plugins add <plugin> --target ${client.id}`;
+const installCommand = `npx universal-agent-plugins add context7 --target ${client.id}`;
 
 usePageSeo(title, client.intro, {
   translate: false,
   pageType: 'CollectionPage',
-  canonicalPath: `/agents/${client.slug}`,
+  canonicalPath: `/agents/${client.slug}/`,
   pageProperties: {
     breadcrumb: { '@id': breadcrumbId },
     mainEntity: { '@id': listId },
@@ -100,8 +100,8 @@ usePageSeo(title, client.intro, {
             <h2 id="agent-install-title">Choose a plugin and install it</h2>
             <CommandSnippet :command="installCommand" kind="add" label="Install" />
             <p>
-              Replace <code>&lt;plugin&gt;</code> with a reviewed short name or a pinned GitHub
-              package source.
+              Try Context7, or replace <code>context7</code> with another compatible plugin's
+              reviewed short name or pinned GitHub package source.
             </p>
           </aside>
         </div>
@@ -157,7 +157,7 @@ usePageSeo(title, client.intro, {
         </div>
         <ul class="agent-page__plugin-grid">
           <li v-for="plugin in reviewedPlugins" :key="plugin.name">
-            <NuxtLink :to="`/plugins/${plugin.name}`">
+            <NuxtLink :to="`/plugins/${plugin.name}/`">
               <span class="agent-page__plugin-icon">
                 <img
                   v-if="pluginIcon(plugin)"
@@ -176,7 +176,7 @@ usePageSeo(title, client.intro, {
             </NuxtLink>
           </li>
         </ul>
-        <NuxtLink class="button button--secondary agent-page__directory-link" to="/plugins">
+        <NuxtLink class="button button--secondary agent-page__directory-link" to="/plugins/">
           Explore the full plugin directory <span aria-hidden="true">→</span>
         </NuxtLink>
       </v-container>

@@ -19,11 +19,29 @@ const iconURL = pluginIcon(plugin);
 const supportedClients = clients.filter((client) =>
   plugin.client_support.clients.includes(client.id),
 );
+const clientGroups = [
+  {
+    label: 'Managed by CLI',
+    clients: supportedClients.filter(
+      (client) => plugin.client_support.delivery[client.id] === 'managed',
+    ),
+  },
+  {
+    label: 'Requires a final step in the app',
+    clients: supportedClients.filter((client) =>
+      ['prepared', 'manual_activation'].includes(plugin.client_support.delivery[client.id] ?? ''),
+    ),
+  },
+  {
+    label: 'Delivery details not specified',
+    clients: supportedClients.filter((client) => !plugin.client_support.delivery[client.id]),
+  },
+].filter((group) => group.clients.length > 0);
 const initialTarget =
   supportedClients.find((client) => client.id === 'cursor')?.id ?? supportedClients[0]?.id;
 const targets = ref<ClientID[]>(initialTarget ? [initialTarget] : []);
 const autoDetect = ref(true);
-const trustLabel = 'Reviewed package';
+const trustLabel = 'Reviewed listing';
 const siteUrl = String(config.public.siteUrl).replace(/\/+$/, '');
 const pluginUrl = `${siteUrl}/plugins/${plugin.name}/`;
 const pluginSchemaId = `${pluginUrl}#plugin`;
@@ -93,7 +111,7 @@ usePageSeo(`${plugin.display_name} Agent Plugin | Universal Agent Plugins`, desc
       <v-container>
         <div class="plugin-detail__hero-topbar">
           <v-btn
-            to="/plugins"
+            to="/plugins/"
             variant="text"
             icon
             aria-label="Back to plugin directory"
@@ -102,7 +120,7 @@ usePageSeo(`${plugin.display_name} Agent Plugin | Universal Agent Plugins`, desc
             <v-icon :icon="mdiArrowLeft" size="22" />
           </v-btn>
           <nav class="breadcrumbs" aria-label="Breadcrumb">
-            <NuxtLink to="/plugins">Plugins</NuxtLink><span aria-hidden="true">/</span
+            <NuxtLink to="/plugins/">Plugins</NuxtLink><span aria-hidden="true">/</span
             ><span>{{ plugin.display_name }}</span>
           </nav>
         </div>
@@ -137,6 +155,11 @@ usePageSeo(`${plugin.display_name} Agent Plugin | Universal Agent Plugins`, desc
               >
             </div>
 
+            <p class="plugin-detail__summary">
+              The listing and metadata were reviewed. An automated security assessment, when
+              present, applies only to the exact scanned revision. Runtime behavior is not audited.
+            </p>
+
             <div class="plugin-detail__actions">
               <v-btn size="x-large" class="plugin-detail__install-cta" @click="openInstallSection">
                 Install plugin <v-icon :icon="mdiDownload" end size="20" />
@@ -155,13 +178,17 @@ usePageSeo(`${plugin.display_name} Agent Plugin | Universal Agent Plugins`, desc
 
           <div class="plugin-detail__summary-card">
             <p class="plugin-detail__summary-eyebrow">Plugin overview</p>
-            <div class="plugin-detail__summary-block">
-              <div class="plugin-detail__summary-title">Supported clients</div>
+            <div
+              v-for="group in clientGroups"
+              :key="group.label"
+              class="plugin-detail__summary-block"
+            >
+              <div class="plugin-detail__summary-title">{{ group.label }}</div>
               <div class="plugin-detail__client-list">
                 <NuxtLink
-                  v-for="client in supportedClients"
+                  v-for="client in group.clients"
                   :key="client.id"
-                  :to="`/agents/${clientLandingById.get(client.id)?.slug}`"
+                  :to="`/agents/${clientLandingById.get(client.id)?.slug}/`"
                   class="plugin-detail__client"
                 >
                   <img :src="asset(`client-icons/${client.icon}`)" alt="" width="22" height="22" >

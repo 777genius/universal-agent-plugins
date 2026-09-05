@@ -15,11 +15,22 @@ test('CSS background works without JavaScript and keeps unique logos on the circ
     for (const client of uniqueLogos) {
       const logo = field.locator(`[data-client-id="${client.id}"] img`);
       await expect(logo).toHaveAttribute('src', new RegExp(`/client-icons/${client.icon}$`));
-      await expect.poll(() => logo.evaluate((image: HTMLImageElement) => image.complete && image.naturalWidth > 0)).toBe(true);
     }
+    await expect
+      .poll(() =>
+        field
+          .locator('[data-client-id] img')
+          .evaluateAll((images: HTMLImageElement[]) =>
+            images.every((image) => image.complete && image.naturalWidth > 0),
+          ),
+      )
+      .toBe(true);
     // Flatten the camera only; retain the historical spoke/circumference geometry.
     await field.locator('.hero-agent-field__plane').evaluate((node: HTMLElement) => {
-      node.style.transform = 'none';
+      // CSS animations outrank ordinary inline declarations while they are
+      // settling. Important keeps this geometry probe deterministic even when
+      // the full browser suite starts several contexts at once.
+      node.style.setProperty('transform', 'none', 'important');
     });
     await expect.poll(() => field.locator('.hero-agent-field__plane')
       .evaluate((node) => getComputedStyle(node).transform)).toBe('none');

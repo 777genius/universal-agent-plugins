@@ -20,9 +20,7 @@ const availableClients = computed(() =>
     ? clients.filter((client) => plugin.value!.client_support.clients.includes(client.id))
     : [],
 );
-const sourceUnavailable = computed(
-  () => plugin.value?.discovery?.availability === 'unavailable',
-);
+const sourceUnavailable = computed(() => plugin.value?.discovery?.availability === 'unavailable');
 const targets = ref<ClientID[]>([]);
 const autoDetect = ref(true);
 
@@ -50,11 +48,11 @@ usePageSeo(
 </script>
 
 <template>
-  <div class="registry-surface plugin-page">
+  <div class="registry-surface plugin-page community-plugin-page">
     <PageBackground />
     <div class="container">
       <nav class="breadcrumbs" aria-label="Breadcrumb">
-        <NuxtLink to="/plugins">Plugins</NuxtLink><span aria-hidden="true">/</span
+        <NuxtLink to="/plugins/">Plugins</NuxtLink><span aria-hidden="true">/</span
         ><span>{{ plugin?.display_name ?? 'Community plugin' }}</span>
       </nav>
 
@@ -76,7 +74,7 @@ usePageSeo(
           <dl class="plugin-facts">
             <div>
               <dt>Author</dt>
-              <dd>{{ plugin.author.name }}</dd>
+              <dd>{{ plugin.author.name || 'Not declared' }}</dd>
             </div>
             <div>
               <dt>{{ sourceUnavailable ? 'Last known agents' : 'Works with' }}</dt>
@@ -84,14 +82,16 @@ usePageSeo(
                 {{
                   availableClients.length
                     ? availableClients.map((client) => client.name).join(', ')
-                    : 'No supported agents yet'
+                    : plugin.client_support.resolution === 'install_time' && plugin.installable
+                      ? 'Detected at install time'
+                      : 'Not declared'
                 }}
               </dd>
             </div>
             <div>
               <dt>{{ sourceUnavailable ? 'Last known components' : 'Components' }}</dt>
               <dd>
-                {{ plugin.components.length ? plugin.components.join(', ') : 'No installable tools' }}
+                {{ plugin.components.length ? plugin.components.join(', ') : 'Not declared' }}
               </dd>
             </div>
             <div>
@@ -115,8 +115,27 @@ usePageSeo(
       <div v-else class="community-plugin-state">
         <h1>Plugin not found</h1>
         <p>This package is no longer available in the current directory.</p>
-        <NuxtLink class="button button--primary" to="/plugins">Explore plugins</NuxtLink>
+        <NuxtLink class="button button--primary" to="/plugins/">Explore plugins</NuxtLink>
       </div>
     </div>
   </div>
 </template>
+
+<style scoped>
+.community-plugin-page .plugin-page__grid {
+  grid-template-columns: minmax(0, 1fr);
+  max-width: 960px;
+  margin-inline: auto;
+  gap: 32px;
+}
+
+.community-plugin-page :deep(.install-panel) {
+  position: static;
+}
+
+.plugin-profile,
+.plugin-facts dd {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+</style>

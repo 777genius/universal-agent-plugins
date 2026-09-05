@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { productSoftwareSchema } from '~/utils/seo';
 
-const { content } = useLandingContent();
 const config = useRuntimeConfig();
 const description =
   'Install the Universal Agent Plugins CLI on macOS, Linux, or Windows and manage Agent Plugins 1.0 from one command.';
@@ -24,9 +23,7 @@ usePageSeo('Download Universal Agent Plugins CLI', description, {
 </script>
 
 <template>
-  <v-container class="section">
-    <h1 class="text-h4 section-title">{{ content.download.title }}</h1>
-    <p class="text-body-2 mb-6">{{ content.download.note }}</p>
-    <DownloadSection />
-  </v-container>
+  <div class="download-page">
+    <DownloadSection heading-tag="h1" />
+  </div>
 </template>

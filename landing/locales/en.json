@@ -85,8 +85,8 @@
       "linux": "Linux",
       "other": "your device"
     },
-    "supportTitle": "Support snapshot",
-    "supportSubtitle": "Real support depth today, based on the current support policy and target matrix.",
+    "supportTitle": "Supported agents",
+    "supportSubtitle": "Compatibility depends on the plugin. The CLI checks each selected agent and prints any activation or sign-in steps that remain.",
     "supportLink": "Read the support boundary"
   },
   "common": {
