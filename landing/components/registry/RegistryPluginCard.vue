@@ -13,8 +13,11 @@ import {
 } from '~/utils/registry';
 import { pluginCommands } from '~/utils/commands';
 
-const props = defineProps<{ plugin: RegistryPlugin }>();
-const { asset, pluginIcon } = useSite();
+const props = withDefaults(
+  defineProps<{ plugin: RegistryPlugin; alternatives?: RegistryPlugin[] }>(),
+  { alternatives: () => [] },
+);
+const { asset, pluginIcon, sourceUrl } = useSite();
 const { current, expired, published } = useDirectoryStatus();
 const isDiscovered = computed(() => props.plugin.trust_state === 'conformant_unreviewed');
 const availableClients = computed(() =>
@@ -116,6 +119,12 @@ const securityDetailURL = computed(() =>
     : `/plugins/${props.plugin.name}/#security-review`,
 );
 
+function alternativeDetailURL(alternative: RegistryPlugin) {
+  return alternative.trust_state === 'conformant_unreviewed'
+    ? { path: '/plugins/community/', query: { source: alternative.install_source } }
+    : `/plugins/${alternative.name}/`;
+}
+
 function updateTargets(values: string[]) {
   const allowed = new Set(availableClients.value.map((client) => client.id));
   const next = values.filter((value): value is (typeof clients)[number]['id'] =>
@@ -142,12 +151,12 @@ function updateAutoDetect(value: boolean) {
       :class="{ 'plugin-card__ribbon--muted': !canInstall }"
       >{{
         canInstall
-          ? 'Reviewed listing'
+          ? 'reviewed listing'
           : expired
-            ? 'Temporarily paused'
+            ? 'temporarily paused'
             : !published
-              ? 'Preview only'
-              : 'Not available'
+              ? 'preview only'
+              : 'not available'
       }}</span
     >
     <div
@@ -172,19 +181,28 @@ function updateAutoDetect(value: boolean) {
               ? 'Found on GitHub'
               : 'Currently unavailable'
           }}
-          · {{ plugin.source.repository }}{{ plugin.source.path ? `/${plugin.source.path}` : '' }}
+          ·
+          <a :href="sourceUrl(plugin)" target="_blank" rel="noreferrer">
+            {{ plugin.source.repository }}{{ plugin.source.path ? `/${plugin.source.path}` : '' }}
+          </a>
         </p>
         <p v-else-if="canInstall" class="plugin-card__source-label">
           {{ deliverySummary }}
         </p>
       </div>
     </div>
-    <p
-      v-if="isDiscovered"
-      class="plugin-card__author plugin-card__popularity"
-      title="Stars belong to the GitHub repository, not this individual package"
-    >
-      <span aria-hidden="true">★</span> {{ repositoryStars }} stars on repo · Agent Plugins 1.0
+    <p v-if="isDiscovered" class="plugin-card__author plugin-card__popularity">
+      <AppTooltip>
+        <template #trigger>
+          <button type="button" class="plugin-card__popularity-trigger">
+            <span aria-hidden="true">★</span> {{ repositoryStars }} stars on repo
+          </button>
+        </template>
+        <p class="app-tooltip__compact">
+          This is the GitHub repository's star count, not a rating for this individual plugin.
+        </p>
+      </AppTooltip>
+      <span aria-hidden="true"> · </span>Agent Plugins 1.0
     </p>
     <SecurityAssessmentBadge
       v-if="plugin.security"
@@ -192,6 +210,36 @@ function updateAutoDetect(value: boolean) {
       :details-to="securityDetailURL"
     />
     <p class="plugin-card__description">{{ plugin.description }}</p>
+    <details v-if="alternatives.length" class="plugin-other-sources">
+      <summary>
+        Other sources ({{ alternatives.length }})<span class="sr-only">
+          for {{ plugin.display_name }}</span
+        >
+      </summary>
+      <ul class="plugin-other-sources__list">
+        <li v-for="alternative in alternatives" :key="alternative.install_source">
+          <NuxtLink :to="alternativeDetailURL(alternative)">
+            {{ alternative.source.repository
+            }}{{ alternative.source.path ? `/${alternative.source.path}` : '' }}
+          </NuxtLink>
+          <span
+            >{{
+              alternative.trust_state === 'conformant_unreviewed'
+                ? 'community listing'
+                : 'reviewed listing'
+            }}
+            ·
+            {{
+              alternative.distributions.find((item) => item.id === alternative.default_distribution)
+                ?.kind === 'upstream'
+                ? 'upstream'
+                : 'community / direct'
+            }}
+            · {{ alternative.installable ? 'installable' : 'unavailable' }}</span
+          >
+        </li>
+      </ul>
+    </details>
     <div class="plugin-card__bottom">
       <button
         v-if="canInstall"

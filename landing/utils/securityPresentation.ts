@@ -9,6 +9,14 @@ export interface SecurityFindingGroups {
   hidden: number;
 }
 
+export interface SecurityTooltipPresentation {
+  label: string;
+  scope: string;
+  findings: SecurityFinding[];
+  remaining: number;
+  disclaimer: string;
+}
+
 type SecurityAssessment = NonNullable<RegistryPlugin['security']>;
 
 // These findings describe repository automation. The workflows are not copied
@@ -47,21 +55,28 @@ export function securityAssessmentHeading(assessment: SecurityAssessment): strin
   return 'Automated review notes';
 }
 
-export function securityAssessmentTooltip(plugin: RegistryPlugin): string {
+export function securityAssessmentTooltip(plugin: RegistryPlugin): SecurityTooltipPresentation {
   const assessment = plugin.security;
-  if (!assessment) return '';
+  if (!assessment) {
+    return {
+      label: '',
+      scope: '',
+      findings: [],
+      remaining: 0,
+      disclaimer: '',
+    };
+  }
   const groups = groupSecurityFindings(assessment);
   const revision = shortRevision(plugin.source.revision);
-  const lines = [
-    securityAssessmentLabel(assessment),
-    `Checked indexed revision ${revision} with LintAI ${assessment.scanner.version}.`,
-  ];
   const preview = [...groups.installer, ...groups.maintainer].slice(0, 2);
-  lines.push(...preview.map((finding) => `${finding.code}: ${finding.message}`));
-  const remaining = assessment.counts.total - preview.length;
-  if (remaining > 0) lines.push(`+${remaining} more in the full review.`);
-  lines.push('This result applies only to the checked files and is not a guarantee of safety.');
-  return lines.join('\n');
+  return {
+    label: securityAssessmentLabel(assessment),
+    scope: `LintAI ${assessment.scanner.version} checked exact indexed revision ${revision}.`,
+    findings: preview,
+    remaining: Math.max(0, assessment.counts.total - preview.length),
+    disclaimer:
+      'This static check looks for configured patterns. It does not run the plugin or guarantee safety.',
+  };
 }
 
 export function shortRevision(revision: string | null): string {

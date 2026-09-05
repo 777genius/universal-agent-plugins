@@ -42,7 +42,7 @@ const initialTarget =
   supportedClients.find((client) => client.id === 'cursor')?.id ?? supportedClients[0]?.id;
 const targets = ref<ClientID[]>(initialTarget ? [initialTarget] : []);
 const autoDetect = ref(true);
-const trustLabel = 'Reviewed listing';
+const trustLabel = 'reviewed listing';
 const siteUrl = String(config.public.siteUrl).replace(/\/+$/, '');
 const pluginUrl = `${siteUrl}/plugins/${plugin.name}/`;
 const pluginSchemaId = `${pluginUrl}#plugin`;

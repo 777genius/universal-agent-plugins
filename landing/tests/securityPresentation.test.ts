@@ -77,10 +77,11 @@ describe('security assessment presentation', () => {
       3,
     );
     const tooltip = securityAssessmentTooltip(subject);
-    assert.match(tooltip, /indexed revision abcdef123456/);
-    assert.match(tooltip, /SEC329: MCP config launches a mutable package/);
-    assert.match(tooltip, /\+2 more/);
-    assert.match(tooltip, /not a guarantee of safety/);
+    assert.match(tooltip.scope, /exact indexed revision abcdef123456/);
+    assert.equal(tooltip.findings[0]?.code, 'SEC329');
+    assert.match(tooltip.findings[0]?.message ?? '', /MCP config launches a mutable package/);
+    assert.equal(tooltip.remaining, 2);
+    assert.match(tooltip.disclaimer, /not run the plugin or guarantee safety/);
     assert.equal(groupSecurityFindings(subject.security!).hidden, 2);
   });
 });

@@ -55,7 +55,12 @@ test('homepage installs with auto-detection and exposes the full directory', asy
   await expect(securityBadge).toContainText(
     /Automated review: (?:no blocking findings|\d+ notes?|\d+ blocking findings?)/,
   );
-  await expect(securityBadge).toHaveAttribute('title', /Checked indexed revision [0-9a-f]{12}/);
+  await expect(securityBadge).not.toHaveAttribute('title');
+  await securityBadge.hover();
+  const securityTooltip = page.locator('.app-tooltip');
+  await expect(securityTooltip).toBeVisible();
+  await expect(securityTooltip).toContainText(/exact indexed revision [0-9a-f]{12}/);
+  await expect(securityTooltip).toContainText(/does not run the plugin or guarantee safety/i);
   await expect(page.getByText(/guarantee of safety/i)).toHaveCount(0);
   await expect(page.locator('.catalog-count')).toContainText(/[2-9]\d{3} plugins/, {
     timeout: 15_000,
@@ -284,9 +289,17 @@ test('security badges explain the exact checked revision and open full findings'
   page,
 }) => {
   await page.goto('./');
+  await expect(page.locator('.catalog')).toHaveAttribute('data-discovery-state', /current|cached/, {
+    timeout: 15_000,
+  });
   const badge = page.locator('.plugin-card__security--warnings').first();
   await expect(badge).toBeVisible({ timeout: 15_000 });
-  await expect(badge).toHaveAttribute('title', /SEC\d+:/);
+  await expect(badge).not.toHaveAttribute('title');
+  await badge.focus();
+  const tooltip = page.locator('.app-tooltip');
+  await expect(tooltip).toBeVisible();
+  await expect(tooltip).toContainText(/SEC\d+/);
+  await expect(tooltip).toContainText(/exact indexed revision [0-9a-f]{12}/);
   await expect(badge).toHaveAttribute('href', /plugins\/community.*#security-review/);
 
   await badge.click();

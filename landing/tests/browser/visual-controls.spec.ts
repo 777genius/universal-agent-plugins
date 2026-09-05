@@ -3,6 +3,10 @@ import { expect, test } from '@playwright/test';
 test('flat filters retain keyboard selection, category search, and reset', async ({ page }) => {
   await page.goto('./');
   await expect(page.getByText('In your terminal', { exact: true })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Other installation methods' })).toHaveAttribute(
+    'href',
+    'https://github.com/777genius/universal-agent-plugins#quick-start',
+  );
   await expect(page.getByText('No target flag means auto-detect')).toHaveCount(0);
   const controls = page.getByRole('search', { name: 'Filter plugins' });
   await controls.scrollIntoViewIfNeeded();

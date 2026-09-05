@@ -11,10 +11,17 @@ export interface CatalogFilters {
   owner?: string;
 }
 
-/** Keep metadata-only Discovery records available by direct URL, not in the install catalog. */
+const retiredCatalogRepositories = new Set(['777genius/universal-agent-plugins-registry']);
+
+/** Keep retired and metadata-only Discovery records available by direct URL, not in the catalog. */
 export function catalogVisiblePlugins(plugins: RegistryPlugin[]): RegistryPlugin[] {
   return plugins.filter(
-    (plugin) => plugin.trust_state !== 'conformant_unreviewed' || plugin.installable,
+    (plugin) =>
+      !(
+        plugin.trust_state === 'conformant_unreviewed' &&
+        retiredCatalogRepositories.has(plugin.source.repository.toLowerCase())
+      ) &&
+      (plugin.trust_state !== 'conformant_unreviewed' || plugin.installable),
   );
 }
 
