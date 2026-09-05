@@ -39,8 +39,7 @@ const targetOptions = computed(() =>
 const commands = computed(() =>
   props.plugin.installable &&
   current.value &&
-  targets.value.length &&
-  (autoDetect.value || hasCompleteSource.value)
+  (autoDetect.value || (targets.value.length > 0 && hasCompleteSource.value))
     ? pluginCommands(props.plugin, autoDetect.value ? undefined : targets.value)
     : undefined,
 );
@@ -57,7 +56,7 @@ const chatgptSelected = computed(
     selectedTargets.value.some((target) => target.client === 'chatgpt' && target.app_binding),
 );
 const unavailableDiscoveryReason = computed(() => {
-  if (props.plugin.trust_state !== 'conformant_unreviewed' || props.plugin.installable) return '';
+  if (props.plugin.installable) return '';
   if (props.plugin.discovery?.availability === 'unavailable')
     return 'This package is no longer available from its source.';
   if (!props.plugin.components.length)
@@ -145,6 +144,7 @@ watch(availableClients, (next) => {
     <p
       v-else-if="!unavailableDiscoveryReason && !autoDetect && !hasCompleteSource"
       class="install-panel__notice"
+      role="status"
     >
       <strong>Commands unavailable.</strong> {{ resolution.unavailable_reason }}
     </p>
@@ -158,11 +158,17 @@ watch(availableClients, (next) => {
       {{ plugin.display_name }} in Apps or Plugins, connect it, and start a new chat. Availability
       depends on your account and workspace.
     </p>
-    <p v-if="!autoDetect && resolution.fallback_reason && current" class="install-panel__notice">
+    <p
+      v-if="!unavailableDiscoveryReason && !autoDetect && resolution.fallback_reason && current"
+      class="install-panel__notice"
+    >
       <strong>Expected source fallback: {{ expectedSource?.label }}.</strong>
       {{ resolution.fallback_reason }}
     </p>
-    <p v-else-if="!autoDetect && !hasCompleteSource && current" class="install-panel__notice">
+    <p
+      v-else-if="!unavailableDiscoveryReason && !autoDetect && !hasCompleteSource && current"
+      class="install-panel__notice"
+    >
       <strong>No single source serves this target set.</strong> The CLI will fail before mutation
       and suggest compatible target/source combinations; it never mixes distributions across
       clients.
@@ -173,3 +179,23 @@ watch(availableClients, (next) => {
     </p>
   </aside>
 </template>
+
+<style scoped>
+.install-panel {
+  min-width: 0;
+  width: 100%;
+}
+
+.target-select :deep(.app-multiselect__trigger) {
+  padding-block: 10px;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.target-select :deep(.app-multiselect__value > span:last-child) {
+  overflow: visible;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-align: left;
+}
+</style>

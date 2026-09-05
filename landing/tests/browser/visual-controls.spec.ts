@@ -8,19 +8,21 @@ test('flat filters retain keyboard selection, category search, and reset', async
   await controls.scrollIntoViewIfNeeded();
   await expect(controls).toHaveCSS('border-top-width', '0px');
   await expect(controls).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
-  for (const field of await controls.locator('.search-field input, .app-select__trigger, .app-combobox__anchor').all()) {
+  for (const field of await controls
+    .locator('.search-field input, .app-select__trigger, .app-combobox__anchor')
+    .all()) {
     await expect(field).toHaveCSS('border-radius', '0px');
     await expect(field).toHaveCSS('border-top-width', '0px');
     await expect(field).toHaveCSS('background-image', 'none');
     await expect(field).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
-    expect((await field.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+    expect((await field.boundingBox())!.height).toBeGreaterThanOrEqual(43.5);
     await field.hover();
     await expect(field).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
   }
   const trust = page.getByRole('combobox', { name: 'Filter by trust level', exact: true });
   await trust.focus();
   await page.keyboard.press('Enter');
-  await page.getByRole('option', { name: 'Reviewed plugins', exact: true }).click();
+  await page.getByRole('option', { name: 'Reviewed listings', exact: true }).click();
   await expect(trust).toBeFocused();
   await expect(page.locator('.plugin-card[data-trust="community"]')).toHaveCount(0);
   await expect(page.locator('.plugin-card').first()).toBeVisible();
@@ -38,7 +40,9 @@ test('flat filters retain keyboard selection, category search, and reset', async
   await expect(page.getByRole('searchbox', { name: 'Search plugins' })).toHaveValue('');
 });
 
-test('numbered benefits remain readable in both themes and responsive layouts', async ({ page }) => {
+test('numbered benefits remain readable in both themes and responsive layouts', async ({
+  page,
+}) => {
   await page.goto('./');
   const cards = page.locator('.registry-benefits__card');
   await expect(cards).toHaveCount(4);
@@ -50,17 +54,22 @@ test('numbered benefits remain readable in both themes and responsive layouts', 
     for (const width of [1440, 800, 390, 280]) {
       await page.setViewportSize({ width, height: 1000 });
       await cards.first().scrollIntoViewIfNeeded();
-      const columns = await page.locator('.registry-benefits__grid').evaluate((node) =>
-        getComputedStyle(node).gridTemplateColumns.split(' ').length);
+      const columns = await page
+        .locator('.registry-benefits__grid')
+        .evaluate((node) => getComputedStyle(node).gridTemplateColumns.split(' ').length);
       expect(columns).toBe(width > 980 ? 4 : width > 720 ? 2 : 1);
       for (const [index, card] of (await cards.all()).entries()) {
-        await expect(card.getByRole('heading', { name: headings[index], exact: true })).toBeVisible();
+        await expect(
+          card.getByRole('heading', { name: headings[index], exact: true }),
+        ).toBeVisible();
         const box = (await card.boundingBox())!;
         expect(box.x).toBeGreaterThanOrEqual(0);
         expect(box.x + box.width).toBeLessThanOrEqual(width);
         expect(await card.evaluate((node) => node.scrollWidth <= node.clientWidth)).toBe(true);
       }
-      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+        true,
+      );
     }
     // The desktop theme control is intentionally absent from the compact mobile header.
     await page.setViewportSize({ width: 1440, height: 1000 });

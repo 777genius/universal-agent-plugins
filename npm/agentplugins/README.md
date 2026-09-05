@@ -23,7 +23,7 @@ verified scripts in the [project README](https://github.com/777genius/universal-
 3. Follow any activation or sign-in instruction printed by the CLI.
 4. Start a new agent session and use the plugin.
 
-[Browse 2,500+ plugins](https://777genius.github.io/universal-agent-plugins-registry/)
+[Browse 2,500+ plugins](https://777genius.github.io/universal-agent-plugins/plugins/)
 
 ## What it does
 
@@ -104,7 +104,7 @@ and caches it locally. Native release tests cover x64 and arm64 on all three
 operating systems.
 
 - [Source and documentation](https://github.com/777genius/universal-agent-plugins)
-- [Browse the registry](https://777genius.github.io/universal-agent-plugins-registry/)
+- [Browse the plugin catalog](https://777genius.github.io/universal-agent-plugins/plugins/)
 - [Client E2E evidence](https://github.com/777genius/universal-agent-plugins/blob/main/docs/AGENTPLUGINS_CLIENT_E2E.md)
 
 Universal Agent Plugins is an independent community project. It is not

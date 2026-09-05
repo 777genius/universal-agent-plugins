@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/discoveryv1"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
 type fixedDiscoveryClient struct {
@@ -115,15 +116,15 @@ func TestHumanSearchShowsExactProvenanceTrustAndRunnableInstallCommand(t *testin
 	fixture := newCLIFixture(t, nil)
 	fixture.app.DirectoryClient = &fixedDirectoryClient{bundle: readModelBundle()}
 	fixture.app.DiscoveryClient = &fixedDiscoveryClient{bundle: discoverySearchBundle()}
-	stdout, _, err := fixture.execute(false, "search", "upstream/demo", "--trust", "unreviewed", "--client", "cursor")
+	stdout, _, err := fixture.execute(false, "search", "upstream/demo", "--trust", "unreviewed", "--client", "cursor", "--details")
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, want := range []string{
-		"[unreviewed, available]",
+		"[unreviewed]",
 		"source: upstream/demo@" + strings.Repeat("a", 40) + "//plugin",
-		"schema: Agent Plugins 1.0; runtime: not reviewed",
-		"npx universal-agent-plugins install discovery:upstream/demo//plugin --target cursor",
+		"schema: https://agent-plugins.org/schemas/1.0.0/plugin.schema.json; runtime: not reviewed",
+		"npx universal-agent-plugins add discovery:upstream/demo//plugin --target cursor",
 	} {
 		if !strings.Contains(stdout, want) {
 			t.Fatalf("human search omitted %q:\n%s", want, stdout)
@@ -131,7 +132,7 @@ func TestHumanSearchShowsExactProvenanceTrustAndRunnableInstallCommand(t *testin
 	}
 }
 
-func TestHumanSearchUsesShellSafeTargetPlaceholderWithoutClient(t *testing.T) {
+func TestHumanSearchOmitsTargetAndTechnicalDetailsWithoutClient(t *testing.T) {
 	t.Parallel()
 	fixture := newCLIFixture(t, nil)
 	fixture.app.DirectoryClient = &fixedDirectoryClient{bundle: readModelBundle()}
@@ -140,9 +141,9 @@ func TestHumanSearchUsesShellSafeTargetPlaceholderWithoutClient(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := "npx universal-agent-plugins install discovery:upstream/demo//plugin --target YOUR_AGENT"
-	if !strings.Contains(stdout, want) || strings.Contains(stdout, "--target <agent>") {
-		t.Fatalf("human search target placeholder is not shell-safe:\n%s", stdout)
+	want := "npx universal-agent-plugins add discovery:upstream/demo//plugin\n"
+	if !strings.Contains(stdout, want) || strings.Contains(stdout, "--target") || strings.Contains(stdout, "source:") || strings.Contains(stdout, "runtime:") {
+		t.Fatalf("human search is not compact:\n%s", stdout)
 	}
 }
 
@@ -157,8 +158,111 @@ func TestHumanSearchDoesNotOfferInstallForUnavailablePackage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(stdout, "install: unavailable at indexed source") || strings.Contains(stdout, "npx universal-agent-plugins install") {
+	if !strings.Contains(stdout, "0 results") || strings.Contains(stdout, "npx universal-agent-plugins") {
 		t.Fatalf("human search offered installation for an unavailable package:\n%s", stdout)
+	}
+	details, _, err := fixture.execute(false, "search", "upstream/demo", "--trust", "unreviewed", "--details")
+	if err != nil || !strings.Contains(details, "install: unavailable at indexed source") || strings.Contains(details, "npx universal-agent-plugins") {
+		t.Fatalf("unavailable details = %q, err = %v", details, err)
+	}
+	jsonOutput, _, err := fixture.execute(false, "search", "upstream/demo", "--trust", "unreviewed", "--format", "json")
+	if err != nil || !strings.Contains(jsonOutput, `"status":"unavailable"`) {
+		t.Fatalf("JSON lost unavailable result: %q, err = %v", jsonOutput, err)
+	}
+}
+
+func TestHumanSearchGroupsSourcesWhileJSONRetainsRecords(t *testing.T) {
+	t.Parallel()
+	fixture := newCLIFixture(t, nil)
+	fixture.app.DirectoryClient = &fixedDirectoryClient{bundle: readModelBundle()}
+	fixture.app.DiscoveryClient = &fixedDiscoveryClient{bundle: discoverySearchBundle()}
+	compact, _, err := fixture.execute(false, "search", "demo")
+	if err != nil || !strings.HasPrefix(compact, "1 results") || strings.Count(compact, "npx universal-agent-plugins add ") != 1 || !strings.Contains(compact, "add demo\n") {
+		t.Fatalf("compact grouping = %q, err = %v", compact, err)
+	}
+	details, _, err := fixture.execute(false, "search", "demo", "--details")
+	if err != nil || !strings.Contains(details, "Other sources (") || !strings.Contains(details, "discovery:upstream/demo//plugin") {
+		t.Fatalf("details = %q, err = %v", details, err)
+	}
+	first, _, err := fixture.execute(false, "search", "demo", "--format", "json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, _, err := fixture.execute(false, "search", "demo", "--format", "json", "--details")
+	if err != nil || first != second || !strings.Contains(first, "discovery:upstream/demo//plugin") {
+		t.Fatalf("JSON changed with presentation flag: %q vs %q, err=%v", first, second, err)
+	}
+}
+
+func TestHumanSearchTypoFallbackRespectsFiltersAndJSON(t *testing.T) {
+	t.Parallel()
+	fixture := newCLIFixture(t, nil)
+	fixture.app.DirectoryClient = &fixedDirectoryClient{bundle: readModelBundle()}
+	bundle := discoverySearchBundle()
+	bundle.Search.Records[0].Name = "context7"
+	bundle.Search.Records[0].Slug = "discovery:upstream/context7//plugin"
+	fixture.app.DiscoveryClient = &fixedDiscoveryClient{bundle: bundle}
+	stdout, _, err := fixture.execute(false, "search", "contex7", "--trust", "unreviewed")
+	if err != nil || !strings.Contains(stdout, "context7") || !strings.Contains(stdout, "close name matches") {
+		t.Fatalf("typo fallback = %q, err=%v", stdout, err)
+	}
+	for _, filters := range [][]string{{"--owner", "other"}, {"--component", "skills"}, {"--client", "kiro"}, {"--auth", "required"}} {
+		args := append([]string{"search", "contex7", "--trust", "unreviewed"}, filters...)
+		output, _, err := fixture.execute(false, args...)
+		if err != nil || !strings.HasPrefix(output, "0 results") {
+			t.Fatalf("filters %v: %q err=%v", filters, output, err)
+		}
+	}
+	jsonOutput, _, err := fixture.execute(false, "search", "contex7", "--trust", "unreviewed", "--format", "json")
+	if err != nil || !strings.Contains(jsonOutput, `"results":[]`) {
+		t.Fatalf("JSON typo behavior changed: %q err=%v", jsonOutput, err)
+	}
+}
+
+func TestSearchIdentityTypoIsBounded(t *testing.T) {
+	for _, test := range []struct {
+		query string
+		want  bool
+	}{{"contex7", true}, {"contextt7", true}, {"contexx7", true}, {"context7", false}, {"ctx", false}, {"cntex", false}, {"owner/contex7", false}} {
+		if got := searchIdentityTypo(test.query, "context7"); got != test.want {
+			t.Errorf("%q = %v, want %v", test.query, got, test.want)
+		}
+	}
+}
+
+func TestHumanSearchPrimarySourcePreference(t *testing.T) {
+	t.Parallel()
+	base := searchResult{ManifestName: "context7", ProductID: "context7", DisplayName: "Context7", TrustState: "unreviewed", Status: "available", InstallSelector: "copy"}
+	community := base
+	community.TrustState, community.InstallSelector = "reviewed", "context7"
+	upstream := community
+	upstream.DistributionKind, upstream.InstallSelector = domain.DistributionUpstream, "upstream"
+	unavailable := upstream
+	unavailable.Status, unavailable.InstallSelector = "unavailable", "unavailable"
+	var output strings.Builder
+	if err := writeHumanSearch(&output, searchResponse{Query: "context7", Results: []searchResult{base, unavailable, community, upstream}}, searchOptions{details: true}); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(output.String(), "add context7\n") || strings.Count(output.String(), "npx universal-agent-plugins") != 1 || !strings.Contains(output.String(), "Other sources (3)") {
+		t.Fatalf("primary preference: %s", output.String())
+	}
+}
+
+func TestHumanSearchReviewedTypoAndExactMatchPrecedence(t *testing.T) {
+	t.Parallel()
+	fixture := newCLIFixture(t, nil)
+	fixture.app.DirectoryClient = &fixedDirectoryClient{bundle: readModelBundle()}
+	fixture.app.DiscoveryClient = &fixedDiscoveryClient{bundle: discoverySearchBundle()}
+	output, _, err := fixture.execute(false, "search", "demoo", "--trust", "reviewed")
+	if err != nil || !strings.Contains(output, "add demo\n") || !strings.Contains(output, "close name matches") {
+		t.Fatalf("reviewed typo: %q err=%v", output, err)
+	}
+	bundle := discoverySearchBundle()
+	bundle.Search.Records[0].Name = "demoo"
+	fixture.app.DiscoveryClient = &fixedDiscoveryClient{bundle: bundle}
+	output, _, err = fixture.execute(false, "search", "demoo")
+	if err != nil || strings.Contains(output, "close name matches") || strings.Contains(output, "add demo\n") || !strings.HasPrefix(output, "1 results") {
+		t.Fatalf("exact match precedence: %q err=%v", output, err)
 	}
 }
 

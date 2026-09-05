@@ -1,6 +1,15 @@
 <script setup lang="ts">
-import { availableFilters, catalogVisiblePlugins, filterPlugins } from '~/utils/filter';
+import {
+  availableFilters,
+  catalogVisiblePlugins,
+  filterPlugins,
+  groupCatalogPlugins,
+  catalogQuery,
+  restoreCatalogQuery,
+} from '~/utils/filter';
+import type { LocationQueryRaw } from 'vue-router';
 import type { RegistryPlugin } from '~/types/registry';
+import { canonicalPath } from '~/utils/seo';
 
 const props = withDefaults(
   defineProps<{ plugins: RegistryPlugin[]; heading?: string; intro?: string }>(),
@@ -18,11 +27,22 @@ const trust = ref('all');
 const client = ref('all');
 const authentication = ref('all');
 const owner = ref('all');
+const route = useRoute();
+const router = useRouter();
+const filterRefs = [query, category, component, source, trust, client, authentication, owner];
+function restoreFilters() {
+  restoreCatalogQuery(route.query).forEach((value, index) => {
+    filterRefs[index]!.value = value;
+  });
+}
+restoreFilters();
+watch(() => route.query, restoreFilters);
 const mobileFiltersOpen = ref(false);
 const pageSize = 48;
 const displayLimit = ref(pageSize);
 const discovery = useDiscoveryStatus();
 const catalogPlugins = computed(() => catalogVisiblePlugins(props.plugins));
+const catalogTotal = computed(() => groupCatalogPlugins(catalogPlugins.value).length);
 const filters = computed(() => availableFilters(catalogPlugins.value));
 type FilterOption = { value: string; label: string };
 let previousCategoryOptions: FilterOption[] = [];
@@ -61,7 +81,7 @@ const sourceOptions = [
 ];
 const trustOptions = [
   { value: 'all', label: 'All trust levels' },
-  { value: 'reviewed', label: 'Reviewed plugins' },
+  { value: 'reviewed', label: 'Reviewed listings' },
   { value: 'conformant_unreviewed', label: 'Community discovery' },
 ];
 const clientOptions = [
@@ -82,19 +102,21 @@ const ownerOptions = computed(() => [
   ...filters.value.owners.map((item) => ({ value: item, label: item })),
 ]);
 const visible = computed(() =>
-  filterPlugins(catalogPlugins.value, {
-    query: query.value,
-    category: category.value === 'all' ? '' : category.value,
-    component:
-      component.value === 'all'
-        ? undefined
-        : (component.value as RegistryPlugin['components'][number]),
-    source: source.value as 'all' | 'upstream' | 'community_bridge' | 'community' | 'direct',
-    trust: trust.value as 'all' | 'reviewed' | 'conformant_unreviewed',
-    client: client.value as 'all' | RegistryPlugin['client_support']['clients'][number],
-    authentication: authentication.value as 'all' | 'none' | 'required_or_unknown',
-    owner: owner.value === 'all' ? '' : owner.value,
-  }),
+  groupCatalogPlugins(
+    filterPlugins(catalogPlugins.value, {
+      query: query.value,
+      category: category.value === 'all' ? '' : category.value,
+      component:
+        component.value === 'all'
+          ? undefined
+          : (component.value as RegistryPlugin['components'][number]),
+      source: source.value as 'all' | 'upstream' | 'community_bridge' | 'community' | 'direct',
+      trust: trust.value as 'all' | 'reviewed' | 'conformant_unreviewed',
+      client: client.value as 'all' | RegistryPlugin['client_support']['clients'][number],
+      authentication: authentication.value as 'all' | 'none' | 'required_or_unknown',
+      owner: owner.value === 'all' ? '' : owner.value,
+    }),
+  ),
 );
 const displayed = computed(() => visible.value.slice(0, displayLimit.value));
 const remaining = computed(() => Math.max(0, visible.value.length - displayed.value.length));
@@ -104,8 +126,40 @@ const activeFilterCount = computed(
       (filter) => filter.value !== 'all',
     ).length,
 );
+const activeChips = computed(() => {
+  const labels = [
+    'Search',
+    'Category',
+    'Component',
+    'Source',
+    'Trust',
+    'Agent',
+    'Authentication',
+    'Owner',
+  ];
+  const options = [
+    [],
+    stableCategoryOptions.value,
+    stableComponentOptions.value,
+    sourceOptions,
+    trustOptions,
+    clientOptions,
+    authenticationOptions,
+    ownerOptions.value,
+  ];
+  return filterRefs.flatMap((filter, index) =>
+    filter.value !== (index === 0 ? '' : 'all')
+      ? [
+          {
+            index,
+            label: `${labels[index]}: ${options[index]?.find((option) => option.value === filter.value)?.label ?? filter.value}`,
+          },
+        ]
+      : [],
+  );
+});
 const catalogSummary = computed(() => {
-  const total = catalogPlugins.value.length;
+  const total = catalogTotal.value;
   if (!visible.value.length) return `No matches · ${total} total`;
   if (visible.value.length === total) return `${displayed.value.length} shown · ${total} plugins`;
   if (displayed.value.length < visible.value.length)
@@ -127,15 +181,19 @@ function clearFilters() {
 
 watch([query, category, component, source, trust, client, authentication, owner], () => {
   displayLimit.value = pageSize;
+  const values = filterRefs.map((filter) => filter.value);
+  if (JSON.stringify(values) !== JSON.stringify(restoreCatalogQuery(route.query))) {
+    void router.replace({
+      path: canonicalPath(route.path),
+      query: catalogQuery(values, route.query) as LocationQueryRaw,
+      hash: route.hash,
+    });
+  }
 });
 </script>
 
 <template>
-  <section
-    class="catalog"
-    aria-labelledby="catalog-title"
-    :data-discovery-state="discovery.state"
-  >
+  <section class="catalog" aria-labelledby="catalog-title" :data-discovery-state="discovery.state">
     <div class="section-heading">
       <p class="eyebrow">Plugin directory</p>
       <div class="catalog-heading-row">
@@ -164,7 +222,7 @@ watch([query, category, component, source, trust, client, authentication, owner]
           type="search"
           aria-label="Search plugins"
           placeholder="Search by name, author, or capability…"
-        >
+        />
         <button
           v-if="query"
           class="search-field__clear"
@@ -240,6 +298,26 @@ watch([query, category, component, source, trust, client, authentication, owner]
         />
       </div>
     </div>
+    <div class="catalog-active-filters" aria-label="Active filters">
+      <button
+        v-for="chip in activeChips"
+        :key="chip.index"
+        type="button"
+        class="catalog-filter-chip"
+        :aria-label="`Remove ${chip.label}`"
+        @click="filterRefs[chip.index]!.value = chip.index === 0 ? '' : 'all'"
+      >
+        {{ chip.label }} <span aria-hidden="true">×</span>
+      </button>
+      <button
+        type="button"
+        class="catalog-filter-reset"
+        :disabled="!activeChips.length"
+        @click="clearFilters"
+      >
+        Reset filters
+      </button>
+    </div>
     <div class="catalog-meta">
       <div>
         <div class="catalog-count" aria-live="polite">{{ catalogSummary }}</div>
@@ -252,21 +330,60 @@ watch([query, category, component, source, trust, client, authentication, owner]
             >Finding more community plugins on GitHub…</template
           >
           <template v-else-if="discovery.state === 'stale'"
-            >Community results are refreshing. Reviewed plugins remain available.</template
+            >Community results are refreshing. Reviewed listings remain available.</template
           >
           <template v-else-if="discovery.state === 'unavailable'"
-            >Community results are temporarily unavailable. Reviewed plugins remain
+            >Community results are temporarily unavailable. Reviewed listings remain
             available.</template
           >
         </p>
       </div>
     </div>
     <div v-if="visible.length" class="plugin-grid">
-      <RegistryPluginCard
-        v-for="plugin in displayed"
-        :key="plugin.install_source"
-        :plugin="plugin"
-      />
+      <div
+        v-for="group in displayed"
+        :key="group.primary.install_source"
+        class="plugin-source-group"
+      >
+        <RegistryPluginCard :plugin="group.primary" />
+        <details v-if="group.alternatives.length" class="plugin-other-sources">
+          <summary>
+            Other sources ({{ group.alternatives.length }})<span class="sr-only">
+              for {{ group.primary.display_name }}</span
+            >
+          </summary>
+          <ul class="plugin-other-sources__list">
+            <li v-for="alternative in group.alternatives" :key="alternative.install_source">
+              <NuxtLink
+                :to="
+                  alternative.trust_state === 'conformant_unreviewed'
+                    ? { path: '/plugins/community/', query: { source: alternative.install_source } }
+                    : `/plugins/${alternative.name}/`
+                "
+              >
+                {{ alternative.source.repository
+                }}{{ alternative.source.path ? `/${alternative.source.path}` : '' }}
+              </NuxtLink>
+              <span
+                >{{
+                  alternative.trust_state === 'conformant_unreviewed'
+                    ? 'Community listing'
+                    : 'Reviewed listing'
+                }}
+                ·
+                {{
+                  alternative.distributions.find(
+                    (item) => item.id === alternative.default_distribution,
+                  )?.kind === 'upstream'
+                    ? 'Upstream'
+                    : 'Community / direct'
+                }}
+                · {{ alternative.installable ? 'Installable' : 'Unavailable' }}</span
+              >
+            </li>
+          </ul>
+        </details>
+      </div>
     </div>
     <div v-else class="empty-state">
       <h3>No matching plugins</h3>

@@ -5,7 +5,13 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { pluginCommands } from '../utils/commands.ts';
 import { discoveryPlugin } from '../utils/discovery.ts';
-import { catalogVisiblePlugins, filterPlugins } from '../utils/filter.ts';
+import {
+  catalogVisiblePlugins,
+  filterPlugins,
+  groupCatalogPlugins,
+  catalogQuery,
+  restoreCatalogQuery,
+} from '../utils/filter.ts';
 import { mirroredIconPath, parseDirectoryData } from '../utils/registry.ts';
 import type { DiscoveryRecord, DiscoverySnapshot } from '../types/discovery.ts';
 
@@ -48,6 +54,125 @@ const discoveryRecord = {
 } satisfies DiscoveryRecord;
 
 describe('unified registry landing', () => {
+  it('groups alternate sources with a deterministic reviewed primary', () => {
+    const reviewed = registry.plugins[0]!;
+    const other = {
+      ...reviewed,
+      install_source: 'discovery:other/plugin',
+      trust_state: 'conformant_unreviewed' as const,
+      source: { ...reviewed.source, repository: 'other/plugin' },
+    };
+    const groups = groupCatalogPlugins([other, reviewed]);
+    assert.equal(groups.length, 1);
+    assert.equal(groups[0]?.primary, reviewed);
+    assert.deepEqual(groups[0]?.alternatives, [other]);
+    assert.equal(groupCatalogPlugins([reviewed, other])[0]?.primary, reviewed);
+  });
+
+  it('prefers upstream, available, non-test sources before stars', () => {
+    const base = registry.plugins[0]!;
+    const candidate = (id: string, upstream: boolean, installable: boolean, path: string) => ({
+      ...base,
+      install_source: id,
+      trust_state: 'conformant_unreviewed' as const,
+      installable,
+      source: { ...base.source, repository: `${id}/plugin`, path },
+      distributions: base.distributions.map((item) => ({
+        ...item,
+        kind: upstream ? ('upstream' as const) : ('community' as const),
+      })),
+    });
+    const community = candidate('a', false, true, '');
+    const unavailable = candidate('b', true, false, '');
+    const test = candidate('c', true, true, 'fixtures/example');
+    const real = candidate('d', true, true, 'plugin');
+    assert.equal(groupCatalogPlugins([community, unavailable, test, real])[0]?.primary, real);
+    assert.equal(groupCatalogPlugins([real, test, unavailable, community])[0]?.primary, real);
+  });
+
+  it('keeps different monorepo packages separate and groups canonical source aliases', () => {
+    const base = { ...registry.plugins[0]!, trust_state: 'conformant_unreviewed' as const };
+    const first = { ...base, name: 'first', source: { ...base.source, path: 'first' } };
+    const second = {
+      ...base,
+      name: 'second',
+      install_source: 'second',
+      source: { ...base.source, path: 'second' },
+    };
+    const alias = { ...first, name: 'alias', install_source: 'alias' };
+    assert.equal(groupCatalogPlugins([first, second, alias]).length, 2);
+  });
+
+  it('uses repository stars then install source as a stable primary tiebreaker', () => {
+    const base = discoveryPlugin(discoveryRecord, discoverySnapshot);
+    const popular = { ...base, install_source: 'z', discovery: { ...base.discovery!, stars: 100 } };
+    const sameStars = { ...popular, install_source: 'a' };
+    assert.equal(groupCatalogPlugins([base, popular])[0]?.primary, popular);
+    assert.equal(groupCatalogPlugins([popular, sameStars])[0]?.primary, sameStars);
+    assert.equal(groupCatalogPlugins([sameStars, popular])[0]?.primary, sameStars);
+  });
+
+  it('joins canonical aliases transitively without losing any source', () => {
+    const base = { ...registry.plugins[0]!, trust_state: 'conformant_unreviewed' as const };
+    const first = {
+      ...base,
+      name: 'first',
+      install_source: 'first',
+      source: { ...base.source, path: 'first' },
+    };
+    const second = {
+      ...base,
+      name: 'second',
+      install_source: 'second',
+      source: { ...base.source, path: 'second' },
+    };
+    const bridge = { ...first, name: 'second', install_source: 'bridge' };
+    const groups = groupCatalogPlugins([first, second, bridge]);
+    assert.equal(groups.length, 1);
+    assert.equal(groups[0]?.alternatives.length, 2);
+  });
+
+  it('uses typo fallback only when exact search has no results, retaining filters', () => {
+    const plugin = {
+      ...registry.plugins[0]!,
+      name: 'calendar',
+      display_name: 'Calendar',
+      categories: ['productivity'],
+    };
+    for (const query of ['calndar', 'calender', 'calenadr', 'callendar']) {
+      assert.deepEqual(filterPlugins([plugin], { query }), [plugin]);
+      assert.deepEqual(filterPlugins([plugin], { query, category: 'other' }), []);
+    }
+    const exact = {
+      ...plugin,
+      name: 'calender',
+      display_name: 'Calender',
+      install_source: 'exact',
+    };
+    assert.deepEqual(filterPlugins([plugin, exact], { query: 'calender' }), [exact]);
+    assert.deepEqual(filterPlugins([plugin], { query: 'xyz' }), []);
+  });
+
+  it('round-trips every filter, preserves unrelated queries and clears only catalog state', () => {
+    const values = [
+      'calendar',
+      'productivity',
+      'mcp',
+      'upstream',
+      'reviewed',
+      'codex',
+      'none',
+      'example',
+    ];
+    const query = catalogQuery(values, { campaign: 'launch' });
+    assert.deepEqual(restoreCatalogQuery(query), values);
+    assert.equal(query.campaign, 'launch');
+    assert.deepEqual(catalogQuery(['', ...Array(7).fill('all')], query), { campaign: 'launch' });
+    assert.deepEqual(restoreCatalogQuery({ q: ['calendar', 'ignored'], owner: null }), [
+      'calendar',
+      ...Array(7).fill('all'),
+    ]);
+  });
   it('loads the signed reviewed directory used by the site', () => {
     assert.ok(registry.plugins.length >= 20);
     assert.ok(registry.plugins.every((plugin) => plugin.trust_state !== 'conformant_unreviewed'));

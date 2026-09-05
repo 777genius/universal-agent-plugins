@@ -2,7 +2,7 @@
 import type { ClientID, RegistryIndex } from '~/types/registry';
 import { pluginCommands } from '~/utils/commands';
 import { countAtElapsed, PLUGIN_COUNT_ANIMATION_MS } from '~/utils/countAnimation';
-import { catalogVisiblePlugins } from '~/utils/filter';
+import { catalogVisiblePlugins, groupCatalogPlugins } from '~/utils/filter';
 import { deliveryLabel, expectedDistribution, resolveDistribution } from '~/utils/registry';
 
 const props = defineProps<{ registry: RegistryIndex }>();
@@ -27,7 +27,7 @@ if (import.meta.client) {
     (state) => {
       if (state !== 'current' && state !== 'cached') return;
 
-      const target = catalogVisiblePlugins(props.registry.plugins).length;
+      const target = groupCatalogPlugins(catalogVisiblePlugins(props.registry.plugins)).length;
       if (
         countAnimationCompleted.value ||
         window.matchMedia('(prefers-reduced-motion: reduce)').matches
@@ -132,7 +132,7 @@ function updateTargets(values: string[]) {
   <section class="hero-shell">
     <div class="hero container">
       <div class="hero__copy">
-        <h1>One plugin<br ><em>All your agents</em></h1>
+        <h1>One plugin<br /><em>All your agents</em></h1>
         <p class="hero__lead">
           Install, update, repair, and remove Agent Plugins 1.0 across supported AI agents with one
           command. Let the CLI detect installed agents, or choose exactly where the plugin goes.
@@ -182,8 +182,7 @@ function updateTargets(values: string[]) {
               <li class="hero-quick-start__step">
                 <span class="hero-quick-start__number hero-quick-start__number--run">2</span>
                 <span class="hero-quick-start__label"
-                  ><strong>Copy and run</strong
-                  ><small>In your terminal</small></span
+                  ><strong>Copy and run</strong><small>In your terminal</small></span
                 >
                 <CommandSnippet v-if="command" :command="command" kind="add" inline />
                 <p v-else class="install-panel__notice" role="status">

@@ -1,13 +1,21 @@
 <script setup lang="ts">
 import CommandSnippetCard from '~/components/shared/CommandSnippetCard.vue';
+import { clientLandingPages } from '~/data/clients';
 import { applyCliInvocation, getCliInvocation } from '~/utils/cliInvocation';
+
+withDefaults(defineProps<{ headingTag?: 'h1' | 'h2' }>(), { headingTag: 'h2' });
 
 const { content } = useLandingContent();
 const { t, locale } = useI18n();
 const { data: releaseData, fallbackUrl } = useReleaseDownloads();
 const { quickstartUrl, supportBoundaryUrl } = useDocsLinks();
 
-const releaseVersion = computed(() => releaseData.value?.version || null);
+const releaseVersion = computed(() => {
+  const version = releaseData.value?.version;
+  return (
+    version?.match(/^(?:agentplugins-)?v?(\d+\.\d+\.\d+(?:-[\w.-]+)?(?:\+[\w.-]+)?)$/)?.[1] || null
+  );
+});
 const releaseDate = computed(() => {
   if (!releaseData.value?.pubDate) {
     return '';
@@ -92,7 +100,9 @@ const quickstartSteps = computed(() => {
   <section id="download" class="download-section section anchor-offset">
     <v-container>
       <div class="download-section__header">
-        <h2 class="download-section__title">{{ content.download.title }}</h2>
+        <component :is="headingTag" class="download-section__title">{{
+          content.download.title
+        }}</component>
         <p class="download-section__subtitle">{{ content.download.note }}</p>
         <p v-if="releaseVersion" class="download-section__release-info">
           {{ t('download.latestRelease') }} ·
@@ -194,16 +204,18 @@ const quickstartSteps = computed(() => {
 
         <div class="download-section__support-list">
           <div
-            v-for="(lane, index) in content.supportLanes"
-            :key="lane.id"
+            v-for="(client, index) in clientLandingPages"
+            :key="client.id"
             class="download-section__support-item"
             :style="{ '--accent': supportAccent[index % supportAccent.length] }"
           >
             <div class="download-section__support-main">
-              <h4 class="download-section__support-name">{{ lane.name }}</h4>
-              <span class="download-section__support-status">{{ lane.status }}</span>
+              <h4 class="download-section__support-name">
+                <NuxtLink :to="`/agents/${client.slug}/`">{{ client.name }}</NuxtLink>
+              </h4>
+              <span class="download-section__support-status">{{ client.status }}</span>
             </div>
-            <p class="download-section__support-note">{{ lane.note }}</p>
+            <p class="download-section__support-note">{{ client.note }}. {{ client.activation }}</p>
           </div>
         </div>
 
@@ -501,6 +513,11 @@ const quickstartSteps = computed(() => {
   font-size: 0.96rem;
   font-weight: 700;
   color: #e0e6ff;
+}
+
+.download-section__support-name a {
+  color: inherit;
+  text-underline-offset: 3px;
 }
 
 .download-section__support-status {

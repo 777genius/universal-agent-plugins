@@ -115,22 +115,22 @@ test('scroll reveals respect reduced motion', async ({ page }) => {
   ).toBeLessThanOrEqual(0.00001);
 });
 
-test(
-  'below-fold content stays visible when JavaScript is disabled',
-  async ({ browser, baseURL }) => {
-    const context = await browser.newContext({ javaScriptEnabled: false });
-    try {
-      const page = await context.newPage();
-      await page.goto(baseURL!);
-      const section = page.locator('#why');
-      await expect(section).toBeVisible();
-      await expect(section).not.toHaveClass(/scroll-reveal/);
-      await expect(section).toHaveCSS('opacity', '1');
-    } finally {
-      await context.close();
-    }
-  },
-);
+test('below-fold content stays visible when JavaScript is disabled', async ({
+  browser,
+  baseURL,
+}) => {
+  const context = await browser.newContext({ javaScriptEnabled: false });
+  try {
+    const page = await context.newPage();
+    await page.goto(baseURL!);
+    const section = page.locator('#why');
+    await expect(section).toBeVisible();
+    await expect(section).not.toHaveClass(/scroll-reveal/);
+    await expect(section).toHaveCSS('opacity', '1');
+  } finally {
+    await context.close();
+  }
+});
 
 test('plugin counter stays inside the hero on a narrow screen', async ({ page }) => {
   await page.setViewportSize({ width: 280, height: 844 });
@@ -202,7 +202,7 @@ test('homepage publishes canonical social metadata and complete product schema',
 
 test('supported client links open crawlable client-specific landing pages', async ({ page }) => {
   await page.goto('./');
-  await page.locator('.client-strip a[href$="/agents/codex"]').click();
+  await page.locator('.client-strip a[href$="/agents/codex/"]').click();
   await expect(page).toHaveURL(/\/agents\/codex\/?$/);
   await expect(page).toHaveTitle('Agent Plugins for Codex | Universal Agent Plugins');
   await expect(
@@ -213,7 +213,7 @@ test('supported client links open crawlable client-specific landing pages', asyn
     'https://777genius.github.io/universal-agent-plugins/agents/codex/',
   );
   await expect(page.locator('.command-snippet')).toContainText(
-    'npx universal-agent-plugins add <plugin> --target codex',
+    'npx universal-agent-plugins add context7 --target codex',
   );
   const graph = await parseJsonLd(page);
   expect(graph.map((item) => item['@type'])).toEqual(
@@ -271,9 +271,9 @@ test('community plugin titles open an installable plugin page instead of GitHub'
   await expect(communityCard).toBeVisible({ timeout: 15_000 });
   const title = communityCard.locator('.plugin-card__title-link');
   const pluginName = (await title.textContent())?.trim();
-  await expect(title).toHaveAttribute('href', /\/plugins\/community\?source=/);
+  await expect(title).toHaveAttribute('href', /\/plugins\/community\/\?source=/);
   await title.click();
-  await expect(page).toHaveURL(/\/plugins\/community\?source=/);
+  await expect(page).toHaveURL(/\/plugins\/community\/\?source=/);
   await expect(page.getByRole('heading', { name: pluginName, exact: true })).toBeVisible({
     timeout: 15_000,
   });
@@ -316,7 +316,7 @@ test('metadata-only community direct links explain why installation is unavailab
   page,
 }) => {
   await page.goto(
-    './plugins/community?source=discovery%3Aremotion-dev%2Fremotion%2F%2Fpackages%2Fagent-plugin',
+    './plugins/community/?source=discovery%3Aremotion-dev%2Fremotion%2F%2Fpackages%2Fagent-plugin',
   );
   await expect(page.getByRole('heading', { name: 'remotion', exact: true })).toBeVisible({
     timeout: 15_000,
@@ -324,14 +324,13 @@ test('metadata-only community direct links explain why installation is unavailab
   await expect(page.getByRole('heading', { name: 'Not ready to install' })).toBeVisible();
   await expect(page.getByRole('status')).toContainText('This plugin is not installable yet');
   await expect(page.getByRole('status')).toContainText("doesn't include any tools");
-  await expect(page.getByText('No supported agents yet')).toBeVisible();
-  await expect(page.getByText('No installable tools')).toBeVisible();
+  await expect(page.getByText('Not declared')).toHaveCount(2);
   await expect(page.locator('.command-snippet')).toHaveCount(0);
 });
 
 test('unavailable community sources never expose stale install guidance', async ({ page }) => {
   await page.goto(
-    './plugins/community?source=discovery%3A777genius%2Funiversal-agent-plugins%2F%2Fbridges%2Fchrome-devtools%2Foverlay',
+    './plugins/community/?source=discovery%3A777genius%2Funiversal-agent-plugins%2F%2Fbridges%2Fchrome-devtools%2Foverlay',
   );
   await expect(page.getByRole('heading', { name: 'Not ready to install' })).toBeVisible({
     timeout: 15_000,

@@ -22,6 +22,113 @@ function normalized(value: string): string {
   return value.trim().toLowerCase();
 }
 
+export const catalogQueryKeys = [
+  'q',
+  'category',
+  'component',
+  'source',
+  'trust',
+  'client',
+  'auth',
+  'owner',
+] as const;
+
+/** Only the catalog's keys are changed; unrelated route state is preserved. */
+export function catalogQuery(values: string[], existing: Record<string, unknown> = {}) {
+  const result = { ...existing };
+  catalogQueryKeys.forEach((key, index) => {
+    const value = values[index]?.trim();
+    if (value && (key === 'q' || value !== 'all')) result[key] = value;
+    else Reflect.deleteProperty(result, key);
+  });
+  return result;
+}
+
+export function restoreCatalogQuery(query: Record<string, unknown>): string[] {
+  return catalogQueryKeys.map((key) => {
+    const value = Array.isArray(query[key]) ? query[key][0] : query[key];
+    return typeof value === 'string' && value.trim() ? value.trim() : key === 'q' ? '' : 'all';
+  });
+}
+
+function primaryPriority(plugin: RegistryPlugin): number[] {
+  return [
+    plugin.trust_state === 'conformant_unreviewed' ? 1 : 0,
+    plugin.distributions.some((item) => item.kind === 'upstream') ? 0 : 1,
+    plugin.installable && plugin.discovery?.availability !== 'unavailable' ? 0 : 1,
+    /(^|[/_.-])(tests?|fixtures?|examples?|demo)([/_.-]|$)/i.test(
+      `${plugin.source.repository}/${plugin.source.path}`,
+    )
+      ? 1
+      : 0,
+    -(plugin.discovery?.stars ?? 0),
+  ];
+}
+
+export function groupCatalogPlugins(plugins: RegistryPlugin[]) {
+  type SourceGroup = { members: RegistryPlugin[]; keys: Set<string>; order: number };
+  const groups = new Set<SourceGroup>();
+  const byIdentity = new Map<string, SourceGroup>();
+  for (const [order, plugin] of plugins.entries()) {
+    const keys = new Set([
+      `name:${normalized(plugin.name)}`,
+      `source:${normalized(plugin.source.repository)}/${plugin.source.path.replace(/^\/+|\/+$/g, '')}`,
+      ...(plugin.discovery?.reviewed_distribution_id
+        ? [`distribution:${plugin.discovery.reviewed_distribution_id}`]
+        : []),
+      ...((plugin.trust_state ?? 'reviewed') === 'reviewed'
+        ? plugin.distributions.map((item) => `distribution:${item.id}`)
+        : []),
+    ]);
+    const overlapping = [
+      ...new Set([...keys].flatMap((key) => (byIdentity.has(key) ? [byIdentity.get(key)!] : []))),
+    ];
+    const group = {
+      members: [plugin, ...overlapping.flatMap((item) => item.members)],
+      keys: new Set([...keys, ...overlapping.flatMap((item) => [...item.keys])]),
+      order: Math.min(order, ...overlapping.map((item) => item.order)),
+    };
+    overlapping.forEach((item) => groups.delete(item));
+    groups.add(group);
+    group.keys.forEach((key) => byIdentity.set(key, group));
+  }
+  return [...groups]
+    .sort((left, right) => left.order - right.order)
+    .map((group) => {
+      group.members.sort((left, right) => {
+        const a = primaryPriority(left);
+        const b = primaryPriority(right);
+        return (
+          a.map((value, index) => value - b[index]!).find((value) => value !== 0) ??
+          compareText(left.install_source, right.install_source)
+        );
+      });
+      return { primary: group.members[0]!, alternatives: group.members.slice(1) };
+    });
+}
+
+/** One insertion/deletion/substitution or adjacent transposition, for meaningful words only. */
+function typoMatch(value: string, query: string): boolean {
+  if (query.length < 4) return false;
+  return normalized(value)
+    .split(/[^\p{L}\p{N}]+/u)
+    .some((word) => {
+      if (Math.abs(word.length - query.length) > 1) return false;
+      let index = 0;
+      while (index < Math.min(word.length, query.length) && word[index] === query[index]) index++;
+      if (word.length === query.length)
+        return (
+          word.slice(index + 1) === query.slice(index + 1) ||
+          (word[index] === query[index + 1] &&
+            word[index + 1] === query[index] &&
+            word.slice(index + 2) === query.slice(index + 2))
+        );
+      return word.length > query.length
+        ? word.slice(index + 1) === query.slice(index)
+        : word.slice(index) === query.slice(index + 1);
+    });
+}
+
 function sourceOwner(plugin: RegistryPlugin): string {
   return plugin.source.repository.split('/', 1)[0] ?? plugin.source.repository;
 }
@@ -96,19 +203,8 @@ export function filterPlugins(
   filters: CatalogFilters,
 ): RegistryPlugin[] {
   const query = normalized(filters.query ?? '');
-  const matches = plugins.filter((plugin) => {
-    const searchable = [
-      plugin.name,
-      plugin.display_name,
-      plugin.description,
-      plugin.author.name,
-      plugin.source.repository,
-      ...plugin.categories,
-      ...plugin.keywords,
-      ...plugin.components,
-    ];
+  const eligible = plugins.filter((plugin) => {
     return (
-      (!query || searchable.some((value) => normalized(value).includes(query))) &&
       (!filters.category || plugin.categories.includes(filters.category)) &&
       (!filters.component || plugin.components.includes(filters.component)) &&
       (!filters.source ||
@@ -129,6 +225,25 @@ export function filterPlugins(
       (!filters.owner || normalized(sourceOwner(plugin)) === normalized(filters.owner))
     );
   });
+  const searchable = (plugin: RegistryPlugin) => [
+    plugin.name,
+    plugin.display_name,
+    plugin.description,
+    plugin.author.name,
+    plugin.source.repository,
+    ...plugin.categories,
+    ...plugin.keywords,
+    ...plugin.components,
+  ];
+  let matches = eligible.filter(
+    (plugin) => !query || searchable(plugin).some((value) => normalized(value).includes(query)),
+  );
+  if (query && !matches.length)
+    matches = eligible.filter((plugin) =>
+      [plugin.name, plugin.display_name, ...plugin.keywords].some((value) =>
+        typoMatch(value, query),
+      ),
+    );
   if (!query) {
     const reviewed = matches
       .filter((plugin) => (plugin.trust_state ?? 'reviewed') === 'reviewed')
