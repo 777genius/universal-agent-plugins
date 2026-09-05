@@ -5,10 +5,11 @@ import { seoDescription, spdxLicenseUrl } from '~/utils/seo';
 import type { ClientID } from '~/types/registry';
 
 const route = useRoute();
-const registry = useRegistry();
+const slug = String(route.params.slug);
+const registry = await useRegistryPage({ projection: { kind: 'plugin', value: slug } });
 const config = useRuntimeConfig();
 const { asset, pluginIcon, sourceUrl } = useSite();
-const plugin = registry.plugins.find((item) => item.name === String(route.params.slug));
+const plugin = registry.plugins.find((item) => item.name === slug);
 
 if (!plugin || plugin.trust_state === 'conformant_unreviewed') {
   throw createError({ statusCode: 404, statusMessage: 'Plugin not found' });

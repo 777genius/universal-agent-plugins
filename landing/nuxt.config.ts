@@ -118,6 +118,10 @@ export default defineNuxtConfig({
         '/plugins',
         '/plugins/community',
         ...registryIndex.plugins.map((plugin) => `/plugins/${plugin.name}`),
+        '/api/registry/catalog',
+        '/api/registry/empty',
+        ...clientLandingPages.map((client) => `/api/registry/client/${client.id}`),
+        ...registryIndex.plugins.map((plugin) => `/api/registry/plugin/${plugin.name}`),
         '/api/releases/latest',
         '/sitemap.xml',
         '/robots.txt',
@@ -149,6 +153,9 @@ export default defineNuxtConfig({
     name: productName,
   },
   runtimeConfig: {
+    // The complete reviewed Directory is server/build-only. Route-scoped API
+    // projections keep unrelated plugin records out of every page payload.
+    registryIndex,
     seo: {
       sitemapRoutes,
     },
@@ -165,7 +172,6 @@ export default defineNuxtConfig({
       docsSitemapUrl,
       baseURL,
       repositoryUrl: registryRepositoryUrl,
-      registryIndex,
       discoveryKeyID,
       discoveryPublicKey,
     },

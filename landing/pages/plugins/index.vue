@@ -1,5 +1,5 @@
 <script setup lang="ts">
-const registry = useRegistry();
+const registry = await useRegistryPage({ discovery: true });
 const config = useRuntimeConfig();
 const description =
   'Search reviewed and community Agent Plugins 1.0 for Codex, Claude Code, Cursor, Gemini CLI, OpenCode, and more.';
