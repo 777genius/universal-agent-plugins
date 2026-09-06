@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -105,7 +106,11 @@ func checkTemplateJavaScriptSyntax(t *testing.T, source []byte) {
 	// the module, load the SDK, install dependencies, or inherit Node preload flags.
 	cmd := exec.CommandContext(ctx, node, "--check", path)
 	cmd.Dir = dir
-	cmd.Env = []string{"HOME=" + dir, "TMPDIR=" + dir, "PATH=" + os.Getenv("PATH")}
+	cmd.Env = []string{"HOME=" + dir, "USERPROFILE=" + dir, "APPDATA=" + dir, "LOCALAPPDATA=" + dir, "TMPDIR=" + dir, "TMP=" + dir, "TEMP=" + dir, "PATH=" + os.Getenv("PATH")}
+	if runtime.GOOS == "windows" {
+		volume := filepath.VolumeName(dir)
+		cmd.Env = append(cmd.Env, "SystemRoot="+os.Getenv("SystemRoot"), "HOMEDRIVE="+volume, "HOMEPATH="+strings.TrimPrefix(dir, volume))
+	}
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("node --check: %v\n%s", err, out)
 	}

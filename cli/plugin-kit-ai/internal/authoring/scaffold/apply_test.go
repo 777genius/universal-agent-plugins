@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"syscall"
 	"testing"
@@ -158,79 +159,130 @@ func TestExecutableModeAndNoExecution(t *testing.T) {
 func TestStagingReplacementRefusesForeignCleanup(t *testing.T) {
 	parent := tempRoot(t)
 	dest := filepath.Join(parent, "out")
+	p := planFor(t, "skill")
+	calibrateStageRename(t, parent, p.Files())
+	if err := os.WriteFile(filepath.Join(parent, "unowned"), []byte("foreign"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	before := skillTree(t, parent)
 	validate := realValidation(t)
+	fault := errors.New("abort after denied stage replacement")
+	blocked := false
 	var original, replaced string
-	result, err := Apply(context.Background(), planFor(t, "skill"), ApplyOptions{Destination: dest, Validate: func(ctx context.Context, s string) error {
+	result, err := Apply(context.Background(), p, ApplyOptions{Destination: dest, Validate: func(ctx context.Context, s string) error {
 		if err := validate(ctx, s); err != nil {
 			return err
 		}
 		original = filepath.Dir(s)
 		replaced = original + "-moved"
-		if err := os.Rename(original, replaced); err != nil {
-			t.Skipf("native directory handle rename prerequisite: %v", err)
+		blocked = replacementRenameBlocked(t, original, replaced)
+		if blocked {
+			return fault
 		}
 		if err := os.Mkdir(original, 0700); err != nil {
 			return err
 		}
-		if err := os.WriteFile(filepath.Join(original, "sentinel"), []byte("foreign"), 0600); err != nil {
-			return err
-		}
-		return nil
+		return os.WriteFile(filepath.Join(original, "sentinel"), []byte("foreign"), 0600)
 	}})
-	if err == nil || result.Committed {
-		t.Fatal("accepted replaced staging")
+	if original == "" {
+		t.Fatalf("stage replacement callback not reached: %+v %v", result, err)
 	}
-	b, e := os.ReadFile(filepath.Join(original, "sentinel"))
+	if blocked {
+		var cleanup *CleanupError
+		if !errors.Is(err, fault) || result.Committed || errors.As(err, &cleanup) || !reflect.DeepEqual(before, skillTree(t, parent)) {
+			t.Fatalf("denied attack must clean only owned staging: %+v %v", result, err)
+		}
+		// With all handles released, the same parent still supports normal commit.
+		result, err = Apply(context.Background(), p, ApplyOptions{Destination: dest, Validate: validate})
+		if err != nil || !result.Committed || result.Destination != dest {
+			t.Fatalf("commit after denied attack: %+v %v", result, err)
+		}
+		if err := validate(context.Background(), dest); err != nil {
+			t.Fatal(err)
+		}
+		assertOnly(t, parent, "out", "unowned")
+	} else {
+		var cleanup *CleanupError
+		if err == nil || result.Committed || !errors.As(err, &cleanup) {
+			t.Fatalf("accepted replaced staging or lost ownership error: %+v %v", result, err)
+		}
+		b, e := os.ReadFile(filepath.Join(original, "sentinel"))
+		if e != nil || string(b) != "foreign" {
+			t.Fatalf("foreign stage removed: %v", e)
+		}
+		// Owned payload cleanup still addresses its pinned container, wherever moved.
+		assertOnly(t, replaced)
+		if _, e = os.Lstat(dest); !errors.Is(e, fs.ErrNotExist) {
+			t.Fatal("partial destination")
+		}
+	}
+	b, e := os.ReadFile(filepath.Join(parent, "unowned"))
 	if e != nil || string(b) != "foreign" {
-		t.Fatalf("foreign stage removed: %v", e)
-	}
-	// Owned payload cleanup still addresses its pinned container, wherever moved.
-	assertOnly(t, replaced)
-	if _, e = os.Lstat(dest); !errors.Is(e, fs.ErrNotExist) {
-		t.Fatal("partial destination")
+		t.Fatalf("unowned sibling changed: %v", e)
 	}
 }
 func TestParentReplacementRefusesCommitAndCleansOwnedStage(t *testing.T) {
 	grand := tempRoot(t)
 	parent := filepath.Join(grand, "parent")
 	moved := filepath.Join(grand, "moved")
-	os.Mkdir(parent, 0755)
+	if err := os.Mkdir(parent, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(parent, "unowned"), []byte("foreign"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	requireRenameRoundTrip(t, parent, moved)
+	before := skillTree(t, parent)
 	validate := realValidation(t)
-	result, err := Apply(context.Background(), planFor(t, "skill"), ApplyOptions{Destination: filepath.Join(parent, "out"), Validate: func(ctx context.Context, s string) error {
+	fault := errors.New("abort after denied parent replacement")
+	attempted, blocked := false, false
+	dest := filepath.Join(parent, "out")
+	p := planFor(t, "skill")
+	result, err := Apply(context.Background(), p, ApplyOptions{Destination: dest, Validate: func(ctx context.Context, s string) error {
 		if err := validate(ctx, s); err != nil {
 			return err
 		}
-		if err := os.Rename(parent, moved); err != nil {
-			t.Skipf("native directory handle rename prerequisite: %v", err)
+		attempted = true
+		blocked = replacementRenameBlocked(t, parent, moved)
+		if blocked {
+			return fault
 		}
 		if err := os.Mkdir(parent, 0755); err != nil {
 			return err
 		}
 		return os.WriteFile(filepath.Join(parent, "sentinel"), []byte("foreign"), 0644)
 	}})
-	if err == nil || result.Committed {
-		t.Fatal("accepted replaced parent")
+	if !attempted {
+		t.Fatalf("parent replacement callback not reached: %+v %v", result, err)
 	}
-	assertOnly(t, parent, "sentinel")
-	assertOnly(t, moved)
-}
-func TestDeniedParent(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("POSIX permissions fixture; Windows ACL denial needs native CI fixture")
-	}
-	parent := tempRoot(t)
-	if err := os.Chmod(parent, 0500); err != nil {
-		t.Fatal(err)
-	}
-	defer os.Chmod(parent, 0700)
-	// Root/capability-bearing environments cannot establish this fixture.
-	probe := filepath.Join(parent, "permission-probe")
-	if err := os.Mkdir(probe, 0700); err == nil {
-		os.Remove(probe)
-		t.Skip("environment bypasses directory write permissions")
-	}
-	if r, err := Apply(context.Background(), planFor(t, "skill"), ApplyOptions{Destination: filepath.Join(parent, "out"), Validate: realValidation(t)}); err == nil || r.Committed {
-		t.Fatal("denied parent accepted")
+	if blocked {
+		var cleanup *CleanupError
+		if !errors.Is(err, fault) || result.Committed || errors.As(err, &cleanup) || !reflect.DeepEqual(before, skillTree(t, parent)) {
+			t.Fatalf("denied attack must clean only owned staging: %+v %v", result, err)
+		}
+		requireRenameRoundTrip(t, parent, moved) // Prove the pin was released.
+		result, err = Apply(context.Background(), p, ApplyOptions{Destination: dest, Validate: validate})
+		if err != nil || !result.Committed || result.Destination != dest {
+			t.Fatalf("commit after denied attack: %+v %v", result, err)
+		}
+		if err := validate(context.Background(), dest); err != nil {
+			t.Fatal(err)
+		}
+		assertOnly(t, parent, "out", "unowned")
+		if b, e := os.ReadFile(filepath.Join(parent, "unowned")); e != nil || string(b) != "foreign" {
+			t.Fatalf("unowned content changed after commit: %v", e)
+		}
+	} else {
+		if err == nil || result.Committed {
+			t.Fatal("accepted replaced parent")
+		}
+		assertOnly(t, parent, "sentinel")
+		if b, e := os.ReadFile(filepath.Join(parent, "sentinel")); e != nil || string(b) != "foreign" {
+			t.Fatalf("replacement content changed: %v", e)
+		}
+		if !reflect.DeepEqual(before, skillTree(t, moved)) {
+			t.Fatal("owned staging leaked or unowned content changed in moved parent")
+		}
 	}
 }
 

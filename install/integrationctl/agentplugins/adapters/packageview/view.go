@@ -4,8 +4,8 @@
 // component and opaque-tree capture. Never call Capture after a fatal core/schema
 // result. Convert these private input records to conformance types in the caller.
 //
-// Linux uses Go rooted handles plus openat2 and verified O_PATH handles. Other
-// platforms fail closed until their special-file and replacement gates are proven.
+// Linux uses openat2/O_PATH. Darwin requires read-only local APFS; Windows
+// requires local fixed-drive NTFS. Native execution remains a release gate.
 // The profile assumes a trusted kernel/mount namespace and ordinary local files;
 // it is not an atomic filesystem snapshot or protection from the same principal
 // modifying private storage. No source writes, execution, discovery, or network
@@ -20,13 +20,17 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strconv"
 	"sync"
 )
 
 const ScopeID = "agentplugins-captured-input-sha256-v1"
-const ReadProfile = "packageview-local-linux-v1"
+
+// Each native profile has its own filesystem and kernel capability contract.
+const ReadProfile = "packageview-local-" + runtime.GOOS + "-v1"
+
 const TreeAlgorithm = "agentplugins-tree-sha256-v1"
 
 type State string
@@ -172,6 +176,7 @@ func contextError(ctx context.Context) error {
 type Lease struct {
 	mu                sync.Mutex
 	source            *source
+	scratchClose      func() error
 	private           string
 	privateInfo       os.FileInfo
 	limits            Limits
@@ -216,27 +221,11 @@ func (r Reader) open(ctx context.Context, exactRoot string, hooks *captureHooks)
 	}
 	l := &Lease{source: s, limits: limits, observations: map[string]os.FileInfo{}, linkInfos: map[string]os.FileInfo{}, directoryEntries: map[string][]string{}, contents: map[string][]byte{}, hooks: hooks}
 	defer l.finish(&err)
-	// Resolve scratch parents only to reject overlap; source I/O remains rooted.
-	src, err := filepath.EvalSymlinks(exactRoot)
+	tmp, release, err := scratchParent(s, exactRoot, r.TempDir)
 	if err != nil {
-		return nil, fail("root_unreadable")
+		return nil, err
 	}
-	tmp, err := filepath.EvalSymlinks(r.TempDir)
-	if err != nil {
-		return nil, fail("scratch_unavailable")
-	}
-	src, err = filepath.Abs(src)
-	if err != nil {
-		return nil, fail("root_unreadable")
-	}
-	tmp, err = filepath.Abs(tmp)
-	if err != nil {
-		return nil, fail("scratch_unavailable")
-	}
-	rel, err := filepath.Rel(src, tmp)
-	if err != nil || rel == "." || (rel != ".." && !isParentRelative(rel)) {
-		return nil, fail("scratch_overlaps_source")
-	}
+	l.scratchClose = release
 	l.private, err = os.MkdirTemp(tmp, "packageview-*")
 	if err != nil {
 		return nil, fail("scratch_unavailable")
@@ -333,6 +322,10 @@ func (l *Lease) close() error {
 			}
 			failed = failed || e != nil
 		}
+	}
+	if l.scratchClose != nil {
+		failed = l.scratchClose() != nil || failed
+		l.scratchClose = nil
 	}
 	if failed {
 		l.closeErr = &Error{Code: "cleanup_failed", CleanupFailed: true}

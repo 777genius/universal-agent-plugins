@@ -4,12 +4,13 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
-	"sync"
 	"testing"
+	"time"
 
 	"github.com/777genius/plugin-kit-ai/cli/internal/authoring/project"
 	"github.com/777genius/plugin-kit-ai/cli/internal/authoring/report"
@@ -34,8 +35,9 @@ func skillFixture(t *testing.T) (string, SkillPlan, SkillSourceGate) {
 		if e != nil {
 			return nil, e
 		}
-		if !report.Build("validate", "test", p, false).Successful() {
-			return nil, errors.New("gate failed")
+		r := report.Build("validate", "test", p, false)
+		if !r.Successful() {
+			return nil, fmt.Errorf("gate failed: host=%s findings=%+v", r.HostSafety.Status, r.Findings)
 		}
 		core := p.Input.Plugin.Bytes
 		return func(ctx context.Context) (err error) {
@@ -224,8 +226,10 @@ func TestSkillRootAndParentReplacement(t *testing.T) {
 		t.Run(replace, func(t *testing.T) {
 			base := t.TempDir()
 			root, p, gate := skillFixture(t)
+			replaced := root
 			if replace == "skills" {
-				if e := os.Mkdir(filepath.Join(root, "skills"), 0700); e != nil {
+				replaced = filepath.Join(root, "skills")
+				if e := os.Mkdir(replaced, 0700); e != nil {
 					t.Fatal(e)
 				}
 			}
@@ -234,31 +238,58 @@ func TestSkillRootAndParentReplacement(t *testing.T) {
 				t.Fatal(e)
 			}
 			before := skillTree(t, outside)
+			original := skillTree(t, root)
 			moved := filepath.Join(base, "moved")
+			requireRenameRoundTrip(t, replaced, moved)
+			fault := errors.New("abort after denied skill parent replacement")
+			attempted, blocked := false, false
 			ops := applyOps{rename: renameExclusive, write: func(ctx context.Context, r *os.Root, files []File) error {
 				if e := writeTree(ctx, r, files); e != nil {
 					return e
 				}
-				replaced := root
-				if replace == "skills" {
-					replaced = filepath.Join(root, "skills")
-				}
-				if e := os.Rename(replaced, moved); e != nil {
-					return e
+				attempted = true
+				blocked = replacementRenameBlocked(t, replaced, moved)
+				if blocked {
+					return fault
 				}
 				return os.Symlink(outside, replaced)
 			}}
 			result, err := applySkill(context.Background(), p, root, gate, sharedSkillValidation("new-skill"), ops)
+			if !attempted {
+				t.Fatalf("skill replacement callback not reached: %+v %v", result, err)
+			}
 			if err == nil || result.Committed {
 				t.Fatalf("boundary replacement accepted: %v", err)
 			}
+			if blocked {
+				var cleanup *CleanupError
+				if !errors.Is(err, fault) || errors.As(err, &cleanup) || !reflect.DeepEqual(original, skillTree(t, root)) {
+					t.Fatalf("denied attack cleanup changed source: %+v %v", result, err)
+				}
+				requireRenameRoundTrip(t, replaced, moved)
+				result, err = ApplySkill(context.Background(), p, root, gate, sharedSkillValidation("new-skill"))
+				if err != nil || !result.Committed || result.Destination != filepath.Join(root, "skills", "new-skill") {
+					t.Fatalf("commit after denied attack: %+v %v", result, err)
+				}
+				assertOnly(t, root, "plugin.json", "skills")
+				assertOnly(t, filepath.Join(root, "skills"), "new-skill")
+				b, e := os.ReadFile(filepath.Join(result.Destination, "SKILL.md"))
+				if e != nil || !bytes.Equal(b, p.File().Bytes) {
+					t.Fatalf("committed skill changed: %v", e)
+				}
+			} else {
+				// Prove the replacement actually happened, including the symlink.
+				if target, e := os.Readlink(replaced); e != nil || target != outside {
+					t.Fatalf("replacement symlink not established: %q %v", target, e)
+				}
+				for path := range skillTree(t, moved) {
+					if strings.Contains(path, ".authoring-") {
+						t.Fatal("owned moved staging was not cleaned")
+					}
+				}
+			}
 			if !reflect.DeepEqual(before, skillTree(t, outside)) {
 				t.Fatal("replacement target touched")
-			}
-			for path := range skillTree(t, moved) {
-				if strings.Contains(path, ".authoring-") {
-					t.Fatal("owned moved staging was not cleaned")
-				}
 			}
 		})
 	}
@@ -266,6 +297,14 @@ func TestSkillRootAndParentReplacement(t *testing.T) {
 
 func TestSkillStageReplacementPreservesUnrelatedContent(t *testing.T) {
 	root, p, gate := skillFixture(t)
+	calibrateStageRename(t, root, []File{{Path: p.name + "/SKILL.md", Bytes: p.body, Mode: 0644}})
+	// An unowned sibling must survive both failed-attack cleanup and commit.
+	if err := os.WriteFile(filepath.Join(root, "unowned"), []byte("unrelated"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	before := skillTree(t, root)
+	fault := errors.New("abort after denied skill stage replacement")
+	blocked := false
 	var replacement, moved string
 	ops := applyOps{rename: renameExclusive, write: func(ctx context.Context, r *os.Root, files []File) error {
 		if err := writeTree(ctx, r, files); err != nil {
@@ -273,8 +312,9 @@ func TestSkillStageReplacementPreservesUnrelatedContent(t *testing.T) {
 		}
 		replacement = filepath.Dir(r.Name())
 		moved = replacement + "-moved"
-		if err := os.Rename(replacement, moved); err != nil {
-			return err
+		blocked = replacementRenameBlocked(t, replacement, moved)
+		if blocked {
+			return fault
 		}
 		if err := os.Mkdir(replacement, 0700); err != nil {
 			return err
@@ -282,17 +322,37 @@ func TestSkillStageReplacementPreservesUnrelatedContent(t *testing.T) {
 		return os.WriteFile(filepath.Join(replacement, "keep"), []byte("unrelated replacement"), 0600)
 	}}
 	result, err := applySkill(context.Background(), p, root, gate, sharedSkillValidation("new-skill"), ops)
+	if replacement == "" {
+		t.Fatalf("skill stage replacement callback not reached: %+v %v", result, err)
+	}
 	var cleanup *CleanupError
-	if err == nil || result.Committed || !errors.As(err, &cleanup) {
-		t.Fatalf("ownership error: %v %+v", err, result)
+	if blocked {
+		if !errors.Is(err, fault) || result.Committed || errors.As(err, &cleanup) || !reflect.DeepEqual(before, skillTree(t, root)) {
+			t.Fatalf("denied attack cleanup changed source: %+v %v", result, err)
+		}
+		result, err = ApplySkill(context.Background(), p, root, gate, sharedSkillValidation("new-skill"))
+		if err != nil || !result.Committed || result.Destination != filepath.Join(root, "skills", "new-skill") {
+			t.Fatalf("commit after denied attack: %+v %v", result, err)
+		}
+		assertOnly(t, root, "plugin.json", "skills", "unowned")
+		assertOnly(t, filepath.Join(root, "skills"), "new-skill")
+		b, e := os.ReadFile(filepath.Join(result.Destination, "SKILL.md"))
+		if e != nil || !bytes.Equal(b, p.File().Bytes) {
+			t.Fatalf("committed skill changed: %v", e)
+		}
+	} else {
+		if err == nil || result.Committed || !errors.As(err, &cleanup) {
+			t.Fatalf("ownership error: %v %+v", err, result)
+		}
+		b, e := os.ReadFile(filepath.Join(replacement, "keep"))
+		if e != nil || string(b) != "unrelated replacement" {
+			t.Fatal("replacement was touched")
+		}
+		assertOnly(t, moved)
 	}
-	b, e := os.ReadFile(filepath.Join(replacement, "keep"))
-	if e != nil || string(b) != "unrelated replacement" {
-		t.Fatal("replacement was touched")
-	}
-	entries, e := os.ReadDir(moved)
-	if e != nil || len(entries) != 0 {
-		t.Fatalf("pinned original payload cleanup: %v %v", entries, e)
+	b, e := os.ReadFile(filepath.Join(root, "unowned"))
+	if e != nil || string(b) != "unrelated" {
+		t.Fatalf("unowned sibling changed: %v", e)
 	}
 }
 
@@ -309,6 +369,56 @@ func sharedSkillValidation(name string) SkillValidation {
 	}
 }
 
+// Each attempt publishes completion even when ApplySkill fails before write.
+// Cleanup cancels and joins it before TempDir cleanup, including after Fatal.
+type skillApplyAttempt struct {
+	ctx    context.Context
+	done   chan struct{}
+	result Result
+	err    error
+}
+
+func startSkillApply(t *testing.T, p SkillPlan, root string, gate SkillSourceGate, ops applyOps) *skillApplyAttempt {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	a := &skillApplyAttempt{ctx: ctx, done: make(chan struct{}), err: errors.New("ApplySkill exited without returning")}
+	go func() {
+		defer close(a.done)
+		a.result, a.err = applySkill(ctx, p, root, gate, sharedSkillValidation(p.name), ops)
+	}()
+	t.Cleanup(func() {
+		cancel() // Also releases a paused write if an assertion ended the test.
+		select {
+		case <-a.done:
+		case <-time.After(30 * time.Second):
+			t.Error("ApplySkill did not stop after cancellation")
+		}
+	})
+	return a
+}
+
+func (a *skillApplyAttempt) waitForWrite(entered <-chan struct{}) error {
+	select {
+	case <-entered:
+		return nil
+	case <-a.done:
+		return fmt.Errorf("ApplySkill completed before write: result=%+v: %w", a.result, a.err)
+	case <-a.ctx.Done():
+		return fmt.Errorf("waiting for ApplySkill write: %w", a.ctx.Err())
+	}
+}
+
+func (a *skillApplyAttempt) wait(t *testing.T) (Result, error) {
+	t.Helper()
+	select {
+	case <-a.done:
+		return a.result, a.err
+	case <-a.ctx.Done():
+		t.Fatalf("waiting for ApplySkill completion: %v", a.ctx.Err())
+		return Result{}, a.ctx.Err()
+	}
+}
+
 func TestSkillConcurrentUnicodeCaseFoldCollision(t *testing.T) {
 	root, _, gate := skillFixture(t)
 	if err := os.Mkdir(filepath.Join(root, "skills"), 0700); err != nil {
@@ -316,38 +426,92 @@ func TestSkillConcurrentUnicodeCaseFoldCollision(t *testing.T) {
 	}
 	// Both names are distinct, normative lowercase Unicode, NFC, and EqualFold.
 	names := []string{"skill", "ſkill"}
-	if !strings.EqualFold(names[0], names[1]) {
+	if names[0] == names[1] || !strings.EqualFold(names[0], names[1]) {
 		t.Fatal("fixture must collide")
 	}
-	entered := make(chan struct{})
-	release := make(chan struct{})
-	var wg sync.WaitGroup
-	first, _ := BuildSkillPlan(context.Background(), names[0], "text")
-	second, _ := BuildSkillPlan(context.Background(), names[1], "text")
-	wg.Add(1)
-	var firstResult Result
-	var firstErr error
-	go func() {
-		defer wg.Done()
-		firstResult, firstErr = applySkill(context.Background(), first, root, gate, sharedSkillValidation(names[0]), applyOps{
-			rename: renameExclusive, write: func(ctx context.Context, r *os.Root, files []File) error {
-				close(entered)
-				<-release
-				return writeTree(ctx, r, files)
-			},
-		})
-	}()
-	<-entered
-	secondResult, secondErr := ApplySkill(context.Background(), second, root, gate, sharedSkillValidation(names[1]))
-	close(release)
-	wg.Wait()
-	if !errors.Is(secondErr, os.ErrExist) || secondResult.Committed || firstErr != nil || !firstResult.Committed {
-		t.Fatalf("fold collision: %v %v %+v %+v", firstErr, secondErr, firstResult, secondResult)
+	first, err := BuildSkillPlan(context.Background(), names[0], "text")
+	if err != nil {
+		t.Fatal(err)
 	}
-	for path := range skillTree(t, root) {
-		if strings.Contains(path, ".authoring-") {
-			t.Fatal("reservation/stage leaked")
-		}
+	second, err := BuildSkillPlan(context.Background(), names[1], "text")
+	if err != nil {
+		t.Fatal(err)
+	}
+	entered, release := make(chan struct{}), make(chan struct{})
+	var stage string
+	// Registered before the attempts, so their cancellation/join runs first.
+	t.Cleanup(func() { close(release) })
+	one := startSkillApply(t, first, root, gate, applyOps{
+		rename: renameExclusive, write: func(ctx context.Context, r *os.Root, files []File) error {
+			stage = filepath.Dir(r.Name())
+			close(entered)
+			select {
+			case <-release:
+				return writeTree(ctx, r, files)
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		},
+	})
+	if err := one.waitForWrite(entered); err != nil {
+		t.Fatal(err)
+	}
+	two := startSkillApply(t, second, root, gate, applyOps{write: writeTree, rename: renameExclusive})
+	secondResult, secondErr := two.wait(t)
+	// The loser must finish while the first writer still holds its reservation
+	// and has not published anything: a sequential collision is insufficient.
+	select {
+	case <-one.done:
+		t.Fatal("first writer completed before overlapping collision was proved")
+	default:
+	}
+	assertOnly(t, filepath.Join(root, "skills"), filepath.Base(stage))
+	if !errors.Is(secondErr, os.ErrExist) || secondResult.Committed {
+		t.Fatalf("fold collision loser: %v %+v", secondErr, secondResult)
+	}
+	// A send releases the callback; cleanup owns the channel close on every path.
+	select {
+	case release <- struct{}{}:
+	case <-one.ctx.Done():
+		t.Fatal(one.ctx.Err())
+	}
+	firstResult, firstErr := one.wait(t)
+	if firstErr != nil || !firstResult.Committed {
+		t.Fatalf("fold collision winner: %v %+v", firstErr, firstResult)
+	}
+	assertOnly(t, root, "plugin.json", "skills")
+	assertOnly(t, filepath.Join(root, "skills"), names[0])
+	body, err := os.ReadFile(filepath.Join(firstResult.Destination, "SKILL.md"))
+	if err != nil || !bytes.Equal(body, first.File().Bytes) {
+		t.Fatalf("winner bytes: %q %v", body, err)
+	}
+}
+
+func TestSkillConcurrentFaultBeforeWriteReportsCompletion(t *testing.T) {
+	root, p, _ := skillFixture(t)
+	before := skillTree(t, root)
+	fault := errors.New("injected source gate failure before write")
+	entered := make(chan struct{})
+	a := startSkillApply(t, p, root, func(context.Context, string) (func(context.Context) error, error) {
+		return nil, fault
+	}, applyOps{rename: renameExclusive, write: func(ctx context.Context, r *os.Root, files []File) error {
+		close(entered)
+		return writeTree(ctx, r, files)
+	}})
+	if err := a.waitForWrite(entered); !errors.Is(err, fault) {
+		t.Fatalf("early completion did not report injected failure: %v", err)
+	}
+	result, err := a.wait(t)
+	if !errors.Is(err, fault) || result.Committed {
+		t.Fatalf("fault-before-write: %v %+v", err, result)
+	}
+	select {
+	case <-entered:
+		t.Fatal("write ran after source gate failure")
+	default:
+	}
+	if !reflect.DeepEqual(before, skillTree(t, root)) {
+		t.Fatal("fault-before-write changed source")
 	}
 }
 

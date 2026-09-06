@@ -3,6 +3,7 @@ package commands
 import (
 	"context"
 	"errors"
+	"path/filepath"
 
 	"github.com/777genius/plugin-kit-ai/cli/internal/authoring/report"
 	"github.com/777genius/plugin-kit-ai/cli/internal/authoring/skills"
@@ -48,7 +49,10 @@ func (a App) skillsCommand(capture func(report.Report)) (*cobra.Command, error) 
 					root = args[0]
 				}
 				var err error
-				req.Root, err = skills.ExactRoot(root)
+				// Accept the documented ./package spelling on Windows too. Only
+				// translate separators: never clean away an interior reparse/..
+				// component before the rooted service checks it.
+				req.Root, err = skills.ExactRoot(filepath.FromSlash(root))
 				return req, err
 			},
 			Runner: authoringcli.RunnerFunc[skills.Request, report.Report](func(ctx context.Context, req skills.Request) (report.Report, error) {
