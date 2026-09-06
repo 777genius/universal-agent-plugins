@@ -1,5 +1,7 @@
-function escapeYaml(value) {
-  return String(value).replace(/"/g, '\\"');
+function yamlString(value) {
+  // JSON strings are valid YAML double-quoted scalars and escape quotes,
+  // backslashes and control characters in one deterministic operation.
+  return JSON.stringify(String(value));
 }
 
 export function renderFrontmatter(meta) {
@@ -11,7 +13,7 @@ export function renderFrontmatter(meta) {
     if (Array.isArray(value)) {
       lines.push(`${key}:`);
       for (const item of value) {
-        lines.push(`  - "${escapeYaml(item)}"`);
+        lines.push(`  - ${yamlString(item)}`);
       }
       continue;
     }
@@ -19,7 +21,7 @@ export function renderFrontmatter(meta) {
       lines.push(`${key}: ${value ? "true" : "false"}`);
       continue;
     }
-    lines.push(`${key}: "${escapeYaml(value)}"`);
+    lines.push(`${key}: ${yamlString(value)}`);
   }
   lines.push("---", "");
   return lines.join("\n");
@@ -34,13 +36,82 @@ export function sanitizeGeneratedMarkdown(body) {
 }
 
 export function stripMarkdownLinks(body) {
-  return body.replace(/\[((?:\\.|[^\]])+)\]\((?:<[^>\n]+>|[^)\n]+)\)/g, "$1");
+  let output = "";
+  let offset = 0;
+  while (offset < body.length) {
+    const open = body.indexOf("[", offset);
+    if (open < 0) {
+      output += body.slice(offset);
+      break;
+    }
+    output += body.slice(offset, open);
+    let close = open + 1;
+    while (close < body.length && body[close] !== "]") {
+      close += body[close] === "\\" && close + 1 < body.length ? 2 : 1;
+    }
+    if (close >= body.length) {
+      output += body.slice(open);
+      break;
+    }
+    if (body[close + 1] !== "(") {
+      output += body.slice(open, close + 1);
+      offset = close + 1;
+      continue;
+    }
+    const targetStart = close + 2;
+    let end = targetStart;
+    if (body[targetStart] === "<") {
+      end = body.indexOf(">", targetStart + 1);
+      if (end <= targetStart + 1 || body.slice(targetStart + 1, end).includes("\n") || body[end + 1] !== ")") {
+        end = -1;
+      } else {
+        end += 1;
+      }
+    } else {
+      while (end < body.length && body[end] !== ")" && body[end] !== "\n") {
+        end += 1;
+      }
+      if (end === targetStart || body[end] !== ")") {
+        end = -1;
+      }
+    }
+    if (end < 0) {
+      output += body.slice(open, close + 1);
+      offset = close + 1;
+      continue;
+    }
+    output += body.slice(open + 1, close);
+    offset = end + 1;
+  }
+  return output;
+}
+
+function stripHtmlComments(body) {
+  let output = "";
+  let offset = 0;
+  while (offset < body.length) {
+    const open = body.indexOf("<!--", offset);
+    if (open < 0) {
+      output += body.slice(offset);
+      break;
+    }
+    const close = body.indexOf("-->", open + 4);
+    if (close < 0) {
+      output += body.slice(offset);
+      break;
+    }
+    output += body.slice(offset, open);
+    offset = close + 3;
+    while (body[offset] === "\n") {
+      offset += 1;
+    }
+  }
+  return output;
 }
 
 export function normalizeGeneratedMarkdown(body) {
   return sanitizeGeneratedMarkdown(
-    stripMarkdownLinks(body)
-      .replace(/<!--[\s\S]*?-->\n*/g, "")
+    stripHtmlComments(stripMarkdownLinks(body))
       .replace(/<a\b[^>]*><\/a>\n*/g, "")
       .replace(/<details><summary>([^<]+)<\/summary>\s*<p>\s*/g, "\n**$1**\n\n")
       .replace(/\s*<\/p>\s*<\/details>/g, "\n")

@@ -193,7 +193,6 @@ function localizeNodeRuntimeBody(locale, body) {
     .replace(/^### Constructor$/gm, "### Конструктор")
     .replace(/^#### Parameters$/gm, "#### Параметры")
     .replace(/^#### Returns$/gm, "#### Возвращает")
-    .replace(/^### event$/gm, "### event")
     .replace("Handler signature for Claude hooks that return an object response or no value.", "Сигнатура обработчика для Claude hooks, который возвращает объект ответа или `void`.")
     .replace("Handler signature for Codex events that return an exit code or no value.", "Сигнатура обработчика для Codex events, который возвращает код выхода или `void`.")
     .replace("JSON-shaped payload used by the runtime helpers when a stricter schema is not known.", "JSON-представление payload, которое используется runtime-хелперами, когда строгая схема неизвестна.")
