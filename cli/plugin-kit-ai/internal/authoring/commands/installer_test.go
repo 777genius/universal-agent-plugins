@@ -27,8 +27,8 @@ import (
 // existing add command constructs its real planner. Detection and scanner are
 // no-effect test inputs; no real user profile, runtime or provider is executed.
 func TestGeneratedPackagesReachExistingInstallerPlanner(t *testing.T) {
-	if runtime.GOOS != "linux" && !(runtime.GOOS == "windows" && runtime.GOARCH == "amd64") {
-		t.Skip("writable native authoring requires Linux or Windows amd64")
+	if runtime.GOOS != "linux" && !(runtime.GOOS == "windows" && (runtime.GOARCH == "amd64" || runtime.GOARCH == "arm64")) {
+		t.Skip("writable native authoring requires Linux or Windows amd64/arm64")
 	}
 	author := commands.App{Projects: project.Service{Scratch: t.TempDir()}, Revision: baseline}
 	registry, e := specregistry.New()

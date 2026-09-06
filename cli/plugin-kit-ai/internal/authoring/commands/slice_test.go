@@ -218,8 +218,8 @@ func tree(t *testing.T, root string) map[string]string {
 }
 
 func TestReportsAndFreshFactory(t *testing.T) {
-	if runtime.GOOS != "linux" && !(runtime.GOOS == "windows" && runtime.GOARCH == "amd64") {
-		t.Skip("writable native authoring requires Linux or Windows amd64")
+	if runtime.GOOS != "linux" && !(runtime.GOOS == "windows" && (runtime.GOARCH == "amd64" || runtime.GOARCH == "arm64")) {
+		t.Skip("writable native authoring requires Linux or Windows amd64/arm64")
 	}
 	scratch := t.TempDir()
 	a := commands.App{Projects: project.Service{Scratch: scratch}, Revision: baseline}
@@ -343,8 +343,8 @@ func TestArgumentFailuresBeforeEffects(t *testing.T) {
 }
 
 func TestInitValidationAndFailurePolicy(t *testing.T) {
-	if runtime.GOOS != "linux" && !(runtime.GOOS == "windows" && runtime.GOARCH == "amd64") {
-		t.Skip("writable native authoring requires Linux or Windows amd64")
+	if runtime.GOOS != "linux" && !(runtime.GOOS == "windows" && (runtime.GOARCH == "amd64" || runtime.GOARCH == "arm64")) {
+		t.Skip("writable native authoring requires Linux or Windows amd64/arm64")
 	}
 	scratch := t.TempDir()
 	a := commands.App{Projects: project.Service{Scratch: scratch}, Revision: baseline}
@@ -399,8 +399,8 @@ func TestInitValidationAndFailurePolicy(t *testing.T) {
 }
 
 func TestConcurrentInitAndCanceledInvocation(t *testing.T) {
-	if runtime.GOOS != "linux" && !(runtime.GOOS == "windows" && runtime.GOARCH == "amd64") {
-		t.Skip("writable native authoring requires Linux or Windows amd64")
+	if runtime.GOOS != "linux" && !(runtime.GOOS == "windows" && (runtime.GOARCH == "amd64" || runtime.GOARCH == "arm64")) {
+		t.Skip("writable native authoring requires Linux or Windows amd64/arm64")
 	}
 	parent, scratch := t.TempDir(), t.TempDir()
 	a := commands.App{Projects: project.Service{Scratch: scratch}, Revision: baseline}
@@ -451,8 +451,8 @@ type faultContext struct {
 func (c faultContext) Err() error { c.check(); return c.Context.Err() }
 
 func TestCleanupFailureSurvivesCancellation(t *testing.T) {
-	if runtime.GOOS != "linux" && !(runtime.GOOS == "windows" && runtime.GOARCH == "amd64") {
-		t.Skip("writable native authoring requires Linux or Windows amd64")
+	if runtime.GOOS != "linux" && !(runtime.GOOS == "windows" && (runtime.GOARCH == "amd64" || runtime.GOARCH == "arm64")) {
+		t.Skip("writable native authoring requires Linux or Windows amd64/arm64")
 	}
 	root, scratch := t.TempDir(), t.TempDir()
 	write(t, root, "plugin.json", plugin(""))
@@ -530,8 +530,8 @@ func TestCleanupFailureSurvivesCancellation(t *testing.T) {
 }
 
 func TestNativeBinaryVerticalSlice(t *testing.T) {
-	if runtime.GOOS != "linux" && !(runtime.GOOS == "windows" && runtime.GOARCH == "amd64") {
-		t.Skip("writable native authoring requires Linux or Windows amd64")
+	if runtime.GOOS != "linux" && !(runtime.GOOS == "windows" && (runtime.GOARCH == "amd64" || runtime.GOARCH == "arm64")) {
+		t.Skip("writable native authoring requires Linux or Windows amd64/arm64")
 	}
 	_, file, _, _ := runtime.Caller(0)
 	module := filepath.Clean(filepath.Join(filepath.Dir(file), "../../.."))

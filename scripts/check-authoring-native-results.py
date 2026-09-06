@@ -16,6 +16,42 @@ import re
 import sys
 
 
+def host_identity():
+    system = {"Linux": "linux", "Darwin": "darwin", "Windows": "windows"}.get(platform.system())
+    arch = {"x86_64": "amd64", "amd64": "amd64", "arm64": "arm64", "aarch64": "arm64"}.get(platform.machine().lower())
+    if system == "windows":
+        # Python/bash may be x64 tools on Windows ARM. Query the native kernel,
+        # then inspect Go and product PE machines separately; never trust an
+        # emulated process's platform.machine() as hardware evidence.
+        import ctypes
+        kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel.GetCurrentProcess.restype = ctypes.c_void_p
+        query = kernel.IsWow64Process2
+        query.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_ushort), ctypes.POINTER(ctypes.c_ushort)]
+        query.restype = ctypes.c_int
+        process, native = ctypes.c_ushort(), ctypes.c_ushort()
+        if not query(kernel.GetCurrentProcess(), ctypes.byref(process), ctypes.byref(native)):
+            raise OSError("cannot establish native Windows machine")
+        arch = {0x8664: "amd64", 0xAA64: "arm64"}.get(native.value)
+    return system, arch
+
+
+def executable_identity(path):
+    """Read native 64-bit ELF/PE machine IDs, rejecting x86 and ARM64EC/X."""
+    with path.open("rb") as stream:
+        header = stream.read(64)
+        if len(header) != 64:
+            raise ValueError("truncated executable: " + str(path))
+        if header[:4] == b"\x7fELF" and header[4:7] == b"\x02\x01\x01":
+            return "linux", {62: "amd64", 183: "arm64"}.get(int.from_bytes(header[18:20], "little"))
+        if header[:2] == b"MZ":
+            stream.seek(int.from_bytes(header[60:64], "little"))
+            pe = stream.read(26)
+            if len(pe) == 26 and pe[:4] == b"PE\0\0" and pe[24:26] == b"\x0b\x02":
+                return "windows", {0x8664: "amd64", 0xAA64: "arm64"}.get(int.from_bytes(pe[4:6], "little"))
+    raise ValueError("unsupported executable header: " + str(path))
+
+
 def unavailable_diagnostic(text, test):
     """Ignore only complete Go status lines naming this event's exact test."""
     name = re.escape(test)
@@ -24,7 +60,7 @@ def unavailable_diagnostic(text, test):
     for line in text.splitlines():
         if test and re.fullmatch(structural, line):
             continue
-        if re.search(r"platform_unavailable|not[ _-]?available|gate.*(?:incomplete|unproven)", line, re.I):
+        if re.search(r"platform_unavailable|scratch_unavailable|not[ _-]?available|gate.*(?:incomplete|unproven)", line, re.I):
             return True
     return False
 
@@ -54,17 +90,33 @@ def check(root):
         require(bool(re.fullmatch(r"[0-9a-f]{40}", head)) and head == os.environ["EXPECTED_HEAD"], "head mismatch")
         env = json.loads((evidence / "go-env.json").read_text(encoding="utf-8"))
         summary["go"] = env
-        native_os = {"Linux": "linux", "Darwin": "darwin", "Windows": "windows"}.get(platform.system())
-        native_arch = {"x86_64": "amd64", "amd64": "amd64", "arm64": "arm64", "aarch64": "arm64"}.get(platform.machine().lower())
-        summary["host"] = {"os": native_os, "arch": native_arch, "release": platform.release()}
+        native_os, native_arch = host_identity()
+        summary["host"] = {"os": native_os, "arch": native_arch, "release": platform.release(),
+                           "runner_arch": os.environ.get("RUNNER_ARCH")}
         require(native_os in ("linux", "windows"), "checkpoint supports Linux and Windows only; macOS writable release gate UNPROVEN")
         require(native_os == env["GOHOSTOS"] == env["GOOS"] == os.environ["EXPECTED_OS"], "native OS mismatch")
         require(native_arch == env["GOHOSTARCH"] == env["GOARCH"] == os.environ["EXPECTED_ARCH"], "native architecture mismatch")
+        require(native_arch in ("amd64", "arm64"), "unsupported native architecture")
+        require(os.environ.get("RUNNER_ARCH", "").lower() == {"amd64": "x64", "arm64": "arm64"}.get(native_arch), "runner architecture mismatch")
         require(env["GOVERSION"] == "go1.25.13", "Go pin mismatch")
         suffix = ".exe" if native_os == "windows" else ""
         summary["go_sha256"] = digest(Path(env["GOROOT"]) / "bin" / ("go" + suffix))
         binaries = {name: digest(root / "bin" / (name + suffix)) for name in ("agentplugins", "plugin-kit-ai")}
         summary["binary_sha256"] = binaries
+        executables = {name: root / "bin" / (name + suffix) for name in binaries}
+        executables["go"] = Path(env["GOROOT"]) / "bin" / ("go" + suffix)
+        summary["executable_machines"] = {name: executable_identity(path) for name, path in executables.items()}
+        for name, identity in summary["executable_machines"].items():
+            require(identity == (native_os, native_arch), "native executable architecture mismatch: " + name)
+        summary["builds"] = {}
+        for name in binaries:
+            build = json.loads((evidence / (name + "-build.json")).read_text(encoding="utf-8"))
+            summary["builds"][name] = build
+            settings = {item["Key"]: item["Value"] for item in build["Settings"]}
+            require(build["GoVersion"] == env["GOVERSION"], "binary Go pin mismatch: " + name)
+            require(build["Path"] == "github.com/777genius/plugin-kit-ai/cli/cmd/" + name, "binary entrypoint mismatch: " + name)
+            require((settings.get("GOOS"), settings.get("GOARCH")) == (native_os, native_arch), "binary build architecture mismatch: " + name)
+            require(settings.get("vcs.revision") == head and settings.get("vcs.modified") == "false", "binary source revision/cleanliness mismatch: " + name)
         if native_os == "windows":
             import ctypes
             volume = Path(root).anchor
@@ -169,6 +221,12 @@ def check(root):
                         "TestWindowsReplacementBeforeAndAfterNameCheck", "TestWindowsReplacementWithPipeNamespaceLink", "TestWindowsSameObjectReopenAfterNameReplacement", "TestWindowsMetadataProbeReplacement", "TestWindowsExistingWriterAndReparseSetterDenied", "TestWindowsAttributesOnlyHandleCannotSetReparse", "TestWindowsDirectoryAncestryHeld", "TestWindowsInventoryMutationRejected", "TestWindowsJunctionsAndNamespaceRoots", "TestWindowsInertFIFOReparseRejected", "TestWindowsHandleLifetimeAndFailureCleanup", "TestWindowsOfflineFileHasNoDataOpen",
                         "TestWindowsScratchPhysicalAliases", "TestWindowsScratchIdentityUnavailableFailsClosed", "TestWindowsScratchAncestryHeld", "TestWindowsScratchDistinctNTFSVolumes"],
         }
+        # These diagnostics and negative controls must not disappear from ARM
+        # discovery via an amd64-only build guard either.
+        critical["windows"] += ["TestWindowsBasicInfoABI", "TestWindowsBootstrapStages",
+                                "TestWindowsScratchAliasResolutionStages", "TestWindowsReopenProtectedParameters",
+                                "TestWindowsModeAndChangeMetadata", "TestWindowsRootAndIntermediateReparseRejected",
+                                "TestWindowsScratchAliasFailuresStayBeforeData"]
         for test in critical.get(native_os, []):
             require((native_package, test) in passed, "missing mandatory native contract: " + test)
         scaffold_package = "github.com/777genius/plugin-kit-ai/cli/internal/authoring/scaffold"

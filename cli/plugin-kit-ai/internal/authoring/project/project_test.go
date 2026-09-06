@@ -35,8 +35,8 @@ func empty(t *testing.T, root string) {
 }
 func writableNative(t *testing.T) {
 	t.Helper()
-	if runtime.GOOS != "linux" && !(runtime.GOOS == "windows" && runtime.GOARCH == "amd64") {
-		t.Skip("writable native authoring requires Linux or Windows amd64")
+	if runtime.GOOS != "linux" && !(runtime.GOOS == "windows" && (runtime.GOARCH == "amd64" || runtime.GOARCH == "arm64")) {
+		t.Skip("writable native authoring requires Linux or Windows amd64/arm64")
 	}
 }
 

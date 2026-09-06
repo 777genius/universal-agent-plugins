@@ -1,4 +1,4 @@
-//go:build windows && amd64
+//go:build windows && (amd64 || arm64)
 
 package packageview
 
@@ -52,7 +52,7 @@ func nativeSharedRename(old, next string) error {
 	if err != nil {
 		return err
 	}
-	// FILE_RENAME_INFORMATION, amd64: BOOLEAN at 0, HANDLE at 8,
+	// FILE_RENAME_INFORMATION, amd64/arm64: BOOLEAN at 0, HANDLE at 8,
 	// ULONG at 16, WCHAR[] at 20. RootDirectory=NULL + a basename renames
 	// within the existing parent. No replace/POSIX flags or access bypasses.
 	buf := make([]byte, 20+2*(len(name)-1))
@@ -440,11 +440,42 @@ func TestWindowsInventoryMutationRejected(t *testing.T) {
 	}
 }
 
-// Ensure the hand-declared FILE_BASIC_INFO ABI remains 40 bytes on amd64.
+// Both Windows targets use the same LLP64 NT ABI. These assignments are
+// compile-time equalities, so cross-compiling the tests checks real selected
+// Go/x/sys layouts too. Native syscall/identity tests are still mandatory.
+var (
+	_ [8]byte  = [unsafe.Sizeof(windows.Handle(0))]byte{}
+	_ [40]byte = [unsafe.Sizeof(winBasic{})]byte{}
+	_ [8]byte  = [unsafe.Alignof(winBasic{})]byte{}
+	_ [24]byte = [unsafe.Offsetof(winBasic{}.Change)]byte{}
+	_ [32]byte = [unsafe.Offsetof(winBasic{}.Attributes)]byte{}
+	_ [48]byte = [unsafe.Sizeof(windows.OBJECT_ATTRIBUTES{})]byte{}
+	_ [8]byte  = [unsafe.Offsetof(windows.OBJECT_ATTRIBUTES{}.RootDirectory)]byte{}
+	_ [16]byte = [unsafe.Offsetof(windows.OBJECT_ATTRIBUTES{}.ObjectName)]byte{}
+	_ [24]byte = [unsafe.Offsetof(windows.OBJECT_ATTRIBUTES{}.Attributes)]byte{}
+	_ [32]byte = [unsafe.Offsetof(windows.OBJECT_ATTRIBUTES{}.SecurityDescriptor)]byte{}
+	_ [40]byte = [unsafe.Offsetof(windows.OBJECT_ATTRIBUTES{}.SecurityQoS)]byte{}
+	_ [16]byte = [unsafe.Sizeof(windows.NTUnicodeString{})]byte{}
+	_ [8]byte  = [unsafe.Offsetof(windows.NTUnicodeString{}.Buffer)]byte{}
+	_ [16]byte = [unsafe.Sizeof(windows.IO_STATUS_BLOCK{})]byte{}
+	_ [8]byte  = [unsafe.Offsetof(windows.IO_STATUS_BLOCK{}.Information)]byte{}
+	_ [52]byte = [unsafe.Sizeof(windows.ByHandleFileInformation{})]byte{}
+)
+
+// Check the manual rename fixture against the native declaration. The scaffold
+// rename uses this same field order with Sizeof/Offsetof rather than constants.
 func TestWindowsBasicInfoABI(t *testing.T) {
-	if unsafe.Sizeof(winBasic{}) != 40 {
-		t.Fatal("FILE_BASIC_INFO ABI mismatch")
+	type renameInfo struct {
+		ReplaceIfExists byte
+		RootDirectory   windows.Handle
+		FileNameLength  uint32
+		FileName        [1]uint16
 	}
+	var _ [24]byte = [unsafe.Sizeof(renameInfo{})]byte{}
+	var _ [8]byte = [unsafe.Offsetof(renameInfo{}.RootDirectory)]byte{}
+	var _ [16]byte = [unsafe.Offsetof(renameInfo{}.FileNameLength)]byte{}
+	var _ [20]byte = [unsafe.Offsetof(renameInfo{}.FileName)]byte{}
+	t.Log("64-bit NT layouts: BASIC=40 OBJECT_ATTRIBUTES=48 UNICODE_STRING=16 IO_STATUS_BLOCK=16 RENAME name offset=20")
 }
 
 func TestWindowsExistingWriterAndReparseSetterDenied(t *testing.T) {

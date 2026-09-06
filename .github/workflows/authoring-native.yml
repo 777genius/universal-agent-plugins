@@ -19,6 +19,10 @@ jobs:
         include:
           - {runner: ubuntu-24.04, os: linux, arch: amd64}
           - {runner: windows-2022, os: windows, arch: amd64}
+          # github/docs ec3629a841129ae28189d7bb2274a7b3d40c5095:
+          # data/reusables/actions/supported-github-runners.md (standard public runners).
+          - {runner: ubuntu-24.04-arm, os: linux, arch: arm64}
+          - {runner: windows-11-arm, os: windows, arch: arm64}
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 25
     defaults:
@@ -43,6 +47,7 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # ci.yml
         with:
           go-version: '1.25.13'
+          architecture: ${{ matrix.arch == 'amd64' && 'x64' || matrix.arch }}
           cache: false
       - name: Native offline tests and actual entrypoint builds
         run: |
@@ -97,8 +102,9 @@ jobs:
           suffix=""; if [[ "$EXPECTED_OS" == windows ]]; then suffix=.exe; fi
           command_package=github.com/777genius/plugin-kit-ai/cli/internal/authoring/commands
           for entry in agentplugins plugin-kit-ai; do
-            go build -p 2 -trimpath -ldflags "-X $command_package.Enabled=vertical-slice-v1 -X $command_package.Revision=$EXPECTED_HEAD" \
+            go build -p 2 -buildvcs=true -trimpath -ldflags "-X $command_package.Enabled=vertical-slice-v1 -X $command_package.Revision=$EXPECTED_HEAD" \
               -o "$AUTHORING_NATIVE_BIN_DIR/$entry$suffix" "./cli/plugin-kit-ai/cmd/$entry"
+            go version -m -json "$AUTHORING_NATIVE_BIN_DIR/$entry$suffix" > "$NATIVE_ROOT/evidence/$entry-build.json"
           done
           go test -p 2 -json -list '^Test' "${packages[@]}" > "$NATIVE_ROOT/evidence/test-discovery.json"
           # Only packageview's owned disposable filesystem fixtures run privileged
