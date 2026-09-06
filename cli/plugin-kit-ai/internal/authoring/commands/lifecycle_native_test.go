@@ -1,4 +1,4 @@
-//go:build (linux || windows) && amd64
+//go:build (linux || windows) && (amd64 || arm64)
 
 package commands_test
 
