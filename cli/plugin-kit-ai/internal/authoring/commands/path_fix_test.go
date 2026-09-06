@@ -78,7 +78,11 @@ func (b pathFixBinaries) run(t *testing.T, i int, cwd, scratch string, args ...s
 	cmd.Env = append(nativeEnvironment(t.TempDir(), scratch, t.TempDir()), "GOMAXPROCS=2")
 	var out, errout bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &out, &errout
+	started := time.Now().UnixNano()
 	err := cmd.Run()
+	if runtime.GOOS == "windows" && cmd.Process != nil {
+		t.Logf("native invocation binary=%d pid=%d started_ns=%d ended_ns=%d", i, cmd.Process.Pid, started, time.Now().UnixNano())
+	}
 	code := 0
 	if err != nil {
 		if exit, ok := err.(*exec.ExitError); ok {

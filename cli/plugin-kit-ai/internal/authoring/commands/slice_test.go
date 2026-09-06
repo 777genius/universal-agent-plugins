@@ -78,8 +78,9 @@ func execute(t *testing.T, a commands.App, args []string, mount bool) (report.Re
 
 // Workers capture bytes and errors; only the parent may decode or fail a test.
 type rawExecution struct {
-	out, errout []byte
-	err         error
+	out, errout         []byte
+	err                 error
+	diagnosticGoroutine string
 }
 
 func executeRaw(a commands.App, args []string, mount bool) rawExecution {
@@ -90,7 +91,9 @@ func executeRaw(a commands.App, args []string, mount bool) rawExecution {
 		args = append([]string{"author"}, args...)
 	}
 	e := a.Execute(context.Background(), args, authoringcli.Streams{Out: &out, Err: &errout}, builder)
-	return rawExecution{out.Bytes(), errout.Bytes(), e}
+	var stack [64]byte
+	gid := strings.Fields(string(stack[:runtime.Stack(stack[:], false)]))[1]
+	return rawExecution{out.Bytes(), errout.Bytes(), e, gid}
 }
 
 func decodeExecution(t *testing.T, result rawExecution) (report.Report, int, []byte) {
@@ -416,7 +419,7 @@ func TestConcurrentInitAndCanceledInvocation(t *testing.T) {
 		if r.Committed {
 			wins++
 		} else if r.Error == nil || r.Error.Code != "destination_exists" {
-			t.Fatalf("unexpected race failure: %+v", r)
+			t.Fatalf("unexpected race failure pid=%d goroutine=%s: %+v", os.Getpid(), result.diagnosticGoroutine, r)
 		}
 	}
 	if wins != 1 {

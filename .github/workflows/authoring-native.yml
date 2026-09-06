@@ -3,6 +3,11 @@ name: Authoring native offline
 on:
   pull_request:
   workflow_dispatch:
+    inputs:
+      windows_arm64_diagnostics:
+        description: Capture same-invocation native errors (diagnostic builds cannot qualify as release proof)
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -49,6 +54,10 @@ jobs:
           go-version: '1.25.13'
           architecture: ${{ matrix.arch == 'amd64' && 'x64' || matrix.arch }}
           cache: false
+      - name: Prepare disposable second NTFS filesystem on Windows ARM64
+        if: matrix.os == 'windows' && matrix.arch == 'arm64'
+        shell: pwsh
+        run: ./cli/plugin-kit-ai/internal/authoring/commands/testdata/windows_arm64_volume.ps1 -Mode Setup
       - name: Native offline tests and actual entrypoint builds
         run: |
           set -euo pipefail
@@ -100,9 +109,19 @@ jobs:
           go list -p 2 -deps -test "${packages[@]}" ./cli/plugin-kit-ai/cmd/{agentplugins,plugin-kit-ai} > "$NATIVE_ROOT/evidence/dependencies.txt"
           export GOPROXY=off GOSUMDB=off
           suffix=""; if [[ "$EXPECTED_OS" == windows ]]; then suffix=.exe; fi
+          build_vcs=true
+          if [[ "$EXPECTED_OS/$EXPECTED_ARCH" == windows/arm64 && "${{ github.event_name == 'pull_request' || inputs.windows_arm64_diagnostics }}" == true ]]; then
+            # Generate outside checkout; apply to these actual binaries and tests,
+            # never to a post-failure rerun. Preserve exact overlay with evidence.
+            go run ./cli/plugin-kit-ai/internal/authoring/commands/testdata/native_diagnostics.go "$GITHUB_WORKSPACE" "$NATIVE_ROOT/evidence/diagnostics"
+            export GOFLAGS="-overlay=$NATIVE_ROOT/evidence/diagnostics/overlay.json"
+            # Fail the existing clean-VCS proof gate transparently for diagnostic
+            # builds; an overlay must never masquerade as clean production proof.
+            build_vcs=false
+          fi
           command_package=github.com/777genius/plugin-kit-ai/cli/internal/authoring/commands
           for entry in agentplugins plugin-kit-ai; do
-            go build -p 2 -buildvcs=true -trimpath -ldflags "-X $command_package.Enabled=vertical-slice-v1 -X $command_package.Revision=$EXPECTED_HEAD" \
+            go build -p 2 -buildvcs="$build_vcs" -trimpath -ldflags "-X $command_package.Enabled=vertical-slice-v1 -X $command_package.Revision=$EXPECTED_HEAD" \
               -o "$AUTHORING_NATIVE_BIN_DIR/$entry$suffix" "./cli/plugin-kit-ai/cmd/$entry"
             go version -m -json "$AUTHORING_NATIVE_BIN_DIR/$entry$suffix" > "$NATIVE_ROOT/evidence/$entry-build.json"
           done
@@ -134,6 +153,21 @@ jobs:
           fi
           printf '%s\n' "$result" > "$NATIVE_ROOT/evidence/test-exit.txt"
           exit "$result"
+      - name: Detach and remove only the owned Windows ARM64 VHDX
+        if: always() && matrix.os == 'windows' && matrix.arch == 'arm64'
+        shell: pwsh
+        run: ./cli/plugin-kit-ai/internal/authoring/commands/testdata/windows_arm64_volume.ps1 -Mode Cleanup
+      - name: Preserve disposable volume setup and cleanup evidence
+        if: always() && matrix.os == 'windows' && matrix.arch == 'arm64' && env.AUTHORING_VOLUME_FIXTURE != ''
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: authoring-volume-arm64-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ env.AUTHORING_VOLUME_FIXTURE }}/*.json
+            ${{ env.AUTHORING_VOLUME_FIXTURE }}/*.txt
+            ${{ env.AUTHORING_VOLUME_FIXTURE }}/*.log
+          if-no-files-found: error
+          retention-days: 14
       - name: Require structured native evidence (including skips and offline E2E)
         if: always()
         run: python scripts/check-authoring-native-results.py "$NATIVE_ROOT"
