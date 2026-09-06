@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 
@@ -39,7 +40,13 @@ func executeRelease(ctx context.Context, args []string, streams authoringcli.Str
 		return a.Execute(ctx, args, streams, newReleaseRoot)
 	}
 	if !noEffect {
-		return installer()
+		if err := installer(); err != nil {
+			// Preserve the ordinary main's installer rendering and exit boundary.
+			// Author and already-rendered utility failures never enter this branch.
+			_, _ = fmt.Fprintln(streams.Err, "agentplugins:", err)
+			return exitx.Wrap(err, 1)
+		}
+		return nil
 	}
 	var out bytes.Buffer
 	root.SetOut(&out)

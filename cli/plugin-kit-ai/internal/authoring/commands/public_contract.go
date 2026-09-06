@@ -174,7 +174,7 @@ func selectPublic(root *cobra.Command, args []string) selection {
 		}
 		var next *cobra.Command
 		for _, c := range s.command.Commands() {
-			if c.Name() == token && (!c.Hidden || c.Name() == "author" || c.Annotations[authoringcli.RejectionKey] != "") {
+			if (c.Name() == token || c.Annotations[operationKey] == "" && c.HasAlias(token)) && (!c.Hidden || c.Name() == "author" || c.Annotations[authoringcli.RejectionKey] != "") {
 				next = c
 				break
 			}
@@ -281,7 +281,7 @@ func (a App) executePublic(ctx context.Context, args []string, streams authoring
 		if a.Release != nil {
 			if a.Release.Reject != nil {
 				if e := a.Release.Reject(Invocation{Command: selected.command, Values: selected.values}); e != nil {
-					if v := selected.values["json"]; len(v) > 0 && v[len(v)-1] == "true" && len(selected.values["format"]) == 0 {
+					if (Invocation{Values: selected.values}).Bool("json") && len(selected.values["format"]) == 0 {
 						selected.format = "json"
 					}
 					return nil, &inputError{"v1_operation_unavailable", e.Error()}
@@ -295,6 +295,7 @@ func (a App) executePublic(ctx context.Context, args []string, streams authoring
 			if utilitySelected {
 				authoringcli.PrepareReleaseUtilities(root, true)
 			}
+			a.guardReleaseCompletion(root, build)
 		}
 		if selected.invalid {
 			return nil, &inputError{"arguments_invalid", publicArguments}

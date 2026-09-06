@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"os"
+	"os/exec"
 	"strings"
 	"testing"
 
@@ -128,7 +130,7 @@ func TestReleaseV1InventoryCoverage(t *testing.T) {
 			prefix = path
 		}
 		for _, child := range c.Commands() {
-			if child.Name() == "help" || child.Name() == "completion" || strings.HasPrefix(child.Name(), "__complete") {
+			if child.Name() == "help" || child.Name() == "completion" || child.Name() == "__complete" || child.Name() == "__completeNoDesc" {
 				continue
 			}
 			walk(child, prefix)
@@ -316,5 +318,130 @@ func TestReleaseCompletionHelpAncestry(t *testing.T) {
 	}
 	for _, shell := range []string{"bash", "zsh", "fish", "powershell"} {
 		releaseProbe(t, []string{"completion", shell, "--no-descriptions"}, 0)
+	}
+}
+
+func TestReleaseCompatibilityBooleanSpellings(t *testing.T) {
+	for _, value := range []string{"1", "t", "T", "TRUE", "true", "True", "0", "f", "F", "FALSE", "false", "False", "invalid"} {
+		t.Run(value, func(t *testing.T) {
+			truth := value == "1" || value == "t" || value == "T" || value == "TRUE" || value == "true" || value == "True"
+			p, human := releaseProbe(t, []string{"skills", "ls", "--json=" + value}, 2)
+			if (p.Error != nil) != truth || (human == "") != truth {
+				t.Fatal("legacy JSON boolean semantics changed")
+			}
+			for _, prefix := range [][]string{{"update"}, {"integrations", "update"}} {
+				p, _ = releaseProbe(t, append(prefix, "--all="+value, "--dry-run="+value, "--format=json"), 2)
+				if p.Error == nil || strings.Contains(p.Error.Action, "Use agentplugins update --all.") != truth || strings.Contains(p.Error.Action, "Preserve plan intent") != truth {
+					t.Fatalf("intent changed: %+v", p.Error)
+				}
+			}
+			// Explicit presence still retires a flag, even when false. Format's
+			// final value wins regardless of the JSON flag's position or spelling.
+			for _, args := range [][]string{
+				{"init", "--force=" + value, "--help", "--format=json"},
+				{"skills", "ls", "--format=human", "--json=" + value, "--format=json"},
+			} {
+				p, _ = releaseProbe(t, args, 2)
+				if p.Error == nil {
+					t.Fatal("missing rejection")
+				}
+			}
+			_, human = releaseProbe(t, []string{"skills", "ls", "--format=json", "--json=" + value, "--format=human"}, 2)
+			if human == "" {
+				t.Fatal("final human format ignored")
+			}
+		})
+	}
+}
+
+// A child process is essential: Cobra CompErrorln bypasses Command.SetErr.
+func TestReleaseCompletionProcessStderr(t *testing.T) {
+	if os.Getenv("UAP_COMPLETION_PROCESS_FIXTURE") == "1" {
+		args := os.Args
+		for i, arg := range args {
+			if arg == "--" {
+				args = args[i+1:]
+				break
+			}
+		}
+		streams := authoringcli.Streams{Out: os.Stdout, Err: os.Stderr}
+		a := commands.App{Revision: "process-fixture", PublicContract: true, Release: &commands.ReleaseOptions{Product: "plugin-kit-ai", Version: "2.0.0", Reject: rejectV1}}
+		err := a.Execute(context.Background(), args, streams, newReleaseRoot)
+		if err != nil {
+			os.Exit(exitx.Code(err))
+		}
+		os.Exit(0)
+	}
+	exe, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	home := t.TempDir()
+	marker := "glpat-" + strings.Repeat("b", 20)
+	for _, protocol := range []string{"__complete", "__completeNoDesc"} {
+		cases := []struct {
+			args  []string
+			want  string
+			fails bool
+		}{
+			{[]string{protocol, ""}, "init", false},
+			{append(append([]string{protocol}, []string{"init"}...), "--desc"), "--description", false},
+			{append(append([]string{protocol}, []string{"init"}...), "--description", ""), ":", false},
+			{[]string{protocol, "--unknown=" + marker, ""}, "", true},
+			{[]string{protocol, "--unknown=" + marker}, "", true},
+			{[]string{protocol, "--no-color=" + marker, ""}, "", true},
+			{[]string{protocol, "-" + marker, ""}, "", true},
+			{[]string{protocol, marker, ""}, "", true},
+			{[]string{protocol, "--format", marker, "--unknown", ""}, "", true},
+			{[]string{protocol, "--unknown=" + marker, "", "--format=json"}, "", true},
+			{[]string{protocol, "--format=json", "--unknown=" + marker, ""}, "", true},
+			{[]string{"--format=json", protocol, "--unknown=" + marker, ""}, "", true},
+		}
+		for i, tc := range cases {
+			child := exec.Command(exe, append([]string{"-test.run=^TestReleaseCompletionProcessStderr$", "--"}, tc.args...)...)
+			child.Dir = home
+			child.Env = []string{"UAP_COMPLETION_PROCESS_FIXTURE=1", "HOME=" + home, "TMPDIR=" + home, "XDG_CONFIG_HOME=" + home, "PATH=" + home, "BASH_COMP_DEBUG_FILE=" + home + "/completion-debug", "GOMAXPROCS=2"}
+			var stdout, stderr bytes.Buffer
+			child.Stdout, child.Stderr = &stdout, &stderr
+			err := child.Run()
+			if _, statErr := os.Stat(home + "/completion-debug"); !os.IsNotExist(statErr) {
+				t.Fatal("completion wrote a process-global debug file")
+			}
+			if (err != nil) != tc.fails || stderr.Len() != 0 || strings.Contains(stdout.String(), marker) || !strings.Contains(stdout.String(), tc.want) {
+				t.Fatalf("protocol %s case %d: exit=%v stderr bytes=%d; completion/containment failed", protocol, i, err, stderr.Len())
+			}
+		}
+	}
+}
+
+func TestReleaseV1InventoryMutants(t *testing.T) {
+	if name := os.Getenv("UAP_INVENTORY_PROCESS_FIXTURE"); name != "" {
+		c := &cobra.Command{Use: name, Hidden: true}
+		rootCmd.AddCommand(c)
+		defer rootCmd.RemoveCommand(c)
+		TestReleaseV1InventoryCoverage(t)
+		return
+	}
+	exe, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"__complete", "__completeNoDesc", "__completeReviewFixture", "review-unmapped-command"} {
+		child := exec.Command(exe, "-test.run=^TestReleaseV1InventoryMutants$")
+		child.Env = []string{"UAP_INVENTORY_PROCESS_FIXTURE=" + name, "GOMAXPROCS=2"}
+		out, err := child.CombinedOutput()
+		wantFailure := name == "__completeReviewFixture" || name == "review-unmapped-command"
+		if (err != nil) != wantFailure || wantFailure && !strings.Contains(string(out), "unclassified command/alias "+name) {
+			t.Fatalf("inventory mutant %s: %v, %s", name, err, out)
+		}
+	}
+}
+
+func TestReleaseInvalidBooleanIsNotIntent(t *testing.T) {
+	for _, name := range []string{"all", "dry-run"} {
+		p, _ := releaseProbe(t, []string{"update", "--" + name + "=invalid", "--" + name + "=true", "--format=json"}, 2)
+		if p.Error == nil || !strings.Contains(p.Error.Action, "Invalid boolean") || strings.Contains(p.Error.Action, "Preserve plan intent") || strings.Contains(p.Error.Action, "Use agentplugins update --all.") {
+			t.Fatal("invalid value coerced into intent")
+		}
 	}
 }

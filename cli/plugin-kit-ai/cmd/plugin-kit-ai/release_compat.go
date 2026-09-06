@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"strconv"
 	"strings"
 
 	"github.com/777genius/plugin-kit-ai/cli/internal/authoring/commands"
@@ -133,6 +134,16 @@ func rejectV1(in commands.Invocation) error {
 		return ""
 	}
 	reject := func(v string, extra string) error { return errors.New(legacyGuidance(v) + " " + extra) }
+	// These booleans select output or replacement intent. Validate every
+	// occurrence: pflag rejects an earlier invalid value even if a later one is
+	// valid. Never turn malformed input into an all/plan/JSON choice.
+	for _, name := range []string{"json", "all", "dry-run"} {
+		for _, value := range in.Values[name] {
+			if _, err := strconv.ParseBool(value); err != nil {
+				return reject(verb, "Invalid boolean flag value; use true or false.")
+			}
+		}
+	}
 	if in.Command.Annotations[authoringcli.RejectionKey] != "" {
 		extra := ""
 		switch verb {
@@ -159,7 +170,7 @@ func rejectV1(in commands.Invocation) error {
 				case "add":
 					extra = "For a supported standard/local/exact source, use agentplugins add <name-or-source> --target <clients> --scope user."
 				case "update":
-					if last("all") == "true" {
+					if in.Bool("all") {
 						extra = "Use agentplugins update --all."
 					} else {
 						extra = "With an explicit name, use agentplugins update <name-or-installation-id>; omitted name does not imply --all."
@@ -169,7 +180,7 @@ func rejectV1(in commands.Invocation) error {
 				case "repair":
 					extra = "For a supported selected manager binding, use agentplugins repair <name-or-installation-id> --target <client>."
 				}
-				if last("dry-run") == "true" || !has("dry-run") && strings.HasPrefix(verb, "integrations ") {
+				if in.Bool("dry-run") || !has("dry-run") && strings.HasPrefix(verb, "integrations ") {
 					extra += " Preserve plan intent by adding --dry-run."
 				}
 			}

@@ -5,6 +5,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/cli/internal/authoringcli"
 	"github.com/spf13/cobra"
 	"io"
+	"strconv"
 )
 
 // ReleaseOptions is explicit private composition, never environment discovery.
@@ -17,6 +18,18 @@ type Invocation struct {
 	Command *cobra.Command
 	Values  map[string][]string
 }
+
+// Bool observes pflag's final boolean value. Invalid input never implies intent;
+// compatibility still rejects the invocation based on explicit flag presence.
+func (in Invocation) Bool(name string) bool {
+	v := in.Values[name]
+	if len(v) == 0 {
+		return false
+	}
+	b, err := strconv.ParseBool(v[len(v)-1])
+	return err == nil && b
+}
+
 type versionPayload struct {
 	report.Public
 	Product        string `json:"product"`
@@ -53,6 +66,7 @@ func (a App) ReleaseSelection(args []string, build RootBuilder) (root *cobra.Com
 	s := selectPublic(root, args)
 	author = s.command.Annotations[operationKey] != ""
 	noEffect = len(args) > 0 && (args[0] == "__complete" || args[0] == "__completeNoDesc") || author || s.help || s.command == root || s.command.Name() == "version" || isCompletion(s.command)
+	a.guardReleaseCompletion(root, build)
 	return
 }
 
@@ -93,4 +107,32 @@ func OutputFormat(root *cobra.Command, args []string) string { return selectPubl
 
 func CompletionInvocation(root *cobra.Command, args []string) bool {
 	return isCompletion(selectPublic(root, args).command)
+}
+
+// Cobra's protocol prints getCompletions errors directly to process stderr.
+// Check its parser boundary on an inert fresh tree before that Run is reached.
+// Never redirect process globals, and never pre-parse the execution tree (slice
+// flags and completion's Changed bookkeeping must remain untouched).
+func (a App) guardReleaseCompletion(root *cobra.Command, build RootBuilder) {
+	previousE, previous := root.PersistentPreRunE, root.PersistentPreRun
+	root.PersistentPreRunE = func(c *cobra.Command, args []string) error {
+		if c.Name() == cobra.ShellCompRequestCmd || c.Name() == cobra.ShellCompNoDescRequestCmd {
+			probe, err := a.releaseTree(build)
+			if err == nil {
+				authoringcli.PrepareReleaseUtilities(probe, true)
+				err = authoringcli.CheckReleaseCompletion(probe, args)
+			}
+			if err != nil {
+				return &inputError{"arguments_invalid", publicArguments}
+			}
+			return nil
+		}
+		if previousE != nil {
+			return previousE(c, args)
+		}
+		if previous != nil {
+			previous(c, args)
+		}
+		return nil
+	}
 }

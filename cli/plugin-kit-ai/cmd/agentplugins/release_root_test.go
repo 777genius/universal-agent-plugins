@@ -6,11 +6,15 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"os"
+	"os/exec"
 	"strings"
 	"testing"
 
+	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli"
 	"github.com/777genius/plugin-kit-ai/cli/internal/authoringcli"
 	"github.com/777genius/plugin-kit-ai/cli/internal/exitx"
+	"github.com/spf13/cobra"
 )
 
 func TestReleaseRoutesBeforeInstallerSetup(t *testing.T) {
@@ -94,6 +98,116 @@ func TestReleaseInstallerFlagsRejectBeforeHelp(t *testing.T) {
 			err := executeRelease(context.Background(), append(args, "--format=json"), authoringcli.Streams{Out: &out, Err: io.Discard}, func() error { t.Fatal("installer initialized"); return nil })
 			if exitx.Code(err) != 2 || !strings.Contains(out.String(), `"attempted":false`) || !strings.Contains(out.String(), `"result":"failure"`) {
 				t.Fatal(err, out.String())
+			}
+		}
+	}
+}
+
+func TestReleaseInstallerAliasAndFlagPlacement(t *testing.T) {
+	for _, args := range [][]string{
+		{"install", "fixture", "--target=cursor"}, {"--target=cursor", "install", "fixture"},
+		{"install", "author"}, {"--target=author", "install", "fixture"}, {"install", "--", "author"},
+		{"update", "--all"}, {"--all", "update"},
+	} {
+		t.Run(strings.Join(args, " "), func(t *testing.T) {
+			capture := func() (string, error) {
+				root := agentpluginscli.NewRoot(agentpluginscli.App{})
+				selected := ""
+				for _, c := range root.Commands() {
+					c.RunE = func(cmd *cobra.Command, _ []string) error { selected = cmd.Name(); return nil }
+				}
+				root.SetOut(io.Discard)
+				root.SetErr(io.Discard)
+				root.SetArgs(args)
+				err := root.Execute()
+				return selected, err
+			}
+			want, baselineErr := capture()
+			calls, got := 0, ""
+			err := executeRelease(context.Background(), args, authoringcli.Streams{Out: io.Discard, Err: io.Discard}, func() error {
+				calls++
+				var err error
+				got, err = capture()
+				return err
+			})
+			if (err == nil) != (baselineErr == nil) || got != want || baselineErr == nil && calls != 1 {
+				t.Fatalf("Cobra dispatch changed: baseline=%q/%v release=%q/%v callbacks=%d", want, baselineErr, got, err, calls)
+			}
+		})
+	}
+}
+
+func TestReleaseInstallerErrorRendering(t *testing.T) {
+	var out, stderr bytes.Buffer
+	failure := errors.New("captured installer failure")
+	err := executeRelease(context.Background(), []string{"list"}, authoringcli.Streams{Out: &out, Err: &stderr}, func() error { return failure })
+	if exitx.Code(err) != 1 || !errors.Is(err, failure) || out.Len() != 0 || stderr.String() != "agentplugins: captured installer failure\n" {
+		t.Fatalf("installer error boundary changed: %v, %q, %q", err, out.String(), stderr.String())
+	}
+	for _, args := range [][]string{{"author", "--unknown=credential-fixture"}, {"--unknown=credential-fixture"}} {
+		out.Reset()
+		stderr.Reset()
+		err = executeRelease(context.Background(), append(args, "--format=json"), authoringcli.Streams{Out: &out, Err: &stderr}, func() error { t.Fatal("installer callback"); return failure })
+		if exitx.Code(err) != 2 || stderr.Len() != 0 || strings.Contains(out.String(), "credential-fixture") || strings.Count(out.String(), `"schema_version"`) != 1 {
+			t.Fatal("duplicated or disclosed author/utility failure")
+		}
+	}
+}
+
+// A child process is essential: Cobra CompErrorln bypasses Command.SetErr.
+func TestReleaseCompletionProcessStderr(t *testing.T) {
+	if os.Getenv("UAP_COMPLETION_PROCESS_FIXTURE") == "1" {
+		args := os.Args
+		for i, arg := range args {
+			if arg == "--" {
+				args = args[i+1:]
+				break
+			}
+		}
+		streams := authoringcli.Streams{Out: os.Stdout, Err: os.Stderr}
+		err := executeRelease(context.Background(), args, streams, func() error { panic("installer callback in completion") })
+		if err != nil {
+			os.Exit(exitx.Code(err))
+		}
+		os.Exit(0)
+	}
+	exe, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	home := t.TempDir()
+	marker := "glpat-" + strings.Repeat("b", 20)
+	for _, protocol := range []string{"__complete", "__completeNoDesc"} {
+		cases := []struct {
+			args  []string
+			want  string
+			fails bool
+		}{
+			{[]string{protocol, ""}, "author", false},
+			{append(append([]string{protocol}, []string{"author", "init"}...), "--desc"), "--description", false},
+			{append(append([]string{protocol}, []string{"author", "init"}...), "--description", ""), ":", false},
+			{[]string{protocol, "--unknown=" + marker, ""}, "", true},
+			{[]string{protocol, "--unknown=" + marker}, "", true},
+			{[]string{protocol, "--no-color=" + marker, ""}, "", true},
+			{[]string{protocol, "-" + marker, ""}, "", true},
+			{[]string{protocol, marker, ""}, "", true},
+			{[]string{protocol, "--format", marker, "--unknown", ""}, "", true},
+			{[]string{protocol, "--unknown=" + marker, "", "--format=json"}, "", true},
+			{[]string{protocol, "--format=json", "--unknown=" + marker, ""}, "", true},
+			{[]string{"--format=json", protocol, "--unknown=" + marker, ""}, "", true},
+		}
+		for i, tc := range cases {
+			child := exec.Command(exe, append([]string{"-test.run=^TestReleaseCompletionProcessStderr$", "--"}, tc.args...)...)
+			child.Dir = home
+			child.Env = []string{"UAP_COMPLETION_PROCESS_FIXTURE=1", "HOME=" + home, "TMPDIR=" + home, "XDG_CONFIG_HOME=" + home, "PATH=" + home, "BASH_COMP_DEBUG_FILE=" + home + "/completion-debug", "GOMAXPROCS=2"}
+			var stdout, stderr bytes.Buffer
+			child.Stdout, child.Stderr = &stdout, &stderr
+			err := child.Run()
+			if _, statErr := os.Stat(home + "/completion-debug"); !os.IsNotExist(statErr) {
+				t.Fatal("completion wrote a process-global debug file")
+			}
+			if (err != nil) != tc.fails || stderr.Len() != 0 || strings.Contains(stdout.String(), marker) || !strings.Contains(stdout.String(), tc.want) {
+				t.Fatalf("protocol %s case %d: exit=%v stderr bytes=%d; completion/containment failed", protocol, i, err, stderr.Len())
 			}
 		}
 	}
