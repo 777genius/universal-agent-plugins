@@ -9,10 +9,12 @@ import (
 	"sort"
 
 	"github.com/777genius/plugin-kit-ai/cli/internal/authoring/project"
+	"github.com/777genius/plugin-kit-ai/cli/internal/authoring/readiness"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/pathpolicy"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/packageview"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/conformance"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/planner"
 )
 
 type State string
@@ -76,34 +78,39 @@ type Error struct {
 	Action string `json:"action"`
 }
 type Report struct {
-	Schema      string      `json:"schema"`
-	Engine      string      `json:"engine"`
-	Revision    string      `json:"revision"`
-	Command     string      `json:"command"`
-	Mode        string      `json:"mode"`
-	Root        string      `json:"root,omitempty"`
-	Identity    Identity    `json:"identity"`
-	Coverage    Coverage    `json:"coverage"`
-	Profiles    []Profile   `json:"profiles"`
-	SchemaIDs   []string    `json:"schema_ids"`
-	Loadability Assessment  `json:"loadability"`
-	Conformance Assessment  `json:"normative_conformance"`
-	HostSafety  Assessment  `json:"host_safety"`
-	Readiness   Assessment  `json:"authoring_readiness"`
-	Release     Assessment  `json:"release_policy"`
-	Runtime     Assessment  `json:"runtime_evidence"`
-	Findings    []Finding   `json:"findings"`
-	Components  []Component `json:"components"`
-	Checks      []Check     `json:"checks"`
-	Committed   bool        `json:"committed"`
-	Paths       []string    `json:"affected_paths"`
-	Error       *Error      `json:"error,omitempty"`
+	Compatibility Assessment                    `json:"compatibility"`
+	Clients       []planner.ClientCompatibility `json:"clients,omitempty"`
+	Capabilities  *readiness.Capabilities       `json:"capabilities,omitempty"`
+	Toolchain     Assessment                    `json:"toolchain"`
+	DoctorChecks  []readiness.Check             `json:"doctor_checks,omitempty"`
+	Schema        string                        `json:"schema"`
+	Engine        string                        `json:"engine"`
+	Revision      string                        `json:"revision"`
+	Command       string                        `json:"command"`
+	Mode          string                        `json:"mode"`
+	Root          string                        `json:"root,omitempty"`
+	Identity      Identity                      `json:"identity"`
+	Coverage      Coverage                      `json:"coverage"`
+	Profiles      []Profile                     `json:"profiles"`
+	SchemaIDs     []string                      `json:"schema_ids"`
+	Loadability   Assessment                    `json:"loadability"`
+	Conformance   Assessment                    `json:"normative_conformance"`
+	HostSafety    Assessment                    `json:"host_safety"`
+	Readiness     Assessment                    `json:"authoring_readiness"`
+	Release       Assessment                    `json:"release_policy"`
+	Runtime       Assessment                    `json:"runtime_evidence"`
+	Findings      []Finding                     `json:"findings"`
+	Components    []Component                   `json:"components"`
+	Checks        []Check                       `json:"checks"`
+	Committed     bool                          `json:"committed"`
+	Paths         []string                      `json:"affected_paths"`
+	Error         *Error                        `json:"error,omitempty"`
 }
 
 func assessment(s State) Assessment { return Assessment{Status: s, FindingIDs: []string{}} }
 func New(command, revision string) Report {
 	return Report{Schema: "agentplugins-authoring-report/v1", Engine: "standard-first-slice/1", Revision: revision,
-		Command: command, Mode: "read", Coverage: Coverage{Plugin: NotEvaluated, MCP: NotEvaluated, Skills: NotEvaluated, Filesystem: NotEvaluated}, Profiles: []Profile{}, SchemaIDs: []string{}, Findings: []Finding{}, Components: []Component{}, Checks: []Check{}, Paths: []string{},
+		Compatibility: assessment(NotEvaluated), Toolchain: assessment(NotEvaluated), Command: command, Mode: "read", Coverage: Coverage{Plugin: NotEvaluated, MCP: NotEvaluated, Skills: NotEvaluated, Filesystem: NotEvaluated}, Profiles: []Profile{}, SchemaIDs: []string{}, Findings: []Finding{}, Components: []Component{}, Checks: []Check{}, Paths: []string{},
 		Loadability: assessment(NotEvaluated), Conformance: assessment(NotEvaluated), HostSafety: assessment(NotEvaluated), Readiness: assessment(NotEvaluated), Release: assessment(NotEvaluated), Runtime: assessment(NotEvaluated)}
 }
 func opaque(s string) string {
@@ -338,7 +345,7 @@ func (r *Report) finish() {
 	sort.Slice(r.Findings, func(i, j int) bool { return r.Findings[i].ID < r.Findings[j].ID })
 	sort.Slice(r.Components, func(i, j int) bool { return r.Components[i].ID < r.Components[j].ID })
 	r.SchemaIDs = unique(r.SchemaIDs)
-	for _, a := range []*Assessment{&r.Loadability, &r.Conformance, &r.HostSafety, &r.Readiness, &r.Release, &r.Runtime} {
+	for _, a := range []*Assessment{&r.Loadability, &r.Conformance, &r.HostSafety, &r.Readiness, &r.Release, &r.Runtime, &r.Compatibility, &r.Toolchain} {
 		a.FindingIDs = unique(a.FindingIDs)
 	}
 	for i := range r.Checks {
@@ -356,5 +363,52 @@ func unique(v []string) []string {
 	return out
 }
 func (r Report) Successful() bool {
-	return r.Error == nil && r.Readiness.Status == Pass && r.Release.Status != Fail
+	if r.Command == "capabilities" {
+		return r.Error == nil && r.Capabilities != nil
+	}
+	return r.Error == nil && r.Readiness.Status == Pass && r.Release.Status != Fail && r.Compatibility.Status != Fail && (r.Command != "doctor" || r.Toolchain.Status == Pass)
+}
+
+// AddCompatibility attaches only the planner's explicitly sanitized static DTO.
+func (r *Report) AddCompatibility(clients []planner.ClientCompatibility) {
+	r.Clients = clients
+	if clients == nil {
+		return
+	}
+	r.Compatibility = assessment(Pass)
+	for _, c := range clients {
+		for _, component := range c.Components {
+			if component.Support == "unsupported" {
+				id := r.add(Finding{Code: "target_component_unsupported", Layer: "compatibility", Rule: "planner/static-support", ItemID: opaque(string(c.ClientID) + ":" + string(component.Kind)), Severity: "error"})
+				r.Compatibility.Status = Fail
+				r.Compatibility.FindingIDs = append(r.Compatibility.FindingIDs, id)
+			}
+		}
+	}
+	r.finish()
+}
+
+// Doctor readiness is distinct from valid package authoring and from execution.
+// Unknown runtime proof must never become a passed toolchain assessment.
+func (r *Report) AddDoctor(checks []readiness.Check) {
+	r.DoctorChecks = checks
+	r.Toolchain = assessment(NotEvaluated)
+	if r.Loadability.Status == Pass && r.Readiness.Status == Pass {
+		r.Toolchain.Status = Pass
+	}
+	for _, check := range checks {
+		if check.Status == "pass" {
+			continue
+		}
+		severity := "warning"
+		if check.Status == "fail" {
+			severity = "error"
+			r.Toolchain.Status = Fail
+		} else if r.Toolchain.Status == Pass {
+			r.Toolchain.Status = NotEvaluated
+		}
+		id := r.add(Finding{Code: check.ID, Layer: "toolchain", Rule: "authoring/static-evidence", ItemID: check.ItemID, Severity: severity})
+		r.Toolchain.FindingIDs = append(r.Toolchain.FindingIDs, id)
+	}
+	r.finish()
 }
