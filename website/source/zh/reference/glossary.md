@@ -7,6 +7,10 @@ locale: "zh"
 generated: false
 translationRequired: true
 ---
+
+[使用插件](/zh/use/) · [构建插件](/zh/build/) — 仅为准备内容，尚未发布。v2 暂不支持项目迁移。
+<details><summary>plugin-kit-ai v1 · 1.2.4 历史资料；旧说明不是当前的 Build 流程。</summary>
+
 # 词汇表
 
 当文档术语拖慢您的速度时，请使用此页面。目标不是完美的理论。目标是快速共享意义。
@@ -60,3 +64,5 @@ translationRequired: true
 另一个队友、另一台机器或另一个用户可以在没有隐藏设置知识的情况下使用存储库。
 
 相关页面：[目标模型](/zh/concepts/target-model)、[支持边界](/zh/reference/support-boundary) 和[生产准备情况](/zh/guide/production-readiness)。
+
+</details>

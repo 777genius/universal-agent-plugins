@@ -7,6 +7,10 @@ locale: "es"
 generated: false
 translationRequired: true
 ---
+
+[Usar plugins](/es/use/) · [Crear plugins](/es/build/) — Preparación, no es un lanzamiento. La migración de proyectos a v2 aún no está disponible.
+<details><summary>Material histórico de plugin-kit-ai v1 · 1.2.4; las instrucciones antiguas no son el flujo Build actual.</summary>
+
 # Cómo publicar complementos
 
 Utilice esta guía cuando su repositorio ya esté creado en `plugin-kit-ai` y desee el siguiente paso más claro para la publicación Codex, Claude o Gemini.
@@ -154,3 +158,5 @@ plugin-kit-ai publish ./my-plugin --all --dry-run --format json
 - [`plugin-kit-ai publish`](/es/api/cli/plugin-kit-ai-publish)
 - [`plugin-kit-ai publication`](/es/api/cli/plugin-kit-ai-publication)
 - [`plugin-kit-ai publication doctor`](/es/api/cli/plugin-kit-ai-publication-doctor)
+
+</details>

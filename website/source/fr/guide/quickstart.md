@@ -7,6 +7,10 @@ locale: "fr"
 generated: false
 translationRequired: true
 ---
+
+[Utiliser des plugins](/fr/use/) · [Créer des plugins](/fr/build/) — Préparation, pas une version publiée. La migration des projets vers v2 est indisponible.
+<details><summary>Documentation historique plugin-kit-ai v1 · 1.2.4 ; les anciennes instructions ne constituent pas le parcours Build actuel.</summary>
+
 # Démarrage rapide
 
 Il s'agit du chemin recommandé le plus court lorsque vous souhaitez un dépôt de plugin qui peut ensuite évoluer vers d'autres façons d'expédier le plugin.
@@ -110,3 +114,5 @@ Choisissez d'abord `claude` uniquement lorsque les crochets Claude constituent d
 - Continuez avec [Ce que vous pouvez construire](/fr/guide/what-you-can-build) si vous souhaitez la carte complète des produits.
 - Continuez avec [Choisir une cible](/fr/guide/choose-a-target) lorsque vous êtes prêt à faire correspondre le dépôt à la manière dont vous souhaitez l'expédier.
 - Continuez avec [Un projet, plusieurs cibles](/fr/guide/one-project-multiple-targets) lorsque vous êtes prêt à vous développer au-delà du premier chemin.
+
+</details>

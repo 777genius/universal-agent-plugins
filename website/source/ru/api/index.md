@@ -10,6 +10,10 @@ aside: false
 outline: false
 ---
 
+[Использовать плагины](/ru/use/) · [Создавать плагины](/ru/build/) — Подготовка, не релиз. Миграция проектов в v2 пока недоступна.
+<details><summary>Исторические материалы plugin-kit-ai v1 · 1.2.4; старые инструкции не являются текущим Build.</summary>
+
+
 <div class="docs-hero docs-hero--compact">
   <p class="docs-kicker">СГЕНЕРИРОВАННЫЙ СПРАВОЧНИК</p>
   <h1>Поверхности API</h1>
@@ -60,3 +64,5 @@ outline: false
 - общие runtime-хелперы для Node и Python
 - события конкретных платформ
 - сводку по возможностям API поперёк платформ
+
+</details>

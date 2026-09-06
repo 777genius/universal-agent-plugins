@@ -9,6 +9,10 @@ translationRequired: true
 aside: false
 outline: false
 ---
+
+[使用插件](/zh/use/) · [构建插件](/zh/build/) — 仅为准备内容，尚未发布。v2 暂不支持项目迁移。
+<details><summary>plugin-kit-ai v1 · 1.2.4 历史资料；旧说明不是当前的 Build 流程。</summary>
+
 <div class="docs-hero docs-hero--compact">
   <p class="docs-kicker">参考</p>
   <h1>当您需要合同时的确切答案</h1>
@@ -51,3 +55,5 @@ outline: false
     <p>检查健康的插件存储库是什么样子，以及哪些文件是编写的，哪些是生成的。</p>
   </a>
 </div>
+
+</details>

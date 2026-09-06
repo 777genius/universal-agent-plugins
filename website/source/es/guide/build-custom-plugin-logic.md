@@ -8,6 +8,10 @@ generated: false
 translationRequired: false
 ---
 
+[Usar plugins](/es/use/) · [Crear plugins](/es/build/) — Preparación, no es un lanzamiento. La migración de proyectos a v2 aún no está disponible.
+<details><summary>Material histórico de plugin-kit-ai v1 · 1.2.4; las instrucciones antiguas no son el flujo Build actual.</summary>
+
+
 # Construir lógica personalizada del plugin
 
 Esta guía avanzada se mantiene por ahora en inglés.
@@ -22,3 +26,5 @@ Esta guía avanzada se mantiene por ahora en inglés.
   - [plugin-kit-ai-starter-claude-go](https://github.com/777genius/plugin-kit-ai-starter-claude-go)
   - [plugin-kit-ai-starter-claude-python](https://github.com/777genius/plugin-kit-ai-starter-claude-python)
   - [plugin-kit-ai-starter-claude-node-typescript](https://github.com/777genius/plugin-kit-ai-starter-claude-node-typescript)
+
+</details>

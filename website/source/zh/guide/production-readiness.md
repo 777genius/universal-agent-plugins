@@ -7,6 +7,10 @@ locale: "zh"
 generated: false
 translationRequired: true
 ---
+
+[使用插件](/zh/use/) · [构建插件](/zh/build/) — 仅为准备内容，尚未发布。v2 暂不支持项目迁移。
+<details><summary>plugin-kit-ai v1 · 1.2.4 历史资料；旧说明不是当前的 Build 流程。</summary>
+
 # 生产准备情况
 
 在您将项目称为生产就绪、移交就绪或准备广泛展示之前，请使用此清单。
@@ -80,3 +84,5 @@ plugin-kit-ai validate . --platform codex-runtime --strict
 ## 最终规则
 
 如果队友无法克隆存储库、运行记录的流程、传递 `validate --strict` 并在没有部落知识的情况下理解所选通道，则该项目尚未准备好投入生产。
+
+</details>

@@ -8,6 +8,10 @@ generated: false
 translationRequired: true
 ---
 
+[Использовать плагины](/ru/use/) · [Создавать плагины](/ru/build/) — Подготовка, не релиз. Миграция проектов в v2 пока недоступна.
+<details><summary>Исторические материалы plugin-kit-ai v1 · 1.2.4; старые инструкции не являются текущим Build.</summary>
+
+
 # Частые вопросы
 
 ## С чего начинать: Go, Python или Node?
@@ -77,3 +81,5 @@ plugin-kit-ai validate ./my-plugin --platform codex-runtime --strict
 Нет.
 
 Разные paths несут разное обещание поддержки. Используйте [Границу поддержки](/ru/reference/support-boundary) для короткого ответа и [Поддержку target'ов](/ru/reference/target-support) для точной матрицы.
+
+</details>

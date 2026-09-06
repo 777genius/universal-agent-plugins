@@ -7,6 +7,10 @@ locale: "zh"
 generated: false
 translationRequired: true
 ---
+
+[使用插件](/zh/use/) · [构建插件](/zh/build/) — 仅为准备内容，尚未发布。v2 暂不支持项目迁移。
+<details><summary>plugin-kit-ai v1 · 1.2.4 历史资料；旧说明不是当前的 Build 流程。</summary>
+
 # 入门模板
 
 如果您想要一个已知良好的起点，而不是从空白目录构建脚手架，请使用官方入门存储库。
@@ -60,3 +64,5 @@ translationRequired: true
 - 选择**第一个**正确路径的启动器
 - 不要将 starter 系列视为仓库的最终边界
 - 保留一个存储库，并仅在产品确实需要更多输出时才扩展它
+
+</details>

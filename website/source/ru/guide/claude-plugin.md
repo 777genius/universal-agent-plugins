@@ -8,6 +8,10 @@ generated: false
 translationRequired: true
 ---
 
+[Использовать плагины](/ru/use/) · [Создавать плагины](/ru/build/) — Подготовка, не релиз. Миграция проектов в v2 пока недоступна.
+<details><summary>Исторические материалы plugin-kit-ai v1 · 1.2.4; старые инструкции не являются текущим Build.</summary>
+
+
 # Соберите плагин для Claude
 
 Выбирайте этот путь, когда вам нужны именно Claude hooks, а не путь Codex по умолчанию.
@@ -45,3 +49,5 @@ plugin-kit-ai init my-claude-plugin --platform claude --claude-extended-hooks
 
 - Прочитайте [Модель target’ов](/ru/concepts/target-model), чтобы понять отличие Claude от packaging и workspace-config target’ов.
 - Откройте [Platform Events](/ru/api/platform-events/claude) для event-level reference.
+
+</details>

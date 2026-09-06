@@ -7,6 +7,10 @@ locale: "fr"
 generated: false
 translationRequired: true
 ---
+
+[Utiliser des plugins](/fr/use/) · [Créer des plugins](/fr/build/) — Préparation, pas une version publiée. La migration des projets vers v2 est indisponible.
+<details><summary>Documentation historique plugin-kit-ai v1 · 1.2.4 ; les anciennes instructions ne constituent pas le parcours Build actuel.</summary>
+
 # Préparation à la production
 
 Utilisez cette liste de contrôle avant de qualifier un projet de prêt pour la production, prêt pour le transfert ou prêt à être diffusé à grande échelle.
@@ -80,3 +84,5 @@ Un dépôt public devrait rendre ces choses évidentes :
 ## Règle finale
 
 Si un coéquipier ne peut pas cloner le dépôt, exécuter le flux documenté, transmettre `validate --strict` et comprendre la voie choisie sans connaissances tribales, le projet n'est pas encore prêt pour la production.
+
+</details>

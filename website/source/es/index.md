@@ -7,6 +7,10 @@ locale: "es"
 generated: false
 translationRequired: true
 ---
+
+[Usar plugins](/es/use/) · [Crear plugins](/es/build/) — Preparación, no es un lanzamiento. La migración de proyectos a v2 aún no está disponible.
+<details><summary>Material histórico de plugin-kit-ai v1 · 1.2.4; las instrucciones antiguas no son el flujo Build actual.</summary>
+
 <div class="docs-hero docs-hero--feature">
   <p class="docs-kicker">DOCUMENTACIÓN PÚBLICA</p>
   <h1>plugin-kit-ai</h1>
@@ -103,3 +107,5 @@ Si es nuevo, puede detenerse después de las páginas iniciales. Todo lo demás 
 - expandir el mismo repositorio más adelante a más rutas de envío
 - mantenga una historia de revisión y validación a medida que crece el repositorio
 - encuentre el contrato exacto sólo cuando lo necesite
+
+</details>

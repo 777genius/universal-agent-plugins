@@ -9,6 +9,10 @@ translationRequired: true
 aside: false
 outline: false
 ---
+
+[使用插件](/zh/use/) · [构建插件](/zh/build/) — 仅为准备内容，尚未发布。v2 暂不支持项目迁移。
+<details><summary>plugin-kit-ai v1 · 1.2.4 历史资料；旧说明不是当前的 Build 流程。</summary>
+
 <div class="docs-hero docs-hero--compact">
   <p class="docs-kicker">发布</p>
   <h1>用户发生了什么变化</h1>
@@ -53,3 +57,5 @@ outline: false
     <p>该项目宣布了第一个稳定的公共合同，并提供了后续版本不断完善的基线。</p>
   </a>
 </div>
+
+</details>

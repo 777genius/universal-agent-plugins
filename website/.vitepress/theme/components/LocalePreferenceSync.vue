@@ -2,41 +2,17 @@
 import { onMounted, watch } from "vue";
 import { useData, useRoute } from "vitepress";
 
+import { localeFromPath as routeLocale } from "./locale-routes.mjs";
+
 const storageKey = "plugin-kit-ai-docs-locale";
 const { site } = useData();
 const route = useRoute();
-
-function localeFromPath(path: string): string | null {
-  const normalized = stripBase(path === "/" ? "/" : path.replace(/\/+$/, ""));
-  for (const locale of ["en", "ru", "es", "fr", "zh"]) {
-    if (normalized === `/${locale}` || normalized.startsWith(`/${locale}/`)) {
-      return locale;
-    }
-  }
-  return null;
-}
-
-function normalizePath(path: string): string {
-  if (!path || path === "/") {
-    return "/";
-  }
-  return path.replace(/\/+$/, "");
-}
-
-function stripBase(path: string): string {
-  const base = normalizePath(site.value.base || "/");
-  if (base === "/" || !path.startsWith(base)) {
-    return path;
-  }
-  const stripped = path.slice(base.length);
-  return stripped.startsWith("/") ? stripped : `/${stripped}`;
-}
 
 function persistLocale(path: string) {
   if (typeof window === "undefined") {
     return;
   }
-  const locale = localeFromPath(path);
+  const locale = routeLocale(path, site.value.base);
   if (!locale) {
     return;
   }

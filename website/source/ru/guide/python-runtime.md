@@ -8,6 +8,10 @@ generated: false
 translationRequired: true
 ---
 
+[Использовать плагины](/ru/use/) · [Создавать плагины](/ru/build/) — Подготовка, не релиз. Миграция проектов в v2 пока недоступна.
+<details><summary>Исторические материалы plugin-kit-ai v1 · 1.2.4; старые инструкции не являются текущим Build.</summary>
+
+
 # Соберите Python runtime-плагин
 
 Используйте этот путь, когда команда уже пишет на Python и вы хотите запускать плагин прямо из этого репозитория.
@@ -175,3 +179,5 @@ plugin-kit-ai init my-plugin --platform codex-runtime --runtime python --runtime
 - Прочитайте [Выбор runtime](/ru/concepts/choosing-runtime), чтобы понять tradeoffs.
 - Прочитайте [Выбор модели поставки](/ru/guide/choose-delivery-model) для решения между local helper и shared package.
 - Откройте [Python Runtime API](/ru/api/runtime-python/), когда понадобится справочник по helper API.
+
+</details>

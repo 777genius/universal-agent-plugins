@@ -7,6 +7,10 @@ locale: "fr"
 generated: false
 translationRequired: true
 ---
+
+[Utiliser des plugins](/fr/use/) · [Créer des plugins](/fr/build/) — Préparation, pas une version publiée. La migration des projets vers v2 est indisponible.
+<details><summary>Documentation historique plugin-kit-ai v1 · 1.2.4 ; les anciennes instructions ne constituent pas le parcours Build actuel.</summary>
+
 # Exemples et recettes
 
 Utilisez cette page lorsque vous souhaitez voir à quoi ressemble `plugin-kit-ai` dans de vrais référentiels au lieu de simplement lire des conseils abstraits.
@@ -89,3 +93,5 @@ Ce ne sont pas le principal point d’entrée pour la plupart des auteurs de plu
 Les exemples doivent clarifier le marché public et non le remplacer.
 
 Utilisez des exemples de dépôts pour voir la forme et les résultats sains. Pour le modèle mental multi-cibles à dépôt unique, lisez [Un projet, plusieurs cibles](/fr/guide/one-project-multiple-targets).
+
+</details>

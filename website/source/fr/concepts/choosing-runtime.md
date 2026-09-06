@@ -7,6 +7,10 @@ locale: "fr"
 generated: false
 translationRequired: true
 ---
+
+[Utiliser des plugins](/fr/use/) · [Créer des plugins](/fr/build/) — Préparation, pas une version publiée. La migration des projets vers v2 est indisponible.
+<details><summary>Documentation historique plugin-kit-ai v1 · 1.2.4 ; les anciennes instructions ne constituent pas le parcours Build actuel.</summary>
+
 # Choisir l'environnement d'exécution
 
 Le choix du runtime ne concerne pas seulement la préférence linguistique. Cela change la façon dont le plugin fonctionne, ce que la machine d'exécution doit avoir installé et la simplicité du CI et du transfert.
@@ -51,3 +55,5 @@ flowchart TD
 | Voie d'exécution principale non-Go | `node --typescript` |
 | Local Python-première équipe | `python` |
 | Trappe de secours | `shell` |
+
+</details>

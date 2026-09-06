@@ -8,6 +8,10 @@ generated: false
 translationRequired: true
 ---
 
+[Использовать плагины](/ru/use/) · [Создавать плагины](/ru/build/) — Подготовка, не релиз. Миграция проектов в v2 пока недоступна.
+<details><summary>Исторические материалы plugin-kit-ai v1 · 1.2.4; старые инструкции не являются текущим Build.</summary>
+
+
 # Соберите первый плагин
 
 Этот гайд теперь покрывает узкий legacy-compatible путь для Codex runtime на Go:
@@ -77,3 +81,5 @@ plugin-kit-ai validate . --platform codex-runtime --strict
 - Прочитайте [Один проект, несколько target’ов](/ru/guide/one-project-multiple-targets), если для вас важна идея одного repo и нескольких outputs как основная идея продукта.
 - Используйте [Стартовые шаблоны](/ru/guide/starter-templates), когда нужен проверенный пример репозитория.
 - Откройте [Справочник CLI](/ru/api/cli/), когда нужно точное поведение команд.
+
+</details>

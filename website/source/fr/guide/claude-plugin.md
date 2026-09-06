@@ -7,6 +7,10 @@ locale: "fr"
 generated: false
 translationRequired: true
 ---
+
+[Utiliser des plugins](/fr/use/) · [Créer des plugins](/fr/build/) — Préparation, pas une version publiée. La migration des projets vers v2 est indisponible.
+<details><summary>Documentation historique plugin-kit-ai v1 · 1.2.4 ; les anciennes instructions ne constituent pas le parcours Build actuel.</summary>
+
 # Créer un plugin Claude
 
 Choisissez ce chemin lorsque vous ciblez explicitement les hooks Claude au lieu du chemin d'exécution par défaut Codex.
@@ -44,3 +48,5 @@ Choisissez des crochets étendus uniquement lorsque vous souhaitez intentionnell
 
 - Lisez [Modèle cible](/fr/concepts/target-model) pour voir en quoi Claude diffère des cibles d'empaquetage ou de configuration d'espace de travail.
 - Vérifiez [Événements de plateforme](/fr/api/platform-events/claude) pour une référence au niveau de l'événement.
+
+</details>

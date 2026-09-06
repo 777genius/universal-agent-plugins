@@ -9,6 +9,10 @@ translationRequired: true
 aside: true
 outline: [2, 3]
 ---
+
+[Usar plugins](/es/use/) · [Crear plugins](/es/build/) — Preparación, no es un lanzamiento. La migración de proyectos a v2 aún no está disponible.
+<details><summary>Material histórico de plugin-kit-ai v1 · 1.2.4; las instrucciones antiguas no son el flujo Build actual.</summary>
+
 # Un proyecto, múltiples objetivos
 
 Utilice esta página después del primer repositorio en funcionamiento, cuando la verdadera pregunta sea: ¿debería crecer este mismo repositorio y, de ser así, hasta qué punto?
@@ -42,3 +46,4 @@ Dividir repos cuando el producto deja de ser una sola cosa en la práctica:
 ## El modelo mental seguro
 
 Comience de manera limitada, valide una salida funcional y solo luego haga crecer el repositorio con otra salida compatible.
+</details>

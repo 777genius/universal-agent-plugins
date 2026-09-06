@@ -7,6 +7,10 @@ locale: "es"
 generated: false
 translationRequired: true
 ---
+
+[Usar plugins](/es/use/) · [Crear plugins](/es/build/) — Preparación, no es un lanzamiento. La migración de proyectos a v2 aún no está disponible.
+<details><summary>Material histórico de plugin-kit-ai v1 · 1.2.4; las instrucciones antiguas no son el flujo Build actual.</summary>
+
 # v1.0.4 Go SDK
 
 Fecha de lanzamiento: `2026-03-29`
@@ -29,3 +33,4 @@ Este parche hizo que la ruta pública del módulo Go SDK fuera veraz para el con
 ## Por qué debería importarles a los usuarios
 
 Este parche redujo la fricción para los consumidores normales de Go e hizo que la ruta recomendada SDK pareciera un módulo público normal en lugar de una solución alternativa para casos especiales.
+</details>

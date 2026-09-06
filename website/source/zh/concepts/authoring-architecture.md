@@ -9,6 +9,10 @@ translationRequired: true
 aside: true
 outline: [2, 3]
 ---
+
+[使用插件](/zh/use/) · [构建插件](/zh/build/) — 仅为准备内容，尚未发布。v2 暂不支持项目迁移。
+<details><summary>plugin-kit-ai v1 · 1.2.4 历史资料；旧说明不是当前的 Build 流程。</summary>
+
 # 项目来源和产出
 
 此页面比主要产品型号窄。它解释了存储库内的工作边界：您编写的内容、生成的内容以及为什么拆分可以保持项目的可维护性。
@@ -43,3 +47,5 @@ project source -> generate -> target outputs -> validate --strict -> handoff
 ## 这与更大的模型有何关系
 
 如果您想要更高级的解释，请从[plugin-kit-ai如何工作](/zh/concepts/managed-project-model)开始。
+
+</details>

@@ -8,6 +8,10 @@ generated: false
 translationRequired: true
 ---
 
+[Использовать плагины](/ru/use/) · [Создавать плагины](/ru/build/) — Подготовка, не релиз. Миграция проектов в v2 пока недоступна.
+<details><summary>Исторические материалы plugin-kit-ai v1 · 1.2.4; старые инструкции не являются текущим Build.</summary>
+
+
 # Что именно вы собираете
 
 Начинайте с задачи. Вам не нужно понимать target IDs, runtime lanes или детали local MCP transport до того, как вы создадите repo.
@@ -77,3 +81,5 @@ plugin-kit-ai generate --check .
 - Открывайте [Соберите собственную логику плагина](/ru/guide/build-custom-plugin-logic), когда вы осознанно выбираете продвинутый runtime path.
 - Открывайте [Выбор target](/ru/guide/choose-a-target), когда нужны конкретные решения по способу поставки.
 - Открывайте [Что можно собрать](/ru/guide/what-you-can-build), когда нужна полная product map.
+
+</details>

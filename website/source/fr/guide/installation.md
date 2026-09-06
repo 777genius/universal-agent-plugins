@@ -7,6 +7,10 @@ locale: "fr"
 generated: false
 translationRequired: true
 ---
+
+[Utiliser des plugins](/fr/use/) · [Créer des plugins](/fr/build/) — Préparation, pas une version publiée. La migration des projets vers v2 est indisponible.
+<details><summary>Documentation historique plugin-kit-ai v1 · 1.2.4 ; les anciennes instructions ne constituent pas le parcours Build actuel.</summary>
+
 # Installation
 
 Utilisez Homebrew par défaut lorsqu'il correspond à votre environnement. L'objectif ici est simple : installez le CLI et accédez rapidement à votre premier dépôt fonctionnel.
@@ -69,3 +73,5 @@ Pour CI, préférez l'action de configuration dédiée au lieu d'apprendre à ch
 Les packages npm et PyPI sont des canaux d'installation pour le CLI. Ce ne sont pas des API d’exécution et ce ne sont pas des SDK.
 
 Voir [Référence > Installer les canaux](/fr/reference/install-channels) pour connaître les limites du contrat.
+
+</details>

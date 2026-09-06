@@ -7,6 +7,10 @@ locale: "fr"
 generated: false
 translationRequired: true
 ---
+
+[Utiliser des plugins](/fr/use/) · [Créer des plugins](/fr/build/) — Préparation, pas une version publiée. La migration des projets vers v2 est indisponible.
+<details><summary>Documentation historique plugin-kit-ai v1 · 1.2.4 ; les anciennes instructions ne constituent pas le parcours Build actuel.</summary>
+
 # Créez votre premier plugin
 
 Ce didacticiel vous donne le premier dépôt de travail le plus simple sur le chemin par défaut le plus fort.
@@ -76,3 +80,5 @@ Cela ne signifie pas que le dépôt doit rester éternellement à cible unique 
 - Lisez [Un projet, plusieurs cibles](/fr/guide/one-project-multiple-targets) si l'idée d'un dépôt unique et de plusieurs résultats est l'une des principales raisons pour lesquelles vous vous souciez du produit.
 - Utilisez [Modèles de démarrage](/fr/guide/starter-templates) lorsque vous souhaitez un exemple de dépôt connu.
 - Parcourez [Référence CLI](/fr/api/cli/) lorsque vous avez besoin d'un comportement de commande exact.
+
+</details>

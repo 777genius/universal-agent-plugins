@@ -7,6 +7,10 @@ locale: "es"
 generated: false
 translationRequired: true
 ---
+
+[Usar plugins](/es/use/) · [Crear plugins](/es/build/) — Preparación, no es un lanzamiento. La migración de proyectos a v2 aún no está disponible.
+<details><summary>Material histórico de plugin-kit-ai v1 · 1.2.4; las instrucciones antiguas no son el flujo Build actual.</summary>
+
 # Transferencia de paquete
 
 Utilice esta guía cuando un complemento Python o Node deba viajar como un artefacto portátil en lugar de como un repositorio en vivo.
@@ -93,3 +97,4 @@ No asuma que el mismo contrato se aplica a:
 ## Orden de lectura recomendado
 
 Empareje esta página con [Elegir modelo de entrega](/es/guide/choose-delivery-model), [Preparación para la producción](/es/guide/production-readiness) y [Límite de soporte](/es/reference/support-boundary).
+</details>

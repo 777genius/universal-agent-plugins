@@ -8,6 +8,10 @@ generated: false
 translationRequired: true
 ---
 
+[Использовать плагины](/ru/use/) · [Создавать плагины](/ru/build/) — Подготовка, не релиз. Миграция проектов в v2 пока недоступна.
+<details><summary>Исторические материалы plugin-kit-ai v1 · 1.2.4; старые инструкции не являются текущим Build.</summary>
+
+
 # Установка
 
 Используйте `npx`, если хотите максимально быстро попробовать первую установку плагина. Используйте Homebrew, если plugin-kit-ai нужен для ежедневной работы.
@@ -89,3 +93,5 @@ curl -fsSL https://raw.githubusercontent.com/777genius/plugin-kit-ai/main/script
 npm и PyPI пакеты — это способы установить CLI binary. Они не считаются публичным runtime API и не являются SDK.
 
 См. [Справочник > Каналы установки](/ru/reference/install-channels) для формальной границы контракта.
+
+</details>

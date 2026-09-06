@@ -9,6 +9,10 @@ translationRequired: true
 aside: false
 outline: false
 ---
+
+[使用插件](/zh/use/) · [构建插件](/zh/build/) — 仅为准备内容，尚未发布。v2 暂不支持项目迁移。
+<details><summary>plugin-kit-ai v1 · 1.2.4 历史资料；旧说明不是当前的 Build 流程。</summary>
+
 <div class="docs-hero docs-hero--compact">
   <p class="docs-kicker">概念</p>
   <h1>好奇用户的心智模型</h1>
@@ -47,3 +51,4 @@ outline: false
     <p>当您需要正式的兼容性合同时，请使用确切的支持词汇。</p>
   </a>
 </div>
+</details>

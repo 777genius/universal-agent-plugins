@@ -10,6 +10,10 @@ aside: true
 outline: [2, 3]
 ---
 
+[Использовать плагины](/ru/use/) · [Создавать плагины](/ru/build/) — Подготовка, не релиз. Миграция проектов в v2 пока недоступна.
+<details><summary>Исторические материалы plugin-kit-ai v1 · 1.2.4; старые инструкции не являются текущим Build.</summary>
+
+
 # Пакеты и настройка интеграций
 
 Не каждый проект должен поставляться как исполняемый runtime plugin.
@@ -47,3 +51,5 @@ Packages и integration setup отвечают на другой вопрос: �
 - optional `.app.json` и `.mcp.json` лежат в корне plugin
 
 Этот package path нужен для официального Codex plugin bundle surface, а не для смешивания repo-local runtime wiring с package layout.
+
+</details>

@@ -9,6 +9,10 @@ translationRequired: true
 aside: true
 outline: [2, 3]
 ---
+
+[使用插件](/zh/use/) · [构建插件](/zh/build/) — 仅为准备内容，尚未发布。v2 暂不支持项目迁移。
+<details><summary>plugin-kit-ai v1 · 1.2.4 历史资料；旧说明不是当前的 Build 流程。</summary>
+
 # 包和集成设置
 
 并非每个项目都应该作为可执行运行时插件提供。
@@ -46,3 +50,4 @@ outline: [2, 3]
 - 可选的 `.app.json` 和 `.mcp.json` 留在插件根目录
 
 此包路径适用于官方 Codex 插件包表面，而不是用于将存储库本地运行时连接混合到包布局中。
+</details>

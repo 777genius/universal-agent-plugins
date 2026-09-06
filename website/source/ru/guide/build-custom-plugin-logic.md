@@ -8,6 +8,10 @@ generated: false
 translationRequired: true
 ---
 
+[Использовать плагины](/ru/use/) · [Создавать плагины](/ru/build/) — Подготовка, не релиз. Миграция проектов в v2 пока недоступна.
+<details><summary>Исторические материалы plugin-kit-ai v1 · 1.2.4; старые инструкции не являются текущим Build.</summary>
+
+
 # Соберите собственную логику плагина
 
 Выбирайте этот путь, когда плагин не просто подключает существующий сервис или локальный инструмент.
@@ -114,3 +118,5 @@ plugin-kit-ai test . --platform codex-runtime --event Notify
 - Откройте [Примеры и рецепты](/ru/guide/examples-and-recipes), если хотите прямые ссылки на repo вместо только conceptual path.
 - Откройте [Выбор target](/ru/guide/choose-a-target), когда понадобятся конкретные решения по способу поставки.
 - Откройте [Один проект, несколько target'ов](/ru/guide/one-project-multiple-targets), когда repo будет готов расти в несколько outputs.
+
+</details>

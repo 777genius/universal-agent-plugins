@@ -10,6 +10,10 @@ aside: true
 outline: [2, 3]
 ---
 
+[Использовать плагины](/ru/use/) · [Создавать плагины](/ru/build/) — Подготовка, не релиз. Миграция проектов в v2 пока недоступна.
+<details><summary>Исторические материалы plugin-kit-ai v1 · 1.2.4; старые инструкции не являются текущим Build.</summary>
+
+
 # Зачем нужен plugin-kit-ai
 
 plugin-kit-ai нужен командам, которые хотят один поддерживаемый plugin project, а не набор несвязанных repo, target-specific copies и starter templates.
@@ -42,3 +46,5 @@ plugin-kit-ai даёт один repo, который остаётся главн
 ## Как устроена модель продукта
 
 Если product fit уже понятен и нужен operating model, читайте [Как работает plugin-kit-ai](/ru/concepts/managed-project-model).
+
+</details>

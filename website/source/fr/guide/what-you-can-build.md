@@ -9,6 +9,10 @@ translationRequired: true
 aside: true
 outline: [2, 3]
 ---
+
+[Utiliser des plugins](/fr/use/) · [Créer des plugins](/fr/build/) — Préparation, pas une version publiée. La migration des projets vers v2 est indisponible.
+<details><summary>Documentation historique plugin-kit-ai v1 · 1.2.4 ; les anciennes instructions ne constituent pas le parcours Build actuel.</summary>
+
 # Ce que vous pouvez construire
 
 Utilisez cette page comme carte du produit. Il montre quels types de résultats existent, et non quand un dépôt doit croître ou se diviser plus tard.
@@ -35,3 +39,5 @@ A partir d'un même projet, vous pouvez évoluer vers :
 Choisir Node ou Python ne vous oblige pas à décider de chaque détail d'emballage ou d'intégration dès le premier jour.
 
 Cette page est l'aperçu. Si votre question est de savoir si un dépôt doit continuer à croître, lisez [Un projet, plusieurs cibles](/fr/guide/one-project-multiple-targets).
+
+</details>

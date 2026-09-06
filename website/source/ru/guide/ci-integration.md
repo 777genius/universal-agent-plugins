@@ -8,6 +8,10 @@ generated: false
 translationRequired: true
 ---
 
+[Использовать плагины](/ru/use/) · [Создавать плагины](/ru/build/) — Подготовка, не релиз. Миграция проектов в v2 пока недоступна.
+<details><summary>Исторические материалы plugin-kit-ai v1 · 1.2.4; старые инструкции не являются текущим Build.</summary>
+
+
 # Интеграция с CI
 
 Самая безопасная история для CI не обязана быть сложной. Она просто должна строго проверять публичный контракт проекта.
@@ -83,3 +87,5 @@ plugin-kit-ai validate . --platform codex-runtime --strict
 Если CI не может воспроизвести authored outputs и пройти `validate --strict`, repo не готов к стабильному handoff. Для multi-target repo нужен явный зелёный прогон по каждому target’у в support scope.
 
 Свяжите эту страницу с [Готовностью к продакшену](/ru/guide/production-readiness), [Границей поддержки](/ru/reference/support-boundary) и [Диагностикой проблем](/ru/reference/troubleshooting).
+
+</details>

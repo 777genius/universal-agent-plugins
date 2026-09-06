@@ -8,6 +8,10 @@ generated: false
 translationRequired: true
 ---
 
+[Использовать плагины](/ru/use/) · [Создавать плагины](/ru/build/) — Подготовка, не релиз. Миграция проектов в v2 пока недоступна.
+<details><summary>Исторические материалы plugin-kit-ai v1 · 1.2.4; старые инструкции не являются текущим Build.</summary>
+
+
 # Соберите Node/TypeScript runtime-плагин
 
 Это основной поддерживаемый путь без Go, когда команде нужен TypeScript, но при этом нужен поддерживаемый локальный runtime-плагин.
@@ -43,3 +47,5 @@ plugin-kit-ai validate ./my-plugin --platform codex-runtime --strict
 - нужен минимум проблем с bootstrap в CI и на других машинах
 
 См. [Выбор runtime](/ru/concepts/choosing-runtime) и [Node Runtime API](/ru/api/runtime-node/) для следующего уровня деталей.
+
+</details>

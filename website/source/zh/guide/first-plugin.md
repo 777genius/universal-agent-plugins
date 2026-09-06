@@ -7,6 +7,10 @@ locale: "zh"
 generated: false
 translationRequired: true
 ---
+
+[使用插件](/zh/use/) · [构建插件](/zh/build/) — 仅为准备内容，尚未发布。v2 暂不支持项目迁移。
+<details><summary>plugin-kit-ai v1 · 1.2.4 历史资料；旧说明不是当前的 Build 流程。</summary>
+
 # 构建你的第一个插件
 
 本教程为您提供了最强默认路径上最简单的第一个工作存储库。
@@ -76,3 +80,5 @@ plugin-kit-ai validate . --platform codex-runtime --strict
 - 如果单回购、多输出的想法是您关心该产品的核心原因，请阅读[一个项目，多个目标](/zh/guide/one-project-multiple-targets)。
 - 当您想要一个已知良好的示例存储库时，请使用[入门模板](/zh/guide/starter-templates)。
 - 当您需要精确的命令行为时，请浏览 [CLI 参考](/zh/api/cli/)。
+
+</details>

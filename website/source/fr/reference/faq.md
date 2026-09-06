@@ -7,6 +7,10 @@ locale: "fr"
 generated: false
 translationRequired: true
 ---
+
+[Utiliser des plugins](/fr/use/) · [Créer des plugins](/fr/build/) — Préparation, pas une version publiée. La migration des projets vers v2 est indisponible.
+<details><summary>Documentation historique plugin-kit-ai v1 · 1.2.4 ; les anciennes instructions ne constituent pas le parcours Build actuel.</summary>
+
 # FAQ
 
 ## Dois-je commencer par Go, Python ou Node ?
@@ -76,3 +80,5 @@ Voir [Un projet, plusieurs cibles](/fr/guide/one-project-multiple-targets) et [M
 Non.
 
 Différents chemins comportent différentes promesses de soutien. Utilisez [Limite de support](/fr/reference/support-boundary) pour la réponse courte et [Support des cibles](/fr/reference/target-support) pour la matrice exacte.
+
+</details>

@@ -7,6 +7,10 @@ locale: "zh"
 generated: false
 translationRequired: true
 ---
+
+[使用插件](/zh/use/) · [构建插件](/zh/build/) — 仅为准备内容，尚未发布。v2 暂不支持项目迁移。
+<details><summary>plugin-kit-ai v1 · 1.2.4 历史资料；旧说明不是当前的 Build 流程。</summary>
+
 # FAQ
 
 ## 我应该从 Go、Python 还是 Node 开始？
@@ -76,3 +80,5 @@ plugin-kit-ai validate ./my-plugin --platform codex-runtime --strict
 不。
 
 不同的路径承载着不同的支持承诺。使用 [支持边界](/zh/reference/support-boundary) 作为简短答案，使用 [目标支持](/zh/reference/target-support) 作为精确矩阵。
+
+</details>

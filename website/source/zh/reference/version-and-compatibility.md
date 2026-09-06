@@ -7,6 +7,10 @@ locale: "zh"
 generated: false
 translationRequired: true
 ---
+
+[使用插件](/zh/use/) · [构建插件](/zh/build/) — 仅为准备内容，尚未发布。v2 暂不支持项目迁移。
+<details><summary>plugin-kit-ai v1 · 1.2.4 历史资料；旧说明不是当前的 Build 流程。</summary>
+
 # 版本和兼容性政策
 
 本页用于一项实际的团队决策：我们正在标准化什么，这一承诺有多强？
@@ -85,3 +89,4 @@ translationRequired: true
 ## 最终规则
 
 仅标准化您的团队实际上愿意在 CI、移交和部署中捍卫其公开承诺的发布线和路径。
+</details>
