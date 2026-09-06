@@ -9,6 +9,7 @@ const path = require("node:path");
 const crypto = require("node:crypto");
 const c = require("./dual-authoring-candidate");
 const bridge = require("./packed-installer-bridge");
+const posixFixture = { skip: process.platform !== "linux" && "Linux POSIX fixture only" };
 const hash = p => c.digest(fs.readFileSync(p));
 const write = (p, v) => fs.writeFileSync(p,c.encode(v),{mode:0o600});
 function fixture(t) {
@@ -38,7 +39,7 @@ function fixture(t) {
  const nativeConfig=path.join(root,"native-config.json"); write(nativeConfig,{stage:{candidate:true,repo,root:candidate,identity,manifestDigest:completion.candidate_sha256,assetScope:completion.asset_scope,authoringMode:completion.authoring_mode,go:"/unused",workParent:work,output,node:"/unused",npm:"/unused"},completionDigest:hash(completionPath),evidenceOutput:evidence});
  return {root,candidate,projects,nativePath,nativeConfig,completionPath,fixtureRoot,request:{expectedCommit:identity.commit,nativeConfig,nativeConfigSha256:hash(nativeConfig),nativeCompletionSha256:hash(nativePath),fixtureRoot,disposableEvidence:true}};
 }
-test("SYNTHETIC intake control and fail-closed mutations (not packed-native acceptance)", t => {
+test("SYNTHETIC intake control and fail-closed mutations (not packed-native acceptance)", posixFixture, t => {
  const original=c.frozenCandidate;
  c.frozenCandidate=()=>({synthetic:true}); // no fabricated binary metadata or execution
  try {
@@ -87,7 +88,7 @@ test("SYNTHETIC intake control and fail-closed mutations (not packed-native acce
   assert.equal(cli.status,1); assert.equal(fs.existsSync(rejectedOutput),false);
  } finally {c.frozenCandidate=original;}
 });
-test("snapshot rejects links and captures empty files/directories and modes", t => {
+test("snapshot rejects links and captures empty files/directories and modes", posixFixture, t => {
  const root=fs.mkdtempSync(path.join(os.tmpdir(),"packed-snapshot-SYNTHETIC-"));
  fs.mkdirSync(path.join(root,"empty")); fs.writeFileSync(path.join(root,"file"),"");
  const first=bridge.snapshot(root); assert.equal(first.entries.length,3);

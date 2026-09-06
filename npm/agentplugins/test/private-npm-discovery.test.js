@@ -16,7 +16,12 @@ before(() => {
   fs.writeFileSync(env.npm_config_userconfig, ""); fs.writeFileSync(env.npm_config_globalconfig, "");
   // Minimal detached package: default discovery sees ONLY the exact helper.
   dir("test");
-  for (const name of ["scripts", "lib"]) fs.cpSync(path.join(__dirname, "..", name), path.join(root, name), { recursive: true });
+  for (const name of ["scripts/dual-authoring-candidate.js", "scripts/stage-dual-authoring-npm.js",
+    "scripts/stage-dual-authoring-candidate.js", "scripts/private-npm/bootstrap.js",
+    "scripts/private-npm/launcher.js", "lib/verifier.js"]) {
+    dir(path.dirname(name));
+    fs.copyFileSync(path.join(__dirname, "..", name), path.join(root, name));
+  }
   helper = path.join(root, "test", "private-npm-fixture.js");
   fs.copyFileSync(path.join(__dirname, "private-npm-fixture.js"), helper);
   dir("consumers");
@@ -43,7 +48,11 @@ function invoke(args, extra = {}) {
 test("STRUCTURAL missing npm: helper import and default discovery are side-effect free", () => {
   invoke(["-e", `require(${JSON.stringify(helper)})`]);
   const out = invoke(["--test", "--test-reporter=tap"]);
-  assert.match(out, /ok 1 - test[/\\]private-npm-fixture\.js/);
+  assert.deepEqual([...out.matchAll(/^ok \d+ - (.+)$/gm)].map(match => match[1].replaceAll("\\", "/")),
+    ["test/private-npm-fixture.js"]);
+  assert.match(out, /^# tests 1$/m);
+  assert.match(out, /^# pass 1$/m);
+  assert.match(out, /^# skipped 0$/m);
   assert.match(out, /# fail 0/);
 });
 test("STRUCTURAL missing npm: staged-child and unsupported platform skips precede tool resolution", () => {
@@ -66,4 +75,32 @@ assert.equal(f.resolveNpm(${JSON.stringify(helper)}),fs.realpathSync(${JSON.stri
 assert.deepEqual(fs.readdirSync(process.env.TMPDIR),before);console.log('rejected before setup');`],
     { UAP_PRIVATE_NPM_FIXTURE_NPM: path.join(root, "missing", "npm-cli.js") });
   assert.match(out, /rejected before setup/);
+});
+
+test("STRUCTURAL Linux IO model: unsupported bridge default discovery skips before fixture setup", {
+  skip: process.platform !== "linux" && "Linux module/IO model only"
+}, () => {
+  const detached = fs.mkdtempSync(path.join(os.tmpdir(), "bridge-discovery-model-"));
+  for (const name of ["packed-installer-bridge.test.js", "packed-installer-bridge.js", "dual-authoring-candidate.js"]) {
+    fs.copyFileSync(path.join(__dirname, "../scripts", name), path.join(detached, name));
+  }
+  const guard = path.join(detached, "unsupported.cjs");
+  fs.writeFileSync(guard, `const fs=require('node:fs');
+Object.defineProperty(process,'platform',{value:process.env.DISCOVERY_PLATFORM});
+for(const name of ['mkdtempSync','chmodSync','symlinkSync','linkSync']) {
+  fs[name]=()=>{throw new Error('unsupported bridge fixture setup: '+name);};
+}
+`);
+  for (const platform of ["win32", "darwin"]) {
+    const r = cp.spawnSync(process.execPath, ["--require", guard, "--test", "--test-reporter=tap"], {
+      cwd: detached, env: { ...env, DISCOVERY_PLATFORM: platform }, encoding: "utf8", timeout: 15000
+    });
+    assert.equal(r.error, undefined);
+    assert.equal(r.status, 0, r.stdout + r.stderr);
+    assert.match(r.stdout, /^# tests 2$/m);
+    assert.match(r.stdout, /^# pass 0$/m);
+    assert.match(r.stdout, /^# fail 0$/m);
+    assert.match(r.stdout, /^# skipped 2$/m);
+    assert.equal((r.stdout.match(/# SKIP Linux POSIX fixture only/g) || []).length, 2);
+  }
 });
