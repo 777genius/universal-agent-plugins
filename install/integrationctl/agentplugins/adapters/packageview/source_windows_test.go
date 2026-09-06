@@ -237,9 +237,6 @@ func TestWindowsReplacementBeforeAndAfterNameCheck(t *testing.T) {
 				if setupErr = nativeDistinctReplacement(old, filepath.Join(root, p)); setupErr != nil {
 					return
 				}
-				// Make the relevant metadata change deterministic even if NTFS
-				// defers rename timestamps while other handles remain open.
-				setupErr = os.Chmod(old, 0400)
 				done = setupErr == nil
 			}
 			// Never Fatal/Goexit inside Reader.open: its error cleanup needs an
@@ -289,7 +286,6 @@ func TestWindowsReplacementWithPipeNamespaceLink(t *testing.T) {
 		if setupErr = nativeDistinctReplacement(old, filepath.Join(root, p)); setupErr != nil {
 			return
 		}
-		setupErr = os.Chmod(old, 0400)
 		done = setupErr == nil
 	}, dataOpenError: func(string) error { return setupErr }})
 	if l != nil {
