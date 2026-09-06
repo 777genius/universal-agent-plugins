@@ -52,7 +52,7 @@ $create = Join-Path $fixture 'create.txt'
 "create vdisk file=`"$vhd`" maximum=256 type=expandable`nexit" | Set-Content -LiteralPath $create -Encoding ascii
 & diskpart.exe /s $create | Out-File (Join-Path $fixture 'create.log')
 if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $vhd)) { throw 'Fresh VHDX creation failed' }
-$image = Mount-DiskImage -ImagePath $vhd -StorageType VHD -Access ReadWrite -PassThru
+$image = Mount-DiskImage -ImagePath $vhd -StorageType VHDX -Access ReadWrite -PassThru
 $disks = @($image | Get-Disk)
 if ($disks.Count -ne 1) { throw 'Fresh image must map to exactly one disk' }
 $disk = $disks[0]
