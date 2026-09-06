@@ -12,7 +12,15 @@ const b = require("../scripts/private-npm/bootstrap");
 const mkdir = p => { fs.mkdirSync(p, { recursive: true, mode: 0o700 }); return p; };
 const write = (p, bytes, mode = 0o644) => { mkdir(path.dirname(p)); fs.writeFileSync(p, bytes, { mode }); };
 const node = process.execPath;
-const npm = fs.realpathSync("/usr/local/bin/npm");
+// Import/discovery must not inspect a host npm installation. Resolve only when
+// an enabled fixture is requested; never search PATH or provision a tool.
+function resolveNpm(file = process.env.UAP_PRIVATE_NPM_FIXTURE_NPM || "/usr/local/bin/npm") {
+  assert.ok(path.isAbsolute(file), "fixture npm must be an explicit absolute path");
+  const npm = fs.realpathSync(file);
+  assert.ok(fs.statSync(npm).isFile(), "fixture npm must resolve to a regular file");
+  fs.accessSync(npm, fs.constants.R_OK);
+  return npm;
+}
 const run = (exe, args, env, cwd) => cp.spawnSync(exe, args, { env, cwd, encoding: "utf8", timeout: 45000, maxBuffer: 16 * 1024 * 1024 });
 function checked(exe, args, env, cwd) {
   const r = run(exe, args, env, cwd);
@@ -65,6 +73,7 @@ function candidate(root, commit, versions = { agentplugins: "0.1.23", "plugin-ki
   return { source, go, manifest, identity, manifestDigest: c.digest(c.encode(manifest)) };
 }
 function fixture(label = "structural", versions, behavior) {
+  const npm = resolveNpm();
   const f = workspace(label); Object.assign(f, sourceFixture(f.root, f.env));
   Object.assign(f, candidate(f.root, f.commit, versions, behavior));
   f.options = { candidate: true, repo: f.repo, root: f.source, identity: f.identity, manifestDigest: f.manifestDigest,
@@ -91,4 +100,4 @@ function installPair(f) {
   return f;
 }
 const changeJSON = (file, change) => { const value = JSON.parse(fs.readFileSync(file)); change(value); fs.writeFileSync(file, c.encode(value)); };
-module.exports = { fs, path, cp, assert, c, s, b, mkdir, write, node, npm, run, checked, workspace, fixture, installPair, changeJSON };
+module.exports = { fs, path, cp, assert, c, s, b, mkdir, write, node, resolveNpm, run, checked, workspace, fixture, installPair, changeJSON };

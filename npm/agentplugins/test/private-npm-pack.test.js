@@ -3,7 +3,7 @@ const nodeTest = require("node:test");
 const enabled = process.platform === "linux" && process.env.AGENTPLUGINS_STAGED_TEST_CHILD !== "1";
 const test = (name, fn) => nodeTest.test(name, { skip: !enabled }, fn);
 const before = fn => nodeTest.before(() => { if (enabled) return fn(); });
-const { fs, path, assert, c, s, mkdir, node, npm, checked, fixture, installPair, changeJSON } = require("./private-npm-fixture");
+const { fs, path, assert, c, s, mkdir, node, checked, fixture, installPair, changeJSON } = require("./private-npm-fixture");
 let f;
 before(() => { f = installPair(fixture()); });
 const success = r => { assert.equal(r.status, 0, r.stderr); assert.equal(r.stderr, ""); return JSON.parse(r.stdout); };
@@ -124,10 +124,52 @@ test("STRUCTURAL actual local scripts-disabled upgrade/uninstall/reinstall prese
     const env = { ...f.envFor(), UAP_PRIVATE_NPM_CANDIDATE: next.source };
     assert.equal(success(f.launch("agentplugins", [], env)).version, "0.1.24");
     assert.equal(c.digest(fs.readFileSync(other)), pin); assert.equal(success(f.launch("plugin-kit-ai")).version, "2.0.0");
-    checked(node, [npm, "uninstall", "--prefix", prefix, "--ignore-scripts", "--offline", "--no-audit", "--no-fund", "universal-agent-plugins"], f.env, prefix);
+    checked(node, [f.options.npm, "uninstall", "--prefix", prefix, "--ignore-scripts", "--offline", "--no-audit", "--no-fund", "universal-agent-plugins"], f.env, prefix);
     assert.equal(fs.existsSync(path.join(prefix, "node_modules", ".bin", "agentplugins")), false);
     assert.equal(success(f.launch("plugin-kit-ai")).version, "2.0.0"); assert.equal(c.digest(fs.readFileSync(other)), pin);
     f.install([f.tarball("agentplugins")], prefix); assert.equal(success(f.launch("agentplugins")).version, "0.1.23");
+    // Reciprocal lifecycle uses the same separately staged local upgrade pair.
+    // Snapshot the entire preserved package, bin link, and warm executable
+    // across each npm operation.
+    const tree = root => fs.readdirSync(root).sort().map(name => {
+      const file = path.join(root, name), stat = fs.lstatSync(file);
+      return [name, stat.mode, stat.isDirectory() ? tree(file) : stat.isSymbolicLink() ? fs.readlinkSync(file) : c.digest(fs.readFileSync(file))];
+    });
+    const bin = product => path.join(prefix, "node_modules", ".bin", product);
+    const agentRoot = f.packageRoot("agentplugins"), agentTree = tree(agentRoot);
+    const agentLink = fs.readlinkSync(bin("agentplugins"));
+    const agentBinary = f.binaryPath("agentplugins"), agentBytes = fs.readFileSync(agentBinary);
+    const agentMode = fs.statSync(agentBinary).mode;
+    const preserved = () => {
+      assert.deepEqual(tree(agentRoot), agentTree);
+      assert.equal(fs.readlinkSync(bin("agentplugins")), agentLink);
+      assert.deepEqual(fs.readFileSync(agentBinary), agentBytes);
+      assert.equal(fs.statSync(agentBinary).mode, agentMode);
+      assert.equal(fs.realpathSync(bin("agentplugins")), path.join(agentRoot, "bin", "agentplugins.js"));
+      const got = success(f.launch("agentplugins"));
+      assert.equal(got.product, "agentplugins"); assert.equal(got.version, "0.1.23");
+      assert.equal(JSON.parse(checked(node, [bin("agentplugins")], f.envFor(), f.cwd)).version, "0.1.23");
+    };
+    const installed = (version, env) => {
+      const root = f.packageRoot("plugin-kit-ai"), pkg = JSON.parse(fs.readFileSync(path.join(root, "package.json")));
+      assert.equal(pkg.version, version); assert.equal(pkg.scripts, undefined);
+      assert.deepEqual(pkg.bin, { "plugin-kit-ai": "bin/plugin-kit-ai.js" });
+      assert.equal(fs.realpathSync(bin("plugin-kit-ai")), path.join(root, "bin", "plugin-kit-ai.js"));
+      const got = success(f.launch("plugin-kit-ai", [], env));
+      assert.equal(got.product, "plugin-kit-ai"); assert.equal(got.version, version);
+      assert.equal(JSON.parse(checked(node, [bin("plugin-kit-ai")], env, f.cwd)).version, version);
+      assert.equal(fs.existsSync(path.join(root, "vendor")), false);
+      preserved();
+    };
+    const inputs = [tree(f.source), tree(next.source)];
+    f.install([next.tarball("plugin-kit-ai")], prefix);
+    installed("2.0.1", env);
+    checked(node, [f.options.npm, "uninstall", "--prefix", prefix, "--ignore-scripts", "--offline", "--no-audit", "--no-fund", "plugin-kit-ai"], f.env, prefix);
+    assert.equal(fs.existsSync(f.packageRoot("plugin-kit-ai")), false);
+    assert.equal(fs.existsSync(bin("plugin-kit-ai")), false); preserved();
+    f.install([f.tarball("plugin-kit-ai")], prefix);
+    installed("2.0.0", f.envFor());
+    assert.deepEqual([tree(f.source), tree(next.source)], inputs);
   } finally { f.prefixes = original; }
   fs.writeFileSync(path.join(f.root, "structural-evidence.json"), c.encode({ kind: "STRUCTURAL real npm packs; mock Go/executables", record: f.record, upgrade: next.record, mutations: mutations.length }));
   console.log(`STRUCTURAL pack artifacts: ${f.root}`);
