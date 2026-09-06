@@ -33,7 +33,9 @@ func pathFixAlias(t *testing.T, path, target string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	buf := make([]byte, 16+2*len(targetName))
+	// Both names need in-buffer NULs, including the empty print name whose
+	// offset follows the substitute name's terminator (as in nativeJunction).
+	buf := make([]byte, 16+2*(len(targetName)+1))
 	binary.LittleEndian.PutUint32(buf, windows.IO_REPARSE_TAG_MOUNT_POINT)
 	binary.LittleEndian.PutUint16(buf[4:], uint16(len(buf)-8))
 	binary.LittleEndian.PutUint16(buf[10:], uint16(2*(len(targetName)-1)))

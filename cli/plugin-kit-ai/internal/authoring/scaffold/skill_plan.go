@@ -150,6 +150,15 @@ func applySkill(ctx context.Context, p SkillPlan, exactRoot string, gate SkillSo
 	if e = skillAbsent(parent, destination); e != nil {
 		return result, e
 	}
+	// A competing writer's reservation is already a collision, even before
+	// publication. Reject it by metadata before the source gate tries to capture
+	// that writer's open reservation/private stage (unreadable on Windows).
+	// This check grants no write authority; the exclusive reservation is still
+	// acquired only after the full source gate and precondition below.
+	reservation := skillReservation(p.name)
+	if e = absent(source, reservation); e != nil {
+		return result, e
+	}
 	recheck, e := gate(ctx, exactRoot)
 	if e != nil {
 		return result, e
@@ -184,7 +193,6 @@ func applySkill(ctx context.Context, p SkillPlan, exactRoot string, gate SkillSo
 	// Reserve a Unicode case-fold identity across concurrent Skills writers.
 	// The kernel still owns exact-destination absence at commit. Acquire only
 	// after the source gate; never remove an existing or replaced reservation.
-	reservation := skillReservation(p.name)
 	reservationFile, e := source.OpenFile(reservation, os.O_CREATE|os.O_EXCL|os.O_RDWR, 0600)
 	if e != nil {
 		return result, e

@@ -35,8 +35,9 @@ func skillFixture(t *testing.T) (string, SkillPlan, SkillSourceGate) {
 		if e != nil {
 			return nil, e
 		}
-		if !report.Build("validate", "test", p, false).Successful() {
-			return nil, errors.New("gate failed")
+		r := report.Build("validate", "test", p, false)
+		if !r.Successful() {
+			return nil, fmt.Errorf("gate failed: host=%s findings=%+v", r.HostSafety.Status, r.Findings)
 		}
 		core := p.Input.Plugin.Bytes
 		return func(ctx context.Context) (err error) {

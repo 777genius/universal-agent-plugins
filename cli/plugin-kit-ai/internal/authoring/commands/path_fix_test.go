@@ -110,7 +110,19 @@ func (b pathFixBinaries) journey(t *testing.T, parent, scratch string) {
 			t.Fatalf("relative init: %d %s", code, out)
 		}
 		root := filepath.Join(cwd, name)
+		r, code, out = b.run(t, i, cwd, scratch, "skills", "init", "relative", "./"+name, "--description=Disposable relative Skill.")
+		if code != 0 || !r.Committed {
+			t.Fatalf("relative skills init: %d %s", code, out)
+		}
 		before := tree(t, root)
+		// Mutation must still reject interior traversal, including a missing
+		// intermediary that lexical cleaning would erase into this valid root.
+		for _, path := range []string{name + "/missing/../", name + "/../" + name} {
+			r, code, out := b.run(t, i, cwd, scratch, "skills", "init", "rejected", path, "--description=Must not commit.")
+			if code == 0 || r.Committed {
+				t.Fatalf("unclean skills mutation accepted: %s %d %s", path, code, out)
+			}
+		}
 		for _, command := range []string{"validate", "inspect", "test"} {
 			_, code, absolute := b.run(t, i, cwd, scratch, command, root)
 			if code != 0 {

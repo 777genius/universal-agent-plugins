@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -14,6 +15,7 @@ import (
 	"reflect"
 	"runtime"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -312,7 +314,7 @@ func TestReportsAndFreshFactory(t *testing.T) {
 	for _, result := range concurrentResults(jobs...) {
 		r, c, _ := decodeExecution(t, result)
 		if c != 0 || r.Conformance.Status != report.Pass {
-			t.Error("concurrent factory failed")
+			t.Errorf("concurrent factory failed: exit=%d error=%+v host=%s findings=%+v", c, r.Error, r.HostSafety.Status, r.Findings)
 		}
 	}
 }
@@ -458,6 +460,13 @@ func TestCleanupFailureSurvivesCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	replacement := ""
+	var stageInfo os.FileInfo
+	var retained *os.File
+	t.Cleanup(func() {
+		if retained != nil {
+			retained.Close()
+		}
+	})
 	fault := faultContext{Context: ctx, check: func() {
 		if replacement != "" {
 			return
@@ -470,10 +479,26 @@ func TestCleanupFailureSurvivesCancellation(t *testing.T) {
 			return
 		}
 		replacement = filepath.Join(scratch, entries[0].Name())
-		if e := os.Rename(replacement, replacement+"-displaced"); e != nil {
+		stageInfo, e = os.Stat(replacement)
+		if e != nil {
 			t.Fatal(e)
 		}
-		write(t, replacement, "preserve", marker)
+		if runtime.GOOS != "windows" {
+			if e := os.Rename(replacement, replacement+"-displaced"); e != nil {
+				t.Fatal(e)
+			}
+		}
+		write(t, replacement, "preserve", "ordinary-review-value")
+		if runtime.GOOS == "windows" {
+			// Reader cleanup is recursive, unlike scaffold container cleanup.
+			// An ordinary open file denies delete sharing on Windows, retaining
+			// a nonempty entry through the actual cleanup attempt. A failed
+			// rename alone would never exercise cleanup error precedence.
+			retained, e = os.Open(filepath.Join(replacement, "preserve"))
+			if e != nil {
+				t.Fatal(e)
+			}
+		}
 		cancel()
 	}}
 	var out, errout bytes.Buffer
@@ -485,11 +510,22 @@ func TestCleanupFailureSurvivesCancellation(t *testing.T) {
 	if r.Release.Status != report.Fail || len(r.Checks) != 5 || !reflect.DeepEqual(r.Checks[1].Assessment, r.HostSafety) {
 		t.Fatalf("cleanup failure lost in release/static projection: %s", out.Bytes())
 	}
-	if replacement == "" {
+	if replacement == "" || !errors.Is(ctx.Err(), context.Canceled) {
 		t.Fatal("cleanup fault did not run")
 	}
-	if b, e := os.ReadFile(filepath.Join(replacement, "preserve")); e != nil || string(b) != marker {
+	if b, e := os.ReadFile(filepath.Join(replacement, "preserve")); e != nil || string(b) != "ordinary-review-value" {
 		t.Fatal("reader removed unowned replacement")
+	}
+	if retained != nil {
+		// Calibrate the exact retained entry, not an unrelated denied attack.
+		if err := os.Remove(filepath.Join(replacement, "preserve")); !errors.Is(err, syscall.Errno(32)) { // ERROR_SHARING_VIOLATION
+			t.Fatalf("retained entry did not cause delete-sharing failure: %v", err)
+		}
+		if err := retained.Close(); err != nil {
+			t.Fatal(err)
+		}
+		retained = nil
+		reviewCleanupVerifyRetainedEntry(t, replacement, stageInfo)
 	}
 }
 
