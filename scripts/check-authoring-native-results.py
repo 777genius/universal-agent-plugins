@@ -166,10 +166,18 @@ def check(root):
         critical = {
             "linux": ["TestDeviceMetadataOnly", "TestReplacementRacesNeverFollowSpecialOrOutside/before-name-check/device", "TestReplacementRacesNeverFollowSpecialOrOutside/after-name-check/device"],
             "windows": ["TestNativeCaptureAndCleanup", "TestNativeTraversalOrderAndBoundedLinks", "TestNativeLegacyMetadataAndHardlinks", "TestNativeLegacySymlinkAlias", "TestNativeRootLinkRejected",
-                        "TestWindowsReplacementBeforeAndAfterNameCheck", "TestWindowsReplacementWithPipeNamespaceLink", "TestWindowsSameObjectReopenAfterNameReplacement", "TestWindowsMetadataProbeReplacement", "TestWindowsExistingWriterAndReparseSetterDenied", "TestWindowsAttributesOnlyHandleCannotSetReparse", "TestWindowsDirectoryAncestryHeld", "TestWindowsInventoryMutationRejected", "TestWindowsJunctionsAndNamespaceRoots", "TestWindowsInertFIFOReparseRejected", "TestWindowsHandleLifetimeAndFailureCleanup", "TestWindowsOfflineFileHasNoDataOpen"],
+                        "TestWindowsReplacementBeforeAndAfterNameCheck", "TestWindowsReplacementWithPipeNamespaceLink", "TestWindowsSameObjectReopenAfterNameReplacement", "TestWindowsMetadataProbeReplacement", "TestWindowsExistingWriterAndReparseSetterDenied", "TestWindowsAttributesOnlyHandleCannotSetReparse", "TestWindowsDirectoryAncestryHeld", "TestWindowsInventoryMutationRejected", "TestWindowsJunctionsAndNamespaceRoots", "TestWindowsInertFIFOReparseRejected", "TestWindowsHandleLifetimeAndFailureCleanup", "TestWindowsOfflineFileHasNoDataOpen",
+                        "TestWindowsScratchPhysicalAliases", "TestWindowsScratchIdentityUnavailableFailsClosed", "TestWindowsScratchAncestryHeld", "TestWindowsScratchDistinctNTFSVolumes"],
         }
         for test in critical.get(native_os, []):
             require((native_package, test) in passed, "missing mandatory native contract: " + test)
+        command_package = "github.com/777genius/plugin-kit-ai/cli/internal/authoring/commands"
+        path_contracts = ["ordinary-relative-roots", "traversal-order", "reparse-before-dot-dot"]
+        if native_os == "windows":
+            path_contracts += ["namespace-rejection", "same-volume-overlapping-alias", "two-physical-ntfs-volumes"]
+        for contract in path_contracts:
+            test = "TestNativePathFixBothBinaries/" + contract
+            require((command_package, test) in passed, "missing mandatory both-binary path contract: " + test)
         require((evidence / "test-exit.txt").read_text(encoding="utf-8").strip() == "0", "go test exited unsuccessfully")
     except (OSError, ValueError, KeyError, TypeError, AttributeError) as exc:
         errors.append(f"missing or malformed evidence: {exc}")
