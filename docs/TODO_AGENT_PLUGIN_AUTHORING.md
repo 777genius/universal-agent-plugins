@@ -3,7 +3,7 @@
 > Owner clarification (2026-09-06): historical status is not permission to delete
 > useful legacy implementation, tests or design ideas. Follow the
 > [capability preservation contract](./AUTHORING_CAPABILITY_PRESERVATION.md).
-
+>
 > Decision recorded in [ADR 0006](./adr/0006-standard-first-authoring.md) and the
 > [approved implementation plan](./STANDARD_FIRST_AUTHORING_ENGINE_IMPLEMENTATION_PLAN.md).
 > Standard-first authoring uses root `plugin.json`, without a required sidecar.

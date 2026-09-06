@@ -13,7 +13,8 @@ Accepted owner clarification, 2026-09-06. This controls legacy treatment in the
 - Before any deletion, inventory implementation, tests, consumers, exact mapping,
   preservation destination and support status. Dispositions are reuse, adapt,
   preserve/defer, or explicitly owner-approved removal. Unresolved means preserve.
-- No current standard-first caller is insufficient evidence to delete a capability.
+- The absence of a current standard-first caller is not sufficient evidence
+  to delete a capability.
 - Historical binaries and Git history alone do not satisfy source preservation.
 - Keeping code does not promise a maintained second YAML authoring product. That
   remains a separate explicit decision; this clarification does not expand scope.
