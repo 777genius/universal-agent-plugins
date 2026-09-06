@@ -247,3 +247,34 @@ locale/model/boundary/drift checks, VitePress dead-link/render/output checks and
 real browser acceptance remain ROOT's separate gate. D3 locale prose/switching,
 D4 landing and D5 release/platform evidence remain independent. This correction
 does not authorize publication or claim full-site/browser acceptance.
+
+## Historical Claude gap correction (bb08ee00f2734baa04265a5afee115772a815cf2)
+
+The former 160-page platform inventory was complete only relative to tracked
+files: pinned v1.2.4 registry `9beca10448ac50fbe526a52101d1433a12471980`
+declares `event-platform:claude`, but that tree omits all five Claude pages.
+The bounded historical reader now derives those five missing routes from that
+same revision's canonical `docs/generated/support_matrix.md`. It preserves the
+matrix's event order, maturity, contract class and summary verbatim (18 events:
+three stable, fifteen beta), checks event identities against the pinned registry,
+and mirrors canonical English facts with explicit historical metadata/banner.
+This is historical evidence, not current v2 support or new translated prose.
+The pinned exporter source was inspected, never executed.
+
+All former 160 pages, including five target-support pages, remain byte-equivalent
+under the existing historical metadata/source-link normalization. Regression
+coverage now checks every selected historical registry route and all five
+mirrored locale routes, Claude table facts against the exact matrix, and
+repeatable extraction. Matching the incomplete tracked inventory alone is no
+longer the completeness criterion. No model/deadlink checks or links are removed.
+The pinned repository ignore file has no matching Claude rule, and current
+`git check-ignore --no-index` reports no match; historical external/global ignore
+state is unavailable, so an ignore-related original cause is not established.
+
+Mandatory offline consumer integration and terminal evidence are recorded in
+`/tmp/uap-authoring-docs-historical-claude-20260906-artifacts/HANDOFF.md`.
+The single Git lock probe failed read-only; ROOT owns mechanical integration.
+Full generation, model/VitePress deadlink checks and browser acceptance after
+integration remain ROOT gates. D3 locales, D4 landing, D5 release and existing
+native/Windows/macOS holds remain unaccepted. Preserved YAML implementation,
+exporters, tests, assets and dependencies are unchanged.

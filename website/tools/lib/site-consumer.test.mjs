@@ -248,9 +248,12 @@ test("whole historical platform inventory retains all five support pages, facts 
   const bundle = await extractPlatformData();
   const expected = (await run("git", ["ls-tree", "-r", "--name-only", historicalSHA, "website/generated"], { cwd: repoRoot }))
     .trim().split("\n").filter((file) => /\/(en|ru|es|fr|zh)\/(api\/(platform-events|capabilities)\/.*|reference\/target-support)\.md$/.test(file));
-  assert.deepEqual(bundle.pages.map(p => `website/generated/${p.relativePath}`).sort(), expected.sort());
+  assert.equal(expected.length, 160);
+  const tracked = bundle.pages.filter(p => !p.relativePath.endsWith("/platform-events/claude.md"));
+  assert.deepEqual(tracked.map(p => `website/generated/${p.relativePath}`).sort(), expected.sort());
+  assert.equal(bundle.pages.length, 165);
   assert.equal(bundle.pages.filter(p => p.relativePath.endsWith("reference/target-support.md")).length, 5);
-  for (const page of bundle.pages) {
+  for (const page of tracked) {
     const original = await run("git", ["show", `${historicalSHA}:website/generated/${page.relativePath}`], { cwd: repoRoot });
     // Entire body facts preserved except the explicit historical banner and metadata links.
     const facts = text => text.split("\n").filter(line => !/^(stability:|maturity:|historicalVersion:|sourceSHA:|status:|> Historical)/.test(line))
@@ -261,4 +264,36 @@ test("whole historical platform inventory retains all five support pages, facts 
   }
   const aliases = buildRedirects(inventory, bundle.pages.map(p => `/${p.relativePath.replace(/\.md$/, "")}`).concat(["/en/api/cli/"]));
   assert.equal(aliases["/reference/target-support"], "/en/reference/target-support");
+});
+
+
+test("every pinned historical registry route produces a page, including Claude facts in five locales", async () => {
+  const bundles = [await extractHistorical(["cli"]), await extractPlatformData()];
+  const pages = bundles.flatMap(bundle => bundle.pages);
+  const routes = new Set(pages.map(page => `/${page.relativePath.replace(/\.md$/, "")}`));
+  const registry = JSON.parse(await run("git", ["show", `${historicalSHA}:website/generated/registries/entities.json`], { cwd: repoRoot }));
+  for (const entry of registry.filter(entry => ["cli", "platform-events", "capabilities"].includes(entry.surface))) {
+    for (const [key, route] of Object.entries(entry).filter(([key, value]) => /^path[A-Z]/.test(key) && value))
+      assert.ok(routes.has(route), `${entry.canonicalId} ${key}: ${route}`);
+    if (entry.localeStrategy === "mirrored")
+      for (const locale of ["en", "ru", "es", "fr", "zh"])
+        assert.ok(routes.has(entry.pathEn.replace(/^\/en\//, `/${locale}/`)), `${entry.canonicalId}: ${locale}`);
+  }
+  const matrix = await run("git", ["show", `${historicalSHA}:docs/generated/support_matrix.md`], { cwd: repoRoot });
+  const facts = matrix.split("\n").filter(line => line.startsWith("| claude |"))
+    .map(line => line.split("|").slice(1, -1).map(cell => cell.trim()))
+    .map(row => [row[1], row[3], row[4], row[13]]);
+  assert.equal(facts.length, 18);
+  assert.equal(facts.filter(row => row[1] === "stable").length, 3);
+  assert.equal(facts.filter(row => row[1] === "beta").length, 15);
+  for (const locale of ["en", "ru", "es", "fr", "zh"]) {
+    const page = pages.find(page => page.relativePath === `${locale}/api/platform-events/claude.md`);
+    assert.ok(page);
+    assert.deepEqual(page.content.split("\n").filter(line => line.startsWith("| ")).slice(2)
+      .map(line => line.split("|").slice(1, -1).map(cell => cell.trim())), facts);
+    assert.match(page.content, /status: "historical"/);
+    assert.ok(page.content.includes(`sourceSHA: "${historicalSHA}"`));
+    assert.ok(page.content.includes("Project migration is not available in v2 yet."));
+  }
+  assert.deepEqual(await extractPlatformData(), bundles[1]);
 });
