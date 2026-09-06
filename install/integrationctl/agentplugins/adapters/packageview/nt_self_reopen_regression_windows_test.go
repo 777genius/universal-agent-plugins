@@ -12,8 +12,8 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-// The existing replacement, reparse, hardlink, ancestry and failure-cleanup
-// contracts run unchanged. These cases add byte/list reads and exact denial
+// The replacement, reparse, hardlink, ancestry and failure-cleanup contracts
+// remain required. These cases add byte/list reads and exact denial
 // mapping at the NT seam, which the parameter-only native matrix did not prove.
 func TestWindowsNTSelfOpenAccessAndRead(t *testing.T) {
 	for _, directory := range []bool{false, true} {
@@ -105,8 +105,9 @@ func TestWindowsNTSelfOpenDirectoryAfterNameReplacement(t *testing.T) {
 	directoryGuardMetadataAccess(t, probe)
 	original, err := probe.Stat()
 	bootstrapCheck(t, "original identity", err)
-	bootstrapCheck(t, "replace directory name", os.Rename(filepath.Join(root, "candidate"), filepath.Join(root, "moved")))
+	bootstrapCheck(t, "replace directory name", nativeSharedRename(filepath.Join(root, "candidate"), filepath.Join(root, "moved")))
 	nativeWrite(t, root, "candidate/replacement-child", "replacement")
+	bootstrapCheck(t, "distinct replacement directory", nativeDistinctReplacement(filepath.Join(root, "moved"), filepath.Join(root, "candidate")))
 	// Directory rename is possible before acquiring the ancestry-protecting pin.
 	// Prove the first protected self-open and subsequent list still select the
 	// held directory. Existing file replacement tests cover both read boundaries
@@ -172,7 +173,14 @@ func TestWindowsNTSelfOpenExistingConflictsAndCleanup(t *testing.T) {
 					if !errors.Is(err, windows.ERROR_SHARING_VIOLATION) {
 						t.Fatalf("expected Win32 sharing violation, got %T: %v", err, err)
 					}
-					if _, err := probe.Stat(); !errors.Is(err, os.ErrClosed) {
+					// Inspect the os.File's current state, never a saved raw HANDLE
+					// which another goroutine could already have reused. Go 1.25
+					// Windows Close invalidates Sysfd; Stat calls GetFileType on it.
+					if windows.Handle(probe.Fd()) != windows.InvalidHandle {
+						t.Fatal("failure left consumed metadata probe open")
+					}
+					var pathErr *os.PathError
+					if _, err := probe.Stat(); !errors.As(err, &pathErr) || pathErr.Op != "GetFileType" || !errors.Is(err, windows.ERROR_INVALID_HANDLE) {
 						t.Fatalf("failure did not close consumed metadata probe: %v", err)
 					}
 					if winRecordCount() != before {
@@ -183,6 +191,7 @@ func TestWindowsNTSelfOpenExistingConflictsAndCleanup(t *testing.T) {
 				h = windows.InvalidHandle
 				pin, err := s.pin("candidate", false)
 				bootstrapCheck(t, "pin after writer released", err)
+				defer pin.file.Close()
 				bootstrapCheck(t, "pin close", pin.file.Close())
 				bootstrapCheck(t, "source close", s.close())
 				h = ntSelfFixtureHandle(t, filepath.Join(root, "candidate"), windows.GENERIC_READ, 0)

@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -22,6 +23,108 @@ func nativeFixture(t *testing.T, build func(string)) string {
 	return root
 }
 func winRecordCount() int { winInfos.RLock(); defer winInfos.RUnlock(); return len(winInfos.m) }
+
+// MoveFileExW (os.Rename) does not let the fixture choose the access/share
+// contract of its internal opens. Use a DELETE-only, fully shared handle and
+// FileRenameInformation with a same-directory basename instead. In particular,
+// do not request data-write access or open a protected parent for writing.
+// This is fixture code only: production pins and their share masks stay intact.
+func nativeSharedRename(old, next string) error {
+	if filepath.Dir(old) != filepath.Dir(next) {
+		return fmt.Errorf("rename fixture requires one parent directory")
+	}
+	u, err := windows.UTF16PtrFromString(old)
+	if err != nil {
+		return err
+	}
+	h, err := windows.CreateFile(u, windows.DELETE, winShare, nil, windows.OPEN_EXISTING,
+		windows.FILE_FLAG_OPEN_REPARSE_POINT|windows.FILE_FLAG_BACKUP_SEMANTICS, 0)
+	if err != nil {
+		return fmt.Errorf("rename DELETE open: %w", err)
+	}
+	f := os.NewFile(uintptr(h), "rename-fixture")
+	defer f.Close()
+	before, err := f.Stat()
+	if err != nil {
+		return err
+	}
+	name, err := windows.UTF16FromString(filepath.Base(next))
+	if err != nil {
+		return err
+	}
+	// FILE_RENAME_INFORMATION, amd64: BOOLEAN at 0, HANDLE at 8,
+	// ULONG at 16, WCHAR[] at 20. RootDirectory=NULL + a basename renames
+	// within the existing parent. No replace/POSIX flags or access bypasses.
+	buf := make([]byte, 20+2*(len(name)-1))
+	binary.LittleEndian.PutUint32(buf[16:], uint32(2*(len(name)-1)))
+	for i, c := range name[:len(name)-1] {
+		binary.LittleEndian.PutUint16(buf[20+2*i:], c)
+	}
+	var iosb windows.IO_STATUS_BLOCK
+	if err := windows.NtSetInformationFile(h, &iosb, &buf[0], uint32(len(buf)), windows.FileRenameInformation); err != nil {
+		return fmt.Errorf("rename FileRenameInformation: %w", err)
+	}
+	if _, err := os.Lstat(old); !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("rename did not remove old name: %v", err)
+	}
+	after, err := nativeNameInfo(next)
+	if err != nil {
+		return err
+	}
+	if !os.SameFile(before, after) {
+		return fmt.Errorf("rename destination is not the original object")
+	}
+	return nil
+}
+
+func nativeNameInfo(name string) (os.FileInfo, error) {
+	f, err := winOpen(0, `\??\`+name, false)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	return f.Stat()
+}
+
+func nativeDistinctReplacement(old, replacement string) error {
+	a, err := nativeNameInfo(old)
+	if err != nil {
+		return err
+	}
+	b, err := nativeNameInfo(replacement)
+	if err != nil {
+		return err
+	}
+	if os.SameFile(a, b) {
+		return fmt.Errorf("replacement still names original object")
+	}
+	return nil
+}
+
+func TestWindowsSharedRenameCalibration(t *testing.T) {
+	for _, directory := range []bool{false, true} {
+		t.Run(map[bool]string{false: "regular", true: "directory"}[directory], func(t *testing.T) {
+			root := t.TempDir()
+			name := "candidate"
+			if directory {
+				name += "/child"
+			}
+			nativeWrite(t, root, name, "original")
+			// Calibrate the ABI and held-object rename independently of source
+			// acquisition. The attack tests repeat it with production pins held.
+			probe, err := winOpen(0, `\??\`+filepath.Join(root, "candidate"), false)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer probe.Close()
+			if err := nativeSharedRename(filepath.Join(root, "candidate"), filepath.Join(root, "moved-雪")); err != nil {
+				t.Fatalf("UNPROVEN native rename calibration: %v", err)
+			}
+			t.Log("DELETE-only fully shared FileRenameInformation moved the held object; old name absent, destination identity matched")
+		})
+	}
+}
+
 func TestWindowsModeAndChangeMetadata(t *testing.T) {
 	root := nativeFixture(t, func(root string) { nativeWrite(t, root, "plugin.json", "core") })
 	s := nativeSource(t, root)
@@ -61,7 +164,10 @@ func TestWindowsHandleLifetimeAndFailureCleanup(t *testing.T) {
 	root := nativeFixture(t, func(root string) { nativeWrite(t, root, "plugin.json", "core") })
 	for i := 0; i < 10; i++ {
 		scratch := t.TempDir()
-		_, e := (Reader{TempDir: scratch, Limits: Limits{PluginBytes: 1}}).Open(context.Background(), root)
+		l, e := (Reader{TempDir: scratch, Limits: Limits{PluginBytes: 1}}).Open(context.Background(), root)
+		if l != nil {
+			defer l.Close()
+		}
 		var safe *Error
 		if !errors.As(e, &safe) || safe.Code != "byte_limit" {
 			t.Fatal(e)
@@ -75,6 +181,7 @@ func TestWindowsHandleLifetimeAndFailureCleanup(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
+	defer s.close()
 	if e := s.close(); e != nil {
 		t.Fatal(e)
 	}
@@ -97,17 +204,29 @@ func TestWindowsReplacementBeforeAndAfterNameCheck(t *testing.T) {
 			root := nativeFixture(t, func(root string) { nativeWrite(t, root, "plugin.json", "original") })
 			scratch := t.TempDir()
 			done := false
+			var setupErr error
 			replace := func(p string) {
 				if p != "plugin.json" || done {
 					return
 				}
-				done = true
-				if e := os.Rename(filepath.Join(root, p), filepath.Join(root, "held-original")); e != nil {
-					t.Fatal(e)
+				old := filepath.Join(root, "held-original")
+				if setupErr = nativeSharedRename(filepath.Join(root, p), old); setupErr != nil {
+					return
 				}
-				nativeWrite(t, root, p, "replacement")
+				if setupErr = os.WriteFile(filepath.Join(root, p), []byte("replacement"), 0600); setupErr != nil {
+					return
+				}
+				if setupErr = nativeDistinctReplacement(old, filepath.Join(root, p)); setupErr != nil {
+					return
+				}
+				// Make the relevant metadata change deterministic even if NTFS
+				// defers rename timestamps while other handles remain open.
+				setupErr = os.Chmod(old, 0400)
+				done = setupErr == nil
 			}
-			hooks := &captureHooks{}
+			// Never Fatal/Goexit inside Reader.open: its error cleanup needs an
+			// error return. Report fixture failures only after ownership unwinds.
+			hooks := &captureHooks{dataOpenError: func(string) error { return setupErr }}
 			if after {
 				hooks.afterNameCheck = replace
 			} else {
@@ -115,7 +234,10 @@ func TestWindowsReplacementBeforeAndAfterNameCheck(t *testing.T) {
 			}
 			l, e := (Reader{TempDir: scratch}).open(context.Background(), root, hooks)
 			if l != nil {
-				l.Close()
+				defer l.Close()
+			}
+			if setupErr != nil {
+				t.Fatalf("UNPROVEN replacement setup: %v", setupErr)
 			}
 			var safe *Error
 			if !done || !errors.As(e, &safe) || safe.Code != "source_changed" {
@@ -132,23 +254,39 @@ func TestWindowsReplacementWithPipeNamespaceLink(t *testing.T) {
 	root := nativeFixture(t, func(root string) { nativeWrite(t, root, "plugin.json", "original") })
 	// Probe privilege before entering the hook. This creates no pipe/server.
 	nativeLink(t, root, `\\.\pipe\packageview-disposable-nonexistent`, "pipe-link")
-	l, e := (Reader{TempDir: t.TempDir()}).open(context.Background(), root, &captureHooks{afterNameCheck: func(p string) {
-		if p != "plugin.json" {
+	scratch := t.TempDir()
+	var setupErr error
+	done := false
+	l, e := (Reader{TempDir: scratch}).open(context.Background(), root, &captureHooks{afterNameCheck: func(p string) {
+		if p != "plugin.json" || done {
 			return
 		}
-		if e := os.Rename(filepath.Join(root, p), filepath.Join(root, "old")); e != nil {
-			t.Fatal(e)
+		old := filepath.Join(root, "old")
+		if setupErr = nativeSharedRename(filepath.Join(root, p), old); setupErr != nil {
+			return
 		}
-		if e := os.Rename(filepath.Join(root, "pipe-link"), filepath.Join(root, p)); e != nil {
-			t.Fatal(e)
+		if setupErr = nativeSharedRename(filepath.Join(root, "pipe-link"), filepath.Join(root, p)); setupErr != nil {
+			return
 		}
-	}})
+		if setupErr = nativeDistinctReplacement(old, filepath.Join(root, p)); setupErr != nil {
+			return
+		}
+		setupErr = os.Chmod(old, 0400)
+		done = setupErr == nil
+	}, dataOpenError: func(string) error { return setupErr }})
 	if l != nil {
-		l.Close()
+		defer l.Close()
+	}
+	if setupErr != nil {
+		t.Fatalf("UNPROVEN pipe substitution setup: %v", setupErr)
 	}
 	var safe *Error
-	if !errors.As(e, &safe) || safe.Code != "source_changed" {
+	if !done || !errors.As(e, &safe) || safe.Code != "source_changed" {
 		t.Fatalf("pipe substitution: %v", e)
+	}
+	entries, e := os.ReadDir(scratch)
+	if e != nil || len(entries) != 0 {
+		t.Fatal("pipe substitution failure leaked scratch", e)
 	}
 }
 func setNativeReparse(t *testing.T, path string, tag uint32, data []byte) {
@@ -246,6 +384,9 @@ func TestWindowsDirectoryAncestryHeld(t *testing.T) {
 		t.Fatal(e)
 	}
 	p.file.Close()
+	if e := nativeSharedRename(filepath.Join(root, "sub"), filepath.Join(root, "renamed-sub")); !errors.Is(e, windows.ERROR_SHARING_VIOLATION) {
+		t.Fatalf("protected directory DELETE denial was not sharing protection: %v", e)
+	}
 	if e := os.Rename(filepath.Join(root, "sub"), filepath.Join(t.TempDir(), "moved")); e == nil {
 		t.Fatal("pinned ancestor moved outside root")
 	}
@@ -258,17 +399,23 @@ func TestWindowsInventoryMutationRejected(t *testing.T) {
 	})
 	scratch := t.TempDir()
 	changed := false
+	var setupErr error
 	l, err := (Reader{TempDir: scratch}).open(context.Background(), root, &captureHooks{afterChunk: func(path string) {
 		if path == "z" && !changed {
-			changed = true
-			nativeWrite(t, root, "late", "added after enumeration")
+			setupErr = os.WriteFile(filepath.Join(root, "late"), []byte("added after enumeration"), 0600)
+			changed = setupErr == nil
 		}
 	}})
+	if l != nil {
+		defer l.Close()
+	}
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer l.Close()
 	_, err = l.Capture(context.Background())
+	if setupErr != nil {
+		t.Fatal("inventory mutation setup", setupErr)
+	}
 	var safe *Error
 	if !changed || !errors.As(err, &safe) || safe.Code != "source_changed" {
 		t.Fatalf("inventory mutation accepted: changed=%t error=%v", changed, err)
@@ -329,12 +476,14 @@ func TestWindowsSameObjectReopenAfterNameReplacement(t *testing.T) {
 		t.Fatal(e)
 	}
 	defer p.file.Close()
-	if e := os.Rename(filepath.Join(root, "plugin.json"), filepath.Join(root, "old")); e != nil {
+	if e := nativeSharedRename(filepath.Join(root, "plugin.json"), filepath.Join(root, "old")); e != nil {
 		t.Fatal(e)
 	}
 	nativeWrite(t, root, "plugin.json", "replacement")
-	// Isolate the native ReOpenFile contract; production additionally rejects
-	// the change-time/name mismatch rather than accepting a changed capture.
+	if e := nativeDistinctReplacement(filepath.Join(root, "old"), filepath.Join(root, "plugin.json")); e != nil {
+		t.Fatal(e)
+	}
+	// Isolate the native same-handle contract from capture metadata rejection.
 	f, e := winReopen(p.file, windows.GENERIC_READ, winShare)
 	if e != nil {
 		t.Fatal(e)
@@ -342,11 +491,18 @@ func TestWindowsSameObjectReopenAfterNameReplacement(t *testing.T) {
 	defer f.Close()
 	b, e := io.ReadAll(io.LimitReader(f, 100))
 	if e != nil || string(b) != "original" {
-		t.Fatalf("ReOpenFile selected replacement: %q, %v", b, e)
+		t.Fatalf("NT self-open selected replacement: %q, %v", b, e)
 	}
-	if f, e := p.reopen(false); e == nil {
-		f.Close()
-		t.Fatal("production accepted changed metadata")
+	if e := os.Chmod(filepath.Join(root, "old"), 0400); e != nil {
+		t.Fatal(e)
+	}
+	changed, e := p.reopen(false)
+	if changed != nil {
+		defer changed.Close()
+	}
+	var safe *Error
+	if changed != nil || !errors.As(e, &safe) || safe.Code != "source_changed" {
+		t.Fatalf("production did not reject changed metadata: %v", e)
 	}
 }
 
@@ -357,16 +513,20 @@ func TestWindowsMetadataProbeReplacement(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
+	defer f.Close() // Also cover fatal replacement fixture setup before remember.
 	before, e := f.Stat()
 	if e != nil {
 		f.Close()
 		t.Fatal(e)
 	}
-	if e := os.Rename(filepath.Join(root, "plugin.json"), filepath.Join(root, "old")); e != nil {
+	if e := nativeSharedRename(filepath.Join(root, "plugin.json"), filepath.Join(root, "old")); e != nil {
 		f.Close()
 		t.Fatal(e)
 	}
 	nativeWrite(t, root, "plugin.json", "replacement")
+	if e := nativeDistinctReplacement(filepath.Join(root, "old"), filepath.Join(root, "plugin.json")); e != nil {
+		t.Fatal(e)
+	}
 	p, e := s.remember(f) // consumes f, upgrades by handle, never by replaced name
 	if e != nil {
 		t.Fatal(e)
@@ -437,11 +597,20 @@ func TestWindowsOfflineFileHasNoDataOpen(t *testing.T) {
 		t.Fatal(e)
 	}
 	defer windows.SetFileAttributes(u, windows.FILE_ATTRIBUTE_NORMAL)
-	l, e := (Reader{TempDir: t.TempDir()}).open(context.Background(), root, &captureHooks{beforeDataOpen: func(string) { t.Fatal("data-opened offline object") }})
+	dataAttempt := false
+	l, e := (Reader{TempDir: t.TempDir()}).open(context.Background(), root, &captureHooks{
+		beforeDataOpen: func(string) { dataAttempt = true },
+		dataOpenError:  func(string) error { return fmt.Errorf("offline fixture reached data open") },
+	})
+	if l != nil {
+		defer l.Close()
+	}
+	if dataAttempt {
+		t.Fatal("data-open attempted on offline object")
+	}
 	if e != nil {
 		t.Fatal(e)
 	}
-	defer l.Close()
 	if l.Data().Plugin.State != Blocked {
 		t.Fatalf("offline file availability: %+v", l.Data().Plugin)
 	}
