@@ -32,10 +32,12 @@ Package codex exposes typed public event inputs, responses, and registrars for C
 - type NotifyEvent
   - func \(e \*NotifyEvent\) RawJSON\(\) json.RawMessage
 - type PermissionRequestEvent
+- type PreToolUseEvent
 - type Registrar
   - func NewRegistrar\(backend runtime.RegistrarBackend\) \*Registrar
   - func \(r \*Registrar\) OnNotify\(fn func\(\*NotifyEvent\) \*Response\)
   - func \(r \*Registrar\) OnPermissionRequest\(fn func\(\*PermissionRequestEvent\) \*Response\)
+  - func \(r \*Registrar\) OnPreToolUse\(fn func\(\*PreToolUseEvent\) \*Response\)
   - func \(r \*Registrar\) OnStop\(fn func\(\*StopEvent\) \*Response\)
   - func \(r \*Registrar\) OnSubagentStop\(fn func\(\*SubagentStopEvent\) \*Response\)
 - type Response
@@ -81,6 +83,14 @@ PermissionRequestEvent is the Codex PermissionRequest hook input \(decoded from 
 type PermissionRequestEvent = internalcodex.PermissionRequestInput
 ```
 
+## type PreToolUseEvent
+
+PreToolUseEvent is the Codex PreToolUse hook input \(decoded from stdin JSON\). ToolInput stays raw JSON for typed consumers.
+
+```go
+type PreToolUseEvent = internalcodex.PreToolUseInput
+```
+
 ## type Registrar
 
 Registrar registers public Codex event handlers on a root SDK app.
@@ -114,6 +124,14 @@ func (r *Registrar) OnPermissionRequest(fn func(*PermissionRequestEvent) *Respon
 ```
 
 OnPermissionRequest registers a handler for the Codex PermissionRequest.
+
+### func \(\*Registrar\) OnPreToolUse
+
+```go
+func (r *Registrar) OnPreToolUse(fn func(*PreToolUseEvent) *Response)
+```
+
+OnPreToolUse registers a handler for the Codex PreToolUse.
 
 ### func \(\*Registrar\) OnStop
 

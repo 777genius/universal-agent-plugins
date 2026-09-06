@@ -137,6 +137,26 @@ func TestDecodeSubagentStopAllFields(t *testing.T) {
 	}
 }
 
+func TestDecodePreToolUseAllFields(t *testing.T) {
+	t.Parallel()
+
+	payload := `{"session_id":"s","turn_id":"t","transcript_path":"/tp","cwd":"/x","hook_event_name":"PreToolUse","model":"m","permission_mode":"default","tool_name":"request_user_input","tool_input":{"questions":[{"id":"q1","header":"Choice","question":"Which option?"}],"is_blocking":true},"tool_use_id":"call-1","agent_id":"a1","agent_type":"worker"}`
+	v, name, err := DecodePreToolUse(runtime.Envelope{Stdin: []byte(payload)})
+	if err != nil {
+		t.Fatalf("DecodePreToolUse() error = %v", err)
+	}
+	if name != "PreToolUse" {
+		t.Fatalf("hook name = %q", name)
+	}
+	in := v.(*PreToolUseInput)
+	if in.ToolName != "request_user_input" || in.ToolUseID != "call-1" || in.AgentID != "a1" || in.AgentType != "worker" {
+		t.Fatalf("DecodePreToolUse() = %+v", *in)
+	}
+	if in.ToolInput == nil || in.SessionID != "s" || in.TurnID != "t" {
+		t.Fatalf("DecodePreToolUse() = %+v", *in)
+	}
+}
+
 func TestDecodePermissionRequestAllFields(t *testing.T) {
 	t.Parallel()
 
@@ -180,6 +200,7 @@ func TestEncodeObservationOutcomes(t *testing.T) {
 	for name, res := range map[string]runtime.Result{
 		"stop":               EncodeStop(StopOutcome{}),
 		"subagent stop":      EncodeSubagentStop(SubagentStopOutcome{}),
+		"pre tool use":       EncodePreToolUse(PreToolUseOutcome{}),
 		"permission request": EncodePermissionRequest(PermissionRequestOutcome{}),
 	} {
 		if res.ExitCode != 0 || len(res.Stdout) != 0 || res.Stderr != "" {

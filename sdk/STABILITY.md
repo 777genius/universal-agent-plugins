@@ -32,6 +32,7 @@ Current SDK beta surface added after the first promotion:
 - approved-export-shaped Codex event types for the stdin-JSON lifecycle hooks:
   - `Stop` (invocation name `CodexStop`)
   - `SubagentStop` (invocation name `CodexSubagentStop`)
+  - `PreToolUse` (invocation name `CodexPreToolUse`)
   - `PermissionRequest` (invocation name `CodexPermissionRequest`)
 
 These hooks are runtime-supported and scaffolded, but remain outside the stable compatibility promise until they are promoted through the audit ledger. The same beta status applies to:

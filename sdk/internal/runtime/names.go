@@ -23,6 +23,8 @@ func CanonicalInvocationName(platform PlatformID, raw string) string {
 			return "Stop"
 		case strings.EqualFold(raw, "CodexSubagentStop"):
 			return "SubagentStop"
+		case strings.EqualFold(raw, "CodexPreToolUse"):
+			return "PreToolUse"
 		case strings.EqualFold(raw, "CodexPermissionRequest"):
 			return "PermissionRequest"
 		}

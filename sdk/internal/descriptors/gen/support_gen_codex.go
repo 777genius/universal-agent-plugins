@@ -63,6 +63,25 @@ func codexSupportEntries() []runtime.SupportEntry {
 		},
 		{
 			Platform:       "codex",
+			Event:          "PreToolUse",
+			Status:         "runtime_supported",
+			Maturity:       "beta",
+			V1Target:       false,
+			InvocationKind: "argv_command_casefold",
+			Carrier:        runtime.CarrierStdinJSON,
+			TransportModes: []runtime.TransportMode{
+				"process",
+			},
+			ScaffoldSupport: true,
+			ValidateSupport: true,
+			Capabilities: []runtime.CapabilityID{
+				"codex_pre_tool_use",
+			},
+			Summary:         "Codex PreToolUse hook",
+			LiveTestProfile: "codex_notify",
+		},
+		{
+			Platform:       "codex",
 			Event:          "PermissionRequest",
 			Status:         "runtime_supported",
 			Maturity:       "beta",

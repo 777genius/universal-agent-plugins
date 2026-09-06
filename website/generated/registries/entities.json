@@ -21,6 +21,25 @@
   {
     "relatedIds": [],
     "searchTerms": [
+      "codex_pre_tool_use"
+    ],
+    "publicVisibility": "public",
+    "canonicalId": "capability:codex_pre_tool_use",
+    "kind": "capability",
+    "surface": "capabilities",
+    "localeStrategy": "mirrored",
+    "title": "codex_pre_tool_use",
+    "summary": "Capability codex_pre_tool_use",
+    "stability": "public-stable",
+    "maturity": "stable",
+    "sourceKind": "support-export",
+    "sourceRef": "docs/generated/support_matrix.md",
+    "pathEn": "/en/api/capabilities/codex_pre_tool_use",
+    "pathRu": "/ru/api/capabilities/codex_pre_tool_use"
+  },
+  {
+    "relatedIds": [],
+    "searchTerms": [
       "codex_stop"
     ],
     "publicVisibility": "public",
@@ -1719,6 +1738,7 @@
       "Notify",
       "Stop",
       "SubagentStop",
+      "PreToolUse",
       "PermissionRequest"
     ],
     "publicVisibility": "public",

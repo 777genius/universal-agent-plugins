@@ -223,6 +223,13 @@ var registry = map[key]runtime.Descriptor{
 		Decode:   internal_codex.DecodeSubagentStop,
 		Encode:   internal_codex.EncodeSubagentStop,
 	},
+	{platform: "codex", event: "PreToolUse"}: {
+		Platform: "codex",
+		Event:    "PreToolUse",
+		Carrier:  runtime.CarrierStdinJSON,
+		Decode:   internal_codex.DecodePreToolUse,
+		Encode:   internal_codex.EncodePreToolUse,
+	},
 	{platform: "codex", event: "PermissionRequest"}: {
 		Platform: "codex",
 		Event:    "PermissionRequest",

@@ -751,6 +751,10 @@
           "link": "/fr/api/capabilities/codex_permission_request"
         },
         {
+          "text": "codex_pre_tool_use",
+          "link": "/fr/api/capabilities/codex_pre_tool_use"
+        },
+        {
           "text": "codex_stop",
           "link": "/fr/api/capabilities/codex_stop"
         },

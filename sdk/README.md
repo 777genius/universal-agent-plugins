@@ -74,6 +74,7 @@ Platform packages:
   - `claude/WorktreeRemove` (`public-beta`)
   - `codex/Stop` (`public-beta`, invocation name `CodexStop`)
   - `codex/SubagentStop` (`public-beta`, invocation name `CodexSubagentStop`)
+  - `codex/PreToolUse` (`public-beta`, invocation name `CodexPreToolUse`)
   - `codex/PermissionRequest` (`public-beta`, invocation name `CodexPermissionRequest`)
 
 Codex lifecycle hooks use prefixed invocation names (`CodexStop`, not `Stop`) because the flat

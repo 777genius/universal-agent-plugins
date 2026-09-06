@@ -19,4 +19,5 @@ translationRequired: false
 | Notify | stable | production-ready | Codex notify hook |
 | Stop | beta | runtime-supported but not stable | Codex Stop lifecycle hook |
 | SubagentStop | beta | runtime-supported but not stable | Codex SubagentStop lifecycle hook |
+| PreToolUse | beta | runtime-supported but not stable | Codex PreToolUse hook |
 | PermissionRequest | beta | runtime-supported but not stable | Codex PermissionRequest hook |

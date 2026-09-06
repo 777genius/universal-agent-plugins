@@ -20,6 +20,7 @@ Capabilities показывают runtime-поведение поперёк пл
 - Это лучший вход, если вы сравниваете похожее поведение между Claude и Codex.
 
 - [`codex_permission_request`](/ru/api/capabilities/codex_permission_request)
+- [`codex_pre_tool_use`](/ru/api/capabilities/codex_pre_tool_use)
 - [`codex_stop`](/ru/api/capabilities/codex_stop)
 - [`codex_subagent_stop`](/ru/api/capabilities/codex_subagent_stop)
 - [`config_change`](/ru/api/capabilities/config_change)

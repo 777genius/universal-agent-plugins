@@ -10,6 +10,11 @@ func (r *Registrar) OnPermissionRequest(fn func(*PermissionRequestEvent) *Respon
 	r.backend.Register("codex", "PermissionRequest", wrapPermissionRequest(fn))
 }
 
+// OnPreToolUse registers a handler for the Codex PreToolUse.
+func (r *Registrar) OnPreToolUse(fn func(*PreToolUseEvent) *Response) {
+	r.backend.Register("codex", "PreToolUse", wrapPreToolUse(fn))
+}
+
 // OnStop registers a handler for the Codex Stop.
 func (r *Registrar) OnStop(fn func(*StopEvent) *Response) {
 	r.backend.Register("codex", "Stop", wrapStop(fn))

@@ -101,6 +101,9 @@ func ResolveInvocation(args []string, _ runtime.Env) (runtime.Invocation, error)
 	if strings.EqualFold(raw, "CodexSubagentStop") {
 		return runtime.Invocation{Platform: "codex", Event: "SubagentStop", RawName: raw}, nil
 	}
+	if strings.EqualFold(raw, "CodexPreToolUse") {
+		return runtime.Invocation{Platform: "codex", Event: "PreToolUse", RawName: raw}, nil
+	}
 	if strings.EqualFold(raw, "CodexPermissionRequest") {
 		return runtime.Invocation{Platform: "codex", Event: "PermissionRequest", RawName: raw}, nil
 	}

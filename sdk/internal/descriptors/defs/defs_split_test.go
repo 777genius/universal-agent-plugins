@@ -40,6 +40,7 @@ func TestEventsPreserveStableBucketOrder(t *testing.T) {
 		{platform: "codex", event: "Notify"},
 		{platform: "codex", event: "Stop"},
 		{platform: "codex", event: "SubagentStop"},
+		{platform: "codex", event: "PreToolUse"},
 		{platform: "codex", event: "PermissionRequest"},
 	}
 	if len(events) != len(want) {

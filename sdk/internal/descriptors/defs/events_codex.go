@@ -94,6 +94,35 @@ func codexEvents() []EventDescriptor {
 		},
 		{
 			Platform: "codex",
+			Event:    "PreToolUse",
+			Invocation: InvocationBinding{
+				Kind: runtime.InvocationArgvCommandCaseFold,
+				Name: "CodexPreToolUse",
+			},
+			Carrier: runtime.CarrierStdinJSON,
+			Contract: ContractMeta{
+				Maturity: runtime.MaturityBeta,
+			},
+			DecodeFunc: "DecodePreToolUse",
+			EncodeFunc: "EncodePreToolUse",
+			Registrar: RegistrarMeta{
+				MethodName:   "OnPreToolUse",
+				EventType:    "*PreToolUseEvent",
+				ResponseType: "*Response",
+				WrapFunc:     "wrapPreToolUse",
+			},
+			Docs: DocsMeta{
+				SnippetKey: "codex-pretooluse",
+				TableGroup: "codex",
+				Summary:    "Codex PreToolUse hook",
+			},
+			Capabilities: []runtime.CapabilityID{"codex_pre_tool_use"},
+			CapabilityMappings: []CapabilityMapping{
+				{Unified: "codex_pre_tool_use", Platform: "codex_pre_tool_use"},
+			},
+		},
+		{
+			Platform: "codex",
 			Event:    "PermissionRequest",
 			Invocation: InvocationBinding{
 				Kind: runtime.InvocationArgvCommandCaseFold,

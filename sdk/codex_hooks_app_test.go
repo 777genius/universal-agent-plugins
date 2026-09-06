@@ -61,6 +61,28 @@ func TestApp_CodexSubagentStopHook(t *testing.T) {
 	}
 }
 
+func TestApp_CodexPreToolUseHook(t *testing.T) {
+	iox := &testIO{in: []byte(`{"session_id":"s","turn_id":"t","hook_event_name":"PreToolUse","tool_name":"request_user_input","tool_input":{"questions":[{"question":"Which one?"}]},"tool_use_id":"call-1"}`)}
+	app := New(Config{
+		Name: "t",
+		Args: []string{"plugin-kit-ai", "CodexPreToolUse"},
+		IO:   iox,
+		Env:  testEnv{},
+	})
+	app.Codex().OnPreToolUse(func(e *codex.PreToolUseEvent) *codex.Response {
+		if e.ToolName != "request_user_input" || e.ToolUseID != "call-1" {
+			t.Fatalf("event = %+v", *e)
+		}
+		return codex.Continue()
+	})
+	if c := app.Run(); c != 0 {
+		t.Fatalf("exit %d stderr=%q", c, iox.err.String())
+	}
+	if iox.out.Len() != 0 || iox.err.Len() != 0 {
+		t.Fatalf("observation hook wrote output: stdout=%q stderr=%q", iox.out.String(), iox.err.String())
+	}
+}
+
 func TestApp_CodexPermissionRequestHook(t *testing.T) {
 	iox := &testIO{in: []byte(`{"session_id":"s","turn_id":"t","hook_event_name":"PermissionRequest","tool_name":"shell","tool_input":{"command":["ls"]}}`)}
 	app := New(Config{
@@ -98,9 +120,11 @@ func TestResolverCodexPrefixNoCollision(t *testing.T) {
 	}{
 		{raw: "Stop", platform: "claude", event: "Stop"},
 		{raw: "SubagentStop", platform: "claude", event: "SubagentStop"},
+		{raw: "PreToolUse", platform: "claude", event: "PreToolUse"},
 		{raw: "PermissionRequest", platform: "claude", event: "PermissionRequest"},
 		{raw: "CodexStop", platform: "codex", event: "Stop"},
 		{raw: "CodexSubagentStop", platform: "codex", event: "SubagentStop"},
+		{raw: "CodexPreToolUse", platform: "codex", event: "PreToolUse"},
 		{raw: "CodexPermissionRequest", platform: "codex", event: "PermissionRequest"},
 		{raw: "codexstop", platform: "codex", event: "Stop"},
 		{raw: "notify", platform: "codex", event: "Notify"},

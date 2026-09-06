@@ -20,6 +20,7 @@ Capacidades give you a cross-platform view of runtime behavior after you already
 - This is the better entry point when you compare similar behavior across Claude and Codex.
 
 - [`codex_permission_request`](/es/api/capabilities/codex_permission_request)
+- [`codex_pre_tool_use`](/es/api/capabilities/codex_pre_tool_use)
 - [`codex_stop`](/es/api/capabilities/codex_stop)
 - [`codex_subagent_stop`](/es/api/capabilities/codex_subagent_stop)
 - [`config_change`](/es/api/capabilities/config_change)

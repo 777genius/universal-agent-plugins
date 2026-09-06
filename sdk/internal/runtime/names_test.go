@@ -27,6 +27,7 @@ func TestCanonicalInvocationNameCodex(t *testing.T) {
 	cases := map[string]string{
 		"CodexStop":              "Stop",
 		"CodexSubagentStop":      "SubagentStop",
+		"CodexPreToolUse":        "PreToolUse",
 		"CodexPermissionRequest": "PermissionRequest",
 		"codexstop":              "Stop",
 		"notify":                 "notify",
