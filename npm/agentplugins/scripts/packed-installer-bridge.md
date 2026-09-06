@@ -1,4 +1,4 @@
-# ROOT's packed-generated project → injected installer bridge
+# Packed-generated project → injected installer bridge
 
 This is a separate, opt-in **test boundary**, following a successful terminal
 `private-npm-native.test.js` run at the final integrated commit. It never builds
@@ -8,11 +8,9 @@ The existing `add --dry-run` command constructs its real planner; only detection
 security assessment and lifecycle/state interfaces are injected. Fake Cursor,
 Codex and Claude directories exist only in Go test temporary directories.
 
-The accepted input is ROOT's actual `native-completion.json`, independently pinned
-along with its native config. Failed64b2 has no completion and is not input.
-Partial invocations, synthetic test records and source-generated harness results
-are never packed-native acceptance. Integrate the native oracle fix and these
-four new files before the final native run. This worker did not rebuild a candidate.
+The accepted input is the same-run actual `native-completion.json`, independently
+pinned along with its native config. Partial invocations, synthetic test records
+and source-generated harness results are never packed-native acceptance.
 
 ## Run after the final native gate
 
@@ -82,28 +80,29 @@ namespace contract, not protection against a hostile concurrent same-UID writer.
    external directory from config and all observed inputs. Example from checkout:
 
    ```sh
-   env -i PATH=/var/data/uap-authoring-test-20260906/toolchain/go/bin:/usr/bin:/bin \
+   env -i PATH="$(dirname "$GO")":/usr/bin:/bin \
      HOME="$PRIVATE_HOME" USERPROFILE="$PRIVATE_HOME" APPDATA="$PRIVATE_HOME" \
      LOCALAPPDATA="$PRIVATE_HOME" XDG_CONFIG_HOME="$PRIVATE_HOME" \
      XDG_DATA_HOME="$PRIVATE_HOME" XDG_STATE_HOME="$PRIVATE_HOME" \
      XDG_CACHE_HOME="$PRIVATE_CACHE" TMPDIR="$PRIVATE_TMP" TMP="$PRIVATE_TMP" TEMP="$PRIVATE_TMP" \
      GOCACHE="$PRIVATE_CACHE/go-build" \
-     GOMODCACHE=/tmp/uap-authoring-native-integration-old-20260906-artifacts/windows-modules \
+     GOMODCACHE="$PRIVATE_MODULE_CACHE" \
      GOPROXY=off GOSUMDB=off GOENV=off GOTOOLCHAIN=local GOMAXPROCS=2 \
      UAP_PACKED_INSTALLER_NODE="$NODE" \
      UAP_PACKED_INSTALLER_CONFIG=/absolute/bridge-config/sealed.json \
      UAP_PACKED_INSTALLER_CONFIG_SHA256="$BRIDGE_SHA256" \
      UAP_PACKED_INSTALLER_COMMIT="$FINAL_COMMIT" \
      UAP_PACKED_INSTALLER_OUTPUT=/absolute/bridge-results/completion.json \
-     go test -p=2 ./cli/plugin-kit-ai/internal/authoring/commands \
+     "$GO" test -p=2 -tags=packedci ./cli/plugin-kit-ai/internal/authoring/commands \
        -run '^TestPackedGeneratedPackagesReachExistingInstallerPlanner$' -count=1 -v
    ```
 
    Create the private directories and result parent first. `NODE` is an absolute
    trusted installed Node 22/24 path. Go checks HEAD and clean tracked/untracked
    state; don't use `-trimpath`, `-overlay`, alternate build flags or source copies.
-   Do not set private directories inside the native fixture. No opt-in config
-   skips the test; a partial opt-in fails. A skip is not acceptance.
+   Do not set private directories inside the native fixture. The `packedci` tag
+   exposes acceptance only; absent or partial configuration fails. Ordinary
+   coverage retains the source harness on Linux/Windows amd64/arm64.
 
 Require exit 0, **ten passing project subtests**, and the exclusive result JSON
 with **30 reports** (two products × five templates × three fake targets). Each
@@ -135,3 +134,44 @@ Fixtures are retained under private TMPDIR for diagnosis.
 fixtures using the existing public authoring test helper, including extra-skill,
 and exercises the same planner seam for 15 plans. It writes no packed result.
 Use the same offline/private environment above, without any packed opt-in vars.
+
+## Mandatory bounded CI
+
+`authoring-native.yml` adds a separate Linux amd64 packed job, with its own clean
+exact-SHA checkout and 45-minute ceiling. It runs `scripts/run-packed-ci.py
+"$PACKED_ROOT" "$EXPECTED_HEAD"` after setup. `PACKED_ROOT` must be absent,
+absolute and outside checkout. The runner resolves installed Go, Node and npm's
+JavaScript CLI; no root-host tool or cache paths are embedded. Go is 1.25.13,
+Node is **22.23.2**, and npm is its bundled **10.9.8**, with no npm upgrade.
+ROOT selected this pair from the fresh official Node release index (2026-07-28
+security release). Versions and tool SHA256 hashes, including stager Node, are
+recorded. The private candidate uses the accepted release-contract fixture
+versions agentplugins 0.1.91 and plugin-kit-ai 2.0.0; these are not publication.
+
+Relevant Go dependencies warm in a job-owned module cache. Subsequent commands
+use allowlisted environments, private profiles, GOPROXY/GOSUMDB off and local
+Go tooling. This is an offline command contract, not an OS network sandbox.
+Both real npm packs/installations and both named native tests must pass with
+741 invocations (739 distinct records; two repeated journeys are intentional).
+The canonical seal pins those exact ten projects. Tagged Go discovery must name
+`TestPackedGeneratedPackagesReachExistingInstallerPlanner` exactly once before
+uncached execution. Ten project leaves and thirty unique product/lane/target
+plans must pass; optional product grouping events do not count as leaves.
+
+The read-only terminal checker rejects missing phase exits, skipped named tests,
+truncated transcripts, identity/pin/count/tuple mismatches and missing or true
+claim fields where declared by each schema. It checks post-planner verification
+of the unchanged seal. Failure artifacts retain logs and sealed inputs; the
+artifact digest index preserves relationships. Downloaded archives are audit
+material, not a fresh verification of relocated live trees.
+
+The always-running aggregate requires **native and packed success**. Its focused
+structural controls reject missing/conditional jobs, dependencies, matrix lanes
+and explicit tags. All four native lanes and all five source-harness lanes
+remain mandatory. Existing Windows concurrent-init failure remains a blocker;
+no retry or restricted diagnostic substitutes for that gate. PR167/169 and the
+writable macOS owner gate remain upstream requirements. Required-check settings
+are external: source controls do not prove GitHub enforcement. ROOT must run the
+new integrated SHA and independently inspect its jobs/artifacts and required
+check settings before CI acceptance. Release eligibility, platform acceptance
+and attestation remain false. Local synthetic/source tests are not this run.

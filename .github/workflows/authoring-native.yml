@@ -179,3 +179,72 @@ jobs:
           path: ${{ env.NATIVE_ROOT }}/evidence
           if-no-files-found: error
           retention-days: 14
+
+  packed:
+    name: Authoring / packed Linux amd64
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      PACKED_ROOT: ${{ runner.temp }}/authoring-packed-${{ github.run_id }}-${{ github.run_attempt }}
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version: '1.25.13'
+          architecture: x64
+          cache: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: '22.23.2'
+          # Use bundled npm 10.9.8; no separate package-manager migration.
+          check-latest: false
+      - name: Build, pack, execute, seal and plan at the exact checkout SHA
+        shell: bash
+        run: python3 -B scripts/run-packed-ci.py "$PACKED_ROOT" "$EXPECTED_HEAD"
+      - name: Require terminal packed evidence
+        if: always()
+        shell: bash
+        run: python3 -B scripts/check-packed-ci.py "$PACKED_ROOT" "$EXPECTED_HEAD"
+      - name: Preserve packed evidence including failure logs and sealed inputs
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: authoring-packed-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ env.PACKED_ROOT }}/**
+            !${{ env.PACKED_ROOT }}/modules/**
+            !${{ env.PACKED_ROOT }}/orchestrator/**
+            !${{ env.PACKED_ROOT }}/planner/**
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
+
+  acceptance:
+    name: Authoring / required native and packed
+    needs: [native, packed]
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      REQUIRED_RESULTS: ${{ toJSON(needs) }}
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Check mandatory graph and focused negative controls
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -B scripts/check-packed-workflow.py
+          python3 -B -m unittest discover -s scripts -p 'test_packed_ci.py'
+      - name: Require every native lane and packed job to succeed
+        if: always()
+        shell: bash
+        run: python3 -B scripts/check-packed-workflow.py --results "$REQUIRED_RESULTS"
