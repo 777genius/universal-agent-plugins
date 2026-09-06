@@ -15,6 +15,8 @@ import (
 
 const reopenDiagnosticFlags = windows.FILE_FLAG_OPEN_REPARSE_POINT | windows.FILE_FLAG_OPEN_NO_RECALL | windows.FILE_FLAG_BACKUP_SEMANTICS
 
+var winReOpen = windows.NewLazySystemDLL("kernel32.dll").NewProc("ReOpenFile")
+
 // Test-only parameter evidence, not a fallback or an alternative read profile.
 // Every initial open is attributes-only. Every upgrade uses only its HANDLE;
 // directory listing access follows same-handle type/attribute checks, and data

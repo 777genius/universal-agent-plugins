@@ -20,10 +20,10 @@ import (
 
 // This profile accepts local fixed-drive NTFS only. Every source component is
 // opened with NtCreateFile relative to a held directory, with no reparse follow
-// and no data access. ReOpenFile first acquires protected pins by HANDLE:
+// and no data access. NtCreateFile self-opens first acquire protected pins by HANDLE:
 // regular/link pins use DELETE for share accounting without FILE_READ_DATA;
 // proven directories use list access and deny delete sharing to retain ancestry.
-// ReOpenFile then upgrades verified regular objects by HANDLE. DELETE permission is
+// Self-opens then upgrade verified regular objects by HANDLE. DELETE permission is
 // a capability prerequisite only; no source deletion or other write is issued.
 // Device-map changes, hostile filesystem filters and privileged volume changes
 // are outside this local-kernel profile. No UNC, ADS or DOS device path fallback.
@@ -66,8 +66,6 @@ type winObservation struct {
 
 const winShare = windows.FILE_SHARE_READ | windows.FILE_SHARE_WRITE | windows.FILE_SHARE_DELETE
 const winUnsafeAttributes = windows.FILE_ATTRIBUTE_OFFLINE | windows.FILE_ATTRIBUTE_RECALL_ON_OPEN | windows.FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS | windows.FILE_ATTRIBUTE_DEVICE | windows.FILE_ATTRIBUTE_ENCRYPTED
-
-var winReOpen = windows.NewLazySystemDLL("kernel32.dll").NewProc("ReOpenFile")
 
 func winMeta(f *os.File) (winSnapshot, error) {
 	defer runtime.KeepAlive(f)
@@ -130,17 +128,46 @@ func winCheckDirectory(f *os.File) error {
 	return nil
 }
 
-// winReopen never resolves a source pathname. OPEN_REPARSE_POINT is retained
-// even for the first metadata upgrade, so a concurrent reparse conversion cannot
-// redirect acquisition into another namespace.
+// winReopen self-opens an empty NT name relative to the held object, never a
+// source pathname. This local NTFS behavior requires native identity/adversarial
+// evidence; the documented RootDirectory-relative naming rule alone does not
+// promise empty-name regular-file semantics. Retain OPEN_REPARSE_POINT even for
+// the first metadata upgrade. Callers prove type and compare metadata around
+// upgrades; a failed capability/share check has no pathname fallback.
 func winReopen(f *os.File, access, share uint32) (*os.File, error) {
+	// KeepAlive prevents finalizer closure while Fd is used as a scalar HANDLE.
+	// Callers own the file and serialize explicit Close with this operation.
 	defer runtime.KeepAlive(f)
-	flags := uint32(windows.FILE_FLAG_OPEN_REPARSE_POINT | windows.FILE_FLAG_OPEN_NO_RECALL | windows.FILE_FLAG_BACKUP_SEMANTICS)
-	h, _, e := winReOpen.Call(f.Fd(), uintptr(access), uintptr(share), uintptr(flags))
-	if windows.Handle(h) == windows.InvalidHandle {
+	if f == nil {
+		return nil, windows.ERROR_INVALID_HANDLE
+	}
+	parent := windows.Handle(f.Fd())
+	if parent == 0 || parent == windows.InvalidHandle {
+		return nil, windows.ERROR_INVALID_HANDLE
+	}
+	u, e := windows.NewNTUnicodeString("")
+	if e != nil {
 		return nil, e
 	}
-	return os.NewFile(h, "source-handle"), nil
+	oa := windows.OBJECT_ATTRIBUTES{RootDirectory: parent, ObjectName: u}
+	oa.Length = uint32(unsafe.Sizeof(oa))
+	const options = windows.FILE_OPEN_REPARSE_POINT | windows.FILE_OPEN_NO_RECALL | windows.FILE_SYNCHRONOUS_IO_NONALERT | windows.FILE_OPEN_FOR_BACKUP_INTENT
+	var h windows.Handle
+	var iosb windows.IO_STATUS_BLOCK
+	e = windows.NtCreateFile(&h, access|windows.SYNCHRONIZE, &oa, &iosb, nil, 0, share, windows.FILE_OPEN, options, 0, 0)
+	// The typed OBJECT_ATTRIBUTES points to u and its UTF-16 backing storage;
+	// retain that graph until the synchronous native call has returned.
+	runtime.KeepAlive(u)
+	if e != nil {
+		if status, ok := e.(windows.NTStatus); ok {
+			return nil, status.Errno() // RtlNtStatusToDosError, not GetLastError.
+		}
+		return nil, e
+	}
+	if h == 0 || h == windows.InvalidHandle {
+		return nil, windows.ERROR_INVALID_HANDLE
+	}
+	return os.NewFile(uintptr(h), "source-handle"), nil
 }
 func winDup(f *os.File) (*os.File, error) {
 	defer runtime.KeepAlive(f)
