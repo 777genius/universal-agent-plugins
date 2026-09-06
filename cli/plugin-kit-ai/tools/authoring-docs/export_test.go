@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -39,7 +40,7 @@ func rendered(t *testing.T) (map[string][]byte, manifest) {
 	for _, root := range roots {
 		trap(root)
 	}
-	files, err := render(preparedSourceSHA, factoryPins, roots)
+	files, err := render(factoryBaselineSHA, factoryPins, roots)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -60,7 +61,7 @@ func TestDeterministicSurfacesAndNoActions(t *testing.T) {
 	if !reflect.DeepEqual(first, second) {
 		t.Fatal("fresh exports differ")
 	}
-	if m.Released || m.Status != "prepared-not-release" || m.SourceSHA != preparedSourceSHA || m.Namespace != namespace {
+	if m.Released || m.Status != "prepared-not-release" || m.SourceSHA != factoryBaselineSHA || m.Namespace != namespace {
 		t.Fatal("identity")
 	}
 	if len(m.Surfaces) != 2 || m.Surfaces[0].CommandPath != "plugin-kit-ai" || m.Surfaces[1].CommandPath != "agentplugins author" {
@@ -162,7 +163,7 @@ func TestExclusionPrunesLinksAndDescendants(t *testing.T) {
 	}
 	root.Flags().String("secret", "", "hidden flag")
 	_ = root.Flags().MarkHidden("secret")
-	files, err := render(preparedSourceSHA, nil, []*cobra.Command{root})
+	files, err := render(factoryBaselineSHA, nil, []*cobra.Command{root})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -176,14 +177,12 @@ func TestExclusionPrunesLinksAndDescendants(t *testing.T) {
 }
 
 func TestSourceIdentityAndNoOverwrite(t *testing.T) {
-	checkout, err := filepath.Abs("../../../..")
-	if err != nil {
+	checkout := committedFixture(t)
+	sha := checkoutSHA(t, checkout)
+	if _, err := validateSource(checkout, sha); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := validateSource(checkout, preparedSourceSHA); err != nil {
-		t.Fatal(err)
-	}
-	for _, sha := range []string{"", "070663e", strings.Repeat("0", 40), preparedSourceSHA + "\n"} {
+	for _, sha := range []string{"", "070663e", strings.Repeat("0", 40), sha + "\n"} {
 		dest := filepath.Join(t.TempDir(), "output")
 		if err := export(checkout, sha, dest); err == nil {
 			t.Fatal("accepted bad source", sha)
@@ -197,30 +196,51 @@ func TestSourceIdentityAndNoOverwrite(t *testing.T) {
 	if err := os.WriteFile(marker, []byte("keep v1"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	if err := export(checkout, preparedSourceSHA, dest); err == nil {
+	if err := export(checkout, sha, dest); err == nil {
 		t.Fatal("accepted existing output")
 	}
 	body, _ := os.ReadFile(marker)
 	if string(body) != "keep v1" {
 		t.Fatal("overwrote v1")
 	}
-	if _, err := validateSource(t.TempDir(), preparedSourceSHA); err == nil {
+	if _, err := validateSource(t.TempDir(), sha); err == nil {
 		t.Fatal("accepted non-checkout")
 	}
 }
 
 func TestExportBytesAndLinks(t *testing.T) {
-	checkout, err := filepath.Abs("../../../..")
-	if err != nil {
-		t.Fatal(err)
-	}
+	checkout := committedFixture(t)
+	sha := checkoutSHA(t, checkout)
 	base := t.TempDir()
 	a, b := filepath.Join(base, "a"), filepath.Join(base, "b")
 	for _, dest := range []string{a, b} {
-		if err := export(checkout, preparedSourceSHA, dest); err != nil {
+		if err := export(checkout, sha, dest); err != nil {
 			t.Fatal(err)
 		}
 	}
+	roots, err := trees()
+	if err != nil {
+		t.Fatal(err)
+	}
+	expected, err := render(sha, factoryPins, roots)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var m manifest
+	if err := json.Unmarshal(expected[namespace+"/manifest.json"], &m); err != nil {
+		t.Fatal(err)
+	}
+	if len(m.Surfaces) != 2 || len(m.Surfaces[0].Commands) != 20 || len(m.Surfaces[1].Commands) != 14 || m.FactoryBaseline != factoryBaselineSHA || m.SourceSHA != sha || m.Released || m.Status != "prepared-not-release" {
+		t.Fatal("untouched tree inventory/provenance")
+	}
+	for _, surface := range m.Surfaces {
+		for _, entry := range surface.Commands {
+			if _, err := os.Stat(filepath.Join(a, entry.FileName)); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	seen := 0
 	err = filepath.WalkDir(a, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -233,6 +253,10 @@ func TestExportBytesAndLinks(t *testing.T) {
 		if err != nil {
 			return err
 		}
+		seen++
+		if !bytes.Equal(first, expected[filepath.ToSlash(rel)]) {
+			t.Fatalf("disk differs from untouched tree: %s", rel)
+		}
 		second, err := os.ReadFile(filepath.Join(b, rel))
 		if err != nil {
 			return err
@@ -241,16 +265,9 @@ func TestExportBytesAndLinks(t *testing.T) {
 			t.Fatalf("nondeterministic file %s", rel)
 		}
 		if strings.HasSuffix(path, ".md") {
-			for _, line := range strings.Split(string(first), "\n") {
-				if !strings.HasPrefix(line, "* [") {
-					continue
-				}
-				parts := strings.SplitN(line, "](", 2)
-				if len(parts) != 2 {
-					continue
-				}
-				target := strings.SplitN(parts[1], ")", 2)[0]
-				if strings.HasPrefix(target, "https://github.com/777genius/universal-agent-plugins/blob/"+preparedSourceSHA+"/") {
+			for _, match := range regexp.MustCompile(`\[[^\]]*\]\(([^)]+)\)`).FindAllStringSubmatch(string(first), -1) {
+				target := match[1]
+				if strings.HasPrefix(target, "https://github.com/777genius/universal-agent-plugins/blob/"+sha+"/") {
 					continue
 				}
 				if _, err := os.Stat(filepath.Join(filepath.Dir(path), target)); err != nil {
@@ -262,6 +279,9 @@ func TestExportBytesAndLinks(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatal(err)
+	}
+	if seen != 35 {
+		t.Fatalf("disk file count: %d", seen)
 	}
 }
 
@@ -276,7 +296,7 @@ func TestCheckoutHEADMismatch(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(checkout, ".git/HEAD"), []byte(strings.Repeat("1", 40)+"\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	_, err := validateSource(checkout, preparedSourceSHA)
+	_, err := validateSource(checkout, factoryBaselineSHA)
 	if err == nil || !strings.Contains(err.Error(), "differs from checkout HEAD") {
 		t.Fatalf("wrong mismatch result: %v", err)
 	}

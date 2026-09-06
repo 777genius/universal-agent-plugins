@@ -2,11 +2,13 @@ package main
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli"
@@ -21,13 +23,14 @@ const namespace = "prepared-authoring-v2"
 
 // This is intentionally a separate envelope, not the v1 manifest array.
 type manifest struct {
-	Schema    string      `json:"schema"`
-	Namespace string      `json:"namespace"`
-	Status    string      `json:"status"`
-	Released  bool        `json:"released"`
-	SourceSHA string      `json:"source_sha"`
-	Sources   []sourcePin `json:"sources"`
-	Surfaces  []surface   `json:"surfaces"`
+	Schema          string      `json:"schema"`
+	Namespace       string      `json:"namespace"`
+	Status          string      `json:"status"`
+	Released        bool        `json:"released"`
+	FactoryBaseline string      `json:"factory_baseline_sha"`
+	SourceSHA       string      `json:"source_sha"`
+	Sources         []sourcePin `json:"sources"`
+	Surfaces        []surface   `json:"surfaces"`
 }
 type surface struct {
 	Identity    string  `json:"identity"`
@@ -120,7 +123,7 @@ func prepare(c *cobra.Command) {
 
 func render(sha string, pins []sourcePin, roots []*cobra.Command) (map[string][]byte, error) {
 	result := map[string][]byte{}
-	m := manifest{Schema: "authoring-docs-manifest-v1", Namespace: namespace, Status: "prepared-not-release", SourceSHA: sha, Sources: pins}
+	m := manifest{Schema: "authoring-docs-manifest-v1", Namespace: namespace, Status: "prepared-not-release", SourceSHA: sha, FactoryBaseline: factoryBaselineSHA, Sources: pins}
 	for _, root := range roots {
 		prepare(root)
 		s := surface{Identity: namespace + ":" + root.CommandPath(), CommandPath: root.CommandPath(), Commands: []entry{}}
@@ -169,6 +172,10 @@ func render(sha string, pins []sourcePin, roots []*cobra.Command) (map[string][]
 }
 
 func export(checkout, sha, out string) error {
+	return exportTrees(checkout, sha, out, trees)
+}
+
+func exportTrees(checkout, sha, out string, load func() ([]*cobra.Command, error)) error {
 	if out == "" {
 		return fmt.Errorf("--out-dir is required")
 	}
@@ -176,8 +183,11 @@ func export(checkout, sha, out string) error {
 	if err != nil {
 		return err
 	}
-	roots, err := trees()
+	roots, err := load()
 	if err != nil {
+		return err
+	}
+	if err := validateProjection(roots); err != nil {
 		return err
 	}
 	files, err := render(sha, pins, roots)
@@ -196,6 +206,39 @@ func export(checkout, sha, out string) error {
 		if err := os.WriteFile(filepath.Join(out, filepath.FromSlash(name)), body, 0644); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+// Hash the actual deterministic rendered facts, with fixed provenance rather
+// than caller SHA/host paths. Length framing and sorted names bind every byte.
+// This is a reviewed golden, never regenerated automatically during export.
+const reviewedProjection = "2e2b7d165e600a29a5c5ff730508a67470c5535917ca9921432da666814aefb3"
+
+func projectionFingerprint(roots []*cobra.Command) (string, error) {
+	files, err := render("SOURCE_SHA", nil, roots)
+	if err != nil {
+		return "", err
+	}
+	names := make([]string, 0, len(files))
+	for name := range files {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	h := sha256.New()
+	for _, name := range names {
+		fmt.Fprintf(h, "%d:%s%d:", len(name), name, len(files[name]))
+		h.Write(files[name])
+	}
+	return fmt.Sprintf("%x", h.Sum(nil)), nil
+}
+func validateProjection(roots []*cobra.Command) error {
+	got, err := projectionFingerprint(roots)
+	if err != nil {
+		return err
+	}
+	if got != reviewedProjection {
+		return fmt.Errorf("loaded documentation projection mismatch: %s", got)
 	}
 	return nil
 }

@@ -38,19 +38,60 @@ pruned before rendering, including their descendant links.
 ## Prepared output contract
 
 The caller supplies an exact `--source-sha`, `--checkout` repository root and
-an absent `--out-dir` whose parent already exists. The source must equal the
-explicit audited baseline and checkout HEAD. Tracked changes, staged changes,
-source pin mismatches, and untracked Go files outside this adapter are rejected.
-Updating the baseline requires owner integration, a source review, updating the
-constant and file pins, and rerunning the focused checks. This exporter does
-not accept a newer commit merely because it is a descendant of this baseline.
-Build this tool from the reviewed patch against that source; checkout validation
-is not cryptographic attestation of an arbitrary externally supplied binary.
+an absent `--out-dir` whose parent already exists. `source_sha` is the exact
+clean integrated checkout HEAD; `factory_baseline_sha` separately remains
+`070663efb27f69ecae8609e6b839f86f843efbb0`. A committed adapter and subsequent
+docs-only commits work without repinning their own commit identity. Ancestry
+alone is never acceptance: the factory pins and bounded file inventory must
+still match. All tracked staged/unstaged changes fail the simple cleanliness
+check. Missing or unexpected relevant Go inputs fail even when ignored.
+
+The source inventory in `source.go` covers all non-test Go files directly in
+`internal/authoring/commands`, `internal/authoringcli`,
+`internal/agentpluginscli` (under the CLI module), and
+`install/integrationctl/agentplugins/domain`. This includes constructor
+configuration, the installer root's other constructed commands, the
+`target_batch.go` → `domain/clients.go` help/registry chain, and other same-package
+initializers. Runtime callbacks in these packages are pinned as part of their
+files; their transitive engine implementations, YAML assets and examples are
+outside the help inventory. Existing `_test.go` files in factory packages do not
+contribute to the docs binary. The adapter's complete Go file set, including its
+focused tests, must be tracked; additional adapter Go files are rejected.
+The two `cmd/*` wrapper pins are composition references, not linked packages.
+
+All five workspace modules' existing go.mod/go.sum, root go.work/go.work.sum,
+and the absence of nested workspace controls, extra sum files and vendor
+directories are checked. These controls fix workspace use/local replacements
+and module version selection, including Cobra v1.10.2, pflag v1.0.9 and the
+Cobra/doc dependency go-md2man/v2 v2.0.6. This is a bounded documentation input
+contract, not a digest of the repository or installer runtime.
+
+Before any output creation the tool renders the actual loaded trees with the
+literal provenance token `SOURCE_SHA`, no source pin array, and no host paths.
+It hashes sorted, length-framed filenames and bytes (both manifest facts and
+Cobra Markdown), and compares with `reviewedProjection`. Thus a binary compiled
+with different help/flags cannot stamp the validated checkout SHA on different
+facts. The golden covers untouched factory trees, not the hook-trap trees used
+by the no-action test. Normal output uses the caller's exact SHA, including the
+author parent source link. Across commits only these provenance bytes differ.
+
+Supported builds use the reviewed adapter source, Go 1.25.13, the root workspace
+and the existing checksum-verified module cache. Set GOENV=off,
+GOTOOLCHAIN=local, GOPROXY=off, GOSUMDB=off, GOFLAGS empty and GOWORK to the
+absolute checkout go.work; use private HOME/TMP/GOCACHE and GOMAXPROCS=2 with
+`go test -p 2` / `go build -p 2`. No overlays, build tags, alternate workspaces,
+vendor mode, linker substitutions or modified module-cache source are supported.
+The fingerprint verifies exported facts even for an ordinary mismatched source
+build; it does not authenticate a deliberately altered verifier or arbitrary
+binary. Factory changes require a fresh bounded source/help review, updated
+input pins and an explicitly reviewed projection golden, not an automatic
+regeneration or self-commit SHA constant. Adapter-only changes that preserve
+facts need no new factory baseline.
 
 Output lives only under `prepared-authoring-v2/` inside the new destination:
 
 - `manifest.json`: `authoring-docs-manifest-v1` envelope with namespace,
-  `prepared-not-release` status, `released: false`, source SHA and relative
+  `prepared-not-release` status, `released: false`, exact source SHA, audited factory baseline SHA and relative
   source file SHA-256 pins, plus the two surfaces.
 - Markdown files named from the actual command path with underscores, e.g.
   `plugin-kit-ai_init.md` and `agentplugins_author_init.md`. Every page carries
@@ -90,9 +131,14 @@ No dependency was added; the existing Cobra docs dependency renders Markdown.
 Focused tests cover fresh-tree and on-disk byte determinism, the exact two
 surfaces and utility inventory, Markdown links, local/inherited flag defaults
 and help, hidden/rejection/internal descendant exclusion, source identity
-rejection before writes, no v1 overwrite, hook traps and untouched private
+rejection before writes, clean committed and later docs-only fixtures, changed
+factory/target-registry/workspace/dependency inputs, ignored/adapter Go additions,
+changed loaded help/flag/Markdown facts, no v1 overwrite, hook traps and untouched private
 profile directories. They do not claim product/native/npm suite coverage or
-OS release acceptance. Existing Windows/macOS holds remain unchanged; no
+OS release acceptance. Set DOCS_TEST_CHECKOUT to the absolute clean checkout
+being tested to run the disk checks against that full committed tree; otherwise
+they use a disposable committed source-contract fixture. Mutation tests always
+use private fixture Git metadata and never mutate the source checkout. Existing Windows/macOS holds remain unchanged; no
 restricted Windows reproduction was attempted or rerouted.
 
 ROOT mechanical integration and independent medium review remain downstream.
