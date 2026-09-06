@@ -7,12 +7,13 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"golang.org/x/sys/windows"
 )
 
 // One synchronous sibling creation, selected by held object identity, occurs
-// exactly between the two metadata observations. No sleep, race loop, timestamp
+// exactly between the two metadata observations. No race loop, timestamp
 // write or mocked metadata. An unchanged native epoch is a fixture failure.
 func TestWindowsAncestorEpochBoundary(t *testing.T) {
 	for _, boundary := range []string{"outside", "root", "descendant"} {
@@ -41,6 +42,7 @@ func TestWindowsAncestorEpochBoundary(t *testing.T) {
 						mutationErr = err
 						return
 					}
+					windowsAwaitDirectoryClock(t, a)
 					mutationErr = os.Mkdir(filepath.Join(target, "unrelated-sibling"), 0700)
 					if mutationErr != nil {
 						return
@@ -140,7 +142,17 @@ func TestWindowsAncestorEpochOrderedRoot(t *testing.T) {
 					return
 				}
 				fired = true
+				before, e := winMeta(f)
+				bootstrapCheck(t, "ordered root pre-mutation", e)
+				windowsAwaitDirectoryClock(t, before)
 				mutationErr = os.Mkdir(filepath.Join(root, "late"), 0700)
+				after, e := winMeta(f)
+				bootstrapCheck(t, "ordered root post-mutation", e)
+				x, y := before, after
+				x.Write, x.Change, y.Write, y.Change = 0, 0, 0, 0
+				if x != y || before == after {
+					t.Fatal("ordered root fixture did not isolate directory epoch mutation")
+				}
 			})
 			if s != nil {
 				s.close()
@@ -221,5 +233,27 @@ func TestWindowsAncestorEpochReplacementRejected(t *testing.T) {
 	var safe *Error
 	if !fired || mutationErr != nil || !errors.As(err, &safe) || safe.Code != "root_unreadable" {
 		t.Fatalf("ancestor replacement accepted: fired=%t mutation=%v acquisition=%v", fired, mutationErr, err)
+	}
+}
+
+// NTFS can stamp two consecutive directory mutations with the same kernel clock
+// tick. Wait for an observed coarse-clock advance before the SINGLE mutation;
+// never retry acquisition/mutation or modify source timestamps. A stopped clock
+// fails the fixture after a bounded deadline, and each caller still proves the
+// actual filesystem epoch changed without any other metadata changing.
+func windowsAwaitDirectoryClock(t *testing.T, snapshot winSnapshot) {
+	t.Helper()
+	clock := func() int64 {
+		var now windows.Filetime
+		windows.GetSystemTimeAsFileTime(&now)
+		return int64(uint64(now.HighDateTime)<<32 | uint64(now.LowDateTime))
+	}
+	threshold := max(snapshot.Write, snapshot.Change, clock())
+	deadline := time.Now().Add(2 * time.Second)
+	for clock() <= threshold {
+		if time.Now().After(deadline) {
+			t.Fatal("native coarse clock did not advance for directory mutation")
+		}
+		time.Sleep(time.Millisecond)
 	}
 }

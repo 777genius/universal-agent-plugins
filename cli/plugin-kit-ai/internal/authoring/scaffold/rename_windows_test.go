@@ -18,6 +18,9 @@ func TestWindowsRenameNativeClassification(t *testing.T) {
 		t.Run(kind, func(t *testing.T) {
 			parent := tempRoot(t)
 			for _, name := range []string{"source", "dest"} {
+				if kind == "sharing-violation" && name == "dest" {
+					continue
+				}
 				if err := os.Mkdir(filepath.Join(parent, name), 0700); err != nil {
 					t.Fatal(err)
 				}
@@ -36,7 +39,7 @@ func TestWindowsRenameNativeClassification(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				handle, err := windows.CreateFile(name, windows.FILE_READ_ATTRIBUTES, windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE, nil, windows.OPEN_EXISTING, windows.FILE_FLAG_BACKUP_SEMANTICS, 0)
+				handle, err := windows.CreateFile(name, windows.FILE_LIST_DIRECTORY, windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE, nil, windows.OPEN_EXISTING, windows.FILE_FLAG_BACKUP_SEMANTICS, 0)
 				if err != nil {
 					t.Fatal(err)
 				}
