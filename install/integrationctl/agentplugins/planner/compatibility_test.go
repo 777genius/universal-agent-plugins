@@ -235,3 +235,73 @@ func TestCompatibilityDisabledAndComponentOnly(t *testing.T) {
 		t.Fatal("empty package invented components")
 	}
 }
+
+// Exact keys, even empty ones, are identities in every item-level source.
+func TestCompatibilityEmptyInvalidIdentity(t *testing.T) {
+	for _, source := range []string{"map", "inventory", "diagnostic", "overlap"} {
+		for _, name := range []string{"", "a-private-invalid-name", "z-private-invalid-name"} {
+			t.Run(source+"/"+name, func(t *testing.T) {
+				e := domain.PackageEnvelope{MCP: domain.MCPComponent{Servers: map[string]domain.MCPServer{"good": {Type: "stdio"}}}}
+				switch source {
+				case "map":
+					e.MCP.InvalidServer = map[string]domain.Diagnostic{name: {}}
+				case "inventory":
+					e.Inventory.InvalidMCPServer = []string{name}
+				case "overlap":
+					e.MCP.Servers[name] = domain.MCPServer{Type: "stdio"}
+					fallthrough
+				case "diagnostic":
+					e.Diagnostics = []domain.Diagnostic{{Severity: domain.SeverityError, Boundary: domain.BoundaryMCPServer, Item: name}}
+				}
+				var first []byte
+				for repeat := 0; repeat < 10; repeat++ {
+					got, err := Compatibility(e, []domain.ClientID{domain.ClientCursor})
+					if err != nil || len(got[0].Components) != 2 {
+						t.Fatalf("inventory: %+v, %v", got, err)
+					}
+					for i, c := range got[0].Components {
+						invalid := (i == 0) == (name < "good")
+						want := domain.SupportNative
+						if invalid {
+							want = domain.SupportUnsupported
+						}
+						if c.Kind != domain.ComponentMCPServer || c.Index != i+1 || c.Support != want || compatContains(c.Limitations, "invalid_component") != invalid {
+							t.Fatalf("identity boundary: %+v", c)
+						}
+					}
+					raw, _ := json.Marshal(got)
+					if strings.Contains(string(raw), "private-invalid-name") || strings.Contains(string(raw), `"good"`) {
+						t.Fatal("name disclosure")
+					}
+					if repeat > 0 && string(raw) != string(first) {
+						t.Fatal("unstable indexes")
+					}
+					first = raw
+				}
+			})
+		}
+	}
+}
+
+func TestCompatibilityDocumentBoundary(t *testing.T) {
+	for _, item := range []string{"", "document-private-marker"} {
+		e := domain.PackageEnvelope{
+			Skills:      map[string]domain.Skill{"good": {}},
+			MCP:         domain.MCPComponent{Servers: map[string]domain.MCPServer{"": {Type: "stdio"}, "good": {Type: "stdio"}}},
+			Diagnostics: []domain.Diagnostic{{Severity: domain.SeverityError, Boundary: domain.BoundaryMCP, Item: item}},
+		}
+		got, err := Compatibility(e, []domain.ClientID{domain.ClientCursor})
+		if err != nil || len(got[0].Components) != 3 {
+			t.Fatalf("document boundary invented inventory: %+v, %v", got, err)
+		}
+		for _, c := range got[0].Components {
+			want := domain.SupportNative
+			if c.Kind == domain.ComponentMCPServer {
+				want = domain.SupportUnsupported
+			}
+			if c.Support != want {
+				t.Fatalf("document boundary: %+v", c)
+			}
+		}
+	}
+}

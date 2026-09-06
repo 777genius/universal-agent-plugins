@@ -90,6 +90,10 @@ func compatibilityFor(envelope domain.PackageEnvelope, capabilities domain.Clien
 	// bounds. No detected client or DeliveryPlan is constructed.
 	decisions := componentDecisions(envelope, capabilities)
 	invalid := make(map[domain.ComponentKind]map[string]bool)
+	// Empty names are exact item identities, never a kind-wide sentinel.
+	invalidKind := map[domain.ComponentKind]bool{
+		domain.ComponentSkill: envelope.Inventory.InvalidSkillsRoot,
+	}
 	mark := func(kind domain.ComponentKind, name string) {
 		if invalid[kind] == nil {
 			invalid[kind] = make(map[string]bool)
@@ -114,7 +118,11 @@ func compatibilityFor(envelope domain.PackageEnvelope, capabilities domain.Clien
 		switch diagnostic.Boundary {
 		case domain.BoundarySkill:
 			kind = domain.ComponentSkill
-		case domain.BoundaryMCP, domain.BoundaryMCPServer:
+		case domain.BoundaryMCP:
+			// This boundary describes the MCP document, not a server key.
+			invalidKind[domain.ComponentMCPServer] = true
+			continue
+		case domain.BoundaryMCPServer:
 			kind = domain.ComponentMCPServer
 		case domain.BoundaryApp:
 			kind = domain.ComponentApp
@@ -127,9 +135,6 @@ func compatibilityFor(envelope domain.PackageEnvelope, capabilities domain.Clien
 	}
 	for kind, names := range invalid {
 		for name := range names {
-			if name == "" {
-				continue
-			}
 			found := false
 			for _, item := range decisions {
 				if item.Kind == kind && item.Name == name {
@@ -159,17 +164,13 @@ func compatibilityFor(envelope domain.PackageEnvelope, capabilities domain.Clien
 		if item.Reason != "" {
 			component.Limitations = append(component.Limitations, item.Reason)
 		}
-		if invalid[item.Kind][item.Name] || invalid[item.Kind][""] {
+		if invalid[item.Kind][item.Name] || invalidKind[item.Kind] {
 			reject("invalid_component")
 		}
 		switch item.Kind {
 		case domain.ComponentExtension:
 			// The registry has no namespace-specific interpreter contract.
 			reject("extension_semantics_not_established")
-		case domain.ComponentSkill:
-			if envelope.Inventory.InvalidSkillsRoot {
-				reject("invalid_component")
-			}
 		case domain.ComponentMCPServer:
 			if envelope.MCP.Present && !envelope.MCP.Enabled {
 				reject("component_disabled")
