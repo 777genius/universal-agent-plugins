@@ -12,7 +12,7 @@ maturity: "stable"
 sourceRef: "npm/plugin-kit-ai-runtime"
 translationRequired: false
 ---
-<DocMetaCard surface="runtime-node" stability="public-stable" maturity="stable" source-ref="npm/plugin-kit-ai-runtime" source-href="https://github.com/777genius/plugin-kit-ai/tree/main/npm/plugin-kit-ai-runtime" />
+<DocMetaCard surface="runtime-node" stability="public-stable" maturity="stable" source-ref="npm/plugin-kit-ai-runtime" source-href="https://github.com/777genius/universal-agent-plugins/tree/main/npm/plugin-kit-ai-runtime" />
 
 # Приложение Claude
 

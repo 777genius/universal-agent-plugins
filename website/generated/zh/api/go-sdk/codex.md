@@ -12,7 +12,7 @@ maturity: "stable"
 sourceRef: "sdk/codex"
 translationRequired: false
 ---
-<DocMetaCard surface="go-sdk" stability="public-stable" maturity="stable" source-ref="sdk/codex" source-href="https://github.com/777genius/plugin-kit-ai/tree/main/sdk/codex" />
+<DocMetaCard surface="go-sdk" stability="public-stable" maturity="stable" source-ref="sdk/codex" source-href="https://github.com/777genius/universal-agent-plugins/tree/main/sdk/codex" />
 
 # codex
 

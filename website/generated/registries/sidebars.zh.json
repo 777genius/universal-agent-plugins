@@ -1,36 +1,19 @@
 {
   "/zh/": [
     {
-      "text": "开始",
+      "text": "使用插件",
       "items": [
         {
-          "text": "总览",
-          "link": "/zh/guide/"
+          "text": "概览",
+          "link": "/zh/use/"
         },
         {
           "text": "安装",
-          "link": "/zh/guide/installation"
+          "link": "/zh/use/install"
         },
         {
-          "text": "快速入门",
-          "link": "/zh/guide/quickstart"
-        }
-      ]
-    },
-    {
-      "text": "核心思路",
-      "items": [
-        {
-          "text": "您可以构建什么",
-          "link": "/zh/guide/what-you-can-build"
-        },
-        {
-          "text": "一个项目，多个目标",
-          "link": "/zh/guide/one-project-multiple-targets"
-        },
-        {
-          "text": "选择一个目标",
-          "link": "/zh/guide/choose-a-target"
+          "text": "管理",
+          "link": "/zh/use/manage"
         }
       ]
     },
@@ -38,75 +21,1055 @@
       "text": "构建插件",
       "items": [
         {
-          "text": "构建你的第一个插件",
-          "link": "/zh/guide/first-plugin"
+          "text": "概览",
+          "link": "/zh/build/"
         },
         {
-          "text": "构建 Python 运行时插件",
-          "link": "/zh/guide/python-runtime"
+          "text": "单个 Skill",
+          "link": "/zh/build/skill"
         },
         {
-          "text": "构建一个团队就绪的插件",
-          "link": "/zh/guide/team-ready-plugin"
+          "text": "远程 MCP",
+          "link": "/zh/build/mcp-remote"
         },
         {
-          "text": "构建 Claude 插件",
-          "link": "/zh/guide/claude-plugin"
+          "text": "本地 MCP",
+          "link": "/zh/build/mcp-stdio"
         },
         {
-          "text": "构建 Node/TypeScript 运行时插件",
-          "link": "/zh/guide/node-typescript-runtime"
+          "text": "混合插件",
+          "link": "/zh/build/hybrid"
+        },
+        {
+          "text": "多个 Skills",
+          "link": "/zh/build/skills"
+        },
+        {
+          "text": "结构",
+          "link": "/zh/build/layout"
+        },
+        {
+          "text": "检查",
+          "link": "/zh/build/checks"
+        },
+        {
+          "text": "交接",
+          "link": "/zh/build/handoff"
         }
       ]
     },
     {
-      "text": "Starter 与示例",
+      "text": "历史 v1 · 基准 1.2.4",
       "items": [
         {
-          "text": "入门模板",
-          "link": "/zh/guide/starter-templates"
-        },
-        {
-          "text": "选择一个入门存储库",
-          "link": "/zh/guide/choose-a-starter"
-        },
-        {
-          "text": "示例和食谱",
-          "link": "/zh/guide/examples-and-recipes"
+          "text": "历史背景",
+          "link": "/zh/legacy/v1/"
         }
       ]
     },
     {
-      "text": "交付与 targets",
+      "text": "plugin-kit-ai · 准备中，尚未发布",
       "items": [
         {
-          "text": "选择交付模式",
-          "link": "/zh/guide/choose-delivery-model"
+          "text": "plugin-kit-ai (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai"
         },
         {
-          "text": "捆绑交接",
-          "link": "/zh/guide/bundle-handoff"
+          "text": "plugin-kit-ai capabilities (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-capabilities"
         },
         {
-          "text": "包和集成设置",
-          "link": "/zh/guide/package-and-workspace-targets"
+          "text": "plugin-kit-ai compat (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-compat"
         },
         {
-          "text": "如何发布插件",
-          "link": "/zh/guide/how-to-publish-plugins"
+          "text": "plugin-kit-ai completion (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion"
+        },
+        {
+          "text": "plugin-kit-ai completion bash (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion-bash"
+        },
+        {
+          "text": "plugin-kit-ai completion fish (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion-fish"
+        },
+        {
+          "text": "plugin-kit-ai completion help (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion-help"
+        },
+        {
+          "text": "plugin-kit-ai completion powershell (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion-powershell"
+        },
+        {
+          "text": "plugin-kit-ai completion zsh (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion-zsh"
+        },
+        {
+          "text": "plugin-kit-ai doctor (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-doctor"
+        },
+        {
+          "text": "plugin-kit-ai help (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-help"
+        },
+        {
+          "text": "plugin-kit-ai init (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-init"
+        },
+        {
+          "text": "plugin-kit-ai inspect (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-inspect"
+        },
+        {
+          "text": "plugin-kit-ai skills (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-skills"
+        },
+        {
+          "text": "plugin-kit-ai skills help (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-skills-help"
+        },
+        {
+          "text": "plugin-kit-ai skills init (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-skills-init"
+        },
+        {
+          "text": "plugin-kit-ai skills validate (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-skills-validate"
+        },
+        {
+          "text": "plugin-kit-ai test (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-test"
+        },
+        {
+          "text": "plugin-kit-ai validate (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-validate"
+        },
+        {
+          "text": "plugin-kit-ai version (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-version"
         }
       ]
     },
     {
-      "text": "生产与 CI",
+      "text": "agentplugins author · 准备中，尚未发布",
       "items": [
         {
-          "text": "生产准备情况",
-          "link": "/zh/guide/production-readiness"
+          "text": "agentplugins author (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author"
         },
         {
-          "text": "CI 集成",
-          "link": "/zh/guide/ci-integration"
+          "text": "agentplugins author capabilities (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-capabilities"
+        },
+        {
+          "text": "agentplugins author compat (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-compat"
+        },
+        {
+          "text": "agentplugins author doctor (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-doctor"
+        },
+        {
+          "text": "agentplugins author help (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-help"
+        },
+        {
+          "text": "agentplugins author init (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-init"
+        },
+        {
+          "text": "agentplugins author inspect (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-inspect"
+        },
+        {
+          "text": "agentplugins author skills (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills"
+        },
+        {
+          "text": "agentplugins author skills help (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills-help"
+        },
+        {
+          "text": "agentplugins author skills init (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills-init"
+        },
+        {
+          "text": "agentplugins author skills validate (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills-validate"
+        },
+        {
+          "text": "agentplugins author test (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-test"
+        },
+        {
+          "text": "agentplugins author validate (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-validate"
+        },
+        {
+          "text": "agentplugins author version (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-version"
+        }
+      ]
+    }
+  ],
+  "/zh/use/": [
+    {
+      "text": "使用插件",
+      "items": [
+        {
+          "text": "概览",
+          "link": "/zh/use/"
+        },
+        {
+          "text": "安装",
+          "link": "/zh/use/install"
+        },
+        {
+          "text": "管理",
+          "link": "/zh/use/manage"
+        }
+      ]
+    },
+    {
+      "text": "构建插件",
+      "items": [
+        {
+          "text": "概览",
+          "link": "/zh/build/"
+        },
+        {
+          "text": "单个 Skill",
+          "link": "/zh/build/skill"
+        },
+        {
+          "text": "远程 MCP",
+          "link": "/zh/build/mcp-remote"
+        },
+        {
+          "text": "本地 MCP",
+          "link": "/zh/build/mcp-stdio"
+        },
+        {
+          "text": "混合插件",
+          "link": "/zh/build/hybrid"
+        },
+        {
+          "text": "多个 Skills",
+          "link": "/zh/build/skills"
+        },
+        {
+          "text": "结构",
+          "link": "/zh/build/layout"
+        },
+        {
+          "text": "检查",
+          "link": "/zh/build/checks"
+        },
+        {
+          "text": "交接",
+          "link": "/zh/build/handoff"
+        }
+      ]
+    },
+    {
+      "text": "历史 v1 · 基准 1.2.4",
+      "items": [
+        {
+          "text": "历史背景",
+          "link": "/zh/legacy/v1/"
+        }
+      ]
+    },
+    {
+      "text": "plugin-kit-ai · 准备中，尚未发布",
+      "items": [
+        {
+          "text": "plugin-kit-ai (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai"
+        },
+        {
+          "text": "plugin-kit-ai capabilities (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-capabilities"
+        },
+        {
+          "text": "plugin-kit-ai compat (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-compat"
+        },
+        {
+          "text": "plugin-kit-ai completion (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion"
+        },
+        {
+          "text": "plugin-kit-ai completion bash (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion-bash"
+        },
+        {
+          "text": "plugin-kit-ai completion fish (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion-fish"
+        },
+        {
+          "text": "plugin-kit-ai completion help (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion-help"
+        },
+        {
+          "text": "plugin-kit-ai completion powershell (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion-powershell"
+        },
+        {
+          "text": "plugin-kit-ai completion zsh (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion-zsh"
+        },
+        {
+          "text": "plugin-kit-ai doctor (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-doctor"
+        },
+        {
+          "text": "plugin-kit-ai help (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-help"
+        },
+        {
+          "text": "plugin-kit-ai init (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-init"
+        },
+        {
+          "text": "plugin-kit-ai inspect (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-inspect"
+        },
+        {
+          "text": "plugin-kit-ai skills (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-skills"
+        },
+        {
+          "text": "plugin-kit-ai skills help (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-skills-help"
+        },
+        {
+          "text": "plugin-kit-ai skills init (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-skills-init"
+        },
+        {
+          "text": "plugin-kit-ai skills validate (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-skills-validate"
+        },
+        {
+          "text": "plugin-kit-ai test (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-test"
+        },
+        {
+          "text": "plugin-kit-ai validate (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-validate"
+        },
+        {
+          "text": "plugin-kit-ai version (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-version"
+        }
+      ]
+    },
+    {
+      "text": "agentplugins author · 准备中，尚未发布",
+      "items": [
+        {
+          "text": "agentplugins author (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author"
+        },
+        {
+          "text": "agentplugins author capabilities (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-capabilities"
+        },
+        {
+          "text": "agentplugins author compat (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-compat"
+        },
+        {
+          "text": "agentplugins author doctor (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-doctor"
+        },
+        {
+          "text": "agentplugins author help (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-help"
+        },
+        {
+          "text": "agentplugins author init (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-init"
+        },
+        {
+          "text": "agentplugins author inspect (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-inspect"
+        },
+        {
+          "text": "agentplugins author skills (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills"
+        },
+        {
+          "text": "agentplugins author skills help (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills-help"
+        },
+        {
+          "text": "agentplugins author skills init (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills-init"
+        },
+        {
+          "text": "agentplugins author skills validate (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills-validate"
+        },
+        {
+          "text": "agentplugins author test (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-test"
+        },
+        {
+          "text": "agentplugins author validate (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-validate"
+        },
+        {
+          "text": "agentplugins author version (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-version"
+        }
+      ]
+    }
+  ],
+  "/zh/build/": [
+    {
+      "text": "使用插件",
+      "items": [
+        {
+          "text": "概览",
+          "link": "/zh/use/"
+        },
+        {
+          "text": "安装",
+          "link": "/zh/use/install"
+        },
+        {
+          "text": "管理",
+          "link": "/zh/use/manage"
+        }
+      ]
+    },
+    {
+      "text": "构建插件",
+      "items": [
+        {
+          "text": "概览",
+          "link": "/zh/build/"
+        },
+        {
+          "text": "单个 Skill",
+          "link": "/zh/build/skill"
+        },
+        {
+          "text": "远程 MCP",
+          "link": "/zh/build/mcp-remote"
+        },
+        {
+          "text": "本地 MCP",
+          "link": "/zh/build/mcp-stdio"
+        },
+        {
+          "text": "混合插件",
+          "link": "/zh/build/hybrid"
+        },
+        {
+          "text": "多个 Skills",
+          "link": "/zh/build/skills"
+        },
+        {
+          "text": "结构",
+          "link": "/zh/build/layout"
+        },
+        {
+          "text": "检查",
+          "link": "/zh/build/checks"
+        },
+        {
+          "text": "交接",
+          "link": "/zh/build/handoff"
+        }
+      ]
+    },
+    {
+      "text": "历史 v1 · 基准 1.2.4",
+      "items": [
+        {
+          "text": "历史背景",
+          "link": "/zh/legacy/v1/"
+        }
+      ]
+    },
+    {
+      "text": "plugin-kit-ai · 准备中，尚未发布",
+      "items": [
+        {
+          "text": "plugin-kit-ai (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai"
+        },
+        {
+          "text": "plugin-kit-ai capabilities (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-capabilities"
+        },
+        {
+          "text": "plugin-kit-ai compat (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-compat"
+        },
+        {
+          "text": "plugin-kit-ai completion (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion"
+        },
+        {
+          "text": "plugin-kit-ai completion bash (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion-bash"
+        },
+        {
+          "text": "plugin-kit-ai completion fish (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion-fish"
+        },
+        {
+          "text": "plugin-kit-ai completion help (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion-help"
+        },
+        {
+          "text": "plugin-kit-ai completion powershell (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion-powershell"
+        },
+        {
+          "text": "plugin-kit-ai completion zsh (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion-zsh"
+        },
+        {
+          "text": "plugin-kit-ai doctor (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-doctor"
+        },
+        {
+          "text": "plugin-kit-ai help (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-help"
+        },
+        {
+          "text": "plugin-kit-ai init (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-init"
+        },
+        {
+          "text": "plugin-kit-ai inspect (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-inspect"
+        },
+        {
+          "text": "plugin-kit-ai skills (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-skills"
+        },
+        {
+          "text": "plugin-kit-ai skills help (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-skills-help"
+        },
+        {
+          "text": "plugin-kit-ai skills init (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-skills-init"
+        },
+        {
+          "text": "plugin-kit-ai skills validate (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-skills-validate"
+        },
+        {
+          "text": "plugin-kit-ai test (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-test"
+        },
+        {
+          "text": "plugin-kit-ai validate (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-validate"
+        },
+        {
+          "text": "plugin-kit-ai version (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-version"
+        }
+      ]
+    },
+    {
+      "text": "agentplugins author · 准备中，尚未发布",
+      "items": [
+        {
+          "text": "agentplugins author (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author"
+        },
+        {
+          "text": "agentplugins author capabilities (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-capabilities"
+        },
+        {
+          "text": "agentplugins author compat (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-compat"
+        },
+        {
+          "text": "agentplugins author doctor (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-doctor"
+        },
+        {
+          "text": "agentplugins author help (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-help"
+        },
+        {
+          "text": "agentplugins author init (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-init"
+        },
+        {
+          "text": "agentplugins author inspect (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-inspect"
+        },
+        {
+          "text": "agentplugins author skills (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills"
+        },
+        {
+          "text": "agentplugins author skills help (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills-help"
+        },
+        {
+          "text": "agentplugins author skills init (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills-init"
+        },
+        {
+          "text": "agentplugins author skills validate (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills-validate"
+        },
+        {
+          "text": "agentplugins author test (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-test"
+        },
+        {
+          "text": "agentplugins author validate (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-validate"
+        },
+        {
+          "text": "agentplugins author version (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-version"
+        }
+      ]
+    }
+  ],
+  "/zh/legacy/v1/": [
+    {
+      "text": "使用插件",
+      "items": [
+        {
+          "text": "概览",
+          "link": "/zh/use/"
+        },
+        {
+          "text": "安装",
+          "link": "/zh/use/install"
+        },
+        {
+          "text": "管理",
+          "link": "/zh/use/manage"
+        }
+      ]
+    },
+    {
+      "text": "构建插件",
+      "items": [
+        {
+          "text": "概览",
+          "link": "/zh/build/"
+        },
+        {
+          "text": "单个 Skill",
+          "link": "/zh/build/skill"
+        },
+        {
+          "text": "远程 MCP",
+          "link": "/zh/build/mcp-remote"
+        },
+        {
+          "text": "本地 MCP",
+          "link": "/zh/build/mcp-stdio"
+        },
+        {
+          "text": "混合插件",
+          "link": "/zh/build/hybrid"
+        },
+        {
+          "text": "多个 Skills",
+          "link": "/zh/build/skills"
+        },
+        {
+          "text": "结构",
+          "link": "/zh/build/layout"
+        },
+        {
+          "text": "检查",
+          "link": "/zh/build/checks"
+        },
+        {
+          "text": "交接",
+          "link": "/zh/build/handoff"
+        }
+      ]
+    },
+    {
+      "text": "历史 v1 · 基准 1.2.4",
+      "items": [
+        {
+          "text": "历史背景",
+          "link": "/zh/legacy/v1/"
+        }
+      ]
+    },
+    {
+      "text": "plugin-kit-ai · 准备中，尚未发布",
+      "items": [
+        {
+          "text": "plugin-kit-ai (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai"
+        },
+        {
+          "text": "plugin-kit-ai capabilities (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-capabilities"
+        },
+        {
+          "text": "plugin-kit-ai compat (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-compat"
+        },
+        {
+          "text": "plugin-kit-ai completion (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion"
+        },
+        {
+          "text": "plugin-kit-ai completion bash (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion-bash"
+        },
+        {
+          "text": "plugin-kit-ai completion fish (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion-fish"
+        },
+        {
+          "text": "plugin-kit-ai completion help (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion-help"
+        },
+        {
+          "text": "plugin-kit-ai completion powershell (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion-powershell"
+        },
+        {
+          "text": "plugin-kit-ai completion zsh (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion-zsh"
+        },
+        {
+          "text": "plugin-kit-ai doctor (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-doctor"
+        },
+        {
+          "text": "plugin-kit-ai help (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-help"
+        },
+        {
+          "text": "plugin-kit-ai init (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-init"
+        },
+        {
+          "text": "plugin-kit-ai inspect (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-inspect"
+        },
+        {
+          "text": "plugin-kit-ai skills (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-skills"
+        },
+        {
+          "text": "plugin-kit-ai skills help (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-skills-help"
+        },
+        {
+          "text": "plugin-kit-ai skills init (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-skills-init"
+        },
+        {
+          "text": "plugin-kit-ai skills validate (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-skills-validate"
+        },
+        {
+          "text": "plugin-kit-ai test (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-test"
+        },
+        {
+          "text": "plugin-kit-ai validate (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-validate"
+        },
+        {
+          "text": "plugin-kit-ai version (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-version"
+        }
+      ]
+    },
+    {
+      "text": "agentplugins author · 准备中，尚未发布",
+      "items": [
+        {
+          "text": "agentplugins author (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author"
+        },
+        {
+          "text": "agentplugins author capabilities (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-capabilities"
+        },
+        {
+          "text": "agentplugins author compat (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-compat"
+        },
+        {
+          "text": "agentplugins author doctor (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-doctor"
+        },
+        {
+          "text": "agentplugins author help (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-help"
+        },
+        {
+          "text": "agentplugins author init (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-init"
+        },
+        {
+          "text": "agentplugins author inspect (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-inspect"
+        },
+        {
+          "text": "agentplugins author skills (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills"
+        },
+        {
+          "text": "agentplugins author skills help (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills-help"
+        },
+        {
+          "text": "agentplugins author skills init (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills-init"
+        },
+        {
+          "text": "agentplugins author skills validate (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills-validate"
+        },
+        {
+          "text": "agentplugins author test (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-test"
+        },
+        {
+          "text": "agentplugins author validate (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-validate"
+        },
+        {
+          "text": "agentplugins author version (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-version"
+        }
+      ]
+    }
+  ],
+  "/zh/api/cli/prepared-authoring-v2": [
+    {
+      "text": "使用插件",
+      "items": [
+        {
+          "text": "概览",
+          "link": "/zh/use/"
+        },
+        {
+          "text": "安装",
+          "link": "/zh/use/install"
+        },
+        {
+          "text": "管理",
+          "link": "/zh/use/manage"
+        }
+      ]
+    },
+    {
+      "text": "构建插件",
+      "items": [
+        {
+          "text": "概览",
+          "link": "/zh/build/"
+        },
+        {
+          "text": "单个 Skill",
+          "link": "/zh/build/skill"
+        },
+        {
+          "text": "远程 MCP",
+          "link": "/zh/build/mcp-remote"
+        },
+        {
+          "text": "本地 MCP",
+          "link": "/zh/build/mcp-stdio"
+        },
+        {
+          "text": "混合插件",
+          "link": "/zh/build/hybrid"
+        },
+        {
+          "text": "多个 Skills",
+          "link": "/zh/build/skills"
+        },
+        {
+          "text": "结构",
+          "link": "/zh/build/layout"
+        },
+        {
+          "text": "检查",
+          "link": "/zh/build/checks"
+        },
+        {
+          "text": "交接",
+          "link": "/zh/build/handoff"
+        }
+      ]
+    },
+    {
+      "text": "历史 v1 · 基准 1.2.4",
+      "items": [
+        {
+          "text": "历史背景",
+          "link": "/zh/legacy/v1/"
+        }
+      ]
+    },
+    {
+      "text": "plugin-kit-ai · 准备中，尚未发布",
+      "items": [
+        {
+          "text": "plugin-kit-ai (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai"
+        },
+        {
+          "text": "plugin-kit-ai capabilities (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-capabilities"
+        },
+        {
+          "text": "plugin-kit-ai compat (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-compat"
+        },
+        {
+          "text": "plugin-kit-ai completion (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion"
+        },
+        {
+          "text": "plugin-kit-ai completion bash (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion-bash"
+        },
+        {
+          "text": "plugin-kit-ai completion fish (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion-fish"
+        },
+        {
+          "text": "plugin-kit-ai completion help (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion-help"
+        },
+        {
+          "text": "plugin-kit-ai completion powershell (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion-powershell"
+        },
+        {
+          "text": "plugin-kit-ai completion zsh (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion-zsh"
+        },
+        {
+          "text": "plugin-kit-ai doctor (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-doctor"
+        },
+        {
+          "text": "plugin-kit-ai help (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-help"
+        },
+        {
+          "text": "plugin-kit-ai init (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-init"
+        },
+        {
+          "text": "plugin-kit-ai inspect (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-inspect"
+        },
+        {
+          "text": "plugin-kit-ai skills (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-skills"
+        },
+        {
+          "text": "plugin-kit-ai skills help (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-skills-help"
+        },
+        {
+          "text": "plugin-kit-ai skills init (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-skills-init"
+        },
+        {
+          "text": "plugin-kit-ai skills validate (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-skills-validate"
+        },
+        {
+          "text": "plugin-kit-ai test (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-test"
+        },
+        {
+          "text": "plugin-kit-ai validate (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-validate"
+        },
+        {
+          "text": "plugin-kit-ai version (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-version"
+        }
+      ]
+    },
+    {
+      "text": "agentplugins author · 准备中，尚未发布",
+      "items": [
+        {
+          "text": "agentplugins author (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author"
+        },
+        {
+          "text": "agentplugins author capabilities (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-capabilities"
+        },
+        {
+          "text": "agentplugins author compat (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-compat"
+        },
+        {
+          "text": "agentplugins author doctor (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-doctor"
+        },
+        {
+          "text": "agentplugins author help (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-help"
+        },
+        {
+          "text": "agentplugins author init (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-init"
+        },
+        {
+          "text": "agentplugins author inspect (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-inspect"
+        },
+        {
+          "text": "agentplugins author skills (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills"
+        },
+        {
+          "text": "agentplugins author skills help (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills-help"
+        },
+        {
+          "text": "agentplugins author skills init (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills-init"
+        },
+        {
+          "text": "agentplugins author skills validate (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills-validate"
+        },
+        {
+          "text": "agentplugins author test (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-test"
+        },
+        {
+          "text": "agentplugins author validate (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-validate"
+        },
+        {
+          "text": "agentplugins author version (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-version"
         }
       ]
     }

@@ -1,112 +1,1075 @@
 {
   "/ru/": [
     {
-      "text": "Старт",
+      "text": "Использовать плагины",
       "items": [
         {
           "text": "Обзор",
-          "link": "/ru/guide/"
+          "link": "/ru/use/"
         },
         {
           "text": "Установка",
-          "link": "/ru/guide/installation"
+          "link": "/ru/use/install"
         },
         {
-          "text": "Быстрый старт",
-          "link": "/ru/guide/quickstart"
+          "text": "Управление",
+          "link": "/ru/use/manage"
         }
       ]
     },
     {
-      "text": "Суть проекта",
+      "text": "Создавать плагины",
       "items": [
         {
-          "text": "Что можно собрать",
-          "link": "/ru/guide/what-you-can-build"
+          "text": "Обзор",
+          "link": "/ru/build/"
         },
         {
-          "text": "Один проект, несколько target'ов",
-          "link": "/ru/guide/one-project-multiple-targets"
+          "text": "Один Skill",
+          "link": "/ru/build/skill"
         },
         {
-          "text": "Выбор target",
-          "link": "/ru/guide/choose-a-target"
+          "text": "Удалённый MCP",
+          "link": "/ru/build/mcp-remote"
+        },
+        {
+          "text": "Локальный MCP",
+          "link": "/ru/build/mcp-stdio"
+        },
+        {
+          "text": "Гибридный плагин",
+          "link": "/ru/build/hybrid"
+        },
+        {
+          "text": "Несколько Skills",
+          "link": "/ru/build/skills"
+        },
+        {
+          "text": "Структура",
+          "link": "/ru/build/layout"
+        },
+        {
+          "text": "Проверки",
+          "link": "/ru/build/checks"
+        },
+        {
+          "text": "Передача",
+          "link": "/ru/build/handoff"
         }
       ]
     },
     {
-      "text": "Сборка плагина",
+      "text": "История v1 · базовая версия 1.2.4",
       "items": [
         {
-          "text": "Соберите первый плагин",
-          "link": "/ru/guide/first-plugin"
-        },
-        {
-          "text": "Соберите Python runtime-плагин",
-          "link": "/ru/guide/python-runtime"
-        },
-        {
-          "text": "Сделайте плагин готовым для команды",
-          "link": "/ru/guide/team-ready-plugin"
-        },
-        {
-          "text": "Соберите плагин для Claude",
-          "link": "/ru/guide/claude-plugin"
-        },
-        {
-          "text": "Соберите Node/TypeScript runtime-плагин",
-          "link": "/ru/guide/node-typescript-runtime"
+          "text": "Исторический контекст",
+          "link": "/ru/legacy/v1/"
         }
       ]
     },
     {
-      "text": "Starter'ы и примеры",
+      "text": "plugin-kit-ai · подготовка, не релиз",
       "items": [
         {
-          "text": "Стартовые шаблоны",
-          "link": "/ru/guide/starter-templates"
+          "text": "plugin-kit-ai (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai"
         },
         {
-          "text": "Выбор стартового репозитория",
-          "link": "/ru/guide/choose-a-starter"
+          "text": "plugin-kit-ai capabilities (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-capabilities"
         },
         {
-          "text": "Примеры и рецепты",
-          "link": "/ru/guide/examples-and-recipes"
+          "text": "plugin-kit-ai compat (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-compat"
+        },
+        {
+          "text": "plugin-kit-ai completion (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion"
+        },
+        {
+          "text": "plugin-kit-ai completion bash (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion-bash"
+        },
+        {
+          "text": "plugin-kit-ai completion fish (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion-fish"
+        },
+        {
+          "text": "plugin-kit-ai completion help (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion-help"
+        },
+        {
+          "text": "plugin-kit-ai completion powershell (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion-powershell"
+        },
+        {
+          "text": "plugin-kit-ai completion zsh (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion-zsh"
+        },
+        {
+          "text": "plugin-kit-ai doctor (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-doctor"
+        },
+        {
+          "text": "plugin-kit-ai help (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-help"
+        },
+        {
+          "text": "plugin-kit-ai init (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-init"
+        },
+        {
+          "text": "plugin-kit-ai inspect (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-inspect"
+        },
+        {
+          "text": "plugin-kit-ai skills (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-skills"
+        },
+        {
+          "text": "plugin-kit-ai skills help (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-skills-help"
+        },
+        {
+          "text": "plugin-kit-ai skills init (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-skills-init"
+        },
+        {
+          "text": "plugin-kit-ai skills validate (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-skills-validate"
+        },
+        {
+          "text": "plugin-kit-ai test (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-test"
+        },
+        {
+          "text": "plugin-kit-ai validate (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-validate"
+        },
+        {
+          "text": "plugin-kit-ai version (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-version"
         }
       ]
     },
     {
-      "text": "Поставка и target'ы",
+      "text": "agentplugins author · подготовка, не релиз",
       "items": [
         {
-          "text": "Выбор модели поставки",
-          "link": "/ru/guide/choose-delivery-model"
+          "text": "agentplugins author (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author"
         },
         {
-          "text": "Передача bundle",
-          "link": "/ru/guide/bundle-handoff"
+          "text": "agentplugins author capabilities (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-capabilities"
         },
         {
-          "text": "Пакеты и настройка интеграций",
-          "link": "/ru/guide/package-and-workspace-targets"
+          "text": "agentplugins author compat (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-compat"
         },
         {
-          "text": "Как публиковать плагины",
-          "link": "/ru/guide/how-to-publish-plugins"
+          "text": "agentplugins author doctor (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-doctor"
+        },
+        {
+          "text": "agentplugins author help (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-help"
+        },
+        {
+          "text": "agentplugins author init (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-init"
+        },
+        {
+          "text": "agentplugins author inspect (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-inspect"
+        },
+        {
+          "text": "agentplugins author skills (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills"
+        },
+        {
+          "text": "agentplugins author skills help (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills-help"
+        },
+        {
+          "text": "agentplugins author skills init (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills-init"
+        },
+        {
+          "text": "agentplugins author skills validate (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills-validate"
+        },
+        {
+          "text": "agentplugins author test (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-test"
+        },
+        {
+          "text": "agentplugins author validate (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-validate"
+        },
+        {
+          "text": "agentplugins author version (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-version"
+        }
+      ]
+    }
+  ],
+  "/ru/use/": [
+    {
+      "text": "Использовать плагины",
+      "items": [
+        {
+          "text": "Обзор",
+          "link": "/ru/use/"
+        },
+        {
+          "text": "Установка",
+          "link": "/ru/use/install"
+        },
+        {
+          "text": "Управление",
+          "link": "/ru/use/manage"
         }
       ]
     },
     {
-      "text": "Продакшен и CI",
+      "text": "Создавать плагины",
       "items": [
         {
-          "text": "Готовность к продакшену",
-          "link": "/ru/guide/production-readiness"
+          "text": "Обзор",
+          "link": "/ru/build/"
         },
         {
-          "text": "Интеграция с CI",
-          "link": "/ru/guide/ci-integration"
+          "text": "Один Skill",
+          "link": "/ru/build/skill"
+        },
+        {
+          "text": "Удалённый MCP",
+          "link": "/ru/build/mcp-remote"
+        },
+        {
+          "text": "Локальный MCP",
+          "link": "/ru/build/mcp-stdio"
+        },
+        {
+          "text": "Гибридный плагин",
+          "link": "/ru/build/hybrid"
+        },
+        {
+          "text": "Несколько Skills",
+          "link": "/ru/build/skills"
+        },
+        {
+          "text": "Структура",
+          "link": "/ru/build/layout"
+        },
+        {
+          "text": "Проверки",
+          "link": "/ru/build/checks"
+        },
+        {
+          "text": "Передача",
+          "link": "/ru/build/handoff"
+        }
+      ]
+    },
+    {
+      "text": "История v1 · базовая версия 1.2.4",
+      "items": [
+        {
+          "text": "Исторический контекст",
+          "link": "/ru/legacy/v1/"
+        }
+      ]
+    },
+    {
+      "text": "plugin-kit-ai · подготовка, не релиз",
+      "items": [
+        {
+          "text": "plugin-kit-ai (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai"
+        },
+        {
+          "text": "plugin-kit-ai capabilities (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-capabilities"
+        },
+        {
+          "text": "plugin-kit-ai compat (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-compat"
+        },
+        {
+          "text": "plugin-kit-ai completion (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion"
+        },
+        {
+          "text": "plugin-kit-ai completion bash (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion-bash"
+        },
+        {
+          "text": "plugin-kit-ai completion fish (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion-fish"
+        },
+        {
+          "text": "plugin-kit-ai completion help (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion-help"
+        },
+        {
+          "text": "plugin-kit-ai completion powershell (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion-powershell"
+        },
+        {
+          "text": "plugin-kit-ai completion zsh (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion-zsh"
+        },
+        {
+          "text": "plugin-kit-ai doctor (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-doctor"
+        },
+        {
+          "text": "plugin-kit-ai help (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-help"
+        },
+        {
+          "text": "plugin-kit-ai init (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-init"
+        },
+        {
+          "text": "plugin-kit-ai inspect (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-inspect"
+        },
+        {
+          "text": "plugin-kit-ai skills (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-skills"
+        },
+        {
+          "text": "plugin-kit-ai skills help (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-skills-help"
+        },
+        {
+          "text": "plugin-kit-ai skills init (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-skills-init"
+        },
+        {
+          "text": "plugin-kit-ai skills validate (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-skills-validate"
+        },
+        {
+          "text": "plugin-kit-ai test (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-test"
+        },
+        {
+          "text": "plugin-kit-ai validate (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-validate"
+        },
+        {
+          "text": "plugin-kit-ai version (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-version"
+        }
+      ]
+    },
+    {
+      "text": "agentplugins author · подготовка, не релиз",
+      "items": [
+        {
+          "text": "agentplugins author (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author"
+        },
+        {
+          "text": "agentplugins author capabilities (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-capabilities"
+        },
+        {
+          "text": "agentplugins author compat (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-compat"
+        },
+        {
+          "text": "agentplugins author doctor (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-doctor"
+        },
+        {
+          "text": "agentplugins author help (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-help"
+        },
+        {
+          "text": "agentplugins author init (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-init"
+        },
+        {
+          "text": "agentplugins author inspect (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-inspect"
+        },
+        {
+          "text": "agentplugins author skills (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills"
+        },
+        {
+          "text": "agentplugins author skills help (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills-help"
+        },
+        {
+          "text": "agentplugins author skills init (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills-init"
+        },
+        {
+          "text": "agentplugins author skills validate (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills-validate"
+        },
+        {
+          "text": "agentplugins author test (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-test"
+        },
+        {
+          "text": "agentplugins author validate (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-validate"
+        },
+        {
+          "text": "agentplugins author version (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-version"
+        }
+      ]
+    }
+  ],
+  "/ru/build/": [
+    {
+      "text": "Использовать плагины",
+      "items": [
+        {
+          "text": "Обзор",
+          "link": "/ru/use/"
+        },
+        {
+          "text": "Установка",
+          "link": "/ru/use/install"
+        },
+        {
+          "text": "Управление",
+          "link": "/ru/use/manage"
+        }
+      ]
+    },
+    {
+      "text": "Создавать плагины",
+      "items": [
+        {
+          "text": "Обзор",
+          "link": "/ru/build/"
+        },
+        {
+          "text": "Один Skill",
+          "link": "/ru/build/skill"
+        },
+        {
+          "text": "Удалённый MCP",
+          "link": "/ru/build/mcp-remote"
+        },
+        {
+          "text": "Локальный MCP",
+          "link": "/ru/build/mcp-stdio"
+        },
+        {
+          "text": "Гибридный плагин",
+          "link": "/ru/build/hybrid"
+        },
+        {
+          "text": "Несколько Skills",
+          "link": "/ru/build/skills"
+        },
+        {
+          "text": "Структура",
+          "link": "/ru/build/layout"
+        },
+        {
+          "text": "Проверки",
+          "link": "/ru/build/checks"
+        },
+        {
+          "text": "Передача",
+          "link": "/ru/build/handoff"
+        }
+      ]
+    },
+    {
+      "text": "История v1 · базовая версия 1.2.4",
+      "items": [
+        {
+          "text": "Исторический контекст",
+          "link": "/ru/legacy/v1/"
+        }
+      ]
+    },
+    {
+      "text": "plugin-kit-ai · подготовка, не релиз",
+      "items": [
+        {
+          "text": "plugin-kit-ai (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai"
+        },
+        {
+          "text": "plugin-kit-ai capabilities (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-capabilities"
+        },
+        {
+          "text": "plugin-kit-ai compat (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-compat"
+        },
+        {
+          "text": "plugin-kit-ai completion (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion"
+        },
+        {
+          "text": "plugin-kit-ai completion bash (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion-bash"
+        },
+        {
+          "text": "plugin-kit-ai completion fish (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion-fish"
+        },
+        {
+          "text": "plugin-kit-ai completion help (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion-help"
+        },
+        {
+          "text": "plugin-kit-ai completion powershell (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion-powershell"
+        },
+        {
+          "text": "plugin-kit-ai completion zsh (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion-zsh"
+        },
+        {
+          "text": "plugin-kit-ai doctor (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-doctor"
+        },
+        {
+          "text": "plugin-kit-ai help (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-help"
+        },
+        {
+          "text": "plugin-kit-ai init (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-init"
+        },
+        {
+          "text": "plugin-kit-ai inspect (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-inspect"
+        },
+        {
+          "text": "plugin-kit-ai skills (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-skills"
+        },
+        {
+          "text": "plugin-kit-ai skills help (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-skills-help"
+        },
+        {
+          "text": "plugin-kit-ai skills init (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-skills-init"
+        },
+        {
+          "text": "plugin-kit-ai skills validate (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-skills-validate"
+        },
+        {
+          "text": "plugin-kit-ai test (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-test"
+        },
+        {
+          "text": "plugin-kit-ai validate (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-validate"
+        },
+        {
+          "text": "plugin-kit-ai version (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-version"
+        }
+      ]
+    },
+    {
+      "text": "agentplugins author · подготовка, не релиз",
+      "items": [
+        {
+          "text": "agentplugins author (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author"
+        },
+        {
+          "text": "agentplugins author capabilities (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-capabilities"
+        },
+        {
+          "text": "agentplugins author compat (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-compat"
+        },
+        {
+          "text": "agentplugins author doctor (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-doctor"
+        },
+        {
+          "text": "agentplugins author help (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-help"
+        },
+        {
+          "text": "agentplugins author init (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-init"
+        },
+        {
+          "text": "agentplugins author inspect (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-inspect"
+        },
+        {
+          "text": "agentplugins author skills (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills"
+        },
+        {
+          "text": "agentplugins author skills help (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills-help"
+        },
+        {
+          "text": "agentplugins author skills init (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills-init"
+        },
+        {
+          "text": "agentplugins author skills validate (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills-validate"
+        },
+        {
+          "text": "agentplugins author test (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-test"
+        },
+        {
+          "text": "agentplugins author validate (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-validate"
+        },
+        {
+          "text": "agentplugins author version (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-version"
+        }
+      ]
+    }
+  ],
+  "/ru/legacy/v1/": [
+    {
+      "text": "Использовать плагины",
+      "items": [
+        {
+          "text": "Обзор",
+          "link": "/ru/use/"
+        },
+        {
+          "text": "Установка",
+          "link": "/ru/use/install"
+        },
+        {
+          "text": "Управление",
+          "link": "/ru/use/manage"
+        }
+      ]
+    },
+    {
+      "text": "Создавать плагины",
+      "items": [
+        {
+          "text": "Обзор",
+          "link": "/ru/build/"
+        },
+        {
+          "text": "Один Skill",
+          "link": "/ru/build/skill"
+        },
+        {
+          "text": "Удалённый MCP",
+          "link": "/ru/build/mcp-remote"
+        },
+        {
+          "text": "Локальный MCP",
+          "link": "/ru/build/mcp-stdio"
+        },
+        {
+          "text": "Гибридный плагин",
+          "link": "/ru/build/hybrid"
+        },
+        {
+          "text": "Несколько Skills",
+          "link": "/ru/build/skills"
+        },
+        {
+          "text": "Структура",
+          "link": "/ru/build/layout"
+        },
+        {
+          "text": "Проверки",
+          "link": "/ru/build/checks"
+        },
+        {
+          "text": "Передача",
+          "link": "/ru/build/handoff"
+        }
+      ]
+    },
+    {
+      "text": "История v1 · базовая версия 1.2.4",
+      "items": [
+        {
+          "text": "Исторический контекст",
+          "link": "/ru/legacy/v1/"
+        }
+      ]
+    },
+    {
+      "text": "plugin-kit-ai · подготовка, не релиз",
+      "items": [
+        {
+          "text": "plugin-kit-ai (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai"
+        },
+        {
+          "text": "plugin-kit-ai capabilities (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-capabilities"
+        },
+        {
+          "text": "plugin-kit-ai compat (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-compat"
+        },
+        {
+          "text": "plugin-kit-ai completion (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion"
+        },
+        {
+          "text": "plugin-kit-ai completion bash (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion-bash"
+        },
+        {
+          "text": "plugin-kit-ai completion fish (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion-fish"
+        },
+        {
+          "text": "plugin-kit-ai completion help (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion-help"
+        },
+        {
+          "text": "plugin-kit-ai completion powershell (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion-powershell"
+        },
+        {
+          "text": "plugin-kit-ai completion zsh (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion-zsh"
+        },
+        {
+          "text": "plugin-kit-ai doctor (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-doctor"
+        },
+        {
+          "text": "plugin-kit-ai help (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-help"
+        },
+        {
+          "text": "plugin-kit-ai init (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-init"
+        },
+        {
+          "text": "plugin-kit-ai inspect (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-inspect"
+        },
+        {
+          "text": "plugin-kit-ai skills (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-skills"
+        },
+        {
+          "text": "plugin-kit-ai skills help (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-skills-help"
+        },
+        {
+          "text": "plugin-kit-ai skills init (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-skills-init"
+        },
+        {
+          "text": "plugin-kit-ai skills validate (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-skills-validate"
+        },
+        {
+          "text": "plugin-kit-ai test (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-test"
+        },
+        {
+          "text": "plugin-kit-ai validate (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-validate"
+        },
+        {
+          "text": "plugin-kit-ai version (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-version"
+        }
+      ]
+    },
+    {
+      "text": "agentplugins author · подготовка, не релиз",
+      "items": [
+        {
+          "text": "agentplugins author (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author"
+        },
+        {
+          "text": "agentplugins author capabilities (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-capabilities"
+        },
+        {
+          "text": "agentplugins author compat (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-compat"
+        },
+        {
+          "text": "agentplugins author doctor (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-doctor"
+        },
+        {
+          "text": "agentplugins author help (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-help"
+        },
+        {
+          "text": "agentplugins author init (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-init"
+        },
+        {
+          "text": "agentplugins author inspect (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-inspect"
+        },
+        {
+          "text": "agentplugins author skills (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills"
+        },
+        {
+          "text": "agentplugins author skills help (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills-help"
+        },
+        {
+          "text": "agentplugins author skills init (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills-init"
+        },
+        {
+          "text": "agentplugins author skills validate (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills-validate"
+        },
+        {
+          "text": "agentplugins author test (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-test"
+        },
+        {
+          "text": "agentplugins author validate (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-validate"
+        },
+        {
+          "text": "agentplugins author version (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-version"
+        }
+      ]
+    }
+  ],
+  "/ru/api/cli/prepared-authoring-v2": [
+    {
+      "text": "Использовать плагины",
+      "items": [
+        {
+          "text": "Обзор",
+          "link": "/ru/use/"
+        },
+        {
+          "text": "Установка",
+          "link": "/ru/use/install"
+        },
+        {
+          "text": "Управление",
+          "link": "/ru/use/manage"
+        }
+      ]
+    },
+    {
+      "text": "Создавать плагины",
+      "items": [
+        {
+          "text": "Обзор",
+          "link": "/ru/build/"
+        },
+        {
+          "text": "Один Skill",
+          "link": "/ru/build/skill"
+        },
+        {
+          "text": "Удалённый MCP",
+          "link": "/ru/build/mcp-remote"
+        },
+        {
+          "text": "Локальный MCP",
+          "link": "/ru/build/mcp-stdio"
+        },
+        {
+          "text": "Гибридный плагин",
+          "link": "/ru/build/hybrid"
+        },
+        {
+          "text": "Несколько Skills",
+          "link": "/ru/build/skills"
+        },
+        {
+          "text": "Структура",
+          "link": "/ru/build/layout"
+        },
+        {
+          "text": "Проверки",
+          "link": "/ru/build/checks"
+        },
+        {
+          "text": "Передача",
+          "link": "/ru/build/handoff"
+        }
+      ]
+    },
+    {
+      "text": "История v1 · базовая версия 1.2.4",
+      "items": [
+        {
+          "text": "Исторический контекст",
+          "link": "/ru/legacy/v1/"
+        }
+      ]
+    },
+    {
+      "text": "plugin-kit-ai · подготовка, не релиз",
+      "items": [
+        {
+          "text": "plugin-kit-ai (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai"
+        },
+        {
+          "text": "plugin-kit-ai capabilities (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-capabilities"
+        },
+        {
+          "text": "plugin-kit-ai compat (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-compat"
+        },
+        {
+          "text": "plugin-kit-ai completion (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion"
+        },
+        {
+          "text": "plugin-kit-ai completion bash (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion-bash"
+        },
+        {
+          "text": "plugin-kit-ai completion fish (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion-fish"
+        },
+        {
+          "text": "plugin-kit-ai completion help (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion-help"
+        },
+        {
+          "text": "plugin-kit-ai completion powershell (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion-powershell"
+        },
+        {
+          "text": "plugin-kit-ai completion zsh (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion-zsh"
+        },
+        {
+          "text": "plugin-kit-ai doctor (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-doctor"
+        },
+        {
+          "text": "plugin-kit-ai help (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-help"
+        },
+        {
+          "text": "plugin-kit-ai init (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-init"
+        },
+        {
+          "text": "plugin-kit-ai inspect (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-inspect"
+        },
+        {
+          "text": "plugin-kit-ai skills (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-skills"
+        },
+        {
+          "text": "plugin-kit-ai skills help (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-skills-help"
+        },
+        {
+          "text": "plugin-kit-ai skills init (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-skills-init"
+        },
+        {
+          "text": "plugin-kit-ai skills validate (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-skills-validate"
+        },
+        {
+          "text": "plugin-kit-ai test (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-test"
+        },
+        {
+          "text": "plugin-kit-ai validate (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-validate"
+        },
+        {
+          "text": "plugin-kit-ai version (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-version"
+        }
+      ]
+    },
+    {
+      "text": "agentplugins author · подготовка, не релиз",
+      "items": [
+        {
+          "text": "agentplugins author (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author"
+        },
+        {
+          "text": "agentplugins author capabilities (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-capabilities"
+        },
+        {
+          "text": "agentplugins author compat (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-compat"
+        },
+        {
+          "text": "agentplugins author doctor (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-doctor"
+        },
+        {
+          "text": "agentplugins author help (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-help"
+        },
+        {
+          "text": "agentplugins author init (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-init"
+        },
+        {
+          "text": "agentplugins author inspect (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-inspect"
+        },
+        {
+          "text": "agentplugins author skills (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills"
+        },
+        {
+          "text": "agentplugins author skills help (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills-help"
+        },
+        {
+          "text": "agentplugins author skills init (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills-init"
+        },
+        {
+          "text": "agentplugins author skills validate (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills-validate"
+        },
+        {
+          "text": "agentplugins author test (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-test"
+        },
+        {
+          "text": "agentplugins author validate (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-validate"
+        },
+        {
+          "text": "agentplugins author version (На английском)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-version"
         }
       ]
     }

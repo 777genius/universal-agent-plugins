@@ -12,7 +12,7 @@ maturity: "beta"
 sourceRef: "sdk/platformmeta"
 translationRequired: false
 ---
-<DocMetaCard surface="go-sdk" stability="public-beta" maturity="beta" source-ref="sdk/platformmeta" source-href="https://github.com/777genius/plugin-kit-ai/tree/main/sdk/platformmeta" />
+<DocMetaCard surface="go-sdk" stability="public-beta" maturity="beta" source-ref="sdk/platformmeta" source-href="https://github.com/777genius/universal-agent-plugins/tree/main/sdk/platformmeta" />
 
 # platformmeta
 
