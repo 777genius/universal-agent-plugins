@@ -20,7 +20,7 @@ export async function extractGoSDK() {
         "run",
         "github.com/princjef/gomarkdoc/cmd/gomarkdoc@v1.1.0",
         "--repository.url",
-        "https://github.com/777genius/plugin-kit-ai",
+        "https://github.com/777genius/universal-agent-plugins",
         "--repository.default-branch",
         "main",
         "--output",

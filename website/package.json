@@ -18,7 +18,7 @@
   },
   "scripts": {
     "docs:clean": "node ./tools/clean.mjs",
-    "docs:test": "node --test ./tools/lib/frontmatter.test.mjs",
+    "docs:test": "node --test ./tools/lib/frontmatter.test.mjs ./tools/lib/site-consumer.test.mjs",
     "docs:gen": "node ./tools/generate.mjs",
     "docs:build": "pnpm run docs:gen && vitepress build && node ./tools/postbuild.mjs",
     "docs:dev": "pnpm run docs:gen && vitepress dev",

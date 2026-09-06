@@ -1,6 +1,7 @@
+import { emitRedirects } from "./lib/redirects.mjs";
 import fs from "node:fs";
 import path from "node:path";
-import { docsBaseUrl, websiteRoot } from "./config/site.mjs";
+import { docsBaseUrl, websiteRoot, generatedRegistryPaths } from "./config/site.mjs";
 
 const distRoot = path.join(websiteRoot, "dist");
 const englishRoot = path.join(distRoot, "en");
@@ -11,22 +12,10 @@ fs.writeFileSync(
   ["User-agent: *", "Allow: /", `Sitemap: ${sitemapUrl}`, ""].join("\n")
 );
 
-for (const filePath of listHtmlFiles(englishRoot)) {
-  const relative = path.relative(englishRoot, filePath).replace(/\\/g, "/");
-  if (!relative || relative === "index.html") {
-    continue;
-  }
+const redirects = JSON.parse(fs.readFileSync(generatedRegistryPaths.redirects, "utf8"));
+await emitRedirects(distRoot, redirects, docsBaseUrl);
 
-  const aliasPath = path.join(distRoot, relative);
-  if (fs.existsSync(aliasPath)) {
-    continue;
-  }
-
-  const targetUrl = new URL(toEnglishDocsPath(relative).replace(/^\/+/, ""), docsBaseUrl).toString();
-  fs.mkdirSync(path.dirname(aliasPath), { recursive: true });
-  fs.writeFileSync(aliasPath, createRedirectDocument(targetUrl));
-}
-
+// Preserved former alias helpers; current source-owned emission is above.
 function listHtmlFiles(rootDir) {
   if (!fs.existsSync(rootDir)) {
     return [];

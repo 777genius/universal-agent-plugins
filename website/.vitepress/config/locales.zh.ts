@@ -1,3 +1,4 @@
+import { journeyNav } from "../../tools/lib/journeys.mjs";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -30,6 +31,7 @@ export const zhLocaleConfig = {
       copyright: "MIT 许可"
     },
     nav: [
+      ...journeyNav("zh"),
       { text: "指南", link: "/zh/guide/" },
       { text: "概念", link: "/zh/concepts/" },
       { text: "参考", link: "/zh/reference/" },
@@ -38,7 +40,7 @@ export const zhLocaleConfig = {
     ],
     sidebar: readSidebar("sidebars.zh.json"),
     editLink: {
-      pattern: "https://github.com/777genius/plugin-kit-ai/edit/main/website/source/:path",
+      pattern: "https://github.com/777genius/universal-agent-plugins/edit/main/website/source/:path",
       text: "编辑此页"
     }
   }

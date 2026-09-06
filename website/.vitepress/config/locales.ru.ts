@@ -1,3 +1,4 @@
+import { journeyNav } from "../../tools/lib/journeys.mjs";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -30,6 +31,7 @@ export const ruLocaleConfig = {
       copyright: "Лицензия MIT"
     },
     nav: [
+      ...journeyNav("ru"),
       { text: "Гайды", link: "/ru/guide/" },
       { text: "Концепции", link: "/ru/concepts/" },
       { text: "Справочник", link: "/ru/reference/" },
@@ -38,7 +40,7 @@ export const ruLocaleConfig = {
     ],
     sidebar: readSidebar("sidebars.ru.json"),
     editLink: {
-      pattern: "https://github.com/777genius/plugin-kit-ai/edit/main/website/source/:path",
+      pattern: "https://github.com/777genius/universal-agent-plugins/edit/main/website/source/:path",
       text: "Редактировать страницу"
     }
   }
