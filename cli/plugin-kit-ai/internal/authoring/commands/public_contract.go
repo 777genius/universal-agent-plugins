@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -56,6 +57,7 @@ type selection struct {
 	operation, mode, format string
 	help, invalid           bool
 	flags                   []string
+	values                  map[string][]string
 }
 
 // selectPublic observes definitions on the fresh tree without executing a
@@ -64,7 +66,7 @@ type selection struct {
 // command; its unknown arity can never promote a credential value into a verb.
 // Format selection continues after errors, with pflag's final-value semantics.
 func selectPublic(root *cobra.Command, args []string) selection {
-	s := selection{command: root, operation: "author", mode: "read", format: "human"}
+	s := selection{command: root, operation: "author", mode: "read", format: "human", values: map[string][]string{}}
 	positional, helpCommand := false, false
 	lookup := func(name string, short bool) *pflag.Flag {
 		for c := s.command; c != nil; c = c.Parent() {
@@ -83,6 +85,7 @@ func selectPublic(root *cobra.Command, args []string) selection {
 		return nil
 	}
 	flag := func(f *pflag.Flag, value string) {
+		s.values[f.Name] = append(s.values[f.Name], value)
 		if f.Name == "format" {
 			s.format = value
 		}
@@ -122,6 +125,7 @@ func selectPublic(root *cobra.Command, args []string) selection {
 					i++
 					value = args[i]
 				} else {
+					s.values[f.Name] = append(s.values[f.Name], "")
 					s.invalid = true
 					continue
 				}
@@ -138,7 +142,7 @@ func selectPublic(root *cobra.Command, args []string) selection {
 				if f == nil {
 					s.invalid = true
 					positional = true
-					break
+					continue
 				}
 				value := f.NoOptDefVal
 				if strings.HasPrefix(cluster, "=") {
@@ -170,7 +174,7 @@ func selectPublic(root *cobra.Command, args []string) selection {
 		}
 		var next *cobra.Command
 		for _, c := range s.command.Commands() {
-			if c.Name() == token && (!c.Hidden || c.Name() == "author") {
+			if c.Name() == token && (!c.Hidden || c.Name() == "author" || c.Annotations[authoringcli.RejectionKey] != "") {
 				next = c
 				break
 			}
@@ -183,11 +187,14 @@ func selectPublic(root *cobra.Command, args []string) selection {
 			continue
 		}
 		s.command = next
+		if id := next.Annotations[operationKey]; id != "" {
+			s.operation = id
+		}
 	}
 	s.help = s.help || helpCommand
 	if id := s.command.Annotations[operationKey]; id != "" {
 		s.operation = id
-	} else {
+	} else if s.command.Annotations[authoringcli.RejectionKey] == "" && !isCompletion(s.command) {
 		s.invalid = true
 	}
 	if s.operation == "author.init" || s.operation == "author.skills.init" {
@@ -218,6 +225,8 @@ func publicInputError(err error) error {
 
 func (a App) executePublic(ctx context.Context, args []string, streams authoringcli.Streams, build RootBuilder) error {
 	var captured *report.Report
+	var utility bytes.Buffer
+	utilitySelected := false
 	var selected = selection{operation: "author", mode: "read", format: "human"}
 	var surface []string
 	factory := authoringcli.Factory(func() (*cobra.Command, error) {
@@ -231,6 +240,9 @@ func (a App) executePublic(ctx context.Context, args []string, streams authoring
 				return c, err
 			})
 		}
+		if a.Release != nil {
+			factories = append(factories, func() (*cobra.Command, error) { return NewVersionCommand() })
+		}
 		root, err := build(factories...)
 		if err != nil {
 			return nil, err
@@ -238,7 +250,11 @@ func (a App) executePublic(ctx context.Context, args []string, streams authoring
 		if root == nil {
 			return nil, errors.New("missing authoring root")
 		}
-		root.CompletionOptions.DisableDefaultCmd = true
+		root.CompletionOptions.DisableDefaultCmd = a.Release == nil
+		if a.Release != nil {
+			root.SetOut(&utility)
+			authoringcli.PrepareReleaseUtilities(root, false)
+		}
 		if root.Name() == "plugin-kit-ai" {
 			root.Annotations = map[string]string{operationKey: "author"}
 		}
@@ -262,6 +278,24 @@ func (a App) executePublic(ctx context.Context, args []string, streams authoring
 		prepare(root)
 		surface = implementedLeaves(root)
 		selected = selectPublic(root, args)
+		if a.Release != nil {
+			if a.Release.Reject != nil {
+				if e := a.Release.Reject(Invocation{Command: selected.command, Values: selected.values}); e != nil {
+					if v := selected.values["json"]; len(v) > 0 && v[len(v)-1] == "true" && len(selected.values["format"]) == 0 {
+						selected.format = "json"
+					}
+					return nil, &inputError{"v1_operation_unavailable", e.Error()}
+				}
+			}
+			utilitySelected = isCompletion(selected.command)
+			if len(args) > 0 && (args[0] == "__complete" || args[0] == "__completeNoDesc") {
+				utilitySelected = true
+				selected.invalid = false
+			}
+			if utilitySelected {
+				authoringcli.PrepareReleaseUtilities(root, true)
+			}
+		}
 		if selected.invalid {
 			return nil, &inputError{"arguments_invalid", publicArguments}
 		}
@@ -282,9 +316,15 @@ func (a App) executePublic(ctx context.Context, args []string, streams authoring
 
 		return root, nil
 	})
-	err := factory.Execute(ctx, args, authoringcli.Streams{In: streams.In, Out: io.Discard, Err: io.Discard})
+	err := factory.Execute(ctx, args, authoringcli.Streams{In: streams.In, Out: &utility, Err: io.Discard})
 	if errors.Is(err, errPublicHelp) {
 		err = nil
+	}
+	if utilitySelected && err == nil && !selected.help && selected.format == "human" {
+		if _, e := streams.Out.Write(utility.Bytes()); e != nil {
+			return exitx.Wrap(errors.New("authoring output failed"), 1)
+		}
+		return nil
 	}
 	attempted := captured != nil
 	code := 0
@@ -320,7 +360,8 @@ func (a App) executePublic(ctx context.Context, args []string, streams authoring
 		commands = surface
 	}
 	p := captured.PublicResult(selected.operation, selected.mode, attempted, commands)
-	if !attempted && err == nil {
+	versionResult := a.Release != nil && selected.operation == "author.version" && !selected.help && err == nil
+	if !attempted && err == nil && !versionResult && (!utilitySelected || selected.help) {
 		p.Help = publicHelp(selected)
 	}
 	result := outputjson.Success
@@ -329,9 +370,23 @@ func (a App) executePublic(ctx context.Context, args []string, streams authoring
 	}
 	var outputErr error
 	if selected.format == "json" {
-		outputErr = outputjson.Write(streams.Out, selected.operation, result, p)
+		var payload any = p
+		if utilitySelected && err == nil && !selected.help {
+			payload = struct {
+				report.Public
+				Script string `json:"script"`
+			}{p, utility.String()}
+		}
+		if versionResult {
+			payload = versionPayload{Public: p, Product: a.Release.Product, ProductVersion: a.Release.Version}
+		}
+		outputErr = outputjson.Write(streams.Out, selected.operation, result, payload)
 	} else {
-		outputErr = writePublicHuman(streams.Out, p, result)
+		if versionResult {
+			_, outputErr = fmt.Fprintf(streams.Out, "%s %s\nauthoring engine %s; revision %s\n", a.Release.Product, a.Release.Version, p.EngineVersion, p.Revision)
+		} else {
+			outputErr = writePublicHuman(streams.Out, p, result)
+		}
 	}
 	if outputErr != nil {
 		return exitx.Wrap(errors.New("authoring output failed"), 1)
@@ -389,7 +444,7 @@ func publicHelp(s selection) *report.CommandHelp {
 	// argv and mutable flag values never contribute to usage text.
 	use := s.command.CommandPath() + strings.TrimPrefix(s.command.Use, s.command.Name())
 	h := &report.CommandHelp{Use: use, Flags: []string{}, Guidance: publicArguments}
-	if s.operation == "author" {
+	if s.operation == "author" && (s.command.Name() == "author" || s.command.Name() == "plugin-kit-ai") {
 		h.Use += " <command>"
 	}
 	seen := map[string]bool{}

@@ -12,7 +12,7 @@ const producer = require("../scripts/stage-dual-authoring-candidate");
 // Structural controlled-builder fixtures only: Go env/build/inspection are
 // stubbed. Git snapshot, exclusive creation, writes and cleanup are real.
 // Actual Linux bytes and native journeys are separate opt-in evidence.
-function fixture(t) {
+function fixture(t, mode) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "candidate-marker-"));
   const repo = path.resolve(__dirname, "../../..");
   const workParent = path.join(root, "work");
@@ -27,6 +27,17 @@ function fixture(t) {
   const output = path.join(root, "candidate");
   const marker = path.join(output, "candidate.json");
   const options = { candidate: true, repo, workParent, modCache, go, output, identity, assetScope: "linux-amd64-pair" };
+  if (mode) {
+    options.authoringMode = mode;
+    // Structural source-capability response, like the fake compiler below;
+    // this is not a real source or native candidate proof.
+    const read = c.readFile;
+    t.mock.method(c, "readFile", function(file, ...rest) {
+      if (file.endsWith("/source/cli/plugin-kit-ai/internal/authoring/commands/commands.go"))
+        return Buffer.from('const ReleaseMode = "release-cli-contract-v1"\n');
+      return read(file, ...rest);
+    });
+  }
   // Keep the trusted tool directory disjoint from candidate output.
   const tools = path.join(root, "tools"); fs.mkdirSync(tools);
   fs.renameSync(go, path.join(tools, "go")); options.go = path.join(tools, "go");
@@ -36,6 +47,7 @@ function fixture(t) {
     if (args[0] === "env") return JSON.stringify({ GOVERSION: "go1.25.13", GOHOSTOS: "linux", GOHOSTARCH: "amd64" });
     if (args[0] === "build") {
       const product = args.at(-1).split("/").at(-1);
+      assert.equal(args[args.indexOf("-ldflags") + 1], c.linkerFlags(product, identity, mode));
       fs.writeFileSync(args[args.indexOf("-o") + 1], `STRUCTURAL ONLY: ${product}`);
       return Buffer.alloc(0);
     }
@@ -44,7 +56,7 @@ function fixture(t) {
     assert.ok(c.PRODUCTS.includes(product));
     return JSON.stringify({ GoVersion: "go1.25.13", Path: `github.com/777genius/plugin-kit-ai/cli/cmd/${product}`,
       Settings: Object.entries({ GOOS: "linux", GOARCH: "amd64", CGO_ENABLED: "0", "-buildmode": "exe", "-compiler": "gc",
-        "-ldflags": c.linkerFlags(product, identity) }).map(([Key, Value]) => ({ Key, Value })) });
+        "-ldflags": c.linkerFlags(product, identity, mode) }).map(([Key, Value]) => ({ Key, Value })) });
   });
   return { options, marker, output };
 }
@@ -154,4 +166,16 @@ test("successful structural candidate still finalizes and verifies", {
   assert.equal(producer.verifyCandidate({ candidate: true, root: output, identity: options.identity,
     manifestDigest: result.manifest_sha256, go: options.go, workParent: options.workParent,
     assetScope: options.assetScope }).consistency_verified, true);
+});
+
+
+test("release mode producer and verifier require matching explicit intent", (t) => {
+  const mode = "release-cli-contract-v1";
+  const { options, output, marker } = fixture(t, mode);
+  const staged = producer.stageCandidate(options);
+  assert.equal(JSON.parse(fs.readFileSync(marker)).build.authoring_mode, mode);
+  const verify = { candidate: true, root: output, identity: options.identity,
+    manifestDigest: staged.manifest_sha256, go: options.go, workParent: options.workParent, assetScope: options.assetScope };
+  assert.throws(() => producer.verifyCandidate(verify), /build description/);
+  assert.equal(producer.verifyCandidate({ ...verify, authoringMode: mode }).consistency_verified, true);
 });

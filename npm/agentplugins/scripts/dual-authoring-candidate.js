@@ -56,8 +56,13 @@ function executableName(product, target) {
   return product + (target.startsWith("windows-") ? ".exe" : "");
 }
 
-function linkerFlags(product, id) {
-  return `-X main.version=${id.versions[product]} -X ${COMMANDS}.Enabled=vertical-slice-v1 -X ${COMMANDS}.Revision=${id.commit}`;
+function authoringMode(value = "vertical-slice-v1") {
+  if (!["vertical-slice-v1", "release-cli-contract-v1"].includes(value)) throw new Error("unknown private authoring mode");
+  return value;
+}
+
+function linkerFlags(product, id, mode) {
+  return `-X main.version=${id.versions[product]} -X ${COMMANDS}.Enabled=${authoringMode(mode)} -X ${COMMANDS}.Revision=${id.commit}`;
 }
 
 // Walk every component, including ancestors, before resolving paths. This is a
@@ -177,7 +182,8 @@ function checkMetadata(value, body, label) {
       value.sha256 !== digest(body) || value.size !== body.length) throw new Error(`${label}: digest or size mismatch`);
 }
 
-function manifestShape(manifest, expected, expectedScope) {
+function manifestShape(manifest, expected, expectedScope, expectedMode) {
+  const mode = authoringMode(expectedMode);
   identity(expected);
   const targets = scopeTargets(expectedScope);
   keys(manifest, ["schema", "status", "identity", "asset_scope", "build", "products", "release_eligible"], "candidate");
@@ -187,7 +193,7 @@ function manifestShape(manifest, expected, expectedScope) {
       PRODUCTS.some((p) => manifest.identity.versions[p] !== expected.versions[p])) throw new Error("candidate identity/schema mismatch");
   keys(manifest.build, ["method", "go_version", "go_sha256", "source_archive_sha256", "authoring_mode"], "build");
   if (manifest.build.method !== "controlled-git-archive-go-build/v1" || manifest.build.go_version !== "go1.25.13" ||
-      manifest.build.authoring_mode !== "vertical-slice-v1" ||
+      manifest.build.authoring_mode !== mode ||
       typeof manifest.build.go_sha256 !== "string" || typeof manifest.build.source_archive_sha256 !== "string" ||
       !/^[0-9a-f]{64}$/.test(manifest.build.go_sha256) || !/^[0-9a-f]{64}$/.test(manifest.build.source_archive_sha256)) {
     throw new Error("candidate controlled build description is invalid");
@@ -212,7 +218,7 @@ function manifestShape(manifest, expected, expectedScope) {
 // This function validates STRUCTURE/BYTES ONLY. The public verifier additionally
 // checks embedded product/build settings with the trusted Go tool. Neither is a
 // platform gate, and neither establishes provenance from untrusted metadata.
-function frozenCandidate(root, expected, manifestDigest, expectedScope) {
+function frozenCandidate(root, expected, manifestDigest, expectedScope, expectedMode) {
   safeDirectory(root);
   if (typeof manifestDigest !== "string" || !/^[0-9a-f]{64}$/.test(manifestDigest)) throw new Error("independent manifest digest is required");
   const body = readFile(path.join(root, "candidate.json"), 1024 * 1024);
@@ -220,7 +226,7 @@ function frozenCandidate(root, expected, manifestDigest, expectedScope) {
   const manifest = JSON.parse(body);
   // Require canonical encoding: duplicate JSON keys and ambiguous encodings fail.
   if (!body.equals(encode(manifest))) throw new Error("noncanonical candidate JSON");
-  manifestShape(manifest, expected, expectedScope);
+  manifestShape(manifest, expected, expectedScope, expectedMode);
   const expectedFiles = ["candidate.json"];
   const binaries = [];
   const seen = new Set();
@@ -243,6 +249,6 @@ function frozenCandidate(root, expected, manifestDigest, expectedScope) {
 
 module.exports = {
   REPOSITORY, SCHEMA, PRODUCTS, TARGETS, COMMANDS, digest, encode, keys, identity,
-  assetName, executableName, linkerFlags, safeDirectory, outputPlacement, readFile,
+  assetName, executableName, authoringMode, linkerFlags, safeDirectory, outputPlacement, readFile,
   archive, unpack, metadata, scopeTargets, manifestShape, frozenCandidate
 };

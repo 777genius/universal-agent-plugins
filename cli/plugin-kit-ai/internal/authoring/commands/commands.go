@@ -29,7 +29,10 @@ import (
 var Enabled string
 var Revision = "unversioned"
 
-func IsEnabled() bool { return Enabled == "vertical-slice-v1" }
+const ReleaseMode = "release-cli-contract-v1"
+
+func IsEnabled() bool { return Enabled == "vertical-slice-v1" || IsRelease() }
+func IsRelease() bool { return Enabled == ReleaseMode }
 
 type RootBuilder func(...authoringcli.Factory) (*cobra.Command, error)
 type App struct {
@@ -37,6 +40,7 @@ type App struct {
 	Revision string
 	// PublicContract opts into the private Phase 6 contract; mains retain their existing mode.
 	PublicContract bool
+	Release        *ReleaseOptions
 }
 
 func commandNames() []string {

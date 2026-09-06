@@ -285,3 +285,26 @@ test("offline controlled snapshot matches exact HEAD blobs and rejects a differe
   assert.equal(fs.existsSync(path.join(context.root, "source", "npm")), false);
   assert.throws(() => producer.sourceSnapshot(repo, "b".repeat(40), producer.privateContext(temp())), /HEAD/);
 });
+
+test("private mode is explicit, closed and bound to embedded bytes", () => {
+  const mode = "release-cli-contract-v1";
+  assert.equal(c.authoringMode(), "vertical-slice-v1");
+  assert.throws(() => c.authoringMode("enabled"), /unknown private/);
+  assert.notEqual(c.linkerFlags("agentplugins", ID), c.linkerFlags("agentplugins", ID, mode));
+  const info = { GoVersion: "go1.25.13", Path: "github.com/777genius/plugin-kit-ai/cli/cmd/agentplugins",
+    Settings: Object.entries({ GOOS: "linux", GOARCH: "amd64", CGO_ENABLED: "0", "-buildmode": "exe", "-compiler": "gc",
+      "-ldflags": c.linkerFlags("agentplugins", ID, mode) }).map(([Key, Value]) => ({ Key, Value })) };
+  producer.buildInfo(info, "agentplugins", "linux-amd64", ID, mode);
+  assert.throws(() => producer.buildInfo(info, "agentplugins", "linux-amd64", ID), /build setting mismatch/);
+  info.Settings.at(-1).Value = c.linkerFlags("agentplugins", ID);
+  assert.throws(() => producer.buildInfo(info, "agentplugins", "linux-amd64", ID, mode), /build setting mismatch/);
+});
+
+test("manifest expected mode cannot silently reinterpret historical candidates", () => {
+  const f = structuralFixture();
+  assert.throws(() => c.frozenCandidate(f.root, ID, f.hash, SCOPE, "release-cli-contract-v1"), /build description/);
+  f.manifest.build.authoring_mode = "release-cli-contract-v1";
+  const hash = f.save();
+  assert.throws(() => freeze(f.root, ID, hash), /build description/);
+  assert.equal(c.frozenCandidate(f.root, ID, hash, SCOPE, "release-cli-contract-v1").binaries.length, 12);
+});

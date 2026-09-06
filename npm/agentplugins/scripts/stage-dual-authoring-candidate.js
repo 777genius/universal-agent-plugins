@@ -17,7 +17,8 @@ function run(command, args, options = {}) {
 }
 
 function optIn(options, fields) {
-  c.keys(options, ["candidate", ...fields], "options");
+  c.keys(options, ["candidate", ...fields, ...("authoringMode" in options ? ["authoringMode"] : [])], "options");
+  c.authoringMode(options.authoringMode);
   if (options.candidate !== true) throw new Error("explicit candidate opt-in required");
   c.identity(options.identity);
 }
@@ -56,7 +57,7 @@ function toolchain(go, context) {
   return hash;
 }
 
-function buildInfo(info, product, target, id) {
+function buildInfo(info, product, target, id, mode) {
   if (!info || info.GoVersion !== GO_VERSION || info.Path !== `github.com/777genius/plugin-kit-ai/cli/cmd/${product}` ||
       !Array.isArray(info.Settings)) throw new Error("embedded Go product/toolchain identity mismatch");
   const settings = new Map();
@@ -67,16 +68,16 @@ function buildInfo(info, product, target, id) {
   const [os, arch] = target.split("-");
   const required = {
     GOOS: os, GOARCH: arch, CGO_ENABLED: "0", "-buildmode": "exe", "-compiler": "gc",
-    "-ldflags": c.linkerFlags(product, id)
+    "-ldflags": c.linkerFlags(product, id, mode)
   };
   for (const [key, value] of Object.entries(required)) {
     if (settings.get(key) !== value) throw new Error(`embedded Go build setting mismatch: ${product}/${target}/${key}`);
   }
 }
 
-function inspectBinary(go, file, product, target, id, env) {
+function inspectBinary(go, file, product, target, id, env, mode) {
   // `go version` reads build info; it never starts the subject executable.
-  buildInfo(JSON.parse(run(go, ["version", "-m", "-json", file], { env })), product, target, id);
+  buildInfo(JSON.parse(run(go, ["version", "-m", "-json", file], { env })), product, target, id, mode);
 }
 
 function sourceSnapshot(repo, commit, context) {
@@ -117,6 +118,7 @@ function writeExclusive(file, body, mode = 0o444) {
 function stageCandidate(options) {
   optIn(options, ["repo", "output", "workParent", "go", "modCache", "identity", "assetScope"]);
   const targets = c.scopeTargets(options.assetScope);
+  const mode = c.authoringMode(options.authoringMode);
   const id = structuredClone(options.identity);
   c.safeDirectory(options.modCache);
   c.safeDirectory(options.workParent);
@@ -124,11 +126,19 @@ function stageCandidate(options) {
   const context = privateContext(options.workParent);
   const goHash = toolchain(options.go, context);
   const sourceHash = sourceSnapshot(options.repo, id.commit, context);
+  // Old revisions accept arbitrary -X strings even when their routing does not
+  // implement that mode. Refuse that source before compiling or labelling bytes.
+  if (mode === "release-cli-contract-v1") {
+    const selection = c.readFile(path.join(context.root, "source", "cli/plugin-kit-ai/internal/authoring/commands/commands.go")).toString();
+    if (!/^const ReleaseMode = "release-cli-contract-v1"$/m.test(selection)) {
+      throw new Error("frozen source does not declare the requested release authoring mode");
+    }
+  }
   const env = { ...context.env, GOMODCACHE: options.modCache, GOWORK: path.join(context.root, "source", "go.work") };
   const manifest = {
     schema: c.SCHEMA, status: "CANDIDATE", identity: id, asset_scope: options.assetScope,
     build: { method: "controlled-git-archive-go-build/v1", go_version: GO_VERSION, go_sha256: goHash,
-      source_archive_sha256: sourceHash, authoring_mode: "vertical-slice-v1" },
+      source_archive_sha256: sourceHash, authoring_mode: mode },
     products: {}, release_eligible: false
   };
   // Reserve an absent destination exclusively. Partial output has no candidate
@@ -148,10 +158,10 @@ function stageCandidate(options) {
         // No trimpath: Go intentionally omits -ldflags from build info with
         // trimpath. Preserve the exact embedded version/engine linker settings
         // for byte inspection. Reproducibility is a later, separate gate.
-        const args = ["build", "-p", "2", "-buildvcs=false", "-mod=readonly", "-ldflags", c.linkerFlags(product, id),
+        const args = ["build", "-p", "2", "-buildvcs=false", "-mod=readonly", "-ldflags", c.linkerFlags(product, id, mode),
           "-o", binaryPath, `./cli/plugin-kit-ai/cmd/${product}`];
         run(options.go, args, { cwd: path.join(context.root, "source"), env: { ...env, GOOS: os, GOARCH: arch } });
-        inspectBinary(options.go, binaryPath, product, target, id, env);
+        inspectBinary(options.go, binaryPath, product, target, id, env, mode);
         const binary = c.readFile(binaryPath);
         const file = c.assetName(product, id.versions[product], target);
         const binaryName = c.executableName(product, target);
@@ -164,7 +174,7 @@ function stageCandidate(options) {
         fs.writeFileSync(path.join(context.root, "build-log.json"), c.encode(log));
       }
     }
-    c.manifestShape(manifest, id, options.assetScope);
+    c.manifestShape(manifest, id, options.assetScope, mode);
     const body = c.encode(manifest);
     const manifestHash = c.digest(body);
     // Validate the complete set in a separate private root before publishing the
@@ -174,7 +184,7 @@ function stageCandidate(options) {
     for (const file of fs.readdirSync(options.output)) writeExclusive(path.join(checkRoot, file), c.readFile(path.join(options.output, file)));
     writeExclusive(path.join(checkRoot, "candidate.json"), body);
     verifyCandidate({ candidate: true, root: checkRoot, identity: id, manifestDigest: manifestHash,
-      go: options.go, workParent: options.workParent, assetScope: options.assetScope });
+      go: options.go, workParent: options.workParent, assetScope: options.assetScope, authoringMode: mode });
     // Recheck final output bytes immediately before committing the marker.
     for (const product of c.PRODUCTS) for (const asset of Object.values(manifest.products[product].assets)) {
       if (c.digest(c.readFile(path.join(options.output, asset.file))) !== asset.sha256) throw new Error("staged bytes changed");
@@ -225,14 +235,14 @@ function verifyCandidate(options) {
   if (options.workParent === options.root || options.workParent.startsWith(options.root + path.sep)) {
     throw new Error("verification scratch must be outside candidate output");
   }
-  const frozen = c.frozenCandidate(options.root, options.identity, options.manifestDigest, options.assetScope);
+  const frozen = c.frozenCandidate(options.root, options.identity, options.manifestDigest, options.assetScope, options.authoringMode);
   const context = privateContext(options.workParent);
   const goHash = toolchain(options.go, context);
   if (goHash !== frozen.manifest.build.go_sha256) throw new Error("trusted Go tool digest mismatch");
   for (const { product, target, binary } of frozen.binaries) {
     const file = path.join(context.root, "bin", `${product}-${target}`);
     writeExclusive(file, binary); // no executable bit; no execution during verify
-    inspectBinary(options.go, file, product, target, options.identity, context.env);
+    inspectBinary(options.go, file, product, target, options.identity, context.env, options.authoringMode);
   }
   return { status: "CANDIDATE", manifest_sha256: frozen.manifest_sha256,
     consistency_verified: true, release_eligible: false, platform_acceptance: false, attested: false };

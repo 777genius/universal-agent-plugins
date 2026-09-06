@@ -17,7 +17,13 @@ func main() {
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 		defer stop()
 		app := commands.App{Projects: project.Service{Scratch: os.TempDir()}, Revision: commands.Revision}
-		if err := app.Execute(ctx, os.Args[1:], authoringcli.Streams{In: os.Stdin, Out: os.Stdout, Err: os.Stderr}, authoringcli.NewPluginKitRoot); err != nil {
+		build := commands.RootBuilder(authoringcli.NewPluginKitRoot)
+		if commands.IsRelease() {
+			app.PublicContract = true
+			app.Release = &commands.ReleaseOptions{Product: "plugin-kit-ai", Version: version, Reject: rejectV1}
+			build = newReleaseRoot
+		}
+		if err := app.Execute(ctx, os.Args[1:], authoringcli.Streams{In: os.Stdin, Out: os.Stdout, Err: os.Stderr}, build); err != nil {
 			os.Exit(exitx.Code(err))
 		}
 		return

@@ -60,14 +60,22 @@ var (
 )
 
 func main() {
-	if commands.IsEnabled() && commands.IsAuthorInvocation(os.Args[1:], agentpluginscli.NewRoot(agentpluginscli.App{})) {
+	if commands.IsRelease() {
+		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+		defer stop()
+		if err := executeRelease(ctx, os.Args[1:], authoringcli.Streams{In: os.Stdin, Out: os.Stdout, Err: os.Stderr}, run); err != nil {
+			os.Exit(exitx.Code(err))
+		}
+		return
+	}
+	if commands.IsEnabled() && commands.IsAuthorInvocation(os.Args[1:], agentpluginscli.NewRoot(agentpluginscli.App{Version: version})) {
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 		defer stop()
 		app := commands.App{Projects: project.Service{Scratch: os.TempDir()}, Revision: commands.Revision}
 		err := app.Execute(ctx, os.Args[1:], authoringcli.Streams{In: os.Stdin, Out: os.Stdout, Err: os.Stderr}, func(factories ...authoringcli.Factory) (*cobra.Command, error) {
 			// Construct the ENTIRE root and installer options on every invocation.
 			// Installer dependencies are deliberately unconfigured on this author route.
-			root := agentpluginscli.NewRoot(agentpluginscli.App{})
+			root := agentpluginscli.NewRoot(agentpluginscli.App{Version: version})
 			author, err := authoringcli.NewAuthorCommand(factories...)
 			if err != nil {
 				return nil, err
