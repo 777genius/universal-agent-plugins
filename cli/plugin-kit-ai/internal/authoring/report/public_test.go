@@ -101,6 +101,33 @@ func TestPublicAffectedPathsWithholdCredentialNames(t *testing.T) {
 	}
 }
 
+func TestPublicCredentialFamilies(t *testing.T) {
+	gitlab := "glpat-" + strings.Repeat("b", 20)
+	slack := "xoxb-" + strings.Repeat("1", 12) + "-" + strings.Repeat("2", 12) + "-" + strings.Repeat("a", 24)
+	for i, value := range []string{gitlab, slack, strings.ToUpper(gitlab), strings.ToUpper(slack), "docs." + gitlab, slack + ".v1", "glpat-" + strings.Repeat("a_", 10)} {
+		t.Run(fmt.Sprint(i), func(t *testing.T) {
+			if got := DisplayIdentity(value); got != "" {
+				t.Fatalf("disclosed=true output_sha256=%x", sha256.Sum256([]byte(got)))
+			}
+			r := New("skills init", "revision")
+			r.Committed = true
+			r.Paths = []string{"skills/" + value + "/SKILL.md", "plugin.json"}
+			p := r.PublicResult("author.skills.init", "local_mutation", true, nil)
+			if !p.Committed || !p.Effects.Attempted || !reflect.DeepEqual(p.Paths, []string{"plugin.json"}) || !reflect.DeepEqual(p.WithheldPathIDs, []string{opaque(r.Paths[0])}) {
+				t.Fatal("withholding lost path identity or committed effects")
+			}
+			if r.Paths[0] != "skills/"+value+"/SKILL.md" {
+				t.Fatal("display policy rewrote private path")
+			}
+		})
+	}
+	for _, value := range []string{"glpat-helper", "xoxb-helper", "xoxb-docs-preview-build", "com.example.docs", "preview-1", "2026.09+build", "UPPER"} {
+		if DisplayIdentity(value) != value {
+			t.Errorf("ordinary identity withheld: %s", value)
+		}
+	}
+}
+
 // Freeze complete payload bytes in addition to the independently asserted
 // semantics above. Full documents are logged for review in immutable test logs.
 func TestPublicGoldenResults(t *testing.T) {

@@ -3,8 +3,10 @@ package commands_test
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -158,6 +160,12 @@ func TestPublicParserAndHelpParity(t *testing.T) {
 				if bytes.Contains(b, []byte("unknown-secret")) || bytes.Contains(b, []byte("invalid-secret")) {
 					t.Fatalf("token echo: %s", b)
 				}
+				if e.Data.Help != nil {
+					// Assert the actual route before normalizing only its allowed
+					// invocation prefix; all remaining payload bytes still match.
+					prefix := assertPublicHelpRoute(t, e, mount)
+					b = bytes.Replace(b, []byte(`"use":"`+prefix), []byte(`"use":"author`), 1)
+				}
 				if first != nil && !bytes.Equal(first, b) {
 					t.Fatalf("entrypoint drift:\n%s\n%s", first, b)
 				}
@@ -167,6 +175,115 @@ func TestPublicParserAndHelpParity(t *testing.T) {
 	}
 	if files, _ := os.ReadDir(a.Projects.Scratch); len(files) != 0 {
 		t.Fatalf("scratch leaked: %v", files)
+	}
+}
+
+func assertPublicHelpRoute(t *testing.T, e publicEnvelope, mount bool) string {
+	t.Helper()
+	prefix := "plugin-kit-ai"
+	if mount {
+		prefix = "agentplugins author"
+	}
+	route := strings.ReplaceAll(strings.TrimPrefix(e.Command, "author"), ".", " ")
+	suffix := " [package-path]"
+	switch e.Command {
+	case "author":
+		suffix = " <command>"
+	case "author.skills", "author.capabilities":
+		suffix = ""
+	case "author.init":
+		suffix = " <path>"
+	case "author.skills.init":
+		suffix = " <name> [package-path]"
+	}
+	if e.Data.Help == nil || e.Data.Help.Use != prefix+route+suffix {
+		t.Fatalf("incorrect help route for %s", e.Command)
+	}
+	return prefix
+}
+
+func TestPublicHelpExecutableAndAncestry(t *testing.T) {
+	for _, route := range []string{"", "skills", "init", "inspect", "validate", "test", "compat", "doctor", "capabilities", "skills init", "skills validate"} {
+		for _, mount := range []bool{false, true} {
+			for _, helpVerb := range []bool{false, true} {
+				args := append(strings.Fields(route), "--help")
+				if helpVerb {
+					args = append([]string{"help"}, strings.Fields(route)...)
+				}
+				a := publicApp(t)
+				e, code, _ := publicRun(t, a, append(args, "--format=json"), mount)
+				if code != 0 {
+					t.Fatal("help failed")
+				}
+				assertPublicHelpRoute(t, e, mount)
+				noPolicy(t, e)
+				human := executeRaw(a, args, mount)
+				if human.err != nil || len(human.errout) != 0 || !bytes.HasPrefix(human.out, []byte("Usage: "+e.Data.Help.Use+"\n")) {
+					t.Fatal("human usage disagrees with the verified JSON route")
+				}
+			}
+		}
+	}
+}
+
+func TestPublicCredentialFamilySinks(t *testing.T) {
+	// Non-live synthetic values are assembled only in memory. Failure logs never
+	// include shaped inputs or raw output, even when exercising a disclosure bug.
+	for family, value := range map[string]string{
+		"gitlab": "glpat-" + strings.Repeat("b", 20),
+		"slack":  "xoxb-" + strings.Repeat("1", 12) + "-" + strings.Repeat("2", 12) + "-" + strings.Repeat("a", 24),
+	} {
+		for _, field := range []string{"name", "version", "server", "namespace", "executable", "skill"} {
+			for _, mount := range []bool{false, true} {
+				for _, format := range []string{"json", "human"} {
+					t.Run(fmt.Sprintf("%s/%s/mount=%t/%s", family, field, mount, format), func(t *testing.T) {
+						a, root := publicApp(t), t.TempDir()
+						manifest := map[string]any{"$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json", "name": "visible-demo", "version": "preview-1"}
+						serverName := "visible-server"
+						server := map[string]any{"type": "stdio", "command": "node", "args": []string{"server.mjs"}}
+						switch field {
+						case "name", "version":
+							manifest[field] = value
+						case "server":
+							serverName = value
+						case "namespace":
+							manifest["extensions"] = map[string]any{value: map[string]any{}}
+						case "executable":
+							server["command"] = value
+						}
+						body, _ := json.Marshal(manifest)
+						write(t, root, "plugin.json", string(body))
+						body, _ = json.Marshal(map[string]any{"$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json", "mcpServers": map[string]any{serverName: server}})
+						write(t, root, "mcp.json", string(body))
+						check := func(args []string, mutation bool) {
+							raw := executeRaw(a, append(args, "--format="+format), mount)
+							disclosed := bytes.Contains(raw.out, []byte(value)) || bytes.Contains(raw.errout, []byte(value))
+							t.Logf("disclosed=%t output_sha256=%x", disclosed, sha256.Sum256(raw.out))
+							if disclosed || raw.err != nil || len(raw.errout) != 0 {
+								t.Fatal("credential projection disclosed input or operation failed")
+							}
+							if format == "json" {
+								e, _ := publicDecode(t, raw) // Safe only after the disclosure assertion.
+								if e.Data.Committed != mutation || mutation && (len(e.Data.Paths) != 0 || len(e.Data.WithheldPathIDs) != 1 || !e.Data.Effects.Attempted) {
+									t.Fatal("incorrect mutation projection")
+								}
+							}
+						}
+						if field == "skill" {
+							check([]string{"skills", "init", value, root, "--description=Example"}, true)
+							if _, err := os.Stat(filepath.Join(root, "skills", value, "SKILL.md")); err != nil {
+								t.Fatal("display policy prevented the requested Skill commit")
+							}
+						}
+						before := tree(t, root)
+						check([]string{"inspect", root}, false)
+						if !reflect.DeepEqual(before, tree(t, root)) {
+							t.Fatal("inspection changed source")
+						}
+					})
+				}
+			}
+		}
 	}
 }
 
@@ -511,16 +628,20 @@ func TestPublicFreshInventoryCancellationAndOutput(t *testing.T) {
 		t.Fatalf("output precedence: %v calls %d", err, w.calls)
 	}
 	var wg sync.WaitGroup
-	results := make(chan rawExecution, 8)
+	results := make([]rawExecution, 8)
 	for i := 0; i < 8; i++ {
 		wg.Add(1)
-		go func(i int) { defer wg.Done(); results <- executeRaw(a, []string{"skills", "--format=json"}, i%2 == 0) }(i)
+		go func(i int) {
+			defer wg.Done()
+			results[i] = executeRaw(a, []string{"skills", "--format=json"}, i%2 == 0)
+		}(i)
 	}
 	wg.Wait()
-	close(results)
 	var first []byte
-	for raw := range results {
-		publicDecode(t, raw)
+	for i, raw := range results {
+		e, _ := publicDecode(t, raw)
+		prefix := assertPublicHelpRoute(t, e, i%2 == 0)
+		raw.out = bytes.Replace(raw.out, []byte(`"use":"`+prefix), []byte(`"use":"author`), 1)
 		if first != nil && !bytes.Equal(first, raw.out) {
 			t.Fatal("concurrent factory drift")
 		}

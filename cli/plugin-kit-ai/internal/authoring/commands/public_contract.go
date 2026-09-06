@@ -385,9 +385,12 @@ func writePublicHuman(w io.Writer, p report.Public, result string) error {
 // Help lists definitions rather than flag values; never serialize mutable pflag
 // values, which can contain credentials even when help bypasses a runner.
 func publicHelp(s selection) *report.CommandHelp {
-	h := &report.CommandHelp{Use: s.command.Use, Flags: []string{}, Guidance: publicArguments}
+	// Only trusted tree definitions supply the route and argument placeholders;
+	// argv and mutable flag values never contribute to usage text.
+	use := s.command.CommandPath() + strings.TrimPrefix(s.command.Use, s.command.Name())
+	h := &report.CommandHelp{Use: use, Flags: []string{}, Guidance: publicArguments}
 	if s.operation == "author" {
-		h.Use = "author <command>"
+		h.Use += " <command>"
 	}
 	seen := map[string]bool{}
 	for c := s.command; c != nil; c = c.Parent() {

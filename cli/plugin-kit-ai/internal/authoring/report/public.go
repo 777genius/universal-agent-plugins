@@ -1,6 +1,7 @@
 package report
 
 import (
+	"regexp"
 	"sort"
 	"strings"
 
@@ -60,12 +61,20 @@ type DisplayComponent struct {
 	ExecutableKind string `json:"executable_kind,omitempty"`
 }
 
+// Recognize bounded GitLab PAT and Slack token families, including shapes
+// embedded in a larger identity. Short ordinary names sharing a prefix remain
+// useful. This supplements, rather than replaces, the existing display rules.
+var publicCredentialFamily = regexp.MustCompile(`(?i)(glpat-[a-z0-9_-]{20}|xox[baprs]-[0-9]{10,13}-[0-9]{10,13}-[a-z0-9]{24})`)
+
 // DisplayIdentity is a conservative display policy, never a conformance rule.
 // It withholds whole values rather than leaking prefixes of unsafe input. Short
 // ordinary names and non-SemVer versions remain useful; paths, controls, URL and
 // credential-like tokens do not become public identity or suggestion text.
 func DisplayIdentity(s string) string {
 	if len(s) == 0 || len(s) > 64 {
+		return ""
+	}
+	if publicCredentialFamily.MatchString(s) {
 		return ""
 	}
 	lower := strings.ToLower(s)
