@@ -47,7 +47,7 @@ func main() {
 		"cli/plugin-kit-ai/internal/authoring/scaffold":            "scaffold",
 	}
 	files := map[string][]string{
-		"packageview": {"source_windows.go"},
+		"packageview": {"source_windows.go", "scratch_windows.go"},
 		"scaffold":    {"apply.go", "rename_windows.go", "stage_windows.go"},
 	}
 	for dir, pkg := range packages {
