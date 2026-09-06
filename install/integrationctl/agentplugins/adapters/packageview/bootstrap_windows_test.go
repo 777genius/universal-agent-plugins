@@ -79,6 +79,10 @@ func TestWindowsBootstrapStages(t *testing.T) {
 	}
 	t.Logf("bootstrap fixture=%q", root)
 
+	t.Run("parameter-matrix", func(t *testing.T) {
+		bootstrapParameterMatrix(t, root[:3])
+	})
+
 	t.Run("native-stages", func(t *testing.T) {
 		before := winRecordCount()
 		s := &source{records: make(map[winSnapshot]*winObservation)}
