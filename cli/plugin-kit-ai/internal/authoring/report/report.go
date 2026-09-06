@@ -12,6 +12,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/pathpolicy"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/packageview"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/conformance"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
 type State string
@@ -152,7 +153,34 @@ func Build(command, revision string, p project.Result, release bool) Report {
 	r.SchemaIDs = append(r.SchemaIDs, f.SchemaIDs...)
 	r.Conformance = assessment(state(f.Conformance))
 	r.HostSafety = assessment(Pass)
+	// Translate retained canonical identities within their component boundary.
+	serverIDs := map[string]string{}
+	skillIDs := map[string]string{}
+	if f.Package != nil {
+		for name := range f.Package.MCP.Servers {
+			serverIDs[opaque(name)] = opaque("mcp:" + name)
+		}
+		for name := range f.Package.MCP.InvalidServer {
+			serverIDs[opaque(name)] = opaque("mcp:" + name)
+		}
+		for name := range f.Package.Skills {
+			skillIDs[opaque(name)] = opaque("skill:" + name)
+		}
+		for _, name := range f.Package.Inventory.InvalidSkills {
+			skillIDs[opaque(name)] = opaque("skill:" + name)
+		}
+	}
 	for _, f := range f.Findings {
+		switch f.Boundary {
+		case domain.BoundarySkill:
+			if id, ok := skillIDs[f.Item]; ok {
+				f.Item = id
+			}
+		case domain.BoundaryMCPServer:
+			if id, ok := serverIDs[f.Item]; ok {
+				f.Item = id
+			}
+		}
 		id := r.add(Finding{Code: f.Code, Layer: string(f.Layer), Rule: f.RuleRef, Location: f.Path, ItemID: f.Item, Severity: string(f.Severity)})
 		if f.Layer == conformance.Normative {
 			r.Conformance.FindingIDs = append(r.Conformance.FindingIDs, id)
@@ -270,7 +298,21 @@ func (r *Report) components(p project.Result) {
 				req = append(req, "header_values_redacted")
 			}
 		}
-		r.Components = append(r.Components, Component{opaque("mcp:" + name), "mcp_" + s.Type, Pass, req})
+		status := Pass
+		for _, finding := range p.Facts.Findings {
+			if finding.Code == "diagnostics_truncated" {
+				status = combine(status, NotEvaluated)
+			}
+			if finding.Boundary != domain.BoundaryMCPServer || finding.Item != opaque(name) {
+				continue
+			}
+			if finding.Layer == conformance.Normative {
+				status = Fail
+			} else {
+				status = combine(status, NotEvaluated)
+			}
+		}
+		r.Components = append(r.Components, Component{opaque("mcp:" + name), "mcp_" + s.Type, status, req})
 	}
 	for name := range pkg.MCP.InvalidServer {
 		r.Components = append(r.Components, Component{opaque("mcp:" + name), "mcp_server", Fail, []string{}})

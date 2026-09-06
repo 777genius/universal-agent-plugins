@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
@@ -434,21 +435,32 @@ func TestNativeBinaryVerticalSlice(t *testing.T) {
 	}
 	_, file, _, _ := runtime.Caller(0)
 	module := filepath.Clean(filepath.Join(filepath.Dir(file), "../../.."))
-	bin := t.TempDir()
-	binaries := []string{filepath.Join(bin, "plugin-kit-ai"), filepath.Join(bin, "agentplugins")}
+	bin := os.Getenv("AUTHORING_NATIVE_BIN_DIR")
+	supplied := bin != ""
+	if !supplied {
+		bin = t.TempDir()
+	}
+	suffix := ""
+	if runtime.GOOS == "windows" {
+		suffix = ".exe"
+	}
+	names := []string{"plugin-kit-ai", "agentplugins"}
+	binaries := []string{filepath.Join(bin, names[0]+suffix), filepath.Join(bin, names[1]+suffix)}
+	hashes := make([]string, len(binaries))
 	prefix := "github.com/777genius/plugin-kit-ai/cli/internal/authoring/commands"
-	for i, name := range []string{"plugin-kit-ai", "agentplugins"} {
-		build := exec.Command(filepath.Join(runtime.GOROOT(), "bin", "go"), "build", "-p", "2", "-ldflags", "-X "+prefix+".Enabled=vertical-slice-v1 -X "+prefix+".Revision="+baseline+"+vertical-slice-worktree", "-o", binaries[i], "./cmd/"+name)
-		build.Dir = module
-		if out, e := build.CombinedOutput(); e != nil {
-			t.Fatalf("build actual %s: %v\n%s", name, e, out)
+	for i, name := range names {
+		if !supplied {
+			build := exec.Command(filepath.Join(runtime.GOROOT(), "bin", "go"), "build", "-p", "2", "-ldflags", "-X "+prefix+".Enabled=vertical-slice-v1 -X "+prefix+".Revision="+baseline+"+vertical-slice-worktree", "-o", binaries[i], "./cmd/"+name)
+			build.Dir = module
+			if out, e := build.CombinedOutput(); e != nil {
+				t.Fatalf("build actual %s: %v\n%s", name, e, out)
+			}
 		}
 		body, e := os.ReadFile(binaries[i])
 		if e != nil {
 			t.Fatal(e)
 		}
-		h := sha256.Sum256(body)
-		t.Logf("native evidence: baseline=%s working_patch=true binary=%s sha256=%x go=%s os=%s arch=%s", baseline, name, h, runtime.Version(), runtime.GOOS, runtime.GOARCH)
+		hashes[i] = fmt.Sprintf("%x", sha256.Sum256(body))
 	}
 	homes := []string{t.TempDir(), t.TempDir()}
 	roots := []string{t.TempDir(), t.TempDir()}
@@ -484,7 +496,7 @@ func TestNativeBinaryVerticalSlice(t *testing.T) {
 		if strings.Contains(out.String(), homes[i]) || strings.Contains(out.String(), scratch[i]) {
 			t.Fatalf("implicit root disclosure: %s", out.Bytes())
 		}
-		if r.Revision != baseline+"+vertical-slice-worktree" {
+		if !supplied && r.Revision != baseline+"+vertical-slice-worktree" {
 			t.Fatalf("wrong engine revision: %s", r.Revision)
 		}
 		return r, code, out.Bytes()
@@ -647,7 +659,46 @@ func TestNativeBinaryVerticalSlice(t *testing.T) {
 			t.Fatalf("enclosing flag escaped author routing: %s", b)
 		}
 	}
+	for _, flags := range [][]string{{"--ordinary-review-option", "ordinary-review-value"}, {"--ordinary-review-option=ordinary-review-value"}} {
+		var first []byte
+		for i := range binaries {
+			args := append([]string{}, flags...)
+			if i == 1 {
+				args = append(args, "author")
+			}
+			args = append(args, "validate", filepath.Join(roots[i], "absent"), "--format=json")
+			r, code, b := runExact(i, args...)
+			if code != 2 || r.Error == nil || r.Error.Code != "arguments_invalid" {
+				t.Fatalf("unknown flag escaped author routing: %s", b)
+			}
+			if i == 0 {
+				first = b
+			} else if !bytes.Equal(first, b) {
+				t.Fatal("unknown flag native parity")
+			}
+		}
+	}
 	if _, e := os.Stat(effect); !os.IsNotExist(e) {
 		t.Fatal("static authoring executed a process")
 	}
+	if t.Failed() {
+		return
+	}
+	for i := range names {
+		body, err := os.ReadFile(binaries[i])
+		if err != nil || fmt.Sprintf("%x", sha256.Sum256(body)) != hashes[i] {
+			t.Fatal("native binary changed during flow")
+		}
+	}
+	for i, name := range names {
+		evidence, err := json.Marshal(struct {
+			Entrypoint string `json:"entrypoint"`
+			SHA256     string `json:"sha256"`
+		}{name, hashes[i]})
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Logf("AUTHORING_NATIVE_E2E %s", evidence)
+	}
+
 }

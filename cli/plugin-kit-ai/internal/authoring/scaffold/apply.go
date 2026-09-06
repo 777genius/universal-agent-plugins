@@ -34,6 +34,13 @@ type Result struct {
 	Committed   bool
 }
 
+// CleanupError marks incomplete owned-stage recovery while retaining its cause.
+// Public reports must classify it without serializing private filesystem paths.
+type CleanupError struct{ Err error }
+
+func (e *CleanupError) Error() string { return e.Err.Error() }
+func (e *CleanupError) Unwrap() error { return e.Err }
+
 func Apply(ctx context.Context, p Plan, o ApplyOptions) (Result, error) {
 	return apply(ctx, p, o, applyOps{write: writeTree, rename: renameExclusive})
 }
@@ -114,7 +121,7 @@ func apply(ctx context.Context, p Plan, o ApplyOptions, ops applyOps) (result Re
 			cleanup = errors.Join(cleanup, fmt.Errorf("staging ownership changed; refused sibling cleanup: %w", errOr(statErr, fs.ErrInvalid)))
 		}
 		if cleanup != nil {
-			err = errors.Join(err, fmt.Errorf("cleanup staging %q: %w", filepath.Join(parentPath, stage), cleanup))
+			err = errors.Join(err, &CleanupError{fmt.Errorf("cleanup staging %q: %w", filepath.Join(parentPath, stage), cleanup)})
 		}
 	}()
 	if e = owned.Mkdir("payload", 0700); e != nil {
@@ -145,7 +152,7 @@ func apply(ctx context.Context, p Plan, o ApplyOptions, ops applyOps) (result Re
 			}
 		}
 		if cleanup != nil {
-			err = errors.Join(err, fmt.Errorf("cleanup owned payload: %w", cleanup))
+			err = errors.Join(err, &CleanupError{fmt.Errorf("cleanup owned payload: %w", cleanup)})
 		}
 	}()
 	if e = ops.write(ctx, root, files); e != nil {

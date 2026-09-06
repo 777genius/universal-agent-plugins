@@ -111,6 +111,9 @@ func (a App) Execute(ctx context.Context, args []string, streams authoringcli.St
 		}
 	}
 	if err != nil {
+		if captured.Error != nil && captured.Error.Code == "private_cleanup_failed" {
+			return exitx.Wrap(errors.New("authoring cleanup failed; see report for recovery"), 1)
+		}
 		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 			return exitx.Wrap(errors.New("authoring canceled"), 1)
 		}
@@ -242,6 +245,10 @@ func summary(name string) string {
 	}
 }
 func failure(err error, phase string) (string, string) {
+	var cleanup *scaffold.CleanupError
+	if errors.As(err, &cleanup) {
+		return "private_cleanup_failed", "Private scaffold cleanup failed; check committed status and inspect owned staging before retrying; preserve unrelated replacements."
+	}
 	var reader *packageview.Error
 	if errors.As(err, &reader) && reader.CleanupFailed {
 		return "private_cleanup_failed", "Private reader cleanup failed; inspect owned scratch before retrying."
@@ -301,22 +308,16 @@ func selectedCommand(args []string) string {
 	return "author"
 }
 
-// IsAuthorInvocation recognizes the first command after enclosing persistent
-// flags using their actual definitions. It constructs no configured clients.
+// IsAuthorInvocation uses Cobra selection on an invocation-owned, unconfigured
+// root. Find observes flag definitions without parsing or executing any command.
+// Callers must supply a fresh root, just as they do for Execute.
 func IsAuthorInvocation(args []string, root *cobra.Command) bool {
-	for i := 0; i < len(args); i++ {
-		arg := args[i]
-		if arg == "--" {
-			return i+1 < len(args) && args[i+1] == "author"
-		}
-		if !strings.HasPrefix(arg, "-") {
-			return arg == "author"
-		}
-		name, value, equals := strings.Cut(strings.TrimPrefix(arg, "--"), "=")
-		_ = value
-		f := root.PersistentFlags().Lookup(name)
-		if f != nil && f.NoOptDefVal == "" && !equals {
-			i++
+	author := &cobra.Command{Use: "author"}
+	root.AddCommand(author)
+	selected, _, _ := root.Find(args)
+	for c := selected; c != nil; c = c.Parent() {
+		if c == author {
+			return true
 		}
 	}
 	return false
