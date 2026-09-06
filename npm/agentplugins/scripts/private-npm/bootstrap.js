@@ -27,7 +27,7 @@ function pin(value) {
   }
 }
 
-function loadRelease(product, packageRoot, target) {
+function loadRelease(product, packageRoot, target, expectedMode = "vertical-slice-v1") {
   if (!Object.hasOwn(PACKAGES, product)) throw new Error("unknown fixed private product");
   c.safeDirectory(packageRoot);
   const { value: descriptor } = json(path.join(packageRoot, "private-release.json"));
@@ -35,8 +35,9 @@ function loadRelease(product, packageRoot, target) {
   c.identity(descriptor.identity);
   if (descriptor.schema !== SCHEMA || descriptor.product !== product || descriptor.npm_package !== PACKAGES[product] ||
       !hash(descriptor.candidate_sha256)) throw new Error("private release binding is invalid");
-  // B owns future producer/validator modes. Never accept an either-mode check.
-  if (descriptor.authoring_mode !== "vertical-slice-v1") throw new Error("unsupported explicit expected candidate mode");
+  // Historical callers retain vertical-slice-v1; release shims expect exactly B's mode.
+  c.authoringMode(expectedMode);
+  if (descriptor.authoring_mode !== expectedMode) throw new Error("unsupported explicit expected candidate mode");
   if (!c.scopeTargets(descriptor.asset_scope).includes(target)) throw new Error("unsupported private target for expected scope");
   const { value: pkg } = json(path.join(packageRoot, "package.json"));
   c.keys(pkg.bin, [product], "private npm bin");
@@ -44,7 +45,7 @@ function loadRelease(product, packageRoot, target) {
       pkg.private !== true || pkg.bin[product] !== `bin/${product}.js`) throw new Error("private npm package binding is invalid");
   const { bytes, value: manifest } = json(path.join(packageRoot, "candidate.json"));
   if (c.digest(bytes) !== descriptor.candidate_sha256) throw new Error("candidate manifest digest mismatch");
-  c.manifestShape(manifest, descriptor.identity, descriptor.asset_scope);
+  c.manifestShape(manifest, descriptor.identity, descriptor.asset_scope, expectedMode);
   if (manifest.build.authoring_mode !== descriptor.authoring_mode) throw new Error("candidate mode does not match expected mode");
   const seen = new Set();
   for (const p of c.PRODUCTS) for (const asset of Object.values(manifest.products[p].assets)) {
@@ -95,7 +96,7 @@ function cachePath(root, product, target, release) {
 async function ensureBinary(product, options = {}, hooks = {}) {
   const { packageRoot, cacheRoot, candidateRoot, signal } = options;
   v.cancelled(signal);
-  const release = loadRelease(product, packageRoot, options.target);
+  const release = loadRelease(product, packageRoot, options.target, options.expectedMode);
   c.safeDirectory(cacheRoot);
   if (inside(cacheRoot, packageRoot) || inside(packageRoot, cacheRoot)) throw new Error("private cache overlaps package input");
   // Validate a supplied locator even on warm hits, without opening its source.

@@ -5,7 +5,8 @@ fixed shim constant `agentplugins` or `plugin-kit-ai`; options supply absolute
 `packageRoot`, existing owner-only `cacheRoot`, exact `target`, and a local
 `candidateRoot` for cold acquisition. Optional `signal` cancels acquisition;
 `lockOptions.timeoutMs/pollMs` bound cooperating waits (defaults 30 s / 50 ms).
-There is no environment dispatcher, launcher or npm lifecycle hook in N1.
+There is no environment dispatcher or npm lifecycle hook in N1. N2's fixed
+launcher supplies these options; see [private packaging](README.md).
 
 The package contains canonical, bounded `package.json`, `candidate.json` and
 `private-release.json`. Package name/version/private flag and the sole product
@@ -31,8 +32,8 @@ bin mapping `bin/<product>.js` are checked. The descriptor has exactly:
 This example explains fields, not literal canonical fixture bytes. Encoding is
 exactly the existing candidate `encode` helper. Identity/schema/archive helpers
 remain owned by the candidate producer. Expected mode is mandatory and compared
-exactly; this base supports only `vertical-slice-v1`. B must integrate its new
-producer/validator mode before any release-mode consumer acceptance.
+exactly. Historical callers default to `vertical-slice-v1`; N2 supplies the
+explicit `expectedMode: "release-cli-contract-v1"`. Each rejects the other mode.
 
 Trust starts at the controlled builder and independently retained pack/candidate
 digest. The descriptor cannot authenticate a malicious replacement package.
