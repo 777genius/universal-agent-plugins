@@ -9,13 +9,14 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
 	"golang.org/x/sys/windows"
 )
 
 func TestWindowsRenameNativeClassification(t *testing.T) {
-	for _, kind := range []string{"empty", "nonempty", "missing-source", "sharing-violation", "destination-sharing", "destination-metadata"} {
+	for _, kind := range []string{"empty", "nonempty", "missing-source", "sharing-violation", "source-sharing-existing", "destination-sharing", "destination-metadata"} {
 		t.Run(kind, func(t *testing.T) {
 			parent := tempRoot(t)
 			for _, name := range []string{"source", "dest"} {
@@ -35,14 +36,15 @@ func TestWindowsRenameNativeClassification(t *testing.T) {
 			if kind == "missing-source" {
 				old, want = "missing", windows.STATUS_OBJECT_NAME_NOT_FOUND
 			}
-			if kind == "sharing-violation" || kind == "destination-sharing" || kind == "destination-metadata" {
+			sourceSharing := kind == "sharing-violation" || kind == "source-sharing-existing"
+			if sourceSharing || kind == "destination-sharing" || kind == "destination-metadata" {
 				held, access := "dest", uint32(windows.FILE_READ_ATTRIBUTES|windows.FILE_LIST_DIRECTORY)
-				if kind == "sharing-violation" {
+				if sourceSharing {
 					held = old
 				}
 				if kind == "destination-metadata" {
 					access = windows.FILE_READ_ATTRIBUTES
-				} else {
+				} else if sourceSharing {
 					want = windows.STATUS_SHARING_VIOLATION
 				}
 				handle := holdRenameDirectory(t, filepath.Join(parent, held), access)
@@ -54,9 +56,15 @@ func TestWindowsRenameNativeClassification(t *testing.T) {
 			}
 			defer root.Close()
 			before := skillTree(t, parent)
-			// Invoke the native no-replace primitive directly; no absent() shortcut.
-			err = renameExclusive(root, old, root, "dest")
-			collision := want == windows.STATUS_OBJECT_NAME_COLLISION || kind == "destination-sharing"
+			// Held destination data access is a collision control on native NTFS.
+			// Source delete denial fails NtCreateFile, before NtSetInformationFile;
+			// an independent destination tests only the diagnostic contract.
+			raw := renameWindows(root, old, root, "dest")
+			if raw != want {
+				t.Fatalf("native %s: raw=%v (%T), want %#x", kind, raw, raw, uint32(want))
+			}
+			err = &os.LinkError{Op: "rename-exclusive", Old: old, New: "dest", Err: windowsRenameError(raw, root, "dest")}
+			collision := want == windows.STATUS_OBJECT_NAME_COLLISION || kind == "source-sharing-existing"
 			var link *os.LinkError
 			var status windows.NTStatus
 			if !errors.As(err, &link) || link.Old != old || link.New != "dest" || !errors.As(err, &status) || status != want || !errors.Is(err, want.Errno()) || errors.Is(err, os.ErrExist) != collision {
@@ -95,8 +103,40 @@ func holdRenameDirectory(t *testing.T, path string, access uint32) windows.Handl
 	return h
 }
 
+// Root.Open(".").Name() is ".", not a physical container pathname.
+// Resolve the held identity only among this fixture's immediate children.
+func renameFixtureContainer(t *testing.T, parent string, from *os.File) string {
+	t.Helper()
+	held, err := from.Stat()
+	if err != nil {
+		t.Fatal(err)
+	}
+	entries, err := os.ReadDir(parent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	matches := []string{}
+	for _, entry := range entries {
+		path := filepath.Join(parent, entry.Name())
+		info, err := os.Lstat(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if os.SameFile(held, info) {
+			if !filepath.IsAbs(path) || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 || !strings.HasPrefix(entry.Name(), ".authoring-") {
+				t.Fatalf("held container is not an owned stage: %q", path)
+			}
+			matches = append(matches, path)
+		}
+	}
+	if len(matches) != 1 {
+		t.Fatalf("want exactly one owned stage matching held identity, got %v", matches)
+	}
+	return matches[0]
+}
+
 func TestWindowsApplyNativeCollisionCleanup(t *testing.T) {
-	for _, kind := range []string{"collision", "destination-sharing", "destination-removed", "source-sharing"} {
+	for _, kind := range []string{"collision", "destination-sharing", "source-sharing-existing", "destination-removed", "source-sharing"} {
 		for _, retain := range []bool{false, true} {
 			t.Run(fmt.Sprintf("%s/retain=%v", kind, retain), func(t *testing.T) {
 				parent := tempRoot(t)
@@ -113,7 +153,12 @@ func TestWindowsApplyNativeCollisionCleanup(t *testing.T) {
 				calls := 0
 				ops := applyOps{write: writeTree, rename: func(from *os.File, old string, to *os.File, new string) error {
 					calls++
-					container = from.Name()
+					container = renameFixtureContainer(t, parent, from)
+					assertOnly(t, parent, filepath.Base(container))
+					if old != "payload" || new != filepath.Base(dest) {
+						t.Fatalf("unexpected rename components: %q -> %q", old, new)
+					}
+					sourceSharing := kind == "source-sharing" || kind == "source-sharing-existing" || kind == "destination-removed"
 					// Winner appears after Apply's final absence check, without timing.
 					if kind != "source-sharing" {
 						if err := os.Mkdir(dest, 0700); err != nil {
@@ -122,38 +167,38 @@ func TestWindowsApplyNativeCollisionCleanup(t *testing.T) {
 					}
 					if kind != "collision" {
 						path := dest
-						if kind == "source-sharing" {
-							path = filepath.Join(from.Name(), old)
+						if sourceSharing {
+							path = filepath.Join(container, old)
 						}
 						held = holdRenameDirectory(t, path, windows.FILE_READ_ATTRIBUTES|windows.FILE_LIST_DIRECTORY)
 					}
 					before := skillTree(t, parent)
 					var err error
 					if kind == "destination-removed" {
-						// One real NtSetInformationFile, then remove the winner before
-						// the diagnostic observation. Never retry the source rename.
+						// Source NtCreateFile really fails sharing. Remove only our empty
+						// destination before one probe, keeping the same source lease.
 						err = renameWindows(from, old, to, new)
-						if !errors.Is(err, windows.STATUS_SHARING_VIOLATION) {
-							t.Fatalf("raw destination sharing: %v", err)
+						if err != windows.STATUS_SHARING_VIOLATION {
+							t.Fatalf("raw source sharing: %v", err)
 						}
 						if !reflect.DeepEqual(before, skillTree(t, parent)) {
 							t.Fatal("failed native rename changed trees")
 						}
-						if e := windows.CloseHandle(held); e != nil {
-							t.Fatal(e)
-						}
-						held = 0
 						if e := os.Remove(dest); e != nil {
 							t.Fatal(e)
 						}
 						err = &os.LinkError{Op: "rename-exclusive", Old: old, New: new, Err: windowsRenameError(err, to, new)}
+						delete(before, "dest")
+						if !reflect.DeepEqual(before, skillTree(t, parent)) {
+							t.Fatal("removal/probe changed entries beyond owned destination")
+						}
 					} else {
 						err = renameExclusive(from, old, to, new)
 						if !reflect.DeepEqual(before, skillTree(t, parent)) {
 							t.Fatal("native collision changed staged payload or destination")
 						}
 					}
-					if kind == "source-sharing" {
+					if sourceSharing {
 						if e := windows.CloseHandle(held); e != nil {
 							t.Fatal(e)
 						}
@@ -168,15 +213,19 @@ func TestWindowsApplyNativeCollisionCleanup(t *testing.T) {
 				}}
 				result, err := apply(context.Background(), planFor(t, "skill"), ApplyOptions{Destination: dest, Validate: realValidation(t)}, ops)
 				want := windows.STATUS_SHARING_VIOLATION
-				if kind == "collision" {
+				if kind == "collision" || kind == "destination-sharing" {
 					want = windows.STATUS_OBJECT_NAME_COLLISION
 				}
-				exists := kind == "collision" || kind == "destination-sharing"
+				exists := kind == "collision" || kind == "destination-sharing" || kind == "source-sharing-existing"
 				var cleanup *CleanupError
 				var link *os.LinkError
-				if calls != 1 || result.Committed || errors.Is(err, os.ErrExist) != exists || !errors.Is(err, want) || !errors.Is(err, want.Errno()) || !errors.As(err, &link) || errors.As(err, &cleanup) != retain {
+				var status windows.NTStatus
+				// ENOTEMPTY in CleanupError also matches ErrExist. Classify the
+				// original LinkError separately; commands still prioritize cleanup.
+				if calls != 1 || result.Committed || !errors.As(err, &link) || link.Old != "payload" || link.New != "dest" || errors.Is(link.Err, os.ErrExist) != exists || !errors.As(link.Err, &status) || status != want || !errors.Is(link.Err, want) || !errors.Is(link.Err, want.Errno()) || errors.As(err, &cleanup) != retain {
 					t.Fatalf("calls=%d result=%+v err=%v", calls, result, err)
 				}
+				t.Logf("%s: status=%#x win32=%d exists=%v cleanup=%v", kind, uint32(status), status.Errno(), exists, retain)
 				names := []string{}
 				if exists {
 					assertOnly(t, dest)
@@ -223,7 +272,10 @@ func TestWindowsRenameObservationFailureAndReparse(t *testing.T) {
 	for _, target := range []string{filepath.Join(tempRoot(t), "missing"), tempRoot(t)} {
 		link := filepath.Join(parent, "link")
 		if err := os.Symlink(target, link); err != nil {
-			t.Skipf("native symlink prerequisite: %v", err)
+			if errors.Is(err, windows.ERROR_PRIVILEGE_NOT_HELD) {
+				t.Skipf("UNPROVEN: native symlink privilege prerequisite: %v", err)
+			}
+			t.Fatal(err)
 		}
 		if err := windowsRenameError(cause, root, "link"); !errors.Is(err, os.ErrExist) || !errors.Is(err, cause) {
 			t.Fatalf("reparse entry must count without following target: %v", err)
