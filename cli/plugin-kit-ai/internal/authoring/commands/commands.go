@@ -13,11 +13,13 @@ import (
 	"strings"
 
 	"github.com/777genius/plugin-kit-ai/cli/internal/authoring/project"
+	"github.com/777genius/plugin-kit-ai/cli/internal/authoring/readiness"
 	"github.com/777genius/plugin-kit-ai/cli/internal/authoring/report"
 	"github.com/777genius/plugin-kit-ai/cli/internal/authoring/scaffold"
 	"github.com/777genius/plugin-kit-ai/cli/internal/authoringcli"
 	"github.com/777genius/plugin-kit-ai/cli/internal/exitx"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/packageview"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/spf13/cobra"
 )
 
@@ -33,7 +35,13 @@ type App struct {
 	Projects project.Service
 	Revision string
 }
+
+func commandNames() []string {
+	return []string{"init", "validate", "inspect", "test", "compat", "capabilities", "doctor"}
+}
+
 type request struct {
+	targets           []domain.ClientID
 	root              string
 	disclose, release bool
 	template          scaffold.Options
@@ -47,7 +55,7 @@ func (a App) Execute(ctx context.Context, args []string, streams authoringcli.St
 	var human bytes.Buffer
 	factory := authoringcli.Factory(func() (*cobra.Command, error) {
 		factories := make([]authoringcli.Factory, 0, 4)
-		for _, name := range []string{"init", "validate", "inspect", "test"} {
+		for _, name := range commandNames() {
 			factories = append(factories, func() (*cobra.Command, error) { return a.command(name, func(r report.Report) { captured = &r }) })
 		}
 		root, err := build(factories...)
@@ -65,7 +73,7 @@ func (a App) Execute(ctx context.Context, args []string, streams authoringcli.St
 		root.CompletionOptions.DisableDefaultCmd = true
 		for _, group := range root.Commands() {
 			if group.Name() == "author" {
-				group.Long = "Build Agent Plugins packages with init, validate, inspect and static test."
+				group.Long = "Build Agent Plugins packages and inspect static compatibility and toolchain evidence."
 				for _, child := range group.Commands() {
 					child.Long = child.Short + "\n\nInstaller-only inherited flags are rejected. Use agentplugins add for installation policy."
 				}
@@ -91,7 +99,7 @@ func (a App) Execute(ctx context.Context, args []string, streams authoringcli.St
 			return exitx.Wrap(errors.New("authoring output failed"), 1)
 		}
 	} else {
-		if _, e := fmt.Fprintf(streams.Out, "%s: readiness %s; conformance %s; runtime %s\n", captured.Command, captured.Readiness.Status, captured.Conformance.Status, captured.Runtime.Status); e != nil {
+		if _, e := fmt.Fprintf(streams.Out, "%s: readiness %s; conformance %s; host %s; compatibility %s; toolchain %s; runtime %s\n", captured.Command, captured.Readiness.Status, captured.Conformance.Status, captured.HostSafety.Status, captured.Compatibility.Status, captured.Toolchain.Status, captured.Runtime.Status); e != nil {
 			return exitx.Wrap(errors.New("authoring output failed"), 1)
 		}
 		for _, f := range captured.Findings {
@@ -102,6 +110,41 @@ func (a App) Execute(ctx context.Context, args []string, streams authoringcli.St
 		for _, component := range captured.Components {
 			if _, e := fmt.Fprintf(streams.Out, "%s %s: %s; requirements %s\n", component.Type, component.ID, component.Status, strings.Join(component.Requirements, ", ")); e != nil {
 				return exitx.Wrap(errors.New("authoring output failed"), 1)
+			}
+		}
+		if captured.Capabilities != nil {
+			if _, e := fmt.Fprintf(streams.Out, "commands: %s\n", strings.Join(captured.Capabilities.Commands, ", ")); e != nil {
+				return exitx.Wrap(e, 1)
+			}
+			for _, s := range captured.Capabilities.Schemas {
+				if _, e := fmt.Fprintf(streams.Out, "schema: %s; %s\n", s.ID, s.Digest); e != nil {
+					return exitx.Wrap(e, 1)
+				}
+			}
+			for _, p := range captured.Capabilities.Profiles {
+				if _, e := fmt.Fprintf(streams.Out, "profile: %s; revision %s; %s\n", p.ID, p.Revision, p.Digest); e != nil {
+					return exitx.Wrap(e, 1)
+				}
+			}
+			for _, c := range captured.Capabilities.Clients {
+				if _, e := fmt.Fprintf(streams.Out, "client: %s; activation: %s\n", c.ClientID, c.ActivationMode); e != nil {
+					return exitx.Wrap(e, 1)
+				}
+			}
+		}
+		for _, c := range captured.Clients {
+			if _, e := fmt.Fprintf(streams.Out, "target %s: static support only; %s\n", c.ClientID, strings.Join(c.Limitations, ", ")); e != nil {
+				return exitx.Wrap(e, 1)
+			}
+			for _, v := range c.Components {
+				if _, e := fmt.Fprintf(streams.Out, "  %s %d: %s\n", v.Kind, v.Index, v.Support); e != nil {
+					return exitx.Wrap(e, 1)
+				}
+			}
+		}
+		for _, c := range captured.DoctorChecks {
+			if _, e := fmt.Fprintf(streams.Out, "%s: %s; %s\n", c.ID, c.Status, c.Action); e != nil {
+				return exitx.Wrap(e, 1)
 			}
 		}
 		if captured.Error != nil {
@@ -126,10 +169,17 @@ func (a App) Execute(ctx context.Context, args []string, streams authoringcli.St
 	return nil
 }
 func (a App) command(name string, capture func(report.Report)) (*cobra.Command, error) {
-	return authoringcli.NewCommand(authoringcli.Spec[request, report.Report]{Use: name + " <path>", Short: summary(name), Args: cobra.ExactArgs(1),
-		Support: authoringcli.Support{Format: true, NoColor: true},
+	use, args := name+" <path>", cobra.ExactArgs(1)
+	if name == "capabilities" {
+		use, args = name, cobra.NoArgs
+	}
+	return authoringcli.NewCommand(authoringcli.Spec[request, report.Report]{Use: use, Short: summary(name), Args: args,
+		Support: authoringcli.Support{Format: true, NoColor: true, Target: name == "compat" || name == "inspect"},
 		Configure: func(c *cobra.Command) {
 			f := c.Flags()
+			if name == "capabilities" {
+				return
+			}
 			f.Bool("include-root", false, "disclose the explicitly selected root in this report")
 			if name == "init" {
 				for _, v := range []struct{ name, help string }{
@@ -144,10 +194,20 @@ func (a App) command(name string, capture func(report.Report)) (*cobra.Command, 
 				f.Bool("release-policy", false, "also evaluate bounded release hygiene (not publication approval)")
 			}
 		},
-		Decode: func(c *cobra.Command, _ authoringcli.Options, args []string) (request, error) {
+		Decode: func(c *cobra.Command, opts authoringcli.Options, args []string) (request, error) {
+			if name == "capabilities" {
+				return request{}, nil
+			}
 			get := func(n string) string { v, _ := c.Flags().GetString(n); return v }
 			disclose, _ := c.Flags().GetBool("include-root")
 			req := request{root: args[0], disclose: disclose}
+			if name == "compat" || name == "inspect" && (opts.Target != "" || c.Flags().Changed("target")) {
+				ids, err := readiness.Targets(opts.Target)
+				if err != nil {
+					return request{}, err
+				}
+				req.targets = ids
+			}
 			if name == "init" {
 				req.template = scaffold.Options{Template: scaffold.Template(get("template")), Name: get("name"), Description: get("description"), SkillName: get("skill-name"), MCPChoice: scaffold.Template(get("mcp")), Runtime: get("runtime"), RemoteURL: get("url"), AuthorName: get("author-name"), License: get("license"), CopyrightHolder: get("copyright-holder"), CopyrightYear: get("copyright-year")}
 			} else {
@@ -156,6 +216,15 @@ func (a App) command(name string, capture func(report.Report)) (*cobra.Command, 
 			return req, nil
 		},
 		Runner: authoringcli.RunnerFunc[request, report.Report](func(ctx context.Context, req request) (report.Report, error) {
+			if name == "capabilities" {
+				r := report.New(name, a.Revision)
+				c, err := readiness.Engine(commandNames())
+				r.Capabilities = c
+				if err != nil {
+					r.AddError("capabilities_unavailable", "Check the embedded engine metadata.")
+				}
+				return r, err
+			}
 			if name == "init" {
 				return a.init(ctx, req)
 			}
@@ -168,6 +237,17 @@ func (a App) command(name string, capture func(report.Report)) (*cobra.Command, 
 				code, action := failure(e, "read")
 				r.AddError(code, action)
 				return r, e
+			}
+			if len(req.targets) > 0 {
+				clients, err := readiness.Compatibility(p, req.targets)
+				if err != nil {
+					r.AddError("compatibility_unavailable", "Select explicit supported clients.")
+					return r, err
+				}
+				r.AddCompatibility(clients)
+			}
+			if name == "doctor" {
+				r.AddDoctor(readiness.Doctor(p))
 			}
 			if !r.Successful() {
 				return r, errors.New("authoring checks incomplete or failed")
@@ -236,6 +316,12 @@ func summary(name string) string {
 	switch name {
 	case "init":
 		return "Create an offline standard package in an absent destination"
+	case "compat":
+		return "Evaluate explicit --target clients using static adapter support; no installed clients required"
+	case "capabilities":
+		return "Show embedded schemas, profiles, live client metadata and implemented commands"
+	case "doctor":
+		return "Inspect captured native files and executable metadata; no processes or network"
 	case "inspect":
 		return "Inspect captured components and unresolved runtime requirements"
 	case "test":
@@ -274,7 +360,7 @@ func failure(err error, phase string) (string, string) {
 	}
 	switch phase {
 	case "arguments":
-		return "arguments_invalid", "Use init, validate, inspect or test with one explicit path and supported flags; installer-only and runtime flags are rejected."
+		return "arguments_invalid", "Use an implemented command with one explicit path (capabilities takes none); compat requires distinct comma-separated --target clients. Installer-only and runtime flags are rejected."
 	case "template":
 		return "template_options_invalid", "Select a template, exact name and description; remote requires --url, stdio requires --runtime node, hybrid requires --mcp; licenses require explicit holder and year."
 	case "apply", "destination":
@@ -299,7 +385,7 @@ func wantsJSON(args []string) bool {
 }
 func selectedCommand(args []string) string {
 	for _, a := range args {
-		for _, n := range []string{"init", "validate", "inspect", "test"} {
+		for _, n := range commandNames() {
 			if a == n {
 				return n
 			}
