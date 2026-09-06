@@ -54,6 +54,11 @@ func (service Service) Repair(ctx context.Context, input AddInput) (AddResult, e
 		return AddResult{}, err
 	}
 	result := AddResult{InstallationID: installation.InstallationID, Plan: plan}
+	if err := service.preflightTargetComponents(ctx, input, &plan, &installation, true, false); err != nil {
+		result.Plan = plan
+		return result, err
+	}
+	result.Plan = plan
 	clientKey := domain.ComputeClientBindingID(installation.InstallationID, string(input.Client.ClientID), string(input.Scope), plan.ActivePath)
 	client, ok := installation.Clients[clientKey]
 	if !ok && sameNativeBackend(input.Client.ClientID, domain.ClientCopilot) {
@@ -218,7 +223,7 @@ func (service Service) Repair(ctx context.Context, input AddInput) (AddResult, e
 		}
 	}
 	dataPath := ""
-	if packageNeedsPluginData(input.Envelope) {
+	if packageNeedsPluginData(input.Envelope, plan) {
 		if service.PluginData == nil {
 			return result, fmt.Errorf("PLUGIN_DATA manager is required for stdio repair")
 		}

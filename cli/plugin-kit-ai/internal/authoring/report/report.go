@@ -215,7 +215,7 @@ func Build(command, revision string, p project.Result, release bool) Report {
 	if f.Package != nil {
 		r.Loadability.Status = Pass
 		r.Identity.ManifestDigest = f.Package.ManifestDigest
-		if pathpolicy.ValidateLeafID(f.Package.Manifest.Name) != nil {
+		if pathpolicy.ValidateLeafID(domain.ComputePhysicalArtifactID(f.Package.Manifest.Name, "authoring-preview")) != nil {
 			id := r.add(Finding{Code: "physical_name_unsafe", Layer: "host_safety", Rule: "host/portable-leaf", Location: "plugin.json", Severity: "error"})
 			r.HostSafety.Status = Fail
 			r.HostSafety.FindingIDs = append(r.HostSafety.FindingIDs, id)

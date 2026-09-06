@@ -189,7 +189,7 @@ func TestOpenAIOAuthHintsDoNotOverrideGenericAuthentication(t *testing.T) {
 		service, _, _ := serviceFixture(t)
 		client := domain.DetectedClient{ClientID: clientID, Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), ".client")}
 		input := addInput(t, client, "https://example.com/generic-auth-"+string(clientID))
-		input.Envelope.MCP = domain.MCPComponent{Present: true, Enabled: true, Servers: map[string]domain.MCPServer{"server": {Name: "server", Type: "stdio"}}}
+		input.Envelope.MCP = domain.MCPComponent{Present: true, Enabled: true, Servers: map[string]domain.MCPServer{"server": {Name: "server", Type: "stdio", Decoded: map[string]any{"command":"sh"}}}}
 		input.Envelope.CatalogEvidence = &domain.CatalogEvidence{Compatibility: map[string]domain.CatalogCompatibility{string(clientID): {Package: map[bool]string{true: "projected", false: "native"}[clientID == domain.ClientCodex], Authentication: domain.AuthenticationRequirementNotRequired}}}
 		input.Hints.OpenAIMCPAuth = map[string]domain.OpenAIMCPAuthHint{"server": {OAuthResource: "https://example.com/oauth"}}
 		result, err := service.Add(context.Background(), input)
@@ -726,8 +726,8 @@ func TestNoChangeDryRunChecksManagedDigestWithoutNativeObservation(t *testing.T)
 	if observer.calls != 0 {
 		t.Fatalf("dry-run observed native client identity %d times", observer.calls)
 	}
-	if observer.preparedCalls != 1 {
-		t.Fatalf("dry-run prepared observations = %d, want 1", observer.preparedCalls)
+	if observer.preparedCalls != 0 {
+		t.Fatalf("dry-run prepared observations = %d, want 0 (selection integrity fails before observation)", observer.preparedCalls)
 	}
 	state, err := store.Load()
 	if err != nil {

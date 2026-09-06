@@ -229,7 +229,7 @@ func TestClineProjectsChromeLikeStdioWithoutAuthorCWD(t *testing.T) {
 		t.Fatal(err)
 	}
 	server := projection.Servers["chrome"]
-	if server.Command != "npx" || server.CWD != "" || len(server.Args) != 4 || server.Args[3] != filepath.Join(dataPath, "cache") {
+	if server.Command != "npx" || server.CWD != plan.ActivePath || len(server.Args) != 4 || server.Args[3] != filepath.Join(dataPath, "cache") {
 		t.Fatalf("Cline stdio projection = %+v", server)
 	}
 	if server.Env["PLUGIN_ROOT"] != plan.ActivePath || server.Env["PLUGIN_DATA"] != dataPath || server.Env["MODE"] != "safe" {
@@ -237,8 +237,11 @@ func TestClineProjectsChromeLikeStdioWithoutAuthorCWD(t *testing.T) {
 	}
 }
 
-func TestClineRejectsExplicitStdioCWDBeforeProjectionMutation(t *testing.T) {
+func TestClinePreservesExplicitStdioCWD(t *testing.T) {
 	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "workspace"), 0o700); err != nil {
+		t.Fatal(err)
+	}
 	envelope := domain.PackageEnvelope{MCP: domain.MCPComponent{Servers: map[string]domain.MCPServer{
 		"local": {Name: "local", Type: "stdio", Decoded: map[string]any{"type": "stdio", "command": "node", "cwd": "./workspace"}},
 	}}}
@@ -246,12 +249,17 @@ func TestClineRejectsExplicitStdioCWDBeforeProjectionMutation(t *testing.T) {
 		{Kind: domain.ComponentMCPServer, Name: "local", Support: domain.SupportPrepared},
 	}}
 	err := projectClineNative(root, envelope, plan, filepath.Join(root, "data"))
-	if err == nil || !strings.Contains(err.Error(), "Cline stdio MCP server does not support cwd") {
-		t.Fatalf("Cline explicit cwd projection error = %v", err)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if _, statErr := os.Stat(filepath.Join(root, clineProjectionFile)); !os.IsNotExist(statErr) {
-		t.Fatalf("rejected Cline cwd mutated projection: %v", statErr)
+	projection, err := readClineProjection(root)
+	if err != nil {
+		t.Fatal(err)
 	}
+	if projection.Servers["local"].CWD != filepath.Join(plan.ActivePath, "workspace") {
+		t.Fatalf("cwd = %q", projection.Servers["local"].CWD)
+	}
+
 }
 
 func TestClineCollisionAndBusyLockLeaveNoPartialActivation(t *testing.T) {
@@ -395,4 +403,42 @@ func clineFixtureObjects(t *testing.T, configRoot, active, skillName, serverName
 			Path: clineMCPSettingsPath(configRoot), SourceRelative: clineProjectionFile, ManagedDigest: receipt.Digest, ProtectionClass: "managed"})
 	}
 	return objects
+}
+
+func TestClineNeutralCWDTypeValidation(t *testing.T) {
+	for _, value := range []any{false, 42, []string{"work"}} {
+		if _, err := clineNeutralServer(domain.MCPServer{Type: "stdio", Decoded: map[string]any{"command": "node", "cwd": value}}); err == nil {
+			t.Fatalf("accepted cwd %#v", value)
+		}
+	}
+}
+
+func TestClineProjectionRoundTripExpandsPortableValuesOnlyOnce(t *testing.T) {
+	root := t.TempDir()
+	active := filepath.Join(root, "${PLUGIN_DATA}", "${PLUGIN_ROOT}")
+	envelope := domain.PackageEnvelope{MCP: domain.MCPComponent{Servers: map[string]domain.MCPServer{"local": {Type: "stdio", Decoded: map[string]any{"command": "node", "args": []any{"${PLUGIN_ROOT}/run.js", "${UNKNOWN}"}, "env": map[string]any{"ROOT": "${PLUGIN_ROOT}", "OTHER": "${HOME}"}}}}}}
+	plan := domain.DeliveryPlan{ActivePath: active, Components: []domain.ComponentDecision{{Kind: domain.ComponentMCPServer, Name: "local", Support: domain.SupportNative}}}
+	if err := projectClineNative(root, envelope, plan, filepath.Join(root, "data")); err != nil {
+		t.Fatal(err)
+	}
+	projection, err := readClineProjection(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	settings := filepath.Join(root, "native.json")
+	if _, err := nativeconfig.New().Apply(nativeconfig.Request{Paths: nativeconfig.Paths{JSON: settings}, Codec: nativeconfig.CodecCline, Action: nativeconfig.ActionAdd, Name: "local", Server: projection.Servers["local"], Placeholders: nativeconfig.Placeholders{PackageRoot: active, DataRoot: "/wrong-second-pass"}}); err != nil {
+		t.Fatal(err)
+	}
+	var doc map[string]any
+	body, err := os.ReadFile(settings)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(body, &doc); err != nil {
+		t.Fatal(err)
+	}
+	transport := doc["mcpServers"].(map[string]any)["local"].(map[string]any)["transport"].(map[string]any)
+	if transport["cwd"] != active || transport["args"].([]any)[0] != filepath.Join(active, "run.js") || transport["env"].(map[string]any)["ROOT"] != active {
+		t.Fatalf("second-pass expansion: %#v", transport)
+	}
 }

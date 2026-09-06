@@ -27,7 +27,7 @@ Schemas retain the existing registry's exact identifiers and pinned digests.
 | plugins/5.1 | Exact root plugin.json, sole authority. Captured path checked; no alternate format selection. |
 | plugins/5.2 | Closed object, required exact schema, exact keys and metadata types. Original schema validation is independent of installer filtering; case variants remain opaque (AUD-018 correction). |
 | plugins/5.3-5.5 | Required name and type-only optional metadata via pinned schema. No SemVer, URL, email, SPDX or physical-name policy added. |
-| plugins/8.1 | Object extension container and object values; contents opaque. No invented namespace regex or ownership validation. |
+| plugins/8.1 | Author schema requires an object container and object members. Installer reports and ignores a non-object container; non-object members remain rejected under the documented disputed interpretation below. Object contents stay opaque. |
 | plugins/6.2 | Absent components are optional; wrong kind invalidates that component. Unreadable is unavailable, never absence. |
 | plugins/7.1 | Only supplied immediate Skills; complete discovery must be supplied by the rooted reader. |
 | plugins/7.2.1 | Closed explicit transport schemas; inert single-token command, allowed cwd anchors, absolute HTTP(S), no userinfo/fragment, loopback-only cleartext and valid case-unique literal headers. |
@@ -60,3 +60,35 @@ identity and deterministic duplicate-span ordinal, never messages or values. Pub
 raw bytes, env, headers, extensions and underlying errors are not serialized.
 Facts.Package is an internal canonical PackageEnvelope capability, excluded from
 Facts JSON. Consumers must build allowlisted report DTOs and must not serialize it.
+
+## Extension loading policy (published 1.0)
+
+| Original input | Canonical author schema | Installer disposition | Extension interpretation |
+| --- | --- | --- | --- |
+| Absent or empty object | Valid | Load | None |
+| Container null, string or array | Invalid | Report `plugin_extensions_ignored`, ignore, load healthy skills/MCP | None |
+| Unknown namespace with object value | Valid | Load, retain raw bytes | Opaque |
+| Unknown namespace with scalar, null or array value | Invalid | Reject manifest (disputed policy retained) | None |
+| Unknown top-level field | Invalid | Report `plugin_unknown_field`, preserve, load healthy skills/MCP | None |
+| Implemented namespace valid/invalid contents | Not applicable | No portable namespace interpreter currently implemented | No invented semantics |
+
+The original author document is validated independently of the installer view.
+Tolerant loading does not make invalid author input valid. Namespace names are
+not subject to an invented reverse-domain regex. Regression tests exercise both
+views and healthy component discovery in disposable roots without execution.
+Canonical schemas, profile source digests and runtime member policy are unchanged.
+
+At corpus `Booyaka101/agent-plugins-conformance-kit@4d163c6281a9b4929f482f387efe340b4dc175a1`,
+`disputed/AP-8.1-EXTENSIONS-MEMBER-OBJECTS/fixture.json` has
+`expect.rejected: null`, expects skill `alpha`, and records optional rejection
+and an `extensions` report. Its rationale explicitly records the two readings;
+it is not an authoritative scalar-member rejection requirement or certification.
+The corpus pin and strict-reporting gate remain unchanged.
+
+[Issue #77 discussion](https://github.com/agentplugins/agent-plugins-spec/issues/77#issuecomment-5488098709)
+remained OPEN at the 2026-09-06 review and tracks the distinction between the
+object-member requirement and ignoring unimplemented namespaces. [PR #82](https://github.com/agentplugins/agent-plugins-spec/pull/82)
+was OPEN, unmerged, at head `6b0210e4bee84d8bea3f200091badbe796a5c88f`
+on 2026-09-06. Its draft 1.1 container change does not settle published 1.0
+member interpretation. Unknown schema versions, including draft 1.1, remain
+unsupported. Revisit this bounded interpretation after authoritative clarification.

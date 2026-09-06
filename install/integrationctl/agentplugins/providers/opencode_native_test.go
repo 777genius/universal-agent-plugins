@@ -513,6 +513,9 @@ func TestOpenCodeProjectionPreservesOfficialLocalCWD(t *testing.T) {
 	configRoot := filepath.Join(root, "opencode")
 	active := filepath.Join(root, "managed", "demo")
 	envelope, plan := openCodeTestPackage(t, active, configRoot, "owned")
+	if err := os.MkdirAll(filepath.Join(active, "workspace"), 0700); err != nil {
+		t.Fatal(err)
+	}
 	envelope.MCP.Servers["docs"] = domain.MCPServer{Name: "docs", Type: "stdio", Decoded: map[string]any{
 		"command": "node", "args": []any{"${PLUGIN_ROOT}/server.js"}, "cwd": "./workspace",
 	}}
