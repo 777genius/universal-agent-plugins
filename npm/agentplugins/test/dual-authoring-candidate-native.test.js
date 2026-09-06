@@ -20,7 +20,15 @@ test("actual controlled Linux pair: offline verification, engine reports, frozen
 }, () => {
   const options = JSON.parse(c.readFile(config, 1024 * 1024));
   assert.equal(options.assetScope, "linux-amd64-pair");
-  assert.equal(options.identity.commit, "55c5b5bc9bec353560f66f86008a4090b5634e12");
+  // Bind the candidate to the intended source checkout, independently of its
+  // manifest. An explicit source also permits replay from a detached test copy.
+  const sourceRepo = process.env.UAP_CANDIDATE_NATIVE_SOURCE_REPO || path.resolve(__dirname, "../../..");
+  c.safeDirectory(sourceRepo);
+  const sourceContext = producer.privateContext(options.workParent);
+  const sourceHead = cp.execFileSync("/usr/bin/git", ["rev-parse", "HEAD"], {
+    cwd: sourceRepo, env: sourceContext.env, encoding: "utf8"
+  }).trim();
+  assert.equal(options.identity.commit, sourceHead, "candidate revision must equal intended source HEAD");
   assert.deepEqual(producer.verifyCandidate(options), {
     status: "CANDIDATE", manifest_sha256: options.manifestDigest,
     consistency_verified: true, release_eligible: false, platform_acceptance: false, attested: false
@@ -106,8 +114,13 @@ test("actual controlled Linux pair: offline verification, engine reports, frozen
   const emptyModules = path.join(contexts[0].root, "empty-modules"); fs.mkdirSync(emptyModules);
   const failureRoot = fs.mkdtempSync(path.join(path.dirname(options.workParent), "candidate-failure-"));
   const failedOutput = path.join(failureRoot, "failed-build");
-  const stageOptions = { candidate: true, repo: path.resolve(__dirname, "../../.."), output: failedOutput,
+  const stageOptions = { candidate: true, repo: sourceRepo, output: failedOutput,
     modCache: emptyModules, workParent: options.workParent, go: options.go, identity: options.identity, assetScope: options.assetScope };
+  const wrongCommit = (sourceHead[0] === "0" ? "1" : "0") + sourceHead.slice(1);
+  assert.throws(() => producer.stageCandidate({ ...stageOptions,
+    identity: { ...options.identity, commit: wrongCommit, engine_revision: wrongCommit }
+  }), /declared source commit must equal checkout HEAD/);
+  assert.equal(fs.existsSync(failedOutput), false);
   assert.throws(() => producer.stageCandidate(stageOptions), /Command failed/);
   assert.equal(fs.statSync(failedOutput).isDirectory(), true);
   assert.equal(fs.existsSync(path.join(failedOutput, "candidate.json")), false);
