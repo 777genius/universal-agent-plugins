@@ -24,6 +24,10 @@ type Service struct {
 }
 
 func (s Service) Read(ctx context.Context, exactRoot string) (result Result, err error) {
+	exactRoot, err = readRoot(exactRoot)
+	if err != nil {
+		return result, err
+	}
 	lease, err := (packageview.Reader{TempDir: s.Scratch, Limits: s.Limits}).Open(ctx, exactRoot)
 	if err != nil {
 		return result, err

@@ -176,6 +176,7 @@ func contextError(ctx context.Context) error {
 type Lease struct {
 	mu                sync.Mutex
 	source            *source
+	scratchClose      func() error
 	private           string
 	privateInfo       os.FileInfo
 	limits            Limits
@@ -220,27 +221,11 @@ func (r Reader) open(ctx context.Context, exactRoot string, hooks *captureHooks)
 	}
 	l := &Lease{source: s, limits: limits, observations: map[string]os.FileInfo{}, linkInfos: map[string]os.FileInfo{}, directoryEntries: map[string][]string{}, contents: map[string][]byte{}, hooks: hooks}
 	defer l.finish(&err)
-	// Resolve scratch parents only to reject overlap; source I/O remains rooted.
-	src, err := filepath.EvalSymlinks(exactRoot)
+	tmp, release, err := scratchParent(s, exactRoot, r.TempDir)
 	if err != nil {
-		return nil, fail("root_unreadable")
+		return nil, err
 	}
-	tmp, err := filepath.EvalSymlinks(r.TempDir)
-	if err != nil {
-		return nil, fail("scratch_unavailable")
-	}
-	src, err = filepath.Abs(src)
-	if err != nil {
-		return nil, fail("root_unreadable")
-	}
-	tmp, err = filepath.Abs(tmp)
-	if err != nil {
-		return nil, fail("scratch_unavailable")
-	}
-	rel, err := filepath.Rel(src, tmp)
-	if err != nil || rel == "." || (rel != ".." && !isParentRelative(rel)) {
-		return nil, fail("scratch_overlaps_source")
-	}
+	l.scratchClose = release
 	l.private, err = os.MkdirTemp(tmp, "packageview-*")
 	if err != nil {
 		return nil, fail("scratch_unavailable")
@@ -337,6 +322,10 @@ func (l *Lease) close() error {
 			}
 			failed = failed || e != nil
 		}
+	}
+	if l.scratchClose != nil {
+		failed = l.scratchClose() != nil || failed
+		l.scratchClose = nil
 	}
 	if failed {
 		l.closeErr = &Error{Code: "cleanup_failed", CleanupFailed: true}

@@ -323,9 +323,8 @@ func (s *source) walk(rel string, nofollow, rootSelection bool) (*pinned, error)
 			}
 			return s.rememberMustDuplicate(stack[len(stack)-1])
 		}
-		// The shared scratch-overlap check uses Win32 EvalSymlinks. Root names
-		// must therefore have matching NT/Win32 spellings; reject DOS devices and
-		// terminal dots/spaces instead of allowing that check to name another root.
+		// Keep the ordinary Win32 root-selection contract: reject DOS devices and
+		// terminal dots/spaces even though overlap identity is now handle-derived.
 		if rootSelection && (!filepath.IsLocal(n) || strings.HasSuffix(n, ".") || strings.HasSuffix(n, " ") || strings.ContainsAny(n, "<>|")) {
 			return nil, syscall.EXDEV
 		}
