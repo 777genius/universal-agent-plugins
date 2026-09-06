@@ -3,6 +3,8 @@ package hostdetect
 import (
 	"strings"
 	"testing"
+
+	"github.com/777genius/plugin-kit-ai/sdk/internal/runtime"
 )
 
 type fakeEnv map[string]string
@@ -134,7 +136,7 @@ func TestDetectFailsClosed(t *testing.T) {
 func TestDetectOversizedPayloadSkipsSniff(t *testing.T) {
 	t.Parallel()
 
-	filler := strings.Repeat("a", 1<<20)
+	filler := strings.Repeat("a", runtime.MaxPayloadBytes)
 	oversized := []byte(`{"turn_id":"x","pad":"` + filler + `"}`)
 	got, err := Detect(DefaultRegistry(), "", nil, oversized)
 	if err != nil {

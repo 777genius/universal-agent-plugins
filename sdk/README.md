@@ -79,7 +79,10 @@ Platform packages:
 Codex lifecycle hooks use prefixed invocation names (`CodexStop`, not `Stop`) because the flat
 resolver already assigns the bare event names to Claude; the descriptor `Event` stays clean
 (`Stop`). The payloads arrive as snake_case stdin JSON and the handlers are observation-style:
-success means empty stdout and exit 0.
+success means empty stdout and exit 0. Note on the generated support matrix: the
+`codex_notify` live-test profile is a platform-level attribute — the live lane exercises the
+legacy notify path only, and these three lifecycle events are covered by unit/app-level tests,
+not by live execution.
 
 Host detection for multi-host binaries lives in
 `github.com/777genius/plugin-kit-ai/sdk/hostdetect` (`public-beta`): an explicit override always

@@ -33,9 +33,11 @@ Current SDK beta surface added after the first promotion:
   - `Stop` (invocation name `CodexStop`)
   - `SubagentStop` (invocation name `CodexSubagentStop`)
   - `PermissionRequest` (invocation name `CodexPermissionRequest`)
+
+These hooks are runtime-supported and scaffolded, but remain outside the stable compatibility promise until they are promoted through the audit ledger. The same beta status applies to:
+
 - the `hostdetect` package (`Platform`, `Env`, `Signal`, `Registry`, `DefaultRegistry`, `Detect`)
 - the root `plugin-kit-ai.MaxPayloadBytes` constant
-These hooks are runtime-supported and scaffolded, but remain outside the stable compatibility promise until they are promoted through the audit ledger.
 
 ## Public-Stable
 Approved stable SDK surface:

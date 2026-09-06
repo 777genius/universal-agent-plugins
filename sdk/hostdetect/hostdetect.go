@@ -51,9 +51,8 @@ type Registry []Signal
 // Detect returns PlatformUnknown with a nil error.
 func Detect(registry Registry, override string, env Env, payload []byte) (Platform, error) {
 	if p := strings.TrimSpace(override); p != "" {
-		want := Platform(strings.ToLower(p))
 		for _, sig := range registry {
-			if sig.Platform == want && sig.Platform != PlatformUnknown {
+			if sig.Platform != PlatformUnknown && strings.EqualFold(string(sig.Platform), p) {
 				return sig.Platform, nil
 			}
 		}
