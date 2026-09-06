@@ -14,8 +14,8 @@ import (
 	"reflect"
 	"runtime"
 	"strings"
-	"sync"
 	"testing"
+	"time"
 
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli"
 	"github.com/777genius/plugin-kit-ai/cli/internal/authoring/commands"
@@ -71,6 +71,16 @@ func decodeReport(t *testing.T, b []byte) report.Report {
 }
 func execute(t *testing.T, a commands.App, args []string, mount bool) (report.Report, int, []byte) {
 	t.Helper()
+	return decodeExecution(t, executeRaw(a, args, mount))
+}
+
+// Workers capture bytes and errors; only the parent may decode or fail a test.
+type rawExecution struct {
+	out, errout []byte
+	err         error
+}
+
+func executeRaw(a commands.App, args []string, mount bool) rawExecution {
 	var out, errout bytes.Buffer
 	builder := commands.RootBuilder(authoringcli.NewPluginKitRoot)
 	if mount {
@@ -78,15 +88,75 @@ func execute(t *testing.T, a commands.App, args []string, mount bool) (report.Re
 		args = append([]string{"author"}, args...)
 	}
 	e := a.Execute(context.Background(), args, authoringcli.Streams{Out: &out, Err: &errout}, builder)
-	if errout.Len() != 0 {
-		t.Fatalf("duplicate stderr %q", errout.String())
+	return rawExecution{out.Bytes(), errout.Bytes(), e}
+}
+
+func decodeExecution(t *testing.T, result rawExecution) (report.Report, int, []byte) {
+	t.Helper()
+	if len(result.errout) != 0 {
+		t.Fatalf("duplicate stderr %q", result.errout)
 	}
 	code := 0
-	if e != nil {
-		code = exitx.Code(e)
+	if result.err != nil {
+		code = exitx.Code(result.err)
 	}
-	return decodeReport(t, out.Bytes()), code, out.Bytes()
+	return decodeReport(t, result.out), code, result.out
 }
+
+// Drain every worker before assertions so a parent Fatal cannot strand work.
+func concurrentResults(jobs ...func() rawExecution) []rawExecution {
+	start := make(chan struct{})
+	results := make(chan rawExecution, len(jobs))
+	for _, job := range jobs {
+		go func() {
+			<-start
+			results <- job()
+		}()
+	}
+	close(start)
+	collected := make([]rawExecution, 0, len(jobs))
+	for range jobs {
+		collected = append(collected, <-results)
+	}
+	return collected
+}
+
+func TestConcurrentResultsFaults(t *testing.T) {
+	const faultEnv = "UAP_POSTMERGE_CONCURRENT_FAULT"
+	if fault := os.Getenv(faultEnv); fault != "" {
+		results := concurrentResults(func() rawExecution {
+			if fault == "stderr" {
+				return rawExecution{out: []byte(`{}`), errout: []byte("injected stderr"), err: fmt.Errorf("injected command error")}
+			}
+			return rawExecution{out: []byte(`{`), err: fmt.Errorf("injected command error")}
+		}, func() rawExecution { return rawExecution{out: []byte(`{}`)} })
+		for _, result := range results {
+			decodeExecution(t, result)
+		}
+		return
+	}
+	for _, tc := range []struct{ fault, diagnostic string }{
+		{"malformed", "invalid report:"}, {"stderr", "duplicate stderr"},
+	} {
+		t.Run(tc.fault, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			cmd := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestConcurrentResultsFaults$", "-test.timeout=8s")
+			cmd.Env = append(os.Environ(), faultEnv+"="+tc.fault)
+			out, err := cmd.CombinedOutput()
+			if ctx.Err() != nil || err == nil || !bytes.Contains(out, []byte(tc.diagnostic)) || bytes.Contains(out, []byte("test timed out")) {
+				t.Fatalf("fault did not fail promptly: %v (%v)\n%s", err, ctx.Err(), out)
+			}
+		})
+	}
+	results := concurrentResults(func() rawExecution {
+		return rawExecution{out: []byte(`{}`), err: fmt.Errorf("injected command error")}
+	})
+	if _, code, _ := decodeExecution(t, results[0]); code == 0 {
+		t.Fatal("worker command error lost")
+	}
+}
+
 func write(t *testing.T, root, path, body string) {
 	t.Helper()
 	p := filepath.Join(root, filepath.FromSlash(path))
@@ -233,18 +303,18 @@ func TestReportsAndFreshFactory(t *testing.T) {
 	}
 	root := t.TempDir()
 	write(t, root, "plugin.json", plugin(""))
-	var wg sync.WaitGroup
+	var jobs []func() rawExecution
 	for i := 0; i < 8; i++ {
-		wg.Add(1)
-		go func(i int) {
-			defer wg.Done()
-			r, c, _ := execute(t, a, []string{"validate", root, "--format=json"}, i%2 == 0)
-			if c != 0 || r.Conformance.Status != report.Pass {
-				t.Error("concurrent factory failed")
-			}
-		}(i)
+		jobs = append(jobs, func() rawExecution {
+			return executeRaw(a, []string{"validate", root, "--format=json"}, i%2 == 0)
+		})
 	}
-	wg.Wait()
+	for _, result := range concurrentResults(jobs...) {
+		r, c, _ := decodeExecution(t, result)
+		if c != 0 || r.Conformance.Status != report.Pass {
+			t.Error("concurrent factory failed")
+		}
+	}
 }
 
 func TestArgumentFailuresBeforeEffects(t *testing.T) {
@@ -334,19 +404,13 @@ func TestConcurrentInitAndCanceledInvocation(t *testing.T) {
 	a := commands.App{Projects: project.Service{Scratch: scratch}, Revision: baseline}
 	dest := filepath.Join(parent, "demo")
 	args := []string{"init", dest, "--template=skill", "--name=demo", "--description=A fixture.", "--format=json"}
-	start := make(chan struct{})
-	results := make(chan report.Report, 2)
+	var jobs []func() rawExecution
 	for i := 0; i < 2; i++ {
-		go func(mount bool) {
-			<-start
-			r, _, _ := execute(t, a, args, mount)
-			results <- r
-		}(i == 1)
+		jobs = append(jobs, func() rawExecution { return executeRaw(a, args, i == 1) })
 	}
-	close(start)
 	wins := 0
-	for i := 0; i < 2; i++ {
-		r := <-results
+	for _, result := range concurrentResults(jobs...) {
+		r, _, _ := decodeExecution(t, result)
 		if r.Committed {
 			wins++
 		} else if r.Error == nil || r.Error.Code != "destination_exists" {
