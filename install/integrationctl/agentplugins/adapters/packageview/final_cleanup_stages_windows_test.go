@@ -72,7 +72,11 @@ func windowsFinalCleanupStage(t *testing.T, stage string, err error) error {
 // Observe the actual production resolver. A copied walker can silently diverge
 // from source-root role and namespace protection, invalidating this diagnostic.
 func windowsFinalCleanupSource(t *testing.T, role, name string) (*source, error) {
-	s, err := openSourceWithMetadataStage(name, func(f *os.File, stage string) {
+	open := openSourceWithMetadataStage
+	if role == "scratch" {
+		open = openTrustedScratchWithMetadataStage
+	}
+	s, err := open(name, func(f *os.File, stage string) {
 		snapshot, e := winMeta(f)
 		t.Logf("stage=%s.%s observation=%+v err=%v (not internal comparison evidence)", role, stage, snapshot, e)
 	})

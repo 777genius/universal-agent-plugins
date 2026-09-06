@@ -4,6 +4,8 @@ package scaffold
 
 import (
 	"errors"
+	"fmt"
+	"io/fs"
 	"os"
 	"runtime"
 	"unsafe"
@@ -17,17 +19,48 @@ import (
 // POSIX_SEMANTICS. Unsupported filesystems fail without a weaker fallback.
 func renameExclusive(from *os.File, old string, to *os.File, new string) error {
 	err := renameWindows(from, old, to, new)
+	if err != nil {
+		err = windowsRenameError(err, to, new)
+	}
 	runtime.KeepAlive(from)
 	runtime.KeepAlive(to)
+	if err != nil {
+		return &os.LinkError{Op: "rename-exclusive", Old: old, New: new, Err: err}
+	}
+	return nil
+}
+
+func windowsRenameError(err error, to *os.File, new string) error {
 	// Both NT calls return NTStatus, which lacks Is/Unwrap in pinned x/sys.
 	// Retain the native cause and expose its Win32 errno for Go classification.
 	if status, ok := err.(windows.NTStatus); ok {
 		err = errors.Join(status, status.Errno())
 	}
-	if err != nil {
-		return &os.LinkError{Op: "rename-exclusive", Old: old, New: new, Err: err}
+	if !errors.Is(err, windows.STATUS_SHARING_VIOLATION) {
+		return err
 	}
-	return nil
+	// A winner's delete-denying data handle can make sharing failure precede
+	// name collision. Observe existence only after failure; never retry rename.
+	// Metadata access avoids data opens, and the single rooted component is
+	// opened as a reparse point so even a dangling/outside link counts as existing.
+	name, e := windows.NewNTUnicodeString(new)
+	if e != nil {
+		return err
+	}
+	oa := windows.OBJECT_ATTRIBUTES{RootDirectory: windows.Handle(to.Fd()), ObjectName: name, Attributes: windows.OBJ_CASE_INSENSITIVE}
+	oa.Length = uint32(unsafe.Sizeof(oa))
+	var handle windows.Handle
+	e = windows.NtCreateFile(&handle, windows.FILE_READ_ATTRIBUTES|windows.SYNCHRONIZE, &oa, &windows.IO_STATUS_BLOCK{}, nil, 0,
+		windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE|windows.FILE_SHARE_DELETE, windows.FILE_OPEN,
+		windows.FILE_OPEN_REPARSE_POINT|windows.FILE_SYNCHRONOUS_IO_NONALERT, 0, 0)
+	runtime.KeepAlive(to)
+	if e != nil {
+		return err // Missing or unobservable destination: no new existence claim.
+	}
+	if e = windows.CloseHandle(handle); e != nil {
+		return errors.Join(err, e)
+	}
+	return errors.Join(err, fmt.Errorf("destination already exists: %w", fs.ErrExist))
 }
 func renameWindows(from *os.File, old string, to *os.File, new string) error {
 	name, err := windows.NewNTUnicodeString(old)
