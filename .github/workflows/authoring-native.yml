@@ -28,7 +28,6 @@ jobs:
       EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
       EXPECTED_OS: ${{ matrix.os }}
       EXPECTED_ARCH: ${{ matrix.arch }}
-      NATIVE_ROOT: ${{ runner.temp }}/authoring-native-${{ github.run_id }}-${{ github.run_attempt }}
       GOTOOLCHAIN: local
       GOMAXPROCS: 2
     steps:
@@ -48,10 +47,12 @@ jobs:
       - name: Native offline tests and actual entrypoint builds
         run: |
           set -euo pipefail
+          export NATIVE_ROOT="$RUNNER_TEMP/authoring-native-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
           if [[ "$EXPECTED_OS" == windows ]]; then
             NATIVE_ROOT="$(cygpath -m "$NATIVE_ROOT")"
             export NATIVE_ROOT
           fi
+          printf 'NATIVE_ROOT=%s\n' "$NATIVE_ROOT" >> "$GITHUB_ENV"
           mkdir "$NATIVE_ROOT"
           mkdir -p "$NATIVE_ROOT"/{evidence,home,tmp,config,cache,appdata,localappdata,hooks,bin}
           # Tool setup is finished. All test subprocesses inherit disposable profiles.
