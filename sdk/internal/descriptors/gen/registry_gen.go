@@ -209,6 +209,27 @@ var registry = map[key]runtime.Descriptor{
 		Decode:   internal_codex.DecodeNotify,
 		Encode:   internal_codex.EncodeNotify,
 	},
+	{platform: "codex", event: "Stop"}: {
+		Platform: "codex",
+		Event:    "Stop",
+		Carrier:  runtime.CarrierStdinJSON,
+		Decode:   internal_codex.DecodeStop,
+		Encode:   internal_codex.EncodeStop,
+	},
+	{platform: "codex", event: "SubagentStop"}: {
+		Platform: "codex",
+		Event:    "SubagentStop",
+		Carrier:  runtime.CarrierStdinJSON,
+		Decode:   internal_codex.DecodeSubagentStop,
+		Encode:   internal_codex.EncodeSubagentStop,
+	},
+	{platform: "codex", event: "PermissionRequest"}: {
+		Platform: "codex",
+		Event:    "PermissionRequest",
+		Carrier:  runtime.CarrierStdinJSON,
+		Decode:   internal_codex.DecodePermissionRequest,
+		Encode:   internal_codex.EncodePermissionRequest,
+	},
 }
 
 func Lookup(platform runtime.PlatformID, event runtime.EventID) (runtime.Descriptor, bool) {

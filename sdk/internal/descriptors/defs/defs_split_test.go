@@ -38,6 +38,9 @@ func TestEventsPreserveStableBucketOrder(t *testing.T) {
 		{platform: "gemini", event: "BeforeTool"},
 		{platform: "gemini", event: "AfterTool"},
 		{platform: "codex", event: "Notify"},
+		{platform: "codex", event: "Stop"},
+		{platform: "codex", event: "SubagentStop"},
+		{platform: "codex", event: "PermissionRequest"},
 	}
 	if len(events) != len(want) {
 		t.Fatalf("events count = %d want %d", len(events), len(want))

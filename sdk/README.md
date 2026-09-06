@@ -72,6 +72,20 @@ Platform packages:
   - `claude/ConfigChange` (`public-beta`)
   - `claude/WorktreeCreate` (`public-beta`)
   - `claude/WorktreeRemove` (`public-beta`)
+  - `codex/Stop` (`public-beta`, invocation name `CodexStop`)
+  - `codex/SubagentStop` (`public-beta`, invocation name `CodexSubagentStop`)
+  - `codex/PermissionRequest` (`public-beta`, invocation name `CodexPermissionRequest`)
+
+Codex lifecycle hooks use prefixed invocation names (`CodexStop`, not `Stop`) because the flat
+resolver already assigns the bare event names to Claude; the descriptor `Event` stays clean
+(`Stop`). The payloads arrive as snake_case stdin JSON and the handlers are observation-style:
+success means empty stdout and exit 0.
+
+Host detection for multi-host binaries lives in
+`github.com/777genius/plugin-kit-ai/sdk/hostdetect` (`public-beta`): an explicit override always
+wins, unknown overrides are errors, and detection fails closed with `PlatformUnknown` instead of
+silently assuming a host. The root package also exports `plugin-kit-ai.MaxPayloadBytes`, the single
+wire limit used by runtime decoders.
 Gemini's current production-ready 9-hook runtime boundary is audited in [../../docs/GEMINI_RUNTIME_AUDIT.md](../../docs/GEMINI_RUNTIME_AUDIT.md).
 
 Generated support matrix: [../../docs/generated/support_matrix.md](../../docs/generated/support_matrix.md)
