@@ -218,17 +218,18 @@ func (e DirectoryEvidence) HasTrustedProvenanceAtSequence(sequence uint64) bool 
 }
 
 // HasTrustedEligibilityProvenance applies the schema-1 compatibility rule for
-// evidence that can block or promote a release. Static schema/materialization
-// gates require reproducible workflow provenance; client runtime gates may also
-// use evidence explicitly reviewed by the signed Directory publisher.
+// evidence that can block or promote a release. Static schema gates require
+// reproducible workflow provenance. Materialization and client runtime gates
+// may also use exact evidence explicitly reviewed by the signed Directory
+// publisher.
 func (e DirectoryEvidence) HasTrustedEligibilityProvenance() bool {
 	if !e.HasTrustedProvenance() {
 		return false
 	}
-	if e.Level == "schema" || e.Level == "materialization" {
+	if e.Level == "schema" {
 		return e.Trust.Kind == "github_actions"
 	}
-	return e.Level == "discovery" || e.Level == "runtime" || e.Level == "oauth"
+	return e.Level == "materialization" || e.Level == "discovery" || e.Level == "runtime" || e.Level == "oauth"
 }
 
 // HasTrustedEligibilityProvenanceAtSequence applies the eligibility-level
@@ -237,10 +238,10 @@ func (e DirectoryEvidence) HasTrustedEligibilityProvenanceAtSequence(sequence ui
 	if !e.HasTrustedProvenanceAtSequence(sequence) {
 		return false
 	}
-	if e.Level == "schema" || e.Level == "materialization" {
+	if e.Level == "schema" {
 		return e.Trust == nil || e.Trust.Kind == "github_actions"
 	}
-	return e.Level == "discovery" || e.Level == "runtime" || e.Level == "oauth"
+	return e.Level == "materialization" || e.Level == "discovery" || e.Level == "runtime" || e.Level == "oauth"
 }
 
 type DirectoryRevocation struct {
