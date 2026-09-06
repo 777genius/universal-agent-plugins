@@ -78,6 +78,15 @@ CONTRACTS = {
         'TestReplacementRacesNeverFollowSpecialOrOutside/after-name-check/device',
     ],
     'windows': [
+        'TestWindowsAncestorEpochBoundary/outside/stat',
+        'TestWindowsAncestorEpochBoundary/outside/protect',
+        'TestWindowsAncestorEpochBoundary/root/stat',
+        'TestWindowsAncestorEpochBoundary/root/protect',
+        'TestWindowsAncestorEpochBoundary/descendant/stat',
+        'TestWindowsAncestorEpochBoundary/descendant/protect',
+        'TestWindowsAncestorEpochOrderedRoot',
+        'TestWindowsAncestorEpochMetadataGuards',
+        'TestWindowsAncestorEpochReplacementRejected',
         'TestWindowsPureNamespaceReplacement/before_name_check',
         'TestWindowsPureNamespaceReplacement/after_name_check',
         'TestWindowsFinalCleanupAcquisitionStages',
@@ -291,7 +300,8 @@ class NativeEvidenceTests(unittest.TestCase):
             for arch in ("amd64", "arm64"):
                 names = (["TestDeviceMetadataOnly"] if system == "linux" else
                     ["TestWindowsScratchDistinctNTFSVolumes", "TestWindowsBasicInfoABI",
-                     "TestWindowsNTSelfOpenAccessAndRead", "TestWindowsScratchAliasResolutionStages"])
+                     "TestWindowsNTSelfOpenAccessAndRead", "TestWindowsScratchAliasResolutionStages"] +
+                    [n for n in CONTRACTS["windows"] if n.startswith("TestWindowsAncestorEpoch")])
                 for name in names:
                     with self.subTest(system=system, arch=arch, test=name):
                         self.fixture(system, arch)

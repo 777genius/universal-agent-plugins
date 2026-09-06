@@ -96,7 +96,7 @@ func main() {
 						if c, ok := n.Results[i].(*ast.CallExpr); ok {
 							if id, ok := c.Fun.(*ast.Ident); ok && id.Name == "fail" && len(c.Args) == 1 {
 								if code, ok := c.Args[0].(*ast.BasicLit); ok && code.Value == strconv.Quote("source_changed") {
-									pairs := []string{"[]any{meta, after}", "[]any{meta, locked}"}
+									pairs := []string{`[]any{meta, after, map[string]any{"outside_root": outsideRoot, "selected_root_depth": s.selectionDepth}}`, `[]any{meta, locked, map[string]any{"outside_root": outsideRoot, "selected_root_depth": s.selectionDepth}}`}
 									observation, err := parser.ParseExpr(pairs[changes])
 									must(err)
 									observations = append(observations, observation)

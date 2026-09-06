@@ -223,7 +223,12 @@ def check(root):
         }
         # These diagnostics and negative controls must not disappear from ARM
         # discovery via an amd64-only build guard either.
-        critical["windows"] += ["TestWindowsBasicInfoABI", "TestWindowsBootstrapStages",
+        critical["windows"] += ["TestWindowsAncestorEpochBoundary/outside/stat", "TestWindowsAncestorEpochBoundary/outside/protect",
+                                "TestWindowsAncestorEpochBoundary/root/stat", "TestWindowsAncestorEpochBoundary/root/protect",
+                                "TestWindowsAncestorEpochBoundary/descendant/stat", "TestWindowsAncestorEpochBoundary/descendant/protect",
+                                "TestWindowsAncestorEpochOrderedRoot", "TestWindowsAncestorEpochMetadataGuards",
+                                "TestWindowsAncestorEpochReplacementRejected",
+                                "TestWindowsBasicInfoABI", "TestWindowsBootstrapStages",
                                 "TestWindowsScratchAliasResolutionStages", "TestWindowsReopenProtectedParameters",
                                 "TestWindowsModeAndChangeMetadata", "TestWindowsRootAndIntermediateReparseRejected",
                                 "TestWindowsScratchAliasFailuresStayBeforeData"]
