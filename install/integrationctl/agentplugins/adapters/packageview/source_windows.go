@@ -33,9 +33,20 @@ type source struct {
 	volume         uint32
 	records        map[winSnapshot]*winObservation
 	selectionDepth int
+	purpose        winAcquisitionPurpose
 	// Operation-local native test seam; nil in production. No pathname is passed.
 	metadataStage func(*os.File, string)
 }
+
+// The zero value preserves strict captured-source acquisition. Trusted scratch
+// is a directory traversal capability, including its leaf, never captured data.
+type winAcquisitionPurpose uint8
+
+const (
+	winCapturedSource winAcquisitionPurpose = iota
+	winTrustedScratch
+)
+
 type pinned struct {
 	file *os.File
 	info os.FileInfo
@@ -62,10 +73,10 @@ type winSnapshot struct {
 	Creation, Write, Change              int64
 }
 type winObservation struct {
-	file        *os.File
-	info        os.FileInfo
-	meta        winSnapshot
-	outsideRoot bool
+	file          *os.File
+	info          os.FileInfo
+	meta          winSnapshot
+	traversalOnly bool
 }
 
 const winShare = windows.FILE_SHARE_READ | windows.FILE_SHARE_WRITE | windows.FILE_SHARE_DELETE
@@ -183,11 +194,12 @@ func winDup(f *os.File) (*os.File, error) {
 	return os.NewFile(uintptr(h), "source-pin"), nil
 }
 
-// winUnchanged excludes only the write/change epoch of a proven outside-root
-// directory. Its identity, creation, size, attributes and link count stay pinned.
-// Captured root/descendant observations always require the complete snapshot.
-func winUnchanged(a, b winSnapshot, outsideRoot bool) bool {
-	if outsideRoot && a.Attributes&windows.FILE_ATTRIBUTE_DIRECTORY != 0 && a.Attributes&windows.FILE_ATTRIBUTE_REPARSE_POINT == 0 {
+// winUnchanged excludes only the write/change epoch of a proven traversal-only
+// directory (outside-source ancestry or trusted scratch, including its leaf).
+// Identity, creation, size, attributes and links stay pinned. Captured source
+// root/descendant observations always require the complete snapshot.
+func winUnchanged(a, b winSnapshot, traversalOnly bool) bool {
+	if traversalOnly && a.Attributes&windows.FILE_ATTRIBUTE_DIRECTORY != 0 && a.Attributes&windows.FILE_ATTRIBUTE_REPARSE_POINT == 0 {
 		a.Write, a.Change = b.Write, b.Change
 	}
 	return a == b
@@ -197,6 +209,12 @@ func (s *source) remember(f *os.File, outside ...bool) (*pinned, error) {
 	// Takes ownership on all paths; hard bounds include root-selection ancestors.
 	defer f.Close()
 	outsideRoot := len(outside) == 1 && outside[0]
+	traversalOnly := outsideRoot || s.purpose == winTrustedScratch
+	if s.purpose == winTrustedScratch {
+		if e := winCheckDirectory(f); e != nil {
+			return nil, e
+		}
+	}
 	meta, e := winMeta(f)
 	if e != nil {
 		return nil, e
@@ -216,7 +234,7 @@ func (s *source) remember(f *os.File, outside ...bool) (*pinned, error) {
 		return nil, e
 	}
 	after, e := winMeta(f)
-	if e != nil || !winUnchanged(meta, after, outsideRoot) {
+	if e != nil || !winUnchanged(meta, after, traversalOnly) {
 		return nil, fail("source_changed")
 	}
 	if meta.Attributes&windows.FILE_ATTRIBUTE_REPARSE_POINT != 0 {
@@ -231,11 +249,11 @@ func (s *source) remember(f *os.File, outside ...bool) (*pinned, error) {
 		// A strict observation of this exact epoch may promote an identity pin;
 		// never downgrade a captured observation on a root-selection revisit.
 		winInfos.Lock()
-		if o.outsideRoot && !outsideRoot {
+		if o.traversalOnly && !traversalOnly {
 			// The ancestor's Stat may have observed a newer permitted epoch.
 			// Bind promotion to this fresh, fully checked Stat instead.
 			delete(winInfos.m, o.info)
-			o.info, o.outsideRoot = info, false
+			o.info, o.traversalOnly = info, false
 			winInfos.m[info] = o
 		}
 		winInfos.Unlock()
@@ -269,7 +287,7 @@ func (s *source) remember(f *os.File, outside ...bool) (*pinned, error) {
 		return nil, e
 	}
 	locked, e := winMeta(held)
-	if e != nil || !winUnchanged(meta, locked, outsideRoot) {
+	if e != nil || !winUnchanged(meta, locked, traversalOnly) {
 		held.Close()
 		return nil, fail("source_changed")
 	}
@@ -278,7 +296,7 @@ func (s *source) remember(f *os.File, outside ...bool) (*pinned, error) {
 		held.Close()
 		return nil, e
 	}
-	o := &winObservation{file: held, info: info, meta: meta, outsideRoot: outsideRoot}
+	o := &winObservation{file: held, info: info, meta: meta, traversalOnly: traversalOnly}
 	s.records[meta] = o
 	winInfos.Lock()
 	winInfos.m[info] = o
@@ -287,6 +305,9 @@ func (s *source) remember(f *os.File, outside ...bool) (*pinned, error) {
 }
 func openSource(name string) (_ *source, err error) { return openSourceWithMetadataStage(name, nil) }
 func openSourceWithMetadataStage(name string, stage func(*os.File, string)) (_ *source, err error) {
+	return openWindowsRoot(name, winCapturedSource, stage)
+}
+func openWindowsRoot(name string, purpose winAcquisitionPurpose, stage func(*os.File, string)) (_ *source, err error) {
 	name = strings.ReplaceAll(name, "/", `\`)
 	// Bootstrap ONLY a literal fixed drive root. The remainder never goes through
 	// Win32 path cleaning. In particular junction/../x is evaluated in order.
@@ -306,7 +327,7 @@ func openSourceWithMetadataStage(name string, stage func(*os.File, string)) (_ *
 		return nil, fail("root_unreadable")
 	}
 	rest := strings.TrimRight(name[3:], `\`)
-	s := &source{records: make(map[winSnapshot]*winObservation), selectionDepth: winSelectionDepth(rest), metadataStage: stage}
+	s := &source{records: make(map[winSnapshot]*winObservation), selectionDepth: winSelectionDepth(rest), purpose: purpose, metadataStage: stage}
 	defer func() {
 		if err != nil {
 			_ = s.close()
@@ -369,7 +390,12 @@ func (s *source) close() error {
 	}
 	return errors.Join(es...)
 }
-func (s *source) pin(rel string, nofollow bool) (*pinned, error) { return s.walk(rel, nofollow, false) }
+func (s *source) pin(rel string, nofollow bool) (*pinned, error) {
+	if s.purpose == winTrustedScratch {
+		return nil, fail("source_changed")
+	}
+	return s.walk(rel, nofollow, false)
+}
 func winParts(p string) ([]string, error) {
 	if p == "" || len(p) > 4096 || !utf8.ValidString(p) || strings.ContainsAny(p, ":\x00*?\"") || p[0] == '/' || p[0] == '\\' {
 		return nil, syscall.EXDEV
@@ -458,7 +484,7 @@ func (s *source) walk(rel string, nofollow, rootSelection bool) (*pinned, error)
 		if e != nil {
 			return nil, e
 		}
-		if outsideRoot {
+		if outsideRoot || s.purpose == winTrustedScratch {
 			// ChangeTime also detects rename before delete protection. Excluding
 			// its epoch therefore requires a fresh metadata-only name check from
 			// the held parent AFTER the child is protected, never a data fallback.
@@ -569,12 +595,12 @@ func (p *pinned) reopen(directory bool) (*os.File, error) {
 	if (directory && !p.info.IsDir()) || (!directory && !p.info.Mode().IsRegular()) {
 		return nil, fail("wrong_kind")
 	}
-	// Outside-root identity pins authorize traversal only, never captured data.
+	// Traversal identity pins, including scratch leaves, never authorize data.
 	winInfos.RLock()
 	o := winInfos.m[p.info]
-	outsideRoot := o != nil && o.outsideRoot
+	traversalOnly := o != nil && o.traversalOnly
 	winInfos.RUnlock()
-	if outsideRoot {
+	if traversalOnly {
 		return nil, fail("source_changed")
 	}
 	// Refuse any attribute/type/reparse/link-count change before upgrading access.
@@ -608,7 +634,7 @@ func same(a, b os.FileInfo) bool {
 		if o := winInfos.m[i]; o != nil {
 			found = true
 			m, e := winMeta(o.file)
-			if e != nil || !winUnchanged(o.meta, m, o.outsideRoot) {
+			if e != nil || !winUnchanged(o.meta, m, o.traversalOnly) {
 				return false
 			}
 		}

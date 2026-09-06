@@ -232,6 +232,18 @@ def check(root):
                                 "TestWindowsScratchAliasResolutionStages", "TestWindowsReopenProtectedParameters",
                                 "TestWindowsModeAndChangeMetadata", "TestWindowsRootAndIntermediateReparseRejected",
                                 "TestWindowsScratchAliasFailuresStayBeforeData"]
+        critical["windows"] += [
+            'TestWindowsSharedScratchEpochBoundary/scratch/stat',
+            'TestWindowsSharedScratchEpochBoundary/scratch/protect',
+            'TestWindowsSharedScratchEpochBoundary/source/stat',
+            'TestWindowsSharedScratchEpochBoundary/source/protect',
+            'TestWindowsSharedScratchReplacementRejected/directory/stat',
+            'TestWindowsSharedScratchReplacementRejected/directory/protect',
+            'TestWindowsSharedScratchReplacementRejected/junction/stat',
+            'TestWindowsSharedScratchReplacementRejected/junction/protect',
+            'TestWindowsSharedScratchReplacementRejected/reparse/stat',
+            'TestWindowsSharedScratchReplacementRejected/reparse/protect',
+        ]
         for test in critical.get(native_os, []):
             require((native_package, test) in passed, "missing mandatory native contract: " + test)
         scaffold_package = "github.com/777genius/plugin-kit-ai/cli/internal/authoring/scaffold"
