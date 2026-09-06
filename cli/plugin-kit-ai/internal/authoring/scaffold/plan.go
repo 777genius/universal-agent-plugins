@@ -273,3 +273,20 @@ func validateURL(raw string) error {
 	}
 	return nil
 }
+
+// DefaultDescription is neutral deterministic template text for the explicit
+// public command option. BuildPlan retains its explicit-input contract.
+func DefaultDescription(t Template) string {
+	switch t {
+	case Skill:
+		return "A Skill for documentation and task guidance."
+	case MCPRemote:
+		return "An Agent Plugins package with a remote MCP server."
+	case MCPStdio:
+		return "An Agent Plugins package with a local Node MCP server."
+	case Hybrid:
+		return "An Agent Plugins package with a Skill and an MCP server."
+	default:
+		return ""
+	}
+}

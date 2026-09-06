@@ -16,6 +16,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/cli/internal/authoring/readiness"
 	"github.com/777genius/plugin-kit-ai/cli/internal/authoring/report"
 	"github.com/777genius/plugin-kit-ai/cli/internal/authoring/scaffold"
+	"github.com/777genius/plugin-kit-ai/cli/internal/authoring/skills"
 	"github.com/777genius/plugin-kit-ai/cli/internal/authoringcli"
 	"github.com/777genius/plugin-kit-ai/cli/internal/exitx"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/packageview"
@@ -34,6 +35,8 @@ type RootBuilder func(...authoringcli.Factory) (*cobra.Command, error)
 type App struct {
 	Projects project.Service
 	Revision string
+	// PublicContract opts into the private Phase 6 contract; mains retain their existing mode.
+	PublicContract bool
 }
 
 func commandNames() []string {
@@ -41,6 +44,7 @@ func commandNames() []string {
 }
 
 type request struct {
+	inventory         []string
 	targets           []domain.ClientID
 	root              string
 	disclose, release bool
@@ -51,6 +55,9 @@ type request struct {
 // All state, including the enclosing root/options, is invocation-owned. Raw Cobra
 // errors and buffered help/parser output never enter machine-readable reports.
 func (a App) Execute(ctx context.Context, args []string, streams authoringcli.Streams, build RootBuilder) error {
+	if a.PublicContract {
+		return a.executePublic(ctx, args, streams, build)
+	}
 	var captured *report.Report
 	var human bytes.Buffer
 	factory := authoringcli.Factory(func() (*cobra.Command, error) {
@@ -173,6 +180,9 @@ func (a App) command(name string, capture func(report.Report)) (*cobra.Command, 
 		return a.skillsCommand(capture)
 	}
 	use, args := name+" <path>", cobra.ExactArgs(1)
+	if a.PublicContract && name != "init" {
+		use, args = name+" [package-path]", cobra.MaximumNArgs(1)
+	}
 	if name == "capabilities" {
 		use, args = name, cobra.NoArgs
 	}
@@ -191,6 +201,9 @@ func (a App) command(name string, capture func(report.Report)) (*cobra.Command, 
 					{"url", "explicit remote MCP URL"}, {"author-name", "optional explicit author"}, {"license", "optional MIT or ISC license"},
 					{"copyright-holder", "explicit license holder"}, {"copyright-year", "explicit four-digit license year"},
 				} {
+					if a.PublicContract && v.name == "mcp" {
+						v.name = "mcp-template"
+					}
 					f.String(v.name, "", v.help)
 				}
 			} else {
@@ -199,11 +212,22 @@ func (a App) command(name string, capture func(report.Report)) (*cobra.Command, 
 		},
 		Decode: func(c *cobra.Command, opts authoringcli.Options, args []string) (request, error) {
 			if name == "capabilities" {
-				return request{}, nil
+				return request{inventory: implementedLeaves(c.Root())}, nil
 			}
 			get := func(n string) string { v, _ := c.Flags().GetString(n); return v }
 			disclose, _ := c.Flags().GetBool("include-root")
-			req := request{root: args[0], disclose: disclose}
+			root := ""
+			if len(args) > 0 {
+				root = args[0]
+			}
+			req := request{root: root, disclose: disclose}
+			if a.PublicContract {
+				var err error
+				req.root, err = skills.ExactRoot(filepath.FromSlash(root))
+				if err != nil {
+					return request{}, err
+				}
+			}
 			if name == "compat" || name == "inspect" && (opts.Target != "" || c.Flags().Changed("target")) {
 				ids, err := readiness.Targets(opts.Target)
 				if err != nil {
@@ -212,7 +236,22 @@ func (a App) command(name string, capture func(report.Report)) (*cobra.Command, 
 				req.targets = ids
 			}
 			if name == "init" {
-				req.template = scaffold.Options{Template: scaffold.Template(get("template")), Name: get("name"), Description: get("description"), SkillName: get("skill-name"), MCPChoice: scaffold.Template(get("mcp")), Runtime: get("runtime"), RemoteURL: get("url"), AuthorName: get("author-name"), License: get("license"), CopyrightHolder: get("copyright-holder"), CopyrightYear: get("copyright-year")}
+				mcpFlag := "mcp"
+				if a.PublicContract {
+					mcpFlag = "mcp-template"
+				}
+				req.template = scaffold.Options{Template: scaffold.Template(get("template")), Name: get("name"), Description: get("description"), SkillName: get("skill-name"), MCPChoice: scaffold.Template(get(mcpFlag)), Runtime: get("runtime"), RemoteURL: get("url"), AuthorName: get("author-name"), License: get("license"), CopyrightHolder: get("copyright-holder"), CopyrightYear: get("copyright-year")}
+				if a.PublicContract {
+					if !c.Flags().Changed("name") && !strings.ContainsAny(root, `/\`) && root != "." && root != ".." {
+						req.template.Name = root
+					}
+					if !c.Flags().Changed("description") {
+						req.template.Description = scaffold.DefaultDescription(req.template.Template)
+					}
+					if _, err := scaffold.BuildPlan(req.template); err != nil {
+						return request{}, publicInputError(err)
+					}
+				}
 			} else {
 				req.release, _ = c.Flags().GetBool("release-policy")
 			}
@@ -221,7 +260,11 @@ func (a App) command(name string, capture func(report.Report)) (*cobra.Command, 
 		Runner: authoringcli.RunnerFunc[request, report.Report](func(ctx context.Context, req request) (report.Report, error) {
 			if name == "capabilities" {
 				r := report.New(name, a.Revision)
-				c, err := readiness.Engine(commandNames())
+				names := commandNames()
+				if a.PublicContract {
+					names = req.inventory
+				}
+				c, err := readiness.Engine(names)
 				r.Capabilities = c
 				if err != nil {
 					r.AddError("capabilities_unavailable", "Check the embedded engine metadata.")
