@@ -8,6 +8,10 @@ generated: false
 translationRequired: true
 ---
 
+[Использовать плагины](/ru/use/) · [Создавать плагины](/ru/build/) — Подготовка, не релиз. Миграция проектов в v2 пока недоступна.
+<details><summary>Исторические материалы plugin-kit-ai v1 · 1.2.4; старые инструкции не являются текущим Build.</summary>
+
+
 # Передача bundle
 
 Используйте этот гайд, когда Python или Node плагин нужно передавать как готовый portable artifact, а не как живой checkout репозитория.
@@ -94,3 +98,5 @@ Bundle handoff не означает «универсальная упаковк
 ## Что читать дальше
 
 Свяжите эту страницу с [Выбором модели поставки](/ru/guide/choose-delivery-model), [Готовностью к продакшену](/ru/guide/production-readiness) и [Границей поддержки](/ru/reference/support-boundary).
+
+</details>

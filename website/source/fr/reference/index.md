@@ -9,6 +9,10 @@ translationRequired: true
 aside: false
 outline: false
 ---
+
+[Utiliser des plugins](/fr/use/) · [Créer des plugins](/fr/build/) — Préparation, pas une version publiée. La migration des projets vers v2 est indisponible.
+<details><summary>Documentation historique plugin-kit-ai v1 · 1.2.4 ; les anciennes instructions ne constituent pas le parcours Build actuel.</summary>
+
 <div class="docs-hero docs-hero--compact">
   <p class="docs-kicker">RÉFÉRENCE</p>
   <h1>Réponses exactes lorsque vous avez besoin du contrat</h1>
@@ -51,3 +55,5 @@ outline: false
     <p>Vérifiez à quoi ressemble un dépôt de plugin sain et quels fichiers sont créés par rapport à ceux générés.</p>
   </a>
 </div>
+
+</details>

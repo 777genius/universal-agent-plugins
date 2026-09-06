@@ -9,6 +9,10 @@ translationRequired: true
 aside: true
 outline: [2, 3]
 ---
+
+[Utiliser des plugins](/fr/use/) · [Créer des plugins](/fr/build/) — Préparation, pas une version publiée. La migration des projets vers v2 est indisponible.
+<details><summary>Documentation historique plugin-kit-ai v1 · 1.2.4 ; les anciennes instructions ne constituent pas le parcours Build actuel.</summary>
+
 # Pourquoi plugin-kit-ai
 
 plugin-kit-ai existe pour les équipes qui souhaitent un projet de plugin maintenu au lieu d'une pile de dépôts, de copies ou de modèles de démarrage spécifiques à une cible déconnectés.
@@ -41,3 +45,4 @@ Ce n'est probablement pas le bon outil si vous avez seulement besoin de :
 ## Comment fonctionne le modèle de produit
 
 Si l'adéquation du produit est claire et que vous souhaitez le modèle opérationnel, lisez [Comment fonctionne plugin-kit-ai](/fr/concepts/managed-project-model).
+</details>

@@ -9,6 +9,10 @@ translationRequired: true
 aside: true
 outline: [2, 3]
 ---
+
+[使用插件](/zh/use/) · [构建插件](/zh/build/) — 仅为准备内容，尚未发布。v2 暂不支持项目迁移。
+<details><summary>plugin-kit-ai v1 · 1.2.4 历史资料；旧说明不是当前的 Build 流程。</summary>
+
 # 您可以构建什么
 
 使用此页面作为产品地图。它显示了存在哪些类型的输出，而不是一个存储库稍后应该增长或分裂的时间。
@@ -35,3 +39,5 @@ plugin-kit-ai 可以从一个可执行插件开始，并随着时间的推移扩
 选择 Node 或 Python 并不强迫您在第一天就决定每个打包或集成细节。
 
 此页面是概述。如果您的问题是一个存储库是否应该继续增长，请阅读[一个项目，多个目标](/zh/guide/one-project-multiple-targets)。
+
+</details>

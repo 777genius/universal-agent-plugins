@@ -9,6 +9,10 @@ translationRequired: true
 aside: false
 outline: false
 ---
+
+[Utiliser des plugins](/fr/use/) · [Créer des plugins](/fr/build/) — Préparation, pas une version publiée. La migration des projets vers v2 est indisponible.
+<details><summary>Documentation historique plugin-kit-ai v1 · 1.2.4 ; les anciennes instructions ne constituent pas le parcours Build actuel.</summary>
+
 <div class="docs-hero docs-hero--compact">
   <p class="docs-kicker">RÉFÉRENCE GÉNÉRÉE</p>
   <h1>Surfaces API</h1>
@@ -59,3 +63,5 @@ outline: false
 - assistants d'exécution partagés pour Node et Python
 - événements spécifiques à la plateforme
 - métadonnées multiplateformes au niveau des capacités
+
+</details>

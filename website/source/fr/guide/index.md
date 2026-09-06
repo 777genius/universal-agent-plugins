@@ -9,6 +9,10 @@ translationRequired: true
 aside: false
 outline: false
 ---
+
+[Utiliser des plugins](/fr/use/) · [Créer des plugins](/fr/build/) — Préparation, pas une version publiée. La migration des projets vers v2 est indisponible.
+<details><summary>Documentation historique plugin-kit-ai v1 · 1.2.4 ; les anciennes instructions ne constituent pas le parcours Build actuel.</summary>
+
 <div class="docs-hero docs-hero--compact">
   <p class="docs-kicker">GUIDES</p>
   <h1>Commencez avec un dépôt fonctionnel</h1>
@@ -70,3 +74,5 @@ outline: false
     <p>Découvrez comment les flux de publication Codex, Claude et Gemini diffèrent afin que vous puissiez tester la voie de droite avant le jour de la sortie.</p>
   </a>
 </div>
+
+</details>

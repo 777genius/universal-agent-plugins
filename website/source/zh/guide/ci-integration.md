@@ -7,6 +7,10 @@ locale: "zh"
 generated: false
 translationRequired: true
 ---
+
+[使用插件](/zh/use/) · [构建插件](/zh/build/) — 仅为准备内容，尚未发布。v2 暂不支持项目迁移。
+<details><summary>plugin-kit-ai v1 · 1.2.4 历史资料；旧说明不是当前的 Build 流程。</summary>
+
 # CI 集成
 
 最稳妥的 CI 流程并不复杂，关键在于严格遵守公共契约。
@@ -82,3 +86,5 @@ plugin-kit-ai validate . --platform codex-runtime --strict
 如果 CI 不能重现源码生成结果并通过 `validate --strict`，那么这个仓库就还没有准备好进行稳定交付。对于多目标仓库，这意味着支持范围内的每个目标都必须明确跑绿。
 
 将此页面与[生产准备](/zh/guide/production-readiness)、[支持边界](/zh/reference/support-boundary) 和[故障排除](/zh/reference/troubleshooting) 配对。
+
+</details>

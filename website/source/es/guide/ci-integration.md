@@ -7,6 +7,10 @@ locale: "es"
 generated: false
 translationRequired: true
 ---
+
+[Usar plugins](/es/use/) · [Crear plugins](/es/build/) — Preparación, no es un lanzamiento. La migración de proyectos a v2 aún no está disponible.
+<details><summary>Material histórico de plugin-kit-ai v1 · 1.2.4; las instrucciones antiguas no son el flujo Build actual.</summary>
+
 # Integración de CI
 
 La historia de CI más segura no es complicada. Es simplemente estricto con el contrato público.
@@ -82,3 +86,5 @@ Utilice el mismo patrón que Node y haga explícita la versión Python en CI.
 Si CI no puede reproducir los resultados creados y pasar `validate --strict`, el repositorio no está listo para una transferencia estable. Para un repositorio de múltiples objetivos, eso significa una ejecución verde explícita para cada objetivo dentro del alcance del soporte.
 
 Empareje esta página con [Preparación para la producción](/es/guide/production-readiness), [Límite de soporte](/es/reference/support-boundary) y [Solución de problemas](/es/reference/troubleshooting).
+
+</details>

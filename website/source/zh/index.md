@@ -7,6 +7,10 @@ locale: "zh"
 generated: false
 translationRequired: true
 ---
+
+[使用插件](/zh/use/) · [构建插件](/zh/build/) — 仅为准备内容，尚未发布。v2 暂不支持项目迁移。
+<details><summary>plugin-kit-ai v1 · 1.2.4 历史资料；旧说明不是当前的 Build 流程。</summary>
+
 <div class="docs-hero docs-hero--feature">
   <p class="docs-kicker">公共文档</p>
   <h1>plugin-kit-ai</h1>
@@ -103,3 +107,5 @@ translationRequired: true
 - 稍后将相同的存储库扩展到更多运输路径
 - 随着存储库的增长保留一个审查和验证故事
 - 仅在需要时找到确切的合同
+
+</details>

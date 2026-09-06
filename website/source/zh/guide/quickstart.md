@@ -7,6 +7,10 @@ locale: "zh"
 generated: false
 translationRequired: true
 ---
+
+[使用插件](/zh/use/) · [构建插件](/zh/build/) — 仅为准备内容，尚未发布。v2 暂不支持项目迁移。
+<details><summary>plugin-kit-ai v1 · 1.2.4 历史资料；旧说明不是当前的 Build 流程。</summary>
+
 # 快速入门
 
 当您想要一个插件存储库稍后可以发展为更多方式来运送插件时，这是最短的推荐路径。
@@ -110,3 +114,5 @@ plugin-kit-ai validate ./my-plugin --platform codex-runtime --strict
 - 如果您想要完整的产品地图，请继续[您可以构建什么](/zh/guide/what-you-can-build)。
 - 当您准备好将存储库与您想要的运输方式相匹配时，继续[选择目标](/zh/guide/choose-a-target)。
 - 当您准备好扩展第一条路径之外时，继续[一个项目，多个目标](/zh/guide/one-project-multiple-targets)。
+
+</details>

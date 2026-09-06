@@ -7,6 +7,10 @@ locale: "es"
 generated: false
 translationRequired: true
 ---
+
+[Usar plugins](/es/use/) · [Crear plugins](/es/build/) — Preparación, no es un lanzamiento. La migración de proyectos a v2 aún no está disponible.
+<details><summary>Material histórico de plugin-kit-ai v1 · 1.2.4; las instrucciones antiguas no son el flujo Build actual.</summary>
+
 # Canales de instalación
 
 `plugin-kit-ai` admite varias formas de instalar el CLI.
@@ -23,3 +27,5 @@ translationRequired: true
 Estos paquetes de instalación no están documentados como SDKs públicos o APIs de tiempo de ejecución. El público API vive bajo la sección generada [API](/es/api/).
 
 Lea [Política de versión y compatibilidad](/es/reference/version-and-compatibility) si su verdadera pregunta no es "¿cómo lo instalo?" pero "¿qué conlleva exactamente la promesa de compatibilidad pública?".
+
+</details>

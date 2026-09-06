@@ -7,6 +7,10 @@ locale: "fr"
 generated: false
 translationRequired: true
 ---
+
+[Utiliser des plugins](/fr/use/) · [Créer des plugins](/fr/build/) — Préparation, pas une version publiée. La migration des projets vers v2 est indisponible.
+<details><summary>Documentation historique plugin-kit-ai v1 · 1.2.4 ; les anciennes instructions ne constituent pas le parcours Build actuel.</summary>
+
 # Flux de travail de création
 
 Le flux de travail recommandé est volontairement simple :
@@ -56,3 +60,5 @@ Le flux de travail peut s'élargir pour des cas particuliers :
 - les commandes groupées sont importantes pour les flux de transfert portables Python et Node
 
 Commencez par [Démarrage rapide](/fr/guide/quickstart) lorsque vous avez besoin du chemin le plus court.
+
+</details>

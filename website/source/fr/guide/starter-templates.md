@@ -7,6 +7,10 @@ locale: "fr"
 generated: false
 translationRequired: true
 ---
+
+[Utiliser des plugins](/fr/use/) · [Créer des plugins](/fr/build/) — Préparation, pas une version publiée. La migration des projets vers v2 est indisponible.
+<details><summary>Documentation historique plugin-kit-ai v1 · 1.2.4 ; les anciennes instructions ne constituent pas le parcours Build actuel.</summary>
+
 # Modèles de démarrage
 
 Si vous souhaitez un bon point de départ connu au lieu d'un échafaudage à partir d'un répertoire vierge, utilisez les référentiels de démarrage officiels.
@@ -60,3 +64,5 @@ Utilisez `plugin-kit-ai init` directement lorsque :
 - choisissez un démarreur pour le **premier** chemin correct
 - ne pas traiter la famille starter comme la limite finale du repo
 - conserver un dépôt et l'étendre uniquement lorsque le produit a vraiment besoin de plus de sorties
+
+</details>

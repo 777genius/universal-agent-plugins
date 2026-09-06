@@ -7,6 +7,10 @@ locale: "es"
 generated: false
 translationRequired: true
 ---
+
+[Usar plugins](/es/use/) · [Crear plugins](/es/build/) — Preparación, no es un lanzamiento. La migración de proyectos a v2 aún no está disponible.
+<details><summary>Material histórico de plugin-kit-ai v1 · 1.2.4; las instrucciones antiguas no son el flujo Build actual.</summary>
+
 # Política de versión y compatibilidad
 
 Esta página es para una decisión práctica del equipo: ¿qué estamos estandarizando y qué tan sólida es esa promesa?
@@ -87,3 +91,4 @@ Los equipos sanos suelen estandarizar:
 ## Regla final
 
 Estandarice solo la línea de lanzamiento y la ruta cuya promesa pública su equipo esté realmente dispuesto a defender en CI, transferencia e implementación.
+</details>

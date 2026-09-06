@@ -7,6 +7,10 @@ locale: "fr"
 generated: false
 translationRequired: true
 ---
+
+[Utiliser des plugins](/fr/use/) · [Créer des plugins](/fr/build/) — Préparation, pas une version publiée. La migration des projets vers v2 est indisponible.
+<details><summary>Documentation historique plugin-kit-ai v1 · 1.2.4 ; les anciennes instructions ne constituent pas le parcours Build actuel.</summary>
+
 # Créez un plugin prêt pour l'équipe
 
 Ce didacticiel reprend là où s'arrête le premier plugin réussi. L'objectif n'est pas seulement « cela fonctionne sur ma machine », mais un dépôt qu'un autre coéquipier peut cloner, valider et expédier sans connaissances cachées.
@@ -125,3 +129,5 @@ Un dépôt de plugin prêt pour l’équipe devrait diriger les gens vers :
 Le dépôt est prêt lorsqu'un autre coéquipier peut le cloner, comprendre le chemin et la portée cible, reproduire les sorties générées et passer la porte de validation stricte sans improvisation.
 
 Associez ce didacticiel à [Construisez votre premier plugin](/fr/guide/first-plugin), [Architecture de création](/fr/concepts/authoring-architecture) et [Limite de support](/fr/reference/support-boundary).
+
+</details>

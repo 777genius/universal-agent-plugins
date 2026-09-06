@@ -7,6 +7,10 @@ locale: "zh"
 generated: false
 translationRequired: true
 ---
+
+[使用插件](/zh/use/) · [构建插件](/zh/build/) — 仅为准备内容，尚未发布。v2 暂不支持项目迁移。
+<details><summary>plugin-kit-ai v1 · 1.2.4 历史资料；旧说明不是当前的 Build 流程。</summary>
+
 # 选择运行时
 
 运行时选择不仅仅是语言偏好。它改变了插件的运行方式、执行机必须安装的内容以及 CI 和切换的简单程度。
@@ -51,3 +55,5 @@ flowchart TD
 |主要非Go运行时通道| `node --typescript` |
 |本地Python-一线队| `python` |
 |逃生舱口 | `shell` |
+
+</details>

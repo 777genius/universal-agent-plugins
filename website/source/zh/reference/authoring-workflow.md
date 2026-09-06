@@ -7,6 +7,10 @@ locale: "zh"
 generated: false
 translationRequired: true
 ---
+
+[使用插件](/zh/use/) · [构建插件](/zh/build/) — 仅为准备内容，尚未发布。v2 暂不支持项目迁移。
+<details><summary>plugin-kit-ai v1 · 1.2.4 历史资料；旧说明不是当前的 Build 流程。</summary>
+
 # 创作工作流程
 
 推荐的工作流程故意简单：
@@ -56,3 +60,5 @@ flowchart LR
 - 打包相关命令对于可移植的 Python 和 Node 交付流程很重要
 
 当您需要最短路径时，请从[快速入门](/zh/guide/quickstart)开始。
+
+</details>

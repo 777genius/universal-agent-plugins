@@ -7,6 +7,10 @@ locale: "es"
 generated: false
 translationRequired: true
 ---
+
+[Usar plugins](/es/use/) · [Crear plugins](/es/build/) — Preparación, no es un lanzamiento. La migración de proyectos a v2 aún no está disponible.
+<details><summary>Material histórico de plugin-kit-ai v1 · 1.2.4; las instrucciones antiguas no son el flujo Build actual.</summary>
+
 # Límite de soporte
 
 Utilice esta página cuando necesite la respuesta más breve y honesta sobre soporte.
@@ -65,3 +69,4 @@ Pueden ser útiles para los primeros usuarios, pero no deberían convertirse sil
 ## Regla práctica
 
 Si elige formar parte de un equipo, estandarice el camino más estrecho cuya promesa realmente esté dispuesto a defender en CI, implementación y transferencia.
+</details>

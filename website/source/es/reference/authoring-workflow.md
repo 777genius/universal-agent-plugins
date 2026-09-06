@@ -7,6 +7,10 @@ locale: "es"
 generated: false
 translationRequired: true
 ---
+
+[Usar plugins](/es/use/) · [Crear plugins](/es/build/) — Preparación, no es un lanzamiento. La migración de proyectos a v2 aún no está disponible.
+<details><summary>Material histórico de plugin-kit-ai v1 · 1.2.4; las instrucciones antiguas no son el flujo Build actual.</summary>
+
 # Flujo de trabajo de creación
 
 El flujo de trabajo recomendado es intencionalmente simple:
@@ -56,3 +60,4 @@ El flujo de trabajo puede ampliarse para casos especiales:
 - Los comandos del paquete son importantes para los flujos de transferencia portátiles Python y Node
 
 Comience con [Inicio rápido](/es/guide/quickstart) cuando necesite la ruta más corta.
+</details>

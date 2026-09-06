@@ -7,6 +7,10 @@ locale: "zh"
 generated: false
 translationRequired: true
 ---
+
+[使用插件](/zh/use/) · [构建插件](/zh/build/) — 仅为准备内容，尚未发布。v2 暂不支持项目迁移。
+<details><summary>plugin-kit-ai v1 · 1.2.4 历史资料；旧说明不是当前的 Build 流程。</summary>
+
 # v1.0.4 Go SDK
 
 发布日期：`2026-03-29`
@@ -29,3 +33,4 @@ translationRequired: true
 ## 为什么用户应该关心
 
 该补丁减少了普通 Go 消费者的摩擦，并使推荐的 SDK 路径看起来像普通的公共模块，而不是特殊情况的解决方法。
+</details>

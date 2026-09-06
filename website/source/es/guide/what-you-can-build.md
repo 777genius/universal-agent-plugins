@@ -9,6 +9,10 @@ translationRequired: true
 aside: true
 outline: [2, 3]
 ---
+
+[Usar plugins](/es/use/) · [Crear plugins](/es/build/) — Preparación, no es un lanzamiento. La migración de proyectos a v2 aún no está disponible.
+<details><summary>Material histórico de plugin-kit-ai v1 · 1.2.4; las instrucciones antiguas no son el flujo Build actual.</summary>
+
 # Lo que puedes construir
 
 Utilice esta página como mapa del producto. Muestra qué tipos de resultados existen, no cuándo un repositorio debería crecer o dividirse más adelante.
@@ -35,3 +39,4 @@ A partir de un mismo proyecto, puedes crecer hacia:
 Elegir Node o Python no lo obliga a decidir cada detalle de empaquetado o integración desde el primer día.
 
 Esta página es la descripción general. Si su pregunta es si un repositorio debería seguir creciendo, lea [Un proyecto, múltiples objetivos](/es/guide/one-project-multiple-targets).
+</details>

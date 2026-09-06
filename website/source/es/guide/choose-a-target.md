@@ -7,6 +7,10 @@ locale: "es"
 generated: false
 translationRequired: true
 ---
+
+[Usar plugins](/es/use/) · [Crear plugins](/es/build/) — Preparación, no es un lanzamiento. La migración de proyectos a v2 aún no está disponible.
+<details><summary>Material histórico de plugin-kit-ai v1 · 1.2.4; las instrucciones antiguas no son el flujo Build actual.</summary>
+
 # Elige un objetivo
 
 Utilice esta página cuando ya sepa que desea `plugin-kit-ai`, pero aún necesita hacer coincidir el repositorio con la forma en que desea enviar el complemento.
@@ -64,3 +68,4 @@ Si intencionalmente comienza con Node/TypeScript o Python compatibles, eso cambi
 - agregue más objetivos solo cuando aparezca un requisito real de entrega o integración
 
 Lea [Un proyecto, múltiples objetivos](/es/guide/one-project-multiple-targets) cuando desee el modelo mental de múltiples objetivos más amplio.
+</details>

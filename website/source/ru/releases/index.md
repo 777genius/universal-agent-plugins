@@ -10,6 +10,10 @@ aside: false
 outline: false
 ---
 
+[Использовать плагины](/ru/use/) · [Создавать плагины](/ru/build/) — Подготовка, не релиз. Миграция проектов в v2 пока недоступна.
+<details><summary>Исторические материалы plugin-kit-ai v1 · 1.2.4; старые инструкции не являются текущим Build.</summary>
+
+
 <div class="docs-hero docs-hero--compact">
   <p class="docs-kicker">RELEASES</p>
   <h1>Что изменилось для пользователей</h1>
@@ -54,3 +58,5 @@ outline: false
     <p>Проект зафиксировал первый стабильный публичный контракт и заложил baseline, который дальше только уточняется.</p>
   </a>
 </div>
+
+</details>

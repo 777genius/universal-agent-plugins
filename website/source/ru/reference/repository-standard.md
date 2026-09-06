@@ -8,6 +8,10 @@ generated: false
 translationRequired: true
 ---
 
+[Использовать плагины](/ru/use/) · [Создавать плагины](/ru/build/) — Подготовка, не релиз. Миграция проектов в v2 пока недоступна.
+<details><summary>Исторические материалы plugin-kit-ai v1 · 1.2.4; старые инструкции не являются текущим Build.</summary>
+
+
 # Стандарт репозитория
 
 Эта страница описывает публичную форму здорового `plugin-kit-ai` репозитория.
@@ -65,3 +69,5 @@ translationRequired: true
 - handoff становится правдоподобным
 
 Свяжите эту страницу с [Процессом авторинга](/ru/reference/authoring-workflow), [Готовностью к продакшену](/ru/guide/production-readiness) и [Словарём терминов](/ru/reference/glossary).
+
+</details>

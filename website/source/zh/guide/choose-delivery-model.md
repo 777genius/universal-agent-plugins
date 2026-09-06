@@ -7,6 +7,10 @@ locale: "zh"
 generated: false
 translationRequired: true
 ---
+
+[使用插件](/zh/use/) · [构建插件](/zh/build/) — 仅为准备内容，尚未发布。v2 暂不支持项目迁移。
+<details><summary>plugin-kit-ai v1 · 1.2.4 历史资料；旧说明不是当前的 Build 流程。</summary>
+
 # 选择交付模式
 
 Python 和 Node 插件有两种受支持的方式来传送帮助程序逻辑。他们解决不同的实际问题。
@@ -82,3 +86,5 @@ plugin-kit-ai init my-plugin --platform codex-runtime --runtime python --runtime
 - 当您想要最强的长期支持路径时，选择 Go
 - 当您想要最顺利的 Python 或 Node 启动时，选择供应的助手
 - 当您已经知道需要跨存储库的可重用依赖策略时，选择共享运行时包将此页面与[构建Python运行时插件](/zh/guide/python-runtime)、[选择入门存储库](/zh/guide/choose-a-starter)、[入门模板](/zh/guide/starter-templates)和[生产准备](/zh/guide/production-readiness)配对。
+
+</details>

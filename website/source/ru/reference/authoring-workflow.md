@@ -8,6 +8,10 @@ generated: false
 translationRequired: true
 ---
 
+[Использовать плагины](/ru/use/) · [Создавать плагины](/ru/build/) — Подготовка, не релиз. Миграция проектов в v2 пока недоступна.
+<details><summary>Исторические материалы plugin-kit-ai v1 · 1.2.4; старые инструкции не являются текущим Build.</summary>
+
+
 # Процесс авторинга
 
 Рекомендуемый workflow намеренно простой:
@@ -57,3 +61,5 @@ Workflow может расширяться в специальных случа�
 - bundle commands важны для portable Python и Node handoff flows
 
 Начинайте с [Быстрого старта](/ru/guide/quickstart), если нужен самый короткий путь.
+
+</details>

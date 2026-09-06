@@ -7,6 +7,10 @@ locale: "fr"
 generated: false
 translationRequired: true
 ---
+
+[Utiliser des plugins](/fr/use/) · [Créer des plugins](/fr/build/) — Préparation, pas une version publiée. La migration des projets vers v2 est indisponible.
+<details><summary>Documentation historique plugin-kit-ai v1 · 1.2.4 ; les anciennes instructions ne constituent pas le parcours Build actuel.</summary>
+
 # Modèle de stabilité
 
 `plugin-kit-ai` utilise des termes contractuels formels afin que les équipes puissent décider exactement ce qu'elles souhaitent normaliser.
@@ -63,3 +67,4 @@ Cela peut être utile pour l’apprentissage ou l’adoption précoce, mais cela
 1. Préférez le chemin recommandé pour le produit que vous créez.
 2. Utilisez les termes formels exacts uniquement lorsque vous avez besoin de précisions en matière de politique ou de compatibilité.
 3. Utilisez `validate --strict` comme porte de préparation pour le dépôt que vous prévoyez d'expédier.
+</details>

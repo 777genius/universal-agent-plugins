@@ -7,6 +7,10 @@ locale: "zh"
 generated: false
 translationRequired: true
 ---
+
+[使用插件](/zh/use/) · [构建插件](/zh/build/) — 仅为准备内容，尚未发布。v2 暂不支持项目迁移。
+<details><summary>plugin-kit-ai v1 · 1.2.4 历史资料；旧说明不是当前的 Build 流程。</summary>
+
 # 构建 Node/TypeScript 运行时插件
 
 当您的团队需要 TypeScript 但仍需要受支持的本地运行时插件时，这是主要受支持的非 Go 路径。
@@ -42,3 +46,4 @@ plugin-kit-ai validate ./my-plugin --platform codex-runtime --strict
 - 您希望 CI 和其他机器上的引导摩擦最小
 
 有关下一层的详细信息，请参阅[选择运行时](/zh/concepts/choosing-runtime) 和 [Node 运行时 API](/zh/api/runtime-node/)。
+</details>

@@ -9,6 +9,10 @@ translationRequired: true
 aside: true
 outline: [2, 3]
 ---
+
+[使用插件](/zh/use/) · [构建插件](/zh/build/) — 仅为准备内容，尚未发布。v2 暂不支持项目迁移。
+<details><summary>plugin-kit-ai v1 · 1.2.4 历史资料；旧说明不是当前的 Build 流程。</summary>
+
 # 为什么 plugin-kit-ai
 
 plugin-kit-ai 适合那些想要一个维护的插件项目而不是一堆断开连接的特定于目标的存储库、副本或入门模板的团队。
@@ -41,3 +45,4 @@ plugin-kit-ai 为您提供一个在生成所需输出时保持权威的存储库
 ## 产品模型如何运作
 
 如果产品适合性很明确并且您想要操作模型，请阅读[plugin-kit-ai 工作原理](/zh/concepts/managed-project-model)。
+</details>

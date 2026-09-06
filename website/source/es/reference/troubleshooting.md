@@ -7,6 +7,10 @@ locale: "es"
 generated: false
 translationRequired: true
 ---
+
+[Usar plugins](/es/use/) · [Crear plugins](/es/build/) — Preparación, no es un lanzamiento. La migración de proyectos a v2 aún no está disponible.
+<details><summary>Material histórico de plugin-kit-ai v1 · 1.2.4; las instrucciones antiguas no son el flujo Build actual.</summary>
+
 # Solución de problemas
 
 Utilice esta página cuando el flujo de trabajo deje de moverse. Comience primero con el control más simple.
@@ -58,3 +62,4 @@ Comience con la ruta predeterminada Go si desea el contrato más sólido.
 Pase a Node/TypeScript o Python solo cuando la compensación en tiempo de ejecución local sea real e intencional.
 
 Consulte [Creación de un complemento de tiempo de ejecución Python](/es/guide/python-runtime), [Flujo de trabajo de creación](/es/reference/authoring-workflow) y [FAQ](/es/reference/faq).
+</details>
