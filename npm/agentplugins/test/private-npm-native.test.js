@@ -22,6 +22,54 @@ function tree(root, relative = "") {
   });
 }
 
+function retiredInvocation(invoke, command, tail) {
+  const argv = ["--format=json", ...command.split(" "), ...tail];
+  // These inventory tails are known format flags, not arbitrary argv values.
+  // selectPublic uses the last format value; only literal "json" emits JSON.
+  // Keep the original invalid-format process and assert its exact human error
+  // before a separately recorded JSON companion. rejectV1 precedes format
+  // validation, so the companion must retain the same retirement semantics.
+  if (tail[0] === "--format" || tail[0]?.startsWith("--format=")) {
+    assert.ok(["publish", "publication", "publication doctor"].includes(command));
+    const action = "This v1 operation is unavailable in v2. Use plugin-kit-ai 1.2.4 with `plugin-kit-ai " +
+      command + "` for the legacy workflow. Project migration is unavailable in v2. ";
+    assert.equal(invoke("plugin-kit-ai", argv, 2, false),
+      "author: failure; readiness not_evaluated; conformance not_evaluated; runtime not_evaluated\n" +
+      "error: v1_operation_unavailable (operation)\n" + action + "\n");
+    const r = invoke("plugin-kit-ai", [...argv, "--format=json"], 2);
+    assert.equal(r.command, "author"); assert.equal(r.schema_version, 1);
+    assert.equal(r.data.error.code, "v1_operation_unavailable"); assert.equal(r.data.error.action, action);
+    return r;
+  }
+  return invoke("plugin-kit-ai", argv, 2);
+}
+
+test("native retirement oracle preserves original format tails and rejects output mismatches", () => {
+  for (const command of ["publish", "publication", "publication doctor"]) for (const tail of [
+    ["--format=credential-fixture"], ["--format", "credential-fixture"]
+  ]) {
+    const action = `This v1 operation is unavailable in v2. Use plugin-kit-ai 1.2.4 with \`plugin-kit-ai ${command}\` for the legacy workflow. Project migration is unavailable in v2. `;
+    const human = "author: failure; readiness not_evaluated; conformance not_evaluated; runtime not_evaluated\n" +
+      "error: v1_operation_unavailable (operation)\n" + action + "\n";
+    const report = { command: "author", schema_version: 1, data: { error: { code: "v1_operation_unavailable", action } } };
+    const original = ["--format=json", ...command.split(" "), ...tail];
+    const calls = [];
+    assert.equal(retiredInvocation((...args) => { calls.push(args); return args[3] === false ? human : report; }, command, tail), report);
+    assert.deepEqual(calls, [["plugin-kit-ai", original, 2, false], ["plugin-kit-ai", [...original, "--format=json"], 2]]);
+    for (const wrong of [JSON.stringify(report), "", human.trimEnd() + "\n", human + "credential-fixture\n",
+      human.replace("not_evaluated", "passed"), human.replace("v1_operation_unavailable", "arguments_invalid")]) {
+      let count = 0;
+      assert.throws(() => retiredInvocation(() => { count++; return wrong; }, command, tail), assert.AssertionError);
+      assert.equal(count, 1); // A wrong original output cannot be hidden by a green companion.
+    }
+    assert.throws(() => retiredInvocation((p, a, c, json) => json === false ? human :
+      { ...report, data: { error: { code: "arguments_invalid", action } } }, command, tail), assert.AssertionError);
+  }
+  const calls = [];
+  retiredInvocation((...args) => calls.push(args), "publish", ["--dest", "credential-fixture"]);
+  assert.deepEqual(calls, [["plugin-kit-ai", ["--format=json", "publish", "--dest", "credential-fixture"], 2]]);
+});
+
 test("NATIVE opt-in: exact two Linux tarballs, five accepted template lanes and complete release journeys", { skip: !config }, () => {
   assert.equal(process.platform, "linux"); assert.equal(process.arch, "x64");
   const cfg = JSON.parse(read(config));
@@ -145,7 +193,9 @@ test("NATIVE opt-in: exact two Linux tarballs, five accepted template lanes and 
       if (short) tails.push([`-${short}=${value}`]);
     }
     for (const tail of tails) {
-      const r = invoke("plugin-kit-ai", ["--format=json", ...command.split(" "), ...tail], 2);
+      const before = tree(projects["plugin-kit-ai"]);
+      const r = retiredInvocation(invoke, command, tail);
+      assert.deepEqual(tree(projects["plugin-kit-ai"]), before);
       assert.equal(r.result, "failure"); assert.deepEqual(r.data.effects, { attempted: false, committed: false });
       assert.equal(r.data.normative_conformance.status, "not_evaluated");
     }
