@@ -47,15 +47,25 @@ func (svc PluginService) Dev(ctx context.Context, opts PluginDevOptions, emit fu
 		return update.Passed, nil
 	}
 
-	lastPassed, err := runCycle("initial", nil)
-	if err != nil {
-		return PluginDevSummary{}, err
-	}
+	cycle++
+	initialUpdate := svc.runDevCycle(ctx, root, selectedPlatform, opts, cycle, "initial", nil)
+	lastPassed := initialUpdate.Passed
 	if opts.Once {
+		emit(initialUpdate)
 		return PluginDevSummary{Cycles: cycle, LastPassed: lastPassed}, nil
 	}
 
-	return svc.runDevWatchLoop(ctx, root, interval, &cycle, &lastPassed, runCycle, emit)
+	// Capture the generated baseline before publishing the initial update. A caller
+	// may edit a fixture as soon as it receives that update; taking the baseline
+	// afterward can absorb that edit and leave the watch loop waiting forever.
+	snapshot, err := takeDevSnapshot(root)
+	if err != nil {
+		emit(initialUpdate)
+		return PluginDevSummary{}, err
+	}
+	emit(initialUpdate)
+
+	return svc.runDevWatchLoop(ctx, root, interval, snapshot, &cycle, &lastPassed, runCycle, emit)
 }
 
 func normalizeDevRoot(root string) string {
