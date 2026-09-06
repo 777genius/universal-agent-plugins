@@ -54,8 +54,8 @@ func TestWindowsScratchAliasResolutionStages(t *testing.T) {
 			}
 			var stack [64]byte
 			t.Logf("resolved acquisition pid=%d goroutine=%s", os.Getpid(), strings.Fields(string(stack[:runtime.Stack(stack[:], false)]))[1])
-			scratch, e := openSource(resolved)
-			t.Logf("resolved openSource err=%v", e)
+			scratch, e := openTrustedScratchWithMetadataStage(resolved, nil)
+			t.Logf("resolved trusted scratch acquisition err=%v", e)
 			if e != nil {
 				t.Fatal("protected acquisition stage:", e)
 			}

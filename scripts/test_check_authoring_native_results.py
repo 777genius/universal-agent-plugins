@@ -78,6 +78,17 @@ CONTRACTS = {
         'TestReplacementRacesNeverFollowSpecialOrOutside/after-name-check/device',
     ],
     'windows': [
+        'TestWindowsSharedScratchReplacementRejected/reparse/stat',
+        'TestWindowsSharedScratchReplacementRejected/reparse/protect',
+        'TestWindowsSharedScratchEpochBoundary/scratch/stat',
+        'TestWindowsSharedScratchEpochBoundary/scratch/protect',
+        'TestWindowsSharedScratchEpochBoundary/source/stat',
+        'TestWindowsSharedScratchEpochBoundary/source/protect',
+        'TestWindowsSharedScratchReplacementRejected/directory/stat',
+        'TestWindowsSharedScratchReplacementRejected/directory/protect',
+        'TestWindowsSharedScratchReplacementRejected/junction/stat',
+        'TestWindowsSharedScratchReplacementRejected/junction/protect',
+
         'TestWindowsAncestorEpochBoundary/outside/stat',
         'TestWindowsAncestorEpochBoundary/outside/protect',
         'TestWindowsAncestorEpochBoundary/root/stat',
@@ -301,7 +312,7 @@ class NativeEvidenceTests(unittest.TestCase):
                 names = (["TestDeviceMetadataOnly"] if system == "linux" else
                     ["TestWindowsScratchDistinctNTFSVolumes", "TestWindowsBasicInfoABI",
                      "TestWindowsNTSelfOpenAccessAndRead", "TestWindowsScratchAliasResolutionStages"] +
-                    [n for n in CONTRACTS["windows"] if n.startswith("TestWindowsAncestorEpoch")])
+                    [n for n in CONTRACTS["windows"] if n.startswith(("TestWindowsAncestorEpoch", "TestWindowsSharedScratch"))])
                 for name in names:
                     with self.subTest(system=system, arch=arch, test=name):
                         self.fixture(system, arch)
@@ -313,7 +324,8 @@ class NativeEvidenceTests(unittest.TestCase):
         for arch in ("amd64", "arm64"):
             for name in ("TestWindowsScratchDistinctNTFSVolumes", "TestDeniedParent",
                          "TestNativePathFixBothBinaries/two-physical-ntfs-volumes",
-                         "TestNativeBinaryLifecycle/sdk-static-only", "TestNativeBinaryVerticalSlice/skill"):
+                         "TestNativeBinaryLifecycle/sdk-static-only", "TestNativeBinaryVerticalSlice/skill",
+                         *[n for n in CONTRACTS["windows"] if n.startswith("TestWindowsSharedScratch")]):
                 for action in ("skip", "omit"):
                     with self.subTest(arch=arch, test=name, action=action):
                         self.fixture("windows", arch)
