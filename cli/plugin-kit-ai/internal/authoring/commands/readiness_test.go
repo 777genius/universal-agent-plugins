@@ -111,7 +111,7 @@ func TestReadinessUnknownSchemaAndFreshFactories(t *testing.T) {
 	}
 	for i := 0; i < 4; i++ {
 		r, code, _ := execute(t, app, []string{"capabilities", "--format=json"}, i%2 == 0)
-		if code != 0 || len(r.Capabilities.Commands) != 7 {
+		if code != 0 || len(r.Capabilities.Commands) != 8 {
 			t.Fatal("factory state leak")
 		}
 	}
