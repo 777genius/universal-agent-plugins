@@ -3,6 +3,7 @@
 package scaffold
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io/fs"
@@ -220,7 +221,14 @@ func BuildPlan(o Options) (Plan, error) {
 func nodeServerSource(pluginName string) []byte {
 	name, _ := json.Marshal(pluginName) // Marshaling a string cannot fail.
 	greeting, _ := json.Marshal("Hello from " + pluginName + "!")
-	return []byte("import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';\nimport { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';\n\nconst server = new McpServer({ name: " + string(name) + ", version: '0.1.0' });\nserver.registerTool('hello', { description: 'Return a greeting', inputSchema: {} }, async () => ({\n  content: [{ type: 'text', text: " + string(greeting) + " }],\n}));\nawait server.connect(new StdioServerTransport());\n")
+	// Write static code and complete encoded literals separately.
+	var source bytes.Buffer
+	source.WriteString("import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';\nimport { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';\n\nconst server = new McpServer({ name: ")
+	source.Write(name)
+	source.WriteString(", version: '0.1.0' });\nserver.registerTool('hello', { description: 'Return a greeting', inputSchema: {} }, async () => ({\n  content: [{ type: 'text', text: ")
+	source.Write(greeting)
+	source.WriteString(" }],\n}));\nawait server.connect(new StdioServerTransport());\n")
+	return source.Bytes()
 }
 
 func jsonBytes(v any) []byte {
