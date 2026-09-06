@@ -17,7 +17,9 @@ translationRequired: true
 
 Use these future commands against the same exact package root after editing.
 The example assumes `./review-helper` exists and contains root `plugin.json`.
-An explicit path keeps the check independent of your current directory.
+Run these relative-path examples from the package's parent directory.
+An explicit root avoids relying on the current-directory default; use an absolute
+path if the working directory may change.
 
 ## Run the offline authoring loop
 
