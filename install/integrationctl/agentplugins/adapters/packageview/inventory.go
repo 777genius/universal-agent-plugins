@@ -7,6 +7,7 @@ import (
 	"os"
 	"slices"
 	"sort"
+	"strings"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/packagedigest"
 )
@@ -141,6 +142,21 @@ func (l *Lease) Capture(ctx context.Context) (_ Input, err error) {
 	}
 	if legacy != l.input.Legacy {
 		return Input{}, fail("source_changed")
+	}
+	if l.input.Coverage.TreeComplete {
+		retained := make(map[string]Observation, len(l.input.Inventory))
+		for _, o := range l.input.Inventory {
+			retained[o.Path] = o
+		}
+		for _, o := range l.input.Inventory {
+			if err = contextError(ctx); err != nil {
+				return Input{}, err
+			}
+			if o.Kind == "symlink" && !retainedLinkResolves(o.Path, retained) {
+				l.input.Coverage.TreeComplete = false
+				break
+			}
+		}
 	}
 	if l.input.Coverage.TreeComplete {
 		entries := make([]packagedigest.CapturedEntry, 0, len(l.input.Inventory))
@@ -428,4 +444,53 @@ func (l *Lease) omit(o Observation, code string) {
 		l.input.Coverage.InventoryComplete = false
 	}
 	l.find("host", code, o.Path)
+}
+
+// retainedLinkResolves checks representation, not source containment (which the
+// rooted reader establishes separately). Consume components before processing
+// later "..": even a directory removed from the final spelling must be retained.
+// Only inventory is consulted. Inventory paths/targets are already bounded to
+// 4096 bytes; at most 40 link expansions bound work and pending components per
+// link, matching the existing Linux reader ceiling. No recursion or filesystem IO.
+func retainedLinkResolves(rel string, retained map[string]Observation) bool {
+	pending := strings.Split(rel, "/")
+	var dirs []string
+	links := 0
+	for len(pending) > 0 {
+		part := pending[0]
+		pending = pending[1:]
+		switch part {
+		case "", ".":
+			continue
+		case "..":
+			if len(dirs) == 0 {
+				return false
+			}
+			dirs = dirs[:len(dirs)-1]
+			continue
+		}
+		name := part
+		if len(dirs) > 0 {
+			name = strings.Join(dirs, "/") + "/" + part
+		}
+		o, ok := retained[name]
+		if !ok || !o.Captured || o.State != Present {
+			return false
+		}
+		switch o.Kind {
+		case "directory":
+			dirs = append(dirs, part)
+		case "file":
+			return len(pending) == 0
+		case "symlink":
+			links++
+			if links > 40 || o.Target == "" || strings.HasPrefix(o.Target, "/") {
+				return false
+			}
+			pending = append(strings.Split(o.Target, "/"), pending...)
+		default:
+			return false
+		}
+	}
+	return true
 }

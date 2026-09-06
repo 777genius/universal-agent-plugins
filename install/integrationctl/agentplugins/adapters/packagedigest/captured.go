@@ -1,6 +1,7 @@
 package packagedigest
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"crypto/sha256"
@@ -8,6 +9,7 @@ import (
 	"errors"
 	"path"
 	"sort"
+	"strings"
 )
 
 // CapturedEntry is an already bounded, privately owned input to the existing
@@ -61,8 +63,10 @@ func DigestCaptured(ctx context.Context, captured []CapturedEntry) (string, erro
 				return "", ErrCapturedPolicy
 			}
 			if len(c.Content) >= 40 && len(c.Content) <= 1024 {
-				line, _, _ := bytes.Cut(c.Content, []byte{'\n'})
-				if bytes.Equal(bytes.TrimSuffix(line, []byte{'\r'}), []byte("version https://git-lfs.github.com/spec/v1")) {
+				// Match isLFSPointer exactly: ScanLines removes one CR and
+				// the installer then removes one more, including at EOF.
+				scanner := bufio.NewScanner(bytes.NewReader(c.Content))
+				if scanner.Scan() && strings.TrimSuffix(scanner.Text(), "\r") == "version https://git-lfs.github.com/spec/v1" {
 					return "", ErrCapturedPolicy
 				}
 			}
