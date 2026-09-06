@@ -65,6 +65,7 @@ type winObservation struct {
 }
 
 const winShare = windows.FILE_SHARE_READ | windows.FILE_SHARE_WRITE | windows.FILE_SHARE_DELETE
+const winUnsafeAttributes = windows.FILE_ATTRIBUTE_OFFLINE | windows.FILE_ATTRIBUTE_RECALL_ON_OPEN | windows.FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS | windows.FILE_ATTRIBUTE_DEVICE | windows.FILE_ATTRIBUTE_ENCRYPTED
 
 var winReOpen = windows.NewLazySystemDLL("kernel32.dll").NewProc("ReOpenFile")
 
@@ -92,15 +93,41 @@ func winOpen(parent windows.Handle, name string, directory bool) (*os.File, erro
 	// This first type probe has no data access. Attribute-only handles do not
 	// establish the share protection needed below; remember upgrades by HANDLE
 	// to a DELETE-access metadata pin before trusting the object for data access.
-	if directory {
-		options |= windows.FILE_DIRECTORY_FILE
-	}
+	// Do not add FILE_DIRECTORY_FILE: native parameter probes reject its
+	// combination with the retained options. Prove a bootstrap directory from
+	// this metadata-only handle instead, before volume queries or list access.
 	var h windows.Handle
 	e = windows.NtCreateFile(&h, windows.FILE_READ_ATTRIBUTES|windows.SYNCHRONIZE, &oa, &windows.IO_STATUS_BLOCK{}, nil, 0, winShare, windows.FILE_OPEN, options, 0, 0)
 	if e != nil {
 		return nil, e
 	}
-	return os.NewFile(uintptr(h), "source-metadata"), nil
+	f := os.NewFile(uintptr(h), "source-metadata")
+	if directory {
+		if e := winCheckDirectory(f); e != nil {
+			f.Close()
+			return nil, e
+		}
+	}
+	return f, nil
+}
+
+func winCheckDirectory(f *os.File) error {
+	defer runtime.KeepAlive(f)
+	kind, e := windows.GetFileType(windows.Handle(f.Fd()))
+	if e != nil || kind != windows.FILE_TYPE_DISK {
+		return syscall.EXDEV
+	}
+	meta, e := winMeta(f)
+	if e != nil {
+		return e
+	}
+	if meta.Attributes&(winUnsafeAttributes|windows.FILE_ATTRIBUTE_REPARSE_POINT) != 0 {
+		return syscall.EXDEV
+	}
+	if meta.Attributes&windows.FILE_ATTRIBUTE_DIRECTORY == 0 {
+		return syscall.ENOTDIR
+	}
+	return nil
 }
 
 // winReopen never resolves a source pathname. OPEN_REPARSE_POINT is retained
@@ -131,7 +158,7 @@ func (s *source) remember(f *os.File) (*pinned, error) {
 	if e != nil {
 		return nil, e
 	}
-	if meta.Volume != s.volume || meta.Attributes&(windows.FILE_ATTRIBUTE_OFFLINE|windows.FILE_ATTRIBUTE_RECALL_ON_OPEN|windows.FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS|windows.FILE_ATTRIBUTE_DEVICE|windows.FILE_ATTRIBUTE_ENCRYPTED) != 0 {
+	if meta.Volume != s.volume || meta.Attributes&winUnsafeAttributes != 0 {
 		return nil, syscall.EXDEV
 	}
 	kind, e := windows.GetFileType(windows.Handle(f.Fd()))
@@ -231,6 +258,11 @@ func openSource(name string) (_ *source, err error) {
 	}
 	p, e := s.rememberMustDuplicate(f)
 	if e != nil {
+		return nil, fail("platform_unavailable")
+	}
+	// Recheck the protected handle before promoting it to the root anchor.
+	if e := winCheckDirectory(p.file); e != nil {
+		p.file.Close()
 		return nil, fail("platform_unavailable")
 	}
 	s.anchor.Close()
