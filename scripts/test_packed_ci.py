@@ -230,6 +230,21 @@ class TerminalControls(unittest.TestCase):
 
 
 class WorkflowControls(unittest.TestCase):
+    def test_runner_context_rejected_only_at_job_env_scope(self):
+        text = (ROOT / '.github/workflows/authoring-native.yml').read_text()
+        runner = (ROOT / 'scripts/run-packed-ci.py').read_text()
+        for expression in ('${{ runner.temp }}', "${{ runner['temp'] }}"):
+            bad = text.replace("      PYTHONDONTWRITEBYTECODE: '1'",
+                '      PACKED_ROOT: ' + expression + '/authoring-packed-${{ github.run_id }}-${{ github.run_attempt }}\n' +
+                "      PYTHONDONTWRITEBYTECODE: '1'", 1)
+            with self.subTest(expression=expression), self.assertRaisesRegex(ValueError, 'runner context is unavailable in job env'):
+                w.check(bad, runner)
+        # The same context is supported at step scope.
+        good = text.replace('      - name: Build, pack, execute, seal and plan at the exact checkout SHA\n',
+            '      - name: Build, pack, execute, seal and plan at the exact checkout SHA\n'
+            '        env:\n          STEP_TEMP: ${{ runner.temp }}\n')
+        w.check(good, runner)
+
     def test_committed_graph_and_mutations(self):
         text = (ROOT / '.github/workflows/authoring-native.yml').read_text()
         runner = (ROOT / 'scripts/run-packed-ci.py').read_text()

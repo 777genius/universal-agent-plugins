@@ -186,9 +186,15 @@ jobs:
     timeout-minutes: 45
     env:
       EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
-      PACKED_ROOT: ${{ runner.temp }}/authoring-packed-${{ github.run_id }}-${{ github.run_attempt }}
       PYTHONDONTWRITEBYTECODE: '1'
     steps:
+      - name: Resolve disposable packed evidence path
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Publish the path before checkout/setup so always() consumers retain it.
+          # Leave creation (0700) and stale-root rejection to run-packed-ci.py.
+          printf 'PACKED_ROOT=%s/authoring-packed-%s-%s\n' "$RUNNER_TEMP" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" >> "$GITHUB_ENV"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}

@@ -22,6 +22,26 @@ def check(text, runner):
     jobs = dict(re.findall(r'^  (\w+):\n(.*?)(?=^  \w+:\n|\Z)', text.split('\njobs:\n', 1)[1], re.M | re.S))
     require(set(jobs) == {'native', 'packed', 'acceptance'}, 'required jobs missing/renamed')
     native, packed, aggregate = (jobs[n] for n in ('native', 'packed', 'acceptance'))
+    # github/docs contexts.md: jobs.<job_id>.env excludes runner (steps.env allows it).
+    for body in jobs.values():
+        job_env = re.search(r'^    env:\n((?:[ \t]+.*\n|\n)*?)(?=^    \S|\Z)', body, re.M)
+        if job_env:
+            require(not re.search(r'\$\{\{[^}]*\brunner\s*(?:\.|\[)', job_env[1]),
+                    'runner context is unavailable in job env')
+    initialization = """      - name: Resolve disposable packed evidence path
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Publish the path before checkout/setup so always() consumers retain it.
+          # Leave creation (0700) and stale-root rejection to run-packed-ci.py.
+          printf 'PACKED_ROOT=%s/authoring-packed-%s-%s\\n' "$RUNNER_TEMP" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" >> "$GITHUB_ENV"
+"""
+    require('    steps:\n' + initialization in packed, 'publish packed path first without creating root')
+    require('      PACKED_ROOT:' not in packed, 'packed path must come from runtime environment')
+    require('      - name: Require terminal packed evidence\n        if: always()\n' in packed and
+            '      - name: Preserve packed evidence including failure logs and sealed inputs\n        if: always()\n' in packed and
+            '            ${{ env.PACKED_ROOT }}/**\n' in packed and
+            '          if-no-files-found: error\n' in packed, 'always checker/upload required')
     for body in (native, packed):
         require(not re.search(r'^    (?:if|continue-on-error):', body, re.M), 'required job cannot be conditional')
     matrix = re.findall(r'- \{runner: ([\w.-]+), os: (\w+), arch: (\w+)\}', native)
