@@ -19,6 +19,9 @@ Capabilities показывают runtime-поведение поперёк пл
 - Открывайте эту зону, когда важно само действие или реакция, а не только имя платформы.
 - Это лучший вход, если вы сравниваете похожее поведение между Claude и Codex.
 
+- [`codex_permission_request`](/ru/api/capabilities/codex_permission_request)
+- [`codex_stop`](/ru/api/capabilities/codex_stop)
+- [`codex_subagent_stop`](/ru/api/capabilities/codex_subagent_stop)
 - [`config_change`](/ru/api/capabilities/config_change)
 - [`gemini_after_agent`](/ru/api/capabilities/gemini_after_agent)
 - [`gemini_after_model`](/ru/api/capabilities/gemini_after_model)

@@ -19,6 +19,9 @@ Capabilities give you a cross-platform view of runtime behavior after you alread
 - Open this area when you care about the behavior itself, not only the platform name.
 - This is the better entry point when you compare similar behavior across Claude and Codex.
 
+- [`codex_permission_request`](/zh/api/capabilities/codex_permission_request)
+- [`codex_stop`](/zh/api/capabilities/codex_stop)
+- [`codex_subagent_stop`](/zh/api/capabilities/codex_subagent_stop)
 - [`config_change`](/zh/api/capabilities/config_change)
 - [`gemini_after_agent`](/zh/api/capabilities/gemini_after_agent)
 - [`gemini_after_model`](/zh/api/capabilities/gemini_after_model)

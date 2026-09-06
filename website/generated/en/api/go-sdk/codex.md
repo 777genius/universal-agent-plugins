@@ -31,11 +31,17 @@ Package codex exposes typed public event inputs, responses, and registrars for C
 - func RegisterCustomJSON\[T any\]\(r \*Registrar, eventName string, fn func\(\*T\) \*Response\) error
 - type NotifyEvent
   - func \(e \*NotifyEvent\) RawJSON\(\) json.RawMessage
+- type PermissionRequestEvent
 - type Registrar
   - func NewRegistrar\(backend runtime.RegistrarBackend\) \*Registrar
   - func \(r \*Registrar\) OnNotify\(fn func\(\*NotifyEvent\) \*Response\)
+  - func \(r \*Registrar\) OnPermissionRequest\(fn func\(\*PermissionRequestEvent\) \*Response\)
+  - func \(r \*Registrar\) OnStop\(fn func\(\*StopEvent\) \*Response\)
+  - func \(r \*Registrar\) OnSubagentStop\(fn func\(\*SubagentStopEvent\) \*Response\)
 - type Response
   - func Continue\(\) \*Response
+- type StopEvent
+- type SubagentStopEvent
 
 
 ## func RegisterCustomJSON
@@ -67,6 +73,14 @@ func (e *NotifyEvent) RawJSON() json.RawMessage
 
 RawJSON returns the original JSON payload for pass\-through or custom decoding.
 
+## type PermissionRequestEvent
+
+PermissionRequestEvent is the Codex PermissionRequest hook input \(decoded from stdin JSON\). ToolInput stays raw JSON for typed consumers.
+
+```go
+type PermissionRequestEvent = internalcodex.PermissionRequestInput
+```
+
 ## type Registrar
 
 Registrar registers public Codex event handlers on a root SDK app.
@@ -93,6 +107,30 @@ func (r *Registrar) OnNotify(fn func(*NotifyEvent) *Response)
 
 OnNotify registers a handler for the Codex Notify.
 
+### func \(\*Registrar\) OnPermissionRequest
+
+```go
+func (r *Registrar) OnPermissionRequest(fn func(*PermissionRequestEvent) *Response)
+```
+
+OnPermissionRequest registers a handler for the Codex PermissionRequest.
+
+### func \(\*Registrar\) OnStop
+
+```go
+func (r *Registrar) OnStop(fn func(*StopEvent) *Response)
+```
+
+OnStop registers a handler for the Codex Stop.
+
+### func \(\*Registrar\) OnSubagentStop
+
+```go
+func (r *Registrar) OnSubagentStop(fn func(*SubagentStopEvent) *Response)
+```
+
+OnSubagentStop registers a handler for the Codex SubagentStop.
+
 ## type Response
 
 Response represents a successful Codex notify acknowledgement.
@@ -108,3 +146,19 @@ func Continue() *Response
 ```
 
 Continue acknowledges the notify event and exits successfully.
+
+## type StopEvent
+
+StopEvent is the Codex Stop lifecycle hook input \(decoded from stdin JSON\). Field names follow the Codex hooks schema; wire uses snake\_case via the platform adapter.
+
+```go
+type StopEvent = internalcodex.StopInput
+```
+
+## type SubagentStopEvent
+
+SubagentStopEvent is the Codex SubagentStop hook input \(decoded from stdin JSON\). It carries the Stop fields plus subagent identity.
+
+```go
+type SubagentStopEvent = internalcodex.SubagentStopInput
+```
