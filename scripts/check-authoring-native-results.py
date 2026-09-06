@@ -16,6 +16,19 @@ import re
 import sys
 
 
+def unavailable_diagnostic(text, test):
+    """Ignore only complete Go status lines naming this event's exact test."""
+    name = re.escape(test)
+    structural = (rf"[ \t]*(?:=== (?:RUN|PAUSE|CONT) +{name}|"
+                  rf"--- (?:PASS|FAIL|SKIP): {name} \([0-9]+\.[0-9]+s\))")
+    for line in text.splitlines():
+        if test and re.fullmatch(structural, line):
+            continue
+        if re.search(r"platform_unavailable|not[ _-]?available|gate.*(?:incomplete|unproven)", line, re.I):
+            return True
+    return False
+
+
 def check(root):
     evidence = root / "evidence"
     evidence.mkdir(parents=True, exist_ok=True)
@@ -98,7 +111,7 @@ def check(root):
             if action == "output":
                 text = event.get("Output", "")
                 output[key] = output.get(key, "") + text
-                if re.search(r"platform_unavailable|not[ _-]?available|gate.*(?:incomplete|unproven)", text, re.I):
+                if unavailable_diagnostic(text, test):
                     errors.append(f"unavailable native evidence: {package}/{test}: {text.strip()}")
                 if "AUTHORING_NATIVE_E2E " in text:
                     markers.append((key, json.loads(text.split("AUTHORING_NATIVE_E2E ", 1)[1])))
