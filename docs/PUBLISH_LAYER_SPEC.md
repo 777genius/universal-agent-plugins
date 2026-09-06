@@ -1,5 +1,9 @@
 # Publish Layer Spec
 
+> Owner clarification (2026-09-06): historical status is not permission to delete
+> useful legacy implementation, tests or design ideas. Follow the
+> [capability preservation contract](./AUTHORING_CAPABILITY_PRESERVATION.md).
+
 Spec date: 2026-04-04
 
 This document defines the intended `publish/...` layer for `plugin-kit-ai`.

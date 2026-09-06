@@ -17,6 +17,15 @@ command would preserve the wrong authority and conceal format conversion.
 Cobra commands also retain parent pointers, flag values, and streams, making
 package globals unsuitable for two independent entrypoints.
 
+## Owner clarification: capability preservation
+
+Accepted 2026-09-06: preserve useful YAML-specific implementation and its tests
+while excluding it from the standard dependency graph. Command retirement does
+not authorize code deletion. Unresolved capabilities remain preserved; each
+removal requires an inventoried decision explicitly accepted by the owner.
+See the [preservation contract](../AUTHORING_CAPABILITY_PRESERVATION.md).
+This does not authorize a second supported authoring engine.
+
 ## Decision
 
 1. Root `plugin.json` is the sole portable source of identity and metadata.
