@@ -5,6 +5,7 @@ import os from "node:os";
 import vm from "node:vm";
 import test from "node:test";
 import { consumePreparedCLI, extractPreparedCLI, namespace } from "../extractors/prepared-cli.mjs";
+import { extractPlatformData } from "../extractors/platform.mjs";
 import { extractHistorical, historicalSHA } from "../extractors/historical.mjs";
 import { scanSourceEntities, buildSidebar } from "../generate.mjs";
 import { bindGeneratedPaths, docsLocales, entityPath, journeyNav, localePathField, requirePreparationPreview } from "./journeys.mjs";
@@ -13,6 +14,7 @@ import { sourceRoot, repoRoot, docsBaseUrl, repoBrowserUrl } from "../config/sit
 import { run } from "./process.mjs";
 
 const actualOutput = process.env.DOCS_TEST_ADAPTER_OUTPUT;
+if (!actualOutput) throw new Error("Required fresh adapter fixture missing; run pnpm docs:test (integration runner)");
 const sourceSHA = process.env.DOCS_AUTHORING_SOURCE_SHA;
 const sourceEntities = await scanSourceEntities();
 const inventory = JSON.parse(await fs.readFile(new URL("../config/routes.json", import.meta.url), "utf8"));
@@ -110,7 +112,7 @@ test("historical 1.2.4 keeps every pinned CLI page, command fact and old URL", a
   }
 });
 
-test("actual accepted adapter envelope preserves all commands/flags/provenance and source parent", { skip: !actualOutput }, async () => {
+test("actual accepted adapter envelope preserves all commands/flags/provenance and source parent", {}, async () => {
   const bundle = await consumePreparedCLI(actualOutput, sourceSHA);
   assert.equal(bundle.entities.length, bundle.envelope.surfaces.flatMap((surface) => surface.commands).length);
   const second = await consumePreparedCLI(actualOutput, sourceSHA);
@@ -158,7 +160,7 @@ test("actual accepted adapter envelope preserves all commands/flags/provenance a
 });
 
 test("extractor invokes the actual docs adapter on the clean explicit source, deterministically", {
-  skip: !process.env.DOCS_TEST_RUN_ADAPTER
+
 }, async () => {
   const first = await extractPreparedCLI();
   const second = await extractPreparedCLI();
@@ -166,7 +168,7 @@ test("extractor invokes the actual docs adapter on the clean explicit source, de
   assert.deepEqual(first, await consumePreparedCLI(actualOutput, sourceSHA));
 });
 
-test("reject legacy arrays, wrong source/release, path traversal, missing surfaces and broken links", { skip: !actualOutput }, async (t) => {
+test("reject legacy arrays, wrong source/release, path traversal, missing surfaces and broken links", {}, async (t) => {
   const directory = await fixture(t);
   const manifestFile = path.join(directory, namespace, "manifest.json");
   const original = JSON.parse(await fs.readFile(path.join(actualOutput, namespace, "manifest.json"), "utf8"));
@@ -239,4 +241,24 @@ test("emitted HTML redirects preserve query/deep fragments at canonical base; no
 test("new canonical source links retain Go module identity", () => {
   assert.equal(docsBaseUrl, "https://777genius.github.io/universal-agent-plugins/docs/");
   assert.equal(repoBrowserUrl("cli:x"), "https://github.com/777genius/universal-agent-plugins/tree/main/cli/plugin-kit-ai");
+});
+
+
+test("whole historical platform inventory retains all five support pages, facts and English alias", async () => {
+  const bundle = await extractPlatformData();
+  const expected = (await run("git", ["ls-tree", "-r", "--name-only", historicalSHA, "website/generated"], { cwd: repoRoot }))
+    .trim().split("\n").filter((file) => /\/(en|ru|es|fr|zh)\/(api\/(platform-events|capabilities)\/.*|reference\/target-support)\.md$/.test(file));
+  assert.deepEqual(bundle.pages.map(p => `website/generated/${p.relativePath}`).sort(), expected.sort());
+  assert.equal(bundle.pages.filter(p => p.relativePath.endsWith("reference/target-support.md")).length, 5);
+  for (const page of bundle.pages) {
+    const original = await run("git", ["show", `${historicalSHA}:website/generated/${page.relativePath}`], { cwd: repoRoot });
+    // Entire body facts preserved except the explicit historical banner and metadata links.
+    const facts = text => text.split("\n").filter(line => !/^(stability:|maturity:|historicalVersion:|sourceSHA:|status:|> Historical)/.test(line))
+      .join("\n").replace(/stability="[^"]*"/g, 'stability="historical"').replace(/maturity="[^"]*"/g, 'maturity="historical"')
+      .replace(/https:\/\/github.com\/777genius\/plugin-kit-ai\/(tree|blob)\/main\//g, `https://github.com/777genius/universal-agent-plugins/$1/${historicalSHA}/`).replace(/\n+/g, "\n");
+    assert.equal(facts(page.content), facts(original), page.relativePath);
+    assert.ok(page.content.includes(`sourceSHA: "${historicalSHA}"`));
+  }
+  const aliases = buildRedirects(inventory, bundle.pages.map(p => `/${p.relativePath.replace(/\.md$/, "")}`).concat(["/en/api/cli/"]));
+  assert.equal(aliases["/reference/target-support"], "/en/reference/target-support");
 });

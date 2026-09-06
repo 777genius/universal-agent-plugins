@@ -1,3 +1,4 @@
+import { requireAuthoringSource } from "../lib/source-contract.mjs";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { docsToolsRoot, repoRoot } from "../config/site.mjs";
@@ -95,9 +96,7 @@ export async function consumePreparedCLI(root, expectedSHA) {
 }
 
 export async function extractPreparedCLI() {
-  const checkout = path.resolve(process.env.DOCS_AUTHORING_CHECKOUT || repoRoot);
-  const sha = process.env.DOCS_AUTHORING_SOURCE_SHA;
-  if (!/^[0-9a-f]{40}$/.test(sha || "")) throw new Error("DOCS_AUTHORING_SOURCE_SHA must name the accepted exact checkout");
+  const { checkout, sha } = await requireAuthoringSource();
   await fs.mkdir(docsToolsRoot, { recursive: true });
   const parent = await fs.mkdtemp(path.join(docsToolsRoot, "authoring-"));
   const output = path.join(parent, "export"); // Adapter requires an absent destination.

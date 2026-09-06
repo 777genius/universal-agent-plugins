@@ -26,16 +26,24 @@ export async function generationPrerequisites() {
     const version = await run("go", ["version"]);
     if (!version.includes(" go1.25.13 ")) errors.push(`Go 1.25.13 required; found ${version.trim()}`);
   } catch { errors.push("Missing Go 1.25.13 executable"); }
-  const moduleCache = process.env.GOMODCACHE;
-  if (!moduleCache) errors.push("Explicit existing GOMODCACHE required");
+  if (!process.env.GOMODCACHE) errors.push("Explicit existing GOMODCACHE required");
   else {
-    try { await fs.access(path.join(moduleCache, "github.com/princjef/gomarkdoc@v1.1.0")); }
-    catch { errors.push(`Missing offline gomarkdoc@v1.1.0 in ${moduleCache}`); }
+    try { await fs.access(process.env.GOMODCACHE); }
+    catch { errors.push("GOMODCACHE must already exist for offline extraction"); }
   }
+  try { await verifiedGomarkdoc(); } catch (error) { errors.push(error.message); }
   return errors;
 }
 
 export async function requireGenerationPrerequisites() {
   const errors = await generationPrerequisites();
   if (errors.length) throw new Error(`Full docs generation gate (no installation attempted):\n${errors.join("\n")}`);
+}
+
+// A pinned installed executable avoids go run's offline deprecation lookup.
+export async function verifiedGomarkdoc() {
+  const executable = process.env.DOCS_GOMARKDOC;
+  if (!executable || !path.isAbsolute(executable)) throw new Error("DOCS_GOMARKDOC must name an installed absolute gomarkdoc v1.1.0 executable");
+  if ((await run(executable, ["--version"])).trim() !== "v1.1.0") throw new Error("gomarkdoc v1.1.0 required");
+  return executable;
 }

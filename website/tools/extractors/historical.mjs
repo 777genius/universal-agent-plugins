@@ -7,7 +7,7 @@ const repository = "https://github.com/777genius/universal-agent-plugins";
 
 // Read committed reference artifacts, never execute the old product exporter.
 // The legacy exporter implementation remains preserved at its existing source.
-export async function extractHistorical(surfaces) {
+export async function extractHistorical(surfaces, referencePages = []) {
   const show = (file) => run("git", ["show", `${historicalSHA}:${file}`], { cwd: repoRoot });
   const registry = JSON.parse(await show("website/generated/registries/entities.json"));
   const entities = registry.filter((entry) => surfaces.includes(entry.surface)).map((entry) => ({
@@ -20,7 +20,8 @@ export async function extractHistorical(surfaces) {
   }));
   const files = (await run("git", ["ls-tree", "-r", "--name-only", historicalSHA,
     ...["en", "ru", "es", "fr", "zh"].flatMap((locale) => surfaces.map((surface) =>
-      `website/generated/${locale}/api/${surface}`))], { cwd: repoRoot })).trim().split("\n").filter(Boolean);
+      `website/generated/${locale}/api/${surface}`).concat(referencePages.map((page) =>
+      `website/generated/${locale}/reference/${page}.md`)))], { cwd: repoRoot })).trim().split("\n").filter(Boolean);
   const pages = [];
   for (const file of files) {
     if (!file.endsWith(".md")) continue;

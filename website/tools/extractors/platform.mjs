@@ -1,6 +1,6 @@
 import { extractHistorical } from "./historical.mjs";
 
-export const extractPlatformData = () => extractHistorical(["platform-events", "capabilities"]);
+export const extractPlatformData = () => extractHistorical(["platform-events", "capabilities"], ["target-support"]);
 
 import fs from "node:fs/promises";
 import path from "node:path";

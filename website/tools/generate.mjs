@@ -1,3 +1,4 @@
+import { requireAuthoringSource } from "./lib/source-contract.mjs";
 import { pathToFileURL } from "node:url";
 import { requireGenerationPrerequisites } from "./lib/preflight.mjs";
 import fs from "node:fs/promises";
@@ -19,6 +20,7 @@ const mirroredGeneratedLocales = ["es", "fr", "zh"];
 
 export async function generate() {
   requirePreparationPreview();
+  await requireAuthoringSource();
   await requireGenerationPrerequisites();
   const bundles = await Promise.all([
     extractCLI(),
@@ -28,6 +30,11 @@ export async function generate() {
     extractPlatformData()
   ]);
 
+  await assembleBundles(bundles);
+}
+
+// Shared production assembly seam: integration writes the real generated tree and runtime.
+export async function assembleBundles(bundles) {
   const rawGeneratedEntities = bundles.flatMap((bundle) => bundle.entities);
   const baseGeneratedPages = bundles.flatMap((bundle) => bundle.pages);
   const generatedPages = [

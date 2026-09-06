@@ -7,8 +7,9 @@ const __dirname = path.dirname(__filename);
 export const websiteRoot = path.resolve(__dirname, "..", "..");
 export const repoRoot = path.resolve(websiteRoot, "..");
 export const sourceRoot = path.join(websiteRoot, "source");
-export const generatedRoot = path.join(websiteRoot, "generated");
-export const runtimeRoot = path.join(websiteRoot, ".site");
+export const outputRoot = process.env.DOCS_SITE_OUTPUT_ROOT ? path.resolve(process.env.DOCS_SITE_OUTPUT_ROOT) : websiteRoot;
+export const generatedRoot = path.join(outputRoot, "generated");
+export const runtimeRoot = path.join(outputRoot, ".site");
 export const docsToolsRoot = process.env.DOCS_TOOLS_ROOT ? path.resolve(process.env.DOCS_TOOLS_ROOT) : path.join(websiteRoot, ".docs-tools");
 
 export const locales = [
