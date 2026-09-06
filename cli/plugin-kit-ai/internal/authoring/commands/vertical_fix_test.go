@@ -90,93 +90,127 @@ func TestReviewSplitUnknownAuthorFlag(t *testing.T) {
 }
 
 func TestReviewInitCleanupFailurePrecedence(t *testing.T) {
-	// Inject the same stage replacement + cancellation at the shared API and
-	// command boundary. All paths belong to this fresh disposable test fixture.
-	for _, throughCommand := range []bool{false, true} {
-		parent, scratch := t.TempDir(), t.TempDir()
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
-		replaced := ""
-		fault := faultContext{Context: ctx, check: func() {
-			if replaced != "" {
-				return
+	// Windows pins prevent replacing the held stage. An unrelated container
+	// entry instead makes real, nonrecursive cleanup fail after cancellation.
+	// Exercise that fixture on Linux too, alongside the actual replacement.
+	faults := []string{"retained-container-entry"}
+	if runtime.GOOS != "windows" {
+		faults = append(faults, "stage-replacement")
+	}
+	for _, fixture := range faults {
+		for _, throughCommand := range []bool{false, true} {
+			boundary := "shared-apply"
+			if throughCommand {
+				boundary = "command"
 			}
-			entries, err := os.ReadDir(parent)
-			if err != nil {
-				t.Fatal(err)
-			}
-			for _, entry := range entries {
-				if !strings.HasPrefix(entry.Name(), ".authoring-") {
-					continue
+			t.Run(fixture+"/"+boundary, func(t *testing.T) {
+				parent, scratch := t.TempDir(), t.TempDir()
+				ctx, cancel := context.WithCancel(context.Background())
+				defer cancel()
+				replaced := ""
+				var stageInfo os.FileInfo
+				fault := faultContext{Context: ctx, check: func() {
+					if replaced != "" {
+						return
+					}
+					entries, err := os.ReadDir(parent)
+					if err != nil {
+						t.Fatal(err)
+					}
+					for _, entry := range entries {
+						if !strings.HasPrefix(entry.Name(), ".authoring-") {
+							continue
+						}
+						replaced = filepath.Join(parent, entry.Name())
+						stageInfo, err = os.Stat(replaced)
+						if err != nil {
+							t.Fatal(err)
+						}
+						if fixture == "stage-replacement" {
+							if err := os.Rename(replaced, replaced+"-displaced"); err != nil {
+								t.Fatal(err)
+							}
+						}
+						write(t, replaced, "preserve", "ordinary-review-value")
+						cancel()
+						return
+					}
+				}}
+				dest := filepath.Join(parent, "demo")
+				if !throughCommand {
+					plan, err := scaffold.BuildPlan(scaffold.Options{Template: scaffold.Skill, Name: "demo", Description: "A disposable review fixture."})
+					if err != nil {
+						t.Fatal(err)
+					}
+					result, err := scaffold.Apply(fault, plan, scaffold.ApplyOptions{Destination: dest, Validate: func(ctx context.Context, stage string) error {
+						p, err := (project.Service{Scratch: scratch}).Read(ctx, stage)
+						if err != nil {
+							return err
+						}
+						if !report.Build("validate", "review", p, false).Successful() {
+							return fmt.Errorf("staging validation failed")
+						}
+						return nil
+					}})
+					t.Logf("shared Apply: committed=%t err=%v", result.Committed, err)
+					var cleanup *scaffold.CleanupError
+					if !errors.Is(err, context.Canceled) || !errors.As(err, &cleanup) || result.Committed {
+						t.Fatal("joined cleanup/cancellation fault not preserved")
+					}
+					if fixture == "stage-replacement" {
+						if !strings.Contains(err.Error(), "refused sibling cleanup") {
+							t.Fatal("replacement ownership refusal missing")
+						}
+					} else {
+						reviewCleanupRequireNonempty(t, cleanup.Err, filepath.Base(replaced))
+						if !strings.Contains(cleanup.Error(), "cleanup staging ") || !strings.Contains(cleanup.Error(), replaced) {
+							t.Fatal("expected private container cleanup cause")
+						}
+					}
+				} else {
+					a := commands.App{Projects: project.Service{Scratch: scratch}, Revision: "8d514ba723bf1c564ec1fbf92a3858f51d13e641"}
+					var out, errout bytes.Buffer
+					err := a.Execute(fault, []string{"init", dest, "--template=skill", "--name=demo", "--description=A disposable review fixture.", "--format=json"}, authoringcli.Streams{Out: &out, Err: &errout}, authoringcli.NewPluginKitRoot)
+					var r report.Report
+					if e := json.Unmarshal(out.Bytes(), &r); e != nil {
+						t.Fatal(e)
+					}
+					t.Logf("command: committed=%t error=%+v returned=%v", r.Committed, r.Error, err)
+					if err == nil || r.Committed || r.Error == nil {
+						t.Fatal("unexpected init result")
+					}
+					if r.Error.Code != "private_cleanup_failed" {
+						t.Errorf("scaffold cleanup failure hidden by %q", r.Error.Code)
+					}
+					if !strings.Contains(err.Error(), "cleanup") || !strings.Contains(r.Error.Action, "staging") || !strings.Contains(r.Error.Action, "committed") {
+						t.Error("sanitized recovery evidence missing")
+					}
+					for _, value := range []string{parent, scratch, ".authoring-", "ordinary-review-value"} {
+						if strings.Contains(out.String()+err.Error(), value) {
+							t.Error("private cleanup value leaked")
+						}
+					}
+					if errout.Len() != 0 {
+						t.Error("raw cleanup stderr")
+					}
 				}
-				replaced = filepath.Join(parent, entry.Name())
-				if err := os.Rename(replaced, replaced+"-displaced"); err != nil {
-					t.Fatal(err)
+				if replaced == "" || !errors.Is(ctx.Err(), context.Canceled) {
+					t.Fatal("stage fault was not reached")
 				}
-				write(t, replaced, "preserve", "ordinary-review-value")
-				cancel()
-				return
-			}
-		}}
-		dest := filepath.Join(parent, "demo")
-		if !throughCommand {
-			plan, err := scaffold.BuildPlan(scaffold.Options{Template: scaffold.Skill, Name: "demo", Description: "A disposable review fixture."})
-			if err != nil {
-				t.Fatal(err)
-			}
-			result, err := scaffold.Apply(fault, plan, scaffold.ApplyOptions{Destination: dest, Validate: func(ctx context.Context, stage string) error {
-				p, err := (project.Service{Scratch: scratch}).Read(ctx, stage)
-				if err != nil {
-					return err
+				if b, err := os.ReadFile(filepath.Join(replaced, "preserve")); err != nil || string(b) != "ordinary-review-value" {
+					t.Fatal("unowned fixture content was removed")
 				}
-				if !report.Build("validate", "review", p, false).Successful() {
-					return fmt.Errorf("staging validation failed")
+				if fixture == "stage-replacement" {
+					if _, err := os.Stat(replaced + "-displaced"); err != nil {
+						t.Fatal("expected retained displaced container")
+					}
+				} else {
+					reviewCleanupVerifyRetainedEntry(t, replaced, stageInfo)
 				}
-				return nil
-			}})
-			t.Logf("shared Apply: committed=%t err=%v", result.Committed, err)
-			var cleanup *scaffold.CleanupError
-			if !errors.Is(err, context.Canceled) || !errors.As(err, &cleanup) || !strings.Contains(err.Error(), "refused sibling cleanup") || result.Committed {
-				t.Fatal("joined cleanup/cancellation fault not preserved")
-			}
-		} else {
-			a := commands.App{Projects: project.Service{Scratch: scratch}, Revision: "8d514ba723bf1c564ec1fbf92a3858f51d13e641"}
-			var out, errout bytes.Buffer
-			err := a.Execute(fault, []string{"init", dest, "--template=skill", "--name=demo", "--description=A disposable review fixture.", "--format=json"}, authoringcli.Streams{Out: &out, Err: &errout}, authoringcli.NewPluginKitRoot)
-			var r report.Report
-			if e := json.Unmarshal(out.Bytes(), &r); e != nil {
-				t.Fatal(e)
-			}
-			t.Logf("command: committed=%t error=%+v returned=%v", r.Committed, r.Error, err)
-			if err == nil || r.Committed || r.Error == nil {
-				t.Fatal("unexpected init result")
-			}
-			if r.Error.Code != "private_cleanup_failed" {
-				t.Errorf("scaffold cleanup failure hidden by %q", r.Error.Code)
-			}
-			if !strings.Contains(err.Error(), "cleanup") || !strings.Contains(r.Error.Action, "staging") || !strings.Contains(r.Error.Action, "committed") {
-				t.Error("sanitized recovery evidence missing")
-			}
-			for _, value := range []string{parent, scratch, ".authoring-", "ordinary-review-value"} {
-				if strings.Contains(out.String()+err.Error(), value) {
-					t.Error("private cleanup value leaked")
+				if _, err := os.Stat(dest); !os.IsNotExist(err) {
+					t.Fatal("unexpected destination")
 				}
-			}
-			if errout.Len() != 0 {
-				t.Error("raw cleanup stderr")
-			}
-		}
-		if replaced == "" {
-			t.Fatal("stage fault was not reached")
-		}
-		if b, err := os.ReadFile(filepath.Join(replaced, "preserve")); err != nil || string(b) != "ordinary-review-value" {
-			t.Fatal("unowned replacement was removed")
-		}
-		if _, err := os.Stat(replaced + "-displaced"); err != nil {
-			t.Fatal("expected retained displaced container")
-		}
-		if _, err := os.Stat(dest); !os.IsNotExist(err) {
-			t.Fatal("unexpected destination")
+			})
 		}
 	}
 }
