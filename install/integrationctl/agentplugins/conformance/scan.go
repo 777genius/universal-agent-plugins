@@ -25,16 +25,18 @@ type parseFailure struct {
 func (e *parseFailure) Error() string { return e.Code }
 func (e *parseFailure) Unwrap() error { return e.cause }
 
-// scanJSON is the single structural token walk. Compatibility callers select
+// scanJSON checks JSON structure. Compatibility callers select
 // their old duplicate boundary and no new limits; author callers record bounded
 // duplicate locations before any map materialization.
 func scanJSON(ctx context.Context, body []byte, limits Limits, mode duplicateMode) ([]duplicate, error) {
+	// Only unbounded root compatibility checks may skip opaque descendants.
+	skipRootValues := mode == duplicateRoot && limits == (Limits{})
 	// encoding/json map decoding already rejects nesting beyond 10000. Keep
 	// that existing ceiling in the compatibility walk before recursive descent.
 	if limits.Depth == 0 {
 		limits.Depth = 10000
 	}
-	s := jsonScanner{ctx: ctx, decoder: json.NewDecoder(bytes.NewReader(body)), limits: limits, mode: mode}
+	s := jsonScanner{ctx: ctx, decoder: json.NewDecoder(bytes.NewReader(body)), limits: limits, mode: mode, skipRootValues: skipRootValues}
 	s.decoder.UseNumber()
 	token, err := s.token()
 	if err != nil {
@@ -52,6 +54,11 @@ func scanJSON(ctx context.Context, body []byte, limits Limits, mode duplicateMod
 		}
 		return nil, err
 	}
+	// RawMessage decoding counts depth from the value, excluding the root.
+	// Validate the whole document too to retain encoding/json's 10000 ceiling.
+	if skipRootValues && !json.Valid(body) {
+		return nil, &parseFailure{Code: "document_depth_limit"}
+	}
 	return s.duplicates, nil
 }
 
@@ -60,6 +67,7 @@ type jsonScanner struct {
 	decoder         *json.Decoder
 	limits          Limits
 	mode            duplicateMode
+	skipRootValues  bool
 	tokens, members int
 	duplicates      []duplicate
 }
@@ -111,6 +119,16 @@ func (s *jsonScanner) value(token json.Token, keys []string, depth int) error {
 				}
 			}
 			seen[key] = true
+			if s.skipRootValues {
+				if err := s.ctx.Err(); err != nil {
+					return err
+				}
+				var value json.RawMessage
+				if err := s.decoder.Decode(&value); err != nil {
+					return err
+				}
+				continue
+			}
 			t, err = s.token()
 			if err != nil {
 				return err
