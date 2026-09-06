@@ -179,7 +179,7 @@ func TestNativeBinaryReadiness(t *testing.T) {
 		return a
 	}
 	c := parity([]string{"capabilities"}, 0)
-	if c.Capabilities == nil || len(c.Capabilities.Commands) != 7 || c.Readiness.Status != report.NotEvaluated {
+	if c.Capabilities == nil || len(c.Capabilities.Commands) != 8 || c.Readiness.Status != report.NotEvaluated {
 		t.Fatal("capabilities evidence", c)
 	}
 	for _, lane := range []struct {

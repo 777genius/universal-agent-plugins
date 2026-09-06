@@ -37,7 +37,7 @@ type App struct {
 }
 
 func commandNames() []string {
-	return []string{"init", "validate", "inspect", "test", "compat", "capabilities", "doctor"}
+	return []string{"init", "validate", "inspect", "test", "compat", "capabilities", "doctor", "skills"}
 }
 
 type request struct {
@@ -169,6 +169,9 @@ func (a App) Execute(ctx context.Context, args []string, streams authoringcli.St
 	return nil
 }
 func (a App) command(name string, capture func(report.Report)) (*cobra.Command, error) {
+	if name == "skills" {
+		return a.skillsCommand(capture)
+	}
 	use, args := name+" <path>", cobra.ExactArgs(1)
 	if name == "capabilities" {
 		use, args = name, cobra.NoArgs
