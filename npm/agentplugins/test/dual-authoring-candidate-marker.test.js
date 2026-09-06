@@ -169,7 +169,10 @@ test("successful structural candidate still finalizes and verifies", {
 });
 
 
-test("release mode producer and verifier require matching explicit intent", (t) => {
+test("release mode producer and verifier require matching explicit intent", {
+  // Like the sibling producer fixtures, this requires the repository Git snapshot.
+  skip: process.env.AGENTPLUGINS_STAGED_TEST_CHILD === "1"
+}, (t) => {
   const mode = "release-cli-contract-v1";
   const { options, output, marker } = fixture(t, mode);
   const staged = producer.stageCandidate(options);
