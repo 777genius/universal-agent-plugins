@@ -74,7 +74,10 @@ func CheckReleaseCompletion(root *cobra.Command, args []string) error {
 				name = last[i-1 : i]
 			}
 		}
-	} else if len(flags) > 0 {
+	}
+	// Cobra independently falls back for an empty name (including --=x), but
+	// returns before that fallback for ordinary partial flag names without =.
+	if name == "" && (!strings.HasPrefix(last, "-") || equal) && len(flags) > 0 {
 		prev := flags[len(flags)-1]
 		if len(prev) > 1 && strings.HasPrefix(prev, "-") && prev != "--" && !strings.Contains(prev, "=") {
 			if strings.HasPrefix(prev, "--") {

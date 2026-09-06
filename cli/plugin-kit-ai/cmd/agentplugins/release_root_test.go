@@ -186,6 +186,16 @@ func TestReleaseCompletionProcessStderr(t *testing.T) {
 			{[]string{protocol, ""}, "author", false},
 			{append(append([]string{protocol}, []string{"author", "init"}...), "--desc"), "--description", false},
 			{append(append([]string{protocol}, []string{"author", "init"}...), "--description", ""), ":", false},
+			// Empty flag names fall back to the preceding value flag in Cobra.
+			{[]string{protocol, "author", "init", "--description", "--=x"}, ":0\n", false},
+			{[]string{protocol, "author", "skills", "init", "--description", "--=x"}, ":0\n", false},
+			{[]string{protocol, "author", "skills", "init", "--format", "--=x"}, ":0\n", false},
+			{[]string{protocol, "--format", "--=x"}, ":0\n", false},
+			// Ordinary partial flag names must still leave the missing value invalid.
+			{[]string{protocol, "author", "init", "--description", "--desc"}, "", true},
+			{[]string{protocol, "author", "init", "--description", "-"}, "", true},
+			{[]string{protocol, "author", "init", "--description", "--"}, "", true},
+			{[]string{protocol, "--unknown=" + marker, "--=x"}, "", true},
 			{[]string{protocol, "--unknown=" + marker, ""}, "", true},
 			{[]string{protocol, "--unknown=" + marker}, "", true},
 			{[]string{protocol, "--no-color=" + marker, ""}, "", true},
@@ -205,6 +215,9 @@ func TestReleaseCompletionProcessStderr(t *testing.T) {
 			err := child.Run()
 			if _, statErr := os.Stat(home + "/completion-debug"); !os.IsNotExist(statErr) {
 				t.Fatal("completion wrote a process-global debug file")
+			}
+			if tc.want == ":0\n" && stdout.String() != tc.want {
+				t.Fatalf("protocol %s case %d: want exact completion %q, got %q", protocol, i, tc.want, stdout.String())
 			}
 			if (err != nil) != tc.fails || stderr.Len() != 0 || strings.Contains(stdout.String(), marker) || !strings.Contains(stdout.String(), tc.want) {
 				t.Fatalf("protocol %s case %d: exit=%v stderr bytes=%d; completion/containment failed", protocol, i, err, stderr.Len())
