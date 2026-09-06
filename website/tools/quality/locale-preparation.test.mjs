@@ -1,13 +1,15 @@
 import test from "node:test";
+import vm from "node:vm";
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { execFileSync } from "node:child_process";
+import { inventory, dispositionErrors } from "./locale-dispositions.mjs";
+import { journeyNav, journeyLabels, journeySidebar } from "../lib/journeys.mjs";
 import { sourceRoot, repoRoot } from "../config/site.mjs";
 import { listMarkdownFiles } from "../lib/fs.mjs";
 import { readFrontmatter } from "../lib/site-model.mjs";
 import { localeCodes, localeDestination, localeFromPath, preferredLocale } from "../../.vitepress/theme/components/locale-routes.mjs";
-const base = "bb08ee00f2734baa04265a5afee115772a815cf2";
+
 const routeFor = (relative) => `/${relative.replace(/index\.md$/, "").replace(/\.md$/, "")}`;
 const routes = new Map();
 const entities = new Map();
@@ -23,7 +25,7 @@ for (const locale of localeCodes) for (const file of await listMarkdownFiles(pat
 test("all five locales switch through existing counterpart routes and matching canonical IDs", async () => {
   for (const [id, entity] of entities) for (const locale of localeCodes) {
     const target = localeDestination(entity, locale);
-    assert.equal(target.fallback, false, `${id}/${locale}`);
+    assert.equal(target.fallback, !entity[`path${locale[0].toUpperCase()}${locale.slice(1)}`], `${id}/${locale}`);
     assert.ok(routes.has(target.path), target.path);
     assert.equal((await readFrontmatter(routes.get(target.path))).canonicalId, id);
   }
@@ -42,46 +44,62 @@ test("base paths, html aliases, queries and fragments do not corrupt locale dete
   }
   assert.equal(localeFromPath("/docs-other/ru/build/", "/docs/"), null);
 });
-test("gateway honors saved locale then browser preference order including English", () => {
+test("gateway honors saved locale then browser preference order including English", async () => {
   for (const code of localeCodes) assert.equal(preferredLocale(code.toUpperCase(), ["en"]), code);
   assert.equal(preferredLocale("invalid", ["fr-CA", "zh-CN"]), "fr");
   assert.equal(preferredLocale("", ["en-GB", "ru"]), "en");
   assert.equal(preferredLocale("", ["de", "es-MX"]), "es");
   assert.equal(preferredLocale("", []), "en");
+  const gateway = await fs.readFile(path.join(sourceRoot, "gateway/index.md"), "utf8");
+  const inline = gateway.split("    - |\n")[1].split("\n---")[0].split("\n").map(line => line.slice(6)).join("\n");
+  for (const [saved, languages] of [["FR", ["en", "zh"]], ["invalid", ["en-GB", "ru"]], ["fr-CA", ["es-MX", "zh"]], ["", ["zh_CN", "fr"]]]) {
+    let target;
+    vm.runInNewContext(inline, { URLSearchParams, window: {
+      location: { search: "", pathname: "/docs/", hash: "", replace: value => { target = value; } },
+      localStorage: { getItem: () => saved, setItem() {} }, navigator: { languages }
+    } });
+    assert.equal(target, `/docs/${preferredLocale(saved, languages)}/`);
+  }
 });
-test("52 minimal fallbacks link to exact English counterparts without copied commands", async () => {
-  let count = 0;
-  for (const [route, file] of routes) {
-    if (!/^\/(ru|es|fr|zh)\/(use|build|legacy\/v1)\//.test(route)) continue;
+test("inventoried fallbacks require English links; current translations permit commands and releases", async () => {
+  for (const [relative, entry] of Object.entries(inventory.pages)) {
+    if (entry.disposition !== "english-fallback") continue;
+    const file = path.join(sourceRoot, relative);
     const body = await fs.readFile(file, "utf8");
-    const english = route.replace(/^\/[^/]+\//, "/en/");
-    assert.ok(body.includes(`](${english})`), route);
+    assert.deepEqual(dispositionErrors(relative, body, await readFrontmatter(file)), [], relative);
     for (const match of body.matchAll(/\]\((\/[^)#]+)\)/g)) assert.ok(routes.has(match[1]), match[1]);
-    assert.ok(!body.includes("```"));
-    count++;
   }
-  assert.equal(count, 52);
+  for (const relative of ["fr/build/tutorial.md", "fr/releases/2.0.md"]) {
+    const body = "# Current translation\n```sh\nagentplugins author check\n```\n";
+    assert.deepEqual(dispositionErrors(relative, body, { localeDisposition: "current-translation" }), []);
+    assert.ok(dispositionErrors(relative, body, { localeDisposition: "english-fallback" }).length);
+    assert.ok(dispositionErrors(relative, body, {}).length);
+  }
 });
-test("all original localized content and deep-link headings survive verbatim inside historical details", async () => {
-  let count = 0;
-  for (const [route, file] of routes) {
-    if (!/^\/(ru|es|fr|zh)\//.test(route) || /^\/(ru|es|fr|zh)\/(use|build|legacy\/v1)\//.test(route)) continue;
-    const original = execFileSync("git", ["show", `${base}:${path.relative(repoRoot, file)}`], { cwd: repoRoot, encoding: "utf8" });
-    const current = await fs.readFile(file, "utf8");
-    const end = original.indexOf("\n---", 4) + 4;
-    assert.equal(current.slice(0, end), original.slice(0, end));
-    const archive = current.slice(current.indexOf("</summary>") + "</summary>".length + 1, -"\n</details>\n".length);
-    assert.equal(archive, original.slice(end), route);
-    assert.ok(current.includes("1.2.4"));
-    count++;
+test("all 192 inventoried original files survive independently of private Git history", async () => {
+  const archived = Object.entries(inventory.pages).filter(([, entry]) => entry.disposition === "historical-snapshot");
+  assert.equal(archived.length, 192);
+  for (const [relative, entry] of archived) {
+    const file = path.join(sourceRoot, relative);
+    const body = await fs.readFile(file, "utf8");
+    const meta = await readFrontmatter(file);
+    assert.deepEqual(dispositionErrors(relative, body, meta), [], relative);
+    assert.ok(dispositionErrors(relative, body.replace("</details>", "lost archive"), meta).length);
+    // A future adapted translation is current prose outside the immutable
+    // archival disclosure; preserving old frontmatter needs no metadata edit.
+    entry.currentDisposition = "current-translation";
+    try {
+      const adapted = body.replace("<details><summary>", "```sh\nagentplugins author check\n```\n\n<details><summary>");
+      assert.deepEqual(dispositionErrors(relative, adapted, meta), [], relative);
+    } finally { delete entry.currentDisposition; }
   }
-  assert.equal(count, 192);
 });
 test("localized navigation targets produced source pages; both switcher variants label actual destination language", async () => {
   for (const locale of localeCodes.slice(1)) {
     const config = await fs.readFile(path.join(repoRoot, `website/.vitepress/config/locales.${locale}.ts`), "utf8");
-    assert.ok(config.includes(`link: "/${locale}/use/"`));
-    assert.ok(config.includes(`link: "/${locale}/build/"`));
+    assert.ok(config.includes(`...journeyNav("${locale}")`));
+    assert.deepEqual(journeyNav(locale).map(x => x.link), [`/${locale}/use/`, `/${locale}/build/`]);
+    assert.equal(journeyNav(locale)[0].text, journeyLabels[locale][0]);
     for (const match of config.matchAll(/link: "(\/[^\"]+)"/g)) assert.ok(routes.has(match[1]), match[1]);
   }
   const component = await fs.readFile(path.join(repoRoot, "website/.vitepress/theme/components/LocaleSwitcher.vue"), "utf8");

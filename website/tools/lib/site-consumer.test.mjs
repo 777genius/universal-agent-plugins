@@ -8,7 +8,7 @@ import { consumePreparedCLI, extractPreparedCLI, namespace } from "../extractors
 import { extractPlatformData } from "../extractors/platform.mjs";
 import { extractHistorical, historicalSHA } from "../extractors/historical.mjs";
 import { scanSourceEntities, buildSidebar } from "../generate.mjs";
-import { bindGeneratedPaths, docsLocales, entityPath, journeyNav, localePathField, requirePreparationPreview } from "./journeys.mjs";
+import { bindGeneratedPaths, docsLocales, entityPath, journeyNav, journeyLabels, journeyPageLabels, localePathField, requirePreparationPreview } from "./journeys.mjs";
 import { buildRedirects, createRedirectDocument, emitRedirects, htmlPath } from "./redirects.mjs";
 import { sourceRoot, repoRoot, docsBaseUrl, repoBrowserUrl } from "../config/site.mjs";
 import { run } from "./process.mjs";
@@ -38,20 +38,36 @@ test("preparation cannot run under the ordinary publication build", () => {
   assert.doesNotThrow(() => requirePreparationPreview({ DOCS_PREPARATION_PREVIEW: "1" }));
 });
 
-test("all five navigations expose real Use and Build journeys with truthful English fallback", () => {
+test("all five navigations expose real Use and Build journeys with truthful English fallback", async () => {
   const prepared = sourceEntities.filter((entry) => entry.publicVisibility === "preparation");
-  assert.equal(prepared.length, 13);
+  const requiredJourneys = ["use:index", "use:install", "use:manage", "build:index", "build:skill",
+    "build:mcp-remote", "build:mcp-stdio", "build:hybrid", "build:skills", "build:layout",
+    "build:checks", "build:handoff", "legacy:v1:index"];
+  for (const id of requiredJourneys) assert.ok(prepared.some(entry => entry.canonicalId === `page:${id}`), id);
   for (const entry of prepared) {
     assert.equal(entry.released, false);
     assert.equal(entry.stability, "prepared-not-release");
-    for (const locale of docsLocales) assert.equal(entityPath(entry, locale), entry.pathEn);
+    for (const locale of docsLocales) {
+      const expected = entry.pathEn.replace(/^\/en\//, `/${locale}/`);
+      assert.equal(entityPath(entry, locale), expected);
+      const file = path.join(sourceRoot, expected.endsWith("/") ? `${expected}index.md` : `${expected}.md`);
+      const body = await fs.readFile(file, "utf8");
+      assert.ok(body.includes(`canonicalId: "${entry.canonicalId}"`), file);
+      assert.ok(body.includes(`locale: "${locale}"`), file);
+    }
   }
   for (const locale of docsLocales) {
-    assert.deepEqual(journeyNav(locale).map((entry) => entry.link), ["/en/use/", "/en/build/"]);
+    assert.deepEqual(journeyNav(locale).map((entry) => entry.link), [`/${locale}/use/`, `/${locale}/build/`]);
     const sidebar = buildSidebar(locale, sourceEntities);
+    assert.equal(sidebar[`/${locale}/use/`][0].text, journeyLabels[locale][0]);
+    assert.equal(sidebar[`/${locale}/build/`][1].text, journeyLabels[locale][1]);
+    if (locale !== "en") assert.equal(sidebar[`/${locale}/use/`][0].items[0].text, journeyPageLabels[locale]["page:use:index"]);
     const links = flattenLinks({ use: sidebar[`/${locale}/use/`], build: sidebar[`/${locale}/build/`] });
-    for (const entry of prepared) assert.ok(links.includes(entry.pathEn), entry.canonicalId);
-    assert.ok(!links.some((link) => /^\/(ru|es|fr|zh)\/(use|build|legacy)\//.test(link)));
+    for (const entry of prepared.filter(entry => requiredJourneys.includes(entry.canonicalId.slice("page:".length))))
+      assert.ok(links.includes(entityPath(entry, locale)), entry.canonicalId);
+    const missing = { canonicalId: "generated:missing", title: "plugin-kit-ai missing translation", surface: "authoring-cli", pathEn: "/en/api/missing" };
+    assert.equal(entityPath(missing, locale), missing.pathEn);
+    assert.ok(flattenLinks(buildSidebar(locale, [...sourceEntities, missing])).includes(missing.pathEn));
   }
 });
 

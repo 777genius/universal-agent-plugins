@@ -1,3 +1,4 @@
+import { journeyNav } from "../../tools/lib/journeys.mjs";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -30,12 +31,13 @@ export const ruLocaleConfig = {
       copyright: "Лицензия MIT"
     },
     nav: [
-      { text: "Использовать плагины", link: "/ru/use/" },
-      { text: "Создавать плагины", link: "/ru/build/" },
-      { text: "Гайды · v1", link: "/ru/guide/" },
-      { text: "Концепции · v1", link: "/ru/concepts/" },
-      { text: "Справочник · v1", link: "/ru/reference/" },
-      { text: "API · v1", link: "/ru/api/" },
+      ...journeyNav("ru"),
+      { text: "v1", items: [
+        { text: "Гайды · v1", link: "/ru/guide/" },
+        { text: "Концепции · v1", link: "/ru/concepts/" },
+        { text: "Справочник · v1", link: "/ru/reference/" },
+        { text: "API · v1", link: "/ru/api/" },
+      ] },
       { text: "Релизы", link: "/ru/releases/" }
     ],
     sidebar: readSidebar("sidebars.ru.json"),

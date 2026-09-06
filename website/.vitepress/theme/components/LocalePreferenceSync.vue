@@ -1,8 +1,12 @@
 <script setup lang="ts">
-import { onMounted, watch } from "vue";
+import { onMounted, onBeforeUnmount, watch } from "vue";
 import { useData, useRoute } from "vitepress";
 
 import { localeFromPath as routeLocale } from "./locale-routes.mjs";
+
+import { installHistoricalFragments } from "./historical-fragments.mjs";
+let disposeFragments: (() => void) | undefined;
+onBeforeUnmount(() => disposeFragments?.());
 
 const storageKey = "plugin-kit-ai-docs-locale";
 const { site } = useData();
@@ -24,6 +28,7 @@ function persistLocale(path: string) {
 }
 
 onMounted(() => {
+  disposeFragments = installHistoricalFragments(window);
   persistLocale(route.path);
   watch(
     () => route.path,

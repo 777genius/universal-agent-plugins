@@ -36,7 +36,7 @@ for (const pin of envelope.sources) {
   const digest = createHash("sha256").update(await fs.readFile(path.join(source, pin.path))).digest("hex");
   assert.equal(digest, pin.sha256, pin.path);
 }
-const log = await run(process.execPath, ["--test", "website/tools/lib/frontmatter.test.mjs", "website/tools/lib/site-consumer.test.mjs"], {
+const log = await run(process.execPath, ["--test", "website/tools/quality/locale-preparation.test.mjs", "website/tools/lib/frontmatter.test.mjs", "website/tools/lib/site-consumer.test.mjs"], {
   cwd: repository, env: { DOCS_TEST_ADAPTER_OUTPUT: output, DOCS_TEST_ARTIFACTS: directory }
 });
 console.log(log);

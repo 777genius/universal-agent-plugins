@@ -1,3 +1,4 @@
+import { journeyNav } from "../../tools/lib/journeys.mjs";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -30,12 +31,13 @@ export const zhLocaleConfig = {
       copyright: "MIT 许可"
     },
     nav: [
-      { text: "使用插件", link: "/zh/use/" },
-      { text: "构建插件", link: "/zh/build/" },
-      { text: "指南 · v1", link: "/zh/guide/" },
-      { text: "概念 · v1", link: "/zh/concepts/" },
-      { text: "参考 · v1", link: "/zh/reference/" },
-      { text: "API · v1", link: "/zh/api/" },
+      ...journeyNav("zh"),
+      { text: "v1", items: [
+        { text: "指南 · v1", link: "/zh/guide/" },
+        { text: "概念 · v1", link: "/zh/concepts/" },
+        { text: "参考 · v1", link: "/zh/reference/" },
+        { text: "API · v1", link: "/zh/api/" },
+      ] },
       { text: "发布", link: "/zh/releases/" }
     ],
     sidebar: readSidebar("sidebars.zh.json"),

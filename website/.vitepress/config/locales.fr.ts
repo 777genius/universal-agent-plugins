@@ -1,3 +1,4 @@
+import { journeyNav } from "../../tools/lib/journeys.mjs";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -30,12 +31,13 @@ export const frLocaleConfig = {
       copyright: "Sous licence MIT"
     },
     nav: [
-      { text: "Utiliser des plugins", link: "/fr/use/" },
-      { text: "Créer des plugins", link: "/fr/build/" },
-      { text: "Guide · v1", link: "/fr/guide/" },
-      { text: "Concepts · v1", link: "/fr/concepts/" },
-      { text: "Référence · v1", link: "/fr/reference/" },
-      { text: "API · v1", link: "/fr/api/" },
+      ...journeyNav("fr"),
+      { text: "v1", items: [
+        { text: "Guide · v1", link: "/fr/guide/" },
+        { text: "Concepts · v1", link: "/fr/concepts/" },
+        { text: "Référence · v1", link: "/fr/reference/" },
+        { text: "API · v1", link: "/fr/api/" },
+      ] },
       { text: "Versions", link: "/fr/releases/" }
     ],
     sidebar: readSidebar("sidebars.fr.json"),

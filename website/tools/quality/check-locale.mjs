@@ -1,3 +1,4 @@
+import { dispositionErrors, inventory } from "./locale-dispositions.mjs";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { sourceRoot } from "../config/site.mjs";
@@ -10,26 +11,26 @@ const errors = [];
 for (const locale of locales) {
   const root = path.join(sourceRoot, locale);
   const seen = new Set();
+  const canonicalIds = new Set();
   for (const file of await listMarkdownFiles(root)) {
     const relative = path.relative(root, file).replaceAll("\\", "/");
     const body = await fs.readFile(file, "utf8");
     const meta = await readFrontmatter(file);
     seen.add(relative);
+    if (typeof meta.canonicalId !== "string" || !meta.canonicalId || canonicalIds.has(meta.canonicalId)) errors.push(`${locale}/${relative}: missing or duplicate canonical ID`);
+    canonicalIds.add(meta.canonicalId);
     if (meta.locale !== locale) errors.push(`${locale}/${relative}: wrong locale`);
     if (locale === "en") { english.set(relative, meta); continue; }
     if (!english.has(relative)) errors.push(`${locale}/${relative}: missing English counterpart`);
     if (meta.canonicalId !== english.get(relative)?.canonicalId) errors.push(`${locale}/${relative}: canonical mismatch`);
-    if (/^(use|build|legacy\/v1)\//.test(relative)) {
-      const target = `/en/${relative.replace(/index\.md$/, "").replace(/\.md$/, "")}`;
-      if (!body.includes(`](${target})`)) errors.push(`${locale}/${relative}: missing explicit English pointer`);
-      if (/```|`(?:plugin-kit-ai|agentplugins)\s/.test(body)) errors.push(`${locale}/${relative}: executable fallback copy`);
-    } else if (!body.includes('<details><summary>') || !body.includes('1.2.4') || !body.trimEnd().endsWith('</details>')) {
-      errors.push(`${locale}/${relative}: historical context missing`);
-    }
+    for (const error of dispositionErrors(`${locale}/${relative}`, body, meta)) errors.push(`${locale}/${relative}: ${error}`);
   }
   if (locale !== "en") for (const relative of english.keys()) {
     if (!seen.has(relative)) errors.push(`${locale}/${relative}: missing counterpart`);
   }
+}
+for (const relative of Object.keys(inventory.pages)) {
+  try { await fs.access(path.join(sourceRoot, relative)); } catch { errors.push(`${relative}: inventoried page missing`); }
 }
 if (errors.length) {
   console.error(errors.join("\n"));

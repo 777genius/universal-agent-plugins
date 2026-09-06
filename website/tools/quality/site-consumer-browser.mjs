@@ -1,3 +1,5 @@
+import { runLocaleSmoke } from "./locale-browser.mjs";
+import { journeyNav } from "../lib/journeys.mjs";
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -24,7 +26,7 @@ export async function runSiteConsumerSmoke(browser, base, artifactsRoot) {
   try {
     for (const locale of ["en", "ru", "es", "fr", "zh"]) {
       await page.goto(`${base}/${locale}/`, { waitUntil: "networkidle" });
-      for (const [label, route] of [["Use plugins", "/en/use/"], ["Build plugins", "/en/build/"]]) {
+      for (const { text: label, link: route } of journeyNav(locale)) {
         const link = page.locator(".VPNavBarMenu").getByRole("link", { name: new RegExp(`^${label}`) });
         assert.equal(await link.count(), 1);
         assert.ok((await link.getAttribute("href")).endsWith(route));
@@ -57,6 +59,7 @@ export async function runSiteConsumerSmoke(browser, base, artifactsRoot) {
       }
     }
     assert.deepEqual(failures, []);
+    await runLocaleSmoke(browser, base, artifactsRoot);
     await fs.writeFile(path.join(artifactsRoot, "d2b-browser.json"), JSON.stringify({
       scope: "Actual VitePress output served locally, canonical origin intercepted locally", evidence
     }, null, 2) + "\n");

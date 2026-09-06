@@ -3,31 +3,128 @@ export const localePathField = (locale) => `path${locale[0].toUpperCase()}${loca
 export const entityPath = (entry, locale) => entry[localePathField(locale)] || entry.pathEn || "";
 export const isPreparedSource = (relative) => /^(use|build|legacy\/v1)\//.test(relative);
 
+export const journeyLabels = {
+  "en": [
+    "Use plugins",
+    "Build plugins",
+    "Historical v1 · baseline 1.2.4",
+    "English"
+  ],
+  "ru": [
+    "Использовать плагины",
+    "Создавать плагины",
+    "История v1 · базовая версия 1.2.4",
+    "На английском"
+  ],
+  "es": [
+    "Usar plugins",
+    "Crear plugins",
+    "Histórico v1 · referencia 1.2.4",
+    "En inglés"
+  ],
+  "fr": [
+    "Utiliser des plugins",
+    "Créer des plugins",
+    "Historique v1 · référence 1.2.4",
+    "En anglais"
+  ],
+  "zh": [
+    "使用插件",
+    "构建插件",
+    "历史 v1 · 基准 1.2.4",
+    "英语"
+  ]
+};
+
 export function journeyNav(locale) {
-  const suffix = locale === "en" ? "" : " (English preview)";
-  return [
-    { text: `Use plugins${suffix}`, link: "/en/use/" },
-    { text: `Build plugins${suffix}`, link: "/en/build/" }
-  ];
+  return ["use", "build"].map((section, index) => ({ text: journeyLabels[locale][index], link: `/${locale}/${section}/` }));
 }
+
+export const journeyPageLabels = {
+  "ru": {
+    "page:use:index": "Обзор",
+    "page:use:install": "Установка",
+    "page:use:manage": "Управление",
+    "page:build:index": "Обзор",
+    "page:build:skill": "Один Skill",
+    "page:build:mcp-remote": "Удалённый MCP",
+    "page:build:mcp-stdio": "Локальный MCP",
+    "page:build:hybrid": "Гибридный плагин",
+    "page:build:skills": "Несколько Skills",
+    "page:build:layout": "Структура",
+    "page:build:checks": "Проверки",
+    "page:build:handoff": "Передача",
+    "page:legacy:v1:index": "Исторический контекст"
+  },
+  "es": {
+    "page:use:index": "Resumen",
+    "page:use:install": "Instalar",
+    "page:use:manage": "Gestionar",
+    "page:build:index": "Resumen",
+    "page:build:skill": "Un Skill",
+    "page:build:mcp-remote": "MCP remoto",
+    "page:build:mcp-stdio": "MCP local",
+    "page:build:hybrid": "Plugin híbrido",
+    "page:build:skills": "Varios Skills",
+    "page:build:layout": "Estructura",
+    "page:build:checks": "Comprobaciones",
+    "page:build:handoff": "Entrega",
+    "page:legacy:v1:index": "Contexto histórico"
+  },
+  "fr": {
+    "page:use:index": "Présentation",
+    "page:use:install": "Installer",
+    "page:use:manage": "Gérer",
+    "page:build:index": "Présentation",
+    "page:build:skill": "Un Skill",
+    "page:build:mcp-remote": "MCP distant",
+    "page:build:mcp-stdio": "MCP local",
+    "page:build:hybrid": "Plugin hybride",
+    "page:build:skills": "Plusieurs Skills",
+    "page:build:layout": "Structure",
+    "page:build:checks": "Vérifications",
+    "page:build:handoff": "Transmission",
+    "page:legacy:v1:index": "Contexte historique"
+  },
+  "zh": {
+    "page:use:index": "概览",
+    "page:use:install": "安装",
+    "page:use:manage": "管理",
+    "page:build:index": "概览",
+    "page:build:skill": "单个 Skill",
+    "page:build:mcp-remote": "远程 MCP",
+    "page:build:mcp-stdio": "本地 MCP",
+    "page:build:hybrid": "混合插件",
+    "page:build:skills": "多个 Skills",
+    "page:build:layout": "结构",
+    "page:build:checks": "检查",
+    "page:build:handoff": "交接",
+    "page:legacy:v1:index": "历史背景"
+  }
+};
+
+const preparationLabels = {
+  en: "prepared, not released", ru: "подготовка, не релиз", es: "preparación, no publicado",
+  fr: "préparation, non publié", zh: "准备中，尚未发布"
+};
 
 export function journeySidebar(locale, entities) {
   const groups = [
-    ["Use plugins", "use", ["index", "install", "manage"]],
-    ["Build plugins", "build", ["index", "skill", "mcp-remote", "mcp-stdio", "hybrid", "skills", "layout", "checks", "handoff"]],
-    ["Historical v1 · 1.2.4", "legacy:v1", ["index"]]
+    [journeyLabels[locale][0], "use", ["index", "install", "manage"]],
+    [journeyLabels[locale][1], "build", ["index", "skill", "mcp-remote", "mcp-stdio", "hybrid", "skills", "layout", "checks", "handoff"]],
+    [journeyLabels[locale][2], "legacy:v1", ["index"]]
   ].map(([text, section, pages]) => ({ text, items: pages.map((page) => {
     const id = `page:${section}:${page}`;
     const entity = entities.find((entry) => entry.canonicalId === id);
     if (!entity?.pathEn) throw new Error(`Missing journey source: ${id}`);
-    return { text: entity.title + (locale === "en" || entity[localePathField(locale)] ? "" : " (English)"),
+    return { text: (journeyPageLabels[locale]?.[id] || entity.title) + (locale === "en" || entity[localePathField(locale)] ? "" : ` (${journeyLabels[locale][3]})`),
       link: entityPath(entity, locale) };
   }) }));
   groups.push(...["plugin-kit-ai", "agentplugins author"].map((surface) => ({
-    text: `${surface} · prepared, not released`,
+    text: `${surface} · ${preparationLabels[locale]}`,
     items: entities.filter((entry) => entry.surface === "authoring-cli" &&
       (entry.title === surface || entry.title.startsWith(`${surface} `)))
-      .map((entry) => ({ text: entry.title, link: entityPath(entry, locale) }))
+      .map((entry) => ({ text: entry.title + (locale === "en" || entry[localePathField(locale)] ? "" : ` (${journeyLabels[locale][3]})`), link: entityPath(entry, locale) }))
   })));
   return groups;
 }
