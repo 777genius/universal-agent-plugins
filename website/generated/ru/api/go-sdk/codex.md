@@ -133,7 +133,7 @@ OnSubagentStop registers a handler for the Codex SubagentStop.
 
 ## type Response
 
-Response represents a successful Codex notify acknowledgement.
+Response represents a successful acknowledgement of a Codex event \(Notify and the observation\-style lifecycle hooks Stop, SubagentStop, and PermissionRequest\).
 
 ```go
 type Response struct{}
@@ -145,7 +145,7 @@ type Response struct{}
 func Continue() *Response
 ```
 
-Continue acknowledges the notify event and exits successfully.
+Continue acknowledges the event and exits successfully with empty output.
 
 ## type StopEvent
 
