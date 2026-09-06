@@ -136,6 +136,7 @@ function stageCandidate(options) {
   c.outputPlacement(options.output, [options.repo, options.modCache, options.workParent, path.dirname(options.go)]);
   fs.mkdirSync(options.output, { mode: 0o700 });
   const log = [];
+  const marker = path.join(options.output, "candidate.json");
   let markerOwned = false;
   try {
     for (const product of c.PRODUCTS) {
@@ -179,16 +180,41 @@ function stageCandidate(options) {
       if (c.digest(c.readFile(path.join(options.output, asset.file))) !== asset.sha256) throw new Error("staged bytes changed");
     }
     if (fs.readdirSync(options.output).length !== targets.length * 2) throw new Error("unexpected partial output entry");
-    writeExclusive(path.join(options.output, "candidate.json"), body);
+    // Own the marker as soon as exclusive creation succeeds, before any write
+    // or finalization can throw. A failed open never authorizes its removal.
+    const markerFd = fs.openSync(marker, "wx", 0o444);
     markerOwned = true;
+    try {
+      fs.writeFileSync(markerFd, body);
+    } catch (error) {
+      // Preserve the write failure even if closing also fails; retain that
+      // secondary diagnostic without retrying a possibly closed descriptor.
+      try { fs.closeSync(markerFd); } catch (closeError) { error.closeError = closeError; }
+      throw error;
+    }
+    fs.closeSync(markerFd);
+    fs.chmodSync(marker, 0o444);
     fs.chmodSync(options.output, 0o555);
     return { status: "CANDIDATE", manifest_sha256: manifestHash, output: options.output,
       local_build_evidence: context.root, release_eligible: false, platform_acceptance: false, attested: false };
   } catch (error) {
     // Leave inspectable partial bytes but no success marker, even if final chmod
     // failed. Do not delete caller files or erase the failed build's evidence.
-    const marker = path.join(options.output, "candidate.json");
-    if (markerOwned) fs.unlinkSync(marker);
+    if (markerOwned) {
+      try {
+        try { fs.unlinkSync(marker); }
+        catch (cleanupError) {
+          if (!["EACCES", "EPERM"].includes(cleanupError.code)) throw cleanupError;
+          // Directory finalization may have changed permissions before throwing.
+          // Only this invocation's reserved output is made writable for cleanup.
+          fs.chmodSync(options.output, 0o700);
+          fs.unlinkSync(marker);
+        }
+      } catch (cleanupError) {
+        throw new AggregateError([error, cleanupError],
+          `${error.message}; candidate marker cleanup failed: ${cleanupError.message}`, { cause: error });
+      }
+    }
     throw error;
   }
 }
