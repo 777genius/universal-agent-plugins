@@ -71,11 +71,11 @@ func rootFor(t *testing.T, nested bool, factory Factory) *cobra.Command {
 
 func execute(root *cobra.Command, args ...string) (string, string, error) {
 	var out, diag bytes.Buffer
-	root.SetOut(&out)
-	root.SetErr(&diag)
-	root.SetIn(strings.NewReader("private input"))
-	root.SetArgs(args)
-	err := root.Execute()
+	ctx := root.Context()
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	err := Factory(func() (*cobra.Command, error) { return root, nil }).Execute(ctx, args, Streams{strings.NewReader("private input"), &out, &diag})
 	return out.String(), diag.String(), err
 }
 
@@ -110,8 +110,8 @@ func TestEntrypointParityAndIsolation(t *testing.T) {
 			if decoder.Decode(&doc) != nil || decoder.Decode(&doc) != io.EOF {
 				t.Fatal("not exactly one JSON document")
 			}
-			// Reuse after runner failure must not carry format/target/booleans.
-			_, _, _ = execute(a, "validate", path)
+			// Independent invocations must not carry format/target/booleans.
+			_, _, _ = execute(rootFor(t, false, factory), "validate", path)
 			if got[2].Options != (Options{Format: "human"}) {
 				t.Fatalf("stale flags: %+v", got[2])
 			}
@@ -135,9 +135,9 @@ func TestInstallerFlagsRejectedBeforeRunner(t *testing.T) {
 				if err == nil || !strings.Contains(err.Error(), "installer-only") || calls != 0 {
 					t.Fatalf("%v calls=%d", err, calls)
 				}
-				_, _, err = execute(root, "author", "validate", t.TempDir())
+				_, _, err = execute(rootFor(t, true, fixtureFactory(func(_ context.Context, req request) (result, error) { calls++; return result{}, nil }, Support{Format: true})), "author", "validate", t.TempDir())
 				if err != nil || calls != 1 {
-					t.Fatalf("reused after rejection: %v calls=%d", err, calls)
+					t.Fatalf("fresh invocation after rejection: %v calls=%d", err, calls)
 				}
 			})
 		}
@@ -157,9 +157,9 @@ func TestUnsupportedFlagsAndArguments(t *testing.T) {
 		if err == nil || calls != 0 {
 			t.Fatalf("%v: %v calls=%d", args, err, calls)
 		}
-		_, _, err = execute(root, "author", "validate", t.TempDir())
+		_, _, err = execute(rootFor(t, true, fixtureFactory(func(_ context.Context, req request) (result, error) { calls++; return result{}, nil }, Support{Format: true})), "author", "validate", t.TempDir())
 		if err != nil || calls != 1 {
-			t.Fatalf("reused after args rejection: %v", err)
+			t.Fatalf("fresh invocation after args rejection: %v", err)
 		}
 	}
 }
@@ -326,35 +326,5 @@ func TestConcurrentIndependentTrees(t *testing.T) {
 				t.Fatal(err)
 			}
 		})
-	}
-}
-
-func TestFailedRunRestoresCommandLocalDefaults(t *testing.T) {
-	var requests [][]string
-	spec := Spec[[]string, string]{Use: "inspect", Args: cobra.NoArgs,
-		Configure: func(cmd *cobra.Command) {
-			cmd.Flags().StringSlice("select", []string{"a,b", "base"}, "selected components")
-		},
-		Decode: func(cmd *cobra.Command, _ Options, _ []string) ([]string, error) {
-			return cmd.Flags().GetStringSlice("select")
-		},
-		Runner: RunnerFunc[[]string, string](func(_ context.Context, req []string) (string, error) {
-			requests = append(requests, append([]string(nil), req...))
-			return "", errors.New("fixture failure")
-		}),
-		Render: func(Streams, Options, string, error) error { return nil },
-	}
-	root, err := NewPluginKitRoot(func() (*cobra.Command, error) { return NewCommand(spec) })
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, _, _ = execute(root, "inspect", "--select=override")
-	_, _, _ = execute(root, "inspect")
-	_, _, _ = execute(root, "inspect", "--select=next")
-	if len(requests[2]) != 1 || requests[2][0] != "next" {
-		t.Fatalf("slice append state survived reset: %#v", requests)
-	}
-	if len(requests) != 3 || len(requests[0]) != 1 || requests[0][0] != "override" || len(requests[1]) != 2 || requests[1][0] != "a,b" || requests[1][1] != "base" {
-		t.Fatalf("retained command-local state: %#v", requests)
 	}
 }

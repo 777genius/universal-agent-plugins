@@ -1,9 +1,7 @@
 package authoringcli
 
 import (
-	"encoding/csv"
 	"fmt"
-	"strings"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -90,34 +88,4 @@ func AdaptFlags(cmd *cobra.Command, support Support) (Options, error) {
 		}
 	}
 	return opts, nil
-}
-
-// Cobra retains parsed values across Execute calls. Reset only flags in this
-// invocation's chain after execution/argument rejection; sibling command flags
-// and streams are untouched. No installer command installs this behavior.
-func resetFlags(cmd *cobra.Command) {
-	seen := map[*pflag.Flag]bool{}
-	flagSets(cmd, func(fs *pflag.FlagSet) {
-		fs.VisitAll(func(f *pflag.Flag) {
-			if seen[f] || !f.Changed {
-				return
-			}
-			seen[f] = true
-			// Slice defaults need pflag's typed replacement, not parsing "[a,b]".
-			if slice, ok := f.Value.(pflag.SliceValue); ok {
-				var values []string
-				var err error
-				if f.DefValue != "[]" {
-					values, err = csv.NewReader(strings.NewReader(strings.TrimSuffix(strings.TrimPrefix(f.DefValue, "["), "]"))).Read()
-				}
-				if err == nil && slice.Replace(values) == nil {
-					f.Changed = false
-				}
-				return
-			}
-			if f.Value.Set(f.DefValue) == nil {
-				f.Changed = false
-			}
-		})
-	})
 }

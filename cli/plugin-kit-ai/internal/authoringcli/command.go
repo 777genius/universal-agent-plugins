@@ -10,7 +10,6 @@ import (
 	"reflect"
 
 	"github.com/spf13/cobra"
-	"github.com/spf13/pflag"
 )
 
 // Options is a value snapshot, never the installer's mutable options object.
@@ -59,45 +58,26 @@ type Spec[Request, Result any] struct {
 	Render           func(Streams, Options, Result, error) error
 }
 
-// NewCommand returns a new command and new flag sets on every call. Required
+// NewCommand returns a new command and new flag sets on every call.
+// The returned mutable command is single-invocation. Required
 // dependencies fail at construction, so missing services cannot become stubs.
 func NewCommand[Request, Result any](spec Spec[Request, Result]) (*cobra.Command, error) {
 	if spec.Use == "" || spec.Decode == nil || nilRunner(spec.Runner) || spec.Render == nil {
 		return nil, fmt.Errorf("authoring command requires use, decoder, runner, and renderer")
 	}
 	cmd := &cobra.Command{Use: spec.Use, Short: spec.Short, Long: spec.Long, Hidden: spec.Hidden}
-	reset := func() {
-		resetFlags(cmd)
-		// pflag slice values retain an internal append bit even after Replace.
-		// Reconstruct local Values instead of only clearing Flag.Changed.
-		if spec.Configure != nil {
-			fresh := &cobra.Command{}
-			spec.Configure(fresh)
-			for _, pair := range [][2]*pflag.FlagSet{{cmd.Flags(), fresh.Flags()}, {cmd.PersistentFlags(), fresh.PersistentFlags()}} {
-				pair[1].VisitAll(func(defaultFlag *pflag.Flag) {
-					if current := pair[0].Lookup(defaultFlag.Name); current != nil {
-						current.Value = defaultFlag.Value
-						current.Changed = false
-					}
-				})
-			}
-		}
-	}
 	cmd.Args = func(cmd *cobra.Command, args []string) error {
 		if _, err := AdaptFlags(cmd, spec.Support); err != nil {
-			reset()
 			return err
 		}
 		if spec.Args != nil {
 			if err := spec.Args(cmd, args); err != nil {
-				reset()
 				return err
 			}
 		}
 		return nil
 	}
 	cmd.RunE = func(cmd *cobra.Command, args []string) error {
-		defer reset()
 		opts, err := AdaptFlags(cmd, spec.Support)
 		if err != nil {
 			return err
@@ -139,8 +119,51 @@ func nilRunner(value any) bool {
 	}
 }
 
-// Factory must construct a fresh tree, never return a cached Cobra command.
+// Factory must construct a fresh single-invocation tree, including flag bindings
+// and mutable captures, never return a cached Cobra command. Composition must
+// execute through Factory.Execute, including for the enclosing installer root.
 type Factory func() (*cobra.Command, error)
+
+// Execute builds and consumes a fresh tree for every invocation, including help,
+// parse failures and cancellation. It never resets installer-owned flag values.
+// Factories and injected services must be concurrency-safe if called concurrently.
+func (factory Factory) Execute(ctx context.Context, args []string, streams Streams) error {
+	if factory == nil {
+		return fmt.Errorf("nil execution factory")
+	}
+	root, err := factory()
+	if err != nil {
+		return err
+	}
+	if root == nil || root.Parent() != nil {
+		return fmt.Errorf("execution factory requires a fresh root")
+	}
+	const consumed = "authoringcli.single-invocation-consumed"
+	var claim func(*cobra.Command) error
+	claim = func(cmd *cobra.Command) error {
+		if _, used := cmd.Annotations[consumed]; used {
+			return fmt.Errorf("execution factory reused single-invocation command %q", cmd.Name())
+		}
+		if cmd.Annotations == nil {
+			cmd.Annotations = map[string]string{}
+		}
+		cmd.Annotations[consumed] = "true"
+		for _, child := range cmd.Commands() {
+			if err := claim(child); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	if err := claim(root); err != nil {
+		return err
+	}
+	root.SetIn(streams.In)
+	root.SetOut(streams.Out)
+	root.SetErr(streams.Err)
+	root.SetArgs(append([]string{}, args...))
+	return root.ExecuteContext(ctx)
+}
 
 func mount(root *cobra.Command, factories []Factory) error {
 	if len(factories) == 0 {
@@ -169,6 +192,7 @@ func mount(root *cobra.Command, factories []Factory) error {
 
 // NewAuthorCommand is internal wiring only: the subtree remains hidden until
 // the integrator explicitly opens the complete vertical-slice release gate.
+// The returned mutable subtree is single-invocation.
 // The installer root retains all existing persistent flags in their positions.
 func NewAuthorCommand(factories ...Factory) (*cobra.Command, error) {
 	root := &cobra.Command{Use: "author", Short: "Build Agent Plugins packages", Hidden: true,
@@ -194,7 +218,8 @@ func NewAuthorCommand(factories ...Factory) (*cobra.Command, error) {
 	return root, nil
 }
 
-// NewPluginKitRoot is a future composition seam, not a replacement for v1 yet.
+// NewPluginKitRoot returns a mutable single-invocation root for future composition,
+// not a replacement for v1 yet. Execute it through a Factory.
 func NewPluginKitRoot(factories ...Factory) (*cobra.Command, error) {
 	root := &cobra.Command{Use: "plugin-kit-ai", Short: "Build Agent Plugins packages", SilenceErrors: true, SilenceUsage: true}
 	flags := root.PersistentFlags()

@@ -69,6 +69,12 @@ legacy importer -> standard mutation plan (migration only)
 standard authoring -X-> pluginmanifest/pluginmodel/app/publicationmodel/legacyimport
 ```
 
+The canonical domain/conformance guard scans production sources for every build
+constraint and follows transitive local imports. Standard-library data packages
+and schema registry ports remain valid dependencies; Cobra, process/HTTP access,
+CLI, client/provider, planning/state mutation, and publication dependencies do
+not. This is a dependency check, not a function-level purity proof.
+
 The [command and policy inventory](./0006-authoring-inventory.md) records
 conversion decisions and the failure classification handoff. Host restrictions
 must never be reported as normative schema failures. In particular, Windows
@@ -96,14 +102,18 @@ planner checks, unchanged installer tests, and matching engine provenance.
 Runtime, migration, preview, publication, and retirement retain their later
 phase gates. Historical artifacts and v1 binaries remain immutable.
 
-Factories allocate fresh Cobra trees and flag sets; callers must not cache a
-command or share mutable configuration captures. Runner, decoder, and renderer
-implementations must honor cancellation and stream/JSON contracts. The factory
-resets parsed flags after its argument rejection or runner completion, including
-runner/render errors. Cobra parsing errors and ancestor pre-run failures occur
-outside that lifecycle: construct a fresh tree after those failures. Trees are
-not safe for concurrent Execute calls; independent trees may execute concurrently
-with concurrency-safe injected runners.
+Factories allocate fresh Cobra trees and flag sets for **every invocation**.
+Returned mutable roots/subtrees are single-invocation, including successful
+execution and help. Composition executes the enclosing root through
+`authoringcli.Factory.Execute`, which constructs a tree per call and rejects
+previously consumed commands. There is no flag reset or reusable-tree contract:
+parse, required/group validation, argument, pre-run, runner/render failures,
+help, and cancellation all consume the tree. Installer-owned options are never
+reset by authoring. Factories must allocate flag bindings and mutable captures
+inside each construction; callers must not cache commands or share these values.
+Runner, decoder, and renderer implementations must honor cancellation and
+stream/JSON contracts. Independent invocations may execute concurrently with
+concurrency-safe factories and injected runners.
 
 ## Non-Goals
 

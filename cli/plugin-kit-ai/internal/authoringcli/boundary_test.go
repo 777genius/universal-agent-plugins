@@ -17,6 +17,9 @@ import (
 func TestStandardAuthoringImportBoundary(t *testing.T) {
 	_, file, _, _ := runtime.Caller(0)
 	repo := filepath.Clean(filepath.Join(filepath.Dir(file), "../../../.."))
+	if err := checkFactsBoundary(repo); err != nil {
+		t.Fatal(err)
+	}
 	const base = "github.com/777genius/plugin-kit-ai"
 	modules := map[string]string{base + "/cli": "cli/plugin-kit-ai", base + "/install/integrationctl": "install/integrationctl", base + "/plugininstall": "install/plugininstall", base + "/sdk": "sdk", base: "."}
 	resolve := func(path string) string {
