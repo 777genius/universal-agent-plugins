@@ -7,7 +7,7 @@ on:
       windows_diagnostics:
         description: Capture same-invocation native errors (diagnostic builds cannot qualify as release proof)
         type: boolean
-        default: true
+        default: false
 
 permissions:
   contents: read
@@ -110,7 +110,7 @@ jobs:
           export GOPROXY=off GOSUMDB=off
           suffix=""; if [[ "$EXPECTED_OS" == windows ]]; then suffix=.exe; fi
           build_vcs=true
-          if [[ "$EXPECTED_OS" == windows && "${{ github.event_name == 'pull_request' || inputs.windows_diagnostics }}" == true ]]; then
+          if [[ "$EXPECTED_OS" == windows && "${{ inputs.windows_diagnostics }}" == true ]]; then
             # Generate outside checkout; apply to these actual binaries and tests,
             # never to a post-failure rerun. Preserve exact overlay with evidence.
             go run ./cli/plugin-kit-ai/internal/authoring/commands/testdata/native_diagnostics.go "$GITHUB_WORKSPACE" "$NATIVE_ROOT/evidence/diagnostics"
