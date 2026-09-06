@@ -248,7 +248,8 @@ func (service Service) applyGroup(ctx context.Context, input GroupInput, replace
 		}
 		result.Targets[targetIndex] = AddResult{InstallationID: installationID, Plan: plan}
 		if target.ReleaseRevoked && normalizedOriginMode(target.OriginMode) == domain.OriginModeDirect {
-			result.Targets[targetIndex].Plan.Warnings = append(result.Targets[targetIndex].Plan.Warnings, "direct_source_digest_matches_known_revoked_directory_release")
+			plan.Warnings = append(plan.Warnings, "direct_source_digest_matches_known_revoked_directory_release")
+			result.Targets[targetIndex].Plan = plan
 		}
 		if plan.Status == domain.PlanUnsupported {
 			return result, fmt.Errorf("target %s is unsupported; group preflight caused no mutation", target.Client.ClientID)
@@ -256,9 +257,11 @@ func (service Service) applyGroup(ctx context.Context, input GroupInput, replace
 		if err := service.preflightActivation(target, plan); err != nil {
 			return result, err
 		}
-		if err := preflightRuntime(target.Envelope, plan, service.automaticallyActivates(target, plan)); err != nil {
+		if err := service.preflightTargetComponents(ctx, target, &plan, installationIfExisting(state, installationIndex, existing), input.Repair, replace); err != nil {
+			result.Targets[targetIndex].Plan = plan
 			return result, err
 		}
+		result.Targets[targetIndex].Plan = plan
 		key := plan.ActivePath
 		if sameNativeBackend(target.Client.ClientID, domain.ClientCopilot) {
 			key = "shared-copilot-vscode:" + plan.PhysicalArtifactID
@@ -302,6 +305,9 @@ func (service Service) applyGroup(ctx context.Context, input GroupInput, replace
 				}
 			}
 		}
+		if replace {
+			describeMCPRemovals(&plan, managed)
+		}
 		if replace && managed == nil {
 			return result, fmt.Errorf("update target %s is not installed", target.Client.ClientID)
 		}
@@ -318,7 +324,7 @@ func (service Service) applyGroup(ctx context.Context, input GroupInput, replace
 		} else if err := service.observeGroupNativeIdentity(ctx, target.Client, plan, managed, input.Repair); err != nil {
 			return result, err
 		}
-		noChange := managed != nil && !input.Repair && !input.Switch && groupPackageUnchanged(*managed, target) && containsSurface(managed.AffectedSurfaces, string(target.Client.ClientID))
+		noChange := !requiresComponentRemoval(plan) && managed != nil && !input.Repair && !input.Switch && groupPackageUnchanged(*managed, target) && containsSurface(managed.AffectedSurfaces, string(target.Client.ClientID))
 		if noChange {
 			result.Targets[targetIndex].NoChange = true
 			result.Targets[targetIndex].Activation = domain.ActivationOutcome{Activation: managed.Activation, Authentication: managed.Authentication, Policy: managed.Policy, Verification: managed.Verification}
@@ -351,7 +357,7 @@ func (service Service) applyGroup(ctx context.Context, input GroupInput, replace
 			if err := service.preflightActivation(check, plan); err != nil {
 				return result, err
 			}
-			if err := preflightRuntime(check.Envelope, plan, service.automaticallyActivates(check, plan)); err != nil {
+			if err := service.preflightTargetComponents(ctx, check, &plan, &state.Installations[installationIndex], false, true); err != nil {
 				return result, err
 			}
 			for _, binding := range state.Installations[installationIndex].Clients {
@@ -388,7 +394,7 @@ func (service Service) applyGroup(ctx context.Context, input GroupInput, replace
 			continue
 		}
 		operationID := fmt.Sprintf("%s-%03d", groupID, targetIndex+1)
-		if packageNeedsPluginData(target.input.Envelope) {
+		if packageNeedsPluginData(target.input.Envelope, target.plan) {
 			if service.PluginData == nil {
 				cleanup()
 				return result, fmt.Errorf("PLUGIN_DATA manager is required for stdio MCP packages")

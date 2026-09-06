@@ -93,16 +93,15 @@ func (r *recordingRegistry) Validate(uri string, value any) error {
 	r.uris = append(r.uris, uri)
 	return r.interfaceRegistry.Validate(uri, value)
 }
-func TestPhysicalNamePolicyBeforeComponentDecode(t *testing.T) {
+func TestPortableNameDoesNotPreventComponentDecode(t *testing.T) {
 	root := t.TempDir()
 	writeMinimalPlugin(t, root, "con")
 	writeLoaderFile(t, filepath.Join(root, "mcp.json"), "not JSON")
 	writeLoaderFile(t, filepath.Join(root, "skills", "bad", "SKILL.md"), "not YAML")
 	original := testLoader(t)
 	registry := &recordingRegistry{interfaceRegistry: original.Registry}
-	_, e := (Loader{Registry: registry}).Load(context.Background(), domain.LoadInput{SnapshotRoot: root})
-	var load *domain.LoadError
-	if !errors.As(e, &load) || load.Diagnostic.Code != "plugin_name_unsafe" || len(registry.uris) != 1 || registry.uris[0] != domain.PluginSchemaV1 {
+	pkg, e := (Loader{Registry: registry}).Load(context.Background(), domain.LoadInput{SnapshotRoot: root})
+	if e != nil || pkg.Manifest.Name != "con" || len(pkg.Diagnostics) == 0 || len(registry.uris) == 0 || registry.uris[0] != domain.PluginSchemaV1 {
 		t.Fatalf("precedence: %v %v", e, registry.uris)
 	}
 	f, e := (conformance.Decoder{Registry: original.Registry}).DecodePlugin(context.Background(), conformance.NewDocument("plugin.json", conformance.Present, []byte(`{"$schema":"`+domain.PluginSchemaV1+`","name":"con"}`)))

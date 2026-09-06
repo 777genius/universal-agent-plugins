@@ -80,3 +80,7 @@ checks proved:
 Plugin data was retained by default, matching the CLI's documented safe-remove
 contract. No browser, model, tool call, consent screen, or OAuth session was
 used in this evidence run.
+
+Compatibility work dated 2026-09-06 is tracked separately in
+[release preparation](AGENTPLUGINS_RELEASE_PREPARATION.md). This historical
+transcript does not prove the unreleased candidate's cwd or transport behavior.

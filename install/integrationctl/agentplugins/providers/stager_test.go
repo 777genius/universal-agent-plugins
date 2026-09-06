@@ -243,6 +243,9 @@ func TestStagerProjectsExactOwnedPluginDataContract(t *testing.T) {
 	plan := stagingPlan(t, domain.ClientCodex, domain.PackageProjection)
 	plan.Components = []domain.ComponentDecision{{Kind: domain.ComponentMCPServer, Name: "local", Support: domain.SupportProjected}}
 	ownedData := filepath.Join(t.TempDir(), "owned-plugin-data")
+	if err := os.MkdirAll(filepath.Join(ownedData, "work"), 0700); err != nil {
+		t.Fatal(err)
+	}
 	delivery, err := (Stager{}).StageWithPluginData(context.Background(), envelope, plan, "operation-data", domain.CompatibilityHints{}, ownedData)
 	if err != nil {
 		t.Fatal(err)
@@ -274,6 +277,9 @@ func TestStagerProjectsKiroStdioRuntimeContractBeforeNativeImport(t *testing.T) 
 	plan := stagingPlan(t, domain.ClientKiro, domain.PackageNative)
 	plan.Components = []domain.ComponentDecision{{Kind: domain.ComponentMCPServer, Name: "local", Support: domain.SupportNative}}
 	ownedData := filepath.Join(t.TempDir(), "owned-plugin-data")
+	if err := os.MkdirAll(filepath.Join(ownedData, "work"), 0700); err != nil {
+		t.Fatal(err)
+	}
 	delivery, err := (Stager{}).StageWithPluginData(context.Background(), envelope, plan, "operation-kiro-data", domain.CompatibilityHints{}, ownedData)
 	if err != nil {
 		t.Fatal(err)
@@ -317,6 +323,9 @@ func TestStagerProjectsCursorNativeManifestAndRuntimeContract(t *testing.T) {
 		{Kind: domain.ComponentMCPServer, Name: "local", Support: domain.SupportNative},
 	}
 	ownedData := filepath.Join(t.TempDir(), "owned-plugin-data")
+	if err := os.MkdirAll(filepath.Join(ownedData, "work"), 0700); err != nil {
+		t.Fatal(err)
+	}
 	delivery, err := (Stager{}).StageWithPluginData(context.Background(), envelope, plan, "operation-cursor-data", domain.CompatibilityHints{}, ownedData)
 	if err != nil {
 		t.Fatal(err)
@@ -345,6 +354,12 @@ func TestStagerResolvesBundledStdioCommandForNativeProjection(t *testing.T) {
 	t.Parallel()
 	config := map[string]any{"command": "./bin/server", "args": []any{"${PLUGIN_ROOT}/config"}}
 	pluginRoot, dataPath := filepath.Join(t.TempDir(), "plugin", "${PLUGIN_DATA}"), filepath.Join(t.TempDir(), "data")
+	if err := os.MkdirAll(filepath.Join(pluginRoot, "bin"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(pluginRoot, "bin/server"), []byte("inert"), 0600); err != nil {
+		t.Fatal(err)
+	}
 	if err := applyStdioDataContract(config, pluginRoot, dataPath); err != nil {
 		t.Fatal(err)
 	}

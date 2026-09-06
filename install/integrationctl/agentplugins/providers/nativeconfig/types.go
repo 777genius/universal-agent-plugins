@@ -58,17 +58,21 @@ func IsCommittedCleanup(err error) bool {
 }
 
 // Server is the transport-aware neutral MCP shape accepted by the supported
-// codecs. Type must be "stdio" or "remote". Placeholders are resolved
-// recursively in all strings. RemoteTransport is codec-specific and is
+// codecs. Type must be "stdio" or "remote". Portable placeholders are resolved
+// once in raw args, env values, and cwd. RemoteTransport is codec-specific and is
 // rejected unless the selected codec explicitly defines it.
 type Server struct {
-	Type    string            `json:"type"`
-	Command string            `json:"command,omitempty"`
-	Args    []string          `json:"args,omitempty"`
-	Env     map[string]string `json:"env,omitempty"`
-	CWD     string            `json:"cwd,omitempty"`
-	URL     string            `json:"url,omitempty"`
-	Headers map[string]string `json:"headers,omitempty"`
+	// Trusted adapters set these only after portable expansion. They are not
+	// native fields or persisted payload flags; projection readers restore them.
+	StdioValuesResolved bool              `json:"-"`
+	CWDResolved         bool              `json:"-"`
+	Type                string            `json:"type"`
+	Command             string            `json:"command,omitempty"`
+	Args                []string          `json:"args,omitempty"`
+	Env                 map[string]string `json:"env,omitempty"`
+	CWD                 string            `json:"cwd,omitempty"`
+	URL                 string            `json:"url,omitempty"`
+	Headers             map[string]string `json:"headers,omitempty"`
 	// RemoteTransport distinguishes Gemini's streamable HTTP and legacy SSE
 	// native keys. It is ignored by codecs whose native shape uses one URL key.
 	RemoteTransport string `json:"remote_transport,omitempty"`

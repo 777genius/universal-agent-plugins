@@ -19,6 +19,11 @@ func renameExclusive(from *os.File, old string, to *os.File, new string) error {
 	runtime.KeepAlive(from)
 	runtime.KeepAlive(to)
 	if err != nil {
+		// Native NTSTATUS errors do not implement errors.Is. Convert to the
+		// Win32 errno so callers can classify collisions with os.ErrExist.
+		if status, ok := err.(windows.NTStatus); ok {
+			err = status.Errno()
+		}
 		return &os.LinkError{Op: "rename-exclusive", Old: old, New: new, Err: err}
 	}
 	return nil

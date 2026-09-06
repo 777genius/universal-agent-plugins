@@ -104,8 +104,7 @@ The installed package is standard-first:
 ```text
 plugin.json
 ├── skills/       optional reusable instructions
-├── mcp.json      optional MCP servers
-└── hooks/        optional client-supported hooks
+└── mcp.json      optional MCP servers
 ```
 
 You can also install a local package or a pinned GitHub package without adding

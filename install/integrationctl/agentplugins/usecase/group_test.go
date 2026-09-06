@@ -169,7 +169,7 @@ func TestGroupedDryRunDoesNotObserveNativeClientIdentity(t *testing.T) {
 	}); err == nil || !strings.Contains(err.Error(), "changed or is missing") {
 		t.Fatalf("tampered group dry-run error = %v", err)
 	}
-	if observer.calls != 0 || observer.preparedCalls != 1 {
+	if observer.calls != 0 || observer.preparedCalls != 0 {
 		t.Fatalf("tampered group dry-run observations: native=%d prepared=%d", observer.calls, observer.preparedCalls)
 	}
 }

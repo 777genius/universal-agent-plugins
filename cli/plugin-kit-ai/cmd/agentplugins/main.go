@@ -35,6 +35,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/statemigration"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/statev2"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/managedstdio"
 	clientplanner "github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/planner"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/providers"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/transaction"
@@ -60,6 +61,9 @@ var (
 )
 
 func main() {
+	if handled, code := managedstdio.Dispatch(os.Args[1:], os.Stderr); handled {
+		os.Exit(code)
+	}
 	if commands.IsEnabled() && commands.IsAuthorInvocation(os.Args[1:], agentpluginscli.NewRoot(agentpluginscli.App{})) {
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 		defer stop()
@@ -117,6 +121,9 @@ func run() error {
 	directoryManager := dirswap.Manager{JournalDir: filepath.Join(dataRoot, "operations-v2")}
 	mutationLock := processlock.Lock{Path: filepath.Join(dataRoot, "mutation.lock")}
 	stager := providers.Stager{}
+	if executable, err := os.Executable(); err == nil {
+		stager.LauncherSource, _ = managedstdio.NewSource(executable, version)
+	}
 	activator := providers.Activator{Runner: runner}
 	planner := clientplanner.Planner{ManagedRoot: filepath.Join(dataRoot, "managed"), Detected: map[domain.ClientID]domain.DetectedClient{}}
 	lifecycle := usecase.Service{

@@ -42,6 +42,9 @@ func projectServer(codec Codec, server Server, placeholders Placeholders) (map[s
 		return nil, fmt.Errorf("MCP server type must be stdio or remote")
 	}
 	resolve := func(value string) (string, error) {
+		if server.StdioValuesResolved {
+			return value, nil
+		}
 		replacements := []struct{ token, value string }{
 			{"${PLUGIN_ROOT}", placeholders.PackageRoot},
 			{"${PLUGIN_DATA}", placeholders.DataRoot},
@@ -57,6 +60,12 @@ func projectServer(codec Codec, server Server, placeholders Placeholders) (map[s
 			"${PLUGIN_ROOT}", placeholders.PackageRoot,
 			"${PLUGIN_DATA}", placeholders.DataRoot,
 		).Replace(value), nil
+	}
+	resolveCWD := func(value string) (string, error) {
+		if server.CWDResolved {
+			return value, nil
+		}
+		return resolve(value)
 	}
 	projectStrings := func(values []string) ([]string, error) {
 		out := make([]string, len(values))
@@ -103,7 +112,7 @@ func projectServer(codec Codec, server Server, placeholders Placeholders) (map[s
 				entry["environment"] = env
 			}
 			if server.CWD != "" {
-				cwd, err := resolve(server.CWD)
+				cwd, err := resolveCWD(server.CWD)
 				if err != nil {
 					return nil, err
 				}
@@ -111,7 +120,7 @@ func projectServer(codec Codec, server Server, placeholders Placeholders) (map[s
 			}
 			return entry, nil
 		}
-		if (codec == CodecWindsurf || codec == CodecCline) && server.CWD != "" {
+		if codec == CodecWindsurf && server.CWD != "" {
 			return nil, fmt.Errorf("%s stdio MCP server does not accept cwd", codec)
 		}
 		if codec == CodecCline {
@@ -121,6 +130,13 @@ func projectServer(codec Codec, server Server, placeholders Placeholders) (map[s
 			}
 			if len(env) > 0 {
 				transport["env"] = env
+			}
+			if server.CWD != "" {
+				cwd, err := resolveCWD(server.CWD)
+				if err != nil {
+					return nil, err
+				}
+				transport["cwd"] = cwd
 			}
 			return map[string]any{"transport": transport}, nil
 		}
@@ -132,7 +148,7 @@ func projectServer(codec Codec, server Server, placeholders Placeholders) (map[s
 			entry["env"] = env
 		}
 		if server.CWD != "" {
-			cwd, err := resolve(server.CWD)
+			cwd, err := resolveCWD(server.CWD)
 			if err != nil {
 				return nil, err
 			}

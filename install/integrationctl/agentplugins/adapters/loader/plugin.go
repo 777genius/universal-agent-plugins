@@ -2,7 +2,6 @@ package loader
 
 import (
 	"encoding/json"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/pathpolicy"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/conformance"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
@@ -18,10 +17,6 @@ func (loader Loader) loadPluginManifest(path string) (domain.PluginManifest, []d
 	manifest, diagnostics, digest, err := (conformance.InstallerDecoder{Registry: loader.Registry}).Plugin(body)
 	if err != nil {
 		return manifest, diagnostics, digest, err
-	}
-	// Installer physical policy remains before any component reads.
-	if err := pathpolicy.ValidateLeafID(manifest.Name); err != nil {
-		return domain.PluginManifest{}, diagnostics, "", domain.FatalLoad("plugin_name_unsafe", "plugin.json", "plugin name cannot be used as a portable physical identifier", err)
 	}
 	return manifest, diagnostics, digest, nil
 }

@@ -4,12 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"os"
-	"os/exec"
+
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/managedstdio"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/providers/nativeconfig"
 )
 
@@ -23,7 +24,7 @@ func TestWindsurfStagerProjectsResolvedMCPAndExactOwnership(t *testing.T) {
 		{Kind: domain.ComponentMCPServer, Name: "docs", Support: domain.SupportPrepared},
 	}
 	dataRoot := filepath.Join(t.TempDir(), "plugin-data")
-	delivery, err := (Stager{}).StageWithPluginData(context.Background(), envelope, plan, "windsurf-stage", domain.CompatibilityHints{}, dataRoot)
+	delivery, err := windsurfFixtureStager(t).StageWithPluginData(context.Background(), envelope, plan, "windsurf-stage", domain.CompatibilityHints{}, dataRoot)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -31,7 +32,7 @@ func TestWindsurfStagerProjectsResolvedMCPAndExactOwnership(t *testing.T) {
 	servers := document["mcpServers"].(map[string]any)
 	local := servers["local"].(map[string]any)
 	args := local["args"].([]any)
-	if args[0] != filepath.Join(plan.ActivePath, "runtime", "server.js") || args[1] != filepath.Join(dataRoot, "cache") {
+	if args[7] != filepath.Join(plan.ActivePath, "runtime", "server.js") || args[8] != filepath.Join(dataRoot, "cache") {
 		t.Fatalf("Windsurf placeholders were not bound: %+v", args)
 	}
 	env := local["env"].(map[string]any)
@@ -206,10 +207,10 @@ func TestWindsurfExpandsOnlyPortableStdioValues(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if stdio.Command != "${PLUGIN_ROOT}" || stdio.Args[0] != filepath.Join(packageRoot, "run.js") || stdio.Args[1] != "${PLUGIN_CACHE}/literal" || stdio.Env["DATA"] != filepath.Join(dataRoot, "state") || stdio.Env["UNKNOWN"] != "${HOME}" {
+	if stdio.Args[6] != "${PLUGIN_ROOT}" || stdio.Args[7] != filepath.Join(packageRoot, "run.js") || stdio.Args[8] != "${PLUGIN_CACHE}/literal" || stdio.Env["DATA"] != filepath.Join(dataRoot, "state") || stdio.Env["UNKNOWN"] != "${HOME}" {
 		t.Fatalf("Windsurf stdio placeholder projection = %+v", stdio)
 	}
-	if strings.Contains(stdio.Args[0], dataRoot) {
+	if strings.Contains(stdio.Args[7], dataRoot) {
 		t.Fatalf("Windsurf recursively expanded replacement text: %+v", stdio.Args)
 	}
 
@@ -229,7 +230,7 @@ func TestWindsurfExpandsOnlyPortableStdioValues(t *testing.T) {
 	}
 }
 
-func TestWindsurfStagerRejectsUnsupportedCWDWithoutChangingProjection(t *testing.T) {
+func TestWindsurfStagerRejectsMissingCWDWithoutChangingProjection(t *testing.T) {
 	t.Parallel()
 	root := t.TempDir()
 	projectionPath := filepath.Join(root, "mcp.json")
@@ -242,7 +243,7 @@ func TestWindsurfStagerRejectsUnsupportedCWDWithoutChangingProjection(t *testing
 	plan.Components = []domain.ComponentDecision{{Kind: domain.ComponentMCPServer, Name: "local", Support: domain.SupportPrepared}}
 
 	err := projectWindsurfMCP(root, envelope, plan, filepath.Join(t.TempDir(), "data"))
-	if err == nil || !strings.Contains(err.Error(), "does not support cwd") {
+	if err == nil || !strings.Contains(err.Error(), "cwd unavailable") {
 		t.Fatalf("Windsurf cwd projection error = %v", err)
 	}
 	body, readErr := os.ReadFile(projectionPath)
@@ -317,12 +318,8 @@ func TestWindsurfBundledCommandUsesManagedPluginRoot(t *testing.T) {
 	}
 	configPath := filepath.Join(plan.NativeRegistryRoot, "mcp_config.json")
 	entry := readObject(t, configPath)["mcpServers"].(map[string]any)["local"].(map[string]any)
-	if got := entry["command"]; got != commandPath {
+	if got := entry["command"]; got != filepath.Join(activeRoot, filepath.FromSlash(managedstdio.RelativeDirectory), managedstdio.ExecutableName) {
 		t.Fatalf("bundled Windsurf command = %v, want %s", got, commandPath)
-	}
-	output, err := exec.Command(commandPath).CombinedOutput()
-	if err != nil || string(output) != "managed-root\n" {
-		t.Fatalf("projected bundled command output = %q, %v", output, err)
 	}
 	if got := envelope.MCP.Servers["local"].Decoded["command"]; got != "./bin/server" {
 		t.Fatalf("Windsurf projection mutated source command: %v", got)
@@ -365,7 +362,7 @@ func stagedWindsurfDelivery(t *testing.T, configRoot, revision, operation string
 		{Kind: domain.ComponentMCPServer, Name: "local", Support: domain.SupportPrepared},
 		{Kind: domain.ComponentMCPServer, Name: "docs", Support: domain.SupportPrepared},
 	}
-	delivery, err := (Stager{}).StageWithPluginData(context.Background(), envelope, plan, operation, domain.CompatibilityHints{}, filepath.Join(t.TempDir(), "data"))
+	delivery, err := windsurfFixtureStager(t).StageWithPluginData(context.Background(), envelope, plan, operation, domain.CompatibilityHints{}, filepath.Join(t.TempDir(), "data"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -433,4 +430,22 @@ func removeWindsurfEntryForTest(path, name string) error {
 		return err
 	}
 	return os.WriteFile(path, next, 0o600)
+}
+
+// These fixture bytes are explicitly injected and never executed. Native helper
+// execution is covered by managedstdio subprocess tests and CLI integration.
+func windsurfFixtureStager(t *testing.T) Stager {
+	t.Helper()
+	if !managedstdio.Supported() {
+		t.Skip("managed stdio platform unsupported")
+	}
+	path := filepath.Join(t.TempDir(), "fixture-cli")
+	if err := os.WriteFile(path, []byte("fixture-v1"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	source, err := managedstdio.NewSource(path, "fixture")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return Stager{LauncherSource: source}
 }
