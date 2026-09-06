@@ -65,7 +65,7 @@
     {
       "Path": "src/server.mjs",
       "Mode": 420,
-      "SHA256": "a0c4749141869e0ad277b3cc8e976512a296263e1a15e4d191d95c399b00a6ea"
+      "SHA256": "745dcedf95106d9ac4c1d3180e48b4dc78a1518a27be61faf87b2e07fbcc9c04"
     }
   ],
   "mcp-remote": [
@@ -124,7 +124,7 @@
     {
       "Path": "src/server.mjs",
       "Mode": 420,
-      "SHA256": "a0c4749141869e0ad277b3cc8e976512a296263e1a15e4d191d95c399b00a6ea"
+      "SHA256": "745dcedf95106d9ac4c1d3180e48b4dc78a1518a27be61faf87b2e07fbcc9c04"
     }
   ],
   "skill": [

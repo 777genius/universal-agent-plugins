@@ -206,8 +206,7 @@ func BuildPlan(o Options) (Plan, error) {
 		}
 		add("package.json", pkg)
 		add("package-lock.json", lock)
-		name, _ := json.Marshal(o.Name)
-		add("src/server.mjs", []byte("import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';\nimport { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';\n\nconst server = new McpServer({ name: "+string(name)+", version: '0.1.0' });\nserver.registerTool('hello', { description: 'Return a greeting', inputSchema: {} }, async () => ({\n  content: [{ type: 'text', text: 'Hello from "+o.Name+"!' }],\n}));\nawait server.connect(new StdioServerTransport());\n"))
+		add("src/server.mjs", nodeServerSource(o.Name))
 	}
 	sort.Slice(p.files, func(i, j int) bool { return p.files[i].Path < p.files[j].Path })
 	if err = validateFiles(p.files); err != nil {
@@ -215,6 +214,15 @@ func BuildPlan(o Options) (Plan, error) {
 	}
 	return p, nil
 }
+
+// nodeServerSource encodes every dynamic JavaScript string as a complete JSON literal.
+// Keep serialization safe independently of the caller's identity validation.
+func nodeServerSource(pluginName string) []byte {
+	name, _ := json.Marshal(pluginName) // Marshaling a string cannot fail.
+	greeting, _ := json.Marshal("Hello from " + pluginName + "!")
+	return []byte("import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';\nimport { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';\n\nconst server = new McpServer({ name: " + string(name) + ", version: '0.1.0' });\nserver.registerTool('hello', { description: 'Return a greeting', inputSchema: {} }, async () => ({\n  content: [{ type: 'text', text: " + string(greeting) + " }],\n}));\nawait server.connect(new StdioServerTransport());\n")
+}
+
 func jsonBytes(v any) []byte {
 	b, err := json.MarshalIndent(v, "", "  ")
 	if err != nil {
