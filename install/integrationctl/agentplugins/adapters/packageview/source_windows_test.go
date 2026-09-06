@@ -165,15 +165,33 @@ func TestWindowsHandleLifetimeAndFailureCleanup(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		scratch := t.TempDir()
 		l, e := (Reader{TempDir: scratch, Limits: Limits{PluginBytes: 1}}).Open(context.Background(), root)
+		// Inspect cleanup even when Open fails before the intended byte limit.
+		// No follow-up acquisition can explain the original sanitized error.
 		if l != nil {
-			defer l.Close()
+			t.Errorf("iteration=%d/10 Reader.Open unexpectedly returned a lease", i+1)
+			if err := l.Close(); err != nil {
+				t.Errorf("iteration=%d/10 unexpected lease Close: %v", i+1, err)
+			}
+		}
+		if got := winRecordCount(); got != before {
+			t.Errorf("iteration=%d/10 Reader.Open retained metadata records: before=%d after=%d", i+1, before, got)
+		}
+		entries, cleanupErr := os.ReadDir(scratch)
+		if cleanupErr != nil || len(entries) != 0 {
+			t.Errorf("iteration=%d/10 Reader.Open scratch cleanup: entries=%d err=%v", i+1, len(entries), cleanupErr)
+		}
+		// A record count alone cannot prove that unregistered handles closed.
+		if err := os.Rename(scratch, scratch+"-moved"); err != nil {
+			t.Errorf("iteration=%d/10 scratch handle leaked: %v", i+1, err)
+		} else if err := os.Rename(scratch+"-moved", scratch); err != nil {
+			t.Fatalf("iteration=%d/10 restore scratch name: %v", i+1, err)
 		}
 		var safe *Error
-		if !errors.As(e, &safe) || safe.Code != "byte_limit" {
-			t.Fatal(e)
+		if !errors.As(e, &safe) || safe.Code != "byte_limit" || safe.CleanupFailed {
+			t.Fatalf("iteration=%d/10 stage=Reader.Open expected byte_limit with successful cleanup; got=%v; internal stage is sanitized (run TestWindowsFinalCleanupAcquisitionStages separately)", i+1, e)
 		}
-		if winRecordCount() != before {
-			t.Fatal("failure retained metadata handles")
+		if t.Failed() {
+			t.FailNow()
 		}
 	}
 	// Windows denies removal if a directory handle leaked without delete sharing.
