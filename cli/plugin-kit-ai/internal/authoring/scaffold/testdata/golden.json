@@ -1,0 +1,152 @@
+{
+  "hybrid-remote": [
+    {
+      "Path": ".gitignore",
+      "Mode": 420,
+      "SHA256": "6c7d15d2ab1a0b51ebcae7e88b9ad01f0713d0833bc2dbe8f3bcc7a81b66b344"
+    },
+    {
+      "Path": "README.md",
+      "Mode": 420,
+      "SHA256": "215cc3b04a1d4b93ba66469779ce4d852e6a1a39442d20baf505d5629c26c0af"
+    },
+    {
+      "Path": "mcp.json",
+      "Mode": 420,
+      "SHA256": "75497b724aeb9c9b51d7eabb527e99e3f60ffa2ddb67782108cd5b6b6df33349"
+    },
+    {
+      "Path": "plugin.json",
+      "Mode": 420,
+      "SHA256": "bf26b82241bd9fab3f9af888b0a39fe6ddb2f386d9320c3382418277708375b4"
+    },
+    {
+      "Path": "skills/audit-plugin/SKILL.md",
+      "Mode": 420,
+      "SHA256": "29cbe36a386c27f4ec5ade82d23c3681614b2645f94fe9f2cb4095dd4a36a5c6"
+    }
+  ],
+  "hybrid-stdio": [
+    {
+      "Path": ".gitignore",
+      "Mode": 420,
+      "SHA256": "6c7d15d2ab1a0b51ebcae7e88b9ad01f0713d0833bc2dbe8f3bcc7a81b66b344"
+    },
+    {
+      "Path": "README.md",
+      "Mode": 420,
+      "SHA256": "48ccd6ae59aba8cfa11042e4f17fb5f726da15678a1740476b2b1d80d35e96a7"
+    },
+    {
+      "Path": "mcp.json",
+      "Mode": 420,
+      "SHA256": "a591a5843c442422b0f988615e3fbc33116cc208126762b6dbc75b74db240797"
+    },
+    {
+      "Path": "package-lock.json",
+      "Mode": 420,
+      "SHA256": "300991e36a32699c6dcd375695f35979d33d1837f9a0a142861c3a6d6ca6e77b"
+    },
+    {
+      "Path": "package.json",
+      "Mode": 420,
+      "SHA256": "99dbcadc92d1226804ffeb9b2ba532355d07fa9554a0d0270ceb02c73ce410be"
+    },
+    {
+      "Path": "plugin.json",
+      "Mode": 420,
+      "SHA256": "bf26b82241bd9fab3f9af888b0a39fe6ddb2f386d9320c3382418277708375b4"
+    },
+    {
+      "Path": "skills/audit-plugin/SKILL.md",
+      "Mode": 420,
+      "SHA256": "29cbe36a386c27f4ec5ade82d23c3681614b2645f94fe9f2cb4095dd4a36a5c6"
+    },
+    {
+      "Path": "src/server.mjs",
+      "Mode": 420,
+      "SHA256": "a0c4749141869e0ad277b3cc8e976512a296263e1a15e4d191d95c399b00a6ea"
+    }
+  ],
+  "mcp-remote": [
+    {
+      "Path": ".gitignore",
+      "Mode": 420,
+      "SHA256": "6c7d15d2ab1a0b51ebcae7e88b9ad01f0713d0833bc2dbe8f3bcc7a81b66b344"
+    },
+    {
+      "Path": "README.md",
+      "Mode": 420,
+      "SHA256": "215cc3b04a1d4b93ba66469779ce4d852e6a1a39442d20baf505d5629c26c0af"
+    },
+    {
+      "Path": "mcp.json",
+      "Mode": 420,
+      "SHA256": "75497b724aeb9c9b51d7eabb527e99e3f60ffa2ddb67782108cd5b6b6df33349"
+    },
+    {
+      "Path": "plugin.json",
+      "Mode": 420,
+      "SHA256": "bf26b82241bd9fab3f9af888b0a39fe6ddb2f386d9320c3382418277708375b4"
+    }
+  ],
+  "mcp-stdio": [
+    {
+      "Path": ".gitignore",
+      "Mode": 420,
+      "SHA256": "6c7d15d2ab1a0b51ebcae7e88b9ad01f0713d0833bc2dbe8f3bcc7a81b66b344"
+    },
+    {
+      "Path": "README.md",
+      "Mode": 420,
+      "SHA256": "48ccd6ae59aba8cfa11042e4f17fb5f726da15678a1740476b2b1d80d35e96a7"
+    },
+    {
+      "Path": "mcp.json",
+      "Mode": 420,
+      "SHA256": "a591a5843c442422b0f988615e3fbc33116cc208126762b6dbc75b74db240797"
+    },
+    {
+      "Path": "package-lock.json",
+      "Mode": 420,
+      "SHA256": "300991e36a32699c6dcd375695f35979d33d1837f9a0a142861c3a6d6ca6e77b"
+    },
+    {
+      "Path": "package.json",
+      "Mode": 420,
+      "SHA256": "99dbcadc92d1226804ffeb9b2ba532355d07fa9554a0d0270ceb02c73ce410be"
+    },
+    {
+      "Path": "plugin.json",
+      "Mode": 420,
+      "SHA256": "bf26b82241bd9fab3f9af888b0a39fe6ddb2f386d9320c3382418277708375b4"
+    },
+    {
+      "Path": "src/server.mjs",
+      "Mode": 420,
+      "SHA256": "a0c4749141869e0ad277b3cc8e976512a296263e1a15e4d191d95c399b00a6ea"
+    }
+  ],
+  "skill": [
+    {
+      "Path": ".gitignore",
+      "Mode": 420,
+      "SHA256": "6c7d15d2ab1a0b51ebcae7e88b9ad01f0713d0833bc2dbe8f3bcc7a81b66b344"
+    },
+    {
+      "Path": "README.md",
+      "Mode": 420,
+      "SHA256": "c9c93f4a9f536cf9146e7088522a18a5eac757d0c3bf1b4bc16f5e2519f50193"
+    },
+    {
+      "Path": "plugin.json",
+      "Mode": 420,
+      "SHA256": "bf26b82241bd9fab3f9af888b0a39fe6ddb2f386d9320c3382418277708375b4"
+    },
+    {
+      "Path": "skills/audit-plugin/SKILL.md",
+      "Mode": 420,
+      "SHA256": "29cbe36a386c27f4ec5ade82d23c3681614b2645f94fe9f2cb4095dd4a36a5c6"
+    }
+  ]
+}
