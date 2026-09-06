@@ -16,6 +16,10 @@ import (
 	"time"
 
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli"
+	"github.com/777genius/plugin-kit-ai/cli/internal/authoring/commands"
+	"github.com/777genius/plugin-kit-ai/cli/internal/authoring/project"
+	"github.com/777genius/plugin-kit-ai/cli/internal/authoringcli"
+	"github.com/777genius/plugin-kit-ai/cli/internal/exitx"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/dirswap"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/locks"
 	processadapter "github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/process"
@@ -35,6 +39,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/providers"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/transaction"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/usecase"
+	"github.com/spf13/cobra"
 	"golang.org/x/term"
 )
 
@@ -55,6 +60,26 @@ var (
 )
 
 func main() {
+	if commands.IsEnabled() && commands.IsAuthorInvocation(os.Args[1:], agentpluginscli.NewRoot(agentpluginscli.App{})) {
+		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+		defer stop()
+		app := commands.App{Projects: project.Service{Scratch: os.TempDir()}, Revision: commands.Revision}
+		err := app.Execute(ctx, os.Args[1:], authoringcli.Streams{In: os.Stdin, Out: os.Stdout, Err: os.Stderr}, func(factories ...authoringcli.Factory) (*cobra.Command, error) {
+			// Construct the ENTIRE root and installer options on every invocation.
+			// Installer dependencies are deliberately unconfigured on this author route.
+			root := agentpluginscli.NewRoot(agentpluginscli.App{})
+			author, err := authoringcli.NewAuthorCommand(factories...)
+			if err != nil {
+				return nil, err
+			}
+			root.AddCommand(author)
+			return root, nil
+		})
+		if err != nil {
+			os.Exit(exitx.Code(err))
+		}
+		return
+	}
 	if err := run(); err != nil {
 		_, _ = fmt.Fprintln(os.Stderr, "agentplugins:", err)
 		os.Exit(1)
