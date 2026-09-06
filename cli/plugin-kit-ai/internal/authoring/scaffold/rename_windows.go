@@ -3,6 +3,7 @@
 package scaffold
 
 import (
+	"errors"
 	"os"
 	"runtime"
 	"unsafe"
@@ -18,6 +19,11 @@ func renameExclusive(from *os.File, old string, to *os.File, new string) error {
 	err := renameWindows(from, old, to, new)
 	runtime.KeepAlive(from)
 	runtime.KeepAlive(to)
+	// Both NT calls return NTStatus, which lacks Is/Unwrap in pinned x/sys.
+	// Retain the native cause and expose its Win32 errno for Go classification.
+	if status, ok := err.(windows.NTStatus); ok {
+		err = errors.Join(status, status.Errno())
+	}
 	if err != nil {
 		return &os.LinkError{Op: "rename-exclusive", Old: old, New: new, Err: err}
 	}
