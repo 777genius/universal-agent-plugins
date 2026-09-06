@@ -1,5 +1,9 @@
 # `plugin.yaml` V1 Spec
 
+> Owner clarification (2026-09-06): historical status is not permission to delete
+> useful legacy implementation, tests or design ideas. Follow the
+> [capability preservation contract](./AUTHORING_CAPABILITY_PRESERVATION.md).
+
 > Historical v1 design — not current Agent Plugins 1.0 guidance.
 > Superseded for future authoring by [ADR 0006](./adr/0006-standard-first-authoring.md)
 > and the [implementation plan](./STANDARD_FIRST_AUTHORING_ENGINE_IMPLEMENTATION_PLAN.md).
