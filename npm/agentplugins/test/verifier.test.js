@@ -5,8 +5,9 @@ const fs = require("node:fs");
 const fsp = require("node:fs/promises");
 const os = require("node:os");
 const path = require("node:path");
+const http = require("node:http");
 const { EventEmitter } = require("node:events");
-const { PassThrough } = require("node:stream");
+const { PassThrough, Duplex } = require("node:stream");
 const test = require("node:test");
 const v = require("../lib/verifier");
 const c = require("../scripts/dual-authoring-candidate");
@@ -43,12 +44,68 @@ test("canonical downloader closes before verified success with or without Conten
   }
 });
 
+for (const delta of [0, -1, 1]) {
+  test(`real HTTP parser preserves padded Content-Length with size delta ${delta}`, async () => {
+    const length = "000" + (BODY.length + delta);
+    const file = destination();
+    let parsed;
+    const request = (url, options) => {
+      assert.equal(url.protocol, "https:");
+      assert.equal(url.hostname, "github.com");
+      assert.deepEqual(Object.keys(options.headers).sort(), ["Accept", "User-Agent"]);
+      let sent = false;
+      const socket = new Duplex({
+        read() {},
+        write(chunk, encoding, callback) {
+          callback();
+          if (sent) return;
+          sent = true;
+          process.nextTick(() => {
+            this.push(Buffer.concat([Buffer.from(
+              `HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Length: ${length}\r\n\r\n`
+            ), BODY]));
+            this.push(null);
+          });
+        }
+      });
+      socket.setTimeout = () => socket;
+      const req = http.get({ hostname: "fixture.invalid", headers: options.headers,
+        createConnection: () => socket });
+      req.prependOnceListener("response", res => { parsed = res.headers["content-length"]; });
+      return req;
+    };
+    const download = v.downloadFile(URL, file, PIN, { request });
+    if (delta === 0) {
+      await download;
+      assert.deepEqual(fs.readFileSync(file), BODY);
+      assert.equal(fs.statSync(file).mode & 0o777, 0o600);
+      fs.unlinkSync(file);
+    } else {
+      await assert.rejects(download, /size does not match embedded metadata/);
+      assert.equal(fs.existsSync(file), false);
+    }
+    assert.equal(parsed, length);
+  });
+}
+
 test("declared length rejects zero, malformed, ambiguous and inexact values", async () => {
-  for (const length of ["0", "NaN", "abc", "-1", "1.5", "01", "9999999999999999999999", "3", "", " 22", "22,22"]) {
+  for (const length of ["0", "000", "NaN", "abc", "-1", "+23", "1.5", "01", "9999999999999999999999", "3", "", " 22", "22,22"]) {
     const file = destination();
     await assert.rejects(v.downloadFile(URL, file, PIN, { request: transport((res, req) => {
       res.headers["content-length"] = length; req.emit("response", res); res.end(BODY);
     }) }), /size/);
+    assert.equal(fs.existsSync(file), false);
+  }
+});
+
+test("declared zero and unsafe sizes reject even when embedded size matches numerically", async () => {
+  for (const length of ["000", "09007199254740992"]) {
+    const file = destination();
+    await assert.rejects(v.downloadFile(URL, file, { ...PIN, size: Number(length) }, {
+      request: transport((res, req) => {
+        res.headers["content-length"] = length; req.emit("response", res); res.end(BODY);
+      })
+    }), /size does not match embedded metadata/);
     assert.equal(fs.existsSync(file), false);
   }
 });

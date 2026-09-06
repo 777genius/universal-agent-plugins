@@ -105,7 +105,9 @@ async function downloadFile(value, destination, expected, options = {}, redirect
         return;
       }
       const length = response.headers["content-length"];
-      if (length !== undefined && (!/^[1-9][0-9]*$/.test(String(length)) || Number(length) !== expected.size)) {
+      const numericLength = Number(length);
+      if (length !== undefined && (!/^[0-9]+$/.test(String(length)) ||
+          !Number.isSafeInteger(numericLength) || numericLength <= 0 || numericLength !== expected.size)) {
         response.resume();
         reject(new Error("binary download size does not match embedded metadata"));
         return;
