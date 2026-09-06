@@ -1,0 +1,97 @@
+name: Authoring native offline
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  native:
+    name: Authoring / ${{ matrix.os }}-${{ matrix.arch }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {runner: ubuntu-24.04, os: linux, arch: amd64}
+          - {runner: macos-15, os: darwin, arch: arm64}
+          - {runner: windows-2022, os: windows, arch: amd64}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 25
+    defaults:
+      run:
+        shell: bash
+    env:
+      EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      EXPECTED_OS: ${{ matrix.os }}
+      EXPECTED_ARCH: ${{ matrix.arch }}
+      NATIVE_ROOT: ${{ runner.temp }}/authoring-native-${{ github.run_id }}-${{ github.run_attempt }}
+      GOTOOLCHAIN: local
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # ci.yml
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # ci.yml
+        with:
+          go-version: '1.25.13'
+          cache: false
+      - name: Native offline tests and actual entrypoint builds
+        run: |
+          set -euo pipefail
+          mkdir "$NATIVE_ROOT"
+          mkdir -p "$NATIVE_ROOT"/{evidence,home,tmp,config,cache,appdata,localappdata,hooks,bin}
+          # Tool setup is finished. All test subprocesses inherit disposable profiles.
+          export HOME="$NATIVE_ROOT/home" USERPROFILE="$NATIVE_ROOT/home"
+          if [[ "$EXPECTED_OS" == windows ]]; then
+            profile="$(cygpath -w "$HOME")"
+            export HOMEDRIVE="${profile:0:2}" HOMEPATH="${profile:2}"
+          fi
+          export XDG_CONFIG_HOME="$NATIVE_ROOT/config" XDG_CACHE_HOME="$NATIVE_ROOT/cache"
+          export XDG_DATA_HOME="$NATIVE_ROOT/home/data" XDG_STATE_HOME="$NATIVE_ROOT/home/state"
+          export APPDATA="$NATIVE_ROOT/appdata" LOCALAPPDATA="$NATIVE_ROOT/localappdata"
+          export TMPDIR="$NATIVE_ROOT/tmp" TMP="$NATIVE_ROOT/tmp" TEMP="$NATIVE_ROOT/tmp"
+          export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$NATIVE_ROOT/config/gitconfig"
+          export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.hooksPath GIT_CONFIG_VALUE_0="$NATIVE_ROOT/hooks"
+          export GIT_TERMINAL_PROMPT=0 GCM_INTERACTIVE=never TZ=UTC LC_ALL=C
+          export GOENV=off GOWORK="$GITHUB_WORKSPACE/go.work"
+          export AUTHORING_NATIVE_BIN_DIR="$NATIVE_ROOT/bin"
+          git rev-parse HEAD > "$NATIVE_ROOT/evidence/head.txt"
+          test "$(cat "$NATIVE_ROOT/evidence/head.txt")" = "$EXPECTED_HEAD"
+          go env -json GOOS GOARCH GOHOSTOS GOHOSTARCH GOVERSION GOROOT > "$NATIVE_ROOT/evidence/go-env.json"
+          test "$(go env GOHOSTOS)/$(go env GOHOSTARCH)" = "$EXPECTED_OS/$EXPECTED_ARCH"
+          test "$(go env GOOS)/$(go env GOARCH)" = "$EXPECTED_OS/$EXPECTED_ARCH"
+          test "$(go env GOVERSION)" = go1.25.13
+          packages=(./install/integrationctl/agentplugins/adapters/packageview
+            ./install/integrationctl/agentplugins/adapters/packagedigest
+            ./install/integrationctl/agentplugins/conformance
+            ./install/integrationctl/agentplugins/adapters/loader
+            ./cli/plugin-kit-ai/internal/authoringcli
+            ./cli/plugin-kit-ai/internal/authoring/...)
+          go list "${packages[@]}" > "$NATIVE_ROOT/evidence/packages.txt"
+          # Resolve only lane/build Go dependencies before offline execution.
+          go list -deps -test "${packages[@]}" ./cli/plugin-kit-ai/cmd/{agentplugins,plugin-kit-ai} > "$NATIVE_ROOT/evidence/dependencies.txt"
+          export GOPROXY=off GOSUMDB=off
+          suffix=""; if [[ "$EXPECTED_OS" == windows ]]; then suffix=.exe; fi
+          command_package=github.com/777genius/plugin-kit-ai/cli/internal/authoring/commands
+          for entry in agentplugins plugin-kit-ai; do
+            go build -trimpath -ldflags "-X $command_package.Enabled=vertical-slice-v1 -X $command_package.Revision=$EXPECTED_HEAD" \
+              -o "$AUTHORING_NATIVE_BIN_DIR/$entry$suffix" "./cli/plugin-kit-ai/cmd/$entry"
+          done
+          set +e
+          go test -json -count=1 -timeout=12m "${packages[@]}" > "$NATIVE_ROOT/evidence/go-test.json" 2> "$NATIVE_ROOT/evidence/go-test.stderr"
+          result=$?
+          printf '%s\n' "$result" > "$NATIVE_ROOT/evidence/test-exit.txt"
+          exit "$result"
+      - name: Require structured native evidence (including skips and offline E2E)
+        if: always()
+        run: python scripts/check-authoring-native-results.py "$NATIVE_ROOT"
+      - name: Preserve each host's evidence, including failures
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # existing platform-proof pin
+        with:
+          name: authoring-native-${{ matrix.os }}-${{ matrix.arch }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.NATIVE_ROOT }}/evidence
+          if-no-files-found: error
+          retention-days: 14
