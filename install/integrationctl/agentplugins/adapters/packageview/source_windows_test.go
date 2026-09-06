@@ -185,8 +185,9 @@ func nativeJunction(t *testing.T, path, target string) {
 		t.Fatal(e)
 	}
 	// Substitute name includes a NUL terminator outside its declared length;
-	// print name is empty. All source and target directories are new fixtures.
-	data := make([]byte, 8+2*len(u))
+	// print name is empty and has its own in-buffer NUL terminator.
+	// All source and target directories are new fixtures.
+	data := make([]byte, 8+2*(len(u)+1))
 	binary.LittleEndian.PutUint16(data[2:], uint16((len(u)-1)*2))
 	binary.LittleEndian.PutUint16(data[4:], uint16(len(u)*2))
 	for i, v := range u {
@@ -291,6 +292,7 @@ func TestWindowsExistingWriterAndReparseSetterDenied(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
+	defer writer.Close() // Release the fixture handle even if acquisition fails.
 	s := nativeSource(t, root)
 	p, e := s.pin("plugin.json", false)
 	writer.Close()
