@@ -172,6 +172,10 @@ def check(root):
         for test in critical.get(native_os, []):
             require((native_package, test) in passed, "missing mandatory native contract: " + test)
         command_package = "github.com/777genius/plugin-kit-ai/cli/internal/authoring/commands"
+        for contract in ("generated-skill", "skills-init", "static-validation", "duplicate-unchanged",
+                         "readiness", "strict-flags", "malformed-skill", "sdk-static-only"):
+            test = "TestNativeBinaryLifecycle/" + contract
+            require((command_package, test) in passed, "missing mandatory both-binary lifecycle contract: " + test)
         path_contracts = ["ordinary-relative-roots", "traversal-order", "reparse-before-dot-dot"]
         if native_os == "windows":
             path_contracts += ["namespace-rejection", "same-volume-overlapping-alias", "two-physical-ntfs-volumes"]
