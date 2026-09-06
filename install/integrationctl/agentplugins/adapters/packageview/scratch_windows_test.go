@@ -25,13 +25,21 @@ func TestWindowsScratchPhysicalAliases(t *testing.T) {
 	for _, tc := range []struct {
 		name, target string
 		overlap      bool
+		ancestorLink bool
 	}{
-		{"same", root, true}, {"descendant", filepath.Join(root, "nested"), true},
-		{"sibling", sibling, false}, {"ancestor", parent, false},
+		{"same", root, true, false}, {"descendant", filepath.Join(root, "nested"), true, false},
+		{"sibling", sibling, false, false}, {"ancestor", parent, false, false},
+		{"ancestor-junction-same", root, true, true},
+		{"ancestor-junction-sibling", sibling, false, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			alias := filepath.Join(t.TempDir(), "scratch-alias")
-			nativeJunction(t, alias, tc.target)
+			if tc.ancestorLink {
+				nativeJunction(t, alias, parent)
+				alias = filepath.Join(alias, filepath.Base(tc.target))
+			} else {
+				nativeJunction(t, alias, tc.target)
+			}
 			before := winRecordCount()
 			opened := 0
 			l, e := (Reader{TempDir: alias}).open(context.Background(), root, &captureHooks{beforeDataOpen: func(string) { opened++ }})
@@ -70,6 +78,42 @@ func TestWindowsScratchPhysicalAliases(t *testing.T) {
 	}
 }
 
+func TestWindowsScratchAliasFailuresStayBeforeData(t *testing.T) {
+	root := nativeFixture(t, func(root string) { nativeWrite(t, root, "plugin.json", "core") })
+	for _, name := range []string{"cycle", "missing-target", "unknown-reparse"} {
+		t.Run(name, func(t *testing.T) {
+			parent := t.TempDir()
+			alias := filepath.Join(parent, "scratch-alias")
+			switch name {
+			case "cycle":
+				nativeJunction(t, alias, alias)
+			case "missing-target":
+				nativeJunction(t, alias, filepath.Join(parent, "missing"))
+			case "unknown-reparse":
+				nativeWrite(t, parent, "scratch-alias", "")
+				// Inert NTFS LX_FIFO metadata, never a live special endpoint.
+				setNativeReparse(t, alias, 0x80000024, nil)
+			}
+			before := winRecordCount()
+			l, e := (Reader{TempDir: alias}).open(context.Background(), root, &captureHooks{beforeDataOpen: func(string) { t.Fatal("invalid scratch reached source data") }})
+			if l != nil {
+				l.Close()
+			}
+			var safe *Error
+			if !errors.As(e, &safe) || safe.Code != "scratch_unavailable" {
+				t.Fatalf("invalid scratch: %v", e)
+			}
+			if winRecordCount() != before {
+				t.Fatal("invalid scratch leaked ancestry")
+			}
+			entries, e := os.ReadDir(parent)
+			if e != nil || len(entries) != 1 || entries[0].Name() != "scratch-alias" {
+				t.Fatal("invalid scratch changed fixture parent", e)
+			}
+		})
+	}
+}
+
 func TestWindowsScratchIdentityUnavailableFailsClosed(t *testing.T) {
 	root := nativeFixture(t, func(root string) { nativeWrite(t, root, "plugin.json", "core") })
 	s := nativeSource(t, root)
@@ -96,25 +140,34 @@ func TestWindowsScratchIdentityUnavailableFailsClosed(t *testing.T) {
 }
 
 func TestWindowsScratchAncestryHeld(t *testing.T) {
-	root := nativeFixture(t, func(root string) { nativeWrite(t, root, "plugin.json", "core") })
-	parent := t.TempDir()
-	scratch := filepath.Join(parent, "scratch")
-	if e := os.Mkdir(scratch, 0700); e != nil {
-		t.Fatal(e)
-	}
-	l, e := (Reader{TempDir: scratch}).Open(context.Background(), root)
-	if e != nil {
-		t.Fatal(e)
-	}
-	defer l.Close()
-	if e := os.Rename(scratch, scratch+"-moved"); !errors.Is(e, windows.ERROR_SHARING_VIOLATION) {
-		t.Fatalf("scratch ancestry was not held: %v", e)
-	}
-	if e := l.Close(); e != nil {
-		t.Fatal(e)
-	}
-	if e := os.Rename(scratch, scratch+"-moved"); e != nil {
-		t.Fatal("scratch handle leaked", e)
+	for _, name := range []string{"direct", "junction"} {
+		t.Run(name, func(t *testing.T) {
+			root := nativeFixture(t, func(root string) { nativeWrite(t, root, "plugin.json", "core") })
+			parent := t.TempDir()
+			scratch := filepath.Join(parent, "scratch")
+			if e := os.Mkdir(scratch, 0700); e != nil {
+				t.Fatal(e)
+			}
+			tempDir := scratch
+			if name == "junction" {
+				tempDir = filepath.Join(t.TempDir(), "scratch-alias")
+				nativeJunction(t, tempDir, scratch)
+			}
+			l, e := (Reader{TempDir: tempDir}).Open(context.Background(), root)
+			if e != nil {
+				t.Fatal(e)
+			}
+			defer l.Close()
+			if e := os.Rename(scratch, scratch+"-moved"); !errors.Is(e, windows.ERROR_SHARING_VIOLATION) {
+				t.Fatalf("scratch ancestry was not held: %v", e)
+			}
+			if e := l.Close(); e != nil {
+				t.Fatal(e)
+			}
+			if e := os.Rename(scratch, scratch+"-moved"); e != nil {
+				t.Fatal("scratch handle leaked", e)
+			}
+		})
 	}
 }
 

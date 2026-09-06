@@ -16,11 +16,7 @@ func scratchParent(s *source, _ string, tempDir string) (_ string, release func(
 	// no-reparse directory ancestry as source acquisition, through private cleanup.
 	// Source identity comes only from the already acquired handle, never a second
 	// source pathname lookup. Neither identity query requests file data or writes.
-	tmp, e := filepath.EvalSymlinks(tempDir)
-	if e != nil {
-		return "", nil, fail("scratch_unavailable")
-	}
-	tmp, e = filepath.Abs(tmp)
+	tmp, e := winResolveScratch(tempDir)
 	if e != nil {
 		return "", nil, fail("scratch_unavailable")
 	}
@@ -39,6 +35,74 @@ func scratchParent(s *source, _ string, tempDir string) (_ string, release func(
 	// Use the ordinary trusted scratch spelling for writes. GUID names are
 	// identity evidence only, never an alternate namespace acquisition route.
 	return tmp, scratch.close, nil
+}
+
+// winResolveScratch is only for the trusted, cleanable scratch configuration.
+// Go 1.23+ reports junctions as ModeIrregular, so EvalSymlinks leaves a leaf
+// junction unresolved (and rejects one in an ancestor). openSource must still
+// reject those reparse points. Resolve known links here using metadata only,
+// then let openSource acquire and protect the entire resolved directory ancestry.
+// Never use this resolver for a source path or as physical identity evidence.
+func winResolveScratch(name string) (string, error) {
+	name, e := filepath.Abs(name)
+	if e != nil {
+		return "", e
+	}
+	steps := 0
+	for links := 0; links <= 255; links++ {
+		// Stay within the existing local drive scratch boundary. In particular,
+		// Readlink returning a UNC, volume GUID or device target is not permission
+		// to acquire that namespace, even though scratch itself is trusted.
+		if len(name) < 3 || name[1] != ':' || name[2] != '\\' || !((name[0] >= 'A' && name[0] <= 'Z') || (name[0] >= 'a' && name[0] <= 'z')) {
+			return "", fail("scratch_unavailable")
+		}
+		parts, e := winParts(name[3:])
+		if name[3:] == "" {
+			return name, nil
+		}
+		if e != nil {
+			return "", e
+		}
+		resolved := name[:3]
+		linked := false
+		for i, part := range parts {
+			steps++
+			if steps > 8192 {
+				return "", fail("scratch_unavailable")
+			}
+			next := filepath.Join(resolved, part)
+			info, e := os.Lstat(next)
+			if e != nil {
+				return "", e
+			}
+			if info.Mode()&(os.ModeSymlink|os.ModeIrregular) != 0 {
+				// Readlink opens with no data access and OPEN_REPARSE_POINT;
+				// it accepts only SYMLINK/MOUNT_POINT tags, not unknown reparses.
+				target, e := os.Readlink(next)
+				if e != nil {
+					return "", e
+				}
+				if filepath.VolumeName(target) == "" {
+					if strings.HasPrefix(target, `\`) || strings.HasPrefix(target, "/") {
+						target = name[:2] + target
+					} else {
+						target = filepath.Join(resolved, target)
+					}
+				}
+				name = filepath.Join(append([]string{target}, parts[i+1:]...)...)
+				linked = true
+				break
+			}
+			if !info.IsDir() {
+				return "", fail("scratch_unavailable")
+			}
+			resolved = next
+		}
+		if !linked {
+			return resolved, nil
+		}
+	}
+	return "", fail("scratch_unavailable")
 }
 
 func winScratchDisjoint(source, scratch *os.File) error {
