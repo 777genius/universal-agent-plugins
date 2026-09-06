@@ -146,8 +146,8 @@ func tree(t *testing.T, root string) map[string]string {
 }
 
 func TestReportsAndFreshFactory(t *testing.T) {
-	if runtime.GOOS != "linux" {
-		t.Skip("native packageview is unavailable outside Linux at this checkpoint")
+	if runtime.GOOS != "linux" && !(runtime.GOOS == "windows" && runtime.GOARCH == "amd64") {
+		t.Skip("writable native authoring requires Linux or Windows amd64")
 	}
 	scratch := t.TempDir()
 	a := commands.App{Projects: project.Service{Scratch: scratch}, Revision: baseline}
@@ -271,8 +271,8 @@ func TestArgumentFailuresBeforeEffects(t *testing.T) {
 }
 
 func TestInitValidationAndFailurePolicy(t *testing.T) {
-	if runtime.GOOS != "linux" {
-		t.Skip("Linux checkpoint")
+	if runtime.GOOS != "linux" && !(runtime.GOOS == "windows" && runtime.GOARCH == "amd64") {
+		t.Skip("writable native authoring requires Linux or Windows amd64")
 	}
 	scratch := t.TempDir()
 	a := commands.App{Projects: project.Service{Scratch: scratch}, Revision: baseline}
@@ -327,8 +327,8 @@ func TestInitValidationAndFailurePolicy(t *testing.T) {
 }
 
 func TestConcurrentInitAndCanceledInvocation(t *testing.T) {
-	if runtime.GOOS != "linux" {
-		t.Skip("Linux checkpoint")
+	if runtime.GOOS != "linux" && !(runtime.GOOS == "windows" && runtime.GOARCH == "amd64") {
+		t.Skip("writable native authoring requires Linux or Windows amd64")
 	}
 	parent, scratch := t.TempDir(), t.TempDir()
 	a := commands.App{Projects: project.Service{Scratch: scratch}, Revision: baseline}
@@ -385,8 +385,8 @@ type faultContext struct {
 func (c faultContext) Err() error { c.check(); return c.Context.Err() }
 
 func TestCleanupFailureSurvivesCancellation(t *testing.T) {
-	if runtime.GOOS != "linux" {
-		t.Skip("Linux checkpoint")
+	if runtime.GOOS != "linux" && !(runtime.GOOS == "windows" && runtime.GOARCH == "amd64") {
+		t.Skip("writable native authoring requires Linux or Windows amd64")
 	}
 	root, scratch := t.TempDir(), t.TempDir()
 	write(t, root, "plugin.json", plugin(""))
@@ -430,13 +430,20 @@ func TestCleanupFailureSurvivesCancellation(t *testing.T) {
 }
 
 func TestNativeBinaryVerticalSlice(t *testing.T) {
-	if runtime.GOOS != "linux" {
-		t.Skip("native Linux first slice; other readers unavailable")
+	if runtime.GOOS != "linux" && !(runtime.GOOS == "windows" && runtime.GOARCH == "amd64") {
+		t.Skip("writable native authoring requires Linux or Windows amd64")
 	}
 	_, file, _, _ := runtime.Caller(0)
 	module := filepath.Clean(filepath.Join(filepath.Dir(file), "../../.."))
 	bin := os.Getenv("AUTHORING_NATIVE_BIN_DIR")
 	supplied := bin != ""
+	revision := baseline + "+vertical-slice-worktree"
+	if supplied {
+		revision = os.Getenv("EXPECTED_HEAD")
+		if len(revision) != 40 {
+			t.Fatal("supplied native binaries require EXPECTED_HEAD")
+		}
+	}
 	if !supplied {
 		bin = t.TempDir()
 	}
@@ -450,7 +457,7 @@ func TestNativeBinaryVerticalSlice(t *testing.T) {
 	prefix := "github.com/777genius/plugin-kit-ai/cli/internal/authoring/commands"
 	for i, name := range names {
 		if !supplied {
-			build := exec.Command(filepath.Join(runtime.GOROOT(), "bin", "go"), "build", "-p", "2", "-ldflags", "-X "+prefix+".Enabled=vertical-slice-v1 -X "+prefix+".Revision="+baseline+"+vertical-slice-worktree", "-o", binaries[i], "./cmd/"+name)
+			build := exec.Command(filepath.Join(runtime.GOROOT(), "bin", "go"+suffix), "build", "-p", "2", "-ldflags", "-X "+prefix+".Enabled=vertical-slice-v1 -X "+prefix+".Revision="+revision, "-o", binaries[i], "./cmd/"+name)
 			build.Dir = module
 			if out, e := build.CombinedOutput(); e != nil {
 				t.Fatalf("build actual %s: %v\n%s", name, e, out)
@@ -467,16 +474,48 @@ func TestNativeBinaryVerticalSlice(t *testing.T) {
 	scratch := []string{t.TempDir(), t.TempDir()}
 	traps := t.TempDir()
 	effect := filepath.Join(traps, "effect")
+	trapBody := []byte("#!/bin/sh\nprintf invoked > '" + strings.ReplaceAll(effect, "'", "'\"'\"'") + "'\nexit 79\n")
+	if runtime.GOOS == "windows" {
+		// A real PE trap catches direct CreateProcess/LookPath execution; a .cmd
+		// or shebang fixture alone cannot establish this on Windows.
+		source := filepath.Join(t.TempDir(), "trap.go")
+		write(t, filepath.Dir(source), filepath.Base(source), "package main\nimport (\"os\")\nfunc main(){os.WriteFile(os.Getenv(\"AUTHORING_TRAP_EFFECT\"), []byte(\"invoked\"), 0600); os.Exit(79)}\n")
+		trap := filepath.Join(t.TempDir(), "trap.exe")
+		build := exec.Command(filepath.Join(runtime.GOROOT(), "bin", "go.exe"), "build", "-p", "2", "-o", trap, source)
+		if out, err := build.CombinedOutput(); err != nil {
+			t.Fatalf("build Windows execution trap: %v: %s", err, out)
+		}
+		var err error
+		trapBody, err = os.ReadFile(trap)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
 	for _, name := range []string{"node", "npm", "npx", "python", "go", "agent", "claude", "codex", "missing-fixture-command"} {
-		if e := os.WriteFile(filepath.Join(traps, name), []byte("#!/bin/sh\nprintf invoked > '"+effect+"'\nexit 79\n"), 0700); e != nil {
+		if e := os.WriteFile(filepath.Join(traps, name+suffix), trapBody, 0700); e != nil {
 			t.Fatal(e)
 		}
+	}
+	// Prove the harness trap works before testing the products, then clear its
+	// control effect. This utility is outside every generated package root.
+	control := exec.Command(filepath.Join(traps, "node"+suffix))
+	control.Env = append(nativeEnvironment(homes[0], scratch[0], traps), "AUTHORING_TRAP_EFFECT="+effect)
+	if err := control.Run(); err == nil {
+		t.Fatal("execution trap did not fail")
+	} else if exit, ok := err.(*exec.ExitError); !ok || exit.ExitCode() != 79 {
+		t.Fatalf("execution trap cannot run: %v", err)
+	}
+	if body, err := os.ReadFile(effect); err != nil || string(body) != "invoked" {
+		t.Fatal("execution trap did not record control effect", err)
+	}
+	if err := os.Remove(effect); err != nil {
+		t.Fatal(err)
 	}
 	runExact := func(i int, args ...string) (report.Report, int, []byte) {
 		t.Helper()
 		cmd := exec.Command(binaries[i], args...)
 		cmd.Dir = homes[i]
-		cmd.Env = []string{"HOME=" + homes[i], "XDG_CONFIG_HOME=" + homes[i], "PATH=" + traps, "TMPDIR=" + scratch[i], "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_NOSYSTEM=1", "AGENTPLUGINS_DIRECTORY_ORIGIN=ordinary-fixture-marker", "AGENTPLUGINS_SECURITY_ORIGIN=ordinary-fixture-marker"}
+		cmd.Env = append(nativeEnvironment(homes[i], scratch[i], traps), "AUTHORING_TRAP_EFFECT="+effect, "AGENTPLUGINS_DIRECTORY_ORIGIN=ordinary-fixture-marker", "AGENTPLUGINS_SECURITY_ORIGIN=ordinary-fixture-marker")
 		var out, errout bytes.Buffer
 		cmd.Stdout = &out
 		cmd.Stderr = &errout
@@ -496,7 +535,7 @@ func TestNativeBinaryVerticalSlice(t *testing.T) {
 		if strings.Contains(out.String(), homes[i]) || strings.Contains(out.String(), scratch[i]) {
 			t.Fatalf("implicit root disclosure: %s", out.Bytes())
 		}
-		if !supplied && r.Revision != baseline+"+vertical-slice-worktree" {
+		if r.Revision != revision {
 			t.Fatalf("wrong engine revision: %s", r.Revision)
 		}
 		return r, code, out.Bytes()
@@ -508,6 +547,8 @@ func TestNativeBinaryVerticalSlice(t *testing.T) {
 		}
 		return runExact(i, append(args, "--format=json")...)
 	}
+	readProfile := ""
+	sdk := map[string]string{}
 	for _, tc := range []struct {
 		lane  string
 		flags []string
@@ -542,6 +583,25 @@ func TestNativeBinaryVerticalSlice(t *testing.T) {
 				t.Fatal("native generated bytes/modes differ")
 			}
 			before := tree(t, destinations[0])
+			if tc.lane == "mcp-stdio" {
+				lock, err := os.ReadFile(filepath.Join(destinations[0], "package-lock.json"))
+				if err != nil {
+					t.Fatal(err)
+				}
+				var manifest struct {
+					Packages map[string]struct {
+						Version string `json:"version"`
+					} `json:"packages"`
+				}
+				if err := json.Unmarshal(lock, &manifest); err != nil {
+					t.Fatal(err)
+				}
+				sdk["@modelcontextprotocol/sdk"] = manifest.Packages["node_modules/@modelcontextprotocol/sdk"].Version
+				sdk["package-lock-sha256"] = fmt.Sprintf("%x", sha256.Sum256(lock))
+				if sdk["@modelcontextprotocol/sdk"] == "" {
+					t.Fatal("missing generated SDK pin")
+				}
+			}
 			for _, command := range []string{"validate", "inspect", "test"} {
 				r, c, b := run(0, command, destinations[0])
 				r2, c2, b2 := run(1, command, destinations[1])
@@ -554,6 +614,10 @@ func TestNativeBinaryVerticalSlice(t *testing.T) {
 				if r.Identity.TreeDigest == "" || r.Identity.ScopeDigest == "" || r.Identity.ScopeDigest == r.Identity.TreeDigest {
 					t.Fatal("missing or conflated identity")
 				}
+				if r.Identity.ReadProfile != "packageview-local-"+runtime.GOOS+"-v1" {
+					t.Fatalf("unexpected native filesystem read profile: %s", r.Identity.ReadProfile)
+				}
+				readProfile = r.Identity.ReadProfile
 				t.Logf("native journey: template=%s command=%s exit=0 scope=%s tree=%s boundary=static-only", tc.lane, command, r.Identity.ScopeDigest, r.Identity.TreeDigest)
 			}
 			if !reflect.DeepEqual(before, tree(t, destinations[0])) {
@@ -692,13 +756,30 @@ func TestNativeBinaryVerticalSlice(t *testing.T) {
 	}
 	for i, name := range names {
 		evidence, err := json.Marshal(struct {
-			Entrypoint string `json:"entrypoint"`
-			SHA256     string `json:"sha256"`
-		}{name, hashes[i]})
+			Entrypoint  string            `json:"entrypoint"`
+			SHA256      string            `json:"sha256"`
+			Revision    string            `json:"revision"`
+			ReadProfile string            `json:"read_profile"`
+			Templates   []string          `json:"templates"`
+			SDK         map[string]string `json:"sdk"`
+		}{name, hashes[i], revision, readProfile, []string{"skill", "mcp-remote", "mcp-stdio", "hybrid", "hybrid-remote"}, sdk})
 		if err != nil {
 			t.Fatal(err)
 		}
 		t.Logf("AUTHORING_NATIVE_E2E %s", evidence)
 	}
 
+}
+
+// Only disposable profile/config/temp paths reach the binaries under test.
+// SystemRoot is required by Windows process startup and is not a user profile.
+func nativeEnvironment(home, scratch, path string) []string {
+	env := []string{"HOME=" + home, "USERPROFILE=" + home, "APPDATA=" + filepath.Join(home, "appdata"), "LOCALAPPDATA=" + filepath.Join(home, "localappdata"),
+		"XDG_CONFIG_HOME=" + home, "XDG_CACHE_HOME=" + filepath.Join(home, "cache"), "XDG_DATA_HOME=" + filepath.Join(home, "data"), "XDG_STATE_HOME=" + filepath.Join(home, "state"),
+		"TMPDIR=" + scratch, "TMP=" + scratch, "TEMP=" + scratch, "PATH=" + path, "GIT_CONFIG_GLOBAL=" + filepath.Join(home, "gitconfig"), "GIT_CONFIG_NOSYSTEM=1"}
+	if runtime.GOOS == "windows" {
+		volume := filepath.VolumeName(home)
+		env = append(env, "SystemRoot="+os.Getenv("SystemRoot"), "HOMEDRIVE="+volume, "HOMEPATH="+strings.TrimPrefix(home, volume), "PATHEXT=.EXE")
+	}
+	return env
 }

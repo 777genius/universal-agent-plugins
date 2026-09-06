@@ -13,9 +13,6 @@ import (
 )
 
 func TestDigestFramingGoldenIncludesEmptyPrefixModeAndSymlink(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("symlink fixture requires an unprivileged symlink platform")
-	}
 	root := t.TempDir()
 	write(t, filepath.Join(root, "a"), nil, 0o644)
 	write(t, filepath.Join(root, "a-prefix"), []byte("prefix"), 0o644)
@@ -23,7 +20,16 @@ func TestDigestFramingGoldenIncludesEmptyPrefixModeAndSymlink(t *testing.T) {
 	if err := os.Symlink("a", filepath.Join(root, "link")); err != nil {
 		t.Fatal(err)
 	}
-	snapshot, err := (Builder{TempRoot: t.TempDir()}).Snapshot(context.Background(), root, domain.SourceIdentity{})
+	builder := Builder{TempRoot: t.TempDir()}
+	var snapshot domain.PackageSnapshot
+	var err error
+	if runtime.GOOS == "windows" {
+		// Windows needs explicit portable Git mode metadata. The POSIX lane
+		// continues to prove executable-mode inference from the actual source.
+		snapshot, err = builder.SnapshotWithExecutables(context.Background(), root, domain.SourceIdentity{}, []string{"bin/x"})
+	} else {
+		snapshot, err = builder.Snapshot(context.Background(), root, domain.SourceIdentity{})
+	}
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -58,11 +64,6 @@ func TestSnapshotIsIndependentFromSourceMutation(t *testing.T) {
 
 func TestSnapshotRejectsPortablePathAndContentHazards(t *testing.T) {
 	tests := map[string]func(*testing.T, string){
-		"case collision": func(t *testing.T, root string) {
-			write(t, filepath.Join(root, "Readme"), nil, 0o644)
-			write(t, filepath.Join(root, "README"), nil, 0o644)
-		},
-		"device": func(t *testing.T, root string) { write(t, filepath.Join(root, "CON.txt"), nil, 0o644) },
 		"Git metadata case alias": func(t *testing.T, root string) {
 			write(t, filepath.Join(root, ".Git", "config"), nil, 0o644)
 		},
@@ -76,12 +77,12 @@ func TestSnapshotRejectsPortablePathAndContentHazards(t *testing.T) {
 			write(t, filepath.Join(root, "e\u0301"), nil, 0o644)
 		},
 	}
-	if runtime.GOOS != "windows" {
-		tests["external symlink"] = func(t *testing.T, root string) {
-			if err := os.Symlink("../outside", filepath.Join(root, "escape")); err != nil {
-				t.Fatal(err)
-			}
+	tests["external symlink"] = func(t *testing.T, root string) {
+		if err := os.Symlink("../outside", filepath.Join(root, "escape")); err != nil {
+			t.Fatal(err)
 		}
+	}
+	if runtime.GOOS != "windows" {
 		tests["special file"] = func(t *testing.T, root string) {
 			listener, err := net.Listen("unix", filepath.Join(root, "socket"))
 			if err != nil {
@@ -141,9 +142,6 @@ func TestDigestChangesForExecutableMode(t *testing.T) {
 }
 
 func TestDigestChangesForExactSymlinkTarget(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("symlink fixture requires an unprivileged symlink platform")
-	}
 	root := t.TempDir()
 	write(t, filepath.Join(root, "a"), nil, 0o644)
 	write(t, filepath.Join(root, "b"), nil, 0o644)

@@ -6,7 +6,6 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 
@@ -458,9 +457,6 @@ func TestRemoteServerSemanticValidation(t *testing.T) {
 }
 
 func TestLoaderCanonicalizesFilesystemResolvedRoot(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("root symlink aliases are platform-specific")
-	}
 	realRoot := t.TempDir()
 	writeMinimalPlugin(t, realRoot, "canonical-root")
 	writeLoaderFile(t, filepath.Join(realRoot, "bin", "server"), "fixture")
@@ -492,9 +488,6 @@ func TestLoaderCanonicalizesFilesystemResolvedRoot(t *testing.T) {
 }
 
 func TestStdioBundledCommandAllowsContainedInternalSymlink(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("symlink fixture requires an unprivileged symlink platform")
-	}
 	root := t.TempDir()
 	writeMinimalPlugin(t, root, "symlink-stdio")
 	writeLoaderFile(t, filepath.Join(root, "bin", "server"), "fixture")
@@ -513,9 +506,6 @@ func TestStdioBundledCommandAllowsContainedInternalSymlink(t *testing.T) {
 }
 
 func TestStdioBundledCommandRejectsExternalSymlink(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("symlink fixture requires an unprivileged symlink platform")
-	}
 	root := t.TempDir()
 	outside := filepath.Join(t.TempDir(), "server")
 	writeMinimalPlugin(t, root, "external-symlink-stdio")
@@ -537,9 +527,6 @@ func TestStdioBundledCommandRejectsExternalSymlink(t *testing.T) {
 }
 
 func TestStdioMissingBundledCommandRejectsExternalSymlinkAncestor(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("symlink fixture requires an unprivileged symlink platform")
-	}
 	root := t.TempDir()
 	outside := t.TempDir()
 	writeMinimalPlugin(t, root, "external-symlink-ancestor-stdio")

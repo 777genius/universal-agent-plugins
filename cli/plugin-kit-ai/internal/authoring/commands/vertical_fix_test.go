@@ -43,20 +43,27 @@ func TestReviewSplitUnknownAuthorFlag(t *testing.T) {
 	routed := commands.IsAuthorInvocation(args, agentpluginscli.NewRoot(agentpluginscli.App{}))
 	t.Logf("Cobra selects %q; author dispatcher selects author=%t", selected.CommandPath(), routed)
 
-	binary := filepath.Join(t.TempDir(), "agentplugins")
-	_, file, _, _ := runtime.Caller(0)
-	module := filepath.Clean(filepath.Join(filepath.Dir(file), "../../.."))
-	prefix := "github.com/777genius/plugin-kit-ai/cli/internal/authoring/commands"
-	build := exec.Command(filepath.Join(runtime.GOROOT(), "bin", "go"), "build", "-p", "2", "-ldflags", "-X "+prefix+".Enabled=vertical-slice-v1 -X "+prefix+".Revision=8d514ba723bf1c564ec1fbf92a3858f51d13e641", "-o", binary, "./cmd/agentplugins")
-	build.Dir = module
-	if out, err := build.CombinedOutput(); err != nil {
-		t.Fatalf("build: %v\n%s", err, out)
+	suffix := ""
+	if runtime.GOOS == "windows" {
+		suffix = ".exe"
+	}
+	binary := filepath.Join(os.Getenv("AUTHORING_NATIVE_BIN_DIR"), "agentplugins"+suffix)
+	if os.Getenv("AUTHORING_NATIVE_BIN_DIR") == "" {
+		binary = filepath.Join(t.TempDir(), "agentplugins"+suffix)
+		_, file, _, _ := runtime.Caller(0)
+		module := filepath.Clean(filepath.Join(filepath.Dir(file), "../../.."))
+		prefix := "github.com/777genius/plugin-kit-ai/cli/internal/authoring/commands"
+		build := exec.Command(filepath.Join(runtime.GOROOT(), "bin", "go"+suffix), "build", "-p", "2", "-ldflags", "-X "+prefix+".Enabled=vertical-slice-v1 -X "+prefix+".Revision=8d514ba723bf1c564ec1fbf92a3858f51d13e641", "-o", binary, "./cmd/agentplugins")
+		build.Dir = module
+		if out, err := build.CombinedOutput(); err != nil {
+			t.Fatalf("build: %v\n%s", err, out)
+		}
 	}
 	home, scratch := t.TempDir(), t.TempDir()
 	native := func(argv []string) (int, string, string) {
 		c := exec.Command(binary, argv...)
 		c.Dir = home
-		c.Env = []string{"HOME=" + home, "XDG_CONFIG_HOME=" + home, "PATH=" + t.TempDir(), "TMPDIR=" + scratch, "AGENTPLUGINS_DIRECTORY_ORIGIN=ordinary-review-origin", "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_NOSYSTEM=1"}
+		c.Env = append(nativeEnvironment(home, scratch, t.TempDir()), "AGENTPLUGINS_DIRECTORY_ORIGIN=ordinary-review-origin")
 		var out, errout bytes.Buffer
 		c.Stdout, c.Stderr = &out, &errout
 		code := 0

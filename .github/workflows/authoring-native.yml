@@ -7,6 +7,9 @@ on:
 permissions:
   contents: read
 
+# Bounded pre-release checkpoint: Linux + Windows only. Writable macOS APFS
+# remains an UNPROVEN release gate; the preserved read-only research profile
+# does not establish authoring support or full MVP acceptance. No Mac provisioning.
 jobs:
   native:
     name: Authoring / ${{ matrix.os }}-${{ matrix.arch }}
@@ -15,7 +18,6 @@ jobs:
       matrix:
         include:
           - {runner: ubuntu-24.04, os: linux, arch: amd64}
-          - {runner: macos-15, os: darwin, arch: arm64}
           - {runner: windows-2022, os: windows, arch: amd64}
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 25
@@ -28,8 +30,14 @@ jobs:
       EXPECTED_ARCH: ${{ matrix.arch }}
       NATIVE_ROOT: ${{ runner.temp }}/authoring-native-${{ github.run_id }}-${{ github.run_attempt }}
       GOTOOLCHAIN: local
+      GOMAXPROCS: 2
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # ci.yml
+        # Preserve exact Git bytes for embedded template golden hashes.
+        env:
+          GIT_CONFIG_COUNT: '1'
+          GIT_CONFIG_KEY_0: core.autocrlf
+          GIT_CONFIG_VALUE_0: 'false'
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
@@ -40,6 +48,10 @@ jobs:
       - name: Native offline tests and actual entrypoint builds
         run: |
           set -euo pipefail
+          if [[ "$EXPECTED_OS" == windows ]]; then
+            NATIVE_ROOT="$(cygpath -m "$NATIVE_ROOT")"
+            export NATIVE_ROOT
+          fi
           mkdir "$NATIVE_ROOT"
           mkdir -p "$NATIVE_ROOT"/{evidence,home,tmp,config,cache,appdata,localappdata,hooks,bin}
           # Tool setup is finished. All test subprocesses inherit disposable profiles.
@@ -56,6 +68,11 @@ jobs:
           export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.hooksPath GIT_CONFIG_VALUE_0="$NATIVE_ROOT/hooks"
           export GIT_TERMINAL_PROMPT=0 GCM_INTERACTIVE=never TZ=UTC LC_ALL=C
           export GOENV=off GOWORK="$GITHUB_WORKSPACE/go.work"
+          export GOCACHE="$NATIVE_ROOT/cache/go-build" GOMODCACHE="$NATIVE_ROOT/cache/go-modules"
+          if [[ "$EXPECTED_OS" == windows ]]; then
+            GOWORK="$(cygpath -m "$GOWORK")"
+            export GOWORK
+          fi
           export AUTHORING_NATIVE_BIN_DIR="$NATIVE_ROOT/bin"
           git rev-parse HEAD > "$NATIVE_ROOT/evidence/head.txt"
           test "$(cat "$NATIVE_ROOT/evidence/head.txt")" = "$EXPECTED_HEAD"
@@ -63,25 +80,51 @@ jobs:
           test "$(go env GOHOSTOS)/$(go env GOHOSTARCH)" = "$EXPECTED_OS/$EXPECTED_ARCH"
           test "$(go env GOOS)/$(go env GOARCH)" = "$EXPECTED_OS/$EXPECTED_ARCH"
           test "$(go env GOVERSION)" = go1.25.13
+          # Node is used only for generated JavaScript syntax checks (--check).
+          unset NODE_OPTIONS NODE_PATH
+          node --version > "$NATIVE_ROOT/evidence/node-version.txt"
           packages=(./install/integrationctl/agentplugins/adapters/packageview
             ./install/integrationctl/agentplugins/adapters/packagedigest
             ./install/integrationctl/agentplugins/conformance
             ./install/integrationctl/agentplugins/adapters/loader
             ./cli/plugin-kit-ai/internal/authoringcli
             ./cli/plugin-kit-ai/internal/authoring/...)
-          go list "${packages[@]}" > "$NATIVE_ROOT/evidence/packages.txt"
+          go list -p 2 "${packages[@]}" > "$NATIVE_ROOT/evidence/packages.txt"
           # Resolve only lane/build Go dependencies before offline execution.
-          go list -deps -test "${packages[@]}" ./cli/plugin-kit-ai/cmd/{agentplugins,plugin-kit-ai} > "$NATIVE_ROOT/evidence/dependencies.txt"
+          go list -p 2 -deps -test "${packages[@]}" ./cli/plugin-kit-ai/cmd/{agentplugins,plugin-kit-ai} > "$NATIVE_ROOT/evidence/dependencies.txt"
           export GOPROXY=off GOSUMDB=off
           suffix=""; if [[ "$EXPECTED_OS" == windows ]]; then suffix=.exe; fi
           command_package=github.com/777genius/plugin-kit-ai/cli/internal/authoring/commands
           for entry in agentplugins plugin-kit-ai; do
-            go build -trimpath -ldflags "-X $command_package.Enabled=vertical-slice-v1 -X $command_package.Revision=$EXPECTED_HEAD" \
+            go build -p 2 -trimpath -ldflags "-X $command_package.Enabled=vertical-slice-v1 -X $command_package.Revision=$EXPECTED_HEAD" \
               -o "$AUTHORING_NATIVE_BIN_DIR/$entry$suffix" "./cli/plugin-kit-ai/cmd/$entry"
           done
+          go test -p 2 -json -list '^Test' "${packages[@]}" > "$NATIVE_ROOT/evidence/test-discovery.json"
+          # Only packageview's owned disposable filesystem fixtures run privileged
+          # on Linux: CAP_MKNOD is required for three mandatory device gates.
+          # Build unprivileged, then execute that single test binary with env -i.
+          # No package/device payload is executed/opened; no real project is used.
+          # All other suites stay unprivileged, preserving the permission-denial gate.
+          if [[ "$EXPECTED_OS" == linux ]]; then
+            go test -p 2 -c -o "$NATIVE_ROOT/bin/packageview.test" "${packages[0]}"
+            selected=("${packages[@]:1}")
+          else
+            selected=("${packages[@]}")
+          fi
           set +e
-          go test -json -count=1 -timeout=12m "${packages[@]}" > "$NATIVE_ROOT/evidence/go-test.json" 2> "$NATIVE_ROOT/evidence/go-test.stderr"
+          go test -p 2 -json -count=1 -timeout=12m "${selected[@]}" > "$NATIVE_ROOT/evidence/go-test.json" 2> "$NATIVE_ROOT/evidence/go-test.stderr"
           result=$?
+          if [[ "$EXPECTED_OS" == linux ]]; then
+            go tool test2json -p github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/packageview \
+              sudo -n env -i HOME="$HOME" USERPROFILE="$USERPROFILE" APPDATA="$APPDATA" LOCALAPPDATA="$LOCALAPPDATA" \
+              XDG_CONFIG_HOME="$XDG_CONFIG_HOME" XDG_CACHE_HOME="$XDG_CACHE_HOME" XDG_DATA_HOME="$XDG_DATA_HOME" XDG_STATE_HOME="$XDG_STATE_HOME" \
+              TMPDIR="$TMPDIR" TMP="$TMP" TEMP="$TEMP" PATH=/usr/bin:/bin GOMAXPROCS=2 \
+              "$NATIVE_ROOT/bin/packageview.test" -test.v=test2json -test.count=1 -test.timeout=3m \
+              >> "$NATIVE_ROOT/evidence/go-test.json" 2>> "$NATIVE_ROOT/evidence/go-test.stderr"
+            privileged_result=$?
+            printf '%s\n' "$privileged_result" > "$NATIVE_ROOT/evidence/packageview-exit.txt"
+            if [[ "$privileged_result" != 0 ]]; then result=$privileged_result; fi
+          fi
           printf '%s\n' "$result" > "$NATIVE_ROOT/evidence/test-exit.txt"
           exit "$result"
       - name: Require structured native evidence (including skips and offline E2E)

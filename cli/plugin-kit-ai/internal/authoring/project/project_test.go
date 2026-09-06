@@ -33,15 +33,15 @@ func empty(t *testing.T, root string) {
 		t.Fatalf("scratch not cleaned: %v %v", e, err)
 	}
 }
-func linux(t *testing.T) {
+func writableNative(t *testing.T) {
 	t.Helper()
-	if runtime.GOOS != "linux" {
-		t.Skip("Linux reader checkpoint")
+	if runtime.GOOS != "linux" && !(runtime.GOOS == "windows" && runtime.GOARCH == "amd64") {
+		t.Skip("writable native authoring requires Linux or Windows amd64")
 	}
 }
 
 func TestCoreGateAndExactRoot(t *testing.T) {
-	linux(t)
+	writableNative(t)
 	scratch := t.TempDir()
 	s := Service{Scratch: scratch}
 	for _, body := range []string{`{`, strings.Replace(core, "1.0.0", "8.0.0", 1), strings.Replace(core, `"demo"`, `9`, 1)} {
@@ -78,7 +78,7 @@ func TestCoreGateAndExactRoot(t *testing.T) {
 	empty(t, scratch)
 }
 func TestLegacyMetadataAndImmutableIdentity(t *testing.T) {
-	linux(t)
+	writableNative(t)
 	root, scratch := t.TempDir(), t.TempDir()
 	s := Service{Scratch: scratch}
 	put(t, root, "plugin.json", core)
@@ -127,7 +127,7 @@ func (c *countingContext) Err() error {
 	return c.Context.Err()
 }
 func TestCleanupOnCaptureFailureAndCancellation(t *testing.T) {
-	linux(t)
+	writableNative(t)
 	root, scratch := t.TempDir(), t.TempDir()
 	put(t, root, "plugin.json", core)
 	put(t, root, "data", strings.Repeat("a", 1<<20))
@@ -151,7 +151,7 @@ func TestCleanupOnCaptureFailureAndCancellation(t *testing.T) {
 	}
 }
 func TestCapturedCommandContainment(t *testing.T) {
-	linux(t)
+	writableNative(t)
 	for _, tc := range []struct {
 		value, field string
 		entries      []packageview.Observation

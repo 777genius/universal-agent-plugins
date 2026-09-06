@@ -250,6 +250,34 @@ func TestWindowsDirectoryAncestryHeld(t *testing.T) {
 	}
 }
 
+func TestWindowsInventoryMutationRejected(t *testing.T) {
+	root := nativeFixture(t, func(root string) {
+		nativeWrite(t, root, "plugin.json", "core")
+		nativeWrite(t, root, "z", "last inventory entry")
+	})
+	scratch := t.TempDir()
+	changed := false
+	l, err := (Reader{TempDir: scratch}).open(context.Background(), root, &captureHooks{afterChunk: func(path string) {
+		if path == "z" && !changed {
+			changed = true
+			nativeWrite(t, root, "late", "added after enumeration")
+		}
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer l.Close()
+	_, err = l.Capture(context.Background())
+	var safe *Error
+	if !changed || !errors.As(err, &safe) || safe.Code != "source_changed" {
+		t.Fatalf("inventory mutation accepted: changed=%t error=%v", changed, err)
+	}
+	entries, err := os.ReadDir(scratch)
+	if err != nil || len(entries) != 0 {
+		t.Fatal("inventory failure leaked scratch", err)
+	}
+}
+
 // Ensure the hand-declared FILE_BASIC_INFO ABI remains 40 bytes on amd64.
 func TestWindowsBasicInfoABI(t *testing.T) {
 	if unsafe.Sizeof(winBasic{}) != 40 {
