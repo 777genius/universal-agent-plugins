@@ -4,8 +4,8 @@
 // component and opaque-tree capture. Never call Capture after a fatal core/schema
 // result. Convert these private input records to conformance types in the caller.
 //
-// Linux uses Go rooted handles plus openat2 and verified O_PATH handles. Other
-// platforms fail closed until their special-file and replacement gates are proven.
+// Linux uses openat2/O_PATH. Darwin requires read-only local APFS; Windows
+// requires local fixed-drive NTFS. Native execution remains a release gate.
 // The profile assumes a trusted kernel/mount namespace and ordinary local files;
 // it is not an atomic filesystem snapshot or protection from the same principal
 // modifying private storage. No source writes, execution, discovery, or network
@@ -20,13 +20,17 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strconv"
 	"sync"
 )
 
 const ScopeID = "agentplugins-captured-input-sha256-v1"
-const ReadProfile = "packageview-local-linux-v1"
+
+// Each native profile has its own filesystem and kernel capability contract.
+const ReadProfile = "packageview-local-" + runtime.GOOS + "-v1"
+
 const TreeAlgorithm = "agentplugins-tree-sha256-v1"
 
 type State string
