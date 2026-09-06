@@ -163,7 +163,7 @@ func TestReviewInitCleanupFailurePrecedence(t *testing.T) {
 						}
 					} else {
 						reviewCleanupRequireNonempty(t, cleanup.Err, filepath.Base(replaced))
-						if !strings.Contains(cleanup.Error(), "cleanup staging ") || !strings.Contains(cleanup.Error(), replaced) {
+						if !strings.Contains(cleanup.Error(), "cleanup staging ") || !strings.Contains(cleanup.Error(), fmt.Sprintf("%q", replaced)) {
 							t.Fatal("expected private container cleanup cause")
 						}
 					}
