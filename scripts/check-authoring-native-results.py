@@ -165,12 +165,14 @@ def check(root):
         native_package = "github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/packageview"
         critical = {
             "linux": ["TestDeviceMetadataOnly", "TestReplacementRacesNeverFollowSpecialOrOutside/before-name-check/device", "TestReplacementRacesNeverFollowSpecialOrOutside/after-name-check/device"],
-            "windows": ["TestNativeCaptureAndCleanup", "TestNativeTraversalOrderAndBoundedLinks", "TestNativeLegacyMetadataAndHardlinks", "TestNativeLegacySymlinkAlias", "TestNativeRootLinkRejected",
+            "windows": ["TestWindowsBootstrapDirectoryGuard", "TestWindowsBootstrapDirectoryGuardWrongKind", "TestWindowsBootstrapDirectoryGuardUnsafe", "TestNativeCaptureAndCleanup", "TestNativeTraversalOrderAndBoundedLinks", "TestNativeLegacyMetadataAndHardlinks", "TestNativeLegacySymlinkAlias", "TestNativeRootLinkRejected",
                         "TestWindowsReplacementBeforeAndAfterNameCheck", "TestWindowsReplacementWithPipeNamespaceLink", "TestWindowsSameObjectReopenAfterNameReplacement", "TestWindowsMetadataProbeReplacement", "TestWindowsExistingWriterAndReparseSetterDenied", "TestWindowsAttributesOnlyHandleCannotSetReparse", "TestWindowsDirectoryAncestryHeld", "TestWindowsInventoryMutationRejected", "TestWindowsJunctionsAndNamespaceRoots", "TestWindowsInertFIFOReparseRejected", "TestWindowsHandleLifetimeAndFailureCleanup", "TestWindowsOfflineFileHasNoDataOpen",
                         "TestWindowsScratchPhysicalAliases", "TestWindowsScratchIdentityUnavailableFailsClosed", "TestWindowsScratchAncestryHeld", "TestWindowsScratchDistinctNTFSVolumes"],
         }
         for test in critical.get(native_os, []):
             require((native_package, test) in passed, "missing mandatory native contract: " + test)
+        scaffold_package = "github.com/777genius/plugin-kit-ai/cli/internal/authoring/scaffold"
+        require((scaffold_package, "TestDeniedParent") in passed, "missing mandatory parent permission denial")
         command_package = "github.com/777genius/plugin-kit-ai/cli/internal/authoring/commands"
         for contract in ("generated-skill", "skills-init", "static-validation", "duplicate-unchanged",
                          "readiness", "strict-flags", "malformed-skill", "sdk-static-only"):
