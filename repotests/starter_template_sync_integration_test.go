@@ -49,7 +49,16 @@ func TestStarterTemplateSyncContractFilesStayAligned(t *testing.T) {
 	mustContain(t, workflow, "run: ./scripts/update-starter-template.sh")
 	mustContain(t, workflow, "default: \"all\"")
 	mustContain(t, workflow, "- all-runtime-package")
-	mustContain(t, rootReadme, "Codex and Claude starters across Go, Python, and")
+	// Preserved v1 starters remain discoverable without being advertised as
+	// root plugin.json templates for the unreleased standard authoring MVP.
+	_, historicalReadme, found := strings.Cut(rootReadme, "### Historical authoring and development\n")
+	if !found {
+		t.Fatal("README missing historical authoring boundary")
+	}
+	mustContain(t, strings.Join(strings.Fields(historicalReadme), " "), "The repository preserves Codex and Claude starters across Go, Python, and Node/TypeScript.")
+	mustContain(t, historicalReadme, "[starters](examples/starters/README.md)")
+	mustContain(t, startersReadme, "Historical plugin-kit-ai v1 managed examples; baseline 1.2.4.")
+	mustContain(t, startersReadme, "These are not root `plugin.json` starters for the standard MVP.")
 	mustContain(t, cliReadme, "Official starter templates:")
 	mustContain(t, startersReadme, "These starter repos are the fastest way to get one working plugin repo that can later expand to more supported outputs.")
 	mustContain(t, startersReadme, "Use this template")
