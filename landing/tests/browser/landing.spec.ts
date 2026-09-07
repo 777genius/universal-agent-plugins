@@ -295,6 +295,7 @@ test('security badges explain the exact checked revision and open full findings'
   const badge = page.locator('.plugin-card__security--warnings').first();
   await expect(badge).toBeVisible({ timeout: 15_000 });
   await expect(badge).not.toHaveAttribute('title');
+  await badge.scrollIntoViewIfNeeded();
   await badge.focus();
   const tooltip = page.locator('.app-tooltip');
   await expect(tooltip).toBeVisible();
