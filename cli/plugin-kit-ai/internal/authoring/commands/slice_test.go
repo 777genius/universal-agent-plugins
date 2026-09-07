@@ -78,8 +78,9 @@ func execute(t *testing.T, a commands.App, args []string, mount bool) (report.Re
 
 // Workers capture bytes and errors; only the parent may decode or fail a test.
 type rawExecution struct {
-	out, errout []byte
-	err         error
+	out, errout  []byte
+	err          error
+	operationErr error
 }
 
 func executeRaw(a commands.App, args []string, mount bool) rawExecution {
@@ -89,8 +90,32 @@ func executeRaw(a commands.App, args []string, mount bool) rawExecution {
 		builder = mounted
 		args = append([]string{"author"}, args...)
 	}
-	e := a.Execute(context.Background(), args, authoringcli.Streams{Out: &out, Err: &errout}, builder)
-	return rawExecution{out.Bytes(), errout.Bytes(), e}
+	// Each fresh command tree and captured error belong to this invocation.
+	// Capture before App.Execute replaces private causes with its public error.
+	var operationErr error
+	capture := func(factories ...authoringcli.Factory) (*cobra.Command, error) {
+		root, err := builder(factories...)
+		if err != nil {
+			return nil, err
+		}
+		var visit func(*cobra.Command)
+		visit = func(cmd *cobra.Command) {
+			if cmd.Name() == "init" && cmd.RunE != nil {
+				run := cmd.RunE
+				cmd.RunE = func(cmd *cobra.Command, args []string) error {
+					operationErr = run(cmd, args)
+					return operationErr
+				}
+			}
+			for _, child := range cmd.Commands() {
+				visit(child)
+			}
+		}
+		visit(root)
+		return root, nil
+	}
+	e := a.Execute(context.Background(), args, authoringcli.Streams{Out: &out, Err: &errout}, capture)
+	return rawExecution{out: out.Bytes(), errout: errout.Bytes(), err: e, operationErr: operationErr}
 }
 
 func decodeExecution(t *testing.T, result rawExecution) (report.Report, int, []byte) {
@@ -419,7 +444,7 @@ func TestConcurrentInitAndCanceledInvocation(t *testing.T) {
 		if r.Committed {
 			wins++
 		} else if r.Error == nil || r.Error.Code != "destination_exists" {
-			t.Fatalf("unexpected race failure: %+v", r)
+			t.Fatalf("unexpected race failure: %+v; operation_error=%T %v", r, result.operationErr, result.operationErr)
 		}
 	}
 	if wins != 1 {
