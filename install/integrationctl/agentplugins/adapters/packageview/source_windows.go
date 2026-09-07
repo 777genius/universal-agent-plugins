@@ -32,6 +32,8 @@ type source struct {
 	legacyInfo os.FileInfo
 	volume     uint32
 	records    map[winSnapshot]*winObservation
+	// Instance-local acquisition diagnostic; nil in normal sources.
+	acquisitionHook func(stage string, before, after winSnapshot, err error)
 }
 type pinned struct {
 	file *os.File
@@ -196,7 +198,13 @@ func (s *source) remember(f *os.File) (*pinned, error) {
 	if e != nil {
 		return nil, e
 	}
+	if s.acquisitionHook != nil {
+		s.acquisitionHook("before-after-stat", meta, winSnapshot{}, nil)
+	}
 	after, e := winMeta(f)
+	if s.acquisitionHook != nil {
+		s.acquisitionHook("after-stat", meta, after, e)
+	}
 	if e != nil || meta != after {
 		return nil, fail("source_changed")
 	}
