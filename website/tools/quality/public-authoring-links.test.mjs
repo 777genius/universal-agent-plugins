@@ -4,8 +4,8 @@ import { createRequire } from 'node:module';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { test } from 'node:test';
 
-const root = new URL('../../', import.meta.url);
-const read = (path: string) => readFileSync(new URL(path, root), 'utf8');
+const root = new URL('../../../', import.meta.url);
+const read = (path) => readFileSync(new URL(path, root), 'utf8');
 // Use the site's installed VitePress, or a read-only matching cache in isolated reviews.
 // VITEPRESS_TEST_MODULE is an absolute path to vitepress/dist/node/index.js.
 const websiteRequire = createRequire(new URL('website/package.json', root));
@@ -17,7 +17,7 @@ const md = await createMarkdownRenderer(fileURLToPath(new URL('website/', root))
 // Exact heading sequence extracted from original main
 // 01f02cb51cfe5f664d4d5f52b295c59c7ea03495:website/source/{locale}/guide/quickstart.md.
 // Render with VitePress's actual slugger: accents, Cyrillic and punctuation matter.
-const oldHeadings: Record<string, string> = {
+const oldHeadings = {
   en: `# Quickstart
 ## Recommended Default
 ## Start With The Job
@@ -81,8 +81,10 @@ const oldHeadings: Record<string, string> = {
 ## 稍后扩展的内容
 ## 快速入门后`,
 };
-const ids = (html: string) => [...html.matchAll(/\bid="([^"]+)"/g)].map(m => m[1]);
-const headingIds = (html: string) => [...html.matchAll(/<h[1-6] id="([^"]+)"/g)].map(m => m[1]);
+const ids = (html) => [...html.matchAll(/\bid="([^"]+)"/g)].map(m => m[1]);
+const headingIds = (html) => [...html.matchAll(/<h[1-6] id="([^"]+)"/g)].map(m => m[1]);
+
+assert.equal(Object.values(oldHeadings).reduce((total, headings) => total + headings.split('\n').length, 0), 62);
 
 for (const [locale, headings] of Object.entries(oldHeadings)) {
   test(`${locale}: every original quickstart fragment resolves exactly once`, async () => {

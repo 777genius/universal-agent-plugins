@@ -49,7 +49,19 @@ func TestStarterTemplateSyncContractFilesStayAligned(t *testing.T) {
 	mustContain(t, workflow, "run: ./scripts/update-starter-template.sh")
 	mustContain(t, workflow, "default: \"all\"")
 	mustContain(t, workflow, "- all-runtime-package")
-	mustContain(t, rootReadme, "starter templates for Codex and Claude across Go, Python, and Node/TypeScript")
+	// Templates remain available for historical YAML projects across both targets
+	// and all three runtimes; the public Build entry does not claim v2 is released.
+	mustContain(t, rootReadme, "**Preparation — unreleased:** the standard-first authoring CLI is not released.")
+	mustContain(t, strings.ReplaceAll(rootReadme, "\r\n", "\n"), "For existing v1 `plugin.yaml` projects, retain the original templates, generation,\nvalidation and export workflows in [the historical authoring guide](docs/PLUGIN_KIT_AI_AUTHORING.md).")
+	mustContain(t, rootReadme, "The reference below is for historical v1 maintenance.")
+	mustContain(t, rootReadme, "[examples/starters/README.md](examples/starters/README.md)")
+	mustContain(t, rootReadme, "the stable local Python and Node subset on `codex-runtime` and `claude`")
+	for starter, repo := range expected {
+		mustContain(t, cliReadme, "https://github.com/777genius/"+repo)
+		if !fileExists(filepath.Join(root, "examples", "starters", starter, "plugin", "plugin.yaml")) {
+			t.Fatalf("historical starter %s missing plugin/plugin.yaml", starter)
+		}
+	}
 	mustContain(t, cliReadme, "Official starter templates:")
 	mustContain(t, startersReadme, "These starter repos are the fastest way to get one working plugin repo that can later expand to more supported outputs.")
 	mustContain(t, startersReadme, "Use this template")
