@@ -17,9 +17,20 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/conformance"
 )
 
+// physicalMutationRoot resolves only a fresh owned infrastructure directory,
+// before fixture inputs (including deliberate symlinks) are constructed.
+func physicalMutationRoot(t *testing.T) string {
+	t.Helper()
+	root, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	return root
+}
+
 func TestSkillsFactoriesAndEntrypointParity(t *testing.T) {
 	a := commands.App{Projects: project.Service{Scratch: t.TempDir()}, Revision: "skills-factories"}
-	roots := []string{t.TempDir(), t.TempDir()}
+	roots := []string{physicalMutationRoot(t), physicalMutationRoot(t)}
 	for _, root := range roots {
 		write(t, root, "plugin.json", plugin(""))
 		write(t, root, "keep", marker)
@@ -105,7 +116,7 @@ func TestSkillsFactoriesAndEntrypointParity(t *testing.T) {
 	}
 }
 func TestSkillsExactCWD(t *testing.T) {
-	root := t.TempDir()
+	root := physicalMutationRoot(t)
 	write(t, root, "plugin.json", plugin(""))
 	child := filepath.Join(root, "child")
 	if e := os.Mkdir(child, 0700); e != nil {
@@ -160,7 +171,7 @@ func TestSkillsHumanAllowlist(t *testing.T) {
 func TestSkillsPostCommitErrorIsExplicit(t *testing.T) {
 	for _, mount := range []bool{false, true} {
 		for _, jsonOutput := range []bool{false, true} {
-			root := t.TempDir()
+			root := physicalMutationRoot(t)
 			write(t, root, "plugin.json", plugin(""))
 			a := commands.App{Projects: project.Service{Scratch: t.TempDir(), Limits: packageview.Limits{Entries: 1}}}
 			args := []string{"skills", "init", "new", "--description", "text", root}

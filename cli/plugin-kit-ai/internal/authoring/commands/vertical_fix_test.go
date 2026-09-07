@@ -104,7 +104,7 @@ func TestReviewInitCleanupFailurePrecedence(t *testing.T) {
 				boundary = "command"
 			}
 			t.Run(fixture+"/"+boundary, func(t *testing.T) {
-				parent, scratch := t.TempDir(), t.TempDir()
+				parent, scratch := physicalMutationRoot(t), t.TempDir()
 				ctx, cancel := context.WithCancel(context.Background())
 				defer cancel()
 				replaced := ""

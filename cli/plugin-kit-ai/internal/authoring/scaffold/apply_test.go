@@ -107,7 +107,16 @@ func TestMissingParentSymlinkParentAndSourceOverlap(t *testing.T) {
 		t.Fatal(err)
 	}
 	p := planFor(t, "skill")
-	validate := realValidation(t)
+	validationCalls := 0
+	realValidate := realValidation(t)
+	validate := func(ctx context.Context, stage string) error {
+		validationCalls++
+		return realValidate(ctx, stage)
+	}
+	// Prove this physical fixture reaches real validation before adding aliases.
+	if result, err := Apply(context.Background(), p, ApplyOptions{Destination: filepath.Join(root, "positive"), Validate: validate}); err != nil || !result.Committed || validationCalls != 1 {
+		t.Fatalf("physical root positive control: %+v %v calls=%d", result, err, validationCalls)
+	}
 	for _, o := range []ApplyOptions{
 		{Destination: filepath.Join(root, "missing", "out")},
 		{Destination: filepath.Join(source, "out"), SourceRoots: []string{source}},
@@ -132,6 +141,9 @@ func TestMissingParentSymlinkParentAndSourceOverlap(t *testing.T) {
 	}
 	if _, err := Apply(context.Background(), p, ApplyOptions{Destination: filepath.Join(source, "out"), SourceRoots: []string{alias}, Validate: validate}); err == nil {
 		t.Fatal("source alias overlap")
+	}
+	if validationCalls != 1 {
+		t.Fatalf("unsafe input reached validation: calls=%d", validationCalls)
 	}
 	assertOnly(t, source, "sentinel")
 	b, _ := os.ReadFile(filepath.Join(source, "sentinel"))
