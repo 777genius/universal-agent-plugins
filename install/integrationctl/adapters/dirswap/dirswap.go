@@ -38,17 +38,19 @@ const (
 )
 
 type Receipt struct {
-	SchemaVersion   int    `json:"schema_version"`
-	Operation       string `json:"operation"`
-	OperationID     string `json:"operation_id"`
-	ClientBindingID string `json:"client_binding_id"`
-	Sequence        int    `json:"sequence"`
-	OwnedBase       string `json:"owned_base"`
-	ActivePath      string `json:"active_path"`
-	StagingPath     string `json:"staging_path,omitempty"`
-	BackupPath      string `json:"backup_path"`
-	HadActive       bool   `json:"had_active"`
-	Phase           string `json:"phase"`
+	SchemaVersion     int    `json:"schema_version"`
+	Operation         string `json:"operation"`
+	OperationID       string `json:"operation_id"`
+	ClientBindingID   string `json:"client_binding_id"`
+	Sequence          int    `json:"sequence"`
+	OwnedBase         string `json:"owned_base"`
+	ActivePath        string `json:"active_path"`
+	StagingPath       string `json:"staging_path,omitempty"`
+	BackupPath        string `json:"backup_path"`
+	HadActive         bool   `json:"had_active"`
+	Phase             string `json:"phase"`
+	PublishedIdentity string `json:"published_identity,omitempty"`
+	PublishedDigest   string `json:"published_digest,omitempty"`
 }
 
 type Input struct {
@@ -64,8 +66,8 @@ type Input struct {
 	// reconstructing a target it has independently confirmed absent: an earlier
 	// absence check can go stale before this call runs, and normal Apply
 	// semantics would otherwise treat newly appeared content as an existing
-	// directory to back up and later discard on Commit. This narrows, but does
-	// not eliminate, the window between this check and the rename below.
+	// directory to back up and later discard on Commit. Publication also uses
+	// an exclusive rename so a newly appeared target is never overwritten.
 	RequireAbsent bool
 }
 
@@ -125,7 +127,11 @@ func (manager Manager) Apply(ctx context.Context, input Input) (Receipt, error) 
 		return receipt, err
 	}
 	if receipt.Operation == OperationSwap {
-		if err := os.Rename(receipt.StagingPath, receipt.ActivePath); err != nil {
+		rename := os.Rename
+		if !receipt.HadActive {
+			rename = renameDirectoryExclusive
+		}
+		if err := rename(receipt.StagingPath, receipt.ActivePath); err != nil {
 			return receipt, fmt.Errorf("activate staged directory: %w", err)
 		}
 	}
@@ -362,7 +368,15 @@ func (manager Manager) newReceipt(input Input) (Receipt, error) {
 	} else if !os.IsNotExist(err) {
 		return Receipt{}, err
 	}
+	publishedIdentity, publishedDigest := "", ""
+	if !hadActive && operation == OperationSwap {
+		publishedIdentity, publishedDigest, err = publicationProof(stagingPath)
+		if err != nil {
+			return Receipt{}, fmt.Errorf("capture staged ownership: %w", err)
+		}
+	}
 	return Receipt{
+		PublishedIdentity: publishedIdentity, PublishedDigest: publishedDigest,
 		SchemaVersion:   receiptSchemaVersion,
 		Operation:       operation,
 		OperationID:     input.OperationID,
@@ -497,15 +511,7 @@ func (manager Manager) restoreOld(receipt Receipt) error {
 		return fmt.Errorf("inspect backup directory during rollback: %w", err)
 	}
 	if !receipt.HadActive {
-		if backupExists {
-			return fmt.Errorf("unexpected backup for operation without an old active directory")
-		}
-		if activeExists {
-			if err := removeOwnedDirectory(receipt.OwnedBase, receipt.ActivePath); err != nil {
-				return fmt.Errorf("remove activated directory during rollback: %w", err)
-			}
-		}
-		return nil
+		return manager.rollbackAbsent(receipt, activeExists, backupExists)
 	}
 	if !backupExists {
 		if activeExists {

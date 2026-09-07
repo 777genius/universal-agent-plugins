@@ -1,22 +1,7 @@
 package pluginkitairepo_test
 
-// This suite drives the real Claude Code CLI through UAP's actual install
-// route (personal <CLAUDE_CONFIG_DIR>/skills/<physical-id>/.claude-plugin,
-// declared name@skills-dir discovery). It is opt-in and uses only a disposable
-// HOME/CLAUDE_CONFIG_DIR; it never touches the invoking user's real Claude
-// Code profile, credentials, or projects. Unlike the Codex suite, this one
-// requires no container/VM: Claude Code has no known kernel-syscall
-// dependency analogous to Codex's pidfd_open requirement, so it runs directly
-// on the host OS the CLI itself supports (this suite assumes macOS/Linux;
-// CLAUDE_CONFIG_DIR isolation is the same on both).
-//
-// One isolation gap remains and is not fixable from here: the real `claude`
-// binary queries the host's OS credential store (the macOS login keychain, or
-// the platform equivalent elsewhere) for a service name derived from
-// CLAUDE_CONFIG_DIR. No real secret is read back, because the derived service
-// name differs from the real profile's, but the store itself is genuinely
-// queried rather than substituted with a disposable one -- Claude Code has no
-// flag to redirect that. Documented rather than silently claimed away.
+// This opt-in suite uses only disposable fixture paths. Native execution requires
+// an isolated Linux container; a redirected HOME cannot isolate the macOS keychain.
 
 import (
 	"context"
@@ -27,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -381,9 +367,16 @@ func TestAgentpluginsClaudeNativeLifecycle(t *testing.T) {
 	if os.Getenv("AGENTPLUGINS_CLAUDE_NATIVE_E2E") != "1" {
 		t.Skip("opt-in native client execution")
 	}
+	if runtime.GOOS != "linux" {
+		t.Fatal("native Claude requires isolated Linux runtime")
+	}
 	client := claudeNativeBinary(t, "AGENTPLUGINS_CLAUDE_BIN")
 	installer := claudeNativeBinary(t, "AGENTPLUGINS_INSTALLER_BIN")
+	if expected := os.Getenv("AGENTPLUGINS_CLAUDE_SHA256"); len(expected) != 64 || claudeSHA256(t, client) != expected {
+		t.Fatal("Claude binary pin mismatch")
+	}
 	f := newClaudeNativeFixture(t)
+	nativeProvisionScanner(t, &nativeFixture{Root: f.Root})
 	clientDir := filepath.Dir(client)
 
 	// Every expected stage is declared up front as not_evaluated, matching
@@ -422,6 +415,9 @@ func TestAgentpluginsClaudeNativeLifecycle(t *testing.T) {
 
 	// Measure the client actually under test rather than trusting an env var.
 	measuredClientVersion = claudeVersionString(t, f, client)
+	if want := os.Getenv("AGENTPLUGINS_CLAUDE_VERSION"); want == "" || measuredClientVersion != want {
+		t.Fatalf("Claude version %q does not match %q", measuredClientVersion, want)
+	}
 
 	claudeWriteFixturePackage(t, f.PackageRoot, "claude-native-proof", "1.0.0")
 

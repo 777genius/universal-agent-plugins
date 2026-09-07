@@ -227,6 +227,12 @@ func nativeSession(t *testing.T, f *nativeFixture, client, label, revision, oper
 			t.Fatalf("duplicate native plugin server: %s", server.Name)
 		}
 		serverNames[server.Name] = true
+		if label == "partial_failure" && server.Name == "startup-failure" {
+			if server.RuntimeStatus != "failed" || len(server.Tools) != 0 {
+				t.Fatalf("startup-failure server was not independently failed: %+v", server)
+			}
+			continue
+		}
 		if server.Name == "http" {
 			result, err := r.request("mcpServer/tool/call", map[string]any{"threadId": thread.Thread.ID, "server": server.Name, "tool": "inspect_runtime", "arguments": map[string]string{"nonce": f.Nonce}})
 			if err != nil {
@@ -276,7 +282,14 @@ func nativeSession(t *testing.T, f *nativeFixture, client, label, revision, oper
 		}
 		observed = facts
 	}
-	if len(serverNames) != 4 || !serverNames["default"] || !serverNames["explicit"] || !serverNames["http"] || !serverNames["redirect"] {
+	wantServers := 4
+	if label == "partial_failure" {
+		wantServers = 5
+		if !serverNames["startup-failure"] || serverNames["unavailable"] || serverNames["unsupported-sse"] {
+			t.Fatalf("failure isolation inventory: %v", serverNames)
+		}
+	}
+	if len(serverNames) != wantServers || !serverNames["default"] || !serverNames["explicit"] || !serverNames["http"] || !serverNames["redirect"] {
 		t.Fatalf("unexpected exact native server inventory: %v", serverNames)
 	}
 	if count != 2 {
@@ -301,6 +314,9 @@ func nativeSession(t *testing.T, f *nativeFixture, client, label, revision, oper
 	found := false
 	for _, group := range skills.Data {
 		for _, skill := range group.Skills {
+			if label == "partial_failure" && skill.PluginID == f.PluginID && strings.Contains(skill.Path, "invalid-proof") {
+				t.Fatal("invalid skill reached native discovery")
+			}
 			if nativeSkillIdentity(skill.Name, skill.PluginID, skill.Path, skill.Enabled, f.PluginID, observed.Root) {
 				body, err := os.ReadFile(skill.Path)
 				if err != nil {
@@ -318,6 +334,27 @@ func nativeSession(t *testing.T, f *nativeFixture, client, label, revision, oper
 	}
 	stages[label+"_native_tool"] = nativeStage{Status: "passed", Artifacts: []string{label + "-rpc.jsonl", "events.jsonl"}}
 	stages[label+"_skill_discovery"] = nativeStage{Status: "passed", Reason: "Exact plugin-attributed skill path and body bytes; no model use claimed"}
+	if label == "A" && f.ProviderRequests != nil {
+		nativeAttempt(stages, "skill_context", "skill-context-request.json")
+		r.must(t, "turn/start", map[string]any{"threadId": thread.Thread.ID, "input": []any{
+			map[string]any{"type": "text", "text": "Use the explicitly selected skill and reply briefly.", "text_elements": []any{}},
+			map[string]string{"type": "skill", "name": "native-proof:native-proof", "path": filepath.Join(observed.Root, "skills", "native-proof", "SKILL.md")},
+		}})
+		select {
+		case body := <-f.ProviderRequests:
+			nativeWrite(t, filepath.Join(f.Root, "skill-context-request.json"), body, 0600)
+			var request map[string]json.RawMessage
+			if err := json.Unmarshal(body, &request); err != nil {
+				t.Fatal(err)
+			}
+			if !bytes.Contains(request["input"], []byte("UAP_SKILL_BODY_A_"+f.Nonce)) {
+				t.Fatal("native turn did not inject selected installed skill body into outgoing input")
+			}
+			stages["skill_context"] = nativeStage{Status: "passed", Reason: "model_provider=scripted_loopback; real native explicit-skill turn injected BODY into outgoing Responses input; no real model skill use claimed", Artifacts: []string{"skill-context-request.json", label + "-rpc.jsonl"}}
+		case <-time.After(30 * time.Second):
+			t.Fatal("native explicit-skill turn did not reach scripted provider")
+		}
+	}
 	return observed
 }
 
@@ -336,29 +373,31 @@ func TestAgentpluginsCodexNativeLifecycle(t *testing.T) {
 	f := newNativeFixture(t, true)
 	f.ClientBinDir = filepath.Dir(client)
 	stages := map[string]nativeStage{}
-	for _, name := range []string{"install", "A_native_tool", "B_native_tool", "same_version_native_tool", "unchanged", "owned_repair", "native_cache_repair", "partial_failure", "remove", "repeat_remove", "foreign_preservation", "collision_drift", "immutable_git", "http", "redirect_headers", "skill_context", "real_model_skill_use", "oauth"} {
+	for _, name := range []string{"install", "A_native_tool", "B_native_tool", "same_version_native_tool", "unchanged", "owned_repair", "native_cache_repair", "partial_failure", "all_unsupported", "remove", "repeat_remove", "foreign_preservation", "collision_drift", "immutable_git", "immutable_git_native", "http", "redirect_headers", "skill_context", "real_model_skill_use", "oauth"} {
 		stages[name] = nativeStage{Status: "not_evaluated", Reason: "not reached"}
 	}
-	evidence := map[string]any{"started_utc": time.Now().UTC().Format(time.RFC3339Nano), "os": runtime.GOOS, "arch": runtime.GOARCH, "profile": f.Root, "client_version": "0.153.4", "client_source": "3d2ee51ca2d5db578f328aa75e20aa22c0197c9a", "client_sha256": nativeSHA(t, client), "installer_sha256": nativeSHA(t, installer), "installer_base_commit": os.Getenv("AGENTPLUGINS_INSTALLER_COMMIT"), "installer_source_state": "reviewed_uncommitted_patches", "installer_patch_sha256": strings.Split(os.Getenv("AGENTPLUGINS_INSTALLER_PATCH_SHA256"), ","), "installer_tree": os.Getenv("AGENTPLUGINS_INSTALLER_TREE"), "acquisition": "local_directory", "native_surface": "codex app-server direct thread MCP RPC", "stages": stages}
+	evidence := map[string]any{"started_utc": time.Now().UTC().Format(time.RFC3339Nano), "os": runtime.GOOS, "arch": runtime.GOARCH, "profile": f.Root, "client_version": "0.153.4", "client_source": "3d2ee51ca2d5db578f328aa75e20aa22c0197c9a", "client_sha256": nativeSHA(t, client), "installer_sha256": nativeSHA(t, installer), "acquisition": "local_directory", "native_surface": "codex app-server direct thread MCP RPC", "stages": stages}
 	defer func() {
 		evidence["finished_utc"] = time.Now().UTC().Format(time.RFC3339Nano)
 		hashes := map[string]string{}
 		entries, _ := os.ReadDir(f.Root)
 		for _, e := range entries {
-			if !e.IsDir() && (strings.HasSuffix(e.Name(), ".jsonl") || strings.HasSuffix(e.Name(), ".log") || strings.HasSuffix(e.Name(), "-installer.json")) {
+			if !e.IsDir() && (strings.HasSuffix(e.Name(), ".jsonl") || strings.HasSuffix(e.Name(), ".log") || strings.HasSuffix(e.Name(), "-installer.json") || e.Name() == "skill-context-request.json" || e.Name() == "immutable-git.json") {
 				hashes[e.Name()] = nativeSHA(t, filepath.Join(f.Root, e.Name()))
 			}
 		}
 		evidence["artifact_sha256"] = hashes
 		nativeJSON(t, filepath.Join(f.Root, "evidence.json"), evidence)
 	}()
-	if evidence["installer_base_commit"] == "" || evidence["installer_tree"] == "" {
-		t.Fatal("exact installer base commit and resulting tree required")
+	identity, err := nativeSourceIdentity(os.Getenv("AGENTPLUGINS_INSTALLER_COMMIT"), os.Getenv("AGENTPLUGINS_INSTALLER_TREE"), os.Getenv("AGENTPLUGINS_INSTALLER_PATCH_SHA256"))
+	if err != nil {
+		t.Fatal(err)
 	}
-	if os.Getenv("AGENTPLUGINS_INSTALLER_PATCH_SHA256") == "" {
-		t.Fatal("accepted installer patch digests required for reviewed uncommitted source identity")
+	for key, value := range identity {
+		evidence[key] = value
 	}
-	nativeWrite(t, filepath.Join(f.CodexHome, "config.toml"), []byte("cli_auth_credentials_store = \"file\"\nmcp_oauth_credentials_store = \"file\"\nmodel_provider = \"fixture\"\nmodel = \"fixture-model\"\n[model_providers.fixture]\nname = \"Fixture\"\nbase_url = \"http://127.0.0.1:1/v1\"\nwire_api = \"responses\"\nrequires_openai_auth = false\n[analytics]\nenabled = false\n[feedback]\nenabled = false\n"), 0600)
+	providerURL := nativeScriptedProvider(t, f)
+	nativeWrite(t, filepath.Join(f.CodexHome, "config.toml"), []byte("cli_auth_credentials_store = \"file\"\nmcp_oauth_credentials_store = \"file\"\nmodel_provider = \"fixture\"\nmodel = \"fixture-model\"\n[model_providers.fixture]\nname = \"Fixture\"\nbase_url = \""+providerURL+"\"\nwire_api = \"responses\"\nrequires_openai_auth = false\n[analytics]\nenabled = false\n[feedback]\nenabled = false\n"), 0600)
 	b, err := nativeCommand(t, f, client, "client-version", "--version")
 	if err != nil || strings.TrimSpace(string(b)) != "codex-cli 0.153.4" {
 		t.Fatalf("wrong pinned client: %s %v", b, err)
@@ -510,6 +549,33 @@ func TestAgentpluginsCodexNativeLifecycle(t *testing.T) {
 	if nativeTreeDigest(t, active) != originalDigest {
 		t.Fatal("fixture original bytes were not restored exactly")
 	}
+	// A foreign directory at the formerly owned path must not be adopted.
+	nativeAttempt(stages, "collision_drift", "foreign-collision.log")
+	collisionBackup := filepath.Join(f.Root, "collision-original-backup")
+	if err := os.Rename(active, collisionBackup); err != nil {
+		t.Fatal(err)
+	}
+	nativeWrite(t, filepath.Join(active, "foreign-sentinel"), []byte("foreign-"+f.Nonce), 0600)
+	collisionDigest := nativeTreeDigest(t, active)
+	collision, collisionErr := nativeCommand(t, f, installer, "foreign-collision", "repair", "native-proof", "--target", "codex", "--format", "json")
+	collisionStderr, err := os.ReadFile(filepath.Join(f.Root, "foreign-collision-stderr.log"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := nativeCollisionGuardResult(collision, collisionStderr, collisionErr); err != nil {
+		t.Fatal(err)
+	}
+	if nativeTreeDigest(t, active) != collisionDigest || nativeSHA(t, statePath) != guardState || nativeTreeDigest(t, c.Root) != cacheDigest {
+		t.Fatal("foreign collision refusal mutated protected bytes")
+	}
+	stages["collision_drift"] = nativeStage{Status: "passed", Reason: "Modified owned artifact and foreign replacement directory independently refused; state/cache/foreign bytes preserved", Artifacts: []string{"owned-guard.log", "foreign-collision.log", "foreign-collision-stderr.log"}}
+	// Explicit fixture reset of only the test-authored foreign directory.
+	if err := os.Rename(active, filepath.Join(f.Root, "foreign-collision-retained")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(collisionBackup, active); err != nil {
+		t.Fatal(err)
+	}
 	// Actual reconstruction tests an absent recorded artifact separately.
 	nativeAttempt(stages, "owned_repair", "owned-repair-installer.json")
 	backup := filepath.Join(f.Root, "owned-artifact-backup")
@@ -532,6 +598,79 @@ func TestAgentpluginsCodexNativeLifecycle(t *testing.T) {
 		nativeSession(t, f, client, "native_cache_repair", "C", "read", stages)
 		stages["native_cache_repair"] = nativeStage{Status: "passed"}
 	}
+	nativeAttempt(stages, "partial_failure", "partial-failure-installer.json")
+	var partialMCP map[string]any
+	partialBody, err := os.ReadFile(filepath.Join(f.Package, "mcp.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(partialBody, &partialMCP); err != nil {
+		t.Fatal(err)
+	}
+	partialServers := partialMCP["mcpServers"].(map[string]any)
+	partialServers["unavailable"] = map[string]any{"type": "stdio", "command": "uap-deliberately-unavailable-" + f.Nonce}
+	partialServers["startup-failure"] = map[string]any{"type": "stdio", "command": "./bin/probe", "args": []string{"--fail-startup"}, "env": map[string]string{"UAP_TEST_ROOT": f.Root, "UAP_TEST_EVENTS": f.Events, "UAP_TEST_NONCE": f.Nonce}}
+	partialServers["unsupported-sse"] = map[string]any{"type": "sse", "url": f.HTTPURL + "/unsupported-sse"}
+	nativeJSON(t, filepath.Join(f.Package, "mcp.json"), partialMCP)
+	nativeWrite(t, filepath.Join(f.Package, "skills", "invalid-proof", "SKILL.md"), []byte("No required skill frontmatter"), 0600)
+	partialOutput := nativeInstaller(t, f, installer, client, "partial-failure", "update", "native-proof")
+	if !bytes.Contains(partialOutput, []byte("declared_sse_not_supported_by_client")) || !bytes.Contains(partialOutput, []byte("stdio_runtime_unavailable")) {
+		t.Fatal("installer did not distinguish planner-unsupported SSE")
+	}
+	nativeSession(t, f, client, "partial_failure", "C", "read", stages)
+	startupEvents, err := os.ReadFile(f.Events)
+	if err != nil {
+		t.Fatal(err)
+	}
+	startupObserved := false
+	for _, line := range bytes.Split(startupEvents, []byte{'\n'}) {
+		if len(line) == 0 {
+			continue
+		}
+		var event struct {
+			Method string `json:"method"`
+			Nonce  string `json:"nonce"`
+		}
+		if err := json.Unmarshal(line, &event); err != nil {
+			t.Fatal(err)
+		}
+		if event.Method == "startup-failed" && event.Nonce == f.Nonce {
+			startupObserved = true
+		}
+	}
+	if !startupObserved {
+		t.Fatal("native startup failure had no correlated fixture process event")
+	}
+
+	stages["partial_failure"] = nativeStage{Status: "passed", Reason: "UAP omitted unavailable runtime, unsupported SSE and invalid skill; an existing executable failed at native startup independently while healthy sibling tools and skill remained usable", Artifacts: []string{"partial-failure-installer.json", "partial_failure-rpc.jsonl"}}
+	nativeAttempt(stages, "all_unsupported", "all-unsupported.log")
+	unsupportedState, unsupportedManaged, unsupportedCache := nativeSHA(t, statePath), nativeTreeDigest(t, active), nativeTreeDigest(t, c.Root)
+	unsupportedConfig := nativeSHA(t, filepath.Join(f.CodexHome, "config.toml"))
+	skillsBackup := filepath.Join(f.Root, "unsupported-skills-backup")
+	if err := os.Rename(filepath.Join(f.Package, "skills"), skillsBackup); err != nil {
+		t.Fatal(err)
+	}
+	nativeJSON(t, filepath.Join(f.Package, "mcp.json"), map[string]any{"$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json", "mcpServers": map[string]any{"unsupported-sse": partialServers["unsupported-sse"]}})
+	unsupportedOut, unsupportedErr := nativeCommand(t, f, installer, "all-unsupported", "update", "native-proof", "--target", "codex", "--format", "json")
+	unsupportedStderr, err := os.ReadFile(filepath.Join(f.Root, "all-unsupported-stderr.log"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if unsupportedErr == nil || !strings.Contains(string(unsupportedStderr), "target codex is unsupported; group preflight caused no mutation") {
+		t.Fatalf("expected exact all-unsupported refusal: %v %s", unsupportedErr, unsupportedStderr)
+	}
+	if err := nativeUnmutatedPreflightResult(unsupportedOut); err != nil {
+		t.Fatal(err)
+	}
+	if nativeSHA(t, statePath) != unsupportedState || nativeTreeDigest(t, active) != unsupportedManaged || nativeTreeDigest(t, c.Root) != unsupportedCache || nativeSHA(t, filepath.Join(f.CodexHome, "config.toml")) != unsupportedConfig {
+		t.Fatal("all-unsupported refusal mutated installed surfaces")
+	}
+	stages["all_unsupported"] = nativeStage{Status: "passed", Reason: "SSE-only update refused in preflight with mutated=false; state, managed/cache bytes and native config unchanged", Artifacts: []string{"all-unsupported.log", "all-unsupported-stderr.log"}}
+	// Restore only the source fixture bytes; this reset is not repair evidence.
+	if err := os.Rename(skillsBackup, filepath.Join(f.Package, "skills")); err != nil {
+		t.Fatal(err)
+	}
+	nativeJSON(t, filepath.Join(f.Package, "mcp.json"), partialMCP)
 	nativeAttempt(stages, "remove", "remove-installer.json")
 	// Codex has no supported CLI verb for UAP to silently uninstall a plugin
 	// on the user's behalf (see usecase/remove.go and remove_group.go); every
@@ -589,7 +728,12 @@ func TestAgentpluginsCodexNativeLifecycle(t *testing.T) {
 		t.Fatal("repeated removal lost native data marker")
 	}
 	stages["repeat_remove"] = nativeStage{Status: "passed", Reason: "Expected idempotent/not-found outcome; new native inventory absent and foreign/data bytes preserved"}
+	nativeAttempt(stages, "immutable_git", "immutable-git.json")
+	nativeJSON(t, filepath.Join(f.Root, "immutable-git.json"), nativeImmutableAcquisition(t, f))
+	stages["immutable_git"] = nativeStage{Status: "passed", Reason: "Exact-SHA production acquisition with synthetic local Git transport; acquisition only, not native Git E2E", Artifacts: []string{"immutable-git.json"}}
 	nativeCheckHTTP(t, f, stages)
+	stages["http"] = stages["A_http"]
+	stages["immutable_git_native"] = nativeStage{Status: "not_evaluated", Reason: "CLI admits immutable GitHub sources only and disables Git config rewrites; synthetic supported transport seam proves acquisition separately"}
 	for _, name := range []string{"real_model_skill_use", "oauth"} {
 		stages[name] = nativeStage{Status: "not_evaluated", Reason: "No authenticated provider or real model requested"}
 	}
@@ -649,7 +793,7 @@ func nativeCheckHTTP(t *testing.T, f *nativeFixture, stages map[string]nativeSta
 	if err != nil {
 		t.Fatal(err)
 	}
-	seen, redirect, leaked := false, false, false
+	seen, redirect, leaked, redirectSource := false, false, false, false
 	negotiated := ""
 	stages["generated_protocol_header_priority"] = nativeStage{Status: "not_evaluated", Reason: "No post-negotiation request with a generated protocol header observed"}
 	for _, line := range bytes.Split(b, []byte{'\n'}) {
@@ -681,6 +825,9 @@ func nativeCheckHTTP(t *testing.T, f *nativeFixture, stages map[string]nativeSta
 				stages["generated_protocol_header_priority"] = nativeStage{Status: "passed", Reason: "Post-negotiation header exactly matches negotiated " + negotiated}
 			}
 		}
+		if e.Origin == "declared-source" && e.URI == "/redirect" && e.Probe == f.Nonce {
+			redirectSource = true
+		}
 		if e.Origin == "redirect-destination" {
 			redirect = true
 			if e.Probe != "" {
@@ -699,10 +846,12 @@ func nativeCheckHTTP(t *testing.T, f *nativeFixture, stages map[string]nativeSta
 	}
 	if leaked {
 		stages["redirect_headers"] = nativeStage{Status: "failed", Reason: "Configured custom test header reached another loopback origin"}
-	} else if redirect {
+	} else if redirect && redirectSource {
 		stages["redirect_headers"] = nativeStage{Status: "passed", Reason: "Redirect destination received no configured test header"}
+	} else if redirectSource && !redirect {
+		stages["redirect_headers"] = nativeStage{Status: "passed", Reason: "Configured request reached redirect source; client did not follow to another origin during completed sessions", Artifacts: []string{"http-events.jsonl"}}
 	} else {
-		stages["redirect_headers"] = nativeStage{Status: "not_evaluated", Reason: "No redirect destination request observed; inspect source transcript"}
+		stages["redirect_headers"] = nativeStage{Status: "not_evaluated", Reason: "No correlated source/destination redirect exchange; containment not proven"}
 	}
 }
 
@@ -818,6 +967,17 @@ func nativeRepairGuardResult(stdout, stderr []byte, commandErr error) error {
 	if commandErr == nil || !strings.Contains(string(stderr), "native identity ownership is indeterminate; refusing repair") {
 		return fmt.Errorf("expected ownership guard refusal, got %v; %s", commandErr, stderr)
 	}
+	return nativeUnmutatedPreflightResult(stdout)
+}
+func nativeCollisionGuardResult(stdout, stderr []byte, commandErr error) error {
+	const expected = "agentplugins: group repair preflight failed; no target was changed: observe prepared identity for codex: native package has no recognized authoritative manifest"
+	lines := strings.Split(strings.TrimSpace(string(stderr)), "\n")
+	if commandErr == nil || lines[len(lines)-1] != expected {
+		return fmt.Errorf("expected manifest-less foreign-directory refusal, got %v; %s", commandErr, stderr)
+	}
+	return nativeUnmutatedPreflightResult(stdout)
+}
+func nativeUnmutatedPreflightResult(stdout []byte) error {
 	var result struct {
 		Result string `json:"result"`
 		Data   struct {
@@ -842,4 +1002,192 @@ func nativeRepairGuardResult(stdout, stderr []byte, commandErr error) error {
 		return fmt.Errorf("ownership refusal did not explicitly preserve targets")
 	}
 	return nil
+}
+
+// Public exact-SHA skill-only acquisition. The outer disposable-container runner
+// must disconnect the network and acknowledge the nonce before native discovery.
+func TestAgentpluginsCodexImmutableGitDiscovery(t *testing.T) {
+	if os.Getenv("AGENTPLUGINS_CODEX_GIT_E2E") != "1" {
+		t.Skip("opt-in public immutable Git native discovery")
+	}
+	if runtime.GOOS != "linux" || os.Getenv("AGENTPLUGINS_NATIVE_DISPOSABLE_LINUX") != "1" {
+		t.Fatal("requires disposable Linux boundary")
+	}
+	if _, err := os.Lstat("/etc/codex"); !os.IsNotExist(err) {
+		t.Fatal("system Codex config must be absent")
+	}
+	gate := os.Getenv("AGENTPLUGINS_GIT_GATE_DIR")
+	if !filepath.IsAbs(gate) {
+		t.Fatal("AGENTPLUGINS_GIT_GATE_DIR must be an absolute fresh outer-runner directory")
+	}
+	if info, err := os.Lstat(gate); err == nil && !info.IsDir() {
+		t.Fatal("Git gate must be a real directory")
+	}
+	if entries, err := os.ReadDir(gate); err == nil {
+		if len(entries) != 0 {
+			t.Fatal("Git gate directory must be empty")
+		}
+	} else if !os.IsNotExist(err) {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"git-acquisition-complete", "git-network-isolated"} {
+		if _, err := os.Lstat(filepath.Join(gate, name)); !os.IsNotExist(err) {
+			t.Fatal("Git gate must be fresh and absent")
+		}
+	}
+	client, installer := nativeBinary(t, "AGENTPLUGINS_CODEX_BIN"), nativeBinary(t, "AGENTPLUGINS_INSTALLER_BIN")
+	f := newNativeFixture(t, true)
+	f.ClientBinDir = filepath.Dir(client)
+	stages := map[string]nativeStage{"git_acquisition": {Status: "not_evaluated"}, "native_skill_discovery": {Status: "not_evaluated"}, "native_mcp_from_git": {Status: "not_evaluated", Reason: "Reviewed public fixture contains a skill only"}}
+	evidence, err := nativeSourceIdentity(os.Getenv("AGENTPLUGINS_INSTALLER_COMMIT"), os.Getenv("AGENTPLUGINS_INSTALLER_TREE"), os.Getenv("AGENTPLUGINS_INSTALLER_PATCH_SHA256"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	stages["real_model_skill_use"] = nativeStage{Status: "not_evaluated", Reason: "Skill discovery only; no real model invocation"}
+	stages["oauth"] = nativeStage{Status: "not_evaluated", Reason: "Credential-free fixture"}
+	stages["remove"] = nativeStage{Status: "not_evaluated", Reason: "not reached"}
+	evidence["os"] = runtime.GOOS
+	evidence["arch"] = runtime.GOARCH
+	evidence["stages"] = stages
+	evidence["profile"] = f.Root
+	evidence["client_sha256"] = nativeSHA(t, client)
+	evidence["installer_sha256"] = nativeSHA(t, installer)
+	evidence["started_utc"] = time.Now().UTC().Format(time.RFC3339Nano)
+	defer func() {
+		evidence["finished_utc"] = time.Now().UTC().Format(time.RFC3339Nano)
+		hashes := map[string]string{}
+		entries, _ := os.ReadDir(f.Root)
+		for _, entry := range entries {
+			if !entry.IsDir() && (strings.HasSuffix(entry.Name(), ".log") || strings.HasSuffix(entry.Name(), ".jsonl") || strings.HasSuffix(entry.Name(), "-installer.json")) {
+				hashes[entry.Name()] = nativeSHA(t, filepath.Join(f.Root, entry.Name()))
+			}
+		}
+		evidence["artifact_sha256"] = hashes
+		nativeJSON(t, filepath.Join(f.Root, "evidence.json"), evidence)
+	}()
+	nativeWrite(t, filepath.Join(f.CodexHome, "config.toml"), []byte("cli_auth_credentials_store = \"file\"\nmcp_oauth_credentials_store = \"file\"\n[analytics]\nenabled = false\n[feedback]\nenabled = false\n"), 0600)
+	version, err := nativeCommand(t, f, client, "client-version", "--version")
+	if err != nil || strings.TrimSpace(string(version)) != "codex-cli 0.153.4" {
+		t.Fatalf("wrong client %s %v", version, err)
+	}
+	evidence["client_version"] = "0.153.4"
+	evidence["client_source"] = "3d2ee51ca2d5db578f328aa75e20aa22c0197c9a"
+	evidence["security_scanner"] = nativeProvisionScanner(t, f)
+	const revision = "4d163c6281a9b4929f482f387efe340b4dc175a1"
+	const source = "Booyaka101/agent-plugins-conformance-kit@" + revision + "//fixtures/core/AP-6.2-MISSING-LOCATION-OK/plugin"
+	evidence["source"] = source
+	nativeAttempt(stages, "git_acquisition", "git-add-installer.json")
+	output := nativeInstaller(t, f, installer, client, "git-add", "add", source)
+	var result any
+	if err := json.Unmarshal(output, &result); err != nil {
+		t.Fatal(err)
+	}
+	physical := nativeFindString(result, "physical_artifact_id")
+	if physical == "" {
+		t.Fatal("missing native physical identity")
+	}
+	f.PluginID = "demo@" + providers.ManagedMarketplaceName(physical)
+	stateBytes, err := os.ReadFile(filepath.Join(f.Root, "installer-state", "state-v2.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var state any
+	if err := json.Unmarshal(stateBytes, &state); err != nil {
+		t.Fatal(err)
+	}
+	if nativeFindString(state, "resolved_revision") != revision {
+		t.Fatal("installer source is not exact pinned Git revision")
+	}
+	active := nativeFindString(state, "target_locator")
+	nativeRequireContained(t, f.Root, active)
+	const manifestSHA = "c9036920ac155cbb4d0a09deca484a98e64071677df431dfd897db855880d3ad"
+	if nativeSHA(t, filepath.Join(active, "plugin.json")) != manifestSHA {
+		t.Fatal("acquired manifest does not match reviewed pinned fixture")
+	}
+	evidence["reviewed_git_subtree"] = "ea758f6ddb033f2b3eb2db138212ab7525e1ce7c"
+	evidence["managed_manifest_sha256"] = nativeSHA(t, filepath.Join(active, "plugin.json"))
+	evidence["source_tree_digest"] = nativeFindString(result, "tree_digest")
+	evidence["source_manifest_digest"] = nativeFindString(result, "manifest_digest")
+	evidence["resolved_revision"] = revision
+	stages["git_acquisition"] = nativeStage{Status: "passed", Reason: "Actual CLI immutable public GitHub acquisition without Directory", Artifacts: []string{"git-add-installer.json"}}
+	nativeWrite(t, filepath.Join(gate, "git-acquisition-complete"), []byte(f.Nonce), 0600)
+	timer := time.NewTimer(55 * time.Second)
+	defer timer.Stop()
+	tick := time.NewTicker(100 * time.Millisecond)
+	defer tick.Stop()
+	isolated := false
+	for !isolated {
+		select {
+		case <-timer.C:
+			t.Fatal("outer runner did not acknowledge network isolation within 55s")
+		case <-tick.C:
+			path := filepath.Join(gate, "git-network-isolated")
+			info, err := os.Lstat(path)
+			if os.IsNotExist(err) {
+				continue
+			}
+			if err != nil || !info.Mode().IsRegular() {
+				t.Fatal("isolation gate must be regular file")
+			}
+			body, err := os.ReadFile(path)
+			if err != nil || string(body) != f.Nonce {
+				t.Fatal("isolation gate nonce mismatch")
+			}
+			isolated = true
+		}
+	}
+	evidence["network_boundary"] = "outer runner disconnected container network after acquisition and acknowledged per-run nonce before app-server"
+	nativeAttempt(stages, "native_skill_discovery", "git-native-rpc.jsonl")
+	r := startNativeRPC(t, f, client, "git-native")
+	defer r.close()
+	r.must(t, "initialize", map[string]any{"clientInfo": map[string]string{"name": "uap_native_fixture", "version": "1.0.0"}, "capabilities": map[string]any{"experimentalApi": true}})
+	if err := json.NewEncoder(r.in).Encode(map[string]any{"method": "initialized"}); err != nil {
+		t.Fatal(err)
+	}
+	var listing struct {
+		Data []struct {
+			Skills []struct {
+				Name     string `json:"name"`
+				Path     string `json:"path"`
+				PluginID string `json:"pluginId"`
+				Enabled  bool   `json:"enabled"`
+			} `json:"skills"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(r.must(t, "skills/list", map[string]any{"cwds": []string{f.Project}, "forceReload": true}), &listing); err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, group := range listing.Data {
+		for _, skill := range group.Skills {
+			if skill.Name != "demo:alpha" || skill.PluginID != f.PluginID || !skill.Enabled {
+				continue
+			}
+			nativeRequireContained(t, f.Root, skill.Path)
+			if !strings.Contains(skill.Path, "/plugins/cache/") || !strings.HasSuffix(skill.Path, "/skills/alpha/SKILL.md") {
+				t.Fatal("skill is not from installed native cache")
+			}
+			body, err := os.ReadFile(skill.Path)
+			if err != nil || string(body) != "---\nname: alpha\ndescription: Fixture skill alpha for the Agent Plugins conformance kit.\n---\n\nFixture body.\n" || nativeSHA(t, skill.Path) != "f77d30f91adee306136e36b0bedd535a826db3b2884b6dfbd5ba8f3d548efd3b" {
+				t.Fatal("native Git skill body mismatch")
+			}
+			evidence["native_skill_sha256"] = nativeSHA(t, skill.Path)
+			evidence["native_plugin_id"] = skill.PluginID
+			evidence["native_skill_path"] = skill.Path
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("exact Git plugin-attributed skill absent from native discovery")
+	}
+	stages["native_skill_discovery"] = nativeStage{Status: "passed", Reason: "Fresh isolated native app-server discovered exact plugin-attributed demo:alpha installed cache body; no model use or MCP execution claimed", Artifacts: []string{"git-native-rpc.jsonl"}}
+	r.close()
+	nativeAttempt(stages, "remove", "git-remove-installer.json")
+	nativeInstaller(t, f, installer, client, "git-remove", "remove", "demo", "--external-uninstalled")
+	if _, err := os.Lstat(active); !os.IsNotExist(err) {
+		t.Fatal("Git-installed managed directory remains after remove")
+	}
+	nativeAssertAbsent(t, f, client, f.PluginID, "git-removed")
+	stages["remove"] = nativeStage{Status: "passed", Reason: "Normal remove deleted managed artifact; fresh app-server excludes plugin tools/skills", Artifacts: []string{"git-remove-installer.json", "git-removed-rpc.jsonl"}}
+
 }

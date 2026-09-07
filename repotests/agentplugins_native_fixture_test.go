@@ -10,6 +10,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/loader"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/packagedigest"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/sourceacquisition"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/specregistry"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/planner"
@@ -29,6 +31,7 @@ import (
 type nativeFixture struct {
 	Root, Project, Home, CodexHome, Package, Probe, Events, Nonce string
 	PluginID, ClientBinDir, HTTPURL, RedirectURL                  string
+	ProviderRequests                                              chan []byte
 }
 type nativeStage struct {
 	Status    string   `json:"status"`
@@ -644,5 +647,172 @@ func TestAgentpluginsNativeFixtureLifecycleResults(t *testing.T) {
 	nativeWrite(t, path, []byte("original"), 0600)
 	if nativeTreeDigest(t, root) != before {
 		t.Fatal("exact restore not reproducible")
+	}
+}
+
+// Identity metadata describes the build input, never a made-up patch for a clean commit.
+// The orchestrator verifies these values against the build checkout and hashes the binary.
+func nativeSourceIdentity(commit, tree, patches string) (map[string]any, error) {
+	valid := func(value string, n int) bool {
+		b, err := hex.DecodeString(value)
+		return err == nil && len(b) == n && value == strings.ToLower(value)
+	}
+	if !valid(commit, 20) || !valid(tree, 20) {
+		return nil, fmt.Errorf("exact 40-character installer commit and tree required")
+	}
+	state := "committed"
+	hashes := []string{}
+	if patches != "" {
+		state = "reviewed_uncommitted_patches"
+		for _, h := range strings.Split(patches, ",") {
+			if !valid(h, 32) {
+				return nil, fmt.Errorf("installer patch must be an exact SHA256 digest")
+			}
+			hashes = append(hashes, h)
+		}
+	}
+	return map[string]any{"installer_base_commit": commit, "installer_tree": tree, "installer_source_state": state, "installer_patch_sha256": hashes}, nil
+}
+func TestAgentpluginsNativeFixtureSourceIdentity(t *testing.T) {
+	commit, tree := strings.Repeat("a", 40), strings.Repeat("b", 40)
+	identity, err := nativeSourceIdentity(commit, tree, "")
+	if err != nil || identity["installer_source_state"] != "committed" {
+		t.Fatalf("clean source: %v %v", identity, err)
+	}
+	identity, err = nativeSourceIdentity(commit, tree, strings.Repeat("c", 64))
+	if err != nil || identity["installer_source_state"] != "reviewed_uncommitted_patches" {
+		t.Fatal("patch source identity lost")
+	}
+	for _, bad := range []string{"unknown", strings.Repeat("c", 63), strings.Repeat("c", 64) + ","} {
+		if _, err := nativeSourceIdentity(commit, tree, bad); err == nil {
+			t.Fatalf("invalid patch accepted: %q", bad)
+		}
+	}
+	if _, err := nativeSourceIdentity("HEAD", tree, ""); err == nil {
+		t.Fatal("symbolic commit accepted")
+	}
+}
+
+// Uses the production exact-SHA acquirer with its supported transport injection.
+// The CLI only admits GitHub identities, so this is acquisition evidence, not
+// a claim that the CLI accepted a local Git URL or native Git registration.
+func nativeImmutableAcquisition(t *testing.T, f *nativeFixture) map[string]any {
+	t.Helper()
+	git, err := exec.LookPath("git")
+	if err != nil {
+		t.Fatal(err)
+	}
+	run := func(args ...string) string {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		cmd := exec.CommandContext(ctx, git, args...)
+		cmd.Dir = f.Package
+		cmd.Env = append(f.env(filepath.Dir(git)), "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL="+os.DevNull, "GIT_TERMINAL_PROMPT=0", "GIT_AUTHOR_NAME=Fixture", "GIT_AUTHOR_EMAIL=fixture@example.invalid", "GIT_COMMITTER_NAME=Fixture", "GIT_COMMITTER_EMAIL=fixture@example.invalid")
+		b, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("synthetic git: %v %s", err, b)
+		}
+		return strings.TrimSpace(string(b))
+	}
+	run("init", "--quiet")
+	run("add", ".")
+	run("commit", "--quiet", "-m", "test: immutable fixture")
+	revision := run("rev-parse", "HEAD")
+	original := nativeSHA(t, filepath.Join(f.Package, "plugin.json"))
+	nativeWrite(t, filepath.Join(f.Package, "uncommitted-sentinel"), []byte("must not enter snapshot"), 0600)
+	acquirer := sourceacquisition.Acquirer{TempRoot: filepath.Join(f.Root, "tmp"), URLForRepo: func(string) string { return f.Package }}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	snapshot, err := acquirer.AcquireGitHub(ctx, "fixture/native-proof", revision, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer packagedigest.Remove(snapshot)
+	if snapshot.Source.ResolvedRevision != revision || nativeSHA(t, filepath.Join(snapshot.Root, "plugin.json")) != original {
+		t.Fatal("immutable acquisition identity mismatch")
+	}
+	if _, err := os.Lstat(filepath.Join(snapshot.Root, "uncommitted-sentinel")); !os.IsNotExist(err) {
+		t.Fatal("uncommitted bytes entered immutable acquisition")
+	}
+	if _, err := os.Lstat(filepath.Join(snapshot.Root, ".git")); !os.IsNotExist(err) {
+		t.Fatal("Git metadata entered package")
+	}
+	return map[string]any{"revision": revision, "tree": run("rev-parse", "HEAD^{tree}"), "manifest_sha256": original, "source": snapshot.Source, "evidence_scope": "production acquirer with synthetic local Git transport; acquisition only"}
+}
+func TestAgentpluginsNativeFixtureImmutableAcquisition(t *testing.T) {
+	f := newNativeFixture(t, false)
+	f.writePackage(t, "A", "1.0.0")
+	nativeImmutableAcquisition(t, f)
+}
+
+// Minimal Responses events match pinned codex-api/tests/sse_end_to_end.rs.
+func nativeScriptedProvider(t *testing.T, f *nativeFixture) string {
+	t.Helper()
+	f.ProviderRequests = make(chan []byte, 8)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" || r.URL.Path != "/v1/responses" {
+			http.NotFound(w, r)
+			return
+		}
+		body, err := io.ReadAll(io.LimitReader(r.Body, (2<<20)+1))
+		if err != nil || len(body) > 2<<20 {
+			http.Error(w, "bounded fixture request", 400)
+			return
+		}
+		select {
+		case f.ProviderRequests <- body:
+		default:
+			http.Error(w, "fixture request limit", 429)
+			return
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		events := []map[string]any{
+			{"type": "response.output_item.done", "item": map[string]any{"type": "message", "id": "fixture-message", "role": "assistant", "content": []any{map[string]string{"type": "output_text", "text": "Fixture response."}}}},
+			{"type": "response.completed", "response": map[string]any{"id": "fixture-response", "usage": map[string]int{"input_tokens": 1, "output_tokens": 1, "total_tokens": 2}}},
+		}
+		for _, event := range events {
+			b, _ := json.Marshal(event)
+			fmt.Fprintf(w, "event: %s\ndata: %s\n\n", event["type"], b)
+		}
+	}))
+	t.Cleanup(server.Close)
+	return server.URL + "/v1"
+}
+
+func TestAgentpluginsNativeFixtureForeignCollisionClassification(t *testing.T) {
+	good := []byte(`{"result":"failure","data":{"status":"preflight_failed","targets":[{"output":{"result":{"mutated":false}}}]}}`)
+	stderr := []byte("Resolving and validating each unique exact installed package revision once...\nagentplugins: group repair preflight failed; no target was changed: observe prepared identity for codex: native package has no recognized authoritative manifest\n")
+	if err := nativeCollisionGuardResult(good, stderr, fmt.Errorf("exit 1")); err != nil {
+		t.Fatal(err)
+	}
+	for _, bad := range []string{"network timeout", "agentplugins: unrelated preflight failure"} {
+		if nativeCollisionGuardResult(good, []byte(bad), fmt.Errorf("exit 1")) == nil {
+			t.Fatal("unrelated failure accepted")
+		}
+	}
+	mutated := bytes.ReplaceAll(good, []byte("false"), []byte("true"))
+	if nativeCollisionGuardResult(mutated, stderr, fmt.Errorf("exit 1")) == nil {
+		t.Fatal("mutating collision accepted")
+	}
+	if nativeCollisionGuardResult(good, stderr, nil) == nil {
+		t.Fatal("successful collision accepted")
+	}
+}
+
+func TestAgentpluginsNativeFixtureStartupFailure(t *testing.T) {
+	f := newNativeFixture(t, false)
+	cmd := exec.Command(f.Probe, "--fail-startup")
+	cmd.Dir = f.Project
+	cmd.Env = append(f.env(filepath.Dir(f.Probe)), "UAP_TEST_ROOT="+f.Root, "UAP_TEST_EVENTS="+f.Events, "UAP_TEST_NONCE="+f.Nonce)
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	output, err := cmd.Output()
+	exit, ok := err.(*exec.ExitError)
+	if !ok || exit.ExitCode() != 42 || len(output) != 0 || !strings.Contains(stderr.String(), "intentional fixture startup failure") {
+		t.Fatalf("startup failure contract: %v %s %s", err, output, stderr.String())
+	}
+	events, err := os.ReadFile(f.Events)
+	if err != nil || !bytes.Contains(events, []byte(`"method":"startup-failed"`)) {
+		t.Fatalf("startup failure not recorded: %v %s", err, events)
 	}
 }

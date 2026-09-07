@@ -2,9 +2,7 @@ package pluginkitairepo_test
 
 // This suite drives the real OpenCode CLI through UAP's actual install route
 // (global opencode.json under <XDG_CONFIG_HOME>/opencode, plus global
-// skills). UAP also supports opencode.jsonc for this same route, but this
-// checkpoint only exercises the .json path -- that is a real, currently
-// unproven gap, not a claim that both are covered. It is opt-in and uses
+// skills). Both .json and .jsonc run the complete lifecycle. It is opt-in and uses
 // only disposable HOME/XDG roots and a fresh project directory; it never
 // touches the invoking user's real OpenCode config. `opencode debug config`
 // proves effective config, not a handshake or tool call -- that distinction
@@ -20,6 +18,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -396,13 +395,70 @@ func openCodeWriteFixturePackage(t *testing.T, root, name, version string) {
 }
 
 func TestAgentpluginsOpenCodeNativeLifecycle(t *testing.T) {
+	for _, route := range []string{"opencode.json", "opencode.jsonc"} {
+		t.Run(route, func(t *testing.T) { openCodeNativeLifecycle(t, route) })
+	}
+}
+
+const openCodeJSONCComment = "// UAP disposable JSONC lifecycle sentinel\n"
+
+func openCodeReadConfigDocument(t *testing.T, body []byte, doc *map[string]any) {
+	t.Helper()
+	// The only comment authored by this fixture is this exact sentinel.
+	// Do not strip arbitrary comment syntax, which could corrupt URL strings.
+	body = []byte(strings.ReplaceAll(string(body), openCodeJSONCComment, ""))
+	if err := json.Unmarshal(body, doc); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func openCodePrepareNative(t *testing.T, f *openCodeNativeFixture, client string) map[string]string {
+	t.Helper()
+	if runtime.GOOS != "linux" || os.Getenv("AGENTPLUGINS_NATIVE_DISPOSABLE_LINUX") != "1" {
+		t.Fatal("native OpenCode execution requires the approved disposable Linux container")
+	}
+	if expected := os.Getenv("AGENTPLUGINS_OPENCODE_SHA256"); len(expected) != 64 || openCodeSHA256(t, client) != expected {
+		t.Fatal("OpenCode binary SHA256 mismatch or missing pin")
+	}
+	if os.Getenv("AGENTPLUGINS_OPENCODE_VERSION") != "1.18.29" {
+		t.Fatal("OpenCode requires version pin 1.18.29")
+	}
+	return nativeProvisionScanner(t, &nativeFixture{Root: f.Root})
+}
+
+func openCodeNativeLifecycle(t *testing.T, route string) {
 	if os.Getenv("AGENTPLUGINS_OPENCODE_NATIVE_E2E") != "1" {
 		t.Skip("opt-in native client execution")
 	}
 	client := openCodeNativeBinary(t, "AGENTPLUGINS_OPENCODE_BIN")
 	installer := openCodeNativeBinary(t, "AGENTPLUGINS_INSTALLER_BIN")
 	f := newOpenCodeNativeFixture(t)
+	scanner := openCodePrepareNative(t, f, client)
 	clientDir := filepath.Dir(client)
+	configPath := filepath.Join(f.XDGConfig, "opencode", route)
+	if route == "opencode.jsonc" {
+		if err := os.MkdirAll(filepath.Dir(configPath), 0700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(configPath, []byte(openCodeJSONCComment+"{\n  \"mcp\": {}\n}\n"), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	assertConfigRoute := func() {
+		t.Helper()
+		body, err := os.ReadFile(configPath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if route == "opencode.jsonc" {
+			if !strings.Contains(string(body), openCodeJSONCComment) {
+				t.Fatal("JSONC comment was lost")
+			}
+			if _, err := os.Stat(filepath.Join(f.XDGConfig, "opencode", "opencode.json")); !os.IsNotExist(err) {
+				t.Fatalf("JSONC lifecycle unexpectedly created opencode.json: %v", err)
+			}
+		}
+	}
 
 	stages := map[string]openCodeNativeStage{}
 	for _, name := range []string{
@@ -419,8 +475,9 @@ func TestAgentpluginsOpenCodeNativeLifecycle(t *testing.T) {
 		"installer_base_commit": os.Getenv("AGENTPLUGINS_INSTALLER_COMMIT"), "installer_tree": os.Getenv("AGENTPLUGINS_INSTALLER_TREE"),
 		"installer_patch_sha256": os.Getenv("AGENTPLUGINS_INSTALLER_PATCH_SHA256"), "acquisition": "local_directory",
 		"native_surface":         "opencode debug config (effective config proof; not a handshake or tool call) plus opencode mcp list (real per-server connection attempts, still not a handshake or tool call)",
-		"config_route_exercised": "opencode.json only; opencode.jsonc is not exercised by this checkpoint despite the client accepting either",
-		"network_dependency":     "the installer's security scan (lintai) is fetched from GitHub on first use during add if not already cached; this run is not fully offline despite local_directory acquisition",
+		"config_route_exercised": route,
+		"network_dependency":     "none; pinned scanner preprovisioned; disposable container denies external network",
+		"scanner":                scanner,
 		"stages":                 stages,
 	}
 	defer func() {
@@ -434,11 +491,12 @@ func TestAgentpluginsOpenCodeNativeLifecycle(t *testing.T) {
 			t.Fatal(err)
 		}
 	}()
-	if evidence["installer_base_commit"] == "" || evidence["installer_tree"] == "" {
-		t.Fatal("exact installer base commit and resulting tree required")
+	identity, err := nativeSourceIdentity(os.Getenv("AGENTPLUGINS_INSTALLER_COMMIT"), os.Getenv("AGENTPLUGINS_INSTALLER_TREE"), os.Getenv("AGENTPLUGINS_INSTALLER_PATCH_SHA256"))
+	if err != nil {
+		t.Fatal(err)
 	}
-	if os.Getenv("AGENTPLUGINS_INSTALLER_PATCH_SHA256") == "" {
-		t.Fatal("accepted installer patch digests required for reviewed uncommitted source identity")
+	for key, value := range identity {
+		evidence[key] = value
 	}
 	if pinned := os.Getenv("AGENTPLUGINS_OPENCODE_VERSION"); pinned != "" && pinned != measuredVersion {
 		t.Fatalf("measured opencode version %q does not match pinned %q", measuredVersion, pinned)
@@ -447,6 +505,7 @@ func TestAgentpluginsOpenCodeNativeLifecycle(t *testing.T) {
 	openCodeWriteFixturePackage(t, f.PackageRoot, "opencode-native-proof", "1.0.0")
 	added := openCodeRunInstaller(t, f, installer, clientDir, "add-v1", "add", f.PackageRoot, "--target", "opencode")
 	openCodeAssertCompleted(t, "install", added)
+	assertConfigRoute()
 	stages["install"] = openCodeNativeStage{Status: "passed"}
 
 	config := openCodeDebugConfig(t, f, client, "debug-config-v1")
@@ -493,6 +552,7 @@ func TestAgentpluginsOpenCodeNativeLifecycle(t *testing.T) {
 	openCodeWriteFixturePackage(t, f.PackageRoot, "opencode-native-proof", "2.0.0")
 	updated := openCodeRunInstaller(t, f, installer, clientDir, "update-v2", "update", f.PackageRoot, "--target", "opencode")
 	openCodeAssertCompleted(t, "version update", updated)
+	assertConfigRoute()
 	stages["version_update"] = openCodeNativeStage{Status: "passed"}
 
 	before := openCodeSHA256(t, filepath.Join(f.XDGConfig, "opencode", "skills", "demo-skill", "SKILL.md"))
@@ -514,22 +574,23 @@ func TestAgentpluginsOpenCodeNativeLifecycle(t *testing.T) {
 	}
 	stages["same_version_refresh"] = openCodeNativeStage{Status: "passed", Reason: "mutated:true and installed skill file digest changed on identical version, changed content"}
 
-	beforeUnchanged := openCodeSHA256(t, filepath.Join(f.XDGConfig, "opencode", "opencode.json"))
+	beforeUnchanged := openCodeSHA256(t, configPath)
 	unchanged := openCodeRunInstaller(t, f, installer, clientDir, "unchanged-reapply", "update", f.PackageRoot, "--target", "opencode")
 	openCodeAssertCompleted(t, "unchanged re-apply", unchanged)
 	openCodeAssertMutated(t, unchanged, false)
-	afterUnchanged := openCodeSHA256(t, filepath.Join(f.XDGConfig, "opencode", "opencode.json"))
+	afterUnchanged := openCodeSHA256(t, configPath)
 	if beforeUnchanged != afterUnchanged {
 		t.Fatalf("physically-unchanged re-apply changed the config file digest: %s -> %s", beforeUnchanged, afterUnchanged)
 	}
+	assertConfigRoute()
 	stages["unchanged"] = openCodeNativeStage{Status: "passed", Reason: "mutated:false and byte-identical config file digest on an identical re-apply"}
 
 	// Plant an unrelated foreign top-level config key before any destructive
 	// operation, and carry it through repair/remove to prove it survives.
-	rawConfig, err := os.ReadFile(filepath.Join(f.XDGConfig, "opencode", "opencode.json"))
+	rawConfig, err := os.ReadFile(configPath)
 	must(err)
 	var rawDoc map[string]any
-	must(json.Unmarshal(rawConfig, &rawDoc))
+	openCodeReadConfigDocument(t, rawConfig, &rawDoc)
 	rawMCP, _ := rawDoc["mcp"].(map[string]any)
 	if rawMCP == nil {
 		rawMCP = map[string]any{}
@@ -538,7 +599,10 @@ func TestAgentpluginsOpenCodeNativeLifecycle(t *testing.T) {
 	rawMCP["foreign-untouched"] = map[string]any{"type": "local", "command": []any{"sh", "-c", "cat"}}
 	foreignBody, err := json.MarshalIndent(rawDoc, "", "  ")
 	must(err)
-	must(os.WriteFile(filepath.Join(f.XDGConfig, "opencode", "opencode.json"), foreignBody, 0644))
+	if route == "opencode.jsonc" {
+		foreignBody = append([]byte(openCodeJSONCComment), foreignBody...)
+	}
+	must(os.WriteFile(configPath, foreignBody, 0644))
 
 	// Genuine absent-directory repair: delete the whole managed package
 	// directory UAP owns (the closest OpenCode analog to the Codex C3 /
@@ -574,6 +638,7 @@ func TestAgentpluginsOpenCodeNativeLifecycle(t *testing.T) {
 	if _, ok := postRepairMCP["api/server"]; !ok {
 		t.Fatalf("repair lost the managed api/server entry: %+v", postRepairMCP)
 	}
+	assertConfigRoute()
 	stages["owned_repair"] = openCodeNativeStage{Status: "passed", Reason: "the whole managed package directory was deleted and repair genuinely reconstructed it; installed skill file digest unchanged, config entries intact"}
 	stages["foreign_config_preservation"] = openCodeNativeStage{Status: "passed", Reason: "foreign-untouched entry present in effective config after a genuine absent-directory repair"}
 
@@ -584,17 +649,20 @@ func TestAgentpluginsOpenCodeNativeLifecycle(t *testing.T) {
 	// the real write path (openCodeMCPRequests), not the no-change/VerifyOnly
 	// branch a same-content re-apply would take.
 	openCodeWriteFixturePackage(t, f.PackageRoot, "opencode-native-proof", "3.0.0")
-	preCollisionBytes, err := os.ReadFile(filepath.Join(f.XDGConfig, "opencode", "opencode.json"))
+	preCollisionBytes, err := os.ReadFile(configPath)
 	must(err)
 	collisionDoc := map[string]any{}
-	must(json.Unmarshal(preCollisionBytes, &collisionDoc))
+	openCodeReadConfigDocument(t, preCollisionBytes, &collisionDoc)
 	collisionMCP, _ := collisionDoc["mcp"].(map[string]any)
 	delete(collisionMCP, "api/server")
 	collisionMCP["api/server"] = map[string]any{"type": "local", "command": []any{"sh", "-c", "echo foreign-owns-this-key"}}
 	collisionBody, err := json.MarshalIndent(collisionDoc, "", "  ")
 	must(err)
-	must(os.WriteFile(filepath.Join(f.XDGConfig, "opencode", "opencode.json"), collisionBody, 0644))
-	postCollisionPlantBytes, err := os.ReadFile(filepath.Join(f.XDGConfig, "opencode", "opencode.json"))
+	if route == "opencode.jsonc" {
+		collisionBody = append([]byte(openCodeJSONCComment), collisionBody...)
+	}
+	must(os.WriteFile(configPath, collisionBody, 0644))
+	postCollisionPlantBytes, err := os.ReadFile(configPath)
 	must(err)
 	beforeCollisionSkillDigest := openCodeSHA256(t, filepath.Join(f.XDGConfig, "opencode", "skills", "demo-skill", "SKILL.md"))
 
@@ -613,7 +681,7 @@ func TestAgentpluginsOpenCodeNativeLifecycle(t *testing.T) {
 	// state, not a full rollback. Assert that precisely instead of only
 	// checking that an error occurred.
 	openCodeAssertJSONDataStatus(t, collisionUpdateOut, "managed_committed_activation_failed")
-	afterCollisionUpdateBytes, err := os.ReadFile(filepath.Join(f.XDGConfig, "opencode", "opencode.json"))
+	afterCollisionUpdateBytes, err := os.ReadFile(configPath)
 	must(err)
 	if string(afterCollisionUpdateBytes) != string(postCollisionPlantBytes) {
 		t.Fatalf("config file changed despite a refused update:\nbefore=%s\nafter=%s", postCollisionPlantBytes, afterCollisionUpdateBytes)
@@ -636,7 +704,7 @@ func TestAgentpluginsOpenCodeNativeLifecycle(t *testing.T) {
 		t.Fatalf("repair refusal did not contain the exact expected ownership message for api/server:\n%s", collisionRepairOut)
 	}
 	openCodeAssertJSONDataStatus(t, collisionRepairOut, "managed_committed_activation_failed")
-	afterCollisionRepairBytes, err := os.ReadFile(filepath.Join(f.XDGConfig, "opencode", "opencode.json"))
+	afterCollisionRepairBytes, err := os.ReadFile(configPath)
 	must(err)
 	if string(afterCollisionRepairBytes) != string(postCollisionPlantBytes) {
 		t.Fatalf("config file changed despite a refused repair:\nbefore=%s\nafter=%s", postCollisionPlantBytes, afterCollisionRepairBytes)
@@ -649,7 +717,7 @@ func TestAgentpluginsOpenCodeNativeLifecycle(t *testing.T) {
 	// Restore the exact pre-collision bytes directly, simulating the foreign
 	// writer reverting its own change, so remove below observes the actual
 	// managed state.
-	must(os.WriteFile(filepath.Join(f.XDGConfig, "opencode", "opencode.json"), preCollisionBytes, 0644))
+	must(os.WriteFile(configPath, preCollisionBytes, 0644))
 
 	removed := openCodeRunInstaller(t, f, installer, clientDir, "remove", "remove", "opencode-native-proof", "--target", "opencode")
 	if removed == nil || removed["result"] != "success" {
@@ -675,6 +743,7 @@ func TestAgentpluginsOpenCodeNativeLifecycle(t *testing.T) {
 	if _, statErr := os.Stat(filepath.Join(f.XDGConfig, "opencode", "skills", "demo-skill")); !os.IsNotExist(statErr) {
 		t.Fatalf("remove did not delete the installed skill directory from disk: %v", statErr)
 	}
+	assertConfigRoute()
 	stages["remove"] = openCodeNativeStage{Status: "passed", Reason: "result:success and data.status:data_retained; managed MCP entries removed from effective config; installed skill directory actually deleted from disk (not just absent from debug config); foreign sibling config entry preserved"}
 
 	repeatOut, repeatErr := openCodeRunInstallerExpectError(t, f, installer, clientDir, "repeat-remove", "remove", "opencode-native-proof", "--target", "opencode")

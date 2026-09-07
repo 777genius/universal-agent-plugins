@@ -178,6 +178,15 @@ func handle(r request) (any, error) {
 	}
 }
 func main() {
+	if len(os.Args) == 2 && os.Args[1] == "--fail-startup" {
+		if err := event("startup-failed", nil); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(43)
+		}
+		fmt.Fprintln(os.Stderr, "intentional fixture startup failure")
+		os.Exit(42)
+	}
+
 	scan := bufio.NewScanner(io.LimitReader(os.Stdin, 8<<20))
 	scan.Buffer(make([]byte, 4096), 1<<20)
 	out := json.NewEncoder(os.Stdout)

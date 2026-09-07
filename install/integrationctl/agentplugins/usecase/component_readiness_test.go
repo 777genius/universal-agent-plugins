@@ -154,119 +154,133 @@ func TestReadinessUsesAuthoredAbsolutePATH(t *testing.T) {
 }
 
 func TestHelperUpgradeCannotMasqueradeAsExactRepair(t *testing.T) {
-	if !managedstdio.Supported() {
-		t.Skip("native launcher unsupported")
-	}
-	service, store, _ := serviceFixture(t)
-	source := func(body string) *managedstdio.Source {
-		path := filepath.Join(t.TempDir(), "helper")
-		if err := os.WriteFile(path, []byte(body), 0755); err != nil {
-			t.Fatal(err)
-		}
-		s, err := managedstdio.NewSource(path, body)
-		if err != nil {
-			t.Fatal(err)
-		}
-		return s
-	}
-	service.Stager = providers.Stager{LauncherSource: source("helper A fixture; never executed")}
-	client := domain.DetectedClient{ClientID: domain.ClientWindsurf, Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), "windsurf")}
-	input := clinePackageInput(t, client, "1.0.0", "sha256:helper", "sha256:helper-manifest", "sh")
-	input.Confirmed = true
-	installed, err := service.Add(context.Background(), input)
-	if err != nil {
-		t.Fatal(err)
-	}
-	input.InstallationID = installed.InstallationID
-	// A damaged artifact demands rematerialization; rebuilding with B must never
-	// replace the receipt for A under the same exact-repair request.
-	marker := filepath.Join(installed.Plan.ActivePath, "damage.txt")
-	if err := os.WriteFile(marker, []byte("prior damage"), 0600); err != nil {
-		t.Fatal(err)
-	}
-	stateBefore, _ := store.Load()
-	before, _ := json.Marshal(stateBefore)
-	service.Stager = providers.Stager{LauncherSource: source("helper B fixture; never executed")}
-	result, err := service.Repair(context.Background(), input)
-	if err == nil || !strings.Contains(err.Error(), "projection digest differs") || result.Mutated {
-		t.Fatalf("repair=%+v err=%v", result, err)
-	}
-	stateAfter, _ := store.Load()
-	after, _ := json.Marshal(stateAfter)
-	if string(before) != string(after) {
-		t.Fatal("exact repair changed state")
-	}
-	if body, err := os.ReadFile(marker); err != nil || string(body) != "prior damage" {
-		t.Fatal("prior artifact changed")
-	}
-	// A controlled update can replace A with B; subsequent exact repair must use B.
-	if err := os.Remove(marker); err != nil {
-		t.Fatal(err)
-	}
-	oldBinding := onlyBinding(stateBefore.Installations[0])
-	oldData := stateBefore.Installations[0].DataReceipts[oldBinding.DataReceiptID]
-	dataMarker := filepath.Join(oldData.Locator, "continuity")
-	if err := os.WriteFile(dataMarker, []byte("persistent"), 0600); err != nil {
-		t.Fatal(err)
-	}
-	setEnvelopeVersion(t, &input.Envelope, "2.0.0", "sha256:helper-b", "sha256:helper-b-manifest")
-	input.OperationID = "helper-b-update"
-	updated, err := service.Update(context.Background(), input)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !updated.Mutated {
-		t.Fatal("B update did not commit")
-	}
-	stateB, _ := store.Load()
-	bindingB := onlyBinding(stateB.Installations[0])
-	if managedDigest(bindingB) == managedDigest(onlyBinding(stateBefore.Installations[0])) {
-		t.Fatal("helper bytes did not change managed digest")
-	}
-	if stateB.Installations[0].DataReceipts[bindingB.DataReceiptID].Locator != oldData.Locator {
-		t.Fatal("update changed data ownership")
-	}
-	if body, err := os.ReadFile(dataMarker); err != nil || string(body) != "persistent" {
-		t.Fatal("update lost persistent data")
-	}
-	if err := os.WriteFile(marker, []byte("new damage"), 0600); err != nil {
-		t.Fatal(err)
-	}
-	input.OperationID = "helper-b-repair"
-	repaired, err := service.Repair(context.Background(), input)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !repaired.Mutated {
-		t.Fatal("B exact repair did not commit")
-	}
-	stateRepaired, _ := store.Load()
-	if managedDigest(onlyBinding(stateRepaired.Installations[0])) != managedDigest(bindingB) {
-		t.Fatal("exact B repair changed receipt digest")
-	}
-	if body, err := os.ReadFile(dataMarker); err != nil || string(body) != "persistent" {
-		t.Fatal("persistent data lost")
-	}
+	for _, clientID := range []domain.ClientID{domain.ClientWindsurf, domain.ClientClaude} {
+		t.Run(string(clientID), func(t *testing.T) {
+			if !managedstdio.Supported() {
+				t.Skip("native launcher unsupported")
+			}
+			service, store, _ := serviceFixture(t)
+			source := func(body string) *managedstdio.Source {
+				path := filepath.Join(t.TempDir(), "helper")
+				if err := os.WriteFile(path, []byte(body), 0755); err != nil {
+					t.Fatal(err)
+				}
+				s, err := managedstdio.NewSource(path, body)
+				if err != nil {
+					t.Fatal(err)
+				}
+				return s
+			}
+			service.Stager = providers.Stager{LauncherSource: source("helper A fixture; never executed")}
+			client := domain.DetectedClient{ClientID: clientID, Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), "windsurf")}
+			if clientID == domain.ClientClaude {
+				client.ExecutablePath = "/test/bin/claude"
+				runner := &fakeClaudeLifecycleRunner{configRoot: client.ConfigRoot}
+				service.Activator = providers.Activator{Runner: runner}
+				service.NativeObserver = providers.NativeIdentityObserver{Runner: runner, Stager: service.Stager}
+			}
+			input := clinePackageInput(t, client, "1.0.0", "sha256:helper", "sha256:helper-manifest", "sh")
+			input.Confirmed = true
+			input.BackendExecutable = client.ExecutablePath
+			installed, err := service.Add(context.Background(), input)
+			if err != nil {
+				t.Fatal(err)
+			}
+			input.InstallationID = installed.InstallationID
+			// A damaged artifact demands rematerialization; rebuilding with B must never
+			// replace the receipt for A under the same exact-repair request.
+			marker := filepath.Join(installed.Plan.ActivePath, "damage.txt")
+			if err := os.WriteFile(marker, []byte("prior damage"), 0600); err != nil {
+				t.Fatal(err)
+			}
+			stateBefore, _ := store.Load()
+			before, _ := json.Marshal(stateBefore)
+			service.Stager = providers.Stager{LauncherSource: source("helper B fixture; never executed")}
+			result, err := service.Repair(context.Background(), input)
+			if err == nil || !strings.Contains(err.Error(), "projection digest differs") || result.Mutated {
+				t.Fatalf("repair=%+v err=%v", result, err)
+			}
+			stateAfter, _ := store.Load()
+			after, _ := json.Marshal(stateAfter)
+			if string(before) != string(after) {
+				t.Fatal("exact repair changed state")
+			}
+			if body, err := os.ReadFile(marker); err != nil || string(body) != "prior damage" {
+				t.Fatal("prior artifact changed")
+			}
+			// A controlled update can replace A with B; subsequent exact repair must use B.
+			if err := os.Remove(marker); err != nil {
+				t.Fatal(err)
+			}
+			oldBinding := onlyBinding(stateBefore.Installations[0])
+			oldData := stateBefore.Installations[0].DataReceipts[oldBinding.DataReceiptID]
+			dataMarker := filepath.Join(oldData.Locator, "continuity")
+			if err := os.WriteFile(dataMarker, []byte("persistent"), 0600); err != nil {
+				t.Fatal(err)
+			}
+			setEnvelopeVersion(t, &input.Envelope, "2.0.0", "sha256:helper-b", "sha256:helper-b-manifest")
+			input.OperationID = "helper-b-update"
+			updated, err := service.Update(context.Background(), input)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !updated.Mutated {
+				t.Fatal("B update did not commit")
+			}
+			stateB, _ := store.Load()
+			bindingB := onlyBinding(stateB.Installations[0])
+			if managedDigest(bindingB) == managedDigest(onlyBinding(stateBefore.Installations[0])) {
+				t.Fatal("helper bytes did not change managed digest")
+			}
+			if stateB.Installations[0].DataReceipts[bindingB.DataReceiptID].Locator != oldData.Locator {
+				t.Fatal("update changed data ownership")
+			}
+			if body, err := os.ReadFile(dataMarker); err != nil || string(body) != "persistent" {
+				t.Fatal("update lost persistent data")
+			}
+			if err := os.WriteFile(marker, []byte("new damage"), 0600); err != nil {
+				t.Fatal(err)
+			}
+			input.OperationID = "helper-b-repair"
+			repaired, err := service.Repair(context.Background(), input)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !repaired.Mutated {
+				t.Fatal("B exact repair did not commit")
+			}
+			stateRepaired, _ := store.Load()
+			if managedDigest(onlyBinding(stateRepaired.Installations[0])) != managedDigest(bindingB) {
+				t.Fatal("exact B repair changed receipt digest")
+			}
+			if body, err := os.ReadFile(dataMarker); err != nil || string(body) != "persistent" {
+				t.Fatal("persistent data lost")
+			}
 
-	nativePath := filepath.Join(client.ConfigRoot, "mcp_config.json")
-	if err := os.Remove(nativePath); err != nil {
-		t.Fatal(err)
-	}
-	input.OperationID = "helper-b-native-repair"
-	nativeRepaired, err := service.Repair(context.Background(), input)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !nativeRepaired.Mutated {
-		t.Fatal("B absent native config repair did not commit")
-	}
-	if _, err := os.Stat(nativePath); err != nil {
-		t.Fatal("native config not restored")
-	}
-	if body, err := os.ReadFile(dataMarker); err != nil || string(body) != "persistent" {
-		t.Fatal("native repair lost persistent data")
-	}
+			if clientID == domain.ClientClaude {
+				return
+			}
+			nativePath := filepath.Join(client.ConfigRoot, "mcp_config.json")
+			if err := os.Remove(nativePath); err != nil {
+				t.Fatal(err)
+			}
+			input.OperationID = "helper-b-native-repair"
+			nativeRepaired, err := service.Repair(context.Background(), input)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !nativeRepaired.Mutated {
+				t.Fatal("B absent native config repair did not commit")
+			}
+			if _, err := os.Stat(nativePath); err != nil {
+				t.Fatal("native config not restored")
+			}
+			if body, err := os.ReadFile(dataMarker); err != nil || string(body) != "persistent" {
+				t.Fatal("native repair lost persistent data")
+			}
 
+		})
+	}
 }
 
 func TestStaticUnsupportedUpdateUsesConfirmedRemoval(t *testing.T) {
@@ -376,21 +390,33 @@ func TestClineHistoricalProjectionDigestCannotBeSilentlyRepaired(t *testing.T) {
 	}
 }
 
-func TestMissingHelperOnlyExcludesWindsurfStdio(t *testing.T) {
-	service, _, _ := serviceFixture(t)
-	client := domain.DetectedClient{ClientID: domain.ClientWindsurf, Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), "windsurf")}
-	input := clinePackageInput(t, client, "1.0.0", "sha256:missing-helper", "sha256:helper-manifest", "sh")
-	input.Confirmed = true
-	input.Envelope.MCP.Servers["remote"] = domain.MCPServer{Type: "streamable-http", Decoded: map[string]any{"type": "streamable-http", "url": "https://example.invalid/mcp"}, Raw: json.RawMessage(`{"type":"streamable-http","url":"https://example.invalid/mcp"}`)}
-	installed, err := service.Add(context.Background(), input)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got := domain.SelectedMCPNames(installed.Plan); !reflect.DeepEqual(got, []string{"remote"}) {
-		t.Fatal(got)
-	}
-	if packageNeedsPluginData(input.Envelope, installed.Plan) {
-		t.Fatal("unselected stdio demanded data")
+func TestMissingHelperOnlyExcludesManagedStdio(t *testing.T) {
+	for _, clientID := range []domain.ClientID{domain.ClientWindsurf, domain.ClientClaude} {
+		t.Run(string(clientID), func(t *testing.T) {
+			service, _, _ := serviceFixture(t)
+			client := domain.DetectedClient{ClientID: clientID, Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), "windsurf")}
+			if clientID == domain.ClientClaude {
+				client.ExecutablePath = "/test/bin/claude"
+				runner := &fakeClaudeLifecycleRunner{configRoot: client.ConfigRoot}
+				service.Activator = providers.Activator{Runner: runner}
+				service.NativeObserver = providers.NativeIdentityObserver{Runner: runner, Stager: service.Stager}
+			}
+			input := clinePackageInput(t, client, "1.0.0", "sha256:missing-helper", "sha256:helper-manifest", "sh")
+			input.Confirmed = true
+			input.BackendExecutable = client.ExecutablePath
+			input.Envelope.MCP.Servers["remote"] = domain.MCPServer{Type: "streamable-http", Decoded: map[string]any{"type": "streamable-http", "url": "https://example.invalid/mcp"}, Raw: json.RawMessage(`{"type":"streamable-http","url":"https://example.invalid/mcp"}`)}
+			installed, err := service.Add(context.Background(), input)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := domain.SelectedMCPNames(installed.Plan); !reflect.DeepEqual(got, []string{"remote"}) {
+				t.Fatal(got)
+			}
+			if packageNeedsPluginData(input.Envelope, installed.Plan) {
+				t.Fatal("unselected stdio demanded data")
+			}
+
+		})
 	}
 }
 
@@ -439,5 +465,20 @@ func TestUnexpectedReadinessIOIsNotAComponentSkip(t *testing.T) {
 		if unexpectedPathIO(err) {
 			t.Fatalf("expected readiness became fatal: %v", err)
 		}
+	}
+}
+
+func TestClaudeMissingHelperRetainsPreviouslySelectedStdio(t *testing.T) {
+	service, _, _ := serviceFixture(t)
+	envelope := domain.PackageEnvelope{SnapshotRoot: t.TempDir(), MCP: domain.MCPComponent{Servers: map[string]domain.MCPServer{
+		"local":  {Type: "stdio", Decoded: map[string]any{"command": "sh"}},
+		"remote": {Type: "streamable-http"},
+	}}}
+	plan := domain.DeliveryPlan{ClientID: domain.ClientClaude, Components: []domain.ComponentDecision{
+		{Kind: domain.ComponentMCPServer, Name: "local", Support: domain.SupportProjected},
+		{Kind: domain.ComponentMCPServer, Name: "remote", Support: domain.SupportProjected},
+	}}
+	if err := service.preflightComponents(envelope, &plan, true, map[string]bool{"local": true, "remote": true}); err == nil || !strings.Contains(err.Error(), "retaining the entire installed package") {
+		t.Fatalf("previous selection silently withdrawn: %v", err)
 	}
 }
