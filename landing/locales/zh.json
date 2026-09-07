@@ -324,5 +324,24 @@
     "genericTitle": "出了点问题",
     "genericDescription": "发生意外错误。请稍后重试。",
     "goHome": "Go 到主页"
+  },
+  "publicAuthoring": {
+    "title": "使用插件 / 构建插件",
+    "intro": "安装已发布的插件，或准备可移植的 Agent Plugins 1.0 包。",
+    "useTitle": "使用插件",
+    "available": "现已可用：通过 Universal Agent Plugins 安装插件。使用 Node.js 22+ 时运行：",
+    "installHelp": "如需在 macOS、Linux 或 Windows 上进行原生安装，请阅读安装指南。CLI 会询问要使用哪些兼容的客户端；个别插件可能需要自己的运行环境。",
+    "installLink": "安装指南",
+    "buildTitle": "构建插件",
+    "standard": "以 plugin.json 为核心构建可移植的 Agent Plugins 1.0 包，可选包含 skills/ 和 mcp.json。客户端支持取决于包及其组件。",
+    "preparation": "准备中 — 尚未发布",
+    "unreleased": "以标准为先的创作 CLI 正在准备中，尚未发布。npm 和 PyPI 上已发布的 plugin-kit-ai 1.2.4 是历史 v1 工具，并非 standard-first v2。安装 plugin-kit-ai{'@'}latest 不会提供未来的创作流程。",
+    "specLink": "Agent Plugins 1.0 规范",
+    "historyTitle": "历史 v1 维护",
+    "history": "请使用以下 v1 说明维护现有 plugin.yaml 项目。这些模板和生成输出属于历史 v1 流程，不会创建新的标准优先创作流程。",
+    "quickstartLink": "快速入门与 v1 维护",
+    "compatibilityLink": "客户端兼容性（英文）",
+    "limitations": "兼容性取决于包。通过模式验证并不证明运行、OAuth 或激活成功。Codex 不支持声明的 MCP SSE；stdio 和 Streamable HTTP 保留现有适配器支持。",
+    "versions": "版本核验日期为 2026-09-07：universal-agent-plugins 0.1.53（npm）、plugin-kit-ai 1.2.4（npm/PyPI），GitHub 稳定版本 agentplugins-v0.1.53。"
   }
 }
