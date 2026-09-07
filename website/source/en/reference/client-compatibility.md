@@ -10,12 +10,56 @@ translationRequired: false
 
 # UAP client compatibility evidence
 
+## Released installer 0.1.53
+
+[Public release 0.1.53](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.53)
+uses installer commit `28cf05af0a1e4fea642825dd34b78f9c99094ab5`.
+[Native run 34166817934](https://github.com/777genius/universal-agent-plugins/actions/runs/34166817934)
+passed all nine jobs and 18 required tests without skips. It downloaded the public
+binaries, checked their manifest and attestations before execution, and used
+separate source-built test/probe helpers at harness commit
+`9c33cfac81fc00e61205591321c89c5675fedb60`.
+
+| Tested client | Linux arm64 | macOS arm64 | Windows amd64 |
+| --- | --- | --- | --- |
+| Codex 0.153.4 | Passed stdio/HTTP and skill-context lifecycle | Same scope passed | Same scope passed |
+| Claude Code 2.1.263 | Passed stdio/HTTP/skill lifecycle | Same scope passed | Passed HTTP/installed-skill lifecycle; managed stdio unsupported |
+| OpenCode 1.18.29 | Passed lifecycle, collision-observation and extended stdio/skill suites | Same scope passed | Same scope passed |
+
+Lifecycle includes install, update, same-version refresh, repair and removal.
+OpenCode JSON/JSONC lifecycle and HTTP collision fixtures are separate from its
+global JSON stdio/skill-body suite; JSONC stdio/body coverage is not inferred.
+The observed colliding OpenCode tool names remain a limitation, with
+`opencode_tool_namespace_not_evaluated` advisory. The required Codex suite's Git
+acquisition seam is not a new public-Git native runtime claim.
+
+These are maintainer-run observations in fresh GitHub-hosted profiles with
+scripted loopback providers and network access. They do not prove real-model
+quality, OAuth/login, desktop applications, live services, independent adoption
+or vendor certification. Package validation, installation, activation/discovery
+and runtime remain separate evidence layers. The separate
+[six-platform launcher run](https://github.com/777genius/universal-agent-plugins/actions/runs/34164699278)
+does not extend this native-client table to other architectures.
+
+[Released evidence identities](https://github.com/777genius/universal-agent-plugins/blob/main/docs/evidence/client-compatibility-released-0.1.53.json)
+record all nine lanes and exact hashes. A verified archive contains 529 original
+files plus its summary, SHA-256
+`0d315f3a24bb6c41d184f0632d76a7228e18a6c1c41be2774e23c8066dfd3af6`.
+[Public evidence archive](https://github.com/777genius/universal-agent-plugins/releases/download/native-evidence-0.1.53-34166817934/uap-0.1.53-native-34166817934.zip)
+and [checksum sidecar](https://github.com/777genius/universal-agent-plugins/releases/download/native-evidence-0.1.53-34166817934/uap-0.1.53-native-34166817934.zip.sha256)
+were re-downloaded and hash-checked after publication on the
+[separate evidence release](https://github.com/777genius/universal-agent-plugins/releases/tag/native-evidence-0.1.53-34166817934).
+[Reproduction and publication procedure](https://github.com/777genius/universal-agent-plugins/blob/main/docs/released-native-client-proof.md)
+keeps those assets separate from the immutable installer release.
+
+## Historical source-built observations
+
 Snapshot: **2026-09-07**. These are bounded native CLI observations for the
 `agentplugins` installer. They do not establish support for every version of a
 client, Desktop application, operating system, package, or authentication flow.
 UAP is independent community tooling; this matrix is not vendor certification.
 
-## Source and release boundary
+### Historical source and release boundary
 
 The macOS/Windows checkpoint below is `ef20b93`; Linux evidence retains its
 separate historical identity. No result is implicitly carried to another SHA.
@@ -29,7 +73,7 @@ from product tree `dcd9090458b036515c9aed77ee5d3e66f0dcb4f5`, base commit
 The delivery was merged in [PR #184](https://github.com/777genius/universal-agent-plugins/pull/184)
 as [`7d17c77599306d662e0bec0e0fd77d35a4f8941c`](https://github.com/777genius/universal-agent-plugins/commit/7d17c77599306d662e0bec0e0fd77d35a4f8941c).
 These historical runs identify their tested premerge product tree, not a runtime
-rerun of that merge commit. The latest release verified for this snapshot is
+rerun of that merge commit. The latest release verified for the 2026-09-07 source snapshot is
 **0.1.51 (2026-09-06)**, which does **not** contain PR #184. Do not apply these
 candidate runtime results to that published binary.
 
@@ -40,7 +84,7 @@ audited `opencode-extended-11`. Raw transcripts are not
 bundled with this summary; hashes identify retained artifacts, not a publicly
 replayable transcript archive.
 
-## Linux arm64 native CLI matrix
+### Historical Linux arm64 native CLI matrix
 
 Each run used a fresh test project and isolated HOME/client/XDG roots in a
 container. Runtime used loopback MCP servers and scripted providers, without
@@ -76,7 +120,7 @@ manifest hashes. The skill BODY nonce reaches outgoing tool context and is
 absent from initial metadata/tool definitions; this does not establish model
 comprehension. The run does not prove new installer code or another OS.
 
-## Limitations observed and narrower proofs
+### Historical limitations and narrower proofs
 
 - **OpenCode tool-name collision:** logical keys `api/server` and `api server`
   each work alone, but together expose one `api_server_inspect_runtime` callable
@@ -107,7 +151,7 @@ comprehension. The run does not prove new installer code or another OS.
   switch/update were not evaluated. Claude/OpenCode native Git runs were not
   evaluated. Local and immutable Git installation do not require the Directory.
 
-## macOS arm64 and Windows amd64 source checkpoint
+### Historical macOS arm64 and Windows amd64 source checkpoint
 
 [GitHub Actions run 34158664586](https://github.com/777genius/universal-agent-plugins/actions/runs/34158664586)
 passed all six required native client lanes without skips on source commit
