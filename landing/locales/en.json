@@ -324,5 +324,24 @@
     "genericTitle": "Something went wrong",
     "genericDescription": "An unexpected error occurred. Please try again later.",
     "goHome": "Go to homepage"
+  },
+  "publicAuthoring": {
+    "title": "Use plugins / Build plugins",
+    "intro": "Install available plugins or prepare a portable Agent Plugins 1.0 package.",
+    "useTitle": "Use plugins",
+    "available": "Available now: install plugins with Universal Agent Plugins. With Node.js 22+, run:",
+    "installHelp": "For native installation on macOS, Linux or Windows, follow the installer guide. The CLI asks which compatible agents to use; individual plugins may need their own runtimes.",
+    "installLink": "Installer guide",
+    "buildTitle": "Build plugins",
+    "standard": "Build a portable Agent Plugins 1.0 package around plugin.json, with optional skills/ and mcp.json. Client support depends on the package and its components.",
+    "preparation": "Preparation — unreleased",
+    "unreleased": "The standard-first authoring CLI is in preparation and is unreleased. Published plugin-kit-ai 1.2.4 on npm and PyPI is the historical v1 tool, not standard-first v2. Installing plugin-kit-ai@latest does not provide the future authoring workflow.",
+    "specLink": "Read the Agent Plugins 1.0 specification",
+    "historyTitle": "Historical v1 maintenance",
+    "history": "Maintain existing plugin.yaml projects with the v1 instructions below. These templates and generated outputs are historical v1 workflows; they do not create the new standard-first authoring flow.",
+    "quickstartLink": "Quickstart and v1 maintenance",
+    "compatibilityLink": "Client compatibility (English)",
+    "limitations": "Compatibility is package-specific. Schema validation does not prove runtime, OAuth or activation. Codex does not support declared MCP SSE; stdio and Streamable HTTP keep their existing adapter support.",
+    "versions": "Published versions checked on 2026-09-07: universal-agent-plugins 0.1.51 (npm), plugin-kit-ai 1.2.4 (npm/PyPI), stable GitHub release agentplugins-v0.1.51."
   }
 }

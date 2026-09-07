@@ -324,5 +324,24 @@
     "genericTitle": "Quelque chose s'est mal passé",
     "genericDescription": "Une erreur inattendue s'est produite. Veuillez réessayer plus tard.",
     "goHome": "Go vers la page d'accueil"
+  },
+  "publicAuthoring": {
+    "title": "Utiliser des plugins / Créer des plugins",
+    "intro": "Installez des plugins disponibles ou préparez un paquet portable Agent Plugins 1.0.",
+    "useTitle": "Utiliser des plugins",
+    "available": "Disponible maintenant : installez des plugins avec Universal Agent Plugins. Avec Node.js 22+, exécutez :",
+    "installHelp": "Pour une installation native sur macOS, Linux ou Windows, consultez le guide. Le CLI demande quels agents compatibles utiliser ; chaque plugin peut nécessiter son propre environnement d’exécution.",
+    "installLink": "Guide d’installation",
+    "buildTitle": "Créer des plugins",
+    "standard": "Créez un paquet portable Agent Plugins 1.0 autour de plugin.json, avec skills/ et mcp.json facultatifs. La prise en charge dépend du paquet et de ses composants.",
+    "preparation": "En préparation — non publié",
+    "unreleased": "Le CLI de création fondé sur le standard est en préparation et n’est pas encore publié. plugin-kit-ai 1.2.4, publié sur npm et PyPI, est l’outil historique v1, pas standard-first v2. Installer plugin-kit-ai@latest ne fournit pas le futur parcours de création.",
+    "specLink": "Spécification Agent Plugins 1.0",
+    "historyTitle": "Maintenance historique v1",
+    "history": "Maintenez les projets plugin.yaml existants avec les instructions v1 ci-dessous. Ces modèles et sorties générées relèvent des parcours historiques v1 ; ils ne créent pas le nouveau parcours fondé sur le standard.",
+    "quickstartLink": "Démarrage rapide et maintenance v1",
+    "compatibilityLink": "Compatibilité des clients (en anglais)",
+    "limitations": "La compatibilité dépend du paquet. La validation du schéma ne prouve ni l’exécution, ni OAuth, ni l’activation. Codex ne prend pas en charge MCP SSE déclaré ; stdio et Streamable HTTP conservent leur prise en charge par les adaptateurs existants.",
+    "versions": "Versions vérifiées le 2026-09-07 : universal-agent-plugins 0.1.51 (npm), plugin-kit-ai 1.2.4 (npm/PyPI), version stable GitHub agentplugins-v0.1.51."
   }
 }

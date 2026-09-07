@@ -127,8 +127,14 @@ if (!productionReadiness.includes("Pick The Right Path On Purpose")) {
 }
 
 const quickstart = await fs.readFile(path.join(distRoot, "en", "guide", "quickstart.html"), "utf8");
-if (!quickstart.includes("Recommended Default")) {
-  console.error("Quickstart page is missing its expected canonical default flow.");
+for (const claim of ["Use plugins", "Build plugins", "Preparation", "unreleased", "Historical v1 maintenance", "plugin.json", "npx universal-agent-plugins add context7"]) {
+  if (!quickstart.includes(claim)) {
+    console.error(`Quickstart page is missing its public availability claim: ${claim}`);
+    hasError = true;
+  }
+}
+if (quickstart.includes("Recommended Default") || quickstart.includes("npx plugin-kit-ai@latest add notion")) {
+  console.error("Quickstart still recommends the old v1 first-run journey.");
   hasError = true;
 }
 if (!quickstart.includes("Supported Node And Python Paths")) {

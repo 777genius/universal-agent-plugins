@@ -486,6 +486,16 @@ test('sitemap lists only live canonical pages and unstable routes stay out of th
 
   await page.goto('./create-plugin');
   await expect(page.locator('meta[name="robots"]')).toHaveAttribute('content', 'noindex, follow');
+  await expect(page.getByRole('heading', { name: 'Use plugins / Build plugins', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Use plugins', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Build plugins', exact: true })).toBeVisible();
+  await expect(page.locator('#use-plugins code')).toHaveText('npx universal-agent-plugins add context7');
+  await expect(page.locator('#build-plugins')).toContainText('Preparation — unreleased');
+  await expect(page.locator('#build-plugins')).toContainText('not standard-first v2');
+  await expect(page.locator('#historical-v1 a')).toHaveAttribute(
+    'href',
+    'https://777genius.github.io/universal-agent-plugins/docs/en/guide/quickstart.html#historical-v1',
+  );
 });
 
 test('an unsupported localized route is never selected for browser-language visitors', async ({
