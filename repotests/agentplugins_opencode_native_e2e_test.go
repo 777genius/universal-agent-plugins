@@ -67,18 +67,7 @@ func newOpenCodeNativeFixture(t *testing.T) *openCodeNativeFixture {
 // ambient config, OPENCODE_PURE disables any implicit project/global merge
 // that could hide the owned entry.
 func (f *openCodeNativeFixture) env(clientDir string) []string {
-	return []string{
-		"HOME=" + f.Home,
-		"XDG_CONFIG_HOME=" + f.XDGConfig,
-		"XDG_DATA_HOME=" + f.XDGData,
-		"XDG_CACHE_HOME=" + f.XDGCache,
-		"XDG_STATE_HOME=" + f.XDGState,
-		"AGENTPLUGINS_HOME=" + f.StateHome,
-		"TMPDIR=" + filepath.Join(f.Root, "tmp"),
-		"OPENCODE_PURE=1",
-		"PATH=" + clientDir + ":/usr/bin:/bin",
-		"LANG=en_US.UTF-8",
-	}
+	return append(nativePlatformEnvironment(f.Root, f.Home, clientDir), "AGENTPLUGINS_HOME="+f.StateHome, "OPENCODE_PURE=1")
 }
 
 func (f *openCodeNativeFixture) record(t *testing.T, label string, out []byte) {
@@ -414,9 +403,7 @@ func openCodeReadConfigDocument(t *testing.T, body []byte, doc *map[string]any) 
 
 func openCodePrepareNative(t *testing.T, f *openCodeNativeFixture, client string) map[string]string {
 	t.Helper()
-	if runtime.GOOS != "linux" || os.Getenv("AGENTPLUGINS_NATIVE_DISPOSABLE_LINUX") != "1" {
-		t.Fatal("native OpenCode execution requires the approved disposable Linux container")
-	}
+	nativeRequireDisposable(t)
 	if expected := os.Getenv("AGENTPLUGINS_OPENCODE_SHA256"); len(expected) != 64 || openCodeSHA256(t, client) != expected {
 		t.Fatal("OpenCode binary SHA256 mismatch or missing pin")
 	}
@@ -476,7 +463,7 @@ func openCodeNativeLifecycle(t *testing.T, route string) {
 		"installer_patch_sha256": os.Getenv("AGENTPLUGINS_INSTALLER_PATCH_SHA256"), "acquisition": "local_directory",
 		"native_surface":         "opencode debug config (effective config proof; not a handshake or tool call) plus opencode mcp list (real per-server connection attempts, still not a handshake or tool call)",
 		"config_route_exercised": route,
-		"network_dependency":     "none; pinned scanner preprovisioned; disposable container denies external network",
+		"network_dependency":     nativeNetworkEvidence(),
 		"scanner":                scanner,
 		"stages":                 stages,
 	}
@@ -761,7 +748,7 @@ func openCodeNativeBinary(t *testing.T, key string) string {
 		t.Fatalf("%s must name an absolute scratch binary", key)
 	}
 	st, err := os.Stat(p)
-	if err != nil || !st.Mode().IsRegular() || st.Mode()&0111 == 0 {
+	if err != nil || !st.Mode().IsRegular() || (runtime.GOOS != "windows" && st.Mode()&0111 == 0) {
 		t.Fatalf("invalid %s binary", key)
 	}
 	return p

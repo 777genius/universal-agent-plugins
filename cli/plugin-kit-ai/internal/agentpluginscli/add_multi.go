@@ -350,6 +350,9 @@ func renderAddMultiResult(cmd *cobra.Command, opts *options, result addMultiResu
 		return err
 	}
 	for _, target := range result.Targets {
+		if err := renderOpenCodeRuntimeNotice(cmd.OutOrStdout(), target.Output.Result); err != nil {
+			return err
+		}
 		if _, err := fmt.Fprintf(cmd.OutOrStdout(), "  %s: %s\n", target.Target, target.Status); err != nil {
 			return err
 		}

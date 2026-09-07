@@ -196,6 +196,13 @@ func renderUpdateAll(cmd *cobra.Command, opts *options, result updateAllResult) 
 
 func renderUpdateAllHuman(writer io.Writer, result updateAllResult) error {
 	for _, installation := range result.Installations {
+		if installation.Plan != nil {
+			for _, target := range installation.Plan.Targets {
+				if err := renderOpenCodeRuntimeNotice(writer, target.Output.Result); err != nil {
+					return err
+				}
+			}
+		}
 		if _, err := fmt.Fprintf(writer, "%s: %s", installation.Name, installation.Status); err != nil {
 			return err
 		}

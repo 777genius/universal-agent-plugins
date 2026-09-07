@@ -20,7 +20,7 @@ import (
 
 // This suite is intentionally opt-in and uses only a freshly provisioned binary.
 // macOS release binaries read managed CFPreferences independently of HOME; this
-// runner requires a clean Linux container/VM until that boundary is isolated.
+// runner requires a disposable image/VM or explicitly opted-in hosted runner.
 func nativeBinary(t *testing.T, key string) string {
 	t.Helper()
 	p := os.Getenv(key)
@@ -28,7 +28,7 @@ func nativeBinary(t *testing.T, key string) string {
 		t.Fatalf("%s must name an absolute scratch binary", key)
 	}
 	st, err := os.Stat(p)
-	if err != nil || !st.Mode().IsRegular() || st.Mode()&0111 == 0 {
+	if err != nil || !st.Mode().IsRegular() || (runtime.GOOS != "windows" && st.Mode()&0111 == 0) {
 		t.Fatalf("invalid %s binary", key)
 	}
 	return p
@@ -257,11 +257,11 @@ func nativeSession(t *testing.T, f *nativeFixture, client, label, revision, oper
 		}
 		for _, p := range []string{facts.Root, facts.Data, facts.CWD} {
 			rel, err := filepath.Rel(f.Root, p)
-			if err != nil || rel == ".." || strings.HasPrefix(rel, "../") {
+			if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
 				t.Fatalf("runtime path escapes fixture: %s", p)
 			}
 		}
-		if !strings.Contains(facts.Root, string(filepath.Separator)+"plugins/cache/") {
+		if !strings.Contains(filepath.ToSlash(facts.Root), "/plugins/cache/") {
 			t.Fatalf("not native installed cache: %s", facts.Root)
 		}
 		for _, path := range []string{"plugin.json", ".codex-plugin/plugin.json"} {
@@ -363,9 +363,7 @@ func TestAgentpluginsCodexNativeLifecycle(t *testing.T) {
 	if os.Getenv("AGENTPLUGINS_CODEX_NATIVE_E2E") != "1" {
 		t.Skip("opt-in native client execution")
 	}
-	if runtime.GOOS != "linux" || os.Getenv("AGENTPLUGINS_NATIVE_DISPOSABLE_LINUX") != "1" {
-		t.Fatal("requires a newly provisioned disposable Linux container/VM; macOS managed preferences are not isolated by HOME")
-	}
+	nativeRequireDisposable(t)
 	if _, err := os.Lstat("/etc/codex"); !os.IsNotExist(err) {
 		t.Fatal("system Codex config must be absent in disposable image")
 	}
@@ -613,7 +611,7 @@ func TestAgentpluginsCodexNativeLifecycle(t *testing.T) {
 	}
 	partialServers := partialMCP["mcpServers"].(map[string]any)
 	partialServers["unavailable"] = map[string]any{"type": "stdio", "command": "uap-deliberately-unavailable-" + f.Nonce}
-	partialServers["startup-failure"] = map[string]any{"type": "stdio", "command": "./bin/probe", "args": []string{"--fail-startup"}, "env": map[string]string{"UAP_TEST_ROOT": f.Root, "UAP_TEST_EVENTS": f.Events, "UAP_TEST_NONCE": f.Nonce}}
+	partialServers["startup-failure"] = map[string]any{"type": "stdio", "command": "./bin/" + nativeExecutableName("probe"), "args": []string{"--fail-startup"}, "env": map[string]string{"UAP_TEST_ROOT": f.Root, "UAP_TEST_EVENTS": f.Events, "UAP_TEST_NONCE": f.Nonce}}
 	partialServers["unsupported-sse"] = map[string]any{"type": "sse", "url": f.HTTPURL + "/unsupported-sse"}
 	nativeJSON(t, filepath.Join(f.Package, "mcp.json"), partialMCP)
 	nativeWrite(t, filepath.Join(f.Package, "skills", "invalid-proof", "SKILL.md"), []byte("No required skill frontmatter"), 0600)
@@ -770,7 +768,7 @@ func nativeRequireContained(t *testing.T, root, path string) {
 		t.Fatal(err)
 	}
 	rel, err := filepath.Rel(root, resolved)
-	if err != nil || rel == ".." || strings.HasPrefix(rel, "../") {
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
 		t.Fatalf("path escapes disposable fixture: %s", path)
 	}
 }
@@ -1030,9 +1028,7 @@ func TestAgentpluginsCodexImmutableGitDiscovery(t *testing.T) {
 	if os.Getenv("AGENTPLUGINS_CODEX_GIT_E2E") != "1" {
 		t.Skip("opt-in public immutable Git native discovery")
 	}
-	if runtime.GOOS != "linux" || os.Getenv("AGENTPLUGINS_NATIVE_DISPOSABLE_LINUX") != "1" {
-		t.Fatal("requires disposable Linux boundary")
-	}
+	nativeRequireDisposable(t)
 	if _, err := os.Lstat("/etc/codex"); !os.IsNotExist(err) {
 		t.Fatal("system Codex config must be absent")
 	}
@@ -1187,7 +1183,7 @@ func TestAgentpluginsCodexImmutableGitDiscovery(t *testing.T) {
 				continue
 			}
 			nativeRequireContained(t, f.Root, skill.Path)
-			if !strings.Contains(skill.Path, "/plugins/cache/") || !strings.HasSuffix(skill.Path, "/skills/alpha/SKILL.md") {
+			if !strings.Contains(filepath.ToSlash(skill.Path), "/plugins/cache/") || !strings.HasSuffix(filepath.ToSlash(skill.Path), "/skills/alpha/SKILL.md") {
 				t.Fatal("skill is not from installed native cache")
 			}
 			body, err := os.ReadFile(skill.Path)
