@@ -88,22 +88,22 @@ func managedCodexPluginEntryPresent(configRoot, declaredName, marketplace string
 
 // equivalentLocalPath compares the filesystem identity rather than only the
 // spelling of a path. macOS commonly exposes /tmp through /private/tmp, and
-// the same aliasing can occur in containerized or symlinked test homes. Both
-// paths must resolve successfully before an alias is accepted; an unreadable
-// or missing source remains fail-closed.
+// Windows can expose the same directory with an extended-length path prefix.
+// Identical cleaned paths are accepted directly; differing paths must both
+// stat successfully and identify the same file before an alias is accepted.
 func equivalentLocalPath(left, right string) bool {
 	left = filepath.Clean(left)
 	right = filepath.Clean(right)
 	if left == right {
 		return true
 	}
-	resolvedLeft, err := filepath.EvalSymlinks(left)
+	leftInfo, err := os.Stat(left)
 	if err != nil {
 		return false
 	}
-	resolvedRight, err := filepath.EvalSymlinks(right)
+	rightInfo, err := os.Stat(right)
 	if err != nil {
 		return false
 	}
-	return filepath.Clean(resolvedLeft) == filepath.Clean(resolvedRight)
+	return os.SameFile(leftInfo, rightInfo)
 }
