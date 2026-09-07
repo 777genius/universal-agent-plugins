@@ -24,6 +24,13 @@ import urllib.request
 import zipfile
 
 PINS = {
+    "linux-arm64": {
+        "rg": ("github", "BurntSushi/ripgrep", "15.2.0", "ripgrep-15.2.0-aarch64-unknown-linux-gnu.tar.gz", "sha256:a740b91c82eaf9914cfedd353572f2791cbe0162c84101ee0951058f4dcbc90d", "rg"),
+        "codex": ("github", "openai/codex", "rust-v0.153.4", "codex-aarch64-unknown-linux-musl.tar.gz", "sha256:5cda6182bd94c3a30f2eb63a495489ebf7f691fddb14d70f48c6c1a5071b6cde", "codex-aarch64-unknown-linux-musl"),
+        "claude": ("npm", "@anthropic-ai/claude-code-linux-arm64", "2.1.263", "claude-code-linux-arm64-2.1.263.tgz", "sha512-RlJtLbl8xqFMf2zUdOKD4o5FkNhcgGjlS3Un8PNfSbv1fLQg3SqBQgEJhNEtSeKlEsOs26RnCG/jVk4yah8Udw==", "claude"),
+        "opencode": ("npm", "opencode-linux-arm64", "1.18.29", "opencode-linux-arm64-1.18.29.tgz", "sha512-Lr7XXik5wPJZBV5RW+aR6Uogf1n5GogpB565m+D/jiO/vRXr9LhvCpixgAr1tiwuH1ZfMsqOOlbFQz5jgH3Tqg==", "opencode"),
+        "lintai": ("github", "777genius/lintai", "v0.1.3", "lintai-v0.1.3-aarch64-unknown-linux-gnu.tar.gz", "sha256:132a37610575bd251ecaf0be4c6090dad144dd1397c99aad989a3944c63c3d4a", "lintai"),
+    },
     "darwin-arm64": {
         "rg": ("github", "BurntSushi/ripgrep", "15.2.0", "ripgrep-15.2.0-aarch64-apple-darwin.tar.gz", "sha256:3750b2e93f37e0c692657da574d7019a101c0084da05a790c83fd335bad973e4", "rg"),
         "codex": ("github", "openai/codex", "rust-v0.153.4", "codex-aarch64-apple-darwin.tar.gz", "sha256:8cf911ea676523bfb2121ec561848d2aba564890ad536db4d8a3353f2b9850b1", "codex-aarch64-apple-darwin"),
@@ -98,6 +105,44 @@ def provision(pin, directory, name):
     return path, {"source": source, "version": version, "archive": archive, "archive_integrity": digest, "binary_sha256": hashlib.sha256(binary).hexdigest()}
 
 
+def provision_release(source, directory, target, tag, commit, repository):
+    """Verify public producer bytes before executing them; never rebuild installer."""
+    if not re.fullmatch(r"agentplugins-v(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)", tag):
+        raise ValueError("an exact stable release tag is required")
+    if not re.fullmatch(r"[0-9a-f]{40}", commit):
+        raise ValueError("an exact producer source commit is required")
+    if repository != "777genius/universal-agent-plugins":
+        raise ValueError("unsupported binary producer repository")
+    metadata = json.loads(subprocess.check_output(["gh", "api", f"repos/{repository}/releases/tags/{tag}"], text=True))
+    if metadata.get("draft") is not False or metadata.get("prerelease") is not False or metadata.get("tag_name") != tag:
+        raise ValueError("native release proof requires an exact public stable release")
+    tagged = json.loads(subprocess.check_output(["gh", "api", f"repos/{repository}/commits/{tag}"], text=True))
+    if tagged.get("sha") != commit:
+        raise ValueError("producer release tag differs from expected commit")
+    tree = tagged["commit"]["tree"]["sha"]
+    if not re.fullmatch(r"[0-9a-f]{40}", tree):
+        raise ValueError("invalid producer source tree")
+    assets = directory / "release-assets"
+    assets.mkdir()
+    subprocess.run(["gh", "release", "download", tag, "--repo", repository, "--dir", str(assets)], check=True, timeout=300)
+    verified = json.loads(subprocess.check_output(["node", str(source / "npm/agentplugins/scripts/release-assets.js"), "verify", str(assets), tag, commit], text=True, timeout=60))
+    selected = verified["assets"][target]
+    installer = assets / selected["file"]
+    attestations = {}
+    for name in (selected["file"], "checksums.txt", "release-manifest.json"):
+        attestations[name] = json.loads(subprocess.check_output([
+            "gh", "attestation", "verify", str(assets / name), "--repo", repository,
+            "--signer-workflow", f"github.com/{repository}/.github/workflows/agentplugins-release.yml",
+            "--source-digest", commit, "--deny-self-hosted-runners", "--format", "json"], text=True, timeout=180))
+    installer.chmod(0o700)
+    return installer, {"acquisition": "public GitHub release download", "repository": repository,
+        "tag": tag, "version": verified["version"], "commit": commit, "tree": tree,
+        "file": selected["file"], "binary_sha256": selected["sha256"], "size": selected["size"],
+        "manifest_sha256": verified["manifest_sha256"],
+        "checksums_sha256": hashlib.sha256((assets / "checksums.txt").read_bytes()).hexdigest(),
+        "attestations": attestations}
+
+
 def require_hosted(target):
     if any(os.environ.get(k) != v for k, v in {"GITHUB_ACTIONS": "true", "RUNNER_ENVIRONMENT": "github-hosted", "AGENTPLUGINS_NATIVE_DISPOSABLE_HOSTED": "1"}.items()):
         raise RuntimeError("native proof requires explicit opt-in on a disposable GitHub-hosted runner")
@@ -105,6 +150,15 @@ def require_hosted(target):
     actual = platform.system().lower() + "-" + str(machine)
     if actual != target:
         raise RuntimeError(f"target {target} does not match actual native platform {actual}")
+
+
+def disposable_runtime_environment(target):
+    # Recheck the actual runner before granting the runtime's Linux test opt-in.
+    require_hosted(target)
+    env = {"GITHUB_ACTIONS": "true", "RUNNER_ENVIRONMENT": "github-hosted", "AGENTPLUGINS_NATIVE_DISPOSABLE_HOSTED": "1"}
+    if target == "linux-arm64":
+        env["AGENTPLUGINS_NATIVE_DISPOSABLE_LINUX"] = "1"
+    return env
 
 
 def find_git_bash(git):
@@ -123,7 +177,12 @@ def main():
     parser.add_argument("--client", choices=PATTERNS, required=True)
     parser.add_argument("--target", choices=PINS, required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--release-tag")
+    parser.add_argument("--release-commit")
+    parser.add_argument("--release-repo", default="777genius/universal-agent-plugins")
     args = parser.parse_args()
+    if bool(args.release_tag) != bool(args.release_commit):
+        parser.error("--release-tag and --release-commit must be supplied together")
     require_hosted(args.target)
     source = Path(__file__).resolve().parents[1]
     output = args.output.resolve()
@@ -147,16 +206,22 @@ def main():
         _, identity["ripgrep_asset"] = provision(PINS[args.target]["rg"], binary_dir, "rg")
         suffix = ".exe" if os.name == "nt" else ""
         installer, probe, tests = [binary_dir / (p + suffix) for p in ("agentplugins", "native-probe", "repotests")]
-        for command, cwd in [(["go", "build", "-trimpath", "-o", str(installer), "./cmd/agentplugins"], source / "cli/plugin-kit-ai"), (["go", "build", "-trimpath", "-o", str(probe), "./repotests/testdata/agentplugins_native_probe"], source), (["go", "test", "-c", "-o", str(tests), "./repotests"], source)]:
+        commands = [(["go", "build", "-trimpath", "-o", str(probe), "./repotests/testdata/agentplugins_native_probe"], source), (["go", "test", "-c", "-o", str(tests), "./repotests"], source)]
+        if args.release_tag:
+            installer, identity["installer_release"] = provision_release(source, binary_dir, args.target, args.release_tag, args.release_commit, args.release_repo)
+        else:
+            commands.insert(0, (["go", "build", "-trimpath", "-o", str(installer), "./cmd/agentplugins"], source / "cli/plugin-kit-ai"))
+        for command, cwd in commands:
             subprocess.run(command, cwd=cwd, check=True, timeout=360)
-        identity["build_sha256"] = {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in (installer, probe, tests)}
+        identity["harness_build_sha256"] = {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in (probe, tests)}
+        identity["installer_sha256"] = hashlib.sha256(installer.read_bytes()).hexdigest()
         project = scratch / "project"
         project.mkdir()
         evidence_root = scratch / "evidence"
         evidence_root.mkdir()
         home = scratch / "home"
         home.mkdir()
-        env = {"HOME": str(home), "USERPROFILE": str(home), "TEMP": str(evidence_root), "TMP": str(evidence_root), "TMPDIR": str(evidence_root), "PATH": str(binary_dir), "LANG": "en_US.UTF-8", "GITHUB_ACTIONS": "true", "RUNNER_ENVIRONMENT": "github-hosted", "AGENTPLUGINS_NATIVE_DISPOSABLE_HOSTED": "1", "AGENTPLUGINS_INSTALLER_BIN": str(installer), "AGENTPLUGINS_INSTALLER_COMMIT": identity["commit"], "AGENTPLUGINS_INSTALLER_TREE": identity["tree"], "AGENTPLUGINS_NATIVE_PROBE_BIN": str(probe), "AGENTPLUGINS_LINTAI_BIN": str(scanner), "AGENTPLUGINS_LINTAI_SHA256": scanner_evidence["binary_sha256"], "AGENTPLUGINS_LINTAI_ARCHIVE_SHA256": PINS[args.target]["lintai"][4].split(":", 1)[1]}
+        env = {"HOME": str(home), "USERPROFILE": str(home), "TEMP": str(evidence_root), "TMP": str(evidence_root), "TMPDIR": str(evidence_root), "PATH": str(binary_dir), "LANG": "en_US.UTF-8", **disposable_runtime_environment(args.target), "AGENTPLUGINS_INSTALLER_BIN": str(installer), "AGENTPLUGINS_INSTALLER_COMMIT": identity["commit"], "AGENTPLUGINS_INSTALLER_TREE": identity["tree"], "AGENTPLUGINS_NATIVE_PROBE_BIN": str(probe), "AGENTPLUGINS_LINTAI_BIN": str(scanner), "AGENTPLUGINS_LINTAI_SHA256": scanner_evidence["binary_sha256"], "AGENTPLUGINS_LINTAI_ARCHIVE_SHA256": PINS[args.target]["lintai"][4].split(":", 1)[1]}
         if os.name == "nt":
             env["SystemRoot"] = os.environ["SystemRoot"]
             env["COMSPEC"] = str(Path(env["SystemRoot"]) / "System32/cmd.exe")
@@ -184,6 +249,14 @@ def main():
                     identity["git_bash_sha256"] = hashlib.sha256(bash.read_bytes()).hexdigest()
         else:
             env["PATH"] += ":/usr/bin:/bin"
+        if args.release_tag:
+            release = identity["installer_release"]
+            env["AGENTPLUGINS_INSTALLER_COMMIT"] = release["commit"]
+            env["AGENTPLUGINS_INSTALLER_TREE"] = release["tree"]
+            measured = subprocess.check_output([str(installer), "version"], cwd=project, env=env, text=True, timeout=30).strip()
+            identity["installer_version_measured"] = measured
+            if measured != "agentplugins " + release["version"]:
+                raise RuntimeError(f"released installer version mismatch: {measured!r}")
         prefix = "AGENTPLUGINS_" + args.client.upper()
         env[prefix + "_NATIVE_E2E"] = "1"
         env[prefix + "_BIN"] = str(client)

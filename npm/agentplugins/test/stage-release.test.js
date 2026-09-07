@@ -17,6 +17,24 @@ const COMMIT = "a".repeat(40);
 const HISTORICAL_COMMIT = "5630ccd92aa91c8ac8cafb37eea8752fd82edce0";
 const HISTORICAL_TREE = "cf13cbe2f64ae09d93ad34bfc6047fe99d5ca845";
 
+test("checked-in release evidence matches the pinned snapshot and preserves historical claims", async (t) => {
+  const root = await fsp.mkdtemp(path.join(os.tmpdir(), "agentplugins-current-evidence-"));
+  t.after(() => fsp.rm(root, { recursive: true, force: true }));
+  const packageVersion = JSON.parse(await fsp.readFile(path.resolve(__dirname, "../package.json"), "utf8")).version;
+  const evidenceRoot = packageVersion === "0.0.0-development"
+    ? path.resolve(__dirname, "../../../docs")
+    : path.join(__dirname, "evidence-root");
+  const metadata = stageEvidence(root, evidenceRoot);
+  assert.equal(metadata.source.commit, "01f02cb51cfe5f664d4d5f52b295c59c7ea03495");
+  assert.equal(metadata.installer.commit, HISTORICAL_COMMIT);
+  assert.equal(metadata.installer.version, "0.1.22");
+  assert.equal(metadata.claim_boundary.model_turn_e2e, false);
+  assert.equal(metadata.claim_boundary.oauth_e2e, false);
+  const document = path.join(root, "test/evidence-root/AGENTPLUGINS_CLIENT_E2E.md");
+  await fsp.appendFile(document, "\nUnreviewed change\n");
+  assert.throws(() => stageEvidence(root, path.dirname(document)), /immutable source locator/);
+});
+
 async function fixtureEvidence(root) {
   const evidenceRoot = path.join(root, "evidence");
   await fsp.mkdir(path.join(evidenceRoot, "evidence"), { recursive: true });
@@ -158,7 +176,7 @@ test("release staging embeds every exact platform asset hash", async (t) => {
   assert.equal(manifest.client_evidence.installer.commit, HISTORICAL_COMMIT);
   assert.deepEqual(manifest.client_evidence.source, {
     repository: "777genius/plugin-kit-ai",
-    commit: "4b25a45e1574bab7a4f49e48905a3b3b2647e917",
+    commit: "01f02cb51cfe5f664d4d5f52b295c59c7ea03495",
     document: {
       path: "docs/AGENTPLUGINS_CLIENT_E2E.md",
       sha256: manifest.client_evidence.document_sha256
