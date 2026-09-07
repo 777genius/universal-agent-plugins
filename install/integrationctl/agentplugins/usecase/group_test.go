@@ -441,9 +441,9 @@ func TestGroupedRepairRecoversAbsentManagedDirectoryWithoutTreatingFailedNativeD
 // closes the race an independent review identified: the absence recheck just
 // before the kernel commit ("compare absent targets again before publishing")
 // can itself go stale before dirswap actually renames the staged directory
-// into place. RequireAbsent (dirswap.Input/DirectoryMutation) forces a fresh
-// Lstat immediately before that rename and fails closed, without touching
-// anything, if the path is no longer absent.
+// into place. RequireAbsent rejects an occupied target before journaling;
+// exclusive publication prevents a destination appearing after that check
+// from being overwritten.
 func TestGroupedRepairPreservesForeignContentThatAppearsAfterTheLastAbsenceRecheck(t *testing.T) {
 	t.Parallel()
 	service, store, _ := serviceFixture(t)

@@ -433,6 +433,35 @@ func TestAgentpluginsNativeFixtureEvidenceOutcomes(t *testing.T) {
 	}
 }
 
+func TestAgentpluginsNativeFixtureStageFailures(t *testing.T) {
+	stages := map[string]nativeStage{
+		"tool":     {Status: "passed"},
+		"oauth":    {Status: "not_evaluated"},
+		"data":     {Status: "not_applicable"},
+		"optional": {Status: "skipped"},
+	}
+	if err := nativeStageFailures(stages); err != nil {
+		t.Fatalf("bounded successful evidence rejected: %v", err)
+	}
+	nativeAttempt(stages, "install", "add-installer.json")
+	if err := nativeStageFailures(stages); err == nil || !strings.Contains(err.Error(), "install:") {
+		t.Fatalf("unfinished attempted stage accepted: %v", err)
+	}
+	stages["install"] = nativeStage{Status: "passed"}
+	for _, name := range []string{"A_http", "A_cwd_default", "native_cache_repair", "generated_protocol_header_priority", "redirect_headers"} {
+		stages[name] = nativeStage{Status: "failed", Reason: "fixture mismatch"}
+		if err := nativeStageFailures(stages); err == nil || !strings.Contains(err.Error(), name+": fixture mismatch") {
+			t.Fatalf("%s failure accepted or omitted: %v", name, err)
+		}
+		delete(stages, name)
+	}
+	stages["z"] = nativeStage{Status: "failed", Reason: "last"}
+	stages["a"] = nativeStage{Status: "failed", Reason: "first"}
+	if err := nativeStageFailures(stages); err == nil || err.Error() != "native stages failed: a: first; z: last" {
+		t.Fatalf("failure reporting is incomplete or nondeterministic: %v", err)
+	}
+}
+
 // ReleaseScanner.resolve supports a prepopulated cache. The runtime still runs
 // the normal scan-agent-plugin command and validates its pinned report/policy.
 func nativeProvisionScanner(t *testing.T, f *nativeFixture) map[string]string {

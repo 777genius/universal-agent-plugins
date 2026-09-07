@@ -855,20 +855,11 @@ func (service Service) observeGroupRecoveryEligibility(ctx context.Context, clie
 //
 // Known residual limitations, not fixed by this contract:
 //
-//   - Rollback after this hook fails is the ordinary, unguarded
-//     transaction.Kernel rollback: if something else concurrently modifies a
-//     directory this group just restored, in the narrow window between the
-//     journal write and dirswap's rename, or between this hook's own failure
-//     and the rollback that follows it, that content is not specially
-//     preserved (same risk profile as every other lifecycle operation using
-//     transaction.Kernel; RequireAbsent only closes the earlier, larger
-//     window between the last absence recheck and the rename). A
-//     digest-guarded "recovery_required" outcome that actually survives
-//     transaction.Kernel.Recover was prototyped and deliberately reverted: it
-//     required a new journal phase Recover would refuse to auto-resolve plus
-//     an explicit operator-facing command, which is out of this bounded
-//     contract's scope (see the delivery plan's own note that full parity is
-//     a separate research item).
+//   - Absent swaps use exclusive publication and persisted root identity/tree
+//     fingerprints for rollback and recovery. Changed or replaced provisional
+//     objects retain their journal and fail closed. A noncooperating writer
+//     changing the quarantine after its final fingerprint check and before
+//     removal remains an unresolved filesystem concurrency limitation.
 //   - Codex's own registry command is global across every installation's
 //     marketplace entries in its config.toml, not scoped to one installation:
 //     one installation has at most one Codex client binding, so a single

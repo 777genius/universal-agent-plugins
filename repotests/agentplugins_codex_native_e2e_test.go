@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -388,6 +389,9 @@ func TestAgentpluginsCodexNativeLifecycle(t *testing.T) {
 		}
 		evidence["artifact_sha256"] = hashes
 		nativeJSON(t, filepath.Join(f.Root, "evidence.json"), evidence)
+		if err := nativeStageFailures(stages); err != nil {
+			t.Error(err)
+		}
 	}()
 	identity, err := nativeSourceIdentity(os.Getenv("AGENTPLUGINS_INSTALLER_COMMIT"), os.Getenv("AGENTPLUGINS_INSTALLER_TREE"), os.Getenv("AGENTPLUGINS_INSTALLER_PATCH_SHA256"))
 	if err != nil {
@@ -855,6 +859,22 @@ func nativeCheckHTTP(t *testing.T, f *nativeFixture, stages map[string]nativeSta
 	}
 }
 
+// Evaluate only recorded failures: unattempted and out-of-scope stages do not
+// claim success and must not make a bounded native run fail.
+func nativeStageFailures(stages map[string]nativeStage) error {
+	var failures []string
+	for name, stage := range stages {
+		if stage.Status == "failed" {
+			failures = append(failures, name+": "+stage.Reason)
+		}
+	}
+	if len(failures) == 0 {
+		return nil
+	}
+	sort.Strings(failures)
+	return fmt.Errorf("native stages failed: %s", strings.Join(failures, "; "))
+}
+
 func nativeAttempt(stages map[string]nativeStage, name, artifact string) {
 	stages[name] = nativeStage{Status: "failed", Reason: "Attempt started but did not complete its assertions; inspect the test failure and transcript", Artifacts: []string{artifact}}
 }
@@ -1064,6 +1084,9 @@ func TestAgentpluginsCodexImmutableGitDiscovery(t *testing.T) {
 		}
 		evidence["artifact_sha256"] = hashes
 		nativeJSON(t, filepath.Join(f.Root, "evidence.json"), evidence)
+		if err := nativeStageFailures(stages); err != nil {
+			t.Error(err)
+		}
 	}()
 	nativeWrite(t, filepath.Join(f.CodexHome, "config.toml"), []byte("cli_auth_credentials_store = \"file\"\nmcp_oauth_credentials_store = \"file\"\n[analytics]\nenabled = false\n[feedback]\nenabled = false\n"), 0600)
 	version, err := nativeCommand(t, f, client, "client-version", "--version")
