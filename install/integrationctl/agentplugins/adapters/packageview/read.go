@@ -151,7 +151,7 @@ func (l *Lease) read(ctx context.Context, rel string, p *pinned, limit int64) ([
 		return nil, e
 	}
 	defer f.Close() // also covers a panic during post-open legacy authorization
-	opened, statErr := f.Stat()
+	opened, statErr := p.postOpenInfo(f)
 	if statErr != nil {
 		f.Close()
 		return nil, fail("source_changed")
@@ -300,7 +300,7 @@ func (l *Lease) verifyCaptured(ctx context.Context, rel string, p *pinned) error
 		return fail("verification_failed")
 	}
 	defer f.Close() // also covers a panic during post-open legacy authorization
-	opened, statErr := f.Stat()
+	opened, statErr := p.postOpenInfo(f)
 	if statErr != nil {
 		f.Close()
 		return fail("source_changed")
