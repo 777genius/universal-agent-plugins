@@ -164,7 +164,8 @@ function assertContext7Search(output) {
   if (output?.schema_version !== 1 || output.command !== "search" || output.result !== "success" ||
       !output.data || typeof output.data !== "object" || !Array.isArray(output.data.results) ||
       !output.data.results.some((result) => result?.product_id === "context7" &&
-        result.install_selector === "upstash/context7" &&
+        // Search emits the product selector for its active default distribution.
+        result.install_selector === "context7" &&
         result.distribution_id === "upstash/context7" &&
         result.distribution_kind === "upstream" &&
         result.trust_state === "reviewed" &&
