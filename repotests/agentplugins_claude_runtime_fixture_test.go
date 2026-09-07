@@ -203,9 +203,7 @@ func TestAgentpluginsClaudeNativeRuntimeLifecycle(t *testing.T) {
 	if os.Getenv("AGENTPLUGINS_CLAUDE_NATIVE_E2E") != "1" {
 		t.Skip("opt-in native client execution")
 	}
-	if runtime.GOOS != "linux" {
-		t.Fatal("native Claude requires isolated Linux runtime; macOS keychain is not isolated")
-	}
+	nativeRequireDisposable(t)
 	client := claudeNativeBinary(t, "AGENTPLUGINS_CLAUDE_BIN")
 	installer := claudeNativeBinary(t, "AGENTPLUGINS_INSTALLER_BIN")
 	if expected := os.Getenv("AGENTPLUGINS_CLAUDE_SHA256"); len(expected) != 64 || claudeSHA256(t, client) != expected {

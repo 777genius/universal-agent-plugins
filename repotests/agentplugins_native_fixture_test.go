@@ -97,7 +97,7 @@ func newNativeFixture(t *testing.T, preserve bool) *nativeFixture {
 	if _, err := rand.Read(nonce[:]); err != nil {
 		t.Fatal(err)
 	}
-	f := &nativeFixture{Root: root, Project: filepath.Join(root, "project"), Home: filepath.Join(root, "home"), CodexHome: filepath.Join(root, "home", ".codex"), Package: filepath.Join(root, "package"), Probe: filepath.Join(root, "native-probe"), Events: filepath.Join(root, "events.jsonl"), Nonce: hex.EncodeToString(nonce[:])}
+	f := &nativeFixture{Root: root, Project: filepath.Join(root, "project"), Home: filepath.Join(root, "home"), CodexHome: filepath.Join(root, "home", ".codex"), Package: filepath.Join(root, "package"), Probe: filepath.Join(root, nativeExecutableName("native-probe")), Events: filepath.Join(root, "events.jsonl"), Nonce: hex.EncodeToString(nonce[:])}
 	for _, p := range []string{f.Project, f.Home, f.CodexHome, filepath.Join(root, "tmp"), filepath.Join(root, "xdg-config"), filepath.Join(root, "xdg-data"), filepath.Join(root, "xdg-cache"), filepath.Join(root, "xdg-state")} {
 		if err := os.MkdirAll(p, 0700); err != nil {
 			t.Fatal(err)
@@ -127,7 +127,7 @@ func (f *nativeFixture) env(binDir string) []string {
 	if clientDir == "" {
 		clientDir = binDir
 	}
-	return []string{"HOME=" + f.Home, "AGENTPLUGINS_HOME=" + filepath.Join(f.Root, "installer-state"), "CODEX_HOME=" + f.CodexHome, "XDG_CONFIG_HOME=" + filepath.Join(f.Root, "xdg-config"), "XDG_DATA_HOME=" + filepath.Join(f.Root, "xdg-data"), "XDG_CACHE_HOME=" + filepath.Join(f.Root, "xdg-cache"), "XDG_STATE_HOME=" + filepath.Join(f.Root, "xdg-state"), "TMPDIR=" + filepath.Join(f.Root, "tmp"), "PATH=" + binDir + ":" + clientDir + ":/usr/bin:/bin", "LANG=en_US.UTF-8", "TERM=dumb"}
+	return append(nativePlatformEnvironment(f.Root, f.Home, binDir, clientDir), "AGENTPLUGINS_HOME="+filepath.Join(f.Root, "installer-state"), "CODEX_HOME="+f.CodexHome)
 }
 func (f *nativeFixture) writePackage(t *testing.T, revision, version string) {
 	t.Helper()
@@ -137,10 +137,10 @@ func (f *nativeFixture) writePackage(t *testing.T, revision, version string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	nativeWrite(t, filepath.Join(f.Package, "bin", "probe"), b, 0700)
+	nativeWrite(t, filepath.Join(f.Package, "bin", nativeExecutableName("probe")), b, 0700)
 	env := map[string]string{"UAP_TEST_ROOT": f.Root, "UAP_TEST_EVENTS": f.Events, "UAP_TEST_NONCE": f.Nonce, "UAP_TEST_REVISION": revision, "UAP_TEST_LITERAL": "literal ${UNKNOWN} $HOME", "UAP_TEST_ONCE": "${PLUGIN_ROOT}/${UNKNOWN}"}
 	server := func(cwd string) map[string]any {
-		m := map[string]any{"type": "stdio", "command": "./bin/../bin/probe", "args": []string{"argument with spaces", "${PLUGIN_ROOT}/argument", "${UNKNOWN}"}, "env": env}
+		m := map[string]any{"type": "stdio", "command": "./bin/../bin/" + nativeExecutableName("probe"), "args": []string{"argument with spaces", "${PLUGIN_ROOT}/argument", "${UNKNOWN}"}, "env": env}
 		if cwd != "" {
 			m["cwd"] = cwd
 		}
@@ -474,28 +474,33 @@ func nativeProvisionScanner(t *testing.T, f *nativeFixture) map[string]string {
 	// Platform/digest pins mirror agentplugins/adapters/securityscan/release.go's
 	// releaseAssets table exactly, so this cache prepopulation stays consistent
 	// with what the real ReleaseScanner would resolve to on the same host.
-	var platform, archive string
-	switch runtime.GOARCH {
-	case "arm64":
-		platform = "linux-arm64"
-		archive = "132a37610575bd251ecaf0be4c6090dad144dd1397c99aad989a3944c63c3d4a"
-	case "amd64":
-		platform = "linux-amd64"
-		archive = "2b3d176db752433b904a4b42375543ff398f4841d22e48f7d4f23ded925b72da"
+	platform := runtime.GOOS + "-" + runtime.GOARCH
+	if platform == "linux-amd64" {
 		for _, path := range []string{"/lib/ld-musl-x86_64.so.1", "/lib64/ld-musl-x86_64.so.1"} {
 			if _, err := os.Stat(path); err == nil {
-				platform = "linux-amd64-musl"
-				archive = "3da60f749c61e2caca029a44a9ce422d570aef8c57f82ce51c411c8cec12f61b"
+				platform += "-musl"
 				break
 			}
 		}
-	default:
-		t.Fatalf("lintai security scanner has no pinned platform asset for linux/%s", runtime.GOARCH)
 	}
+	pins := map[string]string{
+		"darwin-arm64":     "be8b263e2323074080d928ea7c2129458299a6d03f7a9f178dfc1aa8e6bc17ff",
+		"darwin-amd64":     "abc170612a847bf1a896ef85a4ee93977baa8275f303dac3ed27bf34050b7513",
+		"linux-arm64":      "132a37610575bd251ecaf0be4c6090dad144dd1397c99aad989a3944c63c3d4a",
+		"linux-amd64":      "2b3d176db752433b904a4b42375543ff398f4841d22e48f7d4f23ded925b72da",
+		"linux-amd64-musl": "3da60f749c61e2caca029a44a9ce422d570aef8c57f82ce51c411c8cec12f61b",
+		"windows-amd64":    "2f61f6a83a160afa3feed9ea1722b82d0d938ebff865a4e20d39b5f55270c911",
+		"windows-arm64":    "484c30e7ef55310e0aec595c06870dbb5454ae7d29404ca797e00acad6011453",
+	}
+	archive, ok := pins[platform]
+	if !ok {
+		t.Fatalf("lintai security scanner has no pinned platform asset for %s", platform)
+	}
+
 	if os.Getenv("AGENTPLUGINS_LINTAI_ARCHIVE_SHA256") != archive {
 		t.Fatal("lintai archive provenance does not match pinned platform asset")
 	}
-	destination := filepath.Join(f.Root, "installer-state", "security", "lintai", "0.1.3", platform, "lintai")
+	destination := filepath.Join(f.Root, "installer-state", "security", "lintai", "0.1.3", platform, nativeExecutableName("lintai"))
 	b, err := os.ReadFile(binary)
 	if err != nil {
 		t.Fatal(err)
@@ -517,7 +522,7 @@ func TestAgentpluginsNativeFixtureAdmission(t *testing.T) {
 		t.Fatal(err)
 	}
 	load := func() domain.PackageEnvelope {
-		envelope, err := (loader.Loader{Registry: registry}).Load(context.Background(), domain.LoadInput{SnapshotRoot: f.Package, ExecutableFiles: []string{"bin/probe"}})
+		envelope, err := (loader.Loader{Registry: registry}).Load(context.Background(), domain.LoadInput{SnapshotRoot: f.Package, ExecutableFiles: []string{"bin/" + nativeExecutableName("probe")}})
 		if err != nil {
 			t.Fatal(err)
 		}

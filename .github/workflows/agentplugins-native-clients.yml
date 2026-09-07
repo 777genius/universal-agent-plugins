@@ -1,0 +1,64 @@
+name: Native Client Runtime
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'repotests/agentplugins_*native*'
+      - 'repotests/agentplugins_*runtime*'
+      - 'repotests/testdata/agentplugins_native_probe/**'
+      - 'install/integrationctl/agentplugins/**'
+      - 'scripts/run-native-client-matrix.py'
+      - 'scripts/test_native_client_matrix.py'
+      - '.github/workflows/agentplugins-native-clients.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: native-clients-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  native-client:
+    name: ${{ matrix.client }} runtime (${{ matrix.platform.target }})
+    strategy:
+      fail-fast: false
+      matrix:
+        client: [codex, claude, opencode]
+        platform:
+          - target: darwin-arm64
+            runner: macos-15
+          - target: windows-amd64
+            runner: windows-2025
+    runs-on: ${{ matrix.platform.runner }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.25.13'
+          cache: false
+      - name: Build exact source and execute pinned native client in disposable fixture
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+          AGENTPLUGINS_NATIVE_DISPOSABLE_HOSTED: '1'
+        shell: bash
+        run: |
+          python scripts/run-native-client-matrix.py \
+            --client '${{ matrix.client }}' \
+            --target '${{ matrix.platform.target }}' \
+            --output '${{ runner.temp }}/native-client-proof'
+      - name: Upload native evidence including failed stages
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: native-client-${{ matrix.client }}-${{ matrix.platform.target }}
+          path: ${{ runner.temp }}/native-client-proof/
+          if-no-files-found: error
+          retention-days: 14

@@ -40,7 +40,7 @@ func claudeNativeBinary(t *testing.T, key string) string {
 		t.Fatalf("%s must name an absolute scratch binary", key)
 	}
 	st, err := os.Stat(p)
-	if err != nil || !st.Mode().IsRegular() || st.Mode()&0111 == 0 {
+	if err != nil || !st.Mode().IsRegular() || (runtime.GOOS != "windows" && st.Mode()&0111 == 0) {
 		t.Fatalf("invalid %s binary", key)
 	}
 	return p
@@ -94,19 +94,7 @@ func newClaudeNativeFixture(t *testing.T) *claudeNativeFixture {
 // inherited ambient credentials beyond PATH/LANG, and updater/telemetry
 // disabled where the client honors that.
 func (f *claudeNativeFixture) env(clientDir string) []string {
-	return []string{
-		"HOME=" + f.Home,
-		"CLAUDE_CONFIG_DIR=" + f.ConfigDir,
-		"AGENTPLUGINS_HOME=" + f.StateHome,
-		"XDG_CONFIG_HOME=" + filepath.Join(f.Root, "xdg-config"),
-		"XDG_DATA_HOME=" + filepath.Join(f.Root, "xdg-data"),
-		"XDG_CACHE_HOME=" + filepath.Join(f.Root, "xdg-cache"),
-		"TMPDIR=" + filepath.Join(f.Root, "tmp"),
-		"PATH=" + clientDir + ":/usr/bin:/bin",
-		"DISABLE_AUTOUPDATER=1",
-		"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1",
-		"LANG=en_US.UTF-8",
-	}
+	return append(nativePlatformEnvironment(f.Root, f.Home, clientDir), "CLAUDE_CONFIG_DIR="+f.ConfigDir, "AGENTPLUGINS_HOME="+f.StateHome, "DISABLE_AUTOUPDATER=1", "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1")
 }
 
 // record saves a command's combined stdout+stderr to its own evidence file
@@ -367,9 +355,7 @@ func TestAgentpluginsClaudeNativeLifecycle(t *testing.T) {
 	if os.Getenv("AGENTPLUGINS_CLAUDE_NATIVE_E2E") != "1" {
 		t.Skip("opt-in native client execution")
 	}
-	if runtime.GOOS != "linux" {
-		t.Fatal("native Claude requires isolated Linux runtime")
-	}
+	nativeRequireDisposable(t)
 	client := claudeNativeBinary(t, "AGENTPLUGINS_CLAUDE_BIN")
 	installer := claudeNativeBinary(t, "AGENTPLUGINS_INSTALLER_BIN")
 	if expected := os.Getenv("AGENTPLUGINS_CLAUDE_SHA256"); len(expected) != 64 || claudeSHA256(t, client) != expected {
