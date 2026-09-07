@@ -180,7 +180,19 @@ func winDup(f *os.File) (*os.File, error) {
 	}
 	return os.NewFile(uintptr(h), "source-pin"), nil
 }
-func (s *source) remember(f *os.File) (*pinned, error) {
+
+// Root-selection ancestors are identity/ancestry pins, not captured inventory.
+// Unrelated child activity may update their size and timestamps during acquisition.
+// All identity, type, reparse, link-count and creation facts remain exact; package
+// inventory and regular files retain the full snapshot comparison.
+func winAcquisitionEqual(before, after winSnapshot, rootSelection bool) bool {
+	if rootSelection && before.Attributes&(windows.FILE_ATTRIBUTE_DIRECTORY|windows.FILE_ATTRIBUTE_REPARSE_POINT) == windows.FILE_ATTRIBUTE_DIRECTORY {
+		after.Size, after.Write, after.Change = before.Size, before.Write, before.Change
+	}
+	return before == after
+}
+
+func (s *source) remember(f *os.File, rootSelection bool) (*pinned, error) {
 	// Takes ownership on all paths; hard bounds include root-selection ancestors.
 	defer f.Close()
 	meta, e := winMeta(f)
@@ -205,7 +217,7 @@ func (s *source) remember(f *os.File) (*pinned, error) {
 	if s.acquisitionHook != nil {
 		s.acquisitionHook("after-stat", meta, after, e)
 	}
-	if e != nil || meta != after {
+	if e != nil || !winAcquisitionEqual(meta, after, rootSelection) {
 		return nil, fail("source_changed")
 	}
 	if meta.Attributes&windows.FILE_ATTRIBUTE_REPARSE_POINT != 0 {
@@ -244,7 +256,10 @@ func (s *source) remember(f *os.File) (*pinned, error) {
 		return nil, e
 	}
 	locked, e := winMeta(held)
-	if e != nil || locked != meta {
+	if s.acquisitionHook != nil {
+		s.acquisitionHook("after-reopen", meta, locked, e)
+	}
+	if e != nil || !winAcquisitionEqual(meta, locked, rootSelection) {
 		held.Close()
 		return nil, fail("source_changed")
 	}
@@ -291,7 +306,7 @@ func openSource(name string) (_ *source, err error) {
 	if windows.GetVolumeInformationByHandle(windows.Handle(f.Fd()), nil, 0, &s.volume, nil, nil, &fs[0], uint32(len(fs))) != nil || windows.UTF16ToString(fs[:]) != "NTFS" {
 		return nil, fail("filesystem_unavailable")
 	}
-	p, e := s.rememberMustDuplicate(f)
+	p, e := s.rememberMustDuplicate(f, true)
 	if e != nil {
 		return nil, fail("platform_unavailable")
 	}
@@ -320,12 +335,12 @@ func openSource(name string) (_ *source, err error) {
 	}
 	return s, nil
 }
-func (s *source) rememberMustDuplicate(f *os.File) (*pinned, error) {
+func (s *source) rememberMustDuplicate(f *os.File, rootSelection bool) (*pinned, error) {
 	dup, e := winDup(f)
 	if e != nil {
 		return nil, e
 	}
-	return s.remember(dup)
+	return s.remember(dup, rootSelection)
 }
 func (s *source) close() error {
 	var es []error
@@ -377,7 +392,7 @@ func (s *source) walk(rel string, nofollow, rootSelection bool) (*pinned, error)
 			if len(todo) > 0 {
 				continue
 			}
-			return s.rememberMustDuplicate(stack[len(stack)-1])
+			return s.rememberMustDuplicate(stack[len(stack)-1], rootSelection)
 		}
 		if n == ".." {
 			if len(stack) == 1 {
@@ -388,7 +403,7 @@ func (s *source) walk(rel string, nofollow, rootSelection bool) (*pinned, error)
 			if len(todo) > 0 {
 				continue
 			}
-			return s.rememberMustDuplicate(stack[len(stack)-1])
+			return s.rememberMustDuplicate(stack[len(stack)-1], rootSelection)
 		}
 		// Keep the ordinary Win32 root-selection contract: reject DOS devices and
 		// terminal dots/spaces even though overlap identity is now handle-derived.
@@ -401,7 +416,7 @@ func (s *source) walk(rel string, nofollow, rootSelection bool) (*pinned, error)
 		if e != nil {
 			return nil, e
 		}
-		p, e := s.remember(f)
+		p, e := s.remember(f, rootSelection)
 		if e != nil {
 			return nil, e
 		}
