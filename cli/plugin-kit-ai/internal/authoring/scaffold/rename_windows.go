@@ -3,6 +3,8 @@
 package scaffold
 
 import (
+	"errors"
+	"fmt"
 	"os"
 	"runtime"
 	"unsafe"
@@ -21,8 +23,9 @@ func renameExclusive(from *os.File, old string, to *os.File, new string) error {
 	if err != nil {
 		// Native NTSTATUS errors do not implement errors.Is. Convert to the
 		// Win32 errno so callers can classify collisions with os.ErrExist.
-		if status, ok := err.(windows.NTStatus); ok {
-			err = status.Errno()
+		var status windows.NTStatus
+		if errors.As(err, &status) {
+			err = fmt.Errorf("%v: %w", err, status.Errno())
 		}
 		return &os.LinkError{Op: "rename-exclusive", Old: old, New: new, Err: err}
 	}
@@ -41,7 +44,7 @@ func renameWindows(from *os.File, old string, to *os.File, new string) error {
 		windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE|windows.FILE_SHARE_DELETE, windows.FILE_OPEN,
 		windows.FILE_DIRECTORY_FILE|windows.FILE_OPEN_REPARSE_POINT|windows.FILE_SYNCHRONOUS_IO_NONALERT, 0, 0)
 	if err != nil {
-		return err
+		return fmt.Errorf("open source directory for exclusive rename: %w", err)
 	}
 	defer windows.CloseHandle(handle)
 	target, err := windows.UTF16FromString(new)
@@ -62,5 +65,8 @@ func renameWindows(from *os.File, old string, to *os.File, new string) error {
 	info.RootDirectory = windows.Handle(to.Fd())
 	info.FileNameLength = uint32((len(target) - 1) * 2)
 	copy(unsafe.Slice(&info.FileName[0], len(target)-1), target[:len(target)-1])
-	return windows.NtSetInformationFile(handle, &status, &buffer[0], uint32(size), windows.FileRenameInformation)
+	if err := windows.NtSetInformationFile(handle, &status, &buffer[0], uint32(size), windows.FileRenameInformation); err != nil {
+		return fmt.Errorf("commit exclusive directory rename: %w", err)
+	}
+	return nil
 }
