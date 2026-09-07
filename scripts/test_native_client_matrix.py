@@ -3,6 +3,7 @@ import base64
 import hashlib
 import importlib.util
 import io
+import json
 from pathlib import Path
 import tarfile
 import tempfile
@@ -16,6 +17,44 @@ SPEC.loader.exec_module(matrix)
 
 
 class NativeMatrixTests(unittest.TestCase):
+    def test_release_identity_rejected_before_network(self):
+        for tag, commit, repo in [("latest", "a" * 40, "777genius/universal-agent-plugins"), ("agentplugins-v1.2.3", "main", "777genius/universal-agent-plugins"), ("agentplugins-v1.2.3", "a" * 40, "other/repo"), ("agentplugins-v1.2.3", "a" * 40, "777genius/plugin-kit-ai")]:
+            with patch.object(matrix.subprocess, "check_output") as network:
+                with self.assertRaises(ValueError):
+                    matrix.provision_release(Path("."), Path("."), "darwin-arm64", tag, commit, repo)
+                network.assert_not_called()
+
+    def test_release_requires_public_stable_and_exact_producer_commit(self):
+        good = {"tag_name": "agentplugins-v1.2.3", "draft": False, "prerelease": False}
+        for responses in [[dict(good, draft=True)], [dict(good, prerelease=True)], [good, {"sha": "b" * 40}]]:
+            with patch.object(matrix.subprocess, "check_output", side_effect=[json.dumps(r) for r in responses]), patch.object(matrix.subprocess, "run") as download:
+                with self.assertRaises(ValueError):
+                    matrix.provision_release(Path("."), Path("."), "darwin-arm64", good["tag_name"], "a" * 40, "777genius/universal-agent-plugins")
+                download.assert_not_called()
+
+    def test_released_installer_requires_all_three_attestations(self):
+        with tempfile.TemporaryDirectory() as temp:
+            directory = Path(temp)
+            asset = "agentplugins_1.2.3_darwin_arm64"
+            def download(*args, **kwargs):
+                (directory / "release-assets" / asset).write_bytes(b"installer")
+                (directory / "release-assets/checksums.txt").write_bytes(b"checksums")
+            responses = [
+                {"tag_name": "agentplugins-v1.2.3", "draft": False, "prerelease": False},
+                {"sha": "a" * 40, "commit": {"tree": {"sha": "b" * 40}}},
+                {"version": "1.2.3", "manifest_sha256": "c" * 64, "assets": {"darwin-arm64": {"file": asset, "sha256": "d" * 64, "size": 9}}}, [], [], []]
+            with patch.object(matrix.subprocess, "check_output", side_effect=[json.dumps(r) for r in responses]) as check, patch.object(matrix.subprocess, "run", side_effect=download):
+                installer, evidence = matrix.provision_release(Path("."), directory, "darwin-arm64", "agentplugins-v1.2.3", "a" * 40, "777genius/universal-agent-plugins")
+            self.assertEqual(installer.read_bytes(), b"installer")
+            self.assertEqual(evidence["commit"], "a" * 40)
+            self.assertEqual(evidence["tree"], "b" * 40)
+            for call in check.call_args_list[-3:]:
+                command = call.args[0]
+                self.assertIn("--deny-self-hosted-runners", command)
+                self.assertEqual(command[command.index("--source-digest") + 1], "a" * 40)
+                self.assertIn("github.com/777genius/universal-agent-plugins/.github/workflows/agentplugins-release.yml", command)
+            self.assertEqual(set(evidence["attestations"]), {asset, "checksums.txt", "release-manifest.json"})
+
     def test_git_bash_discovery_supports_runner_git_layouts(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp).resolve()
