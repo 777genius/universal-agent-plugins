@@ -113,10 +113,10 @@ def provision_release(source, directory, target, tag, commit, repository):
         raise ValueError("an exact producer source commit is required")
     if repository != "777genius/universal-agent-plugins":
         raise ValueError("unsupported binary producer repository")
-    metadata = json.loads(subprocess.check_output(["gh", "api", f"repos/{repository}/releases/tags/{tag}"], text=True))
+    metadata = json.loads(subprocess.check_output(["gh", "api", f"repos/{repository}/releases/tags/{tag}"], encoding="utf-8", errors="strict"))
     if metadata.get("draft") is not False or metadata.get("prerelease") is not False or metadata.get("tag_name") != tag:
         raise ValueError("native release proof requires an exact public stable release")
-    tagged = json.loads(subprocess.check_output(["gh", "api", f"repos/{repository}/commits/{tag}"], text=True))
+    tagged = json.loads(subprocess.check_output(["gh", "api", f"repos/{repository}/commits/{tag}"], encoding="utf-8", errors="strict"))
     if tagged.get("sha") != commit:
         raise ValueError("producer release tag differs from expected commit")
     tree = tagged["commit"]["tree"]["sha"]
@@ -125,7 +125,7 @@ def provision_release(source, directory, target, tag, commit, repository):
     assets = directory / "release-assets"
     assets.mkdir()
     subprocess.run(["gh", "release", "download", tag, "--repo", repository, "--dir", str(assets)], check=True, timeout=300)
-    verified = json.loads(subprocess.check_output(["node", str(source / "npm/agentplugins/scripts/release-assets.js"), "verify", str(assets), tag, commit], text=True, timeout=60))
+    verified = json.loads(subprocess.check_output(["node", str(source / "npm/agentplugins/scripts/release-assets.js"), "verify", str(assets), tag, commit], encoding="utf-8", errors="strict", timeout=60))
     selected = verified["assets"][target]
     installer = assets / selected["file"]
     attestations = {}
@@ -133,7 +133,7 @@ def provision_release(source, directory, target, tag, commit, repository):
         attestations[name] = json.loads(subprocess.check_output([
             "gh", "attestation", "verify", str(assets / name), "--repo", repository,
             "--signer-workflow", f"github.com/{repository}/.github/workflows/agentplugins-release.yml",
-            "--source-digest", commit, "--deny-self-hosted-runners", "--format", "json"], text=True, timeout=180))
+            "--source-digest", commit, "--deny-self-hosted-runners", "--format", "json"], encoding="utf-8", errors="strict", timeout=180))
     installer.chmod(0o700)
     return installer, {"acquisition": "public GitHub release download", "repository": repository,
         "tag": tag, "version": verified["version"], "commit": commit, "tree": tree,
@@ -191,7 +191,7 @@ def main():
     identity = {"schema_version": 1, "client": args.client, "target": args.target, "started_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "isolation": "disposable GitHub-hosted machine; explicit runtime environment; fresh project and profiles", "network": "not blocked; scripted loopback model endpoints; no real-model or OAuth proof", "status": "failed", "scratch": str(scratch)}
     try:
         for key, rev in [("commit", "HEAD"), ("tree", "HEAD^{tree}")]:
-            identity[key] = subprocess.check_output(["git", "rev-parse", rev], cwd=source, text=True).strip()
+            identity[key] = subprocess.check_output(["git", "rev-parse", rev], cwd=source, encoding="utf-8", errors="strict").strip()
         expected = os.environ.get("EXPECTED_COMMIT", "")
         if not re.fullmatch(r"[0-9a-f]{40}", expected) or identity["commit"] != expected:
             raise RuntimeError("checkout differs from expected exact workflow source commit")
@@ -233,7 +233,7 @@ def main():
                 env["PATH"] += os.pathsep + str(Path(git).parent)
                 env["AGENTPLUGINS_NATIVE_GIT_BIN_DIR"] = str(Path(git).parent)
                 identity["git_path"] = git
-                identity["git_version"] = subprocess.check_output([git, "--version"], text=True).strip()
+                identity["git_version"] = subprocess.check_output([git, "--version"], encoding="utf-8", errors="strict").strip()
                 bash = find_git_bash(git)
                 if args.client == "claude" and bash is None:
                     raise RuntimeError("Claude Windows proof requires Git Bash in the detected Git installation")
@@ -253,7 +253,7 @@ def main():
             release = identity["installer_release"]
             env["AGENTPLUGINS_INSTALLER_COMMIT"] = release["commit"]
             env["AGENTPLUGINS_INSTALLER_TREE"] = release["tree"]
-            measured = subprocess.check_output([str(installer), "version"], cwd=project, env=env, text=True, timeout=30).strip()
+            measured = subprocess.check_output([str(installer), "version"], cwd=project, env=env, encoding="utf-8", errors="strict", timeout=30).strip()
             identity["installer_version_measured"] = measured
             if measured != "agentplugins " + release["version"]:
                 raise RuntimeError(f"released installer version mismatch: {measured!r}")
