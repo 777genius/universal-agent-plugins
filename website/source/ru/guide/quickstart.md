@@ -8,11 +8,15 @@ generated: false
 translationRequired: true
 ---
 
+<a id="быстрыи-старт"></a>
+
 # Используйте плагины / Создавайте плагины
 
 Установите доступные плагины или подготовьте переносимый пакет Agent Plugins 1.0.
 
 ## Используйте плагины {#use-plugins}
+
+<a id="опциональная-быстрая-проверка"></a>
 
 Доступно сейчас: установка через Universal Agent Plugins. С Node.js 22+ выполните:
 
@@ -32,6 +36,8 @@ npx universal-agent-plugins add context7
 
 ## Создавайте плагины {#build-plugins}
 
+<a id="если-читать-только-одно"></a>
+
 Создавайте переносимый пакет Agent Plugins 1.0 на основе plugin.json с необязательными skills/ и mcp.json. Поддержка клиентов зависит от пакета и его компонентов.
 
 **Подготовка — ещё не выпущено**
@@ -42,7 +48,12 @@ CLI для разработки с приоритетом стандарта н�
 
 ## Сопровождение исторических проектов v1 {#historical-v1}
 
+<a id="legacy-path-для-совместимости"></a>
+<a id="почему-этот-путь-все-еще-существует"></a>
+
 Используйте инструкции v1 ниже для существующих проектов plugin.yaml. Эти шаблоны и генерируемые результаты относятся к историческому процессу v1, а не к новой разработке с приоритетом стандарта.
+
+<a id="установите-cli-для-ежедневнои-работы"></a>
 
 ```bash
 brew install 777genius/homebrew-plugin-kit-ai/plugin-kit-ai
@@ -53,6 +64,8 @@ go mod tidy
 plugin-kit-ai generate .
 plugin-kit-ai validate . --platform codex-runtime --strict
 ```
+
+<a id="начните-с-задачи"></a>
 
 ```bash
 plugin-kit-ai init my-plugin --template online-service

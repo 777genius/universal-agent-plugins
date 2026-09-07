@@ -8,6 +8,8 @@ generated: false
 translationRequired: true
 ---
 
+<a id="快速入门"></a>
+
 # 使用插件 / 构建插件
 
 安装已发布的插件，或准备可移植的 Agent Plugins 1.0 包。
@@ -41,6 +43,10 @@ npx universal-agent-plugins add context7
 [Agent Plugins 1.0 规范](https://agent-plugins.org/specification)
 
 ## 历史 v1 维护 {#historical-v1}
+
+<a id="如果你只读一件事"></a>
+<a id="推荐默认值"></a>
+<a id="为什么这是默认值"></a>
 
 请使用以下 v1 说明维护现有 plugin.yaml 项目。这些模板和生成输出属于历史 v1 流程，不会创建新的标准优先创作流程。
 

@@ -218,7 +218,7 @@ the recorded source, and `remove` changes only files owned by the CLI.
 
 Build portable Agent Plugins 1.0 packages around `plugin.json`, with optional
 `skills/` and `mcp.json`. See the [Agent Plugins 1.0 specification](https://agent-plugins.org/specification)
-and the [Use / Build quickstart](https://777genius.github.io/plugin-kit-ai/docs/en/guide/quickstart.html).
+and the [Use / Build quickstart](https://777genius.github.io/universal-agent-plugins/docs/en/guide/quickstart.html).
 
 **Preparation — unreleased:** the standard-first authoring CLI is not released.
 As checked on 2026-09-07, npm `universal-agent-plugins` is 0.1.51 and the stable
@@ -234,11 +234,11 @@ The reference below is for historical v1 maintenance.
 
 `plugin-kit-ai` keeps authored source under `plugin/`, generates the supported outputs you need, and helps you validate the repo before handoff. This includes supported outputs for Claude, Codex, Gemini, Cursor, and OpenCode where the repo shape allows it. The honest promise is `one repo / many supported outputs`, not fake parity everywhere.
 
-overview: [plugin-kit-ai documentation](https://777genius.github.io/plugin-kit-ai/docs/en/)
-Use / Build and historical v1 maintenance: [Quickstart](https://777genius.github.io/plugin-kit-ai/docs/en/guide/quickstart.html)
-historical v1 template selection: [Choose What You Are Building](https://777genius.github.io/plugin-kit-ai/docs/en/guide/choose-what-you-are-building.html)
-one repo, many outputs: [What You Can Build](https://777genius.github.io/plugin-kit-ai/docs/en/guide/what-you-can-build.html)
-honest caveat: [Support Boundary](https://777genius.github.io/plugin-kit-ai/docs/en/reference/support-boundary.html)
+overview: [plugin-kit-ai documentation](https://777genius.github.io/universal-agent-plugins/docs/en/)
+Use / Build and historical v1 maintenance: [Quickstart](https://777genius.github.io/universal-agent-plugins/docs/en/guide/quickstart.html)
+historical v1 template selection: [Choose What You Are Building](https://777genius.github.io/universal-agent-plugins/docs/en/guide/choose-what-you-are-building.html)
+one repo, many outputs: [What You Can Build](https://777genius.github.io/universal-agent-plugins/docs/en/guide/what-you-can-build.html)
+honest caveat: [Support Boundary](https://777genius.github.io/universal-agent-plugins/docs/en/reference/support-boundary.html)
 
 ## Choose What You Are Building
 

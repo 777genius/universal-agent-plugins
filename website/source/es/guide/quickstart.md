@@ -8,6 +8,8 @@ generated: false
 translationRequired: true
 ---
 
+<a id="inicio-rapido"></a>
+
 # Usar plugins / Crear plugins
 
 Instala plugins disponibles o prepara un paquete portable Agent Plugins 1.0.
@@ -41,6 +43,10 @@ El CLI de autoría basado en el estándar está en preparación y aún no se ha 
 [Especificación Agent Plugins 1.0](https://agent-plugins.org/specification)
 
 ## Mantenimiento histórico de v1 {#historical-v1}
+
+<a id="si-solo-lees-una-cosa"></a>
+<a id="valor-predeterminado-recomendado"></a>
+<a id="por-que-este-es-el-valor-predeterminado"></a>
 
 Mantén los proyectos plugin.yaml existentes con las instrucciones v1 siguientes. Estas plantillas y salidas generadas son flujos históricos v1; no crean el nuevo flujo de autoría basado en el estándar.
 

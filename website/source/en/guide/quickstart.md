@@ -8,11 +8,15 @@ generated: false
 translationRequired: true
 ---
 
+<a id="quickstart"></a>
+
 # Use plugins / Build plugins
 
 Install available plugins or prepare a portable Agent Plugins 1.0 package.
 
 ## Use plugins {#use-plugins}
+
+<a id="optional-first-proof"></a>
 
 Available now: install plugins with Universal Agent Plugins. With Node.js 22+, run:
 
@@ -32,6 +36,9 @@ Compatibility is package-specific. Schema validation does not prove runtime, OAu
 
 ## Build plugins {#build-plugins}
 
+<a id="recommended-default"></a>
+<a id="if-you-only-read-one-thing"></a>
+
 Build a portable Agent Plugins 1.0 package around plugin.json, with optional skills/ and mcp.json. Client support depends on the package and its components.
 
 **Preparation — unreleased**
@@ -42,7 +49,12 @@ The standard-first authoring CLI is in preparation and is unreleased. Published 
 
 ## Historical v1 maintenance {#historical-v1}
 
+<a id="legacy-compatibility-path"></a>
+<a id="why-this-path-still-exists"></a>
+
 Maintain existing plugin.yaml projects with the v1 instructions below. These templates and generated outputs are historical v1 workflows; they do not create the new standard-first authoring flow.
+
+<a id="install-the-cli-for-daily-use"></a>
 
 ```bash
 brew install 777genius/homebrew-plugin-kit-ai/plugin-kit-ai
@@ -53,6 +65,8 @@ go mod tidy
 plugin-kit-ai generate .
 plugin-kit-ai validate . --platform codex-runtime --strict
 ```
+
+<a id="start-with-the-job"></a>
 
 ```bash
 plugin-kit-ai init my-plugin --template online-service

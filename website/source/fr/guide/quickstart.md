@@ -8,6 +8,8 @@ generated: false
 translationRequired: true
 ---
 
+<a id="demarrage-rapide"></a>
+
 # Utiliser des plugins / Créer des plugins
 
 Installez des plugins disponibles ou préparez un paquet portable Agent Plugins 1.0.
@@ -41,6 +43,10 @@ Le CLI de création fondé sur le standard est en préparation et n’est pas en
 [Spécification Agent Plugins 1.0](https://agent-plugins.org/specification)
 
 ## Maintenance historique v1 {#historical-v1}
+
+<a id="si-vous-ne-lisez-qu-une-chose"></a>
+<a id="valeur-par-defaut-recommandee"></a>
+<a id="pourquoi-c-est-la-valeur-par-defaut"></a>
 
 Maintenez les projets plugin.yaml existants avec les instructions v1 ci-dessous. Ces modèles et sorties générées relèvent des parcours historiques v1 ; ils ne créent pas le nouveau parcours fondé sur le standard.
 
