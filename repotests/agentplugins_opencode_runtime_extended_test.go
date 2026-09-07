@@ -280,6 +280,7 @@ func TestAgentpluginsOpenCodeNativeRuntimeExtended(t *testing.T) {
 		openCodeAssertMutated(t, result, true)
 		session(u.label, u.revision)
 	}
+	nativeRequireContained(t, f.Root, root)
 	if err := os.RemoveAll(root); err != nil {
 		t.Fatal(err)
 	}

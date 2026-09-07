@@ -48,6 +48,8 @@ jobs:
         with:
           go-version: '1.25.13'
           cache: false
+      - name: Verify native matrix safety and evidence gates
+        run: python scripts/test_native_client_matrix.py
       - name: Build exact source and execute pinned native client in disposable fixture
         env:
           GH_TOKEN: ${{ github.token }}
