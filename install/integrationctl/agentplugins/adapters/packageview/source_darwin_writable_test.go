@@ -485,10 +485,23 @@ func TestDarwinWritableReplacedPrivateChild(t *testing.T) {
 	}
 }
 
-// The context switches to a real terminal context at a synchronous traversal
-// boundary. This makes cancellation and deadline cases deterministic without
-// timers racing the filesystem or replacing resolver errors with mock errors.
-type darwinTraversalContext struct{ context.Context }
+// darwinTraversalDeadlineCause is synthetic cause-propagation evidence, not a
+// wall-clock deadline test. Its controlled clock reaches the fixed deadline
+// when the traversal hook closes done. Deadline and Done stay unchanged, and
+// Err transitions exactly once with that channel; no timer races filesystem I/O.
+type darwinTraversalDeadlineCause struct{ done <-chan struct{} }
+
+func (c darwinTraversalDeadlineCause) Deadline() (time.Time, bool) { return time.Unix(1, 0), true }
+func (c darwinTraversalDeadlineCause) Done() <-chan struct{}       { return c.done }
+func (c darwinTraversalDeadlineCause) Value(any) any               { return nil }
+func (c darwinTraversalDeadlineCause) Err() error {
+	select {
+	case <-c.done:
+		return context.DeadlineExceeded
+	default:
+		return nil
+	}
+}
 
 func TestDarwinWritableTraversalCancellation(t *testing.T) {
 	for _, cause := range []error{context.Canceled, context.DeadlineExceeded} {
@@ -496,18 +509,19 @@ func TestDarwinWritableTraversalCancellation(t *testing.T) {
 			t.Run(cause.Error()+"/"+phase, func(t *testing.T) {
 				root, scratch := writableFixture(t)
 				nativeWrite(t, root, "skills/a/SKILL.md", "# inert")
-				ctx := &darwinTraversalContext{Context: context.Background()}
-				var terminal context.Context
-				var cancel context.CancelFunc
-				if cause == context.Canceled {
-					terminal, cancel = context.WithCancel(context.Background())
-					cancel()
-				} else {
-					terminal, cancel = context.WithDeadline(context.Background(), time.Unix(1, 0))
-				}
+				ctx, cancel := context.WithCancel(context.Background())
 				defer cancel()
+				if cause == context.DeadlineExceeded {
+					ctx = darwinTraversalDeadlineCause{done: ctx.Done()}
+					t.Log("synthetic deadline cause propagation; no wall-clock expiry claim")
+				}
+				done := ctx.Done()
+				deadline, hasDeadline := ctx.Deadline()
+				if done == nil || ctx.Err() != nil {
+					t.Fatal("context must start live with a stable Done channel")
+				}
 				fired, armed, coreOpens := false, false, 0
-				stop := func() { fired = true; ctx.Context = terminal }
+				stop := func() { fired = true; cancel() }
 				hooks := &captureHooks{}
 				switch phase {
 				case "after-metadata":
@@ -560,12 +574,50 @@ func TestDarwinWritableTraversalCancellation(t *testing.T) {
 				if !fired || !errors.Is(e, cause) || !errors.As(e, &safe) || safe.Code != "canceled" || safe.CleanupFailed {
 					t.Fatalf("traversal cancellation lost: fired=%v err=%v", fired, e)
 				}
+				if after, ok := ctx.Deadline(); after != deadline || ok != hasDeadline || ctx.Done() != done || ctx.Err() != cause {
+					t.Fatal("context contract changed at traversal boundary")
+				}
+				select {
+				case <-done:
+				default:
+					t.Fatal("original Done channel did not close")
+				}
 				entries, e := os.ReadDir(scratch)
 				if e != nil || len(entries) != 0 {
 					t.Fatal("owned cleanup", entries, e)
 				}
 			})
 		}
+	}
+}
+
+func TestDarwinWritableCaptureContextHandoff(t *testing.T) {
+	root, scratch := writableFixture(t)
+	openCtx, cancelOpen := context.WithCancel(context.Background())
+	defer cancelOpen()
+	l, e := (Reader{TempDir: scratch}).Open(openCtx, root)
+	if e != nil {
+		t.Fatal("Open prerequisite", e)
+	}
+	defer l.Close()
+	// A resolver retaining Open's context must fail this otherwise live Capture.
+	// Merely observing Capture's argument at a shared polling site cannot pass.
+	cancelOpen()
+	captureCtx, cancelCapture := context.WithCancel(context.Background())
+	defer cancelCapture()
+	in, e := l.Capture(captureCtx)
+	if e != nil || !in.Coverage.TreeComplete || in.Identity.TreeDigest == "" {
+		t.Fatalf("Capture retained stale Open context: %v", e)
+	}
+	if openCtx.Err() != context.Canceled || captureCtx.Err() != nil {
+		t.Fatal("distinct phase context prerequisite")
+	}
+	if e := l.Close(); e != nil {
+		t.Fatal(e)
+	}
+	entries, e := os.ReadDir(scratch)
+	if e != nil || len(entries) != 0 {
+		t.Fatal("owned cleanup", entries, e)
 	}
 }
 
