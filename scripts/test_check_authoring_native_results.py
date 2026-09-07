@@ -206,6 +206,9 @@ class NativeEvidenceTests(unittest.TestCase):
         if system == "windows":
             paths += ["namespace-rejection", "same-volume-overlapping-alias", "two-physical-ntfs-volumes"]
         tests.update((self.commands, "TestNativePathFixBothBinaries/" + t) for t in paths)
+        tests.add((self.commands, "TestPackedInstallerSourceHarness"))
+        tests.update((self.commands, "TestPackedInstallerSourceHarness/" + lane) for lane in
+                     ("skill", "mcp-remote", "mcp-stdio", "hybrid-remote", "hybrid-stdio"))
         self.events = [dict(Action="pass", Package=p, Test=t) for p, t in sorted(tests)]
         self.events += [dict(Action="pass", Package=p) for p in packages]
         self.discovery = [dict(Action="output", Package=p, Output=t + "\n")
@@ -253,6 +256,27 @@ class NativeEvidenceTests(unittest.TestCase):
                 with self.subTest(system=system, arch=arch):
                     self.fixture(system, arch)
                     self.assertEqual(self.check()["errors"], [])
+
+    def test_source_harness_required_on_every_host(self):
+        for system in ("linux", "windows"):
+            for arch in ("amd64", "arm64"):
+                for lane in ("", "/skill", "/mcp-remote", "/mcp-stdio", "/hybrid-remote", "/hybrid-stdio"):
+                    for action in ("skip", "omit"):
+                        with self.subTest(system=system, arch=arch, lane=lane, action=action):
+                            self.fixture(system, arch)
+                            name = "TestPackedInstallerSourceHarness" + lane
+                            if action == "omit":
+                                self.events = [e for e in self.events if e.get("Test") != name]
+                                self.discovery = [e for e in self.discovery if e.get("Output") != name + "\n"]
+                            else:
+                                next(e for e in self.events if e.get("Test") == name)["Action"] = action
+                            self.rejected("source harness")
+
+    def test_packed_acceptance_cannot_leak_into_native_discovery(self):
+        self.fixture("linux", "amd64")
+        self.discovery.append(dict(Action="output", Package=self.commands,
+            Output="TestPackedGeneratedPackagesReachExistingInstallerPlanner\n"))
+        self.rejected("explicit packedci tag")
 
     def test_architecture_mismatch(self):
         for system in ("linux", "windows"):
