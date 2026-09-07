@@ -47,7 +47,7 @@ PATTERNS = {
 REQUIRED_TESTS = {
     "codex": {"TestAgentpluginsCodexNativeLifecycle"},
     "claude": {"TestAgentpluginsClaudeNativeLifecycle", "TestAgentpluginsClaudeNativeRuntimeLifecycle"},
-    "opencode": {"TestAgentpluginsOpenCodeNativeLifecycle", "TestAgentpluginsOpenCodeNativeToolCollision"},
+    "opencode": {"TestAgentpluginsOpenCodeNativeLifecycle", "TestAgentpluginsOpenCodeNativeToolCollision", "TestAgentpluginsOpenCodeNativeRuntimeExtended"},
 }
 
 

@@ -96,3 +96,11 @@ func TestNativePlatformEnvironmentIsolation(t *testing.T) {
 		t.Fatal("scratch binary directory missing")
 	}
 }
+
+// Hosted proof has no egress firewall. Never reuse the Linux isolation claim.
+func nativeNetworkEvidence() string {
+	if runtime.GOOS == "linux" {
+		return "pinned scanner preprovisioned; disposable Linux runner owns the network boundary"
+	}
+	return "not blocked; disposable GitHub-hosted runner; pinned scanner preprovisioned; scripted loopback provider"
+}

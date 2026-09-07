@@ -1,7 +1,8 @@
 package pluginkitairepo_test
 
 // This opt-in suite uses only disposable fixture paths. Native execution requires
-// an isolated Linux container; a redirected HOME cannot isolate the macOS keychain.
+// a disposable image/VM or explicitly opted-in hosted runner; redirected HOME
+// alone cannot isolate the macOS keychain.
 
 import (
 	"context"

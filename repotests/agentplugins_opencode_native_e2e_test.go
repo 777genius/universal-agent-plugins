@@ -463,7 +463,7 @@ func openCodeNativeLifecycle(t *testing.T, route string) {
 		"installer_patch_sha256": os.Getenv("AGENTPLUGINS_INSTALLER_PATCH_SHA256"), "acquisition": "local_directory",
 		"native_surface":         "opencode debug config (effective config proof; not a handshake or tool call) plus opencode mcp list (real per-server connection attempts, still not a handshake or tool call)",
 		"config_route_exercised": route,
-		"network_dependency":     "none; pinned scanner preprovisioned; disposable container denies external network",
+		"network_dependency":     nativeNetworkEvidence(),
 		"scanner":                scanner,
 		"stages":                 stages,
 	}

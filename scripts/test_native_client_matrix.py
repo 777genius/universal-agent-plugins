@@ -15,6 +15,9 @@ SPEC.loader.exec_module(matrix)
 
 
 class NativeMatrixTests(unittest.TestCase):
+    def test_extended_runtime_is_required_for_opencode_proof(self):
+        self.assertIn("TestAgentpluginsOpenCodeNativeRuntimeExtended", matrix.REQUIRED_TESTS["opencode"])
+
     def test_runtime_rejects_ambient_and_self_hosted_machine(self):
         for env in [{}, {"GITHUB_ACTIONS": "true", "RUNNER_ENVIRONMENT": "self-hosted", "AGENTPLUGINS_NATIVE_DISPOSABLE_HOSTED": "1"}]:
             with patch.dict(matrix.os.environ, env, clear=True):

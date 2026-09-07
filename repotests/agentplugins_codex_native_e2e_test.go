@@ -20,7 +20,7 @@ import (
 
 // This suite is intentionally opt-in and uses only a freshly provisioned binary.
 // macOS release binaries read managed CFPreferences independently of HOME; this
-// runner requires a clean Linux container/VM until that boundary is isolated.
+// runner requires a disposable image/VM or explicitly opted-in hosted runner.
 func nativeBinary(t *testing.T, key string) string {
 	t.Helper()
 	p := os.Getenv(key)
