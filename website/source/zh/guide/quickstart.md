@@ -26,7 +26,7 @@ npx universal-agent-plugins add context7
 
 [安装指南](https://github.com/777genius/universal-agent-plugins#quick-start)
 
-版本核验日期为 2026-09-07：universal-agent-plugins 0.1.51（npm）、plugin-kit-ai 1.2.4（npm/PyPI），GitHub 稳定版本 agentplugins-v0.1.51。
+版本核验日期为 2026-09-07：universal-agent-plugins 0.1.53（npm）、plugin-kit-ai 1.2.4（npm/PyPI），GitHub 稳定版本 agentplugins-v0.1.53。
 
 兼容性取决于包。通过模式验证并不证明运行、OAuth 或激活成功。Codex 不支持声明的 MCP SSE；stdio 和 Streamable HTTP 保留现有适配器支持。
 

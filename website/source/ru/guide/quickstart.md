@@ -28,7 +28,7 @@ npx universal-agent-plugins add context7
 
 [Инструкция по установке](https://github.com/777genius/universal-agent-plugins#quick-start)
 
-Версии проверены 2026-09-07: universal-agent-plugins 0.1.51 (npm), plugin-kit-ai 1.2.4 (npm/PyPI), стабильный релиз GitHub agentplugins-v0.1.51.
+Версии проверены 2026-09-07: universal-agent-plugins 0.1.53 (npm), plugin-kit-ai 1.2.4 (npm/PyPI), стабильный релиз GitHub agentplugins-v0.1.53.
 
 Совместимость зависит от пакета. Проверка схемы не доказывает работу, OAuth или активацию. Codex не поддерживает заявленный MCP SSE; поддержка stdio и Streamable HTTP сохраняется в существующих адаптерах.
 

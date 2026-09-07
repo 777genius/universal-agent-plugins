@@ -342,6 +342,6 @@
     "quickstartLink": "Быстрый старт и сопровождение v1",
     "compatibilityLink": "Совместимость клиентов (на английском)",
     "limitations": "Совместимость зависит от пакета. Проверка схемы не доказывает работу, OAuth или активацию. Codex не поддерживает заявленный MCP SSE; поддержка stdio и Streamable HTTP сохраняется в существующих адаптерах.",
-    "versions": "Версии проверены 2026-09-07: universal-agent-plugins 0.1.51 (npm), plugin-kit-ai 1.2.4 (npm/PyPI), стабильный релиз GitHub agentplugins-v0.1.51."
+    "versions": "Версии проверены 2026-09-07: universal-agent-plugins 0.1.53 (npm), plugin-kit-ai 1.2.4 (npm/PyPI), стабильный релиз GitHub agentplugins-v0.1.53."
   }
 }

@@ -45,7 +45,7 @@ test('the authoring front door renders Use/Build and preserves its indexing poli
     assert.ok(copy.standard.includes('plugin.json'));
     assert.ok(copy.unreleased.includes('1.2.4'));
     assert.ok(copy.unreleased.includes('plugin-kit-ai@latest'));
-    assert.ok(copy.versions.includes('agentplugins-v0.1.51'));
+    assert.ok(copy.versions.includes('agentplugins-v0.1.53'));
     assert.ok(copy.limitations.includes('SSE'));
   }
   // docsUrl already ends in /en/: exercise the exact expression used in the page.

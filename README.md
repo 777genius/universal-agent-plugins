@@ -221,8 +221,8 @@ Build portable Agent Plugins 1.0 packages around `plugin.json`, with optional
 and the [Use / Build quickstart](https://777genius.github.io/universal-agent-plugins/docs/en/guide/quickstart.html).
 
 **Preparation — unreleased:** the standard-first authoring CLI is not released.
-As checked on 2026-09-07, npm `universal-agent-plugins` is 0.1.51 and the stable
-GitHub release is `agentplugins-v0.1.51`. npm/PyPI `plugin-kit-ai` is 1.2.4:
+As checked on 2026-09-07, npm `universal-agent-plugins` is 0.1.53 and the stable
+GitHub release is `agentplugins-v0.1.53`. npm/PyPI `plugin-kit-ai` is 1.2.4:
 `plugin-kit-ai@latest` is the historical v1 tool, not standard-first v2.
 
 For existing v1 `plugin.yaml` projects, retain the original templates, generation,

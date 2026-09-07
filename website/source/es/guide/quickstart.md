@@ -26,7 +26,7 @@ Para la instalación nativa en macOS, Linux o Windows, consulta la guía. El CLI
 
 [Guía de instalación](https://github.com/777genius/universal-agent-plugins#quick-start)
 
-Versiones verificadas el 2026-09-07: universal-agent-plugins 0.1.51 (npm), plugin-kit-ai 1.2.4 (npm/PyPI), versión estable de GitHub agentplugins-v0.1.51.
+Versiones verificadas el 2026-09-07: universal-agent-plugins 0.1.53 (npm), plugin-kit-ai 1.2.4 (npm/PyPI), versión estable de GitHub agentplugins-v0.1.53.
 
 La compatibilidad depende del paquete. Validar el esquema no demuestra ejecución, OAuth ni activación. Codex no admite MCP SSE declarado; stdio y Streamable HTTP conservan el soporte de sus adaptadores actuales.
 
