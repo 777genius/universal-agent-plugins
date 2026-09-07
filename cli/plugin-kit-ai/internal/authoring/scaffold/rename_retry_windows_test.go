@@ -106,6 +106,7 @@ func TestPackageRenameRetryWithReaderProcess(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 			var payload, protected string
+			blockedTamper := false
 			waits := 0
 			validate := realValidation(t)
 			ops := applyOps{write: writeTree}
@@ -150,8 +151,26 @@ func TestPackageRenameRetryWithReaderProcess(t *testing.T) {
 						if kind == "stage" {
 							path = filepath.Dir(payload)
 						}
-						if err := os.Rename(path, path+"-moved"); err != nil {
+						before, err := os.Lstat(path)
+						if err != nil {
 							t.Fatal(err)
+						}
+						if err := os.Rename(path, path+"-moved"); err != nil {
+							// Windows may protect ancestors of the retained source
+							// handle from rename. Prove that protection preserved the
+							// original object; do not release handles to force tampering.
+							if (kind != "parent" && kind != "stage") || !errors.Is(err, windows.ERROR_ACCESS_DENIED) {
+								t.Fatal(err)
+							}
+							after, statErr := os.Lstat(path)
+							if statErr != nil || !os.SameFile(before, after) {
+								t.Fatalf("blocked tamper changed identity: %v", statErr)
+							}
+							if _, e := os.Lstat(path + "-moved"); !errors.Is(e, os.ErrNotExist) {
+								t.Fatalf("blocked tamper moved source: %v", e)
+							}
+							blockedTamper = true
+							break
 						}
 						if err := os.Mkdir(path, 0700); err != nil {
 							t.Fatal(err)
@@ -171,7 +190,7 @@ func TestPackageRenameRetryWithReaderProcess(t *testing.T) {
 				payload = path
 				return validate(ctx, path)
 			}}, ops)
-			if kind == "release" || kind == "nested-reader" {
+			if kind == "release" || kind == "nested-reader" || blockedTamper {
 				if err != nil || !result.Committed || waits != 1 {
 					t.Fatalf("result=%+v waits=%d err=%v", result, waits, err)
 				}
@@ -207,7 +226,7 @@ func TestPackageRenameRetryWithReaderProcess(t *testing.T) {
 					}
 				}
 			}
-			if kind != "parent" && kind != "stage" && kind != "payload" {
+			if blockedTamper || (kind != "parent" && kind != "stage" && kind != "payload") {
 				entries, e := os.ReadDir(parent)
 				if e != nil {
 					t.Fatal(e)
@@ -255,10 +274,20 @@ func TestPackageRenameRetryEligibility(t *testing.T) {
 				defer holdRenameReader(t, parent)()
 			}
 			waits := 0
-			r := &renameRetry{ctx: context.Background(), check: func() error { return nil }, budget: time.Nanosecond, attempts: 32,
-				wait: func(context.Context, time.Duration) error { waits++; return nil }}
+			r := &renameRetry{ctx: context.Background(), check: func() error { return nil }, budget: 10 * time.Millisecond, attempts: 32,
+				wait: func(ctx context.Context, delay time.Duration) error {
+					waits++
+					// Exercise actual elapsed-time exhaustion. A no-op wait with
+					// a nanosecond budget can fit all attempts in one Windows tick.
+					return waitRename(ctx, delay+20*time.Millisecond)
+				}}
+			started := time.Now()
 			err = renameResult(dir, "source", dir, "destination", renameWindows(dir, "source", dir, "destination", r))
-			if waits != 0 {
+			if kind == "budget" {
+				if waits > 1 || time.Since(started) < r.budget {
+					t.Fatalf("budget not enforced: waits=%d elapsed=%v", waits, time.Since(started))
+				}
+			} else if waits != 0 {
 				t.Fatalf("unexpected retry: %d", waits)
 			}
 			switch kind {
