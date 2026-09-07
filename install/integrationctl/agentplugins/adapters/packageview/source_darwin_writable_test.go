@@ -8,6 +8,7 @@ import (
 	"golang.org/x/sys/unix"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -16,7 +17,12 @@ import (
 // fixture storage is a failed prerequisite, never a native success/skip.
 func writableFixture(t *testing.T) (string, string) {
 	t.Helper()
-	base, e := filepath.EvalSymlinks(t.TempDir())
+	return writableFixtureAt(t, t.TempDir())
+}
+
+func writableFixtureAt(t *testing.T, dir string) (string, string) {
+	t.Helper()
+	base, e := filepath.EvalSymlinks(dir)
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -73,7 +79,22 @@ func TestDarwinWritableCapture(t *testing.T) {
 	}
 }
 func TestDarwinWritableStaticOpenBoundary(t *testing.T) {
-	root, scratch := writableFixture(t)
+	// Darwin's sockaddr_un cannot hold a typical testing.T temp path. Own a
+	// short directory independently of TMPDIR; never remove the shared root.
+	base, e := os.MkdirTemp("/private/tmp", "pv-")
+	if e != nil {
+		t.Fatal(e)
+	}
+	t.Cleanup(func() {
+		if e := os.RemoveAll(base); e != nil {
+			t.Error(e)
+		}
+	})
+	root, scratch := writableFixtureAt(t, base)
+	socketPath := filepath.Join(root, "socket")
+	if len(socketPath) >= len((unix.RawSockaddrUnix{}).Path) {
+		t.Fatalf("socket fixture path exceeds host sockaddr_un capacity: %q", socketPath)
+	}
 	nativeWrite(t, root, "plugin/plugin.yaml", "excluded")
 	nativeLink(t, root, "plugin/plugin.yaml", "legacy-alias")
 	nativeLink(t, root, "/outside", "absolute")
@@ -91,7 +112,7 @@ func TestDarwinWritableStaticOpenBoundary(t *testing.T) {
 		t.Fatal(e)
 	}
 	defer unix.Close(fd)
-	if e := unix.Bind(fd, &unix.SockaddrUnix{Name: filepath.Join(root, "socket")}); e != nil {
+	if e := unix.Bind(fd, &unix.SockaddrUnix{Name: socketPath}); e != nil {
 		t.Fatal(e)
 	}
 	opens := map[string]int{}
@@ -264,22 +285,50 @@ func TestDarwinWritablePanicAndFDs(t *testing.T) {
 		t.Fatal(e)
 	}
 	count := func() int {
-		entries, e := os.ReadDir("/dev/fd")
+		// Names only: ReadDir may stat volatile /dev/fd entries on Darwin.
+		dir, e := os.Open("/dev/fd")
 		if e != nil {
 			t.Fatal(e)
 		}
-		return len(entries)
+		observer := strconv.FormatUint(uint64(dir.Fd()), 10)
+		names, readErr := dir.Readdirnames(-1)
+		closeErr := dir.Close() // Close even on enumeration failure, before comparing.
+		if readErr != nil || closeErr != nil {
+			t.Fatalf("FD enumeration: read=%v close=%v", readErr, closeErr)
+		}
+		n := 0
+		seenObserver := false
+		for _, name := range names {
+			if name == observer {
+				seenObserver = true
+				continue
+			}
+			if _, e := strconv.ParseUint(name, 10, 64); e != nil {
+				t.Fatalf("unexpected FD name %q: %v", name, e)
+			}
+			n++
+		}
+		if !seenObserver {
+			t.Fatal("FD observer did not enumerate itself")
+		}
+		return n
 	}
 	before := count()
 	held, e := os.Open(filepath.Join(root, "plugin.json"))
 	if e != nil {
 		t.Fatal(e)
 	}
-	if count() <= before {
+	defer held.Close()
+	if count() != before+1 {
 		held.Close()
 		t.Fatal("FD observer failed positive control")
 	}
-	held.Close()
+	if e := held.Close(); e != nil {
+		t.Fatal(e)
+	}
+	if count() != before {
+		t.Fatal("FD observer failed closed control")
+	}
 	for i := 0; i < 3; i++ {
 		var caught any
 		func() {
