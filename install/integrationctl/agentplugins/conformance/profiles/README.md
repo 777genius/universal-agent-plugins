@@ -48,8 +48,8 @@ explicitly says Unicode lowercase alphanumeric characters, despite parenthetical
 ASCII examples. This profile accepts Unicode lowercase letters and numbers,
 counts characters as Unicode code points, and does not normalize names. Unknown
 frontmatter fields are not normatively prohibited by this prose and remain opaque.
-Installer retains its ASCII names and unknown-field rejection, empty optional
-compatibility acceptance, and unrestricted metadata values. YAML LF/CRLF framing
+Installer retains its ASCII names and unknown-field rejection. Both paths require
+string-to-string metadata and compatibility of 1-500 characters when supplied. YAML LF/CRLF framing
 and EOF closing delimiter reuse the installer grammar; author input also accepts a leading UTF-8 BOM while retaining its original bytes. Body content has no format
 restrictions; empty body is valid per the source minimal example. Markdown
 references and scripts are not parsed or executed; their captured path containment

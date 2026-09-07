@@ -59,6 +59,14 @@ type Input struct {
 	ActivePath      string
 	StagingPath     string
 	Remove          bool
+	// RequireAbsent rejects the whole operation, before any journal write or
+	// filesystem mutation, if ActivePath already exists. It exists for a caller
+	// reconstructing a target it has independently confirmed absent: an earlier
+	// absence check can go stale before this call runs, and normal Apply
+	// semantics would otherwise treat newly appeared content as an existing
+	// directory to back up and later discard on Commit. This narrows, but does
+	// not eliminate, the window between this check and the rename below.
+	RequireAbsent bool
 }
 
 type Manager struct {
@@ -340,6 +348,9 @@ func (manager Manager) newReceipt(input Input) (Receipt, error) {
 		hadActive = true
 	} else if !os.IsNotExist(activeErr) {
 		return Receipt{}, activeErr
+	}
+	if input.RequireAbsent && hadActive {
+		return Receipt{}, fmt.Errorf("active path unexpectedly exists; concurrent modification detected")
 	}
 	sum := sha256.Sum256([]byte(input.OperationID))
 	backupPath := filepath.Join(ownedBase, ".agentplugins-backup-"+hex.EncodeToString(sum[:8]))

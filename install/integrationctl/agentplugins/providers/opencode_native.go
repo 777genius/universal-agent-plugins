@@ -292,9 +292,6 @@ func buildOpenCodeNativeObjects(stagingRoot string, envelope domain.PackageEnvel
 	objects := make([]domain.NativeObjectOwnership, 0, len(projection.MCPServers)+len(envelope.Skills))
 	placeholders := nativeconfig.Placeholders{PackageRoot: projection.PackageRoot, DataRoot: projection.DataRoot}
 	for name, server := range projection.MCPServers {
-		if err := pathpolicy.ValidateLeafID(name); err != nil {
-			return nil, fmt.Errorf("invalid OpenCode MCP server name %q: %w", name, err)
-		}
 		receipt, err := nativeconfig.DesiredReceipt(projection.ConfigPath, nativeconfig.CodecOpenCode, name, server, placeholders)
 		if err != nil {
 			return nil, err

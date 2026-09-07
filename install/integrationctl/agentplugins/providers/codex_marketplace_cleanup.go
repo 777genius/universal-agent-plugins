@@ -55,6 +55,37 @@ func managedCodexMarketplaceRegistered(configRoot, marketplace, managedArtifactP
 	return true, nil
 }
 
+// managedCodexPluginEntryPresent reports whether Codex's config.toml still
+// carries a per-plugin `[plugins."<declaredName>@<marketplace>"]` enablement
+// entry, independent of whether its marketplace source is still registered.
+// The two records are cleared by separate CLI commands; a stale plugin entry
+// left behind is what lets a freshly started Codex app-server silently
+// re-materialize an already-removed plugin. Presence alone is the ownership
+// signal here (unlike managedCodexMarketplaceRegistered's source-path check):
+// the key embeds this installation's own generated marketplace name
+// (managedMarketplaceName), so an unrelated plugin can only collide by
+// coincidentally sharing both that generated name and the declared name.
+func managedCodexPluginEntryPresent(configRoot, declaredName, marketplace string) (bool, error) {
+	if strings.TrimSpace(configRoot) == "" || strings.TrimSpace(declaredName) == "" || strings.TrimSpace(marketplace) == "" {
+		return false, fmt.Errorf("managed Codex plugin ownership evidence is incomplete")
+	}
+	body, err := os.ReadFile(filepath.Join(configRoot, "config.toml"))
+	if os.IsNotExist(err) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("inspect managed Codex plugin config: %w", err)
+	}
+	var document struct {
+		Plugins map[string]map[string]any `toml:"plugins"`
+	}
+	if err := toml.Unmarshal(body, &document); err != nil {
+		return false, fmt.Errorf("inspect managed Codex plugin config: %w", err)
+	}
+	_, present := document.Plugins[declaredName+"@"+marketplace]
+	return present, nil
+}
+
 // equivalentLocalPath compares the filesystem identity rather than only the
 // spelling of a path. macOS commonly exposes /tmp through /private/tmp, and
 // the same aliasing can occur in containerized or symlinked test homes. Both

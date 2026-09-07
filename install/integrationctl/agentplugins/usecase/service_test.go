@@ -189,7 +189,7 @@ func TestOpenAIOAuthHintsDoNotOverrideGenericAuthentication(t *testing.T) {
 		service, _, _ := serviceFixture(t)
 		client := domain.DetectedClient{ClientID: clientID, Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), ".client")}
 		input := addInput(t, client, "https://example.com/generic-auth-"+string(clientID))
-		input.Envelope.MCP = domain.MCPComponent{Present: true, Enabled: true, Servers: map[string]domain.MCPServer{"server": {Name: "server", Type: "stdio", Decoded: map[string]any{"command":"sh"}}}}
+		input.Envelope.MCP = domain.MCPComponent{Present: true, Enabled: true, Servers: map[string]domain.MCPServer{"server": {Name: "server", Type: "stdio", Decoded: map[string]any{"command": "sh"}}}}
 		input.Envelope.CatalogEvidence = &domain.CatalogEvidence{Compatibility: map[string]domain.CatalogCompatibility{string(clientID): {Package: map[bool]string{true: "projected", false: "native"}[clientID == domain.ClientCodex], Authentication: domain.AuthenticationRequirementNotRequired}}}
 		input.Hints.OpenAIMCPAuth = map[string]domain.OpenAIMCPAuthHint{"server": {OAuthResource: "https://example.com/oauth"}}
 		result, err := service.Add(context.Background(), input)
@@ -1830,6 +1830,14 @@ func TestRemoveCleansNativeCodexMarketplaceBeforeManagedArtifactDeletion(t *test
 	wantCleanup := []string{"/test/bin/codex", "plugin", "marketplace", "remove", marketplace, "--json"}
 	if got := runner.commands[len(runner.commands)-1].Argv; !reflect.DeepEqual(got, wantCleanup) {
 		t.Fatalf("last command = %#v, want cleanup %#v", got, wantCleanup)
+	}
+	// The plugin's own registration must be cleared before its marketplace
+	// source, not just the marketplace: a stale `[plugins."id"] enabled`
+	// config.toml entry left behind is what let a freshly started Codex
+	// app-server silently re-materialize an already-"removed" plugin.
+	wantPluginRemove := []string{"/test/bin/codex", "plugin", "remove", "demo@" + marketplace, "--json"}
+	if got := runner.commands[len(runner.commands)-2].Argv; !reflect.DeepEqual(got, wantPluginRemove) {
+		t.Fatalf("second-to-last command = %#v, want plugin cleanup %#v", got, wantPluginRemove)
 	}
 	config, err := os.ReadFile(filepath.Join(client.ConfigRoot, "config.toml"))
 	if err != nil {

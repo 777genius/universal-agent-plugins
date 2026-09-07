@@ -38,9 +38,9 @@ func TestInstallerFacadeCharacterization(t *testing.T) {
 		installerValid bool
 		author         conformance.Outcome
 	}{
-		{"numeric-metadata", "metadata: {count: 5}\n", true, conformance.Fail},
-		{"nested-metadata", "metadata: {nested: {value: x}}\n", true, conformance.Fail},
-		{"empty-compatibility", "compatibility: ''\n", true, conformance.Fail},
+		{"numeric-metadata", "metadata: {count: 5}\n", false, conformance.Fail},
+		{"nested-metadata", "metadata: {nested: {value: x}}\n", false, conformance.Fail},
+		{"empty-compatibility", "compatibility: ''\n", false, conformance.Fail},
 		{"unknown-field", "future: true\n", false, conformance.Pass},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
