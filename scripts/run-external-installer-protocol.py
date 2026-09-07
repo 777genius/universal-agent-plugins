@@ -59,6 +59,26 @@ def target_paths(value):
     return set()
 
 
+
+def run_command(label, command, project, env, output, evidence, structured=False):
+    try:
+        result = subprocess.run(command, cwd=project, env=env, capture_output=True, timeout=300)
+    except subprocess.TimeoutExpired as error:
+        # subprocess captures bytes even for partial output. Preserve them before
+        # propagating failure so main's finally block can hash the diagnostics.
+        (output / (label + '.log')).write_bytes(error.stdout or b'')
+        (output / (label + '-stderr.log')).write_bytes(error.stderr or b'')
+        evidence['commands'].append({'label': label, 'argv': command, 'exit_code': None,
+                                     'timed_out': True, 'timeout_seconds': error.timeout})
+        raise
+    (output / (label + '.log')).write_bytes(result.stdout)
+    (output / (label + '-stderr.log')).write_bytes(result.stderr)
+    evidence['commands'].append({'label': label, 'argv': command, 'exit_code': result.returncode})
+    require(result.returncode == 0, 'command failed: ' + label)
+    text = result.stdout.decode('utf-8', errors='strict')
+    return json.loads(text) if structured else text.strip()
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', type=Path, required=True)
@@ -92,13 +112,7 @@ def main():
         sentinel = project / 'unrelated-sentinel.txt'
         sentinel.write_bytes(b'preserve this unrelated file\n')
         def run(label, command, structured=False):
-            result = subprocess.run(command, cwd=project, env=env, capture_output=True, timeout=300)
-            (output / (label + '.log')).write_bytes(result.stdout)
-            (output / (label + '-stderr.log')).write_bytes(result.stderr)
-            evidence['commands'].append({'label': label, 'argv': command, 'exit_code': result.returncode})
-            require(result.returncode == 0, 'command failed: ' + label)
-            text = result.stdout.decode('utf-8', errors='strict')
-            return json.loads(text) if structured else text.strip()
+            return run_command(label, command, project, env, output, evidence, structured)
         def uap(label, *arguments):
             return run(label, [npx, '--yes', 'universal-agent-plugins@' + VERSION, *arguments], '--format' in arguments)
         evidence['node_version'] = run('node-version', [node, '--version'])
