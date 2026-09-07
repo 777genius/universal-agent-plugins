@@ -86,25 +86,76 @@ export async function runLocaleSmoke(browser, base, artifactsRoot) {
       await goto(fallback);
       await inspectSwitcher(fallback, () => fallback, () => "en", true);
       await goto("/?gateway=manual");
-      await inspectSwitcher("gateway", code => `/${code}/`, code => code, false, true);
+      await inspectSwitcher("/?gateway=manual", code => `/${code}/`, code => code, false, true);
       evidence.push({ variant, fiveCounterparts: true, englishFallback: true, unknownHomes: true });
       async function inspectSwitcher(label, destination, language, fallback, home = false) {
-        if (variant === "screen") await page.locator(".VPNavBarHamburger").click();
-        const widget = page.locator(`.locale-switcher--${variant}`);
-        if (variant === "navbar") await widget.locator("button").hover();
-        else await widget.locator("button").click();
-        const links = widget.locator("a");
-        assert.equal(await links.count(), 5, label);
-        await links.first().waitFor({ state: "visible" });
+        const homeIdentities = { en: "plugin-kit-ai", ru: "Документация plugin-kit-ai", es: "Documentación de plugin-kit-ai", fr: "Documentation de plugin-kit-ai", zh: "plugin-kit-ai 文档" };
         for (const [index, code] of locales.entries()) {
-          const link = links.nth(index);
-          assert.ok(await link.isVisible());
-          assert.ok((await link.getAttribute("href")).endsWith(destination(code)));
-          assert.equal(await link.getAttribute("lang"), language(code));
-          assert.equal(await link.getAttribute("hreflang"), language(code));
-          if (fallback && code !== "en") assert.match(await link.innerText(), /English/);
-          if (home) assert.match(await link.innerText(), /Home/);
+          // Every activation starts at its own origin, including same-route
+          // English fallbacks; no previous selection supplies the next menu.
+          await page.mouse.move(0, 0);
+          await goto(label);
+          await page.waitForFunction(() => !!document.querySelector("#app")?.__vue_app__);
+          assert.equal(new URL(page.url()).pathname, new URL(`${base}${label}`).pathname);
+          const widget = page.locator(`.locale-switcher--${variant}`);
+          const button = widget.locator("button");
+          let bounds;
+          if (variant === "navbar") {
+            assert.deepEqual(await page.evaluate(() => [scrollX, scrollY]), [0, 0], `${label}: unscrolled origin`);
+            const buttonBox = await inViewport(button, `${label}: navbar button`);
+            // Raw pointer movement cannot actionability-scroll an overflowing
+            // control into view (unlike locator.hover()).
+            await page.mouse.move(buttonBox.x + buttonBox.width / 2, buttonBox.y + buttonBox.height / 2);
+            await page.waitForFunction(() => document.querySelector('.locale-switcher--navbar button')?.getAttribute("aria-expanded") === "true");
+            const menu = widget.locator(".locale-switcher__menu");
+            await menu.waitFor({ state: "visible" });
+            bounds = { button: buttonBox, menu: await inViewport(menu, `${label}: navbar menu`) };
+            assert.deepEqual(await page.evaluate(() => [scrollX, scrollY]), [0, 0]);
+          } else {
+            await page.locator(".VPNavBarHamburger").click();
+            await button.click();
+          }
+          const links = widget.locator("a");
+          assert.equal(await links.count(), 5, label);
+          await links.first().waitFor({ state: "visible" });
+          for (const [linkIndex, requested] of locales.entries()) {
+            const link = links.nth(linkIndex);
+            assert.ok(await link.isVisible());
+            assert.ok((await link.getAttribute("href")).endsWith(destination(requested)));
+            assert.equal(await link.getAttribute("lang"), language(requested));
+            assert.equal(await link.getAttribute("hreflang"), language(requested));
+            if (fallback && requested !== "en") assert.match(await link.innerText(), /English/);
+            if (home) assert.match(await link.innerText(), /Home/);
+            if (variant === "navbar") await inViewport(link, `${label}: ${requested} navbar link`);
+          }
+          const expectedPath = new URL(`${base}${destination(code)}`).pathname;
+          const actualLanguage = language(code);
+          const identity = home ? homeIdentities[actualLanguage] : fallback ? "plugin-kit-ai" : "Use plugins";
+          const selector = home && actualLanguage !== "en" ? ".locale-historical-identity" : ".vp-doc h1";
+          await links.nth(index).click();
+          await page.waitForURL(url => url.pathname === expectedPath);
+          // URL changes can precede the client route render and head update.
+          // These predicates also work when a fallback points to the origin.
+          await page.waitForFunction(({ selector, identity, lang }) => {
+            const el = document.querySelector(selector);
+            return el && el.getClientRects().length > 0 &&
+              el.textContent.replace(/\u200b/g, "").trim() === identity && document.documentElement.lang === lang;
+          }, { selector, identity, lang: languageTags[actualLanguage] });
+          assert.equal(new URL(page.url()).pathname, expectedPath);
+          assert.ok(await page.locator(selector).first().isVisible());
+          assert.equal((await page.locator(selector).first().innerText()).replace(/\u200b/g, "").trim(), identity);
+          assert.equal(await page.locator("html").getAttribute("lang"), languageTags[actualLanguage]);
+          await page.waitForFunction(variant => document.querySelector(`.locale-switcher--${variant} button`)?.getAttribute("aria-expanded") === "false", variant);
+          evidence.push({ variant, origin: label, requested: code, pathname: expectedPath, identity, language: languageTags[actualLanguage], bounds, activated: true });
         }
+      }
+      async function inViewport(locator, label) {
+        const box = await locator.boundingBox();
+        const viewport = page.viewportSize();
+        assert.ok(box && box.width > 0 && box.height > 0 && box.x >= 0 && box.y >= 0 &&
+          box.x + box.width <= viewport.width && box.y + box.height <= viewport.height,
+        `${label}: ${JSON.stringify({ box, viewport })}`);
+        return box;
       }
     }
     assert.deepEqual(errors, []);
