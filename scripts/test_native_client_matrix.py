@@ -5,6 +5,7 @@ import importlib.util
 import io
 from pathlib import Path
 import tarfile
+import tempfile
 import unittest
 from unittest.mock import patch
 import zipfile
@@ -15,6 +16,16 @@ SPEC.loader.exec_module(matrix)
 
 
 class NativeMatrixTests(unittest.TestCase):
+    def test_git_bash_discovery_supports_runner_git_layouts(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp).resolve()
+            (root / "bin").mkdir()
+            bash = root / "bin/bash.exe"
+            bash.write_bytes(b"fixture")
+            for relative in ["bin/git.exe", "cmd/git.exe", "mingw64/bin/git.exe"]:
+                self.assertEqual(matrix.find_git_bash(root / relative), bash)
+            self.assertIsNone(matrix.find_git_bash(root / "unrelated/deep/tree/git.exe"))
+
     def test_extended_runtime_is_required_for_opencode_proof(self):
         self.assertIn("TestAgentpluginsOpenCodeNativeRuntimeExtended", matrix.REQUIRED_TESTS["opencode"])
 

@@ -38,6 +38,9 @@ func nativePlatformEnvironment(root, home string, binDirs ...string) []string {
 			if gitDir := os.Getenv("AGENTPLUGINS_NATIVE_GIT_BIN_DIR"); filepath.IsAbs(gitDir) {
 				paths = append(paths, gitDir)
 			}
+			if shellDir := os.Getenv("AGENTPLUGINS_NATIVE_GIT_SHELL_BIN_DIR"); filepath.IsAbs(shellDir) {
+				paths = append(paths, shellDir)
+			}
 			if bash := os.Getenv("AGENTPLUGINS_NATIVE_GIT_BASH_PATH"); filepath.IsAbs(bash) {
 				env = append(env, "CLAUDE_CODE_GIT_BASH_PATH="+bash)
 			}

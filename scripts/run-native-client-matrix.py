@@ -107,6 +107,17 @@ def require_hosted(target):
         raise RuntimeError(f"target {target} does not match actual native platform {actual}")
 
 
+def find_git_bash(git):
+    # GitHub runners may expose Git through bin, cmd, or mingw64/bin.
+    # Search only the detected installation ancestors, never an ambient shell.
+    path = Path(git).resolve()
+    for parent in list(path.parents)[:3]:
+        candidate = parent / "bin/bash.exe"
+        if candidate.is_file():
+            return candidate
+    return None
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--client", choices=PATTERNS, required=True)
@@ -156,10 +167,20 @@ def main():
             if git:
                 env["PATH"] += os.pathsep + str(Path(git).parent)
                 env["AGENTPLUGINS_NATIVE_GIT_BIN_DIR"] = str(Path(git).parent)
+                identity["git_path"] = git
                 identity["git_version"] = subprocess.check_output([git, "--version"], text=True).strip()
-                bash = Path(git).parent.parent / "bin/bash.exe"
-                if bash.is_file():
+                bash = find_git_bash(git)
+                if args.client == "claude" and bash is None:
+                    raise RuntimeError("Claude Windows proof requires Git Bash in the detected Git installation")
+                if bash is not None:
                     env["AGENTPLUGINS_NATIVE_GIT_BASH_PATH"] = str(bash)
+                    env["AGENTPLUGINS_NATIVE_GIT_SHELL_BIN_DIR"] = str(bash.parent)
+                    env["PATH"] += os.pathsep + str(bash.parent)
+                    shell = bash.parent / "sh.exe"
+                    if args.client == "opencode" and not shell.is_file():
+                        raise RuntimeError("OpenCode lifecycle fixture requires sh.exe from the detected Git installation")
+                    if shell.is_file():
+                        identity["git_sh_sha256"] = hashlib.sha256(shell.read_bytes()).hexdigest()
                     identity["git_bash_sha256"] = hashlib.sha256(bash.read_bytes()).hexdigest()
         else:
             env["PATH"] += ":/usr/bin:/bin"
@@ -197,7 +218,7 @@ def main():
                         destination = output / fixture.name / path.name
                         destination.parent.mkdir(parents=True, exist_ok=True)
                         shutil.copyfile(path, destination)
-        identity["artifact_sha256"] = {str(p.relative_to(output)): hashlib.sha256(p.read_bytes()).hexdigest() for p in output.rglob("*") if p.is_file()}
+        identity["artifact_sha256"] = {p.relative_to(output).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest() for p in output.rglob("*") if p.is_file()}
         (output / "runner-evidence.json").write_text(json.dumps(identity, indent=2) + "\n", encoding="utf-8")
 
 
