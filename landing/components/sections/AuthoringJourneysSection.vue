@@ -15,7 +15,6 @@ const journeys = computed(() => [
     description: t('pluginAuthoring.use.description'),
     cta: t('pluginAuthoring.use.cta'),
     href: useGuideUrl.value,
-    accent: '#00f0ff',
   },
   {
     id: 'build',
@@ -24,7 +23,6 @@ const journeys = computed(() => [
     description: t('pluginAuthoring.build.description'),
     cta: t('pluginAuthoring.build.cta'),
     href: buildGuideUrl.value,
-    accent: '#7257ff',
   },
 ]);
 </script>
