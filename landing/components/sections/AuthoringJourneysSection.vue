@@ -1,17 +1,33 @@
 <script setup lang="ts">
-const { t } = useI18n();
-const { docsUrl } = useDocsLinks();
+import type { DocsLocale } from '~/utils/docsLinks';
+import { replaceDocsLocale } from '~/utils/docsLinks';
 
-// docsUrl only fallback-checks docPath '' (the docs root), which has real
-// content in every locale, so appending a suffix here bypasses locale
-// fallback for use/build/legacy/v1 specifically. Harmless today because
-// landing has no locale-aware routing yet (currentLocale is always 'en'),
-// but if that changes, route these through useDocsLinks()'s fallback-aware
-// resolution with the correct docPath instead of string concatenation.
-const base = computed(() => docsUrl.value.replace(/\/+$/, '') + '/');
-const useGuideUrl = computed(() => `${base.value}use/`);
-const buildGuideUrl = computed(() => `${base.value}build/`);
-const historicalGuideUrl = computed(() => `${base.value}legacy/v1/`);
+const { t, locale } = useI18n();
+const config = useRuntimeConfig();
+
+const currentLocale = computed<DocsLocale>(() => {
+  const supported = new Set<DocsLocale>(['en', 'ru', 'es', 'fr', 'zh']);
+  return supported.has(locale.value as DocsLocale) ? (locale.value as DocsLocale) : 'en';
+});
+
+// The template always carries an "en" locale segment; replaceDocsLocale
+// rewrites it to the resolved locale (falling back to English per-docPath,
+// unlike a plain string suffix on docsUrl, which only fallback-checks the
+// docs root and would silently serve untranslated pages once landing gets
+// locale-aware routing).
+const docsRoot = computed(() => {
+  const url = String(config.public.docsUrl || 'https://777genius.github.io/universal-agent-plugins/docs/en/');
+  return url.replace(/\/+$/, '') + '/';
+});
+const useGuideUrl = computed(() =>
+  replaceDocsLocale(`${docsRoot.value}use/`, currentLocale.value, 'use'),
+);
+const buildGuideUrl = computed(() =>
+  replaceDocsLocale(`${docsRoot.value}build/`, currentLocale.value, 'build'),
+);
+const historicalGuideUrl = computed(() =>
+  replaceDocsLocale(`${docsRoot.value}legacy/v1/`, currentLocale.value, 'legacy/v1'),
+);
 
 const journeys = computed(() => [
   {
