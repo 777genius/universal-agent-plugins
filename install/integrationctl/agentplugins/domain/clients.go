@@ -88,8 +88,8 @@ func withActivation(definition ClientDefinition, activation ActivationMode) Clie
 
 func clientDefinition(id ClientID, displayName, backendFamily, delivery, catalogPackage string, legacyRequired bool, packageMode PackageMode, skill, mcp, extension SupportLevel) ClientDefinition {
 	transports := map[string]SupportLevel{"stdio": mcp, "streamable-http": mcp, "sse": mcp}
-	// OpenCode remote starts with Streamable HTTP; its fallback cannot preserve SSE-first.
-	if id == ClientOpenCode {
+	// Codex rejects native SSE; OpenCode remote fallback cannot preserve SSE-first.
+	if id == ClientOpenCode || id == ClientCodex {
 		transports["sse"] = SupportUnsupported
 	}
 	appSupport := SupportUnsupported

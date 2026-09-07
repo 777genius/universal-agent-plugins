@@ -193,6 +193,9 @@ func (stager Stager) stage(
 				return domain.StagedDelivery{}, err
 			}
 		case domain.ClientClaude:
+			if err := stager.deliverManagedStdio(stagingPath, envelope, plan); err != nil {
+				return domain.StagedDelivery{}, err
+			}
 			if err := projectClaude(stagingPath, envelope, plan, pluginDataPath); err != nil {
 				return domain.StagedDelivery{}, err
 			}

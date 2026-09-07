@@ -10,6 +10,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/loader"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/specregistry"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/managedstdio"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/providers"
 )
 
@@ -94,6 +95,15 @@ func TestPortableDotPathsInstallAndExactRepair(t *testing.T) {
 
 func TestClaudeBundledDotPathsInstallAndRepair(t *testing.T) {
 	service, _, _ := serviceFixture(t)
+	helper := filepath.Join(t.TempDir(), "fixture-helper")
+	if err := os.WriteFile(helper, []byte("fixture helper; never executed"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	source, err := managedstdio.NewSource(helper, "fixture")
+	if err != nil {
+		t.Fatal(err)
+	}
+	service.Stager = providers.Stager{LauncherSource: source}
 	client := domain.DetectedClient{ClientID: domain.ClientClaude, Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), "claude"), ExecutablePath: "/test/bin/claude"}
 	runner := &fakeClaudeLifecycleRunner{configRoot: client.ConfigRoot}
 	service.Activator = providers.Activator{Runner: runner}
@@ -133,10 +143,10 @@ func TestClaudeBundledDotPathsInstallAndRepair(t *testing.T) {
 		t.Helper()
 		runtime := filepath.Join(installed.Plan.ActivePath, ".agentplugins-runtime")
 		server := readUsecaseObject(t, filepath.Join(installed.Plan.ActivePath, ".mcp.json"))["local"].(map[string]any)
-		if server["command"] != filepath.Join(runtime, "bin/server") || server["cwd"] != filepath.Join(runtime, "work") {
+		if server["cwd"] != nil || server["args"].([]any)[3] != filepath.Join(runtime, "work") || server["args"].([]any)[6] != "./bin/../bin/server" {
 			t.Fatalf("Claude final paths: %+v", server)
 		}
-		if server["args"].([]any)[0] != filepath.Join(runtime, "config") {
+		if server["args"].([]any)[7] != filepath.Join(runtime, "config") {
 			t.Fatalf("Claude PLUGIN_ROOT expansion: %+v", server)
 		}
 		if _, err := os.Stat(filepath.Join(runtime, "bin/server")); err != nil {

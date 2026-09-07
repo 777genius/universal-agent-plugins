@@ -264,9 +264,53 @@ func (observer NativeIdentityObserver) inspectCodexCLI(ctx context.Context, plan
 		return registryIndeterminate, err
 	}
 	if result.ExitCode != 0 {
+		if diagnostic := boundedNativeDiagnostic(result.Stdout, result.Stderr); diagnostic != "" {
+			return registryIndeterminate, fmt.Errorf("Codex plugin registry command failed with exit code %d: %s", result.ExitCode, diagnostic)
+		}
 		return registryIndeterminate, fmt.Errorf("Codex plugin registry command failed with exit code %d", result.ExitCode)
 	}
 	return codexRegistryFinding(result.Stdout, plan.DeclaredName, managedMarketplaceName(plan.PhysicalArtifactID), managed != nil), nil
+}
+
+// nativeDiagnosticLimit bounds the excerpt kept from a failed native CLI
+// invocation's own output. It exists purely for operator diagnosis of a
+// discovery failure and is never treated as proof of package absence.
+const nativeDiagnosticLimit = 2048
+
+// boundedNativeDiagnostic returns a short, sanitized excerpt of a failed
+// native CLI invocation's own stdout/stderr. It never includes argv,
+// environment, or configuration; only the bounded child-process output, with
+// control characters stripped and length capped.
+func boundedNativeDiagnostic(stdout, stderr []byte) string {
+	parts := make([]string, 0, 2)
+	if text := sanitizeNativeDiagnosticText(stderr); text != "" {
+		parts = append(parts, text)
+	}
+	if text := sanitizeNativeDiagnosticText(stdout); text != "" {
+		parts = append(parts, text)
+	}
+	text := strings.Join(parts, " | ")
+	if len(text) > nativeDiagnosticLimit {
+		// Re-validate after the byte-index cut: it may have split a multibyte
+		// rune, which strings.ToValidUTF8 would otherwise leave as U+FFFD.
+		text = strings.ToValidUTF8(text[:nativeDiagnosticLimit], "") + "...(truncated)"
+	}
+	return text
+}
+
+func sanitizeNativeDiagnosticText(output []byte) string {
+	text := strings.ToValidUTF8(string(output), "")
+	text = strings.Map(func(r rune) rune {
+		switch {
+		case r == '\n' || r == '\t':
+			return ' '
+		case r < 0x20 || r == 0x7f:
+			return -1
+		default:
+			return r
+		}
+	}, text)
+	return strings.Join(strings.Fields(text), " ")
 }
 
 func codexRegistryFinding(body []byte, name, expectedMarketplace string, owned bool) registryFinding {
@@ -624,8 +668,16 @@ func inspectClaudeSkillsRegistry(plan domain.DeliveryPlan, name string, owned bo
 	}
 	finding := registryClear
 	for _, entry := range entries {
-		if entry.Type()&os.ModeSymlink != 0 || !entry.IsDir() {
+		if entry.Type()&os.ModeSymlink != 0 {
 			return registryIndeterminate, nil
+		}
+		if !entry.IsDir() {
+			// A plain file cannot contain the .claude-plugin/plugin.json this
+			// scheme requires, so it can never claim a competing plugin
+			// identity. OS-generated artifacts such as .DS_Store are common
+			// in a Finder-browsed skills directory and must not block every
+			// other plugin's repair/update.
+			continue
 		}
 		path := filepath.Join(root, entry.Name())
 		manifest := filepath.Join(path, ".claude-plugin", "plugin.json")
@@ -671,8 +723,15 @@ func inspectUnqualifiedPluginRoot(root, name, activePath string, owned bool) (re
 		if strings.HasPrefix(entry.Name(), ".agentplugins-staging-") {
 			continue
 		}
-		if entry.Type()&os.ModeSymlink != 0 || !entry.IsDir() {
+		if entry.Type()&os.ModeSymlink != 0 {
 			return registryIndeterminate, nil
+		}
+		if !entry.IsDir() {
+			// A plain file cannot contain the manifest this scheme requires,
+			// so it can never claim a competing plugin identity. OS-generated
+			// artifacts such as .DS_Store are common here and must not block
+			// every other plugin's repair/update.
+			continue
 		}
 		path := filepath.Join(root, entry.Name())
 		manifestName, qualified, namespace, err := nativeManifestIdentity(path)

@@ -137,6 +137,11 @@ well-formed; it does not prove runtime, OAuth, or activation in every client.
 The CLI prints installed, prepared, activation required, and authentication
 pending as separate outcomes.
 
+For Codex, declared MCP SSE is unsupported; stdio and Streamable HTTP retain
+their existing adapter support. Valid SSE components are excluded from Codex
+delivery without invalidating the package. See [transport evidence and lifecycle
+behavior](docs/CODEX_TRANSPORT_EVIDENCE.md).
+
 ## Find and verify plugins
 
 search combines the reviewed Registry Directory with a signed public Discovery

@@ -424,7 +424,7 @@ func componentDecisions(envelope domain.PackageEnvelope, capabilities domain.Cli
 			}
 		}
 		value := decision(domain.ComponentMCPServer, name, support)
-		if capabilities.ClientID == domain.ClientOpenCode && server.Type == "sse" && support == domain.SupportUnsupported {
+		if (capabilities.ClientID == domain.ClientOpenCode || capabilities.ClientID == domain.ClientCodex) && server.Type == "sse" && support == domain.SupportUnsupported {
 			value.Reason = "declared_sse_not_supported_by_client"
 		}
 		decisions = append(decisions, value)

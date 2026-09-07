@@ -22,7 +22,7 @@ func TestClaudeBundledStdioObservesIsolatedRuntime(t *testing.T) {
 			}}}
 			plan := stagingPlan(t, domain.ClientClaude, domain.PackageProjection)
 			plan.Components = []domain.ComponentDecision{{Kind: domain.ComponentMCPServer, Name: "local", Support: domain.SupportProjected}}
-			delivery, err := (Stager{}).Stage(context.Background(), envelope, plan, "claude-bundled-paths", domain.CompatibilityHints{})
+			delivery, err := windsurfFixtureStager(t).Stage(context.Background(), envelope, plan, "claude-bundled-paths", domain.CompatibilityHints{})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -39,10 +39,10 @@ func TestClaudeBundledStdioObservesIsolatedRuntime(t *testing.T) {
 			if cwd == "./work" {
 				expectedCWD = filepath.Join(activeRuntime, "work")
 			}
-			if server["command"] != filepath.Join(activeRuntime, "bin/run") || server["cwd"] != expectedCWD {
+			if server["cwd"] != nil || server["args"].([]any)[3] != expectedCWD || server["args"].([]any)[6] != "./bin/../bin/run" {
 				t.Fatalf("isolated stdio projection: %+v", server)
 			}
-			if args := server["args"].([]any); args[0] != filepath.Join(activeRuntime, "config") || args[1] != "${UNKNOWN}" {
+			if args := server["args"].([]any); args[7] != filepath.Join(activeRuntime, "config") || args[8] != "${UNKNOWN}" {
 				t.Fatalf("args: %+v", args)
 			}
 			if err := (Stager{}).Verify(context.Background(), delivery.StagingPath, delivery.ArtifactDigest); err != nil {

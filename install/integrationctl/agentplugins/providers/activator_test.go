@@ -852,12 +852,71 @@ func TestDeactivatorPreviewsThenCleansManagedCodexMarketplace(t *testing.T) {
 	if !outcome.ArtifactRemovalAllowed || !outcome.ExternalRemovalComplete {
 		t.Fatalf("outcome = %+v", outcome)
 	}
-	want := [][]string{{
-		"/test/bin/codex", "plugin", "marketplace", "remove",
-		managedMarketplaceName(request.PhysicalArtifactID), "--json",
-	}}
+	marketplace := managedMarketplaceName(request.PhysicalArtifactID)
+	want := [][]string{
+		{"/test/bin/codex", "plugin", "remove", request.DeclaredName + "@" + marketplace, "--json"},
+		{"/test/bin/codex", "plugin", "marketplace", "remove", marketplace, "--json"},
+	}
 	if got := commandArgv(runner.commands); !reflect.DeepEqual(got, want) {
 		t.Fatalf("commands = %#v, want %#v", got, want)
+	}
+}
+
+// TestDeactivatorCleansStalePluginEntryWhenMarketplaceAlreadyGone covers the
+// gap a live-native run found: if config.toml's marketplace source is
+// already gone (e.g. a user manually ran only `codex plugin marketplace
+// remove` off this code's own earlier guidance) but the separate
+// `[plugins."id"] enabled = true` entry survives, managedCodexMarketplaceRegistered
+// reports not-registered and the old code skipped cleanup entirely,
+// reproducing the self-heal bug on every subsequent remove. The plugin's own
+// registration must still be cleared whenever a live CLI is available,
+// independent of marketplace registration.
+func TestDeactivatorCleansStalePluginEntryWhenMarketplaceAlreadyGone(t *testing.T) {
+	t.Parallel()
+	runner := &recordingRunner{}
+	request := codexDeactivationRequest(t)
+	request.Confirmed = true
+	marketplace := managedMarketplaceName(request.PhysicalArtifactID)
+	writeTestFile(t, filepath.Join(request.Client.ConfigRoot, "config.toml"), fmt.Sprintf(`
+[plugins."%s@%s"]
+enabled = true
+`, request.DeclaredName, marketplace))
+	outcome, err := (Activator{Runner: runner}).Deactivate(context.Background(), request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !outcome.ArtifactRemovalAllowed || !outcome.ExternalRemovalComplete {
+		t.Fatalf("outcome = %+v", outcome)
+	}
+	want := [][]string{{"/test/bin/codex", "plugin", "remove", request.DeclaredName + "@" + marketplace, "--json"}}
+	if got := commandArgv(runner.commands); !reflect.DeepEqual(got, want) {
+		t.Fatalf("commands = %#v, want %#v (marketplace remove must NOT run -- there is no marketplace source left to clean)", got, want)
+	}
+}
+
+// TestDeactivatorBlocksRemovalWhenPluginEntryStaleAndCLIUnavailable covers a
+// second gap from the same live-native finding: without a live CLI, a stale
+// `[plugins."id"]` entry must block removal exactly like a registered
+// marketplace does, not just fall through to ExternalRemovalComplete=true
+// with nothing actually cleaned.
+func TestDeactivatorBlocksRemovalWhenPluginEntryStaleAndCLIUnavailable(t *testing.T) {
+	t.Parallel()
+	request := codexDeactivationRequest(t)
+	request.Confirmed = true
+	request.BackendExecutable = ""
+	marketplace := managedMarketplaceName(request.PhysicalArtifactID)
+	writeTestFile(t, filepath.Join(request.Client.ConfigRoot, "config.toml"), fmt.Sprintf(`
+[plugins."%s@%s"]
+enabled = true
+`, request.DeclaredName, marketplace))
+	outcome, err := (Activator{}).Deactivate(context.Background(), request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantPluginRemove := fmt.Sprintf("codex plugin remove %s@%s --json", request.DeclaredName, marketplace)
+	if outcome.ArtifactRemovalAllowed || outcome.ExternalRemovalComplete || outcome.Activation != domain.ActivationManual ||
+		len(outcome.UserActions) != 1 || !strings.Contains(outcome.UserActions[0], wantPluginRemove) {
+		t.Fatalf("outcome = %+v, want blocked with guidance containing %q", outcome, wantPluginRemove)
 	}
 }
 
@@ -877,9 +936,28 @@ func TestDeactivatorTreatsAbsentManagedCodexMarketplaceAsClean(t *testing.T) {
 	}
 }
 
+func TestDeactivatorRetainsManagedCodexArtifactWhenPluginCleanupFails(t *testing.T) {
+	t.Parallel()
+	runner := &recordingRunner{run: func(command legacyports.Command) legacyports.CommandResult {
+		return legacyports.CommandResult{ExitCode: 1, Stderr: []byte("config write failed")}
+	}}
+	request := codexDeactivationRequest(t)
+	request.Confirmed = true
+	outcome, err := (Activator{Runner: runner}).Deactivate(context.Background(), request)
+	if err == nil || !strings.Contains(err.Error(), "remove managed Codex plugin") {
+		t.Fatalf("outcome = %+v, error = %v", outcome, err)
+	}
+	if outcome.ExternalRemovalComplete {
+		t.Fatalf("failed cleanup claimed external completion: %+v", outcome)
+	}
+}
+
 func TestDeactivatorRetainsManagedCodexArtifactWhenMarketplaceCleanupFails(t *testing.T) {
 	t.Parallel()
 	runner := &recordingRunner{run: func(command legacyports.Command) legacyports.CommandResult {
+		if len(command.Argv) >= 3 && command.Argv[1] == "plugin" && command.Argv[2] == "remove" {
+			return legacyports.CommandResult{}
+		}
 		return legacyports.CommandResult{ExitCode: 1, Stderr: []byte("config write failed")}
 	}}
 	request := codexDeactivationRequest(t)
@@ -923,9 +1001,13 @@ func TestDeactivatorRetainsManagedCodexArtifactWhenCLIIsUnavailable(t *testing.T
 		t.Fatal(err)
 	}
 	marketplace := managedMarketplaceName(request.PhysicalArtifactID)
+	wantPluginRemove := fmt.Sprintf("codex plugin remove %s@%s --json", request.DeclaredName, marketplace)
+	wantMarketplaceRemove := fmt.Sprintf("codex plugin marketplace remove %s --json", marketplace)
 	if outcome.ArtifactRemovalAllowed || outcome.ExternalRemovalComplete || outcome.Activation != domain.ActivationManual ||
-		len(outcome.UserActions) != 1 || !strings.Contains(outcome.UserActions[0], marketplace) {
-		t.Fatalf("outcome = %+v", outcome)
+		len(outcome.UserActions) != 1 ||
+		!strings.Contains(outcome.UserActions[0], wantPluginRemove) ||
+		!strings.Contains(outcome.UserActions[0], wantMarketplaceRemove) {
+		t.Fatalf("outcome = %+v, want guidance containing both %q and %q", outcome, wantPluginRemove, wantMarketplaceRemove)
 	}
 }
 
