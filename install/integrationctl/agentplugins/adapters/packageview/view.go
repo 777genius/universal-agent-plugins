@@ -223,7 +223,8 @@ type Lease struct {
 	hooks *captureHooks
 }
 type captureHooks struct {
-	nativeOpen func(string, int) // immediately before Darwin single-name openat
+	scratchOpen func(string, int) // Darwin scratch traversal only
+	nativeOpen  func(string, int) // immediately before Darwin single-name openat
 
 	beforeDataOpen func(string)
 	dataOpenError  func(string) error
@@ -350,6 +351,9 @@ func (l *Lease) Close() error {
 	defer l.mu.Unlock()
 	if l.closed {
 		return l.closeErr
+	}
+	if l.source == nil && l.private == "" && l.scratchClose == nil {
+		return l.close()
 	}
 	err := sourceIO(func() error {
 		if l.source != nil {

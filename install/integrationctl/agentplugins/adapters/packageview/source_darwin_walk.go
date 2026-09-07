@@ -148,7 +148,7 @@ func (s *source) directory(name string) (result *os.File, err error) {
 		next := physicalName(prefix, n)
 		if e != nil {
 			if _, seen := s.bindings[next]; seen {
-				return nil, fail("source_changed")
+				return nil, acquisitionError(e, "source_changed")
 			}
 			return nil, e
 		}
@@ -225,7 +225,7 @@ func (s *source) resolve(rel string, nofollow, selecting bool) (*pinned, error) 
 		if e != nil {
 			dir.Close()
 			if _, seen := s.bindings[physical]; seen {
-				return nil, fail("source_changed")
+				return nil, acquisitionError(e, "source_changed")
 			}
 			return nil, e
 		}
@@ -294,15 +294,12 @@ func (s *source) verifyBinding(name string, old os.FileInfo) error {
 	}
 	dir, e := s.directory(parent)
 	if e != nil {
-		if s.ctx.Err() != nil {
-			return contextError(s.ctx)
-		}
-		return fail("source_changed")
+		return acquisitionError(e, "source_changed")
 	}
 	defer dir.Close()
 	info, e := darwinStat(int(dir.Fd()), n)
 	if e != nil {
-		return fail("source_changed")
+		return acquisitionError(e, "source_changed")
 	}
 	equal := same(old, info)
 	if s.ancestors[name] {
@@ -314,7 +311,10 @@ func (s *source) verifyBinding(name string, old os.FileInfo) error {
 	if text, ok := s.links[name]; ok {
 		p := &pinned{file: dir, info: info, name: n, parent: parent, source: s}
 		got, e := p.link(4096)
-		if e != nil || got != text {
+		if e != nil {
+			return acquisitionError(e, "source_changed")
+		}
+		if got != text {
 			return fail("source_changed")
 		}
 	}

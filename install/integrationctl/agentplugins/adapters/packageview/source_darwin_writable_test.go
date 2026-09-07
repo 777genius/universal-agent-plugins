@@ -8,9 +8,11 @@ import (
 	"golang.org/x/sys/unix"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 )
 
 // No mounting, cloud, device creation or real-project inputs. Unsupported
@@ -329,21 +331,65 @@ func TestDarwinWritablePanicAndFDs(t *testing.T) {
 	if count() != before {
 		t.Fatal("FD observer failed closed control")
 	}
-	for i := 0; i < 3; i++ {
-		var caught any
-		func() {
-			defer func() { caught = recover() }()
-			_, _ = (Reader{TempDir: scratch}).open(context.Background(), root, &captureHooks{nativeOpen: func(string, int) { panic("owned panic") }})
-		}()
-		if caught != "owned panic" {
-			t.Fatal("panic not relayed", caught)
-		}
-		if count() != before {
-			t.Fatal("descriptor leak after panic")
-		}
-		entries, e := os.ReadDir(scratch)
-		if e != nil || len(entries) != 0 {
-			t.Fatal("panic scratch cleanup", e, entries)
+	// Keep the original first-native-open schedule: scratch owns an anchor,
+	// source binding replay panics, and the lease has not received scratchClose.
+	// Later phases exercise the held pin and data FD ownership as well.
+	nativeWrite(t, root, "opaque", "inert payload")
+	for _, phase := range []string{"scratch-handoff", "core-read", "inventory-read", "final-verification"} {
+		for i := 0; i < 3; i++ {
+			fired, coreOpens := false, 0
+			var l *Lease
+			var caught any
+			var runErr error
+			hooks := &captureHooks{}
+			boom := func() { fired = true; panic("owned panic") }
+			switch phase {
+			case "scratch-handoff":
+				hooks.nativeOpen = func(string, int) { boom() }
+			case "core-read", "inventory-read":
+				hooks.afterChunk = func(n string) {
+					if phase == "core-read" && n == "plugin.json" || phase == "inventory-read" && n == "opaque" {
+						boom()
+					}
+				}
+			case "final-verification":
+				hooks.nativeOpen = func(n string, flags int) {
+					if n == "plugin.json" && flags&unix.O_DIRECTORY == 0 {
+						coreOpens++
+						if coreOpens == 2 {
+							boom()
+						}
+					}
+				}
+			}
+			func() {
+				defer func() { caught = recover() }()
+				l, runErr = (Reader{TempDir: scratch}).open(context.Background(), root, hooks)
+				if runErr == nil && l != nil {
+					_, runErr = l.Capture(context.Background())
+				}
+			}()
+			if !fired || caught != "owned panic" || runErr != nil {
+				t.Fatalf("%s panic not relayed: fired=%v panic=%v err=%v", phase, fired, caught, runErr)
+			}
+			if count() != before {
+				t.Fatalf("descriptor leak after panic: phase=%s", phase)
+			}
+			if l != nil {
+				if !reflect.DeepEqual(l.Data(), Input{}) {
+					t.Fatal("panic retained partial Input")
+				}
+				if e := l.Close(); e != nil {
+					t.Fatal("panic Close", e)
+				}
+				if e := l.Close(); e != nil {
+					t.Fatal("repeated panic Close", e)
+				}
+			}
+			entries, e := os.ReadDir(scratch)
+			if e != nil || len(entries) != 0 {
+				t.Fatal("panic scratch cleanup", e, entries)
+			}
 		}
 	}
 }
@@ -436,5 +482,174 @@ func TestDarwinWritableReplacedPrivateChild(t *testing.T) {
 	got, e := os.ReadFile(filepath.Join(l.private, "foreign"))
 	if e != nil || string(got) != "keep" {
 		t.Fatal("foreign child modified", e)
+	}
+}
+
+// The context switches to a real terminal context at a synchronous traversal
+// boundary. This makes cancellation and deadline cases deterministic without
+// timers racing the filesystem or replacing resolver errors with mock errors.
+type darwinTraversalContext struct{ context.Context }
+
+func TestDarwinWritableTraversalCancellation(t *testing.T) {
+	for _, cause := range []error{context.Canceled, context.DeadlineExceeded} {
+		for _, phase := range []string{"after-metadata", "descendant-replay", "scratch-resolution", "post-open-guard", "final-guard"} {
+			t.Run(cause.Error()+"/"+phase, func(t *testing.T) {
+				root, scratch := writableFixture(t)
+				nativeWrite(t, root, "skills/a/SKILL.md", "# inert")
+				ctx := &darwinTraversalContext{Context: context.Background()}
+				var terminal context.Context
+				var cancel context.CancelFunc
+				if cause == context.Canceled {
+					terminal, cancel = context.WithCancel(context.Background())
+					cancel()
+				} else {
+					terminal, cancel = context.WithDeadline(context.Background(), time.Unix(1, 0))
+				}
+				defer cancel()
+				fired, armed, coreOpens := false, false, 0
+				stop := func() { fired = true; ctx.Context = terminal }
+				hooks := &captureHooks{}
+				switch phase {
+				case "after-metadata":
+					hooks.beforeDataOpen = func(n string) {
+						if n == "plugin.json" {
+							stop()
+						}
+					}
+				case "descendant-replay":
+					hooks.metadata = func(n string) error { armed = n == "skills/a/SKILL.md"; return nil }
+					hooks.nativeOpen = func(n string, flags int) {
+						if armed && n == "a" && flags&unix.O_DIRECTORY != 0 {
+							stop()
+						}
+					}
+				case "scratch-resolution":
+					// Opens the real scratch directory; a subsequent prefix replay
+					// step returns cancellation before ownership reaches the lease.
+					hooks.scratchOpen = func(n string, flags int) {
+						if n == "scratch" && flags&unix.O_DIRECTORY != 0 {
+							stop()
+						}
+					}
+				case "post-open-guard", "final-guard":
+					hooks.nativeOpen = func(n string, flags int) {
+						if n == "plugin.json" && flags&unix.O_DIRECTORY == 0 {
+							coreOpens++
+							if phase == "post-open-guard" || coreOpens == 2 {
+								stop()
+							}
+						}
+					}
+				}
+				l, e := (Reader{TempDir: scratch}).open(ctx, root, hooks)
+				if phase == "descendant-replay" || phase == "final-guard" {
+					if e != nil {
+						t.Fatal("Open prerequisite", e)
+					}
+					defer l.Close()
+					in, captureErr := l.Capture(ctx)
+					e = captureErr
+					if !reflect.DeepEqual(in, Input{}) || !reflect.DeepEqual(l.Data(), Input{}) {
+						t.Fatal("usable partial Input")
+					}
+				} else if l != nil {
+					l.Close()
+					t.Fatal("partial Open lease")
+				}
+				var safe *Error
+				if !fired || !errors.Is(e, cause) || !errors.As(e, &safe) || safe.Code != "canceled" || safe.CleanupFailed {
+					t.Fatalf("traversal cancellation lost: fired=%v err=%v", fired, e)
+				}
+				entries, e := os.ReadDir(scratch)
+				if e != nil || len(entries) != 0 {
+					t.Fatal("owned cleanup", entries, e)
+				}
+			})
+		}
+	}
+}
+
+func TestDarwinWritableScratchFinalSymlink(t *testing.T) {
+	root, scratch := writableFixture(t)
+	external := filepath.Join(filepath.Dir(scratch), "scratch-alias")
+	inside := filepath.Join(filepath.Dir(scratch), "inside-alias")
+	sourceAlias := filepath.Join(filepath.Dir(scratch), "source-alias")
+	nativeWrite(t, root, "inside/keep", "source sentinel")
+	for alias, target := range map[string]string{external: scratch, inside: filepath.Join(root, "inside"), sourceAlias: root} {
+		if e := os.Symlink(target, alias); e != nil {
+			t.Fatal(e)
+		}
+	}
+	for _, temp := range []string{scratch, external} {
+		l, e := (Reader{TempDir: temp}).Open(context.Background(), root)
+		if e != nil {
+			t.Fatal("trusted scratch rejected", temp, e)
+		}
+		if filepath.Dir(l.private) != scratch {
+			t.Fatal("private child is not physical", l.private)
+		}
+		if _, e := l.Capture(context.Background()); e != nil {
+			t.Fatal(e)
+		}
+		if e := l.Close(); e != nil {
+			t.Fatal(e)
+		}
+		entries, e := os.ReadDir(scratch)
+		if e != nil || len(entries) != 0 {
+			t.Fatal("scratch cleanup", entries, e)
+		}
+	}
+	for _, temp := range []string{inside, sourceAlias} {
+		l, e := (Reader{TempDir: temp}).Open(context.Background(), root)
+		if l != nil {
+			l.Close()
+			t.Fatal("overlap accepted")
+		}
+		var safe *Error
+		if !errors.As(e, &safe) || safe.Code != "scratch_overlaps_source" {
+			t.Fatal("physical overlap not rejected", e)
+		}
+	}
+	if l, e := (Reader{TempDir: external}).Open(context.Background(), sourceAlias); e == nil || l != nil {
+		if l != nil {
+			l.Close()
+		}
+		t.Fatal("final source symlink accepted")
+	}
+	got, e := os.ReadFile(filepath.Join(root, "inside/keep"))
+	if e != nil || string(got) != "source sentinel" {
+		t.Fatal("source changed", e)
+	}
+}
+
+func TestDarwinWritableObservedChangePrecedesCancellation(t *testing.T) {
+	root, scratch := writableFixture(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	fired := false
+	var mutationErr error
+	l, e := (Reader{TempDir: scratch}).open(ctx, root, &captureHooks{nativeOpen: func(n string, flags int) {
+		if !fired && n == "parent" && flags&unix.O_DIRECTORY != 0 {
+			fired = true
+			mutationErr = os.Chmod(filepath.Dir(root), 0750)
+			cancel()
+		}
+	}})
+	if l != nil {
+		l.Close()
+		t.Fatal("partial lease")
+	}
+	if !fired || mutationErr != nil {
+		t.Fatal("mutation prerequisite", fired, mutationErr)
+	}
+	// p.open observes the changed mode before directory/verifyBinding unwind.
+	// A later ctx.Err probe must not overwrite that already observed change.
+	requireChanged(t, e)
+	if errors.Is(e, context.Canceled) {
+		t.Fatal("observed change masked by cancellation")
+	}
+	entries, e := os.ReadDir(scratch)
+	if e != nil || len(entries) != 0 {
+		t.Fatal("owned cleanup", entries, e)
 	}
 }

@@ -111,8 +111,9 @@ func (l *Lease) capturePhase(ctx context.Context) (_ Input, err error) {
 		}
 		p, e := l.source.pin(rel, false)
 		if e != nil {
-			return Input{}, fail("source_changed")
+			return Input{}, acquisitionError(e, "source_changed")
 		}
+		defer p.file.Close() // panic ownership; normal iterations close immediately
 		ok := same(l.observations[rel], p.info)
 		if ok && p.info.IsDir() {
 			if e := l.verifyDirectory(ctx, rel, p); e != nil {
@@ -142,12 +143,19 @@ func (l *Lease) capturePhase(ctx context.Context) (_ Input, err error) {
 		}
 		p, e := l.source.pin(o.Path, true)
 		if e != nil {
-			return Input{}, fail("source_changed")
+			return Input{}, acquisitionError(e, "source_changed")
 		}
+		defer p.file.Close() // panic ownership; normal iterations close immediately
 		target, e := p.link(l.limits.FileBytes)
 		ok := same(l.linkInfos[o.Path], p.info)
 		ce := p.file.Close()
-		if e != nil || !ok || target != o.Target {
+		if !ok {
+			return Input{}, fail("source_changed")
+		}
+		if e != nil {
+			return Input{}, acquisitionError(e, "source_changed")
+		}
+		if target != o.Target {
 			return Input{}, fail("source_changed")
 		}
 		if ce != nil {
@@ -305,7 +313,7 @@ func (l *Lease) verifyDirectory(ctx context.Context, rel string, p *pinned) erro
 	}
 	f, e := p.reopen(true)
 	if e != nil {
-		return fail("source_changed")
+		return acquisitionError(e, "source_changed")
 	}
 	defer f.Close()
 	for {
@@ -378,6 +386,7 @@ func (l *Lease) walk(ctx context.Context, dir string, depth int) error {
 			l.omit(Observation{Path: rel, State: stateOf(e)}, "inventory_"+string(stateOf(e)))
 			continue
 		}
+		defer p.file.Close() // bounded entry count; close on panic before loop cleanup
 		if rel == ".plugin-kit-ai.lock" && !p.info.IsDir() {
 			if ce := p.file.Close(); ce != nil {
 				return fail("close_failed")
@@ -412,6 +421,7 @@ func (l *Lease) walk(ctx context.Context, dir string, depth int) error {
 				}
 				o.State = stateOf(e)
 			} else {
+				defer q.file.Close() // also own the target during legacy authorization
 				if !q.info.IsDir() && !q.info.Mode().IsRegular() {
 					o.State = WrongKind
 				}

@@ -122,7 +122,7 @@ func (l *Lease) read(ctx context.Context, rel string, p *pinned, limit int64) ([
 	// A later error cannot undo a forbidden Darwin open under hostile replacement.
 	current, e := l.source.pin(rel, false)
 	if e != nil {
-		return nil, fail("source_changed")
+		return nil, acquisitionError(e, "source_changed")
 	}
 	ok := same(p.info, current.info)
 	ce := current.file.Close()
@@ -133,7 +133,7 @@ func (l *Lease) read(ctx context.Context, rel string, p *pinned, limit int64) ([
 		return nil, fail("close_failed")
 	}
 	if allowed, guardErr := l.legacyGuard(p.info); guardErr != nil || !allowed {
-		return nil, fail("source_changed")
+		return nil, acquisitionError(guardErr, "source_changed")
 	}
 	if e := contextError(ctx); e != nil {
 		return nil, e
@@ -158,7 +158,7 @@ func (l *Lease) read(ctx context.Context, rel string, p *pinned, limit int64) ([
 	}
 	if allowed, guardErr := l.legacyGuard(opened); guardErr != nil || !allowed {
 		f.Close()
-		return nil, fail("source_changed")
+		return nil, acquisitionError(guardErr, "source_changed")
 	}
 	closed := false
 	defer func() {
@@ -210,12 +210,15 @@ func (l *Lease) read(ctx context.Context, rel string, p *pinned, limit int64) ([
 	}
 	current, e = l.source.pin(rel, false)
 	if e != nil {
-		return nil, fail("source_changed")
+		return nil, acquisitionError(e, "source_changed")
 	}
 	ok = same(p.info, current.info)
 	ce = current.file.Close()
-	if allowed, guardErr := l.legacyGuard(p.info); !ok || guardErr != nil || !allowed {
+	if !ok {
 		return nil, fail("source_changed")
+	}
+	if allowed, guardErr := l.legacyGuard(p.info); guardErr != nil || !allowed {
+		return nil, acquisitionError(guardErr, "source_changed")
 	}
 	if ce != nil {
 		return nil, fail("close_failed")
@@ -283,8 +286,11 @@ func verifyRead(ctx context.Context, f *os.File, want []byte) error {
 // caller-authorized component stage, even if metadata has the same clock tick.
 func (l *Lease) verifyCaptured(ctx context.Context, rel string, p *pinned) error {
 	want, ok := l.contents[rel]
-	if allowed, guardErr := l.legacyGuard(p.info); !ok || guardErr != nil || !allowed {
+	if !ok {
 		return fail("source_changed")
+	}
+	if allowed, guardErr := l.legacyGuard(p.info); guardErr != nil || !allowed {
+		return acquisitionError(guardErr, "source_changed")
 	}
 	f, e := p.reopen(false)
 	if e != nil {
@@ -301,7 +307,7 @@ func (l *Lease) verifyCaptured(ctx context.Context, rel string, p *pinned) error
 	}
 	if allowed, guardErr := l.legacyGuard(opened); guardErr != nil || !allowed {
 		f.Close()
-		return fail("source_changed")
+		return acquisitionError(guardErr, "source_changed")
 	}
 	e = verifyRead(ctx, f, want)
 	after, se := f.Stat()
@@ -321,12 +327,15 @@ func (l *Lease) verifyCaptured(ctx context.Context, rel string, p *pinned) error
 	}
 	current, e := l.source.pin(rel, false)
 	if e != nil {
-		return fail("source_changed")
+		return acquisitionError(e, "source_changed")
 	}
 	ok = same(p.info, current.info)
 	ce = current.file.Close()
-	if allowed, guardErr := l.legacyGuard(p.info); !ok || guardErr != nil || !allowed {
+	if !ok {
 		return fail("source_changed")
+	}
+	if allowed, guardErr := l.legacyGuard(p.info); guardErr != nil || !allowed {
+		return acquisitionError(guardErr, "source_changed")
 	}
 	if ce != nil {
 		return fail("close_failed")
@@ -341,4 +350,13 @@ func fatalAcquisition(e error) error {
 		return e
 	}
 	return nil
+}
+
+// Preserve the error actually observed; do not replace it by probing the context
+// again, which could mask a previously detected source change.
+func acquisitionError(e error, fallback string) error {
+	if fatal := fatalAcquisition(e); fatal != nil {
+		return fatal
+	}
+	return fail(fallback)
 }

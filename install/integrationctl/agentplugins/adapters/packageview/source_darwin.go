@@ -53,8 +53,13 @@ func darwinFS(fd int) (unix.Statfs_t, error) {
 func openSource(name string, _ GeneratedStaging) (*source, error) {
 	return openSourceContext(context.Background(), name)
 }
-func openSourceContext(ctx context.Context, name string) (result *source, err error) {
-	s := &source{ctx: ctx, bindings: map[string]os.FileInfo{}, links: map[string]string{}, ancestors: map[string]bool{}}
+func openSourceContext(ctx context.Context, name string) (*source, error) {
+	return openSelectedDirectory(ctx, name, true, nil)
+}
+
+// Only trusted scratch selection follows the final directory symlink.
+func openSelectedDirectory(ctx context.Context, name string, nofollow bool, hooks *captureHooks) (result *source, err error) {
+	s := &source{ctx: ctx, hooks: hooks, bindings: map[string]os.FileInfo{}, links: map[string]string{}, ancestors: map[string]bool{}}
 	defer func() {
 		if result == nil {
 			_ = s.close()
@@ -72,7 +77,7 @@ func openSourceContext(ctx context.Context, name string) (result *source, err er
 		name = cwd + "/" + name
 	}
 	// No filepath.Clean: a/.. must visit a before ascending.
-	p, e := s.resolve(name, true, true)
+	p, e := s.resolve(name, nofollow, true)
 	if e != nil {
 		if fatal := fatalAcquisition(e); fatal != nil {
 			return nil, fatal
@@ -200,7 +205,10 @@ func (p *pinned) reopen(directory bool) (*os.File, error) {
 		return nil, fail("source_changed")
 	}
 	now, e := darwinStat(int(p.file.Fd()), p.name)
-	if e != nil || !same(p.info, now) {
+	if e != nil {
+		return nil, acquisitionError(e, "source_changed")
+	}
+	if !same(p.info, now) {
 		return nil, fail("source_changed")
 	}
 	flags := unix.O_RDONLY | unix.O_NOFOLLOW | unix.O_NONBLOCK | unix.O_NOCTTY | unix.O_CLOEXEC

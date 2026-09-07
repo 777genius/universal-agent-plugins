@@ -61,6 +61,31 @@ func TestLimitsAndSafeErrors(t *testing.T) {
 	if e := l.Close(); e != nil {
 		t.Fatal(e)
 	}
+	if e := l.Close(); e != nil {
+		t.Fatal("repeated zero-value Close", e)
+	}
+}
+
+// Remapping must retain the observed typed error, including wrapped cancellation,
+// and must not invent cancellation in place of an already observed edit.
+func TestAcquisitionErrorPreservesCause(t *testing.T) {
+	for _, cause := range []error{context.Canceled, context.DeadlineExceeded} {
+		original := &Error{Code: "canceled", cancellation: cause}
+		got := acquisitionError(original, "source_changed")
+		if got != original || !errors.Is(got, cause) {
+			t.Fatalf("lost cancellation: %v", got)
+		}
+	}
+	for _, code := range []string{"source_changed", "path_limit", "filesystem_unavailable"} {
+		original := fail(code)
+		if got := acquisitionError(original, "scratch_unavailable"); got != original {
+			t.Fatalf("lost observed %s: %v", code, got)
+		}
+	}
+	var safe *Error
+	if got := acquisitionError(errors.New("private host detail"), "source_changed"); !errors.As(got, &safe) || safe.Code != "source_changed" {
+		t.Fatalf("lost sanitized fallback: %v", got)
+	}
 }
 
 // GeneratedStaging is the only seam that can relax Darwin's read-only-mount
