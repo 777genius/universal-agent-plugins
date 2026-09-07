@@ -161,6 +161,17 @@ def disposable_runtime_environment(target):
     return env
 
 
+def profile_environment(home, target):
+    """Prepare the fresh profile before any installer probe or native test."""
+    env = {"HOME": str(home), "USERPROFILE": str(home)}
+    if target == "windows-amd64":
+        for key, directory in (("APPDATA", "Roaming"), ("LOCALAPPDATA", "Local")):
+            path = home / "AppData" / directory
+            path.mkdir(parents=True, exist_ok=False)
+            env[key] = str(path)
+    return env
+
+
 def find_git_bash(git):
     # GitHub runners may expose Git through bin, cmd, or mingw64/bin.
     # Search only the detected installation ancestors, never an ambient shell.
@@ -221,7 +232,7 @@ def main():
         evidence_root.mkdir()
         home = scratch / "home"
         home.mkdir()
-        env = {"HOME": str(home), "USERPROFILE": str(home), "TEMP": str(evidence_root), "TMP": str(evidence_root), "TMPDIR": str(evidence_root), "PATH": str(binary_dir), "LANG": "en_US.UTF-8", **disposable_runtime_environment(args.target), "AGENTPLUGINS_INSTALLER_BIN": str(installer), "AGENTPLUGINS_INSTALLER_COMMIT": identity["commit"], "AGENTPLUGINS_INSTALLER_TREE": identity["tree"], "AGENTPLUGINS_NATIVE_PROBE_BIN": str(probe), "AGENTPLUGINS_LINTAI_BIN": str(scanner), "AGENTPLUGINS_LINTAI_SHA256": scanner_evidence["binary_sha256"], "AGENTPLUGINS_LINTAI_ARCHIVE_SHA256": PINS[args.target]["lintai"][4].split(":", 1)[1]}
+        env = {**profile_environment(home, args.target), "TEMP": str(evidence_root), "TMP": str(evidence_root), "TMPDIR": str(evidence_root), "PATH": str(binary_dir), "LANG": "en_US.UTF-8", **disposable_runtime_environment(args.target), "AGENTPLUGINS_INSTALLER_BIN": str(installer), "AGENTPLUGINS_INSTALLER_COMMIT": identity["commit"], "AGENTPLUGINS_INSTALLER_TREE": identity["tree"], "AGENTPLUGINS_NATIVE_PROBE_BIN": str(probe), "AGENTPLUGINS_LINTAI_BIN": str(scanner), "AGENTPLUGINS_LINTAI_SHA256": scanner_evidence["binary_sha256"], "AGENTPLUGINS_LINTAI_ARCHIVE_SHA256": PINS[args.target]["lintai"][4].split(":", 1)[1]}
         if os.name == "nt":
             env["SystemRoot"] = os.environ["SystemRoot"]
             env["COMSPEC"] = str(Path(env["SystemRoot"]) / "System32/cmd.exe")

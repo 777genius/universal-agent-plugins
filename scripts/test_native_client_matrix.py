@@ -75,6 +75,30 @@ class NativeMatrixTests(unittest.TestCase):
                 matrix.provision_release(Path("."), Path("."), "darwin-arm64", "agentplugins-v1.2.3", "a" * 40, "777genius/universal-agent-plugins")
             download.assert_not_called()
 
+    def test_windows_profile_is_ready_for_pretest_probe_without_ambient_appdata(self):
+        with tempfile.TemporaryDirectory() as temp:
+            home = Path(temp) / "home"
+            home.mkdir()
+            ambient = {"APPDATA": str(Path(temp) / "foreign-roaming"), "LOCALAPPDATA": str(Path(temp) / "foreign-local")}
+            with patch.dict(matrix.os.environ, ambient):
+                env = matrix.profile_environment(home, "windows-amd64")
+                # Ordinary Python child only: exercise the exact profile passed
+                # to the pre-test probe without running a client or installer.
+                if matrix.os.name == "nt":
+                    env["SystemRoot"] = matrix.os.environ["SystemRoot"]
+                output = matrix.subprocess.check_output([sys.executable, "-c",
+                    "import os,json; from pathlib import Path; "
+                    "paths={k:os.environ[k] for k in ('HOME','USERPROFILE','APPDATA','LOCALAPPDATA')}; "
+                    "[(Path(paths[k])/'probe.txt').write_text('isolated') for k in ('APPDATA','LOCALAPPDATA')]; "
+                    "print(json.dumps(paths))"], env=env, encoding="utf-8", errors="strict")
+            measured = json.loads(output)
+            self.assertEqual(measured["HOME"], str(home))
+            self.assertEqual(measured["USERPROFILE"], str(home))
+            for key, subdir in (("APPDATA", "Roaming"), ("LOCALAPPDATA", "Local")):
+                self.assertEqual(measured[key], str(home / "AppData" / subdir))
+                self.assertEqual((Path(measured[key]) / "probe.txt").read_text(), "isolated")
+                self.assertFalse(Path(ambient[key]).exists())
+
     def test_git_bash_discovery_supports_runner_git_layouts(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp).resolve()
