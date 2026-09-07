@@ -335,7 +335,7 @@
     "buildTitle": "Créer des plugins",
     "standard": "Créez un paquet portable Agent Plugins 1.0 autour de plugin.json, avec skills/ et mcp.json facultatifs. La prise en charge dépend du paquet et de ses composants.",
     "preparation": "En préparation — non publié",
-    "unreleased": "Le CLI de création fondé sur le standard est en préparation et n’est pas encore publié. plugin-kit-ai 1.2.4, publié sur npm et PyPI, est l’outil historique v1, pas standard-first v2. Installer plugin-kit-ai@latest ne fournit pas le futur parcours de création.",
+    "unreleased": "Le CLI de création fondé sur le standard est en préparation et n’est pas encore publié. plugin-kit-ai 1.2.4, publié sur npm et PyPI, est l’outil historique v1, pas standard-first v2. Installer plugin-kit-ai{'@'}latest ne fournit pas le futur parcours de création.",
     "specLink": "Spécification Agent Plugins 1.0",
     "historyTitle": "Maintenance historique v1",
     "history": "Maintenez les projets plugin.yaml existants avec les instructions v1 ci-dessous. Ces modèles et sorties générées relèvent des parcours historiques v1 ; ils ne créent pas le nouveau parcours fondé sur le standard.",

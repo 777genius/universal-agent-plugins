@@ -335,7 +335,7 @@
     "buildTitle": "Crear plugins",
     "standard": "Crea un paquete portable Agent Plugins 1.0 basado en plugin.json, con skills/ y mcp.json opcionales. El soporte de cada cliente depende del paquete y sus componentes.",
     "preparation": "En preparación — sin publicar",
-    "unreleased": "El CLI de autoría basado en el estándar está en preparación y aún no se ha publicado. plugin-kit-ai 1.2.4, publicado en npm y PyPI, es la herramienta histórica v1, no standard-first v2. Instalar plugin-kit-ai@latest no proporciona el futuro flujo de autoría.",
+    "unreleased": "El CLI de autoría basado en el estándar está en preparación y aún no se ha publicado. plugin-kit-ai 1.2.4, publicado en npm y PyPI, es la herramienta histórica v1, no standard-first v2. Instalar plugin-kit-ai{'@'}latest no proporciona el futuro flujo de autoría.",
     "specLink": "Especificación Agent Plugins 1.0",
     "historyTitle": "Mantenimiento histórico de v1",
     "history": "Mantén los proyectos plugin.yaml existentes con las instrucciones v1 siguientes. Estas plantillas y salidas generadas son flujos históricos v1; no crean el nuevo flujo de autoría basado en el estándar.",

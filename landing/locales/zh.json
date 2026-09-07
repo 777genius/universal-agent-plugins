@@ -335,7 +335,7 @@
     "buildTitle": "构建插件",
     "standard": "以 plugin.json 为核心构建可移植的 Agent Plugins 1.0 包，可选包含 skills/ 和 mcp.json。客户端支持取决于包及其组件。",
     "preparation": "准备中 — 尚未发布",
-    "unreleased": "以标准为先的创作 CLI 正在准备中，尚未发布。npm 和 PyPI 上已发布的 plugin-kit-ai 1.2.4 是历史 v1 工具，并非 standard-first v2。安装 plugin-kit-ai@latest 不会提供未来的创作流程。",
+    "unreleased": "以标准为先的创作 CLI 正在准备中，尚未发布。npm 和 PyPI 上已发布的 plugin-kit-ai 1.2.4 是历史 v1 工具，并非 standard-first v2。安装 plugin-kit-ai{'@'}latest 不会提供未来的创作流程。",
     "specLink": "Agent Plugins 1.0 规范",
     "historyTitle": "历史 v1 维护",
     "history": "请使用以下 v1 说明维护现有 plugin.yaml 项目。这些模板和生成输出属于历史 v1 流程，不会创建新的标准优先创作流程。",

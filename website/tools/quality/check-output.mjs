@@ -127,13 +127,22 @@ if (!productionReadiness.includes("Pick The Right Path On Purpose")) {
 }
 
 const quickstart = await fs.readFile(path.join(distRoot, "en", "guide", "quickstart.html"), "utf8");
-for (const claim of ["Use plugins", "Build plugins", "Preparation", "unreleased", "Historical v1 maintenance", "plugin.json", "npx universal-agent-plugins add context7"]) {
+for (const claim of ["Use plugins", "Build plugins", "Preparation", "unreleased", "Historical v1 maintenance", "plugin.json"]) {
   if (!quickstart.includes(claim)) {
     console.error(`Quickstart page is missing its public availability claim: ${claim}`);
     hasError = true;
   }
 }
-if (quickstart.includes("Recommended Default") || quickstart.includes("npx plugin-kit-ai@latest add notion")) {
+// Shiki splits shell tokens across nested spans; concatenate their text without
+// adding spaces. Keep code blocks separate so unrelated examples cannot combine.
+const quickstartCommands = [...quickstart.matchAll(/<code\b[^>]*>([\s\S]*?)<\/code>/g)]
+  .map((match) => match[1].replace(/<\/?span\b[^>]*>/g, ""));
+if (!quickstartCommands.some((text) => text.includes("npx universal-agent-plugins add context7"))) {
+  console.error("Quickstart page is missing its public availability claim: npx universal-agent-plugins add context7");
+  hasError = true;
+}
+if (quickstart.includes("Recommended Default") || quickstart.includes("npx plugin-kit-ai@latest add notion") ||
+    quickstartCommands.some((text) => text.includes("npx plugin-kit-ai@latest add notion"))) {
   console.error("Quickstart still recommends the old v1 first-run journey.");
   hasError = true;
 }

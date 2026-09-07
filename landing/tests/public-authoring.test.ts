@@ -2,10 +2,31 @@ import assert from 'node:assert/strict';
 import { readFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
+import { createI18n } from 'vue-i18n';
 
 const root = new URL('../../', import.meta.url);
 const read = (path: string) => readFileSync(new URL(path, root), 'utf8');
 const locales = ['en', 'ru', 'es', 'fr', 'zh'];
+const renderedCopy = (locale: string) => {
+  const messages = JSON.parse(read(`landing/locales/${locale}.json`));
+  const { t } = createI18n({ legacy: false, locale, fallbackLocale: false,
+    messages: { [locale]: messages } }).global;
+  return Object.fromEntries(Object.keys(messages.publicAuthoring).map(key =>
+    [key, t(`publicAuthoring.${key}`)]));
+};
+
+test('all public authoring messages compile and render literal npm latest tags', (context) => {
+  const errors = context.mock.method(console, 'error', () => {});
+  for (const locale of locales) {
+    const source = JSON.parse(read(`landing/locales/${locale}.json`)).publicAuthoring;
+    const rendered = renderedCopy(locale);
+    for (const key of Object.keys(source)) {
+      assert.equal(rendered[key], source[key].replaceAll("{'@'}", '@'), `${locale}:${key}`);
+    }
+    assert.ok(rendered.unreleased.includes('plugin-kit-ai@latest'), locale);
+    assert.equal(errors.mock.callCount(), 0, `${locale}: message compilation errors`);
+  }
+});
 
 test('the authoring front door renders Use/Build and preserves its indexing policy', () => {
   const page = read('landing/pages/create-plugin.vue');
@@ -19,7 +40,7 @@ test('the authoring front door renders Use/Build and preserves its indexing poli
   assert.ok(page.includes('npx universal-agent-plugins add context7'));
   const keys = [...page.matchAll(/(?:t|usePageSeo)\('publicAuthoring\.([^']+)'/g)].map(m => m[1]);
   for (const locale of locales) {
-    const copy = JSON.parse(read(`landing/locales/${locale}.json`)).publicAuthoring;
+    const copy = renderedCopy(locale);
     for (const key of [...keys, 'intro']) assert.equal(typeof copy[key], 'string', `${locale}:${key}`);
     assert.ok(copy.standard.includes('plugin.json'));
     assert.ok(copy.unreleased.includes('1.2.4'));
@@ -41,7 +62,7 @@ test('the authoring front door renders Use/Build and preserves its indexing poli
 test('all quickstarts separate installation, preparation and historical commands', () => {
   for (const locale of locales) {
     const text = read(`website/source/${locale}/guide/quickstart.md`);
-    const copy = JSON.parse(read(`landing/locales/${locale}.json`)).publicAuthoring;
+    const copy = renderedCopy(locale);
     assert.ok(text.includes('canonicalId: "page:guide:quickstart"'));
     for (const key of ['standard', 'unreleased', 'versions', 'limitations', 'history']) {
       assert.ok(text.includes(copy[key]), `${locale}:${key}`);
