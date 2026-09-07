@@ -1,19 +1,6 @@
 import { computed } from 'vue';
 import type { LocaleCode } from '~/data/i18n';
-
-const docsLocalePattern = /\/(en|ru|es|fr|zh)(?=\/|$)/;
-
-const replaceDocsLocale = (url: string, locale: LocaleCode): string => {
-  if (!url) {
-    return url;
-  }
-
-  if (docsLocalePattern.test(url)) {
-    return url.replace(docsLocalePattern, `/${locale}`);
-  }
-
-  return url;
-};
+import { replaceDocsLocale } from '~/utils/docsLinks';
 
 export const useDocsLinks = () => {
   const { locale } = useI18n();
@@ -28,6 +15,7 @@ export const useDocsLinks = () => {
     replaceDocsLocale(
       config.public.docsUrl || 'https://777genius.github.io/universal-agent-plugins/docs/en/',
       currentLocale.value,
+      '',
     ),
   );
 
@@ -36,6 +24,7 @@ export const useDocsLinks = () => {
       config.public.quickstartUrl ||
         'https://777genius.github.io/universal-agent-plugins/docs/en/guide/quickstart.html',
       currentLocale.value,
+      'guide/quickstart',
     ),
   );
 
@@ -43,6 +32,7 @@ export const useDocsLinks = () => {
     replaceDocsLocale(
       'https://777genius.github.io/universal-agent-plugins/docs/en/reference/support-boundary.html',
       currentLocale.value,
+      'reference/support-boundary',
     ),
   );
 
@@ -50,6 +40,7 @@ export const useDocsLinks = () => {
     replaceDocsLocale(
       'https://777genius.github.io/universal-agent-plugins/docs/en/guide/build-custom-plugin-logic.html',
       currentLocale.value,
+      'guide/build-custom-plugin-logic',
     ),
   );
 
