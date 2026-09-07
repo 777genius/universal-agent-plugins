@@ -17,13 +17,28 @@ import (
 // inventory. It never interprets them. On fatal I/O/change/budget/cancel it closes
 // the lease and returns no partial Input. Component availability findings retain
 // safe siblings. Repeated successful calls return independent copies.
-func (l *Lease) Capture(ctx context.Context) (_ Input, err error) {
+func (l *Lease) Capture(ctx context.Context) (Input, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
+	var in Input
+	err := sourceIO(func() (err error) { in, err = l.capturePhase(ctx); return }, func() {
+		l.input = Input{}
+		_ = l.close()
+	})
+	if err != nil {
+		markCleanupFailure(err, l)
+		return Input{}, err
+	}
+	return in, nil
+}
+func (l *Lease) capturePhase(ctx context.Context) (_ Input, err error) {
 	if l.closed {
 		return Input{}, fail("lease_closed")
 	}
 	defer l.finish(&err)
+	if l.source != nil {
+		l.source.phaseContext(ctx)
+	}
 	if err = contextError(ctx); err != nil {
 		return Input{}, err
 	}
@@ -51,6 +66,9 @@ func (l *Lease) Capture(ctx context.Context) (_ Input, err error) {
 		rel := "skills/" + name
 		p, e := l.metadata(rel, false)
 		if e != nil {
+			if fatal := fatalAcquisition(e); fatal != nil {
+				return Input{}, fatal
+			}
 			d := Document{Path: rel + "/SKILL.md", State: stateOf(e)}
 			l.input.Skills = append(l.input.Skills, Skill{rel, d})
 			l.find("host", "skill_"+string(d.State), rel)
@@ -143,6 +161,9 @@ func (l *Lease) Capture(ctx context.Context) (_ Input, err error) {
 	if legacy != l.input.Legacy {
 		return Input{}, fail("source_changed")
 	}
+	if e := l.source.verifyBindings(); e != nil {
+		return Input{}, e
+	}
 	if l.input.Coverage.TreeComplete {
 		retained := make(map[string]Observation, len(l.input.Inventory))
 		for _, o := range l.input.Inventory {
@@ -212,7 +233,7 @@ func (l *Lease) list(ctx context.Context, rel string) ([]string, State, error) {
 	}
 	p, e := l.metadata(rel, false)
 	if e != nil {
-		return nil, stateOf(e), nil
+		return nil, stateOf(e), fatalAcquisition(e)
 	}
 	defer p.file.Close()
 	if !p.info.IsDir() {
@@ -351,6 +372,9 @@ func (l *Lease) walk(ctx context.Context, dir string, depth int) error {
 		}
 		p, e := l.metadata(rel, true)
 		if e != nil {
+			if fatal := fatalAcquisition(e); fatal != nil {
+				return fatal
+			}
 			l.omit(Observation{Path: rel, State: stateOf(e)}, "inventory_"+string(stateOf(e)))
 			continue
 		}
@@ -382,13 +406,25 @@ func (l *Lease) walk(ctx context.Context, dir string, depth int) error {
 			l.total += o.Size
 			q, e := l.source.pin(rel, false)
 			if e != nil {
+				if fatal := fatalAcquisition(e); fatal != nil {
+					p.file.Close()
+					return fatal
+				}
 				o.State = stateOf(e)
 			} else {
 				if !q.info.IsDir() && !q.info.Mode().IsRegular() {
 					o.State = WrongKind
 				}
-				if q.info.Mode().IsRegular() && !l.legacyGuard(q.info) {
-					o.State = Blocked
+				if q.info.Mode().IsRegular() {
+					allowed, e := l.legacyGuard(q.info)
+					if e != nil {
+						q.file.Close()
+						p.file.Close()
+						return e
+					}
+					if !allowed {
+						o.State = Blocked
+					}
 				}
 				if ce := q.file.Close(); ce != nil {
 					_ = p.file.Close()
@@ -402,7 +438,12 @@ func (l *Lease) walk(ctx context.Context, dir string, depth int) error {
 		case p.info.Mode().IsRegular():
 			o.Kind = "file"
 			o.Executable = p.info.Mode()&0111 != 0
-			if !l.legacyGuard(p.info) {
+			allowed, e := l.legacyGuard(p.info)
+			if e != nil {
+				p.file.Close()
+				return e
+			}
+			if !allowed {
 				o.State = Blocked
 			} else {
 				_, e := l.read(ctx, rel, p, l.limits.FileBytes)

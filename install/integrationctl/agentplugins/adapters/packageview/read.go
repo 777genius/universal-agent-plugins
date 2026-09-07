@@ -13,11 +13,13 @@ import (
 func (l *Lease) legacy() (State, error) {
 	p, e := l.source.pin("plugin/plugin.yaml", false)
 	if e != nil {
-		return stateOf(e), nil
+		return stateOf(e), fatalAcquisition(e)
 	}
 	defer p.file.Close()
 	if l.source.legacyInfo == nil {
 		l.source.legacyInfo = p.info
+	} else if !same(l.source.legacyInfo, p.info) {
+		return Blocked, fail("source_changed")
 	}
 	if p.info.Mode().IsRegular() {
 		return Present, nil
@@ -28,19 +30,19 @@ func (l *Lease) legacy() (State, error) {
 // legacyGuard checks both initial and current exact sentinel identity without
 // opening data. Hardlinks are withheld, even when the sentinel is absent, so a
 // canonical hardlink alias cannot be hidden by moving its directory entry.
-func (l *Lease) legacyGuard(info os.FileInfo) bool {
+func (l *Lease) legacyGuard(info os.FileInfo) (bool, error) {
 	if multipleLinks(info) {
-		return false
+		return false, nil
 	}
-	if l.source.legacyInfo != nil && os.SameFile(info, l.source.legacyInfo) {
-		return false
+	if l.source.legacyInfo != nil && sameIdentity(info, l.source.legacyInfo) {
+		return false, nil
 	}
 	p, e := l.source.pin("plugin/plugin.yaml", false)
 	if e != nil {
-		return stateOf(e) == Absent || stateOf(e) == WrongKind
+		return stateOf(e) == Absent || stateOf(e) == WrongKind, fatalAcquisition(e)
 	}
 	defer p.file.Close()
-	return !os.SameFile(info, p.info)
+	return !sameIdentity(info, p.info), nil
 }
 func (l *Lease) metadata(rel string, nofollow bool) (*pinned, error) {
 	if l.hooks != nil && l.hooks.metadata != nil {
@@ -57,6 +59,9 @@ func (l *Lease) document(ctx context.Context, rel string, limit int64) (Document
 	}
 	p, e := l.metadata(rel, false)
 	if e != nil {
+		if fatal := fatalAcquisition(e); fatal != nil {
+			return d, fatal
+		}
 		d.State = stateOf(e)
 		if d.State != Absent {
 			l.find("host", "document_"+string(d.State), rel)
@@ -69,7 +74,11 @@ func (l *Lease) document(ctx context.Context, rel string, limit int64) (Document
 		l.find("host", "document_wrong_kind", rel)
 		return d, nil
 	}
-	if !l.legacyGuard(p.info) {
+	allowed, e := l.legacyGuard(p.info)
+	if e != nil {
+		return d, e
+	}
+	if !allowed {
 		l.find("host", "excluded_alias", rel)
 		return d, nil
 	}
@@ -108,8 +117,9 @@ func (l *Lease) read(ctx context.Context, rel string, p *pinned, limit int64) ([
 	if l.hooks != nil && l.hooks.beforeDataOpen != nil {
 		l.hooks.beforeDataOpen(rel)
 	}
-	// Recheck the name before data access; a replacement cannot be opened because
-	// reopen uses the already-verified inode. Changes also invalidate the capture.
+	// Recheck before access. Linux/Windows retain their native pin guarantees;
+	// Darwin owns a parent/name and relies on the published quiescence interval.
+	// A later error cannot undo a forbidden Darwin open under hostile replacement.
 	current, e := l.source.pin(rel, false)
 	if e != nil {
 		return nil, fail("source_changed")
@@ -122,7 +132,7 @@ func (l *Lease) read(ctx context.Context, rel string, p *pinned, limit int64) ([
 	if ce != nil {
 		return nil, fail("close_failed")
 	}
-	if !l.legacyGuard(p.info) {
+	if allowed, guardErr := l.legacyGuard(p.info); guardErr != nil || !allowed {
 		return nil, fail("source_changed")
 	}
 	if e := contextError(ctx); e != nil {
@@ -139,6 +149,16 @@ func (l *Lease) read(ctx context.Context, rel string, p *pinned, limit int64) ([
 	f, e := p.reopen(false)
 	if e != nil {
 		return nil, e
+	}
+	defer f.Close() // also covers a panic during post-open legacy authorization
+	opened, statErr := f.Stat()
+	if statErr != nil {
+		f.Close()
+		return nil, fail("source_changed")
+	}
+	if allowed, guardErr := l.legacyGuard(opened); guardErr != nil || !allowed {
+		f.Close()
+		return nil, fail("source_changed")
 	}
 	closed := false
 	defer func() {
@@ -194,7 +214,7 @@ func (l *Lease) read(ctx context.Context, rel string, p *pinned, limit int64) ([
 	}
 	ok = same(p.info, current.info)
 	ce = current.file.Close()
-	if !ok || !l.legacyGuard(p.info) {
+	if allowed, guardErr := l.legacyGuard(p.info); !ok || guardErr != nil || !allowed {
 		return nil, fail("source_changed")
 	}
 	if ce != nil {
@@ -263,12 +283,25 @@ func verifyRead(ctx context.Context, f *os.File, want []byte) error {
 // caller-authorized component stage, even if metadata has the same clock tick.
 func (l *Lease) verifyCaptured(ctx context.Context, rel string, p *pinned) error {
 	want, ok := l.contents[rel]
-	if !ok || !l.legacyGuard(p.info) {
+	if allowed, guardErr := l.legacyGuard(p.info); !ok || guardErr != nil || !allowed {
 		return fail("source_changed")
 	}
 	f, e := p.reopen(false)
 	if e != nil {
+		if fatal := fatalAcquisition(e); fatal != nil {
+			return fatal
+		}
 		return fail("verification_failed")
+	}
+	defer f.Close() // also covers a panic during post-open legacy authorization
+	opened, statErr := f.Stat()
+	if statErr != nil {
+		f.Close()
+		return fail("source_changed")
+	}
+	if allowed, guardErr := l.legacyGuard(opened); guardErr != nil || !allowed {
+		f.Close()
+		return fail("source_changed")
 	}
 	e = verifyRead(ctx, f, want)
 	after, se := f.Stat()
@@ -292,11 +325,20 @@ func (l *Lease) verifyCaptured(ctx context.Context, rel string, p *pinned) error
 	}
 	ok = same(p.info, current.info)
 	ce = current.file.Close()
-	if !ok || !l.legacyGuard(p.info) {
+	if allowed, guardErr := l.legacyGuard(p.info); !ok || guardErr != nil || !allowed {
 		return fail("source_changed")
 	}
 	if ce != nil {
 		return fail("close_failed")
+	}
+	return nil
+}
+
+// Typed acquisition failures cannot be downgraded to component availability.
+func fatalAcquisition(e error) error {
+	var safe *Error
+	if errors.As(e, &safe) {
+		return e
 	}
 	return nil
 }

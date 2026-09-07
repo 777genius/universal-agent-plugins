@@ -671,6 +671,35 @@ so `init`, `test`, and `publish` do not depend on methods they do not use.
 
 ## Standard project model
 
+### Controlling Darwin reader clarification (2026-09-07)
+
+Writable macOS local authoring uses `packageview-local-darwin-v2` on supported
+local APFS. During each Reader.Open-through-Lease.Close acquisition interval,
+the source tree and ancestor bindings establishing its selected location and
+containment must remain quiescent, including the gap between core decoding and
+component capture. Static package content remains untrusted. The reader retains
+metadata-first type checks, legacy identity/alias exclusion, contained resolution,
+bounded private capture, offline operation and observed-change failure. It does
+not protect acquisition from an active concurrent source or ancestor writer.
+Violation can cause a forbidden open or an out-of-scope/excluded read before an
+error; repeated checks do not equal Linux's inode-bound acquisition or prove an
+atomic source revision. Mutation-plan rechecks, public stage validation, installer
+invariants and full native macOS release gates remain required.
+
+The delegated practical decision selects ordinary already-mounted local APFS
+with per-thread materialization OFF via a small Darwin arm64 libSystem cgo
+binding. No-cgo and unsupported hosts reject safely before acquisition. This
+changes the authoring concurrency boundary explicitly; installer safety and
+Linux/Windows profiles remain unchanged. Full scope, residual forbidden-open
+risk, bounds and native proof requirements are recorded in
+[ADR 0006](./adr/0006-standard-first-authoring.md#darwin-acquisition-clarification-2026-09-07-pr-1).
+PR 1 owns reader/contracts/focused tests and remains unmerged pending native
+proof. PR 2 owns actual public composition, native producers/qualification and
+user help; cross-compilation or read-only APFS tests do not prove writable
+support. All original MVP, public stage validation, Skills transaction, both
+entrypoints, installer planner and wrapper/revision gates remain required.
+
+
 Introduce a thin authoring value around the canonical `PackageEnvelope` rather
 than a second manifest model. The value must distinguish the mutable source
 tree from the sealed snapshot that was actually parsed.
@@ -2147,6 +2176,17 @@ project while it is migrated.
   global conditional spread across commands.
 
 ### Filesystem and concurrency
+
+For Darwin authoring, the explicit quiescent interval above controls concurrent
+source/ancestor writes. Keep the project and selected directory bindings unchanged
+from before Open until Close finishes, including core decoding gaps. Finish saves,
+builds, sync and checkouts first; edits between commands remain normal. Unrelated
+outer siblings may change. No timestamp/identity observation proves no ABA.
+Static containment/type/legacy checks below remain mandatory within that boundary.
+Observed changes fail fatally and discard evidence, never authorize retry or a
+narrow component finding. Native proof remains pending until measured on writable
+APFS with the real materialization policy and declared OS floor.
+
 
 - package root is explicit and real;
 - no path traversal, symlink escape, junction, reparse point, device, or FIFO;

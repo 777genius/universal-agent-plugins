@@ -55,14 +55,14 @@ func nativeFixture(t *testing.T, build func(string)) string {
 	run("attach", "-readonly", "-nobrowse", "-noautoopen", "-mountpoint", mount, dmg)
 	return root
 }
-func TestDarwinWritableProfileRejected(t *testing.T) {
-	s, e := openSource(t.TempDir(), GeneratedStaging{})
-	if e == nil {
-		s.close()
-		t.Fatal("writable filesystem accepted")
+func TestDarwinWritableProfileAdmission(t *testing.T) {
+	root, scratch := writableFixture(t)
+	l, e := (Reader{TempDir: scratch}).Open(context.Background(), root)
+	if e != nil {
+		t.Fatalf("UNPROVEN writable admission: %v", e)
 	}
-	var safe *Error
-	if !errors.As(e, &safe) || safe.Code != "filesystem_unavailable" {
+	defer l.Close()
+	if _, e = l.Capture(context.Background()); e != nil {
 		t.Fatal(e)
 	}
 }
