@@ -34,6 +34,10 @@ export async function runLocaleSmoke(browser, base, artifactsRoot) {
         await page.reload({ waitUntil: "networkidle" });
         await visibleTarget(id);
         await goto(`/${locale}/use/`);
+        // goto() only waits for networkidle, not VitePress client-router
+        // rendering; page.evaluate has no locator auto-wait, so query the
+        // node through a real wait instead of racing hydration.
+        await page.locator(".vp-doc").first().waitFor({ state: "visible" });
         // A real anchor exercises VitePress's installed client router.
         await page.evaluate(href => {
           const a = document.createElement("a"); a.href = href; a.id = "locale-browser-probe";
@@ -60,6 +64,7 @@ export async function runLocaleSmoke(browser, base, artifactsRoot) {
       await visibleTarget(outlineId);
       await page.setViewportSize({ width: 1440, height: 900 });
       await goto(route);
+      await page.locator(".vp-doc").first().waitFor({ state: "visible" });
       // No current archive has nested details. This explicit browser fixture
       // verifies future nested disclosures without changing historical bytes.
       await page.evaluate(() => {
