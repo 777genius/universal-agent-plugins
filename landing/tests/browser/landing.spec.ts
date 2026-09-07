@@ -488,6 +488,45 @@ test('sitemap lists only live canonical pages and unstable routes stay out of th
   await expect(page.locator('meta[name="robots"]')).toHaveAttribute('content', 'noindex, follow');
 });
 
+test('the authoring frontdoor distinguishes Use from unreleased Build and links to real docs journeys', async ({
+  page,
+}) => {
+  await page.goto('./create-plugin');
+  await expect(page.locator('#authoring-hero h1')).toHaveText('Use plugins. Build plugins.');
+
+  const useCard = page.locator('.authoring-journeys-section__card--use');
+  await expect(useCard.locator('.authoring-journeys-section__card-title')).toHaveText(
+    'Use plugins',
+  );
+  await expect(useCard.locator('.authoring-journeys-section__badge')).toHaveText('Available now');
+  await expect(useCard.locator('.authoring-journeys-section__link')).toHaveAttribute(
+    'href',
+    'https://777genius.github.io/universal-agent-plugins/docs/en/use/',
+  );
+
+  const buildCard = page.locator('.authoring-journeys-section__card--build');
+  await expect(buildCard.locator('.authoring-journeys-section__card-title')).toHaveText(
+    'Build plugins',
+  );
+  await expect(buildCard.locator('.authoring-journeys-section__badge')).toHaveText(
+    'Unreleased preview',
+  );
+  await expect(buildCard.locator('.authoring-journeys-section__link')).toHaveAttribute(
+    'href',
+    'https://777genius.github.io/universal-agent-plugins/docs/en/build/',
+  );
+  // The unreleased preview must explicitly disclaim an npm announcement, not
+  // silently omit the topic.
+  await expect(buildCard).toContainText('not an announcement that');
+
+  await expect(
+    page.locator('.authoring-journeys-section__historical a'),
+  ).toHaveAttribute(
+    'href',
+    'https://777genius.github.io/universal-agent-plugins/docs/en/legacy/v1/',
+  );
+});
+
 test('an unsupported localized route is never selected for browser-language visitors', async ({
   browser,
   baseURL,
