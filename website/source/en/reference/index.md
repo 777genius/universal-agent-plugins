@@ -52,3 +52,5 @@ outline: false
     <p>Check what a healthy plugin repo looks like and which files are authored versus generated.</p>
   </a>
 </div>
+
+- the observed UAP native client evidence: [UAP client compatibility evidence](/en/reference/client-compatibility)
