@@ -17,7 +17,7 @@ type NotifyEvent struct {
 
 // Response represents a successful acknowledgement of a Codex event
 // (Notify and the observation-style lifecycle hooks Stop, SubagentStop,
-// and PermissionRequest).
+// PreToolUse, and PermissionRequest).
 type Response struct{}
 
 // Continue acknowledges the event and exits successfully with empty output.

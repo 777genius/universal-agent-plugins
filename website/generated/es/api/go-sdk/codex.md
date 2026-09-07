@@ -151,7 +151,7 @@ OnSubagentStop registers a handler for the Codex SubagentStop.
 
 ## type Response
 
-Response represents a successful acknowledgement of a Codex event \(Notify and the observation\-style lifecycle hooks Stop, SubagentStop, and PermissionRequest\).
+Response represents a successful acknowledgement of a Codex event \(Notify and the observation\-style lifecycle hooks Stop, SubagentStop, PreToolUse, and PermissionRequest\).
 
 ```go
 type Response struct{}
