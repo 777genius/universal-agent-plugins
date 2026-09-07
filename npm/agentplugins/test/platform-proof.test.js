@@ -81,7 +81,7 @@ test("platform proof requires the reviewed upstream context7 distribution in sea
         { product_id: "other", distribution_id: "owner/other" },
         {
           product_id: "context7",
-          install_selector: "upstash/context7",
+          install_selector: "context7",
           distribution_id: "upstash/context7",
           distribution_kind: "upstream",
           trust_state: "reviewed",
@@ -93,6 +93,8 @@ test("platform proof requires the reviewed upstream context7 distribution in sea
   assert.doesNotThrow(() => assertContext7Search(valid));
   for (const invalid of [
     { ...valid, data: { results: [] } },
+    { ...valid, data: { results: [{ ...valid.data.results[1], install_selector: "other" }] } },
+    { ...valid, data: { results: [{ ...valid.data.results[1], install_selector: "discovery:upstash/context7//plugins/agent-plugins/context7" }] } },
     { ...valid, data: { results: [{ ...valid.data.results[1], distribution_id: "777genius/context7" }] } },
     { ...valid, data: { results: [{ ...valid.data.results[1], distribution_kind: "community_bridge" }] } },
     { ...valid, data: { results: [{ ...valid.data.results[1], trust_state: "discovered" }] } },
