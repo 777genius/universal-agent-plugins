@@ -2597,7 +2597,7 @@
     "surface": "guide",
     "localeStrategy": "mirrored",
     "title": "Quickstart",
-    "summary": "The fastest recommended path to a working plugin-kit-ai project.",
+    "summary": "Install available plugins or prepare a portable Agent Plugins 1.0 package.",
     "stability": "public-stable",
     "maturity": "stable",
     "publicVisibility": "public",
