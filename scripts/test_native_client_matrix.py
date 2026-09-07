@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 import tarfile
 import tempfile
+import sys
 import unittest
 from unittest.mock import patch
 import zipfile
@@ -43,7 +44,16 @@ class NativeMatrixTests(unittest.TestCase):
                 {"tag_name": "agentplugins-v1.2.3", "draft": False, "prerelease": False},
                 {"sha": "a" * 40, "commit": {"tree": {"sha": "b" * 40}}},
                 {"version": "1.2.3", "manifest_sha256": "c" * 64, "assets": {"darwin-arm64": {"file": asset, "sha256": "d" * 64, "size": 9}}}, [], [], []]
-            with patch.object(matrix.subprocess, "check_output", side_effect=[json.dumps(r) for r in responses]) as check, patch.object(matrix.subprocess, "run", side_effect=download):
+            # Simulate the Windows ANSI locale while real child processes emit
+            # UTF-8 JSON. Cyrillic я contains 0x8f, undefined in cp1252.
+            payloads = iter(json.dumps({**r, "unicode_note": "я 😀"} if isinstance(r, dict) else r,
+                                       ensure_ascii=False).encode("utf-8") for r in responses)
+            real_run = matrix.subprocess.run
+            def child_output(command, **kwargs):
+                payload = next(payloads)
+                return real_run([sys.executable, "-c", "import sys; sys.stdout.buffer.write(" + repr(payload) + ")"],
+                                stdout=matrix.subprocess.PIPE, check=True, **kwargs).stdout
+            with patch.object(matrix.subprocess, "_text_encoding", return_value="cp1252"), patch.object(matrix.subprocess, "check_output", side_effect=child_output) as check, patch.object(matrix.subprocess, "run", side_effect=download):
                 installer, evidence = matrix.provision_release(Path("."), directory, "darwin-arm64", "agentplugins-v1.2.3", "a" * 40, "777genius/universal-agent-plugins")
             self.assertEqual(installer.read_bytes(), b"installer")
             self.assertEqual(evidence["commit"], "a" * 40)
@@ -54,6 +64,40 @@ class NativeMatrixTests(unittest.TestCase):
                 self.assertEqual(command[command.index("--source-digest") + 1], "a" * 40)
                 self.assertIn("github.com/777genius/universal-agent-plugins/.github/workflows/agentplugins-release.yml", command)
             self.assertEqual(set(evidence["attestations"]), {asset, "checksums.txt", "release-manifest.json"})
+
+    def test_release_json_invalid_utf8_fails_before_download(self):
+        real_run = matrix.subprocess.run
+        def child_output(command, **kwargs):
+            return real_run([sys.executable, "-c", "import sys; sys.stdout.buffer.write(b'\\xff')"],
+                            stdout=matrix.subprocess.PIPE, check=True, **kwargs).stdout
+        with patch.object(matrix.subprocess, "_text_encoding", return_value="cp1252"), patch.object(matrix.subprocess, "check_output", side_effect=child_output), patch.object(matrix.subprocess, "run") as download:
+            with self.assertRaises(UnicodeDecodeError):
+                matrix.provision_release(Path("."), Path("."), "darwin-arm64", "agentplugins-v1.2.3", "a" * 40, "777genius/universal-agent-plugins")
+            download.assert_not_called()
+
+    def test_windows_profile_is_ready_for_pretest_probe_without_ambient_appdata(self):
+        with tempfile.TemporaryDirectory() as temp:
+            home = Path(temp) / "home"
+            home.mkdir()
+            ambient = {"APPDATA": str(Path(temp) / "foreign-roaming"), "LOCALAPPDATA": str(Path(temp) / "foreign-local")}
+            with patch.dict(matrix.os.environ, ambient):
+                env = matrix.profile_environment(home, "windows-amd64")
+                # Ordinary Python child only: exercise the exact profile passed
+                # to the pre-test probe without running a client or installer.
+                if matrix.os.name == "nt":
+                    env["SystemRoot"] = matrix.os.environ["SystemRoot"]
+                output = matrix.subprocess.check_output([sys.executable, "-c",
+                    "import os,json; from pathlib import Path; "
+                    "paths={k:os.environ[k] for k in ('HOME','USERPROFILE','APPDATA','LOCALAPPDATA')}; "
+                    "[(Path(paths[k])/'probe.txt').write_text('isolated') for k in ('APPDATA','LOCALAPPDATA')]; "
+                    "print(json.dumps(paths))"], env=env, encoding="utf-8", errors="strict")
+            measured = json.loads(output)
+            self.assertEqual(measured["HOME"], str(home))
+            self.assertEqual(measured["USERPROFILE"], str(home))
+            for key, subdir in (("APPDATA", "Roaming"), ("LOCALAPPDATA", "Local")):
+                self.assertEqual(measured[key], str(home / "AppData" / subdir))
+                self.assertEqual((Path(measured[key]) / "probe.txt").read_text(), "isolated")
+                self.assertFalse(Path(ambient[key]).exists())
 
     def test_git_bash_discovery_supports_runner_git_layouts(self):
         with tempfile.TemporaryDirectory() as temp:
