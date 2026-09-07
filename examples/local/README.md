@@ -1,5 +1,18 @@
 # Repo-Local Plugin Examples
 
+> **Historical plugin-kit-ai v1 managed examples; baseline 1.2.4.**
+> Commands, stability labels, and support claims below describe the preserved v1
+> workflow. These are not root `plugin.json` starters for the standard MVP.
+> Project migration is not available in v2 yet. Maintain legacy projects using
+> the v1 1.2.4 command set. See [historical context](../../website/source/en/legacy/v1/index.md)
+> and the [prepared, unreleased Build guide](../../website/source/en/build/index.md).
+> Public activation remains gated; no v2 npm availability is implied.
+
+All three examples have `plugin/plugin.yaml` targeting `codex-runtime`.
+Their Python, Node, and TypeScript helpers demonstrate historical launcher
+behavior, not the future offline MCP/Skill authoring loop. Preserve those
+helpers and dependencies when consulting these examples.
+
 These examples are reference implementations for the fast local plugin entrance layer.
 For copy-first starter repos, see [../starters/README.md](../starters/README.md).
 

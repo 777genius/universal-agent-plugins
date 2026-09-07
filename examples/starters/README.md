@@ -1,5 +1,18 @@
 # Canonical Starter Repos
 
+> **Historical plugin-kit-ai v1 managed examples; baseline 1.2.4.**
+> Commands, stability labels, and support claims below describe the preserved v1
+> workflow. These are not root `plugin.json` starters for the standard MVP.
+> Project migration is not available in v2 yet. Maintain legacy projects using
+> the v1 1.2.4 command set. See [historical context](../../website/source/en/legacy/v1/index.md)
+> and the [prepared, unreleased Build guide](../../website/source/en/build/index.md).
+> Public activation remains gated; no v2 npm availability is implied.
+
+All eight starters have `plugin/plugin.yaml`: the four Codex starters target
+`codex-runtime`, and the four Claude starters target Claude. Shared-package
+variants preserve their runtime dependencies. Claude Skills and hooks do not
+turn these managed projects into standard packages; hooks are client-specific.
+
 These starter repos are the fastest way to get one working plugin repo that can later expand to more supported outputs.
 
 Use them when you want to pick a stack, copy a template, get to the first green run quickly, and keep the repo open for later expansion.
@@ -7,11 +20,12 @@ For deeper contract examples, see [../local/README.md](../local/README.md) and [
 
 ## Install `plugin-kit-ai`
 
-Use the supported CLI install order:
+The historical channel order is preserved below. Use an exact v1 1.2.4
+executable; Homebrew, fallback, and the action tag are not exact version pins:
 
 1. Homebrew: `brew install 777genius/homebrew-plugin-kit-ai/plugin-kit-ai`
-2. npm: `npm i -g plugin-kit-ai` or `npx plugin-kit-ai@latest ...`
-3. pipx (when that release was published to PyPI): `pipx install plugin-kit-ai` or `pipx run plugin-kit-ai version`
+2. npm: `npm i -g plugin-kit-ai@1.2.4` or `npx plugin-kit-ai@1.2.4 ...`
+3. pipx (when that release was published to PyPI): `pipx install plugin-kit-ai==1.2.4` or `pipx run --spec plugin-kit-ai==1.2.4 plugin-kit-ai version`
 4. Verified fallback: `curl -fsSL https://raw.githubusercontent.com/777genius/plugin-kit-ai/main/scripts/install.sh | sh`
 5. CI: `777genius/universal-agent-plugins/setup-plugin-kit-ai@v1`
 
@@ -121,4 +135,4 @@ Supported alternatives still exist, but they are not encoded into the starter re
 
 - Shared-package variants are for teams that already know they want `plugin-kit-ai-runtime` as a reusable dependency instead of vendored helper files.
 - Starter choice is about the first correct path, not the final limit of the product.
-- If the repo later needs a wider scope, see [One Project, Multiple Targets](https://777genius.github.io/plugin-kit-ai/docs/en/guide/one-project-multiple-targets.html).
+- If the repo later needs a wider scope, see [One Project, Multiple Targets](https://github.com/777genius/universal-agent-plugins/blob/9beca10448ac50fbe526a52101d1433a12471980/website/source/en/guide/one-project-multiple-targets.md).
