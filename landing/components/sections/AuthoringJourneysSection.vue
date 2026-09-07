@@ -2,6 +2,12 @@
 const { t } = useI18n();
 const { docsUrl } = useDocsLinks();
 
+// docsUrl only fallback-checks docPath '' (the docs root), which has real
+// content in every locale, so appending a suffix here bypasses locale
+// fallback for use/build/legacy/v1 specifically. Harmless today because
+// landing has no locale-aware routing yet (currentLocale is always 'en'),
+// but if that changes, route these through useDocsLinks()'s fallback-aware
+// resolution with the correct docPath instead of string concatenation.
 const base = computed(() => docsUrl.value.replace(/\/+$/, '') + '/');
 const useGuideUrl = computed(() => `${base.value}use/`);
 const buildGuideUrl = computed(() => `${base.value}build/`);
