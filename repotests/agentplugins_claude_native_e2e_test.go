@@ -694,27 +694,8 @@ func claudeAssertNoWindowsStdio(t *testing.T, root, installPath string, names ..
 	if err != nil {
 		t.Fatal(err)
 	}
-	var config struct {
-		Servers map[string]map[string]any `json:"mcpServers"`
-	}
-	if err := json.Unmarshal(body, &config); err != nil {
+	if err := claudeWindowsMCPProjection(body, names...); err != nil {
 		t.Fatal(err)
-	}
-	if len(config.Servers) == 0 {
-		t.Fatal("missing projected HTTP inventory")
-	}
-	for _, name := range names {
-		if _, ok := config.Servers[name]; ok {
-			t.Fatalf("unsupported stdio projected: %s", name)
-		}
-	}
-	for name, server := range config.Servers {
-		if server["command"] != nil || server["args"] != nil || server["type"] == "stdio" {
-			t.Fatalf("stdio command projected: %s %+v", name, server)
-		}
-	}
-	if strings.Contains(string(body), "--internal-stdio-v1") {
-		t.Fatal("managed stdio launcher projected")
 	}
 	err = filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
@@ -749,6 +730,61 @@ func TestClaudeWindowsStdioPlan(t *testing.T) {
 			}
 			if err := claudeWindowsStdioPlan(r, "default", "explicit"); (err != nil) != tc.wantError {
 				t.Fatalf("classification error = %v, wantError = %v", err, tc.wantError)
+			}
+		})
+	}
+}
+
+// Claude's generated .mcp.json is a flat server-name map, not the portable
+// package mcp.json envelope. Fail closed on wrappers and non-network entries.
+func claudeWindowsMCPProjection(body []byte, excluded ...string) error {
+	var servers map[string]map[string]any
+	if err := json.Unmarshal(body, &servers); err != nil {
+		return err
+	}
+	if len(servers) == 0 {
+		return fmt.Errorf("missing projected HTTP inventory")
+	}
+	for _, name := range excluded {
+		if _, ok := servers[name]; ok {
+			return fmt.Errorf("unsupported stdio projected: %s", name)
+		}
+	}
+	for name, server := range servers {
+		if server["command"] != nil || server["args"] != nil || server["type"] == "stdio" {
+			return fmt.Errorf("stdio command projected: %s %+v", name, server)
+		}
+		url, _ := server["url"].(string)
+		if (server["type"] != "http" && server["type"] != "sse") || url == "" {
+			return fmt.Errorf("invalid projected network server: %s %+v", name, server)
+		}
+	}
+	if strings.Contains(string(body), "--internal-stdio-v1") {
+		return fmt.Errorf("managed stdio launcher projected")
+	}
+	return nil
+}
+
+func TestClaudeWindowsMCPProjection(t *testing.T) {
+	// Exact flat shape written by projectClaudeMCP; streamable-http becomes http.
+	const httpProjection = `{"http":{"type":"http","url":"http://127.0.0.1:1234/mcp"}}`
+	for _, tc := range []struct {
+		name, body string
+		wantError  bool
+	}{
+		{"flat generated HTTP", httpProjection, false},
+		{"flat generated HTTP and SSE", `{"remote-http":{"type":"http","url":"http://127.0.0.1:9/mcp"},"remote-sse":{"type":"sse","url":"http://127.0.0.1:9/sse"}}`, false},
+		{"portable wrapper", `{"mcpServers":` + httpProjection + `}`, true},
+		{"empty", `{}`, true},
+		{"excluded stdio name", `{"default":{"type":"http","url":"http://127.0.0.1/mcp"}}`, true},
+		{"implicit stdio", `{"other":{"command":"sh","args":["-c","cat"]}}`, true},
+		{"explicit stdio", `{"other":{"type":"stdio"}}`, true},
+		{"hidden command", `{"http":{"type":"http","url":"http://127.0.0.1/mcp","command":"sh"}}`, true},
+		{"helper reference", `{"http":{"type":"http","url":"http://127.0.0.1/--internal-stdio-v1"}}`, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := claudeWindowsMCPProjection([]byte(tc.body), "default", "explicit", "local"); (err != nil) != tc.wantError {
+				t.Fatalf("projection error = %v, wantError = %v", err, tc.wantError)
 			}
 		})
 	}
