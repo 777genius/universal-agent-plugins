@@ -51,7 +51,7 @@ func TestStarterTemplateSyncContractFilesStayAligned(t *testing.T) {
 	mustContain(t, workflow, "- all-runtime-package")
 	// Preserved v1 starters remain discoverable without being advertised as
 	// root plugin.json templates for the unreleased standard authoring MVP.
-	_, historicalReadme, found := strings.Cut(rootReadme, "### Historical authoring and development\n")
+	_, historicalReadme, found := cutHistoricalReadme(rootReadme)
 	if !found {
 		t.Fatal("README missing historical authoring boundary")
 	}

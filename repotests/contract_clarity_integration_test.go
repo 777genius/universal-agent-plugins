@@ -220,7 +220,7 @@ func TestContractClarity_RuntimeMetadataAndDocsStayAligned(t *testing.T) {
 
 	// The root README separates the installer and unreleased standard preview
 	// from preserved v1 capabilities. Keep legacy claims inside that boundary.
-	currentReadme, historicalReadme, found := strings.Cut(string(rootReadme), "### Historical authoring and development\n")
+	currentReadme, historicalReadme, found := cutHistoricalReadme(string(rootReadme))
 	if !found {
 		t.Fatal("README missing historical authoring boundary")
 	}
