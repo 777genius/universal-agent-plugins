@@ -490,11 +490,45 @@ jobs:
           verifyAuthoringRelease(options);
           fs.appendFileSync(process.env.GITHUB_ENV, `PAIRED_OUTPUT=${root}\n`);
           NODE
+      - name: Bind preparation invocation outside unchanged frozen input bytes
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const c = require('./npm/agentplugins/scripts/dual-authoring-candidate');
+          const n = require('./npm/agentplugins/scripts/authoring-native-qualification');
+          const root = process.env.PAIRED_OUTPUT;
+          const pairBody = c.readFile(path.join(root, 'pair-prepared.json'));
+          const pair = JSON.parse(pairBody);
+          const pins = { identity: pair.identity, candidate_sha256: pair.candidate_sha256,
+            pair_marker_sha256: c.digest(pairBody), products: pair.products };
+          // Input provenance only: no future qualification or npm tarball hash.
+          // The external provider artifact ID/digest is acquired after upload.
+          // Keep candidate-identity.json and all eighteen input subjects intact.
+          const before = require('./npm/agentplugins/scripts/authoring-release')
+            .verifyProjectedPair(root, pins).subjects.map(x => [x.file, x.sha256]);
+          n.writePreparation(root, pins, {
+            repository: process.env.GITHUB_REPOSITORY,
+            workflow: '.github/workflows/agentplugins-release.yml',
+            source: process.env.SOURCE_SHA,
+            workflow_sha: process.env.WORKFLOW_SHA,
+            run_id: Number(process.env.GITHUB_RUN_ID),
+            run_attempt: Number(process.env.GITHUB_RUN_ATTEMPT)
+          });
+          const after = require('./npm/agentplugins/scripts/authoring-release')
+            .verifyProjectedPair(root, pins).subjects.map(x => [x.file, x.sha256]);
+          require('node:assert/strict').deepEqual(after, before);
+          fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY,
+            'Preparation receipt binds input provenance only. Native and public acceptance remain required.\n');
+          NODE
       - name: Upload candidate identity and both prepared projections together
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
         with:
           name: authoring-preparation-${{ inputs.source_sha }}
           path: |
+            ${{ env.PAIRED_OUTPUT }}/preparation-run.json
             ${{ env.PAIRED_OUTPUT }}/candidate-identity.json
             ${{ env.PAIRED_OUTPUT }}/candidate/candidate.json
             ${{ env.PAIRED_OUTPUT }}/pair-prepared.json

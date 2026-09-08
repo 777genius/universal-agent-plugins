@@ -1,0 +1,166 @@
+name: Frozen Authoring Native Observations
+
+# N1 only. No automatic event, source build, promotion, signing or publication.
+# Local closed receipts are not authenticated provider admission. Whole-OS
+# observation and real installer services remain required execution prerequisites.
+on:
+  workflow_dispatch:
+    inputs:
+      source_sha:
+        description: Exact prepared source and producer workflow revision
+        required: true
+        type: string
+      preparation_run:
+        description: Exact completed preparation run ID
+        required: true
+        type: string
+      preparation_attempt:
+        description: Exact completed preparation attempt
+        required: true
+        type: string
+      artifact_id:
+        description: Exact preparation artifact ID, never a name or latest selector
+        required: true
+        type: string
+      artifact_sha256:
+        description: Independently retained provider ZIP digest
+        required: true
+        type: string
+      receipt_sha256:
+        description: Independently retained preparation receipt digest
+        required: true
+        type: string
+      pair_sha256:
+        description: Independently retained pair marker digest
+        required: true
+        type: string
+      candidate_sha256:
+        description: Independently retained candidate digest
+        required: true
+        type: string
+      projection_pins:
+        description: Exact two-product manifest and checksum pins as bounded JSON
+        required: true
+        type: string
+      host_go_sha256:
+        description: Independent Linux amd64 Go 1.25.13 executable digest
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: frozen-native-${{ inputs.source_sha }}-${{ inputs.artifact_id }}
+  cancel-in-progress: false
+jobs:
+  linux-amd64:
+    if: ${{ github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    permissions:
+      contents: read
+      actions: read
+    env:
+      PATH: /usr/local/bin:/usr/bin:/bin
+      SOURCE_SHA: ${{ inputs.source_sha }}
+      WORKFLOW_SHA: ${{ github.sha }}
+      PREPARATION_RUN: ${{ inputs.preparation_run }}
+      PREPARATION_ATTEMPT: ${{ inputs.preparation_attempt }}
+      ARTIFACT_ID: ${{ inputs.artifact_id }}
+      ARTIFACT_SHA256: ${{ inputs.artifact_sha256 }}
+      RECEIPT_SHA256: ${{ inputs.receipt_sha256 }}
+      PAIR_SHA256: ${{ inputs.pair_sha256 }}
+      CANDIDATE_SHA256: ${{ inputs.candidate_sha256 }}
+      PROJECTION_PINS: ${{ inputs.projection_pins }}
+      HOST_GO_SHA256: ${{ inputs.host_go_sha256 }}
+    steps:
+      - name: Validate exact read-only selection before acquisition
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${GITHUB_REPOSITORY}" = "777genius/universal-agent-plugins"
+          [[ "${SOURCE_SHA}" =~ ^[0-9a-f]{40}$ && ! "${SOURCE_SHA}" =~ ^0{40}$ ]]
+          test "${SOURCE_SHA}" = "${WORKFLOW_SHA}"
+          for value in "${PREPARATION_RUN}" "${PREPARATION_ATTEMPT}" "${ARTIFACT_ID}"; do
+            [[ "${value}" =~ ^[1-9][0-9]{0,14}$ ]]
+          done
+          test "${PREPARATION_ATTEMPT}" -le 1000
+          for value in "${ARTIFACT_SHA256}" "${RECEIPT_SHA256}" "${PAIR_SHA256}" "${CANDIDATE_SHA256}" "${HOST_GO_SHA256}"; do
+            [[ "${value}" =~ ^[0-9a-f]{64}$ && ! "${value}" =~ ^0{64}$ ]]
+          done
+          test "${#PROJECTION_PINS}" -le 1024
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.source_sha }}
+          persist-credentials: false
+      - name: Check source without changing history
+        run: test "$(git rev-parse HEAD)" = "${SOURCE_SHA}"
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22.21.1
+          package-manager-cache: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: 1.25.13
+          cache: false
+      - name: Inspect exact preparation attempt and artifact metadata
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const p = require('./npm/agentplugins/scripts/authoring-promotion');
+          // Read-only consistency check, not accepted cryptographic custody.
+          p.inspectArtifact({ run_id: Number(process.env.PREPARATION_RUN),
+            run_attempt: Number(process.env.PREPARATION_ATTEMPT),
+            artifact_id: Number(process.env.ARTIFACT_ID), artifact_sha256: process.env.ARTIFACT_SHA256 },
+            '.github/workflows/agentplugins-release.yml', process.env.SOURCE_SHA, process.env.RUNNER_TEMP);
+          NODE
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          artifact-ids: ${{ inputs.artifact_id }}
+          run-id: ${{ inputs.preparation_run }}
+          github-token: ${{ github.token }}
+          repository: 777genius/universal-agent-plugins
+          merge-multiple: true
+          path: ${{ runner.temp }}/frozen-inputs
+      - name: Inspect host Go and execute the fixed pair journey
+        shell: bash
+        run: |
+          set -euo pipefail
+          export HOST_GO="$(command -v go)"
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const c = require('./npm/agentplugins/scripts/dual-authoring-candidate');
+          const root = path.join(process.env.RUNNER_TEMP, 'frozen-inputs');
+          const pair = c.readFile(path.join(root, 'pair-prepared.json'));
+          if (c.digest(pair) !== process.env.PAIR_SHA256) throw Error('pair pin');
+          const identity = JSON.parse(pair).identity;
+          if (identity.commit !== process.env.SOURCE_SHA) throw Error('source pin');
+          const producer = { repository: process.env.GITHUB_REPOSITORY,
+            workflow: '.github/workflows/authoring-frozen-native.yml', source: process.env.SOURCE_SHA,
+            workflow_sha: process.env.WORKFLOW_SHA, run_id: Number(process.env.GITHUB_RUN_ID),
+            run_attempt: Number(process.env.GITHUB_RUN_ATTEMPT) };
+          const options = { root, pins: { identity, candidate_sha256: process.env.CANDIDATE_SHA256,
+            pair_marker_sha256: process.env.PAIR_SHA256, products: JSON.parse(process.env.PROJECTION_PINS) },
+            preparation: { sha256: process.env.RECEIPT_SHA256, producer: { ...producer,
+              workflow: '.github/workflows/agentplugins-release.yml', run_id: Number(process.env.PREPARATION_RUN),
+              run_attempt: Number(process.env.PREPARATION_ATTEMPT) } }, producer,
+            go: process.env.HOST_GO, go_sha256: process.env.HOST_GO_SHA256,
+            output: path.join(process.env.RUNNER_TEMP, 'frozen-native-evidence'),
+            work: path.join(process.env.RUNNER_TEMP, 'frozen-native-work') };
+          fs.writeFileSync(path.join(process.env.RUNNER_TEMP, 'native-options.json'), c.encode(options), { flag: 'wx', mode: 0o600 });
+          NODE
+          node npm/agentplugins/scripts/authoring-native-qualification.js "${RUNNER_TEMP}/native-options.json"
+      - name: Retain bounded observations or failure diagnostics
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: frozen-native-linux-amd64-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/frozen-native-evidence/*
+          if-no-files-found: error
+          retention-days: 7
+# N2 must replace metadata-plus-download with same-checked-ZIP intake before
+# provider admission. This job does not claim that a supplied boolean verifies
+# the attempt. N1 terminals bind embedded attempts and reject stale preparation.
+# No OS observer is provisioned here: production retains failure diagnostics.

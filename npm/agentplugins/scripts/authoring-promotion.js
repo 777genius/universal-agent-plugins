@@ -245,48 +245,13 @@ function verifySubject(file, expected, cwd) {
 // beside them. Reconstruct the expected manifests/marker from pinned candidate
 // bytes; this never builds or launches native subjects, even for Go build info.
 function frozenSubjects(root, record) {
-  c.safeDirectory(root);
-  const candidateFile = path.join(root, "candidate", "candidate.json");
-  const body = c.readFile(candidateFile, LIMIT);
-  exact(c.digest(body), record.candidate_sha256, "candidate digest");
-  const manifest = JSON.parse(body);
-  if (!body.equals(c.encode(manifest))) fail("noncanonical candidate");
-  c.manifestShape(manifest, record.identity, SCOPE, MODE);
-  const result = [{ file: candidateFile, sha256: record.candidate_sha256 }];
-  const products = {};
-  for (const p of c.PRODUCTS) {
-    const projection = path.join(root, p); c.safeDirectory(projection);
-    exact(manifest.products[p].assets, record.products[p].assets, "candidate product pins");
-    const m = { schema_version: 3, status: "CANDIDATE", product: p, repository: REPOSITORY,
-      tag: tag(record.identity, p), version: record.identity.versions[p], commit: record.identity.commit,
-      engine_revision: record.identity.commit, versions: record.identity.versions, candidate_sha256: record.candidate_sha256,
-      authoring_mode: MODE, asset_scope: SCOPE, assets: manifest.products[p].assets,
-      release_eligible: false, platform_acceptance: false, attested: false };
-    const mBody = c.encode(m);
-    const checks = Buffer.from([...Object.values(m.assets).map(a => `${a.sha256}  ${a.file}`), `${c.digest(mBody)}  release-manifest.json`].join("\n") + "\n");
-    for (const [name, bytes, hash] of [["release-manifest.json", mBody, record.products[p].manifest_sha256], ["checksums.txt", checks, record.products[p].checksums_sha256]]) {
-      const file = path.join(projection, name);
-      exact(c.readFile(file, LIMIT), bytes, "projection bytes"); exact(c.digest(bytes), hash, "independent projection pin");
-      result.push({ file, sha256: hash });
-    }
-    for (const a of Object.values(m.assets)) {
-      const file = path.join(projection, a.file); const bytes = c.readFile(file);
-      exact(c.metadata(bytes), { sha256: a.sha256, size: a.size }, "asset bytes");
-      const binary = p === "plugin-kit-ai" ? c.unpack(bytes, a.binary.file) : bytes;
-      exact(c.metadata(binary), { sha256: a.binary.sha256, size: a.binary.size }, "inner binary bytes");
-      result.push({ file, sha256: a.sha256 });
-    }
-    exact(fs.readdirSync(projection).sort(), [...Object.values(m.assets).map(a => a.file), "release-manifest.json", "checksums.txt"].sort(), "projection closure");
-    products[p] = { manifest_sha256: c.digest(mBody), checksums_sha256: c.digest(checks) };
-  }
-  const marker = { schema: "authoring-release-pair/v1", status: "CANDIDATE", identity: record.identity,
-    candidate_sha256: record.candidate_sha256, authoring_mode: MODE, asset_scope: SCOPE, products,
-    release_eligible: false, platform_acceptance: false, attested: false };
-  const markerFile = path.join(root, "pair-prepared.json");
-  exact(c.readFile(markerFile, LIMIT), c.encode(marker), "pair marker");
-  exact(c.digest(c.encode(marker)), record.pair_marker_sha256, "pair marker pin");
-  result.push({ file: markerFile, sha256: record.pair_marker_sha256 });
-  return result; // 18 unchanged input subjects, promotion record is the 19th.
+  const pins = { identity: record.identity, candidate_sha256: record.candidate_sha256,
+    pair_marker_sha256: record.pair_marker_sha256,
+    products: Object.fromEntries(c.PRODUCTS.map(p => [p, {
+      manifest_sha256: record.products[p].manifest_sha256, checksums_sha256: record.products[p].checksums_sha256 }])) };
+  const verified = require("./authoring-release").verifyProjectedPair(root, pins);
+  for (const p of c.PRODUCTS) exact(verified.manifest.products[p].assets, record.products[p].assets, "candidate product pins");
+  return verified.subjects;
 }
 function releasePins(record, p) {
   return [...Object.values(record.products[p].assets).map(a => ({ name: a.file, sha256: a.sha256, size: a.size })),

@@ -493,3 +493,103 @@ func TestReleasePairedPromotionShellSyntax(t *testing.T) {
 		}
 	}
 }
+
+func TestFrozenNativeReadOnlyWorkflowContract(t *testing.T) {
+	w := readProducerWorkflow(t, "authoring-frozen-native.yml")
+	if len(w.Jobs) != 1 || len(w.On.Dispatch.Inputs) != 10 || len(w.On.Run.Workflows) != 0 {
+		t.Fatal("N1 requires one explicit Linux lane and ten bounded identity inputs")
+	}
+	if len(w.Permissions) != 1 || w.Permissions["contents"] != "read" || w.Concurrency.Cancel {
+		t.Fatal("native producer must preserve read-only permissions and owned cancellation")
+	}
+	job, ok := w.Jobs["linux-amd64"]
+	if !ok || job.If != "${{ github.event_name == 'workflow_dispatch' }}" || job.Needs != nil || job.Environment != nil {
+		t.Fatal("native route must remain independently dispatched without protected effects")
+	}
+	if len(job.Permissions) != 2 || job.Permissions["actions"] != "read" || job.Permissions["contents"] != "read" {
+		t.Fatal("only contents/actions read is permitted")
+	}
+	if job.Env["PATH"] != "/usr/local/bin:/usr/bin:/bin" || len(job.Steps) == 0 || job.Steps[0].Uses != "" {
+		t.Fatal("guarded PATH and pre-acquisition validation required")
+	}
+	var scripts strings.Builder
+	downloads, uploads := 0, 0
+	for _, step := range job.Steps {
+		scripts.WriteString(step.Run)
+		if step.Run != "" {
+			command := exec.Command("/bin/bash", "-n")
+			command.Env = []string{"PATH=/usr/local/bin:/usr/bin:/bin"}
+			command.Stdin = strings.NewReader(step.Run)
+			if output, err := command.CombinedOutput(); err != nil {
+				t.Fatalf("%s: %v %s", step.Name, err, output)
+			}
+		}
+		if token, ok := step.Env["GH_TOKEN"]; ok && (step.Name != "Inspect exact preparation attempt and artifact metadata" || token != "${{ github.token }}") {
+			t.Fatal("read token escaped acquisition")
+		}
+		if strings.HasPrefix(step.Uses, "actions/download-artifact@") {
+			downloads++
+			for k, v := range map[string]string{"artifact-ids": "${{ inputs.artifact_id }}", "run-id": "${{ inputs.preparation_run }}", "repository": "777genius/universal-agent-plugins"} {
+				if step.With[k] != v {
+					t.Fatalf("download lost exact %s", k)
+				}
+			}
+			if _, ok := step.With["name"]; ok {
+				t.Fatal("artifact name must not select frozen bytes")
+			}
+		}
+		if strings.HasPrefix(step.Uses, "actions/upload-artifact@") {
+			uploads++
+			if step.With["path"] != "${{ runner.temp }}/frozen-native-evidence/*" {
+				t.Fatal("upload must exclude binaries, client state and compilation caches")
+			}
+		}
+		if step.Uses != "" && !regexp.MustCompile(`^actions/(checkout|setup-node|setup-go|download-artifact|upload-artifact)@[0-9a-f]{40}$`).MatchString(step.Uses) {
+			t.Fatalf("unreviewed action %s", step.Uses)
+		}
+	}
+	if downloads != 1 || uploads != 1 {
+		t.Fatal("one exact input acquisition and one diagnostic/evidence upload required")
+	}
+	body := scripts.String()
+	for _, forbidden := range []string{"go build", "go test", "go mod", "stageCandidate", "frozenCandidate", "npm install", "npm publish", "attestation verify", "git push", "--auth-complete", "--accept-security-risk", "strace", "ptrace"} {
+		if strings.Contains(body, forbidden) {
+			t.Fatalf("native route reaches forbidden operation %s", forbidden)
+		}
+	}
+	for _, required := range []string{"p.inspectArtifact", "run_attempt: Number(process.env.PREPARATION_ATTEMPT)", "authoring-native-qualification.js", "go_sha256: process.env.HOST_GO_SHA256", "pair_marker_sha256: process.env.PAIR_SHA256"} {
+		if !strings.Contains(body, required) {
+			t.Fatalf("native route lacks %s", required)
+		}
+	}
+}
+
+func TestFrozenPreparationReceiptOutsideProjectionBytes(t *testing.T) {
+	job := readProducerWorkflow(t, "agentplugins-release.yml").Jobs["paired-preparation"]
+	receipts, uploads := 0, 0
+	for _, step := range job.Steps {
+		if step.Name == "Bind preparation invocation outside unchanged frozen input bytes" {
+			receipts++
+			for _, required := range []string{"n.writePreparation(root, pins", "workflow_sha: process.env.WORKFLOW_SHA", "run_attempt: Number(process.env.GITHUB_RUN_ATTEMPT)", "deepEqual(after, before)"} {
+				if !strings.Contains(step.Run, required) {
+					t.Fatalf("receipt does not bind %s", required)
+				}
+			}
+			for _, forbidden := range []string{"qualification_sha256", "tarball_sha256", "attest", "stageCandidate({"} {
+				if strings.Contains(step.Run, forbidden) {
+					t.Fatalf("provenance-only receipt includes %s", forbidden)
+				}
+			}
+		}
+		if strings.HasPrefix(step.Uses, "actions/upload-artifact@") {
+			uploads++
+			paths, _ := step.With["path"].(string)
+			if !strings.Contains(paths, "${{ env.PAIRED_OUTPUT }}/preparation-run.json\n") || strings.Contains(paths, "/agentplugins/preparation-run") {
+				t.Fatal("receipt must be a sibling of unchanged eight-file projections")
+			}
+		}
+	}
+	if receipts != 1 || uploads != 1 {
+		t.Fatal("one byte-bound receipt before the existing upload required")
+	}
+}

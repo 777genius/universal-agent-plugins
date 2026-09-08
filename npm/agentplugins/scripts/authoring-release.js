@@ -2,6 +2,9 @@
 
 const fs = require("node:fs");
 const path = require("node:path");
+const { isDeepStrictEqual: equal } = require("node:util");
+const fail = message => { throw new Error(message); };
+const exact = (a, b, label) => { if (!equal(a, b)) fail(`${label}: binding mismatch`); };
 
 // Schema v3 is an explicit projection of one sealed native pair. Historical
 // consumers continue to require v2; consistency is never publication approval.
@@ -148,4 +151,57 @@ function verifyAuthoringRelease(input) {
   return { ...pair, consistency_verified: true };
 }
 
-module.exports = { prepareAuthoringRelease, verifyAuthoringRelease };
+function verifyProjectedPair(root, pins) {
+  c.keys(pins, ["identity", "candidate_sha256", "pair_marker_sha256", "products"], "projected pair pins");
+  c.identity(pins.identity);
+  if (/^0{40}$/.test(pins.identity.commit) || pins.identity.versions["plugin-kit-ai"] !== "2.0.0") fail("first-cut identity required");
+  c.keys(pins.products, c.PRODUCTS, "projection pins");
+  const record = pins;
+  const seen = new Set();
+  c.safeDirectory(root);
+  const candidateFile = path.join(root, "candidate", "candidate.json");
+  const body = c.readFile(candidateFile, 1024 * 1024);
+  exact(c.digest(body), record.candidate_sha256, "candidate digest");
+  const manifest = JSON.parse(body);
+  if (!body.equals(c.encode(manifest))) fail("noncanonical candidate");
+  c.manifestShape(manifest, record.identity, AUTHORING_SCOPE, AUTHORING_MODE);
+  const result = [{ file: candidateFile, sha256: record.candidate_sha256 }];
+  const products = {};
+  for (const p of c.PRODUCTS) {
+    const projection = path.join(root, p); c.safeDirectory(projection);
+    c.keys(pins.products[p], ["manifest_sha256", "checksums_sha256"], "product projection pins");
+    const m = { schema_version: 3, status: "CANDIDATE", product: p, repository: c.REPOSITORY,
+      tag: productManifest({ manifest, manifest_sha256: pins.candidate_sha256 }, p).tag, version: record.identity.versions[p], commit: record.identity.commit,
+      engine_revision: record.identity.commit, versions: record.identity.versions, candidate_sha256: record.candidate_sha256,
+      authoring_mode: AUTHORING_MODE, asset_scope: AUTHORING_SCOPE, assets: manifest.products[p].assets,
+      release_eligible: false, platform_acceptance: false, attested: false };
+    const mBody = c.encode(m);
+    const checks = Buffer.from([...Object.values(m.assets).map(a => `${a.sha256}  ${a.file}`), `${c.digest(mBody)}  release-manifest.json`].join("\n") + "\n");
+    for (const [name, bytes, hash] of [["release-manifest.json", mBody, record.products[p].manifest_sha256], ["checksums.txt", checks, record.products[p].checksums_sha256]]) {
+      const file = path.join(projection, name);
+      exact(c.readFile(file, 1024 * 1024), bytes, "projection bytes"); exact(c.digest(bytes), hash, "independent projection pin");
+      result.push({ file, sha256: hash });
+    }
+    for (const a of Object.values(m.assets)) {
+      const file = path.join(projection, a.file); const bytes = c.readFile(file);
+      exact(c.metadata(bytes), { sha256: a.sha256, size: a.size }, "asset bytes");
+      const binary = p === "plugin-kit-ai" ? c.unpack(bytes, a.binary.file) : bytes;
+      exact(c.metadata(binary), { sha256: a.binary.sha256, size: a.binary.size }, "inner binary bytes");
+      if (seen.has(a.binary.sha256)) fail("duplicate product/target binary");
+      seen.add(a.binary.sha256);
+      result.push({ file, sha256: a.sha256 });
+    }
+    exact(fs.readdirSync(projection).sort(), [...Object.values(m.assets).map(a => a.file), "release-manifest.json", "checksums.txt"].sort(), "projection closure");
+    products[p] = { manifest_sha256: c.digest(mBody), checksums_sha256: c.digest(checks) };
+  }
+  const marker = { schema: "authoring-release-pair/v1", status: "CANDIDATE", identity: record.identity,
+    candidate_sha256: record.candidate_sha256, authoring_mode: AUTHORING_MODE, asset_scope: AUTHORING_SCOPE, products,
+    release_eligible: false, platform_acceptance: false, attested: false };
+  const markerFile = path.join(root, "pair-prepared.json");
+  exact(c.readFile(markerFile, 1024 * 1024), c.encode(marker), "pair marker");
+  exact(c.digest(c.encode(marker)), record.pair_marker_sha256, "pair marker pin");
+  result.push({ file: markerFile, sha256: record.pair_marker_sha256 });
+  return { manifest, subjects: result }; // Eighteen unchanged frozen inputs.
+}
+
+module.exports = { prepareAuthoringRelease, verifyAuthoringRelease, verifyProjectedPair };
