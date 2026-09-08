@@ -15,6 +15,12 @@ generated_files=(
   "sdk/internal/descriptors/gen/registry_gen.go"
   "sdk/internal/descriptors/gen/resolvers_gen.go"
   "sdk/internal/descriptors/gen/support_gen.go"
+  "sdk/internal/descriptors/gen/support_gen_claude.go"
+  "sdk/internal/descriptors/gen/support_gen_codex.go"
+  "sdk/internal/descriptors/gen/support_gen_gemini.go"
+  "sdk/claude/registrar_gen.go"
+  "sdk/codex/registrar_gen.go"
+  "sdk/gemini/registrar_gen.go"
   "docs/generated/support_matrix.md"
   "docs/generated/target_support_matrix.md"
 )

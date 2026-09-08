@@ -17,3 +17,7 @@ translationRequired: false
 | Событие | Зрелость | Контракт | Сводка |
 | --- | --- | --- | --- |
 | Notify | stable | готово для production | Стабильный hook `notify` для Codex. |
+| Stop | beta | runtime поддерживается, но ещё не stable | Codex Stop lifecycle hook |
+| SubagentStop | beta | runtime поддерживается, но ещё не stable | Codex SubagentStop lifecycle hook |
+| PreToolUse | beta | runtime поддерживается, но ещё не stable | Codex PreToolUse hook |
+| PermissionRequest | beta | runtime поддерживается, но ещё не stable | Codex PermissionRequest hook |
