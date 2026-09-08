@@ -68,7 +68,7 @@ output before invoking the Unix harness; its hash is recorded in `results.json`.
 | `yes-lifecycle` | Space deselects Codex, arrow moves to Cursor, Enter submits; preflight identity/version visible before Yes; exactly Cursor materializes; plain activation No is consumed and auth is not asked. |
 | `empty` | Space/arrows deselect both; Enter produces inline validation, never defaults back to all; Esc exits 1 without mutation. |
 | `escape`, `ctrl-c`, `ctrl-d`, `confirm-*` | Cancellation at each form exits 1 without mutation and restores terminal. Raw Ctrl+D is a key, not Unix EOF. |
-| `plain`, `dumb`, `term-unset` | Full selection/default-No path without escape sequences; same consent policy. |
+| `plain`, `dumb`, `term-unset` | Full selection/default-No path with explicit `--color=never`, without escape sequences; same consent policy. |
 | `no-color`, `NO_COLOR` | Same keyboard UI, no color SGR; cursor controls are allowed. |
 | `plain-eof`, `plain-partial-eof` | Canonical VEOF at empty selection and partial `y` plus EOF at confirm fail closed; neither equals Enter/Yes. |
 | `stdin-pipe` | Pipe stays open with no data; CLI exits with required-target error without reading it. |
@@ -94,7 +94,7 @@ The inspected Huh keymap uses Space/arrows and Enter for confirmation; `y`/`n`
 are disabled. Yes uses Space then Enter; explicit No moves left then right and
 submits. Normal rich cases wait for the rendered Yes/No/Enter controls, beyond
 the preprinted question. The initially tiny viewport selects Plain under the
-inspected size gate (width < 40 or height < 10), and must emit no ANSI. `queued` deliberately sends two Enters together and
+inspected size gate (width < 40 or height < 10), and, with explicit `--color=never`, must emit no ANSI. `queued` deliberately sends two Enters together and
 requires completion without another key; its queued-input assertion is retained.
 
 Each case saves `terminal.ansi` (raw synthetic capture), `transcript.txt`, semantic
@@ -193,3 +193,107 @@ Each Unix semantic checkpoint saves `.frame.txt` and `.frame.svg` alongside
 `terminal.raw`. SVG files are rendered synthetic transcript images from the
 harness's small Screen model, not native terminal-emulator screenshots; raw
 captures and restoration/state checks remain authoritative.
+
+## Semantic color policy cases
+
+The historical escape-free Plain/tiny/redirect cases explicitly pass
+`--color=never`; Plain selects interaction independently of color. Additional
+real PTY cases `plain-auto`, `plain-always`, `plain-never`, `plain-NO_COLOR`,
+`rich-never`, and `color-stderr-visible` retain the same consent, mutation and
+terminal reuse assertions. They check colored visible labels with reset before
+the colon/value, escape-free Plain suppression, rich controls without SGR, and
+independent redirected stdout / visible stderr policy. `color-pipe-human` forces
+color into redirected human output; `color-pipe-json` requires a single versioned
+JSON envelope and no escapes on either output despite always. `color-error`
+checks red error/reset boundaries; both existing Yes lifecycle cases also require
+yellow warning/reset boundaries while retaining all persisted-state/auth checks.
+
+## Bounded selection matrix
+
+`selection_matrix.py` owns a separate stdlib lane using the unchanged harness's
+`Fixture`, controlling PTY, status channel and same-PTY restoration probe. Run
+against a frozen native binary with an independently known SHA256; no build or
+agent installation is performed:
+
+```sh
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover \
+  -s scripts/terminal-ui -p test_selection_matrix.py
+PYTHONDONTWRITEBYTECODE=1 python3 scripts/terminal-ui/selection_matrix.py \
+  --binary /absolute/frozen-agentplugins --binary-sha256 TRUSTED_SHA256 \
+  --artifacts /tmp/new-selection-matrix --timeout 8
+```
+
+Fifteen cases cover Codex-only, Cursor-only and both with default No and explicit
+Yes → activation No; neither with retained empty validation; Escape/Ctrl+C at
+both forms; queued Enter/Enter, Enter/y/Enter and Enter/Space/Enter; and native-ownership rejection.
+Selection paths exercise Up/Down and Space toggle/re-toggle, assert the displayed
+canonical identities, then compare exact plan targets and persisted binding IDs,
+receipt identities and native package paths. Queued cases require exit without
+another key and unchanged state; the controls may disappear before rendering.
+No pre-consent client/project/managed/state/journal mutation is allowed. Cache
+exclusions match the existing harness and are not a whole-filesystem guarantee.
+
+Each case saves raw key bytes in `events.json`, semantic frames with protected
+state hashes, complete before/after protected state, actual CLI exit status,
+restoration/reuse results, and `outcome.json` with source commit/file hashes and
+binary hash. The historical binary's equivalence to the source commit is not
+assumed. The lane normalizes reverse-index only for its small evidence renderer;
+raw PTY bytes remain unchanged. Parser tests are not native E2E evidence.
+
+The fixture adds a minimal `.codex-plugin/plugin.json` identity to the standard
+package. Codex positive installation may still be **blocked**: the native owner
+observer invokes `codex plugin list --json`, which version-only stubs reject with
+97. Positive cases remain failures; they never substitute Cursor or fabricate a
+registry response. The separate ownership case requires CLI exit 1, the native
+identity error, unchanged protected state and terminal reuse. The synthetic
+scanner is UI-only evidence. No real profiles, auth or agents are used.
+
+Linux is the executed platform for this lane. For macOS, use the same invocation
+with a verified native binary in a disposable environment containing only the two
+synthetic clients; the existing persistent PTY owner handles terminal lifetime.
+macOS remains untested until that native run. The existing Windows ConPTY lane
+supports Plain interaction, not this rich arrow/Space matrix; this matrix is
+explicitly **not covered on Windows**. Reuse its persistent ConPTY owner/mode/echo
+probe when adding native Plain subset cases; do not count Linux, WSL, or renderer
+unit tests as Windows PASS. No new framework or dependency is needed.
+
+## Plugin fixture matrix
+
+`plugin_matrix.py` runs 19 cases on native Linux or macOS against a supplied
+binary. Eight package kinds cover empty/skill packages, missing stdio runtime,
+HTTP authentication uncertainty, mixed healthy/skipped components, malformed
+JSON, ignored unsupported components, and native ownership collisions. Keyboard
+cancel/default No, rejection, exact Cursor skill install/removal, and read-only
+JSON plans retain state and terminal restoration assertions.
+
+```sh
+PYTHONDONTWRITEBYTECODE=1 PLUGIN_MATRIX_BINARY=/absolute/frozen-agentplugins \
+  python3 -m unittest discover -s scripts/terminal-ui -p test_plugin_matrix.py
+PYTHONDONTWRITEBYTECODE=1 python3 scripts/terminal-ui/plugin_matrix.py \
+  --binary /absolute/frozen-agentplugins --artifacts /tmp/new-plugin-matrix --timeout 15
+# Focused ten-client selection/default-No and JSON plan check:
+PYTHONDONTWRITEBYTECODE=1 python3 scripts/terminal-ui/plugin_matrix.py \
+  --binary /absolute/frozen-agentplugins --case empty:all-ten \
+  --artifacts /tmp/new-plugin-all-ten --timeout 15
+```
+
+The all-ten case adds seven version-only stubs and synthetic config directories
+for ten logical choices: Codex, Cursor, Copilot, VS Code, Kiro, Claude, Gemini,
+OpenCode, Cline and Windsurf. Paths follow production
+`install/integrationctl/agentplugins/adapters/clientdetect/detector.go`: Cline's
+VS Code globalStorage lives under the fixture's `Library/Application Support`
+on Darwin and XDG config on Linux; OpenCode uses XDG config on both. No host OS
+is overridden and no desktop application is seeded. All paths stay under the
+fresh synthetic HOME. Run on a disposable host without ambient desktop agents,
+as described above; unexpected choices remain failures. ChatGPT has no
+config-only discovery surface and is omitted. Ten logical review/JSON identities
+are required, with the Copilot/VS Code shared physical owner explained; this
+case declines installation and does not prove ten-client runtime operation.
+
+`report.json` records the actual host platform, executed case list, binary and
+source hashes, contract references and limitations. Path-contract tests exercise
+both platform layouts; they do not execute Darwin discovery on Linux. The native
+CI workflow runs the full matrix on Linux and macOS; a local Linux result is
+not a macOS pass. Windows ConPTY is a separate lane. HTTP fixtures use only an
+isolated loopback endpoint and assert zero CLI requests; scanner output remains
+synthetic, with no authentication, security or real-client release qualification.

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"os"
+	"reflect"
 	"runtime"
 	"strings"
 	"testing"
@@ -15,6 +16,27 @@ import (
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/prompt"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
+
+func TestFormWindowSizeMessages(t *testing.T) {
+	// Only the size-query command is consumed. In particular, messages carrying
+	// slices must pass through without an interface-comparison panic.
+	for _, msg := range []tea.Msg{nil, tea.QuitMsg{}, tea.WindowSizeMsg{Width: 80, Height: 24}, tea.BatchMsg{}} {
+		got, err := formWindowSize(io.Discard, msg)
+		if err != nil || !reflect.DeepEqual(got, msg) {
+			t.Fatalf("forward %T: got %T, %v", msg, got, err)
+		}
+	}
+	f, err := os.CreateTemp(t.TempDir(), "redirected")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	for _, output := range []io.Writer{io.Discard, f} {
+		if got, err := formWindowSize(output, tea.RequestWindowSize()); err != nil || got != nil {
+			t.Fatalf("nonterminal %T: got %v, %v", output, got, err)
+		}
+	}
+}
 
 // Both implementations must discard values when canceled, closed or unable to
 // show their question. PTY tests separately exercise rich keyboard submission.

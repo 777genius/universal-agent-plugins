@@ -86,7 +86,7 @@ func main() {
 		return
 	}
 	if err := run(); err != nil {
-		_, _ = fmt.Fprintln(os.Stderr, "agentplugins:", err)
+		_, _ = fmt.Fprintln(os.Stderr, "agentplugins:", agentpluginscli.ErrorText(os.Args[1:], os.Stderr, err))
 		os.Exit(1)
 	}
 }

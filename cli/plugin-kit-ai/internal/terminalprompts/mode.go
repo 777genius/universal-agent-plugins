@@ -6,6 +6,7 @@ import (
 	"runtime"
 
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/prompt"
+	"github.com/777genius/plugin-kit-ai/cli/internal/terminaltheme"
 	"golang.org/x/term"
 )
 
@@ -30,10 +31,19 @@ func ResolveMode(c Capabilities, plain bool) Mode {
 	}
 	return Rich
 }
-func terminal(v any) bool { f, ok := v.(*os.File); return ok && term.IsTerminal(int(f.Fd())) }
+func terminal(v any) bool {
+	if w, ok := v.(io.Writer); ok {
+		v = terminaltheme.Unwrap(w)
+	}
+	f, ok := v.(*os.File)
+	return ok && term.IsTerminal(int(f.Fd()))
+}
+
+// New receives the CLI-resolved noColor decision for the visible stream.
+// It must not reapply NO_COLOR after explicit flags have overridden it.
 func New(input io.Reader, output, errorOutput io.Writer, plain, noColor bool) (prompt.Prompter, io.Writer, error) {
 	c := Capabilities{InputTTY: terminal(input), OutputTTY: terminal(output), ErrorTTY: terminal(errorOutput), TERM: os.Getenv("TERM"), GOOS: runtime.GOOS}
-	if f, ok := output.(*os.File); ok {
+	if f, ok := terminaltheme.Unwrap(output).(*os.File); ok {
 		w, h, e := term.GetSize(int(f.Fd()))
 		c.SizeOK = e == nil && w >= 40 && h >= 10
 	}
@@ -46,7 +56,12 @@ func New(input io.Reader, output, errorOutput io.Writer, plain, noColor bool) (p
 		visible = errorOutput
 	}
 	if mode == Rich {
-		return HuhPrompter{Input: input, Output: visible, NoColor: noColor || os.Getenv("NO_COLOR") != ""}, visible, nil
+		return HuhPrompter{Input: input, Output: terminaltheme.Unwrap(visible), NoColor: noColor}, visible, nil
 	}
-	return PlainPrompter{Input: input, Output: visible}, visible, nil
+	policy := &terminaltheme.Policy{Mode: "always", Explicit: true}
+	if noColor {
+		policy.Mode = "never"
+	}
+	format := "human"
+	return PlainPrompter{Input: input, Output: terminaltheme.Wrap(terminaltheme.Unwrap(visible), policy, &format)}, visible, nil
 }

@@ -34,7 +34,7 @@ func readUnixTerminalLine(ctx context.Context, reader io.Reader, f *os.File) (li
 		return "", fmt.Errorf("reprocess prompt input: %w", e)
 	}
 	defer func() {
-		if e := unix.IoctlSetTermios(int(f.Fd()), unix.TIOCSETA, attrs); e != nil {
+		if e := restoreTerminal(int(f.Fd()), attrs); e != nil {
 			line = ""
 			err = fmt.Errorf("restore prompt terminal: %w", e)
 		}
