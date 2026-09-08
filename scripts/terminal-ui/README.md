@@ -256,3 +256,44 @@ supports Plain interaction, not this rich arrow/Space matrix; this matrix is
 explicitly **not covered on Windows**. Reuse its persistent ConPTY owner/mode/echo
 probe when adding native Plain subset cases; do not count Linux, WSL, or renderer
 unit tests as Windows PASS. No new framework or dependency is needed.
+
+## Plugin fixture matrix
+
+`plugin_matrix.py` runs 19 cases on native Linux or macOS against a supplied
+binary. Eight package kinds cover empty/skill packages, missing stdio runtime,
+HTTP authentication uncertainty, mixed healthy/skipped components, malformed
+JSON, ignored unsupported components, and native ownership collisions. Keyboard
+cancel/default No, rejection, exact Cursor skill install/removal, and read-only
+JSON plans retain state and terminal restoration assertions.
+
+```sh
+PYTHONDONTWRITEBYTECODE=1 PLUGIN_MATRIX_BINARY=/absolute/frozen-agentplugins \
+  python3 -m unittest discover -s scripts/terminal-ui -p test_plugin_matrix.py
+PYTHONDONTWRITEBYTECODE=1 python3 scripts/terminal-ui/plugin_matrix.py \
+  --binary /absolute/frozen-agentplugins --artifacts /tmp/new-plugin-matrix --timeout 15
+# Focused ten-client selection/default-No and JSON plan check:
+PYTHONDONTWRITEBYTECODE=1 python3 scripts/terminal-ui/plugin_matrix.py \
+  --binary /absolute/frozen-agentplugins --case empty:all-ten \
+  --artifacts /tmp/new-plugin-all-ten --timeout 15
+```
+
+The all-ten case adds seven version-only stubs and synthetic config directories
+for ten logical choices: Codex, Cursor, Copilot, VS Code, Kiro, Claude, Gemini,
+OpenCode, Cline and Windsurf. Paths follow production
+`install/integrationctl/agentplugins/adapters/clientdetect/detector.go`: Cline's
+VS Code globalStorage lives under the fixture's `Library/Application Support`
+on Darwin and XDG config on Linux; OpenCode uses XDG config on both. No host OS
+is overridden and no desktop application is seeded. All paths stay under the
+fresh synthetic HOME. Run on a disposable host without ambient desktop agents,
+as described above; unexpected choices remain failures. ChatGPT has no
+config-only discovery surface and is omitted. Ten logical review/JSON identities
+are required, with the Copilot/VS Code shared physical owner explained; this
+case declines installation and does not prove ten-client runtime operation.
+
+`report.json` records the actual host platform, executed case list, binary and
+source hashes, contract references and limitations. Path-contract tests exercise
+both platform layouts; they do not execute Darwin discovery on Linux. The native
+CI workflow runs the full matrix on Linux and macOS; a local Linux result is
+not a macOS pass. Windows ConPTY is a separate lane. HTTP fixtures use only an
+isolated loopback endpoint and assert zero CLI requests; scanner output remains
+synthetic, with no authentication, security or real-client release qualification.

@@ -12,6 +12,7 @@ import hashlib
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import json
 import os
+import platform
 from pathlib import Path
 import re
 import shutil
@@ -119,13 +120,29 @@ def local_endpoint(enabled):
         thread.join(timeout=2)
 
 
+def ten_client_paths(fixture, system):
+    """Synthetic discovery surfaces from clientdetect/detector.go.
+
+    The explicit system argument permits path-contract tests on either host;
+    real runs always use the native system, including the native scanner cache.
+    """
+    check(system in ('Linux', 'Darwin'), 'ten-profile fixture supports Linux and Darwin only')
+    config = Path(fixture.env['XDG_CONFIG_HOME'])
+    editor = (fixture.home / 'Library/Application Support' if system == 'Darwin' else config)
+    paths = (fixture.home / '.copilot', fixture.home / '.kiro',
+             Path(fixture.env['CLAUDE_CONFIG_DIR']),
+             Path(fixture.env['GEMINI_CLI_HOME']) / '.gemini',
+             editor / 'Code/User/globalStorage/saoudrizwan.claude-dev',
+             config / 'opencode', fixture.home / '.codeium/windsurf')
+    for path in paths:
+        check(path.resolve().is_relative_to(fixture.home.resolve()),
+              'discovery path escapes synthetic HOME')
+    return paths
+
+
 def seed_ten_clients(fixture):
-    # Linux detector paths, all under the disposable HOME; no desktop app seam.
-    check(os.uname().sysname == 'Linux', 'ten-profile fixture currently Linux-only')
-    for relative in ('.copilot', '.kiro', '.claude', '.gemini/.gemini',
-                     'config/Code/User/globalStorage/saoudrizwan.claude-dev',
-                     'config/opencode', '.codeium/windsurf'):
-        (fixture.home / relative).mkdir(parents=True, exist_ok=True)
+    for path in ten_client_paths(fixture, platform.system()):
+        path.mkdir(parents=True, exist_ok=True)
     # Claude selection requires its CLI surface, not only its config directory.
     for name in ('copilot', 'code', 'kiro-cli', 'claude', 'gemini', 'opencode', 'windsurf'):
         shutil.copy2(fixture.bin / 'cursor', fixture.bin / name)
@@ -376,16 +393,17 @@ def main():
     report = {'source_sha': subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=source, text=True).strip(),
               'binary': str(binary), 'binary_sha256': hashlib.sha256(binary.read_bytes()).hexdigest(),
               'binary_source_link': 'Supplied binary SHA256 recorded; consult external build receipt for source parity.',
+              'platform': platform.system(),
               'audit_matrix': AUDIT_MATRIX,
               'fixture_contracts': {
                   'manifest': 'install/integrationctl/agentplugins/adapters/specregistry/schemas/1.0.0/plugin.schema.json',
                   'mcp': 'install/integrationctl/agentplugins/adapters/specregistry/schemas/1.0.0/mcp.schema.json',
                   'loader': 'install/integrationctl/agentplugins/adapters/loader/loader_test.go',
                   'projection': 'install/integrationctl/agentplugins/providers/stager_test.go',
-                  'ownership': 'install/integrationctl/agentplugins/providers/native_identity_test.go'},
-              'gaps': ['Ten-profile empty run is synthetic Linux discovery. ChatGPT is an eleventh client with no config-only surface; omitted.',
-                       'Windows ConPTY and macOS not executed by this Unix lane.',
-                       'ECOSYSTEM guardrail document not found in workspace or sibling task roots.',
+                  'ownership': 'install/integrationctl/agentplugins/providers/native_identity_test.go',
+                  'discovery': 'install/integrationctl/agentplugins/adapters/clientdetect/detector.go'},
+              'gaps': ['Ten-profile empty run uses synthetic native Linux/Darwin discovery paths. ChatGPT is an eleventh client with no config-only surface; omitted.',
+                       'This report covers only the recorded native platform and listed cases; Windows ConPTY is a separate lane.',
                        'Scanner is synthetic; no security/runtime/client activation qualification.'], 'cases': []}
     for case in args.case or CASES:
         entry = {'case': case, 'status': 'pass',

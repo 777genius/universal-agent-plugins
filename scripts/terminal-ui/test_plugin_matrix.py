@@ -6,11 +6,51 @@ import os
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 
 import plugin_matrix as lane
 
 
 class FixtureValidation(unittest.TestCase):
+    def test_platform_discovery_paths(self):
+        for system, editor in (('Linux', 'config'), ('Darwin', 'Library/Application Support')):
+            with self.subTest(system=system), tempfile.TemporaryDirectory() as tmp:
+                fixture = lane.Fixture(tmp)
+                before = fixture.mutations()
+                paths = lane.ten_client_paths(fixture, system)
+                self.assertEqual({str(p.relative_to(fixture.home)) for p in paths}, {
+                    '.copilot', '.kiro', '.claude', '.gemini/.gemini',
+                    editor + '/Code/User/globalStorage/saoudrizwan.claude-dev',
+                    'config/opencode', '.codeium/windsurf'})
+                self.assertEqual(fixture.mutations(), before)
+                self.assertTrue(all(p.resolve().is_relative_to(fixture.home.resolve()) for p in paths))
+
+    def test_native_seed_preserves_isolation_and_version_only_stubs(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fixture = lane.Fixture(tmp)
+            env = dict(fixture.env)
+            with patch.object(lane, 'ten_client_paths', wraps=lane.ten_client_paths) as paths:
+                lane.seed_ten_clients(fixture)
+                paths.assert_called_once_with(fixture, lane.platform.system())
+            self.assertEqual(fixture.env, env)
+            self.assertTrue(all(p.is_dir() for p in lane.ten_client_paths(fixture, lane.platform.system())))
+            self.assertEqual({p.name for p in fixture.bin.iterdir()}, {
+                'codex', 'cursor', 'copilot', 'code', 'kiro-cli', 'claude', 'gemini', 'opencode', 'windsurf'})
+            for stub in fixture.bin.iterdir():
+                self.assertEqual(stub.read_bytes(), (fixture.bin / 'cursor').read_bytes())
+                self.assertTrue(os.access(stub, os.X_OK))
+            fixture.unchanged()
+
+    def test_discovery_rejects_unsupported_platform_and_external_roots(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fixture = lane.Fixture(tmp)
+            with self.assertRaisesRegex(AssertionError, 'Linux and Darwin'):
+                lane.ten_client_paths(fixture, 'Windows')
+            fixture.env['XDG_CONFIG_HOME'] = str(fixture.root / 'outside-home')
+            for system in ('Linux', 'Darwin'):
+                with self.subTest(system=system), self.assertRaisesRegex(AssertionError, 'escapes'):
+                    lane.ten_client_paths(fixture, system)
+
     def test_standard_fixture_contracts(self):
         for kind in lane.KINDS:
             with self.subTest(kind=kind), tempfile.TemporaryDirectory() as tmp:
@@ -53,7 +93,9 @@ class FixtureValidation(unittest.TestCase):
             self.assertEqual(requests, [{'method': 'POST', 'path': '/mcp'}])
 
     def test_case_contract(self):
+        self.assertEqual(len(lane.CASES), 19)
         self.assertEqual(len(lane.CASES), len(set(lane.CASES)))
+        self.assertIn('empty:all-ten', lane.CASES)
         self.assertIn('skill:install', lane.CASES)
         for kind in ('stdio-missing', 'collision', 'malformed'):
             self.assertIn(kind + ':reject', lane.CASES)
