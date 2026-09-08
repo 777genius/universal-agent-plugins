@@ -39,7 +39,8 @@ func readCancelable(ctx context.Context, r io.Reader) (string, error) {
 		// Classify without consuming input before opening the shared input queue.
 		var events uint32
 		if err := windows.GetNumberOfConsoleInputEvents(windows.Handle(f.Fd()), &events); err != nil {
-			return "", fmt.Errorf("validate console input: %w", err)
+			// Defer system message formatting until the caller requests Error().
+			return "", os.NewSyscallError("validate console input", err)
 		}
 		var err error
 		console, err = windows.CreateFile(windows.StringToUTF16Ptr("CONIN$"),
@@ -53,7 +54,7 @@ func readCancelable(ctx context.Context, r io.Reader) (string, error) {
 		defer windows.CloseHandle(console)
 		var openedMode uint32
 		if err := windows.GetConsoleMode(console, &openedMode); err != nil {
-			return "", fmt.Errorf("validate console input: %w", err)
+			return "", os.NewSyscallError("validate console input", err)
 		}
 		if openedMode != mode {
 			return "", fmt.Errorf("console input mode changed: inherited=%#x opened=%#x", mode, openedMode)
