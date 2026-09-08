@@ -12,8 +12,7 @@ Install and manage Agent Plugins 1.0 across your AI agents with one CLI.
 
 ### Quick start
 
-Choose your operating system below. Already have Node.js 22+? You can use `npx`
-on any supported desktop OS without permanently installing the CLI.
+Choose your operating system and run the commands below.
 
 <details>
 <summary><strong>macOS</strong></summary>
@@ -62,8 +61,7 @@ irm https://raw.githubusercontent.com/777genius/universal-agent-plugins/main/ins
 <details>
 <summary><strong>Any OS with Node.js 22+ (npx)</strong></summary>
 
-Run the command without permanently installing the CLI. `npx` downloads the
-verified Go binary and immediately runs the plugin command:
+Run on a supported desktop OS without permanently installing the CLI:
 
 ```bash
 npx universal-agent-plugins add context7
@@ -71,26 +69,30 @@ npx universal-agent-plugins add context7
 
 </details>
 
-Homebrew and the installers select the native binary for your OS and
-architecture. The scripts verify its published SHA-256 and reported version,
-then replace the CLI atomically. They install into `$HOME/.local/bin` unless
+The CLI finds compatible agents installed on your computer.
+
+1. Choose one or more agents if prompted. If only one is found, it is selected automatically.
+2. Follow any activation or sign-in instructions printed by the CLI.
+3. Start a new agent session and try the plugin.
+
+<details>
+<summary>Installation details</summary>
+
+Homebrew and the installers select the native binary for your OS and architecture.
+The installer scripts verify its published SHA-256 and reported version, then
+replace the CLI atomically. They install into `$HOME/.local/bin` unless
 `AGENTPLUGINS_BIN_DIR` is set.
 
-Node.js is not a requirement of the native CLI. Individual plugins may declare
-their own runtime requirements; the CLI checks those separately before
-installation.
+The native CLI does not require Node.js. The `npx` option requires Node.js 22+
+and downloads and runs the verified Go binary. Individual plugins may have
+their own runtime requirements, which the CLI checks before installation.
 
-The CLI finds compatible agents installed on your computer and asks where to
-install the plugin. Choose one or several. The package is downloaded and
-verified once, then prepared for every agent you selected.
+The plugin package is downloaded and verified once, then prepared for each
+selected agent.
 
-1. Run the command above.
-2. Select the installed agents you want to use. If only one is found, it is
-   selected automatically; if several are found, the CLI shows a multi-select.
-3. Follow any activation or sign-in instruction printed by the CLI.
-4. Start a new agent session and use the plugin.
+</details>
 
-[Browse 2,500+ plugins](https://777genius.github.io/universal-agent-plugins/plugins/)
+[Browse plugins](https://777genius.github.io/universal-agent-plugins/plugins/)
 
 ## What the CLI does
 
@@ -147,7 +149,7 @@ behavior](docs/CODEX_TRANSPORT_EVIDENCE.md).
 ## Find and verify plugins
 
 search combines the reviewed Registry Directory with a signed public Discovery
-Index containing 2,500+ conformant package paths. Discovery records are
+Index containing conformant package paths. Discovery records are
 unreviewed metadata, not endorsements. They install only through a
 publisher-qualified exact-SHA selector and are validated again before mutation.
 
@@ -240,21 +242,19 @@ historical v1 template selection: [Choose What You Are Building](https://777geni
 one repo, many outputs: [What You Can Build](https://777genius.github.io/universal-agent-plugins/docs/en/guide/what-you-can-build.html)
 honest caveat: [Support Boundary](https://777genius.github.io/universal-agent-plugins/docs/en/reference/support-boundary.html)
 
-## Choose What You Are Building
-
-### Connect an online service
-
-### Connect a local tool
-
-### Build custom plugin logic
-
-## Quick Start
+### Legacy quick start
 
 ```bash
 brew install 777genius/homebrew-plugin-kit-ai/plugin-kit-ai
+```
+
 npm: `npm i -g plugin-kit-ai` or `npx plugin-kit-ai@latest ...`
+
 pipx (`public-beta`, only when that release is published to PyPI): `pipx install plugin-kit-ai`
+
 fallback installer: `curl -fsSL https://raw.githubusercontent.com/777genius/plugin-kit-ai/main/scripts/install.sh | sh`
+
+```bash
 plugin-kit-ai init my-plugin --template online-service
 plugin-kit-ai init my-plugin --template local-tool
 plugin-kit-ai init my-plugin --template custom-logic
@@ -263,14 +263,7 @@ plugin-kit-ai generate .
 plugin-kit-ai validate . --platform codex-runtime --strict
 ```
 
-## Works Across Multiple Outputs
-## What To Do Next
-## Keep This Rule In Mind
-## Deep Product Details
-## Go Deeper By Goal
-### Fast Local Plugin
-### Production-Ready Plugin Repo
-### Already Have Native Config
+### Support and references
 
 [examples/starters/README.md](examples/starters/README.md)
 [examples/local/README.md](examples/local/README.md)
@@ -282,7 +275,7 @@ the stable local Python and Node subset on `codex-runtime` and `claude`
 [docs/generated/support_matrix.md](docs/generated/support_matrix.md)
 [docs/SUPPORT.md](docs/SUPPORT.md)
 
-## SDK And CLI
+### SDK and CLI
 
 Go SDK packages: `github.com/777genius/plugin-kit-ai/sdk/claude`, `github.com/777genius/plugin-kit-ai/sdk/codex`, and `github.com/777genius/plugin-kit-ai/sdk/gemini`.
 
@@ -299,17 +292,19 @@ Go SDK packages: `github.com/777genius/plugin-kit-ai/sdk/claude`, `github.com/77
 
 </details>
 
+Contributor checks:
+
 ```bash
 go test ./...
 make vet
 ```
 
-- Contributing: CONTRIBUTING.md
-- Security policy: SECURITY.md
-- Support boundary: docs/SUPPORT.md
-- Native CLI installation: docs/NATIVE_INSTALL.md
-- Client E2E evidence: docs/AGENTPLUGINS_CLIENT_E2E.md
-- Registry: https://github.com/777genius/universal-agent-plugins-registry
+- Contributing: [CONTRIBUTING.md](CONTRIBUTING.md)
+- Security policy: [SECURITY.md](SECURITY.md)
+- Support boundary: [docs/SUPPORT.md](docs/SUPPORT.md)
+- Native CLI installation: [docs/NATIVE_INSTALL.md](docs/NATIVE_INSTALL.md)
+- Client E2E evidence: [docs/AGENTPLUGINS_CLIENT_E2E.md](docs/AGENTPLUGINS_CLIENT_E2E.md)
+- Registry repository: https://github.com/777genius/universal-agent-plugins-registry
 
 ## License
 
