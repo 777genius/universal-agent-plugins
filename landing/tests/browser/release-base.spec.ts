@@ -40,11 +40,29 @@ for (const locale of publishedLocales) {
     await page.addInitScript(() => sessionStorage.removeItem('plugin-kit-ai_release_meta'));
     await page.goto(`.${localizedPath('/plugins/', locale)}`);
     await expect(page.locator('h1')).toBeVisible();
-    await page.waitForFunction(() =>
-      Boolean(
-        (document.querySelector('#__nuxt') as any)?.__vue_app__?.config.globalProperties.$router,
-      ),
-    );
+    await page.waitForFunction(() => {
+      const app = (document.querySelector('#__nuxt') as any)?.__vue_app__;
+      const nuxt = app?.$nuxt || app?.config.globalProperties.$nuxt;
+      return Boolean(app?.config.globalProperties.$router && nuxt?.isHydrating === false);
+    });
+    // With appManifest disabled, this build does not request a download payload
+    // on router.push. Probe the real extracted artifact through the browser to
+    // prove the blockade, without seeding Nuxt's data or payload caches.
+    const payloadUrl = new URL(
+      `${localizedPath('/download/', locale).slice(1)}_payload.json`, base,
+    ).href;
+    const extracted = await request.get(payloadUrl);
+    expect(extracted.ok()).toBe(true);
+    expect(Array.isArray(await extracted.json())).toBe(true);
+    expect(await page.evaluate(async (url) => {
+      try {
+        await fetch(url);
+        return false;
+      } catch {
+        return true;
+      }
+    }, payloadUrl), 'browser cannot load the real extracted download payload').toBe(true);
+    expect(payloads).toContain(payloadUrl);
     const documents: string[] = [];
     page.on('request', (req) => {
       if (req.isNavigationRequest() && req.frame() === page.mainFrame()) documents.push(req.url());
@@ -65,7 +83,7 @@ for (const locale of publishedLocales) {
     );
     await expect(page).toHaveURL(new URL(localizedPath('/download/', locale).slice(1), base).href);
     await expect(page.locator('.download-section__release-info a')).toHaveText(`v${version}`);
-    expect(payloads.length, 'missing extracted payload path must execute').toBeGreaterThan(0);
+    expect(payloads.length, 'extracted payload blockade must execute').toBeGreaterThan(0);
     expect(github.length, 'GitHub refresh must actually be blocked').toBeGreaterThan(0);
     expect(localApi).toEqual([endpoint]);
     expect(documents, 'must remain an SPA navigation').toEqual([]);
