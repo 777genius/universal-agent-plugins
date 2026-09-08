@@ -87,9 +87,23 @@ def selected_frame(session, expected):
 
 
 def installed(fixture, selected):
-    if 'codex' not in selected: fixture.installed(selected)
-    body = json.loads((fixture.data / 'state-v2.json').read_text())
-    bindings = body['installations'][0]['clients']
+    # Keep shared installation checks here: Fixture.installed assumes no active
+    # clients, while this lane verifies synthetic Codex native activation.
+    state = fixture.data / 'state-v2.json'
+    check(state.is_file(), 'no persisted installation state after Yes')
+    body = json.loads(state.read_text())
+    found = set()
+    def walk(value):
+        if isinstance(value, dict):
+            if 'client_id' in value: found.add(value['client_id'])
+            for child in value.values(): walk(child)
+        elif isinstance(value, list):
+            for child in value: walk(child)
+    walk(body)
+    check(found == set(selected), f'persisted clients {found}, expected {set(selected)}')
+    installations = body.get('installations', [])
+    check(len(installations) == 1, 'expected exactly one fresh installation')
+    bindings = installations[0]['clients']
     check(sorted(b['client_id'] for b in bindings.values()) == sorted(selected),
           'binding identities differ from selection')
     locators = []
@@ -104,6 +118,13 @@ def installed(fixture, selected):
             check(receipt['client_binding_id'] == binding_id, 'receipt identity mismatch')
             check(receipt['active_path'] == binding['target_locator'], 'receipt path mismatch')
         target = Path(binding['target_locator']).resolve()
+        check(target.is_relative_to(fixture.root.resolve()), 'target escaped fixture')
+        manifest = target / 'plugin.json'
+        check(manifest.is_file(), 'native package manifest missing')
+        check(json.loads(manifest.read_text())['name'] == 'pty-synthetic',
+              'wrong package materialized')
+        check(manifest.read_bytes() == (fixture.package / 'plugin.json').read_bytes(),
+              'package manifest bytes differ from source')
         expected_root = fixture.data / 'managed/clients/codex' if client == 'codex' else fixture.home / '.cursor'
         check(target.is_relative_to(expected_root.resolve()),
               f'identity/path mismatch: {client}: {target}')
@@ -111,11 +132,17 @@ def installed(fixture, selected):
             native = target / '.codex-plugin/plugin.json'
             check(native.is_file(), 'Codex native identity missing after Yes')
             check(json.loads(native.read_text())['name'] == 'pty-synthetic', 'wrong Codex identity')
+            # The standard adapter renders native metadata from plugin.json.
+            expected_native = (b'{\n  "description": "Synthetic terminal fixture",\n'
+                               b'  "name": "pty-synthetic",\n  "version": "1.0.0"\n}\n')
+            check(native.read_bytes() == expected_native,
+                  'Codex native manifest bytes differ from expected projection')
             registry = json.loads((fixture.data / 'synthetic-codex-registry.json').read_text())
             check(len(registry['installed']) == 1 and registry['installed'][0]['enabled'], 'native registry mismatch')
         locators.append(str(target))
     for client in set(TARGETS) - set(selected):
         check(hashes(fixture.home / ('.' + client)) == {}, f'unselected {client} mutated')
+    check(fixture.mutations() != fixture.before, 'Yes produced no mutation')
     return {'bindings': bindings, 'package_paths': locators}
 
 
