@@ -66,6 +66,31 @@ jobs:
       - name: Windows native console cancellation entry and reuse
         if: ${{ !cancelled() && runner.os == 'Windows' && steps.build.outcome == 'success' }}
         run: python scripts/terminal-ui/qualification_faults.py --case windows-console-cancel --artifacts "$RUNNER_TEMP/windows-fault-evidence" --timeout 15
+      # Temporary investigation: fresh processes after strict cancellation.
+      - name: Windows error resource diagnostic (temporary)
+        if: ${{ always() && runner.os == 'Windows' && steps.build.outcome == 'success' }}
+        shell: pwsh
+        run: |
+          $repo = (Get-Location).Path
+          $evidence = Join-Path $env:RUNNER_TEMP ('windows-fault-evidence/error-resource-' + [guid]::NewGuid().ToString('N'))
+          New-Item -ItemType Directory -Path $evidence -Force | Out-Null
+          $go = (Get-Command go -CommandType Application -ErrorAction Stop).Source
+          Get-Command python -CommandType Application -ErrorAction Stop | Out-Null
+          if (!(Test-Path (Join-Path $env:RUNNER_TEMP 'agentplugins.exe'))) { throw 'built CLI missing' }
+          & $go version | Tee-Object -FilePath (Join-Path $evidence 'go-version.txt')
+          Push-Location cli/plugin-kit-ai
+          try {
+            & $go test -c -o (Join-Path $evidence 'promptio.test.exe') ./internal/promptio
+            $buildExit = $LASTEXITCODE
+          } finally {
+            Pop-Location
+          }
+          Set-Content -Path (Join-Path $evidence 'build-exit.txt') -Value $buildExit
+          if ($buildExit -ne 0) { throw 'probe build failed' }
+          python -I scripts/terminal-ui/diagnostic_error_resource.py --repo $repo --binary (Join-Path $evidence 'promptio.test.exe') --artifacts (Join-Path $evidence 'probe')
+          $probeExit = $LASTEXITCODE
+          Set-Content -Path (Join-Path $evidence 'probe-exit.txt') -Value $probeExit
+          exit $probeExit
       - name: Windows PowerShell ConPTY default No and Ctrl+C
         if: ${{ !cancelled() && runner.os == 'Windows' && steps.build.outcome == 'success' }}
         shell: pwsh
