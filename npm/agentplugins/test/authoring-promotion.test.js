@@ -317,14 +317,19 @@ test("pinned attest multi-subject statement binds both projection basename colli
 });
 
 // Load unchanged production source into a test-local module and expose ONLY its
-// private sequencing seam. No native adapter is substituted and no production
+// private sequencing seam and exact post-admission main tail. No native adapter is substituted and no production
 // caller can inject this recheck. The callback models admission; signatures and
 // provider effects still execute their real orchestration against child fixtures.
 function sequencing() {
   const file = require.resolve("../scripts/authoring-promotion");
   const Module = require("node:module"), m = { exports: {} };
-  require("node:vm").runInThisContext(Module.wrap(fs.readFileSync(file, "utf8").replace(/^#!.*\n/, "") +
-    "\nmodule.exports = { promotePair, verifyAll };"), { filename: file })(m.exports, Module.createRequire(file), m, file, path.dirname(file));
+  const body = fs.readFileSync(file, "utf8");
+  // Model only the state AFTER admission; never replace admittedInputs or make
+  // the unconditional native gate positive, even inside this private VM.
+  const tail = body.slice(body.indexOf("  const observed = inspectPair(state.record, state.o.scratch);", body.indexOf("function main(args)")),
+    body.indexOf("\nif (require.main === module)"));
+  require("node:vm").runInThisContext(Module.wrap(body.replace(/^#!.*\n/, "") +
+    "\nmodule.exports = { promotePair, verifyAll, admissionTail: (state,args) => {\n" + tail + "};"), { filename: file })(m.exports, Module.createRequire(file), m, file, path.dirname(file));
   assert.equal(p.promotePair, undefined);
   return m.exports;
 }
@@ -439,4 +444,84 @@ for(const defect of ["digest","duplicate","extra","bytes"]) test(`incomplete dra
   if(defect==="bytes") routes[endpoint("releases/assets/1000")].binary=Buffer.from("bad").toString("base64");
   const calls=provider(t,f,routes); assert.throws(()=>p.inspectPair(f.record,f.scratch));
   assert(calls().every(c=>c.args[0]==="api"));
+});
+
+// Shared offline state for route + sequence tests; all nineteen signatures use
+// the real verifier orchestration, with synthetic child-provider responses.
+function reconciliationFixture(t, states = ["draft", "draft"], mutation = {}) {
+  const f = fixture(), routes = releaseRoutes(f, states), seq = sequencing();
+  const assets = Object.fromEntries(c.PRODUCTS.map((product,i) => [f.record.products[product].tag, structuredClone(routes[endpoint(`releases/${200+i}`)].body.assets)]));
+  const e = expected(f), subjects = [...p.frozenSubjects(f.root,f.record), {file:f.recordFile, sha256:e.sha256}];
+  e.workflow_sha = ID.commit; e.subjects = subjects.map(s => ({name:path.basename(s.file),digest:{sha256:s.sha256}}));
+  routes.verify = {body:verified(e)};
+  const calls = provider(t,f,routes,{assets,...mutation});
+  const change = fn => { const file=path.join(f.sandbox,"routes.json"), next=JSON.parse(fs.readFileSync(file)); fn(next); fs.writeFileSync(file,JSON.stringify(next)); };
+  const state = () => ({o:f.options, record:p.validateSelection(fs.readFileSync(f.recordFile),selected), subjects});
+  const recheck = () => { const s=state(); p.frozenSubjects(f.root,s.record); seq.verifyAll(s); return s; };
+  const writes = () => calls().filter(c => c.args[0] === "release").map(c => c.args);
+  return {f,seq,calls,change,state,recheck,writes};
+}
+for (const failure of ["second-edit", "final-readback"]) test(`completed public pair reconciliation route after ${failure} uncertainty`, t => {
+  const b=reconciliationFixture(t,undefined,failure === "second-edit" ? {failEdit:"v2.0.0"} : {});
+  assert.throws(() => b.seq.promotePair(() => {
+    if (failure === "final-readback" && b.writes().filter(a => a[1] === "edit").length === 2) throw Error("interrupted final readback");
+    return b.recheck();
+  },false),failure === "second-edit" ? /plugin-kit-ai mutation uncertain/ : /interrupted final readback/);
+  assert.deepEqual(b.writes().map(a => a[1]),["edit","edit"]);
+  const offset=b.calls().length;
+  const admission=b.seq.admissionTail(b.state(),["admit-reconciliation"]);
+  assert.equal(admission.sign_required,false); assert.equal(admission.status,"qualified-for-promotion");
+  assert.deepEqual(admission.missing_assets,[[],[]]);
+  assert.equal(b.calls().slice(offset).filter(c => c.args.includes("verify")).length,19);
+  assert.deepEqual(b.seq.promotePair(b.recheck,true).public_readback,["public","public"]);
+  assert.equal(b.calls().slice(offset).filter(c => c.args.includes("verify")).length,38);
+  assert.equal(b.calls().slice(offset).filter(c => c.args[0] === "release").length,0);
+});
+for (const invalid of ["absent", "incomplete-public", "signature"]) test(`reconciliation admission rejects ${invalid} without mutation`, t => {
+  const b=reconciliationFixture(t,invalid === "absent" ? ["absent","absent"] : ["public","public"]);
+  if (invalid === "incomplete-public") b.change(r => r[endpoint("releases/201")].body.assets.pop());
+  if (invalid === "signature") b.change(r => r.verify={exit:9});
+  assert.throws(() => b.seq.admissionTail(b.state(),["admit-reconciliation"]),
+    invalid === "absent" ? /reconciliation requires/ : invalid === "signature" ? /trusted gh failed/ : /incomplete public release/);
+  assert.deepEqual(b.writes(),[]);
+});
+for (const write of ["create", "upload"]) for (const when of ["first", "subsequent"]) for (const transition of ["public", "draft", "absent", "appeared"]) {
+  test(`peer ${transition} before ${when} ${write} stops all subsequent mutations`, t => {
+    const target=when === "first" ? 0 : 1, peer=1-target;
+    const states=["draft","draft"]; states[target]=write === "create" ? "absent" : "draft";
+    if (when === "first") states[peer]=transition === "draft" ? "public" : transition === "appeared" ? "absent" : "draft";
+    // On subsequent writes the peer is our own verified create or upload.
+    // A public->draft case starts with a public peer (no earlier write needed).
+    if (when === "subsequent") states[peer]=transition === "draft" ? "public" : write === "create" ? "absent" : "draft";
+    const b=reconciliationFixture(t,states); let checks=0, before;
+    if (write === "upload") b.change(r => {
+      r[endpoint(`releases/${200+target}`)].body.assets.pop();
+      if (when === "subsequent" && transition !== "draft") r[endpoint(`releases/${200+peer}`)].body.assets.pop();
+    });
+    assert.throws(() => b.seq.promotePair(() => {
+      if (++checks === (when === "first" ? 2 : 3)) {
+        before=b.writes().length;
+        b.change(r => {
+          const lookup=r[`graphql:tag=${b.f.record.products[c.PRODUCTS[peer]].tag}`].body.data.repository;
+          if (transition === "absent") lookup.release=null;
+          else if (transition === "appeared") {
+            lookup.release={databaseId:300+peer}; r[endpoint(`releases/${300+peer}`)]={body:{...r[endpoint(`releases/${200+peer}`)].body,id:300+peer}};
+          } else r[endpoint(`releases/${200+peer}`)].body.draft=transition === "draft";
+        });
+      }
+      return b.recheck();
+    },!states.every(s => s === "absent")),/pair changed|release identity changed/);
+    assert.equal(b.writes().length,before);
+    assert.deepEqual(b.writes().map(a => a[1]),when === "subsequent" && transition !== "draft" ? [write] : []);
+  });
+}
+
+test("verified own creates advance expected presence without an extra upload", t => {
+  const b=reconciliationFixture(t,["absent","absent"]);
+  assert.deepEqual(b.seq.promotePair(b.recheck,false).public_readback,["public","public"]);
+  assert.deepEqual(b.writes().map(a => a[1]),["create","create","edit","edit"]);
+  const before=b.writes().length;
+  assert.equal(b.seq.admissionTail(b.state(),["admit-reconciliation"]).sign_required,false);
+  assert.deepEqual(b.seq.promotePair(b.recheck,true).public_readback,["public","public"]);
+  assert.equal(b.writes().length,before);
 });

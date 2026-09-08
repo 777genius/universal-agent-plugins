@@ -376,11 +376,13 @@ function promotePair(recheck, reconciliation) {
   if (observed.reconciliation_required && !reconciliation) fail("PARTIAL_NATIVE_PROMOTION: exact pair reconciliation required; no automatic second publication");
   if (observed.states.every(s => s === "public")) return { status: "qualified-for-promotion", public_readback: observed.states };
   if (reconciliation && !observed.reconciliation_required && !observed.pair.some(r => r?.draft)) fail("explicit reconciliation requires an existing draft or partial pair");
-  const expectedStates = observed.states.map(s => s === "public" ? "public" : "draft");
+  const normalizeStates = states => states.map(s => s === "incomplete-draft" ? "draft" : s);
+  const expectedStates = normalizeStates(observed.states);
   const ids = observed.pair.map(r => r?.id ?? null);
   const readPair = () => {
     const next = inspectPair(state.record, state.o.scratch);
     next.pair.forEach((r, i) => exact(r?.id ?? null, ids[i], "release identity changed"));
+    exact(normalizeStates(next.states), expectedStates, "pair changed during draft preparation or publication");
     return next;
   };
   // Draft creation is possible only after real admission and all 19 signatures.
@@ -405,6 +407,7 @@ function promotePair(recheck, reconciliation) {
       if (!after || !after.draft || after.missing_assets.length) fail("draft preparation incomplete; reconcile exact pair");
       if (existing) exact(after.id, existing.id, "draft identity changed during upload");
       ids[index] = after.id;
+      expectedStates[index] = "draft";
     } else if (!existing.draft && !reconciliation) fail("release changed during draft preparation; reconcile exact pair");
   }
   observed = readPair();
@@ -420,6 +423,9 @@ function promotePair(recheck, reconciliation) {
     for (const product of c.PRODUCTS) checkTag(state.record, product, state.o.scratch);
     try { gh(["release", "edit", tag(state.record.identity, p), "--repo", REPOSITORY, "--draft=false"], state.o.scratch); }
     catch { fail(`PARTIAL_NATIVE_PROMOTION: ${p} mutation uncertain; inspect both exact tags/assets before any further action`); }
+    const after = inspectRelease(state.record, p, state.o.scratch);
+    if (!after || after.draft) fail("public transition readback required; reconcile exact pair");
+    exact(after.id, ids[index], "release identity changed during publication");
     expectedStates[index] = "public";
   }
   state = recheck(); observed = readPair();
@@ -434,7 +440,7 @@ function main(args) {
   const state = admittedInputs(value);
   const observed = inspectPair(state.record, state.o.scratch);
   if (observed.reconciliation_required && args[0] !== "admit-reconciliation") fail("PARTIAL_NATIVE_PROMOTION: reconcile before signing");
-  if (args[0] === "admit-reconciliation" && !observed.reconciliation_required && !observed.pair.some(r => r?.draft)) fail("reconciliation requires an incomplete draft or partial public pair");
+  if (args[0] === "admit-reconciliation" && !observed.reconciliation_required && !observed.pair.some(r => r?.draft) && !observed.states.every(s => s === "public")) fail("reconciliation requires an existing draft or public pair");
   // Resuming an exact record keeps the original signing invocation. A later run
   // reuses/verifies those signatures instead of adding a different invocation.
   const signRequired = args[0] !== "admit-reconciliation" && String(state.record.producer.run_id) === process.env.GITHUB_RUN_ID &&
