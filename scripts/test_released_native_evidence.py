@@ -3,6 +3,8 @@ import importlib.util
 import json
 from pathlib import Path
 import tempfile
+import shutil
+from unittest.mock import patch
 import unittest
 import zipfile
 
@@ -110,6 +112,46 @@ class EvidenceTests(unittest.TestCase):
         record = json.loads(self.record_path.read_text())
         change(record)
         self.record_path.write_text(json.dumps(record))
+
+    def linux_supplement(self):
+        # Synthetic fixture conversion only; these are never lifecycle receipts.
+        for folder in list(self.root.iterdir()):
+            if not folder.name.endswith('linux-arm64'):
+                shutil.rmtree(folder)
+                continue
+            for path in folder.rglob('*.json'):
+                path.write_text(path.read_text().replace('linux-arm64', 'linux-amd64').replace('linux_arm64', 'linux_amd64'))
+            folder = folder.rename(folder.with_name(folder.name.replace('linux-arm64', 'linux-amd64')))
+            self.record_path = folder / 'runner-evidence.json'
+            self.refresh_hashes()
+        # Reuse synthetic tool metadata with the target name translated, without
+        # pretending the unfilled production pins have been verified.
+        return {**proof.pins(), 'linux-amd64': {key: tuple(value.replace('linux-arm64', 'linux-amd64') if isinstance(value, str) else value for value in pin) for key, pin in proof.pins()['linux-arm64'].items()}}
+
+    def test_linux_supplement_requires_all_three_and_keeps_historical_default(self):
+        synthetic_pins = self.linux_supplement()
+        with patch.object(proof, 'pins', return_value=synthetic_pins):
+            with self.assertRaisesRegex(ValueError, 'exactly 9'):
+                self.verify()
+            summary, _ = proof.verify(self.root, '1.2.3', 'a'*40, 'b'*40, 'c'*40, scope='linux-amd64')
+            self.assertEqual(summary['scope'], 'linux-amd64')
+            self.assertEqual(len(summary['jobs']), 3)
+            self.assertEqual({job['target'] for job in summary['jobs']}, {'linux-amd64'})
+            self.mutate(lambda r: r.update(passed_tests=[]))
+            with self.assertRaisesRegex(ValueError, 'missing required tests'):
+                proof.verify(self.root, '1.2.3', 'a'*40, 'b'*40, 'c'*40, scope='linux-amd64')
+            shutil.rmtree(self.record_path.parent)
+            with self.assertRaisesRegex(ValueError, 'exactly 3'):
+                proof.verify(self.root, '1.2.3', 'a'*40, 'b'*40, 'c'*40, scope='linux-amd64')
+
+    def test_linux_supplement_cannot_accept_unfilled_production_pins(self):
+        synthetic_pins = self.linux_supplement()
+        pin = list(synthetic_pins['linux-amd64']['codex'])
+        pin[4] = None
+        synthetic_pins['linux-amd64']['codex'] = tuple(pin)
+        with patch.object(proof, 'pins', return_value=synthetic_pins):
+            with self.assertRaisesRegex(ValueError, 'unfilled'):
+                proof.verify(self.root, '1.2.3', 'a'*40, 'b'*40, 'c'*40, scope='linux-amd64')
 
     def test_exact_matrix_and_deterministic_archive(self):
         summary, files = self.verify()

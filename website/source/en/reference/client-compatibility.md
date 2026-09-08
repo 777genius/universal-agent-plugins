@@ -52,6 +52,34 @@ were re-downloaded and hash-checked after publication on the
 [Reproduction and publication procedure](https://github.com/777genius/universal-agent-plugins/blob/main/docs/released-native-client-proof.md)
 keeps those assets separate from the immutable installer release.
 
+## Supplemental Linux amd64 proof for 0.1.53
+
+[Run 34195481283](https://github.com/777genius/universal-agent-plugins/actions/runs/34195481283)
+passed all three Linux amd64 jobs and six required tests without skips on
+Ubuntu 24.04 GitHub-hosted runners. It downloaded the same public UAP 0.1.53
+release identified above, with native binary SHA-256
+`d9d1a99a6d0d5e497bad793df017efc8e59a1e53c4012e6375ade6a3d12c3df9`.
+Harness commit: `376d06b3b71c3826a3c3dbbbf8ed5def43eb5c72`.
+
+| Tested client | Linux amd64 observation |
+| --- | --- |
+| Codex 0.153.4 | Passed native lifecycle, stdio/HTTP and skill-context assertions |
+| Claude Code 2.1.263 | Passed native lifecycle and stdio/HTTP/skill runtime assertions |
+| OpenCode 1.18.29 | Passed lifecycle, extended stdio/skill and collision-observation suites |
+
+This supplements the original nine jobs; it does not rewrite their evidence.
+The same loopback-provider, real-model/OAuth and OpenCode collision limitations
+apply. JSONC lifecycle still does not establish JSONC stdio/body runtime.
+The earlier Windows Claude managed-stdio limitation is unchanged.
+
+[Evidence identities and file hashes](https://github.com/777genius/universal-agent-plugins/blob/main/docs/evidence/client-compatibility-linux-amd64-0.1.53.json)
+identify the exact release and harness. The separate
+[evidence archive](https://github.com/777genius/universal-agent-plugins/releases/tag/native-evidence-0.1.53-linux-amd64-34195481283)
+contains 175 original files plus its verifier summary; archive SHA-256:
+`d4baaf822ea1cc9c29d46d4393e2ae7771d34bd68b80864aaf0ceed34ac1df8d`.
+Verify it using `scripts/verify-released-native-evidence.py --scope linux-amd64`
+with the recorded release and harness identities.
+
 ## Historical source-built observations
 
 Snapshot: **2026-09-07**. These are bounded native CLI observations for the
@@ -203,7 +231,7 @@ failures have not been relabeled as passes.
 | --- | --- |
 | macOS arm64 source checkpoint | All required native suites passed at `ef20b93`, including OpenCode extended runtime |
 | Windows amd64 source checkpoint | All required native suites passed at `ef20b93`; Claude managed stdio remains explicitly unsupported |
-| Linux amd64 | Not evaluated by these final runs |
+| Linux amd64 | Released 0.1.53 supplemental proof above; not part of the historical runs |
 | Desktop applications | Not evaluated by these CLI runs |
 | Historical macOS 15.6.1 arm64, UAP 0.1.22 | Discovery/lifecycle only; Claude 2.1.205, Gemini 0.36.0, OpenCode 1.18.4; Cline/Windsurf config projection, client versions unrecorded |
 

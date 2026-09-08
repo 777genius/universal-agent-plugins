@@ -10,6 +10,42 @@ SPEC.loader.exec_module(matrix)
 
 
 class LinuxHostedSafetyTests(unittest.TestCase):
+    def test_native_amd64_host_mapping_and_opt_in(self):
+        env = {"GITHUB_ACTIONS": "true", "RUNNER_ENVIRONMENT": "github-hosted", "AGENTPLUGINS_NATIVE_DISPOSABLE_HOSTED": "1"}
+        for machine in ("x86_64", "amd64", "AMD64"):
+            with self.subTest(machine=machine), patch.dict(matrix.os.environ, env, clear=True), patch.object(matrix.platform, "system", return_value="Linux"), patch.object(matrix.platform, "machine", return_value=machine):
+                runtime = matrix.disposable_runtime_environment("linux-amd64")
+                self.assertEqual(runtime["AGENTPLUGINS_NATIVE_DISPOSABLE_LINUX"], "1")
+        for changes, system, machine in [({}, "Linux", "aarch64"), ({}, "Darwin", "x86_64"), ({"RUNNER_ENVIRONMENT": "self-hosted"}, "Linux", "x86_64"), ({"AGENTPLUGINS_NATIVE_DISPOSABLE_HOSTED": "0"}, "Linux", "x86_64")]:
+            with self.subTest(changes=changes, system=system, machine=machine), patch.dict(matrix.os.environ, {**env, **changes}, clear=True), patch.object(matrix.platform, "system", return_value=system), patch.object(matrix.platform, "machine", return_value=machine):
+                with self.assertRaises(RuntimeError):
+                    matrix.disposable_runtime_environment("linux-amd64")
+
+    def test_linux_versions_match_existing_lanes(self):
+        for tool in ("codex", "claude", "opencode", "rg", "lintai"):
+            self.assertEqual(matrix.PINS["linux-amd64"][tool][2], matrix.PINS["linux-arm64"][tool][2])
+
+    def test_unfilled_pins_fail_before_any_download(self):
+        for tool in matrix.PINS["linux-amd64"]:
+            pin = list(matrix.PINS["linux-amd64"][tool])
+            pin[4] = None  # Explicitly test the incomplete-pin failure boundary.
+            with self.subTest(tool=tool), patch.object(matrix.subprocess, "run") as github, patch.object(matrix.urllib.request, "urlopen") as npm:
+                with self.assertRaisesRegex(ValueError, "unfilled"):
+                    matrix.provision(pin, Path("unused"), tool)
+                github.assert_not_called()
+                npm.assert_not_called()
+
+    def test_dispatch_scope_selects_only_three_linux_jobs(self):
+        import json
+        import re
+        workflow = (Path(__file__).resolve().parents[1] / ".github/workflows/agentplugins-released-native-clients.yml").read_text()
+        expression = next(line for line in workflow.splitlines() if "platform: ${{" in line)
+        selected, historical = [json.loads(value) for value in re.findall(r"'([\[].*?[\]])'", expression)]
+        self.assertEqual(selected, [{"target": "linux-amd64", "runner": "ubuntu-24.04"}])
+        self.assertEqual({p["target"] for p in historical}, {"linux-arm64", "darwin-arm64", "windows-amd64"})
+        self.assertIn("default: historical-nine", workflow)
+        self.assertIn("client: [codex, claude, opencode]", workflow)
+
     def test_native_arm64_host_accepts_kernel_machine_aliases(self):
         env = {"GITHUB_ACTIONS": "true", "RUNNER_ENVIRONMENT": "github-hosted", "AGENTPLUGINS_NATIVE_DISPOSABLE_HOSTED": "1"}
         for machine in ("aarch64", "arm64"):

@@ -24,6 +24,14 @@ import urllib.request
 import zipfile
 
 PINS = {
+    # Exact release archives downloaded and verified against upstream digests.
+    "linux-amd64": {
+        "rg": ("github", "BurntSushi/ripgrep", "15.2.0", "ripgrep-15.2.0-x86_64-unknown-linux-musl.tar.gz", "sha256:33e15bcf1624b25cdd2a55813a47a2f95dbe126268203e76aa6a585d1e7b149c", "rg"),
+        "codex": ("github", "openai/codex", "rust-v0.153.4", "codex-x86_64-unknown-linux-musl.tar.gz", "sha256:f479424eca092484dc40d87ae28c44f4cc40234a60045d6131e493800d814a30", "codex-x86_64-unknown-linux-musl"),
+        "claude": ("npm", "@anthropic-ai/claude-code-linux-x64", "2.1.263", "claude-code-linux-x64-2.1.263.tgz", "sha512-0IrvpLd/0FP0acQw59T4Cvx/r4nwAXKBrW0WyhIXymzYWurPCLztB+Icu9MkeewAUI+p3PTXsSfmilv/n6XlAQ==", "claude"),
+        "opencode": ("npm", "opencode-linux-x64", "1.18.29", "opencode-linux-x64-1.18.29.tgz", "sha512-X8/wS/8mzL7Ko0zYYF6RzKax39KkxXDRoimhmzXuo0gPrZX4DQjqBNpPAByBwUjFapk73ZGSVsjDGvoNapBa1Q==", "opencode"),
+        "lintai": ("github", "777genius/lintai", "v0.1.3", "lintai-v0.1.3-x86_64-unknown-linux-gnu.tar.gz", "sha256:2b3d176db752433b904a4b42375543ff398f4841d22e48f7d4f23ded925b72da", "lintai"),
+    },
     "linux-arm64": {
         "rg": ("github", "BurntSushi/ripgrep", "15.2.0", "ripgrep-15.2.0-aarch64-unknown-linux-gnu.tar.gz", "sha256:a740b91c82eaf9914cfedd353572f2791cbe0162c84101ee0951058f4dcbc90d", "rg"),
         "codex": ("github", "openai/codex", "rust-v0.153.4", "codex-aarch64-unknown-linux-musl.tar.gz", "sha256:5cda6182bd94c3a30f2eb63a495489ebf7f691fddb14d70f48c6c1a5071b6cde", "codex-aarch64-unknown-linux-musl"),
@@ -58,7 +66,16 @@ REQUIRED_TESTS = {
 }
 
 
+def require_verified_pin(pin):
+    if not isinstance(pin, str) or not (
+        re.fullmatch(r"sha256:[0-9a-f]{64}", pin)
+        or re.fullmatch(r"sha512-[A-Za-z0-9+/]{86}==", pin)
+    ):
+        raise ValueError("unfilled or invalid archive pin; verify exact upstream archive before native dispatch")
+
+
 def verify_digest(body, pin):
+    require_verified_pin(pin)
     if pin.startswith("sha256:"):
         actual = "sha256:" + hashlib.sha256(body).hexdigest()
     elif pin.startswith("sha512-"):
@@ -87,6 +104,7 @@ def extract_binary(body, archive, basename):
 
 def provision(pin, directory, name):
     kind, repository, version, archive, digest, basename = pin
+    require_verified_pin(digest)
     if kind == "github":
         subprocess.run(["gh", "release", "download", version, "--repo", repository, "--pattern", archive, "--dir", str(directory)], check=True, timeout=240)
         body = (directory / archive).read_bytes()
@@ -156,7 +174,7 @@ def disposable_runtime_environment(target):
     # Recheck the actual runner before granting the runtime's Linux test opt-in.
     require_hosted(target)
     env = {"GITHUB_ACTIONS": "true", "RUNNER_ENVIRONMENT": "github-hosted", "AGENTPLUGINS_NATIVE_DISPOSABLE_HOSTED": "1"}
-    if target == "linux-arm64":
+    if target in ("linux-arm64", "linux-amd64"):
         env["AGENTPLUGINS_NATIVE_DISPOSABLE_LINUX"] = "1"
     return env
 
@@ -208,6 +226,8 @@ def main():
             raise RuntimeError("checkout differs from expected exact workflow source commit")
         if subprocess.check_output(["git", "status", "--porcelain", "--untracked-files=normal"], cwd=source):
             raise RuntimeError("native proof must build a clean exact checkout")
+        for key in (args.client, "lintai", "rg"):
+            require_verified_pin(PINS[args.target][key][4])
         binary_dir = scratch / "bin"
         binary_dir.mkdir()
         client, client_evidence = provision(PINS[args.target][args.client], binary_dir, args.client)

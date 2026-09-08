@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Verify nine downloaded released-native artifacts and optionally freeze a ZIP.
+"""Verify scoped downloaded released-native artifacts and optionally freeze a ZIP.
 
 Input is a fresh directory populated by gh run download. No archives are
 extracted, clients executed, or release assets modified. Recorded attestation
@@ -22,6 +22,7 @@ CLIENT_TESTS = {
     'opencode': {'TestAgentpluginsOpenCodeNativeLifecycle', 'TestAgentpluginsOpenCodeNativeToolCollision', 'TestAgentpluginsOpenCodeNativeRuntimeExtended'},
 }
 TARGETS = ('darwin-arm64', 'windows-amd64', 'linux-arm64')
+SCOPES = {'historical-nine': TARGETS, 'linux-amd64': ('linux-amd64',)}
 REPOSITORY = '777genius/universal-agent-plugins'
 
 
@@ -91,6 +92,7 @@ def pins():
 def verify_tools(record, target, client):
     for field, key in (('client_asset', client), ('scanner_asset', 'lintai'), ('ripgrep_asset', 'rg')):
         kind, repo, version, archive_name, integrity, _ = pins()[target][key]
+        require(isinstance(integrity, str) and re.fullmatch(r'(sha256:[0-9a-f]{64}|sha512-[A-Za-z0-9+/]{86}==)', integrity), 'unfilled or invalid archive pin')
         source = f'https://github.com/{repo}/releases/tag/{version}' if kind == 'github' else f'https://registry.npmjs.org/{repo}/-/{archive_name}'
         asset = record.get(field, {})
         require(all(asset.get(k) == v for k, v in {'source': source, 'version': version, 'archive': archive_name, 'archive_integrity': integrity}.items()) and exact_hex(asset.get('binary_sha256'), 64), 'wrong pinned tool: ' + field)
@@ -174,17 +176,19 @@ def verify_fixtures(bodies, record, client, target):
     expected = {'codex': {'codex'}, 'claude': {'claude-lifecycle', 'claude-runtime'}, 'opencode': {'opencode.json', 'opencode.jsonc', 'extended', ('api/server',), ('api server',), ('api/server', 'api server')}}
     require(set(found) == expected[client], 'missing or unexpected structured fixtures')
 
-def verify(root, version, release_commit, harness_commit, harness_tree):
+def verify(root, version, release_commit, harness_commit, harness_tree, *, scope='historical-nine'):
+    require(scope in SCOPES, 'unknown evidence scope')
+    targets = SCOPES[scope]
     require(re.fullmatch(r'(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)', version), 'exact stable version required')
     for value in (release_commit, harness_commit, harness_tree):
         require(exact_hex(value, 40), 'exact source SHA required')
-    names = {f'released-native-client-{client}-{target}' for client in CLIENT_TESTS for target in TARGETS}
+    names = {f'released-native-client-{client}-{target}' for client in CLIENT_TESTS for target in targets}
     require(root.is_dir() and not root.is_symlink(), 'input must be a real directory')
-    require({p.name for p in root.iterdir()} == names, 'exactly nine expected artifact directories required')
+    require({p.name for p in root.iterdir()} == names, f'exactly {len(names)} expected artifact directories required for {scope}')
     files, jobs, release_trees, manifests, checksums = {}, [], set(), set(), set()
     by_target = {}
     for client, required in CLIENT_TESTS.items():
-        for target in TARGETS:
+        for target in targets:
             name = f'released-native-client-{client}-{target}'
             bodies = collect(root / name)
             require('runner-evidence.json' in bodies, 'missing runner evidence: ' + name)
@@ -230,7 +234,7 @@ def verify(root, version, release_commit, harness_commit, harness_tree):
     require(len(release_trees) == len(manifests) == len(checksums) == 1, 'cross-job release metadata mismatch')
     summary = {'schema_version': 1, 'status': 'passed', 'release_version': version, 'release_commit': release_commit,
                'release_tree': next(iter(release_trees)), 'harness_commit': harness_commit, 'harness_tree': harness_tree,
-               'jobs': jobs, 'files_sha256': {p: digest(b) for p, b in sorted(files.items())},
+               'scope': scope, 'jobs': jobs, 'files_sha256': {p: digest(b) for p, b in sorted(files.items())},
                'boundary': 'Fixture assertions only; no real-model quality or OAuth claim. Hash and record consistency verification only. Embedded provenance was verified by the runner, not cryptographically reverified here. Log content is unredacted; publication needs disclosure review.'}
     return summary, files
 
@@ -253,11 +257,12 @@ def main():
     parser.add_argument('input', type=Path)
     for name in ('release-version', 'release-commit', 'harness-commit', 'harness-tree'):
         parser.add_argument('--' + name, required=True)
+    parser.add_argument('--scope', choices=SCOPES, default='historical-nine', help='Linux amd64 is supplemental proof, never a replacement for historical nine')
     parser.add_argument('--archive', type=Path, help='new durable ZIP path outside input')
     args = parser.parse_args()
     if args.archive:
         require(not args.archive.resolve().is_relative_to(args.input.resolve()), 'archive must be outside input')
-    summary, files = verify(args.input, args.release_version, args.release_commit, args.harness_commit, args.harness_tree)
+    summary, files = verify(args.input, args.release_version, args.release_commit, args.harness_commit, args.harness_tree, scope=args.scope)
     if args.archive:
         archive(args.archive, summary, files)
     print(json.dumps(summary, indent=2, sort_keys=True))
