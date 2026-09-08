@@ -1305,7 +1305,9 @@ Distinguish frozen-input provenance from release qualification:
    A reviewed production launcher may accept an explicit checksum-bound local
    asset source for this purpose. It must verify the selected product, target,
    source, outer asset and extracted binary through the normal checked cache
-   path, reject malformed inputs without fallback, and never execute the supplied
+   path. Expected digests come from authenticated input provenance in the verified
+   package binding, never from a caller-supplied asset-and-digest pair. Reject
+   malformed inputs without fallback, and never execute the supplied
    file directly. This capability must be implemented and reviewed first;
    ordinary null-qualified preparation remains non-executable.
 3. Pack the final npm tarballs once with the authenticated input binding. Keep
@@ -1321,10 +1323,14 @@ Distinguish frozen-input provenance from release qualification:
    the complementary ten-project/thirty-plan gate. Help or injected planner
    success cannot replace distributed installer success. Missing lanes remain
    unresolved; they never become skipped successes.
-5. After qualification and both native release readbacks, verify default anonymous
-   acquisition without the local source using those identical tarballs before
-   publishing either npm package. Both publishers consume the tested bytes
-   without repacking. Require both registry provenance/readbacks before pair
+5. After qualification and both native release readbacks, install those identical
+   npm tarballs from authenticated staging artifacts into fresh disposable homes,
+   checking their recorded digests without packaging from a checkout. Before
+   publishing either npm package, run their production launchers without the local
+   asset source and verify anonymous native downloads from the canonical public
+   GitHub release URLs. This is not a prepublication npm-registry download. Both
+   publishers verify the staged tarball SHA256, SRI and SHA1 and publish that exact
+   file without repacking. Require both registry provenance/readbacks before pair
    channel promotion. Preserve the repository-wide latest release policy needed
    by historical kit launchers; a non-default release is still a public effect.
 
