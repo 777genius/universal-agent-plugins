@@ -183,4 +183,4 @@ jobs:
         env:
           UAP_E2E_WEB_ROOT: ../.combined-browser
           UAP_E2E_REPOSITORY_BASE: ${{ matrix.base }}
-        run: pnpm exec playwright test tests/browser/i18n-integration.spec.ts tests/browser/payload-scoping.spec.ts tests/browser/i18n-state.spec.ts
+        run: pnpm exec playwright test tests/browser/i18n-integration.spec.ts tests/browser/payload-scoping.spec.ts tests/browser/i18n-state.spec.ts tests/browser/locale-install-navigation.spec.ts tests/browser/release-base.spec.ts
