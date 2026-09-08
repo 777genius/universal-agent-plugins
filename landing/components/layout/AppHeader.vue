@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { publishedLocales } from '~/data/i18n';
 import { mdiClose, mdiGithub, mdiMenu } from '@mdi/js';
 import {
   DialogClose,
@@ -63,6 +64,7 @@ onMounted(() => {
           {{ t('nav.viewOnGithub') }}
         </v-btn>
         <template v-if="interactiveReady">
+          <LanguageSwitcher v-if="publishedLocales.length > 1" compact />
           <ThemeToggle />
         </template>
         <div v-else class="app-header__control-fallback" aria-hidden="true" />
@@ -113,6 +115,7 @@ onMounted(() => {
               <div class="mobile-menu__actions">
                 <span>Appearance</span>
                 <template v-if="interactiveReady">
+                  <LanguageSwitcher v-if="publishedLocales.length > 1" compact />
                   <ThemeToggle />
                 </template>
                 <template v-else>

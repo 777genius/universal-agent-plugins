@@ -1,27 +1,21 @@
 <script setup lang="ts">
 import { supportedLocales } from "~/data/i18n";
-import type { LocaleCode } from "~/data/i18n";
-import { useLocaleStore } from "~/stores/locale";
+import type { KnownLocale } from "~/data/i18n";
 
 const { t, locale } = useI18n();
-const nuxtApp = useNuxtApp();
-const switchLocalePath = useSwitchLocalePath();
 const props = defineProps<{ fullWidth?: boolean; compact?: boolean; iconOnly?: boolean }>();
-const localeStore = useLocaleStore();
-const i18nClient = nuxtApp.$i18n as
-  | { setLocale?: (code: LocaleCode) => Promise<void> | void }
-  | undefined;
-
-// Sync store with actual i18n locale on mount (handles SSG hydration)
-onMounted(() => {
-  if (locale.value && locale.value !== localeStore.current) {
-    localeStore.setLocale(locale.value as string, false);
-  }
+const { switchLocale, pending, error } = useLocation();
+const retryLocale = ref<string>();
+const activator = ref<{ $el?: HTMLElement; focus?: () => void }>();
+const returnFocus = () => nextTick(() => {
+  activator.value?.focus?.();
+  activator.value?.$el?.focus();
 });
 
 const flagIconMap: Record<string, string> = {
   en: "circle-flags:gb",
   ru: "circle-flags:ru",
+  uk: "circle-flags:ua",
   es: "circle-flags:es",
   fr: "circle-flags:fr",
   zh: "circle-flags:cn"
@@ -30,13 +24,13 @@ const flagIconMap: Record<string, string> = {
 const items = computed(() =>
   supportedLocales.map((item) => ({
     title: item.name,
-    value: item.code as LocaleCode,
+    value: item.code as KnownLocale,
     flagIcon: flagIconMap[item.code] ?? "circle-flags:xx"
   }))
 );
 
 const dropdownItems = computed(() =>
-  items.value.filter((item) => item.value !== locale.value)
+  items.value
 );
 
 const currentFlagIcon = computed(() => {
@@ -64,22 +58,12 @@ watch(iconMenuOpen, (open) => {
   }
 });
 
-const { trackLanguageSwitch } = useAnalytics();
-
-const onChange = async (value: string | LocaleCode) => {
-  const nextLocale = value as LocaleCode;
+const onChange = async (value: unknown) => {
+  if (typeof value !== 'string' || pending.value) return;
+  retryLocale.value = value;
+  await switchLocale(value);
   iconMenuOpen.value = false;
-  trackLanguageSwitch(locale.value as string, nextLocale);
-  localeStore.setLocale(nextLocale, true);
-  if (i18nClient?.setLocale) {
-    await i18nClient.setLocale(nextLocale);
-  } else {
-    locale.value = nextLocale;
-  }
-  const path = switchLocalePath(nextLocale);
-  if (path) {
-    await navigateTo(path);
-  }
+  returnFocus();
 };
 </script>
 
@@ -87,7 +71,7 @@ const onChange = async (value: string | LocaleCode) => {
   <!-- Icon-only mode with search dropdown -->
   <v-menu v-if="props.iconOnly" v-model="iconMenuOpen" location="bottom end" :close-on-content-click="false">
     <template #activator="{ props: menuProps }">
-      <v-btn variant="text" v-bind="menuProps" :aria-label="t('language.label')">
+      <v-btn ref="activator" variant="text" v-bind="menuProps" :disabled="pending" :aria-label="t('language.label')">
         <Icon :name="currentFlagIcon" class="language-switcher__flag-icon" />
       </v-btn>
     </template>
@@ -99,6 +83,7 @@ const onChange = async (value: string | LocaleCode) => {
           type="text"
           class="language-switcher__search-input"
           :placeholder="t('language.search')"
+          :aria-label="t('language.search')"
           @keydown.esc="iconMenuOpen = false"
         >
       </div>
@@ -106,6 +91,8 @@ const onChange = async (value: string | LocaleCode) => {
         <v-list-item
           v-for="item in filteredDropdownItems"
           :key="item.value"
+          :disabled="pending || item.value === locale"
+          :active="item.value === locale"
           @click="onChange(item.value)"
         >
           <template #title>
@@ -127,9 +114,12 @@ const onChange = async (value: string | LocaleCode) => {
   <!-- Standard mode with search -->
   <v-autocomplete
     v-else
+    ref="activator"
+    :disabled="pending"
+    :loading="pending"
     :label="props.compact ? undefined : t('language.label')"
     :placeholder="props.compact ? t('language.label') : undefined"
-    :items="dropdownItems"
+    :items="items"
     :model-value="locale"
     density="compact"
     :variant="props.compact ? 'plain' : 'outlined'"
@@ -159,6 +149,12 @@ const onChange = async (value: string | LocaleCode) => {
       </v-list-item>
     </template>
   </v-autocomplete>
+  <div v-if="error" role="alert">
+    {{ t('language.switchError', 'Unable to change language. Please try again.') }}
+    <v-btn :disabled="pending" variant="text" @click="onChange(retryLocale)">
+      {{ t('language.retry', 'Retry') }}
+    </v-btn>
+  </div>
 </template>
 
 <style scoped>

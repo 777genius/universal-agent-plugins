@@ -7,8 +7,13 @@ export default defineNuxtPlugin({
 
     // Run after hydration to avoid SSR/CSR mismatches.
     nuxtApp.hook("app:mounted", () => {
-      initTheme();
-      initLocale();
+      try {
+        initTheme();
+      } catch {
+        // Storage denial must not prevent locale preference initialization.
+      } finally {
+        initLocale();
+      }
     });
   }
 });

@@ -1,16 +1,14 @@
-import { defineStore } from "pinia";
+import { defineStore } from 'pinia';
+import { isPublishedLocale, type PublishedLocale } from '../data/i18n.ts';
 
-export const useLocaleStore = defineStore("locale", {
-  state: () => ({
-    current: "en",
-    userSelected: false
-  }),
+/** Preference metadata only: the route owns the active locale. */
+export const useLocaleStore = defineStore('locale', {
+  state: () => ({ preferredLocale: null as PublishedLocale | null, userSelected: false }),
   actions: {
-    setLocale(locale: string, fromUser: boolean) {
-      this.current = locale;
-      if (fromUser) {
-        this.userSelected = true;
-      }
-    }
-  }
+    rememberChoice(value: unknown) {
+      if (!isPublishedLocale(value)) return;
+      this.preferredLocale = value;
+      this.userSelected = true;
+    },
+  },
 });
