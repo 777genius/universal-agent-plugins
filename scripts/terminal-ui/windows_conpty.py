@@ -327,7 +327,12 @@ def powershell_argv(shell, argv, nonce, cli_env):
     command += "$start.Arguments = " + quote(subprocess.list2cmdline(argv[1:])) + '; '
     command += '$start.EnvironmentVariables.Clear(); '
     for key, value in sorted(cli_env.items()):
-        command += '$start.EnvironmentVariables[' + quote(key) + '] = ' + quote(value) + '; '
+        # Encode values separately: PowerShell also treats curly quotes as
+        # delimiters, even inside an ASCII single-quoted literal.
+        encoded = base64.b64encode(value.encode('utf-16-le')).decode('ascii')
+        command += ('$start.EnvironmentVariables[' + quote(key) + '] = '
+                    "[System.Text.Encoding]::Unicode.GetString([System.Convert]::FromBase64String('"
+                    + encoded + "')); ")
     command += 'Write-Output ' + quote('POWERSHELL_LAUNCH_' + nonce) + '; '
     command += ("$child = [System.Diagnostics.Process]::Start($start); "
                 "if ($null -eq $child) { throw 'native CLI did not start' }; "

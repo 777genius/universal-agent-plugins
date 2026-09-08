@@ -131,12 +131,38 @@ class OwnerTests(unittest.TestCase):
         self.assertIn('$start.Arguments = ' + quote(subprocess.list2cmdline(args[1:])), command)
         self.assertIn('$start.EnvironmentVariables.Clear();', command)
         for key, value in env.items():
-            self.assertIn('$start.EnvironmentVariables[' + quote(key) + '] = ' + quote(value), command)
+            encoded = base64.b64encode(value.encode('utf-16-le')).decode('ascii')
+            self.assertIn('$start.EnvironmentVariables[' + quote(key) + '] = '
+                          "[System.Text.Encoding]::Unicode.GetString([System.Convert]::FromBase64String('"
+                          + encoded + "'));", command)
         self.assertIn('$start.UseShellExecute = $false', command)
         self.assertNotIn('RedirectStandard', command)
         self.assertNotIn('$env:', command)
         self.assertIn("Write-Output 'POWERSHELL_LAUNCH_nonce'", command)
         self.assertTrue(command.endswith('$child.WaitForExit(); exit $child.ExitCode'))
+
+    def test_powershell_environment_values_round_trip_without_literal_interpolation(self):
+        import base64
+        import re
+        from windows_conpty import powershell_argv
+        values = ["O’Brien", '\u2018left\u2019right\u201alow\u201breversed',
+                  'Unicode é 中文 😀', "ASCII O'Brien", '`backtick`n',
+                  '$HOME $(throw "must not execute")', 'line1\r\nline2\nline3',
+                  '', "’; throw 'must not execute'; #", '“double” „quotes‟']
+        env = {'VALUE_' + str(i): value for i, value in enumerate(values)}
+        before = dict(env)
+        command = base64.b64decode(
+            powershell_argv('pwsh.exe', ['cli.exe'], 'nonce', env)[-1]
+        ).decode('utf-16-le')
+        assignments = re.findall(
+            r"\$start\.EnvironmentVariables\['(VALUE_\d+)'\] = "
+            r"\[System.Text.Encoding\]::Unicode.GetString\("
+            r"\[System.Convert\]::FromBase64String\('([A-Za-z0-9+/=]*)'\)\);",
+            command)
+        self.assertEqual(len(assignments), len(env))
+        self.assertEqual({key: base64.b64decode(value, validate=True).decode('utf-16-le')
+                          for key, value in assignments}, env)
+        self.assertEqual(env, before)
 
     def test_owner_error_is_reported_before_prompt_timeout(self):
         import json
@@ -254,8 +280,10 @@ class PowerShellFixtureTests(unittest.TestCase):
             self.assertEqual(captured['timeout'], 15)
             command = base64.b64decode(captured['config']['argv'][-1]).decode('utf-16-le')
             for key, value in fixture.env.items():
-                literal = "'" + value.replace("'", "''") + "'"
-                self.assertIn("$start.EnvironmentVariables['" + key + "'] = " + literal, command)
+                encoded = base64.b64encode(value.encode('utf-16-le')).decode('ascii')
+                self.assertIn("$start.EnvironmentVariables['" + key + "'] = "
+                              "[System.Text.Encoding]::Unicode.GetString([System.Convert]::FromBase64String('"
+                              + encoded + "'));", command)
             self.assertNotIn('powershell-home', command)
             self.assertNotIn('TERM', fixture.env)
             fixture.unchanged()
