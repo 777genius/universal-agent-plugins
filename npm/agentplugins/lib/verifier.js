@@ -87,7 +87,12 @@ async function downloadFile(value, destination, expected, options = {}, redirect
       : requestApprovedTarget(target, requestOptions);
     request.setTimeout(DOWNLOAD_TIMEOUT_MS, () => request.destroy(new Error("binary download timed out")));
     let streamFailure;
-    request.once("error", error => streamFailure ? streamFailure(error) : reject(error));
+    let delegated = false;
+    request.once("error", error => {
+      // A superseded request may still fail while its response drains. Only
+      // the descendant owns completion, including waiting for output close.
+      if (!delegated) streamFailure ? streamFailure(error) : reject(error);
+    });
     abort = () => request.destroy(new Error("binary acquisition cancelled"));
     options.signal?.addEventListener("abort", abort, { once: true });
     if (options.signal?.aborted) { abort(); return; }
@@ -100,6 +105,7 @@ async function downloadFile(value, destination, expected, options = {}, redirect
         }
         try {
           const next = new URL(response.headers.location, target.url).toString();
+          delegated = true;
           downloadFile(next, destination, expected, options, redirects - 1).then(resolve, reject);
         } catch (error) { reject(error); }
         return;
