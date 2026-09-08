@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/777genius/plugin-kit-ai/cli/internal/promptio"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/usecase"
 	"github.com/spf13/cobra"
@@ -73,12 +74,21 @@ func runBindingChange(
 		}
 		return fmt.Errorf("binding change is blocked; remove all listed targets first")
 	}
-	if opts.format == "human" {
-		renderHumanBindingPlan(cmd.OutOrStdout(), planned.Plan)
-	}
 	confirmed := mutationConfirmed(app, opts)
+	writer := cmd.OutOrStdout()
+	if opts.format == "human" {
+		if !confirmed && app.Terminal {
+			writer, err = promptio.VisibleOutput(writer, cmd.ErrOrStderr())
+			if err != nil {
+				return err
+			}
+		}
+		if err := renderHumanBindingPlan(writer, planned.Plan); err != nil {
+			return err
+		}
+	}
 	if !confirmed && opts.format == "human" && app.Terminal {
-		confirmed, err = promptYesNo(cmd.Context(), cmd.InOrStdin(), cmd.OutOrStdout(), cmd.ErrOrStderr(), "Apply this binding change? [y/N]")
+		confirmed, err = promptYesNo(cmd.Context(), cmd.InOrStdin(), writer, writer, "Apply this binding change? [y/N]")
 		if err != nil {
 			return err
 		}
@@ -122,7 +132,9 @@ func renderBindingChange(writer io.Writer, format, commandName string, result us
 		return writeJSONOutput(writer, commandName, data)
 	}
 	if dryRun || !result.Plan.CanApply {
-		renderHumanBindingPlan(writer, result.Plan)
+		if err := renderHumanBindingPlan(writer, result.Plan); err != nil {
+			return err
+		}
 	}
 	if !result.Plan.CanApply {
 		_, _ = fmt.Fprintln(writer, "Blocked. Remove every listed target and native object first.")
@@ -138,7 +150,9 @@ func renderBindingChange(writer io.Writer, format, commandName string, result us
 	return nil
 }
 
-func renderHumanBindingPlan(writer io.Writer, plan usecase.BindingChangePlan) {
+func renderHumanBindingPlan(writer io.Writer, plan usecase.BindingChangePlan) error {
+	checked := &planWriter{writer: writer}
+	writer = checked
 	_, _ = fmt.Fprintf(writer, "Plugin: %s -> %s\n", plan.OldName, plan.NewName)
 	_, _ = fmt.Fprintf(writer, "Format: %s -> %s\n", plan.OldFormat.FormatID, plan.NewFormat.FormatID)
 	_, _ = fmt.Fprintf(writer, "Schema: %s -> %s\n", plan.OldFormat.SchemaURI, plan.NewFormat.SchemaURI)
@@ -152,6 +166,7 @@ func renderHumanBindingPlan(writer io.Writer, plan usecase.BindingChangePlan) {
 	for _, blocker := range plan.Blockers {
 		_, _ = fmt.Fprintf(writer, "  Blocker: %s\n", blocker)
 	}
+	return checked.err
 }
 
 func provenanceLabel(source usecase.ProvenanceSummary) string {
