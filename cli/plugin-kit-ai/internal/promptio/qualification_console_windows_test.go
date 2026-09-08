@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"runtime/debug"
 	"testing"
 	"time"
 
@@ -25,6 +26,9 @@ func TestQualificationConsoleCancellation(t *testing.T) {
 	if err := windows.GetConsoleMode(h, &before); err != nil {
 		t.Fatalf("requires real inherited console input: %v", err)
 	}
+	oldGC := debug.SetGCPercent(-1) // Do not let finalizers hide handle leaks.
+	defer debug.SetGCPercent(oldGC)
+	var baseline [2]uint32
 	for i := 0; i < 30; i++ {
 		delay := []time.Duration{0, time.Microsecond, 100 * time.Microsecond, time.Millisecond, 10 * time.Millisecond, 80 * time.Millisecond}[i%6]
 		fmt.Fprintf(os.Stdout, "QUALIFICATION_CONSOLE_READ_START %d delay=%s\n", i, delay)
@@ -51,6 +55,18 @@ func TestQualificationConsoleCancellation(t *testing.T) {
 		expected := fmt.Sprintf("qualification-reuse-%d", i)
 		if err != nil || line != expected {
 			t.Fatalf("iteration %d inherited console reuse: %q %v", i, line, err)
+		}
+		if err := windows.GetConsoleMode(h, &after); err != nil || before != after {
+			t.Fatalf("iteration %d console mode/handle after reuse: %d %d %v", i, before, after, err)
+		}
+		// Keep the runner's 30 exchanges and cancellation bounds unchanged.
+		// One complete timing sweep warms up before four fixed-baseline batches.
+		if i == 5 {
+			baseline = qualificationConsoleResources(t, nil)
+			t.Logf("console warmup=6 handles=%d goroutines=%d", baseline[0], baseline[1])
+		} else if i > 5 && (i+1)%6 == 0 {
+			got := qualificationConsoleResources(t, &baseline)
+			t.Logf("console measured=%d handles=%d goroutines=%d", i-5, got[0], got[1])
 		}
 	}
 	fmt.Fprintln(os.Stdout, "QUALIFICATION_CONSOLE_OK")
