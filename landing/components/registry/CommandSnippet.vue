@@ -3,6 +3,7 @@
   See site/NOTICE.md for the complete attribution.
 -->
 <script setup lang="ts">
+const { t } = useI18n();
 type CommandKind = 'terminal' | 'add' | 'update' | 'repair' | 'remove';
 
 const props = withDefaults(
@@ -14,7 +15,7 @@ const props = withDefaults(
     inline?: boolean;
   }>(),
   {
-    label: 'Terminal',
+    label: undefined,
     kind: 'terminal',
     compact: false,
     inline: false,
@@ -85,19 +86,21 @@ async function copyCommand() {
             <path d="m5 7 4 5-4 5M11 17h8" />
           </template>
         </svg>
-        {{ label }}
+        {{ label ?? t('registryUi.command.terminal') }}
       </span>
       <button
         type="button"
-        :aria-label="copied ? 'Command copied' : 'Copy command'"
+        :aria-label="
+          copied ? t('registryUi.command.copiedLabel') : t('registryUi.command.copyLabel')
+        "
         @click="copyCommand"
       >
-        {{ copied ? 'Copied' : 'Copy' }}
+        {{ copied ? t('registryUi.command.copied') : t('registryUi.command.copy') }}
       </button>
     </div>
     <pre><code>{{ visibleCommand }}</code></pre>
     <span class="sr-only" role="status" aria-live="polite">{{
-      copied ? 'Command copied to clipboard' : ''
+      copied ? t('registryUi.command.announcement') : ''
     }}</span>
   </div>
 </template>

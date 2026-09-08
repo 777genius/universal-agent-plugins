@@ -3,15 +3,17 @@
   Content model and implementation are new for Universal Agent Plugins.
 -->
 <script setup lang="ts">
-import type { RegistryPlugin } from '~/types/registry';
+import { useInstallPreferencesStore } from '~/stores/installPreferences';
+import type { RegistryDiagnostic, RegistryPlugin } from '~/types/registry';
 import {
-  authenticationLabel,
-  deliveryLabel,
+  authenticationState,
   expectedDistribution,
   githubSourceUrl,
   resolveDistribution,
 } from '~/utils/registry';
 import { pluginCommands } from '~/utils/commands';
+const { t, locale, n } = useI18n();
+const localePath = useLocalePath();
 
 const props = withDefaults(
   defineProps<{ plugin: RegistryPlugin; alternatives?: RegistryPlugin[] }>(),
@@ -32,16 +34,71 @@ const deliverySummary = computed(() => {
     ['prepared', 'manual_activation'].includes(delivery[client.id] ?? ''),
   ).length;
   if (managed + prepared < availableClients.value.length || !availableClients.value.length)
-    return 'Agent compatibility checked when you run the command';
-  return `${managed} installed automatically · ${prepared} require one final step`;
+    return t('registryUi.card.agentCompatibilityCheckedWhenYouRunTheCommand');
+  return t('registryUi.card.deliverySummary', { managed: n(managed), prepared: n(prepared) });
 });
 const initialTarget =
   availableClients.value.find((client) => client.id === 'cursor')?.id ??
   availableClients.value[0]?.id;
-const targets = ref<(typeof clients)[number]['id'][]>(initialTarget ? [initialTarget] : []);
-const autoDetect = ref(true);
-const installExpanded = ref(false);
+const preferences = useInstallPreferencesStore();
+if (preferences.package.identity === props.plugin.install_source) {
+  preferences.reconcilePackage(
+    props.plugin.install_source,
+    availableClients.value.map((client) => client.id),
+  );
+}
+const savedChoice = preferences.readPackage(
+  props.plugin.install_source,
+  availableClients.value.map((client) => client.id),
+);
+const targets = ref<(typeof clients)[number]['id'][]>(
+  savedChoice.targetIds.length
+    ? (savedChoice.targetIds as (typeof clients)[number]['id'][])
+    : initialTarget
+      ? [initialTarget]
+      : [],
+);
+const autoDetect = ref(savedChoice.autoDetect);
+const installExpanded = ref(savedChoice.expanded);
+function saveChoice() {
+  preferences.selectPackage(
+    props.plugin.install_source,
+    {
+      targetIds: targets.value,
+      autoDetect: autoDetect.value,
+      expanded: installExpanded.value,
+    },
+    availableClients.value.map((client) => client.id),
+  );
+}
+function toggleInstall() {
+  installExpanded.value = !installExpanded.value;
+  saveChoice();
+}
+watch(availableClients, (next) => {
+  const allowed = new Set(next.map((client) => client.id));
+  if (targets.value.some((id) => !allowed.has(id))) {
+    targets.value = next[0] ? [next[0].id] : [];
+    autoDetect.value = true;
+    if (preferences.package.identity === props.plugin.install_source)
+      preferences.reconcilePackage(props.plugin.install_source, [...allowed]);
+  }
+});
 const installPanelId = `plugin-install-${props.plugin.install_source.replace(/[^a-z0-9_-]+/gi, '-')}`;
+function diagnosticText(
+  diagnostic: RegistryDiagnostic | undefined,
+  original: string | undefined,
+): string {
+  if (!diagnostic) return original ? t('registryUi.reason.external', { reason: original }) : '';
+  const reasons =
+    diagnostic.reasons
+      ?.map((reason) => diagnosticText(reason, undefined))
+      .join(t('registryUi.reason.separator')) ?? '';
+  if (diagnostic.code === 'reasons') return reasons;
+  const params: Record<string, string | number> = { ...diagnostic.params, reasons };
+  if (diagnostic.params?.status) params.status = t(`registryUi.status.${diagnostic.params.status}`);
+  return t(`registryUi.reason.${diagnostic.code}`, params);
+}
 const resolution = computed(() => resolveDistribution(props.plugin, targets.value));
 const selectedDistribution = computed(() =>
   isDiscovered.value || current.value ? resolution.value.distribution : undefined,
@@ -58,11 +115,11 @@ const command = computed(() =>
     : '',
 );
 const iconURL = computed(() => pluginIcon(props.plugin));
-const autoOption = {
-  label: 'All installed agents (recommended)',
-  summary: 'All installed agents',
-  description: 'Detected when you run the command',
-};
+const autoOption = computed(() => ({
+  label: t('registryUi.card.allInstalledAgentsRecommended'),
+  summary: t('registryUi.card.allInstalledAgents'),
+  description: t('registryUi.card.detectedWhenYouRunTheCommand'),
+}));
 const targetOptions = computed(() =>
   clients.map((client) => ({
     value: client.id,
@@ -72,28 +129,39 @@ const targetOptions = computed(() =>
     description: (() => {
       if (isDiscovered.value)
         return props.plugin.discovery?.availability === 'available'
-          ? 'Checked again before installation'
-          : 'Unavailable at its indexed source';
-      if (!published.value) return 'Unavailable: review data is not installation authority';
-      if (expired.value) return 'Unavailable: signed Directory snapshot expired';
+          ? t('registryUi.card.checkedAgainBeforeInstallation')
+          : t('registryUi.card.unavailableAtItsIndexedSource');
+      if (!published.value)
+        return t('registryUi.card.unavailableReviewDataIsNotInstallationAuthority');
+      if (expired.value) return t('registryUi.card.unavailableSignedDirectorySnapshotExpired');
       const source = expectedDistribution(props.plugin, [client.id]);
       const target = source?.targets.find((item) => item.client === client.id);
       if (client.id === 'chatgpt')
         return target?.app_binding
-          ? 'Verified connection; finish setup in ChatGPT'
-          : 'Not available for ChatGPT';
-      return target ? deliveryLabel(target.delivery) : 'Not installable from an active release';
+          ? t('registryUi.card.verifiedConnectionFinishSetupInChatgpt')
+          : t('registryUi.card.notAvailableForChatgpt');
+      return target
+        ? t(`registryUi.delivery.${target.delivery}`)
+        : t('registryUi.card.notInstallableFromAnActiveRelease');
     })(),
   })),
 );
 const authLabel = computed(() =>
-  authenticationLabel(resolution.value.distribution, targets.value, props.plugin.authentication),
+  t(
+    `registryUi.authentication.${authenticationState(resolution.value.distribution, targets.value, props.plugin.authentication)}`,
+  ),
 );
 const showAuthentication = computed(
-  () => !autoDetect.value && authLabel.value !== 'No account required',
+  () =>
+    !autoDetect.value &&
+    authenticationState(
+      resolution.value.distribution,
+      targets.value,
+      props.plugin.authentication,
+    ) !== 'not_required',
 );
 const repositoryStars = computed(() =>
-  new Intl.NumberFormat('en', {
+  new Intl.NumberFormat(locale.value, {
     notation: 'compact',
     maximumFractionDigits: 1,
   }).format(props.plugin.discovery?.stars ?? 0),
@@ -106,23 +174,23 @@ const provenanceURL = computed(() => {
 });
 const detailURL = computed(() =>
   isDiscovered.value
-    ? { path: '/plugins/community/', query: { source: props.plugin.install_source } }
-    : `/plugins/${props.plugin.name}/`,
+    ? { path: localePath('/plugins/community/'), query: { source: props.plugin.install_source } }
+    : localePath(`/plugins/${props.plugin.name}/`),
 );
 const securityDetailURL = computed(() =>
   isDiscovered.value
     ? {
-        path: '/plugins/community/',
+        path: localePath('/plugins/community/'),
         query: { source: props.plugin.install_source },
         hash: '#security-review',
       }
-    : `/plugins/${props.plugin.name}/#security-review`,
+    : `${localePath(`/plugins/${props.plugin.name}/`)}#security-review`,
 );
 
 function alternativeDetailURL(alternative: RegistryPlugin) {
   return alternative.trust_state === 'conformant_unreviewed'
-    ? { path: '/plugins/community/', query: { source: alternative.install_source } }
-    : `/plugins/${alternative.name}/`;
+    ? { path: localePath('/plugins/community/'), query: { source: alternative.install_source } }
+    : localePath(`/plugins/${alternative.name}/`);
 }
 
 function updateTargets(values: string[]) {
@@ -130,11 +198,15 @@ function updateTargets(values: string[]) {
   const next = values.filter((value): value is (typeof clients)[number]['id'] =>
     allowed.has(value as (typeof clients)[number]['id']),
   );
-  if (next.length) targets.value = next;
+  if (next.length) {
+    targets.value = next;
+    saveChoice();
+  }
 }
 
 function updateAutoDetect(value: boolean) {
   autoDetect.value = value;
+  saveChoice();
 }
 </script>
 
@@ -151,12 +223,12 @@ function updateAutoDetect(value: boolean) {
       :class="{ 'plugin-card__ribbon--muted': !canInstall }"
       >{{
         canInstall
-          ? 'reviewed listing'
+          ? t('registryUi.card.reviewedListing')
           : expired
-            ? 'temporarily paused'
+            ? t('registryUi.card.temporarilyPaused')
             : !published
-              ? 'preview only'
-              : 'not available'
+              ? t('registryUi.card.previewOnly')
+              : t('registryUi.card.notAvailable')
       }}</span
     >
     <div
@@ -168,7 +240,7 @@ function updateAutoDetect(value: boolean) {
     >
       <span v-if="iconURL" class="plugin-card__icon"
         ><img :src="iconURL" alt="" width="32" height="32" loading="lazy"
-      ></span>
+      /></span>
       <div class="plugin-card__identity-copy">
         <h3>
           <NuxtLink class="plugin-card__title-link" :to="detailURL">{{
@@ -178,8 +250,8 @@ function updateAutoDetect(value: boolean) {
         <p v-if="isDiscovered" class="plugin-card__source-label">
           {{
             plugin.discovery?.availability === 'available'
-              ? 'Found on GitHub'
-              : 'Currently unavailable'
+              ? t('registryUi.card.foundOnGithub')
+              : t('registryUi.card.currentlyUnavailable')
           }}
           ·
           <a :href="sourceUrl(plugin)" target="_blank" rel="noreferrer">
@@ -195,14 +267,19 @@ function updateAutoDetect(value: boolean) {
       <AppTooltip>
         <template #trigger>
           <button type="button" class="plugin-card__popularity-trigger">
-            <span aria-hidden="true">★</span> {{ repositoryStars }} stars on repo
+            <span aria-hidden="true">★</span>
+            {{ t('registryUi.card.stars', { count: repositoryStars }) }}
           </button>
         </template>
         <p class="app-tooltip__compact">
-          This is the GitHub repository's star count, not a rating for this individual plugin.
+          {{
+            t(
+              'registryUi.card.thisIsTheGithubRepositorySStarCountNotARatingForThisIndividualPlugin',
+            )
+          }}
         </p>
       </AppTooltip>
-      <span aria-hidden="true"> · </span>Agent Plugins 1.0
+      <span aria-hidden="true"> · </span>{{ t('registryUi.card.agentPlugins10') }}
     </p>
     <SecurityAssessmentBadge
       v-if="plugin.security"
@@ -212,8 +289,9 @@ function updateAutoDetect(value: boolean) {
     <p class="plugin-card__description">{{ plugin.description }}</p>
     <details v-if="alternatives.length" class="plugin-other-sources">
       <summary>
-        Other sources ({{ alternatives.length }})<span class="sr-only">
-          for {{ plugin.display_name }}</span
+        {{ t('registryUi.card.otherSources', { count: n(alternatives.length) })
+        }}<span class="sr-only">
+          {{ t('registryUi.card.forPlugin', { name: plugin.display_name }) }}</span
         >
       </summary>
       <ul class="plugin-other-sources__list">
@@ -225,17 +303,22 @@ function updateAutoDetect(value: boolean) {
           <span
             >{{
               alternative.trust_state === 'conformant_unreviewed'
-                ? 'community listing'
-                : 'reviewed listing'
+                ? t('registryUi.card.communityListing')
+                : t('registryUi.card.reviewedListing')
             }}
             ·
             {{
               alternative.distributions.find((item) => item.id === alternative.default_distribution)
                 ?.kind === 'upstream'
-                ? 'upstream'
-                : 'community / direct'
+                ? t('registryUi.card.upstream')
+                : t('registryUi.card.communityDirect')
             }}
-            · {{ alternative.installable ? 'installable' : 'unavailable' }}</span
+            ·
+            {{
+              alternative.installable
+                ? t('registryUi.card.installable')
+                : t('registryUi.card.unavailable')
+            }}</span
           >
         </li>
       </ul>
@@ -247,19 +330,19 @@ function updateAutoDetect(value: boolean) {
         class="plugin-card__install-toggle"
         :aria-controls="installPanelId"
         :aria-expanded="installExpanded"
-        :aria-label="`Install ${plugin.display_name}`"
-        @click="installExpanded = !installExpanded"
+        :aria-label="t('registryUi.card.installName', { name: plugin.display_name })"
+        @click="toggleInstall"
       >
-        Install
+        {{ t('registryUi.card.install') }}
       </button>
       <span v-else class="plugin-card__unavailable">{{
         isDiscovered
-          ? 'Unavailable at its indexed source; no install command is generated.'
+          ? t('registryUi.card.unavailableAtItsIndexedSourceNoInstallCommandIsGenerated')
           : expired
-            ? 'Commands disabled because the Directory is temporarily stale.'
+            ? t('registryUi.card.commandsDisabledBecauseTheDirectoryIsTemporarilyStale')
             : !published
-              ? 'Commands disabled in preview.'
-              : resolution.unavailable_reason
+              ? t('registryUi.card.commandsDisabledInPreview')
+              : diagnosticText(resolution.unavailable_diagnostic, resolution.unavailable_reason)
       }}</span>
       <Transition name="plugin-install">
         <div
@@ -268,28 +351,31 @@ function updateAutoDetect(value: boolean) {
           class="plugin-card__install-panel"
         >
           <p v-if="!autoDetect && selectedDistribution" class="plugin-card__author">
-            By {{ selectedDistribution.publisher }} ·
+            {{ t('registryUi.card.publisher', { publisher: selectedDistribution.publisher }) }} ·
             <a
               :href="isDiscovered ? provenanceURL : githubSourceUrl(plugin, selectedDistribution)"
               target="_blank"
               rel="noreferrer"
-              >View source <span class="sr-only">for {{ plugin.name }}</span></a
+              >{{ t('registryUi.card.viewSource') }}
+              <span class="sr-only">{{
+                t('registryUi.card.forPlugin', { name: plugin.name })
+              }}</span></a
             >
           </p>
           <p
             v-if="!autoDetect && resolution.fallback_reason && current"
             class="plugin-card__author"
           >
-            {{ resolution.fallback_reason }}
+            {{ diagnosticText(resolution.fallback_diagnostic, resolution.fallback_reason) }}
           </p>
           <p v-if="showAuthentication" class="plugin-card__auth">{{ authLabel }}</p>
           <ul
             v-if="!autoDetect && selectedDistribution"
             class="badge-list"
-            aria-label="Install candidate components"
+            :aria-label="t('registryUi.card.installCandidateComponents')"
           >
             <li v-for="component in selectedDistribution.components" :key="component">
-              {{ component }}
+              {{ t(`registryUi.components.${component}`) }}
             </li>
           </ul>
           <div class="plugin-card__install">
@@ -298,12 +384,17 @@ function updateAutoDetect(value: boolean) {
               :model-value="targets"
               :auto-selected="autoDetect"
               :auto-option="autoOption"
-              :label="`Choose clients for ${plugin.display_name}`"
+              :label="t('registryUi.card.chooseClients', { name: plugin.display_name })"
               :options="targetOptions"
               @update:auto-selected="updateAutoDetect"
               @update:model-value="updateTargets"
             />
-            <CommandSnippet label="Add" kind="add" :command="command" compact />
+            <CommandSnippet
+              :label="t('registryUi.card.add')"
+              kind="add"
+              :command="command"
+              compact
+            />
           </div>
         </div>
       </Transition>

@@ -11,6 +11,7 @@ import {
   ComboboxTrigger,
   ComboboxViewport,
 } from 'reka-ui';
+const { t } = useI18n();
 
 type ComboboxOption = {
   value: string;
@@ -36,11 +37,17 @@ onMounted(() => {
 
 watchEffect(() => {
   if (!props.options.length)
-    throw new Error(`AppCombobox "${props.label}" requires at least one option`);
+    throw new Error(
+      t('registryUi.controls.optionsRequired', { component: 'AppCombobox', label: props.label }),
+    );
   if (props.options.some((option) => option.value === ''))
-    throw new Error(`AppCombobox "${props.label}" options must use non-empty values`);
+    throw new Error(
+      t('registryUi.controls.nonEmptyOptions', { component: 'AppCombobox', label: props.label }),
+    );
   if (!props.options.some((option) => option.value === props.modelValue))
-    throw new Error(`AppCombobox "${props.label}" received an unknown value`);
+    throw new Error(
+      t('registryUi.controls.unknownValue', { component: 'AppCombobox', label: props.label }),
+    );
 });
 
 function displayValue(value: unknown) {
@@ -81,7 +88,10 @@ function selectCurrentText(event: FocusEvent | MouseEvent) {
         @focus="selectCurrentText"
         @click="selectCurrentText"
       />
-      <ComboboxTrigger class="app-combobox__trigger" :aria-label="`Open ${label.toLowerCase()}`">
+      <ComboboxTrigger
+        class="app-combobox__trigger"
+        :aria-label="t('registryUi.combobox.open', { label })"
+      >
         <svg aria-hidden="true" viewBox="0 0 16 16" fill="none">
           <path d="m3.5 6 4.5 4 4.5-4" />
         </svg>
@@ -95,7 +105,9 @@ function selectCurrentText(event: FocusEvent | MouseEvent) {
         :side-offset="7"
       >
         <ComboboxViewport class="app-combobox__viewport">
-          <ComboboxEmpty class="app-combobox__empty">No matching categories</ComboboxEmpty>
+          <ComboboxEmpty class="app-combobox__empty">{{
+            t('registryUi.combobox.empty')
+          }}</ComboboxEmpty>
           <ComboboxItem
             v-for="option in options"
             :key="option.value"

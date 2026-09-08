@@ -193,7 +193,27 @@ export interface RegistryIndex {
   plugins: RegistryPlugin[];
 }
 
+export interface RegistryDiagnostic {
+  code:
+    | 'distributionStatus'
+    | 'releaseStatus'
+    | 'missingComponents'
+    | 'unsupportedTargets'
+    | 'blockingFailure'
+    | 'missingEvidence'
+    | 'noReleases'
+    | 'reasons'
+    | 'invalidTargets'
+    | 'defaultIneligible'
+    | 'distributionReason'
+    | 'noEligibleDistribution';
+  params?: Record<string, string | number>;
+  reasons?: RegistryDiagnostic[];
+}
+
 export interface DistributionResolution {
+  fallback_diagnostic?: RegistryDiagnostic;
+  unavailable_diagnostic?: RegistryDiagnostic;
   distribution?: DistributionView;
   fallback_reason?: string;
   unavailable_reason?: string;
