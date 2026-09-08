@@ -70,6 +70,7 @@ func TestQualificationConsoleCancellation(t *testing.T) {
 		}
 	}
 	qualificationConsoleQueuedAnswers(t, h, before)
+	qualificationConsoleInputClassification(t, h)
 	qualificationConsoleResources(t, &baseline)
 	fmt.Fprintln(os.Stdout, "QUALIFICATION_CONSOLE_OK")
 }
