@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { expect, test } from '@playwright/test';
+import { hydrated } from './i18n-state.helpers';
 import { publishedLocales, localeMetadata, type KnownLocale } from '../../data/i18n';
 import { localizedPath } from '../../utils/localizedRoutes';
 
@@ -45,6 +46,7 @@ for (const target of ['ru', 'uk'] as const)
   for (const width of [390, 1440]) {
     test(`${target} navigation preserves query/hash and browser history at ${width}px`, async ({
       page,
+      baseURL,
     }) => {
       test.skip(
         !(publishedLocales as readonly KnownLocale[]).includes(target),
@@ -52,8 +54,10 @@ for (const target of ['ru', 'uk'] as const)
       );
       await page.setViewportSize({ width, height: 900 });
       const suffix = '?q=context7&tag=one&tag=two&extra=kept#catalog';
-      await page.goto(`./plugins/${suffix}`);
-      const initialUrl = page.url();
+      const initialUrl = new URL(`./plugins/${suffix}`, baseURL!).href;
+      await page.goto(initialUrl);
+      await hydrated(page);
+      await expect(page).toHaveURL(initialUrl);
       const initialHistoryLength = await page.evaluate(() => history.length);
       const targetUrl = new URL(`../${target}/plugins/${suffix}`, initialUrl).href;
       // The shell lane supplies accessible language control names via its own namespace.
