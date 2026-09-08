@@ -26,6 +26,11 @@ func restoreTerminal(fd int, attrs *unix.Termios) error {
 	// dequeuing any bytes into userspace. Do not do this when PENDIN was set in
 	// the caller's snapshot: that pending work belongs to the next owner.
 	// FIONREAD = _IOR('f', 127, int), not exported by x/sys on Darwin.
-	_, err := unix.IoctlGetInt(fd, 0x4004667f)
-	return err
+	if _, err := unix.IoctlGetInt(fd, 0x4004667f); err != nil {
+		return err
+	}
+	// Replay can change other flags (ttyecho clears FLUSHO). Restore the
+	// snapshot again now that PENDIN is clear. ICANON already matches, so this
+	// TIOCSETA does not schedule another replay.
+	return unix.IoctlSetTermios(fd, unix.TIOCSETA, attrs)
 }
