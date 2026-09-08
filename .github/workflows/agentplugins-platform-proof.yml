@@ -202,7 +202,11 @@ jobs:
           fi
           node proof-tools/npm/agentplugins/scripts/release-assets.js verify \
             "${assets}" "${TAG}" "${commit}" "${policy[@]}" > "${RUNNER_TEMP}/verified-release.json"
-          for asset in "${assets}"/agentplugins_* "${assets}/checksums.txt" "${assets}/release-manifest.json"; do
+          attested_assets=("${assets}"/agentplugins_* "${assets}/checksums.txt" "${assets}/release-manifest.json")
+          if [[ -f "${assets}/THIRD_PARTY_NOTICES.txt" ]]; then
+            attested_assets+=("${assets}/THIRD_PARTY_NOTICES.txt")
+          fi
+          for asset in "${attested_assets[@]}"; do
             gh attestation verify "${asset}" \
               --repo "${GITHUB_REPOSITORY}" \
               --signer-workflow "github.com/${GITHUB_REPOSITORY}/.github/workflows/agentplugins-release.yml" \
@@ -244,6 +248,9 @@ jobs:
             mkdir -p "${proof_bundle}/release-assets"
             cp "${assets}"/agentplugins_* "${assets}/checksums.txt" "${assets}/release-manifest.json" \
               "${proof_bundle}/release-assets/"
+            if [[ -f "${assets}/THIRD_PARTY_NOTICES.txt" ]]; then
+              cp "${assets}/THIRD_PARTY_NOTICES.txt" "${proof_bundle}/release-assets/"
+            fi
           fi
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
         with:

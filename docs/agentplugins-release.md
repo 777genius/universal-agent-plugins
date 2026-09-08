@@ -73,6 +73,31 @@ Proof` with `--ref <exact-tag>` and `allow_legacy_manifest=true`. The workflow
 must already exist at that tag, and its source SHA must equal the audited tag
 commit; current `main` is never allowed to impersonate a historical harness.
 
+## Third-party notice delivery
+
+New release preparation copies `npm/agentplugins/THIRD_PARTY_NOTICES.txt` into
+an identically named companion release asset. It is included in `checksums.txt`,
+attested, compared on draft reuse, and reverified before promotion. The six raw
+binary filenames, bytes, download URLs, and schema-v2 binary manifest stay the
+same. The checksum list gains one notice entry. Historical releases without the
+companion remain readable; this does not qualify their notice delivery.
+
+The npm file list includes the complete notice text even with pack scripts
+disabled. Its checked-in copy must match
+`cli/plugin-kit-ai/THIRD_PARTY_NOTICES.txt`; the npm tests enforce this in the
+source tree. When updating production dependency notices, copy the canonical
+file to the npm package too. Staging checks it against the verified companion.
+The npm tarball still contains no native binaries.
+
+Native users must download and retain `THIRD_PARTY_NOTICES.txt` from the same
+release alongside their binary, and include it when redistributing. Release
+notes state this requirement. Raw-binary bootstrap and atomic installation do
+not fetch the companion automatically. Homebrew and other downstream packagers
+must arrange notice delivery themselves; this change does not prove that they
+do. Companion availability does not guarantee delivery to a user who downloads
+only a binary. The existing notice inventory covers the terminal integration;
+this packaging change is not an audit of every historical dependency license.
+
 ## Homebrew tap
 
 Homebrew synchronization is owned by
