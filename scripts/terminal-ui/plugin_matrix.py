@@ -29,8 +29,30 @@ KINDS = ('empty', 'skill', 'stdio-missing', 'http-auth', 'mixed', 'malformed',
 CASES = tuple(f'{kind}:{action}' for kind in KINDS for action in
               (('reject',) if kind == 'malformed' else
                ('cancel',) if kind in ('stdio-missing', 'collision') else ('cancel', 'default-no'))
-              ) + ('skill:install', 'stdio-missing:reject', 'mixed:reject',
-                   'collision:reject', 'http-auth:reject', 'empty:all-ten')
+              ) + ('skill:install', 'stdio-missing:reject', 'mixed:partial-plan',
+                   'collision:reject', 'http-auth:auth-unknown', 'empty:all-ten')
+
+# Expectations follow the existing planner contract, not a stricter invented
+# pre-consent policy. Keep validation, delivery, activation, auth and runtime
+# separate. Original failed case names remain in the audit for traceability.
+AUDIT_MATRIX = {
+    'mixed:reject': {
+        'case': 'mixed:partial-plan', 'classification': 'test assumption',
+        'reason': 'Healthy skills remain deliverable when missing stdio is skipped.',
+        'source': 'install/integrationctl/agentplugins/usecase/component_readiness_test.go:TestMixedAddAndGroupKeepHealthySiblings'},
+    'http-auth:reject': {
+        'case': 'http-auth:auth-unknown', 'classification': 'test assumption',
+        'reason': 'Installation does not authenticate remote MCP; preserve not_checked and make no HTTP request.',
+        'source': 'install/integrationctl/agentplugins/planner/planner_test.go:TestPlannerAuthenticationRequiresAffirmativePerClientCatalogEvidence'},
+    'collision:reject': {
+        'case': 'collision:reject', 'classification': 'human diagnostic bug',
+        'reason': 'Ownership rejection must retain remediation and selected-target context.',
+        'source': 'cli/plugin-kit-ai/internal/agentpluginscli/add_multi.go:runAddManyLoaded'},
+    'empty:all-ten': {
+        'case': 'empty:all-ten', 'classification': 'human display ambiguity',
+        'reason': 'Outer JSON targets are logical IDs; inner plans may share the Copilot physical owner. Show selected identities and explain shared delivery.',
+        'source': 'cli/plugin-kit-ai/internal/agentpluginscli/cli_test.go:TestCopilotAndVSCodeShareOneGroupedPhysicalMutation'},
+}
 
 
 def put(root, relative, body):
@@ -142,6 +164,27 @@ def exact_skill(fixture):
     return target
 
 
+def json_plan(fixture, binary, evidence, targets, timeout):
+    # Separate read-only inspection after the actual keyboard consent decision;
+    # this does not bypass selection or authorize installation/activation.
+    argv = [str(binary), 'add', str(fixture.package), '--target=' + ','.join(targets),
+            '--dry-run', '--format=json']
+    (evidence / 'plan-command.json').write_text(json.dumps(argv))
+    result = subprocess.run(argv, cwd=fixture.project, env=fixture.env,
+                            capture_output=True, timeout=timeout)
+    (evidence / 'plan.json').write_bytes(result.stdout)
+    (evidence / 'plan.stderr').write_bytes(result.stderr)
+    check(result.returncode == 0, 'JSON plan failed')
+    fixture.unchanged()
+    data = json.loads(result.stdout)['data']
+    return data.get('targets', [{'target': targets[0], 'output': data}])
+
+
+def check_auth_unknown(plan):
+    check(plan['authentication'] == 'not_checked', 'plan overstated authentication')
+    check(plan['verification'] == 'package_validated', 'plan overstated runtime/installation verification')
+
+
 def run_case(case, binary, evidence, timeout=8):
     kind, action = case.split(':')
     check(case in CASES, 'unknown case')
@@ -197,6 +240,18 @@ def run_case(case, binary, evidence, timeout=8):
                 fixture.unchanged()
                 check(set(planned) == expected and len(planned) == len(expected),
                       f'ten-target plan differs from selected identities: {planned}')
+                check('Uses shared physical binding owned by copilot' in text,
+                      'shared physical owner not explained')
+                records = json_plan(fixture, binary, evidence, planned, timeout)
+                check({r['target'] for r in records} == expected and len(records) == 10,
+                      'JSON lost selected logical identities')
+                plans = {r['target']: r['output']['result']['plan'] for r in records}
+                for target, plan in plans.items():
+                    check_auth_unknown(plan)
+                    check(plan['client_id'] == ('copilot' if target == 'vscode' else target),
+                          'unexpected physical plan owner')
+                check(plans['copilot'] == plans['vscode'],
+                      'shared targets have different physical bindings')
                 return
             check(choices(session.raw) == ['codex', 'cursor'],
                   f'compatible choices differ: {choices(session.raw)}')
@@ -226,7 +281,6 @@ def run_case(case, binary, evidence, timeout=8):
                 text = clean(session.raw[offset:]).lower()
                 check('cursor' in text, 'failure omitted selected client identity (Cursor)')
                 pattern = (r'(unmanaged|unowned|collision|ownership)' if kind == 'collision' else
-                           r'(auth|401|credential)' if kind == 'http-auth' else
                            r'(runtime|executable|command).*?(missing|not found|unavailable)|missing.*?(runtime|executable|command)')
                 check(re.search(pattern, text, re.S), 'missing fail-closed diagnostic')
                 check(re.search(r'(install|remove|choose|verify|authenticate)', text), 'missing remediation')
@@ -245,6 +299,10 @@ def run_case(case, binary, evidence, timeout=8):
                 check(all(value in text for value in ('mcp_server fixture: unsupported',
                       'stdio_runtime_unavailable', 'uap-fixture-missing-runtime', 'install it explicitly',
                       'components_skipped_local_readiness')), 'MCP skipped reason/remediation missing')
+            if kind in ('mixed', 'http-auth'):
+                check('Authentication: not_checked' in text, 'auth uncertainty label lost')
+                check('Verification: package_validated' in text, 'verification overstated')
+                check('Installed and verified' not in text and 'Ready' not in text, 'plan falsely claimed usability')
             if kind == 'http-auth':
                 check('mcp_server fixture: native' in text, 'HTTP support decision missing')
                 check('Authentication: not_checked' in text, 'HTTP auth status overstated')
@@ -252,10 +310,24 @@ def run_case(case, binary, evidence, timeout=8):
             if kind in ('empty', 'unsupported'):
                 check(not re.search(r'  - (skill|mcp_server|hook|command) ', text),
                       'loader invented portable components')
-            if action == 'default-no':
+            if action in ('default-no', 'partial-plan', 'auth-unknown'):
                 send(session, b'\r')
                 session.finish()
                 fixture.unchanged()
+                if action in ('partial-plan', 'auth-unknown'):
+                    records = json_plan(fixture, binary, evidence, ['cursor'], timeout)
+                    check(len(records) == 1 and records[0]['target'] == 'cursor', 'JSON target mismatch')
+                    plan = records[0]['output']['result']['plan']
+                    check_auth_unknown(plan)
+                    components = {(c['kind'], c['name']): c for c in plan['components']}
+                    mcp = components[('mcp_server', 'fixture')]
+                    if action == 'partial-plan':
+                        check(components[('skill', 'guide')]['support'] == 'native', 'healthy skill lost')
+                        check(mcp['support'] == 'unsupported' and mcp['reason'] == 'stdio_runtime_unavailable',
+                              'missing runtime skip differs from contract')
+                    else:
+                        check(mcp['support'] == 'native', 'HTTP component lost')
+                        check(requests == [], 'installation unexpectedly contacted HTTP endpoint')
                 return
             send(session, b' \r')
             session.wait(LIFECYCLE, 'activation')
@@ -286,6 +358,8 @@ def run_case(case, binary, evidence, timeout=8):
             (evidence / 'mutations.json').write_text(json.dumps({
                 'before': fixture.before, 'after': fixture.mutations()}, indent=2))
             fixture.validate_stubs()
+            if kind == 'http-auth':
+                check(requests == [], 'installation unexpectedly contacted HTTP endpoint')
 
 
 def main():
@@ -301,7 +375,8 @@ def main():
     source = Path(__file__).resolve().parents[2]
     report = {'source_sha': subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=source, text=True).strip(),
               'binary': str(binary), 'binary_sha256': hashlib.sha256(binary.read_bytes()).hexdigest(),
-              'binary_source_link': 'Historical evidence binary; current source parity not established by a rebuild.',
+              'binary_source_link': 'Supplied binary SHA256 recorded; consult external build receipt for source parity.',
+              'audit_matrix': AUDIT_MATRIX,
               'fixture_contracts': {
                   'manifest': 'install/integrationctl/agentplugins/adapters/specregistry/schemas/1.0.0/plugin.schema.json',
                   'mcp': 'install/integrationctl/agentplugins/adapters/specregistry/schemas/1.0.0/mcp.schema.json',

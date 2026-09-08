@@ -55,8 +55,19 @@ class FixtureValidation(unittest.TestCase):
     def test_case_contract(self):
         self.assertEqual(len(lane.CASES), len(set(lane.CASES)))
         self.assertIn('skill:install', lane.CASES)
-        for kind in ('stdio-missing', 'mixed', 'collision', 'http-auth', 'malformed'):
+        for kind in ('stdio-missing', 'collision', 'malformed'):
             self.assertIn(kind + ':reject', lane.CASES)
+        self.assertIn('mixed:partial-plan', lane.CASES)
+        self.assertIn('http-auth:auth-unknown', lane.CASES)
+        self.assertNotIn('mixed:reject', lane.CASES)
+        self.assertNotIn('http-auth:reject', lane.CASES)
+
+    def test_auth_uncertainty_does_not_imply_runtime_verification(self):
+        lane.check_auth_unknown({'authentication': 'not_checked', 'verification': 'package_validated'})
+        for auth, verification in (('not_required', 'package_validated'), ('verified', 'package_validated'),
+                                   ('not_checked', 'installed')):
+            with self.subTest(auth=auth, verification=verification), self.assertRaises(AssertionError):
+                lane.check_auth_unknown({'authentication': auth, 'verification': verification})
 
     def test_choice_parser_rejects_diagnostic_only_client(self):
         self.assertEqual(lane.choices(b'Warning: cursor (cursor)\n'), [])

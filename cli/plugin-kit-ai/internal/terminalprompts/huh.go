@@ -1,6 +1,7 @@
 package terminalprompts
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -46,7 +47,7 @@ func (p HuhPrompter) SelectTargets(ctx context.Context, r prompt.TargetSelection
 		}
 	}
 	field := huh.NewMultiSelect[domain.ClientID]().Title("Choose targets (all selected by default)").Options(choices...).Height(len(choices) + 2).Value(&ids).Filterable(false).Validate(func(v []domain.ClientID) error { _, err := prompt.ValidateSelection(r, v); return err })
-	if err := p.run(ctx, huh.NewForm(huh.NewGroup(field)), func() bool { _, err := prompt.ValidateSelection(r, ids); return err == nil }); err != nil {
+	if err := p.run(ctx, huh.NewForm(huh.NewGroup(field)), formInput{canSubmit: func() bool { _, err := prompt.ValidateSelection(r, ids); return err == nil }}); err != nil {
 		return prompt.TargetSelectionResult{}, err
 	}
 	return prompt.ValidateSelection(r, ids)
@@ -56,6 +57,10 @@ func (p HuhPrompter) Confirm(ctx context.Context, r prompt.ConfirmationRequest) 
 		return prompt.ConfirmationResult{}, prompt.ErrPromptUnavailable
 	}
 	if err := ctx.Err(); err != nil {
+		return prompt.ConfirmationResult{}, err
+	}
+	queued, err := confirmationInput(ctx, p.Input)
+	if err != nil {
 		return prompt.ConfirmationResult{}, err
 	}
 	if err := promptio.WriteText(p.Output, fmt.Sprintf("%s (No by default; arrows/Space choose, Enter submits)\n", prompt.SafeText(r.Title))); err != nil {
@@ -68,7 +73,7 @@ func (p HuhPrompter) Confirm(ctx context.Context, r prompt.ConfirmationRequest) 
 		}
 	}
 	field := huh.NewConfirm().Title(prompt.SafeText(r.Title)).Affirmative("Yes").Negative("No").Value(&accepted)
-	if err := p.run(ctx, huh.NewForm(huh.NewGroup(field))); err != nil {
+	if err := p.run(ctx, huh.NewForm(huh.NewGroup(field)), formInput{queued: queued}); err != nil {
 		return prompt.ConfirmationResult{}, err
 	}
 	return prompt.ConfirmationResult{Accepted: accepted}, nil
@@ -84,7 +89,17 @@ func promptKeyMap() *huh.KeyMap {
 	km.Confirm.Reject = key.NewBinding(key.WithDisabled())
 	return km
 }
-func (p HuhPrompter) run(ctx context.Context, form *huh.Form, canSubmit ...func() bool) (err error) {
+
+type formInput struct {
+	canSubmit func() bool
+	queued    []byte
+}
+
+func (p HuhPrompter) run(ctx context.Context, form *huh.Form, configs ...formInput) (err error) {
+	var config formInput
+	if len(configs) > 0 {
+		config = configs[0]
+	}
 	if err = ctx.Err(); err != nil {
 		return err
 	}
@@ -106,6 +121,9 @@ func (p HuhPrompter) run(ctx context.Context, form *huh.Form, canSubmit ...func(
 			return fmt.Errorf("prepare terminal input: %w", err)
 		}
 		source = owned
+	}
+	if len(config.queued) > 0 {
+		source = io.MultiReader(bytes.NewReader(config.queued), source)
 	}
 	handoff := newSubmissionReader(runCtx, source)
 	defer handoff.finish()
@@ -141,7 +159,7 @@ func (p HuhPrompter) run(ctx context.Context, form *huh.Form, canSubmit ...func(
 		case tea.QuitMsg, tea.InterruptMsg:
 			finishInput()
 		case tea.KeyPressMsg:
-			if m.String() == "enter" && len(canSubmit) > 0 && !canSubmit[0]() {
+			if m.String() == "enter" && config.canSubmit != nil && !config.canSubmit() {
 				handoff.reject()
 			}
 		}
