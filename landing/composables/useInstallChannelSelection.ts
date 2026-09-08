@@ -11,6 +11,7 @@ export function useInstallChannelSelection(channels: ComputedRef<InstallChannel[
   const preferences = useInstallPreferencesStore();
   const selectedInstallChannelId = computed(() => preferences.channelId);
   const detectedInstallPlatform = ref<InstallPlatform | null>(null);
+  const detectionComplete = ref(false);
 
   const recommendedChannelId = computed(() => {
     if (detectedInstallPlatform.value) {
@@ -32,15 +33,20 @@ export function useInstallChannelSelection(channels: ComputedRef<InstallChannel[
     );
   });
 
-  watchEffect(() => {
-    const available = channels.value.map((channel) => channel.id);
-    preferences.reconcileChannels(available);
-    const next =
-      recommendedChannelId.value ??
-      channels.value.find((channel) => channel.id === 'npm')?.id ??
-      available[0];
-    if (next) preferences.selectChannel(next, available, false);
-  });
+  // Pinia actions read shared selection state. Track only this consumer's inputs,
+  // otherwise overlapping locale route instances can retrigger each other forever.
+  watch(
+    [() => channels.value.map((channel) => channel.id), recommendedChannelId, detectionComplete],
+    ([available, recommendation, ready]) => {
+      preferences.reconcileChannels(available);
+      // A newly created route has not detected its platform yet. Keep the hydrated
+      // selection until detection settles instead of briefly restoring SSR defaults.
+      if (!ready && preferences.channelId) return;
+      const next = recommendation ?? available.find((id) => id === 'npm') ?? available[0];
+      if (next) preferences.selectChannel(next, available, false);
+    },
+    { immediate: true },
+  );
 
   onMounted(async () => {
     try {
@@ -50,6 +56,8 @@ export function useInstallChannelSelection(channels: ComputedRef<InstallChannel[
       );
     } catch {
       detectedInstallPlatform.value = null;
+    } finally {
+      detectionComplete.value = true;
     }
   });
 
