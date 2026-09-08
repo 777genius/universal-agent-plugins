@@ -5,6 +5,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
+	"sort"
 	"strings"
 	"testing"
 )
@@ -25,23 +27,48 @@ func TestLandingSurface_LocalesLinksAndBrandingStayAligned(t *testing.T) {
 		t.Fatal(err)
 	}
 	i18n := string(i18nBody)
-	mustContain(t, i18n, `export type LocaleCode = 'en' | 'ru' | 'es' | 'fr' | 'zh';`)
-	mustContain(t, i18n, `{ code: 'en'`)
-	mustContain(t, i18n, `{ code: 'ru'`)
-	mustContain(t, i18n, `{ code: 'es'`)
-	mustContain(t, i18n, `{ code: 'fr'`)
-	mustContain(t, i18n, `{ code: 'zh'`)
-	mustNotContain(t, i18n, `{ code: 'de'`)
+
+	// Publication is independent of the preserved legacy content model.
+	assertLandingLocaleModel(t, landingRoot, i18n)
 
 	docsLinksBody, err := os.ReadFile(filepath.Join(landingRoot, "composables", "useDocsLinks.ts"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	docsLinks := string(docsLinksBody)
-	mustContain(t, docsLinks, `const docsLocalePattern = /\/(en|ru|es|fr|zh)(?=\/|$)/;`)
-	mustContain(t, docsLinks, `new Set<LocaleCode>(['en', 'ru', 'es', 'fr', 'zh'])`)
-	mustContain(t, docsLinks, `supportBoundaryUrl`)
-	mustContain(t, docsLinks, `https://777genius.github.io/universal-agent-plugins/docs/en/`)
+
+	mustContain(t, docsLinks, "supportBoundaryUrl")
+	mustContain(t, docsLinks, "customLogicGuideUrl")
+	if strings.Contains(docsLinks, "from '~/data/docsAvailability'") {
+		mustContain(t, docsLinks, "resolveDocsLink(id, locale.value, configured)")
+		for _, id := range []string{"home", "quickstart", "supportBoundary", "customLogicGuide"} {
+			mustContain(t, docsLinks, "link('"+id+"'")
+		}
+		docs := readRepoFile(t, landingRoot, "data", "docsAvailability.ts")
+		for _, contract := range []string{
+			"home: ''", "quickstart: 'guide/quickstart.html'",
+			"supportBoundary: 'reference/support-boundary.html'",
+			"customLogicGuide: 'guide/build-custom-plugin-logic.html'",
+			"https://777genius.github.io/universal-agent-plugins/docs/",
+			"locale === 'ru' ? 'ru' : 'en'", "englishFallback: locale === 'uk'",
+			"configuredUrl || defaultUrl", "source === owned",
+			"source.startsWith(owned)", "/^[?#]/.test(suffix)",
+			"return { url: source, language: null, englishFallback: false }",
+		} {
+			mustContain(t, docs, contract)
+		}
+		mustContain(t, docsLinks, "t('shell.docs.englishLabel', { label })")
+	} else {
+		// Foundation checkpoint: the original docs resolver is still wired.
+		mustContain(t, docsLinks, "import type { LocaleCode } from '~/data/i18n'")
+		mustContain(t, docsLinks, `const docsLocalePattern = /\/(en|ru|es|fr|zh)(?=\/|$)/;`)
+		mustContain(t, docsLinks, "new Set<LocaleCode>(['en', 'ru', 'es', 'fr', 'zh'])")
+		for _, path := range []string{"", "guide/quickstart.html", "reference/support-boundary.html", "guide/build-custom-plugin-logic.html"} {
+			mustContain(t, docsLinks, "https://777genius.github.io/universal-agent-plugins/docs/en/"+path+"'")
+		}
+		mustContain(t, docsLinks, "replaceDocsLocale(")
+		mustContain(t, docsLinks, ": 'en'")
+	}
 
 	releaseComposableBody, err := os.ReadFile(filepath.Join(landingRoot, "composables", "useReleaseDownloads.ts"))
 	if err != nil {
@@ -162,12 +189,12 @@ func TestLandingSurface_LocalesLinksAndBrandingStayAligned(t *testing.T) {
 	mustContain(t, ruLocale, `"copied": "Скопировано"`)
 	mustContain(t, ruLocale, `"comparison": "Почему это работает"`)
 	mustContain(t, ruLocale, `"pluginKitAi": "Universal Agent Plugins"`)
-	mustContain(t, ruLocale, `"generate": "собрать варианты"`)
+	assertLandingApprovedString(t, ruLocaleBody, "hero.demo.steps.generate", "собрать варианты", "создать результаты")
 	mustContain(t, ruLocale, `"viewAll": "Смотреть все"`)
 	mustContain(t, ruLocale, `"viewDetails": "Подробнее"`)
 	mustContain(t, ruLocale, `"filterLabel": "Фильтр по сценариям"`)
 	mustContain(t, ruLocale, `"pluginDetailTitle": "{plugin} | Universal Agent Plugins"`)
-	mustContain(t, ruLocale, `"catalogTitle": "Вся первая линейка плагинов в одном каталоге с поиском"`)
+	assertLandingApprovedString(t, ruLocaleBody, "plugins.catalogTitle", "Вся первая линейка плагинов в одном каталоге с поиском", "Все собственные плагины в одном каталоге с поиском")
 	mustContain(t, ruLocale, `"pluginsTitle": "Каталог плагинов | Universal Agent Plugins"`)
 	mustNotContain(t, ruLocale, `"pricing"`)
 	mustNotContain(t, ruLocale, `Hookplex`)
@@ -216,15 +243,24 @@ func TestLandingSurface_LocalesLinksAndBrandingStayAligned(t *testing.T) {
 		t.Fatal(err)
 	}
 	robots := string(robotsBody)
-	mustContain(t, robots, `https://777genius.github.io/universal-agent-plugins/docs/sitemap.xml`)
+	mustContain(t, robots, "config.public.docsSitemapUrl")
+	mustContain(t, robots, "Sitemap: ${docsSitemapUrl}")
+	mustContain(t, robots, "https://777genius.github.io/universal-agent-plugins")
+	mustContain(t, robots, "docs/sitemap.xml")
+	mustContain(t, robots, "Allow: /")
 
 	logoBody, err := os.ReadFile(filepath.Join(landingRoot, "components", "common", "AppLogo.vue"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	logo := string(logoBody)
-	mustContain(t, logo, `const localePath = useLocalePath();`)
-	mustContain(t, logo, `<NuxtLink :to="homePath" class="app-logo">`)
+	if strings.Contains(logo, "from '~/utils/localizedRoutes'") {
+		mustContain(t, logo, "localizedPath('/', isKnownLocale(locale.value) ? locale.value : 'en')")
+	} else {
+		mustContain(t, logo, "const localePath = useLocalePath();")
+		mustContain(t, strings.ReplaceAll(logo, `"`, "'"), "localePath('/')")
+	}
+	mustContain(t, logo, `<NuxtLink :to="homePath" class="app-logo"`)
 	mustContain(t, logo, `:src="asset('icon.svg')"`)
 	mustContain(t, logo, `Universal Agent Plugins`)
 	mustNotContain(t, logo, `plugin-kit-ai`)
@@ -252,7 +288,12 @@ func TestLandingSurface_LocalesLinksAndBrandingStayAligned(t *testing.T) {
 	}
 	pluginsPage := string(pluginsPageBody)
 	mustContain(t, pluginsPage, `const registry = await useRegistryPage({ discovery: true })`)
-	mustContain(t, pluginsPage, `usePageSeo('Agent Plugins 1.0 Directory | Search 2,500+ Plugins'`)
+	if strings.Contains(pluginsPage, "t('registryUi.directoryPage.title')") {
+		mustContain(t, pluginsPage, "usePageSeo(() => t('registryUi.directoryPage.title')")
+		assertLandingApprovedString(t, enLocaleBody, "registryUi.directoryPage.title", "Agent Plugins 1.0 Directory | Search 2,500+ Plugins")
+	} else {
+		mustContain(t, pluginsPage, `usePageSeo('Agent Plugins 1.0 Directory | Search 2,500+ Plugins'`)
+	}
 	mustContain(t, pluginsPage, `'@type': 'ItemList'`)
 	mustContain(t, pluginsPage, `<PluginCatalog`)
 	mustContain(t, pluginsPage, `:plugins="registry.plugins"`)
@@ -405,4 +446,97 @@ func assertPluginCategories(t *testing.T, plugins []struct {
 		return
 	}
 	t.Fatalf("plugin %s missing from landing content", wantID)
+}
+
+// These are the two accepted publication checkpoints, not arbitrary subsets.
+func assertLandingLocaleModel(t *testing.T, root, source string) {
+	t.Helper()
+	literals := func(pattern string) []string {
+		match := regexp.MustCompile(pattern).FindStringSubmatch(source)
+		if len(match) != 2 {
+			t.Fatalf("missing locale declaration matching %s", pattern)
+		}
+		var values []string
+		for _, item := range regexp.MustCompile(`['"]([^'"]+)['"]`).FindAllStringSubmatch(match[1], -1) {
+			values = append(values, item[1])
+		}
+		sort.Strings(values)
+		return values
+	}
+	assertSet := func(got []string, want string) {
+		if strings.Join(got, ",") != want {
+			t.Fatalf("locale set = %v, want %s", got, want)
+		}
+	}
+	assertSet(literals(`(?s)type\s+LegacyContentLocale\s*=([^;]+);`), "en,es,fr,ru,zh")
+	mustContain(t, source, "LocaleCode = LegacyContentLocale")
+	mustContain(t, source, "KnownLocale = LegacyContentLocale")
+	assertSet(literals(`(?s)type\s+KnownLocale\s*=([^;]+);`), "uk")
+	assertSet(literals(`(?s)const\s+candidateLocales\s*=\s*\[([^]]+)\]`), "en,ru,uk")
+	published := literals(`(?s)const\s+publishedLocales\s*=\s*\[([^]]+)\]`)
+	if got := strings.Join(published, ","); got != "en" && got != "en,ru,uk" {
+		t.Fatalf("publication = %v, want EN-only foundation/shell or EN/RU/UK final", published)
+	}
+	metadata := regexp.MustCompile(`(?s)const\s+localeMetadata\s*=\s*\{(.*?)\}\s*as const`).FindStringSubmatch(source)
+	if len(metadata) != 2 {
+		t.Fatal("missing localeMetadata")
+	}
+	var codes []string
+	for _, row := range regexp.MustCompile(`(\w+):\s*\{([^}]+)\}`).FindAllStringSubmatch(metadata[1], -1) {
+		code := row[1]
+		codes = append(codes, code)
+		mustContain(t, row[2], "code: '"+code+"'")
+		mustContain(t, row[2], "file: '"+code+".json'")
+
+	}
+	// Candidate metadata can precede a dictionary. Legacy and published
+	// dictionaries must always remain present and valid.
+	required := map[string]bool{"en": true, "es": true, "fr": true, "ru": true, "zh": true}
+	for _, code := range published {
+		required[code] = true
+	}
+	for code := range required {
+		var dictionary map[string]interface{}
+		if err := json.Unmarshal([]byte(readRepoFile(t, root, "locales", code+".json")), &dictionary); err != nil {
+			t.Fatalf("%s dictionary: %v", code, err)
+		}
+		if len(dictionary) == 0 {
+			t.Fatalf("%s dictionary is empty", code)
+		}
+	}
+
+	sort.Strings(codes)
+	assertSet(codes, "en,es,fr,ru,uk,zh")
+	mustContain(t, source, "publishedLocales.map(code => localeMetadata[code])")
+	config := readRepoFile(t, root, "nuxt.config.ts")
+	mustContain(t, config, "locales: [...supportedLocales]")
+	mustContain(t, config, "defaultLocale: 'en'")
+}
+
+// Compare keyed dictionary values, allowing only approved staged wording.
+// Vue I18n literal pipes render identically to the older unescaped strings.
+func assertLandingApprovedString(t *testing.T, body []byte, key string, allowed ...string) {
+	t.Helper()
+	var value interface{}
+	if err := json.Unmarshal(body, &value); err != nil {
+		t.Fatal(err)
+	}
+	for _, part := range strings.Split(key, ".") {
+		object, ok := value.(map[string]interface{})
+		if !ok {
+			t.Fatalf("missing dictionary path %s", key)
+		}
+		value = object[part]
+	}
+	got, ok := value.(string)
+	if !ok {
+		t.Fatalf("dictionary %s is not a string", key)
+	}
+	got = strings.ReplaceAll(got, "{'|'}", "|")
+	for _, want := range allowed {
+		if got == want {
+			return
+		}
+	}
+	t.Fatalf("dictionary %s = %q, want one of %q", key, got, allowed)
 }
