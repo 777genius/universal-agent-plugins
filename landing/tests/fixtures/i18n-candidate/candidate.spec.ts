@@ -125,3 +125,14 @@ test('pending lazy load disables repeated choices without committing early', asy
   await expect(activator(page)).toBeEnabled();
   await expect(activator(page)).toBeFocused();
 });
+
+test("outside dismissal keeps the user-selected input focused", async ({ page }) => {
+  await activator(page).click();
+  const search = page.getByRole("searchbox", { name: "Search plugins" });
+  await search.click();
+  await expect(page.getByRole("menu")).toBeHidden();
+  await expect(search).toBeFocused();
+  await page.keyboard.type("x");
+  await expect(search).toHaveValue("gitlabx");
+  await expect(search).toBeFocused();
+});

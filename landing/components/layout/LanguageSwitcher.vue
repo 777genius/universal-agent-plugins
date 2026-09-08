@@ -6,10 +6,12 @@ const { t, locale } = useI18n();
 const props = defineProps<{ fullWidth?: boolean; compact?: boolean; iconOnly?: boolean }>();
 const { switchLocale, pending, error } = useLocation();
 const retryLocale = ref<string>();
-const activator = ref<{ $el?: HTMLElement; focus?: () => void }>();
+// VMenu forwards VOverlay's supported activatorEl reference. The activator
+// slot props own the button ref, so a second template ref there gets replaced.
+const menu = ref<{ activatorEl?: HTMLElement }>();
 const returnFocus = () => nextTick(() => {
-  activator.value?.focus?.();
-  activator.value?.$el?.focus();
+  // Wait for the disabled/loading button and the menu to finish their update.
+  if (!pending.value && !menuOpen.value) menu.value?.activatorEl?.focus();
 });
 
 const flagIconMap: Record<string, string> = {
@@ -32,9 +34,7 @@ const items = computed(() =>
 const currentName = computed(() => items.value.find(item => item.value === locale.value)?.title);
 const currentFlagIcon = computed(() => flagIconMap[locale.value] ?? "circle-flags:xx");
 const menuOpen = ref(false);
-watch(menuOpen, open => {
-  if (!open) returnFocus();
-});
+// Vuetify handles Escape/Tab; outside dismissal must retain the clicked focus target.
 
 const onChange = async (value: unknown) => {
   if (typeof value !== 'string' || pending.value) return;
@@ -51,10 +51,9 @@ const onChange = async (value: unknown) => {
 </script>
 
 <template>
-  <v-menu v-model="menuOpen" location="bottom end" :close-on-content-click="false">
+  <v-menu ref="menu" v-model="menuOpen" location="bottom end" :close-on-content-click="false">
     <template #activator="{ props: menuProps }">
       <v-btn
-        ref="activator"
         v-bind="menuProps"
         :variant="props.compact || props.iconOnly ? 'text' : 'outlined'"
         :block="props.fullWidth"
@@ -74,6 +73,8 @@ const onChange = async (value: unknown) => {
         :key="item.value"
         role="menuitemradio"
         :aria-checked="item.value === locale"
+        :aria-disabled="pending"
+        :tabindex="pending ? -1 : 0"
         :active="item.value === locale"
         :disabled="pending"
         @click="onChange(item.value)"

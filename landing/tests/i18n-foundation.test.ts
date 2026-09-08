@@ -115,10 +115,16 @@ test('pending transitions serialize across callers; denied storage/analytics are
   assert.equal(f.state().calls, 1); assert.equal(f.state().remembered, 'uk');
 });
 
-test('stubbed adapter preserves router query arrays/hash, confirms route and scopes successful cookie', async () => {
+for (const [appBase, destination] of [
+  ['/', '/plugins/gitlab'],
+  ['/', '/plugins/gitlab/'],
+  ['/universal-agent-plugins/', '/plugins/gitlab'],
+  ['/universal-agent-plugins/', '/plugins/gitlab/'],
+]) {
+test(`stubbed adapter preserves canonical slash, params/query/hash and cookie (${appBase}, ${destination})`, async () => {
   const { createRouter, createMemoryHistory } = await import('vue-router');
   const { ref } = await import('vue');
-  const router = createRouter({ history: createMemoryHistory('/universal-agent-plugins/'), routes: [
+  const router = createRouter({ history: createMemoryHistory(appBase), routes: [
     { path: '/plugins/:slug/', component: {} }, { path: '/ru/plugins/:slug/', component: {} },
   ] });
   await router.push('/ru/plugins/gitlab/?source=a%2Fb&target=codex&target=cursor#security');
@@ -130,8 +136,8 @@ test('stubbed adapter preserves router query arrays/hash, confirms route and sco
     useNuxtApp: () => ({ runWithContext: (fn: () => unknown) => fn(), $i18n: { locale: active, loadLocaleMessages: async () => {}, getLocaleMessage: () => ({ language: {} }) } }),
     useRoute: () => router.currentRoute.value,
     useRouter: () => router,
-    useSwitchLocalePath: () => () => '/plugins/gitlab/',
-    useRuntimeConfig: () => ({ app: { baseURL: '/universal-agent-plugins/' } }),
+    useSwitchLocalePath: () => () => destination,
+    useRuntimeConfig: () => ({ app: { baseURL: appBase } }),
     useState: (key: string, init: () => boolean) => {
       if (!states.has(key)) states.set(key, ref(init()));
       return states.get(key);
@@ -148,10 +154,12 @@ test('stubbed adapter preserves router query arrays/hash, confirms route and sco
     const adapter = useLocation();
     assert.equal(await adapter.switchLocale('en'), true);
     assert.equal(calls, 1);
+    assert.equal(router.currentRoute.value.fullPath, '/plugins/gitlab/?source=a/b&target=codex&target=cursor#security');
+    assert.equal(router.resolve(router.currentRoute.value.fullPath).href, `${appBase}plugins/gitlab/?source=a/b&target=codex&target=cursor#security`);
     assert.equal(router.currentRoute.value.params.slug, 'gitlab');
     assert.deepEqual(router.currentRoute.value.query, { source: 'a/b', target: ['codex', 'cursor'] });
     assert.equal(router.currentRoute.value.hash, '#security');
-    assert.match(cookie, /^uap_locale=en; Path=\/universal-agent-plugins\/; Max-Age=31536000; SameSite=Lax; Secure$/);
+    assert.equal(cookie, `uap_locale=en; Path=${appBase}; Max-Age=31536000; SameSite=Lax; Secure`);
     const back = new Promise<void>(resolve => {
       const remove = router.afterEach(() => { remove(); resolve(); });
     });
@@ -166,6 +174,7 @@ test('stubbed adapter preserves router query arrays/hash, confirms route and sco
     }
   }
 });
+}
 
 
 test('cookie metadata ignores old, malformed and unpublished values and storage denial', () => {

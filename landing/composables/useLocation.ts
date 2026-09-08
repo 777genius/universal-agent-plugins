@@ -88,7 +88,10 @@ export const useLocation = () => {
       const path = switchLocalePath(target as PublishedLocale);
       if (!path) return undefined;
       // Nuxt resolves existing params; explicitly retain the complete query and hash.
-      return router.resolve({ path: path.split(/[?#]/, 1)[0], query: { ...route.query }, hash: route.hash }).fullPath;
+      // Named i18n routes omit the site's canonical trailing slash. Normalize
+      // before the sole navigation; the router still owns the application base.
+      const pathname = `${path.split(/[?#]/, 1)[0].replace(/\/+$/, '')}/`;
+      return router.resolve({ path: pathname, query: { ...route.query }, hash: route.hash }).fullPath;
     },
     loadMessages: target => i18n.loadLocaleMessages(target),
     messages: target => i18n.getLocaleMessage(target),
