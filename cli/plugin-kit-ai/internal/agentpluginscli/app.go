@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/prompt"
+	"github.com/777genius/plugin-kit-ai/cli/internal/terminaltheme"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/directoryv1"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/discoveryv1"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/statemigration"
@@ -63,11 +64,11 @@ type App struct {
 }
 
 type options struct {
+	color               terminaltheme.Policy
 	target              string
 	scope               string
 	dryRun              bool
 	format              string
-	noColor             bool
 	plain               bool
 	externalUninstalled bool
 	purgeData           bool

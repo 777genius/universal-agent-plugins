@@ -13,6 +13,7 @@ import (
 	"charm.land/huh/v2"
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/prompt"
 	"github.com/777genius/plugin-kit-ai/cli/internal/promptio"
+	"github.com/777genius/plugin-kit-ai/cli/internal/terminaltheme"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/charmbracelet/colorprofile"
 	"github.com/muesli/cancelreader"
@@ -40,7 +41,7 @@ func (p HuhPrompter) SelectTargets(ctx context.Context, r prompt.TargetSelection
 		choices = append(choices, huh.NewOption(prompt.SafeText(c.Label)+" ("+prompt.SafeText(string(c.ID))+")", c.ID))
 	}
 	for _, label := range r.SkippedLabels {
-		if err := promptio.WriteText(p.Output, "Skipped installed clients that this package cannot install together: "+prompt.SafeText(label)+"\n"); err != nil {
+		if err := promptio.WriteText(p.Output, (terminaltheme.Theme{Enabled: !p.NoColor}).Text(terminaltheme.Warning, "Skipped installed clients that this package cannot install together")+": "+prompt.SafeText(label)+"\n"); err != nil {
 			return prompt.TargetSelectionResult{}, err
 		}
 	}
@@ -148,8 +149,10 @@ func (p HuhPrompter) run(ctx context.Context, form *huh.Form, canSubmit ...func(
 	})}
 	if p.NoColor {
 		options = append(options, tea.WithColorProfile(colorprofile.Ascii))
+	} else {
+		options = append(options, tea.WithColorProfile(colorprofile.ANSI))
 	}
-	form.WithAccessible(false).WithInput(input).WithOutput(output).WithKeyMap(promptKeyMap()).WithProgramOptions(options...).WithViewHook(func(v tea.View) tea.View { v.ReportFocus = false; return v })
+	form.WithTheme(huh.ThemeFunc(semanticHuhTheme)).WithAccessible(false).WithInput(input).WithOutput(output).WithKeyMap(promptKeyMap()).WithProgramOptions(options...).WithViewHook(func(v tea.View) tea.View { v.ReportFocus = false; return v })
 	// Huh assumes a nonnil returned model even on initialization failure. Bubble
 	// Tea retains its own panic cleanup; normalize a remaining adapter panic.
 	defer func() {
@@ -269,4 +272,18 @@ func (r *formReader) stop(cancelRead func()) {
 	r.mu.Unlock()
 	cancelRead()
 	r.active.Wait()
+}
+
+func semanticHuhTheme(dark bool) *huh.Styles {
+	t := huh.ThemeBase(dark)
+	for _, f := range []*huh.FieldStyles{&t.Focused, &t.Blurred} {
+		f.Title = f.Title.Foreground(terminaltheme.Color(terminaltheme.Label))
+		f.Description = f.Description.Foreground(terminaltheme.Color(terminaltheme.Muted))
+		f.ErrorIndicator = f.ErrorIndicator.Foreground(terminaltheme.Color(terminaltheme.Error))
+		f.ErrorMessage = f.ErrorMessage.Foreground(terminaltheme.Color(terminaltheme.Error))
+		f.SelectedPrefix = f.SelectedPrefix.Foreground(terminaltheme.Color(terminaltheme.Success))
+		f.MultiSelectSelector = f.MultiSelectSelector.Foreground(terminaltheme.Color(terminaltheme.Label))
+		f.FocusedButton = f.FocusedButton.Foreground(terminaltheme.Color(terminaltheme.Label))
+	}
+	return t
 }

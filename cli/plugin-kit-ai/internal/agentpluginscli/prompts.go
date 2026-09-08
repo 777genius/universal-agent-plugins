@@ -6,6 +6,7 @@ import (
 	"io"
 
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/prompt"
+	"github.com/777genius/plugin-kit-ai/cli/internal/terminaltheme"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/usecase"
 	"github.com/spf13/cobra"
 )
@@ -18,7 +19,7 @@ func withPrompter(cmd *cobra.Command, app App, opts *options) (App, error) {
 		return app, prompt.ErrPromptUnavailable
 	}
 	var err error
-	app.Prompter, app.reviewOutput, err = app.PromptFactory(cmd.InOrStdin(), cmd.OutOrStdout(), cmd.ErrOrStderr(), opts.plain, opts.noColor)
+	app.Prompter, app.reviewOutput, err = app.PromptFactory(cmd.InOrStdin(), cmd.OutOrStdout(), cmd.ErrOrStderr(), opts.plain, !terminaltheme.For(visiblePromptWriter(cmd)).Enabled)
 	return app, err
 }
 func reviewWriter(cmd *cobra.Command, app App) io.Writer {
@@ -35,16 +36,16 @@ func confirmInstall(ctx context.Context, cmd *cobra.Command, app App, loaded loa
 		return false, prompt.ErrPromptUnavailable
 	}
 	writer := &planWriter{writer: reviewWriter(cmd, app)}
-	if _, err := fmt.Fprintf(writer, "Source: %s\nScope: user\n", prompt.SafeText(publicPackageSource(loaded.envelope.Source))); err != nil {
+	if _, err := fmt.Fprintf(writer, "%s: %s\n%s: user\n", terminaltheme.For(writer).Text(terminaltheme.Label, "Source"), prompt.SafeText(publicPackageSource(loaded.envelope.Source)), terminaltheme.For(writer).Text(terminaltheme.Label, "Scope")); err != nil {
 		return false, err
 	}
 	if loaded.envelope.Source.ResolvedRevision != "" {
-		if _, err := fmt.Fprintln(writer, "Revision: "+prompt.SafeText(loaded.envelope.Source.ResolvedRevision)); err != nil {
+		if _, err := fmt.Fprintln(writer, terminaltheme.For(writer).Text(terminaltheme.Label, "Revision")+": "+prompt.SafeText(loaded.envelope.Source.ResolvedRevision)); err != nil {
 			return false, err
 		}
 	}
 	if loaded.envelope.TreeDigest != "" {
-		if _, err := fmt.Fprintln(writer, "Tree: "+prompt.SafeText(loaded.envelope.TreeDigest)); err != nil {
+		if _, err := fmt.Fprintln(writer, terminaltheme.For(writer).Text(terminaltheme.Label, "Tree")+": "+prompt.SafeText(loaded.envelope.TreeDigest)); err != nil {
 			return false, err
 		}
 	}
@@ -83,3 +84,11 @@ func (w *planWriter) Write(p []byte) (int, error) {
 	}
 	return len(p), nil
 }
+
+func visiblePromptWriter(cmd *cobra.Command) io.Writer {
+	if terminaltheme.IsTerminal(cmd.OutOrStdout()) {
+		return cmd.OutOrStdout()
+	}
+	return cmd.ErrOrStderr()
+}
+func (w *planWriter) SemanticTheme() terminaltheme.Theme { return terminaltheme.For(w.writer) }

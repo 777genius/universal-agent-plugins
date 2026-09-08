@@ -7,7 +7,9 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/prompt"
 	"github.com/777genius/plugin-kit-ai/cli/internal/promptio"
+	"github.com/777genius/plugin-kit-ai/cli/internal/terminaltheme"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/usecase"
 	"github.com/spf13/cobra"
@@ -137,15 +139,15 @@ func renderBindingChange(writer io.Writer, format, commandName string, result us
 		}
 	}
 	if !result.Plan.CanApply {
-		_, _ = fmt.Fprintln(writer, "Blocked. Remove every listed target and native object first.")
+		_, _ = fmt.Fprintln(writer, terminaltheme.For(writer).Text(terminaltheme.Error, "Blocked. Remove every listed target and native object first."))
 		return nil
 	}
 	if result.NoChange {
-		_, _ = fmt.Fprintln(writer, "Binding already matches. No changes made.")
+		_, _ = fmt.Fprintln(writer, terminaltheme.For(writer).Text(terminaltheme.Muted, "Binding already matches. No changes made."))
 		return nil
 	}
 	if result.Mutated {
-		_, _ = fmt.Fprintln(writer, "Binding updated. Reinstall targets explicitly with agentplugins add.")
+		_, _ = fmt.Fprintln(writer, terminaltheme.For(writer).Text(terminaltheme.Success, "Binding updated. Reinstall targets explicitly with agentplugins add."))
 	}
 	return nil
 }
@@ -153,18 +155,18 @@ func renderBindingChange(writer io.Writer, format, commandName string, result us
 func renderHumanBindingPlan(writer io.Writer, plan usecase.BindingChangePlan) error {
 	checked := &planWriter{writer: writer}
 	writer = checked
-	_, _ = fmt.Fprintf(writer, "Plugin: %s -> %s\n", plan.OldName, plan.NewName)
-	_, _ = fmt.Fprintf(writer, "Format: %s -> %s\n", plan.OldFormat.FormatID, plan.NewFormat.FormatID)
-	_, _ = fmt.Fprintf(writer, "Schema: %s -> %s\n", plan.OldFormat.SchemaURI, plan.NewFormat.SchemaURI)
-	_, _ = fmt.Fprintf(writer, "Source: %s -> %s\n", provenanceLabel(plan.OldSource), provenanceLabel(plan.NewSource))
-	_, _ = fmt.Fprintf(writer, "Components: %s -> %s\n", componentInventoryLabel(plan.OldComponents), componentInventoryLabel(plan.NewComponents))
-	_, _ = fmt.Fprintf(writer, "Native objects: %d\n", plan.NativeObjectCount)
-	_, _ = fmt.Fprintln(writer, "PLUGIN_DATA: not transferred")
+	_, _ = fmt.Fprintf(writer, "%s: %s -> %s\n", terminaltheme.For(writer).Text(terminaltheme.Label, "Plugin"), prompt.SafeText(string(plan.OldName)), prompt.SafeText(string(plan.NewName)))
+	_, _ = fmt.Fprintf(writer, "%s: %s -> %s\n", terminaltheme.For(writer).Text(terminaltheme.Label, "Format"), prompt.SafeText(string(plan.OldFormat.FormatID)), prompt.SafeText(string(plan.NewFormat.FormatID)))
+	_, _ = fmt.Fprintf(writer, "%s: %s -> %s\n", terminaltheme.For(writer).Text(terminaltheme.Label, "Schema"), prompt.SafeText(string(plan.OldFormat.SchemaURI)), prompt.SafeText(string(plan.NewFormat.SchemaURI)))
+	_, _ = fmt.Fprintf(writer, "%s: %s -> %s\n", terminaltheme.For(writer).Text(terminaltheme.Label, "Source"), prompt.SafeText(string(provenanceLabel(plan.OldSource))), prompt.SafeText(string(provenanceLabel(plan.NewSource))))
+	_, _ = fmt.Fprintf(writer, "%s: %s -> %s\n", terminaltheme.For(writer).Text(terminaltheme.Label, "Components"), prompt.SafeText(string(componentInventoryLabel(plan.OldComponents))), prompt.SafeText(string(componentInventoryLabel(plan.NewComponents))))
+	_, _ = fmt.Fprintf(writer, "%s: %d\n", terminaltheme.For(writer).Text(terminaltheme.Label, "Native objects"), plan.NativeObjectCount)
+	_, _ = fmt.Fprintln(writer, terminaltheme.For(writer).Text(terminaltheme.Label, "PLUGIN_DATA")+": not transferred")
 	for _, target := range plan.Targets {
-		_, _ = fmt.Fprintf(writer, "  %s/%s: %s\n", target.ClientID, target.Scope, target.Decision)
+		_, _ = fmt.Fprintf(writer, "  %s/%s: %s\n", prompt.SafeText(string(target.ClientID)), prompt.SafeText(string(target.Scope)), prompt.SafeText(string(target.Decision)))
 	}
 	for _, blocker := range plan.Blockers {
-		_, _ = fmt.Fprintf(writer, "  Blocker: %s\n", blocker)
+		_, _ = fmt.Fprintf(writer, "  %s: %s\n", terminaltheme.For(writer).Text(terminaltheme.Error, "Blocker"), prompt.SafeText(blocker))
 	}
 	return checked.err
 }
