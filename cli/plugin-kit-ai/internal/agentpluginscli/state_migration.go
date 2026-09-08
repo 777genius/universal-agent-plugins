@@ -51,7 +51,7 @@ func runMigrateState(ctx context.Context, cmd *cobra.Command, app App, opts *opt
 	}
 	confirmed := mutationConfirmed(app, opts)
 	if !confirmed && opts.format == "human" && app.Terminal {
-		confirmed, err = promptYesNo(cmd.InOrStdin(), cmd.OutOrStdout(), "Create a backup and migrate this state? [y/N]")
+		confirmed, err = promptYesNo(cmd.Context(), cmd.InOrStdin(), cmd.OutOrStdout(), cmd.ErrOrStderr(), "Create a backup and migrate this state? [y/N]")
 		if err != nil {
 			return err
 		}

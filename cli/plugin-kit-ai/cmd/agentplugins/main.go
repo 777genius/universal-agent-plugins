@@ -20,6 +20,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/cli/internal/authoring/project"
 	"github.com/777genius/plugin-kit-ai/cli/internal/authoringcli"
 	"github.com/777genius/plugin-kit-ai/cli/internal/exitx"
+	"github.com/777genius/plugin-kit-ai/cli/internal/terminalprompts"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/dirswap"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/locks"
 	processadapter "github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/process"
@@ -157,11 +158,12 @@ func run() error {
 			Scanner: securityscan.ReleaseScanner{Root: filepath.Join(dataRoot, "security", "lintai"), HTTPClient: lintaiReleaseHTTPClient()},
 			Cache:   securityscan.FileCache{Root: filepath.Join(dataRoot, "security", "assessments")}, Requirement: securityscan.DefaultRequirement(),
 		},
-		Lifecycle:   lifecycle,
-		Input:       os.Stdin,
-		Output:      os.Stdout,
-		ErrorOutput: os.Stderr,
-		Terminal:    term.IsTerminal(int(os.Stdin.Fd())),
+		Lifecycle:     lifecycle,
+		Input:         os.Stdin,
+		Output:        os.Stdout,
+		ErrorOutput:   os.Stderr,
+		PromptFactory: terminalprompts.New,
+		Terminal:      term.IsTerminal(int(os.Stdin.Fd())),
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()

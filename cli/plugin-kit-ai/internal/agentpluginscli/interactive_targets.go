@@ -17,28 +17,28 @@ import (
 // turning ambient client detection into an unsafe all-or-nothing guess. It
 // first narrows the installed clients to one complete target set that the
 // selected package can actually serve, then asks the user to confirm it.
-func promptCompatibleDetectedTargets(ctx context.Context, cmd *cobra.Command, app App, source string) (string, []domain.DetectedClient, *loadedPackage, error) {
+func promptCompatibleDetectedTargets(ctx context.Context, cmd *cobra.Command, app App, source string) ([]domain.ClientID, []domain.DetectedClient, *loadedPackage, error) {
 	clients, err := app.Detector.Detect(ctx)
 	if err != nil {
-		return "", nil, nil, fmt.Errorf("detect AI clients: %w", err)
+		return nil, nil, nil, fmt.Errorf("detect AI clients: %w", err)
 	}
 	detected := detectedSupportedClients(clients)
 	if len(detected) == 0 {
-		selection, all, err := promptTargetChoices(cmd, detected, nil, clients)
+		selection, all, err := promptTargetChoices(cmd, app, detected, nil, clients)
 		return selection, all, nil, err
 	}
 
 	compatible, preloaded, err := app.compatibleDetectedTargets(ctx, source, detected)
 	if err != nil {
-		return "", nil, nil, err
+		return nil, nil, nil, err
 	}
 	skipped := subtractDetectedClients(detected, compatible)
-	selection, all, err := promptTargetChoices(cmd, compatible, skipped, clients)
+	selection, all, err := promptTargetChoices(cmd, app, compatible, skipped, clients)
 	if err != nil {
 		if preloaded != nil && preloaded.cleanup != nil {
 			_ = preloaded.cleanup()
 		}
-		return "", nil, nil, err
+		return nil, nil, nil, err
 	}
 	return selection, all, preloaded, nil
 }

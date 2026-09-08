@@ -152,7 +152,7 @@ func runRepair(ctx context.Context, cmd *cobra.Command, app App, opts *options, 
 	}
 	confirmed := mutationConfirmed(app, opts)
 	if !confirmed && opts.format == "human" && app.Terminal {
-		confirmed, err = promptYesNo(stdin, cmd.OutOrStdout(), "Repair the managed package and its recorded verification state? [y/N]")
+		confirmed, err = promptYesNo(cmd.Context(), stdin, cmd.OutOrStdout(), cmd.ErrOrStderr(), "Repair the managed package and its recorded verification state? [y/N]")
 		if err != nil {
 			return err
 		}
@@ -295,7 +295,7 @@ func runUpdate(ctx context.Context, cmd *cobra.Command, app App, opts *options, 
 	}
 	confirmed := mutationConfirmed(app, opts)
 	if !confirmed && opts.format == "human" && app.Terminal {
-		confirmed, err = promptYesNo(cmd.InOrStdin(), cmd.OutOrStdout(), "Apply this update? [y/N]")
+		confirmed, err = promptYesNo(cmd.Context(), cmd.InOrStdin(), cmd.OutOrStdout(), cmd.ErrOrStderr(), "Apply this update? [y/N]")
 		if err != nil {
 			return err
 		}
@@ -424,7 +424,7 @@ func promptBoundTargets(cmd *cobra.Command, app App, selector, scope string) (st
 		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "  %d. [x] %s\n", index+1, target)
 	}
 	_, _ = fmt.Fprint(cmd.OutOrStdout(), "Choose targets by number, comma-separated [all]: ")
-	line, readErr := readInputLine(cmd.InOrStdin())
+	line, readErr := readInputLine(cmd.Context(), cmd.InOrStdin())
 	if readErr != nil && readErr != io.EOF {
 		return "", readErr
 	}
@@ -503,7 +503,7 @@ func runRemove(ctx context.Context, cmd *cobra.Command, app App, opts *options, 
 	}
 	confirmed := mutationConfirmed(app, opts)
 	if !confirmed && opts.format == "human" && app.Terminal {
-		confirmed, err = promptYesNo(cmd.InOrStdin(), cmd.OutOrStdout(), "Remove this target? [y/N]")
+		confirmed, err = promptYesNo(cmd.Context(), cmd.InOrStdin(), cmd.OutOrStdout(), cmd.ErrOrStderr(), "Remove this target? [y/N]")
 		if err != nil {
 			return err
 		}
@@ -551,7 +551,7 @@ func runLegacyRemove(ctx context.Context, cmd *cobra.Command, app App, opts *opt
 	}
 	confirmed := mutationConfirmed(app, opts)
 	if !confirmed && opts.format == "human" && app.Terminal {
-		confirmed, err = promptYesNo(cmd.InOrStdin(), cmd.OutOrStdout(), "Remove every legacy target listed above? [y/N]")
+		confirmed, err = promptYesNo(cmd.Context(), cmd.InOrStdin(), cmd.OutOrStdout(), cmd.ErrOrStderr(), "Remove every legacy target listed above? [y/N]")
 		if err != nil {
 			return err
 		}
@@ -752,7 +752,7 @@ func selectBoundClient(
 	if _, err := fmt.Fprint(cmd.OutOrStdout(), "Choose one target: "); err != nil {
 		return domain.DetectedClient{}, detectedMap, err
 	}
-	line, readErr := readInputLine(reader)
+	line, readErr := readInputLine(cmd.Context(), reader)
 	if readErr != nil && readErr != io.EOF {
 		return domain.DetectedClient{}, detectedMap, readErr
 	}

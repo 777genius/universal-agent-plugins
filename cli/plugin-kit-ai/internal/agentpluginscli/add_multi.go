@@ -80,20 +80,22 @@ func runAddManyWithClients(ctx context.Context, cmd *cobra.Command, app App, opt
 	if loaded.cleanup != nil {
 		defer loaded.cleanup()
 	}
-	return runAddManyLoaded(ctx, cmd, app, opts, loaded, targets, activationComplete, authComplete, detectedClientValues(detected))
+	return runAddManyLoaded(ctx, cmd, app, opts, loaded, targets, activationComplete, authComplete, detectedClientValues(detected), false)
 }
 
-func runAddManyLoaded(ctx context.Context, cmd *cobra.Command, app App, opts *options, loaded loadedPackage, targets []domain.ClientID, activationComplete, authComplete bool, clients []domain.DetectedClient) error {
+func runAddManyLoaded(ctx context.Context, cmd *cobra.Command, app App, opts *options, loaded loadedPackage, targets []domain.ClientID, activationComplete, authComplete bool, clients []domain.DetectedClient, needsInstallConfirmation bool) error {
 	if err := authorizeSecurityAssessment(cmd, app, opts, &loaded); err != nil {
 		return err
 	}
 	if len(targets) == 1 {
+		selectedOptions := *opts
+		selectedOptions.target = string(targets[0])
 		if activationComplete || authComplete {
-			return runAddLoaded(ctx, cmd, app, opts, loaded, activationComplete, authComplete, clients)
+			return runAddLoaded(ctx, cmd, app, &selectedOptions, loaded, activationComplete, authComplete, clients, needsInstallConfirmation)
 		}
 		if state, err := app.StateStore.Load(); err == nil {
 			if installation, ok := locallyMatchedInstallation(state, loaded.envelope.Manifest.Name); ok && installationHasTarget(installation, targets[0], string(domain.ScopeUser)) {
-				return runAddLoaded(ctx, cmd, app, opts, loaded, false, false, clients)
+				return runAddLoaded(ctx, cmd, app, &selectedOptions, loaded, false, false, clients, needsInstallConfirmation)
 			}
 		}
 	}
@@ -150,6 +152,19 @@ func runAddManyLoaded(ctx context.Context, cmd *cobra.Command, app App, opts *op
 	}
 	if opts.dryRun {
 		return renderAddMultiResult(cmd, opts, combined, loaded.envelope)
+	}
+	if needsInstallConfirmation {
+		accepted, err := confirmInstall(ctx, cmd, app, loaded, planned.Targets)
+		if err != nil {
+			return err
+		}
+		if !accepted {
+			_, err = fmt.Fprintln(cmd.OutOrStdout(), "Installation not applied.")
+			return err
+		}
+	}
+	if err := ctx.Err(); err != nil {
+		return err
 	}
 	if len(targets) > 1 {
 		proof, proofErr := newAddAcquisitionProof(loaded)

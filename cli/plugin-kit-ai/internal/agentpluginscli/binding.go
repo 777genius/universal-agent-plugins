@@ -78,7 +78,7 @@ func runBindingChange(
 	}
 	confirmed := mutationConfirmed(app, opts)
 	if !confirmed && opts.format == "human" && app.Terminal {
-		confirmed, err = promptYesNo(cmd.InOrStdin(), cmd.OutOrStdout(), "Apply this binding change? [y/N]")
+		confirmed, err = promptYesNo(cmd.Context(), cmd.InOrStdin(), cmd.OutOrStdout(), cmd.ErrOrStderr(), "Apply this binding change? [y/N]")
 		if err != nil {
 			return err
 		}

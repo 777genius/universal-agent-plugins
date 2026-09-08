@@ -22,6 +22,7 @@ func NewRoot(app App) *cobra.Command {
 	flags.StringVar(&opts.scope, "scope", "user", "installation scope (user only in this release)")
 	flags.BoolVar(&opts.dryRun, "dry-run", false, "show the exact plan without changes")
 	flags.StringVar(&opts.format, "format", "human", "output format: human or json")
+	flags.BoolVar(&opts.plain, "plain", false, "use accessible line prompts without terminal controls")
 	flags.BoolVar(&opts.noColor, "no-color", false, "disable color output")
 	flags.BoolVar(&opts.acceptSecurityRisk, "accept-security-risk", false, "continue despite blocking automated security findings")
 	flags.BoolVar(&opts.securityDetails, "security-details", false, "show every automated security finding in human output")
