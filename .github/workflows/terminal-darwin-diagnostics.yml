@@ -1,0 +1,57 @@
+name: Temporary Darwin terminal diagnostics
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - '.github/workflows/terminal-darwin-diagnostics.yml'
+      - 'cli/plugin-kit-ai/internal/terminalprompts/**'
+      - 'cli/plugin-kit-ai/internal/promptio/**'
+      - 'cli/plugin-kit-ai/internal/agentpluginscli/prompt/**'
+      - 'cli/plugin-kit-ai/go.mod'
+      - 'cli/plugin-kit-ai/go.sum'
+
+permissions:
+  contents: read
+
+# Investigation evidence only; this does not qualify product acceptance or
+# waive the existing 33-case macOS matrix failures. Remove or convert this
+# workflow and its tagged controls after the root-cause fix.
+jobs:
+  darwin-input-handoff:
+    runs-on: macos-15
+    timeout-minutes: 10
+    env:
+      GOWORK: 'off'
+      GOTOOLCHAIN: local
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version: '1.25.13'
+          cache: false
+      - name: Run all 11 diagnostic cases (failures remain visible)
+        working-directory: cli/plugin-kit-ai
+        shell: bash
+        run: |
+          evidence="$RUNNER_TEMP/terminal-darwin-diagnostics"
+          mkdir -p "$evidence/home" "$evidence/tmp" "$evidence/modcache" "$evidence/buildcache"
+          export HOME="$evidence/home" TMPDIR="$evidence/tmp"
+          export GOMODCACHE="$evidence/modcache" GOCACHE="$evidence/buildcache"
+          set +e
+          go test -tags terminaldiagnostic -count=1 -v -timeout=90s -run '^TestDarwinInputHandoff$' ./internal/terminalprompts 2>&1 | tee "$evidence/probe.log"
+          probe_status=${PIPESTATUS[0]}
+          printf '%s\n' "$probe_status" > "$evidence/exit-status.txt"
+          exit "$probe_status"
+      - name: Upload diagnostic evidence even on failure
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: terminal-darwin-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/terminal-darwin-diagnostics/probe.log
+            ${{ runner.temp }}/terminal-darwin-diagnostics/exit-status.txt
+          if-no-files-found: warn
+          retention-days: 7
