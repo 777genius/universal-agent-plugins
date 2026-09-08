@@ -40,5 +40,5 @@ export default defineNuxtPlugin((nuxtApp) => {
     });
   };
 
-  nuxtApp.hook('page:finish', () => requestAnimationFrame(revealSections));
+  nuxtApp.hook('page:finish', () => { requestAnimationFrame(revealSections); });
 });

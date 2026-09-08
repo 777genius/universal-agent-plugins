@@ -4,12 +4,18 @@ on:
   pull_request:
     paths:
       - "landing/**"
+      - "website/**"
+      - ".github/workflows/docs-pages.yml"
+      - ".github/workflows/registry-compatibility-mirror.yml"
       - "cmd/agentplugins-registry-mirror/**"
       - ".github/workflows/landing.yml"
   push:
     branches: [main]
     paths:
       - "landing/**"
+      - "website/**"
+      - ".github/workflows/docs-pages.yml"
+      - ".github/workflows/registry-compatibility-mirror.yml"
       - "cmd/agentplugins-registry-mirror/**"
       - ".github/workflows/landing.yml"
 
@@ -37,7 +43,9 @@ jobs:
         with:
           node-version: "22.21.1"
           cache: pnpm
-          cache-dependency-path: landing/pnpm-lock.yaml
+          cache-dependency-path: |
+            landing/pnpm-lock.yaml
+            website/pnpm-lock.yaml
 
       - name: Verify and stage signed registry feeds
         run: |
@@ -54,7 +62,9 @@ jobs:
 
       - name: Prepare Nuxt tooling
         working-directory: landing
-        run: pnpm exec nuxt prepare
+        run: |
+          pnpm exec nuxt prepare
+          pnpm exec vue-tsc --noEmit
 
       - name: Check registry, lint, and generate
         env:
@@ -64,6 +74,7 @@ jobs:
         run: |
           pnpm run test:registry
           pnpm run lint
+          pnpm run check:i18n
           pnpm run generate
 
       - name: Stage the GitHub Pages base path
@@ -82,3 +93,93 @@ jobs:
           UAP_E2E_WEB_ROOT: .e2e-pages
         working-directory: landing
         run: pnpm run test:browser
+
+  combined-pages-validation:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      matrix:
+        base: ["/", "/universal-agent-plugins/"]
+    env:
+      NUXT_APP_BASE_URL: ${{ matrix.base }}
+      NUXT_PUBLIC_SITE_URL: https://777genius.github.io${{ matrix.base }}
+      NUXT_PUBLIC_DOCS_URL: https://777genius.github.io${{ matrix.base }}docs/en/
+      NUXT_PUBLIC_QUICKSTART_URL: https://777genius.github.io${{ matrix.base }}docs/en/guide/quickstart.html
+      NUXT_PUBLIC_DOCS_SITEMAP_URL: https://777genius.github.io${{ matrix.base }}docs/sitemap.xml
+      DOCS_BASE_PATH: ${{ matrix.base }}docs/
+      DOCS_HOSTNAME: https://777genius.github.io
+      UAP_VERIFIED_MIRROR: ${{ runner.temp }}/uap-registry-mirror
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.25.13"
+          cache: false
+
+      - uses: pnpm/action-setup@a8198c4bff370c8506180b035930dea56dbd5288 # v5
+        with:
+          version: 8.15.1
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22.21.1"
+          cache: pnpm
+          cache-dependency-path: |
+            landing/pnpm-lock.yaml
+            website/pnpm-lock.yaml
+
+      - name: Verify and stage signed registry feeds
+        run: |
+          go run ./cmd/agentplugins-registry-mirror \
+            --registry-repository 777genius/universal-agent-plugins-registry \
+            --pages-origin https://777genius.github.io/universal-agent-plugins-registry/ \
+            --output "${RUNNER_TEMP}/uap-registry-mirror"
+          mkdir -p landing/public
+          cp -a "${RUNNER_TEMP}/uap-registry-mirror/." landing/public/
+
+      - name: Install landing dependencies
+        working-directory: landing
+        run: pnpm install --frozen-lockfile
+
+      - name: Install docs dependencies
+        working-directory: website
+        run: pnpm install --frozen-lockfile
+
+      - name: Prepare and validate landing
+        working-directory: landing
+        run: |
+          pnpm exec nuxt prepare
+          pnpm exec vue-tsc --noEmit
+          pnpm run test:artifact
+          pnpm run test:registry
+          pnpm run lint
+          pnpm run generate
+
+      - name: Validate and build public docs
+        working-directory: website
+        run: pnpm run docs:check
+
+      - name: Assemble and validate exact final Pages artifact
+        working-directory: landing
+        run: pnpm run build:pages
+
+      - name: Install browser
+        working-directory: landing
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Serve assembled artifact at deployment base
+        run: |
+          mkdir -p .combined-browser${{ matrix.base }}
+          cp -a .pages-dist/. .combined-browser${{ matrix.base }}/
+
+      - name: Representative final static integration
+        working-directory: landing
+        env:
+          UAP_E2E_WEB_ROOT: ../.combined-browser
+          UAP_E2E_REPOSITORY_BASE: ${{ matrix.base }}
+        run: pnpm exec playwright test tests/browser/i18n-integration.spec.ts tests/browser/payload-scoping.spec.ts tests/browser/i18n-state.spec.ts

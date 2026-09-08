@@ -1,3 +1,4 @@
+import { publishedLocales, localeMetadata } from '../../data/i18n';
 import { expect, test } from '@playwright/test';
 
 const parseJsonLd = async (page: import('@playwright/test').Page) => {
@@ -171,7 +172,7 @@ test('homepage publishes canonical social metadata and complete product schema',
     'href',
     'https://777genius.github.io/universal-agent-plugins/',
   );
-  await expect(page.locator('link[rel="alternate"][hreflang]')).toHaveCount(0);
+  await expect(page.locator('link[rel="alternate"][hreflang]')).toHaveCount(publishedLocales.length + 1);
   await expect(page.locator('meta[property="og:image"]')).toHaveAttribute(
     'content',
     'https://777genius.github.io/universal-agent-plugins/og-image.png',
@@ -455,11 +456,15 @@ test('sitemap lists only live canonical pages and unstable routes stay out of th
   const locations = [...sitemap.matchAll(/<loc>([^<]+)<\/loc>/g)].map((match) => match[1]!);
   expect(locations.length).toBeGreaterThanOrEqual(20);
   expect(locations.every((location) => location.endsWith('/'))).toBe(true);
-  expect(locations.some((location) => /\/(ru|es|fr|zh)(?:\/|$)/.test(location))).toBe(false);
+  for (const code of Object.keys(localeMetadata).filter(code => code !== 'en')) {
+    expect(locations.some(location => new URL(location).pathname.includes(`/${code}/`))).toBe(
+      (publishedLocales as readonly string[]).includes(code),
+    );
+  }
   expect(sitemap).not.toContain('<lastmod>');
   expect(sitemap).not.toContain('/plugins/community/');
   expect(sitemap).not.toContain('/create-plugin/');
-  expect(locations.filter((location) => location.includes('/agents/'))).toHaveLength(11);
+  expect(locations.filter((location) => location.includes('/agents/'))).toHaveLength(11 * publishedLocales.length);
 
   const prefix = '/universal-agent-plugins/';
   const statuses = await Promise.all(

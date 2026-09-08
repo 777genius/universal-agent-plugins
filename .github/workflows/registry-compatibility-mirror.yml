@@ -108,6 +108,10 @@ jobs:
         run: pnpm run docs:build
 
       - name: Assemble GitHub Pages artifact
+        env:
+          UAP_VERIFIED_MIRROR: ${{ runner.temp }}/uap-registry-mirror
+          NUXT_APP_BASE_URL: /universal-agent-plugins/
+          NUXT_PUBLIC_SITE_URL: https://777genius.github.io/universal-agent-plugins
         working-directory: landing
         run: pnpm run build:pages
 

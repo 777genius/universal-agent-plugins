@@ -4,7 +4,7 @@ import { mdiApps, mdiArrowRight, mdiChevronUp, mdiOpenInNew } from '@mdi/js';
 import CommandSnippetCard from '~/components/shared/CommandSnippetCard.vue';
 import { resolveAgentBadge } from '~/data/agentBadges';
 import { buildInstallCommandForSelection } from '~/data/pluginInstall';
-import type { InstallChannel, PluginCard, PluginResolvedInstallSpec } from '~/types/content';
+import type { PluginInstallTargetId, InstallChannel, PluginCard, PluginResolvedInstallSpec } from '~/types/content';
 import { applyCliInvocation, getCliInvocation } from '~/utils/cliInvocation';
 
 const props = withDefaults(
@@ -143,7 +143,7 @@ const projectRootHint = computed(() => {
 });
 
 const targetBoundaryNotes = computed(() => {
-  const notes = selectedTargets.value
+  const notes: { id: PluginInstallTargetId | 'project-root'; label: string; iconSrc: string | undefined; note: string; subtle: boolean }[] = selectedTargets.value
     .map((lane) => {
       const key = `plugins.install.targets.${lane.targetId}.boundaryNote`;
       if (!te(key)) {
