@@ -403,8 +403,6 @@ jobs:
       KIT_VERSION: ${{ inputs.plugin_kit_version }}
       GOTOOLCHAIN: local
       GOMAXPROCS: "2"
-      GOMODCACHE: ${{ runner.temp }}/paired-modules
-      GOCACHE: ${{ runner.temp }}/paired-cache
     steps:
       - name: Validate explicit paired identity before checkout
         shell: bash
@@ -431,9 +429,15 @@ jobs:
           node-version: 22
           package-manager-cache: false
       - name: Provision declared Go modules for offline producer
+        env:
+          GOMODCACHE: ${{ runner.temp }}/paired-modules
+          GOCACHE: ${{ runner.temp }}/paired-cache
         run: go mod download
       - name: Freeze one full release-contract pair and project verified bytes
         shell: bash
+        env:
+          GOMODCACHE: ${{ runner.temp }}/paired-modules
+          GOCACHE: ${{ runner.temp }}/paired-cache
         run: |
           set -euo pipefail
           export TRUSTED_GO="$(command -v go)"

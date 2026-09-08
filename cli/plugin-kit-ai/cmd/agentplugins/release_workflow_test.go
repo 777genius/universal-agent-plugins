@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"testing"
@@ -85,11 +86,13 @@ type producerWorkflow struct {
 		Needs       any               `yaml:"needs"`
 		Uses        string            `yaml:"uses"`
 		Permissions map[string]string `yaml:"permissions"`
+		Env         map[string]string `yaml:"env"`
 		Steps       []struct {
-			Name string         `yaml:"name"`
-			Run  string         `yaml:"run"`
-			Uses string         `yaml:"uses"`
-			With map[string]any `yaml:"with"`
+			Name string            `yaml:"name"`
+			Run  string            `yaml:"run"`
+			Uses string            `yaml:"uses"`
+			With map[string]any    `yaml:"with"`
+			Env  map[string]string `yaml:"env"`
 		} `yaml:"steps"`
 	} `yaml:"jobs"`
 }
@@ -119,6 +122,43 @@ func runProducerPreflight(t *testing.T, script string, values map[string]string,
 	body, err := command.CombinedOutput()
 	if (err == nil) != success {
 		t.Fatalf("preflight success=%v, expected %v: %v\n%s", err == nil, success, err, body)
+	}
+}
+
+// YAML decoding alone accepts runner expressions in job env, but GitHub rejects
+// that context there before creating a run. Step env supports runner instead.
+func TestReleaseWorkflowRunnerCacheContext(t *testing.T) {
+	w := readProducerWorkflow(t, "agentplugins-release.yml")
+	runnerExpression := regexp.MustCompile(`\$\{\{[^}]*\brunner\s*[.\[]`)
+	for name, job := range w.Jobs {
+		for key, value := range job.Env {
+			if runnerExpression.MatchString(value) {
+				t.Errorf("jobs.%s.env.%s uses unavailable runner context", name, key)
+			}
+		}
+	}
+	consumers := map[string]bool{
+		"Provision declared Go modules for offline producer":               false,
+		"Freeze one full release-contract pair and project verified bytes": false,
+	}
+	for _, step := range w.Jobs["paired-preparation"].Steps {
+		if _, ok := consumers[step.Name]; !ok {
+			continue
+		}
+		consumers[step.Name] = true
+		for key, want := range map[string]string{
+			"GOMODCACHE": "${{ runner.temp }}/paired-modules",
+			"GOCACHE":    "${{ runner.temp }}/paired-cache",
+		} {
+			if step.Env[key] != want {
+				t.Errorf("%s must set step env %s=%q, got %q", step.Name, key, want, step.Env[key])
+			}
+		}
+	}
+	for name, found := range consumers {
+		if !found {
+			t.Errorf("missing cache consumer %q", name)
+		}
 	}
 }
 
