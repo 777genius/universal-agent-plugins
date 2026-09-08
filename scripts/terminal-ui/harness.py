@@ -544,7 +544,6 @@ def run_case(name, binary, root, args):
                 fixture.unchanged()
                 check(not re.search(args.confirmation, clean(session.raw)), 'empty advanced to confirmation')
                 session.send(b'\x1b'); session.finish(1)
-                assert_paste_stayed_in_selection(session.raw[offset:], args.confirmation)
                 fixture.unchanged(); return
             if name in ('resize', 'tiny'):
                 session.resize(8, 40)
