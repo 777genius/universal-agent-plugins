@@ -89,11 +89,11 @@ jobs:
         timeout-minutes: 1
         run: |
           Get-FileHash "$env:RUNNER_TEMP/windows-console-diagnostic.test.exe" -Algorithm SHA256 | Select-Object Algorithm, Hash | ConvertTo-Json | Set-Content "$env:RUNNER_TEMP/windows-diagnostic-evidence/binary-sha256.json"
-          & "$env:RUNNER_TEMP/windows-console-diagnostic.test.exe" '-test.run=^TestDiagnosticThreadPreflight$' -test.v -test.timeout=2s 2>&1 | Tee-Object -FilePath "$env:RUNNER_TEMP/windows-diagnostic-evidence/preflight.log"
+          & "$env:RUNNER_TEMP/windows-console-diagnostic.test.exe" '-test.run=^TestDiagnosticThreadPreflight$' '-test.v' '-test.timeout=2s' 2>&1 | Tee-Object -FilePath "$env:RUNNER_TEMP/windows-diagnostic-evidence/preflight.log"
           $code = $LASTEXITCODE
           @{ exit = $code } | ConvertTo-Json | Set-Content "$env:RUNNER_TEMP/windows-diagnostic-evidence/preflight-status.json"
           if ($code -ne 0) { exit $code }
-          & "$env:RUNNER_TEMP/windows-console-diagnostic.test.exe" '-test.run=^TestWindows' -test.v -test.timeout=30s 2>&1 | Tee-Object -FilePath "$env:RUNNER_TEMP/windows-diagnostic-evidence/windows-unit-tests.log"
+          & "$env:RUNNER_TEMP/windows-console-diagnostic.test.exe" '-test.run=^TestWindows' '-test.v' '-test.timeout=30s' 2>&1 | Tee-Object -FilePath "$env:RUNNER_TEMP/windows-diagnostic-evidence/windows-unit-tests.log"
           $code = $LASTEXITCODE
           @{ exit = $code } | ConvertTo-Json | Set-Content "$env:RUNNER_TEMP/windows-diagnostic-evidence/windows-unit-status.json"
           exit $code
