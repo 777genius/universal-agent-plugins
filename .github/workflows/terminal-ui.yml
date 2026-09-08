@@ -54,6 +54,10 @@ jobs:
         run: |
           python3 -m unittest discover -s scripts/terminal-ui -p 'test_*.py'
           python3 scripts/terminal-ui/harness.py --binary "$RUNNER_TEMP/agentplugins.exe" --scanner-archive "$RUNNER_TEMP/scanner/${{ matrix.archive }}" --artifacts "$RUNNER_TEMP/terminal-evidence" --timeout 15
+      - name: Unix selection combinations (synthetic client and scanner protocols)
+        if: runner.os != 'Windows'
+        run: |
+          python3 scripts/terminal-ui/selection_matrix.py --build-go "$(command -v go)" --artifacts "$RUNNER_TEMP/selection-evidence" --timeout 15 > "$RUNNER_TEMP/selection-matrix.log" 2>&1 || { tail -c 6000 "$RUNNER_TEMP/selection-matrix.log"; exit 1; }
       - name: Unix npm inherited terminal routes
         if: runner.os != 'Windows'
         run: python3 scripts/terminal-ui/harness.py --binary "$RUNNER_TEMP/agentplugins.exe" --scanner-archive "$RUNNER_TEMP/scanner/${{ matrix.archive }}" --npm-launcher --case escape --case json-tty --case json-explicit --artifacts "$RUNNER_TEMP/npm-terminal-evidence" --timeout 15
@@ -71,7 +75,7 @@ jobs:
         shell: pwsh
         run: |
           $shellPath = (Get-Command pwsh -CommandType Application).Source
-          python scripts/terminal-ui/windows_conpty.py --binary "$env:RUNNER_TEMP/agentplugins.exe" --scanner-archive "$env:RUNNER_TEMP/scanner/${{ matrix.archive }}" --powershell "$shellPath" --case default-no --case ctrl-c --artifacts "$env:RUNNER_TEMP/powershell-terminal-evidence" --timeout 15
+          python scripts/terminal-ui/windows_conpty.py --binary "$env:RUNNER_TEMP/agentplugins.exe" --scanner-archive "$env:RUNNER_TEMP/scanner/${{ matrix.archive }}" --powershell "$shellPath" --case default-no --case no --case yes-lifecycle --case ctrl-c --case confirm-ctrl-c --case eof --case resize --artifacts "$env:RUNNER_TEMP/powershell-terminal-evidence" --timeout 15
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       # Keep the broad gate required, including when a console case fails.
       # Run it after console proof so legacy fixture failures cannot hide ConPTY.
@@ -84,6 +88,8 @@ jobs:
         with:
           name: terminal-${{ matrix.target }}
           path: |
+            ${{ runner.temp }}/selection-evidence
+            ${{ runner.temp }}/selection-matrix.log
             ${{ runner.temp }}/terminal-evidence
             ${{ runner.temp }}/npm-terminal-evidence
             ${{ runner.temp }}/windows-fault-evidence

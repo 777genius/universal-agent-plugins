@@ -9,6 +9,7 @@ import platform
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
 import time
 
@@ -19,11 +20,22 @@ SETS = {'codex': ('codex',), 'cursor': ('cursor',), 'both': TARGETS}
 CASES = tuple(f'{s}-{answer}' for s in SETS for answer in ('default-no', 'yes')) + (
     'neither', 'selection-escape', 'selection-ctrl-c',
     'confirmation-escape', 'confirmation-ctrl-c', 'queued-enters', 'queued-yes', 'queued-space',
-    'native-ownership')
+    'native-ownership', 'selection-eof', 'confirmation-eof', 'confirmation-partial-eof')
 
 
 def digest(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+def source_digest(repo):
+    """Hash tracked working-tree bytes, including local changes and deletions."""
+    paths = subprocess.check_output(['git', 'ls-files', '-z'], cwd=repo).split(b'\0')
+    state = hashlib.sha256()
+    for raw in sorted(set(paths) - {b''}):
+        path = repo / os.fsdecode(raw)
+        state.update(raw + b'\0')
+        state.update((digest(path) if path.is_file() else 'missing').encode() + b'\0')
+    return state.hexdigest()
 
 
 def choices(text):
@@ -75,7 +87,7 @@ def selected_frame(session, expected):
 
 
 def installed(fixture, selected):
-    fixture.installed(selected)
+    if 'codex' not in selected: fixture.installed(selected)
     body = json.loads((fixture.data / 'state-v2.json').read_text())
     bindings = body['installations'][0]['clients']
     check(sorted(b['client_id'] for b in bindings.values()) == sorted(selected),
@@ -83,21 +95,63 @@ def installed(fixture, selected):
     locators = []
     for binding_id, binding in bindings.items():
         client = binding['client_id']
+        check(binding['materialization'] == 'materialized', 'binding not materialized')
+        check(any(r.get('phase') == 'committed' for r in binding['receipts']), 'missing commit')
+        check(binding.get('authentication') not in ('authenticated', 'not_required'), 'false auth')
+        check(binding.get('activation') == 'active' if client == 'codex' else binding.get('activation') != 'active', 'wrong activation')
         check(binding['client_binding_id'] == binding_id, 'binding key mismatch')
         for receipt in binding['receipts']:
             check(receipt['client_binding_id'] == binding_id, 'receipt identity mismatch')
             check(receipt['active_path'] == binding['target_locator'], 'receipt path mismatch')
         target = Path(binding['target_locator']).resolve()
-        check(target.is_relative_to((fixture.home / ('.' + client)).resolve()),
+        expected_root = fixture.data / 'managed/clients/codex' if client == 'codex' else fixture.home / '.cursor'
+        check(target.is_relative_to(expected_root.resolve()),
               f'identity/path mismatch: {client}: {target}')
         if client == 'codex':
             native = target / '.codex-plugin/plugin.json'
             check(native.is_file(), 'Codex native identity missing after Yes')
             check(json.loads(native.read_text())['name'] == 'pty-synthetic', 'wrong Codex identity')
+            registry = json.loads((fixture.data / 'synthetic-codex-registry.json').read_text())
+            check(len(registry['installed']) == 1 and registry['installed'][0]['enabled'], 'native registry mismatch')
         locators.append(str(target))
     for client in set(TARGETS) - set(selected):
         check(hashes(fixture.home / ('.' + client)) == {}, f'unselected {client} mutated')
     return {'bindings': bindings, 'package_paths': locators}
+
+
+def prepare_codex_registry(fixture):
+    """Synthetic controlled native registry protocol, not a real Codex executable."""
+    stub = fixture.bin / 'codex'
+    stub.write_text('#!' + sys.executable + '\n' + r'''import json, os, sys
+from pathlib import Path
+args = sys.argv[1:]
+root = Path(os.environ['AGENTPLUGINS_HOME'])
+registry = root / 'synthetic-codex-registry.json'
+with open(os.environ['STUB_LOG'], 'a') as log:
+    log.write(sys.argv[0] + ' ' + ' '.join(args) + '\n')
+state = json.loads(registry.read_text()) if registry.exists() else {}
+if args == ['--version']:
+    print('synthetic 99.0.0')
+elif args == ['plugin', 'list', '--json']:
+    print(json.dumps({'installed': state.get('installed', [])}))
+elif len(args) == 5 and args[:3] == ['plugin', 'marketplace', 'add'] and args[4] == '--json':
+    path = Path(args[3]).resolve()
+    if not path.is_relative_to((root / 'managed/clients/codex').resolve()): sys.exit(97)
+    manifest = path / '.agents/plugins/marketplace.json'
+    body = json.loads(manifest.read_text())
+    state['marketplace'] = body['name']
+    registry.write_text(json.dumps(state))
+    print('{}')
+elif len(args) == 4 and args[:2] == ['plugin', 'add'] and args[3] == '--json':
+    market = state.get('marketplace')
+    if not market or args[2] != 'pty-synthetic@' + market: sys.exit(97)
+    state['installed'] = [dict(pluginId=args[2], name='pty-synthetic', marketplaceName=market,
+                               installed=True, enabled=True)]
+    registry.write_text(json.dumps(state))
+    print('{}')
+else:
+    sys.exit(97)
+''')
 
 
 def run_case(name, binary, evidence, timeout):
@@ -107,10 +161,24 @@ def run_case(name, binary, evidence, timeout):
         native = fixture.package / '.codex-plugin/plugin.json'
         native.parent.mkdir()
         native.write_text(json.dumps({'name': 'pty-synthetic', 'version': '1.0.0'}))
-        session = Keyboard([str(binary), 'add', str(fixture.package)], fixture, evidence, timeout)
+        if name != 'native-ownership': prepare_codex_registry(fixture)
+        eof = name.endswith('eof')
+        argv = [str(binary), 'add', str(fixture.package)] + (['--plain'] if eof else [])
+        session = Keyboard(argv, fixture, evidence, timeout)
         outcome = {'case': name, 'status': 'failed'}
         try:
             session.wait(SELECT, 'selection')
+            if eof:
+                fixture.unchanged()
+                if name != 'selection-eof':
+                    session.send(b'\n')
+                    session.wait(CONFIRM, 'confirmation')
+                    fixture.unchanged()
+                session.send(b'y\x04\x04' if name == 'confirmation-partial-eof' else b'\x04')
+                session.finish(1)
+                fixture.unchanged()
+                outcome['status'] = 'passed'
+                return outcome
             session.wait(r'enter submit', 'selection-ready')
             selected_frame(session, TARGETS)
             fixture.unchanged()
@@ -168,14 +236,15 @@ def run_case(name, binary, evidence, timeout):
                         fixture.unchanged()
                     elif name.endswith('-yes') and name != 'queued-yes':
                         session.send(b' \r')
-                        for index in range(len(selected)):
-                            offset = session.wait(LIFECYCLE, f'activation-{index}', after=offset)
+                        for index, client in enumerate(selected if len(selected) == 1 else ()):
+                            marker = r'Have you completed required authentication[^\r\n]*\[y/N\]' if client == 'codex' else LIFECYCLE
+                            offset = session.wait(marker, f'lifecycle-{index}', after=offset)
                             import termios
                             check(termios.tcgetattr(session.slave) == session.before, 'raw mode at activation')
                             session.send(b'n\n')
                         session.finish(0)
-                        check('Have you completed required authentication' not in clean(session.raw),
-                              'activation No advanced to authentication')
+                        check(clean(session.raw).count('Have you completed required authentication') == int(selected == ('codex',)),
+                              'unexpected authentication prompt')
                         outcome['installation'] = installed(fixture, selected)
                     else:
                         if name not in ('queued-enters', 'queued-yes', 'queued-space'): session.send(b'\r')
@@ -193,9 +262,10 @@ def run_case(name, binary, evidence, timeout):
                 'before': fixture.before, 'after': fixture.mutations()}, indent=2))
             session.close()
             try:
-                if name == 'native-ownership':
+                if (fixture.root / 'stub.log').exists():
                     log = (fixture.root / 'stub.log').read_text().splitlines()
                     check(log and all(line.endswith(' --version') or line.endswith('codex plugin list --json')
+                                      or (name in ('codex-yes', 'both-yes') and ('/codex plugin marketplace add ' in line or '/codex plugin add pty-synthetic@' in line) and line.endswith(' --json'))
                                       for line in log), 'unexpected native subprocess')
                 else:
                     fixture.validate_stubs()
@@ -209,26 +279,41 @@ def run_case(name, binary, evidence, timeout):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--binary', required=True, type=Path)
-    parser.add_argument('--binary-sha256', required=True)
+    parser.add_argument('--binary', type=Path)
+    parser.add_argument('--build-go', type=Path, help='build exact current source with this Go executable')
+    parser.add_argument('--binary-sha256')
     parser.add_argument('--artifacts', required=True, type=Path)
     parser.add_argument('--timeout', type=float, default=8)
     parser.add_argument('--case', action='append', choices=CASES)
     args = parser.parse_args()
     if os.name != 'posix': parser.error('Windows selection matrix NOT COVERED; Unix PTY required')
     if not 0 < args.timeout <= 30: parser.error('timeout must be in (0, 30]')
+    repo = Path(__file__).resolve().parents[2]
+    source_before = source_digest(repo)
+    if args.build_go:
+        check(args.binary is None and args.binary_sha256 is None, '--build-go excludes supplied binary')
+        args.artifacts.mkdir(parents=True, exist_ok=False)
+        args.binary = args.artifacts.resolve() / 'source-agentplugins'
+        with (args.artifacts / 'build.log').open('wb') as log:
+            subprocess.run([str(args.build_go.resolve()), 'build', '-o', str(args.binary), './cmd/agentplugins'],
+                           cwd=repo / 'cli/plugin-kit-ai', stdout=log, stderr=subprocess.STDOUT, check=True, timeout=180)
+        check(source_digest(repo) == source_before, 'tracked source changed during build')
+        args.binary_sha256 = digest(args.binary)
+    else:
+        check(args.binary is not None and args.binary_sha256, 'supply --build-go or binary and hash')
+        args.artifacts.mkdir(parents=True, exist_ok=False)
     check(digest(args.binary) == args.binary_sha256, 'binary hash mismatch; build needed if no verified binary')
-    args.artifacts.mkdir(parents=True, exist_ok=False)
     binary = args.artifacts.resolve() / 'frozen-agentplugins'
     shutil.copyfile(args.binary, binary); binary.chmod(0o700)
     check(digest(binary) == args.binary_sha256, 'frozen copy hash mismatch')
     repo = Path(__file__).resolve().parents[2]
-    provenance = {'source_commit': subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=repo, text=True).strip(),
+    provenance = {'tracked_worktree_sha256': source_before, 'source_commit': subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=repo, text=True).strip(),
                   'source_files_sha256': {p.name: digest(p) for p in (
                       Path(__file__), Path(__file__).with_name('harness.py'),
                       Path(__file__).with_name('pty_owner.py'))},
                   'binary_sha256': digest(binary), 'platform': platform.platform(),
-                  'binary_source_equivalence': 'not established; historical frozen binary',
+                  'binary_source_equivalence': 'built from current source in this run' if args.build_go else 'not established; supplied binary',
+                  'client_registry': 'synthetic Codex registry and install protocol; version-only Cursor; no real client qualification',
                   'scanner': 'synthetic protocol stub; UI evidence only',
                   'windows': 'not covered', 'macos': 'not run' if platform.system() != 'Darwin' else 'native'}
     results = []
@@ -239,6 +324,7 @@ def main():
         results.append(result)
         print(json.dumps({k: result[k] for k in ('case', 'status', 'error') if k in result}), flush=True)
         (args.artifacts / 'results.json').write_text(json.dumps(results, indent=2))
+    check(source_digest(repo) == source_before, 'tracked source changed during matrix')
     return int(any(r['status'] != 'passed' for r in results))
 
 
