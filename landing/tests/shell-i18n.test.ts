@@ -3,7 +3,7 @@ import { readFileSync, existsSync } from 'node:fs';
 import { test } from 'node:test';
 import { stripTypeScriptTypes } from 'node:module';
 import { createI18n } from 'vue-i18n';
-import { computed, ref, watchEffect, effectScope, nextTick } from 'vue';
+import { computed, ref, watch, effectScope, nextTick } from 'vue';
 import { createPinia, setActivePinia } from 'pinia';
 import { assembleDownloadContent, downloadTechnical } from '../data/download.ts';
 import { docsAvailability, resolveDocsLink, ownedDocsRoot } from '../data/docsAvailability.ts';
@@ -155,8 +155,9 @@ test('channel adapter retains manual IDs across locale remount and reconciles re
   const factory = new Function(
     'computed',
     'ref',
-    'watchEffect',
+    'watch',
     'onMounted',
+    'window',
     'useInstallPreferencesStore',
     'normalizeInstallPlatform',
     'recommendedInstallChannelId',
@@ -166,8 +167,9 @@ test('channel adapter retains manual IDs across locale remount and reconciles re
   const useSelection = factory(
     computed,
     ref,
-    watchEffect,
+    watch,
     (callback: () => void) => mounted.push(callback),
+    { navigator: { userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' } },
     useInstallPreferencesStore,
     normalizeInstallPlatform,
     recommendedInstallChannelId,
@@ -178,6 +180,7 @@ test('channel adapter retains manual IDs across locale remount and reconciles re
   const firstScope = effectScope();
   const first = firstScope.run(() => useSelection(channels))!;
   assert.equal(first.selectedInstallChannelId.value, 'brew');
+  await mounted[0]!();
   first.detectedInstallPlatform.value = 'windows';
   await nextTick();
   assert.equal(first.selectedInstallChannelId.value, 'powershell');
@@ -189,6 +192,7 @@ test('channel adapter retains manual IDs across locale remount and reconciles re
   }));
   const secondScope = effectScope();
   const second = secondScope.run(() => useSelection(channels))!;
+  await mounted[1]!();
   second.detectedInstallPlatform.value = 'linux';
   await nextTick();
   assert.equal(second.selectedInstallChannelId.value, 'npm');
