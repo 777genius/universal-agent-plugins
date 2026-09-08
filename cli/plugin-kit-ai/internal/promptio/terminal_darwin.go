@@ -15,7 +15,22 @@ func SnapshotTerminal(fd int) (func() error, error) {
 }
 
 func restoreTerminal(fd int, attrs *unix.Termios) error {
-	if err := unix.IoctlSetTermios(fd, unix.TIOCSETA, attrs); err != nil {
+	initial := *attrs
+	if attrs.Lflag&(unix.ICANON|unix.PENDIN) == unix.ICANON {
+		current, err := unix.IoctlGetTermios(fd, unix.TIOCGETA)
+		if err != nil {
+			return err
+		}
+		if current.Lflag&unix.ICANON == 0 {
+			// TIOCSETA wakes kqueue readers before installing ICANON. Their
+			// ttnread can clear the kernel's PENDIN under the old raw settings,
+			// leaving even newline-terminated input in the raw queue. Include
+			// PENDIN in the requested flags so canonical replay remains due
+			// after the new settings are installed.
+			initial.Lflag |= unix.PENDIN
+		}
+	}
+	if err := unix.IoctlSetTermios(fd, unix.TIOCSETA, &initial); err != nil {
 		return err
 	}
 	if attrs.Lflag&unix.PENDIN != 0 {
