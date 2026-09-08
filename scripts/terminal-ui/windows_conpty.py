@@ -296,6 +296,17 @@ def finish_console(terminal, status_path, evidence, fixture=None):
 CASES = ('default-no', 'no', 'yes-lifecycle', 'ctrl-c', 'confirm-ctrl-c', 'eof', 'resize')
 
 
+def prepare_powershell_fixture(fixture):
+    # Native bf397 evidence shows only this empty startup directory hierarchy
+    # added by PowerShell. Seed it before any process starts, not at a prompt:
+    # every directory and any subsequent cache/config file remains asserted.
+    fixture.unchanged()
+    (fixture.home / 'AppData' / 'Local' / 'Microsoft' / 'PowerShell').mkdir(parents=True)
+    fixture.before = fixture.mutations()
+    # PowerShell needs PATHEXT to classify the CLI as a native application.
+    fixture.env['PATHEXT'] = '.EXE'
+
+
 def powershell_argv(shell, argv, nonce):
     # Encode the command, preserving spaces, apostrophes and Unicode literally.
     quote = lambda value: "'" + value.replace("'", "''") + "'"
@@ -317,9 +328,7 @@ def run_case(name, args):
         config = dict(argv=[str(args.binary), 'add', str(fixture.package)], cwd=str(fixture.project),
                       nonce=nonce, status=str(status_path))
         if args.powershell:
-            # PowerShell uses PATHEXT to classify native applications. Without
-            # it an .exe can be treated as a document and launched detached.
-            fixture.env['PATHEXT'] = '.EXE'
+            prepare_powershell_fixture(fixture)
             config['argv'] = powershell_argv(args.powershell, config['argv'], nonce)
         config_path = evidence / 'job.json'
         config_path.write_text(json.dumps(config), encoding='utf-8')

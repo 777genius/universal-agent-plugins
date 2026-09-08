@@ -180,6 +180,76 @@ class OwnerTests(unittest.TestCase):
             self.assertEqual(c.error, None if closed else 'ReadFile WinError 6')
 
 
+class PowerShellFixtureTests(unittest.TestCase):
+    def make_fixture(self, root):
+        from pathlib import Path
+        from harness import Fixture
+        # Opaque synthetic scanner bytes suffice: these tests never execute it.
+        scanner = Path(root) / 'scanner.exe'
+        scanner.write_bytes(b'synthetic, not executable')
+        return Fixture(Path(root) / 'fixture', scanner)
+
+    def test_startup_baseline_adds_only_four_empty_directories(self):
+        import tempfile
+        from pathlib import Path
+        from windows_conpty import prepare_powershell_fixture
+        with tempfile.TemporaryDirectory() as root:
+            fixture = self.make_fixture(root)
+            before = fixture.mutations()
+            env = dict(fixture.env)
+            prepare_powershell_fixture(fixture)
+            expected = dict(before, home=dict(before['home']))
+            path = Path()
+            for part in ('AppData', 'Local', 'Microsoft', 'PowerShell'):
+                path /= part
+                expected['home'][str(path)] = 'directory'
+            self.assertEqual(fixture.before, expected)
+            self.assertEqual(fixture.env, dict(env, PATHEXT='.EXE'))
+            fixture.unchanged()
+
+    def test_all_cli_mutations_remain_detected(self):
+        import tempfile
+        from windows_conpty import prepare_powershell_fixture
+        targets = ('home/.codex/config.toml', 'home/.cursor/config.json',
+                   'home/unexpected', 'home/AppData/Local/Microsoft/PowerShell/cache',
+                   'project/config', 'managed/package', 'operations/journal', 'state')
+        for target in targets:
+            with self.subTest(target=target), tempfile.TemporaryDirectory() as root:
+                fixture = self.make_fixture(root)
+                prepare_powershell_fixture(fixture)
+                roots = dict(home=fixture.home, project=fixture.project,
+                             managed=fixture.data / 'managed', operations=fixture.data / 'operations-v2',
+                             state=fixture.data / 'state-v2.json')
+                key, _, relative = target.partition('/')
+                path = roots[key] / relative if relative else roots[key]
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text('unauthorized mutation')
+                with self.assertRaisesRegex(AssertionError, 'mutated before consent'):
+                    fixture.unchanged()
+
+    def test_removed_startup_directory_is_detected(self):
+        import tempfile
+        from windows_conpty import prepare_powershell_fixture
+        with tempfile.TemporaryDirectory() as root:
+            fixture = self.make_fixture(root)
+            prepare_powershell_fixture(fixture)
+            (fixture.home / 'AppData' / 'Local' / 'Microsoft' / 'PowerShell').rmdir()
+            with self.assertRaisesRegex(AssertionError, 'mutated before consent'):
+                fixture.unchanged()
+
+    def test_setup_cannot_rebaseline_existing_mutation(self):
+        import tempfile
+        from windows_conpty import prepare_powershell_fixture
+        with tempfile.TemporaryDirectory() as root:
+            fixture = self.make_fixture(root)
+            before = fixture.before
+            (fixture.project / 'unauthorized').write_text('mutation')
+            with self.assertRaisesRegex(AssertionError, 'mutated before consent'):
+                prepare_powershell_fixture(fixture)
+            self.assertIs(fixture.before, before)
+            self.assertFalse((fixture.home / 'AppData').exists())
+
+
 class FailureEvidenceTests(unittest.TestCase):
     def test_cleanup_preserves_prompt_failure_and_separate_cleanup_error(self):
         import json

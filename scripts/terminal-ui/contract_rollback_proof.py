@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build a Plain-only rollback rehearsal in a disposable exact-base archive.
+"""Build a Plain-only rollback rehearsal in a disposable candidate archive.
 
 This is evidence tooling, never production fallback. Source and the index stay
 unchanged. Removed UI files exist only in the disposable proof tree.
@@ -11,19 +11,33 @@ import io
 import json
 import os
 from pathlib import Path
+import re
 import subprocess
 import tarfile
 import tempfile
 
-BASE = "75851d78e4d54d586b1697efd5a0ab30f1f5b6a8"
+def candidate_archive(source, requested):
+    """Pin HEAD once, or require an explicit immutable full commit SHA."""
+    if requested is not None and not re.fullmatch(r"[0-9a-fA-F]{40}", requested):
+        raise ValueError("--candidate must be a full 40-character commit SHA")
+    candidate = subprocess.check_output(
+        ["git", "rev-parse", "--verify", (requested or "HEAD") + "^{commit}"],
+        cwd=source, text=True).strip()
+    if requested is not None and candidate != requested.lower():
+        raise ValueError("--candidate must identify a commit directly")
+    archive = subprocess.check_output(
+        ["git", "archive", candidate, "cli", "sdk", "install", ".github", "scripts"], cwd=source)
+    return candidate, archive
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--go", default="/tmp/uap-go-toolchain/go/bin/go")
     parser.add_argument("--artifacts", required=True)
+    parser.add_argument("--candidate", help="reviewed full commit SHA (default: current HEAD)")
     args = parser.parse_args()
     source = Path(__file__).resolve().parents[2]
+    candidate, archive = candidate_archive(source, args.candidate)
     artifacts = Path(args.artifacts).resolve()
     artifacts.mkdir(parents=True, exist_ok=True)
     work = Path(tempfile.mkdtemp(prefix="plain-rollback-", dir=artifacts))
@@ -32,12 +46,13 @@ def main():
                GOFLAGS="-buildvcs=false",
                HOME=str(work / "home"), XDG_CONFIG_HOME=str(work / "config"))
     Path(env["HOME"]).mkdir()
-    archive = subprocess.check_output(["git", "archive", BASE, "cli", "sdk", "install", ".github", "scripts"], cwd=source)
     with tarfile.open(fileobj=io.BytesIO(archive)) as tar:
         tar.extractall(work, filter="data")
     module = work / "cli/plugin-kit-ai"
     adapters = module / "internal/terminalprompts"
-    manifest = {"base": BASE, "tree": str(work), "archive_sha256": hashlib.sha256(archive).hexdigest(),
+    manifest = {"candidate_sha": candidate, "candidate_input": args.candidate or "HEAD",
+                "proof_script_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+                "tree": str(work), "archive_sha256": hashlib.sha256(archive).hexdigest(),
                 "removed_fixture_files": [], "commands": [], "status": "running"}
     original = {p: p.read_text() for p in (adapters / "mode.go", module / "go.mod", module / "go.sum")}
 
@@ -49,21 +64,22 @@ def main():
             raise RuntimeError(f"command failed: see {artifacts / log}")
 
     try:
+        contract_path = adapters / "adapter_success_contract_test.go"
+        contract = contract_path.read_text()
+        manifest["shared_contract_sha256"] = hashlib.sha256(contract_path.read_bytes()).hexdigest()
         # Exclude rich source and its tests only in the archived rehearsal.
         for path in sorted(adapters.glob("*.go")):
-            if path.name not in ("plain.go", "mode.go"):
+            if path.name not in ("plain.go", "mode.go", contract_path.name):
                 manifest["removed_fixture_files"].append(str(path.relative_to(work)))
                 path.unlink()
         mode = adapters / "mode.go"
         branch = '\tif mode == Rich {\n\t\treturn HuhPrompter{Input: input, Output: visible, NoColor: noColor || os.Getenv("NO_COLOR") != ""}, visible, nil\n\t}\n'
         text = mode.read_text()
         if text.count(branch) != 1 or text.count('\treturn Rich\n') != 1:
-            raise RuntimeError("base wiring changed")
+            raise RuntimeError("candidate wiring changed")
         mode.write_text(text.replace(branch, "").replace('\treturn Rich\n', '\treturn Plain\n'))
-        contract = (source / "cli/plugin-kit-ai/internal/terminalprompts/adapter_success_contract_test.go").read_text()
-        manifest["shared_contract_sha256"] = hashlib.sha256(contract.encode()).hexdigest()
         rich = '\t\t\t\t\tif adapter == "huh" {\n\t\t\t\t\t\tp = HuhPrompter{Input: input, Output: &output, NoColor: true}\n\t\t\t\t\t}\n'
-        if contract.count(rich) != 1:
+        if contract.count(rich) != 1 or contract.count('[]string{"plain", "huh"}') != 1:
             raise RuntimeError("shared contract construction changed")
         (adapters / "adapter_success_contract_test.go").write_text(
             contract.replace('[]string{"plain", "huh"}', '[]string{"plain"}').replace(rich, ""))
@@ -73,7 +89,7 @@ def main():
         forbidden = [d for d in deps if d.startswith(("charm.land/", "github.com/charmbracelet/"))]
         if forbidden:
             raise RuntimeError(f"rich dependencies remain: {forbidden}")
-        run([args.go, "test", "./internal/agentpluginscli/prompt", "./internal/terminalprompts",
+        run([args.go, "test", "-count=1", "./internal/agentpluginscli/prompt", "./internal/terminalprompts",
              "./internal/agentpluginscli", "./cmd/agentplugins/..."], "rollback-tests.log")
         binary = artifacts / "agentplugins-plain"
         run([args.go, "build", "-o", str(binary), "./cmd/agentplugins"], "rollback-build.log")
