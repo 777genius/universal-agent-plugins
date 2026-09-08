@@ -74,7 +74,7 @@ jobs:
           $repo = (Get-Location).Path
           $evidence = Join-Path $env:RUNNER_TEMP ('windows-fault-evidence/error-resource-' + [guid]::NewGuid().ToString('N'))
           New-Item -ItemType Directory -Path $evidence -Force | Out-Null
-          $go = (Get-Command go -CommandType Application -ErrorAction Stop).Source
+          $go = (Get-Command go -CommandType Application -ErrorAction Stop | Select-Object -First 1).Source
           Get-Command python -CommandType Application -ErrorAction Stop | Out-Null
           if (!(Test-Path (Join-Path $env:RUNNER_TEMP 'agentplugins.exe'))) { throw 'built CLI missing' }
           & $go version | Tee-Object -FilePath (Join-Path $evidence 'go-version.txt')
