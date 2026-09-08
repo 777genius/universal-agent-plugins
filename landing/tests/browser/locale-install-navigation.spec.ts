@@ -57,6 +57,10 @@ for (const target of publishedLocales.filter((locale) => locale !== 'en')) {
         // URL/html.lang alone passed before the freeze. These require a completed
         // scheduler, localized route content and a responsive real language menu.
         await expect(switcher).toHaveAttribute('aria-busy', 'false');
+        if (width < 768) {
+          await page.getByRole('button', { name: wording(target)('shell.navigation.close'), exact: true }).click();
+          await expect(page.getByRole('dialog')).not.toBeVisible();
+        }
         await expect(
           page.getByRole('heading', { name: downloadHeading(target), exact: true }),
         ).toBeVisible();
@@ -73,6 +77,7 @@ for (const target of publishedLocales.filter((locale) => locale !== 'en')) {
         await expect
           .poll(() => page.locator('.download-section__steps code').allTextContents())
           .toEqual(commands);
+        if (width < 768) await page.getByRole('button', { name: wording(target)('shell.navigation.open'), exact: true }).click();
         await switcher.click();
         const current = page.getByRole('menuitemradio', {
           name: localeMetadata[target].name,
