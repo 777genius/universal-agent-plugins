@@ -10,6 +10,7 @@ const path = require("node:path");
 const crypto = require("node:crypto");
 const test = require("node:test");
 const c = require("../scripts/dual-authoring-candidate");
+const bridge = require("../scripts/packed-installer-bridge");
 const adapter = require("../scripts/authoring-release");
 const packing = require("../scripts/stage-dual-authoring-npm");
 const stager = require("../scripts/stage-authoring-npm");
@@ -28,7 +29,7 @@ function tree(root) {
   walk(root); return result;
 }
 
-test("PUBLIC NATIVE: exact integrated packs, both actual bins, static parity and lifecycle", () => {
+test("PUBLIC NATIVE: exact integrated packs, both actual bins, static parity and lifecycle", t => {
   const config = process.env.UAP_PUBLIC_AUTHORING_NATIVE_CONFIG;
   assert.ok(config && path.isAbsolute(config), "required UAP_PUBLIC_AUTHORING_NATIVE_CONFIG: exact integrated assets remain a coordinator gate");
   const cfg = JSON.parse(c.readFile(config, 1024 * 1024));
@@ -36,6 +37,7 @@ test("PUBLIC NATIVE: exact integrated packs, both actual bins, static parity and
   const o = cfg.prepare, candidate = o.candidate;
   const platform = require("../lib/platform").detectPlatform();
   const target = platform.key;
+  assert.equal(target, "linux-amd64", "public packed intake is the bounded Linux lane");
   c.outputPlacement(cfg.evidenceOutput, [o.repo, o.output, candidate.root, candidate.workParent]);
   const context = packing.npmContext(candidate.workParent);
   const env = { ...context.env, PATH: `${path.dirname(o.node)}:/usr/local/bin:/usr/bin:/bin` };
@@ -53,7 +55,7 @@ test("PUBLIC NATIVE: exact integrated packs, both actual bins, static parity and
   for (const claim of ["release_eligible", "platform_acceptance", "attested"]) assert.equal(record[claim], false);
   assert.deepEqual(record.wrapper_blobs, Object.fromEntries(Object.entries(source).map(([n, { bytes, ...pin }]) => [n, pin])));
   fs.mkdirSync(cfg.evidenceOutput, { mode: 0o700 });
-  const bodies = {}, tarballs = {}, invocations = [], reports = {}, trees = {};
+  const bodies = {}, tarballs = {}, packs = {}, binaries = {}, installations = [], invocations = [], reports = {}, trees = {};
   const integrity = bytes => "sha512-" + crypto.createHash("sha512").update(bytes).digest("base64");
   for (const p of c.PRODUCTS) {
     const manifestBytes = c.readFile(path.join(candidate.outputs[p], "release-manifest.json"));
@@ -81,6 +83,7 @@ test("PUBLIC NATIVE: exact integrated packs, both actual bins, static parity and
     const packed = packing.packPackage(p, files, root, { ...o, output, identity: candidate.identity },
       { env, root: fs.mkdtempSync(path.join(context.root, "synthetic-pack-")) });
     tarballs[p] = path.join(output, packed.file);
+    packs[p] = { ...packed, file: tarballs[p] };
     const m = JSON.parse(manifestBytes), a = m.assets[target];
     const body = c.readFile(path.join(candidate.outputs[p], a.file));
     assert.equal(c.digest(body), a.sha256);
@@ -88,11 +91,17 @@ test("PUBLIC NATIVE: exact integrated packs, both actual bins, static parity and
   }
   const loader = path.join(context.root, "transport.cjs"), log = path.join(cfg.evidenceOutput, "downloads.log");
   preload(loader, bodies, log);
+  function install(p, prefix, env) {
+    const argv = [o.npm, "install", "--global", "--prefix", prefix, "--offline", "--ignore-scripts", "--no-audit", "--no-fund", tarballs[p]];
+    const result = run(o.node, argv, env, context.root);
+    installations.push({ product: p, argv, status: result.status, signal: result.signal, pack_sha256: c.digest(c.readFile(tarballs[p])) });
+    ok(result);
+  }
   // Separate prefixes and homes prove neither native product needs its peer.
   for (const p of c.PRODUCTS) {
     const prefix = path.join(context.root, `${p} independent prefix`);
     const independent = environment({ ...context, env }, prefix, path.join(context.root, `${p} independent home`));
-    ok(run(o.node, [o.npm, "install", "--global", "--prefix", prefix, "--offline", "--ignore-scripts", "--no-audit", "--no-fund", tarballs[p]], independent, context.root));
+    install(p, prefix, independent);
     const packageRoot = path.join(prefix, "lib/node_modules", p === "agentplugins" ? "universal-agent-plugins" : p);
     const controlled = { ...independent, NODE_OPTIONS: `--require=${JSON.stringify(loader)}`, PATH: "/absent-peer-binary-path" };
     if (p === "plugin-kit-ai") assert.equal(ok(run(o.node, [path.join(packageRoot, "lib/install.js")], controlled, context.root)), "");
@@ -102,7 +111,7 @@ test("PUBLIC NATIVE: exact integrated packs, both actual bins, static parity and
   }
   const prefix = path.join(context.root, "shared prefix ü"), home = path.join(context.root, "consumer home ü");
   const consumer = environment({ ...context, env }, prefix, home);
-  for (const p of c.PRODUCTS) ok(run(o.node, [o.npm, "install", "--global", "--prefix", prefix, "--offline", "--ignore-scripts", "--no-audit", "--no-fund", tarballs[p]], consumer, context.root));
+  for (const p of c.PRODUCTS) install(p, prefix, consumer);
   const client = path.join(home, ".codex"), installer = path.join(context.root, "installer-state");
   fs.mkdirSync(client); fs.mkdirSync(installer);
   fs.writeFileSync(path.join(client, "config.toml"), "# isolated synthetic target\n");
@@ -141,10 +150,11 @@ test("PUBLIC NATIVE: exact integrated packs, both actual bins, static parity and
     for (const name of ["dev", "bootstrap", "normalize", "import", "export", "publish"]) {
       assert.ok(!JSON.stringify(help).includes(`"${name}"`), `deferred ${name} absent`);
     }
-    for (const lane of ["skill", "mcp-remote", "mcp-stdio"]) {
-      const extra = lane === "mcp-remote" ? ["--url=https://docs.example.com/mcp"] : lane === "mcp-stdio" ? ["--runtime=node"] : [];
-      assert.equal(author(p, ["init", lane, `--template=${lane}`, ...extra]).committed, true);
+    for (const lane of bridge.LANES) {
+      assert.equal(author(p, bridge.publicInit(lane)).committed, true);
       const project = path.join(projects[p], lane);
+      assert.equal(author(p, ["skills", "init", "extra-skill", project, "--description=Disposable fixture."]).committed, true);
+      author(p, ["skills", "validate", project]);
       for (const command of ["validate", "inspect", "test"]) {
         const d = author(p, [command, project]);
         assert.equal(d.runtime_evidence.status, "not_evaluated"); assert.ok(d.identity.tree_digest);
@@ -171,6 +181,7 @@ test("PUBLIC NATIVE: exact integrated packs, both actual bins, static parity and
     fs.writeFileSync(cached, "corrupt fixture cache");
     ok(run(o.node, [bin(p), "version", "--format=json"], transportEnv, projects[p]));
     assert.equal(c.digest(c.readFile(cached)), release.asset.binary.sha256);
+    binaries[p] = { path: cached, sha256: release.asset.binary.sha256, size: c.readFile(cached).length };
   }
   const offline = path.join(context.root, "offline.cjs"); preload(offline, {}, log, true);
   const offlineEnv = { ...transportEnv, NODE_OPTIONS: `--require=${JSON.stringify(offline)}` };
@@ -179,10 +190,28 @@ test("PUBLIC NATIVE: exact integrated packs, both actual bins, static parity and
   ok(run(o.node, [o.npm, "uninstall", "--global", "--prefix", prefix, "--offline", "--ignore-scripts", "universal-agent-plugins"], consumer, context.root));
   assert.deepEqual(fs.readFileSync(bin("plugin-kit-ai")), peerBytes);
   ok(run(o.node, [bin("plugin-kit-ai"), "version"], offlineEnv, projects["plugin-kit-ai"]));
-  ok(run(o.node, [o.npm, "install", "--global", "--prefix", prefix, "--offline", "--ignore-scripts", tarballs.agentplugins], consumer, context.root));
+  install("agentplugins", prefix, consumer);
   ok(run(o.node, [bin("agentplugins"), "version"], offlineEnv, projects.agentplugins));
   assert.deepEqual(tree(projects["plugin-kit-ai"]), before);
   assert.equal(fs.readFileSync(log, "utf8").trim().split("\n").length, 6, "independent/shared cold and corruption recovery downloads per product; warm is offline");
   fs.writeFileSync(path.join(cfg.evidenceOutput, "result.json"), c.encode({ source: candidate.identity.commit,
-    fixture_acquisition_execution: true, signed_promotion: false, public_eligible: false, runtime_evidence: "not_evaluated" }));
+    fixture_acquisition_execution: true, signed_promotion: false, public_eligible: false, runtime_evidence: "not_evaluated" }), { flag: "wx" });
+  for (const p of c.PRODUCTS) assert.deepEqual(bridge.LANES.map(lane => tree(path.join(projects[p], lane))), trees[p], "all generated projects preserved through lifecycle");
+  const terminal = { schema: "dual-authoring-public-native/v1", status: "completed",
+    identity: candidate.identity, candidate_sha256: candidate.manifestDigest, completion_sha256: cfg.completionDigest,
+    config_sha256: c.digest(c.readFile(config)), pair_marker_sha256: o.pairMarkerDigest, projection_pins: o.projectionPins,
+    fixtureRoot: context.root, target, packs, binaries, installations,
+    tools: { ...record.tools, go: { path: candidate.go, sha256: c.digest(c.readFile(candidate.go)) },
+      producer_node: { path: process.execPath, sha256: c.digest(c.readFile(process.execPath)), version: process.version } },
+    invocations: invocations.length, invocations_sha256: c.digest(c.readFile(path.join(cfg.evidenceOutput, "invocations.json"))),
+    downloads_sha256: c.digest(c.readFile(log)), result_sha256: c.digest(c.readFile(path.join(cfg.evidenceOutput, "result.json"))),
+    projects, trees: Object.fromEntries(c.PRODUCTS.map(p => [p, bridge.snapshot(projects[p])])),
+    fixture_acquisition_execution: true, qualification: null, signed_promotion: false, public_eligible: false,
+    release_eligible: false, platform_acceptance: false, attested: false, runtime_evidence: "not_evaluated" };
+  // Validate the full contract before exclusive terminal publication. No success
+  // marker exists if a lane, pin, or lifecycle assertion above failed.
+  bridge.publicEvidence(cfg, terminal, config);
+  const terminalPath = path.join(cfg.evidenceOutput, "public-native-completion.json");
+  fs.writeFileSync(terminalPath, c.encode(terminal), { flag: "wx", mode: 0o600 });
+  t.diagnostic("public native completion: " + JSON.stringify({ file: terminalPath, sha256: c.digest(c.readFile(terminalPath)), source: candidate.identity.commit }));
 });

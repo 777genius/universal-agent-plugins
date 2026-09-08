@@ -229,6 +229,73 @@ class TerminalControls(unittest.TestCase):
         with self.assertRaises(OSError): p.check(root, sha)
 
 
+class PublicControls(unittest.TestCase):
+    def test_public_terminal_and_matrix_controls(self):
+        root, sha, put, get = TerminalControls.fixture(self)
+        # Reuse only the synthetic planner transcripts; no native claim.
+        private = get('run.json'); tools = private['tools']; claims = {k: False for k in p.CLAIMS}
+        request = dict(intake='public-fixture/v1', expectedCommit=sha, nativeConfig=str(root / 'public-config.json'))
+        put('public-config.json', dict(evidenceOutput=str(root / 'public-native')))
+        put('public-native/invocations.json', [])
+        native = dict(schema='dual-authoring-public-native/v1', status='completed', identity=private['identity'],
+            qualification=None, tools=tools, invocations_sha256=p.digest(root / 'public-native/invocations.json'),
+            signed_promotion=False, public_eligible=False, **claims)
+        put('public-native/public-native-completion.json', native)
+        request.update(nativeConfigSha256=p.digest(request['nativeConfig']),
+            nativeCompletionSha256=p.digest(root / 'public-native/public-native-completion.json'))
+        marker = json.dumps(dict(file=str(root / 'public-native/public-native-completion.json'), sha256=request['nativeCompletionSha256'], source=sha))
+        put('public.tap', tap([p.PUBLIC_TEST]).replace('TAP version 13\n', 'TAP version 13\n# public native completion: ' + marker + '\n'))
+        options = dict(request=request, nativeTap=str(root / 'public.tap'), nativeTapSha256=p.digest(root / 'public.tap'),
+            go=tools['go']['path'], node=tools['node']['path'], modCache=str(root / 'unused-modules'))
+        put('public-run.json', dict(schema='public-packed-run/v1', head=sha, options=options, tools=tools, **claims))
+        sealed = get('bridge-config/sealed.json'); sealed['request'] = request
+        inventory_root = root / 'sealed-tree'; inventory_root.mkdir()
+        entries = [dict(path='.', mode=inventory_root.stat().st_mode & 0o777, kind='directory')]
+        sealed['inputs']['snapshots'] = [dict(root=str(inventory_root), entries=entries,
+            sha256=p.hashlib.sha256((json.dumps(entries, indent=2) + '\n').encode()).hexdigest())]
+        put('bridge-config/request.json', request); put('bridge-config/sealed.json', sealed)
+        pin = p.digest(root / 'bridge-config/sealed.json')
+        result = get('results/completion.json'); result.update(config_sha256=pin, inputs=sealed['inputs']); put('results/completion.json', result)
+        put('logs/post-verify.stdout', json.dumps(sealed['inputs']))
+        put('logs/seal.stdout', pin + '\n')
+        for name in ('head', 'clean', 'terminal-clean', 'post-verify', 'discovery', 'planner'):
+            phase = get('logs/' + name + '.json')
+            if name == 'head': phase['argv'] = ['/usr/bin/git', 'rev-parse', 'HEAD']
+            if name in ('clean', 'terminal-clean'): phase['argv'] = ['/usr/bin/git', 'status', '--porcelain=v1', '--untracked-files=all']
+            if name == 'post-verify': phase['argv'][-2] = pin
+            if name in ('discovery', 'planner'):
+                phase['env'].update(UAP_PACKED_INSTALLER_NODE=tools['node']['path'],
+                    UAP_PACKED_INSTALLER_CONFIG=str(root / 'bridge-config/sealed.json'), UAP_PACKED_INSTALLER_CONFIG_SHA256=pin,
+                    UAP_PACKED_INSTALLER_COMMIT=sha, UAP_PACKED_INSTALLER_OUTPUT=str(root / 'results/completion.json'))
+            put('logs/' + name + '.json', phase)
+        p.check_public(root, sha)
+        valid_tap = (root / 'public.tap').read_text()
+        for bad in [tap([p.PUBLIC_TEST]), valid_tap.replace(sha, 'b'*40), valid_tap + '# public native completion: ' + marker + '\n']:
+            with self.assertRaises(ValueError): p.public_tap(bad, request)
+        for file, key, value in [('public-run.json', 'head', 'b'*40), ('logs/planner.json', 'argv', []),
+            ('logs/discovery.json', 'env', {}), ('logs/post-verify.json', 'exit', 1),
+            ('results/completion.json', 'plans', result['plans'][:-1]),
+            ('results/completion.json', 'plans', [result['plans'][0]] + result['plans'][:-1]),
+            ('results/completion.json', 'attested', True), ('bridge-config/sealed.json', 'helper_sha256', '0'*64)]:
+            original = get(file); put(file, dict(original, **{key: value}))
+            with self.subTest(file=file, key=key), self.assertRaises((ValueError, KeyError)): p.check_public(root, sha)
+            put(file, original)
+        (inventory_root / 'unexpected').mkdir()
+        with self.assertRaisesRegex(ValueError, 'sealed tree changed'): p.check_public(root, sha)
+        (inventory_root / 'unexpected').rmdir()
+        for text in [tap([p.PUBLIC_TEST])[:-1], tap([p.PUBLIC_TEST]).replace('# skipped 0', '# skipped 1'), tap(p.NATIVE_TESTS)]:
+            put('public.tap', text)
+            with self.assertRaises(ValueError): p.check_public(root, sha)
+
+    def test_public_runner_rejects_missing_or_wrong_contract_before_output(self):
+        root = Path(tempfile.mkdtemp(prefix='public-packed-runner-SYNTHETIC-'))
+        options = root / 'options.json'; output = root / 'must-not-exist'
+        for value in ({}, dict(request={'intake': 'private'}, nativeTap='/unused', nativeTapSha256='0'*64, go='/unused', node='/unused', modCache='/unused')):
+            options.write_text(json.dumps(value))
+            with self.assertRaises(ValueError): r.public_main(output, 'a'*40, options)
+            self.assertFalse(output.exists())
+
+
 class WorkflowControls(unittest.TestCase):
     def test_runner_context_rejected_only_at_job_env_scope(self):
         text = (ROOT / '.github/workflows/authoring-native.yml').read_text()

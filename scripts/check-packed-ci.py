@@ -21,6 +21,7 @@ PACKAGE = 'github.com/777genius/plugin-kit-ai/cli/internal/authoring/commands'
 CANDIDATE_TEST = 'actual controlled Linux pair: offline verification, engine reports, frozen journeys and negative proof'
 NATIVE_TESTS = ['native retirement oracle preserves original format tails and rejects output mismatches',
     'NATIVE opt-in: exact two Linux tarballs, five accepted template lanes and complete release journeys']
+PUBLIC_TEST = 'PUBLIC NATIVE: exact integrated packs, both actual bins, static parity and lifecycle'
 CLAIMS = ('release_eligible', 'platform_acceptance', 'attested')
 
 
@@ -236,5 +237,97 @@ def check(root, sha):
     require(log('head').strip() == sha and log('clean') == log('terminal-clean') == '', 'clean checkout proof')
 
 
+def public_tap(text, request):
+    tap(text, [PUBLIC_TEST])
+    markers = re.findall(r'^# public native completion: (.+)$', text, re.M)
+    require(len(markers) == 1, 'one public terminal TAP binding required')
+    cfg = read(request['nativeConfig'])
+    require(json.loads(markers[0]) == dict(file=str(Path(cfg['evidenceOutput']) / 'public-native-completion.json'),
+        sha256=request['nativeCompletionSha256'], source=request['expectedCommit']), 'public TAP terminal identity')
+
+
+def unchanged_snapshots(inputs):
+    require(inputs['snapshots'], 'missing sealed inventories')
+    for snapshot in inputs['snapshots']:
+        root = Path(snapshot['root']); expected = snapshot['entries']
+        encoded = (json.dumps(expected, indent=2, ensure_ascii=False) + '\n').encode()
+        require(hashlib.sha256(encoded).hexdigest() == snapshot['sha256'], 'inventory digest')
+        actual = []
+        def walk(file, relative):
+            st = file.lstat(); require(not st.st_mode & 0o7000, 'special inventory mode')
+            row = dict(path=relative, mode=stat.S_IMODE(st.st_mode), kind='directory' if stat.S_ISDIR(st.st_mode) else 'file')
+            if stat.S_ISLNK(st.st_mode):
+                require(file.resolve(strict=True).is_relative_to(root) and file.resolve() != root, 'inventory link escape')
+                row.update(kind='symlink', target=str(file.readlink()))
+            elif not stat.S_ISDIR(st.st_mode):
+                body = data(file); row.update(size=len(body), sha256=hashlib.sha256(body).hexdigest())
+            actual.append(row)
+            if stat.S_ISDIR(st.st_mode):
+                for child in sorted(file.iterdir()): walk(child, child.name if relative == '.' else relative + '/' + child.name)
+        require(root.resolve() == root, 'aliased inventory root')
+        walk(root, '.')
+        require(actual == expected, 'sealed tree changed')
+
+
+def check_public(root, sha):
+    run = read(root / 'public-run.json'); false_claims(run)
+    require(run['schema'] == 'public-packed-run/v1' and run['head'] == sha and re.fullmatch('[0-9a-f]{40}', sha), 'public run identity')
+    options = run['options']; request = options['request']
+    require(request['intake'] == 'public-fixture/v1' and request['expectedCommit'] == sha, 'public request identity')
+    require(digest(options['nativeTap']) == options['nativeTapSha256'], 'changed public TAP')
+    public_tap(data(options['nativeTap']).decode(), request)
+    require(digest(request['nativeConfig']) == request['nativeConfigSha256'], 'changed public config')
+    cfg = read(request['nativeConfig'])
+    terminal_path = Path(cfg['evidenceOutput']) / 'public-native-completion.json'
+    require(digest(terminal_path) == request['nativeCompletionSha256'], 'changed public terminal')
+    native = read(terminal_path); false_claims(native, (*CLAIMS, 'signed_promotion', 'public_eligible'))
+    require(native['schema'] == 'dual-authoring-public-native/v1' and native['status'] == 'completed' and
+        native['qualification'] is None and native['identity']['commit'] == native['identity']['engine_revision'] == sha, 'public terminal contract')
+    require(digest(Path(cfg['evidenceOutput']) / 'invocations.json') == native['invocations_sha256'], 'public invocation pin')
+    sealed_path = root / 'bridge-config/sealed.json'; sealed = read(sealed_path); false_claims(sealed)
+    require(sealed['schema'] == 'packed-installer-bridge/v1' and sealed['request'] == request == read(root / 'bridge-config/request.json'), 'public sealed request')
+    repo = Path(__file__).resolve().parent.parent; bridge = repo / 'npm/agentplugins/scripts/packed-installer-bridge.js'
+    require(sealed['verifier_sha256'] == digest(bridge) and sealed['helper_sha256'] == digest(bridge.with_name('dual-authoring-candidate.js')), 'public verifier changed')
+    for key in ('go', 'node'):
+        tool = run['tools'][key]
+        require(tool['path'] == options[key] and tool['sha256'] == digest(tool['path']) == native['tools'][key]['sha256'], 'public tool changed')
+    node, go = [run['tools'][k]['path'] for k in ('node', 'go')]
+    commands = {'head': ['/usr/bin/git', 'rev-parse', 'HEAD'],
+        'clean': ['/usr/bin/git', 'status', '--porcelain=v1', '--untracked-files=all'],
+        'terminal-clean': ['/usr/bin/git', 'status', '--porcelain=v1', '--untracked-files=all'],
+        'seal': [node, str(bridge), 'seal', str(root / 'bridge-config/request.json'), str(sealed_path)],
+        'post-verify': [node, str(bridge), 'verify', str(sealed_path), digest(sealed_path), sha]}
+    for name, flag in [('discovery', '-list'), ('planner', '-run')]:
+        commands[name] = [go, 'test', '-p=2', '-tags=packedci', '-json',
+            *([] if name == 'discovery' else ['-count=1', '-timeout=20m']), flag, REGEX, PACKAGE_PATH]
+    for name, command in commands.items():
+        phase = read(root / 'logs' / (name + '.json'))
+        require(type(phase['exit']) is int and phase['exit'] == 0 and phase['argv'] == command and phase['cwd'] == str(repo), 'public phase: ' + name)
+        require(all(phase['env'].get(k) == v for k, v in dict(GOPROXY='off', GOSUMDB='off', GOVCS='*:off', GOENV='off', GOTOOLCHAIN='local').items()), 'public offline environment')
+        require(not any(k in phase['env'] for k in ('GOFLAGS', 'NODE_OPTIONS', 'AGENTPLUGINS_STAGED_TEST_CHILD')), 'inherited public control')
+        data(root / 'logs' / (name + '.stdout')); data(root / 'logs' / (name + '.stderr'))
+        if name in ('discovery', 'planner'):
+            require(all(phase['env'].get(k) == v for k, v in dict(UAP_PACKED_INSTALLER_NODE=node,
+                UAP_PACKED_INSTALLER_CONFIG=str(sealed_path), UAP_PACKED_INSTALLER_CONFIG_SHA256=digest(sealed_path),
+                UAP_PACKED_INSTALLER_COMMIT=sha, UAP_PACKED_INSTALLER_OUTPUT=str(root / 'results/completion.json')).items()), 'public planner opt-in')
+    log = lambda name: data(root / 'logs' / (name + '.stdout')).decode()
+    go_discovery(log('discovery')); go_results(log('planner'))
+    result = read(root / 'results/completion.json'); false_claims(result)
+    require(result['kind'] == 'packed-generated-existing-injected-installer-planner' and result['commit'] == sha, 'public planner completion')
+    require(result['config_sha256'] == digest(sealed_path) == log('seal').strip(), 'public planner seal pin')
+    require(result['inputs'] == sealed['inputs'] == json.loads(log('post-verify')), 'public preservation')
+    unchanged_snapshots(result['inputs'])
+    projects = result['inputs']['projects']
+    require(Counter((p['product'], p['lane']) for p in projects) == Counter({(p, l): 1 for p in PRODUCTS for l in LANES}) and
+        len({p['source'] for p in projects}) == 10, 'public ten distinct projects')
+    plans(result)
+    require(log('head').strip() == sha and log('clean') == log('terminal-clean') == '', 'public exact clean checkout')
+
+
 if __name__ == '__main__':
-    check(Path(sys.argv[1]), sys.argv[2])
+    if len(sys.argv) == 4 and sys.argv[1] == '--public':
+        check_public(Path(sys.argv[2]), sys.argv[3])
+    elif len(sys.argv) == 3:
+        check(Path(sys.argv[1]), sys.argv[2])
+    else:
+        raise SystemExit('usage: check-packed-ci.py ROOT SHA | --public ROOT SHA')

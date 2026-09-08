@@ -97,3 +97,73 @@ test("snapshot rejects links and captures empty files/directories and modes", po
  assert.equal(bridge.snapshot(root,true).entries.length,4);
  fs.unlinkSync(path.join(root,"link")); fs.symlinkSync("/etc/passwd",path.join(root,"link")); assert.throws(()=>bridge.snapshot(root,true));
 });
+
+function publicFixture(t) {
+ const f=fixture(t), cfg=JSON.parse(fs.readFileSync(f.nativeConfig)), old=cfg.stage;
+ const dir=name=>{const p=path.join(f.root,name);fs.mkdirSync(p);return p;};
+ const outputs=Object.fromEntries(bridge.PRODUCTS.map(p=>[p,dir('projection-'+p)])), projectionPins={}, assets={}, binaries={}, packs={};
+ const native=JSON.parse(fs.readFileSync(f.nativePath)), evidence=cfg.evidenceOutput, invocations=[];
+ for(const p of bridge.PRODUCTS) {
+  const bytes=Buffer.from('synthetic binary '+p), asset={file:p+'.bin',sha256:c.digest(bytes),size:bytes.length,binary:{sha256:c.digest(bytes),size:bytes.length}};
+  assets[p]={assets:{'linux-amd64':asset}};
+  fs.writeFileSync(path.join(outputs[p],asset.file),bytes);
+  write(path.join(outputs[p],'release-manifest.json'),{schema_version:3,status:'CANDIDATE',product:p,repository:old.identity.repository,tag:p==='agentplugins'?`agentplugins-v${old.identity.versions[p]}`:`v${old.identity.versions[p]}`,version:old.identity.versions[p],versions:old.identity.versions,authoring_mode:old.authoringMode,asset_scope:'six-platform-pair',assets:assets[p].assets,commit:old.identity.commit,engine_revision:old.identity.commit,candidate_sha256:old.manifestDigest,release_eligible:false,platform_acceptance:false,attested:false});
+  fs.writeFileSync(path.join(outputs[p],'checksums.txt'),`${asset.sha256}  ${asset.file}\n${hash(path.join(outputs[p],'release-manifest.json'))}  release-manifest.json\n`);
+  projectionPins[p]={manifest_sha256:hash(path.join(outputs[p],'release-manifest.json')),checksums_sha256:hash(path.join(outputs[p],'checksums.txt'))};
+  const binary=path.join(f.fixtureRoot,p+'.bin');fs.writeFileSync(binary,bytes);binaries[p]={path:binary,sha256:asset.sha256,size:asset.size};
+  const packdir=path.join(evidence,p);fs.mkdirSync(packdir);const pack=path.join(packdir,native.packs[p].file), body=Buffer.from('executed synthetic '+p);fs.writeFileSync(pack,body);
+  packs[p]={file:pack,sha256:c.digest(body),size:body.length,integrity:'sha512-'+crypto.createHash('sha512').update(body).digest('base64')};
+  const parent=path.join(f.fixtureRoot,`${p} projects ü`);fs.renameSync(f.projects[p],parent);f.projects[p]=parent;
+  const add=(argv,author=false,status=0)=>invocations.push({product:p,argv:[...(author&&p==='agentplugins'?['author']:[]),...argv],status,signal:null,stderr:'',stdout:JSON.stringify({schema_version:1,result:'success',data:{engine:'standard-first-slice/1',revision:old.identity.commit,committed:true}})});
+  add(['version','--format=json']);add(['--help']);add(['version','--format=json'],true);add(['--help','--format=json'],true);
+  for(const lane of bridge.LANES){
+   const source=path.join(parent,lane);fs.mkdirSync(path.join(source,'skills'));fs.mkdirSync(path.join(source,'skills/extra-skill'));fs.writeFileSync(path.join(source,'skills/extra-skill/SKILL.md'),'synthetic');
+   for(const args of [bridge.publicInit(lane),['skills','init','extra-skill',source,'--description=Disposable fixture.'],['skills','validate',source],...['validate','inspect','test'].map(n=>[n,source])]) add([...args,'--format=json'],true);
+  }
+ }
+ invocations.push({product:'plugin-kit-ai',argv:['update','--all','--format=json'],status:2,signal:null,stdout:'{}',stderr:''},
+  {product:'agentplugins',argv:['add',path.join(f.projects.agentplugins,'skill'),'--target=codex','--dry-run','--format=json'],status:0,signal:null,stdout:'{}',stderr:''});
+ const tool=path.join(f.root,'tool');fs.writeFileSync(tool,'synthetic tool');const toolpin={path:tool,sha256:hash(tool)};
+ const candidate={candidate:true,root:f.candidate,identity:old.identity,manifestDigest:old.manifestDigest,go:tool,workParent:old.workParent,assetScope:'six-platform-pair',authoringMode:old.authoringMode,outputs,pairMarker:path.join(f.root,'pair.json')};
+ write(candidate.pairMarker,{schema:'authoring-release-pair/v1',status:'CANDIDATE',identity:old.identity,candidate_sha256:old.manifestDigest,authoring_mode:old.authoringMode,asset_scope:candidate.assetScope,products:projectionPins,release_eligible:false,platform_acceptance:false,attested:false});
+ const pairMarkerDigest=hash(candidate.pairMarker), prep={schema:'dual-authoring-public-preparation/v1',identity:old.identity,candidate_sha256:old.manifestDigest,projection_pins:projectionPins,pair_marker_sha256:pairMarkerDigest,wrapper_blobs:{'source.js':{sha256:c.digest(Buffer.from('synthetic source'))}},generated:{},packs:native.packs,tools:{node:toolpin,npm:toolpin},qualification:null,release_eligible:false,platform_acceptance:false,attested:false};
+ fs.writeFileSync(path.join(old.repo,'source.js'),'synthetic source');write(f.completionPath,prep);
+ const publicCfg={prepare:{candidate,repo:old.repo,node:tool,npm:tool,output:old.output,projectionPins,pairMarkerDigest},completionDigest:hash(f.completionPath),evidenceOutput:evidence};write(f.nativeConfig,publicCfg);
+ write(path.join(evidence,'invocations.json'),invocations);fs.writeFileSync(path.join(evidence,'downloads.log'),'synthetic download');
+ write(path.join(evidence,'result.json'),{source:old.identity.commit,fixture_acquisition_execution:true,signed_promotion:false,public_eligible:false,runtime_evidence:'not_evaluated'});
+ const installations=[...bridge.PRODUCTS,...bridge.PRODUCTS,'agentplugins'].map((p,i)=>({product:p,argv:[tool,'install','--global','--prefix',path.join(f.fixtureRoot,i<2?`${p} independent prefix`:'shared prefix ü'),'--offline','--ignore-scripts','--no-audit','--no-fund',packs[p].file],status:0,signal:null,pack_sha256:packs[p].sha256}));
+ const terminal={schema:'dual-authoring-public-native/v1',status:'completed',identity:old.identity,candidate_sha256:old.manifestDigest,completion_sha256:hash(f.completionPath),config_sha256:hash(f.nativeConfig),pair_marker_sha256:pairMarkerDigest,projection_pins:projectionPins,fixtureRoot:f.fixtureRoot,target:'linux-amd64',packs,binaries,installations,tools:{node:toolpin,npm:toolpin,go:toolpin,producer_node:{...toolpin,version:'v22.21.1'}},invocations:invocations.length,invocations_sha256:hash(path.join(evidence,'invocations.json')),downloads_sha256:hash(path.join(evidence,'downloads.log')),result_sha256:hash(path.join(evidence,'result.json')),projects:f.projects,trees:Object.fromEntries(bridge.PRODUCTS.map(p=>[p,bridge.snapshot(f.projects[p])])),fixture_acquisition_execution:true,qualification:null,signed_promotion:false,public_eligible:false,release_eligible:false,platform_acceptance:false,attested:false,runtime_evidence:'not_evaluated'};
+ f.nativePath=path.join(evidence,'public-native-completion.json');write(f.nativePath,terminal);
+ return {...f,terminal,assets,tool,request:{...f.request,intake:'public-fixture/v1',nativeConfigSha256:hash(f.nativeConfig),nativeCompletionSha256:hash(f.nativePath)}};
+}
+test('SYNTHETIC public intake: exact lanes, executed packs, pins and schema separation',posixFixture,t=>{
+ const original=c.frozenCandidate, f=publicFixture(t);
+ c.frozenCandidate=()=>({manifest:{products:f.assets,build:{go_sha256:hash(f.tool)}}});
+ try {
+  const sealed=path.join(f.root,'sealed.json');const digest=bridge.publishSeal(f.request,sealed);
+  assert.throws(()=>bridge.publishSeal(f.request,sealed));
+  assert.throws(()=>bridge.publishSeal(f.request,path.join(f.candidate,'overlap.json')));
+  assert.throws(()=>bridge.publishSeal(f.request,path.join(f.root,'repo/overlap.json')));
+  const verify=()=>bridge.verify(sealed,digest,f.request.expectedCommit);assert.equal(verify().projects.length,10);
+  for(const field of ['release_eligible','platform_acceptance','attested','signed_promotion','public_eligible']) for(const value of [true,undefined]) {
+   const bad={...f.terminal,[field]:value};write(f.nativePath,bad);
+   assert.throws(()=>bridge.seal({...f.request,nativeCompletionSha256:hash(f.nativePath)}),field);
+  }
+  for(const change of [{schema:'dual-authoring-npm-completion/v1'},{status:'running'},{qualification:{}},{invocations:69},{fixtureRoot:f.root},{identity:{...f.terminal.identity,engine_revision:'0'.repeat(40)}},{packs:{...f.terminal.packs,agentplugins:{...f.terminal.packs.agentplugins,sha256:JSON.parse(fs.readFileSync(f.completionPath)).packs.agentplugins.sha256}}},{projects:{...f.projects,agentplugins:f.projects['plugin-kit-ai']}},{installations:f.terminal.installations.slice(1)}]){
+   write(f.nativePath,{...f.terminal,...change});assert.throws(()=>bridge.seal({...f.request,nativeCompletionSha256:hash(f.nativePath)}));
+  }
+  write(f.nativePath,f.terminal);
+  assert.throws(()=>bridge.seal({...f.request,expectedCommit:'0'.repeat(40)}));
+  assert.throws(()=>bridge.seal({...f.request,nativeConfigSha256:'0'.repeat(64)}));
+  const {intake,...privateRequest}=f.request;assert.throws(()=>bridge.seal(privateRequest));assert.throws(()=>bridge.seal({...f.request,intake:'private'}));
+  for(const file of [f.nativeConfig,f.completionPath,path.join(f.root,'pair.json'),path.join(f.root,'projection-agentplugins/checksums.txt'),path.join(f.root,'projection-agentplugins/release-manifest.json'),f.tool,f.terminal.packs.agentplugins.file,f.terminal.binaries.agentplugins.path,path.join(path.dirname(f.nativePath),'invocations.json'),path.join(f.projects.agentplugins,'skill/plugin.json')]){
+   const before=fs.readFileSync(file);fs.appendFileSync(file,'changed');assert.throws(verify);fs.writeFileSync(file,before);
+  }
+  const inv=path.join(path.dirname(f.nativePath),'invocations.json'), before=fs.readFileSync(inv), rows=JSON.parse(before);
+  for(const bad of [rows.slice(1),[rows[0],...rows.slice(0,-1)],rows.map((r,i)=>i===5?{...r,status:1}:r)]){
+   write(inv,bad);write(f.nativePath,{...f.terminal,invocations:bad.length,invocations_sha256:hash(inv)});assert.throws(()=>bridge.seal({...f.request,nativeCompletionSha256:hash(f.nativePath)}));
+  }
+  fs.writeFileSync(inv,before);write(f.nativePath,f.terminal);assert.equal(verify().projects.length,10);
+ } finally {c.frozenCandidate=original;}
+ assert.throws(()=>bridge.seal(f.request),'unstubbed candidate rejects synthetic bytes');
+});

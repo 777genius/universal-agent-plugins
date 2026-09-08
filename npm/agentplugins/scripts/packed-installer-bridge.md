@@ -175,3 +175,61 @@ are external: source controls do not prove GitHub enforcement. ROOT must run the
 new integrated SHA and independently inspect its jobs/artifacts and required
 check settings before CI acceptance. Release eligibility, platform acceptance
 and attestation remain false. Local synthetic/source tests are not this run.
+
+### Explicit public fixture intake
+
+Public preparation is **not** private native completion. The public producer
+`test/public-authoring-native.test.js` now emits an exclusive
+`public-native-completion.json` (`dual-authoring-public-native/v1`) only after
+both products finish five lanes, `extra-skill`, static parity, isolation, cache
+recovery, and lifecycle checks. Its 70 authoring/installer invocation records
+are ordered and complete. Five successful npm installations separately bind
+actual fixture tarball paths and SHA256 values (independent prefixes, shared
+prefix, and reinstall). Preparation tarballs remain separate, unqualified
+inputs; substituting their hashes for executed packs is rejected.
+
+The terminal binds the configuration, preparation completion, source/engine
+identity, candidate, pair marker, projections/checksums, tools, cached native
+binaries, invocation/download/result logs, all ten project locators, and full
+generated-tree inventories including modes and empty directories. Native binary
+and tarball contents are pinned; supplied executables are never launched by the
+bridge. The public producer's preceding native verification and the final
+clean-SHA Go gate remain required execution/source proof. The bridge checks
+read-only byte consistency; it does not authenticate an arbitrary supplied log.
+
+Use the existing six request fields (`expectedCommit`, `nativeConfig`,
+`nativeConfigSha256`, `nativeCompletionSha256`, `fixtureRoot`,
+`disposableEvidence`) with the additional exact field
+`"intake": "public-fixture/v1"`. The completion digest must independently pin
+`public-native-completion.json`. Omitting `intake` still selects the unchanged
+strict private schema. Unknown intake values and public/private substitution
+fail closed. Seal with the same `packed-installer-bridge.js seal REQUEST OUTPUT`
+command and pass its digest to the existing tagged planner. Source/evidence
+output overlap and existing seal/terminal destinations fail.
+
+For owner-scheduled final-source acceptance, the imported runner has an explicit
+public consumption mode. It does not build or repeat the public native run:
+
+```text
+python3 -B scripts/run-packed-ci.py --public OUTPUT FINAL_SHA OPTIONS
+python3 -B scripts/check-packed-ci.py --public OUTPUT FINAL_SHA
+```
+
+`OPTIONS` is JSON with exactly `request` (the request object above), `nativeTap`
+(absolute owner-terminal TAP path), `nativeTapSha256` (independent SHA256), `go`,
+`node` (canonical absolute tools matching native completion), and `modCache`
+(the existing offline module cache). `OUTPUT` must be new, external, and disjoint
+from source and evidence. Both checker modes require exact named discovery,
+ten projects, thirty unique Cursor/Codex/Claude plans, complete non-skipped
+transcripts, and post-planner seal verification. Public planning is offline;
+there is no public preparation/build/warmup fallback. The default private CI
+runner and mandatory native/packed workflow graph remain intact.
+
+All public qualification, release, platform acceptance, attestation, signed
+promotion and public eligibility claims remain false/null. Synthetic acquisition
+proves fixture execution only. Historical f68 evidence cannot satisfy this
+new schema or a later SHA and must not be enriched, repinned, or rerun here.
+The final integrated source (including the independently owned preparation
+initialization fix) still needs owner-scheduled public native execution and
+packed planner acceptance. These focused synthetic tests do not satisfy that
+E2E or the external release/required-check prerequisites.

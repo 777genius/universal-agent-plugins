@@ -39,6 +39,19 @@ def private_env(root, go, node, repo, modules):
     return env
 
 
+def planner(root, sha, go, node, sealed, printed, run):
+    bridge = Path(__file__).resolve().parent.parent / "npm/agentplugins/scripts/packed-installer-bridge.js"
+    results = root / 'results'; results.mkdir()
+    extra = dict(UAP_PACKED_INSTALLER_NODE=str(node), UAP_PACKED_INSTALLER_CONFIG=str(sealed),
+        UAP_PACKED_INSTALLER_CONFIG_SHA256=printed, UAP_PACKED_INSTALLER_COMMIT=sha,
+        UAP_PACKED_INSTALLER_OUTPUT=str(results / 'completion.json'))
+    discovery = run('discovery', [go, 'test', '-p=2', '-tags=packedci', '-json', '-list', proof.REGEX, proof.PACKAGE_PATH], extra)
+    proof.go_discovery(discovery)
+    output = run('planner', [go, 'test', '-p=2', '-tags=packedci', '-json', '-count=1', '-timeout=20m', '-run', proof.REGEX, proof.PACKAGE_PATH], extra)
+    proof.go_results(output)
+    run('post-verify', [node, bridge, 'verify', sealed, printed, sha])
+
+
 def main(root, sha):
     repo = Path(__file__).resolve().parent.parent
     proof.require(re.fullmatch('[0-9a-f]{40}', sha), 'exact SHA required')
@@ -124,15 +137,7 @@ def main(root, sha):
     proof.require(printed == proof.digest(sealed), 'seal pin mismatch')
     env = private_env(root / 'planner', go, node, repo, modules)
     env.update(GOPROXY='off', GOSUMDB='off', GOVCS='*:off')
-    results = root / 'results'; results.mkdir()
-    extra = dict(UAP_PACKED_INSTALLER_NODE=str(node), UAP_PACKED_INSTALLER_CONFIG=str(sealed),
-        UAP_PACKED_INSTALLER_CONFIG_SHA256=printed, UAP_PACKED_INSTALLER_COMMIT=sha,
-        UAP_PACKED_INSTALLER_OUTPUT=str(results / 'completion.json'))
-    discovery = run('discovery', [go, 'test', '-p=2', '-tags=packedci', '-json', '-list', proof.REGEX, proof.PACKAGE_PATH], extra)
-    proof.go_discovery(discovery)
-    output = run('planner', [go, 'test', '-p=2', '-tags=packedci', '-json', '-count=1', '-timeout=20m', '-run', proof.REGEX, proof.PACKAGE_PATH], extra)
-    proof.go_results(output)
-    run('post-verify', [node, bridge, 'verify', sealed, printed, sha])
+    planner(root, sha, go, node, sealed, printed, run)
     proof.require(run('terminal-clean', ['/usr/bin/git', 'status', '--porcelain=v1', '--untracked-files=all']) == '', 'checkout changed')
     proof.check(root, sha)
     write(root / 'artifact-index.json', {str(p.relative_to(root)): proof.digest(p) for p in sorted(root.rglob('*'))
@@ -141,5 +146,62 @@ def main(root, sha):
         release_eligible=False, platform_acceptance=False, attested=False))
 
 
+def public_main(root, sha, options_path):
+    """Consume an owner-terminal public run; never rebuild or enrich old proof."""
+    repo = Path(__file__).resolve().parent.parent
+    options = proof.read(options_path)
+    proof.require(set(options) == {'request', 'nativeTap', 'nativeTapSha256', 'go', 'node', 'modCache'}, 'public runner options')
+    request = options['request']
+    proof.require(request.get('intake') == 'public-fixture/v1' and request['expectedCommit'] == sha, 'explicit public intake SHA')
+    proof.require(proof.digest(options['nativeTap']) == options['nativeTapSha256'], 'public transcript pin')
+    proof.public_tap(proof.data(options['nativeTap']).decode(), request)
+    proof.require(re.fullmatch('[0-9a-f]{40}', sha), 'exact SHA required')
+    proof.require(root.is_absolute() and root.resolve() == root and not root.is_relative_to(repo), 'external canonical output required')
+    # Output must be disjoint before creating logs or planner homes.
+    cfg = proof.read(request['nativeConfig']); candidate = cfg['prepare']['candidate']
+    protected = [repo, Path(options_path), Path(options['nativeTap']), Path(request['nativeConfig']),
+        Path(request['fixtureRoot']), Path(cfg['evidenceOutput']), Path(cfg['prepare']['output']),
+        Path(candidate['root']), Path(candidate['pairMarker']), Path(candidate['workParent']),
+        *[Path(options[k]) for k in ('go', 'node', 'modCache')], *map(Path, candidate['outputs'].values())]
+    for other in protected:
+        proof.require(not root.is_relative_to(other) and not other.is_relative_to(root), 'public output overlaps input')
+    go, node, modules = [Path(options[k]).resolve(strict=True) for k in ('go', 'node', 'modCache')]
+    proof.require(str(go) == candidate['go'] and str(node) == cfg['prepare']['node'], 'public tool paths differ')
+    proof.require(platform.system() == 'Linux' and platform.machine() == 'x86_64', 'native Linux amd64 required')
+    root.mkdir(mode=0o700); (root / 'logs').mkdir(); (root / 'bridge-config').mkdir()
+    env = private_env(root / 'planner', go, node, repo, modules)
+    env.update(GOPROXY='off', GOSUMDB='off', GOVCS='*:off')
+    def run(name, argv, extra=None):
+        argv = list(map(str, argv)); record = dict(argv=argv, cwd=str(repo), env=dict(env, **(extra or {})), exit=None)
+        started = time.monotonic()
+        try:
+            with (root / 'logs' / (name + '.stdout')).open('x') as out, (root / 'logs' / (name + '.stderr')).open('x') as err:
+                record['exit'] = subprocess.run(argv, cwd=repo, env=record['env'], stdout=out, stderr=err, timeout=1200).returncode
+        finally:
+            record['seconds'] = round(time.monotonic() - started, 3); write(root / 'logs' / (name + '.json'), record)
+        proof.require(record['exit'] == 0, name + ' failed')
+        return (root / 'logs' / (name + '.stdout')).read_text()
+    proof.require(run('head', ['/usr/bin/git', 'rev-parse', 'HEAD']).strip() == sha, 'wrong checkout')
+    proof.require(run('clean', ['/usr/bin/git', 'status', '--porcelain=v1', '--untracked-files=all']) == '', 'dirty checkout')
+    write(root / 'public-run.json', dict(schema='public-packed-run/v1', head=sha, options=options,
+        tools={k: dict(path=str(p), sha256=proof.digest(p)) for k, p in dict(go=go, node=node).items()},
+        release_eligible=False, platform_acceptance=False, attested=False))
+    request_path = root / 'bridge-config/request.json'; write(request_path, request)
+    sealed = root / 'bridge-config/sealed.json'
+    bridge = repo / 'npm/agentplugins/scripts/packed-installer-bridge.js'
+    printed = run('seal', [node, bridge, 'seal', request_path, sealed]).strip()
+    proof.require(printed == proof.digest(sealed), 'public seal pin')
+    planner(root, sha, go, node, sealed, printed, run)
+    proof.require(run('terminal-clean', ['/usr/bin/git', 'status', '--porcelain=v1', '--untracked-files=all']) == '', 'checkout changed')
+    proof.check_public(root, sha)
+    write(root / 'summary.json', dict(status='passed', intake='public-fixture/v1', head=sha, projects=10, plans=30,
+        release_eligible=False, platform_acceptance=False, attested=False, signed_promotion=False, public_eligible=False))
+
+
 if __name__ == '__main__':
-    main(Path(sys.argv[1]), sys.argv[2])
+    if len(sys.argv) == 5 and sys.argv[1] == '--public':
+        public_main(Path(sys.argv[2]), sys.argv[3], Path(sys.argv[4]))
+    elif len(sys.argv) == 3:
+        main(Path(sys.argv[1]), sys.argv[2])
+    else:
+        raise SystemExit('usage: run-packed-ci.py ROOT SHA | --public ROOT SHA OPTIONS')
