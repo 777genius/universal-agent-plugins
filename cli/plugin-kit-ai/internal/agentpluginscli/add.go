@@ -10,6 +10,7 @@ import (
 
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/prompt"
 	"github.com/777genius/plugin-kit-ai/cli/internal/promptio"
+	"github.com/777genius/plugin-kit-ai/cli/internal/terminaltheme"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/usecase"
@@ -464,26 +465,26 @@ func renderHumanPlan(writer io.Writer, envelope domain.PackageEnvelope, result u
 	result = withOpenCodeRuntimeNotice(result)
 	checked := &planWriter{writer: writer}
 	writer = checked
-	_, _ = fmt.Fprintf(writer, "Plugin: %s %s\n", prompt.SafeText(string(envelope.Manifest.Name)), prompt.SafeText(string(envelope.Manifest.Version)))
-	_, _ = fmt.Fprintf(writer, "Target: %s\n", prompt.SafeText(string(result.Plan.ClientID)))
-	_, _ = fmt.Fprintf(writer, "Package: %s\n", prompt.SafeText(string(result.Plan.PackageMode)))
-	_, _ = fmt.Fprintf(writer, "Result: %s\n", prompt.SafeText(string(result.Plan.Status)))
-	_, _ = fmt.Fprintf(writer, "Authentication: %s\n", prompt.SafeText(string(result.Plan.Authentication)))
-	_, _ = fmt.Fprintf(writer, "Verification: %s\n", prompt.SafeText(string(result.Plan.Verification)))
+	_, _ = fmt.Fprintf(writer, "%s: %s %s\n", terminaltheme.For(writer).Text(terminaltheme.Label, "Plugin"), prompt.SafeText(string(envelope.Manifest.Name)), prompt.SafeText(string(envelope.Manifest.Version)))
+	_, _ = fmt.Fprintf(writer, "%s: %s\n", terminaltheme.For(writer).Text(terminaltheme.Label, "Target"), prompt.SafeText(string(result.Plan.ClientID)))
+	_, _ = fmt.Fprintf(writer, "%s: %s\n", terminaltheme.For(writer).Text(terminaltheme.Label, "Package"), prompt.SafeText(string(result.Plan.PackageMode)))
+	_, _ = fmt.Fprintf(writer, "%s: %s\n", terminaltheme.For(writer).Text(terminaltheme.Label, "Result"), prompt.SafeText(string(result.Plan.Status)))
+	_, _ = fmt.Fprintf(writer, "%s: %s\n", terminaltheme.For(writer).Text(terminaltheme.Label, "Authentication"), prompt.SafeText(string(result.Plan.Authentication)))
+	_, _ = fmt.Fprintf(writer, "%s: %s\n", terminaltheme.For(writer).Text(terminaltheme.Label, "Verification"), prompt.SafeText(string(result.Plan.Verification)))
 	for _, component := range result.Plan.Components {
 		_, _ = fmt.Fprintf(writer, "  - %s %s: %s\n", prompt.SafeText(string(component.Kind)), prompt.SafeText(string(component.Name)), prompt.SafeText(string(component.Support)))
 	}
 	for _, diagnostic := range result.Plan.Diagnostics {
-		_, _ = fmt.Fprintf(writer, "  Warning: %s: %s\n", prompt.SafeText(string(diagnostic.Code)), prompt.SafeText(string(diagnostic.Message)))
+		_, _ = fmt.Fprintf(writer, "  %s: %s: %s\n", terminaltheme.For(writer).Text(terminaltheme.Warning, "Warning"), prompt.SafeText(string(diagnostic.Code)), prompt.SafeText(string(diagnostic.Message)))
 	}
 	for _, warning := range result.Plan.Warnings {
-		_, _ = fmt.Fprintf(writer, "  Warning: %s\n", prompt.SafeText(string(warning)))
+		_, _ = fmt.Fprintf(writer, "  %s: %s\n", terminaltheme.For(writer).Text(terminaltheme.Warning, "Warning"), prompt.SafeText(string(warning)))
 	}
 	for _, action := range result.Plan.UserActions {
-		_, _ = fmt.Fprintf(writer, "  Planned action: %s\n", prompt.SafeText(string(action)))
+		_, _ = fmt.Fprintf(writer, "  %s: %s\n", terminaltheme.For(writer).Text(terminaltheme.Label, "Planned action"), prompt.SafeText(string(action)))
 	}
 	for _, action := range result.Plan.LocalActions {
-		_, _ = fmt.Fprintf(writer, "  Planned action: %s\n", prompt.SafeText(string(action)))
+		_, _ = fmt.Fprintf(writer, "  %s: %s\n", terminaltheme.For(writer).Text(terminaltheme.Label, "Planned action"), prompt.SafeText(string(action)))
 	}
 	return checked.err
 }
@@ -509,18 +510,18 @@ func renderAddResultErrorWithSecurity(writer io.Writer, format string, envelope 
 	}
 	if failure := addFailureStatus(result, commandErr); failure != "" {
 		if result.Plan.Status == domain.PlanUnsupported {
-			if _, err := fmt.Fprintf(writer, "Add: %s\n", failure); err != nil {
+			if _, err := fmt.Fprintf(writer, "%s: %s\n", terminaltheme.For(writer).Text(terminaltheme.Error, "Add"), failure); err != nil {
 				return err
 			}
 			return renderHumanPlan(writer, envelope, result)
 		}
-		if _, err := fmt.Fprintf(writer, "Add: %s\n", failure); err != nil {
+		if _, err := fmt.Fprintf(writer, "%s: %s\n", terminaltheme.For(writer).Text(terminaltheme.Error, "Add"), failure); err != nil {
 			return err
 		}
 		// Lifecycle recovery is useful after a failed phase, but must not imply
 		// that a rolled-back or uncertain transaction left a usable installation.
 		if failure == "activation_failed" || failure == "authentication_failed" || failure == "verification_failed" {
-			_, err := fmt.Fprintf(writer, "Next: %s\n", nextLocalLifecycleAction(result))
+			_, err := fmt.Fprintf(writer, "%s: %s\n", terminaltheme.For(writer).Text(terminaltheme.Label, "Next"), nextLocalLifecycleAction(result))
 			return err
 		}
 		return nil
@@ -532,17 +533,17 @@ func renderAddResultErrorWithSecurity(writer io.Writer, format string, envelope 
 		return err
 	}
 	if result.NoChange {
-		_, _ = fmt.Fprintln(writer, "Already installed and lifecycle verification is complete. No changes made.")
+		_, _ = fmt.Fprintln(writer, terminaltheme.For(writer).Text(terminaltheme.Muted, "Already installed and lifecycle verification is complete. No changes made."))
 		return nil
 	}
 	if result.Mutated && fullyInstalled(result.Activation) {
 		if result.Activation.ActivationAttested || result.Activation.AuthenticationAttested {
-			_, _ = fmt.Fprintln(writer, "Lifecycle is user-attested for the explicitly confirmed phase; it was not observed from the client.")
+			_, _ = fmt.Fprintln(writer, terminaltheme.For(writer).Text(terminaltheme.Warning, "Lifecycle is user-attested for the explicitly confirmed phase; it was not observed from the client."))
 		} else {
 			if result.Plan.ClientID == domain.ClientOpenCode && len(domain.SelectedMCPNames(result.Plan)) > 0 {
-				_, _ = fmt.Fprintln(writer, "OpenCode MCP configuration installed and verified.")
+				_, _ = fmt.Fprintln(writer, terminaltheme.For(writer).Text(terminaltheme.Success, "OpenCode MCP configuration installed and verified."))
 			} else {
-				_, _ = fmt.Fprintln(writer, "Installed and verified for the selected client.")
+				_, _ = fmt.Fprintln(writer, terminaltheme.For(writer).Text(terminaltheme.Success, "Installed and verified for the selected client."))
 			}
 		}
 		return nil
@@ -550,18 +551,18 @@ func renderAddResultErrorWithSecurity(writer io.Writer, format string, envelope 
 	if result.Mutated {
 		if result.Activation.Authentication == domain.AuthenticationPending {
 			if result.Activation.Activation == domain.ActivationActive {
-				_, _ = fmt.Fprintln(writer, "Package materialized and client activation completed. Authentication is pending.")
+				_, _ = fmt.Fprintln(writer, terminaltheme.For(writer).Text(terminaltheme.Warning, "Package materialized and client activation completed. Authentication is pending."))
 			} else {
-				_, _ = fmt.Fprintln(writer, "Package prepared. Authentication and client activation are pending.")
+				_, _ = fmt.Fprintln(writer, terminaltheme.For(writer).Text(terminaltheme.Warning, "Package prepared. Authentication and client activation are pending."))
 			}
 		} else if result.Activation.Authentication == domain.AuthenticationNotChecked && result.Activation.Activation == domain.ActivationActive {
-			_, _ = fmt.Fprintln(writer, "Package materialized and client activation verified. Authentication requirements have not been checked.")
+			_, _ = fmt.Fprintln(writer, terminaltheme.For(writer).Text(terminaltheme.Warning, "Package materialized and client activation verified. Authentication requirements have not been checked."))
 		} else {
-			_, _ = fmt.Fprintln(writer, "Package prepared. Activation is not complete yet.")
+			_, _ = fmt.Fprintln(writer, terminaltheme.For(writer).Text(terminaltheme.Warning, "Package prepared. Activation is not complete yet."))
 		}
 	}
 	if action := nextLocalLifecycleAction(result); action != "" && !fullyInstalled(result.Activation) {
-		_, _ = fmt.Fprintf(writer, "Next: %s\n", action)
+		_, _ = fmt.Fprintf(writer, "%s: %s\n", terminaltheme.For(writer).Text(terminaltheme.Label, "Next"), action)
 	}
 	return nil
 }

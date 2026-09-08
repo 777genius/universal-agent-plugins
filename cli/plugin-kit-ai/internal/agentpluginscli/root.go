@@ -3,6 +3,7 @@ package agentpluginscli
 import (
 	"fmt"
 
+	"github.com/777genius/plugin-kit-ai/cli/internal/terminaltheme"
 	"github.com/spf13/cobra"
 )
 
@@ -15,6 +16,8 @@ func NewRoot(app App) *cobra.Command {
 		SilenceErrors: true,
 	}
 	root.SetIn(app.input())
+	app.Output = terminaltheme.Wrap(app.output(), &opts.color, &opts.format)
+	app.ErrorOutput = terminaltheme.Wrap(app.errorOutput(), &opts.color, &opts.format)
 	root.SetOut(app.output())
 	root.SetErr(app.errorOutput())
 	flags := root.PersistentFlags()
@@ -22,8 +25,10 @@ func NewRoot(app App) *cobra.Command {
 	flags.StringVar(&opts.scope, "scope", "user", "installation scope (user only in this release)")
 	flags.BoolVar(&opts.dryRun, "dry-run", false, "show the exact plan without changes")
 	flags.StringVar(&opts.format, "format", "human", "output format: human or json")
-	flags.BoolVar(&opts.plain, "plain", false, "use accessible line prompts without terminal controls")
-	flags.BoolVar(&opts.noColor, "no-color", false, "disable color output")
+	flags.BoolVar(&opts.plain, "plain", false, "use accessible line prompts (independent of color)")
+	flags.Var(&opts.color, "color", "human output color: auto, never, always")
+	flags.Var(terminaltheme.NoColorFlag{Policy: &opts.color}, "no-color", "alias for --color=never")
+	flags.Lookup("no-color").NoOptDefVal = "true"
 	flags.BoolVar(&opts.acceptSecurityRisk, "accept-security-risk", false, "continue despite blocking automated security findings")
 	flags.BoolVar(&opts.securityDetails, "security-details", false, "show every automated security finding in human output")
 

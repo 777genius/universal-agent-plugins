@@ -111,7 +111,7 @@ func assertGeminiCLIProjection(t *testing.T, root, url, marker string, present b
 		t.Fatalf("Gemini local MCP presence = %v, want %v", localExists, present)
 	}
 	if present {
-		if local["command"] != "go" || !strings.HasSuffix(local["cwd"].(string), "/workspace") {
+		if local["command"] != "go" || !strings.HasSuffix(local["cwd"].(string), string(filepath.Separator)+"workspace") {
 			t.Fatalf("Gemini local MCP projection = %+v", local)
 		}
 	}
