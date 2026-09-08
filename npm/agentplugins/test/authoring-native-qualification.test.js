@@ -31,6 +31,7 @@ function fixture() {
   instance.filename = original; instance.paths = Module._nodeModulePaths(__dirname);
   instance._compile(prefix + "\nmodule.exports = fixture;", original);
   const f = instance.exports();
+  if (process.env.N1_FIXTURE_LOG) fs.appendFileSync(process.env.N1_FIXTURE_LOG, f.sandbox + "\n");
   f.pins = { identity: structuredClone(ID), candidate_sha256: f.record.candidate_sha256,
     pair_marker_sha256: f.record.pair_marker_sha256, products: Object.fromEntries(c.PRODUCTS.map(p => [p, {
       manifest_sha256: f.record.products[p].manifest_sha256, checksums_sha256: f.record.products[p].checksums_sha256 }])) };
@@ -47,11 +48,11 @@ function fixture() {
 }
 function internal(observation = false, fastTimeout = false) {
   let source = fs.readFileSync(moduleFile, "utf8");
-  if (observation) source = source.replace('    observationGate(); //', '    /* Test-only synthetic observation; not a native pass. */ //');
+  if (observation) source = source.replace('    e["scans.json"] = observationGate(); //', '    e["scans.json"] = JSON.parse(fs.readFileSync(path.join(install.env.TMPDIR, "fixture-scans.json"))); // Test-only captured child fixtures.');
   if (fastTimeout) source = source.replace('installer ? 120000 : 15000', '100');
   // Expose lexical contracts only in this test VM. Production exports no policy,
   // verifier, command inventory, child executable or success switch.
-  source += '\nmodule.exports.test = { commands, installationCommands, verifyJourney, terminal, tree, canonical, context, subprocess, observationGate, jsonDocument, treeShape };';
+  source += '\nmodule.exports.test = { commands, installationCommands, verifyJourney, terminal, tree, canonical, context, subprocess, observationGate, jsonDocument, treeShape, packageIdentity, capabilities, PROFILES, POLICY };';
   const Module = require("node:module");
   const instance = new Module(moduleFile, module);
   instance.filename = moduleFile; instance.paths = Module._nodeModulePaths(path.dirname(moduleFile));
@@ -72,10 +73,7 @@ const sha = s => crypto.createHash('sha256').update(s).digest('hex');
 const product = selected.includes('plugin-kit-ai') ? 'plugin-kit-ai' : 'agentplugins';
 fs.appendFileSync(cfg.log, JSON.stringify({selected,argv,env:process.env})+'\n');
 const scenario = cfg.scenario;
-if (scenario === 'timeout') setInterval(()=>{},1000);
-else if (scenario === 'flood') process.stdout.write('x'.repeat(2*1024*1024));
-else if (scenario === 'cancel') setInterval(()=>{},1000);
-else main();
+const profiles = [{"id": "agent-plugins/1.0.0", "revision": "ff8ab5e392cc87bd88d87c060815a87490e51003", "digest": "sha256:97a658b7dca3ce1b4c2266b95da300fa51d9dc4ade59d73168e5f9104272da18"}, {"id": "agent-skills/2026-09-06", "revision": "69ef37e9424c0a7ea9dd2293b559e43ec8176379", "digest": "sha256:b9079c0c10b7930e8c6a20ff2bc10cda2a3343c55185120e3f1116a1a529b220"}, {"id": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json", "revision": "1.0.0", "digest": "sha256:0a4aad95ce337878ad38802ebf0daa3fde76abe3f65400c86bcbb1ec0b3ab883"}, {"id": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json", "revision": "1.0.0", "digest": "sha256:6539175bfcdf43085855183e86da40ea94b166547a72b47ae9a0a390516d3acb"}, {"id": "author-document-bounds/v1", "revision": "1", "digest": "sha256:4b8ab8fd50481ccd1a0b777dcbbfa06cf89516a5ea61ce09d56d6dd6a2c43004"}];
 function output(value, status=0) {
   if (scenario === 'invalid-utf8') process.stdout.write(Buffer.from([0xff]));
   else if (scenario === 'bad-json') process.stdout.write('{bad');
@@ -113,7 +111,19 @@ function main() {
     if(scenario==='missing-command') data.commands.pop();
     if(scenario==='deferred-command') data.commands.push('author.publish');
     if(verb==='--help')data.help={use:product==='agentplugins'?'agentplugins author':'plugin-kit-ai'};
-    else data.capabilities={schemas:[{id:'fixture-only'}]};
+    else {
+      const kinds={chatgpt:['compatibility_projection','projected','unsupported','unsupported'],claude:['compatibility_projection','projected','projected','unsupported'],
+        cline:['native','native','native','unsupported'],codex:['compatibility_projection','projected','projected','unsupported'],
+        copilot:['native','native','native','native'],cursor:['native','native','native','native'],gemini:['native','native','native','unsupported'],kiro:['native','native','native','unsupported'],
+        opencode:['prepared_package','prepared','prepared','unsupported'],vscode:['prepared_package','prepared','prepared','prepared'],windsurf:['prepared_package','prepared','prepared','prepared']};
+      data.capabilities={schemas:profiles.slice(2,4).map(p=>({id:p.id,digest:p.digest})),profiles,commands:data.commands,
+        evidence_limits:['static_only','no_path_lookup','no_executable_version_probe','no_runtime_or_oauth_evidence','native_files_metadata_only'],
+        clients:Object.entries(kinds).map(([id,k])=>({client_id:id,package_mode:k[0],activation_mode:['claude','cline','opencode'].includes(id)?'automatic':'manual',
+          scopes:['user'],skill_support:k[1],mcp_transports:{stdio:k[2],'streamable-http':k[2],sse:k[2]},app_support:id==='chatgpt'?'projected':'unsupported',extension_support:k[3]}))};
+      if(scenario==='empty-capabilities')data.capabilities={};
+      if(scenario==='missing-profile')data.capabilities.profiles=profiles.slice(1);
+      if(scenario==='wrong-schema')data.capabilities.schemas[0].digest='sha256:'+sha('wrong schema');
+    }
     return done();
   }
   if(args.includes('--force')||args.includes('--scope=user')||lane==='missing-destination')return done(2);
@@ -135,8 +145,8 @@ function main() {
   }
   if(verb==='skills'&&args[1]==='init'){skill(root,'extra-skill');data.committed=true;data.effects.committed=true;}
   const malformed=fs.existsSync(path.join(root,'skills/broken'));
-  data.identity={read_profile:'packageview-local-linux-v1',tree_digest:'sha256:'+sha('tree '+root)};
-  data.profiles=[{id:'agent-skills/2026-09-06',revision:'69ef37e9424c0a7ea9dd2293b559e43ec8176379',digest:'sha256:b9079c0c10b7930e8c6a20ff2bc10cda2a3343c55185120e3f1116a1a529b220'}];
+  data.identity={read_profile:'packageview-local-linux-v1',tree_digest:identity(root).tree_digest};
+  data.profiles=profiles;data.schema_ids=(root==='skill'?[profiles[2].id]:profiles.slice(2,4).map(x=>x.id).sort());
   data.loadability={status:'pass'};data.normative_conformance={status:malformed?'fail':'pass'};
   data.authoring_readiness={status:malformed?'fail':'pass'};data.release_policy={status:'not_evaluated'};
   data.components=[{type:'skill',status:'pass'}];data.findings=malformed?[{severity:'error'}]:[];
@@ -155,7 +165,62 @@ function main() {
 }
 function write(root,name,value){fs.writeFileSync(path.join(root,name),typeof value==='string'?value:JSON.stringify(value)+'\n');}
 function skill(root,name){fs.mkdirSync(path.join(root,'skills',name),{recursive:true,mode:0o700});write(root,'skills/'+name+'/SKILL.md','---\nname: '+name+'\ndescription: Owned fixture\n---\nInstructions\n');}
-function security(source){return {scanner:{id:'lintai',version:'0.1.3'},scanned_files:4,evidence_source:source,outcome:'no_blocking_findings',subject:{tree_digest:'sha256:'+sha('tree'),manifest_digest:'sha256:'+sha('manifest')},report_digest:'sha256:'+sha('report')};}
+// Independent implementation of the existing uint64-BE package framing on
+// actual child-created bytes (not the producer's package identity helper).
+function identity(root) {
+  const parts=[];
+  const number=n=>{const b=Buffer.alloc(8);b.writeBigUInt64BE(BigInt(n));return b;};
+  const frame=x=>{const b=Buffer.from(x);parts.push(number(b.length),b);};
+  frame('agentplugins.package-tree\0sha256\0v1');
+  const entries=[];
+  const walk=rel=>{for(const name of fs.readdirSync(path.join(root,rel)).sort()){
+    const p=path.posix.join(rel,name),st=fs.statSync(path.join(root,p));entries.push([p,st]);if(st.isDirectory())walk(p);
+  }};walk('');entries.sort((a,b)=>a[0]<b[0]?-1:1);
+  for(const [p,st]of entries){const body=st.isDirectory()?Buffer.alloc(0):fs.readFileSync(path.join(root,p));
+    for(const field of ['entry',p,st.isDirectory()?'directory':'file',st.isDirectory()?'040000':st.mode&0o111?'100755':'100644',''])frame(field);
+    parts.push(number(body.length),body);
+  }
+  return {tree_digest:'sha256:'+sha(Buffer.concat(parts)),manifest_digest:'sha256:'+sha(fs.readFileSync(path.join(root,'plugin.json')))};
+}
+const policy={id:'agent-plugin-install',version:2,digest:'sha256:9cf869e299d847d7078aeca01f5a182fcdb0144bbf513c83290459991c79e037'};
+function security(source,root){
+  const report=JSON.stringify({schema_version:1,tool:{name:'lintai',version:'0.1.3'},policy:{id:policy.id,version:scenario==='raw-report-policy'?999:2,presets:['agent-plugin']},
+    stats:{scanned_files:scenario==='raw-report-counts'?-1:4,skipped_files:0},findings:scenario==='raw-report-findings'?[{rule_code:'SEC330'}]:[],diagnostics:[],runtime_errors:[]})+'\n';
+  const value={schema_version:1,scanner:{id:'lintai',version:'0.1.3'},policy,counts:{blocking:0,warnings:0,total:0},scanned_files:4,
+    evidence_source:source,outcome:'no_blocking_findings',subject:identity(root),report_digest:'sha256:'+sha(report)};
+  if(scenario==='wrong-package')value.subject={tree_digest:'sha256:'+sha('unrelated tree'),manifest_digest:'sha256:'+sha('unrelated manifest')};
+  if(scenario==='invalid-security-contract'){value.schema_version=999;value.policy={id:'wrong',version:-1,digest:'invalid'};value.counts={blocking:42};}
+  if(scenario==='wrong-policy')value.policy={...policy,version:1};
+  if(scenario==='wrong-counts')value.counts={blocking:42,warnings:0,total:42};
+  if(scenario==='wrong-findings')value.findings=[{code:'SEC330',disposition:'blocking',message:'bad executable'}];
+  if(scenario==='cache-mismatch'&&source==='cache')value.report_digest='sha256:'+sha('other report');
+  const key=sha([value.subject.tree_digest,value.subject.manifest_digest,'lintai','0.1.3',policy.id,'2',policy.digest].join('\0'));
+  const state=process.env.AGENTPLUGINS_HOME;
+  if(source==='local_scan'){
+    const scanner='security/lintai/0.1.3/linux-amd64/lintai',executable='not executable: scanner acquisition fixture';
+    fs.mkdirSync(path.dirname(path.join(state,scanner)),{recursive:true,mode:0o700});
+    if(scenario!=='missing-scanner')fs.writeFileSync(path.join(state,scanner),executable,{mode:0o700});
+    fs.mkdirSync(path.join(state,'security/assessments'),{recursive:true,mode:0o700});
+    const cached={...value};delete cached.evidence_source;
+    if(scenario!=='missing-cache')write(state,'security/assessments/'+key+'.json',cached);
+    const file=path.join(process.env.TMPDIR,'fixture-scans.json'),scans=fs.existsSync(file)?JSON.parse(fs.readFileSync(file)):[];
+    if(scenario!=='missing-scan')scans.push({id:'dry-run/'+path.basename(root),args:['scan-agent-plugin','<source>/'+path.basename(root)],subject:identity(root),
+      executable:{path:scanner,sha256:sha(executable)},report:scenario==='missing-report'?'':report});
+    fs.writeFileSync(file,JSON.stringify(scans));
+  }
+  return value;
+}
+const installationID='12345678-1234-4234-8234-123456789abc';
+const physical='skill-'+sha(installationID).slice(0,12), projection='managed/clients/codex/'+physical;
+function registration(state,root){
+  const subject=identity(root),revision={version:'0.1.0',...subject};
+  const target=path.join(state,projection),binding='client_'+sha([installationID,'codex','user',target].join('\0')).slice(0,24);
+  return {installation_id:installationID,declared_name:'skill',source:{tree_digest:subject.tree_digest},
+    package:{declared_name:'skill',version:'0.1.0',manifest_digest:subject.manifest_digest},
+    clients:{[binding]:{client_binding_id:binding,client_id:'codex',scope:'user',materialization:'materialized',physical_artifact_id:physical,
+      target_locator:path.join(state,projection),package_revision:revision}}};
+}
+
 function installer(args) {
   const verb=args[0], state=process.env.AGENTPLUGINS_HOME,client=path.join(process.env.HOME,'.codex');
   const data={}, result={schema_version:1,command:verb,result:'success',data};
@@ -163,25 +228,48 @@ function installer(args) {
   if(scenario==='scan-failure'){result.result='failure';return output(result,1);}
   if(verb==='add'&&args.includes('--dry-run')) {
     const lane=path.basename(args[1]), names=fs.readdirSync(path.join(args[1],'skills'));
-    const components=names.map(name=>({kind:'skill',name,support:'native'}));
-    if(lane!=='skill')components.push({kind:'mcp_server',name:lane,support:'native'});
-    data.security=security('local_scan');data.tree_digest='sha256:'+sha('tree');data.manifest_digest='sha256:'+sha('manifest');
+    const components=names.map(name=>({kind:'skill',name,support:'projected'}));
+    if(lane!=='skill')components.push({kind:'mcp_server',name:lane,support:'projected'});
+    data.security=security('local_scan',args[1]);Object.assign(data,data.security.subject);
     data.dry_run=true;data.result={plan:{client_id:'codex',scope:'user',status:'manual_activation_required',components}};
     if(scenario==='wrong-plan')data.result.plan.components=[];
     if(scenario==='dry-run-effect')write(client,'unexpected','effect');
   } else if(verb==='add') {
     if(scenario==='add-failure'){result.result='failure';return output(result,1);}
-    data.result={mutated:true,activation:{authentication:'not_checked'}};
-    data.security=security('cache');data.tree_digest='sha256:'+sha('tree');data.manifest_digest='sha256:'+sha('manifest');
-    if(scenario!=='no-state')write(state,'state-v2.json',{installed:true});
-    if(scenario!=='no-effect')write(client,'installed','fixture projection');
+    data.result={installation_id:installationID,mutated:true,activation:{authentication:'not_checked'}};
+    data.security=security('cache',args[1]);Object.assign(data,data.security.subject);
+    if(scenario!=='no-state')write(state,'state-v2.json',{schema_version:4,installations:[registration(state,args[1])]});
+    if(scenario!=='no-effect'){
+      for(const name of ['skill','extra-skill']){
+        fs.mkdirSync(path.join(state,projection,'skills',name),{recursive:true,mode:0o700});
+        fs.copyFileSync(path.join(args[1],'skills',name,'SKILL.md'),path.join(state,projection,'skills',name,'SKILL.md'));
+      }
+    }
+    if(scenario==='alter-client')write(client,'config.toml','unexpected replacement');
+    if(scenario==='alter-client-mode')fs.chmodSync(path.join(client,'config.toml'),0o644);
     if(scenario==='auth-claim')data.result.activation.authentication_attested=true;
-  } else if(verb==='info'){data.name='skill';data.version='0.1.0';data.clients=[{client_id:'codex',package_revision:{version:'0.1.0'}}];}
-  else if(verb==='update')data.result={mutated:false,no_change:scenario!=='wrong-update'};
-  else if(verb==='remove'){data.result={mutated:true};write(state,'state-v2.json',{installed:false});fs.unlinkSync(path.join(client,'installed'));}
-  else if(verb==='list')data.installations=scenario==='remaining-installation'?[{name:'skill'}]:[];
+    if(scenario==='wrong-installation-identity')data.result.installation_id='87654321-1234-4234-8234-123456789abc';
+  } else if(verb==='info'){
+    if(scenario==='info-mutates-state')write(state,'unexpected-info-write','x');
+    data.installation_id=installationID;data.name='skill';data.version='0.1.0';data.clients=Object.values(JSON.parse(fs.readFileSync(path.join(state,'state-v2.json'))).installations[0].clients);
+  }
+  else if(verb==='update')data.result={installation_id:installationID,mutated:false,no_change:scenario!=='wrong-update'};
+  else if(verb==='remove'){
+    data.result={installation_id:installationID,mutated:true};
+    if(scenario!=='remaining-registration')write(state,'state-v2.json',{schema_version:4,installations:[]});
+    if(scenario!=='remove-leaves-client-projection'){
+      for(const name of ['skill','extra-skill']){fs.unlinkSync(path.join(state,projection,'skills',name,'SKILL.md'));fs.rmdirSync(path.join(state,projection,'skills',name));}
+      fs.rmdirSync(path.join(state,projection,'skills'));fs.rmdirSync(path.join(state,projection));
+    }
+  }
+  else if(verb==='list'){data.installations=scenario==='remaining-installation'?[{name:'skill'}]:[];if(scenario==='list-mutates-state')write(state,'list-write','x');}
   return output(result);
 }
+if (scenario === 'timeout') setInterval(()=>{},1000);
+else if (scenario === 'flood') process.stdout.write('x'.repeat(2*1024*1024));
+else if (scenario === 'cancel') setInterval(()=>{},1000);
+else main();
+
 `;
 }
 function subprocessFixtures(t, f, scenario = "ok") {
@@ -263,10 +351,18 @@ test("fixed production orchestration and closed reader with subprocess fixtures 
 });
 for (const scenario of ["wrong-binary","wrong-build-target","wrong-build-mode","wrong-build-source","wrong-version","wrong-source",
   "runtime-claim","bad-json","invalid-utf8","missing-command","deferred-command","missing-template","yaml","wrong-result","wrong-command","parity","changed-project",
-  "changed-input","scan-failure","wrong-plan","dry-run-effect","add-failure","no-state","no-effect","auth-claim","wrong-update","remaining-installation"]) {
+  "changed-input","scan-failure","wrong-plan","dry-run-effect","add-failure","no-state","no-effect","auth-claim","wrong-update","remaining-installation","wrong-package","invalid-security-contract","wrong-policy","wrong-counts","wrong-findings","cache-mismatch",
+  "missing-scanner","missing-cache","missing-scan","missing-report","alter-client","alter-client-mode","info-mutates-state",
+  "remove-leaves-client-projection","remaining-registration","list-mutates-state","empty-capabilities","missing-profile","wrong-schema","raw-report-policy","raw-report-counts","raw-report-findings","wrong-installation-identity"]) {
   test(`full subprocess journey fails without completion: ${scenario}`,async t=>{
     const f=fixture();subprocessFixtures(t,f,scenario);
-    await assert.rejects(internal(true).produce(f.options), scenario === "wrong-command" ? /author command identifier/ : undefined);noTerminal(f);
+    const reasons = { "wrong-command": /author command identifier/, "wrong-package": /independently captured package security subject/,
+      "invalid-security-contract": /fixed production security schema/, "wrong-policy": /fixed production security policy/,
+      "wrong-counts": /security counts match outcome/, "wrong-findings": /security findings match counts/,
+      "remove-leaves-client-projection": /remove owned projection/, "info-mutates-state": /info is read only/,
+      "list-mutates-state": /list is read only/, "raw-report-policy": /scanner report policy/,
+      "raw-report-counts": /scanner report file counts/, "raw-report-findings": /scanner report findings/, "wrong-installation-identity": /lifecycle installed identity/ };
+    await assert.rejects(internal(true).produce(f.options), reasons[scenario]);noTerminal(f);
     assert.ok(fs.existsSync(path.join(f.options.output,"diagnostic.json")));
   });
 }
@@ -458,4 +554,181 @@ test("input and output placement reject overlap before subprocess effects",async
     await assert.rejects(native.produce(f.options));noTerminal(f);
     assert.equal(fs.existsSync(f.options.work),false);
   }
+});
+
+// Rehash every outer pin as the independent reviewer did: each rejection must
+// come from semantic replay, not a stale digest or a broken fixture baseline.
+test("N1 reader rejects rehashed semantic omissions and contradictions", async t => {
+  const f = fixture(); subprocessFixtures(t, f); await internal(true).produce(f.options);
+  const root = f.options.output, expected = expectations(f);
+  const originals = Object.fromEntries(fs.readdirSync(root).map(file => [file, fs.readFileSync(path.join(root, file))]));
+  const rootOnly = [{ path: ".", mode: 448, kind: "directory" }];
+  const editSecurity = (e, change) => {
+    for (const row of e["transcripts.json"].installer.slice(0, 4)) {
+      const v = JSON.parse(row.stdout); change(v.data, row); row.stdout = JSON.stringify(v) + "\n";
+    }
+  };
+  function changeRawReport(e, change) {
+    const scan = e["scans.json"][0], report = JSON.parse(scan.report); change(report);
+    scan.report = JSON.stringify(report) + "\n";
+    const digest = "sha256:" + hash(scan.report);
+    editSecurity(e, (d, row) => { if (row.id === "dry-run/skill" || row.id === "add") d.security.report_digest = digest; });
+    // Update the referenced cache bytes and every snapshot pin too. Only the
+    // report's production semantics are invalid, not its integrity chain.
+    const states = e["transcripts.json"].installer.flatMap(r => [r.before, r.after]);
+    const files = states.flatMap(s => s.acquisition).filter(x => x.path.startsWith("security/assessments/") && x.kind === "file");
+    for (const sha256 of new Set(files.map(x => x.sha256))) {
+      const value = JSON.parse(Buffer.from(e["acquisition.json"][sha256], "base64"));
+      if (value.subject.tree_digest !== scan.subject.tree_digest) continue;
+      value.report_digest = digest; const body = Buffer.from(JSON.stringify(value) + "\n"), pin = c.metadata(body);
+      delete e["acquisition.json"][sha256]; e["acquisition.json"][pin.sha256] = body.toString("base64");
+      for (const item of files.filter(x => x.sha256 === sha256)) Object.assign(item, pin);
+    }
+  }
+  const cases = {
+    "missing custody": e => { e["preservation.json"].custody_before = []; e["preservation.json"].custody_after = []; },
+    "preparation custody omitted": e => { e["preservation.json"].custody_before.pop(); e["preservation.json"].custody_after.pop(); },
+    "custody substituted subject": e => { for (const k of ["custody_before", "custody_after"]) e["preservation.json"][k][0].file = "invented"; },
+    "custody invalid inode": e => { for (const k of ["custody_before", "custody_after"]) e["preservation.json"][k][0].ino = "not-an-inode"; },
+    "remove leaves projection": e => {
+      const rows = e["transcripts.json"].installer, r = rows[6];
+      r.after.state.push(...r.before.state.filter(x => x.path.startsWith("managed/clients/codex/") && !r.after.state.some(a => a.path === x.path)));
+      rows[7].before = structuredClone(r.after); rows[7].after = structuredClone(r.after);
+    },
+    "info mutates state": e => { e["transcripts.json"].installer[4].after.state.push({ path: "unauthorized", mode: 384, kind: "file", size: 1, sha256: hash("x") }); },
+    "list mutates client": e => { e["transcripts.json"].installer[7].after.client[1].mode ^= 0o100; },
+    "preexisting client changed continuously": e => {
+      const rows = e["transcripts.json"].installer;
+      for (let i = 3; i < rows.length; i++) for (const when of i === 3 ? ["after"] : ["before", "after"])
+        rows[i][when].client.find(x => x.path === "config.toml").sha256 = hash("changed config");
+    },
+    "wrong add installation ID": e => { const row = e["transcripts.json"].installer[3], v = JSON.parse(row.stdout); v.data.result.installation_id = "other"; row.stdout = JSON.stringify(v); },
+    "wrong info revision": e => { const row = e["transcripts.json"].installer[4], v = JSON.parse(row.stdout); v.data.clients[0].package_revision.tree_digest = "sha256:" + hash("other tree"); row.stdout = JSON.stringify(v); },
+    "wrong state client binding": e => {
+      for (const row of e["transcripts.json"].installer) for (const state of [row.before, row.after]) {
+        if (!state.state_document) continue; const document = JSON.parse(state.state_document);
+        if (!document.installations.length) continue;
+        document.installations[0].clients = { wrong: Object.values(document.installations[0].clients)[0] };
+        state.state_document = JSON.stringify(document); Object.assign(state.state.find(x => x.path === "state-v2.json"), c.metadata(Buffer.from(state.state_document)));
+      }
+    },
+    "state discontinuity": e => { e["transcripts.json"].installer[4].before = structuredClone(e["transcripts.json"].installer[2].after); },
+    "missing command effects": e => { for (const p of c.PRODUCTS) for (const r of e["transcripts.json"][p]) { r.before = rootOnly; r.after = rootOnly; } },
+    "init never created": e => { for (const p of c.PRODUCTS) e["transcripts.json"][p].find(r => r.id === "skill/init").after = rootOnly; },
+    "extra Skill overwrites existing file": e => { for (const p of c.PRODUCTS) e["transcripts.json"][p].find(r => r.id === "skill/extra-skill").after.find(x => x.path === "skill/README.md").mode ^= 0o100; },
+    "malformed harness omitted": e => { for (const p of c.PRODUCTS) { const r = e["transcripts.json"][p].find(r => r.id === "malformed-skill"); r.before = r.before.filter(x => !x.path.includes("/broken")); r.after = r.before; } },
+    "malformed harness wrong bytes": e => { for (const p of c.PRODUCTS) { const r = e["transcripts.json"][p].find(r => r.id === "malformed-skill"); for (const when of ["before", "after"]) r[when].find(x => x.path.endsWith("broken/SKILL.md")).sha256 = hash("other invalid Skill"); } },
+    "invented acquisition path": e => { for (const r of e["transcripts.json"].installer) for (const state of [r.before, r.after]) state.acquisition = [{ path: "../../outside", kind: "symlink", sha256: "not-a-digest" }]; },
+    "acquisition missing bytes": e => { e["acquisition.json"] = {}; },
+    "acquisition altered bytes": e => { const a = e["acquisition.json"]; a[Object.keys(a)[0]] = Buffer.from("unrelated").toString("base64"); },
+    "acquisition oversize": e => { e["transcripts.json"].installer[0].after.acquisition.find(x => x.kind === "file").size = 17 * 1024 * 1024; },
+    "wrong scanned package and policy": e => editSecurity(e, d => {
+      d.tree_digest = "sha256:" + "b".repeat(64); d.manifest_digest = "sha256:" + "c".repeat(64);
+      Object.assign(d.security, { schema_version: 999, policy: { id: "wrong", version: -1, digest: "invalid" }, counts: { blocking: 42 },
+        subject: { tree_digest: d.tree_digest, manifest_digest: d.manifest_digest } });
+    }),
+    "wrong package only": e => editSecurity(e, d => { d.tree_digest = "sha256:" + hash("other package"); d.security.subject.tree_digest = d.tree_digest; }),
+    "wrong policy only": e => editSecurity(e, d => { d.security.policy.digest = "sha256:" + hash("stale policy"); }),
+    "invalid counts only": e => editSecurity(e, d => { d.security.counts.blocking = 42; }),
+    "invalid findings only": e => editSecurity(e, d => { d.security.findings = [{ code: "SEC330", disposition: "blocking", message: "blocking" }]; }),
+    "missing scanner call": e => { e["scans.json"].pop(); },
+    "missing raw report": e => { e["scans.json"][0].report = ""; },
+    "changed raw report": e => { e["scans.json"][0].report += " "; },
+    "raw report invalid counts with coherent pins": e => changeRawReport(e, r => { r.stats.scanned_files = -1; }),
+    "raw report invalid policy with coherent pins": e => changeRawReport(e, r => { r.policy.version = 999; }),
+    "raw report findings with coherent pins": e => changeRawReport(e, r => { r.findings = [{ rule_code: "SEC330" }]; }),
+    "raw report runtime errors with coherent pins": e => changeRawReport(e, r => { r.runtime_errors = [{}]; }),
+    "scanner unrelated executable": e => { e["scans.json"][0].executable.sha256 = hash("other scanner"); },
+    "scan unrelated subject": e => { e["scans.json"][0].subject.tree_digest = "sha256:" + hash("other subject"); },
+    "scan wrong command": e => { e["scans.json"][0].args = ["--version"]; },
+    "cache report mismatch": e => editSecurity(e, (d, row) => { if (row.id === "add") d.security.report_digest = "sha256:" + hash("another report"); }),
+    "empty capability contract": e => { for (const p of c.PRODUCTS) { const r = e["transcripts.json"][p].find(r => r.id === "capabilities"), v = JSON.parse(r.stdout); v.data.capabilities = {}; r.stdout = JSON.stringify(v); } },
+    "missing capabilities client": e => { for (const p of c.PRODUCTS) { const r = e["transcripts.json"][p].find(r => r.id === "capabilities"), v = JSON.parse(r.stdout); v.data.capabilities.clients.pop(); r.stdout = JSON.stringify(v); } },
+    "missing conformance profile": e => { for (const p of c.PRODUCTS) { const r = e["transcripts.json"][p].find(r => r.id === "skill/validate"), v = JSON.parse(r.stdout); v.data.profiles.pop(); r.stdout = JSON.stringify(v); } },
+    "wrong schema inventory": e => { for (const p of c.PRODUCTS) { const r = e["transcripts.json"][p].find(r => r.id === "skill/validate"), v = JSON.parse(r.stdout); v.data.schema_ids = []; r.stdout = JSON.stringify(v); } }
+  };
+  for (const [name, change] of Object.entries(cases)) await t.test(name, () => {
+    const e = Object.fromEntries(Object.entries(originals).filter(([n]) => !n.endsWith("-terminal.json")).map(([n, b]) => [n, JSON.parse(b)]));
+    change(e);
+    const put = (n, b) => { fs.chmodSync(path.join(root, n), 0o600); fs.writeFileSync(path.join(root, n), b); };
+    for (const [n, v] of Object.entries(e)) put(n, c.encode(v));
+    for (const p of c.PRODUCTS) {
+      const v = JSON.parse(originals[p + "-terminal.json"]);
+      v.evidence = v.evidence.map(pin => ({ file: pin.file, ...c.metadata(c.encode(e[pin.file])) }));
+      put(p + "-terminal.json", c.encode(v));
+    }
+    assert.throws(() => native.readTerminals(root, f.root, f.pins, expected), name);
+    for (const [n, b] of Object.entries(originals)) put(n, b);
+  });
+  assert.equal(native.readTerminals(root, f.root, f.pins, expected).length, 2);
+});
+
+for (const scenario of ["pre-close kill denied", "close never arrives", "successful termination"]) {
+  test(`N1 bounded cleanup: ${scenario}`, async t => {
+    const { EventEmitter } = require("node:events"), child = new EventEmitter();
+    child.pid = 123456789; child.stdout = new EventEmitter(); child.stderr = new EventEmitter();
+    let kills = 0, probes = 0;
+    t.mock.method(cp, "spawn", () => child);
+    t.mock.method(process, "kill", (_pid, signal) => {
+      if (signal === 0) { probes++; const e = new Error("gone"); e.code = "ESRCH"; throw e; }
+      kills++;
+      if (scenario === "pre-close kill denied") { const e = new Error("denied"); e.code = "EPERM"; throw e; }
+      if (scenario === "successful termination") setImmediate(() => child.emit("close", null, "SIGKILL"));
+      return true;
+    });
+    const begin = performance.now();
+    const result = internal(false, true).test.subprocess("/never-executed", [], { root: os.tmpdir(), env: {} });
+    const outcome = await Promise.race([
+      result.then(() => "unexpected success", e => e.message),
+      new Promise(resolve => { const timer = setTimeout(() => resolve("unbounded"), 1800); timer.unref(); })
+    ]);
+    assert.notEqual(outcome, "unbounded"); assert.match(outcome, /timeout/); assert.equal(kills, 1);
+    if (scenario === "successful termination") { assert.ok(performance.now() - begin < 900); assert.doesNotMatch(outcome, /uncertain/); }
+    else { assert.match(outcome, /cleanup uncertain: child close not observed/); assert.equal(probes, 0); }
+    if (scenario === "pre-close kill denied") { assert.match(outcome, /cleanup denied: EPERM/); assert.ok(performance.now() - begin < 500); }
+    child.emit("close", null, "SIGKILL"); assert.equal(kills, 1); // Late close cannot retry cleanup.
+  });
+}
+
+test("denied pre-close cleanup reaches producer failure diagnostics without retries", async t => {
+  const f = fixture(), { EventEmitter } = require("node:events"), child = new EventEmitter();
+  child.pid = 123456789; child.stdout = new EventEmitter(); child.stderr = new EventEmitter();
+  let calls = 0;
+  t.mock.method(cp, "spawn", () => child);
+  t.mock.method(process, "kill", () => { calls++; const e = new Error("synthetic denial"); e.code = "EPERM"; throw e; });
+  const pending = internal(true, true).produce(f.options);
+  await assert.rejects(pending, /cleanup denied: EPERM; cleanup uncertain: child close not observed/);
+  noTerminal(f); assert.equal(calls, 1);
+  const diagnostic = JSON.parse(fs.readFileSync(path.join(f.options.output, "diagnostic.json")));
+  assert.equal(diagnostic.native_acceptance, false); assert.match(diagnostic.error, /cleanup uncertain/);
+  child.emit("close", null, "SIGKILL"); assert.equal(calls, 1);
+});
+
+test("independent package identity uses content framing and portable executable modes", () => {
+  const documents = { "plugin.json": Buffer.from('{"name":"skill"}\n'), "skills/demo/SKILL.md": Buffer.from([0, ...Buffer.from("fixture"), 255]) };
+  const project = { files: [{ path: ".", kind: "directory", mode: 448 },
+    { path: "plugin.json", kind: "file", mode: 420, ...c.metadata(documents["plugin.json"]) },
+    { path: "skills", kind: "directory", mode: 448 }, { path: "skills/demo", kind: "directory", mode: 448 },
+    { path: "skills/demo/SKILL.md", kind: "file", mode: 493, ...c.metadata(documents["skills/demo/SKILL.md"]) }],
+    documents: Object.fromEntries(Object.entries(documents).map(([name, body]) => [name, body.toString("base64")])) };
+  const digest = internal().test.packageIdentity;
+  // Independently framed uint64-BE vector; includes non-UTF8 content.
+  const expected = { tree_digest: "sha256:68fa0b7927e71c2ff3c74c3235085d8aed2b85968db22ee27fe02ca1abff9bae",
+    manifest_digest: "sha256:2950ebbb0911376d0566dead6130d2b13b00608eac7119a6fe50ae65e6a0967d" };
+  assert.deepEqual(digest(project), expected);
+  project.files[1].mode = 384; assert.deepEqual(digest(project), expected); // Non-executable permission changes are not package identity.
+  project.files[4].mode = 420; assert.notEqual(digest(project).tree_digest, expected.tree_digest);
+  project.documents["plugin.json"] = Buffer.from("other bytes").toString("base64"); assert.throws(() => digest(project));
+});
+
+test("fixed profile and schema pins agree with preserved domain contracts", () => {
+  const n = internal().test, root = path.resolve(__dirname, "../../..");
+  for (const schema of n.capabilities().schemas) {
+    const name = schema.id.endsWith("/plugin.schema.json") ? "plugin" : "mcp";
+    const file = path.join(root, `install/integrationctl/agentplugins/adapters/specregistry/schemas/1.0.0/${name}.schema.json`);
+    assert.equal("sha256:" + c.digest(fs.readFileSync(file)), schema.digest);
+  }
+  assert.equal(n.PROFILES.at(-1).digest, "sha256:" + c.digest(fs.readFileSync(path.join(root, "install/integrationctl/agentplugins/conformance/profiles/README.md"))));
+  const policy = fs.readFileSync(path.join(root, "install/integrationctl/agentplugins/adapters/securityscan/policy_test.go"), "utf8");
+  assert.ok(policy.includes(n.POLICY.digest));
 });

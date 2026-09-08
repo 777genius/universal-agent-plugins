@@ -7,6 +7,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const os = require("node:os");
 const cp = require("node:child_process");
+const crypto = require("node:crypto");
 const assert = require("node:assert/strict");
 const c = require("./dual-authoring-candidate");
 const { verifyProjectedPair } = require("./authoring-release");
@@ -21,7 +22,41 @@ const LIMIT = 1024 * 1024;
 const CASES = Object.freeze(["skill", "mcp-remote", "mcp-stdio", "hybrid-remote", "hybrid-stdio"]);
 const LEAVES = Object.freeze(["author.capabilities", "author.compat", "author.doctor", "author.init", "author.inspect",
   "author.skills.init", "author.skills.validate", "author.test", "author.validate"]);
-const FILES = Object.freeze(["transcripts.json", "trees.json", "build-info.json", "preservation.json", "preparation.json", "host.json"]);
+const FILES = Object.freeze(["transcripts.json", "trees.json", "build-info.json", "preservation.json", "preparation.json", "host.json", "scans.json", "acquisition.json"]);
+// Fixed identities from conformance/profile.go, specregistry/registry.go,
+// readiness.Engine and domain.ClientDefinitions at this reviewed source.
+const SCHEMAS = [
+  { id: "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json", digest: "sha256:0a4aad95ce337878ad38802ebf0daa3fde76abe3f65400c86bcbb1ec0b3ab883" },
+  { id: "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json", digest: "sha256:6539175bfcdf43085855183e86da40ea94b166547a72b47ae9a0a390516d3acb" }
+];
+const PROFILES = [
+  { id: "agent-plugins/1.0.0", revision: "ff8ab5e392cc87bd88d87c060815a87490e51003", digest: "sha256:97a658b7dca3ce1b4c2266b95da300fa51d9dc4ade59d73168e5f9104272da18" },
+  { id: "agent-skills/2026-09-06", revision: "69ef37e9424c0a7ea9dd2293b559e43ec8176379", digest: "sha256:b9079c0c10b7930e8c6a20ff2bc10cda2a3343c55185120e3f1116a1a529b220" },
+  ...SCHEMAS.map(x => ({ ...x, revision: "1.0.0" })),
+  { id: "author-document-bounds/v1", revision: "1", digest: "sha256:4b8ab8fd50481ccd1a0b777dcbbfa06cf89516a5ea61ce09d56d6dd6a2c43004" }
+];
+function capabilities() {
+  const rows = [
+    ["chatgpt", "compatibility_projection", "projected", "unsupported", "unsupported"],
+    ["claude", "compatibility_projection", "projected", "projected", "unsupported", "automatic"],
+    ["cline", "native", "native", "native", "unsupported", "automatic"],
+    ["codex", "compatibility_projection", "projected", "projected", "unsupported"],
+    ["copilot", "native", "native", "native", "native"], ["cursor", "native", "native", "native", "native"],
+    ["gemini", "native", "native", "native", "unsupported"], ["kiro", "native", "native", "native", "unsupported"],
+    ["opencode", "prepared_package", "prepared", "prepared", "unsupported", "automatic"],
+    ["vscode", "prepared_package", "prepared", "prepared", "prepared"],
+    ["windsurf", "prepared_package", "prepared", "prepared", "prepared"]
+  ];
+  return { schemas: SCHEMAS, profiles: PROFILES, commands: LEAVES,
+    evidence_limits: ["static_only", "no_path_lookup", "no_executable_version_probe", "no_runtime_or_oauth_evidence", "native_files_metadata_only"],
+    clients: rows.map(([client_id, package_mode, skill_support, mcp, extension_support, activation_mode = "manual"]) => ({
+      client_id, package_mode, activation_mode, scopes: ["user"], skill_support,
+      mcp_transports: { stdio: mcp, "streamable-http": mcp, sse: mcp },
+      app_support: client_id === "chatgpt" ? "projected" : "unsupported", extension_support })) };
+}
+const POLICY = { id: "agent-plugin-install", version: 2,
+  digest: "sha256:9cf869e299d847d7078aeca01f5a182fcdb0144bbf513c83290459991c79e037" };
+const BROKEN = "---\nname: [\n---\nBroken\n";
 const TOP = ["schema", "lane", "identity", "candidate_sha256", "pair_marker_sha256", "projection_pins", "subject",
   "peer_subject", "preparation", "producer", "host", "tools", "assertions", "evidence"];
 const fail = message => { throw new Error(message); };
@@ -139,35 +174,60 @@ function subprocess(file, argv, ctx, signal, installer = false) {
     if (signal?.aborted) return reject(new Error("cancelled before process"));
     const child = cp.spawn(file, argv, { cwd: path.join(ctx.root, "projects"), env: ctx.env,
       shell: false, detached: true, stdio: ["ignore", "pipe", "pipe"] });
-    let stdout = [], stderr = [], bytes = 0, problem, closed = false;
+    let stdout = [], stderr = [], bytes = 0, problem, closed = false, settled = false, stopped = false, grace;
+    const finish = error => {
+      if (settled) return; settled = true;
+      clearTimeout(timer); clearTimeout(grace); signal?.removeEventListener("abort", cancel);
+      if (error) reject(new Error(error));
+    };
+    const uncertain = () => {
+      let detail = "";
+      try { child.stdout.destroy?.(); child.stderr.destroy?.(); child.unref?.(); }
+      catch (e) { detail = `; stream detach failed: ${e.code || "unknown"}`; }
+      finish(`${problem}; cleanup uncertain: child close not observed${detail}`);
+    };
     const stop = reason => {
-      problem ||= reason;
+      if (stopped || settled) return;
+      stopped = true; problem ||= reason;
       if (child.pid && !closed) {
         try { process.kill(-child.pid, "SIGKILL"); }
-        catch (e) { if (e.code !== "ESRCH") problem = `owned-child cleanup denied: ${e.code}`; }
+        catch (e) { if (e.code !== "ESRCH") { problem += `; owned-child cleanup denied: ${e.code}`; uncertain(); return; } }
       }
+      // One cleanup attempt only. A missing close (including inherited pipes)
+      // must not hold failure diagnostics hostage. Unref is not cleanup proof.
+      grace = setTimeout(uncertain, 1000);
     };
     const timer = setTimeout(() => stop("timeout"), installer ? 120000 : 15000);
     const cancel = () => stop("cancelled"); signal?.addEventListener("abort", cancel, { once: true });
     for (const [stream, chunks] of [[child.stdout, stdout], [child.stderr, stderr]]) stream.on("data", b => {
+      if (settled) return;
       bytes += b.length;
       if (bytes > LIMIT) stop("output flood"); else chunks.push(b);
     });
-    child.on("error", e => { problem = `subprocess failed: ${e.code}`; });
+    child.on("error", e => stop(`subprocess failed: ${e.code}`));
     child.on("close", (status, sig) => {
-      closed = true; clearTimeout(timer); signal?.removeEventListener("abort", cancel);
+      closed = true;
+      if (settled) return; // Never retry denied cleanup after a late close.
       if (child.pid) {
-        try { process.kill(-child.pid, 0); problem ||= "owned descendants survived"; process.kill(-child.pid, "SIGKILL"); }
-        catch (e) { if (e.code !== "ESRCH") problem ||= `cleanup uncertain: ${e.code}`; }
+        try {
+          process.kill(-child.pid, 0); problem ||= "owned descendants survived";
+          if (!stopped) {
+            stopped = true;
+            try { process.kill(-child.pid, "SIGKILL"); }
+            catch (e) { if (e.code !== "ESRCH") problem += `; owned-child cleanup denied: ${e.code}`; }
+          }
+        } catch (e) { if (e.code !== "ESRCH") problem ||= `cleanup uncertain: ${e.code}`; }
       }
-      if (problem || sig) return reject(new Error(problem || `signal ${sig}`));
+      if (problem || sig) return finish(problem || `signal ${sig}`);
       try {
         const decoder = new TextDecoder("utf-8", { fatal: true });
-        resolve({ status, stdout: decoder.decode(Buffer.concat(stdout)), stderr: decoder.decode(Buffer.concat(stderr)) });
-      } catch { reject(new Error("invalid UTF-8 subprocess output")); }
+        const result = { status, stdout: decoder.decode(Buffer.concat(stdout)), stderr: decoder.decode(Buffer.concat(stderr)) };
+        finish(); resolve(result);
+      } catch { finish("invalid UTF-8 subprocess output"); }
     });
   });
 }
+
 function initArgs(lane) {
   const args = ["init", lane, "--template", lane.startsWith("hybrid-") ? "hybrid" : lane];
   if (lane.startsWith("hybrid-")) args.push("--mcp-template", lane.endsWith("remote") ? "mcp-remote" : "mcp-stdio");
@@ -229,7 +289,7 @@ function authorResult(row, spec, product, identity) {
   exact(d.runtime_evidence.status, "not_evaluated");
   if (spec.id === "author-help" || spec.id === "capabilities") exact(d.commands, LEAVES);
   if (spec.id === "engine-version") { exact(d.product, product); exact(d.product_version, identity.versions[product]); return; }
-  if (spec.id === "capabilities") { assert.ok(d.capabilities); return; }
+  if (spec.id === "capabilities") { exact(d.capabilities, capabilities(), "fixed capabilities inventory"); return; }
   if (spec.id === "author-help") { assert.ok(d.help.use.startsWith(product === "agentplugins" ? "agentplugins author" : "plugin-kit-ai")); return; }
   const mutation = /\/(init|extra-skill)$/.test(spec.id);
   if (mutation) { exact(d.committed, true); exact(d.effects.committed, true); }
@@ -237,11 +297,8 @@ function authorResult(row, spec, product, identity) {
   if (!spec.lane || /\/(existing)$/.test(spec.id) || spec.id === "installer-flag") return;
   assert.match(d.identity.tree_digest, /^sha256:[0-9a-f]{64}$/);
   exact(d.identity.read_profile, "packageview-local-linux-v1");
-  assert.ok(Array.isArray(d.profiles) && d.profiles.length > 0, "embedded Skills profile");
-  for (const profile of d.profiles) { assert.ok(profile.id && profile.revision); assert.match(profile.digest, /^sha256:[0-9a-f]{64}$/); }
-  assert.ok(d.profiles.some(p => p.id === "agent-skills/2026-09-06" &&
-    p.revision === "69ef37e9424c0a7ea9dd2293b559e43ec8176379" &&
-    p.digest === "sha256:b9079c0c10b7930e8c6a20ff2bc10cda2a3343c55185120e3f1116a1a529b220"), "pinned Skills rules");
+  exact(d.profiles, PROFILES, "exact conformance profiles");
+  exact(d.schema_ids, (spec.lane === "skill" ? [SCHEMAS[0].id] : SCHEMAS.map(x => x.id).sort()), "accepted package schema inventory");
   exact(d.loadability.status, "pass");
   exact(d.normative_conformance.status, spec.id === "malformed-skill" ? "fail" : "pass");
   exact(d.authoring_readiness.status, spec.id === "malformed-skill" ? "fail" : "pass");
@@ -276,16 +333,45 @@ function treeShape(entries) {
     c.keys(v, v.kind === "directory" ? ["path", "mode", "kind"] : ["path", "mode", "kind", "sha256", "size"], "tree entry");
     assert.ok(typeof v.path === "string" && v.path.length <= 512 && !names.has(v.path));
     assert.ok(v.path === "." || /^(?!\.\.?($|\/))[A-Za-z0-9._-]+(?:\/[A-Za-z0-9._-]+)*$/.test(v.path));
-    assert.ok(!v.path.split("/").includes("..")); names.add(v.path);
+    assert.ok(v.path === "." || v.path.split("/").every(x => x !== "." && x !== "..")); names.add(v.path);
     assert.ok(Number.isInteger(v.mode) && v.mode >= 0 && v.mode <= 511);
     assert.ok(v.kind === "file" || v.kind === "directory");
     if (v.kind === "file") { sha(v.sha256); assert.ok(Number.isSafeInteger(v.size) && v.size >= 0); bytes += v.size; }
   }
-  assert.ok(names.has(".") && bytes <= 16 * LIMIT);
+  assert.ok(entries[0]?.path === "." && entries[0].kind === "directory" && bytes <= 16 * LIMIT);
   for (const v of entries) if (v.path !== ".") {
     const parent = path.posix.dirname(v.path);
     assert.ok(entries.some(x => x.path === parent && x.kind === "directory"), "tree parent closure");
   }
+}
+// Base64 preserves exact bounded bytes, including empty/non-UTF8 generated
+// files. Entries remain no-link inventories; no evidence path is opened here.
+function capturedBytes(entries, documents) {
+  c.keys(documents, entries.filter(x => x.kind === "file").map(x => x.path), "referenced byte closure");
+  const result = Object.create(null); let total = 0;
+  for (const item of entries.filter(x => x.kind === "file")) {
+    const value = documents[item.path]; assert.equal(typeof value, "string");
+    assert.ok(value.length <= 24 * LIMIT);
+    const bytes = Buffer.from(value, "base64"); exact(bytes.toString("base64"), value);
+    exact(c.metadata(bytes), { size: item.size, sha256: item.sha256 }, "referenced bytes");
+    total += bytes.length; assert.ok(total <= 16 * LIMIT); result[item.path] = bytes;
+  }
+  return result;
+}
+// Exact packagedigest/snapshot.go v1 framing for this fixed no-link journey.
+// Hash content, not per-file digest text, and exclude the synthetic root entry.
+function packageIdentity(project) {
+  treeShape(project.files); const bytes = capturedBytes(project.files, project.documents);
+  const h = crypto.createHash("sha256");
+  const length = n => { const b = Buffer.alloc(8); b.writeBigUInt64BE(BigInt(n)); h.update(b); };
+  const frame = text => { const b = Buffer.from(text); length(b.length); h.update(b); };
+  frame("agentplugins.package-tree\0sha256\0v1");
+  for (const item of project.files.filter(x => x.path !== ".").sort((a, b) => a.path < b.path ? -1 : 1)) {
+    const body = item.kind === "file" ? bytes[item.path] : Buffer.alloc(0);
+    for (const text of ["entry", item.path, item.kind, item.kind === "directory" ? "040000" : item.mode & 0o111 ? "100755" : "100644", ""]) frame(text);
+    length(body.length); h.update(body);
+  }
+  return { tree_digest: `sha256:${h.digest("hex")}`, manifest_digest: `sha256:${c.digest(bytes["plugin.json"])}` };
 }
 function projectEvidence(root, lane) {
   const files = tree(root);
@@ -293,8 +379,9 @@ function projectEvidence(root, lane) {
   const mcp = lane === "skill" ? null : JSON.parse(c.readFile(path.join(root, "mcp.json"), LIMIT));
   const lock = lane.endsWith("stdio") ? JSON.parse(c.readFile(path.join(root, "package-lock.json"), LIMIT)) : null;
   const pkg = lock ? JSON.parse(c.readFile(path.join(root, "package.json"), LIMIT)) : null;
-  const documents = Object.fromEntries(["plugin.json", ...(mcp ? ["mcp.json"] : []), ...(lock ? ["package.json", "package-lock.json"] : [])]
-    .map(n => [n, c.readFile(path.join(root, n), LIMIT).toString("utf8")]));
+  const documents = Object.fromEntries(files.filter(x => x.kind === "file").map(x =>
+    [x.path, (x.size ? c.readFile(path.join(root, x.path), 16 * LIMIT) : Buffer.alloc(0)).toString("base64")]));
+  exact(tree(root), files, "project bytes and modes stable during capture");
   return { files, manifest, mcp, lock, package: pkg, documents };
 }
 function checkProject(value, lane) {
@@ -302,11 +389,11 @@ function checkProject(value, lane) {
   treeShape(value.files); assert.ok(value.files.length > 3);
   const documents = { "plugin.json": value.manifest, ...(value.mcp ? { "mcp.json": value.mcp } : {}),
     ...(value.lock ? { "package.json": value.package, "package-lock.json": value.lock } : {}) };
-  c.keys(value.documents, Object.keys(documents), "exact project documents");
+  const captured = capturedBytes(value.files, value.documents);
   for (const [name, parsed] of Object.entries(documents)) {
-    exact(jsonDocument(value.documents[name]), parsed);
+    exact(jsonDocument(captured[name].toString("utf8")), parsed);
     const pin = value.files.find(x => x.path === name); assert.ok(pin);
-    exact([pin.sha256, pin.size], [c.digest(Buffer.from(value.documents[name])), Buffer.byteLength(value.documents[name])]);
+    exact([pin.sha256, pin.size], [c.digest(captured[name]), captured[name].length]);
   }
   const names = value.files.map(x => x.path);
   exact(new Set(names).size, names.length);
@@ -339,52 +426,226 @@ function installationCommands() {
     { id: "list", args: ["list", "--format=json"] }
   ];
 }
-function scanEvidence(r, source) {
+function scanEvidence(r, source, project) {
   const data = r.data.security ? r.data : r.data.targets?.[0]?.output;
   const security = data?.security;
-  assert.ok(security && security.scanned_files > 0, "production scan evidence");
-  exact(security.scanner, { id: "lintai", version: "0.1.3" });
+  assert.ok(security, "production scan evidence");
+  c.keys(security, ["schema_version", "subject", "scanner", "policy", "outcome", "counts", "scanned_files", "report_digest", "evidence_source",
+    ...(Object.hasOwn(security, "findings") ? ["findings"] : [])], "security assessment");
+  exact(security.schema_version, 1, "fixed production security schema");
+  exact(security.scanner, { id: "lintai", version: "0.1.3" }); exact(security.policy, POLICY, "fixed production security policy");
   exact(security.evidence_source, source); exact(security.outcome, "no_blocking_findings");
-  exact(security.subject, { tree_digest: data.tree_digest, manifest_digest: data.manifest_digest });
+  // This journey already requires no warnings or blocking findings. In this
+  // outcome the production counts and published finding projection are empty.
+  exact(security.counts, { blocking: 0, warnings: 0, total: 0 }, "security counts match outcome");
+  exact(security.findings ?? [], [], "security findings match counts"); positive(security.scanned_files);
+  const subject = packageIdentity(project);
+  exact(security.subject, subject, "independently captured package security subject");
+  exact({ tree_digest: data.tree_digest, manifest_digest: data.manifest_digest }, subject);
   assert.match(security.report_digest, /^sha256:[0-9a-f]{64}$/);
+  return security;
+}
+function acquisition(state, bodies) {
+  const root = { path: ".", mode: 448, kind: "directory" };
+  assert.ok(Array.isArray(state.acquisition)); treeShape([root, ...state.acquisition]);
+  for (const item of state.acquisition) {
+    const directory = /^(?:security(?:\/(?:lintai|assessments))?|security\/lintai\/0\.1\.3(?:\/linux-amd64(?:-musl)?)?)$/.test(item.path);
+    const file = /^(?:security\/lintai\/0\.1\.3\/linux-amd64(?:-musl)?\/lintai|security\/assessments\/[0-9a-f]{64}\.json|(?:directory|discovery)-v1-cache\.json)$/.test(item.path);
+    assert.ok(directory || file, "fixed acquisition paths"); exact(item.kind, directory ? "directory" : "file");
+  }
+  return capturedBytes(state.acquisition, Object.fromEntries(state.acquisition.filter(x => x.kind === "file")
+    .map(x => [x.path, bodies[x.sha256]])));
+}
+function acquisitionClosure(rows, bodies) {
+  const files = rows.flatMap(row => [row.before, row.after].flatMap(state => state.acquisition.filter(x => x.kind === "file")));
+  const pins = [...new Map(files.map(x => [x.sha256, x])).values()];
+  c.keys(bodies, pins.map(x => x.sha256), "closed acquisition byte subjects");
+  let total = 0;
+  for (const item of pins) { total += item.size; assert.ok(total <= 16 * LIMIT, "total acquisition byte bound"); }
+  for (const row of rows) for (const state of [row.before, row.after]) acquisition(state, bodies);
+}
+function scanReplay(rows, projects, scans, bodies) {
+  assert.ok(Array.isArray(scans)); exact(scans.length, 3, "three observed fresh scans and report bytes");
+  const fresh = new Map(); let executable;
+  for (let i = 0; i < 4; i++) {
+    const row = rows[i], lane = i < 3 ? row.id.slice(8) : "skill";
+    const assessment = scanEvidence(jsonDocument(row.stdout), i < 3 ? "local_scan" : "cache", projects[lane]);
+    const key = c.digest(Buffer.from([assessment.subject.tree_digest, assessment.subject.manifest_digest,
+      "lintai", "0.1.3", POLICY.id, String(POLICY.version), POLICY.digest].join("\0")));
+    const file = `security/assessments/${key}.json`, before = acquisition(row.before, bodies), after = acquisition(row.after, bodies);
+    const cached = { ...assessment }; delete cached.evidence_source;
+    assert.ok(after[file], "required assessment cache bytes"); exact(jsonDocument(after[file].toString("utf8")), cached);
+    if (i < 3) {
+      assert.equal(before[file], undefined, "fresh scan must precede cache creation");
+      const scan = scans[i]; c.keys(scan, ["id", "args", "subject", "executable", "report"], "observed scanner call");
+      exact([scan.id, scan.args, scan.subject], [row.id, ["scan-agent-plugin", `<source>/${lane}`], assessment.subject]);
+      c.keys(scan.executable, ["path", "sha256"], "observed scanner executable");
+      assert.match(scan.executable.path, /^security\/lintai\/0\.1\.3\/linux-amd64(?:-musl)?\/lintai$/);
+      assert.ok(after[scan.executable.path], "required scanner acquisition bytes");
+      exact(c.digest(after[scan.executable.path]), sha(scan.executable.sha256));
+      const item = row.after.acquisition.find(x => x.path === scan.executable.path); exact(item.mode, 0o700);
+      if (executable) exact(scan.executable, executable, "same acquired scanner"); else executable = scan.executable;
+      assert.equal(typeof scan.report, "string");
+      const report = jsonDocument(scan.report);
+      exact(`sha256:${c.digest(Buffer.from(scan.report))}`, assessment.report_digest, "exact scanner report bytes");
+      exact(report.schema_version, 1); exact(report.tool, { name: "lintai", version: "0.1.3" });
+      exact([report.policy.id, report.policy.version], [POLICY.id, POLICY.version], "scanner report policy");
+      assert.ok(Array.isArray(report.policy.presets) && report.policy.presets.every(x => typeof x === "string"));
+      exact(report.stats.scanned_files, assessment.scanned_files, "scanner report file counts");
+      assert.ok(Number.isSafeInteger(report.stats.skipped_files) && report.stats.skipped_files >= 0);
+      exact(report.findings, [], "scanner report findings"); exact(report.runtime_errors ?? [], []);
+      assert.ok(Array.isArray(report.diagnostics ?? []));
+      fresh.set(lane, { assessment: cached, bytes: after[file] });
+    } else {
+      const preceding = fresh.get(lane); assert.ok(preceding, "preceding genuine scan required");
+      exact(cached, preceding.assessment, "cache must reuse exact preceding scan");
+      exact(before[file], preceding.bytes); exact(after[file], preceding.bytes);
+      exact(c.digest(before[executable.path]), executable.sha256);
+      exact(before[executable.path], after[executable.path]);
+    }
+  }
+}
+function stateDocument(state) {
+  const item = state.state.find(x => x.path === "state-v2.json");
+  if (!item) { exact(state.state_document, null); return { installations: [] }; }
+  assert.equal(typeof state.state_document, "string");
+  exact(c.metadata(Buffer.from(state.state_document)), { sha256: item.sha256, size: item.size });
+  const document = jsonDocument(state.state_document); exact(document.schema_version, 4);
+  assert.ok(Array.isArray(document.installations)); return document;
+}
+function installedIdentity(state, project) {
+  const document = stateDocument(state); exact(document.installations.length, 1);
+  const registration = document.installations[0], subject = packageIdentity(project);
+  exact(registration.declared_name, "skill"); exact(registration.package.declared_name, "skill");
+  exact(registration.package.version, "0.1.0"); exact(registration.source.tree_digest, subject.tree_digest);
+  exact(registration.package.manifest_digest, subject.manifest_digest);
+  assert.match(registration.installation_id, /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+  const clients = Object.values(registration.clients); exact(clients.length, 1);
+  const client = clients[0]; exact([client.client_id, client.scope, client.materialization], ["codex", "user", "materialized"]);
+  const physical = `skill-${c.digest(Buffer.from(registration.installation_id)).slice(0, 12)}`;
+  exact(client.physical_artifact_id, physical);
+  const projection = `managed/clients/codex/${physical}`;
+  assert.ok(typeof client.target_locator === "string" && path.posix.isAbsolute(client.target_locator) &&
+    path.posix.normalize(client.target_locator) === client.target_locator && client.target_locator.endsWith(`/${projection}`));
+  const binding = "client_" + c.digest(Buffer.from([registration.installation_id, "codex", "user", client.target_locator].join("\0"))).slice(0, 24);
+  exact(Object.keys(registration.clients), [binding]); exact(client.client_binding_id, binding);
+  exact([client.package_revision.version, client.package_revision.tree_digest, client.package_revision.manifest_digest],
+    ["0.1.0", subject.tree_digest, subject.manifest_digest]);
+  assert.ok(state.state.some(x => x.path === projection && x.kind === "directory"), "owned client projection exists");
+  // Skills are copied without changes into the Codex compatibility projection.
+  for (const skill of project.files.filter(x => /^skills\/[^/]+\/SKILL.md$/.test(x.path))) {
+    const copied = state.state.find(x => x.path === `${projection}/${skill.path}`);
+    assert.ok(copied && copied.kind === "file"); exact([copied.sha256, copied.size], [skill.sha256, skill.size]);
+  }
+  return { registration, client, projection };
 }
 function installed(row, spec, projects) {
   const r = envelope(row, { ...spec, status: 0 }), verb = spec.args[0]; exact(r.command, verb);
   if (spec.id.startsWith("dry-run/")) {
     exact(r.data.dry_run, true);
-    scanEvidence(r, "local_scan");
+    scanEvidence(r, "local_scan", projects[spec.id.slice(8)]);
     const lane = spec.id.slice(8), result = lifecycleResult(r, "add", "codex"), plan = result.plan;
     exact([plan.client_id, plan.scope, plan.status], ["codex", "user", "manual_activation_required"]);
     const skills = projects[lane].files.filter(x => /^skills\/[^/]+\/SKILL.md$/.test(x.path)).map(x => `skill:${x.path.split("/")[1]}`);
     const servers = Object.keys(projects[lane].mcp?.mcpServers || {}).map(x => `mcp_server:${x}`);
     exact(plan.components.map(x => `${x.kind}:${x.name}`).sort(), [...skills, ...servers].sort());
-    assert.ok(plan.components.every(x => x.support && x.support !== "unsupported"));
+    assert.ok(plan.components.every(x => x.support === "projected"), "Codex compatibility projection support");
     exact(row.before.client, row.after.client); exact(row.before.state, row.after.state);
     return;
   }
   if (["add", "update", "remove"].includes(verb)) {
     const result = lifecycleResult(r, verb, "codex");
     exact(result.mutated, verb !== "update");
+    const identity = installedIdentity(verb === "add" ? row.after : row.before, projects.skill);
+    exact(result.installation_id, identity.registration.installation_id, "lifecycle installed identity");
     if (verb === "update") { exact(result.no_change, true); exact(row.before.state, row.after.state); exact(row.before.client, row.after.client); }
     else assert.notDeepEqual(row.before.state, row.after.state, "real lifecycle state mutation");
     if (verb === "add") {
       exact(result.activation.authentication, "not_checked");
       assert.notEqual(result.activation.authentication_attested, true);
-      assert.notDeepEqual(row.before.client, row.after.client, "real client projection");
+      exact(row.before.client, row.after.client, "preexisting client configuration preservation");
+      exact(stateDocument(row.before).installations, [], "new installation starts unregistered");
+      assert.ok(!row.before.state.some(x => x.path === identity.projection || x.path.startsWith(identity.projection + "/")), "new owned projection");
       assert.ok(row.after.state.some(x => x.path === "state-v2.json"), "production lifecycle state");
-      scanEvidence(r, "cache"); // The preceding fresh dry-run scanned these identical bytes.
+      scanEvidence(r, "cache", projects.skill); // The preceding fresh dry-run scanned these identical bytes.
+    }
+    if (verb === "remove") {
+      assert.ok(!row.after.state.some(x => x.path === identity.projection || x.path.startsWith(identity.projection + "/")), "remove owned projection");
+      exact(stateDocument(row.after).installations, [], "remove registration");
+      assert.ok(!row.after.state.some(x => x.path.startsWith("managed/clients/codex/") && x.kind === "file"), "no remaining Codex projection files");
+      exact(row.before.client, row.after.client, "remove preserves client configuration");
     }
   } else if (verb === "info") {
+    exact(row.before, row.after, "info is read only");
+    const identity = installedIdentity(row.before, projects.skill);
+    exact(r.data.installation_id, identity.registration.installation_id, "info installed identity");
     exact(r.data.name, "skill"); exact(r.data.version, "0.1.0");
     exact(r.data.clients.length, 1); exact(r.data.clients[0].client_id, "codex");
-    exact(r.data.clients[0].package_revision.version, "0.1.0");
-  } else exact(r.data.installations, []);
+    exact(r.data.clients[0].package_revision, identity.client.package_revision);
+  } else {
+    exact(row.before, row.after, "list is read only");
+    exact(r.data.installations, []); exact(stateDocument(row.after).installations, []);
+  }
 }
 // No supported, reviewed whole-descendant observer has been provisioned for
 // this contract. Never retry the denied ptrace flow, or treat a caller boolean,
 // control trap, local file, or an empty syscall list as host observation.
 function observationGate() {
   fail("WHOLE_OS_OBSERVATION_UNAVAILABLE: supported authoring process/network and owned-descendant observation remains a separate execution prerequisite; no passing terminal");
+}
+function commandContinuity(rows, projects) {
+  const sort = xs => xs.slice().sort((a, b) => a.path < b.path ? -1 : a.path > b.path ? 1 : 0);
+  let expected = [{ path: ".", mode: 448, kind: "directory" }];
+  const broken = [
+    { path: "skill/skills/broken", mode: 448, kind: "directory" },
+    { path: "skill/skills/broken/SKILL.md", mode: 384, kind: "file", ...c.metadata(Buffer.from(BROKEN)) }
+  ];
+  for (const row of rows) {
+    if (row.id === "malformed-skill") expected = sort([...expected, ...broken]);
+    exact(row.before, expected, `command continuity before ${row.id}`);
+    if (/\/(init|extra-skill)$/.test(row.id)) {
+      const [lane, operation] = row.id.split("/");
+      let files = projects[lane].files;
+      if (operation === "init") files = files.filter(x => !/^skills\/extra-skill(?:\/|$)/.test(x.path) &&
+        !(x.path === "skills" && lane.startsWith("mcp-")));
+      const added = files.map(x => ({ ...x, path: x.path === "." ? lane : `${lane}/${x.path}` }));
+      const keep = expected.filter(x => x.path !== lane && !x.path.startsWith(lane + "/"));
+      if (operation === "init") assert.ok(!expected.some(x => x.path === lane));
+      else for (const old of expected.filter(x => x.path === lane || x.path.startsWith(lane + "/")))
+        exact(added.find(x => x.path === old.path), old, "extra Skill preserves all existing bytes and modes");
+      expected = sort([...keep, ...added]);
+      assert.notDeepEqual(row.before, expected, "declared authoring mutation has effects");
+    }
+    exact(row.after, expected, `command effects and final project tree ${row.id}`);
+    if (row.id !== "product-help") {
+      const data = jsonDocument(row.stdout).data;
+      if (data.identity) {
+        const lane = row.id === "malformed-skill" ? "skill" : row.id.split("/")[0];
+        const files = row.after.filter(x => x.path === lane || x.path.startsWith(lane + "/"))
+          .map(x => ({ ...x, path: x.path === lane ? "." : x.path.slice(lane.length + 1) }));
+        const documents = Object.fromEntries(files.filter(x => x.kind === "file").map(x => [x.path,
+          x.path === "skills/broken/SKILL.md" ? Buffer.from(BROKEN).toString("base64") : projects[lane].documents[x.path]]));
+        exact(data.identity.tree_digest, packageIdentity({ files, documents }).tree_digest, "author result describes observed command tree");
+      }
+    }
+    if (row.id === "malformed-skill") expected = expected.filter(x => !broken.some(b => b.path === x.path));
+  }
+  exact(expected, sort([{ path: ".", mode: 448, kind: "directory" }, ...CASES.flatMap(lane =>
+    projects[lane].files.map(x => ({ ...x, path: x.path === "." ? lane : `${lane}/${x.path}` })))]), "final command tree closure");
+}
+function custodyCoverage(entries, preparation) {
+  const subjects = [...preparation.subjects, { file: "preparation-run.json", ...c.metadata(c.encode(preparation)) }];
+  assert.ok(Array.isArray(entries)); exact(entries.length, 19, "eighteen inputs plus preparation custody");
+  exact(entries.map(x => x.file), subjects.map(x => x.file));
+  const inodes = new Set();
+  entries.forEach((v, i) => {
+    c.keys(v, ["file", "mode", "dev", "ino", "links", "size", "mtime", "ctime"], "input custody fields");
+    exact(v.size, subjects[i].size); exact(v.links, 1);
+    for (const key of ["mode", "dev", "ino"]) assert.ok(Number.isSafeInteger(v[key]) && v[key] >= 0);
+    assert.ok(v.mode <= 0o177777); exact(v.mode & 0o170000, 0o100000); exact(v.mode & 0o7000, 0);
+    for (const key of ["mtime", "ctime"]) assert.ok(Number.isFinite(v[key]) && v[key] > 0);
+    const identity = `${v.dev}:${v.ino}`; assert.ok(!inodes.has(identity)); inodes.add(identity);
+  });
 }
 function verifyJourney(e, pins) {
   c.keys(e, FILES, "evidence bundle");
@@ -401,6 +662,7 @@ function verifyJourney(e, pins) {
     }
     c.keys(projects[p], CASES, "five templates");
     for (const lane of CASES) checkProject(projects[p][lane], lane);
+    commandContinuity(rows, projects[p]);
   }
   for (let i = 0; i < commands("agentplugins").length; i++) {
     const spec = commands("agentplugins")[i];
@@ -412,15 +674,24 @@ function verifyJourney(e, pins) {
     const row = transcript.installer[i];
     c.keys(row, ["id", "args", "status", "stdout", "stderr", "before", "after"], "installer transcript");
     for (const state of [row.before, row.after]) {
-      c.keys(state, ["client", "state", "acquisition"], "separate installer state and acquisition");
+      c.keys(state, ["client", "state", "acquisition", "state_document"], "separate installer state and acquisition");
       treeShape(state.client); treeShape(state.state);
-      assert.ok(Array.isArray(state.acquisition) && state.acquisition.length <= 4096);
+      acquisition(state, e["acquisition.json"]); stateDocument(state);
     }
+    if (i) exact(row.before, transcript.installer[i - 1].after, "installer state continuity");
+    else { exact(row.before.acquisition, []); exact(stateDocument(row.before).installations, []); }
+    // Every original client file/directory survives every command, including modes.
+    for (const original of transcript.installer[0].before.client)
+      exact(row.after.client.find(x => x.path === original.path), original, "preexisting client preservation");
     exact([row.id, row.args], [specs[i].id, specs[i].args]); installed(row, specs[i], projects.agentplugins);
   }
+  acquisitionClosure(transcript.installer, e["acquisition.json"]);
+  scanReplay(transcript.installer, projects.agentplugins, e["scans.json"], e["acquisition.json"]);
   const preserve = e["preservation.json"];
   c.keys(preserve, ["inputs_before", "inputs_after", "projects_before", "projects_after", "author_homes_before", "author_homes_after", "custody_before", "custody_after"], "preservation");
   for (const name of ["inputs", "projects", "author_homes", "custody"]) exact(preserve[`${name}_before`], preserve[`${name}_after`]);
+  custodyCoverage(preserve.custody_before, e["preparation.json"]);
+  custodyCoverage(preserve.custody_after, e["preparation.json"]);
   exact(preserve.projects_before, projects);
   exact(preserve.inputs_before, e["preparation.json"].subjects, "preserved eighteen independently pinned subjects");
   c.keys(preserve.author_homes_before, c.PRODUCTS, "isolated author homes");
@@ -480,6 +751,7 @@ async function produce(options, signal) {
   assert.ok(!options.output.startsWith(options.work + "/") && !options.work.startsWith(options.output + "/") && options.work !== options.output);
   fs.mkdirSync(options.output, { mode: 0o700 }); fs.mkdirSync(options.work, { mode: 0o700 });
   const e = {}, rows = {}, projects = {}, binaries = {}, build = {}, contexts = {};
+  const acquisitionBodies = Object.create(null); let acquisitionTotal = 0;
   const frozenBefore = frozen.subjects.map(s => ({ file: path.relative(root, s.file), ...c.metadata(c.readFile(s.file)) }));
   const custodyBefore = inputCustody(root, frozen.subjects);
   const ownedTerminals = [];
@@ -504,7 +776,7 @@ async function produce(options, signal) {
       for (const spec of commands(p)) {
         const malformed = path.join(projectRoot, "skill/skills/broken");
         if (spec.id === "malformed-skill") {
-          fs.mkdirSync(malformed, { mode: 0o700 }); fs.writeFileSync(path.join(malformed, "SKILL.md"), "---\nname: [\n---\nBroken\n", { flag: "wx" });
+          fs.mkdirSync(malformed, { mode: 0o700 }); fs.writeFileSync(path.join(malformed, "SKILL.md"), BROKEN, { flag: "wx", mode: 0o600 });
         }
         const before = tree(projectRoot), r = await subprocess(binaries[p], spec.args, ctx, signal);
         const row = { id: spec.id, args: spec.args, ...r, before, after: tree(projectRoot) };
@@ -528,7 +800,16 @@ async function produce(options, signal) {
       // Genuine feed/scanner acquisition is retained separately. These are the
       // production cache names, not wildcard state exclusions or seeded inputs.
       const isAcquisition = x => /^(security(?:\/|$)|directory-v1-cache\.json$|discovery-v1-cache\.json$)/.test(x.path);
-      return { client: tree(client), state: all.filter(x => !isAcquisition(x)), acquisition: all.filter(isAcquisition) };
+      const acquisition = all.filter(isAcquisition);
+      const stateFile = path.join(install.env.AGENTPLUGINS_HOME, "state-v2.json");
+      for (const item of acquisition.filter(x => x.kind === "file")) {
+        const bytes = c.readFile(path.join(install.env.AGENTPLUGINS_HOME, item.path), 16 * LIMIT);
+        exact(c.metadata(bytes), { sha256: item.sha256, size: item.size }, "acquisition snapshot bytes");
+        if (!Object.hasOwn(acquisitionBodies, item.sha256)) { acquisitionTotal += bytes.length; assert.ok(acquisitionTotal <= 16 * LIMIT, "total acquisition byte bound"); }
+        acquisitionBodies[item.sha256] = bytes.toString("base64");
+      }
+      return { client: tree(client), state: all.filter(x => !isAcquisition(x)), acquisition,
+        state_document: all.some(x => x.path === "state-v2.json") ? c.readFile(stateFile, LIMIT).toString("utf8") : null };
     };
     for (const spec of installationCommands()) {
       const args = spec.args.map(a => a.replace("<source>", path.join(contexts.agentplugins.root, "projects")));
@@ -550,10 +831,14 @@ async function produce(options, signal) {
       inputs_after: after.subjects.map(s => ({ file: path.relative(root, s.file), ...c.metadata(c.readFile(s.file)) })),
       projects_before: projects, projects_after: afterProjects, author_homes_before: homesBefore, author_homes_after: homesAfter,
       custody_before: custodyBefore, custody_after: inputCustody(root, after.subjects) };
-    verifyJourney({ ...e, "host.json": {} }, pins);
-    observationGate(); // Unavailable capability is a failure diagnostic, never a pass stub.
+    e["acquisition.json"] = acquisitionBodies;
+    e["scans.json"] = observationGate(); // Unavailable capability is a failure diagnostic, never a pass stub.
+    // ReleaseScanner keeps neither its raw report stdout nor acquisition HTTP
+    // bytes. No scan record can be inferred from a cached assessment. A future
+    // reviewed observer must close that custody; production has no positive seam.
     e["host.json"] = { platform: process.platform, architecture: process.arch, machine: os.machine(), target: TARGET,
       observation: "whole-descendant-authoring-no-process-network/1" };
+    verifyJourney(e, pins);
     const tools = { go: { sha256: options.go_sha256, version: "go1.25.13" }, node: { sha256: c.digest(c.readFile(process.execPath)), version: process.version } };
     for (const file of FILES) fs.writeFileSync(path.join(options.output, file), c.encode(e[file]), { flag: "wx", mode: 0o400 });
     if (signal?.aborted) fail("cancelled before terminal");
