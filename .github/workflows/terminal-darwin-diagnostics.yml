@@ -32,16 +32,17 @@ jobs:
         with:
           go-version: '1.25.13'
           cache: false
-      - name: Run all 11 diagnostic cases (failures remain visible)
+      - name: Run original controls and bounded record probes (failures remain visible)
         working-directory: cli/plugin-kit-ai
         shell: bash
         run: |
           evidence="$RUNNER_TEMP/terminal-darwin-diagnostics"
           mkdir -p "$evidence/home" "$evidence/tmp" "$evidence/modcache" "$evidence/buildcache"
-          export HOME="$evidence/home" TMPDIR="$evidence/tmp"
+          export HOME="$evidence/home" USERPROFILE="$evidence/home" TMPDIR="$evidence/tmp"
+          export XDG_CONFIG_HOME="$evidence/home/config" XDG_DATA_HOME="$evidence/home/data" XDG_CACHE_HOME="$evidence/home/cache"
           export GOMODCACHE="$evidence/modcache" GOCACHE="$evidence/buildcache"
           set +e
-          go test -tags terminaldiagnostic -count=1 -v -timeout=90s -run '^TestDarwinInputHandoff$' ./internal/terminalprompts 2>&1 | tee "$evidence/probe.log"
+          go test -tags terminaldiagnostic -count=1 -v -timeout=90s -run '^TestDarwin(InputHandoff|RecordProbe)$' ./internal/terminalprompts 2>&1 | tee "$evidence/probe.log"
           probe_status=${PIPESTATUS[0]}
           printf '%s\n' "$probe_status" > "$evidence/exit-status.txt"
           exit "$probe_status"

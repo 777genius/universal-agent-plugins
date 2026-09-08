@@ -37,7 +37,9 @@ func TestDarwinInputHandoff(t *testing.T) {
 				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 				defer cancel()
 				cmd := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestDarwinInputHandoffChild$", "-test.v")
-				cmd.Env = []string{"HOME=" + t.TempDir(), "TMPDIR=" + t.TempDir(),
+				home := t.TempDir()
+				cmd.Env = []string{"HOME=" + home, "USERPROFILE=" + home,
+					"XDG_CONFIG_HOME=" + home, "XDG_DATA_HOME=" + home, "XDG_CACHE_HOME=" + home, "TMPDIR=" + t.TempDir(),
 					"DARWIN_HANDOFF_CASE=" + scenario, "DARWIN_HANDOFF_READER=" + reader}
 				out, err := cmd.CombinedOutput()
 				t.Logf("%s", out)
@@ -49,6 +51,41 @@ func TestDarwinInputHandoff(t *testing.T) {
 	}
 }
 
+// TestDarwinRecordProbe distinguishes queue loss from deferred canonical
+// processing, and tests record-sized reads through the existing cancel backends.
+// It is a bounded follow-up to native f57; no candidate is production policy.
+func TestDarwinRecordProbe(t *testing.T) {
+	for _, tc := range []struct{ scenario, reader string }{
+		{"queued-raw-before", "direct-record"},
+		{"queued-raw-after", "direct-record"},
+		{"queued-pendin", "direct-record"},
+		{"queued-pendin", "kqueue-record"},
+		{"queued-pendin", "select-record"},
+		{"partial-eof", "kqueue-record"},
+		{"partial-eof", "select-record"},
+		{"canonical-queued", "kqueue-record"},
+		{"canonical-queued", "select-record"},
+		{"cancel", "kqueue-record"},
+		{"cancel", "select-record"},
+	} {
+		t.Run(tc.scenario+"/"+tc.reader, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			cmd := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestDarwinInputHandoffChild$", "-test.v")
+			home := t.TempDir()
+			cmd.Env = []string{"HOME=" + home, "USERPROFILE=" + home,
+				"XDG_CONFIG_HOME=" + home, "XDG_DATA_HOME=" + home, "XDG_CACHE_HOME=" + home,
+				"TMPDIR=" + t.TempDir(), "DARWIN_HANDOFF_CASE=" + tc.scenario,
+				"DARWIN_HANDOFF_READER=" + tc.reader}
+			out, err := cmd.CombinedOutput()
+			t.Logf("%s", out)
+			if err != nil {
+				t.Fatalf("native record probe: %v (deadline: %v)", err, ctx.Err())
+			}
+		})
+	}
+}
+
 func TestDarwinInputHandoffChild(t *testing.T) {
 	scenario := os.Getenv("DARWIN_HANDOFF_CASE")
 	if scenario == "" {
@@ -56,6 +93,10 @@ func TestDarwinInputHandoffChild(t *testing.T) {
 	}
 	mode := os.Getenv("DARWIN_HANDOFF_READER")
 	master, slave := darwinHandoffPTY(t)
+	original, err := unix.IoctlGetTermios(int(slave.Fd()), unix.TIOCGETA)
+	if err != nil {
+		t.Fatal(err)
+	}
 	fmt.Printf("scenario=%s reader=%s slave=%s\n", scenario, mode, slave.Name())
 	write := func(s string) {
 		t.Helper()
@@ -64,7 +105,7 @@ func TestDarwinInputHandoffChild(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if scenario == "queued" {
+	if strings.HasPrefix(scenario, "queued") {
 		state, err := term.MakeRaw(int(slave.Fd()))
 		if err != nil {
 			t.Fatal(err)
@@ -89,18 +130,44 @@ func TestDarwinInputHandoffChild(t *testing.T) {
 		if err := owned.Close(); err != nil {
 			t.Fatal(err)
 		}
-		if err := term.Restore(int(slave.Fd()), state); err != nil {
-			t.Fatal(err)
+		if scenario != "queued-raw-before" {
+			if err := term.Restore(int(slave.Fd()), state); err != nil {
+				t.Fatal(err)
+			}
+			fmt.Println("rich reader closed; canonical mode restored")
 		}
-		fmt.Println("rich reader closed; canonical mode restored")
+		if scenario == "queued-raw-after" {
+			if _, err := term.MakeRaw(int(slave.Fd())); err != nil {
+				t.Fatal(err)
+			}
+			fmt.Println("returned to raw to inspect surviving bytes")
+		}
+		if scenario == "queued-raw-before" || scenario == "queued-raw-after" {
+			// Restore before the independent next-owner read, including on failure.
+			defer term.Restore(int(slave.Fd()), state)
+		}
+		if scenario == "queued-pendin" {
+			attrs, err := unix.IoctlGetTermios(int(slave.Fd()), unix.TIOCGETA)
+			if err != nil {
+				t.Fatal(err)
+			}
+			fmt.Printf("before PENDIN lflag=%#x iflag=%#x\n", attrs.Lflag, attrs.Iflag)
+			attrs.Lflag |= unix.PENDIN
+			if err := unix.IoctlSetTermios(int(slave.Fd()), unix.TIOCSETA, attrs); err != nil {
+				t.Fatal(err)
+			}
+			fmt.Println("requested PENDIN without flushing or adding input")
+		}
 	} else if scenario == "partial-eof" {
 		write("y\x04\x04") // Exactly the native partial-EOF fixture.
+	} else if scenario == "canonical-queued" {
+		write("n\nnext\n") // The next owner's line is already in the kernel queue.
 	}
 
 	var reader io.Reader = slave
-	if mode == "kqueue" || mode == "select" {
+	if strings.HasPrefix(mode, "kqueue") || strings.HasPrefix(mode, "select") {
 		var source cancelreader.File = slave
-		if mode == "select" {
+		if strings.HasPrefix(mode, "select") {
 			// Diagnostic only: the pinned library selects its select backend
 			// by this name. The descriptor still names the SAME fresh slave.
 			source = darwinSelectControl{slave}
@@ -109,8 +176,28 @@ func TestDarwinInputHandoffChild(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer cr.Close()
+		if scenario != "cancel" {
+			defer cr.Close()
+		}
 		reader = cr
+		if scenario == "cancel" {
+			ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+			defer cancel()
+			joined := make(chan struct{})
+			go func() { defer close(joined); <-ctx.Done(); cr.Cancel() }()
+			fmt.Println("record cancellation read begin")
+			var buf [4096]byte
+			n, err := cr.Read(buf[:])
+			<-joined
+			if n != 0 || !errors.Is(err, cancelreader.ErrCanceled) {
+				t.Fatalf("record cancellation: %d %v", n, err)
+			}
+			if err := cr.Close(); err != nil {
+				t.Fatal(err)
+			}
+			// Close has already released the cancel backend before handoff.
+			reader = nil
+		}
 	}
 	if mode == "production" {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
@@ -129,9 +216,9 @@ func TestDarwinInputHandoffChild(t *testing.T) {
 		} else if line != "" || !errors.Is(err, prompt.ErrPromptInputClosed) {
 			t.Fatalf("partial EOF must fail closed: %q %v", line, err)
 		}
-	} else {
+	} else if reader != nil {
 		size := 1
-		if mode == "direct-record" {
+		if strings.HasSuffix(mode, "record") {
 			size = 4096
 		}
 		var got strings.Builder
@@ -158,7 +245,21 @@ func TestDarwinInputHandoffChild(t *testing.T) {
 	}
 	// A single direct read exposes a residual EOF record instead of silently
 	// retrying past it. This is the same next-line contract as the shell probe.
-	write("next\n")
+	if strings.HasPrefix(scenario, "queued-raw") {
+		if err := unix.IoctlSetTermios(int(slave.Fd()), unix.TIOCSETA, original); err != nil {
+			t.Fatal(err)
+		}
+	}
+	attrs, err := unix.IoctlGetTermios(int(slave.Fd()), unix.TIOCGETA)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if *attrs != *original {
+		t.Fatalf("terminal state changed: got %+v want %+v", attrs, original)
+	}
+	if scenario != "canonical-queued" {
+		write("next\n")
+	}
 	fmt.Println("same-slave next-line read begin")
 	var next [32]byte
 	n, err := slave.Read(next[:])
