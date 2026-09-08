@@ -617,6 +617,27 @@ function publicInfoClient(value, client) {
     Object.assign(expected, { receipt_reconciled: false, native_discovery_reconciled: false, native_identity_state: "indeterminate" });
   exact(value, expected, "public info client matches checked registration and isolated lifecycle observations");
 }
+function publicInfoInstallation(value, registration, client) {
+  // This journey installs one local generated package. read.go's publicSource
+  // returns local for its empty/absolute canonical source, with no repository
+  // or Directory origin. Do not invent remote/Directory readback support here.
+  const source = registration.source;
+  const canonical = (source.canonical_source || "").replace(/^\p{White_Space}+|\p{White_Space}+$/gu, "");
+  assert.ok(!source.repository && (!canonical || path.posix.isAbsolute(canonical)), "public info local source registration");
+  assert.ok(registration.directory == null, "public info local registration has no Directory origin");
+  if (registration.needs_rebind !== undefined) exact(typeof registration.needs_rebind, "boolean");
+  // installedIdentity has already checked the single materialized client's
+  // tree/manifest against the package. read_directory.go convergenceState
+  // therefore has no pending client (and no Directory release sequence).
+  const expected = { installation_id: registration.installation_id, name: registration.declared_name,
+    source: "local", clients: value.clients, mixed_version: false };
+  if (registration.package.version) expected.version = registration.package.version;
+  if (registration.needs_rebind === true) expected.needs_rebind = true;
+  exact(value, expected, "public info installation matches checked registration and Go omission rules");
+  assert.ok(Array.isArray(value.clients), "public info installation clients array");
+  exact(value.clients.length, 1, "public info installation client count");
+  publicInfoClient(value.clients[0], client);
+}
 function installedIdentity(state, project) {
   const document = stateDocument(state); exact(document.installations.length, 1);
   const registration = document.installations[0], subject = packageIdentity(project);
@@ -696,10 +717,7 @@ function installed(row, spec, projects) {
   } else if (verb === "info") {
     exact(row.before, row.after, "info is read only");
     const identity = installedIdentity(row.before, projects.skill);
-    exact(r.data.installation_id, identity.registration.installation_id, "info installed identity");
-    exact(r.data.name, "skill"); exact(r.data.version, "0.1.0");
-    exact(r.data.clients.length, 1);
-    publicInfoClient(r.data.clients[0], identity.client);
+    publicInfoInstallation(r.data, identity.registration, identity.client);
   } else {
     exact(row.before, row.after, "list is read only");
     exact(r.data.installations, []); exact(stateDocument(row.after).installations, []);

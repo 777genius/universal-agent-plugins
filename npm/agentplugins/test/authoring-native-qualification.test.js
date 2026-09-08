@@ -119,6 +119,44 @@ const publicInfoChanges = {
   "version claim": v => { v.client_version = "1.0.0"; },
   "discovery evidence": v => { v.native_discovery_evidence = { basis: "invented" }; }
 };
+// Enclosing read.go publicInstallation mutations; private additions use the
+// actual checked binding so privacy failures cannot be mistaken for bad IDs.
+const publicInstallationChanges = {
+  "wrong installation_id": v => { v.installation_id = "00000000-0000-4000-8000-000000000000"; },
+  "wrong name": v => { v.name = "foreign"; },
+  "wrong version": v => { v.version = "9.0.0"; },
+  "wrong source": v => { v.source = "https://example.invalid/foreign"; },
+  "mixed version": v => { v.mixed_version = true; },
+  "wrong mixed version type": v => { v.mixed_version = "false"; },
+  "false rebind claim": v => { v.needs_rebind = true; },
+  "explicit false rebind": v => { v.needs_rebind = false; },
+  "null rebind": v => { v.needs_rebind = null; },
+  "empty convergence": v => { v.convergence_action = ""; },
+  "null convergence": v => { v.convergence_action = null; },
+  "false convergence": v => { v.convergence_action = "update"; },
+  "production-format false convergence": v => {
+    v.mixed_version = true;
+    v.convergence_action = "run `agentplugins update " + v.installation_id + " --target codex` to converge the remaining clients";
+  },
+  "invented directory": v => { v.directory = {}; },
+  "null directory": v => { v.directory = null; },
+  "invented warnings": v => { v.warnings = [{ code: "invented" }]; },
+  "empty warnings": v => { v.warnings = []; },
+  "null warnings": v => { v.warnings = null; },
+  "unknown field": v => { v.private_claim = true; },
+  "empty clients": v => { v.clients = []; },
+  "null clients": v => { v.clients = null; },
+  "extra client": v => { v.clients.push(structuredClone(v.clients[0])); },
+  "missing installation_id": v => { delete v.installation_id; },
+  "missing name": v => { delete v.name; },
+  "missing version": v => { delete v.version; },
+  "missing source": v => { delete v.source; },
+  "missing clients": v => { delete v.clients; },
+  "missing mixed_version": v => { delete v.mixed_version; },
+  "private target_locator": (v, binding) => { v.target_locator = binding.target_locator; },
+  "private physical_artifact_id": (v, binding) => { v.physical_artifact_id = binding.physical_artifact_id; },
+  "private client_binding_id": (v, binding) => { v.client_binding_id = binding.client_binding_id; },
+};
 function fixtureProgram() {
   // Deliberately independent response implementation with actual mkdir/write/
   // state mutations in each child. A zero status without those effects is tested.
@@ -131,6 +169,7 @@ const product = selected.includes('plugin-kit-ai') ? 'plugin-kit-ai' : 'agentplu
 fs.appendFileSync(cfg.log, JSON.stringify({selected,argv,env:process.env})+'\n');
 const scenario = cfg.scenario;
 ${publicClientFixture.toString()}
+const publicInstallationChanges = {${Object.entries(publicInstallationChanges).map(([key, fn]) => JSON.stringify(key) + ":" + fn.toString()).join(",")}};
 const publicInfoChanges = {${Object.entries(publicInfoChanges).map(([key, fn]) => JSON.stringify(key) + ":" + fn.toString()).join(",")}};
 const profiles = [{"id": "agent-plugins/1.0.0", "revision": "ff8ab5e392cc87bd88d87c060815a87490e51003", "digest": "sha256:97a658b7dca3ce1b4c2266b95da300fa51d9dc4ade59d73168e5f9104272da18"}, {"id": "agent-skills/2026-09-06", "revision": "69ef37e9424c0a7ea9dd2293b559e43ec8176379", "digest": "sha256:b9079c0c10b7930e8c6a20ff2bc10cda2a3343c55185120e3f1116a1a529b220"}, {"id": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json", "revision": "1.0.0", "digest": "sha256:0a4aad95ce337878ad38802ebf0daa3fde76abe3f65400c86bcbb1ec0b3ab883"}, {"id": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json", "revision": "1.0.0", "digest": "sha256:6539175bfcdf43085855183e86da40ea94b166547a72b47ae9a0a390516d3acb"}, {"id": "author-document-bounds/v1", "revision": "1", "digest": "sha256:4b8ab8fd50481ccd1a0b777dcbbfa06cf89516a5ea61ce09d56d6dd6a2c43004"}];
 function output(value, status=0) {
@@ -274,7 +313,8 @@ const physical='skill-'+sha(installationID).slice(0,12), projection='managed/cli
 function registration(state,root){
   const subject=identity(root),revision={version:'0.1.0',...subject};
   const target=path.join(scenario==='wrong-target-locator'?'/not-the-owned-installer-root':state,projection),binding='client_'+sha([installationID,'codex','user',target].join('\0')).slice(0,24);
-  return {installation_id:installationID,declared_name:'skill',source:{tree_digest:subject.tree_digest},
+  return {installation_id:installationID,declared_name:'skill',source:{tree_digest:subject.tree_digest,...(scenario.startsWith('installation-rebind')?{canonical_source:root}:{})},
+    ...(scenario.startsWith('installation-rebind')?{needs_rebind:true}:{}),
     package:{declared_name:'skill',version:'0.1.0',manifest_digest:subject.manifest_digest},
     clients:{[binding]:{client_binding_id:binding,client_id:'codex',scope:'user',materialization:'materialized',physical_artifact_id:physical,
       activation:'manual_activation_required',authentication:'not_checked',policy:'allowed',verification:'installation_verified',
@@ -327,6 +367,12 @@ function installer(args) {
     data.installation_id=installationID;data.name='skill';data.version='0.1.0';data.source='local';data.mixed_version=false;
     data.clients=Object.values(JSON.parse(fs.readFileSync(path.join(state,'state-v2.json'))).installations[0].clients).map(publicClientFixture);
     Object.assign(data.clients[0],{receipt_reconciled:false,native_discovery_reconciled:false,native_identity_state:'indeterminate'});
+    const reg=JSON.parse(fs.readFileSync(path.join(state,'state-v2.json'))).installations[0];
+    if(reg.needs_rebind)data.needs_rebind=true;
+    if(scenario==='installation-rebind/missing')delete data.needs_rebind;
+    if(scenario==='installation-rebind/false')data.needs_rebind=false;
+    if(scenario==='installation-rebind/string')data.needs_rebind='true';
+    if(scenario.startsWith('public-installation/'))publicInstallationChanges[scenario.slice('public-installation/'.length)](data,Object.values(reg.clients)[0]);
     if(scenario.startsWith('public-info/'))publicInfoChanges[scenario.slice('public-info/'.length)](data.clients[0]);
   }
   else if(verb==='update')data.result={installation_id:installationID,mutated:false,no_change:scenario!=='wrong-update'};
@@ -436,6 +482,14 @@ test("fixed production orchestration and closed reader with subprocess fixtures 
   for (const key of ["target_locator", "physical_artifact_id", "client_binding_id"]) {
     assert.ok(!fields.includes(key)); assert.equal(Object.hasOwn(value.clients[0], key), false);
   }
+  const installationShape = go.split("type publicInstallation struct {")[1].split("\n}")[0];
+  const installationFields = [...installationShape.matchAll(/`json:"([^",]+)(,omitempty)?"`/g)];
+  assert.deepEqual(installationFields.filter(m => !m[2]).map(m => m[1]).sort(),
+    ["installation_id", "name", "source", "clients", "mixed_version"].sort());
+  assert.deepEqual(value, { installation_id: "12345678-1234-4234-8234-123456789abc", name: "skill",
+    version: "0.1.0", source: "local", clients: value.clients, mixed_version: false });
+  for (const key of ["target_locator", "physical_artifact_id", "client_binding_id"])
+    assert.ok(!installationFields.some(m => m[1] === key));
   assert.ok(!info.stdout.includes(f.sandbox));
   assert.deepEqual(info.before.state_document_source, info.after.state_document_source);
   // The public stdout is preserved byte-for-byte rather than normalized into
@@ -446,6 +500,75 @@ test("fixed production orchestration and closed reader with subprocess fixtures 
   assert.ok(calls.some(x=>x.argv[0]==='remove'));
   assert.ok(calls.every(x=>!x.argv.includes('--auth-complete')&&!x.argv.includes('--accept-security-risk')));
   assert.throws(()=>promotion.requireNativeContracts(result),/unknown or duplicate terminal lane|NATIVE_EVIDENCE_INTEGRATION_REQUIRED/);
+});
+for (const name of Object.keys(publicInstallationChanges)) {
+  test(`public installation subprocess rejects ${name}`, async t => {
+    const f = fixture(); subprocessFixtures(t, f, "public-installation/" + name);
+    await assert.rejects(internal(true).produce(f.options), /public info installation/);
+    noTerminal(f);
+    assert.ok(fs.existsSync(path.join(f.options.output, "diagnostic.json")));
+  });
+}
+for (const name of ["missing", "false", "string"]) {
+  test(`public installation subprocess rejects registered rebind ${name}`, async t => {
+    const f = fixture(); subprocessFixtures(t, f, "installation-rebind/" + name);
+    await assert.rejects(internal(true).produce(f.options), /public info installation/);
+    noTerminal(f);
+  });
+}
+test("public installation replay rejects all coherently rehashed enclosing contradictions", async t => {
+  const f = fixture(); subprocessFixtures(t, f); await internal(true).produce(f.options);
+  const root = f.options.output, expected = expectations(f);
+  assert.equal(fixtureReader(root, f.root, f.pins, expected).length, 2);
+  const originals = Object.fromEntries(fs.readdirSync(root).map(file => [file, fs.readFileSync(path.join(root, file))]));
+  const put = (file, bytes) => { fs.chmodSync(path.join(root, file), 0o600); fs.writeFileSync(path.join(root, file), bytes); };
+  for (const [name, change] of Object.entries(publicInstallationChanges)) await t.test(name, () => {
+    const transcripts = JSON.parse(originals["transcripts.json"]), row = transcripts.installer.find(r => r.id === "info");
+    const reg = JSON.parse(row.before.state_document).installations[0], value = JSON.parse(row.stdout);
+    change(value.data, Object.values(reg.clients)[0]); row.stdout = JSON.stringify(value) + "\n";
+    put("transcripts.json", c.encode(transcripts));
+    for (const p of c.PRODUCTS) {
+      const file = p + "-terminal.json", terminal = JSON.parse(originals[file]);
+      for (const pin of terminal.evidence) Object.assign(pin, c.metadata(fs.readFileSync(path.join(root, pin.file))));
+      put(file, c.encode(terminal));
+      for (const pin of terminal.evidence)
+        assert.deepEqual(c.metadata(fs.readFileSync(path.join(root, pin.file))), { size: pin.size, sha256: pin.sha256 });
+    }
+    assert.throws(() => fixtureReader(root, f.root, f.pins, expected), /public info installation/);
+    for (const [file, bytes] of Object.entries(originals)) put(file, bytes);
+  });
+  assert.equal(fixtureReader(root, f.root, f.pins, expected).length, 2);
+});
+test("public installation reports registered needs_rebind with Go omission and exact stdout", async t => {
+  const f = fixture(); subprocessFixtures(t, f, "installation-rebind");
+  // Deliberately noncanonical public bytes must survive both assertion paths.
+  const script = path.join(f.sandbox, "child-fixture.js"), source = fs.readFileSync(script, "utf8");
+  const marker = "else process.stdout.write(JSON.stringify(value)+'\\n');";
+  assert.ok(source.includes(marker));
+  fs.writeFileSync(script, source.replace(marker,
+    "else if(value.command==='info')process.stdout.write(' \\n'+JSON.stringify(value,null,2)+'\\n\\t'); " + marker));
+  assert.equal((await internal(true).produce(f.options)).length, 2);
+  assert.equal(fixtureReader(f.options.output, f.root, f.pins, expectations(f)).length, 2);
+  const file = path.join(f.options.output, "transcripts.json"), transcripts = JSON.parse(fs.readFileSync(file));
+  const row = transcripts.installer.find(r => r.id === "info"), value = JSON.parse(row.stdout);
+  assert.equal(JSON.parse(row.before.state_document).installations[0].needs_rebind, true);
+  assert.deepEqual(Object.keys(value.data).sort(), ["installation_id", "name", "version", "source", "clients", "mixed_version", "needs_rebind"].sort());
+  assert.equal(value.data.needs_rebind, true); assert.equal(value.data.mixed_version, false);
+  assert.equal(row.stdout, " \n" + JSON.stringify(value, null, 2) + "\n\t");
+  assert.deepEqual(row.before, row.after);
+  const originals = Object.fromEntries(fs.readdirSync(f.options.output).map(n => [n, fs.readFileSync(path.join(f.options.output, n))]));
+  for (const replacement of [undefined, false, "true"]) {
+    const changed = structuredClone(value);
+    if (replacement === undefined) delete changed.data.needs_rebind; else changed.data.needs_rebind = replacement;
+    row.stdout = JSON.stringify(changed) + "\n";
+    fs.chmodSync(file, 0o600); fs.writeFileSync(file, c.encode(transcripts));
+    for (const p of c.PRODUCTS) {
+      const name = p + "-terminal.json", terminal = JSON.parse(originals[name]);
+      for (const pin of terminal.evidence) Object.assign(pin, c.metadata(fs.readFileSync(path.join(f.options.output, pin.file))));
+      fs.chmodSync(path.join(f.options.output, name), 0o600); fs.writeFileSync(path.join(f.options.output, name), c.encode(terminal));
+    }
+    assert.throws(() => fixtureReader(f.options.output, f.root, f.pins, expectations(f)), /public info installation/);
+  }
 });
 for (const name of ["scope", "materialization", "revision", "target_locator", "physical_artifact_id", "client_binding_id"]) {
   test(`public info subprocess rejects ${name}`, async t => {
