@@ -33,10 +33,10 @@ export async function useRegistryPage(options: RegistryPageOptions = {}): Promis
 
   const { data, error } = await useAsyncData<RegistryIndex>(
     key,
-    () => $fetch<RegistryIndex>(endpoint),
+    () => $fetch<RegistryIndex>(endpoint, { responseType: 'json' }),
     { deep: false },
   );
-  if (error.value || !data.value) {
+  if (error.value || !data.value || !Array.isArray(data.value.plugins)) {
     throw createError({
       statusCode: 500,
       statusMessage: 'Plugin directory is unavailable',
