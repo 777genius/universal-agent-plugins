@@ -34,7 +34,7 @@ on:
         description: Independently selected preparation ZIP SHA256 (promotion only)
         required: false
       promotion_operation:
-        description: Promote exact drafts or explicitly reconcile a partial public pair
+        description: Promote exact drafts or reconcile interrupted drafts/partial publication
         required: true
         default: promote
         type: choice
@@ -537,12 +537,18 @@ jobs:
       - name: Reject missing native terminal contracts before protected effects
         env:
           PROMOTION_RECORD: ${{ inputs.promotion_record }}
+          TAG: ${{ inputs.tag }}
+          WORKFLOW_REF: ${{ github.ref }}
+          KIT_VERSION: ${{ inputs.plugin_kit_version }}
+          WORKFLOW_SHA: ${{ github.sha }}
         run: |
           node <<'NODE'
           const p = require('./npm/agentplugins/scripts/authoring-promotion');
           const input = process.env.PROMOTION_RECORD || '{}';
           if (Buffer.byteLength(input) > 1024 * 1024) throw Error('bounded promotion input required');
-          const record = JSON.parse(input);
+          const selected = { tag: process.env.TAG, ref: process.env.WORKFLOW_REF, source: process.env.WORKFLOW_SHA,
+            versions: { agentplugins: process.env.TAG.slice('agentplugins-v'.length), 'plugin-kit-ai': process.env.KIT_VERSION } };
+          const record = p.validateSelection(Buffer.from(input), selected);
           p.requireNativeContracts(record.qualification?.lanes || []);
           NODE
 
@@ -572,6 +578,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           PROMOTION_RECORD: ${{ inputs.promotion_record }}
+          TAG: ${{ inputs.tag }}
+          WORKFLOW_REF: ${{ github.ref }}
+          KIT_VERSION: ${{ inputs.plugin_kit_version }}
+          WORKFLOW_SHA: ${{ github.sha }}
           PREPARATION_RUN: ${{ inputs.preparation_run }}
           PREPARATION_ATTEMPT: ${{ inputs.preparation_attempt }}
           PREPARATION_ARTIFACT: ${{ inputs.preparation_artifact }}
@@ -582,7 +592,9 @@ jobs:
           const fs = require('node:fs');
           const path = require('node:path');
           const p = require('./npm/agentplugins/scripts/authoring-promotion');
-          const record = p.admitRecord(Buffer.from(process.env.PROMOTION_RECORD));
+          const selected = { tag: process.env.TAG, ref: process.env.WORKFLOW_REF, source: process.env.WORKFLOW_SHA,
+            versions: { agentplugins: process.env.TAG.slice('agentplugins-v'.length), 'plugin-kit-ai': process.env.KIT_VERSION } };
+          const record = p.admitRecord(Buffer.from(process.env.PROMOTION_RECORD), selected);
           if (record.identity.commit !== process.env.SOURCE_SHA) throw Error('exact promotion source required');
           const scratch = fs.mkdtempSync(path.join(process.env.RUNNER_TEMP, 'paired-promotion-'));
           const preparation = { run_id: Number(process.env.PREPARATION_RUN), run_attempt: Number(process.env.PREPARATION_ATTEMPT),
@@ -591,7 +603,7 @@ jobs:
           const recordFile = path.join(scratch, 'authoring-promotion.json');
           fs.writeFileSync(recordFile, p.encodeRecord(record), { flag: 'wx', mode: 0o400 });
           fs.writeFileSync(path.join(scratch, 'options.json'), JSON.stringify({ record: recordFile,
-            root: path.join(scratch, 'frozen'), scratch: path.join(scratch, 'provider'), workflow_sha: process.env.SOURCE_SHA, preparation }), { flag: 'wx' });
+            root: path.join(scratch, 'frozen'), scratch: path.join(scratch, 'provider'), workflow_sha: process.env.SOURCE_SHA, preparation, selected }), { flag: 'wx' });
           fs.mkdirSync(path.join(scratch, 'provider'), { mode: 0o700 });
           fs.appendFileSync(process.env.GITHUB_ENV, `PROMOTION_ROOT=${scratch}\n`);
           NODE
@@ -618,7 +630,7 @@ jobs:
           node <<'NODE'
           const fs = require('node:fs');
           const result = JSON.parse(fs.readFileSync(`${process.env.PROMOTION_ROOT}/admitted.json`));
-          if (result.status !== 'qualified-for-promotion' || result.subjects.length !== 19) throw Error('exact admitted subjects required');
+          if (!['qualified-for-promotion', 'reconciliation-required'].includes(result.status) || result.subjects.length !== 19) throw Error('exact admitted subjects required');
           fs.appendFileSync(process.env.GITHUB_OUTPUT, `sign_required=${result.sign_required}\npaths<<SUBJECTS\n${result.subjects.map(s => s.file).join('\n')}\nSUBJECTS\n`);
           NODE
       - uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2

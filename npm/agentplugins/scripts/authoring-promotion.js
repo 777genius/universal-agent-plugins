@@ -126,8 +126,15 @@ function requireNativeContracts(lanes) {
   fail(`NATIVE_EVIDENCE_INTEGRATION_REQUIRED: missing lanes [${missing.join(", ")}]; unsupported contracts [${unsupported.join(", ")}]. ` +
     "No accepted frozen-pair all-target terminal producer/schema is integrated. dual-authoring-public-native/v1 is Linux fixture evidence with false release claims; private-packed or SLSA build success cannot qualify this pair. Signing and promotion are disabled.");
 }
-function admitRecord(body) {
+function validateSelection(body, selected) {
   const record = decodeRecord(body);
+  c.keys(selected, ["tag", "ref", "source", "versions"], "selected promotion identity");
+  exact(selected, { tag: record.products.agentplugins.tag, ref: `refs/tags/${record.products.agentplugins.tag}`,
+    source: record.identity.commit, versions: record.identity.versions }, "selected promotion identity");
+  return record;
+}
+function admitRecord(body, selected) {
+  const record = validateSelection(body, selected);
   requireNativeContracts(record.qualification.lanes);
   return record; // Unreachable until real native terminal adapters are reviewed.
 }
@@ -306,28 +313,31 @@ function inspectRelease(record, p, cwd) {
   const release = api(`releases/${id}`, cwd);
   if (release.id !== id || release.tag_name !== tag(record.identity, p) || typeof release.draft !== "boolean" || release.prerelease !== false) fail("release identity/state mismatch");
   const expected = releasePins(record, p);
-  if (!Array.isArray(release.assets) || release.assets.length !== expected.length) fail("release asset allowlist mismatch");
-  const seen = new Set();
+  if (!Array.isArray(release.assets) || release.assets.length > expected.length) fail("release asset allowlist mismatch");
+  const seen = new Set(), ids = new Set();
   for (const a of release.assets) {
     const pin = expected.find(x => x.name === a.name);
-    if (!pin || seen.has(a.name) || a.state !== "uploaded" || a.digest !== `sha256:${pin.sha256}`) fail("release asset bytes/digest mismatch");
+    if (!pin || seen.has(a.name) || ids.has(a.id) || a.state !== "uploaded" || a.digest !== `sha256:${pin.sha256}`) fail("release asset bytes/digest mismatch");
     integer(a.id); integer(a.size, 128 * LIMIT); if (pin.size !== undefined) exact(a.size, pin.size, "release size");
     const bytes = gh(["api", "--hostname", "github.com", "-H", "Accept: application/octet-stream",
       `repos/${REPOSITORY}/releases/assets/${a.id}`], cwd, 128 * LIMIT, null);
     if (bytes.length !== a.size || c.digest(bytes) !== pin.sha256) fail("downloaded release asset bytes mismatch");
-    seen.add(a.name);
+    seen.add(a.name); ids.add(a.id);
   }
-  return release;
+  const missing_assets = expected.filter(pin => !seen.has(pin.name)).map(pin => pin.name);
+  if (missing_assets.length && !release.draft) fail("incomplete public release");
+  return { ...release, missing_assets };
 }
 function inspectPair(record, cwd) {
   const pair = c.PRODUCTS.map(p => inspectRelease(record, p, cwd));
   // This describes observed state only; it never authorizes a write.
-  const states = pair.map(r => r === null ? "absent" : r.draft ? "draft" : "public");
-  return { pair, states, reconciliation_required: states.includes("public") && !states.every(s => s === "public") };
+  const states = pair.map(r => r === null ? "absent" : r.missing_assets.length ? "incomplete-draft" : r.draft ? "draft" : "public");
+  return { pair, states, reconciliation_required: states.includes("incomplete-draft") ||
+    (states.includes("public") && !states.every(s => s === "public")) };
 }
 
 function options(v) {
-  c.keys(v, ["record", "root", "scratch", "workflow_sha", "preparation"], "promotion options");
+  c.keys(v, ["record", "root", "scratch", "workflow_sha", "preparation", "selected"], "promotion options");
   for (const name of ["root", "scratch"]) c.safeDirectory(v[name]);
   if (v.root === v.scratch || v.root.startsWith(v.scratch + path.sep) || v.scratch.startsWith(v.root + path.sep)) fail("scratch and inputs must be disjoint");
   if (typeof v.record !== "string" || !path.isAbsolute(v.record) || path.basename(v.record) !== "authoring-promotion.json") fail("absolute authoring-promotion.json required");
@@ -336,7 +346,7 @@ function options(v) {
 }
 function admittedInputs(input) {
   const o = options(input);
-  const record = admitRecord(c.readFile(o.record, LIMIT)); // Before gh, output or attestation.
+  const record = admitRecord(c.readFile(o.record, LIMIT), o.selected); // Before gh, output or attestation.
   exact(o.workflow_sha, record.identity.commit, "integrated workflow source");
   cliVersion(o.scratch);
   inspectArtifact(o.preparation, WORKFLOW, record.identity.commit, o.scratch);
@@ -356,43 +366,63 @@ function verifyAll(state) {
   }, state.o.scratch);
 }
 function promote(input, reconciliation = false) {
-  let state = admittedInputs(input);
-  verifyAll(state);
+  return promotePair(() => { const state = admittedInputs(input); verifyAll(state); return state; }, reconciliation);
+}
+// Private sequencing seam: the only production caller supplies fresh admission
+// AND signature verification. It is not exported or configurable through input.
+function promotePair(recheck, reconciliation) {
+  let state = recheck();
   let observed = inspectPair(state.record, state.o.scratch);
   if (observed.reconciliation_required && !reconciliation) fail("PARTIAL_NATIVE_PROMOTION: exact pair reconciliation required; no automatic second publication");
   if (observed.states.every(s => s === "public")) return { status: "qualified-for-promotion", public_readback: observed.states };
-  if (reconciliation && !observed.reconciliation_required) fail("explicit reconciliation requires an observed partial pair");
+  if (reconciliation && !observed.reconciliation_required && !observed.pair.some(r => r?.draft)) fail("explicit reconciliation requires an existing draft or partial pair");
+  const expectedStates = observed.states.map(s => s === "public" ? "public" : "draft");
+  const ids = observed.pair.map(r => r?.id ?? null);
+  const readPair = () => {
+    const next = inspectPair(state.record, state.o.scratch);
+    next.pair.forEach((r, i) => exact(r?.id ?? null, ids[i], "release identity changed"));
+    return next;
+  };
   // Draft creation is possible only after real admission and all 19 signatures.
   for (const p of c.PRODUCTS) {
-    state = admittedInputs(input); verifyAll(state);
-    const existing = inspectRelease(state.record, p, state.o.scratch);
-    if (existing === null) {
+    state = recheck();
+    const index = c.PRODUCTS.indexOf(p);
+    const existing = readPair().pair[index];
+    if (existing === null || existing.missing_assets.length) {
+      if (existing && !reconciliation) fail("incomplete draft requires explicit reconciliation");
       const projection = path.join(state.o.root, p);
-      const files = releasePins(state.record, p).map(pin => {
+      const files = releasePins(state.record, p).filter(pin => !existing || existing.missing_assets.includes(pin.name)).map(pin => {
         if (pin.name === "authoring-promotion.json") return state.o.record;
         if (pin.name === "candidate.json") return path.join(state.o.root, "candidate", pin.name);
         if (pin.name === "pair-prepared.json") return path.join(state.o.root, pin.name);
         return path.join(projection, pin.name);
       });
       for (const product of c.PRODUCTS) checkTag(state.record, product, state.o.scratch);
-      gh(["release", "create", tag(state.record.identity, p), ...files, "--repo", REPOSITORY, "--verify-tag", "--target", state.record.identity.commit,
+      if (existing) gh(["release", "upload", tag(state.record.identity, p), ...files, "--repo", REPOSITORY], state.o.scratch);
+      else gh(["release", "create", tag(state.record.identity, p), ...files, "--repo", REPOSITORY, "--verify-tag", "--target", state.record.identity.commit,
         "--draft", "--title", tag(state.record.identity, p), "--notes", "Qualified frozen authoring pair; publication is reconciled separately."], state.o.scratch);
+      const after = inspectRelease(state.record, p, state.o.scratch);
+      if (!after || !after.draft || after.missing_assets.length) fail("draft preparation incomplete; reconcile exact pair");
+      if (existing) exact(after.id, existing.id, "draft identity changed during upload");
+      ids[index] = after.id;
     } else if (!existing.draft && !reconciliation) fail("release changed during draft preparation; reconcile exact pair");
   }
+  observed = readPair();
+  if (!observed.states.every(s => s === "draft" || s === "public")) fail("complete pair required before publication");
+  exact(observed.states, expectedStates, "pair changed during draft preparation");
   for (const p of c.PRODUCTS) {
-    state = admittedInputs(input); verifyAll(state);
-    observed = inspectPair(state.record, state.o.scratch);
+    state = recheck();
+    observed = readPair();
     const index = c.PRODUCTS.indexOf(p);
-    if (reconciliation && observed.states[index] === "public") continue;
-    if (reconciliation) {
-      if (observed.states[index] !== "draft" || observed.states[1 - index] !== "public") fail("partial pair changed before reconciliation");
-    } else exact(observed.states, index === 0 ? ["draft", "draft"] : ["public", "draft"], "pair changed before publication");
+    exact(observed.states, expectedStates, "pair changed before publication");
+    if (observed.states[index] === "public") continue;
     // No retry on uncertain response. The next invocation stops on partial state.
     for (const product of c.PRODUCTS) checkTag(state.record, product, state.o.scratch);
     try { gh(["release", "edit", tag(state.record.identity, p), "--repo", REPOSITORY, "--draft=false"], state.o.scratch); }
     catch { fail(`PARTIAL_NATIVE_PROMOTION: ${p} mutation uncertain; inspect both exact tags/assets before any further action`); }
+    expectedStates[index] = "public";
   }
-  state = admittedInputs(input); verifyAll(state); observed = inspectPair(state.record, state.o.scratch);
+  state = recheck(); observed = readPair();
   exact(observed.states, ["public", "public"], "both public readbacks required");
   return { status: "qualified-for-promotion", public_readback: observed.states };
 }
@@ -404,17 +434,17 @@ function main(args) {
   const state = admittedInputs(value);
   const observed = inspectPair(state.record, state.o.scratch);
   if (observed.reconciliation_required && args[0] !== "admit-reconciliation") fail("PARTIAL_NATIVE_PROMOTION: reconcile before signing");
-  if (args[0] === "admit-reconciliation" && !observed.reconciliation_required) fail("reconciliation requires partial public pair");
+  if (args[0] === "admit-reconciliation" && !observed.reconciliation_required && !observed.pair.some(r => r?.draft)) fail("reconciliation requires an incomplete draft or partial public pair");
   // Resuming an exact record keeps the original signing invocation. A later run
   // reuses/verifies those signatures instead of adding a different invocation.
-  const signRequired = String(state.record.producer.run_id) === process.env.GITHUB_RUN_ID &&
+  const signRequired = args[0] !== "admit-reconciliation" && String(state.record.producer.run_id) === process.env.GITHUB_RUN_ID &&
     String(state.record.producer.run_attempt) === process.env.GITHUB_RUN_ATTEMPT;
   if (!signRequired) verifyAll(state);
-  return { status: "qualified-for-promotion", subjects: state.subjects, sign_required: signRequired };
+  return { status: observed.states.includes("incomplete-draft") ? "reconciliation-required" : "qualified-for-promotion", missing_assets: observed.pair.map(r => r?.missing_assets ?? []), subjects: state.subjects, sign_required: signRequired };
 }
 if (require.main === module) {
   try { process.stdout.write(JSON.stringify(main(process.argv.slice(2))) + "\n"); }
   catch (error) { process.stderr.write(`authoring promotion: ${error.message}\n`); process.exitCode = 1; }
 }
-module.exports = { SCHEMA, WORKFLOW, GH_VERSION, LANES, encodeRecord, decodeRecord, admitRecord, requireNativeContracts,
+module.exports = { SCHEMA, WORKFLOW, GH_VERSION, LANES, encodeRecord, decodeRecord, validateSelection, admitRecord, requireNativeContracts,
   inspectArtifact, acquireArtifact, mapVerifiedOutput, verifySubject, frozenSubjects, releasePins, inspectPair, promote };

@@ -72,6 +72,10 @@ func TestStableReleaseRequiresVerifiedReproducibleBootstrapBeforeBuild(t *testin
 // Parse the job graph as well as executing its preflight shell. A new job or
 // dispatch mode must not accidentally inherit the publication permissions.
 type producerWorkflow struct {
+	Concurrency struct {
+		Group  string `yaml:"group"`
+		Cancel bool   `yaml:"cancel-in-progress"`
+	} `yaml:"concurrency"`
 	Name string `yaml:"name"`
 	On   struct {
 		Run struct {
@@ -402,6 +406,26 @@ func TestReleaseDownstreamEventIsolationNegativeControls(t *testing.T) {
 func TestReleasePairedPromotionProtectedGraph(t *testing.T) {
 	w := readProducerWorkflow(t, "agentplugins-release.yml")
 	admission, signing := w.Jobs["paired-promotion-admission"], w.Jobs["paired-sign-and-promote"]
+	if w.Concurrency.Group != "agentplugins-release-${{ inputs.tag }}" || w.Concurrency.Cancel {
+		t.Fatal("promotion must serialize on the independently selected, record-bound tag")
+	}
+	for _, job := range []string{"paired-promotion-admission", "paired-sign-and-promote"} {
+		for _, step := range w.Jobs[job].Steps {
+			if _, ok := step.Env["PROMOTION_RECORD"]; !ok {
+				continue
+			}
+			for key, want := range map[string]string{"TAG": "${{ inputs.tag }}", "WORKFLOW_REF": "${{ github.ref }}", "WORKFLOW_SHA": "${{ github.sha }}", "KIT_VERSION": "${{ inputs.plugin_kit_version }}"} {
+				if step.Env[key] != want {
+					t.Fatalf("%s loses independent %s binding", step.Name, key)
+				}
+			}
+			binding := strings.Index(step.Run, "Buffer.from(")
+			effect := strings.Index(step.Run, "p.acquireArtifact(")
+			if binding < 0 || !strings.Contains(step.Run, ", selected)") || (effect >= 0 && binding > effect) {
+				t.Fatalf("%s must bind canonical record before native/provider effects", step.Name)
+			}
+		}
+	}
 	if admission.Needs != nil || len(admission.Permissions) != 1 || admission.Permissions["contents"] != "read" || signing.Needs != "paired-promotion-admission" {
 		t.Fatal("native admission must precede protected promotion")
 	}

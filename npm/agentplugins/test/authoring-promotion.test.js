@@ -10,6 +10,7 @@ const c = require("../scripts/dual-authoring-candidate");
 const p = require("../scripts/authoring-promotion");
 const ID = { repository: c.REPOSITORY, commit: "a".repeat(40), engine_revision: "a".repeat(40),
   versions: { agentplugins: "0.1.54", "plugin-kit-ai": "2.0.0" } };
+const selected = { tag: "agentplugins-v0.1.54", ref: "refs/tags/agentplugins-v0.1.54", source: ID.commit, versions: ID.versions };
 const hash = text => c.digest(Buffer.from(text));
 const pin = { run_id: 21, run_attempt: 2, artifact_id: 31, artifact_sha256: hash("zip fixture") };
 const url = `https://github.com/${c.REPOSITORY}`;
@@ -64,7 +65,7 @@ function fixture() {
   });
   const recordFile = path.join(sandbox, "authoring-promotion.json");
   fs.writeFileSync(recordFile, p.encodeRecord(record));
-  return { sandbox, root, scratch, record, recordFile, options: { record: recordFile, root, scratch, workflow_sha: ID.commit, preparation: pin } };
+  return { sandbox, root, scratch, record, recordFile, options: { record: recordFile, root, scratch, workflow_sha: ID.commit, preparation: pin, selected } };
 }
 function expected(f) {
   return { name: "authoring-promotion.json", sha256: c.digest(fs.readFileSync(f.recordFile)), source: ID.commit,
@@ -83,12 +84,34 @@ function verified(e) {
 // Actual subprocesses execute the production orchestration. Only the test
 // process redirects the hard-coded executable to a disposable script. Responses
 // are deliberately synthetic, never proof that gh verified a real signature.
-function provider(t, f, routes) {
+function provider(t, f, routes, mutation = null) {
   const script = path.join(f.sandbox, "provider-fixture.js"), log = path.join(f.sandbox, "calls.jsonl");
+  const routeFile = path.join(f.sandbox, "routes.json");
+  fs.writeFileSync(routeFile, JSON.stringify(routes));
   fs.writeFileSync(script, `const fs = require('node:fs');
 const args = process.argv.slice(2);
 fs.appendFileSync(${JSON.stringify(log)}, JSON.stringify({args,env:process.env})+'\\n');
-const routes=${JSON.stringify(routes)};
+const routes=JSON.parse(fs.readFileSync(${JSON.stringify(routeFile)}));
+const mutation=${JSON.stringify(mutation)};
+if(args[0]==='release' && mutation) {
+  const release=Object.values(routes).find(r=>r.body?.tag_name===args[2]).body;
+  const pins=mutation.assets[args[2]];
+  if(args[1]==='create') { routes['graphql:tag='+args[2]].body.data.repository.release={databaseId:release.id}; release.assets=[]; }
+  if(args[1]==='upload' || args[1]==='create') {
+    const files=args.slice(3,args.indexOf('--repo'));
+    for(const file of files.slice(0,mutation.interrupt ?? files.length)) {
+      const name=require('node:path').basename(file), pin=pins.find(a=>a.name===name);
+      if(!pin || release.assets.some(a=>a.name===name) || require('node:crypto').createHash('sha256').update(fs.readFileSync(file)).digest('hex')!==pin.digest.slice(7)) throw Error('immutable upload violation');
+      release.assets.push(pin);
+    }
+    if(mutation.moveTag) routes[${JSON.stringify(endpoint('commits/v2.0.0'))}].body.sha='b'.repeat(40);
+    if(mutation.replaceID) { release.id+=10000; routes['graphql:tag='+args[2]].body.data.repository.release.databaseId=release.id; routes[${JSON.stringify(endpoint('releases/'))}+release.id]={body:release}; }
+  } else if(args[1]==='edit') { if(release.assets.length!==11) throw Error('premature public effect'); release.draft=false; }
+  else throw Error('forbidden fixture mutation');
+  fs.writeFileSync(${JSON.stringify(routeFile)},JSON.stringify(routes));
+  if(mutation.interrupt!==undefined || mutation.failEdit===args[2] && args[1]==='edit') process.exit(9);
+  process.exit(0);
+}
 if(args[0]==='--version'){console.log('gh version ${p.GH_VERSION} (fixture only)');process.exit(0)}
 const key=args.includes('graphql')?'graphql:'+args.at(-1):args.includes('verify')?'verify':args.at(-1);
 const r=routes[key]; if(!r) {process.stderr.write('fixture unexpected call');process.exit(9)}
@@ -140,7 +163,7 @@ test("fixed canonical record ignores construction order but accepts no synthetic
   const reorder = v => Array.isArray(v) ? v.map(reorder) : v && typeof v === "object" ? Object.fromEntries(Object.entries(v).reverse().map(([k,x]) => [k,reorder(x)])) : v;
   assert.deepEqual(p.encodeRecord(reorder(f.record)), encoded);
   assert.deepEqual(p.decodeRecord(encoded), f.record);
-  assert.throws(() => p.admitRecord(encoded), /NATIVE_EVIDENCE_INTEGRATION_REQUIRED.*fixture-terminal/);
+  assert.throws(() => p.admitRecord(encoded, selected), /NATIVE_EVIDENCE_INTEGRATION_REQUIRED.*fixture-terminal/);
   assert.equal(p.frozenSubjects(f.root, f.record).length, 18);
   for (const product of c.PRODUCTS) {
     assert.equal(fs.readdirSync(path.join(f.root, product)).length, 8);
@@ -257,6 +280,12 @@ for (const [label, mutate] of Object.entries({
   "moved tag": r => { r[endpoint("commits/v2.0.0")].body.sha = "b".repeat(40); },
   "prerelease": r => { r[endpoint("releases/201")].body.prerelease = true; },
   "missing second readback": r => { r[endpoint("releases/201")] = { exit: 1 }; },
+  "missing public asset": r => { r[endpoint("releases/201")].body.assets.pop(); },
+  "duplicate asset": r => { r[endpoint("releases/201")].body.assets[1] = r[endpoint("releases/201")].body.assets[0]; },
+  "duplicate asset ID": r => { r[endpoint("releases/201")].body.assets[1].id = 1100; },
+  "wrong size type": r => { r[endpoint("releases/201")].body.assets[0].size = "42"; },
+  "wrong state": r => { r[endpoint("releases/201")].body.assets[0].state = "starter"; },
+  "wrong draft type": r => { r[endpoint("releases/201")].body.draft = "true"; },
   "extra asset": r => { r[endpoint("releases/201")].body.assets.push({ name: "extra" }); },
   "wrong digest": r => { r[endpoint("releases/201")].body.assets[0].digest = `sha256:${hash("other")}`; },
   "changed download": r => { r[endpoint("releases/assets/1100")].binary = Buffer.from("other").toString("base64"); },
@@ -285,4 +314,129 @@ test("pinned attest multi-subject statement binds both projection basename colli
   assert.throws(() => p.mapVerifiedOutput(JSON.stringify(corrupt), e), /subject set/);
   corrupt[0].verificationResult.statement.subject.pop();
   assert.throws(() => p.mapVerifiedOutput(JSON.stringify(corrupt), e), /subject count/);
+});
+
+// Load unchanged production source into a test-local module and expose ONLY its
+// private sequencing seam. No native adapter is substituted and no production
+// caller can inject this recheck. The callback models admission; signatures and
+// provider effects still execute their real orchestration against child fixtures.
+function sequencing() {
+  const file = require.resolve("../scripts/authoring-promotion");
+  const Module = require("node:module"), m = { exports: {} };
+  require("node:vm").runInThisContext(Module.wrap(fs.readFileSync(file, "utf8").replace(/^#!.*\n/, "") +
+    "\nmodule.exports = { promotePair, verifyAll };"), { filename: file })(m.exports, Module.createRequire(file), m, file, path.dirname(file));
+  assert.equal(p.promotePair, undefined);
+  return m.exports;
+}
+for (const count of [0, 10, 11]) test(`exact ${count}/11 draft sequencing and full control`, t => {
+  const f = fixture(), routes = releaseRoutes(f), assets = Object.fromEntries(c.PRODUCTS.map((product,i) =>
+    [f.record.products[product].tag, routes[endpoint(`releases/${200+i}`)].body.assets]));
+  routes[endpoint("releases/200")].body.assets = assets[selected.tag].slice(0,count);
+  const e = expected(f), subjects = [...p.frozenSubjects(f.root,f.record), { file: f.recordFile, sha256: e.sha256 }];
+  e.workflow_sha = ID.commit; e.subjects = subjects.map(s => ({ name: path.basename(s.file), digest: { sha256: s.sha256 } }));
+  routes.verify = { body: verified(e) };
+  const calls = provider(t,f,routes,{assets}), seq = sequencing(); let checks = 0;
+  const recheck = () => { checks++; fs.appendFileSync(path.join(f.sandbox,"calls.jsonl"), JSON.stringify({admission:checks})+"\n");
+    const record = p.validateSelection(fs.readFileSync(f.recordFile),selected), state = { o:f.options,record,subjects };
+    p.frozenSubjects(f.root,record); seq.verifyAll(state); return state; };
+  const before = p.inspectPair(f.record,f.scratch);
+  assert.equal(before.states[0],count===11 ? "draft" : "incomplete-draft");
+  assert.equal(before.reconciliation_required,count!==11);
+  assert.equal(before.pair[0].missing_assets.length,11-count); assert.equal(before.status,undefined);
+  if(count!==11) { assert.throws(()=>seq.promotePair(recheck,false),/reconciliation required/); assert(!calls().some(c=>c.args?.[0]==="release")); }
+  assert.deepEqual(seq.promotePair(recheck,count!==11).public_readback,["public","public"]);
+  const effects = calls().filter(c=>c.args?.[0]==="release").map(c=>c.args);
+  assert.deepEqual(effects.map(a=>a[1]),count===11 ? ["edit","edit"] : ["upload","edit","edit"]);
+  if(count!==11) assert.deepEqual(effects[0].slice(3,effects[0].indexOf("--repo")).map(x=>path.basename(x)),assets[selected.tag].slice(count).map(a=>a.name));
+  let segment=[];
+  for(const call of calls()) {
+    if(call.admission) segment=[];
+    else if(call.args[0]==="release") {
+      assert.equal(segment.filter(a=>a.includes("verify")).length,19);
+      for(const product of c.PRODUCTS) assert(segment.some(a=>a.at(-1)===endpoint(`commits/${f.record.products[product].tag}`)));
+      for(const id of [200,201]) assert(segment.some(a=>a.at(-1)===endpoint(`releases/${id}`)));
+    } else segment.push(call.args);
+  }
+  assert(checks>=6);
+});
+for (const mode of ["create0", "create10", "upload", "edit", "moveTag", "replaceID", "admission", "signature"]) test(`partial ${mode} failure preserves immutable state and stops`, t => {
+  const f=fixture(), routes=releaseRoutes(f,mode.startsWith("create") ? ["absent","draft"] : ["draft","draft"]);
+  const assets=Object.fromEntries(c.PRODUCTS.map((product,i)=>[f.record.products[product].tag,routes[endpoint(`releases/${200+i}`)].body.assets]));
+  if(!mode.startsWith("create")) routes[endpoint("releases/200")].body.assets=assets[selected.tag].slice(0,10);
+  const mutation={assets,...(mode.startsWith("create") ? {interrupt:Number(mode.slice(6))} : mode==="upload" ? {interrupt:1} : mode==="edit" ? {failEdit:selected.tag} : {[mode]:true})};
+  const calls=provider(t,f,routes,mutation), seq=sequencing(); let checks=0;
+  const original=fs.readFileSync(f.recordFile);
+  assert.throws(()=>seq.promotePair(()=>{
+    checks++; if(mode==="admission" && checks===2) p.admitRecord(original,selected);
+    const state={o:f.options,record:p.validateSelection(original,selected),subjects:[{file:f.recordFile,sha256:c.digest(original)}]};
+    if(mode==="signature" && checks===2) seq.verifyAll(state);
+    return state;
+  },!mode.startsWith("create")));
+  const effects=calls().filter(c=>c.args?.[0]==="release").map(c=>c.args[1]);
+  assert.deepEqual(effects,["admission","signature"].includes(mode) ? [] : mode==="edit" ? ["upload","edit"] : [mode.startsWith("create") ? "create" : "upload"]);
+  const after=JSON.parse(fs.readFileSync(path.join(f.sandbox,"routes.json")));
+  assert.deepEqual(after[endpoint("releases/201")],routes[endpoint("releases/201")]);
+  const present=after[endpoint("releases/200")].body.assets;
+  assert.deepEqual(present,assets[selected.tag].slice(0,mode.startsWith("create") ? Number(mode.slice(6)) : ["admission","signature"].includes(mode) ? 10 : 11));
+  assert.deepEqual(fs.readFileSync(f.recordFile),original); p.frozenSubjects(f.root,f.record);
+  if(["create0","create10","upload","edit"].includes(mode)) {
+    // A NEW explicit invocation reads the preserved provider state. No retry
+    // occurs inside the failed invocation, even if all upload bytes arrived.
+    const offset=calls().length, e=expected(f), subjects=[...p.frozenSubjects(f.root,f.record),{file:f.recordFile,sha256:e.sha256}];
+    e.workflow_sha=ID.commit; e.subjects=subjects.map(s=>({name:path.basename(s.file),digest:{sha256:s.sha256}}));
+    after.verify={body:verified(e)}; t.mock.restoreAll(); const resumed=provider(t,f,after,{assets});
+    assert.deepEqual(seq.promotePair(()=>{
+      const state={o:f.options,record:p.validateSelection(fs.readFileSync(f.recordFile),selected),subjects};
+      p.frozenSubjects(f.root,state.record); seq.verifyAll(state); return state;
+    },true).public_readback,["public","public"]);
+    const next=resumed().slice(offset).filter(c=>c.args?.[0]==="release").map(c=>c.args[1]);
+    assert.deepEqual(next,mode.startsWith("create") ? ["upload","edit","edit"] : mode==="upload" ? ["edit","edit"] : ["edit"]);
+  }
+});
+
+test("actual preflight and record shells bind dispatch before native acquisition, including resume", t => {
+  const f=fixture(), yaml=fs.readFileSync(path.resolve(__dirname,"../../../.github/workflows/agentplugins-release.yml"),"utf8");
+  const script=name=>{ const step=yaml.slice(yaml.indexOf(`      - name: ${name}\n`));
+    return step.match(/        run: \|\n((?:          .*\n|\n)+)/)[1].split("\n").map(l=>l.slice(10)).join("\n"); };
+  const env={PATH:path.dirname(process.execPath)+":/usr/local/bin:/usr/bin:/bin",SOURCE_SHA:ID.commit,WORKFLOW_SHA:ID.commit,
+    TAG:selected.tag,WORKFLOW_REF:selected.ref,KIT_VERSION:"2.0.0",GITHUB_REPOSITORY:c.REPOSITORY,PROMOTION_RECORD:fs.readFileSync(f.recordFile,"utf8")};
+  const trap=path.join(f.sandbox,"effect-trap.js"), effects=path.join(f.sandbox,"shell-effects");
+  fs.writeFileSync(trap, `require('node:child_process').spawnSync=()=>{require('node:fs').appendFileSync(${JSON.stringify(effects)},'effect');throw Error('unexpected process effect')}`);
+  env.NODE_OPTIONS=`--require=${trap}`; env.RUNNER_TEMP=f.scratch;
+  const cwd=path.resolve(__dirname,"../../..");
+  for(const changed of [false,true]) {
+    const values={...env,...(changed ? {TAG:"agentplugins-v0.1.55",WORKFLOW_REF:"refs/tags/agentplugins-v0.1.55"} : {})};
+    const run=name=>cp.spawnSync("/bin/bash",["-e","-o","pipefail","-s"],{cwd,env:values,input:script(name),encoding:"utf8",timeout:10000});
+    assert.equal(run("Validate promotion identity before checkout").status,0);
+    for(const name of ["Reject missing native terminal contracts before protected effects","Acquire exact frozen preparation after native admission"]) {
+      const result=run(name); assert.equal(result.status,1); assert.equal(result.stdout,"");
+      assert.match(result.stderr,changed ? /selected promotion identity/ : /NATIVE_EVIDENCE_INTEGRATION_REQUIRED/);
+      if(changed) assert.doesNotMatch(result.stderr,/NATIVE_EVIDENCE_INTEGRATION_REQUIRED/);
+    }
+  }
+  for(const operation of ["admit","admit-reconciliation","promote","reconcile"]) for(const run of ["41","99"]) {
+    const config=path.join(f.sandbox,"resume.json");
+    fs.writeFileSync(config,JSON.stringify({...f.options,selected:{...selected,tag:"agentplugins-v0.1.55",ref:"refs/tags/agentplugins-v0.1.55",versions:{...ID.versions,agentplugins:"0.1.55"}}}));
+    const result=cp.spawnSync(process.execPath,[require.resolve("../scripts/authoring-promotion"),operation,config],
+      {cwd,env:{...env,GITHUB_RUN_ID:run,GITHUB_RUN_ATTEMPT:"3"},encoding:"utf8",timeout:10000});
+    assert.equal(result.status,1); assert.equal(result.stdout,""); assert.match(result.stderr,/selected promotion identity/);
+  }
+  assert.equal(fs.existsSync(effects),false);
+  const calls=provider(t,f,{});
+  for(const mutation of [{tag:"agentplugins-v0.1.55",ref:"refs/tags/agentplugins-v0.1.55",versions:{...ID.versions,agentplugins:"0.1.55"}}, {ref:"refs/heads/main"}, {source:"b".repeat(40)}, {versions:{...ID.versions,"plugin-kit-ai":"2.0.1"}}]) {
+    const options={...f.options,selected:{...selected,...mutation}};
+    for(const resume of [false,true]) assert.throws(()=>p.promote(options,resume),/selected promotion identity/);
+  }
+  assert.deepEqual(calls(),[]); assert.deepEqual(fs.readdirSync(f.scratch),[]);
+});
+
+for(const defect of ["digest","duplicate","extra","bytes"]) test(`incomplete draft still rejects present ${defect}`,t=>{
+  const f=fixture(), routes=releaseRoutes(f), assets=routes[endpoint("releases/200")].body.assets;
+  assets.pop();
+  if(defect==="digest") assets[0].digest=`sha256:${hash("bad")}`;
+  if(defect==="duplicate") assets[1]=assets[0];
+  if(defect==="extra") assets.push({name:"unexpected"});
+  if(defect==="bytes") routes[endpoint("releases/assets/1000")].binary=Buffer.from("bad").toString("base64");
+  const calls=provider(t,f,routes); assert.throws(()=>p.inspectPair(f.record,f.scratch));
+  assert(calls().every(c=>c.args[0]==="api"));
 });
