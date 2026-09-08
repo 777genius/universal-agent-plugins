@@ -141,6 +141,9 @@ well-formed; it does not prove runtime, OAuth, or activation in every client.
 The CLI prints installed, prepared, activation required, and authentication
 pending as separate outcomes.
 
+See the [client compatibility evidence](https://777genius.github.io/universal-agent-plugins/docs/en/reference/client-compatibility.html)
+for tested client versions, platforms, and release-specific limitations.
+
 For Codex, declared MCP SSE is unsupported; stdio and Streamable HTTP retain
 their existing adapter support. Valid SSE components are excluded from Codex
 delivery without invalidating the package. See [transport evidence and lifecycle

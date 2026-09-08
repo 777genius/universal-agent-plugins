@@ -34,6 +34,8 @@ Compatibility is package-specific. Schema validation does not prove runtime, OAu
 
 [Client compatibility (English)](https://github.com/777genius/universal-agent-plugins#supported-clients)
 
+[Tested client versions and platform limitations](/en/reference/client-compatibility)
+
 ## Build plugins {#build-plugins}
 
 <a id="recommended-default"></a>
