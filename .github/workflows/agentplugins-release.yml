@@ -7,12 +7,19 @@ on:
         description: Exact stable tag, for example agentplugins-v0.1.0
         required: true
       producer_mode:
-        description: Bounded release contract; publishes verified GitHub binary assets only
+        description: Binary-only publication or read-only paired native preparation
         required: true
         default: binary-only
         type: choice
         options:
           - binary-only
+          - paired-preparation
+      source_sha:
+        description: Exact source and workflow SHA (required for paired preparation)
+        required: false
+      plugin_kit_version:
+        description: Explicit plugin-kit version (paired first cut requires 2.0.0)
+        required: false
 
 permissions:
   contents: read
@@ -23,6 +30,7 @@ concurrency:
 
 jobs:
   validate:
+    if: ${{ inputs.producer_mode == 'binary-only' }}
     runs-on: ubuntu-latest
     env:
       GOWORK: "off"
@@ -144,6 +152,7 @@ jobs:
         run: npm test && npm pack --dry-run --ignore-scripts
 
   build:
+    if: ${{ inputs.producer_mode == 'binary-only' }}
     needs: validate
     runs-on: ubuntu-latest
     env:
@@ -200,6 +209,7 @@ jobs:
           retention-days: 3
 
   stage-draft:
+    if: ${{ inputs.producer_mode == 'binary-only' }}
     needs: [validate, build]
     runs-on: ubuntu-latest
     environment: agentplugins-release
@@ -308,6 +318,7 @@ jobs:
           retention-days: 7
 
   platform-proof:
+    if: ${{ inputs.producer_mode == 'binary-only' }}
     needs: [validate, stage-draft]
     uses: ./.github/workflows/agentplugins-platform-proof.yml
     permissions:
@@ -322,6 +333,7 @@ jobs:
       release_assets_artifact: ${{ needs.stage-draft.outputs.assets_artifact }}
 
   promote-release:
+    if: ${{ inputs.producer_mode == 'binary-only' }}
     needs: [validate, stage-draft, platform-proof]
     runs-on: ubuntu-latest
     environment: agentplugins-release
@@ -378,3 +390,91 @@ jobs:
           gh release edit "${TAG}" --repo "${GITHUB_REPOSITORY}" --draft=false
           gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${TAG}" \
             --jq 'select(.draft == false and .prerelease == false) | .tag_name' | grep -Fx -- "${TAG}"
+
+  paired-preparation:
+    if: ${{ inputs.producer_mode == 'paired-preparation' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      SOURCE_SHA: ${{ inputs.source_sha }}
+      WORKFLOW_SHA: ${{ github.sha }}
+      TAG: ${{ inputs.tag }}
+      KIT_VERSION: ${{ inputs.plugin_kit_version }}
+      GOTOOLCHAIN: local
+      GOMAXPROCS: "2"
+    steps:
+      - name: Validate explicit paired identity before checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "${SOURCE_SHA}" =~ ^[0-9a-f]{40}$ && ! "${SOURCE_SHA}" =~ ^0{40}$ ]]
+          test "${SOURCE_SHA}" = "${WORKFLOW_SHA}"
+          [[ "${TAG}" =~ ^agentplugins-v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]
+          test "${KIT_VERSION}" = "2.0.0"
+          test "${TAG#agentplugins-v}" != "${KIT_VERSION}"
+          test "${GITHUB_REPOSITORY}" = "777genius/universal-agent-plugins"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ inputs.source_sha }}
+      - name: Check exact checkout
+        run: test "$(git rev-parse HEAD)" = "${SOURCE_SHA}"
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: 1.25.13
+          cache: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          package-manager-cache: false
+      - name: Provision declared Go modules for offline producer
+        env:
+          GOMODCACHE: ${{ runner.temp }}/paired-modules
+          GOCACHE: ${{ runner.temp }}/paired-cache
+        run: go mod download
+      - name: Freeze one full release-contract pair and project verified bytes
+        shell: bash
+        env:
+          GOMODCACHE: ${{ runner.temp }}/paired-modules
+          GOCACHE: ${{ runner.temp }}/paired-cache
+        run: |
+          set -euo pipefail
+          export TRUSTED_GO="$(command -v go)"
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const { stageCandidate } = require('./npm/agentplugins/scripts/stage-dual-authoring-candidate');
+          const { prepareAuthoringRelease, verifyAuthoringRelease } = require('./npm/agentplugins/scripts/release-assets');
+          const root = fs.mkdtempSync(path.join(process.env.RUNNER_TEMP, 'authoring-preparation-'));
+          const workParent = path.join(root, 'work');
+          fs.mkdirSync(workParent, { mode: 0o700 });
+          const identity = { repository: '777genius/universal-agent-plugins',
+            commit: process.env.SOURCE_SHA, engine_revision: process.env.SOURCE_SHA,
+            versions: { agentplugins: process.env.TAG.slice('agentplugins-v'.length), 'plugin-kit-ai': process.env.KIT_VERSION } };
+          const common = { candidate: true, identity, go: process.env.TRUSTED_GO, workParent,
+            assetScope: 'six-platform-pair', authoringMode: 'release-cli-contract-v1' };
+          // stageCandidate builds once and independently verifies before sealing.
+          const candidate = path.join(root, 'candidate');
+          const staged = stageCandidate({ ...common, repo: process.env.GITHUB_WORKSPACE,
+            modCache: process.env.GOMODCACHE, output: candidate });
+          fs.writeFileSync(path.join(root, 'candidate-identity.json'), JSON.stringify({ identity, ...staged }, null, 2) + '\n', { flag: 'wx' });
+          const options = { ...common, root: candidate, manifestDigest: staged.manifest_sha256,
+            outputs: { agentplugins: path.join(root, 'agentplugins'), 'plugin-kit-ai': path.join(root, 'plugin-kit-ai') },
+            pairMarker: path.join(root, 'pair-prepared.json') };
+          prepareAuthoringRelease(options);
+          verifyAuthoringRelease(options);
+          fs.appendFileSync(process.env.GITHUB_ENV, `PAIRED_OUTPUT=${root}\n`);
+          NODE
+      - name: Upload candidate identity and both prepared projections together
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: authoring-preparation-${{ inputs.source_sha }}
+          path: |
+            ${{ env.PAIRED_OUTPUT }}/candidate-identity.json
+            ${{ env.PAIRED_OUTPUT }}/candidate/candidate.json
+            ${{ env.PAIRED_OUTPUT }}/pair-prepared.json
+            ${{ env.PAIRED_OUTPUT }}/agentplugins/*
+            ${{ env.PAIRED_OUTPUT }}/plugin-kit-ai/*
+          if-no-files-found: error
+          retention-days: 7
