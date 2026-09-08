@@ -4,13 +4,19 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
-# Temporary investigation: remove or convert after the root cause is proven.
+# DIAGNOSTIC ONLY: independent hypotheses, not supported production fixes.
+# Remove this temporary workflow and its patch fixtures after the actual fix.
 # Diagnostic evidence does not qualify a standard authoring release.
 jobs:
   diagnostics:
     runs-on: windows-2025
     timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [inherited, retired-thread]
     env:
+      DIAGNOSTIC_BASE: f074ca4fdd59a929e5fa3bc67561574147092e04
       GOWORK: 'off'
       GOTOOLCHAIN: local
       CGO_ENABLED: '0'
@@ -19,18 +25,45 @@ jobs:
       run:
         shell: pwsh
     steps:
-      - name: Preserve repository line endings before checkout
+      - name: Initialize evidence and preserve line endings before checkout
         run: |
+          New-Item -ItemType Directory -Force "$env:RUNNER_TEMP/windows-diagnostic-evidence" | Out-Null
+          @{ variant = '${{ matrix.variant }}'; expected_source_sha = $env:DIAGNOSTIC_BASE; workflow_sha = $env:GITHUB_SHA; diagnostic_only = $true } | ConvertTo-Json | Set-Content "$env:RUNNER_TEMP/windows-diagnostic-evidence/request.json"
           git config --global core.autocrlf false
           exit $LASTEXITCODE
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: Checkout diagnostic fixtures
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
+          path: fixtures
+      - name: Record the single variant patch and hash
+        run: |
+          $patch = "$env:GITHUB_WORKSPACE/fixtures/scripts/terminal-ui/diagnostics/${{ matrix.variant }}.patch"
+          Copy-Item $patch "$env:RUNNER_TEMP/windows-diagnostic-evidence/variant.patch"
+          Get-FileHash $patch -Algorithm SHA256 | Select-Object Algorithm, Hash | ConvertTo-Json | Set-Content "$env:RUNNER_TEMP/windows-diagnostic-evidence/variant-patch-sha256.json"
+      - name: Fresh checkout of exact traced source base
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: f074ca4fdd59a929e5fa3bc67561574147092e04
+          persist-credentials: false
+          path: source
+      - name: Verify source and apply one diagnostic-only patch
+        working-directory: source
+        run: |
+          $sha = git rev-parse HEAD
+          $code = $LASTEXITCODE
+          $sha | Set-Content "$env:RUNNER_TEMP/windows-diagnostic-evidence/source-sha.txt"
+          if ($code -ne 0) { exit $code }
+          if ($sha -ne $env:DIAGNOSTIC_BASE) { throw 'Unexpected source base' }
+          git apply --check "$env:RUNNER_TEMP/windows-diagnostic-evidence/variant.patch" 2>&1 | Tee-Object -FilePath "$env:RUNNER_TEMP/windows-diagnostic-evidence/patch-check.log"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git apply "$env:RUNNER_TEMP/windows-diagnostic-evidence/variant.patch" 2>&1 | Tee-Object -FilePath "$env:RUNNER_TEMP/windows-diagnostic-evidence/patch-apply.log"
+          exit $LASTEXITCODE
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
         with:
           go-version: '1.25.13'
           cache: false
-      - name: Create disposable build profile and evidence directory
+      - name: Create disposable build profile
         run: |
           $root = Join-Path $env:RUNNER_TEMP ("console-diagnostic-" + [guid]::NewGuid())
           New-Item -ItemType Directory -Force $root | Out-Null
@@ -39,26 +72,32 @@ jobs:
             New-Item -ItemType Directory -Force $dir | Out-Null
             "$key=$dir" >> $env:GITHUB_ENV
           }
-          New-Item -ItemType Directory -Force "$env:RUNNER_TEMP/windows-diagnostic-evidence" | Out-Null
       - name: Build tagged diagnostic test binary
-        id: build
         timeout-minutes: 3
-        working-directory: cli/plugin-kit-ai
+        working-directory: source/cli/plugin-kit-ai
         run: |
           go test -c -tags terminaldiagnostic -o "$env:RUNNER_TEMP/windows-console-diagnostic.test.exe" ./internal/promptio 2>&1 | Tee-Object -FilePath "$env:RUNNER_TEMP/windows-diagnostic-evidence/build.log"
           $code = $LASTEXITCODE
           @{ exit = $code } | ConvertTo-Json | Set-Content "$env:RUNNER_TEMP/windows-diagnostic-evidence/build-status.json"
           exit $code
-      - name: Run all five isolated controls
+      - name: Run unchanged timed-cancel control (30 iterations)
         timeout-minutes: 5
+        working-directory: source
         run: |
-          python scripts/terminal-ui/windows_cancel_diagnostic.py --repo "$env:GITHUB_WORKSPACE" --binary "$env:RUNNER_TEMP/windows-console-diagnostic.test.exe" --artifacts "$env:RUNNER_TEMP/windows-diagnostic-evidence/controls" --control consecutive --control pre-canceled --control timed-cancel --control native-inherited --control native-duplicate 2>&1 | Tee-Object -FilePath "$env:RUNNER_TEMP/windows-diagnostic-evidence/driver.log"
+          python scripts/terminal-ui/windows_cancel_diagnostic.py --repo "$env:GITHUB_WORKSPACE/source" --binary "$env:RUNNER_TEMP/windows-console-diagnostic.test.exe" --artifacts "$env:RUNNER_TEMP/windows-diagnostic-evidence/controls" --control timed-cancel 2>&1 | Tee-Object -FilePath "$env:RUNNER_TEMP/windows-diagnostic-evidence/driver.log"
           $code = $LASTEXITCODE
           @{ exit = $code } | ConvertTo-Json | Set-Content "$env:RUNNER_TEMP/windows-diagnostic-evidence/driver-status.json"
           exit $code
+      - name: Capture final source diff even on failure
+        if: always()
+        run: |
+          if (Test-Path "$env:GITHUB_WORKSPACE/source/.git") {
+            git -C "$env:GITHUB_WORKSPACE/source" diff --binary --output="$env:RUNNER_TEMP/windows-diagnostic-evidence/source.diff"
+            exit $LASTEXITCODE
+          }
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         if: always()
         with:
-          name: windows-console-diagnostics
+          name: windows-console-diagnostics-${{ matrix.variant }}
           path: ${{ runner.temp }}/windows-diagnostic-evidence
           if-no-files-found: warn
