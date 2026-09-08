@@ -35,6 +35,12 @@ func readCancelable(ctx context.Context, r io.Reader) (string, error) {
 	var console windows.Handle
 	var mode uint32
 	if windows.GetConsoleMode(windows.Handle(f.Fd()), &mode) == nil {
+		// Output handles also have console modes, potentially identical to input.
+		// Classify without consuming input before opening the shared input queue.
+		var events uint32
+		if err := windows.GetNumberOfConsoleInputEvents(windows.Handle(f.Fd()), &events); err != nil {
+			return "", fmt.Errorf("validate console input: %w", err)
+		}
 		var err error
 		console, err = windows.CreateFile(windows.StringToUTF16Ptr("CONIN$"),
 			windows.GENERIC_READ|windows.GENERIC_WRITE,
