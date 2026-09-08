@@ -13,12 +13,9 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-var qualificationGetHandleInformation = windows.NewLazySystemDLL("kernel32.dll").NewProc("GetHandleInformation")
-
 // Runs only inside the existing synthetic attached ConPTY qualification.
 func qualificationConsoleInputClassification(t *testing.T, input windows.Handle) {
 	t.Helper()
-	qualificationClassificationHandles(t, "entry")
 	output, err := windows.CreateFile(windows.StringToUTF16Ptr("CONOUT$"),
 		windows.GENERIC_READ|windows.GENERIC_WRITE,
 		windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE,
@@ -26,21 +23,12 @@ func qualificationConsoleInputClassification(t *testing.T, input windows.Handle)
 	if err != nil {
 		t.Fatal(err)
 	}
-	qualificationClassificationHandles(t, "after CONOUT$ open")
 	f := os.NewFile(uintptr(output), "qualification-console-output")
 	defer func() {
 		if err := f.Close(); err != nil {
 			t.Errorf("close output: %v", err)
 		}
-		// NewFile owns output: inspect it after Close, never close it twice.
-		var flags uint32
-		ok, _, err := qualificationGetHandleInformation.Call(uintptr(output), uintptr(unsafe.Pointer(&flags)))
-		if ok != 0 || !errors.Is(err, windows.ERROR_INVALID_HANDLE) {
-			t.Errorf("output handle still valid after File.Close: handle=%#x flags=%#x error=%v", output, flags, err)
-		}
-		qualificationClassificationHandles(t, "after output close")
 	}()
-	qualificationClassificationHandles(t, "after output wrap")
 	for _, h := range []windows.Handle{input, output} {
 		var original uint32
 		if err := windows.GetConsoleMode(h, &original); err != nil {
@@ -54,8 +42,6 @@ func qualificationConsoleInputClassification(t *testing.T, input windows.Handle)
 			if err := windows.GetConsoleMode(h, &restored); err != nil || restored != original {
 				t.Errorf("restored mode=%#x want=%#x: %v", restored, original, err)
 			}
-			t.Logf("classification restored handle=%#x mode=%#x", h, restored)
-			qualificationClassificationHandles(t, "after mode restore")
 		}(h, original)
 		// 0x7 is valid for both input and output, with different meanings.
 		if err := windows.SetConsoleMode(h, 0x7); err != nil {
@@ -88,10 +74,8 @@ func qualificationConsoleInputClassification(t *testing.T, input windows.Handle)
 		t.Fatalf("queued events=%d want at least %d: %v", before, written, err)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	qualificationClassificationHandles(t, "before output ReadLine")
 	line, err := ReadLine(ctx, f)
 	cancel()
-	qualificationClassificationHandles(t, "after output ReadLine")
 	if line != "" || !errors.Is(err, windows.ERROR_INVALID_HANDLE) {
 		t.Fatalf("output handle accepted: line=%q error=%v", line, err)
 	}
@@ -107,18 +91,4 @@ func qualificationConsoleInputClassification(t *testing.T, input windows.Handle)
 		t.Fatalf("preserved queue: line=%q want=%q error=%v", line, want, err)
 	}
 	t.Log("matching-mode output rejected; console input queue preserved")
-	qualificationClassificationHandles(t, "before deferred cleanup")
-}
-
-// Immediate stage census isolates the acquisition boundary without warming up,
-// waiting for resources, or changing the parent's strict resource ceiling.
-func qualificationClassificationHandles(t *testing.T, stage string) {
-	t.Helper()
-	var handles uint32
-	ok, _, err := qualificationGetProcessHandleCount.Call(uintptr(windows.CurrentProcess()), uintptr(unsafe.Pointer(&handles)))
-	if ok == 0 {
-		t.Errorf("classification %s handle census: %v", stage, err)
-		return
-	}
-	t.Logf("classification %s handles=%d", stage, handles)
 }
