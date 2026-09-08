@@ -207,3 +207,52 @@ color into redirected human output; `color-pipe-json` requires a single versione
 JSON envelope and no escapes on either output despite always. `color-error`
 checks red error/reset boundaries; both existing Yes lifecycle cases also require
 yellow warning/reset boundaries while retaining all persisted-state/auth checks.
+
+## Bounded selection matrix
+
+`selection_matrix.py` owns a separate stdlib lane using the unchanged harness's
+`Fixture`, controlling PTY, status channel and same-PTY restoration probe. Run
+against a frozen native binary with an independently known SHA256; no build or
+agent installation is performed:
+
+```sh
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover \
+  -s scripts/terminal-ui -p test_selection_matrix.py
+PYTHONDONTWRITEBYTECODE=1 python3 scripts/terminal-ui/selection_matrix.py \
+  --binary /absolute/frozen-agentplugins --binary-sha256 TRUSTED_SHA256 \
+  --artifacts /tmp/new-selection-matrix --timeout 8
+```
+
+Fifteen cases cover Codex-only, Cursor-only and both with default No and explicit
+Yes → activation No; neither with retained empty validation; Escape/Ctrl+C at
+both forms; queued Enter/Enter, Enter/y/Enter and Enter/Space/Enter; and native-ownership rejection.
+Selection paths exercise Up/Down and Space toggle/re-toggle, assert the displayed
+canonical identities, then compare exact plan targets and persisted binding IDs,
+receipt identities and native package paths. Queued cases require exit without
+another key and unchanged state; the controls may disappear before rendering.
+No pre-consent client/project/managed/state/journal mutation is allowed. Cache
+exclusions match the existing harness and are not a whole-filesystem guarantee.
+
+Each case saves raw key bytes in `events.json`, semantic frames with protected
+state hashes, complete before/after protected state, actual CLI exit status,
+restoration/reuse results, and `outcome.json` with source commit/file hashes and
+binary hash. The historical binary's equivalence to the source commit is not
+assumed. The lane normalizes reverse-index only for its small evidence renderer;
+raw PTY bytes remain unchanged. Parser tests are not native E2E evidence.
+
+The fixture adds a minimal `.codex-plugin/plugin.json` identity to the standard
+package. Codex positive installation may still be **blocked**: the native owner
+observer invokes `codex plugin list --json`, which version-only stubs reject with
+97. Positive cases remain failures; they never substitute Cursor or fabricate a
+registry response. The separate ownership case requires CLI exit 1, the native
+identity error, unchanged protected state and terminal reuse. The synthetic
+scanner is UI-only evidence. No real profiles, auth or agents are used.
+
+Linux is the executed platform for this lane. For macOS, use the same invocation
+with a verified native binary in a disposable environment containing only the two
+synthetic clients; the existing persistent PTY owner handles terminal lifetime.
+macOS remains untested until that native run. The existing Windows ConPTY lane
+supports Plain interaction, not this rich arrow/Space matrix; this matrix is
+explicitly **not covered on Windows**. Reuse its persistent ConPTY owner/mode/echo
+probe when adding native Plain subset cases; do not count Linux, WSL, or renderer
+unit tests as Windows PASS. No new framework or dependency is needed.
