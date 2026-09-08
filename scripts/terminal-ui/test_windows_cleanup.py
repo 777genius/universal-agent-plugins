@@ -1,5 +1,6 @@
 """Resource ownership fault injection; not native ConPTY qualification."""
 import unittest
+import threading
 from types import SimpleNamespace
 from windows_conpty import ConPTY
 
@@ -65,6 +66,168 @@ class CleanupTests(unittest.TestCase):
         c.close()
         self.assertTrue(c.forced)
         self.assertEqual(killed, [10])
+
+
+class CaptureWaitTests(unittest.TestCase):
+    def console(self):
+        c = ConPTY.__new__(ConPTY)
+        c.timeout, c.error, c.raw = 1, None, bytearray()
+        c.output_changed, c.reader_done = threading.Condition(), False
+        c.closed, c.output, c.status_path = False, 50, None
+        c.poll = lambda: 0
+        return c
+
+    def test_poll_can_publish_marker_and_signal_exit(self):
+        c = self.console()
+        def poll():
+            with c.output_changed:
+                c.raw.extend(b'RESTORE_OK')
+            return 0
+        c.poll = poll
+        self.assertEqual(c.wait('RESTORE_OK'), len(b'RESTORE_OK'))
+
+    def test_delayed_reader_after_process_signal_and_multiple_scans(self):
+        import ctypes
+        from unittest.mock import patch
+        for ending in ('marker', 'eof', 'error'):
+            with self.subTest(ending=ending):
+                c = self.console()
+                release, entered = threading.Event(), threading.Event()
+                calls = []
+                def read(handle, buf, length, size, overlapped):
+                    if calls:
+                        size._obj.value = 0
+                        return True
+                    calls.append(True)
+                    entered.set()
+                    if not release.wait(2):
+                        raise RuntimeError('test did not release reader')
+                    if ending == 'error': return False
+                    data = b'RESTORE_OK' if ending == 'marker' else b'other output'
+                    ctypes.memmove(buf, data, len(data))
+                    size._obj.value = len(data)
+                    return True
+                c.k = SimpleNamespace(ReadFile=read)
+                polls = []
+                def poll():
+                    polls.append(0)
+                    if len(polls) == 3: release.set()
+                    return 0
+                c.poll = poll
+                with patch.object(ctypes, 'get_last_error', return_value=5, create=True):
+                    reader = threading.Thread(target=c.read)
+                    reader.start()
+                    try:
+                        self.assertTrue(entered.wait(1))
+                        if ending == 'marker':
+                            self.assertEqual(c.wait('RESTORE_OK'), len(b'RESTORE_OK'))
+                        else:
+                            message = 'EOF.*before marker' if ending == 'eof' else 'ReadFile WinError 5'
+                            with self.assertRaisesRegex(AssertionError, message):
+                                c.wait('RESTORE_OK')
+                        self.assertGreaterEqual(len(polls), 3)
+                    finally:
+                        release.set()
+                        reader.join(2)
+                    self.assertFalse(reader.is_alive())
+
+    def test_original_deadline_including_late_marker_and_eof(self):
+        from unittest.mock import patch
+        for ending in ('open', 'marker', 'eof'):
+            with self.subTest(ending=ending):
+                c = self.console()
+                now = [0.0]
+                waits = []
+                class ScheduledCondition(threading.Condition):
+                    def wait(self, timeout):
+                        waits.append(timeout)
+                        now[0] += timeout
+                        if now[0] >= 1:
+                            if ending == 'marker': c.raw.extend(b'RESTORE_OK')
+                            if ending == 'eof': c.reader_done = True
+                c.output_changed = ScheduledCondition()
+                with patch('windows_conpty.time.monotonic', side_effect=lambda: now[0]):
+                    with self.assertRaisesRegex(AssertionError, 'timeout waiting for RESTORE_OK'):
+                        c.wait('RESTORE_OK')
+                self.assertAlmostEqual(sum(waits), 1)
+                self.assertEqual(now[0], 1)
+                self.assertTrue(all(0 < wait <= .02 for wait in waits))
+
+    def test_marker_published_during_poll_after_deadline_is_rejected(self):
+        from unittest.mock import patch
+        c = self.console()
+        now = [0.0]
+        def poll():
+            now[0] = 1.01
+            c.raw.extend(b'RESTORE_OK')
+            return 0
+        c.poll = poll
+        with patch('windows_conpty.time.monotonic', side_effect=lambda: now[0]):
+            with self.assertRaisesRegex(AssertionError, 'timeout waiting for RESTORE_OK'):
+                c.wait('RESTORE_OK')
+
+    def test_marker_split_across_notifications_and_after_offset(self):
+        from unittest.mock import patch
+        c = self.console()
+        c.raw.extend(b'RESTORE_OK old output')
+        offset = len(c.raw)
+        now = [0.0]
+        chunks = iter((b'REST', b'ORE_', b'OK'))
+        class ScheduledCondition(threading.Condition):
+            def wait(self, timeout):
+                now[0] += timeout
+                c.raw.extend(next(chunks))
+        c.output_changed = ScheduledCondition()
+        with patch('windows_conpty.time.monotonic', side_effect=lambda: now[0]):
+            self.assertEqual(c.wait('RESTORE_OK', after=offset), offset + len(b'RESTORE_OK'))
+        self.assertAlmostEqual(now[0], .06)
+
+    def test_reader_eof_errors_and_capture_limit(self):
+        import ctypes
+        from unittest.mock import patch
+        for kind in ('zero', 'broken', 'invalid', 'aborted', 'exception', 'limit'):
+            for closed in (False, True):
+                with self.subTest(kind=kind, closed=closed):
+                    c = self.console()
+                    c.closed = closed
+                    def read(handle, buf, length, size, overlapped):
+                        if kind == 'exception': raise OSError('injected reader error')
+                        if kind == 'limit':
+                            c.raw.extend(b'x' * (4 * 1024 * 1024))
+                            ctypes.memmove(buf, b'RESTORE_OK', 10)
+                            size._obj.value = 10
+                            return True
+                        size._obj.value = 0
+                        return kind == 'zero'
+                    code = {'broken': 109, 'invalid': 6, 'aborted': 995}.get(kind, 5)
+                    c.k = SimpleNamespace(ReadFile=read)
+                    with patch.object(ctypes, 'get_last_error', return_value=code, create=True):
+                        c.read()
+                    self.assertTrue(c.reader_done)
+                    expected = {'exception': 'injected reader error', 'limit': 'capture exceeded 4 MiB'}
+                    message = expected.get(kind)
+                    if kind in ('invalid', 'aborted') and not closed:
+                        message = 'ReadFile WinError ' + str(code)
+                    if message:
+                        self.assertIn(message, c.error)
+                    else:
+                        self.assertIsNone(c.error)
+                        message = 'EOF.*before marker'
+                    with self.assertRaisesRegex(AssertionError, message):
+                        c.wait('RESTORE_OK')
+
+    def test_owner_native_error_wins_over_captured_marker(self):
+        import json
+        import tempfile
+        from pathlib import Path
+        c = self.console()
+        c.raw.extend(b'RESTORE_OK')
+        with tempfile.TemporaryDirectory() as root:
+            c.status_path = Path(root) / 'status.json'
+            c.status_path.write_text(json.dumps({'error': 'native failure WinError 6'}))
+            with self.assertRaisesRegex(AssertionError, 'native failure WinError 6'):
+                c.wait('RESTORE_OK')
+
 
 class OwnerTests(unittest.TestCase):
     def test_rejects_shared_or_unattached_console_before_open(self):
@@ -171,6 +334,7 @@ class OwnerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as root:
             c = ConPTY.__new__(ConPTY)
             c.timeout, c.error, c.raw = 1, None, bytearray()
+            c.output_changed, c.reader_done = threading.Condition(), False
             c.poll = lambda: 1
             c.status_path = Path(root) / 'status.json'
             c.status_path.write_text(json.dumps({'error': 'GetConsoleMode(std=-10): WinError 6'}))
@@ -213,6 +377,7 @@ class OwnerTests(unittest.TestCase):
         for closed in (False, True):
             c = ConPTY.__new__(ConPTY)
             c.closed, c.error, c.output = closed, None, 50
+            c.output_changed, c.reader_done = threading.Condition(), False
             c.k = SimpleNamespace(ReadFile=lambda *args: False)
             with patch.object(ctypes, 'get_last_error', return_value=6, create=True):
                 c.read()

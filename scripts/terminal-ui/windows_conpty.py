@@ -93,6 +93,8 @@ class ConPTY:
         for name, (args, result) in signatures.items():
             function = getattr(self.k, name); function.argtypes = args; function.restype = result
         self.timeout, self.raw, self.error = timeout, bytearray(), None
+        self.output_changed = threading.Condition()
+        self.reader_done = False
         self.handles = []
         self.job = None
         self.job_assigned = False
@@ -165,14 +167,27 @@ class ConPTY:
 
     def read(self):
         buf, size = ctypes.create_string_buffer(65536), W.DWORD()
-        while self.k.ReadFile(self.output, buf, len(buf), ctypes.byref(size), None):
-            if not size.value: return
-            self.raw.extend(buf.raw[:size.value])
-            if len(self.raw) > 4 * 1024 * 1024:
-                self.error = 'capture exceeded 4 MiB'; return
-        error = ctypes.get_last_error()
-        if error != 109 and not (self.closed and error in (6, 995)):
-            self.error = 'ReadFile WinError ' + str(error)
+        error = None
+        try:
+            while self.k.ReadFile(self.output, buf, len(buf), ctypes.byref(size), None):
+                if not size.value: return
+                with self.output_changed:
+                    self.raw.extend(buf.raw[:size.value])
+                    if len(self.raw) > 4 * 1024 * 1024:
+                        error = 'capture exceeded 4 MiB'
+                        self.error = error
+                        return
+                    self.output_changed.notify_all()
+            code = ctypes.get_last_error()
+            if code != 109 and not (self.closed and code in (6, 995)):
+                error = 'ReadFile WinError ' + str(code)
+        except Exception as exc:
+            error = 'console reader failure: ' + repr(exc)
+        finally:
+            with self.output_changed:
+                self.error = error
+                self.reader_done = True
+                self.output_changed.notify_all()
 
     def send(self, data):
         size = W.DWORD()
@@ -189,17 +204,25 @@ class ConPTY:
     def wait(self, marker, after=0):
         deadline = time.monotonic() + self.timeout
         while time.monotonic() < deadline:
-            check(self.error is None, self.error)
-            if re.search(marker, clean(bytes(self.raw[after:]))): return len(self.raw)
             code = self.poll()
             # Read status only after exit (or a protocol marker in the caller).
             # Windows CRT readers may deny deletion during atomic replacement.
             if code is not None and self.status_path and self.status_path.exists():
                 state = json.loads(self.status_path.read_text(encoding='utf-8'))
                 check('error' not in state, 'console owner native failure: ' + str(state.get('error')))
-            check(code is None, 'console owner exited (' + str(code) + ') before marker: ' + marker +
-                  '\n' + clean(bytes(self.raw))[-6000:])
-            time.sleep(0.02)
+            # Process signaling does not imply that the independent pipe reader
+            # has captured all output. Drain until a marker, reader completion,
+            # or the original deadline; never renew the budget after exit.
+            with self.output_changed:
+                check(self.error is None, self.error)
+                found = re.search(marker, clean(bytes(self.raw[after:])))
+                remaining = deadline - time.monotonic()
+                if remaining <= 0: break
+                if found: return len(self.raw)
+                check(not self.reader_done,
+                      'console output EOF (owner exit ' + str(code) + ') before marker: ' + marker +
+                      '\n' + clean(bytes(self.raw))[-6000:])
+                self.output_changed.wait(min(0.02, remaining))
         raise AssertionError('timeout waiting for ' + marker)
 
     def close(self, child_pid=None):
