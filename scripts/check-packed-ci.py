@@ -1,0 +1,240 @@
+#!/usr/bin/env python3
+"""Read-only terminal checks; successful same-SHA suites supply execution proof."""
+import base64
+from collections import Counter
+import hashlib
+import json
+from pathlib import Path
+import re
+import stat
+import sys
+
+VERSIONS = dict(go='go1.25.13', node='v22.23.2', npm='10.9.8')
+MODE = 'release-cli-contract-v1'
+PRODUCTS = ('agentplugins', 'plugin-kit-ai')
+LANES = ('skill', 'mcp-remote', 'mcp-stdio', 'hybrid-remote', 'hybrid-stdio')
+TARGETS = ('cursor', 'codex', 'claude')
+NAME = 'TestPackedGeneratedPackagesReachExistingInstallerPlanner'
+REGEX = '^' + NAME + '$'
+PACKAGE_PATH = './cli/plugin-kit-ai/internal/authoring/commands'
+PACKAGE = 'github.com/777genius/plugin-kit-ai/cli/internal/authoring/commands'
+CANDIDATE_TEST = 'actual controlled Linux pair: offline verification, engine reports, frozen journeys and negative proof'
+NATIVE_TESTS = ['native retirement oracle preserves original format tails and rejects output mismatches',
+    'NATIVE opt-in: exact two Linux tarballs, five accepted template lanes and complete release journeys']
+CLAIMS = ('release_eligible', 'platform_acceptance', 'attested')
+
+
+def require(condition, message):
+    if not condition:
+        raise ValueError(message)
+
+
+def data(path):
+    path = Path(path)
+    require(path.resolve() == path.absolute(), 'symlink path: ' + str(path))
+    st = path.lstat()
+    require(stat.S_ISREG(st.st_mode) and st.st_nlink == 1, 'nonregular/hardlinked evidence: ' + str(path))
+    return path.read_bytes()
+
+
+def digest(path):
+    return hashlib.sha256(data(path)).hexdigest()
+
+
+def read(path):
+    def unique(pairs):
+        result = {}
+        for key, value in pairs:
+            require(key not in result, 'duplicate JSON key')
+            result[key] = value
+        return result
+    return json.loads(data(path), object_pairs_hook=unique)
+
+
+def false_claims(record, fields=CLAIMS):
+    require(all(record.get(k) is False for k in fields), 'missing/true claim')
+
+
+def tap(text, names):
+    require(text.startswith('TAP version 13\n') and text.endswith('\n'), 'truncated TAP')
+    require(not re.search(r'(?im)^\s*not ok\b|^ok .*#\s*(?:SKIP|TODO)\b|^Bail out!', text), 'failed/skipped TAP')
+    require(re.findall(r'^ok \d+ - (.+)$', text, re.M) == names, 'missing/extra named native test')
+    require(re.findall(r'^# Subtest: (.+)$', text, re.M) == names, 'missing native starts')
+    for key, number in dict(tests=len(names), suites=0, pass_=len(names), fail=0, cancelled=0, skipped=0, todo=0).items():
+        require(re.findall(r'^# ' + key.rstrip('_') + r' (\d+)$', text, re.M) == [str(number)], 'TAP terminal ' + key)
+    require(re.search(r'^# duration_ms [0-9.]+\n\Z', text, re.M), 'truncated TAP terminal')
+    require(re.findall(r'^1\.\.(\d+)$', text, re.M) == [str(len(names))], 'missing TAP plan')
+
+
+def events(text):
+    require(text.endswith('\n'), 'truncated Go JSON')
+    rows = [json.loads(line) for line in text.splitlines()]
+    require(rows and all(e.get('Package') == PACKAGE and e.get('Action') not in ('fail', 'skip') for e in rows), 'wrong package/failed/skipped Go event')
+    require([e['Action'] for e in rows if not e.get('Test') and e['Action'] in ('pass', 'fail', 'skip')] == ['pass'], 'missing Go package success')
+    return rows
+
+
+def go_discovery(text):
+    rows = events(text)
+    require([e.get('Output') for e in rows if e.get('Output', '').startswith('Test')] == [NAME + '\n'], 'exact named discovery required')
+    require(not any(e.get('Test') for e in rows), 'execution substituted for discovery')
+
+
+def go_results(text):
+    rows = events(text)
+    leaves = {NAME, *(NAME + '/' + p + '/' + l for p in PRODUCTS for l in LANES)}
+    groups = {NAME + '/' + p for p in PRODUCTS}
+    ran = Counter(e['Test'] for e in rows if e.get('Test') and e['Action'] == 'run')
+    passed = Counter(e['Test'] for e in rows if e.get('Test') and e['Action'] == 'pass')
+    require(ran == passed and leaves <= set(ran) <= leaves | groups and all(v == 1 for v in ran.values()),
+            'exact root/ten leaves must run/pass; optional product groups are not leaves')
+    require(all(not e.get('Test') or e['Test'] in ran for e in rows), 'unexpected subtest')
+
+
+def plans(record):
+    rows = record['plans']
+    require(len(rows) == 30 and Counter((r['product'], r['lane'], r['target']) for r in rows) ==
+            Counter({(p, l, t): 1 for p in PRODUCTS for l in LANES for t in TARGETS}), 'exact 30 unique plan tuples required')
+    for row in rows:
+        report = row['report']
+        require(report['result'] == 'success' and report['data']['dry_run'] is True, 'successful dry run required')
+        found = []
+        def walk(value):
+            if isinstance(value, dict):
+                if 'client_id' in value and 'components' in value and 'status' in value:
+                    found.append(value)
+                for child in value.values(): walk(child)
+            elif isinstance(value, list):
+                for child in value: walk(child)
+        walk(report)
+        require(len(found) == 1, 'one target plan required')
+        plan = found[0]
+        require(plan['client_id'] == row['target'] and plan['scope'] == 'user' and
+                plan['status'] == ('ready' if row['target'] == 'claude' else 'manual_activation_required'), 'wrong plan target/status')
+        components = plan['components']
+        expected = {('skill', 'extra-skill')}
+        if row['lane'] == 'skill' or row['lane'].startswith('hybrid-'): expected.add(('skill', row['lane']))
+        if row['lane'] != 'skill': expected.add(('mcp_server', row['lane']))
+        require({(c['kind'], c['name']) for c in components} == expected, 'exact lane component names')
+        kinds = Counter(c['kind'] for c in components)
+        require(kinds == Counter(skill=2 if row['lane'] == 'skill' or row['lane'].startswith('hybrid-') else 1,
+                                 **({} if row['lane'] == 'skill' else {'mcp_server': 1})), 'lane components')
+        require(len({(c['kind'], c['name']) for c in components}) == len(components) and
+                any(c['kind'] == 'skill' and c['name'] == 'extra-skill' for c in components) and
+                all(c.get('support') and c['support'] != 'unsupported' for c in components), 'missing/duplicate/unsupported components')
+
+
+def invocation_rows(invocations, count):
+    require(count == len(invocations) == 741, 'exactly 741 invocations')
+    require(len({json.dumps(r, sort_keys=True) for r in invocations}) == 739, 'repeated invocation evidence')
+    counts = Counter((row['product'], tuple(row['argv']), row['status']) for row in invocations)
+    for command in ('publish', 'publication', 'publication doctor'):
+        for tail in (('--format=credential-fixture',), ('--format', 'credential-fixture')):
+            original = ('--format=json', *command.split(), *tail)
+            for argv in (original, (*original, '--format=json')):
+                require(counts[('plugin-kit-ai', argv, 2)] == 1, 'original format tail/JSON companion missing')
+    for row in invocations:
+        require(row['product'] in PRODUCTS and type(row['status']) is int and row['status'] in (0, 1, 2) and row['signal'] is None and row['stderr'] == '', 'invalid invocation')
+
+def check(root, sha):
+    run = read(root / 'run.json'); false_claims(run)
+    require(run['head'] == sha and re.fullmatch('[0-9a-f]{40}', sha) and run['versions'] == VERSIONS, 'run identity/tools')
+    require(str(run['run_id']).isdigit() and str(run['attempt']).isdigit(), 'run identity missing')
+    identity = run['identity']
+    require(identity == dict(repository='777genius/universal-agent-plugins', commit=sha, engine_revision=sha,
+        versions={'agentplugins': '0.1.91', 'plugin-kit-ai': '2.0.0'}), 'candidate identity')
+    for tool in ('go', 'node', 'npm'):
+        require(digest(Path(run['tools'][tool]['path'])) == run['tools'][tool]['sha256'], 'tool changed')
+    phases = ('head', 'clean', 'go-version', 'node-version', 'npm-version', 'go-host', 'warmup', 'stage', 'verify',
+              'candidate-native', 'npm-stage', 'npm-native', 'seal', 'discovery', 'planner', 'post-verify', 'terminal-clean')
+    for name in phases:
+        phase = read(root / 'logs' / (name + '.json'))
+        require(type(phase['exit']) is int and phase['exit'] == 0, 'phase failed: ' + name)
+        data(root / 'logs' / (name + '.stdout')); data(root / 'logs' / (name + '.stderr'))
+        require('AGENTPLUGINS_STAGED_TEST_CHILD' not in phase['env'] and 'GOFLAGS' not in phase['env'] and 'NODE_OPTIONS' not in phase['env'], 'forbidden inherited control')
+        if name in ('discovery', 'planner'):
+            flag = '-list' if name == 'discovery' else '-run'
+            require(phase['argv'] == [run['tools']['go']['path'], 'test', '-p=2', '-tags=packedci', '-json',
+                *([] if name == 'discovery' else ['-count=1', '-timeout=20m']), flag, REGEX, PACKAGE_PATH], 'tag/selection command mismatch')
+    repo = Path(__file__).resolve().parent.parent
+    scripts = repo / 'npm/agentplugins/scripts'
+    node = run['tools']['node']['path']
+    expected_commands = {
+        'candidate-native': [node, '--test', '--test-reporter=tap', 'npm/agentplugins/test/dual-authoring-candidate-native.test.js'],
+        'npm-native': [node, '--test', '--test-reporter=tap', 'npm/agentplugins/test/private-npm-native.test.js'],
+        'post-verify': [node, str(scripts / 'packed-installer-bridge.js'), 'verify', str(root / 'bridge-config/sealed.json'),
+                        digest(root / 'bridge-config/sealed.json'), sha]}
+    for name, script, args in (
+        ('stage', 'stage-dual-authoring-candidate.js', ['stage', '--candidate', str(root / 'stage.json')]),
+        ('verify', 'stage-dual-authoring-candidate.js', ['verify', '--candidate', str(root / 'verify.json')]),
+        ('npm-stage', 'stage-dual-authoring-npm.js', ['--candidate', str(root / 'npm-stage.json')]),
+        ('seal', 'packed-installer-bridge.js', ['seal', str(root / 'bridge-config/request.json'), str(root / 'bridge-config/sealed.json')])):
+        expected_commands[name] = [node, str(scripts / script), *args]
+    for name, argv in expected_commands.items():
+        phase = read(root / 'logs' / (name + '.json'))
+        require(all(phase['env'].get(k) == v for k, v in dict(GOPROXY='off', GOSUMDB='off', GOENV='off', GOTOOLCHAIN='local', GOVCS='*:off').items()), 'offline phase environment')
+        require(phase['argv'] == argv and phase['cwd'] == str(repo), 'wrong execution command: ' + name)
+    for name, key, value in [('candidate-native', 'UAP_CANDIDATE_NATIVE_CONFIG', root / 'verify.json'),
+        ('candidate-native', 'UAP_CANDIDATE_NATIVE_SOURCE_REPO', repo),
+        ('npm-native', 'UAP_PRIVATE_NPM_NATIVE_CONFIG', root / 'npm-native.json')]:
+        require(read(root / 'logs' / (name + '.json'))['env'].get(key) == str(value), 'missing native opt-in')
+    log = lambda name: data(root / 'logs' / (name + '.stdout')).decode()
+    tap(log('candidate-native'), [CANDIDATE_TEST]); tap(log('npm-native'), NATIVE_TESTS)
+    go_discovery(log('discovery')); go_results(log('planner'))
+    candidate = read(root / 'candidate/candidate.json')
+    pack = read(root / 'npm-pair/completion.json')
+    native = read(root / 'native/native-completion.json')
+    cfg = read(root / 'npm-native.json')
+    sealed = read(root / 'bridge-config/sealed.json')
+    result = read(root / 'results/completion.json')
+    require(candidate['schema'] == 'dual-authoring-candidate/v1' and pack['schema'] == 'dual-authoring-npm-completion/v1' and
+        native['kind'] == 'actual-linux-private-npm-pair' and sealed['schema'] == 'packed-installer-bridge/v1' and
+        result['kind'] == 'packed-generated-existing-injected-installer-planner', 'wrong terminal schema/kind')
+    false_claims(candidate, ('release_eligible',))
+    for record in (pack, native, sealed, result): false_claims(record)
+    for record in (candidate, pack, native): require(record['identity'] == identity, 'terminal identity mismatch')
+    candidate_pin = digest(root / 'candidate/candidate.json')
+    require(json.loads(log('stage'))['manifest_sha256'] == candidate_pin, 'stage pin')
+    false_claims(json.loads(log('stage')))
+    verified = json.loads(log('verify')); false_claims(verified)
+    require(verified['manifest_sha256'] == candidate_pin and verified['consistency_verified'] is True, 'build verification')
+    require(candidate['asset_scope'] == 'linux-amd64-pair', 'candidate scope')
+    require(pack['status'] == candidate['status'] == 'CANDIDATE' and pack['authoring_mode'] == MODE and pack['asset_scope'] == 'linux-amd64-pair', 'candidate mode/scope')
+    require(pack['candidate_sha256'] == native['candidate_sha256'] == candidate_pin, 'candidate chain')
+    require(native['completion_sha256'] == cfg['completionDigest'] == digest(root / 'npm-pair/completion.json'), 'pack completion chain')
+    require(native['packs'] == pack['packs'] and set(pack['packs']) == set(PRODUCTS), 'pack identity')
+    for p in pack['packs'].values():
+        body = data(root / 'npm-pair' / p['file'])
+        require(hashlib.sha256(body).hexdigest() == p['sha256'] and len(body) == p['size'] and
+            'sha512-' + base64.b64encode(hashlib.sha512(body).digest()).decode() == p['integrity'], 'tarball pin')
+    require(native['tools'] == pack['tools'], 'native tool identity')
+    for name in ('node', 'npm', 'go', 'stager_node'):
+        tool = pack['tools'][name]; key = 'node' if name == 'stager_node' else name
+        require(tool['path'] == run['tools'][key]['path'] and tool['sha256'] == run['tools'][key]['sha256'], 'stager tool hash')
+        require(tool['version'] == ('go version go1.25.13 linux/amd64' if key == 'go' else VERSIONS[key]), 'stager tool version')
+    require(candidate['build']['go_version'] == VERSIONS['go'] and candidate['build']['authoring_mode'] == MODE and
+        candidate['build']['go_sha256'] == run['tools']['go']['sha256'], 'candidate build identity')
+    invocations = read(root / 'native/invocations.json')
+    invocation_rows(invocations, native['invocations'])
+    require(cfg['stage']['repo'] == str(repo), 'wrong terminal checkout')
+    require(native['inventory_sha256'] == digest(repo / 'cli/plugin-kit-ai/cmd/plugin-kit-ai/release_compat.go'), 'same-SHA inventory')
+    request = sealed['request']
+    require(request == read(root / 'bridge-config/request.json') and request['expectedCommit'] == sha and
+        request['nativeConfigSha256'] == digest(root / 'npm-native.json') and
+        request['nativeCompletionSha256'] == digest(root / 'native/native-completion.json'), 'native seal pins')
+    require(sealed['verifier_sha256'] == digest(repo / 'npm/agentplugins/scripts/packed-installer-bridge.js') and
+        sealed['helper_sha256'] == digest(repo / 'npm/agentplugins/scripts/dual-authoring-candidate.js'), 'verifier pins')
+    require(log('seal').strip() == result['config_sha256'] == digest(root / 'bridge-config/sealed.json') and result['commit'] == sha, 'planner pin')
+    require(result['inputs'] == sealed['inputs'] == json.loads(log('post-verify')), 'post-planner seal verification')
+    require(Counter((p['product'], p['lane']) for p in result['inputs']['projects']) == Counter({(p, l): 1 for p in PRODUCTS for l in LANES}), 'ten project identities')
+    require(len({p['source'] for p in result['inputs']['projects']}) == 10, 'duplicate project')
+    journeys = re.findall(r'^# native journey evidence: (.+)$', log('candidate-native'), re.M)
+    require(len(journeys) == 1, 'candidate terminal journey missing')
+    journey = read(Path(journeys[0])); false_claims(journey, ('platform_acceptance', 'attested'))
+    require(journey['identity'] == identity and journey['manifest_sha256'] == candidate_pin and len(journey['trees']) == 2 and all(len(t) == 5 for t in journey['trees']), 'candidate journey identity/inventory')
+    plans(result)
+    require(log('head').strip() == sha and log('clean') == log('terminal-clean') == '', 'clean checkout proof')
+
+
+if __name__ == '__main__':
+    check(Path(sys.argv[1]), sys.argv[2])
