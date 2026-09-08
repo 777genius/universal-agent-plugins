@@ -191,8 +191,7 @@ class Fixture:
                           'XDG_CACHE_HOME': 'cache', 'XDG_STATE_HOME': 'state',
                           'APPDATA': 'appdata', 'LOCALAPPDATA': 'localappdata',
                           'CODEX_HOME': '.codex', 'CLAUDE_CONFIG_DIR': '.claude',
-                          'CURSOR_CONFIG_DIR': '.cursor', 'GEMINI_CLI_HOME': '.gemini',
-                          'OPENCODE_CONFIG_DIR': '.opencode'}.items():
+                          'CURSOR_CONFIG_DIR': '.cursor', 'GEMINI_CLI_HOME': '.gemini'}.items():
             self.env[key] = str(self.home / path)
         # Existing executable-cache seam, only inside this disposable fixture.
         # This is a SYNTHETIC scanner protocol response, not security evidence.
