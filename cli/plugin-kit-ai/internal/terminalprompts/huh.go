@@ -53,12 +53,28 @@ func (p HuhPrompter) SelectTargets(ctx context.Context, r prompt.TargetSelection
 	}
 	return prompt.ValidateSelection(r, ids)
 }
-func (p HuhPrompter) Confirm(ctx context.Context, r prompt.ConfirmationRequest) (prompt.ConfirmationResult, error) {
+func (p HuhPrompter) Confirm(ctx context.Context, r prompt.ConfirmationRequest) (result prompt.ConfirmationResult, err error) {
 	if p.Input == nil || p.Output == nil {
 		return prompt.ConfirmationResult{}, prompt.ErrPromptUnavailable
 	}
 	if err := ctx.Err(); err != nil {
 		return prompt.ConfirmationResult{}, err
+	}
+	// This owner includes consent inspection and the form. The form snapshots
+	// the terminal only after inspection, so its restore cannot preserve flags
+	// changed at that earlier boundary. Restore the caller's snapshot after all
+	// form readers and cancellation callbacks have joined, including error exits.
+	if f, ok := p.Input.(*os.File); ok && term.IsTerminal(int(f.Fd())) {
+		state, e := term.GetState(int(f.Fd()))
+		if e != nil {
+			return prompt.ConfirmationResult{}, fmt.Errorf("snapshot confirmation terminal: %w", e)
+		}
+		defer func() {
+			if e := term.Restore(int(f.Fd()), state); e != nil {
+				result = prompt.ConfirmationResult{}
+				err = fmt.Errorf("restore confirmation terminal: %w", e)
+			}
+		}()
 	}
 	queued, err := confirmationInput(ctx, p.Input)
 	if err != nil {

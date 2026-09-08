@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"os"
 	"testing"
 	"time"
 
@@ -19,6 +20,10 @@ import (
 // The controller writes one actual PTY batch at the selection frame. There is
 // no delay between that submission and the queued confirmation keys.
 func TestConsentPTYBoundary(t *testing.T) {
+	testConsentPTYBoundary(t, consentPTY)
+}
+
+func testConsentPTYBoundary(t *testing.T, openPTY func(*testing.T) (*os.File, *os.File)) {
 	t.Setenv("TERM", "xterm-256color")
 	for _, tc := range []struct {
 		name, selection, confirmation, remaining string
@@ -56,11 +61,12 @@ func TestConsentPTYBoundary(t *testing.T) {
 		{name: "fresh-next-owner", selection: "\r", confirmation: " \rnext-owner\n", accepted: true, remaining: "next-owner"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			master, slave := consentPTY(t)
+			master, slave := openPTY(t)
 			before, err := unix.IoctlGetTermios(int(slave.Fd()), consentGetTermios)
 			if err != nil {
 				t.Fatal(err)
 			}
+			t.Logf("initial terminal: %+v", before)
 			drained := make(chan []byte, 1)
 			go func() {
 				var output bytes.Buffer
@@ -103,15 +109,32 @@ func TestConsentPTYBoundary(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			selected, selectErr := unix.IoctlGetTermios(int(slave.Fd()), consentGetTermios)
+			if selectErr != nil {
+				t.Fatal(selectErr)
+			}
+			if *selected != *before {
+				t.Errorf("selection changed terminal: got %+v want %+v", selected, before)
+			}
 			result, err := p.Confirm(ctx, prompt.ConfirmationRequest{Title: "Apply fixture?"})
 			after, restoreErr := unix.IoctlGetTermios(int(slave.Fd()), consentGetTermios)
-			if restoreErr != nil || *after != *before {
-				t.Errorf("mode restoration: %v", restoreErr)
+			if restoreErr != nil {
+				t.Fatal(restoreErr)
+			}
+			if *after != *before {
+				t.Errorf("confirmation changed terminal: got %+v want %+v", after, before)
 			}
 			if tc.remaining != "" {
 				line, e := promptio.ReadLine(ctx, slave)
 				if e != nil || line != tc.remaining {
 					t.Errorf("next owner: %q %v", line, e)
+				}
+				afterLine, e := unix.IoctlGetTermios(int(slave.Fd()), consentGetTermios)
+				if e != nil {
+					t.Fatal(e)
+				}
+				if *afterLine != *before {
+					t.Errorf("plain handoff changed terminal: got %+v want %+v", afterLine, before)
 				}
 			}
 			slave.Close()
