@@ -1,0 +1,127 @@
+import { expect, test, type Page } from '@playwright/test';
+
+const activator = (page: Page) => page.getByRole('button', { name: /^Language:/ });
+const requested = (baseURL: string, locale = '') =>
+  new URL(`./${locale ? `${locale}/` : ''}plugins/gitlab/?q=gitlab&target=codex&target=cursor#plugins`, baseURL).href;
+
+async function assertRoute(page: Page, baseURL: string, locale: string) {
+  await expect(page).toHaveURL(requested(baseURL, locale === 'en' ? '' : locale));
+  await expect(page.getByTestId('locale')).toHaveText(locale);
+  await expect(page.getByRole('searchbox', { name: 'Search plugins' })).toHaveValue('gitlab');
+  await expect(page.getByTestId('message')).toHaveText('Language');
+}
+async function choose(page: Page, name: string) {
+  await activator(page).click();
+  await page.getByRole('menuitemradio', { name, exact: true }).click();
+}
+
+test.beforeEach(async ({ page, baseURL }) => {
+  await page.route('**/fixture-messages/*', route => route.fulfill({ json: { ready: true } }));
+  await page.goto(requested(baseURL!));
+  await expect(page.locator('main')).toHaveAttribute('data-hydrated', 'true');
+  await assertRoute(page, baseURL!, 'en');
+  await expect(page.getByTestId('preference')).toHaveText('none');
+});
+
+test('keyboard, Escape, current choice, one navigation and Back/Forward preserve manual preference', async ({ page, context, baseURL }) => {
+  const errors: string[] = [];
+  page.on('pageerror', error => errors.push(error.message));
+  const initial = Number(await page.getByTestId('navigations').textContent());
+  await activator(page).focus();
+  await page.keyboard.press('ArrowDown');
+  const english = page.getByRole('menuitemradio', { name: 'English', exact: true });
+  await expect(english).toHaveAttribute('aria-checked', 'true');
+  await expect(english).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('menu')).toBeHidden();
+  await expect(activator(page)).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await expect(english).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByRole('menuitemradio', { name: 'Русский', exact: true })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await assertRoute(page, baseURL!, 'ru');
+  await expect(activator(page)).toBeFocused();
+  await expect(page.getByTestId('navigations')).toHaveText(String(initial + 1));
+  await expect(page.getByTestId('preference')).toHaveText('ru');
+  const cookie = (await context.cookies()).find(item => item.name === 'uap_locale');
+  expect(cookie?.value).toBe('ru');
+  expect(cookie?.path).toBe(new URL(baseURL!).pathname);
+  await activator(page).click();
+  await expect(page.getByRole('menuitemradio', { name: 'Русский', exact: true })).toHaveAttribute('aria-checked', 'true');
+  await page.getByRole('menuitemradio', { name: 'Русский', exact: true }).click();
+  await expect(page.getByRole('menu')).toBeHidden();
+  await expect(activator(page)).toBeFocused();
+  await expect(page.getByTestId('navigations')).toHaveText(String(initial + 1));
+  await page.goBack();
+  await assertRoute(page, baseURL!, 'en');
+  await expect(page.getByTestId('preference')).toHaveText('ru');
+  await page.goForward();
+  await assertRoute(page, baseURL!, 'ru');
+  await expect(page.getByTestId('preference')).toHaveText('ru');
+  expect((await context.cookies()).find(item => item.name === 'uap_locale')?.value).toBe('ru');
+  expect(errors).toEqual([]);
+});
+
+test('real Nuxt i18n swallowed loader rejection leaves URL/preference intact and explicit retry succeeds', async ({ page, context, baseURL }) => {
+  const initial = Number(await page.getByTestId('navigations').textContent());
+  let failing = true;
+  let requests = 0;
+  await page.route('**/fixture-messages/uk', route => {
+    requests++;
+    return failing ? route.fulfill({ status: 503, body: 'fixture load rejected' }) : route.fulfill({ json: { ready: true } });
+  });
+  await choose(page, 'Українська');
+  await expect(page.getByRole('alert')).toContainText('Unable to change language');
+  await assertRoute(page, baseURL!, 'en');
+  await expect(page.getByTestId('preference')).toHaveText('none');
+  await expect(page.getByTestId('navigations')).toHaveText(String(initial));
+  await expect(activator(page)).toBeFocused();
+  expect(requests).toBe(1);
+  expect((await context.cookies()).some(item => item.name === 'uap_locale')).toBe(false);
+  failing = false;
+  await page.getByRole('button', { name: 'Retry', exact: true }).click();
+  await assertRoute(page, baseURL!, 'uk');
+  await expect(page.getByRole('alert')).toBeHidden();
+  await expect(page.getByTestId('preference')).toHaveText('uk');
+  await expect(page.getByTestId('navigations')).toHaveText(String(initial + 1));
+  await expect(activator(page)).toBeFocused();
+  expect((await context.cookies()).find(item => item.name === 'uap_locale')?.value).toBe('uk');
+});
+
+test('Nuxt abortNavigation keeps the previous route and cookie, then permits explicit retry', async ({ page, context, baseURL }) => {
+  const initial = Number(await page.getByTestId('navigations').textContent());
+  await page.getByRole('button', { name: 'Abort next navigation' }).click();
+  await choose(page, 'Русский');
+  await expect(page.getByRole('alert')).toBeVisible();
+  await assertRoute(page, baseURL!, 'en');
+  await expect(page.getByTestId('preference')).toHaveText('none');
+  await expect(page.getByTestId('navigations')).toHaveText(String(initial));
+  expect((await context.cookies()).some(item => item.name === 'uap_locale')).toBe(false);
+  await page.getByRole('button', { name: 'Retry', exact: true }).click();
+  await assertRoute(page, baseURL!, 'ru');
+  await expect(page.getByTestId('preference')).toHaveText('ru');
+  await expect(page.getByTestId('navigations')).toHaveText(String(initial + 1));
+});
+
+test('pending lazy load disables repeated choices without committing early', async ({ page, baseURL }) => {
+  let release!: () => void;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  await page.route('**/fixture-messages/uk', async route => {
+    await gate;
+    await route.fulfill({ json: { ready: true } });
+  });
+  try {
+    await choose(page, 'Українська');
+    await expect(activator(page)).toBeDisabled();
+    await expect(activator(page)).toHaveAttribute('aria-busy', 'true');
+    await expect(page.getByRole('menuitemradio', { name: 'Русский', exact: true })).toHaveAttribute('aria-disabled', 'true');
+    await assertRoute(page, baseURL!, 'en');
+    await expect(page.getByTestId('preference')).toHaveText('none');
+  } finally {
+    release();
+  }
+  await assertRoute(page, baseURL!, 'uk');
+  await expect(activator(page)).toBeEnabled();
+  await expect(activator(page)).toBeFocused();
+});

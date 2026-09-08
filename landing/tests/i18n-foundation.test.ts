@@ -77,6 +77,9 @@ function fixture() {
   const adapter = {
     valid: (code: unknown): code is string => typeof code === 'string' && (candidateLocales as readonly string[]).includes(code),
     active: () => active,
+    currentPath: () => '/plugins/gitlab/',
+    loadMessages: async (_code: string) => {},
+    messages: (_code: string): Record<string, unknown> => ({ language: { label: 'Select language' } }),
     pending: { value: false }, error: { value: false },
     destination: (code: string) => `/${code}/plugins/gitlab/?source=a%2Fb&target=codex&target=cursor#security`,
     navigate: async (path: string): Promise<unknown> => { calls++; assert.ok(path.endsWith('?source=a%2Fb&target=codex&target=cursor#security')); active = 'uk'; return undefined; },
@@ -112,7 +115,7 @@ test('pending transitions serialize across callers; denied storage/analytics are
   assert.equal(f.state().calls, 1); assert.equal(f.state().remembered, 'uk');
 });
 
-test('Nuxt adapter preserves router query arrays/hash, confirms route and scopes successful cookie', async () => {
+test('stubbed adapter preserves router query arrays/hash, confirms route and scopes successful cookie', async () => {
   const { createRouter, createMemoryHistory } = await import('vue-router');
   const { ref } = await import('vue');
   const router = createRouter({ history: createMemoryHistory('/universal-agent-plugins/'), routes: [
@@ -124,7 +127,7 @@ test('Nuxt adapter preserves router query arrays/hash, confirms route and scopes
   let calls = 0;
   let cookie = '';
   const globals = {
-    useNuxtApp: () => ({ $i18n: { locale: active } }),
+    useNuxtApp: () => ({ runWithContext: (fn: () => unknown) => fn(), $i18n: { locale: active, loadLocaleMessages: async () => {}, getLocaleMessage: () => ({ language: {} }) } }),
     useRoute: () => router.currentRoute.value,
     useRouter: () => router,
     useSwitchLocalePath: () => () => '/plugins/gitlab/',
@@ -149,7 +152,12 @@ test('Nuxt adapter preserves router query arrays/hash, confirms route and scopes
     assert.deepEqual(router.currentRoute.value.query, { source: 'a/b', target: ['codex', 'cursor'] });
     assert.equal(router.currentRoute.value.hash, '#security');
     assert.match(cookie, /^uap_locale=en; Path=\/universal-agent-plugins\/; Max-Age=31536000; SameSite=Lax; Secure$/);
-    await router.back();
+    const back = new Promise<void>(resolve => {
+      const remove = router.afterEach(() => { remove(); resolve(); });
+    });
+    router.back();
+    await back;
+    assert.equal(router.currentRoute.value.fullPath, '/ru/plugins/gitlab/?source=a%2Fb&target=codex&target=cursor#security');
     assert.equal(useLocaleStore().preferredLocale, 'en');
   } finally {
     for (const [key, descriptor] of previous) {
@@ -166,4 +174,38 @@ test('cookie metadata ignores old, malformed and unpublished values and storage 
     assert.equal(readManualLocaleCookie(() => cookie), null);
   }
   assert.equal(readManualLocaleCookie(() => { throw new Error('denied'); }), null);
+});
+
+
+test('rejected and swallowed message loads stop before navigation; retry loads and commits once', async () => {
+  for (const rejects of [true, false]) {
+    const f = fixture();
+    const load = f.adapter.loadMessages;
+    const messages = f.adapter.messages;
+    f.adapter.loadMessages = async () => { if (rejects) throw new Error('message request rejected'); };
+    f.adapter.messages = () => ({});
+    assert.equal(await switchLocaleTransaction('uk', f.adapter), false);
+    assert.deepEqual(f.state(), { active: 'en', remembered: '', writes: 0, calls: 0 });
+    assert.equal(f.adapter.error.value, true);
+    assert.equal(f.adapter.pending.value, false);
+    f.adapter.loadMessages = load;
+    f.adapter.messages = messages;
+    assert.equal(await switchLocaleTransaction('uk', f.adapter), true);
+    assert.equal(f.adapter.error.value, false);
+    assert.deepEqual(f.state(), { active: 'uk', remembered: 'uk', writes: 1, calls: 1 });
+  }
+});
+
+test('route change during pending preflight cancels stale destination without writes', async () => {
+  const f = fixture();
+  let release!: () => void;
+  f.adapter.loadMessages = () => new Promise<void>(resolve => { release = resolve; });
+  const switching = switchLocaleTransaction('uk', f.adapter);
+  assert.equal(f.adapter.pending.value, true);
+  assert.equal(await switchLocaleTransaction('ru', f.adapter), false);
+  f.adapter.currentPath = () => '/download/';
+  release();
+  assert.equal(await switching, false);
+  assert.deepEqual(f.state(), { active: 'en', remembered: '', writes: 0, calls: 0 });
+  assert.equal(f.adapter.pending.value, false);
 });

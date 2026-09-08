@@ -21,6 +21,9 @@ export async function switchLocaleTransaction(code: unknown, adapter: {
   pending: { value: boolean };
   error: { value: boolean };
   destination: (code: string) => string | undefined;
+  loadMessages: (code: string) => Promise<void>;
+  messages: (code: string) => Record<string, unknown>;
+  currentPath: () => string;
   navigate: (path: string) => Promise<unknown>;
   remember: (code: string) => void;
   persist: (code: string) => void;
@@ -30,9 +33,16 @@ export async function switchLocaleTransaction(code: unknown, adapter: {
   adapter.pending.value = true;
   adapter.error.value = false;
   const previous = adapter.active();
+  const previousPath = adapter.currentPath();
   try {
     const path = adapter.destination(code);
     if (!path) throw new Error('Missing localized route');
+    // i18n 9 catches loader rejection and resolves with an empty dictionary.
+    // Preflight through its supported API, then inspect the target directly:
+    // translated-key lookup could succeed through the English fallback.
+    await adapter.loadMessages(code);
+    if (!Object.keys(adapter.messages(code)).length) throw new Error('Locale messages unavailable');
+    if (adapter.currentPath() !== previousPath || adapter.active() !== previous) throw new Error('Route changed during locale loading');
     const result = await adapter.navigate(path);
     if (result || adapter.active() !== code) throw new Error('Locale navigation did not complete');
     adapter.remember(code);
@@ -48,7 +58,12 @@ export async function switchLocaleTransaction(code: unknown, adapter: {
 }
 
 export const useLocation = () => {
-  const i18n = useNuxtApp().$i18n as { locale: string | Ref<string> };
+  const nuxtApp = useNuxtApp();
+  const i18n = nuxtApp.$i18n as {
+    locale: string | Ref<string>;
+    loadLocaleMessages: (code: string) => Promise<void>;
+    getLocaleMessage: (code: string) => Record<string, unknown>;
+  };
   const route = useRoute();
   const router = useRouter();
   const switchLocalePath = useSwitchLocalePath();
@@ -75,7 +90,10 @@ export const useLocation = () => {
       // Nuxt resolves existing params; explicitly retain the complete query and hash.
       return router.resolve({ path: path.split(/[?#]/, 1)[0], query: { ...route.query }, hash: route.hash }).fullPath;
     },
-    navigate: async path => await navigateTo(path),
+    loadMessages: target => i18n.loadLocaleMessages(target),
+    messages: target => i18n.getLocaleMessage(target),
+    currentPath: () => route.fullPath,
+    navigate: async path => await nuxtApp.runWithContext(() => navigateTo(path)),
     remember: target => store.rememberChoice(target),
     persist: target => {
       document.cookie = `uap_locale=${encodeURIComponent(target)}; Path=${base}; Max-Age=31536000; SameSite=Lax${location.protocol === 'https:' ? '; Secure' : ''}`;
