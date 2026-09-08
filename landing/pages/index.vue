@@ -1,31 +1,50 @@
 <script setup lang="ts">
-import { registryFaqItems } from '~/data/registryFaq';
-import { productSoftwareSchema } from '~/utils/seo';
+import { isKnownLocale } from '~/data/i18n';
+import { localizedPath } from '~/utils/localizedRoutes';
+import { productRootUrl, productSoftwareSchema } from '~/utils/seo';
+const { t, locale } = useI18n();
+const registryFaqItems = computed(() =>
+  ['0', '1', '2', '3', '4', '5'].map((key) => ({
+    question: t(`shell.faq.items.${key}.question`),
+    answer: t(`shell.faq.items.${key}.answer`),
+  })),
+);
 
 const registry = await useRegistryPage({ discovery: true });
 const config = useRuntimeConfig();
-const description =
-  'Install, update, repair, and remove Agent Plugins 1.0 across supported AI agents with one CLI.';
-const siteUrl = String(config.public.siteUrl).replace(/\/+$/, '');
+const { docsUrl } = useDocsLinks();
+const homePath = computed(() =>
+  localizedPath('/', isKnownLocale(locale.value) ? locale.value : 'en'),
+);
+const description = computed(() => t('shell.seo.indexDescription'));
+const siteUrl = productRootUrl(
+  String(config.public.siteUrl),
+  String(config.app.baseURL),
+).replace(/\/+$/, '');
 const githubUrl = `https://github.com/${config.public.githubRepo}`;
 const softwareId = `${siteUrl}/#software`;
 
-usePageSeo('Universal Agent Plugins CLI | Install Agent Plugins 1.0', description, {
+usePageSeo(() => t('shell.seo.indexTitle'), description, {
   translate: false,
   siteIdentity: true,
   pageProperties: { about: { '@id': softwareId } },
-  structuredData: [
-    productSoftwareSchema({
-      siteUrl,
-      githubUrl,
-      releasesUrl: String(config.public.githubReleasesUrl),
-      docsUrl: String(config.public.docsUrl),
-      description,
-    }),
+  structuredData: () => [
+    {
+      ...productSoftwareSchema({
+        siteUrl,
+        githubUrl,
+        releasesUrl: String(config.public.githubReleasesUrl),
+        docsUrl: docsUrl.value,
+        description: description.value,
+        applicationSubCategory: t('shell.seo.applicationSubCategory'),
+      softwareRequirements: t('shell.seo.softwareRequirements'),
+        featureList: t('shell.seo.featureList'),
+      }),
+    },
     {
       '@type': 'FAQPage',
-      '@id': `${siteUrl}/#faq`,
-      mainEntity: registryFaqItems.map((item) => ({
+      '@id': `${siteUrl}${homePath.value}#faq`,
+      mainEntity: registryFaqItems.value.map((item) => ({
         '@type': 'Question',
         name: item.question,
         acceptedAnswer: {
@@ -44,6 +63,6 @@ usePageSeo('Universal Agent Plugins CLI | Install Agent Plugins 1.0', descriptio
     <RegistryHero :registry="registry" />
     <RegistryDirectory :registry="registry" />
     <RegistryWhy />
-    <RegistryFaq />
+    <RegistryFaq :items="registryFaqItems" />
   </div>
 </template>

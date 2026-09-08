@@ -1,15 +1,20 @@
 <script setup lang="ts">
-const localePath = useLocalePath();
-const homePath = computed(() => localePath("/"));
+import { isKnownLocale } from '~/data/i18n';
+import { localizedPath } from '~/utils/localizedRoutes';
+const { t, locale } = useI18n();
+
+const homePath = computed(() =>
+  localizedPath('/', isKnownLocale(locale.value) ? locale.value : 'en'),
+);
 const { asset } = useSite();
 </script>
 
 <template>
-  <NuxtLink :to="homePath" class="app-logo">
+  <NuxtLink :to="homePath" class="app-logo" :aria-label="t('shell.accessibility.home')">
     <img :src="asset('icon.svg')" alt="" class="app-logo__mark" width="36" height="36" >
     <span class="app-logo__copy">
       <span class="app-logo__text">Universal Agent Plugins</span>
-      <span class="app-logo__subtext">multi-agent CLI</span>
+      <span class="app-logo__subtext">{{ t('shell.logo.subtitle') }}</span>
     </span>
   </NuxtLink>
 </template>
@@ -43,7 +48,7 @@ const { asset } = useSite();
 }
 
 .app-logo__text {
-  font-family: "JetBrains Mono", monospace;
+  font-family: 'JetBrains Mono', monospace;
   font-weight: 700;
   font-size: 14px;
   letter-spacing: 0.04em;

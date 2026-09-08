@@ -1,4 +1,5 @@
 import type { ComputedRef } from 'vue';
+import { useInstallPreferencesStore } from '~/stores/installPreferences';
 import type { InstallChannel } from '~/types/content';
 import {
   normalizeInstallPlatform,
@@ -7,9 +8,9 @@ import {
 } from '~/utils/installPlatform';
 
 export function useInstallChannelSelection(channels: ComputedRef<InstallChannel[]>) {
-  const selectedInstallChannelId = ref<string | null>(null);
+  const preferences = useInstallPreferencesStore();
+  const selectedInstallChannelId = computed(() => preferences.channelId);
   const detectedInstallPlatform = ref<InstallPlatform | null>(null);
-  const manuallySelected = ref(false);
 
   const recommendedChannelId = computed(() => {
     if (detectedInstallPlatform.value) {
@@ -32,16 +33,13 @@ export function useInstallChannelSelection(channels: ComputedRef<InstallChannel[
   });
 
   watchEffect(() => {
-    const selectionStillExists = channels.value.some(
-      (channel) => channel.id === selectedInstallChannelId.value,
-    );
-    if (!selectionStillExists || !manuallySelected.value) {
-      selectedInstallChannelId.value =
-        recommendedChannelId.value ??
-        channels.value.find((channel) => channel.id === 'npm')?.id ??
-        channels.value[0]?.id ??
-        null;
-    }
+    const available = channels.value.map((channel) => channel.id);
+    preferences.reconcileChannels(available);
+    const next =
+      recommendedChannelId.value ??
+      channels.value.find((channel) => channel.id === 'npm')?.id ??
+      available[0];
+    if (next) preferences.selectChannel(next, available, false);
   });
 
   onMounted(async () => {
@@ -59,8 +57,10 @@ export function useInstallChannelSelection(channels: ComputedRef<InstallChannel[
     if (!channels.value.some((channel) => channel.id === channelId)) {
       return;
     }
-    manuallySelected.value = true;
-    selectedInstallChannelId.value = channelId;
+    preferences.selectChannel(
+      channelId,
+      channels.value.map((channel) => channel.id),
+    );
   }
 
   return {

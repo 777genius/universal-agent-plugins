@@ -6,7 +6,7 @@ const { isDark, toggleTheme } = useBrowserTheme();
 const { trackThemeToggle } = useAnalytics();
 
 const tooltip = computed(() => isDark.value ? t('theme.light') : t('theme.dark'));
-const ariaLabel = computed(() => t("theme.toggle"));
+const ariaLabel = tooltip;
 
 const onToggle = () => {
   const nextTheme = isDark.value ? "light" : "dark";

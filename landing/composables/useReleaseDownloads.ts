@@ -1,3 +1,4 @@
+import { withAppBase } from '~/utils/localizedRoutes';
 import { emptyDownloadsResponse, parseGitHubRelease } from '~/utils/releaseDownloads';
 import type {
   DownloadArch,
@@ -110,7 +111,10 @@ export const useReleaseDownloads = () => {
       }
 
       try {
-        const parsed = await $fetch<DownloadsApiResponse>('/api/releases/latest');
+        const parsed = await $fetch<DownloadsApiResponse>(
+          withAppBase('/api/releases/latest', String(config.app.baseURL)),
+          { responseType: 'json' },
+        );
         writeCache(parsed);
         return parsed;
       } catch {

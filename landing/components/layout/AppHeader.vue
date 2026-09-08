@@ -28,11 +28,11 @@ const githubUrl = `https://github.com/${config.public.githubRepo}`;
 const homePath = computed(() => localePath('/'));
 const homeHref = computed(() => router.resolve(homePath.value).href);
 
-const navItems = [
-  { id: 'plugins', label: 'Plugins' },
-  { id: 'why', label: 'Why it works' },
-  { id: 'faq', label: 'FAQ' },
-];
+const navItems = computed(() => [
+  { id: 'plugins', label: t('shell.navigation.plugins') },
+  { id: 'why', label: t('shell.navigation.why') },
+  { id: 'faq', label: t('shell.navigation.faq') },
+]);
 
 const normalizePath = (value: string) => (value !== '/' ? value.replace(/\/+$/, '') : '/');
 
@@ -77,14 +77,14 @@ onMounted(() => {
       <div class="app-header__mobile-actions">
         <DialogRoot v-model:open="menuOpen">
           <DialogTrigger as-child>
-            <v-btn :icon="mdiMenu" variant="text" :disabled="!interactiveReady" aria-label="Open navigation menu" />
+            <v-btn :icon="mdiMenu" variant="text" :disabled="!interactiveReady" :aria-label="t('shell.navigation.open')" />
           </DialogTrigger>
           <DialogPortal>
             <DialogOverlay class="mobile-menu-overlay" />
             <DialogContent class="mobile-menu" @escape-key-down="onMobileEscape">
-              <DialogTitle class="sr-only">Navigation menu</DialogTitle>
+              <DialogTitle class="sr-only">{{ t('shell.navigation.title') }}</DialogTitle>
               <DialogDescription class="sr-only">
-                Jump to plugins, product details, frequently asked questions, or GitHub.
+                {{ t('shell.navigation.description') }}
               </DialogDescription>
               <div class="mobile-menu__header">
                 <div @click="menuOpen = false">
@@ -92,7 +92,7 @@ onMounted(() => {
                 </div>
                 <div style="flex: 1" />
                 <DialogClose as-child>
-                  <v-btn :icon="mdiClose" variant="text" aria-label="Close navigation menu" />
+                  <v-btn :icon="mdiClose" variant="text" :aria-label="t('shell.navigation.close')" />
                 </DialogClose>
               </div>
               <hr class="mobile-menu__divider" >
@@ -118,7 +118,7 @@ onMounted(() => {
               </nav>
               <hr class="mobile-menu__divider" >
               <div class="mobile-menu__actions">
-                <span>Appearance</span>
+                <span>{{ t('shell.navigation.appearance') }}</span>
                 <template v-if="interactiveReady">
                   <LanguageSwitcher v-if="publishedLocales.length > 1" compact contain-menu @menu-open="languageMenuOpen = $event" />
                   <ThemeToggle />

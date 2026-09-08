@@ -100,7 +100,9 @@
   },
   "language": {
     "label": "Language",
-    "search": "Search language…"
+    "search": "Search language…",
+    "switchError": "Unable to change language. Please try again.",
+    "retry": "Retry"
   },
   "features": {
     "sectionTitle": "A clean path from one plugin repo to many agents",
@@ -343,5 +345,203 @@
     "compatibilityLink": "Client compatibility (English)",
     "limitations": "Compatibility is package-specific. Schema validation does not prove runtime, OAuth or activation. Codex does not support declared MCP SSE; stdio and Streamable HTTP keep their existing adapter support.",
     "versions": "Published versions checked on 2026-09-07: universal-agent-plugins 0.1.53 (npm), plugin-kit-ai 1.2.4 (npm/PyPI), stable GitHub release agentplugins-v0.1.53."
+  },
+  "shell": {
+    "docs": {
+      "englishLabel": "{label} (documentation in English)"
+    },
+    "logo": {
+      "subtitle": "multi-agent CLI"
+    },
+    "accessibility": {
+      "home": "Universal Agent Plugins home",
+      "chooseTargets": "Choose target agents",
+      "supportedAgents": "Supported agents",
+      "license": "Apache 2.0 license"
+    },
+    "why": {
+      "eyebrow": "Why it works",
+      "title": "One standard",
+      "subtitle": "Native delivery",
+      "intro": "The package stays portable; the installer handles each client's format and lifecycle.",
+      "standardTitle": "Standard first",
+      "clientTitle": "Client-aware",
+      "clientDescription": "Codex, Cursor, Claude Code, Gemini CLI, OpenCode, and other clients receive the format they support.",
+      "lifecycleTitle": "Full lifecycle",
+      "lifecycleDescription": "Add, inspect, update, repair, switch source, or remove a plugin through the same CLI.",
+      "sourceTitle": "Source visible",
+      "sourceDescription": "Reviewed packages and community discovery remain clearly labeled, with their source available before install.",
+      "standardDescription": "Packages are read from Agent Plugins 1.0 {manifest}, without a second install manifest."
+    },
+    "faq": {
+      "eyebrow": "FAQ",
+      "title": "Common questions",
+      "items": {
+        "0": {
+          "question": "Which AI agents are supported?",
+          "answer": "Codex, ChatGPT, Cursor, GitHub Copilot CLI, VS Code, Kiro, Claude Code, Gemini CLI, OpenCode, Cline, and Windsurf are supported or prepared through an explicit client-specific path."
+        },
+        "1": {
+          "question": "Does one command install into every agent?",
+          "answer": "By default the CLI detects installed compatible agents and asks you to confirm. You can also select one or many agents explicitly."
+        },
+        "2": {
+          "question": "What happens when an agent needs sign-in?",
+          "answer": "The CLI prepares the package and shows the exact activation or sign-in step. It never receives your OAuth password."
+        },
+        "3": {
+          "question": "Can I install a plugin outside this directory?",
+          "answer": "Yes. Use a pinned GitHub source that contains a valid Agent Plugins 1.0 plugin.json package."
+        },
+        "4": {
+          "question": "Are all discovered plugins reviewed?",
+          "answer": "No. Reviewed entries and automatically discovered community packages are labeled separately so you can choose the trust level you need."
+        },
+        "5": {
+          "question": "Can I undo an installation?",
+          "answer": "Yes. The same CLI records managed state and supports inspect, update, repair, source switching, and removal."
+        }
+      }
+    },
+    "seo": {
+      "indexTitle": "Universal Agent Plugins CLI {'|'} Install Agent Plugins 1.0",
+      "indexDescription": "Install, update, repair, and remove Agent Plugins 1.0 across supported AI agents with one CLI.",
+      "downloadTitle": "Download Universal Agent Plugins CLI",
+      "downloadDescription": "Install the Universal Agent Plugins CLI on macOS, Linux, or Windows and manage Agent Plugins 1.0 from one command.",
+      "applicationSubCategory": "Agent plugin manager",
+      "softwareRequirements": "Native CLI for macOS, Linux, and Windows; or Node.js 22+ for npx",
+      "featureList": "Install, inspect, update, repair, switch source, and remove Agent Plugins 1.0",
+      "imageAlt": "Universal Agent Plugins - install plugins across AI agents with one CLI",
+      "organizationDescription": "Open-source multi-agent installer and lifecycle manager for Agent Plugins 1.0."
+    },
+    "hero": {
+      "autoLabel": "All installed agents (recommended)",
+      "autoSummary": "All installed agents",
+      "autoDescription": "Detected when you run the command",
+      "unavailable": "Temporarily unavailable",
+      "refreshing": "Refreshing plugin data",
+      "chatgptSetup": "Finish setup in ChatGPT",
+      "notAvailable": "Not available",
+      "notAvailableForPlugin": "Not available for this plugin",
+      "title": "One plugin",
+      "subtitle": "All your agents",
+      "intro": "Install, update, repair, and remove Agent Plugins 1.0 across supported AI agents with one command. Let the CLI detect installed agents, or choose exactly where the plugin goes.",
+      "github": "Open GitHub",
+      "choose": "Choose agents",
+      "chooseHint": "One, many, or auto-detect",
+      "run": "Copy and run",
+      "terminal": "In your terminal",
+      "refreshNotice": "Plugin data is refreshing. Try again shortly.",
+      "otherMethods": "Other installation methods",
+      "planNotice": "One command plans every selected agent before changing files",
+      "supportedClients": "Supported clients",
+      "clientNote": "The CLI installs or prepares the native format each client supports. Some clients may ask you to finish activation or sign in.",
+      "install": "Install {name}",
+      "explore": "Explore plugins",
+      "exploreCount": "Explore {count} plugins | Explore {count} plugin | Explore {count} plugins",
+      "delivery": {
+        "managed": "Managed install",
+        "prepared": "Prepared; client import remains",
+        "manual_activation": "Manual activation required"
+      },
+      "sourceReason": "Source reason: {reason}",
+      "diagnostics": {
+        "distributionStatus": "distribution is {status}",
+        "releaseStatus": "release {sequence} is {status}",
+        "missingComponents": "release {sequence} misses required components",
+        "unsupportedTargets": "release {sequence} does not support {targets}",
+        "blockingFailure": "release {sequence} has blocking trusted failure for {targets}",
+        "missingEvidence": "release {sequence} lacks current positive package compatibility evidence (passed materialization) for {targets}",
+        "noReleases": "no releases",
+        "defaultIneligible": "declared default {distribution} was ineligible: {reasons}",
+        "reasonSeparator": "; ",
+        "status": {
+          "candidate": "candidate",
+          "active": "active",
+          "suspended": "suspended",
+          "superseded": "superseded",
+          "revoked": "revoked"
+        }
+      }
+    },
+    "header": {
+      "plugins": "Plugins",
+      "why": "Why it works",
+      "faq": "FAQ",
+      "openMenu": "Open navigation menu",
+      "closeMenu": "Close navigation menu",
+      "menuTitle": "Navigation menu",
+      "menuDescription": "Jump to plugins, product details, frequently asked questions, or GitHub.",
+      "appearance": "Appearance"
+    },
+    "navigation": {
+      "plugins": "Plugins",
+      "why": "Why it works",
+      "faq": "FAQ",
+      "open": "Open navigation menu",
+      "close": "Close navigation menu",
+      "title": "Navigation menu",
+      "description": "Jump to plugins, product details, frequently asked questions, or GitHub.",
+      "appearance": "Appearance"
+    }
+  },
+  "registryUi": {
+    "clients": {
+      "codex": {
+        "note": "Skills and supported MCP transports",
+        "status": "Supported",
+        "activation": "Follow any activation hint printed by the CLI, then start a new Codex session."
+      },
+      "chatgpt": {
+        "note": "Verified ChatGPT connections",
+        "status": "Setup in app",
+        "activation": "Complete the final app activation or sign-in step in ChatGPT when prompted."
+      },
+      "cursor": {
+        "note": "Native Agent Plugin package",
+        "status": "Supported",
+        "activation": "Reload Cursor when requested, then verify that the plugin is discovered."
+      },
+      "copilot": {
+        "note": "Managed native plugin",
+        "status": "Supported",
+        "activation": "Restart or reload the client only when the native Copilot workflow asks for it."
+      },
+      "vscode": {
+        "note": "Copilot plugin integration",
+        "status": "Supported",
+        "activation": "If automatic activation is unavailable, follow the exact setting or import path printed by the CLI."
+      },
+      "kiro": {
+        "note": "Native folder package",
+        "status": "Supported",
+        "activation": "Follow the printed import or activation hint when Kiro requires a final client-side step."
+      },
+      "claude": {
+        "note": "Managed MCP configuration",
+        "status": "Supported",
+        "activation": "Reload Claude Code when requested and complete any service sign-in in the client or provider."
+      },
+      "gemini": {
+        "note": "Managed MCP configuration",
+        "status": "Supported",
+        "activation": "Enable or reload the integration when Gemini CLI prints a follow-up step."
+      },
+      "opencode": {
+        "note": "Managed MCP configuration",
+        "status": "Supported",
+        "activation": "Open a new OpenCode session after installation so the project configuration is reloaded."
+      },
+      "cline": {
+        "note": "Managed MCP configuration",
+        "status": "Supported",
+        "activation": "Reload Cline when requested and complete provider authentication outside the plugin package."
+      },
+      "windsurf": {
+        "note": "Prepared package; manual activation required",
+        "status": "Prepared by CLI",
+        "activation": "Follow the exact manual activation path printed after preparation."
+      }
+    }
   }
 }

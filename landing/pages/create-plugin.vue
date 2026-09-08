@@ -1,16 +1,10 @@
 <script setup lang="ts">
-const { t, locale } = useI18n();
-const config = useRuntimeConfig();
+const { t } = useI18n();
+const { quickstartUrl, docsLabel, quickstartEnglishFallback } = useDocsLinks();
 // This checkpoint preserves the existing route and indexing policy.
 // Availability is stated in visible copy, independently of robots metadata.
 usePageSeo('publicAuthoring.title', 'publicAuthoring.intro', {
   robots: 'noindex, follow',
-});
-const quickstartUrl = computed(() => {
-  const base = String(config.public.docsUrl)
-    .replace(/\/+$/, '')
-    .replace(/\/(en|ru|es|fr|zh)$/, '');
-  return `${base}/${locale.value}/guide/quickstart.html`;
 });
 </script>
 
@@ -37,7 +31,9 @@ const quickstartUrl = computed(() => {
       <section id="build-plugins" aria-labelledby="build-title">
         <h2 id="build-title">{{ t('publicAuthoring.buildTitle') }}</h2>
         <p>{{ t('publicAuthoring.standard') }}</p>
-        <p><strong>{{ t('publicAuthoring.preparation') }}</strong></p>
+        <p>
+          <strong>{{ t('publicAuthoring.preparation') }}</strong>
+        </p>
         <p>{{ t('publicAuthoring.unreleased') }}</p>
         <a href="https://agent-plugins.org/specification">
           {{ t('publicAuthoring.specLink') }}
@@ -51,8 +47,8 @@ const quickstartUrl = computed(() => {
       <section id="historical-v1" aria-labelledby="history-title">
         <h2 id="history-title">{{ t('publicAuthoring.historyTitle') }}</h2>
         <p>{{ t('publicAuthoring.history') }}</p>
-        <a :href="`${quickstartUrl}#historical-v1`">
-          {{ t('publicAuthoring.quickstartLink') }}
+        <a :href="quickstartUrl.split('#')[0] + '#historical-v1'">
+          {{ docsLabel(t('publicAuthoring.quickstartLink'), quickstartEnglishFallback) }}
         </a>
       </section>
     </div>
