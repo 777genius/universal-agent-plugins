@@ -62,7 +62,34 @@ func TestAgentpluginsReleaseContractsStayFailClosed(t *testing.T) {
 	mustContain(t, releaseProofJob, "require_draft: true")
 	mustContain(t, releaseProofJob, "expected_asset_set_digest: ${{ needs.stage-draft.outputs.asset_set_digest }}")
 	mustContain(t, releaseProofJob, "release_assets_artifact: ${{ needs.stage-draft.outputs.assets_artifact }}")
-	mustContain(t, releasePromoteJob, "needs: [validate, stage-draft, platform-proof]")
+	mustContain(t, releasePromoteJob, "needs: [validate, stage-draft, platform-proof, verified-draft]")
+	mustContain(t, releasePromoteJob, "if: ${{ inputs.publish_release == true }}")
+	mustContain(t, releaseWorkflow, "publish_release:\n        description: Explicitly promote after all verification succeeds\n        required: false\n        type: boolean\n        default: false")
+	draftReceiptJob := yamlJob(t, releaseWorkflow, "verified-draft")
+	for _, want := range []string{
+		"needs: [validate, stage-draft, platform-proof]",
+		"contents: read", "attestations: read",
+		"ref: ${{ needs.validate.outputs.commit }}",
+		"RELEASE_ID: ${{ needs.stage-draft.outputs.release_id }}",
+		"EXPECTED_ASSET_SET_DIGEST: ${{ needs.stage-draft.outputs.asset_set_digest }}",
+		"python3 scripts/verify-agentplugins-draft.py",
+		"--run-id", "--run-attempt", "verified-draft.json", "if-no-files-found: error",
+	} {
+		mustContain(t, draftReceiptJob, want)
+	}
+	mustContain(t, releaseDraftJob, "release_id: ${{ steps.release-identity.outputs.release_id }}")
+	mustContain(t, releaseDraftJob, "databaseId")
+	// No status override: Actions' implicit success() keeps failed/skipped needs closed,
+	// including when the caller explicitly requests publication.
+	for _, job := range []string{releasePromoteJob, draftReceiptJob} {
+		for _, forbidden := range []string{"always()", "!cancelled()", "failure()", "continue-on-error:"} {
+			mustNotContain(t, job, forbidden)
+		}
+	}
+	for _, forbidden := range []string{"contents: write", "id-token: write", "gh release edit", "gh release create", "if:"} {
+		mustNotContain(t, draftReceiptJob, forbidden)
+	}
+	mustAppearBefore(t, draftReceiptJob, "python3 scripts/verify-agentplugins-draft.py", "actions/upload-artifact@")
 	mustContain(t, releasePromoteJob, "EXPECTED_ASSET_SET_DIGEST: ${{ needs.stage-draft.outputs.asset_set_digest }}")
 	mustContain(t, releasePromoteJob, "gh release edit \"${TAG}\"")
 	mustContain(t, releasePromoteJob, "--draft=false")

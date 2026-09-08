@@ -6,6 +6,11 @@ on:
       tag:
         description: Exact stable tag, for example agentplugins-v0.1.0
         required: true
+      publish_release:
+        description: Explicitly promote after all verification succeeds
+        required: false
+        type: boolean
+        default: false
       producer_mode:
         description: Bounded release contract; publishes verified GitHub binary assets only
         required: true
@@ -204,6 +209,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: agentplugins-release
     outputs:
+      release_id: ${{ steps.release-identity.outputs.release_id }}
       asset_set_digest: ${{ steps.draft.outputs.asset_set_digest }}
       assets_artifact: ${{ steps.draft.outputs.assets_artifact }}
     permissions:
@@ -298,6 +304,16 @@ jobs:
             --target "${{ needs.validate.outputs.commit }}" --draft \
             --title "Agentplugins ${TAG#agentplugins-v}" --generate-notes \
             --notes "Native downloads: retain the companion THIRD_PARTY_NOTICES.txt with the binary and include it when redistributing."
+      - name: Capture staged release identity
+        id: release-identity
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          release_query='query($owner:String!,$name:String!,$tag:String!){repository(owner:$owner,name:$name){release(tagName:$tag){databaseId isDraft isPrerelease tagName}}}'
+          release_response="$(gh api graphql -f query="${release_query}" -F owner="${GITHUB_REPOSITORY%%/*}" -F name="${GITHUB_REPOSITORY#*/}" -F tag="${TAG}")"
+          release_id="$(jq -er --arg tag "${TAG}" '.data.repository.release | select(.isDraft == true and .isPrerelease == false and .tagName == $tag) | .databaseId | select(type == "number" and . > 0)' <<<"${release_response}")"
+          echo "release_id=${release_id}" >> "${GITHUB_OUTPUT}"
       - name: Share frozen draft assets with the read-only proof workflow
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
         with:
@@ -324,8 +340,45 @@ jobs:
       expected_asset_set_digest: ${{ needs.stage-draft.outputs.asset_set_digest }}
       release_assets_artifact: ${{ needs.stage-draft.outputs.assets_artifact }}
 
-  promote-release:
+  verified-draft:
     needs: [validate, stage-draft, platform-proof]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      attestations: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ needs.validate.outputs.commit }}
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          package-manager-cache: false
+      - name: Verify live draft after successful platform proofs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+          FROZEN_COMMIT: ${{ needs.validate.outputs.commit }}
+          RELEASE_ID: ${{ needs.stage-draft.outputs.release_id }}
+          EXPECTED_ASSET_SET_DIGEST: ${{ needs.stage-draft.outputs.asset_set_digest }}
+        run: |
+          python3 scripts/verify-agentplugins-draft.py \
+            --repository "${GITHUB_REPOSITORY}" --tag "${TAG}" \
+            --commit "${FROZEN_COMMIT}" --release-id "${RELEASE_ID}" \
+            --asset-set-digest "${EXPECTED_ASSET_SET_DIGEST}" \
+            --run-id "${GITHUB_RUN_ID}" --run-attempt "${GITHUB_RUN_ATTEMPT}" \
+            --source "${GITHUB_WORKSPACE}" --receipt "${RUNNER_TEMP}/verified-draft.json"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: agentplugins-verified-draft-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/verified-draft.json
+          if-no-files-found: error
+          retention-days: 7
+
+  promote-release:
+    if: ${{ inputs.publish_release == true }}
+    needs: [validate, stage-draft, platform-proof, verified-draft]
     runs-on: ubuntu-latest
     environment: agentplugins-release
     permissions:
