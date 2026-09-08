@@ -58,6 +58,10 @@ jobs:
         if: runner.os != 'Windows'
         run: |
           python3 scripts/terminal-ui/selection_matrix.py --build-go "$(command -v go)" --artifacts "$RUNNER_TEMP/selection-evidence" --timeout 15 > "$RUNNER_TEMP/selection-matrix.log" 2>&1 || { tail -c 6000 "$RUNNER_TEMP/selection-matrix.log"; exit 1; }
+      - name: Unix full plugin matrix (19 cases, synthetic client and scanner protocols)
+        if: ${{ !cancelled() && runner.os != 'Windows' && steps.build.outcome == 'success' }}
+        run: |
+          python3 scripts/terminal-ui/plugin_matrix.py --binary "$RUNNER_TEMP/agentplugins.exe" --artifacts "$RUNNER_TEMP/plugin-evidence" --timeout 15 > "$RUNNER_TEMP/plugin-matrix.log" 2>&1 || { tail -c 6000 "$RUNNER_TEMP/plugin-matrix.log"; exit 1; }
       - name: Unix npm inherited terminal routes
         if: runner.os != 'Windows'
         run: python3 scripts/terminal-ui/harness.py --binary "$RUNNER_TEMP/agentplugins.exe" --scanner-archive "$RUNNER_TEMP/scanner/${{ matrix.archive }}" --npm-launcher --case escape --case json-tty --case json-explicit --artifacts "$RUNNER_TEMP/npm-terminal-evidence" --timeout 15
@@ -90,6 +94,8 @@ jobs:
           path: |
             ${{ runner.temp }}/selection-evidence
             ${{ runner.temp }}/selection-matrix.log
+            ${{ runner.temp }}/plugin-evidence
+            ${{ runner.temp }}/plugin-matrix.log
             ${{ runner.temp }}/terminal-evidence
             ${{ runner.temp }}/npm-terminal-evidence
             ${{ runner.temp }}/windows-fault-evidence
