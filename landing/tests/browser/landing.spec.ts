@@ -247,6 +247,12 @@ test.describe('mobile navigation and catalog', () => {
 
   test('keeps advanced filters compact and makes search easy to clear', async ({ page }) => {
     await page.goto('./');
+    // SSR controls are visible before Vue has installed their event handlers.
+    await page.waitForFunction(() => {
+      const app = (document.querySelector('#__nuxt') as any)?.__vue_app__;
+      const nuxt = app?.$nuxt || app?.config.globalProperties.$nuxt;
+      return Boolean(app?.config.globalProperties.$router && nuxt?.isHydrating === false);
+    });
     await page.locator('.catalog .section-heading').scrollIntoViewIfNeeded();
 
     const toggle = page.locator('.catalog-filter-toggle');
