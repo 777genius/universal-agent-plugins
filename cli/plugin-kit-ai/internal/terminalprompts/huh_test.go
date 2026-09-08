@@ -195,3 +195,66 @@ func TestHuhClosedInputInitializationFails(t *testing.T) {
 		t.Fatal(result, err)
 	}
 }
+
+// A renderer may call Write on its own goroutine. Recovery must happen there,
+// and a one-shot failure must not prevent the later terminal cleanup writes.
+type panicOnceWriter struct {
+	calls int
+}
+
+func (w *panicOnceWriter) Write(p []byte) (int, error) {
+	w.calls++
+	if w.calls == 1 {
+		panic("synthetic-secret-token\x1b[31m")
+	}
+	return len(p), nil
+}
+
+func TestFormWriterPanicCancelsAndAllowsCleanup(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	output := &panicOnceWriter{}
+	writer := &formWriter{Writer: output, cancel: cancel}
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		n, err := writer.Write([]byte("render"))
+		if n != 0 || err == nil || err.Error() != "terminal output writer panicked" {
+			t.Errorf("panic write = %d, %v", n, err)
+		}
+	}()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("writer panic did not return")
+	}
+	if ctx.Err() != context.Canceled {
+		t.Fatal("writer panic did not cancel form")
+	}
+	first := writer.Err()
+	if first == nil || strings.Contains(first.Error(), "synthetic-secret") {
+		t.Fatalf("unsafe stored error: %v", first)
+	}
+	if n, err := writer.Write([]byte("restore cursor")); n != len("restore cursor") || err != nil {
+		t.Fatalf("cleanup write = %d, %v", n, err)
+	}
+	if writer.Err() != first {
+		t.Fatal("cleanup lost original error")
+	}
+}
+
+func TestFormWriterKeepsFirstWriteErrorAfterPanic(t *testing.T) {
+	_, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	writer := &formWriter{Writer: broken{}, cancel: cancel}
+	if _, err := writer.Write([]byte("render")); !errors.Is(err, io.ErrClosedPipe) {
+		t.Fatal(err)
+	}
+	writer.Writer = &panicOnceWriter{}
+	if _, err := writer.Write([]byte("cleanup")); err == nil {
+		t.Fatal("panic did not return an error")
+	}
+	if !errors.Is(writer.Err(), io.ErrClosedPipe) {
+		t.Fatalf("original write error replaced: %v", writer.Err())
+	}
+}

@@ -186,16 +186,24 @@ type formWriter struct {
 	cancel context.CancelFunc
 }
 
-func (w *formWriter) Write(p []byte) (int, error) {
+func (w *formWriter) Write(p []byte) (n int, err error) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	n, err := w.Writer.Write(p)
+	// Renderer writes run on Bubble Tea's goroutine, outside run's recovery.
+	// Convert an injected writer panic into the usual cancellation path, while
+	// allowing subsequent writes to restore the terminal. Never expose its value.
+	defer func() {
+		if recover() != nil {
+			n, err = 0, errors.New("terminal output writer panicked")
+		}
+		if err != nil && w.err == nil {
+			w.err = err
+			w.cancel()
+		}
+	}()
+	n, err = w.Writer.Write(p)
 	if err == nil && n != len(p) {
 		err = io.ErrShortWrite
-	}
-	if err != nil && w.err == nil {
-		w.err = err
-		w.cancel()
 	}
 	return n, err
 }
