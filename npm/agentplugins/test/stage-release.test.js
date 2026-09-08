@@ -214,6 +214,52 @@ test("release staging embeds every exact platform asset hash", async (t) => {
   assert.throws(() => stage(packageRoot, assetsRoot, version, COMMIT, { evidenceRoot }), /packaged notices do not match/);
 });
 
+test("historical schema-v2 staging rejects missing notices before mutations or packing", async (t) => {
+  const root = await fsp.mkdtemp(path.join(os.tmpdir(), "agentplugins-stage-missing-notices-"));
+  t.after(() => fsp.rm(root, { recursive: true, force: true }));
+  const packageRoot = path.join(root, "package");
+  const assetsRoot = path.join(root, "assets");
+  await fsp.mkdir(packageRoot);
+  await fsp.mkdir(assetsRoot);
+  await fsp.writeFile(path.join(packageRoot, "package.json"), JSON.stringify({
+    name: "universal-agent-plugins", version: "0.0.0-development",
+    bin: { agentplugins: "bin/agentplugins.js" }, files: ["THIRD_PARTY_NOTICES.txt"]
+  }));
+  await fsp.writeFile(path.join(packageRoot, "assets.json"), "existing asset metadata\n");
+  await fsp.writeFile(path.join(packageRoot, "THIRD_PARTY_NOTICES.txt"), "stale checkout notices\n");
+  await fsp.mkdir(path.join(packageRoot, "test/evidence-root"), { recursive: true });
+  await fsp.writeFile(path.join(packageRoot, "test/evidence-root/keep.txt"), "existing evidence\n");
+  const version = "0.1.12";
+  for (const [platform, arch] of [["darwin", "x64"], ["darwin", "arm64"], ["linux", "x64"], ["linux", "arm64"], ["win32", "x64"], ["win32", "arm64"]]) {
+    const info = detectPlatform(platform, arch);
+    await fsp.writeFile(path.join(assetsRoot, expectedAssetName(version, info)), `${info.key}\n`);
+  }
+  prepareRelease(assetsRoot, `agentplugins-v${version}`, COMMIT);
+  await fsp.unlink(path.join(assetsRoot, "THIRD_PARTY_NOTICES.txt"));
+  const checksumsPath = path.join(assetsRoot, "checksums.txt");
+  await fsp.writeFile(checksumsPath, (await fsp.readFile(checksumsPath, "utf8"))
+    .split("\n").filter((line) => !line.endsWith("  THIRD_PARTY_NOTICES.txt")).join("\n"));
+  const historical = verifyRelease(assetsRoot, `agentplugins-v${version}`, COMMIT);
+  assert.equal(historical.manifest_schema, 2);
+  assert.equal(historical.gate_eligible, true);
+  assert.deepEqual(historical.notices, []);
+  const evidenceRoot = await fixtureEvidence(root);
+  const snapshot = () => fs.readdirSync(root, { recursive: true }).sort().map((name) => {
+    const file = path.join(root, name);
+    return [name, fs.statSync(file).isDirectory() ? null : fs.readFileSync(file)];
+  });
+  const before = snapshot();
+  const pack = t.mock.fn();
+  const afterInitialReleaseVerification = t.mock.fn();
+  assert.throws(() => {
+    stage(packageRoot, assetsRoot, version, COMMIT, { evidenceRoot, afterInitialReleaseVerification });
+    pack();
+  }, /release staging requires verified companion THIRD_PARTY_NOTICES\.txt/);
+  assert.equal(pack.mock.callCount(), 0);
+  assert.equal(afterInitialReleaseVerification.mock.callCount(), 0);
+  assert.deepEqual(snapshot(), before);
+});
+
 test("staged package tests are hermetic to repository layout and caller cwd", {
   skip: process.env.AGENTPLUGINS_STAGED_TEST_CHILD === "1"
 }, async (t) => {
@@ -261,6 +307,10 @@ test("staged package tests are hermetic to repository layout and caller cwd", {
   const packedFiles = packResult[0].files.map(({ path: filename }) => filename);
   assert.ok(packedFiles.includes("README.md"));
   assert.ok(packedFiles.includes("assets.json"));
+  assert.ok(packedFiles.includes("THIRD_PARTY_NOTICES.txt"));
+  const packedNotices = childProcess.execFileSync("tar", ["-xOf",
+    path.join(packageRoot, packResult[0].filename), "package/THIRD_PARTY_NOTICES.txt"]);
+  assert.deepEqual(packedNotices, await fsp.readFile(path.join(assetsRoot, "THIRD_PARTY_NOTICES.txt")));
   assert.equal(packedFiles.some((filename) => filename.startsWith("test/") || filename.includes("evidence-root")), false);
 });
 

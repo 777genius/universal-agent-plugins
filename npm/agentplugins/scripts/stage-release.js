@@ -325,6 +325,10 @@ function stage(packageRoot, assetRoot, version, commit, options = {}) {
   if (!initialRelease.gate_eligible || initialRelease.manifest_schema !== 2) {
     throw new Error("release staging requires a gate-eligible schema-v2 current producer manifest");
   }
+  const notice = initialRelease.notices?.[0];
+  if (!notice || notice.file !== "THIRD_PARTY_NOTICES.txt") {
+    throw new Error("release staging requires verified companion THIRD_PARTY_NOTICES.txt");
+  }
   const pkgPath = path.join(packageRoot, "package.json");
   const packageRootStat = fs.lstatSync(packageRoot);
   if (!packageRootStat.isDirectory() || packageRootStat.isSymbolicLink()) {
@@ -335,7 +339,6 @@ function stage(packageRoot, assetRoot, version, commit, options = {}) {
   const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
   const packageName = validatePackageMetadata(pkg);
   const loadedEvidence = loadEvidence(options.evidenceRoot);
-  const notice = initialRelease.notices?.[0];
   let noticeBody;
   if (notice) {
     const source = path.resolve(__dirname, "..", notice.file);
