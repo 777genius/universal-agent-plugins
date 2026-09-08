@@ -349,6 +349,9 @@ func renderUpdateMultiResult(cmd *cobra.Command, opts *options, result updateMul
 	}
 	values := make([]string, len(result.Targets))
 	for index, target := range result.Targets {
+		if err := renderOpenCodeRuntimeNotice(cmd.OutOrStdout(), target.Output.Result); err != nil {
+			return err
+		}
 		values[index] = target.Target
 		rollout := "preflight only"
 		if target.Selected {

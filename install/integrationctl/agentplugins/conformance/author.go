@@ -297,17 +297,5 @@ func (d Decoder) DecodeMCP(ctx context.Context, doc Document, pluginSchema strin
 	f.finish(l)
 	return f, nil
 }
-func normativeCommand(value string) (string, error) {
-	if !strings.HasPrefix(value, "./") || strings.Contains(value, "\\") {
-		return "", semanticError("stdio_command_path", "bundled command requires a plugin-relative path")
-	}
-	// Dot segments and physical device names are not normative rejection rules.
-	// Actual traversal order and link containment are supplied observations.
-	return strings.TrimPrefix(value, "./"), nil
-}
-func normativeCWD(value string) error {
-	if strings.HasPrefix(value, "./") || value == "${PLUGIN_ROOT}" || value == "${PLUGIN_DATA}" || strings.HasPrefix(value, "${PLUGIN_ROOT}/") || strings.HasPrefix(value, "${PLUGIN_DATA}/") {
-		return nil
-	}
-	return semanticError("stdio_cwd_root", "cwd requires a declared standard root")
-}
+func normativeCommand(value string) (string, error) { return ParseCommandPath(value) }
+func normativeCWD(value string) error               { _, _, err := ParseCWDPath(value); return err }

@@ -324,5 +324,24 @@
     "genericTitle": "algo salió mal",
     "genericDescription": "Se produjo un error inesperado. Inténtelo de nuevo más tarde.",
     "goHome": "Go a la página de inicio"
+  },
+  "publicAuthoring": {
+    "title": "Usar plugins / Crear plugins",
+    "intro": "Instala plugins disponibles o prepara un paquete portable Agent Plugins 1.0.",
+    "useTitle": "Usar plugins",
+    "available": "Disponible ahora: instala plugins con Universal Agent Plugins. Con Node.js 22+, ejecuta:",
+    "installHelp": "Para la instalación nativa en macOS, Linux o Windows, consulta la guía. El CLI pregunta qué agentes compatibles usar; cada plugin puede necesitar su propio entorno de ejecución.",
+    "installLink": "Guía de instalación",
+    "buildTitle": "Crear plugins",
+    "standard": "Crea un paquete portable Agent Plugins 1.0 basado en plugin.json, con skills/ y mcp.json opcionales. El soporte de cada cliente depende del paquete y sus componentes.",
+    "preparation": "En preparación — sin publicar",
+    "unreleased": "El CLI de autoría basado en el estándar está en preparación y aún no se ha publicado. plugin-kit-ai 1.2.4, publicado en npm y PyPI, es la herramienta histórica v1, no standard-first v2. Instalar plugin-kit-ai{'@'}latest no proporciona el futuro flujo de autoría.",
+    "specLink": "Especificación Agent Plugins 1.0",
+    "historyTitle": "Mantenimiento histórico de v1",
+    "history": "Mantén los proyectos plugin.yaml existentes con las instrucciones v1 siguientes. Estas plantillas y salidas generadas son flujos históricos v1; no crean el nuevo flujo de autoría basado en el estándar.",
+    "quickstartLink": "Inicio rápido y mantenimiento v1",
+    "compatibilityLink": "Compatibilidad de clientes (en inglés)",
+    "limitations": "La compatibilidad depende del paquete. Validar el esquema no demuestra ejecución, OAuth ni activación. Codex no admite MCP SSE declarado; stdio y Streamable HTTP conservan el soporte de sus adaptadores actuales.",
+    "versions": "Versiones verificadas el 2026-09-07: universal-agent-plugins 0.1.53 (npm), plugin-kit-ai 1.2.4 (npm/PyPI), versión estable de GitHub agentplugins-v0.1.53."
   }
 }

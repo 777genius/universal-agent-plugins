@@ -100,7 +100,11 @@ func checkTemplateJavaScriptSyntax(t *testing.T, source []byte) {
 	if err := os.WriteFile(path, source, 0600); err != nil {
 		t.Fatal(err)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	timeout := 10 * time.Second
+	if runtime.GOOS == "windows" {
+		timeout = 30 * time.Second
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	// Parse only a newly generated temporary fixture. Do not import or execute
 	// the module, load the SDK, install dependencies, or inherit Node preload flags.
@@ -111,7 +115,8 @@ func checkTemplateJavaScriptSyntax(t *testing.T, source []byte) {
 		volume := filepath.VolumeName(dir)
 		cmd.Env = append(cmd.Env, "SystemRoot="+os.Getenv("SystemRoot"), "HOMEDRIVE="+volume, "HOMEPATH="+strings.TrimPrefix(dir, volume))
 	}
+	started := time.Now()
 	if out, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("node --check: %v\n%s", err, out)
+		t.Fatalf("node --check: %v; context=%v elapsed=%s process=%v\n%s", err, ctx.Err(), time.Since(started), cmd.ProcessState, out)
 	}
 }

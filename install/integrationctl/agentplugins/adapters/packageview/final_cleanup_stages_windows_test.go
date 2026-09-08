@@ -158,7 +158,7 @@ func windowsFinalCleanupSource(t *testing.T, role, name string) (_ *source, err 
 // to obtain them, and the diagnostic never retries remember after failure.
 func windowsFinalCleanupRemember(t *testing.T, stage string, s *source, f *os.File) (*pinned, error) {
 	before, beforeErr := winMeta(f)
-	p, err := s.rememberMustDuplicate(f)
+	p, err := s.rememberMustDuplicate(f, true)
 	if err != nil {
 		after, afterErr := winMeta(f)
 		t.Logf("stage=%s surrounding snapshots before=%+v err=%v after=%+v err=%v (not internal comparison evidence)", stage, before, beforeErr, after, afterErr)

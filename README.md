@@ -8,7 +8,9 @@
 
 Install and manage Agent Plugins 1.0 across your AI agents with one CLI.
 
-## Quick start
+## Use plugins
+
+### Quick start
 
 Choose your operating system below. Already have Node.js 22+? You can use `npx`
 on any supported desktop OS without permanently installing the CLI.
@@ -104,8 +106,7 @@ The installed package is standard-first:
 ```text
 plugin.json
 ├── skills/       optional reusable instructions
-├── mcp.json      optional MCP servers
-└── hooks/        optional client-supported hooks
+└── mcp.json      optional MCP servers
 ```
 
 You can also install a local package or a pinned GitHub package without adding
@@ -137,6 +138,11 @@ Compatibility is package-specific. A schema pass means that the package is
 well-formed; it does not prove runtime, OAuth, or activation in every client.
 The CLI prints installed, prepared, activation required, and authentication
 pending as separate outcomes.
+
+For Codex, declared MCP SSE is unsupported; stdio and Streamable HTTP retain
+their existing adapter support. Valid SSE components are excluded from Codex
+delivery without invalidating the package. See [transport evidence and lifecycle
+behavior](docs/CODEX_TRANSPORT_EVIDENCE.md).
 
 ## Find and verify plugins
 
@@ -206,24 +212,33 @@ path and package digest are stored for safe replay. Direct full-SHA installation
 remain immutable; use `switch` to move to another exact source. `repair` reapplies
 the recorded source, and `remove` changes only files owned by the CLI.
 
-## Authoring and development
+<a id="authoring-and-development"></a>
 
-This repository also retains the original plugin-kit-ai authoring tools. Use
-the authoring guide at docs/PLUGIN_KIT_AI_AUTHORING.md when you want to build,
-validate, or export a package rather than install one.
+## Build plugins
 
-Build one plugin and ship it to many AI agents. The repository includes starter templates for Codex and Claude across Go, Python, and Node/TypeScript.
+Build portable Agent Plugins 1.0 packages around `plugin.json`, with optional
+`skills/` and `mcp.json`. See the [Agent Plugins 1.0 specification](https://agent-plugins.org/specification)
+and the [Use / Build quickstart](https://777genius.github.io/universal-agent-plugins/docs/en/guide/quickstart.html).
+
+**Preparation — unreleased:** the standard-first authoring CLI is not released.
+As checked on 2026-09-07, npm `universal-agent-plugins` is 0.1.53 and the stable
+GitHub release is `agentplugins-v0.1.53`. npm/PyPI `plugin-kit-ai` is 1.2.4:
+`plugin-kit-ai@latest` is the historical v1 tool, not standard-first v2.
+
+For existing v1 `plugin.yaml` projects, retain the original templates, generation,
+validation and export workflows in [the historical authoring guide](docs/PLUGIN_KIT_AI_AUTHORING.md).
+The reference below is for historical v1 maintenance.
 
 <details>
 <summary>Legacy authoring and SDK reference</summary>
 
 `plugin-kit-ai` keeps authored source under `plugin/`, generates the supported outputs you need, and helps you validate the repo before handoff. This includes supported outputs for Claude, Codex, Gemini, Cursor, and OpenCode where the repo shape allows it. The honest promise is `one repo / many supported outputs`, not fake parity everywhere.
 
-overview: [plugin-kit-ai documentation](https://777genius.github.io/plugin-kit-ai/docs/en/)
-fastest start: [Quickstart](https://777genius.github.io/plugin-kit-ai/docs/en/guide/quickstart.html)
-choose by job first: [Choose What You Are Building](https://777genius.github.io/plugin-kit-ai/docs/en/guide/choose-what-you-are-building.html)
-one repo, many outputs: [What You Can Build](https://777genius.github.io/plugin-kit-ai/docs/en/guide/what-you-can-build.html)
-honest caveat: [Support Boundary](https://777genius.github.io/plugin-kit-ai/docs/en/reference/support-boundary.html)
+overview: [plugin-kit-ai documentation](https://777genius.github.io/universal-agent-plugins/docs/en/)
+Use / Build and historical v1 maintenance: [Quickstart](https://777genius.github.io/universal-agent-plugins/docs/en/guide/quickstart.html)
+historical v1 template selection: [Choose What You Are Building](https://777genius.github.io/universal-agent-plugins/docs/en/guide/choose-what-you-are-building.html)
+one repo, many outputs: [What You Can Build](https://777genius.github.io/universal-agent-plugins/docs/en/guide/what-you-can-build.html)
+honest caveat: [Support Boundary](https://777genius.github.io/universal-agent-plugins/docs/en/reference/support-boundary.html)
 
 ## Choose What You Are Building
 

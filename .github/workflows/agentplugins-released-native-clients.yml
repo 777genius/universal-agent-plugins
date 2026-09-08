@@ -1,0 +1,81 @@
+name: Released Native Client Runtime
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Exact public UAP installer stable tag (agentplugins-vX.Y.Z)
+        required: true
+        type: string
+      release_commit:
+        description: Exact 40-character producer commit SHA, separate from this harness SHA
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  attestations: read
+
+concurrency:
+  group: released-native-clients-${{ github.ref }}-${{ inputs.release_tag }}
+  cancel-in-progress: false
+
+jobs:
+  native-client:
+    name: ${{ matrix.client }} runtime (${{ matrix.platform.target }})
+    strategy:
+      fail-fast: false
+      matrix:
+        client: [codex, claude, opencode]
+        platform:
+          - target: linux-arm64
+            runner: ubuntu-24.04-arm
+          - target: darwin-arm64
+            runner: macos-15
+          - target: windows-amd64
+            runner: windows-2025
+    runs-on: ${{ matrix.platform.runner }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        # Preserve exact Git bytes for pinned embedded schema digests.
+        env:
+          GIT_CONFIG_COUNT: '1'
+          GIT_CONFIG_KEY_0: core.autocrlf
+          GIT_CONFIG_VALUE_0: 'false'
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.25.13'
+          cache: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Verify native matrix safety and evidence gates
+        run: python -m unittest discover -s scripts -p 'test_native_client*.py'
+      - name: Verify released installer and execute pinned native client in disposable fixture
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_COMMIT: ${{ github.sha }}
+          AGENTPLUGINS_NATIVE_DISPOSABLE_HOSTED: '1'
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          RELEASE_COMMIT: ${{ inputs.release_commit }}
+        shell: bash
+        run: |
+          python scripts/run-native-client-matrix.py \
+            --release-tag "$RELEASE_TAG" \
+            --release-commit "$RELEASE_COMMIT" \
+            --client '${{ matrix.client }}' \
+            --target '${{ matrix.platform.target }}' \
+            --output '${{ runner.temp }}/native-client-proof'
+      - name: Upload native evidence including failed stages
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: released-native-client-${{ matrix.client }}-${{ matrix.platform.target }}
+          path: ${{ runner.temp }}/native-client-proof/
+          if-no-files-found: error
+          retention-days: 14

@@ -9,18 +9,19 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/atomicfile"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/filetree"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/pathpolicy"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/managedstdio"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/packagesnapshot"
 )
 
 type Stager struct {
+	LauncherSource  *managedstdio.Source
 	SnapshotBuilder packagesnapshot.Builder
 	PluginDataRoot  string
 }
@@ -143,7 +144,7 @@ func (stager Stager) stage(
 	if err := validatePlanPaths(plan); err != nil {
 		return domain.StagedDelivery{}, err
 	}
-	if err := validateReservedStdioEnvironment(envelope); err != nil {
+	if err := validateReservedStdioEnvironment(envelope, plan); err != nil {
 		return domain.StagedDelivery{}, err
 	}
 	if err := os.MkdirAll(plan.TargetRoot, 0o700); err != nil {
@@ -192,6 +193,9 @@ func (stager Stager) stage(
 				return domain.StagedDelivery{}, err
 			}
 		case domain.ClientClaude:
+			if err := stager.deliverManagedStdio(stagingPath, envelope, plan); err != nil {
+				return domain.StagedDelivery{}, err
+			}
 			if err := projectClaude(stagingPath, envelope, plan, pluginDataPath); err != nil {
 				return domain.StagedDelivery{}, err
 			}
@@ -240,6 +244,9 @@ func (stager Stager) stage(
 		}
 	}
 	if plan.ClientID == domain.ClientWindsurf {
+		if err := stager.deliverManagedStdio(stagingPath, envelope, plan); err != nil {
+			return domain.StagedDelivery{}, err
+		}
 		if err := projectWindsurfMCP(stagingPath, envelope, plan, pluginDataPath); err != nil {
 			return domain.StagedDelivery{}, err
 		}
@@ -301,8 +308,9 @@ func (stager Stager) stage(
 	}, nil
 }
 
-func validateReservedStdioEnvironment(envelope domain.PackageEnvelope) error {
-	for name, server := range envelope.MCP.Servers {
+func validateReservedStdioEnvironment(envelope domain.PackageEnvelope, plan domain.DeliveryPlan) error {
+	for _, name := range domain.SelectedMCPNames(plan) {
+		server := envelope.MCP.Servers[name]
 		if server.Type != "stdio" {
 			continue
 		}
@@ -564,7 +572,7 @@ func projectOpenAIMCP(root string, envelope domain.PackageEnvelope, serverNames 
 		switch server.Type {
 		case "stdio":
 			delete(config, "type")
-			if err := applyStdioDataContract(config, pluginRoot, dataPath); err != nil {
+			if err := applyStdioDataContract(config, pluginRoot, dataPath, root); err != nil {
 				return fmt.Errorf("stdio MCP server %s: %w", name, err)
 			}
 		case "streamable-http":
@@ -597,7 +605,7 @@ func projectKiroMCP(root string, envelope domain.PackageEnvelope, plan domain.De
 		server := envelope.MCP.Servers[name]
 		config := cloneObject(server.Decoded)
 		if server.Type == "stdio" {
-			if err := applyStdioDataContract(config, plan.ActivePath, dataPath); err != nil {
+			if err := applyStdioDataContract(config, plan.ActivePath, dataPath, root); err != nil {
 				return fmt.Errorf("project Kiro stdio MCP server %s: %w", name, err)
 			}
 		}
@@ -655,7 +663,7 @@ func projectCursorMCP(root string, envelope domain.PackageEnvelope, serverNames 
 		switch server.Type {
 		case "stdio":
 			delete(config, "type")
-			if err := applyStdioDataContract(config, pluginRoot, dataPath); err != nil {
+			if err := applyStdioDataContract(config, pluginRoot, dataPath, root); err != nil {
 				return fmt.Errorf("project Cursor stdio MCP server %s: %w", name, err)
 			}
 		case "streamable-http":
@@ -734,14 +742,7 @@ func projectedOpenAIManifest(envelope domain.PackageEnvelope) (map[string]any, e
 }
 
 func supportedMCPNames(plan domain.DeliveryPlan) []string {
-	var names []string
-	for _, component := range plan.Components {
-		if component.Kind == domain.ComponentMCPServer && component.Support != domain.SupportUnsupported {
-			names = append(names, component.Name)
-		}
-	}
-	sort.Strings(names)
-	return names
+	return domain.SelectedMCPNames(plan)
 }
 
 func hasSupported(plan domain.DeliveryPlan, kind domain.ComponentKind) bool {
@@ -786,7 +787,7 @@ func cloneJSONValue(value any) any {
 	}
 }
 
-func applyStdioDataContract(config map[string]any, pluginRoot, dataPath string) error {
+func applyStdioDataContract(config map[string]any, pluginRoot, dataPath string, observationRoot ...string) error {
 	expand := strings.NewReplacer("${PLUGIN_ROOT}", pluginRoot, "${PLUGIN_DATA}", dataPath).Replace
 	switch env := config["env"].(type) {
 	case map[string]any:
@@ -830,32 +831,27 @@ func applyStdioDataContract(config map[string]any, pluginRoot, dataPath string) 
 			args[index] = expand(args[index])
 		}
 	}
-	if command, ok := config["command"].(string); ok && strings.HasPrefix(command, "./") {
-		command = filepath.Clean(filepath.Join(pluginRoot, filepath.FromSlash(strings.TrimPrefix(command, "./"))))
-		if !pathContainedBy(pluginRoot, command) {
-			return fmt.Errorf("stdio command escapes PLUGIN_ROOT")
-		}
-		config["command"] = command
+	command, _ := config["command"].(string)
+	cwd, _ := config["cwd"].(string)
+	resolvedCommand, resolvedCWD, err := resolveStdioPaths(command, cwd, pluginRoot, dataPath, observationRoot...)
+	if err != nil {
+		return err
 	}
-	if cwd, ok := config["cwd"].(string); ok && cwd != "" {
-		cwd = expand(cwd)
-		if !filepath.IsAbs(cwd) {
-			cwd = filepath.Join(pluginRoot, cwd)
-		}
-		cwd = filepath.Clean(cwd)
-		if !pathContainedBy(pluginRoot, cwd) && !pathContainedBy(dataPath, cwd) {
-			return fmt.Errorf("stdio cwd escapes PLUGIN_ROOT and PLUGIN_DATA")
-		}
-		config["cwd"] = cwd
-	} else {
-		config["cwd"] = pluginRoot
-	}
+	config["command"], config["cwd"] = resolvedCommand, resolvedCWD
 	return nil
 }
 
 func pathContainedBy(root, candidate string) bool {
-	relative, err := filepath.Rel(filepath.Clean(root), filepath.Clean(candidate))
-	return err == nil && relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator))
+	resolvedRoot, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		return false
+	}
+	resolvedCandidate, err := filepath.EvalSymlinks(candidate)
+	if err != nil {
+		return false
+	}
+	relative, err := filepath.Rel(resolvedRoot, resolvedCandidate)
+	return err == nil && !filepath.IsAbs(relative) && relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator))
 }
 
 func writeJSON(path string, value any) error {

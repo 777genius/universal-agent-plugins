@@ -177,6 +177,9 @@ func renderRepairResult(writer io.Writer, format string, installation domain.Ins
 	if format == "json" {
 		return writeJSONOutput(writer, "repair", data)
 	}
+	if err := renderOpenCodeRuntimeNotice(writer, result); err != nil {
+		return err
+	}
 	if result.NoChange {
 		_, err := fmt.Fprintln(writer, "Managed package digest is valid. No repair was needed.")
 		return err
@@ -210,6 +213,7 @@ type repairResultData struct {
 }
 
 func newRepairResultData(installation domain.Installation, result usecase.AddResult, dryRun bool) repairResultData {
+	result = withOpenCodeRuntimeNotice(result)
 	return repairResultData{
 		OperationID: result.Receipt.OperationID, Plugin: installation.DeclaredName,
 		Version: installation.Package.Version, Source: publicSource(installation.Source),
@@ -768,12 +772,19 @@ func renderUpdateResult(writer io.Writer, format string, envelope domain.Package
 	if dryRun {
 		return renderHumanPlan(writer, envelope, result)
 	}
+	if err := renderOpenCodeRuntimeNotice(writer, result); err != nil {
+		return err
+	}
 	if result.NoChange {
 		_, _ = fmt.Fprintln(writer, "Already up to date. No changes made.")
 		return nil
 	}
 	if result.Mutated && fullyInstalled(result.Activation) {
-		_, _ = fmt.Fprintln(writer, "Updated and verified for the selected client.")
+		if result.Plan.ClientID == domain.ClientOpenCode && len(domain.SelectedMCPNames(result.Plan)) > 0 {
+			_, _ = fmt.Fprintln(writer, "OpenCode MCP configuration updated and verified.")
+		} else {
+			_, _ = fmt.Fprintln(writer, "Updated and verified for the selected client.")
+		}
 		return nil
 	}
 	if result.Mutated {

@@ -75,6 +75,10 @@ type DirectoryMutation struct {
 	// before a durable directory intent exists.
 	DesiredState domain.StateFileV2
 	Verify       func(context.Context, string) error
+	// RequireAbsent rejects this mutation, before any journal write or
+	// filesystem mutation, if ActivePath already exists. See dirswap.Input's
+	// field of the same name.
+	RequireAbsent bool
 }
 
 type DirectoryRemoval struct {
@@ -100,6 +104,14 @@ type DirectoryGroup struct {
 	OperationGroupID string
 	Mutations        []DirectoryMutation
 	DesiredState     domain.StateFileV2
+	// PostApplyVerify runs once every mutation in the group has been applied and
+	// individually verified, and before the group's state commit decision. It
+	// exists for verification that depends on the whole group's restored
+	// filesystem state at once (for example, a native client registry that must
+	// observe every reconstructed path together before any single one can be
+	// confirmed). A returned error rolls back every applied mutation in the
+	// group; no state or native side effect from this group is ever committed.
+	PostApplyVerify func(context.Context) error
 }
 
 type DirectoryRemovalGroup struct {
@@ -147,6 +159,7 @@ func (kernel Kernel) ApplyDirectory(ctx context.Context, mutation DirectoryMutat
 	directoryReceipt, err := kernel.Directory.Apply(ctx, dirswap.Input{
 		OperationID: mutation.OperationID, ClientBindingID: mutation.ClientBindingID, Sequence: mutation.Sequence,
 		OwnedBase: mutation.OwnedBase, ActivePath: mutation.ActivePath, StagingPath: mutation.StagingPath,
+		RequireAbsent: mutation.RequireAbsent,
 	})
 	if err != nil {
 		if directoryReceipt.OperationID != "" {
@@ -277,6 +290,7 @@ func (kernel Kernel) ApplyDirectoryGroup(ctx context.Context, group DirectoryGro
 		directoryReceipt, err := kernel.Directory.Apply(ctx, dirswap.Input{
 			OperationID: mutation.OperationID, ClientBindingID: mutation.ClientBindingID, Sequence: mutation.Sequence,
 			OwnedBase: mutation.OwnedBase, ActivePath: mutation.ActivePath, StagingPath: mutation.StagingPath,
+			RequireAbsent: mutation.RequireAbsent,
 		})
 		if err != nil {
 			if directoryReceipt.OperationID != "" {
@@ -312,6 +326,14 @@ func (kernel Kernel) ApplyDirectoryGroup(ctx context.Context, group DirectoryGro
 		installation.Clients[mutation.ClientBindingID] = client
 		state.Installations[installationIndex] = installation
 		applied[len(applied)-1].state = receipt
+	}
+	if group.PostApplyVerify != nil {
+		if err := group.PostApplyVerify(ctx); err != nil {
+			if rollbackErr := rollback(); rollbackErr != nil {
+				return nil, groupError(GroupFailureUnknown, fmt.Errorf("post-apply group verification: %v; rollback failed: %w", err, rollbackErr))
+			}
+			return nil, groupError(GroupFailureRolledBack, fmt.Errorf("post-apply group verification: %w", err))
+		}
 	}
 	if oldState, err := kernel.persistCommitDecision(state, beforeJSON); err != nil {
 		if oldState {

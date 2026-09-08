@@ -453,6 +453,7 @@ func readInputLine(reader io.Reader) (string, error) {
 }
 
 func renderHumanPlan(writer io.Writer, envelope domain.PackageEnvelope, result usecase.AddResult) error {
+	result = withOpenCodeRuntimeNotice(result)
 	_, _ = fmt.Fprintf(writer, "Plugin: %s %s\n", envelope.Manifest.Name, envelope.Manifest.Version)
 	_, _ = fmt.Fprintf(writer, "Target: %s\n", result.Plan.ClientID)
 	_, _ = fmt.Fprintf(writer, "Package: %s\n", result.Plan.PackageMode)
@@ -509,6 +510,9 @@ func renderAddResultErrorWithSecurity(writer io.Writer, format string, envelope 
 	if dryRun {
 		return renderHumanPlan(writer, envelope, result)
 	}
+	if err := renderOpenCodeRuntimeNotice(writer, result); err != nil {
+		return err
+	}
 	if result.NoChange {
 		_, _ = fmt.Fprintln(writer, "Already installed and lifecycle verification is complete. No changes made.")
 		return nil
@@ -517,7 +521,11 @@ func renderAddResultErrorWithSecurity(writer io.Writer, format string, envelope 
 		if result.Activation.ActivationAttested || result.Activation.AuthenticationAttested {
 			_, _ = fmt.Fprintln(writer, "Lifecycle is user-attested for the explicitly confirmed phase; it was not observed from the client.")
 		} else {
-			_, _ = fmt.Fprintln(writer, "Installed and verified for the selected client.")
+			if result.Plan.ClientID == domain.ClientOpenCode && len(domain.SelectedMCPNames(result.Plan)) > 0 {
+				_, _ = fmt.Fprintln(writer, "OpenCode MCP configuration installed and verified.")
+			} else {
+				_, _ = fmt.Fprintln(writer, "Installed and verified for the selected client.")
+			}
 		}
 		return nil
 	}
@@ -592,6 +600,7 @@ func addFailureStatus(result usecase.AddResult, commandErr error) string {
 }
 
 func newAddResultData(envelope domain.PackageEnvelope, result usecase.AddResult, dryRun bool) addResultData {
+	result = withOpenCodeRuntimeNotice(result)
 	return addResultData{
 		OperationID: result.Receipt.OperationID, Plugin: envelope.Manifest.Name,
 		Version: envelope.Manifest.Version, Source: publicPackageSource(envelope.Source),

@@ -143,15 +143,44 @@ func (activator Activator) Deactivate(ctx context.Context, request domain.Deacti
 		if err != nil {
 			return outcome, err
 		}
-		if registered {
-			if strings.TrimSpace(request.BackendExecutable) == "" || activator.Runner == nil {
+		pluginEntryPresent, err := managedCodexPluginEntryPresent(request.Client.ConfigRoot, request.DeclaredName, marketplace)
+		if err != nil {
+			return outcome, err
+		}
+		if strings.TrimSpace(request.BackendExecutable) == "" || activator.Runner == nil {
+			// Block on either stale record, not just the marketplace: a
+			// live [plugins."id"] entry with no CLI available to clear it
+			// is exactly as dangerous as a registered marketplace with no
+			// CLI -- both would otherwise let ExternalRemovalComplete=true
+			// fall through below with nothing actually cleaned.
+			if registered || pluginEntryPresent {
 				outcome.Activation = domain.ActivationManual
 				outcome.ArtifactRemovalAllowed = false
-				outcome.UserActions = []string{fmt.Sprintf("run `codex plugin marketplace remove %s --json`, then retry removal", marketplace)}
+				outcome.UserActions = []string{fmt.Sprintf("run `codex plugin remove %s@%s --json`, then `codex plugin marketplace remove %s --json`, then retry removal", request.DeclaredName, marketplace, marketplace)}
 				return outcome, nil
 			}
-			if err := activator.removeCodexMarketplace(ctx, request.BackendExecutable, marketplace); err != nil {
+		} else {
+			// Remove the plugin's own registration whenever a live CLI is
+			// available, independent of whether the marketplace source is
+			// still registered: a stale `[plugins."id"] enabled = true`
+			// config.toml entry can outlive the marketplace record (for
+			// example after a user follows this same code's own earlier
+			// manual-cleanup guidance and only runs `marketplace remove`),
+			// and a freshly started Codex app-server treats that lingering
+			// entry as still-enabled, silently re-materializing the
+			// "removed" plugin from its original local source. Gating this
+			// call behind `registered` reproduced exactly that bug.
+			// `codex plugin remove` is confirmed idempotent and safe to call
+			// even when the marketplace is already gone (verified by hand
+			// against a real Codex 0.153.4 binary: exit 0, clears the
+			// `[plugins."id"]` entry, no error either way).
+			if err := activator.removeCodexPlugin(ctx, request.BackendExecutable, request.DeclaredName+"@"+marketplace); err != nil {
 				return outcome, err
+			}
+			if registered {
+				if err := activator.removeCodexMarketplace(ctx, request.BackendExecutable, marketplace); err != nil {
+					return outcome, err
+				}
 			}
 		}
 		outcome.ExternalRemovalComplete = true
@@ -663,6 +692,18 @@ func (activator Activator) removeCodexMarketplace(ctx context.Context, executabl
 	remove, err := activator.runClientResult(ctx, "Codex CLI", executable, "plugin", "marketplace", "remove", marketplace, "--json")
 	if err != nil && !commandOutputContains(remove, "not configured or installed") {
 		return fmt.Errorf("remove managed Codex marketplace %s: %w", marketplace, err)
+	}
+	return nil
+}
+
+// removeCodexPlugin uninstalls the plugin itself (distinct from its
+// marketplace source): it is what clears Codex's own per-plugin
+// config.toml enablement entry and native cache, not just the marketplace
+// registration. Already-absent is treated as success for idempotent retries.
+func (activator Activator) removeCodexPlugin(ctx context.Context, executable, pluginSpec string) error {
+	remove, err := activator.runClientResult(ctx, "Codex CLI", executable, "plugin", "remove", pluginSpec, "--json")
+	if err != nil && !commandOutputContains(remove, "not configured or installed") {
+		return fmt.Errorf("remove managed Codex plugin %s: %w", pluginSpec, err)
 	}
 	return nil
 }

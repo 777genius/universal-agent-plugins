@@ -29,6 +29,63 @@ Historical v1 binaries alone do not satisfy code preservation. See
 Phase 11 inventory gate. Current standard CLI/npm work may continue; blanket
 legacy deletion is not authorized.
 
+## Owner decision: early public wording and site checkpoint (2026-09-08)
+
+The owner explicitly authorizes prioritizing a stable intermediate PR merge and
+public site update before the full v2 CLI release and phases 7-11. This is a
+partial delivery of this plan, not a smaller replacement for its full objective.
+It supersedes preparation-document rules that require D5 merely to publish
+truthful public wording; full executable release qualification still requires D5.
+
+Scope: replace obsolete primary positioning with clear Use plugins / Build
+plugins journeys, consistent maintained locales, canonical links and explicit
+availability labels. Describe unreleased standard authoring commands as
+preparation, never as installed or currently executable features. Preserve
+accurate instructions for currently available products and the historical v1
+reference, including redirects. Verify actual published versions before claiming
+availability; do not relabel an unreleased candidate as the current version.
+
+Implement a minimal explicit public-documentation boundary. The existing
+DOCS_PREPARATION_PREVIEW flag remains restricted to disposable non-published
+previews: do not enable it in production, remove the check without a replacement,
+or use noindex alone as proof of safe publication. Update conflicting preparation
+docs and their tests in the same bounded PR so subsequent agents see this owner
+decision. Do not create a second docs engine or a generic release platform.
+
+Checkpoint acceptance:
+
+- Every maintained locale distinguishes available installation from unreleased
+  authoring; no runnable future command is presented as current.
+- All Use/Build/history links and redirects resolve in the actual built site;
+  canonical-English fallback is explicit where a translation is absent.
+- Counter, geometry, catalog and affected navigation E2E pass with genuine
+  verified feeds, original assertions/timeouts and no masked retries.
+- The production-mode docs/landing build succeeds without the preview flag;
+  actual Pages assembly and public-boundary checks pass on the merge candidate.
+- Independent review and required CI cover the exact merge candidate. Merge a
+  dependency-safe, reversible checkpoint and verify the resulting deployed site.
+
+Do not hold this checkpoint for unrelated runtime, migration, export, publish or
+legacy-isolation phases. Do not merge the current preparation stack unchanged:
+main/master auto-deploys Pages, so establish and verify the boundary first.
+CLI asset release, npm/PyPI tags, Homebrew and native qualification remain
+separate gates; this checkpoint does not attest them or activate future commands.
+Useful YAML capabilities and all preservation constraints above remain intact.
+
+The preliminary 100-500 changed-line estimate is a target, not a guarantee.
+Re-estimate after bounded intake against the actual merge base; do not weaken
+acceptance or expand scope just to satisfy that number. Hosted workers use
+`gpt-6-astra`, reasoning `medium`, service tier `default` (no fast).
+
+Checkpoint receipt: PR #190 merged as `dc28313ab6f567eb86eecac3ef903f79b584d4c3`.
+Pages deployment 34170488596 passed on descendant
+`758c1656e1d3e6f1783b96638839486416921453`. Public HTTP readback verified
+five quickstarts, all 62 historical anchors and the Use/Build/history entrypoint.
+Browser evidence remains composite: 34 passing scenarios followed by the complete
+affected tooltip scenario passing after a positioning-only test fix, with no
+assertion/timeout weakening or retry. Full deployed-browser validation remains
+pending. This is partial delivery; phases 0-11 and executable release gates remain.
+
 ## Status
 
 - Decision: approved for planning.
@@ -1618,6 +1675,10 @@ installer's ability to load otherwise usable package components.
 - Agent Skills validation provenance is visible and reproducible.
 
 ## Phase 6 - Dual-entrypoint MVP release and documentation
+
+Delivery order: preserve the owner-approved early public wording checkpoint,
+then qualify and publish the full dual-entrypoint MVP. Public wording alone does
+not qualify the CLI, native assets, wrappers or later release-gated phases.
 
 ### Summary
 

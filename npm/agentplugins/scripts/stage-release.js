@@ -25,11 +25,12 @@ const EVIDENCE_FILES = [
   "AGENTPLUGINS_CLIENT_E2E.md",
   path.join("evidence", "agentplugins-client-e2e-2026-08-30.json")
 ];
+// Pins the source documents, not a rerun or the historical installer commit.
 const EVIDENCE_SOURCE = {
   repository: PRODUCER_REPOSITORY,
-  commit: "4b25a45e1574bab7a4f49e48905a3b3b2647e917",
+  commit: "01f02cb51cfe5f664d4d5f52b295c59c7ea03495",
   document_path: "docs/AGENTPLUGINS_CLIENT_E2E.md",
-  document_sha256: "df6769bf430a337f116cd9df75bcc3ea26df166a016eacf9bc9fbc6cfbf9b100",
+  document_sha256: "0cecbf12a96cf578d12e1cb2f582aa13dca2d9d900ccaefd223f5d7c1030ea65",
   record_path: "docs/evidence/agentplugins-client-e2e-2026-08-30.json",
   record_sha256: "437da1bc7423a85b231be139ff9bfbd7e89c942ef216a61ebde668c08a9c2ee3"
 };

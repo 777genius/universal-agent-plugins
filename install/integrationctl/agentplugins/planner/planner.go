@@ -423,7 +423,11 @@ func componentDecisions(envelope domain.PackageEnvelope, capabilities domain.Cli
 				support = domain.SupportProjected
 			}
 		}
-		decisions = append(decisions, decision(domain.ComponentMCPServer, name, support))
+		value := decision(domain.ComponentMCPServer, name, support)
+		if (capabilities.ClientID == domain.ClientOpenCode || capabilities.ClientID == domain.ClientCodex) && server.Type == "sse" && support == domain.SupportUnsupported {
+			value.Reason = "declared_sse_not_supported_by_client"
+		}
+		decisions = append(decisions, value)
 	}
 	appNames := sortedKeys(envelope.App.Bindings)
 	for _, name := range appNames {
