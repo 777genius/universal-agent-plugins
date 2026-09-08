@@ -55,6 +55,7 @@ jobs:
             --output "${RUNNER_TEMP}/uap-registry-mirror"
           mkdir -p landing/public
           cp -a "${RUNNER_TEMP}/uap-registry-mirror/." landing/public/
+          echo "UAP_VERIFIED_MIRROR=${RUNNER_TEMP}/uap-registry-mirror" >> "$GITHUB_ENV"
 
       - name: Install landing dependencies
         working-directory: landing
@@ -110,7 +111,6 @@ jobs:
       NUXT_PUBLIC_DOCS_SITEMAP_URL: https://777genius.github.io${{ matrix.base }}docs/sitemap.xml
       DOCS_BASE_PATH: ${{ matrix.base }}docs/
       DOCS_HOSTNAME: https://777genius.github.io
-      UAP_VERIFIED_MIRROR: ${{ runner.temp }}/uap-registry-mirror
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -141,6 +141,7 @@ jobs:
             --output "${RUNNER_TEMP}/uap-registry-mirror"
           mkdir -p landing/public
           cp -a "${RUNNER_TEMP}/uap-registry-mirror/." landing/public/
+          echo "UAP_VERIFIED_MIRROR=${RUNNER_TEMP}/uap-registry-mirror" >> "$GITHUB_ENV"
 
       - name: Install landing dependencies
         working-directory: landing
