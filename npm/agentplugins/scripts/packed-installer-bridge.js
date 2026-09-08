@@ -158,7 +158,18 @@ function publicInit(lane) {
     ...(lane.endsWith("remote") ? ["--url=https://docs.example.com/mcp"] : lane.endsWith("stdio") ? ["--runtime=node"] : []),
     ...(template === "hybrid" ? ["--mcp-template=mcp-" + lane.split("-")[1]] : [])];
 }
-function publicEvidence(cfg, native, configPath) {
+function installerBoundary(projectRoot) {
+  return { executable_observation: "help-and-preflight-rejection", valid_add_dry_run: "not_evaluated",
+    argv: ["add", path.join(projectRoot, "skill"), "--target=codex", "--dry-run", "--format=json"],
+    reason: "production-security-inputs-not-offline" };
+}
+function installerHelp(value) {
+  assert.deepEqual(value, { schema_version: 1, command: "help", result: "success",
+    data: { use: "agentplugins add", commands: null } }, "installer help visibility only");
+}
+function publicEvidence(cfg, native, configPath, intake = "public-fixture/v1") {
+  assert.ok(["public-fixture/v1", "public-fixture/v2"].includes(intake), "explicit public schema required");
+  const v2 = intake === "public-fixture/v2";
   c.keys(cfg, ["prepare", "completionDigest", "evidenceOutput"], "public config");
   const o = cfg.prepare, v = o.candidate;
   c.keys(o, ["candidate", "repo", "node", "npm", "output", "projectionPins", "pairMarkerDigest"], "public preparation");
@@ -169,8 +180,8 @@ function publicEvidence(cfg, native, configPath) {
     "pair_marker_sha256", "projection_pins", "fixtureRoot", "target", "packs", "binaries", "installations", "tools",
     "invocations", "invocations_sha256", "downloads_sha256", "result_sha256", "projects", "trees",
     "fixture_acquisition_execution", "qualification", "signed_promotion", "public_eligible", "release_eligible",
-    "platform_acceptance", "attested", "runtime_evidence"], "public terminal");
-  assert.equal(native.schema, "dual-authoring-public-native/v1"); assert.equal(native.status, "completed");
+    "platform_acceptance", "attested", "runtime_evidence", ...(v2 ? ["installer_boundary"] : [])], "public terminal");
+  assert.equal(native.schema, v2 ? "dual-authoring-public-native/v2" : "dual-authoring-public-native/v1"); assert.equal(native.status, "completed");
   falseClaims(native); assert.equal(native.signed_promotion, false); assert.equal(native.public_eligible, false);
   assert.equal(native.qualification, null); assert.equal(native.fixture_acquisition_execution, true);
   assert.equal(native.runtime_evidence, "not_evaluated"); assert.equal(native.target, "linux-amd64");
@@ -262,12 +273,20 @@ function publicEvidence(cfg, native, configPath) {
     }
   }
   command("plugin-kit-ai", ["update", "--all", "--format=json"], 2);
-  command("agentplugins", ["add", path.join(native.projects.agentplugins, "skill"), "--target=codex", "--dry-run", "--format=json"]);
+  if (v2) {
+    assert.deepEqual(native.installer_boundary, installerBoundary(native.projects.agentplugins), "outstanding production add requirement");
+    command("agentplugins", ["add", "--help", "--format=json"]);
+    command("agentplugins", ["add", path.join(native.projects.agentplugins, "skill"), "--target=codex", "--scope=project", "--dry-run", "--format=json"], 1);
+  } else command("agentplugins", ["add", path.join(native.projects.agentplugins, "skill"), "--target=codex", "--dry-run", "--format=json"]);
   assert.equal(native.invocations, expected.length); assert.equal(invocations.length, expected.length);
   invocations.forEach((row, i) => {
     c.keys(row, ["product", "argv", "status", "signal", "stdout", "stderr"], "public invocation");
     const want = expected[i]; assert.equal(row.product, want.product); assert.deepEqual(row.argv, want.argv);
-    assert.equal(row.status, want.status); assert.equal(row.signal, null); assert.equal(row.stderr, ""); assert.equal(typeof row.stdout, "string");
+    assert.equal(row.status, want.status); assert.equal(row.signal, null); assert.equal(typeof row.stdout, "string");
+    const rejection = v2 && i === 70;
+    assert.equal(row.stderr, rejection ? "agentplugins: --scope project is not supported by the current client adapters; the public CLI supports user scope only\n" : "");
+    if (rejection) assert.equal(row.stdout, "");
+    if (v2 && i === 69) installerHelp(JSON.parse(row.stdout));
     if (want.author) {
       const result = JSON.parse(row.stdout); assert.equal(result.result, "success"); assert.equal(result.schema_version, 1);
       assert.equal(result.data.revision, v.identity.commit); assert.equal(result.data.engine, "standard-first-slice/1");
@@ -286,18 +305,19 @@ function publicEvidence(cfg, native, configPath) {
   return { identity: v.identity, repo: o.repo, candidate_sha256: v.manifestDigest, packs: native.packs, projects,
     snapshots: [...roots.slice(1).map(root => snapshot(root)), snapshot(native.fixtureRoot, true)],
     public_evidence: { schema: native.schema, signed_promotion: false, public_eligible: false, qualification: null,
-      pair_marker_sha256: native.pair_marker_sha256, tools: native.tools, binaries: native.binaries } };
+      pair_marker_sha256: native.pair_marker_sha256, tools: native.tools, binaries: native.binaries,
+      ...(v2 ? { installer_boundary: native.installer_boundary } : {}) } };
 }
 function intake(request) {
   if (!Object.hasOwn(request, "intake")) return privateIntake(request);
   c.keys(request, [...REQUEST_KEYS, "intake"], "public bridge request");
-  assert.equal(request.intake, "public-fixture/v1"); assert.equal(request.disposableEvidence, true);
+  assert.ok(["public-fixture/v1", "public-fixture/v2"].includes(request.intake)); assert.equal(request.disposableEvidence, true);
   pin(request.nativeConfig, request.nativeConfigSha256);
   const cfg = json(request.nativeConfig);
   const terminal = path.join(cfg.evidenceOutput, "public-native-completion.json"); pin(terminal, request.nativeCompletionSha256);
   const native = json(terminal);
   assert.equal(native.identity.commit, request.expectedCommit); assert.equal(native.fixtureRoot, request.fixtureRoot);
-  return publicEvidence(cfg, native, request.nativeConfig);
+  return publicEvidence(cfg, native, request.nativeConfig, request.intake);
 }
 function seal(request) {
   const inputs = intake(request);
@@ -333,4 +353,4 @@ if (require.main === module) {
     } else throw new Error("usage: node packed-installer-bridge.js seal REQUEST OUTPUT | verify CONFIG SHA256 COMMIT");
   } catch (error) { process.stderr.write(`packed installer bridge: ${error.message}\n`); process.exitCode = 1; }
 }
-module.exports = { LANES, PRODUCTS, intake, seal, verify, snapshot, publicInit, publicEvidence, publishSeal };
+module.exports = { LANES, PRODUCTS, intake, seal, verify, snapshot, publicInit, publicEvidence, publishSeal, installerBoundary, installerHelp };

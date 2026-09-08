@@ -14,7 +14,7 @@ const bridge = require("../scripts/packed-installer-bridge");
 const adapter = require("../scripts/authoring-release");
 const packing = require("../scripts/stage-dual-authoring-npm");
 const stager = require("../scripts/stage-authoring-npm");
-const { preload, run, ok, environment } = require("./public-authoring-pack.test");
+const { preload, run, ok, environment, nativeObservation } = require("./public-authoring-pack.test");
 
 function tree(root) {
   const result = {};
@@ -122,10 +122,10 @@ test("PUBLIC NATIVE: exact integrated packs, both actual bins, static parity and
     const root = path.join(context.root, `${p} projects ü`); fs.mkdirSync(root); return [p, root];
   }));
   function invoke(p, argv, status = 0, json = true) {
-    const r = run(o.node, [bin(p), ...argv], { ...transportEnv, PATH: "/absent-peer-binary-path" }, projects[p]);
+    const r = nativeObservation(p, o.node, bin(p), argv, { ...transportEnv, PATH: "/absent-peer-binary-path" }, projects[p]);
     invocations.push({ product: p, argv, status: r.status, signal: r.signal, stdout: r.stdout, stderr: r.stderr });
     fs.writeFileSync(path.join(cfg.evidenceOutput, "invocations.json"), c.encode(invocations));
-    assert.equal(r.status, status, r.stdout + r.stderr); assert.equal(r.stderr, "");
+    assert.equal(r.status, status, r.stdout + r.stderr);
     return json ? JSON.parse(r.stdout) : r.stdout;
   }
   function author(p, argv, status = 0, compare = true) {
@@ -170,9 +170,16 @@ test("PUBLIC NATIVE: exact integrated packs, both actual bins, static parity and
   const retired = invoke("plugin-kit-ai", ["update", "--all", "--format=json"], 2);
   assert.equal(retired.data.error.code, "v1_operation_unavailable");
   assert.deepEqual(tree(projects["plugin-kit-ai"]), before);
-  // Installer dry-run uses an explicitly isolated synthetic client root/home.
-  const dry = invoke("agentplugins", ["add", path.join(projects.agentplugins, "skill"), "--target=codex", "--dry-run", "--format=json"]);
-  assert.ok(dry); assert.deepEqual(tree(projects["plugin-kit-ai"]), before);
+  // Genuine executable visibility/preflight only; valid production add remains required.
+  const preservedRoots = [...Object.values(projects), client, installer];
+  const preserved = preservedRoots.map(root => bridge.snapshot(root));
+  const help = invoke("agentplugins", ["add", "--help", "--format=json"]);
+  bridge.installerHelp(help);
+  assert.deepEqual(preservedRoots.map(root => bridge.snapshot(root)), preserved);
+  assert.equal(invoke("agentplugins", ["add", path.join(projects.agentplugins, "skill"), "--target=codex",
+    "--scope=project", "--dry-run", "--format=json"], 1, false), "");
+  assert.deepEqual(preservedRoots.map(root => bridge.snapshot(root)), preserved);
+  const installer_boundary = bridge.installerBoundary(projects.agentplugins);
   const runtime = require("../lib/public-authoring");
   for (const p of c.PRODUCTS) {
     const packageRoot = path.resolve(bin(p), "../..");
@@ -197,7 +204,7 @@ test("PUBLIC NATIVE: exact integrated packs, both actual bins, static parity and
   fs.writeFileSync(path.join(cfg.evidenceOutput, "result.json"), c.encode({ source: candidate.identity.commit,
     fixture_acquisition_execution: true, signed_promotion: false, public_eligible: false, runtime_evidence: "not_evaluated" }), { flag: "wx" });
   for (const p of c.PRODUCTS) assert.deepEqual(bridge.LANES.map(lane => tree(path.join(projects[p], lane))), trees[p], "all generated projects preserved through lifecycle");
-  const terminal = { schema: "dual-authoring-public-native/v1", status: "completed",
+  const terminal = { schema: "dual-authoring-public-native/v2", installer_boundary, status: "completed",
     identity: candidate.identity, candidate_sha256: candidate.manifestDigest, completion_sha256: cfg.completionDigest,
     config_sha256: c.digest(c.readFile(config)), pair_marker_sha256: o.pairMarkerDigest, projection_pins: o.projectionPins,
     fixtureRoot: context.root, target, packs, binaries, installations,
@@ -210,7 +217,7 @@ test("PUBLIC NATIVE: exact integrated packs, both actual bins, static parity and
     release_eligible: false, platform_acceptance: false, attested: false, runtime_evidence: "not_evaluated" };
   // Validate the full contract before exclusive terminal publication. No success
   // marker exists if a lane, pin, or lifecycle assertion above failed.
-  bridge.publicEvidence(cfg, terminal, config);
+  bridge.publicEvidence(cfg, terminal, config, "public-fixture/v2");
   const terminalPath = path.join(cfg.evidenceOutput, "public-native-completion.json");
   fs.writeFileSync(terminalPath, c.encode(terminal), { flag: "wx", mode: 0o600 });
   t.diagnostic("public native completion: " + JSON.stringify({ file: terminalPath, sha256: c.digest(c.readFile(terminalPath)), source: candidate.identity.commit }));
