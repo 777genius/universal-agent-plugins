@@ -17,22 +17,12 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-// Temporary native trace; not a release candidate.
-func traceConsole(format string, args ...any) {
- path := os.Getenv("UAP_CONSOLE_TRACE")
- if path == "" { return }
- f, err := os.OpenFile(path+".native", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
- if err != nil { return }
- defer f.Close()
- fmt.Fprintf(f, "%s "+format+"\n", append([]any{time.Now().Format(time.RFC3339Nano)}, args...)...)
-}
-
 var cancelSynchronousIO = windows.NewLazySystemDLL("kernel32.dll").NewProc("CancelSynchronousIo")
 
-// Console requests use an owned duplicate of the inherited handle and cancel
-// at the I/O request with CancelIoEx. Interrupting only the issuing thread is
-// insufficient evidence that the console is ready for its next owner.
-// No CONIN$ is opened and queued console input is never flushed.
+// Console requests own a separately opened input file object. A duplicate
+// would retain the inherited file object's lifetime when our handle closes.
+// Open only for validated console input; keep pipe cancellation unchanged.
+// The console host still owns editing and echo, and no input is flushed.
 func readCancelable(ctx context.Context, r io.Reader) (string, error) {
 	f, ok := r.(*os.File)
 	if !ok {
@@ -45,12 +35,23 @@ func readCancelable(ctx context.Context, r io.Reader) (string, error) {
 	var console windows.Handle
 	var mode uint32
 	if windows.GetConsoleMode(windows.Handle(f.Fd()), &mode) == nil {
-		process := windows.CurrentProcess()
-		if err := windows.DuplicateHandle(process, windows.Handle(f.Fd()), process, &console, 0, false, windows.DUPLICATE_SAME_ACCESS); err != nil {
+		var err error
+		console, err = windows.CreateFile(windows.StringToUTF16Ptr("CONIN$"),
+			windows.GENERIC_READ|windows.GENERIC_WRITE,
+			windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE,
+			nil, windows.OPEN_EXISTING, 0, 0)
+		if err != nil {
 			return "", fmt.Errorf("prepare console cancellation: %w", err)
 		}
 		// Registered before the join defer: never close a handle with a live read.
-		defer func() { traceConsole("close console=%d err=%v", console, windows.CloseHandle(console)) }()
+		defer windows.CloseHandle(console)
+		var openedMode uint32
+		if err := windows.GetConsoleMode(console, &openedMode); err != nil {
+			return "", fmt.Errorf("validate console input: %w", err)
+		}
+		if openedMode != mode {
+			return "", fmt.Errorf("console input mode changed: inherited=%#x opened=%#x", mode, openedMode)
+		}
 		read = func() (string, error) { return readConsoleLine(ctx, console, mode) }
 	}
 	defer runtime.KeepAlive(f)
@@ -78,9 +79,7 @@ func readCancelable(ctx context.Context, r io.Reader) (string, error) {
 		// reader is released, before allowing the OS thread to be reused.
 		defer windows.CloseHandle(thread)
 		ready <- thread
-		traceConsole("reader enter console=%d thread=%d ctx=%v", console, thread, ctx.Err())
 		line, err := read()
-		traceConsole("reader return console=%d line=%q err=%v", console, line, err)
 		done <- result{line, err}
 		<-release
 	}()
@@ -98,8 +97,7 @@ func readCancelable(ctx context.Context, r io.Reader) (string, error) {
 				// ERROR_NOT_FOUND is expected when cancellation wins the entry race.
 				// Repeat until the read returns; completion, not cancellation success,
 				// is the handoff boundary. Input ownership remains exclusive until then.
-				err := windows.CancelIoEx(console, nil)
-				traceConsole("CancelIoEx console=%d err=%v", console, err)
+				_ = windows.CancelIoEx(console, nil)
 			} else if thread != 0 {
 				_, _, _ = cancelSynchronousIO.Call(uintptr(thread))
 			}
@@ -119,9 +117,7 @@ func readCancelable(ctx context.Context, r io.Reader) (string, error) {
 func readConsoleLine(ctx context.Context, h windows.Handle, mode uint32) (string, error) {
 	return readConsoleAnswer(ctx, mode&windows.ENABLE_LINE_INPUT != 0, func(b []uint16) (uint32, error) {
 		var n uint32
-		traceConsole("ReadConsole enter handle=%d ctx=%v", h, ctx.Err())
 		err := windows.ReadConsole(h, &b[0], uint32(len(b)), &n, nil)
-		traceConsole("ReadConsole return handle=%d n=%d units=%04x err=%v ctx=%v", h, n, b[:n], err, ctx.Err())
 		return n, err
 	})
 }
@@ -136,7 +132,6 @@ func readConsoleAnswer(ctx context.Context, cooked bool, read func([]uint16) (ui
 		}
 		n, err := read(b[:])
 		if e := ctx.Err(); e != nil {
-			traceConsole("discard canceled read n=%d units=%04x err=%v", n, b[:n], err)
 			return "", e
 		}
 		if err != nil {

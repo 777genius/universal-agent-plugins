@@ -14,7 +14,7 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-// Runs against inherited ConPTY console input, never a pipe or CONIN$.
+// Runs with inherited ConPTY console input; ReadLine owns each fresh input open.
 // A timing sweep exercises cancellation around ReadConsole entry; the delayed
 // samples exercise a read held open without an input record from the driver.
 func TestQualificationConsoleCancellation(t *testing.T) {
@@ -69,5 +69,7 @@ func TestQualificationConsoleCancellation(t *testing.T) {
 			t.Logf("console measured=%d handles=%d goroutines=%d", i-5, got[0], got[1])
 		}
 	}
+	qualificationConsoleQueuedAnswers(t, h, before)
+	qualificationConsoleResources(t, &baseline)
 	fmt.Fprintln(os.Stdout, "QUALIFICATION_CONSOLE_OK")
 }
