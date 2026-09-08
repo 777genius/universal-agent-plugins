@@ -1,6 +1,20 @@
 # Support And Compatibility Policy
 
-This document defines the approved public contract for `plugin-kit-ai` after the `v1.0.0` release.
+## Universal Agent Plugins installer
+
+For `agentplugins`, start with [native CLI installation](./NATIVE_INSTALL.md)
+and the [client compatibility evidence](https://777genius.github.io/universal-agent-plugins/docs/en/reference/client-compatibility.html).
+The matrix identifies tested installer/client versions and platforms;
+package validity, installation, activation, runtime and OAuth are separate layers.
+
+For help, [open a question or bug report](https://github.com/777genius/universal-agent-plugins/issues/new/choose)
+with your OS/architecture, installer and client versions, the command used, and
+the diagnostic output. Remove secrets and private paths before sharing output.
+Use the [security reporting process](../SECURITY.md) for vulnerabilities.
+
+## Historical plugin-kit-ai v1 policy
+
+The remaining sections define the approved public contract for `plugin-kit-ai` after the `v1.0.0` release.
 
 ## Recommended Production Lanes
 
