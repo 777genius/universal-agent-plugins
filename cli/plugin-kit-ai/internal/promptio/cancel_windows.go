@@ -19,10 +19,10 @@ import (
 
 var cancelSynchronousIO = windows.NewLazySystemDLL("kernel32.dll").NewProc("CancelSynchronousIo")
 
-// Console requests use an owned duplicate of the inherited handle and cancel
-// at the I/O request with CancelIoEx. Interrupting only the issuing thread is
-// insufficient evidence that the console is ready for its next owner.
-// No CONIN$ is opened and queued console input is never flushed.
+// Console requests own a separately opened input file object. A duplicate
+// would retain the inherited file object's lifetime when our handle closes.
+// Open only for validated console input; keep pipe cancellation unchanged.
+// The console host still owns editing and echo, and no input is flushed.
 func readCancelable(ctx context.Context, r io.Reader) (string, error) {
 	f, ok := r.(*os.File)
 	if !ok {
@@ -35,12 +35,29 @@ func readCancelable(ctx context.Context, r io.Reader) (string, error) {
 	var console windows.Handle
 	var mode uint32
 	if windows.GetConsoleMode(windows.Handle(f.Fd()), &mode) == nil {
-		process := windows.CurrentProcess()
-		if err := windows.DuplicateHandle(process, windows.Handle(f.Fd()), process, &console, 0, false, windows.DUPLICATE_SAME_ACCESS); err != nil {
+		// Output handles also have console modes, potentially identical to input.
+		// Classify without consuming input before opening the shared input queue.
+		var events uint32
+		if err := windows.GetNumberOfConsoleInputEvents(windows.Handle(f.Fd()), &events); err != nil {
+			return "", fmt.Errorf("validate console input: %w", err)
+		}
+		var err error
+		console, err = windows.CreateFile(windows.StringToUTF16Ptr("CONIN$"),
+			windows.GENERIC_READ|windows.GENERIC_WRITE,
+			windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE,
+			nil, windows.OPEN_EXISTING, 0, 0)
+		if err != nil {
 			return "", fmt.Errorf("prepare console cancellation: %w", err)
 		}
 		// Registered before the join defer: never close a handle with a live read.
 		defer windows.CloseHandle(console)
+		var openedMode uint32
+		if err := windows.GetConsoleMode(console, &openedMode); err != nil {
+			return "", fmt.Errorf("validate console input: %w", err)
+		}
+		if openedMode != mode {
+			return "", fmt.Errorf("console input mode changed: inherited=%#x opened=%#x", mode, openedMode)
+		}
 		read = func() (string, error) { return readConsoleLine(ctx, console, mode) }
 	}
 	defer runtime.KeepAlive(f)
