@@ -8,6 +8,7 @@ const path = require("node:path");
 const VERSION = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
 const COMMIT = /^[0-9a-f]{40}$/;
 const DIGEST = /^[0-9a-f]{64}$/;
+const NOTICES = "THIRD_PARTY_NOTICES.txt";
 const PRODUCER_REPOSITORY = "777genius/plugin-kit-ai";
 const TARGETS = [
   ["darwin-amd64", "darwin", "amd64", ""],
@@ -69,8 +70,15 @@ function assetMetadata(assetRoot, version) {
   return assets;
 }
 
+// Historical releases have no companion notices; new preparation always adds them.
+function noticeFiles(assetRoot) {
+  if (!fs.readdirSync(assetRoot).includes(NOTICES)) return [];
+  regularUnaliasedFile(path.join(assetRoot, NOTICES), "release notices");
+  return [NOTICES];
+}
+
 function writeChecksums(assetRoot, assets) {
-  const names = [...Object.values(assets).map((asset) => asset.file), "release-manifest.json"];
+  const names = [...Object.values(assets).map((asset) => asset.file), "release-manifest.json", ...noticeFiles(assetRoot)];
   const body = names.map((file) => `${sha256(path.join(assetRoot, file))}  ${file}`).join("\n") + "\n";
   fs.writeFileSync(path.join(assetRoot, "checksums.txt"), body);
 }
@@ -83,6 +91,11 @@ function prepareRelease(assetRoot, tag, commit) {
     assets: assetMetadata(assetRoot, identity.version)
   };
   fs.writeFileSync(path.join(assetRoot, "release-manifest.json"), JSON.stringify(manifest, null, 2) + "\n");
+  const noticeSource = path.resolve(__dirname, "..", NOTICES);
+  regularUnaliasedFile(noticeSource, "packaged notices");
+  const noticeTarget = path.join(assetRoot, NOTICES);
+  if (fs.readdirSync(assetRoot).includes(NOTICES)) regularUnaliasedFile(noticeTarget, "release notices");
+  fs.copyFileSync(noticeSource, noticeTarget);
   writeChecksums(assetRoot, manifest.assets);
   return manifest;
 }
@@ -104,7 +117,7 @@ function parseChecksums(assetRoot) {
 function verifyChecksums(assetRoot, expectedNames) {
   const entries = parseChecksums(assetRoot);
   if (entries.size !== expectedNames.length || expectedNames.some((name) => !entries.has(name))) {
-    throw new Error("checksums.txt does not name exactly the six binaries and release manifest");
+    throw new Error("checksums.txt does not name exactly the six binaries, release manifest, and any companion notices");
   }
   for (const name of expectedNames) {
     if (entries.get(name) !== sha256(path.join(assetRoot, name))) {
@@ -124,12 +137,12 @@ function verifyRelease(assetRoot, tag, commit, options = {}) {
     throw new Error("release manifest identity does not match the exact tag and commit");
   }
   const computed = assetMetadata(assetRoot, identity.version);
-  const names = [...Object.values(computed).map((asset) => asset.file), "release-manifest.json"];
+  const names = [...Object.values(computed).map((asset) => asset.file), "release-manifest.json", ...noticeFiles(assetRoot)];
   verifyChecksums(assetRoot, names);
   const expectedFiles = [...names, "checksums.txt"].sort();
   const actualFiles = fs.readdirSync(assetRoot).sort();
   if (actualFiles.join("\n") !== expectedFiles.join("\n")) {
-    throw new Error("release directory must contain exactly the six binaries, checksums, and manifest");
+    throw new Error("release directory must contain exactly the six binaries, checksums, manifest, and any companion notices");
   }
 
   if (manifest.schema_version === 1 && options.allowLegacyManifest === true) {
@@ -170,6 +183,7 @@ function verifyRelease(assetRoot, tag, commit, options = {}) {
     assets: computed,
     manifest_schema: 2,
     manifest_sha256: sha256(manifestPath),
+    notices: noticeFiles(assetRoot).map((file) => ({ file, sha256: sha256(path.join(assetRoot, file)) })),
     gate_eligible: true
   };
 }

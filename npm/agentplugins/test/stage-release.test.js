@@ -169,6 +169,10 @@ test("release staging embeds every exact platform asset hash", async (t) => {
   const evidenceRoot = await fixtureEvidence(root);
   const manifest = stage(packageRoot, assetsRoot, version, COMMIT, { evidenceRoot });
   assert.equal(manifest.version, version);
+  assert.deepEqual(
+    await fsp.readFile(path.join(packageRoot, "THIRD_PARTY_NOTICES.txt")),
+    await fsp.readFile(path.join(assetsRoot, "THIRD_PARTY_NOTICES.txt"))
+  );
   assert.equal(manifest.npm_package, "universal-agent-plugins");
   assert.equal(manifest.producer.repository, "777genius/plugin-kit-ai");
   assert.equal(manifest.producer.commit, COMMIT);
@@ -199,6 +203,15 @@ test("release staging embeds every exact platform asset hash", async (t) => {
     await fsp.readFile(path.join(packageRoot, "test/evidence-root/AGENTPLUGINS_CLIENT_E2E.md"), "utf8"),
     await fsp.readFile(path.join(evidenceRoot, "AGENTPLUGINS_CLIENT_E2E.md"), "utf8")
   );
+  // A rechecksummed companion from a different source must not reach npm.
+  const noticeFile = path.join(assetsRoot, "THIRD_PARTY_NOTICES.txt");
+  await fsp.writeFile(noticeFile, "different source notices\n");
+  const noticeHash = crypto.createHash("sha256").update(await fsp.readFile(noticeFile)).digest("hex");
+  const checksumsFile = path.join(assetsRoot, "checksums.txt");
+  await fsp.writeFile(checksumsFile, (await fsp.readFile(checksumsFile, "utf8")).replace(
+    /^[0-9a-f]{64}  THIRD_PARTY_NOTICES\.txt$/m, `${noticeHash}  THIRD_PARTY_NOTICES.txt`
+  ));
+  assert.throws(() => stage(packageRoot, assetsRoot, version, COMMIT, { evidenceRoot }), /packaged notices do not match/);
 });
 
 test("staged package tests are hermetic to repository layout and caller cwd", {
@@ -473,6 +486,7 @@ test("legacy manifests are audit-only and never gate eligible", async (t) => {
     await fsp.writeFile(path.join(root, expectedAssetName(version, info)), `${info.key}\n`);
   }
   const { assets } = prepareRelease(root, `agentplugins-v${version}`, COMMIT);
+  await fsp.rm(path.join(root, "THIRD_PARTY_NOTICES.txt"));
   await fsp.writeFile(path.join(root, "release-manifest.json"), JSON.stringify({
     schema_version: 1,
     tag: `agentplugins-v${version}`,

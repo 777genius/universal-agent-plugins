@@ -103,6 +103,10 @@ versioned Go binary for macOS, Linux, or Windows, verifies its embedded SHA-256,
 and caches it locally. Native release tests cover x64 and arm64 on all three
 operating systems.
 
+Third-party license text is included in `THIRD_PARTY_NOTICES.txt` in this npm
+package. For direct native downloads, retain the companion notice file from
+the same release with the binary, including when redistributing.
+
 - [Source and documentation](https://github.com/777genius/universal-agent-plugins)
 - [Browse the plugin catalog](https://777genius.github.io/universal-agent-plugins/plugins/)
 - [Client E2E evidence](https://github.com/777genius/universal-agent-plugins/blob/main/docs/AGENTPLUGINS_CLIENT_E2E.md)

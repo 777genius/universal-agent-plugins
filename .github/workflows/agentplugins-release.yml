@@ -258,7 +258,7 @@ jobs:
             gh release download "${TAG}" --repo "${GITHUB_REPOSITORY}" --dir "${existing}"
             node "${GITHUB_WORKSPACE}/npm/agentplugins/scripts/release-assets.js" \
               verify "${existing}" "${TAG}" "${FROZEN_COMMIT}"
-            for asset in agentplugins_* checksums.txt release-manifest.json; do
+            for asset in agentplugins_* checksums.txt release-manifest.json THIRD_PARTY_NOTICES.txt; do
               cmp -- "${asset}" "${existing}/${asset}" || {
                 echo "existing draft asset differs from the frozen build: ${asset}" >&2
                 exit 1
@@ -274,6 +274,7 @@ jobs:
             ${{ runner.temp }}/agentplugins-assets/agentplugins_*
             ${{ runner.temp }}/agentplugins-assets/checksums.txt
             ${{ runner.temp }}/agentplugins-assets/release-manifest.json
+            ${{ runner.temp }}/agentplugins-assets/THIRD_PARTY_NOTICES.txt
       - name: Create non-public immutable draft
         if: ${{ steps.draft.outputs.existing != 'true' }}
         env:
@@ -292,10 +293,11 @@ jobs:
             echo "release ${TAG} appeared concurrently; refusing to overwrite immutable assets" >&2
             exit 1
           fi
-          gh release create "${TAG}" agentplugins_* checksums.txt release-manifest.json \
+          gh release create "${TAG}" agentplugins_* checksums.txt release-manifest.json THIRD_PARTY_NOTICES.txt \
             --repo "${GITHUB_REPOSITORY}" --verify-tag \
             --target "${{ needs.validate.outputs.commit }}" --draft \
-            --title "Agentplugins ${TAG#agentplugins-v}" --generate-notes
+            --title "Agentplugins ${TAG#agentplugins-v}" --generate-notes \
+            --notes "Native downloads: retain the companion THIRD_PARTY_NOTICES.txt with the binary and include it when redistributing."
       - name: Share frozen draft assets with the read-only proof workflow
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
         with:
@@ -304,6 +306,7 @@ jobs:
             ${{ runner.temp }}/agentplugins-assets/agentplugins_*
             ${{ runner.temp }}/agentplugins-assets/checksums.txt
             ${{ runner.temp }}/agentplugins-assets/release-manifest.json
+            ${{ runner.temp }}/agentplugins-assets/THIRD_PARTY_NOTICES.txt
           if-no-files-found: error
           retention-days: 7
 
@@ -368,8 +371,9 @@ jobs:
           mkdir -p "${assets}"
           gh release download "${TAG}" --repo "${GITHUB_REPOSITORY}" --dir "${assets}"
           node npm/agentplugins/scripts/release-assets.js verify "${assets}" "${TAG}" "${FROZEN_COMMIT}"
+          cmp -- npm/agentplugins/THIRD_PARTY_NOTICES.txt "${assets}/THIRD_PARTY_NOTICES.txt"
           test "$(sha256sum "${assets}/checksums.txt" | cut -d ' ' -f 1)" = "${EXPECTED_ASSET_SET_DIGEST}"
-          for asset in "${assets}"/agentplugins_* "${assets}/checksums.txt" "${assets}/release-manifest.json"; do
+          for asset in "${assets}"/agentplugins_* "${assets}/checksums.txt" "${assets}/release-manifest.json" "${assets}/THIRD_PARTY_NOTICES.txt"; do
             gh attestation verify "${asset}" \
               --repo "${GITHUB_REPOSITORY}" \
               --signer-workflow "github.com/${GITHUB_REPOSITORY}/.github/workflows/agentplugins-release.yml" \
