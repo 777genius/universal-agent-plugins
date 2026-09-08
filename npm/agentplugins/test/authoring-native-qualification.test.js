@@ -65,7 +65,7 @@ function internal(observation = false, fastTimeout = false) {
   if (fastTimeout) source = source.replace('installer ? 120000 : 15000', '100');
   // Expose lexical contracts only in this test VM. Production exports no policy,
   // verifier, command inventory, child executable or success switch.
-  source += '\nmodule.exports.test = { commands, installationCommands, verifyJourney, terminal, tree, canonical, context, subprocess, observationGate, jsonDocument, treeShape, packageIdentity, capabilities, PROFILES, POLICY, scannerArchive, SCANNER_RELEASES };';
+  source += '\nmodule.exports.test = { commands, installationCommands, verifyJourney, terminal, tree, canonical, context, subprocess, observationGate, jsonDocument, treeShape, packageIdentity, capabilities, PROFILES, POLICY, scannerArchive, SCANNER_RELEASES, publicInfoClient };';
   const Module = require("node:module");
   const instance = new Module(moduleFile, module);
   instance.filename = moduleFile; instance.paths = Module._nodeModulePaths(path.dirname(moduleFile));
@@ -75,6 +75,50 @@ function internal(observation = false, fastTimeout = false) {
 function noTerminal(f) {
   for (const p of c.PRODUCTS) assert.equal(fs.existsSync(path.join(f.options.output, `${p}-terminal.json`)), false);
 }
+// Independent fixture of read.go's publicClient/publicPackageRevision JSON,
+// including Go omitempty and immutable-revision redaction. Never return state.
+function publicClientFixture(binding) {
+  const { client_id, scope, materialization, activation, authentication, policy, verification } = binding;
+  const value = { client_id, scope, materialization, activation, authentication, policy, verification };
+  if (binding.package_revision) {
+    const r = binding.package_revision;
+    value.package_revision = { tree_digest: r.tree_digest, manifest_digest: r.manifest_digest };
+    if (r.version) value.package_revision.version = r.version;
+    if (r.distribution_id) value.package_revision.distribution_id = r.distribution_id;
+    if (r.release_sequence) value.package_revision.release_sequence = r.release_sequence;
+    const immutable = (r.resolved_revision || "").replace(/^\p{White_Space}+|\p{White_Space}+$/gu, "");
+    if (/^[0-9a-f]{40}$/.test(immutable)) value.package_revision.resolved_revision = immutable;
+  }
+  if (binding.affected_surfaces?.length) value.affected_surfaces = [...binding.affected_surfaces].sort();
+  return value;
+}
+const publicInfoChanges = {
+  "scope": v => { v.scope = "project"; },
+  "materialization": v => { v.materialization = "degraded"; },
+  "revision": v => { v.package_revision.tree_digest = "sha256:" + "b".repeat(64); },
+  "target_locator": v => { v.target_locator = "/foreign/managed/clients/codex/skill-232a373eb43a"; },
+  "physical_artifact_id": v => { v.physical_artifact_id = "skill-000000000000"; },
+  "client_binding_id": v => { v.client_binding_id = "client_000000000000000000000000"; },
+  "client ID": v => { v.client_id = "cursor"; },
+  "missing scope": v => { delete v.scope; },
+  "missing materialization": v => { delete v.materialization; },
+  "activation": v => { v.activation = "active"; },
+  "authentication": v => { v.authentication = "authenticated"; },
+  "policy": v => { v.policy = "blocked"; },
+  "verification": v => { v.verification = "runtime_verified"; },
+  "surfaces": v => { v.affected_surfaces = ["unregistered"]; },
+  "revision version": v => { v.package_revision.version = "9.0.0"; },
+  "revision manifest": v => { v.package_revision.manifest_digest = "sha256:" + "b".repeat(64); },
+  "revision resolved": v => { v.package_revision.resolved_revision = "b".repeat(40); },
+  "revision distribution": v => { v.package_revision.distribution_id = "invented"; },
+  "revision sequence": v => { v.package_revision.release_sequence = 1; },
+  "revision private evidence": v => { v.package_revision.catalog_evidence = {}; },
+  "receipt claim": v => { v.receipt_reconciled = true; },
+  "discovery claim": v => { v.native_discovery_reconciled = true; },
+  "identity claim": v => { v.native_identity_state = "managed"; },
+  "version claim": v => { v.client_version = "1.0.0"; },
+  "discovery evidence": v => { v.native_discovery_evidence = { basis: "invented" }; }
+};
 function fixtureProgram() {
   // Deliberately independent response implementation with actual mkdir/write/
   // state mutations in each child. A zero status without those effects is tested.
@@ -86,6 +130,8 @@ const sha = s => crypto.createHash('sha256').update(s).digest('hex');
 const product = selected.includes('plugin-kit-ai') ? 'plugin-kit-ai' : 'agentplugins';
 fs.appendFileSync(cfg.log, JSON.stringify({selected,argv,env:process.env})+'\n');
 const scenario = cfg.scenario;
+${publicClientFixture.toString()}
+const publicInfoChanges = {${Object.entries(publicInfoChanges).map(([key, fn]) => JSON.stringify(key) + ":" + fn.toString()).join(",")}};
 const profiles = [{"id": "agent-plugins/1.0.0", "revision": "ff8ab5e392cc87bd88d87c060815a87490e51003", "digest": "sha256:97a658b7dca3ce1b4c2266b95da300fa51d9dc4ade59d73168e5f9104272da18"}, {"id": "agent-skills/2026-09-06", "revision": "69ef37e9424c0a7ea9dd2293b559e43ec8176379", "digest": "sha256:b9079c0c10b7930e8c6a20ff2bc10cda2a3343c55185120e3f1116a1a529b220"}, {"id": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json", "revision": "1.0.0", "digest": "sha256:0a4aad95ce337878ad38802ebf0daa3fde76abe3f65400c86bcbb1ec0b3ab883"}, {"id": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json", "revision": "1.0.0", "digest": "sha256:6539175bfcdf43085855183e86da40ea94b166547a72b47ae9a0a390516d3acb"}, {"id": "author-document-bounds/v1", "revision": "1", "digest": "sha256:4b8ab8fd50481ccd1a0b777dcbbfa06cf89516a5ea61ce09d56d6dd6a2c43004"}];
 function output(value, status=0) {
   if (scenario === 'invalid-utf8') process.stdout.write(Buffer.from([0xff]));
@@ -231,6 +277,7 @@ function registration(state,root){
   return {installation_id:installationID,declared_name:'skill',source:{tree_digest:subject.tree_digest},
     package:{declared_name:'skill',version:'0.1.0',manifest_digest:subject.manifest_digest},
     clients:{[binding]:{client_binding_id:binding,client_id:'codex',scope:'user',materialization:'materialized',physical_artifact_id:physical,
+      activation:'manual_activation_required',authentication:'not_checked',policy:'allowed',verification:'installation_verified',
       target_locator:target,package_revision:revision}}};
 }
 
@@ -277,7 +324,10 @@ function installer(args) {
     if(scenario==='wrong-installation-identity')data.result.installation_id='87654321-1234-4234-8234-123456789abc';
   } else if(verb==='info'){
     if(scenario==='info-mutates-state')write(state,'unexpected-info-write','x');
-    data.installation_id=installationID;data.name='skill';data.version='0.1.0';data.clients=Object.values(JSON.parse(fs.readFileSync(path.join(state,'state-v2.json'))).installations[0].clients);
+    data.installation_id=installationID;data.name='skill';data.version='0.1.0';data.source='local';data.mixed_version=false;
+    data.clients=Object.values(JSON.parse(fs.readFileSync(path.join(state,'state-v2.json'))).installations[0].clients).map(publicClientFixture);
+    Object.assign(data.clients[0],{receipt_reconciled:false,native_discovery_reconciled:false,native_identity_state:'indeterminate'});
+    if(scenario.startsWith('public-info/'))publicInfoChanges[scenario.slice('public-info/'.length)](data.clients[0]);
   }
   else if(verb==='update')data.result={installation_id:installationID,mutated:false,no_change:scenario!=='wrong-update'};
   else if(verb==='remove'){
@@ -373,11 +423,85 @@ test("fixed production orchestration and closed reader with subprocess fixtures 
   assert.deepEqual(reread[0].peer_subject,reread[1].subject);
   assert.equal(reread[0].assertions.installer.length,8);
   assert.equal(reread[0].assertions.commands.agentplugins.length,54);
+  const rows = JSON.parse(fs.readFileSync(path.join(f.options.output, "transcripts.json"))).installer;
+  const info = rows.find(row => row.id === "info"), value = JSON.parse(info.stdout).data;
+  const registered = Object.values(JSON.parse(info.before.state_document).installations[0].clients)[0];
+  const go = fs.readFileSync(path.resolve(__dirname, "../../../cli/plugin-kit-ai/internal/agentpluginscli/read.go"), "utf8");
+  const shape = go.split("type publicClient struct {")[1].split("\n}")[0];
+  const fields = [...shape.matchAll(/`json:"([^",]+)[^"]*"`/g)].map(m => m[1]).filter(k => k !== "-");
+  assert.match(shape, /BindingID[^\n]+`json:"-"`/);
+  assert.ok(Object.keys(value.clients[0]).every(key => fields.includes(key)));
+  assert.deepEqual(value.clients[0], { ...publicClientFixture(registered), receipt_reconciled: false,
+    native_discovery_reconciled: false, native_identity_state: "indeterminate" });
+  for (const key of ["target_locator", "physical_artifact_id", "client_binding_id"]) {
+    assert.ok(!fields.includes(key)); assert.equal(Object.hasOwn(value.clients[0], key), false);
+  }
+  assert.ok(!info.stdout.includes(f.sandbox));
+  assert.deepEqual(info.before.state_document_source, info.after.state_document_source);
+  // The public stdout is preserved byte-for-byte rather than normalized into
+  // a fabricated private response; state normalization keeps separate raw pins.
+  assert.equal(info.stdout, JSON.stringify({ schema_version: 1, command: "info", result: "success", data: value }) + "\n");
   const calls=fs.readFileSync(f.log,"utf8").trim().split("\n").map(JSON.parse);
   assert.ok(calls.some(x=>x.argv.includes('--dry-run')));
   assert.ok(calls.some(x=>x.argv[0]==='remove'));
   assert.ok(calls.every(x=>!x.argv.includes('--auth-complete')&&!x.argv.includes('--accept-security-risk')));
   assert.throws(()=>promotion.requireNativeContracts(result),/unknown or duplicate terminal lane|NATIVE_EVIDENCE_INTEGRATION_REQUIRED/);
+});
+for (const name of ["scope", "materialization", "revision", "target_locator", "physical_artifact_id", "client_binding_id"]) {
+  test(`public info subprocess rejects ${name}`, async t => {
+    const f = fixture(); subprocessFixtures(t, f, "public-info/" + name);
+    await assert.rejects(internal(true).produce(f.options), /public info client matches checked registration/);
+    noTerminal(f);
+    assert.ok(fs.existsSync(path.join(f.options.output, "diagnostic.json")));
+  });
+}
+test("public info replay rejects coherently rehashed client contradictions", async t => {
+  const f = fixture(); subprocessFixtures(t, f); await internal(true).produce(f.options);
+  const root = f.options.output, expected = expectations(f);
+  const originals = Object.fromEntries(fs.readdirSync(root).map(file => [file, fs.readFileSync(path.join(root, file))]));
+  const put = (file, bytes) => { fs.chmodSync(path.join(root, file), 0o600); fs.writeFileSync(path.join(root, file), bytes); };
+  for (const [name, change] of Object.entries(publicInfoChanges)) await t.test(name, () => {
+    const transcripts = JSON.parse(originals["transcripts.json"]), row = transcripts.installer.find(r => r.id === "info");
+    const value = JSON.parse(row.stdout); change(value.data.clients[0]); row.stdout = JSON.stringify(value) + "\n";
+    // All state snapshots/raw pins remain identical. Rehash the changed
+    // transcript and BOTH terminal pins, so rejection must be semantic.
+    const bytes = c.encode(transcripts); put("transcripts.json", bytes);
+    for (const p of c.PRODUCTS) {
+      const file = p + "-terminal.json", terminal = JSON.parse(originals[file]);
+      Object.assign(terminal.evidence.find(pin => pin.file === "transcripts.json"), c.metadata(bytes));
+      put(file, c.encode(terminal));
+    }
+    assert.throws(() => fixtureReader(root, f.root, f.pins, expected), /public info client matches checked registration/);
+    for (const [file, bytes] of Object.entries(originals)) put(file, bytes);
+  });
+  assert.equal(fixtureReader(root, f.root, f.pins, expected).length, 2);
+});
+test("public info revision uses Go projection and omitempty without leaking private evidence", () => {
+  const binding = { client_id: "codex", scope: "user", materialization: "materialized", activation: "manual_activation_required",
+    authentication: "not_checked", policy: "allowed", verification: "installation_verified", affected_surfaces: ["z", "a"],
+    target_locator: "/private", physical_artifact_id: "private", client_binding_id: "private",
+    package_revision: { version: "0.1.0", resolved_revision: " " + "a".repeat(40) + " ", distribution_id: "recorded", release_sequence: 3,
+      tree_digest: "sha256:" + hash("tree"), manifest_digest: "sha256:" + hash("manifest"), catalog_evidence: { private: true } } };
+  const check = internal().test.publicInfoClient, projected = publicClientFixture(binding);
+  check(projected, binding);
+  assert.deepEqual(projected.affected_surfaces, ["a", "z"]);
+  assert.equal(projected.package_revision.resolved_revision, "a".repeat(40));
+  assert.equal(Object.hasOwn(projected.package_revision, "catalog_evidence"), false);
+  for (const key of Object.keys(projected.package_revision)) {
+    const missing = structuredClone(projected); delete missing.package_revision[key];
+    assert.throws(() => check(missing, binding), /public info client matches checked registration/);
+  }
+  binding.package_revision.resolved_revision = "\u0085" + "a".repeat(40) + "\u0085";
+  check(projected, binding); // Go trims NEL; JS String.trim does not.
+  for (const resolved of ["", "main", "/private/revision", "A".repeat(40), "a".repeat(39), "\uFEFF" + "a".repeat(40)]) {
+    binding.package_revision.resolved_revision = resolved;
+    binding.package_revision.version = ""; binding.package_revision.distribution_id = ""; binding.package_revision.release_sequence = 0;
+    binding.affected_surfaces = [];
+    const value = publicClientFixture(binding); check(value, binding);
+    assert.deepEqual(Object.keys(value.package_revision).sort(), ["manifest_digest", "tree_digest"]);
+    const invented = structuredClone(value); invented.package_revision.resolved_revision = resolved;
+    assert.throws(() => check(invented, binding), /public info client matches checked registration/);
+  }
 });
 for (const scenario of ["wrong-binary","wrong-build-target","wrong-build-mode","wrong-build-source","wrong-version","wrong-source",
   "runtime-claim","bad-json","invalid-utf8","missing-command","deferred-command","missing-template","yaml","wrong-result","wrong-command","parity","changed-project",

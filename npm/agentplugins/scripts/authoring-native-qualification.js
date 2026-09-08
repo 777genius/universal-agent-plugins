@@ -590,12 +590,32 @@ function normalizeInstaller(rows, root) {
       state.state_document = c.encode(document).toString("utf8");
       Object.assign(state.state.find(x => x.path === "state-v2.json"), c.metadata(Buffer.from(state.state_document)));
     }
-    if (row.id === "info") {
-      const document = jsonDocument(row.stdout);
-      for (const client of document.data.clients) normalizeClient(client, document.data.installation_id);
-      row.stdout = c.encode(document).toString("utf8");
-    }
   }
+}
+function publicInfoClient(value, client) {
+  // read.go: publicInstallationView/publicPackageRevision expose a projection,
+  // never the private binding, locator, physical child or catalog evidence.
+  // This assertion is shared by per-command capture and terminal replay.
+  const expected = {};
+  for (const key of ["client_id", "scope", "materialization", "activation", "authentication", "policy", "verification"]) {
+    assert.equal(typeof client[key], "string", `registered public info ${key}`);
+    expected[key] = client[key];
+  }
+  const revision = client.package_revision, exposed = {};
+  for (const key of ["version", "distribution_id", "release_sequence"])
+    if (revision[key]) exposed[key] = revision[key];
+  // Go strings.TrimSpace uses Unicode White_Space (unlike JS trim's BOM rule).
+  const resolved = (revision.resolved_revision || "").replace(/^\p{White_Space}+|\p{White_Space}+$/gu, "");
+  if (/^[0-9a-f]{40}$/.test(resolved)) exposed.resolved_revision = resolved;
+  for (const key of ["tree_digest", "manifest_digest"]) exposed[key] = revision[key];
+  expected.package_revision = exposed;
+  if (client.affected_surfaces?.length) expected.affected_surfaces = client.affected_surfaces.slice().sort();
+  // read_reconciliation.go returns indeterminate with false reconciliation for
+  // this isolated Codex config, with no installed/versioned native client.
+  // Optional observations cannot invent successful native discovery evidence.
+  if (["receipt_reconciled", "native_discovery_reconciled", "native_identity_state"].some(key => Object.hasOwn(value, key)))
+    Object.assign(expected, { receipt_reconciled: false, native_discovery_reconciled: false, native_identity_state: "indeterminate" });
+  exact(value, expected, "public info client matches checked registration and isolated lifecycle observations");
 }
 function installedIdentity(state, project) {
   const document = stateDocument(state); exact(document.installations.length, 1);
@@ -678,8 +698,8 @@ function installed(row, spec, projects) {
     const identity = installedIdentity(row.before, projects.skill);
     exact(r.data.installation_id, identity.registration.installation_id, "info installed identity");
     exact(r.data.name, "skill"); exact(r.data.version, "0.1.0");
-    exact(r.data.clients.length, 1); exact(r.data.clients[0].client_id, "codex");
-    exact(r.data.clients[0].package_revision, identity.client.package_revision);
+    exact(r.data.clients.length, 1);
+    publicInfoClient(r.data.clients[0], identity.client);
   } else {
     exact(row.before, row.after, "list is read only");
     exact(r.data.installations, []); exact(stateDocument(row.after).installations, []);
