@@ -17,37 +17,38 @@ func ReadLine(ctx context.Context, reader io.Reader) (string, error) {
 	return readCancelable(ctx, reader)
 }
 func readLine(ctx context.Context, reader io.Reader) (string, error) {
+	return readLineBuffer(ctx, reader, make([]byte, 1))
+}
+
+// Larger buffers are safe only when the kernel guarantees canonical record
+// boundaries. Streams use one byte so this owner never prefetches another answer.
+func readLineBuffer(ctx context.Context, reader io.Reader, b []byte) (string, error) {
 	var line strings.Builder
-	var b [1]byte
 	for {
 		if err := ctx.Err(); err != nil {
 			return "", err
 		}
-		n, err := reader.Read(b[:])
+		n, err := reader.Read(b)
 		if e := ctx.Err(); e != nil {
 			return "", e
 		}
-		if n > 0 && b[0] == '\n' && (err == nil || err == io.EOF) {
-			return strings.TrimSuffix(line.String(), "\r"), nil
-		}
-		if err != nil {
-			if err == io.EOF {
-				return "", prompt.ErrPromptInputClosed
-			}
+		if err != nil && err != io.EOF {
 			return "", fmt.Errorf("read prompt: %w", err)
+		}
+		for _, c := range b[:n] {
+			if c == '\n' {
+				return strings.TrimSuffix(line.String(), "\r"), nil
+			}
+			if line.Len() >= 4096 {
+				return "", fmt.Errorf("prompt answer exceeds 4096 bytes")
+			}
+			line.WriteByte(c)
+		}
+		if err == io.EOF {
+			return "", prompt.ErrPromptInputClosed
 		}
 		if n == 0 {
 			return "", io.ErrNoProgress
 		}
-		if err := ctx.Err(); err != nil {
-			return "", err
-		}
-		if b[0] == '\n' {
-			return strings.TrimSuffix(line.String(), "\r"), nil
-		}
-		if line.Len() >= 4096 {
-			return "", fmt.Errorf("prompt answer exceeds 4096 bytes")
-		}
-		line.WriteByte(b[0])
 	}
 }

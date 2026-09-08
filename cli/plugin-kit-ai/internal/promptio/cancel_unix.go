@@ -47,7 +47,7 @@ func readCancelable(ctx context.Context, reader io.Reader) (line string, err err
 			err = e
 		}
 	}()
-	line, err = readLine(ctx, cr)
+	line, err = readUnixTerminalLine(ctx, cr, f)
 	if ctx.Err() != nil {
 		return "", ctx.Err()
 	}
