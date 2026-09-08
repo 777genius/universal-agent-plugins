@@ -158,3 +158,27 @@ test("hash and original facade cache helpers remain canonical", async () => {
   fs.unlinkSync(file); assert.equal(await v.validCachedBinary(file, PIN.sha256), false);
   assert.equal(typeof fsp.open, "function");
 });
+
+test("download owner receives opened inode on partial failure, and cancellation closes output", async () => {
+  const file = destination(), controller = new AbortController();
+  let opened;
+  await assert.rejects(v.downloadFile(URL, file, PIN, {
+    signal: controller.signal,
+    onOpen: stat => { opened = stat; controller.abort(); },
+    request: transport((res, req) => { req.emit("response", res); res.write(BODY.subarray(0, 2)); })
+  }), /cancelled/);
+  assert.ok(opened);
+  const named = fs.lstatSync(file);
+  assert.equal(named.ino, opened.ino); assert.equal(named.dev, opened.dev);
+  fs.unlinkSync(file); assert.equal(fs.existsSync(file), false);
+});
+
+test("download open observer failure settles after close without hiding its owned inode", async () => {
+  const file = destination(); let opened;
+  await assert.rejects(v.downloadFile(URL, file, PIN, {
+    onOpen: stat => { opened = stat; throw new Error("injected owner observation failure"); },
+    request: transport((res, req) => { req.emit("response", res); res.end(BODY); })
+  }), /owner observation failure/);
+  assert.equal(fs.lstatSync(file).ino, opened.ino);
+  fs.unlinkSync(file);
+});

@@ -73,6 +73,8 @@ function requestApprovedTarget(target, requestOptions) {
 
 async function downloadFile(value, destination, expected, options = {}, redirects = MAX_REDIRECTS) {
   const target = validateDownloadURL(value);
+  cancelled(options.signal);
+  let abort;
   await new Promise((resolve, reject) => {
     const requestOptions = {
       headers: {
@@ -86,6 +88,9 @@ async function downloadFile(value, destination, expected, options = {}, redirect
     request.setTimeout(DOWNLOAD_TIMEOUT_MS, () => request.destroy(new Error("binary download timed out")));
     let streamFailure;
     request.once("error", error => streamFailure ? streamFailure(error) : reject(error));
+    abort = () => request.destroy(new Error("binary acquisition cancelled"));
+    options.signal?.addEventListener("abort", abort, { once: true });
+    if (options.signal?.aborted) { abort(); return; }
     request.once("response", (response) => {
       if ([301, 302, 303, 307, 308].includes(response.statusCode) && response.headers.location) {
         response.resume();
@@ -125,6 +130,11 @@ async function downloadFile(value, destination, expected, options = {}, redirect
         output.destroy();
       };
       streamFailure = fail;
+      // The operation owner can retain the actual opened identity even when a
+      // partial download fails. Never infer ownership from a later pathname.
+      output.once("open", fd => {
+        try { options.onOpen?.(fs.fstatSync(fd)); } catch (error) { fail(error); }
+      });
       let ended = false;
       response.once("end", () => { ended = true; });
       response.once("close", () => { if (!ended) fail(new Error("binary download response closed before completion")); });
@@ -161,7 +171,7 @@ async function downloadFile(value, destination, expected, options = {}, redirect
         resolve();
       });
     });
-  });
+  }).finally(() => { if (abort) options.signal?.removeEventListener("abort", abort); });
 }
 
 function cancelled(signal) {

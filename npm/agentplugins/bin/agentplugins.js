@@ -15,7 +15,8 @@ async function main() {
     process.exitCode = 1;
     return;
   }
-  const childEnvironment = { ...process.env };
+  const childEnvironment = resolved.publicAuthoring
+    ? require("../lib/public-authoring").childEnvironment() : { ...process.env };
   delete childEnvironment.AGENTPLUGINS_INTERNAL_PROOF_MODE;
   delete childEnvironment.AGENTPLUGINS_INTERNAL_PROOF_BINARY;
   const child = spawn(resolved.binaryPath, process.argv.slice(2), { stdio: "inherit", env: childEnvironment });
