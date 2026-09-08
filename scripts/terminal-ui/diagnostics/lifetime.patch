@@ -1,0 +1,429 @@
+--- a/cli/plugin-kit-ai/internal/promptio/cancel_windows.go
++++ b/cli/plugin-kit-ai/internal/promptio/cancel_windows.go
+@@ -22,6 +22,10 @@
+- path := os.Getenv("UAP_CONSOLE_TRACE")
+- if path == "" { return }
+- f, err := os.OpenFile(path+".native", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
+- if err != nil { return }
+- defer f.Close()
+- fmt.Fprintf(f, "%s "+format+"\n", append([]any{time.Now().Format(time.RFC3339Nano)}, args...)...)
++	path := os.Getenv("UAP_CONSOLE_TRACE")
++	if path == "" {
++		return
++	}
++	f, err := os.OpenFile(path+".native", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
++	if err != nil {
++		return
++	}
++	defer f.Close()
++	fmt.Fprintf(f, "%s tid=%d "+format+"\n", append([]any{time.Now().Format(time.RFC3339Nano), windows.GetCurrentThreadId()}, args...)...)
+@@ -32,4 +36,2 @@
+-// Console requests use an owned duplicate of the inherited handle and cancel
+-// at the I/O request with CancelIoEx. Interrupting only the issuing thread is
+-// insufficient evidence that the console is ready for its next owner.
+-// No CONIN$ is opened and queued console input is never flushed.
++// DIAGNOSTIC ONLY: test file-object and issuing-thread lifetimes independently.
++// The production candidate is a separate, trace-free patch. No input is flushed.
+@@ -45,0 +48 @@
++	var nativeEntered bool
+@@ -48,2 +51,3 @@
+-		process := windows.CurrentProcess()
+-		if err := windows.DuplicateHandle(process, windows.Handle(f.Fd()), process, &console, 0, false, windows.DUPLICATE_SAME_ACCESS); err != nil {
++		var err error
++		console, err = diagnosticOpenConsole(windows.Handle(f.Fd()), mode)
++		if err != nil {
+@@ -53,2 +57,9 @@
+-		defer func() { traceConsole("close console=%d err=%v", console, windows.CloseHandle(console)) }()
+-		read = func() (string, error) { return readConsoleLine(ctx, console, mode) }
++		defer func() {
++			traceConsole("close enter console=%d", console)
++			err := windows.CloseHandle(console)
++			traceConsole("close return console=%d err=%v", console, err)
++			if err != nil {
++				panic(fmt.Sprintf("diagnostic close: %v", err))
++			}
++		}()
++		read = func() (string, error) { return readConsoleLine(ctx, console, mode, &nativeEntered) }
+@@ -65,2 +76,19 @@
+-	defer func() { close(release); <-finished }()
+-	go func() {
++	var thread windows.Handle
++	var retired bool
++	defer func() {
++		close(release)
++		<-finished
++		traceConsole("joined console=%d thread=%d native_entered=%t retired=%t", console, thread, nativeEntered, retired)
++		if thread != 0 {
++			defer windows.CloseHandle(thread)
++		}
++		if retired {
++			traceConsole("thread wait enter handle=%d bound=250ms", thread)
++			status, err := windows.WaitForSingleObject(thread, 250)
++			traceConsole("thread wait return handle=%d status=%d err=%v", thread, status, err)
++			if err != nil || status != windows.WAIT_OBJECT_0 {
++				panic(fmt.Sprintf("diagnostic thread did not retire: status=%d err=%v", status, err))
++			}
++		}
++	}()
++	go diagnosticOnReaderThread(diagnosticRetiresThread(), func() {
+@@ -68,2 +96,7 @@
+-		runtime.LockOSThread()
+-		defer runtime.UnlockOSThread()
++		defer func() {
++			retired = console != 0 && nativeEntered && ctx.Err() != nil && diagnosticRetiresThread()
++			traceConsole("reader release native_entered=%t retired=%t initial_tid=%d", nativeEntered, retired, diagnosticInitialThread)
++			if !retired {
++				runtime.UnlockOSThread()
++			}
++		}()
+@@ -77,3 +110,2 @@
+-		// Keep the thread handle alive until cancellation has stopped and the
+-		// reader is released, before allowing the OS thread to be reused.
+-		defer windows.CloseHandle(thread)
++		// The caller owns the thread duplicate through cancellation, join, and
++		// any explicitly bounded native termination wait.
+@@ -86,2 +118,2 @@
+-	}()
+-	thread := <-ready
++	})
++	thread = <-ready
+@@ -119 +151 @@
+-func readConsoleLine(ctx context.Context, h windows.Handle, mode uint32) (string, error) {
++func readConsoleLine(ctx context.Context, h windows.Handle, mode uint32, entered *bool) (string, error) {
+@@ -122,0 +155 @@
++		*entered = true
+--- /dev/null
++++ b/cli/plugin-kit-ai/internal/promptio/diagnostic_lifetime_windows.go
+@@ -0,0 +1,143 @@
++//go:build windows && terminaldiagnostic
++
++package promptio
++
++// Temporary experiment only. The workflow links one policy into each binary;
++// the isolated driver does not inherit arbitrary environment variables.
++import (
++	"fmt"
++	"runtime"
++	"time"
++
++	"golang.org/x/sys/windows"
++)
++
++var diagnosticLifetime = "baseline"
++
++// Go documents that package initialization runs on the startup OS thread.
++// runtime.mexit parks that particular thread instead of terminating it.
++var diagnosticInitialThread = windows.GetCurrentThreadId()
++
++var diagnosticGetThreadID = windows.NewLazySystemDLL("kernel32.dll").NewProc("GetThreadId")
++var diagnosticCompareHandles = windows.NewLazySystemDLL("kernelbase.dll").NewProc("CompareObjectHandles")
++
++func diagnosticRetiresThread() bool {
++	return diagnosticLifetime == "retired-noninitial" || diagnosticLifetime == "fresh-input-retired"
++}
++
++func diagnosticOnReaderThread(excludeInitial bool, run func()) {
++	runtime.LockOSThread()
++	if excludeInitial && windows.GetCurrentThreadId() == diagnosticInitialThread {
++		// Keep m0 occupied until another locked thread has accepted the work.
++		// Unlocking before the handshake would let the child run on m0 again.
++		handed := make(chan struct{})
++		go func() {
++			runtime.LockOSThread()
++			if windows.GetCurrentThreadId() == diagnosticInitialThread {
++				panic("diagnostic: reader still on initial thread")
++			}
++			close(handed)
++			run()
++		}()
++		select {
++		case <-handed:
++		case <-time.After(250 * time.Millisecond):
++			panic("diagnostic: noninitial thread handoff exceeded 250ms")
++		}
++		runtime.UnlockOSThread()
++		return
++	}
++	// run owns unlocking, or returns locked to retire this noninitial thread.
++	run()
++}
++
++func diagnosticOpenConsole(inherited windows.Handle, mode uint32) (windows.Handle, error) {
++	var h windows.Handle
++	var err error
++	if diagnosticLifetime == "fresh-input" || diagnosticLifetime == "fresh-input-retired" {
++		// DuplicateHandle preserves the file object. A new CONIN$ open gives
++		// this request its own handle state and a final-close notification.
++		// This branch is reached only after validating inherited console input.
++		h, err = windows.CreateFile(windows.StringToUTF16Ptr("CONIN$"),
++			windows.GENERIC_READ|windows.GENERIC_WRITE,
++			windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE,
++			nil, windows.OPEN_EXISTING, 0, 0)
++	} else {
++		p := windows.CurrentProcess()
++		err = windows.DuplicateHandle(p, inherited, p, &h, 0, false, windows.DUPLICATE_SAME_ACCESS)
++	}
++	if err != nil {
++		return 0, err
++	}
++	var got uint32
++	if err = windows.GetConsoleMode(h, &got); err != nil || got != mode {
++		windows.CloseHandle(h)
++		return 0, fmt.Errorf("diagnostic console mode: inherited=%#x opened=%#x err=%v", mode, got, err)
++	}
++	if diagnosticCompareHandles.Find() == nil {
++		same, _, _ := diagnosticCompareHandles.Call(uintptr(inherited), uintptr(h))
++		traceConsole("object comparison inherited=%d owned=%d same=%t policy=%s", inherited, h, same != 0, diagnosticLifetime)
++	}
++	return h, nil
++}
++
++// The preflight performs no console I/O. It tests the exact duplicate/wait
++// access, a live-thread timeout, a noninitial ID and real termination before
++// the cancellation sweep can begin. Every wait has an explicit failure bound.
++func diagnosticThreadPreflight() error {
++	switch diagnosticLifetime {
++	case "baseline", "retired-noninitial", "fresh-input", "fresh-input-retired":
++	default:
++		return fmt.Errorf("unknown lifetime policy %q", diagnosticLifetime)
++	}
++	type info struct {
++		h   windows.Handle
++		id  uint32
++		err error
++	}
++	ready := make(chan info, 1)
++	release := make(chan struct{})
++	go diagnosticOnReaderThread(true, func() {
++		var h windows.Handle
++		p := windows.CurrentProcess()
++		err := windows.DuplicateHandle(p, windows.CurrentThread(), p, &h, 0, false, windows.DUPLICATE_SAME_ACCESS)
++		ready <- info{h, windows.GetCurrentThreadId(), err}
++		if err != nil {
++			runtime.UnlockOSThread()
++			return
++		}
++		<-release
++		// Intentionally return locked, on a verified noninitial thread.
++	})
++	var v info
++	select {
++	case v = <-ready:
++	case <-time.After(250 * time.Millisecond):
++		panic("diagnostic: preflight thread did not become ready in 250ms")
++	}
++	if v.err != nil {
++		return v.err
++	}
++	defer windows.CloseHandle(v.h)
++	id, _, idErr := diagnosticGetThreadID.Call(uintptr(v.h))
++	live, liveErr := windows.WaitForSingleObject(v.h, 0)
++	close(release)
++	exit, exitErr := windows.WaitForSingleObject(v.h, 250)
++	traceConsole("preflight policy=%s initial_tid=%d worker_tid=%d handle_tid=%d live=%d live_err=%v exit=%d exit_err=%v", diagnosticLifetime, diagnosticInitialThread, v.id, id, live, liveErr, exit, exitErr)
++	if uint32(id) != v.id || v.id == diagnosticInitialThread {
++		return fmt.Errorf("preflight thread identity initial=%d worker=%d handle=%d err=%v", diagnosticInitialThread, v.id, id, idErr)
++	}
++	if liveErr != nil || live != uint32(windows.WAIT_TIMEOUT) || exitErr != nil || exit != windows.WAIT_OBJECT_0 {
++		return fmt.Errorf("preflight thread wait live=%d err=%v exit=%d err=%v", live, liveErr, exit, exitErr)
++	}
++	return nil
++}
++
++func diagnosticWatchdog(phase string, bound time.Duration) func() {
++	timer := time.AfterFunc(bound, func() {
++		traceConsole("BOUND_EXCEEDED phase=%s bound=%s", phase, bound)
++		// Never return success or allow another read after a failed join.
++		panic(fmt.Sprintf("diagnostic: %s exceeded %s", phase, bound))
++	})
++	return func() { timer.Stop() }
++}
+--- /dev/null
++++ b/cli/plugin-kit-ai/internal/promptio/diagnostic_lifetime_windows_test.go
+@@ -0,0 +1,17 @@
++//go:build windows && terminaldiagnostic
++
++package promptio
++
++import (
++	"testing"
++	"time"
++)
++
++func TestDiagnosticThreadPreflight(t *testing.T) {
++	stop := diagnosticWatchdog("thread preflight", time.Second)
++	defer stop()
++	if err := diagnosticThreadPreflight(); err != nil {
++		t.Fatal(err)
++	}
++	t.Logf("DIAGNOSTIC_PREFLIGHT_OK policy=%s initial_tid=%d", diagnosticLifetime, diagnosticInitialThread)
++}
+--- a/cli/plugin-kit-ai/internal/promptio/diagnostic_console_windows_test.go
++++ b/cli/plugin-kit-ai/internal/promptio/diagnostic_console_windows_test.go
+@@ -10,0 +11 @@
++	"runtime/debug"
+@@ -13,0 +15 @@
++	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/prompt"
+@@ -36 +38 @@
+-	case "consecutive", "pre-canceled", "timed-cancel", "native-inherited", "native-duplicate":
++	case "consecutive", "pre-canceled", "timed-cancel", "native-inherited", "native-duplicate", "queued-boundaries":
+@@ -60,0 +63,15 @@
++	stopPreflight := diagnosticWatchdog("console preflight", time.Second)
++	defer stopPreflight()
++	if err := diagnosticThreadPreflight(); err != nil {
++		t.Fatal(err)
++	}
++	preCtx, preCancel := context.WithCancel(context.Background())
++	preCancel()
++	if line, err := ReadLine(preCtx, os.Stdin); line != "" || !errors.Is(err, context.Canceled) {
++		t.Fatalf("pre-canceled preflight: %q %v", line, err)
++	}
++	stopPreflight()
++	fmt.Fprintf(os.Stdout, "DIAGNOSTIC_PREFLIGHT_OK policy=%s initial_tid=%d\n", diagnosticLifetime, diagnosticInitialThread)
++	oldGC := debug.SetGCPercent(-1)
++	defer debug.SetGCPercent(oldGC)
++	var baseline [2]uint32
+@@ -71,0 +89 @@
++			stopBound := diagnosticWatchdog(fmt.Sprintf("cancel %d", i), time.Second)
+@@ -72,0 +91 @@
++			stopBound()
+@@ -86,0 +106 @@
++		stopBound := diagnosticWatchdog(fmt.Sprintf("reuse %d", i), 2*time.Second)
+@@ -131,0 +152 @@
++		stopBound()
+@@ -134 +155,11 @@
+-		if err != nil || line != fmt.Sprintf("diagnostic-reuse-%d", i) {
++		want := fmt.Sprintf("diagnostic-reuse-%d", i)
++		var wantErr error
++		if kind == "queued-boundaries" {
++			switch i % 3 {
++			case 0:
++				want = fmt.Sprintf("中文é😀-%d", i)
++			case 1:
++				want, wantErr = "", prompt.ErrPromptInputClosed
++			}
++		}
++		if !errors.Is(err, wantErr) || line != want {
+@@ -140,0 +172,8 @@
++		// Same fixed-baseline resource census as the unmodified qualification.
++		if i == 5 {
++			baseline = qualificationConsoleResources(t, nil)
++			log("resources warmup=6 handles=%d goroutines=%d", baseline[0], baseline[1])
++		} else if i > 5 && (i+1)%6 == 0 {
++			got := qualificationConsoleResources(t, &baseline)
++			log("resources measured=%d handles=%d goroutines=%d", i-5, got[0], got[1])
++		}
+--- a/scripts/terminal-ui/windows_cancel_diagnostic.py
++++ b/scripts/terminal-ui/windows_cancel_diagnostic.py
+@@ -15 +15 @@
+-p.add_argument('--control', action='append', choices=['consecutive', 'pre-canceled', 'timed-cancel', 'native-inherited', 'native-duplicate'])
++p.add_argument('--control', action='append', choices=['consecutive', 'pre-canceled', 'timed-cancel', 'native-inherited', 'native-duplicate', 'queued-boundaries'])
+@@ -26 +26 @@
+-for control in a.control or ['consecutive', 'pre-canceled', 'timed-cancel', 'native-inherited', 'native-duplicate']:
++for control in a.control or ['consecutive', 'pre-canceled', 'timed-cancel', 'native-inherited', 'native-duplicate', 'queued-boundaries']:
+@@ -49 +49,9 @@
+-                    data = ('diagnostic-reuse-' + str(i) + '\r').encode()
++                    if control == 'queued-boundaries':
++                        # Submit three real answers together. Later reads must
++                        # preserve Unicode, drain EOF's CR/LF, and keep the
++                        # queued next line across owned-handle close/reopen.
++                        if i % 3:
++                            continue
++                        data = (f'中文é😀-{i}\r\x1a\rdiagnostic-reuse-{i+2}\r').encode()
++                    else:
++                        data = ('diagnostic-reuse-' + str(i) + '\r').encode()
+--- a/scripts/terminal-ui/windows_conpty.py
++++ b/scripts/terminal-ui/windows_conpty.py
+@@ -200,2 +200,9 @@
+-            check(code is None, 'console owner exited (' + str(code) + ') before marker: ' + marker +
+-                  '\n' + clean(bytes(self.raw))[-6000:])
++            # Process exit does not mean the independent output reader has
++            # captured the final marker. Keep the original deadline while it
++            # drains; once it has stopped, rescan before reporting a missing
++            # marker. Never accept exit/status as a substitute for the marker.
++            if code is not None and (self.reader is None or not self.reader.is_alive()):
++                check(self.error is None, self.error)
++                if re.search(marker, clean(bytes(self.raw[after:]))): return len(self.raw)
++                raise AssertionError('console owner exited (' + str(code) + ') before marker: ' + marker +
++                                     '\n' + clean(bytes(self.raw))[-6000:])
+--- /dev/null
++++ b/scripts/terminal-ui/test_windows_capture.py
+@@ -0,0 +1,78 @@
++"""Marker capture may finish after the console owner process exits."""
++from types import SimpleNamespace
++import unittest
++from unittest.mock import patch
++
++from windows_conpty import ConPTY
++
++
++class CaptureTests(unittest.TestCase):
++    def setUp(self):
++        self.now = 0
++        self.on_sleep = lambda: None
++        clock = SimpleNamespace(monotonic=lambda: self.now, sleep=self.sleep)
++        mocked = patch('windows_conpty.time', clock)
++        mocked.start()
++        self.addCleanup(mocked.stop)
++        self.console = ConPTY.__new__(ConPTY)
++        self.console.timeout = 1
++        self.console.error = None
++        self.console.raw = bytearray()
++        self.console.status_path = None
++        self.console.poll = lambda: 0
++        self.console.reader = SimpleNamespace(is_alive=lambda: True)
++
++    def sleep(self, duration):
++        self.now += duration
++        self.on_sleep()
++
++    def capture_during_poll(self):
++        self.console.raw.extend(b'RESTORE_OK_test\r\n')
++        return 0
++
++    def test_marker_captured_during_exit_poll(self):
++        self.console.poll = self.capture_during_poll
++        self.assertGreater(self.console.wait('RESTORE_OK_test'), 0)
++
++    def test_reader_delivers_after_process_exit(self):
++        def capture():
++            if self.now >= .06:
++                self.console.raw.extend(b'RESTORE_OK_test\r\n')
++        self.on_sleep = capture
++        self.assertGreater(self.console.wait('RESTORE_OK_test'), 0)
++        self.assertLess(self.now, self.console.timeout)
++
++    def test_rescan_after_reader_finishes(self):
++        self.console.reader.is_alive = lambda: False
++        self.console.poll = self.capture_during_poll
++        self.assertGreater(self.console.wait('RESTORE_OK_test'), 0)
++        self.assertEqual(self.now, 0)
++
++    def test_finished_reader_without_marker_fails(self):
++        self.console.reader.is_alive = lambda: False
++        with self.assertRaisesRegex(AssertionError, 'exited'):
++            self.console.wait('RESTORE_OK_test')
++        self.assertEqual(self.now, 0)
++
++    def test_missing_marker_keeps_original_deadline(self):
++        with self.assertRaisesRegex(AssertionError, 'timeout waiting'):
++            self.console.wait('RESTORE_OK_test')
++        self.assertGreaterEqual(self.now, self.console.timeout)
++        self.assertLess(self.now, self.console.timeout + .021)
++
++    def test_capture_at_or_after_deadline_fails(self):
++        def capture():
++            if self.now >= self.console.timeout:
++                self.console.raw.extend(b'RESTORE_OK_test\r\n')
++        self.on_sleep = capture
++        with self.assertRaisesRegex(AssertionError, 'timeout waiting'):
++            self.console.wait('RESTORE_OK_test')
++
++    def test_reader_error_remains_failure(self):
++        self.console.error = 'ReadFile WinError 6'
++        with self.assertRaisesRegex(AssertionError, 'ReadFile WinError 6'):
++            self.console.wait('RESTORE_OK_test')
++
++
++if __name__ == '__main__':
++    unittest.main()

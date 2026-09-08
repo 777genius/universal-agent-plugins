@@ -14,9 +14,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        variant: [inherited, retired-thread]
+        variant: [baseline, retired-noninitial, fresh-input, fresh-input-retired]
     env:
-      DIAGNOSTIC_BASE: f074ca4fdd59a929e5fa3bc67561574147092e04
+      DIAGNOSTIC_BASE: 268e6d105229d250625628d59a0c694d657bbe1f
       GOWORK: 'off'
       GOTOOLCHAIN: local
       CGO_ENABLED: '0'
@@ -38,13 +38,13 @@ jobs:
           path: fixtures
       - name: Record the single variant patch and hash
         run: |
-          $patch = "$env:GITHUB_WORKSPACE/fixtures/scripts/terminal-ui/diagnostics/${{ matrix.variant }}.patch"
+          $patch = "$env:GITHUB_WORKSPACE/fixtures/scripts/terminal-ui/diagnostics/lifetime.patch"
           Copy-Item $patch "$env:RUNNER_TEMP/windows-diagnostic-evidence/variant.patch"
           Get-FileHash $patch -Algorithm SHA256 | Select-Object Algorithm, Hash | ConvertTo-Json | Set-Content "$env:RUNNER_TEMP/windows-diagnostic-evidence/variant-patch-sha256.json"
       - name: Fresh checkout of exact traced source base
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          ref: f074ca4fdd59a929e5fa3bc67561574147092e04
+          ref: 268e6d105229d250625628d59a0c694d657bbe1f
           persist-credentials: false
           path: source
       - name: Verify source and apply one diagnostic-only patch
@@ -55,9 +55,9 @@ jobs:
           $sha | Set-Content "$env:RUNNER_TEMP/windows-diagnostic-evidence/source-sha.txt"
           if ($code -ne 0) { exit $code }
           if ($sha -ne $env:DIAGNOSTIC_BASE) { throw 'Unexpected source base' }
-          git apply --check "$env:RUNNER_TEMP/windows-diagnostic-evidence/variant.patch" 2>&1 | Tee-Object -FilePath "$env:RUNNER_TEMP/windows-diagnostic-evidence/patch-check.log"
+          git apply --unidiff-zero --check "$env:RUNNER_TEMP/windows-diagnostic-evidence/variant.patch" 2>&1 | Tee-Object -FilePath "$env:RUNNER_TEMP/windows-diagnostic-evidence/patch-check.log"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          git apply "$env:RUNNER_TEMP/windows-diagnostic-evidence/variant.patch" 2>&1 | Tee-Object -FilePath "$env:RUNNER_TEMP/windows-diagnostic-evidence/patch-apply.log"
+          git apply --unidiff-zero "$env:RUNNER_TEMP/windows-diagnostic-evidence/variant.patch" 2>&1 | Tee-Object -FilePath "$env:RUNNER_TEMP/windows-diagnostic-evidence/patch-apply.log"
           exit $LASTEXITCODE
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
         with:
@@ -72,19 +72,36 @@ jobs:
             New-Item -ItemType Directory -Force $dir | Out-Null
             "$key=$dir" >> $env:GITHUB_ENV
           }
+      - name: Verify capture ordering with the original deadline
+        working-directory: source
+        run: |
+          python -m unittest discover -s scripts/terminal-ui -p test_windows_capture.py 2>&1 | Tee-Object -FilePath "$env:RUNNER_TEMP/windows-diagnostic-evidence/capture-tests.log"
+          exit $LASTEXITCODE
       - name: Build tagged diagnostic test binary
         timeout-minutes: 3
         working-directory: source/cli/plugin-kit-ai
         run: |
-          go test -c -tags terminaldiagnostic -o "$env:RUNNER_TEMP/windows-console-diagnostic.test.exe" ./internal/promptio 2>&1 | Tee-Object -FilePath "$env:RUNNER_TEMP/windows-diagnostic-evidence/build.log"
+          go test -c -tags terminaldiagnostic -ldflags "-X github.com/777genius/plugin-kit-ai/cli/internal/promptio.diagnosticLifetime=${{ matrix.variant }}" -o "$env:RUNNER_TEMP/windows-console-diagnostic.test.exe" ./internal/promptio 2>&1 | Tee-Object -FilePath "$env:RUNNER_TEMP/windows-diagnostic-evidence/build.log"
           $code = $LASTEXITCODE
           @{ exit = $code } | ConvertTo-Json | Set-Content "$env:RUNNER_TEMP/windows-diagnostic-evidence/build-status.json"
           exit $code
-      - name: Run unchanged timed-cancel control (30 iterations)
+      - name: Verify bounded thread preflight and existing Windows unit tests
+        timeout-minutes: 1
+        run: |
+          Get-FileHash "$env:RUNNER_TEMP/windows-console-diagnostic.test.exe" -Algorithm SHA256 | Select-Object Algorithm, Hash | ConvertTo-Json | Set-Content "$env:RUNNER_TEMP/windows-diagnostic-evidence/binary-sha256.json"
+          & "$env:RUNNER_TEMP/windows-console-diagnostic.test.exe" '-test.run=^TestDiagnosticThreadPreflight$' -test.v -test.timeout=2s 2>&1 | Tee-Object -FilePath "$env:RUNNER_TEMP/windows-diagnostic-evidence/preflight.log"
+          $code = $LASTEXITCODE
+          @{ exit = $code } | ConvertTo-Json | Set-Content "$env:RUNNER_TEMP/windows-diagnostic-evidence/preflight-status.json"
+          if ($code -ne 0) { exit $code }
+          & "$env:RUNNER_TEMP/windows-console-diagnostic.test.exe" '-test.run=^TestWindows' -test.v -test.timeout=30s 2>&1 | Tee-Object -FilePath "$env:RUNNER_TEMP/windows-diagnostic-evidence/windows-unit-tests.log"
+          $code = $LASTEXITCODE
+          @{ exit = $code } | ConvertTo-Json | Set-Content "$env:RUNNER_TEMP/windows-diagnostic-evidence/windows-unit-status.json"
+          exit $code
+      - name: Run all controls with original 30 exchanges and queued boundaries
         timeout-minutes: 5
         working-directory: source
         run: |
-          python scripts/terminal-ui/windows_cancel_diagnostic.py --repo "$env:GITHUB_WORKSPACE/source" --binary "$env:RUNNER_TEMP/windows-console-diagnostic.test.exe" --artifacts "$env:RUNNER_TEMP/windows-diagnostic-evidence/controls" --control timed-cancel 2>&1 | Tee-Object -FilePath "$env:RUNNER_TEMP/windows-diagnostic-evidence/driver.log"
+          python scripts/terminal-ui/windows_cancel_diagnostic.py --repo "$env:GITHUB_WORKSPACE/source" --binary "$env:RUNNER_TEMP/windows-console-diagnostic.test.exe" --artifacts "$env:RUNNER_TEMP/windows-diagnostic-evidence/controls" 2>&1 | Tee-Object -FilePath "$env:RUNNER_TEMP/windows-diagnostic-evidence/driver.log"
           $code = $LASTEXITCODE
           @{ exit = $code } | ConvertTo-Json | Set-Content "$env:RUNNER_TEMP/windows-diagnostic-evidence/driver-status.json"
           exit $code
@@ -93,7 +110,9 @@ jobs:
         run: |
           if (Test-Path "$env:GITHUB_WORKSPACE/source/.git") {
             git -C "$env:GITHUB_WORKSPACE/source" diff --binary --output="$env:RUNNER_TEMP/windows-diagnostic-evidence/source.diff"
-            exit $LASTEXITCODE
+            $code = $LASTEXITCODE
+            Get-ChildItem "$env:GITHUB_WORKSPACE/source/cli/plugin-kit-ai/internal/promptio/*.go", "$env:GITHUB_WORKSPACE/source/scripts/terminal-ui/*.py" | Get-FileHash -Algorithm SHA256 | Select-Object Path, Hash | ConvertTo-Json | Set-Content "$env:RUNNER_TEMP/windows-diagnostic-evidence/source-files-sha256.json"
+            exit $code
           }
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         if: always()
