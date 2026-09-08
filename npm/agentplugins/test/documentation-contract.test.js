@@ -116,7 +116,7 @@ test("root documentation recommends the native Go installer without hiding npm",
     return;
   }
   const markdown = fs.readFileSync(documents[0][1], "utf8");
-  assert.match(markdown, /Node\.js is not a requirement of the native CLI/i);
+  assert.match(markdown, /The native CLI does not require Node\.js/i);
   assert.match(markdown, /brew install 777genius\/agentplugins\/agentplugins/);
   assert.match(
     markdown,
