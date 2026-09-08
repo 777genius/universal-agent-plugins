@@ -95,6 +95,7 @@ class ConPTY:
         self.timeout, self.raw, self.error = timeout, bytearray(), None
         self.handles = []
         self.job = None
+        self.job_assigned = False
         self.status_path = None
         self.hpc = W.HANDLE()
         self.pi = PROCESS_INFORMATION()
@@ -134,6 +135,7 @@ class ConPTY:
             # Assign while suspended so PowerShell/CLI descendants cannot escape
             # failure cleanup. Job termination is always recorded as forced.
             self.ok(self.k.AssignProcessToJobObject(self.job, self.pi.hProcess))
+            self.job_assigned = True
             resumed = self.k.ResumeThread(self.pi.hThread)
             self.ok(resumed != 0xffffffff)
             for handle in (input_read, output_write):
@@ -211,26 +213,39 @@ class ConPTY:
             if not self.k.TerminateProcess(handle, 97):
                 # Owner may exit between poll and kill. Only a signaled handle
                 # proves that this failure is harmless.
-                check(self.k.WaitForSingleObject(handle, 0) == 0, 'TerminateProcess failed')
+                check(self.k.WaitForSingleObject(handle, 2000) == 0, 'TerminateProcess failed')
             check(self.k.WaitForSingleObject(handle, 2000) == 0, 'process kill timeout')
         try:
-            if getattr(self, 'job', None):
+            job = getattr(self, 'job', None) if getattr(self, 'job_assigned', True) else None
+            if job:
                 accounting = JOB_ACCOUNTING()
-                self.ok(self.k.QueryInformationJobObject(self.job, 1, ctypes.byref(accounting),
+                self.ok(self.k.QueryInformationJobObject(job, 1, ctypes.byref(accounting),
                                                         ctypes.sizeof(accounting), None))
                 if accounting.active_processes:
                     self.forced = True
-                    attempt(lambda: self.ok(self.k.TerminateJobObject(self.job, 97)))
+                    attempt(lambda: self.ok(self.k.TerminateJobObject(job, 97)))
+                    # Job termination is asynchronous. Do not race it with a
+                    # second TerminateProcess call (ERROR_ACCESS_DENIED).
+                    deadline = time.monotonic() + 2
+                    while True:
+                        self.ok(self.k.QueryInformationJobObject(job, 1, ctypes.byref(accounting),
+                                                                ctypes.sizeof(accounting), None))
+                        if not accounting.active_processes:
+                            break
+                        check(time.monotonic() < deadline, 'job termination timeout')
+                        time.sleep(0.02)
             if self.pi.hProcess and self.poll() is None:
                 self.forced = True
-                if getattr(self, 'job', None):
-                    attempt(lambda: self.ok(self.k.TerminateJobObject(self.job, 97)))
-                elif child_pid:
+                if not job and child_pid:
                     child = self.k.OpenProcess(0x0001 | 0x00100000, False, child_pid)
                     if child:
                         try: attempt(lambda: terminate(child))
                         finally: attempt(lambda: self.ok(self.k.CloseHandle(child)))
-                attempt(lambda: terminate(self.pi.hProcess))
+                if job:
+                    attempt(lambda: check(self.k.WaitForSingleObject(self.pi.hProcess, 2000) == 0,
+                                          'job owner termination timeout'))
+                else:
+                    attempt(lambda: terminate(self.pi.hProcess))
         except Exception as exc:
             errors.append(str(exc))
         finally:
@@ -248,14 +263,45 @@ class ConPTY:
         check(not errors, '; '.join(errors))
 
 
+def finish_console(terminal, status_path, evidence, fixture=None):
+    """Preserve the primary failure and record cleanup failures independently."""
+    primary = sys.exc_info()[1]
+    errors = []
+    status = {}
+    try:
+        if status_path.exists():
+            status = json.loads(status_path.read_text(encoding='utf-8'))
+    except Exception as exc:
+        errors.append('status read: ' + repr(exc))
+    try:
+        terminal.close(status.get('pid'))
+    except Exception as exc:
+        errors.append('console close: ' + repr(exc))
+    (evidence / 'terminal.ansi').write_bytes(terminal.raw)
+    (evidence / 'transcript.txt').write_text(clean(terminal.raw), encoding='utf-8')
+    (evidence / 'cleanup.json').write_text(json.dumps(dict(
+        forced=terminal.forced, reader_error=terminal.error,
+        primary_error=repr(primary) if primary is not None else None,
+        cleanup_errors=errors)), encoding='utf-8')
+    if fixture is not None:
+        (evidence / 'mutations.json').write_text(json.dumps(dict(
+            before=fixture.before, after=fixture.mutations())), encoding='utf-8')
+    if errors:
+        detail = '; '.join(errors)
+        if primary is not None:
+            raise RuntimeError(repr(primary) + '; cleanup: ' + detail) from primary
+        raise AssertionError(detail)
+
+
 CASES = ('default-no', 'no', 'yes-lifecycle', 'ctrl-c', 'confirm-ctrl-c', 'eof', 'resize')
 
 
 def powershell_argv(shell, argv, nonce):
     # Encode the command, preserving spaces, apostrophes and Unicode literally.
     quote = lambda value: "'" + value.replace("'", "''") + "'"
-    command = "Write-Output " + quote('POWERSHELL_LAUNCH_' + nonce) + '; & ' + ' '.join(
-        quote(value) for value in argv) + '; exit $LASTEXITCODE'
+    command = "$ErrorActionPreference = 'Stop'; $global:LASTEXITCODE = $null; Write-Output " + quote('POWERSHELL_LAUNCH_' + nonce) + '; & ' + ' '.join(
+        quote(value) for value in argv) + ("; if ($null -eq $LASTEXITCODE) { throw 'native CLI did not return an exit code' }; "
+                                        "exit $LASTEXITCODE")
     return [str(shell), '-NoLogo', '-NoProfile', '-NonInteractive', '-EncodedCommand',
             base64.b64encode(command.encode('utf-16-le')).decode('ascii')]
 
@@ -271,6 +317,9 @@ def run_case(name, args):
         config = dict(argv=[str(args.binary), 'add', str(fixture.package)], cwd=str(fixture.project),
                       nonce=nonce, status=str(status_path))
         if args.powershell:
+            # PowerShell uses PATHEXT to classify native applications. Without
+            # it an .exe can be treated as a document and launched detached.
+            fixture.env['PATHEXT'] = '.EXE'
             config['argv'] = powershell_argv(args.powershell, config['argv'], nonce)
         config_path = evidence / 'job.json'
         config_path.write_text(json.dumps(config), encoding='utf-8')
@@ -325,17 +374,7 @@ def run_case(name, args):
             if name == 'yes-lifecycle': fixture.installed(['cursor'])
             else: fixture.unchanged()
         finally:
-            # Keep the CLI pid through every phase for timeout cleanup.
-            try:
-                try:
-                    if status_path.exists(): status = json.loads(status_path.read_text(encoding='utf-8'))
-                finally:
-                    terminal.close(status.get('pid'))
-            finally:
-                (evidence / 'terminal.ansi').write_bytes(terminal.raw)
-                (evidence / 'transcript.txt').write_text(clean(terminal.raw), encoding='utf-8')
-                (evidence / 'cleanup.json').write_text(json.dumps({'forced': terminal.forced, 'reader_error': terminal.error}))
-                (evidence / 'mutations.json').write_text(json.dumps({'before': fixture.before, 'after': fixture.mutations()}), encoding='utf-8')
+            finish_console(terminal, status_path, evidence, fixture)
         check(not terminal.forced, 'forced cleanup cannot qualify as a pass')
 
 

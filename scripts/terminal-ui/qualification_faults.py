@@ -87,7 +87,7 @@ def windows_case(binary, case, root, evidence, timeout):
     import sys
     import uuid
     from harness import clean
-    from windows_conpty import ConPTY
+    from windows_conpty import ConPTY, finish_console
     nonce = uuid.uuid4().hex
     env = {key: str(root) for key in ('HOME', 'USERPROFILE', 'APPDATA', 'LOCALAPPDATA', 'TMP', 'TEMP')}
     env.update(SystemRoot=os.environ['SystemRoot'], WINDIR=os.environ['SystemRoot'],
@@ -126,15 +126,7 @@ def windows_case(binary, case, root, evidence, timeout):
         check(status['line_read'] and status['owner_probe'] == status['owner_before'], 'owner console reuse failed')
         check('line_' + nonce in clean(session.raw[offset:]), 'owner kernel echo missing')
     finally:
-        try:
-            try:
-                if status_path.exists(): status = json.loads(status_path.read_text(encoding='utf-8'))
-            finally:
-                session.close(status.get('pid'))
-        finally:
-            (evidence / 'terminal.ansi').write_bytes(session.raw)
-            (evidence / 'transcript.txt').write_text(clean(session.raw), encoding='utf-8')
-            (evidence / 'cleanup.json').write_text(json.dumps(dict(forced=session.forced, reader_error=session.error)))
+        finish_console(session, status_path, evidence)
     check(not session.forced, 'forced cleanup cannot qualify as a pass')
     return {'native_console': True, 'cancellation_and_reuse_iterations': 30,
             'owner_restoration_and_reuse': True}

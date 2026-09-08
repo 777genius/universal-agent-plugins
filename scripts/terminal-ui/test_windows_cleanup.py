@@ -28,6 +28,44 @@ class CleanupTests(unittest.TestCase):
                 c.close()
                 self.assertEqual(len(released), 5)
 
+    def test_job_termination_waits_without_killing_owner_again(self):
+        c = ConPTY.__new__(ConPTY)
+        c.closed = False; c.forced = False; c.error = None
+        c.pi = SimpleNamespace(hProcess=10)
+        c.job = 70; c.job_assigned = True
+        c.hpc = None; c.handles = [70, 10]; c.reader = None
+        c.poll = lambda: None
+        c.ok = lambda value: self.assertTrue(value)
+        counts = iter([2, 1, 0])
+        killed, waited = [], []
+        def accounting(job, info, value, size, result):
+            value._obj.active_processes = next(counts)
+            return True
+        c.k = SimpleNamespace(QueryInformationJobObject=accounting,
+            TerminateJobObject=lambda job, code: killed.append(job) or True,
+            TerminateProcess=lambda *args: self.fail('must not race job termination'),
+            WaitForSingleObject=lambda handle, timeout: waited.append((handle, timeout)) or 0,
+            CloseHandle=lambda handle: True)
+        c.close()
+        self.assertTrue(c.forced)
+        self.assertEqual(killed, [70])
+        self.assertEqual(waited, [(10, 2000)])
+
+    def test_failed_job_assignment_still_terminates_suspended_owner(self):
+        c = ConPTY.__new__(ConPTY)
+        c.closed = False; c.forced = False; c.error = None
+        c.pi = SimpleNamespace(hProcess=10)
+        c.job = 70; c.job_assigned = False
+        c.hpc = None; c.handles = [70, 10]; c.reader = None
+        c.poll = lambda: None
+        c.ok = lambda value: self.assertTrue(value)
+        killed = []
+        c.k = SimpleNamespace(TerminateProcess=lambda handle, code: killed.append(handle) or True,
+            WaitForSingleObject=lambda *args: 0, CloseHandle=lambda handle: True)
+        c.close()
+        self.assertTrue(c.forced)
+        self.assertEqual(killed, [10])
+
 class OwnerTests(unittest.TestCase):
     def test_rejects_shared_or_unattached_console_before_open(self):
         from windows_job import ConsoleOwner
@@ -85,7 +123,7 @@ class OwnerTests(unittest.TestCase):
         argv = powershell_argv('pwsh.exe', ["C:\\test é's\\cli.exe", 'add', 'C:\\fixture $x'], 'nonce')
         self.assertEqual(argv[:5], ['pwsh.exe', '-NoLogo', '-NoProfile', '-NonInteractive', '-EncodedCommand'])
         command = base64.b64decode(argv[-1]).decode('utf-16-le')
-        self.assertEqual(command, "Write-Output 'POWERSHELL_LAUNCH_nonce'; & 'C:\\test é''s\\cli.exe' 'add' 'C:\\fixture $x'; exit $LASTEXITCODE")
+        self.assertEqual(command, "$ErrorActionPreference = 'Stop'; $global:LASTEXITCODE = $null; Write-Output 'POWERSHELL_LAUNCH_nonce'; & 'C:\\test é''s\\cli.exe' 'add' 'C:\\fixture $x'; if ($null -eq $LASTEXITCODE) { throw 'native CLI did not return an exit code' }; exit $LASTEXITCODE")
 
     def test_owner_error_is_reported_before_prompt_timeout(self):
         import json
@@ -108,8 +146,9 @@ class OwnerTests(unittest.TestCase):
         c.poll = lambda: 0
         c.ok = lambda value: self.assertTrue(value)
         killed, released = [], []
+        counts = iter([1, 1, 0])
         def accounting(job, info, value, size, result):
-            value._obj.active_processes = 1
+            value._obj.active_processes = next(counts)
             return True
         c.k = SimpleNamespace(QueryInformationJobObject=accounting,
             TerminateJobObject=lambda job, code: killed.append(job) or True,
@@ -139,3 +178,38 @@ class OwnerTests(unittest.TestCase):
             with patch.object(ctypes, 'get_last_error', return_value=6, create=True):
                 c.read()
             self.assertEqual(c.error, None if closed else 'ReadFile WinError 6')
+
+
+class FailureEvidenceTests(unittest.TestCase):
+    def test_cleanup_preserves_prompt_failure_and_separate_cleanup_error(self):
+        import json
+        import tempfile
+        from pathlib import Path
+        from windows_conpty import finish_console
+        for cleanup_fails in (False, True):
+            with self.subTest(cleanup_fails=cleanup_fails), tempfile.TemporaryDirectory() as root:
+                evidence = Path(root)
+                def close(pid):
+                    if cleanup_fails:
+                        raise OSError('injected cleanup error')
+                terminal = SimpleNamespace(close=close, raw=b'original transcript', forced=True, error=None)
+                with self.assertRaisesRegex(Exception, 'original prompt timeout'):
+                    try:
+                        raise AssertionError('original prompt timeout')
+                    finally:
+                        finish_console(terminal, evidence / 'status.json', evidence)
+                saved = json.loads((evidence / 'cleanup.json').read_text())
+                self.assertIn('original prompt timeout', saved['primary_error'])
+                self.assertEqual(bool(saved['cleanup_errors']), cleanup_fails)
+                self.assertTrue(saved['forced'])
+                self.assertEqual((evidence / 'terminal.ansi').read_bytes(), terminal.raw)
+
+    def test_cleanup_failure_without_primary_still_fails(self):
+        import tempfile
+        from pathlib import Path
+        from windows_conpty import finish_console
+        with tempfile.TemporaryDirectory() as root:
+            terminal = SimpleNamespace(close=lambda pid: (_ for _ in ()).throw(OSError('kill failed')),
+                                       raw=b'', forced=True, error=None)
+            with self.assertRaisesRegex(AssertionError, 'kill failed'):
+                finish_console(terminal, Path(root) / 'status.json', Path(root))

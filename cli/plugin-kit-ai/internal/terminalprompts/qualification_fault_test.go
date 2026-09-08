@@ -20,8 +20,9 @@ import (
 )
 
 type qualificationWriter struct {
-	armed atomic.Bool
-	kind  string
+	armed    atomic.Bool
+	panicked atomic.Bool
+	kind     string
 }
 
 func (w *qualificationWriter) Write(p []byte) (int, error) {
@@ -32,6 +33,7 @@ func (w *qualificationWriter) Write(p []byte) (int, error) {
 		case "huh-write-short":
 			return 0, nil
 		case "huh-render-panic":
+			w.panicked.Store(true)
 			panic("qualification active renderer panic")
 		}
 	}
@@ -113,7 +115,7 @@ func TestQualificationTerminalFault(t *testing.T) {
 			t.Fatalf("short write lost: %v", err)
 		}
 	case "huh-render-panic":
-		if !strings.Contains(err.Error(), "panic") && !strings.Contains(err.Error(), "initialization") {
+		if !writer.panicked.Load() || writer.armed.Load() || err.Error() != "write prompt: terminal output writer panicked" {
 			t.Fatalf("panic error lost: %v", err)
 		}
 	}

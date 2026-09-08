@@ -1557,7 +1557,7 @@ func TestRepeatedAddResumesManualLifecycleWithoutAnotherReceipt(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Count(stdout, "Next:") != 1 || !strings.Contains(stdout, "verify") || !strings.Contains(stdout, "plugins/local") {
+	if strings.Count(stdout, "Next:") != 1 || !strings.Contains(stdout, "verify") || !strings.Contains(stdout, filepath.Join("plugins", "local")) {
 		t.Fatalf("resume output = %q", stdout)
 	}
 	state, err := fixture.store.Load()
