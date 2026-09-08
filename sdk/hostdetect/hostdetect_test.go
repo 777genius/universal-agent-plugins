@@ -133,6 +133,20 @@ func TestDetectFailsClosed(t *testing.T) {
 	}
 }
 
+func TestDetectNullPayloadSkipsSniff(t *testing.T) {
+	t.Parallel()
+
+	called := false
+	registry := Registry{{Platform: PlatformCodex, PayloadSniff: func(payload map[string]any) bool {
+		called = true
+		return true
+	}}}
+	got, err := Detect(registry, "", nil, []byte("null"))
+	if err != nil || got != PlatformUnknown || called {
+		t.Fatalf("Detect(null) = %q, %v; sniff called = %v", got, err, called)
+	}
+}
+
 func TestDetectOversizedPayloadSkipsSniff(t *testing.T) {
 	t.Parallel()
 

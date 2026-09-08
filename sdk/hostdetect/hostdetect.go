@@ -90,5 +90,5 @@ func decodeTopLevel(payload []byte) (map[string]any, bool) {
 	if err := json.Unmarshal(payload, &top); err != nil {
 		return nil, false
 	}
-	return top, true
+	return top, top != nil
 }
