@@ -65,12 +65,12 @@ func (p HuhPrompter) Confirm(ctx context.Context, r prompt.ConfirmationRequest) 
 	// changed at that earlier boundary. Restore the caller's snapshot after all
 	// form readers and cancellation callbacks have joined, including error exits.
 	if f, ok := p.Input.(*os.File); ok && term.IsTerminal(int(f.Fd())) {
-		state, e := term.GetState(int(f.Fd()))
+		restore, e := promptio.SnapshotTerminal(int(f.Fd()))
 		if e != nil {
 			return prompt.ConfirmationResult{}, fmt.Errorf("snapshot confirmation terminal: %w", e)
 		}
 		defer func() {
-			if e := term.Restore(int(f.Fd()), state); e != nil {
+			if e := restore(); e != nil {
 				result = prompt.ConfirmationResult{}
 				err = fmt.Errorf("restore confirmation terminal: %w", e)
 			}
