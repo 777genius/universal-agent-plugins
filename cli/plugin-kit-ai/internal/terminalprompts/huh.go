@@ -18,6 +18,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/charmbracelet/colorprofile"
 	"github.com/muesli/cancelreader"
+	"golang.org/x/term"
 )
 
 type HuhPrompter struct {
@@ -154,7 +155,15 @@ func (p HuhPrompter) run(ctx context.Context, form *huh.Form, configs ...formInp
 	if f, ok := p.Input.(*os.File); ok {
 		input = &formFileReader{formReader: reader, file: f}
 	}
+	var resizeErr error
 	options := []tea.ProgramOption{tea.WithInput(input), tea.WithOutput(output), tea.WithoutSignalHandler(), tea.WithFilter(func(_ tea.Model, msg tea.Msg) tea.Msg {
+		filtered, err := formWindowSize(p.Output, msg)
+		if err != nil {
+			resizeErr = err
+			cancel()
+			return nil
+		}
+		msg = filtered
 		switch m := msg.(type) {
 		case tea.QuitMsg, tea.InterruptMsg:
 			finishInput()
@@ -185,6 +194,9 @@ func (p HuhPrompter) run(ctx context.Context, form *huh.Form, configs ...formInp
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
+	if resizeErr != nil {
+		return fmt.Errorf("query terminal size: %w", resizeErr)
+	}
 	if inputErr := reader.Err(); inputErr != nil {
 		if errors.Is(inputErr, io.EOF) {
 			return prompt.ErrPromptInputClosed
@@ -198,6 +210,26 @@ func (p HuhPrompter) run(ctx context.Context, form *huh.Form, configs ...formInp
 		return fmt.Errorf("terminal prompt: %w", err)
 	}
 	return nil
+}
+
+// Bubble Tea v2.0.2 handles RequestWindowSize with an unjoined checkResize
+// goroutine, which can call the inherited output's Fd after the form returns
+// and its owner closes it. Resolve that command in the event loop instead.
+// The library still owns initial sizing and its joined SIGWINCH listener.
+// Do not cache Fd: that would leave late ioctls targeting a reused descriptor.
+func formWindowSize(output io.Writer, msg tea.Msg) (tea.Msg, error) {
+	if msg != tea.RequestWindowSize() {
+		return msg, nil
+	}
+	f, ok := output.(*os.File)
+	if !ok || !term.IsTerminal(int(f.Fd())) {
+		return nil, nil // Like Bubble Tea, no size query for nonterminal output.
+	}
+	width, height, err := term.GetSize(int(f.Fd()))
+	if err != nil {
+		return nil, err
+	}
+	return tea.WindowSizeMsg{Width: width, Height: height}, nil
 }
 
 type formWriter struct {
