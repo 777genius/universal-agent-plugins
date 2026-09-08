@@ -5,17 +5,19 @@ import (
 	"os"
 
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/prompt"
+	"github.com/777genius/plugin-kit-ai/cli/internal/terminaltheme"
 	"golang.org/x/term"
 )
 
 // VisibleOutput keeps inherited file-backed questions out of redirected logs.
+// Inspect the underlying file but retain the selected presentation writer.
 // Injected non-file writers remain usable by embedders and contract tests.
 func VisibleOutput(primary, alternate io.Writer) (io.Writer, error) {
-	if f, ok := primary.(*os.File); ok {
+	if f, ok := terminaltheme.Unwrap(primary).(*os.File); ok {
 		if term.IsTerminal(int(f.Fd())) {
 			return primary, nil
 		}
-		if f, ok := alternate.(*os.File); ok && term.IsTerminal(int(f.Fd())) {
+		if f, ok := terminaltheme.Unwrap(alternate).(*os.File); ok && term.IsTerminal(int(f.Fd())) {
 			return alternate, nil
 		}
 		return nil, prompt.ErrPromptUnavailable
