@@ -7,18 +7,42 @@ on:
         description: Exact stable tag, for example agentplugins-v0.1.0
         required: true
       producer_mode:
-        description: Binary-only publication or read-only paired native preparation
+        description: Binary-only publication, read-only paired preparation, or explicit promotion
         required: true
         default: binary-only
         type: choice
         options:
           - binary-only
           - paired-preparation
+          - paired-promotion
       source_sha:
         description: Exact source and workflow SHA (required for paired preparation)
         required: false
       plugin_kit_version:
         description: Explicit plugin-kit version (paired first cut requires 2.0.0)
+        required: false
+      preparation_run:
+        description: Exact completed preparation run ID (promotion only)
+        required: false
+      preparation_attempt:
+        description: Exact preparation run attempt (promotion only)
+        required: false
+      preparation_artifact:
+        description: Exact preparation artifact ID (promotion only)
+        required: false
+      preparation_digest:
+        description: Independently selected preparation ZIP SHA256 (promotion only)
+        required: false
+      promotion_operation:
+        description: Promote exact drafts or explicitly reconcile a partial public pair
+        required: true
+        default: promote
+        type: choice
+        options:
+          - promote
+          - reconcile
+      promotion_record:
+        description: Fixed canonical promotion record bindings; unsupported native contracts reject
         required: false
 
 permissions:
@@ -478,3 +502,133 @@ jobs:
             ${{ env.PAIRED_OUTPUT }}/plugin-kit-ai/*
           if-no-files-found: error
           retention-days: 7
+
+  paired-promotion-admission:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.producer_mode == 'paired-promotion' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Validate promotion identity before checkout
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          WORKFLOW_SHA: ${{ github.sha }}
+          WORKFLOW_REF: ${{ github.ref }}
+          TAG: ${{ inputs.tag }}
+          KIT_VERSION: ${{ inputs.plugin_kit_version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "${SOURCE_SHA}" =~ ^[0-9a-f]{40}$ && ! "${SOURCE_SHA}" =~ ^0{40}$ ]]
+          test "${SOURCE_SHA}" = "${WORKFLOW_SHA}"
+          [[ "${TAG}" =~ ^agentplugins-v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]
+          test "${WORKFLOW_REF}" = "refs/tags/${TAG}"
+          test "${KIT_VERSION}" = "2.0.0"
+          test "${TAG#agentplugins-v}" != "${KIT_VERSION}"
+          test "${GITHUB_REPOSITORY}" = "777genius/universal-agent-plugins"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ inputs.source_sha }}
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22.21.1
+          package-manager-cache: false
+      - name: Reject missing native terminal contracts before protected effects
+        env:
+          PROMOTION_RECORD: ${{ inputs.promotion_record }}
+        run: |
+          node <<'NODE'
+          const p = require('./npm/agentplugins/scripts/authoring-promotion');
+          const input = process.env.PROMOTION_RECORD || '{}';
+          if (Buffer.byteLength(input) > 1024 * 1024) throw Error('bounded promotion input required');
+          const record = JSON.parse(input);
+          p.requireNativeContracts(record.qualification?.lanes || []);
+          NODE
+
+  paired-sign-and-promote:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.producer_mode == 'paired-promotion' }}
+    needs: paired-promotion-admission
+    runs-on: ubuntu-latest
+    environment: agentplugins-release
+    permissions:
+      contents: write
+      actions: read
+      id-token: write
+      attestations: write
+      artifact-metadata: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ inputs.source_sha }}
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22.21.1
+          package-manager-cache: false
+      # Admission currently always rejects: real terminal producer integration is
+      # required before any artifact download, attestation or release mutation.
+      - name: Acquire exact frozen preparation after native admission
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PROMOTION_RECORD: ${{ inputs.promotion_record }}
+          PREPARATION_RUN: ${{ inputs.preparation_run }}
+          PREPARATION_ATTEMPT: ${{ inputs.preparation_attempt }}
+          PREPARATION_ARTIFACT: ${{ inputs.preparation_artifact }}
+          PREPARATION_DIGEST: ${{ inputs.preparation_digest }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const p = require('./npm/agentplugins/scripts/authoring-promotion');
+          const record = p.admitRecord(Buffer.from(process.env.PROMOTION_RECORD));
+          if (record.identity.commit !== process.env.SOURCE_SHA) throw Error('exact promotion source required');
+          const scratch = fs.mkdtempSync(path.join(process.env.RUNNER_TEMP, 'paired-promotion-'));
+          const preparation = { run_id: Number(process.env.PREPARATION_RUN), run_attempt: Number(process.env.PREPARATION_ATTEMPT),
+            artifact_id: Number(process.env.PREPARATION_ARTIFACT), artifact_sha256: process.env.PREPARATION_DIGEST };
+          p.acquireArtifact(preparation, p.WORKFLOW, record.identity.commit, scratch);
+          const recordFile = path.join(scratch, 'authoring-promotion.json');
+          fs.writeFileSync(recordFile, p.encodeRecord(record), { flag: 'wx', mode: 0o400 });
+          fs.writeFileSync(path.join(scratch, 'options.json'), JSON.stringify({ record: recordFile,
+            root: path.join(scratch, 'frozen'), scratch: path.join(scratch, 'provider'), workflow_sha: process.env.SOURCE_SHA, preparation }), { flag: 'wx' });
+          fs.mkdirSync(path.join(scratch, 'provider'), { mode: 0o700 });
+          fs.appendFileSync(process.env.GITHUB_ENV, `PROMOTION_ROOT=${scratch}\n`);
+          NODE
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          artifact-ids: ${{ inputs.preparation_artifact }}
+          run-id: ${{ inputs.preparation_run }}
+          github-token: ${{ github.token }}
+          repository: 777genius/universal-agent-plugins
+          merge-multiple: true
+          path: ${{ env.PROMOTION_ROOT }}/frozen
+      - name: Recheck admission and exact subject closure before signing
+        id: subjects
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PROMOTION_OPERATION: ${{ inputs.promotion_operation }}
+        run: |
+          case "${PROMOTION_OPERATION}" in
+            promote) admission=admit ;;
+            reconcile) admission=admit-reconciliation ;;
+            *) exit 1 ;;
+          esac
+          node npm/agentplugins/scripts/authoring-promotion.js "${admission}" "${PROMOTION_ROOT}/options.json" > "${PROMOTION_ROOT}/admitted.json"
+          node <<'NODE'
+          const fs = require('node:fs');
+          const result = JSON.parse(fs.readFileSync(`${process.env.PROMOTION_ROOT}/admitted.json`));
+          if (result.status !== 'qualified-for-promotion' || result.subjects.length !== 19) throw Error('exact admitted subjects required');
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `sign_required=${result.sign_required}\npaths<<SUBJECTS\n${result.subjects.map(s => s.file).join('\n')}\nSUBJECTS\n`);
+          NODE
+      - uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        if: ${{ steps.subjects.outputs.sign_required == 'true' }}
+        with:
+          subject-path: ${{ steps.subjects.outputs.paths }}
+      - name: Reverify all signatures and reconcile both native releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PROMOTION_OPERATION: ${{ inputs.promotion_operation }}
+        run: |
+          case "${PROMOTION_OPERATION}" in promote|reconcile) ;; *) exit 1 ;; esac
+          node npm/agentplugins/scripts/authoring-promotion.js "${PROMOTION_OPERATION}" "${PROMOTION_ROOT}/options.json"

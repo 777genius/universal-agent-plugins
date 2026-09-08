@@ -1,11 +1,15 @@
 package main
 
 import (
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -83,6 +87,7 @@ type producerWorkflow struct {
 	Permissions map[string]string `yaml:"permissions"`
 	Jobs        map[string]struct {
 		If          string            `yaml:"if"`
+		Environment any               `yaml:"environment"`
 		Needs       any               `yaml:"needs"`
 		Uses        string            `yaml:"uses"`
 		Permissions map[string]string `yaml:"permissions"`
@@ -165,16 +170,22 @@ func TestReleaseWorkflowRunnerCacheContext(t *testing.T) {
 func TestReleasePairedPreparationReadOnlyGraph(t *testing.T) {
 	w := readProducerWorkflow(t, "agentplugins-release.yml")
 	mode := w.On.Dispatch.Inputs["producer_mode"]
-	if mode.Default != "binary-only" || strings.Join(mode.Options, ",") != "binary-only,paired-preparation" {
+	if mode.Default != "binary-only" || strings.Join(mode.Options, ",") != "binary-only,paired-preparation,paired-promotion" {
 		t.Fatal("default binary-only dispatch contract changed")
 	}
 	if len(w.Permissions) != 1 || w.Permissions["contents"] != "read" {
 		t.Fatal("workflow must default to contents-read")
 	}
-	if len(w.Jobs) != 6 {
+	if len(w.Jobs) != 8 {
 		t.Fatal("review every new producer job for preparation reachability")
 	}
 	for name, job := range w.Jobs {
+		if name == "paired-promotion-admission" || name == "paired-sign-and-promote" {
+			if job.If != "${{ github.event_name == 'workflow_dispatch' && inputs.producer_mode == 'paired-promotion' }}" {
+				t.Fatalf("%s loses explicit promotion isolation", name)
+			}
+			continue
+		}
 		if name != "paired-preparation" {
 			if job.If != "${{ inputs.producer_mode == 'binary-only' }}" {
 				t.Fatalf("%s reachable from paired route", name)
@@ -280,14 +291,181 @@ func TestReleasePairedRouteCannotTriggerDownstreamPublication(t *testing.T) {
 		if strings.Join(w.On.Run.Workflows, ",") != "Release Assets" {
 			t.Fatalf("%s may be triggered by paired producer", name)
 		}
-		for _, job := range w.Jobs {
-			if !strings.Contains(job.If, "github.event.workflow_run.conclusion == 'success'") {
-				t.Fatalf("%s can publish after rejected legacy major-2 run", name)
+		for jobName, job := range w.Jobs {
+			// Dispatch-only jobs may be added by B. Every automatic route must
+			// reject failed legacy runs; trigger names above isolate paired runs.
+			for _, conclusion := range []string{"failure", "cancelled", "skipped", ""} {
+				if downstreamCondition(t, job.If, "workflow_run", conclusion) {
+					t.Fatalf("%s/%s admits failed legacy run", name, jobName)
+				}
+			}
+			legacy := jobName == "publish-npm" || jobName == "publish-pypi" || jobName == "update-homebrew-tap"
+			if legacy && !downstreamCondition(t, job.If, "workflow_run", "success") {
+				t.Fatalf("%s lost successful automatic v1 route", name)
+			}
+			if !legacy && downstreamCondition(t, job.If, "workflow_run", "success") {
+				t.Fatalf("%s/%s new paired job must be dispatch-only", name, jobName)
 			}
 		}
 	}
 	w := readProducerWorkflow(t, "agentplugins-npm-publish.yml")
 	if len(w.On.Run.Workflows) != 0 {
 		t.Fatal("agentplugins npm publication must require separate dispatch")
+	}
+}
+
+// Parse the restricted boolean expression grammar, rejecting unknown syntax.
+// Testing a failed event must evaluate the whole OR/AND graph, not find a token.
+func downstreamCondition(t *testing.T, expression, event, conclusion string) bool {
+	t.Helper()
+	expression = strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(strings.TrimSpace(expression), "${{"), "}}"))
+	values := map[string]string{"github.event_name": event, "github.event.workflow_run.conclusion": conclusion,
+		"vars.NPM_PUBLISH_READY": "true", "vars.PYPI_TRUSTED_PUBLISHING_READY": "true", "inputs.producer_mode": "paired-promotion"}
+	words := regexp.MustCompile(`'[^']*'|[a-zA-Z_][a-zA-Z0-9_.]*`)
+	expression = words.ReplaceAllStringFunc(expression, func(s string) string {
+		if strings.HasPrefix(s, "'") {
+			return strconv.Quote(s[1 : len(s)-1])
+		}
+		if value, ok := values[s]; ok {
+			return strconv.Quote(value)
+		}
+		if s == "true" || s == "false" {
+			return s
+		}
+		t.Fatalf("unreviewed downstream expression context %q", s)
+		return "false"
+	})
+	tree, err := parser.ParseExpr(expression)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var evaluate func(ast.Expr) any
+	evaluate = func(e ast.Expr) any {
+		switch v := e.(type) {
+		case *ast.ParenExpr:
+			return evaluate(v.X)
+		case *ast.BasicLit:
+			if v.Kind != token.STRING {
+				t.Fatal("non-string expression literal")
+			}
+			value, err := strconv.Unquote(v.Value)
+			if err != nil {
+				t.Fatal(err)
+			}
+			return value
+		case *ast.Ident:
+			if v.Name == "true" {
+				return true
+			}
+			if v.Name == "false" {
+				return false
+			}
+		case *ast.BinaryExpr:
+			left, right := evaluate(v.X), evaluate(v.Y)
+			switch v.Op {
+			case token.EQL:
+				return left == right
+			case token.NEQ:
+				return left != right
+			case token.LAND:
+				return left.(bool) && right.(bool)
+			case token.LOR:
+				return left.(bool) || right.(bool)
+			}
+		}
+		t.Fatal("unsupported downstream expression syntax")
+		return false
+	}
+	result, ok := evaluate(tree).(bool)
+	if !ok {
+		t.Fatal("non-boolean job condition")
+	}
+	return result
+}
+
+func TestReleaseDownstreamEventIsolationNegativeControls(t *testing.T) {
+	for _, expression := range []string{
+		"github.event.workflow_run.conclusion == 'success' || true",
+		"github.event_name == 'workflow_run' || github.event.workflow_run.conclusion == 'success'",
+	} {
+		if !downstreamCondition(t, expression, "workflow_run", "failure") {
+			t.Fatal("negative control failed")
+		}
+	}
+	for _, conclusion := range []string{"success", "failure"} {
+		if downstreamCondition(t, "${{ github.event_name == 'workflow_dispatch' }}", "workflow_run", conclusion) {
+			t.Fatal("dispatch job reachable automatically")
+		}
+	}
+}
+
+func TestReleasePairedPromotionProtectedGraph(t *testing.T) {
+	w := readProducerWorkflow(t, "agentplugins-release.yml")
+	admission, signing := w.Jobs["paired-promotion-admission"], w.Jobs["paired-sign-and-promote"]
+	if admission.Needs != nil || len(admission.Permissions) != 1 || admission.Permissions["contents"] != "read" || signing.Needs != "paired-promotion-admission" {
+		t.Fatal("native admission must precede protected promotion")
+	}
+	if signing.Environment != "agentplugins-release" {
+		t.Fatal("paired signing requires protected release environment")
+	}
+	if signing.Permissions["contents"] != "write" || signing.Permissions["id-token"] != "write" || signing.Permissions["attestations"] != "write" {
+		t.Fatal("missing protected signing boundary")
+	}
+	valid := map[string]string{"SOURCE_SHA": strings.Repeat("a", 40), "WORKFLOW_SHA": strings.Repeat("a", 40),
+		"TAG": "agentplugins-v0.1.54", "KIT_VERSION": "2.0.0", "GITHUB_REPOSITORY": "777genius/universal-agent-plugins", "WORKFLOW_REF": "refs/tags/agentplugins-v0.1.54"}
+	runProducerPreflight(t, admission.Steps[0].Run, valid, true)
+	for _, key := range []string{"SOURCE_SHA", "WORKFLOW_SHA", "TAG", "KIT_VERSION", "GITHUB_REPOSITORY", "WORKFLOW_REF"} {
+		values := make(map[string]string)
+		for k, v := range valid {
+			values[k] = v
+		}
+		values[key] = "invalid"
+		runProducerPreflight(t, admission.Steps[0].Run, values, false)
+	}
+	scripts := ""
+	attestIndex, admitIndex, promoteIndex := -1, -1, -1
+	for i, step := range signing.Steps {
+		scripts += step.Run
+		if strings.Contains(step.Run, "admission=admit") {
+			admitIndex = i
+		}
+		if step.Uses == "actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6" {
+			attestIndex = i
+		}
+		if strings.Contains(step.Run, "case \"${PROMOTION_OPERATION}\" in promote|reconcile)") {
+			promoteIndex = i
+		}
+	}
+	if admitIndex < 0 || attestIndex <= admitIndex || promoteIndex <= attestIndex {
+		t.Fatal("admit -> pinned attest -> reverify/promote required")
+	}
+	for _, bad := range []string{"go build", "stageCandidate", "prepareAuthoringRelease", "npm publish", "--clobber", "git push"} {
+		if strings.Contains(scripts, bad) {
+			t.Fatalf("promotion reaches %s", bad)
+		}
+	}
+	if !strings.Contains(admission.Steps[len(admission.Steps)-1].Run, "requireNativeContracts") {
+		t.Fatal("unsupported contracts must reject before protected job")
+	}
+}
+
+func TestReleasePairedPromotionShellSyntax(t *testing.T) {
+	w := readProducerWorkflow(t, "agentplugins-release.yml")
+	if len(w.On.Dispatch.Inputs) != 10 {
+		t.Fatal("review dispatch input limit and closed input contract")
+	}
+	for _, name := range []string{"paired-promotion-admission", "paired-sign-and-promote"} {
+		for _, step := range w.Jobs[name].Steps {
+			if step.Run == "" {
+				continue
+			}
+			cmd := exec.Command("/bin/bash", "-n")
+			cmd.Dir = t.TempDir()
+			cmd.Env = []string{"PATH=/usr/local/bin:/usr/bin:/bin"}
+			cmd.Stdin = strings.NewReader(step.Run)
+			if output, err := cmd.CombinedOutput(); err != nil {
+				t.Fatalf("%s: %v %s", step.Name, err, output)
+			}
+		}
 	}
 }
