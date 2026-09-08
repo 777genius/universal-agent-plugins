@@ -17,6 +17,17 @@ func CanonicalInvocationName(platform PlatformID, raw string) string {
 		case strings.EqualFold(raw, "UserPromptSubmit"):
 			return "UserPromptSubmit"
 		}
+	case "codex":
+		switch {
+		case strings.EqualFold(raw, "CodexStop"):
+			return "Stop"
+		case strings.EqualFold(raw, "CodexSubagentStop"):
+			return "SubagentStop"
+		case strings.EqualFold(raw, "CodexPreToolUse"):
+			return "PreToolUse"
+		case strings.EqualFold(raw, "CodexPermissionRequest"):
+			return "PermissionRequest"
+		}
 	case "gemini":
 		switch {
 		case strings.EqualFold(raw, "GeminiSessionStart"):

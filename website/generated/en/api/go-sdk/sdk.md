@@ -28,6 +28,7 @@ Package pluginkitai exposes the public root SDK for building plugin\-kit\-ai run
 
 ## Index
 
+- Constants
 - type App
   - func New\(cfg Config\) \*App
   - func \(a \*App\) Claude\(\) \*claude.Registrar
@@ -53,6 +54,14 @@ Package pluginkitai exposes the public root SDK for building plugin\-kit\-ai run
 - type SupportStatus
 - type TransportMode
 
+
+## Constants
+
+MaxPayloadBytes is the single wire limit for stdin and argv JSON payloads accepted by runtime decoders. Consumers should reference this constant instead of duplicating the number.
+
+```go
+const MaxPayloadBytes = runtime.MaxPayloadBytes
+```
 
 ## type App
 

@@ -51,6 +51,11 @@ type TransportMode = runtime.TransportMode
 // SupportEntry aliases a generated public support-matrix row.
 type SupportEntry = runtime.SupportEntry
 
+// MaxPayloadBytes is the single wire limit for stdin and argv JSON payloads
+// accepted by runtime decoders. Consumers should reference this constant
+// instead of duplicating the number.
+const MaxPayloadBytes = runtime.MaxPayloadBytes
+
 // Config configures a root SDK app instance before handlers are registered.
 type Config struct {
 	// Name is the human-readable app label used in diagnostics and examples.

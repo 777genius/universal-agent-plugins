@@ -26,7 +26,7 @@ func TestFirstDoctorOutputLineReturnsFirstNonBlankLine(t *testing.T) {
 }
 
 func TestDoctorFindBinaryUsesNormalizedCommands(t *testing.T) {
-	t.Parallel()
+	// This fixture replaces a package global and must not run in parallel.
 
 	restore := runtimecheck.LookPath
 	runtimecheck.LookPath = func(name string) (string, error) {
