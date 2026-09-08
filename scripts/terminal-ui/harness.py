@@ -472,7 +472,9 @@ CASES = ('detection', 'baseline-lifecycle', 'default-no', 'no', 'yes-lifecycle',
          'confirm-ctrl-d', 'confirm-lf-escape', 'plain', 'dumb', 'term-unset', 'no-color', 'NO_COLOR',
          'resize', 'tiny', 'queued', 'paste', 'plain-eof', 'plain-partial-eof',
          'stdin-pipe', 'json', 'json-tty', 'json-explicit', 'stdout-redirect',
-         'stderr-redirect', 'both-redirect')
+         'stderr-redirect', 'both-redirect', 'plain-auto', 'plain-always',
+         'plain-never', 'plain-NO_COLOR', 'rich-never', 'color-stderr-visible',
+         'color-pipe-human', 'color-pipe-json', 'color-error')
 
 
 def run_case(name, binary, root, args):
@@ -493,7 +495,19 @@ def run_case(name, binary, root, args):
             argv = [node, staged['launcher'], *argv[1:]]
         plain = name in ('tiny', 'plain', 'dumb', 'term-unset', 'plain-eof', 'plain-partial-eof',
                          'stdout-redirect', 'stderr-redirect')
+        legacy_plain = plain
+        if legacy_plain: argv += ['--color=never']
+        if name.startswith('plain-') or name == 'color-stderr-visible': plain = True
         if name.startswith('plain'): argv += ['--plain']
+        if name in ('plain-auto', 'color-stderr-visible'): argv += ['--color=auto']
+        if name in ('plain-always', 'color-pipe-human', 'color-pipe-json', 'color-error'):
+            argv += ['--color=always']
+        if name in ('plain-never', 'rich-never'): argv += ['--color=never']
+        if name == 'plain-NO_COLOR': fixture.env['NO_COLOR'] = '1'
+        if name in ('color-pipe-human', 'color-pipe-json'):
+            argv += ['--target=cursor', '--dry-run']
+        if name == 'color-pipe-json': argv += ['--format=json']
+        if name == 'color-error': argv += ['--target=nonexistent', '--dry-run']
         if name == 'dumb': fixture.env['TERM'] = 'dumb'
         if name == 'term-unset': fixture.env.pop('TERM')
         if name == 'no-color': argv += ['--no-color']
@@ -504,10 +518,26 @@ def run_case(name, binary, root, args):
         redirect = {'stdout-redirect': 'stdout', 'stderr-redirect': 'stderr',
                     'both-redirect': 'both', 'json': 'stdout',
                     'json-explicit': 'stdout'}.get(name)
+        if name == 'color-stderr-visible': redirect = 'stdout'
+        if name in ('color-pipe-human', 'color-pipe-json'): redirect = 'both'
         session = Session(argv, fixture, evidence, args.timeout,
                           stdin_pipe=name == 'stdin-pipe', redirect=redirect,
                           rows=6 if name == 'tiny' else 30, cols=32 if name == 'tiny' else 100)
         try:
+            if name in ('color-pipe-human', 'color-pipe-json', 'color-error'):
+                session.finish(1 if name == 'color-error' else 0)
+                fixture.unchanged()
+                if name == 'color-error':
+                    check(re.search(rb'\x1b\[31m[^\x1b]+\x1b\[m', session.raw), 'error role/reset missing')
+                else:
+                    body = (evidence / 'stdout.raw').read_bytes()
+                    stderr = (evidence / 'stderr.raw').read_bytes()
+                    if name == 'color-pipe-json':
+                        check(json.loads(body).get('schema_version') == 1, 'invalid JSON envelope')
+                        check(b'\x1b' not in body + stderr, 'forced color contaminated JSON streams')
+                    else:
+                        check(b'\x1b[36mTarget\x1b[m: cursor' in body, 'label reset/value boundary missing')
+                return
             if name in ('stdin-pipe', 'json', 'json-tty', 'json-explicit', 'both-redirect'):
                 # stdin-pipe is deliberately held OPEN with no bytes. Reading it hangs
                 # and fails the bound; closing first would only prove EOF handling.
@@ -613,10 +643,21 @@ def run_case(name, binary, root, args):
                 if name == 'no': session.send(b'\x1b[D\x1b[C\r')
                 elif name != 'queued': session.send(b'\n' if plain else b'\r')
                 session.finish(); fixture.unchanged()
-            if plain:
+            if legacy_plain or name in ('plain-never', 'plain-NO_COLOR'):
                 check(b'\x1b' not in session.raw, 'plain emitted terminal controls')
+            if name in ('plain-auto', 'plain-always', 'color-stderr-visible'):
+                check(b'\x1b[36mTarget\x1b[m: ' in session.raw, 'visible colored label/reset missing')
+                check(b'\x1b[?25l' not in session.raw, 'Plain unexpectedly entered rich renderer')
+                if name == 'color-stderr-visible':
+                    check(b'\x1b' not in (evidence / 'stdout.raw').read_bytes(), 'redirected auto stdout colored')
+            if name == 'rich-never':
+                check(b'\x1b[?25l' in session.raw, 'never disabled rich interaction')
+                check(not re.search(rb'\x1b\[[0-9;:]*m', session.raw), 'never emitted SGR')
+            if name in ('yes-lifecycle', 'queued-lifecycle'):
+                check(re.search(rb'\x1b\[33m[^\x1b]+\x1b\[m', session.raw), 'warning role/reset missing')
             if name in ('no-color', 'NO_COLOR'):
                 sgr = re.findall(rb'\x1b\[([0-9;:]*)m', session.raw)
+                check(not sgr, 'disabled color emitted SGR')
                 for value in sgr:
                     nums = [int(n) for n in re.split(rb'[;:]', value) if n]
                     check(not any(30 <= n <= 38 or 40 <= n <= 48 or 90 <= n <= 107 for n in nums), 'color SGR emitted')

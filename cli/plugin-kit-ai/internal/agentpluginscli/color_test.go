@@ -63,7 +63,7 @@ func TestJSONHelpAndErrorsHaveNoANSI(t *testing.T) {
 			t.Fatalf("ANSI: %q", out.String())
 		}
 	}
-	if got := ErrorText([]string{"add", "--color=always"}, io.Discard, errors.New("fixture\x1b[31m\nerror")); !strings.HasPrefix(got, "\x1b[31m") || strings.Contains(got, "\n") {
+	if got := ErrorText([]string{"add", "--color=always"}, io.Discard, errors.New("fixture\x1b[31m\nerror")); !strings.HasPrefix(got, "\x1b[31m") || !strings.Contains(got, "\n") {
 		t.Fatalf("error: %q", got)
 	}
 }

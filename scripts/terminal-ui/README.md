@@ -68,7 +68,7 @@ output before invoking the Unix harness; its hash is recorded in `results.json`.
 | `yes-lifecycle` | Space deselects Codex, arrow moves to Cursor, Enter submits; preflight identity/version visible before Yes; exactly Cursor materializes; plain activation No is consumed and auth is not asked. |
 | `empty` | Space/arrows deselect both; Enter produces inline validation, never defaults back to all; Esc exits 1 without mutation. |
 | `escape`, `ctrl-c`, `ctrl-d`, `confirm-*` | Cancellation at each form exits 1 without mutation and restores terminal. Raw Ctrl+D is a key, not Unix EOF. |
-| `plain`, `dumb`, `term-unset` | Full selection/default-No path without escape sequences; same consent policy. |
+| `plain`, `dumb`, `term-unset` | Full selection/default-No path with explicit `--color=never`, without escape sequences; same consent policy. |
 | `no-color`, `NO_COLOR` | Same keyboard UI, no color SGR; cursor controls are allowed. |
 | `plain-eof`, `plain-partial-eof` | Canonical VEOF at empty selection and partial `y` plus EOF at confirm fail closed; neither equals Enter/Yes. |
 | `stdin-pipe` | Pipe stays open with no data; CLI exits with required-target error without reading it. |
@@ -94,7 +94,7 @@ The inspected Huh keymap uses Space/arrows and Enter for confirmation; `y`/`n`
 are disabled. Yes uses Space then Enter; explicit No moves left then right and
 submits. Normal rich cases wait for the rendered Yes/No/Enter controls, beyond
 the preprinted question. The initially tiny viewport selects Plain under the
-inspected size gate (width < 40 or height < 10), and must emit no ANSI. `queued` deliberately sends two Enters together and
+inspected size gate (width < 40 or height < 10), and, with explicit `--color=never`, must emit no ANSI. `queued` deliberately sends two Enters together and
 requires completion without another key; its queued-input assertion is retained.
 
 Each case saves `terminal.ansi` (raw synthetic capture), `transcript.txt`, semantic
@@ -193,3 +193,17 @@ Each Unix semantic checkpoint saves `.frame.txt` and `.frame.svg` alongside
 `terminal.raw`. SVG files are rendered synthetic transcript images from the
 harness's small Screen model, not native terminal-emulator screenshots; raw
 captures and restoration/state checks remain authoritative.
+
+## Semantic color policy cases
+
+The historical escape-free Plain/tiny/redirect cases explicitly pass
+`--color=never`; Plain selects interaction independently of color. Additional
+real PTY cases `plain-auto`, `plain-always`, `plain-never`, `plain-NO_COLOR`,
+`rich-never`, and `color-stderr-visible` retain the same consent, mutation and
+terminal reuse assertions. They check colored visible labels with reset before
+the colon/value, escape-free Plain suppression, rich controls without SGR, and
+independent redirected stdout / visible stderr policy. `color-pipe-human` forces
+color into redirected human output; `color-pipe-json` requires a single versioned
+JSON envelope and no escapes on either output despite always. `color-error`
+checks red error/reset boundaries; both existing Yes lifecycle cases also require
+yellow warning/reset boundaries while retaining all persisted-state/auth checks.
