@@ -15,18 +15,20 @@ func TestConsentSnapshotDoesNotDrainLaterInput(t *testing.T) {
 		input        string
 		n            int
 		queued, rest string
+		submitted    bool
 	}{
-		{" \r", 1, " ", "\r"},
-		{"\x1b[D \r", 3, "\x1b[D", " \r"},
-		{" \rnext\n", 8, " \r", "next\n"},
-		{"\x1b[200~ \r\x1b[201~ \rnext\n", 21, "\x1b[200~ \r\x1b[201~ \r", "next\n"},
-		{" \r", 0, "", " \r"},
+		{" \r", 1, " ", "\r", false},
+		{"\x1b[D \r", 3, "\x1b[D", " \r", false},
+		{" \rnext\n", 8, " \r", "next\n", true},
+		{"\x1b[200~ \r\x1b[201~ \rnext\n", 21, "\x1b[200~ \r\x1b[201~ \r", "next\n", true},
+		{"\x1b\r \r", 4, "\x1b\r", " \r", true},
+		{" \r", 0, "", " \r", false},
 	} {
 		t.Run(tc.queued, func(t *testing.T) {
 			input := strings.NewReader(tc.input)
-			queued, err := readQueuedInput(context.Background(), input, tc.n)
-			if err != nil || string(queued) != tc.queued {
-				t.Fatalf("snapshot=%q %v", queued, err)
+			queued, submitted, err := readQueuedInput(context.Background(), input, tc.n)
+			if err != nil || string(queued) != tc.queued || submitted != tc.submitted {
+				t.Fatalf("snapshot=%q submitted=%v %v", queued, submitted, err)
 			}
 			rest, err := io.ReadAll(input)
 			if err != nil || string(rest) != tc.rest {
@@ -40,10 +42,10 @@ func TestConsentSnapshotCancellationAndEOF(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	input := strings.NewReader(" \r")
-	if _, err := readQueuedInput(ctx, input, 2); !errors.Is(err, context.Canceled) || input.Len() != 2 {
+	if _, _, err := readQueuedInput(ctx, input, 2); !errors.Is(err, context.Canceled) || input.Len() != 2 {
 		t.Fatalf("canceled snapshot consumed input: %v", err)
 	}
-	if _, err := readQueuedInput(context.Background(), strings.NewReader(" "), 2); !errors.Is(err, io.EOF) {
+	if _, _, err := readQueuedInput(context.Background(), strings.NewReader(" "), 2); !errors.Is(err, io.EOF) {
 		t.Fatalf("snapshot EOF=%v", err)
 	}
 }

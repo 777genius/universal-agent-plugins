@@ -38,16 +38,23 @@ func confirmationInput(ctx context.Context, input io.Reader) (keys []byte, err e
 	if err != nil {
 		return nil, fmt.Errorf("inspect consent boundary: %w", err)
 	}
-	queued, err := readQueuedInput(ctx, f, n)
+	queued, submitted, err := readQueuedInput(ctx, f, n)
 	if err != nil {
 		return nil, fmt.Errorf("read consent boundary: %w", err)
 	}
-	return queuedConfirmationKeys(queued), nil
+	keys = queuedConfirmationKeys(queued)
+	// A raw submission gate ends this owner's stale answer even if the event
+	// decoder ignores it (for example ESC CR is Alt+Enter). Resolve default No
+	// before the live form can read the untouched suffix for the next owner.
+	if submitted && len(keys) == 0 {
+		keys = []byte{'\r'}
+	}
+	return keys, nil
 }
 
-func readQueuedInput(ctx context.Context, input io.Reader, n int) ([]byte, error) {
+func readQueuedInput(ctx context.Context, input io.Reader, n int) ([]byte, bool, error) {
 	if err := ctx.Err(); err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	// Reuse the handoff parser: even within the snapshot, stop at the first
 	// non-pasted submission and leave the next owner's answer in the terminal.
@@ -58,21 +65,21 @@ func readQueuedInput(ctx context.Context, input io.Reader, n int) ([]byte, error
 	for len(queued) < n {
 		count, err := r.Read(b[:])
 		if e := ctx.Err(); e != nil {
-			return nil, e
+			return nil, false, e
 		}
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
 		if count == 0 {
-			return nil, io.ErrNoProgress
+			return nil, false, io.ErrNoProgress
 		}
 		queued = append(queued, b[0])
 		// Read is synchronous; there is no second reader accessing this gate.
 		if r.gate != nil {
-			break
+			return queued, true, nil
 		}
 	}
-	return queued, nil
+	return queued, false, nil
 }
 
 // Old keys may decline or cancel, but cannot choose Yes. Decode with the same
