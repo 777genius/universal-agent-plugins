@@ -119,10 +119,12 @@ function prepare(options) {
   packing.completeRecord(options.output, record);
   return record;
 }
+// Public blob verification re-enters this module while the CLI is preparing.
+module.exports = { prepare, packageFiles, ALLOWLIST, COMMON };
+
 if (require.main === module) {
   try {
     if (process.argv.length !== 4 || process.argv[2] !== "--prepare" || !path.isAbsolute(process.argv[3])) throw new Error("usage: stage-authoring-npm.js --prepare <absolute-options.json>");
     process.stdout.write(c.encode(prepare(JSON.parse(c.readFile(process.argv[3], 1024 * 1024)))));
   } catch (e) { process.stderr.write(`public npm preparation: ${e.message}\n`); process.exitCode = 1; }
 }
-module.exports = { prepare, packageFiles, ALLOWLIST, COMMON };

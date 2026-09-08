@@ -56,7 +56,70 @@ function environment(context, prefix, home) {
     npm_config_prefix: prefix };
 }
 
+function mainDiffersFromHead(head) {
+  const name = "npm/agentplugins/scripts/stage-authoring-npm.js";
+  return !fs.readFileSync(path.join(REPO, name)).equals(
+    cp.execFileSync("/usr/bin/git", ["show", `${head}:${name}`], { cwd: REPO }));
+}
+
 if (require.main === module) {
+  test("fresh --prepare CLI reaches the real public blob closure and source guards", () => {
+    const parent = fs.mkdtempSync(path.join(os.tmpdir(), "public-cli-"));
+    const head = cp.execFileSync("/usr/bin/git", ["rev-parse", "HEAD"], { cwd: REPO, encoding: "utf8" }).trim();
+    const root = path.join(parent, "candidate"), workParent = path.join(parent, "work");
+    const projections = path.join(parent, "projections"), outputs = {}, projectionPins = {};
+    for (const dir of [root, workParent, projections]) fs.mkdirSync(dir);
+    const body = Buffer.from("synthetic CLI boundary fixture\n"), digest = c.digest(body);
+    for (const p of c.PRODUCTS) {
+      outputs[p] = path.join(projections, p); fs.mkdirSync(outputs[p]);
+      for (const name of ["release-manifest.json", "checksums.txt"]) fs.writeFileSync(path.join(outputs[p], name), body);
+      projectionPins[p] = { manifest_sha256: digest, checksums_sha256: digest };
+    }
+    const pairMarker = path.join(projections, "pair.json");
+    fs.writeFileSync(pairMarker, body); fs.writeFileSync(path.join(root, "candidate.json"), body);
+    const options = { candidate: { root, workParent, outputs, pairMarker, manifestDigest: digest,
+      authoringMode: "release-cli-contract-v1", assetScope: "six-platform-pair",
+      identity: { repository: c.REPOSITORY, commit: head, engine_revision: head,
+        versions: { agentplugins: "0.1.99", "plugin-kit-ai": "2.0.0" } } },
+      repo: REPO, node: NODE, npm: NPM, output: path.join(parent, "output"), projectionPins, pairMarkerDigest: digest };
+    const optionsFile = path.join(parent, "options.json"), loader = path.join(parent, "boundary.cjs");
+    fs.writeFileSync(optionsFile, c.encode(options));
+    // Only expensive candidate verification is stubbed. Do not preload the main:
+    // the fresh process must execute its require.main branch before re-entry.
+    // Stop after the real blobs call, before any projection copy or npm packing.
+    fs.writeFileSync(loader, `"use strict";
+const assert = require("node:assert/strict");
+const adapter = require(${JSON.stringify(require.resolve("../scripts/authoring-release"))});
+const packing = require(${JSON.stringify(require.resolve("../scripts/stage-dual-authoring-npm"))});
+assert.equal(require.cache[${JSON.stringify(require.resolve("../scripts/stage-authoring-npm"))}], undefined);
+let verified = false;
+adapter.verifyAuthoringRelease = () => { verified = true; };
+const blobs = packing.blobs;
+packing.blobs = (...args) => {
+  assert.equal(verified, true);
+  assert.equal(args[3], "public");
+  const source = blobs(...args);
+  assert.ok(source["npm/agentplugins/scripts/stage-authoring-npm.js"]);
+  throw new Error("fixture: public closure verified; stopped before packing");
+};
+`);
+    const expected = mainDiffersFromHead(head)
+      ? "executing stager differs from committed source: scripts/stage-authoring-npm.js"
+      : "fixture: public closure verified; stopped before packing";
+    const env = { PATH: "/usr/local/bin:/usr/bin:/bin", HOME: parent, GIT_CONFIG_NOSYSTEM: "1", GIT_CONFIG_GLOBAL: "/dev/null" };
+    const invoke = () => run(NODE, ["--require", loader, path.join(REPO, "npm/agentplugins/scripts/stage-authoring-npm.js"), "--prepare", optionsFile], env, parent);
+    const result = invoke();
+    assert.equal(result.status, 1);
+    assert.equal(result.stdout, "");
+    assert.equal(result.stderr, `public npm preparation: ${expected}\n`);
+    assert.equal(fs.existsSync(options.output), false);
+    options.candidate.identity.commit = options.candidate.identity.engine_revision = "0".repeat(40);
+    fs.writeFileSync(optionsFile, c.encode(options));
+    const wrongHead = invoke();
+    assert.equal(wrongHead.status, 1);
+    assert.equal(wrongHead.stderr, "public npm preparation: expected source must equal checkout HEAD\n");
+    assert.equal(fs.existsSync(options.output), false);
+  });
   test("both real public packs install independently and together; public bins and kit postinstall use shared acquisition", () => {
     const parent = fs.mkdtempSync(path.join(os.tmpdir(), "public pack ü "));
     const context = packing.npmContext(parent);
@@ -142,6 +205,8 @@ if (require.main === module) {
     // the real closure loads; in the writer's dirty tree it must fail closed.
     const tracked = cp.spawnSync("/usr/bin/git", ["cat-file", "-e", `${head}:npm/agentplugins/scripts/stage-authoring-npm.js`], { cwd: REPO });
     if (tracked.status !== 0) assert.throws(() => packing.blobs(REPO, head, context.env, "public"), /missing|differs/);
+    else if (mainDiffersFromHead(head)) assert.throws(() => packing.blobs(REPO, head, context.env, "public"),
+      { message: "executing stager differs from committed source: scripts/stage-authoring-npm.js" });
     else assert.deepEqual(Object.keys(packing.blobs(REPO, head, context.env, "public")).sort(), [...stager.ALLOWLIST].sort());
     assert.throws(() => packing.blobs(REPO, "0".repeat(40), context.env, "public"), /HEAD/);
     assert.throws(() => packing.blobs(REPO, head, context.env, "arbitrary"), /fixed/);
