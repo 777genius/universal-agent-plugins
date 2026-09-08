@@ -62,6 +62,11 @@ for (const locale of publishedLocales) {
     page.on('request', (request) => requests.push(request.url()));
     await page.goto(`.${localizedPath('/plugins/', locale)}`);
     await expect(page.locator('h1')).toBeVisible();
+    await page.waitForFunction(() => {
+      const app = (document.querySelector('#__nuxt') as any)?.__vue_app__;
+      const nuxt = app?.$nuxt || app?.config.globalProperties.$nuxt;
+      return Boolean(app?.config.globalProperties.$router && nuxt?.isHydrating === false);
+    });
     // Drive the installed router: this tests SPA data loading even where the current
     // design has no direct detail-to-download navigation control.
     const navigate = async (target: string) => {

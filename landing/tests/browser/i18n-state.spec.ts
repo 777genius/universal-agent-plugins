@@ -56,7 +56,7 @@ for (const locale of ['ru', 'uk'] as const) {
     await expect(page.getByRole('heading', { name: t('registryUi.catalog.noMatchingPlugins'), exact: true })).toBeVisible();
     await page.getByRole('button', { name: t('registryUi.catalog.resetFilters'), exact: true }).click();
     await expect(cards).toHaveCount(48);
-    expect(new URL(page.url()).searchParams.toString()).toBe('campaign=keep');
+    await expect.poll(() => new URL(page.url()).searchParams.toString()).toBe('campaign=keep');
     expect(errors).toEqual([]);
   });
 }
