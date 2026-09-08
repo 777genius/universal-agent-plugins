@@ -1,18 +1,25 @@
+import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from '@playwright/test';
+
+const base = process.env.UAP_CANDIDATE_BASE || '/';
+const builtBase = readFileSync(new URL('./.output/candidate-base.txt', import.meta.url), 'utf8');
+if (builtBase !== base) throw new Error(`Build fixture for ${base} before running Playwright (built: ${builtBase}).`);
 
 export default defineConfig({
   testDir: '.',
   testMatch: 'candidate.spec.ts',
   timeout: 30_000,
   retries: 0,
+  workers: 1,
   use: {
     baseURL: `http://127.0.0.1:4183${process.env.UAP_CANDIDATE_BASE || '/'}`,
     trace: 'retain-on-failure',
   },
   webServer: {
     cwd: fileURLToPath(new URL('.', import.meta.url)),
-    command: 'node node_modules/nuxt/bin/nuxt.mjs dev --host 127.0.0.1 --port 4183',
+    command: 'node .output/server/index.mjs',
+    env: { HOST: '127.0.0.1', PORT: '4183', NITRO_HOST: '127.0.0.1', NITRO_PORT: '4183', NUXT_APP_BASE_URL: base },
     url: `http://127.0.0.1:4183${process.env.UAP_CANDIDATE_BASE || '/'}plugins/gitlab/`,
     reuseExistingServer: false,
     timeout: 60_000,

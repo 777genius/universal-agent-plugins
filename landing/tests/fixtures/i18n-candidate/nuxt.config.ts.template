@@ -2,6 +2,8 @@ import vuetify from 'vite-plugin-vuetify';
 
 export default defineNuxtConfig({
   compatibilityDate: '2026-09-08',
+  ssr: true,
+  nitro: { preset: 'node-server' },
   devtools: { enabled: false },
   modules: ['@pinia/nuxt', '@nuxtjs/i18n', 'nuxt-icon'],
   app: { baseURL: process.env.UAP_CANDIDATE_BASE || '/' },
@@ -10,6 +12,7 @@ export default defineNuxtConfig({
   i18n: {
     restructureDir: false,
     strategy: 'prefix_except_default',
+    trailingSlash: true,
     defaultLocale: 'en',
     detectBrowserLanguage: false,
     lazy: true,

@@ -77,7 +77,7 @@ onMounted(() => {
       <div class="app-header__mobile-actions">
         <DialogRoot v-model:open="menuOpen">
           <DialogTrigger as-child>
-            <v-btn :icon="mdiMenu" variant="text" aria-label="Open navigation menu" />
+            <v-btn :icon="mdiMenu" variant="text" :disabled="!interactiveReady" aria-label="Open navigation menu" />
           </DialogTrigger>
           <DialogPortal>
             <DialogOverlay class="mobile-menu-overlay" />

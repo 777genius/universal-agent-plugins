@@ -17,7 +17,11 @@ async function choose(page: Page, name: string) {
 
 test.beforeEach(async ({ page, baseURL }) => {
   await page.route('**/fixture-messages/*', route => route.fulfill({ json: { ready: true } }));
-  await page.goto(requested(baseURL!));
+  const response = await page.goto(requested(baseURL!));
+  expect(response?.status()).toBe(200);
+  // Assert the actual document is SSR output before checking client hydration.
+  // A client-only shell must not silently replace this fixture's coverage.
+  expect(await response!.text()).toMatch(/<main\b[^>]*data-hydrated="false"/);
   await expect(page.locator('main')).toHaveAttribute('data-hydrated', 'true');
   await assertRoute(page, baseURL!, 'en');
   await expect(page.getByTestId('preference')).toHaveText('none');
@@ -39,7 +43,8 @@ test('keyboard, Escape, current choice, one navigation and Back/Forward preserve
   await expect(page.getByRole('menuitemradio', { name: 'Українська', exact: true })).toBeFocused();
   await page.keyboard.press('Tab');
   await expect(page.getByRole('menu')).toBeHidden();
-  await expect(activator(page)).toBeFocused();
+  await expect(page.getByRole('button', { name: 'Abort next navigation', exact: true })).toBeFocused();
+  await activator(page).focus();
   await page.keyboard.press('ArrowDown');
   await expect(english).toBeFocused();
   await page.keyboard.press('ArrowDown');
@@ -70,6 +75,12 @@ test('keyboard, Escape, current choice, one navigation and Back/Forward preserve
 
 test('real Nuxt i18n swallowed loader rejection leaves URL/preference intact and explicit retry succeeds', async ({ page, context, baseURL }) => {
   const initial = Number(await page.getByTestId('navigations').textContent());
+  const loaderErrors: string[] = [];
+  page.on('console', message => {
+    if (message.type() === 'error' && message.text().includes('Failed locale loading:')) {
+      loaderErrors.push(message.text());
+    }
+  });
   let failing = true;
   let requests = 0;
   await page.route('**/fixture-messages/uk', route => {
@@ -83,10 +94,13 @@ test('real Nuxt i18n swallowed loader rejection leaves URL/preference intact and
   await expect(page.getByTestId('navigations')).toHaveText(String(initial));
   await expect(activator(page)).toBeFocused();
   expect(requests).toBe(1);
+  expect(loaderErrors).toHaveLength(1);
   expect((await context.cookies()).some(item => item.name === 'uap_locale')).toBe(false);
   failing = false;
   await page.getByRole('button', { name: 'Retry', exact: true }).click();
   await assertRoute(page, baseURL!, 'uk');
+  expect(requests).toBeGreaterThanOrEqual(2);
+  expect(loaderErrors).toHaveLength(1);
   await expect(page.getByRole('alert')).toBeHidden();
   await expect(page.getByTestId('preference')).toHaveText('uk');
   await expect(page.getByTestId('navigations')).toHaveText(String(initial + 1));

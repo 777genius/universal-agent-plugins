@@ -1,31 +1,26 @@
-import { defineStore } from "pinia";
+import { defineStore } from 'pinia';
 
-type ThemeName = "light" | "dark";
+export type ThemeName = 'light' | 'dark';
 
-export const useThemeStore = defineStore("theme", {
+export const useThemeStore = defineStore('theme', {
   state: () => ({
-    current: "dark" as ThemeName,
-    userSelected: false
+    current: 'dark' as ThemeName,
+    userSelected: false,
   }),
   actions: {
-    getInitialTheme(): ThemeName {
-      if (!import.meta.client) return "dark";
-      const saved = localStorage.getItem("theme");
-      if (saved === "dark" || saved === "light") {
+    restoreTheme(saved: unknown) {
+      // A choice made before the adapter starts takes precedence over storage.
+      if (!this.userSelected && (saved === 'dark' || saved === 'light')) {
+        this.current = saved;
         this.userSelected = true;
-        return saved;
       }
-      if (window.matchMedia("(prefers-color-scheme: dark)").matches) {
-        return "dark";
-      }
-      return "dark";
     },
     setTheme(theme: ThemeName, fromUser: boolean) {
       this.current = theme;
-      if (import.meta.client && fromUser) {
-        this.userSelected = true;
-        localStorage.setItem("theme", theme);
-      }
-    }
-  }
+      if (fromUser) this.userSelected = true;
+    },
+    toggleTheme() {
+      this.setTheme(this.current === 'dark' ? 'light' : 'dark', true);
+    },
+  },
 });
