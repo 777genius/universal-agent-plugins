@@ -30,6 +30,10 @@ jobs:
       run:
         shell: bash
     steps:
+      # Embedded schemas are digest-pinned to repository bytes.
+      - name: Preserve repository line endings on Windows
+        if: runner.os == 'Windows'
+        run: git config --global core.autocrlf false
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
@@ -38,9 +42,10 @@ jobs:
           go-version: '1.25.13'
           cache: false
       - name: Focused contracts and frozen release build
+        id: build
         working-directory: cli/plugin-kit-ai
         run: |
-          go test ./internal/agentpluginscli ./internal/agentpluginscli/prompt ./cmd/agentplugins/... ./internal/promptio ./internal/terminalprompts
+          go test ./internal/agentpluginscli/prompt ./internal/promptio ./internal/terminalprompts
           go build -o "$RUNNER_TEMP/agentplugins.exe" ./cmd/agentplugins
       - name: Provision only pinned lintai
         run: python scripts/terminal-ui/provision_scanner.py --target '${{ matrix.target }}' --output "$RUNNER_TEMP/scanner"
@@ -58,6 +63,12 @@ jobs:
       - name: Windows ConPTY Plain matrix
         if: runner.os == 'Windows'
         run: python scripts/terminal-ui/windows_conpty.py --binary "$RUNNER_TEMP/agentplugins.exe" --scanner-archive "$RUNNER_TEMP/scanner/${{ matrix.archive }}" --artifacts "$RUNNER_TEMP/terminal-evidence" --timeout 15
+      # Keep the broad gate required, including when a console case fails.
+      # Run it after console proof so legacy fixture failures cannot hide ConPTY.
+      - name: Broad existing CLI contracts
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        working-directory: cli/plugin-kit-ai
+        run: go test ./internal/agentpluginscli ./cmd/agentplugins/...
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         if: always()
         with:

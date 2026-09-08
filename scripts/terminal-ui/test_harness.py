@@ -55,6 +55,36 @@ class FixtureTests(unittest.TestCase):
         with self.assertRaises(AssertionError): self.fixture.validate_stubs()
 
 
+class EmptySelectionTests(unittest.TestCase):
+    def run_empty(self, early=b'', late=b''):
+        from unittest.mock import Mock
+        session = Mock()
+        # An earlier transcript marker must not contaminate this branch boundary.
+        session.raw = bytearray(b'Apply this plan? old transcript\n')
+        def validation(*args, **kwargs):
+            session.raw.extend(b'must select at least one\n' + early)
+        def finish(expected):
+            self.assertEqual(expected, 1)
+            session.raw.extend(late)
+        session.wait.side_effect = validation
+        session.finish.side_effect = finish
+        fixture = Mock()
+        h.cancel_empty_selection(session, fixture, h.CONFIRM)
+        self.assertEqual(fixture.unchanged.call_count, 2)
+        session.finish.assert_called_once_with(1)
+
+    def test_valid_cancellation_passes(self):
+        self.run_empty()
+
+    def test_early_confirmation_fails(self):
+        with self.assertRaisesRegex(AssertionError, 'empty advanced'):
+            self.run_empty(early=b'Apply this plan?')
+
+    def test_confirmation_drained_during_cancellation_fails(self):
+        with self.assertRaisesRegex(AssertionError, 'empty advanced'):
+            self.run_empty(late=b'Apply this plan?')
+
+
 class ScannerTests(unittest.TestCase):
     def test_verified_binary_is_frozen_before_fixture_copy(self):
         with tempfile.TemporaryDirectory() as root:

@@ -55,6 +55,20 @@ def clean(data):
     return ANSI.sub('', data.decode('utf-8', 'replace'))
 
 
+def cancel_empty_selection(session, fixture, confirmation):
+    # Include every byte from before the invalid submit through cancellation drain.
+    offset = len(session.raw)
+    session.send(b' \x1b[B \r')
+    session.wait(r'(?i)(at least one|select one|cannot be empty|must select)',
+                 'empty-validation', after=offset)
+    fixture.unchanged()
+    session.send(b'\x1b')
+    session.finish(1)
+    check(not re.search(confirmation, clean(session.raw[offset:])),
+          'empty advanced to confirmation')
+    fixture.unchanged()
+
+
 def hashes(root):
     """Capture even empty directories and symlinks; never follow a symlink."""
     result = {}
@@ -539,12 +553,8 @@ def run_case(name, binary, root, args):
             if name in cancel:
                 session.send(cancel[name]); session.finish(1); fixture.unchanged(); return
             if name == 'empty':
-                session.send(b' \x1b[B \r')
-                session.wait(r'(?i)(at least one|select one|cannot be empty|must select)', 'empty-validation')
-                fixture.unchanged()
-                check(not re.search(args.confirmation, clean(session.raw)), 'empty advanced to confirmation')
-                session.send(b'\x1b'); session.finish(1)
-                fixture.unchanged(); return
+                cancel_empty_selection(session, fixture, args.confirmation)
+                return
             if name in ('resize', 'tiny'):
                 session.resize(8, 40)
             if name in ('plain-eof', 'plain-partial-eof'):
