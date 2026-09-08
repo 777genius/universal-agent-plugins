@@ -1,4 +1,4 @@
-import { cp, mkdir, mkdtemp, symlink, writeFile } from 'node:fs/promises';
+import { readdir, rename, cp, mkdir, mkdtemp, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -8,6 +8,17 @@ const fixture = dirname(fileURLToPath(import.meta.url));
 const landing = resolve(fixture, '../../..');
 const target = await mkdtemp(resolve(tmpdir(), 'uap-i18n-candidate-'));
 await cp(fixture, target, { recursive: true, filter: source => !source.endsWith('/prepare.mjs') });
+async function materialize(directory) {
+  for (const entry of await readdir(directory, { withFileTypes: true })) {
+    const path = resolve(directory, entry.name);
+    if (entry.isDirectory()) await materialize(path);
+    else if (entry.name.endsWith('.template')) await rename(path, path.slice(0, -9));
+  }
+}
+await materialize(target);
+await writeFile(resolve(target, 'tsconfig.json'), JSON.stringify({
+  extends: './.nuxt/tsconfig.json', compilerOptions: { types: ['node'], strict: true },
+}));
 for (const path of [
   'components/layout/LanguageSwitcher.vue', 'composables/useLocation.ts',
   'stores/locale.ts', 'utils/localizedRoutes.ts', 'data/routes.ts',

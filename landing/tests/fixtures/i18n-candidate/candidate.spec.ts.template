@@ -35,6 +35,11 @@ test('keyboard, Escape, current choice, one navigation and Back/Forward preserve
   await page.keyboard.press('Escape');
   await expect(page.getByRole('menu')).toBeHidden();
   await expect(activator(page)).toBeFocused();
+  await page.keyboard.press('ArrowUp');
+  await expect(page.getByRole('menuitemradio', { name: 'Українська', exact: true })).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(page.getByRole('menu')).toBeHidden();
+  await expect(activator(page)).toBeFocused();
   await page.keyboard.press('ArrowDown');
   await expect(english).toBeFocused();
   await page.keyboard.press('ArrowDown');

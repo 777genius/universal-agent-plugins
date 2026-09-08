@@ -18,6 +18,11 @@ const router = useRouter();
 const localePath = useLocalePath();
 const config = useRuntimeConfig();
 const menuOpen = ref(false);
+const languageMenuOpen = ref(false);
+function onMobileEscape(event: KeyboardEvent) {
+  // Let Vuetify close the nested menu first; the next Escape closes the dialog.
+  if (languageMenuOpen.value) event.preventDefault();
+}
 const interactiveReady = ref(false);
 const githubUrl = `https://github.com/${config.public.githubRepo}`;
 const homePath = computed(() => localePath('/'));
@@ -76,7 +81,7 @@ onMounted(() => {
           </DialogTrigger>
           <DialogPortal>
             <DialogOverlay class="mobile-menu-overlay" />
-            <DialogContent class="mobile-menu">
+            <DialogContent class="mobile-menu" @escape-key-down="onMobileEscape">
               <DialogTitle class="sr-only">Navigation menu</DialogTitle>
               <DialogDescription class="sr-only">
                 Jump to plugins, product details, frequently asked questions, or GitHub.
@@ -115,7 +120,7 @@ onMounted(() => {
               <div class="mobile-menu__actions">
                 <span>Appearance</span>
                 <template v-if="interactiveReady">
-                  <LanguageSwitcher v-if="publishedLocales.length > 1" compact />
+                  <LanguageSwitcher v-if="publishedLocales.length > 1" compact contain-menu @menu-open="languageMenuOpen = $event" />
                   <ThemeToggle />
                 </template>
                 <template v-else>
