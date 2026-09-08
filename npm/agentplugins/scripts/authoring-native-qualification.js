@@ -8,6 +8,7 @@ const path = require("node:path");
 const os = require("node:os");
 const cp = require("node:child_process");
 const crypto = require("node:crypto");
+const zlib = require("node:zlib");
 const assert = require("node:assert/strict");
 const c = require("./dual-authoring-candidate");
 const { verifyProjectedPair } = require("./authoring-release");
@@ -464,6 +465,53 @@ function acquisitionClosure(rows, bodies) {
   for (const item of pins) { total += item.size; assert.ok(total <= 16 * LIMIT, "total acquisition byte bound"); }
   for (const row of rows) for (const state of [row.before, row.after]) acquisition(state, bodies);
 }
+// Fixed ReleaseScanner release.go pins, never supplied by an evidence caller.
+// HTTP bodies are observer evidence, not files invented in the scanner cache.
+const SCANNER_RELEASES = Object.freeze({
+  "linux-amd64": { name: "lintai-v0.1.3-x86_64-unknown-linux-gnu.tar.gz", sha256: "2b3d176db752433b904a4b42375543ff398f4841d22e48f7d4f23ded925b72da" },
+  "linux-amd64-musl": { name: "lintai-v0.1.3-x86_64-unknown-linux-musl.tar.gz", sha256: "3da60f749c61e2caca029a44a9ce422d570aef8c57f82ce51c411c8cec12f61b" }
+});
+function scannerArchive(scan, executable) {
+  const asset = SCANNER_RELEASES[scan.executable.path.split("/")[3]];
+  assert.ok(asset, "fixed scanner platform");
+  c.keys(scan.archive, ["url", "bytes"], "observed release archive");
+  exact(scan.archive.url, `https://github.com/777genius/lintai/releases/download/v0.1.3/${asset.name}`, "fixed scanner release URL");
+  assert.equal(typeof scan.archive.bytes, "string");
+  assert.ok(scan.archive.bytes.length <= 44 * LIMIT, "scanner archive byte bound");
+  const body = Buffer.from(scan.archive.bytes, "base64");
+  exact(body.toString("base64"), scan.archive.bytes);
+  assert.ok(body.length > 0 && body.length <= 32 * LIMIT, "production scanner archive bound");
+  exact(c.digest(body), asset.sha256, "independently pinned scanner release archive");
+  // Bounded in-memory tar inspection. No extraction to disk or execution. This
+  // N1 profile accepts ordinary tar files/directories; unknown extensions fail
+  // closed pending inspection of the genuine pinned archive.
+  const tar = zlib.gunzipSync(body, { maxOutputLength: 64 * LIMIT });
+  let offset = 0, binary, count = 0;
+  const octal = b => { const v = b.toString("ascii").replace(/\0.*$/, "").trim(); assert.match(v, /^[0-7]+$/); return parseInt(v, 8); };
+  const names = new Set();
+  while (offset + 512 <= tar.length) {
+    const header = tar.subarray(offset, offset + 512);
+    if (header.every(x => x === 0)) break;
+    assert.ok(++count <= 4096, "scanner archive entry bound");
+    const sum = header.reduce((n, x, i) => n + (i >= 148 && i < 156 ? 32 : x), 0);
+    exact(octal(header.subarray(148, 156)), sum, "scanner tar checksum");
+    const text = (a, b) => header.subarray(a, b).toString("utf8").replace(/\0.*$/, "");
+    const prefix = text(345, 500), name = (prefix ? prefix + "/" : "") + text(0, 100);
+    assert.ok(name && !name.startsWith("/") && !/[\\\x00-\x1f]/.test(name) && !name.split("/").includes(".."), "safe scanner archive name");
+    assert.ok(!names.has(name), "unique scanner archive entry"); names.add(name);
+    const type = header[156], size = octal(header.subarray(124, 136));
+    assert.ok([0, 48, 53].includes(type), "ordinary scanner archive entries only");
+    assert.ok(size <= 32 * LIMIT && (type !== 53 || size === 0));
+    const end = offset + 512 + size; assert.ok(end <= tar.length, "complete scanner archive entry");
+    if (path.posix.basename(name) === "lintai" && type !== 53) {
+      assert.equal(binary, undefined, "one release scanner executable"); binary = tar.subarray(offset + 512, end);
+    }
+    offset = offset + 512 + Math.ceil(size / 512) * 512;
+  }
+  assert.ok(tar.length - offset >= 1024 && tar.subarray(offset).every(x => x === 0), "complete scanner tar terminator");
+  assert.ok(binary?.length, "release archive contains lintai");
+  exact(binary, executable, "scanner executable is the pinned archive member");
+}
 function scanReplay(rows, projects, scans, bodies) {
   assert.ok(Array.isArray(scans)); exact(scans.length, 3, "three observed fresh scans and report bytes");
   const fresh = new Map(); let executable;
@@ -477,12 +525,13 @@ function scanReplay(rows, projects, scans, bodies) {
     assert.ok(after[file], "required assessment cache bytes"); exact(jsonDocument(after[file].toString("utf8")), cached);
     if (i < 3) {
       assert.equal(before[file], undefined, "fresh scan must precede cache creation");
-      const scan = scans[i]; c.keys(scan, ["id", "args", "subject", "executable", "report"], "observed scanner call");
+      const scan = scans[i]; c.keys(scan, ["id", "args", "subject", "executable", "archive", "report"], "observed scanner call");
       exact([scan.id, scan.args, scan.subject], [row.id, ["scan-agent-plugin", `<source>/${lane}`], assessment.subject]);
       c.keys(scan.executable, ["path", "sha256"], "observed scanner executable");
       assert.match(scan.executable.path, /^security\/lintai\/0\.1\.3\/linux-amd64(?:-musl)?\/lintai$/);
       assert.ok(after[scan.executable.path], "required scanner acquisition bytes");
       exact(c.digest(after[scan.executable.path]), sha(scan.executable.sha256));
+      scannerArchive(scan, after[scan.executable.path]);
       const item = row.after.acquisition.find(x => x.path === scan.executable.path); exact(item.mode, 0o700);
       if (executable) exact(scan.executable, executable, "same acquired scanner"); else executable = scan.executable;
       assert.equal(typeof scan.report, "string");
@@ -513,6 +562,41 @@ function stateDocument(state) {
   const document = jsonDocument(state.state_document); exact(document.schema_version, 4);
   assert.ok(Array.isArray(document.installations)); return document;
 }
+// Only capture knows the actual operation root. Check exact equality before
+// replacing it with this fixed evidence token; replay never accepts a target
+// expectation supplied by a caller or a different root inside the evidence.
+const INSTALLER_ROOT = "<installer-state>";
+function normalizeInstaller(rows, root) {
+  const normalizeClient = (client, id) => {
+    const physical = `skill-${c.digest(Buffer.from(id)).slice(0, 12)}`;
+    exact(client.physical_artifact_id, physical);
+    exact(client.target_locator, `${root}/managed/clients/codex/${physical}`, "registration targets operation-owned installer root");
+    const binding = locator => "client_" + c.digest(Buffer.from([id, "codex", "user", locator].join("\0"))).slice(0, 24);
+    exact(client.client_binding_id, binding(client.target_locator));
+    client.target_locator = `${INSTALLER_ROOT}/managed/clients/codex/${physical}`;
+    client.client_binding_id = binding(client.target_locator);
+  };
+  for (const row of rows) {
+    for (const state of [row.before, row.after]) {
+      exact(state.root, root); state.root = INSTALLER_ROOT;
+      if (!state.state_document) continue;
+      const document = stateDocument(state);
+      for (const registration of document.installations) {
+        const clients = Object.values(registration.clients); exact(clients.length, 1);
+        exact(Object.keys(registration.clients), [clients[0].client_binding_id]);
+        normalizeClient(clients[0], registration.installation_id);
+        registration.clients = { [clients[0].client_binding_id]: clients[0] };
+      }
+      state.state_document = c.encode(document).toString("utf8");
+      Object.assign(state.state.find(x => x.path === "state-v2.json"), c.metadata(Buffer.from(state.state_document)));
+    }
+    if (row.id === "info") {
+      const document = jsonDocument(row.stdout);
+      for (const client of document.data.clients) normalizeClient(client, document.data.installation_id);
+      row.stdout = c.encode(document).toString("utf8");
+    }
+  }
+}
 function installedIdentity(state, project) {
   const document = stateDocument(state); exact(document.installations.length, 1);
   const registration = document.installations[0], subject = packageIdentity(project);
@@ -525,8 +609,7 @@ function installedIdentity(state, project) {
   const physical = `skill-${c.digest(Buffer.from(registration.installation_id)).slice(0, 12)}`;
   exact(client.physical_artifact_id, physical);
   const projection = `managed/clients/codex/${physical}`;
-  assert.ok(typeof client.target_locator === "string" && path.posix.isAbsolute(client.target_locator) &&
-    path.posix.normalize(client.target_locator) === client.target_locator && client.target_locator.endsWith(`/${projection}`));
+  exact(client.target_locator, `${state.root}/${projection}`, "registration targets operation-owned installer root");
   const binding = "client_" + c.digest(Buffer.from([registration.installation_id, "codex", "user", client.target_locator].join("\0"))).slice(0, 24);
   exact(Object.keys(registration.clients), [binding]); exact(client.client_binding_id, binding);
   exact([client.package_revision.version, client.package_revision.tree_digest, client.package_revision.manifest_digest],
@@ -537,6 +620,20 @@ function installedIdentity(state, project) {
     const copied = state.state.find(x => x.path === `${projection}/${skill.path}`);
     assert.ok(copied && copied.kind === "file"); exact([copied.sha256, copied.size], [skill.sha256, skill.size]);
   }
+  const documents = capturedBytes(state.state.filter(x => /\/(?:\.codex-plugin\/plugin|\.agents\/plugins\/marketplace)\.json$/.test(x.path)), state.projection_documents);
+  const read = leaf => {
+    const bytes = documents[`${projection}/${leaf}`]; assert.ok(bytes, `mandatory Codex projection ${leaf}`);
+    return jsonDocument(bytes.toString("utf8"));
+  };
+  const manifest = { name: "skill", version: "0.1.0", skills: "./skills/" };
+  for (const key of ["description", "homepage", "repository", "license", "author", "keywords"])
+    if (project.manifest[key] !== undefined) manifest[key] = project.manifest[key];
+  exact(read(".codex-plugin/plugin.json"), manifest, "Codex plugin identity and component references");
+  exact(read(".agents/plugins/marketplace.json"), {
+    name: "agentplugins-" + c.digest(Buffer.from(physical)).slice(0, 12),
+    plugins: [{ name: "skill", source: { source: "local", path: "./" },
+      policy: { installation: "AVAILABLE", authentication: "ON_INSTALL" }, category: "Productivity" }]
+  }, "Codex managed marketplace identity and reference");
   return { registration, client, projection };
 }
 function installed(row, spec, projects) {
@@ -551,6 +648,7 @@ function installed(row, spec, projects) {
     exact(plan.components.map(x => `${x.kind}:${x.name}`).sort(), [...skills, ...servers].sort());
     assert.ok(plan.components.every(x => x.support === "projected"), "Codex compatibility projection support");
     exact(row.before.client, row.after.client); exact(row.before.state, row.after.state);
+    exact(row.before.state_document_source, row.after.state_document_source, "dry-run raw state bytes preserved");
     return;
   }
   if (["add", "update", "remove"].includes(verb)) {
@@ -558,7 +656,7 @@ function installed(row, spec, projects) {
     exact(result.mutated, verb !== "update");
     const identity = installedIdentity(verb === "add" ? row.after : row.before, projects.skill);
     exact(result.installation_id, identity.registration.installation_id, "lifecycle installed identity");
-    if (verb === "update") { exact(result.no_change, true); exact(row.before.state, row.after.state); exact(row.before.client, row.after.client); }
+    if (verb === "update") { exact(row.before.state_document_source, row.after.state_document_source, "update raw state bytes preserved"); exact(result.no_change, true); exact(row.before.state, row.after.state); exact(row.before.client, row.after.client); }
     else assert.notDeepEqual(row.before.state, row.after.state, "real lifecycle state mutation");
     if (verb === "add") {
       exact(result.activation.authentication, "not_checked");
@@ -674,8 +772,16 @@ function verifyJourney(e, pins) {
     const row = transcript.installer[i];
     c.keys(row, ["id", "args", "status", "stdout", "stderr", "before", "after"], "installer transcript");
     for (const state of [row.before, row.after]) {
-      c.keys(state, ["client", "state", "acquisition", "state_document"], "separate installer state and acquisition");
+      c.keys(state, ["root", "client", "state", "acquisition", "state_document", "state_document_source", "projection_documents"], "separate installer state and acquisition");
+      exact(state.root, INSTALLER_ROOT, "fixed operation-owned installer root token");
+      if (state.state_document === null) exact(state.state_document_source, null);
+      else {
+        c.keys(state.state_document_source, ["size", "sha256"], "raw state document byte pin");
+        sha(state.state_document_source.sha256); positive(state.state_document_source.size);
+        assert.ok(state.state_document_source.size <= LIMIT);
+      }
       treeShape(state.client); treeShape(state.state);
+      capturedBytes(state.state.filter(x => /\/(?:\.codex-plugin\/plugin|\.agents\/plugins\/marketplace)\.json$/.test(x.path)), state.projection_documents);
       acquisition(state, e["acquisition.json"]); stateDocument(state);
     }
     if (i) exact(row.before, transcript.installer[i - 1].after, "installer state continuity");
@@ -808,7 +914,15 @@ async function produce(options, signal) {
         if (!Object.hasOwn(acquisitionBodies, item.sha256)) { acquisitionTotal += bytes.length; assert.ok(acquisitionTotal <= 16 * LIMIT, "total acquisition byte bound"); }
         acquisitionBodies[item.sha256] = bytes.toString("base64");
       }
-      return { client: tree(client), state: all.filter(x => !isAcquisition(x)), acquisition,
+      const projection_documents = Object.fromEntries(all.filter(x => /\/(?:\.codex-plugin\/plugin|\.agents\/plugins\/marketplace)\.json$/.test(x.path))
+        .map(x => [x.path, c.readFile(path.join(install.env.AGENTPLUGINS_HOME, x.path), LIMIT).toString("base64")]));
+      // The root comes from the fixed context used for this very subprocess,
+      // never registration text or a readTerminals expected-target parameter.
+      // Retain the actual byte pin as well as the normalized document pin so
+      // path normalization cannot conceal info/update/list byte mutation.
+      const rawState = all.find(x => x.path === "state-v2.json");
+      return { state_document_source: rawState ? { size: rawState.size, sha256: rawState.sha256 } : null,
+        root: install.env.AGENTPLUGINS_HOME, client: tree(client), state: all.filter(x => !isAcquisition(x)), acquisition, projection_documents,
         state_document: all.some(x => x.path === "state-v2.json") ? c.readFile(stateFile, LIMIT).toString("utf8") : null };
     };
     for (const spec of installationCommands()) {
@@ -826,6 +940,7 @@ async function produce(options, signal) {
       exact(c.digest(c.readFile(binaries[p])), frozen.manifest.products[p].assets[TARGET].binary.sha256);
       exact(fs.lstatSync(binaries[p]).mode & 0o777, 0o500, "selected executable mode preserved");
     }
+    normalizeInstaller(rows.installer, install.env.AGENTPLUGINS_HOME);
     e["transcripts.json"] = rows; e["trees.json"] = projects; e["build-info.json"] = build; e["preparation.json"] = prep;
     e["preservation.json"] = { inputs_before: frozenBefore,
       inputs_after: after.subjects.map(s => ({ file: path.relative(root, s.file), ...c.metadata(c.readFile(s.file)) })),

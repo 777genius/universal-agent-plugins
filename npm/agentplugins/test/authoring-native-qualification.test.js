@@ -46,13 +46,26 @@ function fixture() {
   const moved = path.join(tools, "go"); fs.renameSync(f.go, moved); f.go = moved; f.options.go = moved;
   return f;
 }
+const scannerFixture = Buffer.from("not executable: scanner acquisition fixture");
+function scannerTar(binary) {
+  const zlib = require("node:zlib"), tar = zlib.gunzipSync(c.archive(binary, "agentplugins"));
+  tar.fill(0, 0, 100); tar.write("lintai", 0); tar.fill(32, 148, 156);
+  const sum = tar.subarray(0, 512).reduce((n, b) => n + b, 0);
+  tar.write(sum.toString(8).padStart(6, "0") + "\0 ", 148);
+  return zlib.gzipSync(tar);
+}
+const scannerFixtureArchive = scannerTar(scannerFixture);
+function fixtureReader(...args) { return internal(true).readTerminals(...args); }
 function internal(observation = false, fastTimeout = false) {
   let source = fs.readFileSync(moduleFile, "utf8");
   if (observation) source = source.replace('    e["scans.json"] = observationGate(); //', '    e["scans.json"] = JSON.parse(fs.readFileSync(path.join(install.env.TMPDIR, "fixture-scans.json"))); // Test-only captured child fixtures.');
+  // Only this isolated test module pins the tiny synthetic tar. Unmodified
+  // production readers must reject it; no runtime pin parameter is introduced.
+  if (observation) source = source.replace("2b3d176db752433b904a4b42375543ff398f4841d22e48f7d4f23ded925b72da", c.digest(scannerFixtureArchive));
   if (fastTimeout) source = source.replace('installer ? 120000 : 15000', '100');
   // Expose lexical contracts only in this test VM. Production exports no policy,
   // verifier, command inventory, child executable or success switch.
-  source += '\nmodule.exports.test = { commands, installationCommands, verifyJourney, terminal, tree, canonical, context, subprocess, observationGate, jsonDocument, treeShape, packageIdentity, capabilities, PROFILES, POLICY };';
+  source += '\nmodule.exports.test = { commands, installationCommands, verifyJourney, terminal, tree, canonical, context, subprocess, observationGate, jsonDocument, treeShape, packageIdentity, capabilities, PROFILES, POLICY, scannerArchive, SCANNER_RELEASES };';
   const Module = require("node:module");
   const instance = new Module(moduleFile, module);
   instance.filename = moduleFile; instance.paths = Module._nodeModulePaths(path.dirname(moduleFile));
@@ -197,7 +210,7 @@ function security(source,root){
   const key=sha([value.subject.tree_digest,value.subject.manifest_digest,'lintai','0.1.3',policy.id,'2',policy.digest].join('\0'));
   const state=process.env.AGENTPLUGINS_HOME;
   if(source==='local_scan'){
-    const scanner='security/lintai/0.1.3/linux-amd64/lintai',executable='not executable: scanner acquisition fixture';
+    const scanner='security/lintai/0.1.3/linux-amd64/lintai',executable=scenario==='unrelated-scanner'?'arbitrary unrelated scanner bytes; never executed':'not executable: scanner acquisition fixture';
     fs.mkdirSync(path.dirname(path.join(state,scanner)),{recursive:true,mode:0o700});
     if(scenario!=='missing-scanner')fs.writeFileSync(path.join(state,scanner),executable,{mode:0o700});
     fs.mkdirSync(path.join(state,'security/assessments'),{recursive:true,mode:0o700});
@@ -205,7 +218,7 @@ function security(source,root){
     if(scenario!=='missing-cache')write(state,'security/assessments/'+key+'.json',cached);
     const file=path.join(process.env.TMPDIR,'fixture-scans.json'),scans=fs.existsSync(file)?JSON.parse(fs.readFileSync(file)):[];
     if(scenario!=='missing-scan')scans.push({id:'dry-run/'+path.basename(root),args:['scan-agent-plugin','<source>/'+path.basename(root)],subject:identity(root),
-      executable:{path:scanner,sha256:sha(executable)},report:scenario==='missing-report'?'':report});
+      executable:{path:scanner,sha256:sha(executable)},archive:{url:'https://github.com/777genius/lintai/releases/download/v0.1.3/lintai-v0.1.3-x86_64-unknown-linux-gnu.tar.gz',bytes:cfg.scannerArchive},report:scenario==='missing-report'?'':report});
     fs.writeFileSync(file,JSON.stringify(scans));
   }
   return value;
@@ -214,11 +227,11 @@ const installationID='12345678-1234-4234-8234-123456789abc';
 const physical='skill-'+sha(installationID).slice(0,12), projection='managed/clients/codex/'+physical;
 function registration(state,root){
   const subject=identity(root),revision={version:'0.1.0',...subject};
-  const target=path.join(state,projection),binding='client_'+sha([installationID,'codex','user',target].join('\0')).slice(0,24);
+  const target=path.join(scenario==='wrong-target-locator'?'/not-the-owned-installer-root':state,projection),binding='client_'+sha([installationID,'codex','user',target].join('\0')).slice(0,24);
   return {installation_id:installationID,declared_name:'skill',source:{tree_digest:subject.tree_digest},
     package:{declared_name:'skill',version:'0.1.0',manifest_digest:subject.manifest_digest},
     clients:{[binding]:{client_binding_id:binding,client_id:'codex',scope:'user',materialization:'materialized',physical_artifact_id:physical,
-      target_locator:path.join(state,projection),package_revision:revision}}};
+      target_locator:target,package_revision:revision}}};
 }
 
 function installer(args) {
@@ -245,6 +258,19 @@ function installer(args) {
         fs.copyFileSync(path.join(args[1],'skills',name,'SKILL.md'),path.join(state,projection,'skills',name,'SKILL.md'));
       }
     }
+    if(scenario!=='no-effect') {
+      fs.mkdirSync(path.join(state,projection,'.codex-plugin'),{mode:0o700});
+      fs.mkdirSync(path.join(state,projection,'.agents/plugins'),{recursive:true,mode:0o700});
+      const manifest={name:'skill',version:'0.1.0',description:'Owned fixture',skills:'./skills/'};
+      const marketplace={name:'agentplugins-'+sha(physical).slice(0,12),plugins:[{name:'skill',source:{source:'local',path:'./'},
+        policy:{installation:'AVAILABLE',authentication:'ON_INSTALL'},category:'Productivity'}]};
+      if(scenario==='wrong-codex-identity')manifest.name='unrelated';
+      if(scenario==='wrong-codex-reference')manifest.skills='./elsewhere/';
+      if(scenario==='wrong-marketplace-identity')marketplace.name='unrelated';
+      if(scenario==='wrong-marketplace-reference')marketplace.plugins[0].source.path='../unrelated';
+      if(scenario!=='missing-codex-projection')write(path.join(state,projection),'.codex-plugin/plugin.json',scenario==='malformed-codex-projection'?'{malformed':manifest);
+      if(scenario!=='missing-marketplace')write(path.join(state,projection),'.agents/plugins/marketplace.json',scenario==='malformed-marketplace'?'{malformed':marketplace);
+    }
     if(scenario==='alter-client')write(client,'config.toml','unexpected replacement');
     if(scenario==='alter-client-mode')fs.chmodSync(path.join(client,'config.toml'),0o644);
     if(scenario==='auth-claim')data.result.activation.authentication_attested=true;
@@ -259,6 +285,8 @@ function installer(args) {
     if(scenario!=='remaining-registration')write(state,'state-v2.json',{schema_version:4,installations:[]});
     if(scenario!=='remove-leaves-client-projection'){
       for(const name of ['skill','extra-skill']){fs.unlinkSync(path.join(state,projection,'skills',name,'SKILL.md'));fs.rmdirSync(path.join(state,projection,'skills',name));}
+      fs.unlinkSync(path.join(state,projection,'.codex-plugin/plugin.json'));fs.rmdirSync(path.join(state,projection,'.codex-plugin'));
+      fs.unlinkSync(path.join(state,projection,'.agents/plugins/marketplace.json'));fs.rmdirSync(path.join(state,projection,'.agents/plugins'));fs.rmdirSync(path.join(state,projection,'.agents'));
       fs.rmdirSync(path.join(state,projection,'skills'));fs.rmdirSync(path.join(state,projection));
     }
   }
@@ -276,7 +304,7 @@ function subprocessFixtures(t, f, scenario = "ok") {
   const script = path.join(f.sandbox, "child-fixture.js"), config = path.join(f.sandbox, "child-config.json");
   f.log = path.join(f.sandbox, "subprocesses.jsonl");
   fs.writeFileSync(script, fixtureProgram());
-  fs.writeFileSync(config, JSON.stringify({ scenario, identity: ID, go: f.go, log: f.log,
+  fs.writeFileSync(config, JSON.stringify({ scenario, scannerArchive: scannerFixtureArchive.toString("base64"), identity: ID, go: f.go, log: f.log,
     input: path.join(f.root, "candidate/candidate.json"), linker: Object.fromEntries(c.PRODUCTS.map(p => [p, c.linkerFlags(p, ID, "release-cli-contract-v1")])) }));
   const spawn = cp.spawn;
   t.mock.method(cp, "spawn", (file, args, options) => {
@@ -337,7 +365,9 @@ test("fixed production orchestration and closed reader with subprocess fixtures 
   const f=fixture();subprocessFixtures(t,f);
   const n=internal(true), result=await n.produce(f.options);
   assert.equal(result.length,2);
-  const reread=native.readTerminals(f.options.output,f.root,f.pins,expectations(f));
+  // This synthetic archive is never genuine acquisition for the production reader.
+  assert.throws(() => native.readTerminals(f.options.output,f.root,f.pins,expectations(f)), /independently pinned scanner release archive/);
+  const reread=fixtureReader(f.options.output,f.root,f.pins,expectations(f));
   assert.equal(reread[0].lane,"agentplugins/linux-amd64"); assert.equal(reread[1].lane,"plugin-kit-ai/linux-amd64");
   assert.notDeepEqual(reread[0].subject,reread[1].subject);
   assert.deepEqual(reread[0].peer_subject,reread[1].subject);
@@ -353,10 +383,10 @@ for (const scenario of ["wrong-binary","wrong-build-target","wrong-build-mode","
   "runtime-claim","bad-json","invalid-utf8","missing-command","deferred-command","missing-template","yaml","wrong-result","wrong-command","parity","changed-project",
   "changed-input","scan-failure","wrong-plan","dry-run-effect","add-failure","no-state","no-effect","auth-claim","wrong-update","remaining-installation","wrong-package","invalid-security-contract","wrong-policy","wrong-counts","wrong-findings","cache-mismatch",
   "missing-scanner","missing-cache","missing-scan","missing-report","alter-client","alter-client-mode","info-mutates-state",
-  "remove-leaves-client-projection","remaining-registration","list-mutates-state","empty-capabilities","missing-profile","wrong-schema","raw-report-policy","raw-report-counts","raw-report-findings","wrong-installation-identity"]) {
+  "remove-leaves-client-projection","remaining-registration","list-mutates-state","empty-capabilities","missing-profile","wrong-schema","raw-report-policy","raw-report-counts","raw-report-findings","wrong-installation-identity", "unrelated-scanner", "wrong-target-locator", "missing-codex-projection", "malformed-codex-projection", "wrong-codex-identity", "wrong-codex-reference", "missing-marketplace", "malformed-marketplace", "wrong-marketplace-identity", "wrong-marketplace-reference"]) {
   test(`full subprocess journey fails without completion: ${scenario}`,async t=>{
     const f=fixture();subprocessFixtures(t,f,scenario);
-    const reasons = { "wrong-command": /author command identifier/, "wrong-package": /independently captured package security subject/,
+    const reasons = { "unrelated-scanner": /scanner executable is the pinned archive member/, "wrong-target-locator": /registration targets operation-owned installer root/, "wrong-command": /author command identifier/, "wrong-package": /independently captured package security subject/,
       "invalid-security-contract": /fixed production security schema/, "wrong-policy": /fixed production security policy/,
       "wrong-counts": /security counts match outcome/, "wrong-findings": /security findings match counts/,
       "remove-leaves-client-projection": /remove owned projection/, "info-mutates-state": /info is read only/,
@@ -418,14 +448,14 @@ test("closed reader rejects terminal and evidence mutations independently", asyn
         fs.symlinkSync(path.join(f.sandbox,'host-held.json'),path.join(root,'host.json'));
       }
       if(scenario==='evidence-hardlink'){special=path.join(f.sandbox,'host-alias.json');fs.linkSync(path.join(root,'host.json'),special);}
-      assert.throws(()=>native.readTerminals(root,f.root,f.pins,expected));
+      assert.throws(()=>fixtureReader(root,f.root,f.pins,expected));
       if(special)fs.unlinkSync(special);
       if(scenario==='evidence-link')fs.unlinkSync(path.join(root,'host.json'));
       if(scenario==='evidence-link'||scenario==='missing-evidence')fs.renameSync(path.join(f.sandbox,'host-held.json'),path.join(root,'host.json'));
       for(const [name,body]of Object.entries(original))put(name,body);
     });
   }
-  assert.equal(native.readTerminals(root,f.root,f.pins,expected).length,2);
+  assert.equal(fixtureReader(root,f.root,f.pins,expected).length,2);
 });
 
 test("rehashed evidence cannot hide omitted commands, bad plans or false preservation",async t=>{
@@ -447,7 +477,7 @@ test("rehashed evidence cannot hide omitted commands, bad plans or false preserv
       for(const [file,v]of Object.entries(e))put(file,v);
       // Attacker updates outer evidence hashes too. Semantic replay must reject.
       for(const p of c.PRODUCTS){const v=JSON.parse(originals[p+'-terminal.json']);v.evidence=v.evidence.map(pin=>({file:pin.file,...c.metadata(c.encode(e[pin.file]))}));put(p+'-terminal.json',v);}
-      assert.throws(()=>native.readTerminals(root,f.root,f.pins,expected));
+      assert.throws(()=>fixtureReader(root,f.root,f.pins,expected));
       for(const [file,b]of Object.entries(originals)){fs.chmodSync(path.join(root,file),0o600);fs.writeFileSync(path.join(root,file),b);}
     });
   }
@@ -532,7 +562,7 @@ test("changed host/source/attempt expectations cannot read a matching local term
     if(kind==='attempt')expect.producer.run_attempt++;
     if(kind==='preparation-attempt')expect.preparation.producer.run_attempt++;
     if(kind==='tool')expect.tools.go.sha256=hash('different host Go');
-    assert.throws(()=>native.readTerminals(f.options.output,f.root,f.pins,expect));
+    assert.throws(()=>fixtureReader(f.options.output,f.root,f.pins,expect));
   }
 });
 
@@ -585,7 +615,53 @@ test("N1 reader rejects rehashed semantic omissions and contradictions", async t
       for (const item of files.filter(x => x.sha256 === sha256)) Object.assign(item, pin);
     }
   }
+  const states = e => e["transcripts.json"].installer.flatMap(r => [r.before, r.after]);
+  function projectionChange(e, leaf, change) {
+    for (const state of states(e)) {
+      const item = state.state.find(x => x.path.endsWith("/" + leaf)); if (!item) continue;
+      if (!change) { state.state = state.state.filter(x => x !== item); delete state.projection_documents[item.path]; continue; }
+      const old = Buffer.from(state.projection_documents[item.path], "base64");
+      const body = Buffer.from(change(old.toString("utf8")));
+      Object.assign(item, c.metadata(body)); state.projection_documents[item.path] = body.toString("base64");
+    }
+  }
   const cases = {
+    "unrelated scanner with every acquisition digest rehashed": e => {
+      const old = e["scans.json"][0].executable.sha256, body = Buffer.from("arbitrary unrelated scanner bytes; never executed"), pin = c.metadata(body);
+      delete e["acquisition.json"][old]; e["acquisition.json"][pin.sha256] = body.toString("base64");
+      for (const scan of e["scans.json"]) scan.executable.sha256 = pin.sha256;
+      for (const state of states(e)) for (const item of state.acquisition) if (item.sha256 === old) Object.assign(item, pin);
+    },
+    "arbitrary root expectation in every snapshot": e => {
+      for (const state of states(e)) state.root = "/not-the-owned-installer-root";
+    },
+    "raw state byte mutation hidden by path normalization": e => {
+      const row = e["transcripts.json"].installer[4]; row.after.state_document_source.sha256 = hash("mutated raw bytes");
+    },
+    "missing release archive": e => { delete e["scans.json"][0].archive; },
+    "substituted release archive": e => { for (const scan of e["scans.json"]) scan.archive.bytes = scannerTar(Buffer.from("unrelated")).toString("base64"); },
+    "wrong release URL": e => { e["scans.json"][0].archive.url = "https://unrelated.invalid/scanner"; },
+    "wrong root with coherent binding and info": e => {
+      for (const state of states(e)) {
+        if (!state.state_document) continue; const doc = JSON.parse(state.state_document);
+        for (const r of doc.installations) {
+          const cl = Object.values(r.clients)[0]; cl.target_locator = '/not-the-owned-installer-root/managed/clients/codex/' + cl.physical_artifact_id;
+          cl.client_binding_id = 'client_' + hash([r.installation_id, 'codex', 'user', cl.target_locator].join('\0')).slice(0, 24);
+          r.clients = { [cl.client_binding_id]: cl };
+        }
+        state.state_document = JSON.stringify(doc) + '\n'; Object.assign(state.state.find(x => x.path === 'state-v2.json'), c.metadata(Buffer.from(state.state_document)));
+      }
+      const row = e['transcripts.json'].installer[4], doc = JSON.parse(row.stdout);
+      doc.data.clients = Object.values(JSON.parse(row.before.state_document).installations[0].clients); row.stdout = JSON.stringify(doc) + '\n';
+    },
+    "missing Codex manifest": e => projectionChange(e, '.codex-plugin/plugin.json'),
+    "malformed Codex manifest": e => projectionChange(e, '.codex-plugin/plugin.json', () => '{malformed'),
+    "wrong Codex identity": e => projectionChange(e, '.codex-plugin/plugin.json', s => { const v = JSON.parse(s); v.name = 'unrelated'; return JSON.stringify(v); }),
+    "wrong Codex reference": e => projectionChange(e, '.codex-plugin/plugin.json', s => { const v = JSON.parse(s); v.skills = './elsewhere/'; return JSON.stringify(v); }),
+    "missing marketplace": e => projectionChange(e, '.agents/plugins/marketplace.json'),
+    "malformed marketplace": e => projectionChange(e, '.agents/plugins/marketplace.json', () => '{malformed'),
+    "wrong marketplace identity": e => projectionChange(e, '.agents/plugins/marketplace.json', s => { const v = JSON.parse(s); v.name = 'unrelated'; return JSON.stringify(v); }),
+    "wrong marketplace reference": e => projectionChange(e, '.agents/plugins/marketplace.json', s => { const v = JSON.parse(s); v.plugins[0].source.path = '../unrelated'; return JSON.stringify(v); }),
     "missing custody": e => { e["preservation.json"].custody_before = []; e["preservation.json"].custody_after = []; },
     "preparation custody omitted": e => { e["preservation.json"].custody_before.pop(); e["preservation.json"].custody_after.pop(); },
     "custody substituted subject": e => { for (const k of ["custody_before", "custody_after"]) e["preservation.json"][k][0].file = "invented"; },
@@ -657,10 +733,22 @@ test("N1 reader rejects rehashed semantic omissions and contradictions", async t
       v.evidence = v.evidence.map(pin => ({ file: pin.file, ...c.metadata(c.encode(e[pin.file])) }));
       put(p + "-terminal.json", c.encode(v));
     }
-    assert.throws(() => native.readTerminals(root, f.root, f.pins, expected), name);
+    const precise = {
+      "unrelated scanner with every acquisition digest rehashed": /scanner executable is the pinned archive member/,
+      "substituted release archive": /independently pinned scanner release archive/,
+      "wrong root with coherent binding and info": /registration targets operation-owned installer root/,
+      "arbitrary root expectation in every snapshot": /fixed operation-owned installer root token/,
+      "missing Codex manifest": /mandatory Codex projection/,
+      "missing marketplace": /mandatory Codex projection/,
+      "wrong Codex identity": /Codex plugin identity and component references/,
+      "wrong Codex reference": /Codex plugin identity and component references/,
+      "wrong marketplace identity": /Codex managed marketplace identity and reference/,
+      "wrong marketplace reference": /Codex managed marketplace identity and reference/
+    };
+    assert.throws(() => fixtureReader(root, f.root, f.pins, expected), precise[name], name);
     for (const [n, b] of Object.entries(originals)) put(n, b);
   });
-  assert.equal(native.readTerminals(root, f.root, f.pins, expected).length, 2);
+  assert.equal(fixtureReader(root, f.root, f.pins, expected).length, 2);
 });
 
 for (const scenario of ["pre-close kill denied", "close never arrives", "successful termination"]) {
@@ -731,4 +819,54 @@ test("fixed profile and schema pins agree with preserved domain contracts", () =
   assert.equal(n.PROFILES.at(-1).digest, "sha256:" + c.digest(fs.readFileSync(path.join(root, "install/integrationctl/agentplugins/conformance/profiles/README.md"))));
   const policy = fs.readFileSync(path.join(root, "install/integrationctl/agentplugins/adapters/securityscan/policy_test.go"), "utf8");
   assert.ok(policy.includes(n.POLICY.digest));
+});
+
+// No genuine release archive is provisioned. These validators exercise only
+// tiny test tar bytes; source-pinned production acceptance is checked separately.
+test("scanner release pins match production source and synthetic acquisition is rejected", () => {
+  const contract = internal().test, source = fs.readFileSync(path.resolve(__dirname,
+    "../../../install/integrationctl/agentplugins/adapters/securityscan/release.go"), "utf8");
+  for (const asset of Object.values(contract.SCANNER_RELEASES)) {
+    assert.ok(source.includes(`{"${asset.name}", "${asset.sha256}", false}`));
+    assert.notEqual(asset.sha256, c.digest(scannerFixtureArchive));
+  }
+  const scan = { executable: { path: "security/lintai/0.1.3/linux-amd64/lintai" }, archive: {
+    url: "https://github.com/777genius/lintai/releases/download/v0.1.3/" + contract.SCANNER_RELEASES["linux-amd64"].name,
+    bytes: scannerFixtureArchive.toString("base64") } };
+  assert.throws(() => contract.scannerArchive(scan, scannerFixture), /independently pinned scanner release archive/);
+  assert.doesNotThrow(() => internal(true).test.scannerArchive(scan, scannerFixture));
+  assert.throws(() => internal(true).test.scannerArchive(scan, Buffer.from("unrelated")), /pinned archive member/);
+});
+test("scanner archive parsing fails closed on bounded malformed test archives", async t => {
+  const zlib = require("node:zlib");
+  const base = zlib.gunzipSync(scannerFixtureArchive);
+  const checksum = tar => {
+    tar.fill(32, 148, 156);
+    tar.write(tar.subarray(0, 512).reduce((n, b) => n + b, 0).toString(8).padStart(6, "0") + "\0 ", 148);
+  };
+  const cases = {
+    "checksum": tar => { tar[0] ^= 1; return tar; },
+    "traversal": tar => { tar.fill(0, 0, 100); tar.write("../lintai"); checksum(tar); return tar; },
+    "link": tar => { tar[156] = 50; checksum(tar); return tar; },
+    "unsupported extension": tar => { tar[156] = 120; checksum(tar); return tar; },
+    "missing binary": tar => { tar.fill(0, 0, 100); tar.write("other"); checksum(tar); return tar; },
+    "oversized member": tar => { tar.write((33 * 1024 * 1024).toString(8).padStart(11, "0") + "\0", 124); checksum(tar); return tar; },
+    "truncated entry": tar => tar.subarray(0, 520),
+    "missing terminator": tar => tar.subarray(0, 1024),
+    "duplicate member": tar => Buffer.concat([tar.subarray(0, 1024), tar]),
+    "trailing nonzero bytes": tar => { tar[tar.length - 1] = 1; return tar; }
+  };
+  for (const [name, change] of Object.entries(cases)) await t.test(name, () => {
+    const body = zlib.gzipSync(change(Buffer.from(base)));
+    // Test-local pin substitution reaches the tar validator, never production
+    // acquisition or a caller-selectable expected digest in shipped code.
+    const Module = require("node:module"), m = new Module(moduleFile, module);
+    m.filename = moduleFile; m.paths = Module._nodeModulePaths(path.dirname(moduleFile));
+    m._compile(fs.readFileSync(moduleFile, "utf8").replace(
+      "2b3d176db752433b904a4b42375543ff398f4841d22e48f7d4f23ded925b72da", c.digest(body)) +
+      "\nmodule.exports.probe = scannerArchive;", moduleFile);
+    assert.throws(() => m.exports.probe({ executable: { path: "security/lintai/0.1.3/linux-amd64/lintai" }, archive: {
+      url: "https://github.com/777genius/lintai/releases/download/v0.1.3/lintai-v0.1.3-x86_64-unknown-linux-gnu.tar.gz",
+      bytes: body.toString("base64") } }, scannerFixture), name);
+  });
 });
