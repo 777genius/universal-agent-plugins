@@ -5,7 +5,11 @@ Companion to [ADR 0006](./0006-standard-first-authoring.md), inspected at
 decisions, not commands newly available in v1. The
 [full plan](../STANDARD_FIRST_AUTHORING_ENGINE_IMPLEMENTATION_PLAN.md) controls
 availability. Reuse means a behavior-neutral seam; adapt changes the project
-model; migrate changes the workflow; retire removes it only at its gate.
+model; migrate changes the workflow; retire removes command exposure only at its gate, not the implementation.
+Implementation disposition follows the owner-approved
+[capability preservation contract](../AUTHORING_CAPABILITY_PRESERVATION.md):
+reuse, adapt, preserve/defer, or individually owner-approved removal.
+Every retire row below retains its implementation and tests until that review.
 
 | Current command or family | Decision | Standard destination / gate |
 | --- | --- | --- |
