@@ -55,8 +55,20 @@ test('CSS background depth animates on the right and pauses offscreen or hidden'
   const field = page.locator('.hero__demo .hero-agent-field');
   const orbit = field.locator('.hero-agent-field__orbit');
   await expect(field).toHaveClass(/hero-agent-field--active/);
+  // Observe real playback in one browser task. The failure trace stalled in a
+  // second locator resolution, before it could sample a second transform.
+  await orbit.evaluate(async (node) => {
+    const spin = node.getAnimations().find((animation) =>
+      (animation as CSSAnimation).animationName === 'agent-orbit-spin');
+    if (!spin) throw new Error('Orbit spin animation is unavailable');
+    await spin.ready;
+  });
   const first = await orbit.evaluate((node) => getComputedStyle(node).transform);
-  await expect.poll(() => orbit.evaluate((node) => getComputedStyle(node).transform)).not.toBe(first);
+  await page.waitForFunction((initial) => {
+    const node = document.querySelector('.hero__demo .hero-agent-field__orbit');
+    return node && getComputedStyle(node).animationPlayState === 'running'
+      && getComputedStyle(node).transform !== initial;
+  }, first, { timeout: 5_000 });
   expect(await field.locator('.hero-agent-field__plane').evaluate((node) => getComputedStyle(node).transform)).toMatch(/^matrix3d\(/);
   expect(await field.evaluate((node) => getComputedStyle(node).pointerEvents)).toBe('none');
   const copy = (await page.locator('.hero__copy').boundingBox())!;
