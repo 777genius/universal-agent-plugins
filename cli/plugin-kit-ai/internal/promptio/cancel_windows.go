@@ -8,19 +8,42 @@ import (
 	"io"
 	"os"
 	"runtime"
+	"strings"
 	"time"
+	"unicode/utf16"
+
+	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/prompt"
 
 	"golang.org/x/sys/windows"
 )
 
 var cancelSynchronousIO = windows.NewLazySystemDLL("kernel32.dll").NewProc("CancelSynchronousIo")
 
-// CancelSynchronousIo targets our locked reader thread, not the inherited
-// console handle. No CONIN$ is opened and queued console input is not flushed.
+// Console requests use an owned duplicate of the inherited handle and cancel
+// at the I/O request with CancelIoEx. Interrupting only the issuing thread is
+// insufficient evidence that the console is ready for its next owner.
+// No CONIN$ is opened and queued console input is never flushed.
 func readCancelable(ctx context.Context, r io.Reader) (string, error) {
-	if _, ok := r.(*os.File); !ok {
+	f, ok := r.(*os.File)
+	if !ok {
 		return readLine(ctx, r)
 	}
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
+	read := func() (string, error) { return readLine(ctx, r) }
+	var console windows.Handle
+	var mode uint32
+	if windows.GetConsoleMode(windows.Handle(f.Fd()), &mode) == nil {
+		process := windows.CurrentProcess()
+		if err := windows.DuplicateHandle(process, windows.Handle(f.Fd()), process, &console, 0, false, windows.DUPLICATE_SAME_ACCESS); err != nil {
+			return "", fmt.Errorf("prepare console cancellation: %w", err)
+		}
+		// Registered before the join defer: never close a handle with a live read.
+		defer windows.CloseHandle(console)
+		read = func() (string, error) { return readConsoleLine(ctx, console, mode) }
+	}
+	defer runtime.KeepAlive(f)
 	type result struct {
 		line string
 		err  error
@@ -41,25 +64,30 @@ func readCancelable(ctx context.Context, r io.Reader) (string, error) {
 			done <- result{err: fmt.Errorf("prepare prompt cancellation: %w", err)}
 			return
 		}
+		// Keep the thread handle alive until cancellation has stopped and the
+		// reader is released, before allowing the OS thread to be reused.
+		defer windows.CloseHandle(thread)
 		ready <- thread
-		line, err := readLine(ctx, r)
+		line, err := read()
 		done <- result{line, err}
 		<-release
 	}()
 	thread := <-ready
-	if thread != 0 {
-		defer windows.CloseHandle(thread)
-	}
 	select {
 	case v := <-done:
 		return v.line, v.err
 	case <-ctx.Done():
 		// Cancellation can race the entry into ReadFile/ReadConsole. Repeat on the
-		// same dedicated thread until that read has exited, then join it.
+		// owned request (or dedicated non-console thread) until it exits, then join.
 		ticker := time.NewTicker(10 * time.Millisecond)
 		defer ticker.Stop()
 		for {
-			if thread != 0 {
+			if console != 0 {
+				// ERROR_NOT_FOUND is expected when cancellation wins the entry race.
+				// Repeat until the read returns; completion, not cancellation success,
+				// is the handoff boundary. Input ownership remains exclusive until then.
+				_ = windows.CancelIoEx(console, nil)
+			} else if thread != 0 {
 				_, _, _ = cancelSynchronousIO.Call(uintptr(thread))
 			}
 			select {
@@ -67,6 +95,61 @@ func readCancelable(ctx context.Context, r io.Reader) (string, error) {
 				return "", ctx.Err()
 			case <-ticker.C:
 			}
+		}
+	}
+}
+
+// ReadConsole's cooked line includes CR/LF. os.File's byte reader translates
+// Ctrl+Z to EOF immediately, leaving that terminator for the next console owner.
+// Read the complete submitted line ourselves before reporting prompt EOF. The
+// console host still owns editing and echo; no console modes are changed.
+func readConsoleLine(ctx context.Context, h windows.Handle, mode uint32) (string, error) {
+	return readConsoleAnswer(ctx, mode&windows.ENABLE_LINE_INPUT != 0, func(b []uint16) (uint32, error) {
+		var n uint32
+		err := windows.ReadConsole(h, &b[0], uint32(len(b)), &n, nil)
+		return n, err
+	})
+}
+
+func readConsoleAnswer(ctx context.Context, cooked bool, read func([]uint16) (uint32, error)) (string, error) {
+	var units []uint16
+	var b [1]uint16 // Never prefetch any character from the next submitted line.
+	closed := false
+	for {
+		if err := ctx.Err(); err != nil {
+			return "", err
+		}
+		n, err := read(b[:])
+		if e := ctx.Err(); e != nil {
+			return "", e
+		}
+		if err != nil {
+			return "", fmt.Errorf("read prompt: %w", err)
+		}
+		if n == 0 {
+			return "", prompt.ErrPromptInputClosed
+		}
+		switch b[0] {
+		case 0x1a:
+			if !cooked {
+				return "", prompt.ErrPromptInputClosed
+			}
+			closed = true
+		case '\n':
+			if closed {
+				return "", prompt.ErrPromptInputClosed
+			}
+			line := strings.TrimSuffix(string(utf16.Decode(units)), "\r")
+			if len(line) > 4096 {
+				return "", fmt.Errorf("prompt answer exceeds 4096 bytes")
+			}
+			return line, nil
+		}
+		if !closed {
+			if len(units) >= 4097 {
+				return "", fmt.Errorf("prompt answer exceeds 4096 bytes")
+			}
+			units = append(units, b[0])
 		}
 	}
 }
