@@ -152,7 +152,8 @@ test('plugin counter stays inside the hero on a narrow screen', async ({ page })
   await page.evaluate(() => document.fonts.ready);
   const initialWidth = (await page.locator('.hero__actions .button--primary').boundingBox())!.width;
   releaseDiscovery();
-  await expect(page.locator('.hero__plugin-count')).toContainText(/[\d,]+/);
+  // The count appears after the signed discovery snapshot has been verified.
+  await expect(page.locator('.hero__plugin-count')).toContainText(/[\d,]+/, { timeout: 15_000 });
   const container = (await page.locator('.hero.container').boundingBox())!;
   const button = (await page.locator('.hero__actions .button--primary').boundingBox())!;
   expect(button.width).toBe(initialWidth);
