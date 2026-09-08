@@ -1,3 +1,4 @@
+import { hydrated } from './i18n-state.helpers';
 import { expect, test } from '@playwright/test';
 import { clientLandingPages } from '../../data/clients';
 
@@ -45,6 +46,7 @@ for (const client of clientLandingPages) {
       });
     });
     await page.goto(`./agents/${client.slug}/`);
+    await hydrated(page);
     const command = `npx universal-agent-plugins add context7 --target ${client.id}`;
     const install = page.locator('.agent-page__install');
     await expect(install.locator('code').first()).toHaveText(command);
