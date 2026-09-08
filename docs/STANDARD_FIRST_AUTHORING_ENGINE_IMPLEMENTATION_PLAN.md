@@ -1290,6 +1290,58 @@ Release cutover is explicit:
    channel pointer or formula to the last proven version. Never delete or
    overwrite an immutable package/version.
 
+### Prepublication provenance and qualification order
+
+This order clarifies the cutover above and governs subsequent worker contracts.
+It specifies work to implement and verify; it is not evidence of release readiness.
+Distinguish frozen-input provenance from release qualification:
+
+1. Freeze both native products at the final accepted integration commit. A
+   separate protected job may attest the exact prepared inputs and a fixed
+   provenance-only record before execution. This grants no platform acceptance,
+   publication permission, or channel eligibility. Preparation stays read-only;
+   its candidate/projection/pair byte contracts remain unchanged.
+2. Authenticate those inputs and package custody before prepublication execution.
+   A reviewed production launcher may accept an explicit checksum-bound local
+   asset source for this purpose. It must verify the selected product, target,
+   source, outer asset and extracted binary through the normal checked cache
+   path, reject malformed inputs without fallback, and never execute the supplied
+   file directly. This capability must be implemented and reviewed first;
+   ordinary null-qualified preparation remains non-executable.
+3. Pack the final npm tarballs once with the authenticated input binding. Keep
+   final qualification and execution receipts outside those immutable bytes:
+   frozen inputs -> input provenance -> tarballs -> stage receipt -> execution
+   receipts -> release qualification -> distribution readbacks -> channels.
+   Do not embed a future qualification digest in a tarball whose execution
+   receipt must itself be included in that qualification.
+4. Require all twelve native product/target lanes and authenticated public-packed
+   acceptance before qualification signing or native release publication. Public
+   acceptance includes actual installed launchers, declared host/Node support,
+   genuine production installer dry-run and lifecycle, preservation/parity, and
+   the complementary ten-project/thirty-plan gate. Help or injected planner
+   success cannot replace distributed installer success. Missing lanes remain
+   unresolved; they never become skipped successes.
+5. After qualification and both native release readbacks, verify default anonymous
+   acquisition without the local source using those identical tarballs before
+   publishing either npm package. Both publishers consume the tested bytes
+   without repacking. Require both registry provenance/readbacks before pair
+   channel promotion. Preserve the repository-wide latest release policy needed
+   by historical kit launchers; a non-default release is still a public effect.
+
+Every admitted receipt binds the exact source and signer workflow revision,
+completed run/attempt, artifact identity/digest, subjects and evidence closure.
+Extract the same checked archive bytes. Provenance signatures authenticate input
+custody, not future test results. Cryptographic verifier compatibility requires
+real positive and negative evidence, not supplied fixture JSON.
+
+No synthetic transport, manufactured cache/assessment qualification, test trust
+flag, command/network-policy relaxation or provider-control workaround satisfies
+these gates. Required process observation and genuine installer services remain
+execution prerequisites. Preserve existing private/v1 contracts and the explicit
+limitations of offline fixture evidence. Native, npm, PyPI, Homebrew and final
+clean-clone gates remain required; this clarification neither reduces scope nor
+opens phases 7-11 before the stable MVP release.
+
 PyPI remains a launcher/distribution surface, not a second Python
 implementation of the authoring engine. A source distribution must not contain
 a divergent authoring path.
