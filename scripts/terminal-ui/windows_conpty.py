@@ -297,22 +297,41 @@ CASES = ('default-no', 'no', 'yes-lifecycle', 'ctrl-c', 'confirm-ctrl-c', 'eof',
 
 
 def prepare_powershell_fixture(fixture):
-    # Native bf397 evidence shows only this empty startup directory hierarchy
-    # added by PowerShell. Seed it before any process starts, not at a prompt:
-    # every directory and any subsequent cache/config file remains asserted.
+    # 458b native evidence contains StartupProfileData-NonInteractive writes.
+    # Keep shell startup/cache activity in a separate disposable profile. Never
+    # rebaseline or exclude anything from the CLI's full mutation snapshot.
     fixture.unchanged()
-    (fixture.home / 'AppData' / 'Local' / 'Microsoft' / 'PowerShell').mkdir(parents=True)
-    fixture.before = fixture.mutations()
-    # PowerShell needs PATHEXT to classify the CLI as a native application.
-    fixture.env['PATHEXT'] = '.EXE'
+    shell_home = fixture.root / 'powershell-home'
+    shell_home.mkdir()
+    shell_env = dict(fixture.env, PATHEXT='.EXE')
+    for key, value in fixture.env.items():
+        # Relocate every synthetic profile/config path, retaining its layout.
+        if key in ('HOME', 'USERPROFILE'):
+            shell_env[key] = str(shell_home)
+        elif Path(value).is_relative_to(fixture.home):
+            shell_env[key] = str(shell_home / Path(value).relative_to(fixture.home))
+    shell_tmp = fixture.root / 'powershell-tmp'
+    shell_tmp.mkdir()
+    for key in ('TMP', 'TEMP', 'TMPDIR'):
+        shell_env[key] = str(shell_tmp)
+    return shell_env
 
 
-def powershell_argv(shell, argv, nonce):
-    # Encode the command, preserving spaces, apostrophes and Unicode literally.
+def powershell_argv(shell, argv, nonce, cli_env):
+    # ProcessStartInfo supplies a child-only environment: changing $env: in the
+    # shell would let asynchronous shell cache writes reach the CLI HOME again.
+    # No stream redirection: the CLI still inherits the owned ConPTY handles.
     quote = lambda value: "'" + value.replace("'", "''") + "'"
-    command = "$ErrorActionPreference = 'Stop'; $global:LASTEXITCODE = $null; Write-Output " + quote('POWERSHELL_LAUNCH_' + nonce) + '; & ' + ' '.join(
-        quote(value) for value in argv) + ("; if ($null -eq $LASTEXITCODE) { throw 'native CLI did not return an exit code' }; "
-                                        "exit $LASTEXITCODE")
+    command = "$ErrorActionPreference = 'Stop'; $start = [System.Diagnostics.ProcessStartInfo]::new(); "
+    command += "$start.UseShellExecute = $false; $start.FileName = " + quote(argv[0]) + '; '
+    command += "$start.Arguments = " + quote(subprocess.list2cmdline(argv[1:])) + '; '
+    command += '$start.EnvironmentVariables.Clear(); '
+    for key, value in sorted(cli_env.items()):
+        command += '$start.EnvironmentVariables[' + quote(key) + '] = ' + quote(value) + '; '
+    command += 'Write-Output ' + quote('POWERSHELL_LAUNCH_' + nonce) + '; '
+    command += ("$child = [System.Diagnostics.Process]::Start($start); "
+                "if ($null -eq $child) { throw 'native CLI did not start' }; "
+                "$child.WaitForExit(); exit $child.ExitCode")
     return [str(shell), '-NoLogo', '-NoProfile', '-NonInteractive', '-EncodedCommand',
             base64.b64encode(command.encode('utf-16-le')).decode('ascii')]
 
@@ -327,13 +346,14 @@ def run_case(name, args):
         status_path = evidence / 'status.json'
         config = dict(argv=[str(args.binary), 'add', str(fixture.package)], cwd=str(fixture.project),
                       nonce=nonce, status=str(status_path))
+        owner_env = fixture.env
         if args.powershell:
-            prepare_powershell_fixture(fixture)
-            config['argv'] = powershell_argv(args.powershell, config['argv'], nonce)
+            owner_env = prepare_powershell_fixture(fixture)
+            config['argv'] = powershell_argv(args.powershell, config['argv'], nonce, fixture.env)
         config_path = evidence / 'job.json'
         config_path.write_text(json.dumps(config), encoding='utf-8')
         terminal = ConPTY([sys.executable, '-I', str(Path(__file__).with_name('windows_job.py').resolve()),
-                          str(config_path)], fixture.env, fixture.project, args.timeout, evidence=evidence)
+                          str(config_path)], owner_env, fixture.project, args.timeout, evidence=evidence)
         terminal.status_path = status_path
         status = {}
         try:

@@ -119,11 +119,24 @@ class OwnerTests(unittest.TestCase):
 
     def test_powershell_no_profile_literal_unicode_arguments_and_exit(self):
         import base64
+        import subprocess
         from windows_conpty import powershell_argv
-        argv = powershell_argv('pwsh.exe', ["C:\\test é's\\cli.exe", 'add', 'C:\\fixture $x'], 'nonce')
+        args = ["C:/test é's/cli.exe", 'add', 'C:/fixture $x', 'embedded"quote', '']
+        env = {'HOME': "C:/CLI é's/home", 'PATH': 'C:/empty', 'EMPTY': ''}
+        argv = powershell_argv('pwsh.exe', args, 'nonce', env)
         self.assertEqual(argv[:5], ['pwsh.exe', '-NoLogo', '-NoProfile', '-NonInteractive', '-EncodedCommand'])
         command = base64.b64decode(argv[-1]).decode('utf-16-le')
-        self.assertEqual(command, "$ErrorActionPreference = 'Stop'; $global:LASTEXITCODE = $null; Write-Output 'POWERSHELL_LAUNCH_nonce'; & 'C:\\test é''s\\cli.exe' 'add' 'C:\\fixture $x'; if ($null -eq $LASTEXITCODE) { throw 'native CLI did not return an exit code' }; exit $LASTEXITCODE")
+        quote = lambda value: "'" + value.replace("'", "''") + "'"
+        self.assertIn('$start.FileName = ' + quote(args[0]), command)
+        self.assertIn('$start.Arguments = ' + quote(subprocess.list2cmdline(args[1:])), command)
+        self.assertIn('$start.EnvironmentVariables.Clear();', command)
+        for key, value in env.items():
+            self.assertIn('$start.EnvironmentVariables[' + quote(key) + '] = ' + quote(value), command)
+        self.assertIn('$start.UseShellExecute = $false', command)
+        self.assertNotIn('RedirectStandard', command)
+        self.assertNotIn('$env:', command)
+        self.assertIn("Write-Output 'POWERSHELL_LAUNCH_nonce'", command)
+        self.assertTrue(command.endswith('$child.WaitForExit(); exit $child.ExitCode'))
 
     def test_owner_error_is_reported_before_prompt_timeout(self):
         import json
@@ -189,22 +202,62 @@ class PowerShellFixtureTests(unittest.TestCase):
         scanner.write_bytes(b'synthetic, not executable')
         return Fixture(Path(root) / 'fixture', scanner)
 
-    def test_startup_baseline_adds_only_four_empty_directories(self):
+    def test_shell_profile_is_separate_without_changing_cli_baseline(self):
         import tempfile
         from pathlib import Path
         from windows_conpty import prepare_powershell_fixture
         with tempfile.TemporaryDirectory() as root:
             fixture = self.make_fixture(root)
-            before = fixture.mutations()
-            env = dict(fixture.env)
-            prepare_powershell_fixture(fixture)
-            expected = dict(before, home=dict(before['home']))
-            path = Path()
-            for part in ('AppData', 'Local', 'Microsoft', 'PowerShell'):
-                path /= part
-                expected['home'][str(path)] = 'directory'
-            self.assertEqual(fixture.before, expected)
-            self.assertEqual(fixture.env, dict(env, PATHEXT='.EXE'))
+            before, env = fixture.before, dict(fixture.env)
+            shell_env = prepare_powershell_fixture(fixture)
+            self.assertIs(fixture.before, before)
+            self.assertEqual(fixture.env, env)
+            self.assertEqual(shell_env['PATHEXT'], '.EXE')
+            shell_home = fixture.root / 'powershell-home'
+            for key, value in env.items():
+                if Path(value).is_relative_to(fixture.home):
+                    self.assertEqual(Path(shell_env[key]), shell_home / Path(value).relative_to(fixture.home))
+                elif key in ('TMP', 'TEMP', 'TMPDIR'):
+                    self.assertEqual(Path(shell_env[key]), fixture.root / 'powershell-tmp')
+                else:
+                    self.assertEqual(shell_env[key], value)
+            # Reproduce the exact native startup artifact outside CLI HOME.
+            cache = shell_home / 'AppData/Local/Microsoft/PowerShell/StartupProfileData-NonInteractive'
+            cache.parent.mkdir(parents=True)
+            cache.write_bytes(b'synthetic shell startup cache')
+            fixture.unchanged()
+            self.assertFalse((fixture.home / 'AppData').exists())
+
+    def test_run_case_routes_shell_and_cli_environments_separately(self):
+        import base64
+        import json
+        import tempfile
+        from pathlib import Path
+        from unittest.mock import patch
+        import windows_conpty
+        with tempfile.TemporaryDirectory() as root:
+            fixture = self.make_fixture(root)
+            args = SimpleNamespace(artifacts=Path(root), scanner_path=None,
+                                   binary=Path(root) / 'never.exe',
+                                   powershell=Path(root) / 'never-pwsh.exe', timeout=15)
+            captured = {}
+            def capture(argv, env, cwd, timeout, evidence):
+                captured.update(env=env, cwd=cwd, timeout=timeout,
+                                config=json.loads(Path(argv[-1]).read_text()))
+                raise RuntimeError('stop before any process starts')
+            with patch.object(windows_conpty, 'Fixture', return_value=fixture), \
+                    patch.object(windows_conpty, 'ConPTY', side_effect=capture):
+                with self.assertRaisesRegex(RuntimeError, 'stop before any process starts'):
+                    windows_conpty.run_case('default-no', args)
+            self.assertEqual(captured['env']['HOME'], str(fixture.root / 'powershell-home'))
+            self.assertEqual(captured['cwd'], fixture.project)
+            self.assertEqual(captured['timeout'], 15)
+            command = base64.b64decode(captured['config']['argv'][-1]).decode('utf-16-le')
+            for key, value in fixture.env.items():
+                literal = "'" + value.replace("'", "''") + "'"
+                self.assertIn("$start.EnvironmentVariables['" + key + "'] = " + literal, command)
+            self.assertNotIn('powershell-home', command)
+            self.assertNotIn('TERM', fixture.env)
             fixture.unchanged()
 
     def test_all_cli_mutations_remain_detected(self):
@@ -212,6 +265,8 @@ class PowerShellFixtureTests(unittest.TestCase):
         from windows_conpty import prepare_powershell_fixture
         targets = ('home/.codex/config.toml', 'home/.cursor/config.json',
                    'home/unexpected', 'home/AppData/Local/Microsoft/PowerShell/cache',
+                   'home/AppData/Local/Microsoft/PowerShell/StartupProfileData-NonInteractive',
+                   'home/localappdata/cache', 'home/appdata/config',
                    'project/config', 'managed/package', 'operations/journal', 'state')
         for target in targets:
             with self.subTest(target=target), tempfile.TemporaryDirectory() as root:
@@ -227,13 +282,13 @@ class PowerShellFixtureTests(unittest.TestCase):
                 with self.assertRaisesRegex(AssertionError, 'mutated before consent'):
                     fixture.unchanged()
 
-    def test_removed_startup_directory_is_detected(self):
+    def test_removed_cli_directory_is_detected(self):
         import tempfile
         from windows_conpty import prepare_powershell_fixture
         with tempfile.TemporaryDirectory() as root:
             fixture = self.make_fixture(root)
             prepare_powershell_fixture(fixture)
-            (fixture.home / 'AppData' / 'Local' / 'Microsoft' / 'PowerShell').rmdir()
+            (fixture.home / '.cursor').rmdir()
             with self.assertRaisesRegex(AssertionError, 'mutated before consent'):
                 fixture.unchanged()
 
