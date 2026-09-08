@@ -20,7 +20,15 @@ func newAddCommand(app App, opts *options) *cobra.Command {
 		Use:     "add <name-or-source>",
 		Aliases: []string{"install"},
 		Short:   "Plan and install one Agent Plugins 1.0 package for one or more clients",
-		Args:    cobra.ExactArgs(1),
+		Args: func(cmd *cobra.Command, args []string) error {
+			if err := cobra.ExactArgs(1)(cmd, args); err != nil {
+				if len(args) == 0 && opts.format != "json" {
+					return fmt.Errorf("%w\nProvide a plugin name or source, for example:\n  agentplugins add ./my-plugin\nSee agentplugins add --help", err)
+				}
+				return err
+			}
+			return nil
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := validateCommonOptions(opts); err != nil {
 				return err
@@ -504,8 +512,16 @@ func renderAddResultErrorWithSecurity(writer io.Writer, format string, envelope 
 			}
 			return renderHumanPlan(writer, envelope, result)
 		}
-		_, err := fmt.Fprintf(writer, "Add: %s\n", failure)
-		return err
+		if _, err := fmt.Fprintf(writer, "Add: %s\n", failure); err != nil {
+			return err
+		}
+		// Lifecycle recovery is useful after a failed phase, but must not imply
+		// that a rolled-back or uncertain transaction left a usable installation.
+		if failure == "activation_failed" || failure == "authentication_failed" || failure == "verification_failed" {
+			_, err := fmt.Fprintf(writer, "Next: %s\n", nextLocalLifecycleAction(result))
+			return err
+		}
+		return nil
 	}
 	if dryRun {
 		return renderHumanPlan(writer, envelope, result)
