@@ -1,5 +1,3 @@
-import enContent from '../content/en.json';
-
 export type LocaleCode = 'en' | 'ru' | 'es' | 'fr' | 'zh';
 
 export const supportedLocales = [
@@ -11,31 +9,3 @@ export const supportedLocales = [
 ] as const;
 
 export const defaultLocale: LocaleCode = 'en';
-
-const pluginDetailPages = (enContent.plugins as Array<{ id: string; slug?: string }>).map(
-  (plugin) => `/plugins/${plugin.slug ?? plugin.id}`,
-);
-
-export const pages = ['/', '/download', '/plugins', ...pluginDetailPages];
-
-/** Pages for sitemap */
-export const sitemapPages = ['/', '/download', '/plugins', ...pluginDetailPages];
-
-/** Generates i18n routes for a given list of pages */
-const buildI18nRoutes = (source: readonly string[]): string[] => {
-  const routes: string[] = [];
-  for (const page of source) {
-    routes.push(page);
-    for (const locale of supportedLocales) {
-      if (locale.code === defaultLocale) continue;
-      routes.push(page === '/' ? `/${locale.code}` : `/${locale.code}${page}`);
-    }
-  }
-  return routes;
-};
-
-/** All i18n routes (for prerender) */
-export const generateI18nRoutes = (): string[] => buildI18nRoutes(pages);
-
-/** i18n routes for sitemap only */
-export const generateSitemapRoutes = (): string[] => buildI18nRoutes(sitemapPages);

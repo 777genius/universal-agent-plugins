@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="context7Title">
+  <title id="context7Title">Context7</title>
+  <defs>
+    <linearGradient id="context7Glow" x1="8" y1="8" x2="56" y2="56" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#30E3CA"/>
+      <stop offset="1" stop-color="#4F8CFF"/>
+    </linearGradient>
+  </defs>
+  <rect x="6" y="6" width="52" height="52" rx="18" fill="#07111F"/>
+  <path fill="url(#context7Glow)" d="M32 13c9.6 0 17.4 7.5 17.9 17H43c-.5-5.8-5.3-10.4-11-10.4-6.2 0-11.2 5-11.2 11.3S25.8 42 32 42c4.3 0 8.2-2.5 10-6.3h-8.8v-5.6h16c.1 1 .2 1.9.2 2.9C49.4 42.8 41.5 51 32 51 20.9 51 12 42.1 12 31S20.9 13 32 13Z"/>
+  <path fill="#9CE8FF" d="M36.2 18h15.6L39 45h-7.2l11.4-21H36.2z"/>
+</svg>

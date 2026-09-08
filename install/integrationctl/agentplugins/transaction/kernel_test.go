@@ -90,6 +90,140 @@ func TestApplyDirectoryGroupRollsBackEveryTargetWhenSecondVerificationFails(t *t
 	}
 }
 
+func TestApplyDirectoryGroupPostApplyVerifyRunsAfterRestorationAndRollsBackOnFailure(t *testing.T) {
+	t.Parallel()
+	kernel, mutation, store := transactionFixture(t, "post-verify-op")
+	// Simulate an absent-managed-object recovery: the active path does not
+	// exist before this transaction runs, matching dirswap's HadActive=false
+	// path used to reconstruct a positively absent managed directory.
+	if err := os.RemoveAll(mutation.ActivePath); err != nil {
+		t.Fatal(err)
+	}
+	verifyCalls := 0
+	_, err := kernel.ApplyDirectoryGroup(context.Background(), DirectoryGroup{
+		OperationGroupID: "post-verify-group", Mutations: []DirectoryMutation{mutation}, DesiredState: mutation.DesiredState,
+		PostApplyVerify: func(context.Context) error {
+			verifyCalls++
+			if _, statErr := os.Stat(filepath.Join(mutation.ActivePath, "body")); statErr != nil {
+				t.Fatalf("post-apply verify ran before restoration: %v", statErr)
+			}
+			return errors.New("post-apply verification refused")
+		},
+	})
+	if err == nil {
+		t.Fatal("post-apply verification failure was ignored")
+	}
+	if phase := FailurePhase(err); phase != GroupFailureRolledBack {
+		t.Fatalf("failure phase = %q, want rolled back", phase)
+	}
+	if verifyCalls != 1 {
+		t.Fatalf("post-apply verify calls = %d, want 1", verifyCalls)
+	}
+	if _, statErr := os.Stat(mutation.ActivePath); !os.IsNotExist(statErr) {
+		t.Fatalf("rollback did not restore absence: %v", statErr)
+	}
+	state, err := store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(onlyClient(state.Installations[0]).Receipts) != 0 {
+		t.Fatal("failed group persisted a receipt")
+	}
+}
+
+func TestApplyDirectoryGroupPostApplyVerifySucceedsBeforeCommit(t *testing.T) {
+	t.Parallel()
+	kernel, mutation, store := transactionFixture(t, "post-verify-success-op")
+	if err := os.RemoveAll(mutation.ActivePath); err != nil {
+		t.Fatal(err)
+	}
+	verifyCalls := 0
+	receipts, err := kernel.ApplyDirectoryGroup(context.Background(), DirectoryGroup{
+		OperationGroupID: "post-verify-success-group", Mutations: []DirectoryMutation{mutation}, DesiredState: mutation.DesiredState,
+		PostApplyVerify: func(context.Context) error {
+			verifyCalls++
+			return nil
+		},
+	})
+	if err != nil {
+		t.Fatalf("apply: %v", err)
+	}
+	if verifyCalls != 1 || len(receipts) != 1 || receipts[0].Phase != ReceiptPhaseCommitted {
+		t.Fatalf("post-apply verify success path = calls=%d receipts=%+v", verifyCalls, receipts)
+	}
+	assertTransactionBody(t, mutation.ActivePath, "new")
+	state, err := store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(onlyClient(state.Installations[0]).Receipts) != 1 {
+		t.Fatal("successful group did not persist a receipt")
+	}
+}
+
+func TestApplyDirectoryGroupRequireAbsentRejectsAndRollsBackWithoutTouchingOccupiedTarget(t *testing.T) {
+	t.Parallel()
+	kernel, mutation, store := transactionFixture(t, "require-absent-op")
+	mutation.RequireAbsent = true
+	// A second, ordinary mutation applies first and succeeds; the group must
+	// still fail closed on the RequireAbsent one and roll the first back too.
+	secondActive := filepath.Join(mutation.OwnedBase, "plugin-second")
+	secondStaging := filepath.Join(mutation.OwnedBase, "plugin-second.staging")
+	writeTransactionBody(t, secondActive, "old-second")
+	writeTransactionBody(t, secondStaging, "new-second")
+	desired := mutation.DesiredState
+	installation := desired.Installations[0]
+	secondClientID := domain.ComputeClientBindingID(installation.InstallationID, "cursor", "user", secondActive)
+	secondClient := onlyClient(installation)
+	secondClient.ClientBindingID = secondClientID
+	secondClient.ClientID = "cursor"
+	secondClient.TargetLocator = secondActive
+	secondClient.PhysicalArtifact = domain.ComputePhysicalArtifactID("demo", installation.InstallationID+"-cursor")
+	secondClient.Receipts = nil
+	installation.Clients[secondClientID] = secondClient
+	desired.Installations[0] = installation
+	second := DirectoryMutation{OperationID: "require-absent-second", InstallationID: installation.InstallationID, ClientBindingID: secondClientID,
+		Sequence: 1, OwnedBase: mutation.OwnedBase, ActivePath: secondActive, StagingPath: secondStaging,
+		Activation: domain.ActivationPrepared, Authentication: domain.AuthenticationNotRequired, Policy: domain.PolicyAllowed,
+		Verification: domain.VerificationInstalled, Verify: func(_ context.Context, activePath string) error {
+			body, readErr := os.ReadFile(filepath.Join(activePath, "body"))
+			if readErr != nil || string(body) != "new-second" {
+				return errors.New("new-second body not active")
+			}
+			return nil
+		}}
+	// mutation.ActivePath already has "old" from transactionFixture, so
+	// RequireAbsent must reject it before any journal write or rename.
+	_, err := kernel.ApplyDirectoryGroup(context.Background(), DirectoryGroup{OperationGroupID: "require-absent-group", Mutations: []DirectoryMutation{second, mutation}, DesiredState: desired})
+	if err == nil {
+		t.Fatal("RequireAbsent violation was ignored")
+	}
+	if phase := FailurePhase(err); phase != GroupFailureRolledBack {
+		t.Fatalf("failure phase = %q, want rolled back", phase)
+	}
+	assertTransactionBody(t, mutation.ActivePath, "old")
+	assertTransactionBody(t, secondActive, "old-second")
+	if _, statErr := os.Stat(mutation.StagingPath); statErr != nil {
+		t.Fatalf("RequireAbsent rejection consumed the staging directory: %v", statErr)
+	}
+	if _, statErr := os.Stat(kernel.Directory.JournalDir); statErr == nil {
+		entries, readErr := os.ReadDir(kernel.Directory.JournalDir)
+		if readErr != nil {
+			t.Fatal(readErr)
+		}
+		if len(entries) != 0 {
+			t.Fatalf("RequireAbsent rejection left journal entries: %v", entries)
+		}
+	}
+	state, err := store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(state.Installations[0].Clients) != 1 || len(onlyClient(state.Installations[0]).Receipts) != 0 {
+		t.Fatalf("RequireAbsent-rejected group changed state: %+v", state.Installations[0])
+	}
+}
+
 func TestGroupedRemovalRecoversFinalStateAndRenamedDataAfterRestart(t *testing.T) {
 	t.Parallel()
 	kernel, mutation, store := transactionFixture(t, "restart-remove")

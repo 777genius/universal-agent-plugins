@@ -43,6 +43,22 @@ func TestCatalogLoadsStrictPinnedIndexAndResolvesExactSource(t *testing.T) {
 	}
 }
 
+func TestCatalogKeepsNewClientsOptionalButRejectsThemInLegacySchemas(t *testing.T) {
+	t.Parallel()
+	oldCatalog := validCatalog()
+	if _, err := (Loader{CurrentCLIVersion: "0.1.0"}).Load(oldCatalog, ""); err != nil {
+		t.Fatalf("legacy catalog now requires new clients: %v", err)
+	}
+	withClaude := strings.Replace(string(oldCatalog),
+		`"kiro":{"package":"native","verification":"tested","authentication":"not_required"}`,
+		`"kiro":{"package":"native","verification":"tested","authentication":"not_required"},"claude":{"package":"prepared","verification":"tested","authentication":"not_required"}`,
+		1,
+	)
+	if _, err := (Loader{CurrentCLIVersion: "0.1.0"}).Load([]byte(withClaude), ""); err == nil {
+		t.Fatal("catalog v1 accepted a client key that released parsers reject")
+	}
+}
+
 func TestCatalogRejectsChecksumUnknownFieldsTraversalAndSupplyChainConflict(t *testing.T) {
 	t.Parallel()
 	tests := map[string][]byte{
@@ -127,7 +143,10 @@ func TestCatalogRejectsUnsafeOrMisplacedChatGPTAppBinding(t *testing.T) {
 		"unsafe-evidence": strings.Replace(valid,
 			`"tests/e2e/results/chatgpt-context7.json"`, `"../outside.json"`, 1),
 		"bad-evidence-revision": strings.Replace(valid, strings.Repeat("e", 40), `not-a-commit`, 1),
-		"non-chatgpt":           strings.Replace(valid, `"authentication":"not_required"}`, `"authentication":"not_required","app_binding":{"app_key":"context7","id":"asdk_app_context7_123","mcp_server":"context7","mcp_url":"https://example.test/mcp","runtime_evidence":"tests/e2e/results/chatgpt-context7.json"}}`, 1),
+		"missing-evidence":      strings.Replace(valid, `"tests/e2e/results/chatgpt-context7.json"`, `""`, 1),
+		"missing-evidence-revision": strings.Replace(valid,
+			strings.Repeat("e", 40), ``, 1),
+		"non-chatgpt": strings.Replace(valid, `"authentication":"not_required"}`, `"authentication":"not_required","app_binding":{"app_key":"context7","id":"asdk_app_context7_123","mcp_server":"context7","mcp_url":"https://example.test/mcp","runtime_evidence":"tests/e2e/results/chatgpt-context7.json"}}`, 1),
 	} {
 		name, body := name, body
 		t.Run(name, func(t *testing.T) {
@@ -135,6 +154,28 @@ func TestCatalogRejectsUnsafeOrMisplacedChatGPTAppBinding(t *testing.T) {
 				t.Fatal("invalid ChatGPT app binding accepted")
 			}
 		})
+	}
+}
+
+func TestValidateAppBindingReferenceRejectsInvalidHTTPSAuthority(t *testing.T) {
+	t.Parallel()
+	valid := domain.CatalogAppBinding{AppKey: "docs", ID: "asdk_app_docs_123", MCPServer: "docs", MCPURL: "https://example.test:443/mcp"}
+	if err := ValidateAppBindingReference(valid); err != nil {
+		t.Fatalf("valid reference rejected: %v", err)
+	}
+	for _, mcpURL := range []string{
+		"https://:443/mcp",
+		"https://example.test:/mcp",
+		"https://[::1]:/mcp",
+		"https://example.test:0/mcp",
+		"https://example.test:65536/mcp",
+		"https://example.test:not-a-port/mcp",
+	} {
+		binding := valid
+		binding.MCPURL = mcpURL
+		if err := ValidateAppBindingReference(binding); err == nil {
+			t.Fatalf("invalid reference URL %q accepted", mcpURL)
+		}
 	}
 }
 

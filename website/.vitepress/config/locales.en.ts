@@ -27,7 +27,7 @@ export const enLocaleConfig = {
     },
     footer: {
       message: "Public docs for plugin authors and integrators.",
-      copyright: "MIT Licensed"
+      copyright: "Apache-2.0 Licensed"
     },
     nav: [
       { text: "Guide", link: "/en/guide/" },

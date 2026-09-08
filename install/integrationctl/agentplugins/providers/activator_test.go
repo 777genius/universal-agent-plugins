@@ -407,6 +407,7 @@ func TestCopilotUnknownOutputContractRemainsManual(t *testing.T) {
 		"stderr only":     {Stderr: []byte("Installed plugins:\n  • " + spec + " (v1.0.0)")},
 		"outside section": {Stdout: []byte("• " + spec + " (v1.0.0)")},
 		"bad version":     {Stdout: []byte("Installed plugins:\n  • " + spec + " (latest)")},
+		"wrong version":   {Stdout: []byte("Installed plugins:\n  • " + spec + " (v1.0.1)")},
 		"duplicate":       {Stdout: []byte("Installed plugins:\n  • " + spec + " (v1.0.0)\n  • " + spec + " (v1.0.0)")},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -425,6 +426,7 @@ func TestCopilotUnknownOutputContractRemainsManual(t *testing.T) {
 func TestCopilotExactVersion1078OutputRemainsSupported(t *testing.T) {
 	t.Parallel()
 	request := activationRequest(t, domain.ClientCopilot)
+	request.Plan.DeclaredVersion = "1.0.78"
 	request.BackendExecutable = "/test/bin/copilot"
 	request.VerifyOnly = true
 	spec := "demo@" + managedMarketplaceName(request.Plan.PhysicalArtifactID)
@@ -434,6 +436,46 @@ func TestCopilotExactVersion1078OutputRemainsSupported(t *testing.T) {
 	outcome, err := (Activator{Runner: runner}).Activate(context.Background(), request)
 	if err != nil || outcome.Activation != domain.ActivationActive {
 		t.Fatalf("outcome=%+v err=%v", outcome, err)
+	}
+}
+
+func TestCopilotLivePluginListingBindsEnabledIdentityAndManagedPath(t *testing.T) {
+	t.Parallel()
+	request := activationRequest(t, domain.ClientCopilot)
+	request.Plan.DeclaredVersion = "1.7.0-uap.1"
+	request.BackendExecutable = "/test/bin/copilot"
+	request.VerifyOnly = true
+	spec := "demo@" + managedMarketplaceName(request.Plan.PhysicalArtifactID)
+	live := func(version, status, path string) []byte {
+		return []byte(copilotLiveHeader + "\n  • " + spec + " (v" + version + ") (" + status + ")\n      from " + path + "\n")
+	}
+
+	runner := &recordingRunner{run: func(legacyports.Command) legacyports.CommandResult {
+		return legacyports.CommandResult{Stdout: live("1.7.0-uap.1", "enabled", request.Delivery.ActivePath)}
+	}}
+	outcome, err := (Activator{Runner: runner}).Activate(context.Background(), request)
+	if err != nil || outcome.Activation != domain.ActivationActive || outcome.Verification != domain.VerificationInstalled {
+		t.Fatalf("live outcome=%+v err=%v", outcome, err)
+	}
+
+	for name, body := range map[string][]byte{
+		"disabled":      live("1.7.0-uap.1", "disabled", request.Delivery.ActivePath),
+		"wrong version": live("1.7.0-uap.0", "enabled", request.Delivery.ActivePath),
+		"wrong path":    live("1.7.0-uap.1", "enabled", filepath.Join(t.TempDir(), "other")),
+		"dot path":      live("1.7.0-uap.1", "enabled", filepath.Dir(request.Delivery.ActivePath)+string(filepath.Separator)+"alias"+string(filepath.Separator)+".."+string(filepath.Separator)+filepath.Base(request.Delivery.ActivePath)),
+		"missing path":  []byte(copilotLiveHeader + "\n  • " + spec + " (v1.7.0-uap.1) (enabled)\n"),
+		"extra suffix":  append(live("1.7.0-uap.1", "enabled", request.Delivery.ActivePath), []byte("unexpected\n")...),
+		"ansi prefix":   append([]byte("\x1b[32m"), live("1.7.0-uap.1", "enabled", request.Delivery.ActivePath)...),
+	} {
+		t.Run(name, func(t *testing.T) {
+			runner := &recordingRunner{run: func(legacyports.Command) legacyports.CommandResult {
+				return legacyports.CommandResult{Stdout: body}
+			}}
+			outcome, err := (Activator{Runner: runner}).Activate(context.Background(), request)
+			if err != nil || outcome.Activation != domain.ActivationManual || outcome.AuthoritativeObservation {
+				t.Fatalf("unknown outcome=%+v err=%v", outcome, err)
+			}
+		})
 	}
 }
 
@@ -810,12 +852,71 @@ func TestDeactivatorPreviewsThenCleansManagedCodexMarketplace(t *testing.T) {
 	if !outcome.ArtifactRemovalAllowed || !outcome.ExternalRemovalComplete {
 		t.Fatalf("outcome = %+v", outcome)
 	}
-	want := [][]string{{
-		"/test/bin/codex", "plugin", "marketplace", "remove",
-		managedMarketplaceName(request.PhysicalArtifactID), "--json",
-	}}
+	marketplace := managedMarketplaceName(request.PhysicalArtifactID)
+	want := [][]string{
+		{"/test/bin/codex", "plugin", "remove", request.DeclaredName + "@" + marketplace, "--json"},
+		{"/test/bin/codex", "plugin", "marketplace", "remove", marketplace, "--json"},
+	}
 	if got := commandArgv(runner.commands); !reflect.DeepEqual(got, want) {
 		t.Fatalf("commands = %#v, want %#v", got, want)
+	}
+}
+
+// TestDeactivatorCleansStalePluginEntryWhenMarketplaceAlreadyGone covers the
+// gap a live-native run found: if config.toml's marketplace source is
+// already gone (e.g. a user manually ran only `codex plugin marketplace
+// remove` off this code's own earlier guidance) but the separate
+// `[plugins."id"] enabled = true` entry survives, managedCodexMarketplaceRegistered
+// reports not-registered and the old code skipped cleanup entirely,
+// reproducing the self-heal bug on every subsequent remove. The plugin's own
+// registration must still be cleared whenever a live CLI is available,
+// independent of marketplace registration.
+func TestDeactivatorCleansStalePluginEntryWhenMarketplaceAlreadyGone(t *testing.T) {
+	t.Parallel()
+	runner := &recordingRunner{}
+	request := codexDeactivationRequest(t)
+	request.Confirmed = true
+	marketplace := managedMarketplaceName(request.PhysicalArtifactID)
+	writeTestFile(t, filepath.Join(request.Client.ConfigRoot, "config.toml"), fmt.Sprintf(`
+[plugins."%s@%s"]
+enabled = true
+`, request.DeclaredName, marketplace))
+	outcome, err := (Activator{Runner: runner}).Deactivate(context.Background(), request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !outcome.ArtifactRemovalAllowed || !outcome.ExternalRemovalComplete {
+		t.Fatalf("outcome = %+v", outcome)
+	}
+	want := [][]string{{"/test/bin/codex", "plugin", "remove", request.DeclaredName + "@" + marketplace, "--json"}}
+	if got := commandArgv(runner.commands); !reflect.DeepEqual(got, want) {
+		t.Fatalf("commands = %#v, want %#v (marketplace remove must NOT run -- there is no marketplace source left to clean)", got, want)
+	}
+}
+
+// TestDeactivatorBlocksRemovalWhenPluginEntryStaleAndCLIUnavailable covers a
+// second gap from the same live-native finding: without a live CLI, a stale
+// `[plugins."id"]` entry must block removal exactly like a registered
+// marketplace does, not just fall through to ExternalRemovalComplete=true
+// with nothing actually cleaned.
+func TestDeactivatorBlocksRemovalWhenPluginEntryStaleAndCLIUnavailable(t *testing.T) {
+	t.Parallel()
+	request := codexDeactivationRequest(t)
+	request.Confirmed = true
+	request.BackendExecutable = ""
+	marketplace := managedMarketplaceName(request.PhysicalArtifactID)
+	writeTestFile(t, filepath.Join(request.Client.ConfigRoot, "config.toml"), fmt.Sprintf(`
+[plugins."%s@%s"]
+enabled = true
+`, request.DeclaredName, marketplace))
+	outcome, err := (Activator{}).Deactivate(context.Background(), request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantPluginRemove := fmt.Sprintf("codex plugin remove %s@%s --json", request.DeclaredName, marketplace)
+	if outcome.ArtifactRemovalAllowed || outcome.ExternalRemovalComplete || outcome.Activation != domain.ActivationManual ||
+		len(outcome.UserActions) != 1 || !strings.Contains(outcome.UserActions[0], wantPluginRemove) {
+		t.Fatalf("outcome = %+v, want blocked with guidance containing %q", outcome, wantPluginRemove)
 	}
 }
 
@@ -835,9 +936,28 @@ func TestDeactivatorTreatsAbsentManagedCodexMarketplaceAsClean(t *testing.T) {
 	}
 }
 
+func TestDeactivatorRetainsManagedCodexArtifactWhenPluginCleanupFails(t *testing.T) {
+	t.Parallel()
+	runner := &recordingRunner{run: func(command legacyports.Command) legacyports.CommandResult {
+		return legacyports.CommandResult{ExitCode: 1, Stderr: []byte("config write failed")}
+	}}
+	request := codexDeactivationRequest(t)
+	request.Confirmed = true
+	outcome, err := (Activator{Runner: runner}).Deactivate(context.Background(), request)
+	if err == nil || !strings.Contains(err.Error(), "remove managed Codex plugin") {
+		t.Fatalf("outcome = %+v, error = %v", outcome, err)
+	}
+	if outcome.ExternalRemovalComplete {
+		t.Fatalf("failed cleanup claimed external completion: %+v", outcome)
+	}
+}
+
 func TestDeactivatorRetainsManagedCodexArtifactWhenMarketplaceCleanupFails(t *testing.T) {
 	t.Parallel()
 	runner := &recordingRunner{run: func(command legacyports.Command) legacyports.CommandResult {
+		if len(command.Argv) >= 3 && command.Argv[1] == "plugin" && command.Argv[2] == "remove" {
+			return legacyports.CommandResult{}
+		}
 		return legacyports.CommandResult{ExitCode: 1, Stderr: []byte("config write failed")}
 	}}
 	request := codexDeactivationRequest(t)
@@ -881,9 +1001,13 @@ func TestDeactivatorRetainsManagedCodexArtifactWhenCLIIsUnavailable(t *testing.T
 		t.Fatal(err)
 	}
 	marketplace := managedMarketplaceName(request.PhysicalArtifactID)
+	wantPluginRemove := fmt.Sprintf("codex plugin remove %s@%s --json", request.DeclaredName, marketplace)
+	wantMarketplaceRemove := fmt.Sprintf("codex plugin marketplace remove %s --json", marketplace)
 	if outcome.ArtifactRemovalAllowed || outcome.ExternalRemovalComplete || outcome.Activation != domain.ActivationManual ||
-		len(outcome.UserActions) != 1 || !strings.Contains(outcome.UserActions[0], marketplace) {
-		t.Fatalf("outcome = %+v", outcome)
+		len(outcome.UserActions) != 1 ||
+		!strings.Contains(outcome.UserActions[0], wantPluginRemove) ||
+		!strings.Contains(outcome.UserActions[0], wantMarketplaceRemove) {
+		t.Fatalf("outcome = %+v, want guidance containing both %q and %q", outcome, wantPluginRemove, wantMarketplaceRemove)
 	}
 }
 
@@ -1040,7 +1164,7 @@ func activationRequest(t *testing.T, client domain.ClientID) domain.ActivationRe
 		DeclaredName: "demo",
 		Plan: domain.DeliveryPlan{
 			ClientID: client, ActivePath: active, PhysicalArtifactID: "demo-0123456789ab",
-			Authentication: domain.AuthenticationNotChecked,
+			DeclaredVersion: "1.0.0", Authentication: domain.AuthenticationNotChecked,
 		},
 		Delivery: domain.StagedDelivery{ClientID: client, OwnedBase: base, ActivePath: active},
 	}

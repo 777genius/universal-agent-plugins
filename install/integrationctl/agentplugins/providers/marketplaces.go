@@ -21,11 +21,16 @@ func ManagedMarketplaceName(physicalArtifactID string) string {
 	return managedMarketplaceName(physicalArtifactID)
 }
 
-func projectCopilotMarketplace(root string, envelope domain.PackageEnvelope, plan domain.DeliveryPlan) error {
-	version := strings.TrimSpace(envelope.Manifest.Version)
+func copilotMarketplaceVersion(version string) string {
+	version = strings.TrimSpace(version)
 	if version == "" {
-		version = "0.0.0"
+		return "0.0.0"
 	}
+	return version
+}
+
+func projectCopilotMarketplace(root string, envelope domain.PackageEnvelope, plan domain.DeliveryPlan) error {
+	version := copilotMarketplaceVersion(envelope.Manifest.Version)
 	description := strings.TrimSpace(envelope.Manifest.Description)
 	if description == "" {
 		description = "Managed Agent Plugin " + envelope.Manifest.Name

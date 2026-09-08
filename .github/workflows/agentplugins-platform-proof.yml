@@ -12,7 +12,7 @@ on:
         required: true
         type: string
       allow_legacy_manifest:
-        description: Audit a schema-v1 historical release; never eligible as an npm publish gate
+        description: Audit a schema-v1 historical release; never eligible for the strict producer contract
         required: false
         default: false
         type: boolean
@@ -76,7 +76,7 @@ on:
         description: Filename of the exact tested npm tarball
         value: ${{ jobs.prepare.outputs.tarball_file }}
       gate_eligible:
-        description: Whether the release uses the strict publish-gate manifest
+        description: Whether the release uses the strict schema-v2 producer manifest
         value: ${{ jobs.prepare.outputs.gate_eligible }}
       bootstrap_mode:
         description: Exact cold-bootstrap evidence source used by native jobs
@@ -211,8 +211,12 @@ jobs:
           stage="${RUNNER_TEMP}/agentplugins-npm-${version}"
           mkdir -p "${stage}"
           cp -R release-source/npm/agentplugins/. "${stage}/"
+          git -C release-source diff --quiet HEAD -- \
+            docs/AGENTPLUGINS_CLIENT_E2E.md \
+            docs/evidence/agentplugins-client-e2e-2026-08-30.json
           node proof-tools/npm/agentplugins/scripts/stage-release.js \
-            "${stage}" "${assets}" "${version}" "${commit}" "${policy[@]}"
+            "${stage}" "${assets}" "${version}" "${commit}" "${policy[@]}" \
+            --evidence-root "${GITHUB_WORKSPACE}/release-source/docs"
           (cd "${stage}" && npm test && npm pack --dry-run --ignore-scripts)
           pack_json="$(cd "${stage}" && npm pack --ignore-scripts --json)"
           tarball_file="$(jq -er 'if length == 1 then .[0].filename else error("expected one npm tarball") end' <<<"${pack_json}")"
@@ -379,6 +383,6 @@ jobs:
                .proofs.synthetic_add_dry_run == true and
                .proofs.warm_cache == true and
                .proofs.warm_cache_without_proof_source == true and
-               .proofs.isolated_add_update_remove == $lifecycle' \
+               .proofs.isolated_add_info_update_remove == $lifecycle' \
               "${matches[0]}" >/dev/null
           done

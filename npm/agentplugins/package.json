@@ -2,23 +2,28 @@
   "name": "universal-agent-plugins",
   "version": "0.0.0-development",
   "description": "Universal community installer and lifecycle manager for Agent Plugins 1.0",
-  "license": "MIT",
-  "homepage": "https://github.com/777genius/plugin-kit-ai#install-agent-plugins-10",
+  "license": "Apache-2.0",
+  "homepage": "https://777genius.github.io/universal-agent-plugins/",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/777genius/plugin-kit-ai.git",
+    "url": "git+https://github.com/777genius/universal-agent-plugins.git",
     "directory": "npm/agentplugins"
   },
   "bugs": {
-    "url": "https://github.com/777genius/plugin-kit-ai/issues"
+    "url": "https://github.com/777genius/universal-agent-plugins/issues"
   },
   "keywords": [
     "agent-plugins",
     "universal-agent-plugins",
     "ai-agents",
+    "claude-code",
     "codex",
     "cursor",
     "copilot",
+    "gemini-cli",
+    "opencode",
+    "cline",
+    "windsurf",
     "kiro",
     "mcp"
   ],

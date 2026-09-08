@@ -29,6 +29,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/transaction"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/usecase"
 	legacyports "github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
+	"github.com/spf13/cobra"
 )
 
 func TestRepairSourceResolutionIsDeadlineAndCancellationResponsive(t *testing.T) {
@@ -72,7 +73,7 @@ func TestHelpKeepsAutomationConfirmationFlagOutOfUserFlow(t *testing.T) {
 	if strings.Contains(stdout, "--yes") {
 		t.Fatalf("user-facing help exposed the automation-only flag: %s", stdout)
 	}
-	if !strings.Contains(stdout, "codex, chatgpt, cursor") {
+	if !strings.Contains(stdout, "codex, chatgpt, cursor") || !strings.Contains(stdout, "claude, gemini") {
 		t.Fatalf("user-facing help omitted the distinct ChatGPT target: %s", stdout)
 	}
 }
@@ -915,6 +916,106 @@ func TestInteractiveAddDefaultsDetectedMultiselectToAll(t *testing.T) {
 	assertClientBindings(t, fixture, domain.MaterializationMaterialized, 1)
 }
 
+func TestInteractiveAddSkipsDetectedClientThatPackageCannotServe(t *testing.T) {
+	t.Parallel()
+	fixture := newCLIFixture(t, []domain.DetectedClient{
+		fixtureClient(t, domain.ClientChatGPT), fixtureClient(t, domain.ClientCursor),
+	})
+	plugin := writeCLIPlugin(t)
+	writeCLIMCP(t, plugin)
+	stdout, _, err := fixture.executeInput(true, "\n", "add", plugin, "--dry-run")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(stdout, "Skipped installed clients that this package cannot install together: chatgpt") {
+		t.Fatalf("package-aware interactive output = %q", stdout)
+	}
+	if strings.Contains(stdout, "Detected supported clients (all selected by default)") {
+		t.Fatalf("single compatible target unexpectedly prompted for multiple clients: %q", stdout)
+	}
+}
+
+func TestInteractiveAddSkipsDetectedClientThatCannotPassActivationPreflight(t *testing.T) {
+	t.Parallel()
+	kiro := fixtureClient(t, domain.ClientKiro)
+	kiro.ExecutablePath = "/test/bin/kiro-cli"
+	fixture := newCLIFixture(t, []domain.DetectedClient{
+		fixtureClient(t, domain.ClientCursor), kiro,
+	})
+	fixture.app.Lifecycle.Activator = providers.Activator{Runner: &cliRunOnlyRunner{}}
+	plugin := writeCLIPlugin(t)
+	writeCLIMCP(t, plugin)
+
+	stdout, _, err := fixture.executeInput(true, "\n", "add", plugin, "--dry-run")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(stdout, "Skipped installed clients that this package cannot install together: kiro") {
+		t.Fatalf("activation-aware interactive output = %q", stdout)
+	}
+	if strings.Contains(stdout, "Detected supported clients (all selected by default)") {
+		t.Fatalf("single preflight-capable target unexpectedly prompted for multiple clients: %q", stdout)
+	}
+	state, loadErr := fixture.store.Load()
+	if loadErr != nil {
+		t.Fatal(loadErr)
+	}
+	if len(state.Installations) != 0 {
+		t.Fatalf("interactive dry-run mutated state: %+v", state)
+	}
+}
+
+func TestInteractiveAddProbesOnlyTargetsSelectedAfterReadOnlyDetection(t *testing.T) {
+	clientCodex := fixtureClient(t, domain.ClientCodex)
+	clientCursor := fixtureClient(t, domain.ClientCursor)
+	detector := &observedProbingDetector{clients: []domain.DetectedClient{clientCursor, clientCodex}}
+	fixture := newCLIFixture(t, nil)
+	fixture.app.Detector = detector
+	command := &cobra.Command{}
+	command.SetIn(strings.NewReader("1\n"))
+	command.SetOut(io.Discard)
+	selection, clients, loaded, err := promptCompatibleDetectedTargets(context.Background(), command, fixture.app, writeCLIPlugin(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded == nil {
+		t.Fatal("direct package was not retained across interactive target selection")
+	}
+	if loaded.cleanup != nil {
+		defer loaded.cleanup()
+	}
+	targets, err := parseTargetOption(selection)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := detectSelectedTargetsForLifecycleResolution(context.Background(), detector, targets, clients, true); err != nil {
+		t.Fatal(err)
+	}
+	if detector.readOnlyCalls != 1 || detector.targetedCalls != 1 || detector.probeCalls != 0 {
+		t.Fatalf("interactive detection calls: read-only=%d targeted=%d ambient=%d", detector.readOnlyCalls, detector.targetedCalls, detector.probeCalls)
+	}
+	if !reflect.DeepEqual(detector.targets, []domain.ClientID{domain.ClientCodex}) {
+		t.Fatalf("version-probed targets = %#v", detector.targets)
+	}
+}
+
+func TestInteractiveAddIgnoresConfigOnlyClaudeButExplicitClaudeFailsClosed(t *testing.T) {
+	claude := fixtureClient(t, domain.ClientClaude)
+	claude.Status = domain.DetectionNotDetected
+	claude.ExecutablePath = ""
+	claude.Surfaces = []domain.ClientSurface{{ID: "claude_config", Detected: true, Evidence: "configuration_directory"}}
+	cursor := fixtureClient(t, domain.ClientCursor)
+	fixture := newCLIFixture(t, []domain.DetectedClient{claude, cursor})
+	plugin := writeCLIPlugin(t)
+	if _, _, err := fixture.executeInput(true, "", "add", plugin, "--dry-run"); err != nil {
+		t.Fatalf("actionable default target failed because of stale Claude config: %v", err)
+	}
+	_, _, err := fixture.execute(false, "add", plugin, "--target", "claude", "--dry-run")
+	if err == nil || !strings.Contains(err.Error(), `target "claude" was not detected`) || !strings.Contains(err.Error(), "no target was changed") {
+		t.Fatalf("explicit config-only Claude error = %v", err)
+	}
+}
+
 func TestCommaSeparatedTargetsRejectUnsafeValues(t *testing.T) {
 	t.Parallel()
 	for name, value := range map[string]string{
@@ -922,7 +1023,7 @@ func TestCommaSeparatedTargetsRejectUnsafeValues(t *testing.T) {
 		"duplicate":    "codex,cursor,codex",
 		"all":          "all",
 		"ambiguous":    "openai,cursor",
-		"unsupported":  "claude,cursor",
+		"unsupported":  "unknown-agent,cursor",
 		"legacy_mixed": "legacy-all,cursor",
 	} {
 		name, value := name, value
@@ -2316,7 +2417,7 @@ func TestOfficialHooksFailClosedBeforeDryRunOrMutation(t *testing.T) {
 	}
 }
 
-func TestImplicitPortableHooksFailClosedBeforeDryRunOrMutation(t *testing.T) {
+func TestImplicitPortableHooksAreIgnoredAndNotStaged(t *testing.T) {
 	t.Parallel()
 	fixture := newCLIFixture(t, []domain.DetectedClient{{ClientID: domain.ClientChatGPT, DisplayName: "ChatGPT", Status: domain.DetectionNotDetected}})
 	plugin := writeCLIPlugin(t)
@@ -2326,20 +2427,29 @@ func TestImplicitPortableHooksFailClosedBeforeDryRunOrMutation(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(plugin, "hooks", "hooks.json"), []byte(`{}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := fixture.execute(false, "add", plugin, "--target", "chatgpt", "--dry-run", "--format", "json"); err == nil {
-		t.Fatal("implicit hook dry-run succeeded")
-	} else {
-		var loadErr *domain.LoadError
-		if !errors.As(err, &loadErr) || loadErr.Diagnostic.Code != "official_hooks_unsupported" || !strings.Contains(err.Error(), "remove the hooks directory") {
-			t.Fatalf("implicit hook dry-run error = %v", err)
-		}
+	if _, _, err := fixture.execute(false, "add", plugin, "--target", "chatgpt", "--dry-run", "--format", "json"); err != nil {
+		t.Fatalf("portable package with unsupported root directory failed validation: %v", err)
 	}
 	state, err := fixture.store.Load()
 	if err != nil || len(state.Installations) != 0 {
-		t.Fatalf("implicit hook dry-run mutated state: %+v, %v", state, err)
+		t.Fatalf("dry-run mutated state: %+v, %v", state, err)
 	}
 	if _, err := os.Stat(fixture.app.ManagedRoot); !os.IsNotExist(err) {
-		t.Fatalf("implicit hook dry-run mutated managed filesystem: %v", err)
+		t.Fatalf("dry-run mutated managed filesystem: %v", err)
+	}
+	if _, _, err := fixture.execute(false, "add", plugin, "--target", "chatgpt"); err != nil {
+		t.Fatalf("install portable package with ignored hooks: %v", err)
+	}
+	state, err = fixture.store.Load()
+	if err != nil || len(state.Installations) != 1 {
+		t.Fatalf("installed state = %+v, %v", state, err)
+	}
+	installed := onlyCLIClient(state.Installations[0]).TargetLocator
+	if _, err := os.Lstat(filepath.Join(installed, "hooks")); !os.IsNotExist(err) {
+		t.Fatalf("unsupported hooks survived staging: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(plugin, "hooks", "hooks.json")); err != nil {
+		t.Fatalf("source package was mutated: %v", err)
 	}
 }
 
@@ -2800,13 +2910,18 @@ func (alwaysErrorWriter) Write([]byte) (int, error) {
 }
 
 type countingSourceAcquirer struct {
-	delegate SourceAcquirer
-	calls    int
+	delegate       SourceAcquirer
+	calls          int
+	discoveryCalls int
 }
 
 func (a *countingSourceAcquirer) AcquireLocal(ctx context.Context, path string) (domain.PackageSnapshot, error) {
 	a.calls++
 	return a.delegate.AcquireLocal(ctx, path)
+}
+func (a *countingSourceAcquirer) DiscoverGitHubPackages(ctx context.Context, repo, revision string) ([]string, error) {
+	a.discoveryCalls++
+	return a.delegate.DiscoverGitHubPackages(ctx, repo, revision)
 }
 func (a *countingSourceAcquirer) AcquireGitHub(ctx context.Context, repo, revision, path string) (domain.PackageSnapshot, error) {
 	a.calls++

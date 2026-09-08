@@ -11,6 +11,7 @@ import (
 	"path"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -30,16 +31,18 @@ var (
 	commitPattern     = regexp.MustCompile(`^[0-9a-f]{40}$`)
 	digestPattern     = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
 	namePattern       = regexp.MustCompile(`^[a-z0-9][a-z0-9.-]{0,63}$`)
-	appAliasPattern   = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*$`)
-	appIDPattern      = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._~:-]{0,255}$`)
 )
 
-var requiredCompatibility = map[string]string{
-	string(domain.ClientCodex):   "projected",
-	string(domain.ClientCursor):  "native",
-	string(domain.ClientCopilot): "native",
-	string(domain.ClientVSCode):  "prepared",
-	string(domain.ClientKiro):    "native",
+var requiredCompatibility = legacyRequiredCompatibility()
+
+func legacyRequiredCompatibility() map[string]string {
+	result := map[string]string{}
+	for _, definition := range domain.ClientDefinitions() {
+		if definition.LegacyCatalogRequired {
+			result[string(definition.ID)] = definition.CatalogPackage
+		}
+	}
+	return result
 }
 
 type Loader struct {
@@ -185,16 +188,13 @@ func validatePlugin(plugin domain.CatalogPlugin, schemaVersion int) error {
 		}
 	}
 	var authentication domain.AuthenticationRequirement
-	for client, expectedPackage := range requiredCompatibility {
-		compatibility, ok := plugin.Compatibility[client]
-		if !ok {
-			return fmt.Errorf("plugin %q compatibility is missing %q", plugin.Name, client)
-		}
-		if compatibility.Package != expectedPackage ||
+	for client, compatibility := range plugin.Compatibility {
+		definition, _ := domain.ClientDefinitionFor(domain.ClientID(client))
+		if compatibility.Package != definition.CatalogPackage ||
 			!validVerificationCompatibility(compatibility.Verification) || !validAuthCompatibility(compatibility.Authentication) {
 			return fmt.Errorf("plugin %q has invalid compatibility for %q", plugin.Name, client)
 		}
-		if compatibility.AppBinding != nil {
+		if definition.ID != domain.ClientChatGPT && compatibility.AppBinding != nil {
 			return fmt.Errorf("plugin %q app_binding is allowed only for chatgpt", plugin.Name)
 		}
 		if authentication == "" {
@@ -203,13 +203,12 @@ func validatePlugin(plugin domain.CatalogPlugin, schemaVersion int) error {
 			return fmt.Errorf("plugin %q must use one consistent authentication requirement for every client", plugin.Name)
 		}
 	}
+	for client := range requiredCompatibility {
+		if _, ok := plugin.Compatibility[client]; !ok {
+			return fmt.Errorf("plugin %q compatibility is missing %q", plugin.Name, client)
+		}
+	}
 	if compatibility, ok := plugin.Compatibility[string(domain.ClientChatGPT)]; ok {
-		if compatibility.Package != "projected" || !validVerificationCompatibility(compatibility.Verification) || !validAuthCompatibility(compatibility.Authentication) {
-			return fmt.Errorf("plugin %q has invalid compatibility for chatgpt", plugin.Name)
-		}
-		if authentication != "" && compatibility.Authentication != authentication {
-			return fmt.Errorf("plugin %q must use one consistent authentication requirement for every client", plugin.Name)
-		}
 		_, hasMCP := components["mcp"]
 		if hasMCP && compatibility.AppBinding == nil {
 			return fmt.Errorf("plugin %q ChatGPT MCP compatibility requires app_binding", plugin.Name)
@@ -229,24 +228,33 @@ func validatePlugin(plugin domain.CatalogPlugin, schemaVersion int) error {
 }
 
 func ValidateAppBinding(binding domain.CatalogAppBinding) error {
-	if !appAliasPattern.MatchString(binding.AppKey) || !appAliasPattern.MatchString(binding.MCPServer) {
-		return fmt.Errorf("app_key and mcp_server must be safe aliases")
-	}
-	if binding.AppKey != binding.MCPServer {
-		return fmt.Errorf("app_key must equal mcp_server in v0.1")
-	}
-	if !appIDPattern.MatchString(binding.ID) {
-		return fmt.Errorf("id must be a non-empty opaque safe ASCII token")
-	}
-	parsed, err := url.Parse(binding.MCPURL)
-	if err != nil || parsed.Scheme != "https" || parsed.Host == "" || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" || parsed.String() != binding.MCPURL {
-		return fmt.Errorf("mcp_url must be a normalized absolute HTTPS URL without userinfo, query, or fragment")
+	if err := ValidateAppBindingReference(binding); err != nil {
+		return err
 	}
 	if err := validateSourcePath(binding.RuntimeEvidence); err != nil {
 		return fmt.Errorf("runtime_evidence: %w", err)
 	}
 	if !commitPattern.MatchString(binding.RuntimeEvidenceRevision) {
 		return fmt.Errorf("runtime_evidence_revision must be an exact lowercase Git commit")
+	}
+	return nil
+}
+
+// ValidateAppBindingReference validates the common registered-app identity
+// and URL contract without requiring legacy Catalog v2 runtime evidence.
+func ValidateAppBindingReference(binding domain.CatalogAppBinding) error {
+	if err := domain.ValidateAppBindingIdentity(binding.AppKey, binding.ID, binding.MCPServer); err != nil {
+		return err
+	}
+	parsed, err := url.Parse(binding.MCPURL)
+	if err != nil || parsed.Scheme != "https" || parsed.Host == "" || parsed.Hostname() == "" || strings.HasSuffix(parsed.Host, ":") || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" || parsed.String() != binding.MCPURL {
+		return fmt.Errorf("mcp_url must be a normalized absolute HTTPS URL without userinfo, query, or fragment")
+	}
+	if port := parsed.Port(); port != "" {
+		value, err := strconv.Atoi(port)
+		if err != nil || value < 1 || value > 65535 {
+			return fmt.Errorf("mcp_url port must be numeric and between 1 and 65535")
+		}
 	}
 	return nil
 }

@@ -3,269 +3,56 @@ package loader
 import (
 	"encoding/json"
 	"fmt"
-	"os"
-	"path"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/conformance"
 	"path/filepath"
 	"sort"
 	"strings"
 
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/pathpolicy"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/pathcontract"
 )
 
-func (loader Loader) loadMCP(filename, pluginSchema string, executableFiles []string) (domain.MCPComponent, []domain.Diagnostic) {
+func (loader Loader) loadMCP(filename, pluginSchema string) (domain.MCPComponent, []domain.Diagnostic) {
 	body, exists, err := readRegularFile(filename)
 	if !exists {
 		return domain.MCPComponent{}, nil
-	}
-	component := domain.MCPComponent{
-		Present:       true,
-		Raw:           append(json.RawMessage(nil), body...),
-		Servers:       map[string]domain.MCPServer{},
-		InvalidServer: map[string]domain.Diagnostic{},
-	}
+	} // Preserve AUD-009 installer disposition.
 	if err != nil {
-		return component, []domain.Diagnostic{mcpDiagnostic("mcp_read_failed", "read root mcp.json", err)}
+		return domain.MCPComponent{Present: true, Raw: append(json.RawMessage(nil), body...), Servers: map[string]domain.MCPServer{}, InvalidServer: map[string]domain.Diagnostic{}}, []domain.Diagnostic{mcpDiagnostic("mcp_read_failed", "read root mcp.json", err)}
 	}
-	rawFields, decoded, err := decodeJSONObject(body)
-	if err != nil {
-		return component, []domain.Diagnostic{mcpDiagnostic("mcp_malformed", "parse root mcp.json", err)}
-	}
-	schemaURI, ok := decoded["$schema"].(string)
-	if !ok || strings.TrimSpace(schemaURI) == "" {
-		return component, []domain.Diagnostic{mcpDiagnostic("mcp_schema_missing", "mcp.json requires a string $schema", nil)}
-	}
-	component.SchemaURI = schemaURI
-	if schemaVersion(schemaURI) != schemaVersion(pluginSchema) {
-		return component, []domain.Diagnostic{mcpDiagnostic("mcp_schema_mismatch", fmt.Sprintf("mcp.json schema %q does not match plugin.json schema version %q", schemaURI, pluginSchema), nil)}
-	}
-	if schemaURI != domain.MCPSchemaV1 || !loader.Registry.Supports(schemaURI) {
-		return component, []domain.Diagnostic{mcpDiagnostic("mcp_schema_unsupported", fmt.Sprintf("unsupported Agent Plugins MCP schema %q", schemaURI), nil)}
-	}
-	serversRaw, ok := rawFields["mcpServers"]
-	if !ok {
-		return component, []domain.Diagnostic{mcpDiagnostic("mcp_servers_missing", "mcp.json requires mcpServers", nil)}
-	}
-	var serverDocuments map[string]json.RawMessage
-	if err := decodeRawJSONObject(serversRaw, &serverDocuments); err != nil || serverDocuments == nil {
-		return component, []domain.Diagnostic{mcpDiagnostic("mcp_servers_invalid", "mcpServers must be a JSON object", err)}
-	}
-	topLevel := make(map[string]any, len(decoded))
-	for key, value := range decoded {
-		topLevel[key] = value
-	}
-	topLevel["mcpServers"] = map[string]any{}
-	if err := loader.Registry.Validate(schemaURI, topLevel); err != nil {
-		return component, []domain.Diagnostic{mcpDiagnostic("mcp_schema_invalid", "mcp.json top-level document does not conform to Agent Plugins 1.0", err)}
-	}
-
-	component.Enabled = true
-	names := make([]string, 0, len(serverDocuments))
-	for name := range serverDocuments {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-	var diagnostics []domain.Diagnostic
-	for _, name := range names {
-		raw := serverDocuments[name]
-		var decodedServer map[string]any
-		decodeErr := decodeJSON(raw, &decodedServer)
-		if decodeErr == nil && decodedServer == nil {
-			decodeErr = fmt.Errorf("server config must be a JSON object")
-		}
-		if decodeErr == nil {
-			document := map[string]any{
-				"$schema":    schemaURI,
-				"mcpServers": map[string]any{name: decodedServer},
-			}
-			decodeErr = loader.Registry.Validate(schemaURI, document)
-		}
-		var requirement *domain.StdioRequirement
-		if decodeErr == nil {
-			typeName, _ := decodedServer["type"].(string)
-			if typeName == "stdio" {
-				requirement, decodeErr = validateStdioServer(filepath.Dir(filename), decodedServer, executableFiles)
-			}
-		}
-		if decodeErr != nil {
-			diagnostic := domain.Diagnostic{
-				Severity: domain.SeverityError,
-				Boundary: domain.BoundaryMCPServer,
-				Code:     "mcp_server_invalid",
-				Path:     "mcp.json",
-				Item:     name,
-				Message:  fmt.Sprintf("MCP server %q was skipped because its configuration is invalid: %v", name, decodeErr),
-			}
-			component.InvalidServer[name] = diagnostic
-			diagnostics = append(diagnostics, diagnostic)
-			continue
-		}
-		typeName, _ := decodedServer["type"].(string)
-		component.Servers[name] = domain.MCPServer{
-			Name:             name,
-			Type:             typeName,
-			Raw:              append(json.RawMessage(nil), raw...),
-			Decoded:          decodedServer,
-			StdioRequirement: requirement,
-		}
-	}
-	return component, diagnostics
+	return (conformance.InstallerDecoder{Registry: loader.Registry}).MCP(body, pluginSchema, func(config map[string]any) (*domain.StdioRequirement, error) {
+		return validateStdioServer(filepath.Dir(filename), config)
+	})
 }
 
-func schemaVersion(uri string) string {
-	const marker = "/schemas/"
-	index := strings.Index(uri, marker)
-	if index < 0 {
-		return ""
-	}
-	remainder := uri[index+len(marker):]
-	if slash := strings.IndexByte(remainder, '/'); slash >= 0 {
-		return remainder[:slash]
-	}
-	return ""
-}
-
-func validateStdioServer(root string, config map[string]any, executableFiles []string) (*domain.StdioRequirement, error) {
-	command, _ := config["command"].(string)
-	if command == "" {
-		return nil, fmt.Errorf("stdio command must be a non-empty executable token")
-	}
-	requirement := &domain.StdioRequirement{Command: command, Kind: domain.ExecutableBare}
-	if strings.ContainsAny(command, `/\\`) {
+func validateStdioServer(root string, config map[string]any) (*domain.StdioRequirement, error) {
+	return conformance.ParseStdio(config, func(command string) (string, error) {
 		relative, err := bundledCommandPath(command)
 		if err != nil {
-			return nil, err
+			return "", err
 		}
-		candidate := filepath.Join(root, filepath.FromSlash(relative))
-		resolved, err := filepath.EvalSymlinks(candidate)
+		observed := pathcontract.Resolve(root, relative)
+		if observed.State == pathcontract.Invalid {
+			return "", observed.Err
+		}
+		return relative, nil
+	}, func(value string) error {
+		parsed, err := pathcontract.ParseCWD(value)
 		if err != nil {
-			return nil, fmt.Errorf("resolve bundled stdio command %q: %w", command, err)
+			return err
 		}
-		contained, err := filepath.Rel(root, resolved)
-		if err != nil || contained == ".." || filepath.IsAbs(contained) || strings.HasPrefix(contained, ".."+string(filepath.Separator)) {
-			return nil, fmt.Errorf("bundled stdio command %q resolves outside the plugin root", command)
-		}
-		info, err := os.Stat(resolved)
-		if err != nil || !info.Mode().IsRegular() {
-			return nil, fmt.Errorf("bundled stdio command %q must name a regular file in the plugin root", command)
-		}
-		resolvedRelative, err := filepath.Rel(root, resolved)
-		if err != nil {
-			return nil, fmt.Errorf("resolve bundled stdio command %q relative to the plugin root: %w", command, err)
-		}
-		resolvedRelative = filepath.ToSlash(resolvedRelative)
-		executable := false
-		for _, item := range executableFiles {
-			if item == relative || item == resolvedRelative {
-				executable = true
-				break
-			}
-		}
-		if !executable {
-			return nil, fmt.Errorf("bundled stdio command %q is not marked executable", command)
-		}
-		requirement.Kind, requirement.BundledRelativePath = domain.ExecutableBundled, relative
-	}
-	values := []string{}
-	if args, ok := config["args"].([]any); ok {
-		for _, value := range args {
-			if text, ok := value.(string); ok {
-				values = append(values, text)
-			}
-		}
-	}
-	if env, ok := config["env"].(map[string]any); ok {
-		if _, reserved := env["PLUGIN_ROOT"]; reserved {
-			return nil, fmt.Errorf("stdio server must not define reserved environment variable PLUGIN_ROOT")
-		}
-		if _, reserved := env["PLUGIN_DATA"]; reserved {
-			return nil, fmt.Errorf("stdio server must not define reserved environment variable PLUGIN_DATA")
-		}
-		for _, value := range env {
-			if text, ok := value.(string); ok {
-				values = append(values, text)
-			}
-		}
-	}
-	if cwd, ok := config["cwd"].(string); ok {
-		if err := validateCWD(cwd); err != nil {
-			return nil, err
-		}
-		values = append(values, cwd)
-	}
-	for _, value := range values {
-		if err := validateReservedPlaceholders(value); err != nil {
-			return nil, err
-		}
-		if strings.Contains(value, "${PLUGIN_ROOT}") {
-			requirement.UsesPluginRoot = true
-		}
-		if strings.Contains(value, "${PLUGIN_DATA}") {
-			requirement.UsesPluginData = true
-		}
-	}
-	return requirement, nil
-}
-
-func bundledCommandPath(command string) (string, error) {
-	if !strings.HasPrefix(command, "./") || strings.Contains(command, `\\`) {
-		return "", fmt.Errorf("bundled stdio command %q must be a ./-prefixed plugin-relative path", command)
-	}
-	relative := strings.TrimPrefix(command, "./")
-	if relative == "" || path.Clean(relative) != relative || strings.HasPrefix(relative, "../") {
-		return "", fmt.Errorf("bundled stdio command %q escapes the plugin root", command)
-	}
-	for _, segment := range strings.Split(relative, "/") {
-		if err := pathpolicy.ValidatePortablePathSegment(segment); err != nil {
-			return "", fmt.Errorf("bundled stdio command %q contains a non-portable path segment: %w", command, err)
-		}
-	}
-	return relative, nil
-}
-
-func validateCWD(value string) error {
-	var suffix string
-	switch {
-	case strings.HasPrefix(value, "./"):
-		suffix = strings.TrimPrefix(value, "./")
-	case value == "${PLUGIN_ROOT}" || value == "${PLUGIN_DATA}":
-		return nil
-	case strings.HasPrefix(value, "${PLUGIN_ROOT}/"):
-		suffix = strings.TrimPrefix(value, "${PLUGIN_ROOT}/")
-	case strings.HasPrefix(value, "${PLUGIN_DATA}/"):
-		suffix = strings.TrimPrefix(value, "${PLUGIN_DATA}/")
-	default:
-		return fmt.Errorf("stdio cwd must be ./-, PLUGIN_ROOT-, or PLUGIN_DATA-rooted")
-	}
-	if suffix == "" || path.IsAbs(suffix) || strings.Contains(suffix, `\\`) || strings.Contains(suffix, "${PLUGIN_") || path.Clean(suffix) != suffix || strings.HasPrefix(suffix, "../") {
-		return fmt.Errorf("stdio cwd escapes its declared root")
-	}
-	for _, segment := range strings.Split(suffix, "/") {
-		if err := pathpolicy.ValidatePortablePathSegment(segment); err != nil {
-			return fmt.Errorf("stdio cwd contains a non-portable path segment: %w", err)
-		}
-	}
-	return nil
-}
-
-func validateReservedPlaceholders(value string) error {
-	for offset := 0; ; {
-		index := strings.Index(value[offset:], "${PLUGIN_")
-		if index < 0 {
+		if parsed.Anchor == pathcontract.Data {
 			return nil
 		}
-		index += offset
-		end := strings.IndexByte(value[index:], '}')
-		if end < 0 {
-			return fmt.Errorf("unterminated reserved PLUGIN placeholder")
+		observed := pathcontract.Resolve(root, parsed.Relative)
+		if observed.State == pathcontract.Invalid {
+			return observed.Err
 		}
-		placeholder := value[index : index+end+1]
-		if placeholder != "${PLUGIN_ROOT}" && placeholder != "${PLUGIN_DATA}" {
-			return fmt.Errorf("unsupported reserved placeholder %q", placeholder)
-		}
-		offset = index + end + 1
-	}
+		return nil
+	})
 }
+func bundledCommandPath(command string) (string, error) { return pathcontract.ParseCommand(command) }
+func validateCWD(value string) error                    { _, err := pathcontract.ParseCWD(value); return err }
 
 func (loader Loader) loadOpenAIMCP(path string, declared bool) (domain.MCPComponent, []domain.Diagnostic) {
 	body, exists, err := readRegularFile(path)

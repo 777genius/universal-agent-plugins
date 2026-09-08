@@ -13,7 +13,6 @@ import (
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/catalog"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/directoryv1"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/discoveryv1"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/packagedigest"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	clientplanner "github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/planner"
@@ -24,8 +23,12 @@ var (
 	exactGitPattern  = regexp.MustCompile(`^(?:github:)?([A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9][A-Za-z0-9._-]*)@([0-9a-f]{40})(?://(.+))?$`)
 )
 
+const maxAutodiscoveryPackageCandidates = 16
+
 type loadedPackage struct {
 	envelope              domain.PackageEnvelope
+	security              *domain.SecurityAssessment
+	securityAuthorized    bool
 	hints                 domain.CompatibilityHints
 	origin                domain.OriginMode
 	directory             *domain.DirectoryOrigin
@@ -268,21 +271,9 @@ func (app App) acquireDiscovery(ctx context.Context, selector string, request pa
 	if err != nil {
 		return loadedPackage{}, fmt.Errorf("load signed Discovery Index: %w", err)
 	}
-	var matches []discoveryv1.Record
-	for _, record := range bundle.Search.Records {
-		if record.Slug == selector {
-			matches = append(matches, record)
-		}
-	}
-	if len(matches) != 1 {
-		if len(matches) == 0 {
-			return loadedPackage{}, fmt.Errorf("discovery package %q was not found", selector)
-		}
-		return loadedPackage{}, fmt.Errorf("discovery package %q is ambiguous", selector)
-	}
-	record := matches[0]
-	if record.Availability != "available" {
-		return loadedPackage{}, fmt.Errorf("discovery package %q is unavailable and cannot be newly acquired", selector)
+	record, err := resolveDiscoveryRecord(bundle, selector)
+	if err != nil {
+		return loadedPackage{}, err
 	}
 	for _, target := range request.Targets {
 		compatible := false
@@ -340,6 +331,21 @@ func (app App) acquireGitHub(ctx context.Context, requested, repository, revisio
 	if app.SourceAcquirer == nil {
 		return loadedPackage{}, fmt.Errorf("package source acquirer is unavailable")
 	}
+	if subpath == "" && expectedDigest == "" {
+		loaded, err := app.acquireAutodiscoveredGitHub(ctx, requested, repository, revision)
+		if err == nil {
+			app.warnDirectRevocation(loaded.envelope.TreeDigest)
+		}
+		return loaded, err
+	}
+	loaded, err := app.acquireGitHubPath(ctx, requested, repository, revision, subpath, expectedDigest)
+	if err == nil {
+		app.warnDirectRevocation(loaded.envelope.TreeDigest)
+	}
+	return loaded, err
+}
+
+func (app App) acquireGitHubPath(ctx context.Context, requested, repository, revision, subpath, expectedDigest string) (loadedPackage, error) {
 	var snapshot domain.PackageSnapshot
 	var err error
 	if expectedDigest == "" {
@@ -358,10 +364,74 @@ func (app App) acquireGitHub(ctx context.Context, requested, repository, revisio
 		}
 	}
 	loaded, err := app.loadSnapshot(ctx, snapshot, domain.OriginModeDirect, nil, nil)
-	if err == nil {
-		app.warnDirectRevocation(snapshot.TreeDigest)
-	}
 	return loaded, err
+}
+
+func (app App) acquireAutodiscoveredGitHub(ctx context.Context, requested, repository, revision string) (loadedPackage, error) {
+	paths, err := app.SourceAcquirer.DiscoverGitHubPackages(ctx, repository, revision)
+	if err != nil {
+		return loadedPackage{}, err
+	}
+	// Each candidate requires an independently sealed package snapshot before
+	// the loader can decide whether it is valid. Bound that work so a pathless
+	// source cannot turn one user action into an unbounded number of fetches.
+	if len(paths) > maxAutodiscoveryPackageCandidates {
+		return loadedPackage{}, fmt.Errorf("Found %d package candidates. Choose one explicitly with //path", len(paths))
+	}
+	// Root plugin.json has precedence. An empty candidate set preserves support
+	// for repository-root native packages such as .codex-plugin/plugin.json.
+	if len(paths) == 0 || (len(paths) == 1 && paths[0] == "") {
+		return app.acquireGitHubPath(ctx, requested, repository, revision, "", "")
+	}
+
+	type candidate struct {
+		path   string
+		loaded loadedPackage
+	}
+	valid := make([]candidate, 0, len(paths))
+	var firstFailure error
+	for _, packagePath := range paths {
+		explicitSource := repository + "@" + revision + "//" + packagePath
+		loaded, loadErr := app.acquireGitHubPath(ctx, explicitSource, repository, revision, packagePath, "")
+		if loadErr != nil {
+			var invalidPackage *domain.LoadError
+			if !errors.As(loadErr, &invalidPackage) {
+				for _, item := range valid {
+					_ = item.loaded.cleanup()
+				}
+				return loadedPackage{}, loadErr
+			}
+			if firstFailure == nil {
+				firstFailure = loadErr
+			}
+			continue
+		}
+		// Preserve what the user typed for update/replay while canonical identity,
+		// state, and digests remain bound to the selected package root.
+		loaded.envelope.Source.RequestedSource = requested
+		valid = append(valid, candidate{path: packagePath, loaded: loaded})
+	}
+	if len(valid) == 1 {
+		return valid[0].loaded, nil
+	}
+	for _, item := range valid {
+		_ = item.loaded.cleanup()
+	}
+	if len(valid) == 0 {
+		listed := make([]string, 0, len(paths))
+		for _, packagePath := range paths {
+			listed = append(listed, "//"+packagePath)
+		}
+		if firstFailure != nil {
+			return loadedPackage{}, fmt.Errorf("no valid Agent Plugins package found among %s: %w", strings.Join(listed, ", "), firstFailure)
+		}
+		return loadedPackage{}, fmt.Errorf("no valid Agent Plugins package found among %s", strings.Join(listed, ", "))
+	}
+	listed := make([]string, 0, len(valid))
+	for _, item := range valid {
+		listed = append(listed, "//"+item.path)
+	}
+	return loadedPackage{}, fmt.Errorf("Found packages: %s. Choose one explicitly", strings.Join(listed, ", "))
 }
 
 func (app App) warnDirectRevocation(treeDigest string) {
@@ -493,7 +563,26 @@ func (app App) loadSnapshot(ctx context.Context, snapshot domain.PackageSnapshot
 	if envelope.TreeDigest != snapshot.TreeDigest {
 		return fail(fmt.Errorf("loader changed the acquired immutable package digest"))
 	}
-	return loadedPackage{envelope: envelope, origin: origin, directory: cloneDirectoryOrigin(directory), directorySelection: cloneDirectorySelection(selection), cleanup: func() error { return packagedigest.Remove(snapshot) }}, nil
+	var assessment *domain.SecurityAssessment
+	if app.SecurityEvaluator != nil && envelope.FormatID == domain.FormatIDAgentPluginsV1 {
+		var trusted *domain.SecurityAssessment
+		if app.SecurityIndex != nil {
+			// The signed index is an optimization, not an availability dependency.
+			// Any fetch, signature, expiry, version, or subject mismatch falls back
+			// to the pinned local scanner before mutation.
+			trusted, _ = app.SecurityIndex.Lookup(ctx, domain.SecuritySubject{
+				TreeDigest: envelope.TreeDigest, ManifestDigest: envelope.ManifestDigest,
+			})
+		}
+		result, securityErr := app.SecurityEvaluator.Evaluate(ctx, domain.SecurityEvaluationInput{
+			SnapshotRoot: snapshot.Root, TreeDigest: envelope.TreeDigest, ManifestDigest: envelope.ManifestDigest, Trusted: trusted,
+		})
+		if securityErr != nil {
+			return fail(fmt.Errorf("security assessment failed before installation: %w", securityErr))
+		}
+		assessment = &result
+	}
+	return loadedPackage{envelope: envelope, security: assessment, origin: origin, directory: cloneDirectoryOrigin(directory), directorySelection: cloneDirectorySelection(selection), cleanup: func() error { return packagedigest.Remove(snapshot) }}, nil
 }
 
 // loadAcquiredSnapshot selects a manifest format from the immutable snapshot.
@@ -598,11 +687,19 @@ func applyDirectoryCompatibility(loaded *loadedPackage, bundle directoryv1.Verif
 		}
 		entry := domain.CatalogCompatibility{Package: packageMode, Verification: directoryVerification(applicable), Authentication: target.Authentication, Evidence: applicable, EvidenceOutcomes: directoryEvidenceOutcomes(applicable)}
 		if target.AppBinding != nil {
-			mcpURL := ""
-			if server, ok := loaded.envelope.MCP.Servers[target.AppBinding.MCPServer]; ok {
-				mcpURL, _ = server.Decoded["url"].(string)
+			server, ok := loaded.envelope.MCP.Servers[target.AppBinding.MCPServer]
+			if !ok || !loaded.envelope.MCP.Enabled {
+				return fmt.Errorf("signed Directory ChatGPT app binding references missing MCP server %q", target.AppBinding.MCPServer)
 			}
-			entry.AppBinding = &domain.CatalogAppBinding{AppKey: target.AppBinding.AppKey, ID: target.AppBinding.ID, MCPServer: target.AppBinding.MCPServer, MCPURL: mcpURL}
+			mcpURL, ok := server.Decoded["url"].(string)
+			if !ok {
+				return fmt.Errorf("signed Directory ChatGPT app binding MCP server %q has no remote URL", target.AppBinding.MCPServer)
+			}
+			binding := domain.CatalogAppBinding{AppKey: target.AppBinding.AppKey, ID: target.AppBinding.ID, MCPServer: target.AppBinding.MCPServer, MCPURL: mcpURL}
+			if err := catalog.ValidateAppBindingReference(binding); err != nil {
+				return fmt.Errorf("signed Directory ChatGPT app binding is invalid: %w", err)
+			}
+			entry.AppBinding = &binding
 		}
 		compatibility[string(target.Client)] = entry
 	}
@@ -782,7 +879,11 @@ func prepareLoadedPackageForClient(loaded *loadedPackage, clientID domain.Client
 		return nil
 	}
 	binding := *compatibility.AppBinding
-	if err := catalog.ValidateAppBinding(binding); err != nil {
+	validateBinding := catalog.ValidateAppBinding
+	if loaded.origin == domain.OriginModeDirectory {
+		validateBinding = catalog.ValidateAppBindingReference
+	}
+	if err := validateBinding(binding); err != nil {
 		return fmt.Errorf("Directory ChatGPT app binding is invalid: %w", err)
 	}
 	server, ok := loaded.envelope.MCP.Servers[binding.MCPServer]

@@ -9,14 +9,131 @@ const test = require("node:test");
 
 const script = path.resolve(__dirname, "..", "scripts", "platform-proof.js");
 const {
+  assertAssetManifest,
+  assertContext7Search,
+  assertInstalledShimInvocation,
   assertPublicJSONPathFree,
+  assertSyntheticInfo,
   frozenReleaseAsset,
+  installedShimInvocation,
   lifecycleCommands,
   lifecycleResult,
   npmInvocation,
   parseBootstrapMode,
   parseLifecycle
 } = require(script);
+
+test("platform proof binds assets.json producer commit in staged and public modes", () => {
+  const version = "1.2.3";
+  const commit = "a".repeat(40);
+  const manifest = {
+    schema_version: 2,
+    version,
+    npm_package: "universal-agent-plugins",
+    repository: "777genius/plugin-kit-ai",
+    tag: `agentplugins-v${version}`,
+    producer: {
+      repository: "777genius/plugin-kit-ai",
+      tag: `agentplugins-v${version}`,
+      commit
+    },
+    assets: { "linux-amd64": { file: "agentplugins", size: 1, sha256: "0".repeat(64) } }
+  };
+  assert.equal(assertAssetManifest(manifest, version, commit, "linux-amd64"), manifest.assets["linux-amd64"]);
+  for (const mutate of [
+    (value) => { value.producer.commit = "b".repeat(40); },
+    (value) => { value.producer.tag = "agentplugins-v9.9.9"; },
+    (value) => { value.producer.repository = "lookalike/repository"; },
+    (value) => { delete value.producer; }
+  ]) {
+    const invalid = structuredClone(manifest);
+    mutate(invalid);
+    assert.throws(() => assertAssetManifest(invalid, version, commit, "linux-amd64"), /expected commit/);
+  }
+});
+
+test("platform proof invokes the installed npm shim and rejects direct bin bypass", () => {
+  const project = path.join(os.tmpdir(), "proof project");
+  const posix = installedShimInvocation(project, ["version"], "linux");
+  assert.equal(posix.command, path.join(project, "node_modules", ".bin", "agentplugins"));
+  assert.equal(posix.shell, false);
+  assert.doesNotThrow(() => assertInstalledShimInvocation(posix, project, "linux"));
+
+  const windows = installedShimInvocation(project, ["version"], "win32");
+  assert.equal(windows.command, path.join(project, "node_modules", ".bin", "agentplugins.cmd"));
+  assert.equal(windows.shell, true);
+  assert.doesNotThrow(() => assertInstalledShimInvocation(windows, project, "win32"));
+
+  assert.throws(() => assertInstalledShimInvocation({
+    command: process.execPath,
+    args: [path.join(project, "node_modules", "universal-agent-plugins", "bin", "agentplugins.js")],
+    shell: false
+  }, project, process.platform), /must execute the installed npm agentplugins shim/);
+});
+
+test("platform proof requires the reviewed upstream context7 distribution in search results", () => {
+  const valid = {
+    schema_version: 1,
+    command: "search",
+    result: "success",
+    data: {
+      results: [
+        { product_id: "other", distribution_id: "owner/other" },
+        {
+          product_id: "context7",
+          install_selector: "context7",
+          distribution_id: "upstash/context7",
+          distribution_kind: "upstream",
+          trust_state: "reviewed",
+          status: "available"
+        }
+      ]
+    }
+  };
+  assert.doesNotThrow(() => assertContext7Search(valid));
+  for (const invalid of [
+    { ...valid, data: { results: [] } },
+    { ...valid, data: { results: [{ ...valid.data.results[1], install_selector: "other" }] } },
+    { ...valid, data: { results: [{ ...valid.data.results[1], install_selector: "discovery:upstash/context7//plugins/agent-plugins/context7" }] } },
+    { ...valid, data: { results: [{ ...valid.data.results[1], distribution_id: "777genius/context7" }] } },
+    { ...valid, data: { results: [{ ...valid.data.results[1], distribution_kind: "community_bridge" }] } },
+    { ...valid, data: { results: [{ ...valid.data.results[1], trust_state: "discovered" }] } },
+    { ...valid, data: { results: [{ ...valid.data.results[1], status: "superseded" }] } },
+    { ...valid, data: { results: [{ ...valid.data.results[1], product_id: "other" }] } }
+  ]) {
+    assert.throws(() => assertContext7Search(invalid), /reviewed upstream context7 distribution/);
+  }
+});
+
+test("platform proof requires exact synthetic info identity, Cursor version, and active state", () => {
+  const valid = {
+    schema_version: 1,
+    command: "info",
+    result: "success",
+    data: {
+      name: "platform-proof-synthetic",
+      version: "1.0.0",
+      clients: [{
+        client_id: "cursor",
+        activation: "active",
+        package_revision: { version: "1.0.0" }
+      }]
+    }
+  };
+  assert.doesNotThrow(() => assertSyntheticInfo(valid));
+  for (const mutate of [
+    (value) => { value.data.name = "lookalike"; },
+    (value) => { value.data.version = "2.0.0"; },
+    (value) => { value.data.clients[0].client_id = "codex"; },
+    (value) => { value.data.clients[0].activation = "pending"; },
+    (value) => { value.data.clients[0].package_revision.version = "2.0.0"; },
+    (value) => { value.data.clients.push({ ...value.data.clients[0] }); }
+  ]) {
+    const invalid = structuredClone(valid);
+    mutate(invalid);
+    assert.throws(() => assertSyntheticInfo(invalid), /identity, Cursor target, installed version, and active state/);
+  }
+});
 
 test("platform proof rejects absolute paths anywhere in public lifecycle JSON", () => {
   const privateRoot = path.join(os.tmpdir(), "agentplugins-private-root");

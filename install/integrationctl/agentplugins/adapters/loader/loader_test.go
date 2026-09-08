@@ -6,7 +6,6 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 
@@ -146,30 +145,32 @@ func TestLoadOfficialPackageRejectsLifecycleHooksUntilModeled(t *testing.T) {
 	}
 }
 
-func TestLoadRejectsImplicitLifecycleHooksForPortableAndOfficialPackages(t *testing.T) {
+func TestLoadRejectsImplicitLifecycleHooksForOfficialPackages(t *testing.T) {
 	t.Parallel()
-	for _, format := range []string{"portable", "official"} {
-		format := format
-		t.Run(format, func(t *testing.T) {
-			root := t.TempDir()
-			if format == "portable" {
-				writeLoaderFile(t, filepath.Join(root, "plugin.json"), `{"$schema":"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json","name":"implicit-hooks","version":"1.0.0","description":"Implicit hooks"}`)
-			} else {
-				writeLoaderFile(t, filepath.Join(root, ".codex-plugin", "plugin.json"), `{"name":"implicit-hooks"}`)
-			}
-			writeLoaderFile(t, filepath.Join(root, "hooks", "hooks.json"), `{}`)
+	root := t.TempDir()
+	writeLoaderFile(t, filepath.Join(root, ".codex-plugin", "plugin.json"), `{"name":"implicit-hooks"}`)
+	writeLoaderFile(t, filepath.Join(root, "hooks", "hooks.json"), `{}`)
 
-			var err error
-			if format == "portable" {
-				_, err = testLoader(t).Load(context.Background(), domain.LoadInput{SnapshotRoot: root})
-			} else {
-				_, err = testOpenAILoader(t).Load(context.Background(), domain.LoadInput{SnapshotRoot: root})
-			}
-			var loadErr *domain.LoadError
-			if !errors.As(err, &loadErr) || loadErr.Diagnostic.Code != "official_hooks_unsupported" || !strings.Contains(err.Error(), "remove the hooks directory") {
-				t.Fatalf("implicit %s hooks error = %v", format, err)
-			}
-		})
+	_, err := testOpenAILoader(t).Load(context.Background(), domain.LoadInput{SnapshotRoot: root})
+	var loadErr *domain.LoadError
+	if !errors.As(err, &loadErr) || loadErr.Diagnostic.Code != "official_hooks_unsupported" || !strings.Contains(err.Error(), "remove the hooks directory") {
+		t.Fatalf("implicit official hooks error = %v", err)
+	}
+}
+
+func TestPortableLoaderIgnoresUnsupportedRootDirectories(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	writeMinimalPlugin(t, root, "portable-extra-directories")
+	writeLoaderFile(t, filepath.Join(root, "hooks", "hooks.json"), `{}`)
+	writeLoaderFile(t, filepath.Join(root, "commands", "run.md"), "not part of Agent Plugins 1.0\n")
+
+	envelope, err := testLoader(t).Load(context.Background(), domain.LoadInput{SnapshotRoot: root})
+	if err != nil {
+		t.Fatalf("portable loader interpreted unsupported root directory: %v", err)
+	}
+	if envelope.Manifest.Name != "portable-extra-directories" {
+		t.Fatalf("manifest = %+v", envelope.Manifest)
 	}
 }
 
@@ -233,22 +234,32 @@ func TestLoadFullPluginPreservesExtensionsAndUnknownFields(t *testing.T) {
 	}
 }
 
-func TestLoadRejectsInvalidKnownManifestFieldDespiteUnknownFieldTolerance(t *testing.T) {
+func TestLoadReportsAndIgnoresNonObjectExtensionsInV1(t *testing.T) {
 	t.Parallel()
-	for name, extensions := range map[string]string{
-		"non-object extensions":      `"invalid"`,
-		"non-object extension value": `{"com.example.invalid":"opaque"}`,
-	} {
+	for name, extensions := range map[string]string{"string": `"invalid"`, "array": `[]`} {
 		name, extensions := name, extensions
 		t.Run(name, func(t *testing.T) {
 			root := t.TempDir()
 			writeLoaderFile(t, filepath.Join(root, "plugin.json"), `{"$schema":"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json","name":"invalid-extension","futureField":true,"extensions":`+extensions+`}`)
-			_, err := testLoader(t).Load(context.Background(), domain.LoadInput{SnapshotRoot: root})
-			var loadErr *domain.LoadError
-			if !errors.As(err, &loadErr) || loadErr.Diagnostic.Code != "plugin_schema_invalid" {
-				t.Fatalf("known-field violation error = %v", err)
+			envelope, err := testLoader(t).Load(context.Background(), domain.LoadInput{SnapshotRoot: root})
+			if err != nil {
+				t.Fatalf("Agent Plugins 1.0 requires report-and-ignore: %v", err)
+			}
+			if len(envelope.Manifest.Extensions) != 0 || len(envelope.Manifest.RawExtensions) != 0 || !hasDiagnostic(envelope.Diagnostics, "plugin_extensions_ignored") {
+				t.Fatalf("extensions were not reported and ignored: manifest=%+v diagnostics=%+v", envelope.Manifest, envelope.Diagnostics)
 			}
 		})
+	}
+}
+
+func TestLoadRejectsNonObjectExtensionMember(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	writeLoaderFile(t, filepath.Join(root, "plugin.json"), `{"$schema":"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json","name":"invalid-extension","extensions":{"com.example.invalid":"opaque"}}`)
+	_, err := testLoader(t).Load(context.Background(), domain.LoadInput{SnapshotRoot: root})
+	var loadErr *domain.LoadError
+	if !errors.As(err, &loadErr) || loadErr.Diagnostic.Code != "plugin_schema_invalid" {
+		t.Fatalf("known-field violation error = %v", err)
 	}
 }
 
@@ -357,15 +368,9 @@ func TestStdioRejectsInvalidReservedContractAndExecutableRequirements(t *testing
 		prepare     func(*testing.T, string)
 		executables []string
 	}{
-		"placeholder path in command":  {server: `{"type":"stdio","command":"${PLUGIN_ROOT}/bin/server"}`},
-		"unknown reserved placeholder": {server: `{"type":"stdio","command":"node","args":["${PLUGIN_CACHE}"]}`},
-		"reserved root environment":    {server: `{"type":"stdio","command":"node","env":{"PLUGIN_ROOT":"override"}}`},
-		"reserved data environment":    {server: `{"type":"stdio","command":"node","env":{"PLUGIN_DATA":"override"}}`},
-		"missing bundled command":      {server: `{"type":"stdio","command":"./bin/server"}`, executables: []string{"bin/server"}},
-		"non-executable bundled command": {
-			server:  `{"type":"stdio","command":"./bin/server"}`,
-			prepare: func(t *testing.T, root string) { writeLoaderFile(t, filepath.Join(root, "bin", "server"), "fixture") },
-		},
+		"placeholder path in command": {server: `{"type":"stdio","command":"${PLUGIN_ROOT}/bin/server"}`},
+		"reserved root environment":   {server: `{"type":"stdio","command":"node","env":{"PLUGIN_ROOT":"override"}}`},
+		"reserved data environment":   {server: `{"type":"stdio","command":"node","env":{"PLUGIN_DATA":"override"}}`},
 	}
 	for name, test := range tests {
 		name, test := name, test
@@ -387,10 +392,102 @@ func TestStdioRejectsInvalidReservedContractAndExecutableRequirements(t *testing
 	}
 }
 
-func TestStdioBundledCommandAllowsContainedInternalSymlink(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("symlink fixture requires an unprivileged symlink platform")
+func TestStdioLoaderPreservesUnknownPlaceholderAndDefersExecutableMode(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	writeMinimalPlugin(t, root, "deferred-stdio-policy")
+	writeLoaderFile(t, filepath.Join(root, "bin", "server"), "fixture")
+	writeLoaderFile(t, filepath.Join(root, "mcp.json"), `{"$schema":"https://agent-plugins.org/schemas/1.0.0/mcp.schema.json","mcpServers":{"local":{"type":"stdio","command":"./bin/server","args":["${PLUGIN_CACHE}"],"cwd":"./${PLUGIN_CACHE}"},"missing":{"type":"stdio","command":"./bin/missing"}}}`)
+	envelope, err := testLoader(t).Load(context.Background(), domain.LoadInput{SnapshotRoot: root})
+	if err != nil {
+		t.Fatal(err)
 	}
+	server, ok := envelope.MCP.Servers["local"]
+	if !ok || server.StdioRequirement == nil || server.StdioRequirement.Kind != domain.ExecutableBundled {
+		t.Fatalf("standard-valid server was rejected before runtime preflight: %+v", envelope.MCP)
+	}
+	args := server.Decoded["args"].([]any)
+	if args[0] != "${PLUGIN_CACHE}" {
+		t.Fatalf("unknown placeholder was not preserved literally: %+v", args)
+	}
+	if cwd := server.Decoded["cwd"]; cwd != "./${PLUGIN_CACHE}" {
+		t.Fatalf("unknown cwd placeholder was not preserved literally: %v", cwd)
+	}
+	if missing := envelope.MCP.Servers["missing"].StdioRequirement; missing == nil || missing.Kind != domain.ExecutableBundled || missing.BundledRelativePath != "bin/missing" {
+		t.Fatalf("missing bundled command was treated as a load-time configuration failure: %+v", envelope.MCP)
+	}
+}
+
+func TestRemoteServerSemanticValidation(t *testing.T) {
+	t.Parallel()
+	tests := map[string]struct {
+		server string
+		valid  bool
+	}{
+		"https":                   {server: `{"type":"streamable-http","url":"https://example.com/mcp"}`, valid: true},
+		"uppercase https":         {server: `{"type":"streamable-http","url":"HTTPS://example.com/mcp"}`, valid: true},
+		"loopback http":           {server: `{"type":"sse","url":"http://127.0.0.1:8080/sse"}`, valid: true},
+		"localhost http":          {server: `{"type":"streamable-http","url":"http://localhost:8080/mcp"}`, valid: true},
+		"relative":                {server: `{"type":"streamable-http","url":"/mcp"}`},
+		"non-http":                {server: `{"type":"streamable-http","url":"ftp://example.com/mcp"}`},
+		"remote cleartext":        {server: `{"type":"streamable-http","url":"http://example.com/mcp"}`},
+		"userinfo":                {server: `{"type":"streamable-http","url":"https://user@example.com/mcp"}`},
+		"fragment":                {server: `{"type":"streamable-http","url":"https://example.com/mcp#fragment"}`},
+		"empty fragment":          {server: `{"type":"streamable-http","url":"https://example.com/mcp#"}`},
+		"duplicate header casing": {server: `{"type":"streamable-http","url":"https://example.com/mcp","headers":{"Authorization":"a","authorization":"b"}}`},
+		"invalid header name":     {server: `{"type":"streamable-http","url":"https://example.com/mcp","headers":{"Bad Header":"x"}}`},
+		"invalid header value":    {server: "{\"type\":\"streamable-http\",\"url\":\"https://example.com/mcp\",\"headers\":{\"X-Test\":\"bad\\u000a\"}}"},
+	}
+	for name, test := range tests {
+		name, test := name, test
+		t.Run(name, func(t *testing.T) {
+			root := t.TempDir()
+			writeMinimalPlugin(t, root, "remote-validation")
+			writeLoaderFile(t, filepath.Join(root, "mcp.json"), `{"$schema":"https://agent-plugins.org/schemas/1.0.0/mcp.schema.json","mcpServers":{"server":`+test.server+`}}`)
+			envelope, err := testLoader(t).Load(context.Background(), domain.LoadInput{SnapshotRoot: root})
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, loaded := envelope.MCP.Servers["server"]
+			if loaded != test.valid {
+				t.Fatalf("loaded = %t, want %t; invalid=%+v", loaded, test.valid, envelope.MCP.InvalidServer)
+			}
+		})
+	}
+}
+
+func TestLoaderCanonicalizesFilesystemResolvedRoot(t *testing.T) {
+	realRoot := t.TempDir()
+	writeMinimalPlugin(t, realRoot, "canonical-root")
+	writeLoaderFile(t, filepath.Join(realRoot, "bin", "server"), "fixture")
+	writeLoaderFile(t, filepath.Join(realRoot, "mcp.json"), `{"$schema":"https://agent-plugins.org/schemas/1.0.0/mcp.schema.json","mcpServers":{"server":{"type":"stdio","command":"./bin/server"}}}`)
+	aliasParent := t.TempDir()
+	alias := filepath.Join(aliasParent, "snapshot")
+	if err := os.Symlink(realRoot, alias); err != nil {
+		t.Fatal(err)
+	}
+	// The acquired root itself must stay a real directory, so exercise the same
+	// filesystem alias macOS exposes as /var -> /private/var through its parent.
+	rootViaAlias := filepath.Join(alias, ".")
+	_, err := testLoader(t).Load(context.Background(), domain.LoadInput{SnapshotRoot: rootViaAlias})
+	if err == nil {
+		t.Fatal("snapshot root symlink should remain rejected")
+	}
+	canonicalRoot := realRoot
+	envelope, err := testLoader(t).Load(context.Background(), domain.LoadInput{SnapshotRoot: canonicalRoot})
+	if err != nil {
+		t.Fatal(err)
+	}
+	resolved, err := filepath.EvalSymlinks(canonicalRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if envelope.SnapshotRoot != filepath.Clean(resolved) {
+		t.Fatalf("snapshot root = %q, want canonical %q", envelope.SnapshotRoot, filepath.Clean(resolved))
+	}
+}
+
+func TestStdioBundledCommandAllowsContainedInternalSymlink(t *testing.T) {
 	root := t.TempDir()
 	writeMinimalPlugin(t, root, "symlink-stdio")
 	writeLoaderFile(t, filepath.Join(root, "bin", "server"), "fixture")
@@ -405,6 +502,44 @@ func TestStdioBundledCommandAllowsContainedInternalSymlink(t *testing.T) {
 	requirement := envelope.MCP.Servers["linked"].StdioRequirement
 	if requirement == nil || requirement.Kind != domain.ExecutableBundled || requirement.BundledRelativePath != "bin/server-link" {
 		t.Fatalf("internal symlink command requirement = %+v diagnostics=%+v", requirement, envelope.Diagnostics)
+	}
+}
+
+func TestStdioBundledCommandRejectsExternalSymlink(t *testing.T) {
+	root := t.TempDir()
+	outside := filepath.Join(t.TempDir(), "server")
+	writeMinimalPlugin(t, root, "external-symlink-stdio")
+	writeLoaderFile(t, outside, "fixture")
+	if err := os.MkdirAll(filepath.Join(root, "bin"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(root, "bin", "server")); err != nil {
+		t.Fatal(err)
+	}
+	writeLoaderFile(t, filepath.Join(root, "mcp.json"), `{"$schema":"https://agent-plugins.org/schemas/1.0.0/mcp.schema.json","mcpServers":{"linked":{"type":"stdio","command":"./bin/server"}}}`)
+	envelope, err := testLoader(t).Load(context.Background(), domain.LoadInput{SnapshotRoot: root})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, exists := envelope.MCP.Servers["linked"]; exists || envelope.MCP.InvalidServer["linked"].Code != "mcp_server_invalid" {
+		t.Fatalf("external symlink command was accepted: %+v", envelope.MCP)
+	}
+}
+
+func TestStdioMissingBundledCommandRejectsExternalSymlinkAncestor(t *testing.T) {
+	root := t.TempDir()
+	outside := t.TempDir()
+	writeMinimalPlugin(t, root, "external-symlink-ancestor-stdio")
+	if err := os.Symlink(outside, filepath.Join(root, "bin")); err != nil {
+		t.Fatal(err)
+	}
+	writeLoaderFile(t, filepath.Join(root, "mcp.json"), `{"$schema":"https://agent-plugins.org/schemas/1.0.0/mcp.schema.json","mcpServers":{"linked":{"type":"stdio","command":"./bin/missing"}}}`)
+	envelope, err := testLoader(t).Load(context.Background(), domain.LoadInput{SnapshotRoot: root})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, exists := envelope.MCP.Servers["linked"]; exists || envelope.MCP.InvalidServer["linked"].Code != "mcp_server_invalid" {
+		t.Fatalf("missing command below an external symlink ancestor was accepted: %+v", envelope.MCP)
 	}
 }
 

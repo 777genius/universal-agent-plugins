@@ -16,6 +16,10 @@ import (
 	"time"
 
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli"
+	"github.com/777genius/plugin-kit-ai/cli/internal/authoring/commands"
+	"github.com/777genius/plugin-kit-ai/cli/internal/authoring/project"
+	"github.com/777genius/plugin-kit-ai/cli/internal/authoringcli"
+	"github.com/777genius/plugin-kit-ai/cli/internal/exitx"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/dirswap"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/locks"
 	processadapter "github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/process"
@@ -24,31 +28,62 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/discoveryv1"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/loader"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/processlock"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/securityscan"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/securityv1"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/sourceacquisition"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/specregistry"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/statemigration"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/statev2"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/managedstdio"
 	clientplanner "github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/planner"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/providers"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/transaction"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/usecase"
+	"github.com/spf13/cobra"
 	"golang.org/x/term"
 )
 
 var (
 	version                   = "0.1.0-development"
-	defaultDirectoryOrigin    = "https://777genius.github.io/universal-agent-plugins/registry/schemas/1/"
+	defaultDirectoryOrigin    = "https://777genius.github.io/universal-agent-plugins-registry/registry/schemas/1/"
 	defaultDirectoryKeyID     = "uap-directory-2026-01"
 	defaultDirectoryPublicKey = "HalXARjat+v3ylTPLMAnvuavRo4ZfrF+DbWwsjlp2bI="
-	defaultDiscoveryOrigin    = "https://777genius.github.io/universal-agent-plugins/discovery/"
+	defaultDiscoveryOrigin    = "https://777genius.github.io/universal-agent-plugins-registry/discovery/"
 	defaultDiscoveryKeyID     = "uap-discovery-2026-01"
 	defaultDiscoveryPublicKey = "IxWvGuscXR9crlCrGyBQZNqroYNVPbBA1B3pnjSffhc="
+	defaultSecurityOrigin     = "https://777genius.github.io/universal-agent-plugins-registry/security/"
+	defaultSecurityKeyID      = "uap-discovery-2026-01"
+	defaultSecurityPublicKey  = "IxWvGuscXR9crlCrGyBQZNqroYNVPbBA1B3pnjSffhc="
 	directoryClientFactory    = newDirectoryClient
 	discoveryClientFactory    = newDiscoveryClient
+	securityClientFactory     = newSecurityClient
 )
 
 func main() {
+	if handled, code := managedstdio.Dispatch(os.Args[1:], os.Stderr); handled {
+		os.Exit(code)
+	}
+	if commands.IsEnabled() && commands.IsAuthorInvocation(os.Args[1:], agentpluginscli.NewRoot(agentpluginscli.App{})) {
+		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+		defer stop()
+		app := commands.App{Projects: project.Service{Scratch: os.TempDir()}, Revision: commands.Revision}
+		err := app.Execute(ctx, os.Args[1:], authoringcli.Streams{In: os.Stdin, Out: os.Stdout, Err: os.Stderr}, func(factories ...authoringcli.Factory) (*cobra.Command, error) {
+			// Construct the ENTIRE root and installer options on every invocation.
+			// Installer dependencies are deliberately unconfigured on this author route.
+			root := agentpluginscli.NewRoot(agentpluginscli.App{})
+			author, err := authoringcli.NewAuthorCommand(factories...)
+			if err != nil {
+				return nil, err
+			}
+			root.AddCommand(author)
+			return root, nil
+		})
+		if err != nil {
+			os.Exit(exitx.Code(err))
+		}
+		return
+	}
 	if err := run(); err != nil {
 		_, _ = fmt.Fprintln(os.Stderr, "agentplugins:", err)
 		os.Exit(1)
@@ -72,6 +107,10 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	securityClient, err := securityClientFactory(dataRoot)
+	if err != nil {
+		return err
+	}
 	registry, err := specregistry.New()
 	if err != nil {
 		return err
@@ -82,6 +121,9 @@ func run() error {
 	directoryManager := dirswap.Manager{JournalDir: filepath.Join(dataRoot, "operations-v2")}
 	mutationLock := processlock.Lock{Path: filepath.Join(dataRoot, "mutation.lock")}
 	stager := providers.Stager{}
+	if executable, err := os.Executable(); err == nil {
+		stager.LauncherSource, _ = managedstdio.NewSource(executable, version)
+	}
 	activator := providers.Activator{Runner: runner}
 	planner := clientplanner.Planner{ManagedRoot: filepath.Join(dataRoot, "managed"), Detected: map[domain.ClientID]domain.DetectedClient{}}
 	lifecycle := usecase.Service{
@@ -110,15 +152,35 @@ func run() error {
 		SourceAcquirer:      lazySourceAcquirer{dataRoot: dataRoot, acquirer: sourceacquisition.Acquirer{TempRoot: dataRoot}},
 		PackageLoader:       packageLoader,
 		NativePackageLoader: loader.OpenAILoader{Loader: packageLoader},
-		Lifecycle:           lifecycle,
-		Input:               os.Stdin,
-		Output:              os.Stdout,
-		ErrorOutput:         os.Stderr,
-		Terminal:            term.IsTerminal(int(os.Stdin.Fd())),
+		SecurityIndex:       securityClient,
+		SecurityEvaluator: securityscan.Evaluator{
+			Scanner: securityscan.ReleaseScanner{Root: filepath.Join(dataRoot, "security", "lintai"), HTTPClient: lintaiReleaseHTTPClient()},
+			Cache:   securityscan.FileCache{Root: filepath.Join(dataRoot, "security", "assessments")}, Requirement: securityscan.DefaultRequirement(),
+		},
+		Lifecycle:   lifecycle,
+		Input:       os.Stdin,
+		Output:      os.Stdout,
+		ErrorOutput: os.Stderr,
+		Terminal:    term.IsTerminal(int(os.Stdin.Fd())),
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	return agentpluginscli.NewRoot(app).ExecuteContext(ctx)
+}
+
+func newSecurityClient(_ string) (*securityv1.Client, error) {
+	publicKey, err := base64.StdEncoding.Strict().DecodeString(defaultSecurityPublicKey)
+	if err != nil || len(publicKey) != ed25519.PublicKeySize {
+		return nil, fmt.Errorf("decode Security Index public key")
+	}
+	origin, err := productionFeedOrigin(os.Getenv("AGENTPLUGINS_SECURITY_ORIGIN"), defaultSecurityOrigin, "AGENTPLUGINS_SECURITY_ORIGIN")
+	if err != nil {
+		return nil, err
+	}
+	return &securityv1.Client{
+		Origin: origin, HTTPClient: hardenedHTTPClient("Security Index"),
+		Trust: securityv1.TrustStore{KeyID: defaultSecurityKeyID, PublicKey: ed25519.PublicKey(publicKey)},
+	}, nil
 }
 
 func newDiscoveryClient(dataRoot string) (*discoveryv1.Client, error) {
@@ -157,6 +219,13 @@ func (acquirer lazySourceAcquirer) AcquireLocal(ctx context.Context, source stri
 		return domain.PackageSnapshot{}, err
 	}
 	return acquirer.acquirer.AcquireLocal(ctx, source)
+}
+
+func (acquirer lazySourceAcquirer) DiscoverGitHubPackages(ctx context.Context, repository, revision string) ([]string, error) {
+	if err := acquirer.prepare(); err != nil {
+		return nil, err
+	}
+	return acquirer.acquirer.DiscoverGitHubPackages(ctx, repository, revision)
 }
 
 func (acquirer lazySourceAcquirer) AcquireGitHub(ctx context.Context, repository, revision, subpath string) (domain.PackageSnapshot, error) {
@@ -243,6 +312,24 @@ func hardenedHTTPClient(feed string) *http.Client {
 				!strings.EqualFold(request.URL.Scheme, via[0].URL.Scheme) ||
 				!strings.EqualFold(request.URL.Host, via[0].URL.Host) {
 				return fmt.Errorf("%s redirect must remain on the original HTTPS origin", feed)
+			}
+			request.Header.Del("Authorization")
+			request.Header.Del("Cookie")
+			request.Header.Del("Proxy-Authorization")
+			return nil
+		},
+	}
+}
+
+func lintaiReleaseHTTPClient() *http.Client {
+	return &http.Client{
+		Timeout: 30 * time.Second,
+		CheckRedirect: func(request *http.Request, via []*http.Request) error {
+			if len(via) == 0 || len(via) > 2 || request.URL.Scheme != "https" {
+				return fmt.Errorf("invalid LintAI release redirect")
+			}
+			if request.URL.Hostname() != "github.com" && request.URL.Hostname() != "release-assets.githubusercontent.com" {
+				return fmt.Errorf("LintAI release redirect uses an untrusted host")
 			}
 			request.Header.Del("Authorization")
 			request.Header.Del("Cookie")

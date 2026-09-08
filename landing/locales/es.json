@@ -11,7 +11,7 @@
     "primaryCta": "Abrir GitHub",
     "secondaryCta": "Ver complementos",
     "docsCta": "Ver documentación",
-    "preview": "plugin-kit-ai vista previa del flujo",
+    "preview": "Universal Agent Plugins vista previa del flujo",
     "latestRelease": "Última versión",
     "status": "Los complementos propios ya están disponibles",
     "trust": {
@@ -20,7 +20,7 @@
       "openSource": "Código abierto"
     },
     "demo": {
-      "title": "plugin-kit-ai flujo",
+      "title": "Universal Agent Plugins flujo",
       "subtitle": "Un repositorio. Etapas claras. Múltiples salidas.",
       "live": "Activo",
       "ready": "listo",
@@ -76,7 +76,15 @@
     "copied": "Copiado",
     "quickstartTitle": "Inicio más rápido",
     "quickstartSubtitle": "Esta es la ruta más rápida hacia una instalación real de plugin o un repositorio validado.",
-    "installTabsLabel": "Elija cómo ejecutar plugin-kit-ai",
+    "installTabsLabel": "Elija cómo ejecutar Universal Agent Plugins",
+    "detectedRecommendation": "Seleccionada la mejor opción para {platform}",
+    "mobileUnsupported": "La CLI funciona en un ordenador. Copie un comando aquí y ejecútelo en macOS, Linux o Windows.",
+    "platforms": {
+      "macos": "macOS",
+      "windows": "Windows",
+      "linux": "Linux",
+      "other": "su dispositivo"
+    },
     "supportTitle": "Instantánea de soporte",
     "supportSubtitle": "Profundidad de soporte real hoy, según la política de soporte actual y la matriz de objetivos.",
     "supportLink": "Leer el límite de soporte"
@@ -126,12 +134,12 @@
     "install": {
       "eyebrow": "Install flow",
       "title": "Instalar este plugin",
-      "subtitle": "Elige tu agente, elige cómo ejecutar plugin-kit-ai si lo necesitas y luego copia el comando exacto para este plugin.",
+      "subtitle": "Elige tu agente, elige cómo ejecutar Universal Agent Plugins si lo necesitas y luego copia el comando exacto para este plugin.",
       "supportedLabel": "Targets disponibles",
       "allAgents": "All",
       "chooseAgentTitle": "Elige tu agente",
       "chooseAgentBody": "Todos los targets están seleccionados por defecto. Elige un subconjunto si quieres un comando de instalación más específico.",
-      "getCliTitle": "Ejecute plugin-kit-ai a su manera",
+      "getCliTitle": "Ejecute Universal Agent Plugins a su manera",
       "getCliBody": "Use npx para la primera prueba más rápida, o instale el CLI para el uso diario.",
       "installTitle": "Instalar el plugin",
       "installBody": "Ejecuta el comando de instalación para el target seleccionado. El comando se mantiene explícito para que el scope final siga siendo obvio después.",
@@ -150,7 +158,7 @@
       "copy": "Copiar",
       "copied": "Copiado",
       "fullOnboardingCta": "Abrir onboarding completo",
-      "alreadyInstalled": "¿Ya ejecuta plugin-kit-ai de otra manera? Vaya directamente al paso 3.",
+      "alreadyInstalled": "¿Ya ejecuta Universal Agent Plugins de otra manera? Vaya directamente al paso 3.",
       "repositoryCta": "Repositorio del plugin",
       "agentDocsCta": "Docs de {agent}",
       "boundaryLabel": "Atención",
@@ -187,7 +195,7 @@
         "codex": {
           "installBody": "Prepara el paquete de Codex y la entrada del marketplace local desde el integration control plane.",
           "manualNote": "Abre el repositorio o la documentación de Codex si quieres inspeccionar el paquete preparado o completar tú mismo la activación nativa.",
-          "boundaryNote": "La automatización para Codex se mantiene conservadora aquí. plugin-kit-ai prepara el paquete y el marketplace, pero Codex todavía puede requerir un paso nativo adicional antes de activarlo."
+          "boundaryNote": "La automatización para Codex se mantiene conservadora aquí. Universal Agent Plugins prepara el paquete y el marketplace, pero Codex todavía puede requerir un paso nativo adicional antes de activarlo."
         },
         "gemini": {
           "installBody": "Instala la extensión de Gemini en el directorio de extensiones del usuario y reutiliza ese mismo managed root para update y repair.",
@@ -288,7 +296,7 @@
     "sectionSubtitle": "No es una lucha contra competidores. Solo una comparación práctica con las tres formas en que los equipos de complementos suelen crear derivas innecesarias.",
     "feature": "Flujo de trabajo",
     "columns": {
-      "pluginKitAi": "plugin-kit-ai",
+      "pluginKitAi": "Universal Agent Plugins",
       "manual": "Configuración manual",
       "duplicated": "Configuraciones duplicadas",
       "scripts": "Guiones únicos"
@@ -296,19 +304,19 @@
   },
   "footer": {
     "copyright": "© {year}",
-    "tagline": "Construir una vez. Envío a muchos agentes de IA.",
+    "tagline": "Instala una vez. Gestiona plugins en todos tus agentes de IA.",
     "github": "GitHub",
     "docs": "Documentos"
   },
   "meta": {
-    "homeTitle": "plugin-kit-ai | Cree complementos de IA una vez y envíelos a muchos agentes",
-    "homeDescription": "plugin-kit-ai es el hogar de nuestros complementos de IA propios y el conjunto de herramientas de código abierto para crear un repositorio de complementos y apuntar a múltiples ecosistemas de agentes.",
-    "downloadTitle": "Comience con plugin-kit-ai | Instalar plugin-kit-ai",
-    "downloadDescription": "Elija una ruta de instalación para plugin-kit-ai, abra los documentos y comience desde un repositorio de complementos limpio.",
-    "pluginsTitle": "Catálogo de complementos | Complementos propios para plugin-kit-ai",
-    "pluginsDescription": "Explore el catálogo de complementos propios de plugin-kit-ai, con tarjetas con capacidad de búsqueda, filtros de flujo de trabajo y páginas livianas para cada repositorio de complementos real.",
-    "pluginDetailTitle": "complemento {complemento} | plugin-kit-ai catálogo",
-    "pluginDetailDescription": "{plugin} es parte del catálogo propio plugin-kit-ai. {lema}"
+    "homeTitle": "Universal Agent Plugins | Un comando para tus agentes de IA",
+    "homeDescription": "Universal Agent Plugins es el hogar de nuestros complementos de IA propios y el conjunto de herramientas de código abierto para crear un repositorio de complementos y apuntar a múltiples ecosistemas de agentes.",
+    "downloadTitle": "Comience con Universal Agent Plugins | Instalar Universal Agent Plugins",
+    "downloadDescription": "Elija una ruta de instalación para Universal Agent Plugins, abra los documentos y comience desde un repositorio de complementos limpio.",
+    "pluginsTitle": "Catálogo de complementos | Complementos propios para Universal Agent Plugins",
+    "pluginsDescription": "Explore el catálogo de complementos propios de Universal Agent Plugins, con tarjetas con capacidad de búsqueda, filtros de flujo de trabajo y páginas livianas para cada repositorio de complementos real.",
+    "pluginDetailTitle": "complemento {complemento} | Universal Agent Plugins catálogo",
+    "pluginDetailDescription": "{plugin} es parte del catálogo propio Universal Agent Plugins. {lema}"
   },
   "error": {
     "notFoundTitle": "Página no encontrada",
@@ -316,5 +324,24 @@
     "genericTitle": "algo salió mal",
     "genericDescription": "Se produjo un error inesperado. Inténtelo de nuevo más tarde.",
     "goHome": "Go a la página de inicio"
+  },
+  "publicAuthoring": {
+    "title": "Usar plugins / Crear plugins",
+    "intro": "Instala plugins disponibles o prepara un paquete portable Agent Plugins 1.0.",
+    "useTitle": "Usar plugins",
+    "available": "Disponible ahora: instala plugins con Universal Agent Plugins. Con Node.js 22+, ejecuta:",
+    "installHelp": "Para la instalación nativa en macOS, Linux o Windows, consulta la guía. El CLI pregunta qué agentes compatibles usar; cada plugin puede necesitar su propio entorno de ejecución.",
+    "installLink": "Guía de instalación",
+    "buildTitle": "Crear plugins",
+    "standard": "Crea un paquete portable Agent Plugins 1.0 basado en plugin.json, con skills/ y mcp.json opcionales. El soporte de cada cliente depende del paquete y sus componentes.",
+    "preparation": "En preparación — sin publicar",
+    "unreleased": "El CLI de autoría basado en el estándar está en preparación y aún no se ha publicado. plugin-kit-ai 1.2.4, publicado en npm y PyPI, es la herramienta histórica v1, no standard-first v2. Instalar plugin-kit-ai{'@'}latest no proporciona el futuro flujo de autoría.",
+    "specLink": "Especificación Agent Plugins 1.0",
+    "historyTitle": "Mantenimiento histórico de v1",
+    "history": "Mantén los proyectos plugin.yaml existentes con las instrucciones v1 siguientes. Estas plantillas y salidas generadas son flujos históricos v1; no crean el nuevo flujo de autoría basado en el estándar.",
+    "quickstartLink": "Inicio rápido y mantenimiento v1",
+    "compatibilityLink": "Compatibilidad de clientes (en inglés)",
+    "limitations": "La compatibilidad depende del paquete. Validar el esquema no demuestra ejecución, OAuth ni activación. Codex no admite MCP SSE declarado; stdio y Streamable HTTP conservan el soporte de sus adaptadores actuales.",
+    "versions": "Versiones verificadas el 2026-09-07: universal-agent-plugins 0.1.53 (npm), plugin-kit-ai 1.2.4 (npm/PyPI), versión estable de GitHub agentplugins-v0.1.53."
   }
 }

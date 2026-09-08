@@ -7,6 +7,25 @@ on:
   workflow_dispatch:
 
 jobs:
+  source-acquisition-smoke:
+    name: source-acquisition-smoke (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - windows-latest
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Verify bounded Git package discovery
+        shell: bash
+        run: cd install/integrationctl && go test -count=1 -run '^TestOSRunnerClassifiesRealGitTreeOverflowAsSoleLimit$' ./agentplugins/adapters/sourceacquisition
+
   polyglot-smoke:
     name: polyglot-smoke (${{ matrix.os }})
     strategy:
@@ -52,3 +71,5 @@ jobs:
           go test -count=1 -run 'TestPluginKitAIBundle(Fetch(URL(PythonRequirementsFlow|ClaudeNodeTypeScriptFlow)|GitHub(ClaudeNodeTypeScriptFlow|LatestClaudeNodeTypeScriptFlow))|PublishFetch(PythonRequirementsFlow|ClaudeNodeTypeScriptFlow))$' ./repotests
           go test -count=1 -run '^TestNPMCLIPackage' ./repotests
           go test -count=1 -run '^TestPythonCLIPackage' ./repotests
+          (cd install/integrationctl && go test -count=1 -run '^TestCacheAtomicPermissionsPreservationAndOfflineExpiry$' ./agentplugins/adapters/directoryv1)
+          (cd install/integrationctl && go test -count=1 -run '^TestInterruptedCacheReplacementRetainsLKG$' ./agentplugins/adapters/discoveryv1)

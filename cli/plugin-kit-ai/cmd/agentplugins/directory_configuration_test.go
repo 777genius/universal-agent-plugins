@@ -18,6 +18,7 @@ import (
 
 	"github.com/777genius/plugin-kit-ai/cli/cmd/agentplugins/internal/bootstrapio"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/directoryv1"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/securityv1"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
@@ -51,6 +52,34 @@ func TestProductionDirectoryIgnoresCallerSuppliedConformanceData(t *testing.T) {
 	if _, err := os.Lstat(fixture["AGENTPLUGINS_DIRECTORY_CACHE"]); !os.IsNotExist(err) {
 		t.Fatalf("production configuration touched caller cache: %v", err)
 	}
+}
+
+func TestProductionDefaultsUseTheStandaloneRegistry(t *testing.T) {
+	if want := "https://777genius.github.io/universal-agent-plugins-registry/"; !strings.HasPrefix(defaultDirectoryOrigin, want) || !strings.HasPrefix(defaultDiscoveryOrigin, want) || !strings.HasPrefix(defaultSecurityOrigin, want) {
+		t.Fatalf("production feed defaults must use the standalone registry: directory=%q discovery=%q security=%q", defaultDirectoryOrigin, defaultDiscoveryOrigin, defaultSecurityOrigin)
+	}
+}
+
+func TestProductionSecurityIndexUsesIndependentOriginAndPinnedTrust(t *testing.T) {
+	clearDirectoryEnvironment(t)
+	client, err := newSecurityClient(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if client.Origin != defaultSecurityOrigin || client.Trust.KeyID != defaultSecurityKeyID || len(client.Trust.PublicKey) != ed25519.PublicKeySize {
+		t.Fatalf("production Security Index configuration = %+v", client)
+	}
+	t.Setenv("AGENTPLUGINS_SECURITY_ORIGIN", "https://mirror.example/security/")
+	client, err = newSecurityClient(t.TempDir())
+	if err != nil || client.Origin != "https://mirror.example/security/" {
+		t.Fatalf("custom Security Index origin = %q err=%v", client.Origin, err)
+	}
+	for _, value := range []string{"http://mirror.example/security/", "https://mirror.example/security", "https://mirror.example/security/../trust/"} {
+		if _, err := productionFeedOrigin(value, defaultSecurityOrigin, "AGENTPLUGINS_SECURITY_ORIGIN"); err == nil {
+			t.Fatalf("unsafe Security Index origin accepted: %q", value)
+		}
+	}
+	_ = securityv1.SchemaVersion
 }
 
 func TestTestOnlyDependencyInjectionPreservesExactLaunchConformance(t *testing.T) {
@@ -159,7 +188,7 @@ func TestProductionDirectoryOriginValidation(t *testing.T) {
 
 func clearDirectoryEnvironment(t *testing.T) {
 	t.Helper()
-	for _, name := range append(append([]string{}, forbiddenProductionDirectoryVariables...), "AGENTPLUGINS_DIRECTORY_ORIGIN", "AGENTPLUGINS_DISCOVERY_ORIGIN") {
+	for _, name := range append(append([]string{}, forbiddenProductionDirectoryVariables...), "AGENTPLUGINS_DIRECTORY_ORIGIN", "AGENTPLUGINS_DISCOVERY_ORIGIN", "AGENTPLUGINS_SECURITY_ORIGIN") {
 		value, existed := os.LookupEnv(name)
 		if err := os.Unsetenv(name); err != nil {
 			t.Fatal(err)

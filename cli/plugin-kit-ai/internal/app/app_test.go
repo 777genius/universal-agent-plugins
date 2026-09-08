@@ -971,7 +971,7 @@ func TestInitRunner_claudeNodeExtrasEmitBundleReleaseWorkflow(t *testing.T) {
 	workflow := string(workflowBody)
 	for _, want := range []string{
 		"actions/setup-node@v6",
-		"777genius/plugin-kit-ai/setup-plugin-kit-ai@v1",
+		"777genius/universal-agent-plugins/setup-plugin-kit-ai@v1",
 		"plugin-kit-ai validate . --platform claude --strict",
 		"plugin-kit-ai bundle publish . --platform claude --repo ${{ github.repository }} --tag ${{ github.ref_name }}",
 	} {

@@ -18,6 +18,7 @@
   },
   "scripts": {
     "docs:clean": "node ./tools/clean.mjs",
+    "docs:test": "node --test ./tools/lib/frontmatter.test.mjs ./tools/quality/check-output.test.mjs ./tools/quality/public-authoring-links.test.mjs",
     "docs:gen": "node ./tools/generate.mjs",
     "docs:build": "pnpm run docs:gen && vitepress build && node ./tools/postbuild.mjs",
     "docs:dev": "pnpm run docs:gen && vitepress dev",
@@ -29,7 +30,7 @@
     "docs:check-output": "node ./tools/quality/check-output.mjs",
     "docs:smoke-ui": "node ./tools/quality/check-ui.mjs",
     "docs:check-ui": "pnpm run docs:build && pnpm run docs:smoke-ui",
-    "docs:check": "pnpm run docs:gen && pnpm run docs:check-locale && pnpm run docs:check-model && pnpm run docs:check-public-boundary && pnpm run docs:check-drift && vitepress build && node ./tools/postbuild.mjs && pnpm run docs:check-output"
+    "docs:check": "pnpm run docs:test && pnpm run docs:gen && pnpm run docs:check-locale && pnpm run docs:check-model && pnpm run docs:check-public-boundary && pnpm run docs:check-drift && vitepress build && node ./tools/postbuild.mjs && pnpm run docs:check-output"
   },
   "devDependencies": {
     "mermaid": "11.17.0",

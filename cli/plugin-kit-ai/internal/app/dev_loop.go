@@ -5,12 +5,7 @@ import (
 	"time"
 )
 
-func (svc PluginService) runDevWatchLoop(ctx context.Context, root string, interval time.Duration, cycle *int, lastPassed *bool, runCycle func(string, []string) (bool, error), emit func(PluginDevUpdate)) (PluginDevSummary, error) {
-	snapshot, err := takeDevSnapshot(root)
-	if err != nil {
-		return PluginDevSummary{}, err
-	}
-
+func (svc PluginService) runDevWatchLoop(ctx context.Context, root string, interval time.Duration, snapshot devSnapshot, cycle *int, lastPassed *bool, runCycle func(string, []string) (bool, error), emit func(PluginDevUpdate)) (PluginDevSummary, error) {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 

@@ -272,6 +272,12 @@ func runLinuxOrdinarySupervisor() int {
 	}
 	if exitErr, ok := waitErr.(*exec.ExitError); ok {
 		if status, ok := exitErr.Sys().(syscall.WaitStatus); ok && status.Signaled() {
+			// Go ignores SIGPIPE by default, so signalling this supervisor would
+			// fall through to the generic 125 status instead of preserving the
+			// supervised command's broken-pipe cause.
+			if status.Signal() == syscall.SIGPIPE {
+				return 128 + int(syscall.SIGPIPE)
+			}
 			_ = syscall.Kill(os.Getpid(), status.Signal())
 			return 125
 		}

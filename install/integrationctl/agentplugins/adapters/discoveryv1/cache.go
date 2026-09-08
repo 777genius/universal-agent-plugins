@@ -11,6 +11,8 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/atomicfile"
 )
 
 type Cache struct {
@@ -189,12 +191,7 @@ func (cache Cache) reconcile(verified VerifiedBundle, trust TrustStore, persist 
 		return VerifiedBundle{}, err
 	}
 	ok = true
-	dir, err := os.Open(directory)
-	if err != nil {
-		return VerifiedBundle{}, err
-	}
-	defer dir.Close()
-	if err := dir.Sync(); err != nil {
+	if err := atomicfile.SyncDirectory(directory); err != nil {
 		return VerifiedBundle{}, err
 	}
 	verified.Source = BundleSourceCache

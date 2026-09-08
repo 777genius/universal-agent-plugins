@@ -4,6 +4,7 @@ import { mdiOpenSourceInitiative, mdiRobotOutline, mdiViewDashboardOutline } fro
 const { content } = useLandingContent();
 const { t, locale } = useI18n();
 const config = useRuntimeConfig();
+const { asset } = useSite();
 const githubUrl = `https://github.com/${config.public.githubRepo}`;
 const { docsUrl } = useDocsLinks();
 const { data: releaseData } = useReleaseDownloads();
@@ -22,7 +23,13 @@ const releaseDate = computed(() => {
       <v-row align="start" justify="space-between">
         <v-col cols="12" md="6" class="hero-section__content">
           <h1 class="hero-section__title">
-            <span class="hero-section__logo">P</span>
+            <img
+              :src="asset('icon.svg')"
+              alt=""
+              class="hero-section__logo"
+              width="56"
+              height="56"
+            >
             {{ content.hero.title }}
           </h1>
 
@@ -135,16 +142,9 @@ const releaseDate = computed(() => {
   height: 56px;
   border-radius: 14px;
   flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: linear-gradient(135deg, #00f0ff, #ff00ff 55%, #39ff14);
-  color: #0a0a0f;
-  font-size: 1.45rem;
-  font-family: "JetBrains Mono", monospace;
-  font-weight: 800;
+  display: block;
   box-shadow: 0 10px 30px rgba(0, 240, 255, 0.2);
-  -webkit-text-fill-color: initial;
+  object-fit: cover;
 }
 
 .hero-section__subtitle {

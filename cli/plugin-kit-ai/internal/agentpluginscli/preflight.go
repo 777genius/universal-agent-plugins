@@ -76,6 +76,27 @@ func preflightInstalledBindings(bindingTargets []domain.ClientID, detected map[d
 	return selected, nil
 }
 
+func resolveInstalledBindingTargets(ctx context.Context, app App, bindingTargets []domain.ClientID, probeVersion bool) ([]domain.ClientID, error) {
+	clients, err := detectClientsForLifecycleResolution(ctx, app.Detector, probeVersion)
+	if err != nil {
+		return nil, fmt.Errorf("detect AI clients: %w", err)
+	}
+	detected := make(map[domain.ClientID]domain.DetectedClient, len(clients))
+	for _, client := range clients {
+		detected[client.ClientID] = client
+	}
+	resolved, err := preflightInstalledBindings(bindingTargets, detected)
+	if err != nil {
+		return nil, err
+	}
+	targets := make([]domain.ClientID, 0, len(resolved))
+	for _, client := range resolved {
+		targets = append(targets, client.ClientID)
+	}
+	sortTargets(targets)
+	return targets, nil
+}
+
 func detectedClientValues(clients map[domain.ClientID]domain.DetectedClient) []domain.DetectedClient {
 	values := make([]domain.DetectedClient, 0, len(clients))
 	for _, client := range clients {

@@ -43,15 +43,42 @@ jobs:
         working-directory: website
         run: pnpm install --frozen-lockfile
 
+      # Keep the renamed CLI Pages site self-contained: every deployment carries
+      # a verified, byte-exact compatibility copy of the registry feeds. This
+      # prevents the normal Pages workflow from overwriting a previous mirror
+      # deployment with a site that only contains the landing page and docs.
+      - name: Verify and stage signed registry feeds
+        env:
+          REGISTRY_REPOSITORY: 777genius/universal-agent-plugins-registry
+          PAGES_ORIGIN: https://777genius.github.io/universal-agent-plugins-registry/
+        run: |
+          previous="${RUNNER_TEMP}/uap-previous-mirror.json"
+          if ! curl --fail --silent --show-error --location --max-time 30 \
+            "${PAGES_ORIGIN%/}/MIRROR_METADATA.json" > "$previous"; then
+            rm -f "$previous"
+          fi
+          go run ./cmd/agentplugins-registry-mirror \
+            --registry-repository "$REGISTRY_REPOSITORY" \
+            --pages-origin "$PAGES_ORIGIN" \
+            --previous-marker "$previous" \
+            --output "${RUNNER_TEMP}/uap-registry-mirror"
+          mkdir -p landing/public
+          cp -a "${RUNNER_TEMP}/uap-registry-mirror/." landing/public/
+
       - name: Build landing
         env:
-          NUXT_APP_BASE_URL: /plugin-kit-ai/
+          NUXT_APP_BASE_URL: /universal-agent-plugins/
+          NUXT_PUBLIC_SITE_URL: https://777genius.github.io/universal-agent-plugins
+          NUXT_PUBLIC_GITHUB_REPO: 777genius/universal-agent-plugins
+          NUXT_PUBLIC_DOCS_URL: https://777genius.github.io/universal-agent-plugins/docs/en/
+          NUXT_PUBLIC_QUICKSTART_URL: https://777genius.github.io/universal-agent-plugins/docs/en/guide/quickstart.html
+          NUXT_PUBLIC_DOCS_SITEMAP_URL: https://777genius.github.io/universal-agent-plugins/docs/sitemap.xml
         working-directory: landing
         run: pnpm generate
 
       - name: Build public docs under /docs
         env:
-          DOCS_BASE_PATH: /plugin-kit-ai/docs/
+          DOCS_BASE_PATH: /universal-agent-plugins/docs/
           DOCS_HOSTNAME: https://777genius.github.io
         working-directory: website
         run: pnpm run docs:build

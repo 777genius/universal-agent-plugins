@@ -28,6 +28,11 @@ node_modules/
 landing/node_modules/
 landing/.nuxt/
 landing/.output/
+landing/public/MIRROR_METADATA.json
+landing/public/discovery/
+landing/public/registry/
+landing/.e2e-pages/
+landing/test-results/
 .dist/
 dist/
 dist

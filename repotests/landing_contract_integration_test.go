@@ -12,6 +12,13 @@ import (
 func TestLandingSurface_LocalesLinksAndBrandingStayAligned(t *testing.T) {
 	root := RepoRoot(t)
 	landingRoot := filepath.Join(root, "landing")
+	canonicalLogo := readRepoFile(t, root, "assets", "logo.svg")
+	if got := readRepoFile(t, landingRoot, "public", "icon.svg"); got != canonicalLogo {
+		t.Fatal("landing favicon must match the canonical Universal Agent Plugins logo")
+	}
+	if got := readRepoFile(t, root, "website", "public", "icon.svg"); got != canonicalLogo {
+		t.Fatal("documentation favicon must match the canonical Universal Agent Plugins logo")
+	}
 
 	i18nBody, err := os.ReadFile(filepath.Join(landingRoot, "data", "i18n.ts"))
 	if err != nil {
@@ -32,16 +39,16 @@ func TestLandingSurface_LocalesLinksAndBrandingStayAligned(t *testing.T) {
 	}
 	docsLinks := string(docsLinksBody)
 	mustContain(t, docsLinks, `const docsLocalePattern = /\/(en|ru|es|fr|zh)(?=\/|$)/;`)
-	mustContain(t, docsLinks, `new Set<LocaleCode>(["en", "ru", "es", "fr", "zh"])`)
+	mustContain(t, docsLinks, `new Set<LocaleCode>(['en', 'ru', 'es', 'fr', 'zh'])`)
 	mustContain(t, docsLinks, `supportBoundaryUrl`)
-	mustContain(t, docsLinks, `https://777genius.github.io/plugin-kit-ai/docs/en/`)
+	mustContain(t, docsLinks, `https://777genius.github.io/universal-agent-plugins/docs/en/`)
 
 	releaseComposableBody, err := os.ReadFile(filepath.Join(landingRoot, "composables", "useReleaseDownloads.ts"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	releaseComposable := string(releaseComposableBody)
-	mustContain(t, releaseComposable, `"/api/releases/latest"`)
+	mustContain(t, releaseComposable, `'/api/releases/latest'`)
 	mustContain(t, releaseComposable, `server: true`)
 	mustContain(t, releaseComposable, `lazy: false`)
 	mustContain(t, releaseComposable, `plugin-kit-ai_release_meta`)
@@ -67,30 +74,42 @@ func TestLandingSurface_LocalesLinksAndBrandingStayAligned(t *testing.T) {
 		t.Fatal(err)
 	}
 	seo := string(seoBody)
-	mustContain(t, seo, `https://777genius.github.io/plugin-kit-ai`)
+	mustContain(t, seo, `https://777genius.github.io/universal-agent-plugins`)
 	mustNotContain(t, seo, `hookplex.dev`)
-	mustNotContain(t, seo, `priceCurrency`)
-	mustNotContain(t, seo, `offers:`)
+
+	seoUtilsBody, err := os.ReadFile(filepath.Join(landingRoot, "utils", "seo.ts"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	seoUtils := string(seoUtilsBody)
+	mustContain(t, seoUtils, `'@type': 'SoftwareApplication'`)
+	mustContain(t, seoUtils, `isAccessibleForFree: true`)
+	mustContain(t, seoUtils, `offers:`)
+	mustContain(t, seoUtils, `price: '0'`)
+	mustContain(t, seoUtils, `priceCurrency: 'USD'`)
+	mustContain(t, seoUtils, `installUrl: npmUrl`)
+	mustContain(t, seoUtils, `softwareRequirements:`)
+	mustNotContain(t, seoUtils, `hookplex.dev`)
 
 	nuxtConfigBody, err := os.ReadFile(filepath.Join(landingRoot, "nuxt.config.ts"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	nuxtConfig := string(nuxtConfigBody)
-	mustContain(t, nuxtConfig, `https://777genius.github.io/plugin-kit-ai/docs/en/`)
-	mustContain(t, nuxtConfig, `https://777genius.github.io/plugin-kit-ai/docs/sitemap.xml`)
+	mustContain(t, nuxtConfig, `https://777genius.github.io/universal-agent-plugins/docs/en/`)
+	mustContain(t, nuxtConfig, `https://777genius.github.io/universal-agent-plugins/docs/sitemap.xml`)
 
 	ruContentBody, err := os.ReadFile(filepath.Join(landingRoot, "content", "ru.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	ruContent := string(ruContentBody)
-	mustContain(t, ruContent, `https://777genius.github.io/plugin-kit-ai/docs/ru/guide/quickstart.html`)
+	mustContain(t, ruContent, `https://777genius.github.io/universal-agent-plugins/docs/ru/guide/quickstart.html`)
 	mustNotContain(t, ruContent, `"testimonials"`)
 	mustContain(t, ruContent, `"title": "Проверяемый установочный скрипт"`)
-	mustContain(t, ruContent, `"title": "npx"`)
-	mustContain(t, ruContent, `"invocation": "npx plugin-kit-ai@latest"`)
-	mustContain(t, ruContent, `"note": "Самый быстрый путь, если сначала нужен one-command install плагина."`)
+	mustContain(t, ruContent, `"title": "npx · Node.js 22+"`)
+	mustContain(t, ruContent, `"invocation": "npx universal-agent-plugins"`)
+	mustContain(t, ruContent, `"note": "Без постоянной установки: npx скачивает проверенный CLI и запускает команду плагина за один шаг."`)
 	mustNotContain(t, ruContent, `Public-beta обёртка`)
 	mustNotContain(t, ruContent, `"pricing"`)
 	mustNotContain(t, ruContent, `"hookplex":`)
@@ -121,14 +140,14 @@ func TestLandingSurface_LocalesLinksAndBrandingStayAligned(t *testing.T) {
 	mustContain(t, enLocale, `"copy": "Copy"`)
 	mustContain(t, enLocale, `"copied": "Copied"`)
 	mustContain(t, enLocale, `"comparison": "Why it works"`)
-	mustContain(t, enLocale, `"pluginKitAi": "plugin-kit-ai"`)
+	mustContain(t, enLocale, `"pluginKitAi": "Universal Agent Plugins"`)
 	mustContain(t, enLocale, `"generate": "generate outputs"`)
 	mustContain(t, enLocale, `"viewAll": "View all"`)
 	mustContain(t, enLocale, `"viewDetails": "View details"`)
 	mustContain(t, enLocale, `"filterLabel": "Filter by workflow"`)
-	mustContain(t, enLocale, `"pluginDetailTitle": "{plugin} plugin | plugin-kit-ai catalog"`)
+	mustContain(t, enLocale, `"pluginDetailTitle": "{plugin} | Universal Agent Plugins"`)
 	mustContain(t, enLocale, `"catalogTitle": "Every first-party plugin in one searchable catalog"`)
-	mustContain(t, enLocale, `"pluginsTitle": "Plugin catalog | First-party plugins for plugin-kit-ai"`)
+	mustContain(t, enLocale, `"pluginsTitle": "Plugin catalog | Universal Agent Plugins"`)
 	mustNotContain(t, enLocale, `"pricing"`)
 	mustNotContain(t, enLocale, `Hookplex`)
 	mustNotContain(t, enLocale, `"hookplex":`)
@@ -142,14 +161,14 @@ func TestLandingSurface_LocalesLinksAndBrandingStayAligned(t *testing.T) {
 	mustContain(t, ruLocale, `"copy": "Копировать"`)
 	mustContain(t, ruLocale, `"copied": "Скопировано"`)
 	mustContain(t, ruLocale, `"comparison": "Почему это работает"`)
-	mustContain(t, ruLocale, `"pluginKitAi": "plugin-kit-ai"`)
+	mustContain(t, ruLocale, `"pluginKitAi": "Universal Agent Plugins"`)
 	mustContain(t, ruLocale, `"generate": "собрать варианты"`)
 	mustContain(t, ruLocale, `"viewAll": "Смотреть все"`)
 	mustContain(t, ruLocale, `"viewDetails": "Подробнее"`)
 	mustContain(t, ruLocale, `"filterLabel": "Фильтр по сценариям"`)
-	mustContain(t, ruLocale, `"pluginDetailTitle": "Плагин {plugin} | каталог plugin-kit-ai"`)
+	mustContain(t, ruLocale, `"pluginDetailTitle": "{plugin} | Universal Agent Plugins"`)
 	mustContain(t, ruLocale, `"catalogTitle": "Вся первая линейка плагинов в одном каталоге с поиском"`)
-	mustContain(t, ruLocale, `"pluginsTitle": "Каталог плагинов | Первая линейка plugin-kit-ai"`)
+	mustContain(t, ruLocale, `"pluginsTitle": "Каталог плагинов | Universal Agent Plugins"`)
 	mustNotContain(t, ruLocale, `"pricing"`)
 	mustNotContain(t, ruLocale, `Hookplex`)
 	mustNotContain(t, ruLocale, `"hookplex":`)
@@ -197,7 +216,7 @@ func TestLandingSurface_LocalesLinksAndBrandingStayAligned(t *testing.T) {
 		t.Fatal(err)
 	}
 	robots := string(robotsBody)
-	mustContain(t, robots, `https://777genius.github.io/plugin-kit-ai/docs/sitemap.xml`)
+	mustContain(t, robots, `https://777genius.github.io/universal-agent-plugins/docs/sitemap.xml`)
 
 	logoBody, err := os.ReadFile(filepath.Join(landingRoot, "components", "common", "AppLogo.vue"))
 	if err != nil {
@@ -206,7 +225,9 @@ func TestLandingSurface_LocalesLinksAndBrandingStayAligned(t *testing.T) {
 	logo := string(logoBody)
 	mustContain(t, logo, `const localePath = useLocalePath();`)
 	mustContain(t, logo, `<NuxtLink :to="homePath" class="app-logo">`)
-	mustContain(t, logo, `plugin-kit-ai`)
+	mustContain(t, logo, `:src="asset('icon.svg')"`)
+	mustContain(t, logo, `Universal Agent Plugins`)
+	mustNotContain(t, logo, `plugin-kit-ai`)
 	mustNotContain(t, logo, `Hookplex`)
 
 	heroBody, err := os.ReadFile(filepath.Join(landingRoot, "components", "sections", "HeroSection.vue"))
@@ -214,8 +235,9 @@ func TestLandingSurface_LocalesLinksAndBrandingStayAligned(t *testing.T) {
 		t.Fatal(err)
 	}
 	hero := string(heroBody)
-	mustContain(t, hero, `<span class="hero-section__logo">P</span>`)
-	mustNotContain(t, hero, `<span class="hero-section__logo">H</span>`)
+	mustContain(t, hero, `class="hero-section__logo"`)
+	mustContain(t, hero, `:src="asset('icon.svg')"`)
+	mustNotContain(t, hero, `<span class="hero-section__logo">`)
 
 	indexBody, err := os.ReadFile(filepath.Join(landingRoot, "pages", "index.vue"))
 	if err != nil {
@@ -229,22 +251,35 @@ func TestLandingSurface_LocalesLinksAndBrandingStayAligned(t *testing.T) {
 		t.Fatal(err)
 	}
 	pluginsPage := string(pluginsPageBody)
-	mustContain(t, pluginsPage, `usePageSeo('meta.pluginsTitle', 'meta.pluginsDescription')`)
-	mustContain(t, pluginsPage, `v-model="searchQuery"`)
-	mustContain(t, pluginsPage, `filteredPlugins`)
-	mustContain(t, pluginsPage, `selectedCategory`)
-	mustContain(t, pluginsPage, `plugins.categories.`)
-	mustContain(t, pluginsPage, `pluginDetailPath`)
+	mustContain(t, pluginsPage, `const registry = await useRegistryPage({ discovery: true })`)
+	mustContain(t, pluginsPage, `usePageSeo('Agent Plugins 1.0 Directory | Search 2,500+ Plugins'`)
+	mustContain(t, pluginsPage, `'@type': 'ItemList'`)
+	mustContain(t, pluginsPage, `<PluginCatalog`)
+	mustContain(t, pluginsPage, `:plugins="registry.plugins"`)
 
 	pluginDetailPageBody, err := os.ReadFile(filepath.Join(landingRoot, "pages", "plugins", "[slug].vue"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	pluginDetailPage := string(pluginDetailPageBody)
-	mustContain(t, pluginDetailPage, `getPluginBySlug`)
-	mustContain(t, pluginDetailPage, `usePageSeo(detailTitle, detailDescription, { translate: false })`)
-	mustContain(t, pluginDetailPage, `plugins.useCasesTitle`)
-	mustContain(t, pluginDetailPage, `plugins.highlightsTitle`)
+	mustContain(t, pluginDetailPage, `registry.plugins.find`)
+	mustContain(t, pluginDetailPage, `projection: { kind: 'plugin', value: slug }`)
+	mustContain(t, pluginDetailPage, `usePageSeo(`)
+	mustContain(t, pluginDetailPage, `'@type': 'SoftwareSourceCode'`)
+	mustContain(t, pluginDetailPage, `'@type': 'BreadcrumbList'`)
+	mustContain(t, pluginDetailPage, `<InstallPanel`)
+	mustContain(t, pluginDetailPage, `sourceUrl(plugin)`)
+
+	agentPageBody, err := os.ReadFile(filepath.Join(landingRoot, "pages", "agents", "[client].vue"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	agentPage := string(agentPageBody)
+	mustContain(t, agentPage, `clientLandingBySlug.get`)
+	mustContain(t, agentPage, `projection: { kind: 'client', value: client.id }`)
+	mustContain(t, agentPage, `'@type': 'ItemList'`)
+	mustContain(t, agentPage, `'@type': 'BreadcrumbList'`)
+	mustContain(t, agentPage, `npx universal-agent-plugins add context7 --target`)
 
 	enContentBody, err := os.ReadFile(filepath.Join(landingRoot, "content", "en.json"))
 	if err != nil {

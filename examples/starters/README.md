@@ -13,7 +13,7 @@ Use the supported CLI install order:
 2. npm: `npm i -g plugin-kit-ai` or `npx plugin-kit-ai@latest ...`
 3. pipx (when that release was published to PyPI): `pipx install plugin-kit-ai` or `pipx run plugin-kit-ai version`
 4. Verified fallback: `curl -fsSL https://raw.githubusercontent.com/777genius/plugin-kit-ai/main/scripts/install.sh | sh`
-5. CI: `777genius/plugin-kit-ai/setup-plugin-kit-ai@v1`
+5. CI: `777genius/universal-agent-plugins/setup-plugin-kit-ai@v1`
 
 ## Choose A Starter
 

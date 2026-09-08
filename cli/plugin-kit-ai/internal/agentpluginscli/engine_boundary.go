@@ -86,6 +86,9 @@ func runSwitch(ctx context.Context, cmd *cobra.Command, app App, opts *options, 
 	if loaded.envelope.Manifest.Name != installation.DeclaredName {
 		return fmt.Errorf("switch source manifest name %q does not match installed product %q", loaded.envelope.Manifest.Name, installation.DeclaredName)
 	}
+	if err := authorizeSecurityAssessment(cmd, app, opts, &loaded); err != nil {
+		return err
+	}
 	output := switchOutput{DryRun: true, Status: "planned", Source: publicPackageSource(loaded.envelope.Source), Revision: loaded.envelope.Source.ResolvedRevision,
 		TreeDigest: loaded.envelope.TreeDigest, ManifestDigest: loaded.envelope.ManifestDigest, Directory: cloneDirectoryOrigin(loaded.directory),
 	}

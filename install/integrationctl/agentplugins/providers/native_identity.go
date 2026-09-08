@@ -72,11 +72,14 @@ func (observer NativeIdentityObserver) observeIdentity(ctx context.Context, clie
 	}
 
 	prepared, preparedErr := inspectPreparedRegistry(plan, name, managed != nil)
+	if client.ClientID == domain.ClientClaude {
+		prepared, preparedErr = inspectClaudeSkillsRegistry(plan, name, managed != nil)
+	}
 	if preparedErr != nil {
 		prepared = registryIndeterminate
 	}
 	nativeAttempted := includeNativeRegistry && observer.Runner != nil && strings.TrimSpace(plan.NativeRegistryExecutable) != "" &&
-		(client.ClientID == domain.ClientCodex || client.ClientID == domain.ClientCopilot || client.ClientID == domain.ClientVSCode)
+		(client.ClientID == domain.ClientCodex || client.ClientID == domain.ClientClaude || client.ClientID == domain.ClientCopilot || client.ClientID == domain.ClientVSCode)
 	native := registryClear
 	if includeNativeRegistry {
 		nativeCtx := ctx
@@ -160,6 +163,44 @@ func (observer NativeIdentityObserver) inspectNativeRegistry(ctx context.Context
 			return observer.inspectCodexCLI(ctx, plan, managed)
 		}
 		return inspectCodexFiles(plan, managed)
+	case domain.ClientClaude:
+		if strings.TrimSpace(plan.NativeRegistryExecutable) == "" || observer.Runner == nil {
+			return registryIndeterminate, nil
+		}
+		configRoot := strings.TrimSpace(plan.TargetAnchor)
+		if configRoot == "" {
+			configRoot = strings.TrimSpace(client.ConfigRoot)
+		}
+		if configRoot == "" && strings.TrimSpace(plan.TargetRoot) != "" {
+			configRoot = filepath.Dir(filepath.Clean(plan.TargetRoot))
+		}
+		command, err := claudeListCommand(plan.NativeRegistryExecutable, configRoot, plan.ActivePath)
+		if err != nil {
+			return registryIndeterminate, err
+		}
+		result, err := runClaudeListCommand(ctx, observer.Runner, command)
+		if err != nil {
+			if ctxErr := ctx.Err(); ctxErr != nil {
+				return registryIndeterminate, ctxErr
+			}
+			return registryIndeterminate, err
+		}
+		if result.ExitCode != 0 {
+			return registryIndeterminate, fmt.Errorf("Claude Code plugin registry command failed with exit code %d", result.ExitCode)
+		}
+		switch claudePluginStatus(result.Stdout, plan.DeclaredName, plan.ActivePath) {
+		case claudeStatusInstalled:
+			if managed == nil {
+				return registryCollision, nil
+			}
+			return registryExpected, nil
+		case claudeStatusAbsent:
+			return registryClear, nil
+		case claudeStatusCollision:
+			return registryCollision, nil
+		default:
+			return registryIndeterminate, nil
+		}
 	case domain.ClientChatGPT:
 		// ChatGPT's installed-plugin registry is remote and this adapter has no
 		// authenticated read-only API. A signed explicit app binding authorizes
@@ -193,6 +234,19 @@ func (observer NativeIdentityObserver) inspectNativeRegistry(ctx context.Context
 		return registryIndeterminate, nil
 	case domain.ClientKiro:
 		return inspectKiroRegistry(plan, managed)
+	case domain.ClientOpenCode:
+		// OpenCode MCP entries are keyed by individual server names rather than
+		// the package identity. Exact entry collision and ownership checks happen
+		// transactionally in the native config provider after staging.
+		return registryClear, nil
+	case domain.ClientCline:
+		// Cline MCP identities are per-server and protected by exact receipts;
+		// its skill paths are checked before the all-or-none native config batch.
+		return registryClear, nil
+	case domain.ClientGemini:
+		return inspectGeminiRegistry(plan, managed)
+	case domain.ClientWindsurf:
+		return inspectWindsurfRegistry(plan, managed)
 	default:
 		return registryIndeterminate, nil
 	}
@@ -210,9 +264,53 @@ func (observer NativeIdentityObserver) inspectCodexCLI(ctx context.Context, plan
 		return registryIndeterminate, err
 	}
 	if result.ExitCode != 0 {
+		if diagnostic := boundedNativeDiagnostic(result.Stdout, result.Stderr); diagnostic != "" {
+			return registryIndeterminate, fmt.Errorf("Codex plugin registry command failed with exit code %d: %s", result.ExitCode, diagnostic)
+		}
 		return registryIndeterminate, fmt.Errorf("Codex plugin registry command failed with exit code %d", result.ExitCode)
 	}
 	return codexRegistryFinding(result.Stdout, plan.DeclaredName, managedMarketplaceName(plan.PhysicalArtifactID), managed != nil), nil
+}
+
+// nativeDiagnosticLimit bounds the excerpt kept from a failed native CLI
+// invocation's own output. It exists purely for operator diagnosis of a
+// discovery failure and is never treated as proof of package absence.
+const nativeDiagnosticLimit = 2048
+
+// boundedNativeDiagnostic returns a short, sanitized excerpt of a failed
+// native CLI invocation's own stdout/stderr. It never includes argv,
+// environment, or configuration; only the bounded child-process output, with
+// control characters stripped and length capped.
+func boundedNativeDiagnostic(stdout, stderr []byte) string {
+	parts := make([]string, 0, 2)
+	if text := sanitizeNativeDiagnosticText(stderr); text != "" {
+		parts = append(parts, text)
+	}
+	if text := sanitizeNativeDiagnosticText(stdout); text != "" {
+		parts = append(parts, text)
+	}
+	text := strings.Join(parts, " | ")
+	if len(text) > nativeDiagnosticLimit {
+		// Re-validate after the byte-index cut: it may have split a multibyte
+		// rune, which strings.ToValidUTF8 would otherwise leave as U+FFFD.
+		text = strings.ToValidUTF8(text[:nativeDiagnosticLimit], "") + "...(truncated)"
+	}
+	return text
+}
+
+func sanitizeNativeDiagnosticText(output []byte) string {
+	text := strings.ToValidUTF8(string(output), "")
+	text = strings.Map(func(r rune) rune {
+		switch {
+		case r == '\n' || r == '\t':
+			return ' '
+		case r < 0x20 || r == 0x7f:
+			return -1
+		default:
+			return r
+		}
+	}, text)
+	return strings.Join(strings.Fields(text), " ")
 }
 
 func codexRegistryFinding(body []byte, name, expectedMarketplace string, owned bool) registryFinding {
@@ -278,7 +376,11 @@ func (observer NativeIdentityObserver) inspectCopilotCLI(ctx context.Context, pl
 	if result.ExitCode != 0 {
 		return registryIndeterminate, fmt.Errorf("Copilot plugin registry command failed with exit code %d", result.ExitCode)
 	}
-	return copilotRegistryFinding(result.Stdout, plan.DeclaredName, managedMarketplaceName(plan.PhysicalArtifactID), managed != nil), nil
+	expectedPath := plan.ActivePath
+	if managed != nil && strings.TrimSpace(managed.TargetLocator) != "" {
+		expectedPath = managed.TargetLocator
+	}
+	return copilotRegistryFindingAt(result.Stdout, plan.DeclaredName, managedMarketplaceName(plan.PhysicalArtifactID), copilotMarketplaceVersion(plan.DeclaredVersion), expectedPath, managed != nil), nil
 }
 
 func (observer NativeIdentityObserver) runNativeRegistry(ctx context.Context, command legacyports.Command) (legacyports.CommandResult, error) {
@@ -288,7 +390,25 @@ func (observer NativeIdentityObserver) runNativeRegistry(ctx context.Context, co
 	return observer.Runner.Run(ctx, command)
 }
 
-func copilotRegistryFinding(stdout []byte, name, expectedMarketplace string, owned bool) registryFinding {
+func copilotRegistryFinding(stdout []byte, name, expectedMarketplace, expectedVersion string, owned bool) registryFinding {
+	return copilotRegistryFindingAt(stdout, name, expectedMarketplace, expectedVersion, "", owned)
+}
+
+func copilotRegistryFindingAt(stdout []byte, name, expectedMarketplace, expectedVersion, expectedPath string, owned bool) registryFinding {
+	expected := name + "@" + expectedMarketplace
+	if status, recognized := copilotLivePluginStatus(stdout, expected, expectedVersion, expectedPath); recognized {
+		switch status {
+		case copilotStatusInstalled:
+			if !owned {
+				return registryCollision
+			}
+			return registryExpected
+		case copilotStatusAbsent:
+			return registryClear
+		default:
+			return registryIndeterminate
+		}
+	}
 	normalized := strings.ReplaceAll(string(stdout), "\r\n", "\n")
 	document := strings.TrimSuffix(normalized, "\n")
 	if document == "No plugins installed.\n\nUse 'copilot plugin install <source>' to install a plugin." {
@@ -315,7 +435,7 @@ func copilotRegistryFinding(stdout []byte, name, expectedMarketplace string, own
 			return registryIndeterminate
 		}
 		match := copilotInstalledEntry.FindStringSubmatch(line)
-		if len(match) == 2 {
+		if len(match) == 3 {
 			if recognizedEmpty {
 				return registryIndeterminate
 			}
@@ -330,6 +450,9 @@ func copilotRegistryFinding(stdout []byte, name, expectedMarketplace string, own
 				return registryIndeterminate
 			}
 			if parts[0] == name && parts[1] == expectedMarketplace {
+				if match[2] != expectedVersion {
+					return registryIndeterminate
+				}
 				if !owned {
 					return registryCollision
 				}
@@ -531,6 +654,59 @@ func inspectPreparedRegistry(plan domain.DeliveryPlan, name string, owned bool) 
 	return inspectUnqualifiedPluginRoot(plan.TargetRoot, name, plan.ActivePath, owned)
 }
 
+func inspectClaudeSkillsRegistry(plan domain.DeliveryPlan, name string, owned bool) (registryFinding, error) {
+	root := strings.TrimSpace(plan.TargetRoot)
+	if root == "" {
+		return registryIndeterminate, nil
+	}
+	entries, err := os.ReadDir(root)
+	if os.IsNotExist(err) {
+		return registryClear, nil
+	}
+	if err != nil {
+		return registryIndeterminate, err
+	}
+	finding := registryClear
+	for _, entry := range entries {
+		if entry.Type()&os.ModeSymlink != 0 {
+			return registryIndeterminate, nil
+		}
+		if !entry.IsDir() {
+			// A plain file cannot contain the .claude-plugin/plugin.json this
+			// scheme requires, so it can never claim a competing plugin
+			// identity. OS-generated artifacts such as .DS_Store are common
+			// in a Finder-browsed skills directory and must not block every
+			// other plugin's repair/update.
+			continue
+		}
+		path := filepath.Join(root, entry.Name())
+		manifest := filepath.Join(path, ".claude-plugin", "plugin.json")
+		manifestName, readErr := readJSONManifestName(manifest)
+		if os.IsNotExist(readErr) {
+			// Plain skills legitimately share this directory and do not claim a
+			// plugin identity.
+			if _, skillErr := os.Lstat(filepath.Join(path, "SKILL.md")); skillErr == nil {
+				continue
+			} else if !os.IsNotExist(skillErr) {
+				return registryIndeterminate, skillErr
+			}
+			return registryIndeterminate, nil
+		}
+		if readErr != nil {
+			return registryIndeterminate, readErr
+		}
+		if manifestName != name {
+			continue
+		}
+		if sameCleanPath(path, plan.ActivePath) && owned {
+			finding = registryExpected
+			continue
+		}
+		return registryCollision, nil
+	}
+	return finding, nil
+}
+
 func inspectUnqualifiedPluginRoot(root, name, activePath string, owned bool) (registryFinding, error) {
 	if strings.TrimSpace(root) == "" {
 		return registryIndeterminate, nil
@@ -547,8 +723,15 @@ func inspectUnqualifiedPluginRoot(root, name, activePath string, owned bool) (re
 		if strings.HasPrefix(entry.Name(), ".agentplugins-staging-") {
 			continue
 		}
-		if entry.Type()&os.ModeSymlink != 0 || !entry.IsDir() {
+		if entry.Type()&os.ModeSymlink != 0 {
 			return registryIndeterminate, nil
+		}
+		if !entry.IsDir() {
+			// A plain file cannot contain the manifest this scheme requires,
+			// so it can never claim a competing plugin identity. OS-generated
+			// artifacts such as .DS_Store are common here and must not block
+			// every other plugin's repair/update.
+			continue
 		}
 		path := filepath.Join(root, entry.Name())
 		manifestName, qualified, namespace, err := nativeManifestIdentity(path)
@@ -597,7 +780,7 @@ func nativeManifestIdentity(root string) (name string, qualified bool, namespace
 			return "", false, "", readErr
 		}
 	}
-	for _, manifest := range []string{filepath.Join(root, "plugin.json"), filepath.Join(root, ".cursor-plugin", "plugin.json"), filepath.Join(root, ".codex-plugin", "plugin.json")} {
+	for _, manifest := range []string{filepath.Join(root, ".claude-plugin", "plugin.json"), filepath.Join(root, "plugin.json"), filepath.Join(root, ".cursor-plugin", "plugin.json"), filepath.Join(root, ".codex-plugin", "plugin.json")} {
 		name, readErr := readJSONManifestName(manifest)
 		if readErr == nil {
 			return name, false, "", nil

@@ -74,3 +74,32 @@ body {
 .app-header {
   backdrop-filter: blur(10px);
 }
+
+/* Progressive enhancement: sections remain visible until the client observer is ready. */
+.scroll-reveal-ready .scroll-reveal {
+  opacity: 0;
+  transform: translate3d(0, 18px, 0);
+  transition:
+    opacity 320ms ease-out,
+    transform 420ms cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: opacity, transform;
+}
+
+/* Establish the hidden state without playing the transition backwards on hydration. */
+.scroll-reveal-ready:not(.scroll-reveal-active) .scroll-reveal {
+  transition: none;
+}
+
+.scroll-reveal-ready .scroll-reveal.scroll-reveal--visible {
+  opacity: 1;
+  transform: translate3d(0, 0, 0);
+  will-change: auto;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scroll-reveal-ready .scroll-reveal {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+}

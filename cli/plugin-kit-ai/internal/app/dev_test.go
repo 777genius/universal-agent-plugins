@@ -73,15 +73,14 @@ func TestPluginServiceDevWatchRerunsOnFixtureChange(t *testing.T) {
 		errCh <- err
 	}()
 
-	first := <-updatesCh
+	first := receiveDevUpdate(t, updatesCh)
 	if first.Cycle != 1 {
 		t.Fatalf("first cycle = %d", first.Cycle)
 	}
-	time.Sleep(60 * time.Millisecond)
 	if err := os.WriteFile(fixturePath, []byte(`{"session_id":"s2","cwd":"/tmp","hook_event_name":"Stop"}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	second := <-updatesCh
+	second := receiveDevUpdate(t, updatesCh)
 	if second.Cycle != 2 {
 		t.Fatalf("second cycle = %d", second.Cycle)
 	}
@@ -92,8 +91,30 @@ func TestPluginServiceDevWatchRerunsOnFixtureChange(t *testing.T) {
 	if !strings.Contains(output, "fixtures/claude/Stop.json") {
 		t.Fatalf("output = %s", output)
 	}
-	if err := <-errCh; err != nil {
+	if err := receiveDevError(t, errCh); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func receiveDevUpdate(t *testing.T, updates <-chan PluginDevUpdate) PluginDevUpdate {
+	t.Helper()
+	select {
+	case update := <-updates:
+		return update
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for dev update")
+		return PluginDevUpdate{}
+	}
+}
+
+func receiveDevError(t *testing.T, errors <-chan error) error {
+	t.Helper()
+	select {
+	case err := <-errors:
+		return err
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for dev completion")
+		return nil
 	}
 }
 

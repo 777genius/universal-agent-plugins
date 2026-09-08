@@ -68,6 +68,7 @@ func (planner Planner) Plan(
 		Verification:       domain.VerificationPackageValid,
 		PhysicalArtifactID: physicalArtifactID,
 		DeclaredName:       envelope.Manifest.Name,
+		DeclaredVersion:    envelope.Manifest.Version,
 	}
 	planner.setNativeRegistry(&plan, client)
 	if client.Status != domain.DetectionDetected && client.ClientID != domain.ClientChatGPT {
@@ -80,6 +81,13 @@ func (planner Planner) Plan(
 		plan.Status = domain.PlanUnsupported
 		plan.Activation = domain.ActivationFailed
 		plan.Warnings = append(plan.Warnings, "scope_not_supported")
+		return plan, nil
+	}
+	if client.ClientID == domain.ClientClaude && strings.TrimSpace(client.ExecutablePath) == "" {
+		plan.Status = domain.PlanUnsupported
+		plan.Activation = domain.ActivationFailed
+		plan.Warnings = append(plan.Warnings, "trusted_claude_cli_required")
+		plan.UserActions = append(plan.UserActions, "install Claude Code CLI so agentplugins can verify the exact @skills-dir identity")
 		return plan, nil
 	}
 	target, err := planner.ResolveTarget(ctx, client, scope, physicalArtifactID)
@@ -150,10 +158,32 @@ func (planner Planner) Plan(
 		plan.Status = domain.PlanReady
 		plan.Activation = domain.ActivationPrepared
 	}
+	if plan.Status != domain.PlanUnsupported && client.ClientID == domain.ClientOpenCode &&
+		strings.TrimSpace(client.ConfigRoot) != "" && hasOnlyPortableNativeComponents(plan.Components) {
+		plan.Status = domain.PlanReady
+		plan.Activation = domain.ActivationPrepared
+	}
+	if plan.Status != domain.PlanUnsupported && client.ClientID == domain.ClientGemini &&
+		strings.TrimSpace(client.ConfigRoot) != "" && geminiNativePlanComponents(plan.Components) {
+		plan.Status = domain.PlanReady
+		plan.Activation = domain.ActivationPrepared
+	}
+	if plan.Status != domain.PlanUnsupported && client.ClientID == domain.ClientWindsurf &&
+		strings.TrimSpace(client.ConfigRoot) != "" && hasSupportedKind(plan.Components, domain.ComponentMCPServer) {
+		plan.Status = domain.PlanReady
+		plan.Activation = domain.ActivationPrepared
+	}
+	if plan.Status != domain.PlanUnsupported && client.ClientID == domain.ClientCline &&
+		strings.TrimSpace(client.ConfigRoot) != "" && hasOnlyPortableNativeComponents(plan.Components) {
+		plan.Status = domain.PlanReady
+		plan.Activation = domain.ActivationPrepared
+	}
 
 	switch client.ClientID {
 	case domain.ClientCodex:
 		plan.UserActions = append(plan.UserActions, "finish installation in Codex Plugins, then start a new session")
+	case domain.ClientClaude:
+		plan.UserActions = append(plan.UserActions, "start a new Claude Code session or run /reload-plugins")
 	case domain.ClientChatGPT:
 		if hasSupportedKind(plan.Components, domain.ComponentApp) {
 			plan.UserActions = append(plan.UserActions, "install the prepared plugin from ChatGPT Plugins, verify its registered app connection, then start a new chat")
@@ -170,14 +200,44 @@ func (planner Planner) Plan(
 		}
 	case domain.ClientKiro:
 		plan.UserActions = append(plan.UserActions, "agentplugins will install and verify the package's global Kiro skills and MCP servers automatically")
+	case domain.ClientCline:
+		plan.UserActions = append(plan.UserActions, "agentplugins will install and verify Cline skills and MCP servers automatically; VS Code reloads MCP settings, while Cline CLI reads them on its next process")
+	case domain.ClientGemini:
+		plan.UserActions = append(plan.UserActions, "agentplugins will install and verify Gemini CLI skills and MCP servers automatically; reload them in a running session or restart Gemini CLI")
 	case domain.ClientVSCode:
 		if strings.TrimSpace(planner.Detected[domain.ClientCopilot].ExecutablePath) != "" {
 			plan.UserActions = append(plan.UserActions, "agentplugins will install through GitHub Copilot CLI; VS Code discovers it automatically")
 		} else {
 			plan.UserActions = append(plan.UserActions, "register the prepared local plugin in VS Code after installation")
 		}
+	case domain.ClientOpenCode:
+		plan.UserActions = append(plan.UserActions, "agentplugins will install the package's skills and MCP servers; restart OpenCode when complete")
+	case domain.ClientWindsurf:
+		if strings.TrimSpace(client.ConfigRoot) != "" && hasSupportedKind(plan.Components, domain.ComponentMCPServer) {
+			plan.UserActions = append(plan.UserActions, "agentplugins will update the selected legacy Windsurf channel's local MCP configuration; refresh MCP servers before first use")
+		} else {
+			plan.UserActions = append(plan.UserActions, "select exactly one legacy Windsurf channel and import the prepared MCP configuration manually")
+		}
+		if hasSupportedKind(plan.Components, domain.ComponentSkill) {
+			plan.Warnings = appendUnique(plan.Warnings, "windsurf_skills_prepared_only")
+			plan.UserActions = append(plan.UserActions, "Windsurf skills remain in the prepared package and are not claimed as activated")
+		}
 	}
 	return plan, nil
+}
+
+func geminiNativePlanComponents(components []domain.ComponentDecision) bool {
+	has := false
+	for _, component := range components {
+		if component.Support == domain.SupportUnsupported {
+			continue
+		}
+		if component.Kind != domain.ComponentSkill && component.Kind != domain.ComponentMCPServer {
+			return false
+		}
+		has = true
+	}
+	return has
 }
 
 func (planner Planner) setNativeRegistry(plan *domain.DeliveryPlan, client domain.DetectedClient) {
@@ -305,56 +365,19 @@ func (planner Planner) ResolveTarget(
 }
 
 func Capabilities(clientID domain.ClientID) (domain.ClientCapabilities, bool) {
-	allMCP := map[string]domain.SupportLevel{
-		"stdio":           domain.SupportNative,
-		"streamable-http": domain.SupportNative,
-		"sse":             domain.SupportNative,
-	}
-	switch clientID {
-	case domain.ClientCodex:
-		return domain.ClientCapabilities{
-			ClientID: clientID, PackageMode: domain.PackageProjection, ActivationMode: domain.ActivationByUser,
-			Scopes: []domain.InstallScope{domain.ScopeUser}, SkillSupport: domain.SupportProjected,
-			MCPTransports: mapSupport(allMCP, domain.SupportProjected), AppSupport: domain.SupportUnsupported, ExtensionSupport: domain.SupportUnsupported,
-		}, true
-	case domain.ClientChatGPT:
-		return domain.ClientCapabilities{
-			ClientID: clientID, PackageMode: domain.PackageProjection, ActivationMode: domain.ActivationByUser,
-			Scopes: []domain.InstallScope{domain.ScopeUser}, SkillSupport: domain.SupportProjected,
-			MCPTransports: mapSupport(allMCP, domain.SupportUnsupported), AppSupport: domain.SupportProjected, ExtensionSupport: domain.SupportUnsupported,
-		}, true
-	case domain.ClientCursor:
-		return domain.ClientCapabilities{
-			ClientID: clientID, PackageMode: domain.PackageNative, ActivationMode: domain.ActivationByUser,
-			Scopes: []domain.InstallScope{domain.ScopeUser}, SkillSupport: domain.SupportNative,
-			MCPTransports: allMCP, AppSupport: domain.SupportUnsupported, ExtensionSupport: domain.SupportNative,
-		}, true
-	case domain.ClientCopilot:
-		return domain.ClientCapabilities{
-			ClientID: clientID, PackageMode: domain.PackageNative, ActivationMode: domain.ActivationByUser,
-			Scopes: []domain.InstallScope{domain.ScopeUser}, SkillSupport: domain.SupportNative,
-			MCPTransports: allMCP, AppSupport: domain.SupportUnsupported, ExtensionSupport: domain.SupportNative,
-		}, true
-	case domain.ClientVSCode:
-		return domain.ClientCapabilities{
-			ClientID: clientID, PackageMode: domain.PackagePrepared, ActivationMode: domain.ActivationByUser,
-			Scopes: []domain.InstallScope{domain.ScopeUser}, SkillSupport: domain.SupportPrepared,
-			MCPTransports: mapSupport(allMCP, domain.SupportPrepared), AppSupport: domain.SupportUnsupported, ExtensionSupport: domain.SupportPrepared,
-		}, true
-	case domain.ClientKiro:
-		return domain.ClientCapabilities{
-			ClientID: clientID, PackageMode: domain.PackageNative, ActivationMode: domain.ActivationByUser,
-			Scopes: []domain.InstallScope{domain.ScopeUser}, SkillSupport: domain.SupportNative,
-			MCPTransports: allMCP, AppSupport: domain.SupportUnsupported, ExtensionSupport: domain.SupportUnsupported,
-		}, true
-	default:
-		return domain.ClientCapabilities{}, false
-	}
+	definition, ok := domain.ClientDefinitionFor(clientID)
+	return definition.Capabilities, ok
 }
 
 func (planner Planner) targetRoot(client domain.DetectedClient, mode domain.PackageMode) (string, string, error) {
 	var anchor, root string
-	if client.ClientID == domain.ClientCursor && mode == domain.PackageNative {
+	if client.ClientID == domain.ClientClaude && mode == domain.PackageProjection {
+		if strings.TrimSpace(client.ConfigRoot) == "" {
+			return "", "", fmt.Errorf("Claude Code config root is unavailable")
+		}
+		anchor = client.ConfigRoot
+		root = filepath.Join(client.ConfigRoot, "skills")
+	} else if client.ClientID == domain.ClientCursor && mode == domain.PackageNative {
 		if strings.TrimSpace(client.ConfigRoot) == "" {
 			return "", "", fmt.Errorf("Cursor config root is unavailable")
 		}
@@ -400,7 +423,11 @@ func componentDecisions(envelope domain.PackageEnvelope, capabilities domain.Cli
 				support = domain.SupportProjected
 			}
 		}
-		decisions = append(decisions, decision(domain.ComponentMCPServer, name, support))
+		value := decision(domain.ComponentMCPServer, name, support)
+		if (capabilities.ClientID == domain.ClientOpenCode || capabilities.ClientID == domain.ClientCodex) && server.Type == "sse" && support == domain.SupportUnsupported {
+			value.Reason = "declared_sse_not_supported_by_client"
+		}
+		decisions = append(decisions, value)
 	}
 	appNames := sortedKeys(envelope.App.Bindings)
 	for _, name := range appNames {
@@ -495,6 +522,20 @@ func hasSupportedKind(decisions []domain.ComponentDecision, kind domain.Componen
 }
 
 func hasOnlyKiroNativeComponents(decisions []domain.ComponentDecision) bool {
+	found := false
+	for _, item := range decisions {
+		if item.Support == domain.SupportUnsupported {
+			continue
+		}
+		if item.Kind != domain.ComponentSkill && item.Kind != domain.ComponentMCPServer {
+			return false
+		}
+		found = true
+	}
+	return found
+}
+
+func hasOnlyPortableNativeComponents(decisions []domain.ComponentDecision) bool {
 	found := false
 	for _, item := range decisions {
 		if item.Support == domain.SupportUnsupported {

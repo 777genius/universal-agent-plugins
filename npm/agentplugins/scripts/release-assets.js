@@ -8,6 +8,7 @@ const path = require("node:path");
 const VERSION = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
 const COMMIT = /^[0-9a-f]{40}$/;
 const DIGEST = /^[0-9a-f]{64}$/;
+const PRODUCER_REPOSITORY = "777genius/plugin-kit-ai";
 const TARGETS = [
   ["darwin-amd64", "darwin", "amd64", ""],
   ["darwin-arm64", "darwin", "arm64", ""],
@@ -19,6 +20,21 @@ const TARGETS = [
 
 function sha256(file) {
   return crypto.createHash("sha256").update(fs.readFileSync(file)).digest("hex");
+}
+
+function regularUnaliasedFile(file, label) {
+  const stat = fs.lstatSync(file);
+  if (!stat.isFile() || stat.isSymbolicLink() || stat.size <= 0 || stat.nlink !== 1) {
+    throw new Error(`${label} is not a regular, non-empty, unaliased file`);
+  }
+  return stat;
+}
+
+function validateReleaseRoot(assetRoot) {
+  const stat = fs.lstatSync(assetRoot);
+  if (!stat.isDirectory() || stat.isSymbolicLink()) {
+    throw new Error("release root must be a real directory");
+  }
 }
 
 function releaseIdentity(tag, commit) {
@@ -41,12 +57,13 @@ function expectedAssets(version) {
 
 function assetMetadata(assetRoot, version) {
   const assets = {};
+  const identities = new Set();
   for (const [key, file] of Object.entries(expectedAssets(version))) {
     const filePath = path.join(assetRoot, file);
-    const stat = fs.lstatSync(filePath);
-    if (!stat.isFile() || stat.isSymbolicLink() || stat.size <= 0) {
-      throw new Error(`release asset is not a regular non-empty file: ${file}`);
-    }
+    const stat = regularUnaliasedFile(filePath, `release asset ${file}`);
+    const identity = `${stat.dev}:${stat.ino}`;
+    if (identities.has(identity)) throw new Error(`release asset is aliased: ${file}`);
+    identities.add(identity);
     assets[key] = { file, sha256: sha256(filePath), size: stat.size };
   }
   return assets;
@@ -97,8 +114,11 @@ function verifyChecksums(assetRoot, expectedNames) {
 }
 
 function verifyRelease(assetRoot, tag, commit, options = {}) {
+  validateReleaseRoot(assetRoot);
   const identity = releaseIdentity(tag, commit);
   const manifestPath = path.join(assetRoot, "release-manifest.json");
+  regularUnaliasedFile(manifestPath, "release manifest");
+  regularUnaliasedFile(path.join(assetRoot, "checksums.txt"), "release checksums");
   const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
   if (manifest.tag !== identity.tag || manifest.commit !== identity.commit) {
     throw new Error("release manifest identity does not match the exact tag and commit");
@@ -116,7 +136,14 @@ function verifyRelease(assetRoot, tag, commit, options = {}) {
     if (Object.keys(manifest).sort().join(",") !== "commit,schema_version,tag") {
       throw new Error("legacy release manifest has unexpected fields");
     }
-    return { ...identity, assets: computed, manifest_schema: 1, gate_eligible: false };
+    return {
+      repository: PRODUCER_REPOSITORY,
+      ...identity,
+      assets: computed,
+      manifest_schema: 1,
+      manifest_sha256: sha256(manifestPath),
+      gate_eligible: false
+    };
   }
   if (manifest.schema_version !== 2 || manifest.version !== identity.version) {
     throw new Error("release manifest schema or version does not match");
@@ -137,7 +164,14 @@ function verifyRelease(assetRoot, tag, commit, options = {}) {
       throw new Error(`release manifest asset metadata mismatch: ${key}`);
     }
   }
-  return { ...identity, assets: computed, manifest_schema: 2, gate_eligible: true };
+  return {
+    repository: PRODUCER_REPOSITORY,
+    ...identity,
+    assets: computed,
+    manifest_schema: 2,
+    manifest_sha256: sha256(manifestPath),
+    gate_eligible: true
+  };
 }
 
 function main() {
@@ -163,4 +197,4 @@ if (require.main === module) {
   }
 }
 
-module.exports = { expectedAssets, prepareRelease, verifyRelease };
+module.exports = { PRODUCER_REPOSITORY, expectedAssets, prepareRelease, verifyRelease };

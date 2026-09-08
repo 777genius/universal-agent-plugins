@@ -1,411 +1,316 @@
-# plugin-kit-ai
+<img width="1600" height="420" alt="image" src="https://github.com/user-attachments/assets/79dd800b-b348-4e78-8257-8367fa8a959b" />
 
-[![Required](https://github.com/777genius/plugin-kit-ai/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/777genius/plugin-kit-ai/actions/workflows/ci.yml)
-[![Docs](https://github.com/777genius/plugin-kit-ai/actions/workflows/docs.yml/badge.svg?branch=main)](https://github.com/777genius/plugin-kit-ai/actions/workflows/docs.yml)
-[![Polyglot Smoke](https://github.com/777genius/plugin-kit-ai/actions/workflows/polyglot-smoke.yml/badge.svg?branch=main)](https://github.com/777genius/plugin-kit-ai/actions/workflows/polyglot-smoke.yml)
-[![Release](https://img.shields.io/github/v/release/777genius/plugin-kit-ai?label=release)](https://github.com/777genius/plugin-kit-ai/releases)
-[![npm](https://img.shields.io/npm/v/plugin-kit-ai?label=npm)](https://www.npmjs.com/package/plugin-kit-ai)
-[![Go Reference](https://pkg.go.dev/badge/github.com/777genius/plugin-kit-ai/sdk.svg)](https://pkg.go.dev/github.com/777genius/plugin-kit-ai/sdk)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Required](https://github.com/777genius/universal-agent-plugins/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/777genius/universal-agent-plugins/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/777genius/universal-agent-plugins?label=release)](https://github.com/777genius/universal-agent-plugins/releases)
+[![npm](https://img.shields.io/npm/v/universal-agent-plugins?label=npm)](https://www.npmjs.com/package/universal-agent-plugins)
+[![Agent Plugins 1.0](https://img.shields.io/badge/Agent%20Plugins-1.0.0-7257FF)](https://agent-plugins.org/specification)
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 
-Build one plugin and ship it to many AI agents.
+Install and manage Agent Plugins 1.0 across your AI agents with one CLI.
 
-`plugin-kit-ai` keeps authored source under `plugin/`, generates the supported outputs you need, and helps you validate the repo before handoff.
-The honest promise is `one repo / many supported outputs`, not fake parity everywhere.
+## Use plugins
 
-## Install Agent Plugins 1.0
+### Quick start
 
-Want to use a plugin rather than author one? `universal-agent-plugins` is the
-public npm package. It installs the `agentplugins` binary; both names run the
-same installer and lifecycle manager (Node.js 22+):
+Choose your operating system and run the commands below.
+
+<details>
+<summary><strong>macOS</strong></summary>
+
+With Homebrew:
+
+```bash
+brew install 777genius/agentplugins/agentplugins
+agentplugins add context7
+```
+
+Without Homebrew, use the native installer:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/777genius/universal-agent-plugins/main/install.sh | sh -s -- add context7
+```
+
+</details>
+
+<details>
+<summary><strong>Linux</strong></summary>
+
+Install the matching native binary and add your first plugin:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/777genius/universal-agent-plugins/main/install.sh | sh -s -- add context7
+```
+
+Homebrew also works on Linux: run `brew install 777genius/agentplugins/agentplugins`,
+then `agentplugins add context7`.
+
+</details>
+
+<details>
+<summary><strong>Windows</strong></summary>
+
+Run in PowerShell:
+
+```powershell
+irm https://raw.githubusercontent.com/777genius/universal-agent-plugins/main/install.ps1 | iex
+& "$HOME\.local\bin\agentplugins.exe" add context7
+```
+
+</details>
+
+<details>
+<summary><strong>Any OS with Node.js 22+ (npx)</strong></summary>
+
+Run on a supported desktop OS without permanently installing the CLI:
 
 ```bash
 npx universal-agent-plugins add context7
 ```
 
-Short names resolve to immutable releases through the signed
-[Universal Agent Plugins Directory](https://github.com/777genius/universal-agent-plugins).
-The command shows the selected publisher, source, and verification status, so a
-community bridge is not mistaken for its upstream project. Direct local paths
-and exact GitHub revisions work without Directory submission.
+</details>
 
-```bash
-npx universal-agent-plugins search docs
-npx universal-agent-plugins validate ./my-plugin
-npx universal-agent-plugins add context7 --dry-run --target cursor
-npx universal-agent-plugins add context7 --target codex,cursor,kiro
-npx universal-agent-plugins outdated --all
-npx universal-agent-plugins update --all
-npx universal-agent-plugins update context7 --target codex,cursor,kiro
-npx universal-agent-plugins repair context7 --target codex,cursor,kiro
-npx universal-agent-plugins remove context7 --target codex,cursor,kiro
-npx universal-agent-plugins switch context7 --to upstash/context7
-npx universal-agent-plugins add ./my-plugin --target cursor
-npx universal-agent-plugins add owner/repo@0123456789abcdef0123456789abcdef01234567//plugins/my-plugin --target cursor
+The CLI finds compatible agents installed on your computer.
+
+1. Choose one or more agents if prompted. If only one is found, it is selected automatically.
+2. Follow any activation or sign-in instructions printed by the CLI.
+3. Start a new agent session and try the plugin.
+
+<details>
+<summary>Installation details</summary>
+
+Homebrew and the installers select the native binary for your OS and architecture.
+The installer scripts verify its published SHA-256 and reported version, then
+replace the CLI atomically. They install into `$HOME/.local/bin` unless
+`AGENTPLUGINS_BIN_DIR` is set.
+
+The native CLI does not require Node.js. The `npx` option requires Node.js 22+
+and downloads and runs the verified Go binary. Individual plugins may have
+their own runtime requirements, which the CLI checks before installation.
+
+The plugin package is downloaded and verified once, then prepared for each
+selected agent.
+
+</details>
+
+[Browse plugins](https://777genius.github.io/universal-agent-plugins/plugins/)
+
+## What the CLI does
+
+- installs one plugin in one or several supported agents;
+- updates, repairs, and removes only files it manages;
+- converts the same Agent Plugins 1.0 package into each agent's native format;
+- keeps activation and OAuth prompts visible to you.
+
+## Any Agent Plugins 1.0 package
+
+The installed package is standard-first:
+
+```text
+plugin.json
+├── skills/       optional reusable instructions
+└── mcp.json      optional MCP servers
 ```
 
-Replace the example SHA with the full lowercase 40-character commit SHA you
-reviewed; branches, tags, and abbreviated SHAs are rejected. `add`, `update`,
-`repair`, and `remove` accept comma-separated targets. `repair` reapplies the
-recorded revision; `update` selects a newer eligible release. `switch` moves the
-whole installation to a qualified Directory distribution or exact source.
+You can also install a local package or a pinned GitHub package without adding
+it to the registry. Direct-install examples are collected near the end of this
+README.
 
-`search` combines the reviewed Directory with a separately signed Discovery
-Index. Unreviewed results use publisher-qualified `discovery:owner/repo//path`
-selectors and show their exact indexed commit before install. The CLI
-reacquires and validates those package bytes before mutation; the index
-signature authenticates metadata but is not a package or runtime endorsement.
-`outdated` is read-only, while `update --all` keeps every installation's
-recorded source and targets and fails the batch preflight before mutation if any
-planned update is unsafe.
+plugin.yaml is the legacy plugin-kit-ai authoring format. It is not merged with
+or allowed to override plugin.json.
 
-For Agent Plugins 1.0, the root `plugin.json` is the install authority. A
-`plugin.yaml` file is legacy `plugin-kit-ai` authoring input only: it is not
-merged with, converted into, or allowed to silently override `plugin.json`.
+## Supported clients
 
-Before changing anything, the CLI resolves and validates the source and
-preflights every selected client. `--dry-run` prints that same read-only plan.
-`doctor` only inspects paths and filesystem metadata; it never launches a
-discovered client executable, and neither does a `--dry-run`. Non-dry-run
-lifecycle resolution may explicitly run a bounded `--version` probe when an
-exact client version is needed for signed Directory evidence. That probe
-receives an empty stdin and credential-free environment and runs outside the
-caller's working directory. If it cannot obtain a matching version,
-version-bound evidence remains unavailable rather than being inferred.
-Managed files and state are staged and committed together; a failure rolls back
-changes when ownership can be proven, or stops with recovery guidance without
-claiming success. Client-controlled activation happens separately: some clients
-activate automatically, while others finish as prepared and print a manual
-activation step. OAuth and consent prompts stay visible and user-controlled;
-cancelling one preserves the package and reports authentication as pending or
-cancelled.
-Kiro skills are installed directly into the documented global skills path.
-For packages with MCP servers, agentplugins atomically merges only its owned
-entries into Kiro's global `mcp.json`, preserving unrelated user configuration,
-then checks supported Kiro CLI versions through a bounded structured ACP v1
-initialize/session handshake.
-It sends no prompt or model/tool turn and does not inject package endpoints;
-Kiro must load its installed native configuration and report connected servers
-with enabled tools. The verifier drains a bounded quiet settlement window,
-rejects EOF, partial bytes, or trailing contradictions, then stops and reaps the
-long-lived ACP process through supervised containment. Automatic Kiro ACP
-verification is available only on Linux after capability preflight proves
-delegated cgroup v2 creation, atomic CLONE_INTO_CGROUP placement, and
-cgroup.kill. macOS, Windows, and Linux hosts without every required proof fail
-preflight before any MCP mutation. On those hosts, use Kiro's documented manual
-skill and MCP configuration paths; that workflow is outside this automatic CLI
-path. Failure to start ACP
-after a supported preflight may still leave a manual verification action. This
-is activation evidence, not a runtime tool E2E claim.
-Once the ACP process starts, companion-launch failure (including a missing
-`kiro-cli-chat`), EOF, timeout, authentication failure, malformed or partial
-output, contradiction, and non-clean exit are authoritative activation
-failures; the managed package remains committed for explicit repair and is
-never reported active.
-Verification is reported for the exact plugin, client, runtime, and OAuth
-evidence available—not as a claim that every combination has been tested.
+The CLI has adapters for:
 
-`universal-agent-plugins` is an independent community installer, not an official
-OpenAI CLI.
+| Client | Delivery |
+| --- | --- |
+| <img src="landing/public/client-icons/openai.svg" width="24" height="24" alt="" align="middle"> Codex | managed package or OpenAI compatibility package |
+| <img src="landing/public/client-icons/openai.svg" width="24" height="24" alt="" align="middle"> ChatGPT | registered app/binding where the package provides one |
+| <img src="landing/public/client-icons/cursor.svg" width="24" height="24" alt="" align="middle"> Cursor | native Agent Plugin and MCP/skills projection |
+| <img src="landing/public/client-icons/github-copilot.svg" width="24" height="24" alt="" align="middle"> GitHub Copilot CLI | native plugin and managed marketplace path |
+| <img src="landing/public/client-icons/vscode.svg" width="24" height="24" alt="" align="middle"> VS Code | prepared Copilot-compatible package |
+| <img src="landing/public/client-icons/kiro.svg" width="24" height="24" alt="" align="middle"> Kiro | native folder and Power import guidance |
+| <img src="landing/public/client-icons/claude.svg" width="24" height="24" alt="" align="middle"> Claude Code | client-specific skills/MCP projection |
+| <img src="landing/public/client-icons/gemini.svg" width="24" height="24" alt="" align="middle"> Gemini CLI | client-specific configuration projection |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="assets/client-icons/opencode-dark.svg"><img src="landing/public/client-icons/opencode.svg" width="24" height="24" alt="" align="middle"></picture> OpenCode | client-specific configuration projection |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="assets/client-icons/cline-dark.svg"><img src="landing/public/client-icons/cline.svg" width="24" height="24" alt="" align="middle"></picture> Cline | client-specific configuration projection |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="assets/client-icons/windsurf-dark.svg"><img src="landing/public/client-icons/windsurf.svg" width="24" height="24" alt="" align="middle"></picture> Windsurf | client-specific configuration projection |
 
-Docs site:
+Compatibility is package-specific. A schema pass means that the package is
+well-formed; it does not prove runtime, OAuth, or activation in every client.
+The CLI prints installed, prepared, activation required, and authentication
+pending as separate outcomes.
 
-- overview: [plugin-kit-ai documentation](https://777genius.github.io/plugin-kit-ai/docs/en/)
-- fastest start: [Quickstart](https://777genius.github.io/plugin-kit-ai/docs/en/guide/quickstart.html)
-- choose by job first: [Choose What You Are Building](https://777genius.github.io/plugin-kit-ai/docs/en/guide/choose-what-you-are-building.html)
-- one repo, many outputs: [What You Can Build](https://777genius.github.io/plugin-kit-ai/docs/en/guide/what-you-can-build.html)
-- delivery model guide: [Choose A Target](https://777genius.github.io/plugin-kit-ai/docs/en/guide/choose-a-target.html)
-- honest caveat: [Support Boundary](https://777genius.github.io/plugin-kit-ai/docs/en/reference/support-boundary.html)
+See the [client compatibility evidence](https://777genius.github.io/universal-agent-plugins/docs/en/reference/client-compatibility.html)
+for tested client versions, platforms, and release-specific limitations.
 
-Project policies:
+For Codex, declared MCP SSE is unsupported; stdio and Streamable HTTP retain
+their existing adapter support. Valid SSE components are excluded from Codex
+delivery without invalidating the package. See [transport evidence and lifecycle
+behavior](docs/CODEX_TRANSPORT_EVIDENCE.md).
 
-- support boundary: [docs/SUPPORT.md](docs/SUPPORT.md)
-- contributing: [CONTRIBUTING.md](CONTRIBUTING.md)
-- security: [SECURITY.md](SECURITY.md)
-- code of conduct: [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)
+## Find and verify plugins
 
-## Choose What You Are Building
+search combines the reviewed Registry Directory with a signed public Discovery
+Index containing conformant package paths. Discovery records are
+unreviewed metadata, not endorsements. They install only through a
+publisher-qualified exact-SHA selector and are validated again before mutation.
 
-### Connect an online service
+The registry is optional for direct installs, but it makes reviewed short names,
+provenance, compatibility notes, and safe discovery convenient:
 
-Use this when the plugin should connect to a hosted service like Notion, Stripe, Cloudflare, or Vercel.
+[Browse the registry](https://777genius.github.io/universal-agent-plugins/plugins/) ·
+[Submit a package](https://github.com/777genius/universal-agent-plugins-registry/blob/main/CONTRIBUTING.md)
+
+## Lifecycle safety
+
+Before changing a client, the CLI validates the source and preflights every
+selected target. --dry-run prints the same plan without writing. Managed files
+and state are committed together; failures roll back what ownership proves safe
+or stop with a repair command. OAuth and consent remain visible and controlled
+by you. No install telemetry is sent.
+
+The CLI is an independent community project. It is not affiliated with OpenAI,
+Agent Plugins, or the vendors shown above.
+
+## More commands
+
+For normal interactive use, omit `--target` and choose agents in the prompt.
+Use `--target` in scripts, CI, or whenever you want to name clients explicitly.
 
 ```bash
-plugin-kit-ai init my-plugin --template online-service
-cd my-plugin
-plugin-kit-ai inspect . --authoring
-plugin-kit-ai generate .
-plugin-kit-ai generate --check .
-plugin-kit-ai validate . --platform claude --strict
+# Find and inspect plugins
+agentplugins search docs
+agentplugins info context7
+
+# Install in specific agents
+agentplugins add context7 --target codex,cursor,kiro
+
+# Manage an installed plugin
+agentplugins update context7 --target codex,cursor
+agentplugins repair context7 --target codex,cursor
+agentplugins remove context7 --target codex,cursor
+agentplugins outdated --all
+agentplugins update --all
+agentplugins doctor
+
+# Install a local Agent Plugins 1.0 package
+agentplugins validate ./my-plugin
+agentplugins add ./my-plugin
+
+# Install the only Agent Plugins package found at an exact commit
+agentplugins add \
+  owner/repository@0123456789abcdef0123456789abcdef01234567
+
+# Choose a package explicitly when a repository contains several
+agentplugins add \
+  owner/repository@0123456789abcdef0123456789abcdef01234567//path/to/plugin
 ```
 
-Real examples:
+Remote installs require a full 40-character commit SHA. Branches, tags, and
+abbreviated SHAs are rejected. When no package path is given, the CLI uses a
+valid root `plugin.json` or auto-selects the only valid nested package that has
+`mcp.json` or `skills/`. If several packages match, it lists them and asks for
+an explicit `//path`. Repositories with more than 16 possible packages require
+an explicit path before candidate packages are fetched. The selected canonical
+path and package digest are stored for safe replay. Direct full-SHA installations
+remain immutable; use `switch` to move to another exact source. `repair` reapplies
+the recorded source, and `remove` changes only files owned by the CLI.
 
-- [notion](https://github.com/777genius/universal-plugins-for-ai-agents/tree/main/plugins/notion)
-- [stripe](https://github.com/777genius/universal-plugins-for-ai-agents/tree/main/plugins/stripe)
-- [cloudflare](https://github.com/777genius/universal-plugins-for-ai-agents/tree/main/plugins/cloudflare)
-- [vercel](https://github.com/777genius/universal-plugins-for-ai-agents/tree/main/plugins/vercel)
+<a id="authoring-and-development"></a>
 
-### Connect a local tool
+## Build plugins
 
-Use this when the plugin should call into a repo-owned tool or CLI like Docker Hub, Chrome DevTools, or HubSpot Developer.
+Build portable Agent Plugins 1.0 packages around `plugin.json`, with optional
+`skills/` and `mcp.json`. See the [Agent Plugins 1.0 specification](https://agent-plugins.org/specification)
+and the [Use / Build quickstart](https://777genius.github.io/universal-agent-plugins/docs/en/guide/quickstart.html).
 
-```bash
-plugin-kit-ai init my-plugin --template local-tool
-cd my-plugin
-plugin-kit-ai inspect . --authoring
-plugin-kit-ai generate .
-plugin-kit-ai generate --check .
-plugin-kit-ai validate . --platform claude --strict
-```
+**Preparation — unreleased:** the standard-first authoring CLI is not released.
+As checked on 2026-09-07, npm `universal-agent-plugins` is 0.1.53 and the stable
+GitHub release is `agentplugins-v0.1.53`. npm/PyPI `plugin-kit-ai` is 1.2.4:
+`plugin-kit-ai@latest` is the historical v1 tool, not standard-first v2.
 
-Real examples:
+For existing v1 `plugin.yaml` projects, retain the original templates, generation,
+validation and export workflows in [the historical authoring guide](docs/PLUGIN_KIT_AI_AUTHORING.md).
+The reference below is for historical v1 maintenance.
 
-- [docker-hub](https://github.com/777genius/universal-plugins-for-ai-agents/tree/main/plugins/docker-hub)
-- [hubspot-developer](https://github.com/777genius/universal-plugins-for-ai-agents/tree/main/plugins/hubspot-developer)
-- [chrome-devtools](https://github.com/777genius/universal-plugins-for-ai-agents/tree/main/plugins/win4r/chrome-devtools-codex-plugin)
+<details>
+<summary>Legacy authoring and SDK reference</summary>
 
-### Build custom plugin logic - Advanced
+`plugin-kit-ai` keeps authored source under `plugin/`, generates the supported outputs you need, and helps you validate the repo before handoff. This includes supported outputs for Claude, Codex, Gemini, Cursor, and OpenCode where the repo shape allows it. The honest promise is `one repo / many supported outputs`, not fake parity everywhere.
 
-Use this when the product is defined by hooks, runtime behavior, or custom plugin code.
+overview: [plugin-kit-ai documentation](https://777genius.github.io/universal-agent-plugins/docs/en/)
+Use / Build and historical v1 maintenance: [Quickstart](https://777genius.github.io/universal-agent-plugins/docs/en/guide/quickstart.html)
+historical v1 template selection: [Choose What You Are Building](https://777genius.github.io/universal-agent-plugins/docs/en/guide/choose-what-you-are-building.html)
+one repo, many outputs: [What You Can Build](https://777genius.github.io/universal-agent-plugins/docs/en/guide/what-you-can-build.html)
+honest caveat: [Support Boundary](https://777genius.github.io/universal-agent-plugins/docs/en/reference/support-boundary.html)
 
-This path is more powerful and more engineering-heavy than the first two starters.
-Plain `plugin-kit-ai init my-plugin` still exists as the legacy compatibility path for the older Codex runtime Go starter.
-
-```bash
-plugin-kit-ai init my-plugin --template custom-logic
-cd my-plugin
-plugin-kit-ai inspect . --authoring
-plugin-kit-ai validate . --platform codex-runtime --strict
-plugin-kit-ai test . --platform codex-runtime --event Notify
-```
-
-Guide:
-
-- [Build Custom Plugin Logic](https://777genius.github.io/plugin-kit-ai/docs/en/guide/build-custom-plugin-logic.html)
-
-## Quick Start
-
-Want to try a real Agent Plugin without installing a CLI permanently?
-
-```bash
-npx universal-agent-plugins add context7
-```
-
-Building a plugin instead? Use `plugin-kit-ai` for authoring and generated
-output delivery. Its older `plugin-kit-ai add` lifecycle is not the default
-installer for portable Agent Plugins 1.0. Start with
-[Choose What You Are Building](#choose-what-you-are-building).
-
-Recommended authoring CLI install path:
+### Legacy quick start
 
 ```bash
 brew install 777genius/homebrew-plugin-kit-ai/plugin-kit-ai
-plugin-kit-ai version
 ```
 
-Then create a repo from the path that matches the job:
+npm: `npm i -g plugin-kit-ai` or `npx plugin-kit-ai@latest ...`
+
+pipx (`public-beta`, only when that release is published to PyPI): `pipx install plugin-kit-ai`
+
+fallback installer: `curl -fsSL https://raw.githubusercontent.com/777genius/plugin-kit-ai/main/scripts/install.sh | sh`
 
 ```bash
 plugin-kit-ai init my-plugin --template online-service
 plugin-kit-ai init my-plugin --template local-tool
 plugin-kit-ai init my-plugin --template custom-logic
+plugin-kit-ai init my-plugin
+plugin-kit-ai generate .
+plugin-kit-ai validate . --platform codex-runtime --strict
 ```
 
-Plain `plugin-kit-ai init my-plugin` still exists for backward compatibility, but it is no longer the recommended first start for new repos.
-Use one of the three job-first templates above unless you are intentionally maintaining the older Codex runtime Go path.
+### Support and references
 
-## What You Get
+[examples/starters/README.md](examples/starters/README.md)
+[examples/local/README.md](examples/local/README.md)
+[docs/CHOOSING_HELPER_DELIVERY_MODE.md](docs/CHOOSING_HELPER_DELIVERY_MODE.md)
+the stable local Python and Node subset on `codex-runtime` and `claude`
+`doctor`, `bootstrap`, `validate --strict`, `export`, and bundle handoff for that stable local subset
+`generate`, `import`, and `normalize` are still `public-beta`
+[docs/generated/target_support_matrix.md](docs/generated/target_support_matrix.md)
+[docs/generated/support_matrix.md](docs/generated/support_matrix.md)
+[docs/SUPPORT.md](docs/SUPPORT.md)
 
-- one plugin repo that stays the source of truth
-- authored files under `plugin/`
-- generated root files that stay managed
-- supported outputs for Claude, Codex, Gemini, Cursor, and OpenCode where the repo shape allows it
-- a clean readiness check through `generate`, `generate --check`, and `validate --strict`
+### SDK and CLI
 
-## Works Across Multiple Outputs
-
-- Claude
-- Codex package
-- Codex runtime
-- Gemini
-- OpenCode
-- Cursor
-
-That depth stays available, but you do not need to understand the whole target model before creating the repo.
-
-## What To Do Next
-
-- run `plugin-kit-ai inspect . --authoring`
-- edit the repo under `plugin/`
-- regenerate after changes
-- validate the supported output you actually plan to ship first
-- only then add more outputs when the product really needs them
-
-Other supported CLI install methods:
-
-- npm: `npm i -g plugin-kit-ai` or `npx plugin-kit-ai@latest ...`
-- pipx (`public-beta`, only when that release is published to PyPI): `pipx install plugin-kit-ai`
-- fallback installer: `curl -fsSL https://raw.githubusercontent.com/777genius/plugin-kit-ai/main/scripts/install.sh | sh`
-- fallback one-shot command: `curl -fsSL https://raw.githubusercontent.com/777genius/plugin-kit-ai/main/scripts/install.sh | sh -s -- add notion --dry-run`
-- source build for maintainers of this repo: `go build -o bin/plugin-kit-ai ./cli/plugin-kit-ai/cmd/plugin-kit-ai`
-
-## Keep This Rule In Mind
-
-- start with the job you need today
-- keep authored source under `plugin/` for new repos
-- let generated root files stay managed
-- add deeper target-specific behavior only when you need it
-- use advanced docs when you need exact target and support details
-
-## Deep Product Details
-
-Everything below this point is for people comparing delivery models, import paths, and detailed support boundaries. If you only needed the main promise and first path, you can stop above.
-
-## Go Deeper By Goal
-
-### Fast Local Plugin
-
-Choose this when the plugin stays local to the repo and your team already works in Python or Node.
-
-- Main flow: `init -> doctor -> bootstrap -> generate -> validate --strict`
-- Runtime note: the execution machine still needs Python `3.10+` or Node.js `20+`
-- Delivery options: vendored helper by default, shared `plugin-kit-ai-runtime` when you want a reusable dependency, bundle handoff when the repo must travel
-
-This is a supported non-Go path, not a hidden fallback.
-Use the starter templates for Codex and Claude across Go, Python, and Node/TypeScript when you want the fastest copy-first path into a working repo.
-
-Start here:
-
-- [examples/starters/README.md](examples/starters/README.md)
-- [examples/local/README.md](examples/local/README.md)
-- [docs/CHOOSING_HELPER_DELIVERY_MODE.md](docs/CHOOSING_HELPER_DELIVERY_MODE.md)
-
-### Production-Ready Plugin Repo
-
-Choose this when you want the strongest supported release and distribution story.
-
-- Online service path: `plugin-kit-ai init my-plugin --template online-service`
-- Local tool path: `plugin-kit-ai init my-plugin --template local-tool`
-- Advanced runtime path: `plugin-kit-ai init my-plugin --template custom-logic`
-- Package/config expansion later: `codex-package`, `gemini`, `opencode`, `cursor`
-- Real multi-target MCP-first example: [`context7` in universal-plugins-for-ai-agents](https://github.com/777genius/universal-plugins-for-ai-agents/tree/main/plugins/context7)
-
-### Already Have Native Config
-
-Choose this when you are migrating existing Claude/Codex/Gemini/OpenCode/Cursor native files into the repo-owned workflow.
+Go SDK packages: `github.com/777genius/plugin-kit-ai/sdk/claude`, `github.com/777genius/plugin-kit-ai/sdk/codex`, and `github.com/777genius/plugin-kit-ai/sdk/gemini`.
 
 ```bash
-./bin/plugin-kit-ai import ./native-plugin --from codex-runtime
-./bin/plugin-kit-ai normalize ./my-plugin
-./bin/plugin-kit-ai generate ./my-plugin
-./bin/plugin-kit-ai validate ./my-plugin --platform codex-runtime --strict
-```
-
-## Stability Snapshot
-
-Stable by default:
-
-- the main public CLI contract
-- the recommended Go SDK path
-- Go scaffolds for the default Codex and Claude runtime lanes
-- the stable local Python and Node subset on `codex-runtime` and `claude`
-- `doctor`, `bootstrap`, `validate --strict`, `export`, and bundle handoff for that stable local subset
-
-Use carefully:
-
-- `generate`, `import`, and `normalize` are still `public-beta`
-- package and workspace-config targets have different guarantees than runtime targets
-- `shell` remains a bounded `public-beta` escape hatch
-
-For the precise contract:
-
-- [docs/generated/target_support_matrix.md](docs/generated/target_support_matrix.md)
-- [docs/generated/support_matrix.md](docs/generated/support_matrix.md)
-- [docs/SUPPORT.md](docs/SUPPORT.md)
-
-## Path Summary
-
-- Go is the recommended path when you want the strongest production story and the least downstream runtime friction.
-- Node/TypeScript is the main supported non-Go path for repo-local runtime plugins.
-- Python is the supported Python-first repo-local path.
-- Package and workspace-config targets are for packaging and configuration outputs, not for pretending every target behaves like a runtime plugin.
-
-## SDK And CLI
-
-Go SDK packages:
-
-- `github.com/777genius/plugin-kit-ai/sdk`
-- `github.com/777genius/plugin-kit-ai/sdk/claude`
-- `github.com/777genius/plugin-kit-ai/sdk/codex`
-- `github.com/777genius/plugin-kit-ai/sdk/gemini`
-
-Useful starting points:
-
-- [sdk/README.md](sdk/README.md)
-- [docs/generated/support_matrix.md](docs/generated/support_matrix.md)
-- [docs/SUPPORT.md](docs/SUPPORT.md)
-
-Common CLI commands:
-
-```bash
-./bin/plugin-kit-ai init my-plugin
 ./bin/plugin-kit-ai doctor ./my-plugin
 ./bin/plugin-kit-ai bootstrap ./my-plugin
-./bin/plugin-kit-ai generate ./my-plugin
-./bin/plugin-kit-ai validate ./my-plugin --platform codex-runtime --strict
 ./bin/plugin-kit-ai import ./native-plugin --from codex-runtime
 ./bin/plugin-kit-ai capabilities --format json
 ```
 
-`plugin-kit-ai install` stays intentionally narrow: it installs third-party plugin binaries from GitHub Releases, verifies `checksums.txt`, and does not act as a self-update path for the CLI itself.
+`plugin-kit-ai validate --format json` now emits the versioned `plugin-kit-ai/validate-report` contract.
+[docs/CODEX_TARGET_BOUNDARY.md](docs/CODEX_TARGET_BOUNDARY.md)
+[docs/VALIDATE_JSON_CONTRACT.md](docs/VALIDATE_JSON_CONTRACT.md)
 
-For automation, `plugin-kit-ai validate --format json` now emits the versioned `plugin-kit-ai/validate-report` contract with `schema_version: 1` and explicit outcomes `passed`, `failed`, or `failed_strict_warnings`.
-For Codex lane selection, use [docs/CODEX_TARGET_BOUNDARY.md](docs/CODEX_TARGET_BOUNDARY.md). For the validation ABI itself, use [docs/VALIDATE_JSON_CONTRACT.md](docs/VALIDATE_JSON_CONTRACT.md).
+</details>
 
-## Build And Test
-
-Requirements:
-
-- Go `1.25.13` for this monorepo workspace and its CI lanes
-- generated Go plugin projects created by `plugin-kit-ai init` remain on Go `1.22+`
-
-Common commands from repo root:
+Contributor checks:
 
 ```bash
-go run ./cmd/plugin-kit-ai-gen
-go build -o bin/plugin-kit-ai ./cli/plugin-kit-ai/cmd/plugin-kit-ai
-./bin/plugin-kit-ai version
-make test-polyglot-smoke
 go test ./...
+make vet
 ```
 
-## Repository And Docs Map
+- Contributing: [CONTRIBUTING.md](CONTRIBUTING.md)
+- Security policy: [SECURITY.md](SECURITY.md)
+- Support boundary: [docs/SUPPORT.md](docs/SUPPORT.md)
+- Native CLI installation: [docs/NATIVE_INSTALL.md](docs/NATIVE_INSTALL.md)
+- Client E2E evidence: [docs/AGENTPLUGINS_CLIENT_E2E.md](docs/AGENTPLUGINS_CLIENT_E2E.md)
+- Registry repository: https://github.com/777genius/universal-agent-plugins-registry
 
-Main repo areas:
+## License
 
-- `sdk`
-- `cli/plugin-kit-ai`
-- `install/plugininstall`
-- `examples/starters`
-- `examples/local`
-- `examples/plugins`
-- `repotests`
-- `docs`
-
-Canonical docs:
-
-- [docs/generated/support_matrix.md](docs/generated/support_matrix.md)
-- [docs/generated/target_support_matrix.md](docs/generated/target_support_matrix.md)
-- [docs/SUPPORT.md](docs/SUPPORT.md)
-- [docs/CODEX_TARGET_BOUNDARY.md](docs/CODEX_TARGET_BOUNDARY.md)
-- [docs/VALIDATE_JSON_CONTRACT.md](docs/VALIDATE_JSON_CONTRACT.md)
-- [docs/PRODUCTION.md](docs/PRODUCTION.md)
-- [docs/INSTALL_COMPATIBILITY.md](docs/INSTALL_COMPATIBILITY.md)
-- [docs/STATUS.md](docs/STATUS.md)
-
-Maintainer-only historical context:
-
-- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
-- [docs/FOUNDATION_REWRITE_VNEXT.md](docs/FOUNDATION_REWRITE_VNEXT.md)
-- [docs/adr/README.md](docs/adr/README.md)
+Universal Agent Plugins is licensed under the [Apache License 2.0](LICENSE).
+Third-party components retain their original licenses; see [NOTICE](NOTICE) for
+attribution.

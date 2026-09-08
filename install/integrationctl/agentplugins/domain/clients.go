@@ -10,12 +10,17 @@ type PlanStatus string
 type ComponentKind string
 
 const (
-	ClientCodex   ClientID = "codex"
-	ClientChatGPT ClientID = "chatgpt"
-	ClientCursor  ClientID = "cursor"
-	ClientCopilot ClientID = "copilot"
-	ClientVSCode  ClientID = "vscode"
-	ClientKiro    ClientID = "kiro"
+	ClientCodex    ClientID = "codex"
+	ClientChatGPT  ClientID = "chatgpt"
+	ClientCursor   ClientID = "cursor"
+	ClientCopilot  ClientID = "copilot"
+	ClientVSCode   ClientID = "vscode"
+	ClientKiro     ClientID = "kiro"
+	ClientClaude   ClientID = "claude"
+	ClientGemini   ClientID = "gemini"
+	ClientOpenCode ClientID = "opencode"
+	ClientCline    ClientID = "cline"
+	ClientWindsurf ClientID = "windsurf"
 
 	DetectionNotDetected DetectionStatus = "not_detected"
 	DetectionDetected    DetectionStatus = "detected"
@@ -47,6 +52,106 @@ const (
 	ComponentApp       ComponentKind = "app"
 	ComponentExtension ComponentKind = "extension"
 )
+
+// ClientDefinition is the declarative identity contract shared by the CLI,
+// Directory validation, planning, and read-only detection. Operational client
+// mutation remains in client-specific adapters and is intentionally not part
+// of this registry.
+type ClientDefinition struct {
+	ID                    ClientID
+	DisplayName           string
+	BackendFamily         string
+	DirectoryDelivery     string
+	CatalogPackage        string
+	LegacyCatalogRequired bool
+	Capabilities          ClientCapabilities
+}
+
+var clientDefinitions = []ClientDefinition{
+	clientDefinition(ClientCodex, "OpenAI Codex", "codex", "managed", "projected", true, PackageProjection, SupportProjected, SupportProjected, SupportUnsupported),
+	clientDefinition(ClientChatGPT, "ChatGPT", "chatgpt", "manual_activation", "projected", false, PackageProjection, SupportProjected, SupportUnsupported, SupportUnsupported),
+	clientDefinition(ClientCursor, "Cursor", "cursor", "managed", "native", true, PackageNative, SupportNative, SupportNative, SupportNative),
+	clientDefinition(ClientCopilot, "GitHub Copilot CLI", "github-copilot", "managed", "native", true, PackageNative, SupportNative, SupportNative, SupportNative),
+	clientDefinition(ClientVSCode, "Visual Studio Code", "github-copilot", "prepared", "prepared", true, PackagePrepared, SupportPrepared, SupportPrepared, SupportPrepared),
+	clientDefinition(ClientKiro, "Kiro", "kiro", "managed", "native", true, PackageNative, SupportNative, SupportNative, SupportUnsupported),
+	withActivation(clientDefinition(ClientClaude, "Claude Code", "claude", "managed", "projected", false, PackageProjection, SupportProjected, SupportProjected, SupportUnsupported), ActivationAutomatic),
+	clientDefinition(ClientGemini, "Gemini CLI", "gemini", "managed", "native", false, PackageNative, SupportNative, SupportNative, SupportUnsupported),
+	withActivation(clientDefinition(ClientOpenCode, "OpenCode", "opencode", "managed", "prepared", false, PackagePrepared, SupportPrepared, SupportPrepared, SupportUnsupported), ActivationAutomatic),
+	withActivation(clientDefinition(ClientCline, "Cline", "cline", "managed", "native", false, PackageNative, SupportNative, SupportNative, SupportUnsupported), ActivationAutomatic),
+	clientDefinition(ClientWindsurf, "Windsurf / Devin", "windsurf", "prepared", "prepared", false, PackagePrepared, SupportPrepared, SupportPrepared, SupportPrepared),
+}
+
+func withActivation(definition ClientDefinition, activation ActivationMode) ClientDefinition {
+	definition.Capabilities.ActivationMode = activation
+	return definition
+}
+
+func clientDefinition(id ClientID, displayName, backendFamily, delivery, catalogPackage string, legacyRequired bool, packageMode PackageMode, skill, mcp, extension SupportLevel) ClientDefinition {
+	transports := map[string]SupportLevel{"stdio": mcp, "streamable-http": mcp, "sse": mcp}
+	// Codex rejects native SSE; OpenCode remote fallback cannot preserve SSE-first.
+	if id == ClientOpenCode || id == ClientCodex {
+		transports["sse"] = SupportUnsupported
+	}
+	appSupport := SupportUnsupported
+	if id == ClientChatGPT {
+		appSupport = SupportProjected
+	}
+	return ClientDefinition{
+		ID: id, DisplayName: displayName, BackendFamily: backendFamily,
+		DirectoryDelivery: delivery, CatalogPackage: catalogPackage, LegacyCatalogRequired: legacyRequired,
+		Capabilities: ClientCapabilities{
+			ClientID: id, PackageMode: packageMode, ActivationMode: ActivationByUser,
+			Scopes: []InstallScope{ScopeUser}, SkillSupport: skill, MCPTransports: transports,
+			AppSupport: appSupport, ExtensionSupport: extension,
+		},
+	}
+}
+
+// ClientDefinitions returns registry entries in stable user-facing order.
+func ClientDefinitions() []ClientDefinition {
+	result := make([]ClientDefinition, len(clientDefinitions))
+	for index, definition := range clientDefinitions {
+		result[index] = definition
+		result[index].Capabilities.Scopes = append([]InstallScope(nil), definition.Capabilities.Scopes...)
+		result[index].Capabilities.MCPTransports = make(map[string]SupportLevel, len(definition.Capabilities.MCPTransports))
+		for transport, support := range definition.Capabilities.MCPTransports {
+			result[index].Capabilities.MCPTransports[transport] = support
+		}
+	}
+	return result
+}
+
+func ClientDefinitionFor(id ClientID) (ClientDefinition, bool) {
+	for _, definition := range ClientDefinitions() {
+		if definition.ID == id {
+			return definition, true
+		}
+	}
+	return ClientDefinition{}, false
+}
+
+func SupportedClientIDs() []ClientID {
+	definitions := ClientDefinitions()
+	result := make([]ClientID, len(definitions))
+	for index, definition := range definitions {
+		result[index] = definition.ID
+	}
+	return result
+}
+
+func IsSupportedClient(id ClientID) bool {
+	_, ok := ClientDefinitionFor(id)
+	return ok
+}
+
+func SameClientBackend(first, second ClientID) bool {
+	if first == second {
+		return true
+	}
+	firstDefinition, firstOK := ClientDefinitionFor(first)
+	secondDefinition, secondOK := ClientDefinitionFor(second)
+	return firstOK && secondOK && firstDefinition.BackendFamily == secondDefinition.BackendFamily
+}
 
 type ClientSurface struct {
 	ID       string `json:"id"`
@@ -98,6 +203,7 @@ type DeliveryPlan struct {
 	// are deliberately excluded from public output because registry locators
 	// can reveal local user paths.
 	DeclaredName             string `json:"-"`
+	DeclaredVersion          string `json:"-"`
 	NativeRegistryRoot       string `json:"-"`
 	NativeRegistryExecutable string `json:"-"`
 	// LocalPreparationAuthorized records signed package evidence that permits

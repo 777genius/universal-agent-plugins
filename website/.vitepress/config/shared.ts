@@ -157,7 +157,13 @@ export const sharedConfig = defineConfig({
       const normalize = (value: string) => (value.endsWith("/") ? value : `${value}/`);
       return items.filter((item) => {
         const url = normalize(item.url);
-        return url !== "/" && url !== normalize(docsBasePath) && url !== normalize(gatewayUrl);
+        const pathname = new URL(item.url, docsBaseUrl).pathname.replace(/\/+$/, "");
+        return (
+          url !== "/" &&
+          !pathname.endsWith("/404") &&
+          url !== normalize(docsBasePath) &&
+          url !== normalize(gatewayUrl)
+        );
       });
     }
   },
@@ -167,10 +173,15 @@ export const sharedConfig = defineConfig({
     if (!fs.existsSync(sitemapPath)) {
       return;
     }
-    const gatewayUrl = docsBaseUrl;
-    const entryPattern = new RegExp(`<url><loc>${escapeForRegExp(gatewayUrl)}<\\/loc>[\\s\\S]*?<\\/url>`, "g");
+    const excludedUrls = [docsBaseUrl, new URL("404", docsBaseUrl).toString()];
     const current = fs.readFileSync(sitemapPath, "utf8");
-    const next = current.replace(entryPattern, "");
+    const next = excludedUrls.reduce((body, url) => {
+      const entryPattern = new RegExp(
+        `<url><loc>${escapeForRegExp(url)}\\/?<\\/loc>[\\s\\S]*?<\\/url>`,
+        "g"
+      );
+      return body.replace(entryPattern, "");
+    }, current);
     if (next !== current) {
       fs.writeFileSync(sitemapPath, next);
     }
@@ -191,6 +202,7 @@ export const sharedConfig = defineConfig({
   },
   rewrites: readJson<Record<string, string>>("redirects.json", {}),
   themeConfig: {
+    logo: "/icon.svg",
     siteTitle: "plugin-kit-ai Docs",
     search: {
       provider: "local"

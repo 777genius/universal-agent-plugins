@@ -231,7 +231,7 @@ func TestPluginKitAIInitExtrasPythonEmitsBundleReleaseWorkflow(t *testing.T) {
 	workflow := string(body)
 	for _, want := range []string{
 		"actions/setup-python@v5",
-		"777genius/plugin-kit-ai/setup-plugin-kit-ai@v1",
+		"777genius/universal-agent-plugins/setup-plugin-kit-ai@v1",
 		"plugin-kit-ai doctor .",
 		"plugin-kit-ai bootstrap .",
 		"plugin-kit-ai validate . --platform codex-runtime --strict",
@@ -262,7 +262,7 @@ func TestPluginKitAIInitExtrasNodeTypeScriptEmitsBundleReleaseWorkflow(t *testin
 	workflow := string(body)
 	for _, want := range []string{
 		"actions/setup-node@v6",
-		"777genius/plugin-kit-ai/setup-plugin-kit-ai@v1",
+		"777genius/universal-agent-plugins/setup-plugin-kit-ai@v1",
 		"plugin-kit-ai doctor .",
 		"plugin-kit-ai bootstrap .",
 		"plugin-kit-ai validate . --platform claude --strict",

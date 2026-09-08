@@ -189,7 +189,7 @@ func TestOpenAIOAuthHintsDoNotOverrideGenericAuthentication(t *testing.T) {
 		service, _, _ := serviceFixture(t)
 		client := domain.DetectedClient{ClientID: clientID, Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), ".client")}
 		input := addInput(t, client, "https://example.com/generic-auth-"+string(clientID))
-		input.Envelope.MCP = domain.MCPComponent{Present: true, Enabled: true, Servers: map[string]domain.MCPServer{"server": {Name: "server", Type: "stdio"}}}
+		input.Envelope.MCP = domain.MCPComponent{Present: true, Enabled: true, Servers: map[string]domain.MCPServer{"server": {Name: "server", Type: "stdio", Decoded: map[string]any{"command": "sh"}}}}
 		input.Envelope.CatalogEvidence = &domain.CatalogEvidence{Compatibility: map[string]domain.CatalogCompatibility{string(clientID): {Package: map[bool]string{true: "projected", false: "native"}[clientID == domain.ClientCodex], Authentication: domain.AuthenticationRequirementNotRequired}}}
 		input.Hints.OpenAIMCPAuth = map[string]domain.OpenAIMCPAuthHint{"server": {OAuthResource: "https://example.com/oauth"}}
 		result, err := service.Add(context.Background(), input)
@@ -391,6 +391,69 @@ func TestAuthOnlyResumeRunsVerifierAndPersistsNegativeEvidence(t *testing.T) {
 	binding := onlyBinding(state.Installations[0])
 	if binding.Activation != domain.ActivationFailed || binding.Verification != domain.VerificationFailed {
 		t.Fatalf("negative verifier evidence was discarded: %+v", binding)
+	}
+}
+
+func TestFailedUpdateRestoresPreviousNativeOwnershipForRemoval(t *testing.T) {
+	service, store, client := serviceFixture(t)
+	input := addInput(t, client, "https://example.com/native-receipt-v1")
+	input.Confirmed = true
+	installed, err := service.Add(context.Background(), input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	state, err := store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	binding := onlyBinding(state.Installations[0])
+	clientKey := binding.ClientBindingID
+	previous := append(append([]domain.NativeObjectOwnership(nil), binding.NativeObjects...), domain.NativeObjectOwnership{ObjectID: "native:demo", Kind: "test_native", LogicalName: "demo", ManagedDigest: "sha256:v1", ProtectionClass: "managed"})
+	desired := append(append([]domain.NativeObjectOwnership(nil), binding.NativeObjects...), domain.NativeObjectOwnership{ObjectID: "native:demo", Kind: "test_native", LogicalName: "demo", ManagedDigest: "sha256:v2", ProtectionClass: "managed"})
+	binding.NativeObjects = desired
+	state.Installations[0].Clients[clientKey] = binding
+	if err := store.Save(state); err != nil {
+		t.Fatal(err)
+	}
+	outcome := domain.ActivationOutcome{Activation: domain.ActivationFailed, Authentication: binding.Authentication, Policy: domain.PolicyAllowed, Verification: domain.VerificationFailed}
+	if _, err := service.updateActivationResult(installed.InstallationID, clientKey, outcome, errors.New("injected V2 native activation failure"), previous); err != nil {
+		t.Fatal(err)
+	}
+	persisted, err := store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := onlyBinding(persisted.Installations[0]).NativeObjects; !reflect.DeepEqual(got, previous) {
+		t.Fatalf("failed-update native ownership = %+v, want prior %+v", got, previous)
+	}
+	binding = onlyBinding(persisted.Installations[0])
+	binding.NativeObjects = desired
+	persisted.Installations[0].Clients[clientKey] = binding
+	if err := store.Save(persisted); err != nil {
+		t.Fatal(err)
+	}
+	success := domain.ActivationOutcome{Activation: domain.ActivationActive, Authentication: binding.Authentication, Policy: domain.PolicyAllowed, Verification: domain.VerificationInstalled}
+	if _, err := service.updateActivationResult(installed.InstallationID, clientKey, success, nil, previous); err != nil {
+		t.Fatal(err)
+	}
+	persisted, err = store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := onlyBinding(persisted.Installations[0]).NativeObjects; !reflect.DeepEqual(got, desired) {
+		t.Fatalf("successful-update native ownership = %+v, want desired %+v", got, desired)
+	}
+	if _, err := service.updateActivationResult(installed.InstallationID, clientKey, outcome, errors.New("second injected V2 native activation failure"), previous); err != nil {
+		t.Fatal(err)
+	}
+
+	activator := &capturingRemovalActivator{}
+	service.Activator = activator
+	if _, err := service.Remove(context.Background(), RemoveInput{Selector: installed.InstallationID, Client: client, Scope: domain.ScopeUser, Confirmed: true, OperationID: "remove-after-failed-update"}); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(activator.nativeObjects, previous) {
+		t.Fatalf("remove received native ownership = %+v, want prior %+v", activator.nativeObjects, previous)
 	}
 }
 
@@ -663,8 +726,8 @@ func TestNoChangeDryRunChecksManagedDigestWithoutNativeObservation(t *testing.T)
 	if observer.calls != 0 {
 		t.Fatalf("dry-run observed native client identity %d times", observer.calls)
 	}
-	if observer.preparedCalls != 1 {
-		t.Fatalf("dry-run prepared observations = %d, want 1", observer.preparedCalls)
+	if observer.preparedCalls != 0 {
+		t.Fatalf("dry-run prepared observations = %d, want 0 (selection integrity fails before observation)", observer.preparedCalls)
 	}
 	state, err := store.Load()
 	if err != nil {
@@ -1768,6 +1831,14 @@ func TestRemoveCleansNativeCodexMarketplaceBeforeManagedArtifactDeletion(t *test
 	if got := runner.commands[len(runner.commands)-1].Argv; !reflect.DeepEqual(got, wantCleanup) {
 		t.Fatalf("last command = %#v, want cleanup %#v", got, wantCleanup)
 	}
+	// The plugin's own registration must be cleared before its marketplace
+	// source, not just the marketplace: a stale `[plugins."id"] enabled`
+	// config.toml entry left behind is what let a freshly started Codex
+	// app-server silently re-materialize an already-"removed" plugin.
+	wantPluginRemove := []string{"/test/bin/codex", "plugin", "remove", "demo@" + marketplace, "--json"}
+	if got := runner.commands[len(runner.commands)-2].Argv; !reflect.DeepEqual(got, wantPluginRemove) {
+		t.Fatalf("second-to-last command = %#v, want plugin cleanup %#v", got, wantPluginRemove)
+	}
 	config, err := os.ReadFile(filepath.Join(client.ConfigRoot, "config.toml"))
 	if err != nil {
 		t.Fatal(err)
@@ -1944,6 +2015,19 @@ type observedActivator struct {
 	err          error
 	preflightErr error
 	calls        int
+}
+
+type capturingRemovalActivator struct {
+	nativeObjects []domain.NativeObjectOwnership
+}
+
+func (*capturingRemovalActivator) Activate(context.Context, domain.ActivationRequest) (domain.ActivationOutcome, error) {
+	return domain.ActivationOutcome{}, nil
+}
+
+func (activator *capturingRemovalActivator) Deactivate(_ context.Context, request domain.DeactivationRequest) (domain.DeactivationOutcome, error) {
+	activator.nativeObjects = append([]domain.NativeObjectOwnership(nil), request.NativeObjects...)
+	return domain.DeactivationOutcome{Activation: domain.ActivationNotRequired, ArtifactRemovalAllowed: true, ExternalRemovalComplete: true}, nil
 }
 
 func (activator *observedActivator) PreflightActivation(domain.ActivationRequest) error {

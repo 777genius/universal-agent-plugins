@@ -1,5 +1,31 @@
 package domain
 
+import (
+	"fmt"
+	"regexp"
+)
+
+var (
+	appAliasPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*$`)
+	appIDPattern    = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._~:-]{0,255}$`)
+)
+
+// ValidateAppBindingIdentity validates the signed identity tuple shared by
+// Directory and legacy Catalog app bindings. URL and legacy runtime evidence
+// are validated at their respective source boundaries.
+func ValidateAppBindingIdentity(appKey, id, mcpServer string) error {
+	if !appAliasPattern.MatchString(appKey) || !appAliasPattern.MatchString(mcpServer) {
+		return fmt.Errorf("app_key and mcp_server must be safe aliases")
+	}
+	if appKey != mcpServer {
+		return fmt.Errorf("app_key must equal mcp_server in v0.1")
+	}
+	if !appIDPattern.MatchString(id) {
+		return fmt.Errorf("id must be a non-empty opaque safe ASCII token")
+	}
+	return nil
+}
+
 const (
 	CatalogSchemaV1 = "https://github.com/777genius/universal-agent-plugins/schemas/catalog-v1.schema.json"
 	CatalogSchemaV2 = "https://github.com/777genius/universal-agent-plugins/schemas/catalog-v2.schema.json"

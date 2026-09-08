@@ -19,7 +19,7 @@ jobs:
         with:
           python-version: "3.12"
 
-      - uses: 777genius/plugin-kit-ai/setup-plugin-kit-ai@v1
+      - uses: 777genius/universal-agent-plugins/setup-plugin-kit-ai@v1
 
       - name: Doctor
         run: plugin-kit-ai doctor .

@@ -1,0 +1,127 @@
+.hero-agent-field {
+  --orbit-duration: 36s;
+  position: absolute;
+  inset: 0;
+  perspective: 1125px;
+  pointer-events: none;
+  opacity: 0.55;
+}
+.hero-agent-field__plane {
+  position: absolute;
+  top: 50%;
+  left: calc(62% - 100px);
+  width: min(720px, 150%);
+  aspect-ratio: 1;
+  translate: -50% -50%;
+  transform-style: preserve-3d;
+  transform: rotateX(36deg) rotateY(-28deg) rotateZ(-12deg);
+  animation:
+    agent-plane-tilt 18s ease-in-out infinite alternate,
+    agent-orbit-breathe 12s ease-in-out infinite;
+}
+.hero-agent-field__track {
+  position: absolute;
+  inset: 5%;
+  border: 1px solid color-mix(in srgb, var(--cyan) 55%, transparent);
+  border-radius: 50%;
+  transform-style: preserve-3d;
+  box-shadow:
+    0 0 28px color-mix(in srgb, var(--cyan) 7%, transparent),
+    inset 0 0 38px color-mix(in srgb, var(--primary) 6%, transparent);
+}
+.hero-agent-field__orbit {
+  position: absolute;
+  inset: 0;
+  transform-style: preserve-3d;
+  animation: agent-orbit-spin var(--orbit-duration) linear infinite;
+}
+.hero-agent-field__spoke {
+  position: absolute;
+  inset: 0;
+  transform: rotate(var(--angle));
+  transform-style: preserve-3d;
+}
+.hero-agent-field__node {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 38px;
+  height: 38px;
+  transform: translate(-50%, -50%) rotate(calc(-1 * var(--angle)));
+  transform-style: preserve-3d;
+}
+.hero-agent-field__rotor {
+  position: absolute;
+  inset: 0;
+  transform-style: preserve-3d;
+  animation: agent-orbit-spin var(--orbit-duration) linear infinite reverse;
+}
+.hero-agent-field__rim {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: #a4b6d5;
+  transform: translateZ(var(--rim-depth));
+}
+.hero-agent-field__face {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  border: 1px solid rgba(255, 255, 255, 0.95);
+  border-radius: 50%;
+  background: linear-gradient(145deg, #fff, #e1e8f8);
+  box-shadow: 0 0 12px rgba(11, 24, 58, 0.16);
+  transform: translateZ(0);
+}
+.hero-agent-field__node img {
+  width: 26px;
+  height: 26px;
+  object-fit: contain;
+}
+.hero-agent-field__hub {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  display: grid;
+  place-items: center;
+  width: 116px;
+  height: 116px;
+  border: 1px solid var(--line-strong);
+  border-radius: 36px;
+  background: var(--surface-solid);
+  transform: translate(-50%, -50%) translateZ(12px);
+}
+.hero-agent-field__hub img {
+  width: 76px;
+  height: 76px;
+}
+@keyframes agent-orbit-spin {
+  to { transform: rotate(360deg); }
+}
+@keyframes agent-plane-tilt {
+  to { transform: rotateX(-32deg) rotateY(30deg) rotateZ(12deg); }
+}
+@keyframes agent-orbit-breathe {
+  0%, 100% { scale: 0.96; }
+  50% { scale: 1.04; }
+}
+.hero-agent-field:not(.hero-agent-field--active) {
+  .hero-agent-field__plane,
+  .hero-agent-field__orbit,
+  .hero-agent-field__rotor { animation-play-state: paused; }
+}
+@media (max-width: 720px) {
+  .hero-agent-field__plane { width: min(492px, 150%); }
+  .hero-agent-field__node { width: 30px; height: 30px; }
+  .hero-agent-field__node img { width: 22px; height: 22px; }
+  .hero-agent-field__hub { width: 96px; height: 96px; border-radius: 28px; }
+  .hero-agent-field__hub img { width: 64px; height: 64px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hero-agent-field__plane,
+  .hero-agent-field__orbit,
+  .hero-agent-field__rotor { animation: none; }
+}

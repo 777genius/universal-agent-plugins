@@ -64,6 +64,9 @@ func runUpdateMany(ctx context.Context, cmd *cobra.Command, app App, opts *optio
 		}
 		return err
 	}
+	if err := authorizeSecurityAssessment(cmd, app, opts, &prepared.loaded); err != nil {
+		return err
+	}
 	if opts.dryRun {
 		return renderUpdateMultiResult(cmd, opts, prepared.result)
 	}
@@ -346,6 +349,9 @@ func renderUpdateMultiResult(cmd *cobra.Command, opts *options, result updateMul
 	}
 	values := make([]string, len(result.Targets))
 	for index, target := range result.Targets {
+		if err := renderOpenCodeRuntimeNotice(cmd.OutOrStdout(), target.Output.Result); err != nil {
+			return err
+		}
 		values[index] = target.Target
 		rollout := "preflight only"
 		if target.Selected {

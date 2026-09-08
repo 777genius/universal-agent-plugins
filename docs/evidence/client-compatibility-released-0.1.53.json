@@ -1,0 +1,510 @@
+{
+  "schema_version": 1,
+  "record_date": "2026-09-08",
+  "evidence_kind": "public_release_native_client_runtime",
+  "release": {
+    "repository": "777genius/universal-agent-plugins",
+    "tag": "agentplugins-v0.1.53",
+    "version": "0.1.53",
+    "commit": "28cf05af0a1e4fea642825dd34b78f9c99094ab5",
+    "tree": "9e3bcc3a951031b9a1bd83de12c36b70270f45dc",
+    "manifest_sha256": "9278d6f755adc53002c08ed6078457f0f2fba2fb55057f1f739d05cfeb1bf696",
+    "checksums_sha256": "cb800621c8b7f0e6de636a8a719b61b666a8aaa07135e35438e2b5e880fd53d9"
+  },
+  "native_workflow": {
+    "run_id": 34166817934,
+    "url": "https://github.com/777genius/universal-agent-plugins/actions/runs/34166817934",
+    "harness_commit": "9c33cfac81fc00e61205591321c89c5675fedb60",
+    "harness_tree": "d17e72793961e6798d09eb44256c832465f2d8c7",
+    "conclusion": "success"
+  },
+  "launcher_workflow": {
+    "run_id": 34164699278,
+    "url": "https://github.com/777genius/universal-agent-plugins/actions/runs/34164699278",
+    "commit": "28cf05af0a1e4fea642825dd34b78f9c99094ab5",
+    "conclusion": "success",
+    "targets": [
+      "darwin-amd64",
+      "darwin-arm64",
+      "linux-amd64",
+      "linux-arm64",
+      "windows-amd64",
+      "windows-arm64"
+    ],
+    "boundary": "Frozen installer bootstrap and synthetic lifecycle, separate from native-client runtime."
+  },
+  "archive": {
+    "publication_status": "published_verified_download",
+    "evidence_tag": "native-evidence-0.1.53-34166817934",
+    "release_url": "https://github.com/777genius/universal-agent-plugins/releases/tag/native-evidence-0.1.53-34166817934",
+    "asset_url": "https://github.com/777genius/universal-agent-plugins/releases/download/native-evidence-0.1.53-34166817934/uap-0.1.53-native-34166817934.zip",
+    "filename": "uap-0.1.53-native-34166817934.zip",
+    "sha256": "0d315f3a24bb6c41d184f0632d76a7228e18a6c1c41be2774e23c8066dfd3af6",
+    "size_bytes": 3165833,
+    "original_file_count": 529,
+    "zip_entry_count": 530,
+    "sidecar_url": "https://github.com/777genius/universal-agent-plugins/releases/download/native-evidence-0.1.53-34166817934/uap-0.1.53-native-34166817934.zip.sha256"
+  },
+  "verification": {
+    "kind": "offline_hash_and_record_consistency",
+    "verifier_source_path": "scripts/verify-released-native-evidence.py",
+    "verifier_source_sha256": "b2a7b9cf620dff0ed67d2a1fcfb046c2e1805fc122d020a4d415597a76d01224",
+    "source_boundary": "Verifier is delivered by the later documentation commit, not present at the original runtime harness commit. Pin that documentation commit when reproducing archive verification.",
+    "provenance": "Public release attestations verified by hosted runner before installer execution; offline packaging does not repeat cryptographic verification.",
+    "publication_boundary": "Separate public evidence ZIP and checksum sidecar re-downloaded through gh and verified against the recorded SHA-256 on 2026-09-08."
+  },
+  "lanes": [
+    {
+      "client": "claude",
+      "target": "darwin-arm64",
+      "status": "passed",
+      "client_asset": {
+        "source": "https://registry.npmjs.org/@anthropic-ai/claude-code-darwin-arm64/-/claude-code-darwin-arm64-2.1.263.tgz",
+        "version": "2.1.263",
+        "archive": "claude-code-darwin-arm64-2.1.263.tgz",
+        "archive_integrity": "sha512-yLv8MtgulGMGCWTwDUSmlEL0+94sxKP3vJm0SAXZX+0qVQ09PrjVSRC0ibtVeW7xymyhvP1JaUimOyp+t2wO5g==",
+        "binary_sha256": "ef5d2909c8af49f31ab6d5487e90316777bc2fac170adfe8160716caa8aaf4f9"
+      },
+      "scanner_asset": {
+        "source": "https://github.com/777genius/lintai/releases/tag/v0.1.3",
+        "version": "v0.1.3",
+        "archive": "lintai-v0.1.3-aarch64-apple-darwin.tar.gz",
+        "archive_integrity": "sha256:be8b263e2323074080d928ea7c2129458299a6d03f7a9f178dfc1aa8e6bc17ff",
+        "binary_sha256": "37342414aa7feadc09b8473d1bfafe95fd79ab99f284d37518c930fcb7986c57"
+      },
+      "ripgrep_asset": {
+        "source": "https://github.com/BurntSushi/ripgrep/releases/tag/15.2.0",
+        "version": "15.2.0",
+        "archive": "ripgrep-15.2.0-aarch64-apple-darwin.tar.gz",
+        "archive_integrity": "sha256:3750b2e93f37e0c692657da574d7019a101c0084da05a790c83fd335bad973e4",
+        "binary_sha256": "a326a1fb48074202e9ad41e4cd1e389eeea372c8c6f7d7e80da81176d5d9430e"
+      },
+      "installer_asset": {
+        "file": "agentplugins_0.1.53_darwin_arm64",
+        "size": 12584322,
+        "binary_sha256": "7bc16e2183786963803fb83f1e5a351615362f49c578d174611293859fa12cd0"
+      },
+      "installer_version_measured": "agentplugins 0.1.53",
+      "harness_build_sha256": {
+        "native-probe": "28905662e18b27d90e4b6dfa3e9e57af5de0042eb098243ef82038d3f9614032",
+        "repotests": "29d47f69d7a6ce52bb843314fca88518ae8ec968de100c6121231a74fa6c10a2"
+      },
+      "runner_evidence_path": "released-native-client-claude-darwin-arm64/runner-evidence.json",
+      "runner_evidence_sha256": "481c04db3b5b17142414ab10c3174ce0d70ca405f092a724b7e925e66cbf871f",
+      "passed_tests": [
+        "TestAgentpluginsClaudeNativeLifecycle",
+        "TestAgentpluginsClaudeNativeRuntimeLifecycle"
+      ],
+      "skipped_tests": [],
+      "indexed_artifact_count": 37,
+      "structured_fixture_paths": [
+        "uap-claude-native-evidence-3842199758/evidence.json",
+        "uap-native-evidence-155688856/evidence.json"
+      ]
+    },
+    {
+      "client": "claude",
+      "target": "linux-arm64",
+      "status": "passed",
+      "client_asset": {
+        "source": "https://registry.npmjs.org/@anthropic-ai/claude-code-linux-arm64/-/claude-code-linux-arm64-2.1.263.tgz",
+        "version": "2.1.263",
+        "archive": "claude-code-linux-arm64-2.1.263.tgz",
+        "archive_integrity": "sha512-RlJtLbl8xqFMf2zUdOKD4o5FkNhcgGjlS3Un8PNfSbv1fLQg3SqBQgEJhNEtSeKlEsOs26RnCG/jVk4yah8Udw==",
+        "binary_sha256": "7d25d7c8ae6c6e009cc7dae4e817f674179fd31fb7761bcd56fee4c2902b4c03"
+      },
+      "scanner_asset": {
+        "source": "https://github.com/777genius/lintai/releases/tag/v0.1.3",
+        "version": "v0.1.3",
+        "archive": "lintai-v0.1.3-aarch64-unknown-linux-gnu.tar.gz",
+        "archive_integrity": "sha256:132a37610575bd251ecaf0be4c6090dad144dd1397c99aad989a3944c63c3d4a",
+        "binary_sha256": "7eb11068063a95160c2adb38e1e4e118dbde98b35ecdfb2c627f2d5624b70b0c"
+      },
+      "ripgrep_asset": {
+        "source": "https://github.com/BurntSushi/ripgrep/releases/tag/15.2.0",
+        "version": "15.2.0",
+        "archive": "ripgrep-15.2.0-aarch64-unknown-linux-gnu.tar.gz",
+        "archive_integrity": "sha256:a740b91c82eaf9914cfedd353572f2791cbe0162c84101ee0951058f4dcbc90d",
+        "binary_sha256": "e36d0eb52e70696bdf1781392722e05a21bb91d3b7b762ef5ec20e5df2ec687b"
+      },
+      "installer_asset": {
+        "file": "agentplugins_0.1.53_linux_arm64",
+        "size": 12452024,
+        "binary_sha256": "f33a5b72a53d503416e573f0fae8cef7d5193f48edd2cfe4bcf8e36c3e57fb99"
+      },
+      "installer_version_measured": "agentplugins 0.1.53",
+      "harness_build_sha256": {
+        "native-probe": "6012a9e02420c5e0423fd086ce65a60d93bfc03e808c10b9b73957e931acdca8",
+        "repotests": "92146d77e0f5416be777032026608bcc58dc07b1e6c1dc8d99ac4e21c373c231"
+      },
+      "runner_evidence_path": "released-native-client-claude-linux-arm64/runner-evidence.json",
+      "runner_evidence_sha256": "3dc1e9fe45ef0cb1222a6425e8b7019dfedc7d5761f508b143368e7fbd7e58bb",
+      "passed_tests": [
+        "TestAgentpluginsClaudeNativeLifecycle",
+        "TestAgentpluginsClaudeNativeRuntimeLifecycle"
+      ],
+      "skipped_tests": [],
+      "indexed_artifact_count": 37,
+      "structured_fixture_paths": [
+        "uap-claude-native-evidence-3269414146/evidence.json",
+        "uap-native-evidence-2420074862/evidence.json"
+      ]
+    },
+    {
+      "client": "claude",
+      "target": "windows-amd64",
+      "status": "passed",
+      "client_asset": {
+        "source": "https://registry.npmjs.org/@anthropic-ai/claude-code-win32-x64/-/claude-code-win32-x64-2.1.263.tgz",
+        "version": "2.1.263",
+        "archive": "claude-code-win32-x64-2.1.263.tgz",
+        "archive_integrity": "sha512-P1LnudAWj2ptyE0IZzCZKAe7nU7LxqlkcLdBfp8FsHlH5dp75Og4JJ6TClvfjanHn3shYW4CYN6oI1vSqZlkHw==",
+        "binary_sha256": "0b35df94c1307004f07b738390bfef8dfca5e9af29aaf6517f305bf086b95b03"
+      },
+      "scanner_asset": {
+        "source": "https://github.com/777genius/lintai/releases/tag/v0.1.3",
+        "version": "v0.1.3",
+        "archive": "lintai-v0.1.3-x86_64-pc-windows-msvc.zip",
+        "archive_integrity": "sha256:2f61f6a83a160afa3feed9ea1722b82d0d938ebff865a4e20d39b5f55270c911",
+        "binary_sha256": "9d486e5b66875384c12a147b8a19007beebe2691bc6d23a7867bf019b70be453"
+      },
+      "ripgrep_asset": {
+        "source": "https://github.com/BurntSushi/ripgrep/releases/tag/15.2.0",
+        "version": "15.2.0",
+        "archive": "ripgrep-15.2.0-x86_64-pc-windows-msvc.zip",
+        "archive_integrity": "sha256:71b2fef860abe467217a538ff31de02f5258807c0129f771846f87bd029aafc5",
+        "binary_sha256": "14231169855ec5205cf5a1b6f1db358ff4aed4247c86b69ce8aae647c77f6680"
+      },
+      "installer_asset": {
+        "file": "agentplugins_0.1.53_windows_amd64.exe",
+        "size": 13676032,
+        "binary_sha256": "4acfe85614ba34069e9d77addaa877bb44e3c519fbe77423703a7bd4709addde"
+      },
+      "installer_version_measured": "agentplugins 0.1.53",
+      "harness_build_sha256": {
+        "native-probe.exe": "9d16c5d926807a526c89047a6dd7cf817eb3ec44c0c51c9ded4854950def1a0a",
+        "repotests.exe": "af08548cc279df4bcc063eec3290c19ae314183a503bd4f1a7c7b6ce24ee45e1"
+      },
+      "runner_evidence_path": "released-native-client-claude-windows-amd64/runner-evidence.json",
+      "runner_evidence_sha256": "596d02a0cc97d920922098833ea8723c3eec9c679450c0c23818a657604e2374",
+      "passed_tests": [
+        "TestAgentpluginsClaudeNativeLifecycle",
+        "TestAgentpluginsClaudeNativeRuntimeLifecycle"
+      ],
+      "skipped_tests": [],
+      "indexed_artifact_count": 41,
+      "structured_fixture_paths": [
+        "uap-claude-native-evidence-2348571833/evidence.json",
+        "uap-native-evidence-1935402644/evidence.json"
+      ]
+    },
+    {
+      "client": "codex",
+      "target": "darwin-arm64",
+      "status": "passed",
+      "client_asset": {
+        "source": "https://github.com/openai/codex/releases/tag/rust-v0.153.4",
+        "version": "rust-v0.153.4",
+        "archive": "codex-aarch64-apple-darwin.tar.gz",
+        "archive_integrity": "sha256:8cf911ea676523bfb2121ec561848d2aba564890ad536db4d8a3353f2b9850b1",
+        "binary_sha256": "b973d440acac501fd2594a43e7ca9ce41e0a65b9dfb28d0d7a7837c99e1261e3"
+      },
+      "scanner_asset": {
+        "source": "https://github.com/777genius/lintai/releases/tag/v0.1.3",
+        "version": "v0.1.3",
+        "archive": "lintai-v0.1.3-aarch64-apple-darwin.tar.gz",
+        "archive_integrity": "sha256:be8b263e2323074080d928ea7c2129458299a6d03f7a9f178dfc1aa8e6bc17ff",
+        "binary_sha256": "37342414aa7feadc09b8473d1bfafe95fd79ab99f284d37518c930fcb7986c57"
+      },
+      "ripgrep_asset": {
+        "source": "https://github.com/BurntSushi/ripgrep/releases/tag/15.2.0",
+        "version": "15.2.0",
+        "archive": "ripgrep-15.2.0-aarch64-apple-darwin.tar.gz",
+        "archive_integrity": "sha256:3750b2e93f37e0c692657da574d7019a101c0084da05a790c83fd335bad973e4",
+        "binary_sha256": "a326a1fb48074202e9ad41e4cd1e389eeea372c8c6f7d7e80da81176d5d9430e"
+      },
+      "installer_asset": {
+        "file": "agentplugins_0.1.53_darwin_arm64",
+        "size": 12584322,
+        "binary_sha256": "7bc16e2183786963803fb83f1e5a351615362f49c578d174611293859fa12cd0"
+      },
+      "installer_version_measured": "agentplugins 0.1.53",
+      "harness_build_sha256": {
+        "native-probe": "28905662e18b27d90e4b6dfa3e9e57af5de0042eb098243ef82038d3f9614032",
+        "repotests": "29d47f69d7a6ce52bb843314fca88518ae8ec968de100c6121231a74fa6c10a2"
+      },
+      "runner_evidence_path": "released-native-client-codex-darwin-arm64/runner-evidence.json",
+      "runner_evidence_sha256": "1497bbe38a5d2b980cc914b8f457ab5d630c01bbf8eab3456a9e0656ce7ec325",
+      "passed_tests": [
+        "TestAgentpluginsCodexNativeLifecycle"
+      ],
+      "skipped_tests": [],
+      "indexed_artifact_count": 52,
+      "structured_fixture_paths": [
+        "uap-native-evidence-42330369/evidence.json"
+      ]
+    },
+    {
+      "client": "codex",
+      "target": "linux-arm64",
+      "status": "passed",
+      "client_asset": {
+        "source": "https://github.com/openai/codex/releases/tag/rust-v0.153.4",
+        "version": "rust-v0.153.4",
+        "archive": "codex-aarch64-unknown-linux-musl.tar.gz",
+        "archive_integrity": "sha256:5cda6182bd94c3a30f2eb63a495489ebf7f691fddb14d70f48c6c1a5071b6cde",
+        "binary_sha256": "4d76e542c222ea8c75861d8c4ade60a1a332a63255ce1c60bdaebf7c2a2869e6"
+      },
+      "scanner_asset": {
+        "source": "https://github.com/777genius/lintai/releases/tag/v0.1.3",
+        "version": "v0.1.3",
+        "archive": "lintai-v0.1.3-aarch64-unknown-linux-gnu.tar.gz",
+        "archive_integrity": "sha256:132a37610575bd251ecaf0be4c6090dad144dd1397c99aad989a3944c63c3d4a",
+        "binary_sha256": "7eb11068063a95160c2adb38e1e4e118dbde98b35ecdfb2c627f2d5624b70b0c"
+      },
+      "ripgrep_asset": {
+        "source": "https://github.com/BurntSushi/ripgrep/releases/tag/15.2.0",
+        "version": "15.2.0",
+        "archive": "ripgrep-15.2.0-aarch64-unknown-linux-gnu.tar.gz",
+        "archive_integrity": "sha256:a740b91c82eaf9914cfedd353572f2791cbe0162c84101ee0951058f4dcbc90d",
+        "binary_sha256": "e36d0eb52e70696bdf1781392722e05a21bb91d3b7b762ef5ec20e5df2ec687b"
+      },
+      "installer_asset": {
+        "file": "agentplugins_0.1.53_linux_arm64",
+        "size": 12452024,
+        "binary_sha256": "f33a5b72a53d503416e573f0fae8cef7d5193f48edd2cfe4bcf8e36c3e57fb99"
+      },
+      "installer_version_measured": "agentplugins 0.1.53",
+      "harness_build_sha256": {
+        "native-probe": "6012a9e02420c5e0423fd086ce65a60d93bfc03e808c10b9b73957e931acdca8",
+        "repotests": "92146d77e0f5416be777032026608bcc58dc07b1e6c1dc8d99ac4e21c373c231"
+      },
+      "runner_evidence_path": "released-native-client-codex-linux-arm64/runner-evidence.json",
+      "runner_evidence_sha256": "fa49105c7d01bc8bf128feac7e8c8f92febbfcf0e1326362840aed727324d674",
+      "passed_tests": [
+        "TestAgentpluginsCodexNativeLifecycle"
+      ],
+      "skipped_tests": [],
+      "indexed_artifact_count": 52,
+      "structured_fixture_paths": [
+        "uap-native-evidence-1087345249/evidence.json"
+      ]
+    },
+    {
+      "client": "codex",
+      "target": "windows-amd64",
+      "status": "passed",
+      "client_asset": {
+        "source": "https://github.com/openai/codex/releases/tag/rust-v0.153.4",
+        "version": "rust-v0.153.4",
+        "archive": "codex-x86_64-pc-windows-msvc.exe.zip",
+        "archive_integrity": "sha256:c016b0e6968b78586919c720d2685a03712f6d5f11bcd9d6f92c91eb8c41ba16",
+        "binary_sha256": "444a3f0008050605cae73cd9b7a2dcac61294062dfaab56dd20430fd6498518b"
+      },
+      "scanner_asset": {
+        "source": "https://github.com/777genius/lintai/releases/tag/v0.1.3",
+        "version": "v0.1.3",
+        "archive": "lintai-v0.1.3-x86_64-pc-windows-msvc.zip",
+        "archive_integrity": "sha256:2f61f6a83a160afa3feed9ea1722b82d0d938ebff865a4e20d39b5f55270c911",
+        "binary_sha256": "9d486e5b66875384c12a147b8a19007beebe2691bc6d23a7867bf019b70be453"
+      },
+      "ripgrep_asset": {
+        "source": "https://github.com/BurntSushi/ripgrep/releases/tag/15.2.0",
+        "version": "15.2.0",
+        "archive": "ripgrep-15.2.0-x86_64-pc-windows-msvc.zip",
+        "archive_integrity": "sha256:71b2fef860abe467217a538ff31de02f5258807c0129f771846f87bd029aafc5",
+        "binary_sha256": "14231169855ec5205cf5a1b6f1db358ff4aed4247c86b69ce8aae647c77f6680"
+      },
+      "installer_asset": {
+        "file": "agentplugins_0.1.53_windows_amd64.exe",
+        "size": 13676032,
+        "binary_sha256": "4acfe85614ba34069e9d77addaa877bb44e3c519fbe77423703a7bd4709addde"
+      },
+      "installer_version_measured": "agentplugins 0.1.53",
+      "harness_build_sha256": {
+        "native-probe.exe": "9d16c5d926807a526c89047a6dd7cf817eb3ec44c0c51c9ded4854950def1a0a",
+        "repotests.exe": "af08548cc279df4bcc063eec3290c19ae314183a503bd4f1a7c7b6ce24ee45e1"
+      },
+      "runner_evidence_path": "released-native-client-codex-windows-amd64/runner-evidence.json",
+      "runner_evidence_sha256": "290e38147177cac3568acf3d2af9817f1ebf8e881c8891ad2a3ecfbd5ba8d92a",
+      "passed_tests": [
+        "TestAgentpluginsCodexNativeLifecycle"
+      ],
+      "skipped_tests": [],
+      "indexed_artifact_count": 52,
+      "structured_fixture_paths": [
+        "uap-native-evidence-1243279788/evidence.json"
+      ]
+    },
+    {
+      "client": "opencode",
+      "target": "darwin-arm64",
+      "status": "passed",
+      "client_asset": {
+        "source": "https://registry.npmjs.org/opencode-darwin-arm64/-/opencode-darwin-arm64-1.18.29.tgz",
+        "version": "1.18.29",
+        "archive": "opencode-darwin-arm64-1.18.29.tgz",
+        "archive_integrity": "sha512-EU0qma5GPJXcDp5rENvedSfqJjqxatQW/Qzjs71pR2YdbrSh7YmBwtvnIb2/KIvfQr0DErX4ST14sbBQI2mQdg==",
+        "binary_sha256": "2f24593f1b8e578d0b7ed7ca399440d4b6c125330eece20a69ad8d380190d669"
+      },
+      "scanner_asset": {
+        "source": "https://github.com/777genius/lintai/releases/tag/v0.1.3",
+        "version": "v0.1.3",
+        "archive": "lintai-v0.1.3-aarch64-apple-darwin.tar.gz",
+        "archive_integrity": "sha256:be8b263e2323074080d928ea7c2129458299a6d03f7a9f178dfc1aa8e6bc17ff",
+        "binary_sha256": "37342414aa7feadc09b8473d1bfafe95fd79ab99f284d37518c930fcb7986c57"
+      },
+      "ripgrep_asset": {
+        "source": "https://github.com/BurntSushi/ripgrep/releases/tag/15.2.0",
+        "version": "15.2.0",
+        "archive": "ripgrep-15.2.0-aarch64-apple-darwin.tar.gz",
+        "archive_integrity": "sha256:3750b2e93f37e0c692657da574d7019a101c0084da05a790c83fd335bad973e4",
+        "binary_sha256": "a326a1fb48074202e9ad41e4cd1e389eeea372c8c6f7d7e80da81176d5d9430e"
+      },
+      "installer_asset": {
+        "file": "agentplugins_0.1.53_darwin_arm64",
+        "size": 12584322,
+        "binary_sha256": "7bc16e2183786963803fb83f1e5a351615362f49c578d174611293859fa12cd0"
+      },
+      "installer_version_measured": "agentplugins 0.1.53",
+      "harness_build_sha256": {
+        "native-probe": "28905662e18b27d90e4b6dfa3e9e57af5de0042eb098243ef82038d3f9614032",
+        "repotests": "29d47f69d7a6ce52bb843314fca88518ae8ec968de100c6121231a74fa6c10a2"
+      },
+      "runner_evidence_path": "released-native-client-opencode-darwin-arm64/runner-evidence.json",
+      "runner_evidence_sha256": "2f28a2c73cab27ca15e6302768cc239bb4eccde6a5f35ef74115e94585d68248",
+      "passed_tests": [
+        "TestAgentpluginsOpenCodeNativeLifecycle",
+        "TestAgentpluginsOpenCodeNativeRuntimeExtended",
+        "TestAgentpluginsOpenCodeNativeToolCollision"
+      ],
+      "skipped_tests": [],
+      "indexed_artifact_count": 83,
+      "structured_fixture_paths": [
+        "uap-opencode-native-evidence-147098728-${PLUGIN_DATA}/extended-runtime-evidence.json",
+        "uap-opencode-native-evidence-1968185407/tool-collision-evidence.json",
+        "uap-opencode-native-evidence-4035282982/evidence.json",
+        "uap-opencode-native-evidence-4151479889/evidence.json",
+        "uap-opencode-native-evidence-4245959109/tool-collision-evidence.json",
+        "uap-opencode-native-evidence-593598528/tool-collision-evidence.json"
+      ]
+    },
+    {
+      "client": "opencode",
+      "target": "linux-arm64",
+      "status": "passed",
+      "client_asset": {
+        "source": "https://registry.npmjs.org/opencode-linux-arm64/-/opencode-linux-arm64-1.18.29.tgz",
+        "version": "1.18.29",
+        "archive": "opencode-linux-arm64-1.18.29.tgz",
+        "archive_integrity": "sha512-Lr7XXik5wPJZBV5RW+aR6Uogf1n5GogpB565m+D/jiO/vRXr9LhvCpixgAr1tiwuH1ZfMsqOOlbFQz5jgH3Tqg==",
+        "binary_sha256": "e94d9ebec16ce2611eae94026afe8ec87f2e2dcc66db40bc4f889955b026eb75"
+      },
+      "scanner_asset": {
+        "source": "https://github.com/777genius/lintai/releases/tag/v0.1.3",
+        "version": "v0.1.3",
+        "archive": "lintai-v0.1.3-aarch64-unknown-linux-gnu.tar.gz",
+        "archive_integrity": "sha256:132a37610575bd251ecaf0be4c6090dad144dd1397c99aad989a3944c63c3d4a",
+        "binary_sha256": "7eb11068063a95160c2adb38e1e4e118dbde98b35ecdfb2c627f2d5624b70b0c"
+      },
+      "ripgrep_asset": {
+        "source": "https://github.com/BurntSushi/ripgrep/releases/tag/15.2.0",
+        "version": "15.2.0",
+        "archive": "ripgrep-15.2.0-aarch64-unknown-linux-gnu.tar.gz",
+        "archive_integrity": "sha256:a740b91c82eaf9914cfedd353572f2791cbe0162c84101ee0951058f4dcbc90d",
+        "binary_sha256": "e36d0eb52e70696bdf1781392722e05a21bb91d3b7b762ef5ec20e5df2ec687b"
+      },
+      "installer_asset": {
+        "file": "agentplugins_0.1.53_linux_arm64",
+        "size": 12452024,
+        "binary_sha256": "f33a5b72a53d503416e573f0fae8cef7d5193f48edd2cfe4bcf8e36c3e57fb99"
+      },
+      "installer_version_measured": "agentplugins 0.1.53",
+      "harness_build_sha256": {
+        "native-probe": "6012a9e02420c5e0423fd086ce65a60d93bfc03e808c10b9b73957e931acdca8",
+        "repotests": "92146d77e0f5416be777032026608bcc58dc07b1e6c1dc8d99ac4e21c373c231"
+      },
+      "runner_evidence_path": "released-native-client-opencode-linux-arm64/runner-evidence.json",
+      "runner_evidence_sha256": "27f96f59db4254b46cabc9945b1ccb5b565f29d266908172d03cd6a66911993c",
+      "passed_tests": [
+        "TestAgentpluginsOpenCodeNativeLifecycle",
+        "TestAgentpluginsOpenCodeNativeRuntimeExtended",
+        "TestAgentpluginsOpenCodeNativeToolCollision"
+      ],
+      "skipped_tests": [],
+      "indexed_artifact_count": 83,
+      "structured_fixture_paths": [
+        "uap-opencode-native-evidence-1612502745/tool-collision-evidence.json",
+        "uap-opencode-native-evidence-1912629362/tool-collision-evidence.json",
+        "uap-opencode-native-evidence-3069872216/evidence.json",
+        "uap-opencode-native-evidence-3150781017-${PLUGIN_DATA}/extended-runtime-evidence.json",
+        "uap-opencode-native-evidence-3157749506/tool-collision-evidence.json",
+        "uap-opencode-native-evidence-4224510229/evidence.json"
+      ]
+    },
+    {
+      "client": "opencode",
+      "target": "windows-amd64",
+      "status": "passed",
+      "client_asset": {
+        "source": "https://registry.npmjs.org/opencode-windows-x64/-/opencode-windows-x64-1.18.29.tgz",
+        "version": "1.18.29",
+        "archive": "opencode-windows-x64-1.18.29.tgz",
+        "archive_integrity": "sha512-xtWiZNMiwFtBl7q9yMG+XK/BTYGfgFoHLDx4ruWVYCoxjV0NYwjJi6rB9B3xIVbTclzu81YLKNFcT3kNBEG9Yw==",
+        "binary_sha256": "88d2fa691b2d9e32fde6d1039382a850ddf96fe49cd41683c6375fe1dc8ec2a5"
+      },
+      "scanner_asset": {
+        "source": "https://github.com/777genius/lintai/releases/tag/v0.1.3",
+        "version": "v0.1.3",
+        "archive": "lintai-v0.1.3-x86_64-pc-windows-msvc.zip",
+        "archive_integrity": "sha256:2f61f6a83a160afa3feed9ea1722b82d0d938ebff865a4e20d39b5f55270c911",
+        "binary_sha256": "9d486e5b66875384c12a147b8a19007beebe2691bc6d23a7867bf019b70be453"
+      },
+      "ripgrep_asset": {
+        "source": "https://github.com/BurntSushi/ripgrep/releases/tag/15.2.0",
+        "version": "15.2.0",
+        "archive": "ripgrep-15.2.0-x86_64-pc-windows-msvc.zip",
+        "archive_integrity": "sha256:71b2fef860abe467217a538ff31de02f5258807c0129f771846f87bd029aafc5",
+        "binary_sha256": "14231169855ec5205cf5a1b6f1db358ff4aed4247c86b69ce8aae647c77f6680"
+      },
+      "installer_asset": {
+        "file": "agentplugins_0.1.53_windows_amd64.exe",
+        "size": 13676032,
+        "binary_sha256": "4acfe85614ba34069e9d77addaa877bb44e3c519fbe77423703a7bd4709addde"
+      },
+      "installer_version_measured": "agentplugins 0.1.53",
+      "harness_build_sha256": {
+        "native-probe.exe": "9d16c5d926807a526c89047a6dd7cf817eb3ec44c0c51c9ded4854950def1a0a",
+        "repotests.exe": "af08548cc279df4bcc063eec3290c19ae314183a503bd4f1a7c7b6ce24ee45e1"
+      },
+      "runner_evidence_path": "released-native-client-opencode-windows-amd64/runner-evidence.json",
+      "runner_evidence_sha256": "0c96ba83972e26ad56220f3d8d6035bc3ce61091cbccf641eee4b63c4437a521",
+      "passed_tests": [
+        "TestAgentpluginsOpenCodeNativeLifecycle",
+        "TestAgentpluginsOpenCodeNativeRuntimeExtended",
+        "TestAgentpluginsOpenCodeNativeToolCollision"
+      ],
+      "skipped_tests": [],
+      "indexed_artifact_count": 83,
+      "structured_fixture_paths": [
+        "uap-opencode-native-evidence-1363583405/tool-collision-evidence.json",
+        "uap-opencode-native-evidence-1707362956-${PLUGIN_DATA}/extended-runtime-evidence.json",
+        "uap-opencode-native-evidence-2065339359/tool-collision-evidence.json",
+        "uap-opencode-native-evidence-2743315151/evidence.json",
+        "uap-opencode-native-evidence-3436990270/evidence.json",
+        "uap-opencode-native-evidence-4103962442/tool-collision-evidence.json"
+      ]
+    }
+  ],
+  "limits": [
+    "Fresh GitHub-hosted projects and profiles; scripted loopback providers; network not blocked.",
+    "Windows Claude: managed stdio unsupported, runtime HTTP and installed skill only.",
+    "OpenCode: JSON/JSONC lifecycle and HTTP collision fixtures; separate global JSON stdio and skill-body proof. No inferred JSONC stdio/body proof.",
+    "OpenCode colliding runtime tool names were observed, not fixed; opencode_tool_namespace_not_evaluated remains applicable.",
+    "Codex immutable Git acquisition seam is not native public Git runtime proof in this required suite.",
+    "No real-model quality, OAuth/login, desktop application or live external-service availability proof.",
+    "Native targets limited to Linux arm64, macOS arm64, Windows amd64; launcher targets do not expand them.",
+    "Maintainer-run evidence is not independent external testing, adoption or certification."
+  ],
+  "historical_source_record": "https://github.com/777genius/universal-agent-plugins/blob/9c33cfac81fc00e61205591321c89c5675fedb60/docs/evidence/client-compatibility-2026-09-07.json"
+}

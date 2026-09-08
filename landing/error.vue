@@ -11,6 +11,11 @@ const { t } = useI18n();
 const statusCode = computed(() => props.error?.statusCode || 404);
 const isNotFound = computed(() => statusCode.value === 404);
 
+useSeoMeta({
+  title: () => `${statusCode.value} | Universal Agent Plugins`,
+  robots: 'noindex, nofollow',
+});
+
 const handleGoHome = () => clearError({ redirect: "/" });
 </script>
 

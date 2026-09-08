@@ -1,17 +1,31 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
-  <title id="title">plugin-kit-ai Docs Icon</title>
-  <desc id="desc">Rounded square icon for the plugin-kit-ai documentation site.</desc>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">Universal Agent Plugins logo</title>
+  <desc id="desc">A modular hub linking three portable plugin tiles.</desc>
   <defs>
-    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#fff6e8" />
-      <stop offset="100%" stop-color="#e9f0ff" />
+    <linearGradient id="bg" x1="48" y1="32" x2="464" y2="480" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#11162E"/>
+      <stop offset="1" stop-color="#070A16"/>
     </linearGradient>
+    <linearGradient id="core" x1="164" y1="148" x2="350" y2="354" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#7C5CFC"/>
+      <stop offset="0.52" stop-color="#387BFF"/>
+      <stop offset="1" stop-color="#20C8E8"/>
+    </linearGradient>
+    <filter id="glow" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="18"/>
+    </filter>
   </defs>
-  <rect width="128" height="128" rx="28" fill="url(#bg)" />
-  <rect x="18" y="18" width="92" height="92" rx="22" fill="#0f172a" />
-  <path d="M40 40h48a8 8 0 0 1 8 8v6H40a8 8 0 0 0-8 8V48a8 8 0 0 1 8-8Z" fill="#f8fafc" />
-  <path d="M40 58h56v22a8 8 0 0 1-8 8H40a8 8 0 0 1-8-8V66a8 8 0 0 1 8-8Z" fill="#e2e8f0" />
-  <path d="M48 72h20" stroke="#0f172a" stroke-width="6" stroke-linecap="round" />
-  <path d="M48 84h34" stroke="#334155" stroke-width="6" stroke-linecap="round" />
-  <circle cx="90" cy="40" r="10" fill="#f97316" />
+  <rect width="512" height="512" rx="116" fill="url(#bg)"/>
+  <circle cx="256" cy="256" r="126" fill="#387BFF" opacity=".18" filter="url(#glow)"/>
+  <g fill="none" stroke-linecap="round">
+    <path d="M256 183V112" stroke="#8E79FF" stroke-width="22"/>
+    <path d="M192 294L126 348" stroke="#28C5E6" stroke-width="22"/>
+    <path d="M320 294L386 348" stroke="#FF806E" stroke-width="22"/>
+  </g>
+  <rect x="177" y="164" width="158" height="158" rx="48" fill="url(#core)"/>
+  <rect x="218" y="70" width="76" height="76" rx="24" fill="#8E79FF"/>
+  <rect x="83" y="329" width="76" height="76" rx="24" fill="#28C5E6"/>
+  <rect x="353" y="329" width="76" height="76" rx="24" fill="#FF806E"/>
+  <path d="M230 214h52a18 18 0 0 1 18 18v22a18 18 0 0 1-18 18h-52a18 18 0 0 1-18-18v-22a18 18 0 0 1 18-18Z" fill="#F8FAFF" opacity=".96"/>
+  <path d="M244 197v18m24-18v18m-24 57v18m24-18v18" stroke="#F8FAFF" stroke-width="12" stroke-linecap="round"/>
 </svg>

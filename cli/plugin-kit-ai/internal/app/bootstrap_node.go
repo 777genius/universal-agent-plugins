@@ -41,15 +41,15 @@ func bootstrapNode(ctx context.Context, project runtimecheck.Project) ([]string,
 		lines = append(lines, "Ran: bun install")
 	default:
 		if fileExists(filepath.Join(root, "package-lock.json")) || fileExists(filepath.Join(root, "npm-shrinkwrap.json")) {
-			if err := runBootstrapCommand(ctx, root, "npm", "ci"); err != nil {
+			if err := runBootstrapCommand(ctx, root, "npm", "ci", "--no-audit", "--no-fund"); err != nil {
 				return nil, err
 			}
-			lines = append(lines, "Ran: npm ci")
+			lines = append(lines, "Ran: npm ci --no-audit --no-fund")
 		} else {
-			if err := runBootstrapCommand(ctx, root, "npm", "install"); err != nil {
+			if err := runBootstrapCommand(ctx, root, "npm", "install", "--no-audit", "--no-fund"); err != nil {
 				return nil, err
 			}
-			lines = append(lines, "Ran: npm install")
+			lines = append(lines, "Ran: npm install --no-audit --no-fund")
 		}
 	}
 	if shape.IsTypeScript {

@@ -24,17 +24,18 @@ type validationSource struct {
 }
 
 type validationResult struct {
-	Conformant     bool                 `json:"conformant"`
-	Name           string               `json:"name"`
-	Version        string               `json:"version,omitempty"`
-	FormatID       string               `json:"format_id"`
-	SchemaURI      string               `json:"schema_uri"`
-	SchemaVersion  string               `json:"schema_version"`
-	Source         validationSource     `json:"source"`
-	TreeDigest     string               `json:"tree_digest"`
-	ManifestDigest string               `json:"manifest_digest"`
-	Components     validationComponents `json:"components"`
-	Diagnostics    []domain.Diagnostic  `json:"diagnostics,omitempty"`
+	Conformant     bool                       `json:"conformant"`
+	Name           string                     `json:"name"`
+	Version        string                     `json:"version,omitempty"`
+	FormatID       string                     `json:"format_id"`
+	SchemaURI      string                     `json:"schema_uri"`
+	SchemaVersion  string                     `json:"schema_version"`
+	Source         validationSource           `json:"source"`
+	TreeDigest     string                     `json:"tree_digest"`
+	ManifestDigest string                     `json:"manifest_digest"`
+	Components     validationComponents       `json:"components"`
+	Diagnostics    []domain.Diagnostic        `json:"diagnostics,omitempty"`
+	Security       *domain.SecurityAssessment `json:"security,omitempty"`
 }
 
 func newValidateCommand(app App, opts *options) *cobra.Command {
@@ -58,8 +59,12 @@ func newValidateCommand(app App, opts *options) *cobra.Command {
 				defer loaded.cleanup()
 			}
 			result := newValidationResult(loaded.envelope)
+			result.Security = loaded.security
 			if opts.format == "json" {
 				return writeJSONOutput(cmd.OutOrStdout(), "validate", result)
+			}
+			if loaded.security != nil {
+				renderSecurityAssessment(cmd, *loaded.security, true)
 			}
 			_, err = fmt.Fprintf(cmd.OutOrStdout(), "Valid Agent Plugin: %s %s\nSchema: %s\nSource: %s\nComponents: %d skills, %d MCP servers, %d app bindings\n",
 				result.Name, result.Version, result.SchemaURI, publicPackageSource(loaded.envelope.Source),

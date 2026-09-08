@@ -16,6 +16,70 @@ import (
 
 type OS struct{}
 
+// ErrStdoutLimitExceeded reports that a command produced more stdout than its
+// caller allowed the runner to retain. The runner stops consuming output so
+// the supervised producer terminates at the configured bound.
+var ErrStdoutLimitExceeded = errors.New("command stdout exceeded configured limit")
+
+// IsOnlyStdoutLimitExceeded distinguishes a sole wrapped output-limit cause
+// from a joined containment, cancellation, or execution failure.
+func IsOnlyStdoutLimitExceeded(err error) bool {
+	if err == nil {
+		return false
+	}
+	if err == ErrStdoutLimitExceeded {
+		return true
+	}
+	if joined, ok := err.(interface{ Unwrap() []error }); ok {
+		causes := joined.Unwrap()
+		if len(causes) == 0 {
+			return false
+		}
+		for _, cause := range causes {
+			if !IsOnlyStdoutLimitExceeded(cause) {
+				return false
+			}
+		}
+		return true
+	}
+	if wrapped, ok := err.(interface{ Unwrap() error }); ok {
+		return IsOnlyStdoutLimitExceeded(wrapped.Unwrap())
+	}
+	return false
+}
+
+// IsExactStdoutLimitExitCode recognizes the runner's direct nonzero-exit marker
+// without accepting ordinary wrappers or joins with another cause. Callers may
+// use it only when a specific trusted executable defines that exit code as its
+// broken-pipe status.
+func IsExactStdoutLimitExitCode(err error, exitCode int) bool {
+	if typed, ok := err.(*stdoutLimitExitError); ok {
+		return typed.exitCode == exitCode
+	}
+	// runExplicit's deferred containment close uses errors.Join even when the
+	// close succeeds. Peel only that sole multi-error cause; ordinary wrappers
+	// and joins containing any concurrent failure must not match.
+	if joined, ok := err.(interface{ Unwrap() []error }); ok {
+		causes := joined.Unwrap()
+		return len(causes) == 1 && IsExactStdoutLimitExitCode(causes[0], exitCode)
+	}
+	return false
+}
+
+type stdoutLimitExitError struct {
+	exitCode int
+	waitErr  error
+	limitErr error
+}
+
+func (err *stdoutLimitExitError) Error() string {
+	return fmt.Sprintf("command exited with code %d while stdout exceeded its configured limit: %v", err.exitCode, errors.Join(err.waitErr, err.limitErr))
+}
+
+func (err *stdoutLimitExitError) Unwrap() []error {
+	return []error{err.waitErr, err.limitErr}
+}
+
 type terminationResult struct {
 	leaderStopped              bool
 	leaderTerminationInitiated bool
@@ -186,7 +250,11 @@ func runDuplexMode(ctx context.Context, command ports.Command, exchange func(io.
 		containmentClosed = err == nil
 		return err
 	}
-	defer func() { resultErr = errors.Join(resultErr, closeContainment()) }()
+	defer func() {
+		if closeErr := closeContainment(); closeErr != nil {
+			resultErr = errors.Join(resultErr, closeErr)
+		}
+	}()
 	defer stdout.Close()
 	cmd.Stdout = childStdout
 	stderr := newBoundedDiagnosticBuffer(32 * 1024)
@@ -543,6 +611,13 @@ func (OS) RunWithTreeExitGrace(ctx context.Context, cmd ports.Command, treeExitG
 	return runCommand(ctx, cmd, treeExitGrace, true)
 }
 
+// RunWithDescendantExitGrace preserves the ordinary runner's full descendant
+// containment while allowing a trusted one-shot client a longer bounded grace
+// for naturally exiting helpers. Forced cleanup remains an error.
+func (OS) RunWithDescendantExitGrace(ctx context.Context, cmd ports.Command, treeExitGrace time.Duration) (ports.CommandResult, error) {
+	return runCommand(ctx, cmd, treeExitGrace, false)
+}
+
 func runCommand(ctx context.Context, cmd ports.Command, treeExitGrace time.Duration, processGroupOnly bool) (ports.CommandResult, error) {
 	if len(cmd.Argv) == 0 {
 		return ports.CommandResult{}, exec.ErrNotFound
@@ -566,7 +641,7 @@ func runExplicit(ctx context.Context, command ports.Command, treeExitGrace time.
 	// A shorter independent delay can report exec.ErrWaitDelay for a rapid,
 	// otherwise clean command when its copy goroutines are briefly descheduled.
 	c.WaitDelay = processReapTimeout
-	stdout := newSynchronizedOutputBuffer()
+	stdout := newSynchronizedOutputBuffer(command.StdoutLimitBytes)
 	stderr := newBoundedDiagnosticBuffer(32 * 1024)
 	c.Stdout = stdout
 	c.Stderr = stderr
@@ -626,16 +701,45 @@ func runExplicit(ctx context.Context, command ports.Command, treeExitGrace time.
 	// return; no second Wait or Process.Release may abandon a future zombie.
 	waitErr := closeContainmentAndWait(closeContainment, c.Wait, processReapTimeout)
 	capturedResult, capturedErr := finishExplicitCommand(termination.err, waitErr, stdout.Bytes(), stderr.Bytes())
+	stdoutErr := stdout.Err()
 	if supervisionErr != nil {
-		return capturedResult, withDuplexDiagnostic(errors.Join(supervisionErr, capturedErr), stderr.Bytes())
+		return capturedResult, withDuplexDiagnostic(errors.Join(supervisionErr, capturedErr, stdoutErr), stderr.Bytes())
 	}
 	if ctxErr := ctx.Err(); ctxErr != nil {
-		return capturedResult, withDuplexDiagnostic(errors.Join(ctxErr, capturedErr), stderr.Bytes())
+		return capturedResult, withDuplexDiagnostic(errors.Join(ctxErr, capturedErr, stdoutErr), stderr.Bytes())
 	}
 	if termination.forcedMembers {
-		return capturedResult, withDuplexDiagnostic(errors.Join(fmt.Errorf("process left live descendants that required forced cleanup"), capturedErr), stderr.Bytes())
+		return capturedResult, withDuplexDiagnostic(errors.Join(fmt.Errorf("process left live descendants that required forced cleanup"), capturedErr, stdoutErr), stderr.Bytes())
+	}
+	if stdoutErr != nil {
+		return capturedResult, explicitStdoutError(capturedResult, capturedErr, stdoutErr, waitErr)
 	}
 	return capturedResult, capturedErr
+}
+
+func explicitStdoutError(result ports.CommandResult, commandErr, stdoutErr, waitErr error) error {
+	if stdoutErr == nil {
+		return commandErr
+	}
+	if result.ExitCode != 0 {
+		// Returning ErrStdoutLimitExceeded closes exec's stdout copy pipe. Native
+		// producers such as Git then terminate with the platform's broken-pipe
+		// status. That status is a consequence of the bound, not an independent
+		// command failure. Only collapse the exact raw Wait result for that status;
+		// cancellation, containment/cleanup failures, and every other nonzero exit
+		// retain their stronger causality.
+		if commandErr == nil && isStdoutLimitPipeExit(waitErr) {
+			return ErrStdoutLimitExceeded
+		}
+		if commandErr == nil {
+			return &stdoutLimitExitError{exitCode: result.ExitCode, waitErr: waitErr, limitErr: stdoutErr}
+		}
+		return errors.Join(fmt.Errorf("command exited with code %d while stdout exceeded its configured limit", result.ExitCode), commandErr, stdoutErr)
+	}
+	if commandErr == nil || IsOnlyStdoutLimitExceeded(commandErr) {
+		return ErrStdoutLimitExceeded
+	}
+	return errors.Join(commandErr, stdoutErr)
 }
 
 func finishExplicitCommand(terminationErr, waitErr error, stdout, stderr []byte) (ports.CommandResult, error) {
@@ -694,24 +798,46 @@ func superviseExplicit(ctx context.Context, poll <-chan time.Time, exited func()
 // goroutine to outlive the bounded caller without racing a returned result.
 // Bytes always returns an immutable snapshot rather than bytes.Buffer's alias.
 type synchronizedOutputBuffer struct {
-	mu     sync.Mutex
-	buffer bytes.Buffer
+	mu       sync.Mutex
+	buffer   bytes.Buffer
+	limit    int
+	exceeded bool
 }
 
-func newSynchronizedOutputBuffer() *synchronizedOutputBuffer {
-	return &synchronizedOutputBuffer{}
+func newSynchronizedOutputBuffer(limit int) *synchronizedOutputBuffer {
+	return &synchronizedOutputBuffer{limit: limit}
 }
 
 func (buffer *synchronizedOutputBuffer) Write(value []byte) (int, error) {
 	buffer.mu.Lock()
 	defer buffer.mu.Unlock()
-	return buffer.buffer.Write(value)
+	if buffer.limit <= 0 {
+		return buffer.buffer.Write(value)
+	}
+	remaining := buffer.limit - buffer.buffer.Len()
+	if len(value) <= remaining {
+		return buffer.buffer.Write(value)
+	}
+	if remaining > 0 {
+		_, _ = buffer.buffer.Write(value[:remaining])
+	}
+	buffer.exceeded = true
+	return max(remaining, 0), ErrStdoutLimitExceeded
 }
 
 func (buffer *synchronizedOutputBuffer) Bytes() []byte {
 	buffer.mu.Lock()
 	defer buffer.mu.Unlock()
 	return append([]byte(nil), buffer.buffer.Bytes()...)
+}
+
+func (buffer *synchronizedOutputBuffer) Err() error {
+	buffer.mu.Lock()
+	defer buffer.mu.Unlock()
+	if buffer.exceeded {
+		return ErrStdoutLimitExceeded
+	}
+	return nil
 }
 
 type boundedDiagnosticBuffer struct {

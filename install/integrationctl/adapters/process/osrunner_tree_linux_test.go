@@ -416,6 +416,65 @@ func TestOSRunnerCleansSameProcessGroupMemberAfterLeaderNaturalExit(t *testing.T
 	}
 }
 
+func TestOSRunnerDescendantGraceAcceptsOnlyNaturalHelperExit(t *testing.T) {
+	requireDuplexCapability(t)
+	if os.Getenv("AGENTPLUGINS_PROCESS_GRACE_DESCENDANT") == "1" {
+		time.Sleep(150 * time.Millisecond)
+		os.Exit(0)
+	}
+	if os.Getenv("AGENTPLUGINS_PROCESS_GRACE_LEADER") == "1" {
+		child := exec.Command(os.Args[0], "-test.run=TestOSRunnerDescendantGraceAcceptsOnlyNaturalHelperExit")
+		child.Env = append(os.Environ(), "AGENTPLUGINS_PROCESS_GRACE_DESCENDANT=1")
+		devNull, err := os.OpenFile(os.DevNull, os.O_RDWR, 0)
+		if err != nil {
+			os.Exit(91)
+		}
+		child.Stdin, child.Stdout, child.Stderr = devNull, devNull, devNull
+		if err := child.Start(); err != nil {
+			os.Exit(92)
+		}
+		os.Exit(0)
+	}
+
+	_, err := (OS{}).RunWithDescendantExitGrace(context.Background(), ports.Command{
+		Argv: []string{os.Args[0], "-test.run=TestOSRunnerDescendantGraceAcceptsOnlyNaturalHelperExit"},
+		Env:  append(os.Environ(), "AGENTPLUGINS_PROCESS_GRACE_LEADER=1"),
+	}, 500*time.Millisecond)
+	if err != nil {
+		t.Fatalf("naturally exiting descendant within grace failed: %v", err)
+	}
+}
+
+func TestOSRunnerDescendantGraceStillRejectsForcedCleanup(t *testing.T) {
+	requireDuplexCapability(t)
+	if os.Getenv("AGENTPLUGINS_PROCESS_GRACE_LONG_DESCENDANT") == "1" {
+		for {
+			time.Sleep(time.Hour)
+		}
+	}
+	if os.Getenv("AGENTPLUGINS_PROCESS_GRACE_LONG_LEADER") == "1" {
+		child := exec.Command(os.Args[0], "-test.run=TestOSRunnerDescendantGraceStillRejectsForcedCleanup")
+		child.Env = append(os.Environ(), "AGENTPLUGINS_PROCESS_GRACE_LONG_DESCENDANT=1")
+		devNull, err := os.OpenFile(os.DevNull, os.O_RDWR, 0)
+		if err != nil {
+			os.Exit(93)
+		}
+		child.Stdin, child.Stdout, child.Stderr = devNull, devNull, devNull
+		if err := child.Start(); err != nil {
+			os.Exit(94)
+		}
+		os.Exit(0)
+	}
+
+	_, err := (OS{}).RunWithDescendantExitGrace(context.Background(), ports.Command{
+		Argv: []string{os.Args[0], "-test.run=TestOSRunnerDescendantGraceStillRejectsForcedCleanup"},
+		Env:  append(os.Environ(), "AGENTPLUGINS_PROCESS_GRACE_LONG_LEADER=1"),
+	}, 25*time.Millisecond)
+	if err == nil || !strings.Contains(err.Error(), "live descendants that required forced cleanup") {
+		t.Fatalf("long-lived descendant error = %v, want forced-cleanup failure", err)
+	}
+}
+
 func TestOSRunnerPreservesDiagnosticAndStatusWhileCleaningNaturalExitGroup(t *testing.T) {
 	requireDuplexCapability(t)
 	if os.Getenv("AGENTPLUGINS_PROCESS_DIAGNOSTIC_DESCENDANT") == "1" {

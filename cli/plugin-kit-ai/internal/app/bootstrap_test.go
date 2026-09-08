@@ -116,6 +116,45 @@ func TestPluginServiceBootstrapNodePNPMTypeScriptRunsInstallAndBuild(t *testing.
 	}
 }
 
+func TestPluginServiceBootstrapNodeNPMDisablesAuditAndFundingRequests(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		lockfile    bool
+		wantCommand string
+		wantMarker  string
+	}{
+		{name: "install", wantCommand: "Ran: npm install --no-audit --no-fund", wantMarker: "npm-install"},
+		{name: "ci", lockfile: true, wantCommand: "Ran: npm ci --no-audit --no-fund", wantMarker: "npm-ci"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			restoreBootstrapHelpers(t)
+			dir := t.TempDir()
+			writeBootstrapProjectFile(t, dir, "plugin/plugin.yaml", minimalBootstrapManifest())
+			writeBootstrapProjectFile(t, dir, "plugin/launcher.yaml", "runtime: node\nentrypoint: ./bin/demo\n")
+			writeBootstrapProjectFile(t, dir, "package.json", `{"type":"module"}`)
+			if tc.lockfile {
+				writeBootstrapProjectFile(t, dir, "package-lock.json", `{}`)
+			}
+
+			var svc PluginService
+			result, err := svc.Bootstrap(context.Background(), PluginBootstrapOptions{Root: dir})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if output := strings.Join(result.Lines, "\n"); !strings.Contains(output, tc.wantCommand) {
+				t.Fatalf("output missing %q:\n%s", tc.wantCommand, output)
+			}
+			marker, err := os.ReadFile(filepath.Join(dir, "node_modules", ".installed"))
+			if err != nil {
+				t.Fatalf("read npm install marker: %v", err)
+			}
+			if got := string(marker); got != tc.wantMarker {
+				t.Fatalf("npm install marker = %q, want %q", got, tc.wantMarker)
+			}
+		})
+	}
+}
+
 func TestPluginServiceBootstrapGoIsNoOp(t *testing.T) {
 	restoreBootstrapHelpers(t)
 	dir := t.TempDir()
@@ -221,7 +260,10 @@ func runBootstrapPythonManagerHelper(name string, args []string) {
 func runBootstrapNodeHelper(name string, args []string) {
 	switch name {
 	case "npm":
-		if len(args) == 1 && (args[0] == "install" || args[0] == "ci") {
+		if len(args) == 3 &&
+			(args[0] == "install" || args[0] == "ci") &&
+			args[1] == "--no-audit" &&
+			args[2] == "--no-fund" {
 			mustWriteHelperFile(filepath.Join("node_modules", ".installed"), name+"-"+args[0], 0o644)
 			return
 		}

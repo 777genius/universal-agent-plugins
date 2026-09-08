@@ -52,3 +52,5 @@ outline: false
     <p>Проверьте, как выглядит здоровый plugin repo и какие файлы считаются authored, а какие generated.</p>
   </a>
 </div>
+
+- проверенные версии клиентов UAP: [UAP client compatibility evidence](/en/reference/client-compatibility)

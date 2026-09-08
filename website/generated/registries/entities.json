@@ -2677,7 +2677,7 @@
     "surface": "guide",
     "localeStrategy": "mirrored",
     "title": "Quickstart",
-    "summary": "The fastest recommended path to a working plugin-kit-ai project.",
+    "summary": "Install available plugins or prepare a portable Agent Plugins 1.0 package.",
     "stability": "public-stable",
     "maturity": "stable",
     "publicVisibility": "public",
@@ -2801,6 +2801,28 @@
     "relatedIds": [],
     "searchTerms": [
       "Authoring Workflow"
+    ]
+  },
+  {
+    "canonicalId": "page:reference:client-compatibility",
+    "kind": "page",
+    "surface": "reference",
+    "localeStrategy": "mirrored",
+    "title": "UAP client compatibility evidence",
+    "summary": "Exact client versions, source identity, tested runtime layers, and release limitations.",
+    "stability": "public-stable",
+    "maturity": "stable",
+    "publicVisibility": "public",
+    "sourceKind": "hand-authored",
+    "sourceRef": "reference/client-compatibility.md",
+    "pathEn": "/en/reference/client-compatibility",
+    "pathRu": "/ru/reference/client-compatibility",
+    "pathEs": "",
+    "pathFr": "",
+    "pathZh": "",
+    "relatedIds": [],
+    "searchTerms": [
+      "UAP client compatibility evidence"
     ]
   },
   {

@@ -57,6 +57,11 @@ func (loader Loader) Load(ctx context.Context, input domain.LoadInput) (domain.P
 	if err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
 		return domain.PackageEnvelope{}, domain.FatalLoad("snapshot_invalid", "plugin.json", "package snapshot root must be a real directory", err)
 	}
+	resolvedRoot, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		return domain.PackageEnvelope{}, domain.FatalLoad("snapshot_invalid", "plugin.json", "resolve package snapshot root", err)
+	}
+	root = filepath.Clean(resolvedRoot)
 	manifestPath := filepath.Join(root, "plugin.json")
 	formatID := domain.FormatIDAgentPluginsV1
 	schemaVersion := "1.0.0"
@@ -66,14 +71,7 @@ func (loader Loader) Load(ctx context.Context, input domain.LoadInput) (domain.P
 	if err != nil {
 		return domain.PackageEnvelope{}, err
 	}
-	if err := rejectDiscoverableHooks(root); err != nil {
-		return domain.PackageEnvelope{}, domain.FatalLoad(
-			"official_hooks_unsupported", "hooks/hooks.json",
-			"lifecycle hooks are auto-discovered by official clients but are not modeled by agentplugins v0.1; remove the hooks directory before installation", err,
-		)
-	}
-
-	mcp, mcpDiagnostics := loader.loadMCP(mcpPath, manifest.SchemaURI, input.ExecutableFiles)
+	mcp, mcpDiagnostics := loader.loadMCP(mcpPath, manifest.SchemaURI)
 	diagnostics = append(diagnostics, mcpDiagnostics...)
 	var skills map[string]domain.Skill
 	var invalidSkills []string

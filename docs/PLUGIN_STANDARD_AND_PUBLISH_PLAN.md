@@ -1,8 +1,18 @@
 # Plugin Standard And Publish Plan
 
+> Owner clarification (2026-09-06): historical status is not permission to delete
+> useful legacy implementation, tests or design ideas. Follow the
+> [capability preservation contract](./AUTHORING_CAPABILITY_PRESERVATION.md).
+>
+> Historical v1 design — not current Agent Plugins 1.0 guidance.
+> Superseded for future authoring by [ADR 0006](./adr/0006-standard-first-authoring.md)
+> and the [implementation plan](./STANDARD_FIRST_AUTHORING_ENGINE_IMPLEMENTATION_PLAN.md).
+> The retained content describes legacy `plugin-kit-ai` v1 (baseline `1.2.4`).
+> Root `plugin.json` is the portable standard; v2 migration is not yet available.
+
 Plan date: 2026-04-04
 
-This document fixes the current design direction for `plugin-kit-ai` package authoring, vendor manifests, and future marketplace or gallery publication.
+This document records the historical v1 design direction for `plugin-kit-ai` package authoring, vendor manifests, and future marketplace or gallery publication.
 
 It describes the proposed long-term standard direction for this repository and ecosystem strategy. It does **not** claim that this standard is already adopted outside `plugin-kit-ai`.
 
@@ -359,11 +369,11 @@ Current fields:
 
 Current validation is implemented in:
 
-- [pluginmodel/model.go](/Users/belief/dev/projects/claude/plugin-kit-ai/cli/plugin-kit-ai/internal/pluginmodel/model.go)
+- [pluginmodel/model.go](../cli/plugin-kit-ai/internal/pluginmodel/model.go)
 
 Current scaffold template:
 
-- [plugin.yaml.tmpl](/Users/belief/dev/projects/claude/plugin-kit-ai/cli/plugin-kit-ai/internal/scaffold/templates/plugin.yaml.tmpl)
+- [plugin.yaml.tmpl](../cli/plugin-kit-ai/internal/scaffold/templates/plugin.yaml.tmpl)
 
 This means the new direction is evolutionary, not a greenfield rewrite. We are already close to the desired end state.
 

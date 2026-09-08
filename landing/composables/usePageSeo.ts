@@ -1,7 +1,5 @@
 import { computed, toValue } from 'vue';
-import { defaultLocale, supportedLocales } from '~/data/i18n';
-import { getContent } from '~/data/content';
-import type { LocaleCode } from '~/data/i18n';
+import { canonicalPath } from '~/utils/seo';
 import type { MaybeRefOrGetter } from 'vue';
 
 type PageSeoImage = {
@@ -17,6 +15,13 @@ type PageSeoOptions = {
   robots?: string;
   image?: PageSeoImage;
   translate?: boolean;
+  canonical?: boolean;
+  canonicalPath?: MaybeRefOrGetter<string>;
+  includeWebPage?: boolean;
+  pageType?: 'WebPage' | 'CollectionPage';
+  pageProperties?: MaybeRefOrGetter<Record<string, unknown>>;
+  siteIdentity?: boolean;
+  structuredData?: MaybeRefOrGetter<readonly Record<string, unknown>[]>;
 };
 
 export const usePageSeo = (
@@ -27,10 +32,10 @@ export const usePageSeo = (
   const { t, locale } = useI18n();
   const route = useRoute();
   const config = useRuntimeConfig();
-  const switchLocale = useSwitchLocalePath();
-  const { docsUrl } = useDocsLinks();
-  const siteUrl = config.public.siteUrl || 'https://777genius.github.io/plugin-kit-ai';
-  const siteName = 'plugin-kit-ai';
+  const siteUrl = String(
+    config.public.siteUrl || 'https://777genius.github.io/universal-agent-plugins',
+  ).replace(/\/+$/, '');
+  const siteName = 'Universal Agent Plugins';
   const githubUrl = `https://github.com/${config.public.githubRepo}`;
 
   const shouldTranslate = options.translate !== false;
@@ -38,8 +43,10 @@ export const usePageSeo = (
   const description = computed(() =>
     shouldTranslate ? t(toValue(descriptionSource)) : toValue(descriptionSource),
   );
-  const canonicalPath = computed(() => route.path);
-  const canonicalUrl = computed(() => `${siteUrl}${canonicalPath.value}`);
+  const resolvedCanonicalPath = computed(() =>
+    canonicalPath(options.canonicalPath ? toValue(options.canonicalPath) : route.path),
+  );
+  const canonicalUrl = computed(() => `${siteUrl}${resolvedCanonicalPath.value}`);
 
   const resolvedImage = computed<PageSeoImage>(() => {
     if (options.image) {
@@ -51,7 +58,7 @@ export const usePageSeo = (
       width: 1200,
       height: 630,
       type: 'image/png',
-      alt: 'plugin-kit-ai - build a plugin once and ship it to many AI agents',
+      alt: 'Universal Agent Plugins - install plugins across AI agents with one CLI',
     };
   });
 
@@ -72,6 +79,7 @@ export const usePageSeo = (
     ogDescription: description,
     ogType: options.type || 'website',
     ogSiteName: siteName,
+    ogLocale: 'en_US',
     ogUrl: canonicalUrl,
     ogImage: resolvedImageUrl,
     ogImageType: computed(() => resolvedImage.value.type) as never,
@@ -93,101 +101,77 @@ export const usePageSeo = (
   });
 
   useHead(() => {
-    const links: { rel: string; hreflang?: string; href: string }[] = supportedLocales.map(
-      (item) => {
-        const path = switchLocale(item.code) || canonicalPath.value;
-        return {
-          rel: 'alternate',
-          hreflang: item.code,
-          href: `${siteUrl}${path}`,
-        };
-      },
-    );
+    const webSiteId = `${siteUrl}/#website`;
+    const organizationId = `${siteUrl}/#organization`;
+    const pageId = `${canonicalUrl.value}#webpage`;
+    const jsonLd: Record<string, unknown>[] = [];
 
-    const defaultPath = switchLocale(defaultLocale) || canonicalPath.value;
-    links.push({
-      rel: 'alternate',
-      hreflang: 'x-default',
-      href: `${siteUrl}${defaultPath}`,
-    });
-    links.push({ rel: 'canonical', href: canonicalUrl.value });
-
-    const jsonLd: Record<string, unknown>[] = [
-      {
-        '@context': 'https://schema.org',
-        '@type': 'WebSite',
-        name: siteName,
-        url: siteUrl,
-        inLanguage: supportedLocales.map((item) => item.code),
-        description: description.value,
-      },
-      {
-        '@context': 'https://schema.org',
-        '@type': 'Organization',
-        name: siteName,
-        url: siteUrl,
-        logo: `${siteUrl}/icon.svg`,
-        sameAs: [githubUrl],
-      },
-    ];
-
-    const isDownload = canonicalPath.value.endsWith('/download');
-    const isHome =
-      canonicalPath.value === '/' || /^\/(ru|es|fr|zh)$/.test(canonicalPath.value);
-
-    if (isHome || isDownload) {
+    if (options.includeWebPage !== false) {
       jsonLd.push({
-        '@context': 'https://schema.org',
-        '@type': 'SoftwareApplication',
-        name: 'plugin-kit-ai',
-        applicationCategory: 'DeveloperApplication',
-        operatingSystem: 'macOS, Linux, Windows',
-        description: description.value,
+        '@type': options.pageType || 'WebPage',
+        '@id': pageId,
         url: canonicalUrl.value,
-        downloadUrl: config.public.githubReleasesUrl || `${githubUrl}/releases`,
-        softwareHelp: docsUrl.value,
+        name: title.value,
+        description: description.value,
+        inLanguage: locale.value || 'en',
+        isPartOf: { '@id': webSiteId },
+        ...(options.pageProperties ? toValue(options.pageProperties) : {}),
       });
     }
 
-    if (isHome) {
-      const content = getContent(locale.value as LocaleCode);
-      if (content.faq.length > 0) {
-        jsonLd.push({
-          '@context': 'https://schema.org',
-          '@type': 'FAQPage',
-          mainEntity: content.faq.map((item) => ({
-            '@type': 'Question',
-            name: item.question,
-            acceptedAnswer: {
-              '@type': 'Answer',
-              text: item.answer.replace(/<[^>]*>/g, ''),
-            },
-          })),
-        });
-      }
+    if (options.siteIdentity) {
+      jsonLd.push({
+        '@type': 'WebSite',
+        '@id': webSiteId,
+        name: siteName,
+        alternateName: 'UAP',
+        url: `${siteUrl}/`,
+        inLanguage: 'en',
+        description: description.value,
+        publisher: { '@id': organizationId },
+      });
+      jsonLd.push({
+        '@type': 'Organization',
+        '@id': organizationId,
+        name: siteName,
+        alternateName: 'UAP',
+        description:
+          'Open-source multi-agent installer and lifecycle manager for Agent Plugins 1.0.',
+        url: `${siteUrl}/`,
+        logo: {
+          '@type': 'ImageObject',
+          url: `${siteUrl}/logo-192.png`,
+          contentUrl: `${siteUrl}/logo-192.png`,
+          width: 192,
+          height: 192,
+        },
+        sameAs: [githubUrl, 'https://www.npmjs.com/package/universal-agent-plugins'],
+      });
     }
+
+    if (options.structuredData) jsonLd.push(...toValue(options.structuredData));
 
     return {
       htmlAttrs: {
         lang: locale.value || 'en',
       },
-      link: links,
+      link: options.canonical === false ? [] : [{ rel: 'canonical', href: canonicalUrl.value }],
       meta: [
-        { name: 'author', content: 'plugin-kit-ai' },
+        { name: 'author', content: 'Universal Agent Plugins' },
         { name: 'application-name', content: siteName },
         { name: 'apple-mobile-web-app-title', content: siteName },
         { name: 'format-detection', content: 'telephone=no' },
         { name: 'theme-color', content: '#00f0ff' },
-        {
-          name: 'keywords',
-          content:
-            'plugin-kit-ai, AI plugins, Claude plugins, Codex plugins, Gemini plugins, multi-agent plugins, plugin repo, validate strict',
-        },
       ],
-      script: jsonLd.map((item) => ({
-        type: 'application/ld+json',
-        children: JSON.stringify(item),
-      })),
+      script: jsonLd.length
+        ? [
+            {
+              key: 'seo-jsonld',
+              type: 'application/ld+json',
+              children: JSON.stringify({ '@context': 'https://schema.org', '@graph': jsonLd }),
+            },
+          ]
+        : [],
     };
   });
 };

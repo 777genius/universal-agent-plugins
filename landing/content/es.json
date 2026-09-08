@@ -1,7 +1,7 @@
 {
   "hero": {
-    "title": "plugin-kit-ai",
-    "subtitle": "Cree un complemento una vez. Envíelo a varios agentes de IA desde un repositorio. plugin-kit-ai es el hogar de nuestra línea de complementos propios y el conjunto de herramientas de código abierto detrás de ellos."
+    "title": "Universal Agent Plugins",
+    "subtitle": "Instala, actualiza, repara y elimina Agent Plugins 1.0 en tus agentes de IA con un solo comando."
   },
   "features": [
     {
@@ -964,8 +964,8 @@
   "faq": [
     {
       "id": "whatIsIt",
-      "question": "¿Qué es plugin-kit-ai?",
-      "answer": "plugin-kit-ai es un conjunto de herramientas de código abierto para mantener un repositorio de complementos como fuente de verdad y luego generar y validar los resultados del agente admitido que realmente necesita."
+      "question": "¿Qué es Universal Agent Plugins?",
+      "answer": "Universal Agent Plugins es una CLI que instala, actualiza, repara y elimina Agent Plugins 1.0 en los agentes de IA que elijas."
     },
     {
       "id": "whoShouldUseIt",
@@ -980,12 +980,12 @@
     {
       "id": "stableBoundary",
       "question": "¿Todas las salidas admitidas son igualmente estables en la actualidad?",
-      "answer": "No. Algunas líneas están listas para producción y otras siguen siendo beta públicas. plugin-kit-ai es explícito sobre ese límite para que pueda hacer promesas honestas de productos."
+      "answer": "No. Algunas rutas están listas para producción y otras siguen en beta pública. Universal Agent Plugins muestra ese límite para que puedas hacer promesas honestas."
     },
     {
       "id": "fastestStart",
       "question": "¿Cuál es la forma más rápida de empezar?",
-      "answer": "Instale <code>plugin-kit-ai</code>, cree un repositorio con <code>init</code>, luego ejecute <code>render</code> y <code>validate --strict</code>. La mayoría de los equipos deberían comenzar con <a href=\"https://777genius.github.io/plugin-kit-ai/docs/es/guide/quickstart.html\">Quickstart</a>. Si su equipo es intencionalmente Python-primero, vaya directamente a la guía <a href=\"https://777genius.github.io/plugin-kit-ai/docs/es/guide/python-runtime.html\">Python</a>."
+      "answer": "Instala la CLI nativa de Go y ejecuta <code>agentplugins add context7 --target codex,cursor</code>. Elige uno o varios agentes y sigue cualquier paso de activación que muestre el cliente."
     },
     {
       "id": "whichPathFirst",
@@ -1001,20 +1001,21 @@
     {
       "id": "brew",
       "title": "Homebrew",
-      "description": "Instalación permanente recomendada para máquinas que ya usan Homebrew.",
-      "href": "https://github.com/777genius/homebrew-plugin-kit-ai",
-      "note": "La mejor opción cuando planea usar plugin-kit-ai todos los días.",
-      "command": "brew install 777genius/homebrew-plugin-kit-ai/plugin-kit-ai"
+      "description": "CLI nativa de Go para macOS y Linux. No requiere Node.js.",
+      "href": "https://github.com/777genius/homebrew-agentplugins",
+      "note": "Recomendado para una instalación permanente con actualizaciones de Homebrew.",
+      "command": "brew install 777genius/agentplugins/agentplugins",
+      "invocation": "agentplugins",
+      "recommended": true
     },
     {
       "id": "npm",
-      "title": "npx",
-      "description": "Ejecute plugin-kit-ai sin una instalación permanente cuando quiera añadir un plugin real lo más rápido posible.",
-      "href": "https://www.npmjs.com/package/plugin-kit-ai",
-      "note": "La ruta más rápida cuando primero quiere una instalación de plugin con un solo comando.",
-      "command": "npx plugin-kit-ai@latest version",
-      "invocation": "npx plugin-kit-ai@latest",
-      "recommended": true
+      "title": "npx · Node.js 22+",
+      "description": "La opción más rápida si ya tiene Node.js 22+: ejecute el comando del plugin inmediatamente.",
+      "href": "https://www.npmjs.com/package/universal-agent-plugins",
+      "note": "Sin instalación permanente: npx descarga la CLI verificada y ejecuta el comando en un solo paso.",
+      "command": "npx universal-agent-plugins version",
+      "invocation": "npx universal-agent-plugins"
     },
     {
       "id": "pipx",
@@ -1027,10 +1028,20 @@
     {
       "id": "script",
       "title": "Script de instalación verificado",
-      "description": "Ruta de arranque alternativa que resuelve la última versión estable publicada y verifica las sumas de comprobación.",
-      "href": "https://raw.githubusercontent.com/777genius/plugin-kit-ai/main/scripts/install.sh",
-      "note": "Good cuando la configuración del administrador de paquetes no es lo que desea primero.",
-      "command": "curl -fsSL https://raw.githubusercontent.com/777genius/plugin-kit-ai/main/scripts/install.sh | sh"
+      "description": "Instalación nativa sin gestor de paquetes. No requiere Node.js.",
+      "href": "https://github.com/777genius/universal-agent-plugins/blob/main/docs/NATIVE_INSTALL.md",
+      "note": "Descarga el binario correcto y verifica su SHA-256 y versión.",
+      "command": "curl -fsSL https://raw.githubusercontent.com/777genius/universal-agent-plugins/main/install.sh | sh",
+      "invocation": "$HOME/.local/bin/agentplugins"
+    },
+    {
+      "id": "powershell",
+      "title": "Windows PowerShell",
+      "description": "CLI nativa de Go para Windows. No requiere Node.js.",
+      "href": "https://github.com/777genius/universal-agent-plugins/blob/main/docs/NATIVE_INSTALL.md#windows-powershell",
+      "note": "Descarga el binario de Windows y verifica su SHA-256 y versión.",
+      "command": "irm https://raw.githubusercontent.com/777genius/universal-agent-plugins/main/install.ps1 | iex",
+      "invocation": "& \"$HOME\\.local\\bin\\agentplugins.exe\""
     },
     {
       "id": "releases",
@@ -1052,27 +1063,27 @@
   "quickstartSteps": [
     {
       "id": "install-cli",
-      "title": "Ejecute plugin-kit-ai a su manera",
-      "command": "npx plugin-kit-ai@latest version",
-      "note": "Use npx para la primera prueba más rápida, o instale el CLI para el uso diario."
+      "title": "Ejecute la CLI",
+      "command": "npx universal-agent-plugins version",
+      "note": "Use npx para empezar rápido o instale el binario para el uso diario."
     },
     {
       "id": "try-plugin",
-      "title": "Pruebe un plugin real ahora",
-      "command": "plugin-kit-ai add notion --target claude\nplugin-kit-ai add notion",
-      "note": "El primer comando es la ruta segura para un solo destino. El segundo instala todas las salidas compatibles para ese plugin."
+      "title": "Instale un plugin real",
+      "command": "universal-agent-plugins add context7 --target codex,cursor",
+      "note": "El mismo comando acepta un destino o una lista separada por comas."
     },
     {
       "id": "build-plugin",
-      "title": "Cree su propio repositorio de plugin",
-      "command": "plugin-kit-ai init my-plugin --template online-service\ncd my-plugin",
-      "note": "Cuando la ruta de instalación ya esté clara, comience con la plantilla que coincide con el trabajo."
+      "title": "Manténgalo actualizado",
+      "command": "universal-agent-plugins update context7 --target codex,cursor\nuniversal-agent-plugins repair context7 --target codex,cursor",
+      "note": "Use update para una nueva versión y repair si el cliente se desvía."
     },
     {
       "id": "validate",
-      "title": "Genere y valide antes del traspaso",
-      "command": "plugin-kit-ai generate .\nplugin-kit-ai validate . --platform claude --strict",
-      "note": "Use generate y la validación estricta antes de CI, del traspaso a un compañero o de una versión."
+      "title": "Elimínelo limpiamente",
+      "command": "universal-agent-plugins remove context7 --target codex,cursor",
+      "note": "La CLI elimina las entradas gestionadas y conserva los datos del plugin por defecto."
     }
   ],
   "supportLanes": [

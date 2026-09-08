@@ -35,3 +35,31 @@ jobs:
 
       - name: Run vet (all workspace modules)
         run: make vet
+
+      # The proposal discussed in agentplugins/agent-plugins-spec#81 is not a
+      # normative part of the specification. Pinning the exact revision keeps
+      # this interoperability contract reproducible until a new revision is
+      # reviewed deliberately.
+      - name: Check out pinned Agent Plugins conformance corpus
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: Booyaka101/agent-plugins-conformance-kit
+          ref: 4d163c6281a9b4929f482f387efe340b4dc175a1
+          path: .ci/agent-plugins-conformance-kit
+          persist-credentials: false
+
+      - name: Build pinned conformance corpus
+        working-directory: .ci/agent-plugins-conformance-kit
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm run build
+
+      - name: Run Agent Plugins loader conformance
+        run: |
+          go build -o "$RUNNER_TEMP/agentplugins-conformance-adapter" ./cli/plugin-kit-ai/cmd/agentplugins-conformance-adapter
+          node .ci/agent-plugins-conformance-kit/dist/cli.js verify
+          node .ci/agent-plugins-conformance-kit/dist/cli.js run \
+            --adapter "$RUNNER_TEMP/agentplugins-conformance-adapter" \
+            --strict-reporting \
+            --quiet \
+            --json "$RUNNER_TEMP/agentplugins-conformance.json"

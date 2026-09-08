@@ -1,0 +1,128 @@
+name: Registry compatibility mirror
+
+on:
+  repository_dispatch:
+    types: [registry-published]
+  workflow_dispatch:
+    inputs:
+      registry_repository:
+        description: Registry owner/repository to mirror
+        required: false
+        default: 777genius/universal-agent-plugins-registry
+      pages_origin:
+        description: Published registry Pages origin
+        required: false
+        default: https://777genius.github.io/universal-agent-plugins-registry/
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: registry-compatibility-mirror
+  cancel-in-progress: true
+
+env:
+  DEFAULT_REGISTRY_REPOSITORY: 777genius/universal-agent-plugins-registry
+  DEFAULT_PAGES_ORIGIN: https://777genius.github.io/universal-agent-plugins-registry/
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.25.13"
+          cache: false
+
+      - uses: pnpm/action-setup@v5
+        with:
+          version: 8.15.1
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22.21.1"
+          package-manager-cache: false
+
+      - name: Resolve registry source
+        id: source
+        env:
+          EVENT_REGISTRY: ${{ github.event.client_payload.registry_repository }}
+          EVENT_ORIGIN: ${{ github.event.client_payload.pages_origin }}
+          INPUT_REGISTRY: ${{ inputs.registry_repository }}
+          INPUT_ORIGIN: ${{ inputs.pages_origin }}
+        run: |
+          registry="${EVENT_REGISTRY:-${INPUT_REGISTRY:-$DEFAULT_REGISTRY_REPOSITORY}}"
+          origin="${EVENT_ORIGIN:-${INPUT_ORIGIN:-$DEFAULT_PAGES_ORIGIN}}"
+          printf 'registry=%s\n' "$registry" >> "$GITHUB_OUTPUT"
+          printf 'origin=%s\n' "$origin" >> "$GITHUB_OUTPUT"
+
+      - name: Install landing toolchain
+        working-directory: landing
+        run: pnpm install --frozen-lockfile
+
+      - name: Install docs toolchain
+        working-directory: website
+        run: pnpm install --frozen-lockfile
+
+      - name: Verify and stage signed feeds
+        env:
+          REGISTRY_REPOSITORY: ${{ steps.source.outputs.registry }}
+          PAGES_ORIGIN: ${{ steps.source.outputs.origin }}
+        run: |
+          previous="${RUNNER_TEMP}/uap-previous-mirror.json"
+          if ! curl --fail --silent --show-error --location --max-time 30 \
+            "${PAGES_ORIGIN%/}/MIRROR_METADATA.json" > "$previous"; then
+            rm -f "$previous"
+          fi
+          go run ./cmd/agentplugins-registry-mirror \
+            --registry-repository "$REGISTRY_REPOSITORY" \
+            --pages-origin "$PAGES_ORIGIN" \
+            --previous-marker "$previous" \
+            --output "${RUNNER_TEMP}/uap-registry-mirror"
+          mkdir -p landing/public
+          cp -a "${RUNNER_TEMP}/uap-registry-mirror/." landing/public/
+
+      - name: Build landing
+        env:
+          NUXT_APP_BASE_URL: /universal-agent-plugins/
+          NUXT_PUBLIC_SITE_URL: https://777genius.github.io/universal-agent-plugins
+          NUXT_PUBLIC_GITHUB_REPO: 777genius/universal-agent-plugins
+          NUXT_PUBLIC_DOCS_URL: https://777genius.github.io/universal-agent-plugins/docs/en/
+          NUXT_PUBLIC_QUICKSTART_URL: https://777genius.github.io/universal-agent-plugins/docs/en/guide/quickstart.html
+          NUXT_PUBLIC_DOCS_SITEMAP_URL: https://777genius.github.io/universal-agent-plugins/docs/sitemap.xml
+        working-directory: landing
+        run: pnpm generate
+
+      - name: Build public docs under /docs
+        env:
+          DOCS_BASE_PATH: /universal-agent-plugins/docs/
+          DOCS_HOSTNAME: https://777genius.github.io
+        working-directory: website
+        run: pnpm run docs:build
+
+      - name: Assemble GitHub Pages artifact
+        working-directory: landing
+        run: pnpm run build:pages
+
+      - uses: actions/configure-pages@v6
+
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: .pages-dist
+
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5

@@ -29,12 +29,15 @@ func TestPluginKitAIIntegrationsLifecycleClaudeProjectScope(t *testing.T) {
 	skillPath := filepath.Join(materializedRoot, "plugins", "claude-demo", "skills", "demo", "SKILL.md")
 
 	seedClaudeLifecycleWorkspace(t, workspaceRoot)
-	writeFakeClaudeCLI(t, fakeBinDir)
+	writeFakeClaudeCLI(t, fakeBinDir, stateFile, logFile, marketplacesFile, "user-review@user-marketplace")
 	t.Setenv("PATH", fakeBinDir+string(os.PathListSeparator)+os.Getenv("PATH"))
-	t.Setenv("PLUGIN_KIT_AI_FAKE_CLAUDE_STATE", stateFile)
-	t.Setenv("PLUGIN_KIT_AI_FAKE_CLAUDE_LOG", logFile)
-	t.Setenv("PLUGIN_KIT_AI_FAKE_CLAUDE_MARKETPLACES", marketplacesFile)
-	t.Setenv("PLUGIN_KIT_AI_FAKE_CLAUDE_PRESERVE_REFS", "user-review@user-marketplace")
+	// These ambient test-only values must never reach the read-only Claude probe.
+	// The fake CLI uses the fixture paths embedded below so this remains a real
+	// regression for the production environment allowlist.
+	t.Setenv("PLUGIN_KIT_AI_FAKE_CLAUDE_STATE", "/attacker/state")
+	t.Setenv("PLUGIN_KIT_AI_FAKE_CLAUDE_LOG", "/attacker/log")
+	t.Setenv("PLUGIN_KIT_AI_FAKE_CLAUDE_MARKETPLACES", "/attacker/marketplaces")
+	t.Setenv("PLUGIN_KIT_AI_FAKE_CLAUDE_PRESERVE_REFS", "attacker@marketplace")
 
 	writeClaudeLifecycleSource(t, sourceRoot, "0.1.0", "Original review", "# Original\n")
 
@@ -360,18 +363,19 @@ servers:
 	mustWriteIntegrationFile(t, filepath.Join(sourceRoot, "plugin", "targets", "claude", "manifest.extra.json"), "{\n  \"interface\": {\"defaultPrompt\": ["+quoteJSON(prompt)+"]}\n}\n")
 }
 
-func writeFakeClaudeCLI(t *testing.T, binDir string) {
+func writeFakeClaudeCLI(t *testing.T, binDir, stateFile, logFile, marketplacesFile, preserveRefs string) {
 	t.Helper()
+	for _, path := range []string{stateFile, logFile, marketplacesFile} {
+		mustWriteIntegrationFile(t, path, "")
+	}
 	script := `#!/bin/sh
 set -eu
 
-state_file="${PLUGIN_KIT_AI_FAKE_CLAUDE_STATE:?}"
-log_file="${PLUGIN_KIT_AI_FAKE_CLAUDE_LOG:?}"
-marketplaces_file="${PLUGIN_KIT_AI_FAKE_CLAUDE_MARKETPLACES:?}"
-preserve_refs="${PLUGIN_KIT_AI_FAKE_CLAUDE_PRESERVE_REFS:-}"
+state_file=` + quoteClaudeFakeShell(stateFile) + `
+log_file=` + quoteClaudeFakeShell(logFile) + `
+marketplaces_file=` + quoteClaudeFakeShell(marketplacesFile) + `
+preserve_refs=` + quoteClaudeFakeShell(preserveRefs) + `
 
-mkdir -p "$(dirname "$state_file")" "$(dirname "$log_file")" "$(dirname "$marketplaces_file")"
-touch "$state_file" "$log_file" "$marketplaces_file"
 printf '%s\n' "$*" >> "$log_file"
 
 fail() {
@@ -660,6 +664,10 @@ exit 1
 	if err := os.Chmod(filepath.Join(binDir, "claude"), 0o755); err != nil {
 		t.Fatalf("chmod fake claude: %v", err)
 	}
+}
+
+func quoteClaudeFakeShell(value string) string {
+	return "'" + strings.ReplaceAll(value, "'", "'\"'\"'") + "'"
 }
 
 func fakeClaudeInstalledRefs(t *testing.T, stateFile string) []string {

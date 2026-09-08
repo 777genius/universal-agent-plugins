@@ -1,14 +1,15 @@
 <script setup lang="ts">
 const localePath = useLocalePath();
 const homePath = computed(() => localePath("/"));
+const { asset } = useSite();
 </script>
 
 <template>
   <NuxtLink :to="homePath" class="app-logo">
-    <span class="app-logo__mark">P</span>
+    <img :src="asset('icon.svg')" alt="" class="app-logo__mark" width="36" height="36" >
     <span class="app-logo__copy">
-      <span class="app-logo__text">plugin-kit-ai</span>
-      <span class="app-logo__subtext">multi-agent</span>
+      <span class="app-logo__text">Universal Agent Plugins</span>
+      <span class="app-logo__subtext">multi-agent CLI</span>
     </span>
   </NuxtLink>
 </template>
@@ -28,17 +29,11 @@ const homePath = computed(() => localePath("/"));
 .app-logo__mark {
   width: 36px;
   height: 36px;
-  border-radius: 11px;
+  border-radius: 9px;
   flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-family: "JetBrains Mono", monospace;
-  font-weight: 800;
-  font-size: 16px;
-  color: #0a0a0f;
-  background: linear-gradient(135deg, #00f0ff, #ff00ff 55%, #39ff14);
+  display: block;
   box-shadow: 0 8px 24px rgba(0, 240, 255, 0.2);
+  object-fit: cover;
 }
 
 .app-logo__copy {
@@ -68,7 +63,6 @@ const homePath = computed(() => localePath("/"));
 
 <style>
 .v-theme--light .app-logo__mark {
-  color: #ffffff;
   box-shadow: 0 8px 20px rgba(8, 145, 178, 0.2);
 }
 

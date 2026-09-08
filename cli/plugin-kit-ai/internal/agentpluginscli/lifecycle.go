@@ -39,7 +39,7 @@ func newUpdateCommand(app App, opts *options) *cobra.Command {
 				return fmt.Errorf("provide one installation or use --all")
 			}
 			if strings.TrimSpace(opts.target) == "" {
-				targets, err := defaultBoundTargets(app, args[0], opts.scope, false)
+				targets, err := defaultInstalledBindingTargets(cmd.Context(), app, args[0], opts.scope, false)
 				if err != nil {
 					return err
 				}
@@ -66,7 +66,7 @@ func newRepairCommand(app App, opts *options) *cobra.Command {
 				return err
 			}
 			if strings.TrimSpace(opts.target) == "" {
-				targets, err := defaultBoundTargets(app, args[0], opts.scope, true)
+				targets, err := defaultInstalledBindingTargets(cmd.Context(), app, args[0], opts.scope, true)
 				if err != nil {
 					return err
 				}
@@ -121,6 +121,9 @@ func runRepair(ctx context.Context, cmd *cobra.Command, app App, opts *options, 
 		defer loaded.cleanup()
 	}
 	restoreCatalogEvidence(&loaded, binding)
+	if err := authorizeSecurityAssessment(cmd, app, opts, &loaded); err != nil {
+		return err
+	}
 	if err := prepareLoadedPackageForClient(&loaded, selected.ClientID); err != nil {
 		return err
 	}
@@ -174,6 +177,9 @@ func renderRepairResult(writer io.Writer, format string, installation domain.Ins
 	if format == "json" {
 		return writeJSONOutput(writer, "repair", data)
 	}
+	if err := renderOpenCodeRuntimeNotice(writer, result); err != nil {
+		return err
+	}
 	if result.NoChange {
 		_, err := fmt.Fprintln(writer, "Managed package digest is valid. No repair was needed.")
 		return err
@@ -207,6 +213,7 @@ type repairResultData struct {
 }
 
 func newRepairResultData(installation domain.Installation, result usecase.AddResult, dryRun bool) repairResultData {
+	result = withOpenCodeRuntimeNotice(result)
 	return repairResultData{
 		OperationID: result.Receipt.OperationID, Plugin: installation.DeclaredName,
 		Version: installation.Package.Version, Source: publicSource(installation.Source),
@@ -240,6 +247,9 @@ func runUpdate(ctx context.Context, cmd *cobra.Command, app App, opts *options, 
 	}
 	if domain.ComputeSourceBindingID(loaded.envelope.Source) != installation.Source.SourceBindingID {
 		return fmt.Errorf("resolved source identity changed; use agentplugins rebind after reviewing provenance")
+	}
+	if err := authorizeSecurityAssessment(cmd, app, opts, &loaded); err != nil {
+		return err
 	}
 	clients, err := app.Detector.Detect(ctx)
 	if err != nil {
@@ -371,6 +381,34 @@ func defaultBoundTargets(app App, selector, scope string, degradedOnly bool) ([]
 	}
 	sortTargets(targets)
 	return targets, nil
+}
+
+func defaultInstalledBindingTargets(ctx context.Context, app App, selector, scope string, degradedOnly bool) ([]domain.ClientID, error) {
+	state, err := app.StateStore.Load()
+	if err != nil {
+		return nil, err
+	}
+	installation, err := selectInstallation(state, selector)
+	if err != nil {
+		return nil, err
+	}
+	var bindingTargets []domain.ClientID
+	for _, binding := range installation.Clients {
+		if binding.Scope != scope || binding.Materialization == domain.MaterializationAbsent {
+			continue
+		}
+		if degradedOnly && binding.Materialization != domain.MaterializationDegraded && binding.Activation != domain.ActivationFailed && binding.Activation != domain.ActivationManual && binding.Activation != domain.ActivationPrepared && binding.Authentication != domain.AuthenticationFailed && binding.Authentication != domain.AuthenticationPending && binding.Verification != domain.VerificationFailed {
+			continue
+		}
+		bindingTargets = append(bindingTargets, domain.ClientID(binding.ClientID))
+	}
+	if len(bindingTargets) == 0 {
+		if degradedOnly {
+			return defaultInstalledBindingTargets(ctx, app, selector, scope, false)
+		}
+		return nil, fmt.Errorf("plugin has no materialized target in %s scope", scope)
+	}
+	return resolveInstalledBindingTargets(ctx, app, bindingTargets, false)
 }
 
 func promptBoundTargets(cmd *cobra.Command, app App, selector, scope string) (string, error) {
@@ -734,12 +772,19 @@ func renderUpdateResult(writer io.Writer, format string, envelope domain.Package
 	if dryRun {
 		return renderHumanPlan(writer, envelope, result)
 	}
+	if err := renderOpenCodeRuntimeNotice(writer, result); err != nil {
+		return err
+	}
 	if result.NoChange {
 		_, _ = fmt.Fprintln(writer, "Already up to date. No changes made.")
 		return nil
 	}
 	if result.Mutated && fullyInstalled(result.Activation) {
-		_, _ = fmt.Fprintln(writer, "Updated and verified for the selected client.")
+		if result.Plan.ClientID == domain.ClientOpenCode && len(domain.SelectedMCPNames(result.Plan)) > 0 {
+			_, _ = fmt.Fprintln(writer, "OpenCode MCP configuration updated and verified.")
+		} else {
+			_, _ = fmt.Fprintln(writer, "Updated and verified for the selected client.")
+		}
 		return nil
 	}
 	if result.Mutated {

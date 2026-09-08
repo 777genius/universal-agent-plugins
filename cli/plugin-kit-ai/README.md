@@ -183,7 +183,7 @@ Current behavior and contract details:
 - official pipx CLI bootstrap when a release is published to PyPI (`public-beta`): `pipx install plugin-kit-ai` or `pipx run plugin-kit-ai version` downloads the matching published GitHub Releases binary, verifies `checksums.txt`, and keeps the binary origin aligned with Homebrew/script
 - for Python/Node plugin authoring helpers rather than CLI installation, the shared package path is `plugin-kit-ai-runtime` on PyPI and npm; the default scaffold still vendors helper files so `init -> bootstrap` stays hermetic
 - official CLI bootstrap: `scripts/install.sh` resolves the latest published stable release by default, verifies `checksums.txt`, auto-detects OS/arch, installs the matching `plugin-kit-ai` tarball into `BIN_DIR`, and can pass any trailing script arguments to the installed CLI for one-shot commands
-- official CI setup action: `777genius/plugin-kit-ai/setup-plugin-kit-ai@v1` reuses that same verified release contract and adds the installed binary to `PATH`
+- official CI setup action: `777genius/universal-agent-plugins/setup-plugin-kit-ai@v1` reuses that same verified release contract and adds the installed binary to `PATH`
 - `init --extras` on stable interpreted `python`/`node` launcher-based projects emits `.github/workflows/bundle-release.yml`, which uses `setup-plugin-kit-ai@v1` plus `doctor -> bootstrap -> validate --strict -> bundle publish`
 - `init --platform claude`: stable-default Claude scaffold; `--claude-extended-hooks` opts into the full runtime-supported hook set
 - `init --platform gemini`: richer packaging starter with `targets/gemini/package.yaml` and `targets/gemini/contexts/GEMINI.md`; add `--runtime go` for the optional Gemini Go production-ready 9-hook runtime lane

@@ -27,10 +27,9 @@ const { content } = useLandingContent();
 const { t, te } = useI18n();
 const localePath = useLocalePath();
 
-const selectedTargetIds = ref<Array<(typeof props.installSpec.supportedTargets)[number]['targetId']>>(
-  [],
-);
-const selectedInstallChannelId = ref<string | null>(null);
+const selectedTargetIds = ref<
+  Array<(typeof props.installSpec.supportedTargets)[number]['targetId']>
+>([]);
 const isExpanded = computed({
   get: () => props.expanded,
   set: (value: boolean) => emit('update:expanded', value),
@@ -48,23 +47,16 @@ const selectedTargets = computed(() =>
 
 const installChannels = computed<InstallChannel[]>(() =>
   content.value.installChannels.filter(
-    (channel) => channel.command && ['brew', 'npm', 'script'].includes(channel.id),
+    (channel) => channel.command && ['brew', 'script', 'powershell', 'npm'].includes(channel.id),
   ),
 );
 
-watchEffect(() => {
-  if (
-    selectedInstallChannelId.value &&
-    installChannels.value.some((channel) => channel.id === selectedInstallChannelId.value)
-  ) {
-    return;
-  }
-
-  selectedInstallChannelId.value =
-    installChannels.value.find((channel) => channel.recommended)?.id ??
-    installChannels.value[0]?.id ??
-    null;
-});
+const {
+  detectedInstallPlatform,
+  recommendedChannelId,
+  selectedInstallChannelId,
+  selectInstallChannel,
+} = useInstallChannelSelection(installChannels);
 
 const selectedInstallChannel = computed(
   () =>
@@ -82,6 +74,10 @@ const selectedCliInvocation = computed(() =>
   getCliInvocation(selectedInstallChannel.value?.invocation),
 );
 
+const selectedTargetArgument = computed(() =>
+  selectedTargets.value.map((lane) => lane.targetId).join(','),
+);
+
 const supportLanes = computed(() =>
   props.installSpec.recommendedTargetOrder
     .map((targetId) => targetLanes.value.find((lane) => lane.targetId === targetId))
@@ -92,7 +88,9 @@ const supportLanes = computed(() =>
     })),
 );
 
-const selectedTargetNames = computed(() => selectedTargets.value.map((lane) => lane.badgeLabel).join(', '));
+const selectedTargetNames = computed(() =>
+  selectedTargets.value.map((lane) => lane.badgeLabel).join(', '),
+);
 
 const installCommand = computed(() =>
   buildInstallCommandForSelection(props.installSpec, selectedTargetIds.value),
@@ -103,9 +101,9 @@ const renderedInstallCommand = computed(() =>
 );
 
 const renderedManageCommands = computed(() => ({
-  update: applyCliInvocation(props.installSpec.manageCommands.update, selectedCliInvocation.value),
-  repair: applyCliInvocation(props.installSpec.manageCommands.repair, selectedCliInvocation.value),
-  remove: applyCliInvocation(props.installSpec.manageCommands.remove, selectedCliInvocation.value),
+  update: `${applyCliInvocation(props.installSpec.manageCommands.update, selectedCliInvocation.value)} --target ${selectedTargetArgument.value}`,
+  repair: `${applyCliInvocation(props.installSpec.manageCommands.repair, selectedCliInvocation.value)} --target ${selectedTargetArgument.value}`,
+  remove: `${applyCliInvocation(props.installSpec.manageCommands.remove, selectedCliInvocation.value)} --target ${selectedTargetArgument.value}`,
 }));
 
 const selectionScope = computed(() => {
@@ -119,7 +117,9 @@ const selectionScope = computed(() => {
   return t('plugins.install.mixedScope');
 });
 
-const installPaths = computed(() => [...new Set(selectedTargets.value.map((lane) => lane.installPath))]);
+const installPaths = computed(() => [
+  ...new Set(selectedTargets.value.map((lane) => lane.installPath)),
+]);
 
 const nextStepSummary = computed(() => {
   const followUps = [...new Set(selectedTargets.value.map((lane) => lane.followUp))];
@@ -209,7 +209,12 @@ function toggleExpanded() {
 </script>
 
 <template>
-  <section v-if="isExpanded" id="plugin-install" class="plugin-install section" :style="{ '--install-accent': accent }">
+  <section
+    v-if="isExpanded"
+    id="plugin-install"
+    class="plugin-install section"
+    :style="{ '--install-accent': accent }"
+  >
     <v-container>
       <div class="plugin-install__shell">
         <div class="plugin-install__toolbar">
@@ -226,303 +231,308 @@ function toggleExpanded() {
         </div>
 
         <div class="plugin-install__details">
-            <article class="plugin-install__card plugin-install__card--targets">
+          <article class="plugin-install__card plugin-install__card--targets">
+            <div class="plugin-install__card-head">
+              <span class="plugin-install__step-index">01</span>
+              <div>
+                <h3 class="plugin-install__card-title">
+                  {{ t('plugins.install.chooseAgentTitle') }}
+                </h3>
+                <p class="plugin-install__card-copy">{{ t('plugins.install.chooseAgentBody') }}</p>
+              </div>
+            </div>
+
+            <div
+              class="plugin-install__target-tabs"
+              role="group"
+              :aria-label="t('plugins.install.chooseAgentTitle')"
+            >
+              <button
+                type="button"
+                class="plugin-install__target-tab plugin-install__target-tab--all"
+                :class="{ 'plugin-install__target-tab--active': allSelected }"
+                :aria-pressed="allSelected"
+                @click="toggleAllTargets"
+              >
+                <span class="plugin-install__target-tab-content">
+                  <v-icon :icon="mdiApps" size="18" class="plugin-install__target-tab-icon" />
+                  <span>{{ t('plugins.install.allAgents') }}</span>
+                </span>
+              </button>
+
+              <span class="plugin-install__target-divider" aria-hidden="true" />
+
+              <button
+                v-for="lane in supportLanes"
+                :key="lane.targetId"
+                type="button"
+                class="plugin-install__target-tab"
+                :class="{
+                  'plugin-install__target-tab--active':
+                    !allSelected && selectedTargetIds.includes(lane.targetId),
+                }"
+                :aria-pressed="!allSelected && selectedTargetIds.includes(lane.targetId)"
+                @click="toggleTarget(lane.targetId)"
+              >
+                <span class="plugin-install__target-tab-content">
+                  <img
+                    v-if="lane.iconSrc"
+                    :src="lane.iconSrc"
+                    :alt="`${lane.badgeLabel} icon`"
+                    class="plugin-install__target-tab-image"
+                    loading="lazy"
+                    decoding="async"
+                  >
+                  <span>{{ lane.badgeLabel }}</span>
+                </span>
+              </button>
+            </div>
+
+            <hr class="plugin-install__section-divider">
+
+            <div
+              class="plugin-install__channel-tabs"
+              role="group"
+              :aria-label="t('plugins.install.getCliTitle')"
+            >
+              <button
+                v-for="channel in installChannels"
+                :key="channel.id"
+                type="button"
+                class="plugin-install__channel-tab"
+                :class="{
+                  'plugin-install__channel-tab--active': channel.id === selectedInstallChannelId,
+                }"
+                :aria-pressed="channel.id === selectedInstallChannelId"
+                @click="selectInstallChannel(channel.id)"
+              >
+                <span>{{ channel.title }}</span>
+                <span
+                  v-if="channel.id === recommendedChannelId"
+                  class="plugin-install__channel-tab-badge"
+                >
+                  {{ t('plugins.install.recommended') }}
+                </span>
+              </button>
+            </div>
+            <p v-if="detectedInstallPlatform === 'mobile'" class="plugin-install__platform-note">
+              {{ t('download.mobileUnsupported') }}
+            </p>
+          </article>
+
+          <div class="plugin-install__stack">
+            <article v-if="showCliStep" class="plugin-install__card plugin-install__card--onboard">
               <div class="plugin-install__card-head">
-                <span class="plugin-install__step-index">01</span>
+                <span class="plugin-install__step-index">02</span>
                 <div>
-                  <h3 class="plugin-install__card-title">
-                    {{ t('plugins.install.chooseAgentTitle') }}
-                  </h3>
-                  <p class="plugin-install__card-copy">{{ t('plugins.install.chooseAgentBody') }}</p>
+                  <h3 class="plugin-install__card-title">{{ t('plugins.install.getCliTitle') }}</h3>
+                  <p class="plugin-install__card-copy">{{ t('plugins.install.getCliBody') }}</p>
                 </div>
               </div>
 
-              <div
-                class="plugin-install__target-tabs"
-                role="group"
-                :aria-label="t('plugins.install.chooseAgentTitle')"
+              <p
+                v-if="selectedInstallChannel && selectedInstallChannel.id !== 'npm'"
+                class="plugin-install__channel-description"
               >
-                <button
-                  type="button"
-                  class="plugin-install__target-tab plugin-install__target-tab--all"
-                  :class="{ 'plugin-install__target-tab--active': allSelected }"
-                  :aria-pressed="allSelected"
-                  @click="toggleAllTargets"
+                {{ selectedInstallChannel.description }}
+              </p>
+
+              <CommandSnippetCard
+                v-if="selectedInstallChannel"
+                :label="t('plugins.install.cliCommandLabel')"
+                :command="selectedInstallChannel.command || ''"
+                :copy-label="t('plugins.install.copy')"
+                :copied-label="t('plugins.install.copied')"
+                :accent="accent"
+              />
+
+              <p v-if="selectedInstallChannel?.note" class="plugin-install__muted-note">
+                {{ selectedInstallChannel.note }}
+              </p>
+
+              <div class="plugin-install__cta-row">
+                <v-btn
+                  :to="downloadPagePath"
+                  variant="outlined"
+                  class="plugin-install__secondary-cta"
                 >
-                  <span class="plugin-install__target-tab-content">
-                    <v-icon :icon="mdiApps" size="18" class="plugin-install__target-tab-icon" />
-                    <span>{{ t('plugins.install.allAgents') }}</span>
-                  </span>
-                </button>
+                  {{ t('plugins.install.fullOnboardingCta') }}
+                  <v-icon :icon="mdiArrowRight" end size="18" />
+                </v-btn>
+                <span class="plugin-install__microcopy">{{
+                  t('plugins.install.alreadyInstalled')
+                }}</span>
+              </div>
+            </article>
 
-                <span class="plugin-install__target-divider" aria-hidden="true" />
+            <article class="plugin-install__card plugin-install__card--install">
+              <div class="plugin-install__card-head">
+                <span class="plugin-install__step-index">{{ installStepIndex }}</span>
+                <div>
+                  <h3 class="plugin-install__card-title">
+                    {{ t('plugins.install.installTitle') }}
+                  </h3>
+                </div>
+              </div>
 
-                <button
-                  v-for="lane in supportLanes"
-                  :key="lane.targetId"
-                  type="button"
-                  class="plugin-install__target-tab"
+              <CommandSnippetCard
+                :label="t('plugins.install.installCommandLabel')"
+                :command="renderedInstallCommand"
+                :copy-label="t('plugins.install.copy')"
+                :copied-label="t('plugins.install.copied')"
+                :accent="accent"
+              />
+
+              <div class="plugin-install__facts">
+                <div class="plugin-install__fact">
+                  <span class="plugin-install__fact-label">{{
+                    t('plugins.install.targetsLabel')
+                  }}</span>
+                  <strong class="plugin-install__fact-value">{{ selectedTargetNames }}</strong>
+                </div>
+                <div class="plugin-install__fact">
+                  <span class="plugin-install__fact-label">{{
+                    t('plugins.install.scopeLabel')
+                  }}</span>
+                  <strong class="plugin-install__fact-value">{{ selectionScope }}</strong>
+                </div>
+                <div class="plugin-install__fact">
+                  <span class="plugin-install__fact-label">{{
+                    t('plugins.install.writesToLabel')
+                  }}</span>
+                  <strong class="plugin-install__fact-value plugin-install__fact-value--stacked">
+                    <span
+                      v-for="installPath in installPaths"
+                      :key="installPath"
+                      class="plugin-install__fact-pill"
+                    >
+                      {{ installPath }}
+                    </span>
+                  </strong>
+                </div>
+                <div class="plugin-install__fact">
+                  <span class="plugin-install__fact-label">{{
+                    t('plugins.install.nextStepLabel')
+                  }}</span>
+                  <strong class="plugin-install__fact-value">{{ nextStepSummary }}</strong>
+                </div>
+              </div>
+
+              <div v-if="targetBoundaryNotes.length > 0" class="plugin-install__boundary-group">
+                <p
+                  v-for="boundaryNote in targetBoundaryNotes"
+                  :key="boundaryNote.id"
+                  class="plugin-install__boundary"
                   :class="{
-                    'plugin-install__target-tab--active':
-                      !allSelected && selectedTargetIds.includes(lane.targetId),
+                    'plugin-install__boundary--subtle': boundaryNote.subtle,
                   }"
-                  :aria-pressed="!allSelected && selectedTargetIds.includes(lane.targetId)"
-                  @click="toggleTarget(lane.targetId)"
                 >
-                  <span class="plugin-install__target-tab-content">
+                  <span class="plugin-install__boundary-head">
+                    <AgentBadge
+                      v-if="boundaryNote.iconSrc"
+                      :label="boundaryNote.label"
+                      tone="card"
+                    />
+                    <span
+                      v-else
+                      class="plugin-install__boundary-chip plugin-install__boundary-chip--neutral"
+                    >
+                      {{ boundaryNote.label }}
+                    </span>
+                    <span class="plugin-install__boundary-label">
+                      {{ t('plugins.install.boundaryLabel') }}
+                    </span>
+                  </span>
+                  <span class="plugin-install__boundary-text">{{ boundaryNote.note }}</span>
+                </p>
+              </div>
+            </article>
+          </div>
+
+          <div class="plugin-install__grid plugin-install__grid--secondary">
+            <article class="plugin-install__card">
+              <div class="plugin-install__card-head">
+                <span class="plugin-install__step-index">{{ manualStepIndex }}</span>
+                <div>
+                  <h3 class="plugin-install__card-title">{{ t('plugins.install.manualTitle') }}</h3>
+                  <p class="plugin-install__card-copy">{{ t('plugins.install.manualBody') }}</p>
+                </div>
+              </div>
+
+              <div class="plugin-install__manual-links">
+                <a
+                  :href="plugin.href"
+                  target="_blank"
+                  rel="noreferrer noopener"
+                  class="plugin-install__manual-link plugin-install__manual-link--repo"
+                >
+                  <span class="plugin-install__manual-link-main">
+                    <span class="plugin-install__manual-link-label">{{
+                      t('plugins.install.repositoryCta')
+                    }}</span>
+                  </span>
+                  <v-icon :icon="mdiOpenInNew" size="18" />
+                </a>
+                <a
+                  v-for="lane in selectedDocsTargets"
+                  :key="lane.targetId"
+                  :href="lane.vendorDocsHref"
+                  target="_blank"
+                  rel="noreferrer noopener"
+                  class="plugin-install__manual-link"
+                >
+                  <span class="plugin-install__manual-link-main">
                     <img
                       v-if="lane.iconSrc"
                       :src="lane.iconSrc"
                       :alt="`${lane.badgeLabel} icon`"
-                      class="plugin-install__target-tab-image"
+                      class="plugin-install__manual-link-icon"
                       loading="lazy"
                       decoding="async"
                     >
-                    <span>{{ lane.badgeLabel }}</span>
+                    <span class="plugin-install__manual-link-label">{{
+                      t('plugins.install.agentDocsCta', { agent: lane.badgeLabel })
+                    }}</span>
                   </span>
-                </button>
-              </div>
-
-              <hr class="plugin-install__section-divider">
-
-              <div
-                class="plugin-install__channel-tabs"
-                role="group"
-                :aria-label="t('plugins.install.getCliTitle')"
-              >
-                <button
-                  v-for="channel in installChannels"
-                  :key="channel.id"
-                  type="button"
-                  class="plugin-install__channel-tab"
-                  :class="{
-                    'plugin-install__channel-tab--active': channel.id === selectedInstallChannelId,
-                  }"
-                  :aria-pressed="channel.id === selectedInstallChannelId"
-                  @click="selectedInstallChannelId = channel.id"
-                >
-                  <span>{{ channel.title }}</span>
-                  <span v-if="channel.recommended" class="plugin-install__channel-tab-badge">
-                    {{ t('plugins.install.recommended') }}
-                  </span>
-                </button>
+                  <v-icon :icon="mdiOpenInNew" size="18" />
+                </a>
               </div>
             </article>
 
-            <div class="plugin-install__stack">
-              <article v-if="showCliStep" class="plugin-install__card plugin-install__card--onboard">
-                <div class="plugin-install__card-head">
-                  <span class="plugin-install__step-index">02</span>
-                  <div>
-                    <h3 class="plugin-install__card-title">{{ t('plugins.install.getCliTitle') }}</h3>
-                    <p class="plugin-install__card-copy">{{ t('plugins.install.getCliBody') }}</p>
-                  </div>
+            <article class="plugin-install__card">
+              <div class="plugin-install__card-head">
+                <span class="plugin-install__step-index">{{ manageStepIndex }}</span>
+                <div>
+                  <h3 class="plugin-install__card-title">{{ t('plugins.install.manageTitle') }}</h3>
+                  <p class="plugin-install__card-copy">{{ t('plugins.install.manageBody') }}</p>
                 </div>
+              </div>
 
-                <p
-                  v-if="selectedInstallChannel && selectedInstallChannel.id !== 'npm'"
-                  class="plugin-install__channel-description"
-                >
-                  {{ selectedInstallChannel.description }}
-                </p>
-
+              <div class="plugin-install__manage-grid">
                 <CommandSnippetCard
-                  v-if="selectedInstallChannel"
-                  :label="t('plugins.install.cliCommandLabel')"
-                  :command="selectedInstallChannel.command || ''"
+                  :label="t('plugins.install.updateCommandLabel')"
+                  :command="renderedManageCommands.update"
                   :copy-label="t('plugins.install.copy')"
                   :copied-label="t('plugins.install.copied')"
                   :accent="accent"
                 />
-
-                <p
-                  v-if="selectedInstallChannel?.note"
-                  class="plugin-install__muted-note"
-                >
-                  {{ selectedInstallChannel.note }}
-                </p>
-
-                <div class="plugin-install__cta-row">
-                  <v-btn
-                    :to="downloadPagePath"
-                    variant="outlined"
-                    class="plugin-install__secondary-cta"
-                  >
-                    {{ t('plugins.install.fullOnboardingCta') }}
-                    <v-icon :icon="mdiArrowRight" end size="18" />
-                  </v-btn>
-                  <span class="plugin-install__microcopy">{{
-                    t('plugins.install.alreadyInstalled')
-                  }}</span>
-                </div>
-              </article>
-
-              <article class="plugin-install__card plugin-install__card--install">
-                <div class="plugin-install__card-head">
-                  <span class="plugin-install__step-index">{{ installStepIndex }}</span>
-                  <div>
-                    <h3 class="plugin-install__card-title">{{ t('plugins.install.installTitle') }}</h3>
-                  </div>
-                </div>
-
                 <CommandSnippetCard
-                  :label="t('plugins.install.installCommandLabel')"
-                  :command="renderedInstallCommand"
+                  :label="t('plugins.install.repairCommandLabel')"
+                  :command="renderedManageCommands.repair"
                   :copy-label="t('plugins.install.copy')"
                   :copied-label="t('plugins.install.copied')"
                   :accent="accent"
                 />
-
-                <div class="plugin-install__facts">
-                  <div class="plugin-install__fact">
-                    <span class="plugin-install__fact-label">{{
-                      t('plugins.install.targetsLabel')
-                    }}</span>
-                    <strong class="plugin-install__fact-value">{{ selectedTargetNames }}</strong>
-                  </div>
-                  <div class="plugin-install__fact">
-                    <span class="plugin-install__fact-label">{{
-                      t('plugins.install.scopeLabel')
-                    }}</span>
-                    <strong class="plugin-install__fact-value">{{ selectionScope }}</strong>
-                  </div>
-                  <div class="plugin-install__fact">
-                    <span class="plugin-install__fact-label">{{
-                      t('plugins.install.writesToLabel')
-                    }}</span>
-                    <strong class="plugin-install__fact-value plugin-install__fact-value--stacked">
-                      <span
-                        v-for="installPath in installPaths"
-                        :key="installPath"
-                        class="plugin-install__fact-pill"
-                      >
-                        {{ installPath }}
-                      </span>
-                    </strong>
-                  </div>
-                  <div class="plugin-install__fact">
-                    <span class="plugin-install__fact-label">{{
-                      t('plugins.install.nextStepLabel')
-                    }}</span>
-                    <strong class="plugin-install__fact-value">{{ nextStepSummary }}</strong>
-                  </div>
-                </div>
-
-                <div v-if="targetBoundaryNotes.length > 0" class="plugin-install__boundary-group">
-                  <p
-                    v-for="boundaryNote in targetBoundaryNotes"
-                    :key="boundaryNote.id"
-                    class="plugin-install__boundary"
-                    :class="{
-                      'plugin-install__boundary--subtle': boundaryNote.subtle,
-                    }"
-                  >
-                    <span class="plugin-install__boundary-head">
-                      <AgentBadge
-                        v-if="boundaryNote.iconSrc"
-                        :label="boundaryNote.label"
-                        tone="card"
-                      />
-                      <span
-                        v-else
-                        class="plugin-install__boundary-chip plugin-install__boundary-chip--neutral"
-                      >
-                        {{ boundaryNote.label }}
-                      </span>
-                      <span class="plugin-install__boundary-label">
-                        {{ t('plugins.install.boundaryLabel') }}
-                      </span>
-                    </span>
-                    <span class="plugin-install__boundary-text">{{ boundaryNote.note }}</span>
-                  </p>
-                </div>
-              </article>
-            </div>
-
-            <div class="plugin-install__grid plugin-install__grid--secondary">
-              <article class="plugin-install__card">
-                <div class="plugin-install__card-head">
-                  <span class="plugin-install__step-index">{{ manualStepIndex }}</span>
-                  <div>
-                    <h3 class="plugin-install__card-title">{{ t('plugins.install.manualTitle') }}</h3>
-                    <p class="plugin-install__card-copy">{{ t('plugins.install.manualBody') }}</p>
-                  </div>
-                </div>
-
-                <div class="plugin-install__manual-links">
-                  <a
-                    :href="plugin.href"
-                    target="_blank"
-                    rel="noreferrer noopener"
-                    class="plugin-install__manual-link plugin-install__manual-link--repo"
-                  >
-                    <span class="plugin-install__manual-link-main">
-                      <span class="plugin-install__manual-link-label">{{
-                        t('plugins.install.repositoryCta')
-                      }}</span>
-                    </span>
-                    <v-icon :icon="mdiOpenInNew" size="18" />
-                  </a>
-                  <a
-                    v-for="lane in selectedDocsTargets"
-                    :key="lane.targetId"
-                    :href="lane.vendorDocsHref"
-                    target="_blank"
-                    rel="noreferrer noopener"
-                    class="plugin-install__manual-link"
-                  >
-                    <span class="plugin-install__manual-link-main">
-                      <img
-                        v-if="lane.iconSrc"
-                        :src="lane.iconSrc"
-                        :alt="`${lane.badgeLabel} icon`"
-                        class="plugin-install__manual-link-icon"
-                        loading="lazy"
-                        decoding="async"
-                      >
-                      <span class="plugin-install__manual-link-label">{{
-                        t('plugins.install.agentDocsCta', { agent: lane.badgeLabel })
-                      }}</span>
-                    </span>
-                    <v-icon :icon="mdiOpenInNew" size="18" />
-                  </a>
-                </div>
-              </article>
-
-              <article class="plugin-install__card">
-                <div class="plugin-install__card-head">
-                  <span class="plugin-install__step-index">{{ manageStepIndex }}</span>
-                  <div>
-                    <h3 class="plugin-install__card-title">{{ t('plugins.install.manageTitle') }}</h3>
-                    <p class="plugin-install__card-copy">{{ t('plugins.install.manageBody') }}</p>
-                  </div>
-                </div>
-
-                <div class="plugin-install__manage-grid">
-                  <CommandSnippetCard
-                    :label="t('plugins.install.updateCommandLabel')"
-                    :command="renderedManageCommands.update"
-                    :copy-label="t('plugins.install.copy')"
-                    :copied-label="t('plugins.install.copied')"
-                    :accent="accent"
-                  />
-                  <CommandSnippetCard
-                    :label="t('plugins.install.repairCommandLabel')"
-                    :command="renderedManageCommands.repair"
-                    :copy-label="t('plugins.install.copy')"
-                    :copied-label="t('plugins.install.copied')"
-                    :accent="accent"
-                  />
-                  <CommandSnippetCard
-                    :label="t('plugins.install.removeCommandLabel')"
-                    :command="renderedManageCommands.remove"
-                    :copy-label="t('plugins.install.copy')"
-                    :copied-label="t('plugins.install.copied')"
-                    :accent="accent"
-                  />
-                </div>
-              </article>
-            </div>
+                <CommandSnippetCard
+                  :label="t('plugins.install.removeCommandLabel')"
+                  :command="renderedManageCommands.remove"
+                  :copy-label="t('plugins.install.copy')"
+                  :copied-label="t('plugins.install.copied')"
+                  :accent="accent"
+                />
+              </div>
+            </article>
+          </div>
         </div>
       </div>
     </v-container>
@@ -660,6 +670,14 @@ function toggleExpanded() {
   flex-wrap: wrap;
   gap: 10px;
   align-items: center;
+}
+
+.plugin-install__platform-note {
+  margin: 12px 0 0;
+  color: #ffb703;
+  font-size: 0.8rem;
+  line-height: 1.5;
+  font-family: 'JetBrains Mono', monospace;
 }
 
 .plugin-install__target-divider {
@@ -950,6 +968,10 @@ function toggleExpanded() {
 .v-theme--light .plugin-install__muted-note,
 .v-theme--light .plugin-install__microcopy {
   color: #475569;
+}
+
+.v-theme--light .plugin-install__platform-note {
+  color: #92400e;
 }
 
 .v-theme--light .plugin-install__target-tab,

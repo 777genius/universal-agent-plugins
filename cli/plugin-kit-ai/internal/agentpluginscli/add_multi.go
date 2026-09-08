@@ -22,22 +22,23 @@ type addTargetResult struct {
 }
 
 type addMultiResult struct {
-	OperationID    string                    `json:"operation_id,omitempty"`
-	Batch          bool                      `json:"batch"`
-	Status         string                    `json:"status"`
-	Succeeded      int                       `json:"succeeded"`
-	Failed         int                       `json:"failed"`
-	Plugin         string                    `json:"plugin"`
-	Version        string                    `json:"version,omitempty"`
-	Source         string                    `json:"source"`
-	Revision       string                    `json:"revision,omitempty"`
-	TreeDigest     string                    `json:"tree_digest,omitempty"`
-	ManifestDigest string                    `json:"manifest_digest,omitempty"`
-	Directory      *domain.DirectoryOrigin   `json:"directory,omitempty"`
-	DryRun         bool                      `json:"dry_run"`
-	Targets        []addTargetResult         `json:"targets"`
-	Acquisition    *addAcquisitionProof      `json:"acquisition,omitempty"`
-	TargetOutcomes map[string]addTargetProof `json:"target_outcomes,omitempty"`
+	OperationID    string                     `json:"operation_id,omitempty"`
+	Batch          bool                       `json:"batch"`
+	Status         string                     `json:"status"`
+	Succeeded      int                        `json:"succeeded"`
+	Failed         int                        `json:"failed"`
+	Plugin         string                     `json:"plugin"`
+	Version        string                     `json:"version,omitempty"`
+	Source         string                     `json:"source"`
+	Revision       string                     `json:"revision,omitempty"`
+	TreeDigest     string                     `json:"tree_digest,omitempty"`
+	ManifestDigest string                     `json:"manifest_digest,omitempty"`
+	Security       *domain.SecurityAssessment `json:"security,omitempty"`
+	Directory      *domain.DirectoryOrigin    `json:"directory,omitempty"`
+	DryRun         bool                       `json:"dry_run"`
+	Targets        []addTargetResult          `json:"targets"`
+	Acquisition    *addAcquisitionProof       `json:"acquisition,omitempty"`
+	TargetOutcomes map[string]addTargetProof  `json:"target_outcomes,omitempty"`
 }
 
 type addAcquisitionProof struct {
@@ -83,6 +84,9 @@ func runAddManyWithClients(ctx context.Context, cmd *cobra.Command, app App, opt
 }
 
 func runAddManyLoaded(ctx context.Context, cmd *cobra.Command, app App, opts *options, loaded loadedPackage, targets []domain.ClientID, activationComplete, authComplete bool, clients []domain.DetectedClient) error {
+	if err := authorizeSecurityAssessment(cmd, app, opts, &loaded); err != nil {
+		return err
+	}
 	if len(targets) == 1 {
 		if activationComplete || authComplete {
 			return runAddLoaded(ctx, cmd, app, opts, loaded, activationComplete, authComplete, clients)
@@ -97,6 +101,7 @@ func runAddManyLoaded(ctx context.Context, cmd *cobra.Command, app App, opts *op
 		Batch: true, Status: "planned", Plugin: loaded.envelope.Manifest.Name,
 		Version: loaded.envelope.Manifest.Version, Source: publicPackageSource(loaded.envelope.Source),
 		Revision: loaded.envelope.Source.ResolvedRevision, TreeDigest: loaded.envelope.TreeDigest, ManifestDigest: loaded.envelope.ManifestDigest,
+		Security:  loaded.security,
 		Directory: cloneDirectoryOrigin(loaded.directory),
 		DryRun:    opts.dryRun, Targets: make([]addTargetResult, 0, len(targets)),
 	}
@@ -345,6 +350,9 @@ func renderAddMultiResult(cmd *cobra.Command, opts *options, result addMultiResu
 		return err
 	}
 	for _, target := range result.Targets {
+		if err := renderOpenCodeRuntimeNotice(cmd.OutOrStdout(), target.Output.Result); err != nil {
+			return err
+		}
 		if _, err := fmt.Fprintf(cmd.OutOrStdout(), "  %s: %s\n", target.Target, target.Status); err != nil {
 			return err
 		}

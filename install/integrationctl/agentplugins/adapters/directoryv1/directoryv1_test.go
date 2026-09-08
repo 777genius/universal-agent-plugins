@@ -16,6 +16,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -279,6 +280,18 @@ func TestSnapshotStrictSchemaOneSemantics(t *testing.T) {
 			v.Evidence[0].PackageTreeDigest = "sha256:" + strings.Repeat("d", 64)
 		}},
 		{"unsafe source path", func(v *domain.DirectorySnapshot) { v.Distributions[0].Releases[0].PackageSource.Path = "../plugin" }},
+		{"unsafe app binding alias", func(v *domain.DirectorySnapshot) {
+			v.Distributions[0].ReleasePolicies[0].Targets[0] = domain.DirectoryTarget{Client: domain.ClientChatGPT, Scopes: []domain.InstallScope{domain.ScopeUser}, Delivery: "prepared", Authentication: domain.AuthenticationRequirementUnknown,
+				AppBinding: &domain.DirectoryAppBinding{AppKey: "../docs", ID: "asdk_app_docs_123", MCPServer: "../docs"}}
+		}},
+		{"mismatched app binding aliases", func(v *domain.DirectorySnapshot) {
+			v.Distributions[0].ReleasePolicies[0].Targets[0] = domain.DirectoryTarget{Client: domain.ClientChatGPT, Scopes: []domain.InstallScope{domain.ScopeUser}, Delivery: "prepared", Authentication: domain.AuthenticationRequirementUnknown,
+				AppBinding: &domain.DirectoryAppBinding{AppKey: "docs", ID: "asdk_app_docs_123", MCPServer: "other"}}
+		}},
+		{"unsafe app binding id", func(v *domain.DirectorySnapshot) {
+			v.Distributions[0].ReleasePolicies[0].Targets[0] = domain.DirectoryTarget{Client: domain.ClientChatGPT, Scopes: []domain.InstallScope{domain.ScopeUser}, Delivery: "prepared", Authentication: domain.AuthenticationRequirementUnknown,
+				AppBinding: &domain.DirectoryAppBinding{AppKey: "docs", ID: "not/an/id", MCPServer: "docs"}}
+		}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -526,7 +539,7 @@ func TestCacheAtomicPermissionsPreservationAndOfflineExpiry(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if info.Mode().Perm() != 0600 {
+	if runtime.GOOS != "windows" && info.Mode().Perm() != 0600 {
 		t.Fatalf("cache mode %o", info.Mode().Perm())
 	}
 	lowerSnapshot, lowerEnvelope, _ := signedFixture(t, 19, key, private)
@@ -827,6 +840,22 @@ func TestDirectExactRequiresNoDirectory(t *testing.T) {
 			})
 			if err != nil || selection.Label != "direct source" {
 				t.Fatalf("exact source: %+v %v", selection, err)
+			}
+		})
+	}
+	for _, canonical := range []string{
+		"owner/repo@" + revision,
+		"github:owner/repo@" + revision,
+		"https://github.com/owner/repo@" + revision,
+	} {
+		t.Run("repository root "+canonical, func(t *testing.T) {
+			selection, err := ResolveDirectExact(domain.SourceIdentity{
+				RequestedSource: canonical,
+				CanonicalSource: canonical,
+				Repository:      "owner/repo", ResolvedRevision: revision,
+			})
+			if err != nil || selection.Label != "direct source" {
+				t.Fatalf("exact repository-root source: %+v %v", selection, err)
 			}
 		})
 	}

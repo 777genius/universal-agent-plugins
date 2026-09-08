@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -16,6 +17,7 @@ import (
 type identityRunner struct {
 	result   legacyports.CommandResult
 	commands [][]string
+	last     legacyports.Command
 }
 
 type blockingIdentityRunner struct {
@@ -30,6 +32,7 @@ func (runner blockingIdentityRunner) Run(ctx context.Context, _ legacyports.Comm
 
 func (runner *identityRunner) Run(_ context.Context, command legacyports.Command) (legacyports.CommandResult, error) {
 	runner.commands = append(runner.commands, append([]string(nil), command.Argv...))
+	runner.last = command
 	return runner.result, nil
 }
 
@@ -46,6 +49,109 @@ func TestNativeIdentityCursorReadsEveryAuthoritativeLocalManifest(t *testing.T) 
 	observation, err = (NativeIdentityObserver{}).ObserveNativeIdentity(context.Background(), domain.DetectedClient{ClientID: domain.ClientCursor}, plan, nil)
 	if observation.State != domain.NativeIdentityIndeterminate || err == nil {
 		t.Fatalf("malformed observation = %+v, err = %v", observation, err)
+	}
+}
+
+// TestNativeIdentityUnqualifiedPluginRootIgnoresForeignNonDirectoryEntries
+// reproduces a real defect found reviewing Claude Code's own equivalent scan:
+// a plain OS-generated file such as .DS_Store sitting in a shared plugins
+// root (created automatically the moment a user browses the folder in
+// Finder) made every entry indeterminate, refusing repair/update for every
+// unrelated, healthy plugin sharing that root. A plain file cannot contain
+// the manifest this scheme requires, so it can never claim a competing
+// plugin identity and must not block classification of real entries.
+func TestNativeIdentityUnqualifiedPluginRootIgnoresForeignNonDirectoryEntries(t *testing.T) {
+	root := filepath.Join(t.TempDir(), ".cursor", "plugins", "local")
+	plan := identityPlan(root)
+	if err := os.MkdirAll(plan.ActivePath, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	writeIdentityFile(t, filepath.Join(plan.ActivePath, ".cursor-plugin", "plugin.json"), `{"name":"demo"}`)
+	if err := os.WriteFile(filepath.Join(root, ".DS_Store"), []byte{0}, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	managed := &domain.ClientBinding{NativeObjects: []domain.NativeObjectOwnership{{Kind: "managed_package_directory", ManagedDigest: "sha256:owned"}}}
+	observer := NativeIdentityObserver{Stager: acceptingPackageVerifier{}}
+	observation, err := observer.ObserveNativeIdentity(context.Background(), domain.DetectedClient{ClientID: domain.ClientCursor}, plan, managed)
+	if err != nil || observation.State != domain.NativeIdentityManaged {
+		t.Fatalf("foreign non-directory entry blocked classification: observation = %+v, err = %v", observation, err)
+	}
+
+	// A genuine competing directory entry must still be caught.
+	writeIdentityFile(t, filepath.Join(root, "foreign-path", ".cursor-plugin", "plugin.json"), `{"name":"demo"}`)
+	observation, err = observer.ObserveNativeIdentity(context.Background(), domain.DetectedClient{ClientID: domain.ClientCursor}, plan, managed)
+	if observation.State != domain.NativeIdentityUnmanaged || err != nil {
+		t.Fatalf("real collision was not caught alongside a foreign file: observation = %+v, err = %v", observation, err)
+	}
+
+	// A symlink entry must still fail closed.
+	if err := os.RemoveAll(filepath.Join(root, "foreign-path")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(plan.ActivePath, filepath.Join(root, "suspicious-link")); err != nil {
+		t.Fatal(err)
+	}
+	observation, err = observer.ObserveNativeIdentity(context.Background(), domain.DetectedClient{ClientID: domain.ClientCursor}, plan, managed)
+	if observation.State != domain.NativeIdentityIndeterminate {
+		t.Fatalf("symlink entry was not refused: observation = %+v, err = %v", observation, err)
+	}
+}
+
+// TestNativeIdentityOpenCodeIgnoresForeignNonDirectoryEntries confirms the
+// same fix protects OpenCode too: OpenCode's own native registry check
+// (inspectNativeRegistry) never scans a directory, but its prepared-identity
+// check still goes through the shared inspectUnqualifiedPluginRoot exactly
+// like Cursor's does (observeIdentity calls inspectPreparedRegistry
+// unconditionally for every client before any client-specific override), so
+// a foreign .DS_Store in OpenCode's managed clients root would have hit the
+// identical bug if inspectUnqualifiedPluginRoot had not already been fixed.
+func TestNativeIdentityOpenCodeIgnoresForeignNonDirectoryEntries(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "managed", "clients", "opencode")
+	plan := identityPlan(root)
+	if err := os.MkdirAll(plan.ActivePath, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	writeIdentityFile(t, filepath.Join(plan.ActivePath, "plugin.json"), `{"name":"demo"}`)
+	if err := os.WriteFile(filepath.Join(root, ".DS_Store"), []byte{0}, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	managed := &domain.ClientBinding{NativeObjects: []domain.NativeObjectOwnership{{Kind: "managed_package_directory", ManagedDigest: "sha256:owned"}}}
+	observer := NativeIdentityObserver{Stager: acceptingPackageVerifier{}}
+	observation, err := observer.ObserveNativeIdentity(context.Background(), domain.DetectedClient{ClientID: domain.ClientOpenCode}, plan, managed)
+	if err != nil || observation.State != domain.NativeIdentityManaged {
+		t.Fatalf("foreign non-directory entry blocked OpenCode classification: observation = %+v, err = %v", observation, err)
+	}
+}
+
+// TestNativeIdentityClaudeSkillsRegistryIgnoresForeignNonDirectoryEntries is
+// the Claude-specific counterpart: reproduces the exact reported scenario
+// (a bare .DS_Store in <CLAUDE_CONFIG_DIR>/skills blocking every plugin's
+// repair) against inspectClaudeSkillsRegistry directly.
+func TestNativeIdentityClaudeSkillsRegistryIgnoresForeignNonDirectoryEntries(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "skills")
+	plan := identityPlan(root)
+	if err := os.MkdirAll(plan.ActivePath, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	writeIdentityFile(t, filepath.Join(plan.ActivePath, ".claude-plugin", "plugin.json"), `{"name":"demo"}`)
+	if err := os.WriteFile(filepath.Join(root, ".DS_Store"), []byte{0}, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	managed := &domain.ClientBinding{NativeObjects: []domain.NativeObjectOwnership{{Kind: "managed_package_directory", ManagedDigest: "sha256:owned"}}}
+	observer := NativeIdentityObserver{Stager: acceptingPackageVerifier{}}
+	observation, err := observer.ObservePreparedIdentity(context.Background(), domain.DetectedClient{ClientID: domain.ClientClaude}, plan, managed)
+	if err != nil || observation.State != domain.NativeIdentityManaged {
+		t.Fatalf("foreign .DS_Store blocked Claude skill classification: observation = %+v, err = %v", observation, err)
+	}
+
+	// A directory that legitimately has no manifest and no SKILL.md is still
+	// genuinely ambiguous and must remain refused (unchanged behavior).
+	if err := os.MkdirAll(filepath.Join(root, "unrelated-empty-dir"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	observation, err = observer.ObservePreparedIdentity(context.Background(), domain.DetectedClient{ClientID: domain.ClientClaude}, plan, managed)
+	if observation.State != domain.NativeIdentityIndeterminate {
+		t.Fatalf("ambiguous foreign directory was not refused: observation = %+v, err = %v", observation, err)
 	}
 }
 
@@ -83,6 +189,55 @@ func TestNativeIdentityCodexUsesExactCLIRegistryIdentity(t *testing.T) {
 	observation, err = (NativeIdentityObserver{Runner: runner}).ObserveNativeIdentity(context.Background(), domain.DetectedClient{ClientID: domain.ClientCodex}, plan, nil)
 	if err != nil || observation.State != domain.NativeIdentityUnmanaged {
 		t.Fatalf("occupied managed namespace observation = %+v, err = %v", observation, err)
+	}
+}
+
+// TestNativeIdentityCodexAbsentRecoveryMatchesRealCLIFailureThenSucceedsAfterRestoration
+// reproduces run05's exact defect against the real production observer: Codex's
+// own `plugin list --json` fails outright (its configured local marketplace
+// source is absent) before the managed directory is reconstructed, then
+// succeeds once the directory exists again. The caller (usecase/group.go)
+// relies on ObservePreparedIdentity never invoking this failing command and on
+// ObserveNativeIdentity's error carrying a bounded, sanitized excerpt of the
+// CLI's own output for diagnosis.
+func TestNativeIdentityCodexAbsentRecoveryMatchesRealCLIFailureThenSucceedsAfterRestoration(t *testing.T) {
+	t.Parallel()
+	plan := identityPlan(filepath.Join(t.TempDir(), "prepared"))
+	plan.NativeRegistryExecutable = "/test/bin/codex"
+	marketplace := managedMarketplaceName(plan.PhysicalArtifactID)
+	managed := &domain.ClientBinding{TargetLocator: plan.ActivePath, NativeObjects: []domain.NativeObjectOwnership{{Kind: "managed_package_directory", ManagedDigest: "sha256:owned"}}}
+	client := domain.DetectedClient{ClientID: domain.ClientCodex}
+
+	failingRunner := &identityRunner{result: legacyports.CommandResult{ExitCode: 1, Stderr: []byte("Error: failed to load marketplace snapshot for " + marketplace + "\n")}}
+	observer := NativeIdentityObserver{Runner: failingRunner, Stager: acceptingPackageVerifier{}}
+
+	// The recovery-eligibility gate (usecase's preparedIdentityObservation) must
+	// never invoke this failing command at all.
+	prepared, err := observer.ObservePreparedIdentity(context.Background(), client, plan, managed)
+	if err != nil || prepared.State != domain.NativeIdentityAbsent {
+		t.Fatalf("prepared observation = %+v, err = %v", prepared, err)
+	}
+	if len(failingRunner.commands) != 0 {
+		t.Fatalf("prepared observation launched the native CLI: %v", failingRunner.commands)
+	}
+
+	// The full, CLI-inclusive check must surface the CLI's own failure with a
+	// bounded diagnostic excerpt, and must not be mistaken for proof of absence.
+	_, err = observer.ObserveNativeIdentity(context.Background(), client, plan, managed)
+	if err == nil {
+		t.Fatal("failing native registry command was not surfaced as an error")
+	}
+	if !strings.Contains(err.Error(), "exit code 1") || !strings.Contains(err.Error(), marketplace) {
+		t.Fatalf("native discovery error missing bounded diagnostic: %v", err)
+	}
+
+	// Once the directory is reconstructed and the CLI reports it, the same
+	// observer call must confirm managed ownership with the recorded digest.
+	writeIdentityFile(t, filepath.Join(plan.ActivePath, "plugin.json"), `{"name":"demo"}`)
+	failingRunner.result = legacyports.CommandResult{Stdout: []byte(`{"installed":[{"pluginId":"demo@` + marketplace + `","name":"demo","marketplaceName":"` + marketplace + `","installed":true,"enabled":true}]}`)}
+	observation, err := observer.ObserveNativeIdentity(context.Background(), client, plan, managed)
+	if err != nil || observation.State != domain.NativeIdentityManaged || observation.Digest != "sha256:owned" {
+		t.Fatalf("post-restoration observation = %+v, err = %v", observation, err)
 	}
 }
 
@@ -143,6 +298,7 @@ func TestCopilotRegistryFindingRequiresExactNativeIdentity(t *testing.T) {
 		want registryFinding
 	}{
 		{name: "exact", body: "Installed plugins:\n  • demo@" + marketplace + " (v1.0.0)\n", want: registryExpected},
+		{name: "wrong_version", body: "Installed plugins:\n  • demo@" + marketplace + " (v1.0.1)\n", want: registryIndeterminate},
 		{name: "unrelated", body: "Installed plugins:\n  • other@" + marketplace + " (v1.0.0)\n", want: registryClear},
 		{name: "duplicate", body: "Installed plugins:\n  • demo@" + marketplace + " (v1.0.0)\n  • demo@" + marketplace + " (v1.0.0)\n", want: registryIndeterminate},
 		{name: "absent_short", body: "No plugins installed.\n", want: registryIndeterminate},
@@ -156,10 +312,68 @@ func TestCopilotRegistryFindingRequiresExactNativeIdentity(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			if got := copilotRegistryFinding([]byte(test.body), "demo", marketplace, true); got != test.want {
+			if got := copilotRegistryFinding([]byte(test.body), "demo", marketplace, "1.0.0", true); got != test.want {
 				t.Fatalf("finding = %d, want %d", got, test.want)
 			}
 		})
+	}
+}
+
+func TestCopilotLiveRegistryFindingRequiresExactIdentityStatusAndPath(t *testing.T) {
+	t.Parallel()
+	marketplace := "agentplugins-demo-0123456789ab"
+	path := filepath.Join(t.TempDir(), "managed", "demo")
+	header := copilotLiveHeader + "\n"
+	entry := func(name, version, status, from string) string {
+		return header + "  • " + name + "@" + marketplace + " (v" + version + ") (" + status + ")\n      from " + from + "\n"
+	}
+	tests := []struct {
+		name  string
+		body  string
+		owned bool
+		want  registryFinding
+	}{
+		{name: "managed", body: entry("demo", "1.7.0-uap.1", "enabled", path), owned: true, want: registryExpected},
+		{name: "managed with unrelated", body: entry("other", "9.9.9", "enabled", path) + strings.TrimPrefix(entry("demo", "1.7.0-uap.1", "enabled", path), header), owned: true, want: registryExpected},
+		{name: "managed CRLF", body: strings.ReplaceAll(entry("demo", "1.7.0-uap.1", "enabled", path), "\n", "\r\n"), owned: true, want: registryExpected},
+		{name: "unowned collision", body: entry("demo", "1.7.0-uap.1", "enabled", path), want: registryCollision},
+		{name: "unrelated", body: entry("other", "9.9.9", "enabled", path), owned: true, want: registryClear},
+		{name: "disabled", body: entry("demo", "1.7.0-uap.1", "disabled", path), owned: true, want: registryIndeterminate},
+		{name: "wrong version", body: entry("demo", "1.7.0-uap.0", "enabled", path), owned: true, want: registryIndeterminate},
+		{name: "wrong path", body: entry("demo", "1.7.0-uap.1", "enabled", filepath.Join(t.TempDir(), "other")), owned: true, want: registryIndeterminate},
+		{name: "dot segment path", body: entry("demo", "1.7.0-uap.1", "enabled", filepath.Dir(path)+string(filepath.Separator)+"alias"+string(filepath.Separator)+".."+string(filepath.Separator)+filepath.Base(path)), owned: true, want: registryIndeterminate},
+		{name: "duplicate", body: entry("demo", "1.7.0-uap.1", "enabled", path) + strings.TrimPrefix(entry("demo", "1.7.0-uap.1", "enabled", path), header), owned: true, want: registryIndeterminate},
+		{name: "missing from", body: header + "  • demo@" + marketplace + " (v1.7.0-uap.1) (enabled)\n", owned: true, want: registryIndeterminate},
+		{name: "extra suffix", body: entry("demo", "1.7.0-uap.1", "enabled", path) + "unexpected\n", owned: true, want: registryIndeterminate},
+		{name: "ansi prefix", body: "\x1b[32m" + entry("demo", "1.7.0-uap.1", "enabled", path), owned: true, want: registryIndeterminate},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := copilotRegistryFindingAt([]byte(test.body), "demo", marketplace, "1.7.0-uap.1", path, test.owned); got != test.want {
+				t.Fatalf("finding=%d want=%d", got, test.want)
+			}
+		})
+	}
+}
+
+func TestNativeIdentityCopilotAcceptsExactLiveManagedRegistration(t *testing.T) {
+	t.Parallel()
+	plan := identityPlan(filepath.Join(t.TempDir(), "prepared"))
+	plan.DeclaredVersion = "1.7.0-uap.1"
+	plan.NativeRegistryExecutable = "/test/bin/copilot"
+	if err := os.MkdirAll(plan.ActivePath, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	writeIdentityFile(t, filepath.Join(plan.ActivePath, "plugin.json"), `{"name":"demo"}`)
+	marketplace := managedMarketplaceName(plan.PhysicalArtifactID)
+	managed := &domain.ClientBinding{TargetLocator: plan.ActivePath, NativeObjects: []domain.NativeObjectOwnership{{Kind: "managed_package_directory", ManagedDigest: "sha256:owned"}}}
+	listing := copilotLiveHeader + "\n  • demo@" + marketplace + " (v1.7.0-uap.1) (enabled)\n      from " + plan.ActivePath + "\n"
+	runner := &identityRunner{result: legacyports.CommandResult{Stdout: []byte(listing)}}
+	observation, err := (NativeIdentityObserver{Runner: runner, Stager: acceptingPackageVerifier{}}).ObserveNativeIdentity(
+		context.Background(), domain.DetectedClient{ClientID: domain.ClientCopilot}, plan, managed,
+	)
+	if err != nil || observation.State != domain.NativeIdentityManaged || !observation.NativeDiscoveryReconciled {
+		t.Fatalf("observation=%+v err=%v", observation, err)
 	}
 }
 
@@ -288,6 +502,7 @@ func identityPlan(root string) domain.DeliveryPlan {
 	artifact := "demo-0123456789ab"
 	return domain.DeliveryPlan{
 		DeclaredName:       "demo",
+		DeclaredVersion:    "1.0.0",
 		PhysicalArtifactID: artifact,
 		TargetRoot:         root,
 		ActivePath:         filepath.Join(root, artifact),

@@ -17,8 +17,12 @@ func TestPagesSite_CombinesLandingRootAndDocsSubpath(t *testing.T) {
 	mustContain(t, workflow, "name: Pages")
 	mustContain(t, workflow, "working-directory: landing")
 	mustContain(t, workflow, "pnpm generate")
-	mustContain(t, workflow, "NUXT_APP_BASE_URL: /plugin-kit-ai/")
-	mustContain(t, workflow, "DOCS_BASE_PATH: /plugin-kit-ai/docs/")
+	mustContain(t, workflow, "NUXT_APP_BASE_URL: /universal-agent-plugins/")
+	mustContain(t, workflow, "DOCS_BASE_PATH: /universal-agent-plugins/docs/")
+	mustContain(t, workflow, "go run ./cmd/agentplugins-registry-mirror")
+	mustContain(t, workflow, "MIRROR_METADATA.json")
+	mustContain(t, workflow, "uap-registry-mirror")
+	mustContain(t, workflow, "777genius/universal-agent-plugins-registry")
 	mustContain(t, workflow, "pnpm run build:pages")
 	mustContain(t, workflow, "path: .pages-dist")
 
@@ -63,27 +67,44 @@ func TestPagesSite_CombinesLandingRootAndDocsSubpath(t *testing.T) {
 	site := string(siteBody)
 	mustContain(t, site, `export const docsBasePath = process.env.DOCS_BASE_PATH || "/plugin-kit-ai/docs/";`)
 
-	i18nBody, err := os.ReadFile(filepath.Join(root, "landing", "data", "i18n.ts"))
+	nuxtConfigBody, err := os.ReadFile(filepath.Join(root, "landing", "nuxt.config.ts"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	i18n := string(i18nBody)
-	mustContain(t, i18n, `'/plugins'`)
-	mustContain(t, i18n, `const pluginDetailPages =`)
-	mustContain(t, i18n, "`/plugins/${plugin.slug ?? plugin.id}`")
+	nuxtConfig := string(nuxtConfigBody)
+	mustContain(t, nuxtConfig, `'/plugins'`)
+	mustContain(t, nuxtConfig, "`/plugins/${plugin.name}`")
+	mustContain(t, nuxtConfig, `const sitemapRoutes =`)
+
+	mirrorBody, err := os.ReadFile(filepath.Join(root, "cmd", "agentplugins-registry-mirror", "main.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	mirror := string(mirrorBody)
+	mustContain(t, mirror, `"security/latest.json"`)
+	mustContain(t, mirror, `securityv1.Verify`)
+	mustContain(t, mirror, `Security sequence has conflicting authenticated bytes`)
 
 	pluginDetailPageBody, err := os.ReadFile(filepath.Join(root, "landing", "pages", "plugins", "[slug].vue"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	pluginDetailPage := string(pluginDetailPageBody)
-	mustContain(t, pluginDetailPage, `plugins.openRepository`)
-	mustContain(t, pluginDetailPage, `plugins.backToCatalog`)
+	mustContain(t, pluginDetailPage, `sourceUrl(plugin)`)
+	mustContain(t, pluginDetailPage, `aria-label="Back to plugin directory"`)
+
+	docsConfigBody, err := os.ReadFile(filepath.Join(root, "website", ".vitepress", "config", "shared.ts"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	docsConfig := string(docsConfigBody)
+	mustContain(t, docsConfig, `logo: "/icon.svg"`)
+	mustNotContain(t, docsConfig, "logo: `${docsBasePath}")
 
 	robotsBody, err := os.ReadFile(filepath.Join(root, "landing", "server", "routes", "robots.txt.ts"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	robots := string(robotsBody)
-	mustContain(t, robots, `https://777genius.github.io/plugin-kit-ai/docs/sitemap.xml`)
+	mustContain(t, robots, `https://777genius.github.io/universal-agent-plugins/docs/sitemap.xml`)
 }

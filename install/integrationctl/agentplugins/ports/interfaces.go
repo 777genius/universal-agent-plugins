@@ -43,6 +43,12 @@ type PackageLoader interface {
 	Load(context.Context, domain.LoadInput) (domain.PackageEnvelope, error)
 }
 
+// PackageSecurityEvaluator inspects the already acquired immutable snapshot.
+// It must complete before any client or managed package file is changed.
+type PackageSecurityEvaluator interface {
+	Evaluate(context.Context, domain.SecurityEvaluationInput) (domain.SecurityAssessment, error)
+}
+
 type ClientDetector interface {
 	Detect(context.Context) ([]domain.DetectedClient, error)
 }

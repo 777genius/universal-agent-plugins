@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue';
 import {
   mdiPackageVariantClosed,
   mdiAccountGroupOutline,
@@ -9,8 +9,8 @@ import {
   mdiCodeTags,
   mdiArrowTopRight,
   mdiHelpCircleOutline,
-  mdiFrequentlyAskedQuestions
-} from '@mdi/js'
+  mdiFrequentlyAskedQuestions,
+} from '@mdi/js';
 
 const { content } = useLandingContent();
 const { t } = useI18n();
@@ -48,7 +48,7 @@ const faqLabelById = computed<Record<string, string>>(() => ({
 }));
 
 const faqQuickLinks = computed(() => {
-  const docsBase = `https://777genius.github.io/plugin-kit-ai/docs/${locale.value}`;
+  const docsBase = `https://777genius.github.io/universal-agent-plugins/docs/${locale.value}`;
 
   return [
     {
@@ -65,7 +65,7 @@ const faqQuickLinks = computed(() => {
       title: t('faq.quickLinks.boundaryTitle'),
       body: t('faq.quickLinks.boundaryBody'),
       href: `${docsBase}/reference/support-boundary.html`,
-    }
+    },
   ];
 });
 </script>
@@ -96,10 +96,16 @@ const faqQuickLinks = computed(() => {
               <v-expansion-panel-title class="faq-section__panel-title">
                 <div class="faq-section__panel-header">
                   <div class="faq-section__panel-icon-wrap">
-                    <v-icon size="22" class="faq-section__panel-icon" :icon="faqIconById[item.id] || mdiHelpCircleOutline" />
+                    <v-icon
+                      size="22"
+                      class="faq-section__panel-icon"
+                      :icon="faqIconById[item.id] || mdiHelpCircleOutline"
+                    />
                   </div>
                   <div class="faq-section__panel-copy">
-                    <span class="faq-section__panel-label">{{ faqLabelById[item.id] || t('faq.labels.default') }}</span>
+                    <span class="faq-section__panel-label">{{
+                      faqLabelById[item.id] || t('faq.labels.default')
+                    }}</span>
                     <span class="faq-section__panel-question">{{ item.question }}</span>
                   </div>
                 </div>
@@ -115,7 +121,11 @@ const faqQuickLinks = computed(() => {
         <div class="faq-section__decoration">
           <div class="faq-section__guide-card">
             <div class="faq-section__guide-badge">
-              <v-icon size="18" class="faq-section__guide-badge-icon" :icon="mdiFrequentlyAskedQuestions" />
+              <v-icon
+                size="18"
+                class="faq-section__guide-badge-icon"
+                :icon="mdiFrequentlyAskedQuestions"
+              />
               <span>{{ t('faq.quickLinks.badge') }}</span>
             </div>
             <h3 class="faq-section__guide-title">{{ t('faq.quickLinks.title') }}</h3>
@@ -195,7 +205,10 @@ const faqQuickLinks = computed(() => {
   background: rgba(10, 10, 15, 0.8) !important;
   border: 1px solid rgba(0, 240, 255, 0.08) !important;
   backdrop-filter: blur(12px);
-  transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
+  transition:
+    transform 0.3s ease,
+    box-shadow 0.3s ease,
+    border-color 0.3s ease;
   overflow: hidden;
   animation: faqFadeIn 0.5s ease both;
   animation-delay: var(--delay, 0s);
@@ -362,7 +375,10 @@ const faqQuickLinks = computed(() => {
   color: inherit;
   background: rgba(255, 255, 255, 0.02);
   border: 1px solid rgba(0, 240, 255, 0.08);
-  transition: transform 0.25s ease, border-color 0.25s ease, background 0.25s ease;
+  transition:
+    transform 0.25s ease,
+    border-color 0.25s ease,
+    background 0.25s ease;
 }
 
 .faq-section__guide-link:hover {
@@ -396,8 +412,14 @@ const faqQuickLinks = computed(() => {
 }
 
 @keyframes faqFadeIn {
-  from { opacity: 0; transform: translateY(16px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 /* Light Theme */
@@ -473,23 +495,57 @@ const faqQuickLinks = computed(() => {
 }
 
 @media (max-width: 960px) {
-  .faq-section__header { margin-bottom: 40px; }
-  .faq-section__title { font-size: 1.85rem; }
-  .faq-section__subtitle { font-size: 1rem; }
-  .faq-section__content { grid-template-columns: 1fr; gap: 40px; }
-  .faq-section__guide-card { position: static; }
+  .faq-section__header {
+    margin-bottom: 40px;
+  }
+  .faq-section__title {
+    font-size: 1.85rem;
+  }
+  .faq-section__subtitle {
+    font-size: 1rem;
+  }
+  .faq-section__content {
+    grid-template-columns: 1fr;
+    gap: 40px;
+  }
+  .faq-section__guide-card {
+    position: static;
+  }
 }
 
 @media (max-width: 600px) {
-  .faq-section__header { margin-bottom: 32px; }
-  .faq-section__title { font-size: 1.6rem; }
-  .faq-section__panel-title { padding: 16px 18px !important; }
-  .faq-section__panel-icon-wrap { width: 36px; height: 36px; border-radius: 10px; }
-  .faq-section__panel-header { gap: 12px; }
-  .faq-section__panel-label { font-size: 0.66rem; letter-spacing: 0.12em; }
-  .faq-section__panel-question { font-size: 0.92rem; }
-  :deep(.faq-section__panel-text .v-expansion-panel-text__wrapper) { padding: 0 18px 16px 18px !important; }
-  .faq-section__answer { font-size: 0.9rem; }
-  .faq-section__guide-card { padding: 20px; }
+  .faq-section__header {
+    margin-bottom: 32px;
+  }
+  .faq-section__title {
+    font-size: 1.6rem;
+  }
+  .faq-section__panel-title {
+    padding: 16px 18px !important;
+  }
+  .faq-section__panel-icon-wrap {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+  }
+  .faq-section__panel-header {
+    gap: 12px;
+  }
+  .faq-section__panel-label {
+    font-size: 0.66rem;
+    letter-spacing: 0.12em;
+  }
+  .faq-section__panel-question {
+    font-size: 0.92rem;
+  }
+  :deep(.faq-section__panel-text .v-expansion-panel-text__wrapper) {
+    padding: 0 18px 16px 18px !important;
+  }
+  .faq-section__answer {
+    font-size: 0.9rem;
+  }
+  .faq-section__guide-card {
+    padding: 20px;
+  }
 }
 </style>

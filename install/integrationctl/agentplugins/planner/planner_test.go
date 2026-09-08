@@ -279,6 +279,28 @@ func TestOnlyChatGPTProjectsRegisteredAppBindings(t *testing.T) {
 	}
 }
 
+func TestPlannerReadsNewClientCapabilitiesFromRegistry(t *testing.T) {
+	t.Parallel()
+	claude, ok := Capabilities(domain.ClientClaude)
+	if !ok || claude.PackageMode != domain.PackageProjection || claude.ActivationMode != domain.ActivationAutomatic || claude.SkillSupport != domain.SupportProjected || claude.MCPTransports["stdio"] != domain.SupportProjected {
+		t.Fatalf("Claude capabilities = %+v", claude)
+	}
+	for _, client := range []domain.ClientID{domain.ClientOpenCode, domain.ClientWindsurf} {
+		capabilities, ok := Capabilities(client)
+		if !ok || capabilities.PackageMode != domain.PackagePrepared || capabilities.SkillSupport != domain.SupportPrepared || capabilities.MCPTransports["stdio"] != domain.SupportPrepared {
+			t.Fatalf("%s capabilities = %+v", client, capabilities)
+		}
+	}
+	cline, ok := Capabilities(domain.ClientCline)
+	if !ok || cline.PackageMode != domain.PackageNative || cline.ActivationMode != domain.ActivationAutomatic || cline.SkillSupport != domain.SupportNative || cline.MCPTransports["stdio"] != domain.SupportNative {
+		t.Fatalf("Cline capabilities = %+v", cline)
+	}
+	gemini, ok := Capabilities(domain.ClientGemini)
+	if !ok || gemini.PackageMode != domain.PackageNative || gemini.SkillSupport != domain.SupportNative || gemini.MCPTransports["stdio"] != domain.SupportNative {
+		t.Fatalf("Gemini capabilities = %+v", gemini)
+	}
+}
+
 func TestChatGPTMCPFailsClosedWithoutValidAppBinding(t *testing.T) {
 	t.Parallel()
 	envelope := domain.PackageEnvelope{

@@ -38,17 +38,19 @@ const (
 )
 
 type Receipt struct {
-	SchemaVersion   int    `json:"schema_version"`
-	Operation       string `json:"operation"`
-	OperationID     string `json:"operation_id"`
-	ClientBindingID string `json:"client_binding_id"`
-	Sequence        int    `json:"sequence"`
-	OwnedBase       string `json:"owned_base"`
-	ActivePath      string `json:"active_path"`
-	StagingPath     string `json:"staging_path,omitempty"`
-	BackupPath      string `json:"backup_path"`
-	HadActive       bool   `json:"had_active"`
-	Phase           string `json:"phase"`
+	SchemaVersion     int    `json:"schema_version"`
+	Operation         string `json:"operation"`
+	OperationID       string `json:"operation_id"`
+	ClientBindingID   string `json:"client_binding_id"`
+	Sequence          int    `json:"sequence"`
+	OwnedBase         string `json:"owned_base"`
+	ActivePath        string `json:"active_path"`
+	StagingPath       string `json:"staging_path,omitempty"`
+	BackupPath        string `json:"backup_path"`
+	HadActive         bool   `json:"had_active"`
+	Phase             string `json:"phase"`
+	PublishedIdentity string `json:"published_identity,omitempty"`
+	PublishedDigest   string `json:"published_digest,omitempty"`
 }
 
 type Input struct {
@@ -59,6 +61,14 @@ type Input struct {
 	ActivePath      string
 	StagingPath     string
 	Remove          bool
+	// RequireAbsent rejects the whole operation, before any journal write or
+	// filesystem mutation, if ActivePath already exists. It exists for a caller
+	// reconstructing a target it has independently confirmed absent: an earlier
+	// absence check can go stale before this call runs, and normal Apply
+	// semantics would otherwise treat newly appeared content as an existing
+	// directory to back up and later discard on Commit. Publication also uses
+	// an exclusive rename so a newly appeared target is never overwritten.
+	RequireAbsent bool
 }
 
 type Manager struct {
@@ -96,7 +106,7 @@ func (manager Manager) Apply(ctx context.Context, input Input) (Receipt, error) 
 			return receipt, fmt.Errorf("move active directory to backup: %w", err)
 		}
 		if err := atomicfile.SyncDirectory(receipt.OwnedBase); err != nil {
-			return receipt, fmt.Errorf("sync owned base after backup rename: %w", err)
+			return receipt, fmt.Errorf("sync active parent after backup rename: %w", err)
 		}
 	}
 	if err := manager.inject(FaultBackupRenamed); err != nil {
@@ -117,12 +127,16 @@ func (manager Manager) Apply(ctx context.Context, input Input) (Receipt, error) 
 		return receipt, err
 	}
 	if receipt.Operation == OperationSwap {
-		if err := os.Rename(receipt.StagingPath, receipt.ActivePath); err != nil {
+		rename := os.Rename
+		if !receipt.HadActive {
+			rename = renameDirectoryExclusive
+		}
+		if err := rename(receipt.StagingPath, receipt.ActivePath); err != nil {
 			return receipt, fmt.Errorf("activate staged directory: %w", err)
 		}
 	}
-	if err := atomicfile.SyncDirectory(receipt.OwnedBase); err != nil {
-		return receipt, fmt.Errorf("sync owned base after activation rename: %w", err)
+	if err := syncReceiptParents(receipt, receipt.Operation == OperationSwap); err != nil {
+		return receipt, fmt.Errorf("sync directory swap parents after activation rename: %w", err)
 	}
 	if err := manager.inject(FaultActivationApplied); err != nil {
 		return receipt, err
@@ -161,7 +175,7 @@ func (manager Manager) Commit(ctx context.Context, receipt Receipt) error {
 			return fmt.Errorf("remove committed directory backup: %w", err)
 		}
 		if err := atomicfile.SyncDirectory(receipt.OwnedBase); err != nil {
-			return fmt.Errorf("sync owned base after backup cleanup: %w", err)
+			return fmt.Errorf("sync active parent after backup cleanup: %w", err)
 		}
 	}
 	if err := manager.inject(FaultBackupRemoved); err != nil {
@@ -198,8 +212,8 @@ func (manager Manager) Rollback(ctx context.Context, receipt Receipt) error {
 	if err := manager.restoreOld(receipt); err != nil {
 		return err
 	}
-	if err := atomicfile.SyncDirectory(receipt.OwnedBase); err != nil {
-		return fmt.Errorf("sync owned base after rollback: %w", err)
+	if err := syncReceiptParents(receipt, receipt.Operation == OperationSwap); err != nil {
+		return fmt.Errorf("sync directory swap parents after rollback: %w", err)
 	}
 	receipt.Phase = PhaseRolledBack
 	if err := manager.save(receipt); err != nil {
@@ -310,8 +324,8 @@ func (manager Manager) newReceipt(input Input) (Receipt, error) {
 			return Receipt{}, err
 		}
 		stagingPath = filepath.Clean(stagingPath)
-		if filepath.Dir(stagingPath) != ownedBase || activePath == stagingPath {
-			return Receipt{}, fmt.Errorf("active and staging paths must be distinct direct children of owned base")
+		if activePath == stagingPath {
+			return Receipt{}, fmt.Errorf("active and staging paths must be distinct")
 		}
 	}
 	if filepath.Dir(activePath) != ownedBase {
@@ -321,7 +335,7 @@ func (manager Manager) newReceipt(input Input) (Receipt, error) {
 		return Receipt{}, fmt.Errorf("unsafe active directory: %w", err)
 	}
 	if operation == OperationSwap {
-		if err := pathpolicy.RequireContainedChild(ownedBase, stagingPath); err != nil {
+		if err := validateStagingPath(ownedBase, stagingPath); err != nil {
 			return Receipt{}, fmt.Errorf("unsafe staging directory: %w", err)
 		}
 		stagingInfo, statErr := os.Lstat(stagingPath)
@@ -341,6 +355,9 @@ func (manager Manager) newReceipt(input Input) (Receipt, error) {
 	} else if !os.IsNotExist(activeErr) {
 		return Receipt{}, activeErr
 	}
+	if input.RequireAbsent && hadActive {
+		return Receipt{}, fmt.Errorf("active path unexpectedly exists; concurrent modification detected")
+	}
 	sum := sha256.Sum256([]byte(input.OperationID))
 	backupPath := filepath.Join(ownedBase, ".agentplugins-backup-"+hex.EncodeToString(sum[:8]))
 	if err := pathpolicy.RequireContainedChild(ownedBase, backupPath); err != nil {
@@ -351,7 +368,15 @@ func (manager Manager) newReceipt(input Input) (Receipt, error) {
 	} else if !os.IsNotExist(err) {
 		return Receipt{}, err
 	}
+	publishedIdentity, publishedDigest := "", ""
+	if !hadActive && operation == OperationSwap {
+		publishedIdentity, publishedDigest, err = publicationProof(stagingPath)
+		if err != nil {
+			return Receipt{}, fmt.Errorf("capture staged ownership: %w", err)
+		}
+	}
 	return Receipt{
+		PublishedIdentity: publishedIdentity, PublishedDigest: publishedDigest,
 		SchemaVersion:   receiptSchemaVersion,
 		Operation:       operation,
 		OperationID:     input.OperationID,
@@ -394,11 +419,52 @@ func (manager Manager) validateReceipt(receipt Receipt) error {
 		return fmt.Errorf("remove receipt cannot contain staging path")
 	}
 	for label, path := range paths {
+		if label == "staging" {
+			if err := validateStagingPath(receipt.OwnedBase, path); err != nil {
+				return fmt.Errorf("unsafe staging path: %w", err)
+			}
+			continue
+		}
 		if filepath.Dir(filepath.Clean(path)) != filepath.Clean(receipt.OwnedBase) {
 			return fmt.Errorf("%s path is not a direct child of owned base", label)
 		}
 		if err := pathpolicy.RequireContainedChild(receipt.OwnedBase, path); err != nil {
 			return fmt.Errorf("unsafe %s path: %w", label, err)
+		}
+	}
+	return nil
+}
+
+func validateStagingPath(ownedBase, stagingPath string) error {
+	ownedBase, stagingPath = filepath.Clean(ownedBase), filepath.Clean(stagingPath)
+	stagingParent := filepath.Dir(stagingPath)
+	if stagingParent == ownedBase {
+		return pathpolicy.RequireContainedChild(ownedBase, stagingPath)
+	}
+	if !strings.HasPrefix(filepath.Base(stagingPath), ".agentplugins-staging-") {
+		return fmt.Errorf("cross-parent staging path does not have the reserved leaf prefix")
+	}
+	ownedParent := filepath.Dir(ownedBase)
+	if stagingParent != ownedParent {
+		return fmt.Errorf("staging path is not a child of owned base or its exact parent")
+	}
+	return pathpolicy.RequireContainedChild(ownedParent, stagingPath)
+}
+
+func syncReceiptParents(receipt Receipt, includeStaging bool) error {
+	parents := []string{filepath.Clean(receipt.OwnedBase)}
+	if includeStaging {
+		parents = append(parents, filepath.Dir(receipt.StagingPath))
+	}
+	seen := map[string]bool{}
+	for _, parent := range parents {
+		parent = filepath.Clean(parent)
+		if seen[parent] {
+			continue
+		}
+		seen[parent] = true
+		if err := atomicfile.SyncDirectory(parent); err != nil {
+			return err
 		}
 	}
 	return nil
@@ -445,15 +511,7 @@ func (manager Manager) restoreOld(receipt Receipt) error {
 		return fmt.Errorf("inspect backup directory during rollback: %w", err)
 	}
 	if !receipt.HadActive {
-		if backupExists {
-			return fmt.Errorf("unexpected backup for operation without an old active directory")
-		}
-		if activeExists {
-			if err := removeOwnedDirectory(receipt.OwnedBase, receipt.ActivePath); err != nil {
-				return fmt.Errorf("remove activated directory during rollback: %w", err)
-			}
-		}
-		return nil
+		return manager.rollbackAbsent(receipt, activeExists, backupExists)
 	}
 	if !backupExists {
 		if activeExists {

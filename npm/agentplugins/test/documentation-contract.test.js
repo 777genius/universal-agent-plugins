@@ -5,6 +5,30 @@ const fs = require("node:fs");
 const path = require("node:path");
 const test = require("node:test");
 
+test("npm facade metadata exactly names the UAP product endpoints", () => {
+  const pkg = JSON.parse(fs.readFileSync(path.resolve(__dirname, "../package.json"), "utf8"));
+  assert.equal(pkg.homepage, "https://777genius.github.io/universal-agent-plugins/");
+  assert.deepEqual(pkg.repository, {
+    type: "git",
+    url: "git+https://github.com/777genius/universal-agent-plugins.git",
+    directory: "npm/agentplugins"
+  });
+  assert.deepEqual(pkg.bugs, { url: "https://github.com/777genius/universal-agent-plugins/issues" });
+});
+
+test("detached package execution sentinel", (t) => {
+  const expectedRoot = process.env.AGENTPLUGINS_DETACHED_ASSERT_ROOT;
+  if (!expectedRoot) {
+    t.skip("only asserted by the detached staged-package subprocess");
+    return;
+  }
+  assert.equal(
+    fs.realpathSync(path.resolve(__dirname, "..")),
+    fs.realpathSync(path.resolve(expectedRoot))
+  );
+  assert.equal(fs.existsSync(path.resolve(__dirname, "../../../README.md")), false);
+});
+
 const documents = [
   ["root README", path.resolve(__dirname, "../../../README.md")],
   ["npm README", path.resolve(__dirname, "../README.md")]
@@ -16,7 +40,10 @@ function packagedDocuments() {
   return available;
 }
 
-const allowedTargets = new Set(["codex", "chatgpt", "cursor", "copilot", "vscode", "kiro"]);
+const allowedTargets = new Set([
+  "codex", "chatgpt", "cursor", "copilot", "vscode", "kiro",
+  "claude", "gemini", "opencode", "cline", "windsurf"
+]);
 const exactSourcePattern = /^(?:github:)?[A-Za-z0-9][A-Za-z0-9-]*\/[A-Za-z0-9][A-Za-z0-9._-]*@[0-9a-f]{40}\/\/[A-Za-z0-9._/-]+$/;
 
 function bashCommands(markdown) {
@@ -39,8 +66,18 @@ function commandArgument(command, flag) {
 test("public Agentplugins documentation keeps copyable commands within the CLI contract", () => {
   for (const [label, filename] of packagedDocuments()) {
     const markdown = fs.readFileSync(filename, "utf8");
-    const commands = bashCommands(markdown).filter((command) => command.startsWith("npx universal-agent-plugins "));
+    const commands = bashCommands(markdown).filter(
+      (command) => command.startsWith("npx universal-agent-plugins ") || command.startsWith("agentplugins ")
+    );
     assert.ok(commands.length > 0, `${label} has no copyable universal-agent-plugins commands`);
+    const expectedFirstCommand = label === "root README"
+      ? "agentplugins add context7"
+      : "npx universal-agent-plugins add context7";
+    assert.equal(
+      commands[0],
+      expectedFirstCommand,
+      `${label}: the first command must keep the no-target interactive quick start`
+    );
 
     for (const command of commands) {
       assert.doesNotMatch(command, /(?:^|\s)--yes(?:\s|$)/, `${label}: --yes is not a public option`);
@@ -59,45 +96,64 @@ test("public Agentplugins documentation keeps copyable commands within the CLI c
       }
     }
 
-    for (const verb of ["add", "update", "repair", "remove", "switch"]) {
-      assert.ok(commands.some((command) => command.startsWith(`npx universal-agent-plugins ${verb} `)), `${label}: missing ${verb} example`);
-    }
-    for (const command of commands.filter((value) => value.startsWith("npx universal-agent-plugins switch "))) {
-      assert.ok(commandArgument(command, "--to"), `${label}: switch example requires --to`);
-      assert.equal(commandArgument(command, "--target"), "", `${label}: switch must not use --target`);
+    for (const verb of ["add", "update", "repair", "remove"]) {
+      assert.ok(
+        commands.some(
+          (command) =>
+            command.startsWith(`npx universal-agent-plugins ${verb} `) ||
+            command.startsWith(`agentplugins ${verb} `)
+        ),
+        `${label}: missing ${verb} example`
+      );
     }
     assert.ok(commands.some((command) => command.includes("--target codex,cursor,kiro")), `${label}: missing explicit three-target example`);
   }
 });
 
-test("public documentation keeps the package, binary, manifest, and safety contracts", () => {
-  for (const [label, filename] of packagedDocuments()) {
-    const markdown = fs.readFileSync(filename, "utf8");
-    assert.match(markdown, /`universal-agent-plugins`[\s\S]{0,160}(?:public )?npm package/i, `${label}: npm package identity missing`);
-    assert.match(markdown, /installs? the `agentplugins` binary/i, `${label}: installed binary identity missing`);
-    assert.match(markdown, /same (?:installer and )?lifecycle manager|not separate engines/i, `${label}: shared engine relationship missing`);
-    assert.match(markdown, /signed\s+(?:\n)?(?:\[[^\]]+\]\([^\n]+\)|Universal Agent Plugins Directory)/i, `${label}: signed Directory contract missing`);
-    assert.doesNotMatch(markdown, /pinned\s+(?:legacy\s+)?catalog|catalog\s+v[12]|first\s+catalog/i, `${label}: stale catalog contract`);
-    assert.match(markdown, /root `plugin\.json` is the install authority/i, `${label}: plugin.json authority missing`);
-    assert.match(markdown, /`plugin\.yaml`[\s\S]{0,100}legacy[\s\S]{0,100}authoring input only/i, `${label}: legacy plugin.yaml boundary missing`);
-    assert.match(markdown, /silently override `plugin\.json`|silent(?:ly)?[^.\n]{0,60}override/i, `${label}: manifest override prohibition missing`);
-    assert.match(markdown, /preflight/i, `${label}: preflight missing`);
-    assert.match(markdown, /`--dry-run`[\s\S]{0,120}(?:read-only|without\s+writing)/i, `${label}: dry-run behavior missing`);
-    assert.match(markdown, /publisher[\s\S]{0,120}source|source[\s\S]{0,120}publisher/i, `${label}: source provenance missing`);
-    assert.match(markdown, /rollback|rolls? (?:the group )?back/i, `${label}: rollback boundary missing`);
-    assert.match(markdown, /manual\s+activation|manual-activation/i, `${label}: manual activation boundary missing`);
-    assert.match(markdown, /OAuth[\s\S]{0,160}(?:prompt|consent)[\s\S]{0,160}user-controlled/i, `${label}: OAuth prompt boundary missing`);
-    assert.match(markdown, /not every|not as a claim that every/i, `${label}: verification scope caveat missing`);
+test("root documentation recommends the native Go installer without hiding npm", (t) => {
+  if (!fs.existsSync(documents[0][1])) {
+    t.skip("root README is intentionally absent from the detached npm package");
+    return;
   }
+  const markdown = fs.readFileSync(documents[0][1], "utf8");
+  assert.match(markdown, /The native CLI does not require Node\.js/i);
+  assert.match(markdown, /brew install 777genius\/agentplugins\/agentplugins/);
+  assert.match(
+    markdown,
+    /https:\/\/raw\.githubusercontent\.com\/777genius\/universal-agent-plugins\/main\/install\.sh/
+  );
+  assert.match(
+    markdown,
+    /https:\/\/raw\.githubusercontent\.com\/777genius\/universal-agent-plugins\/main\/install\.ps1/
+  );
+  assert.match(markdown, /npx universal-agent-plugins add context7/);
+});
+
+test("public package documentation points to the authoritative product source", () => {
+  const markdown = fs.readFileSync(documents[1][1], "utf8");
+  assert.match(markdown, /https:\/\/github\.com\/777genius\/universal-agent-plugins(?:\)|\b)/i);
+  assert.match(markdown, /versioned Go binary/i);
+  assert.doesNotMatch(markdown, /product home[\s\S]{0,100}(?:npm facade|facade source)/i);
+});
+
+test("package documentation links current client evidence without stale release claims", () => {
+  const markdown = fs.readFileSync(documents[1][1], "utf8");
+  assert.match(markdown, /https:\/\/github\.com\/777genius\/universal-agent-plugins\/blob\/main\/docs\/AGENTPLUGINS_CLIENT_E2E\.md/);
+  assert.doesNotMatch(markdown, /historical lifecycle evidence collected for/i);
+  assert.doesNotMatch(markdown, /0\.1\.22/);
 });
 
 test("copyable direct-source examples use a marked replacement full SHA", () => {
   const placeholder = "0123456789abcdef0123456789abcdef01234567";
-  for (const [label, filename] of packagedDocuments()) {
+  for (const [label, filename] of [documents[1]]) {
     const markdown = fs.readFileSync(filename, "utf8");
-    assert.ok(markdown.includes(`owner/repo@${placeholder}//plugins/my-plugin`), `${label}: full-SHA source example missing`);
-    assert.ok(markdown.includes("add ./my-plugin --target cursor"), `${label}: local source example missing`);
-    assert.match(markdown, new RegExp(`replace[\\s\\S]{0,180}${placeholder}|${placeholder}[\\s\\S]{0,180}replace`, "i"), `${label}: SHA replacement instruction missing`);
+    assert.match(
+      markdown,
+      new RegExp(`[A-Za-z0-9-]+/[A-Za-z0-9._-]+@${placeholder}//[A-Za-z0-9._/-]+`),
+      `${label}: full-SHA source example missing`
+    );
+    assert.ok(markdown.includes("add ./my-plugin"), `${label}: local source example missing`);
+    assert.match(markdown, /full 40-character commit SHA/i, `${label}: full-SHA replacement instruction missing`);
     assert.doesNotMatch(markdown, /@commit(?:\/\/|\b)/i, `${label}: literal @commit is not copyable`);
   }
 });

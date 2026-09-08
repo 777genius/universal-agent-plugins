@@ -4,6 +4,12 @@ import { docsBaseUrl, websiteRoot } from "./config/site.mjs";
 
 const distRoot = path.join(websiteRoot, "dist");
 const englishRoot = path.join(distRoot, "en");
+const sitemapUrl = new URL("sitemap.xml", docsBaseUrl).toString();
+
+fs.writeFileSync(
+  path.join(distRoot, "robots.txt"),
+  ["User-agent: *", "Allow: /", `Sitemap: ${sitemapUrl}`, ""].join("\n")
+);
 
 for (const filePath of listHtmlFiles(englishRoot)) {
   const relative = path.relative(englishRoot, filePath).replace(/\\/g, "/");

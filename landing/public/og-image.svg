@@ -3,7 +3,7 @@
   <rect x="34" y="34" width="1132" height="562" rx="32" fill="url(#paint0_linear)" fill-opacity="0.08" stroke="#FFFFFF" stroke-opacity="0.08"/>
   <circle cx="1040" cy="110" r="120" fill="#00F0FF" fill-opacity="0.12"/>
   <circle cx="1080" cy="150" r="180" fill="#39FF14" fill-opacity="0.08"/>
-  <text x="88" y="182" fill="#F8FAFC" font-family="Inter, Arial, sans-serif" font-size="74" font-weight="800">plugin-kit-ai</text>
+  <text x="88" y="182" fill="#F8FAFC" font-family="Inter, Arial, sans-serif" font-size="74" font-weight="800">Universal Agent Plugins</text>
   <text x="88" y="254" fill="#A5B4FC" font-family="JetBrains Mono, monospace" font-size="24" font-weight="600">multi-agent plugin toolkit</text>
   <text x="88" y="338" fill="#E2E8F0" font-family="Inter, Arial, sans-serif" font-size="54" font-weight="700">Build a plugin once.</text>
   <text x="88" y="404" fill="#E2E8F0" font-family="Inter, Arial, sans-serif" font-size="54" font-weight="700">Ship it to many AI agents.</text>

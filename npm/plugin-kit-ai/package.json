@@ -2,7 +2,7 @@
   "name": "plugin-kit-ai",
   "version": "0.0.0-development",
   "description": "Thin npm wrapper for the plugin-kit-ai CLI GitHub Releases binary",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "homepage": "https://github.com/777genius/plugin-kit-ai",
   "repository": {
     "type": "git",
@@ -25,6 +25,7 @@
     "access": "public"
   },
   "files": [
+    "LICENSE",
     "README.md",
     "bin",
     "lib"

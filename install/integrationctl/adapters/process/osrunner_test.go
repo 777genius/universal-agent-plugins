@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -71,6 +72,88 @@ func TestOSRunnerCleanExitWithoutOtherGroupMembersRemainsSuccess(t *testing.T) {
 	})
 	if err != nil || result.ExitCode != 0 || string(result.Stdout) != "clean" {
 		t.Fatalf("result = %+v error = %v, want clean natural success", result, err)
+	}
+}
+
+func TestOSRunnerBoundsStdoutAndReturnsLimitError(t *testing.T) {
+	if os.Getenv("AGENTPLUGINS_PROCESS_STDOUT_LIMIT_HELPER") == "1" {
+		fmt.Fprint(os.Stdout, "output beyond the configured bound")
+		os.Exit(0)
+	}
+	environment := append(os.Environ(), "AGENTPLUGINS_PROCESS_STDOUT_LIMIT_HELPER=1")
+	result, err := (OS{}).Run(context.Background(), ports.Command{
+		Argv: []string{os.Args[0], "-test.run=TestOSRunnerBoundsStdoutAndReturnsLimitError"}, Env: environment, StdoutLimitBytes: 6,
+	})
+	if !errors.Is(err, ErrStdoutLimitExceeded) {
+		t.Fatalf("limit error = %v", err)
+	}
+	if len(result.Stdout) > 6 {
+		t.Fatalf("bounded stdout length = %d", len(result.Stdout))
+	}
+}
+
+func TestOSRunnerStdoutLimitStopsProducerBeforeRemainingOutput(t *testing.T) {
+	marker := os.Getenv("AGENTPLUGINS_PROCESS_STDOUT_LIMIT_MARKER")
+	if marker != "" {
+		chunk := []byte(strings.Repeat("x", 1024))
+		for range 100_000 {
+			if _, err := os.Stdout.Write(chunk); err != nil {
+				os.Exit(0)
+			}
+		}
+		_ = os.WriteFile(marker, []byte("producer completed"), 0o600)
+		os.Exit(0)
+	}
+	marker = filepath.Join(t.TempDir(), "completed")
+	environment := append(os.Environ(), "AGENTPLUGINS_PROCESS_STDOUT_LIMIT_MARKER="+marker)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	_, err := (OS{}).Run(ctx, ports.Command{
+		Argv: []string{os.Args[0], "-test.run=TestOSRunnerStdoutLimitStopsProducerBeforeRemainingOutput"}, Env: environment, StdoutLimitBytes: 4096,
+	})
+	if !errors.Is(err, ErrStdoutLimitExceeded) {
+		t.Fatalf("limit error = %v", err)
+	}
+	if _, statErr := os.Stat(marker); !os.IsNotExist(statErr) {
+		t.Fatalf("producer was not stopped at output bound: %v", statErr)
+	}
+}
+
+func TestOSRunnerStdoutLimitPreservesNonzeroExit(t *testing.T) {
+	if os.Getenv("AGENTPLUGINS_PROCESS_STDOUT_LIMIT_EXIT_HELPER") == "1" {
+		_, _ = os.Stdout.Write([]byte(strings.Repeat("x", 4097)))
+		os.Exit(23)
+	}
+	environment := append(os.Environ(), "AGENTPLUGINS_PROCESS_STDOUT_LIMIT_EXIT_HELPER=1")
+	result, err := (OS{}).Run(context.Background(), ports.Command{
+		Argv: []string{os.Args[0], "-test.run=TestOSRunnerStdoutLimitPreservesNonzeroExit"}, Env: environment, StdoutLimitBytes: 16,
+	})
+	if err == nil || IsOnlyStdoutLimitExceeded(err) || !errors.Is(err, ErrStdoutLimitExceeded) {
+		t.Fatalf("combined exit/limit error = %v", err)
+	}
+	if result.ExitCode != 23 || !strings.Contains(err.Error(), "code 23") {
+		t.Fatalf("combined exit/limit result = %+v, %v", result, err)
+	}
+}
+
+func TestOSRunnerStdoutLimitPreservesConventionalPipeExitCodeForGenericCommands(t *testing.T) {
+	if os.Getenv("AGENTPLUGINS_PROCESS_STDOUT_LIMIT_141_HELPER") == "1" {
+		_, _ = os.Stdout.Write([]byte(strings.Repeat("x", 4097)))
+		os.Exit(141)
+	}
+	environment := append(os.Environ(), "AGENTPLUGINS_PROCESS_STDOUT_LIMIT_141_HELPER=1")
+	result, err := (OS{}).Run(context.Background(), ports.Command{
+		Argv: []string{os.Args[0], "-test.run=TestOSRunnerStdoutLimitPreservesConventionalPipeExitCodeForGenericCommands"}, Env: environment, StdoutLimitBytes: 16,
+	})
+	if err == nil || IsOnlyStdoutLimitExceeded(err) || !errors.Is(err, ErrStdoutLimitExceeded) {
+		t.Fatalf("generic exit/limit error = %v", err)
+	}
+	if result.ExitCode != 141 || !IsExactStdoutLimitExitCode(err, 141) {
+		t.Fatalf("generic exit/limit result = %+v, %v", result, err)
+	}
+	if IsExactStdoutLimitExitCode(fmt.Errorf("wrapped: %w", err), 141) ||
+		IsExactStdoutLimitExitCode(errors.Join(err, errors.New("containment failed")), 141) {
+		t.Fatal("wrapped or joined stronger failure matched the exact stdout-limit exit marker")
 	}
 }
 
@@ -353,7 +436,7 @@ func TestBoundedDiagnosticBufferSupportsConcurrentWaitTimeoutDiagnostics(t *test
 }
 
 func TestSynchronizedOutputSnapshotIsImmutableWhileSoleReaperFinishesLateWrite(t *testing.T) {
-	buffer := newSynchronizedOutputBuffer()
+	buffer := newSynchronizedOutputBuffer(0)
 	if _, err := buffer.Write([]byte("early")); err != nil {
 		t.Fatal(err)
 	}
@@ -376,6 +459,58 @@ func TestSynchronizedOutputSnapshotIsImmutableWhileSoleReaperFinishesLateWrite(t
 	}
 	if current := string(buffer.Bytes()); current != "early-late" {
 		t.Fatalf("current output = %q, want completed late write", current)
+	}
+}
+
+func TestSynchronizedOutputBufferBoundsCapturedStdout(t *testing.T) {
+	buffer := newSynchronizedOutputBuffer(5)
+	if written, err := buffer.Write([]byte("123456789")); err != ErrStdoutLimitExceeded || written != 5 {
+		t.Fatalf("write = %d, %v", written, err)
+	}
+	if got := string(buffer.Bytes()); got != "12345" {
+		t.Fatalf("captured output = %q", got)
+	}
+	if !errors.Is(buffer.Err(), ErrStdoutLimitExceeded) {
+		t.Fatalf("limit error = %v", buffer.Err())
+	}
+}
+
+func TestSynchronizedOutputBufferAllowsExactlyConfiguredLimit(t *testing.T) {
+	buffer := newSynchronizedOutputBuffer(5)
+	if written, err := buffer.Write([]byte("12345")); err != nil || written != 5 {
+		t.Fatalf("exact-limit write = %d, %v", written, err)
+	}
+	if err := buffer.Err(); err != nil {
+		t.Fatalf("exact-limit result = %v", err)
+	}
+	if written, err := buffer.Write([]byte("6")); err != ErrStdoutLimitExceeded || written != 0 {
+		t.Fatalf("overflow write = %d, %v", written, err)
+	}
+	if got := string(buffer.Bytes()); got != "12345" {
+		t.Fatalf("bounded bytes = %q", got)
+	}
+}
+
+func TestStdoutLimitClassificationRejectsJoinedStrongerFailure(t *testing.T) {
+	if !IsOnlyStdoutLimitExceeded(fmt.Errorf("wrapped: %w", ErrStdoutLimitExceeded)) {
+		t.Fatal("sole wrapped stdout limit was not recognized")
+	}
+	if IsOnlyStdoutLimitExceeded(errors.Join(ErrStdoutLimitExceeded, errors.New("containment failed"))) {
+		t.Fatal("joined stronger failure was classified as only an stdout limit")
+	}
+}
+
+func TestExplicitStdoutErrorPreservesStrongerCausality(t *testing.T) {
+	stronger := errors.New("containment failed")
+	joined := errors.Join(ErrStdoutLimitExceeded, stronger)
+	got := explicitStdoutError(ports.CommandResult{}, joined, ErrStdoutLimitExceeded, nil)
+	if !errors.Is(got, stronger) || IsOnlyStdoutLimitExceeded(got) {
+		t.Fatalf("joined stronger failure = %v", got)
+	}
+
+	got = explicitStdoutError(ports.CommandResult{ExitCode: 7}, nil, ErrStdoutLimitExceeded, nil)
+	if IsOnlyStdoutLimitExceeded(got) || !errors.Is(got, ErrStdoutLimitExceeded) || !strings.Contains(got.Error(), "code 7") {
+		t.Fatalf("nonzero exit failure = %v", got)
 	}
 }
 

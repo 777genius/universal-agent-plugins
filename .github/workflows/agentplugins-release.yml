@@ -6,6 +6,13 @@ on:
       tag:
         description: Exact stable tag, for example agentplugins-v0.1.0
         required: true
+      producer_mode:
+        description: Bounded release contract; publishes verified GitHub binary assets only
+        required: true
+        default: binary-only
+        type: choice
+        options:
+          - binary-only
 
 permissions:
   contents: read
@@ -37,9 +44,14 @@ jobs:
         id: identity
         env:
           TAG: ${{ inputs.tag }}
+          PRODUCER_MODE: ${{ inputs.producer_mode }}
           WORKFLOW_COMMIT: ${{ github.sha }}
           WORKFLOW_REF: ${{ github.ref }}
         run: |
+          if [[ "${PRODUCER_MODE}" != "binary-only" ]]; then
+            echo "unsupported agentplugins producer mode: ${PRODUCER_MODE}" >&2
+            exit 1
+          fi
           if [[ ! "${TAG}" =~ ^agentplugins-v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             echo "invalid agentplugins stable tag: ${TAG}" >&2
             exit 1
@@ -71,17 +83,21 @@ jobs:
             "repos/${GITHUB_REPOSITORY}/commits/${COMMIT}/check-runs?filter=latest&per_page=100")"
           pr_checks="$(gh api --paginate --slurp \
             "repos/${GITHUB_REPOSITORY}/commits/${pr_head}/check-runs?filter=latest&per_page=100")"
-          require_check() {
+          has_check() {
             local payload="$1"
             local name="$2"
-            if ! jq -e --arg name "${name}" \
+            jq -e --arg name "${name}" \
               'any(.[]?.check_runs[]?; .name == $name and .status == "completed" and .conclusion == "success")' \
-              <<<"${payload}" >/dev/null; then
-              echo "required successful check is missing: ${name}" >&2
+              <<<"${payload}" >/dev/null
+          }
+          require_check() {
+            local name="$1"
+            if ! has_check "${commit_checks}" "${name}" && ! has_check "${pr_checks}" "${name}"; then
+              echo "required successful check is missing on merge commit and PR head: ${name}" >&2
               exit 1
             fi
           }
-          require_check "${pr_checks}" dependency-review
+          require_check dependency-review
           for name in \
             test \
             docs-check \
@@ -94,7 +110,7 @@ jobs:
             'govulncheck (integrationctl)' \
             'govulncheck (plugininstall)' \
             'govulncheck (sdk)'; do
-            require_check "${commit_checks}" "${name}"
+            require_check "${name}"
           done
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:

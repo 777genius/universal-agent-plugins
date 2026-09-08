@@ -11,7 +11,7 @@
     "primaryCta": "打开 GitHub",
     "secondaryCta": "See plugins",
     "docsCta": "查看文档",
-    "preview": "plugin-kit-ai流程预览",
+    "preview": "Universal Agent Plugins流程预览",
     "latestRelease": "最新发布",
     "status": "第一方插件现已可用",
     "trust": {
@@ -20,7 +20,7 @@
       "openSource": "开源"
     },
     "demo": {
-      "title": "plugin-kit-ai 流",
+      "title": "Universal Agent Plugins 流",
       "subtitle": "一个仓库。清晰的阶段。多个输出。",
       "live": "积极的",
       "ready": "准备好",
@@ -76,7 +76,15 @@
     "copied": "已复制",
     "quickstartTitle": "最快开始方式",
     "quickstartSubtitle": "这是通往真实插件安装或已验证仓库的最快路径。",
-    "installTabsLabel": "选择如何运行 plugin-kit-ai",
+    "installTabsLabel": "选择如何运行 Universal Agent Plugins",
+    "detectedRecommendation": "已为 {platform} 选择最佳方式",
+    "mobileUnsupported": "CLI 需要在电脑上运行。请在此复制命令，然后在 macOS、Linux 或 Windows 上执行。",
+    "platforms": {
+      "macos": "macOS",
+      "windows": "Windows",
+      "linux": "Linux",
+      "other": "您的设备"
+    },
     "supportTitle": "支持快照",
     "supportSubtitle": "今天的实际支持深度基于当前的支持政策和目标矩阵。",
     "supportLink": "读取支撑边界"
@@ -126,12 +134,12 @@
     "install": {
       "eyebrow": "Install flow",
       "title": "安装这个插件",
-      "subtitle": "先选择你的代理，如果需要的话再选择如何运行 plugin-kit-ai，然后复制这个插件的准确命令。",
+      "subtitle": "先选择你的代理，如果需要的话再选择如何运行 Universal Agent Plugins，然后复制这个插件的准确命令。",
       "supportedLabel": "可用 targets",
       "allAgents": "All",
       "chooseAgentTitle": "选择你的代理",
       "chooseAgentBody": "默认已经选中了全部 targets。如果你只想生成更窄的安装命令，可以改成更小的选择集合。",
-      "getCliTitle": "按你的方式运行 plugin-kit-ai",
+      "getCliTitle": "按你的方式运行 Universal Agent Plugins",
       "getCliBody": "使用 npx 获得最快的首次体验，或安装 CLI 供日常使用。",
       "installTitle": "安装插件",
       "installBody": "运行当前 target 的安装命令。命令保持显式，这样后续更容易看清最终 scope。",
@@ -150,7 +158,7 @@
       "copy": "复制",
       "copied": "已复制",
       "fullOnboardingCta": "打开完整 onboarding",
-      "alreadyInstalled": "已经通过其他方式运行 plugin-kit-ai？那就直接去第 3 步。",
+      "alreadyInstalled": "已经通过其他方式运行 Universal Agent Plugins？那就直接去第 3 步。",
       "repositoryCta": "插件仓库",
       "agentDocsCta": "{agent} 文档",
       "boundaryLabel": "注意",
@@ -187,7 +195,7 @@
         "codex": {
           "installBody": "通过 integration control plane 为 Codex 准备 package 和本地 marketplace entry。",
           "manualNote": "如果你想自己检查准备好的包，或者亲自完成原生激活路径，可以打开仓库或 Codex 文档。",
-          "boundaryNote": "这里对 Codex 的自动化是刻意保守的。plugin-kit-ai 会准备好 package 和 marketplace，但 Codex 仍可能在真正激活前要求额外的原生步骤。"
+          "boundaryNote": "这里对 Codex 的自动化是刻意保守的。Universal Agent Plugins 会准备好 package 和 marketplace，但 Codex 仍可能在真正激活前要求额外的原生步骤。"
         },
         "gemini": {
           "installBody": "把 Gemini 扩展安装到用户扩展目录中，后续 update 和 repair 也会继续复用同一个 managed root。",
@@ -288,7 +296,7 @@
     "sectionSubtitle": "不是与竞争对手的斗争。只是与插件团队通常造成不必要漂移的三种方式进行实际比较。",
     "feature": "工作流程",
     "columns": {
-      "pluginKitAi": "plugin-kit-ai",
+      "pluginKitAi": "Universal Agent Plugins",
       "manual": "手动设置",
       "duplicated": "重复的配置",
       "scripts": "一次性脚本"
@@ -296,19 +304,19 @@
   },
   "footer": {
     "copyright": "© {year}",
-    "tagline": "构建一次。运送给许多人工智能代理。",
+    "tagline": "安装一次，即可管理所有 AI 代理中的插件。",
     "github": "GitHub",
     "docs": "文档"
   },
   "meta": {
-    "homeTitle": "plugin-kit-ai |构建一次 AI 插件，将其发送给多个代理",
-    "homeDescription": "plugin-kit-ai 是我们第一方 AI 插件和开源工具包的所在地，用于构建一个插件存储库并针对多个代理生态系统。",
-    "downloadTitle": "开始使用 plugin-kit-ai |安装plugin-kit-ai",
-    "downloadDescription": "选择 plugin-kit-ai 的安装路径，打开文档，然后从一个干净的插件存储库开始。",
-    "pluginsTitle": "插件目录 | plugin-kit-ai 的第一方插件",
-    "pluginsDescription": "浏览 plugin-kit-ai 的第一方插件目录，其中包含每个真实插件存储库的可搜索卡片、工作流程过滤器和轻量级页面。",
-    "pluginDetailTitle": "{plugin} 插件 | plugin-kit-ai 目录",
-    "pluginDetailDescription": "{plugin} 是第一方 plugin-kit-ai 目录的一部分。 {tagline}"
+    "homeTitle": "Universal Agent Plugins | 一条命令连接 AI 代理",
+    "homeDescription": "Universal Agent Plugins 是我们第一方 AI 插件和开源工具包的所在地，用于构建一个插件存储库并针对多个代理生态系统。",
+    "downloadTitle": "开始使用 Universal Agent Plugins |安装Universal Agent Plugins",
+    "downloadDescription": "选择 Universal Agent Plugins 的安装路径，打开文档，然后从一个干净的插件存储库开始。",
+    "pluginsTitle": "插件目录 | Universal Agent Plugins 的第一方插件",
+    "pluginsDescription": "浏览 Universal Agent Plugins 的第一方插件目录，其中包含每个真实插件存储库的可搜索卡片、工作流程过滤器和轻量级页面。",
+    "pluginDetailTitle": "{plugin} 插件 | Universal Agent Plugins 目录",
+    "pluginDetailDescription": "{plugin} 是第一方 Universal Agent Plugins 目录的一部分。 {tagline}"
   },
   "error": {
     "notFoundTitle": "找不到页面",
@@ -316,5 +324,24 @@
     "genericTitle": "出了点问题",
     "genericDescription": "发生意外错误。请稍后重试。",
     "goHome": "Go 到主页"
+  },
+  "publicAuthoring": {
+    "title": "使用插件 / 构建插件",
+    "intro": "安装已发布的插件，或准备可移植的 Agent Plugins 1.0 包。",
+    "useTitle": "使用插件",
+    "available": "现已可用：通过 Universal Agent Plugins 安装插件。使用 Node.js 22+ 时运行：",
+    "installHelp": "如需在 macOS、Linux 或 Windows 上进行原生安装，请阅读安装指南。CLI 会询问要使用哪些兼容的客户端；个别插件可能需要自己的运行环境。",
+    "installLink": "安装指南",
+    "buildTitle": "构建插件",
+    "standard": "以 plugin.json 为核心构建可移植的 Agent Plugins 1.0 包，可选包含 skills/ 和 mcp.json。客户端支持取决于包及其组件。",
+    "preparation": "准备中 — 尚未发布",
+    "unreleased": "以标准为先的创作 CLI 正在准备中，尚未发布。npm 和 PyPI 上已发布的 plugin-kit-ai 1.2.4 是历史 v1 工具，并非 standard-first v2。安装 plugin-kit-ai{'@'}latest 不会提供未来的创作流程。",
+    "specLink": "Agent Plugins 1.0 规范",
+    "historyTitle": "历史 v1 维护",
+    "history": "请使用以下 v1 说明维护现有 plugin.yaml 项目。这些模板和生成输出属于历史 v1 流程，不会创建新的标准优先创作流程。",
+    "quickstartLink": "快速入门与 v1 维护",
+    "compatibilityLink": "客户端兼容性（英文）",
+    "limitations": "兼容性取决于包。通过模式验证并不证明运行、OAuth 或激活成功。Codex 不支持声明的 MCP SSE；stdio 和 Streamable HTTP 保留现有适配器支持。",
+    "versions": "版本核验日期为 2026-09-07：universal-agent-plugins 0.1.53（npm）、plugin-kit-ai 1.2.4（npm/PyPI），GitHub 稳定版本 agentplugins-v0.1.53。"
   }
 }

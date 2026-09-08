@@ -1,7 +1,7 @@
 {
   "hero": {
-    "title": "plugin-kit-ai",
-    "subtitle": "构建一个插件一次。从一个存储库将其发送给多个 AI 代理。 plugin-kit-ai 是我们第一方插件阵容及其背后的开源工具包的所在地。"
+    "title": "Universal Agent Plugins",
+    "subtitle": "使用一条命令在 AI 代理中安装、更新、修复和删除 Agent Plugins 1.0。"
   },
   "features": [
     {
@@ -964,8 +964,8 @@
   "faq": [
     {
       "id": "whatIsIt",
-      "question": "什么是 plugin-kit-ai？",
-      "answer": "plugin-kit-ai 是一个开源工具包，用于将一个插件存储库作为事实来源，然后生成并验证您实际需要的受支持的代理输出。"
+      "question": "什么是 Universal Agent Plugins？",
+      "answer": "Universal Agent Plugins 是一个 CLI，可在你选择的 AI 代理中安装、更新、修复和删除 Agent Plugins 1.0。"
     },
     {
       "id": "whoShouldUseIt",
@@ -980,12 +980,12 @@
     {
       "id": "stableBoundary",
       "question": "今天每个受支持的输出都同样稳定吗？",
-      "answer": "不会。有些通道已做好生产准备，有些仍处于公开测试阶段。 plugin-kit-ai 明确了该界限，因此您可以做出诚实的产品承诺。"
+      "answer": "不会。有些路径已可用于生产，有些仍处于公开测试阶段。Universal Agent Plugins 会清楚标注这一界限。"
     },
     {
       "id": "fastestStart",
       "question": "最快的开始方式是什么？",
-      "answer": "安装 <code>plugin-kit-ai</code>，使用 <code>init</code> 创建一个存储库，然后运行 ​​<code>render</code> 和 <code>validate --strict</code>。大多数团队应从 <a href=\"https://777genius.github.io/plugin-kit-ai/docs/zh/guide/quickstart.html\">Quickstart</a> 开始。如果您的团队有意优先考虑 Python，请直接参阅 <a href=\"https://777genius.github.io/plugin-kit-ai/docs/zh/guide/python-runtime.html\">Python 指南</a>。"
+      "answer": "安装原生 Go CLI，然后运行 <code>agentplugins add context7 --target codex,cursor</code>。选择一个或多个代理，然后按客户端提示完成激活。"
     },
     {
       "id": "whichPathFirst",
@@ -1001,20 +1001,21 @@
     {
       "id": "brew",
       "title": "Homebrew",
-      "description": "建议已经使用 Homebrew 的机器进行长期安装。",
-      "href": "https://github.com/777genius/homebrew-plugin-kit-ai",
-      "note": "当您计划每天使用 plugin-kit-ai 时，这是更好的选择。",
-      "command": "brew install 777genius/homebrew-plugin-kit-ai/plugin-kit-ai"
+      "description": "适用于 macOS 和 Linux 的原生 Go CLI，无需 Node.js。",
+      "href": "https://github.com/777genius/homebrew-agentplugins",
+      "note": "建议用于长期安装，并通过 Homebrew 自动升级。",
+      "command": "brew install 777genius/agentplugins/agentplugins",
+      "invocation": "agentplugins",
+      "recommended": true
     },
     {
       "id": "npm",
-      "title": "npx",
-      "description": "当您想最快添加一个真实插件时，无需永久安装即可运行 plugin-kit-ai。",
-      "href": "https://www.npmjs.com/package/plugin-kit-ai",
-      "note": "当您首先想要一次性插件安装时，这是最快的路径。",
-      "command": "npx plugin-kit-ai@latest version",
-      "invocation": "npx plugin-kit-ai@latest",
-      "recommended": true
+      "title": "npx · Node.js 22+",
+      "description": "如果已安装 Node.js 22+，这是最快的方式：直接运行插件命令。",
+      "href": "https://www.npmjs.com/package/universal-agent-plugins",
+      "note": "无需永久安装：npx 下载已验证的 CLI，并一步运行插件命令。",
+      "command": "npx universal-agent-plugins version",
+      "invocation": "npx universal-agent-plugins"
     },
     {
       "id": "pipx",
@@ -1027,10 +1028,20 @@
     {
       "id": "script",
       "title": "已验证的安装脚本",
-      "description": "后备引导路径，用于解析最新发布的稳定版本并验证校验和。",
-      "href": "https://raw.githubusercontent.com/777genius/plugin-kit-ai/main/scripts/install.sh",
-      "note": "Good 当包管理器设置不是您首先想要的时。",
-      "command": "curl -fsSL https://raw.githubusercontent.com/777genius/plugin-kit-ai/main/scripts/install.sh | sh"
+      "description": "无需包管理器的原生安装，无需 Node.js。",
+      "href": "https://github.com/777genius/universal-agent-plugins/blob/main/docs/NATIVE_INSTALL.md",
+      "note": "下载正确的发布二进制文件，并验证 SHA-256 和版本。",
+      "command": "curl -fsSL https://raw.githubusercontent.com/777genius/universal-agent-plugins/main/install.sh | sh",
+      "invocation": "$HOME/.local/bin/agentplugins"
+    },
+    {
+      "id": "powershell",
+      "title": "Windows PowerShell",
+      "description": "适用于 Windows 的原生 Go CLI，无需 Node.js。",
+      "href": "https://github.com/777genius/universal-agent-plugins/blob/main/docs/NATIVE_INSTALL.md#windows-powershell",
+      "note": "下载 Windows 二进制文件并验证其 SHA-256 和版本。",
+      "command": "irm https://raw.githubusercontent.com/777genius/universal-agent-plugins/main/install.ps1 | iex",
+      "invocation": "& \"$HOME\\.local\\bin\\agentplugins.exe\""
     },
     {
       "id": "releases",
@@ -1052,27 +1063,27 @@
   "quickstartSteps": [
     {
       "id": "install-cli",
-      "title": "按你的方式运行 plugin-kit-ai",
-      "command": "npx plugin-kit-ai@latest version",
-      "note": "使用 npx 获得最快的首次体验，或安装 CLI 供日常使用。"
+      "title": "运行 CLI",
+      "command": "npx universal-agent-plugins version",
+      "note": "使用 npx 快速开始，或安装二进制文件供日常使用。"
     },
     {
       "id": "try-plugin",
-      "title": "现在就试一个真实插件",
-      "command": "plugin-kit-ai add notion --target claude\nplugin-kit-ai add notion",
-      "note": "第一条命令是安全的单目标路径。第二条会为该插件安装所有受支持的输出。"
+      "title": "安装一个真实插件",
+      "command": "universal-agent-plugins add context7 --target codex,cursor",
+      "note": "同一命令支持一个目标或用逗号分隔的目标列表。"
     },
     {
       "id": "build-plugin",
-      "title": "创建你自己的插件仓库",
-      "command": "plugin-kit-ai init my-plugin --template online-service\ncd my-plugin",
-      "note": "当安装路径已经清晰后，再从与任务匹配的模板开始。"
+      "title": "保持最新",
+      "command": "universal-agent-plugins update context7 --target codex,cursor\nuniversal-agent-plugins repair context7 --target codex,cursor",
+      "note": "新版本使用 update，客户端出现偏差时使用 repair。"
     },
     {
       "id": "validate",
-      "title": "在移交前生成并验证",
-      "command": "plugin-kit-ai generate .\nplugin-kit-ai validate . --platform claude --strict",
-      "note": "在 CI、交接给队友或发布之前使用 generate 和严格验证。"
+      "title": "干净地移除",
+      "command": "universal-agent-plugins remove context7 --target codex,cursor",
+      "note": "CLI 会删除其管理的客户端条目，默认保留插件数据。"
     }
   ],
   "supportLanes": [

@@ -1,6 +1,20 @@
 # Support And Compatibility Policy
 
-This document defines the approved public contract for `plugin-kit-ai` after the `v1.0.0` release.
+## Universal Agent Plugins installer
+
+For `agentplugins`, start with [native CLI installation](./NATIVE_INSTALL.md)
+and the [client compatibility evidence](https://777genius.github.io/universal-agent-plugins/docs/en/reference/client-compatibility.html).
+The matrix identifies tested installer/client versions and platforms;
+package validity, installation, activation, runtime and OAuth are separate layers.
+
+For help, [open a question or bug report](https://github.com/777genius/universal-agent-plugins/issues/new/choose)
+with your OS/architecture, installer and client versions, the command used, and
+the diagnostic output. Remove secrets and private paths before sharing output.
+Use the [security reporting process](../SECURITY.md) for vulnerabilities.
+
+## Historical plugin-kit-ai v1 policy
+
+The remaining sections define the approved public contract for `plugin-kit-ai` after the `v1.0.0` release.
 
 ## Recommended Production Lanes
 
@@ -166,7 +180,7 @@ Stable CLI bootstrap/setup path for `plugin-kit-ai` itself:
 - for Python/Node plugin authoring helpers, the shared package path is `plugin-kit-ai-runtime` on PyPI and npm; this mirrors the scaffold helper API and stays separate from the CLI wrappers above
 - helper delivery modes are documented in [CHOOSING_HELPER_DELIVERY_MODE.md](./CHOOSING_HELPER_DELIVERY_MODE.md); the default scaffold vendors helper files, while `init ... --runtime-package` switches to the shared dependency path; released CLIs pin the helper version automatically and development builds accept `--runtime-package-version`
 - `scripts/install.sh` resolves the latest published stable release by default, verifies `checksums.txt`, auto-detects OS/arch, installs the matching GitHub Releases tarball into `BIN_DIR`, and can pass trailing script arguments to the installed CLI for one-shot commands
-- `777genius/plugin-kit-ai/setup-plugin-kit-ai@v1` is the official CI setup action and reuses the same verified release contract instead of rebuilding from source in downstream repos
+- `777genius/universal-agent-plugins/setup-plugin-kit-ai@v1` is the official CI setup action and reuses the same verified release contract instead of rebuilding from source in downstream repos
 
 Current beta CLI commands:
 
@@ -295,7 +309,7 @@ Config contract:
   - local JS ecosystem install path uses `npm i -g plugin-kit-ai` as `public-beta`
   - local Python ecosystem install path uses `pipx install plugin-kit-ai` as `public-beta` when that release was published to PyPI
   - local CLI bootstrap uses `scripts/install.sh`
-  - CI bootstrap uses `777genius/plugin-kit-ai/setup-plugin-kit-ai@v1`
+  - CI bootstrap uses `777genius/universal-agent-plugins/setup-plugin-kit-ai@v1`
   - root GitHub Release assets come from `.github/workflows/release-assets.yml` and are the source of truth for downstream CLI channels
   - Homebrew tap updates follow successful `Release Assets` completion or a manual tag-scoped rerun and remain separate from `plugin-kit-ai install`
   - npm publishes follow successful `Release Assets` completion or a manual tag-scoped rerun and remain separate from `plugin-kit-ai install`

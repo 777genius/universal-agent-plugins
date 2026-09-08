@@ -3,12 +3,14 @@ package sourceacquisition
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	processadapter "github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/process"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/packagedigest"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
@@ -45,24 +47,181 @@ func TestAcquireGitHubExactSHASparselySnapshotsOnlyPluginRoot(t *testing.T) {
 	}
 }
 
-func TestAcquireGitHubRepositoryRootExcludesGitMetadata(t *testing.T) {
+func TestDiscoverGitHubPackagesPrefersRepositoryRootManifest(t *testing.T) {
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git is unavailable")
 	}
 	repository := newRepository(t)
+	writeRepo(t, repository, "plugin.json", `{}`, 0o644)
+	writeRepo(t, repository, "mcp.json", `{}`, 0o644)
+	writeRepo(t, repository, "packages/nested/plugin.json", `{}`, 0o644)
+	writeRepo(t, repository, "packages/nested/mcp.json", `{}`, 0o644)
+	revision := commit(t, repository)
+	acquirer := Acquirer{TempRoot: t.TempDir(), Runner: localGitTestRunner{}, URLForRepo: func(string) string { return repository }}
+
+	paths, err := acquirer.DiscoverGitHubPackages(context.Background(), "example/plugin", revision)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(paths) != 1 || paths[0] != "" {
+		t.Fatalf("root-preferred package paths = %q", paths)
+	}
+}
+
+func TestDiscoverGitHubPackagesPrefersRepositoryRootNativeManifest(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git is unavailable")
+	}
+	repository := newRepository(t)
+	writeRepo(t, repository, ".codex-plugin/plugin.json", `{"name":"native"}`, 0o644)
+	writeRepo(t, repository, "packages/nested/plugin.json", `{}`, 0o644)
+	writeRepo(t, repository, "packages/nested/mcp.json", `{}`, 0o644)
+	revision := commit(t, repository)
+	acquirer := Acquirer{TempRoot: t.TempDir(), Runner: localGitTestRunner{}, URLForRepo: func(string) string { return repository }}
+
+	paths, err := acquirer.DiscoverGitHubPackages(context.Background(), "example/plugin", revision)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(paths) != 1 || paths[0] != "" {
+		t.Fatalf("root-native package paths = %q", paths)
+	}
+}
+
+func TestDiscoverGitHubPackagesReturnsOnlyPackageShapedNestedDirectories(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git is unavailable")
+	}
+	repository := newRepository(t)
+	writeRepo(t, repository, "manifest-only/plugin.json", `{}`, 0o644)
+	writeRepo(t, repository, "packages/zeta/plugin.json", `{}`, 0o644)
+	writeRepo(t, repository, "packages/zeta/skills/demo/SKILL.md", "# Demo", 0o644)
+	writeRepo(t, repository, "packages/alpha/plugin.json", `{}`, 0o644)
+	writeRepo(t, repository, "packages/alpha/mcp.json", `{}`, 0o644)
+	writeRepo(t, repository, "packages/not-a-plugin/mcp.json", `{}`, 0o644)
+	revision := commit(t, repository)
+	acquirer := Acquirer{TempRoot: t.TempDir(), Runner: localGitTestRunner{}, URLForRepo: func(string) string { return repository }}
+
+	paths, err := acquirer.DiscoverGitHubPackages(context.Background(), "example/plugin", revision)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"packages/alpha", "packages/zeta"}
+	if strings.Join(paths, "|") != strings.Join(want, "|") {
+		t.Fatalf("nested package paths = %q, want %q", paths, want)
+	}
+}
+
+func TestPackagePathsFromTreeRejectsMalformedEntries(t *testing.T) {
+	if _, err := packagePathsFromTree([]byte("100644 blob hash-without-path\x00")); err == nil {
+		t.Fatal("malformed Git tree entry was accepted")
+	}
+}
+
+func TestPackagePathsFromTreeIgnoresSymlinkAndGitlinkCandidates(t *testing.T) {
+	tree := []byte("120000 blob a\tpackages/symlink/plugin.json\x00" +
+		"100644 blob b\tpackages/symlink/mcp.json\x00" +
+		"100644 blob c\tpackages/gitlink/plugin.json\x00" +
+		"160000 commit d\tpackages/gitlink/mcp.json\x00" +
+		"100644 blob e\tpackages/valid/plugin.json\x00" +
+		"100644 blob f\tpackages/valid/skills/demo/SKILL.md\x00")
+	paths, err := packagePathsFromTree(tree)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(paths) != 1 || paths[0] != "packages/valid" {
+		t.Fatalf("regular-file candidates = %q", paths)
+	}
+}
+
+func TestDiscoverGitHubPackagesBoundsGitTreeMetadata(t *testing.T) {
+	revision := strings.Repeat("a", 40)
+	runner := &discoveryLimitRunner{revision: revision}
+	acquirer := Acquirer{TempRoot: t.TempDir(), Runner: runner}
+	_, err := acquirer.DiscoverGitHubPackages(context.Background(), "example/plugin", revision)
+	if err == nil || !strings.Contains(err.Error(), "choose a package explicitly with //path") {
+		t.Fatalf("metadata limit error = %v", err)
+	}
+	if !runner.sawBoundedTree {
+		t.Fatal("Git tree inspection was not output-bounded")
+	}
+}
+
+func TestOSRunnerClassifiesRealGitTreeOverflowAsSoleLimit(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git is unavailable")
+	}
+	repository := newRepository(t)
+	for index := range 1024 {
+		writeRepo(t, repository, fmt.Sprintf("packages/plugin-%04d/plugin.json", index), "{}", 0o644)
+	}
+	revision := commit(t, repository)
+
+	_, err := (OSRunner{}).Run(context.Background(), Command{
+		Dir:            t.TempDir(),
+		Args:           []string{"-C", repository, "ls-tree", "-r", "-z", revision},
+		MaxOutputBytes: 128,
+	})
+	if !processadapter.IsOnlyStdoutLimitExceeded(err) {
+		t.Fatalf("real Git metadata limit error = %v", err)
+	}
+}
+
+func TestDiscoverGitHubPackagesDoesNotMaskConcurrentLimitFailure(t *testing.T) {
+	revision := strings.Repeat("c", 40)
+	runner := &joinedDiscoveryLimitRunner{revision: revision}
+	acquirer := Acquirer{TempRoot: t.TempDir(), Runner: runner}
+	_, err := acquirer.DiscoverGitHubPackages(context.Background(), "example/plugin", revision)
+	if err == nil || strings.Contains(err.Error(), "metadata exceeds") || !strings.Contains(err.Error(), "inspect repository") {
+		t.Fatalf("joined discovery failure = %v", err)
+	}
+}
+
+func TestDiscoverGitHubPackagesFindsRootBeforeRecursiveMetadataLimit(t *testing.T) {
+	revision := strings.Repeat("b", 40)
+	runner := &rootBeforeRecursiveLimitRunner{revision: revision}
+	acquirer := Acquirer{TempRoot: t.TempDir(), Runner: runner}
+	paths, err := acquirer.DiscoverGitHubPackages(context.Background(), "example/plugin", revision)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(paths) != 1 || paths[0] != "" {
+		t.Fatalf("root package paths = %q", paths)
+	}
+	if runner.recursiveCalls != 0 {
+		t.Fatalf("root package triggered %d recursive tree scans", runner.recursiveCalls)
+	}
+}
+
+func TestAcquireGitHubRepositoryRootExcludesGitDirectoryAndSubmoduleContent(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git is unavailable")
+	}
+	submodule := newRepository(t)
+	writeRepo(t, submodule, "README", "unrelated submodule content", 0o644)
+	_ = commit(t, submodule)
+	repository := newRepository(t)
 	writeRepo(t, repository, "plugin.json", `{"$schema":"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json","name":"root"}`, 0o644)
+	runGit(t, "-c", "protocol.file.allow=always", "-C", repository, "submodule", "add", "--quiet", submodule, "third_party/unrelated")
 	revision := commit(t, repository)
 	acquirer := Acquirer{TempRoot: t.TempDir(), Runner: localGitTestRunner{}, URLForRepo: func(string) string { return repository }}
 	snapshot, err := acquirer.AcquireGitHub(context.Background(), "example/root-plugin", revision, "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer packagedigest.Remove(snapshot)
-	if snapshot.FileCount != 1 || snapshot.Source.RequestedSource != "example/root-plugin@"+revision || strings.HasSuffix(snapshot.Source.CanonicalSource, "//") {
+	t.Cleanup(func() {
+		if err := packagedigest.Remove(snapshot); err != nil {
+			t.Errorf("remove repository-root snapshot: %v", err)
+		}
+	})
+	if snapshot.FileCount != 2 || snapshot.Source.RequestedSource != "example/root-plugin@"+revision || strings.HasSuffix(snapshot.Source.CanonicalSource, "//") {
 		t.Fatalf("root snapshot identity = %+v", snapshot)
 	}
 	if _, err := os.Lstat(filepath.Join(snapshot.Root, ".git")); !os.IsNotExist(err) {
 		t.Fatalf("Git metadata entered repository-root snapshot: %v", err)
+	}
+	if _, err := os.Lstat(filepath.Join(snapshot.Root, "third_party", "unrelated", "README")); !os.IsNotExist(err) {
+		t.Fatalf("unfetched submodule content entered repository-root snapshot: %v", err)
 	}
 }
 
@@ -103,6 +262,10 @@ func TestExecutablePathsFromTreeArePluginRelative(t *testing.T) {
 	}
 	if _, err := executablePathsFromTree([]byte("160000 commit a\tplugin/vendor\x00"), "plugin"); err == nil || !strings.Contains(err.Error(), "submodule") {
 		t.Fatalf("submodule tree error = %v", err)
+	}
+	paths, err = executablePathsFromTree([]byte("160000 commit a\tthird_party/vendor\x00"), "")
+	if err != nil || len(paths) != 0 {
+		t.Fatalf("repository-root submodule executable paths = %v, %v", paths, err)
 	}
 }
 
@@ -184,6 +347,71 @@ type panicRunner struct{}
 
 func (panicRunner) Run(context.Context, Command) ([]byte, error) {
 	panic("git must not run for invalid source")
+}
+
+type discoveryLimitRunner struct {
+	revision       string
+	sawBoundedTree bool
+}
+
+func (runner *discoveryLimitRunner) Run(_ context.Context, command Command) ([]byte, error) {
+	for _, argument := range command.Args {
+		switch argument {
+		case "rev-parse":
+			return []byte(runner.revision + "\n"), nil
+		case "ls-tree":
+			for _, treeArgument := range command.Args {
+				if treeArgument == "-r" {
+					runner.sawBoundedTree = command.MaxOutputBytes == maxGitHubDiscoveryMetadataBytes
+					return nil, processadapter.ErrStdoutLimitExceeded
+				}
+			}
+			return nil, nil
+		}
+	}
+	return nil, nil
+}
+
+type rootBeforeRecursiveLimitRunner struct {
+	revision       string
+	recursiveCalls int
+}
+
+type joinedDiscoveryLimitRunner struct{ revision string }
+
+func (runner *joinedDiscoveryLimitRunner) Run(_ context.Context, command Command) ([]byte, error) {
+	for _, argument := range command.Args {
+		switch argument {
+		case "rev-parse":
+			return []byte(runner.revision + "\n"), nil
+		case "ls-tree":
+			for _, treeArgument := range command.Args {
+				if treeArgument == "-r" {
+					return nil, errors.Join(processadapter.ErrStdoutLimitExceeded, errors.New("synthetic containment failure"))
+				}
+			}
+			return nil, nil
+		}
+	}
+	return nil, nil
+}
+
+func (runner *rootBeforeRecursiveLimitRunner) Run(_ context.Context, command Command) ([]byte, error) {
+	for _, argument := range command.Args {
+		switch argument {
+		case "rev-parse":
+			return []byte(runner.revision + "\n"), nil
+		case "ls-tree":
+			for _, treeArgument := range command.Args {
+				if treeArgument == "-r" {
+					runner.recursiveCalls++
+					return nil, processadapter.ErrStdoutLimitExceeded
+				}
+			}
+			return []byte("100644 blob a\t.codex-plugin/plugin.json\x00"), nil
+		}
+	}
+	return nil, nil
 }
 
 // localGitTestRunner keeps repository-fixture tests independent of host kernel

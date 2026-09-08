@@ -14,6 +14,7 @@ import (
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/pathpolicy"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/providers/nativeconfig"
 	legacyports "github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
 )
 
@@ -22,13 +23,47 @@ type CommandRunner interface {
 }
 
 type Activator struct {
-	Runner CommandRunner
+	Runner       CommandRunner
+	NativeConfig *nativeconfig.Kernel
+}
+
+func (activator Activator) nativeConfigKernel() nativeconfig.Kernel {
+	if activator.NativeConfig != nil {
+		return *activator.NativeConfig
+	}
+	return nativeconfig.New()
+}
+
+func committedNativeCleanup(outcome *domain.ActivationOutcome, err error) bool {
+	if !nativeconfig.IsCommittedCleanup(err) {
+		return false
+	}
+	outcome.UserActions = append(outcome.UserActions, "native config was committed, but lock cleanup degraded; retry repair if the next operation reports a busy lock")
+	return true
+}
+
+func committedNativeDeactivationCleanup(outcome *domain.DeactivationOutcome, err error) bool {
+	if !nativeconfig.IsCommittedCleanup(err) {
+		return false
+	}
+	outcome.UserActions = append(outcome.UserActions, "native config removal was committed, but lock cleanup degraded; retry removal if the next operation reports a busy lock")
+	return true
 }
 
 // AutomaticallyActivates reports whether Activate will use a managed client
 // CLI for this exact request. Runtime preflight consumes this same predicate so
 // it cannot drift from the provider's activation paths.
 func (activator Activator) AutomaticallyActivates(request domain.ActivationRequest) bool {
+	switch request.Client.ClientID {
+	case domain.ClientCline:
+		return strings.TrimSpace(request.Client.ConfigRoot) != "" && openCodeNativeComponents(request.Plan.Components)
+	case domain.ClientOpenCode:
+		return strings.TrimSpace(request.Client.ConfigRoot) != "" && openCodeNativeComponents(request.Plan.Components)
+	case domain.ClientGemini:
+		return strings.TrimSpace(request.Client.ConfigRoot) != "" && geminiNativeComponents(request.Plan.Components)
+	case domain.ClientWindsurf:
+		return strings.TrimSpace(request.Client.ConfigRoot) != "" && len(windsurfObjects(request.Delivery.NativeObjects)) > 0
+	}
 	if request.Client.ClientID == domain.ClientKiro {
 		if strings.TrimSpace(request.Client.ConfigRoot) == "" || !kiroNativeComponents(request.Plan.Components) {
 			return false
@@ -42,6 +77,10 @@ func (activator Activator) AutomaticallyActivates(request domain.ActivationReque
 // PreflightActivation rejects lifecycle configurations that would otherwise
 // discover a missing required capability only after native client mutation.
 func (activator Activator) PreflightActivation(request domain.ActivationRequest) error {
+	if request.Client.ClientID == domain.ClientClaude {
+		_, err := prepareClaudeActivationProbe(request)
+		return err
+	}
 	if !activator.AutomaticallyActivates(request) || request.Client.ClientID != domain.ClientKiro || !hasSupportedMCP(request.Plan.Components) {
 		return nil
 	}
@@ -63,6 +102,32 @@ func (activator Activator) Deactivate(ctx context.Context, request domain.Deacti
 	switch request.Client.ClientID {
 	case domain.ClientCursor:
 		return outcome, nil
+	case domain.ClientClaude:
+		// The official @skills-dir flow is removed by the transaction kernel's
+		// owned-directory removal. A confirmed mutation first verifies the exact
+		// id and installPath through the trusted Claude CLI; previews stay inert.
+		if !request.Confirmed {
+			outcome.UserActions = append(outcome.UserActions, "agentplugins will verify and remove its managed Claude Code @skills-dir plugin")
+			return outcome, nil
+		}
+		if strings.TrimSpace(request.BackendExecutable) == "" || activator.Runner == nil {
+			return outcome, fmt.Errorf("trusted Claude Code CLI is required for exact removal verification")
+		}
+		listed, err := activator.runClaudeListResult(ctx, request.BackendExecutable, request.Client.ConfigRoot, request.ManagedArtifactPath)
+		if err != nil {
+			return outcome, fmt.Errorf("verify Claude Code plugin before removal: %w", err)
+		}
+		switch claudePluginStatus(listed.Stdout, request.DeclaredName, request.ManagedArtifactPath) {
+		case claudeStatusInstalled:
+		case claudeStatusAbsent:
+			if request.CurrentActivation == domain.ActivationActive {
+				return outcome, fmt.Errorf("%w: managed Claude Code plugin is absent before removal", errRecognizedNegativeEvidence)
+			}
+		default:
+			return outcome, fmt.Errorf("Claude Code plugin identity is not exact before removal")
+		}
+		outcome.ExternalRemovalComplete = true
+		return outcome, nil
 	case domain.ClientCodex:
 		if !request.ExternalUninstalled {
 			return requireExternalUninstall(outcome, false, "uninstall the plugin in Codex, then rerun remove with `--external-uninstalled` (also use the flag if it was never activated)"), nil
@@ -78,15 +143,44 @@ func (activator Activator) Deactivate(ctx context.Context, request domain.Deacti
 		if err != nil {
 			return outcome, err
 		}
-		if registered {
-			if strings.TrimSpace(request.BackendExecutable) == "" || activator.Runner == nil {
+		pluginEntryPresent, err := managedCodexPluginEntryPresent(request.Client.ConfigRoot, request.DeclaredName, marketplace)
+		if err != nil {
+			return outcome, err
+		}
+		if strings.TrimSpace(request.BackendExecutable) == "" || activator.Runner == nil {
+			// Block on either stale record, not just the marketplace: a
+			// live [plugins."id"] entry with no CLI available to clear it
+			// is exactly as dangerous as a registered marketplace with no
+			// CLI -- both would otherwise let ExternalRemovalComplete=true
+			// fall through below with nothing actually cleaned.
+			if registered || pluginEntryPresent {
 				outcome.Activation = domain.ActivationManual
 				outcome.ArtifactRemovalAllowed = false
-				outcome.UserActions = []string{fmt.Sprintf("run `codex plugin marketplace remove %s --json`, then retry removal", marketplace)}
+				outcome.UserActions = []string{fmt.Sprintf("run `codex plugin remove %s@%s --json`, then `codex plugin marketplace remove %s --json`, then retry removal", request.DeclaredName, marketplace, marketplace)}
 				return outcome, nil
 			}
-			if err := activator.removeCodexMarketplace(ctx, request.BackendExecutable, marketplace); err != nil {
+		} else {
+			// Remove the plugin's own registration whenever a live CLI is
+			// available, independent of whether the marketplace source is
+			// still registered: a stale `[plugins."id"] enabled = true`
+			// config.toml entry can outlive the marketplace record (for
+			// example after a user follows this same code's own earlier
+			// manual-cleanup guidance and only runs `marketplace remove`),
+			// and a freshly started Codex app-server treats that lingering
+			// entry as still-enabled, silently re-materializing the
+			// "removed" plugin from its original local source. Gating this
+			// call behind `registered` reproduced exactly that bug.
+			// `codex plugin remove` is confirmed idempotent and safe to call
+			// even when the marketplace is already gone (verified by hand
+			// against a real Codex 0.153.4 binary: exit 0, clears the
+			// `[plugins."id"]` entry, no error either way).
+			if err := activator.removeCodexPlugin(ctx, request.BackendExecutable, request.DeclaredName+"@"+marketplace); err != nil {
 				return outcome, err
+			}
+			if registered {
+				if err := activator.removeCodexMarketplace(ctx, request.BackendExecutable, marketplace); err != nil {
+					return outcome, err
+				}
 			}
 		}
 		outcome.ExternalRemovalComplete = true
@@ -103,6 +197,63 @@ func (activator Activator) Deactivate(ctx context.Context, request domain.Deacti
 		}
 		if err := deactivateKiroNative(ctx, request); err != nil {
 			return outcome, err
+		}
+		outcome.ExternalRemovalComplete = true
+		return outcome, nil
+	case domain.ClientCline:
+		if len(clineObjects(request.NativeObjects)) == 0 {
+			return outcome, fmt.Errorf("managed Cline native ownership is missing")
+		}
+		if !request.Confirmed {
+			outcome.UserActions = append(outcome.UserActions, "agentplugins will remove only its managed Cline skills and MCP entries")
+			return outcome, nil
+		}
+		if err := deactivateClineNativeWithKernel(ctx, request, activator.nativeConfigKernel()); err != nil {
+			if !committedNativeDeactivationCleanup(&outcome, err) {
+				return outcome, err
+			}
+		}
+		outcome.ExternalRemovalComplete = true
+		return outcome, nil
+	case domain.ClientOpenCode:
+		if !request.Confirmed {
+			outcome.UserActions = append(outcome.UserActions, "agentplugins will remove its managed OpenCode skills and MCP entries automatically")
+			return outcome, nil
+		}
+		if err := deactivateOpenCodeNativeWithKernel(ctx, request, activator.nativeConfigKernel()); err != nil {
+			if !committedNativeDeactivationCleanup(&outcome, err) {
+				return outcome, err
+			}
+		}
+		outcome.ExternalRemovalComplete = true
+		return outcome, nil
+	case domain.ClientGemini:
+		if !request.Confirmed {
+			outcome.UserActions = append(outcome.UserActions, "agentplugins will remove its managed Gemini CLI skills and MCP entries automatically")
+			return outcome, nil
+		}
+		if err := deactivateGeminiNativeWithKernel(ctx, request, activator.nativeConfigKernel()); err != nil {
+			if !committedNativeDeactivationCleanup(&outcome, err) {
+				return outcome, err
+			}
+		}
+		outcome.ExternalRemovalComplete = true
+		return outcome, nil
+	case domain.ClientWindsurf:
+		if len(windsurfObjects(request.NativeObjects)) == 0 {
+			return requireExternalUninstall(outcome, request.ExternalUninstalled, "remove the prepared package manually, then rerun remove with `--external-uninstalled`"), nil
+		}
+		if strings.TrimSpace(request.Client.ConfigRoot) == "" {
+			return requireExternalUninstall(outcome, request.ExternalUninstalled, "select exactly one installed Windsurf channel, then rerun remove"), nil
+		}
+		if !request.Confirmed {
+			outcome.UserActions = append(outcome.UserActions, "agentplugins will remove only its owned Windsurf MCP entries")
+			return outcome, nil
+		}
+		if err := deactivateWindsurfNativeWithKernel(ctx, request, activator.nativeConfigKernel()); err != nil {
+			if !committedNativeDeactivationCleanup(&outcome, err) {
+				return outcome, err
+			}
 		}
 		outcome.ExternalRemovalComplete = true
 		return outcome, nil
@@ -223,6 +374,16 @@ func (activator Activator) Activate(ctx context.Context, request domain.Activati
 		outcome.Activation = domain.ActivationActive
 		outcome.Verification = domain.VerificationInstalled
 		return outcome, nil
+	case domain.ClientClaude:
+		if strings.TrimSpace(request.BackendExecutable) == "" || activator.Runner == nil {
+			return failedActivation(outcome, "install Claude Code CLI and retry exact @skills-dir verification", fmt.Errorf("trusted Claude Code CLI is required"))
+		}
+		if err := activator.verifyClaude(ctx, request); err != nil {
+			return failedActivation(outcome, fmt.Sprintf("verify with `%s plugin list --json`", request.BackendExecutable), err)
+		}
+		outcome.Activation = domain.ActivationActive
+		outcome.Verification = domain.VerificationInstalled
+		return outcome, nil
 	case domain.ClientChatGPT:
 		outcome.Activation = domain.ActivationManual
 		if componentKindPresent(request.Plan.Components, domain.ComponentApp) {
@@ -269,6 +430,92 @@ func (activator Activator) Activate(ctx context.Context, request domain.Activati
 		}
 		outcome.Activation = domain.ActivationActive
 		outcome.Verification = domain.VerificationInstalled
+		return outcome, nil
+	case domain.ClientCline:
+		if !activator.AutomaticallyActivates(request) {
+			outcome.Activation = domain.ActivationManual
+			outcome.UserActions = append(outcome.UserActions, "install Cline and rerun add to register its skills and MCP servers")
+			return outcome, nil
+		}
+		if request.VerifyOnly {
+			if err := verifyClineNativeObjects(request.Client.ConfigRoot, request.Delivery.NativeObjects, false); err != nil {
+				return failedActivation(outcome, "repair the managed Cline skills and MCP configuration", err)
+			}
+		} else if err := activateClineNativeWithKernel(ctx, request, activator.nativeConfigKernel()); err != nil {
+			if !committedNativeCleanup(&outcome, err) {
+				return failedActivation(outcome, "retry the managed Cline native installation", err)
+			}
+		}
+		outcome.Activation = domain.ActivationActive
+		outcome.Verification = domain.VerificationInstalled
+		outcome.UserActions = append(outcome.UserActions, "reload the Cline MCP view in VS Code, or start a new Cline CLI process")
+		return outcome, nil
+	case domain.ClientOpenCode:
+		if !activator.AutomaticallyActivates(request) {
+			outcome.Activation = domain.ActivationManual
+			outcome.UserActions = append(outcome.UserActions, "rerun with a detected OpenCode config root")
+			return outcome, nil
+		}
+		if request.VerifyOnly {
+			if err := verifyOpenCodeNativeObjects(request.Client.ConfigRoot, request.Delivery.ActivePath, request.Delivery.NativeObjects); err != nil {
+				return failedActivation(outcome, "repair the managed OpenCode skills and MCP configuration", err)
+			}
+		} else if err := activateOpenCodeNativeWithKernel(ctx, request, activator.nativeConfigKernel()); err != nil {
+			if !committedNativeCleanup(&outcome, err) {
+				return failedActivation(outcome, "retry the managed OpenCode native installation", err)
+			}
+		}
+		outcome.Activation = domain.ActivationActive
+		outcome.Verification = domain.VerificationInstalled
+		outcome.UserActions = append(outcome.UserActions, "restart OpenCode to load the installed plugin")
+		return outcome, nil
+	case domain.ClientGemini:
+		if !activator.AutomaticallyActivates(request) {
+			outcome.Activation = domain.ActivationManual
+			outcome.UserActions = append(outcome.UserActions, "install Gemini CLI and rerun add with an isolated writable Gemini config root")
+			return outcome, nil
+		}
+		if request.VerifyOnly {
+			if err := verifyGeminiNativeObjects(request.Client.ConfigRoot, request.Delivery.NativeObjects, false); err != nil {
+				return failedActivation(outcome, "repair the managed Gemini CLI skills and MCP configuration", err)
+			}
+		} else if err := activateGeminiNativeWithKernel(ctx, request, activator.nativeConfigKernel()); err != nil {
+			if !committedNativeCleanup(&outcome, err) {
+				return failedActivation(outcome, "retry the managed Gemini CLI native installation", err)
+			}
+		}
+		outcome.Activation = domain.ActivationActive
+		outcome.Verification = domain.VerificationInstalled
+		outcome.UserActions = append(outcome.UserActions, "in a running Gemini CLI session use `/mcp reload` and `/skills reload`, or restart Gemini CLI")
+		return outcome, nil
+	case domain.ClientWindsurf:
+		if !activator.AutomaticallyActivates(request) {
+			outcome.Activation = domain.ActivationManual
+			if hasSupportedMCP(request.Plan.Components) {
+				outcome.UserActions = append(outcome.UserActions, "select one legacy Windsurf channel and add the prepared MCP servers manually")
+				outcome.LocalActions = append(outcome.LocalActions, fmt.Sprintf("Windsurf: import MCP servers from %s; Devin cloud-synced configuration is never changed automatically", filepath.Join(request.Delivery.ActivePath, "mcp.json")))
+			} else {
+				outcome.UserActions = append(outcome.UserActions, "use the prepared skills manually in Windsurf; agentplugins does not claim automatic skill activation")
+				outcome.LocalActions = append(outcome.LocalActions, fmt.Sprintf("Windsurf: prepared skills remain at %s; Devin cloud-synced configuration is never changed automatically", filepath.Join(request.Delivery.ActivePath, "skills")))
+			}
+			return outcome, nil
+		}
+		if request.VerifyOnly {
+			if err := verifyWindsurfNativeObjects(request.Client.ConfigRoot, request.Delivery.ActivePath, request.Delivery.NativeObjects, false); err != nil {
+				return failedActivation(outcome, "repair the managed Windsurf MCP configuration", err)
+			}
+			outcome.Activation = domain.ActivationActive
+			outcome.Verification = domain.VerificationInstalled
+			return outcome, nil
+		}
+		if err := activateWindsurfNativeWithKernel(ctx, request, activator.nativeConfigKernel()); err != nil {
+			if !committedNativeCleanup(&outcome, err) {
+				return failedActivation(outcome, "retry the managed Windsurf MCP installation", err)
+			}
+		}
+		outcome.Activation = domain.ActivationActive
+		outcome.Verification = domain.VerificationInstalled
+		outcome.UserActions = append(outcome.UserActions, "refresh MCP servers in Windsurf before first use")
 		return outcome, nil
 	case domain.ClientCopilot, domain.ClientVSCode:
 		if strings.TrimSpace(request.BackendExecutable) == "" || activator.Runner == nil {
@@ -344,7 +591,7 @@ func (activator Activator) verifyCopilot(ctx context.Context, request domain.Act
 	if err != nil {
 		return fmt.Errorf("verify Copilot plugin listing: %w", err)
 	}
-	switch copilotPluginStatus(listed.Stdout, pluginSpec) {
+	switch copilotPluginStatus(listed.Stdout, pluginSpec, copilotMarketplaceVersion(request.Plan.DeclaredVersion), request.Delivery.ActivePath) {
 	case copilotStatusInstalled:
 		return nil
 	case copilotStatusAbsent:
@@ -392,6 +639,25 @@ func (activator Activator) verifyCodex(ctx context.Context, request domain.Activ
 	}
 }
 
+func (activator Activator) verifyClaude(ctx context.Context, request domain.ActivationRequest) error {
+	probe, err := prepareClaudeActivationProbe(request)
+	if err != nil {
+		return fmt.Errorf("prepare Claude Code plugin listing: %w", err)
+	}
+	listed, err := activator.runPreparedClaudeListResult(ctx, probe.command)
+	if err != nil {
+		return fmt.Errorf("verify Claude Code plugin listing: %w", err)
+	}
+	switch claudePluginStatus(listed.Stdout, request.DeclaredName, probe.activePath) {
+	case claudeStatusInstalled:
+		return nil
+	case claudeStatusAbsent, claudeStatusCollision:
+		return fmt.Errorf("%w: verify Claude Code plugin listing: %s@skills-dir is not enabled at the managed path", errRecognizedNegativeEvidence, request.DeclaredName)
+	default:
+		return fmt.Errorf("Claude Code plugin list output is not recognized")
+	}
+}
+
 func (activator Activator) verifyKiroMCP(ctx context.Context, request domain.ActivationRequest) error {
 	runner, ok := activator.Runner.(duplexCommandRunner)
 	if !ok {
@@ -430,6 +696,18 @@ func (activator Activator) removeCodexMarketplace(ctx context.Context, executabl
 	return nil
 }
 
+// removeCodexPlugin uninstalls the plugin itself (distinct from its
+// marketplace source): it is what clears Codex's own per-plugin
+// config.toml enablement entry and native cache, not just the marketplace
+// registration. Already-absent is treated as success for idempotent retries.
+func (activator Activator) removeCodexPlugin(ctx context.Context, executable, pluginSpec string) error {
+	remove, err := activator.runClientResult(ctx, "Codex CLI", executable, "plugin", "remove", pluginSpec, "--json")
+	if err != nil && !commandOutputContains(remove, "not configured or installed") {
+		return fmt.Errorf("remove managed Codex plugin %s: %w", pluginSpec, err)
+	}
+	return nil
+}
+
 func (activator Activator) runCopilot(ctx context.Context, executable string, args ...string) error {
 	_, err := activator.runCopilotResult(ctx, executable, args...)
 	return err
@@ -453,6 +731,28 @@ func (activator Activator) runClientResult(ctx context.Context, client, executab
 	return result, nil
 }
 
+func (activator Activator) runClaudeListResult(ctx context.Context, executable, configRoot, activePath string) (legacyports.CommandResult, error) {
+	if activator.Runner == nil {
+		return legacyports.CommandResult{}, fmt.Errorf("Claude Code CLI runner is unavailable")
+	}
+	command, err := claudeListCommand(executable, configRoot, activePath)
+	if err != nil {
+		return legacyports.CommandResult{}, err
+	}
+	return activator.runPreparedClaudeListResult(ctx, command)
+}
+
+func (activator Activator) runPreparedClaudeListResult(ctx context.Context, command legacyports.Command) (legacyports.CommandResult, error) {
+	result, err := runClaudeListCommand(ctx, activator.Runner, command)
+	if err != nil {
+		return result, fmt.Errorf("start Claude Code CLI: %w", err)
+	}
+	if result.ExitCode != 0 {
+		return result, fmt.Errorf("Claude Code CLI command failed with exit code %d", result.ExitCode)
+	}
+	return result, nil
+}
+
 func failedActivation(outcome domain.ActivationOutcome, next string, err error) (domain.ActivationOutcome, error) {
 	outcome.Activation = domain.ActivationFailed
 	outcome.Verification = domain.VerificationFailed
@@ -463,6 +763,20 @@ func failedActivation(outcome domain.ActivationOutcome, next string, err error) 
 }
 
 func kiroNativeComponents(components []domain.ComponentDecision) bool {
+	found := false
+	for _, component := range components {
+		if component.Support == domain.SupportUnsupported {
+			continue
+		}
+		if component.Kind != domain.ComponentSkill && component.Kind != domain.ComponentMCPServer {
+			return false
+		}
+		found = true
+	}
+	return found
+}
+
+func openCodeNativeComponents(components []domain.ComponentDecision) bool {
 	found := false
 	for _, component := range components {
 		if component.Support == domain.SupportUnsupported {
@@ -565,6 +879,67 @@ func codexPluginStatus(body []byte, name, marketplace string) codexStatus {
 	return codexStatusAbsent
 }
 
+type claudeStatus int
+
+const (
+	claudeStatusUnknown claudeStatus = iota
+	claudeStatusInstalled
+	claudeStatusAbsent
+	claudeStatusCollision
+)
+
+func claudePluginStatus(body []byte, name, activePath string) claudeStatus {
+	decoder := json.NewDecoder(strings.NewReader(string(body)))
+	decoder.UseNumber()
+	parsed, err := decodeUniqueJSONValue(decoder)
+	if err != nil {
+		return claudeStatusUnknown
+	}
+	if _, tokenErr := decoder.Token(); !errors.Is(tokenErr, io.EOF) {
+		return claudeStatusUnknown
+	}
+	entries, ok := parsed.([]any)
+	if !ok {
+		return claudeStatusUnknown
+	}
+	expectedID := name + "@skills-dir"
+	expectedPath := filepath.Clean(activePath)
+	seen := map[string]struct{}{}
+	found := false
+	for _, value := range entries {
+		entry, ok := value.(map[string]any)
+		if !ok {
+			return claudeStatusUnknown
+		}
+		id, idOK := entry["id"].(string)
+		scope, scopeOK := entry["scope"].(string)
+		enabled, enabledOK := entry["enabled"].(bool)
+		installPath, pathOK := entry["installPath"].(string)
+		if !idOK || !scopeOK || !enabledOK || !pathOK || id == "" || scope == "" || !filepath.IsAbs(installPath) {
+			return claudeStatusUnknown
+		}
+		identity := id + "\x00" + scope + "\x00" + filepath.Clean(installPath)
+		if _, duplicate := seen[identity]; duplicate {
+			return claudeStatusUnknown
+		}
+		seen[identity] = struct{}{}
+		if id != expectedID {
+			continue
+		}
+		if filepath.Clean(installPath) != expectedPath || scope != "user" {
+			return claudeStatusCollision
+		}
+		if found {
+			return claudeStatusUnknown
+		}
+		found = enabled
+	}
+	if found {
+		return claudeStatusInstalled
+	}
+	return claudeStatusAbsent
+}
+
 func decodeUniqueJSONValue(decoder *json.Decoder) (any, error) {
 	token, err := decoder.Token()
 	if err != nil {
@@ -644,7 +1019,10 @@ func foldJSONKey(key string) string {
 	return folded.String()
 }
 
-var copilotInstalledEntry = regexp.MustCompile(`^[ \t]+•[ \t]+([A-Za-z0-9][A-Za-z0-9._-]*@[A-Za-z0-9][A-Za-z0-9._-]*)[ \t]+\(v[0-9]+\.[0-9]+\.[0-9]+(?:[-+][0-9A-Za-z.-]+)?\)[ \t]*$`)
+var copilotInstalledEntry = regexp.MustCompile(`^[ \t]+•[ \t]+([A-Za-z0-9][A-Za-z0-9._-]*@[A-Za-z0-9][A-Za-z0-9._-]*)[ \t]+\(v([0-9]+\.[0-9]+\.[0-9]+(?:[-+][0-9A-Za-z.-]+)?)\)[ \t]*$`)
+var copilotLiveEntry = regexp.MustCompile(`^  • ([A-Za-z0-9][A-Za-z0-9._-]*@[A-Za-z0-9][A-Za-z0-9._-]*) \(v([0-9]+\.[0-9]+\.[0-9]+(?:[-+][0-9A-Za-z.-]+)?)\) \(([A-Za-z0-9_-]+)\)$`)
+
+const copilotLiveHeader = "Live Plugins (loaded from a local marketplace directory, never copied):"
 
 type copilotStatus int
 
@@ -657,7 +1035,52 @@ const (
 var errCopilotListContractUnknown = errors.New("Copilot plugin list output is not recognized")
 var errRecognizedNegativeEvidence = errors.New("recognized negative client evidence")
 
-func copilotPluginStatus(stdout []byte, expected string) copilotStatus {
+func copilotLivePluginStatus(stdout []byte, expected, expectedVersion, expectedPath string) (copilotStatus, bool) {
+	document := strings.TrimSuffix(strings.ReplaceAll(string(stdout), "\r\n", "\n"), "\n")
+	lines := strings.Split(document, "\n")
+	if len(lines) == 0 || lines[0] != copilotLiveHeader {
+		return copilotStatusUnknown, false
+	}
+	if len(lines) < 3 || (len(lines)-1)%2 != 0 || strings.TrimSpace(expectedVersion) == "" || strings.TrimSpace(expectedPath) == "" {
+		return copilotStatusUnknown, true
+	}
+	seen := make(map[string]bool, (len(lines)-1)/2)
+	matches := 0
+	for index := 1; index < len(lines); index += 2 {
+		entry := copilotLiveEntry.FindStringSubmatch(lines[index])
+		if len(entry) != 4 || seen[entry[1]] || (entry[3] != "enabled" && entry[3] != "disabled") {
+			return copilotStatusUnknown, true
+		}
+		seen[entry[1]] = true
+		const pathPrefix = "      from "
+		if !strings.HasPrefix(lines[index+1], pathPrefix) {
+			return copilotStatusUnknown, true
+		}
+		listedPath := strings.TrimPrefix(lines[index+1], pathPrefix)
+		if listedPath == "" || !filepath.IsAbs(listedPath) || listedPath != filepath.Clean(listedPath) {
+			return copilotStatusUnknown, true
+		}
+		if entry[1] != expected {
+			continue
+		}
+		if entry[2] != expectedVersion || entry[3] != "enabled" || expectedPath != filepath.Clean(expectedPath) || listedPath != expectedPath {
+			return copilotStatusUnknown, true
+		}
+		matches++
+	}
+	if matches == 1 {
+		return copilotStatusInstalled, true
+	}
+	if matches > 1 {
+		return copilotStatusUnknown, true
+	}
+	return copilotStatusAbsent, true
+}
+
+func copilotPluginStatus(stdout []byte, expected, expectedVersion, expectedPath string) copilotStatus {
+	if status, recognized := copilotLivePluginStatus(stdout, expected, expectedVersion, expectedPath); recognized {
+		return status
+	}
 	inInstalledSection := false
 	recognizedSection := false
 	recognizedEntry := false
@@ -679,9 +1102,12 @@ func copilotPluginStatus(stdout []byte, expected string) copilotStatus {
 			continue
 		}
 		entry := copilotInstalledEntry.FindStringSubmatch(rawLine)
-		if len(entry) == 2 {
+		if len(entry) == 3 {
 			recognizedEntry = true
 			if entry[1] == expected {
+				if entry[2] != expectedVersion {
+					return copilotStatusUnknown
+				}
 				matches++
 			}
 			continue
@@ -721,7 +1147,7 @@ func activationObservable(request domain.ActivationRequest, runner CommandRunner
 		return false
 	}
 	switch request.Client.ClientID {
-	case domain.ClientCodex, domain.ClientCopilot, domain.ClientVSCode:
+	case domain.ClientCodex, domain.ClientClaude, domain.ClientCopilot, domain.ClientVSCode:
 		return true
 	case domain.ClientKiro:
 		if !kiroNativeComponents(request.Plan.Components) || !isKiroCLI(request.BackendExecutable) {

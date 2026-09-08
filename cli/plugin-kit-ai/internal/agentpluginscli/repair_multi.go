@@ -116,6 +116,13 @@ func runRepairMany(ctx context.Context, cmd *cobra.Command, app App, opts *optio
 			defer loaded.cleanup()
 		}
 	}
+	for _, key := range keys {
+		loaded := loadedByRevision[key]
+		if err := authorizeSecurityAssessment(cmd, app, opts, &loaded); err != nil {
+			return err
+		}
+		loadedByRevision[key] = loaded
+	}
 	service := lifecycleService(app, detected)
 	inputs := make([]usecase.AddInput, 0, len(targets))
 	result := repairMultiResult{Batch: true, Status: "planned", Plugin: installation.DeclaredName, DryRun: opts.dryRun, Targets: make([]repairTargetResult, 0, len(targets))}
@@ -201,6 +208,9 @@ func renderRepairMultiResult(cmd *cobra.Command, opts *options, result repairMul
 		return err
 	}
 	for _, target := range result.Targets {
+		if err := renderOpenCodeRuntimeNotice(cmd.OutOrStdout(), target.Output.Result); err != nil {
+			return err
+		}
 		if _, err := fmt.Fprintf(cmd.OutOrStdout(), "  %s: %s\n", target.Target, target.Status); err != nil {
 			return err
 		}

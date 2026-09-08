@@ -44,13 +44,183 @@ func TestDetectorReturnsAllSupportedClientsWithoutAmbientDiscovery(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(clients) != 6 {
-		t.Fatalf("clients = %d, want 6", len(clients))
+	if len(clients) != len(domain.SupportedClientIDs()) {
+		t.Fatalf("clients = %d, want %d", len(clients), len(domain.SupportedClientIDs()))
 	}
 	for _, client := range clients {
 		if client.Status != domain.DetectionNotDetected {
 			t.Fatalf("client %s unexpectedly detected", client.ClientID)
 		}
+	}
+}
+
+func TestDetectorFindsNewCLIClientsFromOfficialHomeAndXDGSurfaces(t *testing.T) {
+	t.Parallel()
+	home := t.TempDir()
+	xdg := filepath.Join(home, "xdg")
+	for _, root := range []string{filepath.Join(home, ".claude"), filepath.Join(home, ".gemini"), filepath.Join(xdg, "opencode")} {
+		if err := os.MkdirAll(root, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	detector := testDetector(home, map[string]string{
+		"claude":   filepath.Join(home, "bin", "claude"),
+		"gemini":   filepath.Join(home, "bin", "gemini"),
+		"opencode": filepath.Join(home, "bin", "opencode"),
+	})
+	detector.Environment["XDG_CONFIG_HOME"] = xdg
+	clients, err := detector.Detect(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []domain.ClientID{domain.ClientClaude, domain.ClientGemini, domain.ClientOpenCode} {
+		if statusOf(clients, id) != domain.DetectionDetected {
+			t.Fatalf("%s was not detected: %+v", id, clientOf(clients, id))
+		}
+	}
+	if got := clientOf(clients, domain.ClientOpenCode).ConfigRoot; got != filepath.Join(xdg, "opencode") {
+		t.Fatalf("OpenCode config root = %q", got)
+	}
+}
+
+func TestDetectorRespectsClaudeConfigDirectory(t *testing.T) {
+	t.Parallel()
+	home := t.TempDir()
+	configRoot := filepath.Join(home, "isolated-claude")
+	if err := os.MkdirAll(configRoot, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	detector := testDetector(home, map[string]string{"claude": filepath.Join(home, "bin", "claude")})
+	detector.Environment["CLAUDE_CONFIG_DIR"] = configRoot
+	clients, err := detector.Detect(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	claude := clientOf(clients, domain.ClientClaude)
+	if claude.ConfigRoot != configRoot || claude.Status != domain.DetectionDetected {
+		t.Fatalf("Claude detection = %+v", claude)
+	}
+}
+
+func TestDetectorKeepsConfigOnlyClaudeEvidenceWithoutSelectingIt(t *testing.T) {
+	t.Parallel()
+	home := t.TempDir()
+	configRoot := filepath.Join(home, ".claude")
+	if err := os.MkdirAll(configRoot, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	detector := testDetector(home, nil)
+	clients, err := detector.Detect(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	claude := clientOf(clients, domain.ClientClaude)
+	if claude.Status != domain.DetectionNotDetected || claude.ConfigRoot != configRoot {
+		t.Fatalf("config-only Claude detection = %+v", claude)
+	}
+	if !surfaceDetected(claude.Surfaces, "claude_config") || surfaceDetected(claude.Surfaces, "claude_cli") {
+		t.Fatalf("config-only Claude surfaces = %+v", claude.Surfaces)
+	}
+}
+
+func TestNewOSCapturesClientConfigOverrides(t *testing.T) {
+	home := t.TempDir()
+	claudeRoot := filepath.Join(home, "claude-config")
+	t.Setenv("CLAUDE_CONFIG_DIR", claudeRoot)
+	detector := NewOS(home)
+	detector.LookPath = func(string) (string, error) { return "", exec.ErrNotFound }
+	clients, err := detector.Detect(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := clientOf(clients, domain.ClientClaude).ConfigRoot; got != claudeRoot {
+		t.Fatalf("Claude config root = %q, want %q", got, claudeRoot)
+	}
+}
+
+func TestDetectorFindsClineOnlyFromSupportedEditorSurfaces(t *testing.T) {
+	t.Parallel()
+	home := t.TempDir()
+	extension := filepath.Join(home, ".vscode", "extensions", "saoudrizwan.claude-dev-3.26.4")
+	storage := filepath.Join(home, ".config", "Cursor", "User", "globalStorage", "saoudrizwan.claude-dev")
+	for _, root := range []string{extension, storage} {
+		if err := os.MkdirAll(root, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	detector := testDetector(home, nil)
+	clients, err := detector.Detect(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	cline := clientOf(clients, domain.ClientCline)
+	if cline.Status != domain.DetectionDetected || !surfaceDetected(cline.Surfaces, "cline_vscode_extension") || !surfaceDetected(cline.Surfaces, "cline_cursor_config") {
+		t.Fatalf("Cline detection = %+v", cline)
+	}
+	if want := filepath.Join(home, ".cline"); cline.ConfigRoot != want {
+		t.Fatalf("Cline config root = %q, want %q", cline.ConfigRoot, want)
+	}
+}
+
+func TestDetectorFindsWindsurfDevinChannelsWithoutExecutingThem(t *testing.T) {
+	t.Parallel()
+	home := t.TempDir()
+	applications := filepath.Join(home, "Applications")
+	devinConfig := filepath.Join(home, "Library", "Application Support", "Devin", "User")
+	for _, root := range []string{filepath.Join(applications, "Windsurf.app"), devinConfig} {
+		if err := os.MkdirAll(root, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	detector := testDetector(home, nil)
+	detector.GOOS = "darwin"
+	detector.SystemApplicationsDir = applications
+	clients, err := detector.Detect(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	windsurf := clientOf(clients, domain.ClientWindsurf)
+	if windsurf.Status != domain.DetectionDetected || !surfaceDetected(windsurf.Surfaces, "windsurf_desktop") || !surfaceDetected(windsurf.Surfaces, "devin_config") {
+		t.Fatalf("Windsurf / Devin detection = %+v", windsurf)
+	}
+	if want := filepath.Join(home, ".codeium", "windsurf"); windsurf.ConfigRoot != want {
+		t.Fatalf("Windsurf mutation root = %q, want exact stable channel %q", windsurf.ConfigRoot, want)
+	}
+}
+
+func TestDetectorRefusesToGuessAcrossMultipleWindsurfChannels(t *testing.T) {
+	t.Parallel()
+	home := t.TempDir()
+	applications := filepath.Join(home, "Applications")
+	for _, app := range []string{"Windsurf.app", "Windsurf - Next.app"} {
+		if err := os.MkdirAll(filepath.Join(applications, app), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	detector := testDetector(home, nil)
+	detector.GOOS = "darwin"
+	detector.SystemApplicationsDir = applications
+	clients, err := detector.Detect(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	windsurf := clientOf(clients, domain.ClientWindsurf)
+	if windsurf.Status != domain.DetectionDetected || windsurf.ConfigRoot != "" {
+		t.Fatalf("ambiguous Windsurf channels must detect without mutation authority: %+v", windsurf)
+	}
+}
+
+func TestDetectorDoesNotTreatDevinCLIAsLegacyWindsurfMutationAuthority(t *testing.T) {
+	t.Parallel()
+	home := t.TempDir()
+	detector := testDetector(home, map[string]string{"devin": filepath.Join(home, "bin", "devin")})
+	clients, err := detector.Detect(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	windsurf := clientOf(clients, domain.ClientWindsurf)
+	if windsurf.Status != domain.DetectionDetected || windsurf.ConfigRoot != "" {
+		t.Fatalf("Devin-only detection must remain non-mutating: %+v", windsurf)
 	}
 }
 
@@ -508,6 +678,26 @@ func TestDetectorFindsLinuxGUIOnlyFromExactDesktopEntry(t *testing.T) {
 	}
 }
 
+func TestDetectorRespectsGeminiCLIHomeWithoutTouchingRealHome(t *testing.T) {
+	t.Parallel()
+	home := t.TempDir()
+	geminiHome := filepath.Join(t.TempDir(), "isolated-gemini-home")
+	configRoot := filepath.Join(geminiHome, ".gemini")
+	if err := os.MkdirAll(configRoot, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	detector := testDetector(home, nil)
+	detector.Environment["GEMINI_CLI_HOME"] = geminiHome
+	clients, err := detector.Detect(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	gemini := clientOf(clients, domain.ClientGemini)
+	if gemini.Status != domain.DetectionDetected || gemini.ConfigRoot != configRoot {
+		t.Fatalf("Gemini isolated detection = %+v", gemini)
+	}
+}
+
 func testDetector(home string, binaries map[string]string) Detector {
 	applications := filepath.Join(home, "system-applications")
 	return Detector{
@@ -521,7 +711,8 @@ func testDetector(home string, binaries map[string]string) Detector {
 			}
 			return "", exec.ErrNotFound
 		},
-		Lstat: os.Lstat,
+		Lstat:   os.Lstat,
+		ReadDir: os.ReadDir,
 	}
 }
 

@@ -52,7 +52,7 @@ func parseTargetOption(value string) ([]domain.ClientID, error) {
 			return []domain.ClientID{target}, nil
 		}
 		if !supportedTarget(target) {
-			return nil, fmt.Errorf("unsupported target %q; choose codex, chatgpt, cursor, copilot, vscode, or kiro", raw)
+			return nil, fmt.Errorf("unsupported target %q; choose %s", raw, supportedTargetHelp())
 		}
 		if _, duplicate := seen[target]; duplicate {
 			return nil, fmt.Errorf("--target contains duplicate client %q", target)
@@ -65,20 +65,29 @@ func parseTargetOption(value string) ([]domain.ClientID, error) {
 }
 
 func sortTargets(targets []domain.ClientID) {
-	order := map[domain.ClientID]int{
-		domain.ClientCodex: 0, domain.ClientChatGPT: 1, domain.ClientCursor: 2,
-		domain.ClientCopilot: 3, domain.ClientVSCode: 4, domain.ClientKiro: 5,
+	sort.SliceStable(targets, func(i, j int) bool { return targetOrder(targets[i]) < targetOrder(targets[j]) })
+}
+
+func targetOrder(target domain.ClientID) int {
+	for index, supported := range domain.SupportedClientIDs() {
+		if target == supported {
+			return index
+		}
 	}
-	sort.SliceStable(targets, func(i, j int) bool { return order[targets[i]] < order[targets[j]] })
+	return len(domain.SupportedClientIDs())
 }
 
 func supportedTarget(target domain.ClientID) bool {
-	switch target {
-	case domain.ClientCodex, domain.ClientChatGPT, domain.ClientCursor, domain.ClientCopilot, domain.ClientVSCode, domain.ClientKiro:
-		return true
-	default:
-		return false
+	return domain.IsSupportedClient(target)
+}
+
+func supportedTargetHelp() string {
+	ids := domain.SupportedClientIDs()
+	values := make([]string, len(ids))
+	for index, id := range ids {
+		values[index] = string(id)
 	}
+	return strings.Join(values, ", ")
 }
 
 func joinTargets(targets []domain.ClientID) string {

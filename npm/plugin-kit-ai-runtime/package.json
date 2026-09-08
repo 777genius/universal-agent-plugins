@@ -2,7 +2,7 @@
   "name": "plugin-kit-ai-runtime",
   "version": "0.0.0-development",
   "description": "Official Node/TypeScript runtime helpers for plugin-kit-ai executable plugins",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "homepage": "https://github.com/777genius/plugin-kit-ai",
   "repository": {
     "type": "git",
@@ -26,6 +26,7 @@
     "access": "public"
   },
   "files": [
+    "LICENSE",
     "README.md",
     "index.js",
     "index.d.ts"

@@ -1,14 +1,21 @@
 <script setup lang="ts">
 import CommandSnippetCard from '~/components/shared/CommandSnippetCard.vue';
+import { clientLandingPages } from '~/data/clients';
 import { applyCliInvocation, getCliInvocation } from '~/utils/cliInvocation';
+
+withDefaults(defineProps<{ headingTag?: 'h1' | 'h2' }>(), { headingTag: 'h2' });
 
 const { content } = useLandingContent();
 const { t, locale } = useI18n();
 const { data: releaseData, fallbackUrl } = useReleaseDownloads();
 const { quickstartUrl, supportBoundaryUrl } = useDocsLinks();
-const selectedInstallId = ref<string | null>(null);
 
-const releaseVersion = computed(() => releaseData.value?.version || null);
+const releaseVersion = computed(() => {
+  const version = releaseData.value?.version;
+  return (
+    version?.match(/^(?:agentplugins-)?v?(\d+\.\d+\.\d+(?:-[\w.-]+)?(?:\+[\w.-]+)?)$/)?.[1] || null
+  );
+});
 const releaseDate = computed(() => {
   if (!releaseData.value?.pubDate) {
     return '';
@@ -20,9 +27,11 @@ const releaseDate = computed(() => {
 const supportAccent = ['#39ff14', '#00f0ff', '#ffb703', '#f472b6', '#94a3b8'];
 
 const installChannels = computed(() =>
-  content.value.installChannels.map((channel) =>
-    channel.id === 'docs' ? { ...channel, href: quickstartUrl.value } : channel,
-  ),
+  content.value.installChannels
+    .filter((channel) => ['brew', 'script', 'powershell', 'npm'].includes(channel.id))
+    .map((channel) =>
+      channel.id === 'docs' ? { ...channel, href: quickstartUrl.value } : channel,
+    ),
 );
 
 const quickstartInstallChannels = computed(() =>
@@ -31,19 +40,12 @@ const quickstartInstallChannels = computed(() =>
   ),
 );
 
-watchEffect(() => {
-  if (
-    selectedInstallId.value &&
-    quickstartInstallChannels.value.some((channel) => channel.id === selectedInstallId.value)
-  ) {
-    return;
-  }
-
-  selectedInstallId.value =
-    quickstartInstallChannels.value.find((channel) => channel.recommended)?.id ||
-    quickstartInstallChannels.value[0]?.id ||
-    null;
-});
+const {
+  detectedInstallPlatform,
+  recommendedChannelId,
+  selectedInstallChannelId: selectedInstallId,
+  selectInstallChannel,
+} = useInstallChannelSelection(quickstartInstallChannels);
 
 const selectedInstallChannel = computed(
   () =>
@@ -56,8 +58,13 @@ const selectedCliInvocation = computed(() =>
   getCliInvocation(selectedInstallChannel.value?.invocation),
 );
 
-const quickstartSteps = computed(() =>
-  content.value.quickstartSteps.map((step) => {
+const quickstartSteps = computed(() => {
+  const steps =
+    selectedInstallChannel.value?.id === 'npm'
+      ? content.value.quickstartSteps.filter((step) => step.id !== 'install-cli')
+      : content.value.quickstartSteps;
+
+  return steps.map((step) => {
     if (step.id === 'install-cli' && selectedInstallChannel.value?.command) {
       const command =
         selectedInstallChannel.value.id === 'npm'
@@ -73,7 +80,7 @@ const quickstartSteps = computed(() =>
     if (step.id === 'try-plugin') {
       return {
         ...step,
-        command: `${selectedCliInvocation.value} add notion --target claude\n${selectedCliInvocation.value} add notion`,
+        command: applyCliInvocation(step.command, selectedCliInvocation.value),
       };
     }
 
@@ -85,15 +92,17 @@ const quickstartSteps = computed(() =>
     }
 
     return step;
-  }),
-);
+  });
+});
 </script>
 
 <template>
   <section id="download" class="download-section section anchor-offset">
     <v-container>
       <div class="download-section__header">
-        <h2 class="download-section__title">{{ content.download.title }}</h2>
+        <component :is="headingTag" class="download-section__title">{{
+          content.download.title
+        }}</component>
         <p class="download-section__subtitle">{{ content.download.note }}</p>
         <p v-if="releaseVersion" class="download-section__release-info">
           {{ t('download.latestRelease') }} ·
@@ -129,14 +138,33 @@ const quickstartSteps = computed(() =>
                   'download-section__install-tab--active': channel.id === selectedInstallId,
                 }"
                 :aria-pressed="channel.id === selectedInstallId"
-                @click="selectedInstallId = channel.id"
+                @click="selectInstallChannel(channel.id)"
               >
                 <span>{{ channel.title }}</span>
-                <span v-if="channel.recommended" class="download-section__install-tab-badge">
+                <span
+                  v-if="channel.id === recommendedChannelId"
+                  class="download-section__install-tab-badge"
+                >
                   {{ t('download.recommended') }}
                 </span>
               </button>
             </div>
+            <p
+              v-if="detectedInstallPlatform === 'mobile'"
+              class="download-section__platform-note download-section__platform-note--warning"
+            >
+              {{ t('download.mobileUnsupported') }}
+            </p>
+            <p
+              v-else-if="detectedInstallPlatform && detectedInstallPlatform !== 'other'"
+              class="download-section__platform-note"
+            >
+              {{
+                t('download.detectedRecommendation', {
+                  platform: t(`download.platforms.${detectedInstallPlatform}`),
+                })
+              }}
+            </p>
             <p v-if="selectedInstallChannel" class="download-section__install-tabs-note">
               {{ selectedInstallChannel.description }}
             </p>
@@ -176,16 +204,18 @@ const quickstartSteps = computed(() =>
 
         <div class="download-section__support-list">
           <div
-            v-for="(lane, index) in content.supportLanes"
-            :key="lane.id"
+            v-for="(client, index) in clientLandingPages"
+            :key="client.id"
             class="download-section__support-item"
             :style="{ '--accent': supportAccent[index % supportAccent.length] }"
           >
             <div class="download-section__support-main">
-              <h4 class="download-section__support-name">{{ lane.name }}</h4>
-              <span class="download-section__support-status">{{ lane.status }}</span>
+              <h4 class="download-section__support-name">
+                <NuxtLink :to="`/agents/${client.slug}/`">{{ client.name }}</NuxtLink>
+              </h4>
+              <span class="download-section__support-status">{{ client.status }}</span>
             </div>
-            <p class="download-section__support-note">{{ lane.note }}</p>
+            <p class="download-section__support-note">{{ client.note }}. {{ client.activation }}</p>
           </div>
         </div>
 
@@ -371,6 +401,17 @@ const quickstartSteps = computed(() =>
   line-height: 1.55;
 }
 
+.download-section__platform-note {
+  margin: 0;
+  color: #00f0ff;
+  font-size: 0.8rem;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.download-section__platform-note--warning {
+  color: #ffb703;
+}
+
 .download-section__steps {
   display: grid;
   gap: 14px;
@@ -472,6 +513,11 @@ const quickstartSteps = computed(() =>
   font-size: 0.96rem;
   font-weight: 700;
   color: #e0e6ff;
+}
+
+.download-section__support-name a {
+  color: inherit;
+  text-underline-offset: 3px;
 }
 
 .download-section__support-status {
@@ -674,6 +720,10 @@ const quickstartSteps = computed(() =>
   color: #082f49;
   border-color: rgba(8, 145, 178, 0.2);
   background: linear-gradient(135deg, #67e8f9, #22d3ee);
+}
+
+.v-theme--light .download-section__platform-note--warning {
+  color: #92400e;
 }
 
 @media (max-width: 700px) {

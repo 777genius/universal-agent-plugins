@@ -1,0 +1,106 @@
+name: Native Installer
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - install.sh
+      - install.ps1
+      - repotests/agentplugins_native_install_integration_test.go
+      - .github/workflows/agentplugins-native-install.yml
+  pull_request:
+    branches: [main]
+    paths:
+      - install.sh
+      - install.ps1
+      - repotests/agentplugins_native_install_integration_test.go
+      - .github/workflows/agentplugins-native-install.yml
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Published Agentplugins version to install
+        required: true
+        default: 0.1.44
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: agentplugins-native-installer-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unix:
+    name: native install (${{ matrix.target }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: darwin-amd64
+            runner: macos-15-intel
+          - target: darwin-arm64
+            runner: macos-15
+          - target: linux-amd64
+            runner: ubuntu-24.04
+          - target: linux-arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install the published native binary without Node.js
+        env:
+          AGENTPLUGINS_VERSION: ${{ inputs.version || '0.1.44' }}
+          AGENTPLUGINS_BIN_DIR: ${{ runner.temp }}/agentplugins-bin
+          AGENTPLUGINS_OUTPUT_FILE: ${{ runner.temp }}/agentplugins-install.outputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          sh ./install.sh version | tee "${RUNNER_TEMP}/installer-output.txt"
+          expected="${AGENTPLUGINS_VERSION#agentplugins-v}"
+          expected="${expected#v}"
+          test "$("${AGENTPLUGINS_BIN_DIR}/agentplugins" version)" = "agentplugins ${expected}"
+          grep -Fx "version=${expected}" "${AGENTPLUGINS_OUTPUT_FILE}"
+          grep -Fx "path=${AGENTPLUGINS_BIN_DIR}/agentplugins" "${AGENTPLUGINS_OUTPUT_FILE}"
+          grep -Eq '^sha256=[0-9a-f]{64}$' "${AGENTPLUGINS_OUTPUT_FILE}"
+
+  windows:
+    name: native install (${{ matrix.target }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: windows-amd64
+            runner: windows-2025
+          - target: windows-arm64
+            runner: windows-11-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install the published native binary without Node.js
+        shell: pwsh
+        env:
+          AGENTPLUGINS_OUTPUT_FILE: ${{ runner.temp }}\agentplugins-install.outputs
+        run: |
+          $version = "${{ inputs.version || '0.1.44' }}"
+          $resolvedVersion = $version -replace '^agentplugins-v', '' -replace '^v', ''
+          $binDir = Join-Path "${{ runner.temp }}" "agentplugins-bin"
+          & ./install.ps1 -Version $version -BinDir $binDir -Command "version"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $observed = (& (Join-Path $binDir "agentplugins.exe") version | Out-String).Trim()
+          if ($observed -ne "agentplugins $resolvedVersion") {
+            throw "unexpected installed version: $observed"
+          }
+          $outputs = Get-Content -LiteralPath $env:AGENTPLUGINS_OUTPUT_FILE
+          if ($outputs -notcontains "version=$resolvedVersion") {
+            throw "installer output did not contain the exact version"
+          }
+          if (-not ($outputs | Where-Object { $_ -match '^sha256=[0-9a-f]{64}$' })) {
+            throw "installer output did not contain a valid SHA-256"
+          }

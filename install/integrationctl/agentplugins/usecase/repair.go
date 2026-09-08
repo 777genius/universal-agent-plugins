@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/pathpolicy"
@@ -53,12 +54,30 @@ func (service Service) Repair(ctx context.Context, input AddInput) (AddResult, e
 		return AddResult{}, err
 	}
 	result := AddResult{InstallationID: installation.InstallationID, Plan: plan}
+	if err := service.preflightTargetComponents(ctx, input, &plan, &installation, true, false); err != nil {
+		result.Plan = plan
+		return result, err
+	}
+	result.Plan = plan
 	clientKey := domain.ComputeClientBindingID(installation.InstallationID, string(input.Client.ClientID), string(input.Scope), plan.ActivePath)
 	client, ok := installation.Clients[clientKey]
+	if !ok && sameNativeBackend(input.Client.ClientID, domain.ClientCopilot) {
+		for key, binding := range installation.Clients {
+			if binding.Scope != string(input.Scope) || binding.Materialization == domain.MaterializationAbsent ||
+				binding.PhysicalArtifact != plan.PhysicalArtifactID || !sameNativeBackend(domain.ClientID(binding.ClientID), input.Client.ClientID) {
+				continue
+			}
+			clientKey, client, ok = key, binding, true
+			plan.ActivePath = binding.TargetLocator
+			plan.TargetRoot = filepath.Dir(binding.TargetLocator)
+			result.Plan = plan
+			break
+		}
+	}
 	if !ok || (client.Materialization != domain.MaterializationMaterialized && client.Materialization != domain.MaterializationDegraded) {
 		return result, fmt.Errorf("plugin is not materialized for %s", input.Client.ClientID)
 	}
-	if client.ClientBindingID != clientKey || client.ClientID != string(input.Client.ClientID) ||
+	if client.ClientBindingID != clientKey || !sameNativeBackend(domain.ClientID(client.ClientID), input.Client.ClientID) ||
 		client.Scope != string(input.Scope) || client.PhysicalArtifact != physicalID {
 		return result, fmt.Errorf("managed repair target identity does not match the selected binding")
 	}
@@ -76,7 +95,9 @@ func (service Service) Repair(ctx context.Context, input AddInput) (AddResult, e
 	if client.PackageRevision == nil || strings.TrimSpace(client.PackageRevision.ResolvedRevision) != strings.TrimSpace(input.Envelope.Source.ResolvedRevision) {
 		return result, fmt.Errorf("resolved repair package does not match the exact installed revision")
 	}
-	target, err := service.Targets.ResolveTarget(ctx, input.Client, input.Scope, client.PhysicalArtifact)
+	targetClient := input.Client
+	targetClient.ClientID = domain.ClientID(client.ClientID)
+	target, err := service.Targets.ResolveTarget(ctx, targetClient, input.Scope, client.PhysicalArtifact)
 	if err != nil {
 		return result, fmt.Errorf("resolve managed repair target: %w", err)
 	}
@@ -89,9 +110,53 @@ func (service Service) Repair(ctx context.Context, input AddInput) (AddResult, e
 	}
 	verifyErr := service.Stager.Verify(ctx, target.ActivePath, expectedDigest)
 	if verifyErr == nil {
-		verified, verifyErr := service.verifyClientReadOnly(ctx, input, result, client)
-		if verifyErr != nil {
-			return result, verifyErr
+		verified, clientVerifyErr := service.verifyClientReadOnly(ctx, input, result, client)
+		if clientVerifyErr != nil {
+			if !nativeLifecycleClient(input.Client.ClientID) {
+				return result, clientVerifyErr
+			}
+			// The package bytes are intact but an owned native projection is not.
+			// A confirmed repair may reconstruct an absent exact-owned object. The
+			// provider still observes the live object before any effect and rejects
+			// foreign or tampered state.
+			if input.DryRun {
+				return result, nil
+			}
+			if !input.Confirmed {
+				result.RequiresConfirmation = true
+				return result, nil
+			}
+			delivery := domain.StagedDelivery{
+				ClientID: input.Client.ClientID, OwnedBase: result.Plan.TargetRoot,
+				ActivePath: client.TargetLocator, ArtifactDigest: expectedDigest,
+				NativeObjects: append([]domain.NativeObjectOwnership(nil), client.NativeObjects...),
+			}
+			outcome, activationErr := service.Activator.Activate(ctx, domain.ActivationRequest{
+				Client: input.Client, Plan: result.Plan, Delivery: delivery,
+				DeclaredName: input.Envelope.Manifest.Name, Replacing: true,
+				BackendExecutable:     input.BackendExecutable,
+				PreviousNativeObjects: append([]domain.NativeObjectOwnership(nil), client.NativeObjects...),
+			})
+			outcome = preserveManagedAuthentication(outcome, client.Authentication)
+			result.Activation = outcome
+			if activationErr != nil {
+				return result, fmt.Errorf("repair managed native state: %w", activationErr)
+			}
+			repairedClient := client
+			repairedClient.Materialization = domain.MaterializationMaterialized
+			repairedClient.Activation = outcome.Activation
+			repairedClient.Authentication = outcome.Authentication
+			repairedClient.Policy = outcome.Policy
+			repairedClient.Verification = outcome.Verification
+			repairedClient.UpdatedAt = service.now().Format("2006-01-02T15:04:05.999999999Z07:00")
+			installation.Clients[clientKey] = repairedClient
+			installation.UpdatedAt = repairedClient.UpdatedAt
+			state.Installations[index] = installation
+			if saveErr := service.StateStore.Save(state); saveErr != nil {
+				return result, fmt.Errorf("persist repaired native lifecycle: %w", saveErr)
+			}
+			result.Mutated = true
+			return result, nil
 		}
 		corrected := client
 		corrected.Materialization = domain.MaterializationMaterialized
@@ -158,7 +223,7 @@ func (service Service) Repair(ctx context.Context, input AddInput) (AddResult, e
 		}
 	}
 	dataPath := ""
-	if packageNeedsPluginData(input.Envelope) {
+	if packageNeedsPluginData(input.Envelope, plan) {
 		if service.PluginData == nil {
 			return result, fmt.Errorf("PLUGIN_DATA manager is required for stdio repair")
 		}
@@ -176,6 +241,10 @@ func (service Service) Repair(ctx context.Context, input AddInput) (AddResult, e
 		return result, err
 	}
 	defer func() { _ = service.Stager.Discard(context.Background(), delivery) }()
+	delivery, err = bindStagedDeliveryToPhysicalOwner(delivery, plan, &client)
+	if err != nil {
+		return result, err
+	}
 	if delivery.ActivePath != target.ActivePath {
 		return result, fmt.Errorf("stager returned an unexpected repair target")
 	}
@@ -195,6 +264,7 @@ func (service Service) Repair(ctx context.Context, input AddInput) (AddResult, e
 	desiredClient := client
 	desiredClient.Materialization = domain.MaterializationMaterialized
 	desiredClient.Verification = domain.VerificationPackageValid
+	desiredClient.NativeObjects = append([]domain.NativeObjectOwnership(nil), delivery.NativeObjects...)
 	desiredClient.UpdatedAt = service.now().Format("2006-01-02T15:04:05.999999999Z07:00")
 	installation.Clients[clientKey] = desiredClient
 	installation.UpdatedAt = desiredClient.UpdatedAt
@@ -215,7 +285,57 @@ func (service Service) Repair(ctx context.Context, input AddInput) (AddResult, e
 	}
 	result.Mutated = true
 	result.Activation = verifiedState
+	if nativeLifecycleClient(input.Client.ClientID) {
+		outcome, activationErr := service.Activator.Activate(ctx, domain.ActivationRequest{
+			Client: input.Client, Plan: plan,
+			Delivery: domain.StagedDelivery{
+				ClientID: delivery.ClientID, OwnedBase: delivery.OwnedBase,
+				ActivePath: delivery.ActivePath, ArtifactDigest: delivery.ArtifactDigest,
+				NativeObjects: append([]domain.NativeObjectOwnership(nil), delivery.NativeObjects...),
+			},
+			DeclaredName: input.Envelope.Manifest.Name, Replacing: true,
+			BackendExecutable:     input.BackendExecutable,
+			PreviousNativeObjects: append([]domain.NativeObjectOwnership(nil), client.NativeObjects...),
+		})
+		outcome = preserveManagedAuthentication(outcome, client.Authentication)
+		result.Activation = outcome
+		if _, updateErr := service.updateLifecycle(installation.InstallationID, clientKey, outcome); updateErr != nil {
+			if activationErr != nil {
+				return result, fmt.Errorf("reapply repaired native state: %v; persist verification state: %w", activationErr, updateErr)
+			}
+			return result, updateErr
+		}
+		if activationErr != nil {
+			return result, fmt.Errorf("reapply repaired native state: %w", activationErr)
+		}
+	} else if input.Client.ClientID == domain.ClientClaude {
+		outcome, activationErr := service.Activator.Activate(ctx, domain.ActivationRequest{
+			Client: input.Client, Plan: plan,
+			Delivery:     domain.StagedDelivery{ClientID: delivery.ClientID, OwnedBase: delivery.OwnedBase, ActivePath: delivery.ActivePath, ArtifactDigest: delivery.ArtifactDigest, NativeObjects: delivery.NativeObjects},
+			DeclaredName: input.Envelope.Manifest.Name, Replacing: true, BackendExecutable: input.BackendExecutable, VerifyOnly: true,
+		})
+		outcome = preserveManagedAuthentication(outcome, client.Authentication)
+		result.Activation = outcome
+		if _, updateErr := service.updateLifecycle(installation.InstallationID, clientKey, outcome); updateErr != nil {
+			if activationErr != nil {
+				return result, fmt.Errorf("verify repaired Claude Code plugin: %v; persist verification state: %w", activationErr, updateErr)
+			}
+			return result, updateErr
+		}
+		if activationErr != nil {
+			return result, activationErr
+		}
+	}
 	return result, nil
+}
+
+func nativeLifecycleClient(clientID domain.ClientID) bool {
+	switch clientID {
+	case domain.ClientGemini, domain.ClientOpenCode, domain.ClientCline, domain.ClientWindsurf:
+		return true
+	default:
+		return false
+	}
 }
 
 func (service Service) verifyRepairPrecondition(ctx context.Context, activePath, managedDigest string, reviewedKind ports.VerificationKind, reviewedDigest string) error {

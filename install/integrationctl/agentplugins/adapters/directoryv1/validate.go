@@ -363,6 +363,9 @@ func validatePolicy(p domain.DirectoryReleasePolicy) error {
 			if t.AppBinding == nil || t.AppBinding.AppKey == "" || t.AppBinding.ID == "" || t.AppBinding.MCPServer == "" {
 				return fmt.Errorf("chatgpt app binding required")
 			}
+			if err := domain.ValidateAppBindingIdentity(t.AppBinding.AppKey, t.AppBinding.ID, t.AppBinding.MCPServer); err != nil {
+				return fmt.Errorf("invalid chatgpt app binding: %w", err)
+			}
 		} else if t.AppBinding != nil {
 			return fmt.Errorf("app binding only allowed for chatgpt")
 		}
@@ -427,7 +430,7 @@ func parseSemver(v string) ([3]uint64, error) {
 	return out, nil
 }
 func validClient(v domain.ClientID) bool {
-	return v == domain.ClientCodex || v == domain.ClientChatGPT || v == domain.ClientCursor || v == domain.ClientCopilot || v == domain.ClientVSCode || v == domain.ClientKiro
+	return domain.IsSupportedClient(v)
 }
 func oneOf(v string, values ...string) bool {
 	for _, x := range values {

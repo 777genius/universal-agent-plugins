@@ -15,6 +15,17 @@ const MAX_REDIRECTS = 5;
 const DOWNLOAD_TIMEOUT_MS = 30_000;
 const LOCK_TIMEOUT_MS = 30_000;
 const PROOF_MODE = "local-frozen-release-asset-v1";
+const PRODUCER_REPOSITORY = "777genius/plugin-kit-ai";
+// Source-document snapshot; the tested installer retains its own identity.
+const HISTORICAL_EVIDENCE_COMMIT = "01f02cb51cfe5f664d4d5f52b295c59c7ea03495";
+const HISTORICAL_EVIDENCE_DOCUMENT_SHA256 = "0cecbf12a96cf578d12e1cb2f582aa13dca2d9d900ccaefd223f5d7c1030ea65";
+const HISTORICAL_EVIDENCE_RECORD_SHA256 = "437da1bc7423a85b231be139ff9bfbd7e89c942ef216a61ebde668c08a9c2ee3";
+const COMMIT = /^[0-9a-f]{40}$/;
+
+function exactKeys(value, keys) {
+  return value && typeof value === "object" && !Array.isArray(value) &&
+    Object.keys(value).sort().join(",") === [...keys].sort().join(",");
+}
 
 function loadRelease(packageRoot, platformInfo) {
   const pkg = JSON.parse(fs.readFileSync(path.join(packageRoot, "package.json"), "utf8"));
@@ -23,7 +34,7 @@ function loadRelease(packageRoot, platformInfo) {
   if (!VERSION.test(version) || version === "0.0.0-development") {
     throw new Error("this development npm package has no released binary; use an exact published version");
   }
-  if (manifest.schema_version !== 1 || manifest.version !== version) {
+  if (manifest.schema_version !== 2 || manifest.version !== version) {
     throw new Error("npm version and embedded binary manifest do not match");
   }
   if (manifest.npm_package !== pkg.name) {
@@ -34,6 +45,43 @@ function loadRelease(packageRoot, platformInfo) {
   }
   if (manifest.tag !== `agentplugins-v${version}`) {
     throw new Error("embedded release tag does not match npm version");
+  }
+  const producer = manifest.producer;
+  const releaseManifest = producer && producer.release_manifest;
+  if (!exactKeys(producer, ["repository", "tag", "commit", "release_manifest"]) ||
+      producer.repository !== PRODUCER_REPOSITORY || producer.repository !== manifest.repository ||
+      producer.tag !== manifest.tag || !COMMIT.test(String(producer.commit || "")) ||
+      !exactKeys(releaseManifest, ["schema_version", "sha256", "version"]) ||
+      releaseManifest.schema_version !== 2 || releaseManifest.version !== version ||
+      !DIGEST.test(String(releaseManifest.sha256 || ""))) {
+    throw new Error("embedded producer release identity is invalid or incomplete");
+  }
+  const evidence = manifest.client_evidence;
+  const installer = evidence && evidence.installer;
+  const evidencePackage = evidence && evidence.package;
+  const source = evidence && evidence.source;
+  const claims = evidence && evidence.claim_boundary;
+  const claimKeys = ["lifecycle_e2e", "client_discovery_e2e", "browser_tool_runtime_e2e", "model_turn_e2e", "login_e2e", "oauth_e2e", "windsurf_skill_activation_claimed"];
+  if (!exactKeys(evidence, ["schema_version", "kind", "recorded_at", "document_sha256", "record_sha256", "source", "installer", "package", "claim_boundary"]) ||
+      evidence.schema_version !== 1 || evidence.kind !== "agentplugins_client_lifecycle" ||
+      !/^\d{4}-\d{2}-\d{2}$/.test(String(evidence.recorded_at || "")) ||
+      evidence.document_sha256 !== HISTORICAL_EVIDENCE_DOCUMENT_SHA256 || evidence.record_sha256 !== HISTORICAL_EVIDENCE_RECORD_SHA256 ||
+      !exactKeys(source, ["repository", "commit", "document", "record"]) || source.repository !== PRODUCER_REPOSITORY || source.commit !== HISTORICAL_EVIDENCE_COMMIT ||
+      !exactKeys(source.document, ["path", "sha256"]) || source.document.path !== "docs/AGENTPLUGINS_CLIENT_E2E.md" || source.document.sha256 !== evidence.document_sha256 ||
+      !exactKeys(source.record, ["path", "sha256"]) || source.record.path !== "docs/evidence/agentplugins-client-e2e-2026-08-30.json" || source.record.sha256 !== evidence.record_sha256 ||
+      !exactKeys(installer, ["repository", "commit", "tree", "version", "binary_sha256"]) ||
+      installer.repository !== PRODUCER_REPOSITORY || !COMMIT.test(String(installer.commit || "")) ||
+      !COMMIT.test(String(installer.tree || "")) || !/^\d+\.\d+\.\d+$/.test(String(installer.version || "")) ||
+      !DIGEST.test(String(installer.binary_sha256 || "")) ||
+      !exactKeys(evidencePackage, ["selector", "revision", "tree_digest", "manifest_digest"]) ||
+      !COMMIT.test(String(evidencePackage.revision || "")) ||
+      !/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+@[0-9a-f]{40}$/.test(String(evidencePackage.selector || "")) ||
+      !String(evidencePackage.selector).endsWith(`@${evidencePackage.revision}`) ||
+      !/^sha256:[0-9a-f]{64}$/.test(String(evidencePackage.tree_digest || "")) ||
+      !/^sha256:[0-9a-f]{64}$/.test(String(evidencePackage.manifest_digest || "")) ||
+      !exactKeys(claims, claimKeys) || claims.lifecycle_e2e !== true || claims.client_discovery_e2e !== true ||
+      claimKeys.slice(2).some((key) => claims[key] !== false)) {
+    throw new Error("embedded historical client evidence identity is invalid or incomplete");
   }
   const asset = manifest.assets && manifest.assets[platformInfo.key];
   if (!asset || asset.file !== expectedAssetName(version, platformInfo) || !DIGEST.test(String(asset.sha256 || "")) || !Number.isSafeInteger(asset.size) || asset.size <= 0) {
@@ -213,8 +261,19 @@ function delay(milliseconds) {
 }
 
 async function acquireLock(target, options = {}) {
-  const lockRoot = path.join(os.tmpdir(), "agentplugins-npm-locks");
+  const lockRoot = options.lockRoot || path.join(cacheRoot(
+    options.environment || process.env,
+    options.platform || process.platform,
+    options.home || os.homedir()
+  ), ".locks");
   await fsp.mkdir(lockRoot, { recursive: true, mode: 0o700 });
+  const rootStat = await fsp.lstat(lockRoot);
+  const expectedUid = typeof process.geteuid === "function" ? process.geteuid() : null;
+  if (!rootStat.isDirectory() || rootStat.isSymbolicLink() ||
+      (expectedUid !== null && rootStat.uid !== expectedUid) ||
+      (process.platform !== "win32" && (rootStat.mode & 0o777) !== 0o700)) {
+    throw new Error("agentplugins cache lock root must be a user-owned mode-0700 real directory");
+  }
   const name = crypto.createHash("sha256").update(target).digest("hex") + ".lock";
   const lockPath = path.join(lockRoot, name);
   const started = Date.now();
@@ -256,8 +315,8 @@ async function acquireLock(target, options = {}) {
   }
 }
 
-async function installVerifiedBinary(downloaded, binaryPath, release, platformInfo) {
-  const releaseLock = await acquireLock(binaryPath);
+async function installVerifiedBinary(downloaded, binaryPath, release, platformInfo, lockRoot) {
+  const releaseLock = await acquireLock(binaryPath, { lockRoot });
   try {
     if (await validCachedBinary(binaryPath, release.asset.sha256)) {
       return binaryPath;
@@ -315,6 +374,7 @@ async function ensureBinary(options = {}) {
   const platformInfo = detectPlatform(options.platform, options.arch);
   const release = loadRelease(packageRoot, platformInfo);
   const root = options.cacheRoot || cacheRoot(options.environment, options.platform);
+  const lockRoot = path.join(root, ".locks");
   const binaryPath = path.join(root, release.version, platformInfo.key, platformInfo.binaryName);
   if (await validCachedBinary(binaryPath, release.asset.sha256)) {
     return { binaryPath, version: release.version, cacheHit: true };
@@ -326,7 +386,7 @@ async function ensureBinary(options = {}) {
         throw new Error("internal proof release asset filename does not match embedded metadata");
       }
       await verifyLocalProofAsset(proofAsset, release.asset);
-      await installVerifiedBinary(proofAsset, binaryPath, release, platformInfo);
+      await installVerifiedBinary(proofAsset, binaryPath, release, platformInfo, lockRoot);
       return { binaryPath, version: release.version, cacheHit: false, source: "local_frozen_asset" };
     } catch (error) {
       const cold = !(await validCachedBinary(binaryPath, release.asset.sha256));
@@ -339,7 +399,7 @@ async function ensureBinary(options = {}) {
   const temporary = path.join(os.tmpdir(), `agentplugins-download-${process.pid}-${crypto.randomBytes(8).toString("hex")}`);
   try {
     await downloadFile(url, temporary, release.asset, options);
-    await installVerifiedBinary(temporary, binaryPath, release, platformInfo);
+    await installVerifiedBinary(temporary, binaryPath, release, platformInfo, lockRoot);
     return { binaryPath, version: release.version, cacheHit: false };
   } catch (error) {
     const cold = !(await validCachedBinary(binaryPath, release.asset.sha256));

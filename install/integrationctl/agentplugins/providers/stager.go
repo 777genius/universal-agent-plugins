@@ -9,18 +9,19 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/atomicfile"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/filetree"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/pathpolicy"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/managedstdio"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/packagesnapshot"
 )
 
 type Stager struct {
+	LauncherSource  *managedstdio.Source
 	SnapshotBuilder packagesnapshot.Builder
 	PluginDataRoot  string
 }
@@ -29,11 +30,15 @@ func (stager Stager) Discard(ctx context.Context, delivery domain.StagedDelivery
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	if filepath.Dir(filepath.Clean(delivery.StagingPath)) != filepath.Clean(delivery.OwnedBase) ||
+	stagingBase := filepath.Clean(delivery.OwnedBase)
+	if delivery.ClientID == domain.ClientClaude {
+		stagingBase = filepath.Dir(stagingBase)
+	}
+	if filepath.Dir(filepath.Clean(delivery.StagingPath)) != stagingBase ||
 		!strings.HasPrefix(filepath.Base(delivery.StagingPath), ".agentplugins-staging-") {
 		return fmt.Errorf("refuse unsafe staged delivery cleanup")
 	}
-	return removeStaging(delivery.OwnedBase, delivery.StagingPath)
+	return removeStaging(stagingBase, delivery.StagingPath)
 }
 
 func (stager Stager) Verify(ctx context.Context, root, expectedDigest string) error {
@@ -139,7 +144,7 @@ func (stager Stager) stage(
 	if err := validatePlanPaths(plan); err != nil {
 		return domain.StagedDelivery{}, err
 	}
-	if err := validateReservedStdioEnvironment(envelope); err != nil {
+	if err := validateReservedStdioEnvironment(envelope, plan); err != nil {
 		return domain.StagedDelivery{}, err
 	}
 	if err := os.MkdirAll(plan.TargetRoot, 0o700); err != nil {
@@ -149,8 +154,20 @@ func (stager Stager) stage(
 		return domain.StagedDelivery{}, err
 	}
 	suffix := sha256.Sum256([]byte(operationID))
-	stagingPath := filepath.Join(plan.TargetRoot, ".agentplugins-staging-"+hex.EncodeToString(suffix[:8]))
-	if err := pathpolicy.RequireContainedChild(plan.TargetRoot, stagingPath); err != nil {
+	stagingBase := plan.TargetRoot
+	// Claude Code discovers every plugin-shaped directory directly below its
+	// skills root. Keep the transaction staging directory beside that watched
+	// root so a pre-commit read-only `plugin list` cannot mistake it for an
+	// installed plugin. TargetAnchor and TargetRoot are on the same configured
+	// client filesystem; dirswap still performs the final atomic rename.
+	if plan.ClientID == domain.ClientClaude {
+		stagingBase = plan.TargetAnchor
+	}
+	if err := os.MkdirAll(stagingBase, 0o700); err != nil {
+		return domain.StagedDelivery{}, fmt.Errorf("create client staging root: %w", err)
+	}
+	stagingPath := filepath.Join(stagingBase, ".agentplugins-staging-"+hex.EncodeToString(suffix[:8]))
+	if err := pathpolicy.RequireContainedChild(stagingBase, stagingPath); err != nil {
 		return domain.StagedDelivery{}, fmt.Errorf("unsafe staging path: %w", err)
 	}
 	if _, statErr := os.Lstat(stagingPath); statErr == nil {
@@ -160,7 +177,7 @@ func (stager Stager) stage(
 	}
 	defer func() {
 		if err != nil {
-			_ = removeStaging(plan.TargetRoot, stagingPath)
+			_ = removeStaging(stagingBase, stagingPath)
 		}
 	}()
 	if err := filetree.CopyDir(envelope.SnapshotRoot, stagingPath); err != nil {
@@ -173,6 +190,13 @@ func (stager Stager) stage(
 		switch plan.ClientID {
 		case domain.ClientCodex:
 			if err := projectOpenAI(stagingPath, envelope, plan, hints, pluginDataPath); err != nil {
+				return domain.StagedDelivery{}, err
+			}
+		case domain.ClientClaude:
+			if err := stager.deliverManagedStdio(stagingPath, envelope, plan); err != nil {
+				return domain.StagedDelivery{}, err
+			}
+			if err := projectClaude(stagingPath, envelope, plan, pluginDataPath); err != nil {
 				return domain.StagedDelivery{}, err
 			}
 		case domain.ClientChatGPT:
@@ -191,13 +215,39 @@ func (stager Stager) stage(
 			return domain.StagedDelivery{}, err
 		}
 	}
+	var geminiObjects []domain.NativeObjectOwnership
+	if plan.ClientID == domain.ClientGemini {
+		var err error
+		geminiObjects, err = buildGeminiNativeObjects(stagingPath, envelope, plan, pluginDataPath)
+		if err != nil {
+			return domain.StagedDelivery{}, err
+		}
+	}
 	if plan.ClientID == domain.ClientCursor {
 		if err := projectCursor(stagingPath, envelope, plan, pluginDataPath); err != nil {
 			return domain.StagedDelivery{}, err
 		}
 	}
+	if plan.ClientID == domain.ClientOpenCode {
+		if err := projectOpenCodeNative(stagingPath, envelope, plan, pluginDataPath); err != nil {
+			return domain.StagedDelivery{}, err
+		}
+	}
+	if plan.ClientID == domain.ClientCline {
+		if err := projectClineNative(stagingPath, envelope, plan, pluginDataPath); err != nil {
+			return domain.StagedDelivery{}, err
+		}
+	}
 	if plan.ClientID == domain.ClientCopilot || plan.ClientID == domain.ClientVSCode {
 		if err := projectCopilotMarketplace(stagingPath, envelope, plan); err != nil {
+			return domain.StagedDelivery{}, err
+		}
+	}
+	if plan.ClientID == domain.ClientWindsurf {
+		if err := stager.deliverManagedStdio(stagingPath, envelope, plan); err != nil {
+			return domain.StagedDelivery{}, err
+		}
+		if err := projectWindsurfMCP(stagingPath, envelope, plan, pluginDataPath); err != nil {
 			return domain.StagedDelivery{}, err
 		}
 	}
@@ -226,6 +276,28 @@ func (stager Stager) stage(
 		}
 		objects = append(objects, kiroObjects...)
 	}
+	if plan.ClientID == domain.ClientOpenCode {
+		openCodeObjects, err := buildOpenCodeNativeObjects(stagingPath, envelope, plan)
+		if err != nil {
+			return domain.StagedDelivery{}, err
+		}
+		objects = append(objects, openCodeObjects...)
+	}
+	if plan.ClientID == domain.ClientCline {
+		clineObjects, err := buildClineNativeObjects(stagingPath, envelope, plan)
+		if err != nil {
+			return domain.StagedDelivery{}, err
+		}
+		objects = append(objects, clineObjects...)
+	}
+	objects = append(objects, geminiObjects...)
+	if plan.ClientID == domain.ClientWindsurf {
+		windsurfObjects, err := buildWindsurfNativeObjects(stagingPath, plan)
+		if err != nil {
+			return domain.StagedDelivery{}, err
+		}
+		objects = append(objects, windsurfObjects...)
+	}
 	return domain.StagedDelivery{
 		ClientID:       plan.ClientID,
 		OwnedBase:      plan.TargetRoot,
@@ -236,8 +308,9 @@ func (stager Stager) stage(
 	}, nil
 }
 
-func validateReservedStdioEnvironment(envelope domain.PackageEnvelope) error {
-	for name, server := range envelope.MCP.Servers {
+func validateReservedStdioEnvironment(envelope domain.PackageEnvelope, plan domain.DeliveryPlan) error {
+	for _, name := range domain.SelectedMCPNames(plan) {
+		server := envelope.MCP.Servers[name]
 		if server.Type != "stdio" {
 			continue
 		}
@@ -276,6 +349,9 @@ func validatePlanPaths(plan domain.DeliveryPlan) error {
 	if err := pathpolicy.RequireContainedChild(plan.TargetAnchor, plan.TargetRoot); err != nil {
 		return fmt.Errorf("unsafe delivery target root: %w", err)
 	}
+	if plan.ClientID == domain.ClientClaude && filepath.Clean(plan.TargetRoot) != filepath.Join(filepath.Clean(plan.TargetAnchor), "skills") {
+		return fmt.Errorf("Claude delivery target root must be the exact configured skills directory")
+	}
 	if filepath.Dir(filepath.Clean(plan.ActivePath)) != filepath.Clean(plan.TargetRoot) {
 		return fmt.Errorf("delivery active path must be a direct child of target root")
 	}
@@ -286,6 +362,9 @@ func validatePlanPaths(plan domain.DeliveryPlan) error {
 }
 
 func sanitizePackage(root string, envelope domain.PackageEnvelope, plan domain.DeliveryPlan) error {
+	if err := removeUnsupportedPortableHooks(root); err != nil {
+		return err
+	}
 	if err := removeInvalidAndUnsupportedSkills(root, envelope, plan); err != nil {
 		return err
 	}
@@ -295,7 +374,27 @@ func sanitizePackage(root string, envelope domain.PackageEnvelope, plan domain.D
 	if err := writeSanitizedApp(root, envelope, plan); err != nil {
 		return err
 	}
-	return writeSanitizedExtensions(root, plan)
+	return writeSanitizedExtensions(root, envelope, plan)
+}
+
+func removeUnsupportedPortableHooks(root string) error {
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		return fmt.Errorf("inspect staged package root: %w", err)
+	}
+	for _, entry := range entries {
+		if !strings.EqualFold(entry.Name(), "hooks") {
+			continue
+		}
+		candidate := filepath.Join(root, entry.Name())
+		if err := pathpolicy.RequireContainedChild(root, candidate); err != nil {
+			return fmt.Errorf("unsafe staged hooks path: %w", err)
+		}
+		if err := os.RemoveAll(candidate); err != nil {
+			return fmt.Errorf("remove unsupported staged hooks: %w", err)
+		}
+	}
+	return nil
 }
 
 func writeSanitizedApp(root string, envelope domain.PackageEnvelope, plan domain.DeliveryPlan) error {
@@ -370,14 +469,21 @@ func writeSanitizedMCP(root string, envelope domain.PackageEnvelope, plan domain
 	return writeJSON(path, document)
 }
 
-func writeSanitizedExtensions(root string, plan domain.DeliveryPlan) error {
+func writeSanitizedExtensions(root string, envelope domain.PackageEnvelope, plan domain.DeliveryPlan) error {
 	var unsupported []string
 	for _, component := range plan.Components {
 		if component.Kind == domain.ComponentExtension && component.Support == domain.SupportUnsupported {
 			unsupported = append(unsupported, component.Name)
 		}
 	}
-	if len(unsupported) == 0 {
+	ignoredInvalid := false
+	for _, diagnostic := range envelope.Diagnostics {
+		if diagnostic.Code == "plugin_extensions_ignored" {
+			ignoredInvalid = true
+			break
+		}
+	}
+	if len(unsupported) == 0 && !ignoredInvalid {
 		return nil
 	}
 	path := filepath.Join(root, "plugin.json")
@@ -388,6 +494,10 @@ func writeSanitizedExtensions(root string, plan domain.DeliveryPlan) error {
 	var document map[string]json.RawMessage
 	if err := json.Unmarshal(body, &document); err != nil {
 		return fmt.Errorf("decode staged plugin.json: %w", err)
+	}
+	if ignoredInvalid {
+		delete(document, "extensions")
+		return writeJSON(path, document)
 	}
 	var extensions map[string]json.RawMessage
 	if raw := document["extensions"]; len(raw) > 0 {
@@ -462,7 +572,7 @@ func projectOpenAIMCP(root string, envelope domain.PackageEnvelope, serverNames 
 		switch server.Type {
 		case "stdio":
 			delete(config, "type")
-			if err := applyStdioDataContract(config, pluginRoot, dataPath); err != nil {
+			if err := applyStdioDataContract(config, pluginRoot, dataPath, root); err != nil {
 				return fmt.Errorf("stdio MCP server %s: %w", name, err)
 			}
 		case "streamable-http":
@@ -495,7 +605,7 @@ func projectKiroMCP(root string, envelope domain.PackageEnvelope, plan domain.De
 		server := envelope.MCP.Servers[name]
 		config := cloneObject(server.Decoded)
 		if server.Type == "stdio" {
-			if err := applyStdioDataContract(config, plan.ActivePath, dataPath); err != nil {
+			if err := applyStdioDataContract(config, plan.ActivePath, dataPath, root); err != nil {
 				return fmt.Errorf("project Kiro stdio MCP server %s: %w", name, err)
 			}
 		}
@@ -553,7 +663,7 @@ func projectCursorMCP(root string, envelope domain.PackageEnvelope, serverNames 
 		switch server.Type {
 		case "stdio":
 			delete(config, "type")
-			if err := applyStdioDataContract(config, pluginRoot, dataPath); err != nil {
+			if err := applyStdioDataContract(config, pluginRoot, dataPath, root); err != nil {
 				return fmt.Errorf("project Cursor stdio MCP server %s: %w", name, err)
 			}
 		case "streamable-http":
@@ -632,14 +742,7 @@ func projectedOpenAIManifest(envelope domain.PackageEnvelope) (map[string]any, e
 }
 
 func supportedMCPNames(plan domain.DeliveryPlan) []string {
-	var names []string
-	for _, component := range plan.Components {
-		if component.Kind == domain.ComponentMCPServer && component.Support != domain.SupportUnsupported {
-			names = append(names, component.Name)
-		}
-	}
-	sort.Strings(names)
-	return names
+	return domain.SelectedMCPNames(plan)
 }
 
 func hasSupported(plan domain.DeliveryPlan, kind domain.ComponentKind) bool {
@@ -654,16 +757,38 @@ func hasSupported(plan domain.DeliveryPlan, kind domain.ComponentKind) bool {
 func cloneObject(source map[string]any) map[string]any {
 	result := make(map[string]any, len(source))
 	for key, value := range source {
-		result[key] = value
+		result[key] = cloneJSONValue(value)
 	}
 	return result
 }
 
-func applyStdioDataContract(config map[string]any, pluginRoot, dataPath string) error {
-	expand := func(value string) string {
-		value = strings.ReplaceAll(value, "${PLUGIN_ROOT}", pluginRoot)
-		return strings.ReplaceAll(value, "${PLUGIN_DATA}", dataPath)
+func cloneJSONValue(value any) any {
+	switch value := value.(type) {
+	case map[string]any:
+		return cloneObject(value)
+	case []any:
+		result := make([]any, len(value))
+		for index, item := range value {
+			result[index] = cloneJSONValue(item)
+		}
+		return result
+	case map[string]string:
+		result := make(map[string]string, len(value))
+		for key, item := range value {
+			result[key] = item
+		}
+		return result
+	case []string:
+		return append([]string(nil), value...)
+	case json.RawMessage:
+		return append(json.RawMessage(nil), value...)
+	default:
+		return value
 	}
+}
+
+func applyStdioDataContract(config map[string]any, pluginRoot, dataPath string, observationRoot ...string) error {
+	expand := strings.NewReplacer("${PLUGIN_ROOT}", pluginRoot, "${PLUGIN_DATA}", dataPath).Replace
 	switch env := config["env"].(type) {
 	case map[string]any:
 		if _, exists := env["PLUGIN_ROOT"]; exists {
@@ -706,32 +831,27 @@ func applyStdioDataContract(config map[string]any, pluginRoot, dataPath string) 
 			args[index] = expand(args[index])
 		}
 	}
-	if command, ok := config["command"].(string); ok && strings.HasPrefix(command, "./") {
-		command = filepath.Clean(filepath.Join(pluginRoot, filepath.FromSlash(strings.TrimPrefix(command, "./"))))
-		if !pathContainedBy(pluginRoot, command) {
-			return fmt.Errorf("stdio command escapes PLUGIN_ROOT")
-		}
-		config["command"] = command
+	command, _ := config["command"].(string)
+	cwd, _ := config["cwd"].(string)
+	resolvedCommand, resolvedCWD, err := resolveStdioPaths(command, cwd, pluginRoot, dataPath, observationRoot...)
+	if err != nil {
+		return err
 	}
-	if cwd, ok := config["cwd"].(string); ok && cwd != "" {
-		cwd = expand(cwd)
-		if !filepath.IsAbs(cwd) {
-			cwd = filepath.Join(pluginRoot, cwd)
-		}
-		cwd = filepath.Clean(cwd)
-		if !pathContainedBy(pluginRoot, cwd) && !pathContainedBy(dataPath, cwd) {
-			return fmt.Errorf("stdio cwd escapes PLUGIN_ROOT and PLUGIN_DATA")
-		}
-		config["cwd"] = cwd
-	} else {
-		config["cwd"] = pluginRoot
-	}
+	config["command"], config["cwd"] = resolvedCommand, resolvedCWD
 	return nil
 }
 
 func pathContainedBy(root, candidate string) bool {
-	relative, err := filepath.Rel(filepath.Clean(root), filepath.Clean(candidate))
-	return err == nil && relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator))
+	resolvedRoot, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		return false
+	}
+	resolvedCandidate, err := filepath.EvalSymlinks(candidate)
+	if err != nil {
+		return false
+	}
+	relative, err := filepath.Rel(resolvedRoot, resolvedCandidate)
+	return err == nil && !filepath.IsAbs(relative) && relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator))
 }
 
 func writeJSON(path string, value any) error {

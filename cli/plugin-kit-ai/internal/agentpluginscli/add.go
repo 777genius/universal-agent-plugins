@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/usecase"
 	"github.com/spf13/cobra"
 )
@@ -19,16 +20,27 @@ func newAddCommand(app App, opts *options) *cobra.Command {
 		Use:     "add <name-or-source>",
 		Aliases: []string{"install"},
 		Short:   "Plan and install one Agent Plugins 1.0 package for one or more clients",
-		Args:    cobra.ExactArgs(1),
+		Args: func(cmd *cobra.Command, args []string) error {
+			if err := cobra.ExactArgs(1)(cmd, args); err != nil {
+				if len(args) == 0 && opts.format != "json" {
+					return fmt.Errorf("%w\nProvide a plugin name or source, for example:\n  agentplugins add ./my-plugin\nSee agentplugins add --help", err)
+				}
+				return err
+			}
+			return nil
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := validateCommonOptions(opts); err != nil {
 				return err
 			}
 			var detectedClients []domain.DetectedClient
 			if strings.TrimSpace(opts.target) == "" && app.Terminal {
-				selection, clients, err := promptDetectedTargets(cmd.Context(), cmd, app, !opts.dryRun && isDirectorySelector(args[0]))
+				selection, clients, preloaded, err := promptCompatibleDetectedTargets(cmd.Context(), cmd, app, args[0])
 				if err != nil {
 					return err
+				}
+				if preloaded != nil && preloaded.cleanup != nil {
+					defer preloaded.cleanup()
 				}
 				detectedClients = clients
 				opts.target = selection
@@ -37,17 +49,26 @@ func newAddCommand(app App, opts *options) *cobra.Command {
 				if err != nil {
 					return err
 				}
+				detectedClients, err = detectSelectedTargetsForLifecycleResolution(cmd.Context(), app.Detector, targets, detectedClients, !opts.dryRun && isDirectorySelector(args[0]))
+				if err != nil {
+					return fmt.Errorf("detect selected AI clients: %w", err)
+				}
 				_, detected, err := preflightSelectedTargets(cmd.Context(), app, targets, detectedClients, false)
 				if err != nil {
 					return err
 				}
-				writeProgress(app, opts.format, "Resolving and validating Agent Plugin...")
-				loaded, err := app.loadPackageFor(cmd.Context(), args[0], withDetectedClients(app.addResolutionRequest(args[0], targets), detected))
-				if err != nil {
-					return err
-				}
-				if loaded.cleanup != nil {
-					defer loaded.cleanup()
+				var loaded loadedPackage
+				if preloaded != nil {
+					loaded = *preloaded
+				} else {
+					writeProgress(app, opts.format, "Resolving and validating Agent Plugin...")
+					loaded, err = app.loadPackageFor(cmd.Context(), args[0], withDetectedClients(app.addResolutionRequest(args[0], targets), detected))
+					if err != nil {
+						return err
+					}
+					if loaded.cleanup != nil {
+						defer loaded.cleanup()
+					}
 				}
 				return runAddManyLoaded(cmd.Context(), cmd, app, opts, loaded, targets, activationComplete, authComplete, detectedClientValues(detected))
 			}
@@ -91,6 +112,9 @@ func runAddWithClients(ctx context.Context, cmd *cobra.Command, app App, opts *o
 }
 
 func runAddLoaded(ctx context.Context, cmd *cobra.Command, app App, opts *options, loaded loadedPackage, activationComplete, authComplete bool, clients []domain.DetectedClient) error {
+	if err := authorizeSecurityAssessment(cmd, app, opts, &loaded); err != nil {
+		return err
+	}
 	if automatedMutation(app, opts) && strings.TrimSpace(opts.target) == "" {
 		return fmt.Errorf("automated installation requires --target")
 	}
@@ -114,14 +138,14 @@ func runAddLoaded(ctx context.Context, cmd *cobra.Command, app App, opts *option
 	planned, err := service.Add(ctx, input)
 	if err != nil {
 		if planned.Plan.Status == domain.PlanUnsupported {
-			if renderErr := renderAddResultError(cmd.OutOrStdout(), opts.format, loaded.envelope, planned, opts.dryRun, err); renderErr != nil {
+			if renderErr := renderAddResultErrorWithSecurity(cmd.OutOrStdout(), opts.format, loaded.envelope, loaded.security, planned, opts.dryRun, err); renderErr != nil {
 				return renderErr
 			}
 		}
 		return err
 	}
 	if opts.dryRun || planned.NoChange {
-		return renderAddResult(cmd.OutOrStdout(), opts.format, loaded.envelope, planned, opts.dryRun)
+		return renderAddResultWithSecurity(cmd.OutOrStdout(), opts.format, loaded.envelope, loaded.security, planned, opts.dryRun)
 	}
 	if opts.format == "human" {
 		if err := renderHumanPlan(cmd.OutOrStdout(), loaded.envelope, planned); err != nil {
@@ -130,7 +154,7 @@ func runAddLoaded(ctx context.Context, cmd *cobra.Command, app App, opts *option
 	}
 	freshInstall := planned.Activation.Activation == ""
 	if !freshInstall && opts.format == "human" && app.Terminal && !activationComplete && !authComplete {
-		if err := renderAddResult(cmd.OutOrStdout(), opts.format, loaded.envelope, planned, false); err != nil {
+		if err := renderAddResultWithSecurity(cmd.OutOrStdout(), opts.format, loaded.envelope, loaded.security, planned, false); err != nil {
 			return err
 		}
 		return resumeInteractiveLifecycle(ctx, cmd, service, input, loaded.envelope, planned)
@@ -148,7 +172,7 @@ func runAddLoaded(ctx context.Context, cmd *cobra.Command, app App, opts *option
 	}
 	if !confirmed {
 		if opts.format == "json" {
-			return renderAddResult(cmd.OutOrStdout(), opts.format, loaded.envelope, planned, false)
+			return renderAddResultWithSecurity(cmd.OutOrStdout(), opts.format, loaded.envelope, loaded.security, planned, false)
 		}
 		_, _ = fmt.Fprintln(cmd.OutOrStdout(), "No changes made.")
 		return nil
@@ -157,7 +181,7 @@ func runAddLoaded(ctx context.Context, cmd *cobra.Command, app App, opts *option
 	input.Confirmed = true
 	input.InstallationID = planned.InstallationID
 	result, err := service.Add(ctx, input)
-	if renderErr := renderAddResultError(cmd.OutOrStdout(), opts.format, loaded.envelope, result, false, err); renderErr != nil && err == nil {
+	if renderErr := renderAddResultErrorWithSecurity(cmd.OutOrStdout(), opts.format, loaded.envelope, loaded.security, result, false, err); renderErr != nil && err == nil {
 		err = renderErr
 	}
 	if err == nil && freshInstall && opts.format == "human" && app.Terminal {
@@ -166,23 +190,21 @@ func runAddLoaded(ctx context.Context, cmd *cobra.Command, app App, opts *option
 	return err
 }
 
-func promptDetectedTargets(ctx context.Context, cmd *cobra.Command, app App, probeVersion bool) (string, []domain.DetectedClient, error) {
-	clients, err := detectClientsForLifecycleResolution(ctx, app.Detector, probeVersion)
-	if err != nil {
-		return "", nil, fmt.Errorf("detect AI clients: %w", err)
-	}
-	var detected []domain.DetectedClient
-	for _, client := range clients {
-		if client.Status == domain.DetectionDetected && supportedTarget(client.ClientID) {
-			detected = append(detected, client)
-		}
-	}
+func promptTargetChoices(cmd *cobra.Command, detected, skipped, allClients []domain.DetectedClient) (string, []domain.DetectedClient, error) {
 	if len(detected) == 0 {
 		return "", nil, fmt.Errorf("no supported local AI client was detected; use --target chatgpt for ChatGPT, or install/detect another client")
 	}
-	sort.Slice(detected, func(i, j int) bool { return string(detected[i].ClientID) < string(detected[j].ClientID) })
+	sort.SliceStable(detected, func(i, j int) bool { return targetOrder(detected[i].ClientID) < targetOrder(detected[j].ClientID) })
+	sort.SliceStable(skipped, func(i, j int) bool { return targetOrder(skipped[i].ClientID) < targetOrder(skipped[j].ClientID) })
+	if len(skipped) > 0 {
+		names := make([]string, len(skipped))
+		for index, client := range skipped {
+			names[index] = client.DisplayName
+		}
+		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Skipped installed clients that this package cannot install together: %s\n", strings.Join(names, ", "))
+	}
 	if len(detected) == 1 {
-		return string(detected[0].ClientID), clients, nil
+		return string(detected[0].ClientID), allClients, nil
 	}
 	_, _ = fmt.Fprintln(cmd.OutOrStdout(), "Detected supported clients (all selected by default):")
 	for index, client := range detected {
@@ -199,7 +221,7 @@ func promptDetectedTargets(ctx context.Context, cmd *cobra.Command, app App, pro
 		for index, client := range detected {
 			values[index] = string(client.ClientID)
 		}
-		return strings.Join(values, ","), clients, nil
+		return strings.Join(values, ","), allClients, nil
 	}
 	seen := make(map[int]struct{})
 	var values []string
@@ -214,7 +236,22 @@ func promptDetectedTargets(ctx context.Context, cmd *cobra.Command, app App, pro
 		seen[choice] = struct{}{}
 		values = append(values, string(detected[choice-1].ClientID))
 	}
-	return strings.Join(values, ","), clients, nil
+	return strings.Join(values, ","), allClients, nil
+}
+
+// detectSelectedTargetsForLifecycleResolution keeps ambient discovery strictly
+// read-only. Version execution is an opt-in capability invoked only after the
+// user has selected the complete target set. Detectors without targeted probing
+// retain the read-only observations rather than falling back to executing every
+// discovered client binary.
+func detectSelectedTargetsForLifecycleResolution(ctx context.Context, detector ports.ClientDetector, targets []domain.ClientID, detected []domain.DetectedClient, probeVersion bool) ([]domain.DetectedClient, error) {
+	if !probeVersion {
+		return detected, nil
+	}
+	if targeted, ok := detector.(ports.TargetedVersionProbingClientDetector); ok {
+		return targeted.DetectTargetsWithVersionProbe(ctx, targets)
+	}
+	return detected, nil
 }
 
 func resumeInteractiveLifecycle(
@@ -317,7 +354,7 @@ func selectClient(
 	if !app.Terminal || opts.format == "json" {
 		return domain.DetectedClient{}, detectedMap, fmt.Errorf("multiple clients detected; choose one or more with --target codex,cursor")
 	}
-	sort.Slice(detected, func(i, j int) bool { return detected[i].DisplayName < detected[j].DisplayName })
+	sort.SliceStable(detected, func(i, j int) bool { return targetOrder(detected[i].ClientID) < targetOrder(detected[j].ClientID) })
 	_, _ = fmt.Fprintln(cmd.OutOrStdout(), "Detected clients:")
 	for index, client := range detected {
 		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "  %d. %s\n", index+1, client.DisplayName)
@@ -348,6 +385,16 @@ func normalizeTarget(value string) domain.ClientID {
 		return domain.ClientVSCode
 	case "kiro":
 		return domain.ClientKiro
+	case "claude", "claude-code":
+		return domain.ClientClaude
+	case "gemini", "gemini-cli":
+		return domain.ClientGemini
+	case "opencode", "open-code":
+		return domain.ClientOpenCode
+	case "cline":
+		return domain.ClientCline
+	case "windsurf", "devin":
+		return domain.ClientWindsurf
 	default:
 		return domain.ClientID(strings.ToLower(strings.TrimSpace(value)))
 	}
@@ -414,6 +461,7 @@ func readInputLine(reader io.Reader) (string, error) {
 }
 
 func renderHumanPlan(writer io.Writer, envelope domain.PackageEnvelope, result usecase.AddResult) error {
+	result = withOpenCodeRuntimeNotice(result)
 	_, _ = fmt.Fprintf(writer, "Plugin: %s %s\n", envelope.Manifest.Name, envelope.Manifest.Version)
 	_, _ = fmt.Fprintf(writer, "Target: %s\n", result.Plan.ClientID)
 	_, _ = fmt.Fprintf(writer, "Package: %s\n", result.Plan.PackageMode)
@@ -442,8 +490,17 @@ func renderAddResult(writer io.Writer, format string, envelope domain.PackageEnv
 	return renderAddResultError(writer, format, envelope, result, dryRun, nil)
 }
 
+func renderAddResultWithSecurity(writer io.Writer, format string, envelope domain.PackageEnvelope, security *domain.SecurityAssessment, result usecase.AddResult, dryRun bool) error {
+	return renderAddResultErrorWithSecurity(writer, format, envelope, security, result, dryRun, nil)
+}
+
 func renderAddResultError(writer io.Writer, format string, envelope domain.PackageEnvelope, result usecase.AddResult, dryRun bool, commandErr error) error {
+	return renderAddResultErrorWithSecurity(writer, format, envelope, nil, result, dryRun, commandErr)
+}
+
+func renderAddResultErrorWithSecurity(writer io.Writer, format string, envelope domain.PackageEnvelope, security *domain.SecurityAssessment, result usecase.AddResult, dryRun bool, commandErr error) error {
 	data := newAddResultData(envelope, result, dryRun)
+	data.Security = security
 	data.envelopeResult = addEnvelopeResult(result, commandErr)
 	if format == "json" {
 		return writeJSONOutput(writer, "add", data)
@@ -455,11 +512,22 @@ func renderAddResultError(writer io.Writer, format string, envelope domain.Packa
 			}
 			return renderHumanPlan(writer, envelope, result)
 		}
-		_, err := fmt.Fprintf(writer, "Add: %s\n", failure)
-		return err
+		if _, err := fmt.Fprintf(writer, "Add: %s\n", failure); err != nil {
+			return err
+		}
+		// Lifecycle recovery is useful after a failed phase, but must not imply
+		// that a rolled-back or uncertain transaction left a usable installation.
+		if failure == "activation_failed" || failure == "authentication_failed" || failure == "verification_failed" {
+			_, err := fmt.Fprintf(writer, "Next: %s\n", nextLocalLifecycleAction(result))
+			return err
+		}
+		return nil
 	}
 	if dryRun {
 		return renderHumanPlan(writer, envelope, result)
+	}
+	if err := renderOpenCodeRuntimeNotice(writer, result); err != nil {
+		return err
 	}
 	if result.NoChange {
 		_, _ = fmt.Fprintln(writer, "Already installed and lifecycle verification is complete. No changes made.")
@@ -469,7 +537,11 @@ func renderAddResultError(writer io.Writer, format string, envelope domain.Packa
 		if result.Activation.ActivationAttested || result.Activation.AuthenticationAttested {
 			_, _ = fmt.Fprintln(writer, "Lifecycle is user-attested for the explicitly confirmed phase; it was not observed from the client.")
 		} else {
-			_, _ = fmt.Fprintln(writer, "Installed and verified for the selected client.")
+			if result.Plan.ClientID == domain.ClientOpenCode && len(domain.SelectedMCPNames(result.Plan)) > 0 {
+				_, _ = fmt.Fprintln(writer, "OpenCode MCP configuration installed and verified.")
+			} else {
+				_, _ = fmt.Fprintln(writer, "Installed and verified for the selected client.")
+			}
 		}
 		return nil
 	}
@@ -493,16 +565,17 @@ func renderAddResultError(writer io.Writer, format string, envelope domain.Packa
 }
 
 type addResultData struct {
-	OperationID    string            `json:"operation_id,omitempty"`
-	Plugin         string            `json:"plugin"`
-	Version        string            `json:"version,omitempty"`
-	Source         string            `json:"source"`
-	Revision       string            `json:"revision,omitempty"`
-	TreeDigest     string            `json:"tree_digest"`
-	ManifestDigest string            `json:"manifest_digest"`
-	NextAction     string            `json:"next_action,omitempty"`
-	DryRun         bool              `json:"dry_run"`
-	Result         usecase.AddResult `json:"result"`
+	OperationID    string                     `json:"operation_id,omitempty"`
+	Plugin         string                     `json:"plugin"`
+	Version        string                     `json:"version,omitempty"`
+	Source         string                     `json:"source"`
+	Revision       string                     `json:"revision,omitempty"`
+	TreeDigest     string                     `json:"tree_digest"`
+	ManifestDigest string                     `json:"manifest_digest"`
+	Security       *domain.SecurityAssessment `json:"security,omitempty"`
+	NextAction     string                     `json:"next_action,omitempty"`
+	DryRun         bool                       `json:"dry_run"`
+	Result         usecase.AddResult          `json:"result"`
 	envelopeResult string
 }
 
@@ -543,6 +616,7 @@ func addFailureStatus(result usecase.AddResult, commandErr error) string {
 }
 
 func newAddResultData(envelope domain.PackageEnvelope, result usecase.AddResult, dryRun bool) addResultData {
+	result = withOpenCodeRuntimeNotice(result)
 	return addResultData{
 		OperationID: result.Receipt.OperationID, Plugin: envelope.Manifest.Name,
 		Version: envelope.Manifest.Version, Source: publicPackageSource(envelope.Source),

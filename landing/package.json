@@ -19,6 +19,8 @@
     "generate": "nuxt generate",
     "build:pages": "node ./scripts/build-pages-artifact.mjs",
     "preview": "nuxt preview",
+    "test:registry": "node --test --experimental-strip-types tests/*.test.ts",
+    "test:browser": "playwright test",
     "lint": "eslint \"app.vue\" \"error.vue\" \"components/**/*.{vue,ts}\" \"composables/**/*.{ts,js}\" \"data/**/*.{ts,js}\" \"layouts/**/*.vue\" \"pages/**/*.vue\" \"plugins/**/*.{ts,js}\" \"server/**/*.{ts,js}\" \"stores/**/*.{ts,js}\" \"types/**/*.ts\" \"utils/**/*.{ts,js}\" \"nuxt.config.ts\" --no-error-on-unmatched-pattern",
     "lint:fix": "pnpm run lint -- --fix",
     "format": "prettier --check app.vue error.vue assets/styles/main.scss components composables content data layouts locales pages plugins server stores types utils nuxt.config.ts package.json",
@@ -29,9 +31,11 @@
     "@nuxtjs/i18n": "^9.5.6",
     "@pinia/nuxt": "^0.11.3",
     "@vueuse/nuxt": "^10.11.1",
+    "bowser": "2.14.1",
     "nuxt": "^3.21.10",
     "nuxt-icon": "^0.6.10",
     "pinia": "^3.0.4",
+    "reka-ui": "2.10.4",
     "swiper": "^12.2.0",
     "vue": "^3.5.40",
     "vue-i18n": "^11.4.8",
@@ -41,11 +45,14 @@
   "devDependencies": {
     "@mdi/font": "^7.4.47",
     "@nuxt/eslint": "^1.16.0",
+    "@playwright/test": "1.62.1",
     "@typescript-eslint/parser": "^8.65.0",
     "eslint": "^9.39.5",
     "prettier": "^3.9.6",
     "sass": "^1.102.0",
+    "serve": "14.2.6",
     "typescript": "^6.0.3",
-    "vite-plugin-vuetify": "^2.1.3"
+    "vite-plugin-vuetify": "^2.1.3",
+    "vue-tsc": "3.3.9"
   }
 }

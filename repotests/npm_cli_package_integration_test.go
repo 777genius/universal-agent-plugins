@@ -33,7 +33,7 @@ func TestNPMCLIPackageContractFiles(t *testing.T) {
 	for _, want := range []string{
 		`"name": "plugin-kit-ai"`,
 		`"version": "0.0.0-development"`,
-		`"license": "MIT"`,
+		`"license": "Apache-2.0"`,
 		`"postinstall": "node ./lib/install.js"`,
 		`"plugin-kit-ai": "bin/plugin-kit-ai.js"`,
 		`"node": ">=18"`,

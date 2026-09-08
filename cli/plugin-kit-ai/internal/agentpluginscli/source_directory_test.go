@@ -2,6 +2,7 @@ package agentpluginscli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/directoryv1"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/discoveryv1"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/packagedigest"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/sourceacquisition"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
@@ -54,6 +56,149 @@ func TestDirectoryCompatibilityUsesStablePublicPackageModes(t *testing.T) {
 		if got := loaded.envelope.CatalogEvidence.Compatibility[client].Package; got != packageMode {
 			t.Fatalf("%s package mode = %q, want %q", client, got, packageMode)
 		}
+	}
+}
+
+func TestDirectoryChatGPTBindingDerivesAuthenticatedMCPURLAndPrepares(t *testing.T) {
+	t.Parallel()
+	loaded := loadedPackage{
+		origin: domain.OriginModeDirectory,
+		envelope: domain.PackageEnvelope{MCP: domain.MCPComponent{Present: true, Enabled: true, Servers: map[string]domain.MCPServer{
+			"cloudflare-docs": {Name: "cloudflare-docs", Type: "streamable-http", Decoded: map[string]any{"type": "streamable-http", "url": "https://docs.mcp.cloudflare.com/mcp"}},
+		}}},
+	}
+	policy := domain.DirectoryReleasePolicy{Targets: []domain.DirectoryTarget{{
+		Client: domain.ClientChatGPT, Delivery: "manual_activation", Authentication: domain.AuthenticationRequirementNotRequired,
+		AppBinding: &domain.DirectoryAppBinding{AppKey: "cloudflare-docs", ID: "asdk_app_cloudflare_docs_123", MCPServer: "cloudflare-docs"},
+	}}}
+	if err := applyDirectoryCompatibility(&loaded, directoryv1.VerifiedBundle{Digest: "sha256:" + strings.Repeat("a", 64)}, domain.DirectorySelection{}, policy, directoryEvidenceEnvironment{}); err != nil {
+		t.Fatal(err)
+	}
+	binding := loaded.hints.Compatibility[string(domain.ClientChatGPT)].AppBinding
+	if binding == nil || binding.MCPURL != "https://docs.mcp.cloudflare.com/mcp" || binding.RuntimeEvidence != "" || binding.RuntimeEvidenceRevision != "" {
+		t.Fatalf("Directory binding = %+v", binding)
+	}
+	if err := prepareLoadedPackageForClient(&loaded, domain.ClientChatGPT); err != nil {
+		t.Fatal(err)
+	}
+	if !loaded.envelope.App.Enabled || loaded.envelope.App.Bindings["cloudflare-docs"].ID != "asdk_app_cloudflare_docs_123" {
+		t.Fatalf("prepared app = %+v", loaded.envelope.App)
+	}
+
+	clone := cloneLoadedPackage(loaded)
+	if err := prepareLoadedPackageForClient(&clone, domain.ClientChatGPT); err != nil {
+		t.Fatalf("Directory clone lost source-specific validation: %v", err)
+	}
+}
+
+func TestDirectoryChatGPTBindingFailsBeforeCompatibilityOrAppMutation(t *testing.T) {
+	t.Parallel()
+	fixture := newCLIFixture(t, nil)
+	base := loadedPackage{origin: domain.OriginModeDirectory, envelope: domain.PackageEnvelope{MCP: domain.MCPComponent{Present: true, Enabled: true, Servers: map[string]domain.MCPServer{
+		"docs": {Name: "docs", Type: "streamable-http", Decoded: map[string]any{"url": "https://example.test/mcp"}},
+	}}}}
+	validTarget := domain.DirectoryTarget{Client: domain.ClientChatGPT, Delivery: "manual_activation", Authentication: domain.AuthenticationRequirementNotRequired,
+		AppBinding: &domain.DirectoryAppBinding{AppKey: "docs", ID: "asdk_app_docs_123", MCPServer: "docs"}}
+	tests := []struct {
+		name   string
+		mutate func(*loadedPackage, *domain.DirectoryTarget)
+	}{
+		{name: "missing server", mutate: func(_ *loadedPackage, target *domain.DirectoryTarget) {
+			target.AppBinding.MCPServer, target.AppBinding.AppKey = "other", "other"
+		}},
+		{name: "unsafe URL", mutate: func(loaded *loadedPackage, _ *domain.DirectoryTarget) {
+			loaded.envelope.MCP.Servers["docs"] = domain.MCPServer{Name: "docs", Decoded: map[string]any{"url": "https://user@example.test/mcp"}}
+		}},
+		{name: "empty URL hostname", mutate: func(loaded *loadedPackage, _ *domain.DirectoryTarget) {
+			loaded.envelope.MCP.Servers["docs"] = domain.MCPServer{Name: "docs", Decoded: map[string]any{"url": "https://:443/mcp"}}
+		}},
+		{name: "overflow URL port", mutate: func(loaded *loadedPackage, _ *domain.DirectoryTarget) {
+			loaded.envelope.MCP.Servers["docs"] = domain.MCPServer{Name: "docs", Decoded: map[string]any{"url": "https://example.test:65536/mcp"}}
+		}},
+		{name: "malformed identity", mutate: func(_ *loadedPackage, target *domain.DirectoryTarget) { target.AppBinding.ID = "not/an/id" }},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			loaded := base
+			loaded.envelope.MCP.Servers = map[string]domain.MCPServer{"docs": base.envelope.MCP.Servers["docs"]}
+			target := validTarget
+			binding := *validTarget.AppBinding
+			target.AppBinding = &binding
+			test.mutate(&loaded, &target)
+			err := applyDirectoryCompatibility(&loaded, directoryv1.VerifiedBundle{}, domain.DirectorySelection{}, domain.DirectoryReleasePolicy{Targets: []domain.DirectoryTarget{target}}, directoryEvidenceEnvironment{})
+			if err == nil {
+				t.Fatal("invalid Directory binding accepted")
+			}
+			if loaded.hints.Compatibility != nil || loaded.envelope.CatalogEvidence != nil || loaded.envelope.App.Present {
+				t.Fatalf("validation failure mutated package: %+v", loaded)
+			}
+			state, stateErr := fixture.store.Load()
+			if stateErr != nil || len(state.Installations) != 0 {
+				t.Fatalf("validation failure mutated state: %+v, %v", state, stateErr)
+			}
+		})
+	}
+
+	loaded := base
+	if err := applyDirectoryCompatibility(&loaded, directoryv1.VerifiedBundle{}, domain.DirectorySelection{}, domain.DirectoryReleasePolicy{Targets: []domain.DirectoryTarget{validTarget}}, directoryEvidenceEnvironment{}); err != nil {
+		t.Fatal(err)
+	}
+	loaded.envelope.MCP.Servers["docs"] = domain.MCPServer{Name: "docs", Decoded: map[string]any{"url": "https://other.example.test/mcp"}}
+	if err := prepareLoadedPackageForClient(&loaded, domain.ClientChatGPT); err == nil || !strings.Contains(err.Error(), "does not match") {
+		t.Fatalf("MCP URL substitution accepted: %v", err)
+	}
+}
+
+func TestDirectoryChatGPTDryRunPreparesManualActivationWithoutState(t *testing.T) {
+	t.Parallel()
+	client := fixtureClient(t, domain.ClientChatGPT)
+	client.Version = "fixture-client"
+	fixture := newCLIFixture(t, []domain.DetectedClient{client})
+	plugin := writeCLIPlugin(t)
+	writeCLIMCP(t, plugin)
+	loaded, err := fixture.app.acquireLocal(context.Background(), plugin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	treeDigest, manifestDigest := loaded.envelope.TreeDigest, loaded.envelope.ManifestDigest
+	if err := loaded.cleanup(); err != nil {
+		t.Fatal(err)
+	}
+	revision := strings.Repeat("a", 40)
+	release := domain.DirectoryRelease{
+		Sequence: 1, PackageVersion: "1.0.0", ManifestName: "demo", AgentPluginsSchema: domain.PluginSchemaV1,
+		PackageSource:       domain.DirectorySource{Repository: "owner/demo", Revision: revision, Path: "plugin"},
+		TreeDigestAlgorithm: domain.TreeDigestAlgorithm, TreeDigest: treeDigest, ManifestDigest: manifestDigest,
+		Components: []string{"mcp"}, PublishedAt: "2026-08-21T00:00:00Z",
+	}
+	materialization := intendedTrustedDirectoryEvidence(domain.DirectoryEvidence{ID: "passed/materialization/chatgpt", DistributionID: "owner/demo", ReleaseSequence: 1,
+		PackageTreeDigest: treeDigest, Level: "materialization", Outcome: "passed", Client: domain.ClientChatGPT,
+		ClientVersion: client.Version, InstallerVersion: fixture.app.Version})
+	policy := domain.DirectoryReleasePolicy{
+		ReleaseSequence: 1, Status: domain.ReleaseActive, MinimumInstallerVersion: "0.1.0", CurrentEvidence: []string{materialization.ID},
+		Targets: []domain.DirectoryTarget{{Client: domain.ClientChatGPT, Scopes: []domain.InstallScope{domain.ScopeUser}, Delivery: "manual_activation", Authentication: domain.AuthenticationRequirementNotRequired,
+			AppBinding: &domain.DirectoryAppBinding{AppKey: "demo", ID: "asdk_app_demo_123", MCPServer: "demo"}}},
+	}
+	snapshot := domain.DirectorySnapshot{
+		SnapshotSchemaVersion: 1, Sequence: 17, SourceCommit: strings.Repeat("b", 40),
+		Products: []domain.DirectoryProduct{{SchemaVersion: 1, ID: "demo", DisplayName: "Demo", Description: "Demo", ManifestName: "demo", Aliases: []string{"demo"}, ReservedAliases: []string{"demo"}, Categories: []string{},
+			MinimumCapabilities: domain.DirectoryMinimumCapabilities{Skills: "optional", MCP: "required"}, DefaultDistribution: "owner/demo", Distributions: []string{"owner/demo"}}},
+		Distributions: []domain.DirectoryDistribution{{SchemaVersion: 1, ID: "owner/demo", ProductID: "demo", Kind: domain.DistributionUpstream, Status: domain.DistributionActive, Packager: "owner", Releases: []domain.DirectoryRelease{release}, ReleasePolicies: []domain.DirectoryReleasePolicy{policy}}},
+		Evidence:      []domain.DirectoryEvidence{materialization}, Revocations: []domain.DirectoryRevocation{},
+	}
+	directory := &fixedDirectoryClient{bundle: directoryv1.VerifiedBundle{Snapshot: snapshot, Digest: "sha256:" + strings.Repeat("c", 64)}}
+	acquirer := &localBackedSourceAcquirer{delegate: fixture.app.SourceAcquirer, root: plugin}
+	fixture.app.DirectoryClient, fixture.app.SourceAcquirer = directory, acquirer
+	stdout, _, err := fixture.execute(false, "add", "demo", "--target", "chatgpt", "--dry-run", "--format", "json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(stdout, `"manual_activation_required"`) || directory.calls != 1 || acquirer.verifiedCalls != 1 {
+		t.Fatalf("Directory ChatGPT dry run = %s; calls directory=%d verified=%d", stdout, directory.calls, acquirer.verifiedCalls)
+	}
+	state, err := fixture.store.Load()
+	if err != nil || len(state.Installations) != 0 {
+		t.Fatalf("dry run mutated state: %+v, %v", state, err)
 	}
 }
 
@@ -496,6 +641,10 @@ func withDirectoryEvidence(source domain.DirectoryEvidence, mutate func(*domain.
 func (acquirer *localBackedSourceAcquirer) AcquireLocal(ctx context.Context, path string) (domain.PackageSnapshot, error) {
 	acquirer.localCalls++
 	return acquirer.delegate.AcquireLocal(ctx, path)
+}
+
+func (acquirer *localBackedSourceAcquirer) DiscoverGitHubPackages(ctx context.Context, repository, revision string) ([]string, error) {
+	return acquirer.delegate.DiscoverGitHubPackages(ctx, repository, revision)
 }
 
 func (acquirer *localBackedSourceAcquirer) gitSnapshot(ctx context.Context, repository, revision, path string) (domain.PackageSnapshot, error) {
@@ -1037,6 +1186,332 @@ func TestProductionGitHubAcquirerOutputResolvesAsDirectExactSource(t *testing.T)
 	if loaded.envelope.Source.CanonicalSource != wantCanonical || loaded.envelope.Source.RequestedSource != requested {
 		t.Fatalf("production acquisition identity = %+v", loaded.envelope.Source)
 	}
+}
+
+func TestExactGitHubSourceAutodiscoversUniqueValidPackageThroughLifecycle(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git is unavailable")
+	}
+	repositoryRoot := t.TempDir()
+	validRoot := filepath.Join(repositoryRoot, "packages", "demo")
+	invalidRoot := filepath.Join(repositoryRoot, "packages", "invalid")
+	if err := os.MkdirAll(validRoot, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(invalidRoot, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	manifest := `{"$schema":"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json","name":"demo","version":"1.0.0"}`
+	if err := os.WriteFile(filepath.Join(validRoot, "plugin.json"), []byte(manifest), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	writeCLIMCP(t, validRoot)
+	if err := os.WriteFile(filepath.Join(invalidRoot, "plugin.json"), []byte(`{"name":`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(invalidRoot, "mcp.json"), []byte(`{}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(repositoryRoot, "README.md"), []byte("fixture"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	revision := commitCLIRepository(t, repositoryRoot)
+
+	fixture := newCLIFixture(t, []domain.DetectedClient{fixtureClient(t, domain.ClientCursor)})
+	acquirer := sourceacquisition.Acquirer{
+		TempRoot: fixture.root,
+		Runner:   directGitTestRunner{},
+		URLForRepo: func(repository string) string {
+			if repository != "owner/repo" {
+				t.Fatalf("unexpected repository %q", repository)
+			}
+			return repositoryRoot
+		},
+	}
+	explicit, err := acquirer.AcquireGitHub(context.Background(), "owner/repo", revision, "packages/demo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	expectedTreeDigest := explicit.TreeDigest
+	if err := packagedigest.Remove(explicit); err != nil {
+		t.Fatal(err)
+	}
+	fixture.app.SourceAcquirer = acquirer
+	requested := "owner/repo@" + revision
+
+	if _, _, err := fixture.execute(false, "add", requested, "--target", "cursor", "--format", "json"); err != nil {
+		t.Fatal(err)
+	}
+	state, err := fixture.store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(state.Installations) != 1 {
+		t.Fatalf("installation state = %+v", state.Installations)
+	}
+	installed := state.Installations[0]
+	wantCanonical := "https://github.com/owner/repo@" + revision + "//packages/demo"
+	if installed.Source.RequestedSource != requested || installed.Source.CanonicalSource != wantCanonical ||
+		installed.Source.PackageSubpath != "packages/demo" || installed.Source.TreeDigest != expectedTreeDigest {
+		t.Fatalf("autodiscovered source identity = %+v", installed.Source)
+	}
+	if _, _, err := fixture.execute(false, "info", "demo", "--format", "json"); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := fixture.execute(false, "repair", "demo", "--target", "cursor", "--format", "json"); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := fixture.execute(false, "remove", "demo", "--target", "cursor", "--purge-data", "--format", "json"); err != nil {
+		t.Fatal(err)
+	}
+	state, err = fixture.store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(state.Installations) != 0 {
+		t.Fatalf("remove left autodiscovered installation state: %+v", state.Installations)
+	}
+}
+
+func TestExactGitHubSourceAutodiscoveryRejectsAmbiguousValidPackages(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git is unavailable")
+	}
+	repositoryRoot := t.TempDir()
+	for _, packagePath := range []string{"packages/zeta", "agent-plugin"} {
+		root := filepath.Join(repositoryRoot, filepath.FromSlash(packagePath))
+		if err := os.MkdirAll(root, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		manifest := fmt.Sprintf(`{"$schema":"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json","name":%q,"version":"1.0.0"}`, strings.ReplaceAll(packagePath, "/", "-"))
+		if err := os.WriteFile(filepath.Join(root, "plugin.json"), []byte(manifest), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		writeCLIMCP(t, root)
+	}
+	revision := commitCLIRepository(t, repositoryRoot)
+	fixture := newCLIFixture(t, nil)
+	fixture.app.SourceAcquirer = sourceacquisition.Acquirer{TempRoot: fixture.root, Runner: directGitTestRunner{}, URLForRepo: func(string) string { return repositoryRoot }}
+
+	_, err := fixture.app.loadPackage(context.Background(), "owner/repo@"+revision)
+	want := "Found packages: //agent-plugin, //packages/zeta. Choose one explicitly"
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Fatalf("ambiguous discovery error = %v, want %q", err, want)
+	}
+}
+
+func TestExactGitHubSourceAutodiscoveryFailsClosedOnCandidateAcquisitionError(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git is unavailable")
+	}
+	repositoryRoot := t.TempDir()
+	for _, packagePath := range []string{"agent-plugin", "packages/zeta"} {
+		root := filepath.Join(repositoryRoot, filepath.FromSlash(packagePath))
+		if err := os.MkdirAll(root, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		manifest := fmt.Sprintf(`{"$schema":"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json","name":%q}`, strings.ReplaceAll(packagePath, "/", "-"))
+		if err := os.WriteFile(filepath.Join(root, "plugin.json"), []byte(manifest), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		writeCLIMCP(t, root)
+	}
+	revision := commitCLIRepository(t, repositoryRoot)
+	fixture := newCLIFixture(t, nil)
+	delegate := sourceacquisition.Acquirer{TempRoot: fixture.root, Runner: directGitTestRunner{}, URLForRepo: func(string) string { return repositoryRoot }}
+	fixture.app.SourceAcquirer = &candidateFailingSourceAcquirer{delegate: delegate, failPath: "packages/zeta"}
+
+	_, err := fixture.app.loadPackage(context.Background(), "owner/repo@"+revision)
+	if err == nil || !strings.Contains(err.Error(), "synthetic candidate acquisition failure") {
+		t.Fatalf("candidate acquisition failure = %v", err)
+	}
+	leftovers, globErr := filepath.Glob(filepath.Join(fixture.root, "agentplugins-package-*"))
+	if globErr != nil {
+		t.Fatal(globErr)
+	}
+	if len(leftovers) != 0 {
+		t.Fatalf("candidate failure leaked sealed snapshots: %v", leftovers)
+	}
+}
+
+func TestExactGitHubSourceAutodiscoveryBoundsCandidateAcquisition(t *testing.T) {
+	paths := make([]string, maxAutodiscoveryPackageCandidates+1)
+	for index := range paths {
+		paths[index] = fmt.Sprintf("packages/plugin-%02d", index)
+	}
+	acquirer := &fixedPackageDiscoverySourceAcquirer{paths: paths}
+	fixture := newCLIFixture(t, nil)
+	fixture.app.SourceAcquirer = acquirer
+
+	_, err := fixture.app.loadPackage(context.Background(), "owner/repo@"+strings.Repeat("a", 40))
+	if err == nil || !strings.Contains(err.Error(), "Found 17 package candidates. Choose one explicitly with //path") {
+		t.Fatalf("candidate bound error = %v", err)
+	}
+	if acquirer.acquireCalls != 0 {
+		t.Fatalf("candidate bound performed %d package acquisitions", acquirer.acquireCalls)
+	}
+}
+
+func TestExactGitHubSourceWithoutPortableCandidateKeepsRootNativePackageSupport(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git is unavailable")
+	}
+	repositoryRoot := t.TempDir()
+	manifestRoot := filepath.Join(repositoryRoot, ".codex-plugin")
+	if err := os.MkdirAll(manifestRoot, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(manifestRoot, "plugin.json"), []byte(`{"name":"native-demo","version":"1.0.0"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	nestedRoot := filepath.Join(repositoryRoot, "packages", "nested")
+	if err := os.MkdirAll(nestedRoot, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(nestedRoot, "plugin.json"), []byte(`{"$schema":"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json","name":"nested"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	writeCLIMCP(t, nestedRoot)
+	revision := commitCLIRepository(t, repositoryRoot)
+	fixture := newCLIFixture(t, nil)
+	fixture.app.SourceAcquirer = sourceacquisition.Acquirer{TempRoot: fixture.root, Runner: directGitTestRunner{}, URLForRepo: func(string) string { return repositoryRoot }}
+
+	loaded, err := fixture.app.loadPackage(context.Background(), "owner/repo@"+revision)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer loaded.cleanup()
+	if loaded.envelope.FormatID != domain.FormatIDOpenAIPlugin || loaded.envelope.Source.PackageSubpath != "" {
+		t.Fatalf("root native fallback = format %q source %+v", loaded.envelope.FormatID, loaded.envelope.Source)
+	}
+}
+
+func TestVerifiedEmptyPathGitHubSourceNeverEntersAutodiscovery(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git is unavailable")
+	}
+	repositoryRoot := t.TempDir()
+	if err := os.WriteFile(filepath.Join(repositoryRoot, "plugin.json"), []byte(`{"$schema":"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json","name":"verified-root"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	writeCLIMCP(t, repositoryRoot)
+	nestedRoot := filepath.Join(repositoryRoot, "packages", "nested")
+	if err := os.MkdirAll(nestedRoot, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(nestedRoot, "plugin.json"), []byte(`{"$schema":"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json","name":"nested"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	writeCLIMCP(t, nestedRoot)
+	revision := commitCLIRepository(t, repositoryRoot)
+	fixture := newCLIFixture(t, nil)
+	delegate := sourceacquisition.Acquirer{TempRoot: fixture.root, Runner: directGitTestRunner{}, URLForRepo: func(string) string { return repositoryRoot }}
+	rootSnapshot, err := delegate.AcquireGitHub(context.Background(), "owner/repo", revision, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	expectedDigest := rootSnapshot.TreeDigest
+	if err := packagedigest.Remove(rootSnapshot); err != nil {
+		t.Fatal(err)
+	}
+	counter := &countingSourceAcquirer{delegate: delegate}
+	fixture.app.SourceAcquirer = counter
+	requested := "owner/repo@" + revision
+	loaded, err := fixture.app.acquireGitHub(context.Background(), requested, "owner/repo", revision, "", expectedDigest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer loaded.cleanup()
+	if counter.discoveryCalls != 0 || counter.calls != 1 {
+		t.Fatalf("verified empty-path calls = discovery %d, acquisitions %d", counter.discoveryCalls, counter.calls)
+	}
+	if loaded.envelope.Manifest.Name != "verified-root" || loaded.envelope.Source.PackageSubpath != "" {
+		t.Fatalf("verified root package = %+v", loaded.envelope)
+	}
+}
+
+func TestExactGitHubSourceMalformedRootManifestDoesNotFallBackToNestedPackage(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git is unavailable")
+	}
+	repositoryRoot := t.TempDir()
+	if err := os.WriteFile(filepath.Join(repositoryRoot, "plugin.json"), []byte(`{"name":`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	nestedRoot := filepath.Join(repositoryRoot, "agent-plugin")
+	if err := os.MkdirAll(nestedRoot, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(nestedRoot, "plugin.json"), []byte(`{"$schema":"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json","name":"nested"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	writeCLIMCP(t, nestedRoot)
+	revision := commitCLIRepository(t, repositoryRoot)
+	fixture := newCLIFixture(t, nil)
+	fixture.app.SourceAcquirer = sourceacquisition.Acquirer{TempRoot: fixture.root, Runner: directGitTestRunner{}, URLForRepo: func(string) string { return repositoryRoot }}
+
+	_, err := fixture.app.loadPackage(context.Background(), "owner/repo@"+revision)
+	var loadErr *domain.LoadError
+	if !errors.As(err, &loadErr) || loadErr.Diagnostic.Code != "plugin_manifest_malformed" {
+		t.Fatalf("malformed root precedence error = %v", err)
+	}
+}
+
+func commitCLIRepository(t *testing.T, repositoryRoot string) string {
+	t.Helper()
+	runGit := func(args ...string) string {
+		t.Helper()
+		output, err := exec.Command("git", args...).CombinedOutput()
+		if err != nil {
+			t.Fatalf("git %v: %v: %s", args, err, output)
+		}
+		return strings.TrimSpace(string(output))
+	}
+	runGit("init", "--quiet", "--initial-branch=main", repositoryRoot)
+	runGit("-C", repositoryRoot, "config", "user.email", "fixture@example.invalid")
+	runGit("-C", repositoryRoot, "config", "user.name", "Fixture")
+	runGit("-C", repositoryRoot, "add", ".")
+	runGit("-C", repositoryRoot, "commit", "--quiet", "-m", "fixture")
+	return runGit("-C", repositoryRoot, "rev-parse", "HEAD")
+}
+
+type candidateFailingSourceAcquirer struct {
+	delegate SourceAcquirer
+	failPath string
+}
+
+type fixedPackageDiscoverySourceAcquirer struct {
+	SourceAcquirer
+	paths        []string
+	acquireCalls int
+}
+
+func (acquirer *fixedPackageDiscoverySourceAcquirer) DiscoverGitHubPackages(context.Context, string, string) ([]string, error) {
+	return append([]string(nil), acquirer.paths...), nil
+}
+
+func (acquirer *fixedPackageDiscoverySourceAcquirer) AcquireGitHub(context.Context, string, string, string) (domain.PackageSnapshot, error) {
+	acquirer.acquireCalls++
+	return domain.PackageSnapshot{}, errors.New("unexpected package acquisition")
+}
+
+func (acquirer *candidateFailingSourceAcquirer) AcquireLocal(ctx context.Context, source string) (domain.PackageSnapshot, error) {
+	return acquirer.delegate.AcquireLocal(ctx, source)
+}
+
+func (acquirer *candidateFailingSourceAcquirer) DiscoverGitHubPackages(ctx context.Context, repository, revision string) ([]string, error) {
+	return acquirer.delegate.DiscoverGitHubPackages(ctx, repository, revision)
+}
+
+func (acquirer *candidateFailingSourceAcquirer) AcquireGitHub(ctx context.Context, repository, revision, path string) (domain.PackageSnapshot, error) {
+	if path == acquirer.failPath {
+		return domain.PackageSnapshot{}, errors.New("synthetic candidate acquisition failure")
+	}
+	return acquirer.delegate.AcquireGitHub(ctx, repository, revision, path)
+}
+
+func (acquirer *candidateFailingSourceAcquirer) AcquireGitHubVerified(ctx context.Context, repository, revision, path, digest string) (domain.PackageSnapshot, error) {
+	return acquirer.delegate.AcquireGitHubVerified(ctx, repository, revision, path, digest)
 }
 
 type directGitTestRunner struct{}

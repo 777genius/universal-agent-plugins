@@ -11,7 +11,7 @@
     "primaryCta": "Открыть GitHub",
     "secondaryCta": "Посмотреть плагины",
     "docsCta": "Смотреть документацию",
-    "preview": "Превью процесса plugin-kit-ai",
+    "preview": "Превью процесса Universal Agent Plugins",
     "latestRelease": "Последний релиз",
     "status": "Первая линейка плагинов уже доступна",
     "trust": {
@@ -20,7 +20,7 @@
       "openSource": "Открытый код"
     },
     "demo": {
-      "title": "процесс plugin-kit-ai",
+      "title": "процесс Universal Agent Plugins",
       "subtitle": "Один репозиторий. Понятные стадии. Несколько вариантов публикации.",
       "live": "Активно",
       "ready": "готово",
@@ -76,7 +76,15 @@
     "copied": "Скопировано",
     "quickstartTitle": "Самый быстрый старт",
     "quickstartSubtitle": "Это самый быстрый путь к реальной установке плагина или к валидному репозиторию.",
-    "installTabsLabel": "Выберите, как запускать plugin-kit-ai",
+    "installTabsLabel": "Выберите, как запускать Universal Agent Plugins",
+    "detectedRecommendation": "Выбран лучший вариант для {platform}",
+    "mobileUnsupported": "CLI работает на компьютере. Скопируйте команду и запустите её на macOS, Linux или Windows.",
+    "platforms": {
+      "macos": "macOS",
+      "windows": "Windows",
+      "linux": "Linux",
+      "other": "вашего устройства"
+    },
     "supportTitle": "Снимок поддержки",
     "supportSubtitle": "Текущая глубина поддержки по реальной политике поддержки и матрице поддерживаемых путей.",
     "supportLink": "Открыть границу поддержки"
@@ -126,12 +134,12 @@
     "install": {
       "eyebrow": "Install flow",
       "title": "Установить этот плагин",
-      "subtitle": "Выберите своего агента, выберите как запускать plugin-kit-ai если нужно, затем скопируйте точную команду для этого плагина.",
+      "subtitle": "Выберите своего агента, выберите как запускать Universal Agent Plugins если нужно, затем скопируйте точную команду для этого плагина.",
       "supportedLabel": "Доступные targets",
       "allAgents": "All",
       "chooseAgentTitle": "Выберите агента",
       "chooseAgentBody": "По умолчанию выбраны все targets. Выберите меньший набор, если нужна более узкая команда установки.",
-      "getCliTitle": "Запускайте plugin-kit-ai удобным способом",
+      "getCliTitle": "Запускайте Universal Agent Plugins удобным способом",
       "getCliBody": "Используйте npx для самого быстрого первого старта или установите CLI для ежедневной работы.",
       "installTitle": "Установить плагин",
       "installBody": "Запустите команду установки для выбранного target. Команда остаётся явной, чтобы потом было легко понять итоговый scope.",
@@ -150,7 +158,7 @@
       "copy": "Копировать",
       "copied": "Скопировано",
       "fullOnboardingCta": "Открыть полный onboarding",
-      "alreadyInstalled": "Уже запускаете plugin-kit-ai другим способом? Тогда сразу переходите к шагу 3.",
+      "alreadyInstalled": "Уже запускаете Universal Agent Plugins другим способом? Тогда сразу переходите к шагу 3.",
       "repositoryCta": "Репозиторий плагина",
       "agentDocsCta": "Docs {agent}",
       "boundaryLabel": "Важно",
@@ -187,7 +195,7 @@
         "codex": {
           "installBody": "Подготавливает Codex package и local marketplace entry через integration control plane.",
           "manualNote": "Откройте репозиторий или docs Codex, если хотите сами проверить подготовленный пакет или завершить native activation path.",
-          "boundaryNote": "Автоматизация для Codex здесь сознательно консервативная. plugin-kit-ai подготавливает пакет и marketplace, но Codex всё ещё может требовать отдельный native шаг до полной активации."
+          "boundaryNote": "Автоматизация для Codex здесь сознательно консервативная. Universal Agent Plugins подготавливает пакет и marketplace, но Codex всё ещё может требовать отдельный native шаг до полной активации."
         },
         "gemini": {
           "installBody": "Устанавливает Gemini extension в user extension directory и дальше использует тот же managed root для update и repair.",
@@ -288,7 +296,7 @@
     "sectionSubtitle": "Не борьба с конкурентами, а практичное сравнение с тремя путями, через которые команды обычно сами создают лишний рассинхрон.",
     "feature": "Подход",
     "columns": {
-      "pluginKitAi": "plugin-kit-ai",
+      "pluginKitAi": "Universal Agent Plugins",
       "manual": "Ручная настройка",
       "duplicated": "Дублированные конфиги",
       "scripts": "Одноразовые скрипты"
@@ -296,19 +304,19 @@
   },
   "footer": {
     "copyright": "© {year}",
-    "tagline": "Собрали один раз. Отправили в несколько ИИ-экосистем.",
+    "tagline": "Установите один раз. Управляйте плагинами во всех своих ИИ-агентах.",
     "github": "GitHub",
     "docs": "Документация"
   },
   "meta": {
-    "homeTitle": "plugin-kit-ai | Соберите плагин для ИИ один раз и выпускайте его для разных агентов",
-    "homeDescription": "plugin-kit-ai — это дом для нашей первой линейки плагинов для ИИ и тулкит с открытым кодом, который помогает вести один репозиторий плагина и выпускать его для нескольких экосистем.",
-    "downloadTitle": "Старт с plugin-kit-ai | Установка plugin-kit-ai",
-    "downloadDescription": "Выберите путь установки для plugin-kit-ai, откройте документацию и начните с одного чистого репозитория плагина.",
-    "pluginsTitle": "Каталог плагинов | Первая линейка plugin-kit-ai",
-    "pluginsDescription": "Смотрите каталог первой линейки плагинов plugin-kit-ai: поиск по карточкам, фильтры по рабочим сценариям и короткие страницы каждого реального репозитория.",
-    "pluginDetailTitle": "Плагин {plugin} | каталог plugin-kit-ai",
-    "pluginDetailDescription": "{plugin} входит в первую линейку plugin-kit-ai. {tagline}"
+    "homeTitle": "Universal Agent Plugins | Одна команда для ваших ИИ-агентов",
+    "homeDescription": "Устанавливайте, обновляйте, чините и удаляйте Agent Plugins 1.0 в ИИ-агентах одной командой.",
+    "downloadTitle": "Старт с Universal Agent Plugins",
+    "downloadDescription": "Установите CLI, выберите одного или нескольких агентов и запустите первый плагин.",
+    "pluginsTitle": "Каталог плагинов | Universal Agent Plugins",
+    "pluginsDescription": "Смотрите устанавливаемые Agent Plugins 1.0 с понятной поддержкой клиентов и командами жизненного цикла.",
+    "pluginDetailTitle": "{plugin} | Universal Agent Plugins",
+    "pluginDetailDescription": "Установите {plugin} в поддерживаемых ИИ-агентах. {tagline}"
   },
   "error": {
     "notFoundTitle": "Страница не найдена",
@@ -316,5 +324,24 @@
     "genericTitle": "Что-то пошло не так",
     "genericDescription": "Произошла непредвиденная ошибка. Попробуйте позже.",
     "goHome": "На главную"
+  },
+  "publicAuthoring": {
+    "title": "Используйте плагины / Создавайте плагины",
+    "intro": "Установите доступные плагины или подготовьте переносимый пакет Agent Plugins 1.0.",
+    "useTitle": "Используйте плагины",
+    "available": "Доступно сейчас: установка через Universal Agent Plugins. С Node.js 22+ выполните:",
+    "installHelp": "Для нативной установки на macOS, Linux или Windows откройте инструкцию. CLI предложит совместимые агенты; отдельным плагинам может требоваться своя среда исполнения.",
+    "installLink": "Инструкция по установке",
+    "buildTitle": "Создавайте плагины",
+    "standard": "Создавайте переносимый пакет Agent Plugins 1.0 на основе plugin.json с необязательными skills/ и mcp.json. Поддержка клиентов зависит от пакета и его компонентов.",
+    "preparation": "Подготовка — ещё не выпущено",
+    "unreleased": "CLI для разработки с приоритетом стандарта находится в подготовке и ещё не выпущен. Опубликованный plugin-kit-ai 1.2.4 в npm и PyPI — исторический инструмент v1, а не standard-first v2. Установка plugin-kit-ai{'@'}latest не предоставляет будущий процесс разработки.",
+    "specLink": "Спецификация Agent Plugins 1.0",
+    "historyTitle": "Сопровождение исторических проектов v1",
+    "history": "Используйте инструкции v1 ниже для существующих проектов plugin.yaml. Эти шаблоны и генерируемые результаты относятся к историческому процессу v1, а не к новой разработке с приоритетом стандарта.",
+    "quickstartLink": "Быстрый старт и сопровождение v1",
+    "compatibilityLink": "Совместимость клиентов (на английском)",
+    "limitations": "Совместимость зависит от пакета. Проверка схемы не доказывает работу, OAuth или активацию. Codex не поддерживает заявленный MCP SSE; поддержка stdio и Streamable HTTP сохраняется в существующих адаптерах.",
+    "versions": "Версии проверены 2026-09-07: universal-agent-plugins 0.1.53 (npm), plugin-kit-ai 1.2.4 (npm/PyPI), стабильный релиз GitHub agentplugins-v0.1.53."
   }
 }

@@ -425,8 +425,11 @@ func TestResolveDirectoryEligibilityRequiresTrustedEvidence(t *testing.T) {
 		{name: "forged workflow", mutate: func(_ *DirectoryReleasePolicy, e *DirectoryEvidence) {
 			e.Trust.Workflow = "contributor/evidence/.github/workflows/directory.yml"
 		}},
-		{name: "incompatible reviewed trust", mutate: func(_ *DirectoryReleasePolicy, e *DirectoryEvidence) {
+		{name: "publisher-reviewed materialization", wantOK: true, mutate: func(_ *DirectoryReleasePolicy, e *DirectoryEvidence) {
 			e.Trust = &DirectoryEvidenceTrust{Kind: "reviewed_external"}
+		}},
+		{name: "malformed reviewed trust", mutate: func(_ *DirectoryReleasePolicy, e *DirectoryEvidence) {
+			e.Trust = &DirectoryEvidenceTrust{Kind: "reviewed_external", Workflow: "owner/evidence/.github/workflows/forged.yml"}
 		}},
 		{name: "non-current trusted evidence", mutate: func(p *DirectoryReleasePolicy, _ *DirectoryEvidence) { p.CurrentEvidence = nil }},
 	}

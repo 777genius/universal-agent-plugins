@@ -413,16 +413,23 @@ func parseImmutableGitHubIdentity(value string) (domain.DirectorySource, bool) {
 	case strings.HasPrefix(value, "github:"):
 		value = strings.TrimPrefix(value, "github:")
 	}
-	if strings.Contains(value, "://") || strings.Count(value, "//") != 1 {
+	if strings.Contains(value, "://") || strings.Count(value, "//") > 1 {
 		return domain.DirectorySource{}, false
 	}
-	repositoryRevision, subpath, ok := strings.Cut(value, "//")
-	if !ok || strings.Count(repositoryRevision, "@") != 1 {
+	repositoryRevision := value
+	subpath := ""
+	if strings.Contains(value, "//") {
+		repositoryRevision, subpath, _ = strings.Cut(value, "//")
+		if subpath == "" {
+			return domain.DirectorySource{}, false
+		}
+	}
+	if strings.Count(repositoryRevision, "@") != 1 {
 		return domain.DirectorySource{}, false
 	}
 	repository, revision, ok := strings.Cut(repositoryRevision, "@")
 	identity := domain.DirectorySource{Repository: repository, Revision: revision, Path: subpath}
-	if !ok || !directRepositoryPattern.MatchString(identity.Repository) || !shaPattern.MatchString(identity.Revision) || validateSourcePath(identity.Path) != nil {
+	if !ok || !directRepositoryPattern.MatchString(identity.Repository) || !shaPattern.MatchString(identity.Revision) || (identity.Path != "" && validateSourcePath(identity.Path) != nil) {
 		return domain.DirectorySource{}, false
 	}
 	return identity, true

@@ -1,0 +1,84 @@
+name: Landing
+
+on:
+  pull_request:
+    paths:
+      - "landing/**"
+      - "cmd/agentplugins-registry-mirror/**"
+      - ".github/workflows/landing.yml"
+  push:
+    branches: [main]
+    paths:
+      - "landing/**"
+      - "cmd/agentplugins-registry-mirror/**"
+      - ".github/workflows/landing.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.25.13"
+          cache: false
+
+      - uses: pnpm/action-setup@a8198c4bff370c8506180b035930dea56dbd5288 # v5
+        with:
+          version: 8.15.1
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22.21.1"
+          cache: pnpm
+          cache-dependency-path: landing/pnpm-lock.yaml
+
+      - name: Verify and stage signed registry feeds
+        run: |
+          go run ./cmd/agentplugins-registry-mirror \
+            --registry-repository 777genius/universal-agent-plugins-registry \
+            --pages-origin https://777genius.github.io/universal-agent-plugins-registry/ \
+            --output "${RUNNER_TEMP}/uap-registry-mirror"
+          mkdir -p landing/public
+          cp -a "${RUNNER_TEMP}/uap-registry-mirror/." landing/public/
+
+      - name: Install landing dependencies
+        working-directory: landing
+        run: pnpm install --frozen-lockfile
+
+      - name: Prepare Nuxt tooling
+        working-directory: landing
+        run: pnpm exec nuxt prepare
+
+      - name: Check registry, lint, and generate
+        env:
+          NUXT_APP_BASE_URL: /universal-agent-plugins/
+          NUXT_PUBLIC_SITE_URL: https://777genius.github.io/universal-agent-plugins
+        working-directory: landing
+        run: |
+          pnpm run test:registry
+          pnpm run lint
+          pnpm run generate
+
+      - name: Stage the GitHub Pages base path
+        working-directory: landing
+        run: |
+          mkdir -p .e2e-pages/universal-agent-plugins
+          cp -a .output/public/. .e2e-pages/universal-agent-plugins/
+
+      - name: Install browser
+        working-directory: landing
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Run browser E2E
+        env:
+          UAP_E2E_REPOSITORY_BASE: universal-agent-plugins
+          UAP_E2E_WEB_ROOT: .e2e-pages
+        working-directory: landing
+        run: pnpm run test:browser

@@ -1,173 +1,220 @@
 <script setup lang="ts">
-import { computed, nextTick, ref } from 'vue';
 import { mdiArrowLeft, mdiDownload, mdiOpenInNew } from '@mdi/js';
-import { getPluginBySlug } from '~/data/content';
-import { getResolvedPluginInstallSpec } from '~/data/pluginInstall';
-import type { LocaleCode } from '~/data/i18n';
+import { clientLandingById } from '~/data/clients';
+import { seoDescription, spdxLicenseUrl } from '~/utils/seo';
+import type { ClientID } from '~/types/registry';
 
 const route = useRoute();
-const localePath = useLocalePath();
-const { locale, t } = useI18n();
+const slug = String(route.params.slug);
+const registry = await useRegistryPage({ projection: { kind: 'plugin', value: slug } });
+const config = useRuntimeConfig();
+const { asset, pluginIcon, sourceUrl } = useSite();
+const plugin = registry.plugins.find((item) => item.name === slug);
 
-const pluginAccentMap: Record<string, string> = {
-  context7: '#00f0ff',
-  gitlab: '#ff7a1a',
-  github: '#7c9dff',
-  firebase: '#ffd54f',
-  linear: '#7df9ff',
-  supabase: '#3ecf8e',
-  greptile: '#70b5ff',
-};
-
-const slug = computed(() => String(route.params.slug));
-const plugin = computed(() => getPluginBySlug(locale.value as LocaleCode, slug.value));
-const installSpec = computed(() => getResolvedPluginInstallSpec(slug.value));
-
-if (!plugin.value) {
-  throw createError({
-    statusCode: 404,
-    statusMessage: 'Plugin not found',
-  });
+if (!plugin || plugin.trust_state === 'conformant_unreviewed') {
+  throw createError({ statusCode: 404, statusMessage: 'Plugin not found' });
 }
 
-const accent = computed(() => pluginAccentMap[plugin.value?.slug ?? ''] ?? '#00f0ff');
-const backToCatalogPath = computed(() => localePath('/plugins'));
-const detailTitle = computed(() =>
-  t('meta.pluginDetailTitle', { plugin: plugin.value?.title ?? '' }),
+const accent = '#00f0ff';
+const iconURL = pluginIcon(plugin);
+const supportedClients = clients.filter((client) =>
+  plugin.client_support.clients.includes(client.id),
 );
-const detailDescription = computed(() =>
-  t('meta.pluginDetailDescription', {
-    plugin: plugin.value?.title ?? '',
-    tagline: plugin.value?.tagline ?? '',
-  }),
-);
-const installExpanded = ref(false);
+const clientGroups = [
+  {
+    label: 'Managed by CLI',
+    clients: supportedClients.filter(
+      (client) => plugin.client_support.delivery[client.id] === 'managed',
+    ),
+  },
+  {
+    label: 'Requires a final step in the app',
+    clients: supportedClients.filter((client) =>
+      ['prepared', 'manual_activation'].includes(plugin.client_support.delivery[client.id] ?? ''),
+    ),
+  },
+  {
+    label: 'Delivery details not specified',
+    clients: supportedClients.filter((client) => !plugin.client_support.delivery[client.id]),
+  },
+].filter((group) => group.clients.length > 0);
+const initialTarget =
+  supportedClients.find((client) => client.id === 'cursor')?.id ?? supportedClients[0]?.id;
+const targets = ref<ClientID[]>(initialTarget ? [initialTarget] : []);
+const autoDetect = ref(true);
+const trustLabel = 'reviewed listing';
+const siteUrl = String(config.public.siteUrl).replace(/\/+$/, '');
+const pluginUrl = `${siteUrl}/plugins/${plugin.name}/`;
+const pluginSchemaId = `${pluginUrl}#plugin`;
+const breadcrumbId = `${pluginUrl}#breadcrumb`;
+const clientNames = supportedClients.map((client) => client.name);
+const description = seoDescription([
+  `Install the ${plugin.display_name} Agent Plugin for ${clientNames.join(', ')}.`,
+  plugin.description,
+]);
+const licenseUrl = spdxLicenseUrl(plugin.license);
 
-async function openInstallSection() {
-  installExpanded.value = true;
-  await nextTick();
-  document.getElementById('plugin-install')?.scrollIntoView({
-    behavior: 'smooth',
-    block: 'start',
-  });
+function openInstallSection() {
+  document.getElementById('plugin-install')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
-usePageSeo(detailTitle, detailDescription, { translate: false });
+usePageSeo(`${plugin.display_name} Agent Plugin | Universal Agent Plugins`, description, {
+  translate: false,
+  pageProperties: {
+    breadcrumb: { '@id': breadcrumbId },
+    mainEntity: { '@id': pluginSchemaId },
+  },
+  structuredData: [
+    {
+      '@type': 'SoftwareSourceCode',
+      '@id': pluginSchemaId,
+      name: `${plugin.display_name} Agent Plugin`,
+      description: plugin.description,
+      url: pluginUrl,
+      codeRepository: sourceUrl(plugin),
+      softwareVersion: plugin.version,
+      runtimePlatform: clientNames,
+      keywords: plugin.keywords.join(', '),
+      author: {
+        '@type': 'Organization',
+        name: plugin.author.name,
+        ...(plugin.author.url ? { url: plugin.author.url } : {}),
+      },
+      ...(licenseUrl ? { license: licenseUrl } : {}),
+      isPartOf: { '@id': `${siteUrl}/plugins/#webpage` },
+    },
+    {
+      '@type': 'BreadcrumbList',
+      '@id': breadcrumbId,
+      itemListElement: [
+        {
+          '@type': 'ListItem',
+          position: 1,
+          name: 'Plugin directory',
+          item: `${siteUrl}/plugins/`,
+        },
+        {
+          '@type': 'ListItem',
+          position: 2,
+          name: plugin.display_name,
+          item: pluginUrl,
+        },
+      ],
+    },
+  ],
+});
 </script>
 
 <template>
-  <div v-if="plugin" class="plugin-detail" :style="{ '--accent': accent }">
+  <div class="plugin-detail registry-surface" :style="{ '--accent': accent }">
     <PageBackground />
-
     <section class="plugin-detail__hero section">
       <v-container>
         <div class="plugin-detail__hero-topbar">
           <v-btn
-            :to="backToCatalogPath"
+            to="/plugins/"
             variant="text"
             icon
-            :aria-label="t('plugins.backToCatalog')"
+            aria-label="Back to plugin directory"
             class="plugin-detail__back-cta"
           >
             <v-icon :icon="mdiArrowLeft" size="22" />
           </v-btn>
+          <nav class="breadcrumbs" aria-label="Breadcrumb">
+            <NuxtLink to="/plugins/">Plugins</NuxtLink><span aria-hidden="true">/</span
+            ><span>{{ plugin.display_name }}</span>
+          </nav>
         </div>
 
         <div class="plugin-detail__hero-shell">
           <div class="plugin-detail__hero-copy">
             <div class="plugin-detail__headline">
-              <span
-                :class="[
-                  'plugin-detail__logo-wrap',
-                  `plugin-detail__logo-wrap--${plugin.logoSurface ?? 'default'}`,
-                ]"
-              >
-                <!-- prettier-ignore -->
+              <span class="plugin-detail__logo-wrap plugin-detail__logo-wrap--light">
                 <img
-                  :src="plugin.logoSrc"
-                  :alt="plugin.logoAlt"
+                  v-if="iconURL"
+                  :src="iconURL"
+                  alt=""
                   class="plugin-detail__logo"
                   loading="eager"
-                  decoding="async"
                 >
+                <span v-else aria-hidden="true">{{ plugin.display_name.slice(0, 1) }}</span>
               </span>
               <div>
-                <h1 class="plugin-detail__title">{{ plugin.title }}</h1>
-                <p class="plugin-detail__tagline">{{ plugin.tagline }}</p>
+                <h1 class="plugin-detail__title">{{ plugin.display_name }}</h1>
+                <p class="plugin-detail__tagline">{{ plugin.description }}</p>
               </div>
             </div>
 
             <div class="plugin-detail__chips">
-              <span class="plugin-detail__type">{{ t(`plugins.types.${plugin.pluginType}`) }}</span>
-              <span class="plugin-detail__status">{{ plugin.status }}</span>
+              <span class="plugin-detail__type">Agent Plugins 1.0</span>
+              <span class="plugin-detail__status">{{ trustLabel }}</span>
               <span
                 v-for="category in plugin.categories"
                 :key="category"
                 class="plugin-detail__category"
+                >{{ category }}</span
               >
-                {{ t(`plugins.categories.${category}`) }}
-              </span>
             </div>
 
-            <p class="plugin-detail__summary">{{ plugin.description }}</p>
+            <p class="plugin-detail__summary">
+              The listing and metadata were reviewed. An automated security assessment, when
+              present, applies only to the exact scanned revision. Runtime behavior is not audited.
+            </p>
 
             <div class="plugin-detail__actions">
-              <v-btn
-                size="x-large"
-                class="plugin-detail__install-cta"
-                @click="openInstallSection"
-              >
-                {{ t('plugins.install.showInstallCta') }}
-                <v-icon :icon="mdiDownload" end size="20" />
+              <v-btn size="x-large" class="plugin-detail__install-cta" @click="openInstallSection">
+                Install plugin <v-icon :icon="mdiDownload" end size="20" />
               </v-btn>
               <v-btn
-                :href="plugin.href"
+                :href="sourceUrl(plugin)"
                 target="_blank"
                 rel="noreferrer noopener"
                 size="large"
                 class="plugin-detail__primary-cta"
               >
-                {{ t('plugins.openRepository') }}
-                <v-icon :icon="mdiOpenInNew" end size="18" />
+                View source <v-icon :icon="mdiOpenInNew" end size="18" />
               </v-btn>
             </div>
           </div>
 
           <div class="plugin-detail__summary-card">
-            <p class="plugin-detail__summary-eyebrow">
-              {{ t('plugins.detailSummaryEyebrow') }}
-            </p>
-
-            <div class="plugin-detail__summary-block">
-              <div class="plugin-detail__summary-title">{{ t('plugins.supports') }}</div>
-              <div class="plugin-detail__badges">
-                <AgentBadge
-                  v-for="badge in plugin.badges"
-                  :key="badge"
-                  :label="badge"
-                  tone="detail"
-                />
+            <p class="plugin-detail__summary-eyebrow">Plugin overview</p>
+            <div
+              v-for="group in clientGroups"
+              :key="group.label"
+              class="plugin-detail__summary-block"
+            >
+              <div class="plugin-detail__summary-title">{{ group.label }}</div>
+              <div class="plugin-detail__client-list">
+                <NuxtLink
+                  v-for="client in group.clients"
+                  :key="client.id"
+                  :to="`/agents/${clientLandingById.get(client.id)?.slug}/`"
+                  class="plugin-detail__client"
+                >
+                  <img :src="asset(`client-icons/${client.icon}`)" alt="" width="22" height="22" >
+                  {{ client.name }}
+                </NuxtLink>
               </div>
             </div>
-
             <div class="plugin-detail__summary-block">
-              <div class="plugin-detail__summary-title">{{ t('plugins.pathTitle') }}</div>
+              <div class="plugin-detail__summary-title">Components</div>
               <ul class="plugin-detail__list">
-                <li class="plugin-detail__list-item">
-                  {{ t(`plugins.types.${plugin.pluginType}`) }}
+                <li
+                  v-for="component in plugin.components"
+                  :key="component"
+                  class="plugin-detail__list-item"
+                >
+                  {{ component }}
                 </li>
               </ul>
             </div>
-
             <div class="plugin-detail__summary-block">
-              <div class="plugin-detail__summary-title">{{ t('plugins.categoriesTitle') }}</div>
+              <div class="plugin-detail__summary-title">Package</div>
               <ul class="plugin-detail__list">
-                <li
-                  v-for="category in plugin.categories"
-                  :key="category"
-                  class="plugin-detail__list-item"
-                >
-                  {{ t(`plugins.categories.${category}`) }}
+                <li class="plugin-detail__list-item">Version {{ plugin.version }}</li>
+                <li class="plugin-detail__list-item">
+                  {{ plugin.license || 'License not specified' }}
                 </li>
               </ul>
             </div>
@@ -176,39 +223,10 @@ usePageSeo(detailTitle, detailDescription, { translate: false });
       </v-container>
     </section>
 
-    <PluginInstallSection
-      v-if="plugin && installSpec"
-      :plugin="plugin"
-      :install-spec="installSpec"
-      :accent="accent"
-      :expanded="installExpanded"
-      @update:expanded="installExpanded = $event"
-    />
-
-    <section class="plugin-detail__sections section">
-      <v-container>
-        <div class="plugin-detail__grid">
-          <article class="plugin-detail__panel">
-            <p class="plugin-detail__panel-eyebrow">{{ t('plugins.useCasesTitle') }}</p>
-            <h2 class="plugin-detail__panel-title">{{ t('plugins.useCasesTitle') }}</h2>
-            <ul class="plugin-detail__list">
-              <li v-for="item in plugin.useCases" :key="item" class="plugin-detail__list-item">
-                {{ item }}
-              </li>
-            </ul>
-          </article>
-
-          <article class="plugin-detail__panel">
-            <p class="plugin-detail__panel-eyebrow">{{ t('plugins.highlightsTitle') }}</p>
-            <h2 class="plugin-detail__panel-title">{{ t('plugins.highlightsTitle') }}</h2>
-            <ul class="plugin-detail__list">
-              <li v-for="item in plugin.highlights" :key="item" class="plugin-detail__list-item">
-                {{ item }}
-              </li>
-            </ul>
-          </article>
-        </div>
-      </v-container>
+    <section id="plugin-install" class="plugin-detail__installer section">
+      <v-container
+        ><InstallPanel v-model:targets="targets" v-model:auto-detect="autoDetect" :plugin="plugin"
+      /></v-container>
     </section>
   </div>
 </template>
@@ -227,6 +245,7 @@ usePageSeo(detailTitle, detailDescription, { translate: false });
 .plugin-detail__hero-topbar {
   display: flex;
   align-items: center;
+  gap: 8px;
   margin-bottom: 10px;
   padding-left: 4px;
 }
@@ -427,6 +446,48 @@ usePageSeo(detailTitle, detailDescription, { translate: false });
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
+}
+
+.plugin-detail__client-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.plugin-detail__client {
+  min-width: 0;
+  padding: 8px 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  color: #cbd5e1;
+  font-size: 0.74rem;
+  text-decoration: none;
+  transition:
+    border-color 0.2s ease,
+    color 0.2s ease;
+}
+
+.plugin-detail__client:hover {
+  color: #fff;
+  border-color: rgba(0, 240, 255, 0.32);
+}
+
+.plugin-detail__client img {
+  padding: 2px;
+  border-radius: 6px;
+  background: #fff;
+}
+
+.plugin-detail__installer {
+  padding-top: 18px;
+  padding-bottom: 72px;
+}
+
+.plugin-detail__installer :deep(.install-panel) {
+  position: static;
 }
 
 .plugin-detail__sections {

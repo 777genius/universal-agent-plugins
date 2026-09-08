@@ -41,6 +41,12 @@ pnpm run docs:check
 - update docs when stable or beta claims move
 - use Conventional Commits for commit messages
 
+## Contribution License
+
+Unless you explicitly state otherwise, any contribution intentionally submitted
+for inclusion in this project is provided under the Apache License 2.0, as
+described in section 5 of the license.
+
 ## Release-Sensitive Changes
 
 Treat these as release-sensitive and verify them explicitly:

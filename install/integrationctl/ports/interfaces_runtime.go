@@ -40,6 +40,9 @@ type Command struct {
 	Argv []string
 	Env  []string
 	Dir  string
+	// StdoutLimitBytes bounds captured stdout without terminating the child.
+	// Zero keeps the existing unbounded behavior for trusted callers.
+	StdoutLimitBytes int
 }
 
 type CommandResult struct {

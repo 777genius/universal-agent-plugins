@@ -4,389 +4,232 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Existing immutable stable release tag
+        description: Exact public Agentplugins release tag (agentplugins-vX.Y.Z)
         required: true
-      verify_only:
-        description: Verify an existing public version without publishing
-        required: false
+        type: string
+      publish:
+        description: Publish the verified package to npm with trusted provenance
+        required: true
         default: false
         type: boolean
 
 permissions:
   contents: read
+  attestations: read
+
+concurrency:
+  group: agentplugins-npm-${{ inputs.tag }}
+  cancel-in-progress: false
 
 jobs:
-  release-identity:
-    if: ${{ !inputs.verify_only }}
+  prepare:
+    name: Verify release and stage npm package
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
     outputs:
-      commit: ${{ steps.identity.outputs.commit }}
+      version: ${{ steps.stage.outputs.version }}
+      commit: ${{ steps.stage.outputs.commit }}
+      package_name: ${{ steps.stage.outputs.package_name }}
+      tarball_file: ${{ steps.stage.outputs.tarball_file }}
+      tarball_integrity: ${{ steps.stage.outputs.tarball_integrity }}
+      tarball_shasum: ${{ steps.stage.outputs.tarball_shasum }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ inputs.tag }}
           fetch-depth: 0
           persist-credentials: false
-          ref: ${{ inputs.tag }}
-      - name: Freeze exact release identity
-        id: identity
-        env:
-          TAG: ${{ inputs.tag }}
-          WORKFLOW_COMMIT: ${{ github.sha }}
-          WORKFLOW_REF: ${{ github.ref }}
-        run: |
-          if [[ ! "${TAG}" =~ ^agentplugins-v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "invalid agentplugins stable tag: ${TAG}" >&2
-            exit 1
-          fi
-          git fetch --force origin main:refs/remotes/origin/main "refs/tags/${TAG}:refs/tags/${TAG}"
-          commit="$(git rev-parse HEAD)"
-          test "${WORKFLOW_REF}" = "refs/heads/main"
-          if [[ "${WORKFLOW_COMMIT}" != "${commit}" ]]; then
-            echo "npm publish workflow source does not match the exact tagged main commit" >&2
-            exit 1
-          fi
-          test "${commit}" = "$(git rev-parse refs/remotes/origin/main)"
-          test "${commit}" = "$(git rev-list -n 1 "refs/tags/${TAG}")"
-          echo "commit=${commit}" >> "${GITHUB_OUTPUT}"
-
-  prepublish-conformance:
-    needs: release-identity
-    if: ${{ !inputs.verify_only }}
-    uses: ./.github/workflows/agentplugins-platform-proof.yml
-    permissions:
-      contents: read
-      attestations: read
-    with:
-      tag: ${{ inputs.tag }}
-      expected_commit: ${{ needs.release-identity.outputs.commit }}
-      allow_legacy_manifest: false
-
-  publish:
-    needs: [release-identity, prepublish-conformance]
-    if: ${{ !inputs.verify_only }}
-    runs-on: ubuntu-latest
-    environment: npm-agentplugins
-    outputs:
-      package_name: ${{ steps.publish-gate.outputs.package_name }}
-    permissions:
-      contents: read
-      id-token: write
-      attestations: read
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-          ref: ${{ inputs.tag }}
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 22
+          node-version: "22.23.2"
           registry-url: https://registry.npmjs.org
           package-manager-cache: false
-      - name: Install pinned npm with trusted publishing support
-        run: npm install --global npm@12.0.2
-      - name: Validate explicit stable publication gate
-        id: publish-gate
-        env:
-          TAG: ${{ inputs.tag }}
-          READY: ${{ vars.NPM_AGENTPLUGINS_PUBLISH_READY }}
-        run: |
-          if [[ ! "${TAG}" =~ ^agentplugins-v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "invalid agentplugins stable tag: ${TAG}" >&2
-            exit 1
-          fi
-          test "${READY}" = "true"
-          git fetch --force origin main:refs/remotes/origin/main "refs/tags/${TAG}:refs/tags/${TAG}"
-          head_commit="$(git rev-parse HEAD)"
-          test "${head_commit}" = "${{ needs.release-identity.outputs.commit }}"
-          test "${{ needs.prepublish-conformance.outputs.gate_eligible }}" = "true"
-          test "${head_commit}" = "$(git rev-parse refs/remotes/origin/main)"
-          test "${head_commit}" = "$(git rev-list -n 1 "refs/tags/${TAG}")"
-          echo "commit=${head_commit}" >> "${GITHUB_OUTPUT}"
-          package_name="$(node -p 'require("./npm/agentplugins/package.json").name')"
-          package_name_length="$(printf '%s' "${package_name}" | wc -c | tr -d ' ')"
-          if [[ ! "${package_name}" =~ ^(@[a-z0-9][a-z0-9._-]*/)?[a-z0-9][a-z0-9._-]*$ ]] || [[ "${package_name_length}" -gt 214 ]]; then
-            echo "invalid npm package name in npm/agentplugins/package.json" >&2
-            exit 1
-          fi
-          test "$(node -p 'require("./npm/agentplugins/package.json").bin.agentplugins')" = "bin/agentplugins.js"
-          echo "package_name=${package_name}" >> "${GITHUB_OUTPUT}"
-          registry_error="${RUNNER_TEMP}/agentplugins-npm-view.err"
-          if npm view "${package_name}" versions --json >/dev/null 2>"${registry_error}"; then
-            exists=true
-          elif grep -q 'E404' "${registry_error}"; then
-            exists=false
-          else
-            echo "unable to prove whether ${package_name} already exists in npm" >&2
-            cat "${registry_error}" >&2
-            exit 1
-          fi
-          if [[ "${exists}" != "true" ]]; then
-            echo "${package_name} does not exist yet; trusted publishing only supports existing packages" >&2
-            exit 1
-          fi
-      - name: Download and verify all release assets
+      - name: Verify exact public release identity and attestations
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ inputs.tag }}
         run: |
-          mkdir -p "${RUNNER_TEMP}/agentplugins-assets"
-          gh release download "${TAG}" --repo "${GITHUB_REPOSITORY}" --dir "${RUNNER_TEMP}/agentplugins-assets"
-          cd "${RUNNER_TEMP}/agentplugins-assets"
-          node "${GITHUB_WORKSPACE}/npm/agentplugins/scripts/release-assets.js" verify \
-            "${PWD}" "${TAG}" "${{ steps.publish-gate.outputs.commit }}"
-          for asset in agentplugins_* checksums.txt release-manifest.json; do
-            gh attestation verify "${asset}" \
-              --repo "${GITHUB_REPOSITORY}" \
-              --signer-workflow "github.com/${GITHUB_REPOSITORY}/.github/workflows/agentplugins-release.yml" \
-              --source-digest "${{ steps.publish-gate.outputs.commit }}"
+          set -euo pipefail
+          [[ "${TAG}" =~ ^agentplugins-v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          test "${GITHUB_REF}" = "refs/tags/${TAG}"
+          commit="$(git rev-parse HEAD)"
+          test "${commit}" = "$(git rev-list -n 1 "refs/tags/${TAG}")"
+          git fetch --no-tags --force origin main:refs/remotes/origin/main
+          git merge-base --is-ancestor "${commit}" refs/remotes/origin/main
+          release_json="$(gh release view "${TAG}" --repo "${GITHUB_REPOSITORY}" --json isDraft,isPrerelease,tagName,assets)"
+          version="${TAG#agentplugins-v}"
+          expected_names="agentplugins_${version}_darwin_amd64 agentplugins_${version}_darwin_arm64 agentplugins_${version}_linux_amd64 agentplugins_${version}_linux_arm64 agentplugins_${version}_windows_amd64.exe agentplugins_${version}_windows_arm64.exe checksums.txt release-manifest.json"
+          actual_names="$(jq -r '.assets[].name' <<<"${release_json}" | sort | tr '\n' ' ' | sed 's/ $//')"
+          expected_sorted="$(printf '%s\n' ${expected_names} | sort | tr '\n' ' ' | sed 's/ $//')"
+          jq -e --arg tag "${TAG}" '.isDraft == false and .isPrerelease == false and .tagName == $tag' <<<"${release_json}" >/dev/null
+          test "${actual_names}" = "${expected_sorted}"
+          mkdir -p "${RUNNER_TEMP}/release-assets"
+          gh release download "${TAG}" --repo "${GITHUB_REPOSITORY}" --dir "${RUNNER_TEMP}/release-assets"
+          node npm/agentplugins/scripts/release-assets.js verify "${RUNNER_TEMP}/release-assets" "${TAG}" "${commit}" > "${RUNNER_TEMP}/verified-release.json"
+          for asset in "${RUNNER_TEMP}"/release-assets/agentplugins_* "${RUNNER_TEMP}/release-assets/checksums.txt" "${RUNNER_TEMP}/release-assets/release-manifest.json"; do
+            gh attestation verify "${asset}" --repo "${GITHUB_REPOSITORY}" --signer-workflow "github.com/${GITHUB_REPOSITORY}/.github/workflows/agentplugins-release.yml" --source-digest "${commit}"
           done
-      - name: Download exact six-platform-tested npm tarball
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: ${{ needs.prepublish-conformance.outputs.tarball_artifact }}
-          path: ${{ runner.temp }}/agentplugins-tested-package
-      - name: Revalidate exact tested tarball publication identity
+      - name: Stage and pack the exact npm facade
+        id: stage
         env:
           TAG: ${{ inputs.tag }}
-          TARBALL_FILE: ${{ needs.prepublish-conformance.outputs.tarball_file }}
-          EXPECTED_PACKAGE: ${{ needs.prepublish-conformance.outputs.package_name }}
         run: |
+          set -euo pipefail
           version="${TAG#agentplugins-v}"
-          tarball="${RUNNER_TEMP}/agentplugins-tested-package/${TARBALL_FILE}"
-          test -s "${tarball}"
-          install_root="${RUNNER_TEMP}/agentplugins-publish-inspection"
-          npm install --prefix "${install_root}" --ignore-scripts --no-audit --no-fund --save-exact "${tarball}"
-          package_root="${install_root}/node_modules/${EXPECTED_PACKAGE}"
-          test "$(node -p 'require(process.argv[1]).version' "${package_root}/package.json")" = "${version}"
-          test "$(node -p 'require(process.argv[1]).name' "${package_root}/package.json")" = "${EXPECTED_PACKAGE}"
-          test "$(node -p 'require(process.argv[1]).bin.agentplugins' "${package_root}/package.json")" = "bin/agentplugins.js"
-          test "$(node -p 'Boolean(require(process.argv[1]).scripts?.preinstall || require(process.argv[1]).scripts?.install || require(process.argv[1]).scripts?.postinstall)' "${package_root}/package.json")" = "false"
-          node -e '
-            const fs = require("node:fs");
-            const npmAssets = JSON.parse(fs.readFileSync(process.argv[1]));
-            const release = JSON.parse(fs.readFileSync(process.argv[2]));
-            if (npmAssets.version !== release.version || npmAssets.tag !== release.tag) throw new Error("npm manifest identity mismatch");
-            for (const [key, asset] of Object.entries(release.assets)) {
-              const pin = npmAssets.assets?.[key];
-              if (!pin || pin.file !== asset.file || pin.sha256 !== asset.sha256 || pin.size !== asset.size) {
-                throw new Error(`npm asset pin mismatch: ${key}`);
-              }
-            }
-            if (Object.keys(npmAssets.assets || {}).length !== 6) throw new Error("npm manifest target count mismatch");
-          ' "${package_root}/assets.json" "${RUNNER_TEMP}/agentplugins-tested-package/verified-release.json"
-      - name: Publish stable release with provenance
-        env:
-          TARBALL: ${{ runner.temp }}/agentplugins-tested-package/${{ needs.prepublish-conformance.outputs.tarball_file }}
-        run: npm publish --access public --tag latest --provenance "${TARBALL}"
+          stage="${RUNNER_TEMP}/agentplugins-npm-stage"
+          mkdir -p "${stage}"
+          cp -R npm/agentplugins/. "${stage}/"
+          node "${stage}/scripts/stage-release.js" "${stage}" "${RUNNER_TEMP}/release-assets" "${version}" "$(git rev-parse HEAD)" --evidence-root "${GITHUB_WORKSPACE}/docs"
+          (cd "${stage}" && npm test)
+          mkdir -p "${RUNNER_TEMP}/npm-tarball"
+          (cd "${stage}" && npm pack --ignore-scripts --json --pack-destination "${RUNNER_TEMP}/npm-tarball" > "${RUNNER_TEMP}/npm-tarball/pack.json")
+          tarball_file="$(jq -er 'if length == 1 then .[0].filename else error("expected one tarball") end' "${RUNNER_TEMP}/npm-tarball/pack.json")"
+          integrity="$(jq -er '.[0].integrity' "${RUNNER_TEMP}/npm-tarball/pack.json")"
+          shasum="$(jq -er '.[0].shasum' "${RUNNER_TEMP}/npm-tarball/pack.json")"
+          node npm/agentplugins/scripts/npm-public-contract.js stage-outputs "${RUNNER_TEMP}/npm-tarball/pack.json" "${GITHUB_OUTPUT}" "${version}"
+          echo "version=${version}" >> "${GITHUB_OUTPUT}"
+          echo "commit=$(git rev-parse HEAD)" >> "${GITHUB_OUTPUT}"
+          echo "package_name=$(node -p 'require(process.argv[1]).name' "${stage}/package.json")" >> "${GITHUB_OUTPUT}"
+          echo "tarball_file=${tarball_file}" >> "${GITHUB_OUTPUT}"
+          echo "tarball_integrity=${integrity}" >> "${GITHUB_OUTPUT}"
+          echo "tarball_shasum=${shasum}" >> "${GITHUB_OUTPUT}"
+          if tar -tzf "${RUNNER_TEMP}/npm-tarball/${tarball_file}" | grep -Eq '(^/|(^|/)\.\.(\/|$))'; then
+            echo "unsafe tarball path" >&2
+            exit 1
+          fi
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: agentplugins-npm-${{ steps.stage.outputs.version }}
+          path: ${{ runner.temp }}/npm-tarball/
+          if-no-files-found: error
+          retention-days: 7
 
-  verify:
-    needs: publish
-    if: ${{ always() && !cancelled() && (inputs.verify_only || needs.publish.result == 'success') }}
-    runs-on: ubuntu-latest
+  publish:
+    name: Publish npm package with trusted provenance
+    if: ${{ inputs.publish == true }}
+    needs: prepare
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
+    environment: npm-agentplugins
     permissions:
       contents: read
+      id-token: write
+    steps:
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22.23.2"
+          package-manager-cache: false
+      - name: Use an empty npm config for OIDC publish
+        run: |
+          set -euo pipefail
+          config="${RUNNER_TEMP}/agentplugins-publish.npmrc"
+          printf '%s\n' 'registry=https://registry.npmjs.org/' > "${config}"
+          chmod 600 "${config}"
+          echo "NPM_CONFIG_USERCONFIG=${config}" >> "${GITHUB_ENV}"
+      - name: Install the pinned npm trusted-publisher client
+        run: |
+          set -euo pipefail
+          npm install --global npm@12.0.2
+          test "$(npm --version)" = "12.0.2"
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: agentplugins-npm-${{ needs.prepare.outputs.version }}
+          path: ${{ runner.temp }}/npm-tarball
+      - name: Refuse overwrite and publish the exact staged bytes
+        env:
+          PACKAGE_NAME: ${{ needs.prepare.outputs.package_name }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+          TARBALL: ${{ needs.prepare.outputs.tarball_file }}
+        run: |
+          set -euo pipefail
+          test -z "${NPM_TOKEN:-}"
+          test -z "${NODE_AUTH_TOKEN:-}"
+          test -s "${NPM_CONFIG_USERCONFIG}"
+          grep -Fx 'registry=https://registry.npmjs.org/' "${NPM_CONFIG_USERCONFIG}"
+          if npm view "${PACKAGE_NAME}@${VERSION}" version >/dev/null 2>&1; then
+            echo "npm version already exists and is immutable: ${PACKAGE_NAME}@${VERSION}" >&2
+            exit 1
+          fi
+          test "$(find "${RUNNER_TEMP}/npm-tarball" -maxdepth 1 -name '*.tgz' -type f | wc -l | tr -d ' ')" = 1
+          npm publish "${RUNNER_TEMP}/npm-tarball/${TARBALL}" --registry=https://registry.npmjs.org/ --access public --provenance --tag latest
+
+  verify-public:
+    name: Verify public npm provenance and lifecycle
+    if: ${{ inputs.publish == true }}
+    needs: [prepare, publish]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          persist-credentials: false
           ref: ${{ inputs.tag }}
+          persist-credentials: false
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 22
+          node-version: "22.23.2"
           registry-url: https://registry.npmjs.org
           package-manager-cache: false
-      - name: Resolve immutable verification target
-        id: verify-target
+      - name: Verify metadata, signatures, provenance, and isolated lifecycle
         env:
-          TAG: ${{ inputs.tag }}
+          PACKAGE_NAME: ${{ needs.prepare.outputs.package_name }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+          COMMIT: ${{ needs.prepare.outputs.commit }}
+          TARBALL_INTEGRITY: ${{ needs.prepare.outputs.tarball_integrity }}
+          TARBALL_SHASUM: ${{ needs.prepare.outputs.tarball_shasum }}
+        shell: bash
         run: |
-          if [[ ! "${TAG}" =~ ^agentplugins-v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "invalid agentplugins stable tag: ${TAG}" >&2
-            exit 1
-          fi
-          git fetch --force origin "refs/tags/${TAG}:refs/tags/${TAG}"
-          test "$(git rev-parse HEAD)" = "$(git rev-list -n 1 "refs/tags/${TAG}")"
-          package_name="$(node -p 'require("./npm/agentplugins/package.json").name')"
-          package_name_length="$(printf '%s' "${package_name}" | wc -c | tr -d ' ')"
-          if [[ ! "${package_name}" =~ ^(@[a-z0-9][a-z0-9._-]*/)?[a-z0-9][a-z0-9._-]*$ ]] || [[ "${package_name_length}" -gt 214 ]]; then
-            echo "invalid npm package name in npm/agentplugins/package.json" >&2
-            exit 1
-          fi
-          echo "package_name=${package_name}" >> "${GITHUB_OUTPUT}"
-      - name: Install pinned npm with provenance verification support
-        run: npm install --global npm@12.0.2
-      - name: Verify exact published stable lifecycle from a clean project
-        env:
-          TAG: ${{ inputs.tag }}
-          NPM_PACKAGE: ${{ steps.verify-target.outputs.package_name }}
-        run: |
-          version="${TAG#agentplugins-v}"
-          project="${RUNNER_TEMP}/agentplugins-registry-smoke"
-          test_home="${project}/home"
-          mkdir -p "${project}" "${test_home}/.codex" "${test_home}/.cursor" "${project}/tmp"
-          synthetic="${project}/synthetic-plugin"
-          mkdir -p "${synthetic}"
-          printf '%s\n' \
-            '{' \
-            '  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",' \
-            '  "name": "registry-proof-synthetic",' \
-            '  "version": "1.0.0",' \
-            '  "description": "Synthetic package used only by isolated registry CI"' \
-            '}' > "${synthetic}/plugin.json"
-          cd "${project}" || exit 1
-          npm init -y >/dev/null
-          export HOME="${test_home}"
-          export USERPROFILE="${test_home}"
-          export XDG_CONFIG_HOME="${project}/config"
-          export XDG_CACHE_HOME="${project}/cache"
-          export AGENTPLUGINS_HOME="${project}/state"
-          export AGENTPLUGINS_CACHE_DIR="${RUNNER_TEMP}/agentplugins-registry-cache"
-          export NPM_CONFIG_CACHE="${project}/npm-cache"
-          export NPM_CONFIG_USERCONFIG="${test_home}/.npmrc"
-          export TMPDIR="${project}/tmp"
-          export GIT_CONFIG_GLOBAL="${test_home}/.gitconfig"
-          export GIT_CONFIG_NOSYSTEM=1
-          export GIT_TERMINAL_PROMPT=0
+          set -euo pipefail
+          npm install --global npm@12.0.2
+          test "$(npm --version)" = "12.0.2"
+          root="${RUNNER_TEMP}/agentplugins-public-e2e"
+          mkdir -p "${root}/project" "${root}/home" "${root}/home/.codex" "${root}/home/.cursor" "${root}/home/.kiro" "${root}/tmp" "${root}/synthetic" "${root}/packed"
+          printf '%s\n' '{' '  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",' '  "name": "npm-public-proof",' '  "version": "1.0.0",' '  "description": "Synthetic package used only by isolated npm release CI"' '}' > "${root}/synthetic/plugin.json"
+          printf '%s\n' '{"name":"npm-public-proof-project","version":"1.0.0","private":true}' > "${root}/project/package.json"
+          export HOME="${root}/home" USERPROFILE="${root}/home" XDG_CONFIG_HOME="${root}/config" XDG_CACHE_HOME="${root}/cache" AGENTPLUGINS_HOME="${root}/state" AGENTPLUGINS_CACHE_DIR="${root}/binary-cache" NPM_CONFIG_CACHE="${root}/npm-cache" NPM_CONFIG_USERCONFIG="${root}/home/.npmrc" TMPDIR="${root}/tmp" GIT_CONFIG_GLOBAL="${root}/home/.gitconfig" GIT_CONFIG_NOSYSTEM=1 GIT_TERMINAL_PROMPT=0
           printf '%s\n' 'registry=https://registry.npmjs.org/' > "${NPM_CONFIG_USERCONFIG}"
-          available=false
-          max_attempts=30
-          for attempt in $(seq 1 "${max_attempts}"); do
-            published_version="$(npm view --prefer-online "${NPM_PACKAGE}@${version}" version 2>/dev/null || true)"
-            latest_version="$(npm view --prefer-online "${NPM_PACKAGE}@latest" version 2>/dev/null || true)"
-            if [[ "${published_version}" = "${version}" ]] && \
-              [[ "${latest_version}" = "${version}" ]]; then
-              available=true
+          cd "${root}/project"
+          for attempt in 1 2 3 4 5 6 7 8; do
+            if npm install --ignore-scripts --no-audit --no-fund --save-exact "${PACKAGE_NAME}@${VERSION}"; then
               break
             fi
-            echo "waiting for ${NPM_PACKAGE}@${version} registry propagation (${attempt}/${max_attempts})" >&2
-            sleep 10
+            if [[ "${attempt}" == 8 ]]; then
+              echo "published npm version was not readable after bounded retries" >&2
+              exit 1
+            fi
+            sleep "$((attempt * 2))"
           done
-          test "${available}" = true
-          npm install --ignore-scripts --save-exact "${NPM_PACKAGE}@${version}"
-          npm audit signatures --json --include-attestations > audit-signatures.json
-          jq -e --arg package "${NPM_PACKAGE}" --arg version "${version}" '
-            (.invalid | length) == 0 and
-            (.missing | length) == 0 and
-            ([.verified[] | select(
-              .name == $package and
-              .version == $version and
-              .attestations.provenance.predicateType == "https://slsa.dev/provenance/v1"
-            )] | length) == 1
-          ' audit-signatures.json
-          run_agentplugins() {
-            npm exec --yes --package="${NPM_PACKAGE}@${version}" -- agentplugins "$@"
-          }
-          run_agentplugins version | grep -Fx "agentplugins ${version}"
-          lifecycle_targets="codex,cursor"
-          run_agentplugins add "${synthetic}" --target "${lifecycle_targets}" --format json > add.json
-          jq -e '
-            .data.operation_id as $operation_id |
-            .data.tree_digest as $tree_digest |
-            .data.manifest_digest as $manifest_digest |
-            .schema_version == 1 and .command == "add" and .result == "success" and
-            .data.batch == true and .data.succeeded == 2 and .data.failed == 0 and
-            ([.data.targets[].target] == ["codex", "cursor"]) and
-            (.data.operation_id | type == "string" and length > 0) and
-            (.data.tree_digest | type == "string" and startswith("sha256:")) and
-            (.data.manifest_digest | type == "string" and startswith("sha256:")) and
-            ([.data.targets[] | select(
-              .status == "external_completed" and
-              .output.operation_id == $operation_id and
-              .output.tree_digest == $tree_digest and
-              .output.manifest_digest == $manifest_digest and
-              (.output.result.installation_id | type == "string" and length > 0) and
-              .output.result.mutated == true and
-              .output.result.activation.authentication == "not_checked"
-            )] | length) == 2 and
-            ([.data.targets[].output.result.installation_id] | unique | length) == 1
-          ' add.json
-          installation_id="$(jq -er '.data.targets[0].output.result.installation_id' add.json)"
-          tree_digest="$(jq -er '.data.tree_digest' add.json)"
-          manifest_digest="$(jq -er '.data.manifest_digest' add.json)"
-          run_agentplugins add "${synthetic}" --target "${lifecycle_targets}" --activation-complete --auth-complete --format json > complete.json
-          jq -e --arg installation_id "${installation_id}" --arg tree_digest "${tree_digest}" --arg manifest_digest "${manifest_digest}" '
-            .data.operation_id as $operation_id |
-            .schema_version == 1 and .command == "add" and .result == "success" and
-            .data.batch == true and .data.succeeded == 2 and .data.failed == 0 and
-            ([.data.targets[].target] == ["codex", "cursor"]) and
-            (.data.operation_id | type == "string" and length > 0) and
-            .data.tree_digest == $tree_digest and .data.manifest_digest == $manifest_digest and
-            ([.data.targets[] | select(
-              .status == "external_completed" and
-              .output.operation_id == $operation_id and
-              .output.tree_digest == $tree_digest and
-              .output.manifest_digest == $manifest_digest and
-              .output.result.installation_id == $installation_id and
-              .output.result.mutated == true and
-              .output.result.activation.activation_attested == true and
-              .output.result.activation.authentication_attested == true
-            )] | length) == 2
-          ' complete.json
-          run_agentplugins info registry-proof-synthetic --format json > info.json
-          jq -e --arg installation_id "${installation_id}" --arg tree_digest "${tree_digest}" --arg manifest_digest "${manifest_digest}" '
-            .schema_version == 1 and .command == "info" and
-            .data.name == "registry-proof-synthetic" and .data.installation_id == $installation_id and
-            ([.data.clients[].client_id] == ["codex", "cursor"]) and
-            ([.data.clients[] | select(.package_revision.tree_digest == $tree_digest and .package_revision.manifest_digest == $manifest_digest)] | length) == 2
-          ' info.json
-          state_before_doctor="$(sha256sum "${AGENTPLUGINS_HOME}/state-v2.json")"
-          run_agentplugins doctor registry-proof-synthetic --format json > doctor.json
-          state_after_doctor="$(sha256sum "${AGENTPLUGINS_HOME}/state-v2.json")"
-          test "${state_before_doctor}" = "${state_after_doctor}"
-          jq -e '.schema_version == 1 and .command == "doctor" and .data.read_only == true' doctor.json
-          run_agentplugins update registry-proof-synthetic --target "${lifecycle_targets}" --format json > update.json
-          jq -e --arg installation_id "${installation_id}" --arg tree_digest "${tree_digest}" --arg manifest_digest "${manifest_digest}" '
-            .data.operation_id as $operation_id |
-            .schema_version == 1 and .command == "update" and .result == "success" and
-            .data.batch == true and .data.succeeded == 2 and .data.failed == 0 and
-            ([.data.targets[].target] == ["codex", "cursor"]) and
-            (.data.operation_id | type == "string" and length > 0) and
-            .data.tree_digest == $tree_digest and
-            ([.data.targets[] | select(
-              .selected == true and .status == "external_completed" and
-              .output.operation_id == $operation_id and
-              .output.tree_digest == $tree_digest and
-              .output.manifest_digest == $manifest_digest and
-              .output.result.installation_id == $installation_id and
-              .output.result.no_change == true and .output.result.mutated == false
-            )] | length) == 2
-          ' update.json
-          run_agentplugins remove registry-proof-synthetic --target "${lifecycle_targets}" --external-uninstalled --format json > remove.json
-          jq -e --arg installation_id "${installation_id}" --arg tree_digest "${tree_digest}" --arg manifest_digest "${manifest_digest}" '
-            .data.operation_id as $operation_id |
-            .schema_version == 1 and .command == "remove" and .result == "success" and
-            .data.batch == true and .data.status == "data_retained" and
-            .data.succeeded == 2 and .data.failed == 0 and .data.data_retained == true and
-            .data.plugin_data_preserved == true and
-            ([.data.targets[].target] == ["codex", "cursor"]) and
-            (.data.operation_id | type == "string" and length > 0) and
-            ([.data.targets[] | select(
-              .status == "external_completed" and
-              .output.operation_id == $operation_id and
-              .output.tree_digest == $tree_digest and
-              .output.manifest_digest == $manifest_digest and
-              .output.result.installation_id == $installation_id and
-              .output.result.mutated == true
-            )] | length) == 2 and
-            (.data.retained_data | length) > 0 and
-            ([.data.retained_data[] | select(
-              (.data_receipt_id | type == "string" and length > 0) and
-              (.physical_backend_id | type == "string" and length > 0) and
-              .scope == "user" and .state == "owned" and
-              (keys | sort) == ["data_receipt_id", "physical_backend_id", "scope", "state"]
-            )] | length) == (.data.retained_data | length) and
-            (.data.retained_data_action | contains("agentplugins remove " + $installation_id + " --purge-data")) and
-            ([paths(scalars) as $path | getpath($path) | select(type == "string" and startswith("/"))] | length) == 0
-          ' remove.json
-          run_agentplugins info registry-proof-synthetic --format json > removed.json
-          jq -e --arg installation_id "${installation_id}" '
-            .schema_version == 1 and .command == "info" and
-            .data.installation_id == $installation_id and .data.name == "registry-proof-synthetic" and
-            (.data.clients | length) == 0
-          ' removed.json
-          if grep -F "${RUNNER_TEMP}" add.json complete.json info.json doctor.json update.json remove.json removed.json; then
-            echo "agentplugins JSON output leaked an absolute runner path" >&2
-            exit 1
-          fi
+          npm view "${PACKAGE_NAME}@${VERSION}" --json > "${root}/metadata.json"
+          integrity="$(jq -er 'if type == "array" and length == 1 then .[0].dist.integrity elif type == "object" then .dist.integrity else error("expected one metadata record") end' "${root}/metadata.json")"
+          shasum="$(jq -er 'if type == "array" and length == 1 then .[0].dist.shasum elif type == "object" then .dist.shasum else error("expected one metadata record") end' "${root}/metadata.json")"
+          test "${integrity}" = "${TARBALL_INTEGRITY}"; test "${shasum}" = "${TARBALL_SHASUM}"
+          node "${GITHUB_WORKSPACE}/npm/agentplugins/scripts/npm-public-contract.js" metadata "${root}/metadata.json" "${VERSION}" "${integrity}" "${shasum}"
+          npm audit signatures --json --include-attestations > "${root}/audit.json"
+          jq -e --arg package "${PACKAGE_NAME}" --arg version "${VERSION}" '(.invalid | length) == 0 and (.missing | length) == 0 and ([.verified[] | select(.name == $package and .version == $version)] | length) == 1' "${root}/audit.json" >/dev/null
+          jq '{attestations: .verified[0].attestationBundles}' "${root}/audit.json" > "${root}/attestation.json"
+          node "${GITHUB_WORKSPACE}/npm/agentplugins/scripts/npm-public-contract.js" audit "${root}/audit.json" "${root}/attestation.json" "${VERSION}"
+          node "${GITHUB_WORKSPACE}/npm/agentplugins/scripts/npm-public-contract.js" attestation "${root}/attestation.json" "${VERSION}" "${integrity}" "agentplugins-v${VERSION}" "${COMMIT}"
+          npm pack --ignore-scripts --json --pack-destination "${root}/packed" "${PACKAGE_NAME}@${VERSION}" > "${root}/pack.json"
+          node "${GITHUB_WORKSPACE}/npm/agentplugins/scripts/npm-public-contract.js" download "${root}/pack.json" "${root}/packed" "${VERSION}" "${integrity}" "${shasum}"
+          run_agentplugins() { npm exec --yes --package="${PACKAGE_NAME}@${VERSION}" -- agentplugins "$@"; }
+          run_agentplugins version | grep -Fx "agentplugins ${VERSION}"
+          run_agentplugins search context7 --format json | jq -e '.result == "success" and ([.data.results[] | select(.product_id == "context7" and .distribution_id == "upstash/context7" and .distribution_kind == "upstream")] | length) == 1' >/dev/null
+          run_agentplugins add "${root}/synthetic" --target codex,cursor,kiro --format json > "${root}/add.json"
+          jq -e '.result == "success" and .data.batch == true and .data.succeeded == 3 and .data.failed == 0 and ([.data.targets[].target] == ["codex","cursor","kiro"])' "${root}/add.json" >/dev/null
+          run_agentplugins info npm-public-proof --format json | jq -e '.result == "success" and ([.data.clients[].client_id] == ["codex","cursor","kiro"])' >/dev/null
+          run_agentplugins update npm-public-proof --target codex,cursor,kiro --format json | jq -e '.result == "success" and .data.batch == true and .data.succeeded == 3 and .data.failed == 0' >/dev/null
+          run_agentplugins remove npm-public-proof --target codex,cursor,kiro --external-uninstalled --format json | jq -e '.result == "success" and .data.batch == true and .data.succeeded == 3 and .data.failed == 0 and .data.data_retained == true' >/dev/null
+          run_agentplugins info npm-public-proof --format json | jq -e '.result == "success" and (.data.clients | length) == 0' >/dev/null
+          # Repair is proven against a small immutable package from the public
+          # registry. The CLI repo's own Codex example intentionally exercises
+          # app metadata and is not a suitable repair fixture.
+          repair_source="777genius/universal-agent-plugins-registry@1388c89521bca4b53454776b584ee0c4996b31c0//plugins/context7"
+          mkdir -p "${XDG_CONFIG_HOME}/opencode"
+          run_agentplugins add "${repair_source}" --target opencode --format json | jq -e '.result == "success" and .data.succeeded == 1 and .data.failed == 0' >/dev/null
+          repair_file="$(jq -er '[.installations[] | select(.declared_name == "context7") | .clients[] | select(.client_id == "opencode") | .native_objects[] | select(.kind == "opencode_global_mcp_server") | .path] | if length == 1 and (.[0] | type == "string" and length > 0) then .[0] else error("expected exactly one Context7 OpenCode repair path") end' "${AGENTPLUGINS_HOME}/state-v2.json")"
+          test -f "${repair_file}"
+          jq -e '.mcp.context7' "${repair_file}" > /dev/null
+          jq 'del(.mcp.context7)' "${repair_file}" > "${root}/repair-mutated.json"
+          mv "${root}/repair-mutated.json" "${repair_file}"
+          run_agentplugins repair context7 --target opencode --format json | jq -e '.result == "success" and .data.succeeded == 1 and .data.failed == 0 and .data.targets[0].target == "opencode" and .data.targets[0].output.result.mutated == true' >/dev/null
+          jq -e '.mcp.context7' "${repair_file}" > /dev/null
+          run_agentplugins remove context7 --target opencode --external-uninstalled --format json | jq -e '.result == "success" and .data.succeeded == 1 and .data.failed == 0' >/dev/null

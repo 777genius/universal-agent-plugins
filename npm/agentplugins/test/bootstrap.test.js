@@ -14,7 +14,9 @@ const { PROOF_MODE, acquireLock, downloadFile, ensureBinary, loadRelease } = req
 const { cacheRoot, detectPlatform, expectedAssetName } = require("../lib/platform");
 
 const VERSION = "0.1.0";
+const COMMIT = "a".repeat(40);
 const BINARY = Buffer.from("#!/bin/sh\necho isolated-agentplugins-test\n");
+const HISTORICAL_COMMIT = "5630ccd92aa91c8ac8cafb37eea8752fd82edce0";
 
 async function fixturePackage(t, binary = BINARY) {
   const root = await fsp.mkdtemp(path.join(os.tmpdir(), "agentplugins-npm-package-"));
@@ -23,11 +25,52 @@ async function fixturePackage(t, binary = BINARY) {
   const file = expectedAssetName(VERSION, platformInfo);
   await fsp.writeFile(path.join(root, "package.json"), JSON.stringify({ name: "universal-agent-plugins", version: VERSION }));
   await fsp.writeFile(path.join(root, "assets.json"), JSON.stringify({
-    schema_version: 1,
+    schema_version: 2,
     version: VERSION,
     npm_package: "universal-agent-plugins",
     repository: "777genius/plugin-kit-ai",
     tag: `agentplugins-v${VERSION}`,
+    producer: {
+      repository: "777genius/plugin-kit-ai",
+      tag: `agentplugins-v${VERSION}`,
+      commit: COMMIT,
+      release_manifest: { schema_version: 2, sha256: "b".repeat(64), version: VERSION }
+    },
+    client_evidence: {
+      schema_version: 1,
+      kind: "agentplugins_client_lifecycle",
+      recorded_at: "2026-08-30",
+      document_sha256: "0cecbf12a96cf578d12e1cb2f582aa13dca2d9d900ccaefd223f5d7c1030ea65",
+      record_sha256: "437da1bc7423a85b231be139ff9bfbd7e89c942ef216a61ebde668c08a9c2ee3",
+      source: {
+        repository: "777genius/plugin-kit-ai",
+        commit: "01f02cb51cfe5f664d4d5f52b295c59c7ea03495",
+        document: { path: "docs/AGENTPLUGINS_CLIENT_E2E.md", sha256: "0cecbf12a96cf578d12e1cb2f582aa13dca2d9d900ccaefd223f5d7c1030ea65" },
+        record: { path: "docs/evidence/agentplugins-client-e2e-2026-08-30.json", sha256: "437da1bc7423a85b231be139ff9bfbd7e89c942ef216a61ebde668c08a9c2ee3" }
+      },
+      installer: {
+        repository: "777genius/plugin-kit-ai",
+        commit: HISTORICAL_COMMIT,
+        tree: "e".repeat(40),
+        version: "0.1.22",
+        binary_sha256: "f".repeat(64)
+      },
+      package: {
+        selector: `owner/package@${"1".repeat(40)}`,
+        revision: "1".repeat(40),
+        tree_digest: `sha256:${"2".repeat(64)}`,
+        manifest_digest: `sha256:${"3".repeat(64)}`
+      },
+      claim_boundary: {
+        lifecycle_e2e: true,
+        client_discovery_e2e: true,
+        browser_tool_runtime_e2e: false,
+        model_turn_e2e: false,
+        login_e2e: false,
+        oauth_e2e: false,
+        windsurf_skill_activation_claimed: false
+      }
+    },
     assets: {
       [platformInfo.key]: {
         file,
@@ -274,14 +317,65 @@ test("embedded release manifest is pinned to the npm distribution name", async (
   );
 });
 
-test("an old mtime never lets a contender steal a live cache lock", async () => {
+test("historical evidence metadata is independent from the current producer identity", async (t) => {
+  const fixture = await fixturePackage(t);
+  const manifestPath = path.join(fixture.root, "assets.json");
+  const manifest = JSON.parse(await fsp.readFile(manifestPath, "utf8"));
+  assert.notEqual(manifest.client_evidence.installer.version, manifest.version);
+  assert.notEqual(manifest.client_evidence.installer.commit, manifest.producer.commit);
+  assert.notEqual(manifest.client_evidence.installer.binary_sha256, manifest.assets["linux-amd64"].sha256);
+  assert.doesNotThrow(() => loadRelease(fixture.root, detectPlatform("linux", "x64")));
+});
+
+test("runtime rejects missing, malformed, and mismatched current producer identity", async (t) => {
+  for (const mutate of [
+    (manifest) => { delete manifest.producer; },
+    (manifest) => { manifest.producer.commit = "A".repeat(40); },
+    (manifest) => { manifest.producer.repository = "other/repository"; },
+    (manifest) => { manifest.producer.tag = "agentplugins-v9.9.9"; },
+    (manifest) => { manifest.producer.release_manifest.sha256 = "short"; },
+    (manifest) => { manifest.producer.release_manifest.version = "9.9.9"; }
+  ]) {
+    const fixture = await fixturePackage(t);
+    const manifestPath = path.join(fixture.root, "assets.json");
+    const manifest = JSON.parse(await fsp.readFile(manifestPath, "utf8"));
+    mutate(manifest);
+    await fsp.writeFile(manifestPath, JSON.stringify(manifest));
+    assert.throws(() => loadRelease(fixture.root, detectPlatform("linux", "x64")), /producer release identity/);
+  }
+});
+
+test("runtime rejects malformed historical evidence metadata without binding it to the current release", async (t) => {
+  for (const mutate of [
+    (evidence) => { evidence.installer.commit = "A".repeat(40); },
+    (evidence) => { evidence.package.selector = `owner/other@${"9".repeat(40)}`; },
+    (evidence) => { evidence.claim_boundary.oauth_e2e = true; },
+    (evidence) => { evidence.source.commit = "A".repeat(40); },
+    (evidence) => { evidence.source.commit = "4b25a45e1574bab7a4f49e48905a3b3b2647e917"; },
+    (evidence) => { evidence.source.record.sha256 = "0".repeat(64); },
+    (evidence) => { evidence.document_sha256 = "0".repeat(64); evidence.source.document.sha256 = evidence.document_sha256; },
+    (evidence) => { delete evidence.record_sha256; }
+  ]) {
+    const fixture = await fixturePackage(t);
+    const manifestPath = path.join(fixture.root, "assets.json");
+    const manifest = JSON.parse(await fsp.readFile(manifestPath, "utf8"));
+    mutate(manifest.client_evidence);
+    await fsp.writeFile(manifestPath, JSON.stringify(manifest));
+    assert.throws(() => loadRelease(fixture.root, detectPlatform("linux", "x64")), /historical client evidence/);
+  }
+});
+
+test("an old mtime never lets a contender steal a live cache lock", async (t) => {
   const target = path.join(os.tmpdir(), `agentplugins-live-lock-${crypto.randomBytes(8).toString("hex")}`);
-  const release = await acquireLock(target);
+  const lockRoot = await fsp.mkdtemp(path.join(os.tmpdir(), "agentplugins-live-lock-root-"));
+  await fsp.chmod(lockRoot, 0o700);
+  t.after(() => fsp.rm(lockRoot, { recursive: true, force: true }));
+  const release = await acquireLock(target, { lockRoot });
   const lockName = crypto.createHash("sha256").update(target).digest("hex") + ".lock";
-  const lockPath = path.join(os.tmpdir(), "agentplugins-npm-locks", lockName);
+  const lockPath = path.join(lockRoot, lockName);
   await fsp.utimes(lockPath, new Date(0), new Date(0));
   let firstReleased = false;
-  const contender = acquireLock(target).then((unlock) => {
+  const contender = acquireLock(target, { lockRoot }).then((unlock) => {
     assert.equal(firstReleased, true, "contender stole a lock still held by a live process");
     return unlock;
   });
@@ -294,14 +388,55 @@ test("an old mtime never lets a contender steal a live cache lock", async () => 
 
 test("a stale-looking lock is never auto-removed or stolen", async (t) => {
   const target = path.join(os.tmpdir(), `agentplugins-stale-lock-${crypto.randomBytes(8).toString("hex")}`);
+  const lockRoot = await fsp.mkdtemp(path.join(os.tmpdir(), "agentplugins-stale-lock-root-"));
+  await fsp.chmod(lockRoot, 0o700);
   const lockName = crypto.createHash("sha256").update(target).digest("hex") + ".lock";
-  const lockPath = path.join(os.tmpdir(), "agentplugins-npm-locks", lockName);
+  const lockPath = path.join(lockRoot, lockName);
   await fsp.mkdir(path.dirname(lockPath), { recursive: true });
   const body = JSON.stringify({ pid: 999999, nonce: "0".repeat(32) }) + "\n";
   await fsp.writeFile(lockPath, body, { flag: "wx", mode: 0o600 });
-  t.after(() => fsp.rm(lockPath, { force: true }));
-  await assert.rejects(acquireLock(target, { timeoutMs: 30, pollMs: 5 }), /remove it only after confirming/);
+  t.after(() => fsp.rm(lockRoot, { recursive: true, force: true }));
+  await assert.rejects(acquireLock(target, { lockRoot, timeoutMs: 30, pollMs: 5 }), /remove it only after confirming/);
   assert.equal(await fsp.readFile(lockPath, "utf8"), body);
+});
+
+test("lock roots are isolated inside each user's cache boundary", async (t) => {
+  const root = await fsp.mkdtemp(path.join(os.tmpdir(), "agentplugins-user-locks-"));
+  t.after(() => fsp.rm(root, { recursive: true, force: true }));
+  const target = path.join(root, "shared-target");
+  const environments = [
+    { XDG_CACHE_HOME: path.join(root, "user-a") },
+    { XDG_CACHE_HOME: path.join(root, "user-b") }
+  ];
+  const unlocks = await Promise.all(environments.map((environment) => acquireLock(target, {
+    environment, platform: "linux", home: path.join(root, "unused")
+  })));
+  for (const environment of environments) {
+    const userLockRoot = path.join(environment.XDG_CACHE_HOME, "agentplugins", ".locks");
+    const stat = await fsp.lstat(userLockRoot);
+    assert.equal(stat.isDirectory(), true);
+    assert.equal(stat.mode & 0o777, 0o700);
+  }
+  for (const unlock of unlocks) await unlock();
+  const legacyLock = path.join(os.tmpdir(), "agentplugins-npm-locks",
+    crypto.createHash("sha256").update(target).digest("hex") + ".lock");
+  assert.equal(fs.existsSync(legacyLock), false);
+});
+
+test("lock root rejects symlinks and unsafe modes without touching their contents", async (t) => {
+  if (process.platform === "win32") return;
+  const root = await fsp.mkdtemp(path.join(os.tmpdir(), "agentplugins-lock-safety-"));
+  t.after(() => fsp.rm(root, { recursive: true, force: true }));
+  const unsafe = path.join(root, "unsafe");
+  await fsp.mkdir(unsafe, { mode: 0o755 });
+  await fsp.chmod(unsafe, 0o755);
+  await assert.rejects(acquireLock("target", { lockRoot: unsafe }), /user-owned mode-0700/);
+  const marker = path.join(unsafe, "keep");
+  await fsp.writeFile(marker, "keep");
+  const link = path.join(root, "link");
+  await fsp.symlink(unsafe, link);
+  await assert.rejects(acquireLock("target", { lockRoot: link }), /user-owned mode-0700/);
+  assert.equal(await fsp.readFile(marker, "utf8"), "keep");
 });
 
 test("download verification closes the destination before rejecting", async (t) => {

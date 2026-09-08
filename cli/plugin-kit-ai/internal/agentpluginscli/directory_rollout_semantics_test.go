@@ -12,6 +12,7 @@ import (
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/directoryv1"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/providers"
 )
 
 type rolloutDirectoryFixture struct {
@@ -336,6 +337,77 @@ func TestInteractiveSharedSurfaceAddRequiresSignedPeerEligibilityBeforeAcquisiti
 				t.Fatalf("interactive rejection created a managed artifact root: %v", err)
 			}
 		})
+	}
+}
+
+func TestInteractiveDirectoryAddOffersOnlyOneCompleteSignedTargetSet(t *testing.T) {
+	rollout := newRolloutDirectoryFixture(t,
+		[]domain.ClientID{domain.ClientCursor},
+		[]domain.ClientID{domain.ClientCursor})
+	rollout.cli.app.Detector = staticDetector{clients: []domain.DetectedClient{
+		fixtureClient(t, domain.ClientCodex), fixtureClient(t, domain.ClientCursor),
+	}}
+	stdout, _, err := rollout.cli.executeInput(true, "\n", "add", "rollout-demo", "--dry-run")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(stdout, "Skipped installed clients that this package cannot install together: codex") {
+		t.Fatalf("package-aware Directory output = %q", stdout)
+	}
+	if rollout.acquirer.verifiedCalls != 1 {
+		t.Fatalf("Directory package acquired %d times, want exactly once after target selection", rollout.acquirer.verifiedCalls)
+	}
+}
+
+func TestInteractiveDirectoryAddSkipsTargetThatCannotPassActivationPreflight(t *testing.T) {
+	rollout := newRolloutDirectoryFixture(t,
+		[]domain.ClientID{domain.ClientCursor, domain.ClientKiro},
+		[]domain.ClientID{domain.ClientCursor, domain.ClientKiro})
+	writeCLIMCP(t, rollout.v1.root)
+	loaded, err := rollout.cli.app.acquireLocal(context.Background(), rollout.v1.root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rollout.v1.tree = loaded.envelope.TreeDigest
+	rollout.v1.manifest = loaded.envelope.ManifestDigest
+	if err := loaded.cleanup(); err != nil {
+		t.Fatal(err)
+	}
+	release := &rollout.directory.bundle.Snapshot.Distributions[0].Releases[0]
+	release.TreeDigest = rollout.v1.tree
+	release.ManifestDigest = rollout.v1.manifest
+	for index := range rollout.directory.bundle.Snapshot.Evidence {
+		evidence := &rollout.directory.bundle.Snapshot.Evidence[index]
+		if evidence.DistributionID == "owner/rollout" && evidence.ReleaseSequence == 1 {
+			evidence.PackageTreeDigest = rollout.v1.tree
+		}
+	}
+	kiro := fixtureClient(t, domain.ClientKiro)
+	kiro.ExecutablePath = "/test/bin/kiro-cli"
+	rollout.cli.app.Detector = staticDetector{clients: []domain.DetectedClient{
+		fixtureClient(t, domain.ClientCursor), kiro,
+	}}
+	rollout.cli.app.Lifecycle.Activator = providers.Activator{Runner: &cliRunOnlyRunner{}}
+
+	stdout, _, err := rollout.cli.executeInput(true, "\n", "add", "rollout-demo", "--dry-run")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(stdout, "Skipped installed clients that this package cannot install together: kiro") {
+		t.Fatalf("activation-aware Directory output = %q", stdout)
+	}
+	if strings.Contains(stdout, "Detected supported clients (all selected by default)") {
+		t.Fatalf("single preflight-capable Directory target unexpectedly prompted: %q", stdout)
+	}
+	if rollout.acquirer.verifiedCalls != 1 {
+		t.Fatalf("Directory package acquired %d times, want exactly once", rollout.acquirer.verifiedCalls)
+	}
+	state, loadErr := rollout.cli.store.Load()
+	if loadErr != nil {
+		t.Fatal(loadErr)
+	}
+	if len(state.Installations) != 0 {
+		t.Fatalf("interactive Directory dry-run mutated state: %+v", state)
 	}
 }
 
