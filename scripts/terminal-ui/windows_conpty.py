@@ -13,6 +13,7 @@ import os
 from pathlib import Path
 import platform
 import re
+import base64
 import subprocess
 import sys
 import tempfile
@@ -45,10 +46,34 @@ class PROCESS_INFORMATION(ctypes.Structure):
     _fields_ = [('hProcess', W.HANDLE), ('hThread', W.HANDLE), ('dwProcessId', W.DWORD), ('dwThreadId', W.DWORD)]
 
 
+class JOB_BASIC_LIMIT(ctypes.Structure):
+    _fields_ = [('per_process_time', ctypes.c_int64), ('per_job_time', ctypes.c_int64),
+                ('flags', W.DWORD), ('minimum_working_set', ctypes.c_size_t),
+                ('maximum_working_set', ctypes.c_size_t), ('active_process_limit', W.DWORD),
+                ('affinity', ctypes.c_size_t), ('priority', W.DWORD), ('scheduling', W.DWORD)]
+
+
+class JOB_ACCOUNTING(ctypes.Structure):
+    _fields_ = [('times', ctypes.c_int64 * 4), ('page_faults', W.DWORD),
+                ('total_processes', W.DWORD), ('active_processes', W.DWORD), ('terminated', W.DWORD)]
+
+
+class JOB_EXTENDED_LIMIT(ctypes.Structure):
+    _fields_ = [('basic', JOB_BASIC_LIMIT), ('io_counters', ctypes.c_uint64 * 6),
+                ('process_memory', ctypes.c_size_t), ('job_memory', ctypes.c_size_t),
+                ('peak_process_memory', ctypes.c_size_t), ('peak_job_memory', ctypes.c_size_t)]
+
+
 class ConPTY:
-    def __init__(self, argv, env, cwd, timeout):
+    def __init__(self, argv, env, cwd, timeout, evidence=None):
         self.k = ctypes.WinDLL('kernel32', use_last_error=True)
         signatures = {
+            'CreateJobObjectW': ([W.LPVOID, W.LPCWSTR], W.HANDLE),
+            'SetInformationJobObject': ([W.HANDLE, ctypes.c_int, W.LPVOID, W.DWORD], W.BOOL),
+            'AssignProcessToJobObject': ([W.HANDLE, W.HANDLE], W.BOOL),
+            'QueryInformationJobObject': ([W.HANDLE, ctypes.c_int, W.LPVOID, W.DWORD, W.LPVOID], W.BOOL),
+            'TerminateJobObject': ([W.HANDLE, W.UINT], W.BOOL),
+            'ResumeThread': ([W.HANDLE], W.DWORD),
             'CreatePipe': ([ctypes.POINTER(W.HANDLE), ctypes.POINTER(W.HANDLE), W.LPVOID, W.DWORD], W.BOOL),
             'CreatePseudoConsole': ([COORD, W.HANDLE, W.HANDLE, W.DWORD, ctypes.POINTER(W.HANDLE)], ctypes.c_long),
             'ResizePseudoConsole': ([W.HANDLE, COORD], ctypes.c_long),
@@ -69,6 +94,8 @@ class ConPTY:
             function = getattr(self.k, name); function.argtypes = args; function.restype = result
         self.timeout, self.raw, self.error = timeout, bytearray(), None
         self.handles = []
+        self.job = None
+        self.status_path = None
         self.hpc = W.HANDLE()
         self.pi = PROCESS_INFORMATION()
         self.reader = None
@@ -77,10 +104,16 @@ class ConPTY:
         attributes = None
         initialized = False
         try:
+            self.job = self.k.CreateJobObjectW(None, None)
+            self.ok(self.job)
+            self.handles.append(self.job)
+            limits = JOB_EXTENDED_LIMIT()
+            limits.basic.flags = 0x2000  # JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
+            self.ok(self.k.SetInformationJobObject(self.job, 9, ctypes.byref(limits), ctypes.sizeof(limits)))
             input_read, self.input = self.pipe()
             self.output, output_write = self.pipe()
-            check(self.k.CreatePseudoConsole(COORD(100, 30), input_read, output_write, 0, ctypes.byref(self.hpc)) == 0,
-                  'CreatePseudoConsole failed')
+            result = self.k.CreatePseudoConsole(COORD(100, 30), input_read, output_write, 0, ctypes.byref(self.hpc))
+            check(result == 0, 'CreatePseudoConsole HRESULT=0x%08x' % (result & 0xffffffff))
             self.reader = threading.Thread(target=self.read, daemon=True)
             self.reader.start()
             size = ctypes.c_size_t()
@@ -95,13 +128,26 @@ class ConPTY:
             startup.lpAttributeList = ctypes.cast(attributes, W.LPVOID)
             command = ctypes.create_unicode_buffer(subprocess.list2cmdline(argv))
             environment = ctypes.create_unicode_buffer('\0'.join(k + '=' + v for k, v in sorted(env.items())) + '\0\0')
-            self.ok(self.k.CreateProcessW(None, command, None, None, False, 0x80000 | 0x400,
+            self.ok(self.k.CreateProcessW(None, command, None, None, False, 0x80000 | 0x400 | 0x4,
                                           environment, str(cwd), ctypes.byref(startup), ctypes.byref(self.pi)))
             self.handles.extend([self.pi.hProcess, self.pi.hThread])
+            # Assign while suspended so PowerShell/CLI descendants cannot escape
+            # failure cleanup. Job termination is always recorded as forced.
+            self.ok(self.k.AssignProcessToJobObject(self.job, self.pi.hProcess))
+            resumed = self.k.ResumeThread(self.pi.hThread)
+            self.ok(resumed != 0xffffffff)
             for handle in (input_read, output_write):
                 self.k.CloseHandle(handle); self.handles.remove(handle)
-        except BaseException:
-            self.close()
+        except BaseException as exc:
+            try:
+                self.close()
+            except Exception as cleanup_error:
+                raise RuntimeError(repr(exc) + '; startup cleanup: ' + repr(cleanup_error)) from exc
+            finally:
+                if evidence:
+                    (evidence / 'terminal.ansi').write_bytes(self.raw)
+                    (evidence / 'startup-error.json').write_text(json.dumps(dict(
+                        error=repr(exc), forced=self.forced, reader_error=self.error)), encoding='utf-8')
             raise
         finally:
             if initialized: self.k.DeleteProcThreadAttributeList(attributes)
@@ -123,7 +169,8 @@ class ConPTY:
             if len(self.raw) > 4 * 1024 * 1024:
                 self.error = 'capture exceeded 4 MiB'; return
         error = ctypes.get_last_error()
-        if error not in (6, 109, 995): self.error = 'ReadFile error ' + str(error)
+        if error != 109 and not (self.closed and error in (6, 995)):
+            self.error = 'ReadFile WinError ' + str(error)
 
     def send(self, data):
         size = W.DWORD()
@@ -142,7 +189,14 @@ class ConPTY:
         while time.monotonic() < deadline:
             check(self.error is None, self.error)
             if re.search(marker, clean(bytes(self.raw[after:]))): return len(self.raw)
-            check(self.poll() is None, 'console owner exited before marker: ' + marker)
+            code = self.poll()
+            # Read status only after exit (or a protocol marker in the caller).
+            # Windows CRT readers may deny deletion during atomic replacement.
+            if code is not None and self.status_path and self.status_path.exists():
+                state = json.loads(self.status_path.read_text(encoding='utf-8'))
+                check('error' not in state, 'console owner native failure: ' + str(state.get('error')))
+            check(code is None, 'console owner exited (' + str(code) + ') before marker: ' + marker +
+                  '\n' + clean(bytes(self.raw))[-6000:])
             time.sleep(0.02)
         raise AssertionError('timeout waiting for ' + marker)
 
@@ -160,9 +214,18 @@ class ConPTY:
                 check(self.k.WaitForSingleObject(handle, 0) == 0, 'TerminateProcess failed')
             check(self.k.WaitForSingleObject(handle, 2000) == 0, 'process kill timeout')
         try:
+            if getattr(self, 'job', None):
+                accounting = JOB_ACCOUNTING()
+                self.ok(self.k.QueryInformationJobObject(self.job, 1, ctypes.byref(accounting),
+                                                        ctypes.sizeof(accounting), None))
+                if accounting.active_processes:
+                    self.forced = True
+                    attempt(lambda: self.ok(self.k.TerminateJobObject(self.job, 97)))
             if self.pi.hProcess and self.poll() is None:
                 self.forced = True
-                if child_pid:
+                if getattr(self, 'job', None):
+                    attempt(lambda: self.ok(self.k.TerminateJobObject(self.job, 97)))
+                elif child_pid:
                     child = self.k.OpenProcess(0x0001 | 0x00100000, False, child_pid)
                     if child:
                         try: attempt(lambda: terminate(child))
@@ -188,6 +251,15 @@ class ConPTY:
 CASES = ('default-no', 'no', 'yes-lifecycle', 'ctrl-c', 'confirm-ctrl-c', 'eof', 'resize')
 
 
+def powershell_argv(shell, argv, nonce):
+    # Encode the command, preserving spaces, apostrophes and Unicode literally.
+    quote = lambda value: "'" + value.replace("'", "''") + "'"
+    command = "Write-Output " + quote('POWERSHELL_LAUNCH_' + nonce) + '; & ' + ' '.join(
+        quote(value) for value in argv) + '; exit $LASTEXITCODE'
+    return [str(shell), '-NoLogo', '-NoProfile', '-NonInteractive', '-EncodedCommand',
+            base64.b64encode(command.encode('utf-16-le')).decode('ascii')]
+
+
 def run_case(name, args):
     evidence = args.artifacts / name
     evidence.mkdir()
@@ -198,12 +270,18 @@ def run_case(name, args):
         status_path = evidence / 'status.json'
         config = dict(argv=[str(args.binary), 'add', str(fixture.package)], cwd=str(fixture.project),
                       nonce=nonce, status=str(status_path))
+        if args.powershell:
+            config['argv'] = powershell_argv(args.powershell, config['argv'], nonce)
         config_path = evidence / 'job.json'
         config_path.write_text(json.dumps(config), encoding='utf-8')
         terminal = ConPTY([sys.executable, '-I', str(Path(__file__).with_name('windows_job.py').resolve()),
-                          str(config_path)], fixture.env, fixture.project, args.timeout)
+                          str(config_path)], fixture.env, fixture.project, args.timeout, evidence=evidence)
+        terminal.status_path = status_path
         status = {}
         try:
+            terminal.wait('OWNER_READY_' + nonce)
+            if args.powershell:
+                terminal.wait('POWERSHELL_LAUNCH_' + nonce)
             terminal.wait(r'Choose targets[^\r\n]*:')
             check('codex' in clean(terminal.raw).lower() and 'cursor' in clean(terminal.raw).lower(),
                   'expected both config-only clients')
@@ -231,6 +309,7 @@ def run_case(name, args):
             terminal.wait('RESTORE_READY_' + nonce)
             status = json.loads(status_path.read_text(encoding='utf-8'))
             check(status['exit'] == (1 if name in ('ctrl-c', 'confirm-ctrl-c', 'eof') else 0), 'unexpected CLI exit: ' + str(status))
+            check(status['owner_before'] == status['owner_after'], 'inherited console handles/modes/cursor changed')
             check(status['before'] == status['after'], 'inherited console modes changed')
             check(status['cursor_before'] and status['cursor_after'], 'console cursor was not restored')
             offset = len(terminal.raw)
@@ -241,18 +320,23 @@ def run_case(name, args):
             check(terminal.poll() == 0, 'console owner did not exit cleanly')
             status = json.loads(status_path.read_text(encoding='utf-8'))
             check(status['line_read'] and status['probe_modes'] == status['before'], 'console reuse failed')
+            check(status['owner_probe'] == status['owner_before'], 'console handles/modes/cursor changed on reuse')
             check('line_' + nonce in clean(terminal.raw[offset:]), 'kernel echo missing')
             if name == 'yes-lifecycle': fixture.installed(['cursor'])
             else: fixture.unchanged()
         finally:
-            if status_path.exists(): status = json.loads(status_path.read_text(encoding='utf-8'))
             # Keep the CLI pid through every phase for timeout cleanup.
-            try: terminal.close(status.get('pid'))
+            try:
+                try:
+                    if status_path.exists(): status = json.loads(status_path.read_text(encoding='utf-8'))
+                finally:
+                    terminal.close(status.get('pid'))
             finally:
                 (evidence / 'terminal.ansi').write_bytes(terminal.raw)
                 (evidence / 'transcript.txt').write_text(clean(terminal.raw), encoding='utf-8')
                 (evidence / 'cleanup.json').write_text(json.dumps({'forced': terminal.forced, 'reader_error': terminal.error}))
                 (evidence / 'mutations.json').write_text(json.dumps({'before': fixture.before, 'after': fixture.mutations()}), encoding='utf-8')
+        check(not terminal.forced, 'forced cleanup cannot qualify as a pass')
 
 
 def main():
@@ -260,12 +344,16 @@ def main():
     parser.add_argument('--binary', required=True, type=Path)
     parser.add_argument('--artifacts', required=True, type=Path)
     parser.add_argument('--case', action='append', choices=CASES)
+    parser.add_argument('--powershell', type=Path, help='absolute native PowerShell executable; no profile')
     parser.add_argument('--timeout', type=float, default=15)
     scanner_options(parser)
     args = parser.parse_args()
     if os.name != 'nt': parser.error('native Windows required; no simulated pass')
     if args.timeout <= 0: parser.error('timeout must be positive')
     args.binary = args.binary.resolve(strict=True)
+    if args.powershell:
+        args.powershell = args.powershell.resolve(strict=True)
+        if not args.case: args.case = ['default-no', 'ctrl-c']
     args.artifacts = args.artifacts.resolve()
     args.artifacts.mkdir(parents=True, exist_ok=False)
     scanner = prepare_scanner(args)

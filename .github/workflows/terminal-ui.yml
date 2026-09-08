@@ -63,6 +63,16 @@ jobs:
       - name: Windows ConPTY Plain matrix
         if: runner.os == 'Windows'
         run: python scripts/terminal-ui/windows_conpty.py --binary "$RUNNER_TEMP/agentplugins.exe" --scanner-archive "$RUNNER_TEMP/scanner/${{ matrix.archive }}" --artifacts "$RUNNER_TEMP/terminal-evidence" --timeout 15
+      - name: Windows native console cancellation entry and reuse
+        if: ${{ !cancelled() && runner.os == 'Windows' && steps.build.outcome == 'success' }}
+        run: python scripts/terminal-ui/qualification_faults.py --case windows-console-cancel --artifacts "$RUNNER_TEMP/windows-fault-evidence" --timeout 15
+      - name: Windows PowerShell ConPTY default No and Ctrl+C
+        if: ${{ !cancelled() && runner.os == 'Windows' && steps.build.outcome == 'success' }}
+        shell: pwsh
+        run: |
+          $shellPath = (Get-Command pwsh -CommandType Application).Source
+          python scripts/terminal-ui/windows_conpty.py --binary "$env:RUNNER_TEMP/agentplugins.exe" --scanner-archive "$env:RUNNER_TEMP/scanner/${{ matrix.archive }}" --powershell "$shellPath" --case default-no --case ctrl-c --artifacts "$env:RUNNER_TEMP/powershell-terminal-evidence" --timeout 15
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       # Keep the broad gate required, including when a console case fails.
       # Run it after console proof so legacy fixture failures cannot hide ConPTY.
       - name: Broad existing CLI contracts
@@ -76,5 +86,7 @@ jobs:
           path: |
             ${{ runner.temp }}/terminal-evidence
             ${{ runner.temp }}/npm-terminal-evidence
+            ${{ runner.temp }}/windows-fault-evidence
+            ${{ runner.temp }}/powershell-terminal-evidence
             ${{ runner.temp }}/scanner/scanner.json
           if-no-files-found: warn
