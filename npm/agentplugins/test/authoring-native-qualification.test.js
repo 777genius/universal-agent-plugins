@@ -65,7 +65,7 @@ function internal(observation = false, fastTimeout = false) {
   if (fastTimeout) source = source.replace('installer ? 120000 : 15000', '100');
   // Expose lexical contracts only in this test VM. Production exports no policy,
   // verifier, command inventory, child executable or success switch.
-  source += '\nmodule.exports.test = { commands, installationCommands, verifyJourney, terminal, tree, canonical, context, subprocess, observationGate, jsonDocument, treeShape, packageIdentity, capabilities, PROFILES, POLICY, scannerArchive, SCANNER_RELEASES, publicInfoClient };';
+  source += '\nmodule.exports.test = { commands, installationCommands, verifyJourney, terminal, tree, canonical, context, subprocess, observationGate, jsonDocument, treeShape, packageIdentity, capabilities, PROFILES, POLICY, scannerArchive, SCANNER_RELEASES, publicInfoClient, publicInfoInstallation, installed };';
   const Module = require("node:module");
   const instance = new Module(moduleFile, module);
   instance.filename = moduleFile; instance.paths = Module._nodeModulePaths(path.dirname(moduleFile));
@@ -90,6 +90,7 @@ function publicClientFixture(binding) {
     if (/^[0-9a-f]{40}$/.test(immutable)) value.package_revision.resolved_revision = immutable;
   }
   if (binding.affected_surfaces?.length) value.affected_surfaces = [...binding.affected_surfaces].sort();
+  Object.assign(value, { receipt_reconciled: false, native_discovery_reconciled: false, native_identity_state: "indeterminate" });
   return value;
 }
 const publicInfoChanges = {
@@ -113,6 +114,13 @@ const publicInfoChanges = {
   "revision distribution": v => { v.package_revision.distribution_id = "invented"; },
   "revision sequence": v => { v.package_revision.release_sequence = 1; },
   "revision private evidence": v => { v.package_revision.catalog_evidence = {}; },
+  "missing receipt": v => { delete v.receipt_reconciled; },
+  "missing discovery": v => { delete v.native_discovery_reconciled; },
+  "missing identity": v => { delete v.native_identity_state; },
+  "all reconciliation omitted": v => { delete v.receipt_reconciled; delete v.native_discovery_reconciled; delete v.native_identity_state; },
+  "receipt type": v => { v.receipt_reconciled = "false"; },
+  "discovery type": v => { v.native_discovery_reconciled = "false"; },
+  "identity type": v => { v.native_identity_state = false; },
   "receipt claim": v => { v.receipt_reconciled = true; },
   "discovery claim": v => { v.native_discovery_reconciled = true; },
   "identity claim": v => { v.native_identity_state = "managed"; },
@@ -173,6 +181,8 @@ const publicInstallationChanges = {${Object.entries(publicInstallationChanges).m
 const publicInfoChanges = {${Object.entries(publicInfoChanges).map(([key, fn]) => JSON.stringify(key) + ":" + fn.toString()).join(",")}};
 const profiles = [{"id": "agent-plugins/1.0.0", "revision": "ff8ab5e392cc87bd88d87c060815a87490e51003", "digest": "sha256:97a658b7dca3ce1b4c2266b95da300fa51d9dc4ade59d73168e5f9104272da18"}, {"id": "agent-skills/2026-09-06", "revision": "69ef37e9424c0a7ea9dd2293b559e43ec8176379", "digest": "sha256:b9079c0c10b7930e8c6a20ff2bc10cda2a3343c55185120e3f1116a1a529b220"}, {"id": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json", "revision": "1.0.0", "digest": "sha256:0a4aad95ce337878ad38802ebf0daa3fde76abe3f65400c86bcbb1ec0b3ab883"}, {"id": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json", "revision": "1.0.0", "digest": "sha256:6539175bfcdf43085855183e86da40ea94b166547a72b47ae9a0a390516d3acb"}, {"id": "author-document-bounds/v1", "revision": "1", "digest": "sha256:4b8ab8fd50481ccd1a0b777dcbbfa06cf89516a5ea61ce09d56d6dd6a2c43004"}];
 function output(value, status=0) {
+  if(scenario.startsWith('installation-rebind') && ['add','info','update'].includes(value.command) && !value.data.dry_run)
+    fs.writeFileSync(cfg.log+'.registration-'+value.command,fs.readFileSync(path.join(process.env.AGENTPLUGINS_HOME,'state-v2.json')));
   if (scenario === 'invalid-utf8') process.stdout.write(Buffer.from([0xff]));
   else if (scenario === 'bad-json') process.stdout.write('{bad');
   else process.stdout.write(JSON.stringify(value)+'\n');
@@ -313,9 +323,11 @@ const physical='skill-'+sha(installationID).slice(0,12), projection='managed/cli
 function registration(state,root){
   const subject=identity(root),revision={version:'0.1.0',...subject};
   const target=path.join(scenario==='wrong-target-locator'?'/not-the-owned-installer-root':state,projection),binding='client_'+sha([installationID,'codex','user',target].join('\0')).slice(0,24);
-  return {installation_id:installationID,declared_name:'skill',source:{tree_digest:subject.tree_digest,...(scenario.startsWith('installation-rebind')?{canonical_source:root}:{})},
+  return {installation_id:installationID,declared_name:'skill',origin_mode:'direct',
+    source:{source_binding_id:'src_'+sha(root+'\0\0').slice(0,24),requested_source:root,canonical_source:root,resolved_revision:'',tree_digest:subject.tree_digest},
     ...(scenario.startsWith('installation-rebind')?{needs_rebind:true}:{}),
-    package:{declared_name:'skill',version:'0.1.0',manifest_digest:subject.manifest_digest},
+    package:{loader_kind:'agent_plugins',format_id:'agent-plugins/1.0.0',schema_uri:'https://agent-plugins.org/schemas/1.0.0/plugin.schema.json',
+      declared_name:'skill',version:'0.1.0',manifest_digest:subject.manifest_digest},
     clients:{[binding]:{client_binding_id:binding,client_id:'codex',scope:'user',materialization:'materialized',physical_artifact_id:physical,
       activation:'manual_activation_required',authentication:'not_checked',policy:'allowed',verification:'installation_verified',
       target_locator:target,package_revision:revision}}};
@@ -539,8 +551,8 @@ test("public installation replay rejects all coherently rehashed enclosing contr
   });
   assert.equal(fixtureReader(root, f.root, f.pins, expected).length, 2);
 });
-test("public installation reports registered needs_rebind with Go omission and exact stdout", async t => {
-  const f = fixture(); subprocessFixtures(t, f, "installation-rebind");
+test("public installation preserves Go omission and exact stdout with isolated true rebind info", async t => {
+  const f = fixture(); subprocessFixtures(t, f);
   // Deliberately noncanonical public bytes must survive both assertion paths.
   const script = path.join(f.sandbox, "child-fixture.js"), source = fs.readFileSync(script, "utf8");
   const marker = "else process.stdout.write(JSON.stringify(value)+'\\n');";
@@ -551,26 +563,93 @@ test("public installation reports registered needs_rebind with Go omission and e
   assert.equal(fixtureReader(f.options.output, f.root, f.pins, expectations(f)).length, 2);
   const file = path.join(f.options.output, "transcripts.json"), transcripts = JSON.parse(fs.readFileSync(file));
   const row = transcripts.installer.find(r => r.id === "info"), value = JSON.parse(row.stdout);
-  assert.equal(JSON.parse(row.before.state_document).installations[0].needs_rebind, true);
+  const reg = JSON.parse(row.before.state_document).installations[0];
+  assert.equal(reg.needs_rebind, undefined);
+  // Truthful true-rebind info is valid in isolation, with no successful update.
+  reg.needs_rebind = true; value.data.needs_rebind = true;
+  const checkInfo = internal().test.publicInfoInstallation;
+  checkInfo(value.data, reg, Object.values(reg.clients)[0]);
   assert.deepEqual(Object.keys(value.data).sort(), ["installation_id", "name", "version", "source", "clients", "mixed_version", "needs_rebind"].sort());
   assert.equal(value.data.needs_rebind, true); assert.equal(value.data.mixed_version, false);
-  assert.equal(row.stdout, " \n" + JSON.stringify(value, null, 2) + "\n\t");
+  assert.equal(row.stdout, " \n" + JSON.stringify(JSON.parse(row.stdout), null, 2) + "\n\t");
   assert.deepEqual(row.before, row.after);
-  const originals = Object.fromEntries(fs.readdirSync(f.options.output).map(n => [n, fs.readFileSync(path.join(f.options.output, n))]));
   for (const replacement of [undefined, false, "true"]) {
     const changed = structuredClone(value);
     if (replacement === undefined) delete changed.data.needs_rebind; else changed.data.needs_rebind = replacement;
-    row.stdout = JSON.stringify(changed) + "\n";
-    fs.chmodSync(file, 0o600); fs.writeFileSync(file, c.encode(transcripts));
-    for (const p of c.PRODUCTS) {
-      const name = p + "-terminal.json", terminal = JSON.parse(originals[name]);
-      for (const pin of terminal.evidence) Object.assign(pin, c.metadata(fs.readFileSync(path.join(f.options.output, pin.file))));
-      fs.chmodSync(path.join(f.options.output, name), 0o600); fs.writeFileSync(path.join(f.options.output, name), c.encode(terminal));
-    }
-    assert.throws(() => fixtureReader(f.options.output, f.root, f.pins, expectations(f)), /public info installation/);
+    assert.throws(() => checkInfo(changed.data, reg, Object.values(reg.clients)[0]), /public info installation/);
   }
 });
-for (const name of ["scope", "materialization", "revision", "target_locator", "physical_artifact_id", "client_binding_id"]) {
+test("registered rebind child info succeeds but mandatory unchanged update rejects", async t => {
+  const f = fixture(); subprocessFixtures(t, f, "installation-rebind");
+  await assert.rejects(internal(true).produce(f.options), /update requires a bound Agent Plugins installation/);
+  noTerminal(f);
+  const failure = JSON.parse(fs.readFileSync(path.join(f.options.output, "failure-transcripts.json"))).invocations.installer;
+  const info = failure.find(r => r.id === "info"), update = failure.find(r => r.id === "update");
+  assert.equal(JSON.parse(info.stdout).data.needs_rebind, true);
+  assert.equal(update.status, 0); assert.equal(JSON.parse(update.stdout).data.result.no_change, true);
+  const raw = fs.readFileSync(f.log + ".registration-add");
+  for (const verb of ["info", "update"]) assert.deepEqual(fs.readFileSync(f.log + ".registration-" + verb), raw);
+  const reg = JSON.parse(raw).installations[0];
+  assert.equal(reg.needs_rebind, true); assert.equal(reg.package.loader_kind, "agent_plugins");
+  internal().test.publicInfoInstallation(JSON.parse(info.stdout).data, reg, Object.values(reg.clients)[0]);
+});
+test("update replay rejects ineligible registration with coherent state and all evidence pins", async t => {
+  const f = fixture(); subprocessFixtures(t, f); await internal(true).produce(f.options);
+  const root = f.options.output, expected = expectations(f), api = internal().test;
+  const originals = Object.fromEntries(fs.readdirSync(root).map(file => [file, fs.readFileSync(path.join(root, file))]));
+  const put = (file, bytes) => { fs.chmodSync(path.join(root, file), 0o600); fs.writeFileSync(path.join(root, file), bytes); };
+  for (const scenario of ["needs_rebind", "legacy loader"]) await t.test(scenario, () => {
+    try {
+      const tr = JSON.parse(originals["transcripts.json"]);
+      // Change every registered snapshot from add through remove, including its
+      // raw byte pin. Info remains truthful and no command silently rebinds.
+      for (const row of tr.installer) for (const state of [row.before, row.after]) {
+        if (!state.state_document) continue;
+        const doc = JSON.parse(state.state_document);
+        if (!doc.installations.length) continue;
+        const reg = doc.installations[0];
+        if (scenario === "needs_rebind") reg.needs_rebind = true;
+        else reg.package.loader_kind = "legacy";
+        const bytes = c.encode(doc); state.state_document = bytes.toString("utf8");
+        Object.assign(state.state.find(x => x.path === "state-v2.json"), c.metadata(bytes));
+        state.state_document_source = c.metadata(bytes);
+      }
+      const info = tr.installer.find(r => r.id === "info"), value = JSON.parse(info.stdout);
+      if (scenario === "needs_rebind") value.data.needs_rebind = true;
+      info.stdout = JSON.stringify(value) + "\n";
+      for (let i = 1; i < tr.installer.length; i++) assert.deepEqual(tr.installer[i].before, tr.installer[i - 1].after);
+      const update = tr.installer.find(r => r.id === "update"); assert.deepEqual(update.before, update.after);
+      const projects = JSON.parse(originals["trees.json"]).agentplugins;
+      api.installed(info, api.installationCommands().find(x => x.id === "info"), projects);
+      put("transcripts.json", c.encode(tr));
+      for (const p of c.PRODUCTS) {
+        const file = p + "-terminal.json", terminal = JSON.parse(originals[file]);
+        for (const pin of terminal.evidence) Object.assign(pin, c.metadata(fs.readFileSync(path.join(root, pin.file))));
+        put(file, c.encode(terminal));
+        for (const pin of terminal.evidence)
+          assert.deepEqual(c.metadata(fs.readFileSync(path.join(root, pin.file))), { size: pin.size, sha256: pin.sha256 });
+      }
+      assert.throws(() => fixtureReader(root, f.root, f.pins, expected), /update requires a bound Agent Plugins installation/);
+      // Keep the earlier true-registration omission/type replay negatives: each
+      // must reject at info before the independent update eligibility check.
+      if (scenario === "needs_rebind") for (const replacement of [undefined, false, "true"]) {
+        const reg = JSON.parse(info.before.state_document).installations[0], changed = structuredClone(value);
+        if (replacement === undefined) delete changed.data.needs_rebind; else changed.data.needs_rebind = replacement;
+        info.stdout = JSON.stringify(changed) + "\n"; put("transcripts.json", c.encode(tr));
+        for (const p of c.PRODUCTS) {
+          const file = p + "-terminal.json", terminal = JSON.parse(originals[file]);
+          for (const pin of terminal.evidence) Object.assign(pin, c.metadata(fs.readFileSync(path.join(root, pin.file))));
+          put(file, c.encode(terminal));
+        }
+        assert.equal(reg.needs_rebind, true);
+        assert.throws(() => fixtureReader(root, f.root, f.pins, expected), /public info installation/);
+      }
+    } finally { for (const [file, bytes] of Object.entries(originals)) put(file, bytes); }
+  });
+  assert.equal(fixtureReader(root, f.root, f.pins, expected).length, 2);
+});
+for (const name of ["scope", "materialization", "revision", "target_locator", "physical_artifact_id", "client_binding_id",
+  "all reconciliation omitted", "missing receipt", "missing discovery", "missing identity", "receipt type", "discovery type", "identity type"]) {
   test(`public info subprocess rejects ${name}`, async t => {
     const f = fixture(); subprocessFixtures(t, f, "public-info/" + name);
     await assert.rejects(internal(true).produce(f.options), /public info client matches checked registration/);

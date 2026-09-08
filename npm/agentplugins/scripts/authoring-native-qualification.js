@@ -612,9 +612,9 @@ function publicInfoClient(value, client) {
   if (client.affected_surfaces?.length) expected.affected_surfaces = client.affected_surfaces.slice().sort();
   // read_reconciliation.go returns indeterminate with false reconciliation for
   // this isolated Codex config, with no installed/versioned native client.
-  // Optional observations cannot invent successful native discovery evidence.
-  if (["receipt_reconciled", "native_discovery_reconciled", "native_identity_state"].some(key => Object.hasOwn(value, key)))
-    Object.assign(expected, { receipt_reconciled: false, native_discovery_reconciled: false, native_identity_state: "indeterminate" });
+  // The fixed info --target=codex route always reconciles its selected binding.
+  // Go serializes nonnil false pointers; stdout cannot opt out by omitting them.
+  Object.assign(expected, { receipt_reconciled: false, native_discovery_reconciled: false, native_identity_state: "indeterminate" });
   exact(value, expected, "public info client matches checked registration and isolated lifecycle observations");
 }
 function publicInfoInstallation(value, registration, client) {
@@ -697,7 +697,14 @@ function installed(row, spec, projects) {
     exact(result.mutated, verb !== "update");
     const identity = installedIdentity(verb === "add" ? row.after : row.before, projects.skill);
     exact(result.installation_id, identity.registration.installation_id, "lifecycle installed identity");
-    if (verb === "update") { exact(row.before.state_document_source, row.after.state_document_source, "update raw state bytes preserved"); exact(result.no_change, true); exact(row.before.state, row.after.state); exact(row.before.client, row.after.client); }
+    if (verb === "update") {
+      // prepareUpdateMany (and lifecycle.go) reject unbound/legacy registrations
+      // before an unchanged update can succeed. Use captured state, not stdout.
+      assert.ok(!identity.registration.needs_rebind && identity.registration.package.loader_kind === "agent_plugins",
+        "update requires a bound Agent Plugins installation");
+      exact(row.before.state_document_source, row.after.state_document_source, "update raw state bytes preserved");
+      exact(result.no_change, true); exact(row.before.state, row.after.state); exact(row.before.client, row.after.client);
+    }
     else assert.notDeepEqual(row.before.state, row.after.state, "real lifecycle state mutation");
     if (verb === "add") {
       exact(result.activation.authentication, "not_checked");
