@@ -3,6 +3,14 @@ name: Released Native Client Runtime
 on:
   workflow_dispatch:
     inputs:
+      target_scope:
+        description: Historical nine lanes or only the three new Linux amd64 lanes
+        required: true
+        type: choice
+        default: historical-nine
+        options:
+          - historical-nine
+          - linux-amd64
       release_tag:
         description: Exact public UAP installer stable tag (agentplugins-vX.Y.Z)
         required: true
@@ -27,13 +35,8 @@ jobs:
       fail-fast: false
       matrix:
         client: [codex, claude, opencode]
-        platform:
-          - target: linux-arm64
-            runner: ubuntu-24.04-arm
-          - target: darwin-arm64
-            runner: macos-15
-          - target: windows-amd64
-            runner: windows-2025
+        # Select before matrix expansion: Linux-only dispatch starts three jobs.
+        platform: ${{ fromJSON(inputs.target_scope == 'linux-amd64' && '[{"target":"linux-amd64","runner":"ubuntu-24.04"}]' || '[{"target":"linux-arm64","runner":"ubuntu-24.04-arm"},{"target":"darwin-arm64","runner":"macos-15"},{"target":"windows-amd64","runner":"windows-2025"}]') }}
     runs-on: ${{ matrix.platform.runner }}
     timeout-minutes: 30
     steps:
@@ -55,7 +58,9 @@ jobs:
           node-version: '22'
           package-manager-cache: false
       - name: Verify native matrix safety and evidence gates
-        run: python -m unittest discover -s scripts -p 'test_native_client*.py'
+        run: |
+          python -m unittest discover -s scripts -p 'test_native_client*.py'
+          python -m unittest discover -s scripts -p 'test_released_native_evidence.py'
       - name: Verify released installer and execute pinned native client in disposable fixture
         env:
           GH_TOKEN: ${{ github.token }}
