@@ -140,7 +140,7 @@ func TestDarwinInputHandoffChild(t *testing.T) {
 // Darwin's ptmx ioctls avoid adding a test dependency to the module graph.
 func darwinHandoffPTY(t *testing.T) (*os.File, *os.File) {
 	t.Helper()
-	master, err := os.OpenFile("/dev/ptmx", os.O_RDWR, 0)
+	master, err := os.OpenFile("/dev/ptmx", os.O_RDWR|unix.O_NOCTTY|unix.O_NONBLOCK, 0)
 	if err != nil {
 		t.Fatal(err)
 	}

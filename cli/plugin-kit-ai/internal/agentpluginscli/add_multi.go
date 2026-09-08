@@ -148,13 +148,13 @@ func runAddManyLoaded(ctx context.Context, cmd *cobra.Command, app App, opts *op
 	if err != nil {
 		combined.Status, combined.Failed, combined.Succeeded = "preflight_failed", len(inputs), 0
 		_ = renderAddMultiResult(cmd, opts, combined, loaded.envelope)
-		return fmt.Errorf("group preflight failed; no target was changed: %w%s", err, addGroupNextAction(combined.Targets))
+		return fmt.Errorf("group preflight failed; no target was changed (selected targets: %v): %w%s", targets, err, addGroupNextAction(combined.Targets))
 	}
 	if opts.dryRun {
 		return renderAddMultiResult(cmd, opts, combined, loaded.envelope)
 	}
 	if needsInstallConfirmation {
-		accepted, err := confirmInstall(ctx, cmd, app, loaded, planned.Targets)
+		accepted, err := confirmInstall(ctx, cmd, app, loaded, humanAddGroupPlans(combined.Targets))
 		if err != nil {
 			return err
 		}
@@ -194,7 +194,7 @@ func runAddManyLoaded(ctx context.Context, cmd *cobra.Command, app App, opts *op
 		if applied.Phase == usecase.GroupPhasePlanned && !applied.Mutated {
 			combined.Status, combined.Failed, combined.Succeeded = "preflight_failed", len(inputs), 0
 			_ = renderAddMultiResult(cmd, opts, combined, loaded.envelope)
-			return fmt.Errorf("group apply preflight failed; no target was changed: %w%s", err, addGroupNextAction(combined.Targets))
+			return fmt.Errorf("group apply preflight failed; no target was changed (selected targets: %v): %w%s", targets, err, addGroupNextAction(combined.Targets))
 		}
 		combined.Status = groupFailureStatus(applied.Phase)
 		combined.Failed = len(inputs) - combined.Succeeded
@@ -391,6 +391,24 @@ func addResultTargets(results []addTargetResult) string {
 		values[index] = result.Target
 	}
 	return strings.Join(values, ",")
+}
+
+// The group result describes physical delivery. Review must also identify the
+// selected logical surface when Copilot and VS Code share that delivery.
+// Copy the presentation data so JSON, apply inputs and persisted IDs keep their
+// physical ownership semantics.
+func humanAddGroupPlans(targets []addTargetResult) []usecase.AddResult {
+	results := make([]usecase.AddResult, len(targets))
+	for index, target := range targets {
+		result := target.Output.Result
+		if target.Target != string(result.Plan.ClientID) {
+			result.Plan.LocalActions = append(append([]string(nil), result.Plan.LocalActions...),
+				fmt.Sprintf("Uses shared physical binding owned by %s", result.Plan.ClientID))
+			result.Plan.ClientID = domain.ClientID(target.Target)
+		}
+		results[index] = result
+	}
+	return results
 }
 
 func addGroupNextAction(targets []addTargetResult) string {

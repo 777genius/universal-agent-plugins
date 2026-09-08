@@ -1,6 +1,7 @@
 package terminalprompts
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -17,6 +18,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/charmbracelet/colorprofile"
 	"github.com/muesli/cancelreader"
+	"golang.org/x/term"
 )
 
 type HuhPrompter struct {
@@ -46,16 +48,36 @@ func (p HuhPrompter) SelectTargets(ctx context.Context, r prompt.TargetSelection
 		}
 	}
 	field := huh.NewMultiSelect[domain.ClientID]().Title("Choose targets (all selected by default)").Options(choices...).Height(len(choices) + 2).Value(&ids).Filterable(false).Validate(func(v []domain.ClientID) error { _, err := prompt.ValidateSelection(r, v); return err })
-	if err := p.run(ctx, huh.NewForm(huh.NewGroup(field)), func() bool { _, err := prompt.ValidateSelection(r, ids); return err == nil }); err != nil {
+	if err := p.run(ctx, huh.NewForm(huh.NewGroup(field)), formInput{canSubmit: func() bool { _, err := prompt.ValidateSelection(r, ids); return err == nil }}); err != nil {
 		return prompt.TargetSelectionResult{}, err
 	}
 	return prompt.ValidateSelection(r, ids)
 }
-func (p HuhPrompter) Confirm(ctx context.Context, r prompt.ConfirmationRequest) (prompt.ConfirmationResult, error) {
+func (p HuhPrompter) Confirm(ctx context.Context, r prompt.ConfirmationRequest) (result prompt.ConfirmationResult, err error) {
 	if p.Input == nil || p.Output == nil {
 		return prompt.ConfirmationResult{}, prompt.ErrPromptUnavailable
 	}
 	if err := ctx.Err(); err != nil {
+		return prompt.ConfirmationResult{}, err
+	}
+	// This owner includes consent inspection and the form. The form snapshots
+	// the terminal only after inspection, so its restore cannot preserve flags
+	// changed at that earlier boundary. Restore the caller's snapshot after all
+	// form readers and cancellation callbacks have joined, including error exits.
+	if f, ok := p.Input.(*os.File); ok && term.IsTerminal(int(f.Fd())) {
+		restore, e := promptio.SnapshotTerminal(int(f.Fd()))
+		if e != nil {
+			return prompt.ConfirmationResult{}, fmt.Errorf("snapshot confirmation terminal: %w", e)
+		}
+		defer func() {
+			if e := restore(); e != nil {
+				result = prompt.ConfirmationResult{}
+				err = fmt.Errorf("restore confirmation terminal: %w", e)
+			}
+		}()
+	}
+	queued, err := confirmationInput(ctx, p.Input)
+	if err != nil {
 		return prompt.ConfirmationResult{}, err
 	}
 	if err := promptio.WriteText(p.Output, fmt.Sprintf("%s (No by default; arrows/Space choose, Enter submits)\n", prompt.SafeText(r.Title))); err != nil {
@@ -68,7 +90,7 @@ func (p HuhPrompter) Confirm(ctx context.Context, r prompt.ConfirmationRequest) 
 		}
 	}
 	field := huh.NewConfirm().Title(prompt.SafeText(r.Title)).Affirmative("Yes").Negative("No").Value(&accepted)
-	if err := p.run(ctx, huh.NewForm(huh.NewGroup(field))); err != nil {
+	if err := p.run(ctx, huh.NewForm(huh.NewGroup(field)), formInput{queued: queued}); err != nil {
 		return prompt.ConfirmationResult{}, err
 	}
 	return prompt.ConfirmationResult{Accepted: accepted}, nil
@@ -84,7 +106,17 @@ func promptKeyMap() *huh.KeyMap {
 	km.Confirm.Reject = key.NewBinding(key.WithDisabled())
 	return km
 }
-func (p HuhPrompter) run(ctx context.Context, form *huh.Form, canSubmit ...func() bool) (err error) {
+
+type formInput struct {
+	canSubmit func() bool
+	queued    []byte
+}
+
+func (p HuhPrompter) run(ctx context.Context, form *huh.Form, configs ...formInput) (err error) {
+	var config formInput
+	if len(configs) > 0 {
+		config = configs[0]
+	}
 	if err = ctx.Err(); err != nil {
 		return err
 	}
@@ -106,6 +138,9 @@ func (p HuhPrompter) run(ctx context.Context, form *huh.Form, canSubmit ...func(
 			return fmt.Errorf("prepare terminal input: %w", err)
 		}
 		source = owned
+	}
+	if len(config.queued) > 0 {
+		source = io.MultiReader(bytes.NewReader(config.queued), source)
 	}
 	handoff := newSubmissionReader(runCtx, source)
 	defer handoff.finish()
@@ -136,12 +171,20 @@ func (p HuhPrompter) run(ctx context.Context, form *huh.Form, canSubmit ...func(
 	if f, ok := p.Input.(*os.File); ok {
 		input = &formFileReader{formReader: reader, file: f}
 	}
+	var resizeErr error
 	options := []tea.ProgramOption{tea.WithInput(input), tea.WithOutput(output), tea.WithoutSignalHandler(), tea.WithFilter(func(_ tea.Model, msg tea.Msg) tea.Msg {
+		filtered, err := formWindowSize(p.Output, msg)
+		if err != nil {
+			resizeErr = err
+			cancel()
+			return nil
+		}
+		msg = filtered
 		switch m := msg.(type) {
 		case tea.QuitMsg, tea.InterruptMsg:
 			finishInput()
 		case tea.KeyPressMsg:
-			if m.String() == "enter" && len(canSubmit) > 0 && !canSubmit[0]() {
+			if m.String() == "enter" && config.canSubmit != nil && !config.canSubmit() {
 				handoff.reject()
 			}
 		}
@@ -167,6 +210,9 @@ func (p HuhPrompter) run(ctx context.Context, form *huh.Form, canSubmit ...func(
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
+	if resizeErr != nil {
+		return fmt.Errorf("query terminal size: %w", resizeErr)
+	}
 	if inputErr := reader.Err(); inputErr != nil {
 		if errors.Is(inputErr, io.EOF) {
 			return prompt.ErrPromptInputClosed
@@ -180,6 +226,26 @@ func (p HuhPrompter) run(ctx context.Context, form *huh.Form, canSubmit ...func(
 		return fmt.Errorf("terminal prompt: %w", err)
 	}
 	return nil
+}
+
+// Bubble Tea v2.0.2 handles RequestWindowSize with an unjoined checkResize
+// goroutine, which can call the inherited output's Fd after the form returns
+// and its owner closes it. Resolve that command in the event loop instead.
+// The library still owns initial sizing and its joined SIGWINCH listener.
+// Do not cache Fd: that would leave late ioctls targeting a reused descriptor.
+func formWindowSize(output io.Writer, msg tea.Msg) (tea.Msg, error) {
+	if msg != tea.RequestWindowSize() {
+		return msg, nil
+	}
+	f, ok := output.(*os.File)
+	if !ok || !term.IsTerminal(int(f.Fd())) {
+		return nil, nil // Like Bubble Tea, no size query for nonterminal output.
+	}
+	width, height, err := term.GetSize(int(f.Fd()))
+	if err != nil {
+		return nil, err
+	}
+	return tea.WindowSizeMsg{Width: width, Height: height}, nil
 }
 
 type formWriter struct {
