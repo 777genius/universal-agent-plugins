@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -390,7 +391,9 @@ class WorkflowControls(unittest.TestCase):
 
 
 class C3AuthenticatedControls(unittest.TestCase):
-    def test_closed_intake_before_output(self):
+    # SYNTHETIC gate mock exercises retained prepared intake validations only.
+    @patch.object(r.proof, 'require_authenticated_controller', return_value=None)
+    def test_closed_intake_before_output(self, synthetic_gate):
         from unittest.mock import patch
         root = Path(tempfile.mkdtemp(prefix='C3-runner-SYNTHETIC-'))
         options = root / 'options.json'; output = root / 'must-not-exist'
@@ -416,7 +419,9 @@ class C3AuthenticatedControls(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'missing reviewed'): r.authenticated_main(output, 'a' * 40, options)
             reader.assert_called_once(); planner.assert_not_called(); self.assertFalse(output.exists())
 
-    def test_exact_thirty_plans_and_post_seal(self):
+    # SYNTHETIC gate mock exercises retained prepared terminal validations only.
+    @patch.object(p, 'require_authenticated_controller', return_value=None)
+    def test_exact_thirty_plans_and_post_seal(self, synthetic_gate):
         root = Path(tempfile.mkdtemp(prefix='C3-plans-SYNTHETIC-')); (root / 'results').mkdir(); (root / 'logs').mkdir()
         fixture = root / 'original-projects'; fixture.mkdir()
         entries = [dict(path='.', mode=fixture.stat().st_mode & 0o777, kind='directory')]
@@ -501,13 +506,44 @@ class C3AuthenticatedControls(unittest.TestCase):
         put(post, inputs); (fixture / 'extra-empty').mkdir()
         with self.assertRaisesRegex(ValueError, 'sealed tree changed'): check()
 
+    def test_substituted_node_rejected_before_authenticated_effects(self):
+        import subprocess
+        root = Path(tempfile.mkdtemp(prefix='C3-controller-SYNTHETIC-'))
+        tool = root / 'substitute-node'; tool.write_text('SYNTHETIC TOOL')
+        options = dict(request=dict(intake=p.AUTHENTIC, expectedCommit='a' * 40),
+            go=str(tool), node=str(tool), modCache=str(root))
+        options_path = root / 'options.json'
+        options_path.write_text(json.dumps(options, indent=2) + '\n')
+        receipt = dict(schema='public-authenticated-packed-run/v1', head='a' * 40,
+            options=options, tools=dict(node=dict(path=str(tool), sha256=p.digest(tool))))
+        (root / 'authenticated-run.json').write_text(json.dumps(receipt, indent=2) + '\n')
+        output = root / 'must-not-exist'
+        before = {str(f): f.read_bytes() for f in root.iterdir()}
+        # Actual entrypoints and rejecting gate: no test-only gate mock here.
+        with patch.object(subprocess, 'run', side_effect=AssertionError('subprocess effect')) as child, \
+                patch.object(r, 'planner', side_effect=AssertionError('planner effect')) as planner, \
+                patch.object(r, 'write', side_effect=AssertionError('output effect')) as write:
+            for name, call in (
+                ('runner', lambda: r.authenticated_main(output, 'a' * 40, options_path)),
+                ('checker', lambda: p.check_authenticated(root, 'a' * 40)),
+                ('checker-before-summary', lambda: p.check_authenticated(root, 'a' * 40, require_summary=False)),
+                ('direct-reader', lambda: p.authenticated_verify(options['node'], ['authenticated-options', options_path])),
+            ):
+                with self.subTest(entrypoint=name), self.assertRaisesRegex(ValueError,
+                        'missing independently provisioned trusted controller; C3b capability required'):
+                    call()
+            child.assert_not_called(); planner.assert_not_called(); write.assert_not_called()
+        self.assertFalse(output.exists())
+        self.assertEqual(before, {str(f): f.read_bytes() for f in root.iterdir()})
+
     def test_completed_e_cannot_use_fixture_success(self):
         root = Path(tempfile.mkdtemp(prefix='C3-E-closed-SYNTHETIC-'))
         for schema in ('public-fixture/v1', 'public-fixture/v2', p.AUTHENTIC):
             (root / 'summary.json').write_text(json.dumps(dict(status='passed', intake=schema, plans=30, projects=10)))
             with self.subTest(intake=schema), self.assertRaisesRegex(ValueError, 'completed E cannot use'):
                 p.check_authenticated(root, 'a' * 40, require_completed_e=True)
-            with self.assertRaises(FileNotFoundError): p.check_authenticated(root, 'a' * 40)
+            with self.assertRaisesRegex(ValueError, 'missing independently provisioned trusted controller'):
+                p.check_authenticated(root, 'a' * 40)
 
 
 if __name__ == '__main__': unittest.main()

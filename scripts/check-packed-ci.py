@@ -379,9 +379,14 @@ def authentic_read(path):
     return value
 
 
+def require_authenticated_controller():
+    # Receipt-selected executables and their self-supplied hashes are not authority.
+    raise ValueError('missing independently provisioned trusted controller; C3b capability required')
+
+
 def authenticated_verify(node, argv):
-    # Fixed Node reader re-admits S/I; saved stdout, booleans and fixture TAP do
-    # not authenticate a local J. This process cannot execute public products.
+    require_authenticated_controller()
+    # Prepared reader path; C3b must independently bind its controller before use.
     import subprocess
     repo = Path(__file__).resolve().parent.parent
     bridge = repo / 'npm/agentplugins/scripts/packed-installer-bridge.js'
@@ -409,6 +414,7 @@ def authenticated_plans(root, sha, inputs, sealed_pin, fixture_root):
 
 def check_authenticated(root, sha, require_summary=True, require_completed_e=False):
     require(not require_completed_e, 'completed E cannot use local J or fixture success; C3b E reader required')
+    require_authenticated_controller()
     run = authentic_read(root / 'authenticated-run.json'); false_claims(run)
     require(set(run) == {'schema', 'head', 'options', 'tools', *CLAIMS} and
         run['schema'] == 'public-authenticated-packed-run/v1' and run['head'] == sha, 'authentic run schema')

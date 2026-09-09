@@ -205,6 +205,7 @@ def public_main(root, sha, options_path):
 
 def authenticated_main(root, sha, options_path):
     """Same invocation local J intake. Never generate, copy or replay projects."""
+    proof.require_authenticated_controller()
     repo = Path(__file__).resolve().parent.parent
     options = proof.authentic_read(options_path)
     request = proof.authenticated_options(options, sha)
@@ -216,8 +217,7 @@ def authenticated_main(root, sha, options_path):
         *[Path(admission[k]) for k in ('repo', 'work_parent', 'stage_root', 'input_root', 'journey_root', 'fixture_root')]]
     for other in protected:
         proof.require(other.is_absolute() and other.resolve() == other and not root.is_relative_to(other) and not other.is_relative_to(root), 'authentic output overlaps input')
-    # Real reader admission happens before even the output directory exists.
-    # C3a's unavailable result validator is an explicit error here, before Go.
+    # Prepared admission remains behind the unconditional Python controller gate.
     inputs = proof.authenticated_verify(options['node'], ['authenticated-options', options_path])
     proof.require(inputs['repo'] == str(repo), 'authenticated source checkout')
     for key, name in [('node', 'orchestrator_node'), ('go', 'go')]:

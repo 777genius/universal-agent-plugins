@@ -343,11 +343,15 @@ The bridge has separate `authenticated-options`, `authenticated-intake` and
 `authenticated-seal` commands. Its new seal pins the reader source in addition
 to the existing verifier/helper and repeats admission on `verify`. The runner's
 `--public-authenticated ROOT F OPTIONS` accepts exactly `request,go,node,modCache`.
-It calls authentic intake before creating output, then preserves the existing
-Linux planner commands and five environment variables. The terminal checker
-re-enters the real Node reader, checks ten original project paths, exact thirty
-plan tuples and post-plan snapshots. Summary claims remain false, with null
-qualification and scope `local-authenticated-inputs-and-injected-planner`.
+Python authentic runner, checker and direct reader entrypoints unconditionally
+reject with `missing independently provisioned trusted controller; C3b capability required`
+before interpreter subprocesses, planner effects, output creation or authenticated
+success. Receipt-selected `node` and self-supplied tool/reader hashes are not
+independent interpreter authority; no receipt or environment override opens this
+boundary. Prepared intake, Linux planner commands, five environment variables and
+terminal validations remain for C3b, covered only by explicitly synthetic gate
+mocks. C3b must independently provision the controller and make full public
+execution work; this closed subcheckpoint is not its completion.
 A local J/bridge, successful fixture TAP or injected planner cannot stand for E.
 
 Positive tests explicitly mock custody interfaces and, for bridge-only seal
