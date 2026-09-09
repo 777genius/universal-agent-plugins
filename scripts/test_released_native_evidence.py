@@ -481,6 +481,131 @@ class DraftArchiveTests(unittest.TestCase):
         (self.root/'released-native-client-unknown-linux-arm64').mkdir()
         with self.assertRaisesRegex(ValueError, 'exactly 9'): proof.verify_draft(self.root, self.args)
 
+    def reject_bundle_before_read(self, message):
+        with patch.object(zipfile.ZipFile, 'read', side_effect=AssertionError('ZIP body read')) as read:
+            with self.assertRaisesRegex(ValueError, message):
+                proof.draft_bundle(self.args.producer_bundle.read_bytes(), self.args, self.native)
+            read.assert_not_called()
+
+    def test_zip_unexpected_inventory_rejected_before_any_read(self):
+        original = dict(self.bundle_files)
+        for count in (1, 40):
+            with self.subTest(count=count):
+                self.bundle_files = original | {f'unexpected-{i}': b'x' for i in range(count)}
+                self.write_bundle()
+                self.reject_bundle_before_read('unexpected or missing|too many ZIP')
+
+    def test_zip_aggregate_rejected_before_any_read(self):
+        total = sum(map(len, self.bundle_files.values()))
+        with patch.object(proof, 'ZIP_TOTAL_LIMIT', total - 1):
+            self.reject_bundle_before_read('oversized ZIP aggregate')
+
+    def test_zip_compressed_aggregate_and_unsupported_encodings_before_read(self):
+        with zipfile.ZipFile(self.args.producer_bundle) as zipped:
+            inventory = zipped.infolist()
+        for item in inventory:
+            item.compress_size = 1000
+        with patch.object(zipfile.ZipFile, 'infolist', return_value=inventory), \
+             patch.object(proof, 'ZIP_TOTAL_LIMIT', len(inventory) * 1000 - 1):
+            self.reject_bundle_before_read('oversized ZIP aggregate')
+        for field, value, message in (('orig_filename', 'verified-release.json\0alias', 'aliased ZIP'),
+                                      ('compress_type', zipfile.ZIP_LZMA, 'unsupported ZIP'),
+                                      ('flag_bits', 1, 'unsupported ZIP')):
+            with self.subTest(field=field):
+                old = getattr(inventory[0], field)
+                setattr(inventory[0], field, value)
+                with patch.object(zipfile.ZipFile, 'infolist', return_value=inventory):
+                    self.reject_bundle_before_read(message)
+                setattr(inventory[0], field, old)
+
+    def test_zip_individual_compressed_and_expanded_bounds_before_read(self):
+        for limit in ('ZIP_COMPRESSED_LIMIT', 'ZIP_MEMBER_LIMIT'):
+            with self.subTest(limit=limit), patch.object(proof, limit, 1):
+                self.reject_bundle_before_read('oversized ZIP member')
+
+    def test_zip_duplicates_and_aliases_before_read(self):
+        import warnings
+        for name in ('verified-release.json', 'VERIFIED-release.json'):
+            with self.subTest(name=name):
+                self.write_bundle()
+                with warnings.catch_warnings():
+                    warnings.simplefilter('ignore', UserWarning)
+                    with zipfile.ZipFile(self.args.producer_bundle, 'a') as zipped:
+                        zipped.writestr(name, b'{}')
+                self.args.producer_artifact_digest = proof.digest(self.args.producer_bundle.read_bytes())
+                self.reject_bundle_before_read('duplicate or aliased ZIP')
+
+    def test_zip_budget_preserves_six_large_platform_binaries(self):
+        # Exercise inventory only: represent six near-ceiling binaries without
+        # allocating them or treating synthetic bodies as valid binary evidence.
+        with zipfile.ZipFile(self.args.producer_bundle) as zipped:
+            inventory = zipped.infolist()
+        binaries = [item for item in inventory if item.filename.startswith('release-assets/agentplugins_')]
+        self.assertEqual(len(binaries), 6)
+        for item in binaries:
+            item.file_size = item.compress_size = (400 << 20) - 1
+        with patch.object(zipfile.ZipFile, 'infolist', return_value=inventory), \
+             patch.object(zipfile.ZipFile, 'read', side_effect=RuntimeError('inventory accepted')):
+            with self.assertRaisesRegex(RuntimeError, 'inventory accepted'):
+                proof.draft_bundle(self.args.producer_bundle.read_bytes(), self.args, self.native)
+
+    def reject_tar_before_shared_inspection(self, message):
+        self.write_bundle()
+        with patch.object(self.native, 'inspect_package', side_effect=AssertionError('unbounded shared inspection')) as inspect:
+            with self.assertRaisesRegex(ValueError, message):
+                proof.draft_bundle(self.args.producer_bundle.read_bytes(), self.args, self.native)
+            inspect.assert_not_called()
+
+    def test_tar_member_count_bomb_before_shared_inspection(self):
+        self.package_files.update({f'package/extra-{i}': b'' for i in range(8)})
+        self.repack_tarball()
+        with patch.object(proof, 'TAR_MEMBER_COUNT', 6):
+            self.reject_tar_before_shared_inspection('too many npm headers')
+
+    def test_tar_expansion_bomb_including_trailing_padding(self):
+        import gzip
+        raw = gzip.decompress(self.bundle_files['fixture.tgz'])
+        self.bundle_files['fixture.tgz'] = gzip.compress(raw + b'\0' * 8192)
+        with patch.object(proof, 'TAR_EXPANDED_LIMIT', len(raw) + 1024):
+            self.reject_tar_before_shared_inspection('oversized expanded npm archive')
+
+    def test_tar_body_limit_before_any_selected_read(self):
+        import tarfile
+        with patch.object(proof, 'TAR_MEMBER_LIMIT', 16), \
+             patch.object(tarfile.TarFile, 'extractfile', side_effect=AssertionError('selected body read')):
+            self.reject_tar_before_shared_inspection('oversized npm header body')
+
+    def test_tar_metadata_and_sparse_headers_before_parser_allocations(self):
+        import gzip
+        import tarfile
+        cases = [(tarfile.XHDTYPE, proof.TAR_METADATA_LIMIT + 1, b'', 'oversized npm header'),
+                 (tarfile.GNUTYPE_LONGNAME, proof.TAR_METADATA_LIMIT + 1, b'', 'oversized npm header'),
+                 (tarfile.GNUTYPE_SPARSE, 0, b'', 'sparse forbidden'),
+                 (tarfile.XHDTYPE, 26, b'26 GNU.sparse.size=9999999\n', 'sparse npm metadata'),
+                 (tarfile.XGLTYPE, 18, b'18 size=9999999999\n', 'pax size override')]
+        for kind, size, data, message in cases:
+            with self.subTest(kind=kind, message=message):
+                member = tarfile.TarInfo('package/metadata'); member.type = kind; member.size = size
+                raw = member.tobuf() + data.ljust(512, b'\0') + b'\0' * 1024
+                self.bundle_files['fixture.tgz'] = gzip.compress(raw)
+                with patch.object(tarfile.TarFile, 'open', side_effect=AssertionError('extension parser entered')):
+                    self.reject_tar_before_shared_inspection(message)
+
+    def test_tar_extension_headers_count_and_normal_pax_support(self):
+        import io
+        import tarfile
+        stream = io.BytesIO()
+        with tarfile.open(fileobj=stream, mode='w:gz', format=tarfile.PAX_FORMAT) as archive:
+            for name, body in self.package_files.items():
+                member = tarfile.TarInfo(name); member.size = len(body)
+                member.pax_headers = {'mtime': '1.25'}
+                archive.addfile(member, io.BytesIO(body))
+        self.bundle_files['fixture.tgz'] = stream.getvalue()
+        self.assertEqual(proof.preflight_package(stream.getvalue()), self.package_files)
+        # Four logical files have eight physical headers including pax records.
+        with patch.object(proof, 'TAR_MEMBER_COUNT', 6):
+            self.reject_tar_before_shared_inspection('too many npm headers')
+
 
 if __name__ == '__main__':
     unittest.main()

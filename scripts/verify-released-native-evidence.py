@@ -259,37 +259,133 @@ def original_file(path):
     return path.read_bytes()
 
 
-def draft_bundle(body, args, native):
-    """Inspect preserved ZIP/tar members as bytes; never extract or execute them."""
+# Keep the existing 400 MiB ceiling for each of the six native binaries.
+# The npm package contains launcher sources, not copies of those binaries.
+ZIP_MEMBER_LIMIT = 400 << 20
+ZIP_COMPRESSED_LIMIT = 401 << 20
+ZIP_TOTAL_LIMIT = (6 * 400 + 64) << 20
+TAR_EXPANDED_LIMIT = 64 << 20
+TAR_MEMBER_LIMIT = 16 << 20
+TAR_METADATA_LIMIT = 64 << 10
+TAR_MEMBER_COUNT = 128
+
+
+def preflight_package(body):
+    """Bound gzip, physical headers, then logical members before shared parsing."""
+    import gzip
     import io
     import tarfile
     import tempfile
+    selected = {}
+    with tempfile.TemporaryFile() as expanded:
+        # Include padding, extension records and concatenated gzip streams in the
+        # budget. Never ask the decompressor to allocate an archive-sized buffer.
+        total = 0
+        with gzip.GzipFile(fileobj=io.BytesIO(body)) as compressed:
+            while True:
+                chunk = compressed.read(min(64 << 10, TAR_EXPANDED_LIMIT - total + 1))
+                if not chunk:
+                    break
+                total += len(chunk)
+                require(total <= TAR_EXPANDED_LIMIT, 'oversized expanded npm archive')
+                expanded.write(chunk)
+        expanded.seek(0)
+        count = 0
+        extensions = (tarfile.XHDTYPE, tarfile.XGLTYPE, tarfile.GNUTYPE_LONGNAME, tarfile.GNUTYPE_LONGLINK)
+        while True:
+            header = expanded.read(512)
+            if not header or header == b'\0' * 512:
+                break
+            count += 1
+            require(count <= TAR_MEMBER_COUNT, 'too many npm headers')
+            # frombuf parses only this header, without consuming pax/longname or
+            # sparse extensions. tarfile.open would process them before yielding.
+            member = tarfile.TarInfo.frombuf(header, 'utf-8', 'surrogateescape')
+            require(member.type in (tarfile.REGTYPE, tarfile.AREGTYPE, tarfile.DIRTYPE) + extensions,
+                    'unsupported npm header (links/sparse forbidden)')
+            limit = TAR_METADATA_LIMIT if member.type in extensions else TAR_MEMBER_LIMIT
+            require(0 <= member.size <= limit, 'oversized npm header body')
+            require(not member.isdir() or member.size == 0, 'nonempty npm directory')
+            end = expanded.tell() + ((member.size + 511) // 512) * 512
+            require(end <= total, 'truncated npm header body')
+            if member.type in (tarfile.XHDTYPE, tarfile.XGLTYPE):
+                metadata = expanded.read(member.size)
+                require(b'GNU.sparse' not in metadata, 'sparse npm metadata forbidden')
+                # A pax size override would change the physical record offsets
+                # on the later tarfile pass. npm sources need no such encoding.
+                require(b' size=' not in metadata, 'npm pax size override forbidden')
+            expanded.seek(end)
+        expanded.seek(0)
+        with tarfile.open(fileobj=expanded, mode='r:') as package:
+            members, size = {}, 0
+            for member in package:
+                require(len(members) < TAR_MEMBER_COUNT, 'too many npm members')
+                require(member.isfile() or member.isdir(), 'nonregular npm member')
+                require(not member.issparse() and 0 <= member.size <= TAR_MEMBER_LIMIT,
+                        'oversized or sparse npm member')
+                size += member.size
+                require(size <= TAR_EXPANDED_LIMIT, 'oversized npm member total')
+                name = member.name.rstrip('/') if member.isdir() else member.name
+                safe_name(name)
+                require(name == 'package' or name.startswith('package/'), 'unsafe npm member')
+                require(name.casefold() not in members, 'duplicate npm member')
+                members[name.casefold()] = member
+            for name in ('package/package.json', 'package/assets.json',
+                         'package/THIRD_PARTY_NOTICES.txt', 'package/bin/agentplugins.js'):
+                member = members.get(name.casefold())
+                require(member is not None and member.name == name and member.isfile(), 'missing npm file: ' + name)
+                selected[name] = package.extractfile(member).read(member.size + 1)
+                require(len(selected[name]) == member.size, 'truncated npm file')
+    return selected
+
+
+def draft_bundle(body, args, native):
+    """Inspect preserved ZIP/tar members as bytes; never extract or execute them."""
+    import io
+    import tempfile
     require(digest(body) == args.producer_artifact_digest, 'producer artifact digest mismatch')
     files, seen = {}, set()
+    version, tag = args.release_version, args.release_tag
+    binary_names = {target: f'agentplugins_{version}_{target.replace("-", "_")}' +
+                    ('.exe' if target.startswith('windows') else '') for target in native.TARGETS}
+    names = set(binary_names.values()) | {'release-manifest.json', 'checksums.txt', 'THIRD_PARTY_NOTICES.txt'}
+    expected = {'verified-release.json'} | {'release-assets/' + n for n in names}
     with zipfile.ZipFile(io.BytesIO(body)) as zipped:
-        for item in zipped.infolist():
+        inventory = zipped.infolist()
+        require(len(inventory) <= len(expected) + 2, 'too many ZIP members')
+        total = compressed_total = 0
+        for item in inventory:
+            require(item.orig_filename == item.filename, 'aliased ZIP member name')
             name = item.filename.rstrip('/') if item.is_dir() else item.filename
             safe_name(name)
             require(name.casefold() not in seen, 'duplicate or aliased ZIP member')
             seen.add(name.casefold())
             mode = stat.S_IFMT(item.external_attr >> 16)
             require(mode in ((0, stat.S_IFDIR) if item.is_dir() else (0, stat.S_IFREG)), 'nonregular ZIP member')
-            require(item.file_size < 400 << 20, 'oversized ZIP member')
+            require(item.compress_type in (zipfile.ZIP_STORED, zipfile.ZIP_DEFLATED)
+                    and not item.flag_bits & 1, 'unsupported ZIP compression/encryption')
+            require(0 <= item.file_size < ZIP_MEMBER_LIMIT and
+                    0 <= item.compress_size <= ZIP_COMPRESSED_LIMIT, 'oversized ZIP member')
+            total += item.file_size
+            compressed_total += item.compress_size
+            require(total <= ZIP_TOTAL_LIMIT and compressed_total <= ZIP_TOTAL_LIMIT,
+                    'oversized ZIP aggregate')
             if item.is_dir():
-                require(name == 'release-assets', 'unexpected bundle directory')
+                require(item.filename == 'release-assets/' and item.file_size == 0, 'unexpected bundle directory')
             else:
-                files[name] = zipped.read(item)
-    tarballs = [n for n in files if '/' not in n and n.endswith('.tgz')]
-    require(len(tarballs) == 1, 'exactly one original npm tarball required')
-    tarball = tarballs[0]
+                files[name] = item
+        tarballs = [n for n in files if '/' not in n and n.endswith('.tgz')]
+        require(len(tarballs) == 1, 'exactly one original npm tarball required')
+        tarball = tarballs[0]
+        require(set(files) == expected | {tarball}, 'unexpected or missing bundle assets/notices')
+        # Complete the inventory validation before opening any member body.
+        files = {name: zipped.read(item) for name, item in files.items()}
     assets = {n.removeprefix('release-assets/'): b for n, b in files.items() if n.startswith('release-assets/')}
-    version, tag = args.release_version, args.release_tag
     computed = {}
     for target in sorted(native.TARGETS):
-        name = f'agentplugins_{version}_{target.replace("-", "_")}' + ('.exe' if target.startswith('windows') else '')
+        name = binary_names[target]
         require(name in assets and assets[name], 'missing binary asset')
         computed[target] = {'file': name, 'size': len(assets[name]), 'sha256': digest(assets[name])}
-    names = {a['file'] for a in computed.values()} | {'release-manifest.json', 'checksums.txt', 'THIRD_PARTY_NOTICES.txt'}
     require(set(assets) == names and set(files) == {tarball, 'verified-release.json'} | {'release-assets/' + n for n in names}, 'unexpected or missing bundle assets/notices')
     require(all(assets.values()), 'empty release asset/notices')
     manifest = read_json(assets['release-manifest.json'])
@@ -309,16 +405,16 @@ def draft_bundle(body, args, native):
         'notices': [{'file': 'THIRD_PARTY_NOTICES.txt', 'sha256': digest(assets['THIRD_PARTY_NOTICES.txt'])}],
         'gate_eligible': True} and type(verified['manifest_schema']) is int and verified['gate_eligible'] is True,
         'unsupported or inconsistent verified-release schema')
-    # Reuse the acquisition package validator, which performs no subprocess calls.
+    package = preflight_package(files[tarball])
+    # Preserve shared identity/pin validation, but only after bounded preflight.
     with tempfile.TemporaryDirectory(prefix='offline-draft-package-') as temporary:
         path = Path(temporary) / 'original.tgz'
         path.write_bytes(files[tarball])
         native.inspect_package(path, verified)
-    with tarfile.open(fileobj=io.BytesIO(files[tarball]), mode='r:gz') as package:
-        for name in ('package/package.json', 'package/assets.json'):
-            read_json(package.extractfile(name).read())  # Reject duplicate JSON keys too.
-        require(package.extractfile('package/THIRD_PARTY_NOTICES.txt').read() == assets['THIRD_PARTY_NOTICES.txt'], 'packaged notices mismatch')
-        launcher = digest(package.extractfile('package/bin/agentplugins.js').read())
+    for name in ('package/package.json', 'package/assets.json'):
+        read_json(package[name])  # Reject duplicate JSON keys too.
+    require(package['package/THIRD_PARTY_NOTICES.txt'] == assets['THIRD_PARTY_NOTICES.txt'], 'packaged notices mismatch')
+    launcher = digest(package['package/bin/agentplugins.js'])
     return assets, verified, digest(files[tarball]), launcher
 
 
