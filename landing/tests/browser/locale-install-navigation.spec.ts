@@ -45,10 +45,10 @@ for (const target of publishedLocales.filter((locale) => locale !== 'en')) {
         expect(commands.join('\n')).toContain('curl');
         const initialUrl = page.url();
         if (width < 768) await page.getByRole('button', { name: 'Open navigation menu' }).click();
-        const switcher = page
-          .getByRole('button', { name: /language|язык|мова/i })
+        const initialSwitcher = page
+          .getByRole('button', { name: `${wording('en')('language.label')}: ${localeMetadata.en.name}`, exact: true })
           .filter({ visible: true });
-        await switcher.click();
+        await initialSwitcher.click();
         await page
           .getByRole('menuitemradio', { name: localeMetadata[target].name, exact: true })
           .click();
@@ -56,6 +56,9 @@ for (const target of publishedLocales.filter((locale) => locale !== 'en')) {
         await expect(page.locator('html')).toHaveAttribute('lang', target);
         // URL/html.lang alone passed before the freeze. These require a completed
         // scheduler, localized route content and a responsive real language menu.
+        const switcher = page
+          .getByRole('button', { name: `${wording(target)('language.label')}: ${localeMetadata[target].name}`, exact: true })
+          .filter({ visible: true });
         await expect(switcher).toHaveAttribute('aria-busy', 'false');
         if (width < 768) {
           await page.getByRole('button', { name: wording(target)('shell.navigation.close'), exact: true }).click();
