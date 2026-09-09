@@ -420,13 +420,18 @@ func TestReleasePairedPromotionProtectedGraph(t *testing.T) {
 				}
 			}
 			binding := strings.Index(step.Run, "Buffer.from(")
-			effect := strings.Index(step.Run, "p.acquireArtifact(")
+			contract := strings.Index(step.Run, "p.checkNativeContracts(record)")
+			scratch := strings.Index(step.Run, "fs.mkdtempSync(")
+			if contract <= binding || scratch <= contract {
+				t.Fatalf("%s must reject unsupported native identifiers before scratch/provider effects", step.Name)
+			}
+			effect := strings.Index(step.Run, "p.acquirePreparation(")
 			if binding < 0 || !strings.Contains(step.Run, ", selected)") || (effect >= 0 && binding > effect) {
 				t.Fatalf("%s must bind canonical record before native/provider effects", step.Name)
 			}
 		}
 	}
-	if admission.Needs != nil || len(admission.Permissions) != 1 || admission.Permissions["contents"] != "read" || signing.Needs != "paired-promotion-admission" {
+	if admission.Needs != nil || len(admission.Permissions) != 2 || admission.Permissions["actions"] != "read" || admission.Permissions["contents"] != "read" || signing.Needs != "paired-promotion-admission" {
 		t.Fatal("native admission must precede protected promotion")
 	}
 	if signing.Environment != "agentplugins-release" {
@@ -496,14 +501,14 @@ func TestReleasePairedPromotionShellSyntax(t *testing.T) {
 
 func TestFrozenNativeReadOnlyWorkflowContract(t *testing.T) {
 	w := readProducerWorkflow(t, "authoring-frozen-native.yml")
-	if len(w.Jobs) != 1 || len(w.On.Dispatch.Inputs) != 10 || len(w.On.Run.Workflows) != 0 {
-		t.Fatal("N1 requires one explicit Linux lane and ten bounded identity inputs")
+	if len(w.Jobs) != 2 || len(w.On.Dispatch.Inputs) != 10 || len(w.On.Run.Workflows) != 0 {
+		t.Fatal("N2 requires explicit selected native route, excluded failure route and ten bounded inputs")
 	}
 	if len(w.Permissions) != 1 || w.Permissions["contents"] != "read" || w.Concurrency.Cancel {
 		t.Fatal("native producer must preserve read-only permissions and owned cancellation")
 	}
 	job, ok := w.Jobs["linux-amd64"]
-	if !ok || job.If != "${{ github.event_name == 'workflow_dispatch' }}" || job.Needs != nil || job.Environment != nil {
+	if !ok || job.If != "${{ github.event_name == 'workflow_dispatch' && (fromJSON(inputs.host_contract).target == 'linux-amd64' || fromJSON(inputs.host_contract).target == 'linux-arm64') }}" || job.Needs != nil || job.Environment != nil {
 		t.Fatal("native route must remain independently dispatched without protected effects")
 	}
 	if len(job.Permissions) != 2 || job.Permissions["actions"] != "read" || job.Permissions["contents"] != "read" {
@@ -524,18 +529,16 @@ func TestFrozenNativeReadOnlyWorkflowContract(t *testing.T) {
 				t.Fatalf("%s: %v %s", step.Name, err, output)
 			}
 		}
-		if token, ok := step.Env["GH_TOKEN"]; ok && (step.Name != "Inspect exact preparation attempt and artifact metadata" || token != "${{ github.token }}") {
+		if token, ok := step.Env["GH_TOKEN"]; ok && (step.Name != "Acquire and extract the same checked preparation ZIP" || token != "${{ github.token }}") {
 			t.Fatal("read token escaped acquisition")
 		}
 		if strings.HasPrefix(step.Uses, "actions/download-artifact@") {
+			t.Fatal("a second downloader can extract different bytes from the checked ZIP")
+		}
+		if strings.Contains(step.Run, "p.acquireArtifact(") {
 			downloads++
-			for k, v := range map[string]string{"artifact-ids": "${{ inputs.artifact_id }}", "run-id": "${{ inputs.preparation_run }}", "repository": "777genius/universal-agent-plugins"} {
-				if step.With[k] != v {
-					t.Fatalf("download lost exact %s", k)
-				}
-			}
-			if _, ok := step.With["name"]; ok {
-				t.Fatal("artifact name must not select frozen bytes")
+			if !strings.Contains(step.Run, "p.extractArtifact(file, pin, 'preparation', files,") {
+				t.Fatal("extract the same acquired file with the independently selected pin")
 			}
 		}
 		if strings.HasPrefix(step.Uses, "actions/upload-artifact@") {
@@ -544,7 +547,7 @@ func TestFrozenNativeReadOnlyWorkflowContract(t *testing.T) {
 				t.Fatal("upload must exclude binaries, client state and compilation caches")
 			}
 		}
-		if step.Uses != "" && !regexp.MustCompile(`^actions/(checkout|setup-node|setup-go|download-artifact|upload-artifact)@[0-9a-f]{40}$`).MatchString(step.Uses) {
+		if step.Uses != "" && !regexp.MustCompile(`^actions/(checkout|setup-node|setup-go|upload-artifact)@[0-9a-f]{40}$`).MatchString(step.Uses) {
 			t.Fatalf("unreviewed action %s", step.Uses)
 		}
 	}
@@ -557,7 +560,7 @@ func TestFrozenNativeReadOnlyWorkflowContract(t *testing.T) {
 			t.Fatalf("native route reaches forbidden operation %s", forbidden)
 		}
 	}
-	for _, required := range []string{"p.inspectArtifact", "run_attempt: Number(process.env.PREPARATION_ATTEMPT)", "authoring-native-qualification.js", "go_sha256: process.env.HOST_GO_SHA256", "pair_marker_sha256: process.env.PAIR_SHA256"} {
+	for _, required := range []string{"p.acquireArtifact", "p.extractArtifact", "run_attempt: Number(process.env.PREPARATION_ATTEMPT)", "authoring-native-qualification.js", "go_sha256: process.env.HOST_GO_SHA256", "pair_marker_sha256: process.env.PAIR_SHA256"} {
 		if !strings.Contains(body, required) {
 			t.Fatalf("native route lacks %s", required)
 		}
@@ -591,5 +594,71 @@ func TestFrozenPreparationReceiptOutsideProjectionBytes(t *testing.T) {
 	}
 	if receipts != 1 || uploads != 1 {
 		t.Fatal("one byte-bound receipt before the existing upload required")
+	}
+}
+
+func TestN2AdmissionAcquiresEvidenceBeforeOIDC(t *testing.T) {
+	w := readProducerWorkflow(t, "agentplugins-release.yml")
+	read := w.Jobs["paired-promotion-admission"]
+	if read.Environment != nil || len(read.Permissions) != 2 || read.Permissions["actions"] != "read" || read.Permissions["contents"] != "read" {
+		t.Fatal("native evidence intake must remain outside protected writes/OIDC")
+	}
+	step := read.Steps[len(read.Steps)-1]
+	selectAt := strings.Index(step.Run, "p.validateSelection(")
+	acquireAt := strings.Index(step.Run, "p.admitNativeEvidence(")
+	publicAt := strings.Index(step.Run, "p.requireNativeContracts(")
+	if selectAt < 0 || acquireAt <= selectAt || publicAt <= acquireAt {
+		t.Fatal("syntactic dispatch selection, real native admission, then mandatory public contract required")
+	}
+	for key, value := range map[string]string{
+		"GH_TOKEN": "${{ github.token }}", "PREPARATION_RUN": "${{ inputs.preparation_run }}",
+		"PREPARATION_ATTEMPT": "${{ inputs.preparation_attempt }}", "PREPARATION_ARTIFACT": "${{ inputs.preparation_artifact }}",
+		"PREPARATION_DIGEST": "${{ inputs.preparation_digest }}",
+	} {
+		if step.Env[key] != value {
+			t.Fatalf("missing independent provider locator %s", key)
+		}
+	}
+	write := w.Jobs["paired-sign-and-promote"]
+	if write.Needs != "paired-promotion-admission" {
+		t.Fatal("protected job may not bypass read-only admission failure")
+	}
+	for _, step := range write.Steps {
+		if strings.HasPrefix(step.Uses, "actions/download-artifact@") {
+			t.Fatal("protected job must never independently download/extract unchecked ZIP bytes")
+		}
+		if strings.Contains(step.Run, "p.acquirePreparation(") && !strings.Contains(step.Run, "root: acquired.root") {
+			t.Fatal("promotion must use the checked extracted preparation root")
+		}
+	}
+}
+
+func TestN2ExcludedNativeExecutionRemainsFailure(t *testing.T) {
+	w := readProducerWorkflow(t, "authoring-frozen-native.yml")
+	if _, ok := w.On.Dispatch.Inputs["host_contract"]; !ok {
+		t.Fatal("explicit target/version/host-tool pins required")
+	}
+	job := w.Jobs["excluded-native-execution"]
+	if !strings.Contains(job.If, "target != 'linux-amd64'") || !strings.Contains(job.If, "target != 'linux-arm64'") ||
+		len(job.Permissions) != 1 || job.Permissions["contents"] != "read" || len(job.Steps) != 1 || job.Environment != nil {
+		t.Fatal("excluded Windows/writable macOS must retain an explicit non-protected failure route")
+	}
+	if job.Steps[0].Uses != "" || !strings.Contains(job.Steps[0].Run, "NATIVE_EXECUTION_PENDING") {
+		t.Fatal("excluded platforms must not download or execute products")
+	}
+	command := exec.Command("/bin/bash", "-e", "-c", job.Steps[0].Run)
+	command.Env = []string{"PATH=/usr/local/bin:/usr/bin:/bin"}
+	if output, err := command.CombinedOutput(); err == nil || !strings.Contains(string(output), "No terminal emitted") {
+		t.Fatalf("pending execution must fail, not become skipped qualification: %v %s", err, output)
+	}
+	_, source, _, _ := runtime.Caller(0)
+	body, err := os.ReadFile(filepath.Join(filepath.Dir(source), "../../../../.github/workflows/authoring-frozen-native.yml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, forbidden := range []string{"runs-on: windows", "runs-on: macos", "continue-on-error:", "strategy:", "--accept-security-risk"} {
+		if strings.Contains(string(body), forbidden) {
+			t.Fatalf("excluded native route enables %s", forbidden)
+		}
 	}
 }

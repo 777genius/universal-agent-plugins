@@ -122,9 +122,10 @@ else process.stdout.write(typeof r.body==='string'?r.body:JSON.stringify(r.body)
 `);
   const spawn = cp.spawnSync;
   t.mock.method(cp, "spawnSync", function(executable, args, options) {
+    if (executable === "/usr/bin/python3") return spawn(executable, args, options);
     assert.equal(executable, "/usr/bin/gh"); assert.equal(options.shell, false); assert.equal(options.timeout, 30000);
     assert.equal(options.killSignal, "SIGKILL"); assert.equal(options.env.PATH, "/usr/local/bin:/usr/bin:/bin");
-    assert.equal(options.env.HOME, f.scratch); assert.equal(options.env.GH_CONFIG_DIR, f.scratch);
+    assert.ok(options.env.HOME === f.scratch || options.env.HOME.startsWith(f.scratch + path.sep)); assert.equal(options.env.GH_CONFIG_DIR, options.env.HOME);
     assert.equal(options.env.GH_TOKEN, undefined); assert.equal(options.env.NODE_OPTIONS, undefined);
     return spawn(process.execPath, [script, ...args], options);
   });
@@ -413,7 +414,7 @@ test("actual preflight and record shells bind dispatch before native acquisition
     const values={...env,...(changed ? {TAG:"agentplugins-v0.1.55",WORKFLOW_REF:"refs/tags/agentplugins-v0.1.55"} : {})};
     const run=name=>cp.spawnSync("/bin/bash",["-e","-o","pipefail","-s"],{cwd,env:values,input:script(name),encoding:"utf8",timeout:10000});
     assert.equal(run("Validate promotion identity before checkout").status,0);
-    for(const name of ["Reject missing native terminal contracts before protected effects","Acquire exact frozen preparation after native admission"]) {
+    for(const name of ["Admit exact native evidence read-only before protected effects","Acquire exact frozen preparation after native admission"]) {
       const result=run(name); assert.equal(result.status,1); assert.equal(result.stdout,"");
       assert.match(result.stderr,changed ? /selected promotion identity/ : /NATIVE_EVIDENCE_INTEGRATION_REQUIRED/);
       if(changed) assert.doesNotMatch(result.stderr,/NATIVE_EVIDENCE_INTEGRATION_REQUIRED/);
@@ -524,4 +525,202 @@ test("verified own creates advance expected presence without an extra upload", t
   assert.equal(b.seq.admissionTail(b.state(),["admit-reconciliation"]).sign_required,false);
   assert.deepEqual(b.seq.promotePair(b.recheck,true).public_readback,["public","public"]);
   assert.equal(b.writes().length,before);
+});
+
+
+// Exercise the actual standard-library reader in a separate bounded process.
+// ZIP contents here are synthetic control-flow evidence, never qualification.
+function evidenceZIP(files) {
+  const result = cp.spawnSync('/usr/bin/python3', ['-B', '-c',
+    "import sys,json,base64,zipfile,io; b=io.BytesIO(); z=zipfile.ZipFile(b,'w',zipfile.ZIP_DEFLATED); " +
+    "[(z.writestr(n,base64.b64decode(v))) for n,v in json.load(sys.stdin).items()]; z.close(); sys.stdout.buffer.write(b.getvalue())"], {
+    input: JSON.stringify(Object.fromEntries(Object.entries(files).map(([name, bytes]) => [name, Buffer.from(bytes).toString('base64')]))),
+    env: { PATH: '/usr/bin:/bin', PYTHONNOUSERSITE: '1' }, timeout: 30000, maxBuffer: 64 * 1024 * 1024
+  });
+  assert.equal(result.status, 0, String(result.stderr)); return result.stdout;
+}
+function identityMetadata(f) {
+  return c.encode({ identity: ID, status: 'CANDIDATE', manifest_sha256: f.record.candidate_sha256,
+    output: '/prior-builder/candidate', local_build_evidence: '/prior-builder/evidence',
+    release_eligible: false, platform_acceptance: false, attested: false });
+}
+function preparationZIP(f, mutate = () => {}) {
+  const n = require('../scripts/authoring-native-qualification');
+  const pins = { identity: ID, candidate_sha256: f.record.candidate_sha256, pair_marker_sha256: f.record.pair_marker_sha256,
+    products: Object.fromEntries(c.PRODUCTS.map(product => [product, {
+      manifest_sha256: f.record.products[product].manifest_sha256, checksums_sha256: f.record.products[product].checksums_sha256 }])) };
+  n.writePreparation(f.root, pins, { repository: c.REPOSITORY, workflow: p.WORKFLOW, source: ID.commit,
+    workflow_sha: ID.commit, run_id: 21, run_attempt: 2 });
+  const names = ['candidate/candidate.json', 'pair-prepared.json', 'preparation-run.json',
+    ...c.PRODUCTS.flatMap(product => fs.readdirSync(path.join(f.root, product)).map(name => `${product}/${name}`))];
+  const files = Object.fromEntries(names.map(name => [name, fs.readFileSync(path.join(f.root, name))]));
+  files['candidate-identity.json'] = identityMetadata(f);
+  mutate(files); return evidenceZIP(files);
+}
+function zipRoutes(body, artifact, workflow = p.WORKFLOW) {
+  return {
+    [endpoint(`actions/runs/${artifact.run_id}/attempts/${artifact.run_attempt}`)]: { body: {
+      id: artifact.run_id, run_attempt: artifact.run_attempt, status: 'completed', conclusion: 'success',
+      repository: { full_name: c.REPOSITORY }, head_repository: { full_name: c.REPOSITORY }, head_sha: ID.commit, path: workflow } },
+    [endpoint(`actions/artifacts/${artifact.artifact_id}`)]: { body: {
+      id: artifact.artifact_id, expired: false, digest: `sha256:${artifact.artifact_sha256}`, name: 'synthetic-only',
+      workflow_run: { id: artifact.run_id, head_sha: ID.commit }, size_in_bytes: body.length } },
+    [endpoint(`actions/artifacts/${artifact.artifact_id}/zip`)]: { binary: body.toString('base64') }
+  };
+}
+function registeredNativeRecord(f) {
+  for (const lane of f.record.qualification.lanes.filter(x => x.lane !== 'public-packed-pair')) {
+    lane.schema = 'authoring-frozen-native/v1'; lane.workflow = '.github/workflows/authoring-frozen-native.yml';
+    const index = c.TARGETS.indexOf(lane.lane.split('/')[1]);
+    lane.artifact = { run_id: 100 + index, run_attempt: 2, artifact_id: 200 + index, artifact_sha256: hash(`fixture zip ${index}`) };
+  }
+}
+function promoteEvidence(f, preparation) {
+  fs.writeFileSync(f.recordFile, p.encodeRecord(f.record));
+  return p.promote({ record: f.recordFile, root: f.root, scratch: f.scratch,
+    workflow_sha: ID.commit, preparation, selected });
+}
+function noProtectedCalls(calls) {
+  for (const call of calls()) {
+    assert.ok(!['release', 'attestation'].includes(call.args[0]), 'rejection must cause zero protected effects');
+    assert.ok(!call.args.includes('POST') && !call.args.includes('PATCH') && !call.args.includes('DELETE'));
+  }
+}
+
+test('N2 independently acquired preparation ZIP closes receipt attempt and eighteen frozen subjects', t => {
+  const f = fixture(), bytes = preparationZIP(f), loc = { ...pin, artifact_sha256: c.digest(bytes) };
+  const calls = provider(t, f, zipRoutes(bytes, loc));
+  const acquired = p.acquirePreparation(loc, f.record, f.scratch);
+  assert.equal(acquired.preparation.producer.run_attempt, 2);
+  assert.equal(p.frozenSubjects(acquired.root, f.record).length, 18);
+  assert.equal(fs.readFileSync(path.join(acquired.root, 'candidate/candidate.json')).equals(fs.readFileSync(path.join(f.root, 'candidate/candidate.json'))), true);
+  noProtectedCalls(calls);
+});
+
+for (const [name, mutate, error] of [
+  ['false preparation metadata claim', files => { const v = JSON.parse(files['candidate-identity.json']); v.attested = true; files['candidate-identity.json'] = c.encode(v); }, /preparation metadata claims/],
+  ['foreign preparation metadata identity', files => { const v = JSON.parse(files['candidate-identity.json']); v.identity.commit = 'b'.repeat(40); files['candidate-identity.json'] = c.encode(v); }, /preparation metadata identity/],
+  ['stale embedded preparation attempt', files => { const v = JSON.parse(files['preparation-run.json']); v.producer.run_attempt = 1; files['preparation-run.json'] = c.encode(v); }, /eighteen preparation/],
+  ['stale embedded preparation source', files => { const v = JSON.parse(files['preparation-run.json']); v.producer.source = 'b'.repeat(40); files['preparation-run.json'] = c.encode(v); }, /eighteen preparation/],
+  ['missing receipt subject', files => { const v = JSON.parse(files['preparation-run.json']); v.subjects.pop(); files['preparation-run.json'] = c.encode(v); }, /eighteen preparation/],
+  ['missing ZIP subject', files => { delete files['pair-prepared.json']; }, /ZIP extraction rejected/],
+  ['unexpected ZIP subject', files => { files['unreviewed.json'] = Buffer.from('{}'); }, /ZIP extraction rejected/],
+  ['changed frozen bytes', files => { files['candidate/candidate.json'] = Buffer.from('{}'); }, /candidate/]
+]) test(`N2 ${name} has no protected effects`, t => {
+  const f = fixture(), body = preparationZIP(f, mutate), loc = { ...pin, artifact_sha256: c.digest(body) };
+  registeredNativeRecord(f);
+  const calls = provider(t, f, zipRoutes(body, loc));
+  assert.throws(() => promoteEvidence(f, loc), error);
+  noProtectedCalls(calls);
+});
+
+test('N2 checked ZIP cannot be swapped at extraction and unsupported public never authorizes effects', t => {
+  const f = fixture(), body = preparationZIP(f), loc = { ...pin, artifact_sha256: c.digest(body) };
+  const calls = provider(t, f, zipRoutes(body, loc));
+  const file = p.acquireArtifact(loc, p.WORKFLOW, ID.commit, f.scratch);
+  const extracted = path.join(f.scratch, 'swapped');
+  const names = ['transcripts.json', 'trees.json', 'build-info.json', 'preservation.json',
+    'preparation.json', 'host.json', 'scans.json', 'acquisition.json', 'agentplugins-terminal.json', 'plugin-kit-ai-terminal.json'];
+  const replacement = evidenceZIP(Object.fromEntries(names.map(name => [name, c.encode({ fixture: true })])));
+  fs.chmodSync(file, 0o600); fs.writeFileSync(file, replacement);
+  assert.throws(() => p.extractArtifact(file, loc, 'native', names, extracted, f.scratch), /ZIP extraction rejected/);
+  assert.equal(fs.existsSync(extracted), false);
+  registeredNativeRecord(f);
+  const bodyRecord = p.encodeRecord(f.record);
+  assert.equal(p.checkNativeContracts(f.record), undefined); // Registered syntax grants no authorization.
+  assert.doesNotThrow(() => p.validateSelection(bodyRecord, selected));
+  assert.throws(() => p.admitRecord(bodyRecord, selected), /public-packed-pair/);
+  assert.throws(() => p.requireNativeContracts(f.record.qualification.lanes.slice(0, 12)), /missing lanes \[public-packed-pair\]/);
+  noProtectedCalls(calls);
+});
+
+test('N2 native artifact metadata success cannot replace a valid paired terminal', t => {
+  const f = fixture(), prepared = preparationZIP(f), loc = { ...pin, artifact_sha256: c.digest(prepared) };
+  registeredNativeRecord(f);
+  const files = Object.fromEntries(['transcripts.json', 'trees.json', 'build-info.json', 'preservation.json',
+    'preparation.json', 'host.json', 'scans.json', 'acquisition.json', 'agentplugins-terminal.json', 'plugin-kit-ai-terminal.json']
+    .map(name => [name, c.encode({ fixture: true, status: 'success', name })]));
+  const nativeZIP = evidenceZIP(files);
+  const lanes = f.record.qualification.lanes.filter(x => x.lane.endsWith('/linux-amd64'));
+  for (const lane of lanes) {
+    lane.artifact.artifact_sha256 = c.digest(nativeZIP);
+    lane.sha256 = c.digest(files[`${lane.lane.split('/')[0]}-terminal.json`]);
+  }
+  const calls = provider(t, f, { ...zipRoutes(prepared, loc),
+    ...zipRoutes(nativeZIP, lanes[0].artifact, '.github/workflows/authoring-frozen-native.yml') });
+  assert.throws(() => promoteEvidence(f, loc), /eighteen|preparation|Expected/);
+  noProtectedCalls(calls);
+  assert.ok(calls().some(x => x.args.at(-1) === endpoint(`actions/artifacts/${lanes[0].artifact.artifact_id}/zip`)), 'native bytes actually acquired');
+});
+
+test('N2 provider-bound native semantic mutations reject with zero protected effects', async t => {
+  // Reuse executed child fixtures, not a fabricated passing terminal generator.
+  // Only the test-local reader substitutes the synthetic scanner archive pin.
+  const Module = require('node:module');
+  const file = path.join(__dirname, 'authoring-native-qualification.test.js');
+  const source = fs.readFileSync(file, 'utf8');
+  const instance = new Module(file, module);
+  instance.filename = file; instance.paths = Module._nodeModulePaths(__dirname);
+  instance._compile(source.slice(0, source.indexOf('test("shared verifier')) +
+    '\nmodule.exports = { fixture, subprocessFixtures, internal };', file);
+  const fixtureAPI = instance.exports, f = fixtureAPI.fixture();
+  f.options.producer.run_id = 43;
+  fixtureAPI.subprocessFixtures(t, f);
+  await fixtureAPI.internal(true).produce(f.options);
+  registeredNativeRecord(f);
+  const preparationFiles = ['candidate/candidate.json', 'pair-prepared.json', 'preparation-run.json',
+    ...c.PRODUCTS.flatMap(product => fs.readdirSync(path.join(f.root, product)).map(name => `${product}/${name}`))];
+  const prepared = evidenceZIP({ ...Object.fromEntries(preparationFiles.map(name => [name, fs.readFileSync(path.join(f.root, name))])),
+    'candidate-identity.json': identityMetadata(f) });
+  const loc = { ...pin, run_id: 42, run_attempt: 2, artifact_sha256: c.digest(prepared) };
+  const original = Object.fromEntries(fs.readdirSync(f.options.output).map(name => [name, fs.readFileSync(path.join(f.options.output, name))]));
+  const lanes = f.record.qualification.lanes.filter(x => x.lane.endsWith('/linux-amd64'));
+  for (const lane of lanes) lane.artifact.run_id = 43;
+  const calls = provider(t, f, {});
+  const realReader = require('../scripts/authoring-native-qualification');
+  t.mock.method(realReader, 'readTerminals', fixtureAPI.internal(true).readTerminals);
+  const routesFile = path.join(f.sandbox, 'routes.json');
+  const reseal = (files, changed = null) => {
+    if (changed) for (const product of c.PRODUCTS) {
+      const name = `${product}-terminal.json`, terminal = JSON.parse(files[name]);
+      for (const entry of terminal.evidence) if (files[entry.file]) Object.assign(entry, c.metadata(files[entry.file]));
+      files[name] = c.encode(terminal);
+    }
+    const bytes = evidenceZIP(files);
+    for (const lane of lanes) {
+      lane.artifact.artifact_sha256 = c.digest(bytes);
+      lane.sha256 = c.digest(files[`${lane.lane.split('/')[0]}-terminal.json`]);
+    }
+    return { ...zipRoutes(prepared, loc), ...zipRoutes(bytes, lanes[0].artifact, '.github/workflows/authoring-frozen-native.yml') };
+  };
+  const cases = [
+    ['embedded stale native source', files => { const x = JSON.parse(files['agentplugins-terminal.json']); x.producer.source = 'b'.repeat(40); files['agentplugins-terminal.json'] = c.encode(x); }, /source|producer|Expected/],
+    ['embedded stale native attempt', files => { const x = JSON.parse(files['agentplugins-terminal.json']); x.producer.run_attempt = 1; files['agentplugins-terminal.json'] = c.encode(x); }, /producer|run_attempt|Expected/],
+    ['missing signed peer subject', files => { const x = JSON.parse(files['agentplugins-terminal.json']); delete x.peer_subject; files['agentplugins-terminal.json'] = c.encode(x); }, /closed native terminal/],
+    ['wrong peer binary', files => { const x = JSON.parse(files['agentplugins-terminal.json']); x.peer_subject.binary.sha256 = 'b'.repeat(64); files['agentplugins-terminal.json'] = c.encode(x); }, /peer_subject|Expected/],
+    ['success-shaped runtime claim', files => { const x = JSON.parse(files['agentplugins-terminal.json']); x.assertions.runtime = 'pass'; files['agentplugins-terminal.json'] = c.encode(x); }, /runtime|Expected/],
+    ['omitted mandatory command', files => { const x = JSON.parse(files['transcripts.json']); x.agentplugins.pop(); files['transcripts.json'] = c.encode(x); }, /command|Expected/],
+    ['rehashed grouped reconciliation omission', files => {
+      const x = JSON.parse(files['transcripts.json']);
+      const row = x.installer.find(r => r.id === 'info');
+      assert.ok(row, 'mandatory info command present');
+      const stdout = JSON.parse(row.stdout), client = stdout.data.clients[0];
+      delete client.receipt_reconciled; delete client.native_discovery_reconciled; delete client.native_identity_state;
+      row.stdout = JSON.stringify(stdout); files['transcripts.json'] = c.encode(x);
+    }, /public info client matches checked registration/]
+  ];
+  for (const [label, mutate, error] of cases) await t.test(label, () => {
+    const files = Object.fromEntries(Object.entries(original).map(([name, bytes]) => [name, Buffer.from(bytes)]));
+    mutate(files); fs.writeFileSync(routesFile, JSON.stringify(reseal(files, true)));
+    assert.throws(() => promoteEvidence(f, loc), error);
+    noProtectedCalls(calls);
+  });
+  // A coherent accepted Linux pair reaches the next required target, whose
+  // missing provider route fails. Linux success does not silently shrink lanes.
+  fs.writeFileSync(routesFile, JSON.stringify(reseal(original)));
+  assert.throws(() => promoteEvidence(f, loc), /trusted gh failed/);
+  const next = c.TARGETS.find(target => target !== 'linux-amd64');
+  const missing = f.record.qualification.lanes.find(lane => lane.lane === `agentplugins/${next}`).artifact;
+  assert.ok(calls().some(call => call.args.at(-1) === endpoint(`actions/runs/${missing.run_id}/attempts/${missing.run_attempt}`)));
+  noProtectedCalls(calls);
 });

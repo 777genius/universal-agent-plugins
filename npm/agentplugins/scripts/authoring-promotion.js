@@ -20,6 +20,10 @@ const SCHEMA = "authoring-promotion/v1";
 const SLSA = "https://slsa.dev/provenance/v1";
 const LIMIT = 1024 * 1024;
 const LANES = Object.freeze([...c.PRODUCTS.flatMap(p => c.TARGETS.map(t => `${p}/${t}`)), "public-packed-pair"]);
+const NATIVE_SCHEMA = "authoring-frozen-native/v1";
+const NATIVE_WORKFLOW = ".github/workflows/authoring-frozen-native.yml";
+const NATIVE_FILES = Object.freeze(["transcripts.json", "trees.json", "build-info.json", "preservation.json",
+  "preparation.json", "host.json", "scans.json", "acquisition.json", ...c.PRODUCTS.map(p => `${p}-terminal.json`)]);
 const fail = message => { throw new Error(message); };
 const exact = (a, b, label) => { if (!equal(a, b)) fail(`${label}: binding mismatch`); };
 const sha = (v, n = 64) => {
@@ -119,12 +123,14 @@ function requireNativeContracts(lanes) {
     seen.add(value.lane);
   }
   const missing = LANES.filter(x => !seen.has(x));
-  // Deliberately NO caller-supplied adapter, issuer, success boolean or policy.
-  // Native owners must deliver reviewed terminal schemas AND their producer
-  // source asserting the concrete native/installer and public packed gates.
-  const unsupported = lanes.map(x => `${x.lane}:${String(x.schema).slice(0, 100)}`);
+  // This is only the registered-contract inventory, never evidence admission.
+  // Public packed has no accepted producer. Even twelve admitted native lanes
+  // cannot authorize the thirteen-lane global gate or a protected effect.
+  const unsupported = lanes.filter(x => x.lane === "public-packed-pair" ||
+    x.schema !== NATIVE_SCHEMA || x.workflow !== NATIVE_WORKFLOW)
+    .map(x => `${x.lane}:${String(x.schema).slice(0, 100)}`);
   fail(`NATIVE_EVIDENCE_INTEGRATION_REQUIRED: missing lanes [${missing.join(", ")}]; unsupported contracts [${unsupported.join(", ")}]. ` +
-    "No accepted frozen-pair all-target terminal producer/schema is integrated. dual-authoring-public-native/v1 is Linux fixture evidence with false release claims; private-packed or SLSA build success cannot qualify this pair. Signing and promotion are disabled.");
+    "Public-packed producer/schema remains unsupported. dual-authoring-public-native/v1 is Linux fixture evidence with false release claims; private-packed or SLSA build success cannot qualify this pair. Signing and promotion are disabled.");
 }
 function validateSelection(body, selected) {
   const record = decodeRecord(body);
@@ -189,6 +195,110 @@ function acquireArtifact(pin, workflow, source, cwd) {
   exact(inspectArtifact(pin, workflow, source, cwd), before, "artifact changed during acquisition");
   fs.writeFileSync(file, zip, { flag: "wx", mode: 0o400 });
   return file;
+}
+
+// Extract only the file already checked by acquireArtifact. Python opens once,
+// snapshots and rehashes it, then parses/extracts that same immutable byte array.
+// There is no second provider download, archive-name selection or unzip command.
+function extractArtifact(file, pin, kind, files, output, cwd) {
+  locator(pin); c.safeDirectory(cwd);
+  if (path.basename(file) !== `artifact-${pin.artifact_id}.zip`) fail("exact acquired ZIP path required");
+  const st = fs.lstatSync(file);
+  if (!st.isFile() || st.nlink !== 1) fail("regular unaliased ZIP required");
+  const result = cp.spawnSync("/usr/bin/python3", ["-B", path.resolve(__dirname, "../../../scripts/read-authoring-evidence-zip.py"),
+    "--archive", file, "--sha256", pin.artifact_sha256, "--size", String(st.size),
+    "--kind", kind, "--files", JSON.stringify(files), "--output", output], {
+    cwd, env: { PATH: "/usr/bin:/bin", HOME: cwd, LC_ALL: "C.UTF-8", PYTHONNOUSERSITE: "1" },
+    encoding: "utf8", timeout: 120000, killSignal: "SIGKILL", maxBuffer: LIMIT, shell: false
+  });
+  if (result.error || result.signal || result.status !== 0) fail("checked authoring ZIP extraction rejected; no admission or protected effect");
+  exact(JSON.parse(result.stdout), { archive_sha256: pin.artifact_sha256, files: [...files].sort() }, "extracted archive closure");
+  return output;
+}
+function preparationFiles(record) {
+  return ["preparation-run.json", "candidate-identity.json", "candidate/candidate.json", "pair-prepared.json",
+    ...c.PRODUCTS.flatMap(p => [...c.TARGETS.map(t => `${p}/${record.products[p].assets[t].file}`),
+      `${p}/release-manifest.json`, `${p}/checksums.txt`])];
+}
+function invocationFor(pin, workflow, source) {
+  return { repository: REPOSITORY, workflow, source, workflow_sha: source,
+    run_id: pin.run_id, run_attempt: pin.run_attempt };
+}
+function projectedPins(record) {
+  return { identity: record.identity, candidate_sha256: record.candidate_sha256,
+    pair_marker_sha256: record.pair_marker_sha256, products: Object.fromEntries(c.PRODUCTS.map(p => [p, {
+      manifest_sha256: record.products[p].manifest_sha256, checksums_sha256: record.products[p].checksums_sha256 }])) };
+}
+function acquirePreparation(pin, record, scratch) {
+  record = recordShape(record); c.safeDirectory(scratch); locator(pin);
+  const work = fs.mkdtempSync(path.join(scratch, "preparation-"));
+  const file = acquireArtifact(pin, WORKFLOW, record.identity.commit, work);
+  const root = extractArtifact(file, pin, "preparation", preparationFiles(record), path.join(work, "frozen"), work);
+  frozenSubjects(root, record);
+  const metadataBody = c.readFile(path.join(root, "candidate-identity.json"), LIMIT);
+  const metadata = JSON.parse(metadataBody);
+  exact(metadataBody, c.encode(metadata), "canonical preparation identity metadata");
+  c.keys(metadata, ["identity", "status", "manifest_sha256", "output", "local_build_evidence",
+    "release_eligible", "platform_acceptance", "attested"], "preparation identity metadata");
+  exact(metadata.identity, record.identity, "preparation metadata identity");
+  exact([metadata.status, metadata.manifest_sha256, metadata.release_eligible, metadata.platform_acceptance, metadata.attested],
+    ["CANDIDATE", record.candidate_sha256, false, false, false], "preparation metadata claims");
+  // Historical builder locations are descriptive strings only. Never resolve,
+  // follow or read them in the consumer's namespace, including during recovery.
+  for (const name of ["output", "local_build_evidence"]) {
+    const value = metadata[name];
+    if (typeof value !== "string" || value.length > 4096 || !value.startsWith("/") || /[\x00-\x1f]/.test(value))
+      fail("bounded preparation location metadata required");
+  }
+  const preparation = { sha256: c.digest(c.readFile(path.join(root, "preparation-run.json"), LIMIT)),
+    producer: invocationFor(pin, WORKFLOW, record.identity.commit) };
+  require("./authoring-native-qualification").readPreparation(root, projectedPins(record), preparation);
+  // Metadata cannot substitute for the receipt or the frozen subject pins.
+  // Independently acquired provider bytes, not this file's claims, bind attempt.
+  return { root, preparation };
+}
+function nativeContract(lane) {
+  if (!LANES.slice(0, 12).includes(lane.lane) || lane.schema !== NATIVE_SCHEMA || lane.workflow !== NATIVE_WORKFLOW)
+    fail(`NATIVE_EVIDENCE_INTEGRATION_REQUIRED: unsupported contracts [${lane.lane}:${lane.schema}]`);
+}
+// Registered identifiers are a syntactic precondition only. No success value,
+// provider assertion or authorization is returned by this inexpensive check.
+function checkNativeContracts(record) {
+  recordShape(record).qualification.lanes.slice(0, 12).forEach(nativeContract);
+}
+function admitNativeEvidence(record, preparationPin, scratch) {
+  // Full canonical record validation precedes every acquisition. This return
+  // represents only twelve native observations, never global authorization.
+  record = recordShape(record);
+  const lanes = record.qualification.lanes.slice(0, 12);
+  lanes.forEach(nativeContract);
+  const prepared = acquirePreparation(preparationPin, record, scratch);
+  const receipts = [];
+  const seenArtifacts = new Set();
+  for (const target of ["linux-amd64", ...c.TARGETS.filter(t => t !== "linux-amd64")]) {
+    const pair = c.PRODUCTS.map(p => lanes.find(x => x.lane === `${p}/${target}`));
+    exact(pair[0].artifact, pair[1].artifact, "paired terminals must share one exact artifact");
+    const pin = pair[0].artifact;
+    if (seenArtifacts.has(pin.artifact_id) || pin.artifact_id === preparationPin.artifact_id) fail("native artifact reused across targets or preparation");
+    seenArtifacts.add(pin.artifact_id);
+    const work = fs.mkdtempSync(path.join(scratch, `native-${target}-`));
+    const file = acquireArtifact(pin, NATIVE_WORKFLOW, record.identity.commit, work);
+    const root = extractArtifact(file, pin, "native", NATIVE_FILES, path.join(work, "evidence"), work);
+    for (let i = 0; i < pair.length; i++) {
+      const body = c.readFile(path.join(root, `${c.PRODUCTS[i]}-terminal.json`), LIMIT);
+      exact(c.digest(body), pair[i].sha256, "independently pinned terminal digest");
+    }
+    // The accepted reader validates the complete paired journey and evidence,
+    // not merely producer metadata, success booleans, or the selected subject.
+    const terminal = JSON.parse(c.readFile(path.join(root, "agentplugins-terminal.json"), LIMIT));
+    const observed = require("./authoring-native-qualification").readTerminals(root, prepared.root, projectedPins(record), {
+      producer: invocationFor(pin, NATIVE_WORKFLOW, record.identity.commit), preparation: prepared.preparation,
+      tools: terminal.tools, target
+    });
+    exact(observed.map(x => x.lane), pair.map(x => x.lane), "admitted target lanes");
+    receipts.push(...observed);
+  }
+  return { ...prepared, receipts };
 }
 
 // Mapping for fresh `gh attestation verify --format json` results. This function
@@ -311,13 +421,11 @@ function options(v) {
 }
 function admittedInputs(input) {
   const o = options(input);
-  const record = admitRecord(c.readFile(o.record, LIMIT), o.selected); // Before gh, output or attestation.
+  const record = validateSelection(c.readFile(o.record, LIMIT), o.selected);
   exact(o.workflow_sha, record.identity.commit, "integrated workflow source");
-  cliVersion(o.scratch);
-  inspectArtifact(o.preparation, WORKFLOW, record.identity.commit, o.scratch);
-  // Integration must acquire/validate the accepted native terminal artifacts
-  // here, including actual asserted gates and exact attempt/subject bindings.
-  // requireNativeContracts remains unconditional until that implementation lands.
+  const native = admitNativeEvidence(record, o.preparation, o.scratch);
+  require("./authoring-native-qualification").readPreparation(o.root, projectedPins(record), native.preparation);
+  requireNativeContracts(record.qualification.lanes); // Public adapter still unavailable; zero effects.
   const subjects = frozenSubjects(o.root, record);
   subjects.push({ file: o.record, sha256: c.digest(encodeRecord(record)) });
   return { o, record, subjects };
@@ -418,4 +526,5 @@ if (require.main === module) {
   catch (error) { process.stderr.write(`authoring promotion: ${error.message}\n`); process.exitCode = 1; }
 }
 module.exports = { SCHEMA, WORKFLOW, GH_VERSION, LANES, encodeRecord, decodeRecord, validateSelection, admitRecord, requireNativeContracts,
-  inspectArtifact, acquireArtifact, mapVerifiedOutput, verifySubject, frozenSubjects, releasePins, inspectPair, promote };
+  inspectArtifact, acquireArtifact, extractArtifact, acquirePreparation, checkNativeContracts, admitNativeEvidence,
+  mapVerifiedOutput, verifySubject, frozenSubjects, releasePins, inspectPair, promote };

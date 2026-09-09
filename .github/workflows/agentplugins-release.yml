@@ -542,6 +542,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      actions: read
     steps:
       - name: Validate promotion identity before checkout
         env:
@@ -568,8 +569,13 @@ jobs:
         with:
           node-version: 22.21.1
           package-manager-cache: false
-      - name: Reject missing native terminal contracts before protected effects
+      - name: Admit exact native evidence read-only before protected effects
         env:
+          GH_TOKEN: ${{ github.token }}
+          PREPARATION_RUN: ${{ inputs.preparation_run }}
+          PREPARATION_ATTEMPT: ${{ inputs.preparation_attempt }}
+          PREPARATION_ARTIFACT: ${{ inputs.preparation_artifact }}
+          PREPARATION_DIGEST: ${{ inputs.preparation_digest }}
           PROMOTION_RECORD: ${{ inputs.promotion_record }}
           TAG: ${{ inputs.tag }}
           WORKFLOW_REF: ${{ github.ref }}
@@ -583,7 +589,15 @@ jobs:
           const selected = { tag: process.env.TAG, ref: process.env.WORKFLOW_REF, source: process.env.WORKFLOW_SHA,
             versions: { agentplugins: process.env.TAG.slice('agentplugins-v'.length), 'plugin-kit-ai': process.env.KIT_VERSION } };
           const record = p.validateSelection(Buffer.from(input), selected);
-          p.requireNativeContracts(record.qualification?.lanes || []);
+          p.checkNativeContracts(record); // Syntax only; provider admission still follows.
+          const fs = require('node:fs'), path = require('node:path');
+          const scratch = fs.mkdtempSync(path.join(process.env.RUNNER_TEMP, 'read-only-admission-'));
+          p.admitNativeEvidence(record, { run_id: Number(process.env.PREPARATION_RUN),
+            run_attempt: Number(process.env.PREPARATION_ATTEMPT), artifact_id: Number(process.env.PREPARATION_ARTIFACT),
+            artifact_sha256: process.env.PREPARATION_DIGEST }, scratch);
+          // No public producer is registered. Twelve native receipts remain
+          // insufficient; this throws before the protected job can be scheduled.
+          p.requireNativeContracts(record.qualification.lanes);
           NODE
 
   paired-sign-and-promote:
@@ -606,8 +620,8 @@ jobs:
         with:
           node-version: 22.21.1
           package-manager-cache: false
-      # Admission currently always rejects: real terminal producer integration is
-      # required before any artifact download, attestation or release mutation.
+      # Public-packed admission remains closed. Reacquire and replay independently
+      # in this job; a prior read-only job is never a reusable authorization token.
       - name: Acquire exact frozen preparation after native admission
         env:
           GH_TOKEN: ${{ github.token }}
@@ -628,27 +642,20 @@ jobs:
           const p = require('./npm/agentplugins/scripts/authoring-promotion');
           const selected = { tag: process.env.TAG, ref: process.env.WORKFLOW_REF, source: process.env.WORKFLOW_SHA,
             versions: { agentplugins: process.env.TAG.slice('agentplugins-v'.length), 'plugin-kit-ai': process.env.KIT_VERSION } };
-          const record = p.admitRecord(Buffer.from(process.env.PROMOTION_RECORD), selected);
+          const record = p.validateSelection(Buffer.from(process.env.PROMOTION_RECORD), selected);
+          p.checkNativeContracts(record); // Reject unsupported identifiers before scratch/provider effects.
           if (record.identity.commit !== process.env.SOURCE_SHA) throw Error('exact promotion source required');
           const scratch = fs.mkdtempSync(path.join(process.env.RUNNER_TEMP, 'paired-promotion-'));
           const preparation = { run_id: Number(process.env.PREPARATION_RUN), run_attempt: Number(process.env.PREPARATION_ATTEMPT),
             artifact_id: Number(process.env.PREPARATION_ARTIFACT), artifact_sha256: process.env.PREPARATION_DIGEST };
-          p.acquireArtifact(preparation, p.WORKFLOW, record.identity.commit, scratch);
+          const acquired = p.acquirePreparation(preparation, record, scratch);
           const recordFile = path.join(scratch, 'authoring-promotion.json');
           fs.writeFileSync(recordFile, p.encodeRecord(record), { flag: 'wx', mode: 0o400 });
           fs.writeFileSync(path.join(scratch, 'options.json'), JSON.stringify({ record: recordFile,
-            root: path.join(scratch, 'frozen'), scratch: path.join(scratch, 'provider'), workflow_sha: process.env.SOURCE_SHA, preparation, selected }), { flag: 'wx' });
+            root: acquired.root, scratch: path.join(scratch, 'provider'), workflow_sha: process.env.SOURCE_SHA, preparation, selected }), { flag: 'wx' });
           fs.mkdirSync(path.join(scratch, 'provider'), { mode: 0o700 });
           fs.appendFileSync(process.env.GITHUB_ENV, `PROMOTION_ROOT=${scratch}\n`);
           NODE
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          artifact-ids: ${{ inputs.preparation_artifact }}
-          run-id: ${{ inputs.preparation_run }}
-          github-token: ${{ github.token }}
-          repository: 777genius/universal-agent-plugins
-          merge-multiple: true
-          path: ${{ env.PROMOTION_ROOT }}/frozen
       - name: Recheck admission and exact subject closure before signing
         id: subjects
         env:
