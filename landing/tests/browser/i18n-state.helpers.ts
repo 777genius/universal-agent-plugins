@@ -22,6 +22,11 @@ export function downloadHeading(locale: PublishedLocale) {
   return overlay.shell.download.heading.title;
 }
 
+export function downloadChannelTitle(locale: PublishedLocale, channel: string) {
+  const overlay: DownloadOverlay = JSON.parse(readFileSync(new URL(`../../content/download/${locale}.json`, import.meta.url), 'utf8'));
+  return overlay.shell.download.channels[channel]!.title;
+}
+
 export async function hydrated(page: Page) {
   await page.waitForFunction(() => {
     const root = document.querySelector('#__nuxt') as HTMLElement & {

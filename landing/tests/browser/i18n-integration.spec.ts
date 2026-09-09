@@ -164,7 +164,7 @@ test('unknown routes and localized APIs remain real static 404s', async ({ reque
     'plugins/unknown-plugin/',
     'ru/api/registry/catalog',
     'uk/api/releases/latest',
-    'es/plugins/',
+    'zz/plugins/',
   ]) {
     const response = await request.get(`./${route}`);
     expect(response.status(), route).toBe(404);

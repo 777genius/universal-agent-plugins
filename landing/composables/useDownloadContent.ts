@@ -5,7 +5,9 @@ import type { DownloadOverlay } from '~/types/download';
 export const useDownloadContent = async () => {
   const { locale } = useI18n();
   const load = async (code: string): Promise<DownloadOverlay> => {
-    const language = code === 'ru' || code === 'uk' ? code : 'en';
+    // The route locale comes from the publication manifest. Load its reviewed
+    // overlay instead of silently serving English for newly published locales.
+    const language = code;
     try {
       return (await import(`../content/download/${language}.json`)).default;
     } catch (error) {
