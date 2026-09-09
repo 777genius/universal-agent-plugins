@@ -350,8 +350,126 @@ def check_public(root, sha, require_valid_add=False, require_summary=True):
             release_eligible=False, platform_acceptance=False, attested=False, signed_promotion=False, public_eligible=False), 'public summary scope/gap')
 
 
+AUTHENTIC = 'public-authenticated/v1'
+AUTHENTIC_SEAL = 'packed-installer-bridge/public-authenticated/v1'
+
+
+def authenticated_options(options, sha):
+    require(type(options) is dict and set(options) == {'request', 'go', 'node', 'modCache'}, 'closed authenticated options')
+    request = options['request']
+    require(type(request) is dict and set(request) == {'intake', 'expectedCommit', 'journey', 'journeySha256',
+        'admission', 'admissionSha256', 'fixtureRoot'}, 'closed authenticated request')
+    require(request['intake'] == AUTHENTIC and request['expectedCommit'] == sha and
+        re.fullmatch('[0-9a-f]{40}', sha) and sha != '0' * 40, 'authentic source identity')
+    for key in ('journeySha256', 'admissionSha256'):
+        require(type(request[key]) is str and re.fullmatch('[0-9a-f]{64}', request[key]) and request[key] != '0' * 64, 'authentic pin')
+    for name in ('go', 'node', 'modCache'):
+        file = Path(options[name])
+        require(file.is_absolute() and file.resolve(strict=True) == file, 'canonical authenticated tool/cache')
+    for key in ('journey', 'admission'):
+        require(Path(request[key]).lstat().st_size <= 1024 * 1024, 'bounded authentic input')
+        require(digest(request[key]) == request[key + 'Sha256'], 'changed authentic input')
+    return request
+
+
+def authentic_read(path):
+    require(Path(path).lstat().st_size <= 1024 * 1024, 'bounded authentic JSON')
+    value = read(path)
+    require(data(path) == (json.dumps(value, indent=2, ensure_ascii=False) + '\n').encode(), 'canonical authentic JSON')
+    return value
+
+
+def require_authenticated_controller():
+    # Receipt-selected executables and their self-supplied hashes are not authority.
+    raise ValueError('missing independently provisioned trusted controller; C3b capability required')
+
+
+def authenticated_verify(node, argv):
+    require_authenticated_controller()
+    # Prepared reader path; C3b must independently bind its controller before use.
+    import subprocess
+    repo = Path(__file__).resolve().parent.parent
+    bridge = repo / 'npm/agentplugins/scripts/packed-installer-bridge.js'
+    result = subprocess.run([str(node), str(bridge), *map(str, argv)], cwd=repo,
+        env={'PATH': '/usr/local/bin:/usr/bin:/bin', 'LANG': 'C.UTF-8', 'LC_ALL': 'C.UTF-8'},
+        capture_output=True, timeout=1200)
+    require(result.returncode == 0 and result.stderr == b'', 'authenticated reader failed: ' + result.stderr.decode(errors='replace')[:4096])
+    require(len(result.stdout) <= 32 * 1024 * 1024, 'bounded authenticated reader output')
+    return json.loads(result.stdout)
+
+
+def authenticated_plans(root, sha, inputs, sealed_pin, fixture_root):
+    """Complementary injected plans only; does not authenticate J or remote E."""
+    result = read(root / 'results/completion.json'); false_claims(result)
+    require(result['kind'] == 'packed-generated-existing-injected-installer-planner' and result['commit'] == sha and
+        result['config_sha256'] == sealed_pin, 'authentic planner identity')
+    require(result['inputs'] == inputs == json.loads(data(root / 'logs/post-verify.stdout')), 'authentic post-plan seal')
+    projects = inputs['projects']
+    require(Counter((x['product'], x['lane']) for x in projects) == Counter({(p, l): 1 for p in PRODUCTS for l in LANES}) and
+        len({x['source'] for x in projects}) == 10, 'same ten authentic projects')
+    for row in projects:
+        require(row['source'] == str(Path(fixture_root) / (row['product'] + ' projects ü') / row['lane']), 'original project path')
+    unchanged_snapshots(inputs); plans(result)
+
+
+def check_authenticated(root, sha, require_summary=True, require_completed_e=False):
+    require(not require_completed_e, 'completed E cannot use local J or fixture success; C3b E reader required')
+    require_authenticated_controller()
+    run = authentic_read(root / 'authenticated-run.json'); false_claims(run)
+    require(set(run) == {'schema', 'head', 'options', 'tools', *CLAIMS} and
+        run['schema'] == 'public-authenticated-packed-run/v1' and run['head'] == sha, 'authentic run schema')
+    options = run['options']; request = authenticated_options(options, sha)
+    sealed_path = root / 'bridge-config/sealed.json'; sealed = read(sealed_path); false_claims(sealed)
+    require(set(sealed) == {'schema', 'request', 'verifier_sha256', 'helper_sha256', 'reader_sha256', 'inputs', *CLAIMS} and
+        sealed['schema'] == AUTHENTIC_SEAL and sealed['request'] == request == read(root / 'bridge-config/request.json'), 'authentic seal schema')
+    repo = Path(__file__).resolve().parent.parent; bridge = repo / 'npm/agentplugins/scripts/packed-installer-bridge.js'
+    for key, file in [('verifier_sha256', bridge), ('helper_sha256', bridge.with_name('dual-authoring-candidate.js')),
+        ('reader_sha256', bridge.with_name('public-authoring-acceptance.js'))]:
+        require(sealed[key] == digest(file), 'authentic verifier pin')
+    for key in ('go', 'node'):
+        require(run['tools'][key] == dict(path=options[key], sha256=digest(options[key])), 'authentic tool pin')
+    node, go = options['node'], options['go']; sealed_pin = digest(sealed_path)
+    fresh = authenticated_verify(node, ['verify', sealed_path, sealed_pin, sha])
+    require(fresh == sealed['inputs'], 'fresh authenticated seal')
+    public = fresh['public_inputs']
+    require(public['schema'] == 'authoring-public-local-inputs/v1' and public['cell'] == 'linux-amd64/pair-node22' and
+        public['journey_sha256'] == request['journeySha256'] and public['admission_sha256'] == request['admissionSha256'], 'local custody boundary')
+    false_claims(public, ('signed_promotion', 'public_eligible')); require(public['qualification'] is None, 'no local qualification')
+    for key, tool in [('node', 'orchestrator_node'), ('go', 'go')]:
+        require(public['tools'][tool]['path'] == options[key] and public['tools'][tool]['sha256'] == digest(options[key]), 'journey planner tools')
+    commands = {'head': ['/usr/bin/git', 'rev-parse', 'HEAD'],
+        'clean': ['/usr/bin/git', 'status', '--porcelain=v1', '--untracked-files=all'],
+        'terminal-clean': ['/usr/bin/git', 'status', '--porcelain=v1', '--untracked-files=all'],
+        'seal': [node, str(bridge), 'authenticated-seal', str(root / 'bridge-config/request.json'), str(sealed_path)],
+        'post-verify': [node, str(bridge), 'verify', str(sealed_path), sealed_pin, sha]}
+    for name, flag in [('discovery', '-list'), ('planner', '-run')]:
+        commands[name] = [go, 'test', '-p=2', '-tags=packedci', '-json',
+            *([] if name == 'discovery' else ['-count=1', '-timeout=20m']), flag, REGEX, PACKAGE_PATH]
+    for name, command in commands.items():
+        phase = read(root / 'logs' / (name + '.json'))
+        require(type(phase['exit']) is int and phase['exit'] == 0 and phase['argv'] == command and phase['cwd'] == str(repo), 'authentic phase ' + name)
+        require(all(phase['env'].get(k) == v for k, v in dict(GOPROXY='off', GOSUMDB='off', GOVCS='*:off', GOENV='off', GOTOOLCHAIN='local').items()), 'authentic offline planner environment')
+        require(not any(k in phase['env'] for k in ('GOFLAGS', 'NODE_OPTIONS', 'AGENTPLUGINS_STAGED_TEST_CHILD')), 'authentic inherited override')
+        if name in ('discovery', 'planner'):
+            expected = dict(UAP_PACKED_INSTALLER_NODE=node, UAP_PACKED_INSTALLER_CONFIG=str(sealed_path),
+                UAP_PACKED_INSTALLER_CONFIG_SHA256=sealed_pin, UAP_PACKED_INSTALLER_COMMIT=sha,
+                UAP_PACKED_INSTALLER_OUTPUT=str(root / 'results/completion.json'))
+            require({k: v for k, v in phase['env'].items() if k.startswith('UAP_PACKED_INSTALLER_')} == expected, 'five exact planner variables')
+        require(data(root / 'logs' / (name + '.stderr')) == b'', 'authentic phase stderr')
+    log = lambda name: data(root / 'logs' / (name + '.stdout')).decode()
+    go_discovery(log('discovery')); go_results(log('planner'))
+    require(log('seal').strip() == sealed_pin and log('head').strip() == sha and log('clean') == log('terminal-clean') == '', 'authentic source/seal logs')
+    authenticated_plans(root, sha, fresh, sealed_pin, request['fixtureRoot'])
+    if require_summary:
+        require(authentic_read(root / 'summary.json') == dict(status='passed', scope='local-authenticated-inputs-and-injected-planner',
+            intake=AUTHENTIC, head=sha, projects=10, plans=30, release_eligible=False, platform_acceptance=False,
+            attested=False, signed_promotion=False, public_eligible=False, qualification=None), 'authentic summary scope')
+
+
 if __name__ == '__main__':
-    if len(sys.argv) == 4 and sys.argv[1] == '--public':
+    if len(sys.argv) == 4 and sys.argv[1] == '--public-authenticated':
+        check_authenticated(Path(sys.argv[2]), sys.argv[3])
+    elif len(sys.argv) == 4 and sys.argv[1] == '--public':
         check_public(Path(sys.argv[2]), sys.argv[3])
     elif len(sys.argv) == 3:
         check(Path(sys.argv[1]), sys.argv[2])

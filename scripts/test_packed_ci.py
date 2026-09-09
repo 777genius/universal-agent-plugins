@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -385,6 +386,164 @@ class WorkflowControls(unittest.TestCase):
                 with self.assertRaises(ValueError): w.results(bad)
             bad = copy.deepcopy(good); del bad[job]
             with self.assertRaises(ValueError): w.results(bad)
+
+
+
+
+class C3AuthenticatedControls(unittest.TestCase):
+    # SYNTHETIC gate mock exercises retained prepared intake validations only.
+    @patch.object(r.proof, 'require_authenticated_controller', return_value=None)
+    def test_closed_intake_before_output(self, synthetic_gate):
+        from unittest.mock import patch
+        root = Path(tempfile.mkdtemp(prefix='C3-runner-SYNTHETIC-'))
+        options = root / 'options.json'; output = root / 'must-not-exist'
+        for value in ({}, dict(request={'intake': 'public-fixture/v2'}, go='/unused', node='/unused', modCache='/unused')):
+            options.write_text(json.dumps(value, indent=2) + '\n')
+            with self.assertRaises(ValueError): r.authenticated_main(output, 'a' * 40, options)
+            self.assertFalse(output.exists())
+        # The external authenticated reader fails deterministically; no process,
+        # real provider, planner or output creation may follow its failure.
+        tool = root / 'tool'; tool.write_text('SYNTHETIC')
+        modules = root / 'modules'; modules.mkdir()
+        admission = root / 'admission.json'; journey = root / 'journey.json'; journey.write_text('{}\n')
+        dirs = {}
+        for name in ('repo', 'work_parent', 'stage_root', 'input_root', 'journey_root', 'fixture_root'):
+            directory = root / name; directory.mkdir(); dirs[name] = str(directory)
+        admission.write_text(json.dumps(dirs, indent=2) + '\n')
+        request = dict(intake=p.AUTHENTIC, expectedCommit='a' * 40, journey=str(journey), journeySha256=p.digest(journey),
+            admission=str(admission), admissionSha256=p.digest(admission), fixtureRoot=dirs['fixture_root'])
+        value = dict(request=request, go=str(tool), node=str(tool), modCache=str(modules))
+        options.write_text(json.dumps(value, indent=2) + '\n')
+        with patch.object(r.proof, 'authenticated_verify', side_effect=ValueError('missing reviewed installer/observer')) as reader, \
+                patch.object(r, 'planner', side_effect=AssertionError('planner effect')) as planner:
+            with self.assertRaisesRegex(ValueError, 'missing reviewed'): r.authenticated_main(output, 'a' * 40, options)
+            reader.assert_called_once(); planner.assert_not_called(); self.assertFalse(output.exists())
+
+    # SYNTHETIC gate mock exercises retained prepared terminal validations only.
+    @patch.object(p, 'require_authenticated_controller', return_value=None)
+    def test_exact_thirty_plans_and_post_seal(self, synthetic_gate):
+        root = Path(tempfile.mkdtemp(prefix='C3-plans-SYNTHETIC-')); (root / 'results').mkdir(); (root / 'logs').mkdir()
+        fixture = root / 'original-projects'; fixture.mkdir()
+        entries = [dict(path='.', mode=fixture.stat().st_mode & 0o777, kind='directory')]
+        inputs = dict(projects=[dict(product=product, lane=lane, source=str(fixture / (product + ' projects ü') / lane))
+            for product in p.PRODUCTS for lane in p.LANES], snapshots=[dict(root=str(fixture), entries=entries,
+                sha256=p.hashlib.sha256((json.dumps(entries, indent=2) + '\n').encode()).hexdigest())])
+        record = dict(plan_fixture(), kind='packed-generated-existing-injected-installer-planner', commit='a' * 40,
+            config_sha256='b' * 64, inputs=inputs, release_eligible=False, platform_acceptance=False, attested=False)
+        terminal = root / 'results/completion.json'; post = root / 'logs/post-verify.stdout'
+        put = lambda file, value: file.write_text(json.dumps(value, indent=2) + '\n')
+        put(terminal, record); put(post, inputs)
+        # Exercise the entire distinct terminal branch with a SYNTHETIC opaque
+        # readback, then corrupt real retained logs. No subprocess is launched.
+        from unittest.mock import patch
+        tool = root / 'tool'; tool.write_text('SYNTHETIC TOOL')
+        modules = root / 'modules'; modules.mkdir()
+        journey = root / 'J.json'; admission = root / 'admission.json'
+        put(journey, {}); put(admission, {})
+        request = dict(intake=p.AUTHENTIC, expectedCommit='a' * 40, journey=str(journey), journeySha256=p.digest(journey),
+            admission=str(admission), admissionSha256=p.digest(admission), fixtureRoot=str(fixture))
+        options = dict(request=request, go=str(tool), node=str(tool), modCache=str(modules))
+        claims = dict(release_eligible=False, platform_acceptance=False, attested=False)
+        pin_tool = dict(path=str(tool), sha256=p.digest(tool))
+        inputs['public_inputs'] = dict(schema='authoring-public-local-inputs/v1', cell='linux-amd64/pair-node22',
+            journey_sha256=request['journeySha256'], admission_sha256=request['admissionSha256'],
+            tools=dict(go=pin_tool, orchestrator_node=pin_tool), signed_promotion=False, public_eligible=False, qualification=None)
+        put(root / 'authenticated-run.json', dict(schema='public-authenticated-packed-run/v1', head='a' * 40,
+            options=options, tools=dict(go=pin_tool, node=pin_tool), **claims))
+        bridge = ROOT / 'npm/agentplugins/scripts/packed-installer-bridge.js'
+        config = root / 'bridge-config'; config.mkdir(); sealed = config / 'sealed.json'
+        put(config / 'request.json', request)
+        put(sealed, dict(schema=p.AUTHENTIC_SEAL, request=request, inputs=inputs,
+            verifier_sha256=p.digest(bridge), helper_sha256=p.digest(bridge.with_name('dual-authoring-candidate.js')),
+            reader_sha256=p.digest(bridge.with_name('public-authoring-acceptance.js')), **claims))
+        pin = p.digest(sealed); record['config_sha256'] = pin
+        put(terminal, record); put(post, inputs)
+        commands = {'head': ['/usr/bin/git', 'rev-parse', 'HEAD'],
+            'clean': ['/usr/bin/git', 'status', '--porcelain=v1', '--untracked-files=all'],
+            'terminal-clean': ['/usr/bin/git', 'status', '--porcelain=v1', '--untracked-files=all'],
+            'seal': [str(tool), str(bridge), 'authenticated-seal', str(config / 'request.json'), str(sealed)],
+            'post-verify': [str(tool), str(bridge), 'verify', str(sealed), pin, 'a' * 40]}
+        for name, flag in [('discovery', '-list'), ('planner', '-run')]:
+            commands[name] = [str(tool), 'test', '-p=2', '-tags=packedci', '-json',
+                *([] if name == 'discovery' else ['-count=1', '-timeout=20m']), flag, p.REGEX, p.PACKAGE_PATH]
+        for name, argv in commands.items():
+            env = dict(GOPROXY='off', GOSUMDB='off', GOVCS='*:off', GOENV='off', GOTOOLCHAIN='local')
+            if name in ('discovery', 'planner'):
+                env.update(UAP_PACKED_INSTALLER_NODE=str(tool), UAP_PACKED_INSTALLER_CONFIG=str(sealed),
+                    UAP_PACKED_INSTALLER_CONFIG_SHA256=pin, UAP_PACKED_INSTALLER_COMMIT='a' * 40,
+                    UAP_PACKED_INSTALLER_OUTPUT=str(terminal))
+            put(root / 'logs' / (name + '.json'), dict(argv=argv, cwd=str(ROOT), env=env, exit=0))
+            (root / 'logs' / (name + '.stderr')).write_text('')
+        logs = {'head': 'a' * 40 + '\n', 'clean': '', 'terminal-clean': '', 'seal': pin + '\n',
+            'discovery': go([dict(Action='output', Output=p.NAME + '\n'), dict(Action='pass')]),
+            'planner': go([dict(Action=action, Test=name) for name in [p.NAME] +
+                [p.NAME + '/' + product + '/' + lane for product in p.PRODUCTS for lane in p.LANES]
+                for action in ('run', 'pass')] + [dict(Action='pass')])}
+        for name, text in logs.items(): (root / 'logs' / (name + '.stdout')).write_text(text)
+        put(root / 'summary.json', dict(status='passed', scope='local-authenticated-inputs-and-injected-planner',
+            intake=p.AUTHENTIC, head='a' * 40, projects=10, plans=30, **claims,
+            signed_promotion=False, public_eligible=False, qualification=None))
+        with patch.object(p, 'authenticated_verify', return_value=copy.deepcopy(inputs)) as reader:
+            p.check_authenticated(root, 'a' * 40); reader.assert_called_once()
+            for file, key, value in [('logs/planner.json', 'argv', []), ('logs/post-verify.json', 'exit', 1),
+                ('summary.json', 'scope', 'completed-authenticated-E'), ('bridge-config/sealed.json', 'reader_sha256', '0' * 64)]:
+                target = root / file; old = p.read(target); put(target, dict(old, **{key: value}))
+                with self.subTest(file=file), self.assertRaises(ValueError): p.check_authenticated(root, 'a' * 40)
+                put(target, old)
+        with patch.object(p, 'authenticated_verify', side_effect=ValueError('late custody cancellation')):
+            with self.assertRaisesRegex(ValueError, 'late custody cancellation'): p.check_authenticated(root, 'a' * 40)
+        record['config_sha256'] = 'b' * 64; put(terminal, record)
+        check = lambda: p.authenticated_plans(root, 'a' * 40, inputs, 'b' * 64, str(fixture))
+        check()
+        for name, mutate in [('29 plans', lambda v: v['plans'].pop()),
+            ('duplicate plans', lambda v: v['plans'].__setitem__(1, v['plans'][0])),
+            ('wrong seal', lambda v: v.update(config_sha256='c' * 64)),
+            ('changed original project', lambda v: v['inputs']['projects'][0].update(source='/different/project'))]:
+            bad = copy.deepcopy(record); mutate(bad); put(terminal, bad)
+            with self.subTest(case=name), self.assertRaises(ValueError): check()
+        put(terminal, record); put(post, {})
+        with self.assertRaisesRegex(ValueError, 'post-plan seal'): check()
+        put(post, inputs); (fixture / 'extra-empty').mkdir()
+        with self.assertRaisesRegex(ValueError, 'sealed tree changed'): check()
+
+    def test_substituted_node_rejected_before_authenticated_effects(self):
+        import subprocess
+        root = Path(tempfile.mkdtemp(prefix='C3-controller-SYNTHETIC-'))
+        tool = root / 'substitute-node'; tool.write_text('SYNTHETIC TOOL')
+        options = dict(request=dict(intake=p.AUTHENTIC, expectedCommit='a' * 40),
+            go=str(tool), node=str(tool), modCache=str(root))
+        options_path = root / 'options.json'
+        options_path.write_text(json.dumps(options, indent=2) + '\n')
+        receipt = dict(schema='public-authenticated-packed-run/v1', head='a' * 40,
+            options=options, tools=dict(node=dict(path=str(tool), sha256=p.digest(tool))))
+        (root / 'authenticated-run.json').write_text(json.dumps(receipt, indent=2) + '\n')
+        output = root / 'must-not-exist'
+        before = {str(f): f.read_bytes() for f in root.iterdir()}
+        # Actual entrypoints and rejecting gate: no test-only gate mock here.
+        with patch.object(subprocess, 'run', side_effect=AssertionError('subprocess effect')) as child, \
+                patch.object(r, 'planner', side_effect=AssertionError('planner effect')) as planner, \
+                patch.object(r, 'write', side_effect=AssertionError('output effect')) as write:
+            for name, call in (
+                ('runner', lambda: r.authenticated_main(output, 'a' * 40, options_path)),
+                ('checker', lambda: p.check_authenticated(root, 'a' * 40)),
+                ('checker-before-summary', lambda: p.check_authenticated(root, 'a' * 40, require_summary=False)),
+                ('direct-reader', lambda: p.authenticated_verify(options['node'], ['authenticated-options', options_path])),
+            ):
+                with self.subTest(entrypoint=name), self.assertRaisesRegex(ValueError,
+                        'missing independently provisioned trusted controller; C3b capability required'):
+                    call()
+            child.assert_not_called(); planner.assert_not_called(); write.assert_not_called()
+        self.assertFalse(output.exists())
+        self.assertEqual(before, {str(f): f.read_bytes() for f in root.iterdir()})
+
+    def test_completed_e_cannot_use_fixture_success(self):
+        root = Path(tempfile.mkdtemp(prefix='C3-E-closed-SYNTHETIC-'))
+        for schema in ('public-fixture/v1', 'public-fixture/v2', p.AUTHENTIC):
+            (root / 'summary.json').write_text(json.dumps(dict(status='passed', intake=schema, plans=30, projects=10)))
+            with self.subTest(intake=schema), self.assertRaisesRegex(ValueError, 'completed E cannot use'):
+                p.check_authenticated(root, 'a' * 40, require_completed_e=True)
+            with self.assertRaisesRegex(ValueError, 'missing independently provisioned trusted controller'):
+                p.check_authenticated(root, 'a' * 40)
 
 
 if __name__ == '__main__': unittest.main()

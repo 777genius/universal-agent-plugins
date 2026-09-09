@@ -215,3 +215,48 @@ test('SYNTHETIC v2 help/preflight boundary cannot stand for production add', pos
  } finally { c.frozenCandidate = original; }
  assert.throws(()=>seal(), 'synthetic fixtures cannot publish native evidence');
 });
+
+// C3-only synthetic seam: bypass the unavailable journey result adapter ONLY
+// inside these tests. The real reader and CLI cannot accept this local J.
+test('C3 bridge authenticated intake preserves legacy dispatch', t => {
+ const a = require('./public-authoring-acceptance');
+ const {fixture, withReaders} = require('../test/public-authoring-acceptance.test');
+ const f = fixture(t);
+ withReaders(t, f, () => {
+  assert.throws(() => bridge.seal(f.request), /C3b required/);
+  t.mock.method(a, 'readJourney', request => a.readJourneyInputs(request));
+  const result = bridge.seal(f.request);
+  assert.equal(result.schema, 'packed-installer-bridge/public-authenticated/v1');
+  assert.equal(result.inputs.projects.length, 10);
+  assert.equal(result.inputs.public_inputs.qualification, null);
+  assert.equal(result.attested, false);
+  for (const intake of ['public-fixture/v1', 'public-fixture/v2', undefined]) {
+   const request = {...f.request}; if (intake) request.intake = intake; else delete request.intake;
+   assert.throws(() => bridge.seal(request));
+  }
+  for (const extra of [{authenticated:true}, {nativeTap:'fixture.tap'}, {disposableEvidence:true}]) assert.throws(() => bridge.seal({...f.request,...extra}));
+ });
+ assert.throws(() => a.readAcceptance(f.request), /completed remote E/);
+});
+test('C3 bridge seal binds original ten projects', t => {
+ const a = require('./public-authoring-acceptance');
+ const {fixture, withReaders} = require('../test/public-authoring-acceptance.test');
+ const f = fixture(t);
+ withReaders(t, f, () => {
+  t.mock.method(a, 'readJourney', request => a.readJourneyInputs(request));
+  const sealed = path.join(f.root, 'sealed.json'), pin = bridge.publishSeal(f.request, sealed);
+  const verify = () => bridge.verify(sealed, pin, f.request.expectedCommit);
+  assert.equal(verify().projects.length, 10);
+  for (const output of [path.join(f.admission.work_parent, 'overlap.json'), f.request.admission, f.j.tools.go.path]) {
+   assert.throws(() => bridge.publishSeal(f.request, output), /overlapping roots/);
+  }
+  const source = path.join(f.j.projects.agentplugins, 'skill'), manifest = path.join(source, 'plugin.json');
+  const original = fs.readFileSync(manifest), mode = fs.statSync(manifest).mode & 0o777;
+  fs.appendFileSync(manifest, 'changed'); assert.throws(verify); fs.writeFileSync(manifest, original);
+  fs.chmodSync(manifest, mode ^ 0o020); assert.throws(verify); fs.chmodSync(manifest, mode);
+  const extra = path.join(source, 'unexpected-empty'); fs.mkdirSync(extra); assert.throws(verify);
+  // Retain the changed fixture; no cleanup and no claim that it still verifies.
+  assert.throws(() => bridge.publishSeal(f.request, path.join(f.root, 'late-seal.json')));
+  assert.equal(fs.existsSync(path.join(f.root, 'late-seal.json')), false);
+ });
+});
