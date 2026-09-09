@@ -1,9 +1,13 @@
 package pluginkitairepo_test
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+
+	"gopkg.in/yaml.v3"
 )
 
 func TestPagesSite_CombinesLandingRootAndDocsSubpath(t *testing.T) {
@@ -107,4 +111,131 @@ func TestPagesSite_CombinesLandingRootAndDocsSubpath(t *testing.T) {
 	}
 	robots := string(robotsBody)
 	mustContain(t, robots, `Sitemap: ${docsSitemapUrl}`)
+}
+
+// Resolve the executable selected by each step, including the job-wide PATH
+// updates from action-setup and the step-local docs override. A single pnpm
+// version cannot read both committed lockfiles; docs scripts also invoke pnpm.
+func TestPagesWorkflows_PackageManagerAlignment(t *testing.T) {
+	root := RepoRoot(t)
+	managers := map[string]string{}
+	for _, dir := range []string{"landing", "website"} {
+		body, err := os.ReadFile(filepath.Join(root, dir, "package.json"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var pkg struct {
+			PackageManager string `json:"packageManager"`
+		}
+		if err := json.Unmarshal(body, &pkg); err != nil {
+			t.Fatal(err)
+		}
+		if !strings.HasPrefix(pkg.PackageManager, "pnpm@") {
+			t.Fatalf("%s must declare pnpm", dir)
+		}
+		managers[dir] = strings.TrimPrefix(pkg.PackageManager, "pnpm@")
+	}
+	files, err := filepath.Glob(filepath.Join(root, ".github", "workflows", "*.yml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	checked := 0
+	for _, file := range files {
+		body, err := os.ReadFile(file)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var workflow struct {
+			Jobs map[string]struct {
+				Defaults struct {
+					Run struct {
+						Directory string `yaml:"working-directory"`
+					}
+				}
+				Steps []struct {
+					ID        string            `yaml:"id"`
+					Uses      string            `yaml:"uses"`
+					With      map[string]string `yaml:"with"`
+					Directory string            `yaml:"working-directory"`
+					Run       string            `yaml:"run"`
+				} `yaml:"steps"`
+			} `yaml:"jobs"`
+		}
+		if err := yaml.Unmarshal(body, &workflow); err != nil {
+			t.Fatalf("%s: %v", file, err)
+		}
+		for jobName, job := range workflow.Jobs {
+			relevant := false
+			for _, step := range job.Steps {
+				dir := step.Directory
+				if dir == "" {
+					dir = job.Defaults.Run.Directory
+				}
+				relevant = relevant || (managers[dir] != "" && strings.Contains(step.Run, "pnpm "))
+			}
+			if !relevant {
+				continue
+			}
+			t.Run(filepath.Base(file)+"/"+jobName, func(t *testing.T) {
+				active := ""
+				outputs := map[string]string{}
+				destinations := map[string]bool{}
+				for _, step := range job.Steps {
+					if strings.HasPrefix(step.Uses, "pnpm/action-setup@") {
+						active = step.With["version"]
+						if manifest := step.With["package_json_file"]; manifest != "" {
+							want := managers[filepath.Dir(manifest)]
+							if want == "" || (active != "" && active != want) {
+								t.Fatalf("setup conflicts with %s", manifest)
+							}
+							active = want
+						}
+						if dest := step.With["dest"]; dest != "" {
+							if destinations[dest] {
+								t.Fatalf("toolchains overwrite %s", dest)
+							}
+							destinations[dest] = true
+						}
+						outputs[step.ID] = active
+					}
+					dir := step.Directory
+					if dir == "" {
+						dir = job.Defaults.Run.Directory
+					}
+					want := managers[dir]
+					if want == "" || !strings.Contains(step.Run, "pnpm ") {
+						continue
+					}
+					checked++
+					selected := active
+					invocations := 0
+					for _, line := range strings.Split(step.Run, "\n") {
+						line = strings.TrimSpace(line)
+						for id, version := range outputs {
+							// Export is intentional: nested package scripts must use
+							// the same manager as the outer invocation.
+							if line == `export PATH="${{ steps.`+id+`.outputs.bin_dest }}:$PATH"` {
+								selected = version
+							}
+						}
+						if strings.HasPrefix(line, "pnpm ") {
+							invocations++
+							if selected != want {
+								t.Errorf("%s: selected pnpm@%s, packageManager requires pnpm@%s", dir, selected, want)
+							}
+							if strings.HasPrefix(line, "pnpm install") && !strings.Contains(line, "--frozen-lockfile") {
+								t.Errorf("%s install must remain frozen", dir)
+							}
+						}
+					}
+					if invocations == 0 {
+						t.Fatalf("unrecognized pnpm invocation in %s: %s", dir, step.Run)
+					}
+				}
+			})
+		}
+	}
+	if checked == 0 {
+		t.Fatal("no package-manager steps checked")
+	}
 }

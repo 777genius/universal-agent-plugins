@@ -37,15 +37,14 @@ jobs:
 
       - uses: pnpm/action-setup@a8198c4bff370c8506180b035930dea56dbd5288 # v5
         with:
-          version: 12.3.4
+          package_json_file: landing/package.json
+          dest: ${{ runner.temp }}/pnpm-landing
 
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "22.21.1"
           cache: pnpm
-          cache-dependency-path: |
-            landing/pnpm-lock.yaml
-            website/pnpm-lock.yaml
+          cache-dependency-path: landing/pnpm-lock.yaml
 
       - name: Verify and stage signed registry feeds
         run: |
@@ -121,17 +120,23 @@ jobs:
           go-version: "1.25.13"
           cache: false
 
+      # Keep docs on its own packageManager; landing uses a newer lockfile format.
+      - uses: pnpm/action-setup@a8198c4bff370c8506180b035930dea56dbd5288 # v5
+        id: pnpm-docs
+        with:
+          package_json_file: website/package.json
+          dest: ${{ runner.temp }}/pnpm-docs
+
       - uses: pnpm/action-setup@a8198c4bff370c8506180b035930dea56dbd5288 # v5
         with:
-          version: 12.3.4
+          package_json_file: landing/package.json
+          dest: ${{ runner.temp }}/pnpm-landing
 
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "22.21.1"
           cache: pnpm
-          cache-dependency-path: |
-            landing/pnpm-lock.yaml
-            website/pnpm-lock.yaml
+          cache-dependency-path: landing/pnpm-lock.yaml
 
       - name: Verify and stage signed registry feeds
         run: |
@@ -149,7 +154,9 @@ jobs:
 
       - name: Install docs dependencies
         working-directory: website
-        run: pnpm install --frozen-lockfile
+        run: |
+          export PATH="${{ steps.pnpm-docs.outputs.bin_dest }}:$PATH"
+          pnpm install --frozen-lockfile
 
       - name: Prepare and validate landing
         working-directory: landing
@@ -163,7 +170,9 @@ jobs:
 
       - name: Validate and build public docs
         working-directory: website
-        run: pnpm run docs:check
+        run: |
+          export PATH="${{ steps.pnpm-docs.outputs.bin_dest }}:$PATH"
+          pnpm run docs:check
 
       - name: Assemble and validate exact final Pages artifact
         working-directory: landing
