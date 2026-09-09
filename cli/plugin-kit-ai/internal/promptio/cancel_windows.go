@@ -34,6 +34,9 @@ type cancelWindowsOps struct {
 	observe   func(cancelWindowsEvent)
 	duplicate func(windows.Handle, windows.Handle, windows.Handle, *windows.Handle, uint32, bool, uint32) error
 	close     func(windows.Handle) error
+	open      func() (windows.Handle, error)
+	mode      func(windows.Handle, *uint32) error
+	read      func(context.Context, windows.Handle, uint32) (string, error)
 }
 
 // Console requests own a separately opened input file object. A duplicate
@@ -57,29 +60,55 @@ func readCancelable(ctx context.Context, r io.Reader) (string, error) {
 		}
 	}
 	closeOwned := func(kind string, h windows.Handle) { emit(kind, h, closeHandle(h)) }
+	emit("request-start", 0, nil)
+	defer emit("request-end", 0, nil)
 	f, ok := r.(*os.File)
 	if !ok {
-		return readLine(ctx, r)
+		emit("branch-reader", 0, nil)
+		emit("read-enter", 0, nil)
+		line, err := readLine(ctx, r)
+		emit("read-complete", 0, err)
+		return line, err
+	}
+	if ops != nil && ops.observe != nil {
+		emit("branch-file", windows.Handle(f.Fd()), nil)
 	}
 	if err := ctx.Err(); err != nil {
+		emit("pre-cancel", 0, err)
 		return "", err
 	}
 	read := func() (string, error) { return readLine(ctx, r) }
+	getMode := windows.GetConsoleMode
+	consoleRead := readConsoleLine
+	open := func() (windows.Handle, error) {
+		return windows.CreateFile(windows.StringToUTF16Ptr("CONIN$"), windows.GENERIC_READ|windows.GENERIC_WRITE, windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE, nil, windows.OPEN_EXISTING, 0, 0)
+	}
+	if ops != nil {
+		if ops.mode != nil {
+			getMode = ops.mode
+		}
+		if ops.open != nil {
+			open = ops.open
+		}
+		if ops.read != nil {
+			consoleRead = ops.read
+		}
+	}
 	var console windows.Handle
 	var mode uint32
-	if windows.GetConsoleMode(windows.Handle(f.Fd()), &mode) == nil {
+	if getMode(windows.Handle(f.Fd()), &mode) == nil {
+		emit("branch-console", windows.Handle(f.Fd()), nil)
 		// Output handles also have console modes, potentially identical to input.
 		// Classify without consuming input before opening the shared input queue.
 		var events uint32
-		if err := windows.GetNumberOfConsoleInputEvents(windows.Handle(f.Fd()), &events); err != nil {
+		validationErr := windows.GetNumberOfConsoleInputEvents(windows.Handle(f.Fd()), &events)
+		emit("input-validate", windows.Handle(f.Fd()), validationErr)
+		if err := validationErr; err != nil {
 			// Defer system message formatting until the caller requests Error().
 			return "", os.NewSyscallError("validate console input", err)
 		}
 		var err error
-		console, err = windows.CreateFile(windows.StringToUTF16Ptr("CONIN$"),
-			windows.GENERIC_READ|windows.GENERIC_WRITE,
-			windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE,
-			nil, windows.OPEN_EXISTING, 0, 0)
+		console, err = open()
 		emit("console-acquire", console, err)
 		if err != nil {
 			return "", fmt.Errorf("prepare console cancellation: %w", err)
@@ -87,14 +116,22 @@ func readCancelable(ctx context.Context, r io.Reader) (string, error) {
 		// Registered before the join defer: never close a handle with a live read.
 		defer closeOwned("console-close", console)
 		var openedMode uint32
-		if err := windows.GetConsoleMode(console, &openedMode); err != nil {
-			return "", os.NewSyscallError("validate console input", err)
+		validationErr = getMode(console, &openedMode)
+		if validationErr != nil {
+			emit("console-validate", console, validationErr)
+			return "", os.NewSyscallError("validate console input", validationErr)
 		}
 		if openedMode != mode {
-			return "", fmt.Errorf("console input mode changed: inherited=%#x opened=%#x", mode, openedMode)
+			err := fmt.Errorf("console input mode changed: inherited=%#x opened=%#x", mode, openedMode)
+			emit("console-validate", console, err)
+			return "", err
 		}
-		read = func() (string, error) { return readConsoleLine(ctx, console, mode) }
+		emit("console-validate", console, nil)
+		read = func() (string, error) { return consoleRead(ctx, console, mode) }
+	} else {
+		emit("branch-stream", windows.Handle(f.Fd()), nil)
 	}
+
 	defer runtime.KeepAlive(f)
 	type result struct {
 		line string
@@ -109,6 +146,7 @@ func readCancelable(ctx context.Context, r io.Reader) (string, error) {
 		defer close(finished)
 		runtime.LockOSThread()
 		defer runtime.UnlockOSThread()
+		emit("worker-start", 0, nil)
 		var thread windows.Handle
 		process := windows.CurrentProcess()
 		err := duplicate(process, windows.CurrentThread(), process, &thread, 0, false, windows.DUPLICATE_SAME_ACCESS)
@@ -135,6 +173,8 @@ func readCancelable(ctx context.Context, r io.Reader) (string, error) {
 	case <-ctx.Done():
 		// Cancellation can race the entry into ReadFile/ReadConsole. Repeat on the
 		// owned request (or dedicated non-console thread) until it exits, then join.
+		emit("cancel-start", 0, nil)
+		defer emit("cancel-complete", 0, nil)
 		ticker := time.NewTicker(10 * time.Millisecond)
 		defer ticker.Stop()
 		for {

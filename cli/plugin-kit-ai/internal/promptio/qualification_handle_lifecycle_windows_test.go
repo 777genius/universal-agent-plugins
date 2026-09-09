@@ -41,64 +41,234 @@ func (q *qualificationHandleTrace) context(ctx context.Context) context.Context 
 	}})
 }
 
-// Identity is (request generation, kind, native handle), never a raw handle
-// alone: Windows may reuse the numeric value immediately after successful close.
+// Each registered generation must traverse a complete branch, including failed
+// acquisitions. Numeric handle reuse across generations never transfers ownership.
 func (q *qualificationHandleTrace) verdict() error {
 	if q.overflow {
 		return fmt.Errorf("lifecycle recording overflow")
 	}
-	owned := map[string]windows.Handle{}
-	joined := map[int]bool{}
-	completed := map[int]bool{}
-	threads := map[int]bool{}
+	if q.generation == 0 || q.count == 0 {
+		return fmt.Errorf("empty lifecycle trace")
+	}
+	type request struct {
+		next, branch                         string
+		borrowed, console, thread            windows.Handle
+		worker, readDone, cancel, cancelDone bool
+		workerID                             uint32
+		attempts                             int
+	}
+	requests := make([]request, q.generation+1)
+	valid := func(h windows.Handle) bool { return h != 0 && h != windows.InvalidHandle }
 	for _, e := range q.records[:q.count] {
-		kind, _, _ := strings.Cut(e.operation, "-")
-		key := fmt.Sprintf("%d/%s", e.generation, kind)
-		switch {
-		case strings.HasSuffix(e.operation, "-acquire"):
+		if e.generation < 1 || e.generation > q.generation {
+			return fmt.Errorf("unknown generation %d", e.generation)
+		}
+		r := &requests[e.generation]
+		bad := func() error { return fmt.Errorf("generation=%d invalid %s in %s", e.generation, e.operation, r.next) }
+		switch e.operation {
+		case "request-start", "request-end", "branch-reader", "branch-file", "branch-console", "branch-stream", "worker-start", "join", "cancel-start", "cancel-complete", "read-enter":
 			if e.err != nil {
-				return fmt.Errorf("%s acquisition failed: %v", key, e.err)
+				return bad()
 			}
-			if _, exists := owned[key]; exists {
-				return fmt.Errorf("duplicate acquisition %s", key)
+		}
+		switch e.operation {
+		case "request-start", "request-end", "branch-reader", "worker-start", "join", "cancel-start", "cancel-complete", "pre-cancel":
+			if e.handle != 0 {
+				return bad()
 			}
-			owned[key] = e.handle
-			if kind == "thread" {
-				threads[e.generation] = true
+		}
+		switch e.operation {
+		case "thread-acquire", "thread-close", "native-read-complete":
+			if e.threadID == 0 || e.threadID != r.workerID {
+				return bad()
 			}
-		case strings.HasSuffix(e.operation, "-close"):
+		case "read-enter", "read-complete":
+			if r.worker && (e.threadID == 0 || e.threadID != r.workerID) {
+				return bad()
+			}
+		}
+		switch e.operation {
+		case "cancel-start":
+			if !r.worker || r.cancel || (r.next != "read-enter" && r.next != "read-complete" && r.next != "thread-close" && r.next != "join") {
+				return bad()
+			}
+			r.cancel = true
+			continue
+		case "console-cancel", "thread-cancel":
+			if !r.cancel || r.cancelDone {
+				return bad()
+			}
+			h := r.thread
+			if r.console != 0 {
+				h = r.console
+				if e.operation != "console-cancel" {
+					return bad()
+				}
+			} else if e.operation != "thread-cancel" {
+				return bad()
+			}
+			r.attempts++
+			if !valid(h) || h != e.handle {
+				return bad()
+			}
+			continue
+		case "cancel-complete":
+			if !r.cancel || r.cancelDone || (r.next != "thread-close" && r.next != "join") {
+				return bad()
+			}
+			if (r.console != 0 || r.thread != 0) && r.attempts == 0 {
+				return bad()
+			}
+			r.cancelDone = true
+			continue
+		case "native-read-complete":
+			if r.branch != "console" || r.next != "read-complete" || e.handle != r.console || e.units > 1 {
+				return bad()
+			}
+			continue
+		}
+		if e.operation == "request-start" {
+			if r.next != "" || e.handle != 0 || e.err != nil {
+				return bad()
+			}
+			r.next = "branch"
+			continue
+		}
+		if r.next == "branch" {
+			switch e.operation {
+			case "branch-reader":
+				r.branch, r.next = "reader", "read-enter"
+			case "branch-file":
+				r.borrowed, r.next = e.handle, "classify"
+			default:
+				return bad()
+			}
+			continue
+		}
+		if r.next == "classify" {
+			switch e.operation {
+			case "pre-cancel":
+				if !errors.Is(e.err, context.Canceled) && !errors.Is(e.err, context.DeadlineExceeded) {
+					return bad()
+				}
+				r.next = "request-end"
+			case "branch-console", "branch-stream":
+				if e.handle != r.borrowed {
+					return bad()
+				}
+				if e.operation == "branch-console" {
+					r.branch, r.next = "console", "input-validate"
+				} else {
+					r.branch, r.next = "stream", "worker-start"
+				}
+			default:
+				return bad()
+			}
+			continue
+		}
+		if e.operation != r.next {
+			return bad()
+		}
+		switch e.operation {
+		case "input-validate":
+			if e.handle != r.borrowed {
+				return bad()
+			}
+			r.next = "console-acquire"
 			if e.err != nil {
-				return fmt.Errorf("%s close failed: %v", key, e.err)
+				r.next = "request-end"
 			}
-			if h, exists := owned[key]; !exists || h != e.handle {
-				return fmt.Errorf("unowned close %s", key)
+		case "console-acquire", "thread-acquire":
+			if e.err != nil {
+				if valid(e.handle) {
+					return bad()
+				}
+				if e.operation == "console-acquire" {
+					r.next = "request-end"
+				} else {
+					r.next = "join"
+				}
+				break
 			}
-			if kind == "thread" && !completed[e.generation] {
-				return fmt.Errorf("thread closed before read completion")
+			if !valid(e.handle) || e.handle == r.borrowed {
+				return bad()
 			}
-			if kind == "console" && !joined[e.generation] {
-				return fmt.Errorf("console closed before join")
+			if e.operation == "console-acquire" {
+				r.console, r.next = e.handle, "console-validate"
+			} else {
+				if e.handle == r.console {
+					return bad()
+				}
+				r.thread, r.next = e.handle, "read-enter"
 			}
-			delete(owned, key)
-		case e.operation == "read-complete":
-			completed[e.generation] = true
-		case e.operation == "join":
-			if joined[e.generation] {
-				return fmt.Errorf("duplicate join")
+		case "console-validate":
+			if e.handle != r.console {
+				return bad()
 			}
-			if _, exists := owned[fmt.Sprintf("%d/thread", e.generation)]; exists {
-				return fmt.Errorf("join before thread close")
+			r.next = "worker-start"
+			if e.err != nil {
+				r.next = "console-close"
 			}
-			joined[e.generation] = true
+		case "worker-start":
+			if e.threadID == 0 {
+				return bad()
+			}
+			r.workerID = e.threadID
+			r.worker, r.next = true, "thread-acquire"
+		case "read-enter":
+			if e.handle != r.console {
+				return bad()
+			}
+			r.next = "read-complete"
+		case "read-complete":
+			if e.handle != r.console {
+				return bad()
+			}
+			r.readDone = true
+			if r.worker {
+				r.next = "thread-close"
+			} else {
+				r.next = "request-end"
+			}
+		case "thread-close", "console-close":
+			if e.err != nil {
+				return fmt.Errorf("generation=%d %s failed: %v", e.generation, e.operation, e.err)
+			}
+			if r.cancel && !r.cancelDone {
+				return bad()
+			}
+			if e.operation == "thread-close" {
+				if !r.readDone || e.handle != r.thread {
+					return bad()
+				}
+				r.thread, r.next = 0, "join"
+			} else {
+				if e.handle != r.console {
+					return bad()
+				}
+				r.console, r.next = 0, "request-end"
+			}
+		case "join":
+			if !r.worker || r.thread != 0 || (r.cancel && !r.cancelDone) {
+				return bad()
+			}
+			r.next = "request-end"
+			if r.console != 0 {
+				r.next = "console-close"
+			}
+		case "request-end":
+			if r.console != 0 || r.thread != 0 {
+				return bad()
+			}
+			r.next = "ended"
+		default:
+			return bad()
 		}
 	}
-	for generation := range threads {
-		if !joined[generation] {
-			return fmt.Errorf("missing join generation=%d", generation)
+	for generation := 1; generation <= q.generation; generation++ {
+		if requests[generation].next != "ended" {
+			return fmt.Errorf("missing %s generation=%d", requests[generation].next, generation)
 		}
-	}
-	if len(owned) != 0 {
-		return fmt.Errorf("unclosed prompt handles: %v", owned)
 	}
 	return nil
 }
@@ -120,7 +290,7 @@ func TestQualificationHandleDiagnosticFailures(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			defer f.Close()
+			qualificationCloseFile(t, f)
 			q := new(qualificationHandleTrace)
 			ctx := q.context(context.Background())
 			ops := ctx.Value(cancelWindowsKey{}).(*cancelWindowsOps)
@@ -138,10 +308,10 @@ func TestQualificationHandleDiagnosticFailures(t *testing.T) {
 				}
 			}
 			_, _ = readCancelable(ctx, f)
-			if err := q.verdict(); err == nil || !strings.Contains(err.Error(), failure) {
+			if err := q.verdict(); (failure == "close" && (err == nil || !strings.Contains(err.Error(), failure))) || (failure == "acquisition" && err != nil) {
 				t.Fatalf("missed %s: %v", failure, err)
 			}
-			if q.records[q.count-1].operation != "join" {
+			if q.records[q.count-2].operation != "join" {
 				t.Fatal("missing join on failure path")
 			}
 		})
@@ -155,7 +325,11 @@ func TestQualificationHandleCancellationBeforeRead(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer f.Close()
+	qualificationCloseFile(t, f)
+	qualificationCancellationBeforeRead(t, f)
+}
+
+func qualificationCancellationBeforeRead(t *testing.T, f *os.File) {
 	q := new(qualificationHandleTrace)
 	ctx, cancel := context.WithCancel(q.context(context.Background()))
 	defer cancel()
@@ -170,7 +344,7 @@ func TestQualificationHandleCancellationBeforeRead(t *testing.T) {
 			close(entered)
 			<-release
 		}
-		if e.operation == "thread-cancel" {
+		if e.operation == "thread-cancel" || e.operation == "console-cancel" {
 			once.Do(func() { close(release) })
 		}
 	}
@@ -193,4 +367,6 @@ func TestQualificationHandleCancellationBeforeRead(t *testing.T) {
 	if err := q.verdict(); err != nil {
 		t.Fatal(err)
 	}
+	qualificationRequireOps(t, q, "worker-start", "read-complete", "cancel-start", "cancel-complete", "join")
+	qualificationMutations(t, q)
 }

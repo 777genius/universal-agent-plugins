@@ -73,7 +73,16 @@ func TestQualificationConsoleCancellation(t *testing.T) {
 		}
 	}
 	qualificationConsoleQueuedAnswers(t, h, before, trace)
-	qualificationConsoleInputClassification(t, h)
+	qualificationConsoleInputClassification(t, h, trace)
 	qualificationConsoleResources(t, &baseline)
+	if trace.generation != 91 {
+		t.Fatalf("request coverage: got %d want 91", trace.generation)
+	}
+	if err := trace.verdict(); err != nil {
+		t.Fatal(err)
+	}
+	if t.Failed() {
+		t.Fatal("qualification cleanup or diagnostics failed")
+	}
 	fmt.Fprintln(os.Stdout, "QUALIFICATION_CONSOLE_OK")
 }
