@@ -647,13 +647,10 @@
     "publication": "not authorized; draft staging and qualification only"
   },
   "boundaries": [
-    "Copy is based solely on the supplied source packet and orchestrator-verified facts. No tests were run and no filesystem or GitHub inspection was performed by this worker.",
-    "Only the proposed EN insertion, RU append and two exact runbook replacements are supplied. Historical records and all other work remain outside this worker's ownership.",
     "The combined 12 lanes and 24 top-level required tests comprise independently qualified historical-nine and Linux amd64 scopes, not one dispatch or an independent third-party certification.",
     "Historical-nine retains harness commit 0cfa2b749356c39c22a59bf698289be2584e9e47, tree 1fd1743bc1db40ce9bd7c892774928359037e2c7, run 34309083566 attempt 1 and final draft recheck time 2026-09-09T04:10:39.529018+00:00.",
     "Linux amd64 retains harness commit fde7298df2bfedb29246149a604758f13823146a, tree 2964d685738e4d644f0fae692d30c75950485104, run 34307075390 attempt 1 and final draft recheck time 2026-09-09T03:36:42.614887+00:00. Offline verification from fresh source 0cfa2b7 does not replace those identities or establish a newer native run, live recheck or qualification time.",
     "Both scopes bind producer commit 751e965935819b8c3b566eff245fb927741d63ba, producer run 34305637370 attempt 1, artifact 10086701374 and draft release ID 385200147. The original producer artifact digest is 934d7ffd58e7eb5d2f5b27e6ec05b45360dd30b122883057b775887a885ed84b; the original npm tarball SHA-256 is 4d7fd3345974121a5b2daf9ef6f8701937675a7913ae12dda1404b77cd8b7a18.",
-    "Detailed hashes belong in the orchestrator-owned compact JSON record linked by the proposed copy. This response does not create or modify that record.",
     "Draft 0.1.55 is not published. No draft release/download link or upgrade command is supplied. Original nine-lane and supplemental Linux amd64 released-0.1.53 evidence remain valid and separate.",
     "Windows Claude passed only HTTP/installed-skill runtime coverage; managed stdio reports managed_stdio_platform_unsupported. OpenCode collision observation retains opencode_tool_namespace_not_evaluated and does not establish resolution. JSONC lifecycle is not JSONC stdio/body proof. The Codex Git acquisition seam adds no public-Git native runtime claim.",
     "All clients were genuine and pinned; model providers were scripted loopback services. No real-model, OAuth/login, desktop, live-service, vendor-certification, official-status or independent-adoption claim follows.",
