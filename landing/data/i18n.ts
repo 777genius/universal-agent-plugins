@@ -1,11 +1,21 @@
-export type LocaleCode = 'en' | 'ru' | 'es' | 'fr' | 'zh';
-
-export const supportedLocales = [
-  { code: 'en', iso: 'en-US', name: 'English', flag: '\u{1F1FA}\u{1F1F8}', file: 'en.json' },
-  { code: 'ru', iso: 'ru-RU', name: 'Русский', flag: '\u{1F1F7}\u{1F1FA}', file: 'ru.json' },
-  { code: 'es', iso: 'es-ES', name: 'Español', flag: '\u{1F1EA}\u{1F1F8}', file: 'es.json' },
-  { code: 'fr', iso: 'fr-FR', name: 'Français', flag: '\u{1F1EB}\u{1F1F7}', file: 'fr.json' },
-  { code: 'zh', iso: 'zh-CN', name: '简体中文', flag: '\u{1F1E8}\u{1F1F3}', file: 'zh.json' },
-] as const;
-
-export const defaultLocale: LocaleCode = 'en';
+/** Legacy content remains available to its existing consumers, independently of publication. */
+export type LegacyContentLocale = 'en' | 'ru' | 'es' | 'fr' | 'zh';
+export type LocaleCode = LegacyContentLocale;
+export type KnownLocale = LegacyContentLocale | 'uk';
+export const candidateLocales = ['en', 'ru', 'uk'] as const;
+export const publishedLocales = ['en'] as const;
+export type PublishedLocale = typeof publishedLocales[number];
+export const defaultLocale = 'en' as const;
+export const localeMetadata = {
+  en: { code: 'en', iso: 'en-US', name: 'English', file: 'en.json' },
+  ru: { code: 'ru', iso: 'ru-RU', name: 'Русский', file: 'ru.json' },
+  uk: { code: 'uk', iso: 'uk-UA', name: 'Українська', file: 'uk.json' },
+  es: { code: 'es', iso: 'es-ES', name: 'Español', file: 'es.json' },
+  fr: { code: 'fr', iso: 'fr-FR', name: 'Français', file: 'fr.json' },
+  zh: { code: 'zh', iso: 'zh-CN', name: '简体中文', file: 'zh.json' },
+} as const;
+export const supportedLocales = publishedLocales.map(code => localeMetadata[code]);
+export const isKnownLocale = (value: unknown): value is KnownLocale =>
+  typeof value === 'string' && Object.hasOwn(localeMetadata, value);
+export const isPublishedLocale = (value: unknown): value is PublishedLocale =>
+  typeof value === 'string' && (publishedLocales as readonly string[]).includes(value);

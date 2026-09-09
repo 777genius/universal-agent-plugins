@@ -138,6 +138,7 @@ export default defineNuxtConfig({
     locales: [...supportedLocales],
     defaultLocale: 'en',
     strategy: 'prefix_except_default',
+    trailingSlash: true,
     lazy: true,
     langDir: 'locales',
     bundle: {

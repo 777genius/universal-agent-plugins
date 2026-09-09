@@ -152,7 +152,8 @@ test('plugin counter stays inside the hero on a narrow screen', async ({ page })
   await page.evaluate(() => document.fonts.ready);
   const initialWidth = (await page.locator('.hero__actions .button--primary').boundingBox())!.width;
   releaseDiscovery();
-  await expect(page.locator('.hero__plugin-count')).toContainText(/[\d,]+/);
+  // The count appears after the signed discovery snapshot has been verified.
+  await expect(page.locator('.hero__plugin-count')).toContainText(/[\d,]+/, { timeout: 15_000 });
   const container = (await page.locator('.hero.container').boundingBox())!;
   const button = (await page.locator('.hero__actions .button--primary').boundingBox())!;
   expect(button.width).toBe(initialWidth);
@@ -246,6 +247,12 @@ test.describe('mobile navigation and catalog', () => {
 
   test('keeps advanced filters compact and makes search easy to clear', async ({ page }) => {
     await page.goto('./');
+    // SSR controls are visible before Vue has installed their event handlers.
+    await page.waitForFunction(() => {
+      const app = (document.querySelector('#__nuxt') as any)?.__vue_app__;
+      const nuxt = app?.$nuxt || app?.config.globalProperties.$nuxt;
+      return Boolean(app?.config.globalProperties.$router && nuxt?.isHydrating === false);
+    });
     await page.locator('.catalog .section-heading').scrollIntoViewIfNeeded();
 
     const toggle = page.locator('.catalog-filter-toggle');
