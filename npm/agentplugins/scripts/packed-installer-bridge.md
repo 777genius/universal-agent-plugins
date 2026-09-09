@@ -285,3 +285,76 @@ bridge intake. Genuine C3 execution needs a separately reviewed authenticated
 intake and actual installed launchers/postinstall and installer lifecycle.
 N2, C3 E, P/Q, B, anonymous public readbacks, pair channels, PyPI/Homebrew,
 full-platform E2E, release and phases 0–11 remain open.
+
+## C3a local authenticated input contract (execution remains closed)
+
+C3a adds a distinct `public-authenticated/v1` request, with exactly
+`intake,expectedCommit,journey,journeySha256,admission,admissionSha256,fixtureRoot`.
+It does not translate private, public-fixture/v1 or public-fixture/v2 receipts.
+Their existing false/null/not_evaluated claims and the offline v2 71-call
+boundary remain unchanged. No workflow, promotion, native qualification export,
+public launcher, dependency or package closure changes are part of C3a.
+
+`public-authoring-acceptance.js` fixes `public-wrapper-matrix/v1`'s eighteen
+host/runtime cells and thirty product/runtime executions. Its J codec binds the
+exact canonical I and S, both unchanged packs including SHA256/size/SRI/SHA1,
+all twelve native outer/inner subject pins, source F, producer run/attempt/ref,
+actual host and distinct controller/npm/shim Node/tool pins. It rejects unknown
+fields, alternate canonical spelling, duplicate keys, invalid UTF-8, excessive
+nesting and oversized records. Local paths must be canonical and quiescent;
+this does not introduce a hostile concurrent filesystem security guarantee.
+
+The fixed local receipt schema is `authoring-public-local-inputs/v1`. Its fields
+are `schema,selected,workflow_sha,input_file,stage,repo,work_parent,stage_root,
+input_root,journey_root,fixture_root,cell,tools,producer`. It contains comparison
+pins, never an authenticated/completed boolean. `readJourneyInputs` genuinely
+calls the existing completed `readStage` and `readInputs`, retaining their
+three- and nineteen-subject contracts. The existing stage reader supplies source,
+pack closure and pack inspection; C3a adds no extractor or verifier engine.
+Fresh authenticated subjects are compared with the original retained S/I/packs.
+Re-admission scratch is separate from original custody, source, projects and
+journey evidence, so later seal checks refer to the same original roots.
+
+J is `authoring-public-journey/v1`, with the plan's exact top-level fields.
+Evidence is an ordered table of fixed `commands.json`, `projects.json`,
+`npm-lifecycle.json`, `cache-process.json`, `installer.json` path/size/SHA256 rows.
+The limit is 1 MiB per record and non-command evidence file, 16 MiB for commands,
+and 1 MiB for each command stdout/stderr. The five-file closure therefore fits
+within the plan's 128 MiB aggregate cap. Original project snapshots include
+empty directories, bytes, sizes and modes. No regeneration or project copy is
+implemented. A fixed core inventory contains 55 kit-only or 127 pair command
+rows, including the eighteen genuine installer operations required per pair.
+Core argv/cwd/status/signal and bounded author result checks are recomputed;
+structural true assertions never imply their truth.
+
+**Live J admission deliberately fails.** Full npm shim/postinstall and peer
+lifecycle, cache/process/cancellation, complete conformance/parity and genuine
+installer result/observation validators belong to C3b. In particular there is
+no reviewed public-shim installer validator or whole-descendant observer
+interface available at this boundary. `verifyJourney` emits an explicit C3b
+missing-capability error even for structurally consistent transcripts. The
+three corresponding evidence payloads are bound bytes, not semantically
+validated results. No production producer returns synthetic success.
+`readJourneyInputs` is input-custody-only; `readJourney` cannot publish a seal.
+The local reader CLI exposes only `--read-local-inputs REQUEST` and explicitly
+labels that scope. Completed remote `readAcceptance` always fails in C3a.
+
+The bridge has separate `authenticated-options`, `authenticated-intake` and
+`authenticated-seal` commands. Its new seal pins the reader source in addition
+to the existing verifier/helper and repeats admission on `verify`. The runner's
+`--public-authenticated ROOT F OPTIONS` accepts exactly `request,go,node,modCache`.
+It calls authentic intake before creating output, then preserves the existing
+Linux planner commands and five environment variables. The terminal checker
+re-enters the real Node reader, checks ten original project paths, exact thirty
+plan tuples and post-plan snapshots. Summary claims remain false, with null
+qualification and scope `local-authenticated-inputs-and-injected-planner`.
+A local J/bridge, successful fixture TAP or injected planner cannot stand for E.
+
+Positive tests explicitly mock custody interfaces and, for bridge-only seal
+controls, the unavailable J result boundary. These are source controls only;
+they execute no npm, native, installer, scanner, verifier or provider. C3b must
+supply the genuine producer, full result validators, fixed workflow, completed
+E aggregate/authenticated reader and P adapter together. Its npm/process,
+workflow and P test names remain outstanding. Native/N2, genuine E, P/Q/B,
+anonymous acquisition/readbacks/channels, stable release and phases 0–11
+remain open; independent review and required remote CI are not waived.

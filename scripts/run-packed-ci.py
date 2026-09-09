@@ -203,8 +203,64 @@ def public_main(root, sha, options_path):
     proof.check_public(root, sha)
 
 
+def authenticated_main(root, sha, options_path):
+    """Same invocation local J intake. Never generate, copy or replay projects."""
+    repo = Path(__file__).resolve().parent.parent
+    options = proof.authentic_read(options_path)
+    request = proof.authenticated_options(options, sha)
+    proof.require(root.is_absolute() and root.resolve() == root and not root.exists(), 'new canonical authentic output')
+    proof.require(platform.system() == 'Linux' and platform.machine() == 'x86_64', 'native Linux amd64 required')
+    admission = proof.authentic_read(request['admission'])
+    protected = [repo, Path(options_path), Path(request['admission']), Path(request['journey']), Path(request['fixtureRoot']),
+        *[Path(options[k]) for k in ('go', 'node', 'modCache')],
+        *[Path(admission[k]) for k in ('repo', 'work_parent', 'stage_root', 'input_root', 'journey_root', 'fixture_root')]]
+    for other in protected:
+        proof.require(other.is_absolute() and other.resolve() == other and not root.is_relative_to(other) and not other.is_relative_to(root), 'authentic output overlaps input')
+    # Real reader admission happens before even the output directory exists.
+    # C3a's unavailable result validator is an explicit error here, before Go.
+    inputs = proof.authenticated_verify(options['node'], ['authenticated-options', options_path])
+    proof.require(inputs['repo'] == str(repo), 'authenticated source checkout')
+    for key, name in [('node', 'orchestrator_node'), ('go', 'go')]:
+        tool = inputs['public_inputs']['tools'][name]
+        proof.require(tool['path'] == options[key] and tool['sha256'] == proof.digest(options[key]), 'authenticated planner tool')
+    proof.unchanged_snapshots(inputs)
+    go, node, modules = [Path(options[k]) for k in ('go', 'node', 'modCache')]
+    root.mkdir(mode=0o700); (root / 'logs').mkdir(); (root / 'bridge-config').mkdir()
+    env = private_env(root / 'planner', go, node, repo, modules)
+    env.update(GOPROXY='off', GOSUMDB='off', GOVCS='*:off')
+    def run(name, argv, extra=None):
+        argv = list(map(str, argv)); record = dict(argv=argv, cwd=str(repo), env=dict(env, **(extra or {})), exit=None)
+        started = time.monotonic()
+        try:
+            with (root / 'logs' / (name + '.stdout')).open('x') as out, (root / 'logs' / (name + '.stderr')).open('x') as err:
+                record['exit'] = subprocess.run(argv, cwd=repo, env=record['env'], stdout=out, stderr=err, timeout=1200).returncode
+        finally:
+            record['seconds'] = round(time.monotonic() - started, 3); write(root / 'logs' / (name + '.json'), record)
+        proof.require(record['exit'] == 0, 'authenticated phase failed: ' + name)
+        return (root / 'logs' / (name + '.stdout')).read_text()
+    proof.require(run('head', ['/usr/bin/git', 'rev-parse', 'HEAD']).strip() == sha, 'wrong checkout')
+    proof.require(run('clean', ['/usr/bin/git', 'status', '--porcelain=v1', '--untracked-files=all']) == '', 'dirty checkout')
+    write(root / 'authenticated-run.json', dict(schema='public-authenticated-packed-run/v1', head=sha, options=options,
+        tools={k: dict(path=str(p), sha256=proof.digest(p)) for k, p in dict(go=go, node=node).items()},
+        release_eligible=False, platform_acceptance=False, attested=False))
+    request_path = root / 'bridge-config/request.json'; write(request_path, request)
+    sealed = root / 'bridge-config/sealed.json'; bridge = repo / 'npm/agentplugins/scripts/packed-installer-bridge.js'
+    printed = run('seal', [node, bridge, 'authenticated-seal', request_path, sealed]).strip()
+    proof.require(printed == proof.digest(sealed), 'authenticated seal pin')
+    proof.require(proof.read(sealed)['inputs'] == inputs, 'original intake changed before planner')
+    planner(root, sha, go, node, sealed, printed, run)
+    proof.require(run('terminal-clean', ['/usr/bin/git', 'status', '--porcelain=v1', '--untracked-files=all']) == '', 'checkout changed')
+    proof.check_authenticated(root, sha, require_summary=False)
+    write(root / 'summary.json', dict(status='passed', scope='local-authenticated-inputs-and-injected-planner',
+        intake=proof.AUTHENTIC, head=sha, projects=10, plans=30, release_eligible=False, platform_acceptance=False,
+        attested=False, signed_promotion=False, public_eligible=False, qualification=None))
+    proof.check_authenticated(root, sha)
+
+
 if __name__ == '__main__':
-    if len(sys.argv) == 5 and sys.argv[1] == '--public':
+    if len(sys.argv) == 5 and sys.argv[1] == '--public-authenticated':
+        authenticated_main(Path(sys.argv[2]), sys.argv[3], Path(sys.argv[4]))
+    elif len(sys.argv) == 5 and sys.argv[1] == '--public':
         public_main(Path(sys.argv[2]), sys.argv[3], Path(sys.argv[4]))
     elif len(sys.argv) == 3:
         main(Path(sys.argv[1]), sys.argv[2])
