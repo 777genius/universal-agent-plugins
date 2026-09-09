@@ -1,10 +1,12 @@
 "use strict";
 
-// Structural consistency only: these codecs do NOT establish authenticated
-// provenance, signing, acquisition, eligibility or acceptance. Returned objects
-// and bytes are data, never authority. No files, assets or receipts are opened.
+// Codecs and subject enumeration are structural only. The bounded producer
+// prepares unsigned I; only readInputs invokes the fixed signature boundary.
+// Neither operation grants qualification, publication or execution permission.
 const c = require("./dual-authoring-candidate");
-const { TextDecoder } = require("node:util");
+const fs = require("node:fs");
+const path = require("node:path");
+const { TextDecoder, isDeepStrictEqual: equal } = require("node:util");
 
 const INPUT_SCHEMA = "authoring-native-inputs/v1";
 const DESCRIPTOR_SCHEMA = "dual-authoring-public-npm/v2";
@@ -193,6 +195,121 @@ function decodeDescriptor(body, inputBytes, product) {
   return value;
 }
 
+const agree = (a, b, label) => { if (!equal(a, b)) throw new Error(`C1 provenance ${label} mismatch`); };
+function artifact(value) {
+  fields(value, ["run_id", "run_attempt", "artifact_id", "artifact_sha256"], "input artifact");
+  return { run_id: positive(value.run_id, Number.MAX_SAFE_INTEGER, "input run"),
+    run_attempt: positive(value.run_attempt, 1000, "input attempt"),
+    artifact_id: positive(value.artifact_id, Number.MAX_SAFE_INTEGER, "input artifact ID"),
+    artifact_sha256: hash(value.artifact_sha256, "input artifact") };
+}
+function operationOptions(value, reading) {
+  fields(value, ["input", "selected", "workflow_sha", "scratch", ...(reading ? ["artifact"] : [])], "provenance options");
+  const input = decodeInputs(value.input), body = Buffer.from(value.input);
+  fields(value.selected, ["tag", "ref", "source", "versions"], "selected inputs");
+  fields(value.selected.versions, c.PRODUCTS, "selected versions");
+  const selected = { tag: input.products.agentplugins.tag, ref: `refs/tags/${input.products.agentplugins.tag}`,
+    source: input.identity.commit, versions: input.identity.versions };
+  agree(value.selected, selected, "selected source/ref/versions");
+  fixed(value.workflow_sha, input.identity.commit, "integrated workflow source F");
+  if (Object.values(input.identity.versions).some(v => v.length > 32)) fail("bounded provider versions required");
+  if (input.producer.run_id === input.preparation.artifact.run_id) fail("separate provenance and preparation runs required");
+  const pin = reading ? artifact(value.artifact) : null;
+  if (reading) {
+    agree([pin.run_id, pin.run_attempt], [input.producer.run_id, input.producer.run_attempt], "I artifact producer attempt");
+    if (pin.artifact_id === input.preparation.artifact.artifact_id) fail("I and preparation artifacts must differ");
+  }
+  c.safeDirectory(value.scratch);
+  return { body, input, selected, workflow_sha: value.workflow_sha, scratch: value.scratch, artifact: pin };
+}
+function projectionPins(input) {
+  return { identity: input.identity, candidate_sha256: input.candidate_sha256, pair_marker_sha256: input.pair_marker_sha256,
+    products: Object.fromEntries(c.PRODUCTS.map(p => [p, {
+      manifest_sha256: input.products[p].manifest_sha256, checksums_sha256: input.products[p].checksums_sha256 }])) };
+}
+function preparationSnapshot(root, body) {
+  const input = decodeInputs(body);
+  const verified = require("./authoring-release").verifyProjectedPair(root, projectionPins(input));
+  agree(verified.subjects.length, 18, "original subject count");
+  for (const p of c.PRODUCTS) agree(verified.manifest.products[p].assets, input.products[p].assets, "outer/inner pins");
+  const prepared = require("./authoring-promotion").readInputPreparation(root, body);
+  return { subjects: verified.subjects, preparation: prepared.preparation,
+    metadata_sha256: c.digest(c.readFile(path.join(root, "candidate-identity.json"), MAX_INPUT_BYTES)) };
+}
+
+/** Structural enumeration of exactly 18 original subjects plus exact I bytes.
+ * Keep rows, including both manifest/checksum basenames; this is NOT admission. */
+function inputSubjects(root, inputBytes) {
+  decodeInputs(inputBytes);
+  const snapshot = preparationSnapshot(root, inputBytes);
+  const file = path.join(root, INPUT_FILE);
+  agree(c.readFile(file, MAX_INPUT_BYTES), inputBytes, "retained I bytes");
+  return [...snapshot.subjects, { file, sha256: c.digest(inputBytes) }];
+}
+
+/** Acquire the exact completed preparation and prepare unsigned I for the
+ * future protected provenance job. No signatures, OIDC or upload are performed.
+ * Its returned nineteen rows are signing candidates, never authenticated proof. */
+function produceInputs(value) {
+  const o = operationOptions(value, false), p = require("./authoring-promotion");
+  const pin = o.input.preparation.artifact;
+  p.checkInputTags(o.body, o.scratch);
+  const before = p.inspectArtifact(pin, WORKFLOW, o.input.identity.commit, o.scratch);
+  const prepared = p.acquireInputPreparation(o.body, o.scratch);
+  const snapshot = preparationSnapshot(prepared.root, o.body);
+  p.checkInputTags(o.body, o.scratch);
+  agree(p.inspectArtifact(pin, WORKFLOW, o.input.identity.commit, o.scratch), before, "preparation provider changed");
+  agree(preparationSnapshot(prepared.root, o.body), snapshot, "preparation changed before I completion");
+  agree(operationOptions(value, false), o, "caller inputs changed before I completion");
+  const file = path.join(prepared.root, INPUT_FILE);
+  fs.writeFileSync(file, o.body, { flag: "wx", mode: 0o444 });
+  const subjects = inputSubjects(prepared.root, o.body);
+  agree(preparationSnapshot(prepared.root, o.body), snapshot, "preparation changed at I completion");
+  agree(operationOptions(value, false), o, "caller inputs changed at I completion");
+  return { root: prepared.root, input: o.input, subjects };
+}
+
+/** Source wiring for a completed provenance artifact. Positive integrated use
+ * is UNAVAILABLE: the existing checked reader supports native/preparation only.
+ * A separately accepted 21-entry input-provenance interface is required. Never
+ * substitute preparation kind, append files, or fall back to another extractor. */
+function readInputs(value) {
+  const o = operationOptions(value, true), p = require("./authoring-promotion");
+  p.checkInputTags(o.body, o.scratch);
+  const before = p.inspectArtifact(o.artifact, WORKFLOW, o.input.identity.commit, o.scratch);
+  const work = fs.mkdtempSync(path.join(o.scratch, "input-provenance-"));
+  const file = p.acquireArtifact(o.artifact, WORKFLOW, o.input.identity.commit, work);
+  const files = ["preparation-run.json", "candidate-identity.json", "candidate/candidate.json", "pair-prepared.json",
+    ...c.PRODUCTS.flatMap(p => [...c.TARGETS.map(t => `${p}/${o.input.products[p].assets[t].file}`),
+      `${p}/release-manifest.json`, `${p}/checksums.txt`]), INPUT_FILE];
+  const root = p.extractArtifact(file, o.artifact, "input-provenance", files, path.join(work, "frozen"), work);
+  agree(c.readFile(path.join(root, INPUT_FILE), MAX_INPUT_BYTES), o.body, "independently pinned I bytes");
+  const snapshot = preparationSnapshot(root, o.body);
+  const prepPin = o.input.preparation.artifact;
+  const prepBefore = p.inspectArtifact(prepPin, WORKFLOW, o.input.identity.commit, o.scratch);
+  const prepared = p.acquireInputPreparation(o.body, o.scratch);
+  const original = preparationSnapshot(prepared.root, o.body);
+  const relative = (s, base) => ({ ...s,
+    subjects: s.subjects.map(row => ({ file: path.relative(base, row.file), sha256: row.sha256 })) });
+  agree(relative(snapshot, root), relative(original, prepared.root), "original preparation custody");
+  const subjects = inputSubjects(root, o.body);
+  const multiset = subjects.map(s => ({ name: path.basename(s.file), digest: { sha256: s.sha256 } }));
+  for (const subject of subjects) p.verifySubject(subject.file, {
+    name: path.basename(subject.file), sha256: subject.sha256, source: o.input.identity.commit,
+    workflow_sha: o.workflow_sha, ref: o.selected.ref, run_id: o.input.producer.run_id,
+    run_attempt: o.input.producer.run_attempt, subjects: multiset
+  }, o.scratch);
+  p.checkInputTags(o.body, o.scratch);
+  agree(p.inspectArtifact(o.artifact, WORKFLOW, o.input.identity.commit, o.scratch), before, "I provider changed");
+  agree(p.inspectArtifact(prepPin, WORKFLOW, o.input.identity.commit, o.scratch), prepBefore, "preparation provider changed");
+  agree(preparationSnapshot(prepared.root, o.body), original, "original preparation changed");
+  agree(preparationSnapshot(root, o.body), snapshot, "provenance preparation changed");
+  agree(inputSubjects(root, o.body), subjects, "provenance subjects changed");
+  agree(operationOptions(value, true), o, "caller inputs changed during authentication");
+  return { root, input: o.input, subjects };
+}
+
 module.exports = Object.freeze({ encodeInputs, decodeInputs, encodeDescriptor, decodeDescriptor,
+  produceInputs, readInputs, inputSubjects,
   INPUT_SCHEMA, DESCRIPTOR_SCHEMA, INPUT_FILE, MODE, SCOPE, WORKFLOW, PACKAGES,
   MAX_INPUT_BYTES, MAX_DESCRIPTOR_BYTES, MAX_NATIVE_BYTES });

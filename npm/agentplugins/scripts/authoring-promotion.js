@@ -230,10 +230,18 @@ function projectedPins(record) {
       manifest_sha256: record.products[p].manifest_sha256, checksums_sha256: record.products[p].checksums_sha256 }])) };
 }
 function acquirePreparation(pin, record, scratch) {
-  record = recordShape(record); c.safeDirectory(scratch); locator(pin);
+  return acquirePreparationBinding(pin, recordShape(record), scratch);
+}
+// Shared preparation intake below Q validation. Only the Q wrapper above and
+// the canonical I adapter below supply this private binding; no synthetic Q.
+function acquirePreparationBinding(pin, record, scratch, receiptSha256) {
+  c.safeDirectory(scratch); locator(pin);
   const work = fs.mkdtempSync(path.join(scratch, "preparation-"));
   const file = acquireArtifact(pin, WORKFLOW, record.identity.commit, work);
   const root = extractArtifact(file, pin, "preparation", preparationFiles(record), path.join(work, "frozen"), work);
+  return readPreparationBinding(root, pin, record, receiptSha256);
+}
+function readPreparationBinding(root, pin, record, receiptSha256) {
   frozenSubjects(root, record);
   const metadataBody = c.readFile(path.join(root, "candidate-identity.json"), LIMIT);
   const metadata = JSON.parse(metadataBody);
@@ -252,10 +260,26 @@ function acquirePreparation(pin, record, scratch) {
   }
   const preparation = { sha256: c.digest(c.readFile(path.join(root, "preparation-run.json"), LIMIT)),
     producer: invocationFor(pin, WORKFLOW, record.identity.commit) };
+  if (receiptSha256 !== undefined) exact(preparation.sha256, receiptSha256, "exact I preparation receipt");
   require("./authoring-native-qualification").readPreparation(root, projectedPins(record), preparation);
   // Metadata cannot substitute for the receipt or the frozen subject pins.
   // Independently acquired provider bytes, not this file's claims, bind attempt.
   return { root, preparation };
+}
+// These are fixed structural/custody adapters, not signature admission. The
+// existing Q wrapper retains its recordShape requirement and return encoding.
+function acquireInputPreparation(inputBytes, scratch) {
+  const input = require("./authoring-native-inputs").decodeInputs(inputBytes);
+  return acquirePreparationBinding(input.preparation.artifact, input, scratch, input.preparation.sha256);
+}
+function readInputPreparation(root, inputBytes) {
+  const input = require("./authoring-native-inputs").decodeInputs(inputBytes);
+  return readPreparationBinding(root, input.preparation.artifact, input, input.preparation.sha256);
+}
+function checkInputTags(inputBytes, cwd) {
+  const input = require("./authoring-native-inputs").decodeInputs(inputBytes);
+  c.safeDirectory(cwd); cliVersion(cwd);
+  for (const product of c.PRODUCTS) checkTag(input, product, cwd);
 }
 function nativeContract(lane) {
   if (!LANES.slice(0, 12).includes(lane.lane) || lane.schema !== NATIVE_SCHEMA || lane.workflow !== NATIVE_WORKFLOW)
@@ -527,4 +551,5 @@ if (require.main === module) {
 }
 module.exports = { SCHEMA, WORKFLOW, GH_VERSION, LANES, encodeRecord, decodeRecord, validateSelection, admitRecord, requireNativeContracts,
   inspectArtifact, acquireArtifact, extractArtifact, acquirePreparation, checkNativeContracts, admitNativeEvidence,
+  acquireInputPreparation, readInputPreparation, checkInputTags,
   mapVerifiedOutput, verifySubject, frozenSubjects, releasePins, inspectPair, promote };

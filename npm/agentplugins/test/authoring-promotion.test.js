@@ -724,3 +724,151 @@ test('N2 provider-bound native semantic mutations reject with zero protected eff
   assert.ok(calls().some(call => call.args.at(-1) === endpoint(`actions/runs/${missing.run_id}/attempts/${missing.run_attempt}`)));
   noProtectedCalls(calls);
 });
+
+
+// C1 interface-only tests. Load a private test copy to stub existing module
+// operations below the public wrappers. No production injection API is added,
+// and no subprocess, artifact acquisition or signature is executed.
+function c1PromotionInterface(t) {
+  t.mock.method(cp, "spawnSync", () => assert.fail("C1 interface test cannot spawn"));
+  const filename = require.resolve("../scripts/authoring-promotion");
+  const Module = require("node:module"), local = new Module(filename, module);
+  local.filename = filename; local.paths = module.paths;
+  local._compile(fs.readFileSync(filename, "utf8") + String.raw`
+const c1Calls = [];
+const c1Responses = new Map();
+acquireArtifact = (pin, workflow, source, cwd) => {
+  c1Calls.push({operation:"acquire",pin,workflow,source,cwd});
+  return path.join(cwd,"artifact-"+pin.artifact_id+".zip");
+};
+extractArtifact = (file,pin,kind,files,output,cwd) => {
+  c1Calls.push({operation:"extract",file,pin,kind,files,output,cwd}); return output;
+};
+readPreparationBinding = (root,pin,record,receiptSha256) => {
+  c1Calls.push({operation:"read",root,pin,record,receiptSha256});
+  return {root,preparation:{sha256:receiptSha256 ?? "Q-computed-receipt",producer:invocationFor(pin,WORKFLOW,record.identity.commit)}};
+};
+cliVersion = cwd => c1Calls.push({operation:"version",cwd});
+api = (endpoint,cwd) => { c1Calls.push({operation:"api",endpoint,cwd}); return c1Responses.get(endpoint) ?? {sha:"a".repeat(40)}; };
+module.exports.c1Calls = c1Calls;
+module.exports.c1Responses = c1Responses;
+`, filename);
+  const parent = "/tmp/uap-authoring-d5-c1-provenance-20260909-artifacts/unit-fixtures";
+  fs.mkdirSync(parent, {recursive:true}); const scratch = fs.mkdtempSync(path.join(parent,"q-interface-"));
+  const input = { schema:"authoring-native-inputs/v1",identity:structuredClone(ID),authoring_mode:"release-cli-contract-v1",
+    asset_scope:"six-platform-pair",candidate_sha256:hash("candidate"),pair_marker_sha256:hash("pair"),products:{},
+    preparation:{sha256:hash("receipt"),artifact:structuredClone(pin)},
+    producer:{workflow:p.WORKFLOW,source:ID.commit,run_id:41,run_attempt:3} };
+  for (const product of c.PRODUCTS) {
+    const assets = {};
+    for (const target of c.TARGETS) {
+      const binary = {file:c.executableName(product,target),sha256:hash(product+target),size:10};
+      assets[target] = {file:c.assetName(product,ID.versions[product],target),
+        sha256:product === "agentplugins" ? binary.sha256 : hash("outer"+target),size:10,binary};
+    }
+    input.products[product] = {tag:(product === "agentplugins" ? "agentplugins-v" : "v")+ID.versions[product],
+      manifest_sha256:hash(product+"manifest"),checksums_sha256:hash(product+"checksums"),assets};
+  }
+  const {preparation:_prep,...common} = input;
+  const record = {...common,schema:p.SCHEMA,qualification:{lanes:p.LANES.map((lane,i) => {
+    const pairs = lane === "public-packed-pair" ? c.PRODUCTS.flatMap(product => c.TARGETS.map(target => [product,target])) : [lane.split("/")];
+    return {lane,schema:"fixture-terminal/v1",sha256:hash("terminal"+i),workflow:".github/workflows/fixture-only.yml",
+      source:ID.commit,artifact:{...pin,artifact_id:100+i},subjects:pairs.map(([product,target]) => ({product,target,
+        sha256:input.products[product].assets[target].sha256,binary_sha256:input.products[product].assets[target].binary.sha256}))};
+  })}};
+  return {adapter:local.exports,scratch,input,record,body:require("../scripts/authoring-native-inputs").encodeInputs(input)};
+}
+
+test("C1 provenance preparation adapters share exact existing twenty-entry same-byte interface", t => {
+  const f = c1PromotionInterface(t), a = f.adapter;
+  const result = a.acquireInputPreparation(f.body,f.scratch);
+  assert.deepEqual(a.c1Calls.map(c => c.operation),["acquire","extract","read"]);
+  const [acquired,extracted,read] = a.c1Calls;
+  assert.deepEqual(acquired.pin,f.input.preparation.artifact);
+  assert.equal(acquired.workflow,p.WORKFLOW); assert.equal(acquired.source,ID.commit);
+  assert.equal(extracted.file,path.join(acquired.cwd,"artifact-31.zip"));
+  assert.equal(extracted.cwd,acquired.cwd); assert.equal(extracted.kind,"preparation");
+  assert.equal(extracted.files.length,20); assert.equal(new Set(extracted.files).size,20);
+  assert.ok(extracted.files.includes("candidate/candidate.json"));
+  assert.ok(!extracted.files.includes("native-inputs.json")); assert.ok(!extracted.files.includes("authoring-promotion.json"));
+  assert.equal(read.root,extracted.output); assert.deepEqual(read.record,f.input);
+  assert.equal(read.receiptSha256,f.input.preparation.sha256);
+  assert.deepEqual(Object.keys(result),["root","preparation"]);
+  assert.deepEqual(result.preparation,{sha256:f.input.preparation.sha256,producer:{repository:c.REPOSITORY,
+    workflow:p.WORKFLOW,source:ID.commit,workflow_sha:ID.commit,run_id:pin.run_id,run_attempt:pin.run_attempt}});
+});
+
+test("C1 provenance Q wrapper preserves full record validation, bytes and receipt return contract", t => {
+  const f = c1PromotionInterface(t), before = p.encodeRecord(f.record), a = f.adapter;
+  const result = a.acquirePreparation(pin,f.record,f.scratch);
+  const read = a.c1Calls.at(-1);
+  assert.deepEqual(read.record,p.decodeRecord(before)); assert.equal(read.receiptSha256,undefined);
+  assert.deepEqual(p.encodeRecord(f.record),before);
+  assert.deepEqual(result,{root:read.root,preparation:{sha256:"Q-computed-receipt",producer:{repository:c.REPOSITORY,
+    workflow:p.WORKFLOW,source:ID.commit,workflow_sha:ID.commit,run_id:pin.run_id,run_attempt:pin.run_attempt}}});
+  a.c1Calls.length = 0;
+  assert.throws(() => a.acquirePreparation(pin,f.input,f.scratch));
+  const missing = structuredClone(f.record); missing.qualification.lanes.pop();
+  assert.throws(() => a.acquirePreparation(pin,missing,f.scratch),/missing required lanes/);
+  assert.deepEqual(a.c1Calls,[]);
+  assert.equal(p.LANES.length,13);
+  assert.throws(() => p.requireNativeContracts(f.record.qualification.lanes),/NATIVE_EVIDENCE_INTEGRATION_REQUIRED/);
+  assert.throws(() => p.requireNativeContracts(f.record.qualification.lanes.slice(0,12)),/public-packed-pair/);
+  for (const product of c.PRODUCTS) {
+    assert.ok(p.releasePins(f.record,product).some(row => row.name === "authoring-promotion.json"));
+    assert.ok(!p.releasePins(f.record,product).some(row => row.name === "native-inputs.json"));
+  }
+});
+
+test("C1 provenance fixed tag adapter reuses both existing derived release-tag endpoints", t => {
+  const f = c1PromotionInterface(t); f.adapter.checkInputTags(f.body,f.scratch);
+  assert.deepEqual(f.adapter.c1Calls,[{operation:"version",cwd:f.scratch},
+    {operation:"api",endpoint:"commits/agentplugins-v0.1.54",cwd:f.scratch},
+    {operation:"api",endpoint:"commits/v2.0.0",cwd:f.scratch}]);
+});
+
+test("C1 provenance malformed preparation adapter input rejects before any intake operation", t => {
+  const f = c1PromotionInterface(t);
+  for (const bytes of [null,Buffer.from("{}\n"),Buffer.concat([f.body,Buffer.from("\n")])]) {
+    assert.throws(() => f.adapter.acquireInputPreparation(bytes,f.scratch));
+    assert.throws(() => f.adapter.readInputPreparation(f.scratch,bytes));
+    assert.throws(() => f.adapter.checkInputTags(bytes,f.scratch));
+  }
+  assert.deepEqual(f.adapter.c1Calls,[]); assert.deepEqual(fs.readdirSync(f.scratch),[]);
+});
+
+test("C1 provenance fixed completed-attempt inspector rejects foreign or stale provider metadata at interface level", t => {
+  const f = c1PromotionInterface(t), a = f.adapter;
+  const run = { id:pin.run_id,run_attempt:pin.run_attempt,status:"completed",conclusion:"success",
+    repository:{full_name:c.REPOSITORY},head_repository:{full_name:c.REPOSITORY},head_sha:ID.commit,path:p.WORKFLOW };
+  const item = { id:pin.artifact_id,expired:false,digest:"sha256:"+pin.artifact_sha256,
+    workflow_run:{id:pin.run_id,head_sha:ID.commit},name:"fixture-only",size_in_bytes:123 };
+  const select = (r,i) => {
+    a.c1Responses.set("actions/runs/21/attempts/2",r);
+    a.c1Responses.set("actions/artifacts/31",i); a.c1Calls.length = 0;
+  };
+  select(run,item);
+  assert.deepEqual(a.inspectArtifact(pin,p.WORKFLOW,ID.commit,f.scratch),{run,item});
+  assert.deepEqual(a.c1Calls.map(c => c.endpoint),["actions/runs/21/attempts/2","actions/artifacts/31"]);
+  for (const mutate of [r => r.id++,r => r.run_attempt++,r => r.status = "in_progress",r => r.conclusion = "failure",
+    r => r.repository.full_name = "fork/repo",r => r.head_repository.full_name = "fork/repo",
+    r => r.head_sha = "b".repeat(40),r => r.path = ".github/workflows/other.yml"]) {
+    const changed = structuredClone(run); mutate(changed); select(changed,item);
+    assert.throws(() => a.inspectArtifact(pin,p.WORKFLOW,ID.commit,f.scratch),/exact successful/);
+    assert.equal(a.c1Calls.length,1);
+  }
+  for (const mutate of [i => i.id++,i => i.expired = true,i => i.digest = "sha256:"+hash("different"),
+    i => i.workflow_run.id++,i => i.workflow_run.head_sha = "b".repeat(40),i => i.size_in_bytes = 0]) {
+    const changed = structuredClone(item); mutate(changed); select(run,changed);
+    assert.throws(() => a.inspectArtifact(pin,p.WORKFLOW,ID.commit,f.scratch));
+    assert.ok(a.c1Calls.every(c => c.operation === "api"));
+  }
+  assert.deepEqual(fs.readdirSync(f.scratch),[]);
+});
+
+test("C1 provenance fixed tag adapter rejects a moved second product tag", t => {
+  const f = c1PromotionInterface(t);
+  f.adapter.c1Responses.set("commits/v2.0.0",{sha:"b".repeat(40)});
+  assert.throws(() => f.adapter.checkInputTags(f.body,f.scratch),/moved release tag/);
+  assert.ok(f.adapter.c1Calls.every(c => ["version","api"].includes(c.operation)));
+});
