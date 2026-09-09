@@ -257,6 +257,9 @@ async function ensureBinary(product, options = {}) {
     const recheck = () => { snapshot.recheck(); if (placement) placement.recheck(); if (assetSnapshot) assetSnapshot.recheck(); };
     if (release.descriptor.schema !== SCHEMA) recheck();
     result = await acquireBinary(product, options, platform, target, packageRoot, release, localBinary, recheck);
+    // Acquisition finalization awaits cleanup and unlock while snapshots remain held.
+    v.cancelled(options.signal);
+    recheck();
   } catch (error) { primary = error; }
   const errors = [];
   for (const held of [assetSnapshot, snapshot]) if (held) try { held.close(); } catch (error) { errors.push(error); }

@@ -355,6 +355,65 @@ if (require.main === module) {
 
   });
 
+  test("C2 terminal cancellation rejects after successful awaited unlock", async t => {
+    const f = fixture();
+    for (const p of c.PRODUCTS) for (const warm of [false, true]) for (const supplied of [false, true]) {
+      t.diagnostic(`terminal cancel ${p} warm=${warm} local=${supplied}`);
+      const m = memory(t, f.pair[p]), e = engine(t, f, p, warm), controller = new AbortController();
+      e.options.signal = controller.signal;
+      if (supplied) e.options.environment[LOCATOR] = local(m, f, p);
+      t.mock.method(v, "acquireLock", async () => {
+        e.calls.push("lock");
+        return async () => { await Promise.resolve(); assert.ok(m.handles.size >= 4); e.calls.push("unlock"); controller.abort(); };
+      });
+      await assert.rejects(runtime.ensureBinary(p, e.options), /cancelled/);
+      assert.equal(controller.signal.aborted, true); assert.equal(e.calls.at(-1), "unlock");
+      assert.equal(e.calls.includes("commit"), !warm); assert.equal(m.handles.size, 0);
+      // A late rejection may leave the verified cache entry for a fresh operation.
+      e.options.signal = undefined;
+      e.fault.action = () => {};
+      t.mock.method(v, "acquireLock", async () => async () => {});
+      assert.equal((await runtime.ensureBinary(p, e.options)).cacheHit, true);
+      assert.equal(m.handles.size, 0); t.mock.restoreAll();
+    }
+  });
+
+  test("C2 terminal retained inputs and placement reject after successful awaited unlock", async t => {
+    const f = fixture();
+    for (const p of c.PRODUCTS) for (const warm of [false, true]) for (const field of ["package.json", "native-inputs.json", "public-release.json", "release-manifest.json", "locator", "placement"]) {
+      t.diagnostic(`terminal replacement ${p} warm=${warm} field=${field}`);
+      const m = memory(t, f.pair[p]), e = engine(t, f, p, warm), file = local(m, f, p);
+      e.options.environment[LOCATOR] = file;
+      if (field === "placement") m.put("/unit-cache", null);
+      let changed = false;
+      t.mock.method(v, "acquireLock", async () => {
+        e.calls.push("lock");
+        return async () => {
+          await Promise.resolve(); assert.equal(m.handles.size, 5); e.calls.push("unlock");
+          if (field === "placement") m.put("/unit-cache", null, { type: "link" });
+          else { const name = field === "locator" ? file : `${m.root}/${field}`; m.put(name, Buffer.from(m.nodes.get(name).body)); }
+          changed = true;
+        };
+      });
+      await assert.rejects(runtime.ensureBinary(p, e.options), /changed|unsafe ancestor/);
+      assert.equal(changed, true); assert.equal(e.calls.at(-1), "unlock");
+      assert.equal(e.calls.includes("commit"), !warm); assert.equal(m.handles.size, 0); t.mock.restoreAll();
+    }
+  });
+
+  test("C2 terminal primary and snapshot close errors aggregate", async t => {
+    const f = fixture(), m = memory(t, f.pair.agentplugins), e = engine(t, f, "agentplugins"), controller = new AbortController();
+    e.options.signal = controller.signal;
+    e.fault.action = phase => { if (phase === "unlock") controller.abort(); };
+    m.fault.action = (name, args) => {
+      if (name === "closeSync" && e.calls.includes("unlock")) { m.handles.delete(args[0]); throw new Error("terminal close uncertainty"); }
+    };
+    await assert.rejects(runtime.ensureBinary("agentplugins", e.options), error => {
+      assert.match(error.message, /cancelled/); assert.match(error.message, /terminal close uncertainty/); return true;
+    });
+    assert.equal(m.handles.size, 0);
+  });
+
   test("C2 v1 null and legacy contracts remain unchanged", async t => {
     const f = fixture();
     for (const p of c.PRODUCTS) {
