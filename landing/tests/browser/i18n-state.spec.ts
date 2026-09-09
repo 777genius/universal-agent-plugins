@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import {
-  automatic, downloadHeading, hydrated, deferred, delayedMirror, exactCommands, locales, navigate, offline,
+  automatic, downloadChannelTitle, downloadHeading, hydrated, deferred, delayedMirror, exactCommands, locales, navigate, offline,
   projections, registryFixture, targets, wording,
 } from './i18n-state.helpers';
 
@@ -142,7 +142,7 @@ test('manual download channel beats delayed detection and locale remount', async
     await navigate(page, '/download/');
     await expect.poll(() => held, { message: 'Expected deferred detection script' }).toBeGreaterThan(0);
     await expect(page.locator('.download-section__platform-note')).toHaveCount(0);
-    const npm = page.locator('.download-section__install-tab').filter({ hasText: 'npx' });
+    const npm = page.locator('.download-section__install-tab').filter({ hasText: downloadChannelTitle('en', 'npm') });
     await npm.click();
     await expect(npm).toHaveAttribute('aria-pressed', 'true');
     const commands = await page.locator('.download-section__steps code').allTextContents();
@@ -154,7 +154,8 @@ test('manual download channel beats delayed detection and locale remount', async
     for (const locale of locales.filter((value) => value !== 'en')) {
       await navigate(page, '/download/', locale);
       await expect(page.getByRole('heading', { name: downloadHeading(locale), exact: true })).toBeVisible();
-      await expect(npm).toHaveAttribute('aria-pressed', 'true');
+      const localizedNpm = page.locator('.download-section__install-tab').filter({ hasText: downloadChannelTitle(locale, 'npm') });
+      await expect(localizedNpm).toHaveAttribute('aria-pressed', 'true');
       await expect.poll(() => page.locator('.download-section__steps code').allTextContents()).toEqual(commands);
     }
     expect(errors).toEqual([]);
