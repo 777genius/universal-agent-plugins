@@ -106,11 +106,11 @@ def windows_case(binary, case, root, evidence, timeout):
         session.wait('OWNER_READY_' + nonce)
         offset = 0
         for i in range(30):
-            offset = session.wait(r'QUALIFICATION_CONSOLE_REUSE_READY ' + str(i) + r'\b', after=offset)
+            offset = session.wait(r'QUALIFICATION_CONSOLE_REUSE_READY ' + str(i) + r'\b', after=offset, child_nonce=nonce)
             # One Enter only: CRLF input injection can enqueue a second empty
             # line and invalidate the next cancellation-entry sample.
             session.send(('qualification-reuse-' + str(i) + '\r').encode())
-        session.wait(r'QUALIFICATION_CONSOLE_OK', after=offset)
+        session.wait(r'QUALIFICATION_CONSOLE_OK', after=offset, child_nonce=nonce)
         session.wait('RESTORE_READY_' + nonce)
         status = json.loads(status_path.read_text(encoding='utf-8'))
         check(status['exit'] == 0, 'native console helper failed: ' + repr(status))

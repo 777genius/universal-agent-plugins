@@ -201,7 +201,7 @@ class ConPTY:
         code = W.DWORD(); self.ok(self.k.GetExitCodeProcess(self.pi.hProcess, ctypes.byref(code)))
         return code.value
 
-    def wait(self, marker, after=0):
+    def wait(self, marker, after=0, *, child_nonce=None):
         deadline = time.monotonic() + self.timeout
         while time.monotonic() < deadline:
             code = self.poll()
@@ -215,7 +215,20 @@ class ConPTY:
             # or the original deadline; never renew the budget after exit.
             with self.output_changed:
                 check(self.error is None, self.error)
-                found = re.search(marker, clean(bytes(self.raw[after:])))
+                captured = clean(bytes(self.raw[after:]))
+                # The owner saves completed child status before publishing this
+                # nonce-specific marker, then waits for restoration-probe input.
+                # It is still alive, so poll() alone cannot detect child failure.
+                if child_nonce and 'RESTORE_READY_' + child_nonce in captured:
+                    state = json.loads(self.status_path.read_text(encoding='utf-8'))
+                    transcript = clean(bytes(self.raw))
+                    assertions = '\n'.join(line for line in transcript.splitlines()
+                                           if 'console resources did not settle:' in line
+                                           or 'owned lifecycle:' in line)
+                    check(state.get('exit') == 0 and re.search(marker, captured),
+                          'native console helper exited before ' + marker +
+                          ': ' + repr(state) + '\n' + assertions[-2000:] + '\n' + transcript[-6000:])
+                found = re.search(marker, captured)
                 remaining = deadline - time.monotonic()
                 if remaining <= 0: break
                 if found: return len(self.raw)

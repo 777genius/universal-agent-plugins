@@ -33,9 +33,11 @@ func qualificationConsoleResources(t *testing.T, ceiling *[2]uint32) [2]uint32 {
 			stable = 0
 		}
 		if stable == 3 {
+			qualificationNativeCensus(t)
 			return got
 		}
 		if time.Now().After(deadline) {
+			qualificationNativeCensus(t)
 			stacks := make([]byte, 1<<20)
 			n := runtime.Stack(stacks, true)
 			t.Fatalf("console resources did not settle: baseline=%v actual=%v\n%s", ceiling, got, stacks[:n])

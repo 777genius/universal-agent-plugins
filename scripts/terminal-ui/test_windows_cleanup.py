@@ -216,6 +216,37 @@ class CaptureWaitTests(unittest.TestCase):
                     with self.assertRaisesRegex(AssertionError, message):
                         c.wait('RESTORE_OK')
 
+    def test_child_exit_during_exchange_reports_status_without_timeout(self):
+        import json
+        import tempfile
+        from pathlib import Path
+        from unittest.mock import patch
+        for code in (0, 1):
+            with self.subTest(code=code), tempfile.TemporaryDirectory() as root:
+                c = self.console()
+                c.poll = lambda: None  # Persistent owner awaits its probe input.
+                c.status_path = Path(root) / 'status.json'
+                c.status_path.write_text(json.dumps({'phase': 'probe', 'exit': code}))
+                c.raw.extend(b'console resources did not settle: baseline=[118 2] actual=[124 2]\n' + b'x' * 7000 + b'\nRESTORE_READY_nonce')
+                with patch.object(c.output_changed, 'wait', side_effect=AssertionError('must not wait')):
+                    with self.assertRaisesRegex(AssertionError, "helper exited.*REUSE_READY 24") as caught:
+                        c.wait('REUSE_READY 24', child_nonce='nonce')
+                self.assertIn("'exit': " + str(code), str(caught.exception))
+                self.assertIn('actual=[124 2]', str(caught.exception))
+
+    def test_child_restore_marker_nonce_fragmentation_and_success(self):
+        import json
+        import tempfile
+        from pathlib import Path
+        with tempfile.TemporaryDirectory() as root:
+            c = self.console()
+            c.status_path = Path(root) / 'status.json'
+            c.status_path.write_text(json.dumps({'exit': 0}))
+            for raw in (b'RESTORE_READY_other\nOK', b'RESTORE_READY_non\nOK',
+                        b'OK\nRESTORE_READY_nonce'):
+                c.raw = bytearray(raw)
+                self.assertEqual(c.wait('OK', child_nonce='nonce'), len(raw))
+
     def test_owner_native_error_wins_over_captured_marker(self):
         import json
         import tempfile

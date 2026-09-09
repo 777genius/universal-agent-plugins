@@ -29,7 +29,7 @@ type qualificationKeyEvent struct {
 // Called in the existing ConPTY qualification process after its original 30
 // cancellation exchanges. Queue each triplet in one native write: no driver
 // marker round trips can hide loss of an already submitted next-owner line.
-func qualificationConsoleQueuedAnswers(t *testing.T, inherited windows.Handle, mode uint32) {
+func qualificationConsoleQueuedAnswers(t *testing.T, inherited windows.Handle, mode uint32, trace *qualificationHandleTrace) {
 	t.Helper()
 	if unsafe.Sizeof(qualificationKeyEvent{}) != 20 {
 		t.Fatal("invalid Windows INPUT_RECORD layout")
@@ -55,7 +55,7 @@ func qualificationConsoleQueuedAnswers(t *testing.T, inherited windows.Handle, m
 		}
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
-		if line, err := ReadLine(ctx, os.Stdin); line != "" || !errors.Is(err, context.Canceled) {
+		if line, err := ReadLine(trace.context(ctx), os.Stdin); line != "" || !errors.Is(err, context.Canceled) {
 			t.Fatalf("queued pre-canceled read %d: %q %v", i, line, err)
 		}
 		for j, want := range []string{first, "", next} {
@@ -72,7 +72,7 @@ func qualificationConsoleQueuedAnswers(t *testing.T, inherited windows.Handle, m
 				// private pending buffer in a closed prompt handle cannot help.
 				line, err = readConsoleLine(ctx, inherited, mode)
 			} else {
-				line, err = ReadLine(ctx, os.Stdin)
+				line, err = ReadLine(trace.context(ctx), os.Stdin)
 			}
 			bound.Stop()
 			stop()

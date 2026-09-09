@@ -19,11 +19,44 @@ import (
 
 var cancelSynchronousIO = windows.NewLazySystemDLL("kernel32.dll").NewProc("CancelSynchronousIo")
 
+// Private, per-call diagnostic seam. Nil in normal operation; qualification
+// records into preallocated memory and formats only after the reader has joined.
+// The context keeps concurrent callers isolated without a process-global hook.
+type cancelWindowsKey struct{}
+type cancelWindowsEvent struct {
+	operation string
+	handle    windows.Handle
+	threadID  uint32
+	units     uint32
+	err       error
+}
+type cancelWindowsOps struct {
+	observe   func(cancelWindowsEvent)
+	duplicate func(windows.Handle, windows.Handle, windows.Handle, *windows.Handle, uint32, bool, uint32) error
+	close     func(windows.Handle) error
+}
+
 // Console requests own a separately opened input file object. A duplicate
 // would retain the inherited file object's lifetime when our handle closes.
 // Open only for validated console input; keep pipe cancellation unchanged.
 // The console host still owns editing and echo, and no input is flushed.
 func readCancelable(ctx context.Context, r io.Reader) (string, error) {
+	ops, _ := ctx.Value(cancelWindowsKey{}).(*cancelWindowsOps)
+	emit := func(op string, h windows.Handle, err error) {
+		if ops != nil && ops.observe != nil {
+			ops.observe(cancelWindowsEvent{operation: op, handle: h, threadID: windows.GetCurrentThreadId(), err: err})
+		}
+	}
+	duplicate, closeHandle := windows.DuplicateHandle, windows.CloseHandle
+	if ops != nil {
+		if ops.duplicate != nil {
+			duplicate = ops.duplicate
+		}
+		if ops.close != nil {
+			closeHandle = ops.close
+		}
+	}
+	closeOwned := func(kind string, h windows.Handle) { emit(kind, h, closeHandle(h)) }
 	f, ok := r.(*os.File)
 	if !ok {
 		return readLine(ctx, r)
@@ -47,11 +80,12 @@ func readCancelable(ctx context.Context, r io.Reader) (string, error) {
 			windows.GENERIC_READ|windows.GENERIC_WRITE,
 			windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE,
 			nil, windows.OPEN_EXISTING, 0, 0)
+		emit("console-acquire", console, err)
 		if err != nil {
 			return "", fmt.Errorf("prepare console cancellation: %w", err)
 		}
 		// Registered before the join defer: never close a handle with a live read.
-		defer windows.CloseHandle(console)
+		defer closeOwned("console-close", console)
 		var openedMode uint32
 		if err := windows.GetConsoleMode(console, &openedMode); err != nil {
 			return "", os.NewSyscallError("validate console input", err)
@@ -70,23 +104,27 @@ func readCancelable(ctx context.Context, r io.Reader) (string, error) {
 	ready := make(chan windows.Handle, 1)
 	release := make(chan struct{})
 	finished := make(chan struct{})
-	defer func() { close(release); <-finished }()
+	defer func() { close(release); <-finished; emit("join", 0, nil) }()
 	go func() {
 		defer close(finished)
 		runtime.LockOSThread()
 		defer runtime.UnlockOSThread()
 		var thread windows.Handle
 		process := windows.CurrentProcess()
-		if err := windows.DuplicateHandle(process, windows.CurrentThread(), process, &thread, 0, false, windows.DUPLICATE_SAME_ACCESS); err != nil {
+		err := duplicate(process, windows.CurrentThread(), process, &thread, 0, false, windows.DUPLICATE_SAME_ACCESS)
+		emit("thread-acquire", thread, err)
+		if err != nil {
 			ready <- 0
 			done <- result{err: fmt.Errorf("prepare prompt cancellation: %w", err)}
 			return
 		}
 		// Keep the thread handle alive until cancellation has stopped and the
 		// reader is released, before allowing the OS thread to be reused.
-		defer windows.CloseHandle(thread)
+		defer closeOwned("thread-close", thread)
 		ready <- thread
+		emit("read-enter", console, nil)
 		line, err := read()
+		emit("read-complete", console, err)
 		done <- result{line, err}
 		<-release
 	}()
@@ -104,9 +142,13 @@ func readCancelable(ctx context.Context, r io.Reader) (string, error) {
 				// ERROR_NOT_FOUND is expected when cancellation wins the entry race.
 				// Repeat until the read returns; completion, not cancellation success,
 				// is the handoff boundary. Input ownership remains exclusive until then.
-				_ = windows.CancelIoEx(console, nil)
+				emit("console-cancel", console, windows.CancelIoEx(console, nil))
 			} else if thread != 0 {
-				_, _, _ = cancelSynchronousIO.Call(uintptr(thread))
+				ok, _, err := cancelSynchronousIO.Call(uintptr(thread))
+				if ok != 0 {
+					err = nil
+				}
+				emit("thread-cancel", thread, err)
 			}
 			select {
 			case <-done:
@@ -125,6 +167,9 @@ func readConsoleLine(ctx context.Context, h windows.Handle, mode uint32) (string
 	return readConsoleAnswer(ctx, mode&windows.ENABLE_LINE_INPUT != 0, func(b []uint16) (uint32, error) {
 		var n uint32
 		err := windows.ReadConsole(h, &b[0], uint32(len(b)), &n, nil)
+		if ops, _ := ctx.Value(cancelWindowsKey{}).(*cancelWindowsOps); ops != nil && ops.observe != nil {
+			ops.observe(cancelWindowsEvent{operation: "native-read-complete", handle: h, threadID: windows.GetCurrentThreadId(), units: n, err: err})
+		}
 		return n, err
 	})
 }
