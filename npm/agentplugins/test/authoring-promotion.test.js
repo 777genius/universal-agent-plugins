@@ -753,8 +753,7 @@ api = (endpoint,cwd) => { c1Calls.push({operation:"api",endpoint,cwd}); return c
 module.exports.c1Calls = c1Calls;
 module.exports.c1Responses = c1Responses;
 `, filename);
-  const parent = "/tmp/uap-authoring-d5-c1-provenance-20260909-artifacts/unit-fixtures";
-  fs.mkdirSync(parent, {recursive:true}); const scratch = fs.mkdtempSync(path.join(parent,"q-interface-"));
+  const scratch = fs.mkdtempSync(path.join(os.tmpdir(),"q-interface-"));
   const input = { schema:"authoring-native-inputs/v1",identity:structuredClone(ID),authoring_mode:"release-cli-contract-v1",
     asset_scope:"six-platform-pair",candidate_sha256:hash("candidate"),pair_marker_sha256:hash("pair"),products:{},
     preparation:{sha256:hash("receipt"),artifact:structuredClone(pin)},

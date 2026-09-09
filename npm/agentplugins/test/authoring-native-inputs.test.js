@@ -319,17 +319,16 @@ test("structural consistency only: four codecs stay pure beside separately named
 // C1 tests are orchestration unit evidence only. Provider acquisition and
 // signatures are stubbed module operations; these fixtures never authenticate.
 const fs = require("node:fs");
+const os = require("node:os");
 const path = require("node:path");
 const cp = require("node:child_process");
 const promotion = require("../scripts/authoring-promotion");
 const release = require("../scripts/authoring-release");
 const qualification = require("../scripts/authoring-native-qualification");
-const fixtureParent = "/tmp/uap-authoring-d5-c1-provenance-20260909-artifacts/unit-fixtures";
 
 function c1Fixture(t) {
   t.mock.method(cp, "spawnSync", () => assert.fail("C1 tests must never launch a subprocess"));
-  fs.mkdirSync(fixtureParent, { recursive: true });
-  const sandbox = fs.mkdtempSync(path.join(fixtureParent, "provenance-"));
+  const sandbox = fs.mkdtempSync(path.join(os.tmpdir(), "provenance-"));
   const root = path.join(sandbox, "prepared"), provenance = path.join(sandbox, "provenance"), scratch = path.join(sandbox, "scratch");
   for (const dir of [root, provenance, scratch]) fs.mkdirSync(dir);
   const input = fixture(), inner = new Map();
