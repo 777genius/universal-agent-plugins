@@ -57,6 +57,15 @@ function fixture(product, binaryFor = (p, t) => Buffer.from(`fixture ${p} ${t}\n
   };
   return { root, packageRoot, cacheRoot, descriptor, manifest, bodies, files, identity, qualify, save };
 }
+function mockNativeBytes(t) {
+  const prefix = Buffer.from("synthetic outer\n");
+  t.mock.method(c, "archive", (bytes, name) => Buffer.concat([prefix, Buffer.from(name + "\n"), bytes]));
+  t.mock.method(c, "unpack", (bytes, name) => {
+    const header = Buffer.concat([prefix, Buffer.from(name + "\n")]);
+    assert.deepEqual(bytes.subarray(0, header.length), header);
+    return bytes.subarray(header.length);
+  });
+}
 function transport(f, seen = [], alter = res => res) {
   return (url, options) => {
     seen.push(url.toString());
@@ -81,7 +90,8 @@ const target = `${process.platform === "win32" ? "windows" : process.platform}-$
 
 if (require.main === module) {
   for (const p of c.PRODUCTS) {
-    test(`${p}: preparation and forged bypass reject before any cache/download effect`, async () => {
+    test(`${p}: preparation and forged bypass reject before any cache/download effect`, async t => {
+      mockNativeBytes(t);
       const f = fixture(p);
       const before = fs.readdirSync(f.cacheRoot);
       let requests = 0;
@@ -91,7 +101,8 @@ if (require.main === module) {
         assert.equal(requests, 0); assert.deepEqual(fs.readdirSync(f.cacheRoot), before);
       } finally { delete process.env.UAP_PUBLIC_AUTHORING_VERIFIED; }
     });
-    test(`${p}: cold, offline warm, corrupt recovery and isolation`, async () => {
+    test(`${p}: cold, offline warm, corrupt recovery and isolation`, async t => {
+      mockNativeBytes(t);
       const f = fixture(p); f.qualify(); const seen = [];
       const cold = await publicAPI.ensureBinary(p, options(f, { request: transport(f, seen) }));
       assert.equal(cold.cacheHit, false); assert.equal(seen.length, 1);
@@ -139,7 +150,8 @@ if (require.main === module) {
         await assert.rejects(publicAPI.ensureBinary(p, options(f, { request: () => assert.fail("invalid metadata downloaded") })));
       }
     });
-    test(`${p}: canonical JSON, package binding and unsafe metadata files`, async () => {
+    test(`${p}: canonical JSON, package binding and unsafe metadata files`, async t => {
+      mockNativeBytes(t);
       for (const name of ["public-release.json", "release-manifest.json", "package.json"]) {
         for (const change of [b => Buffer.from(b.toString().replace("{", '{"duplicate":1,"duplicate":2,')),
           b => Buffer.concat([b, Buffer.from([0xff])]), b => Buffer.from(b.toString().trim())]) {

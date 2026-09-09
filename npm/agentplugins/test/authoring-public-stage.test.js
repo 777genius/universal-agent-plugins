@@ -18,7 +18,7 @@ const clone = v => JSON.parse(JSON.stringify(v));
 const inventory = p => ["LICENSE", "README.md", "package.json", `bin/${p}.js`, "bin/package.json",
   "lib/package.json", "lib/platform.js", "lib/verifier.js", "lib/public-authoring.js",
   p === "agentplugins" ? "lib/bootstrap.js" : "lib/install.js", "scripts/package.json",
-  "scripts/dual-authoring-candidate.js", "public-release.json", "release-manifest.json", "native-inputs.json"].sort();
+  "scripts/dual-authoring-candidate.js", "public-release.json", "release-manifest.json", "native-inputs.json", "lib/public-authoring-contract.js", "lib/public-authoring-input.js"].sort();
 const assertions = ["authenticated_native_inputs", "exact_preparation_binding", "exact_source_blobs",
   "exact_generated_closures", "exact_pack_entries_modes_bytes", "both_products_complete", "shared_runtime_bytes_equal",
   "pack_once", "inputs_unchanged", "no_native_execution", "no_publication"];
@@ -377,14 +377,14 @@ test("C1 pure v1 regression: same descriptor, metadata, null/private and all oth
   const f = fixture(), pair = stage.pairedPackageFiles(f.source, f.manifests, f.inputBytes);
   for (const p of products) {
     const v1 = stage.packageFiles(p, f.source, f.manifests[p], { identity: f.input.identity, manifestDigest: f.input.candidate_sha256 });
-    assert.deepEqual(Object.keys(v1).sort(), inventory(p).filter(n => n !== "native-inputs.json"));
+    assert.deepEqual(Object.keys(v1).sort(), inventory(p).filter(n => !["native-inputs.json", "lib/public-authoring-contract.js", "lib/public-authoring-input.js"].includes(n)));
     assert.deepEqual(v1["public-release.json"], json({ schema: "dual-authoring-public-npm/v1", product: p,
       npm_package: inputs.PACKAGES[p], identity: f.input.identity, authoring_mode: "release-cli-contract-v1",
       asset_scope: "six-platform-pair", candidate_sha256: f.input.candidate_sha256,
       release_manifest_sha256: c.digest(f.manifests[p]), qualification: null }));
     const base = JSON.parse(f.source[`npm/${p}/package.json`].bytes);
     assert.deepEqual(v1["package.json"], json({ ...base, version: f.input.identity.versions[p], private: true,
-      files: inventory(p).filter(n => n !== "native-inputs.json") }));
+      files: inventory(p).filter(n => !["native-inputs.json", "lib/public-authoring-contract.js", "lib/public-authoring-input.js"].includes(n)) }));
     for (const n of Object.keys(v1).filter(n => !["package.json", "public-release.json"].includes(n))) assert.deepEqual(v1[n], pair[p][n]);
   }
 });
@@ -398,6 +398,7 @@ test("C1 pure inventories: separate exact stage additions and unchanged legacy e
       .map(n => prefix + "scripts/" + n)];
   assert.deepEqual(stage.ALLOWLIST, legacy);
   assert.deepEqual(stage.STAGE_ALLOWLIST, [...legacy,
+    prefix + "lib/public-authoring-contract.js", prefix + "lib/public-authoring-input.js",
     ...["authoring-native-inputs.js", "authoring-promotion.js", "authoring-native-qualification.js", "platform-proof.js",
       "npm-public-contract.js"].map(n => prefix + "scripts/" + n), "scripts/read-authoring-evidence-zip.py",
     ".github/workflows/agentplugins-release.yml", ".github/workflows/agentplugins-npm-publish.yml"]);
@@ -406,25 +407,21 @@ test("C1 pure inventories: separate exact stage additions and unchanged legacy e
     "encodeStage", "decodeStage", "pairedPackageFiles", "STAGE_ALLOWLIST", "stagePrepublication", "readStage", "validateUnsignedStage", "main"]);
 });
 
-test("C1 pure runtime regression: existing loadRelease rejects v2 and v1/null using only in-memory reads", t => {
+test("C1 pure runtime regression: loadRelease accepts structural v2 and rejects v1/null using only in-memory reads", t => {
   const f = fixture(), pair = stage.pairedPackageFiles(f.source, f.manifests, f.inputBytes);
-  let files, reads;
-  t.mock.method(c, "safeDirectory", root => root);
-  t.mock.method(c, "readFile", file => {
-    const name = file.slice("/unit-package/".length); reads.push(name);
-    assert.ok(Object.hasOwn(files, name), `unexpected read ${file}`); return files[name];
-  });
+  const { memory } = require("./public-authoring-v2.test");
   for (const p of products) {
-    files = pair[p]; reads = [];
-    assert.throws(() => runtime.loadRelease(p, "/unit-package", "linux-amd64"), /public release: unexpected or missing fields/);
-    assert.deepEqual(reads, ["public-release.json"]);
-    // Real metadata contract for v1 is closed; supply its required fixture keys.
-    files = stage.packageFiles(p, f.source, f.manifests[p], { identity: f.input.identity, manifestDigest: f.input.candidate_sha256 });
-    const pkg = JSON.parse(files["package.json"]); pkg.bugs = { url: "https://example.invalid/unit" };
-    if (p === "agentplugins") { pkg.os = ["darwin", "linux", "win32"]; pkg.cpu = ["x64", "arm64"]; }
-    files["package.json"] = json(pkg); reads = [];
-    assert.throws(() => runtime.loadRelease(p, "/unit-package", "linux-amd64"), /not qualified: preparation package/);
-    assert.deepEqual(reads, ["public-release.json", "package.json", "release-manifest.json"]);
+    for (const v2 of [true, false]) {
+      const files = v2 ? pair[p] : stage.packageFiles(p, f.source, f.manifests[p], { identity: f.input.identity, manifestDigest: f.input.candidate_sha256 });
+      const pkg = JSON.parse(files["package.json"]); pkg.bugs = { url: "https://example.invalid/unit" };
+      if (p === "agentplugins") { pkg.os = ["darwin", "linux", "win32"]; pkg.cpu = ["x64", "arm64"]; }
+      files["package.json"] = json(pkg);
+      const m = memory(t, files);
+      t.mock.method(c, "readFile", file => files[file.slice("/unit-package/".length)]);
+      if (v2) assert.deepEqual(runtime.loadRelease(p, m.root, "linux-amd64").asset, f.input.products[p].assets["linux-amd64"]);
+      else assert.throws(() => runtime.loadRelease(p, m.root, "linux-amd64"), /not qualified: preparation package/);
+      assert.equal(m.handles.size, 0); t.mock.restoreAll();
+    }
   }
 });
 

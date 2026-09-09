@@ -233,3 +233,27 @@ The final integrated source (including the independently owned preparation
 initialization fix) still needs owner-scheduled public native execution and
 packed planner acceptance. These focused synthetic tests do not satisfy that
 E2E or the external release/required-check prerequisites.
+
+### C2 production acquisition boundary
+
+The same public launchers and kit postinstall accept the fixed v2 descriptor
+and complete `native-inputs.json` binding. V1 qualification/null behavior stays
+unchanged. V2 alone recognizes `UAP_PUBLIC_AUTHORING_ASSET_FILE` as an untrusted
+absolute locator in an owned private custody directory. Every supplied locator
+is checked before cache effects, including on warm hits; invalid input never
+falls back to download. Outer and inner pins come only from package metadata.
+Local and absent-locator anonymous acquisition converge on the existing locked,
+verified cache under `public-authoring-v2`. The supplied file is never executed.
+
+Bounded retained metadata/asset snapshots are rechecked before commit and return;
+close or cleanup uncertainty returns failure. The child environment removes the
+locator and existing proof controls. These checks assume an owned, quiescent
+namespace, without hostile same-UID, mount-replacement or all-host guarantees.
+Callers must separately keep project/client/evidence outputs outside custody.
+
+C2 source fixtures establish structural and interface behavior only. They do
+not authenticate C1 custody, qualify native inputs, or change either existing
+bridge intake. Genuine C3 execution needs a separately reviewed authenticated
+intake and actual installed launchers/postinstall and installer lifecycle.
+N2, C3 E, P/Q, B, anonymous public readbacks, pair channels, PyPI/Homebrew,
+full-platform E2E, release and phases 0–11 remain open.
