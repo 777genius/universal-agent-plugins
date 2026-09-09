@@ -3,6 +3,36 @@ name: Released Native Client Runtime
 on:
   workflow_dispatch:
     inputs:
+      release_state:
+        description: Public release or authenticated unpublished draft
+        required: true
+        type: choice
+        default: public
+        options: [public, draft]
+      producer_run_id:
+        description: Exact successful producer run ID (draft only)
+        required: false
+        type: string
+      producer_run_attempt:
+        description: Exact successful producer attempt (draft only)
+        required: false
+        type: string
+      expected_asset_set_digest:
+        description: Frozen checksums.txt lowercase SHA-256 (draft only)
+        required: false
+        type: string
+      producer_artifact_id:
+        description: Exact producer npm bundle artifact ID (draft only)
+        required: false
+        type: string
+      producer_artifact_digest:
+        description: Exact npm artifact ZIP lowercase SHA-256 (draft only)
+        required: false
+        type: string
+      release_id:
+        description: Frozen draft release ID (draft only)
+        required: false
+        type: string
       target_scope:
         description: Historical nine lanes or only the three new Linux amd64 lanes
         required: true
@@ -12,7 +42,7 @@ on:
           - historical-nine
           - linux-amd64
       release_tag:
-        description: Exact public UAP installer stable tag (agentplugins-vX.Y.Z)
+        description: Exact UAP installer stable tag (agentplugins-vX.Y.Z)
         required: true
         type: string
       release_commit:
@@ -23,13 +53,44 @@ on:
 permissions:
   contents: read
   attestations: read
+  actions: read
 
 concurrency:
   group: released-native-clients-${{ github.ref }}-${{ inputs.release_tag }}
   cancel-in-progress: false
 
+defaults:
+  run:
+    working-directory: harness
+
 jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+          path: harness
+      - name: Reject incomplete or mixed acquisition identities before any acquisition
+        env:
+          RELEASE_STATE: ${{ inputs.release_state }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          RELEASE_COMMIT: ${{ inputs.release_commit }}
+          PRODUCER_RUN_ID: ${{ inputs.producer_run_id }}
+          PRODUCER_RUN_ATTEMPT: ${{ inputs.producer_run_attempt }}
+          EXPECTED_ASSET_SET_DIGEST: ${{ inputs.expected_asset_set_digest }}
+          PRODUCER_ARTIFACT_ID: ${{ inputs.producer_artifact_id }}
+          PRODUCER_ARTIFACT_DIGEST: ${{ inputs.producer_artifact_digest }}
+          RELEASE_ID: ${{ inputs.release_id }}
+        run: |
+          python scripts/native_client_draft.py --validate-only \
+            --release-state "$RELEASE_STATE" --release-tag "$RELEASE_TAG" --release-commit "$RELEASE_COMMIT" \
+            --producer-run-id "$PRODUCER_RUN_ID" --producer-run-attempt "$PRODUCER_RUN_ATTEMPT" \
+            --expected-asset-set-digest "$EXPECTED_ASSET_SET_DIGEST" --release-id "$RELEASE_ID" \
+            --producer-artifact-id "$PRODUCER_ARTIFACT_ID" --producer-artifact-digest "$PRODUCER_ARTIFACT_DIGEST"
   native-client:
+    needs: validate
     name: ${{ matrix.client }} runtime (${{ matrix.platform.target }})
     strategy:
       fail-fast: false
@@ -49,6 +110,18 @@ jobs:
         with:
           persist-credentials: false
           ref: ${{ github.sha }}
+          path: harness
+      - name: Check out frozen producer notices and source identity
+        if: ${{ inputs.release_state == 'draft' }}
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        env:
+          GIT_CONFIG_COUNT: '1'
+          GIT_CONFIG_KEY_0: core.autocrlf
+          GIT_CONFIG_VALUE_0: 'false'
+        with:
+          persist-credentials: false
+          ref: ${{ inputs.release_commit }}
+          path: producer-source
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: '1.25.13'
@@ -66,11 +139,26 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           EXPECTED_COMMIT: ${{ github.sha }}
           AGENTPLUGINS_NATIVE_DISPOSABLE_HOSTED: '1'
+          RELEASE_STATE: ${{ inputs.release_state }}
           RELEASE_TAG: ${{ inputs.release_tag }}
           RELEASE_COMMIT: ${{ inputs.release_commit }}
+          PRODUCER_RUN_ID: ${{ inputs.producer_run_id }}
+          PRODUCER_RUN_ATTEMPT: ${{ inputs.producer_run_attempt }}
+          EXPECTED_ASSET_SET_DIGEST: ${{ inputs.expected_asset_set_digest }}
+          PRODUCER_ARTIFACT_ID: ${{ inputs.producer_artifact_id }}
+          PRODUCER_ARTIFACT_DIGEST: ${{ inputs.producer_artifact_digest }}
+          RELEASE_ID: ${{ inputs.release_id }}
         shell: bash
         run: |
+          draft_source=()
+          if [[ "$RELEASE_STATE" == draft ]]; then
+            draft_source=(--producer-source "$GITHUB_WORKSPACE/producer-source")
+          fi
           python scripts/run-native-client-matrix.py \
+            --release-state "$RELEASE_STATE" "${draft_source[@]}" \
+            --producer-run-id "$PRODUCER_RUN_ID" --producer-run-attempt "$PRODUCER_RUN_ATTEMPT" \
+            --expected-asset-set-digest "$EXPECTED_ASSET_SET_DIGEST" --release-id "$RELEASE_ID" \
+            --producer-artifact-id "$PRODUCER_ARTIFACT_ID" --producer-artifact-digest "$PRODUCER_ARTIFACT_DIGEST" \
             --release-tag "$RELEASE_TAG" \
             --release-commit "$RELEASE_COMMIT" \
             --client '${{ matrix.client }}' \
@@ -82,5 +170,62 @@ jobs:
         with:
           name: released-native-client-${{ matrix.client }}-${{ matrix.platform.target }}
           path: ${{ runner.temp }}/native-client-proof/
+          if-no-files-found: error
+          retention-days: 14
+
+  draft-complete:
+    name: Qualify all required draft native lanes and reverify live draft
+    needs: [validate, native-client]
+    if: ${{ inputs.release_state == 'draft' && needs.validate.result == 'success' && needs.native-client.result == 'success' }}
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+          path: harness
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          ref: ${{ inputs.release_commit }}
+          path: producer-source
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          pattern: released-native-client-*
+          path: ${{ runner.temp }}/native-lanes
+      - name: Require complete fixture stages then read-only final draft verification
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_STATE: ${{ inputs.release_state }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          RELEASE_COMMIT: ${{ inputs.release_commit }}
+          PRODUCER_RUN_ID: ${{ inputs.producer_run_id }}
+          PRODUCER_RUN_ATTEMPT: ${{ inputs.producer_run_attempt }}
+          EXPECTED_ASSET_SET_DIGEST: ${{ inputs.expected_asset_set_digest }}
+          PRODUCER_ARTIFACT_ID: ${{ inputs.producer_artifact_id }}
+          PRODUCER_ARTIFACT_DIGEST: ${{ inputs.producer_artifact_digest }}
+          RELEASE_ID: ${{ inputs.release_id }}
+          TARGET_SCOPE: ${{ inputs.target_scope }}
+          HARNESS_COMMIT: ${{ github.sha }}
+        shell: bash
+        run: |
+          mkdir "$RUNNER_TEMP/draft-qualification"
+          python scripts/native_client_draft.py \
+            --release-state "$RELEASE_STATE" --release-tag "$RELEASE_TAG" --release-commit "$RELEASE_COMMIT" \
+            --producer-run-id "$PRODUCER_RUN_ID" --producer-run-attempt "$PRODUCER_RUN_ATTEMPT" \
+            --expected-asset-set-digest "$EXPECTED_ASSET_SET_DIGEST" --release-id "$RELEASE_ID" \
+            --producer-artifact-id "$PRODUCER_ARTIFACT_ID" --producer-artifact-digest "$PRODUCER_ARTIFACT_DIGEST" \
+            --target-scope "$TARGET_SCOPE" --harness-commit "$HARNESS_COMMIT" \
+            --producer-source "$GITHUB_WORKSPACE/producer-source" \
+            --evidence "$RUNNER_TEMP/native-lanes" --receipt "$RUNNER_TEMP/draft-qualification/qualification.json"
+      - name: Upload qualification only after successful aggregation and final verification
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: draft-native-qualification-${{ inputs.target_scope }}
+          path: ${{ runner.temp }}/draft-qualification/
           if-no-files-found: error
           retention-days: 14

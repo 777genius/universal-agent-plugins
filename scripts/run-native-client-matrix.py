@@ -22,6 +22,11 @@ import tempfile
 import time
 import urllib.request
 import zipfile
+import importlib.util
+
+_DRAFT_SPEC = importlib.util.spec_from_file_location("native_client_draft", Path(__file__).with_name("native_client_draft.py"))
+draft = importlib.util.module_from_spec(_DRAFT_SPEC)
+_DRAFT_SPEC.loader.exec_module(draft)
 
 PINS = {
     # Exact release archives downloaded and verified against upstream digests.
@@ -187,6 +192,20 @@ def profile_environment(home, target):
             path = home / "AppData" / directory
             path.mkdir(parents=True, exist_ok=False)
             env[key] = str(path)
+    for key, directory in (("XDG_CONFIG_HOME", "config"), ("XDG_CACHE_HOME", "cache"),
+                           ("XDG_STATE_HOME", "state"), ("XDG_DATA_HOME", "data"),
+                           ("NPM_CONFIG_CACHE", "npm-cache")):
+        path = home / directory
+        path.mkdir()
+        env[key] = str(path)
+    for key, filename in (("NPM_CONFIG_USERCONFIG", "npm-user-config"),
+                          ("NPM_CONFIG_GLOBALCONFIG", "npm-global-config"),
+                          ("GIT_CONFIG_GLOBAL", "git-config")):
+        path = home / filename
+        path.write_text("")
+        env[key] = str(path)
+    env["GIT_CONFIG_NOSYSTEM"] = "1"
+    env["GIT_TERMINAL_PROMPT"] = "0"
     return env
 
 
@@ -209,7 +228,16 @@ def main():
     parser.add_argument("--release-tag")
     parser.add_argument("--release-commit")
     parser.add_argument("--release-repo", default="777genius/universal-agent-plugins")
+    parser.add_argument("--release-state", choices=("public", "draft"), default="public")
+    for field in draft.FIELDS:
+        parser.add_argument("--" + field.replace("_", "-"), default="")
+    parser.add_argument("--producer-source", type=Path)
     args = parser.parse_args()
+    draft.validate(args)
+    if args.release_state == "draft" and args.producer_source is None:
+        parser.error("draft mode requires --producer-source")
+    if args.release_state == "public" and args.producer_source is not None:
+        parser.error("public mode must not receive --producer-source")
     if bool(args.release_tag) != bool(args.release_commit):
         parser.error("--release-tag and --release-commit must be supplied together")
     require_hosted(args.target)
@@ -238,14 +266,13 @@ def main():
         suffix = ".exe" if os.name == "nt" else ""
         installer, probe, tests = [binary_dir / (p + suffix) for p in ("agentplugins", "native-probe", "repotests")]
         commands = [(["go", "build", "-trimpath", "-o", str(probe), "./repotests/testdata/agentplugins_native_probe"], source), (["go", "test", "-c", "-o", str(tests), "./repotests"], source)]
-        if args.release_tag:
+        if args.release_state == "draft":
+            identity["helper_sha256"] = draft.helper_hashes(source)
+            tarball, frozen_assets, verified, identity["installer_release"] = draft.acquire(source, binary_dir, args, output)
+        elif args.release_tag:
             installer, identity["installer_release"] = provision_release(source, binary_dir, args.target, args.release_tag, args.release_commit, args.release_repo)
         else:
             commands.insert(0, (["go", "build", "-trimpath", "-o", str(installer), "./cmd/agentplugins"], source / "cli/plugin-kit-ai"))
-        for command, cwd in commands:
-            subprocess.run(command, cwd=cwd, check=True, timeout=360)
-        identity["harness_build_sha256"] = {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in (probe, tests)}
-        identity["installer_sha256"] = hashlib.sha256(installer.read_bytes()).hexdigest()
         project = scratch / "project"
         project.mkdir()
         evidence_root = scratch / "evidence"
@@ -280,6 +307,20 @@ def main():
                     identity["git_bash_sha256"] = hashlib.sha256(bash.read_bytes()).hexdigest()
         else:
             env["PATH"] += ":/usr/bin:/bin"
+        build_env = dict(env)
+        go = shutil.which("go")
+        if not go:
+            raise RuntimeError("Go toolchain missing")
+        build_env["PATH"] = str(Path(go).parent) + os.pathsep + build_env["PATH"]
+        build_env["GOPATH"] = str(scratch / "go")
+        build_env["GOCACHE"] = str(scratch / "go-cache")
+        for command, cwd in commands:
+            subprocess.run(command, cwd=cwd, env=build_env, check=True, timeout=360)
+        identity["harness_build_sha256"] = {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in (probe, tests)}
+        if args.release_state == "draft":
+            installer, identity["packaged_acquisition"] = draft.bootstrap(tarball, frozen_assets, verified, args.target, scratch, env)
+            env["AGENTPLUGINS_INSTALLER_BIN"] = str(installer)
+        identity["installer_sha256"] = hashlib.sha256(installer.read_bytes()).hexdigest()
         if args.release_tag:
             release = identity["installer_release"]
             env["AGENTPLUGINS_INSTALLER_COMMIT"] = release["commit"]
