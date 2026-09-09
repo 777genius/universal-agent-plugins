@@ -220,6 +220,89 @@ def find_git_bash(git):
     return None
 
 
+def prepared_release(source, args):
+    root = args.prepared_input.resolve()
+    if args.prepare_only:
+        root.mkdir(parents=True, exist_ok=False)
+        if args.release_state == 'draft':
+            tarball, assets, verified, release = draft.acquire(source, root, args, root)
+            paths = [str(p.relative_to(root)) for p in (tarball, assets)]
+        else:
+            installer, release = provision_release(source, root, args.target, args.release_tag, args.release_commit, args.release_repo)
+            paths, verified = [str(installer.relative_to(root))], None
+        tool_dir = root / 'prepared-tools'
+        tool_dir.mkdir()
+        tools = {}
+        for name in (args.client, 'lintai', 'rg'):
+            pin = PINS[args.target][name]
+            path, evidence = provision(pin, tool_dir, name)
+            tools[name] = dict(path=path.relative_to(root).as_posix(),
+                               pin=list(pin), evidence=evidence)
+        record = dict(state=args.release_state, tag=args.release_tag, commit=args.release_commit,
+                      target=args.target, client=args.client, tools=tools,
+                      release=release, paths=paths, verified=verified,
+                      files={p.relative_to(root).as_posix(): draft.digest(p) for p in root.rglob('*') if p.is_file()})
+        (root / 'prepared.json').write_text(json.dumps(record))
+        if os.environ.get('GITHUB_OUTPUT'):
+            with open(os.environ['GITHUB_OUTPUT'], 'a') as stream:
+                stream.write('prepared-sha256=' + draft.digest(root / 'prepared.json') + '\n')
+        return
+    record = load_prepared(args)
+    paths = [root / name for name in record['paths']]
+    draft.require(all(p.resolve().is_relative_to(root) and p.exists() for p in paths), 'missing prepared input')
+    if args.release_state == 'draft':
+        return *paths, record['verified'], record['release']
+    return paths[0], record['release']
+
+
+def load_prepared(args):
+    """Authenticate the frozen release and tools without acquiring anything."""
+    root = args.prepared_input.resolve()
+    draft.require(not any(os.environ.get(k) for k in ('GH_TOKEN', 'GITHUB_TOKEN', 'NODE_AUTH_TOKEN', 'NPM_TOKEN')),
+                  'prepared execution must not receive GH_TOKEN, GITHUB_TOKEN, NODE_AUTH_TOKEN, or NPM_TOKEN in its environment')
+    draft.require(not args.prepared_input.is_symlink() and not (root / 'prepared.json').is_symlink()
+                  and draft.digest(root / 'prepared.json') == os.environ.get('PREPARED_SHA256'), 'prepared manifest mismatch')
+    record = json.loads((root / 'prepared.json').read_bytes())
+    draft.require(record.get('client') == args.client, 'mixed prepared client')
+    draft.require((record['state'], record['tag'], record['commit'], record['target']) ==
+                  (args.release_state, args.release_tag, args.release_commit, args.target), 'mixed prepared inputs')
+    files = {p.relative_to(root).as_posix(): p for p in root.rglob('*') if p.is_file()}
+    draft.require(set(files) == set(record['files']) | {'prepared.json'} and
+                  not any(p.is_symlink() for p in root.rglob('*')), 'unexpected prepared files')
+    for name, sha in record['files'].items():
+        draft.require(draft.digest(files[name]) == sha, 'tampered prepared file')
+    tools = record.get('tools', {})
+    draft.require(set(tools) == {args.client, 'lintai', 'rg'}, 'missing prepared tools')
+    for name, tool in tools.items():
+        pin = PINS[args.target][name]
+        require_verified_pin(pin[4])
+        draft.require(tool['pin'] == list(pin), 'prepared tool pin mismatch')
+        draft.require(tool['path'] in record['files'] and
+                      tool['evidence']['binary_sha256'] == record['files'][tool['path']],
+                      'prepared tool digest mismatch')
+    return record
+
+
+def prepared_tools(args, directory):
+    """Keep standalone acquisition, but consume only frozen bytes when supplied."""
+    names = (args.client, 'lintai', 'rg')
+    if args.prepared_input is None:
+        return {name: provision(PINS[args.target][name], directory, name) for name in names}
+    record = load_prepared(args)
+    root = args.prepared_input.resolve()
+    result = {}
+    for name in names:
+        tool = record['tools'][name]
+        body = (root / tool['path']).read_bytes()
+        draft.require(hashlib.sha256(body).hexdigest() == tool['evidence']['binary_sha256'],
+                      'tampered prepared tool')
+        path = directory / (name + ('.exe' if os.name == 'nt' else ''))
+        path.write_bytes(body)
+        path.chmod(0o700)
+        result[name] = path, tool['evidence']
+    return result
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--client", choices=PATTERNS, required=True)
@@ -232,6 +315,9 @@ def main():
     for field in draft.FIELDS:
         parser.add_argument("--" + field.replace("_", "-"), default="")
     parser.add_argument("--producer-source", type=Path)
+    parser.add_argument("--prepare-only", action="store_true")
+    parser.add_argument("--prepared-input", type=Path)
+    parser.add_argument("--target-scope", choices=('historical-nine', 'linux-amd64'), default='historical-nine')
     args = parser.parse_args()
     draft.validate(args)
     if args.release_state == "draft" and args.producer_source is None:
@@ -242,10 +328,18 @@ def main():
         parser.error("--release-tag and --release-commit must be supplied together")
     require_hosted(args.target)
     source = Path(__file__).resolve().parents[1]
+    if args.prepare_only:
+        if args.prepared_input is None or not args.release_tag:
+            parser.error("preparation requires --prepared-input and an exact release")
+        prepared_release(source, args)
+        return
+    prepared = prepared_release(source, args) if args.prepared_input else None
+    if args.release_state == 'draft' and prepared is None:
+        parser.error("draft execution requires prepared inputs")
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=False)
     scratch = Path(tempfile.mkdtemp(prefix="uap-native-hosted-", dir=os.environ["RUNNER_TEMP"])).resolve()
-    identity = {"schema_version": 1, "client": args.client, "target": args.target, "started_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "isolation": "disposable GitHub-hosted machine; explicit runtime environment; fresh project and profiles", "network": "not blocked; scripted loopback model endpoints; no real-model or OAuth proof", "status": "failed", "scratch": str(scratch)}
+    identity = {"schema_version": 1, "client": args.client, "target": args.target, "started_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "isolation": "disposable GitHub-hosted machine; explicit subprocess environments and fresh profiles; no OS/process isolation from runner or later steps", "network": "not blocked; scripted loopback model endpoints; no real-model or OAuth proof", "status": "failed", "scratch": str(scratch)}
     try:
         for key, rev in [("commit", "HEAD"), ("tree", "HEAD^{tree}")]:
             identity[key] = subprocess.check_output(["git", "rev-parse", rev], cwd=source, encoding="utf-8", errors="strict").strip()
@@ -258,19 +352,21 @@ def main():
             require_verified_pin(PINS[args.target][key][4])
         binary_dir = scratch / "bin"
         binary_dir.mkdir()
-        client, client_evidence = provision(PINS[args.target][args.client], binary_dir, args.client)
-        scanner, scanner_evidence = provision(PINS[args.target]["lintai"], binary_dir, "lintai")
+        tools = prepared_tools(args, binary_dir)
+        client, client_evidence = tools[args.client]
+        scanner, scanner_evidence = tools["lintai"]
         identity["client_asset"] = client_evidence
         identity["scanner_asset"] = scanner_evidence
-        _, identity["ripgrep_asset"] = provision(PINS[args.target]["rg"], binary_dir, "rg")
+        _, identity["ripgrep_asset"] = tools["rg"]
         suffix = ".exe" if os.name == "nt" else ""
         installer, probe, tests = [binary_dir / (p + suffix) for p in ("agentplugins", "native-probe", "repotests")]
         commands = [(["go", "build", "-trimpath", "-o", str(probe), "./repotests/testdata/agentplugins_native_probe"], source), (["go", "test", "-c", "-o", str(tests), "./repotests"], source)]
         if args.release_state == "draft":
             identity["helper_sha256"] = draft.helper_hashes(source)
-            tarball, frozen_assets, verified, identity["installer_release"] = draft.acquire(source, binary_dir, args, output)
+            tarball, frozen_assets, verified, identity["installer_release"] = prepared
+            shutil.copyfile(args.prepared_input / "initial-draft.json", output / "initial-draft.json")
         elif args.release_tag:
-            installer, identity["installer_release"] = provision_release(source, binary_dir, args.target, args.release_tag, args.release_commit, args.release_repo)
+            installer, identity["installer_release"] = prepared if prepared is not None else provision_release(source, binary_dir, args.target, args.release_tag, args.release_commit, args.release_repo)
         else:
             commands.insert(0, (["go", "build", "-trimpath", "-o", str(installer), "./cmd/agentplugins"], source / "cli/plugin-kit-ai"))
         project = scratch / "project"

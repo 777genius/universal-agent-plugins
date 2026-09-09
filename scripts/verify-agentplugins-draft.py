@@ -88,6 +88,12 @@ def verify(args):
     receipt = Path(args.receipt)
     require(not receipt.exists(), "receipt path already exists")
     source = Path(args.source).resolve()
+    policy = Path(getattr(args, 'policy_source', None) or source).resolve()
+    if getattr(args, 'policy_source', None):
+        require(run(['git', '-C', str(source), 'rev-parse', 'HEAD']).decode().strip() == args.commit,
+                'wrong producer checkout')
+        require(not run(['git', '-C', str(source), 'status', '--porcelain', '--untracked-files=normal']),
+                'dirty producer checkout')
     before = snapshot(args.repository, args.tag, args.commit, args.release_id)
     with tempfile.TemporaryDirectory(prefix="agentplugins-draft-") as directory:
         root = Path(directory)
@@ -97,7 +103,7 @@ def verify(args):
             require(len(data) == asset["size"], "download size mismatch")
             (root / asset["name"]).write_bytes(data)
         verified = json.loads(run([
-            "node", str(source / "npm/agentplugins/scripts/release-assets.js"),
+            "node", str(policy / "npm/agentplugins/scripts/release-assets.js"),
             "verify", str(root), args.tag, args.commit]))
         require(verified["gate_eligible"] is True
                 and verified["repository"] == ASSET_PRODUCER_REPOSITORY,
@@ -137,6 +143,7 @@ def main():
         parser.add_argument(f"--{name}", required=True)
     for name in ("release-id", "run-id", "run-attempt"):
         parser.add_argument(f"--{name}", required=True, type=int)
+    parser.add_argument("--policy-source", help="trusted verifier checkout; source remains producer data")
     verify(parser.parse_args())
 
 

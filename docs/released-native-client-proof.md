@@ -1,22 +1,35 @@
 # Reproduce released installer native-client evidence
 
-This proof downloads an exact public `777genius/universal-agent-plugins` binary release
-and runs the real pinned Codex, Claude Code, and OpenCode clients against it.
-The nine jobs use disposable GitHub-hosted Linux arm64 (`ubuntu-24.04-arm`),
-macOS arm64 and Windows amd64 runners.
+This proof acquires an exact `777genius/universal-agent-plugins` installer in
+one of two explicit modes: `public` downloads a published stable release;
+`draft` authenticates an unpublished draft and its frozen producer npm bundle.
+Both run genuine pinned Codex, Claude Code, and OpenCode clients in scripted
+fixtures. Select `target_scope=historical-nine` for nine jobs on disposable
+GitHub-hosted Linux arm64 (`ubuntu-24.04-arm`), macOS arm64 and Windows amd64
+runners, or `target_scope=linux-amd64` for three jobs on `ubuntu-24.04`.
+Linux amd64 is supplemental coverage, not a replacement for the historical nine.
+This runbook records no new native qualification.
 Never run these clients against your existing projects or profiles.
 
-Use a UAP tag containing `.github/workflows/agentplugins-released-native-clients.yml`.
-The workflow and checkout execute at that tag's exact commit. The installer
-producer tag and SHA are separate inputs; the proof checks their equality
-against GitHub and records both producer and harness identities. Both sources
-are in the same canonical UAP repository; the old `plugin-kit-ai` repository
-name redirects there. Their release and harness commits can still differ.
+For public reproduction, use an immutable UAP harness tag containing
+`.github/workflows/agentplugins-released-native-clients.yml`.
+The public workflow and checkout execute at that tag's exact commit.
+Draft dispatch is restricted to this workflow in the canonical repository on
+`main`; each run checks out its captured immutable `github.sha`
+and binds that harness commit/tree into its receipts.
+The installer producer tag and SHA are separate inputs; the proof
+checks the producer tag's commit against GitHub and records both identities.
+Both sources are in the canonical UAP repository; the old `plugin-kit-ai`
+name redirects there. Producer and harness commits may differ.
+
+For public acquisition, omit all draft provenance inputs:
 
 ```sh
 gh workflow run agentplugins-released-native-clients.yml \
   --repo 777genius/universal-agent-plugins \
   --ref <immutable-UAP-harness-tag> \
+  -f release_state=public \
+  -f target_scope=historical-nine \
   -f release_tag=agentplugins-vX.Y.Z \
   -f release_commit=<40-character-installer-producer-SHA>
 gh run list --repo 777genius/universal-agent-plugins \
@@ -27,33 +40,122 @@ gh run download <run-id> --repo 777genius/universal-agent-plugins \
   --dir ./released-native-evidence
 ```
 
-Dispatch requires repository Actions permissions. To reproduce independently,
+Dispatch requires repository Actions permissions. To reproduce public mode independently,
 fork the repository and dispatch the same checked-in workflow at the same
 harness commit in your fork; change `--repo` above to your fork. The installer
 producer remains `777genius/universal-agent-plugins`. No client account or model
 credential is used.
 
-The runner rejects draft/prerelease assets, incorrect producer commits, modified
+Public mode rejects draft/prerelease assets and all draft provenance inputs.
+Both modes reject incorrect producer commits, modified
 checksums, mismatched manifest metadata, missing attestations and unexpected
 binary versions. Attestations must identify the producer release workflow and
 exact producer source SHA. It verifies the complete six-binary release asset set
-and the selected binary's provenance before execution. Harness and probe are
+and the selected binary's provenance before execution. The current notices-bearing
+asset set is **nine**: six binaries, `release-manifest.json`, `checksums.txt`,
+and `THIRD_PARTY_NOTICES.txt`, as enforced by `release-assets.js` and the draft
+archive verifier. Historical 0.1.53 has eight assets (no companion notices).
+Harness and probe are
 source-built helpers with separate hashes; the installer is never rebuilt in
 released mode. Client, scanner and ripgrep archives retain their checked-in pins.
 
-Download all nine `released-native-client-*` artifacts. Each must have
+Download all `released-native-client-*` artifacts for the selected scope
+(nine for `historical-nine`, three for `linux-amd64`). Each must have
 `runner-evidence.json` with `status: passed`, all required tests passed and no
 skipped tests; transcripts and fixture evidence accompany it. Identity includes
 the released installer digest, producer tag/commit/tree, verified attestations,
 harness commit/tree and helper hashes. Artifacts expire after 14 days, so archive
-them before publication as described below. A configured lane is not successful
+them privately before expiry as described below; publication is optional.
+A configured lane is not successful
 runtime evidence until its corresponding job passes.
 
 These suites prove fixture installation, discovery and scripted native runtime
 behavior. They do not prove real-model quality, OAuth or live external-service
 availability. The separate platform proof covers additional installer targets.
-Linux native client coverage is arm64 only; it does not imply Linux amd64 client
-proof.
+The historical 0.1.53 Linux native client evidence is arm64 only; configuring
+the new Linux amd64 scope does not establish a successful run.
+
+## Draft dispatch and acquisition
+
+Dispatch only after the exact producer attempt has passed all six platform
+proofs, their aggregate and `verified-draft`. Draft dispatch requires the
+canonical repository's workflow on `refs/heads/main`; public-mode fork and
+immutable-tag instructions do not apply to draft acquisition.
+Freeze the release ID, producer run/attempt, `agentplugins-npm-<version>` artifact
+ID and original ZIP digest, and the digest of `checksums.txt`. IDs/attempts are
+positive integers; both digests are 64 lowercase hex characters (no `sha256:`
+prefix), and the producer SHA is 40 lowercase hex characters.
+An in-progress producer attempt does not satisfy this prerequisite.
+
+```sh
+gh workflow run agentplugins-released-native-clients.yml \
+  --repo 777genius/universal-agent-plugins \
+  --ref main \
+  -f release_state=draft \
+  -f target_scope=historical-nine \
+  -f release_tag=agentplugins-vX.Y.Z \
+  -f release_commit=<40-character-installer-producer-SHA> \
+  -f producer_run_id=<successful-producer-run-ID> \
+  -f producer_run_attempt=<successful-producer-attempt> \
+  -f release_id=<frozen-draft-release-ID> \
+  -f expected_asset_set_digest=<checksums.txt-SHA256> \
+  -f producer_artifact_id=<producer-npm-artifact-ID> \
+  -f producer_artifact_digest=<original-producer-artifact-ZIP-SHA256>
+```
+
+Dispatch separately with `target_scope=linux-amd64` for the three supplemental
+lanes, again using `--ref main` and retaining the same frozen producer and
+release identities. Capture each scope's resolved harness SHA from its run,
+then resolve its tree:
+
+```sh
+gh run view <scope-run-id> --repo 777genius/universal-agent-plugins \
+  --json headSha,url,attempt
+gh api repos/777genius/universal-agent-plugins/git/commits/<resolved-harness-SHA> \
+  --jq '.tree.sha'
+```
+
+Record these identities for both the nine-lane and three-lane dispatches and
+require their receipts to match the captured commit/tree. Refuse a combined
+nine-plus-three qualification with mixed harness versions: if `main` advances
+between dispatches and their resolved SHAs differ, repeat the affected scope
+on `main` until both scopes have the same captured harness commit/tree.
+Use the watch and download commands above for each run, with separate fresh
+output directories.
+
+Draft mode verifies the exact successful producer attempt and artifact ID/name,
+the still-unpublished, non-prerelease draft and all nine attested assets. It uses
+the original npm tarball from that producer artifact, never a local rebuild,
+repack or registry substitute. Package pins and notices must match the frozen
+release. In a disposable project it installs offline with scripts disabled,
+checks installed bytes, proves cold bootstrap from the frozen binary and a warm
+launch without that proof source, then runs the cached binary in native fixtures.
+Acquisition authentication is not inherited by npm or client child environments.
+This proof assumes trusted pinned clients, the canonical package and
+repository-owned fixtures. The child environment provides no OS process
+isolation from the runner or the subsequent artifact-upload step. Network
+access remains enabled, no real-model or OAuth credentials are supplied, and
+collected logs are not guaranteed to be secret-free.
+
+Require every selected lane to pass without skips and the `draft-complete` job
+to pass its read-only aggregation of lane/package/helper identities, fixture
+evidence and snapshot binding, producing the `draft-lanes` receipt.
+Then require `draft-recheck` to pass: this metadata-only job authenticates the
+snapshot and lanes receipts, reauthenticates the producer and reverifies the
+live draft before uploading `draft-native-qualification-<scope>` with
+`qualification.json` and `final-draft.json`.
+The metadata-only `draft-snapshot` and `draft-recheck` jobs require
+`contents: write` for draft visibility, even though they do not publish releases.
+Retain the qualification files alongside the lanes and original producer ZIP
+using the private offline archive instructions below. Qualification is scoped
+to that dispatch; publication of evidence is not required. This installer proof
+does not qualify the standard authoring executable release (D5).
+
+## Optional historical public archive procedure
+
+This is the historical nine-lane public evidence procedure. Any new publication
+requires explicit owner permission after disclosure review; draft qualification
+uses unpublished/private archives and does not depend on publication.
 
 For a durable release record, the release operator downloads all nine artifacts
 from the successful run, verifies each identity and test verdict above, and
@@ -62,7 +164,8 @@ packs their original contents with the run metadata (`gh run view <run-id>
 Publish the archive and its SHA-256 sidecar on a separate evidence release tied
 to the exact harness SHA. Its tag must not begin with `agentplugins-v`, for example
 `native-evidence-run-<run-id>`. Never add evidence assets to the installer release:
-its closed set of eight assets is checked by installation and proof tooling.
+the historical 0.1.53 closed set of eight assets is checked by installation and
+proof tooling (current notices-bearing releases have nine).
 Use a uniquely named archive, for example
 `released-native-evidence-run-<run-id>.tar.gz`, and `gh release upload
 <native-evidence-tag> <archive> <sha256-sidecar> --repo
@@ -70,7 +173,8 @@ Use a uniquely named archive, for example
 and SHA, harness SHA, Actions run URL, published asset URLs and archive digest
 in the separate evidence release's notes, and link that release from the durable
 release documentation. Download the published assets again and verify the digest
-before calling the evidence durable; this workflow has no release-write permission.
+before calling the evidence durable; public-mode workflow jobs have no
+release-write permission.
 
 The Linux runner label is a native arm64 GitHub-hosted VM, as documented in
 [GitHub's runner reference](https://docs.github.com/en/actions/reference/runners/github-hosted-runners).
@@ -156,7 +260,9 @@ While Actions artifacts remain available, `gh run download 34166817934 --repo
 ./native-053-input` is an alternative acquisition route. It expires; the public
 release ZIP above is the durable route. Never execute log or fixture contents.
 
-Publication is an operator step, separate from the read-only verifier: create
+For this historical public procedure, any new publication requires explicit
+owner permission after disclosure review. Publication is optional and separate
+from the read-only verifier: create
 the non-installer tag at the original harness SHA, attach the exact ZIP and
 checksum sidecar without overwrite, and include release/harness identities,
 run URL, archive hash and verifier source digest in the notes. Record the later
@@ -166,7 +272,10 @@ publication status. Original logs intentionally retain dummy fixture keys,
 loopback ports, runner paths and built-in client prompts. Their disclosure review
 must inspect content; safe paths and file extensions do not sanitize logs.
 
-For **offline draft archives**, preserve the existing scope-2
+## Private offline draft archives
+
+Keep draft evidence unpublished; any later publication requires explicit owner
+permission after disclosure review. Preserve the existing scope-2
 `draft-native-qualification-<scope>` artifact's original `qualification.json`
 and `final-draft.json` in a separate directory, and all expected
 `released-native-client-<client>-<target>` directories with every original indexed

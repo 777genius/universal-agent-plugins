@@ -420,8 +420,8 @@ def verify_draft(root, args):
                  (('qualification.json', QUALIFICATION_JSON_LIMIT), ('final-draft.json', FINAL_DRAFT_JSON_LIMIT))}
     require(not args.qualification.is_symlink() and {p.name for p in args.qualification.iterdir()} == set(originals), 'unexpected qualification files')
     q = read_json(originals['qualification.json'])
-    object_keys(q, 'schema_version status release_state target_scope producer_commit harness_commit harness_tree tarball_sha256 producer helper_sha256 lanes final_draft limitation', 'qualification')
-    require(type(q['schema_version']) is int and q['schema_version'] == 1 and q['status'] == 'passed'
+    object_keys(q, 'schema_version status release_state target_scope producer_commit harness_commit harness_tree tarball_sha256 producer helper_sha256 lanes final_draft limitation' + (' invocation' if q.get('schema_version') == 2 else ''), 'qualification')
+    require(type(q['schema_version']) is int and q['schema_version'] in (1, 2) and q['status'] == 'passed'
             and q['release_state'] == 'verified-draft' and q['target_scope'] == args.scope
             and q['producer_commit'] == args.release_commit and q['harness_commit'] == args.harness_commit
             and q['harness_tree'] == args.harness_tree, 'qualification identity mismatch')
@@ -434,6 +434,26 @@ def verify_draft(root, args):
         'scripts/run-native-client-matrix.py', 'scripts/native_client_draft.py',
         'scripts/verify-agentplugins-draft.py', 'scripts/verify-released-native-evidence.py',
         'npm/agentplugins/scripts/release-assets.js'} and all(exact_hex(v, 64) for v in helpers.values()), 'unsupported helper inventory')
+    if 'invocation' in q:
+        invocation = q['invocation']
+        object_keys(invocation, 'binding snapshot_sha256 lanes_sha256 transport', 'invocation')
+        binding = invocation['binding']
+        object_keys(binding, 'repository workflow harness_commit harness_tree run_id run_attempt target_scope release_tag release_commit producer_run_id producer_run_attempt expected_asset_set_digest producer_artifact_id producer_artifact_digest release_id helper_sha256', 'invocation binding')
+        require(binding['repository'] == REPOSITORY and binding['workflow'] == native.NATIVE_WORKFLOW
+                and binding['harness_commit'] == args.harness_commit and binding['harness_tree'] == args.harness_tree
+                and binding['target_scope'] == args.scope and binding['release_tag'] == args.release_tag
+                and binding['release_commit'] == args.release_commit and binding['helper_sha256'] == helpers
+                and all(binding[k] == str(getattr(args, k)) for k in native.FIELDS)
+                and all(type(binding[k]) is int and binding[k] > 0 for k in ('run_id', 'run_attempt')),
+                'mixed final invocation')
+        require(all(exact_hex(invocation[k], 64) for k in ('snapshot_sha256', 'lanes_sha256')), 'invalid invocation digest')
+        transport = invocation['transport']
+        object_keys(transport, 'SNAPSHOT_ARTIFACT_ID SNAPSHOT_ARTIFACT_DIGEST LANES_ARTIFACT_ID LANES_ARTIFACT_DIGEST', 'transport')
+        require(all(isinstance(transport[k], str) and re.fullmatch(r'[1-9]\d*', transport[k]) for k in
+                    ('SNAPSHOT_ARTIFACT_ID', 'LANES_ARTIFACT_ID'))
+                and transport['SNAPSHOT_ARTIFACT_ID'] != transport['LANES_ARTIFACT_ID']
+                and all(exact_hex(transport[k], 64) for k in ('SNAPSHOT_ARTIFACT_DIGEST', 'LANES_ARTIFACT_DIGEST')),
+                'invalid invocation transport')
     bundle = original_file(args.producer_bundle, ZIP_CONTAINER_LIMIT)
     assets, verified, tarball, launcher = draft_bundle(bundle, args, native)
     require(q['tarball_sha256'] == tarball, 'qualification tarball mismatch')
@@ -502,6 +522,14 @@ def verify_draft(root, args):
                 and release.get('tarball_sha256') == tarball
                 and all(type(release['producer'][k]) is int for k in ('run_id', 'run_attempt', 'artifact_id')), 'draft lane producer/package mismatch')
         initial = release['initial_draft']
+        if q['schema_version'] == 2:
+            def receipt_digest(value):
+                return digest((json.dumps(value, sort_keys=True) + '\n').encode())
+            require(receipt_digest(dict(kind='snapshot', binding=binding, producer_tree=release['tree'], live=initial))
+                    == invocation['snapshot_sha256'], 'lane differs from invocation snapshot')
+            require(receipt_digest(dict(kind='lanes-verified', binding=binding, snapshot_sha256=invocation['snapshot_sha256'],
+                                        tarball_sha256=tarball, lanes=q['lanes'])) == invocation['lanes_sha256'],
+                    'qualification differs from lanes receipt')
         receipt(initial)
         from datetime import datetime
         require(datetime.fromisoformat(initial['verified_at']) <= datetime.fromisoformat(final['verified_at']), 'final receipt predates initial verification')
