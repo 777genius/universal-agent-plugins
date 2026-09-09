@@ -1,5 +1,5 @@
 import { computed, toValue } from 'vue';
-import { canonicalPath } from '~/utils/seo';
+import { canonicalPath, productRootUrl, productImageUrl } from '~/utils/seo';
 import type { MaybeRefOrGetter } from 'vue';
 
 type PageSeoImage = {
@@ -32,8 +32,9 @@ export const usePageSeo = (
   const { t, locale } = useI18n();
   const route = useRoute();
   const config = useRuntimeConfig();
-  const siteUrl = String(
-    config.public.siteUrl || 'https://777genius.github.io/universal-agent-plugins',
+  const siteUrl = productRootUrl(
+    String(config.public.siteUrl || 'https://777genius.github.io/universal-agent-plugins'),
+    String(config.app.baseURL),
   ).replace(/\/+$/, '');
   const siteName = 'Universal Agent Plugins';
   const githubUrl = `https://github.com/${config.public.githubRepo}`;
@@ -58,19 +59,13 @@ export const usePageSeo = (
       width: 1200,
       height: 630,
       type: 'image/png',
-      alt: 'Universal Agent Plugins - install plugins across AI agents with one CLI',
+      alt: t('shell.seo.imageAlt'),
     };
   });
 
-  const resolvedImageUrl = computed(() => {
-    const imageUrl = resolvedImage.value.url;
-    if (imageUrl.startsWith('http')) {
-      return imageUrl;
-    }
-
-    const siteBase = siteUrl.endsWith('/') ? siteUrl : `${siteUrl}/`;
-    return new URL(imageUrl.replace(/^\/+/, ''), siteBase).toString();
-  });
+  const resolvedImageUrl = computed(() =>
+    productImageUrl(resolvedImage.value.url, siteUrl, String(config.app.baseURL)),
+  );
 
   useSeoMeta({
     title,
@@ -135,8 +130,7 @@ export const usePageSeo = (
         '@id': organizationId,
         name: siteName,
         alternateName: 'UAP',
-        description:
-          'Open-source multi-agent installer and lifecycle manager for Agent Plugins 1.0.',
+        description: t('shell.seo.organizationDescription'),
         url: `${siteUrl}/`,
         logo: {
           '@type': 'ImageObject',

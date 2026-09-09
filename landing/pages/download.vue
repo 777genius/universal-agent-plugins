@@ -1,23 +1,32 @@
 <script setup lang="ts">
-import { productSoftwareSchema } from '~/utils/seo';
+import { productRootUrl, productSoftwareSchema } from '~/utils/seo';
 
+const { t } = useI18n();
 const config = useRuntimeConfig();
-const description =
-  'Install the Universal Agent Plugins CLI on macOS, Linux, or Windows and manage Agent Plugins 1.0 from one command.';
-const siteUrl = String(config.public.siteUrl).replace(/\/+$/, '');
+const { docsUrl } = useDocsLinks();
+const description = computed(() => t('shell.seo.downloadDescription'));
+const siteUrl = productRootUrl(
+  String(config.public.siteUrl),
+  String(config.app.baseURL),
+).replace(/\/+$/, '');
 const githubUrl = `https://github.com/${config.public.githubRepo}`;
 
-usePageSeo('Download Universal Agent Plugins CLI', description, {
+usePageSeo(() => t('shell.seo.downloadTitle'), description, {
   translate: false,
   pageProperties: { mainEntity: { '@id': `${siteUrl}/#software` } },
-  structuredData: [
-    productSoftwareSchema({
-      siteUrl,
-      githubUrl,
-      releasesUrl: String(config.public.githubReleasesUrl),
-      docsUrl: String(config.public.docsUrl),
-      description,
-    }),
+  structuredData: () => [
+    {
+      ...productSoftwareSchema({
+        siteUrl,
+        githubUrl,
+        releasesUrl: String(config.public.githubReleasesUrl),
+        docsUrl: docsUrl.value,
+        description: description.value,
+        applicationSubCategory: t('shell.seo.applicationSubCategory'),
+      softwareRequirements: t('shell.seo.softwareRequirements'),
+        featureList: t('shell.seo.featureList'),
+      }),
+    },
   ],
 });
 </script>

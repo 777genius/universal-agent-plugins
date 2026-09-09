@@ -2,6 +2,7 @@ import type { ClientTarget } from '../types/registry';
 
 export interface ClientLandingPage extends ClientTarget {
   slug: string;
+  presentationKey?: string;
   intro: string;
   delivery: string;
   activation: string;
@@ -165,6 +166,14 @@ export const clientLandingPages: ClientLandingPage[] = [
 export const clients: ClientTarget[] = clientLandingPages.map(
   ({ id, name, icon, note, status }) => ({ id, name, icon, note, status }),
 );
+
+// Shell consumers can use this contract with clients[] without importing message JSON.
+export function clientPresentationKey(id: ClientTarget['id']): `registryUi.clients.${ClientTarget['id']}` {
+  return `registryUi.clients.${id}`;
+}
+
+// IDs and URLs stay canonical; captions are resolved by the active locale at the UI boundary.
+for (const client of clientLandingPages) client.presentationKey = clientPresentationKey(client.id);
 
 export const clientLandingBySlug = new Map(
   clientLandingPages.map((client) => [client.slug, client]),

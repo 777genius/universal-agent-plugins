@@ -1,14 +1,19 @@
 <script setup lang="ts">
+import { isKnownLocale } from '~/data/i18n';
+import { localizedPath } from '~/utils/localizedRoutes';
 import CommandSnippetCard from '~/components/shared/CommandSnippetCard.vue';
 import { clientLandingPages } from '~/data/clients';
 import { applyCliInvocation, getCliInvocation } from '~/utils/cliInvocation';
 
 withDefaults(defineProps<{ headingTag?: 'h1' | 'h2' }>(), { headingTag: 'h2' });
 
-const { content } = useLandingContent();
 const { t, locale } = useI18n();
+const { content } = await useDownloadContent();
+const clientPath = (slug: string) =>
+  localizedPath(`/agents/${slug}/`, isKnownLocale(locale.value) ? locale.value : 'en');
 const { data: releaseData, fallbackUrl } = useReleaseDownloads();
-const { quickstartUrl, supportBoundaryUrl } = useDocsLinks();
+const { quickstartUrl, supportBoundaryUrl, docsLabel, supportBoundaryEnglishFallback } =
+  useDocsLinks();
 
 const releaseVersion = computed(() => {
   const version = releaseData.value?.version;
@@ -211,11 +216,16 @@ const quickstartSteps = computed(() => {
           >
             <div class="download-section__support-main">
               <h4 class="download-section__support-name">
-                <NuxtLink :to="`/agents/${client.slug}/`">{{ client.name }}</NuxtLink>
+                <NuxtLink :to="clientPath(client.slug)">{{ client.name }}</NuxtLink>
               </h4>
-              <span class="download-section__support-status">{{ client.status }}</span>
+              <span class="download-section__support-status">{{
+                t(`registryUi.clients.${client.id}.status`)
+              }}</span>
             </div>
-            <p class="download-section__support-note">{{ client.note }}. {{ client.activation }}</p>
+            <p class="download-section__support-note">
+              {{ t(`registryUi.clients.${client.id}.note`) }}.
+              {{ t(`registryUi.clients.${client.id}.activation`) }}
+            </p>
           </div>
         </div>
 
@@ -225,7 +235,7 @@ const quickstartSteps = computed(() => {
           target="_blank"
           rel="noopener noreferrer"
         >
-          {{ t('download.supportLink') }}
+          {{ docsLabel(t('download.supportLink'), supportBoundaryEnglishFallback) }}
         </a>
       </article>
     </v-container>

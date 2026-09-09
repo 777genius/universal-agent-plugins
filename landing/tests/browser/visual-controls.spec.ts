@@ -77,6 +77,8 @@ test('numbered benefits remain readable in both themes and responsive layouts', 
     }
     // The desktop theme control is intentionally absent from the compact mobile header.
     await page.setViewportSize({ width: 1440, height: 1000 });
-    await page.getByRole('button', { name: 'Toggle theme', exact: true }).click();
+    const nextTheme = reducedMotion === 'no-preference' ? 'light' : 'dark';
+    await page.getByRole('button', { name: nextTheme === 'light' ? 'Light' : 'Dark', exact: true }).click();
+    await expect(page.locator('.v-application')).toHaveClass(new RegExp(`v-theme--${nextTheme}`));
   }
 });

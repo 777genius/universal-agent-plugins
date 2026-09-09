@@ -2,15 +2,17 @@ import assert from 'node:assert/strict';
 import { readFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
-import { createI18n } from 'vue-i18n';
+import { createI18n, type LocaleMessageDictionary, type VueMessageType } from 'vue-i18n';
+import { resolveDocsLink } from '../data/docsAvailability.ts';
 
 const root = new URL('../../', import.meta.url);
 const read = (path: string) => readFileSync(new URL(path, root), 'utf8');
-const locales = ['en', 'ru', 'es', 'fr', 'zh'];
-const renderedCopy = (locale: string) => {
+const locales = ['en', 'ru', 'es', 'fr', 'zh'] as const;
+const renderedCopy = (locale: typeof locales[number]) => {
   const messages = JSON.parse(read(`landing/locales/${locale}.json`));
-  const { t } = createI18n({ legacy: false, locale, fallbackLocale: false,
-    messages: { [locale]: messages } }).global;
+  // Render each preserved dictionary in an isolated EN test host; Nuxt publishes only EN/RU/UK.
+  const { t } = createI18n<[LocaleMessageDictionary<VueMessageType>], 'en', false>({ legacy: false, locale: 'en', fallbackLocale: false,
+    messages: { en: messages } }).global;
   return Object.fromEntries(Object.keys(messages.publicAuthoring).map(key =>
     [key, t(`publicAuthoring.${key}`)]));
 };
@@ -48,14 +50,20 @@ test('the authoring front door renders Use/Build and preserves its indexing poli
     assert.ok(copy.versions.includes('agentplugins-v0.1.53'));
     assert.ok(copy.limitations.includes('SSE'));
   }
-  // docsUrl already ends in /en/: exercise the exact expression used in the page.
-  const expression = page.match(/const base = ([\s\S]*?);/)![1];
-  for (const locale of locales) {
-    const base = Function('config', `return ${expression}`)({
-      public: { docsUrl: 'https://777genius.github.io/universal-agent-plugins/docs/en/' },
-    });
-    assert.equal(`${base}/${locale}/guide/quickstart.html`,
-      `https://777genius.github.io/universal-agent-plugins/docs/${locale}/guide/quickstart.html`);
+  assert.ok(page.includes('useDocsLinks()'));
+  const expression = page.match(/<a :href="([^"]*historical-v1[^"]*)"/)?.[1];
+  assert.ok(expression);
+  for (const input of [
+    'https://777genius.github.io/universal-agent-plugins/docs/en/guide/quickstart.html?source=x#use-plugins',
+    'https://custom.example/docs/ru/guide/quickstart.html?source=x#historical-v1',
+    '/docs/en/guide/quickstart.html?source=x',
+  ]) {
+    const href: unknown = new Function('quickstartUrl', `return ${expression}`)(input);
+    assert.equal(href, input.split('#')[0] + '#historical-v1');
+  }
+  for (const locale of ['en', 'ru', 'uk']) {
+    assert.equal(resolveDocsLink('quickstart', locale).url,
+      `https://777genius.github.io/universal-agent-plugins/docs/${locale === 'ru' ? 'ru' : 'en'}/guide/quickstart.html`);
   }
 });
 

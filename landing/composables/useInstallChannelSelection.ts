@@ -1,4 +1,5 @@
 import type { ComputedRef } from 'vue';
+import { useInstallPreferencesStore } from '~/stores/installPreferences';
 import type { InstallChannel } from '~/types/content';
 import {
   normalizeInstallPlatform,
@@ -7,9 +8,10 @@ import {
 } from '~/utils/installPlatform';
 
 export function useInstallChannelSelection(channels: ComputedRef<InstallChannel[]>) {
-  const selectedInstallChannelId = ref<string | null>(null);
+  const preferences = useInstallPreferencesStore();
+  const selectedInstallChannelId = computed(() => preferences.channelId);
   const detectedInstallPlatform = ref<InstallPlatform | null>(null);
-  const manuallySelected = ref(false);
+  const detectionComplete = ref(false);
 
   const recommendedChannelId = computed(() => {
     if (detectedInstallPlatform.value) {
@@ -31,18 +33,20 @@ export function useInstallChannelSelection(channels: ComputedRef<InstallChannel[
     );
   });
 
-  watchEffect(() => {
-    const selectionStillExists = channels.value.some(
-      (channel) => channel.id === selectedInstallChannelId.value,
-    );
-    if (!selectionStillExists || !manuallySelected.value) {
-      selectedInstallChannelId.value =
-        recommendedChannelId.value ??
-        channels.value.find((channel) => channel.id === 'npm')?.id ??
-        channels.value[0]?.id ??
-        null;
-    }
-  });
+  // Pinia actions read shared selection state. Track only this consumer's inputs,
+  // otherwise overlapping locale route instances can retrigger each other forever.
+  watch(
+    [() => channels.value.map((channel) => channel.id), recommendedChannelId, detectionComplete],
+    ([available, recommendation, ready]) => {
+      preferences.reconcileChannels(available);
+      // A newly created route has not detected its platform yet. Keep the hydrated
+      // selection until detection settles instead of briefly restoring SSR defaults.
+      if (!ready && preferences.channelId) return;
+      const next = recommendation ?? available.find((id) => id === 'npm') ?? available[0];
+      if (next) preferences.selectChannel(next, available, false);
+    },
+    { immediate: true },
+  );
 
   onMounted(async () => {
     try {
@@ -52,6 +56,8 @@ export function useInstallChannelSelection(channels: ComputedRef<InstallChannel[
       );
     } catch {
       detectedInstallPlatform.value = null;
+    } finally {
+      detectionComplete.value = true;
     }
   });
 
@@ -59,8 +65,10 @@ export function useInstallChannelSelection(channels: ComputedRef<InstallChannel[
     if (!channels.value.some((channel) => channel.id === channelId)) {
       return;
     }
-    manuallySelected.value = true;
-    selectedInstallChannelId.value = channelId;
+    preferences.selectChannel(
+      channelId,
+      channels.value.map((channel) => channel.id),
+    );
   }
 
   return {
