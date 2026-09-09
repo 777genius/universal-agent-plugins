@@ -11,7 +11,7 @@ import argparse
 import hashlib
 from functools import lru_cache
 import json
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import re
 import stat
 import struct
@@ -118,7 +118,7 @@ def verify_attestations(release):
 def verify_fixtures(bodies, record, client, target):
     found = []
     for path, body in bodies.items():
-        base = Path(path).name
+        base = PurePosixPath(path).name
         if base not in ('evidence.json', 'tool-collision-evidence.json', 'extended-runtime-evidence.json'):
             continue
         data = json.loads(body, object_pairs_hook=unique_object)
@@ -147,7 +147,7 @@ def verify_fixtures(bodies, record, client, target):
             require(status in ('passed', 'not_evaluated', 'not_proven', 'not_applicable') or (windows_claude and stage_name == 'stdio_discovery' and status == 'observed_unsupported'), 'failed fixture stage: ' + path)
             for ref in stage.get('artifacts', []) if isinstance(stage, dict) else []:
                 safe_name(ref)
-                require(str(Path(path).parent / ref) in bodies, 'missing stage artifact')
+                require(str(PurePosixPath(path).parent / ref) in bodies, 'missing stage artifact')
         release = record['installer_release']
         identity = data.get('source_identity', data)
         require(identity.get('installer_base_commit') == release['commit'] and identity.get('installer_tree') == release['tree'] and identity.get('installer_patch_sha256') in ([], ''), 'fixture source mismatch')
@@ -172,7 +172,7 @@ def verify_fixtures(bodies, record, client, target):
         require(isinstance(hashes, dict) and hashes, 'missing fixture transcripts')
         for ref, sha in hashes.items():
             safe_name(ref)
-            full = str(Path(path).parent / ref)
+            full = str(PurePosixPath(path).parent / ref)
             require(full in bodies and exact_hex(sha, 64) and digest(bodies[full]) == sha, 'fixture transcript mismatch')
     expected = {'codex': {'codex'}, 'claude': {'claude-lifecycle', 'claude-runtime'}, 'opencode': {'opencode.json', 'opencode.jsonc', 'extended', ('api/server',), ('api server',), ('api/server', 'api server')}}
     require(set(found) == expected[client], 'missing or unexpected structured fixtures')
