@@ -62,11 +62,11 @@ test('homepage installs with auto-detection and exposes the full directory', asy
   await expect(securityTooltip).toContainText(/exact indexed revision [0-9a-f]{12}/);
   await expect(securityTooltip).toContainText(/does not run the plugin or guarantee safety/i);
   await expect(page.getByText(/guarantee of safety/i)).toHaveCount(0);
-  await expect(page.locator('.catalog-count')).toContainText(/[2-9]\d{3} plugins/, {
+  await expect(page.locator('.catalog-count')).toContainText(/[2-9],?\d{3} plugins/, {
     timeout: 15_000,
   });
   const catalogSummary = await page.locator('.catalog-count').innerText();
-  const totalPlugins = Number(catalogSummary.match(/(\d+) plugins/)![1]);
+  const totalPlugins = Number(catalogSummary.match(/([\d,]+) plugins/)![1].replaceAll(',', ''));
   await expect(explorePlugins).toHaveAccessibleName(
     `Explore ${totalPlugins.toLocaleString('en')} plugins`,
     { timeout: 5_000 },
@@ -401,7 +401,7 @@ test('directory filters and reviewed detail keep automatic detection as the defa
   page,
 }) => {
   await page.goto('./plugins');
-  await expect(page.locator('.catalog-count')).toContainText(/[2-9]\d{3}/, {
+  await expect(page.locator('.catalog-count')).toContainText(/[2-9],?\d{3}/, {
     timeout: 15_000,
   });
   await page.getByPlaceholder(/Search by name/).fill('gitlab');

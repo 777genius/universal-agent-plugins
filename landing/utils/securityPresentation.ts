@@ -17,6 +17,12 @@ export interface SecurityTooltipPresentation {
   disclaimer: string;
 }
 
+export type SecurityTranslator = (
+  key: string,
+  params?: Record<string, string | number>,
+  plural?: number,
+) => string;
+
 type SecurityAssessment = NonNullable<RegistryPlugin['security']>;
 
 // These findings describe repository automation. The workflows are not copied
@@ -37,25 +43,49 @@ export function groupSecurityFindings(assessment: SecurityAssessment): SecurityF
   return groups;
 }
 
-export function securityAssessmentLabel(assessment: SecurityAssessment): string {
+export function securityAssessmentLabel(
+  assessment: SecurityAssessment,
+  translate?: SecurityTranslator,
+): string {
   if (assessment.counts.blocking > 0) {
-    return `Automated review: ${formatCount(assessment.counts.blocking, 'blocking finding')}`;
+    return (
+      translate?.(
+        'registryUi.security.blocking',
+        { count: assessment.counts.blocking },
+        assessment.counts.blocking,
+      ) ?? `Automated review: ${formatCount(assessment.counts.blocking, 'blocking finding')}`
+    );
   }
   if (assessment.counts.warnings > 0) {
-    return `Automated review: ${formatCount(assessment.counts.warnings, 'note')}`;
+    return (
+      translate?.(
+        'registryUi.security.notes',
+        { count: assessment.counts.warnings },
+        assessment.counts.warnings,
+      ) ?? `Automated review: ${formatCount(assessment.counts.warnings, 'note')}`
+    );
   }
-  return 'Automated review: no blocking findings';
+  return translate?.('registryUi.security.clear') ?? 'Automated review: no blocking findings';
 }
 
-export function securityAssessmentHeading(assessment: SecurityAssessment): string {
+export function securityAssessmentHeading(
+  assessment: SecurityAssessment,
+  translate?: SecurityTranslator,
+): string {
   const groups = groupSecurityFindings(assessment);
-  if (assessment.counts.blocking > 0) return 'Review before installing';
-  if (assessment.counts.warnings === 0) return 'No blocking findings detected';
-  if (groups.installer.length === 0 && groups.hidden === 0) return 'Repository maintenance notes';
-  return 'Automated review notes';
+  if (assessment.counts.blocking > 0)
+    return translate?.('registryUi.security.review') ?? 'Review before installing';
+  if (assessment.counts.warnings === 0)
+    return translate?.('registryUi.security.noBlocking') ?? 'No blocking findings detected';
+  if (groups.installer.length === 0 && groups.hidden === 0)
+    return translate?.('registryUi.security.maintenance') ?? 'Repository maintenance notes';
+  return translate?.('registryUi.security.reviewNotes') ?? 'Automated review notes';
 }
 
-export function securityAssessmentTooltip(plugin: RegistryPlugin): SecurityTooltipPresentation {
+export function securityAssessmentTooltip(
+  plugin: RegistryPlugin,
+  translate?: SecurityTranslator,
+): SecurityTooltipPresentation {
   const assessment = plugin.security;
   if (!assessment) {
     return {
@@ -67,26 +97,34 @@ export function securityAssessmentTooltip(plugin: RegistryPlugin): SecurityToolt
     };
   }
   const groups = groupSecurityFindings(assessment);
-  const revision = shortRevision(plugin.source.revision);
+  const revision = shortRevision(
+    plugin.source.revision,
+    translate?.('registryUi.security.unknown'),
+  );
   const preview = [...groups.installer, ...groups.maintainer].slice(0, 2);
   return {
-    label: securityAssessmentLabel(assessment),
-    scope: `LintAI ${assessment.scanner.version} checked exact indexed revision ${revision}.`,
+    label: securityAssessmentLabel(assessment, translate),
+    scope:
+      translate?.('registryUi.security.tooltipScope', {
+        version: assessment.scanner.version,
+        revision,
+      }) ?? `LintAI ${assessment.scanner.version} checked exact indexed revision ${revision}.`,
     findings: preview,
     remaining: Math.max(0, assessment.counts.total - preview.length),
     disclaimer:
+      translate?.('registryUi.security.tooltipDisclaimer') ??
       'This static check looks for configured patterns. It does not run the plugin or guarantee safety.',
   };
 }
 
-export function shortRevision(revision: string | null): string {
-  return revision?.slice(0, 12) || 'unknown';
+export function shortRevision(revision: string | null, unknown = 'unknown'): string {
+  return revision?.slice(0, 12) || unknown;
 }
 
-export function formatSecurityDate(value: string): string {
+export function formatSecurityDate(value: string, locale = 'en'): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
-  return new Intl.DateTimeFormat('en', {
+  return new Intl.DateTimeFormat(locale, {
     day: 'numeric',
     month: 'short',
     year: 'numeric',

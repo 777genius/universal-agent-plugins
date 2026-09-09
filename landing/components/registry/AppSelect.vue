@@ -12,6 +12,7 @@ import {
   SelectTrigger,
   SelectViewport,
 } from 'reka-ui';
+const { t } = useI18n();
 
 type SelectOption = {
   value: string;
@@ -37,11 +38,17 @@ const selected = computed(
 
 watchEffect(() => {
   if (!props.options.length)
-    throw new Error(`AppSelect "${props.label}" requires at least one option`);
+    throw new Error(
+      t('registryUi.controls.optionsRequired', { component: 'AppSelect', label: props.label }),
+    );
   if (props.options.some((option) => option.value === ''))
-    throw new Error(`AppSelect "${props.label}" options must use non-empty values`);
+    throw new Error(
+      t('registryUi.controls.nonEmptyOptions', { component: 'AppSelect', label: props.label }),
+    );
   if (!props.options.some((option) => option.value === props.modelValue))
-    throw new Error(`AppSelect "${props.label}" received an unknown value`);
+    throw new Error(
+      t('registryUi.controls.unknownValue', { component: 'AppSelect', label: props.label }),
+    );
 });
 
 function updateValue(value: unknown) {
@@ -55,7 +62,7 @@ function updateValue(value: unknown) {
       <span class="app-select__value">
         <span v-if="selected?.icon" class="app-select__value-icon"
           ><img :src="selected.icon" alt="" width="20" height="20"
-        ></span>
+        /></span>
         <FilterIcon v-else-if="leadingIcon" :name="leadingIcon" />
         <span>{{ selected?.label }}</span>
       </span>
@@ -65,7 +72,7 @@ function updateValue(value: unknown) {
     </SelectTrigger>
     <SelectPortal>
       <SelectContent class="app-select__content" position="popper" align="start" :side-offset="7">
-        <SelectScrollUpButton class="app-select__scroll" aria-label="Scroll options up"
+        <SelectScrollUpButton class="app-select__scroll" :aria-label="t('registryUi.select.up')"
           >⌃</SelectScrollUpButton
         >
         <SelectViewport class="app-select__viewport">
@@ -77,12 +84,12 @@ function updateValue(value: unknown) {
           >
             <span v-if="option.icon" class="app-select__item-icon"
               ><img :src="option.icon" alt="" width="20" height="20"
-            ></span>
+            /></span>
             <SelectItemText>{{ option.label }}</SelectItemText>
             <SelectItemIndicator class="app-select__indicator">✓</SelectItemIndicator>
           </SelectItem>
         </SelectViewport>
-        <SelectScrollDownButton class="app-select__scroll" aria-label="Scroll options down"
+        <SelectScrollDownButton class="app-select__scroll" :aria-label="t('registryUi.select.down')"
           >⌄</SelectScrollDownButton
         >
       </SelectContent>

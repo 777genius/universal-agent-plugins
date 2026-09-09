@@ -1,29 +1,36 @@
 <script setup lang="ts">
+import { productRootUrl } from '~/utils/seo';
+import { localizedPath } from '~/utils/localizedRoutes';
+import type { KnownLocale } from '~/data/i18n';
+const { t, locale } = useI18n();
 const registry = await useRegistryPage({ discovery: true });
 const config = useRuntimeConfig();
-const description =
-  'Search reviewed and community Agent Plugins 1.0 for Codex, Claude Code, Cursor, Gemini CLI, OpenCode, and more.';
-const siteUrl = String(config.public.siteUrl).replace(/\/+$/, '');
-const listId = `${siteUrl}/plugins/#plugin-list`;
+const description = computed(() => t('registryUi.directoryPage.description'));
+const siteUrl = productRootUrl(
+  String(config.public.siteUrl),
+  String(config.app.baseURL),
+).replace(/\/+$/, '');
+const localizedUrl = (path: string) => `${siteUrl}${localizedPath(path, locale.value as KnownLocale)}`;
+const listId = computed(() => `${localizedUrl('/plugins/')}#plugin-list`);
 const reviewedPlugins = registry.plugins.filter(
   (plugin) => plugin.trust_state !== 'conformant_unreviewed',
 );
 
-usePageSeo('Agent Plugins 1.0 Directory | Search 2,500+ Plugins', description, {
+usePageSeo(() => t('registryUi.directoryPage.title'), description, {
   translate: false,
   pageType: 'CollectionPage',
-  pageProperties: { mainEntity: { '@id': listId } },
-  structuredData: [
+  pageProperties: () => ({ mainEntity: { '@id': listId.value } }),
+  structuredData: () => [
     {
       '@type': 'ItemList',
-      '@id': listId,
-      name: 'Reviewed Agent Plugins 1.0 packages',
+      '@id': listId.value,
+      name: t('registryUi.directoryPage.listName'),
       numberOfItems: reviewedPlugins.length,
       itemListElement: reviewedPlugins.map((plugin, index) => ({
         '@type': 'ListItem',
         position: index + 1,
         name: plugin.display_name,
-        url: `${siteUrl}/plugins/${plugin.name}/`,
+        url: localizedUrl(`/plugins/${plugin.name}/`),
       })),
     },
   ],
@@ -35,16 +42,26 @@ usePageSeo('Agent Plugins 1.0 Directory | Search 2,500+ Plugins', description, {
     <PageBackground />
     <div class="container">
       <div class="page-intro">
-        <p class="eyebrow">Plugin directory</p>
-        <h1>Find Agent Plugins 1.0.<br ><em>Use them everywhere.</em></h1>
+        <p class="eyebrow">{{ t('registryUi.directoryPage.pluginDirectory') }}</p>
+        <h1>
+          {{ t('registryUi.directoryPage.findAgentPlugins10') }} <br /><em>
+            {{ t('registryUi.directoryPage.useThemEverywhere') }}
+          </em>
+        </h1>
         <p>
-          Search reviewed packages and community plugins discovered from public GitHub repositories.
+          {{
+            t(
+              'registryUi.directoryPage.searchReviewedPackagesAndCommunityPluginsDiscoveredFromPublicGithubRepositories',
+            )
+          }}
         </p>
       </div>
       <PluginCatalog
         :plugins="registry.plugins"
-        heading="Explore plugins"
-        intro="Filter by capability, source, authentication, or supported agent."
+        :heading="t('registryUi.directoryPage.explorePlugins')"
+        :intro="
+          t('registryUi.directoryPage.filterByCapabilitySourceAuthenticationOrSupportedAgent')
+        "
       />
     </div>
   </div>

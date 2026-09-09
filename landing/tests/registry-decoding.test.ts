@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createRequire, registerHooks } from 'node:module';
 import { test } from 'node:test';
+import { createI18n, type LocaleMessageDictionary, type VueMessageType } from 'vue-i18n';
 import { pathToFileURL } from 'node:url';
 import type { RegistryIndex } from '../types/registry';
 
@@ -32,6 +33,7 @@ test('production registry loader decodes octet-stream and fails closed before st
   const ref = (value?: unknown) => ({ value });
   let body = catalog;
   let httpStatus = 200;
+  let baseURL = '/';
   const requests: string[] = [];
   const decoder = createFetch({
     fetch: async (request: string) => {
@@ -45,7 +47,9 @@ test('production registry loader decodes octet-stream and fails closed before st
   });
   const globals = {
     $fetch: decoder,
-    useRuntimeConfig: () => ({ public: {} }),
+    useRuntimeConfig: () => ({ public: { baseURL } }),
+    useI18n: () => createI18n<[LocaleMessageDictionary<VueMessageType>], 'en', false>({ legacy: false, locale: 'en', messages: { en: JSON.parse(readFileSync(new URL('../locales/en.json', import.meta.url), 'utf8')) } }).global,
+    onScopeDispose: () => {},
     useState: (key: string, init?: () => unknown) => {
       if (!states.has(key)) states.set(key, ref(init?.()));
       return states.get(key);
@@ -77,7 +81,7 @@ test('production registry loader decodes octet-stream and fails closed before st
   await t.test('default pinned decoder reproduces the inferred Blob locally', async () => {
     const result = await decoder('/api/registry/catalog');
     assert.ok(result instanceof Blob);
-    assert.equal(result.plugins, undefined);
+    assert.equal('plugins' in result, false);
     assert.equal(await result.text(), catalog);
   });
 
@@ -104,6 +108,26 @@ test('production registry loader decodes octet-stream and fails closed before st
       assert.equal(states.get('registry-page-key')?.value, `registry-page:${endpoint}`);
     });
   }
+
+  await t.test('repository-base payload cache miss fetches neutral APIs with the pinned JSON decoder', async () => {
+    baseURL = '/universal-agent-plugins/';
+    for (const [projection, response, endpoint] of [
+      [{ kind: 'catalog' }, catalog, 'catalog'],
+      [{ kind: 'client', value: 'codex' }, catalog, 'client/codex'],
+      [{ kind: 'plugin', value: 'gitlab' }, gitlab, 'plugin/gitlab'],
+      [{ kind: 'empty' }, empty, 'empty'],
+    ] as const) {
+      // The async-data shell always invokes load: there is no SSR payload/cache hit.
+      body = response;
+      const before = requests.length;
+      const result = await useRegistryPage({ projection });
+      assert.equal(requests.length, before + 1);
+      assert.equal(requests.at(-1), `/universal-agent-plugins/api/registry/${endpoint}`);
+      assert.deepEqual(result, JSON.parse(response));
+      assert.equal(states.get('registry-page-key')?.value, `registry-page:/api/registry/${endpoint}`);
+    }
+    baseURL = '/';
+  });
 
   for (const invalid of ['{"plugins":', 'null', '{}', '{"plugins":{}}']) {
     await t.test(
