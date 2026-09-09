@@ -73,5 +73,48 @@ class LinuxHostedSafetyTests(unittest.TestCase):
                     matrix.require_hosted("linux-arm64")
 
 
+
+class PreparedInputTests(unittest.TestCase):
+    def test_preparation_returns_before_client_provisioning(self):
+        import sys
+        from tempfile import TemporaryDirectory
+        with TemporaryDirectory() as temp, patch.object(matrix, 'require_hosted'), \
+             patch.object(matrix, 'prepared_release') as prepare, patch.object(matrix, 'provision') as provision, \
+             patch.object(matrix.subprocess, 'run', side_effect=AssertionError('execution during preparation')), \
+             patch.object(sys, 'argv', ['runner', '--client', 'codex', '--target', 'linux-amd64', '--output', temp,
+                  '--release-tag', 'agentplugins-v1.2.3', '--release-commit', 'a'*40, '--prepare-only', '--prepared-input', temp]):
+            matrix.main()
+            prepare.assert_called_once()
+            provision.assert_not_called()
+
+    def test_prepared_runtime_rehashes_and_never_falls_back(self):
+        import json
+        import os
+        from tempfile import TemporaryDirectory
+        from types import SimpleNamespace
+        for mutation in ('none','missing','tamper','manifest','credential','extra'):
+            with self.subTest(mutation=mutation), TemporaryDirectory() as temp, patch.dict(os.environ, {}, clear=True):
+                root = Path(temp)/'prepared'
+                args = SimpleNamespace(prepared_input=root, prepare_only=True, release_state='public', target='linux-amd64',
+                                       release_tag='agentplugins-v1.2.3', release_commit='a'*40, release_repo=matrix.draft.REPOSITORY)
+                def acquire(*unused):
+                    binary = root/'installer'; binary.write_bytes(b'original')
+                    return binary, {'version':'1.2.3'}
+                with patch.object(matrix, 'provision_release', side_effect=acquire):
+                    matrix.prepared_release(Path(temp), args)
+                args.prepare_only = False
+                os.environ['PREPARED_SHA256'] = matrix.draft.digest(root/'prepared.json')
+                if mutation == 'missing': (root/'installer').unlink()
+                elif mutation == 'tamper': (root/'installer').write_bytes(b'changed')
+                elif mutation == 'manifest': (root/'prepared.json').write_text('{}')
+                elif mutation == 'credential': os.environ['GH_TOKEN'] = 'test-sentinel'
+                elif mutation == 'extra': (root/'extra').write_bytes(b'new')
+                with patch.object(matrix, 'provision_release', side_effect=AssertionError('network fallback')):
+                    if mutation == 'none':
+                        self.assertEqual(matrix.prepared_release(Path(temp), args)[0].read_bytes(), b'original')
+                    else:
+                        with self.assertRaises(ValueError): matrix.prepared_release(Path(temp), args)
+
+
 if __name__ == "__main__":
     unittest.main()

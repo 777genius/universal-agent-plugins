@@ -220,6 +220,43 @@ def find_git_bash(git):
     return None
 
 
+def prepared_release(source, args):
+    root = args.prepared_input.resolve()
+    if args.prepare_only:
+        root.mkdir(parents=True, exist_ok=False)
+        if args.release_state == 'draft':
+            tarball, assets, verified, release = draft.acquire(source, root, args, root)
+            paths = [str(p.relative_to(root)) for p in (tarball, assets)]
+        else:
+            installer, release = provision_release(source, root, args.target, args.release_tag, args.release_commit, args.release_repo)
+            paths, verified = [str(installer.relative_to(root))], None
+        record = dict(state=args.release_state, tag=args.release_tag, commit=args.release_commit,
+                      target=args.target, release=release, paths=paths, verified=verified,
+                      files={p.relative_to(root).as_posix(): draft.digest(p) for p in root.rglob('*') if p.is_file()})
+        (root / 'prepared.json').write_text(json.dumps(record))
+        if os.environ.get('GITHUB_OUTPUT'):
+            with open(os.environ['GITHUB_OUTPUT'], 'a') as stream:
+                stream.write('prepared-sha256=' + draft.digest(root / 'prepared.json') + '\n')
+        return
+    draft.require(not any(os.environ.get(k) for k in ('GH_TOKEN', 'GITHUB_TOKEN', 'NODE_AUTH_TOKEN', 'NPM_TOKEN')),
+                  'prepared execution must be credential-free')
+    draft.require(not args.prepared_input.is_symlink() and not (root / 'prepared.json').is_symlink()
+                  and draft.digest(root / 'prepared.json') == os.environ.get('PREPARED_SHA256'), 'prepared manifest mismatch')
+    record = json.loads((root / 'prepared.json').read_bytes())
+    draft.require((record['state'], record['tag'], record['commit'], record['target']) ==
+                  (args.release_state, args.release_tag, args.release_commit, args.target), 'mixed prepared inputs')
+    files = {p.relative_to(root).as_posix(): p for p in root.rglob('*') if p.is_file()}
+    draft.require(set(files) == set(record['files']) | {'prepared.json'} and
+                  not any(p.is_symlink() for p in root.rglob('*')), 'unexpected prepared files')
+    for name, sha in record['files'].items():
+        draft.require(draft.digest(files[name]) == sha, 'tampered prepared file')
+    paths = [root / name for name in record['paths']]
+    draft.require(all(p.resolve().is_relative_to(root) and p.exists() for p in paths), 'missing prepared input')
+    if args.release_state == 'draft':
+        return *paths, record['verified'], record['release']
+    return paths[0], record['release']
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--client", choices=PATTERNS, required=True)
@@ -232,6 +269,9 @@ def main():
     for field in draft.FIELDS:
         parser.add_argument("--" + field.replace("_", "-"), default="")
     parser.add_argument("--producer-source", type=Path)
+    parser.add_argument("--prepare-only", action="store_true")
+    parser.add_argument("--prepared-input", type=Path)
+    parser.add_argument("--target-scope", choices=('historical-nine', 'linux-amd64'), default='historical-nine')
     args = parser.parse_args()
     draft.validate(args)
     if args.release_state == "draft" and args.producer_source is None:
@@ -242,6 +282,14 @@ def main():
         parser.error("--release-tag and --release-commit must be supplied together")
     require_hosted(args.target)
     source = Path(__file__).resolve().parents[1]
+    if args.prepare_only:
+        if args.prepared_input is None or not args.release_tag:
+            parser.error("preparation requires --prepared-input and an exact release")
+        prepared_release(source, args)
+        return
+    prepared = prepared_release(source, args) if args.prepared_input else None
+    if args.release_state == 'draft' and prepared is None:
+        parser.error("draft execution requires prepared inputs")
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=False)
     scratch = Path(tempfile.mkdtemp(prefix="uap-native-hosted-", dir=os.environ["RUNNER_TEMP"])).resolve()
@@ -268,9 +316,10 @@ def main():
         commands = [(["go", "build", "-trimpath", "-o", str(probe), "./repotests/testdata/agentplugins_native_probe"], source), (["go", "test", "-c", "-o", str(tests), "./repotests"], source)]
         if args.release_state == "draft":
             identity["helper_sha256"] = draft.helper_hashes(source)
-            tarball, frozen_assets, verified, identity["installer_release"] = draft.acquire(source, binary_dir, args, output)
+            tarball, frozen_assets, verified, identity["installer_release"] = prepared
+            shutil.copyfile(args.prepared_input / "initial-draft.json", output / "initial-draft.json")
         elif args.release_tag:
-            installer, identity["installer_release"] = provision_release(source, binary_dir, args.target, args.release_tag, args.release_commit, args.release_repo)
+            installer, identity["installer_release"] = prepared if prepared is not None else provision_release(source, binary_dir, args.target, args.release_tag, args.release_commit, args.release_repo)
         else:
             commands.insert(0, (["go", "build", "-trimpath", "-o", str(installer), "./cmd/agentplugins"], source / "cli/plugin-kit-ai"))
         project = scratch / "project"

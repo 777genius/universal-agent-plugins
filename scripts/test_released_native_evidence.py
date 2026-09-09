@@ -359,13 +359,42 @@ class DraftArchiveTests(unittest.TestCase):
         destination.unlink()
         args = SimpleNamespace(**vars(self.args), target_scope=self.args.scope, evidence=self.root,
                                receipt=destination, producer_source=source)
-        def final_receipt(*unused):
-            return self.q['final_draft']
-        with patch.object(self.native, 'authenticate'), patch.object(self.native, 'live_verify', side_effect=final_receipt), \
-             patch.object(self.native, 'output', side_effect=[b'a'*40, b'']), \
+        import os
+        initial = self.q['final_draft']
+        binding = dict(repository=self.native.REPOSITORY, workflow=self.native.NATIVE_WORKFLOW,
+                       harness_commit=self.args.harness_commit, harness_tree=self.args.harness_tree, run_id=99, run_attempt=2,
+                       target_scope=self.args.scope, release_tag=self.args.release_tag, release_commit=self.args.release_commit,
+                       helper_sha256=self.native.helper_hashes(source), **{k:str(getattr(args,k)) for k in self.native.FIELDS})
+        record = json.loads(next(self.root.rglob('runner-evidence.json')).read_bytes())
+        snapshot = dict(kind='snapshot', binding=binding, producer_tree=record['installer_release']['tree'], live=initial)
+        sha = proof.digest((json.dumps(snapshot, sort_keys=True)+'\n').encode())
+        with patch.dict(os.environ, SNAPSHOT_SHA256=sha, LANES_SHA256='b'*64, SNAPSHOT_ARTIFACT_ID='71',
+                        SNAPSHOT_ARTIFACT_DIGEST='b'*64, LANES_ARTIFACT_ID='72', LANES_ARTIFACT_DIGEST='b'*64), \
+             patch.object(self.native, 'receive', return_value=snapshot), \
              patch('subprocess.Popen', side_effect=AssertionError('unexpected process')):
             self.native.aggregate(source, args)
+            lanes = json.loads(destination.read_bytes())
+            os.environ['LANES_SHA256'] = self.native.digest(destination)
+            destination.unlink()
+            destination.with_name('final-draft.json').unlink()
+            import copy
+            final = copy.deepcopy(initial)
+            final['verified_at'] = '2099-01-01T00:00:00+00:00'
+            args.metadata = 'recheck'
+            with patch.object(self.native, 'receive', side_effect=[snapshot, lanes]), \
+                 patch.object(self.native, 'trusted_binding', return_value=binding), \
+                 patch.object(self.native, 'authenticate', return_value=self.q['producer']), \
+                 patch.object(self.native, 'live_verify', return_value=final), \
+                 patch.object(self.native, 'output', return_value=snapshot['producer_tree'].encode()):
+                self.native.metadata(source, args)
             summary, _ = proof.verify_draft(self.root, self.args)
+            current = json.loads(destination.read_bytes())
+            for change in (lambda q:q['invocation']['binding'].update(run_attempt=3),
+                           lambda q:q['invocation'].update(lanes_sha256='0'*64), lambda q:q.pop('invocation')):
+                modified = copy.deepcopy(current); change(modified)
+                destination.write_text(json.dumps(modified))
+                with self.assertRaises(ValueError): proof.verify_draft(self.root, self.args)
+            destination.write_text(json.dumps(current))
         self.assertEqual(len(summary['jobs']), 9)
 
     def test_draft_qualification_schema_identities_and_lanes(self):

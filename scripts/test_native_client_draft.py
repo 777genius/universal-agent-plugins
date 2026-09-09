@@ -260,7 +260,7 @@ class DraftTests(unittest.TestCase):
 
     def test_acquisition_artifact_tamper_before_extraction_or_execution(self):
         with tempfile.TemporaryDirectory() as temp:
-            with patch.object(draft, 'authenticate', return_value={}), patch.object(draft, 'live_verify', return_value={}), \
+            with patch.object(draft, 'authenticate', return_value={}), patch.object(draft, 'receive', return_value={'producer_tree': 'd' * 40, 'live': {}}), \
                  patch.object(draft, 'output', side_effect=[b'a' * 40, b'', b'd' * 40, b'altered zip']), \
                  patch.object(draft, 'unpack_bundle') as unpack:
                 with self.assertRaisesRegex(ValueError, 'download digest'):
@@ -342,7 +342,7 @@ class AggregateTests(unittest.TestCase):
             release = dict(release_state='draft', repository=draft.REPOSITORY, tag='agentplugins-v1.2.3',
                            version='1.2.3', commit='a' * 40, tree='f' * 40, release_id=34, checksums_sha256='c' * 64,
                            producer=producer, tarball_sha256='1' * 64, binary_sha256='2' * 64, size=6, file='agentplugins_1.2.3_linux_amd64',
-                           initial_draft=initial)
+                           initial_draft=initial, attestations={n['name']: attestation(n['name'], n['sha256']) for n in initial['subjects']})
             packaged = dict(bootstrap_source='local_frozen_asset', cold_bootstrap=True, warm_without_proof_source=True,
                             npm_ignore_scripts=True, tarball_sha256='1' * 64, binary_sha256='2' * 64,
                             size=6, version='agentplugins 1.2.3')
@@ -366,12 +366,14 @@ class AggregateTests(unittest.TestCase):
         verifier = Mock()
         if fixture_failure:
             verifier.verify_fixtures.side_effect = ValueError('missing fixture stage')
+        snapshot = {'live': final, 'producer_tree': 'f' * 40, 'binding': {'harness_tree': 'e' * 40}}
         with patch.object(draft, 'load_script', side_effect=lambda n: matrix if n == 'run-native-client-matrix' else verifier), \
-             patch.object(draft, 'authenticate') as auth, patch.object(draft, 'output', side_effect=[b'a' * 40, b'']), \
-             patch.object(draft, 'live_verify', side_effect=RuntimeError('draft gone') if live_failure else None, return_value=final) as live:
+             patch.object(draft, 'receive', side_effect=RuntimeError('snapshot unavailable') if live_failure else None, return_value=snapshot), \
+             patch.dict(os.environ, SNAPSHOT_SHA256='9' * 64), \
+             patch.object(draft, 'authenticate') as auth, patch.object(draft, 'live_verify') as live:
             draft.aggregate(source, args(target_scope='linux-amd64', evidence=root, receipt=root / 'qualification.json', harness_commit='d' * 40))
-        auth.assert_called_once()
-        live.assert_called_once()
+        auth.assert_not_called()
+        live.assert_not_called()
         self.assertEqual(verifier.verify_fixtures.call_count, 3)
 
     def test_complete_lanes_final_verification_then_receipt(self):
@@ -380,9 +382,9 @@ class AggregateTests(unittest.TestCase):
             _, initial = self.fixture(root)
             self.run_aggregate(root, initial)
             result = json.loads((root / 'qualification.json').read_bytes())
-            self.assertEqual(result['status'], 'passed')
+            self.assertEqual(result['kind'], 'lanes-verified')
             self.assertEqual(len(result['lanes']), 3)
-            self.assertEqual(result['producer']['artifact_id'], 56)
+            self.assertEqual(result['snapshot_sha256'], '9' * 64)
 
     def test_failures_never_issue_qualification(self):
         changes = [lambda r: r.update(status='failed'), lambda r: r.update(exit_code=1),
@@ -470,7 +472,7 @@ class AcquisitionIntegrationTests(unittest.TestCase):
                 directory = root / 'acquired'
                 directory.mkdir()
                 with patch.object(draft, 'authenticate', return_value={'artifact_id': 56}), \
-                     patch.object(draft, 'live_verify', return_value=live), patch.object(draft, 'output', side_effect=child):
+                     patch.object(draft, 'receive', return_value={'producer_tree': 'd' * 40, 'live': live}), patch.object(draft, 'output', side_effect=child):
                     if tamper != 'none':
                         with self.assertRaises(ValueError):
                             draft.acquire(root, directory, arguments, root)
@@ -482,5 +484,155 @@ class AcquisitionIntegrationTests(unittest.TestCase):
                         self.assertEqual(set(record['attestations']), set(frozen))
 
 
-if __name__ == '__main__':
+
+class ReceiptBoundaryTests(unittest.TestCase):
+    def fixture(self):
+        live = dict(schema_version=1, release_state='verified-draft', verified_at='2026-09-09T01:00:00+00:00',
+                    repository=draft.REPOSITORY, release=dict(id=34, tag='agentplugins-v1.2.3', commit='a'*40,
+                    draft=True, prerelease=False, updated_at='now', assets=[]), asset_set_digest='c'*64,
+                    subjects=[], signer_workflow='github.com/'+draft.REPOSITORY+'/'+draft.WORKFLOW,
+                    producer_commit='a'*40, producer_run_id=12, producer_run_attempt=2)
+        for i in range(9):
+            live['subjects'].append(dict(name=str(i), id=i+1, size=1, sha256='b'*64))
+            live['release']['assets'].append(dict(name=str(i), id=i+1, size=1, state='uploaded',
+                                                created_at='then', updated_at='now', digest='sha256:'+'b'*64))
+        return dict(kind='snapshot', binding={'run_id': 99, 'run_attempt': 2, 'harness_commit': 'd'*40},
+                    producer_tree='f'*40, live=live)
+
+    def receive(self, record, *, raw=None, artifact_change=None, env_change=None, extra=False):
+        binding = self.fixture()['binding']
+        raw = raw if raw is not None else json.dumps(record).encode()
+        stream = io.BytesIO()
+        with zipfile.ZipFile(stream, 'w', zipfile.ZIP_DEFLATED) as z:
+            z.writestr('receipt.json', raw)
+            if extra: z.writestr('payload.sh', 'false')
+        body = stream.getvalue()
+        sha = hashlib.sha256(body).hexdigest()
+        kind = 'snapshot' if record['kind'] == 'snapshot' else 'lanes'
+        prefix = kind.upper()
+        env = {prefix+'_ARTIFACT_ID': '71', prefix+'_ARTIFACT_DIGEST': sha,
+               prefix+'_SHA256': hashlib.sha256(raw).hexdigest(), 'SNAPSHOT_SHA256': 'c'*64}
+        if kind == 'snapshot': env['SNAPSHOT_SHA256'] = hashlib.sha256(raw).hexdigest()
+        env.update(env_change or {})
+        artifact = dict(id=71, name='draft-'+kind, expired=False, digest='sha256:'+sha,
+                        size_in_bytes=len(body), workflow_run=dict(id=99, head_sha='d'*40))
+        if artifact_change: artifact_change(artifact)
+        with patch.dict(os.environ, env, clear=True), patch.object(draft, 'trusted_binding', return_value=binding), \
+             patch.object(draft, 'api', return_value=artifact), patch.object(draft, 'output', return_value=body):
+            return draft.receive(Path('/harness'), args(target_scope='linux-amd64'), kind)
+
+    def test_transport_and_exact_invocation(self):
+        self.assertEqual(self.receive(self.fixture()), self.fixture())
+        for change in [lambda r:r['binding'].update(run_id=98), lambda r:r['binding'].update(run_attempt=1),
+                       lambda r:r['binding'].update(harness_commit='e'*40), lambda r:r.update(extra=True),
+                       lambda r:r['live'].update(producer_run_attempt=1), lambda r:r['live'].update(producer_commit='e'*40),
+                       lambda r:r['live']['subjects'][0].update(command='evil')]:
+            record = self.fixture(); change(record)
+            with self.assertRaises(ValueError): self.receive(record)
+        for change in [lambda a:a.update(id=72), lambda a:a.update(expired=True),
+                       lambda a:a.update(digest='sha256:'+'0'*64), lambda a:a['workflow_run'].update(id=98),
+                       lambda a:a['workflow_run'].update(head_sha='e'*40), lambda a:a.update(name='draft-other')]:
+            with self.assertRaises(ValueError): self.receive(self.fixture(), artifact_change=change)
+        for changes in [{'SNAPSHOT_SHA256':'0'*64}, {'SNAPSHOT_ARTIFACT_DIGEST':'0'*64}]:
+            with self.assertRaises(ValueError): self.receive(self.fixture(), env_change=changes)
+        for raw in [b'{"kind":"snapshot","kind":"snapshot"}', b' '*(draft.RECEIPT_LIMIT+1)]:
+            with self.assertRaises(ValueError): self.receive(self.fixture(), raw=raw)
+        with self.assertRaises(ValueError): self.receive(self.fixture(), extra=True)
+
+    def test_exact_lane_sets(self):
+        record = dict(kind='lanes-verified', binding=self.fixture()['binding'], snapshot_sha256='c'*64,
+                      tarball_sha256='b'*64, lanes=[dict(client=c, target='linux-amd64', evidence_sha256='b'*64)
+                                                  for c in ('codex','claude','opencode')])
+        self.assertEqual(self.receive(record), record)
+        for change in [lambda r:r['lanes'].pop(), lambda r:r['lanes'].append(r['lanes'][0]),
+                       lambda r:r['lanes'][0].update(target='linux-arm64'), lambda r:r['lanes'][0].update(client='claude'),
+                       lambda r:r.update(snapshot_sha256='d'*64), lambda r:r['lanes'][0].update(path='evil')]:
+            modified = copy.deepcopy(record); change(modified)
+            with self.assertRaises(ValueError): self.receive(modified)
+
+    def test_canonical_main_guard_and_immutable_checkout(self):
+        env = dict(GITHUB_REPOSITORY=draft.REPOSITORY, GITHUB_EVENT_NAME='workflow_dispatch', GITHUB_REF='refs/heads/main',
+                   GITHUB_WORKFLOW_REF=f'{draft.REPOSITORY}/{draft.NATIVE_WORKFLOW}@refs/heads/main',
+                   GITHUB_SHA='d'*40, GITHUB_RUN_ID='99', GITHUB_RUN_ATTEMPT='2')
+        for change in [{}, {'GITHUB_REF':'refs/tags/v1'}, {'GITHUB_REPOSITORY':'fork/repo'},
+                       {'GITHUB_WORKFLOW_REF':'other'}, {'GITHUB_EVENT_NAME':'pull_request'}, {'GITHUB_SHA':'e'*40}]:
+            with patch.dict(os.environ, {**env, **change}, clear=True), \
+                 patch.object(draft, 'output', side_effect=[b'd'*40, b'', b'e'*40]), patch.object(draft, 'helper_hashes', return_value={}):
+                if change:
+                    with self.assertRaises(ValueError): draft.trusted_binding(Path('/harness'), args(target_scope='linux-amd64'))
+                else:
+                    self.assertEqual(draft.trusted_binding(Path('/harness'), args(target_scope='linux-amd64'))['run_attempt'], 2)
+
+    def test_final_recheck_never_qualifies_replacement_or_failed_authentication(self):
+        initial = self.fixture()
+        initial['binding'].update(harness_tree='e'*40, helper_sha256={})
+        mutations = [None, 'auth', 'hidden', 'deleted', 'published', 'recreated', 'tag', 'id', 'size', 'digest', 'created_at', 'updated_at', 'subject']
+        for mutation in mutations:
+            final = copy.deepcopy(initial['live']); final['verified_at'] = '2026-09-09T02:00:00+00:00'
+            if mutation == 'published': final['release']['draft'] = False
+            elif mutation == 'recreated': final['release']['id'] = 35
+            elif mutation == 'tag': final['release']['commit'] = 'e'*40
+            elif mutation == 'subject': final['subjects'][0]['sha256'] = 'e'*64
+            elif mutation in ('id','size','digest','created_at','updated_at'): final['release']['assets'][0][mutation] = 'changed'
+            with tempfile.TemporaryDirectory() as temp, patch.dict(os.environ, SNAPSHOT_SHA256='c'*64, LANES_SHA256='b'*64,
+                    SNAPSHOT_ARTIFACT_ID='71', SNAPSHOT_ARTIFACT_DIGEST='b'*64, LANES_ARTIFACT_ID='72', LANES_ARTIFACT_DIGEST='b'*64), \
+                 patch.object(draft, 'trusted_binding', return_value=initial['binding']), \
+                 patch.object(draft, 'authenticate', side_effect=ValueError('producer failed') if mutation == 'auth' else None, return_value={}), \
+                 patch.object(draft, 'output', return_value=b'f'*40), \
+                 patch.object(draft, 'receive', side_effect=[initial, dict(tarball_sha256='b'*64, lanes=[])]), \
+                 patch.object(draft, 'live_verify', side_effect=ValueError('unavailable') if mutation in ('hidden','deleted') else None, return_value=final):
+                destination = Path(temp)/'qualification.json'
+                arguments = args(metadata='recheck', receipt=destination, target_scope='linux-amd64')
+                if mutation:
+                    with self.assertRaises(ValueError): draft.metadata(Path('/harness'), arguments)
+                    self.assertFalse(destination.exists())
+                    self.assertFalse(destination.with_name('final-draft.json').exists())
+                else:
+                    draft.metadata(Path('/harness'), arguments)
+                    self.assertEqual(json.loads(destination.read_bytes())['schema_version'], 2)
+
+    def test_workflow_write_and_preparation_boundaries(self):
+        import re
+        source = Path(__file__).resolve().parents[1]
+        workflow = (source/draft.NATIVE_WORKFLOW).read_text()
+        jobs = dict(re.findall(r'^  ([\w-]+):\n(.*?)(?=^  [\w-]+:|\Z)', workflow.split('jobs:\n')[1], re.M|re.S))
+        self.assertEqual({name for name, body in jobs.items() if 'contents: write' in body}, {'draft-snapshot','draft-recheck'})
+        self.assertNotIn('write', workflow.split('jobs:\n')[0])
+        for name in ('draft-snapshot','draft-recheck'):
+            body = jobs[name]
+            for guard in ("github.ref == 'refs/heads/main'", "github.repository == '777genius/universal-agent-plugins'", "github.workflow_ref =="):
+                self.assertIn(guard, body)
+            self.assertIn('runs-on: ubuntu-24.04', body)
+            self.assertIn('ref: ${{ github.sha }}', body)
+            self.assertEqual(body.count('persist-credentials: false'), 2)
+            self.assertEqual(body.count('GH_TOKEN:'), 1)
+            for forbidden in ('run-native-client-matrix', 'download-artifact', 'setup-go', 'npm install', 'native-lanes', 'always()'):
+                self.assertNotIn(forbidden, body)
+        runtime = jobs['native-client'].split('- name: Execute pinned')[1].split('- name: Upload')[0]
+        self.assertNotIn('GH_TOKEN', runtime)
+        self.assertIn('--prepared-input', runtime)
+        self.assertIn('steps.prepare.outputs.prepared-sha256', runtime)
+        self.assertIn('--prepare-only', jobs['native-client'])
+        self.assertIn('--metadata recheck', jobs['draft-recheck'])
+        self.assertIn("needs.draft-complete.result == 'success'", jobs['draft-recheck'])
+
+    def test_explicit_policy_source_never_executes_producer_script(self):
+        verifier = draft.load_script('verify-agentplugins-draft')
+        with tempfile.TemporaryDirectory() as temp:
+            arguments = SimpleNamespace(repository=draft.REPOSITORY, tag='agentplugins-v1.2.3', commit='a'*40,
+                asset_set_digest='c'*64, release_id=34, run_id=12, run_attempt=2,
+                source=temp+'/producer', policy_source=temp+'/harness', receipt=temp+'/receipt.json')
+            calls = []
+            def command(argv, **unused):
+                calls.append(argv)
+                if argv[0] == 'git': return b'a'*40 if argv[-1] == 'HEAD' else b''
+                self.assertEqual(argv[:2], ['node', temp+'/harness/npm/agentplugins/scripts/release-assets.js'])
+                raise ValueError('stop before mocked asset validation')
+            with patch.object(verifier, 'snapshot', return_value={'assets':[]}), patch.object(verifier, 'run', side_effect=command):
+                with self.assertRaisesRegex(ValueError, 'stop before'): verifier.verify(arguments)
+            self.assertEqual(len(calls), 3)
+            self.assertFalse(Path(arguments.receipt).exists())
+
+
+if __name__ == "__main__":
     unittest.main()

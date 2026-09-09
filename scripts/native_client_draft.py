@@ -131,7 +131,7 @@ def live_verify(source, producer_source, args, receipt):
             '--commit', args.release_commit, '--release-id', str(args.release_id),
             '--asset-set-digest', args.expected_asset_set_digest,
             '--run-id', str(args.producer_run_id), '--run-attempt', str(args.producer_run_attempt),
-            '--source', str(producer_source), '--receipt', str(receipt)])
+            '--source', str(producer_source), '--policy-source', str(source), '--receipt', str(receipt)])
     record = json.loads(receipt.read_bytes())
     require(record['release_state'] == 'verified-draft'
             and record['release']['id'] == int(args.release_id)
@@ -148,7 +148,10 @@ def acquire(source, directory, args, evidence):
     require(not output(['git', '-C', str(producer_source), 'status', '--porcelain', '--untracked-files=normal']), 'dirty producer checkout')
     tree = output(['git', '-C', str(producer_source), 'rev-parse', 'HEAD^{tree}']).decode().strip()
     require(re.fullmatch(r'[0-9a-f]{40}', tree), 'invalid producer tree')
-    live = live_verify(source, producer_source, args, evidence / 'initial-draft.json')
+    snapshot = receive(source, args, 'snapshot')
+    require(snapshot['producer_tree'] == tree, 'mixed producer tree')
+    live = snapshot['live']
+    (evidence / 'initial-draft.json').write_text(json.dumps(live))
     body = output(['gh', 'api', f'repos/{REPOSITORY}/actions/artifacts/{args.producer_artifact_id}/zip'])
     require(hashlib.sha256(body).hexdigest() == args.producer_artifact_digest, 'artifact download digest mismatch')
     bundle = directory / 'draft-bundle'
@@ -358,11 +361,157 @@ def helper_hashes(source):
         'npm/agentplugins/scripts/release-assets.js')}
 
 
+NATIVE_WORKFLOW = '.github/workflows/agentplugins-released-native-clients.yml'
+RECEIPT_LIMIT = 64 << 10
+
+
+def strict_json(body):
+    require(len(body) <= RECEIPT_LIMIT, 'oversized receipt')
+    def pairs(items):
+        result = {}
+        for key, value in items:
+            require(key not in result, 'duplicate receipt key')
+            result[key] = value
+        return result
+    return json.loads(body, object_pairs_hook=pairs, parse_constant=lambda _: require(False, 'invalid JSON number'))
+
+
+def keys(record, names):
+    require(type(record) is dict and set(record) == set(names.split()), 'unexpected receipt fields')
+
+
+def trusted_binding(source, args):
+    env = os.environ
+    require(env.get('GITHUB_REPOSITORY') == REPOSITORY and env.get('GITHUB_EVENT_NAME') == 'workflow_dispatch'
+            and env.get('GITHUB_REF') == 'refs/heads/main'
+            and env.get('GITHUB_WORKFLOW_REF') == f'{REPOSITORY}/{NATIVE_WORKFLOW}@refs/heads/main',
+            'draft requires canonical main workflow dispatch')
+    sha = env.get('GITHUB_SHA', '')
+    require(re.fullmatch(r'[0-9a-f]{40}', sha) and
+            output(['git', '-C', str(source), 'rev-parse', 'HEAD']).decode().strip() == sha,
+            'wrong immutable harness checkout')
+    require(not output(['git', '-C', str(source), 'status', '--porcelain', '--untracked-files=normal']),
+            'dirty harness checkout')
+    tree = output(['git', '-C', str(source), 'rev-parse', 'HEAD^{tree}']).decode().strip()
+    require(re.fullmatch(r'[0-9a-f]{40}', tree), 'invalid harness tree')
+    for key in ('GITHUB_RUN_ID', 'GITHUB_RUN_ATTEMPT'):
+        require(re.fullmatch(r'[1-9]\d*', env.get(key, '')), 'invalid native invocation')
+    return dict(repository=REPOSITORY, workflow=NATIVE_WORKFLOW, harness_commit=sha, harness_tree=tree,
+                run_id=int(env['GITHUB_RUN_ID']), run_attempt=int(env['GITHUB_RUN_ATTEMPT']),
+                target_scope=args.target_scope, release_tag=args.release_tag, release_commit=args.release_commit,
+                **{key: str(getattr(args, key)) for key in FIELDS}, helper_sha256=helper_hashes(source))
+
+
+def emit(path, record):
+    body = (json.dumps(record, sort_keys=True) + '\n').encode()
+    require(len(body) <= RECEIPT_LIMIT, 'oversized receipt')
+    with Path(path).open('xb') as stream:
+        stream.write(body)
+    if os.environ.get('GITHUB_OUTPUT'):
+        with open(os.environ['GITHUB_OUTPUT'], 'a') as stream:
+            stream.write('receipt-sha256=' + hashlib.sha256(body).hexdigest() + '\n')
+
+
+def receive(source, args, kind):
+    # Only trusted job outputs select transport. No dispatch URLs or names.
+    prefix = 'SNAPSHOT' if kind == 'snapshot' else 'LANES'
+    artifact_id, sha, archive_sha = [os.environ.get(prefix + suffix, '') for suffix in
+                                   ('_ARTIFACT_ID', '_SHA256', '_ARTIFACT_DIGEST')]
+    require(re.fullmatch(r'[1-9]\d*', artifact_id) and re.fullmatch(r'[0-9a-f]{64}', sha)
+            and re.fullmatch(r'[0-9a-f]{64}', archive_sha), 'invalid receipt transport identity')
+    binding = trusted_binding(source, args)
+    artifact = api(f'repos/{REPOSITORY}/actions/artifacts/{artifact_id}')
+    require(artifact['id'] == int(artifact_id) and artifact['expired'] is False
+            and artifact['name'] == 'draft-' + kind
+            and artifact['digest'] == 'sha256:' + archive_sha
+            and 0 < artifact['size_in_bytes'] <= RECEIPT_LIMIT * 2
+            and artifact['workflow_run']['id'] == binding['run_id']
+            and artifact['workflow_run']['head_sha'] == binding['harness_commit'], 'wrong receipt artifact')
+    body = output(['gh', 'api', f'repos/{REPOSITORY}/actions/artifacts/{artifact_id}/zip'])
+    require(len(body) <= RECEIPT_LIMIT * 2 and hashlib.sha256(body).hexdigest() == archive_sha,
+            'receipt archive digest mismatch')
+    with zipfile.ZipFile(io.BytesIO(body)) as archive:
+        members = archive.infolist()
+        require(len(members) == 1 and members[0].filename == 'receipt.json'
+                and members[0].file_size <= RECEIPT_LIMIT
+                and (members[0].external_attr >> 16) & 0o170000 in (0, 0o100000), 'unexpected receipt archive')
+        raw = archive.read(members[0])
+    require(hashlib.sha256(raw).hexdigest() == sha, 'receipt digest mismatch')
+    record = strict_json(raw)
+    keys(record, 'kind binding producer_tree live' if kind == 'snapshot' else
+         'kind binding snapshot_sha256 tarball_sha256 lanes')
+    require(record['kind'] == ('snapshot' if kind == 'snapshot' else 'lanes-verified')
+            and json.dumps(record['binding'], sort_keys=True) == json.dumps(binding, sort_keys=True), 'receipt invocation mismatch')
+    if kind == 'snapshot':
+        require(re.fullmatch(r'[0-9a-f]{40}', record['producer_tree']), 'invalid producer tree')
+        live = record['live']
+        keys(live, 'schema_version release_state verified_at repository release asset_set_digest subjects signer_workflow producer_commit producer_run_id producer_run_attempt')
+        keys(live['release'], 'id tag commit draft prerelease updated_at assets')
+        require(len(live['subjects']) == len(live['release']['assets']) == 9, 'incomplete snapshot subjects')
+        for item in live['subjects']:
+            keys(item, 'name id size sha256')
+        for item in live['release']['assets']:
+            keys(item, 'id name size state created_at updated_at digest')
+        require(live['producer_commit'] == args.release_commit and live['producer_run_id'] == int(args.producer_run_id)
+                and live['producer_run_attempt'] == int(args.producer_run_attempt)
+                and live['asset_set_digest'] == args.expected_asset_set_digest
+                and live['release']['id'] == int(args.release_id), 'snapshot producer mismatch')
+    else:
+        require(record['snapshot_sha256'] == os.environ['SNAPSHOT_SHA256']
+                and re.fullmatch(r'[0-9a-f]{64}', record['tarball_sha256']), 'mixed snapshot or package')
+        targets = ['linux-amd64'] if args.target_scope == 'linux-amd64' else ['linux-arm64', 'darwin-arm64', 'windows-amd64']
+        expected = {(c, t) for c in ('codex', 'claude', 'opencode') for t in targets}
+        require(type(record['lanes']) is list and len(record['lanes']) == len(expected), 'missing lanes')
+        for lane in record['lanes']:
+            keys(lane, 'client target evidence_sha256')
+            pair = (lane['client'], lane['target'])
+            require(pair in expected and re.fullmatch(r'[0-9a-f]{64}', lane['evidence_sha256']), 'invalid lane')
+            expected.remove(pair)
+    return record
+
+
+def metadata(source, args):
+    binding = trusted_binding(source, args)
+    producer = authenticate(args)
+    producer_source = Path(args.producer_source).resolve()
+    tree = output(['git', '-C', str(producer_source), 'rev-parse', 'HEAD^{tree}']).decode().strip()
+    require(re.fullmatch(r'[0-9a-f]{40}', tree), 'invalid producer tree')
+    destination = Path(args.receipt)
+    require(not destination.exists(), 'receipt already exists')
+    if args.metadata == 'recheck':
+        initial = receive(source, args, 'snapshot')
+        lanes = receive(source, args, 'lanes')
+        require(tree == initial['producer_tree'], 'mixed producer tree')
+    # Temporary live receipt cannot leave a final success artifact on comparison failure.
+    with tempfile.TemporaryDirectory() as directory:
+        final = live_verify(source, producer_source, args, Path(directory) / 'live.json')
+    if args.metadata == 'snapshot':
+        emit(destination, dict(kind='snapshot', binding=binding, producer_tree=tree, live=final))
+        return
+    require(final['release'] == initial['live']['release'] and final['subjects'] == initial['live']['subjects'],
+            'draft changed during native qualification')
+    from datetime import datetime
+    require(datetime.fromisoformat(final['verified_at']) > datetime.fromisoformat(initial['live']['verified_at']),
+            'final verification is not fresh')
+    result = dict(schema_version=2, status='passed', release_state='verified-draft', target_scope=args.target_scope,
+                  producer_commit=args.release_commit, harness_commit=binding['harness_commit'],
+                  harness_tree=binding['harness_tree'], tarball_sha256=lanes['tarball_sha256'], producer=producer,
+                  helper_sha256=binding['helper_sha256'], lanes=lanes['lanes'], final_draft=final,
+                  invocation=dict(binding=binding, snapshot_sha256=os.environ['SNAPSHOT_SHA256'],
+                                  lanes_sha256=os.environ['LANES_SHA256'],
+                                  transport={k: os.environ[k] for k in ('SNAPSHOT_ARTIFACT_ID', 'SNAPSHOT_ARTIFACT_DIGEST',
+                                             'LANES_ARTIFACT_ID', 'LANES_ARTIFACT_DIGEST')}),
+                  limitation='genuine pinned clients; scripted loopback providers; no real-model or OAuth qualification')
+    emit(destination.with_name('final-draft.json'), final)
+    emit(destination, result)
+
+
 def aggregate(source, args):
     validate(args)
     require(args.release_state == 'draft', 'aggregate receipt is draft-only')
     root, destination = Path(args.evidence), Path(args.receipt)
     require(not destination.exists(), 'qualification receipt already exists')
+    snapshot = receive(source, args, 'snapshot')
     matrix = load_script('run-native-client-matrix')
     targets = ['linux-amd64'] if args.target_scope == 'linux-amd64' else ['linux-arm64', 'darwin-arm64', 'windows-amd64']
     expected = {(client, target) for target in targets for client in matrix.REQUIRED_TESTS}
@@ -379,6 +528,9 @@ def aggregate(source, args):
         require(record['commit'] == args.harness_commit and re.fullmatch(r'[0-9a-f]{40}', record['tree']), 'mixed harness checkout')
         require(record['helper_sha256'] == helper_hashes(source), 'mixed harness helper bytes')
         release = record['installer_release']
+        require(release['initial_draft'] == snapshot['live'], 'lane snapshot mismatch')
+        for subject in snapshot['live']['subjects']:
+            verify_attestation(release['attestations'][subject['name']], subject['name'], subject['sha256'], args.release_commit)
         producer = release['producer']
         require(release['release_state'] == 'draft' and release['repository'] == REPOSITORY
                 and release['tag'] == args.release_tag and release['commit'] == args.release_commit
@@ -421,21 +573,11 @@ def aggregate(source, args):
         verifier.verify_fixtures(bodies, record, client, target)
         lanes.append({'client': client, 'target': target, 'evidence_sha256': digest(path)})
     require(seen == expected, 'missing lanes')
-    # Reauthenticate after all runtime lanes, then call the unchanged read-only helper.
-    authenticate(args)
-    producer_source = Path(args.producer_source).resolve()
-    require(output(['git', '-C', str(producer_source), 'rev-parse', 'HEAD']).decode().strip() == args.release_commit, 'wrong final producer checkout')
-    require(not output(['git', '-C', str(producer_source), 'status', '--porcelain', '--untracked-files=normal']), 'dirty final producer checkout')
-    final = live_verify(source, producer_source, args, destination.with_name('final-draft.json'))
-    require(final['release'] == common[3] and final['subjects'] == common[4], 'draft changed during native qualification')
-    result = {'schema_version': 1, 'status': 'passed', 'release_state': 'verified-draft',
-              'target_scope': args.target_scope, 'producer_commit': args.release_commit,
-              'harness_commit': args.harness_commit, 'harness_tree': common[0],
-              'tarball_sha256': common[2], 'producer': producer, 'helper_sha256': helper_hashes(source),
-              'lanes': lanes, 'final_draft': final,
-              'limitation': 'genuine pinned clients; scripted loopback providers; no real-model or OAuth qualification'}
-    with destination.open('x', encoding='utf-8') as stream:
-        stream.write(json.dumps(result, indent=2) + '\n')
+    require(common == (snapshot['binding']['harness_tree'], snapshot['producer_tree'], common[2],
+                       snapshot['live']['release'], snapshot['live']['subjects']), 'lanes differ from snapshot')
+    emit(destination, {'kind': 'lanes-verified', 'binding': snapshot['binding'],
+                       'snapshot_sha256': os.environ['SNAPSHOT_SHA256'],
+                       'tarball_sha256': common[2], 'lanes': lanes})
 
 
 def main():
@@ -446,6 +588,7 @@ def main():
     for field in ('release_tag', 'release_commit', *FIELDS):
         parser.add_argument('--' + field.replace('_', '-'), default='')
     parser.add_argument('--validate-only', action='store_true')
+    parser.add_argument('--metadata', choices=('snapshot', 'recheck'))
     parser.add_argument('--producer-source', type=Path)
     parser.add_argument('--harness-commit')
     parser.add_argument('--target-scope', choices=('historical-nine', 'linux-amd64'), default='historical-nine')
@@ -453,7 +596,12 @@ def main():
     parser.add_argument('--receipt', type=Path)
     args = parser.parse_args()
     validate(args)
-    if not args.validate_only:
+    if args.validate_only and args.release_state == 'draft':
+        trusted_binding(Path(__file__).resolve().parents[1], args)
+        authenticate(args)
+    elif args.metadata:
+        metadata(Path(__file__).resolve().parents[1], args)
+    elif not args.validate_only:
         aggregate(Path(__file__).resolve().parents[1], args)
 
 
