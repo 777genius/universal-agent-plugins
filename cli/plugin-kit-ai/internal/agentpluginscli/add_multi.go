@@ -80,20 +80,22 @@ func runAddManyWithClients(ctx context.Context, cmd *cobra.Command, app App, opt
 	if loaded.cleanup != nil {
 		defer loaded.cleanup()
 	}
-	return runAddManyLoaded(ctx, cmd, app, opts, loaded, targets, activationComplete, authComplete, detectedClientValues(detected))
+	return runAddManyLoaded(ctx, cmd, app, opts, loaded, targets, activationComplete, authComplete, detectedClientValues(detected), false)
 }
 
-func runAddManyLoaded(ctx context.Context, cmd *cobra.Command, app App, opts *options, loaded loadedPackage, targets []domain.ClientID, activationComplete, authComplete bool, clients []domain.DetectedClient) error {
+func runAddManyLoaded(ctx context.Context, cmd *cobra.Command, app App, opts *options, loaded loadedPackage, targets []domain.ClientID, activationComplete, authComplete bool, clients []domain.DetectedClient, needsInstallConfirmation bool) error {
 	if err := authorizeSecurityAssessment(cmd, app, opts, &loaded); err != nil {
 		return err
 	}
 	if len(targets) == 1 {
+		selectedOptions := *opts
+		selectedOptions.target = string(targets[0])
 		if activationComplete || authComplete {
-			return runAddLoaded(ctx, cmd, app, opts, loaded, activationComplete, authComplete, clients)
+			return runAddLoaded(ctx, cmd, app, &selectedOptions, loaded, activationComplete, authComplete, clients, needsInstallConfirmation)
 		}
 		if state, err := app.StateStore.Load(); err == nil {
 			if installation, ok := locallyMatchedInstallation(state, loaded.envelope.Manifest.Name); ok && installationHasTarget(installation, targets[0], string(domain.ScopeUser)) {
-				return runAddLoaded(ctx, cmd, app, opts, loaded, false, false, clients)
+				return runAddLoaded(ctx, cmd, app, &selectedOptions, loaded, false, false, clients, needsInstallConfirmation)
 			}
 		}
 	}
@@ -146,10 +148,23 @@ func runAddManyLoaded(ctx context.Context, cmd *cobra.Command, app App, opts *op
 	if err != nil {
 		combined.Status, combined.Failed, combined.Succeeded = "preflight_failed", len(inputs), 0
 		_ = renderAddMultiResult(cmd, opts, combined, loaded.envelope)
-		return fmt.Errorf("group preflight failed; no target was changed: %w%s", err, addGroupNextAction(combined.Targets))
+		return fmt.Errorf("group preflight failed; no target was changed (selected targets: %v): %w%s", targets, err, addGroupNextAction(combined.Targets))
 	}
 	if opts.dryRun {
 		return renderAddMultiResult(cmd, opts, combined, loaded.envelope)
+	}
+	if needsInstallConfirmation {
+		accepted, err := confirmInstall(ctx, cmd, app, loaded, humanAddGroupPlans(combined.Targets))
+		if err != nil {
+			return err
+		}
+		if !accepted {
+			_, err = fmt.Fprintln(cmd.OutOrStdout(), "Installation not applied.")
+			return err
+		}
+	}
+	if err := ctx.Err(); err != nil {
+		return err
 	}
 	if len(targets) > 1 {
 		proof, proofErr := newAddAcquisitionProof(loaded)
@@ -179,7 +194,7 @@ func runAddManyLoaded(ctx context.Context, cmd *cobra.Command, app App, opts *op
 		if applied.Phase == usecase.GroupPhasePlanned && !applied.Mutated {
 			combined.Status, combined.Failed, combined.Succeeded = "preflight_failed", len(inputs), 0
 			_ = renderAddMultiResult(cmd, opts, combined, loaded.envelope)
-			return fmt.Errorf("group apply preflight failed; no target was changed: %w%s", err, addGroupNextAction(combined.Targets))
+			return fmt.Errorf("group apply preflight failed; no target was changed (selected targets: %v): %w%s", targets, err, addGroupNextAction(combined.Targets))
 		}
 		combined.Status = groupFailureStatus(applied.Phase)
 		combined.Failed = len(inputs) - combined.Succeeded
@@ -376,6 +391,24 @@ func addResultTargets(results []addTargetResult) string {
 		values[index] = result.Target
 	}
 	return strings.Join(values, ",")
+}
+
+// The group result describes physical delivery. Review must also identify the
+// selected logical surface when Copilot and VS Code share that delivery.
+// Copy the presentation data so JSON, apply inputs and persisted IDs keep their
+// physical ownership semantics.
+func humanAddGroupPlans(targets []addTargetResult) []usecase.AddResult {
+	results := make([]usecase.AddResult, len(targets))
+	for index, target := range targets {
+		result := target.Output.Result
+		if target.Target != string(result.Plan.ClientID) {
+			result.Plan.LocalActions = append(append([]string(nil), result.Plan.LocalActions...),
+				fmt.Sprintf("Uses shared physical binding owned by %s", result.Plan.ClientID))
+			result.Plan.ClientID = domain.ClientID(target.Target)
+		}
+		results[index] = result
+	}
+	return results
 }
 
 func addGroupNextAction(targets []addTargetResult) string {

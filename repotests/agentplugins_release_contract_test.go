@@ -243,8 +243,8 @@ func TestAgentpluginsReleaseContractsStayFailClosed(t *testing.T) {
 	mustContain(t, removedBoundaryScript, "removed-contract scan failed")
 
 	for _, want := range []string{
-		"attests all six binaries, `checksums.txt`, and",
-		"`release-manifest.json` before creating the non-public draft",
+		"attests all six binaries, `checksums.txt`,\n   `release-manifest.json`, and `THIRD_PARTY_NOTICES.txt` before creating the\n   non-public draft",
+		"public release contains six platform binaries,\n   `checksums.txt`, `release-manifest.json`, and `THIRD_PARTY_NOTICES.txt`, and\n   verify GitHub attestations for every file, including the notices",
 		"promotes that exact draft only after all six native platform proofs succeed",
 		"requires a merged pull request into",
 		"Repository settings are not treated as the release proof",
@@ -252,7 +252,7 @@ func TestAgentpluginsReleaseContractsStayFailClosed(t *testing.T) {
 		"disallow bypass-2FA tokens",
 		"Do not add a bootstrap token back",
 		"required `binary-only` producer mode",
-		"same six assets",
+		"same six assets\nplus `checksums.txt`, `release-manifest.json`, and `THIRD_PARTY_NOTICES.txt`",
 		"npm facade is staged from",
 		"manual trusted publisher",
 		"publish=true",

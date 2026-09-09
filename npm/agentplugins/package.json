@@ -45,6 +45,7 @@
   },
   "files": [
     "LICENSE",
+    "THIRD_PARTY_NOTICES.txt",
     "README.md",
     "assets.json",
     "bin",

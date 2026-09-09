@@ -14,6 +14,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/prompt"
+	"github.com/777genius/plugin-kit-ai/cli/internal/terminalprompts"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/dirswap"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/locks"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/loader"
@@ -906,7 +908,7 @@ func TestInteractiveAddDefaultsDetectedMultiselectToAll(t *testing.T) {
 		fixtureClient(t, domain.ClientCursor), fixtureClient(t, domain.ClientCodex),
 	})
 	plugin := writeCLIPlugin(t)
-	stdout, _, err := fixture.executeInput(true, "\n", "add", plugin)
+	stdout, _, err := fixture.executeInput(true, "\ny\n", "add", plugin)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -972,7 +974,9 @@ func TestInteractiveAddProbesOnlyTargetsSelectedAfterReadOnlyDetection(t *testin
 	fixture := newCLIFixture(t, nil)
 	fixture.app.Detector = detector
 	command := &cobra.Command{}
+	command.SetContext(context.Background())
 	command.SetIn(strings.NewReader("1\n"))
+	fixture.app.Prompter = terminalprompts.PlainPrompter{Input: command.InOrStdin(), Output: io.Discard}
 	command.SetOut(io.Discard)
 	selection, clients, loaded, err := promptCompatibleDetectedTargets(context.Background(), command, fixture.app, writeCLIPlugin(t))
 	if err != nil {
@@ -984,10 +988,7 @@ func TestInteractiveAddProbesOnlyTargetsSelectedAfterReadOnlyDetection(t *testin
 	if loaded.cleanup != nil {
 		defer loaded.cleanup()
 	}
-	targets, err := parseTargetOption(selection)
-	if err != nil {
-		t.Fatal(err)
-	}
+	targets := selection
 	if _, err := detectSelectedTargetsForLifecycleResolution(context.Background(), detector, targets, clients, true); err != nil {
 		t.Fatal(err)
 	}
@@ -1533,7 +1534,7 @@ func TestHumanCodexFlowNeverClaimsPreparedPackageIsInstalled(t *testing.T) {
 	t.Parallel()
 	fixture := newCLIFixture(t, []domain.DetectedClient{fixtureClient(t, domain.ClientCodex)})
 	plugin := writeCLIPlugin(t)
-	stdout, _, err := fixture.execute(true, "add", plugin, "--target", "codex")
+	stdout, _, err := fixture.executeInput(true, "n\n", "add", plugin, "--target", "codex")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1556,7 +1557,7 @@ func TestRepeatedAddResumesManualLifecycleWithoutAnotherReceipt(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Count(stdout, "Next:") != 1 || !strings.Contains(stdout, "verify") || !strings.Contains(stdout, "plugins/local") {
+	if strings.Count(stdout, "Next:") != 1 || !strings.Contains(stdout, "verify") || !strings.Contains(stdout, filepath.Join("plugins", "local")) {
 		t.Fatalf("resume output = %q", stdout)
 	}
 	state, err := fixture.store.Load()
@@ -2975,6 +2976,9 @@ func newCLIFixture(t *testing.T, clients []domain.DetectedClient) cliFixture {
 	return cliFixture{
 		root: root, store: store, operations: operations,
 		app: App{
+			PromptFactory: func(in io.Reader, out, stderr io.Writer, plain, noColor bool) (prompt.Prompter, io.Writer, error) {
+				return terminalprompts.PlainPrompter{Input: in, Output: out}, out, nil
+			},
 			Version: "0.1.0", UserHome: filepath.Join(root, "home"),
 			ManagedRoot: managedRoot, StateStore: store, Detector: staticDetector{clients: clients},
 			SourceAcquirer: sourceacquisition.Acquirer{TempRoot: root},

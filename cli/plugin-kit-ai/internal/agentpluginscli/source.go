@@ -956,11 +956,11 @@ func isShortName(value string) bool {
 }
 
 func explicitLocalPath(value string) bool {
-	if filepath.IsAbs(value) || strings.HasPrefix(value, "./") || strings.HasPrefix(value, "../") || strings.HasPrefix(value, `.\`) || strings.HasPrefix(value, `..\`) {
+	if strings.HasPrefix(value, "/") || strings.HasPrefix(value, "./") || strings.HasPrefix(value, "../") || strings.HasPrefix(value, `.\`) || strings.HasPrefix(value, `..\`) {
 		return true
 	}
-	// filepath.IsAbs follows the host OS. Recognize only genuinely absolute
-	// Windows spellings as well so a source copied between shells is stable;
+	// Classify syntax independently of the host OS, including Unix roots and
+	// only genuinely absolute Windows spellings, so copied sources are stable;
 	// drive-relative forms such as C:plugin intentionally remain selectors.
 	if len(value) >= 3 && ((value[0] >= 'A' && value[0] <= 'Z') || (value[0] >= 'a' && value[0] <= 'z')) && value[1] == ':' && (value[2] == '\\' || value[2] == '/') {
 		return true

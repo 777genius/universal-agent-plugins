@@ -40,8 +40,9 @@ the publishable version from the approved tag; do not manually bump it.
    `binary-only` producer mode.
 3. Review the frozen commit and approve the `agentplugins-release`
    environment deployment.
-4. Confirm the workflow attests all six binaries, `checksums.txt`, and
-   `release-manifest.json` before creating the non-public draft.
+4. Confirm the workflow attests all six binaries, `checksums.txt`,
+   `release-manifest.json`, and `THIRD_PARTY_NOTICES.txt` before creating the
+   non-public draft.
 5. Confirm the read-only platform-proof workflow receives the same-run frozen
    asset artifact and succeeds on all six native targets. For a draft it cold
    bootstraps the npm launcher from the exact local asset only after matching
@@ -53,7 +54,8 @@ the publishable version from the approved tag; do not manually bump it.
    it reverifies the draft identity, manifest, assets, and attestations.
    It promotes that exact draft only after all six native platform proofs succeed.
 7. Verify the resulting public release contains six platform binaries,
-   `checksums.txt`, and `release-manifest.json`, and verify GitHub attestations.
+   `checksums.txt`, `release-manifest.json`, and `THIRD_PARTY_NOTICES.txt`, and
+   verify GitHub attestations for every file, including the notices.
    This exact stable public release is the immutable producer handoff consumed
    by this repository's separate UAP npm facade workflow.
    A standalone public-release platform proof continues to prove the normal
@@ -72,6 +74,33 @@ For a schema-v1 historical platform audit, dispatch `Agentplugins Platform
 Proof` with `--ref <exact-tag>` and `allow_legacy_manifest=true`. The workflow
 must already exist at that tag, and its source SHA must equal the audited tag
 commit; current `main` is never allowed to impersonate a historical harness.
+
+## Third-party notice delivery
+
+New release preparation copies `npm/agentplugins/THIRD_PARTY_NOTICES.txt` into
+an identically named companion release asset. It is included in `checksums.txt`,
+attested, compared on draft reuse, and reverified before promotion. The six raw
+binary filenames, bytes, download URLs, and schema-v2 binary manifest stay the
+same. The checksum list gains one notice entry. Historical releases without the
+companion remain readable; this does not qualify their notice delivery.
+
+The npm file list includes the complete notice text even with pack scripts
+disabled. Its checked-in copy must match
+`cli/plugin-kit-ai/THIRD_PARTY_NOTICES.txt`; the npm tests enforce this in the
+source tree. When updating production dependency notices, copy the canonical
+file to the npm package too. Staging requires the verified companion before any
+staging mutations and checks the npm copy against it. Historical releases without
+the companion remain readable by the verifier but cannot be staged for npm.
+The npm tarball still contains no native binaries.
+
+Native users must download and retain `THIRD_PARTY_NOTICES.txt` from the same
+release alongside their binary, and include it when redistributing. Release
+notes state this requirement. Raw-binary bootstrap and atomic installation do
+not fetch the companion automatically. Homebrew and other downstream packagers
+must arrange notice delivery themselves; this change does not prove that they
+do. Companion availability does not guarantee delivery to a user who downloads
+only a binary. The existing notice inventory covers the terminal integration;
+this packaging change is not an audit of every historical dependency license.
 
 ## Homebrew tap
 
@@ -108,7 +137,8 @@ recreate it.
 
 The historical `plugin-kit-ai` producer slug identifies this same repository. The
 release workflow builds, attests, draft-proves, and promotes the same six assets
-plus `checksums.txt` and `release-manifest.json`. The npm facade is staged from
+plus `checksums.txt`, `release-manifest.json`, and `THIRD_PARTY_NOTICES.txt`.
+The npm facade is staged from
 that exact public release and never embeds the binaries in its tarball.
 
 `.github/workflows/agentplugins-npm-publish.yml` is the manual trusted publisher.
