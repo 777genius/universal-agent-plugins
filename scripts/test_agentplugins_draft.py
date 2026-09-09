@@ -4,6 +4,7 @@ import copy
 import importlib.util
 import json
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import tempfile
@@ -54,6 +55,9 @@ class DraftTests(unittest.TestCase):
     def fake_run(self, command, **kwargs):
         self.calls.append(command)
         if command[0] == "node":
+            self.assertEqual(command[:3], ["node", str(Path(self.args.source) /
+                "npm/agentplugins/scripts/release-assets.js"), "verify"])
+            self.assertEqual(command[4:], [self.args.tag, self.args.commit])
             return self.real_run(command, stderr=subprocess.PIPE, **kwargs)
         self.assertEqual(command[0], "gh")
         if command[1:3] == ["attestation", "verify"]:
@@ -64,10 +68,18 @@ class DraftTests(unittest.TestCase):
                 raise subprocess.CalledProcessError(1, command)
             return b"verified"
         self.assertEqual(command[1], "api")
+        # A visibility-capable token must never turn this verifier into an API writer.
+        self.assertFalse(set(command) & {"-X", "--method", "--input"})
         endpoint = command[2]
+        if endpoint != "graphql":
+            self.assertFalse(set(command) & {"-f", "-F", "--field", "--raw-field"})
         if endpoint != "graphql":
             self.assertTrue(endpoint.startswith("repos/777genius/universal-agent-plugins/"))
         if endpoint == "graphql":
+            self.assertEqual(command[3:5], ["-f",
+                "query=query($owner:String!,$name:String!,$tag:String!){"
+                "repository(owner:$owner,name:$name){release(tagName:$tag){databaseId}}}"])
+            self.assertEqual(len(command), 11)
             self.assertIn("owner=777genius", command)
             self.assertIn("name=universal-agent-plugins", command)
             self.reads += 1
@@ -169,6 +181,15 @@ class DraftTests(unittest.TestCase):
         self.commit = "b" * 40
         self.rejects()
 
+    def test_draft_hidden_by_api_visibility_fails_closed(self):
+        self.lookup_id = None
+        with patch.object(draft, "run", side_effect=self.fake_run):
+            with self.assertRaisesRegex(ValueError, "release missing or recreated"):
+                draft.verify(self.args)
+        self.assertEqual(len(self.calls), 1)
+        self.assertEqual(self.calls[0][1:3], ["api", "graphql"])
+        self.assertFalse(Path(self.args.receipt).exists())
+
     def test_changes_during_verification(self):
         changes = [lambda: self.metadata.update(draft=False),
                    lambda: self.metadata.update(prerelease=True),
@@ -247,6 +268,60 @@ class DraftTests(unittest.TestCase):
             with self.assertRaises(subprocess.CalledProcessError):
                 draft.verify(self.args)
         self.assertFalse(Path(self.args.receipt).exists())
+
+
+class ProducerPermissionTests(unittest.TestCase):
+    def setUp(self):
+        self.workflow = (SOURCE / ".github/workflows/agentplugins-release.yml").read_text()
+
+    def job(self, name):
+        return re.search(r"(?ms)^  " + re.escape(name) +
+                         r":\n.*?(?=^  [\w-]+:\n|\Z)", self.workflow).group()
+
+    def test_write_is_limited_to_trusted_producer_jobs(self):
+        header = self.workflow.split("\njobs:\n", 1)[0]
+        self.assertIn("\npermissions:\n  contents: read\n", header)
+        self.assertNotIn(": write", header)
+        for name in ("validate", "build", "platform-proof"):
+            self.assertNotIn(": write", self.job(name))
+        platform = (SOURCE / ".github/workflows/agentplugins-platform-proof.yml").read_text()
+        self.assertNotIn(": write", platform)
+        job = self.job("verified-draft")
+        permissions, steps = job.split("    steps:\n", 1)
+        self.assertIn("    permissions:\n", permissions)
+        grants = re.findall(r"^      ([\w-]+): (read|write)$", permissions, re.M)
+        self.assertEqual(grants, [("contents", "write"), ("attestations", "read")])
+        self.assertNotIn("env:", permissions)
+        self.assertEqual(job.count("GH_TOKEN:"), 1)
+        self.assertIn("        env:\n          GH_TOKEN: ${{ github.token }}", steps)
+        self.assertIn("          persist-credentials: false\n", steps)
+        self.assertIn("          ref: ${{ needs.validate.outputs.commit }}\n", steps)
+        # Only the frozen-source verifier runs; no installer, plugin, npm, or mutation step.
+        runs = re.findall(r"(?ms)^        run: \|\n(.*?)(?=^      -|\Z)", steps)
+        self.assertEqual(len(runs), 1)
+        commands = runs[0].replace("\\\n", "").strip().splitlines()
+        self.assertEqual(len(commands), 1)
+        self.assertTrue(commands[0].startswith("python3 scripts/verify-agentplugins-draft.py "))
+        self.assertNotRegex(commands[0], r"[;`]|&&|\|\||\$\(")
+        self.assertIn('--source "${GITHUB_WORKSPACE}"', commands[0])
+
+    def test_producer_trust_and_promotion_defaults_remain_fail_closed(self):
+        self.assertRegex(self.workflow, r"publish_release:\n(?:        .*\n)*?        type: boolean\n        default: false\n")
+        validate = self.job("validate")
+        for guard in ('test "${WORKFLOW_REF}" = "refs/heads/main"',
+                      '"${WORKFLOW_COMMIT}" != "${head_commit}"',
+                      'test "${head_commit}" = "$(git rev-parse refs/remotes/origin/main)"',
+                      'test "${head_commit}" = "$(git rev-list -n 1 "refs/tags/${TAG}")"',
+                      '.merged_at != null and .base.ref == "main"',
+                      'require_check dependency-review', 'require_check "${name}"'):
+            self.assertIn(guard, validate)
+        self.assertIn("needs: [validate, stage-draft, platform-proof]", self.job("verified-draft"))
+        promote = self.job("promote-release")
+        self.assertIn("if: ${{ inputs.publish_release == true }}", promote)
+        self.assertIn("needs: [validate, stage-draft, platform-proof, verified-draft]", promote)
+        for name in ("stage-draft", "verified-draft", "promote-release"):
+            self.assertNotRegex(self.job(name), r"always\(\)|!cancelled\(\)|failure\(\)|continue-on-error:")
+        self.assertNotIn("if:", self.job("verified-draft"))
 
 
 if __name__ == "__main__":
