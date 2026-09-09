@@ -1,5 +1,6 @@
 import { computed, toValue } from 'vue';
-import { canonicalPath, productRootUrl, productImageUrl } from '~/utils/seo';
+import { pageRouteSeo, productRootUrl, productImageUrl } from '~/utils/seo';
+import type { ProductRoute } from '~/data/routes';
 import type { MaybeRefOrGetter } from 'vue';
 
 type PageSeoImage = {
@@ -16,6 +17,7 @@ type PageSeoOptions = {
   image?: PageSeoImage;
   translate?: boolean;
   canonical?: boolean;
+  /** @deprecated Canonical identity comes from the actual published route. */
   canonicalPath?: MaybeRefOrGetter<string>;
   includeWebPage?: boolean;
   pageType?: 'WebPage' | 'CollectionPage';
@@ -44,10 +46,24 @@ export const usePageSeo = (
   const description = computed(() =>
     shouldTranslate ? t(toValue(descriptionSource)) : toValue(descriptionSource),
   );
-  const resolvedCanonicalPath = computed(() =>
-    canonicalPath(options.canonicalPath ? toValue(options.canonicalPath) : route.path),
+  const routeSeo = computed(() =>
+    pageRouteSeo(
+      route.path,
+      config.public.seoRoutes as ProductRoute[],
+      siteUrl,
+      String(config.app.baseURL),
+    ),
   );
-  const canonicalUrl = computed(() => `${siteUrl}${resolvedCanonicalPath.value}`);
+  const canonicalUrl = computed(() => routeSeo.value.canonical);
+  const includeAlternates = computed(
+    () =>
+      routeSeo.value.current?.indexable &&
+      !/\bnoindex\b/.test(options.robots || '') &&
+      options.canonical !== false,
+  );
+  const includeCanonical = computed(
+    () => options.canonical !== false && Boolean(canonicalUrl.value),
+  );
 
   const resolvedImage = computed<PageSeoImage>(() => {
     if (options.image) {
@@ -74,7 +90,7 @@ export const usePageSeo = (
     ogDescription: description,
     ogType: options.type || 'website',
     ogSiteName: siteName,
-    ogLocale: 'en_US',
+    ogLocale: computed(() => routeSeo.value.ogLocale),
     ogUrl: canonicalUrl,
     ogImage: resolvedImageUrl,
     ogImageType: computed(() => resolvedImage.value.type) as never,
@@ -90,9 +106,13 @@ export const usePageSeo = (
     twitterDescription: description,
     twitterImage: resolvedImageUrl,
     twitterImageAlt: computed(() => resolvedImage.value.alt),
-    robots:
-      options.robots ||
-      'index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1',
+    robots: computed(
+      () =>
+        options.robots ||
+        (!routeSeo.value.current?.indexable
+          ? 'noindex, follow'
+          : 'index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1'),
+    ),
   });
 
   useHead(() => {
@@ -101,7 +121,7 @@ export const usePageSeo = (
     const pageId = `${canonicalUrl.value}#webpage`;
     const jsonLd: Record<string, unknown>[] = [];
 
-    if (options.includeWebPage !== false) {
+    if (options.includeWebPage !== false && canonicalUrl.value) {
       jsonLd.push({
         '@type': options.pageType || 'WebPage',
         '@id': pageId,
@@ -149,8 +169,22 @@ export const usePageSeo = (
       htmlAttrs: {
         lang: locale.value || 'en',
       },
-      link: options.canonical === false ? [] : [{ rel: 'canonical', href: canonicalUrl.value }],
+      link: includeCanonical.value
+        ? [
+            { key: 'canonical', rel: 'canonical', href: canonicalUrl.value },
+            ...(includeAlternates.value ? routeSeo.value.alternates : []).map((link) => ({
+              key: `alternate-${link.hreflang}`,
+              rel: 'alternate',
+              ...link,
+            })),
+          ]
+        : [],
       meta: [
+        ...(includeAlternates.value ? routeSeo.value.ogAlternates : []).map((content) => ({
+          key: `og-locale-${content}`,
+          property: 'og:locale:alternate',
+          content,
+        })),
         { name: 'author', content: 'Universal Agent Plugins' },
         { name: 'application-name', content: siteName },
         { name: 'apple-mobile-web-app-title', content: siteName },

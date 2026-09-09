@@ -9,9 +9,10 @@ import { useInstallPreferencesStore } from '../stores/installPreferences.ts';
 import { useCatalogUiStore } from '../stores/catalogUi.ts';
 import { readManualLocaleCookie, useLocation, switchLocaleTransaction } from '../composables/useLocation.ts';
 
-test('production EN only, candidates explicit, legacy drafts known but unpublished', () => {
-  assert.deepEqual(publishedLocales, ['en']);
-  for (const code of ['ru', 'uk', 'es', 'fr', 'zh']) {
+test('production EN/RU/UK, candidates explicit, legacy drafts known but unpublished', () => {
+  assert.deepEqual(publishedLocales, ['en', 'ru', 'uk']);
+  for (const code of publishedLocales) assert.equal(isPublishedLocale(code), true);
+  for (const code of ['es', 'fr', 'zh']) {
     assert.equal(isKnownLocale(code), true);
     assert.equal(isPublishedLocale(code), false);
   }
@@ -19,12 +20,12 @@ test('production EN only, candidates explicit, legacy drafts known but unpublish
 });
 test('HTML manifest expansion, exclusions, collisions and base boundaries', () => {
   const routes = productRoutes(['gitlab'], ['codex', 'github-copilot-cli']);
-  assert.equal(expandLocalizedRoutes(routes).length, 8);
+  assert.equal(expandLocalizedRoutes(routes).length, 24);
   const expanded = expandLocalizedRoutes(routes, candidateLocales);
   assert.equal(expanded.length, 24);
   assert.equal(expanded.filter(r => r.indexable).length, 18);
   assert.ok(expanded.some(r => r.path === '/uk/plugins/gitlab/'));
-  for (const path of ['/agents/', '/api/registry/catalog/', '/plugins/unknown/', '/ru/', '/create-plugin/', '/plugins/community/?source=x']) {
+  for (const path of ['/agents/', '/api/registry/catalog/', '/plugins/unknown/', '/es/', '/create-plugin/', '/plugins/community/?source=x']) {
     assert.equal(isIndexablePath(path, routes), false, path);
   }
   assert.equal(isIndexablePath('/uk/plugins/gitlab/?x=y#security', routes, candidateLocales), true);
@@ -41,7 +42,9 @@ test('Pinia request isolation and preferences do not own route state', () => {
   const two = useLocaleStore(createPinia());
   one.rememberChoice('en');
   one.rememberChoice('ru');
-  assert.equal(one.preferredLocale, 'en');
+  assert.equal(one.preferredLocale, 'ru');
+  one.rememberChoice('es');
+  assert.equal(one.preferredLocale, 'ru');
   assert.equal(two.preferredLocale, null);
   assert.equal('current' in one, false);
 });
@@ -178,8 +181,8 @@ test(`stubbed adapter preserves canonical slash, params/query/hash and cookie ($
 
 
 test('cookie metadata ignores old, malformed and unpublished values and storage denial', () => {
-  assert.equal(readManualLocaleCookie(() => 'other=x;uap_locale=en'), 'en');
-  for (const cookie of ['i18n_redirected=en', 'uap_locale=ru', 'uap_locale=uk', 'uap_locale=es', 'uap_locale=%E0%A4%A', 'uap_locale=EN', '']) {
+  for (const locale of publishedLocales) assert.equal(readManualLocaleCookie(() => `other=x;uap_locale=${locale}`), locale);
+  for (const cookie of ['i18n_redirected=en', 'uap_locale=es', 'uap_locale=%E0%A4%A', 'uap_locale=EN', '']) {
     assert.equal(readManualLocaleCookie(() => cookie), null);
   }
   assert.equal(readManualLocaleCookie(() => { throw new Error('denied'); }), null);

@@ -1,8 +1,8 @@
 import { expect, test } from '@playwright/test';
+import { publishedLocales } from '../../data/i18n';
 
-// Production PR1 remains EN-only; candidate switching is exercised with EN-only
-// Nuxt fixture in tests/fixtures/i18n-candidate, never public translations.
-test('root ignores draft preference/browser language and does not write a locale cookie', async ({ page, context, baseURL }) => {
+// Publication drives visibility; browser/cookie preferences never redirect root.
+test('root ignores manual preference/browser language and does not write a locale cookie', async ({ page, context, baseURL }) => {
   const url = new URL(baseURL!);
   await context.addCookies([{ name: 'uap_locale', value: 'ru', domain: url.hostname, path: url.pathname }]);
   await page.addInitScript(() => {
@@ -13,7 +13,7 @@ test('root ignores draft preference/browser language and does not write a locale
   await expect(page.locator('html')).toHaveAttribute('lang', 'en');
   await expect(page).toHaveURL(baseURL!);
   await page.waitForFunction("window.__NUXT__?.state?.['$slocale:initialized'] === true");
-  await expect(page.getByRole('button', { name: /^Language:/ })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /^Language:/ })).toHaveCount(publishedLocales.length > 1 ? 1 : 0);
   const cookies = await context.cookies();
   expect(cookies.find(cookie => cookie.name === 'uap_locale')?.value).toBe('ru');
   expect(cookies.some(cookie => cookie.name === 'i18n_redirected')).toBe(false);
@@ -27,7 +27,7 @@ test('deep link retains query/hash on refresh without preference creation', asyn
   await expect(page).toHaveURL(requested);
   await expect(search).toBeVisible();
   await expect(search).toHaveValue('gitlab');
-  // init-theme-locale runs on app:mounted; Nuxt prefixes useState payload keys with $s.
+  // Locale initialization runs after Nuxt readiness; Nuxt prefixes useState payload keys with $s.
   await page.waitForFunction("window.__NUXT__?.state?.['$slocale:initialized'] === true");
   await page.reload();
   await page.waitForFunction("window.__NUXT__?.state?.['$slocale:initialized'] === true");
