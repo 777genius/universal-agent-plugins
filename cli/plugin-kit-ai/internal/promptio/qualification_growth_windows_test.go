@@ -209,6 +209,7 @@ func TestQualificationNativeResourceOracle(t *testing.T) {
 			return
 		} // Investigate the first failure before any additional run.
 	}
+	t.Log("QUALIFICATION_NATIVE_RESOURCE_ORACLE_OK")
 }
 
 func qualificationNativeOracleChild(t *testing.T, scenario string) {
