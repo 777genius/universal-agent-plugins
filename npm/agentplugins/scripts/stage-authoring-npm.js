@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 "use strict";
 
-// CLI preparation only, plus pure C1 S/final-format generation contracts.
-// Authenticated staging is still absent. This entrypoint never qualifies packs.
+// Preparation and C1 stage source interfaces. Neither qualifies packs.
+// Positive stage execution requires separately accepted artifact/workflow tools.
 const fs = require("node:fs");
 const path = require("node:path");
 const c = require("./dual-authoring-candidate");
@@ -58,7 +58,7 @@ function packageFiles(product, source, manifestBytes, candidate) {
 
 // These fixed pure contracts establish byte/shape consistency ONLY. In
 // particular, parsing S's assertions cannot establish that any assertion is true.
-// No authenticated producer/reader, custody adapter or staging CLI exists here.
+// Authentication belongs to the separate integrated operations below.
 function stageFields(value, names, label) {
   if (!value || typeof value !== "object" || ![Object.prototype, null].includes(Object.getPrototypeOf(value))) {
     throw new Error(`${label}: ordinary data object required`);
@@ -276,6 +276,264 @@ function decodeStage(body, inputBytes) {
   return value;
 }
 
+// Integrated source operations below use only fixed external boundaries. The
+// checked artifact reader's input-provenance/public-stage kinds and protected
+// workflows remain separately required before authentic positive execution.
+const promotion = require("./authoring-promotion");
+const cp = require("node:child_process");
+const { isDeepStrictEqual: stageSame } = require("node:util");
+const agreeStage = (a, b, label) => {
+  if (!stageSame(a, b)) throw new Error(`C1 stage ${label} changed or mismatched`);
+};
+function stageLocator(value) {
+  stageFields(value, ["run_id", "run_attempt", "artifact_id", "artifact_sha256"], "stage artifact locator");
+  return { run_id: stageInteger(value.run_id), run_attempt: stageInteger(value.run_attempt, 1000),
+    artifact_id: stageInteger(value.artifact_id), artifact_sha256: stageHash(value.artifact_sha256) };
+}
+function stageInvocation(value, input) {
+  stageFields(value, ["workflow", "source", "ref", "run_id", "run_attempt"], "stage invocation");
+  const result = { workflow: STAGE_WORKFLOW, source: input.identity.commit,
+    ref: `refs/tags/${input.products.agentplugins.tag}`, run_id: stageInteger(value.run_id),
+    run_attempt: stageInteger(value.run_attempt, 1000) };
+  agreeStage(value, result, "producer source/ref/workflow");
+  if ([input.producer.run_id, input.preparation.artifact.run_id].includes(result.run_id)) {
+    throw new Error("separate stage and input/preparation runs required");
+  }
+  return result;
+}
+function stageCaller(producer) {
+  const expected = { GITHUB_ACTIONS: "true", GITHUB_REPOSITORY: c.REPOSITORY, GITHUB_SHA: producer.source,
+    GITHUB_REF: producer.ref, GITHUB_RUN_ID: String(producer.run_id), GITHUB_RUN_ATTEMPT: String(producer.run_attempt),
+    GITHUB_WORKFLOW_SHA: producer.source, GITHUB_WORKFLOW_REF: `${c.REPOSITORY}/${STAGE_WORKFLOW}@${producer.ref}` };
+  agreeStage(Object.fromEntries(Object.keys(expected).map(k => [k, process.env[k]])), expected, "workflow caller");
+  return expected;
+}
+function stageOptions(value, reading) {
+  stageFields(value, ["input", "selected", "workflow_sha", "artifact", "repo", "workParent", "node", "npm",
+    ...(reading ? ["stage_sha256"] : ["producer", "output"])], "stage operation options");
+  const body = Buffer.from(stageBytes(value.input, inputs.MAX_INPUT_BYTES)), input = inputs.decodeInputs(body);
+  stageDescriptors(input, body); // both bounded descriptors before any effects
+  // Match the existing readInputs provider boundary without changing pure I/S
+  // or descriptor limits. Provider-incompatible versions fail before effects.
+  if (Object.values(input.identity.versions).some(v => v.length > 32)) throw new Error("bounded provider versions required");
+  stageFields(value.selected, ["tag", "ref", "source", "versions"], "stage selection");
+  stageFields(value.selected.versions, c.PRODUCTS, "stage versions");
+  const selected = { tag: input.products.agentplugins.tag, ref: `refs/tags/${input.products.agentplugins.tag}`,
+    source: input.identity.commit, versions: input.identity.versions };
+  agreeStage(value.selected, selected, "selected identity");
+  stageEqual(value.workflow_sha, input.identity.commit, "workflow revision F");
+  const artifact = stageLocator(value.artifact);
+  if (input.producer.run_id === input.preparation.artifact.run_id) throw new Error("separate provenance run required");
+  if (!reading) {
+    agreeStage([artifact.run_id, artifact.run_attempt], [input.producer.run_id, input.producer.run_attempt], "input attempt");
+    if (artifact.artifact_id === input.preparation.artifact.artifact_id) throw new Error("separate input artifact required");
+  }
+  if (reading && [input.producer.run_id, input.preparation.artifact.run_id].includes(artifact.run_id)) {
+    throw new Error("separate completed stage run required");
+  }
+  const producer = reading ? null : stageInvocation(value.producer, input);
+  const stage_sha256 = reading ? stageHash(value.stage_sha256) : null;
+  for (const key of ["repo", "workParent"]) c.safeDirectory(value[key]);
+  const executing = path.resolve(__dirname, "../../..");
+  for (const root of [value.repo, executing]) {
+    if (root === value.workParent || root.startsWith(value.workParent + path.sep) || value.workParent.startsWith(root + path.sep)) {
+      throw new Error("stage source/scratch roots overlap");
+    }
+  }
+  for (const key of ["node", "npm"]) {
+    if (typeof value[key] !== "string" || !path.isAbsolute(value[key]) || path.resolve(value[key]) !== value[key]) {
+      throw new Error("absolute trusted stage tool required");
+    }
+    c.readFile(value[key]);
+  }
+  if (!reading) {
+    stageCaller(producer);
+    // Existence is checked separately at reservation, so caller rechecks work
+    // after the output has been reserved without weakening initial placement.
+    const output = value.output;
+    if (typeof output !== "string" || !path.isAbsolute(output) || path.resolve(output) !== output ||
+        !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(path.basename(output))) throw new Error("safe stage output required");
+    c.safeDirectory(path.dirname(output));
+    for (const root of [value.repo, executing, value.workParent, path.dirname(value.node), path.dirname(value.npm)]) {
+      if (output === root || output.startsWith(root + path.sep) || root.startsWith(output + path.sep)) throw new Error("stage output overlaps input");
+    }
+  }
+  return { body, input, selected, workflow_sha: value.workflow_sha, artifact, producer, stage_sha256,
+    repo: value.repo, workParent: value.workParent, node: value.node, npm: value.npm, output: reading ? null : value.output };
+}
+function stageTools(o, context) {
+  const command = (exe, args) => cp.execFileSync(exe, args, { env: context.env, cwd: context.root,
+    timeout: 30000, maxBuffer: MAX_STAGE_BYTES }).toString().trim();
+  const paths = { node: o.node, npm: o.npm, git: "/usr/bin/git", tar: "/usr/bin/tar", gh: "/usr/bin/gh" };
+  const tools = Object.fromEntries(Object.entries(paths).map(([name, file]) => [name, {
+    version: (name === "npm" ? command(o.node, [o.npm, "--version"]) : command(file, ["--version"])).split("\n")[0],
+    sha256: c.digest(c.readFile(file)) }]));
+  if (!tools.gh.version.startsWith(`gh version ${promotion.GH_VERSION} (`)) throw new Error("fixed stage gh provision required");
+  return tools;
+}
+function toolSnapshot(o) {
+  // Invocation-local pins supplement S's portable five-tool fields. Include the
+  // running interpreter and the fixed checked-reader interpreter; no extra S keys.
+  return Object.fromEntries([...new Set([o.node, o.npm, process.execPath, "/usr/bin/git", "/usr/bin/tar", "/usr/bin/gh",
+    fs.realpathSync("/usr/bin/python3")])].map(file => [file, c.digest(c.readFile(file))]));
+}
+function sourcePins(source) {
+  return Object.fromEntries(Object.entries(source).map(([n, { bytes, ...pin }]) => [n, pin]));
+}
+function inputFiles(input) {
+  return ["preparation-run.json", "candidate-identity.json", "candidate/candidate.json", "pair-prepared.json",
+    ...c.PRODUCTS.flatMap(p => [...c.TARGETS.map(t => `${p}/${input.products[p].assets[t].file}`),
+      `${p}/release-manifest.json`, `${p}/checksums.txt`]), inputs.INPUT_FILE];
+}
+function stageInputSnapshot(root, body) {
+  const input = inputs.decodeInputs(body);
+  const subjects = inputs.inputSubjects(root, body); // existing projected + receipt reader
+  if (subjects.length !== 19) throw new Error("exact nineteen input subjects required");
+  const files = Object.fromEntries(inputFiles(input).map(n => [n, c.readFile(path.join(root, n), inputs.MAX_NATIVE_BYTES)]));
+  agreeStage(files[inputs.INPUT_FILE], body, "same retained I bytes");
+  return { files, subjects: subjects.map(s => ({ file: path.relative(root, s.file), sha256: s.sha256 })) };
+}
+function manifestsFrom(snapshot) {
+  return Object.fromEntries(c.PRODUCTS.map(p => [p, snapshot.files[`${p}/release-manifest.json`]]));
+}
+function generatedPins(pair) {
+  for (const name of [...COMMON, inputs.INPUT_FILE]) agreeStage(pair.agentplugins[name], pair["plugin-kit-ai"][name], "shared generated bytes");
+  return Object.fromEntries(c.PRODUCTS.map(p => [p,
+    Object.fromEntries(Object.entries(pair[p]).map(([n, b]) => [n, c.digest(b)]))]));
+}
+function retainedPack(root, product, input) {
+  const file = `${inputs.PACKAGES[product]}-${input.identity.versions[product]}.tgz`;
+  const bytes = c.readFile(path.join(root, file), inputs.MAX_NATIVE_BYTES);
+  return { file, ...c.metadata(bytes), integrity: "sha512-" + crypto.createHash("sha512").update(bytes).digest("base64"),
+    shasum: crypto.createHash("sha1").update(bytes).digest("hex") };
+}
+function stageProviders(o, inputArtifact, cwd) {
+  promotion.checkInputTags(o.body, cwd);
+  return [promotion.inspectArtifact(inputArtifact, inputs.WORKFLOW, o.input.identity.commit, cwd),
+    promotion.inspectArtifact(o.input.preparation.artifact, inputs.WORKFLOW, o.input.identity.commit, cwd)];
+}
+function stageReadInputs(o, artifact, scratch) {
+  return inputs.readInputs({ input: o.body, selected: o.selected, workflow_sha: o.workflow_sha, artifact, scratch });
+}
+function checkGeneratedRoot(root, files) {
+  const walk = (dir, prefix = "") => fs.readdirSync(dir).flatMap(n => {
+    const relative = prefix + n, file = path.join(dir, n), st = fs.lstatSync(file);
+    if (st.isDirectory() && !st.isSymbolicLink()) return walk(file, relative + "/");
+    return [relative];
+  });
+  agreeStage(walk(root).sort(), Object.keys(files).sort(), "generated file inventory");
+  for (const [name, body] of Object.entries(files)) {
+    agreeStage(c.readFile(path.join(root, name)), body, "generated file bytes");
+    stageEqual(fs.lstatSync(path.join(root, name)).mode & 0o777, /^bin\/[^/]+\.js$/.test(name) ? 0o755 : 0o644, "generated mode");
+  }
+}
+
+/** Produce unsigned S only after authenticated I and two verified packs. Never
+ * signs, publishes, qualifies or launches a native input. Failed work is retained.
+ * Protected positive execution is unavailable until the fixed reader/workflows
+ * and genuine tool/verifier prerequisites have been independently accepted. */
+function stagePrepublication(value) {
+  const o = stageOptions(value, false);
+  c.outputPlacement(o.output, [o.repo, o.workParent, path.resolve(__dirname, "../../.."), path.dirname(o.node), path.dirname(o.npm)]);
+  const context = packing.npmContext(o.workParent);
+  context.env.PATH = "/usr/local/bin:/usr/bin:/bin";
+  const source = packing.blobs(o.repo, o.input.identity.commit, context.env, "stage");
+  const toolPins = toolSnapshot(o), tools = stageTools(o, context), callerArgs = [...process.execArgv];
+  const providers = stageProviders(o, o.artifact, context.root);
+  const admitted = stageReadInputs(o, o.artifact, context.root);
+  const before = stageInputSnapshot(admitted.root, o.body);
+  const snapshot = path.join(context.root, "stage-inputs");
+  c.outputPlacement(snapshot, [admitted.root, o.repo]);
+  fs.mkdirSync(snapshot, { mode: 0o700 });
+  for (const [n, b] of Object.entries(before.files)) write(path.join(snapshot, n), b, 0o444);
+  agreeStage(stageInputSnapshot(snapshot, o.body), before, "owned input snapshot");
+  const pair = pairedPackageFiles(source, manifestsFrom(before), o.body), generated = generatedPins(pair);
+  // Authentication may have changed caller/source/tools; no pack until recheck.
+  agreeStage(stageOptions(value, false), o, "caller before packing");
+  agreeStage(packing.blobs(o.repo, o.input.identity.commit, context.env, "stage"), source, "source before packing");
+  agreeStage(toolSnapshot(o), toolPins, "tools before packing");
+  fs.mkdirSync(o.output, { mode: 0o700 });
+  const packs = {};
+  for (const product of c.PRODUCTS) {
+    const root = path.join(o.output, product); fs.mkdirSync(root, { mode: 0o700 });
+    for (const [n, b] of Object.entries(pair[product])) write(path.join(root, n), b, /^bin\/[^/]+\.js$/.test(n) ? 0o755 : 0o644);
+    const packed = packing.packPackage(product, pair[product], root, { node: o.node, npm: o.npm,
+      output: o.output, identity: o.input.identity }, context);
+    const retained = retainedPack(o.output, product, o.input), { shasum, ...legacy } = retained;
+    agreeStage(packed, legacy, "pack return versus retained bytes");
+    packs[product] = retained; // actual SHA1, without changing v1 pack return/receipts
+  }
+  for (const product of c.PRODUCTS) {
+    checkGeneratedRoot(path.join(o.output, product), pair[product]);
+    packing.verifyPack(path.join(o.output, packs[product].file), pair[product], path.join(context.root, `retained-${product}`), context.env);
+  }
+  agreeStage(stageProviders(o, o.artifact, context.root), providers, "input providers");
+  agreeStage(stageInputSnapshot(admitted.root, o.body), before, "authenticated inputs after packing");
+  agreeStage(stageInputSnapshot(snapshot, o.body), before, "snapshot after packing");
+  agreeStage(packing.blobs(o.repo, o.input.identity.commit, context.env, "stage"), source, "source after packing");
+  agreeStage(toolSnapshot(o), toolPins, "tools after packing");
+  agreeStage(process.execArgv, callerArgs, "caller interpreter arguments");
+  agreeStage(stageOptions(value, false), o, "caller before completion");
+  for (const product of c.PRODUCTS) {
+    checkGeneratedRoot(path.join(o.output, product), pair[product]);
+    agreeStage(retainedPack(o.output, product, o.input), packs[product], "retained pair before completion");
+  }
+  const record = { schema: STAGE_SCHEMA, identity: o.input.identity, authoring_mode: o.input.authoring_mode,
+    asset_scope: o.input.asset_scope, candidate_sha256: o.input.candidate_sha256, pair_marker_sha256: o.input.pair_marker_sha256,
+    projection_pins: Object.fromEntries(c.PRODUCTS.map(p => [p, { manifest_sha256: o.input.products[p].manifest_sha256,
+      checksums_sha256: o.input.products[p].checksums_sha256 }])),
+    native_inputs: { sha256: c.digest(o.body), artifact: o.artifact }, wrapper_blobs: sourcePins(source), generated, packs, tools,
+    producer: o.producer, assertions: Object.fromEntries(ASSERTIONS.map(n => [n, true])) };
+  const completed = decodeStage(encodeStage(record, o.body), o.body);
+  packing.completeRecord(o.output, completed);
+  return completed;
+}
+
+/** Authenticate an independently pinned completed S artifact, then retrieve its
+ * referenced I through readInputs. The required input Buffer is a comparison
+ * pin, never an authentication flag. Check both retained packs without packing.
+ * Returns staging evidence only, never qualification or execution permission. */
+function readStage(value) {
+  const o = stageOptions(value, true), context = packing.npmContext(o.workParent);
+  context.env.PATH = "/usr/local/bin:/usr/bin:/bin";
+  const source = packing.blobs(o.repo, o.input.identity.commit, context.env, "stage"), toolPins = toolSnapshot(o);
+  const before = promotion.inspectArtifact(o.artifact, STAGE_WORKFLOW, o.input.identity.commit, context.root);
+  const archive = promotion.acquireArtifact(o.artifact, STAGE_WORKFLOW, o.input.identity.commit, context.root);
+  const names = ["completion.json", ...c.PRODUCTS.map(p => `${inputs.PACKAGES[p]}-${o.input.identity.versions[p]}.tgz`)];
+  const root = promotion.extractArtifact(archive, o.artifact, "public-stage", names, path.join(context.root, "stage"), context.root);
+  const body = pinFile(path.join(root, "completion.json"), o.stage_sha256, MAX_STAGE_BYTES), record = decodeStage(body, o.body);
+  const invocation = stageInvocation(record.producer, o.input);
+  agreeStage([invocation.run_id, invocation.run_attempt], [o.artifact.run_id, o.artifact.run_attempt], "stage artifact attempt");
+  if ([record.native_inputs.artifact.artifact_id, o.input.preparation.artifact.artifact_id].includes(o.artifact.artifact_id)) {
+    throw new Error("separate stage artifact required");
+  }
+  const subjects = names.map(name => ({ file: path.join(root, name), sha256: name === "completion.json" ? o.stage_sha256 :
+    record.packs[c.PRODUCTS.find(p => record.packs[p].file === name)].sha256 }));
+  const multiset = subjects.map(s => ({ name: path.basename(s.file), digest: { sha256: s.sha256 } }));
+  for (const subject of subjects) promotion.verifyStageSubject(subject.file, { name: path.basename(subject.file),
+    sha256: subject.sha256, source: invocation.source, workflow_sha: o.workflow_sha, ref: invocation.ref,
+    run_id: invocation.run_id, run_attempt: invocation.run_attempt, subjects: multiset }, context.root);
+  const providers = stageProviders(o, record.native_inputs.artifact, context.root);
+  const admitted = stageReadInputs(o, record.native_inputs.artifact, context.root);
+  const snapshot = stageInputSnapshot(admitted.root, o.body);
+  const pair = pairedPackageFiles(source, manifestsFrom(snapshot), o.body);
+  agreeStage(record.wrapper_blobs, sourcePins(source), "authenticated source closure");
+  agreeStage(record.generated, generatedPins(pair), "authenticated generated closures");
+  for (const product of c.PRODUCTS) {
+    agreeStage(retainedPack(root, product, o.input), record.packs[product], "authenticated retained pack");
+    packing.verifyPack(path.join(root, record.packs[product].file), pair[product], path.join(context.root, `read-${product}`), context.env);
+  }
+  agreeStage(promotion.inspectArtifact(o.artifact, STAGE_WORKFLOW, o.input.identity.commit, context.root), before, "stage provider");
+  agreeStage(stageProviders(o, record.native_inputs.artifact, context.root), providers, "input providers");
+  agreeStage(stageInputSnapshot(admitted.root, o.body), snapshot, "reader inputs");
+  agreeStage(packing.blobs(o.repo, o.input.identity.commit, context.env, "stage"), source, "reader source");
+  agreeStage(toolSnapshot(o), toolPins, "reader tools");
+  agreeStage(stageOptions(value, true), o, "reader caller");
+  agreeStage(c.readFile(path.join(root, "completion.json"), MAX_STAGE_BYTES), body, "retained S");
+  for (const product of c.PRODUCTS) agreeStage(retainedPack(root, product, o.input), record.packs[product], "reader retained pair");
+  return { root, record, subjects };
+}
+
 function pinFile(file, expected, maximum = 1024 * 1024) {
   if (typeof expected !== "string" || !/^[0-9a-f]{64}$/.test(expected)) throw new Error("independent preparation digest required");
   const bytes = c.readFile(file, maximum);
@@ -357,7 +615,7 @@ function prepare(options) {
 }
 // Public blob verification re-enters this module while the CLI is preparing.
 module.exports = { prepare, packageFiles, ALLOWLIST, COMMON,
-  encodeStage, decodeStage, pairedPackageFiles, STAGE_ALLOWLIST };
+  encodeStage, decodeStage, pairedPackageFiles, STAGE_ALLOWLIST, stagePrepublication, readStage };
 
 if (require.main === module) {
   try {

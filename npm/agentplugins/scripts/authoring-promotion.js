@@ -329,6 +329,11 @@ function admitNativeEvidence(record, preparationPin, scratch) {
 // is structural; only verifySubject calls the cryptographic boundary. B must
 // never promote supplied JSON into authenticated proof by calling this mapper.
 function mapVerifiedOutput(output, expected) {
+  return mapWorkflowOutput(output, expected, WORKFLOW);
+}
+// Private policy selection only. Cryptographic output fields and their mapping
+// are unchanged; callers cannot supply a workflow or a verifier.
+function mapWorkflowOutput(output, expected, workflow) {
   if (typeof output !== "string" || Buffer.byteLength(output) > 4 * LIMIT) fail("bounded verifier output required");
   const results = JSON.parse(output);
   if (!Array.isArray(results) || results.length !== 1) fail("one verified attestation required");
@@ -351,7 +356,7 @@ function mapVerifiedOutput(output, expected) {
   exact(order(statement.subject), order(normalized), "verified subject set");
   const build = statement.predicate?.buildDefinition;
   if (build?.buildType !== "https://actions.github.io/buildtypes/workflow/v1") fail("verified Actions build type mismatch");
-  exact(build.externalParameters?.workflow, { ref: expected.ref, repository: URL, path: WORKFLOW }, "verified workflow");
+  exact(build.externalParameters?.workflow, { ref: expected.ref, repository: URL, path: workflow }, "verified workflow");
   exact(build.resolvedDependencies, [{ uri: `git+${URL}@${expected.ref}`, digest: { gitCommit: expected.source } }], "verified source");
   const run = statement.predicate?.runDetails;
   exact(run?.metadata?.invocationId, `${URL}/actions/runs/${expected.run_id}/attempts/${expected.run_attempt}`, "verified invocation");
@@ -359,6 +364,17 @@ function mapVerifiedOutput(output, expected) {
   return statement;
 }
 function verifySubject(file, expected, cwd) {
+  return verifyWorkflowSubject(file, expected, cwd, WORKFLOW);
+}
+function verifyStageSubject(file, expected, cwd) {
+  exact(expected.workflow_sha, expected.source, "stage signer revision F");
+  if (!Array.isArray(expected.subjects) || expected.subjects.length !== 3 ||
+      expected.subjects.filter(s => s.name === "completion.json").length !== 1 ||
+      expected.subjects.filter(s => /^universal-agent-plugins-[0-9]+\.[0-9]+\.[0-9]+\.tgz$/.test(s.name)).length !== 1 ||
+      expected.subjects.filter(s => s.name === "plugin-kit-ai-2.0.0.tgz").length !== 1) fail("exact three stage subjects required");
+  return verifyWorkflowSubject(file, expected, cwd, ".github/workflows/agentplugins-npm-publish.yml");
+}
+function verifyWorkflowSubject(file, expected, cwd, workflow) {
   c.keys(expected, ["name", "sha256", "source", "workflow_sha", "ref", "run_id", "run_attempt", "subjects"], "verification expectations");
   sha(expected.sha256); sha(expected.source, 40); sha(expected.workflow_sha, 40);
   integer(expected.run_id); integer(expected.run_attempt, 1000);
@@ -366,11 +382,11 @@ function verifySubject(file, expected, cwd) {
   if (c.digest(c.readFile(file)) !== expected.sha256) fail("subject changed before signature verification");
   cliVersion(cwd);
   const output = gh(["attestation", "verify", file, "--repo", REPOSITORY,
-    "--signer-workflow", SIGNER, "--signer-digest", expected.workflow_sha,
+    "--signer-workflow", workflow === WORKFLOW ? SIGNER : `github.com/${REPOSITORY}/${workflow}`, "--signer-digest", expected.workflow_sha,
     "--source-digest", expected.source, "--source-ref", expected.ref,
     "--cert-oidc-issuer", "https://token.actions.githubusercontent.com",
     "--deny-self-hosted-runners", "--predicate-type", SLSA, "--format", "json"], cwd);
-  const statement = mapVerifiedOutput(output, expected);
+  const statement = mapWorkflowOutput(output, expected, workflow);
   if (c.digest(c.readFile(file)) !== expected.sha256) fail("subject changed after signature verification");
   return statement;
 }
@@ -552,4 +568,4 @@ if (require.main === module) {
 module.exports = { SCHEMA, WORKFLOW, GH_VERSION, LANES, encodeRecord, decodeRecord, validateSelection, admitRecord, requireNativeContracts,
   inspectArtifact, acquireArtifact, extractArtifact, acquirePreparation, checkNativeContracts, admitNativeEvidence,
   acquireInputPreparation, readInputPreparation, checkInputTags,
-  mapVerifiedOutput, verifySubject, frozenSubjects, releasePins, inspectPair, promote };
+  mapVerifiedOutput, verifySubject, verifyStageSubject, frozenSubjects, releasePins, inspectPair, promote };

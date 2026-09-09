@@ -1,7 +1,7 @@
 "use strict";
 
-// In-memory unit evidence only. No artifact custody, authenticated assertions,
-// packing, signatures, native launch, cache, network or qualification is tested.
+// Pure contracts and mocked source orchestration only. No authentic custody,
+// signatures, npm pack, native launch, network or qualification is tested.
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const crypto = require("node:crypto");
@@ -349,8 +349,8 @@ test("C1 pure S: closed tools and assertions; syntax does not establish authenti
   // retained packs/authenticated custody may validate it in subsequent C1.
   const v = clone(f.value); v.packs.agentplugins.sha256 = sha(999);
   assert.deepEqual(stage.decodeStage(stage.encodeStage(v, f.inputBytes), f.inputBytes), v);
-  assert.equal(stage.readStage, undefined);
-  assert.equal(stage.stagePrepublication, undefined);
+  assert.equal(typeof stage.readStage, "function");
+  assert.equal(typeof stage.stagePrepublication, "function");
 });
 
 test("C1 pure S: canonical UTF-8, duplicate keys, nesting, spelling and exact 1 MiB boundary", () => {
@@ -403,7 +403,7 @@ test("C1 pure inventories: separate exact stage additions and unchanged legacy e
     ".github/workflows/agentplugins-release.yml", ".github/workflows/agentplugins-npm-publish.yml"]);
   assert.ok(Object.isFrozen(stage.STAGE_ALLOWLIST));
   assert.deepEqual(Object.keys(stage), ["prepare", "packageFiles", "ALLOWLIST", "COMMON",
-    "encodeStage", "decodeStage", "pairedPackageFiles", "STAGE_ALLOWLIST"]);
+    "encodeStage", "decodeStage", "pairedPackageFiles", "STAGE_ALLOWLIST", "stagePrepublication", "readStage"]);
 });
 
 test("C1 pure runtime regression: existing loadRelease rejects v2 and v1/null using only in-memory reads", t => {
@@ -426,4 +426,346 @@ test("C1 pure runtime regression: existing loadRelease rejects v2 and v1/null us
     assert.throws(() => runtime.loadRelease(p, "/unit-package", "linux-amd64"), /not qualified: preparation package/);
     assert.deepEqual(reads, ["public-release.json", "package.json", "release-manifest.json"]);
   }
+});
+
+// SOURCE orchestration fixtures: every acquisition/signature/pack/tool seam is
+// mocked. Only fresh os.tmpdir roots receive files; none is authentic admission.
+const fs = require("node:fs");
+const os = require("node:os");
+const path = require("node:path");
+const cp = require("node:child_process");
+const Module = require("node:module");
+const packing = require("../scripts/stage-dual-authoring-npm");
+const promotion = require("../scripts/authoring-promotion");
+function fixtureEnv(t, name, value) {
+  const prior = process.env[name]; process.env[name] = value;
+  t.after(() => { if (prior === undefined) delete process.env[name]; else process.env[name] = prior; });
+}
+function integrationFixture(t, hook = () => {}) {
+  const f = fixture(), base = fs.mkdtempSync(path.join(os.tmpdir(), "c1-stage-integration-"));
+  const paths = Object.fromEntries(["repo", "scratch", "tools", "incoming"].map(n => {
+    const dir = path.join(base, n); fs.mkdirSync(dir); return [n, dir];
+  }));
+  const put = (root, n, b, mode = 0o644) => {
+    const file = path.join(root, n); fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, b, { mode }); return file;
+  };
+  const fixedFiles = { "native-inputs.json": f.inputBytes, "preparation-run.json": Buffer.from("receipt fixture"),
+    "candidate-identity.json": Buffer.from("metadata fixture"), "candidate/candidate.json": Buffer.from("candidate fixture"),
+    "pair-prepared.json": Buffer.from("pair fixture") };
+  for (const p of products) {
+    fixedFiles[`${p}/release-manifest.json`] = f.manifests[p];
+    fixedFiles[`${p}/checksums.txt`] = Buffer.from("checksum fixture");
+    for (const a of Object.values(f.input.products[p].assets)) fixedFiles[`${p}/${a.file}`] = Buffer.from(`NOT NATIVE: ${p}/${a.file}`);
+  }
+  for (const [n, b] of Object.entries(fixedFiles)) put(paths.incoming, n, b);
+  const calls = [], options = { input: Buffer.from(f.inputBytes), selected: { tag: f.input.products.agentplugins.tag,
+    ref: `refs/tags/${f.input.products.agentplugins.tag}`, source: f.input.identity.commit, versions: clone(f.input.identity.versions) },
+    workflow_sha: f.input.identity.commit, artifact: { run_id: 201, run_attempt: 3, artifact_id: 401, artifact_sha256: sha(71) },
+    repo: paths.repo, workParent: paths.scratch, node: put(paths.tools, "node", Buffer.from("node fixture")),
+    npm: put(paths.tools, "npm", Buffer.from("npm fixture")), output: path.join(base, "output"),
+    producer: { workflow: ".github/workflows/agentplugins-npm-publish.yml", source: f.input.identity.commit,
+      ref: `refs/tags/${f.input.products.agentplugins.tag}`, run_id: 501, run_attempt: 4 } };
+  for (const [k, v] of Object.entries({ GITHUB_ACTIONS: "true", GITHUB_REPOSITORY: c.REPOSITORY,
+    GITHUB_SHA: options.producer.source, GITHUB_REF: options.producer.ref, GITHUB_RUN_ID: "501", GITHUB_RUN_ATTEMPT: "4",
+    GITHUB_WORKFLOW_SHA: options.producer.source,
+    GITHUB_WORKFLOW_REF: `${c.REPOSITORY}/${options.producer.workflow}@${options.producer.ref}` })) fixtureEnv(t, k, v);
+  const originalRead = c.readFile;
+  const fixedTools = new Set(["/usr/bin/git", "/usr/bin/tar", "/usr/bin/gh", fs.realpathSync("/usr/bin/python3"), process.execPath]);
+  t.mock.method(c, "readFile", (file, max) => fixedTools.has(file) ? Buffer.from(`tool fixture: ${file}`) : originalRead(file, max));
+  t.mock.method(cp, "execFileSync", (exe, args) => {
+    calls.push(["tool", exe, args]); assert.deepEqual(args.at(-1), "--version");
+    return Buffer.from(exe === "/usr/bin/gh" ? `gh version ${promotion.GH_VERSION} (fixture)\n` : "fixture version\n");
+  });
+  t.mock.method(cp, "spawnSync", () => { throw new Error("unexpected external process"); });
+  const event = (name, data) => { calls.push([name, data]); hook(name, data, { f, paths, options, calls, put }); };
+  t.mock.method(packing, "blobs", (repo, commit, env, closure) => {
+    assert.equal(repo, paths.repo); assert.equal(commit, f.input.identity.commit); assert.equal(closure, "stage");
+    assert.equal(env.PATH, "/usr/local/bin:/usr/bin:/bin"); event("blobs");
+    return Object.fromEntries(Object.entries(f.source).map(([n, pin]) => [n, { ...pin, bytes: Buffer.from(pin.bytes) }]));
+  });
+  t.mock.method(promotion, "checkInputTags", body => { assert.deepEqual(body, f.inputBytes); event("tags"); });
+  t.mock.method(promotion, "inspectArtifact", (pin, workflow, source) => {
+    assert.equal(source, f.input.identity.commit); event("inspect", { pin, workflow }); return clone({ pin, workflow, source });
+  });
+  t.mock.method(promotion, "acquireArtifact", (pin, workflow, source, cwd) => {
+    assert.equal(workflow, options.producer.workflow); assert.equal(source, f.input.identity.commit);
+    event("acquire-stage", pin); return put(cwd, `artifact-${pin.artifact_id}.zip`, Buffer.from("checked ZIP interface fixture"));
+  });
+  t.mock.method(promotion, "extractArtifact", (file, pin, kind, names, output, cwd) => {
+    assert.equal(file, path.join(cwd, `artifact-${pin.artifact_id}.zip`)); assert.equal(kind, "public-stage");
+    assert.deepEqual(names, ["completion.json", ...products.map(p => `${inputs.PACKAGES[p]}-${f.input.identity.versions[p]}.tgz`)]);
+    fs.mkdirSync(output); for (const n of names) put(output, n, fs.readFileSync(path.join(options.output, n)));
+    event("extract-stage", output); return output;
+  });
+  t.mock.method(promotion, "verifyStageSubject", (file, expected) => {
+    assert.equal(expected.workflow_sha, f.input.identity.commit); assert.equal(expected.source, f.input.identity.commit);
+    assert.equal(expected.ref, options.producer.ref); assert.equal(expected.run_id, 501); assert.equal(expected.run_attempt, 4);
+    assert.equal(expected.subjects.length, 3); assert.equal(c.digest(originalRead(file)), expected.sha256);
+    event("signer", { file, expected });
+  });
+  const adapter = { ...inputs, readInputs(o) {
+    assert.deepEqual(o.input, f.inputBytes); assert.deepEqual(o.artifact, options.artifact);
+    assert.deepEqual(o.selected, options.selected); assert.equal(o.workflow_sha, f.input.identity.commit);
+    event("read-I", o); return { root: paths.incoming, input: inputs.decodeInputs(o.input), subjects: [] };
+  }, inputSubjects(root, body) {
+    assert.deepEqual(body, f.inputBytes);
+    for (const [n, b] of Object.entries(fixedFiles)) assert.deepEqual(originalRead(path.join(root, n)), b, `input fixture changed: ${n}`);
+    event("input-snapshot", root);
+    return Object.keys(fixedFiles).filter(n => !["preparation-run.json", "candidate-identity.json"].includes(n))
+      .map(n => ({ file: path.join(root, n), sha256: c.digest(fixedFiles[n]) }));
+  } };
+  // Override existing external imports in a test-only module instance. Production
+  // exports/options contain no injection API; the accepted frozen I exports stay frozen.
+  const filename = require.resolve("../scripts/stage-authoring-npm"), loaded = new Module(filename, module);
+  loaded.filename = filename; loaded.paths = Module._nodeModulePaths(path.dirname(filename));
+  const normalRequire = loaded.require.bind(loaded);
+  loaded.require = name => name === "./authoring-native-inputs" ? adapter : normalRequire(name);
+  loaded._compile(fs.readFileSync(filename, "utf8"), filename);
+  const api = loaded.exports, pair = stage.pairedPackageFiles(f.source, f.manifests, f.inputBytes);
+  t.mock.method(packing, "packPackage", (product, files, root, o, context) => {
+    assert.deepEqual(files, pair[product]); assert.equal(o.node, options.node); assert.equal(o.npm, options.npm);
+    assert.equal(context.env.npm_config_ignore_scripts, "true"); assert.equal(context.env.npm_config_offline, "true");
+    const body = Buffer.from(`RETAINED PACK FIXTURE: ${product}`), file = `${inputs.PACKAGES[product]}-${f.input.identity.versions[product]}.tgz`;
+    put(o.output, file, body); event("pack", { product, files, root });
+    return { file, ...c.metadata(body), integrity: "sha512-" + crypto.createHash("sha512").update(body).digest("base64") };
+  });
+  t.mock.method(packing, "verifyPack", (file, files, dest) => {
+    const p = file.includes("universal-agent-plugins-") ? "agentplugins" : "plugin-kit-ai";
+    assert.deepEqual(files, pair[p]); assert.ok(dest.startsWith(paths.scratch + path.sep)); event("verify-pack", { file, files, dest });
+  });
+  const readOptions = () => ({ input: Buffer.from(f.inputBytes), selected: clone(options.selected), workflow_sha: options.workflow_sha,
+    artifact: { run_id: 501, run_attempt: 4, artifact_id: 601, artifact_sha256: sha(80) }, repo: paths.repo,
+    workParent: paths.scratch, node: options.node, npm: options.npm,
+    stage_sha256: c.digest(fs.readFileSync(path.join(options.output, "completion.json"))) });
+  return { ...f, base, paths, options, api, calls, put, readOptions, pair };
+}
+
+test("C1 stage integration producer and reader agree on I, three subjects and retained SHA1 without reader repack", t => {
+  const f = integrationFixture(t), record = f.api.stagePrepublication(f.options);
+  assert.deepEqual(stage.decodeStage(fs.readFileSync(path.join(f.options.output, "completion.json")), f.inputBytes), record);
+  assert.equal(f.calls.filter(x => x[0] === "pack").length, 2);
+  assert.deepEqual(f.calls.filter(x => x[0] === "pack").map(x => x[1].product), products);
+  assert.ok(f.calls.findIndex(x => x[0] === "read-I") < f.calls.findIndex(x => x[0] === "pack"));
+  for (const p of products) {
+    const bytes = fs.readFileSync(path.join(f.options.output, record.packs[p].file));
+    assert.equal(record.packs[p].shasum, crypto.createHash("sha1").update(bytes).digest("hex"));
+    assert.equal(record.packs[p].sha256, c.digest(bytes)); assert.equal(record.packs[p].size, bytes.length);
+  }
+  const result = f.api.readStage(f.readOptions()); assert.deepEqual(result.record, record);
+  assert.equal(result.subjects.length, 3); assert.equal(f.calls.filter(x => x[0] === "signer").length, 3);
+  assert.equal(f.calls.filter(x => x[0] === "read-I").length, 2);
+  assert.equal(f.calls.filter(x => x[0] === "pack").length, 2);
+  const signer = f.calls.findIndex(x => x[0] === "signer"), readerI = f.calls.findLastIndex(x => x[0] === "read-I");
+  assert.ok(signer < readerI);
+});
+
+test("C1 stage integration malformed options fail before scratch, authentication or packing", t => {
+  const f = integrationFixture(t);
+  for (const mutate of [o => o.trusted = true, o => o.input = null, o => o.input = Buffer.from("{}\n"),
+    o => o.selected.source = "b".repeat(40), o => o.selected.versions.agentplugins = "9.0.0",
+    o => o.selected.ref = "refs/heads/main", o => o.workflow_sha = "b".repeat(40),
+    o => o.artifact.run_attempt++, o => o.artifact.artifact_sha256 = "0".repeat(64),
+    o => o.producer.workflow = inputs.WORKFLOW, o => o.producer.source = "b".repeat(40),
+    o => o.producer.ref = "refs/tags/v2.0.0", o => o.producer.run_id = 201, o => o.producer.run_attempt = 1001,
+    o => o.output = o.repo, o => o.workParent = o.repo, o => o.node = "relative", o => o.verifier = () => true]) {
+    const o = { ...clone(f.options), input: Buffer.from(f.inputBytes) }; mutate(o);
+    assert.throws(() => f.api.stagePrepublication(o)); assert.equal(f.calls.length, 0);
+    assert.deepEqual(fs.readdirSync(f.paths.scratch), []); assert.equal(fs.existsSync(f.options.output), false);
+  }
+  for (const mutate of [o => o.stage_sha256 = null, o => o.artifact.run_attempt = 1001, o => o.selected.ref = "refs/heads/main",
+    o => o.authenticated = true]) {
+    const { output, producer, ...o } = { ...clone(f.options), input: Buffer.from(f.inputBytes), stage_sha256: sha(92) };
+    mutate(o); assert.throws(() => f.api.readStage(o)); assert.equal(f.calls.length, 0);
+  }
+});
+
+test("C1 stage integration producer binds actual workflow caller before effects", t => {
+  const f = integrationFixture(t); fixtureEnv(t, "GITHUB_WORKFLOW_SHA", "b".repeat(40));
+  assert.throws(() => f.api.stagePrepublication(f.options), /workflow caller/); assert.equal(f.calls.length, 0);
+});
+
+for (const defect of ["auth", "source-before", "source-after", "input", "I", "snapshot", "tool", "caller", "arguments", "half-pair",
+  "second-modified", "first-late", "verified-late", "generated-late", "generated", "generated-mode", "generated-extra", "provider", "collision"]) {
+  test(`C1 stage integration producer rejects ${defect} with no new accepted S`, t => {
+    let fired = false, blobs = 0;
+    const f = integrationFixture(t, (event, data, state) => {
+      const { options, paths, put } = state;
+      if (event === "blobs") blobs++;
+      if (defect === "auth" && event === "read-I") throw new Error("fixture authentication rejection");
+      if ((defect === "source-before" && event === "blobs" && blobs === 1) ||
+          (defect === "source-after" && event === "blobs" && blobs === 3)) throw new Error("source closure changed fixture");
+      if (event === "pack" && data.product === "plugin-kit-ai" && !fired) {
+        fired = true;
+        if (defect === "input") put(paths.incoming, "pair-prepared.json", Buffer.from("changed input"));
+        if (defect === "I") put(paths.incoming, "native-inputs.json", Buffer.from("changed I"));
+        if (defect === "snapshot") {
+          const snap = state.calls.find(x => x[0] === "input-snapshot" && x[1].endsWith("stage-inputs"))[1];
+          // Do not overwrite sealed fixture files: introduce an unexpected entry;
+          // the mocked existing input interface detects it in the hook below.
+          put(snap, "unexpected", Buffer.from("changed snapshot"));
+        }
+        if (defect === "tool") fs.appendFileSync(options.npm, "changed");
+        if (defect === "caller") options.selected.source = "b".repeat(40);
+        if (defect === "arguments") {
+          const prior = process.execArgv; process.execArgv = ["--changed-fixture"]; t.after(() => { process.execArgv = prior; });
+        }
+        if (defect === "half-pair") throw new Error("failed second pack fixture");
+        if (defect === "second-modified") fs.appendFileSync(path.join(options.output, "plugin-kit-ai-2.0.0.tgz"), "changed");
+        if (defect === "first-late") fs.appendFileSync(path.join(options.output, `universal-agent-plugins-${f.input.identity.versions.agentplugins}.tgz`), "changed");
+        if (defect === "generated") fs.appendFileSync(path.join(data.root, "README.md"), "changed");
+        if (defect === "generated-mode") fs.chmodSync(path.join(data.root, "README.md"), 0o755);
+        if (defect === "generated-extra") put(data.root, "unexpected", Buffer.from("extra"));
+        if (defect === "collision") put(options.output, "completion.json", Buffer.from("existing owner bytes"));
+      }
+      if (event === "verify-pack" && data.file.endsWith("plugin-kit-ai-2.0.0.tgz")) {
+        if (defect === "verified-late") fs.appendFileSync(path.join(options.output, `universal-agent-plugins-${f.input.identity.versions.agentplugins}.tgz`), "late");
+        if (defect === "generated-late") fs.appendFileSync(path.join(options.output, "agentplugins/README.md"), "late");
+      }
+      if (defect === "snapshot" && event === "input-snapshot" && fired && data.endsWith("stage-inputs")) {
+        assert.ok(fs.existsSync(path.join(data, "unexpected"))); throw new Error("changed snapshot fixture");
+      }
+      if (defect === "provider" && event === "inspect" && fired) throw new Error("changed completed attempt fixture");
+    });
+    assert.throws(() => f.api.stagePrepublication(f.options));
+    const marker = path.join(f.options.output, "completion.json");
+    if (defect === "collision") assert.equal(fs.readFileSync(marker, "utf8"), "existing owner bytes");
+    else assert.equal(fs.existsSync(marker), false);
+    assert.ok(f.calls.filter(x => x[0] === "pack").length <= 2);
+  });
+}
+
+for (const defect of ["digest", "attempt", "signature", "source-pins", "generated", "S-I", "I-custody", "input-change", "source-change",
+  "tarball", "late-tarball", "late-S", "caller-change", "S-canonical", "stage-provider"]) {
+  test(`C1 stage integration reader rejects ${defect} without repacking`, t => {
+    let reading = false, verified = 0, readerOptions, readerRoot;
+    const f = integrationFixture(t, (event, data, state) => {
+      if (!reading) return;
+      if (event === "extract-stage") readerRoot = data;
+      if (defect === "signature" && event === "signer") throw new Error("fixed signer rejected fixture");
+      if (defect === "I-custody" && event === "read-I") throw new Error("I custody rejected fixture");
+      if (event === "verify-pack") {
+        verified++;
+        if (verified === 2) {
+          if (defect === "late-tarball") fs.appendFileSync(path.join(readerRoot, `universal-agent-plugins-${f.input.identity.versions.agentplugins}.tgz`), "late");
+          if (defect === "late-S") fs.appendFileSync(path.join(readerRoot, "completion.json"), "late");
+          if (defect === "input-change") state.put(state.paths.incoming, "candidate-identity.json", Buffer.from("late input"));
+          if (defect === "caller-change") readerOptions.selected.source = "b".repeat(40);
+        }
+      }
+      if (defect === "source-change" && event === "blobs" && verified === 2) throw new Error("reader source changed fixture");
+      if (defect === "stage-provider" && event === "inspect" && verified === 2) throw new Error("completed stage changed fixture");
+    });
+    const record = f.api.stagePrepublication(f.options);
+    const marker = path.join(f.options.output, "completion.json");
+    // Producer completion is read-only. Reader mutations use a distinct owned
+    // artifact fixture, never chmod/overwrite that completion or prior receipts.
+    if (["source-pins", "generated", "S-I", "S-canonical"].includes(defect)) {
+      const original = promotion.extractArtifact;
+      t.mock.method(promotion, "extractArtifact", (...args) => {
+        const output = original(...args), changed = clone(record);
+        if (defect === "source-pins") changed.wrapper_blobs[prefix + "scripts/authoring-promotion.js"].sha256 = sha(991);
+        if (defect === "generated") changed.generated.agentplugins["package.json"] = sha(992);
+        if (defect === "S-I") changed.native_inputs.sha256 = sha(993);
+        const bytes = defect === "S-canonical" ? Buffer.from(JSON.stringify(changed)) : json(changed);
+        fs.writeFileSync(path.join(output, "completion.json"), bytes); readerOptions.stage_sha256 = c.digest(bytes);
+        return output;
+      });
+    }
+    readerOptions = f.readOptions();
+    if (defect === "digest") readerOptions.stage_sha256 = sha(999);
+    if (defect === "attempt") readerOptions.artifact.run_attempt++;
+    if (defect === "tarball") fs.appendFileSync(path.join(f.options.output, record.packs.agentplugins.file), "changed pack");
+    reading = true; assert.throws(() => f.api.readStage(readerOptions));
+    assert.equal(f.calls.filter(x => x[0] === "pack").length, 2);
+    assert.deepEqual(fs.readFileSync(marker), stage.encodeStage(record, f.inputBytes));
+  });
+}
+
+test("C1 stage integration existing blobs checks every committed, checkout and executing entry including mode and HEAD", t => {
+  const f = fixture(), root = fs.mkdtempSync(path.join(os.tmpdir(), "c1-stage-blobs-"));
+  const executing = path.resolve(__dirname, "../../.."), normalRead = c.readFile, normalStat = fs.lstatSync;
+  let changed, absent, changedMode, head = f.input.identity.commit, reads = [], commands = [];
+  t.mock.method(cp, "execFileSync", (exe, args, options) => {
+    assert.equal(exe, "/usr/bin/git"); assert.equal(options.cwd, root); commands.push(args);
+    if (args[0] === "rev-parse") return Buffer.from(head + "\n");
+    if (args[0] === "ls-tree") {
+      const n = args.at(-1), pin = f.source[n];
+      return Buffer.from(n === absent ? "" : `${pin.mode} blob ${pin.git_blob}\t${n}\0`);
+    }
+    assert.equal(args[0], "cat-file");
+    return Object.values(f.source).find(pin => pin.git_blob === args.at(-1)).bytes;
+  });
+  t.mock.method(c, "readFile", (file, max) => {
+    const base = file.startsWith(root + path.sep) ? root : file.startsWith(executing + path.sep) ? executing : null;
+    const n = base && path.relative(base, file);
+    if (!n || !Object.hasOwn(f.source, n)) return normalRead(file, max);
+    reads.push(file); return file === changed ? Buffer.from("changed fixture") : Buffer.from(f.source[n].bytes);
+  });
+  t.mock.method(fs, "lstatSync", (...args) => {
+    const file = args[0], base = file.startsWith(root + path.sep) ? root : file.startsWith(executing + path.sep) ? executing : null;
+    const n = base && path.relative(base, file);
+    if (n && Object.hasOwn(f.source, n)) return { mode: file === changedMode ? 0o600 : f.source[n].mode === "100755" ? 0o755 : 0o644 };
+    return normalStat(...args);
+  });
+  assert.deepEqual(packing.blobs(root, head, {}, "stage"), f.source);
+  for (const n of stage.STAGE_ALLOWLIST) for (const base of [root, executing]) assert.ok(reads.includes(path.join(base, n)));
+  for (const n of stage.STAGE_ALLOWLIST) {
+    absent = n; assert.throws(() => packing.blobs(root, head, {}, "stage"), /required regular Git blob missing/); absent = undefined;
+    for (const base of [root, executing]) {
+      changed = path.join(base, n); assert.throws(() => packing.blobs(root, head, {}, "stage"), /differs from committed/); changed = undefined;
+      changedMode = path.join(base, n); assert.throws(() => packing.blobs(root, head, {}, "stage"), /differs from committed/); changedMode = undefined;
+    }
+  }
+  head = "b".repeat(40); commands = [];
+  assert.throws(() => packing.blobs(root, f.input.identity.commit, {}, "stage"), /checkout HEAD/);
+  assert.equal(commands.length, 1);
+});
+
+test("C1 stage integration existing pack engine validates entries, modes, bytes, response SRI and SHA1 without receipt changes", t => {
+  const f = fixture(), pair = stage.pairedPackageFiles(f.source, f.manifests, f.inputBytes);
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "c1-stage-pack-engine-"));
+  let current, flaw, count = 0;
+  const output = path.join(root, "output"); fs.mkdirSync(output);
+  const context = { root: path.join(root, "verify"), env: { PATH: "/usr/local/bin:/usr/bin:/bin" } }; fs.mkdirSync(context.root);
+  t.mock.method(cp, "execFileSync", (exe, args) => {
+    if (exe === "/fixture-node") {
+      assert.deepEqual(args, ["/fixture-npm", "pack", "--ignore-scripts", "--offline", "--json", "--pack-destination", output]);
+      count++;
+      const bytes = Buffer.from(`PACK INTERFACE ${current} ${count}`), name = inputs.PACKAGES[current], version = f.input.identity.versions[current];
+      const filename = `${name}-${version}.tgz`; fs.writeFileSync(path.join(output, filename), bytes);
+      const row = { id: `${name}@${version}`, name, version, filename, size: bytes.length,
+        integrity: "sha512-" + crypto.createHash("sha512").update(bytes).digest("base64"),
+        shasum: crypto.createHash("sha1").update(bytes).digest("hex") };
+      if (flaw === "SRI") row.integrity = "sha512-" + Buffer.alloc(64, 1).toString("base64");
+      if (flaw === "SHA1") row.shasum = "a".repeat(40);
+      if (flaw === "identity") row.name = "wrong-product";
+      return json(count % 2 ? [row] : { [name]: row });
+    }
+    assert.equal(exe, "/usr/bin/tar");
+    const entries = inventory(current).map(n => "package/" + n);
+    if (args[0] === "-tzf") return Buffer.from([...entries, ...(flaw === "entries" ? ["package/extra"] : [])].join("\n") + "\n");
+    if (args[0] === "-tvzf") return Buffer.from(entries.map(n =>
+      (flaw === "mode" ? "lrwxrwxrwx " : /^package\/bin\/[^/]+\.js$/.test(n) ? "-rwxr-xr-x " : "-rw-r--r-- ") + n).join("\n") + "\n");
+    assert.equal(args[0], "-xzf"); const destination = args[args.indexOf("-C") + 1];
+    for (const [n, b] of Object.entries(pair[current])) {
+      const file = path.join(destination, "package", n); fs.mkdirSync(path.dirname(file), { recursive: true });
+      fs.writeFileSync(file, flaw === "bytes" && n === "README.md" ? Buffer.from("wrong bytes") : b,
+        { mode: /^bin\/[^/]+\.js$/.test(n) ? 0o755 : 0o644 });
+    }
+    return Buffer.alloc(0);
+  });
+  for (const product of products) for (const defect of [null, "SRI", "SHA1", "identity", "entries", "mode", "bytes"]) {
+    current = product; flaw = defect;
+    // verifyPack uses exclusive extraction directories; every trial owns a new context.
+    context.root = fs.mkdtempSync(path.join(root, "trial-"));
+    const run = () => packing.packPackage(product, pair[product], root,
+      { node: "/fixture-node", npm: "/fixture-npm", output, identity: f.input.identity }, context);
+    if (defect) assert.throws(run);
+    else {
+      const packed = run(); assert.deepEqual(Object.keys(packed), ["file", "sha256", "size", "integrity"]);
+      assert.equal(packed.sha256, c.digest(fs.readFileSync(path.join(output, packed.file))));
+    }
+  }
+  assert.equal(count, 14);
 });

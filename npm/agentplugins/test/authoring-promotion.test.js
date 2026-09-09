@@ -871,3 +871,42 @@ test("C1 provenance fixed tag adapter rejects a moved second product tag", t => 
   assert.throws(() => f.adapter.checkInputTags(f.body,f.scratch),/moved release tag/);
   assert.ok(f.adapter.c1Calls.every(c => ["version","api"].includes(c.operation)));
 });
+
+// New fixed-stage adapter tests mock the existing process interface IN MEMORY.
+// No verifier execution or authentic signature compatibility is claimed.
+test("C1 stage integration fixed npm signer uses existing verification interface with exact three subjects", t => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "c1-stage-signer-"));
+  const rows = ["completion.json", "universal-agent-plugins-0.1.54.tgz", "plugin-kit-ai-2.0.0.tgz"].map(name => {
+    const file = path.join(root, name), body = Buffer.from(`unsigned interface fixture ${name}`);
+    fs.writeFileSync(file, body); return { name, file, digest: { sha256: c.digest(body) } };
+  });
+  let workflow = ".github/workflows/agentplugins-npm-publish.yml", calls = [], active;
+  t.mock.method(cp, "spawnSync", (exe, args, options) => {
+    assert.equal(exe, "/usr/bin/gh"); assert.equal(options.env.PATH, "/usr/local/bin:/usr/bin:/bin");
+    calls.push(args);
+    if (args[0] === "--version") return { status: 0, stdout: `gh version ${p.GH_VERSION} (interface fixture)\n` };
+    assert.deepEqual(args.slice(0, 3), ["attestation", "verify", active.file]);
+    assert.equal(args[args.indexOf("--signer-workflow") + 1], `github.com/${c.REPOSITORY}/.github/workflows/agentplugins-npm-publish.yml`);
+    assert.equal(args[args.indexOf("--signer-digest") + 1], ID.commit);
+    assert.equal(args[args.indexOf("--source-digest") + 1], ID.commit);
+    assert.equal(args[args.indexOf("--source-ref") + 1], selected.ref);
+    const statement = verified(active.expected); // existing output fixture shape only
+    statement[0].verificationResult.statement.predicate.buildDefinition.externalParameters.workflow.path = workflow;
+    return { status: 0, stdout: JSON.stringify(statement) };
+  });
+  for (const row of rows) {
+    active = { file: row.file, expected: { name: row.name, sha256: row.digest.sha256, source: ID.commit,
+      workflow_sha: ID.commit, ref: selected.ref, run_id: 501, run_attempt: 4,
+      subjects: rows.map(({ name, digest }) => ({ name, digest })) } };
+    assert.equal(p.verifyStageSubject(active.file, active.expected, root)._type, "https://in-toto.io/Statement/v1");
+  }
+  assert.equal(calls.filter(a => a[0] === "attestation").length, 3);
+  workflow = p.WORKFLOW;
+  assert.throws(() => p.verifyStageSubject(active.file, active.expected, root), /verified workflow/);
+  for (const mutate of [e => e.workflow_sha = "b".repeat(40), e => e.subjects.pop(),
+    e => e.subjects[0].name = "authoring-promotion.json", e => e.workflow = p.WORKFLOW,
+    e => e.ref = "refs/heads/main", e => e.sha256 = hash("different bytes")]) {
+    const expected = structuredClone(active.expected); mutate(expected); const before = calls.length;
+    assert.throws(() => p.verifyStageSubject(active.file, expected, root)); assert.equal(calls.length, before);
+  }
+});
