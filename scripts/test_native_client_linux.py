@@ -95,18 +95,18 @@ class PreparedInputTests(unittest.TestCase):
                                release_tag='agentplugins-v1.2.3', release_commit='a'*40,
                                release_repo=matrix.draft.REPOSITORY)
 
-        def public(*unused):
-            path = root / 'installer'
+        def public(source, directory, *unused):
+            path = directory / 'installer'
             path.write_bytes(b'installer')
             return path, {'version': '1.2.3'}
 
-        def draft(*unused):
-            tarball = root / 'package.tgz'
+        def draft(source, directory, arguments, evidence):
+            tarball = directory / 'package.tgz'
             tarball.write_bytes(b'package')
-            assets = root / 'assets'
+            assets = directory / 'assets'
             assets.mkdir()
             (assets / 'installer').write_bytes(b'installer')
-            (root / 'initial-draft.json').write_text('{}')
+            (evidence / 'initial-draft.json').write_text('{}')
             return tarball, assets, {'version': '1.2.3'}, {'version': '1.2.3'}
 
         with patch.object(matrix, 'provision', side_effect=self.fake_provision) as tools, \
@@ -114,7 +114,7 @@ class PreparedInputTests(unittest.TestCase):
              patch.object(matrix.draft, 'acquire', side_effect=draft) as acquire:
             matrix.prepared_release(Path(temp), args)
             self.assertEqual([call.args for call in tools.call_args_list],
-                             [(matrix.PINS[args.target][name], root / 'prepared-tools', name)
+                             [(matrix.PINS[args.target][name], root.resolve() / 'prepared-tools', name)
                               for name in (client, 'lintai', 'rg')])
             self.assertEqual(release.call_count, int(state == 'public'))
             self.assertEqual(acquire.call_count, int(state == 'draft'))
@@ -144,8 +144,8 @@ class PreparedInputTests(unittest.TestCase):
                 root = Path(temp)/'prepared'
                 args = SimpleNamespace(prepared_input=root, prepare_only=True, release_state='public', target='linux-amd64',
                                        client='codex', release_tag='agentplugins-v1.2.3', release_commit='a'*40, release_repo=matrix.draft.REPOSITORY)
-                def acquire(*unused):
-                    binary = root/'installer'; binary.write_bytes(b'original')
+                def acquire(source, directory, *unused):
+                    binary = directory/'installer'; binary.write_bytes(b'original')
                     return binary, {'version':'1.2.3'}
                 with patch.object(matrix, 'provision_release', side_effect=acquire), \
                      patch.object(matrix, 'provision', side_effect=self.fake_provision):
@@ -173,7 +173,11 @@ class PreparedInputTests(unittest.TestCase):
             for client in matrix.PATTERNS:
                 with self.subTest(state=state, client=client), TemporaryDirectory() as temp, \
                      patch.dict(matrix.os.environ, {}, clear=True), ExitStack() as stack:
-                    args = self.prepare_fixture(temp, state, client)
+                    # Exercise a resolvable alias on every OS without symlink privileges.
+                    alias = Path(temp) / 'alias'
+                    alias.mkdir()
+                    args = self.prepare_fixture(alias / '..', state, client)
+                    self.assertNotEqual(args.prepared_input, args.prepared_input.resolve())
                     self.forbid_acquisition(stack)
                     release = matrix.prepared_release(Path(temp), args)
                     self.assertEqual(len(release), 4 if state == 'draft' else 2)
@@ -253,7 +257,7 @@ class PreparedInputTests(unittest.TestCase):
             with self.subTest(state=state), TemporaryDirectory() as temp, \
                  patch.dict(matrix.os.environ, {}, clear=True), ExitStack() as stack:
                 args = self.prepare_fixture(temp, state)
-                matrix.os.environ.update(RUNNER_TEMP=temp, EXPECTED_COMMIT='a'*40)
+                matrix.os.environ.update(RUNNER_TEMP=temp, EXPECTED_COMMIT='a'*40, SystemRoot=temp)
                 argv = ['runner', '--client', args.client, '--target', args.target,
                         '--output', str(Path(temp) / 'output'), '--release-state', state,
                         '--release-tag', args.release_tag, '--release-commit', args.release_commit,
@@ -268,15 +272,17 @@ class PreparedInputTests(unittest.TestCase):
                 stack.enter_context(patch.object(matrix.draft, 'helper_hashes', return_value={}))
                 stack.enter_context(patch.object(matrix.shutil, 'which', return_value=sys.executable))
                 stack.enter_context(patch.object(matrix.subprocess, 'check_output',
-                                                side_effect=['a'*40, 'b'*40, b'']))
+                                                side_effect=['a'*40, 'b'*40, b'', 'git version fixture']))
                 stack.enter_context(patch.object(matrix, 'profile_environment', return_value={}))
-                stack.enter_context(patch.object(matrix.os, 'name', 'posix'))
+                # Keep the native OS branch; this Codex fixture needs no Git Bash.
+                stack.enter_context(patch.object(matrix, 'find_git_bash', return_value=None))
 
                 def build(command, **kwargs):
                     self.assertEqual(command[:2], ['go', 'build'])
                     binary_dir = Path(command[command.index('-o') + 1]).parent
+                    suffix = '.exe' if matrix.os.name == 'nt' else ''
                     for name in (args.client, 'lintai', 'rg'):
-                        self.assertEqual((binary_dir / name).read_bytes(), ('frozen-' + name).encode())
+                        self.assertEqual((binary_dir / (name + suffix)).read_bytes(), ('frozen-' + name).encode())
                     raise BuildReached()
 
                 run = stack.enter_context(patch.object(matrix.subprocess, 'run', side_effect=build))

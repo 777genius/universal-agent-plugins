@@ -179,6 +179,15 @@ class EvidenceTests(unittest.TestCase):
                 self.mutate(change)
                 with self.assertRaises(ValueError): self.verify()
 
+    def test_fixture_lf_bytes_remain_bound_after_outer_reindex(self):
+        log = next(self.record_path.parent.rglob('command.log'))
+        self.assertEqual(log.read_bytes(), b'fixture command transcript\n')
+        self.verify()
+        log.write_bytes(b'fixture command transcript\r\n')
+        self.refresh_hashes()
+        with self.assertRaisesRegex(ValueError, 'fixture transcript mismatch'):
+            self.verify()
+
     def test_transcript_hash_and_unrecorded_content_fail(self):
         log = self.record_path.parent / 'native-tests.log'
         log.write_text('forged')
@@ -730,10 +739,15 @@ class ContainerPreflightTests(unittest.TestCase):
                 struct.pack_into('<Q', extended, 4, 60)
                 extended_body = body[:end]+extended+b'\0'*16+locator+body[end:]
                 proof.preflight_zip(extended_body, 12)
-                # The local stdlib supports extensible sectors; older versions
-                # can still reject them after this bounded preflight.
-                with zipfile.ZipFile(io.BytesIO(extended_body)) as archive:
-                    self.assertEqual(archive.read('0'), b'fixture')
+                # Preflight accepts extensible sectors on every Python version.
+                # Older stdlibs can reject this encoding after preflight.
+                try:
+                    archive = zipfile.ZipFile(io.BytesIO(extended_body))
+                except zipfile.BadZipFile as error:
+                    self.assertEqual(str(error), 'Bad magic number for central directory')
+                else:
+                    with archive:
+                        self.assertEqual(archive.read('0'), b'fixture')
                 sentinel_end = bytearray(body[end:])
                 struct.pack_into('<2H2I', sentinel_end, 8, 65535, 65535, 0xffffffff, 0xffffffff)
                 for candidate in (body, body[:end]+record+locator+body[end:],
