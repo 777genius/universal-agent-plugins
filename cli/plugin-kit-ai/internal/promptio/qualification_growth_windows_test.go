@@ -4,6 +4,7 @@ package promptio
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"os/exec"
 	"runtime"
@@ -243,7 +244,7 @@ func qualificationNativeOracleChild(t *testing.T, scenario string) {
 		return
 	}
 	// Warm diagnostics and close snapshot handles before measuring resources.
-	for _, proc := range []*windows.LazyProc{qualificationWriteConsoleInput, qualificationHandleInformation, cancelSynchronousIO} {
+	for _, proc := range []*windows.LazyProc{qualificationWriteConsoleInput, qualificationHandleInformation, cancelSynchronousIO, qualificationPeekOracleInput, qualificationReadOracleInput} {
 		if err := proc.Find(); err != nil {
 			t.Fatal(err)
 		}
@@ -356,6 +357,7 @@ func qualificationNativeOracleChild(t *testing.T, scenario string) {
 		if err != nil || line != "balanced" {
 			t.Fatalf("balanced request: %q %v", line, err)
 		}
+		qualificationAccountOracleEnter(t, windows.Handle(f.Fd()))
 		cancel()
 		if growth == "growth" {
 			g.stop(t)
@@ -436,5 +438,88 @@ func qualificationQueueOracleLine(t *testing.T, h windows.Handle, line string) {
 	ok, _, err := qualificationWriteConsoleInput.Call(uintptr(h), uintptr(unsafe.Pointer(&records[0])), uintptr(len(records)), uintptr(unsafe.Pointer(&written)))
 	if ok == 0 || written != uint32(len(records)) {
 		t.Fatalf("queue oracle line: %d/%d %v", written, len(records), err)
+	}
+}
+
+// Only the exact key-up emitted after this fixture's terminating Enter may
+// survive ReadConsole. Never flush the shared queue: inherited owners reuse it.
+func qualificationOracleResidual(records []qualificationKeyEvent) error {
+	if len(records) == 0 {
+		return nil
+	}
+	want := qualificationKeyEvent{eventType: 1, repeat: 1, virtualKey: 0x0d, char: '\r'}
+	if len(records) != 1 || records[0] != want {
+		return fmt.Errorf("unexpected residual console input: %+v", records)
+	}
+	return nil
+}
+
+var (
+	qualificationPeekOracleInput = windows.NewLazySystemDLL("kernel32.dll").NewProc("PeekConsoleInputW")
+	qualificationReadOracleInput = windows.NewLazySystemDLL("kernel32.dll").NewProc("ReadConsoleInputW")
+)
+
+func qualificationAccountOracleEnter(t *testing.T, h windows.Handle) {
+	t.Helper()
+	var records [2]qualificationKeyEvent
+	var count uint32
+	ok, _, err := qualificationPeekOracleInput.Call(uintptr(h), uintptr(unsafe.Pointer(&records[0])), uintptr(len(records)), uintptr(unsafe.Pointer(&count)))
+	if ok == 0 {
+		t.Fatalf("peek residual input: %v", err)
+	}
+	if err := qualificationOracleResidual(records[:count]); err != nil {
+		t.Fatal(err)
+	}
+	if count == 0 {
+		return
+	}
+	ok, _, err = qualificationReadOracleInput.Call(uintptr(h), uintptr(unsafe.Pointer(&records[0])), 1, uintptr(unsafe.Pointer(&count)))
+	if ok == 0 || count != 1 {
+		t.Fatalf("account fixture Enter key-up: count=%d err=%v", count, err)
+	}
+	if err := qualificationOracleResidual(records[:count]); err != nil {
+		t.Fatal(err)
+	}
+	var queued uint32
+	if err := windows.GetNumberOfConsoleInputEvents(h, &queued); err != nil || queued != 0 {
+		t.Fatalf("unexpected input after fixture Enter key-up: queued=%d err=%v", queued, err)
+	}
+}
+
+func TestQualificationOracleResidualInput(t *testing.T) {
+	enter := qualificationKeyEvent{eventType: 1, repeat: 1, virtualKey: 0x0d, char: '\r'}
+	for _, records := range [][]qualificationKeyEvent{nil, {enter}} {
+		if err := qualificationOracleResidual(records); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, records := range [][]qualificationKeyEvent{{enter, enter}, {{eventType: 2}}, {{eventType: 1, keyDown: 1, repeat: 1, virtualKey: 0x0d, char: '\r'}}} {
+		if qualificationOracleResidual(records) == nil {
+			t.Fatalf("accepted unexpected residual: %+v", records)
+		}
+	}
+	for field := 0; field < 8; field++ {
+		unexpected := enter
+		switch field {
+		case 0:
+			unexpected.eventType++
+		case 1:
+			unexpected.padding++
+		case 2:
+			unexpected.keyDown++
+		case 3:
+			unexpected.repeat++
+		case 4:
+			unexpected.virtualKey++
+		case 5:
+			unexpected.scan++
+		case 6:
+			unexpected.char++
+		case 7:
+			unexpected.control++
+		}
+		if qualificationOracleResidual([]qualificationKeyEvent{unexpected}) == nil {
+			t.Fatalf("accepted changed fixture field %d", field)
+		}
 	}
 }

@@ -5,6 +5,7 @@ package promptio
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"strings"
@@ -274,7 +275,12 @@ func qualificationConsoleBranches(t *testing.T, f *os.File) {
 			q := new(qualificationHandleTrace)
 			ctx := q.context(context.Background())
 			ops := ctx.Value(cancelWindowsKey{}).(*cancelWindowsOps)
+			injected := false
+			var wantErr error
+			var mismatch string
+			failureOp := ""
 			ops.read = func(context.Context, windows.Handle, uint32) (string, error) {
+				injected = true
 				if branch == "eof" {
 					return "", io.EOF
 				}
@@ -284,35 +290,88 @@ func qualificationConsoleBranches(t *testing.T, f *os.File) {
 				return "answer", nil
 			}
 			switch branch {
+			case "eof":
+				wantErr, failureOp = io.EOF, "read-complete"
+			case "read-error":
+				wantErr, failureOp = windows.ERROR_READ_FAULT, "read-complete"
 			case "open-failure":
-				ops.open = func() (windows.Handle, error) { return windows.InvalidHandle, windows.ERROR_ACCESS_DENIED }
+				wantErr, failureOp = windows.ERROR_ACCESS_DENIED, "console-acquire"
+				ops.open = func() (windows.Handle, error) {
+					injected = true
+					return windows.InvalidHandle, windows.ERROR_ACCESS_DENIED
+				}
 			case "post-open-failure", "mode-mismatch":
+				failureOp = "console-validate"
+				if branch == "post-open-failure" {
+					wantErr = windows.ERROR_INVALID_HANDLE
+				}
 				calls := 0
 				ops.mode = func(h windows.Handle, mode *uint32) error {
 					calls++
 					err := windows.GetConsoleMode(h, mode)
-					if calls == 2 {
+					if calls == 2 && err == nil {
+						injected = true
 						if branch == "post-open-failure" {
 							return windows.ERROR_INVALID_HANDLE
 						}
+						oldMode := *mode
 						*mode ^= windows.ENABLE_LINE_INPUT
+						mismatch = fmt.Sprintf("console input mode changed: inherited=%#x opened=%#x", oldMode, *mode)
 					}
 					return err
 				}
 			case "duplicate-failure":
+				wantErr, failureOp = windows.ERROR_ACCESS_DENIED, "thread-acquire"
 				ops.duplicate = func(windows.Handle, windows.Handle, windows.Handle, *windows.Handle, uint32, bool, uint32) error {
+					injected = true
 					return windows.ERROR_ACCESS_DENIED
 				}
 			}
 			line, err := ReadLine(ctx, f)
-			if branch == "success" {
-				if line != "answer" || err != nil {
-					t.Fatalf("%q %v", line, err)
-				}
-			} else if err == nil {
-				t.Fatalf("%s returned success", branch)
+			if !injected {
+				t.Fatalf("%s did not execute injected operation: %v", branch, err)
 			}
-			qualificationRequireOps(t, q, "branch-console", "input-validate", "console-acquire", "request-end")
+			matches := func(err error) bool {
+				if branch == "mode-mismatch" {
+					return err != nil && mismatch != "" && err.Error() == mismatch
+				}
+				if wantErr == nil {
+					return err == nil
+				}
+				return errors.Is(err, wantErr)
+			}
+			if !matches(err) || (branch == "success" && line != "answer") || (branch != "success" && line != "") {
+				t.Fatalf("%s: line=%q err=%v want=%v %s", branch, line, err, wantErr, mismatch)
+			}
+			want := []string{"request-start", "branch-file", "branch-console", "input-validate", "console-acquire"}
+			if branch != "open-failure" {
+				want = append(want, "console-validate")
+				if branch != "post-open-failure" && branch != "mode-mismatch" {
+					want = append(want, "worker-start", "thread-acquire")
+					if branch != "duplicate-failure" {
+						want = append(want, "read-enter", "read-complete", "thread-close")
+					}
+					want = append(want, "join")
+				}
+				want = append(want, "console-close")
+			}
+			want = append(want, "request-end")
+			qualificationRequireOps(t, q, want...)
+			if q.count != len(want) {
+				t.Fatalf("%s: got %d events want %d", branch, q.count, len(want))
+			}
+			for i, event := range q.records[:q.count] {
+				if event.operation != want[i] {
+					t.Fatalf("%s event %d: %s want %s", branch, i, event.operation, want[i])
+				}
+				if event.operation == failureOp {
+					if !matches(event.err) {
+						t.Fatalf("%s injection event error: %v", branch, event.err)
+					}
+				} else if event.err != nil {
+					t.Fatalf("%s preceding/cleanup operation %s failed: %v", branch, event.operation, event.err)
+				}
+			}
 			qualificationMutations(t, q)
 			var mode uint32
 			if err := windows.GetConsoleMode(windows.Handle(f.Fd()), &mode); err != nil {
