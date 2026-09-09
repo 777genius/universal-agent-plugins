@@ -32,7 +32,7 @@ class DraftTests(unittest.TestCase):
         for target in ("darwin_amd64", "darwin_arm64", "linux_amd64", "linux_arm64",
                        "windows_amd64.exe", "windows_arm64.exe"):
             (self.assets / f"agentplugins_1.2.3_{target}").write_text(f"fixture {target}\n")
-        self.args = argparse.Namespace(repository=draft.REPOSITORY, tag="agentplugins-v1.2.3",
+        self.args = argparse.Namespace(repository="777genius/universal-agent-plugins", tag="agentplugins-v1.2.3",
             commit="a" * 40, release_id=123, run_id=456, run_attempt=2,
             source=str(source), receipt=str(self.root / "receipt.json"))
         subprocess.run(["node", str(script), "prepare", str(self.assets),
@@ -57,14 +57,19 @@ class DraftTests(unittest.TestCase):
             return self.real_run(command, stderr=subprocess.PIPE, **kwargs)
         self.assertEqual(command[0], "gh")
         if command[1:3] == ["attestation", "verify"]:
-            self.assertEqual(command[4:], ["--repo", draft.REPOSITORY, "--signer-workflow",
-                f"github.com/{draft.REPOSITORY}/{draft.WORKFLOW}", "--source-digest", self.args.commit])
+            self.assertEqual(command[4:], ["--repo", "777genius/universal-agent-plugins", "--signer-workflow",
+                "github.com/777genius/universal-agent-plugins/.github/workflows/agentplugins-release.yml",
+                "--source-digest", self.args.commit])
             if self.attestation_failure:
                 raise subprocess.CalledProcessError(1, command)
             return b"verified"
         self.assertEqual(command[1], "api")
         endpoint = command[2]
+        if endpoint != "graphql":
+            self.assertTrue(endpoint.startswith("repos/777genius/universal-agent-plugins/"))
         if endpoint == "graphql":
+            self.assertIn("owner=777genius", command)
+            self.assertIn("name=universal-agent-plugins", command)
             self.reads += 1
             if self.reads == 2 and self.change:
                 self.change()
@@ -100,12 +105,17 @@ class DraftTests(unittest.TestCase):
         self.assertEqual(len(result["subjects"]), 9)
         self.assertEqual(result["producer_run_attempt"], 2)
         self.assertEqual(result["release"]["id"], 123)
+        self.assertEqual(result["repository"], "777genius/universal-agent-plugins")
+        self.assertEqual(result["signer_workflow"],
+            "github.com/777genius/universal-agent-plugins/.github/workflows/agentplugins-release.yml")
         self.assertEqual(result["asset_set_digest"], self.args.asset_set_digest)
         self.assertEqual(json.loads(Path(self.args.receipt).read_text()), result)
         self.assertEqual(sum(c[1:3] == ["attestation", "verify"] for c in self.calls), 9)
 
     def test_invalid_inputs_fail_before_network(self):
-        for field, value in (("repository", "other/repo"), ("tag", "agentplugins-v1.2.3-rc1"),
+        for field, value in (("repository", "other/repo"),
+                             ("repository", "777genius/plugin-kit-ai"),
+                             ("tag", "agentplugins-v1.2.3-rc1"),
                              ("commit", "main"), ("asset_set_digest", "ABC"),
                              ("release_id", 0), ("run_id", 0), ("run_attempt", 0)):
             with self.subTest(field=field):
@@ -114,6 +124,33 @@ class DraftTests(unittest.TestCase):
                 self.rejects()
                 self.assertEqual(self.calls, [])
                 self.args = args
+
+    def test_historical_asset_producer_identity(self):
+        verified = json.loads(self.real_run([
+            "node", str(Path(self.args.source) / "npm/agentplugins/scripts/release-assets.js"),
+            "verify", str(self.assets), self.args.tag, self.args.commit]))
+        self.assertEqual(verified["repository"], "777genius/plugin-kit-ai")
+        self.assertTrue(verified["gate_eligible"])
+        self.verify()
+
+    def test_wrong_verifier_producer_or_ineligible_assets_rejected(self):
+        for overrides in ({"repository": "other/repo"},
+                          {"repository": "777genius/universal-agent-plugins"},
+                          {"gate_eligible": False}):
+            with self.subTest(overrides=overrides):
+                def changed_verifier(command, **kwargs):
+                    output = self.fake_run(command, **kwargs)
+                    if command[0] == "node":
+                        verified = json.loads(output)
+                        verified.update(overrides)
+                        return json.dumps(verified).encode()
+                    return output
+                self.calls = []
+                with patch.object(draft, "run", side_effect=changed_verifier):
+                    with self.assertRaisesRegex(ValueError, "ineligible release assets"):
+                        draft.verify(self.args)
+                self.assertFalse(Path(self.args.receipt).exists())
+                self.assertFalse(any(c[1:3] == ["attestation", "verify"] for c in self.calls))
 
     def test_non_draft_or_wrong_identity(self):
         for field, value in (("draft", False), ("prerelease", True), ("id", 999),

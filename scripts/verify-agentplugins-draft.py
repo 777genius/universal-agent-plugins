@@ -13,7 +13,11 @@ import re
 import subprocess
 import tempfile
 
-REPOSITORY = "777genius/plugin-kit-ai"
+# GitHub API and attestation identity after the repository rename.
+REPOSITORY = "777genius/universal-agent-plugins"
+# release-assets.js preserves this producer identity for the asset contract.
+# It is not an alternate API repository or an accepted attestation signer.
+ASSET_PRODUCER_REPOSITORY = "777genius/plugin-kit-ai"
 WORKFLOW = ".github/workflows/agentplugins-release.yml"
 
 
@@ -96,7 +100,8 @@ def verify(args):
             "node", str(source / "npm/agentplugins/scripts/release-assets.js"),
             "verify", str(root), args.tag, args.commit]))
         require(verified["gate_eligible"] is True
-                and verified["repository"] == args.repository, "ineligible release assets")
+                and verified["repository"] == ASSET_PRODUCER_REPOSITORY,
+                "ineligible release assets")
         require(sha256(root / "checksums.txt") == args.asset_set_digest,
                 "frozen checksums digest mismatch")
         require((root / "THIRD_PARTY_NOTICES.txt").read_bytes() ==
