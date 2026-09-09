@@ -70,14 +70,17 @@ describe('manifest-driven localized SEO', () => {
           assert.equal(seo.canonical, `${site}${relative.slice(1)}`);
           assert.deepEqual(
             seo.alternates.map((link) => link.hreflang),
-            ['en', 'ru', 'uk', 'x-default'],
+            [...candidateLocales, 'x-default'],
           );
           assert.equal(
             seo.alternates.find((link) => link.hreflang === locale)?.href,
             seo.canonical,
           );
-          assert.equal(seo.ogLocale, { en: 'en_US', ru: 'ru_RU', uk: 'uk_UA' }[locale]);
-          assert.equal(seo.ogAlternates.length, 2);
+          assert.equal(seo.ogLocale, {
+            en: 'en_US', ru: 'ru_RU', uk: 'uk_UA', zh: 'zh_CN', es: 'es_ES',
+            hi: 'hi_IN', ar: 'ar', pt: 'pt_BR', fr: 'fr_FR',
+          }[locale]);
+          assert.equal(seo.ogAlternates.length, candidateLocales.length - 1);
         }
       }
     });
@@ -91,7 +94,7 @@ describe('manifest-driven localized SEO', () => {
       '/plugins/missing/',
       '/agents/',
       '/agents/copilot/',
-      '/es/',
+      '/de/',
       '/api/registry/catalog',
     ]) {
       assert.equal(get(path).canonical, undefined, path);

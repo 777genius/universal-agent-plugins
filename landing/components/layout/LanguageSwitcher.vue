@@ -21,7 +21,10 @@ const flagIconMap: Record<string, string> = {
   uk: "circle-flags:ua",
   es: "circle-flags:es",
   fr: "circle-flags:fr",
-  zh: "circle-flags:cn"
+  zh: "circle-flags:cn",
+  hi: "circle-flags:in",
+  ar: "circle-flags:sa",
+  pt: "circle-flags:br"
 };
 
 const items = computed(() =>
