@@ -520,12 +520,14 @@ class ReceiptBoundaryTests(unittest.TestCase):
         return dict(kind='snapshot', binding={'run_id': 99, 'run_attempt': 2, 'harness_commit': 'd'*40},
                     producer_tree='f'*40, live=live)
 
-    def receive(self, record, *, raw=None, artifact_change=None, env_change=None, extra=False):
+    def receive(self, record, *, raw=None, artifact_change=None, env_change=None, extra=False, member_name='receipt.json'):
         binding = self.fixture()['binding']
         raw = raw if raw is not None else json.dumps(record).encode()
         stream = io.BytesIO()
         with zipfile.ZipFile(stream, 'w', zipfile.ZIP_DEFLATED) as z:
-            z.writestr('receipt.json', raw)
+            member = zipfile.ZipInfo('fixture')
+            member.filename = member_name
+            z.writestr(member, raw)
             if extra: z.writestr('payload.sh', 'false')
         body = stream.getvalue()
         sha = hashlib.sha256(body).hexdigest()
@@ -559,6 +561,12 @@ class ReceiptBoundaryTests(unittest.TestCase):
         for raw in [b'{"kind":"snapshot","kind":"snapshot"}', b' '*(draft.RECEIPT_LIMIT+1)]:
             with self.assertRaises(ValueError): self.receive(self.fixture(), raw=raw)
         with self.assertRaises(ValueError): self.receive(self.fixture(), extra=True)
+
+    def test_raw_receipt_name_rejected_before_read(self):
+        with patch.object(zipfile.ZipFile, 'read', side_effect=AssertionError('receipt read before archive validation')) as read:
+            with self.assertRaisesRegex(ValueError, 'unexpected receipt archive'):
+                self.receive(self.fixture(), member_name='receipt.json\0alias')
+            read.assert_not_called()
 
     def test_exact_lane_sets(self):
         record = dict(kind='lanes-verified', binding=self.fixture()['binding'], snapshot_sha256='c'*64,
