@@ -379,24 +379,150 @@ def authentic_read(path):
     return value
 
 
+PROVISION_TARGETS = ('linux-amd64', 'linux-arm64', 'darwin-amd64', 'darwin-arm64', 'windows-amd64', 'windows-arm64')
+PROVISION_CELLS = tuple(t + '/' + lane for t in PROVISION_TARGETS for lane in ('kit-node18', 'pair-node22', 'pair-node24'))
+PROVISION_TOOLS = ('node', 'python', 'git', 'gh', 'tar')
+PROVISION_FIELDS = ('runner', 'image', 'controller', 'npm_node', 'shim_node', 'npm', 'go', 'mod_cache', 'observer', 'installer_policy')
+
+
+def provision_fields(value, names, label='manifest'):
+    if type(value) is dict:
+        for name in names:
+            missing = name + ':entry' if label in ('controllers', 'cells') else label + ':' + name
+            require(name in value, 'PUBLIC_PROVISIONING_REQUIRED:' + missing)
+    require(type(value) is dict and list(value) == list(names), 'closed ordered provision fields')
+
+
+def provision_bytes(file, maximum=1024 * 1024):
+    import os
+    file = Path(file)
+    require(str(file) == os.path.abspath(file) and file.resolve() == file, 'canonical provision path')
+    before = file.lstat()
+    require(stat.S_ISREG(before.st_mode) and before.st_nlink == 1 and 0 < before.st_size <= maximum,
+            'bounded regular unaliased provision file')
+    with open(file, 'rb') as stream:
+        opened = os.fstat(stream.fileno())
+        require((opened.st_dev, opened.st_ino) == (before.st_dev, before.st_ino), 'provision file changed')
+        body = stream.read(maximum + 1)
+        after = os.fstat(stream.fileno())
+    require(before == after == file.lstat() and len(body) == before.st_size, 'provision file changed')
+    return body
+
+
+def read_provisioning():
+    # No caller root, expectedCommit, receipt, PATH or environment selection.
+    file = Path(__file__).absolute().parent.parent / '.github/authoring-public-tools.json'
+    try: body = provision_bytes(file)
+    except FileNotFoundError: raise ValueError('PUBLIC_PROVISIONING_REQUIRED:linux-amd64:manifest') from None
+    text = body.decode('utf-8'); depth = 0; quoted = escaped = False
+    for ch in text:
+        if quoted:
+            if escaped: escaped = False
+            elif ch == '\\': escaped = True
+            elif ch == '"': quoted = False
+        elif ch == '"': quoted = True
+        elif ch in '{[':
+            depth += 1; require(depth <= 8, 'provision depth')
+        elif ch in '}]': depth -= 1
+    value = json.loads(text)
+    require(body == (json.dumps(value, indent=2, ensure_ascii=False) + '\n').encode(), 'canonical provision JSON')
+    def pin(v): require(type(v) is str and re.fullmatch('[0-9a-f]{64}', v) and v != '0' * 64, 'provision pin')
+    def label(v): require(type(v) is str and re.fullmatch('[!-~]{1,256}', v), 'bounded provision identity')
+    def absolute(v, target):
+        import ntpath, posixpath
+        p = ntpath if target.startswith('windows-') else posixpath
+        require(type(v) is str and 0 < len(v) <= 4096 and not re.search('[\x00-\x1f\x7f]', v) and
+                p.isabs(v) and p.normpath(v) == v and v not in ('/', p.splitdrive(v)[0] + '\\') and
+                not v.startswith(('\\\\', '//')), 'canonical provision path')
+    def closure(v, target):
+        provision_fields(v, ('root', 'files')); absolute(v['root'], target)
+        require(type(v['files']) is list and 0 < len(v['files']) <= 4096, 'bounded provision closure')
+        last = ''
+        for row in v['files']:
+            provision_fields(row, ('path', 'sha256')); pin(row['sha256']); name = row['path']
+            require(type(name) is str and len(name) <= 4096 and re.fullmatch(r'[A-Za-z0-9_.@+-]+(?:/[A-Za-z0-9_.@+-]+)*', name) and
+                    not set(name.split('/')) & {'.', '..'} and name > last, 'ordered unique relative closure files')
+            last = name
+    def tool(v, target, npm=False):
+        provision_fields(v, ('path', 'version', 'sha256', 'closure') if npm else ('path', 'version', 'sha256'))
+        absolute(v['path'], target); label(v['version']); pin(v['sha256'])
+        if npm:
+            import ntpath, posixpath
+            closure(v['closure'], target); p = ntpath if target.startswith('windows-') else posixpath
+            require(any(p.join(v['closure']['root'], *f['path'].split('/')) == v['path'] and f['sha256'] == v['sha256']
+                        for f in v['closure']['files']), 'npm CLI in complete closure')
+    provision_fields(value, ('schema', 'controllers', 'cells', 'reader'))
+    require(value['schema'] == 'authoring-public-tools/v1' and value['reader'] == 'linux-amd64', 'fixed provision reader/schema')
+    provision_fields(value['controllers'], PROVISION_TARGETS, 'controllers'); provision_fields(value['cells'], PROVISION_CELLS, 'cells')
+    for target, row in value['controllers'].items():
+        provision_fields(row, PROVISION_TOOLS, target)
+        for v in row.values():
+            if v is not None: tool(v, target)
+    for key, row in value['cells'].items():
+        target = key.split('/')[0]; provision_fields(row, PROVISION_FIELDS, key)
+        require(row['controller'] == target, 'fixed cell controller')
+        for name in ('runner', 'image', 'observer', 'installer_policy'):
+            if row[name] is not None:
+                provision_fields(row[name], ('id', 'sha256')); label(row[name]['id']); pin(row[name]['sha256'])
+        for name in ('npm_node', 'shim_node', 'npm', 'go'):
+            if row[name] is not None:
+                tool(row[name], target, name == 'npm')
+                if name.endswith('_node'):
+                    require(re.fullmatch('v' + key.split('node')[1] + r'\.[0-9]+\.[0-9]+', row[name]['version']), 'selected Node major')
+        if row['mod_cache'] is not None: closure(row['mod_cache'], target)
+    return value
+
+
 def require_authenticated_controller():
-    # Receipt-selected executables and their self-supplied hashes are not authority.
-    raise ValueError('missing independently provisioned trusted controller; C3b capability required')
+    value = read_provisioning()
+    for name, tool in value['controllers']['linux-amd64'].items():
+        message = 'PUBLIC_PROVISIONING_REQUIRED:linux-amd64:' + name
+        require(tool is not None, message)
+        try: body = provision_bytes(tool['path'], 256 * 1024 * 1024)
+        except FileNotFoundError: raise ValueError(message) from None
+        require(hashlib.sha256(body).hexdigest() == tool['sha256'], 'source-frozen provision pin mismatch:' + name)
+    return value['controllers']['linux-amd64']['node']['path']
+
+
+def require_authenticated_execution():
+    raise ValueError('C3b execution incomplete: result/installer/observer validators and independent invocation authority required')
+
+
+def authenticated_source():
+    # Snapshot trusted source, never receipt-selected source. External provisioning
+    # keeps this namespace immutable; before/after hashing is not same-UID isolation.
+    repo = Path(__file__).absolute().parent.parent
+    files = []
+    for directory in ('.github', 'scripts', 'npm/agentplugins/scripts', 'npm/agentplugins/lib', 'npm/plugin-kit-ai/lib'):
+        def walk(folder):
+            require(folder.resolve() == folder and stat.S_ISDIR(folder.lstat().st_mode), 'trusted source directory')
+            for file in sorted(folder.iterdir()):
+                require(not file.is_symlink(), 'trusted source link')
+                if file.is_dir(): walk(file)
+                else: files.append(file)
+                require(len(files) <= 4096, 'trusted source closure bound')
+        walk(repo / directory)
+    return {str(f): hashlib.sha256(provision_bytes(f, 16 * 1024 * 1024)).hexdigest() for f in files}
 
 
 def authenticated_verify(node, argv):
-    require_authenticated_controller()
-    # Prepared reader path; C3b must independently bind its controller before use.
+    controller = require_authenticated_controller()
+    require(str(node) == controller, 'source-frozen controller comparison mismatch')
+    require_authenticated_execution()
     import subprocess
-    repo = Path(__file__).resolve().parent.parent
+    repo = Path(__file__).absolute().parent.parent
     bridge = repo / 'npm/agentplugins/scripts/packed-installer-bridge.js'
-    result = subprocess.run([str(node), str(bridge), *map(str, argv)], cwd=repo,
-        env={'PATH': '/usr/local/bin:/usr/bin:/bin', 'LANG': 'C.UTF-8', 'LC_ALL': 'C.UTF-8'},
-        capture_output=True, timeout=1200)
+    source = authenticated_source()
+    require(require_authenticated_controller() == controller and authenticated_source() == source, 'trusted source/controller changed')
+    try:
+        result = subprocess.run([controller, str(bridge), *map(str, argv)], cwd=repo,
+            env={'PATH': '/usr/local/bin:/usr/bin:/bin', 'LANG': 'C.UTF-8', 'LC_ALL': 'C.UTF-8'},
+            capture_output=True, timeout=1200)
+    finally:
+        require(require_authenticated_controller() == controller and authenticated_source() == source, 'trusted source/controller changed')
     require(result.returncode == 0 and result.stderr == b'', 'authenticated reader failed: ' + result.stderr.decode(errors='replace')[:4096])
     require(len(result.stdout) <= 32 * 1024 * 1024, 'bounded authenticated reader output')
     return json.loads(result.stdout)
-
 
 def authenticated_plans(root, sha, inputs, sealed_pin, fixture_root):
     """Complementary injected plans only; does not authenticate J or remote E."""
@@ -414,11 +540,13 @@ def authenticated_plans(root, sha, inputs, sealed_pin, fixture_root):
 
 def check_authenticated(root, sha, require_summary=True, require_completed_e=False):
     require(not require_completed_e, 'completed E cannot use local J or fixture success; C3b E reader required')
-    require_authenticated_controller()
+    controller = require_authenticated_controller()
+    require_authenticated_execution()
     run = authentic_read(root / 'authenticated-run.json'); false_claims(run)
     require(set(run) == {'schema', 'head', 'options', 'tools', *CLAIMS} and
         run['schema'] == 'public-authenticated-packed-run/v1' and run['head'] == sha, 'authentic run schema')
-    options = run['options']; request = authenticated_options(options, sha)
+    options = run['options']; require(options['node'] == controller, 'source-frozen controller comparison mismatch')
+    request = authenticated_options(options, sha)
     sealed_path = root / 'bridge-config/sealed.json'; sealed = read(sealed_path); false_claims(sealed)
     require(set(sealed) == {'schema', 'request', 'verifier_sha256', 'helper_sha256', 'reader_sha256', 'inputs', *CLAIMS} and
         sealed['schema'] == AUTHENTIC_SEAL and sealed['request'] == request == read(root / 'bridge-config/request.json'), 'authentic seal schema')

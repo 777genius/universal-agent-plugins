@@ -392,11 +392,13 @@ class WorkflowControls(unittest.TestCase):
 
 class C3AuthenticatedControls(unittest.TestCase):
     # SYNTHETIC gate mock exercises retained prepared intake validations only.
-    @patch.object(r.proof, 'require_authenticated_controller', return_value=None)
-    def test_closed_intake_before_output(self, synthetic_gate):
+    @patch.object(r.proof, 'require_authenticated_execution', return_value=None)
+    @patch.object(r.proof, 'require_authenticated_controller')
+    def test_closed_intake_before_output(self, synthetic_gate, synthetic_execution):
         from unittest.mock import patch
         root = Path(tempfile.mkdtemp(prefix='C3-runner-SYNTHETIC-'))
         options = root / 'options.json'; output = root / 'must-not-exist'
+        synthetic_gate.return_value = '/unused'
         for value in ({}, dict(request={'intake': 'public-fixture/v2'}, go='/unused', node='/unused', modCache='/unused')):
             options.write_text(json.dumps(value, indent=2) + '\n')
             with self.assertRaises(ValueError): r.authenticated_main(output, 'a' * 40, options)
@@ -412,6 +414,7 @@ class C3AuthenticatedControls(unittest.TestCase):
         admission.write_text(json.dumps(dirs, indent=2) + '\n')
         request = dict(intake=p.AUTHENTIC, expectedCommit='a' * 40, journey=str(journey), journeySha256=p.digest(journey),
             admission=str(admission), admissionSha256=p.digest(admission), fixtureRoot=dirs['fixture_root'])
+        synthetic_gate.return_value = str(tool)
         value = dict(request=request, go=str(tool), node=str(tool), modCache=str(modules))
         options.write_text(json.dumps(value, indent=2) + '\n')
         with patch.object(r.proof, 'authenticated_verify', side_effect=ValueError('missing reviewed installer/observer')) as reader, \
@@ -420,8 +423,9 @@ class C3AuthenticatedControls(unittest.TestCase):
             reader.assert_called_once(); planner.assert_not_called(); self.assertFalse(output.exists())
 
     # SYNTHETIC gate mock exercises retained prepared terminal validations only.
-    @patch.object(p, 'require_authenticated_controller', return_value=None)
-    def test_exact_thirty_plans_and_post_seal(self, synthetic_gate):
+    @patch.object(p, 'require_authenticated_execution', return_value=None)
+    @patch.object(p, 'require_authenticated_controller')
+    def test_exact_thirty_plans_and_post_seal(self, synthetic_gate, synthetic_execution):
         root = Path(tempfile.mkdtemp(prefix='C3-plans-SYNTHETIC-')); (root / 'results').mkdir(); (root / 'logs').mkdir()
         fixture = root / 'original-projects'; fixture.mkdir()
         entries = [dict(path='.', mode=fixture.stat().st_mode & 0o777, kind='directory')]
@@ -437,6 +441,7 @@ class C3AuthenticatedControls(unittest.TestCase):
         # readback, then corrupt real retained logs. No subprocess is launched.
         from unittest.mock import patch
         tool = root / 'tool'; tool.write_text('SYNTHETIC TOOL')
+        synthetic_gate.return_value = str(tool)
         modules = root / 'modules'; modules.mkdir()
         journey = root / 'J.json'; admission = root / 'admission.json'
         put(journey, {}); put(admission, {})
@@ -530,7 +535,7 @@ class C3AuthenticatedControls(unittest.TestCase):
                 ('direct-reader', lambda: p.authenticated_verify(options['node'], ['authenticated-options', options_path])),
             ):
                 with self.subTest(entrypoint=name), self.assertRaisesRegex(ValueError,
-                        'missing independently provisioned trusted controller; C3b capability required'):
+                        'PUBLIC_PROVISIONING_REQUIRED:linux-amd64:node'):
                     call()
             child.assert_not_called(); planner.assert_not_called(); write.assert_not_called()
         self.assertFalse(output.exists())
@@ -542,8 +547,117 @@ class C3AuthenticatedControls(unittest.TestCase):
             (root / 'summary.json').write_text(json.dumps(dict(status='passed', intake=schema, plans=30, projects=10)))
             with self.subTest(intake=schema), self.assertRaisesRegex(ValueError, 'completed E cannot use'):
                 p.check_authenticated(root, 'a' * 40, require_completed_e=True)
-            with self.assertRaisesRegex(ValueError, 'missing independently provisioned trusted controller'):
+            with self.assertRaisesRegex(ValueError, 'PUBLIC_PROVISIONING_REQUIRED:linux-amd64:node'):
                 p.check_authenticated(root, 'a' * 40)
+
+
+class C3bProvisionControls(unittest.TestCase):
+    def fixture(self):
+        root = Path(tempfile.mkdtemp(prefix='C3b-provision-SYNTHETIC-'))
+        (root / '.github').mkdir(); (root / 'scripts').mkdir()
+        source = root / 'scripts/check-packed-ci.py'; source.write_text('SYNTHETIC SOURCE\n')
+        (root / 'scripts/run-packed-ci.py').write_text('SYNTHETIC RUNNER\n')
+        for folder in ('npm/agentplugins/scripts', 'npm/agentplugins/lib', 'npm/plugin-kit-ai/lib'):
+            (root / folder).mkdir(parents=True); (root / folder / 'source.js').write_text('SYNTHETIC SOURCE\n')
+        value = p.read_provisioning(); file = root / '.github/authoring-public-tools.json'
+        tool = root / 'node'; tool.write_text('SYNTHETIC TOOL\n')
+        for name in p.PROVISION_TOOLS:
+            value['controllers']['linux-amd64'][name] = dict(path=str(tool), version='v22.21.1', sha256=p.digest(tool))
+        self.put(file, value)
+        return root, source, file, tool, value
+
+    def put(self, file, value): file.write_text(json.dumps(value, indent=2, ensure_ascii=False) + '\n')
+
+    def test_literal_canonical_and_closed_manifest_table(self):
+        root, source, file, tool, value = self.fixture()
+        literal = '{\n  "path": "/synthetic/node",\n  "version": "v22.21.1",\n  "sha256": "' + p.hashlib.sha256(b'SYNTHETIC TOOL\n').hexdigest() + '"\n}'
+        value['controllers']['linux-amd64']['node'] = json.loads(literal); self.put(file, value)
+        with patch.object(p, '__file__', str(source)):
+            self.assertEqual(json.dumps(p.read_provisioning()['controllers']['linux-amd64']['node'], indent=2), literal)
+            missing = copy.deepcopy(value); del missing['cells']['linux-arm64/kit-node18']; self.put(file, missing)
+            with self.assertRaisesRegex(ValueError, 'PUBLIC_PROVISIONING_REQUIRED:linux-arm64/kit-node18:entry'): p.read_provisioning()
+            mutations = [lambda v: v['cells'].pop('linux-arm64/kit-node18'), lambda v: v['controllers'].update(extra={}),
+                lambda v: v['controllers']['linux-amd64'].pop('tar'), lambda v: v['cells']['linux-amd64/kit-node18'].update(extra=None),
+                lambda v: v.update(reader='windows-amd64'), lambda v: v['cells']['linux-amd64/kit-node18'].update(controller='linux-arm64'),
+                lambda v: v['controllers']['linux-amd64']['node'].update(sha256='0' * 64),
+                lambda v: v['controllers']['linux-amd64']['node'].update(path='/synthetic/../node'),
+                lambda v: v['controllers']['linux-amd64']['node'].update(version='x' * 257),
+                lambda v: v['controllers']['linux-amd64']['node'].update(extra=True)]
+            for index, mutate in enumerate(mutations):
+                bad = copy.deepcopy(value); mutate(bad); self.put(file, bad)
+                with self.subTest(case=index), self.assertRaises(ValueError): p.read_provisioning()
+            body = (json.dumps(value, indent=2) + '\n').encode()
+            for bad in (json.dumps(value).encode(), body.replace(b'  "schema":', b'  "reader": "linux-amd64",\n  "schema":'),
+                        b'[[' * 10, b' ' * (1024 * 1024 + 1), b'\xff', b'null\n'):
+                file.write_bytes(bad)
+                with self.subTest(bytes=len(bad)), self.assertRaises(ValueError): p.read_provisioning()
+
+    def test_source_binding_tools_missing_pins_links_and_aliases(self):
+        root, source, file, tool, value = self.fixture()
+        with patch.object(p, '__file__', str(source)):
+            self.assertEqual(p.require_authenticated_controller(), str(tool))
+            tool.write_text('CHANGED TOOL\n')
+            with self.assertRaisesRegex(ValueError, 'pin mismatch'): p.require_authenticated_controller()
+            tool.write_text('SYNTHETIC TOOL\n')
+            value['controllers']['linux-amd64']['gh'] = None; self.put(file, value)
+            with self.assertRaisesRegex(ValueError, 'PUBLIC_PROVISIONING_REQUIRED:linux-amd64:gh'): p.require_authenticated_controller()
+            value['controllers']['linux-amd64']['node']['path'] = str(root / 'missing'); self.put(file, value)
+            with self.assertRaisesRegex(ValueError, 'PUBLIC_PROVISIONING_REQUIRED:linux-amd64:node'): p.require_authenticated_controller()
+            link = root / 'link'; link.symlink_to(tool); value['controllers']['linux-amd64']['node']['path'] = str(link); self.put(file, value)
+            with self.assertRaisesRegex(ValueError, 'canonical provision path'): p.require_authenticated_controller()
+            with self.assertRaises(TypeError): p.require_authenticated_controller(root)
+        # A receipt with its own complete matching tool manifest cannot select root.
+        with self.assertRaisesRegex(ValueError, 'PUBLIC_PROVISIONING_REQUIRED:linux-amd64:node'): p.require_authenticated_controller()
+        with patch.object(p, '__file__', str(root / 'absent/scripts/check-packed-ci.py')):
+            with self.assertRaisesRegex(ValueError, 'PUBLIC_PROVISIONING_REQUIRED:linux-amd64:manifest'): p.require_authenticated_controller()
+
+    def test_prepared_controller_rechecks_and_minimal_environment(self):
+        import subprocess
+        from types import SimpleNamespace
+        root, source, file, tool, value = self.fixture()
+        # Real tool-byte binding; only later unfinished capability is mocked.
+        # All subprocesses are mocked; SYNTHETIC TOOL is never executed.
+        with patch.object(p, '__file__', str(source)), patch.object(p, 'require_authenticated_execution'), \
+                patch.object(subprocess, 'run', return_value=SimpleNamespace(returncode=0, stderr=b'', stdout=b'{}')) as child:
+            self.assertEqual(p.authenticated_verify(str(tool), ['authenticated-options', '/synthetic/options']), {})
+            argv = child.call_args.args[0]; env = child.call_args.kwargs['env']
+            self.assertEqual(argv, [str(tool), str(root / 'npm/agentplugins/scripts/packed-installer-bridge.js'), 'authenticated-options', '/synthetic/options'])
+            self.assertEqual(set(env), {'PATH', 'LANG', 'LC_ALL'})
+            for name in ('NODE_OPTIONS', 'NODE_PATH', 'PYTHONPATH', 'PYTHONHOME', 'LD_PRELOAD', 'LD_LIBRARY_PATH'):
+                self.assertNotIn(name, env)
+            child.reset_mock()
+            with self.assertRaisesRegex(ValueError, 'comparison mismatch'): p.authenticated_verify('/receipt/node', [])
+            child.assert_not_called()
+            def changed(*args, **kwargs):
+                tool.write_text('LATE CHANGE\n'); return SimpleNamespace(returncode=0, stderr=b'', stdout=b'{}')
+            child.side_effect = changed
+            with self.assertRaisesRegex(ValueError, 'pin mismatch'): p.authenticated_verify(str(tool), [])
+            tool.write_text('SYNTHETIC TOOL\n'); child.side_effect = None
+            def changed_source(*args, **kwargs):
+                source.write_text('LATE SOURCE CHANGE\n'); return SimpleNamespace(returncode=0, stderr=b'', stdout=b'{}')
+            child.side_effect = changed_source
+            with self.assertRaisesRegex(ValueError, 'trusted source/controller changed'): p.authenticated_verify(str(tool), [])
+            child.reset_mock(); child.side_effect = None
+            controller = p.require_authenticated_controller; calls = []
+            def before_launch():
+                calls.append(True)
+                if len(calls) == 2: source.write_text('CHANGED BEFORE LAUNCH\n')
+                return controller()
+            with patch.object(p, 'require_authenticated_controller', side_effect=before_launch):
+                with self.assertRaisesRegex(ValueError, 'trusted source/controller changed'): p.authenticated_verify(str(tool), [])
+            child.assert_not_called()
+
+    def test_verified_controller_still_cannot_open_execution(self):
+        import subprocess
+        root, source, file, tool, value = self.fixture(); output = root / 'must-not-exist'
+        with patch.object(p, '__file__', str(source)), patch.object(r.proof, '__file__', str(source)), \
+                patch.object(subprocess, 'run') as child, patch.object(r, 'write') as write, patch.object(r, 'planner') as planner:
+            for call in (lambda: p.authenticated_verify(str(tool), []), lambda: p.check_authenticated(root, 'a' * 40),
+                         lambda: p.check_authenticated(root, 'a' * 40, require_summary=False),
+                         lambda: r.authenticated_main(output, 'a' * 40, root / 'unread-receipt')):
+                with self.assertRaisesRegex(ValueError, 'C3b execution incomplete'): call()
+            child.assert_not_called(); write.assert_not_called(); planner.assert_not_called()
+            self.assertFalse(output.exists())
 
 
 if __name__ == '__main__': unittest.main()

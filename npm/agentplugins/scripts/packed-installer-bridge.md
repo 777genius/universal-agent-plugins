@@ -362,3 +362,47 @@ E aggregate/authenticated reader and P adapter together. Its npm/process,
 workflow and P test names remain outstanding. Native/N2, genuine E, P/Q/B,
 anonymous acquisition/readbacks/channels, stable release and phases 0–11
 remain open; independent review and required remote CI are not waived.
+
+### C3b first invariant: source-frozen public tools
+
+The controller now reads only `.github/authoring-public-tools.json` beside the
+executing trusted checkout. `expectedCommit`, receipt pins, PATH and environment
+cannot select that root or an interpreter. `options.node` is comparison only.
+`authoring-public-tools/v1` fixes six controller keys, eighteen cell keys and the
+Linux-amd64 reader. The closed, ordered JSON encoding is two-space indentation
+plus one LF, using the existing encoding/checked-file interface in JavaScript
+and minimal standard-library checks in Python. Limits are 1 MiB and depth eight;
+unknown, missing, duplicate, reordered and alternate-encoded fields fail.
+
+All fields remain present. `null` means approved provision is unavailable;
+there are no approved pins in this checkout. Controller rows contain
+`node,python,git,gh,tar`, each eventually `{path,version,sha256}`. Cell
+`runner,image,observer,installer_policy` are immutable `{id,sha256}` bindings
+supplied by approved provisioning, not guessed runner labels. `npm_node` and
+`shim_node` must match the cell major. npm additionally requires
+`closure:{root,files:[{path,sha256}]}`: the sorted exhaustive regular-file closure,
+including its CLI and dependencies. `mod_cache` uses that same closure shape.
+Closures allow at most 4096 files, 8192 entries and 256 MiB; links and path aliases
+fail. Go and module cache are required only for Linux-amd64/pair-node22;
+installer policy is required for pair cells. Other null capabilities fail with
+`PUBLIC_PROVISIONING_REQUIRED:<controller-or-cell>:<field>` before execution.
+Provisioned versions are frozen metadata bound to bytes, not inferred by running
+a tool. Provisioning owners must supply authentic supply-chain instructions and
+immutable host/image identities before any real cell can run.
+
+`readProvisioning()` takes no root argument. `requireController(key)` returns a
+verified fixed Node path; `requireCellTools(key)` checks that cell's provision.
+Python `require_authenticated_controller()` accepts no caller input. Its initial
+TCB is trusted checkout plus trusted Python/workflow OS. Prepared subprocess paths
+recheck tools and trusted source before and after invocation, using an environment
+that excludes interpreter injection settings. The external provision contract
+must keep paths immutable throughout execution; hashes do not prevent hostile
+same-UID replacement between checks.
+
+A verified controller does **not** open authenticated summary success. A separate
+explicit `C3b execution incomplete` gate remains before receipt reads/effects:
+full result/installer/observer validation and independent invocation authority
+are still missing. Synthetic unit fixtures mock that later capability and child
+execution only; harmless tool bytes are never executed and establish no authentic
+acceptance. Full producer/validators/facades, workflow, J/E/P, genuine matrix and
+remaining release gates remain mandatory next-lane work.
