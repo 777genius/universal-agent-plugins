@@ -3,6 +3,8 @@
 This runbook is for maintainers. Do not create a release without explicit owner
 approval for that exact version. This repository owns both the binary release
 and the separate npm facade publication workflow, which updates `latest`.
+Draft qualification defaults to non-public; public version publication requires
+separate explicit owner authorization and `publish_release=true`.
 `777genius/plugin-kit-ai` is the historical GitHub rename alias for
 `777genius/universal-agent-plugins`, not an independently owned producer.
 Existing immutable producer identity checks retain that historical slug.
@@ -25,8 +27,8 @@ Existing immutable producer identity checks retain that historical slug.
 - `agentplugins-release` requires a reviewer and allows deployment only from
   `main`. Dispatch it from the exact `main` commit referenced by the release
   tag; its source-commit guard rejects a newer or older workflow revision.
-- Select the required `binary-only` producer mode. This repository publishes
-  the verified GitHub binary release in this workflow; npm publication runs
+- Select the required `binary-only` producer mode. This workflow qualifies a
+  draft by default and publishes only with `publish_release=true`; npm publication runs
   separately through `agentplugins-npm-publish.yml` in this same repository.
 
 The checked-in npm version `0.0.0-development` is intentional. Staging derives
@@ -37,9 +39,11 @@ the publishable version from the approved tag; do not manually bump it.
 1. Create the approved annotated stable tag on current `main` and push only that
    tag.
 2. Dispatch `Agentplugins Release Assets` with the exact tag and the required
-   `binary-only` producer mode.
+   `binary-only` producer mode. Leave the typed boolean `publish_release=false`
+   (the default) for draft-only qualification.
 3. Review the frozen commit and approve the `agentplugins-release`
-   environment deployment.
+   environment deployment. This initial technical review is required even for
+   draft-only runs; it does not authorize public version publication.
 4. Confirm the workflow attests all six binaries, `checksums.txt`,
    `release-manifest.json`, and `THIRD_PARTY_NOTICES.txt` before creating the
    non-public draft.
@@ -50,10 +54,18 @@ the publishable version from the approved tag; do not manually bump it.
    launcher or released binary. It then proves a warm-cache invocation with
    the local proof source removed. Until the matrix aggregates successfully,
    no public GitHub Release may exist.
-6. After all six proofs are green, approve the promotion deployment. Confirm
-   it reverifies the draft identity, manifest, assets, and attestations.
-   It promotes that exact draft only after all six native platform proofs succeed.
-7. Verify the resulting public release contains six platform binaries,
+6. Confirm `verified-draft` succeeds after all six proofs, reverifying the live
+   draft identity, manifest, all nine assets, and attestations, and uploads
+   `verified-draft.json`. With `publish_release=false`, promotion is skipped
+   and the verified draft remains non-public.
+7. Only with separate explicit owner authorization for that exact version,
+   dispatch the existing producer with `publish_release=true`. Its exact
+   `main`/tag/source-ref gate and every required gate above must still pass;
+   this is not a standalone promotion command or a bypass for an old draft.
+   After all six native platform proofs and `verified-draft` succeed, approve
+   the promotion environment deployment. It reverifies the draft identity,
+   manifest, assets, and attestations before promoting that exact draft.
+8. After authorized promotion, verify the resulting public release contains six platform binaries,
    `checksums.txt`, `release-manifest.json`, and `THIRD_PARTY_NOTICES.txt`, and
    verify GitHub attestations for every file, including the notices.
    This exact stable public release is the immutable producer handoff consumed
@@ -69,6 +81,8 @@ non-public. Fix the proof defect and rerun the same tag to resume. If draft
 creation itself was interrupted and left an incomplete or non-matching draft,
 an owner must verify that it was never public, delete only that draft release
 (not the tag), and rerun. Never edit or replace assets in place.
+Every resume still requires the exact current `main`/tag/workflow-source gate;
+an older frozen draft cannot bypass it, even with `publish_release=true`.
 
 For a schema-v1 historical platform audit, dispatch `Agentplugins Platform
 Proof` with `--ref <exact-tag>` and `allow_legacy_manifest=true`. The workflow
@@ -136,8 +150,9 @@ recreate it.
 ## Producer cutover and npm publication
 
 The historical `plugin-kit-ai` producer slug identifies this same repository. The
-release workflow builds, attests, draft-proves, and promotes the same six assets
+release workflow builds, attests, draft-proves, and verifies the same six assets
 plus `checksums.txt`, `release-manifest.json`, and `THIRD_PARTY_NOTICES.txt`.
+It promotes only with explicit `publish_release=true` after all existing gates.
 The npm facade is staged from
 that exact public release and never embeds the binaries in its tarball.
 
@@ -162,6 +177,8 @@ Never publish an empty placeholder, reuse a tag, overwrite release assets, or
 resolve a binary through an unpinned GitHub `latest` release.
 
 ## Evidence boundaries
+
+This runbook does not establish that any new draft has already qualified.
 
 The staged macOS lifecycle record remains the 2026-08-30 run of installer
 `0.1.22` at `5630ccd92aa91c8ac8cafb37eea8752fd82edce0`. Its document and JSON
