@@ -116,10 +116,21 @@ gh api repos/777genius/universal-agent-plugins/git/commits/<resolved-harness-SHA
 ```
 
 Record these identities for both the nine-lane and three-lane dispatches and
-require their receipts to match the captured commit/tree. Refuse a combined
-nine-plus-three qualification with mixed harness versions: if `main` advances
-between dispatches and their resolved SHAs differ, repeat the affected scope
-on `main` until both scopes have the same captured harness commit/tree.
+require each scope's receipts to match its recorded harness SHA/tree and helper
+hashes. Two independently qualified scopes may use distinct recorded harness
+identities. Each scope must have passed its own exact required lanes,
+`draft-complete` aggregation and final `draft-recheck`. Both scopes must bind
+the same frozen producer invocation (commit/tree and run/attempt), release
+identity and asset set, original producer bundle bytes and package bytes.
+Archive and verify each scope separately using its recorded identities.
+Do not substitute lanes across scopes, mix lanes from different dispatches or
+harness identities within one scope, or rewrite receipts. A partial or failed
+historical-nine run, including its successful Linux arm64 lanes, cannot replace
+any lane of a new historical-nine qualification.
+Combined coverage must record both scopes' harness identities and their
+qualification times, including each final draft recheck time. A retained,
+fully qualified scope may be reused without a current recheck; its original
+qualification remains tied to its recorded time and harness identity.
 Use the watch and download commands above for each run, with separate fresh
 output directories.
 

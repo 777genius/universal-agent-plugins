@@ -140,6 +140,7 @@ jobs:
           node-version: '22'
           package-manager-cache: false
       - name: Verify native matrix safety and evidence gates
+        shell: bash
         run: |
           python -m unittest discover -s scripts -p 'test_native_client*.py'
           python -m unittest discover -s scripts -p 'test_released_native_evidence.py'

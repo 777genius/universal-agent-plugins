@@ -145,7 +145,10 @@ class DraftTests(unittest.TestCase):
                 body = io.BytesIO()
                 with zipfile.ZipFile(body, 'w') as archive:
                     for name in names:
-                        archive.writestr(name, b'fixture')
+                        member = zipfile.ZipInfo(name)
+                        # Preserve malicious bytes despite Windows constructor normalization.
+                        member.filename = name
+                        archive.writestr(member, b'fixture')
                 with self.subTest(names=names), self.assertRaises(ValueError):
                     draft.unpack_bundle(body.getvalue(), Path(temp))
         body = io.BytesIO()
@@ -155,6 +158,23 @@ class DraftTests(unittest.TestCase):
             archive.writestr(member, b'/etc/passwd')
         with tempfile.TemporaryDirectory() as temp, self.assertRaises(ValueError):
             draft.unpack_bundle(body.getvalue(), Path(temp))
+
+    def test_bundle_raw_names_rejected_before_read(self):
+        for sep in ('/', '\\'):
+            for name in ('a\\evil', 'a\0evil'):
+                with self.subTest(sep=sep, name=name), tempfile.TemporaryDirectory() as temp:
+                    root = Path(temp)
+                    body = io.BytesIO()
+                    with zipfile.ZipFile(body, 'w') as archive:
+                        member = zipfile.ZipInfo('fixture')
+                        member.filename = name
+                        archive.writestr(member, b'fixture')
+                    with patch.object(zipfile.os, 'sep', sep), \
+                         patch.object(zipfile.ZipFile, 'read',
+                                      side_effect=AssertionError('ZIP body read')):
+                        with self.assertRaisesRegex(ValueError, 'artifact path'):
+                            draft.unpack_bundle(body.getvalue(), root)
+                    self.assertEqual(list(root.iterdir()), [])
 
     def test_package_pins_and_dependencies(self):
         verified = verified_release()
@@ -249,12 +269,13 @@ class DraftTests(unittest.TestCase):
     def test_live_helper_contract_and_missing_draft(self):
         with tempfile.TemporaryDirectory() as temp:
             receipt = Path(temp) / 'receipt.json'
+            source = (Path(temp) / 'harness').resolve()
             with patch.object(draft, 'output', side_effect=RuntimeError('missing draft')) as child:
                 with self.assertRaises(RuntimeError):
-                    draft.live_verify(Path('/harness'), Path('/producer'), args(), receipt)
+                    draft.live_verify(source, Path(temp) / 'producer', args(), receipt)
             self.assertFalse(receipt.exists())
             command = child.call_args.args[0]
-            self.assertIn('/harness/scripts/verify-agentplugins-draft.py', command)
+            self.assertIn(str(source / 'scripts/verify-agentplugins-draft.py'), command)
             self.assertIn('--run-attempt', command)
             self.assertNotIn('--release-state', command)
 
@@ -338,7 +359,7 @@ class AggregateTests(unittest.TestCase):
             lane = root / client
             lane.mkdir()
             log = lane / 'native-tests.log'
-            log.write_text(''.join('--- PASS: ' + t + ' (0.1s)\n' for t in sorted(tests)))
+            log.write_bytes(''.join('--- PASS: ' + t + ' (0.1s)\n' for t in sorted(tests)).encode('utf-8'))
             release = dict(release_state='draft', repository=draft.REPOSITORY, tag='agentplugins-v1.2.3',
                            version='1.2.3', commit='a' * 40, tree='f' * 40, release_id=34, checksums_sha256='c' * 64,
                            producer=producer, tarball_sha256='1' * 64, binary_sha256='2' * 64, size=6, file='agentplugins_1.2.3_linux_amd64',
@@ -422,7 +443,7 @@ class AggregateTests(unittest.TestCase):
                     paths[0].unlink()
                 else:
                     log = paths[0].parent / 'native-tests.log'
-                    log.write_text(log.read_text() + '    --- SKIP: test/substage (0.0s)\n')
+                    log.write_bytes(log.read_bytes() + b'    --- SKIP: test/substage (0.0s)\n')
                     record = json.loads(paths[0].read_bytes())
                     record['artifact_sha256']['native-tests.log'] = draft.digest(log)
                     paths[0].write_text(json.dumps(record))
@@ -499,12 +520,14 @@ class ReceiptBoundaryTests(unittest.TestCase):
         return dict(kind='snapshot', binding={'run_id': 99, 'run_attempt': 2, 'harness_commit': 'd'*40},
                     producer_tree='f'*40, live=live)
 
-    def receive(self, record, *, raw=None, artifact_change=None, env_change=None, extra=False):
+    def receive(self, record, *, raw=None, artifact_change=None, env_change=None, extra=False, member_name='receipt.json'):
         binding = self.fixture()['binding']
         raw = raw if raw is not None else json.dumps(record).encode()
         stream = io.BytesIO()
         with zipfile.ZipFile(stream, 'w', zipfile.ZIP_DEFLATED) as z:
-            z.writestr('receipt.json', raw)
+            member = zipfile.ZipInfo('fixture')
+            member.filename = member_name
+            z.writestr(member, raw)
             if extra: z.writestr('payload.sh', 'false')
         body = stream.getvalue()
         sha = hashlib.sha256(body).hexdigest()
@@ -538,6 +561,12 @@ class ReceiptBoundaryTests(unittest.TestCase):
         for raw in [b'{"kind":"snapshot","kind":"snapshot"}', b' '*(draft.RECEIPT_LIMIT+1)]:
             with self.assertRaises(ValueError): self.receive(self.fixture(), raw=raw)
         with self.assertRaises(ValueError): self.receive(self.fixture(), extra=True)
+
+    def test_raw_receipt_name_rejected_before_read(self):
+        with patch.object(zipfile.ZipFile, 'read', side_effect=AssertionError('receipt read before archive validation')) as read:
+            with self.assertRaisesRegex(ValueError, 'unexpected receipt archive'):
+                self.receive(self.fixture(), member_name='receipt.json\0alias')
+            read.assert_not_called()
 
     def test_exact_lane_sets(self):
         record = dict(kind='lanes-verified', binding=self.fixture()['binding'], snapshot_sha256='c'*64,
@@ -621,12 +650,13 @@ class ReceiptBoundaryTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             arguments = SimpleNamespace(repository=draft.REPOSITORY, tag='agentplugins-v1.2.3', commit='a'*40,
                 asset_set_digest='c'*64, release_id=34, run_id=12, run_attempt=2,
-                source=temp+'/producer', policy_source=temp+'/harness', receipt=temp+'/receipt.json')
+                source=str(Path(temp) / 'producer'), policy_source=str(Path(temp) / 'harness'),
+                receipt=str(Path(temp) / 'receipt.json'))
             calls = []
             def command(argv, **unused):
                 calls.append(argv)
                 if argv[0] == 'git': return b'a'*40 if argv[-1] == 'HEAD' else b''
-                self.assertEqual(argv[:2], ['node', temp+'/harness/npm/agentplugins/scripts/release-assets.js'])
+                self.assertEqual(argv[:2], ['node', str(Path(arguments.policy_source).resolve() / 'npm/agentplugins/scripts/release-assets.js')])
                 raise ValueError('stop before mocked asset validation')
             with patch.object(verifier, 'snapshot', return_value={'assets':[]}), patch.object(verifier, 'run', side_effect=command):
                 with self.assertRaisesRegex(ValueError, 'stop before'): verifier.verify(arguments)

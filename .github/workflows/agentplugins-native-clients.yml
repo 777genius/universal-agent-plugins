@@ -9,8 +9,15 @@ on:
       - 'repotests/testdata/agentplugins_native_probe/**'
       - 'install/integrationctl/agentplugins/**'
       - 'scripts/run-native-client-matrix.py'
-      - 'scripts/test_native_client_matrix.py'
+      - 'scripts/native_client*.py'
+      - 'scripts/test_native_client*.py'
+      - 'scripts/verify-agentplugins-draft.py'
+      - 'scripts/test_agentplugins_draft.py'
+      - 'scripts/verify-released-native-evidence.py'
+      - 'scripts/test_released_native_evidence.py'
+      - 'npm/agentplugins/**'
       - '.github/workflows/agentplugins-native-clients.yml'
+      - '.github/workflows/agentplugins-released-native-clients.yml'
   workflow_dispatch:
 
 permissions:
@@ -49,7 +56,10 @@ jobs:
           go-version: '1.25.13'
           cache: false
       - name: Verify native matrix safety and evidence gates
-        run: python scripts/test_native_client_matrix.py
+        shell: bash
+        run: |
+          python -m unittest discover -s scripts -p 'test_native_client*.py'
+          python -m unittest discover -s scripts -p 'test_released_native_evidence.py'
       - name: Build exact source and execute pinned native client in disposable fixture
         env:
           GH_TOKEN: ${{ github.token }}
