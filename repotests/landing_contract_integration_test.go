@@ -448,7 +448,7 @@ func assertPluginCategories(t *testing.T, plugins []struct {
 	t.Fatalf("plugin %s missing from landing content", wantID)
 }
 
-// These are the two accepted publication checkpoints, not arbitrary subsets.
+// Keep the shipped locale set explicit so route and metadata coverage cannot drift silently.
 func assertLandingLocaleModel(t *testing.T, root, source string) {
 	t.Helper()
 	literals := func(pattern string) []string {
@@ -471,12 +471,9 @@ func assertLandingLocaleModel(t *testing.T, root, source string) {
 	assertSet(literals(`(?s)type\s+LegacyContentLocale\s*=([^;]+);`), "en,es,fr,ru,zh")
 	mustContain(t, source, "LocaleCode = LegacyContentLocale")
 	mustContain(t, source, "KnownLocale = LegacyContentLocale")
-	assertSet(literals(`(?s)type\s+KnownLocale\s*=([^;]+);`), "uk")
-	assertSet(literals(`(?s)const\s+candidateLocales\s*=\s*\[([^]]+)\]`), "en,ru,uk")
-	published := literals(`(?s)const\s+publishedLocales\s*=\s*\[([^]]+)\]`)
-	if got := strings.Join(published, ","); got != "en" && got != "en,ru,uk" {
-		t.Fatalf("publication = %v, want EN-only foundation/shell or EN/RU/UK final", published)
-	}
+	assertSet(literals(`(?s)type\s+KnownLocale\s*=([^;]+);`), "ar,hi,pt,uk")
+	assertSet(literals(`(?s)const\s+candidateLocales\s*=\s*\[([^]]+)\]`), "ar,en,es,fr,hi,pt,ru,uk,zh")
+	mustContain(t, source, "publishedLocales = candidateLocales")
 	metadata := regexp.MustCompile(`(?s)const\s+localeMetadata\s*=\s*\{(.*?)\}\s*as const`).FindStringSubmatch(source)
 	if len(metadata) != 2 {
 		t.Fatal("missing localeMetadata")
@@ -492,7 +489,7 @@ func assertLandingLocaleModel(t *testing.T, root, source string) {
 	// Candidate metadata can precede a dictionary. Legacy and published
 	// dictionaries must always remain present and valid.
 	required := map[string]bool{"en": true, "es": true, "fr": true, "ru": true, "zh": true}
-	for _, code := range published {
+	for _, code := range []string{"en", "ru", "uk", "zh", "es", "hi", "ar", "pt", "fr"} {
 		required[code] = true
 	}
 	for code := range required {
@@ -506,8 +503,8 @@ func assertLandingLocaleModel(t *testing.T, root, source string) {
 	}
 
 	sort.Strings(codes)
-	assertSet(codes, "en,es,fr,ru,uk,zh")
-	mustContain(t, source, "publishedLocales.map(code => localeMetadata[code])")
+	assertSet(codes, "ar,en,es,fr,hi,pt,ru,uk,zh")
+	mustContain(t, source, "publishedLocales.map((code) => localeMetadata[code])")
 	config := readRepoFile(t, root, "nuxt.config.ts")
 	mustContain(t, config, "locales: [...supportedLocales]")
 	mustContain(t, config, "defaultLocale: 'en'")

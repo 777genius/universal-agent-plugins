@@ -38,9 +38,9 @@ func TestPagesSite_CombinesLandingRootAndDocsSubpath(t *testing.T) {
 		t.Fatal(err)
 	}
 	script := string(scriptBody)
-	mustContain(t, script, `const landingRoot = path.resolve(scriptDir, "..");`)
-	mustContain(t, script, `const repoRoot = path.resolve(landingRoot, "..");`)
-	mustContain(t, script, `const docsTarget = path.join(pagesDist, "docs");`)
+	mustContain(t, script, `const landingRoot = path.resolve(scriptDir, '..');`)
+	mustContain(t, script, `const repoRoot = path.resolve(landingRoot, '..');`)
+	mustContain(t, script, `const docsTarget = path.join(pagesDist, 'docs');`)
 	mustContain(t, script, `await fs.cp(landingDist, pagesDist, { recursive: true });`)
 	mustContain(t, script, `await fs.cp(docsDist, docsTarget, { recursive: true });`)
 
@@ -72,8 +72,8 @@ func TestPagesSite_CombinesLandingRootAndDocsSubpath(t *testing.T) {
 		t.Fatal(err)
 	}
 	nuxtConfig := string(nuxtConfigBody)
-	mustContain(t, nuxtConfig, `'/plugins'`)
-	mustContain(t, nuxtConfig, "`/plugins/${plugin.name}`")
+	mustContain(t, nuxtConfig, `'/api/registry/catalog'`)
+	mustContain(t, nuxtConfig, "`/api/registry/plugin/${plugin.name}`")
 	mustContain(t, nuxtConfig, `const sitemapRoutes =`)
 
 	mirrorBody, err := os.ReadFile(filepath.Join(root, "cmd", "agentplugins-registry-mirror", "main.go"))
@@ -91,7 +91,7 @@ func TestPagesSite_CombinesLandingRootAndDocsSubpath(t *testing.T) {
 	}
 	pluginDetailPage := string(pluginDetailPageBody)
 	mustContain(t, pluginDetailPage, `sourceUrl(plugin)`)
-	mustContain(t, pluginDetailPage, `aria-label="Back to plugin directory"`)
+	mustContain(t, pluginDetailPage, `:aria-label="t('registryUi.detail.backToPluginDirectory')"`)
 
 	docsConfigBody, err := os.ReadFile(filepath.Join(root, "website", ".vitepress", "config", "shared.ts"))
 	if err != nil {
@@ -106,5 +106,5 @@ func TestPagesSite_CombinesLandingRootAndDocsSubpath(t *testing.T) {
 		t.Fatal(err)
 	}
 	robots := string(robotsBody)
-	mustContain(t, robots, `https://777genius.github.io/universal-agent-plugins/docs/sitemap.xml`)
+	mustContain(t, robots, `Sitemap: ${docsSitemapUrl}`)
 }
