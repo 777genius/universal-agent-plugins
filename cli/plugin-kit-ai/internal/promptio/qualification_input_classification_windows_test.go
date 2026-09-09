@@ -14,7 +14,7 @@ import (
 )
 
 // Runs only inside the existing synthetic attached ConPTY qualification.
-func qualificationConsoleInputClassification(t *testing.T, input windows.Handle) {
+func qualificationConsoleInputClassification(t *testing.T, input windows.Handle, trace *qualificationHandleTrace) {
 	t.Helper()
 	output, err := windows.CreateFile(windows.StringToUTF16Ptr("CONOUT$"),
 		windows.GENERIC_READ|windows.GENERIC_WRITE,
@@ -74,7 +74,7 @@ func qualificationConsoleInputClassification(t *testing.T, input windows.Handle)
 		t.Fatalf("queued events=%d want at least %d: %v", before, written, err)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	line, err := ReadLine(ctx, f)
+	line, err := ReadLine(trace.context(ctx), f)
 	cancel()
 	if line != "" || !errors.Is(err, windows.ERROR_INVALID_HANDLE) {
 		t.Fatalf("output handle accepted: line=%q error=%v", line, err)

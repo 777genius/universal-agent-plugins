@@ -28,11 +28,14 @@ func TestQualificationConsoleCancellation(t *testing.T) {
 	}
 	oldGC := debug.SetGCPercent(-1) // Do not let finalizers hide handle leaks.
 	defer debug.SetGCPercent(oldGC)
+	trace := new(qualificationHandleTrace)
+	defer trace.report(t)
 	var baseline [2]uint32
 	for i := 0; i < 30; i++ {
 		delay := []time.Duration{0, time.Microsecond, 100 * time.Microsecond, time.Millisecond, 10 * time.Millisecond, 80 * time.Millisecond}[i%6]
 		fmt.Fprintf(os.Stdout, "QUALIFICATION_CONSOLE_READ_START %d delay=%s\n", i, delay)
 		ctx, cancel := context.WithCancel(context.Background())
+		ctx = trace.context(ctx)
 		timer := time.AfterFunc(delay, cancel)
 		started := time.Now()
 		line, err := ReadLine(ctx, os.Stdin)
@@ -50,7 +53,7 @@ func TestQualificationConsoleCancellation(t *testing.T) {
 		}
 		fmt.Fprintf(os.Stdout, "QUALIFICATION_CONSOLE_REUSE_READY %d\n", i)
 		reuseCtx, reuseCancel := context.WithTimeout(context.Background(), 2*time.Second)
-		line, err = ReadLine(reuseCtx, os.Stdin)
+		line, err = ReadLine(trace.context(reuseCtx), os.Stdin)
 		reuseCancel()
 		expected := fmt.Sprintf("qualification-reuse-%d", i)
 		if err != nil || line != expected {
@@ -69,8 +72,17 @@ func TestQualificationConsoleCancellation(t *testing.T) {
 			t.Logf("console measured=%d handles=%d goroutines=%d", i-5, got[0], got[1])
 		}
 	}
-	qualificationConsoleQueuedAnswers(t, h, before)
-	qualificationConsoleInputClassification(t, h)
+	qualificationConsoleQueuedAnswers(t, h, before, trace)
+	qualificationConsoleInputClassification(t, h, trace)
 	qualificationConsoleResources(t, &baseline)
+	if trace.generation != 91 {
+		t.Fatalf("request coverage: got %d want 91", trace.generation)
+	}
+	if err := trace.verdict(); err != nil {
+		t.Fatal(err)
+	}
+	if t.Failed() {
+		t.Fatal("qualification cleanup or diagnostics failed")
+	}
 	fmt.Fprintln(os.Stdout, "QUALIFICATION_CONSOLE_OK")
 }

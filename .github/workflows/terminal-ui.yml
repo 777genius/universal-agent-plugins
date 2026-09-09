@@ -67,7 +67,13 @@ jobs:
         run: python3 scripts/terminal-ui/harness.py --binary "$RUNNER_TEMP/agentplugins.exe" --scanner-archive "$RUNNER_TEMP/scanner/${{ matrix.archive }}" --npm-launcher --case escape --case json-tty --case json-explicit --artifacts "$RUNNER_TEMP/npm-terminal-evidence" --timeout 15
       - name: Windows cleanup fault injection
         if: runner.os == 'Windows'
-        run: python -m unittest discover -s scripts/terminal-ui -p 'test_windows_cleanup.py'
+        run: |
+          python -m unittest discover -s scripts/terminal-ui -p 'test_windows_cleanup.py'
+          python -m unittest discover -s scripts/terminal-ui -p 'test_resource_oracle.py'
+      - name: Windows native resource oracle (ten fresh processes)
+        if: ${{ !cancelled() && runner.os == 'Windows' && steps.build.outcome == 'success' }}
+        timeout-minutes: 7
+        run: python scripts/terminal-ui/resource_oracle.py --artifacts "$RUNNER_TEMP/windows-resource-oracle-evidence"
       - name: Windows ConPTY Plain matrix
         if: runner.os == 'Windows'
         run: python scripts/terminal-ui/windows_conpty.py --binary "$RUNNER_TEMP/agentplugins.exe" --scanner-archive "$RUNNER_TEMP/scanner/${{ matrix.archive }}" --artifacts "$RUNNER_TEMP/terminal-evidence" --timeout 15
@@ -99,6 +105,7 @@ jobs:
             ${{ runner.temp }}/terminal-evidence
             ${{ runner.temp }}/npm-terminal-evidence
             ${{ runner.temp }}/windows-fault-evidence
+            ${{ runner.temp }}/windows-resource-oracle-evidence
             ${{ runner.temp }}/powershell-terminal-evidence
             ${{ runner.temp }}/scanner/scanner.json
           if-no-files-found: warn

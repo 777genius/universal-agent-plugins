@@ -1,0 +1,41 @@
+name: Windows terminal resource diagnostic
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  diagnostic:
+    runs-on: windows-2025
+    timeout-minutes: 10
+    env:
+      GOWORK: 'off'
+      GOTOOLCHAIN: local
+      CGO_ENABLED: '0'
+      PYTHONDONTWRITEBYTECODE: '1'
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - run: git config --global core.autocrlf false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version: '1.25.13'
+          cache: false
+      - name: Focused native contracts
+        working-directory: cli/plugin-kit-ai
+        run: go test -count=1 ./internal/promptio ./internal/terminalprompts ./internal/agentpluginscli/prompt > "$RUNNER_TEMP/diagnostic-go.log" 2>&1 || { tail -c 6000 "$RUNNER_TEMP/diagnostic-go.log"; exit 1; }
+      - name: Cleanup reporting regressions
+        run: python -B -m unittest discover -s scripts/terminal-ui -p test_windows_cleanup.py
+      - name: One existing 30-cycle native case
+        run: python -B scripts/terminal-ui/qualification_faults.py --case windows-console-cancel --artifacts "$RUNNER_TEMP/windows-resource-diagnostic" --timeout 15
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: windows-resource-diagnostic
+          path: |
+            ${{ runner.temp }}/windows-resource-diagnostic
+            ${{ runner.temp }}/diagnostic-go.log
+          if-no-files-found: error
