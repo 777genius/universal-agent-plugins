@@ -287,6 +287,8 @@ function readInputs(value) {
   const snapshot = preparationSnapshot(root, o.body);
   const prepPin = o.input.preparation.artifact;
   const prepBefore = p.inspectArtifact(prepPin, WORKFLOW, o.input.identity.commit, o.scratch);
+  p.checkPreparationRef(prepPin, o.selected, o.scratch);
+  p.checkPreparationRef(o.artifact, o.selected, o.scratch);
   const prepared = p.acquireInputPreparation(o.body, o.scratch);
   const original = preparationSnapshot(prepared.root, o.body);
   const relative = (s, base) => ({ ...s,
@@ -305,11 +307,126 @@ function readInputs(value) {
   agree(preparationSnapshot(prepared.root, o.body), original, "original preparation changed");
   agree(preparationSnapshot(root, o.body), snapshot, "provenance preparation changed");
   agree(inputSubjects(root, o.body), subjects, "provenance subjects changed");
+  p.checkPreparationRef(prepPin, o.selected, o.scratch);
+  p.checkPreparationRef(o.artifact, o.selected, o.scratch);
   agree(operationOptions(value, true), o, "caller inputs changed during authentication");
   return { root, input: o.input, subjects };
 }
 
+/** Derive I only from the checked original preparation and independently bound
+ * current provenance caller. Both fixed jobs repeat this operation. */
+function produceInputsFromPreparation(value) {
+  fields(value, ["selected", "workflow_sha", "preparation", "repo", "scratch"], "preparation producer options");
+  const p = require("./authoring-promotion"), packing = require("./stage-dual-authoring-npm");
+  const selected = p.workflowSelection(value.selected, value.workflow_sha);
+  const pin = artifact(value.preparation);
+  for (const name of ["repo", "scratch"]) c.safeDirectory(value[name]);
+  const executing = path.resolve(__dirname, "../../..");
+  for (const root of [value.repo, executing]) {
+    if (root === value.scratch || root.startsWith(value.scratch + path.sep) || value.scratch.startsWith(root + path.sep)) {
+      fail("provenance source/scratch overlap");
+    }
+  }
+  const env = { PATH: "/usr/local/bin:/usr/bin:/bin", HOME: value.scratch, LC_ALL: "C.UTF-8" };
+  const toolFiles = [process.execPath, "/usr/bin/git", "/usr/bin/gh", fs.realpathSync("/usr/bin/python3")];
+  const tools = () => toolFiles.map(file => ({ file, sha256: c.digest(c.readFile(file)) }));
+  const toolPins = tools(), callerArgs = [...process.execArgv];
+  const source = packing.blobs(value.repo, selected.source, env, "stage");
+  const caller = p.inspectInputCaller(selected, value.workflow_sha, value.scratch);
+  if (caller.run_id === pin.run_id) fail("separate original preparation required");
+  const before = p.inspectArtifact(pin, WORKFLOW, selected.source, value.scratch);
+  p.checkPreparationRef(pin, selected, value.scratch);
+  const work = fs.mkdtempSync(path.join(value.scratch, "derive-inputs-"));
+  const archive = p.acquireArtifact(pin, WORKFLOW, selected.source, work);
+  const files = ["preparation-run.json", "candidate-identity.json", "candidate/candidate.json", "pair-prepared.json",
+    ...c.PRODUCTS.flatMap(product => [...c.TARGETS.map(target =>
+      `${product}/${c.assetName(product, selected.versions[product], target)}`),
+    `${product}/release-manifest.json`, `${product}/checksums.txt`])];
+  const root = p.extractArtifact(archive, pin, "preparation", files, path.join(work, "frozen"), work);
+  const snapshot = () => files.map(file => ({ file, sha256: c.digest(c.readFile(path.join(root, file), MAX_NATIVE_BYTES)) }));
+  const originals = snapshot();
+  const candidateBytes = c.readFile(path.join(root, "candidate/candidate.json"), MAX_INPUT_BYTES);
+  const candidate = JSON.parse(candidateBytes);
+  const id = identity({ repository: c.REPOSITORY, commit: selected.source, engine_revision: selected.source, versions: selected.versions });
+  const tentative = { schema: INPUT_SCHEMA, identity: id, authoring_mode: MODE, asset_scope: SCOPE,
+    candidate_sha256: c.digest(candidateBytes), pair_marker_sha256: c.digest(c.readFile(path.join(root, "pair-prepared.json"), MAX_INPUT_BYTES)),
+    products: Object.fromEntries(c.PRODUCTS.map(product => [product, {
+      tag: (product === "agentplugins" ? "agentplugins-v" : "v") + selected.versions[product],
+      manifest_sha256: c.digest(c.readFile(path.join(root, product, "release-manifest.json"), MAX_INPUT_BYTES)),
+      checksums_sha256: c.digest(c.readFile(path.join(root, product, "checksums.txt"), MAX_INPUT_BYTES)),
+      assets: candidate.products?.[product]?.assets }])),
+    preparation: { sha256: c.digest(c.readFile(path.join(root, "preparation-run.json"), MAX_INPUT_BYTES)), artifact: pin },
+    producer: caller };
+  const body = encodeInputs(tentative);
+  preparationSnapshot(root, body); // candidate, projections, metadata and original receipt
+  const result = produceInputs({ input: body, selected, workflow_sha: value.workflow_sha, scratch: value.scratch });
+  const retained = [...inputSubjects(result.root, body), ...["preparation-run.json", "candidate-identity.json"].map(file =>
+    ({ file: path.join(result.root, file), sha256: c.digest(c.readFile(path.join(result.root, file), MAX_INPUT_BYTES)) }))];
+  agree(retained.filter(row => path.basename(row.file) !== INPUT_FILE).map(row =>
+    ({ file: path.relative(result.root, row.file), sha256: row.sha256 })).sort((a, b) => a.file.localeCompare(b.file)),
+  [...originals].sort((a, b) => a.file.localeCompare(b.file)), "derived versus revalidated original payload");
+  agree(snapshot(), originals, "derivation root changed");
+  agree(p.inspectArtifact(pin, WORKFLOW, selected.source, value.scratch), before, "original provider changed");
+  p.checkPreparationRef(pin, selected, value.scratch);
+  agree(p.inspectInputCaller(selected, value.workflow_sha, value.scratch), caller, "current provenance caller");
+  agree(packing.blobs(value.repo, selected.source, env, "stage"), source, "provenance source changed");
+  agree(p.workflowSelection(value.selected, value.workflow_sha), selected, "provenance selection changed");
+  agree(tools(), toolPins, "provenance tools changed");
+  agree(process.execArgv, callerArgs, "provenance interpreter arguments");
+  return result;
+}
+
+// Fixed file transport for the two C1 modules. Options remain comparison pins;
+// reading a file never turns its I bytes into authenticated input provenance.
+function inputFileOptions(file, names) {
+  if (typeof file !== "string" || !path.isAbsolute(file) || path.resolve(file) !== file || /[\x00-\x1f]/.test(file)) {
+    fail("normalized absolute options file required");
+  }
+  const raw = c.readFile(file, MAX_INPUT_BYTES);
+  const value = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(raw));
+  fields(value, names, "CLI options");
+  // Canonical options prevent duplicate keys and ambiguous transport spelling.
+  if (!raw.equals(c.encode(value))) fail("canonical options required");
+  let input, inputFile;
+  if (names.includes("input_file")) {
+    inputFile = value.input_file;
+    if (typeof inputFile !== "string" || !path.isAbsolute(inputFile) || path.resolve(inputFile) !== inputFile ||
+        /[\x00-\x1f]/.test(inputFile) || inputFile === file) fail("normalized distinct input_file required");
+    input = c.readFile(inputFile, MAX_INPUT_BYTES);
+    decodeInputs(input);
+    delete value.input_file;
+    value.input = input;
+  }
+  const files = [file, ...(inputFile ? [inputFile] : [])];
+  for (const root of [path.resolve(__dirname, "../../.."), value.repo,
+    ...[value.node, value.npm].filter(v => typeof v === "string").map(v => path.dirname(v))].filter(Boolean)) {
+    for (const candidate of files) if (candidate === root || candidate.startsWith(root + path.sep)) fail("CLI transport overlaps source/tools");
+  }
+  return { value, recheck() {
+    agree(c.readFile(file, MAX_INPUT_BYTES), raw, "CLI options bytes");
+    if (inputFile) agree(c.readFile(inputFile, MAX_INPUT_BYTES), input, "CLI comparison I bytes");
+  } };
+}
+
+function main(args) {
+  if (args.length !== 2 || !["--produce-inputs", "--read-inputs"].includes(args[0])) {
+    fail("usage: authoring-native-inputs.js --produce-inputs|--read-inputs <absolute-options.json>");
+  }
+  const producing = args[0] === "--produce-inputs";
+  const transport = inputFileOptions(args[1], producing ?
+    ["selected", "workflow_sha", "preparation", "repo", "scratch"] :
+    ["input_file", "selected", "workflow_sha", "scratch", "artifact"]);
+  const result = producing ? produceInputsFromPreparation(transport.value) : readInputs(transport.value);
+  transport.recheck();
+  return result;
+}
+
 module.exports = Object.freeze({ encodeInputs, decodeInputs, encodeDescriptor, decodeDescriptor,
-  produceInputs, readInputs, inputSubjects,
+  produceInputs, readInputs, inputSubjects, produceInputsFromPreparation, inputFileOptions, main,
   INPUT_SCHEMA, DESCRIPTOR_SCHEMA, INPUT_FILE, MODE, SCOPE, WORKFLOW, PACKAGES,
   MAX_INPUT_BYTES, MAX_DESCRIPTOR_BYTES, MAX_NATIVE_BYTES });
+
+if (require.main === module) {
+  try { process.stdout.write(c.encode(main(process.argv.slice(2)))); }
+  catch (error) { process.stderr.write(`C1 inputs: ${error.message}\n`); process.exitCode = 1; }
+}

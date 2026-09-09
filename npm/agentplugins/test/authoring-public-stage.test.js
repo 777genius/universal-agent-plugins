@@ -403,7 +403,7 @@ test("C1 pure inventories: separate exact stage additions and unchanged legacy e
     ".github/workflows/agentplugins-release.yml", ".github/workflows/agentplugins-npm-publish.yml"]);
   assert.ok(Object.isFrozen(stage.STAGE_ALLOWLIST));
   assert.deepEqual(Object.keys(stage), ["prepare", "packageFiles", "ALLOWLIST", "COMMON",
-    "encodeStage", "decodeStage", "pairedPackageFiles", "STAGE_ALLOWLIST", "stagePrepublication", "readStage"]);
+    "encodeStage", "decodeStage", "pairedPackageFiles", "STAGE_ALLOWLIST", "stagePrepublication", "readStage", "validateUnsignedStage", "main"]);
 });
 
 test("C1 pure runtime regression: existing loadRelease rejects v2 and v1/null using only in-memory reads", t => {
@@ -487,6 +487,12 @@ function integrationFixture(t, hook = () => {}) {
   t.mock.method(promotion, "checkInputTags", body => { assert.deepEqual(body, f.inputBytes); event("tags"); });
   t.mock.method(promotion, "inspectArtifact", (pin, workflow, source) => {
     assert.equal(source, f.input.identity.commit); event("inspect", { pin, workflow }); return clone({ pin, workflow, source });
+  });
+  t.mock.method(promotion, "inspectStageCaller", () => { event("stage-caller"); return clone(options.producer); });
+  t.mock.method(promotion, "checkStageEvidence", () => { event("stage-evidence"); return {fixture_only: "ordered provider transcript"}; });
+  t.mock.method(promotion, "inspectCurrentStage", o => { event("current-custody", o); return {fixture_only: clone(o.artifact)}; });
+  t.mock.method(promotion, "acquireCurrentStage", o => {
+    event("acquire-current", o); return put(o.scratch, `artifact-${o.artifact.artifact_id}.zip`, Buffer.from("checked current ZIP fixture"));
   });
   t.mock.method(promotion, "acquireArtifact", (pin, workflow, source, cwd) => {
     assert.equal(workflow, options.producer.workflow); assert.equal(source, f.input.identity.commit);
@@ -768,4 +774,66 @@ test("C1 stage integration existing pack engine validates entries, modes, bytes,
     }
   }
   assert.equal(count, 14);
+});
+
+function workflowTransport(f, options, basename) {
+  const {input, ...rest} = options;
+  const input_file = f.put(f.base, `${basename}-I.json`, input);
+  return f.put(f.base, `${basename}.json`, c.encode({...rest, input_file}));
+}
+test('C1 workflow CLI producer emits closed result and unsigned validator never packs or checks S signatures', t => {
+  const f = integrationFixture(t);
+  const produced = f.api.main(['--stage-prepublication', workflowTransport(f, f.options, 'produce')]);
+  assert.deepEqual(Object.keys(produced), ['root', 'record', 'subjects', 'stage_sha256']);
+  assert.equal(produced.subjects.length, 3); assert.equal(f.calls.filter(([n]) => n === 'pack').length, 2);
+  const result = f.api.main(['--validate-unsigned-stage', workflowTransport(f, f.readOptions(), 'unsigned')]);
+  assert.deepEqual(result.record, produced.record); assert.equal(result.subjects.length, 3);
+  assert.equal(f.calls.filter(([n]) => n === 'pack').length, 2);
+  assert.equal(f.calls.filter(([n]) => n === 'signer').length, 0);
+  assert.ok(f.calls.some(([n]) => n === 'read-I')); assert.ok(f.calls.some(([n]) => n === 'stage-evidence'));
+  const completed = f.api.main(['--read-stage', workflowTransport(f, f.readOptions(), 'completed')]);
+  assert.deepEqual(completed.record, result.record);
+  assert.equal(f.calls.filter(([n]) => n === 'signer').length, 3);
+  assert.equal(f.calls.filter(([n]) => n === 'pack').length, 2);
+});
+for (const defect of ['current custody', 'I signature', 'operation evidence', 'completion.json', 'agent pack', 'kit pack', 'generated pin']) {
+  test(`C1 workflow unsigned validator rejects ${defect} without pack or S signing`, t => {
+    let reading = false;
+    const f = integrationFixture(t, (name) => {
+      if (reading && ((defect === 'I signature' && name === 'read-I') ||
+        (defect === 'operation evidence' && name === 'stage-evidence') ||
+        (defect === 'current custody' && name === 'current-custody'))) throw Error(defect);
+    });
+    f.api.stagePrepublication(f.options); const options = f.readOptions(); reading = true;
+    if (defect.endsWith('pack')) {
+      const product = defect === 'agent pack' ? 'agentplugins' : 'plugin-kit-ai';
+      fs.appendFileSync(path.join(f.options.output, `${inputs.PACKAGES[product]}-${f.input.identity.versions[product]}.tgz`), 'changed');
+    }
+    if (defect === 'completion.json' || defect === 'generated pin') {
+      const original = c.readFile;
+      const retained = fs.readFileSync(path.join(f.options.output, 'completion.json'));
+      const record = JSON.parse(retained); record.generated.agentplugins['README.md'] = sha(19);
+      const changed = defect === 'completion.json' ? Buffer.concat([retained, Buffer.from('changed')]) : c.encode(record);
+      if (defect === 'generated pin') options.stage_sha256 = c.digest(changed);
+      t.mock.method(c, 'readFile', (file, max) => path.basename(file) === 'completion.json' ? changed : original(file, max));
+    }
+    assert.throws(() => f.api.validateUnsignedStage(options));
+    assert.equal(f.calls.filter(([n]) => n === 'pack').length, 2);
+    assert.equal(f.calls.filter(([n]) => n === 'signer').length, 0);
+  });
+}
+test('C1 workflow stage CLI rejects object/path transport, unknown operations and input mutation', t => {
+  const f = integrationFixture(t), file = workflowTransport(f, f.options, 'options');
+  for (const args of [['--unknown', file], ['--read-stage', file, file], ['--read-stage', 'relative']]) assert.throws(() => f.api.main(args));
+  const options = JSON.parse(fs.readFileSync(file)); options.input_file = {type: 'Buffer', data: [1]};
+  fs.writeFileSync(file, c.encode(options)); assert.throws(() => f.api.main(['--stage-prepublication', file]));
+  assert.equal(f.calls.length, 0);
+});
+test('C1 workflow second pack failure cannot emit completion transcript or S', t => {
+  const transcript = [];
+  t.mock.method(process.stderr, 'write', chunk => {transcript.push(String(chunk)); return true;});
+  const f = integrationFixture(t, (name, data) => {if (name === 'pack' && data.product === 'plugin-kit-ai') throw Error('second pack failed');});
+  assert.throws(() => f.api.stagePrepublication(f.options), /second pack/);
+  assert.equal(fs.existsSync(path.join(f.options.output, 'completion.json')), false);
+  assert.equal(transcript.filter(line => line.includes('"operation":"completion"')).length, 0);
 });
