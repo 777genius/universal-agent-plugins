@@ -107,6 +107,8 @@ def unpack_bundle(body, root):
         names = set()
         for member in archive.infolist():
             name = member.filename
+            require(member.orig_filename == name and '\0' not in name,
+                    'aliased artifact path')
             parts = PurePosixPath(name).parts
             require(name and '\\' not in name and not name.startswith('/')
                     and all(p not in ('..', '.') and ':' not in p for p in parts)
@@ -433,6 +435,7 @@ def receive(source, args, kind):
     with zipfile.ZipFile(io.BytesIO(body)) as archive:
         members = archive.infolist()
         require(len(members) == 1 and members[0].filename == 'receipt.json'
+                and members[0].orig_filename == members[0].filename
                 and members[0].file_size <= RECEIPT_LIMIT
                 and (members[0].external_attr >> 16) & 0o170000 in (0, 0o100000), 'unexpected receipt archive')
         raw = archive.read(members[0])

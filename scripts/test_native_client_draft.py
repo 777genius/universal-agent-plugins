@@ -159,6 +159,23 @@ class DraftTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp, self.assertRaises(ValueError):
             draft.unpack_bundle(body.getvalue(), Path(temp))
 
+    def test_bundle_raw_names_rejected_before_read(self):
+        for sep in ('/', '\\'):
+            for name in ('a\\evil', 'a\0evil'):
+                with self.subTest(sep=sep, name=name), tempfile.TemporaryDirectory() as temp:
+                    root = Path(temp)
+                    body = io.BytesIO()
+                    with zipfile.ZipFile(body, 'w') as archive:
+                        member = zipfile.ZipInfo('fixture')
+                        member.filename = name
+                        archive.writestr(member, b'fixture')
+                    with patch.object(zipfile.os, 'sep', sep), \
+                         patch.object(zipfile.ZipFile, 'read',
+                                      side_effect=AssertionError('ZIP body read')):
+                        with self.assertRaisesRegex(ValueError, 'artifact path'):
+                            draft.unpack_bundle(body.getvalue(), root)
+                    self.assertEqual(list(root.iterdir()), [])
+
     def test_package_pins_and_dependencies(self):
         verified = verified_release()
         with tempfile.TemporaryDirectory() as temp:
