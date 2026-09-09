@@ -38,6 +38,53 @@ https.get = options => {
 function run(exe, args, env, cwd) {
   return cp.spawnSync(exe, args, { env, cwd, encoding: "utf8", timeout: 30000, maxBuffer: 8 * 1024 * 1024 });
 }
+// Driver-only intent guard; this does not observe networking in native children.
+const PREFLIGHT_STDERR = "agentplugins: --scope project is not supported by the current client adapters; the public CLI supports user scope only\n";
+function nativeObservation(product, exe, bin, argv, env, cwd, spawn = run) {
+  const bridge = require("../scripts/packed-installer-bridge");
+  const rejected = ["add", path.join(cwd, "skill"), "--target=codex", "--scope=project", "--dry-run", "--format=json"];
+  const same = args => JSON.stringify(args) === JSON.stringify(argv);
+  if (product === "agentplugins") {
+    const allowed = [["version", "--format=json"], ["--help"], ["add", "--help", "--format=json"], rejected];
+    const author = [["version"], ["--help"]];
+    for (const lane of bridge.LANES) {
+      const source = path.join(cwd, lane);
+      author.push(bridge.publicInit(lane), ["skills", "init", "extra-skill", source, "--description=Disposable fixture."],
+        ["skills", "validate", source], ...["validate", "inspect", "test"].map(n => [n, source]));
+    }
+    allowed.push(...author.map(args => ["author", ...args, "--format=json"]));
+    assert.ok(allowed.some(same), "offline native observation denied before spawn: production-security-inputs-not-offline");
+  }
+  const result = spawn(exe, [bin, ...argv], env, cwd);
+  assert.equal(result.signal, null);
+  assert.equal(result.stderr, product === "agentplugins" && same(rejected) ? PREFLIGHT_STDERR : "");
+  return result;
+}
+if (require.main === module) test("offline native guard rejects original valid add before spawn effects", () => {
+  let calls = 0;
+  const source = "/disposable/agentplugins projects ü";
+  const argv = ["add", path.join(source, "skill"), "--target=codex", "--dry-run", "--format=json"];
+  for (const args of [argv, ["install", ...argv.slice(1)], ["--target=codex", ...argv],
+    [...argv, "--help"], [...argv, "--scope=project"], ["author", "publish", "--format=json"]]) {
+    assert.throws(() => nativeObservation("agentplugins", NODE, "/unused/bin", args, {}, source,
+      () => { calls++; throw new Error("spawn effect"); }), /denied before spawn/);
+  }
+  assert.equal(calls, 0);
+});
+if (require.main === module) test("offline native guard allows only designated installer results", () => {
+  const cwd = "/disposable/agentplugins projects ü", bin = "/unused/bin";
+  for (const argv of [["add", "--help", "--format=json"],
+    ["add", path.join(cwd, "skill"), "--target=codex", "--scope=project", "--dry-run", "--format=json"],
+    ["author", "test", path.join(cwd, "skill"), "--format=json"]]) {
+    const stderr = argv.includes("--scope=project") ? PREFLIGHT_STDERR : "";
+    const invoke = result => nativeObservation("agentplugins", NODE, bin, argv, {}, cwd, (exe, args) => {
+      assert.equal(exe, NODE); assert.deepEqual(args, [bin, ...argv]); return result;
+    });
+    assert.equal(invoke({ signal: null, stderr }).stderr, stderr);
+    assert.throws(() => invoke({ signal: null, stderr: stderr + "unexpected output" }));
+    assert.throws(() => invoke({ signal: "SIGTERM", stderr }));
+  }
+});
 function ok(result) { assert.equal(result.status, 0, result.stderr || result.stdout); return result.stdout; }
 function packageBytes(root) {
   const files = {};
@@ -212,7 +259,7 @@ packing.blobs = (...args) => {
     assert.throws(() => packing.blobs(REPO, head, context.env, "arbitrary"), /fixed/);
   });
 }
-module.exports = { preload, run, ok, packageBytes, environment };
+module.exports = { preload, run, ok, packageBytes, environment, nativeObservation, PREFLIGHT_STDERR };
 
 if (require.main === module) test("shared completion helper preserves a collision and rolls back an uncertain marker", () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "public completion-"));

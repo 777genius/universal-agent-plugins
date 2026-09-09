@@ -231,15 +231,29 @@ class TerminalControls(unittest.TestCase):
 
 class PublicControls(unittest.TestCase):
     def test_public_terminal_and_matrix_controls(self):
+        self.public_terminal_controls('v1')
+
+    def test_public_v2_terminal_and_matrix_controls(self):
+        self.public_terminal_controls('v2')
+
+    def public_terminal_controls(self, version):
         root, sha, put, get = TerminalControls.fixture(self)
         # Reuse only the synthetic planner transcripts; no native claim.
         private = get('run.json'); tools = private['tools']; claims = {k: False for k in p.CLAIMS}
-        request = dict(intake='public-fixture/v1', expectedCommit=sha, nativeConfig=str(root / 'public-config.json'))
+        request = dict(intake='public-fixture/' + version, expectedCommit=sha, nativeConfig=str(root / 'public-config.json'))
         put('public-config.json', dict(evidenceOutput=str(root / 'public-native')))
         put('public-native/invocations.json', [])
-        native = dict(schema='dual-authoring-public-native/v1', status='completed', identity=private['identity'],
+        native = dict(schema='dual-authoring-public-native/' + version, status='completed', identity=private['identity'],
             qualification=None, tools=tools, invocations_sha256=p.digest(root / 'public-native/invocations.json'),
             signed_promotion=False, public_eligible=False, **claims)
+        if version == 'v2':
+            native['projects'] = {'agentplugins': '/fixture/agentplugins projects ü'}
+            native['installer_boundary'] = dict(executable_observation='help-and-preflight-rejection', valid_add_dry_run='not_evaluated',
+                argv=['add', '/fixture/agentplugins projects ü/skill', '--target=codex', '--dry-run', '--format=json'],
+                reason='production-security-inputs-not-offline')
+            put('summary.json', dict(status='passed', intake=request['intake'], head=sha, projects=10, plans=30,
+                scope='public-authoring-help-preflight-and-injected-planner', installer_boundary=native['installer_boundary'],
+                signed_promotion=False, public_eligible=False, **claims))
         put('public-native/public-native-completion.json', native)
         request.update(nativeConfigSha256=p.digest(request['nativeConfig']),
             nativeCompletionSha256=p.digest(root / 'public-native/public-native-completion.json'))
@@ -249,6 +263,8 @@ class PublicControls(unittest.TestCase):
             go=tools['go']['path'], node=tools['node']['path'], modCache=str(root / 'unused-modules'))
         put('public-run.json', dict(schema='public-packed-run/v1', head=sha, options=options, tools=tools, **claims))
         sealed = get('bridge-config/sealed.json'); sealed['request'] = request
+        if version == 'v2':
+            sealed['inputs']['public_evidence'] = dict(schema=native['schema'], installer_boundary=native['installer_boundary'])
         inventory_root = root / 'sealed-tree'; inventory_root.mkdir()
         entries = [dict(path='.', mode=inventory_root.stat().st_mode & 0o777, kind='directory')]
         sealed['inputs']['snapshots'] = [dict(root=str(inventory_root), entries=entries,
@@ -269,6 +285,17 @@ class PublicControls(unittest.TestCase):
                     UAP_PACKED_INSTALLER_COMMIT=sha, UAP_PACKED_INSTALLER_OUTPUT=str(root / 'results/completion.json'))
             put('logs/' + name + '.json', phase)
         p.check_public(root, sha)
+        if version == 'v2':
+            with self.assertRaisesRegex(ValueError, 'insufficient evidence'): p.check_public(root, sha, require_valid_add=True)
+            for key, value in [('installer_boundary', None), ('scope', 'successful-production-add')]:
+                original = get('summary.json'); put('summary.json', dict(original, **{key: value}))
+                with self.assertRaisesRegex(ValueError, 'summary scope/gap'): p.check_public(root, sha)
+                put('summary.json', original)
+            original = get('bridge-config/sealed.json')
+            bad = get('bridge-config/sealed.json'); del bad['inputs']['public_evidence']['installer_boundary']
+            put('bridge-config/sealed.json', bad)
+            with self.assertRaisesRegex(ValueError, 'sealed installer boundary'): p.check_public(root, sha)
+            put('bridge-config/sealed.json', original)
         valid_tap = (root / 'public.tap').read_text()
         for bad in [tap([p.PUBLIC_TEST]), valid_tap.replace(sha, 'b'*40), valid_tap + '# public native completion: ' + marker + '\n']:
             with self.assertRaises(ValueError): p.public_tap(bad, request)
@@ -286,6 +313,27 @@ class PublicControls(unittest.TestCase):
         for text in [tap([p.PUBLIC_TEST])[:-1], tap([p.PUBLIC_TEST]).replace('# skipped 0', '# skipped 1'), tap(p.NATIVE_TESTS)]:
             put('public.tap', text)
             with self.assertRaises(ValueError): p.check_public(root, sha)
+
+    def test_public_v2_boundary_and_success_consumer(self):
+        native = dict(schema='dual-authoring-public-native/v2', projects={'agentplugins': '/fixture/agentplugins projects ü'},
+            installer_boundary=dict(executable_observation='help-and-preflight-rejection', valid_add_dry_run='not_evaluated',
+                argv=['add', '/fixture/agentplugins projects ü/skill', '--target=codex', '--dry-run', '--format=json'],
+                reason='production-security-inputs-not-offline'))
+        self.assertEqual(p.public_boundary(native, 'public-fixture/v2'), native['installer_boundary'])
+        with self.assertRaisesRegex(ValueError, 'insufficient evidence'):
+            p.public_boundary(native, 'public-fixture/v2', require_valid_add=True)
+        for intake in ('public-fixture/v1', 'private', None):
+            with self.assertRaises(ValueError): p.public_boundary(native, intake)
+        boundary = native['installer_boundary']
+        for bad in (None, {}, True, dict(boundary, valid_add_dry_run=True), dict(boundary, reason=''),
+            dict(boundary, argv=[]), dict(boundary, accepted=True)):
+            with self.subTest(bad=bad), self.assertRaises(ValueError):
+                p.public_boundary(dict(native, installer_boundary=bad), 'public-fixture/v2')
+        for key in boundary:
+            bad = dict(boundary); del bad[key]
+            with self.assertRaises(ValueError): p.public_boundary(dict(native, installer_boundary=bad), 'public-fixture/v2')
+        with self.assertRaises(ValueError):
+            p.public_boundary(dict(native, schema='dual-authoring-public-native/v1'), 'public-fixture/v2')
 
     def test_public_runner_rejects_missing_or_wrong_contract_before_output(self):
         root = Path(tempfile.mkdtemp(prefix='public-packed-runner-SYNTHETIC-'))

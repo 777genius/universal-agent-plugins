@@ -225,3 +225,40 @@ func TestReleaseCompletionProcessStderr(t *testing.T) {
 		}
 	}
 }
+
+func TestReleaseOfflineInstallerObservationDispatch(t *testing.T) {
+	sentinel := errors.New("valid production dry-run still requires installer")
+	for _, tc := range []struct {
+		args  []string
+		calls int
+	}{
+		{[]string{"add", "/disposable/generated skill", "--target=codex", "--dry-run", "--format=json"}, 1},
+		{[]string{"add", "--help", "--format=json"}, 0},
+		{[]string{"author", "--help", "--format=json"}, 0},
+		{[]string{"author"}, 0},
+	} {
+		var out, stderr bytes.Buffer
+		calls := 0
+		err := executeRelease(context.Background(), tc.args, authoringcli.Streams{Out: &out, Err: &stderr}, func() error { calls++; return sentinel })
+		if calls != tc.calls {
+			t.Fatalf("dispatch %v calls=%d", tc.args, calls)
+		}
+		if tc.calls == 1 {
+			if !errors.Is(err, sentinel) || out.Len() != 0 || stderr.String() != "agentplugins: "+sentinel.Error()+"\n" {
+				t.Fatal(err, out.String(), stderr.String())
+			}
+		} else if err != nil || stderr.Len() != 0 {
+			t.Fatal(err, stderr.String())
+		}
+		if tc.args[0] == "add" && tc.calls == 0 {
+			var got any
+			if err := json.Unmarshal(out.Bytes(), &got); err != nil {
+				t.Fatal(err)
+			}
+			want := `{"schema_version":1,"command":"help","result":"success","data":{"commands":null,"use":"agentplugins add"}}` + "\n"
+			if out.String() != want {
+				t.Fatalf("installer visibility JSON changed: %s", out.String())
+			}
+		}
+	}
+}
