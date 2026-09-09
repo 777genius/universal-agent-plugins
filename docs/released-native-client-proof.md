@@ -108,6 +108,20 @@ lanes, again using `--ref main` and retaining the same frozen producer and
 release identities. Capture each scope's resolved harness SHA from its run,
 then resolve its tree:
 
+```sh
+gh run view <scope-run-id> --repo 777genius/universal-agent-plugins \
+  --json headSha,url,attempt
+gh api repos/777genius/universal-agent-plugins/git/commits/<resolved-harness-SHA> \
+  --jq '.tree.sha'
+```
+
+Record these identities for both the nine-lane and three-lane dispatches and
+require their receipts to match the captured commit/tree. Refuse a combined
+nine-plus-three qualification with mixed harness versions: if `main` advances
+between dispatches and their resolved SHAs differ, repeat the affected scope
+on `main` until both scopes have the same captured harness commit/tree.
+Use the watch and download commands above for each run, with separate fresh
+output directories.
 
 Draft mode verifies the exact successful producer attempt and artifact ID/name,
 the still-unpublished, non-prerelease draft and all nine attested assets. It uses
@@ -116,13 +130,23 @@ repack or registry substitute. Package pins and notices must match the frozen
 release. In a disposable project it installs offline with scripts disabled,
 checks installed bytes, proves cold bootstrap from the frozen binary and a warm
 launch without that proof source, then runs the cached binary in native fixtures.
-Acquisition authentication is excluded from npm and client runtime environments.
+Acquisition authentication is not inherited by npm or client child environments.
+This proof assumes trusted pinned clients, the canonical package and
+repository-owned fixtures. The child environment provides no OS process
+isolation from the runner or the subsequent artifact-upload step. Network
+access remains enabled, no real-model or OAuth credentials are supplied, and
+collected logs are not guaranteed to be secret-free.
 
 Require every selected lane to pass without skips and the `draft-complete` job
-to pass. That job checks lane/package/helper identities and fixture evidence,
-reauthenticates the producer and reverifies the live draft has not changed, then
-uploads `draft-native-qualification-<scope>` with `qualification.json` and
-`final-draft.json`. Retain these alongside the lanes and original producer ZIP
+to pass its read-only aggregation of lane/package/helper identities, fixture
+evidence and snapshot binding, producing the `draft-lanes` receipt.
+Then require `draft-recheck` to pass: this metadata-only job authenticates the
+snapshot and lanes receipts, reauthenticates the producer and reverifies the
+live draft before uploading `draft-native-qualification-<scope>` with
+`qualification.json` and `final-draft.json`.
+The metadata-only `draft-snapshot` and `draft-recheck` jobs require
+`contents: write` for draft visibility, even though they do not publish releases.
+Retain the qualification files alongside the lanes and original producer ZIP
 using the private offline archive instructions below. Qualification is scoped
 to that dispatch; publication of evidence is not required. This installer proof
 does not qualify the standard authoring executable release (D5).
@@ -149,7 +173,8 @@ Use a uniquely named archive, for example
 and SHA, harness SHA, Actions run URL, published asset URLs and archive digest
 in the separate evidence release's notes, and link that release from the durable
 release documentation. Download the published assets again and verify the digest
-before calling the evidence durable; this workflow has no release-write permission.
+before calling the evidence durable; public-mode workflow jobs have no
+release-write permission.
 
 The Linux runner label is a native arm64 GitHub-hosted VM, as documented in
 [GitHub's runner reference](https://docs.github.com/en/actions/reference/runners/github-hosted-runners).
