@@ -205,9 +205,11 @@ def public_main(root, sha, options_path):
 
 def authenticated_main(root, sha, options_path):
     """Same invocation local J intake. Never generate, copy or replay projects."""
-    proof.require_authenticated_controller()
+    controller = proof.require_authenticated_controller()
+    proof.require_authenticated_execution()
     repo = Path(__file__).resolve().parent.parent
     options = proof.authentic_read(options_path)
+    proof.require(options.get('node') == controller, 'source-frozen controller comparison mismatch')
     request = proof.authenticated_options(options, sha)
     proof.require(root.is_absolute() and root.resolve() == root and not root.exists(), 'new canonical authentic output')
     proof.require(platform.system() == 'Linux' and platform.machine() == 'x86_64', 'native Linux amd64 required')
@@ -217,7 +219,7 @@ def authenticated_main(root, sha, options_path):
         *[Path(admission[k]) for k in ('repo', 'work_parent', 'stage_root', 'input_root', 'journey_root', 'fixture_root')]]
     for other in protected:
         proof.require(other.is_absolute() and other.resolve() == other and not root.is_relative_to(other) and not other.is_relative_to(root), 'authentic output overlaps input')
-    # Prepared admission remains behind the unconditional Python controller gate.
+    # Full execution remains separately closed after independent controller binding.
     inputs = proof.authenticated_verify(options['node'], ['authenticated-options', options_path])
     proof.require(inputs['repo'] == str(repo), 'authenticated source checkout')
     for key, name in [('node', 'orchestrator_node'), ('go', 'go')]:
@@ -231,10 +233,13 @@ def authenticated_main(root, sha, options_path):
     def run(name, argv, extra=None):
         argv = list(map(str, argv)); record = dict(argv=argv, cwd=str(repo), env=dict(env, **(extra or {})), exit=None)
         started = time.monotonic()
+        source = proof.authenticated_source()
+        proof.require(proof.require_authenticated_controller() == controller and proof.authenticated_source() == source, 'trusted source/controller changed')
         try:
             with (root / 'logs' / (name + '.stdout')).open('x') as out, (root / 'logs' / (name + '.stderr')).open('x') as err:
                 record['exit'] = subprocess.run(argv, cwd=repo, env=record['env'], stdout=out, stderr=err, timeout=1200).returncode
         finally:
+            proof.require(proof.require_authenticated_controller() == controller and proof.authenticated_source() == source, 'trusted source/controller changed')
             record['seconds'] = round(time.monotonic() - started, 3); write(root / 'logs' / (name + '.json'), record)
         proof.require(record['exit'] == 0, 'authenticated phase failed: ' + name)
         return (root / 'logs' / (name + '.stdout')).read_text()
