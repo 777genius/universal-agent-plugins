@@ -344,7 +344,9 @@ jobs:
     needs: [validate, stage-draft, platform-proof]
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      # GitHub draft visibility requires push capability; contents: read can return null.
+      # This trusted producer verifier still only reads APIs/assets and verifies attestations.
+      contents: write
       attestations: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

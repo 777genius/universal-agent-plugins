@@ -68,7 +68,9 @@ func TestAgentpluginsReleaseContractsStayFailClosed(t *testing.T) {
 	draftReceiptJob := yamlJob(t, releaseWorkflow, "verified-draft")
 	for _, want := range []string{
 		"needs: [validate, stage-draft, platform-proof]",
-		"contents: read", "attestations: read",
+		"contents: write", "attestations: read",
+		"persist-credentials: false",
+		"        env:\n          GH_TOKEN: ${{ github.token }}",
 		"ref: ${{ needs.validate.outputs.commit }}",
 		"RELEASE_ID: ${{ needs.stage-draft.outputs.release_id }}",
 		"EXPECTED_ASSET_SET_DIGEST: ${{ needs.stage-draft.outputs.asset_set_digest }}",
@@ -86,9 +88,15 @@ func TestAgentpluginsReleaseContractsStayFailClosed(t *testing.T) {
 			mustNotContain(t, job, forbidden)
 		}
 	}
-	for _, forbidden := range []string{"contents: write", "id-token: write", "gh release edit", "gh release create", "if:"} {
+	for _, forbidden := range []string{"id-token: write", "attestations: write", "gh release", "npm ", "npx ", "install.sh", "install.ps1", "platform-proof.js", "if:", "\n    env:", "persist-credentials: true"} {
 		mustNotContain(t, draftReceiptJob, forbidden)
 	}
+	// Draft API visibility needs write capability only on the trusted producer reader.
+	mustContain(t, releaseWorkflow, "\npermissions:\n  contents: read\n")
+	for _, job := range []string{yamlJob(t, releaseWorkflow, "validate"), yamlJob(t, releaseWorkflow, "build"), releaseProofJob} {
+		mustNotContain(t, job, ": write")
+	}
+	mustNotContain(t, platformWorkflow, ": write")
 	mustAppearBefore(t, draftReceiptJob, "python3 scripts/verify-agentplugins-draft.py", "actions/upload-artifact@")
 	mustContain(t, releasePromoteJob, "EXPECTED_ASSET_SET_DIGEST: ${{ needs.stage-draft.outputs.asset_set_digest }}")
 	mustContain(t, releasePromoteJob, "gh release edit \"${TAG}\"")
