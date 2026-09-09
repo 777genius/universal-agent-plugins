@@ -1,0 +1,50 @@
+{
+  "shell": {
+    "download": {
+      "heading": {
+        "title": "Installez votre premier plugin",
+        "note": "Choisissez comment exécuter la CLI, sélectionnez un ou plusieurs agents et copiez la commande."
+      },
+      "channels": {
+        "brew": {
+          "title": "Homebrew",
+          "description": "CLI Go native pour macOS et Linux. Node.js n'est pas requis.",
+          "note": "Recommandé pour une installation permanente avec des mises à niveau automatiques de Homebrew."
+        },
+        "npm": {
+          "title": "npx · Node.js 22+",
+          "description": "Le plus rapide lorsque Node.js 22+ est déjà installé : exécutez la commande du plugin immédiatement.",
+          "note": "Zéro installation : npx télécharge la CLI vérifiée et exécute la commande du plugin en une seule étape."
+        },
+        "script": {
+          "title": "Script d'installation vérifié",
+          "description": "Installation native sans gestionnaire de packages. Node.js n'est pas requis.",
+          "note": "Télécharge la version binaire correcte et vérifie son SHA-256 et sa version."
+        },
+        "powershell": {
+          "title": "Windows PowerShell",
+          "description": "CLI Go native pour Windows. Node.js n'est pas requis.",
+          "note": "Télécharge le binaire Windows et vérifie son SHA-256 et sa version."
+        }
+      },
+      "steps": {
+        "install-cli": {
+          "title": "Exécutez la CLI",
+          "note": "Utilisez npx pour un démarrage rapide ou installez le binaire pour une utilisation quotidienne."
+        },
+        "try-plugin": {
+          "title": "Installez un vrai plugin",
+          "note": "La même commande accepte une cible ou une liste séparée par des virgules."
+        },
+        "build-plugin": {
+          "title": "Gardez-le à jour",
+          "note": "Utilisez la mise à jour pour une nouvelle version et réparez lorsqu'un client dérive."
+        },
+        "validate": {
+          "title": "Retirer proprement",
+          "note": "La CLI supprime les entrées de client géré tout en conservant les données du package par défaut."
+        }
+      }
+    }
+  }
+}

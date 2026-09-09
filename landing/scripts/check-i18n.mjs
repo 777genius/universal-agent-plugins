@@ -34,8 +34,16 @@ function validateBranchContracts(source, target, locale, key) {
   assert(actual.length === expected.length || expanded, `${locale}:${key}: plural branches`);
   for (let index = 0; index < actual.length; index++) {
     const contract = expected[expanded && index > 0 ? 1 : index];
-    assert.deepEqual(placeholders(actual[index]), placeholders(contract), `${locale}:${key}: placeholders branch ${index}`);
-    assert.deepEqual(protectedTokens(actual[index]), protectedTokens(contract), `${locale}:${key}: protected literals branch ${index}`);
+    assert.deepEqual(
+      placeholders(actual[index]),
+      placeholders(contract),
+      `${locale}:${key}: placeholders branch ${index}`,
+    );
+    assert.deepEqual(
+      protectedTokens(actual[index]),
+      protectedTokens(contract),
+      `${locale}:${key}: protected literals branch ${index}`,
+    );
   }
 }
 const protectedTokens = (text) =>
@@ -87,7 +95,45 @@ const unchangedLabels = new Set([
 ]);
 // Independently reviewed technical captions/templates, scoped by locale AND key.
 const reviewedCaptions = {
+  ar: { 'registryUi.components.mcp': 'mcp' },
+  es: { 'registryUi.components.mcp': 'mcp' },
+  fr: {
+    'nav.plugins': 'Plugins',
+    'nav.faq': 'FAQ',
+    'registryUi.components.mcp': 'mcp',
+    'plugins.install.boundaryLabel': 'Attention',
+    'plugins.categories.collaboration': 'Collaboration',
+    'plugins.categories.commerce': 'Commerce',
+    'faq.labels.default': 'Question',
+    'shell.why.sourceTitle': 'Source visible',
+    'shell.header.plugins': 'Plugins',
+    'shell.faq.eyebrow': 'FAQ',
+    'shell.header.faq': 'FAQ',
+    'shell.navigation.plugins': 'Plugins',
+    'shell.navigation.faq': 'FAQ',
+    'registryUi.catalog.source': 'Source',
+    'registryUi.catalog.agent': 'Agent',
+    'registryUi.card.installable': 'installable',
+    'registryUi.install.agents': 'Agents',
+    'registryUi.detail.plugins': 'Plugins',
+    'registryUi.detail.version': 'Version {version}',
+    'registryUi.community.plugins': 'Plugins',
+    'registryUi.community.source': 'Source',
+    'registryUi.agentPage.activation': 'Activation',
+    'registryUi.components.extensions': 'extensions',
+  },
+  hi: { 'registryUi.components.mcp': 'mcp' },
+  pt: {
+    'nav.plugins': 'Plugins',
+    'registryUi.command.terminal': 'Terminal',
+    'shell.header.plugins': 'Plugins',
+    'shell.navigation.plugins': 'Plugins',
+    'registryUi.detail.plugins': 'Plugins',
+    'registryUi.community.plugins': 'Plugins',
+    'registryUi.components.mcp': 'mcp',
+  },
   ru: { 'registryUi.components.mcp': 'mcp' },
+  zh: { 'registryUi.components.mcp': 'mcp' },
   uk: {
     'registryUi.components.mcp': 'mcp',
     'nav.faq': 'FAQ',
@@ -103,7 +149,8 @@ export function assertTranslatedCopy(reference, messages, locale) {
     if (typeof value !== 'string' || value !== en[key] || unchangedLabels.has(value)) continue;
     if (reviewedCaptions[locale]?.[key] === value) continue;
     // This exact overlay caption names the Windows shell, with no prose.
-    if (key === 'shell.download.channels.powershell.title' && value === 'Windows PowerShell') continue;
+    if (key === 'shell.download.channels.powershell.title' && value === 'Windows PowerShell')
+      continue;
     const prose = value
       .replace(/\{[^}]*\}/g, '')
       .replace(/https?:\/\/\S+/g, '')

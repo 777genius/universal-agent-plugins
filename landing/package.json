@@ -5,14 +5,7 @@
   "imports": {
     "#internal/nuxt/paths": "./utils/nuxtInternalPaths.js"
   },
-  "packageManager": "pnpm@8.15.1",
-  "pnpm": {
-    "overrides": {
-      "brace-expansion@>=4.0.0 <5.0.9": "5.0.9",
-      "js-yaml@>=4.0.0 <4.3.1": "4.3.1",
-      "nanoid@>=3.0.0 <3.3.18": "3.3.18"
-    }
-  },
+  "packageManager": "pnpm@12.3.4",
   "scripts": {
     "dev": "nuxt dev",
     "build": "nuxt build",
@@ -41,7 +34,7 @@
     "reka-ui": "2.10.4",
     "swiper": "^12.2.0",
     "vue": "^3.5.40",
-    "vue-i18n": "^11.4.8",
+    "vue-i18n": "11.4.8",
     "vue-router": "^4.6.4",
     "vuetify": "^3.12.11"
   },

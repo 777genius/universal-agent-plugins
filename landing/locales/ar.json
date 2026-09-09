@@ -1,0 +1,905 @@
+{
+  "nav": {
+    "features": "الميزات",
+    "plugins": "المكونات الإضافية",
+    "comparison": "لماذا يعمل",
+    "download": "ابدأ الآن",
+    "faq": "الأسئلة الشائعة",
+    "viewOnGithub": "فتح GitHub"
+  },
+  "hero": {
+    "primaryCta": "فتح GitHub",
+    "secondaryCta": "عرض المكونات الإضافية",
+    "docsCta": "عرض الوثائق",
+    "preview": "معاينة تدفق Universal Agent Plugins",
+    "latestRelease": "أحدث إصدار",
+    "status": "المكونات الإضافية الرسمية متاحة الآن",
+    "trust": {
+      "oneRepo": "مستودع واحد",
+      "validated": "سير عمل واضح",
+      "openSource": "مفتوح المصدر"
+    },
+    "demo": {
+      "title": "تدفق Universal Agent Plugins",
+      "subtitle": "مستودع واحد. مراحل واضحة. مخرجات متعددة.",
+      "live": "نشط",
+      "ready": "جاهز",
+      "waiting": "في الانتظار",
+      "repo": "المستودع",
+      "sourceOfTruth": "مصدر الحقيقة",
+      "outputs": "المخرجات",
+      "supportedAgents": "الوكلاء المدعومون",
+      "steps": {
+        "author": "تعريف المكون الإضافي",
+        "generate": "إنشاء المخرجات",
+        "validate": "validate --strict",
+        "ship": "النشر"
+      },
+      "captions": {
+        "author": "صِف المكون الإضافي مرة واحدة في مستودع واحد مُدار.",
+        "generate": "أنشئ المخرجات الخاصة بالوكلاء التي تحتاجها الآن.",
+        "validate": "تحقق من البنية والسياسة وجاهزية التسليم.",
+        "ship": "انشر عبر الوثائق والإصدارات ومسارات التثبيت."
+      },
+      "logs": {
+        "author": "جارٍ تعريف المكون الإضافي مرة واحدة من مستودع واحد مُدار...",
+        "generate": "جارٍ إنشاء المخرجات المدعومة لحاجة المنتج الحالية...",
+        "validate": "جارٍ تشغيل validate --strict قبل التسليم...",
+        "ship": "جارٍ النشر عبر الإصدارات والوثائق وقنوات التثبيت..."
+      }
+    },
+    "paths": {
+      "onlineService": {
+        "title": "ربط خدمة عبر الإنترنت",
+        "description": "ابدأ بتكامل مستضاف مثل Notion أو Stripe أو Cloudflare أو Vercel.",
+        "example": "اطلع على مثال Notion"
+      },
+      "localTool": {
+        "title": "ربط أداة محلية",
+        "description": "ابدأ بأداة مملوكة للمستودع مثل Docker Hub أو Chrome DevTools أو HubSpot Developer.",
+        "example": "اطلع على مثال Docker Hub"
+      },
+      "customLogic": {
+        "title": "بناء منطق مخصص للمكون الإضافي",
+        "badge": "متقدم",
+        "description": "ابدأ بكود مدعوم بمشغّل عندما تكون الخطافات أو منطق وقت التشغيل أو السلوك المخصص هي ما يحدد المنتج.",
+        "example": "فتح دليل المنطق المخصص المتقدم"
+      }
+    }
+  },
+  "download": {
+    "open": "فتح",
+    "recommended": "موصى به",
+    "latestRelease": "أحدث إصدار",
+    "command": "الأمر",
+    "copy": "نسخ",
+    "copied": "تم النسخ",
+    "quickstartTitle": "أسرع بداية",
+    "quickstartSubtitle": "هذا هو أسرع مسار لتثبيت مكون إضافي حقيقي أو الحصول على مستودع تم التحقق منه.",
+    "installTabsLabel": "اختر طريقة تشغيل Universal Agent Plugins",
+    "detectedRecommendation": "تم تحديد أفضل خيار لـ {platform}",
+    "mobileUnsupported": "يعمل CLI على أجهزة سطح المكتب. انسخ أمرًا هنا، ثم شغّله على macOS أو Linux أو Windows.",
+    "platforms": {
+      "macos": "macOS",
+      "windows": "Windows",
+      "linux": "Linux",
+      "other": "جهازك"
+    },
+    "supportTitle": "الوكلاء المدعومون",
+    "supportSubtitle": "يعتمد التوافق على المكون الإضافي. يتحقق CLI من كل وكيل محدد ويطبع أي خطوات تفعيل أو تسجيل دخول متبقية.",
+    "supportLink": "اقرأ حدود الدعم"
+  },
+  "common": {
+    "previous": "السابق",
+    "next": "التالي"
+  },
+  "theme": {
+    "dark": "داكن",
+    "light": "فاتح",
+    "toggle": "تبديل السمة"
+  },
+  "language": {
+    "label": "اللغة",
+    "search": "البحث عن لغة…",
+    "switchError": "تعذر تغيير اللغة. يُرجى المحاولة مرة أخرى.",
+    "retry": "إعادة المحاولة"
+  },
+  "features": {
+    "sectionTitle": "مسار واضح من مستودع مكون إضافي واحد إلى وكلاء متعددين",
+    "sectionSubtitle": "صياغة مفهومة، وحدود صريحة، وسير عمل يبقى قابلًا للإدارة مع نمو المنتج."
+  },
+  "customLogic": {
+    "eyebrow": "مسار متقدم",
+    "title": "ابنِ منطقًا مخصصًا للمكون الإضافي عندما يكون المنتج داخل الكود لديك",
+    "subtitle": "يبقى هذا المسار مدعومًا بالكامل، لكنه ليس من نفس نوع نقطة البداية الخاصة بالمكونات الإضافية للخدمات والأدوات المدعومة بالكتالوج. استخدمه عندما يكون سلوك وقت التشغيل أو الخطافات أو التنسيق هو ما يحدد المنتج.",
+    "advancedBadge": "متقدم",
+    "commandLabel": "أمر البدء",
+    "commandBody": "ابدأ من هنا عندما تكون قيمة المكون الإضافي داخل الكود لديك وتريد مستودعًا واحدًا يحافظ على اتساق المصدر المؤلف والمخرجات المولدة وسلوك وقت التشغيل.",
+    "openGuide": "فتح الدليل المتقدم",
+    "openExample": "فتح مستودع المثال",
+    "points": {
+      "code": "عدّل الملفات المواجهة لوقت التشغيل داخل src/، إضافةً إلى نقطة الدخول المملوكة للمستودع التي تحدد سلوك المكون الإضافي.",
+      "generated": "أبقِ مخرجات الجذر المولدة مُدارة بدل التعامل معها كمصدر مُحرر يدويًا.",
+      "guide": "استخدم inspect --authoring والدليل المتقدم قبل إضافة المزيد من المخرجات."
+    }
+  },
+  "createPlugin": {
+    "eyebrow": "ابنِ مكونك الإضافي",
+    "title": "أنشئ مكونك الإضافي",
+    "subtitle": "اختر شكل المستودع الذي يناسب المهمة، ثم افتح الدليل الذي يشرح ذلك المسار بمزيد من التفصيل.",
+    "onlineServiceCta": "فتح دليل البدء من المهمة",
+    "localToolCta": "فتح دليل البدء من المهمة",
+    "customLogicCta": "فتح الدليل المتقدم",
+    "customLogicDescription": "اختر هذا عندما يكون الكود أو الخطافات أو سلوك وقت التشغيل لديك هو ما يحدد المنتج."
+  },
+  "faq": {
+    "sectionTitle": "لديك أسئلة؟ لدينا إجابات",
+    "subtitle": "النسخة العملية: ما الذي يحله هذا، ولمن صُمم، وأي صفحة تفتح أولًا.",
+    "labels": {
+      "default": "سؤال",
+      "whatIsIt": "نظرة عامة",
+      "whoShouldUseIt": "الجمهور",
+      "oneRepoPerAgent": "سير العمل",
+      "stableBoundary": "الدعم",
+      "fastestStart": "ابدأ من هنا",
+      "whichPathFirst": "اختر مسارًا"
+    },
+    "quickLinks": {
+      "badge": "ابدأ من هنا",
+      "title": "تحتاج إلى خطوة تالية أوضح؟",
+      "subtitle": "يحتاج معظم الأشخاص إلى ثلاث صفحات فقط: البدء السريع، ومسار Python إذا كانت هذه هي تقنيتك، وحدود الدعم قبل تقديم وعود أكبر من اللازم.",
+      "quickstartTitle": "فتح البدء السريع",
+      "quickstartBody": "أقصر مسار مدعوم من التثبيت إلى مستودع تم التحقق منه.",
+      "pythonTitle": "فتح دليل Python",
+      "pythonBody": "أفضل صفحة تالية عندما يكون فريقك معتمدًا على Python بالفعل.",
+      "boundaryTitle": "التحقق من حدود الدعم",
+      "boundaryBody": "اطلع على ما هو جاهز للإنتاج اليوم وما يزال في المرحلة التجريبية."
+    }
+  },
+  "comparison": {
+    "sectionTitle": "لماذا يعمل",
+    "sectionSubtitle": "ليست مواجهة مع المنافسين. إنها مقارنة عملية مع الطرق الثلاث التي تؤدي عادةً إلى انجراف غير ضروري لدى فرق المكونات الإضافية.",
+    "feature": "سير العمل",
+    "columns": {
+      "pluginKitAi": "Universal Agent Plugins",
+      "manual": "إعداد يدوي",
+      "duplicated": "تكوينات مكررة",
+      "scripts": "سكربتات لمرة واحدة"
+    }
+  },
+  "footer": {
+    "copyright": "© {year}",
+    "tagline": "ثبّت مرة واحدة. أدر المكونات الإضافية عبر وكلاء الذكاء الاصطناعي لديك.",
+    "github": "GitHub",
+    "docs": "الوثائق"
+  },
+  "meta": {
+    "homeTitle": "Universal Agent Plugins | أمر واحد عبر وكلاء الذكاء الاصطناعي لديك",
+    "homeDescription": "ثبّت Agent Plugins 1.0 وحدّثها وأصلحها وأزلها عبر وكلاء الذكاء الاصطناعي باستخدام أمر واحد.",
+    "downloadTitle": "ابدأ مع Universal Agent Plugins",
+    "downloadDescription": "ثبّت CLI، واختر وكيلًا واحدًا أو أكثر، وشغّل أول أمر للمكون الإضافي.",
+    "pluginsTitle": "كتالوج المكونات الإضافية | Universal Agent Plugins",
+    "pluginsDescription": "تصفح مكونات Agent Plugins 1.0 القابلة للتثبيت مع دعم واضح للعملاء وأوامر لدورة الحياة.",
+    "pluginDetailTitle": "{plugin} | Universal Agent Plugins",
+    "pluginDetailDescription": "ثبّت {plugin} عبر وكلاء الذكاء الاصطناعي المدعومين لديك. {tagline}"
+  },
+  "error": {
+    "notFoundTitle": "الصفحة غير موجودة",
+    "notFoundDescription": "الصفحة التي تبحث عنها غير موجودة أو تم نقلها.",
+    "genericTitle": "حدث خطأ ما",
+    "genericDescription": "حدث خطأ غير متوقع. يُرجى المحاولة مرة أخرى لاحقًا.",
+    "goHome": "الانتقال إلى الصفحة الرئيسية"
+  },
+  "publicAuthoring": {
+    "title": "استخدام المكونات الإضافية / بناء المكونات الإضافية",
+    "intro": "ثبّت المكونات الإضافية المتاحة أو حضّر حزمة Agent Plugins 1.0 قابلة للنقل.",
+    "useTitle": "استخدام المكونات الإضافية",
+    "available": "متاح الآن: ثبّت المكونات الإضافية باستخدام Universal Agent Plugins. مع Node.js 22+، شغّل:",
+    "installHelp": "للتثبيت الأصلي على macOS أو Linux أو Windows، اتبع دليل المُثبّت. يسأل CLI عن الوكلاء المتوافقين الذين تريد استخدامهم؛ وقد تحتاج المكونات الإضافية الفردية إلى بيئات تشغيل خاصة بها.",
+    "installLink": "دليل المُثبّت",
+    "buildTitle": "بناء المكونات الإضافية",
+    "standard": "ابنِ حزمة Agent Plugins 1.0 قابلة للنقل حول plugin.json، مع skills/ وmcp.json اختياريًا. يعتمد دعم العملاء على الحزمة ومكوناتها.",
+    "preparation": "قيد التحضير - غير مُصدر",
+    "unreleased": "واجهة CLI للتأليف المبدئي وفق المعيار قيد التحضير ولم تُصدر بعد. إصدار plugin-kit-ai 1.2.4 المنشور على npm وPyPI هو أداة v1 التاريخية، وليس v2 المبني أولًا على المعيار. تثبيت plugin-kit-ai{'@'}latest لا يوفر سير عمل التأليف المستقبلي.",
+    "specLink": "اقرأ مواصفة Agent Plugins 1.0",
+    "historyTitle": "صيانة v1 التاريخية",
+    "history": "حافظ على مشاريع plugin.yaml الحالية باستخدام تعليمات v1 أدناه. هذه القوالب والمخرجات المولدة هي مسارات عمل تاريخية لـ v1؛ ولا تنشئ تدفق التأليف الجديد المبني أولًا على المعيار.",
+    "quickstartLink": "البدء السريع وصيانة v1",
+    "compatibilityLink": "توافق العملاء (بالإنجليزية)",
+    "limitations": "التوافق خاص بكل حزمة. التحقق من المخطط لا يثبت وقت التشغيل أو OAuth أو التفعيل. لا يدعم Codex بروتوكول MCP SSE المعلن؛ ويحتفظ stdio وStreamable HTTP بدعم المحولات الحالي.",
+    "versions": "الإصدارات المنشورة التي تم التحقق منها في 2026-09-07: universal-agent-plugins 0.1.53 (npm)، وplugin-kit-ai 1.2.4 (npm/PyPI)، وإصدار GitHub المستقر agentplugins-v0.1.53."
+  },
+  "shell": {
+    "docs": {
+      "englishLabel": "{label} (الوثائق باللغة الإنجليزية)"
+    },
+    "logo": {
+      "subtitle": "CLI متعدد الوكلاء"
+    },
+    "accessibility": {
+      "home": "صفحة Universal Agent Plugins الرئيسية",
+      "chooseTargets": "اختيار الوكلاء المستهدفين",
+      "supportedAgents": "الوكلاء المدعومون",
+      "license": "رخصة Apache 2.0"
+    },
+    "why": {
+      "eyebrow": "لماذا يعمل",
+      "title": "معيار واحد",
+      "subtitle": "تسليم أصلي",
+      "intro": "تبقى الحزمة قابلة للنقل؛ ويتولى المُثبّت تنسيق كل عميل ودورة حياته.",
+      "standardTitle": "المعيار أولًا",
+      "clientTitle": "واعٍ بالعملاء",
+      "clientDescription": "يتلقى Codex وCursor وClaude Code وGemini CLI وOpenCode والعملاء الآخرون التنسيق الذي يدعمونه.",
+      "lifecycleTitle": "دورة حياة كاملة",
+      "lifecycleDescription": "أضف مكونًا إضافيًا أو افحصه أو حدّثه أو أصلحه أو بدّل مصدره أو أزله عبر CLI نفسه.",
+      "sourceTitle": "المصدر مرئي",
+      "sourceDescription": "تبقى الحزم المراجعة والاكتشافات المجتمعية موسومة بوضوح، مع إتاحة مصدرها قبل التثبيت.",
+      "standardDescription": "تُقرأ الحزم من Agent Plugins 1.0 {manifest}، من دون بيان تثبيت ثانٍ."
+    },
+    "faq": {
+      "eyebrow": "الأسئلة الشائعة",
+      "title": "أسئلة شائعة",
+      "items": {
+        "0": {
+          "question": "ما وكلاء الذكاء الاصطناعي المدعومون؟",
+          "answer": "Codex وChatGPT وCursor وGitHub Copilot CLI وVS Code وKiro وClaude Code وGemini CLI وOpenCode وCline وWindsurf مدعومة أو مُحضّرة عبر مسار صريح خاص بكل عميل."
+        },
+        "1": {
+          "question": "هل يثبّت أمر واحد في كل وكيل؟",
+          "answer": "افتراضيًا، يكتشف CLI الوكلاء المتوافقين المثبتين ويطلب منك التأكيد. يمكنك أيضًا تحديد وكيل واحد أو عدة وكلاء صراحةً."
+        },
+        "2": {
+          "question": "ماذا يحدث عندما يحتاج وكيل إلى تسجيل دخول؟",
+          "answer": "يحضّر CLI الحزمة ويعرض خطوة التفعيل أو تسجيل الدخول الدقيقة. ولا يتلقى كلمة مرور OAuth الخاصة بك أبدًا."
+        },
+        "3": {
+          "question": "هل يمكنني تثبيت مكون إضافي خارج هذا الدليل؟",
+          "answer": "نعم. استخدم مصدر GitHub مثبتًا يحتوي على حزمة Agent Plugins 1.0 plugin.json صالحة."
+        },
+        "4": {
+          "question": "هل تتم مراجعة كل المكونات الإضافية المكتشفة؟",
+          "answer": "لا. تُوسم الإدخالات المراجعة وحزم المجتمع المكتشفة تلقائيًا بشكل منفصل حتى تتمكن من اختيار مستوى الثقة الذي تحتاجه."
+        },
+        "5": {
+          "question": "هل يمكنني التراجع عن تثبيت؟",
+          "answer": "نعم. يسجل CLI نفسه الحالة المُدارة ويدعم الفحص والتحديث والإصلاح وتبديل المصدر والإزالة."
+        }
+      }
+    },
+    "seo": {
+      "indexTitle": "Universal Agent Plugins CLI {'|'} تثبيت Agent Plugins 1.0",
+      "indexDescription": "ثبّت Agent Plugins 1.0 وحدّثها وأصلحها وأزلها عبر وكلاء الذكاء الاصطناعي المدعومين باستخدام CLI واحد.",
+      "downloadTitle": "تنزيل Universal Agent Plugins CLI",
+      "downloadDescription": "ثبّت Universal Agent Plugins CLI على macOS أو Linux أو Windows وأدر Agent Plugins 1.0 من أمر واحد.",
+      "applicationSubCategory": "مدير المكونات الإضافية للوكلاء",
+      "softwareRequirements": "CLI أصلي لنظام macOS وLinux وWindows؛ أو Node.js 22+ لاستخدام npx",
+      "featureList": "تثبيت Agent Plugins 1.0 وفحصها وتحديثها وإصلاحها وتبديل مصدرها وإزالتها",
+      "imageAlt": "Universal Agent Plugins - تثبيت المكونات الإضافية عبر وكلاء الذكاء الاصطناعي باستخدام CLI واحد",
+      "organizationDescription": "مُثبّت مفتوح المصدر متعدد الوكلاء ومدير لدورة حياة Agent Plugins 1.0."
+    },
+    "hero": {
+      "autoLabel": "كل الوكلاء المثبتين (موصى به)",
+      "autoSummary": "كل الوكلاء المثبتين",
+      "autoDescription": "يتم اكتشافهم عند تشغيل الأمر",
+      "unavailable": "غير متاح مؤقتًا",
+      "refreshing": "جارٍ تحديث بيانات المكونات الإضافية",
+      "chatgptSetup": "إكمال الإعداد في ChatGPT",
+      "notAvailable": "غير متاح",
+      "notAvailableForPlugin": "غير متاح لهذا المكون الإضافي",
+      "title": "مكون إضافي واحد",
+      "subtitle": "كل وكلائك",
+      "intro": "ثبّت Agent Plugins 1.0 وحدّثها وأصلحها وأزلها عبر وكلاء الذكاء الاصطناعي المدعومين باستخدام أمر واحد. دع CLI يكتشف الوكلاء المثبتين، أو اختر بدقة أين يذهب المكون الإضافي.",
+      "github": "فتح GitHub",
+      "choose": "اختيار الوكلاء",
+      "chooseHint": "واحد أو عدة وكلاء أو اكتشاف تلقائي",
+      "run": "انسخ وشغّل",
+      "terminal": "في الطرفية لديك",
+      "refreshNotice": "جارٍ تحديث بيانات المكونات الإضافية. حاول مرة أخرى بعد قليل.",
+      "otherMethods": "طرق تثبيت أخرى",
+      "planNotice": "أمر واحد يخطط لكل وكيل محدد قبل تغيير الملفات",
+      "supportedClients": "العملاء المدعومون",
+      "clientNote": "يثبّت CLI أو يحضّر التنسيق الأصلي الذي يدعمه كل عميل. قد يطلب منك بعض العملاء إكمال التفعيل أو تسجيل الدخول.",
+      "install": "تثبيت {name}",
+      "explore": "استكشاف المكونات الإضافية",
+      "exploreCount": "استكشاف {count} مكونات إضافية | استكشاف {count} مكون إضافي | استكشاف {count} مكونات إضافية",
+      "delivery": {
+        "managed": "تثبيت مُدار",
+        "prepared": "تم التحضير؛ ما زال استيراد العميل مطلوبًا",
+        "manual_activation": "يتطلب تفعيلًا يدويًا"
+      },
+      "sourceReason": "سبب المصدر: {reason}",
+      "diagnostics": {
+        "distributionStatus": "التوزيع في حالة {status}",
+        "releaseStatus": "الإصدار {sequence} في حالة {status}",
+        "missingComponents": "الإصدار {sequence} يفتقد مكونات مطلوبة",
+        "unsupportedTargets": "الإصدار {sequence} لا يدعم {targets}",
+        "blockingFailure": "الإصدار {sequence} لديه فشل موثوق حاجب لـ {targets}",
+        "missingEvidence": "الإصدار {sequence} يفتقر إلى دليل توافق إيجابي حديث للحزمة (اجتياز التجسيد) لـ {targets}",
+        "noReleases": "لا توجد إصدارات",
+        "defaultIneligible": "التوزيع الافتراضي المعلن {distribution} كان غير مؤهل: {reasons}",
+        "reasonSeparator": "; ",
+        "status": {
+          "candidate": "مرشح",
+          "active": "نشط",
+          "suspended": "معلّق",
+          "superseded": "تم تجاوزه",
+          "revoked": "ملغى"
+        }
+      }
+    },
+    "header": {
+      "plugins": "المكونات الإضافية",
+      "why": "لماذا يعمل",
+      "faq": "الأسئلة الشائعة",
+      "openMenu": "فتح قائمة التنقل",
+      "closeMenu": "إغلاق قائمة التنقل",
+      "menuTitle": "قائمة التنقل",
+      "menuDescription": "انتقل إلى المكونات الإضافية أو تفاصيل المنتج أو الأسئلة الشائعة أو GitHub.",
+      "appearance": "المظهر"
+    },
+    "navigation": {
+      "plugins": "المكونات الإضافية",
+      "why": "لماذا يعمل",
+      "faq": "الأسئلة الشائعة",
+      "open": "فتح قائمة التنقل",
+      "close": "إغلاق قائمة التنقل",
+      "title": "قائمة التنقل",
+      "description": "انتقل إلى المكونات الإضافية أو تفاصيل المنتج أو الأسئلة الشائعة أو GitHub.",
+      "appearance": "المظهر"
+    }
+  },
+  "plugins": {
+    "sectionTitle": "تبدأ إضافاتنا الأولى من هنا",
+    "sectionSubtitle": "تصفح الكتالوج الرسمي الفعلي للخدمات المتصلة بالإنترنت والأدوات المحلية. إذا كانت قيمة المنتج تكمن في كود التشغيل الخاص بك، فاستخدم مسار المنطق المخصص المتقدم بدلا من ذلك.",
+    "supports": "يدعم",
+    "openPlugin": "فتح الإضافة",
+    "viewDetails": "عرض التفاصيل",
+    "viewAll": "عرض الكل",
+    "catalogEyebrow": "كتالوج الإضافات",
+    "catalogTitle": "كل إضافة رسمية في كتالوج واحد قابل للبحث",
+    "catalogSubtitle": "تصفح الكتالوج الفعلي للخدمات المتصلة بالإنترنت والأدوات المحلية، ثم افتح مستودع المصدر فقط بعد أن تتأكد من أن الإضافة مناسبة للمهمة.",
+    "catalogAdvancedNote": "هل تحتاج إلى خطافات أو تنسيق تشغيل أو سلوك وقت تشغيل بدلا من إضافة من الكتالوج؟",
+    "catalogAdvancedLink": "افتح دليل المنطق المخصص المتقدم.",
+    "searchLabel": "البحث في الإضافات",
+    "searchPlaceholder": "ابحث في الإضافات أو سير العمل...",
+    "filterLabel": "التصفية حسب سير العمل",
+    "allCategories": "كل سير العمل",
+    "clearSearch": "مسح البحث",
+    "emptyTitle": "لا توجد إضافات تطابق هذا البحث",
+    "emptyText": "جرّب كلمة أوسع مثل Git أو الوثائق أو الخلفية أو التخطيط، أو أعد ضبط مرشح سير العمل النشط.",
+    "backToCatalog": "العودة إلى الكتالوج",
+    "openRepository": "فتح المستودع",
+    "detailSummaryEyebrow": "ملخص الإضافة",
+    "categoriesTitle": "مصممة من أجل",
+    "useCasesTitle": "أفضل الاستخدامات",
+    "highlightsTitle": "أبرز ما يميزها",
+    "install": {
+      "eyebrow": "مسار التثبيت",
+      "title": "تثبيت هذه الإضافة",
+      "subtitle": "اختر وكيلك، وحدد طريقة تشغيل Universal Agent Plugins إذا احتجت إلى ذلك، ثم انسخ الأمر الدقيق لهذه الإضافة.",
+      "supportedLabel": "الأهداف المتاحة",
+      "allAgents": "الكل",
+      "chooseAgentTitle": "اختر وكيلك",
+      "chooseAgentBody": "يتم تحديد كل الأهداف افتراضيا. اختر مجموعة أصغر عندما تريد أمر تثبيت أضيق نطاقا.",
+      "getCliTitle": "شغّل Universal Agent Plugins بالطريقة المناسبة لك",
+      "getCliBody": "استخدم npx لأسرع تجربة أولى، أو ثبّت CLI للاستخدام اليومي.",
+      "installTitle": "تثبيت الإضافة",
+      "installBody": "شغّل أمر التثبيت للهدف الذي حددته. يبقى الأمر صريحا حتى يظل النطاق الناتج واضحا لاحقا.",
+      "manualTitle": "روابط الإعداد الأصلي",
+      "manualBody": "افتح المستودع أو الوثائق الرسمية لوكيلك.",
+      "manageTitle": "الإدارة لاحقا",
+      "manageBody": "بعد التثبيت، استخدم هذه الأوامر للتحديث أو إصلاح أي انحراف في الإعدادات أو إزالة الإضافة بشكل نظيف.",
+      "recommended": "موصى به",
+      "showInstallCta": "تثبيت",
+      "hideInstallCta": "إخفاء خطوات التثبيت",
+      "cliCommandLabel": "أمر تثبيت CLI",
+      "installCommandLabel": "أمر تثبيت الإضافة",
+      "updateCommandLabel": "أمر التحديث",
+      "repairCommandLabel": "أمر الإصلاح",
+      "removeCommandLabel": "أمر الإزالة",
+      "copy": "نسخ",
+      "copied": "تم النسخ",
+      "fullOnboardingCta": "فتح دليل بدء الاستخدام الكامل",
+      "alreadyInstalled": "هل تشغّل Universal Agent Plugins بطريقة أخرى بالفعل؟ انتقل مباشرة إلى الخطوة 3.",
+      "repositoryCta": "مستودع الإضافة",
+      "agentDocsCta": "وثائق {agent}",
+      "boundaryLabel": "تنبيه",
+      "targetsLabel": "الأهداف",
+      "scopeLabel": "النطاق",
+      "writesToLabel": "يكتب إلى",
+      "nextStepLabel": "بعد التثبيت",
+      "userScope": "نطاق المستخدم",
+      "projectScope": "نطاق المشروع",
+      "mixedScope": "نطاقات مختلطة",
+      "projectRootHint": "يكتب هذا الهدف إعدادات مساحة العمل داخل المشروع الحالي، لذلك شغّل الأمر من جذر المشروع.",
+      "projectRootHintMixed": "يمزج هذا التثبيت بين أهداف على مستوى المستخدم وأهداف مملوكة للمشروع. تبقى Claude وCodex وGemini في نطاق المستخدم، بينما تكتب OpenCode وCursor داخل المشروع الحالي، لذلك شغّل الأمر من جذر المشروع إذا كنت تريد إنشاء إعدادات مساحة العمل هذه في المستودع الصحيح.",
+      "selectionBodies": {
+        "all": "يثبّت كل هدف مدعوم لهذه الإضافة بأمر واحد. استخدم شرائح اختيار الوكلاء عندما تريد مسار تثبيت أضيق.",
+        "multi": "يثبّت الأهداف المحددة: {agents}."
+      },
+      "manualNotes": {
+        "all": "استخدم المستودع عندما تريد فحص المخرجات المولدة مباشرة، أو افتح وثائق الوكيل الرسمية لمسار أصلي خاص بالهدف.",
+        "multi": "افتح المستودع أو وثائق الوكيل المحدد عندما تريد فحص الإعداد الأصلي لـ {agents} أو إكماله."
+      },
+      "followUps": {
+        "none": "جاهزة للاستخدام بعد التثبيت",
+        "reload": "أعد تحميل الإضافات أو أعد فتح الوكيل إذا لم تظهر فورا",
+        "enable": "راجع الأذونات أو فعّل الامتداد إذا طلب Gemini تأكيدا",
+        "activation": "تم تجهيز الحزمة لـ Codex، لكن التفعيل النهائي قد يظل بحاجة إلى تثبيت أصلي أو محادثة جديدة داخل Codex",
+        "depends": "يعتمد على الأهداف المحددة"
+      },
+      "targets": {
+        "claude": {
+          "installBody": "يثبّت الإضافة ضمن مسار الإضافات المُدار في Claude كخيار افتراضي على مستوى المستخدم.",
+          "manualNote": "استخدم المستودع عندما تريد فحص حزمة Claude المولدة أو اتباع مسار إضافات Claude الأصلي يدويا.",
+          "boundaryNote": "إذا كان Claude مفتوحا بالفعل، فأعد تحميل الإضافات أو أعد فتح الجلسة لتظهر الإضافة الجديدة."
+        },
+        "codex": {
+          "installBody": "يجهّز حزمة Codex وإدراج السوق المحلي عبر طبقة التحكم في التكامل.",
+          "manualNote": "استخدم المستودع أو وثائق Codex إذا كنت تريد فحص الحزمة المجهزة أو إكمال مسار التفعيل الأصلي بنفسك.",
+          "boundaryNote": "تبقى أتمتة Codex متحفظة هنا. يجهّز Universal Agent Plugins الحزمة والسوق، لكن قد يظل Codex بحاجة إلى خطوة متابعة أصلية قبل أن تصبح الإضافة نشطة."
+        },
+        "gemini": {
+          "installBody": "يثبّت امتداد Gemini في دليل امتدادات المستخدم، ويبقي مسارات التحديث والإصلاح اللاحقة على الجذر المُدار نفسه.",
+          "manualNote": "افتح المستودع عندما تريد فحص حزمة امتداد Gemini المولدة أو إدارتها عبر أوامر امتدادات Gemini الأصلية.",
+          "boundaryNote": "قد يطلب Gemini تأكيدا أو مراجعة للأذونات بحسب إعدادات أمان الامتدادات المحلية لديك."
+        },
+        "opencode": {
+          "installBody": "يضيف هذه الإضافة إلى إعداد OpenCode المملوك للمشروع وملفات دعم .opencode المُدارة.",
+          "manualNote": "افتح المستودع أو وثائق إضافات OpenCode إذا كنت تريد توصيل الإعداد نفسه يدويا."
+        },
+        "cursor": {
+          "installBody": "يضيف هذه الإضافة إلى إعداد Cursor MCP الخاص بالمشروع حتى يحتفظ المستودع بالتكامل ضمن إعداد مساحة العمل الخاضع للإصدارات.",
+          "manualNote": "افتح المستودع أو وثائق Cursor MCP عندما تريد إدارة إدخال الخادم نفسه يدويا."
+        }
+      }
+    },
+    "categories": {
+      "docs": "الوثائق",
+      "research": "البحث",
+      "codeSearch": "البحث في الكود",
+      "git": "سير عمل Git",
+      "planning": "التخطيط",
+      "devops": "DevOps",
+      "review": "مراجعة الكود",
+      "database": "قاعدة البيانات",
+      "backend": "الخدمات الخلفية",
+      "cloud": "السحابة",
+      "automation": "الأتمتة",
+      "collaboration": "التعاون",
+      "search": "البحث",
+      "observability": "قابلية المراقبة",
+      "developerTools": "أدوات المطورين",
+      "crm": "CRM",
+      "cms": "CMS",
+      "payments": "المدفوعات",
+      "commerce": "التجارة",
+      "messaging": "المراسلة"
+    },
+    "allTypes": "كل أنواع الإضافات",
+    "typeFilterLabel": "التصفية حسب نوع الإضافة",
+    "pathTitle": "أفضل مسار للبدء",
+    "types": {
+      "online-service": "خدمة متصلة بالإنترنت",
+      "local-tool": "أداة محلية",
+      "custom-logic": "منطق مخصص - متقدم"
+    }
+  },
+  "registryUi": {
+    "select": {
+      "up": "مرر الخيارات إلى الأعلى",
+      "down": "مرر الخيارات إلى الأسفل"
+    },
+    "combobox": {
+      "open": "افتح {label}",
+      "empty": "لا توجد فئات مطابقة"
+    },
+    "multi": {
+      "agents": "{count} وكيل | {count} وكلاء",
+      "selected": "{count} محدد",
+      "auto": "اكتشاف تلقائي",
+      "choose": "أو اختر وكلاء محددين",
+      "automaticHelp": "يتحقق CLI من توافق هذه الإضافة مع الوكلاء المثبتين، ويتجاوز الوكلاء غير المتوافقين، ثم يتيح لك تأكيد الأهداف. لا يتم تضمين ChatGPT إلا عندما توفر الإضافة اتصالا موثقا.",
+      "manualHelp": "حدد كل وكيل يجب أن يتلقى هذه الإضافة. سيبقى وكيل واحد محددا على الأقل.",
+      "summary": "{label}: {summary}"
+    },
+    "command": {
+      "terminal": "الطرفية",
+      "copiedLabel": "تم نسخ الأمر",
+      "copyLabel": "انسخ الأمر",
+      "copied": "تم النسخ",
+      "copy": "نسخ",
+      "announcement": "تم نسخ الأمر إلى الحافظة"
+    },
+    "directory": {
+      "heading": "ابحث عن إضافتك",
+      "reviewed": "{count} إضافة تمت مراجعتها. ابحث، واختر وكلاءك، وانسخ أمرا واحدا. | {count} إضافات تمت مراجعتها. ابحث، واختر وكلاءك، وانسخ أمرا واحدا.",
+      "combined": "{reviewed} بالإضافة إلى {community}. ابحث، واختر وكلاءك، وانسخ أمرا واحدا.",
+      "reviewedCount": "{count} إضافة تمت مراجعتها | {count} إضافات تمت مراجعتها",
+      "communityCount": "{count} حزمة مجتمعية | {count} حزم مجتمعية"
+    },
+    "security": {
+      "blocking": "مراجعة آلية: {count} نتيجة مانعة | مراجعة آلية: {count} نتائج مانعة",
+      "notes": "مراجعة آلية: {count} ملاحظة | مراجعة آلية: {count} ملاحظات",
+      "clear": "مراجعة آلية: لا توجد نتائج مانعة",
+      "review": "راجع قبل التثبيت",
+      "noBlocking": "لم يتم رصد نتائج مانعة",
+      "maintenance": "ملاحظات صيانة المستودع",
+      "reviewNotes": "ملاحظات المراجعة الآلية",
+      "unknown": "غير معروف",
+      "tooltipScope": "فحص LintAI {version} النسخة المفهرسة الدقيقة {revision}.",
+      "tooltipDisclaimer": "يبحث هذا الفحص الثابت عن الأنماط المهيأة. لا يشغل الإضافة ولا يضمن الأمان.",
+      "openReview": "{label}. افتح المراجعة الكاملة لـ {name}",
+      "staticReview": "مراجعة ثابتة آلية",
+      "more": "+{count} أخرى في المراجعة الكاملة",
+      "fullDetails": "افتح صفحة الإضافة للاطلاع على التفاصيل الكاملة.",
+      "eyebrow": "مراجعة أمان آلية",
+      "scope": "فحص LintAI {version} النسخة المفهرسة الدقيقة {revision} في {date}. تنطبق هذه النتيجة على ملفات الحزمة تلك فقط.",
+      "freshness": "أي نسخة أحدث في المصدر الرئيسي تعني شيفرة مختلفة. يجب فهرستها وفحصها مرة أخرى؛ لن يعيد CLI استخدام هذه النتيجة للملفات المتغيرة.",
+      "before": "أمور يجب مراجعتها قبل التثبيت",
+      "maintenanceCount": "ملاحظات صيانة المستودع ({count})",
+      "maintenanceHelp": "تتعلق هذه النتائج بأتمتة مستودع المؤلف. إنها نصائح مفيدة لتعزيز الأمان، لكن أداة التثبيت لا تشغل مسارات العمل هذه.",
+      "truncated": "يتم عرض {shown} من أصل {total} نتيجة. الملخص العام الموقع محدود الحجم؛ وتشمل الإجماليات كل نتيجة من الفحص.",
+      "empty": "لم ترصد القواعد الآلية نمطا مانعا في الملفات المفحوصة.",
+      "disclaimer": "تقلل الفحوصات الآلية المخاطر؛ لكنها لا تثبت أن الإضافة آمنة. راجع المصدر والأذونات قبل تثبيت برنامج لا تثق به."
+    },
+    "catalog": {
+      "explorePlugins": "استكشف الإضافات",
+      "searchByCapabilityComponentOrSource": "ابحث حسب القدرة أو المكون أو المصدر.",
+      "allCategories": "كل الفئات",
+      "allComponents": "كل المكونات",
+      "allSources": "كل المصادر",
+      "upstreamPackages": "حزم المصدر الرئيسي",
+      "communityBridges": "جسور المجتمع",
+      "communityPackages": "حزم المجتمع",
+      "directSources": "مصادر مباشرة",
+      "allTrustLevels": "كل مستويات الثقة",
+      "reviewedListings": "قوائم تمت مراجعتها",
+      "communityDiscovery": "استكشاف المجتمع",
+      "allAgents": "كل الوكلاء",
+      "allAuthentication": "كل خيارات المصادقة",
+      "worksWithoutSignIn": "يعمل دون تسجيل الدخول",
+      "mayRequireSignIn": "قد يتطلب تسجيل الدخول",
+      "allOwners": "كل المالكين",
+      "search": "بحث",
+      "category": "الفئة",
+      "component": "المكون",
+      "source": "المصدر",
+      "trust": "الثقة",
+      "agent": "الوكيل",
+      "authentication": "المصادقة",
+      "owner": "المالك",
+      "hideFilters": "إخفاء عوامل التصفية",
+      "moreFilters": "مزيد من عوامل التصفية",
+      "addAPlugin": "إضافة مكون إضافي",
+      "filterPlugins": "تصفية الإضافات",
+      "searchPlugins": "البحث في الإضافات",
+      "searchByNameAuthorOrCapability": "ابحث بالاسم أو المؤلف أو القدرة…",
+      "clearPluginSearch": "مسح بحث الإضافات",
+      "filterByCategory": "تصفية حسب الفئة",
+      "searchCategories": "البحث في الفئات…",
+      "filterByComponent": "تصفية حسب المكون",
+      "filterBySource": "تصفية حسب المصدر",
+      "filterByTrustLevel": "تصفية حسب مستوى الثقة",
+      "filterByAgent": "تصفية حسب الوكيل",
+      "filterByAuthentication": "تصفية حسب المصادقة",
+      "filterByOwner": "تصفية حسب المالك",
+      "searchOwners": "البحث في المالكين…",
+      "activeFilters": "عوامل التصفية النشطة",
+      "pluginDirectory": "دليل الإضافات",
+      "addPlugin": "إضافة مكون إضافي",
+      "resetFilters": "إعادة ضبط عوامل التصفية",
+      "findingMoreCommunityPluginsOnGithub": "جار العثور على مزيد من إضافات المجتمع على GitHub…",
+      "communityResultsAreRefreshingReviewedListingsRemainAvailable": "يتم تحديث نتائج المجتمع. تبقى القوائم التي تمت مراجعتها متاحة.",
+      "communityResultsAreTemporarilyUnavailableReviewedListingsRemainAvailable": "نتائج المجتمع غير متاحة مؤقتا. تبقى القوائم التي تمت مراجعتها متاحة.",
+      "noMatchingPlugins": "لا توجد إضافات مطابقة",
+      "tryABroaderSearchOrClearOneOfTheFilters": "جرب بحثا أوسع أو امسح أحد عوامل التصفية.",
+      "clearFilters": "مسح عوامل التصفية",
+      "addAPluginByPullRequest": "إضافة مكون إضافي عبر طلب سحب",
+      "removeFilter": "إزالة {label}",
+      "activeCount": "{count} نشط",
+      "showMore": "إظهار {count} إضافية",
+      "remaining": "تبقت {count} إضافة مطابقة | تبقت {count} إضافات مطابقة",
+      "noMatches": "لا توجد مطابقات · المجموع {total}",
+      "shown": "المعروض {shown} · {total} إضافة | المعروض {shown} · {total} إضافات",
+      "shownMatching": "المعروض {shown} · المطابق {matching} · المجموع {total}",
+      "matching": "المطابق {matching} · المجموع {total}"
+    },
+    "card": {
+      "foundOnGithub": "موجود على GitHub",
+      "notAvailable": "غير متاح",
+      "unavailableSignedDirectorySnapshotExpired": "غير متاح: انتهت صلاحية لقطة Directory الموقعة",
+      "unavailableAtItsIndexedSourceNoInstallCommandIsGenerated": "غير متاح في مصدره المفهرس؛ لن يتم إنشاء أمر تثبيت.",
+      "unavailableAtItsIndexedSource": "غير متاح في مصدره المفهرس",
+      "checkedAgainBeforeInstallation": "تم التحقق مرة أخرى قبل التثبيت",
+      "reviewedListing": "إدراج تمت مراجعته",
+      "notAvailableForChatgpt": "غير متاح لـ ChatGPT",
+      "verifiedConnectionFinishSetupInChatgpt": "اتصال موثق؛ أكمل الإعداد في ChatGPT",
+      "allInstalledAgents": "كل الوكلاء المثبتين",
+      "commandsDisabledInPreview": "الأوامر معطلة في المعاينة.",
+      "allInstalledAgentsRecommended": "كل الوكلاء المثبتين (موصى به)",
+      "previewOnly": "للمعاينة فقط",
+      "currentlyUnavailable": "غير متاح حاليًا",
+      "agentCompatibilityCheckedWhenYouRunTheCommand": "يتم التحقق من توافق الوكيل عند تشغيل الأمر",
+      "communityListing": "إدراج مجتمعي",
+      "notInstallableFromAnActiveRelease": "غير قابل للتثبيت من إصدار نشط",
+      "detectedWhenYouRunTheCommand": "يتم اكتشافه عند تشغيل الأمر",
+      "commandsDisabledBecauseTheDirectoryIsTemporarilyStale": "الأوامر معطلة لأن Directory قديم مؤقتًا.",
+      "unavailableReviewDataIsNotInstallationAuthority": "غير متاح: بيانات المراجعة ليست مرجعًا معتمدًا للتثبيت",
+      "temporarilyPaused": "متوقف مؤقتًا",
+      "communityDirect": "مجتمعي / مباشر",
+      "installCandidateComponents": "تثبيت مكونات المرشح",
+      "add": "إضافة",
+      "thisIsTheGithubRepositorySStarCountNotARatingForThisIndividualPlugin": "هذا هو عدد نجوم مستودع GitHub، وليس تقييمًا لهذه الإضافة تحديدًا.",
+      "agentPlugins10": "Agent Plugins 1.0",
+      "install": "تثبيت",
+      "viewSource": "عرض المصدر",
+      "deliverySummary": "تم تثبيت {managed} تلقائيًا · يتطلب {prepared} خطوة أخيرة واحدة",
+      "installName": "تثبيت {name}",
+      "chooseClients": "اختيار العملاء لـ {name}",
+      "stars": "{count} نجمة على المستودع",
+      "otherSources": "مصادر أخرى ({count})",
+      "forPlugin": "لـ {name}",
+      "publisher": "بواسطة {publisher}",
+      "upstream": "المصدر الأصلي",
+      "installable": "قابل للتثبيت",
+      "unavailable": "غير متاح"
+    },
+    "install": {
+      "allInstalledAgentsRecommended": "كل الوكلاء المثبتين (موصى به)",
+      "useWithYourAgent": "استخدمه مع وكيلك",
+      "notReadyToInstall": "غير جاهز للتثبيت",
+      "detectedWhenYouRunTheCommand": "يتم اكتشافه عند تشغيل الأمر",
+      "thisPackageIsNoLongerAvailableFromItsSource": "لم تعد هذه الحزمة متاحة من مصدرها.",
+      "notAvailableForChatgpt": "غير متاح لـ ChatGPT",
+      "unavailableSignedDirectorySnapshotExpired": "غير متاح: انتهت صلاحية لقطة Directory الموقعة",
+      "noActiveReleaseSupportsThisClient": "لا يوجد إصدار نشط يدعم هذا العميل",
+      "unavailableReviewDataIsNotInstallationAuthority": "غير متاح: بيانات المراجعة ليست مرجعًا معتمدًا للتثبيت",
+      "thisPackageDoesNotSupportAnyOfTheAgentsAvailableInTheInstallerYet": "لا تدعم هذه الحزمة أيًا من الوكلاء المتاحين في المثبّت حتى الآن.",
+      "verifiedConnectionFinishSetupInChatgpt": "اتصال موثق؛ أكمل الإعداد في ChatGPT",
+      "allInstalledAgents": "كل الوكلاء المثبتين",
+      "weFoundThisProjectButItDoesnTIncludeAnyToolsTheInstallerCanAddYet": "عثرنا على هذا المشروع، لكنه لا يتضمن بعد أي أدوات يستطيع المثبّت إضافتها.",
+      "chooseTargetAgents": "اختيار الوكلاء المستهدفين",
+      "add": "إضافة",
+      "update": "تحديث",
+      "repair": "إصلاح",
+      "remove": "إزالة",
+      "installer": "المثبّت",
+      "runWithNpx": "التشغيل باستخدام npx",
+      "thisPluginIsNotInstallableYet": "هذه الإضافة غير قابلة للتثبيت بعد",
+      "viewPackageSource": "عرض مصدر الحزمة",
+      "agents": "الوكلاء",
+      "commandsUnavailableStaleDirectory": "الأوامر غير متاحة: Directory قديم.",
+      "thisSignedSnapshotHasExpiredBrowseItsHistoryThenReturnAfterAFreshSnapshotIsPublished": "انتهت صلاحية هذه اللقطة الموقعة. تصفح سجلها، ثم عد بعد نشر لقطة جديدة.",
+      "commandsUnavailableInReviewPreview": "الأوامر غير متاحة في معاينة المراجعة.",
+      "unresolvedDataIsForReviewOnlyProductionCommandsRequireAPublishedSignedDirectorySnapshot": "البيانات غير المحسومة مخصصة للمراجعة فقط؛ تتطلب أوامر الإنتاج لقطة Directory موقعة ومنشورة.",
+      "commandsUnavailable": "الأوامر غير متاحة.",
+      "automaticDetection": "اكتشاف تلقائي.",
+      "theCliChecksThisPluginAgainstInstalledAgentsSkipsIncompatibleOnesAndLetsYouConfirmTheTargetsChatgptIsIncludedOnlyWhenThisPluginProvidesAVerifiedConnection": "يتحقق CLI من هذه الإضافة مقابل الوكلاء المثبتين، ويتجاوز غير المتوافق منها، ويتيح لك تأكيد الأهداف. لا يتم تضمين ChatGPT إلا عندما توفر هذه الإضافة اتصالًا موثقًا.",
+      "oneStepRemainsInChatgpt": "تبقت خطوة واحدة في ChatGPT.",
+      "noSingleSourceServesThisTargetSet": "لا يوجد مصدر واحد يخدم مجموعة الأهداف هذه.",
+      "theCliWillFailBeforeMutationAndSuggestCompatibleTargetSourceCombinationsItNeverMixesDistributionsAcrossClients": "سيفشل CLI قبل إجراء أي تعديل وسيقترح تركيبات متوافقة من الأهداف والمصادر؛ ولا يخلط أبدًا توزيعات مختلفة بين العملاء.",
+      "theCliChecksEverySelectedAgentBeforeChangingFilesAndShowsAnySignInOrActivationStepOauthCredentialsStayWithTheAgent": "يتحقق CLI من كل وكيل محدد قبل تغيير الملفات ويعرض أي خطوة لتسجيل الدخول أو التفعيل. تبقى بيانات اعتماد OAuth مع الوكيل.",
+      "chatgptFinish": "افتح ChatGPT، واختر {name} من التطبيقات أو الإضافات، ثم وصله وابدأ محادثة جديدة. يعتمد التوفر على حسابك ومساحة العمل لديك.",
+      "expectedFallback": "مصدر الرجوع المتوقع: {source}."
+    },
+    "authentication": {
+      "not_required": "لا يلزم حساب",
+      "oauth": "يتطلب OAuth",
+      "client_managed": "مصادقة يديرها العميل",
+      "unknown": "تحقق من متطلبات الحزمة",
+      "varies": "تختلف المصادقة",
+      "required": "المصادقة مطلوبة"
+    },
+    "delivery": {
+      "managed": "تثبيت مُدار",
+      "prepared": "تم التحضير؛ تبقى خطوة الاستيراد في العميل",
+      "manual_activation": "يتطلب تفعيلًا يدويًا"
+    },
+    "reason": {
+      "distributionStatus": "حالة التوزيع هي {status}",
+      "releaseStatus": "الإصدار {sequence} حالته {status}",
+      "missingComponents": "الإصدار {sequence} يفتقد مكونات مطلوبة",
+      "unsupportedTargets": "الإصدار {sequence} لا يدعم {targets}",
+      "blockingFailure": "الإصدار {sequence} يحتوي على فشل موثوق حاجب لـ {targets}",
+      "missingEvidence": "الإصدار {sequence} يفتقر إلى دليل حالي إيجابي على توافق الحزمة (اجتاز التجسيد) لـ {targets}",
+      "noReleases": "لا توجد إصدارات",
+      "invalidTargets": "يجب أن تكون الأهداف معرّفات عملاء مدعومة وفريدة",
+      "defaultIneligible": "التوزيع الافتراضي المعلن {distribution} غير مؤهل: {reasons}",
+      "distributionReason": "{distribution}: {reasons}",
+      "noEligibleDistribution": "{name}: لا يوجد توزيع مؤهل يدعم مجموعة الأهداف الكاملة {targets}؛ {reasons}",
+      "external": "السبب المقدم من المصدر: {reason}",
+      "separator": "; "
+    },
+    "status": {
+      "candidate": "مرشح",
+      "active": "نشط",
+      "suspended": "معلّق",
+      "superseded": "تم استبداله",
+      "revoked": "ملغى"
+    },
+    "clients": {
+      "codex": {
+        "note": "المهارات ووسائط نقل MCP المدعومة",
+        "status": "مدعوم",
+        "intro": "ثبّت Agent Plugins 1.0 المحمولة لـ Codex باستخدام أمر CLI واحد. يتم تحضير المهارات وخوادم MCP المدعومة بالتنسيق الذي يفهمه Codex.",
+        "delivery": "يحضر CLI الحزمة المتوافقة مع OpenAI ويحافظ على حالة إدارتها قابلة للتراجع.",
+        "activation": "اتبع أي تلميح تفعيل يطبعه CLI، ثم ابدأ جلسة Codex جديدة."
+      },
+      "chatgpt": {
+        "note": "اتصالات ChatGPT موثقة",
+        "status": "الإعداد داخل التطبيق",
+        "intro": "حضّر Agent Plugins 1.0 المتوافقة لـ ChatGPT مع إبقاء تفعيل التطبيق وموافقة الحساب داخل ChatGPT.",
+        "delivery": "يتحقق CLI من الحزمة المتوافقة أو ربط التطبيق المسجل ويحضره.",
+        "activation": "أكمل خطوة تفعيل التطبيق النهائية أو تسجيل الدخول في ChatGPT عند مطالبتك بذلك."
+      },
+      "cursor": {
+        "note": "حزمة Agent Plugin أصلية",
+        "status": "مدعوم",
+        "intro": "ثبّت Agent Plugins 1.0 في مشاريع Cursor دون تحويل كل إضافة يدويًا. يخطط CLI للحزمة الأصلية قبل تغيير الملفات.",
+        "delivery": "يكتب CLI إسقاطات إضافة Cursor والمهارات وMCP المدعومة للمشروع المحدد.",
+        "activation": "أعد تحميل Cursor عند الطلب، ثم تحقق من اكتشاف الإضافة."
+      },
+      "copilot": {
+        "note": "إضافة أصلية مُدارة",
+        "status": "مدعوم",
+        "intro": "ثبّت Agent Plugins 1.0 عبر GitHub Copilot CLI باستخدام مسار عمل الإضافات الأصلي لديه ونفس أمر دورة الحياة المستخدم للوكلاء الآخرين.",
+        "delivery": "يستخدم CLI تخطيط إضافة Copilot المدعوم ويتحقق من حالة التثبيت الناتجة.",
+        "activation": "أعد تشغيل العميل أو أعد تحميله فقط عندما يطلب مسار عمل Copilot الأصلي ذلك."
+      },
+      "vscode": {
+        "note": "تكامل إضافة Copilot",
+        "status": "مدعوم",
+        "intro": "حضّر Agent Plugins 1.0 لـ VS Code عبر تكامل GitHub Copilot المدعوم، مع تعليمات متابعة دقيقة عندما تبقى خطوات إعداد يدوية.",
+        "delivery": "يعيد CLI استخدام حزمة إضافة Copilot المتوافقة عندما يكون مسار العميل الأصلي متاحًا.",
+        "activation": "إذا لم يكن التفعيل التلقائي متاحًا، فاتبع الإعداد المحدد أو مسار الاستيراد الذي يطبعه CLI."
+      },
+      "kiro": {
+        "note": "حزمة مجلد أصلية",
+        "status": "مدعوم",
+        "intro": "ثبّت Agent Plugins 1.0 لـ Kiro من الحزمة المحمولة نفسها المستخدمة مع وكلاء الذكاء الاصطناعي الآخرين.",
+        "delivery": "يحضر CLI حزمة المجلد الأصلية الخاصة بـ Kiro مع مكونات الإضافة المتوافقة.",
+        "activation": "اتبع تلميح الاستيراد أو التفعيل المطبوع عندما يتطلب Kiro خطوة نهائية من جهة العميل."
+      },
+      "claude": {
+        "note": "تكوين MCP مُدار",
+        "status": "مدعوم",
+        "intro": "ثبّت Agent Plugins 1.0 لـ Claude Code بمهارات مُدارة وتكوين MCP بدلًا من صيانة إعداد منفصل يدويًا.",
+        "delivery": "ينشئ CLI إسقاطات Claude Code المدعومة ويتتبعها للتحديث والإصلاح والإزالة.",
+        "activation": "أعد تحميل Claude Code عند الطلب وأكمل أي تسجيل دخول إلى الخدمة داخل العميل أو لدى المزوّد."
+      },
+      "gemini": {
+        "note": "تكوين MCP مُدار",
+        "status": "مدعوم",
+        "intro": "ثبّت Agent Plugins 1.0 المتوافقة لـ Gemini CLI مع الحفاظ على حزمة الإضافة المحمولة كمصدر الحقيقة.",
+        "delivery": "يكتب CLI تكوين Gemini CLI المدعوم ومكونات الحزمة المتوافقة.",
+        "activation": "فعّل التكامل أو أعد تحميله عندما يطبع Gemini CLI خطوة متابعة."
+      },
+      "opencode": {
+        "note": "تكوين MCP مُدار",
+        "status": "مدعوم",
+        "intro": "ثبّت Agent Plugins 1.0 في مشاريع OpenCode مع تكوين MCP مُدار وحالة دورة حياة قابلة للتراجع.",
+        "delivery": "يحضر CLI تكوين المشروع المدعوم ومكونات الإضافة لـ OpenCode.",
+        "activation": "افتح جلسة OpenCode جديدة بعد التثبيت حتى يُعاد تحميل تكوين المشروع."
+      },
+      "cline": {
+        "note": "تكوين MCP مُدار",
+        "status": "مدعوم",
+        "intro": "ثبّت Agent Plugins 1.0 المتوافقة لـ Cline دون إعادة بناء تكوين MCP لكل إضافة.",
+        "delivery": "يحضر CLI تكوين Cline MCP المدعوم ويتتبعه.",
+        "activation": "أعد تحميل Cline عند الطلب وأكمل مصادقة المزوّد خارج حزمة الإضافة."
+      },
+      "windsurf": {
+        "note": "حزمة محضّرة؛ يتطلب تفعيلًا يدويًا",
+        "status": "محضّر بواسطة CLI",
+        "intro": "حضّر Agent Plugins 1.0 لـ Windsurf باستخدام أمر CLI واحد، ثم أكمل صراحةً خطوة التفعيل الخاصة بالعميل.",
+        "delivery": "يتحقق CLI من حزمة Windsurf المتوافقة ويحضّرها دون الادعاء بوجود تفعيل تلقائي.",
+        "activation": "اتبع مسار التفعيل اليدوي الدقيق المطبوع بعد التحضير."
+      }
+    },
+    "directoryPage": {
+      "explorePlugins": "استكشف الإضافات",
+      "filterByCapabilitySourceAuthenticationOrSupportedAgent": "صفّ حسب الإمكانية أو المصدر أو المصادقة أو الوكيل المدعوم.",
+      "pluginDirectory": "دليل الإضافات",
+      "findAgentPlugins10": "اعثر على Agent Plugins 1.0.",
+      "useThemEverywhere": "استخدمها في كل مكان.",
+      "searchReviewedPackagesAndCommunityPluginsDiscoveredFromPublicGithubRepositories": "ابحث في الحزم المراجَعة وإضافات المجتمع المكتشفة من مستودعات GitHub العامة.",
+      "description": "ابحث في إضافات Agent Plugins 1.0 المراجَعة والمجتمعية لـ Codex وClaude Code وCursor وGemini CLI وOpenCode وغيرها.",
+      "title": "دليل Agent Plugins 1.0 {'|'} ابحث في أكثر من 2,500 إضافة",
+      "listName": "حزم Agent Plugins 1.0 المراجَعة"
+    },
+    "detail": {
+      "backToPluginDirectory": "العودة إلى دليل الإضافات",
+      "breadcrumb": "مسار التنقل",
+      "plugins": "الإضافات",
+      "agentPlugins10": "Agent Plugins 1.0",
+      "theListingAndMetadataWereReviewedAnAutomatedSecurityAssessmentWhenPresentAppliesOnlyToTheExactScannedRevisionRuntimeBehaviorIsNotAudited": "تمت مراجعة القائمة والبيانات الوصفية. ينطبق تقييم الأمان الآلي، عند توفره، على المراجعة المحددة التي تم فحصها فقط. ولا يتم تدقيق سلوك وقت التشغيل.",
+      "installPlugin": "تثبيت الإضافة",
+      "viewSource": "عرض المصدر",
+      "pluginOverview": "نظرة عامة على الإضافة",
+      "components": "المكوّنات",
+      "package": "الحزمة",
+      "pluginNotFound": "لم يتم العثور على الإضافة",
+      "reviewedListing": "قائمة مراجَعة",
+      "licenseNotSpecified": "لم يتم تحديد الترخيص",
+      "managedByCli": "تُدار عبر CLI",
+      "requiresAFinalStepInTheApp": "تتطلب خطوة نهائية في التطبيق",
+      "deliveryDetailsNotSpecified": "لم يتم تحديد تفاصيل التسليم",
+      "descriptionLead": "ثبّت إضافة Agent Plugin باسم {name} لـ {clients}.",
+      "title": "إضافة Agent Plugin باسم {name} {'|'} Universal Agent Plugins",
+      "schemaName": "إضافة Agent Plugin باسم {name}",
+      "directory": "دليل الإضافات",
+      "version": "الإصدار {version}"
+    },
+    "community": {
+      "breadcrumb": "مسار التنقل",
+      "plugins": "الإضافات",
+      "author": "المؤلف",
+      "source": "المصدر",
+      "viewOnGithub": "عرض على GitHub",
+      "loadingPlugin": "جارٍ تحميل الإضافة…",
+      "checkingTheCurrentCommunityDirectory": "جارٍ فحص دليل المجتمع الحالي.",
+      "pluginNotFound": "لم يتم العثور على الإضافة",
+      "thisPackageIsNoLongerAvailableInTheCurrentDirectory": "لم تعد هذه الحزمة متاحة في الدليل الحالي.",
+      "explorePlugins": "استكشف الإضافات",
+      "notDeclared": "غير مُعلَن",
+      "communityPlugin": "إضافة مجتمعية",
+      "communityListing": "قائمة مجتمعية",
+      "lastKnownAgents": "آخر الوكلاء المعروفين",
+      "worksWith": "تعمل مع",
+      "detectedAtInstallTime": "تم اكتشافه أثناء التثبيت",
+      "lastKnownComponents": "آخر المكوّنات المعروفة",
+      "components": "المكوّنات",
+      "title": "إضافة Agent Plugin باسم {name} {'|'} Universal Agent Plugins",
+      "defaultTitle": "إضافة Agent Plugin مجتمعية {'|'} Universal Agent Plugins",
+      "description": "ثبّت إضافة Agent Plugin مجتمعية عبر وكلاء الذكاء الاصطناعي المدعومين."
+    },
+    "agentPage": {
+      "breadcrumb": "مسار التنقل",
+      "backToUniversalAgentPlugins": "العودة إلى Universal Agent Plugins",
+      "install": "تثبيت",
+      "home": "الرئيسية",
+      "agentPlugins10": "Agent Plugins 1.0",
+      "oneCommand": "أمر واحد",
+      "chooseAPluginAndInstallIt": "اختر إضافة وثبّتها",
+      "nativeDelivery": "تسليم أصلي",
+      "packageDelivery": "تسليم الحزم",
+      "activation": "التفعيل",
+      "lifecycle": "دورة الحياة",
+      "useTheSameCliToInspectUpdateRepairSwitchSourceOrRemoveThePlugin": "استخدم واجهة CLI نفسها لفحص الإضافة أو تحديثها أو إصلاحها أو تبديل مصدرها أو إزالتها.",
+      "reviewedDirectory": "دليل مراجَع",
+      "exploreTheFullPluginDirectory": "استكشف دليل الإضافات الكامل",
+      "agentNotFound": "لم يتم العثور على الوكيل",
+      "title": "Agent Plugins لـ {name} {'|'} Universal Agent Plugins",
+      "listName": "حزم Agent Plugins 1.0 المراجَعة لـ {name}",
+      "installFor": "ثبّت Agent Plugins لـ {name}",
+      "whatHappens": "ما الذي يحدث لـ {name}",
+      "vendorDocs": "اقرأ وثائق {name}",
+      "availableFor": "الإضافات المتاحة لـ {name}",
+      "count": "تدعم {count} حزمة مراجَعة هذا العميل. | تدعم {count} حزم مراجَعة هذا العميل.",
+      "tryPlugin": "جرّب Context7، أو استبدل {source} بالاسم المختصر المراجَع لإضافة متوافقة أخرى أو بمصدر حزمة GitHub مثبّت."
+    },
+    "components": {
+      "extensions": "الامتدادات",
+      "mcp": "mcp",
+      "skills": "المهارات"
+    },
+    "distribution": {
+      "upstream": "حزمة المنبع",
+      "community_bridge": "جسر المجتمع",
+      "community": "حزمة مجتمعية",
+      "direct": "مصدر مباشر"
+    },
+    "errors": {
+      "unavailable": "دليل الإضافات غير متاح",
+      "uninitialized": "لم تتم تهيئة دليل الإضافات",
+      "discoveryUnavailable": "فهرس الاكتشاف الموقّع غير متاح"
+    },
+    "controls": {
+      "optionsRequired": "يتطلب {component} \"{label}\" خيارًا واحدًا على الأقل",
+      "nonEmptyOptions": "يجب أن تستخدم خيارات {component} \"{label}\" قيمًا غير فارغة",
+      "unknownValue": "تلقى {component} \"{label}\" قيمة غير معروفة",
+      "selectionRequired": "يتطلب {component} \"{label}\" قيمة محددة واحدة على الأقل"
+    }
+  }
+}

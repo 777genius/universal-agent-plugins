@@ -1,0 +1,50 @@
+{
+  "shell": {
+    "download": {
+      "heading": {
+        "title": "Instala tu primer complemento",
+        "note": "Elija cómo ejecutar la CLI, seleccione uno o más agentes y copie el comando."
+      },
+      "channels": {
+        "brew": {
+          "title": "cerveza casera",
+          "description": "CLI nativa de Go para macOS y Linux. No se requiere Node.js.",
+          "note": "Recomendado para una instalación permanente con actualizaciones automáticas de Homebrew."
+        },
+        "npm": {
+          "title": "npx · Node.js 22+",
+          "description": "Más rápido cuando Node.js 22+ ya está instalado: ejecute el comando del complemento inmediatamente.",
+          "note": "Instalación cero: npx descarga la CLI verificada y ejecuta el comando del complemento en un solo paso."
+        },
+        "script": {
+          "title": "Script de instalación verificado",
+          "description": "Instalación nativa sin administrador de paquetes. No se requiere Node.js.",
+          "note": "Descarga el binario de versión correcto y verifica su SHA-256 y su versión."
+        },
+        "powershell": {
+          "title": "WindowsPowerShell",
+          "description": "CLI nativa de Go para Windows. No se requiere Node.js.",
+          "note": "Descarga el binario de Windows y verifica su SHA-256 y su versión."
+        }
+      },
+      "steps": {
+        "install-cli": {
+          "title": "Ejecute la CLI",
+          "note": "Utilice npx para un inicio rápido o instale el binario para uso diario."
+        },
+        "try-plugin": {
+          "title": "Instalar un complemento real",
+          "note": "El mismo comando acepta un objetivo o una lista separada por comas."
+        },
+        "build-plugin": {
+          "title": "Mantenlo actualizado",
+          "note": "Utilice la actualización para una nueva versión y repare cuando un cliente se desvíe."
+        },
+        "validate": {
+          "title": "Retirar limpiamente",
+          "note": "La CLI elimina las entradas de clientes administrados y al mismo tiempo conserva los datos del paquete de forma predeterminada."
+        }
+      }
+    }
+  }
+}
