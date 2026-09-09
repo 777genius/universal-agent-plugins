@@ -201,7 +201,7 @@ class ConPTY:
         code = W.DWORD(); self.ok(self.k.GetExitCodeProcess(self.pi.hProcess, ctypes.byref(code)))
         return code.value
 
-    def wait(self, marker, after=0, *, child_nonce=None):
+    def wait(self, marker, after=0, *, child_nonce=None, child_final=False):
         deadline = time.monotonic() + self.timeout
         while time.monotonic() < deadline:
             code = self.poll()
@@ -219,13 +219,24 @@ class ConPTY:
                 # The owner saves completed child status before publishing this
                 # nonce-specific marker, then waits for restoration-probe input.
                 # It is still alive, so poll() alone cannot detect child failure.
-                if child_nonce and 'RESTORE_READY_' + child_nonce in captured:
+                # Completion is session evidence, not consumable marker output:
+                # a previous wait may have advanced past it in a coalesced read.
+                transcript = clean(bytes(self.raw)) if child_nonce else ''
+                if child_nonce and re.search(
+                        r'(?m)^RESTORE_READY_' + re.escape(child_nonce) + r'\r?$', transcript):
                     state = json.loads(self.status_path.read_text(encoding='utf-8'))
-                    transcript = clean(bytes(self.raw))
+                    check('error' not in state,
+                          'console owner native failure: ' + str(state.get('error')))
+                    # The owner atomically saves probe status before printing
+                    # the nonce-bound marker. Earlier phases are not completion.
+                    check(state.get('phase') in ('probe', 'done')
+                          and type(state.get('exit')) is int
+                          and state.get('nonce', child_nonce) == child_nonce,
+                          'invalid completed child status: ' + repr(state))
                     assertions = '\n'.join(line for line in transcript.splitlines()
                                            if 'console resources did not settle:' in line
                                            or 'owned lifecycle:' in line)
-                    check(state.get('exit') == 0 and re.search(marker, captured),
+                    check(child_final and state['exit'] == 0 and re.search(marker, captured),
                           'native console helper exited before ' + marker +
                           ': ' + repr(state) + '\n' + assertions[-2000:] + '\n' + transcript[-6000:])
                 found = re.search(marker, captured)

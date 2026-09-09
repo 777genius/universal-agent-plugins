@@ -241,11 +241,11 @@ class CaptureWaitTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as root:
             c = self.console()
             c.status_path = Path(root) / 'status.json'
-            c.status_path.write_text(json.dumps({'exit': 0}))
+            c.status_path.write_text(json.dumps({'phase': 'probe', 'exit': 0}))
             for raw in (b'RESTORE_READY_other\nOK', b'RESTORE_READY_non\nOK',
                         b'OK\nRESTORE_READY_nonce'):
                 c.raw = bytearray(raw)
-                self.assertEqual(c.wait('OK', child_nonce='nonce'), len(raw))
+                self.assertEqual(c.wait('OK', child_nonce='nonce', child_final=True), len(raw))
 
     def test_owner_native_error_wins_over_captured_marker(self):
         import json
@@ -258,6 +258,75 @@ class CaptureWaitTests(unittest.TestCase):
             c.status_path.write_text(json.dumps({'error': 'native failure WinError 6'}))
             with self.assertRaisesRegex(AssertionError, 'native failure WinError 6'):
                 c.wait('RESTORE_OK')
+
+    def completed_console(self, raw, state):
+        import json
+        c = self.console()
+        c.poll = lambda: None  # Owner remains alive for restoration input.
+        c.raw.extend(raw)
+        c.status_path = SimpleNamespace(read_text=lambda **kwargs: json.dumps(state))
+        return c
+
+    def test_coalesced_reuse24_completion_fails_current_and_next_wait(self):
+        from unittest.mock import patch
+        for code in (0, 7):
+            with self.subTest(code=code):
+                c = self.completed_console(
+                    b'QUALIFICATION_CONSOLE_REUSE_READY 24\nRESTORE_READY_nonce\n',
+                    {'phase': 'probe', 'exit': code})
+                with patch.object(c.output_changed, 'wait', side_effect=AssertionError('must not wait')):
+                    for iteration, offset in ((24, 0), (25, len(c.raw))):
+                        marker = 'QUALIFICATION_CONSOLE_REUSE_READY ' + str(iteration)
+                        with self.assertRaisesRegex(AssertionError, 'helper exited before ' + marker) as caught:
+                            c.wait(marker, after=offset, child_nonce='nonce')
+                        self.assertIn("'exit': " + str(code), str(caught.exception))
+
+    def test_final_success_requires_current_marker_and_zero_completion(self):
+        from unittest.mock import patch
+        for code, offset, succeeds in ((0, 0, True), (7, 0, False), (0, 1000, False)):
+            with self.subTest(code=code, offset=offset):
+                c = self.completed_console(b'QUALIFICATION_CONSOLE_OK\nRESTORE_READY_nonce\n',
+                                           {'phase': 'probe', 'exit': code})
+                with patch.object(c.output_changed, 'wait', side_effect=AssertionError('must not wait')):
+                    if succeeds:
+                        self.assertEqual(c.wait('QUALIFICATION_CONSOLE_OK', child_nonce='nonce',
+                                                child_final=True), len(c.raw))
+                    else:
+                        with self.assertRaisesRegex(AssertionError, 'helper exited before'):
+                            c.wait('QUALIFICATION_CONSOLE_OK', after=offset,
+                                   child_nonce='nonce', child_final=True)
+
+    def test_foreign_or_fragmented_nonce_does_not_read_stale_status(self):
+        from unittest.mock import Mock
+        for token in ('other', 'nonce_suffix', 'non', 'nonce-extra'):
+            with self.subTest(token=token):
+                c = self.completed_console(('RESTORE_READY_' + token + '\nREUSE_READY 24\n').encode(), {})
+                c.status_path.read_text = Mock(side_effect=AssertionError('must not read stale status'))
+                self.assertEqual(c.wait('REUSE_READY 24', child_nonce='nonce'), len(c.raw))
+                c.status_path.read_text.assert_not_called()
+
+    def test_completion_rejects_stale_invalid_and_failed_status(self):
+        from unittest.mock import patch
+        for state in ({'phase': 'running', 'exit': 0}, {'phase': 'probe'},
+                      {'phase': 'probe', 'exit': False},
+                      {'phase': 'probe', 'exit': 0, 'nonce': 'foreign'},
+                      {'phase': 'probe', 'exit': 0, 'error': 'status write failed'}):
+            with self.subTest(state=state):
+                c = self.completed_console(b'OK\nRESTORE_READY_nonce\n', state)
+                with patch.object(c.output_changed, 'wait', side_effect=AssertionError('must not wait')):
+                    with self.assertRaisesRegex(AssertionError, 'invalid completed child status|native failure'):
+                        c.wait('OK', child_nonce='nonce', child_final=True)
+
+    def test_completion_status_read_failure_is_not_retried(self):
+        from unittest.mock import Mock, patch
+        for error in (FileNotFoundError('missing status'), PermissionError('status unavailable')):
+            with self.subTest(error=error):
+                c = self.completed_console(b'OK\nRESTORE_READY_nonce\n', {})
+                c.status_path.read_text = Mock(side_effect=error)
+                with patch.object(c.output_changed, 'wait', side_effect=AssertionError('must not wait')):
+                    with self.assertRaises(type(error)):
+                        c.wait('OK', child_nonce='nonce', child_final=True)
+                c.status_path.read_text.assert_called_once()
 
 
 class OwnerTests(unittest.TestCase):

@@ -110,7 +110,7 @@ def windows_case(binary, case, root, evidence, timeout):
             # One Enter only: CRLF input injection can enqueue a second empty
             # line and invalidate the next cancellation-entry sample.
             session.send(('qualification-reuse-' + str(i) + '\r').encode())
-        session.wait(r'QUALIFICATION_CONSOLE_OK', after=offset, child_nonce=nonce)
+        session.wait(r'QUALIFICATION_CONSOLE_OK', after=offset, child_nonce=nonce, child_final=True)
         session.wait('RESTORE_READY_' + nonce)
         status = json.loads(status_path.read_text(encoding='utf-8'))
         check(status['exit'] == 0, 'native console helper failed: ' + repr(status))
