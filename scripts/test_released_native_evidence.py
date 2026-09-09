@@ -549,37 +549,52 @@ class DraftArchiveTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, 'inventory accepted'):
                 proof.draft_bundle(self.args.producer_bundle.read_bytes(), self.args, self.native)
 
-    def reject_tar_before_shared_inspection(self, message):
+    def test_bundle_uses_one_shared_package_parse(self):
+        with patch.object(self.native, 'inspect_package', wraps=self.native.inspect_package) as inspect, \
+             patch.object(self.native.tarfile, 'open', wraps=self.native.tarfile.open) as parse:
+            proof.draft_bundle(self.args.producer_bundle.read_bytes(), self.args, self.native)
+        inspect.assert_called_once()
+        parse.assert_called_once()
+
+    def test_tar_logical_inventory_before_any_file_read(self):
+        self.package_files['package/../evil'] = b'x'
+        self.repack_tarball()
         self.write_bundle()
-        with patch.object(self.native, 'inspect_package', side_effect=AssertionError('unbounded shared inspection')) as inspect:
+        with patch.object(self.native.tarfile.TarFile, 'extractfile', side_effect=AssertionError('file read')):
+            with self.assertRaisesRegex(ValueError, 'unsafe npm member'):
+                proof.draft_bundle(self.args.producer_bundle.read_bytes(), self.args, self.native)
+
+    def reject_tar_before_parser(self, message):
+        self.write_bundle()
+        with patch.object(self.native.tarfile, 'open', side_effect=AssertionError('tar parser entered')) as inspect:
             with self.assertRaisesRegex(ValueError, message):
                 proof.draft_bundle(self.args.producer_bundle.read_bytes(), self.args, self.native)
             inspect.assert_not_called()
 
-    def test_tar_member_count_bomb_before_shared_inspection(self):
+    def test_tar_member_count_bomb_before_parser(self):
         self.package_files.update({f'package/extra-{i}': b'' for i in range(8)})
         self.repack_tarball()
-        with patch.object(proof, 'TAR_MEMBER_COUNT', 6):
-            self.reject_tar_before_shared_inspection('too many npm headers')
+        with patch.object(self.native, 'TAR_MEMBER_COUNT', 6):
+            self.reject_tar_before_parser('too many npm headers')
 
     def test_tar_expansion_bomb_including_trailing_padding(self):
         import gzip
         raw = gzip.decompress(self.bundle_files['fixture.tgz'])
         self.bundle_files['fixture.tgz'] = gzip.compress(raw + b'\0' * 8192)
-        with patch.object(proof, 'TAR_EXPANDED_LIMIT', len(raw) + 1024):
-            self.reject_tar_before_shared_inspection('oversized expanded npm archive')
+        with patch.object(self.native, 'TAR_EXPANDED_LIMIT', len(raw) + 1024):
+            self.reject_tar_before_parser('oversized expanded npm archive')
 
     def test_tar_body_limit_before_any_selected_read(self):
         import tarfile
-        with patch.object(proof, 'TAR_MEMBER_LIMIT', 16), \
+        with patch.object(self.native, 'TAR_MEMBER_LIMIT', 16), \
              patch.object(tarfile.TarFile, 'extractfile', side_effect=AssertionError('selected body read')):
-            self.reject_tar_before_shared_inspection('oversized npm header body')
+            self.reject_tar_before_parser('oversized npm header body')
 
     def test_tar_metadata_and_sparse_headers_before_parser_allocations(self):
         import gzip
         import tarfile
-        cases = [(tarfile.XHDTYPE, proof.TAR_METADATA_LIMIT + 1, b'', 'oversized npm header'),
-                 (tarfile.GNUTYPE_LONGNAME, proof.TAR_METADATA_LIMIT + 1, b'', 'oversized npm header'),
+        cases = [(tarfile.XHDTYPE, self.native.TAR_METADATA_LIMIT + 1, b'', 'oversized npm header'),
+                 (tarfile.GNUTYPE_LONGNAME, self.native.TAR_METADATA_LIMIT + 1, b'', 'oversized npm header'),
                  (tarfile.GNUTYPE_SPARSE, 0, b'', 'sparse forbidden'),
                  (tarfile.XHDTYPE, 26, b'26 GNU.sparse.size=9999999\n', 'sparse npm metadata'),
                  (tarfile.XGLTYPE, 18, b'18 size=9999999999\n', 'pax size override')]
@@ -588,8 +603,8 @@ class DraftArchiveTests(unittest.TestCase):
                 member = tarfile.TarInfo('package/metadata'); member.type = kind; member.size = size
                 raw = member.tobuf() + data.ljust(512, b'\0') + b'\0' * 1024
                 self.bundle_files['fixture.tgz'] = gzip.compress(raw)
-                with patch.object(tarfile.TarFile, 'open', side_effect=AssertionError('extension parser entered')):
-                    self.reject_tar_before_shared_inspection(message)
+                with patch.object(tarfile, 'open', side_effect=AssertionError('extension parser entered')):
+                    self.reject_tar_before_parser(message)
 
     def test_tar_extension_headers_count_and_normal_pax_support(self):
         import io
@@ -601,10 +616,10 @@ class DraftArchiveTests(unittest.TestCase):
                 member.pax_headers = {'mtime': '1.25'}
                 archive.addfile(member, io.BytesIO(body))
         self.bundle_files['fixture.tgz'] = stream.getvalue()
-        self.assertEqual(proof.preflight_package(stream.getvalue()), self.package_files)
+        self.assertEqual(self.native.read_package(stream.getvalue()), self.package_files)
         # Four logical files have eight physical headers including pax records.
-        with patch.object(proof, 'TAR_MEMBER_COUNT', 6):
-            self.reject_tar_before_shared_inspection('too many npm headers')
+        with patch.object(self.native, 'TAR_MEMBER_COUNT', 6):
+            self.reject_tar_before_parser('too many npm headers')
 
 
 if __name__ == '__main__':

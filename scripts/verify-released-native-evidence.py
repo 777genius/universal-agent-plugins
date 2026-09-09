@@ -264,85 +264,10 @@ def original_file(path):
 ZIP_MEMBER_LIMIT = 400 << 20
 ZIP_COMPRESSED_LIMIT = 401 << 20
 ZIP_TOTAL_LIMIT = (6 * 400 + 64) << 20
-TAR_EXPANDED_LIMIT = 64 << 20
-TAR_MEMBER_LIMIT = 16 << 20
-TAR_METADATA_LIMIT = 64 << 10
-TAR_MEMBER_COUNT = 128
-
-
-def preflight_package(body):
-    """Bound gzip, physical headers, then logical members before shared parsing."""
-    import gzip
-    import io
-    import tarfile
-    import tempfile
-    selected = {}
-    with tempfile.TemporaryFile() as expanded:
-        # Include padding, extension records and concatenated gzip streams in the
-        # budget. Never ask the decompressor to allocate an archive-sized buffer.
-        total = 0
-        with gzip.GzipFile(fileobj=io.BytesIO(body)) as compressed:
-            while True:
-                chunk = compressed.read(min(64 << 10, TAR_EXPANDED_LIMIT - total + 1))
-                if not chunk:
-                    break
-                total += len(chunk)
-                require(total <= TAR_EXPANDED_LIMIT, 'oversized expanded npm archive')
-                expanded.write(chunk)
-        expanded.seek(0)
-        count = 0
-        extensions = (tarfile.XHDTYPE, tarfile.XGLTYPE, tarfile.GNUTYPE_LONGNAME, tarfile.GNUTYPE_LONGLINK)
-        while True:
-            header = expanded.read(512)
-            if not header or header == b'\0' * 512:
-                break
-            count += 1
-            require(count <= TAR_MEMBER_COUNT, 'too many npm headers')
-            # frombuf parses only this header, without consuming pax/longname or
-            # sparse extensions. tarfile.open would process them before yielding.
-            member = tarfile.TarInfo.frombuf(header, 'utf-8', 'surrogateescape')
-            require(member.type in (tarfile.REGTYPE, tarfile.AREGTYPE, tarfile.DIRTYPE) + extensions,
-                    'unsupported npm header (links/sparse forbidden)')
-            limit = TAR_METADATA_LIMIT if member.type in extensions else TAR_MEMBER_LIMIT
-            require(0 <= member.size <= limit, 'oversized npm header body')
-            require(not member.isdir() or member.size == 0, 'nonempty npm directory')
-            end = expanded.tell() + ((member.size + 511) // 512) * 512
-            require(end <= total, 'truncated npm header body')
-            if member.type in (tarfile.XHDTYPE, tarfile.XGLTYPE):
-                metadata = expanded.read(member.size)
-                require(b'GNU.sparse' not in metadata, 'sparse npm metadata forbidden')
-                # A pax size override would change the physical record offsets
-                # on the later tarfile pass. npm sources need no such encoding.
-                require(b' size=' not in metadata, 'npm pax size override forbidden')
-            expanded.seek(end)
-        expanded.seek(0)
-        with tarfile.open(fileobj=expanded, mode='r:') as package:
-            members, size = {}, 0
-            for member in package:
-                require(len(members) < TAR_MEMBER_COUNT, 'too many npm members')
-                require(member.isfile() or member.isdir(), 'nonregular npm member')
-                require(not member.issparse() and 0 <= member.size <= TAR_MEMBER_LIMIT,
-                        'oversized or sparse npm member')
-                size += member.size
-                require(size <= TAR_EXPANDED_LIMIT, 'oversized npm member total')
-                name = member.name.rstrip('/') if member.isdir() else member.name
-                safe_name(name)
-                require(name == 'package' or name.startswith('package/'), 'unsafe npm member')
-                require(name.casefold() not in members, 'duplicate npm member')
-                members[name.casefold()] = member
-            for name in ('package/package.json', 'package/assets.json',
-                         'package/THIRD_PARTY_NOTICES.txt', 'package/bin/agentplugins.js'):
-                member = members.get(name.casefold())
-                require(member is not None and member.name == name and member.isfile(), 'missing npm file: ' + name)
-                selected[name] = package.extractfile(member).read(member.size + 1)
-                require(len(selected[name]) == member.size, 'truncated npm file')
-    return selected
-
 
 def draft_bundle(body, args, native):
     """Inspect preserved ZIP/tar members as bytes; never extract or execute them."""
     import io
-    import tempfile
     require(digest(body) == args.producer_artifact_digest, 'producer artifact digest mismatch')
     files, seen = {}, set()
     version, tag = args.release_version, args.release_tag
@@ -405,12 +330,10 @@ def draft_bundle(body, args, native):
         'notices': [{'file': 'THIRD_PARTY_NOTICES.txt', 'sha256': digest(assets['THIRD_PARTY_NOTICES.txt'])}],
         'gate_eligible': True} and type(verified['manifest_schema']) is int and verified['gate_eligible'] is True,
         'unsupported or inconsistent verified-release schema')
-    package = preflight_package(files[tarball])
-    # Preserve shared identity/pin validation, but only after bounded preflight.
-    with tempfile.TemporaryDirectory(prefix='offline-draft-package-') as temporary:
-        path = Path(temporary) / 'original.tgz'
-        path.write_bytes(files[tarball])
-        native.inspect_package(path, verified)
+    package = native.inspect_package(files[tarball], verified)
+    for name in ('package/package.json', 'package/assets.json',
+                 'package/THIRD_PARTY_NOTICES.txt', 'package/bin/agentplugins.js'):
+        require(name in package, 'missing npm file: ' + name)
     for name in ('package/package.json', 'package/assets.json'):
         read_json(package[name])  # Reject duplicate JSON keys too.
     require(package['package/THIRD_PARTY_NOTICES.txt'] == assets['THIRD_PARTY_NOTICES.txt'], 'packaged notices mismatch')

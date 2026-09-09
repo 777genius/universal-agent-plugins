@@ -4,6 +4,7 @@ The artifact is selected by ID AND name and authenticated against an exact
 producer attempt. No build/pack fallback exists. Runtime environments are
 constructed from scratch; acquisition authentication never enters npm/launchers.
 """
+import gzip
 import hashlib
 import importlib.util
 import io
@@ -15,6 +16,7 @@ import shutil
 import subprocess
 import sys
 import tarfile
+import tempfile
 import zipfile
 
 REPOSITORY = '777genius/universal-agent-plugins'
@@ -175,10 +177,9 @@ def acquire(source, directory, args, evidence):
                'manifest_sha256': verified['manifest_sha256'], 'checksums_sha256': args.expected_asset_set_digest,
                'release_id': int(args.release_id), 'producer': provenance, 'attestations': attestations,
                'tarball_sha256': digest(tarballs[0]), 'initial_draft': live}
-    inspect_package(tarballs[0], verified)
-    with tarfile.open(tarballs[0], 'r:gz') as archive:
-        require(archive.extractfile('package/THIRD_PARTY_NOTICES.txt').read() ==
-                (assets / 'THIRD_PARTY_NOTICES.txt').read_bytes(), 'packaged notices mismatch')
+    package = inspect_package(tarballs[0], verified)
+    require(package['package/THIRD_PARTY_NOTICES.txt'] ==
+            (assets / 'THIRD_PARTY_NOTICES.txt').read_bytes(), 'packaged notices mismatch')
     return tarballs[0], assets, verified, release
 
 
@@ -199,19 +200,90 @@ def verify_attestation(records, name, sha, commit):
                 and result.get('verifiedTimestamps'), 'attestation source, signer or subject mismatch')
 
 
+TAR_EXPANDED_LIMIT = 64 << 20
+TAR_MEMBER_LIMIT = 16 << 20
+TAR_METADATA_LIMIT = 64 << 10
+TAR_MEMBER_COUNT = 128
+
+
+def read_package(source):
+    """Read npm files after bounded gzip and full physical/logical preflight.
+
+    Accept a path or compressed bytes. Native binaries remain outside this
+    source package, with their separate 400 MiB ZIP member ceiling.
+    """
+    selected = {}
+    with tempfile.TemporaryFile() as expanded:
+        # Include padding, extension records and concatenated gzip streams in the
+        # budget. Never ask the decompressor to allocate an archive-sized buffer.
+        total = 0
+        compressed = (gzip.GzipFile(fileobj=io.BytesIO(source)) if isinstance(source, bytes)
+                      else gzip.open(source, 'rb'))
+        with compressed:
+            while True:
+                chunk = compressed.read(min(64 << 10, TAR_EXPANDED_LIMIT - total + 1))
+                if not chunk:
+                    break
+                total += len(chunk)
+                require(total <= TAR_EXPANDED_LIMIT, 'oversized expanded npm archive')
+                expanded.write(chunk)
+        expanded.seek(0)
+        count = 0
+        extensions = (tarfile.XHDTYPE, tarfile.XGLTYPE, tarfile.GNUTYPE_LONGNAME, tarfile.GNUTYPE_LONGLINK)
+        while True:
+            header = expanded.read(512)
+            if not header or header == b'\0' * 512:
+                break
+            count += 1
+            require(count <= TAR_MEMBER_COUNT, 'too many npm headers')
+            # frombuf parses only this header, without consuming pax/longname or
+            # sparse extensions. tarfile.open would process them before yielding.
+            member = tarfile.TarInfo.frombuf(header, 'utf-8', 'surrogateescape')
+            require(member.type in (tarfile.REGTYPE, tarfile.AREGTYPE, tarfile.DIRTYPE) + extensions,
+                    'unsupported npm header (links/sparse forbidden)')
+            limit = TAR_METADATA_LIMIT if member.type in extensions else TAR_MEMBER_LIMIT
+            require(0 <= member.size <= limit, 'oversized npm header body')
+            require(not member.isdir() or member.size == 0, 'nonempty npm directory')
+            end = expanded.tell() + ((member.size + 511) // 512) * 512
+            require(end <= total, 'truncated npm header body')
+            if member.type in (tarfile.XHDTYPE, tarfile.XGLTYPE):
+                metadata = expanded.read(member.size)
+                require(b'GNU.sparse' not in metadata, 'sparse npm metadata forbidden')
+                # A pax size override would change the physical record offsets
+                # on the later tarfile pass. npm sources need no such encoding.
+                require(b' size=' not in metadata, 'npm pax size override forbidden')
+            expanded.seek(end)
+        expanded.seek(0)
+        with tarfile.open(fileobj=expanded, mode='r:') as package:
+            members, size = {}, 0
+            for member in package:
+                require(len(members) < TAR_MEMBER_COUNT, 'too many npm members')
+                require(member.isfile() or member.isdir(), 'nonregular npm member')
+                require(not member.issparse() and 0 <= member.size <= TAR_MEMBER_LIMIT,
+                        'oversized or sparse npm member')
+                size += member.size
+                require(size <= TAR_EXPANDED_LIMIT, 'oversized npm member total')
+                name = member.name.rstrip('/') if member.isdir() else member.name
+                parts = PurePosixPath(name).parts
+                require(parts and name == '/'.join(parts)
+                        and not any(ord(c) < 32 or ord(c) == 127 or c in '\\:' for c in name)
+                        and all(p not in ('.', '..') for p in parts), 'unsafe npm member')
+                require(name == 'package' or name.startswith('package/'), 'unsafe npm member')
+                require(name.casefold() not in members, 'duplicate npm member')
+                members[name.casefold()] = member
+            # Complete both inventories before reading any file body or JSON.
+            # Expanded bytes also bound the aggregate retained file contents.
+            for member in members.values():
+                if member.isfile():
+                    selected[member.name] = package.extractfile(member).read(member.size + 1)
+                    require(len(selected[member.name]) == member.size, 'truncated npm file')
+    return selected
+
+
 def inspect_package(tarball, verified):
-    # Validate all paths before npm extracts anything; reject links and dependencies.
-    with tarfile.open(tarball, 'r:gz') as archive:
-        names = set()
-        for member in archive.getmembers():
-            parts = PurePosixPath(member.name).parts
-            require(parts and parts[0] == 'package' and member.name.rstrip('/') == '/'.join(parts)
-                    and all(p not in ('.', '..') and ':' not in p for p in parts)
-                    and '\\' not in member.name and (member.isfile() or member.isdir()), 'unsafe npm member')
-            require(member.name.rstrip('/').casefold() not in names, 'duplicate npm member')
-            names.add(member.name.rstrip('/').casefold())
-        pkg = json.load(archive.extractfile('package/package.json'))
-        pins = json.load(archive.extractfile('package/assets.json'))
+    package = read_package(tarball)
+    pkg = json.loads(package['package/package.json'])
+    pins = json.loads(package['package/assets.json'])
     require(pkg['name'] == 'universal-agent-plugins' and pkg['version'] == verified['version']
             and pkg.get('bin') == {'agentplugins': 'bin/agentplugins.js'}, 'wrong npm package')
     require(not any(pkg.get(k) for k in ('dependencies', 'optionalDependencies', 'peerDependencies', 'bundledDependencies', 'bundleDependencies'))
@@ -223,8 +295,11 @@ def inspect_package(tarball, verified):
                 'commit': verified['commit'], 'release_manifest': {'schema_version': 2,
                     'sha256': verified['manifest_sha256'], 'version': verified['version']}}, 'package pins differ from frozen assets')
 
+    return package
+
 
 def bootstrap(tarball, assets, verified, target, scratch, env):
+    package = inspect_package(tarball, verified)
     project = scratch / 'npm-project'
     project.mkdir()
     (project / 'package.json').write_text('{"private":true}')
@@ -244,11 +319,10 @@ def bootstrap(tarball, assets, verified, target, scratch, env):
     output([node, str(npm), 'install', '--ignore-scripts', '--no-audit', '--no-fund', '--offline', '--save-exact', str(tarball)], cwd=project, env=runtime)
     installed = project / 'node_modules/universal-agent-plugins'
     # npm must have installed exactly the frozen regular file bytes.
-    with tarfile.open(tarball, 'r:gz') as archive:
-        for member in archive.getmembers():
-            if member.isfile():
-                path = installed.joinpath(*PurePosixPath(member.name).parts[1:])
-                require(path.is_file() and not path.is_symlink() and path.read_bytes() == archive.extractfile(member).read(), 'installed package differs from tarball')
+    for name, body in package.items():
+        path = installed.joinpath(*PurePosixPath(name).parts[1:])
+        require(path.is_file() and not path.is_symlink() and path.stat().st_size == len(body)
+                and path.read_bytes() == body, 'installed package differs from tarball')
     launcher = installed / 'bin/agentplugins.js'
     selected = verified['assets'][target]
     runtime['AGENTPLUGINS_INTERNAL_PROOF_MODE'] = 'local-frozen-release-asset-v1'

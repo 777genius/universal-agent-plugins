@@ -168,6 +168,73 @@ class DraftTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     draft.inspect_package(tarball(root, verified, change), verified)
 
+    def test_package_bounds_before_tar_or_json_parser(self):
+        import gzip
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            verified = verified_release()
+            path = tarball(root, verified)
+            original = path.read_bytes()
+            raw = gzip.decompress(original)
+            cases = [
+                (original, 'TAR_MEMBER_COUNT', 3, 'too many npm headers'),
+                (original, 'TAR_MEMBER_LIMIT', 16, 'oversized npm header body'),
+                (gzip.compress(raw + b'\0' * 8192), 'TAR_EXPANDED_LIMIT',
+                 len(raw) + 1024, 'oversized expanded npm archive'),
+                # Concatenated gzip streams count toward the same budget.
+                (original + gzip.compress(b'\0' * 8192), 'TAR_EXPANDED_LIMIT',
+                 len(raw) + 1024, 'oversized expanded npm archive'),
+            ]
+            for kind, size, data, message in (
+                (tarfile.XHDTYPE, draft.TAR_METADATA_LIMIT + 1, b'', 'oversized npm header'),
+                (tarfile.GNUTYPE_LONGNAME, draft.TAR_METADATA_LIMIT + 1, b'', 'oversized npm header'),
+                (tarfile.GNUTYPE_SPARSE, 0, b'', 'sparse forbidden'),
+                (tarfile.XHDTYPE, 26, b'26 GNU.sparse.size=9999999\n', 'sparse npm metadata'),
+                (tarfile.XGLTYPE, 18, b'18 size=9999999999\n', 'pax size override'),
+            ):
+                member = tarfile.TarInfo('package/metadata')
+                member.type, member.size = kind, size
+                body = gzip.compress(member.tobuf() + data.ljust(512, b'\0') + b'\0' * 1024)
+                cases.append((body, 'TAR_MEMBER_COUNT', 128, message))
+            for body, limit, value, message in cases:
+                path.write_bytes(body)
+                with self.subTest(message=message), patch.object(draft, limit, value), \
+                     patch.object(tarfile, 'open', side_effect=AssertionError('tar parser entered')), \
+                     patch.object(draft.json, 'loads', side_effect=AssertionError('JSON parser entered')), \
+                     patch.object(draft, 'output', side_effect=AssertionError('command executed')):
+                    with self.assertRaisesRegex(ValueError, message):
+                        draft.inspect_package(path, verified)
+                    with self.assertRaisesRegex(ValueError, message):
+                        draft.bootstrap(path, root, verified, 'linux-amd64', root, {})
+
+    def test_package_inventory_before_any_file_read_and_normal_extensions(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            verified = verified_release()
+            path = tarball(root, verified)
+            files = draft.inspect_package(path, verified)
+            files['package/' + 'long-' * 25] = b'extra source'
+            for format in (tarfile.PAX_FORMAT, tarfile.GNU_FORMAT):
+                with self.subTest(format=format):
+                    with tarfile.open(path, 'w:gz', format=format) as archive:
+                        for name, body in files.items():
+                            member = tarfile.TarInfo(name)
+                            member.size = len(body)
+                            if format == tarfile.PAX_FORMAT:
+                                member.pax_headers = {'mtime': '1.25'}
+                            archive.addfile(member, io.BytesIO(body))
+                    self.assertEqual(draft.inspect_package(path, verified), files)
+            # An unsafe final logical member must fail before even the first
+            # package body is read (after the physical inventory passed).
+            with tarfile.open(path, 'w:gz') as archive:
+                for name, body in (files | {'package/../evil': b'x'}).items():
+                    member = tarfile.TarInfo(name)
+                    member.size = len(body)
+                    archive.addfile(member, io.BytesIO(body))
+            with patch.object(tarfile.TarFile, 'extractfile', side_effect=AssertionError('file read')):
+                with self.assertRaisesRegex(ValueError, 'unsafe npm member'):
+                    draft.inspect_package(path, verified)
+
     def test_attestation_source_signer_subject(self):
         draft.verify_attestation(attestation('asset', 'b' * 64), 'asset', 'b' * 64, 'a' * 40)
         for field in ('sourceRepositoryURI', 'sourceRepositoryDigest', 'buildSignerURI', 'buildSignerDigest', 'runnerEnvironment', 'issuer'):
