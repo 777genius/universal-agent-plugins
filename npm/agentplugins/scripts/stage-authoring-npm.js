@@ -439,6 +439,7 @@ function stagePrepublication(value) {
   context.env.PATH = "/usr/local/bin:/usr/bin:/bin";
   const source = packing.blobs(o.repo, o.input.identity.commit, context.env, "stage");
   const toolPins = toolSnapshot(o), tools = stageTools(o, context), callerArgs = [...process.execArgv];
+  agreeStage(promotion.inspectStageCaller(o.selected, o.workflow_sha, context.root), o.producer, "provider stage caller");
   const providers = stageProviders(o, o.artifact, context.root);
   const admitted = stageReadInputs(o, o.artifact, context.root);
   const before = stageInputSnapshot(admitted.root, o.body);
@@ -453,6 +454,8 @@ function stagePrepublication(value) {
   agreeStage(packing.blobs(o.repo, o.input.identity.commit, context.env, "stage"), source, "source before packing");
   agreeStage(toolSnapshot(o), toolPins, "tools before packing");
   fs.mkdirSync(o.output, { mode: 0o700 });
+  process.stderr.write("C1_STAGE " + JSON.stringify({ operation: "start", source: o.producer.source, ref: o.producer.ref,
+    run_id: o.producer.run_id, run_attempt: o.producer.run_attempt, input_sha256: c.digest(o.body), input_artifact: o.artifact }) + "\n");
   const packs = {};
   for (const product of c.PRODUCTS) {
     const root = path.join(o.output, product); fs.mkdirSync(root, { mode: 0o700 });
@@ -462,6 +465,7 @@ function stagePrepublication(value) {
     const retained = retainedPack(o.output, product, o.input), { shasum, ...legacy } = retained;
     agreeStage(packed, legacy, "pack return versus retained bytes");
     packs[product] = retained; // actual SHA1, without changing v1 pack return/receipts
+    process.stderr.write("C1_STAGE " + JSON.stringify({ operation: "pack", product, pack: retained }) + "\n");
   }
   for (const product of c.PRODUCTS) {
     checkGeneratedRoot(path.join(o.output, product), pair[product]);
@@ -474,6 +478,7 @@ function stagePrepublication(value) {
   agreeStage(toolSnapshot(o), toolPins, "tools after packing");
   agreeStage(process.execArgv, callerArgs, "caller interpreter arguments");
   agreeStage(stageOptions(value, false), o, "caller before completion");
+  agreeStage(promotion.inspectStageCaller(o.selected, o.workflow_sha, context.root), o.producer, "provider stage completion");
   for (const product of c.PRODUCTS) {
     checkGeneratedRoot(path.join(o.output, product), pair[product]);
     agreeStage(retainedPack(o.output, product, o.input), packs[product], "retained pair before completion");
@@ -486,6 +491,8 @@ function stagePrepublication(value) {
     producer: o.producer, assertions: Object.fromEntries(ASSERTIONS.map(n => [n, true])) };
   const completed = decodeStage(encodeStage(record, o.body), o.body);
   packing.completeRecord(o.output, completed);
+  process.stderr.write("C1_STAGE " + JSON.stringify({ operation: "completion",
+    stage_sha256: c.digest(c.readFile(path.join(o.output, "completion.json"), MAX_STAGE_BYTES)) }) + "\n");
   return completed;
 }
 
@@ -493,12 +500,48 @@ function stagePrepublication(value) {
  * referenced I through readInputs. The required input Buffer is a comparison
  * pin, never an authentication flag. Check both retained packs without packing.
  * Returns staging evidence only, never qualification or execution permission. */
-function readStage(value) {
+function retainedContext(value) {
   const o = stageOptions(value, true), context = packing.npmContext(o.workParent);
   context.env.PATH = "/usr/local/bin:/usr/bin:/bin";
-  const source = packing.blobs(o.repo, o.input.identity.commit, context.env, "stage"), toolPins = toolSnapshot(o);
+  return { o, context, source: packing.blobs(o.repo, o.input.identity.commit, context.env, "stage"), toolPins: toolSnapshot(o) };
+}
+function recheckSubjects(result) {
+  for (const row of result.subjects) pinFile(row.file, row.sha256, 128 * 1024 * 1024);
+}
+function readStage(value) {
+  const { o, context, source, toolPins } = retainedContext(value);
   const before = promotion.inspectArtifact(o.artifact, STAGE_WORKFLOW, o.input.identity.commit, context.root);
   const archive = promotion.acquireArtifact(o.artifact, STAGE_WORKFLOW, o.input.identity.commit, context.root);
+  const retained = openRetainedStage(o, context, archive);
+  const { record, subjects } = retained;
+  const multiset = subjects.map(s => ({ name: path.basename(s.file), digest: { sha256: s.sha256 } }));
+  for (const subject of subjects) promotion.verifyStageSubject(subject.file, { name: path.basename(subject.file),
+    sha256: subject.sha256, source: record.producer.source, workflow_sha: o.workflow_sha, ref: record.producer.ref,
+    run_id: record.producer.run_id, run_attempt: record.producer.run_attempt, subjects: multiset }, context.root);
+  const result = validateRetainedStage(value, o, context, source, toolPins, retained);
+  agreeStage(promotion.inspectArtifact(o.artifact, STAGE_WORKFLOW, o.input.identity.commit, context.root), before, "completed stage provider");
+  agreeStage(packing.blobs(o.repo, o.input.identity.commit, context.env, "stage"), source, "source after signatures");
+  agreeStage(toolSnapshot(o), toolPins, "tools after signatures");
+  agreeStage(stageOptions(value, true), o, "caller after signatures");
+  recheckSubjects(result);
+  return result;
+}
+/** Fixed same-run unsigned acquisition, only for paired_stage_attestation.
+ * It cannot weaken the completed reader or accept a caller's staging root. */
+function validateUnsignedStage(value) {
+  const { o, context, source, toolPins } = retainedContext(value);
+  const custody = { artifact: o.artifact, selected: o.selected, workflow_sha: o.workflow_sha, scratch: context.root };
+  const before = promotion.inspectCurrentStage(custody);
+  const archive = promotion.acquireCurrentStage(custody);
+  const result = validateRetainedStage(value, o, context, source, toolPins, openRetainedStage(o, context, archive));
+  stageCaller(result.record.producer);
+  agreeStage(promotion.inspectCurrentStage(custody), before, "current stage provider");
+  recheckSubjects(result);
+  return result;
+}
+// Both entrypoints share precisely the retained byte checks. This private
+// function has no completed/authenticated switches or injected verifier.
+function openRetainedStage(o, context, archive) {
   const names = ["completion.json", ...c.PRODUCTS.map(p => `${inputs.PACKAGES[p]}-${o.input.identity.versions[p]}.tgz`)];
   const root = promotion.extractArtifact(archive, o.artifact, "public-stage", names, path.join(context.root, "stage"), context.root);
   const body = pinFile(path.join(root, "completion.json"), o.stage_sha256, MAX_STAGE_BYTES), record = decodeStage(body, o.body);
@@ -509,10 +552,11 @@ function readStage(value) {
   }
   const subjects = names.map(name => ({ file: path.join(root, name), sha256: name === "completion.json" ? o.stage_sha256 :
     record.packs[c.PRODUCTS.find(p => record.packs[p].file === name)].sha256 }));
-  const multiset = subjects.map(s => ({ name: path.basename(s.file), digest: { sha256: s.sha256 } }));
-  for (const subject of subjects) promotion.verifyStageSubject(subject.file, { name: path.basename(subject.file),
-    sha256: subject.sha256, source: invocation.source, workflow_sha: o.workflow_sha, ref: invocation.ref,
-    run_id: invocation.run_id, run_attempt: invocation.run_attempt, subjects: multiset }, context.root);
+  return { root, record, subjects, body };
+}
+function validateRetainedStage(value, o, context, source, toolPins, retained) {
+  const { root, record, subjects, body } = retained;
+  const evidence = promotion.checkStageEvidence(o.artifact, o.selected, o.workflow_sha, record, o.stage_sha256, context.root);
   const providers = stageProviders(o, record.native_inputs.artifact, context.root);
   const admitted = stageReadInputs(o, record.native_inputs.artifact, context.root);
   const snapshot = stageInputSnapshot(admitted.root, o.body);
@@ -523,7 +567,7 @@ function readStage(value) {
     agreeStage(retainedPack(root, product, o.input), record.packs[product], "authenticated retained pack");
     packing.verifyPack(path.join(root, record.packs[product].file), pair[product], path.join(context.root, `read-${product}`), context.env);
   }
-  agreeStage(promotion.inspectArtifact(o.artifact, STAGE_WORKFLOW, o.input.identity.commit, context.root), before, "stage provider");
+  agreeStage(promotion.checkStageEvidence(o.artifact, o.selected, o.workflow_sha, record, o.stage_sha256, context.root), evidence, "stage operation evidence");
   agreeStage(stageProviders(o, record.native_inputs.artifact, context.root), providers, "input providers");
   agreeStage(stageInputSnapshot(admitted.root, o.body), snapshot, "reader inputs");
   agreeStage(packing.blobs(o.repo, o.input.identity.commit, context.env, "stage"), source, "reader source");
@@ -613,13 +657,32 @@ function prepare(options) {
   packing.completeRecord(options.output, record);
   return record;
 }
+function main(args) {
+  if (args.length !== 2) throw new Error("one operation and absolute options file required");
+  if (args[0] === "--prepare") {
+    if (!path.isAbsolute(args[1])) throw new Error("absolute preparation options required");
+    return prepare(JSON.parse(c.readFile(args[1], 1024 * 1024)));
+  }
+  if (!["--stage-prepublication", "--read-stage", "--validate-unsigned-stage"].includes(args[0])) throw new Error("unknown C1 stage operation");
+  const producing = args[0] === "--stage-prepublication";
+  const transport = inputs.inputFileOptions(args[1], ["input_file", "selected", "workflow_sha", "artifact", "repo", "workParent", "node", "npm",
+    ...(producing ? ["producer", "output"] : ["stage_sha256"])]);
+  let result;
+  if (producing) {
+    const record = stagePrepublication(transport.value), root = transport.value.output;
+    const stage_sha256 = c.digest(c.readFile(path.join(root, "completion.json"), MAX_STAGE_BYTES));
+    const subjects = [{ file: path.join(root, "completion.json"), sha256: stage_sha256 },
+      ...c.PRODUCTS.map(product => ({ file: path.join(root, record.packs[product].file), sha256: record.packs[product].sha256 }))];
+    result = { root, record, subjects, stage_sha256 };
+  } else result = args[0] === "--read-stage" ? readStage(transport.value) : validateUnsignedStage(transport.value);
+  transport.recheck();
+  return result;
+}
 // Public blob verification re-enters this module while the CLI is preparing.
 module.exports = { prepare, packageFiles, ALLOWLIST, COMMON,
-  encodeStage, decodeStage, pairedPackageFiles, STAGE_ALLOWLIST, stagePrepublication, readStage };
+  encodeStage, decodeStage, pairedPackageFiles, STAGE_ALLOWLIST, stagePrepublication, readStage, validateUnsignedStage, main };
 
 if (require.main === module) {
-  try {
-    if (process.argv.length !== 4 || process.argv[2] !== "--prepare" || !path.isAbsolute(process.argv[3])) throw new Error("usage: stage-authoring-npm.js --prepare <absolute-options.json>");
-    process.stdout.write(c.encode(prepare(JSON.parse(c.readFile(process.argv[3], 1024 * 1024)))));
-  } catch (e) { process.stderr.write(`public npm preparation: ${e.message}\n`); process.exitCode = 1; }
+  try { process.stdout.write(c.encode(main(process.argv.slice(2)))); }
+  catch (e) { process.stderr.write(`public npm preparation: ${e.message}\n`); process.exitCode = 1; }
 }
