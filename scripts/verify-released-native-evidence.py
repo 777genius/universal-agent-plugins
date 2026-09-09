@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Verify scoped downloaded released-native artifacts and optionally freeze a ZIP.
+"""Verify public evidence or explicit offline draft archives; optionally freeze a ZIP.
 
 Input is a fresh directory populated by gh run download. No archives are
 extracted, clients executed, or release assets modified. Recorded attestation
@@ -176,7 +176,7 @@ def verify_fixtures(bodies, record, client, target):
     expected = {'codex': {'codex'}, 'claude': {'claude-lifecycle', 'claude-runtime'}, 'opencode': {'opencode.json', 'opencode.jsonc', 'extended', ('api/server',), ('api server',), ('api/server', 'api server')}}
     require(set(found) == expected[client], 'missing or unexpected structured fixtures')
 
-def verify(root, version, release_commit, harness_commit, harness_tree, *, scope='historical-nine'):
+def verify(root, version, release_commit, harness_commit, harness_tree, *, scope='historical-nine', _draft=None):
     require(scope in SCOPES, 'unknown evidence scope')
     targets = SCOPES[scope]
     require(re.fullmatch(r'(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)', version), 'exact stable version required')
@@ -208,7 +208,11 @@ def verify(root, version, release_commit, harness_commit, harness_tree, *, scope
             actual = set(re.findall(r'^--- PASS: (\w+)', log, re.M))
             require(set(passed) == actual and required.issubset(actual) and not re.search(r'^\s*--- (SKIP|FAIL):', log, re.M), 'test transcript disagrees: ' + name)
             release = record.get('installer_release', {})
-            require(release.get('repository') == REPOSITORY and release.get('acquisition') == 'public GitHub release download', 'not a public released installer: ' + name)
+            require(release.get('repository') == REPOSITORY, 'wrong release repository: ' + name)
+            if _draft:
+                _draft(record, bodies, client, target)
+            else:
+                require(release.get('acquisition') == 'public GitHub release download', 'not a public released installer: ' + name)
             require(release.get('version') == version and release.get('tag') == 'agentplugins-v' + version and release.get('commit') == release_commit, 'wrong release identity: ' + name)
             require(record.get('installer_version_measured') == 'agentplugins ' + version, 'wrong measured version: ' + name)
             asset = 'agentplugins_' + version + '_' + target.replace('-', '_') + ('.exe' if target.startswith('windows-') else '')
@@ -219,7 +223,8 @@ def verify(root, version, release_commit, harness_commit, harness_tree, *, scope
             for field in ('manifest_sha256', 'checksums_sha256'):
                 require(exact_hex(release.get(field), 64), 'missing release digest: ' + name)
             verify_tools(record, target, client)
-            verify_attestations(release)
+            if not _draft:
+                verify_attestations(release)
             suffix = '.exe' if target.startswith('windows-') else ''
             helpers = record.get('harness_build_sha256', {})
             require(set(helpers) == {'native-probe' + suffix, 'repotests' + suffix} and all(exact_hex(v, 64) for v in helpers.values()), 'missing harness helper hashes: ' + name)
@@ -236,6 +241,205 @@ def verify(root, version, release_commit, harness_commit, harness_tree, *, scope
                'release_tree': next(iter(release_trees)), 'harness_commit': harness_commit, 'harness_tree': harness_tree,
                'scope': scope, 'jobs': jobs, 'files_sha256': {p: digest(b) for p, b in sorted(files.items())},
                'boundary': 'Fixture assertions only; no real-model quality or OAuth claim. Hash and record consistency verification only. Embedded provenance was verified by the runner, not cryptographically reverified here. Log content is unredacted; publication needs disclosure review.'}
+    return summary, files
+
+
+# Draft schemas are deliberately separate from the historical public contract.
+def object_keys(value, keys, label):
+    require(isinstance(value, dict) and set(value) == set(keys.split()), 'unsupported ' + label + ' schema')
+
+
+def read_json(body):
+    return json.loads(body, object_pairs_hook=unique_object)
+
+
+def original_file(path):
+    mode = path.lstat()
+    require(stat.S_ISREG(mode.st_mode) and mode.st_nlink == 1, 'nonregular or aliased original: ' + str(path))
+    return path.read_bytes()
+
+
+def draft_bundle(body, args, native):
+    """Inspect preserved ZIP/tar members as bytes; never extract or execute them."""
+    import io
+    import tarfile
+    import tempfile
+    require(digest(body) == args.producer_artifact_digest, 'producer artifact digest mismatch')
+    files, seen = {}, set()
+    with zipfile.ZipFile(io.BytesIO(body)) as zipped:
+        for item in zipped.infolist():
+            name = item.filename.rstrip('/') if item.is_dir() else item.filename
+            safe_name(name)
+            require(name.casefold() not in seen, 'duplicate or aliased ZIP member')
+            seen.add(name.casefold())
+            mode = stat.S_IFMT(item.external_attr >> 16)
+            require(mode in ((0, stat.S_IFDIR) if item.is_dir() else (0, stat.S_IFREG)), 'nonregular ZIP member')
+            require(item.file_size < 400 << 20, 'oversized ZIP member')
+            if item.is_dir():
+                require(name == 'release-assets', 'unexpected bundle directory')
+            else:
+                files[name] = zipped.read(item)
+    tarballs = [n for n in files if '/' not in n and n.endswith('.tgz')]
+    require(len(tarballs) == 1, 'exactly one original npm tarball required')
+    tarball = tarballs[0]
+    assets = {n.removeprefix('release-assets/'): b for n, b in files.items() if n.startswith('release-assets/')}
+    version, tag = args.release_version, args.release_tag
+    computed = {}
+    for target in sorted(native.TARGETS):
+        name = f'agentplugins_{version}_{target.replace("-", "_")}' + ('.exe' if target.startswith('windows') else '')
+        require(name in assets and assets[name], 'missing binary asset')
+        computed[target] = {'file': name, 'size': len(assets[name]), 'sha256': digest(assets[name])}
+    names = {a['file'] for a in computed.values()} | {'release-manifest.json', 'checksums.txt', 'THIRD_PARTY_NOTICES.txt'}
+    require(set(assets) == names and set(files) == {tarball, 'verified-release.json'} | {'release-assets/' + n for n in names}, 'unexpected or missing bundle assets/notices')
+    require(all(assets.values()), 'empty release asset/notices')
+    manifest = read_json(assets['release-manifest.json'])
+    require(type(manifest.get('schema_version')) is int and manifest == {
+        'schema_version': 2, 'version': version, 'tag': tag, 'commit': args.release_commit, 'assets': computed}, 'unsupported or inconsistent manifest schema')
+    checks = {}
+    for line in assets['checksums.txt'].decode('utf-8').splitlines():
+        match = re.fullmatch(r'([0-9a-f]{64})  ([^/\\]+)', line)
+        require(match is not None and match[2] not in checks, 'invalid or duplicate checksum')
+        checks[match[2]] = match[1]
+    require(checks == {n: digest(b) for n, b in assets.items() if n != 'checksums.txt'}
+            and digest(assets['checksums.txt']) == args.expected_asset_set_digest, 'frozen checksums mismatch')
+    verified = read_json(files['verified-release.json'])
+    require(verified == {'repository': '777genius/plugin-kit-ai', 'version': version, 'tag': tag,
+        'commit': args.release_commit, 'assets': computed, 'manifest_schema': 2,
+        'manifest_sha256': digest(assets['release-manifest.json']),
+        'notices': [{'file': 'THIRD_PARTY_NOTICES.txt', 'sha256': digest(assets['THIRD_PARTY_NOTICES.txt'])}],
+        'gate_eligible': True} and type(verified['manifest_schema']) is int and verified['gate_eligible'] is True,
+        'unsupported or inconsistent verified-release schema')
+    # Reuse the acquisition package validator, which performs no subprocess calls.
+    with tempfile.TemporaryDirectory(prefix='offline-draft-package-') as temporary:
+        path = Path(temporary) / 'original.tgz'
+        path.write_bytes(files[tarball])
+        native.inspect_package(path, verified)
+    with tarfile.open(fileobj=io.BytesIO(files[tarball]), mode='r:gz') as package:
+        for name in ('package/package.json', 'package/assets.json'):
+            read_json(package.extractfile(name).read())  # Reject duplicate JSON keys too.
+        require(package.extractfile('package/THIRD_PARTY_NOTICES.txt').read() == assets['THIRD_PARTY_NOTICES.txt'], 'packaged notices mismatch')
+        launcher = digest(package.extractfile('package/bin/agentplugins.js').read())
+    return assets, verified, digest(files[tarball]), launcher
+
+
+def verify_draft(root, args):
+    import native_client_draft as native
+    native.validate(args)
+    require(args.scope in SCOPES, 'unknown evidence scope')
+    originals = {name: original_file(args.qualification / name) for name in ('qualification.json', 'final-draft.json')}
+    require(not args.qualification.is_symlink() and {p.name for p in args.qualification.iterdir()} == set(originals), 'unexpected qualification files')
+    q = read_json(originals['qualification.json'])
+    object_keys(q, 'schema_version status release_state target_scope producer_commit harness_commit harness_tree tarball_sha256 producer helper_sha256 lanes final_draft limitation', 'qualification')
+    require(type(q['schema_version']) is int and q['schema_version'] == 1 and q['status'] == 'passed'
+            and q['release_state'] == 'verified-draft' and q['target_scope'] == args.scope
+            and q['producer_commit'] == args.release_commit and q['harness_commit'] == args.harness_commit
+            and q['harness_tree'] == args.harness_tree, 'qualification identity mismatch')
+    producer = {'repository': REPOSITORY, 'workflow': native.WORKFLOW, 'commit': args.release_commit,
+                'run_id': int(args.producer_run_id), 'run_attempt': int(args.producer_run_attempt),
+                'artifact_id': int(args.producer_artifact_id), 'artifact_digest': args.producer_artifact_digest}
+    require(q['producer'] == producer and all(type(q['producer'][k]) is int for k in ('run_id', 'run_attempt', 'artifact_id')), 'producer identity mismatch')
+    helpers = q['helper_sha256']
+    require(isinstance(helpers, dict) and set(helpers) == {
+        'scripts/run-native-client-matrix.py', 'scripts/native_client_draft.py',
+        'scripts/verify-agentplugins-draft.py', 'scripts/verify-released-native-evidence.py',
+        'npm/agentplugins/scripts/release-assets.js'} and all(exact_hex(v, 64) for v in helpers.values()), 'unsupported helper inventory')
+    bundle = original_file(args.producer_bundle)
+    assets, verified, tarball, launcher = draft_bundle(bundle, args, native)
+    require(q['tarball_sha256'] == tarball, 'qualification tarball mismatch')
+    final = read_json(originals['final-draft.json'])
+    require(final == q['final_draft'], 'final receipt differs from qualification')
+
+    def receipt(record):
+        object_keys(record, 'schema_version release_state verified_at repository release asset_set_digest subjects signer_workflow producer_commit producer_run_id producer_run_attempt', 'draft receipt')
+        require(type(record['schema_version']) is int and record['schema_version'] == 1
+                and record['release_state'] == 'verified-draft' and record['repository'] == REPOSITORY
+                and record['asset_set_digest'] == args.expected_asset_set_digest
+                and record['signer_workflow'] == f'github.com/{REPOSITORY}/{native.WORKFLOW}'
+                and record['producer_commit'] == args.release_commit
+                and all(type(record[k]) is int and record[k] == producer[v] for k, v in
+                        (('producer_run_id', 'run_id'), ('producer_run_attempt', 'run_attempt'))), 'draft receipt identity mismatch')
+        from datetime import datetime
+        require(isinstance(record['verified_at'], str) and datetime.fromisoformat(record['verified_at']).utcoffset() is not None, 'missing receipt timestamp')
+        release = record['release']
+        object_keys(release, 'id tag commit draft prerelease updated_at assets', 'release snapshot')
+        require(type(release['id']) is int and release['id'] == int(args.release_id)
+                and release['tag'] == args.release_tag and release['commit'] == args.release_commit
+                and release['draft'] is True and release['prerelease'] is False
+                and isinstance(release['updated_at'], str) and release['updated_at'], 'release snapshot identity mismatch')
+        subjects, ids = {}, set()
+        for subject in record['subjects']:
+            object_keys(subject, 'name id size sha256', 'subject')
+            name = subject['name']
+            require(name in assets and name not in subjects and type(subject['id']) is int and subject['id'] > 0
+                    and subject['id'] not in ids and type(subject['size']) is int
+                    and subject['size'] == len(assets[name]) and subject['sha256'] == digest(assets[name]), 'duplicate or inconsistent subject')
+            subjects[name] = subject
+            ids.add(subject['id'])
+        require(set(subjects) == set(assets), 'incomplete receipt subjects')
+        seen = set()
+        for asset in release['assets']:
+            object_keys(asset, 'id name size state created_at updated_at digest', 'release asset')
+            name = asset['name']
+            require(name in subjects and name not in seen and asset['state'] == 'uploaded'
+                    and type(asset['id']) is int and type(asset['size']) is int
+                    and all(asset[k] == subjects[name][k] for k in ('id', 'size'))
+                    and asset['digest'] in (None, 'sha256:' + subjects[name]['sha256'])
+                    and all(isinstance(asset[k], str) and asset[k] for k in ('created_at', 'updated_at')), 'release asset identity mismatch')
+            seen.add(name)
+        require(seen == set(assets), 'incomplete release snapshot')
+        return subjects
+
+    subjects = receipt(final)
+    expected = {(c, t) for c in CLIENT_TESTS for t in SCOPES[args.scope]}
+    indexed = {}
+    for lane in q['lanes']:
+        object_keys(lane, 'client target evidence_sha256', 'qualification lane')
+        key = (lane['client'], lane['target'])
+        require(key in expected and key not in indexed and exact_hex(lane['evidence_sha256'], 64), 'duplicate or unknown qualification lane')
+        indexed[key] = lane['evidence_sha256']
+    require(set(indexed) == expected, 'missing qualification lanes')
+
+    def lane_check(record, bodies, client, target):
+        require(type(record['schema_version']) is int and digest(bodies['runner-evidence.json']) == indexed[client, target], 'qualification lane digest mismatch')
+        require(len(record['passed_tests']) == len(set(record['passed_tests'])), 'duplicate passed tests')
+        require(record.get('helper_sha256') == helpers, 'mixed helper hashes')
+        require(len({p.casefold() for p in bodies}) == len(bodies), 'aliased lane paths')
+        release = record['installer_release']
+        require(release.get('acquisition') == 'authenticated producer npm artifact'
+                and release.get('release_state') == 'draft' and release.get('producer') == producer
+                and type(release.get('release_id')) is int and release['release_id'] == int(args.release_id)
+                and release.get('tarball_sha256') == tarball
+                and all(type(release['producer'][k]) is int for k in ('run_id', 'run_attempt', 'artifact_id')), 'draft lane producer/package mismatch')
+        initial = release['initial_draft']
+        receipt(initial)
+        from datetime import datetime
+        require(datetime.fromisoformat(initial['verified_at']) <= datetime.fromisoformat(final['verified_at']), 'final receipt predates initial verification')
+        require(initial['release'] == final['release'] and initial['subjects'] == final['subjects']
+                and read_json(bodies['initial-draft.json']) == initial, 'mixed initial/final draft receipts')
+        require(all(release[k] == v for k, v in {
+            'manifest_sha256': verified['manifest_sha256'], 'checksums_sha256': args.expected_asset_set_digest,
+            'file': verified['assets'][target]['file'], 'size': verified['assets'][target]['size'],
+            'binary_sha256': verified['assets'][target]['sha256']}.items()), 'lane differs from frozen assets')
+        packaged = record['packaged_acquisition']
+        object_keys(packaged, 'bootstrap_source tarball_sha256 launcher_sha256 binary_sha256 size version cold_bootstrap warm_without_proof_source npm_ignore_scripts', 'packaged acquisition')
+        require(packaged == {'bootstrap_source': 'local_frozen_asset', 'tarball_sha256': tarball,
+            'launcher_sha256': launcher, 'binary_sha256': release['binary_sha256'], 'size': release['size'],
+            'version': 'agentplugins ' + args.release_version, 'cold_bootstrap': True,
+            'warm_without_proof_source': True, 'npm_ignore_scripts': True}
+            and all(packaged[k] is True for k in ('cold_bootstrap', 'warm_without_proof_source', 'npm_ignore_scripts'))
+            and type(packaged['size']) is int, 'packaged acquisition mismatch')
+        require(set(release['attestations']) == set(subjects), 'missing or extra recorded draft attestations')
+        for name, subject in subjects.items():
+            native.verify_attestation(release['attestations'][name], name, subject['sha256'], args.release_commit)
+
+    summary, files = verify(root, args.release_version, args.release_commit, args.harness_commit,
+                            args.harness_tree, scope=args.scope, _draft=lane_check)
+    files.update({'draft-qualification/' + n: b for n, b in originals.items()})
+    files['producer-artifact.zip'] = bundle
+    summary.update(release_state='draft', verification_mode='offline-draft-archive', producer=producer,
+                   release_id=int(args.release_id), tarball_sha256=tarball, helper_sha256=helpers,
+                   files_sha256={p: digest(b) for p, b in sorted(files.items())},
+                   boundary='Offline recorded consistency only; no fresh attestation or current draft-state verification. Genuine-client claims require the original successful run; no real-model, OAuth or authoring D5 qualification. Logs are unredacted; retain privately pending disclosure review.')
     return summary, files
 
 
@@ -259,10 +463,21 @@ def main():
         parser.add_argument('--' + name, required=True)
     parser.add_argument('--scope', choices=SCOPES, default='historical-nine', help='Linux amd64 is supplemental proof, never a replacement for historical nine')
     parser.add_argument('--archive', type=Path, help='new durable ZIP path outside input')
+    parser.add_argument('--release-state', choices=('public', 'draft'), default='public')
+    parser.add_argument('--qualification', type=Path, help='original scope-2 qualification artifact directory')
+    parser.add_argument('--producer-bundle', type=Path, help='original producer Actions artifact ZIP')
+    for field in ('producer-run-id', 'producer-run-attempt', 'producer-artifact-id', 'producer-artifact-digest', 'release-id', 'expected-asset-set-digest'):
+        parser.add_argument('--' + field, default='')
     args = parser.parse_args()
     if args.archive:
         require(not args.archive.resolve().is_relative_to(args.input.resolve()), 'archive must be outside input')
-    summary, files = verify(args.input, args.release_version, args.release_commit, args.harness_commit, args.harness_tree, scope=args.scope)
+    if args.release_state == 'draft':
+        require(args.qualification is not None and args.producer_bundle is not None, 'draft requires qualification and original producer bundle')
+        args.release_repo, args.release_tag = REPOSITORY, 'agentplugins-v' + args.release_version
+        summary, files = verify_draft(args.input, args)
+    else:
+        require(not any((args.qualification, args.producer_bundle, args.producer_run_id, args.producer_run_attempt, args.producer_artifact_id, args.producer_artifact_digest, args.release_id, args.expected_asset_set_digest)), 'public mode rejects draft inputs')
+        summary, files = verify(args.input, args.release_version, args.release_commit, args.harness_commit, args.harness_tree, scope=args.scope)
     if args.archive:
         archive(args.archive, summary, files)
     print(json.dumps(summary, indent=2, sort_keys=True))

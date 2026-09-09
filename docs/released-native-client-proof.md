@@ -165,3 +165,30 @@ published files and check their bytes before changing the compact record's
 publication status. Original logs intentionally retain dummy fixture keys,
 loopback ports, runner paths and built-in client prompts. Their disclosure review
 must inspect content; safe paths and file extensions do not sanitize logs.
+
+For **offline draft archives**, preserve the existing scope-2
+`draft-native-qualification-<scope>` artifact's original `qualification.json`
+and `final-draft.json` in a separate directory, and all expected
+`released-native-client-<client>-<target>` directories with every original indexed
+log, fixture and initial receipt under the lane input directory. Also preserve the
+**original Actions ZIP bytes**, selected by producer run/attempt and artifact ID,
+for `agentplugins-npm-<version>` before its **7-day retention** expires (native
+lanes and qualification expire after 14 days); re-zipping its extracted files
+changes the artifact digest. That ZIP retains the exact tested tarball, verification
+record and complete original release assets including notices. Run
+`python3 scripts/verify-released-native-evidence.py <lane-directory> --release-state draft --qualification <qualification-directory> --producer-bundle <original-producer.zip> --release-version <version> --release-commit <producer-SHA> --harness-commit <harness-SHA> --harness-tree <harness-tree> --scope <historical-nine-or-linux-amd64> --producer-run-id <producer-run> --producer-run-attempt <attempt> --producer-artifact-id <artifact-ID> --producer-artifact-digest <original-ZIP-SHA256> --release-id <release-ID> --expected-asset-set-digest <checksums.txt-SHA256> --archive <new-private-archive.zip>`.
+Use identities from the original run records, not latest/name-only selection.
+The archive retains input bytes plus an offline summary; create an exclusive
+SHA-256 sidecar (for example, `(set -C; sha256sum <new-private-archive.zip> > <new-private-archive.zip.sha256>)`),
+retain both privately with the harness run URL/attempt and original artifact
+IDs/digests, and verify the sidecar after copying. To reverify, first check that
+sidecar, safely unpack into fresh paths, keep `summary.json` outside the lane
+input, and pass the archived `draft-qualification/` and `producer-artifact.zip`
+to the same command. This checks recorded consistency, **not fresh attestations
+or current draft state**; it executes no installer or clients. Recorded helper
+hashes bind the original harness, not the later offline verifier checkout.
+Unsupported schemas fail for review. This adds no compatibility rows, public
+evidence publication, real-model/OAuth claim or authoring D5 qualification;
+only successful real runs can support later matrix changes. Never overwrite
+original evidence, repack the frozen npm tarball, or attach evidence to the
+installer release. Historical 0.1.53 reproduction above remains unchanged.

@@ -202,5 +202,285 @@ class EvidenceTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'duplicate JSON'): self.verify()
 
 
+class DraftArchiveTests(unittest.TestCase):
+    enrich = EvidenceTests.enrich
+    mutate = EvidenceTests.mutate
+    """Synthesized fixture bytes only: never published proof or runtime receipts."""
+    def setUp(self):
+        EvidenceTests.setUp(self)
+        import copy
+        import io
+        import tarfile
+        from types import SimpleNamespace
+        import native_client_draft as native
+        self.native = native
+        self.args = SimpleNamespace(release_state='draft', release_repo=proof.REPOSITORY,
+            release_version='1.2.3', release_tag='agentplugins-v1.2.3', release_commit='a'*40,
+            harness_commit='b'*40, harness_tree='c'*40, scope='historical-nine',
+            producer_run_id='12', producer_run_attempt='2', producer_artifact_id='56', release_id='34')
+        self.assets, computed = {}, {}
+        for target in sorted(native.TARGETS):
+            name = 'agentplugins_1.2.3_' + target.replace('-', '_') + ('.exe' if target.startswith('windows') else '')
+            body = ('SYNTHESIZED FIXTURE ONLY ' + target).encode()
+            self.assets[name] = body
+            computed[target] = dict(file=name, size=len(body), sha256=proof.digest(body))
+        manifest = dict(schema_version=2, version='1.2.3', tag=self.args.release_tag, commit='a'*40, assets=computed)
+        self.assets['release-manifest.json'] = json.dumps(manifest).encode()
+        self.assets['THIRD_PARTY_NOTICES.txt'] = b'SYNTHESIZED NOTICES FIXTURE ONLY'
+        self.assets['checksums.txt'] = ''.join(proof.digest(b) + '  ' + n + '\n' for n, b in sorted(self.assets.items())).encode()
+        self.args.expected_asset_set_digest = proof.digest(self.assets['checksums.txt'])
+        verified = dict(repository='777genius/plugin-kit-ai', version='1.2.3', tag=self.args.release_tag,
+            commit='a'*40, assets=computed, manifest_schema=2, gate_eligible=True,
+            manifest_sha256=proof.digest(self.assets['release-manifest.json']),
+            notices=[dict(file='THIRD_PARTY_NOTICES.txt', sha256=proof.digest(self.assets['THIRD_PARTY_NOTICES.txt']))])
+        pkg = dict(name='universal-agent-plugins', version='1.2.3', bin={'agentplugins': 'bin/agentplugins.js'})
+        pins = dict(schema_version=2, version='1.2.3', npm_package=pkg['name'], repository=verified['repository'],
+            tag=self.args.release_tag, assets=computed, producer=dict(repository=verified['repository'],
+            tag=self.args.release_tag, commit='a'*40, release_manifest=dict(schema_version=2,
+            sha256=verified['manifest_sha256'], version='1.2.3')))
+        self.package_files = {'package/package.json': json.dumps(pkg).encode(), 'package/assets.json': json.dumps(pins).encode(),
+            'package/THIRD_PARTY_NOTICES.txt': self.assets['THIRD_PARTY_NOTICES.txt'],
+            'package/bin/agentplugins.js': b'// SYNTHESIZED FIXTURE ONLY; NEVER EXECUTE'}
+        self.bundle_files = {'verified-release.json': json.dumps(verified).encode(),
+                             **{'release-assets/'+n: b for n, b in self.assets.items()}}
+        self.repack_tarball()
+        self.args.producer_bundle = Path(self.temp.name) / 'producer.zip'
+        self.write_bundle()
+        producer = dict(repository=proof.REPOSITORY, workflow=native.WORKFLOW, commit='a'*40,
+            run_id=12, run_attempt=2, artifact_id=56, artifact_digest=self.args.producer_artifact_digest)
+        subjects = [dict(name=n, id=100+i, size=len(b), sha256=proof.digest(b)) for i, (n,b) in enumerate(sorted(self.assets.items()))]
+        snapshot = dict(id=34, tag=self.args.release_tag, commit='a'*40, draft=True, prerelease=False,
+            updated_at='2026-09-09T00:00:00Z', assets=[dict(id=s['id'], name=s['name'], size=s['size'], state='uploaded',
+            created_at='2026-09-09T00:00:00Z', updated_at='2026-09-09T00:00:00Z', digest='sha256:'+s['sha256']) for s in subjects])
+        final = dict(schema_version=1, release_state='verified-draft', verified_at='2026-09-09T00:00:00+00:00',
+            repository=proof.REPOSITORY, release=snapshot, subjects=subjects, asset_set_digest=self.args.expected_asset_set_digest,
+            signer_workflow=f'github.com/{proof.REPOSITORY}/{native.WORKFLOW}', producer_commit='a'*40,
+            producer_run_id=12, producer_run_attempt=2)
+        helpers = {n: proof.digest(('SYNTHESIZED HELPER '+n).encode()) for n in native.helper_hashes(Path(__file__).resolve().parents[1])}
+        tarhash = proof.digest(self.bundle_files['fixture.tgz'])
+        self.q = dict(schema_version=1, status='passed', release_state='verified-draft', target_scope='historical-nine',
+            producer_commit='a'*40, harness_commit='b'*40, harness_tree='c'*40, tarball_sha256=tarhash,
+            producer=producer, helper_sha256=helpers, lanes=[], final_draft=final,
+            limitation='genuine pinned clients; scripted loopback providers; no real-model or OAuth qualification')
+        for path in self.root.rglob('runner-evidence.json'):
+            record = json.loads(path.read_bytes())
+            release = record['installer_release']
+            binary = computed[record['target']]
+            release.update(acquisition='authenticated producer npm artifact', release_state='draft',
+                producer=producer, release_id=34, tarball_sha256=tarhash, initial_draft=final,
+                binary_sha256=binary['sha256'], size=binary['size'], checksums_sha256=self.args.expected_asset_set_digest,
+                manifest_sha256=verified['manifest_sha256'])
+            template = next(iter(release['attestations'].values()))
+            release['attestations'] = {}
+            for subject in subjects:
+                records = copy.deepcopy(template)
+                records[0]['verificationResult']['statement']['subject'] = [{'name':subject['name'], 'digest':{'sha256':subject['sha256']}}]
+                release['attestations'][subject['name']] = records
+            record.update(helper_sha256=helpers, installer_sha256=binary['sha256'], packaged_acquisition=dict(
+                bootstrap_source='local_frozen_asset', tarball_sha256=tarhash,
+                launcher_sha256=proof.digest(self.package_files['package/bin/agentplugins.js']), binary_sha256=binary['sha256'],
+                size=binary['size'], version='agentplugins 1.2.3', cold_bootstrap=True, warm_without_proof_source=True, npm_ignore_scripts=True))
+            for fixture in path.parent.rglob('*.json'):
+                if fixture == path: continue
+                data = json.loads(fixture.read_bytes())
+                data['installer_sha256'] = binary['sha256']
+                fixture.write_text(json.dumps(data))
+            (path.parent/'initial-draft.json').write_text(json.dumps(final))
+            path.write_text(json.dumps(record))
+        self.args.qualification = Path(self.temp.name)/'qualification'
+        self.args.qualification.mkdir()
+        self.sync_records()
+
+    def repack_tarball(self):
+        import io
+        import tarfile
+        stream = io.BytesIO()
+        with tarfile.open(fileobj=stream, mode='w:gz') as tar:
+            for name, body in self.package_files.items():
+                member = tarfile.TarInfo(name); member.size = len(body)
+                tar.addfile(member, io.BytesIO(body))
+        self.bundle_files['fixture.tgz'] = stream.getvalue()
+
+    def write_bundle(self):
+        import io
+        stream = io.BytesIO()
+        with zipfile.ZipFile(stream, 'w') as zipped:
+            for n,b in self.bundle_files.items(): zipped.writestr(n,b)
+        self.args.producer_bundle.write_bytes(stream.getvalue())
+        self.args.producer_artifact_digest = proof.digest(stream.getvalue())
+
+    def sync_records(self):
+        self.q['lanes'] = []
+        for path in self.root.rglob('runner-evidence.json'):
+            record = json.loads(path.read_bytes())
+            record['artifact_sha256'] = {p.relative_to(path.parent).as_posix():proof.digest(p.read_bytes())
+                for p in path.parent.rglob('*') if p.is_file() and p != path}
+            path.write_text(json.dumps(record))
+            self.q['lanes'].append(dict(client=record['client'], target=record['target'], evidence_sha256=proof.digest(path.read_bytes())))
+        self.write_qualification()
+
+    def write_qualification(self):
+        (self.args.qualification/'qualification.json').write_text(json.dumps(self.q))
+        (self.args.qualification/'final-draft.json').write_text(json.dumps(self.q['final_draft']))
+
+    def test_explicit_cli_mode_rejects_mixed_or_missing_inputs(self):
+        import sys
+        common = ['verify-released-native-evidence.py', str(self.root), '--release-version', '1.2.3',
+                  '--release-commit', 'a'*40, '--harness-commit', 'b'*40, '--harness-tree', 'c'*40]
+        for options in (['--producer-run-id', '12'], ['--qualification', str(self.args.qualification)],
+                        ['--release-state', 'draft'], ['--release-state', 'draft', '--qualification', str(self.args.qualification),
+                         '--producer-bundle', str(self.args.producer_bundle)]):
+            with self.subTest(options=options), patch.object(sys, 'argv', common + options), self.assertRaises(ValueError):
+                proof.main()
+
+    def test_draft_roundtrip_original_bytes_and_no_execution(self):
+        with patch('subprocess.Popen', side_effect=AssertionError('offline verifier executed a command')):
+            summary, files = proof.verify_draft(self.root, self.args)
+        self.assertIn('no fresh attestation or current draft-state', summary['boundary'])
+        self.assertEqual(len(summary['jobs']), 9)
+        output = Path(self.temp.name)/'draft.zip'
+        proof.archive(output, summary, files)
+        with zipfile.ZipFile(output) as zipped:
+            self.assertEqual(zipped.read('producer-artifact.zip'), self.args.producer_bundle.read_bytes())
+            for path in self.root.rglob('*'):
+                if path.is_file(): self.assertEqual(zipped.read(path.relative_to(self.root).as_posix()), path.read_bytes())
+            self.assertEqual(zipped.read('draft-qualification/qualification.json'), (self.args.qualification/'qualification.json').read_bytes())
+        with self.assertRaises(ValueError): EvidenceTests.verify(self)  # Public default rejects draft lanes.
+
+    def test_consumes_actual_scope2_aggregate_schema_offline(self):
+        from types import SimpleNamespace
+        source = Path(__file__).resolve().parents[1]
+        for path in self.root.rglob('runner-evidence.json'):
+            record = json.loads(path.read_bytes())
+            record['helper_sha256'] = self.native.helper_hashes(source)
+            path.write_text(json.dumps(record))
+        self.sync_records()
+        destination = self.args.qualification/'qualification.json'
+        destination.unlink()
+        args = SimpleNamespace(**vars(self.args), target_scope=self.args.scope, evidence=self.root,
+                               receipt=destination, producer_source=source)
+        def final_receipt(*unused):
+            return self.q['final_draft']
+        with patch.object(self.native, 'authenticate'), patch.object(self.native, 'live_verify', side_effect=final_receipt), \
+             patch.object(self.native, 'output', side_effect=[b'a'*40, b'']), \
+             patch('subprocess.Popen', side_effect=AssertionError('unexpected process')):
+            self.native.aggregate(source, args)
+            summary, _ = proof.verify_draft(self.root, self.args)
+        self.assertEqual(len(summary['jobs']), 9)
+
+    def test_draft_qualification_schema_identities_and_lanes(self):
+        import copy
+        original = copy.deepcopy(self.q)
+        changes = [lambda q:q.update(schema_version=2), lambda q:q.update(schema_version=True),
+            lambda q:q.update(unknown=True), lambda q:q.update(status='failed'), lambda q:q.update(release_state='public'),
+            lambda q:q.update(harness_tree='0'*40), lambda q:q.update(tarball_sha256='0'*64),
+            lambda q:q['producer'].update(run_attempt=1), lambda q:q['producer'].update(artifact_id=57),
+            lambda q:q['producer'].update(repository='other/repo'), lambda q:q['producer'].update(workflow='other'),
+            lambda q:q.update(helper_sha256={}), lambda q:q['lanes'].pop(), lambda q:q['lanes'].append(q['lanes'][0]),
+            lambda q:q['lanes'][0].update(target='unknown'), lambda q:q['lanes'][0].update(evidence_sha256='0'*64),
+            lambda q:q['final_draft']['release'].update(id=35), lambda q:q['final_draft']['release'].update(draft=False),
+            lambda q:q['final_draft']['release'].update(prerelease=True), lambda q:q['final_draft'].update(asset_set_digest='0'*64),
+            lambda q:q['final_draft']['subjects'].append(q['final_draft']['subjects'][0]),
+            lambda q:q['final_draft']['release']['assets'][0].update(id=999),
+            lambda q:q['final_draft'].update(verified_at='invalid')]
+        for change in changes:
+            with self.subTest(change=change):
+                self.q = copy.deepcopy(original); change(self.q); self.write_qualification()
+                with self.assertRaises(ValueError): proof.verify_draft(self.root, self.args)
+
+    def test_draft_lane_tamper_even_when_reindexed(self):
+        original = self.record_path.read_bytes()
+        changes = [lambda r:r.update(skipped_tests=['skip']), lambda r:r.update(exit_code=True),
+            lambda r:r.update(helper_sha256={}), lambda r:r['installer_release']['producer'].update(run_id=99),
+            lambda r:r['installer_release'].update(tree='0'*40), lambda r:r['installer_release'].update(release_id=True),
+            lambda r:r['installer_release']['initial_draft']['release'].update(id=35),
+            lambda r:r['installer_release']['attestations'].pop('THIRD_PARTY_NOTICES.txt'),
+            lambda r:r['installer_release']['attestations'].update(extra=[]),
+            lambda r:r['packaged_acquisition'].update(warm_without_proof_source=False),
+            lambda r:r['packaged_acquisition'].update(launcher_sha256='0'*64), lambda r:r['client_asset'].update(version='bad')]
+        for change in changes:
+            with self.subTest(change=change):
+                self.record_path.write_bytes(original); self.mutate(change); self.sync_records()
+                with self.assertRaises(ValueError): proof.verify_draft(self.root, self.args)
+        self.record_path.write_bytes(original)
+        log = self.record_path.parent/'native-tests.log'
+        log.write_bytes(log.read_bytes()+b'    --- SKIP: nested/substage (0.0s)\n')
+        self.sync_records()
+        with self.assertRaises(ValueError): proof.verify_draft(self.root, self.args)
+
+    def test_draft_bundle_rejects_tamper_paths_assets_and_package_pins(self):
+        original = dict(self.bundle_files)
+        for name in ('release-assets/extra', '../escape', 'release-assets/CHECKSUMS.TXT'):
+            self.bundle_files = original | {name:b'fixture'}; self.write_bundle()
+            with self.assertRaises(ValueError): proof.draft_bundle(self.args.producer_bundle.read_bytes(), self.args, self.native)
+        for name in ('release-assets/THIRD_PARTY_NOTICES.txt', 'release-assets/checksums.txt', 'verified-release.json'):
+            self.bundle_files = dict(original); self.bundle_files[name] = b'{}'; self.write_bundle()
+            with self.assertRaises(ValueError): proof.draft_bundle(self.args.producer_bundle.read_bytes(), self.args, self.native)
+        self.bundle_files = dict(original)
+        pins = json.loads(self.package_files['package/assets.json']); pins['assets'] = {}
+        self.package_files['package/assets.json'] = json.dumps(pins).encode()
+        self.repack_tarball(); self.write_bundle()
+        with self.assertRaises(ValueError): proof.draft_bundle(self.args.producer_bundle.read_bytes(), self.args, self.native)
+        with self.assertRaises(ValueError): proof.draft_bundle(b'tampered', self.args, self.native)
+
+    def test_draft_linux_scope_requires_exact_three(self):
+        for folder in list(self.root.iterdir()):
+            if not folder.name.endswith('linux-arm64'):
+                shutil.rmtree(folder)
+                continue
+            folder = folder.rename(folder.with_name(folder.name.replace('linux-arm64', 'linux-amd64')))
+            path = folder/'runner-evidence.json'
+            record = json.loads(path.read_bytes())
+            record['target'] = 'linux-amd64'
+            release = record['installer_release']
+            release['file'] = release['file'].replace('linux_arm64', 'linux_amd64')
+            binary_hash = proof.digest(self.assets[release['file']])
+            release.update(binary_sha256=binary_hash, size=len(self.assets[release['file']]))
+            record['installer_sha256'] = binary_hash
+            record['packaged_acquisition'].update(binary_sha256=binary_hash, size=release['size'])
+            for field, key in (('client_asset', record['client']), ('scanner_asset', 'lintai'), ('ripgrep_asset', 'rg')):
+                kind, repo, version, archive, integrity, _ = proof.pins()['linux-amd64'][key]
+                record[field].update(source=f'https://github.com/{repo}/releases/tag/{version}' if kind == 'github' else f'https://registry.npmjs.org/{repo}/-/{archive}',
+                                     version=version, archive=archive, archive_integrity=integrity)
+            for fixture in folder.rglob('*.json'):
+                if fixture.name in ('runner-evidence.json', 'initial-draft.json'): continue
+                data = json.loads(fixture.read_bytes())
+                data['installer_sha256'] = binary_hash
+                data['scanner'].update(platform='linux-amd64', archive_sha256=record['scanner_asset']['archive_integrity'][7:])
+                fixture.write_text(json.dumps(data))
+            path.write_text(json.dumps(record))
+        self.args.scope = self.q['target_scope'] = 'linux-amd64'
+        self.sync_records()
+        summary, _ = proof.verify_draft(self.root, self.args)
+        self.assertEqual(len(summary['jobs']), 3)
+        self.q['lanes'].pop(); self.write_qualification()
+        with self.assertRaisesRegex(ValueError, 'missing qualification lanes'): proof.verify_draft(self.root, self.args)
+
+    def test_draft_archive_member_links_aliases_and_duplicate_json(self):
+        import io
+        import stat
+        for name, mode in (('link', stat.S_IFLNK), ('release-assets/', stat.S_IFREG)):
+            stream = io.BytesIO()
+            with zipfile.ZipFile(stream, 'w') as zipped:
+                member = zipfile.ZipInfo(name); member.external_attr = (mode | 0o644) << 16
+                zipped.writestr(member, b'fixture')
+            body = stream.getvalue(); self.args.producer_artifact_digest = proof.digest(body)
+            with self.assertRaisesRegex(ValueError, 'nonregular ZIP'): proof.draft_bundle(body, self.args, self.native)
+        self.bundle_files['VERIFIED-release.json'] = b'{}'; self.write_bundle()
+        with self.assertRaisesRegex(ValueError, 'aliased ZIP'): proof.draft_bundle(self.args.producer_bundle.read_bytes(), self.args, self.native)
+        del self.bundle_files['VERIFIED-release.json']
+        self.bundle_files['verified-release.json'] = self.bundle_files['verified-release.json'].replace(b'"version": "1.2.3"', b'"version": "1.2.3", "version": "1.2.3"')
+        self.write_bundle()
+        with self.assertRaisesRegex(ValueError, 'duplicate JSON'): proof.draft_bundle(self.args.producer_bundle.read_bytes(), self.args, self.native)
+
+    def test_draft_duplicate_json_and_unknown_directory(self):
+        path = self.args.qualification/'qualification.json'
+        path.write_bytes(path.read_bytes().replace(b'"schema_version": 1', b'"schema_version": 1, "schema_version": 1'))
+        with self.assertRaisesRegex(ValueError, 'duplicate JSON'): proof.verify_draft(self.root, self.args)
+        self.write_qualification()
+        (self.root/'released-native-client-unknown-linux-arm64').mkdir()
+        with self.assertRaisesRegex(ValueError, 'exactly 9'): proof.verify_draft(self.root, self.args)
+
+
 if __name__ == '__main__':
     unittest.main()
