@@ -10,10 +10,12 @@ const adapter = require("./authoring-release");
 const packing = require("./stage-dual-authoring-npm");
 const runtime = require("../lib/public-authoring");
 const inputs = require("./authoring-native-inputs");
+const { projectionBytes } = require("../lib/public-authoring-contract");
 const crypto = require("node:crypto");
 const { TextDecoder } = require("node:util");
 const PREFIX = "npm/agentplugins/";
 const COMMON = Object.freeze(["lib/verifier.js", "lib/public-authoring.js", "scripts/dual-authoring-candidate.js"]);
+const STAGE_COMMON = Object.freeze([...COMMON, "lib/public-authoring-contract.js", "lib/public-authoring-input.js"]);
 const ownFiles = product => ["LICENSE", "README.md", "package.json", `bin/${product}.js`, "lib/platform.js",
   product === "agentplugins" ? "lib/bootstrap.js" : "lib/install.js"];
 const ALLOWLIST = Object.freeze([...new Set([...COMMON.map(n => PREFIX + n),
@@ -23,6 +25,7 @@ const ALLOWLIST = Object.freeze([...new Set([...COMMON.map(n => PREFIX + n),
 // Separate future stage provenance inventory. Never extend the legacy
 // preparation wrapper_blobs receipt or ship these producer helpers in a pack.
 const STAGE_ALLOWLIST = Object.freeze([...ALLOWLIST,
+  ...STAGE_COMMON.filter(n => !COMMON.includes(n)).map(n => PREFIX + n),
   ...["authoring-native-inputs.js", "authoring-promotion.js", "authoring-native-qualification.js",
     "platform-proof.js", "npm-public-contract.js"].map(n => PREFIX + "scripts/" + n),
   "scripts/read-authoring-evidence-zip.py", ".github/workflows/agentplugins-release.yml",
@@ -91,7 +94,7 @@ function stageBytes(value, maximum) {
   if (!Buffer.isBuffer(value) || value.length === 0 || value.length > maximum) throw new Error("stage nonempty bounded Buffer required");
   return value;
 }
-const stageClosure = product => [...ownFiles(product), ...COMMON, "bin/package.json", "lib/package.json",
+const stageClosure = product => [...ownFiles(product), ...STAGE_COMMON, "bin/package.json", "lib/package.json",
   "scripts/package.json", "public-release.json", "release-manifest.json", inputs.INPUT_FILE].sort();
 
 function stageDescriptors(input, inputBytes) {
@@ -127,20 +130,15 @@ function pairedPackageFiles(source, manifests, inputBytes) {
   const descriptors = stageDescriptors(input, inputBytes);
   stageFields(source, STAGE_ALLOWLIST, "stage source closure");
   for (const name of STAGE_ALLOWLIST) stageBlob(source[name], true);
+  for (const name of STAGE_COMMON.filter(n => !COMMON.includes(n))) {
+    stageEqual(source[PREFIX + name].mode, "100644", "v2 helper mode");
+  }
   stageFields(manifests, c.PRODUCTS, "paired manifest bytes");
   for (const product of c.PRODUCTS) {
-    const body = stageBytes(manifests[product], inputs.MAX_INPUT_BYTES), id = input.identity;
-    // Exact existing authoring-release productManifest encoding, using the
-    // already validated I assets. No candidate rebuild, archive or second reader.
-    const expected = c.encode({ schema_version: 3, status: "CANDIDATE", product, repository: id.repository,
-      tag: input.products[product].tag, version: id.versions[product], commit: id.commit, engine_revision: id.engine_revision,
-      versions: id.versions, candidate_sha256: input.candidate_sha256, authoring_mode: input.authoring_mode,
-      asset_scope: input.asset_scope, assets: input.products[product].assets,
-      release_eligible: false, platform_acceptance: false, attested: false });
+    const body = stageBytes(manifests[product], inputs.MAX_INPUT_BYTES);
+    const { manifest: expected, checksums } = projectionBytes(input, product);
     if (!body.equals(expected)) throw new Error("stage projection bytes differ from I");
     stageEqual(c.digest(body), input.products[product].manifest_sha256, "selected manifest hash");
-    const checksums = Buffer.from([...Object.values(input.products[product].assets).map(a => `${a.sha256}  ${a.file}`),
-      `${c.digest(body)}  release-manifest.json`].join("\n") + "\n");
     stageEqual(c.digest(checksums), input.products[product].checksums_sha256, "projection checksums hash");
     const baseBytes = source[`npm/${product}/package.json`].bytes;
     const base = JSON.parse(new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(baseBytes));
@@ -160,6 +158,7 @@ function pairedPackageFiles(source, manifests, inputBytes) {
       identity: input.identity, manifestDigest: input.candidate_sha256 });
     files["public-release.json"] = descriptors[product];
     files[inputs.INPUT_FILE] = inputBytes;
+    for (const name of STAGE_COMMON) files[name] = source[PREFIX + name].bytes;
     files["package.json"] = c.encode({ ...JSON.parse(files["package.json"]), private: false, files: stageClosure(product) });
     // Own the returned buffers, including each product's I and shared runtime.
     pair[product] = Object.fromEntries(Object.entries(files).map(([name, body]) => [name, Buffer.from(body)]));
@@ -207,7 +206,7 @@ function stageRecord(value, inputBytes) {
     for (const name of ownFiles(product).filter(n => n !== "package.json")) {
       stageEqual(g[name], wrapper_blobs[`npm/${product}/${name}`].sha256, "generated source file");
     }
-    for (const name of COMMON) stageEqual(g[name], wrapper_blobs[PREFIX + name].sha256, "shared runtime");
+    for (const name of STAGE_COMMON) stageEqual(g[name], wrapper_blobs[PREFIX + name].sha256, "shared runtime");
     for (const dir of ["bin", "lib", "scripts"]) {
       stageEqual(g[`${dir}/package.json`], c.digest(c.encode({ type: "commonjs" })), "CommonJS scope");
     }
@@ -397,7 +396,7 @@ function manifestsFrom(snapshot) {
   return Object.fromEntries(c.PRODUCTS.map(p => [p, snapshot.files[`${p}/release-manifest.json`]]));
 }
 function generatedPins(pair) {
-  for (const name of [...COMMON, inputs.INPUT_FILE]) agreeStage(pair.agentplugins[name], pair["plugin-kit-ai"][name], "shared generated bytes");
+  for (const name of [...STAGE_COMMON, inputs.INPUT_FILE]) agreeStage(pair.agentplugins[name], pair["plugin-kit-ai"][name], "shared generated bytes");
   return Object.fromEntries(c.PRODUCTS.map(p => [p,
     Object.fromEntries(Object.entries(pair[p]).map(([n, b]) => [n, c.digest(b)]))]));
 }

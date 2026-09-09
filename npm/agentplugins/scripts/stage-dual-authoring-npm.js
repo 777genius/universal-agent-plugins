@@ -50,7 +50,8 @@ function blobs(repo, commit, env, closure = "private") {
   // Check the newly executing helper at the same commit without extending the
   // historical private/public preparation wrapper_blobs receipt inventories.
   const packHelper = PREFIX + "scripts/npm-public-contract.js";
-  for (const name of [...new Set([...allowlist, packHelper])]) {
+  const codecHelper = PREFIX + "lib/public-authoring-contract.js";
+  for (const name of [...new Set([...allowlist, packHelper, ...(closure === "public" ? [codecHelper] : [])])]) {
     const entry = run("/usr/bin/git", ["ls-tree", "-z", commit, "--", name], env, repo).toString();
     const match = /^(100644|100755) blob ([0-9a-f]{40})\t([^\0]+)\0$/.exec(entry);
     if (!match || match[3] !== name) throw new Error(`required regular Git blob missing: ${name}`);
@@ -61,9 +62,15 @@ function blobs(repo, commit, env, closure = "private") {
   // A dirty caller may not manufacture an exact-source claim using old blobs.
   for (const name of ["scripts/npm-public-contract.js", "scripts/stage-dual-authoring-npm.js", "scripts/stage-dual-authoring-candidate.js",
     "scripts/dual-authoring-candidate.js", ...(closure === "public" ?
-      ["scripts/stage-authoring-npm.js", "scripts/authoring-release.js", "lib/public-authoring.js"] : [])]) {
+      ["scripts/stage-authoring-npm.js", "scripts/authoring-release.js", "lib/public-authoring.js", "lib/public-authoring-contract.js"] : [])]) {
     if (!c.readFile(path.resolve(__dirname, "..", name)).equals(result[PREFIX + name].bytes)) {
       throw new Error(`executing stager differs from committed source: ${name}`);
+    }
+  }
+  if (closure === "public") {
+    const file = path.resolve(__dirname, "../lib/public-authoring-contract.js");
+    if ((fs.lstatSync(file).mode & 0o777) !== (result[codecHelper].mode === "100755" ? 0o755 : 0o644)) {
+      throw new Error("executing codec mode differs from committed source");
     }
   }
   if (closure === "stage") {
