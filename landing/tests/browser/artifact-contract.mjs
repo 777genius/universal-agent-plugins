@@ -163,7 +163,7 @@ test('final artifact gate rejects missing, altered, draft and mis-scoped output 
       );
       await mutation('api/registry/client/github-copilot-cli', '{}', /Unexpected API/);
       await mutation('agents/index.html', '<h1>Fake catalog</h1>', /Unexpected\/draft\/fake HTML/);
-      await mutation('es/index.html', '<h1>Draft</h1>', /Unexpected\/draft\/fake HTML/);
+      await mutation('de/index.html', '<h1>Draft</h1>', /Unexpected\/draft\/fake HTML/);
       await mutation('registry/schemas/1/latest.json', '{}', /Assembly changed bytes/);
       await mutation(
         'docs/en/guide/quickstart.html',
