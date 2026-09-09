@@ -20,8 +20,9 @@ function fields(v, names, label) {
 }
 function absent(label) { throw new Error(`PUBLIC_PROVISIONING_REQUIRED:${label}`); }
 function text(v) { assert.ok(typeof v === "string" && /^[\x21-\x7e]{1,256}$/.test(v), "bounded provision identity"); }
+// Absolute path limit: 4096 Unicode code points in both decoders.
 function absolute(v, target) {
-  assert.ok(typeof v === "string" && v.length <= 4096 && !/[\x00-\x1f\x7f]/.test(v), "provision path");
+  assert.ok(typeof v === "string" && Array.from(v).length <= 4096 && !/[\x00-\x1f\x7f]/.test(v), "provision path");
   const p = target.startsWith("windows-") ? path.win32 : path.posix;
   assert.ok(p.isAbsolute(v) && p.normalize(v) === v && v !== p.parse(v).root &&
     !v.startsWith("\\\\") && !v.startsWith("//") && !v.endsWith(p.sep), "canonical provision path");
@@ -91,6 +92,25 @@ function checkTool(t, label) {
   catch (e) { if (e.code === "ENOENT") absent(label); throw e; }
   assert.equal(c.digest(bytes), t.sha256, `source-frozen provision pin mismatch:${label}`);
 }
+// Closure members alone may be empty; manifests and tools retain c.readFile.
+function readClosureFile(file, maximum) {
+  c.safeDirectory(path.dirname(file));
+  const before = fs.lstatSync(file, { bigint: true });
+  assert.ok(before.isFile() && before.nlink === 1n && before.size >= 0n && before.size <= BigInt(maximum),
+    "closure file must be regular, bounded and unaliased");
+  const same = st => ["dev", "ino", "mode", "nlink", "uid", "gid", "size", "mtimeNs", "ctimeNs"].every(k => st[k] === before[k]);
+  const fd = fs.openSync(file, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW || 0));
+  try {
+    assert.ok(same(fs.fstatSync(fd, { bigint: true })), "closure file changed");
+    const body = Buffer.alloc(Number(before.size) + 1);
+    let length = 0, count;
+    while (length < body.length && (count = fs.readSync(fd, body, length, body.length - length, null)) > 0) length += count;
+    assert.ok(BigInt(length) === before.size && same(fs.fstatSync(fd, { bigint: true })) &&
+      same(fs.lstatSync(file, { bigint: true })), "closure file changed");
+    c.safeDirectory(path.dirname(file));
+    return body.subarray(0, length);
+  } finally { fs.closeSync(fd); }
+}
 function checkClosure(value, label) {
   if (value === null) absent(label);
   const found = []; let entries = 0, total = 0;
@@ -101,7 +121,7 @@ function checkClosure(value, label) {
       const file = path.join(dir, name), rel = relative ? `${relative}/${name}` : name, st = fs.lstatSync(file);
       total += st.isFile() ? st.size : 0; assert.ok(total <= 256 * LIMIT, "closure byte bound");
       if (st.isDirectory()) walk(file, rel);
-      else { assert.ok(found.length < 4096, "closure bound"); found.push({ path: rel, sha256: c.digest(c.readFile(file, 256 * LIMIT)) }); }
+      else { assert.ok(found.length < 4096, "closure bound"); found.push({ path: rel, sha256: c.digest(readClosureFile(file, 256 * LIMIT)) }); }
     }
   }
   try { walk(value.root, ""); } catch (e) { if (e.code === "ENOENT") absent(label); throw e; }

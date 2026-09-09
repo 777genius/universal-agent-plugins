@@ -647,6 +647,41 @@ class C3bProvisionControls(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, 'trusted source/controller changed'): p.authenticated_verify(str(tool), [])
             child.assert_not_called()
 
+    def test_supplementary_unicode_path_code_point_boundary(self):
+        root, source, file, tool, value = self.fixture()
+        for suffix, accepted in (('', True), ('a', True), ('ab', False)):
+            value['controllers']['linux-amd64']['node']['path'] = '/' + '😀' * 4094 + suffix
+            self.put(file, value)
+            with self.subTest(code_points=4095 + len(suffix)), patch.object(p, '__file__', str(source)):
+                if accepted: self.assertEqual(p.read_provisioning(), value)
+                else:
+                    with self.assertRaisesRegex(ValueError, 'canonical provision path'): p.read_provisioning()
+
+    def test_provision_read_atime_and_mutation_metadata(self):
+        import os
+        from types import SimpleNamespace
+        root = Path(tempfile.mkdtemp(prefix='C3b-stat-SYNTHETIC-'))
+        file = root / 'bytes'; file.write_bytes(b'harmless bytes')
+        original = os.fstat
+        def observed(**changes):
+            def result(fd):
+                st = original(fd)
+                fields = {name: getattr(st, name) for name in dir(st) if name.startswith('st_')}
+                fields.update(changes)
+                return SimpleNamespace(**fields)
+            return result
+        st = file.stat()
+        # Deterministic read-side atime transition; no filesystem mount assumptions.
+        with patch.object(os, 'fstat', side_effect=observed(st_atime=st.st_atime + 1, st_atime_ns=st.st_atime_ns + 1000000000)):
+            self.assertEqual(p.provision_bytes(file), b'harmless bytes')
+        for field in ('st_dev', 'st_ino', 'st_mode', 'st_nlink', 'st_uid', 'st_gid', 'st_size', 'st_mtime_ns', 'st_ctime_ns'):
+            changed = observed(**{field: getattr(st, field) + 1})
+            calls = iter((False, True))
+            with self.subTest(field=field), patch.object(os, 'fstat', side_effect=lambda fd: changed(fd) if next(calls) else original(fd)):
+                with self.assertRaisesRegex(ValueError, 'provision file changed'): p.provision_bytes(file)
+        file.write_bytes(b'')
+        with self.assertRaisesRegex(ValueError, 'bounded regular'): p.provision_bytes(file)
+
     def test_verified_controller_still_cannot_open_execution(self):
         import subprocess
         root, source, file, tool, value = self.fixture(); output = root / 'must-not-exist'

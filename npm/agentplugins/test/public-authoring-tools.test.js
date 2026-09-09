@@ -6,9 +6,9 @@ const { createRequire } = require("node:module");
 const source = path.resolve(__dirname, "../scripts/public-authoring-tools.js"), local = createRequire(source);
 const c = local("./dual-authoring-candidate"), shipped = local("./public-authoring-tools");
 const base = shipped.readProvisioning(), manifestPath = path.resolve(__dirname, "../../../.github/authoring-public-tools.json");
-function fixture(body = c.encode(base), read = c.readFile) {
+function fixture(body = c.encode(base), read = c.readFile, filesystem = fs) {
   const context = { module: { exports: {} }, Buffer, TextDecoder, __dirname: path.dirname(source),
-    require: id => id === "./dual-authoring-candidate" ? { ...c, readFile: (f, cap) => f === manifestPath ? body : read(f, cap) } : local(id) };
+    require: id => id === "./dual-authoring-candidate" ? { ...c, readFile: (f, cap) => f === manifestPath ? body : read(f, cap) } : id === "node:fs" ? filesystem : local(id) };
   vm.runInThisContext("(function(require,module,__dirname){" + fs.readFileSync(source, "utf8") + "\n})", { filename: source })(context.require, context.module, context.__dirname); return context.module.exports;
 }
 const fresh = () => JSON.parse(c.encode(base));
@@ -70,9 +70,38 @@ test("C3b tools complete npm closure and cell capabilities", () => {
     const bad = JSON.parse(c.encode(value)); bad.cells[key][name] = null;
     assert.throws(() => fixture(c.encode(bad)).requireCellTools(key), new RegExp(`PUBLIC_PROVISIONING_REQUIRED:${key}:${name}`));
   }
+  const empty = path.join(npmRoot, "empty.js"); fs.writeFileSync(empty, "");
+  assert.throws(() => fixture(c.encode(value)).requireCellTools(key), /closure mismatch/);
+  files.unshift({ path: "empty.js", sha256: pin(empty).sha256 });
+  assert.equal(fixture(c.encode(value)).requireCellTools(key).mod_cache.files[0].sha256, c.digest(Buffer.alloc(0)));
+  // Empty members remain exhaustive and cannot be aliased or change mid-read.
+  const hard = path.join(root, "empty-hardlink"); fs.linkSync(empty, hard);
+  assert.throws(() => fixture(c.encode(value)).requireCellTools(key), /unaliased/);
+  // Retain fixtures without cleanup: use a fresh empty member after the alias case.
+  const nextRoot = path.join(root, "next-npm"); fs.mkdirSync(nextRoot);
+  fs.writeFileSync(path.join(nextRoot, "empty.js"), ""); fs.writeFileSync(path.join(nextRoot, "npm-cli.js"), "SYNTHETIC NPM\n");
+  row.npm.path = path.join(nextRoot, "npm-cli.js"); row.npm.closure.root = nextRoot; row.mod_cache.root = nextRoot;
+  const target = path.join(nextRoot, "empty.js");
+  let changed = false;
+  const filesystem = { ...fs, readSync(fd, ...args) {
+    if (!changed) { changed = true; fs.writeFileSync(target, "x"); }
+    return fs.readSync(fd, ...args);
+  } };
+  assert.throws(() => fixture(c.encode(value), c.readFile, filesystem).requireCellTools(key), /closure file changed/);
+  fs.writeFileSync(target, "");
+  const aliasRoot = path.join(root, "linked-npm"); fs.symlinkSync(nextRoot, aliasRoot);
+  const linked = JSON.parse(c.encode(value)); linked.cells[key].mod_cache.root = aliasRoot;
+  assert.throws(() => fixture(c.encode(linked)).requireCellTools(key), /symlink/);
+  const replacedDescriptor = { ...fs, fstatSync(fd, options) {
+    const st = fs.fstatSync(fd, options); return { ...st, ino: st.ino + 1n };
+  } };
+  assert.throws(() => fixture(c.encode(value), c.readFile, replacedDescriptor).requireCellTools(key), /closure file changed/);
+  const emptyTool = JSON.parse(c.encode(value)); emptyTool.controllers["linux-amd64"].node = pin(target);
+  assert.throws(() => fixture(c.encode(emptyTool)).requireController(), /nonempty/);
+  assert.throws(() => fixture(Buffer.alloc(0)).readProvisioning());
   const bad = JSON.parse(c.encode(value)); bad.cells[key].npm.closure.files.push(files[0]);
   assert.throws(() => fixture(c.encode(bad)).readProvisioning(), /ordered unique/);
-  fs.writeFileSync(path.join(npmRoot, "unlisted.js"), "UNLISTED\n");
+  fs.writeFileSync(path.join(row.npm.closure.root, "unlisted.js"), "UNLISTED\n");
   assert.throws(() => fixture(c.encode(value)).requireCellTools(key), /complete source-frozen closure mismatch/);
 });
 test("C3b tools manifest absence and source root cannot be substituted", () => {
@@ -96,6 +125,14 @@ test("C3b tools JS Python agree on identical canonical fixture bytes", () => {
     Buffer.from('['.repeat(9)), Buffer.alloc(1024 * 1024 + 1, 32), Buffer.from([255]));
   const expected = bodies.map(body => { try { fixture(body).readProvisioning(); return true; } catch { return false; } });
   assert.deepEqual(expected, [true, true, ...Array(bodies.length - 2).fill(false)]);
+  // Identical canonical bytes at 4095/4096/4097 code points, including supplementary Unicode.
+  for (const [suffix, accepted] of [["", true], ["a", true], ["ab", false]]) {
+    const unicode = JSON.parse(c.encode(value));
+    unicode.controllers["linux-amd64"].node.path = "/" + "😀".repeat(4094) + suffix;
+    const body = c.encode(unicode); bodies.push(body); expected.push(accepted);
+    if (accepted) assert.doesNotThrow(() => fixture(body).readProvisioning());
+    else assert.throws(() => fixture(body).readProvisioning(), /provision path/);
+  }
   bodies.forEach((body, i) => fs.writeFileSync(path.join(root, `${i}.json`), body));
   const code = `import importlib.util,json,pathlib,sys
 spec=importlib.util.spec_from_file_location('provision',sys.argv[1]); p=importlib.util.module_from_spec(spec); spec.loader.exec_module(p)

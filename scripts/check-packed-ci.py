@@ -405,7 +405,13 @@ def provision_bytes(file, maximum=1024 * 1024):
         require((opened.st_dev, opened.st_ino) == (before.st_dev, before.st_ino), 'provision file changed')
         body = stream.read(maximum + 1)
         after = os.fstat(stream.fileno())
-    require(before == after == file.lstat() and len(body) == before.st_size, 'provision file changed')
+    # Reading may update atime (e.g. relatime on a fresh checkout). Compare
+    # identity and mutation metadata explicitly, retaining nanosecond precision.
+    def identity(st):
+        return (st.st_dev, st.st_ino, st.st_mode, st.st_nlink, st.st_uid, st.st_gid,
+                st.st_size, st.st_mtime_ns, st.st_ctime_ns)
+    require(identity(before) == identity(opened) == identity(after) == identity(file.lstat()) and
+            len(body) == before.st_size, 'provision file changed')
     return body
 
 
@@ -428,6 +434,7 @@ def read_provisioning():
     require(body == (json.dumps(value, indent=2, ensure_ascii=False) + '\n').encode(), 'canonical provision JSON')
     def pin(v): require(type(v) is str and re.fullmatch('[0-9a-f]{64}', v) and v != '0' * 64, 'provision pin')
     def label(v): require(type(v) is str and re.fullmatch('[!-~]{1,256}', v), 'bounded provision identity')
+    # Absolute path limit: 4096 Unicode code points, shared with JS.
     def absolute(v, target):
         import ntpath, posixpath
         p = ntpath if target.startswith('windows-') else posixpath
