@@ -14,6 +14,7 @@ import json
 from pathlib import Path
 import re
 import stat
+import struct
 import zipfile
 
 CLIENT_TESTS = {
@@ -253,10 +254,18 @@ def read_json(body):
     return json.loads(body, object_pairs_hook=unique_object)
 
 
-def original_file(path):
+def original_file(path, limit):
     mode = path.lstat()
     require(stat.S_ISREG(mode.st_mode) and mode.st_nlink == 1, 'nonregular or aliased original: ' + str(path))
-    return path.read_bytes()
+    # Bound the read itself, including growth after lstat; never read-all.
+    body = bytearray()
+    with path.open('rb') as source:
+        while True:
+            chunk = source.read(min(1 << 20, limit - len(body) + 1))
+            if not chunk:
+                return bytes(body)
+            body.extend(chunk)
+            require(len(body) <= limit, 'oversized original: ' + str(path))
 
 
 # Keep the existing 400 MiB ceiling for each of the six native binaries.
@@ -264,10 +273,71 @@ def original_file(path):
 ZIP_MEMBER_LIMIT = 400 << 20
 ZIP_COMPRESSED_LIMIT = 401 << 20
 ZIP_TOTAL_LIMIT = (6 * 400 + 64) << 20
+# Allow compression expansion plus local/central headers, comments and padding.
+ZIP_CONTAINER_LIMIT = ZIP_TOTAL_LIMIT + (16 << 20)
+ZIP_DIRECTORY_LIMIT = 1 << 20
+QUALIFICATION_JSON_LIMIT = 2 << 20
+FINAL_DRAFT_JSON_LIMIT = 1 << 20
+
+
+def preflight_zip(body, member_limit):
+    """Bound central-directory allocation before ZipFile sees original bytes.
+
+    Accept single-disk ZIP and fixed ZIP64 end records, including streaming
+    data descriptors, ZIP64 member extras and archive comments. As in Python's
+    ZipFile, locate the directory relative to the end records (allowing a prefix).
+    Bound ZIP64 extensible end sectors too; split archives are unsupported.
+    """
+    require(len(body) <= ZIP_CONTAINER_LIMIT, 'oversized ZIP container')
+    # Match ZipFile's no-comment fast path, otherwise its bounded reverse search.
+    end = len(body) - 22
+    if not (end >= 0 and body[end:end + 4] == b'PK\x05\x06' and body[-2:] == b'\0\0'):
+        end = body.rfind(b'PK\x05\x06', max(0, len(body) - 65557))
+    require(end >= 0 and end + 22 <= len(body), 'missing or truncated ZIP end record')
+    _, disk, cd_disk, disk_count, count, size, offset, comment = struct.unpack_from('<4s4H2IH', body, end)
+    require(end + 22 + comment == len(body), 'truncated ZIP comment or trailing data')
+    require(disk == cd_disk == 0 and disk_count == count, 'split ZIP or declared-count mismatch')
+    directory_end = end
+    if end >= 20 and body[end - 20:end - 16] == b'PK\x06\x07':
+        _, zip64_disk, zip64_offset, disks = struct.unpack_from('<4sIQI', body, end - 20)
+        require(zip64_disk == 0 and disks == 1, 'split ZIP64 archive')
+        pos = end - 20 - 56
+        # Match ZipFile: first try the locator, then a fixed record with prefix.
+        if zip64_offset <= pos and body[zip64_offset:zip64_offset + 4] == b'PK\x06\x06':
+            pos = zip64_offset
+        require(pos >= 0 and body[pos:pos + 4] == b'PK\x06\x06', 'missing or unsupported ZIP64 end record')
+        (_, record_size, _, _, disk64, cd_disk64, disk_count64,
+         count64, size64, offset64) = struct.unpack_from('<4sQ2H2I4Q', body, pos)
+        require(44 <= record_size <= ZIP_DIRECTORY_LIMIT
+                and pos + 12 + record_size == end - 20, 'invalid or oversized ZIP64 end record')
+        require(disk64 == cd_disk64 == 0 and disk_count64 == count64, 'split ZIP64 or declared-count mismatch')
+        require(count in (65535, count64) and size in (0xffffffff, size64)
+                and offset in (0xffffffff, offset64), 'inconsistent ZIP64 end record')
+        count, size, offset = count64, size64, offset64
+        directory_end = pos
+        require(zip64_offset == pos - (directory_end - size - offset), 'inconsistent ZIP64 locator')
+    else:
+        require(count != 65535 and size != 0xffffffff and offset != 0xffffffff, 'missing ZIP64 end record')
+    require(size <= ZIP_DIRECTORY_LIMIT, 'oversized ZIP central directory')
+    start = directory_end - size
+    require(0 <= offset <= start, 'invalid ZIP central directory bounds')
+    # Walk physical records without slicing the directory or decoding names.
+    # Counts from EOCD are only consistency assertions, never an allocation gate.
+    cursor, actual = start, 0
+    while cursor < directory_end:
+        require(cursor + 46 <= directory_end and body[cursor:cursor + 4] == b'PK\x01\x02',
+                'malformed or truncated ZIP central directory')
+        name, extra, comment = struct.unpack_from('<3H', body, cursor + 28)
+        cursor += 46 + name + extra + comment
+        require(cursor <= directory_end, 'truncated ZIP central directory record')
+        actual += 1
+        require(actual <= member_limit, 'too many ZIP members')
+    require(actual == count, 'ZIP declared-count mismatch')
 
 def draft_bundle(body, args, native):
     """Inspect preserved ZIP/tar members as bytes; never extract or execute them."""
     import io
+    require(len(body) <= ZIP_CONTAINER_LIMIT, 'oversized ZIP container')
     require(digest(body) == args.producer_artifact_digest, 'producer artifact digest mismatch')
     files, seen = {}, set()
     version, tag = args.release_version, args.release_tag
@@ -275,6 +345,7 @@ def draft_bundle(body, args, native):
                     ('.exe' if target.startswith('windows') else '') for target in native.TARGETS}
     names = set(binary_names.values()) | {'release-manifest.json', 'checksums.txt', 'THIRD_PARTY_NOTICES.txt'}
     expected = {'verified-release.json'} | {'release-assets/' + n for n in names}
+    preflight_zip(body, len(expected) + 2)
     with zipfile.ZipFile(io.BytesIO(body)) as zipped:
         inventory = zipped.infolist()
         require(len(inventory) <= len(expected) + 2, 'too many ZIP members')
@@ -345,7 +416,8 @@ def verify_draft(root, args):
     import native_client_draft as native
     native.validate(args)
     require(args.scope in SCOPES, 'unknown evidence scope')
-    originals = {name: original_file(args.qualification / name) for name in ('qualification.json', 'final-draft.json')}
+    originals = {name: original_file(args.qualification / name, limit) for name, limit in
+                 (('qualification.json', QUALIFICATION_JSON_LIMIT), ('final-draft.json', FINAL_DRAFT_JSON_LIMIT))}
     require(not args.qualification.is_symlink() and {p.name for p in args.qualification.iterdir()} == set(originals), 'unexpected qualification files')
     q = read_json(originals['qualification.json'])
     object_keys(q, 'schema_version status release_state target_scope producer_commit harness_commit harness_tree tarball_sha256 producer helper_sha256 lanes final_draft limitation', 'qualification')
@@ -362,7 +434,7 @@ def verify_draft(root, args):
         'scripts/run-native-client-matrix.py', 'scripts/native_client_draft.py',
         'scripts/verify-agentplugins-draft.py', 'scripts/verify-released-native-evidence.py',
         'npm/agentplugins/scripts/release-assets.js'} and all(exact_hex(v, 64) for v in helpers.values()), 'unsupported helper inventory')
-    bundle = original_file(args.producer_bundle)
+    bundle = original_file(args.producer_bundle, ZIP_CONTAINER_LIMIT)
     assets, verified, tarball, launcher = draft_bundle(bundle, args, native)
     require(q['tarball_sha256'] == tarball, 'qualification tarball mismatch')
     final = read_json(originals['final-draft.json'])

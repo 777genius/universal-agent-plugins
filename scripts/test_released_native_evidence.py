@@ -481,6 +481,17 @@ class DraftArchiveTests(unittest.TestCase):
         (self.root/'released-native-client-unknown-linux-arm64').mkdir()
         with self.assertRaisesRegex(ValueError, 'exactly 9'): proof.verify_draft(self.root, self.args)
 
+    def test_original_container_and_qualification_limits_before_read_all(self):
+        for name, constant in (('qualification.json', 'QUALIFICATION_JSON_LIMIT'),
+                               ('final-draft.json', 'FINAL_DRAFT_JSON_LIMIT'),
+                               (None, 'ZIP_CONTAINER_LIMIT')):
+            path = self.args.qualification/name if name else self.args.producer_bundle
+            with self.subTest(name=name), patch.object(proof, constant, path.stat().st_size - 1), \
+                 patch.object(Path, 'read_bytes', side_effect=AssertionError('read-all')), \
+                 patch.object(proof.zipfile, 'ZipFile', side_effect=AssertionError('ZIP allocation')):
+                with self.assertRaisesRegex(ValueError, 'oversized original'):
+                    proof.verify_draft(self.root, self.args)
+
     def reject_bundle_before_read(self, message):
         with patch.object(zipfile.ZipFile, 'read', side_effect=AssertionError('ZIP body read')) as read:
             with self.assertRaisesRegex(ValueError, message):
@@ -620,6 +631,124 @@ class DraftArchiveTests(unittest.TestCase):
         # Four logical files have eight physical headers including pax records.
         with patch.object(self.native, 'TAR_MEMBER_COUNT', 6):
             self.reject_tar_before_parser('too many npm headers')
+
+
+class ContainerPreflightTests(unittest.TestCase):
+    def archive_bytes(self, count=1, streaming=False, zip64=False):
+        import io
+        class Stream(io.BytesIO):
+            def seekable(self): return False
+            def seek(self, *args): raise OSError('stream')
+        stream = Stream() if streaming else io.BytesIO()
+        with zipfile.ZipFile(stream, 'w', compression=zipfile.ZIP_DEFLATED) as archive:
+            for i in range(count):
+                with archive.open(str(i), 'w', force_zip64=zip64) as member:
+                    member.write(b'fixture')
+            archive.comment = b'producer comment'
+        return stream.getvalue()
+
+    def reject(self, body, message):
+        with patch.object(proof.zipfile, 'ZipFile', side_effect=AssertionError('ZipFile allocated')) as constructor:
+            with self.assertRaisesRegex(ValueError, message):
+                # Enter through the production caller with an exact immutable digest.
+                from types import SimpleNamespace
+                import native_client_draft as native
+                args = SimpleNamespace(producer_artifact_digest=proof.digest(body),
+                                       release_version='1.2.3', release_tag='agentplugins-v1.2.3')
+                proof.draft_bundle(body, args, native)
+            constructor.assert_not_called()
+
+    def test_directory_size_before_constructor(self):
+        body = self.archive_bytes()
+        with patch.object(proof, 'ZIP_DIRECTORY_LIMIT', 45):
+            self.reject(body, 'oversized ZIP central directory')
+
+    def test_actual_count_and_declared_mismatch_before_constructor(self):
+        import struct
+        for count, declared, message in ((13, 13, 'too many ZIP'), (13, 1, 'too many ZIP'),
+                                          (1, 2, 'declared-count mismatch'), (1, 0, 'declared-count mismatch')):
+            with self.subTest(count=count, declared=declared):
+                body = bytearray(self.archive_bytes(count))
+                end = body.rfind(b'PK\x05\x06')
+                struct.pack_into('<2H', body, end + 8, declared, declared)
+                self.reject(bytes(body), message)
+
+    def test_malformed_truncated_directory_and_end_before_constructor(self):
+        import struct
+        original = self.archive_bytes()
+        cd = original.index(b'PK\x01\x02')
+        end = original.rfind(b'PK\x05\x06')
+        cases = [b'', original[:-1], original[:end], original + b'trailing']
+        body = bytearray(original); body[cd:cd+4] = b'bad!'; cases.append(bytes(body))
+        body = bytearray(original); struct.pack_into('<H', body, cd+28, 65535); cases.append(bytes(body))
+        body = bytearray(original); struct.pack_into('<I', body, end+12, len(body)+1); cases.append(bytes(body))
+        body = bytearray(original); struct.pack_into('<I', body, end+16, len(body)+1); cases.append(bytes(body))
+        for body in cases:
+            with self.subTest(size=len(body)):
+                self.reject(body, 'ZIP')
+
+    def test_streaming_zip64_members_comments_and_fixed_zip64_end(self):
+        import io
+        import struct
+        for streaming in (False, True):
+            for zip64 in (False, True):
+                body = self.archive_bytes(streaming=streaming, zip64=zip64)
+                end = body.rfind(b'PK\x05\x06')
+                size, offset = struct.unpack_from('<2I', body, end+12)
+                record = struct.pack('<4sQ2H2I4Q', b'PK\x06\x06', 44, 45, 45, 0, 0, 1, 1, size, offset)
+                locator = struct.pack('<4sIQI', b'PK\x06\x07', 0, end, 1)
+                extended = bytearray(record)
+                struct.pack_into('<Q', extended, 4, 60)
+                extended_body = body[:end]+extended+b'\0'*16+locator+body[end:]
+                proof.preflight_zip(extended_body, 12)
+                # The local stdlib supports extensible sectors; older versions
+                # can still reject them after this bounded preflight.
+                with zipfile.ZipFile(io.BytesIO(extended_body)) as archive:
+                    self.assertEqual(archive.read('0'), b'fixture')
+                sentinel_end = bytearray(body[end:])
+                struct.pack_into('<2H2I', sentinel_end, 8, 65535, 65535, 0xffffffff, 0xffffffff)
+                for candidate in (body, body[:end]+record+locator+body[end:],
+                                  body[:end]+record+locator+sentinel_end):
+                    for prefix in (b'', b'prefix'):
+                        proof.preflight_zip(prefix+candidate, 12)
+                        with zipfile.ZipFile(io.BytesIO(prefix+candidate)) as archive:
+                            self.assertEqual(archive.read('0'), b'fixture')
+
+    def test_bad_zip64_before_constructor(self):
+        import struct
+        body = self.archive_bytes()
+        end = body.rfind(b'PK\x05\x06')
+        locator = struct.pack('<4sIQI', b'PK\x06\x07', 0, end, 1)
+        self.reject(body[:end]+locator+body[end:], 'ZIP64')
+        body = bytearray(body)
+        struct.pack_into('<2H', body, end+8, 65535, 65535)
+        self.reject(bytes(body), 'missing ZIP64')
+
+    def test_container_overhead_before_constructor(self):
+        body = self.archive_bytes()
+        # Prefix bytes count even though they are outside all member sizes.
+        with patch.object(proof, 'ZIP_CONTAINER_LIMIT', len(body)):
+            self.reject(b'padding'+body, 'oversized ZIP container')
+
+    def test_original_read_is_bounded_even_after_small_stat(self):
+        import io
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp)/'original'
+            path.write_bytes(b'x')
+            class BoundedStream(io.BytesIO):
+                def read(self, size=-1):
+                    self.assert_bound(size)
+                    return super().read(size)
+            stream = BoundedStream(b'x'*18)
+            stream.assert_bound = lambda size: self.assertTrue(0 < size <= 17)
+            with patch.object(Path, 'open', return_value=stream), \
+                 patch.object(Path, 'read_bytes', side_effect=AssertionError('read-all')):
+                with self.assertRaisesRegex(ValueError, 'oversized original'):
+                    proof.original_file(path, 16)
+            path.write_bytes(b'x'*16)
+            self.assertEqual(proof.original_file(path, 16), b'x'*16)
+            path.write_bytes(b'')
+            self.assertEqual(proof.original_file(path, 16), b'')
 
 
 if __name__ == '__main__':
