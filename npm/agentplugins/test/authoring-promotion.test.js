@@ -871,3 +871,151 @@ test("C1 provenance fixed tag adapter rejects a moved second product tag", t => 
   assert.throws(() => f.adapter.checkInputTags(f.body,f.scratch),/moved release tag/);
   assert.ok(f.adapter.c1Calls.every(c => ["version","api"].includes(c.operation)));
 });
+
+// New fixed-stage adapter tests mock the existing process interface IN MEMORY.
+// No verifier execution or authentic signature compatibility is claimed.
+test("C1 stage integration fixed npm signer uses existing verification interface with exact three subjects", t => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "c1-stage-signer-"));
+  const rows = ["completion.json", "universal-agent-plugins-0.1.54.tgz", "plugin-kit-ai-2.0.0.tgz"].map(name => {
+    const file = path.join(root, name), body = Buffer.from(`unsigned interface fixture ${name}`);
+    fs.writeFileSync(file, body); return { name, file, digest: { sha256: c.digest(body) } };
+  });
+  let workflow = ".github/workflows/agentplugins-npm-publish.yml", calls = [], active;
+  t.mock.method(cp, "spawnSync", (exe, args, options) => {
+    assert.equal(exe, "/usr/bin/gh"); assert.equal(options.env.PATH, "/usr/local/bin:/usr/bin:/bin");
+    calls.push(args);
+    if (args[0] === "--version") return { status: 0, stdout: `gh version ${p.GH_VERSION} (interface fixture)\n` };
+    assert.deepEqual(args.slice(0, 3), ["attestation", "verify", active.file]);
+    assert.equal(args[args.indexOf("--signer-workflow") + 1], `github.com/${c.REPOSITORY}/.github/workflows/agentplugins-npm-publish.yml`);
+    assert.equal(args[args.indexOf("--signer-digest") + 1], ID.commit);
+    assert.equal(args[args.indexOf("--source-digest") + 1], ID.commit);
+    assert.equal(args[args.indexOf("--source-ref") + 1], selected.ref);
+    const statement = verified(active.expected); // existing output fixture shape only
+    statement[0].verificationResult.statement.predicate.buildDefinition.externalParameters.workflow.path = workflow;
+    return { status: 0, stdout: JSON.stringify(statement) };
+  });
+  for (const row of rows) {
+    active = { file: row.file, expected: { name: row.name, sha256: row.digest.sha256, source: ID.commit,
+      workflow_sha: ID.commit, ref: selected.ref, run_id: 501, run_attempt: 4,
+      subjects: rows.map(({ name, digest }) => ({ name, digest })) } };
+    assert.equal(p.verifyStageSubject(active.file, active.expected, root)._type, "https://in-toto.io/Statement/v1");
+  }
+  assert.equal(calls.filter(a => a[0] === "attestation").length, 3);
+  workflow = p.WORKFLOW;
+  assert.throws(() => p.verifyStageSubject(active.file, active.expected, root), /verified workflow/);
+  for (const mutate of [e => e.workflow_sha = "b".repeat(40), e => e.subjects.pop(),
+    e => e.subjects[0].name = "authoring-promotion.json", e => e.workflow = p.WORKFLOW,
+    e => e.ref = "refs/heads/main", e => e.sha256 = hash("different bytes")]) {
+    const expected = structuredClone(active.expected); mutate(expected); const before = calls.length;
+    assert.throws(() => p.verifyStageSubject(active.file, expected, root)); assert.equal(calls.length, before);
+  }
+});
+
+// New fixed workflow interfaces only. Provider/log bytes below are explicitly
+// mocked orchestration evidence, never genuine custody or N2 acceptance.
+function c1WorkflowProvider(t) {
+  const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'c1-workflow-provider-'));
+  const artifact = {run_id: 701, run_attempt: 3, artifact_id: 801, artifact_sha256: hash('opaque checked byte fixture')};
+  const workflow = '.github/workflows/agentplugins-npm-publish.yml';
+  const fields = {GITHUB_ACTIONS: 'true', GITHUB_EVENT_NAME: 'workflow_dispatch', GITHUB_REPOSITORY: c.REPOSITORY,
+    GITHUB_SHA: selected.source, GITHUB_WORKFLOW_SHA: selected.source, GITHUB_REF: selected.ref,
+    GITHUB_WORKFLOW_REF: `${c.REPOSITORY}/${workflow}@${selected.ref}`, GITHUB_RUN_ID: '701', GITHUB_RUN_ATTEMPT: '3',
+    GITHUB_JOB: 'paired_stage_attestation'};
+  for (const [key, value] of Object.entries(fields)) {
+    const prior = process.env[key]; process.env[key] = value;
+    t.after(() => {if (prior === undefined) delete process.env[key]; else process.env[key] = prior;});
+  }
+  const run = {id: 701, run_attempt: 3, status: 'in_progress', conclusion: null, event: 'workflow_dispatch',
+    repository: {full_name: c.REPOSITORY}, head_repository: {full_name: c.REPOSITORY}, head_sha: selected.source,
+    path: workflow, head_branch: selected.tag};
+  const job = {id: 901, run_id: 701, run_attempt: 3, head_sha: selected.source, head_branch: selected.tag,
+    name: 'paired_stage', status: 'completed', conclusion: 'success', started_at: '2026-09-09T01:00:00Z',
+    completed_at: '2026-09-09T01:10:00Z', steps: ['C1 preflight', 'C1 checkout', 'C1 setup', 'C1 stage', 'C1 upload', 'C1 upload evidence']
+      .map((name, i) => ({name, number: i + 2, status: 'completed', conclusion: 'success'}))};
+  const signing = {...job, id: 902, name: 'paired_stage_attestation', status: 'in_progress', conclusion: null};
+  const jobs = {total_count: 2, jobs: [job, signing]};
+  const item = {id: 801, expired: false, digest: `sha256:${artifact.artifact_sha256}`,
+    workflow_run: {id: 701, head_sha: selected.source}, size_in_bytes: Buffer.byteLength('opaque checked byte fixture'),
+    name: `authoring-public-stage-${selected.source}-701-3`, created_at: '2026-09-09T01:05:00Z'};
+  const records = [
+    {operation: 'start', source: selected.source, ref: selected.ref, run_id: 701, run_attempt: 3,
+      input_sha256: hash('I'), input_artifact: {run_id: 601, run_attempt: 2, artifact_id: 701, artifact_sha256: hash('I zip')}},
+    {operation: 'pack', product: 'agentplugins', pack: {fixture_only: 'agent'}},
+    {operation: 'pack', product: 'plugin-kit-ai', pack: {fixture_only: 'kit'}},
+    {operation: 'completion', stage_sha256: hash('S')},
+    {operation: 'upload', artifact_id: 801, artifact_sha256: artifact.artifact_sha256, stage_sha256: hash('S')}];
+  const calls = [];
+  t.mock.method(cp, 'spawnSync', (exe, args, options) => {
+    assert.equal(exe, '/usr/bin/gh'); calls.push(args);
+    let stdout;
+    const endpoint = args.at(-1);
+    if (args[0] === '--version') stdout = `gh version ${p.GH_VERSION} (mocked)\n`;
+    else if (endpoint.endsWith('/zip')) stdout = Buffer.from('opaque checked byte fixture');
+    else if (endpoint.endsWith('/logs')) stdout = records.map(r => `2026-09-09T01:06:00.000Z C1_STAGE ${JSON.stringify(r)}\n`).join('');
+    else if (endpoint.endsWith('/jobs?per_page=100')) stdout = JSON.stringify(jobs);
+    else if (endpoint.includes('/attempts/')) stdout = JSON.stringify(run);
+    else if (endpoint.includes('/commits/')) stdout = JSON.stringify({sha: selected.source});
+    else if (endpoint.endsWith('/artifacts/801')) stdout = JSON.stringify(item);
+    else assert.fail(`unexpected provider request ${endpoint}`);
+    return {status: 0, stdout};
+  });
+  return {scratch, artifact, workflow, run, job, signing, jobs, item, records, calls,
+    options: {artifact, selected, workflow_sha: selected.source, scratch}};
+}
+test('C1 workflow current unsigned custody downloads exact same checked bytes; completed reader stays closed', t => {
+  const f = c1WorkflowProvider(t);
+  assert.throws(() => p.inspectArtifact(f.artifact, f.workflow, selected.source, f.scratch), /successful workflow/);
+  const file = p.acquireCurrentStage(f.options);
+  assert.deepEqual(fs.readFileSync(file), Buffer.from('opaque checked byte fixture'));
+  assert.equal(f.calls.filter(args => args.at(-1).endsWith('/zip')).length, 1);
+  assert.throws(() => p.acquireCurrentStage(f.options), /already exists/);
+  assert.equal(f.calls.filter(args => args.at(-1).endsWith('/zip')).length, 1);
+});
+for (const defect of ['failed', 'cancelled', 'skipped', 'incomplete', 'old attempt', 'foreign run', 'foreign ref',
+  'unknown caller', 'ambiguous producer', 'artifact ID', 'artifact name', 'artifact digest', 'expired', 'upload time',
+  'missing log', 'duplicate pack', 'reordered packs', 'wrong upload', 'wrong completion', 'extra step', 'step failed', 'partial jobs']) {
+  test(`C1 workflow fixed current-stage rejects ${defect} before download`, t => {
+    const f = c1WorkflowProvider(t);
+    if (['failed', 'cancelled', 'skipped'].includes(defect)) f.job.conclusion = defect;
+    if (defect === 'incomplete') f.job.status = 'in_progress';
+    if (defect === 'old attempt') f.run.run_attempt--;
+    if (defect === 'foreign run') f.options.artifact = {...f.artifact, run_id: 700};
+    if (defect === 'foreign ref') f.run.head_branch = 'main';
+    if (defect === 'unknown caller') process.env.GITHUB_JOB = 'publish';
+    if (defect === 'ambiguous producer') {f.jobs.jobs.push({...f.job, id: 903}); f.jobs.total_count++;}
+    if (defect === 'artifact ID') f.item.id++;
+    if (defect === 'artifact name') f.item.name += '-other';
+    if (defect === 'artifact digest') f.item.digest = `sha256:${hash('other')}`;
+    if (defect === 'expired') f.item.expired = true;
+    if (defect === 'upload time') f.item.created_at = '2026-09-10T00:00:00Z';
+    if (defect === 'missing log') f.records.pop();
+    if (defect === 'duplicate pack') f.records.splice(2, 0, f.records[1]);
+    if (defect === 'reordered packs') [f.records[1], f.records[2]] = [f.records[2], f.records[1]];
+    if (defect === 'wrong upload') f.records[4].artifact_id++;
+    if (defect === 'wrong completion') f.records[4].stage_sha256 = hash('different');
+    if (defect === 'extra step') f.job.steps.push({name: 'npm publish', number: 20});
+    if (defect === 'step failed') f.job.steps[3].conclusion = 'failure';
+    if (defect === 'partial jobs') f.jobs.total_count++;
+    assert.throws(() => p.acquireCurrentStage(f.options));
+    assert.equal(f.calls.filter(args => args.at(-1).endsWith('/zip')).length, 0);
+    assert.deepEqual(fs.readdirSync(f.scratch), []);
+  });
+}
+test('C1 workflow current-stage cannot accept completed toggle, caller root or verifier', t => {
+  const f = c1WorkflowProvider(t);
+  for (const key of ['allow_incomplete', 'authenticated', 'root', 'verify', 'producer']) {
+    assert.throws(() => p.acquireCurrentStage({...f.options, [key]: true}));
+  }
+  assert.equal(f.calls.length, 0);
+});
+test('C1 workflow provenance signer independently requires live provider caller and successful admission', t => {
+  const f = c1WorkflowProvider(t);
+  process.env.GITHUB_JOB = 'paired_input_attestation';
+  process.env.GITHUB_WORKFLOW_REF = `${c.REPOSITORY}/${p.WORKFLOW}@${selected.ref}`;
+  f.run.path = p.WORKFLOW; f.job.name = 'paired_input_admission'; f.signing.name = 'paired_input_attestation';
+  const caller = p.inspectInputCaller(selected, selected.source, f.scratch);
+  assert.deepEqual(caller, {workflow: p.WORKFLOW, source: selected.source, run_id: 701, run_attempt: 3});
+  f.job.conclusion = 'failure';
+  assert.throws(() => p.inspectInputCaller(selected, selected.source, f.scratch));
+  assert.equal(f.calls.filter(args => args.at(-1).endsWith('/zip')).length, 0);
+});

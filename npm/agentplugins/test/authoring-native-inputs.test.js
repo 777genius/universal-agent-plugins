@@ -307,7 +307,7 @@ test("structural consistency only: constructor and decoder byte limits include e
 
 test("structural consistency only: four codecs stay pure beside separately named custody operations", () => {
   assert.deepEqual(Object.entries(contract).filter(([, v]) => typeof v === "function").map(([k]) => k),
-    ["encodeInputs", "decodeInputs", "encodeDescriptor", "decodeDescriptor", "produceInputs", "readInputs", "inputSubjects"]);
+    ["encodeInputs", "decodeInputs", "encodeDescriptor", "decodeDescriptor", "produceInputs", "readInputs", "inputSubjects", "produceInputsFromPreparation", "inputFileOptions", "main"]);
   assert.ok(Object.isFrozen(contract));
   const f = fixture(), snapshot = json(f), input = encodeInputs(f);
   const d = descriptor(f, input, "agentplugins"), before = json(d);
@@ -393,6 +393,7 @@ function c1Fixture(t) {
     artifact_id: 501, artifact_sha256: sha(90) };
   const reading = { ...options, artifact };
   const calls = [];
+  t.mock.method(promotion, "checkPreparationRef", () => ({fixture_only: "completed original ref"}));
   t.mock.method(promotion, "checkInputTags", (bytes, cwd) => {
     calls.push("tags"); assert.deepEqual(bytes, body); assert.equal(cwd, scratch);
   });
@@ -585,3 +586,104 @@ test("C1 provenance producer completion collision preserves the existing file", 
   assert.throws(() => contract.produceInputs(f.options), /EEXIST/);
   assert.deepEqual(fs.readFileSync(file), previous);
 });
+
+function workflowPreparation(t) {
+  const f = c1Fixture(t), packing = require('../scripts/stage-dual-authoring-npm');
+  const originalRead = c.readFile;
+  const tools = new Set([process.execPath, '/usr/bin/git', '/usr/bin/gh', fs.realpathSync('/usr/bin/python3')]);
+  t.mock.method(c, 'readFile', (file, max) => tools.has(file) ? Buffer.from(`tool fixture ${file}`) : originalRead(file, max));
+  const repo = path.join(path.dirname(f.scratch), 'repo'); fs.mkdirSync(repo);
+  const derivation = path.join(path.dirname(f.scratch), 'derivation'); fs.mkdirSync(derivation);
+  for (const name of f.files) {
+    fs.mkdirSync(path.dirname(path.join(derivation, name)), {recursive: true});
+    fs.copyFileSync(path.join(f.root, name), path.join(derivation, name));
+  }
+  const options = {selected: f.options.selected, workflow_sha: f.options.workflow_sha,
+    preparation: f.input.preparation.artifact, repo, scratch: f.scratch};
+  t.mock.method(packing, 'blobs', () => ({fixture_only: 'source pins'}));
+  t.mock.method(promotion, 'inspectInputCaller', () => copy(f.input.producer));
+  t.mock.method(promotion, 'checkPreparationRef', () => ({fixture_only: 'original tag invocation'}));
+  t.mock.method(promotion, 'acquireArtifact', (pin, workflow, source, work) => {
+    assert.deepEqual(pin, options.preparation); assert.equal(workflow, contract.WORKFLOW);
+    assert.equal(source, options.selected.source); return path.join(work, `artifact-${pin.artifact_id}.zip`);
+  });
+  t.mock.method(promotion, 'extractArtifact', (archive, pin, kind, files) => {
+    assert.equal(kind, 'preparation'); assert.deepEqual([...files].sort(), [...f.files].sort());
+    assert.equal(path.basename(archive), `artifact-${pin.artifact_id}.zip`); return derivation;
+  });
+  return {...f, derivation, producerOptions: options};
+}
+test('C1 workflow derives I from checked original preparation and revalidates without Q', t => {
+  const f = workflowPreparation(t), file = path.join(f.scratch, 'options.json');
+  fs.writeFileSync(file, c.encode(f.producerOptions));
+  const result = contract.main(['--produce-inputs', file]);
+  assert.deepEqual(result.input, f.input); assert.equal(result.subjects.length, 19);
+  assert.deepEqual(fs.readFileSync(path.join(result.root, 'native-inputs.json')), f.body);
+  assert.deepEqual(Object.keys(result).sort(), ['input', 'root', 'subjects']);
+  assert.equal(f.calls.filter(x => typeof x === 'object').length, 0);
+});
+for (const name of ['candidate/candidate.json', 'candidate-identity.json', 'pair-prepared.json', 'preparation-run.json',
+  'agentplugins/release-manifest.json', 'plugin-kit-ai/checksums.txt']) {
+  test(`C1 workflow contradictory original ${name} rejects derivation`, t => {
+    const f = workflowPreparation(t);
+    // Preparation receipts are immutable; substitute contradictory comparison
+    // bytes at the existing read seam, never overwrite a read-only receipt.
+    const read = c.readFile;
+    t.mock.method(c, 'readFile', (file, max) => {
+      const body = read(file, max);
+      return file === path.join(f.derivation, name) ? Buffer.concat([body, Buffer.from('\n')]) : body;
+    });
+    assert.throws(() => contract.produceInputsFromPreparation(f.producerOptions));
+    assert.equal(fs.existsSync(path.join(f.root, 'native-inputs.json')), false);
+  });
+}
+test('C1 workflow file transport passes exact Buffer to completed I authentication', t => {
+  const f = c1Fixture(t), input_file = path.join(f.scratch, 'comparison.json'), file = path.join(f.scratch, 'options.json');
+  fs.writeFileSync(input_file, f.body);
+  const {input, ...options} = f.reading;
+  fs.writeFileSync(file, c.encode({...options, input_file}));
+  const result = contract.main(['--read-inputs', file]);
+  assert.deepEqual(result.input, f.input);
+  assert.equal(f.calls.filter(x => typeof x === 'object').length, 19);
+});
+for (const defect of ['object', 'Buffer JSON', 'unknown field', 'relative file', 'duplicate key', 'unknown flag', 'extra flag']) {
+  test(`C1 workflow ${defect} transport fails before provider effects`, t => {
+    const f = c1Fixture(t), file = path.join(f.scratch, 'options.json');
+    const {input, ...options} = f.reading;
+    const value = {...options, input_file: path.join(f.scratch, 'comparison.json')};
+    fs.writeFileSync(value.input_file, f.body);
+    if (defect === 'object') value.input_file = f.input;
+    if (defect === 'Buffer JSON') {delete value.input_file; value.input = f.body;}
+    if (defect === 'unknown field') value.authenticated = true;
+    if (defect === 'relative file') value.input_file = 'comparison.json';
+    let bytes = c.encode(value);
+    if (defect === 'duplicate key') bytes = Buffer.from(bytes.toString().replace('{', '{"input_file":"ignored",'));
+    fs.writeFileSync(file, bytes);
+    const args = [defect === 'unknown flag' ? '--produce' : '--read-inputs', file];
+    if (defect === 'extra flag') args.push('--read-inputs');
+    assert.throws(() => contract.main(args)); assert.equal(f.calls.length, 0);
+  });
+}
+test('C1 workflow comparison file change during authentication rejects CLI success', t => {
+  const f = c1Fixture(t), input_file = path.join(f.scratch, 'comparison.json'), file = path.join(f.scratch, 'options.json');
+  fs.writeFileSync(input_file, f.body); const {input, ...options} = f.reading;
+  fs.writeFileSync(file, c.encode({...options, input_file}));
+  t.mock.method(promotion, 'verifySubject', () => fs.writeFileSync(input_file, Buffer.from('changed')));
+  assert.throws(() => contract.main(['--read-inputs', file]), /CLI comparison/);
+});
+
+for (const defect of ['source', 'caller', 'tools', 'original ref', 'reacquired original']) {
+  test(`C1 workflow derivation rejects changed ${defect} before a usable result`, t => {
+    const f = workflowPreparation(t); let checks = 0;
+    if (defect === 'source') t.mock.method(require('../scripts/stage-dual-authoring-npm'), 'blobs', () => ({fixture_only: ++checks}));
+    if (defect === 'caller') t.mock.method(promotion, 'inspectInputCaller', () => ({...f.input.producer, run_attempt: f.input.producer.run_attempt + checks++}));
+    if (defect === 'original ref') t.mock.method(promotion, 'checkPreparationRef', () => {throw Error('foreign original tag ref');});
+    if (defect === 'tools') {
+      const original = c.readFile;
+      t.mock.method(c, 'readFile', (file, max) => file === '/usr/bin/gh' ? Buffer.from(`changed tool ${checks++}`) : original(file,max));
+    }
+    if (defect === 'reacquired original') t.mock.method(promotion, 'acquireInputPreparation', () => {throw Error('original preparation contradiction');});
+    assert.throws(() => contract.produceInputsFromPreparation(f.producerOptions));
+    assert.equal(f.calls.filter(v => typeof v === 'object').length, 0, 'no signing or authentication result from producer fixture');
+  });
+}
