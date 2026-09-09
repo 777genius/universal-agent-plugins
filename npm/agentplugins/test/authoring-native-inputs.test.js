@@ -305,12 +305,385 @@ test("structural consistency only: constructor and decoder byte limits include e
   assert.throws(() => encodeDescriptor(descriptor(over, overBytes, "agentplugins"), overBytes, "agentplugins"));
 });
 
-test("structural consistency only: only four pure codec operations, no effectful or trust API", () => {
+test("structural consistency only: four codecs stay pure beside separately named custody operations", () => {
   assert.deepEqual(Object.entries(contract).filter(([, v]) => typeof v === "function").map(([k]) => k),
-    ["encodeInputs", "decodeInputs", "encodeDescriptor", "decodeDescriptor"]);
+    ["encodeInputs", "decodeInputs", "encodeDescriptor", "decodeDescriptor", "produceInputs", "readInputs", "inputSubjects", "produceInputsFromPreparation", "inputFileOptions", "main"]);
   assert.ok(Object.isFrozen(contract));
   const f = fixture(), snapshot = json(f), input = encodeInputs(f);
   const d = descriptor(f, input, "agentplugins"), before = json(d);
   encodeDescriptor(d, input, "agentplugins"); decodeInputs(input);
   assert.deepEqual(json(f), snapshot); assert.deepEqual(json(d), before); assert.deepEqual(input, snapshot);
 });
+
+
+// C1 tests are orchestration unit evidence only. Provider acquisition and
+// signatures are stubbed module operations; these fixtures never authenticate.
+const fs = require("node:fs");
+const os = require("node:os");
+const path = require("node:path");
+const cp = require("node:child_process");
+const promotion = require("../scripts/authoring-promotion");
+const release = require("../scripts/authoring-release");
+const qualification = require("../scripts/authoring-native-qualification");
+
+function c1Fixture(t) {
+  t.mock.method(cp, "spawnSync", () => assert.fail("C1 tests must never launch a subprocess"));
+  const sandbox = fs.mkdtempSync(path.join(os.tmpdir(), "provenance-"));
+  const root = path.join(sandbox, "prepared"), provenance = path.join(sandbox, "provenance"), scratch = path.join(sandbox, "scratch");
+  for (const dir of [root, provenance, scratch]) fs.mkdirSync(dir);
+  const input = fixture(), inner = new Map();
+  const write = (rel, bytes) => {
+    const file = path.join(root, rel); fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, bytes); return c.metadata(bytes);
+  };
+  const manifest = { schema: c.SCHEMA, status: "CANDIDATE", identity: input.identity, asset_scope: input.asset_scope,
+    build: { method: "controlled-git-archive-go-build/v1", go_version: "go1.25.13", go_sha256: sha(80),
+      source_archive_sha256: sha(81), authoring_mode: input.authoring_mode }, products: {}, release_eligible: false };
+  for (const product of products) {
+    for (const target of targets) {
+      const a = input.products[product].assets[target];
+      const binary = Buffer.from("NONEXECUTABLE UNIT FIXTURE " + product + "/" + target);
+      const outer = product === "agentplugins" ? binary : Buffer.from("OPAQUE OUTER FIXTURE " + target);
+      a.binary = { file: a.binary.file, ...c.metadata(binary) };
+      Object.assign(a, write(product + "/" + a.file, outer));
+      inner.set(c.digest(outer), { file: a.binary.file, binary });
+    }
+    manifest.products[product] = { version: input.identity.versions[product], assets: input.products[product].assets };
+  }
+  // Stub the existing unpack operation only. No ZIP/tar internals are tested.
+  t.mock.method(c, "unpack", (bytes, name) => {
+    const row = inner.get(c.digest(bytes)); assert.ok(row); assert.equal(row.file, name); return row.binary;
+  });
+  input.candidate_sha256 = write("candidate/candidate.json", c.encode(manifest)).sha256;
+  const pins = { identity: input.identity, candidate_sha256: input.candidate_sha256, pair_marker_sha256: "", products: {} };
+  for (const product of products) {
+    const p = input.products[product];
+    const m = { schema_version: 3, status: "CANDIDATE", product, repository: c.REPOSITORY, tag: p.tag,
+      version: input.identity.versions[product], commit: input.identity.commit, engine_revision: input.identity.commit,
+      versions: input.identity.versions, candidate_sha256: input.candidate_sha256, authoring_mode: input.authoring_mode,
+      asset_scope: input.asset_scope, assets: p.assets, release_eligible: false, platform_acceptance: false, attested: false };
+    p.manifest_sha256 = write(product + "/release-manifest.json", c.encode(m)).sha256;
+    const checks = Buffer.from([...Object.values(p.assets).map(a => a.sha256 + "  " + a.file),
+      p.manifest_sha256 + "  release-manifest.json"].join("\n") + "\n");
+    p.checksums_sha256 = write(product + "/checksums.txt", checks).sha256;
+    pins.products[product] = { manifest_sha256: p.manifest_sha256, checksums_sha256: p.checksums_sha256 };
+  }
+  const marker = { schema: "authoring-release-pair/v1", status: "CANDIDATE", identity: input.identity,
+    candidate_sha256: input.candidate_sha256, authoring_mode: input.authoring_mode, asset_scope: input.asset_scope,
+    products: pins.products, release_eligible: false, platform_acceptance: false, attested: false };
+  pins.pair_marker_sha256 = input.pair_marker_sha256 = write("pair-prepared.json", c.encode(marker)).sha256;
+  const invocation = { repository: c.REPOSITORY, workflow: contract.WORKFLOW, source: input.identity.commit,
+    workflow_sha: input.identity.commit, run_id: input.preparation.artifact.run_id, run_attempt: input.preparation.artifact.run_attempt };
+  input.preparation.sha256 = qualification.writePreparation(root, pins, invocation).sha256;
+  write("candidate-identity.json", c.encode({ identity: input.identity, status: "CANDIDATE",
+    manifest_sha256: input.candidate_sha256, output: "/historical/not-opened", local_build_evidence: "/historical/not-opened-either",
+    release_eligible: false, platform_acceptance: false, attested: false }));
+  const original = release.verifyProjectedPair(root, pins).subjects;
+  const files = [...original.map(s => path.relative(root, s.file)), "preparation-run.json", "candidate-identity.json"];
+  for (const file of files) {
+    fs.mkdirSync(path.dirname(path.join(provenance, file)), { recursive: true });
+    fs.copyFileSync(path.join(root, file), path.join(provenance, file));
+  }
+  const body = encodeInputs(input);
+  fs.writeFileSync(path.join(provenance, contract.INPUT_FILE), body);
+  const selected = { tag: input.products.agentplugins.tag, ref: "refs/tags/" + input.products.agentplugins.tag,
+    source: input.identity.commit, versions: copy(input.identity.versions) };
+  const options = { input: body, selected, workflow_sha: input.identity.commit, scratch };
+  const artifact = { run_id: input.producer.run_id, run_attempt: input.producer.run_attempt,
+    artifact_id: 501, artifact_sha256: sha(90) };
+  const reading = { ...options, artifact };
+  const calls = [];
+  t.mock.method(promotion, "checkPreparationRef", () => ({fixture_only: "completed original ref"}));
+  t.mock.method(promotion, "checkInputTags", (bytes, cwd) => {
+    calls.push("tags"); assert.deepEqual(bytes, body); assert.equal(cwd, scratch);
+  });
+  t.mock.method(promotion, "inspectArtifact", (pin, workflow, source, cwd) => {
+    calls.push("inspect"); assert.equal(workflow, contract.WORKFLOW); assert.equal(source, input.identity.commit);
+    assert.equal(cwd, scratch); assert.ok([artifact.artifact_id, input.preparation.artifact.artifact_id].includes(pin.artifact_id));
+    return { fixture_only: copy(pin) };
+  });
+  t.mock.method(promotion, "acquireInputPreparation", (bytes, cwd) => {
+    calls.push("preparation"); assert.equal(cwd, scratch); return promotion.readInputPreparation(root, bytes);
+  });
+  t.mock.method(promotion, "acquireArtifact", (pin, workflow, source, cwd) => {
+    calls.push("acquire"); assert.deepEqual(pin, artifact); assert.equal(workflow, contract.WORKFLOW);
+    assert.equal(source, input.identity.commit); return path.join(cwd, "artifact-501.zip");
+  });
+  t.mock.method(promotion, "extractArtifact", (file, pin, kind, closure, output, cwd) => {
+    calls.push("extract"); assert.equal(file, path.join(cwd, "artifact-501.zip")); assert.deepEqual(pin, artifact);
+    assert.equal(kind, "input-provenance"); assert.equal(output, path.join(cwd, "frozen"));
+    assert.deepEqual([...closure].sort(), [...files, contract.INPUT_FILE].sort()); assert.equal(closure.length, 21);
+    // A simulated future interface, NOT the current checked reader.
+    return provenance;
+  });
+  t.mock.method(promotion, "verifySubject", (file, expected, cwd) => {
+    calls.push({ file, expected: copy(expected) }); assert.equal(cwd, scratch);
+    assert.equal(c.digest(fs.readFileSync(file)), expected.sha256);
+    assert.equal(expected.source, input.identity.commit); assert.equal(expected.workflow_sha, input.identity.commit);
+    assert.equal(expected.ref, selected.ref); assert.equal(expected.run_id, input.producer.run_id);
+    assert.equal(expected.run_attempt, input.producer.run_attempt);
+  });
+  return { root, provenance, scratch, input, body, options, reading, original, files, pins, calls };
+}
+
+test("C1 provenance producer and reader agree with honest simulated custody, never authentic admission", t => {
+  const f = c1Fixture(t), produced = contract.produceInputs(f.options);
+  assert.deepEqual(produced.input, f.input); assert.equal(produced.subjects.length, 19);
+  assert.equal(f.calls.filter(x => typeof x === "object").length, 0, "producer does not verify or sign unsigned I");
+  assert.deepEqual(fs.readFileSync(path.join(f.root, contract.INPUT_FILE)), f.body);
+  const read = contract.readInputs(f.reading);
+  assert.deepEqual(read.input, produced.input);
+  const multiset = list => list.map(s => ({ name: path.basename(s.file), digest: { sha256: s.sha256 } }));
+  assert.deepEqual(multiset(read.subjects), multiset(produced.subjects));
+  const signatures = f.calls.filter(x => typeof x === "object");
+  assert.equal(signatures.length, 19);
+  for (const call of signatures) assert.deepEqual(call.expected.subjects, multiset(read.subjects));
+  for (const name of ["release-manifest.json", "checksums.txt"]) {
+    const rows = signatures[0].expected.subjects.filter(s => s.name === name);
+    assert.equal(rows.length, 2); assert.notEqual(rows[0].digest.sha256, rows[1].digest.sha256);
+  }
+  assert.ok(!signatures[0].expected.subjects.some(s => s.name === "authoring-promotion.json"));
+  assert.deepEqual(Object.keys(read), ["root", "input", "subjects"]);
+});
+
+test("C1 provenance rejects malformed closed options and independent identity disagreements before effects", t => {
+  const f = c1Fixture(t);
+  const mutations = [o => o.input = null, o => o.input = Buffer.from('{}\n'), o => o.input = Buffer.concat([o.input, Buffer.from('\n')]),
+    o => o.verifier = () => true, o => o.success = true, o => o.selected.source = "b".repeat(40),
+    o => o.selected.ref = "refs/heads/main", o => o.selected.tag = "v2.0.0", o => o.workflow_sha = "b".repeat(40),
+    o => o.selected.versions.agentplugins = "0.1.98", o => o.scratch = "relative"];
+  for (const reading of [false, true]) for (const mutate of mutations) {
+    const o = { ...f.options, input: Buffer.from(f.body), selected: copy(f.options.selected), ...(reading ? { artifact: copy(f.reading.artifact) } : {}) };
+    mutate(o); assert.throws(() => (reading ? contract.readInputs : contract.produceInputs)(o));
+  }
+  for (const mutate of [o => o.artifact.run_attempt++, o => o.artifact.run_id++, o => o.artifact.artifact_id = 0,
+    o => o.artifact.artifact_sha256 = "0".repeat(64), o => o.artifact.artifact_id = f.input.preparation.artifact.artifact_id,
+    o => o.artifact.claim = true]) {
+    const o = { ...f.reading, artifact: copy(f.reading.artifact) }; mutate(o); assert.throws(() => contract.readInputs(o));
+  }
+  for (const mutate of [i => i.identity.repository = "fork/repo", i => i.producer.workflow = ".github/workflows/other.yml",
+    i => i.producer.source = "b".repeat(40), i => i.products["plugin-kit-ai"].tag = "v2.0.1",
+    i => delete i.products.agentplugins.assets["linux-amd64"], i => i.qualification = null,
+    i => i.preparation.artifact.run_attempt = 1001, i => i.authoring_mode = "wrong", i => i.asset_scope = "wrong"]) {
+    const input = copy(f.input); mutate(input);
+    assert.throws(() => contract.produceInputs({ ...f.options, input: json(input) }));
+    assert.throws(() => contract.readInputs({ ...f.reading, input: json(input) }));
+  }
+  assert.deepEqual(f.calls, []); assert.equal(fs.existsSync(path.join(f.root, contract.INPUT_FILE)), false);
+  assert.deepEqual(fs.readdirSync(f.scratch), []);
+});
+
+test("C1 provenance checked-artifact dependency rejects with no fallback or signature calls", t => {
+  const f = c1Fixture(t);
+  t.mock.method(promotion, "extractArtifact", (_file, _pin, kind, files) => {
+    assert.equal(kind, "input-provenance"); assert.equal(files.length, 21);
+    throw Error("simulated current checked interface rejects unsupported kind");
+  });
+  assert.throws(() => contract.readInputs(f.reading), /unsupported kind/);
+  assert.deepEqual(f.calls, ["tags", "inspect", "acquire"]);
+});
+
+for (const kind of ["receipt", "attempt", "metadata", "outer", "inner", "I"]) {
+  test("C1 provenance rejects " + kind + " disagreement before signatures or I output", t => {
+    const f = c1Fixture(t);
+    if (kind === "receipt") {
+      f.input.preparation.sha256 = sha(97); f.options.input = f.reading.input = encodeInputs(f.input);
+      // Identity-only stub: receipt validation itself stays the real reader.
+      t.mock.method(promotion, "checkInputTags", () => {});
+    } else if (kind === "attempt") {
+      // Keep the existing read-only receipt intact; select a disagreeing attempt.
+      f.input.preparation.artifact.run_attempt++; f.options.input = encodeInputs(f.input);
+      t.mock.method(promotion, "checkInputTags", () => {});
+    } else if (kind === "metadata") {
+      const file = path.join(f.root, "candidate-identity.json"), metadata = JSON.parse(fs.readFileSync(file));
+      metadata.attested = true; fs.writeFileSync(file, c.encode(metadata));
+    } else if (kind === "outer") fs.appendFileSync(f.original[3].file, "CHANGED");
+    else if (kind === "inner") {
+      f.input.products["plugin-kit-ai"].assets["linux-amd64"].binary.sha256 = sha(99);
+      f.options.input = encodeInputs(f.input); t.mock.method(promotion, "checkInputTags", () => {});
+    } else fs.appendFileSync(path.join(f.provenance, contract.INPUT_FILE), "\n");
+    if (kind === "I") assert.throws(() => contract.readInputs(f.reading), /I bytes/);
+    else assert.throws(() => contract.produceInputs(f.options));
+    assert.equal(fs.existsSync(path.join(f.root, contract.INPUT_FILE)), false);
+    assert.equal(f.calls.filter(x => typeof x === "object").length, 0);
+  });
+}
+
+for (const operation of ["produce", "read"]) for (const changed of ["caller", "source", "subject", "metadata", "provider", "tag"]) {
+  test("C1 provenance " + operation + " rejects late " + changed + " changes", t => {
+    const f = c1Fixture(t); let tags = 0, inspections = 0;
+    const selectedOptions = operation === "read" ? f.reading : f.options;
+    t.mock.method(promotion, "checkInputTags", () => {
+      if (++tags !== 2) return;
+      if (changed === "caller") selectedOptions.input[1] ^= 1;
+      if (changed === "source") selectedOptions.workflow_sha = "b".repeat(40);
+      if (changed === "subject") fs.appendFileSync(operation === "read" ? path.join(f.provenance, f.files[0]) : f.original[0].file, "changed");
+      if (changed === "metadata") {
+        const file = path.join(operation === "read" ? f.provenance : f.root, "candidate-identity.json");
+        const value = JSON.parse(fs.readFileSync(file)); value.output = "/different-history"; fs.writeFileSync(file, c.encode(value));
+      }
+      if (changed === "tag") throw Error("simulated moved release tag");
+    });
+    t.mock.method(promotion, "inspectArtifact", pin => ({ pin: copy(pin), observation: changed === "provider" && ++inspections > (operation === "read" ? 2 : 1) ? "changed" : "same" }));
+    assert.throws(() => (operation === "read" ? contract.readInputs : contract.produceInputs)(selectedOptions));
+    if (operation === "produce") assert.equal(fs.existsSync(path.join(f.root, contract.INPUT_FILE)), false);
+  });
+}
+
+test("C1 provenance unsigned verifier rejection never returns reader admission", t => {
+  const f = c1Fixture(t); let calls = 0;
+  t.mock.method(promotion, "verifySubject", () => { calls++; throw Error("unsigned fixture rejected"); });
+  assert.throws(() => contract.readInputs(f.reading), /unsigned fixture rejected/); assert.equal(calls, 1);
+});
+
+test("C1 provenance rechecks earlier subjects and I after the last signature operation", t => {
+  const f = c1Fixture(t); let calls = 0;
+  t.mock.method(promotion, "verifySubject", () => {
+    if (++calls === 19) fs.appendFileSync(path.join(f.provenance, f.files[0]), "changed after first verification");
+  });
+  assert.throws(() => contract.readInputs(f.reading)); assert.equal(calls, 19);
+});
+
+test("C1 provenance reader rechecks exact I bytes after all nineteen simulated verifications", t => {
+  const f = c1Fixture(t); let calls = 0;
+  t.mock.method(promotion, "verifySubject", () => {
+    if (++calls === 19) fs.appendFileSync(path.join(f.provenance, contract.INPUT_FILE), "\n");
+  });
+  assert.throws(() => contract.readInputs(f.reading), /retained I bytes/); assert.equal(calls, 19);
+});
+
+test("C1 provenance producer checks unchanged preparation after writing I without returning completion", t => {
+  const f = c1Fixture(t), write = fs.writeFileSync;
+  t.mock.method(fs, "writeFileSync", (file, bytes, options) => {
+    write(file, bytes, options);
+    if (file === path.join(f.root, contract.INPUT_FILE)) fs.appendFileSync(f.original[0].file, "late fixture change");
+  });
+  assert.throws(() => contract.produceInputs(f.options));
+  // A failed local candidate is retained; it is never an uploaded completed run.
+  assert.equal(f.calls.filter(x => typeof x === "object").length, 0);
+});
+
+test("C1 provenance reader compares preparation metadata from independently acquired bytes", t => {
+  const f = c1Fixture(t), file = path.join(f.provenance, "candidate-identity.json");
+  const metadata = JSON.parse(fs.readFileSync(file)); metadata.output = "/different-historical-location";
+  fs.writeFileSync(file, c.encode(metadata));
+  assert.throws(() => contract.readInputs(f.reading), /original preparation custody/);
+  assert.equal(f.calls.filter(x => typeof x === "object").length, 0);
+});
+
+test("C1 provenance enumeration rejects missing original row and changed I without authenticating", t => {
+  const f = c1Fixture(t), verify = release.verifyProjectedPair;
+  t.mock.method(release, "verifyProjectedPair", (root, pins) => {
+    const result = verify(root, pins); return { ...result, subjects: result.subjects.slice(1) };
+  });
+  assert.throws(() => contract.inputSubjects(f.provenance, f.body), /original subject count/);
+  assert.deepEqual(f.calls, []);
+});
+
+test("C1 provenance producer completion collision preserves the existing file", t => {
+  const f = c1Fixture(t), file = path.join(f.root, contract.INPUT_FILE), previous = Buffer.from("existing output");
+  fs.writeFileSync(file, previous);
+  assert.throws(() => contract.produceInputs(f.options), /EEXIST/);
+  assert.deepEqual(fs.readFileSync(file), previous);
+});
+
+function workflowPreparation(t) {
+  const f = c1Fixture(t), packing = require('../scripts/stage-dual-authoring-npm');
+  const originalRead = c.readFile;
+  const tools = new Set([process.execPath, '/usr/bin/git', '/usr/bin/gh', fs.realpathSync('/usr/bin/python3')]);
+  t.mock.method(c, 'readFile', (file, max) => tools.has(file) ? Buffer.from(`tool fixture ${file}`) : originalRead(file, max));
+  const repo = path.join(path.dirname(f.scratch), 'repo'); fs.mkdirSync(repo);
+  const derivation = path.join(path.dirname(f.scratch), 'derivation'); fs.mkdirSync(derivation);
+  for (const name of f.files) {
+    fs.mkdirSync(path.dirname(path.join(derivation, name)), {recursive: true});
+    fs.copyFileSync(path.join(f.root, name), path.join(derivation, name));
+  }
+  const options = {selected: f.options.selected, workflow_sha: f.options.workflow_sha,
+    preparation: f.input.preparation.artifact, repo, scratch: f.scratch};
+  t.mock.method(packing, 'blobs', () => ({fixture_only: 'source pins'}));
+  t.mock.method(promotion, 'inspectInputCaller', () => copy(f.input.producer));
+  t.mock.method(promotion, 'checkPreparationRef', () => ({fixture_only: 'original tag invocation'}));
+  t.mock.method(promotion, 'acquireArtifact', (pin, workflow, source, work) => {
+    assert.deepEqual(pin, options.preparation); assert.equal(workflow, contract.WORKFLOW);
+    assert.equal(source, options.selected.source); return path.join(work, `artifact-${pin.artifact_id}.zip`);
+  });
+  t.mock.method(promotion, 'extractArtifact', (archive, pin, kind, files) => {
+    assert.equal(kind, 'preparation'); assert.deepEqual([...files].sort(), [...f.files].sort());
+    assert.equal(path.basename(archive), `artifact-${pin.artifact_id}.zip`); return derivation;
+  });
+  return {...f, derivation, producerOptions: options};
+}
+test('C1 workflow derives I from checked original preparation and revalidates without Q', t => {
+  const f = workflowPreparation(t), file = path.join(f.scratch, 'options.json');
+  fs.writeFileSync(file, c.encode(f.producerOptions));
+  const result = contract.main(['--produce-inputs', file]);
+  assert.deepEqual(result.input, f.input); assert.equal(result.subjects.length, 19);
+  assert.deepEqual(fs.readFileSync(path.join(result.root, 'native-inputs.json')), f.body);
+  assert.deepEqual(Object.keys(result).sort(), ['input', 'root', 'subjects']);
+  assert.equal(f.calls.filter(x => typeof x === 'object').length, 0);
+});
+for (const name of ['candidate/candidate.json', 'candidate-identity.json', 'pair-prepared.json', 'preparation-run.json',
+  'agentplugins/release-manifest.json', 'plugin-kit-ai/checksums.txt']) {
+  test(`C1 workflow contradictory original ${name} rejects derivation`, t => {
+    const f = workflowPreparation(t);
+    // Preparation receipts are immutable; substitute contradictory comparison
+    // bytes at the existing read seam, never overwrite a read-only receipt.
+    const read = c.readFile;
+    t.mock.method(c, 'readFile', (file, max) => {
+      const body = read(file, max);
+      return file === path.join(f.derivation, name) ? Buffer.concat([body, Buffer.from('\n')]) : body;
+    });
+    assert.throws(() => contract.produceInputsFromPreparation(f.producerOptions));
+    assert.equal(fs.existsSync(path.join(f.root, 'native-inputs.json')), false);
+  });
+}
+test('C1 workflow file transport passes exact Buffer to completed I authentication', t => {
+  const f = c1Fixture(t), input_file = path.join(f.scratch, 'comparison.json'), file = path.join(f.scratch, 'options.json');
+  fs.writeFileSync(input_file, f.body);
+  const {input, ...options} = f.reading;
+  fs.writeFileSync(file, c.encode({...options, input_file}));
+  const result = contract.main(['--read-inputs', file]);
+  assert.deepEqual(result.input, f.input);
+  assert.equal(f.calls.filter(x => typeof x === 'object').length, 19);
+});
+for (const defect of ['object', 'Buffer JSON', 'unknown field', 'relative file', 'duplicate key', 'unknown flag', 'extra flag']) {
+  test(`C1 workflow ${defect} transport fails before provider effects`, t => {
+    const f = c1Fixture(t), file = path.join(f.scratch, 'options.json');
+    const {input, ...options} = f.reading;
+    const value = {...options, input_file: path.join(f.scratch, 'comparison.json')};
+    fs.writeFileSync(value.input_file, f.body);
+    if (defect === 'object') value.input_file = f.input;
+    if (defect === 'Buffer JSON') {delete value.input_file; value.input = f.body;}
+    if (defect === 'unknown field') value.authenticated = true;
+    if (defect === 'relative file') value.input_file = 'comparison.json';
+    let bytes = c.encode(value);
+    if (defect === 'duplicate key') bytes = Buffer.from(bytes.toString().replace('{', '{"input_file":"ignored",'));
+    fs.writeFileSync(file, bytes);
+    const args = [defect === 'unknown flag' ? '--produce' : '--read-inputs', file];
+    if (defect === 'extra flag') args.push('--read-inputs');
+    assert.throws(() => contract.main(args)); assert.equal(f.calls.length, 0);
+  });
+}
+test('C1 workflow comparison file change during authentication rejects CLI success', t => {
+  const f = c1Fixture(t), input_file = path.join(f.scratch, 'comparison.json'), file = path.join(f.scratch, 'options.json');
+  fs.writeFileSync(input_file, f.body); const {input, ...options} = f.reading;
+  fs.writeFileSync(file, c.encode({...options, input_file}));
+  t.mock.method(promotion, 'verifySubject', () => fs.writeFileSync(input_file, Buffer.from('changed')));
+  assert.throws(() => contract.main(['--read-inputs', file]), /CLI comparison/);
+});
+
+for (const defect of ['source', 'caller', 'tools', 'original ref', 'reacquired original']) {
+  test(`C1 workflow derivation rejects changed ${defect} before a usable result`, t => {
+    const f = workflowPreparation(t); let checks = 0;
+    if (defect === 'source') t.mock.method(require('../scripts/stage-dual-authoring-npm'), 'blobs', () => ({fixture_only: ++checks}));
+    if (defect === 'caller') t.mock.method(promotion, 'inspectInputCaller', () => ({...f.input.producer, run_attempt: f.input.producer.run_attempt + checks++}));
+    if (defect === 'original ref') t.mock.method(promotion, 'checkPreparationRef', () => {throw Error('foreign original tag ref');});
+    if (defect === 'tools') {
+      const original = c.readFile;
+      t.mock.method(c, 'readFile', (file, max) => file === '/usr/bin/gh' ? Buffer.from(`changed tool ${checks++}`) : original(file,max));
+    }
+    if (defect === 'reacquired original') t.mock.method(promotion, 'acquireInputPreparation', () => {throw Error('original preparation contradiction');});
+    assert.throws(() => contract.produceInputsFromPreparation(f.producerOptions));
+    assert.equal(f.calls.filter(v => typeof v === 'object').length, 0, 'no signing or authentication result from producer fixture');
+  });
+}

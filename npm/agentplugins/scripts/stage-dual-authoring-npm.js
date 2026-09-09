@@ -8,6 +8,7 @@ const cp = require("node:child_process");
 const crypto = require("node:crypto");
 const c = require("./dual-authoring-candidate");
 const producer = require("./stage-dual-authoring-candidate");
+const { validateProductPackJSON } = require("./npm-public-contract");
 const MODE = "release-cli-contract-v1";
 const PACKAGES = { agentplugins: "universal-agent-plugins", "plugin-kit-ai": "plugin-kit-ai" };
 const COMMON = ["lib/verifier.js", "scripts/dual-authoring-candidate.js",
@@ -39,14 +40,17 @@ function npmContext(workParent) {
 }
 
 function blobs(repo, commit, env, closure = "private") {
-  if (!["private", "public"].includes(closure)) throw new Error("unknown fixed npm closure");
-  const allowlist = closure === "private" ? ALLOWLIST : require("./stage-authoring-npm").ALLOWLIST;
+  if (!["private", "public", "stage"].includes(closure)) throw new Error("unknown fixed npm closure");
+  const allowlist = closure === "private" ? ALLOWLIST : require("./stage-authoring-npm")[closure === "stage" ? "STAGE_ALLOWLIST" : "ALLOWLIST"];
   c.safeDirectory(repo);
   if (run("/usr/bin/git", ["rev-parse", "HEAD"], env, repo).toString().trim() !== commit) {
     throw new Error("expected source must equal checkout HEAD");
   }
   const result = {};
-  for (const name of allowlist) {
+  // Check the newly executing helper at the same commit without extending the
+  // historical private/public preparation wrapper_blobs receipt inventories.
+  const packHelper = PREFIX + "scripts/npm-public-contract.js";
+  for (const name of [...new Set([...allowlist, packHelper])]) {
     const entry = run("/usr/bin/git", ["ls-tree", "-z", commit, "--", name], env, repo).toString();
     const match = /^(100644|100755) blob ([0-9a-f]{40})\t([^\0]+)\0$/.exec(entry);
     if (!match || match[3] !== name) throw new Error(`required regular Git blob missing: ${name}`);
@@ -55,14 +59,26 @@ function blobs(repo, commit, env, closure = "private") {
   }
   // The code doing verification/generation must itself be this committed code.
   // A dirty caller may not manufacture an exact-source claim using old blobs.
-  for (const name of ["scripts/stage-dual-authoring-npm.js", "scripts/stage-dual-authoring-candidate.js",
+  for (const name of ["scripts/npm-public-contract.js", "scripts/stage-dual-authoring-npm.js", "scripts/stage-dual-authoring-candidate.js",
     "scripts/dual-authoring-candidate.js", ...(closure === "public" ?
       ["scripts/stage-authoring-npm.js", "scripts/authoring-release.js", "lib/public-authoring.js"] : [])]) {
     if (!c.readFile(path.resolve(__dirname, "..", name)).equals(result[PREFIX + name].bytes)) {
       throw new Error(`executing stager differs from committed source: ${name}`);
     }
   }
-  return result;
+  if (closure === "stage") {
+    // Every listed checkout byte AND every executing-tree byte must be F. Keep
+    // legacy preparation inventories/checks unchanged; stage has its own set.
+    const executing = path.resolve(__dirname, "../../..");
+    for (const root of new Set([repo, executing])) for (const name of allowlist) {
+      const file = path.join(root, name), pin = result[name];
+      if (!c.readFile(file).equals(pin.bytes) ||
+          (fs.lstatSync(file).mode & 0o777) !== (pin.mode === "100755" ? 0o755 : 0o644)) {
+        throw new Error(`stage source differs from committed F: ${name}`);
+      }
+    }
+  }
+  return Object.fromEntries(allowlist.map(name => [name, result[name]]));
 }
 
 function packageFiles(product, source, manifestBytes, options) {
@@ -108,14 +124,17 @@ function verifyPack(tarball, files, destination, env) {
 
 // One exact pack algorithm for both fixed closures; private defaults are intact.
 function packPackage(product, files, root, options, context) {
+    if (!c.PRODUCTS.includes(product)) throw new Error("unknown fixed npm product");
     const result = JSON.parse(run(options.node, [options.npm, "pack", "--ignore-scripts", "--offline", "--json",
       "--pack-destination", options.output], context.env, root));
     const filename = `${PACKAGES[product]}-${options.identity.versions[product]}.tgz`;
-    if (result.length !== 1 || result[0].filename !== filename) throw new Error("unexpected npm pack result");
+    const record = validateProductPackJSON(result, product, options.identity.versions[product]);
     const tarball = path.join(options.output, filename), bytes = c.readFile(tarball);
-    verifyPack(tarball, files, path.join(context.root, product), context.env);
     const integrity = "sha512-" + crypto.createHash("sha512").update(bytes).digest("base64");
-    if (result[0].integrity !== integrity) throw new Error("npm integrity differs from actual pack");
+    const shasum = crypto.createHash("sha1").update(bytes).digest("hex");
+    if (record.integrity !== integrity) throw new Error("npm integrity differs from actual pack");
+    if (record.shasum !== shasum) throw new Error("npm shasum differs from actual pack");
+    verifyPack(tarball, files, path.join(context.root, product), context.env);
     return { file: filename, ...c.metadata(bytes), integrity };
 }
 
