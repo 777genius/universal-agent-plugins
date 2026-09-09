@@ -1,0 +1,664 @@
+{
+  "schema_version": 1,
+  "record_kind": "maintainer_native_draft_qualification",
+  "release_version": "0.1.55",
+  "release_state": "unpublished-draft-at-recorded-rechecks",
+  "producer": {
+    "artifact_digest": "934d7ffd58e7eb5d2f5b27e6ec05b45360dd30b122883057b775887a885ed84b",
+    "artifact_id": 10086701374,
+    "commit": "751e965935819b8c3b566eff245fb927741d63ba",
+    "repository": "777genius/universal-agent-plugins",
+    "run_attempt": 1,
+    "run_id": 34305637370,
+    "workflow": ".github/workflows/agentplugins-release.yml",
+    "workflow_conclusion": "success",
+    "publish_release": false,
+    "promotion_conclusion": "skipped"
+  },
+  "release": {
+    "assets": [
+      {
+        "created_at": "2026-09-09T03:10:26Z",
+        "digest": "sha256:f19bbcef2085b8ec5c11e242130d9218260ad70552a077af0fe2093184c75bfb",
+        "id": 551861956,
+        "name": "THIRD_PARTY_NOTICES.txt",
+        "size": 29752,
+        "state": "uploaded",
+        "updated_at": "2026-09-09T03:10:26Z"
+      },
+      {
+        "created_at": "2026-09-09T03:10:25Z",
+        "digest": "sha256:ffcab468387d0e6be91b3e2bee3bcad706f7272ffba7a951fb517bef5bfed78f",
+        "id": 551861922,
+        "name": "agentplugins_0.1.55_darwin_amd64",
+        "size": 15583456,
+        "state": "uploaded",
+        "updated_at": "2026-09-09T03:10:26Z"
+      },
+      {
+        "created_at": "2026-09-09T03:10:25Z",
+        "digest": "sha256:1f4f227408b6603e6e5c71b86aa638c89cd2c5db0c005ce97f101569495391c7",
+        "id": 551861924,
+        "name": "agentplugins_0.1.55_darwin_arm64",
+        "size": 14690226,
+        "state": "uploaded",
+        "updated_at": "2026-09-09T03:10:26Z"
+      },
+      {
+        "created_at": "2026-09-09T03:10:25Z",
+        "digest": "sha256:3a34ef35dc7abd1f275beed693dcc8877a0595beb30ad281ebd5ef9f653f4210",
+        "id": 551861920,
+        "name": "agentplugins_0.1.55_linux_amd64",
+        "size": 15442104,
+        "state": "uploaded",
+        "updated_at": "2026-09-09T03:10:26Z"
+      },
+      {
+        "created_at": "2026-09-09T03:10:25Z",
+        "digest": "sha256:1488abd34922251b91cd6457dbce860554ed613ef05163d5fa4b1b01c05e952f",
+        "id": 551861921,
+        "name": "agentplugins_0.1.55_linux_arm64",
+        "size": 14418104,
+        "state": "uploaded",
+        "updated_at": "2026-09-09T03:10:26Z"
+      },
+      {
+        "created_at": "2026-09-09T03:10:25Z",
+        "digest": "sha256:14a04b72bcfacc68571e4336cd83effba819f003d5f7bb67d3d58facdbec7872",
+        "id": 551861923,
+        "name": "agentplugins_0.1.55_windows_amd64.exe",
+        "size": 15853056,
+        "state": "uploaded",
+        "updated_at": "2026-09-09T03:10:26Z"
+      },
+      {
+        "created_at": "2026-09-09T03:10:26Z",
+        "digest": "sha256:c6353b09cddd54a86dc15be8fff01e46db788c10693e2a643ae59b1cfb5ab419",
+        "id": 551861949,
+        "name": "agentplugins_0.1.55_windows_arm64.exe",
+        "size": 14556160,
+        "state": "uploaded",
+        "updated_at": "2026-09-09T03:10:27Z"
+      },
+      {
+        "created_at": "2026-09-09T03:10:26Z",
+        "digest": "sha256:8110f4dc087058dfd6941fddab3bd0b53c2fd73df75e953ecb2edc74a72078e3",
+        "id": 551861955,
+        "name": "checksums.txt",
+        "size": 780,
+        "state": "uploaded",
+        "updated_at": "2026-09-09T03:10:26Z"
+      },
+      {
+        "created_at": "2026-09-09T03:10:26Z",
+        "digest": "sha256:2a98c3183e668e7212dd6fb7bccceca42bdf72268d43017834dd62805e1e41c7",
+        "id": 551861953,
+        "name": "release-manifest.json",
+        "size": 1280,
+        "state": "uploaded",
+        "updated_at": "2026-09-09T03:10:26Z"
+      }
+    ],
+    "commit": "751e965935819b8c3b566eff245fb927741d63ba",
+    "draft": true,
+    "id": 385200147,
+    "prerelease": false,
+    "tag": "agentplugins-v0.1.55",
+    "updated_at": "2026-09-09T03:10:27Z"
+  },
+  "tarball_sha256": "4d7fd3345974121a5b2daf9ef6f8701937675a7913ae12dda1404b77cd8b7a18",
+  "asset_set_digest": "8110f4dc087058dfd6941fddab3bd0b53c2fd73df75e953ecb2edc74a72078e3",
+  "scopes": [
+    {
+      "scope": "historical-nine",
+      "run_id": 34309083566,
+      "run_attempt": 1,
+      "run_url": "https://github.com/777genius/universal-agent-plugins/actions/runs/34309083566",
+      "harness_commit": "0cfa2b749356c39c22a59bf698289be2584e9e47",
+      "harness_tree": "1fd1743bc1db40ce9bd7c892774928359037e2c7",
+      "helper_sha256": {
+        "npm/agentplugins/scripts/release-assets.js": "4c223b50c14c82d247f5402d18f22469aad029661120809334e56fb582818c06",
+        "scripts/native_client_draft.py": "993d1975f4949be0804cefb922f265dccf567535caa92f7ae021b7808ba794e1",
+        "scripts/run-native-client-matrix.py": "f127f916889166e5b810ed9d09173cc77d74a4c6bba288d5a20bdfb3aff5cf21",
+        "scripts/verify-agentplugins-draft.py": "994b51b85e4af5835e48b6111a242cdf172245c763799f1b152c8360bd2a415a",
+        "scripts/verify-released-native-evidence.py": "b3399b3d75a301a696840b909ad6bb6f319aa6f392e3f1c1b196234e2c30b2e9"
+      },
+      "final_draft_recheck_at": "2026-09-09T04:10:39.529018+00:00",
+      "qualification_sha256": "167a19b1cc2feac9269a9fc7fc1a98e08bda2fbd422b9b5695ae75a71f3a4b78",
+      "final_draft_sha256": "4190109108ed354ec33ca8f311f711d01fd5394454f29a9dfb38e8fbef90682c",
+      "offline_summary_sha256": "6dfc32ae1046fa946073ef8bce0645db7b7385b7e4ae058a4dd36458a195d069",
+      "offline_verification_status": "passed",
+      "archive": {
+        "filename": "uap-0.1.55-historical-nine-34309083566.zip",
+        "sha256": "a8694d372fdfe1d63288de4aa10807dc0367d81e6f1bf3a14505150ae70dae7f",
+        "size": 37899519,
+        "indexed_file_count": 541,
+        "availability": "retained privately; not published"
+      },
+      "lanes": [
+        {
+          "client": "claude",
+          "target": "darwin-arm64",
+          "status": "passed",
+          "started_utc": "2026-09-09T04:07:10Z",
+          "finished_utc": "2026-09-09T04:07:53Z",
+          "client_asset": {
+            "source": "https://registry.npmjs.org/@anthropic-ai/claude-code-darwin-arm64/-/claude-code-darwin-arm64-2.1.263.tgz",
+            "version": "2.1.263",
+            "archive": "claude-code-darwin-arm64-2.1.263.tgz",
+            "archive_integrity": "sha512-yLv8MtgulGMGCWTwDUSmlEL0+94sxKP3vJm0SAXZX+0qVQ09PrjVSRC0ibtVeW7xymyhvP1JaUimOyp+t2wO5g==",
+            "binary_sha256": "ef5d2909c8af49f31ab6d5487e90316777bc2fac170adfe8160716caa8aaf4f9"
+          },
+          "harness_build_sha256": {
+            "native-probe": "d1caf046e6df6ae990559aee45d594efda9fd9e914ed14008f9bb5679975b95e",
+            "repotests": "74dc8d1d2a7bd18c8d08331524dbb73a7fea4e44c86e006172fdda4c04527ae7"
+          },
+          "packaged_acquisition": {
+            "bootstrap_source": "local_frozen_asset",
+            "tarball_sha256": "4d7fd3345974121a5b2daf9ef6f8701937675a7913ae12dda1404b77cd8b7a18",
+            "launcher_sha256": "766c88f4a6141e5c87113a83b2b2ef59a63cd4bf4ea84a17e1e8423ef839e3e6",
+            "binary_sha256": "1f4f227408b6603e6e5c71b86aa638c89cd2c5db0c005ce97f101569495391c7",
+            "size": 14690226,
+            "version": "agentplugins 0.1.55",
+            "cold_bootstrap": true,
+            "warm_without_proof_source": true,
+            "npm_ignore_scripts": true
+          },
+          "installer_sha256": "1f4f227408b6603e6e5c71b86aa638c89cd2c5db0c005ce97f101569495391c7",
+          "installer_version_measured": "agentplugins 0.1.55",
+          "passed_tests": [
+            "TestAgentpluginsClaudeNativeLifecycle",
+            "TestAgentpluginsClaudeNativeRuntimeLifecycle"
+          ],
+          "skipped_tests": [],
+          "runner_evidence_sha256": "93ac67ac051816d2b9df47325c0b567de2661b99f5ea5db07a29fc42a7a5a96b"
+        },
+        {
+          "client": "claude",
+          "target": "linux-arm64",
+          "status": "passed",
+          "started_utc": "2026-09-09T04:07:43Z",
+          "finished_utc": "2026-09-09T04:08:15Z",
+          "client_asset": {
+            "source": "https://registry.npmjs.org/@anthropic-ai/claude-code-linux-arm64/-/claude-code-linux-arm64-2.1.263.tgz",
+            "version": "2.1.263",
+            "archive": "claude-code-linux-arm64-2.1.263.tgz",
+            "archive_integrity": "sha512-RlJtLbl8xqFMf2zUdOKD4o5FkNhcgGjlS3Un8PNfSbv1fLQg3SqBQgEJhNEtSeKlEsOs26RnCG/jVk4yah8Udw==",
+            "binary_sha256": "7d25d7c8ae6c6e009cc7dae4e817f674179fd31fb7761bcd56fee4c2902b4c03"
+          },
+          "harness_build_sha256": {
+            "native-probe": "b173de75b423c5a8814f6eb102f40bf30dce1835890f27619bd2e67f0baccf9b",
+            "repotests": "0f8efd07cc183e14028bc5c4280ba1991311c98f4b3f9020e4ff31fd3c337783"
+          },
+          "packaged_acquisition": {
+            "bootstrap_source": "local_frozen_asset",
+            "tarball_sha256": "4d7fd3345974121a5b2daf9ef6f8701937675a7913ae12dda1404b77cd8b7a18",
+            "launcher_sha256": "766c88f4a6141e5c87113a83b2b2ef59a63cd4bf4ea84a17e1e8423ef839e3e6",
+            "binary_sha256": "1488abd34922251b91cd6457dbce860554ed613ef05163d5fa4b1b01c05e952f",
+            "size": 14418104,
+            "version": "agentplugins 0.1.55",
+            "cold_bootstrap": true,
+            "warm_without_proof_source": true,
+            "npm_ignore_scripts": true
+          },
+          "installer_sha256": "1488abd34922251b91cd6457dbce860554ed613ef05163d5fa4b1b01c05e952f",
+          "installer_version_measured": "agentplugins 0.1.55",
+          "passed_tests": [
+            "TestAgentpluginsClaudeNativeLifecycle",
+            "TestAgentpluginsClaudeNativeRuntimeLifecycle"
+          ],
+          "skipped_tests": [],
+          "runner_evidence_sha256": "9c3f2087a762794c69fcaa7ef55c7fd76ac19fb09e54f3af39590684704f0257"
+        },
+        {
+          "client": "claude",
+          "target": "windows-amd64",
+          "status": "passed",
+          "started_utc": "2026-09-09T04:04:50Z",
+          "finished_utc": "2026-09-09T04:05:49Z",
+          "client_asset": {
+            "source": "https://registry.npmjs.org/@anthropic-ai/claude-code-win32-x64/-/claude-code-win32-x64-2.1.263.tgz",
+            "version": "2.1.263",
+            "archive": "claude-code-win32-x64-2.1.263.tgz",
+            "archive_integrity": "sha512-P1LnudAWj2ptyE0IZzCZKAe7nU7LxqlkcLdBfp8FsHlH5dp75Og4JJ6TClvfjanHn3shYW4CYN6oI1vSqZlkHw==",
+            "binary_sha256": "0b35df94c1307004f07b738390bfef8dfca5e9af29aaf6517f305bf086b95b03"
+          },
+          "harness_build_sha256": {
+            "native-probe.exe": "d6c9fc7b419bf96733400869b841bf978818856bb4e0542afa2a35e48a357bc0",
+            "repotests.exe": "9d7133f1b4f8559e7b4ebea0bf5858d8be1560394ddf16453bb6cb364a27f0c8"
+          },
+          "packaged_acquisition": {
+            "bootstrap_source": "local_frozen_asset",
+            "tarball_sha256": "4d7fd3345974121a5b2daf9ef6f8701937675a7913ae12dda1404b77cd8b7a18",
+            "launcher_sha256": "766c88f4a6141e5c87113a83b2b2ef59a63cd4bf4ea84a17e1e8423ef839e3e6",
+            "binary_sha256": "14a04b72bcfacc68571e4336cd83effba819f003d5f7bb67d3d58facdbec7872",
+            "size": 15853056,
+            "version": "agentplugins 0.1.55",
+            "cold_bootstrap": true,
+            "warm_without_proof_source": true,
+            "npm_ignore_scripts": true
+          },
+          "installer_sha256": "14a04b72bcfacc68571e4336cd83effba819f003d5f7bb67d3d58facdbec7872",
+          "installer_version_measured": "agentplugins 0.1.55",
+          "passed_tests": [
+            "TestAgentpluginsClaudeNativeLifecycle",
+            "TestAgentpluginsClaudeNativeRuntimeLifecycle"
+          ],
+          "skipped_tests": [],
+          "runner_evidence_sha256": "557e1e5fe3f8af270144e19329fd0cdffff21f784ee914e972c541dd87ac7966"
+        },
+        {
+          "client": "codex",
+          "target": "darwin-arm64",
+          "status": "passed",
+          "started_utc": "2026-09-09T04:06:42Z",
+          "finished_utc": "2026-09-09T04:07:10Z",
+          "client_asset": {
+            "source": "https://github.com/openai/codex/releases/tag/rust-v0.153.4",
+            "version": "rust-v0.153.4",
+            "archive": "codex-aarch64-apple-darwin.tar.gz",
+            "archive_integrity": "sha256:8cf911ea676523bfb2121ec561848d2aba564890ad536db4d8a3353f2b9850b1",
+            "binary_sha256": "b973d440acac501fd2594a43e7ca9ce41e0a65b9dfb28d0d7a7837c99e1261e3"
+          },
+          "harness_build_sha256": {
+            "native-probe": "d1caf046e6df6ae990559aee45d594efda9fd9e914ed14008f9bb5679975b95e",
+            "repotests": "9c482e29997c53ee31f7f74da6300ca7f4eaa94bc2b665a544a1d9c1ad44ea57"
+          },
+          "packaged_acquisition": {
+            "bootstrap_source": "local_frozen_asset",
+            "tarball_sha256": "4d7fd3345974121a5b2daf9ef6f8701937675a7913ae12dda1404b77cd8b7a18",
+            "launcher_sha256": "766c88f4a6141e5c87113a83b2b2ef59a63cd4bf4ea84a17e1e8423ef839e3e6",
+            "binary_sha256": "1f4f227408b6603e6e5c71b86aa638c89cd2c5db0c005ce97f101569495391c7",
+            "size": 14690226,
+            "version": "agentplugins 0.1.55",
+            "cold_bootstrap": true,
+            "warm_without_proof_source": true,
+            "npm_ignore_scripts": true
+          },
+          "installer_sha256": "1f4f227408b6603e6e5c71b86aa638c89cd2c5db0c005ce97f101569495391c7",
+          "installer_version_measured": "agentplugins 0.1.55",
+          "passed_tests": [
+            "TestAgentpluginsCodexNativeLifecycle"
+          ],
+          "skipped_tests": [],
+          "runner_evidence_sha256": "21b2f22919406a1f03a38c16a0451cd365223d001b44861b555e5bd66ae7aedb"
+        },
+        {
+          "client": "codex",
+          "target": "linux-arm64",
+          "status": "passed",
+          "started_utc": "2026-09-09T04:02:17Z",
+          "finished_utc": "2026-09-09T04:02:41Z",
+          "client_asset": {
+            "source": "https://github.com/openai/codex/releases/tag/rust-v0.153.4",
+            "version": "rust-v0.153.4",
+            "archive": "codex-aarch64-unknown-linux-musl.tar.gz",
+            "archive_integrity": "sha256:5cda6182bd94c3a30f2eb63a495489ebf7f691fddb14d70f48c6c1a5071b6cde",
+            "binary_sha256": "4d76e542c222ea8c75861d8c4ade60a1a332a63255ce1c60bdaebf7c2a2869e6"
+          },
+          "harness_build_sha256": {
+            "native-probe": "b173de75b423c5a8814f6eb102f40bf30dce1835890f27619bd2e67f0baccf9b",
+            "repotests": "1f5b94a1cdc1efa2b70853c5d39abcd6b4149e930176311f0b151db521910860"
+          },
+          "packaged_acquisition": {
+            "bootstrap_source": "local_frozen_asset",
+            "tarball_sha256": "4d7fd3345974121a5b2daf9ef6f8701937675a7913ae12dda1404b77cd8b7a18",
+            "launcher_sha256": "766c88f4a6141e5c87113a83b2b2ef59a63cd4bf4ea84a17e1e8423ef839e3e6",
+            "binary_sha256": "1488abd34922251b91cd6457dbce860554ed613ef05163d5fa4b1b01c05e952f",
+            "size": 14418104,
+            "version": "agentplugins 0.1.55",
+            "cold_bootstrap": true,
+            "warm_without_proof_source": true,
+            "npm_ignore_scripts": true
+          },
+          "installer_sha256": "1488abd34922251b91cd6457dbce860554ed613ef05163d5fa4b1b01c05e952f",
+          "installer_version_measured": "agentplugins 0.1.55",
+          "passed_tests": [
+            "TestAgentpluginsCodexNativeLifecycle"
+          ],
+          "skipped_tests": [],
+          "runner_evidence_sha256": "39daa8f162a969c74c985dd40eb98163445ca385387af1b5b864bd483ecda528"
+        },
+        {
+          "client": "codex",
+          "target": "windows-amd64",
+          "status": "passed",
+          "started_utc": "2026-09-09T04:04:17Z",
+          "finished_utc": "2026-09-09T04:05:03Z",
+          "client_asset": {
+            "source": "https://github.com/openai/codex/releases/tag/rust-v0.153.4",
+            "version": "rust-v0.153.4",
+            "archive": "codex-x86_64-pc-windows-msvc.exe.zip",
+            "archive_integrity": "sha256:c016b0e6968b78586919c720d2685a03712f6d5f11bcd9d6f92c91eb8c41ba16",
+            "binary_sha256": "444a3f0008050605cae73cd9b7a2dcac61294062dfaab56dd20430fd6498518b"
+          },
+          "harness_build_sha256": {
+            "native-probe.exe": "d6c9fc7b419bf96733400869b841bf978818856bb4e0542afa2a35e48a357bc0",
+            "repotests.exe": "9e403398a05ea088fa8bec2feb11937fe155115ffb627c830957e759108e48fa"
+          },
+          "packaged_acquisition": {
+            "bootstrap_source": "local_frozen_asset",
+            "tarball_sha256": "4d7fd3345974121a5b2daf9ef6f8701937675a7913ae12dda1404b77cd8b7a18",
+            "launcher_sha256": "766c88f4a6141e5c87113a83b2b2ef59a63cd4bf4ea84a17e1e8423ef839e3e6",
+            "binary_sha256": "14a04b72bcfacc68571e4336cd83effba819f003d5f7bb67d3d58facdbec7872",
+            "size": 15853056,
+            "version": "agentplugins 0.1.55",
+            "cold_bootstrap": true,
+            "warm_without_proof_source": true,
+            "npm_ignore_scripts": true
+          },
+          "installer_sha256": "14a04b72bcfacc68571e4336cd83effba819f003d5f7bb67d3d58facdbec7872",
+          "installer_version_measured": "agentplugins 0.1.55",
+          "passed_tests": [
+            "TestAgentpluginsCodexNativeLifecycle"
+          ],
+          "skipped_tests": [],
+          "runner_evidence_sha256": "5ab93fa8c3261a34e93138c0d37a76fda37e64bdde11abfaeda37b42ddfe8045"
+        },
+        {
+          "client": "opencode",
+          "target": "darwin-arm64",
+          "status": "passed",
+          "started_utc": "2026-09-09T04:04:23Z",
+          "finished_utc": "2026-09-09T04:06:04Z",
+          "client_asset": {
+            "source": "https://registry.npmjs.org/opencode-darwin-arm64/-/opencode-darwin-arm64-1.18.29.tgz",
+            "version": "1.18.29",
+            "archive": "opencode-darwin-arm64-1.18.29.tgz",
+            "archive_integrity": "sha512-EU0qma5GPJXcDp5rENvedSfqJjqxatQW/Qzjs71pR2YdbrSh7YmBwtvnIb2/KIvfQr0DErX4ST14sbBQI2mQdg==",
+            "binary_sha256": "2f24593f1b8e578d0b7ed7ca399440d4b6c125330eece20a69ad8d380190d669"
+          },
+          "harness_build_sha256": {
+            "native-probe": "d1caf046e6df6ae990559aee45d594efda9fd9e914ed14008f9bb5679975b95e",
+            "repotests": "a7baa6829be1beed2abeada3df587b41ab918553d3d137c8c721924ecce5d649"
+          },
+          "packaged_acquisition": {
+            "bootstrap_source": "local_frozen_asset",
+            "tarball_sha256": "4d7fd3345974121a5b2daf9ef6f8701937675a7913ae12dda1404b77cd8b7a18",
+            "launcher_sha256": "766c88f4a6141e5c87113a83b2b2ef59a63cd4bf4ea84a17e1e8423ef839e3e6",
+            "binary_sha256": "1f4f227408b6603e6e5c71b86aa638c89cd2c5db0c005ce97f101569495391c7",
+            "size": 14690226,
+            "version": "agentplugins 0.1.55",
+            "cold_bootstrap": true,
+            "warm_without_proof_source": true,
+            "npm_ignore_scripts": true
+          },
+          "installer_sha256": "1f4f227408b6603e6e5c71b86aa638c89cd2c5db0c005ce97f101569495391c7",
+          "installer_version_measured": "agentplugins 0.1.55",
+          "passed_tests": [
+            "TestAgentpluginsOpenCodeNativeLifecycle",
+            "TestAgentpluginsOpenCodeNativeRuntimeExtended",
+            "TestAgentpluginsOpenCodeNativeToolCollision"
+          ],
+          "skipped_tests": [],
+          "runner_evidence_sha256": "006b7d11cff393da0ab6432b3f3fabf78271aa3b32da2524137ac5375463f153"
+        },
+        {
+          "client": "opencode",
+          "target": "linux-arm64",
+          "status": "passed",
+          "started_utc": "2026-09-09T04:04:58Z",
+          "finished_utc": "2026-09-09T04:06:13Z",
+          "client_asset": {
+            "source": "https://registry.npmjs.org/opencode-linux-arm64/-/opencode-linux-arm64-1.18.29.tgz",
+            "version": "1.18.29",
+            "archive": "opencode-linux-arm64-1.18.29.tgz",
+            "archive_integrity": "sha512-Lr7XXik5wPJZBV5RW+aR6Uogf1n5GogpB565m+D/jiO/vRXr9LhvCpixgAr1tiwuH1ZfMsqOOlbFQz5jgH3Tqg==",
+            "binary_sha256": "e94d9ebec16ce2611eae94026afe8ec87f2e2dcc66db40bc4f889955b026eb75"
+          },
+          "harness_build_sha256": {
+            "native-probe": "b173de75b423c5a8814f6eb102f40bf30dce1835890f27619bd2e67f0baccf9b",
+            "repotests": "644f595d440af2a569ee456b48e354796fdda1a1bd2439e21a7f18c30cd1476d"
+          },
+          "packaged_acquisition": {
+            "bootstrap_source": "local_frozen_asset",
+            "tarball_sha256": "4d7fd3345974121a5b2daf9ef6f8701937675a7913ae12dda1404b77cd8b7a18",
+            "launcher_sha256": "766c88f4a6141e5c87113a83b2b2ef59a63cd4bf4ea84a17e1e8423ef839e3e6",
+            "binary_sha256": "1488abd34922251b91cd6457dbce860554ed613ef05163d5fa4b1b01c05e952f",
+            "size": 14418104,
+            "version": "agentplugins 0.1.55",
+            "cold_bootstrap": true,
+            "warm_without_proof_source": true,
+            "npm_ignore_scripts": true
+          },
+          "installer_sha256": "1488abd34922251b91cd6457dbce860554ed613ef05163d5fa4b1b01c05e952f",
+          "installer_version_measured": "agentplugins 0.1.55",
+          "passed_tests": [
+            "TestAgentpluginsOpenCodeNativeLifecycle",
+            "TestAgentpluginsOpenCodeNativeRuntimeExtended",
+            "TestAgentpluginsOpenCodeNativeToolCollision"
+          ],
+          "skipped_tests": [],
+          "runner_evidence_sha256": "0184edc9d67dea6745f8268476f3ed91eb1711c38b931f58c7c4645f373ec748"
+        },
+        {
+          "client": "opencode",
+          "target": "windows-amd64",
+          "status": "passed",
+          "started_utc": "2026-09-09T04:05:09Z",
+          "finished_utc": "2026-09-09T04:07:01Z",
+          "client_asset": {
+            "source": "https://registry.npmjs.org/opencode-windows-x64/-/opencode-windows-x64-1.18.29.tgz",
+            "version": "1.18.29",
+            "archive": "opencode-windows-x64-1.18.29.tgz",
+            "archive_integrity": "sha512-xtWiZNMiwFtBl7q9yMG+XK/BTYGfgFoHLDx4ruWVYCoxjV0NYwjJi6rB9B3xIVbTclzu81YLKNFcT3kNBEG9Yw==",
+            "binary_sha256": "88d2fa691b2d9e32fde6d1039382a850ddf96fe49cd41683c6375fe1dc8ec2a5"
+          },
+          "harness_build_sha256": {
+            "native-probe.exe": "d6c9fc7b419bf96733400869b841bf978818856bb4e0542afa2a35e48a357bc0",
+            "repotests.exe": "ed9b371d69e07635fd4aafb91f0ab89b962d1f0e36cc63927d86d54216a2b7f6"
+          },
+          "packaged_acquisition": {
+            "bootstrap_source": "local_frozen_asset",
+            "tarball_sha256": "4d7fd3345974121a5b2daf9ef6f8701937675a7913ae12dda1404b77cd8b7a18",
+            "launcher_sha256": "766c88f4a6141e5c87113a83b2b2ef59a63cd4bf4ea84a17e1e8423ef839e3e6",
+            "binary_sha256": "14a04b72bcfacc68571e4336cd83effba819f003d5f7bb67d3d58facdbec7872",
+            "size": 15853056,
+            "version": "agentplugins 0.1.55",
+            "cold_bootstrap": true,
+            "warm_without_proof_source": true,
+            "npm_ignore_scripts": true
+          },
+          "installer_sha256": "14a04b72bcfacc68571e4336cd83effba819f003d5f7bb67d3d58facdbec7872",
+          "installer_version_measured": "agentplugins 0.1.55",
+          "passed_tests": [
+            "TestAgentpluginsOpenCodeNativeLifecycle",
+            "TestAgentpluginsOpenCodeNativeRuntimeExtended",
+            "TestAgentpluginsOpenCodeNativeToolCollision"
+          ],
+          "skipped_tests": [],
+          "runner_evidence_sha256": "52c8b0e621d318cf6605d6b2e22b0d573083d8c145642448518471a1e9663ef3"
+        }
+      ],
+      "workflow_conclusion": "success",
+      "job_conclusions": {
+        "validate": "success",
+        "draft-snapshot": "success",
+        "claude runtime (darwin-arm64)": "success",
+        "opencode runtime (darwin-arm64)": "success",
+        "codex runtime (linux-arm64)": "success",
+        "claude runtime (windows-amd64)": "success",
+        "opencode runtime (windows-amd64)": "success",
+        "codex runtime (darwin-arm64)": "success",
+        "codex runtime (windows-amd64)": "success",
+        "opencode runtime (linux-arm64)": "success",
+        "claude runtime (linux-arm64)": "success",
+        "Verify all required draft native lanes (read-only)": "success",
+        "draft-recheck": "success"
+      }
+    },
+    {
+      "scope": "linux-amd64",
+      "run_id": 34307075390,
+      "run_attempt": 1,
+      "run_url": "https://github.com/777genius/universal-agent-plugins/actions/runs/34307075390",
+      "harness_commit": "fde7298df2bfedb29246149a604758f13823146a",
+      "harness_tree": "2964d685738e4d644f0fae692d30c75950485104",
+      "helper_sha256": {
+        "npm/agentplugins/scripts/release-assets.js": "4c223b50c14c82d247f5402d18f22469aad029661120809334e56fb582818c06",
+        "scripts/native_client_draft.py": "a5c262c101f24581959b1b4a318f651fe6dcd2583a47094e126908a2c34ba09d",
+        "scripts/run-native-client-matrix.py": "f127f916889166e5b810ed9d09173cc77d74a4c6bba288d5a20bdfb3aff5cf21",
+        "scripts/verify-agentplugins-draft.py": "994b51b85e4af5835e48b6111a242cdf172245c763799f1b152c8360bd2a415a",
+        "scripts/verify-released-native-evidence.py": "b101568495615eb697454d08036639de861238d305e906e2e1e4705cab97fc43"
+      },
+      "final_draft_recheck_at": "2026-09-09T03:36:42.614887+00:00",
+      "qualification_sha256": "23705245a4ce0b03123800402d49bfe5d967de26c249a767974c6ddbaa08238e",
+      "final_draft_sha256": "752fe58425d4ae0e7d3cec42e5abf48ec6ae4476d26220f8980d7ea6a46bfe89",
+      "offline_summary_sha256": "0fc0669ebf5e83b59102b3bcf09e2601887f4fe5944a1ac46edcd7ed395e487a",
+      "offline_verification_status": "passed",
+      "archive": {
+        "filename": "uap-0.1.55-linux-amd64-34307075390.zip",
+        "sha256": "37cc1e2f76f8a41165a3ac9d865252cd5eb958e7640b08bd9f28000c9fb099b6",
+        "size": 35750154,
+        "indexed_file_count": 181,
+        "availability": "retained privately; not published"
+      },
+      "lanes": [
+        {
+          "client": "claude",
+          "target": "linux-amd64",
+          "status": "passed",
+          "started_utc": "2026-09-09T03:34:15Z",
+          "finished_utc": "2026-09-09T03:34:58Z",
+          "client_asset": {
+            "source": "https://registry.npmjs.org/@anthropic-ai/claude-code-linux-x64/-/claude-code-linux-x64-2.1.263.tgz",
+            "version": "2.1.263",
+            "archive": "claude-code-linux-x64-2.1.263.tgz",
+            "archive_integrity": "sha512-0IrvpLd/0FP0acQw59T4Cvx/r4nwAXKBrW0WyhIXymzYWurPCLztB+Icu9MkeewAUI+p3PTXsSfmilv/n6XlAQ==",
+            "binary_sha256": "26d020351e8112f4006790f3cfce43b4c9df0c1bb1d0e542364d64151b81d5ba"
+          },
+          "harness_build_sha256": {
+            "native-probe": "647b95485dcd1ac06470397d36f3ffe8ef28a948fcde749ffa1d6beff1d64811",
+            "repotests": "72dbe0cab2ec7c4c3524f564a94b2a5605df881f502f8ce4150ff44b24a251c1"
+          },
+          "packaged_acquisition": {
+            "bootstrap_source": "local_frozen_asset",
+            "tarball_sha256": "4d7fd3345974121a5b2daf9ef6f8701937675a7913ae12dda1404b77cd8b7a18",
+            "launcher_sha256": "766c88f4a6141e5c87113a83b2b2ef59a63cd4bf4ea84a17e1e8423ef839e3e6",
+            "binary_sha256": "3a34ef35dc7abd1f275beed693dcc8877a0595beb30ad281ebd5ef9f653f4210",
+            "size": 15442104,
+            "version": "agentplugins 0.1.55",
+            "cold_bootstrap": true,
+            "warm_without_proof_source": true,
+            "npm_ignore_scripts": true
+          },
+          "installer_sha256": "3a34ef35dc7abd1f275beed693dcc8877a0595beb30ad281ebd5ef9f653f4210",
+          "installer_version_measured": "agentplugins 0.1.55",
+          "passed_tests": [
+            "TestAgentpluginsClaudeNativeLifecycle",
+            "TestAgentpluginsClaudeNativeRuntimeLifecycle"
+          ],
+          "skipped_tests": [],
+          "runner_evidence_sha256": "ae97ea53772246c1087caa7d51e13bab5040b91d47892ff2b4ae2cc297e2c2a4"
+        },
+        {
+          "client": "codex",
+          "target": "linux-amd64",
+          "status": "passed",
+          "started_utc": "2026-09-09T03:34:11Z",
+          "finished_utc": "2026-09-09T03:34:45Z",
+          "client_asset": {
+            "source": "https://github.com/openai/codex/releases/tag/rust-v0.153.4",
+            "version": "rust-v0.153.4",
+            "archive": "codex-x86_64-unknown-linux-musl.tar.gz",
+            "archive_integrity": "sha256:f479424eca092484dc40d87ae28c44f4cc40234a60045d6131e493800d814a30",
+            "binary_sha256": "56ef98ab4032d317ab26e9b5e5a175650717351edb16ed9cde0cb6d1734d62da"
+          },
+          "harness_build_sha256": {
+            "native-probe": "647b95485dcd1ac06470397d36f3ffe8ef28a948fcde749ffa1d6beff1d64811",
+            "repotests": "ddd01860c64bc286e17d5f35cd4a0e8334ce14b24ff1d108986aa89c0b041bf3"
+          },
+          "packaged_acquisition": {
+            "bootstrap_source": "local_frozen_asset",
+            "tarball_sha256": "4d7fd3345974121a5b2daf9ef6f8701937675a7913ae12dda1404b77cd8b7a18",
+            "launcher_sha256": "766c88f4a6141e5c87113a83b2b2ef59a63cd4bf4ea84a17e1e8423ef839e3e6",
+            "binary_sha256": "3a34ef35dc7abd1f275beed693dcc8877a0595beb30ad281ebd5ef9f653f4210",
+            "size": 15442104,
+            "version": "agentplugins 0.1.55",
+            "cold_bootstrap": true,
+            "warm_without_proof_source": true,
+            "npm_ignore_scripts": true
+          },
+          "installer_sha256": "3a34ef35dc7abd1f275beed693dcc8877a0595beb30ad281ebd5ef9f653f4210",
+          "installer_version_measured": "agentplugins 0.1.55",
+          "passed_tests": [
+            "TestAgentpluginsCodexNativeLifecycle"
+          ],
+          "skipped_tests": [],
+          "runner_evidence_sha256": "0ddc644a6fa64366f943497c812312058f40598ad5f61ba0047a466c3050362b"
+        },
+        {
+          "client": "opencode",
+          "target": "linux-amd64",
+          "status": "passed",
+          "started_utc": "2026-09-09T03:34:02Z",
+          "finished_utc": "2026-09-09T03:35:30Z",
+          "client_asset": {
+            "source": "https://registry.npmjs.org/opencode-linux-x64/-/opencode-linux-x64-1.18.29.tgz",
+            "version": "1.18.29",
+            "archive": "opencode-linux-x64-1.18.29.tgz",
+            "archive_integrity": "sha512-X8/wS/8mzL7Ko0zYYF6RzKax39KkxXDRoimhmzXuo0gPrZX4DQjqBNpPAByBwUjFapk73ZGSVsjDGvoNapBa1Q==",
+            "binary_sha256": "ca6c0e1f42be3120595bf6848937e7586ec862c87fa7aa111e89c7cc6e9a4650"
+          },
+          "harness_build_sha256": {
+            "native-probe": "647b95485dcd1ac06470397d36f3ffe8ef28a948fcde749ffa1d6beff1d64811",
+            "repotests": "a22321ee270cbc12f6b23f9a51f4775065c2cacad61e478bd513266b427cddf5"
+          },
+          "packaged_acquisition": {
+            "bootstrap_source": "local_frozen_asset",
+            "tarball_sha256": "4d7fd3345974121a5b2daf9ef6f8701937675a7913ae12dda1404b77cd8b7a18",
+            "launcher_sha256": "766c88f4a6141e5c87113a83b2b2ef59a63cd4bf4ea84a17e1e8423ef839e3e6",
+            "binary_sha256": "3a34ef35dc7abd1f275beed693dcc8877a0595beb30ad281ebd5ef9f653f4210",
+            "size": 15442104,
+            "version": "agentplugins 0.1.55",
+            "cold_bootstrap": true,
+            "warm_without_proof_source": true,
+            "npm_ignore_scripts": true
+          },
+          "installer_sha256": "3a34ef35dc7abd1f275beed693dcc8877a0595beb30ad281ebd5ef9f653f4210",
+          "installer_version_measured": "agentplugins 0.1.55",
+          "passed_tests": [
+            "TestAgentpluginsOpenCodeNativeLifecycle",
+            "TestAgentpluginsOpenCodeNativeRuntimeExtended",
+            "TestAgentpluginsOpenCodeNativeToolCollision"
+          ],
+          "skipped_tests": [],
+          "runner_evidence_sha256": "7dea8268abc0dbdbb65ff3b9f20a40a9a8bf2208113289e2d477eced5de08f8e"
+        }
+      ],
+      "workflow_conclusion": "success",
+      "job_conclusions": {
+        "validate": "success",
+        "draft-snapshot": "success",
+        "codex runtime (linux-amd64)": "success",
+        "opencode runtime (linux-amd64)": "success",
+        "claude runtime (linux-amd64)": "success",
+        "Verify all required draft native lanes (read-only)": "success",
+        "draft-recheck": "success"
+      }
+    }
+  ],
+  "release_tree": "a0bfb081d0aecf001e5a500c90ac9bfc0564e4ce",
+  "qualification_summary": {
+    "native_lanes_passed": 12,
+    "required_tests_passed": 24,
+    "required_tests_skipped": 0,
+    "scope_aggregation": "independent complete scopes; no lane substitution or common-harness claim",
+    "publication": "not authorized; draft staging and qualification only"
+  },
+  "boundaries": [
+    "Copy is based solely on the supplied source packet and orchestrator-verified facts. No tests were run and no filesystem or GitHub inspection was performed by this worker.",
+    "Only the proposed EN insertion, RU append and two exact runbook replacements are supplied. Historical records and all other work remain outside this worker's ownership.",
+    "The combined 12 lanes and 24 top-level required tests comprise independently qualified historical-nine and Linux amd64 scopes, not one dispatch or an independent third-party certification.",
+    "Historical-nine retains harness commit 0cfa2b749356c39c22a59bf698289be2584e9e47, tree 1fd1743bc1db40ce9bd7c892774928359037e2c7, run 34309083566 attempt 1 and final draft recheck time 2026-09-09T04:10:39.529018+00:00.",
+    "Linux amd64 retains harness commit fde7298df2bfedb29246149a604758f13823146a, tree 2964d685738e4d644f0fae692d30c75950485104, run 34307075390 attempt 1 and final draft recheck time 2026-09-09T03:36:42.614887+00:00. Offline verification from fresh source 0cfa2b7 does not replace those identities or establish a newer native run, live recheck or qualification time.",
+    "Both scopes bind producer commit 751e965935819b8c3b566eff245fb927741d63ba, producer run 34305637370 attempt 1, artifact 10086701374 and draft release ID 385200147. The original producer artifact digest is 934d7ffd58e7eb5d2f5b27e6ec05b45360dd30b122883057b775887a885ed84b; the original npm tarball SHA-256 is 4d7fd3345974121a5b2daf9ef6f8701937675a7913ae12dda1404b77cd8b7a18.",
+    "Detailed hashes belong in the orchestrator-owned compact JSON record linked by the proposed copy. This response does not create or modify that record.",
+    "Draft 0.1.55 is not published. No draft release/download link or upgrade command is supplied. Original nine-lane and supplemental Linux amd64 released-0.1.53 evidence remain valid and separate.",
+    "Windows Claude passed only HTTP/installed-skill runtime coverage; managed stdio reports managed_stdio_platform_unsupported. OpenCode collision observation retains opencode_tool_namespace_not_evaluated and does not establish resolution. JSONC lifecycle is not JSONC stdio/body proof. The Codex Git acquisition seam adds no public-Git native runtime claim.",
+    "All clients were genuine and pinned; model providers were scripted loopback services. No real-model, OAuth/login, desktop, live-service, vendor-certification, official-status or independent-adoption claim follows.",
+    "Package validity, installation, activation, runtime and OAuth are separate evidence layers. Installer qualification is not standard authoring executable release qualification (D5).",
+    "Disposable profiles and explicit child environments do not provide OS/process isolation. Network access remained enabled.",
+    "Raw logs and archives remain privately retained pending disclosure review; only metadata is public. Offline archive verification establishes recorded consistency, not fresh attestations or current draft state."
+  ]
+}

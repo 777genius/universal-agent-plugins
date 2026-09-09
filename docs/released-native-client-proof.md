@@ -8,7 +8,7 @@ fixtures. Select `target_scope=historical-nine` for nine jobs on disposable
 GitHub-hosted Linux arm64 (`ubuntu-24.04-arm`), macOS arm64 and Windows amd64
 runners, or `target_scope=linux-amd64` for three jobs on `ubuntu-24.04`.
 Linux amd64 is supplemental coverage, not a replacement for the historical nine.
-This runbook records no new native qualification.
+Draft 0.1.55 has two separately qualified scopes: [historical-nine run 34309083566](https://github.com/777genius/universal-agent-plugins/actions/runs/34309083566) and [Linux amd64 run 34307075390](https://github.com/777genius/universal-agent-plugins/actions/runs/34307075390). Their distinct harness identities and final draft recheck times are recorded in [the compact evidence metadata](https://github.com/777genius/universal-agent-plugins/blob/main/docs/evidence/client-compatibility-draft-0.1.55.json); 0.1.55 remains unpublished.
 Never run these clients against your existing projects or profiles.
 
 For public reproduction, use an immutable UAP harness tag containing
@@ -72,8 +72,7 @@ runtime evidence until its corresponding job passes.
 These suites prove fixture installation, discovery and scripted native runtime
 behavior. They do not prove real-model quality, OAuth or live external-service
 availability. The separate platform proof covers additional installer targets.
-The historical 0.1.53 Linux native client evidence is arm64 only; configuring
-the new Linux amd64 scope does not establish a successful run.
+The original nine-lane 0.1.53 run covered Linux arm64; [supplemental released-0.1.53 run 34195481283](https://github.com/777genius/universal-agent-plugins/actions/runs/34195481283) passed all three Linux amd64 jobs and six required tests without skips, as recorded in [its separate evidence metadata](https://github.com/777genius/universal-agent-plugins/blob/main/docs/evidence/client-compatibility-linux-amd64-0.1.53.json). This supplements the original nine lanes without rewriting their evidence.
 
 ## Draft dispatch and acquisition
 

@@ -10,6 +10,26 @@ translationRequired: false
 
 # UAP client compatibility evidence
 
+## Draft installer 0.1.55
+
+**0.1.55 is an unpublished draft.** These results qualify the recorded draft snapshots; they are not a release announcement or upgrade instruction. The released 0.1.53 evidence below remains valid and separate.
+
+Across two independently qualified scopes, **12 native-client lanes passed all 24 top-level required tests without skips**. Each used the original producer npm tarball, offline npm installation with scripts disabled, cold bootstrap from the frozen native binary, and a warm launch without the proof source. Genuine pinned clients then ran in fresh disposable profiles.
+
+| Tested client | Linux arm64 | Linux amd64 | macOS arm64 | Windows amd64 |
+| --- | --- | --- | --- | --- |
+| Codex 0.153.4 | Lifecycle, stdio/HTTP and skill context passed | Same scope passed | Same scope passed | Same scope passed |
+| Claude Code 2.1.263 | Lifecycle, stdio/HTTP and installed skills passed | Same scope passed | Same scope passed | HTTP/installed-skill lifecycle passed; managed stdio unsupported |
+| OpenCode 1.18.29 | Lifecycle, extended stdio/skill and collision-observation suites passed | Same scope passed | Same scope passed | Same scope passed |
+
+Lifecycle covers install, update, same-version refresh, repair and removal. Windows Claude reports `managed_stdio_platform_unsupported`; its stdio runtime and cwd/argv/env/data behavior are not established. OpenCode's observed collision remains unresolved, with advisory `opencode_tool_namespace_not_evaluated`. JSONC lifecycle does not establish JSONC stdio/body runtime. The Codex Git acquisition seam is not a new public-Git native runtime claim.
+
+The [historical-nine run](https://github.com/777genius/universal-agent-plugins/actions/runs/34309083566) passed nine lanes and 18 required tests with harness `0cfa2b7`; its final draft recheck was **2026-09-09T04:10:39.529018+00:00**. The [Linux amd64 run](https://github.com/777genius/universal-agent-plugins/actions/runs/34307075390) passed three lanes and six required tests with harness `fde7298`; its final draft recheck was **2026-09-09T03:36:42.614887+00:00**. Both bind the same frozen [producer run](https://github.com/777genius/universal-agent-plugins/actions/runs/34305637370). [Compact evidence metadata](https://github.com/777genius/universal-agent-plugins/blob/main/docs/evidence/client-compatibility-draft-0.1.55.json) records exact producer, package, harness, qualification and archive identities.
+
+Both retained scopes passed offline verification. A fresh verifier checkout at `0cfa2b7` also rechecked the retained `fde7298` Linux amd64 scope; this was no new native run or live draft recheck and adds no qualification time. Archive hash consistency is not fresh attestation verification or evidence of current draft state. Raw logs and archives remain private pending disclosure review; only metadata is public.
+
+These are maintainer-run observations using genuine clients with scripted loopback model providers and network access. Disposable profiles and explicit child environments do not provide OS/process isolation. No real-model, OAuth/login, desktop, live-service, vendor-certification, official-status or independent-adoption claim follows. Package validity, installation, activation, runtime and OAuth remain separate evidence layers. This installer proof does not qualify the standard authoring executable release (D5).
+
 ## Released installer 0.1.53
 
 [Public release 0.1.53](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.53)
