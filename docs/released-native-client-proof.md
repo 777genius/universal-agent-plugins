@@ -8,16 +8,19 @@ fixtures. Select `target_scope=historical-nine` for nine jobs on disposable
 GitHub-hosted Linux arm64 (`ubuntu-24.04-arm`), macOS arm64 and Windows amd64
 runners, or `target_scope=linux-amd64` for three jobs on `ubuntu-24.04`.
 Linux amd64 is supplemental coverage, not a replacement for the historical nine.
-The draft 0.1.54 candidate is planned, not built yet; this runbook records no
-new native qualification.
+This runbook records no new native qualification.
 Never run these clients against your existing projects or profiles.
 
-Use an immutable UAP harness tag containing `.github/workflows/agentplugins-released-native-clients.yml`.
-The workflow and checkout execute at that tag's exact commit. The installer
-producer tag and SHA are separate inputs; the proof checks their equality
-against GitHub and records both producer and harness identities. Both sources
-are in the same canonical UAP repository; the old `plugin-kit-ai` repository
-name redirects there. Their release and harness commits can still differ.
+For public reproduction, use an immutable UAP harness tag containing
+`.github/workflows/agentplugins-released-native-clients.yml`.
+The public workflow and checkout execute at that tag's exact commit.
+Draft dispatch is restricted to this workflow in the canonical repository on
+`main`; each run checks out its captured immutable `github.sha`
+and binds that harness commit/tree into its receipts.
+The installer producer tag and SHA are separate inputs; the proof
+checks the producer tag's commit against GitHub and records both identities.
+Both sources are in the canonical UAP repository; the old `plugin-kit-ai`
+name redirects there. Producer and harness commits may differ.
 
 For public acquisition, omit all draft provenance inputs:
 
@@ -75,17 +78,19 @@ the new Linux amd64 scope does not establish a successful run.
 ## Draft dispatch and acquisition
 
 Dispatch only after the exact producer attempt has passed all six platform
-proofs, their aggregate and `verified-draft`. Use the canonical repository for
-draft acquisition; public-mode fork instructions do not grant draft access.
+proofs, their aggregate and `verified-draft`. Draft dispatch requires the
+canonical repository's workflow on `refs/heads/main`; public-mode fork and
+immutable-tag instructions do not apply to draft acquisition.
 Freeze the release ID, producer run/attempt, `agentplugins-npm-<version>` artifact
 ID and original ZIP digest, and the digest of `checksums.txt`. IDs/attempts are
 positive integers; both digests are 64 lowercase hex characters (no `sha256:`
 prefix), and the producer SHA is 40 lowercase hex characters.
+An in-progress producer attempt does not satisfy this prerequisite.
 
 ```sh
 gh workflow run agentplugins-released-native-clients.yml \
   --repo 777genius/universal-agent-plugins \
-  --ref <immutable-UAP-harness-tag> \
+  --ref main \
   -f release_state=draft \
   -f target_scope=historical-nine \
   -f release_tag=agentplugins-vX.Y.Z \
@@ -99,9 +104,10 @@ gh workflow run agentplugins-released-native-clients.yml \
 ```
 
 Dispatch separately with `target_scope=linux-amd64` for the three supplemental
-lanes, retaining the same frozen identities and immutable harness ref. Record
-each harness run URL/attempt and resolved harness commit/tree. Use the watch and
-download commands above for each run, with separate fresh output directories.
+lanes, again using `--ref main` and retaining the same frozen producer and
+release identities. Capture each scope's resolved harness SHA from its run,
+then resolve its tree:
+
 
 Draft mode verifies the exact successful producer attempt and artifact ID/name,
 the still-unpublished, non-prerelease draft and all nine attested assets. It uses
