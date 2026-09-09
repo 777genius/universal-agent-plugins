@@ -40,8 +40,8 @@ function npmContext(workParent) {
 }
 
 function blobs(repo, commit, env, closure = "private") {
-  if (!["private", "public"].includes(closure)) throw new Error("unknown fixed npm closure");
-  const allowlist = closure === "private" ? ALLOWLIST : require("./stage-authoring-npm").ALLOWLIST;
+  if (!["private", "public", "stage"].includes(closure)) throw new Error("unknown fixed npm closure");
+  const allowlist = closure === "private" ? ALLOWLIST : require("./stage-authoring-npm")[closure === "stage" ? "STAGE_ALLOWLIST" : "ALLOWLIST"];
   c.safeDirectory(repo);
   if (run("/usr/bin/git", ["rev-parse", "HEAD"], env, repo).toString().trim() !== commit) {
     throw new Error("expected source must equal checkout HEAD");
@@ -64,6 +64,18 @@ function blobs(repo, commit, env, closure = "private") {
       ["scripts/stage-authoring-npm.js", "scripts/authoring-release.js", "lib/public-authoring.js"] : [])]) {
     if (!c.readFile(path.resolve(__dirname, "..", name)).equals(result[PREFIX + name].bytes)) {
       throw new Error(`executing stager differs from committed source: ${name}`);
+    }
+  }
+  if (closure === "stage") {
+    // Every listed checkout byte AND every executing-tree byte must be F. Keep
+    // legacy preparation inventories/checks unchanged; stage has its own set.
+    const executing = path.resolve(__dirname, "../../..");
+    for (const root of new Set([repo, executing])) for (const name of allowlist) {
+      const file = path.join(root, name), pin = result[name];
+      if (!c.readFile(file).equals(pin.bytes) ||
+          (fs.lstatSync(file).mode & 0o777) !== (pin.mode === "100755" ? 0o755 : 0o644)) {
+        throw new Error(`stage source differs from committed F: ${name}`);
+      }
     }
   }
   return Object.fromEntries(allowlist.map(name => [name, result[name]]));

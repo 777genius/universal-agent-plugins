@@ -1,12 +1,14 @@
 package main
 
 import (
+	"fmt"
 	"go/ast"
 	"go/parser"
 	"go/token"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"runtime"
 	"strconv"
@@ -83,25 +85,34 @@ type producerWorkflow struct {
 		} `yaml:"workflow_run"`
 		Dispatch struct {
 			Inputs map[string]struct {
-				Default string   `yaml:"default"`
-				Options []string `yaml:"options"`
+				Default  string   `yaml:"default"`
+				Type     string   `yaml:"type"`
+				Required bool     `yaml:"required"`
+				Options  []string `yaml:"options"`
 			} `yaml:"inputs"`
 		} `yaml:"workflow_dispatch"`
 	} `yaml:"on"`
 	Permissions map[string]string `yaml:"permissions"`
 	Jobs        map[string]struct {
 		If          string            `yaml:"if"`
+		Name        string            `yaml:"name"`
+		Runner      string            `yaml:"runs-on"`
+		Timeout     int               `yaml:"timeout-minutes"`
+		Outputs     map[string]string `yaml:"outputs"`
 		Environment any               `yaml:"environment"`
 		Needs       any               `yaml:"needs"`
 		Uses        string            `yaml:"uses"`
 		Permissions map[string]string `yaml:"permissions"`
 		Env         map[string]string `yaml:"env"`
 		Steps       []struct {
-			Name string            `yaml:"name"`
-			Run  string            `yaml:"run"`
-			Uses string            `yaml:"uses"`
-			With map[string]any    `yaml:"with"`
-			Env  map[string]string `yaml:"env"`
+			Name     string            `yaml:"name"`
+			ID       string            `yaml:"id"`
+			If       string            `yaml:"if"`
+			Continue bool              `yaml:"continue-on-error"`
+			Run      string            `yaml:"run"`
+			Uses     string            `yaml:"uses"`
+			With     map[string]any    `yaml:"with"`
+			Env      map[string]string `yaml:"env"`
 		} `yaml:"steps"`
 	} `yaml:"jobs"`
 }
@@ -174,16 +185,19 @@ func TestReleaseWorkflowRunnerCacheContext(t *testing.T) {
 func TestReleasePairedPreparationReadOnlyGraph(t *testing.T) {
 	w := readProducerWorkflow(t, "agentplugins-release.yml")
 	mode := w.On.Dispatch.Inputs["producer_mode"]
-	if mode.Default != "binary-only" || strings.Join(mode.Options, ",") != "binary-only,paired-preparation,paired-promotion" {
+	if mode.Default != "binary-only" || strings.Join(mode.Options, ",") != "binary-only,paired-preparation,paired-promotion,paired-input-provenance" {
 		t.Fatal("default binary-only dispatch contract changed")
 	}
 	if len(w.Permissions) != 1 || w.Permissions["contents"] != "read" {
 		t.Fatal("workflow must default to contents-read")
 	}
-	if len(w.Jobs) != 8 {
+	if len(w.Jobs) != 11 {
 		t.Fatal("review every new producer job for preparation reachability")
 	}
 	for name, job := range w.Jobs {
+		if name == "dispatch_contract" || strings.HasPrefix(name, "paired_input_") {
+			continue
+		}
 		if name == "paired-promotion-admission" || name == "paired-sign-and-promote" {
 			if job.If != "${{ github.event_name == 'workflow_dispatch' && inputs.producer_mode == 'paired-promotion' }}" {
 				t.Fatalf("%s loses explicit promotion isolation", name)
@@ -322,16 +336,34 @@ func TestReleasePairedRouteCannotTriggerDownstreamPublication(t *testing.T) {
 // Testing a failed event must evaluate the whole OR/AND graph, not find a token.
 func downstreamCondition(t *testing.T, expression, event, conclusion string) bool {
 	t.Helper()
+	return workflowCondition(t, expression, map[string]any{"github.event_name": event, "github.event.workflow_run.conclusion": conclusion,
+		"vars.NPM_PUBLISH_READY": "true", "vars.PYPI_TRUSTED_PUBLISHING_READY": "true", "inputs.producer_mode": "paired-promotion"})
+}
+func workflowCondition(t *testing.T, expression string, values map[string]any) bool {
+	t.Helper()
 	expression = strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(strings.TrimSpace(expression), "${{"), "}}"))
-	values := map[string]string{"github.event_name": event, "github.event.workflow_run.conclusion": conclusion,
-		"vars.NPM_PUBLISH_READY": "true", "vars.PYPI_TRUSTED_PUBLISHING_READY": "true", "inputs.producer_mode": "paired-promotion"}
+	if expression == "" {
+		expression = "success()"
+	}
+	for _, fn := range []string{"success", "always", "failure", "cancelled"} {
+		if value, ok := values[fn]; ok {
+			expression = strings.ReplaceAll(expression, fn+"()", strconv.FormatBool(value.(bool)))
+		}
+	}
 	words := regexp.MustCompile(`'[^']*'|[a-zA-Z_][a-zA-Z0-9_.]*`)
 	expression = words.ReplaceAllStringFunc(expression, func(s string) string {
 		if strings.HasPrefix(s, "'") {
 			return strconv.Quote(s[1 : len(s)-1])
 		}
 		if value, ok := values[s]; ok {
-			return strconv.Quote(value)
+			switch v := value.(type) {
+			case string:
+				return strconv.Quote(v)
+			case bool:
+				return strconv.FormatBool(v)
+			default:
+				t.Fatal("unsupported typed context")
+			}
 		}
 		if s == "true" || s == "false" {
 			return s
@@ -659,6 +691,382 @@ func TestN2ExcludedNativeExecutionRemainsFailure(t *testing.T) {
 	for _, forbidden := range []string{"runs-on: windows", "runs-on: macos", "continue-on-error:", "strategy:", "--accept-security-risk"} {
 		if strings.Contains(string(body), forbidden) {
 			t.Fatalf("excluded native route enables %s", forbidden)
+		}
+	}
+}
+
+// Fixed C1 graph expectations; fixtures prove source reachability, not hosted
+// permission enforcement, cryptographic acceptance or genuine provider custody.
+func c1Needs(w producerWorkflow, name string) []string {
+	switch n := w.Jobs[name].Needs.(type) {
+	case nil:
+		return nil
+	case string:
+		return []string{n}
+	case []any:
+		result := []string{}
+		for _, v := range n {
+			result = append(result, v.(string))
+		}
+		return result
+	default:
+		panic("unknown needs shape")
+	}
+}
+func c1Permissions(w producerWorkflow, name string) map[string]string {
+	if w.Jobs[name].Permissions != nil {
+		return w.Jobs[name].Permissions
+	}
+	return w.Permissions
+}
+func c1Scripts(w producerWorkflow, name string) string {
+	var s strings.Builder
+	for _, step := range w.Jobs[name].Steps {
+		s.WriteString(step.Run)
+	}
+	return s.String()
+}
+func c1Contract(w producerWorkflow, name string, stage, signer bool) error {
+	job, ok := w.Jobs[name]
+	if !ok {
+		return fmt.Errorf("missing %s", name)
+	}
+	need, mode, env, timeout := "dispatch_contract", "paired-input-provenance", "agentplugins-release", 20
+	if stage {
+		mode, env = "paired-stage", "npm-agentplugins"
+		timeout = 30
+	}
+	if signer {
+		timeout = 20
+		if stage {
+			need = "paired_stage"
+		} else {
+			need = "paired_input_admission"
+		}
+	}
+	condition := "${{ success() && github.event_name == 'workflow_dispatch' && inputs.producer_mode == '" + mode + "'"
+	if stage {
+		condition += " && inputs.publish == false"
+	}
+	condition += " && needs." + need + ".result == 'success' }}"
+	if job.If != condition || !reflect.DeepEqual(c1Needs(w, name), []string{need}) {
+		return fmt.Errorf("%s mode/status/needs", name)
+	}
+	permissions := map[string]string{"contents": "read", "actions": "read"}
+	if signer {
+		permissions["id-token"] = "write"
+		permissions["attestations"] = "write"
+	} else if stage {
+		permissions["attestations"] = "read"
+	}
+	if !reflect.DeepEqual(c1Permissions(w, name), permissions) {
+		return fmt.Errorf("%s effective permissions", name)
+	}
+	if (signer && job.Environment != env) || (!signer && job.Environment != nil) || job.Runner != "ubuntu-24.04" || job.Timeout != timeout {
+		return fmt.Errorf("%s execution boundary", name)
+	}
+	if len(job.Steps) < 3 || job.Steps[0].Name != "C1 preflight" || job.Steps[0].Uses != "" {
+		return fmt.Errorf("%s preflight ordering", name)
+	}
+	attest, uploads, admission, recheck := -1, 0, -1, -1
+	for index, step := range job.Steps {
+		if step.Continue || (step.If != "" && step.If != "${{ success() }}") {
+			return fmt.Errorf("%s step bypass", name)
+		}
+		if step.ID == "stage" {
+			admission = index
+		}
+		if step.ID == "recheck" {
+			recheck = index
+		}
+		if strings.HasPrefix(step.Uses, "actions/attest@") {
+			attest = index
+			if step.Uses != "actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6" || step.With["subject-path"] != "${{ steps.stage.outputs.subjects }}" {
+				return fmt.Errorf("exact subject signing")
+			}
+		}
+		if strings.HasPrefix(step.Uses, "actions/upload-artifact@") {
+			uploads++
+			if step.Uses != "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a" || step.ID != "upload" || step.With["if-no-files-found"] != "error" || step.With["retention-days"] != 7 || step.With["overwrite"] != nil {
+				return fmt.Errorf("immutable upload")
+			}
+			id := "stage"
+			if signer {
+				id = "recheck"
+			}
+			if step.With["path"] != "${{ steps."+id+".outputs.payload }}" {
+				return fmt.Errorf("fixed upload payload")
+			}
+		}
+	}
+	if signer && (attest <= admission || admission < 0 || recheck <= attest) {
+		return fmt.Errorf("independent admission/sign/recheck order")
+	}
+	if !signer && attest != -1 {
+		return fmt.Errorf("unexpected signing")
+	}
+	expectedUploads := 0
+	if stage != signer {
+		expectedUploads = 1
+	}
+	if uploads != expectedUploads {
+		return fmt.Errorf("upload lifecycle")
+	}
+	body := c1Scripts(w, name)
+	for _, forbidden := range []string{"npm publish", "npm install", "--read-stage", "allow_incomplete", "needs.paired_input_admission.outputs", "needs.paired_stage.outputs.accepted"} {
+		if strings.Contains(body, forbidden) {
+			return fmt.Errorf("forbidden C1 effect or trust substitution: %s", forbidden)
+		}
+	}
+	if signer && (!strings.Contains(body, "assert.equal(previous.root, e.SIGNING_ROOT)") || !strings.Contains(body, "pins(previous.root)") || !strings.Contains(body, "result.root = previous.root") || !strings.Contains(body, "fs.mkdtempSync")) {
+		return fmt.Errorf("original signing root recheck")
+	}
+	return nil
+}
+func TestC1InputProvenanceWorkflowContract(t *testing.T) {
+	w := readProducerWorkflow(t, "agentplugins-release.yml")
+	if len(w.Jobs) != 11 || len(w.On.Dispatch.Inputs) != 10 || w.On.Dispatch.Inputs["producer_mode"].Type != "choice" || !w.On.Dispatch.Inputs["producer_mode"].Required {
+		t.Fatal("closed release inputs/jobs")
+	}
+	for _, name := range []string{"paired_input_admission", "paired_input_attestation"} {
+		if err := c1Contract(w, name, false, name == "paired_input_attestation"); err != nil {
+			t.Fatal(err)
+		}
+		body := c1Scripts(w, name)
+		for _, text := range []string{"--produce-inputs", "preparation:", "workflow_sha: e.SOURCE_SHA", "assert.equal(payload.length, 21)", "'native-inputs.json'", "'preparation-run.json', 'candidate-identity.json'"} {
+			if !strings.Contains(body, text) {
+				t.Fatalf("%s missing %s", name, text)
+			}
+		}
+	}
+	if len(w.Jobs["paired_input_admission"].Outputs) != 1 || len(w.Jobs["paired_input_attestation"].Outputs) != 3 {
+		t.Fatal("selector-only outputs")
+	}
+}
+func TestC1PublicStageWorkflowContract(t *testing.T) {
+	w := readProducerWorkflow(t, "agentplugins-npm-publish.yml")
+	if len(w.Jobs) != 6 || len(w.On.Dispatch.Inputs) != 7 || strings.Join(w.On.Dispatch.Inputs["producer_mode"].Options, ",") != "legacy,paired-stage" || w.On.Dispatch.Inputs["producer_mode"].Default != "legacy" || w.On.Dispatch.Inputs["publish"].Type != "boolean" {
+		t.Fatal("closed stage inputs/jobs")
+	}
+	for _, name := range []string{"paired_stage", "paired_stage_attestation"} {
+		if err := c1Contract(w, name, true, name == "paired_stage_attestation"); err != nil {
+			t.Fatal(err)
+		}
+		body := c1Scripts(w, name)
+		if !strings.Contains(body, "assert.equal(payload.length, 3)") || !strings.Contains(body, "input_file") || !strings.Contains(body, "Buffer.from(e.NATIVE_INPUTS, 'utf8')") {
+			t.Fatal("three retained files and Buffer transport")
+		}
+	}
+	if strings.Count(c1Scripts(w, "paired_stage"), "--stage-prepublication") != 1 || strings.Count(c1Scripts(w, "paired_stage_attestation"), "--validate-unsigned-stage") != 2 {
+		t.Fatal("pack once and independent same-run validation")
+	}
+	for name, expected := range map[string][]string{"prepare": {"dispatch_contract"}, "publish": {"prepare"}, "verify-public": {"prepare", "publish"}} {
+		if !reflect.DeepEqual(c1Needs(w, name), expected) {
+			t.Fatalf("legacy needs changed %s", name)
+		}
+	}
+	for _, name := range []string{"prepare", "publish", "verify-public"} {
+		if !strings.Contains(w.Jobs[name].If, "inputs.producer_mode == 'legacy'") || !strings.Contains(w.Jobs[name].If, "github.event_name == 'workflow_dispatch'") || len(c1Needs(w, name)) == 0 {
+			t.Fatal("legacy isolation", name)
+		}
+	}
+}
+func TestC1WorkflowFailureReachability(t *testing.T) {
+	for _, file := range []string{"agentplugins-release.yml", "agentplugins-npm-publish.yml"} {
+		w := readProducerWorkflow(t, file)
+		modes := []string{"binary-only", "paired-preparation", "paired-promotion", "paired-input-provenance", "legacy", "paired-stage", "unknown"}
+		legacyPermissions := map[string]map[string]string{
+			"dispatch_contract": {"contents": "read"}, "validate": {"checks": "read", "contents": "read", "pull-requests": "read"},
+			"build": {"contents": "read"}, "stage-draft": {"contents": "write", "id-token": "write", "attestations": "write", "artifact-metadata": "write"},
+			"platform-proof": {"contents": "read", "attestations": "read"}, "promote-release": {"contents": "write", "attestations": "read"},
+			"paired-preparation": {"contents": "read"}, "paired-promotion-admission": {"contents": "read", "actions": "read"},
+			"paired-sign-and-promote": {"contents": "write", "actions": "read", "id-token": "write", "attestations": "write", "artifact-metadata": "write"},
+			"prepare":                 {"contents": "read", "attestations": "read"}, "publish": {"contents": "read", "id-token": "write"},
+			"verify-public": {"contents": "read", "attestations": "read"},
+		}
+		for name, job := range w.Jobs {
+			if expected, ok := legacyPermissions[name]; ok && !reflect.DeepEqual(c1Permissions(w, name), expected) {
+				t.Fatalf("effective legacy permissions %s", name)
+			}
+			if name == "dispatch_contract" {
+				continue
+			}
+			for _, mode := range modes {
+				for _, event := range []string{"workflow_dispatch", "workflow_run"} {
+					for _, status := range []string{"success", "failure", "cancelled", "skipped", ""} {
+						for _, publish := range []bool{true, false} {
+							values := map[string]any{"github.event_name": event, "inputs.producer_mode": mode, "inputs.publish": publish,
+								"success": status == "success", "failure": status == "failure", "cancelled": status == "cancelled", "always": true}
+							for dependency := range w.Jobs {
+								values["needs."+dependency+".result"] = status
+							}
+							// GitHub's implicit success() applies when no status function is present.
+							reachable := workflowCondition(t, job.If, values)
+							if !strings.Contains(job.If, "success()") {
+								reachable = reachable && status == "success"
+							}
+							for _, dep := range c1Needs(w, name) {
+								reachable = reachable && values["needs."+dep+".result"] == "success"
+							}
+							if (status != "success") && reachable {
+								t.Fatalf("%s reachable after %s", name, status)
+							}
+							if strings.HasPrefix(name, "paired_input_") || strings.HasPrefix(name, "paired_stage") {
+								expected := status == "success" && event == "workflow_dispatch" && ((strings.HasPrefix(name, "paired_input_") && mode == "paired-input-provenance") || (strings.HasPrefix(name, "paired_stage") && mode == "paired-stage" && !publish))
+								if reachable != expected {
+									t.Fatalf("%s reachability %s %s %s %v", name, mode, event, status, publish)
+								}
+								for _, step := range job.Steps {
+									for _, state := range []string{"failure", "cancelled", "skipped", ""} {
+										stopped := map[string]any{"success": false, "failure": state == "failure", "cancelled": state == "cancelled", "always": true}
+										if workflowCondition(t, step.If, stopped) {
+											t.Fatalf("sensitive step survives %s", state)
+										}
+									}
+
+									if workflowCondition(t, step.If, values) && reachable && step.Continue {
+										t.Fatal("sensitive step tolerates failure")
+									}
+								}
+								if err := c1Contract(w, name, strings.HasPrefix(name, "paired_stage"), strings.HasSuffix(name, "attestation")); err != nil {
+									t.Fatal(err)
+								}
+							}
+							if file == "agentplugins-npm-publish.yml" && (name == "prepare" || name == "publish" || name == "verify-public") {
+								expected := status == "success" && event == "workflow_dispatch" && mode == "legacy" && (name == "prepare" || publish)
+								if reachable != expected {
+									t.Fatalf("legacy reachability %s %s %s %s %v", name, mode, event, status, publish)
+								}
+							}
+							if mode == "paired-stage" && (name == "prepare" || name == "publish" || name == "verify-public") && reachable {
+								t.Fatal("paired stage reaches legacy")
+							}
+						}
+					}
+				}
+			}
+		}
+		name := "paired_input_attestation"
+		if file == "agentplugins-npm-publish.yml" {
+			name = "paired_stage_attestation"
+		}
+		original := w.Jobs[name]
+		for _, mutation := range []string{"mode", "or true", "always", "needs", "output authorization", "permissions", "continue"} {
+			job := original
+			job.Steps = append(job.Steps[:0:0], job.Steps...)
+			switch mutation {
+			case "mode":
+				job.If = "${{ success() }}"
+			case "or true":
+				job.If = strings.TrimSuffix(job.If, " }}") + " || true }}"
+			case "always":
+				job.If = "${{ always() }}"
+			case "needs":
+				job.Needs = nil
+			case "output authorization":
+				job.If = "${{ needs.paired_stage.outputs.accepted == 'true' }}"
+			case "permissions":
+				job.Permissions = map[string]string{"contents": "write"}
+			case "continue":
+				job.Steps[0].Continue = true
+			}
+			w.Jobs[name] = job
+			if c1Contract(w, name, file == "agentplugins-npm-publish.yml", true) == nil {
+				t.Fatal("mutation accepted", mutation)
+			}
+		}
+		w.Jobs[name] = original
+	}
+}
+func TestC1WorkflowPreflightNoEffects(t *testing.T) {
+	for _, file := range []string{"agentplugins-release.yml", "agentplugins-npm-publish.yml"} {
+		w := readProducerWorkflow(t, file)
+		stage := file == "agentplugins-npm-publish.yml"
+		mode := "paired-input-provenance"
+		if stage {
+			mode = "paired-stage"
+		}
+		good := map[string]string{"PRODUCER_MODE": mode, "TAG": "agentplugins-v0.1.54", "KIT_VERSION": "2.0.0", "SOURCE_SHA": strings.Repeat("a", 40),
+			"GITHUB_EVENT_NAME": "workflow_dispatch", "GITHUB_ACTIONS": "true", "GITHUB_REPOSITORY": "777genius/universal-agent-plugins",
+			"GITHUB_SHA": strings.Repeat("a", 40), "GITHUB_WORKFLOW_SHA": strings.Repeat("a", 40), "GITHUB_REF": "refs/tags/agentplugins-v0.1.54",
+			"GITHUB_WORKFLOW_REF": "777genius/universal-agent-plugins/.github/workflows/" + file + "@refs/tags/agentplugins-v0.1.54",
+			"GITHUB_RUN_ID":       "21", "GITHUB_RUN_ATTEMPT": "2", "PUBLISH": "false", "NATIVE_INPUTS": "{}\n",
+			"INPUT_ARTIFACT":  `{"run_id":11,"run_attempt":1,"artifact_id":31,"artifact_sha256":"` + strings.Repeat("b", 64) + `"}`,
+			"PREPARATION_RUN": "11", "PREPARATION_ATTEMPT": "1", "PREPARATION_ARTIFACT": "31", "PREPARATION_DIGEST": strings.Repeat("b", 64), "PROMOTION_RECORD": "", "PROMOTION_OPERATION": "promote"}
+		names := []string{"dispatch_contract", "paired_input_admission", "paired_input_attestation"}
+		if stage {
+			names = []string{"dispatch_contract", "paired_stage", "paired_stage_attestation"}
+		}
+		for _, name := range names {
+			good["GITHUB_JOB"] = name
+			good["STAGE_ARTIFACT_ID"] = "901"
+			good["STAGE_ARTIFACT_SHA256"] = strings.Repeat("c", 64)
+			good["STAGE_SHA256"] = strings.Repeat("d", 64)
+			job := w.Jobs[name]
+			if len(job.Steps) == 0 {
+				t.Fatal("missing preflight")
+			}
+			for _, step := range job.Steps {
+				if step.Run != "" {
+					cmd := exec.Command("/bin/bash", "-n")
+					cmd.Stdin = strings.NewReader(step.Run)
+					if out, err := cmd.CombinedOutput(); err != nil {
+						t.Fatalf("shell syntax %s: %v %s", name, err, out)
+					}
+				}
+			}
+			cases := []map[string]string{{}}
+			for _, key := range []string{"PRODUCER_MODE", "TAG", "KIT_VERSION", "SOURCE_SHA", "GITHUB_EVENT_NAME", "GITHUB_ACTIONS", "GITHUB_REPOSITORY", "GITHUB_SHA", "GITHUB_WORKFLOW_SHA", "GITHUB_REF", "GITHUB_WORKFLOW_REF", "GITHUB_RUN_ID", "GITHUB_RUN_ATTEMPT"} {
+				for _, bad := range []string{"", "invalid", "$(touch injected)", "bad\nvalue"} {
+					cases = append(cases, map[string]string{key: bad})
+				}
+			}
+			if stage {
+				for _, bad := range []map[string]string{{"PUBLISH": "true"}, {"INPUT_ARTIFACT": "{}"}, {"INPUT_ARTIFACT": strings.ReplaceAll(good["INPUT_ARTIFACT"], `"run_attempt":1`, `"run_attempt":1001`)}, {"NATIVE_INPUTS": ""}, {"PRODUCER_MODE": "legacy"}} {
+					cases = append(cases, bad)
+				}
+			} else {
+				for _, key := range []string{"PREPARATION_RUN", "PREPARATION_ATTEMPT", "PREPARATION_ARTIFACT", "PREPARATION_DIGEST", "PROMOTION_RECORD", "PROMOTION_OPERATION"} {
+					cases = append(cases, map[string]string{key: "invalid"})
+				}
+			}
+			if name != "dispatch_contract" {
+				cases = append(cases, map[string]string{"GITHUB_JOB": "publish"})
+			}
+			if name == "paired_stage_attestation" {
+				for _, key := range []string{"STAGE_ARTIFACT_ID", "STAGE_ARTIFACT_SHA256", "STAGE_SHA256"} {
+					cases = append(cases, map[string]string{key: "invalid"})
+				}
+			}
+			for index, changes := range cases {
+				dir := t.TempDir()
+				bin := filepath.Join(dir, "bin")
+				if err := os.Mkdir(bin, 0700); err != nil {
+					t.Fatal(err)
+				}
+				for _, tool := range []string{"node", "git", "npm", "gh", "tar", "python3", "curl"} {
+					if err := os.WriteFile(filepath.Join(bin, tool), []byte("#!/bin/bash\necho effect >> \"$MARKER\"\nexit 93\n"), 0700); err != nil {
+						t.Fatal(err)
+					}
+				}
+				cmd := exec.Command("/bin/bash", "-c", job.Steps[0].Run)
+				cmd.Dir = dir
+				cmd.Env = []string{"PATH=/usr/local/bin:" + bin + ":/usr/bin:/bin", "MARKER=" + filepath.Join(dir, "effect")}
+				for key, value := range good {
+					if replacement, ok := changes[key]; ok {
+						value = replacement
+					}
+					cmd.Env = append(cmd.Env, key+"="+value)
+				}
+				output, err := cmd.CombinedOutput()
+				if (err == nil) != (index == 0) {
+					t.Fatalf("%s preflight case %v: %v %s", name, changes, err, output)
+				}
+				entries, err := os.ReadDir(dir)
+				if err != nil || len(entries) != 1 || entries[0].Name() != "bin" {
+					t.Fatalf("preflight produced effects: %v %v", entries, err)
+				}
+			}
 		}
 	}
 }
