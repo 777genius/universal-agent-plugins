@@ -253,3 +253,72 @@ func TestPackedInstallerSourceHarness(t *testing.T) {
 		})
 	}
 }
+
+// Assessment values here are deliberate test inputs, never lintai output/cache.
+type boundaryAssessment struct {
+	*packedScanner
+	fail       bool
+	assessment domain.SecurityAssessment
+}
+
+func (s *boundaryAssessment) Evaluate(ctx context.Context, in domain.SecurityEvaluationInput) (domain.SecurityAssessment, error) {
+	a, err := s.packedScanner.Evaluate(ctx, in)
+	if err != nil {
+		return a, err
+	}
+	if s.fail {
+		return a, fmt.Errorf("injected assessment failure")
+	}
+	a.Outcome = domain.SecurityBlockingFindings
+	a.Counts = domain.SecurityCounts{Blocking: 1, Total: 1}
+	a.Findings = []domain.SecurityFinding{{Code: "TEST-BLOCKING", Disposition: "block", Severity: "high", Path: "plugin.json", Message: "Deliberate test input"}}
+	s.assessment = a
+	return a, nil
+}
+func TestPackedInstallerAssessmentBoundaries(t *testing.T) {
+	for _, fail := range []bool{true, false} {
+		t.Run(fmt.Sprintf("assessment-error-%t", fail), func(t *testing.T) {
+			source := filepath.Join(t.TempDir(), "demo")
+			author := commands.App{Projects: project.Service{Scratch: t.TempDir()}, Revision: publicRevision, PublicContract: true}
+			if _, code, out := publicRun(t, author, []string{"init", source, "--name=demo", "--template=skill", "--format=json"}, false); code != 0 {
+				t.Fatal(out)
+			}
+			fixture, scratch := t.TempDir(), t.TempDir()
+			beforeSource, beforeFixture, beforeScratch := packedTree(t, source), packedTree(t, fixture), packedTree(t, scratch)
+			registry, err := specregistry.New()
+			if err != nil {
+				t.Fatal(err)
+			}
+			detector := &fixtureDetector{clients: []domain.DetectedClient{{ClientID: domain.ClientCodex, Status: domain.DetectionDetected, ConfigRoot: fixture}}}
+			scanner := &boundaryAssessment{packedScanner: &packedScanner{fixtureScanner: fixtureScanner{t: t}, source: source, scratch: scratch, tree: beforeSource}, fail: fail}
+			app := agentpluginscli.App{UserHome: fixture, ManagedRoot: filepath.Join(fixture, "managed"), Detector: detector, StateStore: noEffectState{},
+				SourceAcquirer: sourceacquisition.Acquirer{TempRoot: scratch}, PackageLoader: loader.Loader{Registry: registry}, NativePackageLoader: loader.OpenAILoader{Loader: loader.Loader{Registry: registry}}, SecurityEvaluator: scanner,
+				Lifecycle: usecase.Service{Stager: noEffectStager{}, Activator: noEffectActivator{}}}
+			var out, stderr bytes.Buffer
+			err = authoringcli.Factory(func() (*cobra.Command, error) { return agentpluginscli.NewRoot(app), nil }).Execute(context.Background(),
+				[]string{"add", source, "--target=codex", "--dry-run", "--format=json"}, authoringcli.Streams{Out: &out, Err: &stderr})
+			if fail {
+				if err == nil || !strings.Contains(err.Error(), "injected assessment failure") || out.Len() != 0 {
+					t.Fatal("assessment error published result", err, out.String())
+				}
+			} else {
+				var report struct {
+					Result string
+					Data   struct {
+						DryRun   bool `json:"dry_run"`
+						Security domain.SecurityAssessment
+					}
+				}
+				if err != nil || json.Unmarshal(out.Bytes(), &report) != nil || report.Result != "success" || !report.Data.DryRun || !reflect.DeepEqual(report.Data.Security, scanner.assessment) {
+					t.Fatal("blocking findings lost", err, out.String())
+				}
+			}
+			if stderr.Len() != 0 || detector.calls != 1 || scanner.calls != 1 {
+				t.Fatal("wrong seam or output", stderr.String(), detector.calls, scanner.calls)
+			}
+			if !reflect.DeepEqual(beforeSource, packedTree(t, source)) || !reflect.DeepEqual(beforeFixture, packedTree(t, fixture)) || !reflect.DeepEqual(beforeScratch, packedTree(t, scratch)) {
+				t.Fatal("assessment path mutated fixture or leaked acquisition")
+			}
+		})
+	}
+}

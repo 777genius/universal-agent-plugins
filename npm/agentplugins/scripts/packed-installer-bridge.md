@@ -180,9 +180,9 @@ and attestation remain false. Local synthetic/source tests are not this run.
 
 Public preparation is **not** private native completion. The public producer
 `test/public-authoring-native.test.js` now emits an exclusive
-`public-native-completion.json` (`dual-authoring-public-native/v1`) only after
+`public-native-completion.json` (`dual-authoring-public-native/v2`) only after
 both products finish five lanes, `extra-skill`, static parity, isolation, cache
-recovery, and lifecycle checks. Its 70 authoring/installer invocation records
+recovery, and lifecycle checks. Its 71 authoring/installer invocation records
 are ordered and complete. Five successful npm installations separately bind
 actual fixture tarball paths and SHA256 values (independent prefixes, shared
 prefix, and reinstall). Preparation tarballs remain separate, unqualified
@@ -200,7 +200,7 @@ read-only byte consistency; it does not authenticate an arbitrary supplied log.
 Use the existing six request fields (`expectedCommit`, `nativeConfig`,
 `nativeConfigSha256`, `nativeCompletionSha256`, `fixtureRoot`,
 `disposableEvidence`) with the additional exact field
-`"intake": "public-fixture/v1"`. The completion digest must independently pin
+`"intake": "public-fixture/v2"`. The completion digest must independently pin
 `public-native-completion.json`. Omitting `intake` still selects the unchanged
 strict private schema. Unknown intake values and public/private substitution
 fail closed. Seal with the same `packed-installer-bridge.js seal REQUEST OUTPUT`
@@ -233,6 +233,34 @@ The final integrated source (including the independently owned preparation
 initialization fix) still needs owner-scheduled public native execution and
 packed planner acceptance. These focused synthetic tests do not satisfy that
 E2E or the external release/required-check prerequisites.
+
+Public v2 explicitly narrows executable installer evidence to command visibility
+and preflight rejection. Rows 1–69 retain the original authoring sequence; row 70
+is `agentplugins add --help --format=json` (one successful help JSON document,
+empty stderr); row 71 adds `--scope=project` to the original generated Skill
+vector and requires exit 1, no signal, empty stdout and the exact user-scope-only
+error. Totals are 69 zero exits, one retired-command exit 2, and one preflight
+exit 1. Both project trees, client and installer roots retain entries/bytes/modes.
+The test-only helper rejects valid installer vectors before spawning; it does
+not establish process-level network denial for Go descendants.
+
+The required `installer_boundary` is sealed into `public_evidence` and the
+public summary: `executable_observation: help-and-preflight-rejection`,
+`valid_add_dry_run: not_evaluated`, `reason: production-security-inputs-not-offline`,
+and `argv` retains the original valid add vector without the rejected scope.
+Strict v1 intake remains explicitly selectable and cannot accept v2; private
+schemas/counts remain unchanged. `check_public(..., require_valid_add=True)`
+rejects this evidence as insufficient for successful production add.
+
+The existing ten-project/thirty-plan acceptance still runs the real Go CLI and
+planner with injected detector/security/effects. It does not execute production
+main, Security Index or lintai. Help, rejection and injected assessments cannot
+close Milestone A's still-required successful distributed installer dry-run on
+generated projects. That separate legitimate installer acceptance must bind
+actual public launcher/native bytes, genuine security inputs, structured plans,
+source/client preservation and separately accounted scanner/cache/acquisition
+effects. It remains outstanding after v2 core success, independent review and
+fresh successor E2E; no historical candidate bytes may be relabelled.
 
 ### C2 production acquisition boundary
 

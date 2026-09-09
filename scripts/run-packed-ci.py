@@ -152,13 +152,15 @@ def public_main(root, sha, options_path):
     options = proof.read(options_path)
     proof.require(set(options) == {'request', 'nativeTap', 'nativeTapSha256', 'go', 'node', 'modCache'}, 'public runner options')
     request = options['request']
-    proof.require(request.get('intake') == 'public-fixture/v1' and request['expectedCommit'] == sha, 'explicit public intake SHA')
+    proof.require(request.get('intake') in ('public-fixture/v1', 'public-fixture/v2') and request['expectedCommit'] == sha, 'explicit public intake SHA')
     proof.require(proof.digest(options['nativeTap']) == options['nativeTapSha256'], 'public transcript pin')
     proof.public_tap(proof.data(options['nativeTap']).decode(), request)
     proof.require(re.fullmatch('[0-9a-f]{40}', sha), 'exact SHA required')
     proof.require(root.is_absolute() and root.resolve() == root and not root.is_relative_to(repo), 'external canonical output required')
     # Output must be disjoint before creating logs or planner homes.
     cfg = proof.read(request['nativeConfig']); candidate = cfg['prepare']['candidate']
+    native = proof.read(Path(cfg['evidenceOutput']) / 'public-native-completion.json')
+    boundary = proof.public_boundary(native, request['intake'])
     protected = [repo, Path(options_path), Path(options['nativeTap']), Path(request['nativeConfig']),
         Path(request['fixtureRoot']), Path(cfg['evidenceOutput']), Path(cfg['prepare']['output']),
         Path(candidate['root']), Path(candidate['pairMarker']), Path(candidate['workParent']),
@@ -193,9 +195,12 @@ def public_main(root, sha, options_path):
     proof.require(printed == proof.digest(sealed), 'public seal pin')
     planner(root, sha, go, node, sealed, printed, run)
     proof.require(run('terminal-clean', ['/usr/bin/git', 'status', '--porcelain=v1', '--untracked-files=all']) == '', 'checkout changed')
-    proof.check_public(root, sha)
-    write(root / 'summary.json', dict(status='passed', intake='public-fixture/v1', head=sha, projects=10, plans=30,
+    proof.check_public(root, sha, require_summary=False)
+    write(root / 'summary.json', dict(status='passed',
+        **(dict(scope='public-authoring-help-preflight-and-injected-planner', installer_boundary=boundary) if boundary is not None else {}),
+        intake=request['intake'], head=sha, projects=10, plans=30,
         release_eligible=False, platform_acceptance=False, attested=False, signed_promotion=False, public_eligible=False))
+    proof.check_public(root, sha)
 
 
 if __name__ == '__main__':

@@ -269,11 +269,26 @@ def unchanged_snapshots(inputs):
         require(actual == expected, 'sealed tree changed')
 
 
-def check_public(root, sha):
+def public_boundary(native, intake, require_valid_add=False):
+    require(intake in ('public-fixture/v1', 'public-fixture/v2'), 'explicit public intake')
+    v2 = intake == 'public-fixture/v2'
+    require(native['schema'] == 'dual-authoring-public-native/' + ('v2' if v2 else 'v1'), 'public schema substitution')
+    if v2:
+        expected = dict(executable_observation='help-and-preflight-rejection', valid_add_dry_run='not_evaluated',
+            argv=['add', str(Path(native['projects']['agentplugins']) / 'skill'), '--target=codex', '--dry-run', '--format=json'],
+            reason='production-security-inputs-not-offline')
+        require(native.get('installer_boundary') == expected, 'outstanding production add requirement')
+    else:
+        require('installer_boundary' not in native, 'v2 boundary in v1')
+    require(not require_valid_add, 'insufficient evidence for successful production add: separate installer acceptance required')
+    return native.get('installer_boundary')
+
+
+def check_public(root, sha, require_valid_add=False, require_summary=True):
     run = read(root / 'public-run.json'); false_claims(run)
     require(run['schema'] == 'public-packed-run/v1' and run['head'] == sha and re.fullmatch('[0-9a-f]{40}', sha), 'public run identity')
     options = run['options']; request = options['request']
-    require(request['intake'] == 'public-fixture/v1' and request['expectedCommit'] == sha, 'public request identity')
+    require(request['intake'] in ('public-fixture/v1', 'public-fixture/v2') and request['expectedCommit'] == sha, 'public request identity')
     require(digest(options['nativeTap']) == options['nativeTapSha256'], 'changed public TAP')
     public_tap(data(options['nativeTap']).decode(), request)
     require(digest(request['nativeConfig']) == request['nativeConfigSha256'], 'changed public config')
@@ -281,11 +296,17 @@ def check_public(root, sha):
     terminal_path = Path(cfg['evidenceOutput']) / 'public-native-completion.json'
     require(digest(terminal_path) == request['nativeCompletionSha256'], 'changed public terminal')
     native = read(terminal_path); false_claims(native, (*CLAIMS, 'signed_promotion', 'public_eligible'))
-    require(native['schema'] == 'dual-authoring-public-native/v1' and native['status'] == 'completed' and
+    boundary = public_boundary(native, request['intake'], require_valid_add)
+    require(native['status'] == 'completed' and
         native['qualification'] is None and native['identity']['commit'] == native['identity']['engine_revision'] == sha, 'public terminal contract')
     require(digest(Path(cfg['evidenceOutput']) / 'invocations.json') == native['invocations_sha256'], 'public invocation pin')
     sealed_path = root / 'bridge-config/sealed.json'; sealed = read(sealed_path); false_claims(sealed)
     require(sealed['schema'] == 'packed-installer-bridge/v1' and sealed['request'] == request == read(root / 'bridge-config/request.json'), 'public sealed request')
+    evidence = sealed['inputs'].get('public_evidence', {})
+    if boundary is not None:
+        require(evidence.get('schema') == native['schema'] and evidence.get('installer_boundary') == boundary, 'sealed installer boundary')
+    else:
+        require('installer_boundary' not in evidence, 'v2 sealed boundary in v1')
     repo = Path(__file__).resolve().parent.parent; bridge = repo / 'npm/agentplugins/scripts/packed-installer-bridge.js'
     require(sealed['verifier_sha256'] == digest(bridge) and sealed['helper_sha256'] == digest(bridge.with_name('dual-authoring-candidate.js')), 'public verifier changed')
     for key in ('go', 'node'):
@@ -322,6 +343,11 @@ def check_public(root, sha):
         len({p['source'] for p in projects}) == 10, 'public ten distinct projects')
     plans(result)
     require(log('head').strip() == sha and log('clean') == log('terminal-clean') == '', 'public exact clean checkout')
+    if boundary is not None and require_summary:
+        summary = read(root / 'summary.json'); false_claims(summary, (*CLAIMS, 'signed_promotion', 'public_eligible'))
+        require(summary == dict(status='passed', intake=request['intake'], head=sha, projects=10, plans=30,
+            scope='public-authoring-help-preflight-and-injected-planner', installer_boundary=boundary,
+            release_eligible=False, platform_acceptance=False, attested=False, signed_promotion=False, public_eligible=False), 'public summary scope/gap')
 
 
 if __name__ == '__main__':
