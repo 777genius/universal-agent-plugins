@@ -62,7 +62,34 @@ func TestAgentpluginsReleaseContractsStayFailClosed(t *testing.T) {
 	mustContain(t, releaseProofJob, "require_draft: true")
 	mustContain(t, releaseProofJob, "expected_asset_set_digest: ${{ needs.stage-draft.outputs.asset_set_digest }}")
 	mustContain(t, releaseProofJob, "release_assets_artifact: ${{ needs.stage-draft.outputs.assets_artifact }}")
-	mustContain(t, releasePromoteJob, "needs: [validate, stage-draft, platform-proof]")
+	mustContain(t, releasePromoteJob, "needs: [validate, stage-draft, platform-proof, verified-draft]")
+	mustContain(t, releasePromoteJob, "if: ${{ inputs.publish_release == true }}")
+	mustContain(t, releaseWorkflow, "publish_release:\n        description: Explicitly promote after all verification succeeds\n        required: false\n        type: boolean\n        default: false")
+	draftReceiptJob := yamlJob(t, releaseWorkflow, "verified-draft")
+	for _, want := range []string{
+		"needs: [validate, stage-draft, platform-proof]",
+		"contents: read", "attestations: read",
+		"ref: ${{ needs.validate.outputs.commit }}",
+		"RELEASE_ID: ${{ needs.stage-draft.outputs.release_id }}",
+		"EXPECTED_ASSET_SET_DIGEST: ${{ needs.stage-draft.outputs.asset_set_digest }}",
+		"python3 scripts/verify-agentplugins-draft.py",
+		"--run-id", "--run-attempt", "verified-draft.json", "if-no-files-found: error",
+	} {
+		mustContain(t, draftReceiptJob, want)
+	}
+	mustContain(t, releaseDraftJob, "release_id: ${{ steps.release-identity.outputs.release_id }}")
+	mustContain(t, releaseDraftJob, "databaseId")
+	// No status override: Actions' implicit success() keeps failed/skipped needs closed,
+	// including when the caller explicitly requests publication.
+	for _, job := range []string{releasePromoteJob, draftReceiptJob} {
+		for _, forbidden := range []string{"always()", "!cancelled()", "failure()", "continue-on-error:"} {
+			mustNotContain(t, job, forbidden)
+		}
+	}
+	for _, forbidden := range []string{"contents: write", "id-token: write", "gh release edit", "gh release create", "if:"} {
+		mustNotContain(t, draftReceiptJob, forbidden)
+	}
+	mustAppearBefore(t, draftReceiptJob, "python3 scripts/verify-agentplugins-draft.py", "actions/upload-artifact@")
 	mustContain(t, releasePromoteJob, "EXPECTED_ASSET_SET_DIGEST: ${{ needs.stage-draft.outputs.asset_set_digest }}")
 	mustContain(t, releasePromoteJob, "gh release edit \"${TAG}\"")
 	mustContain(t, releasePromoteJob, "--draft=false")
@@ -245,7 +272,15 @@ func TestAgentpluginsReleaseContractsStayFailClosed(t *testing.T) {
 	for _, want := range []string{
 		"attests all six binaries, `checksums.txt`,\n   `release-manifest.json`, and `THIRD_PARTY_NOTICES.txt` before creating the\n   non-public draft",
 		"public release contains six platform binaries,\n   `checksums.txt`, `release-manifest.json`, and `THIRD_PARTY_NOTICES.txt`, and\n   verify GitHub attestations for every file, including the notices",
-		"promotes that exact draft only after all six native platform proofs succeed",
+		"Leave the typed boolean `publish_release=false`",
+		"This initial technical review is required even for\n   draft-only runs; it does not authorize public version publication",
+		"all nine assets, and attestations",
+		"`verified-draft.json`. With `publish_release=false`, promotion is skipped",
+		"Only with separate explicit owner authorization for that exact version",
+		"dispatch the existing producer with `publish_release=true`",
+		"After all six native platform proofs and `verified-draft` succeed",
+		"Every resume still requires the exact current `main`/tag/workflow-source gate",
+		"This runbook does not establish that any new draft has already qualified",
 		"requires a merged pull request into",
 		"Repository settings are not treated as the release proof",
 		"short-lived bootstrap",
