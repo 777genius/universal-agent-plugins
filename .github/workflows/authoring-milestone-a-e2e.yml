@@ -99,6 +99,19 @@ jobs:
         if: runner.os != 'Windows'
         shell: bash
         run: chmod -R a-w "${RUNNER_TEMP}/milestone-a-input/candidate"
+      - name: Place candidate on the Darwin packageview read-only profile
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          image="$RUNNER_TEMP/milestone-a-candidate-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT.dmg"
+          mount="$RUNNER_TEMP/milestone-a-candidate-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          test ! -e "$image"
+          test ! -e "$mount"
+          mkdir -m 700 "$mount"
+          hdiutil create -quiet -srcfolder "$RUNNER_TEMP/milestone-a-input/candidate" -fs APFS -format UDRO "$image"
+          hdiutil attach -quiet -readonly -nobrowse -mountpoint "$mount" "$image"
+          printf 'MILESTONE_A_CANDIDATE=%s\n' "$mount" >> "$GITHUB_ENV"
       - name: Run both packaged public entrypoints in fresh roots
         shell: bash
         run: |
@@ -109,14 +122,23 @@ jobs:
           native_root="$(node -e 'process.stdout.write(require("./npm/agentplugins/scripts/milestone-a-e2e").nativeAbsolute(process.argv[1]))' "$root")"
           native_outer="$(node -e 'process.stdout.write(require("./npm/agentplugins/scripts/milestone-a-e2e").nativeAbsolute(process.argv[1]))' "$outer")"
           native_input="$(node -e 'process.stdout.write(require("./npm/agentplugins/scripts/milestone-a-e2e").nativeAbsolute(process.argv[1]))' "$RUNNER_TEMP/milestone-a-input")"
+          native_candidate="$(node -e 'process.stdout.write(require("./npm/agentplugins/scripts/milestone-a-e2e").nativeAbsolute(process.argv[1]))' "${MILESTONE_A_CANDIDATE:-$RUNNER_TEMP/milestone-a-input/candidate}")"
+          npm_cli="$(node -e 'process.stdout.write(require("./npm/agentplugins/scripts/milestone-a-e2e").resolveNpmCLI())')"
           printf 'MILESTONE_A_EVIDENCE=%s\n' "$(node -e 'process.stdout.write(require("path").join(process.argv[1],"evidence"))' "$native_root")" >> "$GITHUB_ENV"
           node -e 'require("./npm/agentplugins/scripts/milestone-a-e2e").precreate(process.argv[1])' "$native_root"
           config="$RUNNER_TEMP/milestone-a-run.json"
           native_config="$(node -e 'process.stdout.write(require("./npm/agentplugins/scripts/milestone-a-e2e").nativeAbsolute(process.argv[1]))' "$config")"
-          node -e 'require("fs").writeFileSync(process.argv[1], JSON.stringify({root:process.argv[2],precreatedRoot:true,outerRoot:process.argv[3],input:process.argv[4],platform:process.argv[5],arch:process.argv[6],expectedHead:process.env.EXPECTED_HEAD}))' \
-            "$native_config" "$native_root" "$native_outer" "$native_input" '${{ matrix.platform }}' '${{ matrix.arch }}'
+          node -e 'require("fs").writeFileSync(process.argv[1], JSON.stringify({root:process.argv[2],precreatedRoot:true,outerRoot:process.argv[3],input:process.argv[4],candidateRoot:process.argv[5],npm:process.argv[6],platform:process.argv[7],arch:process.argv[8],expectedHead:process.env.EXPECTED_HEAD}))' \
+            "$native_config" "$native_root" "$native_outer" "$native_input" "$native_candidate" "$npm_cli" '${{ matrix.platform }}' '${{ matrix.arch }}'
           node npm/agentplugins/scripts/milestone-a-e2e.js run "$native_config"
           test -z "$(git status --porcelain)"
+      - name: Detach Darwin packageview candidate
+        if: always() && runner.os == 'macOS'
+        shell: bash
+        run: |
+          if [[ -n "${MILESTONE_A_CANDIDATE:-}" ]]; then
+            hdiutil detach -quiet "$MILESTONE_A_CANDIDATE"
+          fi
       - name: Upload run evidence, including failures
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
