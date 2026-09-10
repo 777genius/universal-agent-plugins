@@ -69,9 +69,18 @@ jobs:
           required = {'selected', 'input', 'stage'} | {'produce': set(), 'assemble': {'journeys', 'bridge'}, 'attest': {'assembly'}, 'check': {'assembly', 'acceptance'}}[mode]
           raw = {name: os.environ.get(env, '') for name, env in names.items()}
           assert all(bool(body) == (name in required) for name, body in raw.items())
+          def unique(pairs):
+              value = {}
+              for key, item in pairs:
+                  assert key not in value
+                  value[key] = item
+              return value
           def value(name):
               assert 0 < len(raw[name].encode()) <= 1024 * 1024
-              return json.loads(raw[name])
+              parsed = json.loads(raw[name], object_pairs_hook=unique,
+                  parse_constant=lambda token: (_ for _ in ()).throw(ValueError(token)))
+              assert raw[name] == json.dumps(parsed, ensure_ascii=False, indent=2, separators=(',', ': ')) + '\n'
+              return parsed
           def locator(v):
               assert set(v) == {'sha256', 'artifact'} and re.fullmatch('[0-9a-f]{64}', v['sha256'])
               a = v['artifact']; assert set(a) == {'run_id', 'run_attempt', 'artifact_id', 'artifact_sha256'} and re.fullmatch('[0-9a-f]{64}', a['artifact_sha256'])
@@ -84,11 +93,15 @@ jobs:
               locator(value('bridge'))
           if mode in ('attest', 'check'): locator(value('assembly'))
           if mode == 'check': locator(value('acceptance'))
-          assert set(s) == {'tag', 'ref', 'source', 'versions'}
+          assert set(s) == {'tag', 'ref', 'source', 'versions'} and type(s['versions']) is dict
+          assert set(s['versions']) == {'agentplugins', 'plugin-kit-ai'}
+          assert all(type(version) is str and len(version) <= 32 and re.fullmatch('(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)', version) for version in s['versions'].values())
+          assert s['versions']['plugin-kit-ai'] == '2.0.0' and s['versions']['agentplugins'] != s['versions']['plugin-kit-ai']
           assert os.environ['GITHUB_REPOSITORY'] == '777genius/universal-agent-plugins'
           assert os.environ['GITHUB_EVENT_NAME'] == 'workflow_dispatch'
-          assert re.fullmatch('[0-9a-f]{40}', s['source'])
+          assert re.fullmatch('[0-9a-f]{40}', s['source']) and s['source'] != '0' * 40
           assert s['source'] == os.environ['GITHUB_SHA'] == os.environ['GITHUB_WORKFLOW_SHA']
+          assert s['tag'] == 'agentplugins-v' + s['versions']['agentplugins']
           assert s['ref'] == 'refs/tags/' + s['tag'] == os.environ['GITHUB_REF']
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -126,9 +139,18 @@ jobs:
           required = {'selected', 'input', 'stage'} | {'produce': set(), 'assemble': {'journeys', 'bridge'}, 'attest': {'assembly'}, 'check': {'assembly', 'acceptance'}}[mode]
           raw = {name: os.environ.get(env, '') for name, env in names.items()}
           assert all(bool(body) == (name in required) for name, body in raw.items())
+          def unique(pairs):
+              value = {}
+              for key, item in pairs:
+                  assert key not in value
+                  value[key] = item
+              return value
           def value(name):
               assert 0 < len(raw[name].encode()) <= 1024 * 1024
-              return json.loads(raw[name])
+              parsed = json.loads(raw[name], object_pairs_hook=unique,
+                  parse_constant=lambda token: (_ for _ in ()).throw(ValueError(token)))
+              assert raw[name] == json.dumps(parsed, ensure_ascii=False, indent=2, separators=(',', ': ')) + '\n'
+              return parsed
           def locator(v):
               assert set(v) == {'sha256', 'artifact'} and re.fullmatch('[0-9a-f]{64}', v['sha256'])
               a = v['artifact']; assert set(a) == {'run_id', 'run_attempt', 'artifact_id', 'artifact_sha256'} and re.fullmatch('[0-9a-f]{64}', a['artifact_sha256'])
@@ -141,11 +163,15 @@ jobs:
               locator(value('bridge'))
           if mode in ('attest', 'check'): locator(value('assembly'))
           if mode == 'check': locator(value('acceptance'))
-          assert set(s) == {'tag', 'ref', 'source', 'versions'}
+          assert set(s) == {'tag', 'ref', 'source', 'versions'} and type(s['versions']) is dict
+          assert set(s['versions']) == {'agentplugins', 'plugin-kit-ai'}
+          assert all(type(version) is str and len(version) <= 32 and re.fullmatch('(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)', version) for version in s['versions'].values())
+          assert s['versions']['plugin-kit-ai'] == '2.0.0' and s['versions']['agentplugins'] != s['versions']['plugin-kit-ai']
           assert os.environ['GITHUB_REPOSITORY'] == '777genius/universal-agent-plugins'
           assert os.environ['GITHUB_EVENT_NAME'] == 'workflow_dispatch'
-          assert re.fullmatch('[0-9a-f]{40}', s['source'])
+          assert re.fullmatch('[0-9a-f]{40}', s['source']) and s['source'] != '0' * 40
           assert s['source'] == os.environ['GITHUB_SHA'] == os.environ['GITHUB_WORKFLOW_SHA']
+          assert s['tag'] == 'agentplugins-v' + s['versions']['agentplugins']
           assert s['ref'] == 'refs/tags/' + s['tag'] == os.environ['GITHUB_REF']
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -196,9 +222,18 @@ jobs:
           required = {'selected', 'input', 'stage'} | {'produce': set(), 'assemble': {'journeys', 'bridge'}, 'attest': {'assembly'}, 'check': {'assembly', 'acceptance'}}[mode]
           raw = {name: os.environ.get(env, '') for name, env in names.items()}
           assert all(bool(body) == (name in required) for name, body in raw.items())
+          def unique(pairs):
+              value = {}
+              for key, item in pairs:
+                  assert key not in value
+                  value[key] = item
+              return value
           def value(name):
               assert 0 < len(raw[name].encode()) <= 1024 * 1024
-              return json.loads(raw[name])
+              parsed = json.loads(raw[name], object_pairs_hook=unique,
+                  parse_constant=lambda token: (_ for _ in ()).throw(ValueError(token)))
+              assert raw[name] == json.dumps(parsed, ensure_ascii=False, indent=2, separators=(',', ': ')) + '\n'
+              return parsed
           def locator(v):
               assert set(v) == {'sha256', 'artifact'} and re.fullmatch('[0-9a-f]{64}', v['sha256'])
               a = v['artifact']; assert set(a) == {'run_id', 'run_attempt', 'artifact_id', 'artifact_sha256'} and re.fullmatch('[0-9a-f]{64}', a['artifact_sha256'])
@@ -211,11 +246,15 @@ jobs:
               locator(value('bridge'))
           if mode in ('attest', 'check'): locator(value('assembly'))
           if mode == 'check': locator(value('acceptance'))
-          assert set(s) == {'tag', 'ref', 'source', 'versions'}
+          assert set(s) == {'tag', 'ref', 'source', 'versions'} and type(s['versions']) is dict
+          assert set(s['versions']) == {'agentplugins', 'plugin-kit-ai'}
+          assert all(type(version) is str and len(version) <= 32 and re.fullmatch('(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)', version) for version in s['versions'].values())
+          assert s['versions']['plugin-kit-ai'] == '2.0.0' and s['versions']['agentplugins'] != s['versions']['plugin-kit-ai']
           assert os.environ['GITHUB_REPOSITORY'] == '777genius/universal-agent-plugins'
           assert os.environ['GITHUB_EVENT_NAME'] == 'workflow_dispatch'
-          assert re.fullmatch('[0-9a-f]{40}', s['source'])
+          assert re.fullmatch('[0-9a-f]{40}', s['source']) and s['source'] != '0' * 40
           assert s['source'] == os.environ['GITHUB_SHA'] == os.environ['GITHUB_WORKFLOW_SHA']
+          assert s['tag'] == 'agentplugins-v' + s['versions']['agentplugins']
           assert s['ref'] == 'refs/tags/' + s['tag'] == os.environ['GITHUB_REF']
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -252,9 +291,18 @@ jobs:
           required = {'selected', 'input', 'stage'} | {'produce': set(), 'assemble': {'journeys', 'bridge'}, 'attest': {'assembly'}, 'check': {'assembly', 'acceptance'}}[mode]
           raw = {name: os.environ.get(env, '') for name, env in names.items()}
           assert all(bool(body) == (name in required) for name, body in raw.items())
+          def unique(pairs):
+              value = {}
+              for key, item in pairs:
+                  assert key not in value
+                  value[key] = item
+              return value
           def value(name):
               assert 0 < len(raw[name].encode()) <= 1024 * 1024
-              return json.loads(raw[name])
+              parsed = json.loads(raw[name], object_pairs_hook=unique,
+                  parse_constant=lambda token: (_ for _ in ()).throw(ValueError(token)))
+              assert raw[name] == json.dumps(parsed, ensure_ascii=False, indent=2, separators=(',', ': ')) + '\n'
+              return parsed
           def locator(v):
               assert set(v) == {'sha256', 'artifact'} and re.fullmatch('[0-9a-f]{64}', v['sha256'])
               a = v['artifact']; assert set(a) == {'run_id', 'run_attempt', 'artifact_id', 'artifact_sha256'} and re.fullmatch('[0-9a-f]{64}', a['artifact_sha256'])
@@ -267,11 +315,15 @@ jobs:
               locator(value('bridge'))
           if mode in ('attest', 'check'): locator(value('assembly'))
           if mode == 'check': locator(value('acceptance'))
-          assert set(s) == {'tag', 'ref', 'source', 'versions'}
+          assert set(s) == {'tag', 'ref', 'source', 'versions'} and type(s['versions']) is dict
+          assert set(s['versions']) == {'agentplugins', 'plugin-kit-ai'}
+          assert all(type(version) is str and len(version) <= 32 and re.fullmatch('(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)', version) for version in s['versions'].values())
+          assert s['versions']['plugin-kit-ai'] == '2.0.0' and s['versions']['agentplugins'] != s['versions']['plugin-kit-ai']
           assert os.environ['GITHUB_REPOSITORY'] == '777genius/universal-agent-plugins'
           assert os.environ['GITHUB_EVENT_NAME'] == 'workflow_dispatch'
-          assert re.fullmatch('[0-9a-f]{40}', s['source'])
+          assert re.fullmatch('[0-9a-f]{40}', s['source']) and s['source'] != '0' * 40
           assert s['source'] == os.environ['GITHUB_SHA'] == os.environ['GITHUB_WORKFLOW_SHA']
+          assert s['tag'] == 'agentplugins-v' + s['versions']['agentplugins']
           assert s['ref'] == 'refs/tags/' + s['tag'] == os.environ['GITHUB_REF']
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -309,9 +361,18 @@ jobs:
           required = {'selected', 'input', 'stage'} | {'produce': set(), 'assemble': {'journeys', 'bridge'}, 'attest': {'assembly'}, 'check': {'assembly', 'acceptance'}}[mode]
           raw = {name: os.environ.get(env, '') for name, env in names.items()}
           assert all(bool(body) == (name in required) for name, body in raw.items())
+          def unique(pairs):
+              value = {}
+              for key, item in pairs:
+                  assert key not in value
+                  value[key] = item
+              return value
           def value(name):
               assert 0 < len(raw[name].encode()) <= 1024 * 1024
-              return json.loads(raw[name])
+              parsed = json.loads(raw[name], object_pairs_hook=unique,
+                  parse_constant=lambda token: (_ for _ in ()).throw(ValueError(token)))
+              assert raw[name] == json.dumps(parsed, ensure_ascii=False, indent=2, separators=(',', ': ')) + '\n'
+              return parsed
           def locator(v):
               assert set(v) == {'sha256', 'artifact'} and re.fullmatch('[0-9a-f]{64}', v['sha256'])
               a = v['artifact']; assert set(a) == {'run_id', 'run_attempt', 'artifact_id', 'artifact_sha256'} and re.fullmatch('[0-9a-f]{64}', a['artifact_sha256'])
@@ -324,11 +385,15 @@ jobs:
               locator(value('bridge'))
           if mode in ('attest', 'check'): locator(value('assembly'))
           if mode == 'check': locator(value('acceptance'))
-          assert set(s) == {'tag', 'ref', 'source', 'versions'}
+          assert set(s) == {'tag', 'ref', 'source', 'versions'} and type(s['versions']) is dict
+          assert set(s['versions']) == {'agentplugins', 'plugin-kit-ai'}
+          assert all(type(version) is str and len(version) <= 32 and re.fullmatch('(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)', version) for version in s['versions'].values())
+          assert s['versions']['plugin-kit-ai'] == '2.0.0' and s['versions']['agentplugins'] != s['versions']['plugin-kit-ai']
           assert os.environ['GITHUB_REPOSITORY'] == '777genius/universal-agent-plugins'
           assert os.environ['GITHUB_EVENT_NAME'] == 'workflow_dispatch'
-          assert re.fullmatch('[0-9a-f]{40}', s['source'])
+          assert re.fullmatch('[0-9a-f]{40}', s['source']) and s['source'] != '0' * 40
           assert s['source'] == os.environ['GITHUB_SHA'] == os.environ['GITHUB_WORKFLOW_SHA']
+          assert s['tag'] == 'agentplugins-v' + s['versions']['agentplugins']
           assert s['ref'] == 'refs/tags/' + s['tag'] == os.environ['GITHUB_REF']
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -391,9 +456,18 @@ jobs:
           required = {'selected', 'input', 'stage'} | {'produce': set(), 'assemble': {'journeys', 'bridge'}, 'attest': {'assembly'}, 'check': {'assembly', 'acceptance'}}[mode]
           raw = {name: os.environ.get(env, '') for name, env in names.items()}
           assert all(bool(body) == (name in required) for name, body in raw.items())
+          def unique(pairs):
+              value = {}
+              for key, item in pairs:
+                  assert key not in value
+                  value[key] = item
+              return value
           def value(name):
               assert 0 < len(raw[name].encode()) <= 1024 * 1024
-              return json.loads(raw[name])
+              parsed = json.loads(raw[name], object_pairs_hook=unique,
+                  parse_constant=lambda token: (_ for _ in ()).throw(ValueError(token)))
+              assert raw[name] == json.dumps(parsed, ensure_ascii=False, indent=2, separators=(',', ': ')) + '\n'
+              return parsed
           def locator(v):
               assert set(v) == {'sha256', 'artifact'} and re.fullmatch('[0-9a-f]{64}', v['sha256'])
               a = v['artifact']; assert set(a) == {'run_id', 'run_attempt', 'artifact_id', 'artifact_sha256'} and re.fullmatch('[0-9a-f]{64}', a['artifact_sha256'])
@@ -406,11 +480,15 @@ jobs:
               locator(value('bridge'))
           if mode in ('attest', 'check'): locator(value('assembly'))
           if mode == 'check': locator(value('acceptance'))
-          assert set(s) == {'tag', 'ref', 'source', 'versions'}
+          assert set(s) == {'tag', 'ref', 'source', 'versions'} and type(s['versions']) is dict
+          assert set(s['versions']) == {'agentplugins', 'plugin-kit-ai'}
+          assert all(type(version) is str and len(version) <= 32 and re.fullmatch('(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)', version) for version in s['versions'].values())
+          assert s['versions']['plugin-kit-ai'] == '2.0.0' and s['versions']['agentplugins'] != s['versions']['plugin-kit-ai']
           assert os.environ['GITHUB_REPOSITORY'] == '777genius/universal-agent-plugins'
           assert os.environ['GITHUB_EVENT_NAME'] == 'workflow_dispatch'
-          assert re.fullmatch('[0-9a-f]{40}', s['source'])
+          assert re.fullmatch('[0-9a-f]{40}', s['source']) and s['source'] != '0' * 40
           assert s['source'] == os.environ['GITHUB_SHA'] == os.environ['GITHUB_WORKFLOW_SHA']
+          assert s['tag'] == 'agentplugins-v' + s['versions']['agentplugins']
           assert s['ref'] == 'refs/tags/' + s['tag'] == os.environ['GITHUB_REF']
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

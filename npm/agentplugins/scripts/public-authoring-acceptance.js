@@ -1624,8 +1624,9 @@ function dispatchInputs(mode) {
     else assert.equal(body, '', `foreign ${dispatchMode} dispatch input: ${name}`);
     if (body) values[name] = bounded(Buffer.from(body), LIMIT);
   }
-  fields(values.selected, ['tag', 'ref', 'source', 'versions'], 'selected source');
-  assert.ok(typeof values.selected.source === 'string' && /^[0-9a-f]{40}$/.test(values.selected.source), 'selected source commit');
+  // Reuse P's complete selected-source contract while dispatch is still pure:
+  // canonical bytes and every selection semantic precede provisioning/facades.
+  values.selected = require('./authoring-promotion').workflowSelection(values.selected, process.env.GITHUB_WORKFLOW_SHA);
   locator(values.input); locator(values.stage);
   if (dispatchMode === 'assemble') {
     list(values.journeys, matrix.length, 'eighteen dispatch journey locators');

@@ -16,9 +16,11 @@ const digest = value => crypto.createHash('sha256').update(value).digest('hex');
 const locator = n => ({ sha256: digest(`payload-${n}`), artifact: {
   run_id: n + 1, run_attempt: 1, artifact_id: n + 101, artifact_sha256: digest(`artifact-${n}`)
 } });
+const selected = () => ({ tag: 'agentplugins-v2.1.0', ref: 'refs/tags/agentplugins-v2.1.0', source: 'a'.repeat(40),
+  versions: { agentplugins: '2.1.0', 'plugin-kit-ai': '2.0.0' } });
 const dispatch = mode => {
   const values = {
-    selected: { tag: 'agentplugins-v2.0.0', ref: 'refs/tags/agentplugins-v2.0.0', source: 'a'.repeat(40), versions: {} },
+    selected: selected(),
     input: locator(1), stage: locator(2), journeys: a.matrix.map((row, i) => ({ cell: row.key, ...locator(i + 10) })),
     bridge: locator(40), assembly: locator(41), acceptance: locator(42)
   };
@@ -47,13 +49,27 @@ test('C3 runtime rejects every open, missing, and malformed dispatch before effe
   try {
     for (const [mode, names] of Object.entries(required)) {
       const cases = [];
-      process.env = { ...savedEnv, ...dispatch(mode) };
+      process.env = { ...savedEnv, GITHUB_WORKFLOW_SHA: 'a'.repeat(40), ...dispatch(mode) };
       assert.doesNotThrow(() => a.dispatchInputs(mode), `${mode}: valid closed dispatch`);
       for (const foreign of owned.filter(name => !names.includes(name))) cases.push([`foreign ${foreign}`, env => { env[`PUBLIC_${foreign.toUpperCase()}`] = encode(locator(90)); }]);
       for (const missing of names) cases.push([`missing ${missing}`, env => { delete env[`PUBLIC_${missing.toUpperCase()}`]; }]);
       for (const malformed of names) cases.push([`malformed ${malformed}`, env => { env[`PUBLIC_${malformed.toUpperCase()}`] = encode({}); }]);
+      const selectedCases = [
+        ['versions null', s => { s.versions = null; }],
+        ['missing version', s => { delete s.versions.agentplugins; }],
+        ['extra version', s => { s.versions.extra = '1.0.0'; }],
+        ['non-string version', s => { s.versions.agentplugins = 210; }],
+        ['oversized version', s => { s.versions.agentplugins = '1'.repeat(33); }],
+        ['wrong kit version', s => { s.versions['plugin-kit-ai'] = '2.0.1'; }],
+        ['wrong tag', s => { s.tag = 'agentplugins-v9.9.9'; }],
+        ['wrong ref', s => { s.ref = 'refs/tags/agentplugins-v9.9.9'; }],
+        ['wrong workflow source', s => { s.source = 'b'.repeat(40); }]
+      ];
+      for (const [label, mutate] of selectedCases) cases.push([label, env => { const s = selected(); mutate(s); env.PUBLIC_SELECTED = encode(s); }]);
+      cases.push(['duplicate selected key', env => { env.PUBLIC_SELECTED = env.PUBLIC_SELECTED.replace('  "tag":', '  "tag": "agentplugins-v2.1.0",\n  "tag":'); }]);
+      cases.push(['non-canonical selected JSON', env => { env.PUBLIC_SELECTED = JSON.stringify(selected()); }]);
       for (const [label, mutate] of cases) {
-        process.env = { ...savedEnv, ...dispatch(mode) }; mutate(process.env);
+        process.env = { ...savedEnv, GITHUB_WORKFLOW_SHA: 'a'.repeat(40), ...dispatch(mode) }; mutate(process.env);
         assert.throws(() => a.workflowRequest(mode, mode === 'produce' ? a.matrix[0].key : undefined), `${mode}: ${label}`);
         assert.deepEqual(effects, { controller: 0, facade: 0, filesystem: 0, subprocess: 0 }, `${mode}: ${label}`);
       }
@@ -134,10 +150,50 @@ test('C3 trusted bootstrap closes and validates dispatch inputs before checkout'
     assert.ok(checkout > 0, name);
     const bootstrap = body.slice(0, checkout);
     assert.match(bootstrap, /bool\(body\) == \(name in required\)/, name);
+    assert.match(bootstrap, /object_pairs_hook=unique/, name);
+    assert.match(bootstrap, /raw\[name\] == json\.dumps\(parsed, ensure_ascii=False, indent=2, separators=/, name);
     assert.match(bootstrap, /def locator\(v\):/, name);
     assert.match(bootstrap, /locator\(value\('input'\)\); locator\(value\('stage'\)\)/, name);
     assert.match(bootstrap, /if mode == 'assemble':/, name);
     assert.match(bootstrap, /if mode in \('attest', 'check'\): locator\(value\('assembly'\)\)/, name);
     assert.match(bootstrap, /if mode == 'check': locator\(value\('acceptance'\)\)/, name);
+    assert.match(bootstrap, /set\(s\['versions'\]\) == \{'agentplugins', 'plugin-kit-ai'\}/, name);
+    assert.match(bootstrap, /s\['tag'\] == 'agentplugins-v' \+ s\['versions'\]\['agentplugins'\]/, name);
+  }
+});
+
+test('C3 trusted pre-checkout bootstraps reject the selected-source semantic bypass', () => {
+  const modes = { public_inputs: 'produce', public_cell: 'produce', public_assemble: 'assemble',
+    public_evidence_intake: 'attest', public_evidence_attestation: 'attest', public_check: 'check' };
+  const cases = [
+    ['versions null', s => { s.versions = null; }],
+    ['missing version', s => { delete s.versions.agentplugins; }],
+    ['extra version', s => { s.versions.extra = '1.0.0'; }],
+    ['non-string version', s => { s.versions.agentplugins = 210; }],
+    ['oversized version', s => { s.versions.agentplugins = '1'.repeat(33); }],
+    ['wrong kit value', s => { s.versions['plugin-kit-ai'] = '2.0.1'; }],
+    ['wrong tag', s => { s.tag = 'agentplugins-v9.9.9'; }],
+    ['wrong ref', s => { s.ref = 'refs/tags/agentplugins-v9.9.9'; }]
+  ];
+  for (const [job, mode] of Object.entries(modes)) {
+    const bootstrap = jobs[job].slice(0, jobs[job].indexOf('uses: actions/checkout@'));
+    const script = bootstrap.match(/run: \|\n([\s\S]*?)(?=^      - )/m)[1].replace(/^ {10}/gm, '');
+    const base = { ...process.env, ...dispatch(mode === 'check' ? 'read' : mode), PUBLIC_MODE: mode,
+      GITHUB_REPOSITORY: '777genius/universal-agent-plugins', GITHUB_EVENT_NAME: 'workflow_dispatch',
+      GITHUB_SHA: 'a'.repeat(40), GITHUB_WORKFLOW_SHA: 'a'.repeat(40),
+      GITHUB_REF: 'refs/tags/agentplugins-v2.1.0' };
+    assert.equal(childProcess.spawnSync('python3', ['-I', '-B', '-'], { input: script, env: base }).status, 0, `${job}: valid`);
+    for (const [label, mutate] of cases) {
+      const s = selected(); mutate(s);
+      const result = childProcess.spawnSync('python3', ['-I', '-B', '-'], { input: script, env: { ...base, PUBLIC_SELECTED: encode(s) } });
+      assert.notEqual(result.status, 0, `${job}: ${label}`);
+    }
+    for (const [label, raw] of [
+      ['duplicate key', encode(selected()).replace('  "tag":', '  "tag": "agentplugins-v2.1.0",\n  "tag":')],
+      ['non-canonical JSON', JSON.stringify(selected())]
+    ]) {
+      const result = childProcess.spawnSync('python3', ['-I', '-B', '-'], { input: script, env: { ...base, PUBLIC_SELECTED: raw } });
+      assert.notEqual(result.status, 0, `${job}: ${label}`);
+    }
   }
 });
