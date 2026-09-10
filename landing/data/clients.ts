@@ -29,12 +29,14 @@ export const clientLandingPages: ClientLandingPage[] = [
     slug: 'chatgpt',
     name: 'ChatGPT',
     icon: 'openai.svg',
-    note: 'Verified ChatGPT connections',
+    note: 'Verified app bindings and guided Context7 setup',
     status: 'Setup in app',
     intro:
       'Prepare compatible Agent Plugins 1.0 for ChatGPT while keeping app activation and account consent inside ChatGPT.',
-    delivery: 'The CLI validates and prepares the compatible package or registered app binding.',
-    activation: 'Complete the final app activation or sign-in step in ChatGPT when prompted.',
+    delivery:
+      'The CLI validates publisher app bindings and can prepare a personal marketplace package for Context7 using its public no-auth MCP endpoint.',
+    activation:
+      'Create or connect the app in Developer Mode, install the prepared personal plugin, and select it in a new chat.',
   },
   {
     id: 'cursor',
@@ -82,14 +84,14 @@ export const clientLandingPages: ClientLandingPage[] = [
     slug: 'kiro',
     name: 'Kiro',
     icon: 'kiro.svg',
-    note: 'Native folder package',
+    note: 'Managed skills and MCP configuration',
     status: 'Supported',
     intro:
       'Install Agent Plugins 1.0 for Kiro from the same portable package used by other AI agents.',
     delivery:
-      "The CLI prepares Kiro's native folder package with the compatible plugin components.",
+      'The CLI installs its owned Kiro skills and MCP entries while preserving unrelated global configuration.',
     activation:
-      'Follow the printed import or activation hint when Kiro requires a final client-side step.',
+      'Complete the printed OAuth or restart step. macOS and Windows preparation does not claim automatic runtime verification.',
   },
   {
     id: 'claude',
@@ -168,7 +170,9 @@ export const clients: ClientTarget[] = clientLandingPages.map(
 );
 
 // Shell consumers can use this contract with clients[] without importing message JSON.
-export function clientPresentationKey(id: ClientTarget['id']): `registryUi.clients.${ClientTarget['id']}` {
+export function clientPresentationKey(
+  id: ClientTarget['id'],
+): `registryUi.clients.${ClientTarget['id']}` {
   return `registryUi.clients.${id}`;
 }
 

@@ -68,7 +68,9 @@ runtime behavior.
 The following matrix describes the current release source. New client support
 is available through `npx` once a release containing this source is published.
 The exact package, source revisions, commands, and limitations are recorded in
-the [isolated client E2E evidence](docs/AGENTPLUGINS_CLIENT_E2E.md).
+the [isolated client E2E evidence](AGENTPLUGINS_CLIENT_E2E.md). Current real
+Context7 client calls are recorded in [Context7 ChatGPT and Kiro E2E
+evidence](CONTEXT7_CHATGPT_KIRO_E2E.md).
 
 | Client | Evidence |
 | --- | --- |
@@ -77,6 +79,8 @@ the [isolated client E2E evidence](docs/AGENTPLUGINS_CLIENT_E2E.md).
 | OpenCode | OpenCode 1.18.4: real isolated configuration and the same exact-source lifecycle |
 | Cline | Real locally detected client; isolated native configuration and exact-source lifecycle; no client runtime or login |
 | Windsurf | Real locally detected configuration and exact-source lifecycle; no client runtime or login |
+| ChatGPT | Real Pro-profile Context7 app registration with the public no-auth endpoint, followed by successful `resolve-library-id` and `query-docs` calls |
+| Kiro | Real Kiro v3 Context7 OAuth, restart, and successful `resolve-library-id` and `query-docs` calls; exact release CI separately covers native configuration lifecycle |
 
 `search` combines the reviewed Directory with a separately signed Discovery
 Index. Unreviewed results use publisher-qualified `discovery:owner/repo//path`
@@ -114,8 +118,8 @@ authentication as pending or cancelled.
 Kiro skills are installed directly into the documented global skills path.
 For packages with MCP servers, agentplugins atomically merges only its owned
 entries into Kiro's global `mcp.json`, preserving unrelated user configuration,
-then checks supported Kiro CLI versions through a bounded structured ACP v1
-initialize/session handshake.
+then checks supported Kiro CLI versions. The normal automatic lane uses a
+bounded structured ACP v1 initialize/session handshake.
 It sends no prompt or model/tool turn and does not inject package endpoints;
 Kiro must load its installed native configuration and report connected servers
 with enabled tools. The verifier drains a bounded quiet settlement window,
@@ -123,10 +127,11 @@ rejects EOF, partial bytes, or trailing contradictions, then stops and reaps the
 long-lived ACP process through supervised containment. Automatic Kiro ACP
 verification is available only on Linux after capability preflight proves
 delegated cgroup v2 creation, atomic CLONE_INTO_CGROUP placement, and
-cgroup.kill. macOS, Windows, and Linux hosts without every required proof fail
-preflight before any MCP mutation. On those hosts, use Kiro's documented manual
-skill and MCP configuration paths; that workflow is outside this automatic CLI
-path. Failure to start ACP
+cgroup.kill. On macOS, Windows, and Linux hosts without that containment,
+`--prepare` installs the owned Kiro skills and MCP configuration without
+claiming a connected runtime. It reports the exact OAuth/restart step and keeps
+the lifecycle receipt for update, repair, remove, and reinstall. Failure to
+start ACP
 after a supported preflight may still leave a manual verification action. This
 is activation evidence, not a runtime tool E2E claim.
 Once the ACP process starts, companion-launch failure (including a missing
@@ -136,6 +141,20 @@ failures; the managed package remains committed for explicit repair and is
 never reported active.
 Verification is reported for the exact plugin, client, runtime, and OAuth
 evidence available—not as a claim that every combination has been tested.
+
+ChatGPT packages with a verified publisher app binding are prepared directly.
+Canonical Directory Context7 also has a guided personal-registration path:
+
+```bash
+npx universal-agent-plugins add context7 --target chatgpt --prepare
+```
+
+The first run prints the public `https://mcp.context7.com/mcp` endpoint and
+requires **No authentication**. After the user creates and connects the app in
+ChatGPT Developer Mode, the CLI accepts its `asdk_app_...` ID and prepares a
+personal marketplace package. The ID stays in private installer state and is
+not emitted in structured output. Installing the marketplace package and
+selecting Context7 in a new chat remain explicit ChatGPT actions.
 
 `universal-agent-plugins` is an independent community installer, not an official
 OpenAI CLI.
