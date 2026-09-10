@@ -147,6 +147,7 @@ func runAddManyLoaded(ctx context.Context, cmd *cobra.Command, app App, opts *op
 	combined.Succeeded = len(planned.Targets)
 	if err != nil {
 		combined.Status, combined.Failed, combined.Succeeded = "preflight_failed", len(inputs), 0
+		setPreflightNextActions(combined.Targets)
 		_ = renderAddMultiResult(cmd, opts, combined, loaded.envelope)
 		return fmt.Errorf("group preflight failed; no target was changed (selected targets: %v): %w%s", targets, err, addGroupNextAction(combined.Targets))
 	}
@@ -193,6 +194,7 @@ func runAddManyLoaded(ctx context.Context, cmd *cobra.Command, app App, opts *op
 	if err != nil {
 		if applied.Phase == usecase.GroupPhasePlanned && !applied.Mutated {
 			combined.Status, combined.Failed, combined.Succeeded = "preflight_failed", len(inputs), 0
+			setPreflightNextActions(combined.Targets)
 			_ = renderAddMultiResult(cmd, opts, combined, loaded.envelope)
 			return fmt.Errorf("group apply preflight failed; no target was changed (selected targets: %v): %w%s", targets, err, addGroupNextAction(combined.Targets))
 		}
@@ -422,6 +424,17 @@ func humanAddGroupPlans(targets []addTargetResult) []usecase.AddResult {
 		results[index] = result
 	}
 	return results
+}
+
+// A ready plan is not actionable when the selected group failed preflight.
+// Preserve unsupported-package recovery instructions, but never promise
+// activation from a plan whose requirements were rejected.
+func setPreflightNextActions(targets []addTargetResult) {
+	for index := range targets {
+		if targets[index].Output.Result.Plan.Status != domain.PlanUnsupported {
+			targets[index].NextAction = "resolve the reported client requirement and retry; nothing was installed"
+		}
+	}
 }
 
 func addGroupNextAction(targets []addTargetResult) string {

@@ -91,3 +91,19 @@ func TestDirectoryZeroChoicesExplainReleaseSelection(t *testing.T) {
 		t.Fatal("acquired package with no eligible release")
 	}
 }
+
+func TestPreflightNextActionsDoNotPromiseAutomaticInstallation(t *testing.T) {
+	targets := []addTargetResult{{NextAction: "agentplugins will install and verify the package's global Kiro skills and MCP servers automatically"}}
+	targets[0].Output.Result.Plan.Status = domain.PlanReady
+	targets[0].Output.Result.Plan.Authentication = domain.AuthenticationNotRequired
+	setPreflightNextActions(targets)
+	if strings.Contains(addGroupNextAction(targets), "automatically") || !strings.Contains(targets[0].NextAction, "nothing was installed") {
+		t.Fatalf("preflight retained the ready-plan promise: %+v", targets)
+	}
+	targets[0].Output.Result.Plan.Status = domain.PlanUnsupported
+	targets[0].NextAction = "ask the publisher to register the ChatGPT connection"
+	setPreflightNextActions(targets)
+	if targets[0].NextAction != "ask the publisher to register the ChatGPT connection" {
+		t.Fatal("unsupported-package recovery action was lost")
+	}
+}
