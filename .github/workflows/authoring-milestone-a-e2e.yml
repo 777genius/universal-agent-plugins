@@ -112,9 +112,10 @@ jobs:
           printf 'MILESTONE_A_EVIDENCE=%s\n' "$(node -e 'process.stdout.write(require("path").join(process.argv[1],"evidence"))' "$native_root")" >> "$GITHUB_ENV"
           node -e 'require("./npm/agentplugins/scripts/milestone-a-e2e").precreate(process.argv[1])' "$native_root"
           config="$RUNNER_TEMP/milestone-a-run.json"
+          native_config="$(node -e 'process.stdout.write(require("./npm/agentplugins/scripts/milestone-a-e2e").nativeAbsolute(process.argv[1]))' "$config")"
           node -e 'require("fs").writeFileSync(process.argv[1], JSON.stringify({root:process.argv[2],precreatedRoot:true,outerRoot:process.argv[3],input:process.argv[4],platform:process.argv[5],arch:process.argv[6],expectedHead:process.env.EXPECTED_HEAD}))' \
-            "$config" "$native_root" "$native_outer" "$native_input" '${{ matrix.platform }}' '${{ matrix.arch }}'
-          node npm/agentplugins/scripts/milestone-a-e2e.js run "$config"
+            "$native_config" "$native_root" "$native_outer" "$native_input" '${{ matrix.platform }}' '${{ matrix.arch }}'
+          node npm/agentplugins/scripts/milestone-a-e2e.js run "$native_config"
           test -z "$(git status --porcelain)"
       - name: Upload run evidence, including failures
         if: always()
