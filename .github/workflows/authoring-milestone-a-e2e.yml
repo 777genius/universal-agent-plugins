@@ -1,0 +1,121 @@
+name: Authoring Milestone A E2E
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/authoring-milestone-a-e2e.yml'
+      - 'npm/agentplugins/scripts/milestone-a-e2e.js'
+      - 'npm/agentplugins/test/milestone-a-e2e.test.js'
+      - 'cli/plugin-kit-ai/**'
+      - 'install/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: authoring-milestone-a-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  prepare:
+    name: Exact candidate package
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      NODE_OPTIONS: --max-old-space-size=384
+      GOTOOLCHAIN: local
+      GOMAXPROCS: '2'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version: '1.25.13'
+          cache: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: '22.23.2'
+          check-latest: false
+      - name: Assemble sealed exact-head native and npm candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="$RUNNER_TEMP/milestone-a-prepare-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          test ! -e "$root"
+          printf 'MILESTONE_A_BUNDLE=%s\n' "$root" >> "$GITHUB_ENV"
+          config="$RUNNER_TEMP/milestone-a-prepare.json"
+          modcache="$RUNNER_TEMP/milestone-a-modcache-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          test ! -e "$modcache"
+          mkdir -m 700 "$modcache"
+          # Tool acquisition precedes the offline candidate builder. Runtime
+          # journeys never receive network access or this module cache.
+          GOMODCACHE="$modcache" go mod download
+          node -e 'require("fs").writeFileSync(process.argv[1], JSON.stringify({root:process.argv[2],repo:process.env.GITHUB_WORKSPACE,expectedHead:process.env.EXPECTED_HEAD,go:process.argv[3],modCache:process.argv[4],node:process.execPath,npm:process.argv[5]}))' \
+            "$config" "$root" "$(command -v go)" "$modcache" "$(command -v npm)"
+          node npm/agentplugins/scripts/milestone-a-e2e.js prepare "$config"
+      - name: Upload exact candidate bundle and failure evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: milestone-a-exact-candidate-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.MILESTONE_A_BUNDLE }}
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
+
+  e2e:
+    name: Milestone A / ${{ matrix.platform }}-${{ matrix.arch }}
+    needs: prepare
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {runner: ubuntu-24.04, platform: linux, arch: amd64}
+          - {runner: windows-2022, platform: windows, arch: amd64}
+          - {runner: macos-14, platform: darwin, arch: arm64}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 12
+    env:
+      NODE_OPTIONS: --max-old-space-size=384
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: '22.23.2'
+          check-latest: false
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: milestone-a-exact-candidate-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/milestone-a-input
+      - name: Restore sealed candidate modes
+        if: runner.os != 'Windows'
+        shell: bash
+        run: chmod -R a-w "${RUNNER_TEMP}/milestone-a-input/candidate"
+      - name: Run both packaged public entrypoints in fresh roots
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="$RUNNER_TEMP/milestone-a-run-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          mkdir -p "$root/evidence"
+          printf 'MILESTONE_A_EVIDENCE=%s/evidence\n' "$root" >> "$GITHUB_ENV"
+          rmdir "$root/evidence" "$root"
+          config="$RUNNER_TEMP/milestone-a-run.json"
+          node -e 'require("fs").writeFileSync(process.argv[1], JSON.stringify({root:process.argv[2],input:process.argv[3],platform:process.argv[4],arch:process.argv[5]}))' \
+            "$config" "$root" "$RUNNER_TEMP/milestone-a-input" '${{ matrix.platform }}' '${{ matrix.arch }}'
+          node npm/agentplugins/scripts/milestone-a-e2e.js run "$config"
+          test -z "$(git status --porcelain)"
+      - name: Upload run evidence, including failures
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: milestone-a-${{ matrix.platform }}-${{ matrix.arch }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.MILESTONE_A_EVIDENCE }}
+          if-no-files-found: error
+          retention-days: 14
