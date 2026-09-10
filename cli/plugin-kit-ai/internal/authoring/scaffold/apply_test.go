@@ -39,7 +39,7 @@ func TestFailureCancellationAndCleanup(t *testing.T) {
 			if kind == "commit-failure" {
 				ops.rename = func(*os.File, string, *os.File, string) error { return sentinel }
 			}
-			result, err := apply(ctx, planFor(t, "skill"), ApplyOptions{Destination: dest, Validate: func(ctx context.Context, s string) error {
+			result, err := apply(ctx, planFor(t, "skill"), ApplyOptions{Destination: dest, Validate: func(ctx context.Context, s string, _ *os.Root) error {
 				if err := validate(ctx, s); err != nil {
 					return err
 				}
@@ -169,7 +169,7 @@ func TestStagingReplacementRefusesForeignCleanup(t *testing.T) {
 	fault := errors.New("abort after denied stage replacement")
 	blocked := false
 	var original, replaced string
-	result, err := Apply(context.Background(), p, ApplyOptions{Destination: dest, Validate: func(ctx context.Context, s string) error {
+	result, err := Apply(context.Background(), p, ApplyOptions{Destination: dest, Validate: func(ctx context.Context, s string, _ *os.Root) error {
 		if err := validate(ctx, s); err != nil {
 			return err
 		}
@@ -238,7 +238,7 @@ func TestParentReplacementRefusesCommitAndCleansOwnedStage(t *testing.T) {
 	attempted, blocked := false, false
 	dest := filepath.Join(parent, "out")
 	p := planFor(t, "skill")
-	result, err := Apply(context.Background(), p, ApplyOptions{Destination: dest, Validate: func(ctx context.Context, s string) error {
+	result, err := Apply(context.Background(), p, ApplyOptions{Destination: dest, Validate: func(ctx context.Context, s string, _ *os.Root) error {
 		if err := validate(ctx, s); err != nil {
 			return err
 		}
@@ -315,7 +315,7 @@ func TestPayloadReplacementDoesNotDeleteForeignTree(t *testing.T) {
 	parent := tempRoot(t)
 	validate := realValidation(t)
 	var foreign, moved string
-	result, err := Apply(context.Background(), planFor(t, "skill"), ApplyOptions{Destination: filepath.Join(parent, "out"), Validate: func(ctx context.Context, s string) error {
+	result, err := Apply(context.Background(), planFor(t, "skill"), ApplyOptions{Destination: filepath.Join(parent, "out"), Validate: func(ctx context.Context, s string, _ *os.Root) error {
 		if err := validate(ctx, s); err != nil {
 			return err
 		}
@@ -428,7 +428,7 @@ func TestPostCommitCleanupErrorRetainsCommittedResult(t *testing.T) {
 		}
 		return nil
 	}}
-	result, err := apply(context.Background(), planFor(t, "skill"), ApplyOptions{Destination: dest, Validate: func(ctx context.Context, s string) error { container = filepath.Dir(s); return validate(ctx, s) }}, ops)
+	result, err := apply(context.Background(), planFor(t, "skill"), ApplyOptions{Destination: dest, Validate: func(ctx context.Context, s string, _ *os.Root) error { container = filepath.Dir(s); return validate(ctx, s) }}, ops)
 	var cleanup *CleanupError
 	if !errors.As(err, &cleanup) || !result.Committed || result.Destination != dest {
 		t.Fatalf("lost committed result: %+v %v", result, err)

@@ -22,7 +22,7 @@ func TestWindowsPrivateStageDACL(t *testing.T) {
 		t.Fatal(err)
 	}
 	dest := filepath.Join(tempRoot(t), "output")
-	_, err = Apply(context.Background(), planFor(t, "skill"), ApplyOptions{Destination: dest, Validate: func(ctx context.Context, root string) error {
+	_, err = Apply(context.Background(), planFor(t, "skill"), ApplyOptions{Destination: dest, Validate: func(ctx context.Context, root string, _ *os.Root) error {
 		descriptor, err := windows.GetNamedSecurityInfo(filepath.Dir(root), windows.SE_FILE_OBJECT, windows.DACL_SECURITY_INFORMATION)
 		if err != nil {
 			return err
@@ -128,7 +128,7 @@ func TestDeniedParent(t *testing.T) {
 		t.Logf("installed parent DACL: %s", actual.String())
 		deniedParentProbeCreates(t, parent, "denied", true)
 		validated := false
-		r, err := Apply(context.Background(), plan, ApplyOptions{Destination: filepath.Join(parent, "out"), Validate: func(ctx context.Context, root string) error {
+		r, err := Apply(context.Background(), plan, ApplyOptions{Destination: filepath.Join(parent, "out"), Validate: func(ctx context.Context, root string, _ *os.Root) error {
 			validated = true
 			return validate(ctx, root)
 		}})

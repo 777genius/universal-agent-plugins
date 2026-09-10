@@ -56,7 +56,7 @@ func nativeFixture(t *testing.T, build func(string)) string {
 	return root
 }
 func TestDarwinWritableProfileRejected(t *testing.T) {
-	s, e := openSource(t.TempDir())
+	s, e := openSource(t.TempDir(), GeneratedStaging{})
 	if e == nil {
 		s.close()
 		t.Fatal("writable filesystem accepted")
@@ -165,7 +165,7 @@ func TestDarwinHandleCleanupAndTypeChecks(t *testing.T) {
 	}
 	before := count()
 	for i := 0; i < 10; i++ {
-		s, e := openSource(root)
+		s, e := openSource(root, GeneratedStaging{})
 		if e != nil {
 			t.Fatal(e)
 		}
@@ -245,4 +245,71 @@ func TestDarwinRootSelectionTraversalOrder(t *testing.T) {
 	}
 }
 
+// A matching GeneratedStaging proof is the only way an ordinary writable
+// local APFS directory is ever accepted; TestDarwinWritableProfileRejected
+// above proves the zero-value (untrusted) path still rejects it.
+func TestDarwinGeneratedStagingProofAcceptsOwnWritableRoot(t *testing.T) {
+	root := t.TempDir()
+	nativeWrite(t, root, "plugin.json", "core")
+	dir, e := os.OpenRoot(root)
+	if e != nil {
+		t.Fatal(e)
+	}
+	defer dir.Close()
+	proof, e := NewGeneratedStaging(dir)
+	if e != nil {
+		t.Fatal(e)
+	}
+	s, e := openSource(root, proof)
+	if e != nil {
+		t.Fatal("trusted generated-staging proof rejected on its own writable root:", e)
+	}
+	defer s.close()
+	if !s.trustedWritable {
+		t.Fatal("trusted flag not set from a matching proof")
+	}
+	// The relaxation must still require local APFS and every other check:
+	// this exercises the same darwinFS/pin/reopen path the untrusted case uses.
+	p, e := s.pin("plugin.json", true)
+	if e != nil {
+		t.Fatal(e)
+	}
+	defer p.file.Close()
+	f, e := p.reopen(false)
+	if e != nil {
+		t.Fatal("trusted data reopen failed:", e)
+	}
+	defer f.Close()
+}
+
+// A GeneratedStaging proof built from one directory must never authorize a
+// different one: the caller could otherwise mint a proof against a trivially
+// creatable writable directory and pass an unrelated path to openSource.
+func TestDarwinGeneratedStagingProofMismatchFailsClosed(t *testing.T) {
+	a := filepath.Join(t.TempDir(), "a")
+	b := filepath.Join(t.TempDir(), "b")
+	for _, d := range []string{a, b} {
+		if e := os.Mkdir(d, 0700); e != nil {
+			t.Fatal(e)
+		}
+	}
+	dirA, e := os.OpenRoot(a)
+	if e != nil {
+		t.Fatal(e)
+	}
+	defer dirA.Close()
+	proof, e := NewGeneratedStaging(dirA)
+	if e != nil {
+		t.Fatal(e)
+	}
+	s, e := openSource(b, proof)
+	if e == nil {
+		s.close()
+		t.Fatal("mismatched generated-staging proof accepted a different directory")
+	}
+	var safe *Error
+	if !errors.As(e, &safe) || safe.Code != "generated_staging_mismatch" {
+		t.Fatal(e)
+	}
+}
 func nativeLinkPrivilegeError(e error) bool { return os.IsPermission(e) }

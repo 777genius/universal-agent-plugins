@@ -69,7 +69,7 @@ func realValidation(t *testing.T) Validate {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return func(ctx context.Context, root string) error {
+	return func(ctx context.Context, root string, _ *os.Root) error {
 		envelope, err := (loader.Loader{Registry: registry}).Load(ctx, domain.LoadInput{SnapshotRoot: root})
 		if err != nil {
 			return err
@@ -117,7 +117,7 @@ func TestTemplateGoldenTreesAndCurrentStandardLoader(t *testing.T) {
 			dest := filepath.Join(root, "result")
 			calls := 0
 			validate := realValidation(t)
-			result, err := Apply(context.Background(), p, ApplyOptions{Destination: dest, Validate: func(ctx context.Context, s string) error {
+			result, err := Apply(context.Background(), p, ApplyOptions{Destination: dest, Validate: func(ctx context.Context, s string, _ *os.Root) error {
 				calls++
 				if filepath.Dir(filepath.Dir(s)) != root || s == dest {
 					t.Fatal("not private sibling staging")
@@ -448,7 +448,7 @@ func TestAllExistingDestinationsPreserved(t *testing.T) {
 				t.Fatal(err)
 			}
 			called := false
-			result, err := Apply(context.Background(), planFor(t, "skill"), ApplyOptions{Destination: dest, Validate: func(context.Context, string) error { called = true; return errors.New("must not validate") }})
+			result, err := Apply(context.Background(), planFor(t, "skill"), ApplyOptions{Destination: dest, Validate: func(context.Context, string, *os.Root) error { called = true; return errors.New("must not validate") }})
 			after, e := os.Lstat(dest)
 			if err == nil || e != nil || result.Committed || called || !os.SameFile(before, after) {
 				t.Fatalf("existing destination changed: %v %v", result, err)
@@ -526,7 +526,7 @@ func TestConcurrentApplyExactlyOneWinner(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			r, err := Apply(context.Background(), p, ApplyOptions{Destination: dest, Validate: func(ctx context.Context, s string) error {
+			r, err := Apply(context.Background(), p, ApplyOptions{Destination: dest, Validate: func(ctx context.Context, s string, _ *os.Root) error {
 				if err := validate(ctx, s); err != nil {
 					return err
 				}
