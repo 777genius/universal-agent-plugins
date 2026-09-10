@@ -75,6 +75,26 @@ The CLI finds compatible agents installed on your computer.
 2. Follow any activation or sign-in instructions printed by the CLI.
 3. Start a new agent session and try the plugin.
 
+For the verified Context7 setup in ChatGPT and Kiro:
+
+```bash
+npx universal-agent-plugins add context7 --target chatgpt,kiro --prepare
+```
+
+- ChatGPT: the CLI guides you to create a Developer Mode app for
+  `https://mcp.context7.com/mcp` with **No authentication**, accepts the
+  resulting `asdk_app_...` ID, and prepares a personal marketplace package.
+  You still install that package and select Context7 in a new chat.
+- Kiro: the CLI installs its owned skills and MCP entry while preserving
+  unrelated configuration. On macOS and Windows it reports the remaining
+  Kiro OAuth/restart step instead of claiming automatic runtime verification.
+
+The same retained installation supports repeat add, update, repair, remove,
+and reinstall. ChatGPT availability still depends on an account or workspace
+where Developer Mode and custom apps are enabled.
+
+See the [real Context7 ChatGPT and Kiro E2E evidence](docs/CONTEXT7_CHATGPT_KIRO_E2E.md).
+
 <details>
 <summary>Installation details</summary>
 
@@ -125,11 +145,11 @@ The CLI has adapters for:
 | Client | Delivery |
 | --- | --- |
 | <img src="landing/public/client-icons/openai.svg" width="24" height="24" alt="" align="middle"> Codex | managed package or OpenAI compatibility package |
-| <img src="landing/public/client-icons/openai.svg" width="24" height="24" alt="" align="middle"> ChatGPT | registered app/binding where the package provides one |
+| <img src="landing/public/client-icons/openai.svg" width="24" height="24" alt="" align="middle"> ChatGPT | verified publisher app binding, or guided personal Context7 app and marketplace preparation |
 | <img src="landing/public/client-icons/cursor.svg" width="24" height="24" alt="" align="middle"> Cursor | native Agent Plugin and MCP/skills projection |
 | <img src="landing/public/client-icons/github-copilot.svg" width="24" height="24" alt="" align="middle"> GitHub Copilot CLI | native plugin and managed marketplace path |
 | <img src="landing/public/client-icons/vscode.svg" width="24" height="24" alt="" align="middle"> VS Code | prepared Copilot-compatible package |
-| <img src="landing/public/client-icons/kiro.svg" width="24" height="24" alt="" align="middle"> Kiro | native folder and Power import guidance |
+| <img src="landing/public/client-icons/kiro.svg" width="24" height="24" alt="" align="middle"> Kiro | managed skills and MCP configuration; client OAuth/restart when required |
 | <img src="landing/public/client-icons/claude.svg" width="24" height="24" alt="" align="middle"> Claude Code | client-specific skills/MCP projection |
 | <img src="landing/public/client-icons/gemini.svg" width="24" height="24" alt="" align="middle"> Gemini CLI | client-specific configuration projection |
 | <picture><source media="(prefers-color-scheme: dark)" srcset="assets/client-icons/opencode-dark.svg"><img src="landing/public/client-icons/opencode.svg" width="24" height="24" alt="" align="middle"></picture> OpenCode | client-specific configuration projection |
@@ -185,6 +205,9 @@ agentplugins info context7
 
 # Install in specific agents
 agentplugins add context7 --target codex,cursor,kiro
+
+# Prepare Context7 for ChatGPT and Kiro
+agentplugins add context7 --target chatgpt,kiro --prepare
 
 # Manage an installed plugin
 agentplugins update context7 --target codex,cursor
