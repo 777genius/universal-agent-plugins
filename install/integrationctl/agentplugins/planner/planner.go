@@ -101,7 +101,24 @@ func (planner Planner) Plan(
 	plan.TargetAnchor = target.TargetAnchor
 	plan.ActivePath = target.ActivePath
 	plan.Components = componentDecisions(envelope, capabilities)
-	applyCatalogCompatibility(&plan, envelope.CatalogEvidence)
+	if client.ClientID == domain.ClientChatGPT && envelope.LocalChatGPTMapping != nil {
+		if scope != domain.ScopeUser {
+			return plan, fmt.Errorf("ChatGPT preparation supports user scope only")
+		}
+		if err := envelope.LocalChatGPTMapping.ValidatePackage(envelope); err != nil {
+			return plan, err
+		}
+		binding, ok := envelope.App.Bindings[envelope.LocalChatGPTMapping.Server]
+		if !envelope.App.Enabled || len(envelope.App.Bindings) != 1 || !ok || binding.ID != envelope.LocalChatGPTMapping.AppID {
+			return plan, fmt.Errorf("personal ChatGPT mapping projection does not match receipt")
+		}
+		plan.LocalPreparationAuthorized = true
+		plan.PersonalChatGPTPreparation = true
+		plan.Authentication = domain.AuthenticationPending
+		plan.Warnings = append(plan.Warnings, "personal_registration_not_remote_verified")
+	} else {
+		applyCatalogCompatibility(&plan, envelope.CatalogEvidence)
+	}
 	chatGPTCompatibility, hasChatGPTCompatibility := domain.CatalogCompatibility{}, false
 	if envelope.CatalogEvidence != nil {
 		chatGPTCompatibility, hasChatGPTCompatibility = envelope.CatalogEvidence.Compatibility[string(domain.ClientChatGPT)]

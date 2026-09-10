@@ -15,10 +15,21 @@ func ApplyInstallIntent(plan *domain.DeliveryPlan, intent domain.InstallIntent) 
 		return err
 	}
 	if intent == domain.InstallIntentPrepare && plan.Scope != domain.ScopeUser {
-		return fmt.Errorf("Kiro preparation supports user scope only")
+		return fmt.Errorf("preparation supports user scope only")
 	}
 	plan.InstallIntent = intent
 	if intent != domain.InstallIntentPrepare || plan.Status == domain.PlanUnsupported {
+		return nil
+	}
+	if plan.ClientID == domain.ClientChatGPT {
+		if !plan.PersonalChatGPTPreparation {
+			return fmt.Errorf("ChatGPT preparation requires a validated Context7 personal mapping")
+		}
+		plan.Status = domain.PlanReady
+		plan.Activation = domain.ActivationPrepared
+		plan.Authentication = domain.AuthenticationPending
+		plan.Verification = domain.VerificationPackageValid
+		plan.UserActions = []string{domain.ChatGPTMappedPreparationAction}
 		return nil
 	}
 	if strings.TrimSpace(plan.NativeRegistryRoot) == "" || !hasOnlyKiroNativeComponents(plan.Components) {

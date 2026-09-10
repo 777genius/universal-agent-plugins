@@ -37,9 +37,11 @@ type SourceAcquirer interface {
 }
 
 type App struct {
-	Prompter      prompt.Prompter
-	PromptFactory func(io.Reader, io.Writer, io.Writer, bool, bool) (prompt.Prompter, io.Writer, error)
-	reviewOutput  io.Writer
+	chatGPTPreparation bool
+	chatGPTAppID       string
+	Prompter           prompt.Prompter
+	PromptFactory      func(io.Reader, io.Writer, io.Writer, bool, bool) (prompt.Prompter, io.Writer, error)
+	reviewOutput       io.Writer
 
 	Version             string
 	UserHome            string
@@ -64,6 +66,7 @@ type App struct {
 }
 
 type options struct {
+	chatGPTAppID        string
 	prepare             bool
 	installIntents      map[domain.ClientID]domain.InstallIntent
 	color               terminaltheme.Policy

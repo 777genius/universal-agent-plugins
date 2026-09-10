@@ -167,6 +167,8 @@ type ComponentInventory struct {
 }
 
 type PackageEnvelope struct {
+	LocalChatGPTMapping *ChatGPTLocalMapping `json:"-"`
+
 	LoaderKind      string             `json:"loader_kind"`
 	FormatID        string             `json:"format_id"`
 	SchemaURI       string             `json:"schema_uri"`

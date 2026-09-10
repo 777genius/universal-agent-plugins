@@ -859,6 +859,10 @@ func upsertPreparedInstallation(
 			installation.Clients = map[string]domain.ClientBinding{}
 		}
 	}
+	if input.Envelope.LocalChatGPTMapping != nil {
+		mapping := *input.Envelope.LocalChatGPTMapping
+		installation.LocalChatGPTMapping = &mapping
+	}
 	previousClient := installation.Clients[clientBindingID]
 	bindingClientID := string(input.Client.ClientID)
 	if previousClient.ClientID != "" {

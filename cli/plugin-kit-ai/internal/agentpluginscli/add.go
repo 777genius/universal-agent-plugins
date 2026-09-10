@@ -44,16 +44,43 @@ func newAddCommand(app App, opts *options) *cobra.Command {
 				if err != nil {
 					return err
 				}
-				if len(targets) != 1 || targets[0] != domain.ClientKiro {
-					return fmt.Errorf("--prepare requires --target kiro; prepare other targets in separate commands")
+				if len(targets) == 0 {
+					if !app.Terminal || opts.format != "human" {
+						return fmt.Errorf("--prepare requires --target kiro and/or chatgpt in automated mode")
+					}
+					targets = []domain.ClientID{domain.ClientKiro, domain.ClientChatGPT}
 				}
-				opts.installIntents[domain.ClientKiro] = domain.InstallIntentPrepare
+				for _, target := range targets {
+					if target != domain.ClientKiro && target != domain.ClientChatGPT {
+						return fmt.Errorf("--prepare requires --target kiro and/or chatgpt (Context7 only)")
+					}
+					opts.installIntents[target] = domain.InstallIntentPrepare
+					if target == domain.ClientChatGPT {
+						app.chatGPTPreparation = true
+					}
+				}
+				if app.chatGPTPreparation && (opts.scope != "user" || !isDirectorySelector(args[0])) {
+					return fmt.Errorf("ChatGPT preparation requires the signed Context7 Directory source and user scope")
+				}
+			}
+			if opts.chatGPTAppID != "" {
+				if !app.chatGPTPreparation {
+					return fmt.Errorf("--chatgpt-app-id requires --prepare --target chatgpt")
+				}
+				if err := domain.ValidateChatGPTAppID(opts.chatGPTAppID); err != nil {
+					return err
+				}
+				app.chatGPTAppID = opts.chatGPTAppID
 			}
 			var detectedClients []domain.DetectedClient
 			targetProvided := cmd.Flags().Changed("target") && strings.TrimSpace(opts.target) != ""
 			if !targetProvided && app.Terminal && opts.format == "human" {
 				var err error
 				app, err = withPrompter(cmd, app, opts)
+				if err != nil {
+					return err
+				}
+				opts.installIntents, err = app.addLifecycleIntents(cmd.Context(), args[0], opts.scope, opts.installIntents)
 				if err != nil {
 					return err
 				}
@@ -66,6 +93,16 @@ func newAddCommand(app App, opts *options) *cobra.Command {
 				}
 				detectedClients = clients
 				targets := selection
+				selectedChatGPT := false
+				for _, target := range targets {
+					if target == domain.ClientChatGPT {
+						selectedChatGPT = true
+					}
+				}
+				if preloaded != nil && !selectedChatGPT {
+					preloaded.chatGPTPreparation = false
+					preloaded.localChatGPTMapping = nil
+				}
 				intents, err := app.addLifecycleIntents(cmd.Context(), args[0], opts.scope, opts.installIntents)
 				if err != nil {
 					return err
@@ -103,7 +140,8 @@ func newAddCommand(app App, opts *options) *cobra.Command {
 			return runAddManyWithClients(cmd.Context(), cmd, app, opts, args[0], targets, activationComplete, authComplete, detectedClients)
 		},
 	}
-	command.Flags().BoolVar(&opts.prepare, "prepare", false, "prepare owned Kiro configuration without launching Kiro; authenticate and verify tools in Kiro")
+	command.Flags().StringVar(&opts.chatGPTAppID, "chatgpt-app-id", "", "personal Context7 registration ID copied from ChatGPT Developer Mode")
+	command.Flags().BoolVar(&opts.prepare, "prepare", false, "prepare Kiro configuration and/or Context7 ChatGPT personal marketplace; authenticate and verify tools in the client")
 	command.Flags().BoolVar(&activationComplete, "activation-complete", false, "attest that manual client activation is complete")
 	command.Flags().BoolVar(&authComplete, "auth-complete", false, "attest that required authentication is complete or none is required after review")
 	return command
@@ -240,7 +278,8 @@ func promptTargetChoices(cmd *cobra.Command, app App, detected []domain.Detected
 			return nil, nil, err
 		}
 	}
-	if len(detected) <= 1 {
+	personalPreparationChoice := len(detected) == 1 && detected[0].ClientID == domain.ClientChatGPT && strings.Contains(detected[0].DisplayName, "prepare personal marketplace")
+	if len(detected) <= 1 && !personalPreparationChoice {
 		for _, label := range request.SkippedLabels {
 			if _, err := fmt.Fprintln(reviewWriter(cmd, app), "Skipped (not installed in this attempt): "+label); err != nil {
 				return nil, nil, err
@@ -556,7 +595,11 @@ func renderAddResultErrorWithSecurity(writer io.Writer, format string, envelope 
 		return err
 	}
 	if result.NoChange && result.Plan.InstallIntent == domain.InstallIntentPrepare {
-		_, err := fmt.Fprintln(writer, "Owned Kiro configuration remains prepared. No changes made.\nNext: "+clientplanner.KiroPrepareAction)
+		message := "Owned Kiro configuration remains prepared. No changes made."
+		if result.Plan.ClientID == domain.ClientChatGPT {
+			message = "Owned ChatGPT package remains prepared. Remote connection and tool calls have not been verified."
+		}
+		_, err := fmt.Fprintln(writer, message+"\nNext: "+nextLocalLifecycleAction(result))
 		return err
 	}
 	if result.NoChange {
@@ -668,6 +711,19 @@ func nextLocalLifecycleAction(result usecase.AddResult) string {
 
 func lifecycleAction(result usecase.AddResult, includePrivate bool) string {
 	if result.Plan.InstallIntent == domain.InstallIntentPrepare {
+		if result.Plan.ClientID == domain.ClientChatGPT {
+			if includePrivate && result.Activation.Activation == domain.ActivationPrepared {
+				if len(result.Activation.LocalActions) > 0 {
+					return result.Activation.LocalActions[0]
+				}
+				if result.Plan.ActivePath != "" {
+					// Personal preparation explicitly exposes its usable marketplace path,
+					// but never the private registration receipt or ID.
+					return domain.ChatGPTPreparedAction(result.Plan.ActivePath, result.Plan.DeclaredName)
+				}
+			}
+			return domain.ChatGPTMappedPreparationAction
+		}
 		return clientplanner.KiroPrepareAction
 	}
 	action := ""
@@ -704,4 +760,12 @@ func lifecycleAction(result usecase.AddResult, includePrivate bool) string {
 func fullyInstalled(outcome domain.ActivationOutcome) bool {
 	authComplete := outcome.Authentication == domain.AuthenticationNotRequired || outcome.Authentication == domain.AuthenticationComplete
 	return outcome.Activation == domain.ActivationActive && outcome.Verification == domain.VerificationInstalled && authComplete
+}
+
+// Preserve group preflight guidance unless a prepared personal marketplace exists.
+func localTargetLifecycleAction(result usecase.AddResult, publicAction string) string {
+	if result.Plan.ClientID == domain.ClientChatGPT && result.Plan.InstallIntent == domain.InstallIntentPrepare && result.Activation.Activation == domain.ActivationPrepared {
+		return nextLocalLifecycleAction(result)
+	}
+	return publicAction
 }

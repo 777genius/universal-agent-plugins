@@ -203,7 +203,8 @@ func (observer NativeIdentityObserver) inspectNativeRegistry(ctx context.Context
 		}
 	case domain.ClientChatGPT:
 		// ChatGPT's installed-plugin registry is remote and this adapter has no
-		// authenticated read-only API. A signed explicit app binding authorizes
+		// authenticated read-only API. A validated explicit app binding (signed or
+		// a personal Context7 receipt) authorizes
 		// only preparation of a new local package, while an existing ownership
 		// receipt authorizes replacement of that owned local package. Neither is
 		// treated as proof of remote activation or registry availability.

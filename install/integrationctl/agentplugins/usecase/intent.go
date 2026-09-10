@@ -37,6 +37,17 @@ func (service Service) planInstall(ctx context.Context, input *AddInput, physica
 			}
 		}
 	}
+	if input.Client.ClientID == domain.ClientChatGPT && input.InstallIntent == domain.InstallIntentPrepare && input.Envelope.LocalChatGPTMapping == nil {
+		return domain.DeliveryPlan{}, fmt.Errorf("ChatGPT preparation requires a personal Context7 registration receipt")
+	}
+	if input.Envelope.LocalChatGPTMapping != nil {
+		if input.Client.ClientID != domain.ClientChatGPT || input.Scope != domain.ScopeUser || input.InstallIntent != domain.InstallIntentPrepare || input.OriginMode != domain.OriginModeDirectory || input.DirectoryResolution == nil || input.DirectoryResolution.ProductID != "context7" || input.DirectoryResolution.DistributionID != "upstash/context7" {
+			return domain.DeliveryPlan{}, fmt.Errorf("personal ChatGPT mapping requires explicit canonical Directory Context7 user preparation")
+		}
+		if installation != nil && installation.LocalChatGPTMapping != nil && *installation.LocalChatGPTMapping != *input.Envelope.LocalChatGPTMapping {
+			return domain.DeliveryPlan{}, fmt.Errorf("personal ChatGPT registration differs from retained receipt")
+		}
+	}
 	plan, err := service.Planner.Plan(ctx, input.Envelope, input.Client, input.Scope, physicalID)
 	if err == nil {
 		err = planner.ApplyInstallIntent(&plan, input.InstallIntent)

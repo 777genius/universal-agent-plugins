@@ -87,6 +87,15 @@ func runAddManyLoaded(ctx context.Context, cmd *cobra.Command, app App, opts *op
 	if err := authorizeSecurityAssessment(cmd, app, opts, &loaded); err != nil {
 		return err
 	}
+	if loaded.chatGPTPreparation && loaded.localChatGPTMapping == nil {
+		action := chatGPTRegistrationResumeAction(cmd, loaded.envelope.Source.RequestedSource, targets)
+		if opts.format == "json" {
+			if err := writeJSONResult(cmd.OutOrStdout(), "add", outputResultFailure, map[string]any{"status": "action_required", "target": "chatgpt", "mcp_url": domain.Context7OAuthURL, "next_action": action, "remote_verified": false, "mutated": false}); err != nil {
+				return err
+			}
+		}
+		return fmt.Errorf("action_required: %s", action)
+	}
 	if len(targets) == 1 {
 		selectedOptions := *opts
 		selectedOptions.target = string(targets[0])
@@ -388,7 +397,7 @@ func renderAddMultiResult(cmd *cobra.Command, opts *options, result addMultiResu
 			return err
 		}
 		if target.NextAction != "" && !fullyInstalled(target.Output.Result.Activation) {
-			if _, err := fmt.Fprintf(cmd.OutOrStdout(), "    Next: %s\n", target.NextAction); err != nil {
+			if _, err := fmt.Fprintf(cmd.OutOrStdout(), "    Next: %s\n", localTargetLifecycleAction(target.Output.Result, target.NextAction)); err != nil {
 				return err
 			}
 		}
