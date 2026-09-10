@@ -40,7 +40,11 @@ jobs:
           set -euo pipefail
           root="$RUNNER_TEMP/milestone-a-prepare-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
           test ! -e "$root"
+          mkdir -m 700 "$root"
+          mkdir -m 700 "$root/evidence"
           printf 'MILESTONE_A_BUNDLE=%s\n' "$root" >> "$GITHUB_ENV"
+          export MILESTONE_A_FAILURE="$root/evidence/workflow-failure.json"
+          trap 'status=$?; if (( status != 0 )) && [[ ! -e "$MILESTONE_A_FAILURE" ]]; then node -e '\''require("fs").writeFileSync(process.argv[1],JSON.stringify({schema:"milestone-a-e2e-workflow-failure/v1",status:Number(process.argv[2]),publication:false},null,2)+"\\n",{flag:"wx",mode:0o600})'\'' "$MILESTONE_A_FAILURE" "$status" || true; fi' EXIT
           config="$RUNNER_TEMP/milestone-a-prepare.json"
           modcache="$RUNNER_TEMP/milestone-a-modcache-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
           test ! -e "$modcache"
@@ -50,7 +54,7 @@ jobs:
           # production security checks retain credential-free read-only access
           # to their pinned public feed and scanner-release endpoints.
           GOMODCACHE="$modcache" go mod download
-          node -e 'require("fs").writeFileSync(process.argv[1], JSON.stringify({root:process.argv[2],repo:process.env.GITHUB_WORKSPACE,expectedHead:process.env.EXPECTED_HEAD,go:process.argv[3],modCache:process.argv[4],node:process.execPath,npm:process.argv[5]}))' \
+          node -e 'require("fs").writeFileSync(process.argv[1], JSON.stringify({root:process.argv[2],precreatedRoot:true,repo:process.env.GITHUB_WORKSPACE,expectedHead:process.env.EXPECTED_HEAD,go:process.argv[3],modCache:process.argv[4],node:process.execPath,npm:process.argv[5]}))' \
             "$config" "$root" "$(command -v go)" "$modcache" "$(command -v npm)"
           node npm/agentplugins/scripts/milestone-a-e2e.js prepare "$config"
       - name: Upload exact candidate bundle and failure evidence
