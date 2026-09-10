@@ -84,6 +84,21 @@ func skippedTargets(clients []domain.DetectedClient, reason string) []targetSkip
 func (app App) compatibleDetectedTargets(ctx context.Context, source string, detected []domain.DetectedClient, intents ...map[domain.ClientID]domain.InstallIntent) ([]domain.DetectedClient, []targetSkip, *loadedPackage, error) {
 	candidates := detected
 	var skipped []targetSkip
+	// The registration resume command applies --prepare to the entire selection.
+	// Keep its target grammar and the menu aligned, even for eligible peers.
+	if app.chatGPTPreparation || (len(intents) > 0 && intents[0][domain.ClientChatGPT] == domain.InstallIntentPrepare) {
+		var allowed []domain.DetectedClient
+		for _, client := range detected {
+			if client.ClientID == domain.ClientKiro || client.ClientID == domain.ClientChatGPT {
+				allowed = append(allowed, client)
+			} else {
+				skipped = append(skipped, targetSkip{client.ClientID, "--prepare supports only Kiro and ChatGPT; install this client separately without --prepare"})
+			}
+		}
+		detected = allowed
+		candidates = allowed
+	}
+
 	switch {
 	case strings.HasPrefix(source, "discovery:"):
 		compatible, err := app.compatibleDiscoveryTargets(ctx, source, detected)
@@ -97,7 +112,7 @@ func (app App) compatibleDetectedTargets(ctx context.Context, source string, det
 		if err != nil {
 			return nil, nil, nil, err
 		}
-		skipped = skippedTargets(subtractDetectedClients(detected, compatible), "the catalog has no compatible release for this combination of clients and system; check this client separately with --target")
+		skipped = append(skipped, skippedTargets(subtractDetectedClients(detected, compatible), "the catalog has no compatible release for this combination of clients and system; check this client separately with --target")...)
 		candidates = compatible
 		if len(candidates) == 0 {
 			return nil, skipped, nil, nil
@@ -192,7 +207,7 @@ func (app App) compatibleDirectoryTargets(ctx context.Context, selector string, 
 			preparing := false
 			// Ordinary eligibility wins unless preparation was requested. Only
 			// the bounded Context7 purpose can offer an additional choice.
-			if (resolveErr != nil || app.chatGPTPreparation) && len(intents) > 0 && intents[0] != nil {
+			if len(intents) > 0 && intents[0][domain.ClientChatGPT] == domain.InstallIntentPrepare {
 				hasChatGPT := false
 				var peers []domain.ClientID
 				for _, target := range targets {

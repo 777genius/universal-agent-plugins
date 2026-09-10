@@ -361,7 +361,7 @@ func renderUpdateMultiResult(cmd *cobra.Command, opts *options, result updateMul
 			return err
 		}
 		if target.NextAction != "" && !fullyInstalled(target.Output.Result.Activation) {
-			if _, err := fmt.Fprintf(cmd.OutOrStdout(), "    Next: %s\n", target.NextAction); err != nil {
+			if _, err := fmt.Fprintf(cmd.OutOrStdout(), "    Next: %s\n", localTargetLifecycleAction(target.Output.Result, target.NextAction)); err != nil {
 				return err
 			}
 		}

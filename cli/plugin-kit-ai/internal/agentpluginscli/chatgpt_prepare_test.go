@@ -323,7 +323,8 @@ func TestContext7GuidedMixedUpdateUsesOneNewImmutableRelease(t *testing.T) {
 	dist.ReleasePolicies = append(dist.ReleasePolicies, policy)
 	d.bundle.Snapshot.Evidence = append(d.bundle.Snapshot.Evidence, intendedTrustedDirectoryEvidence(domain.DirectoryEvidence{ID: policy.CurrentEvidence[0], DistributionID: dist.ID, ReleaseSequence: 2, PackageTreeDigest: release.TreeDigest, Level: "materialization", Outcome: "passed", Client: domain.ClientKiro}))
 	beforeCalls := a.verifiedCalls
-	if out, _, err := f.execute(false, "update", "context7", "--target", "kiro,chatgpt"); err != nil {
+	out, _, err := f.execute(false, "update", "context7", "--target", "kiro,chatgpt")
+	if err != nil {
 		t.Fatalf("%s %v", out, err)
 	}
 	state, err := f.store.Load()
@@ -337,6 +338,9 @@ func TestContext7GuidedMixedUpdateUsesOneNewImmutableRelease(t *testing.T) {
 	for _, b := range i.Clients {
 		if b.PackageRevision == nil || b.PackageRevision.TreeDigest != release.TreeDigest || b.PackageRevision.ResolvedRevision != release.PackageSource.Revision || b.InstallIntent != domain.InstallIntentPrepare || b.Activation != domain.ActivationPrepared {
 			t.Fatalf("mixed update not same revision: %+v", b)
+		}
+		if b.ClientID == "chatgpt" && (!strings.Contains(out, b.TargetLocator) || strings.Contains(out, fixturePersonalAppID)) {
+			t.Fatalf("updated human path: %s", out)
 		}
 	}
 }

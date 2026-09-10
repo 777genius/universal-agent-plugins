@@ -180,6 +180,13 @@ func renderRepairResult(writer io.Writer, format string, installation domain.Ins
 	if err := renderOpenCodeRuntimeNotice(writer, result); err != nil {
 		return err
 	}
+	if !dryRun {
+		if action := localTargetLifecycleAction(result, ""); action != "" {
+			if _, err := fmt.Fprintf(writer, "Next: %s\n", action); err != nil {
+				return err
+			}
+		}
+	}
 	if result.NoChange {
 		_, err := fmt.Fprintln(writer, "Managed package digest is valid. No repair was needed.")
 		return err
@@ -776,6 +783,11 @@ func renderUpdateResult(writer io.Writer, format string, envelope domain.Package
 		return err
 	}
 	if result.NoChange {
+		if action := localTargetLifecycleAction(result, ""); action != "" {
+			if _, err := fmt.Fprintf(writer, "Next: %s\n", action); err != nil {
+				return err
+			}
+		}
 		_, _ = fmt.Fprintln(writer, "Already up to date. No changes made.")
 		return nil
 	}
@@ -800,7 +812,7 @@ func renderUpdateResult(writer io.Writer, format string, envelope domain.Package
 			_, _ = fmt.Fprintln(writer, "Package updated. Activation is not complete yet.")
 		}
 	}
-	if action := nextLifecycleAction(result); action != "" && !fullyInstalled(result.Activation) {
+	if action := nextLocalLifecycleAction(result); action != "" && !fullyInstalled(result.Activation) {
 		_, _ = fmt.Fprintf(writer, "Next: %s\n", action)
 	}
 	return nil

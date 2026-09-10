@@ -1,7 +1,10 @@
 package agentpluginscli
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -9,11 +12,12 @@ import (
 
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/prompt"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/usecase"
 )
 
 func TestContext7InteractivePreparationChoice(t *testing.T) {
 	for _, explicit := range []bool{false, true} {
-		t.Run(map[bool]string{false: "offered", true: "requested"}[explicit], func(t *testing.T) {
+		t.Run(map[bool]string{false: "ordinary-ineligible", true: "requested"}[explicit], func(t *testing.T) {
 			f, d, a := context7GuidedFixture(t)
 			f.app.Detector = staticDetector{clients: []domain.DetectedClient{fixtureClient(t, domain.ClientChatGPT)}}
 			before, _ := json.Marshal(d.bundle)
@@ -22,6 +26,18 @@ func TestContext7InteractivePreparationChoice(t *testing.T) {
 				args = append(args, "--prepare")
 			}
 			out, _, err := f.executeInput(true, "\n", args...)
+			if !explicit {
+				if err == nil || strings.Contains(out, "prepare personal marketplace") || a.verifiedCalls != 0 || a.directGitCalls != 0 || a.localCalls != 0 {
+					t.Fatalf("ordinary add entered preparation: %s %v acquisition=%+v", out, err, a)
+				}
+				state, _ := f.store.Load()
+				after, _ := json.Marshal(d.bundle)
+				if len(state.Installations) != 0 || string(before) != string(after) {
+					t.Fatal("ordinary add mutated state or signed metadata")
+				}
+				return
+			}
+
 			if err == nil || !strings.Contains(err.Error(), "action_required") || !strings.Contains(out, "prepare personal marketplace") {
 				t.Fatalf("choice/guidance: %s %v", out, err)
 			}
@@ -207,6 +223,170 @@ func TestContext7PreparedGuidanceAcrossLifecycle(t *testing.T) {
 		}
 		if strings.Contains(out, path) || strings.Contains(out, fixturePersonalAppID) || strings.Contains(out, "Rerun add") || !strings.Contains(out, "Remote OAuth and tool calls have not been verified") {
 			t.Fatalf("%s public guidance: %s", op, out)
+		}
+	}
+}
+
+func TestContext7HumanPathsAcrossSingleAndMixedLifecycle(t *testing.T) {
+	for _, targets := range []string{"chatgpt", "kiro,chatgpt"} {
+		t.Run(targets, func(t *testing.T) {
+			f, _, _ := context7GuidedFixture(t)
+			check := func(out string) {
+				t.Helper()
+				state, err := f.store.Load()
+				if err != nil {
+					t.Fatal(err)
+				}
+				path := ""
+				for _, b := range state.Installations[0].Clients {
+					if b.ClientID == "chatgpt" {
+						path = b.TargetLocator
+					}
+				}
+				if path == "" || !strings.Contains(out, path) || strings.Contains(out, fixturePersonalAppID) {
+					t.Fatalf("missing usable path or leaked ID: %s", out)
+				}
+				if _, err := os.Stat(filepath.Join(path, ".agents", "plugins", "marketplace.json")); err != nil {
+					t.Fatal(err)
+				}
+			}
+			out, _, err := f.execute(false, "add", "context7", "--target", targets, "--prepare", "--chatgpt-app-id", fixturePersonalAppID)
+			if err != nil {
+				t.Fatalf("initial: %s %v", out, err)
+			}
+			check(out)
+			for _, op := range []string{"add", "update", "repair"} {
+				t.Run(op, func(t *testing.T) {
+					out, _, err := f.execute(false, op, "context7", "--target", targets)
+					if err != nil {
+						t.Fatalf("%s: %s %v", op, out, err)
+					}
+					check(out)
+					out, _, err = f.execute(false, op, "context7", "--target", targets, "--format", "json")
+					if err != nil {
+						t.Fatalf("json: %s %v", out, err)
+					}
+					state, _ := f.store.Load()
+					for _, b := range state.Installations[0].Clients {
+						encoded, _ := json.Marshal(b.TargetLocator)
+						if b.TargetLocator != "" && strings.Contains(out, strings.Trim(string(encoded), "\"")) {
+							t.Fatalf("private path in JSON: %s", out)
+						}
+					}
+					if strings.Contains(out, fixturePersonalAppID) {
+						t.Fatalf("private ID in JSON: %s", out)
+					}
+				})
+			}
+
+			state, _ := f.store.Load()
+			for _, b := range state.Installations[0].Clients {
+				if b.ClientID == "chatgpt" {
+					if err := os.RemoveAll(b.TargetLocator); err != nil {
+						t.Fatal(err)
+					}
+				}
+			}
+			out, _, err = f.execute(false, "repair", "context7", "--target", targets)
+			if err != nil {
+				t.Fatalf("repair missing marketplace: %s %v", out, err)
+			}
+			check(out)
+			f.app.Detector = staticDetector{clients: []domain.DetectedClient{fixtureClient(t, domain.ClientChatGPT)}}
+			out, _, err = f.executeInput(true, "\n", "add", "context7-alias", "--plain")
+			if err != nil {
+				t.Fatalf("retained interactive intent: %s %v", out, err)
+			}
+			check(out)
+		})
+	}
+}
+
+func TestContext7PreparationExcludesEligibleCodexAndResumes(t *testing.T) {
+	f, d, _ := context7GuidedFixture(t)
+	snapshot := &d.bundle.Snapshot
+	policy := &snapshot.Distributions[0].ReleasePolicies[0]
+	policy.Targets = append(policy.Targets, domain.DirectoryTarget{Client: domain.ClientCodex, Scopes: []domain.InstallScope{domain.ScopeUser}, Delivery: "managed", Authentication: domain.AuthenticationRequirementRequired})
+	policy.CurrentEvidence = append(policy.CurrentEvidence, "materialized/codex")
+	evidence := snapshot.Evidence[0]
+	evidence.ID, evidence.Client = "materialized/codex", domain.ClientCodex
+	snapshot.Evidence = append(snapshot.Evidence, evidence)
+	f.app.Detector = staticDetector{clients: []domain.DetectedClient{fixtureClient(t, domain.ClientCodex), fixtureClient(t, domain.ClientKiro), fixtureClient(t, domain.ClientChatGPT)}}
+	// Prove this peer has ordinary signed eligibility before testing preparation.
+	clients := detectedSupportedClients(f.app.Detector.(staticDetector).clients)
+	compatible, err := f.app.compatibleDirectoryTargets(context.Background(), "context7", clients)
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, client := range compatible {
+		if client.ClientID == domain.ClientCodex {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("fixture Codex is not ordinarily eligible: %+v", compatible)
+	}
+	f.app.Prompter = fakePrompter{
+		selectFn: func(request prompt.TargetSelectionRequest) (prompt.TargetSelectionResult, error) {
+			if len(request.Choices) != 2 {
+				t.Fatalf("prepare choices: %+v", request)
+			}
+			for _, choice := range request.Choices {
+				if choice.ID != domain.ClientKiro && choice.ID != domain.ClientChatGPT {
+					t.Fatalf("unsupported preparation choice: %+v", choice)
+				}
+			}
+			return prompt.TargetSelectionResult{IDs: []domain.ClientID{domain.ClientKiro, domain.ClientChatGPT}}, nil
+		},
+		confirmFn: func() (prompt.ConfirmationResult, error) { return prompt.ConfirmationResult{Accepted: true}, nil },
+	}
+	out, _, err := f.executeInput(true, "", "add", "context7", "--prepare", "--plain")
+	if err == nil || !strings.Contains(err.Error(), "action_required") {
+		t.Fatalf("registration: %s %v", out, err)
+	}
+	command := emittedRegistrationCommand(t, err.Error())
+	if strings.Contains(command, "codex") || !strings.Contains(command, "chatgpt,kiro") {
+		t.Fatal(command)
+	}
+	out, _, err = f.execute(false, strings.Fields(command)...)
+	if err != nil {
+		t.Fatalf("resume %s: %s %v", command, out, err)
+	}
+	state, _ := f.store.Load()
+	if len(state.Installations) != 1 || len(state.Installations[0].Clients) != 2 {
+		t.Fatalf("resume state: %+v", state)
+	}
+}
+
+func TestContext7SingleLifecycleRenderPaths(t *testing.T) {
+	for _, noChange := range []bool{false, true} {
+		result := usecase.AddResult{
+			Plan:       domain.DeliveryPlan{ClientID: domain.ClientChatGPT, InstallIntent: domain.InstallIntentPrepare, ActivePath: "/private/personal-marketplace", DeclaredName: "context7"},
+			Activation: domain.ActivationOutcome{Activation: domain.ActivationPrepared, Authentication: domain.AuthenticationPending, Verification: domain.VerificationPackageValid},
+			NoChange:   noChange, Mutated: !noChange,
+		}
+		for _, op := range []string{"add", "update", "repair"} {
+			t.Run(fmt.Sprintf("%s/noChange=%t", op, noChange), func(t *testing.T) {
+				for _, format := range []string{"human", "json"} {
+					var out bytes.Buffer
+					var err error
+					switch op {
+					case "add":
+						err = renderAddResult(&out, format, domain.PackageEnvelope{}, result, false)
+					case "update":
+						err = renderUpdateResult(&out, format, domain.PackageEnvelope{}, result, false)
+					case "repair":
+						err = renderRepairResult(&out, format, domain.Installation{}, result, false)
+					}
+					if err != nil {
+						t.Fatal(err)
+					}
+					if strings.Contains(out.String(), result.Plan.ActivePath) != (format == "human") {
+						t.Fatalf("%s path boundary: %s", format, out.String())
+					}
+				}
+			})
 		}
 	}
 }

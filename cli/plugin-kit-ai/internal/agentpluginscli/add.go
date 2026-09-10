@@ -80,6 +80,10 @@ func newAddCommand(app App, opts *options) *cobra.Command {
 				if err != nil {
 					return err
 				}
+				opts.installIntents, err = app.addLifecycleIntents(cmd.Context(), args[0], opts.scope, opts.installIntents)
+				if err != nil {
+					return err
+				}
 				selection, clients, preloaded, err := promptCompatibleDetectedTargets(cmd.Context(), cmd, app, args[0], opts.installIntents)
 				if err != nil {
 					return err
@@ -595,7 +599,7 @@ func renderAddResultErrorWithSecurity(writer io.Writer, format string, envelope 
 		if result.Plan.ClientID == domain.ClientChatGPT {
 			message = "Owned ChatGPT package remains prepared. Remote connection and tool calls have not been verified."
 		}
-		_, err := fmt.Fprintln(writer, message+"\nNext: "+nextLifecycleAction(result))
+		_, err := fmt.Fprintln(writer, message+"\nNext: "+nextLocalLifecycleAction(result))
 		return err
 	}
 	if result.NoChange {
@@ -756,4 +760,12 @@ func lifecycleAction(result usecase.AddResult, includePrivate bool) string {
 func fullyInstalled(outcome domain.ActivationOutcome) bool {
 	authComplete := outcome.Authentication == domain.AuthenticationNotRequired || outcome.Authentication == domain.AuthenticationComplete
 	return outcome.Activation == domain.ActivationActive && outcome.Verification == domain.VerificationInstalled && authComplete
+}
+
+// Preserve group preflight guidance unless a prepared personal marketplace exists.
+func localTargetLifecycleAction(result usecase.AddResult, publicAction string) string {
+	if result.Plan.ClientID == domain.ClientChatGPT && result.Plan.InstallIntent == domain.InstallIntentPrepare && result.Activation.Activation == domain.ActivationPrepared {
+		return nextLocalLifecycleAction(result)
+	}
+	return publicAction
 }

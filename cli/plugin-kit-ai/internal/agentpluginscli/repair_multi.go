@@ -215,7 +215,7 @@ func renderRepairMultiResult(cmd *cobra.Command, opts *options, result repairMul
 			return err
 		}
 		if target.NextAction != "" {
-			if _, err := fmt.Fprintf(cmd.OutOrStdout(), "    Next: %s\n", target.NextAction); err != nil {
+			if _, err := fmt.Fprintf(cmd.OutOrStdout(), "    Next: %s\n", localTargetLifecycleAction(target.Output.Result, target.NextAction)); err != nil {
 				return err
 			}
 		}
