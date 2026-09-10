@@ -29,7 +29,7 @@ func ApplyInstallIntent(plan *domain.DeliveryPlan, intent domain.InstallIntent) 
 		plan.Activation = domain.ActivationPrepared
 		plan.Authentication = domain.AuthenticationPending
 		plan.Verification = domain.VerificationPackageValid
-		plan.UserActions = []string{domain.ChatGPTRegistrationAction}
+		plan.UserActions = []string{domain.ChatGPTMappedPreparationAction}
 		return nil
 	}
 	if strings.TrimSpace(plan.NativeRegistryRoot) == "" || !hasOnlyKiroNativeComponents(plan.Components) {

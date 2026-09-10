@@ -88,12 +88,13 @@ func runAddManyLoaded(ctx context.Context, cmd *cobra.Command, app App, opts *op
 		return err
 	}
 	if loaded.chatGPTPreparation && loaded.localChatGPTMapping == nil {
+		action := chatGPTRegistrationResumeAction(cmd, loaded.envelope.Source.RequestedSource, targets)
 		if opts.format == "json" {
-			if err := writeJSONResult(cmd.OutOrStdout(), "add", outputResultFailure, map[string]any{"status": "action_required", "target": "chatgpt", "mcp_url": domain.Context7OAuthURL, "next_action": domain.ChatGPTRegistrationAction, "remote_verified": false, "mutated": false}); err != nil {
+			if err := writeJSONResult(cmd.OutOrStdout(), "add", outputResultFailure, map[string]any{"status": "action_required", "target": "chatgpt", "mcp_url": domain.Context7OAuthURL, "next_action": action, "remote_verified": false, "mutated": false}); err != nil {
 				return err
 			}
 		}
-		return fmt.Errorf("action_required: %s", domain.ChatGPTRegistrationAction)
+		return fmt.Errorf("action_required: %s", action)
 	}
 	if len(targets) == 1 {
 		selectedOptions := *opts

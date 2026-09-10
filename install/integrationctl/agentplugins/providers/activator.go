@@ -351,7 +351,7 @@ func (activator Activator) Activate(ctx context.Context, request domain.Activati
 		if request.Client.ClientID == domain.ClientChatGPT {
 			outcome.Activation = domain.ActivationPrepared
 			outcome.Authentication = domain.AuthenticationPending
-			outcome.LocalActions = append(outcome.LocalActions, fmt.Sprintf("In ChatGPT desktop, add the personal local marketplace at %s (.agents/plugins/marketplace.json), install %s, and verify the registered OAuth connection and tool calls in a new chat. The registration receipt is retained locally after remove, including --purge-data, for reinstall.", request.Delivery.ActivePath, request.DeclaredName))
+			outcome.LocalActions = append(outcome.LocalActions, domain.ChatGPTPreparedAction(request.Delivery.ActivePath, request.DeclaredName))
 			outcome.UserActions = append(outcome.UserActions, request.Plan.UserActions...)
 			return outcome, nil
 		}

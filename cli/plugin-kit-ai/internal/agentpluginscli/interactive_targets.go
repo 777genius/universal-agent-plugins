@@ -93,7 +93,7 @@ func (app App) compatibleDetectedTargets(ctx context.Context, source string, det
 		skipped = skippedTargets(subtractDetectedClients(detected, compatible), "not listed as compatible in the signed Discovery record; inspect this client separately with --target")
 		return compatible, skipped, nil, nil
 	case isDirectorySelector(source):
-		compatible, err := app.compatibleDirectoryTargets(ctx, source, detected)
+		compatible, err := app.compatibleDirectoryTargets(ctx, source, detected, intents...)
 		if err != nil {
 			return nil, nil, nil, err
 		}
@@ -102,6 +102,9 @@ func (app App) compatibleDetectedTargets(ctx context.Context, source string, det
 		if len(candidates) == 0 {
 			return nil, skipped, nil, nil
 		}
+	}
+	if len(intents) > 0 && intents[0][domain.ClientChatGPT] == domain.InstallIntentPrepare {
+		app.chatGPTPreparation = true
 	}
 	request := app.addResolutionRequest(source, nil)
 	if isDirectorySelector(source) {
@@ -141,7 +144,7 @@ func (app App) compatibleDiscoveryTargets(ctx context.Context, selector string, 
 	return compatible, nil
 }
 
-func (app App) compatibleDirectoryTargets(ctx context.Context, selector string, detected []domain.DetectedClient) ([]domain.DetectedClient, error) {
+func (app App) compatibleDirectoryTargets(ctx context.Context, selector string, detected []domain.DetectedClient, intents ...map[domain.ClientID]domain.InstallIntent) ([]domain.DetectedClient, error) {
 	if app.DirectoryClient == nil || app.StateStore == nil {
 		return nil, fmt.Errorf("signed Directory dependencies are unavailable; use a direct local or exact full-SHA source")
 	}
@@ -170,7 +173,7 @@ func (app App) compatibleDirectoryTargets(ctx context.Context, selector string, 
 	}
 
 	// At most ten clients are supported, so enumerating subsets is bounded to
-	// 1,023 pure resolver calls. This preserves one signed distribution/release
+	// 1,023 subsets, each with bounded pure resolver checks. This preserves one signed distribution/release
 	// for the complete set instead of combining incompatible per-client picks.
 	for size := len(detected); size >= 1; size-- {
 		var match []domain.DetectedClient
@@ -179,13 +182,55 @@ func (app App) compatibleDirectoryTargets(ctx context.Context, selector string, 
 			for index, client := range candidate {
 				targets[index] = client.ClientID
 			}
-			_, resolveErr := domain.ResolveDirectory(bundle.Snapshot, domain.DirectoryResolveRequest{
+			resolveRequest := domain.DirectoryResolveRequest{
 				Selector: resolveSelector, Targets: targets, Scope: domain.ScopeUser,
 				InstallerVersion: app.Version, ClientVersions: environment.ClientVersions,
 				OS: runtime.GOOS, Architecture: runtime.GOARCH, DependencyIdentity: environment.DependencyIdentity,
 				SchemaVersion: "1.0.0", Operation: operation, Recorded: request.Recorded,
-			})
+			}
+			_, resolveErr := domain.ResolveDirectory(bundle.Snapshot, resolveRequest)
+			preparing := false
+			// Ordinary eligibility wins unless preparation was requested. Only
+			// the bounded Context7 purpose can offer an additional choice.
+			if (resolveErr != nil || app.chatGPTPreparation) && len(intents) > 0 && intents[0] != nil {
+				hasChatGPT := false
+				var peers []domain.ClientID
+				for _, target := range targets {
+					if target == domain.ClientChatGPT {
+						hasChatGPT = true
+					} else {
+						peers = append(peers, target)
+					}
+				}
+				if hasChatGPT {
+					preparation := resolveRequest
+					preparation.Targets = []domain.ClientID{domain.ClientChatGPT}
+					preparation.Purpose = domain.DirectoryResolveContext7ChatGPTPreparation
+					selection, prepErr := domain.ResolveDirectory(bundle.Snapshot, preparation)
+					if prepErr == nil && len(peers) > 0 {
+						peerRequest := resolveRequest
+						peerRequest.Targets = peers
+						peerRequest.Selector = selection.DistributionID
+						peerRequest.Operation = domain.DirectoryNewTarget
+						peerRequest.Recorded = &domain.RecordedDirectoryRelease{
+							ProductID: selection.ProductID, DistributionID: selection.DistributionID, ReleaseSequence: selection.ReleaseSequence,
+							Repository: selection.Source.Repository, ResolvedRevision: selection.Source.Revision, Path: selection.Source.Path,
+							TreeDigestAlgorithm: selection.TreeDigestAlgorithm, TreeDigest: selection.TreeDigest, ManifestDigest: selection.ManifestDigest,
+						}
+						peer, err := domain.ResolveDirectory(bundle.Snapshot, peerRequest)
+						prepErr = err
+						if err == nil && (peer.DistributionID != selection.DistributionID || peer.ReleaseSequence != selection.ReleaseSequence || peer.TreeDigest != selection.TreeDigest) {
+							prepErr = fmt.Errorf("preparation peers require the same immutable release")
+						}
+					}
+					resolveErr = prepErr
+					preparing = prepErr == nil
+				}
+			}
 			if resolveErr == nil {
+				if preparing {
+					intents[0][domain.ClientChatGPT] = domain.InstallIntentPrepare
+				}
 				match = append([]domain.DetectedClient(nil), candidate...)
 				return false
 			}
@@ -247,6 +292,13 @@ func (app App) compatibleLoadedTargets(ctx context.Context, loaded loadedPackage
 	compatible := make([]domain.DetectedClient, 0, len(detected))
 	for _, client := range detected {
 		candidate := cloneLoadedPackage(loaded)
+		if client.ClientID == domain.ClientChatGPT && loaded.chatGPTPreparation && loaded.localChatGPTMapping == nil {
+			// Acquisition already verified source policy, immutable bytes and
+			// endpoint. Registration is the next step, before any mutation.
+			client.DisplayName += " (prepare personal marketplace; register in ChatGPT, then install and verify tools)"
+			compatible = append(compatible, client)
+			continue
+		}
 		if err := prepareLoadedPackageForClient(&candidate, client.ClientID); err != nil {
 			skipped = append(skipped, targetSkip{client.ClientID, "package binding preparation failed; ask the package publisher to check its client mapping"})
 			continue
@@ -270,7 +322,11 @@ func (app App) compatibleLoadedTargets(ctx context.Context, loaded loadedPackage
 				skipped = append(skipped, targetSkip{client.ClientID, "persisted preparation cannot serve this package"})
 				continue
 			}
-			client.DisplayName += " (prepare configuration; authenticate and verify tools in Kiro)"
+			if client.ClientID == domain.ClientChatGPT {
+				client.DisplayName += " (prepare personal marketplace; install and verify tools in ChatGPT)"
+			} else {
+				client.DisplayName += " (prepare configuration; authenticate and verify tools in Kiro)"
+			}
 		}
 		if preflighter, ok := app.Lifecycle.Activator.(interface {
 			PreflightActivation(domain.ActivationRequest) error

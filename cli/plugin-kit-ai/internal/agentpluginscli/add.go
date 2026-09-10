@@ -45,7 +45,10 @@ func newAddCommand(app App, opts *options) *cobra.Command {
 					return err
 				}
 				if len(targets) == 0 {
-					return fmt.Errorf("--prepare requires --target kiro and/or chatgpt")
+					if !app.Terminal || opts.format != "human" {
+						return fmt.Errorf("--prepare requires --target kiro and/or chatgpt in automated mode")
+					}
+					targets = []domain.ClientID{domain.ClientKiro, domain.ClientChatGPT}
 				}
 				for _, target := range targets {
 					if target != domain.ClientKiro && target != domain.ClientChatGPT {
@@ -86,6 +89,16 @@ func newAddCommand(app App, opts *options) *cobra.Command {
 				}
 				detectedClients = clients
 				targets := selection
+				selectedChatGPT := false
+				for _, target := range targets {
+					if target == domain.ClientChatGPT {
+						selectedChatGPT = true
+					}
+				}
+				if preloaded != nil && !selectedChatGPT {
+					preloaded.chatGPTPreparation = false
+					preloaded.localChatGPTMapping = nil
+				}
 				intents, err := app.addLifecycleIntents(cmd.Context(), args[0], opts.scope, opts.installIntents)
 				if err != nil {
 					return err
@@ -261,7 +274,8 @@ func promptTargetChoices(cmd *cobra.Command, app App, detected []domain.Detected
 			return nil, nil, err
 		}
 	}
-	if len(detected) <= 1 {
+	personalPreparationChoice := len(detected) == 1 && detected[0].ClientID == domain.ClientChatGPT && strings.Contains(detected[0].DisplayName, "prepare personal marketplace")
+	if len(detected) <= 1 && !personalPreparationChoice {
 		for _, label := range request.SkippedLabels {
 			if _, err := fmt.Fprintln(reviewWriter(cmd, app), "Skipped (not installed in this attempt): "+label); err != nil {
 				return nil, nil, err
@@ -694,10 +708,17 @@ func nextLocalLifecycleAction(result usecase.AddResult) string {
 func lifecycleAction(result usecase.AddResult, includePrivate bool) string {
 	if result.Plan.InstallIntent == domain.InstallIntentPrepare {
 		if result.Plan.ClientID == domain.ClientChatGPT {
-			if includePrivate && len(result.Activation.LocalActions) > 0 {
-				return result.Activation.LocalActions[0]
+			if includePrivate && result.Activation.Activation == domain.ActivationPrepared {
+				if len(result.Activation.LocalActions) > 0 {
+					return result.Activation.LocalActions[0]
+				}
+				if result.Plan.ActivePath != "" {
+					// Personal preparation explicitly exposes its usable marketplace path,
+					// but never the private registration receipt or ID.
+					return domain.ChatGPTPreparedAction(result.Plan.ActivePath, result.Plan.DeclaredName)
+				}
 			}
-			return domain.ChatGPTRegistrationAction
+			return domain.ChatGPTMappedPreparationAction
 		}
 		return clientplanner.KiroPrepareAction
 	}
