@@ -406,3 +406,88 @@ are still missing. Synthetic unit fixtures mock that later capability and child
 execution only; harmless tool bytes are never executed and establish no authentic
 acceptance. Full producer/validators/facades, workflow, J/E/P, genuine matrix and
 remaining release gates remain mandatory next-lane work.
+
+### C3b delivery step 2: fixed scenarios and producer
+
+This checkpoint implements `scenarioContract`, `verifyNpmLifecycle`,
+`verifyCacheProcess`, `verifyResults` and `produceJourney` in the authentic
+reader module. The original 55 kit / 127 pair core rows, including all eighteen
+installer rows per pair, remain unchanged. A separate immutable inventory adds
+five kit or 34 pair npm lifecycle rows, cache acquisition/repair/invalid-locator
+rows, simultaneous requests, literal arguments and host cancellation scenarios.
+Core command indices link observed processes to `commands.json`; they do not
+replace its inventory. No caller supplies commands, validators or policy.
+
+The producer uses the accepted source-frozen tools API and closed
+`authoring-public-produce/v1` request. It authenticates I/S before installing,
+compares both original packs and all native subject pins, derives fresh disjoint
+roots, invokes actual npm and its installed shims, finalizes the supported
+observer, rechecks source/tools/custody and then writes J plus local admission.
+Kit postinstall must use the selected npm Node. POSIX invokes the installed
+shim directly; Windows uses fixed `.cmd` version invocations and PowerShell
+`.ps1` calls with separately quoted literal arguments. npm install retains
+`--offline --ignore-scripts=false --foreground-scripts --no-audit --no-fund`;
+uninstall retains the corresponding fixed flags and exact package name.
+
+The three new records are closed, ordered schema/cell/row tables. Process rows
+bind ID/core index, actual argv/cwd/environment, executable/runtime identities,
+stdout/stderr size and SHA256, exit/signal, before/after project/prefix/cache/
+client/state/input identities, observed boundaries/counts, postinstall and
+monotonic intervals and the pinned literal-argument manifest effect. Boundary
+events are chronological: reached native/waiter boundary before cancellation,
+then final reaping; a cancelled waiter never launches native code. Repair
+records the exact intentional corruption before checked recovery. Cache
+evidence also binds descendant finalization;
+installer evidence binds assessment and eighteen readbacks. Raw observations
+and assessment are pinned `sidecars/` files, checked exhaustively with the
+128 MiB aggregate ceiling. The three scenario record files carry
+`rows: {shards: [{path,size,sha256}]}` with fixed ordered
+`sidecars/<record-name>-rows-<index>.json` transcript names. Each process row
+and envelope stays within 1 MiB; each ordered transcript shard stays within
+16 MiB. Readers verify pins, canonical partitioning and the aggregate before
+accepting expanded rows. Long workspace paths do not require omitting rows.
+Core transcripts retain 16 MiB and each output retains 1 MiB limits. Overflow
+prevents completion. Equality failures report a bounded assertion label rather
+than constructing potentially enormous diagnostic object diffs.
+
+Result validation checks engine/product versions, embedded schema and profile
+pins, command and client inventories, read profile, independent policy states,
+exact components and names, mutation effects, manifest identities and pair JSON
+and tree equality. Only explicit product/version and displayed invocation
+prefix differences are normalized. Directory and file modes and empty
+directories remain evidence. Cache checks require real repair, warm zero new
+acquisition/commit/download, four overlapping cold requests plus two warm,
+peer namespace preservation and reached cancellation/waiter boundaries.
+
+**Execution prerequisites remain absent on this source.** The fixed modules
+must be supplied and reviewed by their existing owners:
+
+- `public-authoring-custody.js`: `readPublicInputs` returning authenticated
+  `{stage,input}` with original retained subjects and checked pack closure.
+- `public-process-observation.js`: `openPublicObservation` and
+  `verifyPublicObservation`. Its session supplies `run`, `cancel`, `finish`.
+- `public-installer-evidence.js`: `requirePublicInstaller` and
+  `verifyPublicInstaller`, covering actual clean Codex detection, all three
+  lifecycle sources, genuine assessment/services and state/client readbacks.
+
+The process port's concrete return protocol for this consumer is
+`run -> {row,stdout,stderr}` and
+`finish -> {finalization,assessment,readbacks}`. The observer owns pinned raw
+sidecars in the supplied evidence root. `cancel({id,event})` uses the fixed
+scenario's reached boundary; it cannot silently pass an unreached signal.
+`verifyPublicObservation` returns checked `{rows,finalization}`;
+`verifyPublicInstaller` returns checked `{assessment,readbacks}`. Boolean
+success is rejected. These are required integration contracts, not supplied
+observer/security implementations or authentic execution evidence.
+
+Missing exports fail before npm/native effects with their exact module/export
+names. Post-admission setup, process, cancellation and finalization failures
+retain bounded diagnostics, including nested primary causes, without writing J.
+Synthetic unit fixtures establish semantic and orchestration controls
+only. The same-live-root bridge receives the producer's original ten projects;
+it must still run and independently verify its ten leaves/thirty plans in the
+later authorized integrated invocation. No Go gate is executed by this writer.
+Completed remote J/E, aggregation, E2, workflow and P remain mandatory step 3;
+`readAcceptance` stays closed. Full phases 0–11, genuine E2E, native/N2, release
+qualification and distribution gates remain open. This patch awaits independent
+review and does not constitute authentic public acceptance.
