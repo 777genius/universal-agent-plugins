@@ -44,6 +44,7 @@ concurrency:
   group: public-packed-${{ github.ref }}-${{ inputs.mode }}-${{ github.run_id }}
   cancel-in-progress: false
 env:
+  PUBLIC_MODE: ${{ inputs.mode }}
   PUBLIC_SELECTED: ${{ inputs.selected }}
   PUBLIC_INPUT: ${{ inputs.input }}
   PUBLIC_STAGE: ${{ inputs.stage }}
@@ -63,7 +64,26 @@ jobs:
         shell: python -I -B {0}
         run: |
           import json, os, re
-          s = json.loads(os.environ['PUBLIC_SELECTED'])
+          mode = os.environ['PUBLIC_MODE']
+          names = {'selected': 'PUBLIC_SELECTED', 'input': 'PUBLIC_INPUT', 'stage': 'PUBLIC_STAGE', 'journeys': 'PUBLIC_JOURNEYS', 'bridge': 'PUBLIC_BRIDGE', 'assembly': 'PUBLIC_ASSEMBLY', 'acceptance': 'PUBLIC_ACCEPTANCE'}
+          required = {'selected', 'input', 'stage'} | {'produce': set(), 'assemble': {'journeys', 'bridge'}, 'attest': {'assembly'}, 'check': {'assembly', 'acceptance'}}[mode]
+          raw = {name: os.environ.get(env, '') for name, env in names.items()}
+          assert all(bool(body) == (name in required) for name, body in raw.items())
+          def value(name):
+              assert 0 < len(raw[name].encode()) <= 1024 * 1024
+              return json.loads(raw[name])
+          def locator(v):
+              assert set(v) == {'sha256', 'artifact'} and re.fullmatch('[0-9a-f]{64}', v['sha256'])
+              a = v['artifact']; assert set(a) == {'run_id', 'run_attempt', 'artifact_id', 'artifact_sha256'} and re.fullmatch('[0-9a-f]{64}', a['artifact_sha256'])
+              assert all(type(a[k]) is int and a[k] > 0 for k in ('run_id', 'run_attempt', 'artifact_id')) and a['run_attempt'] <= 1000
+          s = value('selected'); locator(value('input')); locator(value('stage'))
+          if mode == 'assemble':
+              journeys = value('journeys'); cells = [f'{target}/{"kit" if node == 18 else "pair"}-node{node}' for target in ('linux-amd64', 'linux-arm64', 'darwin-amd64', 'darwin-arm64', 'windows-amd64', 'windows-arm64') for node in (18, 22, 24)]
+              assert type(journeys) is list and len(journeys) == 18 and [journey.get('cell') for journey in journeys] == cells
+              for journey in journeys: assert set(journey) == {'cell', 'sha256', 'artifact'}; locator({'sha256': journey['sha256'], 'artifact': journey['artifact']})
+              locator(value('bridge'))
+          if mode in ('attest', 'check'): locator(value('assembly'))
+          if mode == 'check': locator(value('acceptance'))
           assert set(s) == {'tag', 'ref', 'source', 'versions'}
           assert os.environ['GITHUB_REPOSITORY'] == '777genius/universal-agent-plugins'
           assert os.environ['GITHUB_EVENT_NAME'] == 'workflow_dispatch'
@@ -101,7 +121,26 @@ jobs:
         shell: python -I -B {0}
         run: |
           import json, os, re
-          s = json.loads(os.environ['PUBLIC_SELECTED'])
+          mode = os.environ['PUBLIC_MODE']
+          names = {'selected': 'PUBLIC_SELECTED', 'input': 'PUBLIC_INPUT', 'stage': 'PUBLIC_STAGE', 'journeys': 'PUBLIC_JOURNEYS', 'bridge': 'PUBLIC_BRIDGE', 'assembly': 'PUBLIC_ASSEMBLY', 'acceptance': 'PUBLIC_ACCEPTANCE'}
+          required = {'selected', 'input', 'stage'} | {'produce': set(), 'assemble': {'journeys', 'bridge'}, 'attest': {'assembly'}, 'check': {'assembly', 'acceptance'}}[mode]
+          raw = {name: os.environ.get(env, '') for name, env in names.items()}
+          assert all(bool(body) == (name in required) for name, body in raw.items())
+          def value(name):
+              assert 0 < len(raw[name].encode()) <= 1024 * 1024
+              return json.loads(raw[name])
+          def locator(v):
+              assert set(v) == {'sha256', 'artifact'} and re.fullmatch('[0-9a-f]{64}', v['sha256'])
+              a = v['artifact']; assert set(a) == {'run_id', 'run_attempt', 'artifact_id', 'artifact_sha256'} and re.fullmatch('[0-9a-f]{64}', a['artifact_sha256'])
+              assert all(type(a[k]) is int and a[k] > 0 for k in ('run_id', 'run_attempt', 'artifact_id')) and a['run_attempt'] <= 1000
+          s = value('selected'); locator(value('input')); locator(value('stage'))
+          if mode == 'assemble':
+              journeys = value('journeys'); cells = [f'{target}/{"kit" if node == 18 else "pair"}-node{node}' for target in ('linux-amd64', 'linux-arm64', 'darwin-amd64', 'darwin-arm64', 'windows-amd64', 'windows-arm64') for node in (18, 22, 24)]
+              assert type(journeys) is list and len(journeys) == 18 and [journey.get('cell') for journey in journeys] == cells
+              for journey in journeys: assert set(journey) == {'cell', 'sha256', 'artifact'}; locator({'sha256': journey['sha256'], 'artifact': journey['artifact']})
+              locator(value('bridge'))
+          if mode in ('attest', 'check'): locator(value('assembly'))
+          if mode == 'check': locator(value('acceptance'))
           assert set(s) == {'tag', 'ref', 'source', 'versions'}
           assert os.environ['GITHUB_REPOSITORY'] == '777genius/universal-agent-plugins'
           assert os.environ['GITHUB_EVENT_NAME'] == 'workflow_dispatch'
@@ -152,7 +191,26 @@ jobs:
         shell: python -I -B {0}
         run: |
           import json, os, re
-          s = json.loads(os.environ['PUBLIC_SELECTED'])
+          mode = os.environ['PUBLIC_MODE']
+          names = {'selected': 'PUBLIC_SELECTED', 'input': 'PUBLIC_INPUT', 'stage': 'PUBLIC_STAGE', 'journeys': 'PUBLIC_JOURNEYS', 'bridge': 'PUBLIC_BRIDGE', 'assembly': 'PUBLIC_ASSEMBLY', 'acceptance': 'PUBLIC_ACCEPTANCE'}
+          required = {'selected', 'input', 'stage'} | {'produce': set(), 'assemble': {'journeys', 'bridge'}, 'attest': {'assembly'}, 'check': {'assembly', 'acceptance'}}[mode]
+          raw = {name: os.environ.get(env, '') for name, env in names.items()}
+          assert all(bool(body) == (name in required) for name, body in raw.items())
+          def value(name):
+              assert 0 < len(raw[name].encode()) <= 1024 * 1024
+              return json.loads(raw[name])
+          def locator(v):
+              assert set(v) == {'sha256', 'artifact'} and re.fullmatch('[0-9a-f]{64}', v['sha256'])
+              a = v['artifact']; assert set(a) == {'run_id', 'run_attempt', 'artifact_id', 'artifact_sha256'} and re.fullmatch('[0-9a-f]{64}', a['artifact_sha256'])
+              assert all(type(a[k]) is int and a[k] > 0 for k in ('run_id', 'run_attempt', 'artifact_id')) and a['run_attempt'] <= 1000
+          s = value('selected'); locator(value('input')); locator(value('stage'))
+          if mode == 'assemble':
+              journeys = value('journeys'); cells = [f'{target}/{"kit" if node == 18 else "pair"}-node{node}' for target in ('linux-amd64', 'linux-arm64', 'darwin-amd64', 'darwin-arm64', 'windows-amd64', 'windows-arm64') for node in (18, 22, 24)]
+              assert type(journeys) is list and len(journeys) == 18 and [journey.get('cell') for journey in journeys] == cells
+              for journey in journeys: assert set(journey) == {'cell', 'sha256', 'artifact'}; locator({'sha256': journey['sha256'], 'artifact': journey['artifact']})
+              locator(value('bridge'))
+          if mode in ('attest', 'check'): locator(value('assembly'))
+          if mode == 'check': locator(value('acceptance'))
           assert set(s) == {'tag', 'ref', 'source', 'versions'}
           assert os.environ['GITHUB_REPOSITORY'] == '777genius/universal-agent-plugins'
           assert os.environ['GITHUB_EVENT_NAME'] == 'workflow_dispatch'
@@ -189,7 +247,26 @@ jobs:
         shell: python -I -B {0}
         run: |
           import json, os, re
-          s = json.loads(os.environ['PUBLIC_SELECTED'])
+          mode = os.environ['PUBLIC_MODE']
+          names = {'selected': 'PUBLIC_SELECTED', 'input': 'PUBLIC_INPUT', 'stage': 'PUBLIC_STAGE', 'journeys': 'PUBLIC_JOURNEYS', 'bridge': 'PUBLIC_BRIDGE', 'assembly': 'PUBLIC_ASSEMBLY', 'acceptance': 'PUBLIC_ACCEPTANCE'}
+          required = {'selected', 'input', 'stage'} | {'produce': set(), 'assemble': {'journeys', 'bridge'}, 'attest': {'assembly'}, 'check': {'assembly', 'acceptance'}}[mode]
+          raw = {name: os.environ.get(env, '') for name, env in names.items()}
+          assert all(bool(body) == (name in required) for name, body in raw.items())
+          def value(name):
+              assert 0 < len(raw[name].encode()) <= 1024 * 1024
+              return json.loads(raw[name])
+          def locator(v):
+              assert set(v) == {'sha256', 'artifact'} and re.fullmatch('[0-9a-f]{64}', v['sha256'])
+              a = v['artifact']; assert set(a) == {'run_id', 'run_attempt', 'artifact_id', 'artifact_sha256'} and re.fullmatch('[0-9a-f]{64}', a['artifact_sha256'])
+              assert all(type(a[k]) is int and a[k] > 0 for k in ('run_id', 'run_attempt', 'artifact_id')) and a['run_attempt'] <= 1000
+          s = value('selected'); locator(value('input')); locator(value('stage'))
+          if mode == 'assemble':
+              journeys = value('journeys'); cells = [f'{target}/{"kit" if node == 18 else "pair"}-node{node}' for target in ('linux-amd64', 'linux-arm64', 'darwin-amd64', 'darwin-arm64', 'windows-amd64', 'windows-arm64') for node in (18, 22, 24)]
+              assert type(journeys) is list and len(journeys) == 18 and [journey.get('cell') for journey in journeys] == cells
+              for journey in journeys: assert set(journey) == {'cell', 'sha256', 'artifact'}; locator({'sha256': journey['sha256'], 'artifact': journey['artifact']})
+              locator(value('bridge'))
+          if mode in ('attest', 'check'): locator(value('assembly'))
+          if mode == 'check': locator(value('acceptance'))
           assert set(s) == {'tag', 'ref', 'source', 'versions'}
           assert os.environ['GITHUB_REPOSITORY'] == '777genius/universal-agent-plugins'
           assert os.environ['GITHUB_EVENT_NAME'] == 'workflow_dispatch'
@@ -227,7 +304,26 @@ jobs:
         shell: python -I -B {0}
         run: |
           import json, os, re
-          s = json.loads(os.environ['PUBLIC_SELECTED'])
+          mode = os.environ['PUBLIC_MODE']
+          names = {'selected': 'PUBLIC_SELECTED', 'input': 'PUBLIC_INPUT', 'stage': 'PUBLIC_STAGE', 'journeys': 'PUBLIC_JOURNEYS', 'bridge': 'PUBLIC_BRIDGE', 'assembly': 'PUBLIC_ASSEMBLY', 'acceptance': 'PUBLIC_ACCEPTANCE'}
+          required = {'selected', 'input', 'stage'} | {'produce': set(), 'assemble': {'journeys', 'bridge'}, 'attest': {'assembly'}, 'check': {'assembly', 'acceptance'}}[mode]
+          raw = {name: os.environ.get(env, '') for name, env in names.items()}
+          assert all(bool(body) == (name in required) for name, body in raw.items())
+          def value(name):
+              assert 0 < len(raw[name].encode()) <= 1024 * 1024
+              return json.loads(raw[name])
+          def locator(v):
+              assert set(v) == {'sha256', 'artifact'} and re.fullmatch('[0-9a-f]{64}', v['sha256'])
+              a = v['artifact']; assert set(a) == {'run_id', 'run_attempt', 'artifact_id', 'artifact_sha256'} and re.fullmatch('[0-9a-f]{64}', a['artifact_sha256'])
+              assert all(type(a[k]) is int and a[k] > 0 for k in ('run_id', 'run_attempt', 'artifact_id')) and a['run_attempt'] <= 1000
+          s = value('selected'); locator(value('input')); locator(value('stage'))
+          if mode == 'assemble':
+              journeys = value('journeys'); cells = [f'{target}/{"kit" if node == 18 else "pair"}-node{node}' for target in ('linux-amd64', 'linux-arm64', 'darwin-amd64', 'darwin-arm64', 'windows-amd64', 'windows-arm64') for node in (18, 22, 24)]
+              assert type(journeys) is list and len(journeys) == 18 and [journey.get('cell') for journey in journeys] == cells
+              for journey in journeys: assert set(journey) == {'cell', 'sha256', 'artifact'}; locator({'sha256': journey['sha256'], 'artifact': journey['artifact']})
+              locator(value('bridge'))
+          if mode in ('attest', 'check'): locator(value('assembly'))
+          if mode == 'check': locator(value('acceptance'))
           assert set(s) == {'tag', 'ref', 'source', 'versions'}
           assert os.environ['GITHUB_REPOSITORY'] == '777genius/universal-agent-plugins'
           assert os.environ['GITHUB_EVENT_NAME'] == 'workflow_dispatch'
@@ -290,7 +386,26 @@ jobs:
         shell: python -I -B {0}
         run: |
           import json, os, re
-          s = json.loads(os.environ['PUBLIC_SELECTED'])
+          mode = os.environ['PUBLIC_MODE']
+          names = {'selected': 'PUBLIC_SELECTED', 'input': 'PUBLIC_INPUT', 'stage': 'PUBLIC_STAGE', 'journeys': 'PUBLIC_JOURNEYS', 'bridge': 'PUBLIC_BRIDGE', 'assembly': 'PUBLIC_ASSEMBLY', 'acceptance': 'PUBLIC_ACCEPTANCE'}
+          required = {'selected', 'input', 'stage'} | {'produce': set(), 'assemble': {'journeys', 'bridge'}, 'attest': {'assembly'}, 'check': {'assembly', 'acceptance'}}[mode]
+          raw = {name: os.environ.get(env, '') for name, env in names.items()}
+          assert all(bool(body) == (name in required) for name, body in raw.items())
+          def value(name):
+              assert 0 < len(raw[name].encode()) <= 1024 * 1024
+              return json.loads(raw[name])
+          def locator(v):
+              assert set(v) == {'sha256', 'artifact'} and re.fullmatch('[0-9a-f]{64}', v['sha256'])
+              a = v['artifact']; assert set(a) == {'run_id', 'run_attempt', 'artifact_id', 'artifact_sha256'} and re.fullmatch('[0-9a-f]{64}', a['artifact_sha256'])
+              assert all(type(a[k]) is int and a[k] > 0 for k in ('run_id', 'run_attempt', 'artifact_id')) and a['run_attempt'] <= 1000
+          s = value('selected'); locator(value('input')); locator(value('stage'))
+          if mode == 'assemble':
+              journeys = value('journeys'); cells = [f'{target}/{"kit" if node == 18 else "pair"}-node{node}' for target in ('linux-amd64', 'linux-arm64', 'darwin-amd64', 'darwin-arm64', 'windows-amd64', 'windows-arm64') for node in (18, 22, 24)]
+              assert type(journeys) is list and len(journeys) == 18 and [journey.get('cell') for journey in journeys] == cells
+              for journey in journeys: assert set(journey) == {'cell', 'sha256', 'artifact'}; locator({'sha256': journey['sha256'], 'artifact': journey['artifact']})
+              locator(value('bridge'))
+          if mode in ('attest', 'check'): locator(value('assembly'))
+          if mode == 'check': locator(value('acceptance'))
           assert set(s) == {'tag', 'ref', 'source', 'versions'}
           assert os.environ['GITHUB_REPOSITORY'] == '777genius/universal-agent-plugins'
           assert os.environ['GITHUB_EVENT_NAME'] == 'workflow_dispatch'

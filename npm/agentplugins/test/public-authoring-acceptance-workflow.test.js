@@ -4,10 +4,66 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const crypto = require('node:crypto');
+const childProcess = require('node:child_process');
+const Module = require('node:module');
 const a = require('../scripts/public-authoring-acceptance');
 const text = fs.readFileSync(path.resolve(__dirname, '../../../.github/workflows/authoring-public-packed.yml'), 'utf8');
 const jobs = Object.fromEntries([...text.matchAll(/^  (public_[a-z_]+):\n([\s\S]*?)(?=^  public_[a-z_]+:|$(?![\s\S]))/gm)]
   .map(m => [m[1], m[2]]));
+const encode = value => JSON.stringify(value, null, 2) + '\n';
+const digest = value => crypto.createHash('sha256').update(value).digest('hex');
+const locator = n => ({ sha256: digest(`payload-${n}`), artifact: {
+  run_id: n + 1, run_attempt: 1, artifact_id: n + 101, artifact_sha256: digest(`artifact-${n}`)
+} });
+const dispatch = mode => {
+  const values = {
+    selected: { tag: 'agentplugins-v2.0.0', ref: 'refs/tags/agentplugins-v2.0.0', source: 'a'.repeat(40), versions: {} },
+    input: locator(1), stage: locator(2), journeys: a.matrix.map((row, i) => ({ cell: row.key, ...locator(i + 10) })),
+    bridge: locator(40), assembly: locator(41), acceptance: locator(42)
+  };
+  const required = { inputs: [], produce: [], assemble: ['journeys', 'bridge'], attest: ['assembly'], read: ['assembly', 'acceptance'] }[mode];
+  const env = Object.fromEntries(['selected', 'input', 'stage', 'journeys', 'bridge', 'assembly', 'acceptance'].map(name => [`PUBLIC_${name.toUpperCase()}`, '']));
+  for (const name of ['selected', 'input', 'stage', ...required]) env[`PUBLIC_${name.toUpperCase()}`] = encode(values[name]);
+  return env;
+};
+
+test('C3 runtime rejects every open, missing, and malformed dispatch before effects', () => {
+  const owned = ['selected', 'input', 'stage', 'journeys', 'bridge', 'assembly', 'acceptance'];
+  const required = { inputs: ['selected', 'input', 'stage'], produce: ['selected', 'input', 'stage'],
+    assemble: ['selected', 'input', 'stage', 'journeys', 'bridge'], attest: ['selected', 'input', 'stage', 'assembly'],
+    read: ['selected', 'input', 'stage', 'assembly', 'acceptance'] };
+  const savedEnv = { ...process.env }, load = Module._load;
+  const originalFs = Object.fromEntries(['mkdirSync', 'mkdtempSync', 'writeFileSync', 'rmSync'].map(name => [name, fs[name]]));
+  const originalChild = Object.fromEntries(['spawn', 'spawnSync', 'execFileSync'].map(name => [name, childProcess[name]]));
+  const effects = { controller: 0, facade: 0, filesystem: 0, subprocess: 0 };
+  Module._load = function(request, parent, isMain) {
+    if (request.includes('public-authoring-tools')) effects.controller++;
+    if (request.includes('public-authoring-custody')) effects.facade++;
+    return load.call(this, request, parent, isMain);
+  };
+  for (const name of Object.keys(originalFs)) fs[name] = (...args) => { effects.filesystem++; return originalFs[name](...args); };
+  for (const name of Object.keys(originalChild)) childProcess[name] = (...args) => { effects.subprocess++; return originalChild[name](...args); };
+  try {
+    for (const [mode, names] of Object.entries(required)) {
+      const cases = [];
+      process.env = { ...savedEnv, ...dispatch(mode) };
+      assert.doesNotThrow(() => a.dispatchInputs(mode), `${mode}: valid closed dispatch`);
+      for (const foreign of owned.filter(name => !names.includes(name))) cases.push([`foreign ${foreign}`, env => { env[`PUBLIC_${foreign.toUpperCase()}`] = encode(locator(90)); }]);
+      for (const missing of names) cases.push([`missing ${missing}`, env => { delete env[`PUBLIC_${missing.toUpperCase()}`]; }]);
+      for (const malformed of names) cases.push([`malformed ${malformed}`, env => { env[`PUBLIC_${malformed.toUpperCase()}`] = encode({}); }]);
+      for (const [label, mutate] of cases) {
+        process.env = { ...savedEnv, ...dispatch(mode) }; mutate(process.env);
+        assert.throws(() => a.workflowRequest(mode, mode === 'produce' ? a.matrix[0].key : undefined), `${mode}: ${label}`);
+        assert.deepEqual(effects, { controller: 0, facade: 0, filesystem: 0, subprocess: 0 }, `${mode}: ${label}`);
+      }
+    }
+  } finally {
+    process.env = savedEnv; Module._load = load;
+    for (const [name, fn] of Object.entries(originalFs)) fs[name] = fn;
+    for (const [name, fn] of Object.entries(originalChild)) childProcess[name] = fn;
+  }
+});
 
 test('C3 workflow four invocations retain all cells and exact completed jobs', () => {
   assert.deepEqual(Object.keys(jobs), ['public_inputs', 'public_cell', 'public_producer_complete', 'public_assemble',
@@ -68,4 +124,20 @@ test('C3 workflow pins source actions and independent controller bootstrap', () 
   assert.doesNotMatch(jobs.public_assemble, /needs:/);
   assert.doesNotMatch(jobs.public_evidence_intake, /needs:/);
   assert.doesNotMatch(jobs.public_check, /needs:/);
+});
+
+test('C3 trusted bootstrap closes and validates dispatch inputs before checkout', () => {
+  const admitted = Object.entries(jobs).filter(([name]) => name !== 'public_producer_complete');
+  assert.equal(admitted.length, 6);
+  for (const [name, body] of admitted) {
+    const checkout = body.indexOf('uses: actions/checkout@');
+    assert.ok(checkout > 0, name);
+    const bootstrap = body.slice(0, checkout);
+    assert.match(bootstrap, /bool\(body\) == \(name in required\)/, name);
+    assert.match(bootstrap, /def locator\(v\):/, name);
+    assert.match(bootstrap, /locator\(value\('input'\)\); locator\(value\('stage'\)\)/, name);
+    assert.match(bootstrap, /if mode == 'assemble':/, name);
+    assert.match(bootstrap, /if mode in \('attest', 'check'\): locator\(value\('assembly'\)\)/, name);
+    assert.match(bootstrap, /if mode == 'check': locator\(value\('acceptance'\)\)/, name);
+  }
 });

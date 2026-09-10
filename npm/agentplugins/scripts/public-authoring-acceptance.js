@@ -1606,15 +1606,46 @@ function readAcceptance(r) {
   ctx.recheck(); return { record: first.e, input: first.intake.input, stage: first.intake.stage,
     subjects, assembly: r.assembly, acceptance: r.acceptance };
 }
+const DISPATCH_INPUTS = freeze({
+  produce: [],
+  assemble: ['journeys', 'bridge'],
+  attest: ['assembly'],
+  check: ['assembly', 'acceptance']
+});
+const DISPATCH_ENV = freeze({ selected: 'PUBLIC_SELECTED', input: 'PUBLIC_INPUT', stage: 'PUBLIC_STAGE',
+  journeys: 'PUBLIC_JOURNEYS', bridge: 'PUBLIC_BRIDGE', assembly: 'PUBLIC_ASSEMBLY', acceptance: 'PUBLIC_ACCEPTANCE' });
+function dispatchInputs(mode) {
+  const dispatchMode = mode === 'inputs' ? 'produce' : mode === 'read' ? 'check' : mode;
+  assert.ok(Object.hasOwn(DISPATCH_INPUTS, dispatchMode), 'fixed workflow operation');
+  const required = new Set(['selected', 'input', 'stage', ...DISPATCH_INPUTS[dispatchMode]]), values = {};
+  for (const [name, env] of Object.entries(DISPATCH_ENV)) {
+    const body = process.env[env] || '';
+    if (required.has(name)) assert.ok(body.length > 0, `required ${dispatchMode} dispatch input: ${name}`);
+    else assert.equal(body, '', `foreign ${dispatchMode} dispatch input: ${name}`);
+    if (body) values[name] = bounded(Buffer.from(body), LIMIT);
+  }
+  fields(values.selected, ['tag', 'ref', 'source', 'versions'], 'selected source');
+  assert.ok(typeof values.selected.source === 'string' && /^[0-9a-f]{40}$/.test(values.selected.source), 'selected source commit');
+  locator(values.input); locator(values.stage);
+  if (dispatchMode === 'assemble') {
+    list(values.journeys, matrix.length, 'eighteen dispatch journey locators');
+    values.journeys.forEach((row, i) => { fields(row, ['cell', 'sha256', 'artifact'], 'dispatch journey locator'); fixed(row.cell, matrix[i].key, 'ordered dispatch cell'); locator({ sha256: row.sha256, artifact: row.artifact }); });
+    locator(values.bridge);
+  }
+  if (values.assembly) locator(values.assembly);
+  if (values.acceptance) locator(values.acceptance);
+  return values;
+}
 function workflowRequest(mode, key) {
   assert.ok(['inputs', 'produce', 'assemble', 'attest', 'read'].includes(mode), 'fixed workflow operation');
+  const dispatch = dispatchInputs(mode);
+  if (mode === 'produce') cell(key);
   const provisioning = require('./public-authoring-tools'), manifest = provisioning.readProvisioning();
   const target = mode === 'produce' ? cell(key).target : 'linux-amd64';
   agree(provisioning.requireController(target), process.execPath, 'workflow independent controller');
   const api = requireFacades(mode === 'produce' ? key : BRIDGE_CELL)['public-authoring-custody'];
   assert.equal(typeof api.readPublicArtifact, 'function', 'PUBLIC_FACADE_REQUIRED:public-authoring-custody.js#readPublicArtifact');
-  const parse = name => bounded(Buffer.from(process.env[name] || ''), LIMIT);
-  const selected = parse('PUBLIC_SELECTED'), stage = parse('PUBLIC_STAGE'), input = parse('PUBLIC_INPUT'); locator(stage); locator(input);
+  const { selected, stage, input } = dispatch;
   const repo = path.resolve(__dirname, '../../..'), parent = absolute(process.env.RUNNER_TEMP);
   const source = sourceSeal(repo, selected.source, { ...manifest, key: mode === 'produce' ? key : BRIDGE_CELL });
   const promotion = require('./authoring-promotion'), graphMode = mode === 'inputs' ? 'produce' : mode === 'read' ? 'check' : mode;
@@ -1651,9 +1682,9 @@ function workflowRequest(mode, key) {
       host: { platform: process.platform, arch: process.arch } };
     return { ...r, schema: 'authoring-public-produce/v1', output, cell: key, tools, producer };
   }
-  if (mode === 'assemble') return { ...r, output, producer, journeys: parse('PUBLIC_JOURNEYS'), bridge: parse('PUBLIC_BRIDGE') };
-  if (mode === 'attest') return { ...r, output, assembly: parse('PUBLIC_ASSEMBLY') };
-  return { ...r, acceptance: parse('PUBLIC_ACCEPTANCE'), assembly: parse('PUBLIC_ASSEMBLY') };
+  if (mode === 'assemble') return { ...r, output, producer, journeys: dispatch.journeys, bridge: dispatch.bridge };
+  if (mode === 'attest') return { ...r, output, assembly: dispatch.assembly };
+  return { ...r, acceptance: dispatch.acceptance, assembly: dispatch.assembly };
 }
 async function workflowOperation(mode, key) {
   const r = workflowRequest(mode, key);
@@ -1700,7 +1731,7 @@ module.exports = { generatedFiles, generatedTreeIdentity, evidenceFiles, expandE
   encodeAcceptance, decodeAcceptance, ACCEPTANCE_SCHEMA, ACCEPTANCE_FILE, INDEX_FILE, ATTESTATION_LINK,
   PUBLIC_JOBS, completedAttempt, acceptanceGraph, historicalTools, retainedJourney, readCompletedJourney,
   INDEX_SCHEMA, encodeAcceptanceIndex, decodeAcceptanceIndex, readAcceptanceClosure,
-  BRIDGE_FILES, assembleAcceptance, attestAcceptanceInputs, readAcceptance, request, fileJSON, disjoint, main, LIMIT, SCHEMA, MATRIX_SCHEMA, INTAKE, WORKFLOW, MISSING };
+  BRIDGE_FILES, assembleAcceptance, attestAcceptanceInputs, readAcceptance, dispatchInputs, workflowRequest, request, fileJSON, disjoint, main, LIMIT, SCHEMA, MATRIX_SCHEMA, INTAKE, WORKFLOW, MISSING };
 if (require.main === module) {
   Promise.resolve().then(() => main(process.argv.slice(2))).then(result => process.stdout.write(c.encode(result))).catch(error => { process.stderr.write(`C3 public journey: ${error.message}\n`); process.exitCode = 1; });
 }
