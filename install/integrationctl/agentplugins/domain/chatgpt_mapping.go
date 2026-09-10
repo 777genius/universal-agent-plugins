@@ -30,6 +30,7 @@ type ChatGPTLocalMapping struct {
 }
 
 var chatGPTAppIDPattern = regexp.MustCompile(`^asdk_app_[0-9a-f]{32}$`)
+var legacyChatGPTAppIDPattern = regexp.MustCompile(`^plugin_asdk_app_[0-9a-f]{32}$`)
 
 func ValidateChatGPTAppID(id string) error {
 	if !chatGPTAppIDPattern.MatchString(id) {
@@ -37,6 +38,13 @@ func ValidateChatGPTAppID(id string) error {
 	}
 	return nil
 }
+
+// IsLegacyContext7Registration identifies receipts written by the broken
+// 0.1.56 OAuth guidance. They may be replaced only by an explicit new app ID.
+func (m ChatGPTLocalMapping) IsLegacyContext7Registration() bool {
+	return m.ProductID == "context7" && m.Repository == "upstash/context7" && m.PackagePath == "plugins/agent-plugins/context7" && m.Server == "context7" && m.URL == Context7OAuthURL && legacyChatGPTAppIDPattern.MatchString(m.AppID)
+}
+
 func (m ChatGPTLocalMapping) Validate() error {
 	if m.ProductID != "context7" || m.Repository != "upstash/context7" || m.PackagePath != "plugins/agent-plugins/context7" || m.Server != "context7" || m.URL != Context7ChatGPTURL {
 		return fmt.Errorf("personal ChatGPT mapping has a different Context7 identity or ChatGPT endpoint")

@@ -257,6 +257,32 @@ func TestContext7GuidedReceiptRejectsChangedRegistrationAndSignedEndpoint(t *tes
 	}
 }
 
+func TestContext7GuidedReceiptMigratesLegacyRegistrationOnlyWithExplicitID(t *testing.T) {
+	f, _, _ := context7GuidedFixture(t)
+	if out, _, err := f.execute(false, "add", "context7", "--target", "chatgpt", "--prepare", "--chatgpt-app-id", fixturePersonalAppID); err != nil {
+		t.Fatalf("initial preparation failed: %s %v", out, err)
+	}
+	state, err := f.store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	state.Installations[0].LocalChatGPTMapping.URL = domain.Context7OAuthURL
+	state.Installations[0].LocalChatGPTMapping.AppID = "plugin_asdk_app_0123456789abcdef0123456789abcdef"
+	if err := f.store.Save(state); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := f.execute(false, "add", "context7", "--target", "chatgpt", "--prepare"); err == nil || !strings.Contains(err.Error(), "action_required") {
+		t.Fatalf("legacy receipt did not require a new explicit ID: %v", err)
+	}
+	if out, _, err := f.execute(false, "add", "context7", "--target", "chatgpt", "--prepare", "--chatgpt-app-id", fixturePersonalAppID); err != nil {
+		t.Fatalf("legacy receipt migration failed: %s %v", out, err)
+	}
+	got, err := f.store.Load()
+	if err != nil || len(got.Installations) != 1 || got.Installations[0].LocalChatGPTMapping == nil || got.Installations[0].LocalChatGPTMapping.AppID != fixturePersonalAppID || got.Installations[0].LocalChatGPTMapping.URL != domain.Context7ChatGPTURL {
+		t.Fatalf("legacy receipt was not replaced: %+v %v", got.Installations, err)
+	}
+}
+
 func TestContext7GuidedForeignFilesAndCancellation(t *testing.T) {
 	f, _, _ := context7GuidedFixture(t)
 	foreign := filepath.Join(f.app.UserHome, ".agents", "plugins", "marketplace.json")
