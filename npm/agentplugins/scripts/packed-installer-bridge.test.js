@@ -236,7 +236,7 @@ test('C3 bridge authenticated intake preserves legacy dispatch', t => {
   }
   for (const extra of [{authenticated:true}, {nativeTap:'fixture.tap'}, {disposableEvidence:true}]) assert.throws(() => bridge.seal({...f.request,...extra}));
  });
- assert.throws(() => a.readAcceptance(f.request), /completed remote E/);
+ assert.throws(() => a.readAcceptance(f.request), /PUBLIC_PROVISIONING_REQUIRED/);
 });
 test('C3 bridge seal binds original ten projects', t => {
  const a = require('./public-authoring-acceptance');

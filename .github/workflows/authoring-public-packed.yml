@@ -1,0 +1,314 @@
+name: Public Packed Authoring
+# R1 produce -> completed R1 -> R2 assemble -> completed R2 -> R3 attest
+# -> completed R3 -> R4 check. No automatic trigger or publication route.
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Separate public invocation
+        required: true
+        type: choice
+        options: [produce, assemble, attest, check]
+      selected:
+        description: "Exact tag/ref/source/versions JSON"
+        required: true
+        type: string
+      input:
+        description: "Original I digest and artifact locator JSON"
+        required: true
+        type: string
+      stage:
+        description: "Original S digest and artifact locator JSON"
+        required: true
+        type: string
+      journeys:
+        description: "R2 only: eighteen ordered exact R1 artifact locators"
+        required: false
+        type: string
+      bridge:
+        description: "R2 only: designated same-cell bridge locator"
+        required: false
+        type: string
+      assembly:
+        description: "R3/R4 only: original exact R2 assembly locator"
+        required: false
+        type: string
+      acceptance:
+        description: "R4 only: exact completed R3 artifact locator"
+        required: false
+        type: string
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: public-packed-${{ github.ref }}-${{ inputs.mode }}-${{ github.run_id }}
+  cancel-in-progress: false
+env:
+  PUBLIC_SELECTED: ${{ inputs.selected }}
+  PUBLIC_INPUT: ${{ inputs.input }}
+  PUBLIC_STAGE: ${{ inputs.stage }}
+  PUBLIC_JOURNEYS: ${{ inputs.journeys }}
+  PUBLIC_BRIDGE: ${{ inputs.bridge }}
+  PUBLIC_ASSEMBLY: ${{ inputs.assembly }}
+  PUBLIC_ACCEPTANCE: ${{ inputs.acceptance }}
+jobs:
+  public_inputs:
+    if: ${{ inputs.mode == 'produce' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    outputs:
+      matrix: ${{ steps.evidence.outputs.matrix }}
+    steps:
+      - name: Bind canonical dispatch before checkout
+        shell: python -I -B {0}
+        run: |
+          import json, os, re
+          s = json.loads(os.environ['PUBLIC_SELECTED'])
+          assert set(s) == {'tag', 'ref', 'source', 'versions'}
+          assert os.environ['GITHUB_REPOSITORY'] == '777genius/universal-agent-plugins'
+          assert os.environ['GITHUB_EVENT_NAME'] == 'workflow_dispatch'
+          assert re.fullmatch('[0-9a-f]{40}', s['source'])
+          assert s['source'] == os.environ['GITHUB_SHA'] == os.environ['GITHUB_WORKFLOW_SHA']
+          assert s['ref'] == 'refs/tags/' + s['tag'] == os.environ['GITHUB_REF']
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ fromJSON(inputs.selected).source }}
+          persist-credentials: false
+      - name: Independently bootstrap and admit inputs
+        id: evidence
+        shell: python -I -B {0}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          import importlib.util, os
+          spec = importlib.util.spec_from_file_location('packed', 'scripts/check-packed-ci.py')
+          packed = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(packed)
+          result = packed.public_workflow('inputs')
+  public_cell:
+    if: ${{ inputs.mode == 'produce' }}
+    needs: public_inputs
+    name: public_cell (${{ matrix.cell }})
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.public_inputs.outputs.matrix) }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    env:
+      PUBLIC_CELL: ${{ matrix.cell }}
+    steps:
+      - name: Bind canonical dispatch before checkout
+        shell: python -I -B {0}
+        run: |
+          import json, os, re
+          s = json.loads(os.environ['PUBLIC_SELECTED'])
+          assert set(s) == {'tag', 'ref', 'source', 'versions'}
+          assert os.environ['GITHUB_REPOSITORY'] == '777genius/universal-agent-plugins'
+          assert os.environ['GITHUB_EVENT_NAME'] == 'workflow_dispatch'
+          assert re.fullmatch('[0-9a-f]{40}', s['source'])
+          assert s['source'] == os.environ['GITHUB_SHA'] == os.environ['GITHUB_WORKFLOW_SHA']
+          assert s['ref'] == 'refs/tags/' + s['tag'] == os.environ['GITHUB_REF']
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ fromJSON(inputs.selected).source }}
+          persist-credentials: false
+      - name: Independently bootstrap and admit produce
+        id: evidence
+        shell: python -I -B {0}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          import importlib.util, os
+          spec = importlib.util.spec_from_file_location('packed', 'scripts/check-packed-ci.py')
+          packed = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(packed)
+          result = packed.public_workflow('produce', os.environ['PUBLIC_CELL'])
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: public-journey-${{ strategy.job-index }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ steps.evidence.outputs.root }}
+          if-no-files-found: error
+          retention-days: 7
+  public_producer_complete:
+    if: ${{ always() && inputs.mode == 'produce' }}
+    needs: [public_inputs, public_cell]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Require all eighteen cells and the same-live-root bridge
+        shell: python -I -B {0}
+        env:
+          INPUTS_RESULT: ${{ needs.public_inputs.result }}
+          CELLS_RESULT: ${{ needs.public_cell.result }}
+        run: |
+          import os
+          assert os.environ['INPUTS_RESULT'] == os.environ['CELLS_RESULT'] == 'success'
+  public_assemble:
+    if: ${{ inputs.mode == 'assemble' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - name: Bind canonical dispatch before checkout
+        shell: python -I -B {0}
+        run: |
+          import json, os, re
+          s = json.loads(os.environ['PUBLIC_SELECTED'])
+          assert set(s) == {'tag', 'ref', 'source', 'versions'}
+          assert os.environ['GITHUB_REPOSITORY'] == '777genius/universal-agent-plugins'
+          assert os.environ['GITHUB_EVENT_NAME'] == 'workflow_dispatch'
+          assert re.fullmatch('[0-9a-f]{40}', s['source'])
+          assert s['source'] == os.environ['GITHUB_SHA'] == os.environ['GITHUB_WORKFLOW_SHA']
+          assert s['ref'] == 'refs/tags/' + s['tag'] == os.environ['GITHUB_REF']
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ fromJSON(inputs.selected).source }}
+          persist-credentials: false
+      - name: Independently bootstrap and admit assemble
+        id: evidence
+        shell: python -I -B {0}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          import importlib.util, os
+          spec = importlib.util.spec_from_file_location('packed', 'scripts/check-packed-ci.py')
+          packed = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(packed)
+          result = packed.public_workflow('assemble')
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: public-assembly-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ steps.evidence.outputs.root }}
+          if-no-files-found: error
+          retention-days: 7
+  public_evidence_intake:
+    if: ${{ inputs.mode == 'attest' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - name: Bind canonical dispatch before checkout
+        shell: python -I -B {0}
+        run: |
+          import json, os, re
+          s = json.loads(os.environ['PUBLIC_SELECTED'])
+          assert set(s) == {'tag', 'ref', 'source', 'versions'}
+          assert os.environ['GITHUB_REPOSITORY'] == '777genius/universal-agent-plugins'
+          assert os.environ['GITHUB_EVENT_NAME'] == 'workflow_dispatch'
+          assert re.fullmatch('[0-9a-f]{40}', s['source'])
+          assert s['source'] == os.environ['GITHUB_SHA'] == os.environ['GITHUB_WORKFLOW_SHA']
+          assert s['ref'] == 'refs/tags/' + s['tag'] == os.environ['GITHUB_REF']
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ fromJSON(inputs.selected).source }}
+          persist-credentials: false
+      - name: Independently bootstrap and admit attest
+        id: evidence
+        shell: python -I -B {0}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          import importlib.util, os
+          spec = importlib.util.spec_from_file_location('packed', 'scripts/check-packed-ci.py')
+          packed = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(packed)
+          result = packed.public_workflow('attest')
+  public_evidence_attestation:
+    if: ${{ inputs.mode == 'attest' }}
+    needs: public_evidence_intake
+    # Only the accepted hosted signer receives E2 signing permissions.
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
+      attestations: write
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - name: Bind canonical dispatch before checkout
+        shell: python -I -B {0}
+        run: |
+          import json, os, re
+          s = json.loads(os.environ['PUBLIC_SELECTED'])
+          assert set(s) == {'tag', 'ref', 'source', 'versions'}
+          assert os.environ['GITHUB_REPOSITORY'] == '777genius/universal-agent-plugins'
+          assert os.environ['GITHUB_EVENT_NAME'] == 'workflow_dispatch'
+          assert re.fullmatch('[0-9a-f]{40}', s['source'])
+          assert s['source'] == os.environ['GITHUB_SHA'] == os.environ['GITHUB_WORKFLOW_SHA']
+          assert s['ref'] == 'refs/tags/' + s['tag'] == os.environ['GITHUB_REF']
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ fromJSON(inputs.selected).source }}
+          persist-credentials: false
+      - name: Independently bootstrap and admit attest
+        id: evidence
+        shell: python -I -B {0}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          import importlib.util, os
+          spec = importlib.util.spec_from_file_location('packed', 'scripts/check-packed-ci.py')
+          packed = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(packed)
+          result = packed.public_workflow('attest')
+      - uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: ${{ steps.evidence.outputs.subjects }}
+      - name: Re-admit original custody and compare every post-sign byte
+        shell: python -I -B {0}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PUBLIC_SIGNED_ROOT: ${{ steps.evidence.outputs.root }}
+        run: |
+          import importlib.util, os
+          from pathlib import Path
+          spec = importlib.util.spec_from_file_location('packed', 'scripts/check-packed-ci.py')
+          packed = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(packed)
+          checked = packed.public_workflow('attest')
+          def closure(root):
+              root = Path(root)
+              result = {}
+              for p in sorted(root.rglob('*')):
+                  assert not p.is_symlink()
+                  if p.is_file():
+                      result[str(p.relative_to(root))] = packed.provision_bytes(p, 16 * 1024 * 1024)
+                  else:
+                      assert p.is_dir()
+              return result
+          assert closure(os.environ['PUBLIC_SIGNED_ROOT']) == closure(checked['root'])
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: public-evidence-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ steps.evidence.outputs.root }}
+          if-no-files-found: error
+          retention-days: 7
+  public_check:
+    if: ${{ inputs.mode == 'check' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - name: Bind canonical dispatch before checkout
+        shell: python -I -B {0}
+        run: |
+          import json, os, re
+          s = json.loads(os.environ['PUBLIC_SELECTED'])
+          assert set(s) == {'tag', 'ref', 'source', 'versions'}
+          assert os.environ['GITHUB_REPOSITORY'] == '777genius/universal-agent-plugins'
+          assert os.environ['GITHUB_EVENT_NAME'] == 'workflow_dispatch'
+          assert re.fullmatch('[0-9a-f]{40}', s['source'])
+          assert s['source'] == os.environ['GITHUB_SHA'] == os.environ['GITHUB_WORKFLOW_SHA']
+          assert s['ref'] == 'refs/tags/' + s['tag'] == os.environ['GITHUB_REF']
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ fromJSON(inputs.selected).source }}
+          persist-credentials: false
+      - name: Independently bootstrap and admit read
+        id: evidence
+        shell: python -I -B {0}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          import importlib.util, os
+          spec = importlib.util.spec_from_file_location('packed', 'scripts/check-packed-ci.py')
+          packed = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(packed)
+          result = packed.public_workflow('read')

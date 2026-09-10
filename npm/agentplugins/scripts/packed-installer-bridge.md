@@ -519,3 +519,75 @@ NOT ACCEPTED. Refused security/crypto/ZIP work must not be retried, rerouted or
 replaced. Quarantined Windows parent-sharing/concurrency reproducers, ptrace or
 alternate observers, denied localhost/private-network/raw-download probes,
 network/auth/download/native execution and provisioning remain excluded.
+
+### Completed public evidence source contracts (recovery work)
+
+The public acceptance module now separates recorded remote tool identities from
+local controller admission. `historicalTools` compares remote paths, versions and
+hashes to the source provisioning manifest without opening those paths.
+`readCompletedJourney` consumes the owner custody facade's checked retained
+`{root, artifact, attempt}` result and replays the existing semantic validators
+only against retained evidence and the original recorded host namespace.
+The `attempt` contains a producer, completed status, successful conclusion and
+fixed job identities; each job binds its run, attempt, source and ref. The custody
+owner still must supply the real facade and accepted upload/attempt binding.
+
+`encodeAcceptance`/`decodeAcceptance` retain the original S/I and both full pack
+pins, all eighteen ordered R1 locators, the designated same-artifact bridge and
+the separate R2 producer. `acceptanceGraph` checks the distinct completed R1/R2/R3
+attempts and unchanged E digest. The index codec rejects missing cells, duplicate
+or unbounded members and self-referential E/index entries; its local closure
+reader pins every retained member. These contracts are not proof of execution.
+
+The fixed public subject wrapper requires exactly the two E2 names and delegates
+to the existing unchanged workflow verifier. Native admission remains closed as
+before. No fixture, codec, local bridge receipt or source registration qualifies
+public E or Q. Aggregate orchestration, attestation intake, the complete E reader,
+the four-invocation workflow and P integration are still unfinished in this
+recovery increment. No workflow dispatch or signing occurred.
+
+The authenticated Python source seal now includes the scaffold template directory
+used by the generated-project validator. It remains closed on missing controller
+or execution prerequisites before launching the bridge or producing outputs.
+
+### Public completion assembly and workflow continuation
+
+The source now wires `--assemble`, `--attest-inputs` and `--read` to the completed
+journey/bridge closure reader. Assembly re-admits original I19/S3 and all eighteen
+R1 artifacts twice, compares the complete retained closure, and writes E last.
+Attestation intake re-admits completed R2 and R1 and prepares exactly the E/index
+subjects. The completed reader binds R1, original R2 and completed R3 separately,
+uses the unchanged public verifier API, and repeats custody and byte checks.
+
+`authoring-public-packed.yml` defines four manual invocations. Produce preflight
+resolves the complete source-frozen matrix before any product job is scheduled;
+all cells and the designated live bridge must succeed. Assemble consumes exact
+R1 locators. Attest uses a separate hosted signer job with only E2 signing
+permissions and compares the full closure after signing. Check consumes exact
+R2/R3 locators. No running invocation waits for its own completion. Python/OS and
+the protected exact checkout remain bootstrap authority; no setup action or
+receipt authenticates the first Node executable. Immutable provision is still an
+external prerequisite, not established by hash-then-exec checks.
+
+The fixed P adapter invokes the same completed reader and compares Q identity,
+preparation, all twelve full native asset pins, original I/S and both full pack
+pins. Source schema registration does not open `requireNativeContracts`, whose
+global failure remains unconditional. P retains both admission results for its
+existing repeated pre-effect admission path. No new publisher is introduced.
+
+These are source contracts, not genuine E acceptance. The real custody,
+observation and installer facades and immutable eighteen-cell provision remain
+missing; cross-host execution, actual verifier compatibility, protected workflow
+settings, exact-head review and genuine E2E remain unverified. N2 remains NOT
+ACCEPTED and its refused internals are unchanged. Fixtures cannot close these
+dependencies or any of the remaining full-program phases.
+
+The fixed `public-evidence` R3 transport root now contains exactly
+`assembly-locator.json` and `evidence/`. The locator file is the canonical original
+R2 `{sha256,artifact}` locator; `evidence/` contains the unchanged E/index/retained
+closure from R2. Only E and index are signing subjects. R4 compares the external
+locator to its independently selected original R2 locator before signature
+verification, after verification and at late artifact readback. Neither E nor
+index contains its own digest or artifact identity. The custody owner must support
+this fixed transport closure through `readPublicArtifact(kind=public-evidence)`;
+no archive reader or verification policy is added by this source implementation.

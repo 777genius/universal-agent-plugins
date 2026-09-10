@@ -126,11 +126,13 @@ function requireNativeContracts(lanes) {
   // This is only the registered-contract inventory, never evidence admission.
   // Public packed has no accepted producer. Even twelve admitted native lanes
   // cannot authorize the thirteen-lane global gate or a protected effect.
-  const unsupported = lanes.filter(x => x.lane === "public-packed-pair" ||
+  const publicContract = require('./public-authoring-acceptance');
+  const unsupported = lanes.filter(x => x.lane === "public-packed-pair" ?
+    x.schema !== publicContract.ACCEPTANCE_SCHEMA || x.workflow !== publicContract.WORKFLOW :
     x.schema !== NATIVE_SCHEMA || x.workflow !== NATIVE_WORKFLOW)
     .map(x => `${x.lane}:${String(x.schema).slice(0, 100)}`);
   fail(`NATIVE_EVIDENCE_INTEGRATION_REQUIRED: missing lanes [${missing.join(", ")}]; unsupported contracts [${unsupported.join(", ")}]. ` +
-    "Public-packed producer/schema remains unsupported. dual-authoring-public-native/v1 is Linux fixture evidence with false release claims; private-packed or SLSA build success cannot qualify this pair. Signing and promotion are disabled.");
+    "Public-packed schema registration is source-only; native acceptance remains required. dual-authoring-public-native/v1 is Linux fixture evidence with false release claims; private-packed or SLSA build success cannot qualify this pair. Signing and promotion are disabled.");
 }
 function validateSelection(body, selected) {
   const record = decodeRecord(body);
@@ -608,7 +610,7 @@ function inspectPair(record, cwd) {
 }
 
 function options(v) {
-  c.keys(v, ["record", "root", "scratch", "workflow_sha", "preparation", "selected"], "promotion options");
+  c.keys(v, ["record", "root", "scratch", "workflow_sha", "preparation", "selected", ...(Object.hasOwn(v, 'public') ? ['public'] : [])], "promotion options");
   for (const name of ["root", "scratch"]) c.safeDirectory(v[name]);
   if (v.root === v.scratch || v.root.startsWith(v.scratch + path.sep) || v.scratch.startsWith(v.root + path.sep)) fail("scratch and inputs must be disjoint");
   if (typeof v.record !== "string" || !path.isAbsolute(v.record) || path.basename(v.record) !== "authoring-promotion.json") fail("absolute authoring-promotion.json required");
@@ -621,10 +623,11 @@ function admittedInputs(input) {
   exact(o.workflow_sha, record.identity.commit, "integrated workflow source");
   const native = admitNativeEvidence(record, o.preparation, o.scratch);
   require("./authoring-native-qualification").readPreparation(o.root, projectedPins(record), native.preparation);
-  requireNativeContracts(record.qualification.lanes); // Public adapter still unavailable; zero effects.
+  requireNativeContracts(record.qualification.lanes); // Native acceptance still required; zero protected effects.
+  const publicEvidence = admitPublicEvidence(record, { request: o.public, preparation: o.preparation });
   const subjects = frozenSubjects(o.root, record);
   subjects.push({ file: o.record, sha256: c.digest(encodeRecord(record)) });
-  return { o, record, subjects };
+  return { o, record, subjects, native, publicEvidence };
 }
 function verifyAll(state) {
   for (const subject of state.subjects) verifySubject(subject.file, {
@@ -721,7 +724,64 @@ if (require.main === module) {
   try { process.stdout.write(JSON.stringify(main(process.argv.slice(2))) + "\n"); }
   catch (error) { process.stderr.write(`authoring promotion: ${error.message}\n`); process.exitCode = 1; }
 }
-module.exports = { inspectStageCaller, workflowSelection, inspectInputCaller, checkPreparationRef, acquireCurrentStage, inspectCurrentStage, checkStageEvidence, SCHEMA, WORKFLOW, GH_VERSION, LANES, encodeRecord, decodeRecord, validateSelection, admitRecord, requireNativeContracts,
+// Fixed public wrappers reuse the existing provider and verifier policy. They
+// introduce no accepted-native override and grant no publication authority.
+function inspectPublicAttempt(pin, selected, mode, cwd) {
+  const publicEvidence = require('./public-authoring-acceptance');
+  if (!Object.hasOwn(publicEvidence.PUBLIC_JOBS, mode)) fail('fixed public attempt mode required');
+  const run = attemptAtRef(pin, publicEvidence.WORKFLOW, selected, cwd, 'completed');
+  const jobs = attemptJobs(pin, selected, cwd), names = publicEvidence.PUBLIC_JOBS[mode];
+  const selectedJobs = names.map(name => oneJob(jobs, name, 'completed'));
+  // Other invocation modes may exist only as skipped jobs in this workflow.
+  for (const job of jobs) if (!names.includes(job.name) &&
+      (job.status !== 'completed' || job.conclusion !== 'skipped')) fail('unexpected active public job');
+  const value = { producer: { workflow: publicEvidence.WORKFLOW, source: selected.source, ref: selected.ref,
+    run_id: pin.run_id, run_attempt: pin.run_attempt }, status: run.status, conclusion: run.conclusion,
+    jobs: selectedJobs.map(j => ({ id: j.id, name: j.name, run_id: j.run_id, run_attempt: j.run_attempt,
+      source: j.head_sha, ref: selected.ref, status: j.status, conclusion: j.conclusion })) };
+  publicEvidence.completedAttempt(value, selected, mode); return value;
+}
+function inspectPublicCaller(selected, workflowSha, mode, cwd) {
+  const a = require('./public-authoring-acceptance');
+  if (!Object.hasOwn(a.PUBLIC_JOBS, mode)) fail('fixed public caller mode');
+  exact(workflowSha, selected.source, 'public workflow F');
+  const jobs = mode === 'produce' ? ['public_inputs', 'public_cell', 'public_producer_complete'] : a.PUBLIC_JOBS[mode];
+  const caller = currentCaller(selected, a.WORKFLOW, jobs);
+  attemptAtRef(caller, a.WORKFLOW, selected, cwd, 'in_progress');
+  const name = process.env.GITHUB_JOB === 'public_cell' ? `public_cell (${process.env.PUBLIC_CELL})` : process.env.GITHUB_JOB;
+  if (!a.PUBLIC_JOBS[mode].includes(name)) fail('fixed public cell');
+  oneJob(attemptJobs(caller, selected, cwd), name, 'in_progress');
+  return { workflow: a.WORKFLOW, source: selected.source, ref: selected.ref, run_id: caller.run_id, run_attempt: caller.run_attempt };
+}
+function verifyPublicSubject(file, expected, cwd) {
+  const a = require('./public-authoring-acceptance'), names = [a.ACCEPTANCE_FILE, a.INDEX_FILE];
+  if (!Array.isArray(expected.subjects) || expected.subjects.length !== 2) fail('exact E2 subjects required');
+  exact(expected.subjects.map(s => s.name).sort(), [...names].sort(), 'exact E2 subject names');
+  if (!names.includes(expected.name)) fail('fixed E2 subject required');
+  return verifyWorkflowSubject(file, expected, cwd, a.WORKFLOW);
+}
+function admitPublicEvidence(value, context) {
+  const record = recordShape(value), a = require('./public-authoring-acceptance');
+  c.keys(context, ['request', 'preparation'], 'public promotion context'); locator(context.preparation);
+  const lane = record.qualification.lanes.find(row => row.lane === 'public-packed-pair');
+  exact([lane.schema, lane.workflow], [a.ACCEPTANCE_SCHEMA, a.WORKFLOW], 'fixed public promotion contract');
+  const request = context.request;
+  if (!request || request.schema !== 'authoring-public-read/v1') fail('completed public read request required');
+  exact(request.selected, { tag: record.products.agentplugins.tag, ref: `refs/tags/${record.products.agentplugins.tag}`,
+    source: record.identity.commit, versions: record.identity.versions }, 'public Q selection');
+  exact(request.workflow_sha, record.identity.commit, 'public Q workflow F');
+  exact(request.acceptance, { sha256: lane.sha256, artifact: lane.artifact }, 'public Q exact completed R3 locator');
+  const admitted = a.readAcceptance(request), e = admitted.record;
+  for (const key of ['identity', 'authoring_mode', 'asset_scope', 'candidate_sha256', 'pair_marker_sha256'])
+    exact(e[key], record[key], `public Q ${key}`);
+  exact(admitted.input.preparation.artifact, context.preparation, 'public Q original preparation');
+  exact(admitted.input.products, record.products, 'public Q all twelve full native outer/inner pins');
+  exact(e.native_inputs, admitted.stage.native_inputs, 'public Q authenticated I locator');
+  exact(e.packs, admitted.stage.packs, 'public Q both complete original pack pins');
+  exact(e.stage, request.stage, 'public Q original S locator');
+  return admitted;
+}
+module.exports = { admitPublicEvidence, inspectPublicCaller, inspectPublicAttempt, verifyPublicSubject, inspectStageCaller, workflowSelection, inspectInputCaller, checkPreparationRef, acquireCurrentStage, inspectCurrentStage, checkStageEvidence, SCHEMA, WORKFLOW, GH_VERSION, LANES, encodeRecord, decodeRecord, validateSelection, admitRecord, requireNativeContracts,
   inspectArtifact, acquireArtifact, extractArtifact, acquirePreparation, checkNativeContracts, admitNativeEvidence,
   acquireInputPreparation, readInputPreparation, checkInputTags,
   mapVerifiedOutput, verifySubject, verifyStageSubject, frozenSubjects, releasePins, inspectPair, promote };
