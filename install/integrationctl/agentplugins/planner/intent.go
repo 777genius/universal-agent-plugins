@@ -27,7 +27,7 @@ func ApplyInstallIntent(plan *domain.DeliveryPlan, intent domain.InstallIntent) 
 		}
 		plan.Status = domain.PlanReady
 		plan.Activation = domain.ActivationPrepared
-		plan.Authentication = domain.AuthenticationPending
+		plan.Authentication = domain.AuthenticationNotRequired
 		plan.Verification = domain.VerificationPackageValid
 		plan.UserActions = []string{domain.ChatGPTMappedPreparationAction}
 		return nil

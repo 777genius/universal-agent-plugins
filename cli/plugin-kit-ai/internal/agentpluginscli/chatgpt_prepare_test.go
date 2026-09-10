@@ -15,7 +15,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/providers"
 )
 
-const fixturePersonalAppID = "plugin_asdk_app_0123456789abcdef0123456789abcdef"
+const fixturePersonalAppID = "asdk_app_0123456789abcdef0123456789abcdef"
 
 // This fixture exercises the verified-acquisition interface with immutable local
 // bytes. It is deliberately not a live catalog or remote ChatGPT qualification.
@@ -58,7 +58,7 @@ func TestContext7GuidedMissingRegistrationAndResume(t *testing.T) {
 	var response struct {
 		Data map[string]any `json:"data"`
 	}
-	if json.Unmarshal([]byte(out), &response) != nil || response.Data["status"] != "action_required" || response.Data["mcp_url"] != domain.Context7OAuthURL || response.Data["remote_verified"] != false {
+	if json.Unmarshal([]byte(out), &response) != nil || response.Data["status"] != "action_required" || response.Data["mcp_url"] != domain.Context7ChatGPTURL || response.Data["authentication"] != "none" || response.Data["remote_verified"] != true {
 		t.Fatalf("action response %s: %v", out, err)
 	}
 	state, _ := f.store.Load()
@@ -155,7 +155,7 @@ func TestContext7GuidedLifecycleRetainsReceipt(t *testing.T) {
 				t.Fatal(err)
 			}
 			b := onlyCLIClient(state.Installations[0])
-			if b.Verification != domain.VerificationPackageValid || b.Authentication != domain.AuthenticationPending {
+			if b.Verification != domain.VerificationPackageValid || b.Authentication != domain.AuthenticationNotRequired {
 				t.Fatalf("fabricated remote completion %+v", b)
 			}
 			if err := os.RemoveAll(b.TargetLocator); err != nil {
@@ -177,7 +177,7 @@ func TestContext7GuidedLifecycleRetainsReceipt(t *testing.T) {
 }
 
 func TestContext7GuidedRejectsInvalidIDsAndUnverifiedSource(t *testing.T) {
-	for _, id := range []string{"connector_old", "asdk_app_old", "plugin_asdk_app_", "plugin_asdk_app_short", "plugin_asdk_app_bad/id", " plugin_asdk_app_abc"} {
+	for _, id := range []string{"connector_old", "asdk_app_", "asdk_app_short", "asdk_app_bad/id", " asdk_app_abc", "plugin_asdk_app_0123456789abcdef0123456789abcdef"} {
 		t.Run(id, func(t *testing.T) {
 			f, _, a := context7GuidedFixture(t)
 			_, _, err := f.execute(false, "add", "context7", "--target", "chatgpt", "--prepare", "--chatgpt-app-id", id)
@@ -220,7 +220,7 @@ func TestContext7GuidedReceiptRejectsChangedRegistrationAndSignedEndpoint(t *tes
 		t.Fatalf("%s %v", out, err)
 	}
 	before, _ := os.ReadFile(f.store.Path)
-	_, _, err := f.execute(false, "add", "context7", "--target", "chatgpt", "--prepare", "--chatgpt-app-id", "plugin_asdk_app_ffffffffffffffffffffffffffffffff")
+	_, _, err := f.execute(false, "add", "context7", "--target", "chatgpt", "--prepare", "--chatgpt-app-id", "asdk_app_ffffffffffffffffffffffffffffffff")
 	if err == nil || !strings.Contains(err.Error(), "conflicts with retained") {
 		t.Fatalf("replaced receipt: %v", err)
 	}
@@ -248,7 +248,7 @@ func TestContext7GuidedReceiptRejectsChangedRegistrationAndSignedEndpoint(t *tes
 	dist.ReleasePolicies = append(dist.ReleasePolicies, policy)
 	d.bundle.Snapshot.Evidence = append(d.bundle.Snapshot.Evidence, intendedTrustedDirectoryEvidence(domain.DirectoryEvidence{ID: policy.CurrentEvidence[0], DistributionID: dist.ID, ReleaseSequence: 2, PackageTreeDigest: release.TreeDigest, Level: "materialization", Outcome: "passed", Client: domain.ClientKiro}))
 	_, _, err = f.execute(false, "update", "context7", "--target", "chatgpt")
-	if err == nil || !strings.Contains(err.Error(), "OAuth server") {
+	if err == nil || !strings.Contains(err.Error(), "canonical Context7 package") {
 		t.Fatalf("rebound endpoint: %v", err)
 	}
 	after, _ := os.ReadFile(f.store.Path)

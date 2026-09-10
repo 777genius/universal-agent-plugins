@@ -114,8 +114,8 @@ func (planner Planner) Plan(
 		}
 		plan.LocalPreparationAuthorized = true
 		plan.PersonalChatGPTPreparation = true
-		plan.Authentication = domain.AuthenticationPending
-		plan.Warnings = append(plan.Warnings, "personal_registration_not_remote_verified")
+		plan.Authentication = domain.AuthenticationNotRequired
+		plan.Warnings = append(plan.Warnings, "personal_registration_requires_account_install")
 	} else {
 		applyCatalogCompatibility(&plan, envelope.CatalogEvidence)
 	}

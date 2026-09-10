@@ -589,7 +589,7 @@ func (app App) acquireDirectory(ctx context.Context, selector string, request pa
 		loaded.chatGPTPreparation = true
 		loaded.localChatGPTMapping = retainedMapping
 		if app.chatGPTAppID != "" {
-			mapping := domain.ChatGPTLocalMapping{ProductID: "context7", Repository: "upstash/context7", PackagePath: "plugins/agent-plugins/context7", Server: "context7", URL: domain.Context7OAuthURL, AppID: app.chatGPTAppID}
+			mapping := domain.ChatGPTLocalMapping{ProductID: "context7", Repository: "upstash/context7", PackagePath: "plugins/agent-plugins/context7", Server: "context7", URL: domain.Context7ChatGPTURL, AppID: app.chatGPTAppID}
 			if retainedMapping != nil && *retainedMapping != mapping {
 				_ = loaded.cleanup()
 				return loadedPackage{}, fmt.Errorf("explicit ChatGPT ID conflicts with retained personal registration receipt")

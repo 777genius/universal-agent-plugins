@@ -106,7 +106,7 @@ func TestContext7ResumeEmittedMixedCommandAndPreparedGuidance(t *testing.T) {
 	if len(state.Installations) != 1 || len(state.Installations[0].Clients) != 2 || a.verifiedCalls != 2 {
 		t.Fatalf("mixed resume: %+v calls=%d", state, a.verifiedCalls)
 	}
-	if strings.Contains(out, fixturePersonalAppID) || strings.Contains(out, "copy its plugin_asdk_app_") || strings.Contains(out, "Rerun add") {
+	if strings.Contains(out, fixturePersonalAppID) || strings.Contains(out, "copy its asdk_app_") || strings.Contains(out, "Rerun add") {
 		t.Fatalf("wrong stage or private ID: %s", out)
 	}
 	for _, b := range state.Installations[0].Clients {
@@ -123,7 +123,7 @@ func TestContext7ResumeEmittedMixedCommandAndPreparedGuidance(t *testing.T) {
 			}
 		}
 	}
-	for _, text := range []string{"ChatGPT desktop", "new chat", "Remote OAuth and tool calls have not been verified", "including --purge-data"} {
+	for _, text := range []string{"No authentication is required", "new chat", "both Context7 tools have been verified in ChatGPT", "including --purge-data"} {
 		if !strings.Contains(out, text) {
 			t.Fatalf("missing %q: %s", text, out)
 		}
@@ -221,7 +221,7 @@ func TestContext7PreparedGuidanceAcrossLifecycle(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%s: %s %v", op, out, err)
 		}
-		if strings.Contains(out, path) || strings.Contains(out, fixturePersonalAppID) || strings.Contains(out, "Rerun add") || !strings.Contains(out, "Remote OAuth and tool calls have not been verified") {
+		if strings.Contains(out, path) || strings.Contains(out, fixturePersonalAppID) || strings.Contains(out, "Rerun add") || !strings.Contains(out, "both Context7 tools have been verified in ChatGPT") {
 			t.Fatalf("%s public guidance: %s", op, out)
 		}
 	}
@@ -363,7 +363,7 @@ func TestContext7SingleLifecycleRenderPaths(t *testing.T) {
 	for _, noChange := range []bool{false, true} {
 		result := usecase.AddResult{
 			Plan:       domain.DeliveryPlan{ClientID: domain.ClientChatGPT, InstallIntent: domain.InstallIntentPrepare, ActivePath: "/private/personal-marketplace", DeclaredName: "context7"},
-			Activation: domain.ActivationOutcome{Activation: domain.ActivationPrepared, Authentication: domain.AuthenticationPending, Verification: domain.VerificationPackageValid},
+			Activation: domain.ActivationOutcome{Activation: domain.ActivationPrepared, Authentication: domain.AuthenticationNotRequired, Verification: domain.VerificationPackageValid},
 			NoChange:   noChange, Mutated: !noChange,
 		}
 		for _, op := range []string{"add", "update", "repair"} {
