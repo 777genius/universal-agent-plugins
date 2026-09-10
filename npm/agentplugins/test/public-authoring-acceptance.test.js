@@ -61,9 +61,11 @@ function fixture(t) {
   for (const p of c.PRODUCTS) {
     const parent = projects[p] = path.join(fixtureRoot, `${p} projects ü`); fs.mkdirSync(parent);
     for (const lane of bridge.LANES) {
-      const dir = path.join(parent, lane); fs.mkdirSync(dir); fs.mkdirSync(path.join(dir, "empty"));
-      fs.mkdirSync(path.join(dir, "skills/extra-skill"), { recursive: true });
-      write(path.join(dir, "plugin.json"), { name: lane }); write(path.join(dir, "skills/extra-skill/SKILL.md"), Buffer.from("SYNTHETIC"));
+      const dir = path.join(parent, lane); fs.mkdirSync(dir, { mode: 0o755 });
+      for (const [name, bytes] of Object.entries(a.generatedFiles(lane))) {
+        const file = path.join(dir, name); fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o755 });
+        fs.writeFileSync(file, bytes, { mode: 0o644 });
+      }
     }
   }
   const j = { schema: a.SCHEMA, status: "completed", identity: id, authoring_mode: ic.MODE, asset_scope: ic.SCOPE,
@@ -136,7 +138,7 @@ function semanticFixture(f) {
     if (project) {
       const manifest = snapshots[w.product].entries.find(x => x.path === `${w.lane}/plugin.json`);
       data.identity = { scope_algorithm: 'agentplugins-captured-input-sha256-v1', scope_digest: 'sha256:' + H(w.lane), tree_algorithm: 'agentplugins-tree-sha256-v1',
-        tree_digest: 'sha256:' + H(w.lane + '-tree'), manifest_digest: 'sha256:' + manifest.sha256,
+        tree_digest: a.generatedTreeIdentity(snapshots[w.product].entries, w.lane, j.cell), manifest_digest: 'sha256:' + manifest.sha256,
         read_profile: `packageview-local-${a.matrix.find(c => c.key === j.cell).target.split('-')[0]}-v1`, tree_exclusions: ['root .git', 'root non-directory .plugin-kit-ai.lock'] };
       for (const k of ['loadability', 'normative_conformance', 'host_safety', 'authoring_readiness']) data[k] = assessment(malformed && ['normative_conformance', 'authoring_readiness'].includes(k) ? 'fail' : 'pass');
       data.inspection = { name: w.lane, version: '0.1.0', schema: a.PROFILES[2].id, components: data.components.map(x =>
@@ -311,6 +313,57 @@ if (require.main === module) {
       assert.throws(() => a.readJourneyInputs(f.request), /original project trees/);
     });
   });
+  test('C3 unit fixed generated closure and captured identity', t => {
+    const f = semanticFixture(fixture(t));
+    assert.ok(a.verifyResults(f.j, f.evidence).projects_preserved);
+    const extraRoot = structuredClone({ 'commands.json': f.evidence['commands.json'], 'projects.json': f.evidence['projects.json'] });
+    for (const snapshot of Object.values(extraRoot['projects.json'])) {
+      snapshot.entries.push({ path: 'unexpected', kind: 'file', mode: 0o644, size: 0, sha256: H('') });
+      snapshot.sha256 = c.digest(c.encode(snapshot.entries));
+    }
+    assert.throws(() => a.verifyResults(f.j, extraRoot), /only generated lane entries/);
+    // Independently rendered scaffold fixtures and ordinary v1 framing pins.
+    const golden = {"skill": "sha256:383668d78b12a5ad868c895183a6d86b3441c6fedc833371250eecd8e40d9754", "mcp-remote": "sha256:2aeaa18441a1e66f8b31c9beee438f88205c9dd24a4d73dd3fc24ebfce50c005", "mcp-stdio": "sha256:39908919898e31f6bd170623b8f70581aa5604f21910c334466d1fc527028e39", "hybrid-remote": "sha256:66fa98b22663011eb77e8ffbe4b73f056eb94b2706fe9f9a58244d32e0935bdb", "hybrid-stdio": "sha256:1ebd460c3872e672a6378226265f89d861160f29932a0b15ae8e376a3c576f6b"};
+    for (const lane of bridge.LANES) {
+      const entries = f.evidence['projects.json'].agentplugins.entries;
+      for (const cell of a.matrix) {
+        const hostEntries = structuredClone(entries);
+        if (cell.target.startsWith('windows-')) for (const e of hostEntries) e.mode = e.kind === 'directory' ? 0o777 : 0o666;
+        assert.equal(a.generatedTreeIdentity(hostEntries, lane, cell.key), golden[lane]);
+      }
+      for (const entry of entries.filter(e => e.path.startsWith(lane + '/'))) {
+        for (const mutation of ['missing', 'mode', ...(entry.kind === 'file' ? ['content'] : [])]) {
+          const bad = structuredClone({ 'commands.json': f.evidence['commands.json'], 'projects.json': f.evidence['projects.json'] });
+          for (const snapshot of Object.values(bad['projects.json'])) {
+            const e = snapshot.entries.find(e => e.path === entry.path);
+            if (mutation === 'missing') snapshot.entries = snapshot.entries.filter(x => x.path !== e.path);
+            else if (mutation === 'mode') e.mode ^= 0o100;
+            else e.sha256 = H('symmetric changed content');
+            snapshot.sha256 = c.digest(c.encode(snapshot.entries));
+          }
+          for (const snapshot of Object.values(bad['projects.json']))
+            assert.throws(() => a.generatedTreeIdentity(snapshot.entries, lane, f.j.cell), e => e.message.length < 1024, `${lane} ${mutation} ${entry.path}`);
+          if (entry.path === lane + '/plugin.json') assert.throws(() => a.verifyResults(f.j, bad), e => e.message.length < 1024);
+        }
+      }
+      for (const kind of ['file', 'directory']) {
+        const bad = structuredClone({ 'commands.json': f.evidence['commands.json'], 'projects.json': f.evidence['projects.json'] });
+        for (const snapshot of Object.values(bad['projects.json'])) {
+          snapshot.entries.push({ path: lane + '/unexpected-empty', mode: kind === 'file' ? 0o644 : 0o755, kind,
+            ...(kind === 'file' ? { size: 0, sha256: H('') } : {}) });
+          snapshot.sha256 = c.digest(c.encode(snapshot.entries));
+        }
+        assert.throws(() => a.verifyResults(f.j, bad), e => e.message.length < 1024);
+      }
+      const bad = structuredClone({ 'commands.json': f.evidence['commands.json'], 'projects.json': f.evidence['projects.json'] });
+      for (const row of bad['commands.json'].filter(r => r.id.startsWith(lane + '/'))) {
+        const v = JSON.parse(row.stdout);
+        if (v.data.identity.tree_digest) v.data.identity.tree_digest = 'sha256:' + H('unbound identical claim');
+        row.stdout = JSON.stringify(v);
+      }
+      assert.throws(() => a.verifyResults(f.j, bad), /captured generated tree identity/);
+    }
+  });
   test("C3 unit production installer evidence is independently required", t => {
     const f = fixture(t); withReaders(t, f, () => {
       semanticFixture(f); const local = a.readJourneyInputs(f.request);
@@ -431,6 +484,29 @@ if (require.main === module) {
       const failure = JSON.parse(fs.readFileSync(path.join(request.output, 'evidence/failure.json')));
       assert.match(failure.primary, /C3 fixed scenario failed/); assert.match(failure.primary, /primary run failure/); assert.match(failure.finalization, /late finalization failure/);
       assert.equal(fs.existsSync(path.join(request.output, 'evidence/public-journey.json')), false);
+      for (const failFinish of [false, true]) {
+        request.output = path.join(f.root, `malformed-observer-${failFinish}`);
+        let finished = 0, ran = 0;
+        api['public-process-observation'].openPublicObservation = () => ({
+          run() { ran++; },
+          finish() { finished++; if (failFinish) throw new Error('SYNTHETIC malformed finalizer failure'); }
+        });
+        await assert.rejects(a.produceJourney(request), /journey incomplete/);
+        assert.equal(finished, 1); assert.equal(ran, 0);
+        const receipt = JSON.parse(fs.readFileSync(path.join(request.output, 'evidence/failure.json')));
+        assert.match(receipt.primary, /session.cancel/);
+        if (failFinish) assert.match(receipt.finalization, /malformed finalizer failure/);
+        else assert.equal(receipt.finalization, null);
+        assert.equal(fs.existsSync(path.join(request.output, 'evidence/public-journey.json')), false);
+      }
+      for (const session of [null, { run() {}, cancel() {} }]) {
+        request.output = path.join(f.root, `no-finalizer-${session === null}`);
+        api['public-process-observation'].openPublicObservation = () => session;
+        await assert.rejects(a.produceJourney(request), /journey incomplete/);
+        const receipt = JSON.parse(fs.readFileSync(path.join(request.output, 'evidence/failure.json')));
+        assert.match(receipt.primary, /session.finish/); assert.equal(receipt.finalization, null);
+        assert.equal(fs.existsSync(path.join(request.output, 'evidence/public-journey.json')), false);
+      }
       request.output = path.join(f.root, 'observer-open-failure');
       api['public-process-observation'].openPublicObservation = () => { throw new Error('SYNTHETIC observation unavailable'); };
       await assert.rejects(a.produceJourney(request), /observation unavailable/);

@@ -799,6 +799,60 @@ function expandEvidence(name, value, root, budget = { size: 0 }) {
   const expanded = { ...value, rows };
   agree(c.encode(value), evidenceFiles(name, expanded)[name], 'canonical row shard partition'); return expanded;
 }
+// Fixed publicInit lanes only: exact scaffold bytes, not a configurable template engine.
+function generatedFiles(lane) {
+  assert.ok(LANES.includes(lane), 'fixed generated lane');
+  const hybrid = lane.startsWith('hybrid-'), stdio = lane.endsWith('stdio'), remote = lane.endsWith('remote');
+  const description = hybrid ? 'An Agent Plugins package with a Skill and an MCP server.' : lane === 'skill' ? 'A Skill for documentation and task guidance.' : remote ? 'An Agent Plugins package with a remote MCP server.' : 'An Agent Plugins package with a local Node MCP server.';
+  const json = value => JSON.stringify(value, null, 2) + '\n';
+  const files = {
+    'plugin.json': json({ $schema: PROFILES[2].id, description, name: lane, version: '0.1.0' }),
+    '.gitignore': 'node_modules/\n.DS_Store\n',
+    'README.md': `# ${lane}\n\n${description}\n\nThis package uses Agent Plugins 1.0: \`plugin.json\`, with portable components in \`skills/\` and/or \`mcp.json\`.\n` +
+      (stdio ? '\nThe stdio server requires Node >=22 and the official MCP SDK pinned in package-lock.json. Dependency installation and runtime execution are separate, explicit author actions. Creation performs neither; runtime behavior has not been tested.\n' : remote ? '\nThe remote MCP URL is configuration only. Creation does not contact the endpoint or verify authentication or runtime behavior.\n' : ''),
+    'skills/extra-skill/SKILL.md': '---\nname: "extra-skill"\ndescription: "Use for extra documentation requests"\n---\n\n# extra-skill\n\nUse for extra documentation requests\n'
+  };
+  if (hybrid || lane === 'skill') files[`skills/${lane}/SKILL.md`] = `---\nname: ${lane}\ndescription: ${JSON.stringify(description)}\n---\n\n# ${lane}\n\n${description}\n\nUse this skill when the request matches its description. Clarify missing requirements before taking action and report the result.\n`;
+  if (remote || stdio) files['mcp.json'] = json({ $schema: PROFILES[3].id, mcpServers: { [lane]: stdio ? { args: ['${PLUGIN_ROOT}/src/server.mjs'], command: 'node', type: 'stdio' } : { type: 'streamable-http', url: 'https://docs.example.com/mcp' } } });
+  if (stdio) {
+    // Existing source-frozen embedded npm fixtures; never install or resolve them.
+    for (const name of ['package.json', 'package-lock.json']) {
+      const bytes = c.readFile(path.resolve(__dirname, '../../../cli/plugin-kit-ai/internal/authoring/scaffold/templates', name), LIMIT).toString('utf8');
+      const needle = name === 'package.json' ? '"name":"agent-plugin-template"' : '"name": "agent-plugin-template"';
+      agree(bytes.split(needle).length - 1, name === 'package.json' ? 1 : 2, 'fixed embedded root names');
+      files[name] = bytes.split(needle).join(needle.replace('agent-plugin-template', lane));
+    }
+    files['src/server.mjs'] = `import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';\nimport { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';\n\nconst server = new McpServer({ name: "${lane}", version: '0.1.0' });\nserver.registerTool('hello', { description: 'Return a greeting', inputSchema: {} }, async () => ({\n  content: [{ type: 'text', text: "Hello from ${lane}!" }],\n}));\nawait server.connect(new StdioServerTransport());\n`;
+  }
+  return Object.fromEntries(Object.entries(files).map(([name, body]) => [name, Buffer.from(body)]));
+}
+function generatedTreeIdentity(entries, lane, key) {
+  const files = generatedFiles(lane), directories = new Set(['.']);
+  for (const name of Object.keys(files)) for (let dir = path.posix.dirname(name); dir !== '.'; dir = path.posix.dirname(dir)) directories.add(dir);
+  const actual = entries.filter(e => e.path === lane || e.path.startsWith(lane + '/')).map(e => ({ ...e, path: e.path === lane ? '.' : e.path.slice(lane.length + 1) }));
+  agree(actual.map(e => e.path).sort(), [...directories, ...Object.keys(files)].sort(), 'fixed generated file/directory closure');
+  const windows = cell(key).target.startsWith('windows-');
+  for (const e of actual) {
+    const directory = directories.has(e.path);
+    agree(e.kind, directory ? 'directory' : 'file', 'generated entry type');
+    // Node's Windows stat reports writable files 0666 and directories 0777;
+    // packageview uses that host read profile, including file execute bits.
+    agree(e.mode, windows ? directory ? 0o777 : 0o666 : directory ? 0o755 : 0o644, 'generated host mode');
+    if (!directory) { agree(e.size, files[e.path].length, 'generated file size'); agree(e.sha256, c.digest(files[e.path]), 'generated file content'); }
+  }
+  // Ordinary agentplugins-tree-sha256-v1 framing (DigestCaptured). Root is
+  // excluded; directories, including empty ones, are entries. Bytes below are
+  // bound to captured size/hash above; claimed report digests are never inputs.
+  const chunks = [], length = n => { const b = Buffer.alloc(8); b.writeBigUInt64BE(BigInt(n)); return b; };
+  const frame = value => { const b = Buffer.from(value); chunks.push(length(b.length), b); };
+  frame('agentplugins.package-tree\0sha256\0v1');
+  for (const e of actual.filter(e => e.path !== '.').sort((a, b) => a.path < b.path ? -1 : a.path > b.path ? 1 : 0)) {
+    const body = e.kind === 'file' ? files[e.path] : Buffer.alloc(0);
+    for (const field of ['entry', e.path, e.kind, e.kind === 'directory' ? '040000' : e.mode & 0o111 ? '100755' : '100644', '']) frame(field);
+    chunks.push(length(body.length), body);
+  }
+  return 'sha256:' + c.digest(Buffer.concat(chunks));
+}
 function verifyResults(j, evidence) {
   for (const name of EVIDENCE) if (Object.hasOwn(evidence, name)) evidenceFiles(name, evidence[name]);
   const expected = commandContract(j.cell), rows = evidence['commands.json']; list(rows, expected.length, 'exact ordered C3 core command rows');
@@ -823,11 +877,13 @@ function verifyResults(j, evidence) {
   fields(evidence['projects.json'], cell(j.cell).products, 'final canonical projects');
   for (const p of cell(j.cell).products) {
     const snapshot = tree(evidence['projects.json'][p], j.cell, j.projects[p]);
+    assert.ok(snapshot.entries.every(e => e.path === '.' || LANES.some(lane => e.path === lane || e.path.startsWith(lane + '/'))), 'only generated lane entries');
     agree(snapshot.entries.filter(e => e.kind === 'directory' && e.path !== '.' && !e.path.includes('/')).map(e => e.path).sort(), [...LANES].sort(), 'exact five canonical projects');
     for (const lane of LANES) {
-      for (const file of ['plugin.json', 'skills/extra-skill/SKILL.md']) assert.ok(snapshot.entries.some(e => e.path === `${lane}/${file}` && e.kind === 'file'), 'retained canonical project files');
+      const capturedDigest = generatedTreeIdentity(snapshot.entries, lane, j.cell);
       const identity = identityByProject.get(`${p}/${lane}`); assert.ok(identity, 'project read identity present');
       const manifest = snapshot.entries.find(e => e.path === `${lane}/plugin.json`);
+      agree(identity.tree_digest, capturedDigest, 'captured generated tree identity');
       agree(identity.manifest_digest, 'sha256:' + manifest.sha256, 'observed manifest identity');
     }
   }
@@ -1026,8 +1082,6 @@ async function produceJourney(value) {
       for (const dir of [s.prefix, s.home, path.join(s.home, 'tmp'), s.npmCache, s.cwd]) fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
       for (const file of [s.userconfig, s.globalconfig]) if (!fs.existsSync(file)) fs.writeFileSync(file, '', { flag: 'wx', mode: 0o600 });
     }
-    const session = await api['public-process-observation'].openPublicObservation({ cell: r.cell, tools: r.tools, roots });
-    for (const method of ['run', 'cancel', 'finish']) assert.equal(typeof session[method], 'function', `PUBLIC_FACADE_REQUIRED:public-process-observation.js#session.${method}`);
     const observed = new Map(), commands = new Array(commandContract(r.cell).length); let primary, terminal, finalError;
     const recheck = () => {
       provisioning.requireCellTools(r.cell); agree(sourceSeal(r.repo, r.workflow_sha, { ...manifest, key: r.cell }), source, 'source preserved');
@@ -1067,7 +1121,9 @@ async function produceJourney(value) {
       }
       verifyObservedRow(row, s, j, roots, commands); observed.set(s.id, row);
     }
+    const session = await api['public-process-observation'].openPublicObservation({ cell: r.cell, tools: r.tools, roots });
     try {
+      for (const method of ['finish', 'run', 'cancel']) assert.equal(typeof session?.[method], 'function', `PUBLIC_FACADE_REQUIRED:public-process-observation.js#session.${method}`);
       for (let i = 0; i < all.length;) {
         const s = all[i], group = [s]; i++;
         if (s.group) while (i < all.length && all[i].group === s.group) group.push(all[i++]);
@@ -1081,7 +1137,7 @@ async function produceJourney(value) {
         if (errors.length) throw new AggregateError(errors, 'C3 fixed scenario failed');
       }
     } catch (e) { primary = e; }
-    finally { try { terminal = await session.finish(); } catch (e) { finalError = e; } }
+    finally { try { if (typeof session?.finish === 'function') terminal = await session.finish(); } catch (e) { finalError = e; } }
     if (primary || finalError) {
       fs.writeFileSync(path.join(roots.evidence, 'failure.json'), c.encode({ primary: failureText(primary), finalization: failureText(finalError) }), { flag: 'wx', mode: 0o600 });
       throw new AggregateError([primary, finalError].filter(Boolean), 'C3 journey incomplete; no J');
@@ -1137,7 +1193,7 @@ function main(args) {
     journey_sha256: requestValue.journeySha256, release_eligible: false, platform_acceptance: false, attested: false };
 }
 // No producer or completed-E CLI can return a success-shaped placeholder.
-module.exports = { evidenceFiles, expandEvidence, scenarioContract, plannedInvocation, rootsFor, requireFacades, verifyNpmLifecycle, verifyCacheProcess, verifyResults, produceJourney,
+module.exports = { generatedFiles, generatedTreeIdentity, evidenceFiles, expandEvidence, scenarioContract, plannedInvocation, rootsFor, requireFacades, verifyNpmLifecycle, verifyCacheProcess, verifyResults, produceJourney,
   expectedCachePath, PROFILES, SURFACE, clientFacts, componentFacts, LITERAL_DESCRIPTION, outputJSON, matrix, commandContract, encodeJourney, decodeJourney, readJourneyInputs, verifyJourney, readJourney,
   readAcceptance, request, fileJSON, disjoint, main, LIMIT, SCHEMA, MATRIX_SCHEMA, INTAKE, WORKFLOW, MISSING };
 if (require.main === module) {
