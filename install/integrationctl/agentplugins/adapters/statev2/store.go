@@ -160,7 +160,7 @@ func Validate(state domain.StateFileV2) error {
 	operationIDs := map[string]struct{}{}
 	for index, installation := range state.Installations {
 		if mapping := installation.LocalChatGPTMapping; mapping != nil {
-			if err := mapping.Validate(); err != nil {
+			if err := mapping.Validate(); err != nil && !mapping.IsLegacyContext7Registration() {
 				return err
 			}
 			if installation.OriginMode != domain.OriginModeDirectory || installation.Directory == nil || installation.Directory.ProductID != mapping.ProductID || installation.Directory.DistributionID != mapping.Repository || installation.Source.Repository != mapping.Repository || installation.Source.PackageSubpath != mapping.PackagePath {

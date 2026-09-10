@@ -44,7 +44,7 @@ func (service Service) planInstall(ctx context.Context, input *AddInput, physica
 		if input.Client.ClientID != domain.ClientChatGPT || input.Scope != domain.ScopeUser || input.InstallIntent != domain.InstallIntentPrepare || input.OriginMode != domain.OriginModeDirectory || input.DirectoryResolution == nil || input.DirectoryResolution.ProductID != "context7" || input.DirectoryResolution.DistributionID != "upstash/context7" {
 			return domain.DeliveryPlan{}, fmt.Errorf("personal ChatGPT mapping requires explicit canonical Directory Context7 user preparation")
 		}
-		if installation != nil && installation.LocalChatGPTMapping != nil && *installation.LocalChatGPTMapping != *input.Envelope.LocalChatGPTMapping {
+		if installation != nil && installation.LocalChatGPTMapping != nil && *installation.LocalChatGPTMapping != *input.Envelope.LocalChatGPTMapping && !installation.LocalChatGPTMapping.IsLegacyContext7Registration() {
 			return domain.DeliveryPlan{}, fmt.Errorf("personal ChatGPT registration differs from retained receipt")
 		}
 	}

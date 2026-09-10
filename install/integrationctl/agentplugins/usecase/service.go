@@ -249,6 +249,7 @@ func (service Service) apply(ctx context.Context, input AddInput, replace bool) 
 		}
 	}
 	isMaterialized := existing && materializedClient(state.Installations[installationIndex], clientBindingID)
+	registrationMigration := existing && input.Envelope.LocalChatGPTMapping != nil && state.Installations[installationIndex].LocalChatGPTMapping != nil && state.Installations[installationIndex].LocalChatGPTMapping.IsLegacyContext7Registration() && *state.Installations[installationIndex].LocalChatGPTMapping != *input.Envelope.LocalChatGPTMapping
 	var managedBinding *domain.ClientBinding
 	if isMaterialized {
 		binding := state.Installations[installationIndex].Clients[clientBindingID]
@@ -280,7 +281,7 @@ func (service Service) apply(ctx context.Context, input AddInput, replace bool) 
 			if !replace && !packageRevisionMatches(current.PackageRevision, input.Envelope) {
 				return result, fmt.Errorf("plugin is already materialized for %s at a different revision; use update", input.Client.ClientID)
 			}
-			result.NoChange = !replace && lifecycleConverged(current)
+			result.NoChange = !replace && !registrationMigration && lifecycleConverged(current)
 		}
 		return result, nil
 	}
@@ -289,7 +290,7 @@ func (service Service) apply(ctx context.Context, input AddInput, replace bool) 
 			return result, err
 		}
 	}
-	if isMaterialized && !replace {
+	if isMaterialized && !replace && !registrationMigration {
 		current := state.Installations[installationIndex].Clients[clientBindingID]
 		result.Activation = lifecycleOutcome(current)
 		if !packageRevisionMatches(current.PackageRevision, input.Envelope) {
@@ -462,7 +463,7 @@ func (service Service) apply(ctx context.Context, input AddInput, replace bool) 
 			ClientID: delivery.ClientID, OwnedBase: delivery.OwnedBase, ActivePath: delivery.ActivePath,
 			ArtifactDigest: delivery.ArtifactDigest, NativeObjects: delivery.NativeObjects,
 		},
-		DeclaredName: input.Envelope.Manifest.Name, Replacing: replace,
+		DeclaredName: input.Envelope.Manifest.Name, Replacing: replace || registrationMigration,
 		Interactive: input.Interactive, BackendExecutable: input.BackendExecutable,
 		PreviousNativeObjects: append([]domain.NativeObjectOwnership(nil), previousClient.NativeObjects...),
 	})

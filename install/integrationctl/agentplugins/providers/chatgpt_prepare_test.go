@@ -23,7 +23,7 @@ func TestPersonalChatGPTPreparationCannotAttestRemoteActivation(t *testing.T) {
 		t.Fatal(err)
 	}
 	outcome, err := activator.Activate(context.Background(), request)
-	if err != nil || outcome.Activation != domain.ActivationPrepared || outcome.Authentication != domain.AuthenticationPending || outcome.Verification != domain.VerificationPackageValid || outcome.ActivationAttested {
+	if err != nil || outcome.Activation != domain.ActivationPrepared || outcome.Authentication != domain.AuthenticationNotRequired || outcome.Verification != domain.VerificationPackageValid || outcome.ActivationAttested {
 		t.Fatalf("false remote success: %+v %v", outcome, err)
 	}
 	request.Plan.PersonalChatGPTPreparation = false

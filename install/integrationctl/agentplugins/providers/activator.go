@@ -350,7 +350,7 @@ func (activator Activator) Activate(ctx context.Context, request domain.Activati
 	if request.Plan.InstallIntent == domain.InstallIntentPrepare {
 		if request.Client.ClientID == domain.ClientChatGPT {
 			outcome.Activation = domain.ActivationPrepared
-			outcome.Authentication = domain.AuthenticationPending
+			outcome.Authentication = domain.AuthenticationNotRequired
 			outcome.LocalActions = append(outcome.LocalActions, domain.ChatGPTPreparedAction(request.Delivery.ActivePath, request.DeclaredName))
 			outcome.UserActions = append(outcome.UserActions, request.Plan.UserActions...)
 			return outcome, nil
