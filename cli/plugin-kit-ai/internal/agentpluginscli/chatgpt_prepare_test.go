@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -105,7 +106,7 @@ func TestContext7GuidedMissingRegistrationAndResume(t *testing.T) {
 				t.Fatalf("projection %s", raw)
 			}
 			info, _ := os.Stat(filepath.Join(b.TargetLocator, ".app.json"))
-			if info.Mode().Perm() != 0600 {
+			if runtime.GOOS != "windows" && info.Mode().Perm() != 0600 {
 				t.Fatalf("app mode %v", info.Mode())
 			}
 			m := readCLIObject(t, filepath.Join(b.TargetLocator, ".codex-plugin", "plugin.json"))
@@ -128,7 +129,7 @@ func TestContext7GuidedMissingRegistrationAndResume(t *testing.T) {
 		t.Fatal("source package was modified")
 	}
 	info, _ := os.Stat(f.store.Path)
-	if info.Mode().Perm() != 0600 {
+	if runtime.GOOS != "windows" && info.Mode().Perm() != 0600 {
 		t.Fatal("personal receipt is not private")
 	}
 }
