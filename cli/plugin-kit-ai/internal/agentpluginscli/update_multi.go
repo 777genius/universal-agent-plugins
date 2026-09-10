@@ -87,7 +87,7 @@ func prepareUpdateMany(ctx context.Context, app App, opts *options, installation
 		}
 	}
 	allTargets := installationTargets(installation, opts.scope)
-	_, detected, err := preflightSelectedTargets(ctx, app, targets, nil, probeVersion && installation.OriginMode == domain.OriginModeDirectory)
+	_, detected, err := preflightSelectedTargets(ctx, app, targets, nil, probeVersion && installation.OriginMode == domain.OriginModeDirectory, lifecycleInstallIntents(installation, opts.scope, nil))
 	if err != nil {
 		return nil, err
 	}

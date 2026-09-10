@@ -143,7 +143,11 @@ func TestPreparedLifecycleVersionDetectionNeverLaunchesKiro(t *testing.T) {
 	}
 	detector := &observedProbingDetector{clients: []domain.DetectedClient{kiro, fixtureClient(t, domain.ClientCursor)}}
 	fixture.app.Detector = detector
-	if _, err := fixture.app.detectForLifecycle(context.Background(), true); err != nil {
+	intents, err := fixture.app.addLifecycleIntents(context.Background(), plugin, string(domain.ScopeUser), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := fixture.app.detectForLifecycle(context.Background(), true, intents); err != nil {
 		t.Fatal(err)
 	}
 	if detector.probeCalls != 0 || len(detector.targets) != 1 || detector.targets[0] != domain.ClientCursor {
@@ -215,6 +219,23 @@ func TestKiroPreparationUsesNormalDirectoryResolution(t *testing.T) {
 			}
 			if detector.probeCalls != 0 || detector.targetedCalls != 0 {
 				t.Fatal("prepared repair executed Kiro version probe")
+			}
+			// A new alias must recover the same binding intent before probing.
+			rollout.directory.bundle.Snapshot.Distributions[0].Releases = rollout.directory.bundle.Snapshot.Distributions[0].Releases[:1]
+			rollout.directory.bundle.Snapshot.Distributions[0].ReleasePolicies = rollout.directory.bundle.Snapshot.Distributions[0].ReleasePolicies[:1]
+			rollout.directory.bundle.Snapshot.Products[0].Aliases = append(rollout.directory.bundle.Snapshot.Products[0].Aliases, "new-context-alias")
+			for _, args := range [][]string{
+				{"add", "new-context-alias", "--target", "kiro"},
+				{"update", "demo", "--target", "kiro"},
+				{"remove", "demo", "--target", "kiro"},
+				{"add", "new-context-alias", "--target", "kiro"},
+			} {
+				if out, _, err := rollout.cli.execute(false, args...); err != nil {
+					t.Fatalf("%v: %s %v", args, out, err)
+				}
+				if detector.probeCalls != 0 || detector.targetedCalls != 0 {
+					t.Fatalf("prepared operation %v executed Kiro version probe", args)
+				}
 			}
 		})
 	}

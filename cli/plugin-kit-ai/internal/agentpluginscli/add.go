@@ -66,7 +66,11 @@ func newAddCommand(app App, opts *options) *cobra.Command {
 				}
 				detectedClients = clients
 				targets := selection
-				detectedClients, err = detectSelectedTargetsForLifecycleResolution(cmd.Context(), app.Detector, automaticInstallTargets(targets, opts.installIntents), detectedClients, !opts.dryRun && isDirectorySelector(args[0]))
+				intents, err := app.addLifecycleIntents(cmd.Context(), args[0], opts.scope, opts.installIntents)
+				if err != nil {
+					return err
+				}
+				detectedClients, err = detectSelectedTargetsForLifecycleResolution(cmd.Context(), app.Detector, automaticInstallTargets(targets, intents), detectedClients, !opts.dryRun && isDirectorySelector(args[0]))
 				if err != nil {
 					return fmt.Errorf("detect selected AI clients: %w", err)
 				}
@@ -114,7 +118,7 @@ func runAddWithClients(ctx context.Context, cmd *cobra.Command, app App, opts *o
 	if err != nil {
 		return err
 	}
-	_, detected, err := preflightSelectedTargets(ctx, app, targets, clients, !opts.dryRun && isDirectorySelector(source))
+	_, detected, err := preflightAddTargets(ctx, app, opts, source, targets, clients)
 	if err != nil {
 		return err
 	}

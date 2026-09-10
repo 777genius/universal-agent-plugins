@@ -7,7 +7,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
-const KiroPrepareAction = "Kiro native configuration is prepared; open or restart Kiro, review the MCP servers and complete authentication in Kiro on first connection when prompted, then verify their tools in Kiro. Runtime connections have not been verified."
+const KiroPrepareAction = "After preparation, open or restart Kiro, review the MCP servers and complete authentication in Kiro on first connection when prompted, then verify their tools in Kiro. Runtime connections have not been verified."
 
 // ApplyInstallIntent retains all package and Directory compatibility decisions.
 func ApplyInstallIntent(plan *domain.DeliveryPlan, intent domain.InstallIntent) error {

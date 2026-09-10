@@ -68,7 +68,7 @@ func runAddMany(ctx context.Context, cmd *cobra.Command, app App, opts *options,
 }
 
 func runAddManyWithClients(ctx context.Context, cmd *cobra.Command, app App, opts *options, source string, targets []domain.ClientID, activationComplete, authComplete bool, clients []domain.DetectedClient) error {
-	_, detected, err := preflightSelectedTargets(ctx, app, targets, clients, !opts.dryRun && isDirectorySelector(source) && len(opts.installIntents) == 0)
+	_, detected, err := preflightAddTargets(ctx, app, opts, source, targets, clients)
 	if err != nil {
 		return err
 	}
