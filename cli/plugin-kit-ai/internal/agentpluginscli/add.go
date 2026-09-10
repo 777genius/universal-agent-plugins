@@ -204,30 +204,32 @@ func runAddLoaded(ctx context.Context, cmd *cobra.Command, app App, opts *option
 	return err
 }
 
-func promptTargetChoices(cmd *cobra.Command, app App, detected, skipped, allClients []domain.DetectedClient) ([]domain.ClientID, []domain.DetectedClient, error) {
-	if len(detected) == 0 {
-		return nil, nil, fmt.Errorf("no supported local AI client was detected; use --target chatgpt for ChatGPT, or install/detect another client")
-	}
+func promptTargetChoices(cmd *cobra.Command, app App, detected []domain.DetectedClient, skipped []targetSkip, allClients []domain.DetectedClient) ([]domain.ClientID, []domain.DetectedClient, error) {
 	detected = append([]domain.DetectedClient(nil), detected...)
-	skipped = append([]domain.DetectedClient(nil), skipped...)
+	skipped = append([]targetSkip(nil), skipped...)
 	sort.SliceStable(detected, func(i, j int) bool { return targetOrder(detected[i].ClientID) < targetOrder(detected[j].ClientID) })
-	sort.SliceStable(skipped, func(i, j int) bool { return targetOrder(skipped[i].ClientID) < targetOrder(skipped[j].ClientID) })
+	sort.SliceStable(skipped, func(i, j int) bool { return targetOrder(skipped[i].Client) < targetOrder(skipped[j].Client) })
 	request := prompt.TargetSelectionRequest{}
 	for _, c := range detected {
 		request.Choices = append(request.Choices, prompt.TargetChoice{ID: c.ClientID, Label: prompt.SafeText(c.DisplayName)})
 		request.DefaultIDs = append(request.DefaultIDs, c.ClientID)
 	}
 	for _, c := range skipped {
-		request.SkippedLabels = append(request.SkippedLabels, prompt.SafeText(c.DisplayName))
+		request.SkippedLabels = append(request.SkippedLabels, prompt.SafeText(string(c.Client)+": "+c.Reason))
 	}
-	if err := prompt.ValidateRequest(request); err != nil {
-		return nil, nil, err
+	if len(detected) > 0 {
+		if err := prompt.ValidateRequest(request); err != nil {
+			return nil, nil, err
+		}
 	}
-	if len(detected) == 1 {
+	if len(detected) <= 1 {
 		for _, label := range request.SkippedLabels {
-			if _, err := fmt.Fprintln(reviewWriter(cmd, app), "Skipped installed clients that this package cannot install together: "+label); err != nil {
+			if _, err := fmt.Fprintln(reviewWriter(cmd, app), "Skipped (not installed in this attempt): "+label); err != nil {
 				return nil, nil, err
 			}
+		}
+		if len(detected) == 0 {
+			return nil, nil, fmt.Errorf("no eligible detected client; nothing was installed. Install/detect a supported client or address the skipped reasons. --target chatgpt checks package eligibility for ChatGPT; it does not register remote MCP or install the full plugin in ChatGPT Plugins")
 		}
 		return request.DefaultIDs, allClients, cmd.Context().Err()
 	}

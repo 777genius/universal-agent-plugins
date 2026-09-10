@@ -147,6 +147,7 @@ func runAddManyLoaded(ctx context.Context, cmd *cobra.Command, app App, opts *op
 	combined.Succeeded = len(planned.Targets)
 	if err != nil {
 		combined.Status, combined.Failed, combined.Succeeded = "preflight_failed", len(inputs), 0
+		setPreflightNextActions(combined.Targets)
 		_ = renderAddMultiResult(cmd, opts, combined, loaded.envelope)
 		return fmt.Errorf("group preflight failed; no target was changed (selected targets: %v): %w%s", targets, err, addGroupNextAction(combined.Targets))
 	}
@@ -193,6 +194,7 @@ func runAddManyLoaded(ctx context.Context, cmd *cobra.Command, app App, opts *op
 	if err != nil {
 		if applied.Phase == usecase.GroupPhasePlanned && !applied.Mutated {
 			combined.Status, combined.Failed, combined.Succeeded = "preflight_failed", len(inputs), 0
+			setPreflightNextActions(combined.Targets)
 			_ = renderAddMultiResult(cmd, opts, combined, loaded.envelope)
 			return fmt.Errorf("group apply preflight failed; no target was changed (selected targets: %v): %w%s", targets, err, addGroupNextAction(combined.Targets))
 		}
@@ -355,6 +357,19 @@ func renderAddMultiResult(cmd *cobra.Command, opts *options, result addMultiResu
 		}
 		return writeJSONResult(cmd.OutOrStdout(), "add", overall, result)
 	}
+	if result.Status == "preflight_failed" {
+		if _, err := fmt.Fprintln(cmd.OutOrStdout(), "Nothing was installed: a selected client could not pass the checks before installation. See the error below; there is no new configuration to activate."); err != nil {
+			return err
+		}
+		for _, target := range result.Targets {
+			if target.Output.Result.Plan.Status == domain.PlanUnsupported {
+				if err := renderHumanPlan(cmd.OutOrStdout(), envelope, target.Output.Result); err != nil {
+					return err
+				}
+			}
+		}
+		return nil
+	}
 	if len(result.Targets) == 1 {
 		return renderAddResult(cmd.OutOrStdout(), "human", envelope, result.Targets[0].Output.Result, result.DryRun)
 	}
@@ -409,6 +424,18 @@ func humanAddGroupPlans(targets []addTargetResult) []usecase.AddResult {
 		results[index] = result
 	}
 	return results
+}
+
+// A ready plan is not actionable when the selected group failed preflight.
+// Preserve unsupported-package recovery instructions, but never promise
+// activation from a plan whose requirements were rejected.
+func setPreflightNextActions(targets []addTargetResult) {
+	for index := range targets {
+		if targets[index].Output.Result.Plan.Status != domain.PlanUnsupported {
+			targets[index].NextAction = "resolve the reported client requirement and retry; nothing was installed"
+			targets[index].Output.NextAction = targets[index].NextAction
+		}
+	}
 }
 
 func addGroupNextAction(targets []addTargetResult) string {

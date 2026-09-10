@@ -929,7 +929,7 @@ func TestInteractiveAddSkipsDetectedClientThatPackageCannotServe(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(stdout, "Skipped installed clients that this package cannot install together: chatgpt") {
+	if !strings.Contains(stdout, "Skipped (not installed in this attempt): chatgpt") {
 		t.Fatalf("package-aware interactive output = %q", stdout)
 	}
 	if strings.Contains(stdout, "Detected supported clients (all selected by default)") {
@@ -952,7 +952,7 @@ func TestInteractiveAddSkipsDetectedClientThatCannotPassActivationPreflight(t *t
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(stdout, "Skipped installed clients that this package cannot install together: kiro") {
+	if !strings.Contains(stdout, "Skipped (not installed in this attempt): kiro") {
 		t.Fatalf("activation-aware interactive output = %q", stdout)
 	}
 	if strings.Contains(stdout, "Detected supported clients (all selected by default)") {
@@ -2063,10 +2063,10 @@ func TestChatGPTMCPWithoutAppBindingFailsBeforeMutation(t *testing.T) {
 	plugin := writeCLIPlugin(t)
 	writeCLIMCP(t, plugin)
 	stdout, _, err := fixture.execute(false, "add", plugin, "--target", "chatgpt")
-	if err == nil || !strings.Contains(err.Error(), "Developer Mode") || !strings.Contains(err.Error(), ".app.json") {
+	if err == nil || !strings.Contains(err.Error(), "Plugins developer mode") || !strings.Contains(err.Error(), ".app.json") {
 		t.Fatalf("missing app error = %v", err)
 	}
-	if !strings.Contains(stdout, "Developer Mode") || !strings.Contains(stdout, ".app.json") || !strings.Contains(stdout, "demo") {
+	if !strings.Contains(stdout, "Plugins developer mode") || !strings.Contains(stdout, ".app.json") || !strings.Contains(stdout, "demo") {
 		t.Fatalf("human unsupported plan omitted recovery guidance: %s", stdout)
 	}
 	state, err := fixture.store.Load()
@@ -2087,7 +2087,7 @@ func TestChatGPTUnsupportedPlanRendersStructuredJSONGuidance(t *testing.T) {
 	if err == nil {
 		t.Fatal("unsupported ChatGPT dry-run succeeded")
 	}
-	if !strings.Contains(stdout, `"status":"unsupported"`) || !strings.Contains(stdout, `"user_actions"`) || !strings.Contains(stdout, "Developer Mode") || !strings.Contains(stdout, ".app.json") {
+	if !strings.Contains(stdout, `"status":"unsupported"`) || !strings.Contains(stdout, `"user_actions"`) || !strings.Contains(stdout, "Plugins developer mode") || !strings.Contains(stdout, ".app.json") {
 		t.Fatalf("JSON unsupported plan omitted structured guidance: %s", stdout)
 	}
 	state, stateErr := fixture.store.Load()
@@ -2142,7 +2142,7 @@ func TestChatGPTUnsupportedUpdateRendersRecoveryWithoutMutation(t *testing.T) {
 					t.Fatalf("JSON update omitted structured user actions: %s", stdout)
 				}
 			}
-			for _, expected := range []string{"Developer Mode", ".app.json", "demo"} {
+			for _, expected := range []string{"Plugins developer mode", ".app.json", "demo"} {
 				if !strings.Contains(stdout, expected) || !strings.Contains(updateErr.Error(), expected) {
 					t.Fatalf("%s update omitted %q recovery guidance: stdout=%q error=%v", test.format, expected, stdout, updateErr)
 				}
@@ -2211,7 +2211,7 @@ func TestNoDetectedClientSuggestsExplicitChatGPTTarget(t *testing.T) {
 	fixture := newCLIFixture(t, nil)
 	plugin := writeCLIPlugin(t)
 	_, _, err := fixture.execute(true, "add", plugin)
-	if err == nil || !strings.Contains(err.Error(), "--target chatgpt") || !strings.Contains(err.Error(), "install/detect another client") {
+	if err == nil || !strings.Contains(err.Error(), "--target chatgpt") || !strings.Contains(err.Error(), "Install/detect a supported client") {
 		t.Fatalf("zero-client guidance = %v", err)
 	}
 	state, stateErr := fixture.store.Load()

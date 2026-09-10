@@ -43,7 +43,7 @@ func (p HuhPrompter) SelectTargets(ctx context.Context, r prompt.TargetSelection
 		choices = append(choices, huh.NewOption(prompt.SafeText(c.Label)+" ("+prompt.SafeText(string(c.ID))+")", c.ID))
 	}
 	for _, label := range r.SkippedLabels {
-		if err := promptio.WriteText(p.Output, (terminaltheme.Theme{Enabled: !p.NoColor}).Text(terminaltheme.Warning, "Skipped installed clients that this package cannot install together")+": "+prompt.SafeText(label)+"\n"); err != nil {
+		if err := promptio.WriteText(p.Output, (terminaltheme.Theme{Enabled: !p.NoColor}).Text(terminaltheme.Warning, "Skipped (not installed in this attempt)")+": "+prompt.SafeText(label)+"\n"); err != nil {
 			return prompt.TargetSelectionResult{}, err
 		}
 	}

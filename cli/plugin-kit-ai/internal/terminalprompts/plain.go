@@ -29,15 +29,8 @@ func (p PlainPrompter) SelectTargets(ctx context.Context, r prompt.TargetSelecti
 		return prompt.TargetSelectionResult{}, err
 	}
 	var b strings.Builder
-	if len(r.SkippedLabels) > 0 {
-		b.WriteString(terminaltheme.For(p.Output).Text(terminaltheme.Warning, "Skipped installed clients that this package cannot install together") + ": ")
-		for i, s := range r.SkippedLabels {
-			if i > 0 {
-				b.WriteString(", ")
-			}
-			b.WriteString(prompt.SafeText(s))
-		}
-		b.WriteByte('\n')
+	for _, label := range r.SkippedLabels {
+		b.WriteString(terminaltheme.For(p.Output).Text(terminaltheme.Warning, "Skipped (not installed in this attempt)") + ": " + prompt.SafeText(label) + "\n")
 	}
 	b.WriteString(terminaltheme.For(p.Output).Text(terminaltheme.Label, "Detected supported clients") + terminaltheme.For(p.Output).Text(terminaltheme.Muted, " (all selected by default)") + ":\n")
 	for i, c := range r.Choices {

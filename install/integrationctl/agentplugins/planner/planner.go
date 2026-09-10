@@ -16,6 +16,9 @@ type Planner struct {
 	Detected    map[domain.ClientID]domain.DetectedClient
 }
 
+// ChatGPTAppBindingAction describes registration and package-author responsibilities.
+const ChatGPTAppBindingAction = "this package is not ready for ChatGPT. Connect its remote MCP server in ChatGPT Plugins developer mode; full plugin installation also needs the publisher's registered connection mapping (.app.json). You do not need to create this file. Setup: https://developers.openai.com/plugins/build/plugins"
+
 // DetectedPhysicalClient returns a genuinely detected client that can address
 // an installed physical binding. Copilot and VS Code share one backend, so an
 // installed binding owned by either logical client can be maintained through
@@ -126,7 +129,7 @@ func (planner Planner) Plan(
 		plan.Status = domain.PlanUnsupported
 		plan.Activation = domain.ActivationFailed
 		plan.Warnings = appendUnique(plan.Warnings, "chatgpt_app_binding_required")
-		action := "register every remote MCP connection in ChatGPT Developer Mode and provide a valid root .app.json mapping"
+		action := ChatGPTAppBindingAction
 		if len(missingChatGPTApps) > 0 {
 			action += " for: " + strings.Join(missingChatGPTApps, ", ")
 		}
