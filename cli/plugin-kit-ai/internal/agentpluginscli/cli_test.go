@@ -937,7 +937,7 @@ func TestInteractiveAddSkipsDetectedClientThatPackageCannotServe(t *testing.T) {
 	}
 }
 
-func TestInteractiveAddSkipsDetectedClientThatCannotPassActivationPreflight(t *testing.T) {
+func TestInteractiveAddOffersKiroPreparationWhenAutomaticPreflightFails(t *testing.T) {
 	t.Parallel()
 	kiro := fixtureClient(t, domain.ClientKiro)
 	kiro.ExecutablePath = "/test/bin/kiro-cli"
@@ -952,11 +952,11 @@ func TestInteractiveAddSkipsDetectedClientThatCannotPassActivationPreflight(t *t
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(stdout, "Skipped (not installed in this attempt): kiro") {
+	if !strings.Contains(stdout, "prepare configuration; automatic MCP verification unavailable") {
 		t.Fatalf("activation-aware interactive output = %q", stdout)
 	}
-	if strings.Contains(stdout, "Detected supported clients (all selected by default)") {
-		t.Fatalf("single preflight-capable target unexpectedly prompted for multiple clients: %q", stdout)
+	if !strings.Contains(stdout, "Detected supported clients (all selected by default)") {
+		t.Fatalf("preparation-capable target unexpectedly prompted for multiple clients: %q", stdout)
 	}
 	state, loadErr := fixture.store.Load()
 	if loadErr != nil {

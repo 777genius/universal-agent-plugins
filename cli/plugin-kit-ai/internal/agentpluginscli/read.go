@@ -20,6 +20,7 @@ import (
 )
 
 type publicClient struct {
+	InstallIntent             domain.InstallIntent           `json:"install_intent,omitempty"`
 	BindingID                 string                         `json:"-"`
 	ClientID                  string                         `json:"client_id"`
 	Scope                     string                         `json:"scope"`
@@ -537,8 +538,9 @@ func publicInstallationView(installation domain.Installation, includeAbsent bool
 		affectedSurfaces := append([]string(nil), client.AffectedSurfaces...)
 		sort.Strings(affectedSurfaces)
 		value.Clients = append(value.Clients, publicClient{
-			BindingID: client.ClientBindingID,
-			ClientID:  client.ClientID, Scope: client.Scope, Materialization: client.Materialization,
+			InstallIntent: client.InstallIntent,
+			BindingID:     client.ClientBindingID,
+			ClientID:      client.ClientID, Scope: client.Scope, Materialization: client.Materialization,
 			Activation: client.Activation, Authentication: client.Authentication,
 			Policy: client.Policy, Verification: client.Verification,
 			PackageRevision:  publicPackageRevision(client.PackageRevision),

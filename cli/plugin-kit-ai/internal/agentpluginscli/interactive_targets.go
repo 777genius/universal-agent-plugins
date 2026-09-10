@@ -17,7 +17,7 @@ import (
 // turning ambient client detection into an unsafe all-or-nothing guess. It
 // first narrows the installed clients to one complete target set that the
 // selected package can actually serve, then asks the user to confirm it.
-func promptCompatibleDetectedTargets(ctx context.Context, cmd *cobra.Command, app App, source string) ([]domain.ClientID, []domain.DetectedClient, *loadedPackage, error) {
+func promptCompatibleDetectedTargets(ctx context.Context, cmd *cobra.Command, app App, source string, intents ...map[domain.ClientID]domain.InstallIntent) ([]domain.ClientID, []domain.DetectedClient, *loadedPackage, error) {
 	clients, err := app.Detector.Detect(ctx)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("detect AI clients: %w", err)
@@ -28,7 +28,7 @@ func promptCompatibleDetectedTargets(ctx context.Context, cmd *cobra.Command, ap
 		return selection, all, nil, err
 	}
 
-	compatible, skipped, preloaded, err := app.compatibleDetectedTargets(ctx, source, detected)
+	compatible, skipped, preloaded, err := app.compatibleDetectedTargets(ctx, source, detected, intents...)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -81,7 +81,7 @@ func skippedTargets(clients []domain.DetectedClient, reason string) []targetSkip
 	return skipped
 }
 
-func (app App) compatibleDetectedTargets(ctx context.Context, source string, detected []domain.DetectedClient) ([]domain.DetectedClient, []targetSkip, *loadedPackage, error) {
+func (app App) compatibleDetectedTargets(ctx context.Context, source string, detected []domain.DetectedClient, intents ...map[domain.ClientID]domain.InstallIntent) ([]domain.DetectedClient, []targetSkip, *loadedPackage, error) {
 	candidates := detected
 	var skipped []targetSkip
 	switch {
@@ -111,7 +111,7 @@ func (app App) compatibleDetectedTargets(ctx context.Context, source string, det
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	compatible, rejected := app.compatibleLoadedTargets(ctx, loaded, candidates)
+	compatible, rejected := app.compatibleLoadedTargets(ctx, loaded, candidates, intents...)
 	skipped = append(skipped, rejected...)
 	return compatible, skipped, &loaded, nil
 }
@@ -225,11 +225,25 @@ func forEachDetectedSubset(values []domain.DetectedClient, size int, visit func(
 	walk(0, 0)
 }
 
-func (app App) compatibleLoadedTargets(ctx context.Context, loaded loadedPackage, detected []domain.DetectedClient) ([]domain.DetectedClient, []targetSkip) {
+func (app App) compatibleLoadedTargets(ctx context.Context, loaded loadedPackage, detected []domain.DetectedClient, intents ...map[domain.ClientID]domain.InstallIntent) ([]domain.DetectedClient, []targetSkip) {
 	var skipped []targetSkip
 	clientMap := detectedClientMap(detected)
 	planner := clientplanner.Planner{ManagedRoot: app.ManagedRoot, Detected: clientMap}
 	physicalID := domain.ComputePhysicalArtifactID(loaded.envelope.Manifest.Name, "00000000-0000-4000-8000-000000000000")
+	if len(intents) > 0 && intents[0] != nil && app.StateStore != nil {
+		if state, err := app.StateStore.Load(); err == nil {
+			if installation, ok := locallyMatchedInstallation(state, loaded.envelope.Manifest.Name); ok {
+				for _, binding := range installation.Clients {
+					if binding.InstallIntent == domain.InstallIntentPrepare {
+						intents[0][domain.ClientID(binding.ClientID)] = binding.InstallIntent
+					}
+				}
+				for _, preference := range installation.InstallPreferences {
+					intents[0][preference.ClientID] = preference.InstallIntent
+				}
+			}
+		}
+	}
 	compatible := make([]domain.DetectedClient, 0, len(detected))
 	for _, client := range detected {
 		candidate := cloneLoadedPackage(loaded)
@@ -251,6 +265,13 @@ func (app App) compatibleLoadedTargets(ctx context.Context, loaded loadedPackage
 			skipped = append(skipped, targetSkip{client.ClientID, reason})
 			continue
 		}
+		if len(intents) > 0 && intents[0][client.ClientID] == domain.InstallIntentPrepare {
+			if err := clientplanner.ApplyInstallIntent(&plan, domain.InstallIntentPrepare); err != nil {
+				skipped = append(skipped, targetSkip{client.ClientID, "persisted preparation cannot serve this package"})
+				continue
+			}
+			client.DisplayName += " (prepare configuration; authenticate and verify tools in Kiro)"
+		}
 		if preflighter, ok := app.Lifecycle.Activator.(interface {
 			PreflightActivation(domain.ActivationRequest) error
 		}); ok {
@@ -259,6 +280,17 @@ func (app App) compatibleLoadedTargets(ctx context.Context, loaded loadedPackage
 			})
 			if err != nil {
 				reason := "automatic activation/verification preflight failed; resolve this client's verification prerequisites before retrying --target " + string(client.ClientID)
+				if client.ClientID == domain.ClientKiro && len(intents) > 0 && intents[0] != nil {
+					if prepareErr := clientplanner.ApplyInstallIntent(&plan, domain.InstallIntentPrepare); prepareErr == nil {
+						prepareErr = preflighter.PreflightActivation(domain.ActivationRequest{Client: client, Plan: plan, VerifyOnly: true})
+						if prepareErr == nil {
+							intents[0][client.ClientID] = domain.InstallIntentPrepare
+							client.DisplayName += " (prepare configuration; automatic MCP verification unavailable; authenticate and verify tools in Kiro)"
+							compatible = append(compatible, client)
+							continue
+						}
+					}
+				}
 				if client.ClientID == domain.ClientKiro {
 					reason = "this CLI cannot automatically check MCP connections in your Kiro setup. Nothing was installed in Kiro. Use another listed client, or connect the server in Kiro: https://kiro.dev/docs/mcp/"
 				}

@@ -12,6 +12,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/cli/internal/promptio"
 	"github.com/777genius/plugin-kit-ai/cli/internal/terminaltheme"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	clientplanner "github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/planner"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/usecase"
 	"github.com/spf13/cobra"
@@ -37,6 +38,17 @@ func newAddCommand(app App, opts *options) *cobra.Command {
 			if err := validateCommonOptions(opts); err != nil {
 				return err
 			}
+			opts.installIntents = make(map[domain.ClientID]domain.InstallIntent)
+			if opts.prepare {
+				targets, err := parseTargetOption(opts.target)
+				if err != nil {
+					return err
+				}
+				if len(targets) != 1 || targets[0] != domain.ClientKiro {
+					return fmt.Errorf("--prepare requires --target kiro; prepare other targets in separate commands")
+				}
+				opts.installIntents[domain.ClientKiro] = domain.InstallIntentPrepare
+			}
 			var detectedClients []domain.DetectedClient
 			targetProvided := cmd.Flags().Changed("target") && strings.TrimSpace(opts.target) != ""
 			if !targetProvided && app.Terminal && opts.format == "human" {
@@ -45,7 +57,7 @@ func newAddCommand(app App, opts *options) *cobra.Command {
 				if err != nil {
 					return err
 				}
-				selection, clients, preloaded, err := promptCompatibleDetectedTargets(cmd.Context(), cmd, app, args[0])
+				selection, clients, preloaded, err := promptCompatibleDetectedTargets(cmd.Context(), cmd, app, args[0], opts.installIntents)
 				if err != nil {
 					return err
 				}
@@ -54,7 +66,7 @@ func newAddCommand(app App, opts *options) *cobra.Command {
 				}
 				detectedClients = clients
 				targets := selection
-				detectedClients, err = detectSelectedTargetsForLifecycleResolution(cmd.Context(), app.Detector, targets, detectedClients, !opts.dryRun && isDirectorySelector(args[0]))
+				detectedClients, err = detectSelectedTargetsForLifecycleResolution(cmd.Context(), app.Detector, automaticInstallTargets(targets, opts.installIntents), detectedClients, !opts.dryRun && isDirectorySelector(args[0]))
 				if err != nil {
 					return fmt.Errorf("detect selected AI clients: %w", err)
 				}
@@ -87,6 +99,7 @@ func newAddCommand(app App, opts *options) *cobra.Command {
 			return runAddManyWithClients(cmd.Context(), cmd, app, opts, args[0], targets, activationComplete, authComplete, detectedClients)
 		},
 	}
+	command.Flags().BoolVar(&opts.prepare, "prepare", false, "prepare owned Kiro configuration without launching Kiro; authenticate and verify tools in Kiro")
 	command.Flags().BoolVar(&activationComplete, "activation-complete", false, "attest that manual client activation is complete")
 	command.Flags().BoolVar(&authComplete, "auth-complete", false, "attest that required authentication is complete or none is required after review")
 	return command
@@ -132,7 +145,8 @@ func runAddLoaded(ctx context.Context, cmd *cobra.Command, app App, opts *option
 	}
 	service := lifecycleService(app, detectedMap)
 	input := usecase.AddInput{
-		Envelope: loaded.envelope, Client: selected, Scope: domain.InstallScope(opts.scope),
+		InstallIntent: opts.installIntents[selected.ClientID],
+		Envelope:      loaded.envelope, Client: selected, Scope: domain.InstallScope(opts.scope),
 		DryRun: opts.dryRun, Confirmed: false, Interactive: app.Terminal,
 		Hints: loaded.hints, BackendExecutable: backendExecutable(selected, detectedMap),
 		ActivationComplete: activationComplete, AuthComplete: authComplete,
@@ -256,7 +270,7 @@ func promptTargetChoices(cmd *cobra.Command, app App, detected []domain.Detected
 // retain the read-only observations rather than falling back to executing every
 // discovered client binary.
 func detectSelectedTargetsForLifecycleResolution(ctx context.Context, detector ports.ClientDetector, targets []domain.ClientID, detected []domain.DetectedClient, probeVersion bool) ([]domain.DetectedClient, error) {
-	if !probeVersion {
+	if !probeVersion || len(targets) == 0 {
 		return detected, nil
 	}
 	if targeted, ok := detector.(ports.TargetedVersionProbingClientDetector); ok {
@@ -273,6 +287,9 @@ func resumeInteractiveLifecycle(
 	envelope domain.PackageEnvelope,
 	current usecase.AddResult,
 ) error {
+	if current.Plan.InstallIntent == domain.InstallIntentPrepare {
+		return nil
+	}
 	if current.Activation.Activation != domain.ActivationActive || current.Activation.Verification != domain.VerificationInstalled {
 		complete, err := promptYesNo(cmd.Context(), cmd.InOrStdin(), cmd.OutOrStdout(), cmd.ErrOrStderr(), "Have you completed activation and verified the plugin is enabled in the client? [y/N]")
 		if err != nil {
@@ -534,6 +551,10 @@ func renderAddResultErrorWithSecurity(writer io.Writer, format string, envelope 
 	if err := renderOpenCodeRuntimeNotice(writer, result); err != nil {
 		return err
 	}
+	if result.NoChange && result.Plan.InstallIntent == domain.InstallIntentPrepare {
+		_, err := fmt.Fprintln(writer, "Owned Kiro configuration remains prepared. No changes made.\nNext: "+clientplanner.KiroPrepareAction)
+		return err
+	}
 	if result.NoChange {
 		_, _ = fmt.Fprintln(writer, terminaltheme.For(writer).Text(terminaltheme.Muted, "Already installed and lifecycle verification is complete. No changes made."))
 		return nil
@@ -642,6 +663,9 @@ func nextLocalLifecycleAction(result usecase.AddResult) string {
 }
 
 func lifecycleAction(result usecase.AddResult, includePrivate bool) string {
+	if result.Plan.InstallIntent == domain.InstallIntentPrepare {
+		return clientplanner.KiroPrepareAction
+	}
 	action := ""
 	if includePrivate && len(result.Activation.LocalActions) > 0 {
 		action = result.Activation.LocalActions[0]

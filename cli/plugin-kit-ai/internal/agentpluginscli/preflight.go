@@ -23,7 +23,7 @@ func detectClientsForLifecycleResolution(ctx context.Context, detector ports.Cli
 // though the remote product cannot be detected locally.
 func preflightSelectedTargets(ctx context.Context, app App, targets []domain.ClientID, clients []domain.DetectedClient, probeVersion bool) ([]domain.DetectedClient, map[domain.ClientID]domain.DetectedClient, error) {
 	if clients == nil {
-		detected, err := detectClientsForLifecycleResolution(ctx, app.Detector, probeVersion)
+		detected, err := app.detectForLifecycle(ctx, probeVersion)
 		if err != nil {
 			return nil, nil, fmt.Errorf("detect AI clients: %w", err)
 		}
@@ -77,7 +77,7 @@ func preflightInstalledBindings(bindingTargets []domain.ClientID, detected map[d
 }
 
 func resolveInstalledBindingTargets(ctx context.Context, app App, bindingTargets []domain.ClientID, probeVersion bool) ([]domain.ClientID, error) {
-	clients, err := detectClientsForLifecycleResolution(ctx, app.Detector, probeVersion)
+	clients, err := app.detectForLifecycle(ctx, probeVersion)
 	if err != nil {
 		return nil, fmt.Errorf("detect AI clients: %w", err)
 	}

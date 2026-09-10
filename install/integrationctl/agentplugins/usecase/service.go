@@ -70,6 +70,7 @@ type pluginDataAwareStager interface {
 }
 
 type AddInput struct {
+	InstallIntent      domain.InstallIntent
 	Envelope           domain.PackageEnvelope
 	Client             domain.DetectedClient
 	Scope              domain.InstallScope
@@ -115,6 +116,9 @@ func (service Service) Update(ctx context.Context, input AddInput) (AddResult, e
 }
 
 func (service Service) apply(ctx context.Context, input AddInput, replace bool) (AddResult, error) {
+	if err := input.InstallIntent.Validate(input.Client.ClientID); err != nil {
+		return AddResult{}, err
+	}
 	if input.OriginMode == "" && input.DirectoryResolution != nil {
 		input.OriginMode = domain.OriginModeDirectory
 	}
@@ -201,7 +205,7 @@ func (service Service) apply(ctx context.Context, input AddInput, replace bool) 
 		}
 	}
 	physicalID := domain.ComputePhysicalArtifactID(input.Envelope.Manifest.Name, installationID)
-	plan, err := service.Planner.Plan(ctx, input.Envelope, input.Client, input.Scope, physicalID)
+	plan, err := service.planInstall(ctx, &input, physicalID, installationIfExisting(state, installationIndex, existing))
 	if err != nil {
 		return AddResult{}, err
 	}
@@ -494,6 +498,9 @@ func (service Service) stagePackage(ctx context.Context, envelope domain.Package
 }
 
 func lifecycleConverged(client domain.ClientBinding) bool {
+	if client.InstallIntent == domain.InstallIntentPrepare {
+		return client.Materialization == domain.MaterializationMaterialized && client.Activation == domain.ActivationPrepared && client.Verification == domain.VerificationPackageValid
+	}
 	authComplete := client.Authentication == domain.AuthenticationNotRequired || client.Authentication == domain.AuthenticationComplete
 	return client.Materialization == domain.MaterializationMaterialized &&
 		client.Activation == domain.ActivationActive &&
@@ -768,7 +775,7 @@ func (service Service) verifyClientReadOnly(ctx context.Context, input AddInput,
 			return domain.ActivationOutcome{}, nil
 		}
 	case domain.ClientKiro:
-		if !strings.Contains(strings.ToLower(input.BackendExecutable), "kiro") {
+		if input.InstallIntent != domain.InstallIntentPrepare && !strings.Contains(strings.ToLower(input.BackendExecutable), "kiro") {
 			return domain.ActivationOutcome{}, nil
 		}
 	default:
@@ -858,6 +865,7 @@ func upsertPreparedInstallation(
 		bindingClientID = previousClient.ClientID
 	}
 	installation.Clients[clientBindingID] = domain.ClientBinding{
+		InstallIntent:   input.InstallIntent,
 		ClientBindingID: clientBindingID, ClientID: bindingClientID, Scope: string(input.Scope),
 		TargetLocator: plan.ActivePath, PhysicalArtifact: plan.PhysicalArtifactID,
 		Materialization: domain.MaterializationStaged, Activation: domain.ActivationPrepared,

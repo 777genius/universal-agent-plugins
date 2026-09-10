@@ -54,6 +54,9 @@ func committedNativeDeactivationCleanup(outcome *domain.DeactivationOutcome, err
 // CLI for this exact request. Runtime preflight consumes this same predicate so
 // it cannot drift from the provider's activation paths.
 func (activator Activator) AutomaticallyActivates(request domain.ActivationRequest) bool {
+	if request.Plan.InstallIntent != domain.InstallIntentAutomatic {
+		return false
+	}
 	switch request.Client.ClientID {
 	case domain.ClientCline:
 		return strings.TrimSpace(request.Client.ConfigRoot) != "" && openCodeNativeComponents(request.Plan.Components)
@@ -77,6 +80,15 @@ func (activator Activator) AutomaticallyActivates(request domain.ActivationReque
 // PreflightActivation rejects lifecycle configurations that would otherwise
 // discover a missing required capability only after native client mutation.
 func (activator Activator) PreflightActivation(request domain.ActivationRequest) error {
+	if err := request.Plan.InstallIntent.Validate(request.Client.ClientID); err != nil {
+		return err
+	}
+	if request.Plan.InstallIntent == domain.InstallIntentPrepare {
+		if request.Plan.Scope != domain.ScopeUser || strings.TrimSpace(request.Client.ConfigRoot) == "" || !kiroNativeComponents(request.Plan.Components) {
+			return fmt.Errorf("Kiro preparation requires native configuration and supported components")
+		}
+		return nil
+	}
 	if request.Client.ClientID == domain.ClientClaude {
 		_, err := prepareClaudeActivationProbe(request)
 		return err
@@ -328,6 +340,19 @@ func (activator Activator) Activate(ctx context.Context, request domain.Activati
 		Authentication: request.Plan.Authentication,
 		Policy:         domain.PolicyAllowed,
 		Verification:   domain.VerificationPackageValid,
+	}
+	if request.Plan.InstallIntent == domain.InstallIntentPrepare {
+		if request.VerifyOnly {
+			err = verifyKiroNativeObjects(request.Client.ConfigRoot, request.Delivery.NativeObjects, false)
+		} else {
+			err = activateKiroNative(ctx, request)
+		}
+		if err != nil {
+			return failedActivation(outcome, "repair the managed Kiro native configuration", err)
+		}
+		outcome.Activation = domain.ActivationPrepared
+		outcome.UserActions = append(outcome.UserActions, request.Plan.UserActions...)
+		return outcome, nil
 	}
 	if request.ActivationComplete && !activator.AutomaticallyActivates(request) {
 		outcome.Activation = domain.ActivationActive

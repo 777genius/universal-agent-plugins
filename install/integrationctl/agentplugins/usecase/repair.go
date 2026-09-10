@@ -17,6 +17,9 @@ import (
 // resolved package. It never uses a persisted target until that target has
 // been matched to the target resolver's current safe result.
 func (service Service) Repair(ctx context.Context, input AddInput) (AddResult, error) {
+	if err := input.InstallIntent.Validate(input.Client.ClientID); err != nil {
+		return AddResult{}, err
+	}
 	if input.OriginMode == "" && input.DirectoryResolution != nil {
 		input.OriginMode = domain.OriginModeDirectory
 	}
@@ -49,11 +52,14 @@ func (service Service) Repair(ctx context.Context, input AddInput) (AddResult, e
 		return AddResult{}, fmt.Errorf("resolved repair source identity does not match the selected installation")
 	}
 	physicalID := domain.ComputePhysicalArtifactID(installation.DeclaredName, installation.InstallationID)
-	plan, err := service.Planner.Plan(ctx, input.Envelope, input.Client, input.Scope, physicalID)
+	plan, err := service.planInstall(ctx, &input, physicalID, &installation)
 	if err != nil {
 		return AddResult{}, err
 	}
 	result := AddResult{InstallationID: installation.InstallationID, Plan: plan}
+	if err := service.preflightActivation(input, plan); err != nil {
+		return result, err
+	}
 	if err := service.preflightTargetComponents(ctx, input, &plan, &installation, true, false); err != nil {
 		result.Plan = plan
 		return result, err
