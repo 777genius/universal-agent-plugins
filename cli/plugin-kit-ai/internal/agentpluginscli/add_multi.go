@@ -433,6 +433,7 @@ func setPreflightNextActions(targets []addTargetResult) {
 	for index := range targets {
 		if targets[index].Output.Result.Plan.Status != domain.PlanUnsupported {
 			targets[index].NextAction = "resolve the reported client requirement and retry; nothing was installed"
+			targets[index].Output.NextAction = targets[index].NextAction
 		}
 	}
 }

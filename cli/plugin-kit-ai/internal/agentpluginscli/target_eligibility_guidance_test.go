@@ -1,6 +1,7 @@
 package agentpluginscli
 
 import (
+	"encoding/json"
 	"errors"
 	"os"
 	"strings"
@@ -94,11 +95,16 @@ func TestDirectoryZeroChoicesExplainReleaseSelection(t *testing.T) {
 
 func TestPreflightNextActionsDoNotPromiseAutomaticInstallation(t *testing.T) {
 	targets := []addTargetResult{{NextAction: "agentplugins will install and verify the package's global Kiro skills and MCP servers automatically"}}
+	targets[0].Output.NextAction = targets[0].NextAction
 	targets[0].Output.Result.Plan.Status = domain.PlanReady
 	targets[0].Output.Result.Plan.Authentication = domain.AuthenticationNotRequired
 	setPreflightNextActions(targets)
 	if strings.Contains(addGroupNextAction(targets), "automatically") || !strings.Contains(targets[0].NextAction, "nothing was installed") {
 		t.Fatalf("preflight retained the ready-plan promise: %+v", targets)
+	}
+	encoded, err := json.Marshal(targets)
+	if err != nil || strings.Contains(string(encoded), "automatically") || strings.Count(string(encoded), "nothing was installed") != 2 {
+		t.Fatalf("serialized next actions disagree: %s, %v", encoded, err)
 	}
 	targets[0].Output.Result.Plan.Status = domain.PlanUnsupported
 	targets[0].NextAction = "ask the publisher to register the ChatGPT connection"
