@@ -1,153 +1,27 @@
 #!/usr/bin/env node
 "use strict";
-
-// Milestone A's bounded, offline exact-candidate producer and consumer.  This
-// intentionally composes the existing sealed native/npm assembly rather than
-// introducing another package format.
-const fs = require("node:fs");
-const path = require("node:path");
-const cp = require("node:child_process");
-const crypto = require("node:crypto");
-const producer = require("./stage-dual-authoring-candidate");
-const packer = require("./stage-dual-authoring-npm");
-
-const PRODUCTS = ["agentplugins", "plugin-kit-ai"];
-const TARGETS = { linux: ["amd64"], windows: ["amd64"], darwin: ["arm64"] };
-const COMMANDS = ["init", "validate", "inspect", "test", "local-add-dry-run"];
-
-function fail(message) { throw new Error(message); }
-function sha(bytes) { return crypto.createHash("sha256").update(bytes).digest("hex"); }
-function absolute(name, value) {
-  if (!value || !path.isAbsolute(value) || path.resolve(value) !== value) fail(`${name} must be absolute`);
-  return value;
-}
-function cleanRoot(root) {
-  absolute("root", root);
-  if (fs.existsSync(root)) fail("Milestone A root must be new");
-  fs.mkdirSync(root, { recursive: false, mode: 0o700 });
-  for (const name of ["evidence", "work", "home", "tmp", "cache", "config"])
-    fs.mkdirSync(path.join(root, name), { mode: 0o700 });
-}
-function baseEnv(root) {
-  return { ...process.env, HOME: path.join(root, "home"), USERPROFILE: path.join(root, "home"),
-    TMPDIR: path.join(root, "tmp"), TMP: path.join(root, "tmp"), TEMP: path.join(root, "tmp"),
-    XDG_CONFIG_HOME: path.join(root, "config"), XDG_CACHE_HOME: path.join(root, "cache"),
-    npm_config_cache: path.join(root, "cache", "npm"), npm_config_offline: "true",
-    npm_config_audit: "false", npm_config_fund: "false", npm_config_update_notifier: "false",
-    NODE_OPTIONS: "--max-old-space-size=384", GIT_TERMINAL_PROMPT: "0" };
-}
-function run(exe, args, options = {}) {
-  const result = cp.spawnSync(exe, args, { encoding: "utf8", timeout: 120000,
-    windowsHide: true, maxBuffer: 16 * 1024 * 1024, ...options });
-  if (result.error) throw result.error;
-  if (result.signal) fail(`${path.basename(exe)} terminated by ${result.signal}`);
-  return result;
-}
-function requireSuccess(result, label) {
-  if (result.status !== 0) fail(`${label} exited ${result.status}: ${result.stderr || result.stdout}`);
-  return result;
-}
-function jsonContract(result, label) {
-  requireSuccess(result, label);
-  let value; try { value = JSON.parse(result.stdout); } catch { fail(`${label} did not return JSON`); }
-  if (value.schema_version !== 1 || value.result !== "success" || typeof value.command !== "string")
-    fail(`${label} returned an invalid result contract`);
-  return value;
-}
-function tree(root) {
-  const rows = [];
-  function visit(dir, prefix = "") {
-    for (const ent of fs.readdirSync(dir, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
-      const rel = prefix ? `${prefix}/${ent.name}` : ent.name, file = path.join(dir, ent.name);
-      if (ent.isDirectory()) visit(file, rel);
-      else if (ent.isFile()) rows.push([rel, sha(fs.readFileSync(file))]);
-      else fail(`generated tree contains non-regular entry: ${rel}`);
-    }
-  }
-  visit(root); return rows;
-}
-function prepare(config) {
-  const root = absolute("root", config.root), repo = absolute("repo", config.repo);
-  cleanRoot(root);
-  const head = requireSuccess(run("git", ["rev-parse", "HEAD"], { cwd: repo }), "git head").stdout.trim();
-  if (head !== config.expectedHead) fail("checkout is not the expected exact candidate");
-  const identity = { repository: "777genius/universal-agent-plugins", commit: head,
-    versions: { agentplugins: "2.0.0", "plugin-kit-ai": "2.0.0" } };
-  const common = { candidate: true, repo, identity, assetScope: "six-platform-pair",
-    authoringMode: "release-cli-contract-v1", go: absolute("go", config.go), workParent: path.join(root, "work") };
-  const candidate = path.join(root, "candidate");
-  const built = producer.stageCandidate({ ...common, output: candidate, modCache: absolute("modCache", config.modCache) });
-  const packages = path.join(root, "packages");
-  const packed = packer.stagePair({ ...common, root: candidate, manifestDigest: built.manifest_sha256,
-    output: packages, node: absolute("node", config.node), npm: absolute("npm", config.npm) });
-  const receipt = { schema: "milestone-a-e2e-prepare/v1", candidate_head: head,
-    candidate_sha256: built.manifest_sha256, asset_scope: "six-platform-pair",
-    packages: packed.packs, registry_fallback: false, publication: false };
-  fs.writeFileSync(path.join(root, "evidence", "prepare.json"), JSON.stringify(receipt, null, 2) + "\n");
-  return receipt;
-}
-function consume(config) {
-  const root = absolute("root", config.root), input = absolute("input", config.input);
-  cleanRoot(root);
-  const platform = config.platform, arch = config.arch;
-  if (!TARGETS[platform]?.includes(arch)) fail("unsupported Milestone A platform lane");
-  const env = baseEnv(root), node = process.execPath, npm = process.platform === "win32" ? "npm.cmd" : "npm";
-  const installed = {}, reports = {}, trees = {};
-  let primary;
-  try {
-    for (const product of PRODUCTS) {
-      const prefix = path.join(root, "work", `install-${product}`);
-      fs.mkdirSync(prefix);
-      const packageName = product === "agentplugins" ? "universal-agent-plugins-2.0.0.tgz" : "plugin-kit-ai-2.0.0.tgz";
-      requireSuccess(run(npm, ["install", "--ignore-scripts", "--offline", "--no-package-lock", "--prefix", prefix,
-        path.join(input, "packages", packageName)], { env }), `install ${product}`);
-      const packageDir = path.join(prefix, "node_modules", product === "agentplugins" ? "universal-agent-plugins" : product);
-      installed[product] = path.join(packageDir, "bin", `${product}.js`);
-    }
-    for (const product of PRODUCTS) {
-      const project = path.join(root, "work", `project-${product}`), client = path.join(root, "work", `client-${product}`);
-      fs.mkdirSync(client);
-      const argv = (args) => [installed[product], ...(product === "agentplugins" ? ["author"] : []), ...args];
-      const commandEnv = { ...env, UAP_PRIVATE_NPM_CANDIDATE: path.join(input, "candidate"),
-        UAP_PRIVATE_NPM_CACHE: path.join(root, "cache", product) };
-      reports[product] = [];
-      reports[product].push(jsonContract(run(node, argv(["init", project, "--template=skill", "--name=milestone-a-fixture",
-        "--description=Disposable Milestone A fixture.", "--format=json"]), { env: commandEnv }), `${product} init`));
-      for (const command of ["validate", ...(platform === "linux" ? ["inspect", "test"] : [])])
-        reports[product].push(jsonContract(run(node, argv([command, project, "--format=json"]), { env: commandEnv }), `${product} ${command}`));
-      if (platform === "linux") {
-        const add = run(node, [installed.agentplugins, "add", ".", "--target=codex", "--dry-run", "--format=json"],
-          { cwd: project, env: { ...commandEnv, HOME: client, USERPROFILE: client } });
-        reports[product].push(jsonContract(add, `${product} local add --dry-run`));
-      }
-      trees[product] = tree(project);
-    }
-    if (platform === "linux" && JSON.stringify(trees.agentplugins) !== JSON.stringify(trees["plugin-kit-ai"]))
-      fail("entrypoints generated different trees; no provenance exception was required or applied");
-    const receipt = { schema: "milestone-a-e2e-run/v1", platform, arch, exact_candidate: true,
-      entrypoints: PRODUCTS, clean_root_separation: true, commands: platform === "linux" ? COMMANDS : ["launcher-smoke", "init", "validate"],
-      fixture_target: "codex", registry_fallback: false, reports, trees, cleanup: "pending" };
-    fs.writeFileSync(path.join(root, "evidence", "run.json"), JSON.stringify(receipt, null, 2) + "\n");
-    return receipt;
-  } catch (error) {
-    primary = error;
-    fs.writeFileSync(path.join(root, "evidence", "failure.json"), JSON.stringify({
-      schema: "milestone-a-e2e-failure/v1", platform, arch, message: String(error.message), cleanup: "pending"
-    }, null, 2) + "\n");
-    throw error;
-  } finally {
-    for (const name of ["work", "home", "tmp", "cache", "config"])
-      fs.rmSync(path.join(root, name), { recursive: true, force: true });
-    const file = path.join(root, "evidence", primary ? "failure.json" : "run.json");
-    if (fs.existsSync(file)) { const r = JSON.parse(fs.readFileSync(file)); r.cleanup = "complete";
-      fs.writeFileSync(file, JSON.stringify(r, null, 2) + "\n"); }
-  }
-}
-function main(argv) {
-  if (argv.length !== 2 || !["prepare", "run"].includes(argv[0])) fail("usage: milestone-a-e2e.js <prepare|run> <config.json>");
-  const config = JSON.parse(fs.readFileSync(absolute("config", argv[1])));
-  return argv[0] === "prepare" ? prepare(config) : consume(config);
-}
-if (require.main === module) try { process.stdout.write(JSON.stringify(main(process.argv.slice(2))) + "\n"); }
-catch (error) { process.stderr.write(`Milestone A E2E: ${error.message}\n`); process.exitCode = 1; }
-module.exports = { prepare, consume, main, tree, COMMANDS, TARGETS };
+const fs=require("node:fs"),path=require("node:path"),cp=require("node:child_process"),crypto=require("node:crypto");
+const producer=require("./stage-dual-authoring-candidate"),packer=require("./stage-dual-authoring-npm");
+const PRODUCTS=["agentplugins","plugin-kit-ai"],TARGETS={linux:["amd64"],windows:["amd64"],darwin:["arm64"]};
+const COMMANDS=["init","validate","inspect","test","local-add-dry-run"];
+function fail(s){throw new Error(s)} function sha(b){return crypto.createHash("sha256").update(b).digest("hex")}
+function absolute(n,v){if(!v||!path.isAbsolute(v)||path.resolve(v)!==v)fail(`${n} must be absolute`);return v}
+function inside(root,v,label="path"){const r=path.relative(root,v);if(r===""||(!r.startsWith(`..${path.sep}`)&&r!==".."&&!path.isAbsolute(r)))return v;fail(`${label} escapes journey root: ${v}`)}
+function fresh(root){absolute("root",root);if(fs.existsSync(root))fail("Milestone A root must be new");fs.mkdirSync(root,{mode:0o700});for(const n of ["evidence","journeys"])fs.mkdirSync(path.join(root,n),{mode:0o700})}
+function tree(root){const out=[];function visit(d,p=""){for(const e of fs.readdirSync(d,{withFileTypes:true}).sort((a,b)=>a.name.localeCompare(b.name))){const r=p?`${p}/${e.name}`:e.name,f=path.join(d,e.name);if(e.isSymbolicLink())fail(`generated tree contains non-regular entry: ${r}`);if(e.isDirectory())visit(f,r);else if(e.isFile())out.push([r,sha(fs.readFileSync(f))]);else fail(`generated tree contains non-regular entry: ${r}`)}}visit(root);return out}
+function snapshot(root,ex=[]){const omit=new Set(ex.map(x=>path.resolve(x))),out=[];function visit(d,p=""){for(const e of fs.readdirSync(d,{withFileTypes:true}).sort((a,b)=>a.name.localeCompare(b.name))){const f=path.join(d,e.name);if(omit.has(path.resolve(f)))continue;const r=p?`${p}/${e.name}`:e.name;if(e.isSymbolicLink())fail(`sandbox contains link: ${r}`);if(e.isDirectory())visit(f,r);else if(e.isFile())out.push([r,sha(fs.readFileSync(f))]);else fail(`sandbox contains unexpected entry: ${r}`)}}visit(root);return out}
+function run(exe,args,o={}){const r=cp.spawnSync(exe,args,{encoding:"utf8",timeout:120000,windowsHide:true,maxBuffer:16777216,...o});if(r.error)throw r.error;if(r.signal)fail(`${path.basename(exe)} terminated by ${r.signal}`);return r}
+function ok(r,l){if(r.status!==0)fail(`${l} exited ${r.status}: ${r.stderr||r.stdout}`);return r}
+function result(r,l){ok(r,l);let v;try{v=JSON.parse(r.stdout)}catch{fail(`${l} did not return JSON`)}if(v.schema_version!==1||v.result!=="success")fail(`${l} returned an invalid result contract`);return v}
+function makeJourney(root,p){const j=path.join(root,"journeys",p);fs.mkdirSync(j);const o={root:j};for(const n of ["home","tmp","config","cache","data","state","appdata","localappdata","npm-cache","npm-prefix","installation","project","client"]){const k=n.replace("-","_");o[k]=path.join(j,n);fs.mkdirSync(o[k])}fs.writeFileSync(path.join(o.client,"config.toml"),"# isolated disposable Codex fixture\n");return o}
+function envFor(j){const e={};for(const k of ["PATH","SystemRoot","ComSpec","PATHEXT","WINDIR","LANG","LC_ALL","TZ"])if(process.env[k]!==undefined)e[k]=process.env[k];return{...e,HOME:j.home,USERPROFILE:j.home,TMPDIR:j.tmp,TMP:j.tmp,TEMP:j.tmp,XDG_CONFIG_HOME:j.config,XDG_CACHE_HOME:j.cache,XDG_DATA_HOME:j.data,XDG_STATE_HOME:j.state,APPDATA:j.appdata,LOCALAPPDATA:j.localappdata,CODEX_HOME:j.client,npm_config_cache:j.npm_cache,npm_config_prefix:j.npm_prefix,npm_config_offline:"true",npm_config_audit:"false",npm_config_fund:"false",npm_config_update_notifier:"false",NODE_OPTIONS:"--max-old-space-size=384",GIT_TERMINAL_PROMPT:"0"}}
+function prepare(c){const root=absolute("root",c.root),repo=absolute("repo",c.repo);fresh(root);const head=ok(run("git",["rev-parse","HEAD"],{cwd:repo}),"git head").stdout.trim();if(head!==c.expectedHead)fail("checkout is not the expected exact candidate");const identity={repository:"777genius/universal-agent-plugins",commit:head,versions:{agentplugins:"2.0.0","plugin-kit-ai":"2.0.0"}},common={candidate:true,repo,identity,assetScope:"six-platform-pair",authoringMode:"release-cli-contract-v1",go:absolute("go",c.go),workParent:path.join(root,"journeys")},candidate=path.join(root,"candidate"),built=producer.stageCandidate({...common,output:candidate,modCache:absolute("modCache",c.modCache)}),packages=path.join(root,"packages"),packed=packer.stagePair({...common,root:candidate,manifestDigest:built.manifest_sha256,output:packages,node:absolute("node",c.node),npm:absolute("npm",c.npm)}),receipt={schema:"milestone-a-e2e-prepare/v1",candidate_head:head,candidate_sha256:built.manifest_sha256,asset_scope:"six-platform-pair",packages:packed.packs,registry_fallback:false,publication:false};fs.writeFileSync(path.join(root,"evidence","prepare.json"),JSON.stringify(receipt,null,2)+"\n");return receipt}
+function provenance(ep,head){const real=fs.realpathSync(ep);let d=path.dirname(real),m;while(d!==path.dirname(d)){const x=path.join(d,"package.json");if(fs.existsSync(x)){m=x;break}d=path.dirname(d)}if(!m)fail(`entrypoint has no package provenance: ${ep}`);const p=JSON.parse(fs.readFileSync(m)),release=path.join(path.dirname(m),"private-release.json");let field,revision;if(fs.existsSync(release)){revision=JSON.parse(fs.readFileSync(release)).identity?.commit;field="private-release.json#identity.commit"}else{field=["gitHead","commit","revision"].find(k=>p[k]!==undefined)||(p.build?.revision!==undefined?"build.revision":null);revision=field?.startsWith("build")?p.build.revision:p[field]}if(revision!==head)fail(`package provenance revision does not equal exact candidate: ${revision}`);return{entrypoint:real,package_manifest:fs.realpathSync(m),package_name:p.name,package_version:p.version,revision_field:field,revision}}
+// Only product labels and the per-entrypoint journey-root provenance vary.
+function normalize(v,project){const journey=path.dirname(project),x=JSON.parse(JSON.stringify(v).split(journey).join("<journey>"));if(x.data){delete x.data.product;delete x.data.product_version;if(x.data.help?.use)x.data.help.use=x.data.help.use.replace(/^agentplugins author|^plugin-kit-ai/,"<author>")}return x}
+function reported(v,root){function walk(x,k=""){if(Array.isArray(x))return x.forEach(y=>walk(y,k));if(x&&typeof x==="object")return Object.entries(x).forEach(([a,b])=>walk(b,a));if(typeof x==="string"&&path.isAbsolute(x)&&/(path|root|dir|home|prefix|locator|destination|project|target|file)$/i.test(k))inside(root,path.resolve(x),`reported ${k}`)}walk(v)}
+function consume(c){const root=absolute("root",c.root),input=absolute("input",c.input),head=c.expectedHead;if(!/^[0-9a-f]{40}$/.test(head||""))fail("expectedHead must be an exact commit");fresh(root);if(!TARGETS[c.platform]?.includes(c.arch))fail("unsupported Milestone A platform lane");const outer=path.dirname(root),before=snapshot(outer,[root,...(c.snapshotExcludes||[])]),reports={},trees={},provenances={},roots={},assertions=[];let primary,receipt;
+ try{for(const p of PRODUCTS){const j=makeJourney(root,p);roots[p]=j.root;const env={...envFor(j),UAP_PRIVATE_NPM_CANDIDATE:path.join(input,"candidate"),UAP_PRIVATE_NPM_CACHE:path.join(j.cache,"candidate")};let ep=c.entrypoints?.[p];if(!ep){const tgz=p==="agentplugins"?"universal-agent-plugins-2.0.0.tgz":"plugin-kit-ai-2.0.0.tgz";ok(run(process.platform==="win32"?"npm.cmd":"npm",["install","--ignore-scripts","--offline","--no-package-lock","--prefix",j.installation,path.join(input,"packages",tgz)],{env}),`install ${p}`);ep=path.join(j.installation,"node_modules",p==="agentplugins"?"universal-agent-plugins":p,"bin",`${p}.js`)}ep=absolute(`${p} entrypoint`,ep);provenances[p]=provenance(ep,head);const argv=a=>[ep,...(p==="agentplugins"?["author"]:[]),...a];reports[p]=[];reports[p].push(result(run(process.execPath,argv(["init",j.project,"--template=skill","--name=milestone-a-fixture","--description=Disposable Milestone A fixture.","--format=json"]),{env}),`${p} init`));for(const cmd of ["validate",...(c.platform==="linux"?["inspect","test"]:[])])reports[p].push(result(run(process.execPath,argv([cmd,j.project,"--format=json"]),{env}),`${p} ${cmd}`));if(c.platform==="linux")reports[p].push(result(run(process.execPath,[ep,"add",".","--target=codex","--dry-run","--format=json"],{cwd:j.project,env}),`${p} local add --dry-run`));for(const r of reports[p]){const rev=r.data?.revision??r.revision;if(rev!==undefined&&rev!==head)fail(`${p} reported revision does not equal exact candidate`);if(rev===undefined&&provenances[p].revision!==head)fail(`${p} result omitted revision without exact package provenance`);reported(r,j.root)}trees[p]=tree(j.project);assertions.push(`${p}:commands`,`${p}:revision`,`${p}:paths`,`${p}:fixture-codex`)}const norm=Object.fromEntries(PRODUCTS.map(p=>[p,reports[p].map(r=>normalize(r,path.join(roots[p],"project")))]));if(JSON.stringify(norm.agentplugins)!==JSON.stringify(norm["plugin-kit-ai"]))fail("entrypoint command JSON differs after allowed normalization");if(JSON.stringify(trees.agentplugins)!==JSON.stringify(trees["plugin-kit-ai"]))fail("entrypoints generated different trees");assertions.push("ordered-json-equality","generated-tree-equality");receipt={schema:"milestone-a-e2e-run/v1",platform:c.platform,arch:c.arch,exact_candidate:PRODUCTS.every(p=>assertions.includes(`${p}:revision`)),entrypoints:PRODUCTS,commands:c.platform==="linux"?COMMANDS:["init","validate"],fixture_target_id:"codex",fixture_roots:Object.fromEntries(PRODUCTS.map(p=>[p,path.join(roots[p],"client")])),provenances,reports,trees,registry_fallback:false,assertions,clean_root_separation:false,cleanup:"pending"};fs.writeFileSync(path.join(root,"evidence","run.json"),JSON.stringify(receipt,null,2)+"\n");return receipt}catch(e){primary=e;fs.writeFileSync(path.join(root,"evidence","failure.json"),JSON.stringify({schema:"milestone-a-e2e-failure/v1",platform:c.platform,arch:c.arch,message:e.message,assertions,cleanup:"pending"},null,2)+"\n");throw e}finally{for(const p of PRODUCTS)if(roots[p])fs.rmSync(roots[p],{recursive:true,force:true});if(fs.readdirSync(path.join(root,"journeys")).length)fail("journey cleanup incomplete");if(JSON.stringify(before)!==JSON.stringify(snapshot(outer,[root,...(c.snapshotExcludes||[])])))fail("unexpected change outside controlled root");const f=path.join(root,"evidence",primary?"failure.json":"run.json");if(fs.existsSync(f)){const r=JSON.parse(fs.readFileSync(f));r.cleanup="complete";r.clean_root_separation=new Set(Object.values(roots)).size===PRODUCTS.length;fs.writeFileSync(f,JSON.stringify(r,null,2)+"\n")}}}
+function main(a){if(a.length!==2||!["prepare","run"].includes(a[0]))fail("usage: milestone-a-e2e.js <prepare|run> <config.json>");const c=JSON.parse(fs.readFileSync(absolute("config",a[1])));return a[0]==="prepare"?prepare(c):consume(c)}
+if(require.main===module)try{process.stdout.write(JSON.stringify(main(process.argv.slice(2)))+"\n")}catch(e){process.stderr.write(`Milestone A E2E: ${e.message}\n`);process.exitCode=1}
+module.exports={prepare,consume,main,tree,snapshot,normalize,inside,COMMANDS,TARGETS};

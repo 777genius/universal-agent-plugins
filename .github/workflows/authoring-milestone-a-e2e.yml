@@ -2,12 +2,6 @@ name: Authoring Milestone A E2E
 
 on:
   pull_request:
-    paths:
-      - '.github/workflows/authoring-milestone-a-e2e.yml'
-      - 'npm/agentplugins/scripts/milestone-a-e2e.js'
-      - 'npm/agentplugins/test/milestone-a-e2e.test.js'
-      - 'cli/plugin-kit-ai/**'
-      - 'install/**'
   workflow_dispatch:
 
 permissions:
@@ -81,6 +75,7 @@ jobs:
     timeout-minutes: 12
     env:
       NODE_OPTIONS: --max-old-space-size=384
+      EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -102,13 +97,16 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          root="$RUNNER_TEMP/milestone-a-run-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          outer="$RUNNER_TEMP/milestone-a-outer-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          test ! -e "$outer"
+          mkdir -m 700 "$outer"
+          root="$outer/run"
           mkdir -p "$root/evidence"
           printf 'MILESTONE_A_EVIDENCE=%s/evidence\n' "$root" >> "$GITHUB_ENV"
           rmdir "$root/evidence" "$root"
           config="$RUNNER_TEMP/milestone-a-run.json"
-          node -e 'require("fs").writeFileSync(process.argv[1], JSON.stringify({root:process.argv[2],input:process.argv[3],platform:process.argv[4],arch:process.argv[5]}))' \
-            "$config" "$root" "$RUNNER_TEMP/milestone-a-input" '${{ matrix.platform }}' '${{ matrix.arch }}'
+          node -e 'require("fs").writeFileSync(process.argv[1], JSON.stringify({root:process.argv[2],outerRoot:process.argv[3],input:process.argv[4],platform:process.argv[5],arch:process.argv[6],expectedHead:process.env.EXPECTED_HEAD}))' \
+            "$config" "$root" "$outer" "$RUNNER_TEMP/milestone-a-input" '${{ matrix.platform }}' '${{ matrix.arch }}'
           node npm/agentplugins/scripts/milestone-a-e2e.js run "$config"
           test -z "$(git status --porcelain)"
       - name: Upload run evidence, including failures

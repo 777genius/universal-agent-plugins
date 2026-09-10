@@ -1,49 +1,30 @@
 "use strict";
-const test = require("node:test");
-const assert = require("node:assert/strict");
-const fs = require("node:fs");
-const os = require("node:os");
-const path = require("node:path");
-const harness = require("../scripts/milestone-a-e2e");
-
-const repo = path.resolve(__dirname, "../../..");
-const source = fs.readFileSync(path.join(repo, "npm/agentplugins/scripts/milestone-a-e2e.js"), "utf8");
-const workflow = fs.readFileSync(path.join(repo, ".github/workflows/authoring-milestone-a-e2e.yml"), "utf8");
-
-test("harness contract fixes exact candidate, entrypoints, order, isolation, and cleanup", () => {
-  assert.deepEqual(harness.COMMANDS, ["init", "validate", "inspect", "test", "local-add-dry-run"]);
-  assert.deepEqual(harness.TARGETS, { linux: ["amd64"], windows: ["amd64"], darwin: ["arm64"] });
-  for (const token of ["checkout is not the expected exact candidate", "six-platform-pair",
-    'PRODUCTS = ["agentplugins", "plugin-kit-ai"]', '`project-${product}`', '`client-${product}`',
-    '"add", ".", "--target=codex", "--dry-run", "--format=json"',
-    'registry_fallback: false', 'for (const name of ["work", "home", "tmp", "cache", "config"])']) assert.match(source, new RegExp(escape(token)));
-  assert.doesNotMatch(source, /npm (view|install).*latest|https?:\/\/registry|npx|npm_config_registry/);
-  assert.match(source, /timeout: 120000/);
-});
-
-test("workflow is secretless, pinned, bounded, PR/manual, and failure-preserving", () => {
-  assert.match(workflow, /pull_request:/); assert.match(workflow, /workflow_dispatch:/);
-  assert.match(workflow, /permissions:\n  contents: read/);
-  assert.doesNotMatch(workflow, /secrets\.|permissions:\s*write|publish|npm-token|id-token/);
-  assert.match(workflow, /ubuntu-24\.04[\s\S]*linux, arch: amd64/);
-  assert.match(workflow, /windows-2022[\s\S]*windows, arch: amd64/);
-  assert.match(workflow, /macos-14[\s\S]*darwin, arch: arm64/);
-  assert.match(workflow, /if: always\(\)[\s\S]*actions\/upload-artifact@[0-9a-f]{40}/);
-  assert.doesNotMatch(workflow, /uses:\s*[^\n]+@(?![0-9a-f]{40}(?:\s|$))/);
-  for (const value of [...workflow.matchAll(/timeout-minutes:\s*(\d+)/g)].map(m => Number(m[1]))) assert.ok(value <= 20);
-  assert.match(workflow, /NODE_OPTIONS: --max-old-space-size=384/);
-});
-
-test("tree digest is deterministic and rejects links", () => {
-  fs.mkdirSync(os.tmpdir(), { recursive: true });
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "milestone-a-tree-"));
-  try {
-    fs.mkdirSync(path.join(root, "b")); fs.writeFileSync(path.join(root, "b", "z"), "z");
-    fs.writeFileSync(path.join(root, "a"), "a");
-    assert.deepEqual(harness.tree(root).map(row => row[0]), ["a", "b/z"]);
-    fs.symlinkSync(path.join(root, "a"), path.join(root, "link"));
-    assert.throws(() => harness.tree(root), /non-regular/);
-  } finally { fs.rmSync(root, { recursive: true, force: true }); }
-});
-
-function escape(value) { return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }
+const test=require("node:test"),assert=require("node:assert/strict"),fs=require("node:fs"),os=require("node:os"),path=require("node:path");
+const harness=require("../scripts/milestone-a-e2e"),HEAD="9db754c93c713219c72206eab54d71ee39e88abf";
+const repo=path.resolve(__dirname,"../../.."),workflow=fs.readFileSync(path.join(repo,".github/workflows/authoring-milestone-a-e2e.yml"),"utf8");
+function fixture(options={}){const outer=fs.mkdtempSync(path.join(os.tmpdir(),"milestone-a-exec-")),input=path.join(outer,"input"),logs=path.join(outer,"declared-logs");fs.mkdirSync(input);fs.mkdirSync(logs);fs.mkdirSync(path.join(input,"candidate"));const entrypoints={};
+ for(const product of ["agentplugins","plugin-kit-ai"]){const pkg=path.join(outer,`package-${product}`),bin=path.join(pkg,"bin");fs.mkdirSync(bin,{recursive:true});fs.writeFileSync(path.join(pkg,"package.json"),JSON.stringify({name:product,version:"2.0.0",gitHead:options.packageRevision||HEAD}));const ep=path.join(bin,`${product}.js`);fs.writeFileSync(ep,`#!/usr/bin/env node
+const fs=require('node:fs'),p=require('node:path');
+const product=${JSON.stringify(product)},a=process.argv.slice(2),author=a[0]==='author',v=author?a[1]:a[0],project=v==='add'?process.cwd():(author?a[2]:a[1]);
+const required=['HOME','USERPROFILE','TMPDIR','TMP','TEMP','XDG_CONFIG_HOME','XDG_CACHE_HOME','XDG_DATA_HOME','XDG_STATE_HOME','APPDATA','LOCALAPPDATA','npm_config_cache','npm_config_prefix','CODEX_HOME'];
+if(!required.every(k=>process.env[k]&&process.env[k].startsWith(p.dirname(process.env.HOME))))process.exit(17);
+fs.appendFileSync(${JSON.stringify(path.join(logs,product+".jsonl"))},JSON.stringify({argv:a,env:Object.fromEntries(required.map(k=>[k,process.env[k]]))})+'\\n');
+if(v==='init')fs.writeFileSync(p.join(project,'fixture.txt'),'same');
+let data={revision:${JSON.stringify(options.resultRevision===null?null:(options.resultRevision||HEAD))},operation:v};if(data.revision===null)delete data.revision;
+if(v==='add'){data={revision:${JSON.stringify(options.resultRevision===null?null:(options.resultRevision||HEAD))},operation:'add',target_id:'codex',target_root:p.join(process.env.CODEX_HOME,'plugins','planned')};if(data.revision===null)delete data.revision;}
+if(${JSON.stringify(options.outside||false)}&&v==='validate')data.output_root=p.join(p.dirname(p.dirname(process.env.HOME)),'sibling');
+if(${JSON.stringify(options.mismatch||false)}&&product==='plugin-kit-ai'&&v==='validate')data.changed=true;
+process.stdout.write(JSON.stringify({schema_version:1,result:'success',data})+'\\n');`);fs.chmodSync(ep,0o755);entrypoints[product]=ep}
+ return{outer,input,logs,entrypoints,root:path.join(outer,"controlled-run"),config:{root:path.join(outer,"controlled-run"),outerRoot:outer,input,platform:"linux",arch:"amd64",expectedHead:HEAD,entrypoints,snapshotExcludes:[input,logs,...Object.values(entrypoints).map(x=>path.dirname(path.dirname(x)))]}}}
+function dispose(f){fs.rmSync(f.outer,{recursive:true,force:true})}
+test("consume executes ordered entrypoints in independent complete roots, compares JSON, proves revision/target, and cleans",()=>{const f=fixture();try{harness.consume(f.config);const receipt=JSON.parse(fs.readFileSync(path.join(f.root,"evidence","run.json")));assert.equal(receipt.exact_candidate,true);assert.equal(receipt.cleanup,"complete");assert.equal(receipt.clean_root_separation,true);assert.equal(receipt.fixture_target_id,"codex");assert.notEqual(receipt.fixture_roots.agentplugins,receipt.fixture_roots["plugin-kit-ai"]);assert.deepEqual(receipt.commands,harness.COMMANDS);
+  for(const p of Object.keys(f.entrypoints)){const rows=fs.readFileSync(path.join(f.logs,p+".jsonl"),"utf8").trim().split("\n").map(JSON.parse);assert.deepEqual(rows.map(x=>x.argv[0]==="author"?x.argv[1]:x.argv[0]),["init","validate","inspect","test","add"]);assert.ok(Object.values(rows[0].env).every(x=>x.startsWith(path.join(f.root,"journeys",p))));assert.notEqual(rows[0].env.HOME,rows[0].env.TMPDIR);assert.notEqual(rows[0].env.npm_config_cache,rows[0].env.npm_config_prefix);}assert.deepEqual(fs.readdirSync(path.join(f.root,"journeys")),[]);}finally{dispose(f)}});
+for(const [name,opts,pattern] of [
+ ["normalized result mismatch",{mismatch:true},/command JSON differs/],
+ ["reported candidate revision mismatch",{resultRevision:"1111111111111111111111111111111111111111"},/reported revision/],
+ ["package provenance revision mismatch",{resultRevision:null,packageRevision:"2222222222222222222222222222222222222222"},/package provenance revision/],
+ ["reported outside-root path",{outside:true},/escapes journey root/]
+])test(`negative executable: ${name} writes failure evidence and cleans`,()=>{const f=fixture(opts);try{assert.throws(()=>harness.consume(f.config),pattern);const failure=JSON.parse(fs.readFileSync(path.join(f.root,"evidence","failure.json")));assert.match(failure.message,pattern);assert.equal(failure.cleanup,"complete");assert.deepEqual(fs.readdirSync(path.join(f.root,"journeys")),[]);}finally{dispose(f)}});
+test("outside sibling mutation is rejected",()=>{const f=fixture();const marker=path.join(f.outer,"unexpected-sibling");fs.appendFileSync(f.entrypoints.agentplugins,`\nfs.writeFileSync(${JSON.stringify(marker)},'changed');\n`);try{assert.throws(()=>harness.consume(f.config),/unexpected change outside/);}finally{dispose(f)}});
+test("tree and snapshot reject links",()=>{const r=fs.mkdtempSync(path.join(os.tmpdir(),"milestone-a-link-"));try{fs.writeFileSync(path.join(r,"a"),"a");fs.symlinkSync(path.join(r,"a"),path.join(r,"link"));assert.throws(()=>harness.tree(r),/non-regular/);assert.throws(()=>harness.snapshot(r),/link/);}finally{fs.rmSync(r,{recursive:true,force:true});}});
+test("workflow is unfiltered, secretless, pinned, bounded and failure-preserving",()=>{assert.match(workflow,/pull_request:\s*\n\s*workflow_dispatch:/);assert.doesNotMatch(workflow,/pull_request:[\s\S]{0,200}paths:/);assert.match(workflow,/permissions:\n  contents: read/);assert.doesNotMatch(workflow,/secrets\.|permissions:\s*write|publish|npm-token|id-token/);assert.match(workflow,/ubuntu-24\.04[\s\S]*windows-2022[\s\S]*macos-14/);assert.match(workflow,/if: always\(\)[\s\S]*actions\/upload-artifact@[0-9a-f]{40}/);assert.doesNotMatch(workflow,/uses:\s*[^\n]+@(?![0-9a-f]{40}(?:\s|$))/);for(const n of [...workflow.matchAll(/timeout-minutes:\s*(\d+)/g)].map(x=>+x[1]))assert.ok(n<=20);assert.match(workflow,/NODE_OPTIONS: --max-old-space-size=384/);});
