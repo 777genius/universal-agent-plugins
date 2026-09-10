@@ -126,6 +126,11 @@ type plannedGroupTarget struct {
 }
 
 func (service Service) applyGroup(ctx context.Context, input GroupInput, replace bool) (GroupResult, error) {
+	for _, target := range append(append([]AddInput(nil), input.Targets...), input.CompatibilityChecks...) {
+		if err := target.InstallIntent.Validate(target.Client.ClientID); err != nil {
+			return GroupResult{}, err
+		}
+	}
 	if len(input.Targets) == 0 {
 		return GroupResult{}, fmt.Errorf("at least one target is required")
 	}
@@ -244,7 +249,7 @@ func (service Service) applyGroup(ctx context.Context, input GroupInput, replace
 		if target.DistributionSuspended && normalizedOriginMode(target.OriginMode) == domain.OriginModeDirectory && !input.Repair {
 			return result, fmt.Errorf("suspended distribution blocks group add/update")
 		}
-		plan, err := service.Planner.Plan(ctx, target.Envelope, target.Client, target.Scope, domain.ComputePhysicalArtifactID(target.Envelope.Manifest.Name, installationID))
+		plan, err := service.planInstall(ctx, &target, domain.ComputePhysicalArtifactID(target.Envelope.Manifest.Name, installationID), installationIfExisting(state, installationIndex, existing))
 		if err != nil {
 			return result, err
 		}
@@ -355,7 +360,7 @@ func (service Service) applyGroup(ctx context.Context, input GroupInput, replace
 			if check.Envelope.TreeDigest != first.Envelope.TreeDigest || check.Envelope.ManifestDigest != first.Envelope.ManifestDigest {
 				return result, fmt.Errorf("compatibility preflight must use the update candidate bytes")
 			}
-			plan, err := service.Planner.Plan(ctx, check.Envelope, check.Client, check.Scope, domain.ComputePhysicalArtifactID(check.Envelope.Manifest.Name, installationID))
+			plan, err := service.planInstall(ctx, &check, domain.ComputePhysicalArtifactID(check.Envelope.Manifest.Name, installationID), installationIfExisting(state, installationIndex, existing))
 			if err != nil {
 				return result, err
 			}

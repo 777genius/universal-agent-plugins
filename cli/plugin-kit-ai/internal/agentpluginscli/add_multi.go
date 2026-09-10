@@ -68,7 +68,7 @@ func runAddMany(ctx context.Context, cmd *cobra.Command, app App, opts *options,
 }
 
 func runAddManyWithClients(ctx context.Context, cmd *cobra.Command, app App, opts *options, source string, targets []domain.ClientID, activationComplete, authComplete bool, clients []domain.DetectedClient) error {
-	_, detected, err := preflightSelectedTargets(ctx, app, targets, clients, !opts.dryRun && isDirectorySelector(source))
+	_, detected, err := preflightAddTargets(ctx, app, opts, source, targets, clients)
 	if err != nil {
 		return err
 	}
@@ -120,7 +120,8 @@ func runAddManyLoaded(ctx context.Context, cmd *cobra.Command, app App, opts *op
 			return fmt.Errorf("preflight target %s: %w; no target was changed", client.ClientID, err)
 		}
 		input := usecase.AddInput{
-			Envelope: clientPackage.envelope, Client: client, Scope: domain.ScopeUser,
+			InstallIntent: opts.installIntents[client.ClientID],
+			Envelope:      clientPackage.envelope, Client: client, Scope: domain.ScopeUser,
 			DryRun: true, Interactive: app.Terminal, Hints: clientPackage.hints,
 			BackendExecutable:  backendExecutable(client, detected),
 			ActivationComplete: activationComplete, AuthComplete: authComplete,

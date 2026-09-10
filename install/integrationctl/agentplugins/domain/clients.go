@@ -190,6 +190,7 @@ type ComponentDecision struct {
 }
 
 type DeliveryPlan struct {
+	InstallIntent      InstallIntent       `json:"install_intent,omitempty"`
 	ClientID           ClientID            `json:"client_id"`
 	Scope              InstallScope        `json:"scope"`
 	Status             PlanStatus          `json:"status"`

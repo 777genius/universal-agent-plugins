@@ -88,7 +88,7 @@ func runRepairMany(ctx context.Context, cmd *cobra.Command, app App, opts *optio
 			requests[key] = &request
 		}
 	}
-	_, detected, err := preflightSelectedTargets(ctx, app, targets, nil, !opts.dryRun && installation.OriginMode == domain.OriginModeDirectory)
+	_, detected, err := preflightSelectedTargets(ctx, app, targets, nil, !opts.dryRun && installation.OriginMode == domain.OriginModeDirectory, lifecycleInstallIntents(installation, opts.scope, nil))
 	if err != nil {
 		return err
 	}

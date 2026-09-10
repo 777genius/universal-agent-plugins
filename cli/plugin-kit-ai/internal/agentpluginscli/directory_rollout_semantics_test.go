@@ -359,7 +359,7 @@ func TestInteractiveDirectoryAddOffersOnlyOneCompleteSignedTargetSet(t *testing.
 	}
 }
 
-func TestInteractiveDirectoryAddSkipsTargetThatCannotPassActivationPreflight(t *testing.T) {
+func TestInteractiveDirectoryAddOffersKiroPreparationWhenAutomaticPreflightFails(t *testing.T) {
 	rollout := newRolloutDirectoryFixture(t,
 		[]domain.ClientID{domain.ClientCursor, domain.ClientKiro},
 		[]domain.ClientID{domain.ClientCursor, domain.ClientKiro})
@@ -393,11 +393,11 @@ func TestInteractiveDirectoryAddSkipsTargetThatCannotPassActivationPreflight(t *
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(stdout, "Skipped (not installed in this attempt): kiro: this CLI cannot automatically check MCP connections") {
+	if !strings.Contains(stdout, "prepare configuration; automatic MCP verification unavailable") {
 		t.Fatalf("activation-aware Directory output = %q", stdout)
 	}
-	if strings.Contains(stdout, "Detected supported clients (all selected by default)") {
-		t.Fatalf("single preflight-capable Directory target unexpectedly prompted: %q", stdout)
+	if !strings.Contains(stdout, "Detected supported clients (all selected by default)") {
+		t.Fatalf("preparation-capable Directory target unexpectedly prompted: %q", stdout)
 	}
 	if rollout.acquirer.verifiedCalls != 1 {
 		t.Fatalf("Directory package acquired %d times, want exactly once", rollout.acquirer.verifiedCalls)

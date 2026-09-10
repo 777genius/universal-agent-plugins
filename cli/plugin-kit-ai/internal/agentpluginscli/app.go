@@ -64,6 +64,8 @@ type App struct {
 }
 
 type options struct {
+	prepare             bool
+	installIntents      map[domain.ClientID]domain.InstallIntent
 	color               terminaltheme.Policy
 	target              string
 	scope               string

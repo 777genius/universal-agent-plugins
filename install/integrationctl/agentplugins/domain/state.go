@@ -159,6 +159,7 @@ type ClientPackageRevision struct {
 }
 
 type ClientBinding struct {
+	InstallIntent    InstallIntent           `json:"install_intent,omitempty"`
 	ClientBindingID  string                  `json:"client_binding_id"`
 	ClientID         string                  `json:"client_id"`
 	Scope            string                  `json:"scope"`
@@ -207,19 +208,20 @@ type DataReceipt struct {
 }
 
 type Installation struct {
-	InstallationID   string                   `json:"installation_id"`
-	DeclaredName     string                   `json:"declared_name"`
-	Source           SourceBinding            `json:"source"`
-	Package          PackageBinding           `json:"package"`
-	OriginMode       OriginMode               `json:"origin_mode,omitempty"`
-	Directory        *DirectoryOrigin         `json:"directory,omitempty"`
-	OperationGroupID string                   `json:"operation_group_id,omitempty"`
-	DataReceipts     map[string]DataReceipt   `json:"data_receipts,omitempty"`
-	DataRetained     bool                     `json:"data_retained,omitempty"`
-	Clients          map[string]ClientBinding `json:"clients"`
-	NeedsRebind      bool                     `json:"needs_rebind,omitempty"`
-	CreatedAt        string                   `json:"created_at"`
-	UpdatedAt        string                   `json:"updated_at"`
+	InstallPreferences []InstallPreference      `json:"install_preferences,omitempty"`
+	InstallationID     string                   `json:"installation_id"`
+	DeclaredName       string                   `json:"declared_name"`
+	Source             SourceBinding            `json:"source"`
+	Package            PackageBinding           `json:"package"`
+	OriginMode         OriginMode               `json:"origin_mode,omitempty"`
+	Directory          *DirectoryOrigin         `json:"directory,omitempty"`
+	OperationGroupID   string                   `json:"operation_group_id,omitempty"`
+	DataReceipts       map[string]DataReceipt   `json:"data_receipts,omitempty"`
+	DataRetained       bool                     `json:"data_retained,omitempty"`
+	Clients            map[string]ClientBinding `json:"clients"`
+	NeedsRebind        bool                     `json:"needs_rebind,omitempty"`
+	CreatedAt          string                   `json:"created_at"`
+	UpdatedAt          string                   `json:"updated_at"`
 }
 
 type StateFileV2 struct {
