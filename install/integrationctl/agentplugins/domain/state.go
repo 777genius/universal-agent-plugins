@@ -208,6 +208,8 @@ type DataReceipt struct {
 }
 
 type Installation struct {
+	LocalChatGPTMapping *ChatGPTLocalMapping `json:"local_chatgpt_mapping,omitempty"`
+
 	InstallPreferences []InstallPreference      `json:"install_preferences,omitempty"`
 	InstallationID     string                   `json:"installation_id"`
 	DeclaredName       string                   `json:"declared_name"`

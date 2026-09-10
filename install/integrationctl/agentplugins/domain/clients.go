@@ -190,6 +190,8 @@ type ComponentDecision struct {
 }
 
 type DeliveryPlan struct {
+	PersonalChatGPTPreparation bool `json:"-"`
+
 	InstallIntent      InstallIntent       `json:"install_intent,omitempty"`
 	ClientID           ClientID            `json:"client_id"`
 	Scope              InstallScope        `json:"scope"`
@@ -207,7 +209,8 @@ type DeliveryPlan struct {
 	DeclaredVersion          string `json:"-"`
 	NativeRegistryRoot       string `json:"-"`
 	NativeRegistryExecutable string `json:"-"`
-	// LocalPreparationAuthorized records signed package evidence that permits
+	// LocalPreparationAuthorized records validated package evidence or an explicit
+	// personal Context7 registration receipt that permits
 	// creation of the local prepared package even when a remote, manually
 	// activated registry cannot be observed. It is never evidence that the
 	// remote identity is free, activated, authenticated, or verified.

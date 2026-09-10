@@ -679,6 +679,7 @@ func (acquirer *localBackedSourceAcquirer) AcquireGitHubVerified(ctx context.Con
 		return domain.PackageSnapshot{}, err
 	}
 	if snapshot.TreeDigest != digest {
+		_ = packagedigest.Remove(snapshot)
 		return domain.PackageSnapshot{}, fmt.Errorf("verified tree digest mismatch")
 	}
 	return snapshot, nil

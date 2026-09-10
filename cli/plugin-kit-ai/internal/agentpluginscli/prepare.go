@@ -97,6 +97,7 @@ func preflightAddTargets(ctx context.Context, app App, opts *options, source str
 	if err != nil {
 		return nil, nil, err
 	}
+	opts.installIntents = intents
 	return preflightSelectedTargets(ctx, app, targets, clients, !opts.dryRun && isDirectorySelector(source), intents)
 }
 

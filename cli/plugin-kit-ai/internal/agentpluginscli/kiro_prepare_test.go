@@ -64,7 +64,7 @@ func TestKiroPrepareCLIPlainAndJSON(t *testing.T) {
 }
 
 func TestPrepareRejectsInvalidTargetsBeforeAcquisition(t *testing.T) {
-	for _, target := range []string{"cursor", "kiro,cursor", "chatgpt", ""} {
+	for _, target := range []string{"cursor", "kiro,cursor", ""} {
 		t.Run(target, func(t *testing.T) {
 			fixture := newCLIFixture(t, nil)
 			_, _, err := fixture.execute(false, "add", "context7", "--target", target, "--prepare")

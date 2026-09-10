@@ -405,7 +405,11 @@ func writeSanitizedApp(root string, envelope domain.PackageEnvelope, plan domain
 		}
 		return nil
 	}
-	return atomicfile.Write(path, append([]byte(nil), envelope.App.Raw...), 0o644)
+	mode := os.FileMode(0o644)
+	if envelope.LocalChatGPTMapping != nil {
+		mode = 0o600
+	}
+	return atomicfile.Write(path, append([]byte(nil), envelope.App.Raw...), mode)
 }
 
 func removeInvalidAndUnsupportedSkills(root string, envelope domain.PackageEnvelope, plan domain.DeliveryPlan) error {

@@ -84,6 +84,12 @@ func (activator Activator) PreflightActivation(request domain.ActivationRequest)
 		return err
 	}
 	if request.Plan.InstallIntent == domain.InstallIntentPrepare {
+		if request.Client.ClientID == domain.ClientChatGPT {
+			if request.Plan.Scope != domain.ScopeUser || !request.Plan.PersonalChatGPTPreparation {
+				return fmt.Errorf("ChatGPT preparation requires validated personal mapping")
+			}
+			return nil
+		}
 		if request.Plan.Scope != domain.ScopeUser || strings.TrimSpace(request.Client.ConfigRoot) == "" || !kiroNativeComponents(request.Plan.Components) {
 			return fmt.Errorf("Kiro preparation requires native configuration and supported components")
 		}
@@ -342,6 +348,13 @@ func (activator Activator) Activate(ctx context.Context, request domain.Activati
 		Verification:   domain.VerificationPackageValid,
 	}
 	if request.Plan.InstallIntent == domain.InstallIntentPrepare {
+		if request.Client.ClientID == domain.ClientChatGPT {
+			outcome.Activation = domain.ActivationPrepared
+			outcome.Authentication = domain.AuthenticationPending
+			outcome.LocalActions = append(outcome.LocalActions, fmt.Sprintf("In ChatGPT desktop, add the personal local marketplace at %s (.agents/plugins/marketplace.json), install %s, and verify the registered OAuth connection and tool calls in a new chat. The registration receipt is retained locally after remove, including --purge-data, for reinstall.", request.Delivery.ActivePath, request.DeclaredName))
+			outcome.UserActions = append(outcome.UserActions, request.Plan.UserActions...)
+			return outcome, nil
+		}
 		if request.VerifyOnly {
 			err = verifyKiroNativeObjects(request.Client.ConfigRoot, request.Delivery.NativeObjects, false)
 		} else {

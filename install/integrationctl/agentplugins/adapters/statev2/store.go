@@ -159,6 +159,14 @@ func Validate(state domain.StateFileV2) error {
 	clientBindingIDs := map[string]struct{}{}
 	operationIDs := map[string]struct{}{}
 	for index, installation := range state.Installations {
+		if mapping := installation.LocalChatGPTMapping; mapping != nil {
+			if err := mapping.Validate(); err != nil {
+				return err
+			}
+			if installation.OriginMode != domain.OriginModeDirectory || installation.Directory == nil || installation.Directory.ProductID != mapping.ProductID || installation.Directory.DistributionID != mapping.Repository || installation.Source.Repository != mapping.Repository || installation.Source.PackageSubpath != mapping.PackagePath {
+				return fmt.Errorf("personal ChatGPT receipt source does not match installation")
+			}
+		}
 		prefix := fmt.Sprintf("installations[%d]", index)
 		if err := pathpolicy.ValidateLeafID(installation.InstallationID); err != nil {
 			return fmt.Errorf("%s has invalid installation_id: %w", prefix, err)
