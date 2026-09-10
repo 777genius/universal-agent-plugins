@@ -355,6 +355,19 @@ func renderAddMultiResult(cmd *cobra.Command, opts *options, result addMultiResu
 		}
 		return writeJSONResult(cmd.OutOrStdout(), "add", overall, result)
 	}
+	if result.Status == "preflight_failed" {
+		if _, err := fmt.Fprintln(cmd.OutOrStdout(), "Nothing was installed: a selected client could not pass the checks before installation. See the error below; there is no new configuration to activate."); err != nil {
+			return err
+		}
+		for _, target := range result.Targets {
+			if target.Output.Result.Plan.Status == domain.PlanUnsupported {
+				if err := renderHumanPlan(cmd.OutOrStdout(), envelope, target.Output.Result); err != nil {
+					return err
+				}
+			}
+		}
+		return nil
+	}
 	if len(result.Targets) == 1 {
 		return renderAddResult(cmd.OutOrStdout(), "human", envelope, result.Targets[0].Output.Result, result.DryRun)
 	}
