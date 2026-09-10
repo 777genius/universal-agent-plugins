@@ -105,13 +105,11 @@ jobs:
           set -euo pipefail
           outer="$RUNNER_TEMP/milestone-a-outer-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
           test ! -e "$outer"
-          mkdir -m 700 "$outer"
           root="$outer/run"
-          mkdir -p "$root/evidence"
           printf 'MILESTONE_A_EVIDENCE=%s/evidence\n' "$root" >> "$GITHUB_ENV"
-          rmdir "$root/evidence" "$root"
+          node -e 'require("./npm/agentplugins/scripts/milestone-a-e2e").precreate(process.argv[1])' "$root"
           config="$RUNNER_TEMP/milestone-a-run.json"
-          node -e 'require("fs").writeFileSync(process.argv[1], JSON.stringify({root:process.argv[2],outerRoot:process.argv[3],input:process.argv[4],platform:process.argv[5],arch:process.argv[6],expectedHead:process.env.EXPECTED_HEAD}))' \
+          node -e 'require("fs").writeFileSync(process.argv[1], JSON.stringify({root:process.argv[2],precreatedRoot:true,outerRoot:process.argv[3],input:process.argv[4],platform:process.argv[5],arch:process.argv[6],expectedHead:process.env.EXPECTED_HEAD}))' \
             "$config" "$root" "$outer" "$RUNNER_TEMP/milestone-a-input" '${{ matrix.platform }}' '${{ matrix.arch }}'
           node npm/agentplugins/scripts/milestone-a-e2e.js run "$config"
           test -z "$(git status --porcelain)"
