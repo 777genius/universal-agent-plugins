@@ -54,7 +54,7 @@ jobs:
           # production security checks retain credential-free read-only access
           # to their pinned public feed and scanner-release endpoints.
           GOMODCACHE="$modcache" go mod download
-          node -e 'require("fs").writeFileSync(process.argv[1], JSON.stringify({root:process.argv[2],precreatedRoot:true,repo:process.env.GITHUB_WORKSPACE,expectedHead:process.env.EXPECTED_HEAD,go:process.argv[3],modCache:process.argv[4],node:process.execPath,npm:process.argv[5]}))' \
+          node -e 'const fs=require("fs"),h=require("./npm/agentplugins/scripts/milestone-a-e2e"),tools=h.resolveTrustedTools(process.argv[3],process.argv[5]); fs.writeFileSync(process.argv[1],JSON.stringify({root:process.argv[2],precreatedRoot:true,repo:process.env.GITHUB_WORKSPACE,expectedHead:process.env.EXPECTED_HEAD,...tools,modCache:process.argv[4]}))' \
             "$config" "$root" "$(command -v go)" "$modcache" "$(command -v npm)"
           node npm/agentplugins/scripts/milestone-a-e2e.js prepare "$config"
       - name: Upload exact candidate bundle and failure evidence
