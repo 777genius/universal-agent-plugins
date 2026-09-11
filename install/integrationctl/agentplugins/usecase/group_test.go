@@ -965,7 +965,6 @@ func TestGroupedAddContinuesActivationAcrossClientFailures(t *testing.T) {
 	})
 }
 
-
 func TestGroupTargetFailureStageClassification(t *testing.T) {
 	t.Parallel()
 	activationAndVerification := groupTargetFailureFromActivation(errors.New("boom"), domain.ActivationOutcome{
@@ -985,6 +984,12 @@ func TestGroupTargetFailureStageClassification(t *testing.T) {
 	})
 	if canceled.Stage != "canceled" {
 		t.Fatalf("canceled stage = %q", canceled.Stage)
+	}
+	authOnly := groupTargetFailureFromActivation(errors.New("auth boom"), domain.ActivationOutcome{
+		Activation: domain.ActivationActive, Authentication: domain.AuthenticationFailed, Verification: domain.VerificationInstalled,
+	})
+	if authOnly.Stage != "authentication" {
+		t.Fatalf("authentication-only stage = %q", authOnly.Stage)
 	}
 }
 

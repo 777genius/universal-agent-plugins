@@ -46,7 +46,6 @@ func TestContext7InteractivePreparationChoice(t *testing.T) {
 	}
 }
 
-
 func TestContext7ChatGPTOnlyActionRequiredIsSuccess(t *testing.T) {
 	f, d, a := context7GuidedFixture(t)
 	f.app.Detector = staticDetector{clients: []domain.DetectedClient{fixtureClient(t, domain.ClientChatGPT)}}

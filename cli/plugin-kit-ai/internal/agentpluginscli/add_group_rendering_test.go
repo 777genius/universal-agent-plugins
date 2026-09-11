@@ -236,19 +236,25 @@ func TestBatchActivationApplySummaryAndExitCodes(t *testing.T) {
 			t.Fatalf("counts = %+v", counts)
 		}
 	})
-	t.Run("unknown commit and not-attempted retries", func(t *testing.T) {
+	t.Run("unknown commit and persist skips omit retry", func(t *testing.T) {
 		source := "demo-plugin"
 		unknown := addTargetResult{Target: "cursor", displayName: "Cursor", Status: string(usecase.GroupTargetManagedUnknown), Output: addResultData{Result: usecase.AddResult{GroupPhase: usecase.GroupTargetManagedUnknown}}}
-		skipped := addTargetResult{Target: "kiro", displayName: "Kiro", Status: string(usecase.GroupTargetExternalNotAttempted),
-			Error: &usecase.GroupTargetFailure{Stage: "persist", Message: "processing stopped because the operation was canceled"},
+		persistSkipped := addTargetResult{Target: "kiro", displayName: "Kiro", Status: string(usecase.GroupTargetExternalNotAttempted),
+			Error:  &usecase.GroupTargetFailure{Stage: "persist", Message: "processing stopped because installation state could not be saved safely"},
+			Output: addResultData{Result: usecase.AddResult{GroupPhase: usecase.GroupTargetExternalNotAttempted}}}
+		canceledSkipped := addTargetResult{Target: "codex", displayName: "Codex", Status: string(usecase.GroupTargetExternalNotAttempted),
+			Error:  &usecase.GroupTargetFailure{Stage: "canceled", Message: "processing stopped because the operation was canceled"},
 			Output: addResultData{Result: usecase.AddResult{GroupPhase: usecase.GroupTargetExternalNotAttempted}}}
 		if retry := batchRetryCommandFor(unknown, source); retry != "" {
 			t.Fatalf("unknown commit must not get retry: %q", retry)
 		}
-		if retry := batchRetryCommandFor(skipped, source); retry != "npx universal-agent-plugins add demo-plugin --target kiro" {
-			t.Fatalf("not-attempted retry = %q", retry)
+		if retry := batchRetryCommandFor(persistSkipped, source); retry != "" {
+			t.Fatalf("persist skip must not get retry: %q", retry)
 		}
-		result := addMultiResult{Plugin: "demo", Failed: 2, Targets: []addTargetResult{unknown, skipped}}
+		if retry := batchRetryCommandFor(canceledSkipped, source); retry != "npx universal-agent-plugins add demo-plugin --target codex" {
+			t.Fatalf("canceled not-attempted retry = %q", retry)
+		}
+		result := addMultiResult{Plugin: "demo", Failed: 2, Targets: []addTargetResult{unknown, persistSkipped}}
 		var out bytes.Buffer
 		cmd := &cobra.Command{}
 		cmd.SetOut(&out)
@@ -256,23 +262,44 @@ func TestBatchActivationApplySummaryAndExitCodes(t *testing.T) {
 			t.Fatal(err)
 		}
 		body := out.String()
-		if !strings.Contains(body, "Needs attention") || !strings.Contains(body, "Managed commit state is unknown") || !strings.Contains(body, "Not completed") {
+		if !strings.Contains(body, "Needs attention") || !strings.Contains(body, "Managed commit state is unknown") || !strings.Contains(body, "doctor before retrying") || !strings.Contains(body, "Not completed") {
 			t.Fatalf("body = %s", body)
 		}
-		if strings.Contains(body, "Retry:\n    npx universal-agent-plugins add demo-plugin --target cursor") {
-			t.Fatalf("unsafe unknown retry present: %s", body)
+		if strings.Contains(body, "Retry:") {
+			t.Fatalf("unsafe persist/unknown retry present: %s", body)
 		}
 	})
-	t.Run("presentation source omits retry", func(t *testing.T) {
-		if got := batchRetrySource(domain.PackageEnvelope{}, "direct local source"); got != "" {
+	t.Run("presentation and github retry sources", func(t *testing.T) {
+		if got := batchRetrySource(domain.PackageEnvelope{}, "", "direct local source"); got != "" {
 			t.Fatalf("presentation source leaked: %q", got)
 		}
 		if got := batchRetryCommandFor(addTargetResult{Target: "cursor", Output: addResultData{Result: usecase.AddResult{GroupPhase: usecase.GroupTargetExternalFailed}}}, ""); got != "" {
 			t.Fatalf("empty source retry = %q", got)
 		}
 		localPath := filepath.Join(t.TempDir(), "plugin")
-		if got := batchRetrySource(domain.PackageEnvelope{Source: domain.SourceIdentity{RequestedSource: localPath}}, "direct local source"); got != "" {
+		if got := batchRetrySource(domain.PackageEnvelope{Source: domain.SourceIdentity{RequestedSource: localPath}}, "", "direct local source"); got != "" {
 			t.Fatalf("local absolute path leaked into retry source: %q", got)
+		}
+		dir := domain.PackageEnvelope{Source: domain.SourceIdentity{
+			RequestedSource: "context7", Repository: "upstash/context7", PackageSubpath: "plugins/agent-plugins/context7",
+			ResolvedRevision: strings.Repeat("a", 40),
+		}}
+		if got := batchRetrySource(dir, domain.OriginModeDirectory, "direct immutable source"); got != "context7" {
+			t.Fatalf("directory retry source = %q", got)
+		}
+		sha := strings.Repeat("b", 40)
+		github := domain.PackageEnvelope{Source: domain.SourceIdentity{
+			Repository: "owner/repo", PackageSubpath: "plugins/demo", ResolvedRevision: sha,
+		}}
+		wantGit := "owner/repo@" + sha + "//plugins/demo"
+		if got := batchRetrySource(github, domain.OriginModeDirect, ""); got != wantGit {
+			t.Fatalf("github retry source = %q, want %q", got, wantGit)
+		}
+		if got := batchRetrySource(domain.PackageEnvelope{Source: domain.SourceIdentity{Repository: "owner/repo", PackageSubpath: "plugins/demo", ResolvedRevision: "moving-head"}}, domain.OriginModeDirect, ""); got != "" {
+			t.Fatalf("mutable github revision leaked: %q", got)
+		}
+		if got := batchRetryCommand("owner/repo@"+sha+"//plugins/demo", domain.ClientKiro); got != "npx universal-agent-plugins add owner/repo@"+sha+"//plugins/demo --target kiro" {
+			t.Fatalf("github retry command = %q", got)
 		}
 	})
 	t.Run("json failure status without failed count", func(t *testing.T) {
@@ -323,6 +350,24 @@ func TestBatchActivationApplySummaryAndExitCodes(t *testing.T) {
 			t.Fatalf("aggregate = %v", err)
 		}
 	})
+	t.Run("single target failure uses apply summary", func(t *testing.T) {
+		result := addMultiResult{Plugin: "demo", Failed: 1, Status: string(usecase.GroupPhaseManagedActivationFailed), Targets: []addTargetResult{{
+			Target: "kiro", displayName: "Kiro", Status: string(usecase.GroupTargetExternalFailed),
+			RetryCommand: "npx universal-agent-plugins add context7 --target kiro",
+			Error:        &usecase.GroupTargetFailure{Stage: "activation", Message: "could not write kiro config"},
+			Output:       addResultData{Result: usecase.AddResult{GroupPhase: usecase.GroupTargetExternalFailed}},
+		}}}
+		var out bytes.Buffer
+		cmd := &cobra.Command{}
+		cmd.SetOut(&out)
+		if err := renderAddMultiResult(cmd, &options{format: "human"}, result, domain.PackageEnvelope{Manifest: domain.PluginManifest{Name: "demo"}}); err != nil {
+			t.Fatal(err)
+		}
+		body := out.String()
+		if strings.Contains(body, "Add: external_failed") || !strings.Contains(body, "Needs attention") || !strings.Contains(body, "could not write kiro config") || !strings.Contains(body, "Retry:") {
+			t.Fatalf("single-target summary = %s", body)
+		}
+	})
 	t.Run("chatgpt-only json is success with action_required", func(t *testing.T) {
 		if batchStatusIndicatesFailure("action_required") {
 			t.Fatal("action_required must not be treated as failure status")
@@ -341,7 +386,7 @@ func TestBatchActivationApplySummaryAndExitCodes(t *testing.T) {
 			Plugin: "demo", Status: string(usecase.GroupPhaseManagedActivationFailed), Failed: 1, ActionRequired: 1,
 			Targets: []addTargetResult{
 				{Target: "kiro", displayName: "Kiro", Status: string(usecase.GroupTargetExternalFailed),
-					Error: &usecase.GroupTargetFailure{Stage: "activation", Message: "kiro failed"},
+					Error:  &usecase.GroupTargetFailure{Stage: "activation", Message: "kiro failed"},
 					Output: addResultData{Result: usecase.AddResult{GroupPhase: usecase.GroupTargetExternalFailed}}},
 				{Target: "chatgpt", displayName: "ChatGPT", Status: "action_required", NextAction: "Finish ChatGPT setup."},
 			},
@@ -366,7 +411,7 @@ func TestBatchActivationApplySummaryAndExitCodes(t *testing.T) {
 					Activation: domain.ActivationOutcome{Activation: domain.ActivationActive, Authentication: domain.AuthenticationNotRequired, Verification: domain.VerificationInstalled},
 				}}},
 				{Target: "cursor", displayName: "Cursor", Status: string(usecase.GroupTargetExternalFailed),
-					Error: &usecase.GroupTargetFailure{Stage: "activation", Message: "first line\nsecond line with agentplugins add resume --foo"},
+					Error:  &usecase.GroupTargetFailure{Stage: "activation", Message: "first line\nsecond line with agentplugins add resume --foo"},
 					Output: addResultData{Result: usecase.AddResult{GroupPhase: usecase.GroupTargetExternalFailed}}},
 			},
 		}

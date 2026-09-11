@@ -759,13 +759,18 @@ func (service Service) applyGroup(ctx context.Context, input GroupInput, replace
 
 func groupTargetFailureFromActivation(err error, outcome domain.ActivationOutcome) *GroupTargetFailure {
 	stage := "activation"
-	// Providers often set VerificationFailed together with ActivationFailed.
-	// Prefer activation unless verification is the only failed dimension.
-	if outcome.Activation != domain.ActivationFailed && outcome.Verification == domain.VerificationFailed {
-		stage = "verification"
-	}
-	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+	switch {
+	case errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
 		stage = "canceled"
+	case outcome.Authentication == domain.AuthenticationFailed &&
+		outcome.Activation != domain.ActivationFailed &&
+		outcome.Verification != domain.VerificationFailed:
+		stage = "authentication"
+	case outcome.Verification == domain.VerificationFailed &&
+		outcome.Activation != domain.ActivationFailed:
+		// Providers often set VerificationFailed together with ActivationFailed.
+		// Prefer activation unless verification is the only failed dimension.
+		stage = "verification"
 	}
 	message := "activation failed"
 	if err != nil {

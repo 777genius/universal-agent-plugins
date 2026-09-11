@@ -238,7 +238,7 @@ func runAddManyLoaded(ctx context.Context, cmd *cobra.Command, app App, opts *op
 		return fmt.Errorf("group apply returned %d targets for %d selected clients", len(applied.Targets), len(selected))
 	}
 	combined.Status, combined.Targets, combined.Succeeded, combined.Failed, combined.ActionRequired = string(applied.Phase), combined.Targets[:0], 0, 0, 0
-	sourceArg := batchRetrySource(loaded.envelope, combined.Source)
+	sourceArg := batchRetrySource(loaded.envelope, loaded.origin, combined.Source)
 	for index, result := range applied.Targets {
 		output := newAddResultData(inputs[index].Envelope, result, false)
 		output.OperationID = operationID
@@ -487,11 +487,16 @@ func renderAddMultiResult(cmd *cobra.Command, opts *options, result addMultiResu
 		}
 		return nil
 	}
-	if len(result.Targets) == 1 {
-		return renderAddResult(cmd.OutOrStdout(), "human", envelope, result.Targets[0].Output.Result, result.DryRun)
-	}
 	if result.DryRun {
+		if len(result.Targets) == 1 {
+			return renderAddResult(cmd.OutOrStdout(), "human", envelope, result.Targets[0].Output.Result, true)
+		}
 		return renderAddMultiDryRun(cmd.OutOrStdout(), result)
+	}
+	// Failed single-target applies use the same summary so error detail and retry
+	// guidance stay visible instead of the legacy "Add: external_failed" line.
+	if len(result.Targets) == 1 && result.Failed == 0 && !batchStatusIndicatesFailure(result.Status) {
+		return renderAddResult(cmd.OutOrStdout(), "human", envelope, result.Targets[0].Output.Result, false)
 	}
 	return renderAddMultiApplySummary(cmd.OutOrStdout(), result, envelope)
 }
@@ -691,6 +696,9 @@ func batchAttentionLines(target addTargetResult) []string {
 		if phase == usecase.GroupTargetManagedUnknown {
 			return []string{"Managed commit state is unknown; run agentplugins doctor before retrying."}
 		}
+		if batchFailureNeedsDoctor(target) {
+			return []string{"Installation state could not be saved safely; run agentplugins doctor before retrying."}
+		}
 		if target.Error != nil && strings.TrimSpace(target.Error.Message) != "" {
 			return []string{target.Error.Message}
 		}
@@ -731,11 +739,18 @@ func countBatchTarget(result *addMultiResult, target addTargetResult) {
 	}
 }
 
-func batchRetrySource(envelope domain.PackageEnvelope, public string) string {
-	// Prefer repository identity so retries never echo host-local absolute paths
-	// that publicPackageSource intentionally hides.
-	if strings.TrimSpace(envelope.Source.Repository) != "" {
-		return publicPackageSource(envelope.Source)
+func batchRetrySource(envelope domain.PackageEnvelope, origin domain.OriginMode, public string) string {
+	// Directory retries must keep the safe product selector (for example context7),
+	// not a reconstructed repository//path that changes provenance.
+	if origin == domain.OriginModeDirectory {
+		if source := strings.TrimSpace(envelope.Source.RequestedSource); isBatchRetryableSource(source) {
+			return source
+		}
+		return ""
+	}
+	// Direct GitHub retries require an immutable owner/repo@FULL_SHA[//path] selector.
+	if repo := strings.TrimSpace(envelope.Source.Repository); repo != "" {
+		return batchRetryGitHubSource(envelope.Source)
 	}
 	if source := strings.TrimSpace(envelope.Source.RequestedSource); isBatchRetryableSource(source) {
 		return source
@@ -744,6 +759,22 @@ func batchRetrySource(envelope domain.PackageEnvelope, public string) string {
 		return source
 	}
 	return ""
+}
+
+func batchRetryGitHubSource(source domain.SourceIdentity) string {
+	repo := strings.TrimSpace(source.Repository)
+	rev := publicImmutableRevision(strings.TrimSpace(source.ResolvedRevision))
+	if repo == "" || rev == "" {
+		return ""
+	}
+	value := repo + "@" + rev
+	if sub := strings.TrimSpace(source.PackageSubpath); sub != "" {
+		value += "//" + sub
+	}
+	if !isBatchRetrySafeArg(value) {
+		return ""
+	}
+	return value
 }
 
 func isBatchPresentationSource(source string) bool {
@@ -775,7 +806,7 @@ func isLocalFilesystemSource(source string) bool {
 }
 
 func batchRetryCommandFor(target addTargetResult, source string) string {
-	if strings.TrimSpace(source) == "" {
+	if strings.TrimSpace(source) == "" || batchFailureNeedsDoctor(target) {
 		return ""
 	}
 	switch target.Output.Result.GroupPhase {
@@ -784,6 +815,13 @@ func batchRetryCommandFor(target addTargetResult, source string) string {
 	default:
 		return ""
 	}
+}
+
+func batchFailureNeedsDoctor(target addTargetResult) bool {
+	if target.Error == nil {
+		return false
+	}
+	return target.Error.Stage == "persist"
 }
 
 func batchRetryCommand(source string, target domain.ClientID) string {
