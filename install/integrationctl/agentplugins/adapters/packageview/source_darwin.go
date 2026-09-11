@@ -14,17 +14,25 @@ import (
 )
 
 // Darwin has no O_PATH -> data-descriptor upgrade in the Go/xsys seam.
-// This profile therefore requires a READ-ONLY LOCAL APFS volume. The held
-// directory plus immutable directory entry pins an object before any data open.
-// A privileged remount, hostile mount namespace or underlying block-device
-// writer is outside the profile. Writable APFS is deliberately unavailable.
-// In particular O_EVTONLY and /dev/fd are NOT used to upgrade file access.
+// This profile therefore requires a READ-ONLY LOCAL APFS volume, UNLESS the
+// caller supplied a matching GeneratedStaging proof (see openSource), in
+// which case only this exact, caller-proven directory is exempt from the
+// read-only requirement; it must still be local APFS. The held directory plus
+// immutable directory entry pins an object before any data open. A privileged
+// remount, hostile mount namespace or underlying block-device writer is
+// outside the profile. Arbitrary writable APFS remains deliberately
+// unavailable. In particular O_EVTONLY and /dev/fd are NOT used to upgrade
+// file access.
 type source struct {
 	root       *os.Root
 	anchor     *os.File
 	legacyInfo os.FileInfo
 	dev        int32
 	fsid       unix.Fsid
+	// trustedWritable is set only when openSource verified a GeneratedStaging
+	// proof against this exact opened directory. It never widens to a
+	// separately opened or path-resolved object.
+	trustedWritable bool
 }
 type pinned struct {
 	file   *os.File // owned parent directory, NOT a data handle to the entry
@@ -33,17 +41,24 @@ type pinned struct {
 	source *source
 }
 
-func darwinFS(fd int) (unix.Statfs_t, error) {
+// darwinFS enforces the local-APFS profile. trustedWritable, which only
+// openSource can set (and only after a live-handle identity match), is the
+// sole thing that exempts a source from the MNT_RDONLY requirement; MNT_LOCAL
+// and the apfs filesystem type are always required, trusted or not.
+func darwinFS(fd int, trustedWritable bool) (unix.Statfs_t, error) {
 	var fs unix.Statfs_t
 	if e := unix.Fstatfs(fd, &fs); e != nil {
 		return fs, e
 	}
-	if unix.ByteSliceToString(fs.Fstypename[:]) != "apfs" || fs.Flags&(unix.MNT_RDONLY|unix.MNT_LOCAL) != unix.MNT_RDONLY|unix.MNT_LOCAL {
+	if unix.ByteSliceToString(fs.Fstypename[:]) != "apfs" || fs.Flags&unix.MNT_LOCAL == 0 {
+		return fs, fail("filesystem_unavailable")
+	}
+	if !trustedWritable && fs.Flags&unix.MNT_RDONLY == 0 {
 		return fs, fail("filesystem_unavailable")
 	}
 	return fs, nil
 }
-func openSource(name string) (_ *source, err error) {
+func openSource(name string, generated GeneratedStaging) (_ *source, err error) {
 	if n := strings.TrimRight(name, "/"); n != "" {
 		name = n
 	}
@@ -73,7 +88,16 @@ func openSource(name string) (_ *source, err error) {
 	if e != nil || !os.SameFile(before, opened) {
 		return nil, fail("source_changed")
 	}
-	fs, e := darwinFS(fd)
+	// A supplied proof must match the exact object just opened by path, or the
+	// call fails closed: a stale/mismatched proof is never silently downgraded
+	// to the ordinary strict profile, since that would mask a swapped root.
+	if generated.present() {
+		if !generated.matches(opened) {
+			return nil, fail("generated_staging_mismatch")
+		}
+		s.trustedWritable = true
+	}
+	fs, e := darwinFS(fd, s.trustedWritable)
 	if e != nil {
 		return nil, e
 	}
@@ -160,7 +184,7 @@ func (s *source) pin(rel string, nofollow bool) (*pinned, error) {
 		if e != nil {
 			return nil, e
 		}
-		fs, e := darwinFS(int(dir.Fd()))
+		fs, e := darwinFS(int(dir.Fd()), s.trustedWritable)
 		if e != nil || fs.Fsid != s.fsid {
 			dir.Close()
 			return nil, syscall.EXDEV
@@ -235,7 +259,7 @@ func (p *pinned) reopen(directory bool) (*os.File, error) {
 	if (directory && !p.info.IsDir()) || (!directory && !p.info.Mode().IsRegular()) {
 		return nil, fail("wrong_kind")
 	}
-	fs, e := darwinFS(int(p.file.Fd()))
+	fs, e := darwinFS(int(p.file.Fd()), p.source.trustedWritable)
 	if e != nil || fs.Fsid != p.source.fsid {
 		return nil, fail("filesystem_unavailable")
 	}
@@ -249,7 +273,7 @@ func (p *pinned) reopen(directory bool) (*os.File, error) {
 		return nil, e
 	}
 	f := os.NewFile(uintptr(fd), "source-data")
-	openedFS, e := darwinFS(fd)
+	openedFS, e := darwinFS(fd, p.source.trustedWritable)
 	if e != nil || openedFS.Fsid != p.source.fsid {
 		f.Close()
 		return nil, fail("filesystem_unavailable")

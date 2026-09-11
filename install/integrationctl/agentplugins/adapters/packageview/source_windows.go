@@ -303,7 +303,13 @@ func (s *source) remember(f *os.File, outside ...bool) (*pinned, error) {
 	winInfos.Unlock()
 	return &pinned{dup, info}, nil
 }
-func openSource(name string) (_ *source, err error) { return openSourceWithMetadataStage(name, nil) }
+
+// Windows' profile already accepts local fixed-drive NTFS without a read-only
+// requirement, so a generated-staging proof adds nothing here and is
+// intentionally ignored.
+func openSource(name string, _ GeneratedStaging) (_ *source, err error) {
+	return openSourceWithMetadataStage(name, nil)
+}
 func openSourceWithMetadataStage(name string, stage func(*os.File, string)) (_ *source, err error) {
 	return openWindowsRoot(name, winCapturedSource, stage)
 }

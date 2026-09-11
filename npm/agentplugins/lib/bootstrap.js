@@ -125,6 +125,11 @@ async function verifyLocalProofAsset(file, expected) {
 
 async function ensureBinary(options = {}) {
   const packageRoot = options.packageRoot || path.resolve(__dirname, "..");
+  // lstat detects dangling descriptors too; malformed new metadata never falls back.
+  try {
+    fs.lstatSync(path.join(packageRoot, "public-release.json"));
+    return require("./public-authoring").ensureBinary("agentplugins", { ...options, packageRoot });
+  } catch (error) { if (error.code !== "ENOENT") throw error; }
   const platformInfo = detectPlatform(options.platform, options.arch);
   const release = loadRelease(packageRoot, platformInfo);
   const root = options.cacheRoot || cacheRoot(options.environment, options.platform);

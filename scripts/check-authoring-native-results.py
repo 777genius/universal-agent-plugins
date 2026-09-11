@@ -249,6 +249,13 @@ def check(root):
         scaffold_package = "github.com/777genius/plugin-kit-ai/cli/internal/authoring/scaffold"
         require((scaffold_package, "TestDeniedParent") in passed, "missing mandatory parent permission denial")
         command_package = "github.com/777genius/plugin-kit-ai/cli/internal/authoring/commands"
+        harness = "TestPackedInstallerSourceHarness"
+        require((command_package, harness) in discovered, "missing source harness discovery")
+        require(not any(t == "TestPackedGeneratedPackagesReachExistingInstallerPlanner" for _, t in discovered),
+                "packed acceptance must require explicit packedci tag")
+        for name in (harness, *(harness + "/" + lane for lane in
+                     ("skill", "mcp-remote", "mcp-stdio", "hybrid-remote", "hybrid-stdio"))):
+            require((command_package, name) in passed, "missing mandatory source harness: " + name)
         for contract in ("generated-skill", "skills-init", "static-validation", "duplicate-unchanged",
                          "readiness", "strict-flags", "malformed-skill", "sdk-static-only"):
             test = "TestNativeBinaryLifecycle/" + contract
