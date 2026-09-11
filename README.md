@@ -261,7 +261,7 @@ init → validate → inspect → static test loop and an installer planner hand
 one standard authoring engine. This is unreleased preview documentation, not
 an announcement that `plugin-kit-ai@2` is available on npm. Public deployment
 remains gated on release acceptance; the installer instructions above retain
-their existing behavior.
+their existing behavior. See the [Use / Build quickstart](https://777genius.github.io/universal-agent-plugins/docs/en/guide/quickstart.html).
 
 Authoring validation and project doctor are distinct from installer
 `agentplugins validate` and `agentplugins doctor`. Static checks do not prove
@@ -297,7 +297,7 @@ describe the preserved v1 workflow, not the unreleased standard authoring MVP.
 `plugin-kit-ai` keeps authored source under `plugin/`, generates the supported outputs you need, and helps you validate the repo before handoff. This includes supported outputs for Claude, Codex, Gemini, Cursor, and OpenCode where the repo shape allows it. The honest promise is `one repo / many supported outputs`, not fake parity everywhere.
 
 overview: [plugin-kit-ai documentation](https://github.com/777genius/universal-agent-plugins/blob/9beca10448ac50fbe526a52101d1433a12471980/website/source/en/index.md)
-fastest start: [Quickstart](https://github.com/777genius/universal-agent-plugins/blob/9beca10448ac50fbe526a52101d1433a12471980/website/source/en/guide/quickstart.md)
+fastest start: [Quickstart](https://777genius.github.io/universal-agent-plugins/docs/en/guide/quickstart.html)
 choose by job first: [Choose What You Are Building](https://github.com/777genius/universal-agent-plugins/blob/9beca10448ac50fbe526a52101d1433a12471980/website/source/en/guide/choose-what-you-are-building.md)
 one repo, many outputs: [What You Can Build](https://github.com/777genius/universal-agent-plugins/blob/9beca10448ac50fbe526a52101d1433a12471980/website/source/en/guide/what-you-can-build.md)
 honest caveat: [Support Boundary](https://github.com/777genius/universal-agent-plugins/blob/9beca10448ac50fbe526a52101d1433a12471980/website/source/en/reference/support-boundary.md)

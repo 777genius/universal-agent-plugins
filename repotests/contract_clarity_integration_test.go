@@ -288,7 +288,7 @@ func TestContractClarity_RuntimeMetadataAndDocsStayAligned(t *testing.T) {
 	mustContain(t, historicalReadme, "supported outputs for Claude, Codex, Gemini, Cursor, and OpenCode where the repo shape allows it")
 	mustContain(t, historicalReadme, "The honest promise is `one repo / many supported outputs`, not fake parity everywhere")
 	mustContain(t, historicalReadme, "overview: [plugin-kit-ai documentation](https://github.com/777genius/universal-agent-plugins/blob/9beca10448ac50fbe526a52101d1433a12471980/website/source/en/index.md)")
-	mustContain(t, historicalReadme, "fastest start: [Quickstart](https://github.com/777genius/universal-agent-plugins/blob/9beca10448ac50fbe526a52101d1433a12471980/website/source/en/guide/quickstart.md)")
+	mustContain(t, historicalReadme, "fastest start: [Quickstart](https://777genius.github.io/universal-agent-plugins/docs/en/guide/quickstart.html)")
 	mustContain(t, historicalReadme, "choose by job first: [Choose What You Are Building](https://github.com/777genius/universal-agent-plugins/blob/9beca10448ac50fbe526a52101d1433a12471980/website/source/en/guide/choose-what-you-are-building.md)")
 	mustContain(t, historicalReadme, "one repo, many outputs: [What You Can Build](https://github.com/777genius/universal-agent-plugins/blob/9beca10448ac50fbe526a52101d1433a12471980/website/source/en/guide/what-you-can-build.md)")
 	mustContain(t, historicalReadme, "honest caveat: [Support Boundary](https://github.com/777genius/universal-agent-plugins/blob/9beca10448ac50fbe526a52101d1433a12471980/website/source/en/reference/support-boundary.md)")
