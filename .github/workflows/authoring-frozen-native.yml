@@ -1,0 +1,194 @@
+name: Frozen Authoring Native Observations
+
+# Frozen inputs only. No automatic event, source build, signing or publication.
+# Local closed receipts are not authenticated provider admission. Whole-OS
+# observation and real installer services remain required execution prerequisites.
+on:
+  workflow_dispatch:
+    inputs:
+      source_sha:
+        description: Exact prepared source and producer workflow revision
+        required: true
+        type: string
+      preparation_run:
+        description: Exact completed preparation run ID
+        required: true
+        type: string
+      preparation_attempt:
+        description: Exact completed preparation attempt
+        required: true
+        type: string
+      artifact_id:
+        description: Exact preparation artifact ID, never a name or latest selector
+        required: true
+        type: string
+      artifact_sha256:
+        description: Independently retained provider ZIP digest
+        required: true
+        type: string
+      receipt_sha256:
+        description: Independently retained preparation receipt digest
+        required: true
+        type: string
+      pair_sha256:
+        description: Independently retained pair marker digest
+        required: true
+        type: string
+      candidate_sha256:
+        description: Independently retained candidate digest
+        required: true
+        type: string
+      projection_pins:
+        description: Exact two-product manifest and checksum pins as bounded JSON
+        required: true
+        type: string
+      host_contract:
+        description: Exact JSON target, agent_version and go_sha256; six targets, excluded execution stays pending
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: frozen-native-${{ inputs.source_sha }}-${{ inputs.artifact_id }}-${{ fromJSON(inputs.host_contract).target }}
+  cancel-in-progress: false
+jobs:
+  linux-amd64:
+    if: ${{ github.event_name == 'workflow_dispatch' && (fromJSON(inputs.host_contract).target == 'linux-amd64' || fromJSON(inputs.host_contract).target == 'linux-arm64') }}
+    runs-on: ${{ fromJSON(inputs.host_contract).target == 'linux-arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
+    timeout-minutes: 25
+    permissions:
+      contents: read
+      actions: read
+    env:
+      PATH: /usr/local/bin:/usr/bin:/bin
+      NATIVE_TARGET: ${{ fromJSON(inputs.host_contract).target }}
+      AGENT_VERSION: ${{ fromJSON(inputs.host_contract).agent_version }}
+      SOURCE_SHA: ${{ inputs.source_sha }}
+      WORKFLOW_SHA: ${{ github.sha }}
+      PREPARATION_RUN: ${{ inputs.preparation_run }}
+      PREPARATION_ATTEMPT: ${{ inputs.preparation_attempt }}
+      ARTIFACT_ID: ${{ inputs.artifact_id }}
+      ARTIFACT_SHA256: ${{ inputs.artifact_sha256 }}
+      RECEIPT_SHA256: ${{ inputs.receipt_sha256 }}
+      PAIR_SHA256: ${{ inputs.pair_sha256 }}
+      CANDIDATE_SHA256: ${{ inputs.candidate_sha256 }}
+      PROJECTION_PINS: ${{ inputs.projection_pins }}
+      HOST_GO_SHA256: ${{ fromJSON(inputs.host_contract).go_sha256 }}
+      HOST_CONTRACT: ${{ inputs.host_contract }}
+    steps:
+      - name: Validate exact read-only selection before acquisition
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${GITHUB_REPOSITORY}" = "777genius/universal-agent-plugins"
+          [[ "${SOURCE_SHA}" =~ ^[0-9a-f]{40}$ && ! "${SOURCE_SHA}" =~ ^0{40}$ ]]
+          test "${SOURCE_SHA}" = "${WORKFLOW_SHA}"
+          [[ "${AGENT_VERSION}" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]
+          case "${NATIVE_TARGET}" in linux-amd64|linux-arm64) ;; *) exit 1 ;; esac
+          for value in "${PREPARATION_RUN}" "${PREPARATION_ATTEMPT}" "${ARTIFACT_ID}"; do
+            [[ "${value}" =~ ^[1-9][0-9]{0,14}$ ]]
+          done
+          test "${PREPARATION_ATTEMPT}" -le 1000
+          for value in "${ARTIFACT_SHA256}" "${RECEIPT_SHA256}" "${PAIR_SHA256}" "${CANDIDATE_SHA256}" "${HOST_GO_SHA256}"; do
+            [[ "${value}" =~ ^[0-9a-f]{64}$ && ! "${value}" =~ ^0{64}$ ]]
+          done
+          test "${#PROJECTION_PINS}" -le 1024
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.source_sha }}
+          persist-credentials: false
+      - name: Check source without changing history
+        run: test "$(git rev-parse HEAD)" = "${SOURCE_SHA}"
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22.21.1
+          package-manager-cache: false
+      - name: Validate the closed selected host contract
+        run: |
+          node <<'NODE'
+          const c = require('./npm/agentplugins/scripts/dual-authoring-candidate');
+          const text = process.env.HOST_CONTRACT;
+          if (Buffer.byteLength(text) > 512) throw Error('bounded host contract required');
+          const value = JSON.parse(text);
+          c.keys(value, ['target', 'agent_version', 'go_sha256'], 'host contract');
+          if (!c.TARGETS.includes(value.target) || !['linux-amd64', 'linux-arm64'].includes(value.target))
+            throw Error('NATIVE_EXECUTION_PENDING');
+          if (value.target !== process.env.NATIVE_TARGET || value.agent_version !== process.env.AGENT_VERSION ||
+              value.go_sha256 !== process.env.HOST_GO_SHA256) throw Error('host contract binding');
+          NODE
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: 1.25.13
+          cache: false
+      - name: Acquire and extract the same checked preparation ZIP
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const p = require('./npm/agentplugins/scripts/authoring-promotion');
+          const c = require('./npm/agentplugins/scripts/dual-authoring-candidate');
+          const scratch = fs.mkdtempSync(path.join(process.env.RUNNER_TEMP, 'native-acquisition-'));
+          const pin = { run_id: Number(process.env.PREPARATION_RUN),
+            run_attempt: Number(process.env.PREPARATION_ATTEMPT),
+            artifact_id: Number(process.env.ARTIFACT_ID), artifact_sha256: process.env.ARTIFACT_SHA256 };
+          const file = p.acquireArtifact(pin, p.WORKFLOW, process.env.SOURCE_SHA, scratch);
+          const versions = { agentplugins: process.env.AGENT_VERSION, 'plugin-kit-ai': '2.0.0' };
+          const files = ['preparation-run.json', 'candidate-identity.json', 'candidate/candidate.json', 'pair-prepared.json',
+            ...c.PRODUCTS.flatMap(product => [...c.TARGETS.map(target => `${product}/${c.assetName(product, versions[product], target)}`),
+              `${product}/checksums.txt`, `${product}/release-manifest.json`])];
+          p.extractArtifact(file, pin, 'preparation', files, path.join(process.env.RUNNER_TEMP, 'frozen-inputs'), scratch);
+          NODE
+      - name: Inspect host Go and execute the fixed pair journey
+        shell: bash
+        run: |
+          set -euo pipefail
+          export HOST_GO="$(command -v go)"
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const c = require('./npm/agentplugins/scripts/dual-authoring-candidate');
+          const root = path.join(process.env.RUNNER_TEMP, 'frozen-inputs');
+          const pair = c.readFile(path.join(root, 'pair-prepared.json'));
+          if (c.digest(pair) !== process.env.PAIR_SHA256) throw Error('pair pin');
+          const identity = JSON.parse(pair).identity;
+          if (identity.commit !== process.env.SOURCE_SHA || identity.versions.agentplugins !== process.env.AGENT_VERSION) throw Error('source/version pin');
+          const producer = { repository: process.env.GITHUB_REPOSITORY,
+            workflow: '.github/workflows/authoring-frozen-native.yml', source: process.env.SOURCE_SHA,
+            workflow_sha: process.env.WORKFLOW_SHA, run_id: Number(process.env.GITHUB_RUN_ID),
+            run_attempt: Number(process.env.GITHUB_RUN_ATTEMPT) };
+          const options = { root, target: process.env.NATIVE_TARGET, pins: { identity, candidate_sha256: process.env.CANDIDATE_SHA256,
+            pair_marker_sha256: process.env.PAIR_SHA256, products: JSON.parse(process.env.PROJECTION_PINS) },
+            preparation: { sha256: process.env.RECEIPT_SHA256, producer: { ...producer,
+              workflow: '.github/workflows/agentplugins-release.yml', run_id: Number(process.env.PREPARATION_RUN),
+              run_attempt: Number(process.env.PREPARATION_ATTEMPT) } }, producer,
+            go: process.env.HOST_GO, go_sha256: process.env.HOST_GO_SHA256,
+            output: path.join(process.env.RUNNER_TEMP, 'frozen-native-evidence'),
+            work: path.join(process.env.RUNNER_TEMP, 'frozen-native-work') };
+          fs.writeFileSync(path.join(process.env.RUNNER_TEMP, 'native-options.json'), c.encode(options), { flag: 'wx', mode: 0o600 });
+          NODE
+          node npm/agentplugins/scripts/authoring-native-qualification.js "${RUNNER_TEMP}/native-options.json"
+      - name: Retain bounded observations or failure diagnostics
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: frozen-native-${{ fromJSON(inputs.host_contract).target }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/frozen-native-evidence/*
+          if-no-files-found: error
+          retention-days: 7
+  excluded-native-execution:
+    if: ${{ github.event_name == 'workflow_dispatch' && fromJSON(inputs.host_contract).target != 'linux-amd64' && fromJSON(inputs.host_contract).target != 'linux-arm64' }}
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - name: Preserve excluded execution as an unresolved failure
+        run: |
+          echo 'NATIVE_EXECUTION_PENDING: Windows and writable macOS are not enabled by portable source.' >&2
+          echo 'No terminal emitted. No excluded-platform runner, product invocation or diagnosis.' >&2
+          exit 1
+# Every target still needs an actual supported observation boundary, scanner/feed
+# custody and native execution. The original authoring-native security matrix is
+# separate and unchanged. A failure or skipped job never supplies terminal proof.

@@ -86,9 +86,25 @@ function freezeSelected(root, release) {
   return binary;
 }
 
+// A single digest over the complete canonical identity tuple (namespace, mode,
+// candidate digest, product, version, target, exact binary digest) keeps the
+// resolved Windows path short and constant-width while still separating every
+// distinguishing field; truncating directory names cannot bound this because
+// the fixed suffix already approaches legacy MAX_PATH on its own.
+function cacheIdentity(product, target, release) {
+  return c.digest(c.encode({
+    namespace: "dual-authoring-npm-cache/v2",
+    authoring_mode: release.descriptor.authoring_mode,
+    candidate_sha256: release.descriptor.candidate_sha256,
+    product,
+    version: release.version,
+    target,
+    binary_sha256: release.asset.binary.sha256,
+  }));
+}
+
 function cachePath(root, product, target, release) {
-  return path.join(root, "dual-authoring-npm-v1", release.descriptor.authoring_mode,
-    release.descriptor.candidate_sha256, product, release.version, target, release.asset.binary.sha256, release.asset.binary.file);
+  return path.join(root, "v2", cacheIdentity(product, target, release), release.asset.binary.file);
 }
 
 // hooks are internal fault/observation seams for offline structural tests. They

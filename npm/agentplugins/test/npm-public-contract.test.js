@@ -2,6 +2,7 @@
 
 const assert = require("node:assert/strict");
 const crypto = require("node:crypto");
+const cp = require("node:child_process");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
@@ -11,6 +12,7 @@ const {
   validateAuditSignatures,
   validateDownloadedTarball,
   validatePackJSON,
+  validateProductPackJSON,
   validatePublicMetadata,
   validateSLSAAttestation
 } = require("../scripts/npm-public-contract");
@@ -128,7 +130,7 @@ test("public npm metadata and downloaded pack bind the staged package identity",
     /publisher identity is not GitHub Actions/
   );
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "npm-public-contract-"));
-  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  t.after(() => cp.execFileSync("rm", ["-r", "--", root]));
   fs.writeFileSync(path.join(root, value.pack[0].filename), value.body);
   assert.equal(
     validateDownloadedTarball(value.pack, root, value.version, value.integrity, value.shasum),
@@ -141,7 +143,7 @@ test("npm 12 object-shaped pack JSON preserves the exact package identity", (t) 
   const npm12 = { "universal-agent-plugins": structuredClone(value.pack[0]) };
   assert.equal(validatePackJSON(npm12, value.version), npm12["universal-agent-plugins"]);
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "npm-public-contract-npm12-"));
-  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  t.after(() => cp.execFileSync("rm", ["-r", "--", root]));
   fs.writeFileSync(path.join(root, value.pack[0].filename), value.body);
   assert.equal(
     validateDownloadedTarball(npm12, root, value.version, value.integrity, value.shasum),
@@ -276,7 +278,7 @@ test("public npm metadata fails closed for every reviewed identity field", () =>
 test("downloaded public npm bytes and pack JSON reject staged digest mismatches", (t) => {
   const value = fixture();
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "npm-public-contract-negative-"));
-  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  t.after(() => cp.execFileSync("rm", ["-r", "--", root]));
   fs.writeFileSync(path.join(root, value.pack[0].filename), Buffer.from("tampered"));
   assert.throws(
     () => validateDownloadedTarball(value.pack, root, value.version, value.integrity, value.shasum),
@@ -288,4 +290,176 @@ test("downloaded public npm bytes and pack JSON reject staged digest mismatches"
     () => validateDownloadedTarball(wrongPack, root, value.version, value.integrity, value.shasum),
     /pack identity/
   );
+});
+
+const products = { agentplugins: "universal-agent-plugins", "plugin-kit-ai": "plugin-kit-ai" };
+const responseForms = {
+  array: record => [record],
+  object: record => ({ [record.name]: record })
+};
+function productRecord(product) {
+  const record = fixture().pack[0];
+  record.name = products[product];
+  record.filename = `${record.name}-${record.version}.tgz`;
+  return record;
+}
+
+for (const product of Object.keys(products)) for (const [form, wrap] of Object.entries(responseForms)) {
+  test(`C1 fixed pack ${product} ${form}: identity, shape and digest syntax`, () => {
+    const record = productRecord(product);
+    // npm carries additional informational fields; these are not a new schema.
+    record.files = [{ path: "package.json", size: 123, mode: 420 }];
+    assert.equal(validateProductPackJSON(wrap(record), product, record.version), record);
+    if (product === "agentplugins") assert.equal(validatePackJSON(wrap(record), record.version), record);
+    else assert.throws(() => validatePackJSON(wrap(record), record.version));
+    for (const mutation of [
+      x => { x.name = "lookalike"; },
+      x => { x.version = "1.2.4"; },
+      x => { x.filename = "../" + x.filename; },
+      x => { x.filename = x.filename.replace("1.2.3", "1.2.4"); },
+      x => { x.integrity = undefined; },
+      x => { x.integrity = 42; },
+      x => { x.integrity = "sha256-" + "a".repeat(86) + "=="; },
+      x => { x.integrity += "\n"; },
+      x => { x.integrity = "sha512-" + "A".repeat(85) + "B=="; },
+      x => { x.shasum = undefined; },
+      x => { x.shasum = 42; },
+      x => { x.shasum = "A".repeat(40); },
+      x => { x.shasum = "a".repeat(39); },
+      x => { x.shasum += "\n"; }
+    ]) {
+      const bad = structuredClone(record); mutation(bad);
+      assert.throws(() => validateProductPackJSON(wrap(bad), product, record.version));
+    }
+    for (const value of [null, false, "pack", [], [record, record], [null], {},
+      { lookalike: record }, { [record.name]: record, extra: record },
+      { [record.name]: [record] }]) {
+      assert.throws(() => validateProductPackJSON(value, product, record.version));
+    }
+    for (const version of [null, 123, "01.2.3", "1.2.3-beta.1", "1.2.3+build", "1.2.3\n"]) {
+      assert.throws(() => validateProductPackJSON(wrap(record), product, version));
+    }
+    for (const unknown of ["universal-agent-plugins", "other", "toString", null]) {
+      assert.throws(() => validateProductPackJSON(wrap(record), unknown, record.version), /unknown fixed npm product/);
+    }
+  });
+}
+
+test("C1 blob checks bind the helper while preserving both historical receipt inventories", t => {
+  const packing = require("../scripts/stage-dual-authoring-npm");
+  const publicPacking = require("../scripts/stage-authoring-npm");
+  const c = require("../scripts/dual-authoring-candidate");
+  const repo = path.resolve(__dirname, "../../..");
+  const helper = "npm/agentplugins/scripts/npm-public-contract.js";
+  const commit = "a".repeat(40);
+  const readFile = c.readFile;
+  let fault;
+  const requested = [];
+  // Simulated committed-source interface, not an accepted Git successor.
+  t.mock.method(cp, "execFileSync", (exe, args) => {
+    assert.equal(exe, "/usr/bin/git");
+    if (args[0] === "rev-parse") return Buffer.from(commit + "\n");
+    if (args[0] === "ls-tree") {
+      const name = args.at(-1); requested.push(name);
+      if (fault === "missing" && name === helper) return Buffer.from("");
+      const bytes = fs.readFileSync(path.join(repo, name));
+      const hash = crypto.createHash("sha1").update(`blob ${bytes.length}\0`).update(bytes).digest("hex");
+      bodies.set(hash, bytes);
+      return Buffer.from(`100644 blob ${hash}\t${name}\0`);
+    }
+    assert.equal(args[0], "cat-file"); return bodies.get(args[2]);
+  });
+  const bodies = new Map();
+  t.mock.method(c, "readFile", (file, ...rest) => fault === "dirty" && file === path.join(repo, helper) ?
+    Buffer.from("changed executing helper") : readFile(file, ...rest));
+  for (const [closure, allowlist] of [["private", packing.ALLOWLIST], ["public", publicPacking.ALLOWLIST]]) {
+    assert.equal(allowlist.includes(helper), false);
+    const source = packing.blobs(repo, commit, {}, closure);
+    assert.deepEqual(Object.keys(source), [...allowlist]);
+    assert.ok(requested.includes(helper));
+    for (const name of allowlist) assert.deepEqual(source[name].bytes, fs.readFileSync(path.join(repo, name)));
+    for (fault of ["missing", "dirty"]) {
+      assert.throws(() => packing.blobs(repo, commit, {}, closure), /required regular Git blob missing|executing stager differs/);
+    }
+    fault = undefined;
+    assert.throws(() => packing.blobs(repo, "b".repeat(40), {}, closure), /checkout HEAD/);
+  }
+});
+
+// Explicit offline tool provision only. Retain small fixtures under TMPDIR for
+// evidence; never import the native-building private-npm fixture suite.
+test("C1 packPackage real offline packs: both forms/products, same receipts, rejection before completion", {
+  skip: !process.env.UAP_C1_PACK_NPM
+}, t => {
+  const packing = require("../scripts/stage-dual-authoring-npm");
+  const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "c1-pack-consumer-"));
+  const npm = process.env.UAP_C1_PACK_NPM;
+  assert.ok(path.isAbsolute(npm));
+  const execFile = cp.execFileSync;
+  const actualRecords = {}, productBytes = {};
+  for (const product of Object.keys(products)) for (const [form, wrap] of Object.entries(responseForms)) {
+    const base = path.join(scratch, `${product}-${form}`); fs.mkdirSync(base);
+    const context = packing.npmContext(base);
+    const root = path.join(base, "package"); fs.mkdirSync(root);
+    const output = path.join(base, "output"); fs.mkdirSync(output);
+    const files = { "package.json": Buffer.from(JSON.stringify({
+      name: products[product], version: "1.2.3", private: true,
+      scripts: { prepack: "exit 91", prepare: "exit 92", postpack: "exit 93", postinstall: "exit 94" }
+    }) + "\n"), "README.md": Buffer.from("Offline fixed pack consumer fixture.\n") };
+    for (const [name, body] of Object.entries(files)) fs.writeFileSync(path.join(root, name), body, { mode: 0o644 });
+    let calls = 0;
+    const mock = t.mock.method(cp, "execFileSync", (exe, args, options) => {
+      if (exe !== process.execPath || args[0] !== npm) return execFile(exe, args, options);
+      calls++;
+      assert.deepEqual(args.slice(1), ["pack", "--ignore-scripts", "--offline", "--json", "--pack-destination", output]);
+      const response = JSON.parse(execFile(exe, args, options));
+      const record = validateProductPackJSON(response, product, "1.2.3");
+      actualRecords[product] = record;
+      return Buffer.from(JSON.stringify(wrap(record)));
+    });
+    const options = { node: process.execPath, npm, output, identity: { versions: { [product]: "1.2.3" } } };
+    const receipt = packing.packPackage(product, files, root, options, context);
+    mock.mock.restore();
+    assert.equal(calls, 1);
+    const body = fs.readFileSync(path.join(output, receipt.file));
+    assert.deepEqual(receipt, { file: `${products[product]}-1.2.3.tgz`,
+      sha256: crypto.createHash("sha256").update(body).digest("hex"), size: body.length,
+      integrity: "sha512-" + crypto.createHash("sha512").update(body).digest("base64") });
+    if (productBytes[product]) assert.deepEqual(body, productBytes[product]);
+    productBytes[product] = body;
+    assert.equal(actualRecords[product].shasum, crypto.createHash("sha1").update(body).digest("hex"));
+    assert.deepEqual(fs.readFileSync(path.join(context.root, product, "package/README.md")), files["README.md"]);
+    // Same bytes and real response, with one field corrupted. No extraction or
+    // downstream completion is allowed even when the other digest is correct.
+    for (const field of ["name", "version", "filename", "integrity", "shasum"]) {
+      const bad = { ...actualRecords[product], [field]: field === "integrity" ?
+        "sha512-" + Buffer.alloc(64).toString("base64") : field === "shasum" ? "0".repeat(40) : "wrong" };
+      let tarCalls = 0;
+      const rejection = t.mock.method(cp, "execFileSync", (exe, args) => {
+        if (exe === process.execPath && args[0] === npm) return Buffer.from(JSON.stringify(wrap(bad)));
+        tarCalls++; throw new Error("unexpected downstream tool");
+      });
+      const marker = path.join(output, "completion.json");
+      assert.throws(() => {
+        const pack = packing.packPackage(product, files, root, options, context);
+        packing.completeRecord(output, { pack });
+      }, /package identity|package-named record|differs from actual pack/);
+      rejection.mock.restore();
+      assert.equal(tarCalls, 0); assert.equal(fs.existsSync(marker), false);
+    }
+    fs.writeFileSync(path.join(output, receipt.file), Buffer.from("changed tarball bytes"));
+    const changed = t.mock.method(cp, "execFileSync", (exe, args) => {
+      assert.equal(exe, process.execPath); assert.equal(args[0], npm);
+      return Buffer.from(JSON.stringify(wrap(actualRecords[product])));
+    });
+    assert.throws(() => packing.packPackage(product, files, root, options, context), /integrity differs from actual pack/);
+    changed.mock.restore();
+  }
+});
+
+test("C1 packPackage rejects unknown products before invoking npm", t => {
+  const packing = require("../scripts/stage-dual-authoring-npm");
+  const run = t.mock.method(cp, "execFileSync", () => { throw new Error("unexpected tool"); });
+  assert.throws(() => packing.packPackage("toString", {}, "", {}, {}), /unknown fixed npm product/);
+  assert.equal(run.mock.callCount(), 0);
 });

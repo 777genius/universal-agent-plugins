@@ -158,3 +158,107 @@ test("hash and original facade cache helpers remain canonical", async () => {
   fs.unlinkSync(file); assert.equal(await v.validCachedBinary(file, PIN.sha256), false);
   assert.equal(typeof fsp.open, "function");
 });
+
+test("download owner receives opened inode on partial failure, and cancellation closes output", async () => {
+  const file = destination(), controller = new AbortController();
+  let opened;
+  await assert.rejects(v.downloadFile(URL, file, PIN, {
+    signal: controller.signal,
+    onOpen: stat => { opened = stat; controller.abort(); },
+    request: transport((res, req) => { req.emit("response", res); res.write(BODY.subarray(0, 2)); })
+  }), /cancelled/);
+  assert.ok(opened);
+  const named = fs.lstatSync(file);
+  assert.equal(named.ino, opened.ino); assert.equal(named.dev, opened.dev);
+  fs.unlinkSync(file); assert.equal(fs.existsSync(file), false);
+});
+
+test("download open observer failure settles after close without hiding its owned inode", async () => {
+  const file = destination(); let opened;
+  await assert.rejects(v.downloadFile(URL, file, PIN, {
+    onOpen: stat => { opened = stat; throw new Error("injected owner observation failure"); },
+    request: transport((res, req) => { req.emit("response", res); res.end(BODY); })
+  }), /owner observation failure/);
+  assert.equal(fs.lstatSync(file).ino, opened.ino);
+  fs.unlinkSync(file);
+});
+
+for (const scenario of [
+  { redirects: 1, cancel: true },
+  { redirects: 3, cancel: true },
+  { redirects: 3, cancel: true, oldError: true },
+  { redirects: 3, cancel: false, oldError: true }
+]) {
+  test(`redirect chain closes before settlement ${JSON.stringify(scenario)}`, async t => {
+    const file = destination(), controller = new AbortController();
+    const requests = [], responses = [], sockets = [], events = [];
+    let output, opened;
+    const create = fs.createWriteStream;
+    t.mock.method(fs, "createWriteStream", (...args) => {
+      output = create(...args);
+      output.once("close", () => events.push("close"));
+      return output;
+    });
+    const request = (url, options) => {
+      assert.deepEqual(Object.keys(options.headers).sort(), ["Accept", "User-Agent"]);
+      assert.equal(url.hostname, requests.length ? "release-assets.githubusercontent.com" : "github.com");
+      const number = requests.length;
+      let sent = false;
+      const socket = new Duplex({
+        read() {},
+        write(chunk, encoding, callback) {
+          callback();
+          if (sent) return;
+          sent = true;
+          process.nextTick(() => this.push(Buffer.from(number < scenario.redirects
+            ? "HTTP/1.1 302 Found\r\nLocation: https://release-assets.githubusercontent.com/binary\r\nContent-Length: 100\r\nConnection: close\r\n\r\nx"
+            : `HTTP/1.1 200 OK\r\nContent-Length: ${BODY.length}\r\nConnection: close\r\n\r\n${BODY.subarray(0, 1)}`)));
+        }
+      });
+      socket.setTimeout = () => socket;
+      sockets.push(socket);
+      const req = http.get({ hostname: "fixture.invalid", headers: options.headers,
+        createConnection: () => socket });
+      req.once("response", res => responses.push(res));
+      req.on("error", () => events.push(`request-error-${number}`));
+      requests.push(req);
+      return req;
+    };
+    try {
+      const download = v.downloadFile(URL, file, PIN, {
+        request, signal: controller.signal,
+        onOpen: stat => {
+          opened = stat;
+          events.push("open");
+          if (scenario.oldError) requests[0].destroy(new Error("superseded request failed"));
+          // Let the real old ClientRequest error fire while its descendant is open.
+          setImmediate(() => {
+            if (scenario.cancel) controller.abort();
+            else { sockets.at(-1).push(BODY.subarray(1)); sockets.at(-1).push(null); }
+          });
+        }
+      }).then(() => {
+        events.push("resolved");
+        assert.equal(output.closed, true, "output must close before resolution");
+      }, error => {
+        events.push("rejected");
+        assert.equal(output.closed, true, "output must close before rejection");
+        throw error;
+      });
+      if (scenario.cancel) await assert.rejects(download, /cancelled/);
+      else { await download; assert.deepEqual(fs.readFileSync(file), BODY); }
+      assert.equal(requests.length, scenario.redirects + 1);
+      assert.equal(responses.length, requests.length);
+      for (const res of responses.slice(0, -1)) assert.equal(res.complete, false);
+      if (scenario.oldError) assert.ok(events.includes("request-error-0"));
+      assert.ok(events.indexOf("close") < events.indexOf(scenario.cancel ? "rejected" : "resolved"));
+      const named = fs.lstatSync(file);
+      assert.equal(named.ino, opened.ino); assert.equal(named.dev, opened.dev);
+    } finally {
+      controller.abort();
+      for (const req of requests) req.destroy();
+      if (output && !output.closed) await new Promise(resolve => output.once("close", resolve));
+      if (fs.existsSync(file)) fs.unlinkSync(file);
+    }
+  });
+}

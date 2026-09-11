@@ -142,7 +142,7 @@ func TestReviewInitCleanupFailurePrecedence(t *testing.T) {
 					if err != nil {
 						t.Fatal(err)
 					}
-					result, err := scaffold.Apply(fault, plan, scaffold.ApplyOptions{Destination: dest, Validate: func(ctx context.Context, stage string) error {
+					result, err := scaffold.Apply(fault, plan, scaffold.ApplyOptions{Destination: dest, Validate: func(ctx context.Context, stage string, _ *os.Root) error {
 						p, err := (project.Service{Scratch: scratch}).Read(ctx, stage)
 						if err != nil {
 							return err

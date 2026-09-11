@@ -17,7 +17,8 @@ async function main() {
   }
 
   const child = spawn(installResult.installedBinary, process.argv.slice(2), {
-    stdio: "inherit"
+    stdio: "inherit",
+    env: installResult.publicAuthoring ? require("../lib/public-authoring").childEnvironment() : process.env
   });
   child.on("error", (err) => {
     process.stderr.write(`plugin-kit-ai npm launcher: ${err.message}\n`);

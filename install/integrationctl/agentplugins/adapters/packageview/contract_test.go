@@ -3,6 +3,7 @@ package packageview
 import (
 	"context"
 	"errors"
+	"os"
 	"testing"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/packagedigest"
@@ -59,5 +60,59 @@ func TestLimitsAndSafeErrors(t *testing.T) {
 	var l Lease
 	if e := l.Close(); e != nil {
 		t.Fatal(e)
+	}
+}
+
+// GeneratedStaging is the only seam that can relax Darwin's read-only-mount
+// requirement. It must be impossible to build one without an already open,
+// live directory handle: a caller holding only a path string (every ordinary
+// validate/inspect/test request) can never obtain one, on any platform.
+func TestGeneratedStagingRequiresLiveHandle(t *testing.T) {
+	if _, e := NewGeneratedStaging(nil); e == nil {
+		t.Fatal("nil handle accepted")
+	}
+	var zero GeneratedStaging
+	if zero.present() {
+		t.Fatal("zero value reports present")
+	}
+	if zero.matches(nil) {
+		t.Fatal("zero value matches nil")
+	}
+	dir, e := os.OpenRoot(t.TempDir())
+	if e != nil {
+		t.Fatal(e)
+	}
+	g, e := NewGeneratedStaging(dir)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if !g.present() {
+		t.Fatal("live handle did not produce a present proof")
+	}
+	info, e := dir.Stat(".")
+	if e != nil {
+		t.Fatal(e)
+	}
+	if !g.matches(info) {
+		t.Fatal("proof does not match the directory it was built from")
+	}
+	other, e := os.OpenRoot(t.TempDir())
+	if e != nil {
+		t.Fatal(e)
+	}
+	defer other.Close()
+	otherInfo, e := other.Stat(".")
+	if e != nil {
+		t.Fatal(e)
+	}
+	if g.matches(otherInfo) {
+		t.Fatal("proof matched an unrelated directory")
+	}
+	if e := dir.Close(); e != nil {
+		t.Fatal(e)
+	}
+	// Close does not invalidate the already captured identity snapshot.
+	if !g.present() || !g.matches(info) {
+		t.Fatal("proof invalidated by closing the source handle")
 	}
 }

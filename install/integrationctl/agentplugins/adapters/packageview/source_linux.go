@@ -22,7 +22,10 @@ type pinned struct {
 	info os.FileInfo
 }
 
-func openSource(name string) (_ *source, err error) {
+// Linux's filesystem allowlist already permits ordinary writable local
+// filesystems (see the switch below), so a generated-staging proof adds
+// nothing here and is intentionally ignored.
+func openSource(name string, _ GeneratedStaging) (_ *source, err error) {
 	// A trailing slash must not hide a final symlink from Lstat.
 	if trimmed := strings.TrimRight(name, "/"); trimmed != "" {
 		name = trimmed
