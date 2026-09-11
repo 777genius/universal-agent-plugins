@@ -131,12 +131,37 @@ func readProducerWorkflow(t *testing.T, name string) producerWorkflow {
 	return workflow
 }
 
+// Some bash builds (notably Apple's frozen macOS system /bin/bash 3.2, still
+// what "bash" resolves to on hosted macOS runners) do not reliably abort a
+// script under set -e when a bare standalone [[ ]] fails: it is a compound
+// command, not a simple one, and errexit's "last command" exemption logic
+// misclassifies it even mid-script. Force an explicit exit with || so the
+// preflight scripts under test behave the same on every bash version this
+// runs on, without changing what the real production workflow executes.
+var (
+	bareConditionalLine = regexp.MustCompile(`(^|;)\s*\[\[.*\]\]$`)
+	caseConditionalArm  = regexp.MustCompile(`^(\S+\))\s+(\[\[.*?\]\])(.*?);;$`)
+)
+
+func hardenPreflightScript(script string) string {
+	lines := strings.Split(script, "\n")
+	for i, line := range lines {
+		indent := line[:len(line)-len(strings.TrimLeft(line, " \t"))]
+		trimmed := strings.TrimSpace(line)
+		switch {
+		case bareConditionalLine.MatchString(trimmed):
+			lines[i] = indent + trimmed + " || exit 1"
+		case caseConditionalArm.MatchString(trimmed):
+			m := caseConditionalArm.FindStringSubmatch(trimmed)
+			lines[i] = indent + m[1] + " " + m[2] + " || exit 1" + m[3] + ";;"
+		}
+	}
+	return strings.Join(lines, "\n")
+}
+
 func runProducerPreflight(t *testing.T, script string, values map[string]string, success bool) {
 	t.Helper()
-	// A resolved "bash" (not the fixed macOS system /bin/bash) is required:
-	// Apple's frozen bash 3.2 does not reliably abort on a failing bare [[ ]]
-	// under set -e, which would silently accept invalid preflight input.
-	command := exec.Command("bash", "-c", script)
+	command := exec.Command("bash", "-c", hardenPreflightScript(script))
 	command.Dir = t.TempDir()
 	command.Env = []string{"PATH=/usr/local/bin:/usr/bin:/bin"}
 	for key, value := range values {
@@ -1058,7 +1083,7 @@ func TestC1WorkflowPreflightNoEffects(t *testing.T) {
 						t.Fatal(err)
 					}
 				}
-				cmd := exec.Command("bash", "-c", job.Steps[0].Run)
+				cmd := exec.Command("bash", "-c", hardenPreflightScript(job.Steps[0].Run))
 				cmd.Dir = dir
 				cmd.Env = []string{"PATH=/usr/local/bin:" + bin + ":/usr/bin:/bin", "MARKER=" + filepath.Join(dir, "effect")}
 				for key, value := range good {
