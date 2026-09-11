@@ -1,5 +1,86 @@
 # Standard-First Authoring Engine Implementation Plan
 
+## Owner decision: accelerated MVP scope (2026-09-10)
+
+The current delivery target is **Milestone A**, shipped as the smallest coherent
+standard-first vertical slice. Phases 7-11 remain an approved roadmap, but they
+do not block the current MVP PR, draft qualification, or merge. Re-enter each
+later phase through its own bounded plan and PR after the MVP is stable.
+
+The accelerated MVP contains only:
+
+- one shared Go implementation behind `agentplugins author` and
+  `plugin-kit-ai`;
+- `init`, `validate`, `inspect`, `compat`, `doctor`, and offline `test`;
+- Skill and stdio/remote MCP templates that validate without running package
+  content;
+- local installer planning through `agentplugins add <path> --dry-run` in a
+  disposable client root;
+- truthful public documentation and historical v1 guidance;
+- draft artifacts and provenance sufficient to test the exact candidate.
+
+The accelerated MVP explicitly defers runtime execution, `dev`, `bootstrap`,
+normalize/import/migration, client projection generation, export/bundle,
+Directory submission, remote publishing, and legacy code isolation. Deferred
+commands stay absent from public help. Useful YAML implementation, dependencies,
+tests, templates, and design ideas remain preserved under the capability
+preservation contract; narrower `plugin.json` support is never deletion
+authorization.
+
+### Minimal evidence gate
+
+Run the following evidence once on the exact merge candidate:
+
+1. Focused unit and contract tests for changed boundaries, including forbidden
+   legacy reads, atomic filesystem behavior, entrypoint parity, and unchanged
+   installer safety.
+2. One genuine clean-root E2E through **each** public entrypoint:
+   `init -> validate -> inspect -> test -> local add --dry-run`, using only new
+   sandbox projects and fixture client homes. Compare normalized JSON contracts
+   and resulting package tree digests.
+   Package acquisition is exact-candidate and local: the E2E must never resolve
+   the authored package from a registry or `latest` tag. The production
+   installer security boundary remains enabled and may perform credential-free,
+   read-only requests to its pinned public Directory, Discovery, Security Index,
+   and scanner-release endpoints. Record that distinction in evidence; do not
+   claim the complete installer journey is offline and do not introduce a
+   test-only bypass into the release binary.
+3. Linux amd64 runs the complete E2E. Windows amd64 and macOS arm64 run packaged
+   launcher smoke for both entrypoints plus init/validate and cleanup. Other
+   released architectures require build/package checks, not duplicate full
+   product/runtime matrices.
+4. Exact-head required repository CI and one independent code review.
+5. Draft artifact identity, checksum, provenance, install, and readback. Public
+   release still requires separate owner approval for the concrete version.
+
+Do not require an eighteen-cell product/runtime matrix, four independent hosted
+workflow invocations, duplicate evidence replays, every package-manager channel,
+or phases 7-11 for this MVP. Existing tests that cheaply protect a real defect
+may remain, but their repetition is not a release gate. Do not weaken security,
+path containment, cancellation/cleanup, deterministic output, fail-closed
+verification, or the ban on real user-project execution.
+
+### Delivery choice
+
+Chosen: thin Milestone A release slice.
+
+- 🎯 confidence 9/10   🛡️ reliability 9/10   🧠 complexity 4/10
+- Approximate remaining change: 1,500-3,500 total changed lines, including
+  tests, CI fixes, wrappers and docs; 450-1,200 logical production lines.
+
+Alternatives rejected for the current delivery:
+
+- Complete phases 0-11 before merge: 🎯 5/10   🛡️ 8/10   🧠 10/10;
+  approximately 12,000-30,000 changed lines remain and useful delivery waits
+  behind unrelated migration/publication work.
+- Ship only wording and mocks: 🎯 4/10   🛡️ 2/10   🧠 2/10;
+  approximately 100-500 lines, but it does not satisfy the requested working
+  E2E and is not an acceptable substitute.
+
+Future hosted implementation and review workers use `gpt-5.6-sol`, reasoning
+effort `low`, service tier `default` (no fast), unless the owner changes this
+profile again.
+
 ## Owner clarification: preserve legacy capabilities (2026-09-06)
 
 This clarification controls every phase, inventory, worker assignment and
@@ -28,6 +109,76 @@ Historical v1 binaries alone do not satisfy code preservation. See
 [the preservation contract](./AUTHORING_CAPABILITY_PRESERVATION.md) and the
 Phase 11 inventory gate. Current standard CLI/npm work may continue; blanket
 legacy deletion is not authorized.
+
+## Owner decision: early public wording and site checkpoint (2026-09-08)
+
+The owner explicitly authorizes prioritizing a stable intermediate PR merge and
+public site update before the full v2 CLI release and phases 7-11. This is a
+partial delivery of this plan, not a smaller replacement for its full objective.
+It supersedes preparation-document rules that require D5 merely to publish
+truthful public wording; full executable release qualification still requires D5.
+
+Scope: replace obsolete primary positioning with clear Use plugins / Build
+plugins journeys, consistent maintained locales, canonical links and explicit
+availability labels. Describe unreleased standard authoring commands as
+preparation, never as installed or currently executable features. Preserve
+accurate instructions for currently available products and the historical v1
+reference, including redirects. Verify actual published versions before claiming
+availability; do not relabel an unreleased candidate as the current version.
+
+Implement a minimal explicit public-documentation boundary. The existing
+DOCS_PREPARATION_PREVIEW flag remains restricted to disposable non-published
+previews: do not enable it in production, remove the check without a replacement,
+or use noindex alone as proof of safe publication. Update conflicting preparation
+docs and their tests in the same bounded PR so subsequent agents see this owner
+decision. Do not create a second docs engine or a generic release platform.
+
+Checkpoint acceptance:
+
+- Every maintained locale distinguishes available installation from unreleased
+  authoring; no runnable future command is presented as current.
+- All Use/Build/history links and redirects resolve in the actual built site;
+  canonical-English fallback is explicit where a translation is absent.
+- Counter, geometry, catalog and affected navigation E2E pass with genuine
+  verified feeds, original assertions/timeouts and no masked retries.
+- The production-mode docs/landing build succeeds without the preview flag;
+  actual Pages assembly and public-boundary checks pass on the merge candidate.
+- Independent review and required CI cover the exact merge candidate. Merge a
+  dependency-safe, reversible checkpoint and verify the resulting deployed site.
+
+Do not hold this checkpoint for unrelated runtime, migration, export, publish or
+legacy-isolation phases. Do not merge the current preparation stack unchanged:
+main/master auto-deploys Pages, so establish and verify the boundary first.
+CLI asset release, npm/PyPI tags, Homebrew and native qualification remain
+separate gates; this checkpoint does not attest them or activate future commands.
+Useful YAML capabilities and all preservation constraints above remain intact.
+
+The preliminary 100-500 changed-line estimate is a target, not a guarantee.
+Re-estimate after bounded intake against the actual merge base; do not weaken
+acceptance or expand scope just to satisfy that number. Hosted workers use the
+current owner-selected profile recorded above: `gpt-5.6-sol`, reasoning `low`,
+service tier `default` (no fast).
+
+Checkpoint delivery evidence (2026-09-08): [PR #190](https://github.com/777genius/universal-agent-plugins/pull/190)
+merged as `dc28313ab6f567eb86eecac3ef903f79b584d4c3`.
+Final source head `e93a8ee0ceaba62befe42aa125c10c7c1aff5f8b` passed
+all applicable CI; the separate native Windows authoring rename-sharing test
+still failed and is not claimed as qualified. Production-artifact browser proof
+was 34 passing scenarios plus one tooltip failure; independent trace review
+identified an offscreen-focus scroll race, a one-line test positioning fix kept
+all assertions/timeouts, and the complete affected scenario passed without retry.
+This is composite evidence, not a fresh 35-test pass. Pages run 34170377916 was
+superseded by [34170488596](https://github.com/777genius/universal-agent-plugins/actions/runs/34170488596)
+on descendant `758c1656e1d3e6f1783b96638839486416921453` after independently
+merged PR #194. The newer deployment passed. Public HTTP readback on 2026-09-08 verified
+HTTP 200, availability wording and all 62 historical fragment IDs across five
+quickstarts, plus the create-plugin journey and history link. The owner lifted the storage pause for this task. Full deployed-site browser E2E
+then completed: 30 passed, 5 failed, no skipped tests or retries (179091.334 ms).
+All nine added locale/anchor/geometry cases passed. Five navigation/detail cases
+remain unresolved and are under independent hosted trace review; publication
+alone is not proof that this remaining acceptance is complete. PR #194 changes Windows init; its qualification is separate from
+PR #190 evidence and must be checked before carrying it into the authoring stack.
+This checkpoint does not complete phases 0-11 or release the new authoring CLI.
 
 ## Status
 
@@ -1619,6 +1770,10 @@ installer's ability to load otherwise usable package components.
 
 ## Phase 6 - Dual-entrypoint MVP release and documentation
 
+Delivery order: first deliver the owner-approved early public wording/site
+checkpoint above; then qualify and publish the full dual-entrypoint MVP. Public
+wording acceptance does not satisfy executable-release acceptance below.
+
 ### Summary
 
 Publish the proven core authoring slice through both command names before
@@ -1665,10 +1820,12 @@ building migration, advanced packaging, and remote publication features.
 ### Tests
 
 - install both entrypoints in fresh isolated environments;
-- run the same golden authoring flow through each;
+- run the same golden authoring flow through each once on Linux amd64;
 - compare JSON output and resulting tree digests;
-- upgrade/uninstall/reinstall smoke on supported OSes;
-- npm provenance/checksum/cache tests;
+- run packaged launcher/init/validate/cleanup smoke on Windows amd64 and macOS
+  arm64; use build/package checks for other released architectures;
+- verify only the package channels included in this MVP candidate;
+- verify draft provenance, checksum, install and readback;
 - docs build, link checker, and landing smoke;
 - v1-to-v2 invocation tests for every removed, renamed, or deferred command.
 
@@ -1682,7 +1839,9 @@ package.
 ### Acceptance criteria
 
 - both entrypoints execute the same authoring engine revision;
-- Milestone A is usable without a registry, account, OAuth, or client install;
+- Milestone A authors and acquires the candidate package without a package
+  registry, account, OAuth, or preinstalled client. Local installer planning may
+  read the production public security feeds required by its fail-closed policy;
 - the main docs contain no current workflow requiring `plugin/plugin.yaml`;
 - a new user can distinguish install versus author in one screen;
 - deferred commands are absent; bounded v1 error shims never claim success or
@@ -2063,6 +2222,10 @@ project while it is migrated.
 
 ## Test strategy
 
+For the accelerated MVP, the minimal evidence gate near the top of this plan
+controls. The broader strategy below applies when the corresponding deferred
+phase is entered; it is not cumulative pre-MVP work.
+
 ### Unit tests
 
 - command factories and flag isolation;
@@ -2114,17 +2277,23 @@ At minimum:
 ## CI gates
 
 Each bounded PR runs only the relevant focused suite plus required repository
-checks. The final release candidate runs:
+checks. The accelerated MVP merge candidate runs:
 
 1. Go tests for standard domain, loader, authoring, installer, and command roots.
 2. Conformance adapter suite.
 3. Template golden and generated-package validation matrix.
 4. Static forbidden-import/forbidden-manifest checks.
-5. Cross-platform build and launcher smoke.
-6. Deterministic archive comparison.
-7. npm/Homebrew/PyPI package verification where affected.
+5. Full Linux amd64 E2E for both entrypoints, packaged launcher/init/validate
+   smoke on Windows amd64 and macOS arm64, and build/package checks for other
+   released architectures.
+6. Deterministic generated-tree comparison between the two entrypoints.
+7. Verification for only the package channels changed by the candidate.
 8. Documentation build and link check.
-9. One full clean-clone E2E of each public authoring entrypoint.
+9. One full clean-clone E2E of each public authoring entrypoint on Linux amd64.
+
+The full eighteen-cell runtime matrix, repeated cross-host evidence replay, and
+four-invocation orchestration are not MVP gates. Add them later only when a
+specific supported runtime, publisher, or custody boundary requires them.
 
 Do not block independent implementation work on long CI when focused gates are
 already available. Do not rerun a fully proven exact head unless code,
@@ -2161,6 +2330,9 @@ may include the selected root only when explicitly requested.
   tool-owned staging output.
 
 ## Proposed PR sequence and review budget
+
+For the accelerated delivery, PRs 1-8 comprise the active roadmap through
+Milestone A. Items 9-16 are deferred backlog and do not block the current MVP.
 
 Approximate implementation budget: Phase 0 counts handwritten ADR/plan lines;
 Phases 1-10 estimate production code and exclude tests, generated fixtures, and
@@ -2255,10 +2427,15 @@ Exit criteria:
   shared MCP, and client-specific activation outcomes;
 - no legacy manifest emitted or read;
 - installer tests remain green;
-- both native entrypoints and supported wrappers are released from the same
-  engine revision.
+- both native entrypoints and included wrappers are qualified from the same
+  engine revision as draft artifacts; public release requires the separate
+  version-specific owner approval;
+- the minimal evidence gate above passes on the exact merge candidate.
 
 ### Milestone B - Useful parity
+
+Deferred after the accelerated MVP. It is not part of the current PR's
+completion denominator.
 
 Adds:
 
@@ -2281,6 +2458,9 @@ Exit criteria:
 
 ### Milestone C - Publish and capability preservation
 
+Deferred after Milestone B. It is not part of the current PR's completion
+denominator.
+
 Adds:
 
 - GitHub release and Directory submission;
@@ -2291,6 +2471,11 @@ adapted. Re-estimate after Milestone B rather than inventing a large platform
 up front.
 
 ## Final acceptance criteria
+
+The checklist below remains the **full roadmap** acceptance. For the current
+accelerated delivery, completion means Milestone A plus its minimal evidence
+gate; unchecked Milestone B/C items are tracked backlog, not a reason to hold
+the MVP merge.
 
 The program is complete when all of the following are true:
 

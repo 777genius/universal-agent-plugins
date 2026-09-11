@@ -7,12 +7,44 @@ on:
         description: Exact stable tag, for example agentplugins-v0.1.0
         required: true
       producer_mode:
-        description: Bounded release contract; publishes verified GitHub binary assets only
+        description: Binary-only publication, read-only paired preparation, or explicit promotion
         required: true
         default: binary-only
         type: choice
         options:
           - binary-only
+          - paired-preparation
+          - paired-promotion
+          - paired-input-provenance
+      source_sha:
+        description: Exact source and workflow SHA (required for paired preparation)
+        required: false
+      plugin_kit_version:
+        description: Explicit plugin-kit version (paired first cut requires 2.0.0)
+        required: false
+      preparation_run:
+        description: Exact completed preparation run ID (promotion or input provenance)
+        required: false
+      preparation_attempt:
+        description: Exact preparation run attempt (promotion or input provenance)
+        required: false
+      preparation_artifact:
+        description: Exact preparation artifact ID (promotion or input provenance)
+        required: false
+      preparation_digest:
+        description: Independently selected preparation ZIP SHA256 (promotion or input provenance)
+        required: false
+      promotion_operation:
+        description: Promote exact drafts or reconcile interrupted drafts/partial publication
+        required: true
+        default: promote
+        type: choice
+        options:
+          - promote
+          - reconcile
+      promotion_record:
+        description: Fixed canonical promotion record bindings; unsupported native contracts reject
+        required: false
 
 permissions:
   contents: read
@@ -22,7 +54,49 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  dispatch_contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    permissions:
+      contents: read
+    env:
+      PRODUCER_MODE: ${{ inputs.producer_mode }}
+      TAG: ${{ inputs.tag }}
+      SOURCE_SHA: ${{ inputs.source_sha }}
+      KIT_VERSION: ${{ inputs.plugin_kit_version }}
+      PREPARATION_RUN: ${{ inputs.preparation_run }}
+      PREPARATION_ATTEMPT: ${{ inputs.preparation_attempt }}
+      PREPARATION_ARTIFACT: ${{ inputs.preparation_artifact }}
+      PREPARATION_DIGEST: ${{ inputs.preparation_digest }}
+      PROMOTION_OPERATION: ${{ inputs.promotion_operation }}
+      PROMOTION_RECORD: ${{ inputs.promotion_record }}
+    steps:
+      - name: C1 preflight
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PATH="/usr/local/bin:${PATH}"
+          [[ "${GITHUB_EVENT_NAME}" == workflow_dispatch ]]
+          case "${PRODUCER_MODE}" in
+            binary-only|paired-preparation|paired-promotion) exit 0 ;;
+            paired-input-provenance) [[ -z "${PROMOTION_RECORD}" && "${PROMOTION_OPERATION}" == promote ]] ;;
+            *) exit 1 ;;
+          esac
+          [[ "${GITHUB_ACTIONS}" == true && "${GITHUB_REPOSITORY}" == 777genius/universal-agent-plugins ]]
+          [[ "${TAG}" =~ ^agentplugins-v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ && ${#TAG} -le 47 ]]
+          [[ "${KIT_VERSION}" == 2.0.0 && "${TAG}" != agentplugins-v2.0.0 ]]
+          [[ "${SOURCE_SHA}" =~ ^[0-9a-f]{40}$ && ! "${SOURCE_SHA}" =~ ^0+$ ]]
+          [[ "${GITHUB_SHA}" == "${SOURCE_SHA}" && "${GITHUB_WORKFLOW_SHA}" == "${SOURCE_SHA}" ]]
+          [[ "${GITHUB_REF}" == "refs/tags/${TAG}" ]]
+          [[ "${GITHUB_WORKFLOW_REF}" == "777genius/universal-agent-plugins/.github/workflows/agentplugins-release.yml@refs/tags/${TAG}" ]]
+          positive() { [[ "$1" =~ ^[1-9][0-9]{0,15}$ && "$1" -le 9007199254740991 ]]; }
+          positive "${GITHUB_RUN_ID}"
+          positive "${GITHUB_RUN_ATTEMPT}"; [[ "${GITHUB_RUN_ATTEMPT}" -le 1000 ]]
+          positive "${PREPARATION_RUN}"; positive "${PREPARATION_ARTIFACT}"
+          positive "${PREPARATION_ATTEMPT}"; [[ "${PREPARATION_ATTEMPT}" -le 1000 ]]
+          [[ "${PREPARATION_DIGEST}" =~ ^[0-9a-f]{64}$ && ! "${PREPARATION_DIGEST}" =~ ^0+$ ]]
   validate:
+    if: ${{ inputs.producer_mode == 'binary-only' }}
     runs-on: ubuntu-latest
     env:
       GOWORK: "off"
@@ -144,6 +218,7 @@ jobs:
         run: npm test && npm pack --dry-run --ignore-scripts
 
   build:
+    if: ${{ inputs.producer_mode == 'binary-only' }}
     needs: validate
     runs-on: ubuntu-latest
     env:
@@ -200,6 +275,7 @@ jobs:
           retention-days: 3
 
   stage-draft:
+    if: ${{ inputs.producer_mode == 'binary-only' }}
     needs: [validate, build]
     runs-on: ubuntu-latest
     environment: agentplugins-release
@@ -308,6 +384,7 @@ jobs:
           retention-days: 7
 
   platform-proof:
+    if: ${{ inputs.producer_mode == 'binary-only' }}
     needs: [validate, stage-draft]
     uses: ./.github/workflows/agentplugins-platform-proof.yml
     permissions:
@@ -322,6 +399,7 @@ jobs:
       release_assets_artifact: ${{ needs.stage-draft.outputs.assets_artifact }}
 
   promote-release:
+    if: ${{ inputs.producer_mode == 'binary-only' }}
     needs: [validate, stage-draft, platform-proof]
     runs-on: ubuntu-latest
     environment: agentplugins-release
@@ -378,3 +456,552 @@ jobs:
           gh release edit "${TAG}" --repo "${GITHUB_REPOSITORY}" --draft=false
           gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${TAG}" \
             --jq 'select(.draft == false and .prerelease == false) | .tag_name' | grep -Fx -- "${TAG}"
+
+  paired-preparation:
+    if: ${{ inputs.producer_mode == 'paired-preparation' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      SOURCE_SHA: ${{ inputs.source_sha }}
+      WORKFLOW_SHA: ${{ github.sha }}
+      TAG: ${{ inputs.tag }}
+      KIT_VERSION: ${{ inputs.plugin_kit_version }}
+      GOTOOLCHAIN: local
+      GOMAXPROCS: "2"
+    steps:
+      - name: Validate explicit paired identity before checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "${SOURCE_SHA}" =~ ^[0-9a-f]{40}$ && ! "${SOURCE_SHA}" =~ ^0{40}$ ]]
+          test "${SOURCE_SHA}" = "${WORKFLOW_SHA}"
+          [[ "${TAG}" =~ ^agentplugins-v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]
+          test "${KIT_VERSION}" = "2.0.0"
+          test "${TAG#agentplugins-v}" != "${KIT_VERSION}"
+          test "${GITHUB_REPOSITORY}" = "777genius/universal-agent-plugins"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ inputs.source_sha }}
+      - name: Check exact checkout
+        run: test "$(git rev-parse HEAD)" = "${SOURCE_SHA}"
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: 1.25.13
+          cache: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          package-manager-cache: false
+      - name: Provision declared Go modules for offline producer
+        env:
+          GOMODCACHE: ${{ runner.temp }}/paired-modules
+          GOCACHE: ${{ runner.temp }}/paired-cache
+        run: go mod download
+      - name: Freeze one full release-contract pair and project verified bytes
+        shell: bash
+        env:
+          GOMODCACHE: ${{ runner.temp }}/paired-modules
+          GOCACHE: ${{ runner.temp }}/paired-cache
+        run: |
+          set -euo pipefail
+          export TRUSTED_GO="$(command -v go)"
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const { stageCandidate } = require('./npm/agentplugins/scripts/stage-dual-authoring-candidate');
+          const { prepareAuthoringRelease, verifyAuthoringRelease } = require('./npm/agentplugins/scripts/release-assets');
+          const root = fs.mkdtempSync(path.join(process.env.RUNNER_TEMP, 'authoring-preparation-'));
+          const workParent = path.join(root, 'work');
+          fs.mkdirSync(workParent, { mode: 0o700 });
+          const identity = { repository: '777genius/universal-agent-plugins',
+            commit: process.env.SOURCE_SHA, engine_revision: process.env.SOURCE_SHA,
+            versions: { agentplugins: process.env.TAG.slice('agentplugins-v'.length), 'plugin-kit-ai': process.env.KIT_VERSION } };
+          const common = { candidate: true, identity, go: process.env.TRUSTED_GO, workParent,
+            assetScope: 'six-platform-pair', authoringMode: 'release-cli-contract-v1' };
+          // stageCandidate builds once and independently verifies before sealing.
+          const candidate = path.join(root, 'candidate');
+          const staged = stageCandidate({ ...common, repo: process.env.GITHUB_WORKSPACE,
+            modCache: process.env.GOMODCACHE, output: candidate });
+          fs.writeFileSync(path.join(root, 'candidate-identity.json'), JSON.stringify({ identity, ...staged }, null, 2) + '\n', { flag: 'wx' });
+          const options = { ...common, root: candidate, manifestDigest: staged.manifest_sha256,
+            outputs: { agentplugins: path.join(root, 'agentplugins'), 'plugin-kit-ai': path.join(root, 'plugin-kit-ai') },
+            pairMarker: path.join(root, 'pair-prepared.json') };
+          prepareAuthoringRelease(options);
+          verifyAuthoringRelease(options);
+          fs.appendFileSync(process.env.GITHUB_ENV, `PAIRED_OUTPUT=${root}\n`);
+          NODE
+      - name: Bind preparation invocation outside unchanged frozen input bytes
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const c = require('./npm/agentplugins/scripts/dual-authoring-candidate');
+          const n = require('./npm/agentplugins/scripts/authoring-native-qualification');
+          const root = process.env.PAIRED_OUTPUT;
+          const pairBody = c.readFile(path.join(root, 'pair-prepared.json'));
+          const pair = JSON.parse(pairBody);
+          const pins = { identity: pair.identity, candidate_sha256: pair.candidate_sha256,
+            pair_marker_sha256: c.digest(pairBody), products: pair.products };
+          // Input provenance only: no future qualification or npm tarball hash.
+          // The external provider artifact ID/digest is acquired after upload.
+          // Keep candidate-identity.json and all eighteen input subjects intact.
+          const before = require('./npm/agentplugins/scripts/authoring-release')
+            .verifyProjectedPair(root, pins).subjects.map(x => [x.file, x.sha256]);
+          n.writePreparation(root, pins, {
+            repository: process.env.GITHUB_REPOSITORY,
+            workflow: '.github/workflows/agentplugins-release.yml',
+            source: process.env.SOURCE_SHA,
+            workflow_sha: process.env.WORKFLOW_SHA,
+            run_id: Number(process.env.GITHUB_RUN_ID),
+            run_attempt: Number(process.env.GITHUB_RUN_ATTEMPT)
+          });
+          const after = require('./npm/agentplugins/scripts/authoring-release')
+            .verifyProjectedPair(root, pins).subjects.map(x => [x.file, x.sha256]);
+          require('node:assert/strict').deepEqual(after, before);
+          fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY,
+            'Preparation receipt binds input provenance only. Native and public acceptance remain required.\n');
+          NODE
+      - name: Upload candidate identity and both prepared projections together
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: authoring-preparation-${{ inputs.source_sha }}
+          path: |
+            ${{ env.PAIRED_OUTPUT }}/preparation-run.json
+            ${{ env.PAIRED_OUTPUT }}/candidate-identity.json
+            ${{ env.PAIRED_OUTPUT }}/candidate/candidate.json
+            ${{ env.PAIRED_OUTPUT }}/pair-prepared.json
+            ${{ env.PAIRED_OUTPUT }}/agentplugins/*
+            ${{ env.PAIRED_OUTPUT }}/plugin-kit-ai/*
+          if-no-files-found: error
+          retention-days: 7
+
+  paired-promotion-admission:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.producer_mode == 'paired-promotion' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - name: Validate promotion identity before checkout
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          WORKFLOW_SHA: ${{ github.sha }}
+          WORKFLOW_REF: ${{ github.ref }}
+          TAG: ${{ inputs.tag }}
+          KIT_VERSION: ${{ inputs.plugin_kit_version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "${SOURCE_SHA}" =~ ^[0-9a-f]{40}$ && ! "${SOURCE_SHA}" =~ ^0{40}$ ]]
+          test "${SOURCE_SHA}" = "${WORKFLOW_SHA}"
+          [[ "${TAG}" =~ ^agentplugins-v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]
+          test "${WORKFLOW_REF}" = "refs/tags/${TAG}"
+          test "${KIT_VERSION}" = "2.0.0"
+          test "${TAG#agentplugins-v}" != "${KIT_VERSION}"
+          test "${GITHUB_REPOSITORY}" = "777genius/universal-agent-plugins"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ inputs.source_sha }}
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22.21.1
+          package-manager-cache: false
+      - name: Admit exact native evidence read-only before protected effects
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PREPARATION_RUN: ${{ inputs.preparation_run }}
+          PREPARATION_ATTEMPT: ${{ inputs.preparation_attempt }}
+          PREPARATION_ARTIFACT: ${{ inputs.preparation_artifact }}
+          PREPARATION_DIGEST: ${{ inputs.preparation_digest }}
+          PROMOTION_RECORD: ${{ inputs.promotion_record }}
+          TAG: ${{ inputs.tag }}
+          WORKFLOW_REF: ${{ github.ref }}
+          KIT_VERSION: ${{ inputs.plugin_kit_version }}
+          WORKFLOW_SHA: ${{ github.sha }}
+        run: |
+          node <<'NODE'
+          const p = require('./npm/agentplugins/scripts/authoring-promotion');
+          const input = process.env.PROMOTION_RECORD || '{}';
+          if (Buffer.byteLength(input) > 1024 * 1024) throw Error('bounded promotion input required');
+          const selected = { tag: process.env.TAG, ref: process.env.WORKFLOW_REF, source: process.env.WORKFLOW_SHA,
+            versions: { agentplugins: process.env.TAG.slice('agentplugins-v'.length), 'plugin-kit-ai': process.env.KIT_VERSION } };
+          const record = p.validateSelection(Buffer.from(input), selected);
+          p.checkNativeContracts(record); // Syntax only; provider admission still follows.
+          const fs = require('node:fs'), path = require('node:path');
+          const scratch = fs.mkdtempSync(path.join(process.env.RUNNER_TEMP, 'read-only-admission-'));
+          p.admitNativeEvidence(record, { run_id: Number(process.env.PREPARATION_RUN),
+            run_attempt: Number(process.env.PREPARATION_ATTEMPT), artifact_id: Number(process.env.PREPARATION_ARTIFACT),
+            artifact_sha256: process.env.PREPARATION_DIGEST }, scratch);
+          // No public producer is registered. Twelve native receipts remain
+          // insufficient; this throws before the protected job can be scheduled.
+          p.requireNativeContracts(record.qualification.lanes);
+          NODE
+
+  paired-sign-and-promote:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.producer_mode == 'paired-promotion' }}
+    needs: paired-promotion-admission
+    runs-on: ubuntu-latest
+    environment: agentplugins-release
+    permissions:
+      contents: write
+      actions: read
+      id-token: write
+      attestations: write
+      artifact-metadata: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ inputs.source_sha }}
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22.21.1
+          package-manager-cache: false
+      # Public-packed admission remains closed. Reacquire and replay independently
+      # in this job; a prior read-only job is never a reusable authorization token.
+      - name: Acquire exact frozen preparation after native admission
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PROMOTION_RECORD: ${{ inputs.promotion_record }}
+          TAG: ${{ inputs.tag }}
+          WORKFLOW_REF: ${{ github.ref }}
+          KIT_VERSION: ${{ inputs.plugin_kit_version }}
+          WORKFLOW_SHA: ${{ github.sha }}
+          PREPARATION_RUN: ${{ inputs.preparation_run }}
+          PREPARATION_ATTEMPT: ${{ inputs.preparation_attempt }}
+          PREPARATION_ARTIFACT: ${{ inputs.preparation_artifact }}
+          PREPARATION_DIGEST: ${{ inputs.preparation_digest }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const p = require('./npm/agentplugins/scripts/authoring-promotion');
+          const selected = { tag: process.env.TAG, ref: process.env.WORKFLOW_REF, source: process.env.WORKFLOW_SHA,
+            versions: { agentplugins: process.env.TAG.slice('agentplugins-v'.length), 'plugin-kit-ai': process.env.KIT_VERSION } };
+          const record = p.validateSelection(Buffer.from(process.env.PROMOTION_RECORD), selected);
+          p.checkNativeContracts(record); // Reject unsupported identifiers before scratch/provider effects.
+          if (record.identity.commit !== process.env.SOURCE_SHA) throw Error('exact promotion source required');
+          const scratch = fs.mkdtempSync(path.join(process.env.RUNNER_TEMP, 'paired-promotion-'));
+          const preparation = { run_id: Number(process.env.PREPARATION_RUN), run_attempt: Number(process.env.PREPARATION_ATTEMPT),
+            artifact_id: Number(process.env.PREPARATION_ARTIFACT), artifact_sha256: process.env.PREPARATION_DIGEST };
+          const acquired = p.acquirePreparation(preparation, record, scratch);
+          const recordFile = path.join(scratch, 'authoring-promotion.json');
+          fs.writeFileSync(recordFile, p.encodeRecord(record), { flag: 'wx', mode: 0o400 });
+          fs.writeFileSync(path.join(scratch, 'options.json'), JSON.stringify({ record: recordFile,
+            root: acquired.root, scratch: path.join(scratch, 'provider'), workflow_sha: process.env.SOURCE_SHA, preparation, selected }), { flag: 'wx' });
+          fs.mkdirSync(path.join(scratch, 'provider'), { mode: 0o700 });
+          fs.appendFileSync(process.env.GITHUB_ENV, `PROMOTION_ROOT=${scratch}\n`);
+          NODE
+      - name: Recheck admission and exact subject closure before signing
+        id: subjects
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PROMOTION_OPERATION: ${{ inputs.promotion_operation }}
+        run: |
+          case "${PROMOTION_OPERATION}" in
+            promote) admission=admit ;;
+            reconcile) admission=admit-reconciliation ;;
+            *) exit 1 ;;
+          esac
+          node npm/agentplugins/scripts/authoring-promotion.js "${admission}" "${PROMOTION_ROOT}/options.json" > "${PROMOTION_ROOT}/admitted.json"
+          node <<'NODE'
+          const fs = require('node:fs');
+          const result = JSON.parse(fs.readFileSync(`${process.env.PROMOTION_ROOT}/admitted.json`));
+          if (!['qualified-for-promotion', 'reconciliation-required'].includes(result.status) || result.subjects.length !== 19) throw Error('exact admitted subjects required');
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `sign_required=${result.sign_required}\npaths<<SUBJECTS\n${result.subjects.map(s => s.file).join('\n')}\nSUBJECTS\n`);
+          NODE
+      - uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        if: ${{ steps.subjects.outputs.sign_required == 'true' }}
+        with:
+          subject-path: ${{ steps.subjects.outputs.paths }}
+      - name: Reverify all signatures and reconcile both native releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PROMOTION_OPERATION: ${{ inputs.promotion_operation }}
+        run: |
+          case "${PROMOTION_OPERATION}" in promote|reconcile) ;; *) exit 1 ;; esac
+          node npm/agentplugins/scripts/authoring-promotion.js "${PROMOTION_OPERATION}" "${PROMOTION_ROOT}/options.json"
+
+  paired_input_admission:
+    name: paired_input_admission
+    needs: dispatch_contract
+    if: ${{ success() && github.event_name == 'workflow_dispatch' && inputs.producer_mode == 'paired-input-provenance' && needs.dispatch_contract.result == 'success' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      actions: read
+    env:
+      PRODUCER_MODE: ${{ inputs.producer_mode }}
+      TAG: ${{ inputs.tag }}
+      SOURCE_SHA: ${{ inputs.source_sha }}
+      KIT_VERSION: ${{ inputs.plugin_kit_version }}
+      PREPARATION_RUN: ${{ inputs.preparation_run }}
+      PREPARATION_ATTEMPT: ${{ inputs.preparation_attempt }}
+      PREPARATION_ARTIFACT: ${{ inputs.preparation_artifact }}
+      PREPARATION_DIGEST: ${{ inputs.preparation_digest }}
+      PROMOTION_OPERATION: ${{ inputs.promotion_operation }}
+      PROMOTION_RECORD: ${{ inputs.promotion_record }}
+      GH_TOKEN: ${{ github.token }}
+    outputs:
+      input_sha256: ${{ steps.stage.outputs.input_sha256 }}
+    steps:
+      - name: C1 preflight
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PATH="/usr/local/bin:${PATH}"
+          [[ "${GITHUB_EVENT_NAME}" == workflow_dispatch ]]
+          case "${PRODUCER_MODE}" in
+            binary-only|paired-preparation|paired-promotion) exit 0 ;;
+            paired-input-provenance) [[ -z "${PROMOTION_RECORD}" && "${PROMOTION_OPERATION}" == promote ]] ;;
+            *) exit 1 ;;
+          esac
+          [[ "${GITHUB_ACTIONS}" == true && "${GITHUB_REPOSITORY}" == 777genius/universal-agent-plugins ]]
+          [[ "${TAG}" =~ ^agentplugins-v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ && ${#TAG} -le 47 ]]
+          [[ "${KIT_VERSION}" == 2.0.0 && "${TAG}" != agentplugins-v2.0.0 ]]
+          [[ "${SOURCE_SHA}" =~ ^[0-9a-f]{40}$ && ! "${SOURCE_SHA}" =~ ^0+$ ]]
+          [[ "${GITHUB_SHA}" == "${SOURCE_SHA}" && "${GITHUB_WORKFLOW_SHA}" == "${SOURCE_SHA}" ]]
+          [[ "${GITHUB_REF}" == "refs/tags/${TAG}" ]]
+          [[ "${GITHUB_WORKFLOW_REF}" == "777genius/universal-agent-plugins/.github/workflows/agentplugins-release.yml@refs/tags/${TAG}" ]]
+          positive() { [[ "$1" =~ ^[1-9][0-9]{0,15}$ && "$1" -le 9007199254740991 ]]; }
+          positive "${GITHUB_RUN_ID}"
+          positive "${GITHUB_RUN_ATTEMPT}"; [[ "${GITHUB_RUN_ATTEMPT}" -le 1000 ]]
+          positive "${PREPARATION_RUN}"; positive "${PREPARATION_ARTIFACT}"
+          positive "${PREPARATION_ATTEMPT}"; [[ "${PREPARATION_ATTEMPT}" -le 1000 ]]
+          [[ "${PREPARATION_DIGEST}" =~ ^[0-9a-f]{64}$ && ! "${PREPARATION_DIGEST}" =~ ^0+$ ]]
+          [[ "${GITHUB_JOB}" == paired_input_admission ]]
+      - name: C1 checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ inputs.source_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: C1 setup
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: "22.23.2"
+          package-manager-cache: false
+      - name: C1 stage
+        id: stage
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require('node:fs'), path = require('node:path'), assert = require('node:assert/strict');
+          const c = require('./npm/agentplugins/scripts/dual-authoring-candidate');
+          const i = require('./npm/agentplugins/scripts/authoring-native-inputs');
+          const s = require('./npm/agentplugins/scripts/stage-authoring-npm');
+          const e = process.env, selected = {tag: e.TAG, ref: `refs/tags/${e.TAG}`, source: e.SOURCE_SHA,
+            versions: {agentplugins: e.TAG.slice('agentplugins-v'.length), 'plugin-kit-ai': e.KIT_VERSION}};
+          const root = fs.mkdtempSync(path.join(e.RUNNER_TEMP, 'c1-workflow-'));
+          const scratch = path.join(root, 'scratch'); fs.mkdirSync(scratch, {mode: 0o700});
+          const options = {selected, workflow_sha: e.SOURCE_SHA};
+          Object.assign(options, {preparation: {run_id: Number(e.PREPARATION_RUN), run_attempt: Number(e.PREPARATION_ATTEMPT),
+            artifact_id: Number(e.PREPARATION_ARTIFACT), artifact_sha256: e.PREPARATION_DIGEST}, repo: process.cwd(), scratch});
+          const file = path.join(root, 'options.json'); fs.writeFileSync(file, c.encode(options), {flag: 'wx', mode: 0o400});
+          const result = i.main(['--produce-inputs', file]);
+          c.keys(result, ['root', 'input', 'subjects'], 'input CLI result');
+          const names = ['candidate/candidate.json', 'pair-prepared.json', ...c.PRODUCTS.flatMap(p => [...c.TARGETS.map(t => `${p}/${result.input.products[p].assets[t].file}`), `${p}/release-manifest.json`, `${p}/checksums.txt`]), 'native-inputs.json'];
+          assert.equal(result.subjects.length, names.length);
+          assert.deepEqual(result.subjects.map(r => path.relative(result.root, r.file)).sort(), [...names].sort());
+          for (const row of result.subjects) assert.equal(c.digest(c.readFile(row.file, 128 * 1024 * 1024)), row.sha256);
+          const payload = [...names, 'preparation-run.json', 'candidate-identity.json'];
+          assert.equal(payload.length, 21);
+          const pins = (r) => payload.map(n => ({file: n, sha256: c.digest(c.readFile(path.join(r, n), 128 * 1024 * 1024))}));
+          const actual = pins(result.root);
+          const result_file = path.join(root, 'result.json');
+          fs.writeFileSync(result_file, c.encode({root: result.root, subjects: result.subjects, pins: actual}), {flag: 'wx', mode: 0o400});
+          const output = (key, value) => fs.appendFileSync(e.GITHUB_OUTPUT, `${key}<<C1_PATHS\n${value}\nC1_PATHS\n`);
+          output('result_file', result_file);
+          output('root', result.root);
+          output('subjects', result.subjects.map(r => r.file).join('\n'));
+          output('payload', payload.map(n => path.join(result.root, n)).join('\n'));
+          output('input_sha256', c.digest(i.encodeInputs(result.input)));
+          NODE
+
+  paired_input_attestation:
+    name: paired_input_attestation
+    needs: paired_input_admission
+    if: ${{ success() && github.event_name == 'workflow_dispatch' && inputs.producer_mode == 'paired-input-provenance' && needs.paired_input_admission.result == 'success' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    environment: agentplugins-release
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
+      attestations: write
+    env:
+      PRODUCER_MODE: ${{ inputs.producer_mode }}
+      TAG: ${{ inputs.tag }}
+      SOURCE_SHA: ${{ inputs.source_sha }}
+      KIT_VERSION: ${{ inputs.plugin_kit_version }}
+      PREPARATION_RUN: ${{ inputs.preparation_run }}
+      PREPARATION_ATTEMPT: ${{ inputs.preparation_attempt }}
+      PREPARATION_ARTIFACT: ${{ inputs.preparation_artifact }}
+      PREPARATION_DIGEST: ${{ inputs.preparation_digest }}
+      PROMOTION_OPERATION: ${{ inputs.promotion_operation }}
+      PROMOTION_RECORD: ${{ inputs.promotion_record }}
+      GH_TOKEN: ${{ github.token }}
+    outputs:
+      input_sha256: ${{ steps.recheck.outputs.input_sha256 }}
+      input_artifact_id: ${{ steps.upload.outputs.artifact-id }}
+      input_artifact_sha256: ${{ steps.upload_evidence.outputs.artifact_sha256 }}
+    steps:
+      - name: C1 preflight
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PATH="/usr/local/bin:${PATH}"
+          [[ "${GITHUB_EVENT_NAME}" == workflow_dispatch ]]
+          case "${PRODUCER_MODE}" in
+            binary-only|paired-preparation|paired-promotion) exit 0 ;;
+            paired-input-provenance) [[ -z "${PROMOTION_RECORD}" && "${PROMOTION_OPERATION}" == promote ]] ;;
+            *) exit 1 ;;
+          esac
+          [[ "${GITHUB_ACTIONS}" == true && "${GITHUB_REPOSITORY}" == 777genius/universal-agent-plugins ]]
+          [[ "${TAG}" =~ ^agentplugins-v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ && ${#TAG} -le 47 ]]
+          [[ "${KIT_VERSION}" == 2.0.0 && "${TAG}" != agentplugins-v2.0.0 ]]
+          [[ "${SOURCE_SHA}" =~ ^[0-9a-f]{40}$ && ! "${SOURCE_SHA}" =~ ^0+$ ]]
+          [[ "${GITHUB_SHA}" == "${SOURCE_SHA}" && "${GITHUB_WORKFLOW_SHA}" == "${SOURCE_SHA}" ]]
+          [[ "${GITHUB_REF}" == "refs/tags/${TAG}" ]]
+          [[ "${GITHUB_WORKFLOW_REF}" == "777genius/universal-agent-plugins/.github/workflows/agentplugins-release.yml@refs/tags/${TAG}" ]]
+          positive() { [[ "$1" =~ ^[1-9][0-9]{0,15}$ && "$1" -le 9007199254740991 ]]; }
+          positive "${GITHUB_RUN_ID}"
+          positive "${GITHUB_RUN_ATTEMPT}"; [[ "${GITHUB_RUN_ATTEMPT}" -le 1000 ]]
+          positive "${PREPARATION_RUN}"; positive "${PREPARATION_ARTIFACT}"
+          positive "${PREPARATION_ATTEMPT}"; [[ "${PREPARATION_ATTEMPT}" -le 1000 ]]
+          [[ "${PREPARATION_DIGEST}" =~ ^[0-9a-f]{64}$ && ! "${PREPARATION_DIGEST}" =~ ^0+$ ]]
+          [[ "${GITHUB_JOB}" == paired_input_attestation ]]
+      - name: C1 checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ inputs.source_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: C1 setup
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: "22.23.2"
+          package-manager-cache: false
+      - name: C1 stage
+        id: stage
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require('node:fs'), path = require('node:path'), assert = require('node:assert/strict');
+          const c = require('./npm/agentplugins/scripts/dual-authoring-candidate');
+          const i = require('./npm/agentplugins/scripts/authoring-native-inputs');
+          const s = require('./npm/agentplugins/scripts/stage-authoring-npm');
+          const e = process.env, selected = {tag: e.TAG, ref: `refs/tags/${e.TAG}`, source: e.SOURCE_SHA,
+            versions: {agentplugins: e.TAG.slice('agentplugins-v'.length), 'plugin-kit-ai': e.KIT_VERSION}};
+          const root = fs.mkdtempSync(path.join(e.RUNNER_TEMP, 'c1-workflow-'));
+          const scratch = path.join(root, 'scratch'); fs.mkdirSync(scratch, {mode: 0o700});
+          const options = {selected, workflow_sha: e.SOURCE_SHA};
+          Object.assign(options, {preparation: {run_id: Number(e.PREPARATION_RUN), run_attempt: Number(e.PREPARATION_ATTEMPT),
+            artifact_id: Number(e.PREPARATION_ARTIFACT), artifact_sha256: e.PREPARATION_DIGEST}, repo: process.cwd(), scratch});
+          const file = path.join(root, 'options.json'); fs.writeFileSync(file, c.encode(options), {flag: 'wx', mode: 0o400});
+          const result = i.main(['--produce-inputs', file]);
+          c.keys(result, ['root', 'input', 'subjects'], 'input CLI result');
+          const names = ['candidate/candidate.json', 'pair-prepared.json', ...c.PRODUCTS.flatMap(p => [...c.TARGETS.map(t => `${p}/${result.input.products[p].assets[t].file}`), `${p}/release-manifest.json`, `${p}/checksums.txt`]), 'native-inputs.json'];
+          assert.equal(result.subjects.length, names.length);
+          assert.deepEqual(result.subjects.map(r => path.relative(result.root, r.file)).sort(), [...names].sort());
+          for (const row of result.subjects) assert.equal(c.digest(c.readFile(row.file, 128 * 1024 * 1024)), row.sha256);
+          const payload = [...names, 'preparation-run.json', 'candidate-identity.json'];
+          assert.equal(payload.length, 21);
+          const pins = (r) => payload.map(n => ({file: n, sha256: c.digest(c.readFile(path.join(r, n), 128 * 1024 * 1024))}));
+          const actual = pins(result.root);
+          const result_file = path.join(root, 'result.json');
+          fs.writeFileSync(result_file, c.encode({root: result.root, subjects: result.subjects, pins: actual}), {flag: 'wx', mode: 0o400});
+          const output = (key, value) => fs.appendFileSync(e.GITHUB_OUTPUT, `${key}<<C1_PATHS\n${value}\nC1_PATHS\n`);
+          output('result_file', result_file);
+          output('root', result.root);
+          output('subjects', result.subjects.map(r => r.file).join('\n'));
+          output('payload', payload.map(n => path.join(result.root, n)).join('\n'));
+          output('input_sha256', c.digest(i.encodeInputs(result.input)));
+          NODE
+      - name: C1 attest
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6
+        with:
+          subject-path: ${{ steps.stage.outputs.subjects }}
+      - name: C1 recheck
+        id: recheck
+        env:
+          PREVIOUS: ${{ steps.stage.outputs.result_file }}
+          SIGNING_ROOT: ${{ steps.stage.outputs.root }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require('node:fs'), path = require('node:path'), assert = require('node:assert/strict');
+          const c = require('./npm/agentplugins/scripts/dual-authoring-candidate');
+          const i = require('./npm/agentplugins/scripts/authoring-native-inputs');
+          const s = require('./npm/agentplugins/scripts/stage-authoring-npm');
+          const e = process.env, selected = {tag: e.TAG, ref: `refs/tags/${e.TAG}`, source: e.SOURCE_SHA,
+            versions: {agentplugins: e.TAG.slice('agentplugins-v'.length), 'plugin-kit-ai': e.KIT_VERSION}};
+          const root = fs.mkdtempSync(path.join(e.RUNNER_TEMP, 'c1-workflow-'));
+          const scratch = path.join(root, 'scratch'); fs.mkdirSync(scratch, {mode: 0o700});
+          const options = {selected, workflow_sha: e.SOURCE_SHA};
+          Object.assign(options, {preparation: {run_id: Number(e.PREPARATION_RUN), run_attempt: Number(e.PREPARATION_ATTEMPT),
+            artifact_id: Number(e.PREPARATION_ARTIFACT), artifact_sha256: e.PREPARATION_DIGEST}, repo: process.cwd(), scratch});
+          const file = path.join(root, 'options.json'); fs.writeFileSync(file, c.encode(options), {flag: 'wx', mode: 0o400});
+          const result = i.main(['--produce-inputs', file]);
+          c.keys(result, ['root', 'input', 'subjects'], 'input CLI result');
+          const names = ['candidate/candidate.json', 'pair-prepared.json', ...c.PRODUCTS.flatMap(p => [...c.TARGETS.map(t => `${p}/${result.input.products[p].assets[t].file}`), `${p}/release-manifest.json`, `${p}/checksums.txt`]), 'native-inputs.json'];
+          assert.equal(result.subjects.length, names.length);
+          assert.deepEqual(result.subjects.map(r => path.relative(result.root, r.file)).sort(), [...names].sort());
+          for (const row of result.subjects) assert.equal(c.digest(c.readFile(row.file, 128 * 1024 * 1024)), row.sha256);
+          const payload = [...names, 'preparation-run.json', 'candidate-identity.json'];
+          assert.equal(payload.length, 21);
+          const pins = (r) => payload.map(n => ({file: n, sha256: c.digest(c.readFile(path.join(r, n), 128 * 1024 * 1024))}));
+          const actual = pins(result.root);
+          const previous = JSON.parse(c.readFile(e.PREVIOUS, 1024 * 1024));
+          c.keys(previous, ['root', 'subjects', 'pins'], 'original signing comparison');
+          assert.equal(previous.root, e.SIGNING_ROOT);
+          assert.deepEqual([...previous.subjects].sort((a,b) => a.file.localeCompare(b.file)), names.map(n => ({file: path.join(e.SIGNING_ROOT, n), sha256: actual.find(row => row.file === n).sha256})).sort((a,b) => a.file.localeCompare(b.file)));
+          assert.deepEqual(previous.pins, actual); assert.deepEqual(pins(previous.root), actual);
+          for (const row of previous.subjects) assert.equal(c.digest(c.readFile(row.file, 128 * 1024 * 1024)), row.sha256);
+          // Original signing root is retained; independently reacquired bytes never replace it.
+          result.root = previous.root; result.subjects = previous.subjects;
+          const result_file = path.join(root, 'result.json');
+          fs.writeFileSync(result_file, c.encode({root: result.root, subjects: result.subjects, pins: actual}), {flag: 'wx', mode: 0o400});
+          const output = (key, value) => fs.appendFileSync(e.GITHUB_OUTPUT, `${key}<<C1_PATHS\n${value}\nC1_PATHS\n`);
+          output('result_file', result_file);
+          output('root', result.root);
+          output('subjects', result.subjects.map(r => r.file).join('\n'));
+          output('payload', payload.map(n => path.join(result.root, n)).join('\n'));
+          output('input_sha256', c.digest(i.encodeInputs(result.input)));
+          NODE
+      - name: C1 upload
+        id: upload
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: authoring-input-provenance-${{ inputs.source_sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ steps.recheck.outputs.payload }}
+          if-no-files-found: error
+          retention-days: 7
+      - name: C1 upload evidence
+        id: upload_evidence
+        env:
+          ARTIFACT_ID: ${{ steps.upload.outputs.artifact-id }}
+          ARTIFACT_SHA256: ${{ steps.upload.outputs.artifact-digest }}
+          COMPLETION_SHA256: ${{ steps.recheck.outputs.input_sha256 }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require('node:fs'), assert = require('node:assert/strict'), e = process.env;
+          assert.match(e.ARTIFACT_ID, /^[1-9][0-9]{0,15}$/);
+          const artifact_id = Number(e.ARTIFACT_ID); assert.ok(Number.isSafeInteger(artifact_id));
+          const artifact_sha256 = e.ARTIFACT_SHA256.replace(/^sha256:/, '').toLowerCase();
+          assert.match(artifact_sha256, /^[0-9a-f]{64}$/); assert.ok(!/^0+$/.test(artifact_sha256));
+          fs.appendFileSync(e.GITHUB_OUTPUT, `artifact_sha256=${artifact_sha256}\n`);
+          NODE

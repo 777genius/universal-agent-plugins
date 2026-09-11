@@ -167,6 +167,23 @@ function extractBinaryFromTarGz(archiveBuffer, wantedName) {
 
 async function ensureInstalled(options = {}) {
   const packageRoot = options.packageRoot || path.resolve(__dirname, "..");
+  const packageVersion = readPackageVersion(packageRoot);
+  const major = /^(0|[1-9]\d*)\./.exec(packageVersion);
+  let descriptor = false;
+  try { fs.lstatSync(path.join(packageRoot, "public-release.json")); descriptor = true; }
+  catch (error) { if (error.code !== "ENOENT") throw error; }
+  if (descriptor || (major && Number(major[1]) >= 2)) {
+    try {
+      if (packageVersion !== "2.0.0") throw new Error("unsupported public plugin-kit-ai version");
+      if (!descriptor) throw new Error("plugin-kit-ai major 2 requires public-release.json");
+      const result = await require("./public-authoring").ensureBinary("plugin-kit-ai", { ...options, packageRoot });
+      return { ...result, installedBinary: result.binaryPath };
+    } catch (error) { error.publicAuthoring = true; throw error; }
+  }
+  const rejectLegacyMajor = tag => {
+    if (/^v?(?:[2-9]|[1-9]\d+)\./.test(tag)) throw new Error("legacy wrapper cannot acquire plugin-kit-ai major 2 or later");
+  };
+  rejectLegacyMajor(normalizeTag(process.env.PLUGIN_KIT_AI_VERSION));
   const repository = process.env.PLUGIN_KIT_AI_REPOSITORY || defaultRepository;
   const apiBase = process.env.GITHUB_API_BASE || "https://api.github.com";
   const releaseBase = deriveReleaseBase(apiBase, process.env.PLUGIN_KIT_AI_RELEASE_BASE_URL);
@@ -175,6 +192,7 @@ async function ensureInstalled(options = {}) {
   if (!tag) {
     tag = await latestTag(apiBase, repository);
   }
+  rejectLegacyMajor(tag);
   const version = tag.replace(/^v/, "");
   const assetName = assetNameForVersion(version, platformInfo);
   const vendorDir = path.join(packageRoot, "vendor", tag);
@@ -220,6 +238,7 @@ async function ensureInstalled(options = {}) {
 }
 
 function formatInstallError(err) {
+  if (err.publicAuthoring) return `plugin-kit-ai npm bootstrap: ${err.message}`;
   return [
     `plugin-kit-ai npm bootstrap: ${err.message}`,
     "Fallbacks:",

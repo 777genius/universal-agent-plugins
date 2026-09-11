@@ -5,6 +5,7 @@ package project
 import (
 	"context"
 	"errors"
+	"os"
 	"strings"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/packageview"
@@ -23,12 +24,36 @@ type Service struct {
 	Limits  packageview.Limits
 }
 
-func (s Service) Read(ctx context.Context, exactRoot string) (result Result, err error) {
+func (s Service) Read(ctx context.Context, exactRoot string) (Result, error) {
+	return s.read(ctx, exactRoot, packageview.GeneratedStaging{})
+}
+
+// ReadGeneratedStaging validates a package this process just generated into
+// its own private, exclusively owned staging directory, immediately before
+// scaffold.Apply's atomic publish -- never external or user-selected content.
+//
+// dir must be the live handle scaffold's own Validate callback received for
+// stagingRoot; it is used only to prove identity (see
+// packageview.NewGeneratedStaging), never for a second read path. That proof
+// authorizes relaxing only the Darwin profile's read-only-mount requirement
+// for this one directory. Ordinary validate/inspect/test/doctor/compat
+// requests call Read, which never receives this proof, and they never hold a
+// pre-opened handle for a caller-supplied root, so they have no path to this
+// method either.
+func (s Service) ReadGeneratedStaging(ctx context.Context, exactRoot string, dir *os.Root) (result Result, err error) {
+	generated, err := packageview.NewGeneratedStaging(dir)
+	if err != nil {
+		return result, err
+	}
+	return s.read(ctx, exactRoot, generated)
+}
+
+func (s Service) read(ctx context.Context, exactRoot string, generated packageview.GeneratedStaging) (result Result, err error) {
 	exactRoot, err = readRoot(exactRoot)
 	if err != nil {
 		return result, err
 	}
-	lease, err := (packageview.Reader{TempDir: s.Scratch, Limits: s.Limits}).Open(ctx, exactRoot)
+	lease, err := (packageview.Reader{TempDir: s.Scratch, Limits: s.Limits, Generated: generated}).Open(ctx, exactRoot)
 	if err != nil {
 		return result, err
 	}

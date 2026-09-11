@@ -335,8 +335,8 @@ func (a App) init(ctx context.Context, req request) (report.Report, error) {
 		}
 		destination = cwd + string(os.PathSeparator) + destination
 	}
-	result, e := scaffold.Apply(ctx, plan, scaffold.ApplyOptions{Destination: destination, Validate: func(ctx context.Context, stage string) error {
-		p, e := a.Projects.Read(ctx, stage)
+	result, e := scaffold.Apply(ctx, plan, scaffold.ApplyOptions{Destination: destination, Validate: func(ctx context.Context, stage string, dir *os.Root) error {
+		p, e := a.Projects.ReadGeneratedStaging(ctx, stage, dir)
 		r = report.Build("init", a.Revision, p, false)
 		r.Mode = "local_mutation"
 		if req.disclose {

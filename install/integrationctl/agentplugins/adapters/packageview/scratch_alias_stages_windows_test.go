@@ -39,7 +39,7 @@ func TestWindowsScratchAliasResolutionStages(t *testing.T) {
 			t.Logf("stdlib EvalSymlinks=%q err=%v", eval, evalErr)
 			before := winRecordCount()
 			if evalErr == nil {
-				old, oldErr := openSource(eval)
+				old, oldErr := openSource(eval, GeneratedStaging{})
 				t.Logf("stdlib result openSource err=%v", oldErr)
 				if old != nil {
 					if e := old.close(); e != nil {
@@ -60,7 +60,7 @@ func TestWindowsScratchAliasResolutionStages(t *testing.T) {
 				t.Fatal("protected acquisition stage:", e)
 			}
 			defer scratch.close()
-			source, e := openSource(target)
+			source, e := openSource(target, GeneratedStaging{})
 			if e != nil {
 				t.Fatal("target acquisition stage:", e)
 			}

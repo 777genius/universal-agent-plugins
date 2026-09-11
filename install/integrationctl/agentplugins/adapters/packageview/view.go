@@ -140,8 +140,42 @@ func (v Limits) bounded() (Limits, error) {
 // trusted scratch parent outside the selected source. It is never cleanup
 // authority. Only the exact MkdirTemp child is owned by the returned lease.
 type Reader struct {
-	TempDir string
-	Limits  Limits
+	TempDir   string
+	Limits    Limits
+	Generated GeneratedStaging
+}
+
+// GeneratedStaging authorizes relaxing only the Darwin profile's read-only-mount
+// source requirement, for exactly one caller-proven directory. Every other
+// containment, symlink, type and mutation check stays exactly as strict; other
+// platforms are unaffected (they never required a read-only mount). The zero
+// value proves nothing and changes no behavior.
+//
+// It can be built only from a live *os.Root handle to that directory, never
+// from a path string, so a caller that holds only a path -- every ordinary
+// validate/inspect/test request -- can never construct one. Open still reopens
+// by path and independently reverifies identity against this proof with
+// os.SameFile before trusting it, so a stale or mismatched proof is rejected,
+// not silently ignored.
+type GeneratedStaging struct{ info os.FileInfo }
+
+// NewGeneratedStaging captures live identity for dir by Stat-ing the already
+// open handle. Callers must pass the exact directory they exclusively created
+// and still hold open; the caller-held handle -- not a reopened path -- is the
+// source of truth.
+func NewGeneratedStaging(dir *os.Root) (GeneratedStaging, error) {
+	if dir == nil {
+		return GeneratedStaging{}, fail("generated_staging_required")
+	}
+	info, err := dir.Stat(".")
+	if err != nil {
+		return GeneratedStaging{}, fail("generated_staging_required")
+	}
+	return GeneratedStaging{info: info}, nil
+}
+func (g GeneratedStaging) present() bool { return g.info != nil }
+func (g GeneratedStaging) matches(fi os.FileInfo) bool {
+	return g.info != nil && fi != nil && os.SameFile(g.info, fi)
 }
 
 // Error is safe to print/serialize. Cancellation remains errors.Is-compatible.
@@ -215,7 +249,7 @@ func (r Reader) open(ctx context.Context, exactRoot string, hooks *captureHooks)
 	if exactRoot == "" || r.TempDir == "" {
 		return nil, fail("explicit_roots_required")
 	}
-	s, err := openSource(exactRoot)
+	s, err := openSource(exactRoot, r.Generated)
 	if err != nil {
 		return nil, err
 	}
