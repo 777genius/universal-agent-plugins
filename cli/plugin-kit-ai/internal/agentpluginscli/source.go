@@ -482,6 +482,7 @@ func (app App) acquireDirectory(ctx context.Context, selector string, request pa
 	if request.Selector != "" {
 		resolveSelector = request.Selector
 	}
+	productID, _ := directorySelectorProductID(bundle.Snapshot, resolveSelector)
 	affectedTargets := expandAffectedSurfaceTargets(request.Targets)
 	resolveRequest := domain.DirectoryResolveRequest{
 		Selector: resolveSelector, Targets: affectedTargets, Scope: domain.ScopeUser,
@@ -494,7 +495,7 @@ func (app App) acquireDirectory(ctx context.Context, selector string, request pa
 	installation, _ := locallyMatchedInstallation(state, resolveSelector)
 	intents := lifecycleInstallIntents(installation, "user", nil)
 	for _, target := range affectedTargets {
-		if target == domain.ClientChatGPT && (app.chatGPTPreparation || intents[target] == domain.InstallIntentPrepare) {
+		if target == domain.ClientChatGPT && (productID == "context7" || app.chatGPTPreparation || intents[target] == domain.InstallIntentPrepare) {
 			preparingChatGPT = true
 		}
 	}

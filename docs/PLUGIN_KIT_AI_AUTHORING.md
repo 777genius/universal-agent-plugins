@@ -127,8 +127,8 @@ rejects EOF, partial bytes, or trailing contradictions, then stops and reaps the
 long-lived ACP process through supervised containment. Automatic Kiro ACP
 verification is available only on Linux after capability preflight proves
 delegated cgroup v2 creation, atomic CLONE_INTO_CGROUP placement, and
-cgroup.kill. On macOS, Windows, and Linux hosts without that containment,
-`--prepare` installs the owned Kiro skills and MCP configuration without
+cgroup.kill. On macOS, Windows, and Linux hosts without that containment, the guided lane
+installs the owned Kiro skills and MCP configuration without
 claiming a connected runtime. It reports the exact OAuth/restart step and keeps
 the lifecycle receipt for update, repair, remove, and reinstall. Failure to
 start ACP
@@ -146,10 +146,11 @@ ChatGPT packages with a verified publisher app binding are prepared directly.
 Canonical Directory Context7 also has a guided personal-registration path:
 
 ```bash
-npx universal-agent-plugins add context7 --target chatgpt --prepare
+npx universal-agent-plugins add context7 --target chatgpt
 ```
 
-The first run prints the public `https://mcp.context7.com/mcp` endpoint and
+The CLI selects this guided lane automatically. The first run prints the public
+`https://mcp.context7.com/mcp` endpoint and
 requires **No authentication**. After the user creates and connects the app in
 ChatGPT Developer Mode, the CLI accepts its `asdk_app_...` ID and prepares a
 personal marketplace package. The ID stays in private installer state and is

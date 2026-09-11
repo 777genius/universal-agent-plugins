@@ -72,7 +72,7 @@ func TestReviewUnrelatedPreparationPreservesAutomaticDirectoryGate(t *testing.T)
 	}
 	writeCLIMCP(t, plugin)
 	r.cli.app.Lifecycle.Activator = providers.Activator{}
-	if out, _, err := r.cli.execute(false, "add", plugin, "--target", "kiro", "--prepare"); err != nil {
+	if out, _, err := r.cli.execute(false, "add", plugin, "--target", "kiro"); err != nil {
 		t.Fatalf("prepare: %s %v", out, err)
 	}
 	if err := check(); err == nil {
@@ -113,7 +113,7 @@ func TestUnrelatedRetainedPreparationPreservesAutomaticDirectoryGate(t *testing.
 	}
 	writeCLIMCP(t, plugin)
 	r.cli.app.Lifecycle.Activator = providers.Activator{}
-	if out, _, err := r.cli.execute(false, "add", plugin, "--target", "kiro", "--prepare"); err != nil {
+	if out, _, err := r.cli.execute(false, "add", plugin, "--target", "kiro"); err != nil {
 		t.Fatalf("prepare: %s %v", out, err)
 	}
 	check()
@@ -154,7 +154,7 @@ func TestUnrelatedPreparationPreservesAutomaticUpdateAndRepairEvidence(t *testin
 	// Seed a recorded native binding with disposable preparation, then model a
 	// historical automatic binding. Every command below must fail at resolution,
 	// before acquisition or activation can execute a client.
-	if out, _, err := r.cli.execute(false, "add", "rollout-demo", "--target", "kiro", "--prepare"); err != nil {
+	if out, _, err := r.cli.execute(false, "add", "rollout-demo", "--target", "kiro"); err != nil {
 		t.Fatalf("seed: %s %v", out, err)
 	}
 	state, err := r.cli.store.Load()
@@ -211,7 +211,7 @@ func TestUnrelatedPreparationPreservesAutomaticUpdateAndRepairEvidence(t *testin
 		t.Fatal(err)
 	}
 
-	if out, _, err := r.cli.execute(false, "add", plugin, "--target", "kiro", "--prepare"); err != nil {
+	if out, _, err := r.cli.execute(false, "add", plugin, "--target", "kiro"); err != nil {
 		t.Fatalf("prepare: %s %v", out, err)
 	}
 	check()

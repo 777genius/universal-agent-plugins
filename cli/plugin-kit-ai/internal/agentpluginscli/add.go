@@ -39,34 +39,16 @@ func newAddCommand(app App, opts *options) *cobra.Command {
 				return err
 			}
 			opts.installIntents = make(map[domain.ClientID]domain.InstallIntent)
-			if opts.prepare {
-				targets, err := parseTargetOption(opts.target)
-				if err != nil {
-					return err
-				}
-				if len(targets) == 0 {
-					if !app.Terminal || opts.format != "human" {
-						return fmt.Errorf("--prepare requires --target kiro and/or chatgpt in automated mode")
-					}
-					targets = []domain.ClientID{domain.ClientKiro, domain.ClientChatGPT}
-				}
-				for _, target := range targets {
-					if target != domain.ClientKiro && target != domain.ClientChatGPT {
-						return fmt.Errorf("--prepare requires --target kiro and/or chatgpt (Context7 only)")
-					}
-					opts.installIntents[target] = domain.InstallIntentPrepare
-					if target == domain.ClientChatGPT {
-						app.chatGPTPreparation = true
-					}
-				}
-				if app.chatGPTPreparation && (opts.scope != "user" || !isDirectorySelector(args[0])) {
-					return fmt.Errorf("ChatGPT preparation requires the signed Context7 Directory source and user scope")
-				}
+			requestedTargets, err := parseTargetOption(opts.target)
+			if err != nil {
+				return err
 			}
+			opts.installIntents, err = app.addLifecycleIntents(cmd.Context(), args[0], opts.scope, opts.installIntents, requestedTargets)
+			if err != nil {
+				return err
+			}
+			app.chatGPTPreparation = opts.installIntents[domain.ClientChatGPT] == domain.InstallIntentPrepare
 			if opts.chatGPTAppID != "" {
-				if !app.chatGPTPreparation {
-					return fmt.Errorf("--chatgpt-app-id requires --prepare --target chatgpt")
-				}
 				if err := domain.ValidateChatGPTAppID(opts.chatGPTAppID); err != nil {
 					return err
 				}
@@ -77,10 +59,6 @@ func newAddCommand(app App, opts *options) *cobra.Command {
 			if !targetProvided && app.Terminal && opts.format == "human" {
 				var err error
 				app, err = withPrompter(cmd, app, opts)
-				if err != nil {
-					return err
-				}
-				opts.installIntents, err = app.addLifecycleIntents(cmd.Context(), args[0], opts.scope, opts.installIntents)
 				if err != nil {
 					return err
 				}
@@ -103,11 +81,7 @@ func newAddCommand(app App, opts *options) *cobra.Command {
 					preloaded.chatGPTPreparation = false
 					preloaded.localChatGPTMapping = nil
 				}
-				intents, err := app.addLifecycleIntents(cmd.Context(), args[0], opts.scope, opts.installIntents)
-				if err != nil {
-					return err
-				}
-				detectedClients, err = detectSelectedTargetsForLifecycleResolution(cmd.Context(), app.Detector, automaticInstallTargets(targets, intents), detectedClients, !opts.dryRun && isDirectorySelector(args[0]))
+				detectedClients, err = detectSelectedTargetsForLifecycleResolution(cmd.Context(), app.Detector, automaticInstallTargets(targets, opts.installIntents), detectedClients, !opts.dryRun && isDirectorySelector(args[0]))
 				if err != nil {
 					return fmt.Errorf("detect selected AI clients: %w", err)
 				}
@@ -141,7 +115,6 @@ func newAddCommand(app App, opts *options) *cobra.Command {
 		},
 	}
 	command.Flags().StringVar(&opts.chatGPTAppID, "chatgpt-app-id", "", "personal Context7 registration ID copied from ChatGPT Developer Mode")
-	command.Flags().BoolVar(&opts.prepare, "prepare", false, "prepare Kiro configuration and/or Context7 ChatGPT personal marketplace; authenticate and verify tools in the client")
 	command.Flags().BoolVar(&activationComplete, "activation-complete", false, "attest that manual client activation is complete")
 	command.Flags().BoolVar(&authComplete, "auth-complete", false, "attest that required authentication is complete or none is required after review")
 	return command
@@ -172,6 +145,14 @@ func runAddWithClients(ctx context.Context, cmd *cobra.Command, app App, opts *o
 }
 
 func runAddLoaded(ctx context.Context, cmd *cobra.Command, app App, opts *options, loaded loadedPackage, activationComplete, authComplete bool, clients []domain.DetectedClient, needsInstallConfirmation bool) error {
+	targets, err := parseTargetOption(opts.target)
+	if err != nil {
+		return err
+	}
+	applyLoadedGuidedIntents(opts, loaded, targets)
+	if opts.chatGPTAppID != "" && !loaded.chatGPTPreparation {
+		return fmt.Errorf("--chatgpt-app-id requires the signed Context7 Directory source and --target chatgpt")
+	}
 	if err := authorizeSecurityAssessment(cmd, app, opts, &loaded); err != nil {
 		return err
 	}

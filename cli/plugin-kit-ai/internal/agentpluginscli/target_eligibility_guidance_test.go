@@ -68,7 +68,7 @@ func TestKiroEligibilityDoesNotGuessFromClientName(t *testing.T) {
 	}
 }
 
-func TestExplicitKiroPreflightDoesNotSuggestActivatingInstalledConfiguration(t *testing.T) {
+func TestExplicitKiroUsesGuidedPreparation(t *testing.T) {
 	kiro := fixtureClient(t, domain.ClientKiro)
 	kiro.ExecutablePath = "/test/bin/kiro-cli"
 	fixture := newCLIFixture(t, []domain.DetectedClient{kiro})
@@ -76,7 +76,7 @@ func TestExplicitKiroPreflightDoesNotSuggestActivatingInstalledConfiguration(t *
 	plugin := writeCLIPlugin(t)
 	writeCLIMCP(t, plugin)
 	stdout, _, err := fixture.execute(false, "add", plugin, "--target", "kiro", "--dry-run")
-	if err == nil || !strings.Contains(stdout, "Nothing was installed") || strings.Contains(stdout, "Planned action:") {
+	if err != nil || strings.Contains(stdout, "Nothing was installed") || !strings.Contains(stdout, "Planned action: After preparation") {
 		t.Fatalf("output=%q err=%v", stdout, err)
 	}
 }

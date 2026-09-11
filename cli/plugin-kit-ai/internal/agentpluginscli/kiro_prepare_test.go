@@ -21,7 +21,7 @@ func TestKiroPrepareCLIPlainAndJSON(t *testing.T) {
 			fixture.app.Lifecycle.Activator = providers.Activator{}
 			plugin := writeCLIPlugin(t)
 			writeCLIMCP(t, plugin)
-			out, _, err := fixture.execute(false, "add", plugin, "--target", "kiro", "--prepare", "--format", format)
+			out, _, err := fixture.execute(false, "add", plugin, "--target", "kiro", "--format", format)
 			if err != nil {
 				t.Fatalf("%s: %v", out, err)
 			}
@@ -63,19 +63,15 @@ func TestKiroPrepareCLIPlainAndJSON(t *testing.T) {
 	}
 }
 
-func TestPrepareRejectsInvalidTargetsBeforeAcquisition(t *testing.T) {
-	for _, target := range []string{"cursor", "kiro,cursor", ""} {
-		t.Run(target, func(t *testing.T) {
-			fixture := newCLIFixture(t, nil)
-			_, _, err := fixture.execute(false, "add", "context7", "--target", target, "--prepare")
-			if err == nil || !strings.Contains(err.Error(), "--prepare requires --target kiro") {
-				t.Fatalf("invalid target: %v", err)
-			}
-			state, _ := fixture.store.Load()
-			if len(state.Installations) != 0 {
-				t.Fatal("mutated")
-			}
-		})
+func TestPrepareFlagWasRemoved(t *testing.T) {
+	fixture := newCLIFixture(t, nil)
+	_, _, err := fixture.execute(false, "add", "context7", "--target", "kiro", "--prepare")
+	if err == nil || !strings.Contains(err.Error(), "unknown flag: --prepare") {
+		t.Fatalf("removed flag accepted: %v", err)
+	}
+	state, _ := fixture.store.Load()
+	if len(state.Installations) != 0 {
+		t.Fatal("mutated")
 	}
 }
 
@@ -138,7 +134,7 @@ func TestPreparedLifecycleVersionDetectionNeverLaunchesKiro(t *testing.T) {
 	fixture := newCLIFixture(t, []domain.DetectedClient{kiro})
 	plugin := writeCLIPlugin(t)
 	writeCLIMCP(t, plugin)
-	if out, _, err := fixture.execute(false, "add", plugin, "--target", "kiro", "--prepare"); err != nil {
+	if out, _, err := fixture.execute(false, "add", plugin, "--target", "kiro"); err != nil {
 		t.Fatalf("%s: %v", out, err)
 	}
 	detector := &observedProbingDetector{clients: []domain.DetectedClient{kiro, fixtureClient(t, domain.ClientCursor)}}
@@ -189,8 +185,10 @@ func TestKiroPreparationUsesNormalDirectoryResolution(t *testing.T) {
 			if err := loaded.cleanup(); err != nil {
 				t.Fatal(err)
 			}
+			rollout.directory.bundle.Snapshot.Products[0].ID = "context7"
+			rollout.directory.bundle.Snapshot.Distributions[0].ProductID = "context7"
 			rollout.directory.bundle.Snapshot.Products[0].Aliases = append(rollout.directory.bundle.Snapshot.Products[0].Aliases, "context7")
-			out, _, err := rollout.cli.execute(false, "add", "context7", "--target", "kiro", "--prepare", "--format", "json")
+			out, _, err := rollout.cli.execute(false, "add", "context7", "--target", "kiro", "--format", "json")
 			if !supported {
 				if err == nil || rollout.acquirer.verifiedCalls != 0 {
 					t.Fatalf("bypassed compatibility: %s %v", out, err)

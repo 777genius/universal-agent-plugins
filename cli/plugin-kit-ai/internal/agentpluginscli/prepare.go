@@ -3,6 +3,7 @@ package agentpluginscli
 import (
 	"context"
 	"errors"
+	"strings"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
@@ -66,7 +67,10 @@ func lifecycleInstallIntents(installation domain.Installation, scope string, exp
 
 // Resolve Directory aliases to the retained product before any executable
 // detection, just as acquisition does before choosing a release.
-func (app App) addLifecycleIntents(ctx context.Context, source, scope string, explicit map[domain.ClientID]domain.InstallIntent) (map[domain.ClientID]domain.InstallIntent, error) {
+func (app App) addLifecycleIntents(ctx context.Context, source, scope string, explicit map[domain.ClientID]domain.InstallIntent, targetSets ...[]domain.ClientID) (map[domain.ClientID]domain.InstallIntent, error) {
+	if explicit == nil {
+		explicit = make(map[domain.ClientID]domain.InstallIntent)
+	}
 	if app.StateStore == nil {
 		return explicit, nil
 	}
@@ -75,7 +79,13 @@ func (app App) addLifecycleIntents(ctx context.Context, source, scope string, ex
 		return nil, err
 	}
 	installation, _ := locallyMatchedInstallation(state, source)
-	if isDirectorySelector(source) && app.DirectoryClient != nil && len(state.Installations) > 0 {
+	needsGuidedResolution := strings.Contains(strings.ToLower(source), "context7") && (len(targetSets) == 0 || len(targetSets[0]) == 0)
+	if !needsGuidedResolution && len(targetSets) > 0 {
+		for _, target := range targetSets[0] {
+			needsGuidedResolution = needsGuidedResolution || strings.Contains(strings.ToLower(source), "context7") && (target == domain.ClientKiro || target == domain.ClientChatGPT)
+		}
+	}
+	if isDirectorySelector(source) && app.DirectoryClient != nil && (len(state.Installations) > 0 || needsGuidedResolution) {
 		bundle, err := app.DirectoryClient.Load(ctx, installedDirectoryFloor(state))
 		if err != nil {
 			return nil, err
@@ -84,21 +94,41 @@ func (app App) addLifecycleIntents(ctx context.Context, source, scope string, ex
 		if err != nil && !errors.Is(err, domain.ErrDirectoryNotFound) {
 			return nil, err
 		}
-		installation, _, err = retainedDirectoryInstallation(state, source, productID)
-		if err != nil {
-			return nil, err
+		if err == nil && productID == "context7" {
+			explicit[domain.ClientKiro] = domain.InstallIntentPrepare
+			explicit[domain.ClientChatGPT] = domain.InstallIntentPrepare
+		}
+		if len(state.Installations) > 0 {
+			installation, _, err = retainedDirectoryInstallation(state, source, productID)
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 	return lifecycleInstallIntents(installation, scope, explicit), nil
 }
 
-func preflightAddTargets(ctx context.Context, app App, opts *options, source string, targets []domain.ClientID, clients []domain.DetectedClient) ([]domain.DetectedClient, map[domain.ClientID]domain.DetectedClient, error) {
-	intents, err := app.addLifecycleIntents(ctx, source, opts.scope, opts.installIntents)
-	if err != nil {
-		return nil, nil, err
+// Direct packages are already loaded before this decision, so only packages
+// with useful Kiro components enter the guided preparation lane.
+func applyLoadedGuidedIntents(opts *options, loaded loadedPackage, targets []domain.ClientID) {
+	if opts.installIntents == nil {
+		opts.installIntents = make(map[domain.ClientID]domain.InstallIntent)
 	}
-	opts.installIntents = intents
-	return preflightSelectedTargets(ctx, app, targets, clients, !opts.dryRun && isDirectorySelector(source), intents)
+	if (loaded.origin != domain.OriginModeDirect && loaded.envelope.Manifest.Name != "context7") || (!loaded.envelope.MCP.Enabled && len(loaded.envelope.Skills) == 0) {
+		return
+	}
+	for _, target := range targets {
+		if target == domain.ClientKiro && opts.installIntents[target] == "" {
+			opts.installIntents[target] = domain.InstallIntentPrepare
+		}
+		if target == domain.ClientChatGPT && loaded.chatGPTPreparation {
+			opts.installIntents[target] = domain.InstallIntentPrepare
+		}
+	}
+}
+
+func preflightAddTargets(ctx context.Context, app App, opts *options, source string, targets []domain.ClientID, clients []domain.DetectedClient) ([]domain.DetectedClient, map[domain.ClientID]domain.DetectedClient, error) {
+	return preflightSelectedTargets(ctx, app, targets, clients, !opts.dryRun && isDirectorySelector(source), opts.installIntents)
 }
 
 func automaticInstallTargets(targets []domain.ClientID, intents map[domain.ClientID]domain.InstallIntent) []domain.ClientID {

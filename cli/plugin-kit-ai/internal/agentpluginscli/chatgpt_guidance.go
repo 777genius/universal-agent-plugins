@@ -16,16 +16,16 @@ func chatGPTRegistrationResumeAction(cmd *cobra.Command, source string, targets 
 	if cmd.Flags().Changed("target") {
 		targetOption, _ = cmd.Flags().GetString("target")
 	}
-	args := []string{"add", quoteResumeArgument(source), "--target", quoteResumeArgument(targetOption), "--prepare"}
+	args := []string{"add", quoteResumeArgument(source), "--target", quoteResumeArgument(targetOption)}
 	cmd.Flags().Visit(func(flag *pflag.Flag) {
 		switch flag.Name {
-		case "target", "prepare", "chatgpt-app-id":
+		case "target", "chatgpt-app-id":
 			return
 		}
 		args = append(args, "--"+flag.Name+"="+quoteResumeArgument(flag.Value.String()))
 	})
 	args = append(args, "--chatgpt-app-id", "<ID>")
-	return strings.Replace(domain.ChatGPTRegistrationAction, "add context7 --target chatgpt --prepare --chatgpt-app-id <ID>", strings.Join(args, " "), 1)
+	return strings.Replace(domain.ChatGPTRegistrationAction, "add context7 --target chatgpt --chatgpt-app-id <ID>", strings.Join(args, " "), 1)
 }
 
 func clientIDStrings(targets []domain.ClientID) []string {
