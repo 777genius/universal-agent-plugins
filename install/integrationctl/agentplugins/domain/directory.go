@@ -278,6 +278,7 @@ type RecordedDirectoryRelease struct {
 }
 
 type DirectoryResolveRequest struct {
+	Purpose            DirectoryResolvePurpose
 	Selector           string
 	Targets            []ClientID
 	Scope              InstallScope
@@ -324,6 +325,9 @@ var (
 // distribution and one release for the complete target set; acquisition
 // failure is intentionally not a fallback input.
 func ResolveDirectory(snapshot DirectorySnapshot, request DirectoryResolveRequest) (DirectorySelection, error) {
+	if err := validateDirectoryResolvePurpose(request); err != nil {
+		return DirectorySelection{}, err
+	}
 	selector := strings.TrimSpace(request.Selector)
 	if selector == "" {
 		return DirectorySelection{}, fmt.Errorf("%w: empty selector", ErrDirectoryNotFound)
@@ -337,6 +341,13 @@ func ResolveDirectory(snapshot DirectorySnapshot, request DirectoryResolveReques
 	product, qualified, err := findDirectoryProduct(snapshot, selector)
 	if err != nil {
 		return DirectorySelection{}, err
+	}
+	if request.Purpose == DirectoryResolveContext7ChatGPTPreparation {
+		if product.ID != "context7" || product.ManifestName != "context7" || (qualified != "" && qualified != "upstash/context7") ||
+			(request.Recorded != nil && request.Recorded.DistributionID != "upstash/context7") {
+			return DirectorySelection{}, fmt.Errorf("%w: Context7 preparation requires the upstream Context7 product", ErrDirectoryIneligible)
+		}
+		qualified = "upstash/context7"
 	}
 	if request.Recorded != nil {
 		if strings.TrimSpace(request.Recorded.ResolvedRevision) == "" {
@@ -492,6 +503,10 @@ func chooseDirectoryRelease(snapshot DirectorySnapshot, product DirectoryProduct
 		if !ok {
 			continue
 		}
+		if request.Purpose == DirectoryResolveContext7ChatGPTPreparation && !isContext7PreparationSource(distribution, *release) {
+			reasons = append(reasons, eligibilityReason{"invalid_preparation_source", "Context7 preparation requires the canonical upstream source"})
+			continue
+		}
 		exactRecorded := request.Recorded != nil && release.Sequence == request.Recorded.ReleaseSequence
 		// Every recorded operation except an explicit update stays on the exact
 		// immutable release. In particular, re-adding a data-retained installation
@@ -554,17 +569,23 @@ func releaseEligibility(snapshot DirectorySnapshot, product DirectoryProduct, di
 			return &eligibilityReason{"blocking_evidence", "current trusted schema evidence failed"}
 		}
 	}
+	if request.Purpose == DirectoryResolveContext7ChatGPTPreparation && !hasContext7PreparationPromotion(snapshot, distribution, release, policy) {
+		return &eligibilityReason{"upstream_materialization_required", "Context7 preparation requires trusted materialization on a declared supported target"}
+	}
 	for _, target := range directoryEligibilityTargets(request.Targets) {
 		entry := targetByClient(policy.Targets, target)
-		if entry == nil || !containsScope(entry.Scopes, request.Scope) {
-			return &eligibilityReason{"incomplete_targets", "release does not support complete target set; missing " + string(target)}
-		}
-		delivery, supported := ExpectedDirectoryDelivery(target)
-		if !supported || entry.Delivery != delivery {
-			return &eligibilityReason{"incompatible_delivery", fmt.Sprintf("release delivery %q is incompatible with %s; expected %q", entry.Delivery, target, delivery)}
-		}
-		if distribution.Kind == DistributionUpstream && !hasPassedUpstreamMaterialization(snapshot, distribution, release, policy, target) {
-			return &eligibilityReason{"upstream_materialization_required", "upstream release lacks current passed materialization evidence for " + string(target)}
+		// Only absence of signed ChatGPT support can use the source-only lane.
+		if !(entry == nil && request.Purpose == DirectoryResolveContext7ChatGPTPreparation) {
+			if entry == nil || !containsScope(entry.Scopes, request.Scope) {
+				return &eligibilityReason{"incomplete_targets", "release does not support complete target set; missing " + string(target)}
+			}
+			delivery, supported := ExpectedDirectoryDelivery(target)
+			if !supported || entry.Delivery != delivery {
+				return &eligibilityReason{"incompatible_delivery", fmt.Sprintf("release delivery %q is incompatible with %s; expected %q", entry.Delivery, target, delivery)}
+			}
+			if distribution.Kind == DistributionUpstream && !hasPassedUpstreamMaterialization(snapshot, distribution, release, policy, target) {
+				return &eligibilityReason{"upstream_materialization_required", "upstream release lacks current passed materialization evidence for " + string(target)}
+			}
 		}
 		for _, evidenceID := range policy.CurrentEvidence {
 			if e := evidenceByID(snapshot, evidenceID); e != nil && e.HasTrustedEligibilityProvenanceAtSequence(snapshot.Sequence) && directoryEvidenceApplies(*e, distribution, release, target, request) && (e.Level == "materialization" || e.Level == "discovery" || e.Level == "runtime" || e.Level == "oauth") && e.Outcome == "failed" {

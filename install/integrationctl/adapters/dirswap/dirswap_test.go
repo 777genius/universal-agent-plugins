@@ -27,6 +27,49 @@ func TestApplyAndCommitAtomicallyReplacesDirectory(t *testing.T) {
 	}
 }
 
+func TestApplyRequireAbsentRejectsWithoutTouchingUnexpectedExistingContent(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	base := filepath.Join(root, "managed")
+	active := filepath.Join(base, "plugin")
+	staging := filepath.Join(base, "plugin.staging")
+	writeBody(t, active, "foreign")
+	writeBody(t, staging, "new")
+	manager := Manager{JournalDir: filepath.Join(root, "journal")}
+	input := Input{OperationID: "operation-1", ClientBindingID: "binding-1", Sequence: 1,
+		OwnedBase: base, ActivePath: active, StagingPath: staging, RequireAbsent: true}
+	if _, err := manager.Apply(context.Background(), input); err == nil {
+		t.Fatal("RequireAbsent accepted an already-existing active path")
+	}
+	assertBody(t, active, "foreign")
+	if _, err := os.Stat(staging); err != nil {
+		t.Fatalf("staged directory was consumed despite the rejected apply: %v", err)
+	}
+	if _, err := os.Stat(manager.journalPath(input.OperationID)); !os.IsNotExist(err) {
+		t.Fatalf("rejected RequireAbsent apply left a journal entry: %v", err)
+	}
+}
+
+func TestApplyRequireAbsentAcceptsGenuinelyAbsentActivePath(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	base := filepath.Join(root, "managed")
+	active := filepath.Join(base, "plugin")
+	staging := filepath.Join(base, "plugin.staging")
+	writeBody(t, staging, "new")
+	manager := Manager{JournalDir: filepath.Join(root, "journal")}
+	input := Input{OperationID: "operation-1", ClientBindingID: "binding-1", Sequence: 1,
+		OwnedBase: base, ActivePath: active, StagingPath: staging, RequireAbsent: true}
+	receipt, err := manager.Apply(context.Background(), input)
+	if err != nil {
+		t.Fatalf("apply: %v", err)
+	}
+	assertBody(t, active, "new")
+	if err := manager.Commit(context.Background(), receipt); err != nil {
+		t.Fatalf("commit: %v", err)
+	}
+}
+
 func TestRecoverRollsBackAfterOldDirectoryWasBackedUp(t *testing.T) {
 	t.Parallel()
 	manager, input := fixture(t)

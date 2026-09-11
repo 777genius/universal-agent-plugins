@@ -36,6 +36,8 @@ type source struct {
 	purpose        winAcquisitionPurpose
 	// Operation-local native test seam; nil in production. No pathname is passed.
 	metadataStage func(*os.File, string)
+	// Instance-local acquisition diagnostic; nil in normal sources.
+	acquisitionHook func(stage string, before, after winSnapshot, err error)
 }
 
 // The zero value preserves strict captured-source acquisition. Trusted scratch
@@ -233,7 +235,13 @@ func (s *source) remember(f *os.File, outside ...bool) (*pinned, error) {
 	if e != nil {
 		return nil, e
 	}
+	if s.acquisitionHook != nil {
+		s.acquisitionHook("before-after-stat", meta, winSnapshot{}, nil)
+	}
 	after, e := winMeta(f)
+	if s.acquisitionHook != nil {
+		s.acquisitionHook("after-stat", meta, after, e)
+	}
 	if e != nil || !winUnchanged(meta, after, traversalOnly) {
 		return nil, fail("source_changed")
 	}
@@ -287,6 +295,9 @@ func (s *source) remember(f *os.File, outside ...bool) (*pinned, error) {
 		return nil, e
 	}
 	locked, e := winMeta(held)
+	if s.acquisitionHook != nil {
+		s.acquisitionHook("after-reopen", meta, locked, e)
+	}
 	if e != nil || !winUnchanged(meta, locked, traversalOnly) {
 		held.Close()
 		return nil, fail("source_changed")
@@ -461,7 +472,7 @@ func (s *source) walk(rel string, nofollow, rootSelection bool) (*pinned, error)
 			if len(todo) > 0 {
 				continue
 			}
-			return s.rememberMustDuplicate(stack[len(stack)-1])
+			return s.rememberMustDuplicate(stack[len(stack)-1], rootSelection)
 		}
 		if n == ".." {
 			if len(stack) == 1 {
@@ -472,7 +483,7 @@ func (s *source) walk(rel string, nofollow, rootSelection bool) (*pinned, error)
 			if len(todo) > 0 {
 				continue
 			}
-			return s.rememberMustDuplicate(stack[len(stack)-1])
+			return s.rememberMustDuplicate(stack[len(stack)-1], rootSelection)
 		}
 		// Keep the ordinary Win32 root-selection contract: reject DOS devices and
 		// terminal dots/spaces even though overlap identity is now handle-derived.

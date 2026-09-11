@@ -16,6 +16,9 @@ type Planner struct {
 	Detected    map[domain.ClientID]domain.DetectedClient
 }
 
+// ChatGPTAppBindingAction describes registration and package-author responsibilities.
+const ChatGPTAppBindingAction = "this package is not ready for ChatGPT. Connect its remote MCP server in ChatGPT Plugins developer mode; full plugin installation also needs the publisher's registered connection mapping (.app.json). You do not need to create this file. Setup: https://developers.openai.com/plugins/build/plugins"
+
 // DetectedPhysicalClient returns a genuinely detected client that can address
 // an installed physical binding. Copilot and VS Code share one backend, so an
 // installed binding owned by either logical client can be maintained through
@@ -98,7 +101,24 @@ func (planner Planner) Plan(
 	plan.TargetAnchor = target.TargetAnchor
 	plan.ActivePath = target.ActivePath
 	plan.Components = componentDecisions(envelope, capabilities)
-	applyCatalogCompatibility(&plan, envelope.CatalogEvidence)
+	if client.ClientID == domain.ClientChatGPT && envelope.LocalChatGPTMapping != nil {
+		if scope != domain.ScopeUser {
+			return plan, fmt.Errorf("ChatGPT preparation supports user scope only")
+		}
+		if err := envelope.LocalChatGPTMapping.ValidatePackage(envelope); err != nil {
+			return plan, err
+		}
+		binding, ok := envelope.App.Bindings[envelope.LocalChatGPTMapping.Server]
+		if !envelope.App.Enabled || len(envelope.App.Bindings) != 1 || !ok || binding.ID != envelope.LocalChatGPTMapping.AppID {
+			return plan, fmt.Errorf("personal ChatGPT mapping projection does not match receipt")
+		}
+		plan.LocalPreparationAuthorized = true
+		plan.PersonalChatGPTPreparation = true
+		plan.Authentication = domain.AuthenticationNotRequired
+		plan.Warnings = append(plan.Warnings, "personal_registration_requires_account_install")
+	} else {
+		applyCatalogCompatibility(&plan, envelope.CatalogEvidence)
+	}
 	chatGPTCompatibility, hasChatGPTCompatibility := domain.CatalogCompatibility{}, false
 	if envelope.CatalogEvidence != nil {
 		chatGPTCompatibility, hasChatGPTCompatibility = envelope.CatalogEvidence.Compatibility[string(domain.ClientChatGPT)]
@@ -126,7 +146,7 @@ func (planner Planner) Plan(
 		plan.Status = domain.PlanUnsupported
 		plan.Activation = domain.ActivationFailed
 		plan.Warnings = appendUnique(plan.Warnings, "chatgpt_app_binding_required")
-		action := "register every remote MCP connection in ChatGPT Developer Mode and provide a valid root .app.json mapping"
+		action := ChatGPTAppBindingAction
 		if len(missingChatGPTApps) > 0 {
 			action += " for: " + strings.Join(missingChatGPTApps, ", ")
 		}
@@ -423,7 +443,11 @@ func componentDecisions(envelope domain.PackageEnvelope, capabilities domain.Cli
 				support = domain.SupportProjected
 			}
 		}
-		decisions = append(decisions, decision(domain.ComponentMCPServer, name, support))
+		value := decision(domain.ComponentMCPServer, name, support)
+		if (capabilities.ClientID == domain.ClientOpenCode || capabilities.ClientID == domain.ClientCodex) && server.Type == "sse" && support == domain.SupportUnsupported {
+			value.Reason = "declared_sse_not_supported_by_client"
+		}
+		decisions = append(decisions, value)
 	}
 	appNames := sortedKeys(envelope.App.Bindings)
 	for _, name := range appNames {

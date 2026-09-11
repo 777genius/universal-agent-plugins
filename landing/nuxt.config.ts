@@ -4,7 +4,9 @@ import { dirname, resolve } from 'node:path';
 import { clientLandingPages } from './data/clients';
 import { supportedLocales } from './data/i18n';
 import { loadRegistryIndex } from './build/load-registry';
-import { canonicalPath } from './utils/seo';
+import { productRoutes } from './data/routes';
+import { expandLocalizedRoutes } from './utils/localizedRoutes';
+import { noindexStaticFallback } from './utils/seo';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 declare const process: any;
@@ -49,13 +51,12 @@ function resolveRegistrySnapshot(): string {
 }
 
 const registryIndex = loadRegistryIndex(resolveRegistrySnapshot(), 'published_snapshot');
-const sitemapRoutes = [
-  '/',
-  '/download',
-  '/plugins',
-  ...clientLandingPages.map((client) => `/agents/${client.slug}`),
-  ...registryIndex.plugins.map((plugin) => `/plugins/${plugin.name}`),
-].map(canonicalPath);
+const htmlRoutes = productRoutes(
+  registryIndex.plugins.map((plugin) => plugin.name),
+  clientLandingPages.map((client) => client.slug),
+);
+const localizedRoutes = expandLocalizedRoutes(htmlRoutes);
+const sitemapRoutes = localizedRoutes.filter((route) => route.indexable);
 
 export default defineNuxtConfig({
   compatibilityDate: '2026-01-19',
@@ -108,16 +109,20 @@ export default defineNuxtConfig({
   },
   nitro: {
     compressPublicAssets: true,
+    hooks: {
+      'prerender:generate'(route) {
+        if (
+          ['/200.html', '/404.html'].includes(route.route) &&
+          typeof route.contents === 'string'
+        ) {
+          route.contents = noindexStaticFallback(route.contents);
+        }
+      },
+    },
     prerender: {
       crawlLinks: false,
       routes: [
-        '/',
-        '/create-plugin',
-        '/download',
-        ...clientLandingPages.map((client) => `/agents/${client.slug}`),
-        '/plugins',
-        '/plugins/community',
-        ...registryIndex.plugins.map((plugin) => `/plugins/${plugin.name}`),
+        ...localizedRoutes.map((route) => route.path),
         '/api/registry/catalog',
         '/api/registry/empty',
         ...clientLandingPages.map((client) => `/api/registry/client/${client.id}`),
@@ -134,10 +139,12 @@ export default defineNuxtConfig({
     },
   },
   i18n: {
+    vueI18n: './i18n.config.ts',
     restructureDir: false,
     locales: [...supportedLocales],
     defaultLocale: 'en',
     strategy: 'prefix_except_default',
+    trailingSlash: true,
     lazy: true,
     langDir: 'locales',
     bundle: {
@@ -164,6 +171,8 @@ export default defineNuxtConfig({
     },
     public: {
       siteUrl,
+      // Route identities only: never expose the reviewed registry records.
+      seoRoutes: htmlRoutes,
       githubRepo,
       productName,
       githubReleasesUrl,

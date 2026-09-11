@@ -55,8 +55,20 @@ test('CSS background depth animates on the right and pauses offscreen or hidden'
   const field = page.locator('.hero__demo .hero-agent-field');
   const orbit = field.locator('.hero-agent-field__orbit');
   await expect(field).toHaveClass(/hero-agent-field--active/);
+  // Observe real playback in one browser task. The failure trace stalled in a
+  // second locator resolution, before it could sample a second transform.
+  await orbit.evaluate(async (node) => {
+    const spin = node.getAnimations().find((animation) =>
+      (animation as CSSAnimation).animationName === 'agent-orbit-spin');
+    if (!spin) throw new Error('Orbit spin animation is unavailable');
+    await spin.ready;
+  });
   const first = await orbit.evaluate((node) => getComputedStyle(node).transform);
-  await expect.poll(() => orbit.evaluate((node) => getComputedStyle(node).transform)).not.toBe(first);
+  await page.waitForFunction((initial) => {
+    const node = document.querySelector('.hero__demo .hero-agent-field__orbit');
+    return node && getComputedStyle(node).animationPlayState === 'running'
+      && getComputedStyle(node).transform !== initial;
+  }, first, { timeout: 5_000 });
   expect(await field.locator('.hero-agent-field__plane').evaluate((node) => getComputedStyle(node).transform)).toMatch(/^matrix3d\(/);
   expect(await field.evaluate((node) => getComputedStyle(node).pointerEvents)).toBe('none');
   const copy = (await page.locator('.hero__copy').boundingBox())!;
@@ -250,7 +262,7 @@ test('installation works with WebGL forbidden and the orbit has no canvas or opt
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.addInitScript(() => {
     const original = HTMLCanvasElement.prototype.getContext;
-    HTMLCanvasElement.prototype.getContext = function (type: string, ...args: unknown[]) {
+    HTMLCanvasElement.prototype.getContext = function (this: HTMLCanvasElement, type: string, ...args: unknown[]) {
       if (/webgl/i.test(type)) throw new Error('This CSS-only page must not create WebGL');
       return original.apply(this, [type, ...args] as Parameters<typeof original>);
     } as typeof original;
@@ -265,7 +277,8 @@ test('installation works with WebGL forbidden and the orbit has no canvas or opt
   await page.getByRole('checkbox', { name: /^Cursor / }).click();
   await page.keyboard.press('Escape');
   await expect(page.locator('.hero__demo .command-snippet')).toContainText('--target cursor');
-  await page.getByRole('button', { name: 'Toggle theme', exact: true }).click();
+  await page.getByRole('button', { name: 'Light', exact: true }).click();
+  await expect(page.locator('.v-application')).toHaveClass(/v-theme--light/);
   await expect(field.locator('[data-client-id]')).toHaveCount(uniqueLogos.length);
   // Only decorative logos are deduplicated, never the actual install targets.
   await page.getByRole('button', { name: /Choose target agents:/ }).click();

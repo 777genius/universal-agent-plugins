@@ -6,6 +6,11 @@ on:
       tag:
         description: Exact stable tag, for example agentplugins-v0.1.0
         required: true
+      publish_release:
+        description: Explicitly promote after all verification succeeds
+        required: false
+        type: boolean
+        default: false
       producer_mode:
         description: Binary-only publication, read-only paired preparation, or explicit promotion
         required: true
@@ -280,6 +285,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: agentplugins-release
     outputs:
+      release_id: ${{ steps.release-identity.outputs.release_id }}
       asset_set_digest: ${{ steps.draft.outputs.asset_set_digest }}
       assets_artifact: ${{ steps.draft.outputs.assets_artifact }}
     permissions:
@@ -334,7 +340,7 @@ jobs:
             gh release download "${TAG}" --repo "${GITHUB_REPOSITORY}" --dir "${existing}"
             node "${GITHUB_WORKSPACE}/npm/agentplugins/scripts/release-assets.js" \
               verify "${existing}" "${TAG}" "${FROZEN_COMMIT}"
-            for asset in agentplugins_* checksums.txt release-manifest.json; do
+            for asset in agentplugins_* checksums.txt release-manifest.json THIRD_PARTY_NOTICES.txt; do
               cmp -- "${asset}" "${existing}/${asset}" || {
                 echo "existing draft asset differs from the frozen build: ${asset}" >&2
                 exit 1
@@ -350,6 +356,7 @@ jobs:
             ${{ runner.temp }}/agentplugins-assets/agentplugins_*
             ${{ runner.temp }}/agentplugins-assets/checksums.txt
             ${{ runner.temp }}/agentplugins-assets/release-manifest.json
+            ${{ runner.temp }}/agentplugins-assets/THIRD_PARTY_NOTICES.txt
       - name: Create non-public immutable draft
         if: ${{ steps.draft.outputs.existing != 'true' }}
         env:
@@ -368,10 +375,21 @@ jobs:
             echo "release ${TAG} appeared concurrently; refusing to overwrite immutable assets" >&2
             exit 1
           fi
-          gh release create "${TAG}" agentplugins_* checksums.txt release-manifest.json \
+          gh release create "${TAG}" agentplugins_* checksums.txt release-manifest.json THIRD_PARTY_NOTICES.txt \
             --repo "${GITHUB_REPOSITORY}" --verify-tag \
             --target "${{ needs.validate.outputs.commit }}" --draft \
-            --title "Agentplugins ${TAG#agentplugins-v}" --generate-notes
+            --title "Agentplugins ${TAG#agentplugins-v}" --generate-notes \
+            --notes "Native downloads: retain the companion THIRD_PARTY_NOTICES.txt with the binary and include it when redistributing."
+      - name: Capture staged release identity
+        id: release-identity
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          release_query='query($owner:String!,$name:String!,$tag:String!){repository(owner:$owner,name:$name){release(tagName:$tag){databaseId isDraft isPrerelease tagName}}}'
+          release_response="$(gh api graphql -f query="${release_query}" -F owner="${GITHUB_REPOSITORY%%/*}" -F name="${GITHUB_REPOSITORY#*/}" -F tag="${TAG}")"
+          release_id="$(jq -er --arg tag "${TAG}" '.data.repository.release | select(.isDraft == true and .isPrerelease == false and .tagName == $tag) | .databaseId | select(type == "number" and . > 0)' <<<"${release_response}")"
+          echo "release_id=${release_id}" >> "${GITHUB_OUTPUT}"
       - name: Share frozen draft assets with the read-only proof workflow
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
         with:
@@ -380,6 +398,7 @@ jobs:
             ${{ runner.temp }}/agentplugins-assets/agentplugins_*
             ${{ runner.temp }}/agentplugins-assets/checksums.txt
             ${{ runner.temp }}/agentplugins-assets/release-manifest.json
+            ${{ runner.temp }}/agentplugins-assets/THIRD_PARTY_NOTICES.txt
           if-no-files-found: error
           retention-days: 7
 
@@ -398,9 +417,47 @@ jobs:
       expected_asset_set_digest: ${{ needs.stage-draft.outputs.asset_set_digest }}
       release_assets_artifact: ${{ needs.stage-draft.outputs.assets_artifact }}
 
-  promote-release:
-    if: ${{ inputs.producer_mode == 'binary-only' }}
+  verified-draft:
     needs: [validate, stage-draft, platform-proof]
+    runs-on: ubuntu-latest
+    permissions:
+      # GitHub draft visibility requires push capability; contents: read can return null.
+      # This trusted producer verifier still only reads APIs/assets and verifies attestations.
+      contents: write
+      attestations: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ needs.validate.outputs.commit }}
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          package-manager-cache: false
+      - name: Verify live draft after successful platform proofs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+          FROZEN_COMMIT: ${{ needs.validate.outputs.commit }}
+          RELEASE_ID: ${{ needs.stage-draft.outputs.release_id }}
+          EXPECTED_ASSET_SET_DIGEST: ${{ needs.stage-draft.outputs.asset_set_digest }}
+        run: |
+          python3 scripts/verify-agentplugins-draft.py \
+            --repository "${GITHUB_REPOSITORY}" --tag "${TAG}" \
+            --commit "${FROZEN_COMMIT}" --release-id "${RELEASE_ID}" \
+            --asset-set-digest "${EXPECTED_ASSET_SET_DIGEST}" \
+            --run-id "${GITHUB_RUN_ID}" --run-attempt "${GITHUB_RUN_ATTEMPT}" \
+            --source "${GITHUB_WORKSPACE}" --receipt "${RUNNER_TEMP}/verified-draft.json"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: agentplugins-verified-draft-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/verified-draft.json
+          if-no-files-found: error
+          retention-days: 7
+
+  promote-release:
+    if: ${{ inputs.publish_release == true }}
+    needs: [validate, stage-draft, platform-proof, verified-draft]
     runs-on: ubuntu-latest
     environment: agentplugins-release
     permissions:
@@ -446,8 +503,9 @@ jobs:
           mkdir -p "${assets}"
           gh release download "${TAG}" --repo "${GITHUB_REPOSITORY}" --dir "${assets}"
           node npm/agentplugins/scripts/release-assets.js verify "${assets}" "${TAG}" "${FROZEN_COMMIT}"
+          cmp -- npm/agentplugins/THIRD_PARTY_NOTICES.txt "${assets}/THIRD_PARTY_NOTICES.txt"
           test "$(sha256sum "${assets}/checksums.txt" | cut -d ' ' -f 1)" = "${EXPECTED_ASSET_SET_DIGEST}"
-          for asset in "${assets}"/agentplugins_* "${assets}/checksums.txt" "${assets}/release-manifest.json"; do
+          for asset in "${assets}"/agentplugins_* "${assets}/checksums.txt" "${assets}/release-manifest.json" "${assets}/THIRD_PARTY_NOTICES.txt"; do
             gh attestation verify "${asset}" \
               --repo "${GITHUB_REPOSITORY}" \
               --signer-workflow "github.com/${GITHUB_REPOSITORY}/.github/workflows/agentplugins-release.yml" \

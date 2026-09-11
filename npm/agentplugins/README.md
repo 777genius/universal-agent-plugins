@@ -23,6 +23,22 @@ verified scripts in the [project README](https://github.com/777genius/universal-
 3. Follow any activation or sign-in instruction printed by the CLI.
 4. Start a new agent session and use the plugin.
 
+For the verified Context7 setup in ChatGPT and Kiro:
+
+```bash
+npx universal-agent-plugins add context7 --target chatgpt,kiro
+```
+
+For ChatGPT, follow the printed Developer Mode steps, use
+`https://mcp.context7.com/mcp` with **No authentication**, and rerun the
+printed command with the `asdk_app_...` ID. The CLI then prepares the personal
+marketplace package; installing it and selecting Context7 remain visible
+ChatGPT steps. For Kiro, the CLI manages its owned skills and MCP entry while
+preserving unrelated configuration, then reports any OAuth or restart step.
+macOS and Windows preparation does not claim automatic runtime verification.
+
+See the [real Context7 ChatGPT and Kiro E2E evidence](https://github.com/777genius/universal-agent-plugins/blob/main/docs/CONTEXT7_CHATGPT_KIRO_E2E.md).
+
 [Browse 2,500+ plugins](https://777genius.github.io/universal-agent-plugins/plugins/)
 
 ## What it does
@@ -58,6 +74,9 @@ npx universal-agent-plugins info context7
 
 # Install in specific agents
 npx universal-agent-plugins add context7 --target codex,cursor,kiro
+
+# Prepare Context7 for ChatGPT and Kiro
+npx universal-agent-plugins add context7 --target chatgpt,kiro
 
 # Manage installed plugins
 npx universal-agent-plugins update context7 --target codex,cursor
@@ -102,6 +121,10 @@ The npm package has no `postinstall`. On first execution it downloads the exact
 versioned Go binary for macOS, Linux, or Windows, verifies its embedded SHA-256,
 and caches it locally. Native release tests cover x64 and arm64 on all three
 operating systems.
+
+Third-party license text is included in `THIRD_PARTY_NOTICES.txt` in this npm
+package. For direct native downloads, retain the companion notice file from
+the same release with the binary, including when redistributing.
 
 - [Source and documentation](https://github.com/777genius/universal-agent-plugins)
 - [Browse the plugin catalog](https://777genius.github.io/universal-agent-plugins/plugins/)

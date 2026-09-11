@@ -2,6 +2,7 @@ package usecase
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"sort"
@@ -47,14 +48,22 @@ const (
 type GroupTargetPhase string
 
 const (
-	GroupTargetPlanned           GroupTargetPhase = "planned"
-	GroupTargetManagedRolledBack GroupTargetPhase = "managed_rolled_back"
-	GroupTargetManagedCommitted  GroupTargetPhase = "managed_committed"
-	GroupTargetManagedUnknown    GroupTargetPhase = "managed_commit_unknown"
-	GroupTargetExternalCompleted GroupTargetPhase = "external_completed"
-	GroupTargetExternalFailed    GroupTargetPhase = "external_failed"
-	GroupTargetExternalPartial   GroupTargetPhase = "external_completed_managed_incomplete"
+	GroupTargetPlanned              GroupTargetPhase = "planned"
+	GroupTargetManagedRolledBack    GroupTargetPhase = "managed_rolled_back"
+	GroupTargetManagedCommitted     GroupTargetPhase = "managed_committed"
+	GroupTargetManagedUnknown       GroupTargetPhase = "managed_commit_unknown"
+	GroupTargetExternalCompleted    GroupTargetPhase = "external_completed"
+	GroupTargetExternalFailed       GroupTargetPhase = "external_failed"
+	GroupTargetExternalPartial      GroupTargetPhase = "external_completed_managed_incomplete"
+	GroupTargetExternalNotAttempted GroupTargetPhase = "external_not_attempted"
 )
+
+// GroupTargetFailure records why one logical surface failed or was skipped
+// during external activation. Retry commands belong in CLI presentation.
+type GroupTargetFailure struct {
+	Stage   string `json:"stage"`
+	Message string `json:"message"`
+}
 
 func (service Service) AddGroup(ctx context.Context, input GroupInput) (GroupResult, error) {
 	return service.applyGroup(ctx, input, false)
@@ -118,9 +127,19 @@ type plannedGroupTarget struct {
 	dataReceipt     domain.DataReceipt
 	dataCreated     bool
 	noChange        bool
+	// recovering marks a confirmed repair target whose managed native object is
+	// positively absent from the filesystem, proven without ever running native
+	// client discovery. Its full native identity is deferred until the group's
+	// directories are restored and is verified once, together, before commit.
+	recovering bool
 }
 
 func (service Service) applyGroup(ctx context.Context, input GroupInput, replace bool) (GroupResult, error) {
+	for _, target := range append(append([]AddInput(nil), input.Targets...), input.CompatibilityChecks...) {
+		if err := target.InstallIntent.Validate(target.Client.ClientID); err != nil {
+			return GroupResult{}, err
+		}
+	}
 	if len(input.Targets) == 0 {
 		return GroupResult{}, fmt.Errorf("at least one target is required")
 	}
@@ -239,7 +258,7 @@ func (service Service) applyGroup(ctx context.Context, input GroupInput, replace
 		if target.DistributionSuspended && normalizedOriginMode(target.OriginMode) == domain.OriginModeDirectory && !input.Repair {
 			return result, fmt.Errorf("suspended distribution blocks group add/update")
 		}
-		plan, err := service.Planner.Plan(ctx, target.Envelope, target.Client, target.Scope, domain.ComputePhysicalArtifactID(target.Envelope.Manifest.Name, installationID))
+		plan, err := service.planInstall(ctx, &target, domain.ComputePhysicalArtifactID(target.Envelope.Manifest.Name, installationID), installationIfExisting(state, installationIndex, existing))
 		if err != nil {
 			return result, err
 		}
@@ -248,7 +267,8 @@ func (service Service) applyGroup(ctx context.Context, input GroupInput, replace
 		}
 		result.Targets[targetIndex] = AddResult{InstallationID: installationID, Plan: plan}
 		if target.ReleaseRevoked && normalizedOriginMode(target.OriginMode) == domain.OriginModeDirect {
-			result.Targets[targetIndex].Plan.Warnings = append(result.Targets[targetIndex].Plan.Warnings, "direct_source_digest_matches_known_revoked_directory_release")
+			plan.Warnings = append(plan.Warnings, "direct_source_digest_matches_known_revoked_directory_release")
+			result.Targets[targetIndex].Plan = plan
 		}
 		if plan.Status == domain.PlanUnsupported {
 			return result, fmt.Errorf("target %s is unsupported; group preflight caused no mutation", target.Client.ClientID)
@@ -256,9 +276,11 @@ func (service Service) applyGroup(ctx context.Context, input GroupInput, replace
 		if err := service.preflightActivation(target, plan); err != nil {
 			return result, err
 		}
-		if err := preflightRuntime(target.Envelope, plan, service.automaticallyActivates(target, plan)); err != nil {
+		if err := service.preflightTargetComponents(ctx, target, &plan, installationIfExisting(state, installationIndex, existing), input.Repair, replace); err != nil {
+			result.Targets[targetIndex].Plan = plan
 			return result, err
 		}
+		result.Targets[targetIndex].Plan = plan
 		key := plan.ActivePath
 		if sameNativeBackend(target.Client.ClientID, domain.ClientCopilot) {
 			key = "shared-copilot-vscode:" + plan.PhysicalArtifactID
@@ -302,10 +324,14 @@ func (service Service) applyGroup(ctx context.Context, input GroupInput, replace
 				}
 			}
 		}
+		if replace {
+			describeMCPRemovals(&plan, managed)
+		}
 		if replace && managed == nil {
 			return result, fmt.Errorf("update target %s is not installed", target.Client.ClientID)
 		}
 		result.Targets[targetIndex].Plan = plan
+		recovering := false
 		if input.DryRun {
 			if err := service.observeGroupPreparedIdentity(ctx, target.Client, plan, managed, input.Repair); err != nil {
 				return result, err
@@ -315,16 +341,18 @@ func (service Service) applyGroup(ctx context.Context, input GroupInput, replace
 					return result, err
 				}
 			}
+		} else if input.Repair && managed != nil && service.observeGroupRecoveryEligibility(ctx, target.Client, plan, managed) {
+			recovering = true
 		} else if err := service.observeGroupNativeIdentity(ctx, target.Client, plan, managed, input.Repair); err != nil {
 			return result, err
 		}
-		noChange := managed != nil && !input.Repair && !input.Switch && groupPackageUnchanged(*managed, target) && containsSurface(managed.AffectedSurfaces, string(target.Client.ClientID))
+		noChange := !requiresComponentRemoval(plan) && managed != nil && !input.Repair && !input.Switch && groupPackageUnchanged(*managed, target) && containsSurface(managed.AffectedSurfaces, string(target.Client.ClientID))
 		if noChange {
 			result.Targets[targetIndex].NoChange = true
 			result.Targets[targetIndex].Activation = domain.ActivationOutcome{Activation: managed.Activation, Authentication: managed.Authentication, Policy: managed.Policy, Verification: managed.Verification}
 		}
 		physical[key] = len(planned)
-		planned = append(planned, plannedGroupTarget{input: target, plan: plan, resultIndexes: []int{targetIndex}, clientBindingID: clientID, managed: managed, noChange: noChange})
+		planned = append(planned, plannedGroupTarget{input: target, plan: plan, resultIndexes: []int{targetIndex}, clientBindingID: clientID, managed: managed, noChange: noChange, recovering: recovering})
 	}
 	if replace && existing && !input.Repair {
 		compatibleBindings := map[string]bool{}
@@ -341,7 +369,7 @@ func (service Service) applyGroup(ctx context.Context, input GroupInput, replace
 			if check.Envelope.TreeDigest != first.Envelope.TreeDigest || check.Envelope.ManifestDigest != first.Envelope.ManifestDigest {
 				return result, fmt.Errorf("compatibility preflight must use the update candidate bytes")
 			}
-			plan, err := service.Planner.Plan(ctx, check.Envelope, check.Client, check.Scope, domain.ComputePhysicalArtifactID(check.Envelope.Manifest.Name, installationID))
+			plan, err := service.planInstall(ctx, &check, domain.ComputePhysicalArtifactID(check.Envelope.Manifest.Name, installationID), installationIfExisting(state, installationIndex, existing))
 			if err != nil {
 				return result, err
 			}
@@ -351,7 +379,7 @@ func (service Service) applyGroup(ctx context.Context, input GroupInput, replace
 			if err := service.preflightActivation(check, plan); err != nil {
 				return result, err
 			}
-			if err := preflightRuntime(check.Envelope, plan, service.automaticallyActivates(check, plan)); err != nil {
+			if err := service.preflightTargetComponents(ctx, check, &plan, &state.Installations[installationIndex], false, true); err != nil {
 				return result, err
 			}
 			for _, binding := range state.Installations[installationIndex].Clients {
@@ -388,7 +416,7 @@ func (service Service) applyGroup(ctx context.Context, input GroupInput, replace
 			continue
 		}
 		operationID := fmt.Sprintf("%s-%03d", groupID, targetIndex+1)
-		if packageNeedsPluginData(target.input.Envelope) {
+		if packageNeedsPluginData(target.input.Envelope, target.plan) {
 			if service.PluginData == nil {
 				cleanup()
 				return result, fmt.Errorf("PLUGIN_DATA manager is required for stdio MCP packages")
@@ -415,6 +443,23 @@ func (service Service) applyGroup(ctx context.Context, input GroupInput, replace
 	}
 	defer cleanup()
 	for _, target := range planned {
+		if target.recovering {
+			// The recovering target's directory is still absent at this point; its
+			// native registry is expected to keep failing until the group's
+			// directories are actually restored. Re-confirm, from the filesystem
+			// alone, that nothing has since occupied the target: a genuine native
+			// verification happens once, after restoration, in PostApplyVerify.
+			if !service.observeGroupRecoveryEligibility(ctx, target.input.Client, target.plan, target.managed) {
+				return result, fmt.Errorf("native identity changed before group commit: recorded absent target %s is no longer eligible for recovery", target.input.Client.ClientID)
+			}
+			// The staged reconstruction must reproduce the exact prior receipt
+			// digest, not merely a new, self-consistent build: repair only ever
+			// authorizes restoring what was already recorded as owned.
+			if expected := managedDigest(*target.managed); expected == "" || target.delivery.ArtifactDigest != expected {
+				return result, fmt.Errorf("staged reconstruction for %s does not match the recorded package digest", target.input.Client.ClientID)
+			}
+			continue
+		}
 		if err := service.observeGroupNativeIdentity(ctx, target.input.Client, target.plan, target.managed, input.Repair); err != nil {
 			return result, fmt.Errorf("native identity changed before group commit: %w", err)
 		}
@@ -501,7 +546,10 @@ func (service Service) applyGroup(ctx context.Context, input GroupInput, replace
 		}
 		client := desired.Installations[installationIndex].Clients[target.clientBindingID]
 		before := ""
-		if target.managed != nil {
+		if target.managed != nil && !target.recovering {
+			// A recovering target's active path is positively absent right now; its
+			// recorded receipt digest describes what was there before it disappeared,
+			// not the current (absent) state this mutation actually observed.
 			before = managedDigest(*target.managed)
 		}
 		operationID := fmt.Sprintf("%s-%03d", groupID, targetIndex+1)
@@ -513,16 +561,17 @@ func (service Service) applyGroup(ctx context.Context, input GroupInput, replace
 		mutations = append(mutations, transaction.DirectoryMutation{OperationID: operationID, InstallationID: installationID, ClientBindingID: target.clientBindingID,
 			Sequence: nextSequence(client), OwnedBase: delivery.OwnedBase, ActivePath: delivery.ActivePath, StagingPath: delivery.StagingPath,
 			BeforeDigest: before, AfterDigest: delivery.ArtifactDigest, NativeObjects: delivery.NativeObjects, Activation: target.plan.Activation,
-			Authentication: authentication, Policy: domain.PolicyAllowed, Verification: target.plan.Verification,
+			Authentication: authentication, Policy: domain.PolicyAllowed, Verification: target.plan.Verification, RequireAbsent: target.recovering,
 			Verify: func(verifyContext context.Context, activePath string) error {
 				return service.Stager.Verify(verifyContext, activePath, delivery.ArtifactDigest)
 			}})
 	}
 	kernel := service.Kernel
 	kernel.StateStore = service.StateStore
+	postApplyVerify := service.groupRecoveryPostApplyVerify(planned)
 	var receipts []domain.MutationReceipt
 	if len(mutations) > 0 {
-		receipts, err = kernel.ApplyDirectoryGroup(ctx, transaction.DirectoryGroup{OperationGroupID: groupID, Mutations: mutations, DesiredState: desired})
+		receipts, err = kernel.ApplyDirectoryGroup(ctx, transaction.DirectoryGroup{OperationGroupID: groupID, Mutations: mutations, DesiredState: desired, PostApplyVerify: postApplyVerify})
 		if err != nil {
 			result.Receipts = receipts
 			assignGroupReceipts(result.Targets, planned, receipts)
@@ -575,7 +624,31 @@ func (service Service) applyGroup(ctx context.Context, input GroupInput, replace
 		planned[index].dataCreated = false
 	}
 	externalCompleted := 0
-	for _, target := range planned {
+	externalFailed := 0
+	logicalTotal := len(result.Targets)
+	var firstActivationErr error
+	markRemainingNotAttempted := func(fromIndex int, stage, message string) {
+		for index := fromIndex; index < len(planned); index++ {
+			target := planned[index]
+			for _, resultIndex := range target.resultIndexes {
+				result.Targets[resultIndex].GroupPhase = GroupTargetExternalNotAttempted
+				result.Targets[resultIndex].Failure = &GroupTargetFailure{Stage: stage, Message: message}
+			}
+		}
+	}
+	classifyActivationFailure := func() {
+		if externalCompleted > 0 {
+			result.Phase = GroupPhaseExternalPartialFailure
+			return
+		}
+		result.Phase = GroupPhaseManagedActivationFailed
+	}
+	for plannedIndex, target := range planned {
+		if err := ctx.Err(); err != nil {
+			classifyActivationFailure()
+			markRemainingNotAttempted(plannedIndex, "canceled", "processing stopped because the operation was canceled before remaining clients could be activated safely")
+			return result, fmt.Errorf("%d of %d client activations failed: %w", externalFailed+countNotAttempted(result.Targets), logicalTotal, err)
+		}
 		delivery := target.delivery
 		if target.noChange && target.managed != nil {
 			delivery = domain.StagedDelivery{
@@ -595,6 +668,22 @@ func (service Service) applyGroup(ctx context.Context, input GroupInput, replace
 			VerifyOnly: target.noChange, ActivationComplete: target.input.ActivationComplete})
 		if input.Repair && target.managed != nil {
 			outcome = preserveManagedAuthentication(outcome, target.managed.Authentication)
+		}
+		if activationErr == nil && outcome.Activation == "" {
+			if err := ctx.Err(); err != nil {
+				activationErr = err
+			} else {
+				activationErr = fmt.Errorf("activator returned an empty activation outcome")
+			}
+		}
+		if activationErr == nil && (outcome.Activation == domain.ActivationFailed || outcome.Verification == domain.VerificationFailed || outcome.Authentication == domain.AuthenticationFailed) {
+			activationErr = fmt.Errorf("activator reported a failed activation outcome without an error")
+		}
+		if activationErr != nil && outcome.Activation == "" {
+			outcome = domain.ActivationOutcome{
+				Activation: domain.ActivationFailed, Authentication: target.plan.Authentication,
+				Policy: domain.PolicyAllowed, Verification: domain.VerificationFailed,
+			}
 		}
 		if target.noChange && target.managed != nil {
 			if activationErr == nil && !clientVerifierAvailable(target.input, target.plan) && target.managed.Activation == domain.ActivationActive && target.managed.Verification == domain.VerificationInstalled {
@@ -622,28 +711,82 @@ func (service Service) applyGroup(ctx context.Context, input GroupInput, replace
 			if lifecycleChanged {
 				result.Targets[resultIndex].NoChange = false
 			}
-			if activationErr == nil && persistErr == nil {
-				result.Targets[resultIndex].GroupPhase = GroupTargetExternalCompleted
-			} else {
+			switch {
+			case persistErr != nil:
 				result.Targets[resultIndex].GroupPhase = GroupTargetExternalFailed
+				result.Targets[resultIndex].Failure = &GroupTargetFailure{Stage: "persist", Message: persistErr.Error()}
+			case activationErr != nil:
+				result.Targets[resultIndex].GroupPhase = GroupTargetExternalFailed
+				result.Targets[resultIndex].Failure = groupTargetFailureFromActivation(activationErr, outcome)
+			default:
+				result.Targets[resultIndex].GroupPhase = GroupTargetExternalCompleted
 			}
-		}
-		if activationErr != nil {
-			if externalCompleted > 0 {
-				result.Phase = GroupPhaseExternalPartialFailure
-			} else {
-				result.Phase = GroupPhaseManagedActivationFailed
-			}
-			return result, activationErr
 		}
 		if persistErr != nil {
-			result.Phase = GroupPhaseManagedActivationFailed
-			return result, persistErr
+			externalFailed += len(target.resultIndexes)
+			classifyActivationFailure()
+			markRemainingNotAttempted(plannedIndex+1, "persist", "processing stopped because installation state could not be saved safely")
+			return result, fmt.Errorf("%d of %d client activations failed: %w", externalFailed+countNotAttempted(result.Targets), logicalTotal, persistErr)
+		}
+		if activationErr != nil {
+			externalFailed += len(target.resultIndexes)
+			if firstActivationErr == nil {
+				firstActivationErr = activationErr
+			}
+			if errors.Is(activationErr, context.Canceled) || errors.Is(activationErr, context.DeadlineExceeded) || ctx.Err() != nil {
+				classifyActivationFailure()
+				markRemainingNotAttempted(plannedIndex+1, "canceled", "processing stopped because the operation was canceled before remaining clients could be activated safely")
+				cause := activationErr
+				if ctxErr := ctx.Err(); ctxErr != nil && !errors.Is(activationErr, context.Canceled) && !errors.Is(activationErr, context.DeadlineExceeded) {
+					cause = ctxErr
+				}
+				return result, fmt.Errorf("%d of %d client activations failed: %w", externalFailed+countNotAttempted(result.Targets), logicalTotal, cause)
+			}
+			continue
 		}
 		externalCompleted += len(target.resultIndexes)
 	}
+	if externalFailed > 0 {
+		classifyActivationFailure()
+		if firstActivationErr != nil {
+			return result, fmt.Errorf("%d of %d client activations failed: %w", externalFailed, logicalTotal, firstActivationErr)
+		}
+		return result, fmt.Errorf("%d of %d client activations failed", externalFailed, logicalTotal)
+	}
 	result.Phase = GroupPhaseCompleted
 	return result, nil
+}
+
+func groupTargetFailureFromActivation(err error, outcome domain.ActivationOutcome) *GroupTargetFailure {
+	stage := "activation"
+	switch {
+	case errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
+		stage = "canceled"
+	case outcome.Authentication == domain.AuthenticationFailed &&
+		outcome.Activation != domain.ActivationFailed &&
+		outcome.Verification != domain.VerificationFailed:
+		stage = "authentication"
+	case outcome.Verification == domain.VerificationFailed &&
+		outcome.Activation != domain.ActivationFailed:
+		// Providers often set VerificationFailed together with ActivationFailed.
+		// Prefer activation unless verification is the only failed dimension.
+		stage = "verification"
+	}
+	message := "activation failed"
+	if err != nil {
+		message = err.Error()
+	}
+	return &GroupTargetFailure{Stage: stage, Message: message}
+}
+
+func countNotAttempted(targets []AddResult) int {
+	count := 0
+	for _, target := range targets {
+		if target.GroupPhase == GroupTargetExternalNotAttempted {
+			count++
+		}
+	}
+	return count
 }
 
 func preservedGroupAuthentication(planned, current domain.AuthenticationState) domain.AuthenticationState {
@@ -779,4 +922,123 @@ func validateGroupNativeIdentityObservation(observation domain.NativeIdentityObs
 	default:
 		return fmt.Errorf("native identity observer returned an unknown state")
 	}
+}
+
+// observeGroupRecoveryEligibility determines whether a confirmed repair target
+// qualifies for the absent-managed-object recovery path: an intact prior
+// managed ownership receipt with a nonempty digest, a native observer capable
+// of the later post-restoration verification, and the active path positively
+// confirmed absent through filesystem-only observation. It deliberately never
+// runs native client discovery, so a failed native registry command can never
+// be mistaken for proof of absence. At its first call site (the per-target
+// preflight loop) a false result simply falls through to the ordinary,
+// CLI-inclusive identity check; at its second call site (the pre-commit
+// recheck of an already-committed recovering target) a false result is a hard
+// refusal instead, since the target's own recovery path was already chosen.
+//
+// This is deliberately restricted to Codex: it is the only client with
+// evidence (run05) that its native registry command fails outright while the
+// target it would report on is absent. Other clients' registry commands have
+// not been shown to share that failure mode, so they keep going through the
+// ordinary, immediate CLI-inclusive check.
+func (service Service) observeGroupRecoveryEligibility(ctx context.Context, client domain.DetectedClient, plan domain.DeliveryPlan, managed *domain.ClientBinding) bool {
+	if client.ClientID != domain.ClientCodex || managed == nil || managedDigest(*managed) == "" || service.NativeObserver == nil {
+		return false
+	}
+	observation, err := service.preparedIdentityObservation(ctx, client, plan, managed)
+	if err != nil {
+		return false
+	}
+	return observation.State == domain.NativeIdentityAbsent
+}
+
+// groupRecoveryPostApplyVerify builds the transaction.DirectoryGroup's
+// PostApplyVerify hook for a group containing at least one recovering target,
+// or returns nil when the group has none. It runs full, native-registry-
+// inclusive identity discovery exactly once per recovering target, only after
+// every directory in the group has already been restored, and requires the
+// client to now confirm exact managed ownership reconciled against the same
+// recorded digest. A returned error rolls the whole group back before any
+// state commit or external activation.
+//
+// Known residual limitations, not fixed by this contract:
+//
+//   - Absent swaps use exclusive publication and persisted root identity/tree
+//     fingerprints for rollback and recovery. Changed or replaced provisional
+//     objects retain their journal and fail closed. A noncooperating writer
+//     changing the quarantine after its final fingerprint check and before
+//     removal remains an unresolved filesystem concurrency limitation.
+//   - Codex's own registry command is global across every installation's
+//     marketplace entries in its config.toml, not scoped to one installation:
+//     one installation has at most one Codex client binding, so a single
+//     RepairGroup call can never itself carry two recovering targets, but a
+//     wiped managed root can still leave two separate installations each with
+//     their own absent Codex-owned directory. Repairing installation A
+//     restores its directory, but this hook's `codex plugin list --json` call
+//     still fails because installation B's marketplace entry is missing, so
+//     the repair of A rolls back too; repairing B is symmetric. Neither gets
+//     fixed until an operator restores or de-registers the other missing
+//     source. This is reachable, not unreached -- but it fails closed (a
+//     rollback, never silent adoption) and is no worse than before this fix
+//     (a preflight refusal instead of a rollback), so it is left as a
+//     documented limitation rather than solved here.
+func (service Service) groupRecoveryPostApplyVerify(planned []plannedGroupTarget) func(context.Context) error {
+	recovering := make([]plannedGroupTarget, 0, len(planned))
+	for _, target := range planned {
+		if target.recovering {
+			recovering = append(recovering, target)
+		}
+	}
+	if len(recovering) == 0 {
+		return nil
+	}
+	return func(ctx context.Context) error {
+		for _, target := range recovering {
+			// Eligibility already required a non-nil NativeObserver; recovering
+			// can only be true when that held at preflight time.
+			observation, err := service.NativeObserver.ObserveNativeIdentity(ctx, target.input.Client, target.plan, target.managed)
+			if err != nil {
+				return fmt.Errorf("verify restored native identity for %s: %w", target.input.Client.ClientID, err)
+			}
+			if err := validateGroupRecoveryVerification(observation, target.managed); err != nil {
+				return fmt.Errorf("restored native identity for %s: %w", target.input.Client.ClientID, err)
+			}
+		}
+		return nil
+	}
+}
+
+// validateGroupRecoveryVerification requires the same managed-identity proof
+// the ordinary repair gate (validateGroupNativeIdentityObservation) already
+// accepts as sufficient: a Managed finding whose digest matches the recorded
+// receipt. Unlike the ordinary gate, an absent finding is no longer
+// acceptable here -- the entire purpose of this check is confirming the
+// reconstructed directory's digest, not merely its absence.
+//
+// Known residual gap, shared with every other Managed check in this
+// codebase (not unique to recovery): a Managed finding with a matching digest
+// can, for a real provider, be reached through the filesystem/digest fallback
+// in observeIdentity even when the native registry itself reported the
+// package as not found (registryClear) rather than confirming it -- see
+// NativeIdentityObservation.NativeDiscoveryReconciled. Requiring that field
+// here was tried and reverted: it is not part of the documented
+// NativeIdentityObserver contract, so any other implementation of that
+// interface (including this package's own test fakes and this repo's shared
+// CLI test fixture) can validly omit it, and requiring it broke unrelated
+// tests without a corresponding real-world exploit demonstrated. This check
+// therefore proves exact digest reconstruction, not that the native registry
+// itself already reports the package as installed; it does not by itself
+// prove the package is activated or otherwise in active use.
+func validateGroupRecoveryVerification(observation domain.NativeIdentityObservation, managed *domain.ClientBinding) error {
+	if managed == nil {
+		return fmt.Errorf("recovery verification requires a recorded managed binding")
+	}
+	if observation.State != domain.NativeIdentityManaged {
+		return fmt.Errorf("state is %q, want managed", observation.State)
+	}
+	expected := managedDigest(*managed)
+	if expected == "" || observation.Digest == "" || expected != observation.Digest {
+		return fmt.Errorf("restored digest does not match the recorded receipt")
+	}
+	return nil
 }

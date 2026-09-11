@@ -224,7 +224,9 @@ func NewPluginKitRoot(factories ...Factory) (*cobra.Command, error) {
 	root := &cobra.Command{Use: "plugin-kit-ai", Short: "Build Agent Plugins packages", SilenceErrors: true, SilenceUsage: true}
 	flags := root.PersistentFlags()
 	flags.String("format", "human", "output format: human or json")
+	flags.String("color", "auto", "human output color: auto, never, always")
 	flags.Bool("no-color", false, "disable color output")
+	flags.Bool("plain", false, "use accessible line prompts (independent of color)")
 	flags.Bool("dry-run", false, "show the plan without changes (supported commands only)")
 	flags.String("target", "", "target clients, comma-separated (supported commands only)")
 	if err := mount(root, factories); err != nil {

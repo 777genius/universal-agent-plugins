@@ -124,7 +124,7 @@ jobs:
           git merge-base --is-ancestor "${commit}" refs/remotes/origin/main
           release_json="$(gh release view "${TAG}" --repo "${GITHUB_REPOSITORY}" --json isDraft,isPrerelease,tagName,assets)"
           version="${TAG#agentplugins-v}"
-          expected_names="agentplugins_${version}_darwin_amd64 agentplugins_${version}_darwin_arm64 agentplugins_${version}_linux_amd64 agentplugins_${version}_linux_arm64 agentplugins_${version}_windows_amd64.exe agentplugins_${version}_windows_arm64.exe checksums.txt release-manifest.json"
+          expected_names="THIRD_PARTY_NOTICES.txt agentplugins_${version}_darwin_amd64 agentplugins_${version}_darwin_arm64 agentplugins_${version}_linux_amd64 agentplugins_${version}_linux_arm64 agentplugins_${version}_windows_amd64.exe agentplugins_${version}_windows_arm64.exe checksums.txt release-manifest.json"
           actual_names="$(jq -r '.assets[].name' <<<"${release_json}" | sort | tr '\n' ' ' | sed 's/ $//')"
           expected_sorted="$(printf '%s\n' ${expected_names} | sort | tr '\n' ' ' | sed 's/ $//')"
           jq -e --arg tag "${TAG}" '.isDraft == false and .isPrerelease == false and .tagName == $tag' <<<"${release_json}" >/dev/null
@@ -132,7 +132,7 @@ jobs:
           mkdir -p "${RUNNER_TEMP}/release-assets"
           gh release download "${TAG}" --repo "${GITHUB_REPOSITORY}" --dir "${RUNNER_TEMP}/release-assets"
           node npm/agentplugins/scripts/release-assets.js verify "${RUNNER_TEMP}/release-assets" "${TAG}" "${commit}" > "${RUNNER_TEMP}/verified-release.json"
-          for asset in "${RUNNER_TEMP}"/release-assets/agentplugins_* "${RUNNER_TEMP}/release-assets/checksums.txt" "${RUNNER_TEMP}/release-assets/release-manifest.json"; do
+          for asset in "${RUNNER_TEMP}"/release-assets/agentplugins_* "${RUNNER_TEMP}/release-assets/checksums.txt" "${RUNNER_TEMP}/release-assets/release-manifest.json" "${RUNNER_TEMP}/release-assets/THIRD_PARTY_NOTICES.txt"; do
             gh attestation verify "${asset}" --repo "${GITHUB_REPOSITORY}" --signer-workflow "github.com/${GITHUB_REPOSITORY}/.github/workflows/agentplugins-release.yml" --source-digest "${commit}"
           done
       - name: Stage and pack the exact npm facade

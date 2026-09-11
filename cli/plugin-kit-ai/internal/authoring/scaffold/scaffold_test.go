@@ -520,21 +520,32 @@ func TestConcurrentApplyExactlyOneWinner(t *testing.T) {
 	validate := realValidation(t)
 	ready := make(chan struct{}, 2)
 	release := make(chan struct{})
-	results := make(chan bool, 2)
+	type outcome struct {
+		result Result
+		err    error
+	}
+	results := make(chan outcome, 2)
 	var wg sync.WaitGroup
 	for range 2 {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
+			arrived := false
+			defer func() {
+				if !arrived {
+					ready <- struct{}{}
+				}
+			}()
 			r, err := Apply(context.Background(), p, ApplyOptions{Destination: dest, Validate: func(ctx context.Context, s string, dir *os.Root) error {
 				if err := validate(ctx, s, dir); err != nil {
 					return err
 				}
+				arrived = true
 				ready <- struct{}{}
 				<-release
 				return nil
 			}})
-			results <- err == nil && r.Committed
+			results <- outcome{r, err}
 		}()
 	}
 	<-ready
@@ -543,9 +554,12 @@ func TestConcurrentApplyExactlyOneWinner(t *testing.T) {
 	wg.Wait()
 	close(results)
 	winners := 0
-	for ok := range results {
-		if ok {
+	for got := range results {
+		t.Logf("concurrent Apply: result=%+v raw_error=%T %v", got.result, got.err, got.err)
+		if got.err == nil && got.result.Committed {
 			winners++
+		} else if got.result.Committed || !errors.Is(got.err, os.ErrExist) {
+			t.Errorf("loser must report destination existence: result=%+v raw_error=%T %v", got.result, got.err, got.err)
 		}
 	}
 	if winners != 1 {

@@ -169,7 +169,7 @@ func TestGroupedDryRunDoesNotObserveNativeClientIdentity(t *testing.T) {
 	}); err == nil || !strings.Contains(err.Error(), "changed or is missing") {
 		t.Fatalf("tampered group dry-run error = %v", err)
 	}
-	if observer.calls != 0 || observer.preparedCalls != 1 {
+	if observer.calls != 0 || observer.preparedCalls != 0 {
 		t.Fatalf("tampered group dry-run observations: native=%d prepared=%d", observer.calls, observer.preparedCalls)
 	}
 }
@@ -297,21 +297,420 @@ func TestGroupedRepairAllowsRecordedObjectToBeAbsentButNeverAdoptsForeignIdentit
 	}
 }
 
+// acceptingVerifier treats any active path as matching any expected digest.
+// It stands in for a real content check in tests that only exercise the
+// native-identity control flow, not staged-byte verification.
+type acceptingVerifier struct{}
+
+func (acceptingVerifier) Verify(context.Context, string, string) error { return nil }
+
+// recoveryProbeNativeObserver simulates Codex's own failure mode from run05:
+// the CLI-inclusive registry command fails outright whenever the managed
+// directory it would report on is absent, regardless of cause. Filesystem-only
+// prepared observation never touches that failing command, matching the real
+// provider split between ObservePreparedIdentity and ObserveNativeIdentity.
+type recoveryProbeNativeObserver struct {
+	stager interface {
+		Verify(context.Context, string, string) error
+	}
+	preparedCalls int
+	nativeCalls   int
+	// postRestorationState, when set, overrides what ObserveNativeIdentity
+	// reports once the target file exists, so a test can simulate the native
+	// registry finding something other than confirmed ownership after
+	// restoration (for example, a foreign namespace collision).
+	postRestorationState domain.NativeIdentityState
+	// injectAfterPreparedCall, when nonzero, runs injectFunc immediately after
+	// the given 1-based ObservePreparedIdentity call number returns its
+	// (truthful, at-that-instant) answer -- simulating a concurrent write that
+	// lands after the last absence check but before the kernel actually swaps.
+	injectAfterPreparedCall int
+	injectFunc              func()
+	// watchPaths, when set, simulates Codex's own registry command being
+	// global across every installation's marketplace entries: ObserveNativeIdentity
+	// fails whenever ANY of these paths is absent, not only plan.ActivePath.
+	watchPaths []string
+}
+
+func (observer *recoveryProbeNativeObserver) ObservePreparedIdentity(_ context.Context, _ domain.DetectedClient, plan domain.DeliveryPlan, managed *domain.ClientBinding) (domain.NativeIdentityObservation, error) {
+	observer.preparedCalls++
+	if observer.injectAfterPreparedCall != 0 && observer.preparedCalls == observer.injectAfterPreparedCall {
+		defer observer.injectFunc()
+	}
+	if _, err := os.Lstat(plan.ActivePath); os.IsNotExist(err) {
+		return domain.NativeIdentityObservation{State: domain.NativeIdentityAbsent}, nil
+	} else if err != nil {
+		return domain.NativeIdentityObservation{State: domain.NativeIdentityIndeterminate}, err
+	}
+	if managed == nil {
+		return domain.NativeIdentityObservation{State: domain.NativeIdentityUnmanaged}, nil
+	}
+	return domain.NativeIdentityObservation{State: domain.NativeIdentityManaged, Digest: managedDigest(*managed)}, nil
+}
+
+func (observer *recoveryProbeNativeObserver) ObserveNativeIdentity(ctx context.Context, _ domain.DetectedClient, plan domain.DeliveryPlan, managed *domain.ClientBinding) (domain.NativeIdentityObservation, error) {
+	observer.nativeCalls++
+	watched := observer.watchPaths
+	if len(watched) == 0 {
+		watched = []string{plan.ActivePath}
+	}
+	for _, path := range watched {
+		if _, err := os.Lstat(path); os.IsNotExist(err) {
+			// The real bug: Codex's `plugin list` fails outright while any of
+			// its configured local marketplace sources is absent. The exit
+			// code must never become proof of absence.
+			return domain.NativeIdentityObservation{}, errors.New("Codex plugin registry command failed with exit code 1")
+		}
+	}
+	if observer.postRestorationState != "" {
+		return domain.NativeIdentityObservation{State: observer.postRestorationState}, nil
+	}
+	if managed == nil {
+		return domain.NativeIdentityObservation{State: domain.NativeIdentityUnmanaged}, nil
+	}
+	expected := managedDigest(*managed)
+	if expected == "" || observer.stager == nil {
+		return domain.NativeIdentityObservation{State: domain.NativeIdentityIndeterminate}, nil
+	}
+	if err := observer.stager.Verify(ctx, plan.ActivePath, expected); err != nil {
+		return domain.NativeIdentityObservation{State: domain.NativeIdentityIndeterminate}, nil
+	}
+	return domain.NativeIdentityObservation{
+		State: domain.NativeIdentityManaged, Digest: expected, ReceiptReconciled: true,
+		NativeDiscoveryAttempted: true, NativeDiscoveryReconciled: true, NativeDiscoveryState: domain.NativeIdentityManaged,
+	}, nil
+}
+
+func TestGroupedRepairRecoversAbsentManagedDirectoryWithoutTreatingFailedNativeDiscoveryAsAbsence(t *testing.T) {
+	t.Parallel()
+	service, store, _ := serviceFixture(t)
+	codex := domain.DetectedClient{ClientID: domain.ClientCodex, Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), ".codex")}
+	install := addInput(t, codex, "https://example.com/absent-repair")
+	added, err := service.AddGroup(context.Background(), GroupInput{Targets: []AddInput{install}, OperationGroupID: "absent-repair-add", Confirmed: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	activePath := added.Targets[0].Plan.ActivePath
+	if _, statErr := os.Stat(activePath); statErr != nil {
+		t.Fatalf("installed target missing: %v", statErr)
+	}
+
+	// Simulate run05: the whole intact managed directory disappears from under
+	// UAP (renamed or removed outside its lifecycle) while state and receipts
+	// still record it as owned with a nonempty digest.
+	if err := os.RemoveAll(activePath); err != nil {
+		t.Fatal(err)
+	}
+
+	observer := &recoveryProbeNativeObserver{stager: service.Stager}
+	service.NativeObserver = observer
+
+	repairInput := install
+	repairInput.InstallationID = added.InstallationID
+
+	if _, err := service.RepairGroup(context.Background(), GroupInput{Targets: []AddInput{repairInput}, OperationGroupID: "absent-repair-dry-run", DryRun: true, Repair: true}); err != nil {
+		t.Fatalf("dry-run repair of an absent recorded object was refused: %v", err)
+	}
+	if observer.nativeCalls != 0 {
+		t.Fatalf("dry-run invoked native client discovery %d times, want 0", observer.nativeCalls)
+	}
+
+	repaired, err := service.RepairGroup(context.Background(), GroupInput{Targets: []AddInput{repairInput}, OperationGroupID: "absent-repair-confirmed", Confirmed: true, Repair: true})
+	if err != nil {
+		t.Fatalf("confirmed repair of an absent recorded object failed: %v", err)
+	}
+	if repaired.Phase != GroupPhaseCompleted {
+		t.Fatalf("repair phase = %s, want completed", repaired.Phase)
+	}
+	if observer.nativeCalls == 0 {
+		t.Fatal("post-restoration native identity verification was never invoked")
+	}
+	if _, err := os.Stat(filepath.Join(activePath, "plugin.json")); err != nil {
+		t.Fatalf("repair did not restore the managed directory: %v", err)
+	}
+	state, err := store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(onlyBinding(state.Installations[0]).Receipts) != 2 {
+		t.Fatalf("repair did not persist a receipt: %+v", onlyBinding(state.Installations[0]))
+	}
+}
+
+// TestGroupedRepairPreservesForeignContentThatAppearsAfterTheLastAbsenceRecheck
+// closes the race an independent review identified: the absence recheck just
+// before the kernel commit ("compare absent targets again before publishing")
+// can itself go stale before dirswap actually renames the staged directory
+// into place. RequireAbsent rejects an occupied target before journaling;
+// exclusive publication prevents a destination appearing after that check
+// from being overwritten.
+func TestGroupedRepairPreservesForeignContentThatAppearsAfterTheLastAbsenceRecheck(t *testing.T) {
+	t.Parallel()
+	service, store, _ := serviceFixture(t)
+	codex := domain.DetectedClient{ClientID: domain.ClientCodex, Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), ".codex")}
+	install := addInput(t, codex, "https://example.com/absent-repair-race")
+	added, err := service.AddGroup(context.Background(), GroupInput{Targets: []AddInput{install}, OperationGroupID: "race-add", Confirmed: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	activePath := added.Targets[0].Plan.ActivePath
+	if err := os.RemoveAll(activePath); err != nil {
+		t.Fatal(err)
+	}
+
+	observer := &recoveryProbeNativeObserver{
+		stager: service.Stager,
+		// Call 1 is the initial eligibility check (still absent); call 2 is the
+		// pre-commit recheck. Inject the foreign write right after call 2
+		// truthfully reports absence, simulating it landing in the remaining
+		// gap before dirswap's own rename.
+		injectAfterPreparedCall: 2,
+		injectFunc: func() {
+			if err := os.MkdirAll(activePath, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(activePath, "FOREIGN"), []byte("not ours"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+		},
+	}
+	service.NativeObserver = observer
+
+	repairInput := install
+	repairInput.InstallationID = added.InstallationID
+	result, err := service.RepairGroup(context.Background(), GroupInput{Targets: []AddInput{repairInput}, OperationGroupID: "race-confirmed", Confirmed: true, Repair: true})
+	if err == nil {
+		t.Fatal("concurrent foreign content at the recovery target was silently adopted or discarded")
+	}
+	if result.Mutated {
+		t.Fatalf("failed race-guarded repair still mutated: %+v", result)
+	}
+	body, readErr := os.ReadFile(filepath.Join(activePath, "FOREIGN"))
+	if readErr != nil || string(body) != "not ours" {
+		t.Fatalf("foreign content was not preserved: body=%q err=%v", body, readErr)
+	}
+	if _, statErr := os.Stat(filepath.Join(activePath, "plugin.json")); statErr == nil {
+		t.Fatal("recovery content was written over the foreign directory")
+	}
+	state, err := store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(onlyBinding(state.Installations[0]).Receipts) != 1 {
+		t.Fatalf("race-guarded failure changed the persisted receipt count: %+v", onlyBinding(state.Installations[0]))
+	}
+}
+
+func TestGroupedRepairStillRefusesChangedExistingContentWithRecoveryAwareObserver(t *testing.T) {
+	t.Parallel()
+	service, _, _ := serviceFixture(t)
+	codex := domain.DetectedClient{ClientID: domain.ClientCodex, Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), ".codex")}
+	install := addInput(t, codex, "https://example.com/changed-repair")
+	added, err := service.AddGroup(context.Background(), GroupInput{Targets: []AddInput{install}, OperationGroupID: "changed-repair-add", Confirmed: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	activePath := added.Targets[0].Plan.ActivePath
+	if err := os.WriteFile(filepath.Join(activePath, "plugin.json"), []byte("tampered"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	observer := &recoveryProbeNativeObserver{stager: service.Stager}
+	service.NativeObserver = observer
+
+	repairInput := install
+	repairInput.InstallationID = added.InstallationID
+	if _, err := service.RepairGroup(context.Background(), GroupInput{Targets: []AddInput{repairInput}, OperationGroupID: "changed-repair-confirmed", Confirmed: true, Repair: true}); err == nil {
+		t.Fatal("repair silently adopted changed existing content")
+	}
+	if observer.nativeCalls == 0 {
+		t.Fatal("changed existing content bypassed the ordinary native identity check")
+	}
+}
+
+func TestGroupedRepairRollsBackAbsentRecoveryWhenPostRestorationNativeVerificationFails(t *testing.T) {
+	t.Parallel()
+	service, store, _ := serviceFixture(t)
+	codex := domain.DetectedClient{ClientID: domain.ClientCodex, Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), ".codex")}
+	install := addInput(t, codex, "https://example.com/absent-repair-collision")
+	added, err := service.AddGroup(context.Background(), GroupInput{Targets: []AddInput{install}, OperationGroupID: "absent-collision-add", Confirmed: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	activePath := added.Targets[0].Plan.ActivePath
+	if err := os.RemoveAll(activePath); err != nil {
+		t.Fatal(err)
+	}
+
+	// Once the directory is restored, the native registry reports the identity
+	// as unmanaged (for example, a foreign namespace now claims it) instead of
+	// confirming ownership: the whole recovery must roll back, not commit.
+	observer := &recoveryProbeNativeObserver{stager: service.Stager, postRestorationState: domain.NativeIdentityUnmanaged}
+	service.NativeObserver = observer
+
+	repairInput := install
+	repairInput.InstallationID = added.InstallationID
+	result, err := service.RepairGroup(context.Background(), GroupInput{Targets: []AddInput{repairInput}, OperationGroupID: "absent-collision-confirmed", Confirmed: true, Repair: true})
+	if err == nil {
+		t.Fatal("post-restoration native verification failure was ignored")
+	}
+	if result.Phase != GroupPhaseManagedRolledBack {
+		t.Fatalf("repair phase = %s, want rolled back", result.Phase)
+	}
+	if _, statErr := os.Stat(activePath); !os.IsNotExist(statErr) {
+		t.Fatalf("failed recovery left a restored directory behind: %v", statErr)
+	}
+	state, err := store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(onlyBinding(state.Installations[0]).Receipts) != 1 {
+		t.Fatalf("failed recovery changed the persisted receipt count: %+v", onlyBinding(state.Installations[0]))
+	}
+}
+
+// TestGroupRecoveryPostApplyVerifyChecksEveryRecoveringTargetOnce covers
+// multiple recovering targets in one group at the mechanism level.
+// Recovery is deliberately restricted to Codex (see
+// observeGroupRecoveryEligibility), and one installation has at most one
+// Codex binding, so a real RepairGroup call can never carry two recovering
+// targets in production; groupRecoveryPostApplyVerify's own loop over
+// multiple recovering entries is exercised directly instead.
+// TestGroupedRepairFailsClosedWhenAnotherInstallationsCodexDirectoryIsAlsoAbsent
+// covers the cross-installation limitation documented in
+// groupRecoveryPostApplyVerify: Codex's own registry command is global across
+// every installation's marketplace entries, not scoped to one installation.
+// If a wiped managed root leaves two installations each with their own absent
+// Codex-owned directory, repairing one restores its bytes locally but the
+// registry call still fails because of the other's missing entry, so that
+// repair rolls back too -- fail-closed, never a silent adoption, and no worse
+// than the pre-fix preflight refusal.
+func TestGroupedRepairFailsClosedWhenAnotherInstallationsCodexDirectoryIsAlsoAbsent(t *testing.T) {
+	t.Parallel()
+	service, store, _ := serviceFixture(t)
+	codexA := domain.DetectedClient{ClientID: domain.ClientCodex, Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), ".codex")}
+	codexB := domain.DetectedClient{ClientID: domain.ClientCodex, Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), ".codex")}
+	installA := addInput(t, codexA, "https://example.com/multi-install-a")
+	installB := addInput(t, codexB, "https://example.com/multi-install-b")
+	installB.InstallationID = ""
+	installB.Envelope.Manifest.Name = "demo-b"
+	if err := os.WriteFile(filepath.Join(installB.Envelope.SnapshotRoot, "plugin.json"), []byte(`{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "demo-b",
+  "version": "1.0.0",
+  "description": "Demo plugin"
+}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	addedA, err := service.AddGroup(context.Background(), GroupInput{Targets: []AddInput{installA}, OperationGroupID: "multi-install-add-a", Confirmed: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	addedB, err := service.AddGroup(context.Background(), GroupInput{Targets: []AddInput{installB}, OperationGroupID: "multi-install-add-b", Confirmed: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	pathA, pathB := addedA.Targets[0].Plan.ActivePath, addedB.Targets[0].Plan.ActivePath
+	if err := os.RemoveAll(pathA); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.RemoveAll(pathB); err != nil {
+		t.Fatal(err)
+	}
+
+	observer := &recoveryProbeNativeObserver{stager: service.Stager, watchPaths: []string{pathA, pathB}}
+	service.NativeObserver = observer
+
+	repairA := installA
+	repairA.InstallationID = addedA.InstallationID
+	result, err := service.RepairGroup(context.Background(), GroupInput{Targets: []AddInput{repairA}, OperationGroupID: "multi-install-repair-a", Confirmed: true, Repair: true})
+	if err == nil {
+		t.Fatal("repair succeeded despite the sibling installation's Codex directory still being absent")
+	}
+	if result.Phase != GroupPhaseManagedRolledBack {
+		t.Fatalf("phase = %s, want rolled back", result.Phase)
+	}
+	if _, statErr := os.Stat(pathA); !os.IsNotExist(statErr) {
+		t.Fatalf("failed cross-installation repair left A restored instead of rolling back: %v", statErr)
+	}
+	if _, statErr := os.Stat(pathB); !os.IsNotExist(statErr) {
+		t.Fatalf("failed cross-installation repair touched B: %v", statErr)
+	}
+	stateA, err := store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, installation := range stateA.Installations {
+		if installation.InstallationID == addedA.InstallationID && len(onlyBinding(installation).Receipts) != 1 {
+			t.Fatalf("failed cross-installation repair changed A's receipt count: %+v", onlyBinding(installation))
+		}
+	}
+
+	// Restoring B too must let A's repair succeed on retry.
+	if err := os.MkdirAll(pathB, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(pathB, "plugin.json"), []byte(`{"name":"demo"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	repaired, err := service.RepairGroup(context.Background(), GroupInput{Targets: []AddInput{repairA}, OperationGroupID: "multi-install-repair-a-retry", Confirmed: true, Repair: true})
+	if err != nil {
+		t.Fatalf("repair of A still failed once B was restored: %v", err)
+	}
+	if repaired.Phase != GroupPhaseCompleted {
+		t.Fatalf("retried repair phase = %s, want completed", repaired.Phase)
+	}
+}
+
+func TestGroupRecoveryPostApplyVerifyChecksEveryRecoveringTargetOnce(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	makeTarget := func(name string) plannedGroupTarget {
+		active := filepath.Join(root, name)
+		if err := os.MkdirAll(active, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		managed := &domain.ClientBinding{NativeObjects: []domain.NativeObjectOwnership{{Kind: "managed_package_directory", ManagedDigest: "sha256:" + name}}}
+		return plannedGroupTarget{
+			input:      AddInput{Client: domain.DetectedClient{ClientID: domain.ClientCodex}},
+			plan:       domain.DeliveryPlan{ActivePath: active},
+			managed:    managed,
+			recovering: true,
+		}
+	}
+	planned := []plannedGroupTarget{makeTarget("first"), makeTarget("second"), {noChange: true}}
+	observer := &recoveryProbeNativeObserver{stager: acceptingVerifier{}}
+	service := Service{NativeObserver: observer}
+	verify := service.groupRecoveryPostApplyVerify(planned)
+	if verify == nil {
+		t.Fatal("expected a non-nil PostApplyVerify hook")
+	}
+	if err := verify(context.Background()); err != nil {
+		t.Fatalf("verify: %v", err)
+	}
+	if observer.nativeCalls != 2 {
+		t.Fatalf("native identity verification calls = %d, want 2 (one per recovering target)", observer.nativeCalls)
+	}
+}
+
 func TestGroupedAddReportsCommittedActivationAndExternalPartialFailuresFromReceipts(t *testing.T) {
 	t.Parallel()
 	for _, test := range []struct {
-		name      string
-		failCall  int
-		wantPhase GroupPhase
-		wantFirst GroupTargetPhase
+		name       string
+		failCall   int
+		wantPhase  GroupPhase
+		wantFirst  GroupTargetPhase
+		wantSecond GroupTargetPhase
+		wantCalls  int
 	}{
-		{name: "first activation", failCall: 1, wantPhase: GroupPhaseManagedActivationFailed, wantFirst: GroupTargetExternalFailed},
-		{name: "second activation", failCall: 2, wantPhase: GroupPhaseExternalPartialFailure, wantFirst: GroupTargetExternalCompleted},
+		{name: "first activation", failCall: 1, wantPhase: GroupPhaseExternalPartialFailure, wantFirst: GroupTargetExternalFailed, wantSecond: GroupTargetExternalCompleted, wantCalls: 2},
+		{name: "second activation", failCall: 2, wantPhase: GroupPhaseExternalPartialFailure, wantFirst: GroupTargetExternalCompleted, wantSecond: GroupTargetExternalFailed, wantCalls: 2},
 	} {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
 			service, store, cursor := serviceFixture(t)
-			service.Activator = &failNthGroupActivator{failCall: test.failCall}
+			activator := &failNthGroupActivator{failCall: test.failCall}
+			service.Activator = activator
 			kiro := domain.DetectedClient{ClientID: domain.ClientKiro, Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), ".kiro")}
 			result, err := service.AddGroup(context.Background(), GroupInput{Targets: []AddInput{
 				addInput(t, cursor, "https://example.com/phase-aware"),
@@ -320,11 +719,17 @@ func TestGroupedAddReportsCommittedActivationAndExternalPartialFailuresFromRecei
 			if err == nil {
 				t.Fatal("activation failure was ignored")
 			}
-			if result.Phase != test.wantPhase || len(result.Receipts) != 2 || result.Targets[0].GroupPhase != test.wantFirst {
+			if !strings.Contains(err.Error(), "of 2 client activations failed") {
+				t.Fatalf("aggregate error = %v", err)
+			}
+			if result.Phase != test.wantPhase || len(result.Receipts) != 2 || result.Targets[0].GroupPhase != test.wantFirst || result.Targets[1].GroupPhase != test.wantSecond {
 				t.Fatalf("phase-aware result = %+v", result)
 			}
-			if result.Targets[test.failCall-1].GroupPhase != GroupTargetExternalFailed {
-				t.Fatalf("failed target outcome = %+v", result.Targets[test.failCall-1])
+			if result.Targets[test.failCall-1].Failure == nil || result.Targets[test.failCall-1].Failure.Message == "" {
+				t.Fatalf("failed target missing failure detail: %+v", result.Targets[test.failCall-1])
+			}
+			if activator.calls != test.wantCalls {
+				t.Fatalf("Activate calls = %d, want %d", activator.calls, test.wantCalls)
 			}
 			state, loadErr := store.Load()
 			if loadErr != nil {
@@ -334,6 +739,257 @@ func TestGroupedAddReportsCommittedActivationAndExternalPartialFailuresFromRecei
 				t.Fatalf("managed commit was not authoritative: %+v", state)
 			}
 		})
+	}
+}
+
+func TestGroupedAddContinuesActivationAcrossClientFailures(t *testing.T) {
+	t.Parallel()
+	t.Run("middle failure keeps neighbors", func(t *testing.T) {
+		service, store, cursor := serviceFixture(t)
+		activator := &failNthGroupActivator{failCall: 2}
+		service.Activator = activator
+		codex := domain.DetectedClient{ClientID: domain.ClientCodex, Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), ".codex")}
+		kiro := domain.DetectedClient{ClientID: domain.ClientKiro, Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), ".kiro")}
+		result, err := service.AddGroup(context.Background(), GroupInput{Targets: []AddInput{
+			addInput(t, cursor, "https://example.com/batch-middle"),
+			addInput(t, codex, "https://example.com/batch-middle"),
+			addInput(t, kiro, "https://example.com/batch-middle"),
+		}, OperationGroupID: "batch-middle", Confirmed: true})
+		if err == nil || result.Phase != GroupPhaseExternalPartialFailure || activator.calls != 3 {
+			t.Fatalf("middle failure = phase=%s calls=%d err=%v", result.Phase, activator.calls, err)
+		}
+		if result.Targets[0].GroupPhase != GroupTargetExternalCompleted || result.Targets[1].GroupPhase != GroupTargetExternalFailed || result.Targets[2].GroupPhase != GroupTargetExternalCompleted {
+			t.Fatalf("target phases = %+v", result.Targets)
+		}
+		if result.Targets[1].Failure == nil || !strings.Contains(result.Targets[1].Failure.Message, "injected activation failure") {
+			t.Fatalf("failure detail = %+v", result.Targets[1].Failure)
+		}
+		state, loadErr := store.Load()
+		if loadErr != nil {
+			t.Fatal(loadErr)
+		}
+		if len(state.Installations) != 1 || len(state.Installations[0].Clients) != 3 {
+			t.Fatalf("state = %+v", state)
+		}
+	})
+	t.Run("all targets fail still activate each", func(t *testing.T) {
+		service, _, cursor := serviceFixture(t)
+		activator := &failNthGroupActivator{failSet: map[int]bool{1: true, 2: true, 3: true}}
+		service.Activator = activator
+		codex := domain.DetectedClient{ClientID: domain.ClientCodex, Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), ".codex")}
+		kiro := domain.DetectedClient{ClientID: domain.ClientKiro, Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), ".kiro")}
+		result, err := service.AddGroup(context.Background(), GroupInput{Targets: []AddInput{
+			addInput(t, cursor, "https://example.com/batch-all-fail"),
+			addInput(t, codex, "https://example.com/batch-all-fail"),
+			addInput(t, kiro, "https://example.com/batch-all-fail"),
+		}, OperationGroupID: "batch-all-fail", Confirmed: true})
+		if err == nil || result.Phase != GroupPhaseManagedActivationFailed || activator.calls != 3 {
+			t.Fatalf("all-fail = phase=%s calls=%d err=%v", result.Phase, activator.calls, err)
+		}
+		for index, target := range result.Targets {
+			if target.GroupPhase != GroupTargetExternalFailed || target.Failure == nil {
+				t.Fatalf("target %d = %+v", index, target)
+			}
+		}
+	})
+	t.Run("context cancel stops remaining", func(t *testing.T) {
+		service, _, cursor := serviceFixture(t)
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		activator := &cancelAfterFirstGroupActivator{cancel: cancel}
+		service.Activator = activator
+		codex := domain.DetectedClient{ClientID: domain.ClientCodex, Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), ".codex")}
+		kiro := domain.DetectedClient{ClientID: domain.ClientKiro, Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), ".kiro")}
+		result, err := service.AddGroup(ctx, GroupInput{Targets: []AddInput{
+			addInput(t, cursor, "https://example.com/batch-cancel"),
+			addInput(t, codex, "https://example.com/batch-cancel"),
+			addInput(t, kiro, "https://example.com/batch-cancel"),
+		}, OperationGroupID: "batch-cancel", Confirmed: true})
+		if err == nil || activator.calls != 1 {
+			t.Fatalf("cancel result calls=%d err=%v", activator.calls, err)
+		}
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("cancel error lost context cause: %v", err)
+		}
+		if result.Targets[0].GroupPhase != GroupTargetExternalFailed {
+			t.Fatalf("first target = %+v", result.Targets[0])
+		}
+		if result.Targets[1].GroupPhase != GroupTargetExternalNotAttempted || result.Targets[2].GroupPhase != GroupTargetExternalNotAttempted {
+			t.Fatalf("remaining targets = %+v", result.Targets)
+		}
+		if result.Targets[1].Failure == nil || result.Targets[1].Failure.Stage != "canceled" || !strings.Contains(result.Targets[1].Failure.Message, "canceled") {
+			t.Fatalf("not-attempted failure = %+v", result.Targets[1].Failure)
+		}
+		if result.Targets[0].Failure == nil || result.Targets[0].Failure.Stage != "canceled" {
+			t.Fatalf("canceled first target stage = %+v", result.Targets[0].Failure)
+		}
+	})
+	t.Run("state store failure stops remaining", func(t *testing.T) {
+		service, store, cursor := serviceFixture(t)
+		calls := 0
+		failing := &failPersistAfterActivateStore{StateStore: store, activated: &calls}
+		service.StateStore = failing
+		service.Kernel.StateStore = failing
+		service.Activator = &countingGroupActivator{calls: &calls}
+		codex := domain.DetectedClient{ClientID: domain.ClientCodex, Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), ".codex")}
+		kiro := domain.DetectedClient{ClientID: domain.ClientKiro, Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), ".kiro")}
+		result, err := service.AddGroup(context.Background(), GroupInput{Targets: []AddInput{
+			addInput(t, cursor, "https://example.com/batch-persist"),
+			addInput(t, codex, "https://example.com/batch-persist"),
+			addInput(t, kiro, "https://example.com/batch-persist"),
+		}, OperationGroupID: "batch-persist", Confirmed: true})
+		if err == nil {
+			t.Fatal("expected state store failure")
+		}
+		if calls != 1 {
+			t.Fatalf("Activate calls = %d, want 1", calls)
+		}
+		if result.Targets[0].GroupPhase != GroupTargetExternalFailed || result.Targets[0].Failure == nil || result.Targets[0].Failure.Stage != "persist" {
+			t.Fatalf("first target = %+v", result.Targets[0])
+		}
+		if result.Targets[1].GroupPhase != GroupTargetExternalNotAttempted || result.Targets[2].GroupPhase != GroupTargetExternalNotAttempted {
+			t.Fatalf("remaining targets = %+v", result.Targets)
+		}
+	})
+	t.Run("shared copilot vscode activates once", func(t *testing.T) {
+		service, _, _ := serviceFixture(t)
+		activator := &failNthGroupActivator{failCall: 1}
+		service.Activator = activator
+		copilot := domain.DetectedClient{ClientID: domain.ClientCopilot, DisplayName: "Copilot", Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), ".copilot"), ExecutablePath: filepath.Join(t.TempDir(), "bin", "copilot")}
+		vscode := domain.DetectedClient{ClientID: domain.ClientVSCode, DisplayName: "VS Code", Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), ".vscode")}
+		result, err := service.AddGroup(context.Background(), GroupInput{Targets: []AddInput{
+			addInput(t, copilot, "https://example.com/batch-shared"),
+			addInput(t, vscode, "https://example.com/batch-shared"),
+		}, OperationGroupID: "batch-shared", Confirmed: true})
+		if err == nil || activator.calls != 1 {
+			t.Fatalf("shared backend calls=%d err=%v", activator.calls, err)
+		}
+		if result.Phase != GroupPhaseManagedActivationFailed {
+			t.Fatalf("phase = %s", result.Phase)
+		}
+		for index, target := range result.Targets {
+			if target.GroupPhase != GroupTargetExternalFailed || target.Failure == nil {
+				t.Fatalf("shared target %d = %+v", index, target)
+			}
+		}
+	})
+	t.Run("empty successful outcome is rejected", func(t *testing.T) {
+		service, _, cursor := serviceFixture(t)
+		service.Activator = &emptyOutcomeGroupActivator{}
+		kiro := domain.DetectedClient{ClientID: domain.ClientKiro, Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), ".kiro")}
+		result, err := service.AddGroup(context.Background(), GroupInput{Targets: []AddInput{
+			addInput(t, cursor, "https://example.com/batch-empty"),
+			addInput(t, kiro, "https://example.com/batch-empty"),
+		}, OperationGroupID: "batch-empty", Confirmed: true})
+		if err == nil || !strings.Contains(err.Error(), "empty activation outcome") {
+			t.Fatalf("empty outcome err = %v", err)
+		}
+		if result.Targets[0].GroupPhase != GroupTargetExternalFailed || result.Targets[0].Activation.Activation != domain.ActivationFailed {
+			t.Fatalf("first target = %+v", result.Targets[0])
+		}
+		if result.Targets[1].GroupPhase != GroupTargetExternalFailed {
+			t.Fatalf("second target = %+v", result.Targets[1])
+		}
+	})
+	t.Run("failed outcome without error is rejected", func(t *testing.T) {
+		service, _, cursor := serviceFixture(t)
+		service.Activator = &failedOutcomeWithoutErrGroupActivator{}
+		kiro := domain.DetectedClient{ClientID: domain.ClientKiro, Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), ".kiro")}
+		result, err := service.AddGroup(context.Background(), GroupInput{Targets: []AddInput{
+			addInput(t, cursor, "https://example.com/batch-failed-silent"),
+			addInput(t, kiro, "https://example.com/batch-failed-silent"),
+		}, OperationGroupID: "batch-failed-silent", Confirmed: true})
+		if err == nil || !strings.Contains(err.Error(), "failed activation outcome without an error") {
+			t.Fatalf("silent failure err = %v", err)
+		}
+		if result.Phase != GroupPhaseManagedActivationFailed {
+			t.Fatalf("phase = %s", result.Phase)
+		}
+		for index, target := range result.Targets {
+			if target.GroupPhase != GroupTargetExternalFailed || target.Failure == nil {
+				t.Fatalf("target %d = %+v", index, target)
+			}
+		}
+	})
+	t.Run("deadline exceeded stops remaining", func(t *testing.T) {
+		service, _, cursor := serviceFixture(t)
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		activator := &deadlineAfterFirstGroupActivator{cancel: cancel}
+		service.Activator = activator
+		codex := domain.DetectedClient{ClientID: domain.ClientCodex, Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), ".codex")}
+		kiro := domain.DetectedClient{ClientID: domain.ClientKiro, Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), ".kiro")}
+		result, err := service.AddGroup(ctx, GroupInput{Targets: []AddInput{
+			addInput(t, cursor, "https://example.com/batch-deadline"),
+			addInput(t, codex, "https://example.com/batch-deadline"),
+			addInput(t, kiro, "https://example.com/batch-deadline"),
+		}, OperationGroupID: "batch-deadline", Confirmed: true})
+		if err == nil || activator.calls != 1 {
+			t.Fatalf("deadline result calls=%d err=%v", activator.calls, err)
+		}
+		if !errors.Is(err, context.DeadlineExceeded) {
+			t.Fatalf("deadline error lost cause: %v", err)
+		}
+		if result.Targets[0].GroupPhase != GroupTargetExternalFailed {
+			t.Fatalf("first target = %+v", result.Targets[0])
+		}
+		if result.Targets[1].GroupPhase != GroupTargetExternalNotAttempted || result.Targets[2].GroupPhase != GroupTargetExternalNotAttempted {
+			t.Fatalf("remaining targets = %+v", result.Targets)
+		}
+	})
+	t.Run("shared copilot vscode success propagates", func(t *testing.T) {
+		service, store, _ := serviceFixture(t)
+		activator := &failNthGroupActivator{}
+		service.Activator = activator
+		copilot := domain.DetectedClient{ClientID: domain.ClientCopilot, DisplayName: "Copilot", Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), ".copilot"), ExecutablePath: filepath.Join(t.TempDir(), "bin", "copilot")}
+		vscode := domain.DetectedClient{ClientID: domain.ClientVSCode, DisplayName: "VS Code", Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), ".vscode")}
+		result, err := service.AddGroup(context.Background(), GroupInput{Targets: []AddInput{
+			addInput(t, copilot, "https://example.com/batch-shared-ok"),
+			addInput(t, vscode, "https://example.com/batch-shared-ok"),
+		}, OperationGroupID: "batch-shared-ok", Confirmed: true})
+		if err != nil || activator.calls != 1 {
+			t.Fatalf("shared success calls=%d err=%v", activator.calls, err)
+		}
+		if result.Phase != GroupPhaseCompleted {
+			t.Fatalf("phase = %s", result.Phase)
+		}
+		for index, target := range result.Targets {
+			if target.GroupPhase != GroupTargetExternalCompleted || target.Activation.Activation != domain.ActivationActive {
+				t.Fatalf("shared target %d = %+v", index, target)
+			}
+		}
+		state, loadErr := store.Load()
+		if loadErr != nil || len(state.Installations) != 1 || len(state.Installations[0].Clients) != 1 {
+			t.Fatalf("shared backend state = %+v err=%v", state, loadErr)
+		}
+	})
+}
+
+func TestGroupTargetFailureStageClassification(t *testing.T) {
+	t.Parallel()
+	activationAndVerification := groupTargetFailureFromActivation(errors.New("boom"), domain.ActivationOutcome{
+		Activation: domain.ActivationFailed, Verification: domain.VerificationFailed,
+	})
+	if activationAndVerification.Stage != "activation" {
+		t.Fatalf("combined failure stage = %q", activationAndVerification.Stage)
+	}
+	verificationOnly := groupTargetFailureFromActivation(errors.New("verify boom"), domain.ActivationOutcome{
+		Activation: domain.ActivationActive, Verification: domain.VerificationFailed,
+	})
+	if verificationOnly.Stage != "verification" {
+		t.Fatalf("verification-only stage = %q", verificationOnly.Stage)
+	}
+	canceled := groupTargetFailureFromActivation(context.Canceled, domain.ActivationOutcome{
+		Activation: domain.ActivationFailed, Verification: domain.VerificationFailed,
+	})
+	if canceled.Stage != "canceled" {
+		t.Fatalf("canceled stage = %q", canceled.Stage)
+	}
+	authOnly := groupTargetFailureFromActivation(errors.New("auth boom"), domain.ActivationOutcome{
+		Activation: domain.ActivationActive, Authentication: domain.AuthenticationFailed, Verification: domain.VerificationInstalled,
+	})
+	if authOnly.Stage != "authentication" {
+		t.Fatalf("authentication-only stage = %q", authOnly.Stage)
 	}
 }
 
@@ -577,13 +1233,18 @@ func (stager *failNthVerificationStager) Verify(ctx context.Context, root, expec
 type failNthGroupActivator struct {
 	calls    int
 	failCall int
+	failSet  map[int]bool
 }
 
 func (activator *failNthGroupActivator) Activate(context.Context, domain.ActivationRequest) (domain.ActivationOutcome, error) {
 	activator.calls++
 	outcome := domain.ActivationOutcome{Activation: domain.ActivationActive, Authentication: domain.AuthenticationNotRequired,
 		Policy: domain.PolicyAllowed, Verification: domain.VerificationInstalled}
-	if activator.calls == activator.failCall {
+	fail := activator.calls == activator.failCall
+	if activator.failSet != nil {
+		fail = activator.failSet[activator.calls]
+	}
+	if fail {
 		outcome.Activation = domain.ActivationFailed
 		outcome.Verification = domain.VerificationFailed
 		return outcome, errors.New("injected activation failure")
@@ -592,6 +1253,115 @@ func (activator *failNthGroupActivator) Activate(context.Context, domain.Activat
 }
 
 func (*failNthGroupActivator) Deactivate(context.Context, domain.DeactivationRequest) (domain.DeactivationOutcome, error) {
+	return domain.DeactivationOutcome{Activation: domain.ActivationNotRequired, ArtifactRemovalAllowed: true, ExternalRemovalComplete: true}, nil
+}
+
+type cancelAfterFirstGroupActivator struct {
+	cancel context.CancelFunc
+	calls  int
+}
+
+func (activator *cancelAfterFirstGroupActivator) Activate(ctx context.Context, _ domain.ActivationRequest) (domain.ActivationOutcome, error) {
+	activator.calls++
+	outcome := domain.ActivationOutcome{Activation: domain.ActivationActive, Authentication: domain.AuthenticationNotRequired,
+		Policy: domain.PolicyAllowed, Verification: domain.VerificationInstalled}
+	if activator.calls == 1 {
+		activator.cancel()
+		outcome.Activation = domain.ActivationFailed
+		outcome.Verification = domain.VerificationFailed
+		return outcome, context.Canceled
+	}
+	return outcome, nil
+}
+
+func (*cancelAfterFirstGroupActivator) Deactivate(context.Context, domain.DeactivationRequest) (domain.DeactivationOutcome, error) {
+	return domain.DeactivationOutcome{Activation: domain.ActivationNotRequired, ArtifactRemovalAllowed: true, ExternalRemovalComplete: true}, nil
+}
+
+type failAfterInstallSaveStore struct {
+	transaction.StateStore
+	afterInstallSaves int
+	failAt            int
+}
+
+func (store *failAfterInstallSaveStore) Save(state domain.StateFileV2) error {
+	if len(state.Installations) > 0 {
+		store.afterInstallSaves++
+		if store.failAt > 0 && store.afterInstallSaves >= store.failAt {
+			return errors.New("injected state store failure")
+		}
+	}
+	return store.StateStore.Save(state)
+}
+
+type failPersistAfterActivateStore struct {
+	transaction.StateStore
+	activated *int
+}
+
+func (store *failPersistAfterActivateStore) Save(state domain.StateFileV2) error {
+	if store.activated != nil && *store.activated > 0 {
+		return errors.New("injected state store failure")
+	}
+	return store.StateStore.Save(state)
+}
+
+type countingGroupActivator struct {
+	calls *int
+}
+
+func (activator *countingGroupActivator) Activate(context.Context, domain.ActivationRequest) (domain.ActivationOutcome, error) {
+	*activator.calls++
+	return domain.ActivationOutcome{Activation: domain.ActivationActive, Authentication: domain.AuthenticationNotRequired,
+		Policy: domain.PolicyAllowed, Verification: domain.VerificationInstalled}, nil
+}
+
+func (*countingGroupActivator) Deactivate(context.Context, domain.DeactivationRequest) (domain.DeactivationOutcome, error) {
+	return domain.DeactivationOutcome{Activation: domain.ActivationNotRequired, ArtifactRemovalAllowed: true, ExternalRemovalComplete: true}, nil
+}
+
+type emptyOutcomeGroupActivator struct{}
+
+func (*emptyOutcomeGroupActivator) Activate(context.Context, domain.ActivationRequest) (domain.ActivationOutcome, error) {
+	return domain.ActivationOutcome{}, nil
+}
+
+func (*emptyOutcomeGroupActivator) Deactivate(context.Context, domain.DeactivationRequest) (domain.DeactivationOutcome, error) {
+	return domain.DeactivationOutcome{Activation: domain.ActivationNotRequired, ArtifactRemovalAllowed: true, ExternalRemovalComplete: true}, nil
+}
+
+type failedOutcomeWithoutErrGroupActivator struct{}
+
+func (*failedOutcomeWithoutErrGroupActivator) Activate(context.Context, domain.ActivationRequest) (domain.ActivationOutcome, error) {
+	return domain.ActivationOutcome{
+		Activation: domain.ActivationFailed, Authentication: domain.AuthenticationNotRequired,
+		Policy: domain.PolicyAllowed, Verification: domain.VerificationFailed,
+	}, nil
+}
+
+func (*failedOutcomeWithoutErrGroupActivator) Deactivate(context.Context, domain.DeactivationRequest) (domain.DeactivationOutcome, error) {
+	return domain.DeactivationOutcome{Activation: domain.ActivationNotRequired, ArtifactRemovalAllowed: true, ExternalRemovalComplete: true}, nil
+}
+
+type deadlineAfterFirstGroupActivator struct {
+	cancel context.CancelFunc
+	calls  int
+}
+
+func (activator *deadlineAfterFirstGroupActivator) Activate(ctx context.Context, _ domain.ActivationRequest) (domain.ActivationOutcome, error) {
+	activator.calls++
+	outcome := domain.ActivationOutcome{Activation: domain.ActivationActive, Authentication: domain.AuthenticationNotRequired,
+		Policy: domain.PolicyAllowed, Verification: domain.VerificationInstalled}
+	if activator.calls == 1 {
+		activator.cancel()
+		outcome.Activation = domain.ActivationFailed
+		outcome.Verification = domain.VerificationFailed
+		return outcome, context.DeadlineExceeded
+	}
+	return outcome, nil
+}
+
+func (*deadlineAfterFirstGroupActivator) Deactivate(context.Context, domain.DeactivationRequest) (domain.DeactivationOutcome, error) {
 	return domain.DeactivationOutcome{Activation: domain.ActivationNotRequired, ArtifactRemovalAllowed: true, ExternalRemovalComplete: true}, nil
 }
 

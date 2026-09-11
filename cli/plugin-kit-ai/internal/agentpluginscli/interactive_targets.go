@@ -17,28 +17,27 @@ import (
 // turning ambient client detection into an unsafe all-or-nothing guess. It
 // first narrows the installed clients to one complete target set that the
 // selected package can actually serve, then asks the user to confirm it.
-func promptCompatibleDetectedTargets(ctx context.Context, cmd *cobra.Command, app App, source string) (string, []domain.DetectedClient, *loadedPackage, error) {
+func promptCompatibleDetectedTargets(ctx context.Context, cmd *cobra.Command, app App, source string, intents ...map[domain.ClientID]domain.InstallIntent) ([]domain.ClientID, []domain.DetectedClient, *loadedPackage, error) {
 	clients, err := app.Detector.Detect(ctx)
 	if err != nil {
-		return "", nil, nil, fmt.Errorf("detect AI clients: %w", err)
+		return nil, nil, nil, fmt.Errorf("detect AI clients: %w", err)
 	}
 	detected := detectedSupportedClients(clients)
 	if len(detected) == 0 {
-		selection, all, err := promptTargetChoices(cmd, detected, nil, clients)
+		selection, all, err := promptTargetChoices(cmd, app, detected, nil, clients)
 		return selection, all, nil, err
 	}
 
-	compatible, preloaded, err := app.compatibleDetectedTargets(ctx, source, detected)
+	compatible, skipped, preloaded, err := app.compatibleDetectedTargets(ctx, source, detected, intents...)
 	if err != nil {
-		return "", nil, nil, err
+		return nil, nil, nil, err
 	}
-	skipped := subtractDetectedClients(detected, compatible)
-	selection, all, err := promptTargetChoices(cmd, compatible, skipped, clients)
+	selection, all, err := promptTargetChoices(cmd, app, compatible, skipped, clients)
 	if err != nil {
 		if preloaded != nil && preloaded.cleanup != nil {
 			_ = preloaded.cleanup()
 		}
-		return "", nil, nil, err
+		return nil, nil, nil, err
 	}
 	return selection, all, preloaded, nil
 }
@@ -68,46 +67,57 @@ func subtractDetectedClients(all, selected []domain.DetectedClient) []domain.Det
 	return result
 }
 
-func (app App) compatibleDetectedTargets(ctx context.Context, source string, detected []domain.DetectedClient) ([]domain.DetectedClient, *loadedPackage, error) {
+// targetSkip contains only installer-owned guidance, never raw planner/provider errors.
+type targetSkip struct {
+	Client domain.ClientID
+	Reason string
+}
+
+func skippedTargets(clients []domain.DetectedClient, reason string) []targetSkip {
+	var skipped []targetSkip
+	for _, client := range clients {
+		skipped = append(skipped, targetSkip{Client: client.ClientID, Reason: strings.ReplaceAll(reason, "--target", "--target "+string(client.ClientID))})
+	}
+	return skipped
+}
+
+func (app App) compatibleDetectedTargets(ctx context.Context, source string, detected []domain.DetectedClient, intents ...map[domain.ClientID]domain.InstallIntent) ([]domain.DetectedClient, []targetSkip, *loadedPackage, error) {
+	candidates := detected
+	var skipped []targetSkip
+
 	switch {
 	case strings.HasPrefix(source, "discovery:"):
 		compatible, err := app.compatibleDiscoveryTargets(ctx, source, detected)
-		return compatible, nil, err
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		skipped = skippedTargets(subtractDetectedClients(detected, compatible), "not listed as compatible in the signed Discovery record; inspect this client separately with --target")
+		return compatible, skipped, nil, nil
 	case isDirectorySelector(source):
-		compatible, err := app.compatibleDirectoryTargets(ctx, source, detected)
+		compatible, err := app.compatibleDirectoryTargets(ctx, source, detected, intents...)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
-		loaded, err := app.loadPackageFor(
-			ctx,
-			source,
-			withDetectedClients(app.addResolutionRequest(source, detectedClientIDs(compatible)), detectedClientMap(detected)),
-		)
-		if err != nil {
-			return nil, nil, err
+		skipped = append(skipped, skippedTargets(subtractDetectedClients(detected, compatible), "the catalog has no compatible release for this combination of clients and system; check this client separately with --target")...)
+		candidates = compatible
+		if len(candidates) == 0 {
+			return nil, skipped, nil, nil
 		}
-		compatible = app.compatibleLoadedTargets(ctx, loaded, compatible)
-		if len(compatible) == 0 {
-			if loaded.cleanup != nil {
-				_ = loaded.cleanup()
-			}
-			return nil, nil, fmt.Errorf("the package cannot be installed automatically in any detected supported client; use --target to inspect a specific client")
-		}
-		return compatible, &loaded, nil
-	default:
-		loaded, err := app.loadPackageFor(ctx, source, app.addResolutionRequest(source, nil))
-		if err != nil {
-			return nil, nil, err
-		}
-		compatible := app.compatibleLoadedTargets(ctx, loaded, detected)
-		if len(compatible) == 0 {
-			if loaded.cleanup != nil {
-				_ = loaded.cleanup()
-			}
-			return nil, nil, fmt.Errorf("the package cannot be installed in any detected supported client; use --target to inspect a specific client")
-		}
-		return compatible, &loaded, nil
 	}
+	if len(intents) > 0 && intents[0][domain.ClientChatGPT] == domain.InstallIntentPrepare {
+		app.chatGPTPreparation = true
+	}
+	request := app.addResolutionRequest(source, nil)
+	if isDirectorySelector(source) {
+		request = withDetectedClients(app.addResolutionRequest(source, detectedClientIDs(candidates)), detectedClientMap(detected))
+	}
+	loaded, err := app.loadPackageFor(ctx, source, request)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	compatible, rejected := app.compatibleLoadedTargets(ctx, loaded, candidates, intents...)
+	skipped = append(skipped, rejected...)
+	return compatible, skipped, &loaded, nil
 }
 
 func (app App) compatibleDiscoveryTargets(ctx context.Context, selector string, detected []domain.DetectedClient) ([]domain.DetectedClient, error) {
@@ -132,13 +142,10 @@ func (app App) compatibleDiscoveryTargets(ctx context.Context, selector string, 
 			compatible = append(compatible, client)
 		}
 	}
-	if len(compatible) == 0 {
-		return nil, fmt.Errorf("discovery package %q cannot be installed in any detected supported client; use --target to inspect a specific client", selector)
-	}
 	return compatible, nil
 }
 
-func (app App) compatibleDirectoryTargets(ctx context.Context, selector string, detected []domain.DetectedClient) ([]domain.DetectedClient, error) {
+func (app App) compatibleDirectoryTargets(ctx context.Context, selector string, detected []domain.DetectedClient, intents ...map[domain.ClientID]domain.InstallIntent) ([]domain.DetectedClient, error) {
 	if app.DirectoryClient == nil || app.StateStore == nil {
 		return nil, fmt.Errorf("signed Directory dependencies are unavailable; use a direct local or exact full-SHA source")
 	}
@@ -158,6 +165,13 @@ func (app App) compatibleDirectoryTargets(ctx context.Context, selector string, 
 	if request.Selector != "" {
 		resolveSelector = request.Selector
 	}
+	if productID, productErr := directorySelectorProductID(bundle.Snapshot, resolveSelector); productErr == nil && productID == "context7" && len(intents) > 0 {
+		if intents[0] == nil {
+			intents[0] = make(map[domain.ClientID]domain.InstallIntent)
+		}
+		intents[0][domain.ClientChatGPT] = domain.InstallIntentPrepare
+		intents[0][domain.ClientKiro] = domain.InstallIntentPrepare
+	}
 	clients := detectedClientMap(detected)
 	environment := directoryEnvironment(clients)
 	environment.InstallerVersion = app.Version
@@ -167,9 +181,8 @@ func (app App) compatibleDirectoryTargets(ctx context.Context, selector string, 
 	}
 
 	// At most ten clients are supported, so enumerating subsets is bounded to
-	// 1,023 pure resolver calls. This preserves one signed distribution/release
+	// 1,023 subsets, each with bounded pure resolver checks. This preserves one signed distribution/release
 	// for the complete set instead of combining incompatible per-client picks.
-	var singleTargetErr error
 	for size := len(detected); size >= 1; size-- {
 		var match []domain.DetectedClient
 		forEachDetectedSubset(detected, size, func(candidate []domain.DetectedClient) bool {
@@ -177,16 +190,55 @@ func (app App) compatibleDirectoryTargets(ctx context.Context, selector string, 
 			for index, client := range candidate {
 				targets[index] = client.ClientID
 			}
-			_, resolveErr := domain.ResolveDirectory(bundle.Snapshot, domain.DirectoryResolveRequest{
+			resolveRequest := domain.DirectoryResolveRequest{
 				Selector: resolveSelector, Targets: targets, Scope: domain.ScopeUser,
 				InstallerVersion: app.Version, ClientVersions: environment.ClientVersions,
 				OS: runtime.GOOS, Architecture: runtime.GOARCH, DependencyIdentity: environment.DependencyIdentity,
 				SchemaVersion: "1.0.0", Operation: operation, Recorded: request.Recorded,
-			})
-			if size == 1 && singleTargetErr == nil && resolveErr != nil {
-				singleTargetErr = resolveErr
+			}
+			_, resolveErr := domain.ResolveDirectory(bundle.Snapshot, resolveRequest)
+			preparing := false
+			// Ordinary eligibility wins unless preparation was requested. Only
+			// the bounded Context7 purpose can offer an additional choice.
+			if len(intents) > 0 && intents[0][domain.ClientChatGPT] == domain.InstallIntentPrepare {
+				hasChatGPT := false
+				var peers []domain.ClientID
+				for _, target := range targets {
+					if target == domain.ClientChatGPT {
+						hasChatGPT = true
+					} else {
+						peers = append(peers, target)
+					}
+				}
+				if hasChatGPT {
+					preparation := resolveRequest
+					preparation.Targets = []domain.ClientID{domain.ClientChatGPT}
+					preparation.Purpose = domain.DirectoryResolveContext7ChatGPTPreparation
+					selection, prepErr := domain.ResolveDirectory(bundle.Snapshot, preparation)
+					if prepErr == nil && len(peers) > 0 {
+						peerRequest := resolveRequest
+						peerRequest.Targets = peers
+						peerRequest.Selector = selection.DistributionID
+						peerRequest.Operation = domain.DirectoryNewTarget
+						peerRequest.Recorded = &domain.RecordedDirectoryRelease{
+							ProductID: selection.ProductID, DistributionID: selection.DistributionID, ReleaseSequence: selection.ReleaseSequence,
+							Repository: selection.Source.Repository, ResolvedRevision: selection.Source.Revision, Path: selection.Source.Path,
+							TreeDigestAlgorithm: selection.TreeDigestAlgorithm, TreeDigest: selection.TreeDigest, ManifestDigest: selection.ManifestDigest,
+						}
+						peer, err := domain.ResolveDirectory(bundle.Snapshot, peerRequest)
+						prepErr = err
+						if err == nil && (peer.DistributionID != selection.DistributionID || peer.ReleaseSequence != selection.ReleaseSequence || peer.TreeDigest != selection.TreeDigest) {
+							prepErr = fmt.Errorf("preparation peers require the same immutable release")
+						}
+					}
+					resolveErr = prepErr
+					preparing = prepErr == nil
+				}
 			}
 			if resolveErr == nil {
+				if preparing {
+					intents[0][domain.ClientChatGPT] = domain.InstallIntentPrepare
+				}
 				match = append([]domain.DetectedClient(nil), candidate...)
 				return false
 			}
@@ -196,10 +248,9 @@ func (app App) compatibleDirectoryTargets(ctx context.Context, selector string, 
 			return match, nil
 		}
 	}
-	if singleTargetErr != nil {
-		return nil, singleTargetErr
-	}
-	return nil, fmt.Errorf("no signed Directory release for %q supports any detected client", selector)
+	// No subset resolved. The caller reports each excluded client and stops
+	// before acquisition; raw resolver diagnostics can contain source details.
+	return nil, nil
 }
 
 func forEachDetectedSubset(values []domain.DetectedClient, size int, visit func([]domain.DetectedClient) bool) {
@@ -227,19 +278,63 @@ func forEachDetectedSubset(values []domain.DetectedClient, size int, visit func(
 	walk(0, 0)
 }
 
-func (app App) compatibleLoadedTargets(ctx context.Context, loaded loadedPackage, detected []domain.DetectedClient) []domain.DetectedClient {
+func (app App) compatibleLoadedTargets(ctx context.Context, loaded loadedPackage, detected []domain.DetectedClient, intents ...map[domain.ClientID]domain.InstallIntent) ([]domain.DetectedClient, []targetSkip) {
+	var skipped []targetSkip
 	clientMap := detectedClientMap(detected)
 	planner := clientplanner.Planner{ManagedRoot: app.ManagedRoot, Detected: clientMap}
 	physicalID := domain.ComputePhysicalArtifactID(loaded.envelope.Manifest.Name, "00000000-0000-4000-8000-000000000000")
+	if len(intents) > 0 && intents[0] != nil && app.StateStore != nil {
+		if state, err := app.StateStore.Load(); err == nil {
+			if installation, ok := locallyMatchedInstallation(state, loaded.envelope.Manifest.Name); ok {
+				for _, binding := range installation.Clients {
+					if binding.InstallIntent == domain.InstallIntentPrepare {
+						intents[0][domain.ClientID(binding.ClientID)] = binding.InstallIntent
+					}
+				}
+				for _, preference := range installation.InstallPreferences {
+					intents[0][preference.ClientID] = preference.InstallIntent
+				}
+			}
+		}
+	}
 	compatible := make([]domain.DetectedClient, 0, len(detected))
 	for _, client := range detected {
 		candidate := cloneLoadedPackage(loaded)
+		if client.ClientID == domain.ClientChatGPT && loaded.chatGPTPreparation && loaded.localChatGPTMapping == nil {
+			// Acquisition already verified source policy, immutable bytes and
+			// endpoint. Registration is the next step, before any mutation.
+			client.DisplayName += " (prepare personal marketplace; register in ChatGPT, then install and verify tools)"
+			compatible = append(compatible, client)
+			continue
+		}
 		if err := prepareLoadedPackageForClient(&candidate, client.ClientID); err != nil {
+			skipped = append(skipped, targetSkip{client.ClientID, "package binding preparation failed; ask the package publisher to check its client mapping"})
 			continue
 		}
 		plan, err := planner.Plan(ctx, candidate.envelope, client, domain.ScopeUser, physicalID)
 		if err != nil || plan.Status == domain.PlanUnsupported {
+			reason := "package is unsupported for this client; ask the package publisher for supported components"
+			if err != nil {
+				reason = "package planning failed; ask the package publisher to check compatibility for this client"
+			}
+			for _, warning := range plan.Warnings {
+				if warning == "chatgpt_app_binding_required" {
+					reason = clientplanner.ChatGPTAppBindingAction
+				}
+			}
+			skipped = append(skipped, targetSkip{client.ClientID, reason})
 			continue
+		}
+		if len(intents) > 0 && intents[0][client.ClientID] == domain.InstallIntentPrepare {
+			if err := clientplanner.ApplyInstallIntent(&plan, domain.InstallIntentPrepare); err != nil {
+				skipped = append(skipped, targetSkip{client.ClientID, "persisted preparation cannot serve this package"})
+				continue
+			}
+			if client.ClientID == domain.ClientChatGPT {
+				client.DisplayName += " (prepare personal marketplace; install and verify tools in ChatGPT)"
+			} else {
+				client.DisplayName += " (prepare configuration; authenticate and verify tools in Kiro)"
+			}
 		}
 		if preflighter, ok := app.Lifecycle.Activator.(interface {
 			PreflightActivation(domain.ActivationRequest) error
@@ -248,12 +343,28 @@ func (app App) compatibleLoadedTargets(ctx context.Context, loaded loadedPackage
 				Client: client, Plan: plan, BackendExecutable: backendExecutable(client, clientMap), VerifyOnly: true,
 			})
 			if err != nil {
+				reason := "automatic activation/verification preflight failed; resolve this client's verification prerequisites before retrying --target " + string(client.ClientID)
+				if client.ClientID == domain.ClientKiro && len(intents) > 0 && intents[0] != nil {
+					if prepareErr := clientplanner.ApplyInstallIntent(&plan, domain.InstallIntentPrepare); prepareErr == nil {
+						prepareErr = preflighter.PreflightActivation(domain.ActivationRequest{Client: client, Plan: plan, VerifyOnly: true})
+						if prepareErr == nil {
+							intents[0][client.ClientID] = domain.InstallIntentPrepare
+							client.DisplayName += " (prepare configuration; automatic MCP verification unavailable; authenticate and verify tools in Kiro)"
+							compatible = append(compatible, client)
+							continue
+						}
+					}
+				}
+				if client.ClientID == domain.ClientKiro {
+					reason = "this CLI cannot automatically check MCP connections in your Kiro setup. Nothing was installed in Kiro. Use another listed client, or connect the server in Kiro: https://kiro.dev/docs/mcp/"
+				}
+				skipped = append(skipped, targetSkip{client.ClientID, reason})
 				continue
 			}
 		}
 		compatible = append(compatible, client)
 	}
-	return compatible
+	return compatible, skipped
 }
 
 func detectedClientIDs(clients []domain.DetectedClient) []domain.ClientID {

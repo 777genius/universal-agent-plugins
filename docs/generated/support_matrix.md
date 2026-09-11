@@ -32,3 +32,7 @@ This generated table is the canonical per-event runtime reference for shipped su
 | gemini | BeforeTool | runtime_supported | stable | production-ready | true | argv_command_casefold | stdin_json | process | true | true | gemini_before_tool | gemini_extension | Gemini BeforeTool hook |
 | gemini | AfterTool | runtime_supported | stable | production-ready | true | argv_command_casefold | stdin_json | process | true | true | gemini_after_tool | gemini_extension | Gemini AfterTool hook |
 | codex | Notify | runtime_supported | stable | production-ready | true | argv_command_casefold | argv_json | process | true | true | notify | codex_notify | Codex notify hook |
+| codex | Stop | runtime_supported | beta | runtime-supported but not stable | false | argv_command_casefold | stdin_json | process | true | true | codex_stop | codex_notify | Codex Stop lifecycle hook |
+| codex | SubagentStop | runtime_supported | beta | runtime-supported but not stable | false | argv_command_casefold | stdin_json | process | true | true | codex_subagent_stop | codex_notify | Codex SubagentStop lifecycle hook |
+| codex | PreToolUse | runtime_supported | beta | runtime-supported but not stable | false | argv_command_casefold | stdin_json | process | true | true | codex_pre_tool_use | codex_notify | Codex PreToolUse hook |
+| codex | PermissionRequest | runtime_supported | beta | runtime-supported but not stable | false | argv_command_casefold | stdin_json | process | true | true | codex_permission_request | codex_notify | Codex PermissionRequest hook |

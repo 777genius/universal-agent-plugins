@@ -5,19 +5,15 @@
   "imports": {
     "#internal/nuxt/paths": "./utils/nuxtInternalPaths.js"
   },
-  "packageManager": "pnpm@8.15.1",
-  "pnpm": {
-    "overrides": {
-      "brace-expansion@>=4.0.0 <5.0.9": "5.0.9",
-      "js-yaml@>=4.0.0 <4.3.1": "4.3.1",
-      "nanoid@>=3.0.0 <3.3.18": "3.3.18"
-    }
-  },
+  "packageManager": "pnpm@12.3.4",
   "scripts": {
     "dev": "nuxt dev",
     "build": "nuxt build",
     "generate": "nuxt generate",
     "build:pages": "node ./scripts/build-pages-artifact.mjs",
+    "check:i18n": "node --experimental-strip-types ./scripts/check-i18n.mjs",
+    "test:artifact": "node --experimental-strip-types --test ./tests/browser/artifact-*.mjs",
+    "check:pages": "node --experimental-strip-types ./scripts/check-pages-artifact.mjs",
     "preview": "nuxt preview",
     "test:registry": "node --test --experimental-strip-types tests/*.test.ts",
     "test:browser": "playwright test",
@@ -38,7 +34,7 @@
     "reka-ui": "2.10.4",
     "swiper": "^12.2.0",
     "vue": "^3.5.40",
-    "vue-i18n": "^11.4.8",
+    "vue-i18n": "11.4.8",
     "vue-router": "^4.6.4",
     "vuetify": "^3.12.11"
   },
@@ -46,6 +42,7 @@
     "@mdi/font": "^7.4.47",
     "@nuxt/eslint": "^1.16.0",
     "@playwright/test": "1.62.1",
+    "@types/node": "22.20.1",
     "@typescript-eslint/parser": "^8.65.0",
     "eslint": "^9.39.5",
     "prettier": "^3.9.6",

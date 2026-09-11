@@ -193,6 +193,19 @@ func (service Service) prepareRemovedBindingsState(ctx context.Context, state do
 			return state, nil, nil, fmt.Errorf("removed binding state is not authoritative")
 		}
 		removed = append(removed, client)
+		if client.InstallIntent != domain.InstallIntentAutomatic {
+			preference := domain.InstallPreference{ClientID: domain.ClientID(client.ClientID), Scope: domain.InstallScope(client.Scope), InstallIntent: client.InstallIntent}
+			found := false
+			for i, previous := range installation.InstallPreferences {
+				if previous.ClientID == preference.ClientID && previous.Scope == preference.Scope {
+					installation.InstallPreferences[i] = preference
+					found = true
+				}
+			}
+			if !found {
+				installation.InstallPreferences = append(installation.InstallPreferences, preference)
+			}
+		}
 		delete(installation.Clients, clientKey)
 	}
 	active := 0
@@ -234,7 +247,13 @@ func (service Service) prepareRemovedBindingsState(ctx context.Context, state do
 				receipts = append(receipts, receipt)
 			}
 			sort.Slice(receipts, func(i, j int) bool { return receipts[i].DataReceiptID < receipts[j].DataReceiptID })
-			state.Installations = append(state.Installations[:installationIndex], state.Installations[installationIndex+1:]...)
+			if len(installation.InstallPreferences) > 0 {
+				installation.DataRetained = false
+				installation.DataReceipts = nil
+				state.Installations[installationIndex] = installation
+			} else {
+				state.Installations = append(state.Installations[:installationIndex], state.Installations[installationIndex+1:]...)
+			}
 			return state, receipts, createdData, nil
 		}
 		installation.DataRetained = true
@@ -297,7 +316,14 @@ func (service Service) PurgeRetainedData(ctx context.Context, selector string, c
 	if err != nil {
 		return err
 	}
-	state.Installations = append(state.Installations[:index], state.Installations[index+1:]...)
+	if len(installation.InstallPreferences) > 0 {
+		retained := installation
+		retained.DataRetained = false
+		retained.DataReceipts = nil
+		state.Installations[index] = retained
+	} else {
+		state.Installations = append(state.Installations[:index], state.Installations[index+1:]...)
+	}
 	receipts := make([]domain.DataReceipt, 0, len(installation.DataReceipts))
 	for _, receipt := range installation.DataReceipts {
 		receipts = append(receipts, receipt)

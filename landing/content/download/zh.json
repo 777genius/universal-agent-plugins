@@ -1,0 +1,50 @@
+{
+  "shell": {
+    "download": {
+      "heading": {
+        "title": "安装你的第一个插件",
+        "note": "选择如何运行 CLI，选择一个或多个代理，然后复制命令。"
+      },
+      "channels": {
+        "brew": {
+          "title": "自制",
+          "description": "适用于 macOS 和 Linux 的本机 Go CLI。不需要 Node.js。",
+          "note": "建议永久安装并自动 Homebrew 升级。"
+        },
+        "npm": {
+          "title": "npx · Node.js 22+",
+          "description": "已安装 Node.js 22+ 时最快：立即运行插件命令。",
+          "note": "零安装：npx 下载经过验证的 CLI 并一步运行插件命令。"
+        },
+        "script": {
+          "title": "已验证的安装脚本",
+          "description": "无需包管理器的本机安装。不需要 Node.js。",
+          "note": "下载正确的版本二进制文件并验证其 SHA-256 和版本。"
+        },
+        "powershell": {
+          "title": "Windows PowerShell",
+          "description": "适用于 Windows 的本机 Go CLI。不需要 Node.js。",
+          "note": "下载 Windows 二进制文件并验证其 SHA-256 和版本。"
+        }
+      },
+      "steps": {
+        "install-cli": {
+          "title": "运行 CLI",
+          "note": "使用 npx 快速启动，或安装二进制文件以供日常使用。"
+        },
+        "try-plugin": {
+          "title": "安装真正的插件",
+          "note": "同一命令接受一个目标或逗号分隔的列表。"
+        },
+        "build-plugin": {
+          "title": "保持最新状态",
+          "note": "使用更新来发布新版本并在客户端出现偏差时进行修复。"
+        },
+        "validate": {
+          "title": "清除干净",
+          "note": "默认情况下，CLI 会删除托管客户端条目，同时保留包数据。"
+        }
+      }
+    }
+  }
+}

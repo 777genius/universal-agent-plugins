@@ -1,16 +1,20 @@
 <script setup lang="ts">
 import { renderHighlightedCommand } from '~/utils/commandHighlight';
 
+const { t } = useI18n();
+
 const props = withDefaults(
   defineProps<{
     label: string;
     command: string;
-    copyLabel: string;
-    copiedLabel: string;
+    copyLabel?: string;
+    copiedLabel?: string;
     accent?: string;
   }>(),
   {
     accent: '#00f0ff',
+    copyLabel: undefined,
+    copiedLabel: undefined,
   },
 );
 
@@ -63,7 +67,9 @@ const copyCommand = async () => {
 };
 
 const commandLines = computed(() => renderHighlightedCommand(props.command));
-const copyStateLabel = computed(() => (copied.value ? props.copiedLabel : props.copyLabel));
+const copyStateLabel = computed(() =>
+  copied.value ? (props.copiedLabel ?? t('download.copied')) : (props.copyLabel ?? t('download.copy')),
+);
 </script>
 
 <template>

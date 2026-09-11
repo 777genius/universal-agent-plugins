@@ -15,10 +15,12 @@ type NotifyEvent struct {
 	Client string
 }
 
-// Response represents a successful Codex notify acknowledgement.
+// Response represents a successful acknowledgement of a Codex event
+// (Notify and the observation-style lifecycle hooks Stop, SubagentStop,
+// PreToolUse, and PermissionRequest).
 type Response struct{}
 
-// Continue acknowledges the notify event and exits successfully.
+// Continue acknowledges the event and exits successfully with empty output.
 func Continue() *Response {
 	return &Response{}
 }

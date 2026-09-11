@@ -71,7 +71,7 @@ func buildGeminiNativeObjects(stagingRoot string, envelope domain.PackageEnvelop
 			if err != nil {
 				return nil, fmt.Errorf("project Gemini MCP server %q: %w", component.Name, err)
 			}
-			native, err = materializeGeminiServer(native, plan.ActivePath, pluginDataPath)
+			native, err = materializeGeminiServer(native, plan.ActivePath, pluginDataPath, stagingRoot)
 			if err != nil {
 				return nil, fmt.Errorf("bind Gemini MCP server %q: %w", component.Name, err)
 			}
@@ -555,21 +555,16 @@ func geminiNativeServer(server domain.MCPServer) (nativeconfig.Server, error) {
 	return result, nil
 }
 
-func materializeGeminiServer(server nativeconfig.Server, packageRoot, dataRoot string) (nativeconfig.Server, error) {
+func materializeGeminiServer(server nativeconfig.Server, packageRoot, dataRoot string, observationRoot ...string) (nativeconfig.Server, error) {
 	if server.Type != "stdio" {
 		return server, nil
 	}
-	resolve := strings.NewReplacer("${PLUGIN_ROOT}", packageRoot, "${PLUGIN_DATA}", dataRoot).Replace
-	if strings.HasPrefix(server.Command, "./") {
-		server.Command = filepath.Clean(filepath.Join(packageRoot, filepath.FromSlash(strings.TrimPrefix(server.Command, "./"))))
-		if !pathContainedBy(packageRoot, server.Command) {
-			return server, fmt.Errorf("stdio command escapes PLUGIN_ROOT")
-		}
+	command, cwd, err := resolveStdioPaths(server.Command, server.CWD, packageRoot, dataRoot, observationRoot...)
+	if err != nil {
+		return server, err
 	}
-	server.CWD = filepath.Clean(resolve(server.CWD))
-	if !pathContainedBy(packageRoot, server.CWD) && !pathContainedBy(dataRoot, server.CWD) {
-		return server, fmt.Errorf("stdio cwd escapes PLUGIN_ROOT and PLUGIN_DATA")
-	}
+	server.Command, server.CWD = command, cwd
+	server.CWDResolved = true
 	return server, nil
 }
 

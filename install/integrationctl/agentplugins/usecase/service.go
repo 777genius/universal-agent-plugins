@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -71,6 +70,7 @@ type pluginDataAwareStager interface {
 }
 
 type AddInput struct {
+	InstallIntent      domain.InstallIntent
 	Envelope           domain.PackageEnvelope
 	Client             domain.DetectedClient
 	Scope              domain.InstallScope
@@ -105,6 +105,7 @@ type AddResult struct {
 	NoChange             bool                     `json:"no_change,omitempty"`
 	Receipt              domain.MutationReceipt   `json:"-"`
 	GroupPhase           GroupTargetPhase         `json:"group_phase,omitempty"`
+	Failure              *GroupTargetFailure      `json:"failure,omitempty"`
 }
 
 func (service Service) Add(ctx context.Context, input AddInput) (AddResult, error) {
@@ -116,6 +117,9 @@ func (service Service) Update(ctx context.Context, input AddInput) (AddResult, e
 }
 
 func (service Service) apply(ctx context.Context, input AddInput, replace bool) (AddResult, error) {
+	if err := input.InstallIntent.Validate(input.Client.ClientID); err != nil {
+		return AddResult{}, err
+	}
 	if input.OriginMode == "" && input.DirectoryResolution != nil {
 		input.OriginMode = domain.OriginModeDirectory
 	}
@@ -202,7 +206,7 @@ func (service Service) apply(ctx context.Context, input AddInput, replace bool) 
 		}
 	}
 	physicalID := domain.ComputePhysicalArtifactID(input.Envelope.Manifest.Name, installationID)
-	plan, err := service.Planner.Plan(ctx, input.Envelope, input.Client, input.Scope, physicalID)
+	plan, err := service.planInstall(ctx, &input, physicalID, installationIfExisting(state, installationIndex, existing))
 	if err != nil {
 		return AddResult{}, err
 	}
@@ -211,7 +215,8 @@ func (service Service) apply(ctx context.Context, input AddInput, replace bool) 
 	}
 	result := AddResult{InstallationID: installationID, Plan: plan}
 	if input.ReleaseRevoked && normalizedOriginMode(input.OriginMode) == domain.OriginModeDirect {
-		result.Plan.Warnings = append(result.Plan.Warnings, "direct_source_digest_matches_known_revoked_directory_release")
+		plan.Warnings = append(plan.Warnings, "direct_source_digest_matches_known_revoked_directory_release")
+		result.Plan = plan
 	}
 	if plan.Status == domain.PlanUnsupported {
 		action := strings.Join(plan.UserActions, "; ")
@@ -223,9 +228,11 @@ func (service Service) apply(ctx context.Context, input AddInput, replace bool) 
 	if err := service.preflightActivation(input, plan); err != nil {
 		return result, err
 	}
-	if err := preflightRuntime(input.Envelope, plan, service.automaticallyActivates(input, plan)); err != nil {
+	if err := service.preflightTargetComponents(ctx, input, &plan, installationIfExisting(state, installationIndex, existing), false, replace); err != nil {
+		result.Plan = plan
 		return result, err
 	}
+	result.Plan = plan
 	if err := rejectNativeNameCollision(state, installationID, input.Envelope.Manifest.Name, input.Client.ClientID); err != nil {
 		return result, err
 	}
@@ -243,10 +250,15 @@ func (service Service) apply(ctx context.Context, input AddInput, replace bool) 
 		}
 	}
 	isMaterialized := existing && materializedClient(state.Installations[installationIndex], clientBindingID)
+	registrationMigration := existing && input.Envelope.LocalChatGPTMapping != nil && state.Installations[installationIndex].LocalChatGPTMapping != nil && state.Installations[installationIndex].LocalChatGPTMapping.IsLegacyContext7Registration() && *state.Installations[installationIndex].LocalChatGPTMapping != *input.Envelope.LocalChatGPTMapping
 	var managedBinding *domain.ClientBinding
 	if isMaterialized {
 		binding := state.Installations[installationIndex].Clients[clientBindingID]
 		managedBinding = &binding
+	}
+	if replace {
+		describeMCPRemovals(&plan, managedBinding)
+		result.Plan = plan
 	}
 	if input.DistributionSuspended && normalizedOriginMode(input.OriginMode) == domain.OriginModeDirectory && !isMaterialized {
 		return result, fmt.Errorf("distribution is suspended; adding a target is blocked")
@@ -270,7 +282,7 @@ func (service Service) apply(ctx context.Context, input AddInput, replace bool) 
 			if !replace && !packageRevisionMatches(current.PackageRevision, input.Envelope) {
 				return result, fmt.Errorf("plugin is already materialized for %s at a different revision; use update", input.Client.ClientID)
 			}
-			result.NoChange = !replace && lifecycleConverged(current)
+			result.NoChange = !replace && !registrationMigration && lifecycleConverged(current)
 		}
 		return result, nil
 	}
@@ -279,7 +291,7 @@ func (service Service) apply(ctx context.Context, input AddInput, replace bool) 
 			return result, err
 		}
 	}
-	if isMaterialized && !replace {
+	if isMaterialized && !replace && !registrationMigration {
 		current := state.Installations[installationIndex].Clients[clientBindingID]
 		result.Activation = lifecycleOutcome(current)
 		if !packageRevisionMatches(current.PackageRevision, input.Envelope) {
@@ -322,7 +334,7 @@ func (service Service) apply(ctx context.Context, input AddInput, replace bool) 
 		if err := service.observeNativeIdentity(ctx, input.Client, plan, managedBinding); err != nil {
 			return result, err
 		}
-		if packageRevisionMatches(previousClient.PackageRevision, input.Envelope) && previousClient.PackageRevision.ResolvedRevision == input.Envelope.Source.ResolvedRevision {
+		if !requiresComponentRemoval(plan) && packageRevisionMatches(previousClient.PackageRevision, input.Envelope) && previousClient.PackageRevision.ResolvedRevision == input.Envelope.Source.ResolvedRevision {
 			if lifecycleConverged(previousClient) {
 				verified, verifyErr := service.verifyClientReadOnly(ctx, input, result, previousClient)
 				if verifyErr != nil {
@@ -358,7 +370,7 @@ func (service Service) apply(ctx context.Context, input AddInput, replace bool) 
 	}
 	var dataReceipt domain.DataReceipt
 	dataCreated := false
-	if packageNeedsPluginData(input.Envelope) {
+	if packageNeedsPluginData(input.Envelope, plan) {
 		if service.PluginData == nil {
 			return result, fmt.Errorf("PLUGIN_DATA manager is required for stdio MCP packages")
 		}
@@ -452,7 +464,7 @@ func (service Service) apply(ctx context.Context, input AddInput, replace bool) 
 			ClientID: delivery.ClientID, OwnedBase: delivery.OwnedBase, ActivePath: delivery.ActivePath,
 			ArtifactDigest: delivery.ArtifactDigest, NativeObjects: delivery.NativeObjects,
 		},
-		DeclaredName: input.Envelope.Manifest.Name, Replacing: replace,
+		DeclaredName: input.Envelope.Manifest.Name, Replacing: replace || registrationMigration,
 		Interactive: input.Interactive, BackendExecutable: input.BackendExecutable,
 		PreviousNativeObjects: append([]domain.NativeObjectOwnership(nil), previousClient.NativeObjects...),
 	})
@@ -488,6 +500,9 @@ func (service Service) stagePackage(ctx context.Context, envelope domain.Package
 }
 
 func lifecycleConverged(client domain.ClientBinding) bool {
+	if client.InstallIntent == domain.InstallIntentPrepare {
+		return client.Materialization == domain.MaterializationMaterialized && client.Activation == domain.ActivationPrepared && client.Verification == domain.VerificationPackageValid
+	}
 	authComplete := client.Authentication == domain.AuthenticationNotRequired || client.Authentication == domain.AuthenticationComplete
 	return client.Materialization == domain.MaterializationMaterialized &&
 		client.Activation == domain.ActivationActive &&
@@ -762,7 +777,7 @@ func (service Service) verifyClientReadOnly(ctx context.Context, input AddInput,
 			return domain.ActivationOutcome{}, nil
 		}
 	case domain.ClientKiro:
-		if !strings.Contains(strings.ToLower(input.BackendExecutable), "kiro") {
+		if input.InstallIntent != domain.InstallIntentPrepare && !strings.Contains(strings.ToLower(input.BackendExecutable), "kiro") {
 			return domain.ActivationOutcome{}, nil
 		}
 	default:
@@ -846,12 +861,17 @@ func upsertPreparedInstallation(
 			installation.Clients = map[string]domain.ClientBinding{}
 		}
 	}
+	if input.Envelope.LocalChatGPTMapping != nil {
+		mapping := *input.Envelope.LocalChatGPTMapping
+		installation.LocalChatGPTMapping = &mapping
+	}
 	previousClient := installation.Clients[clientBindingID]
 	bindingClientID := string(input.Client.ClientID)
 	if previousClient.ClientID != "" {
 		bindingClientID = previousClient.ClientID
 	}
 	installation.Clients[clientBindingID] = domain.ClientBinding{
+		InstallIntent:   input.InstallIntent,
 		ClientBindingID: clientBindingID, ClientID: bindingClientID, Scope: string(input.Scope),
 		TargetLocator: plan.ActivePath, PhysicalArtifact: plan.PhysicalArtifactID,
 		Materialization: domain.MaterializationStaged, Activation: domain.ActivationPrepared,
@@ -1228,8 +1248,9 @@ func newOperationID() (string, error) {
 	return "op-" + hex.EncodeToString(random[:]), nil
 }
 
-func packageNeedsPluginData(envelope domain.PackageEnvelope) bool {
-	for _, server := range envelope.MCP.Servers {
+func packageNeedsPluginData(envelope domain.PackageEnvelope, plan domain.DeliveryPlan) bool {
+	for _, name := range domain.SelectedMCPNames(plan) {
+		server := envelope.MCP.Servers[name]
 		if server.Type == "stdio" {
 			return true
 		}
@@ -1264,40 +1285,6 @@ func (service Service) automaticallyActivates(input AddInput, plan domain.Delive
 	return classifier.AutomaticallyActivates(domain.ActivationRequest{
 		Client: input.Client, Plan: plan, BackendExecutable: input.BackendExecutable,
 	})
-}
-
-func preflightRuntime(envelope domain.PackageEnvelope, plan domain.DeliveryPlan, automaticActivation bool) error {
-	for name, server := range envelope.MCP.Servers {
-		if server.Type != "stdio" {
-			continue
-		}
-		command, _ := server.Decoded["command"].(string)
-		command = strings.TrimSpace(command)
-		if command == "" {
-			if automaticActivation {
-				return fmt.Errorf("stdio MCP server %s has no executable command", name)
-			}
-			continue
-		}
-		if strings.ContainsAny(command, "/\\") || strings.HasPrefix(command, ".") {
-			candidate := command
-			if !filepath.IsAbs(candidate) {
-				candidate = filepath.Join(envelope.SnapshotRoot, filepath.FromSlash(command))
-			}
-			if err := pathpolicy.RequireContainedChild(envelope.SnapshotRoot, candidate); err != nil {
-				return fmt.Errorf("stdio MCP server %s bundled command escapes PLUGIN_ROOT: %w", name, err)
-			}
-			info, err := os.Stat(candidate)
-			if err != nil || info.IsDir() || info.Mode().Perm()&0o111 == 0 {
-				return fmt.Errorf("stdio MCP server %s requires missing or non-executable bundled command %s", name, command)
-			}
-			continue
-		}
-		if _, err := exec.LookPath(command); err != nil && automaticActivation {
-			return fmt.Errorf("stdio MCP server %s requires executable %q on PATH; install it explicitly before retrying (agentplugins never installs runtimes)", name, command)
-		}
-	}
-	return nil
 }
 
 func versionCompare(left, right string) (int, bool) {

@@ -1,8 +1,12 @@
 <script setup lang="ts">
+import { localizedPath } from '~/utils/localizedRoutes';
+import type { KnownLocale } from '~/data/i18n';
 import { mdiArrowLeft, mdiDownload, mdiOpenInNew } from '@mdi/js';
 import { clientLandingById } from '~/data/clients';
-import { seoDescription, spdxLicenseUrl } from '~/utils/seo';
+import { productRootUrl, seoDescription, spdxLicenseUrl } from '~/utils/seo';
 import type { ClientID } from '~/types/registry';
+const { t, locale } = useI18n();
+const localePath = useLocalePath();
 
 const route = useRoute();
 const slug = String(route.params.slug);
@@ -12,7 +16,7 @@ const { asset, pluginIcon, sourceUrl } = useSite();
 const plugin = registry.plugins.find((item) => item.name === slug);
 
 if (!plugin || plugin.trust_state === 'conformant_unreviewed') {
-  throw createError({ statusCode: 404, statusMessage: 'Plugin not found' });
+  throw createError({ statusCode: 404, statusMessage: t('registryUi.detail.pluginNotFound') });
 }
 
 const accent = '#00f0ff';
@@ -20,57 +24,68 @@ const iconURL = pluginIcon(plugin);
 const supportedClients = clients.filter((client) =>
   plugin.client_support.clients.includes(client.id),
 );
-const clientGroups = [
-  {
-    label: 'Managed by CLI',
-    clients: supportedClients.filter(
-      (client) => plugin.client_support.delivery[client.id] === 'managed',
-    ),
-  },
-  {
-    label: 'Requires a final step in the app',
-    clients: supportedClients.filter((client) =>
-      ['prepared', 'manual_activation'].includes(plugin.client_support.delivery[client.id] ?? ''),
-    ),
-  },
-  {
-    label: 'Delivery details not specified',
-    clients: supportedClients.filter((client) => !plugin.client_support.delivery[client.id]),
-  },
-].filter((group) => group.clients.length > 0);
+const clientGroups = computed(() =>
+  [
+    {
+      label: t('registryUi.detail.managedByCli'),
+      clients: supportedClients.filter(
+        (client) => plugin.client_support.delivery[client.id] === 'managed',
+      ),
+    },
+    {
+      label: t('registryUi.detail.requiresAFinalStepInTheApp'),
+      clients: supportedClients.filter((client) =>
+        ['prepared', 'manual_activation'].includes(plugin.client_support.delivery[client.id] ?? ''),
+      ),
+    },
+    {
+      label: t('registryUi.detail.deliveryDetailsNotSpecified'),
+      clients: supportedClients.filter((client) => !plugin.client_support.delivery[client.id]),
+    },
+  ].filter((group) => group.clients.length > 0),
+);
 const initialTarget =
   supportedClients.find((client) => client.id === 'cursor')?.id ?? supportedClients[0]?.id;
 const targets = ref<ClientID[]>(initialTarget ? [initialTarget] : []);
 const autoDetect = ref(true);
-const trustLabel = 'reviewed listing';
-const siteUrl = String(config.public.siteUrl).replace(/\/+$/, '');
-const pluginUrl = `${siteUrl}/plugins/${plugin.name}/`;
-const pluginSchemaId = `${pluginUrl}#plugin`;
-const breadcrumbId = `${pluginUrl}#breadcrumb`;
+const trustLabel = computed(() => t('registryUi.detail.reviewedListing'));
+const siteUrl = productRootUrl(
+  String(config.public.siteUrl),
+  String(config.app.baseURL),
+).replace(/\/+$/, '');
+const localizedUrl = (path: string) => `${siteUrl}${localizedPath(path, locale.value as KnownLocale)}`;
+const pluginUrl = computed(() => localizedUrl(`/plugins/${plugin.name}/`));
+const pluginSchemaId = computed(() => `${pluginUrl.value}#plugin`);
+const breadcrumbId = computed(() => `${pluginUrl.value}#breadcrumb`);
 const clientNames = supportedClients.map((client) => client.name);
-const description = seoDescription([
-  `Install the ${plugin.display_name} Agent Plugin for ${clientNames.join(', ')}.`,
-  plugin.description,
-]);
+const description = computed(() =>
+  seoDescription([
+    t('registryUi.detail.descriptionLead', {
+      name: plugin.display_name,
+      clients: clientNames.join(', '),
+    }),
+    plugin.description,
+  ]),
+);
 const licenseUrl = spdxLicenseUrl(plugin.license);
 
 function openInstallSection() {
   document.getElementById('plugin-install')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
-usePageSeo(`${plugin.display_name} Agent Plugin | Universal Agent Plugins`, description, {
+usePageSeo(() => t('registryUi.detail.title', { name: plugin.display_name }), description, {
   translate: false,
-  pageProperties: {
-    breadcrumb: { '@id': breadcrumbId },
-    mainEntity: { '@id': pluginSchemaId },
-  },
-  structuredData: [
+  pageProperties: () => ({
+    breadcrumb: { '@id': breadcrumbId.value },
+    mainEntity: { '@id': pluginSchemaId.value },
+  }),
+  structuredData: () => [
     {
       '@type': 'SoftwareSourceCode',
-      '@id': pluginSchemaId,
-      name: `${plugin.display_name} Agent Plugin`,
+      '@id': pluginSchemaId.value,
+      name: t('registryUi.detail.schemaName', { name: plugin.display_name }),
       description: plugin.description,
-      url: pluginUrl,
+      url: pluginUrl.value,
       codeRepository: sourceUrl(plugin),
       softwareVersion: plugin.version,
       runtimePlatform: clientNames,
@@ -81,23 +96,23 @@ usePageSeo(`${plugin.display_name} Agent Plugin | Universal Agent Plugins`, desc
         ...(plugin.author.url ? { url: plugin.author.url } : {}),
       },
       ...(licenseUrl ? { license: licenseUrl } : {}),
-      isPartOf: { '@id': `${siteUrl}/plugins/#webpage` },
+      isPartOf: { '@id': `${localizedUrl('/plugins/')}#webpage` },
     },
     {
       '@type': 'BreadcrumbList',
-      '@id': breadcrumbId,
+      '@id': breadcrumbId.value,
       itemListElement: [
         {
           '@type': 'ListItem',
           position: 1,
-          name: 'Plugin directory',
-          item: `${siteUrl}/plugins/`,
+          name: t('registryUi.detail.directory'),
+          item: localizedUrl('/plugins/'),
         },
         {
           '@type': 'ListItem',
           position: 2,
           name: plugin.display_name,
-          item: pluginUrl,
+          item: pluginUrl.value,
         },
       ],
     },
@@ -112,17 +127,17 @@ usePageSeo(`${plugin.display_name} Agent Plugin | Universal Agent Plugins`, desc
       <v-container>
         <div class="plugin-detail__hero-topbar">
           <v-btn
-            to="/plugins/"
+            :to="localePath('/plugins/')"
             variant="text"
             icon
-            aria-label="Back to plugin directory"
+            :aria-label="t('registryUi.detail.backToPluginDirectory')"
             class="plugin-detail__back-cta"
           >
             <v-icon :icon="mdiArrowLeft" size="22" />
           </v-btn>
-          <nav class="breadcrumbs" aria-label="Breadcrumb">
-            <NuxtLink to="/plugins/">Plugins</NuxtLink><span aria-hidden="true">/</span
-            ><span>{{ plugin.display_name }}</span>
+          <nav class="breadcrumbs" :aria-label="t('registryUi.detail.breadcrumb')">
+            <NuxtLink :to="localePath('/plugins/')"> {{ t('registryUi.detail.plugins') }} </NuxtLink
+            ><span aria-hidden="true">/</span><span>{{ plugin.display_name }}</span>
           </nav>
         </div>
 
@@ -136,7 +151,7 @@ usePageSeo(`${plugin.display_name} Agent Plugin | Universal Agent Plugins`, desc
                   alt=""
                   class="plugin-detail__logo"
                   loading="eager"
-                >
+                />
                 <span v-else aria-hidden="true">{{ plugin.display_name.slice(0, 1) }}</span>
               </span>
               <div>
@@ -146,7 +161,7 @@ usePageSeo(`${plugin.display_name} Agent Plugin | Universal Agent Plugins`, desc
             </div>
 
             <div class="plugin-detail__chips">
-              <span class="plugin-detail__type">Agent Plugins 1.0</span>
+              <span class="plugin-detail__type"> {{ t('registryUi.detail.agentPlugins10') }} </span>
               <span class="plugin-detail__status">{{ trustLabel }}</span>
               <span
                 v-for="category in plugin.categories"
@@ -157,13 +172,17 @@ usePageSeo(`${plugin.display_name} Agent Plugin | Universal Agent Plugins`, desc
             </div>
 
             <p class="plugin-detail__summary">
-              The listing and metadata were reviewed. An automated security assessment, when
-              present, applies only to the exact scanned revision. Runtime behavior is not audited.
+              {{
+                t(
+                  'registryUi.detail.theListingAndMetadataWereReviewedAnAutomatedSecurityAssessmentWhenPresentAppliesOnlyToTheExactScannedRevisionRuntimeBehaviorIsNotAudited',
+                )
+              }}
             </p>
 
             <div class="plugin-detail__actions">
               <v-btn size="x-large" class="plugin-detail__install-cta" @click="openInstallSection">
-                Install plugin <v-icon :icon="mdiDownload" end size="20" />
+                {{ t('registryUi.detail.installPlugin') }}
+                <v-icon :icon="mdiDownload" end size="20" />
               </v-btn>
               <v-btn
                 :href="sourceUrl(plugin)"
@@ -172,13 +191,16 @@ usePageSeo(`${plugin.display_name} Agent Plugin | Universal Agent Plugins`, desc
                 size="large"
                 class="plugin-detail__primary-cta"
               >
-                View source <v-icon :icon="mdiOpenInNew" end size="18" />
+                {{ t('registryUi.detail.viewSource') }}
+                <v-icon :icon="mdiOpenInNew" end size="18" />
               </v-btn>
             </div>
           </div>
 
           <div class="plugin-detail__summary-card">
-            <p class="plugin-detail__summary-eyebrow">Plugin overview</p>
+            <p class="plugin-detail__summary-eyebrow">
+              {{ t('registryUi.detail.pluginOverview') }}
+            </p>
             <div
               v-for="group in clientGroups"
               :key="group.label"
@@ -189,32 +211,36 @@ usePageSeo(`${plugin.display_name} Agent Plugin | Universal Agent Plugins`, desc
                 <NuxtLink
                   v-for="client in group.clients"
                   :key="client.id"
-                  :to="`/agents/${clientLandingById.get(client.id)?.slug}/`"
+                  :to="localePath(`/agents/${clientLandingById.get(client.id)?.slug}/`)"
                   class="plugin-detail__client"
                 >
-                  <img :src="asset(`client-icons/${client.icon}`)" alt="" width="22" height="22" >
+                  <img :src="asset(`client-icons/${client.icon}`)" alt="" width="22" height="22" />
                   {{ client.name }}
                 </NuxtLink>
               </div>
             </div>
             <div class="plugin-detail__summary-block">
-              <div class="plugin-detail__summary-title">Components</div>
+              <div class="plugin-detail__summary-title">
+                {{ t('registryUi.detail.components') }}
+              </div>
               <ul class="plugin-detail__list">
                 <li
                   v-for="component in plugin.components"
                   :key="component"
                   class="plugin-detail__list-item"
                 >
-                  {{ component }}
+                  {{ t(`registryUi.components.${component}`) }}
                 </li>
               </ul>
             </div>
             <div class="plugin-detail__summary-block">
-              <div class="plugin-detail__summary-title">Package</div>
+              <div class="plugin-detail__summary-title">{{ t('registryUi.detail.package') }}</div>
               <ul class="plugin-detail__list">
-                <li class="plugin-detail__list-item">Version {{ plugin.version }}</li>
                 <li class="plugin-detail__list-item">
-                  {{ plugin.license || 'License not specified' }}
+                  {{ t('registryUi.detail.version', { version: plugin.version }) }}
+                </li>
+                <li class="plugin-detail__list-item">
+                  {{ plugin.license || t('registryUi.detail.licenseNotSpecified') }}
                 </li>
               </ul>
             </div>

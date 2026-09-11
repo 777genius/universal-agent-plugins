@@ -1,0 +1,50 @@
+{
+  "shell": {
+    "download": {
+      "heading": {
+        "title": "Instale seu primeiro plugin",
+        "note": "Escolha como executar a CLI, selecione um ou mais agentes e copie o comando."
+      },
+      "channels": {
+        "brew": {
+          "title": "Homebrew",
+          "description": "CLI nativa em Go para macOS e Linux. Node.js não é necessário.",
+          "note": "Recomendado para uma instalação permanente com atualizações automáticas pelo Homebrew."
+        },
+        "npm": {
+          "title": "npx · Node.js 22+",
+          "description": "Mais rápido quando o Node.js 22+ já está instalado: execute o comando do plugin imediatamente.",
+          "note": "Sem instalação: o npx baixa a CLI verificada e executa o comando do plugin em uma única etapa."
+        },
+        "script": {
+          "title": "Script de instalação verificado",
+          "description": "Instalação nativa sem gerenciador de pacotes. Node.js não é necessário.",
+          "note": "Baixa o binário correto da versão e verifica seu SHA-256 e sua versão."
+        },
+        "powershell": {
+          "title": "Windows PowerShell",
+          "description": "CLI nativa em Go para Windows. Node.js não é necessário.",
+          "note": "Baixa o binário do Windows e verifica seu SHA-256 e sua versão."
+        }
+      },
+      "steps": {
+        "install-cli": {
+          "title": "Execute a CLI",
+          "note": "Use npx para começar rapidamente ou instale o binário para uso diário."
+        },
+        "try-plugin": {
+          "title": "Instale um plugin real",
+          "note": "O mesmo comando aceita um destino ou uma lista separada por vírgulas."
+        },
+        "build-plugin": {
+          "title": "Mantenha tudo atualizado",
+          "note": "Use update para uma nova versão e repair quando um cliente ficar desalinhado."
+        },
+        "validate": {
+          "title": "Remova de forma limpa",
+          "note": "A CLI remove as entradas gerenciadas do cliente mantendo os dados do pacote por padrão."
+        }
+      }
+    }
+  }
+}

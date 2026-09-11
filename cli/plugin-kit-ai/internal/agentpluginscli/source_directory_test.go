@@ -679,6 +679,7 @@ func (acquirer *localBackedSourceAcquirer) AcquireGitHubVerified(ctx context.Con
 		return domain.PackageSnapshot{}, err
 	}
 	if snapshot.TreeDigest != digest {
+		_ = packagedigest.Remove(snapshot)
 		return domain.PackageSnapshot{}, fmt.Errorf("verified tree digest mismatch")
 	}
 	return snapshot, nil
@@ -1545,12 +1546,12 @@ func TestExistingRelativeDirectoryDoesNotOverrideShortNameForAddOrSwitch(t *test
 }
 
 func TestExplicitLocalPathRecognizesOnlyPortableExplicitAndAbsoluteWindowsForms(t *testing.T) {
-	for _, value := range []string{"./plugin", "../plugin", `.\plugin`, `..\plugin`, `/plugin`, `C:\plugin`, `d:/plugin`, `\\server\share\plugin`} {
+	for _, value := range []string{"/", "./plugin", "../plugin", `.\plugin`, `..\plugin`, `/plugin`, `C:\plugin`, `d:/plugin`, `\\server\share\plugin`} {
 		if !explicitLocalPath(value) {
 			t.Errorf("explicitLocalPath(%q) = false", value)
 		}
 	}
-	for _, value := range []string{"plugin", "existing-plugin", `C:plugin`, `owner\\plugin`, `\\server`} {
+	for _, value := range []string{"", ".", "..", `\plugin`, `\\server\`, "plugin", "existing-plugin", `C:plugin`, `owner\\plugin`, `\\server`} {
 		if explicitLocalPath(value) {
 			t.Errorf("explicitLocalPath(%q) = true", value)
 		}

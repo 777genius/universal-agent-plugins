@@ -1,0 +1,10 @@
+// nuxt-icon 0.x awaits Iconify in SSR setup. Seed decorative fixture-only
+// glyphs so neither document rendering nor hydration needs the public API.
+// The real Icon and LanguageSwitcher components still render normally.
+export default defineNuxtPlugin(() => {
+  const icons = useState('icons', () => ({}));
+  icons.value = Object.fromEntries(['gb', 'ru', 'ua'].map(code => [
+    `circle-flags:${code}`,
+    { width: 24, height: 24, body: '<circle cx="12" cy="12" r="10" fill="currentColor" />' },
+  ]));
+});

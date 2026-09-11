@@ -323,7 +323,7 @@ func TestInteractiveSharedSurfaceAddRequiresSignedPeerEligibilityBeforeAcquisiti
 			rollout.directory.bundle.Snapshot.Distributions[0].ReleasePolicies[0].Targets = []domain.DirectoryTarget{{
 				Client: test.selected, Scopes: []domain.InstallScope{domain.ScopeUser}, Delivery: delivery,
 			}}
-			if _, _, err := rollout.cli.executeInput(true, test.input, "add", "rollout-demo"); err == nil || !strings.Contains(err.Error(), "missing "+string(test.missing)) {
+			if stdout, _, err := rollout.cli.executeInput(true, test.input, "add", "rollout-demo"); err == nil || !strings.Contains(stdout, "the catalog has no compatible release") {
 				t.Fatalf("interactive %s selection accepted incomplete peer policy: %v", test.selected, err)
 			}
 			state, err := rollout.cli.store.Load()
@@ -351,7 +351,7 @@ func TestInteractiveDirectoryAddOffersOnlyOneCompleteSignedTargetSet(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(stdout, "Skipped installed clients that this package cannot install together: codex") {
+	if !strings.Contains(stdout, "Skipped (not installed in this attempt): codex: the catalog has no compatible release") {
 		t.Fatalf("package-aware Directory output = %q", stdout)
 	}
 	if rollout.acquirer.verifiedCalls != 1 {
@@ -359,7 +359,7 @@ func TestInteractiveDirectoryAddOffersOnlyOneCompleteSignedTargetSet(t *testing.
 	}
 }
 
-func TestInteractiveDirectoryAddSkipsTargetThatCannotPassActivationPreflight(t *testing.T) {
+func TestInteractiveDirectoryAddOffersKiroGuidedPreparation(t *testing.T) {
 	rollout := newRolloutDirectoryFixture(t,
 		[]domain.ClientID{domain.ClientCursor, domain.ClientKiro},
 		[]domain.ClientID{domain.ClientCursor, domain.ClientKiro})
@@ -393,11 +393,11 @@ func TestInteractiveDirectoryAddSkipsTargetThatCannotPassActivationPreflight(t *
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(stdout, "Skipped installed clients that this package cannot install together: kiro") {
+	if !strings.Contains(stdout, "prepare configuration; automatic MCP verification unavailable") {
 		t.Fatalf("activation-aware Directory output = %q", stdout)
 	}
-	if strings.Contains(stdout, "Detected supported clients (all selected by default)") {
-		t.Fatalf("single preflight-capable Directory target unexpectedly prompted: %q", stdout)
+	if !strings.Contains(stdout, "Detected supported clients (all selected by default)") {
+		t.Fatalf("preparation-capable Directory target unexpectedly prompted: %q", stdout)
 	}
 	if rollout.acquirer.verifiedCalls != 1 {
 		t.Fatalf("Directory package acquired %d times, want exactly once", rollout.acquirer.verifiedCalls)

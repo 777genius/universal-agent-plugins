@@ -17,6 +17,24 @@ const COMMIT = "a".repeat(40);
 const HISTORICAL_COMMIT = "5630ccd92aa91c8ac8cafb37eea8752fd82edce0";
 const HISTORICAL_TREE = "cf13cbe2f64ae09d93ad34bfc6047fe99d5ca845";
 
+test("checked-in release evidence matches the pinned snapshot and preserves historical claims", async (t) => {
+  const root = await fsp.mkdtemp(path.join(os.tmpdir(), "agentplugins-current-evidence-"));
+  t.after(() => fsp.rm(root, { recursive: true, force: true }));
+  const packageVersion = JSON.parse(await fsp.readFile(path.resolve(__dirname, "../package.json"), "utf8")).version;
+  const evidenceRoot = packageVersion === "0.0.0-development"
+    ? path.resolve(__dirname, "../../../docs")
+    : path.join(__dirname, "evidence-root");
+  const metadata = stageEvidence(root, evidenceRoot);
+  assert.equal(metadata.source.commit, "01f02cb51cfe5f664d4d5f52b295c59c7ea03495");
+  assert.equal(metadata.installer.commit, HISTORICAL_COMMIT);
+  assert.equal(metadata.installer.version, "0.1.22");
+  assert.equal(metadata.claim_boundary.model_turn_e2e, false);
+  assert.equal(metadata.claim_boundary.oauth_e2e, false);
+  const document = path.join(root, "test/evidence-root/AGENTPLUGINS_CLIENT_E2E.md");
+  await fsp.appendFile(document, "\nUnreviewed change\n");
+  assert.throws(() => stageEvidence(root, path.dirname(document)), /immutable source locator/);
+});
+
 async function fixtureEvidence(root) {
   const evidenceRoot = path.join(root, "evidence");
   await fsp.mkdir(path.join(evidenceRoot, "evidence"), { recursive: true });
@@ -151,6 +169,10 @@ test("release staging embeds every exact platform asset hash", async (t) => {
   const evidenceRoot = await fixtureEvidence(root);
   const manifest = stage(packageRoot, assetsRoot, version, COMMIT, { evidenceRoot });
   assert.equal(manifest.version, version);
+  assert.deepEqual(
+    await fsp.readFile(path.join(packageRoot, "THIRD_PARTY_NOTICES.txt")),
+    await fsp.readFile(path.join(assetsRoot, "THIRD_PARTY_NOTICES.txt"))
+  );
   assert.equal(manifest.npm_package, "universal-agent-plugins");
   assert.equal(manifest.producer.repository, "777genius/plugin-kit-ai");
   assert.equal(manifest.producer.commit, COMMIT);
@@ -158,7 +180,7 @@ test("release staging embeds every exact platform asset hash", async (t) => {
   assert.equal(manifest.client_evidence.installer.commit, HISTORICAL_COMMIT);
   assert.deepEqual(manifest.client_evidence.source, {
     repository: "777genius/plugin-kit-ai",
-    commit: "4b25a45e1574bab7a4f49e48905a3b3b2647e917",
+    commit: "01f02cb51cfe5f664d4d5f52b295c59c7ea03495",
     document: {
       path: "docs/AGENTPLUGINS_CLIENT_E2E.md",
       sha256: manifest.client_evidence.document_sha256
@@ -181,6 +203,61 @@ test("release staging embeds every exact platform asset hash", async (t) => {
     await fsp.readFile(path.join(packageRoot, "test/evidence-root/AGENTPLUGINS_CLIENT_E2E.md"), "utf8"),
     await fsp.readFile(path.join(evidenceRoot, "AGENTPLUGINS_CLIENT_E2E.md"), "utf8")
   );
+  // A rechecksummed companion from a different source must not reach npm.
+  const noticeFile = path.join(assetsRoot, "THIRD_PARTY_NOTICES.txt");
+  await fsp.writeFile(noticeFile, "different source notices\n");
+  const noticeHash = crypto.createHash("sha256").update(await fsp.readFile(noticeFile)).digest("hex");
+  const checksumsFile = path.join(assetsRoot, "checksums.txt");
+  await fsp.writeFile(checksumsFile, (await fsp.readFile(checksumsFile, "utf8")).replace(
+    /^[0-9a-f]{64}  THIRD_PARTY_NOTICES\.txt$/m, `${noticeHash}  THIRD_PARTY_NOTICES.txt`
+  ));
+  assert.throws(() => stage(packageRoot, assetsRoot, version, COMMIT, { evidenceRoot }), /packaged notices do not match/);
+});
+
+test("historical schema-v2 staging rejects missing notices before mutations or packing", async (t) => {
+  const root = await fsp.mkdtemp(path.join(os.tmpdir(), "agentplugins-stage-missing-notices-"));
+  t.after(() => fsp.rm(root, { recursive: true, force: true }));
+  const packageRoot = path.join(root, "package");
+  const assetsRoot = path.join(root, "assets");
+  await fsp.mkdir(packageRoot);
+  await fsp.mkdir(assetsRoot);
+  await fsp.writeFile(path.join(packageRoot, "package.json"), JSON.stringify({
+    name: "universal-agent-plugins", version: "0.0.0-development",
+    bin: { agentplugins: "bin/agentplugins.js" }, files: ["THIRD_PARTY_NOTICES.txt"]
+  }));
+  await fsp.writeFile(path.join(packageRoot, "assets.json"), "existing asset metadata\n");
+  await fsp.writeFile(path.join(packageRoot, "THIRD_PARTY_NOTICES.txt"), "stale checkout notices\n");
+  await fsp.mkdir(path.join(packageRoot, "test/evidence-root"), { recursive: true });
+  await fsp.writeFile(path.join(packageRoot, "test/evidence-root/keep.txt"), "existing evidence\n");
+  const version = "0.1.12";
+  for (const [platform, arch] of [["darwin", "x64"], ["darwin", "arm64"], ["linux", "x64"], ["linux", "arm64"], ["win32", "x64"], ["win32", "arm64"]]) {
+    const info = detectPlatform(platform, arch);
+    await fsp.writeFile(path.join(assetsRoot, expectedAssetName(version, info)), `${info.key}\n`);
+  }
+  prepareRelease(assetsRoot, `agentplugins-v${version}`, COMMIT);
+  await fsp.unlink(path.join(assetsRoot, "THIRD_PARTY_NOTICES.txt"));
+  const checksumsPath = path.join(assetsRoot, "checksums.txt");
+  await fsp.writeFile(checksumsPath, (await fsp.readFile(checksumsPath, "utf8"))
+    .split("\n").filter((line) => !line.endsWith("  THIRD_PARTY_NOTICES.txt")).join("\n"));
+  const historical = verifyRelease(assetsRoot, `agentplugins-v${version}`, COMMIT);
+  assert.equal(historical.manifest_schema, 2);
+  assert.equal(historical.gate_eligible, true);
+  assert.deepEqual(historical.notices, []);
+  const evidenceRoot = await fixtureEvidence(root);
+  const snapshot = () => fs.readdirSync(root, { recursive: true }).sort().map((name) => {
+    const file = path.join(root, name);
+    return [name, fs.statSync(file).isDirectory() ? null : fs.readFileSync(file)];
+  });
+  const before = snapshot();
+  const pack = t.mock.fn();
+  const afterInitialReleaseVerification = t.mock.fn();
+  assert.throws(() => {
+    stage(packageRoot, assetsRoot, version, COMMIT, { evidenceRoot, afterInitialReleaseVerification });
+    pack();
+  }, /release staging requires verified companion THIRD_PARTY_NOTICES\.txt/);
+  assert.equal(pack.mock.callCount(), 0);
+  assert.equal(afterInitialReleaseVerification.mock.callCount(), 0);
+  assert.deepEqual(snapshot(), before);
 });
 
 test("staged package tests are hermetic to repository layout and caller cwd", {
@@ -230,6 +307,10 @@ test("staged package tests are hermetic to repository layout and caller cwd", {
   const packedFiles = packResult[0].files.map(({ path: filename }) => filename);
   assert.ok(packedFiles.includes("README.md"));
   assert.ok(packedFiles.includes("assets.json"));
+  assert.ok(packedFiles.includes("THIRD_PARTY_NOTICES.txt"));
+  const packedNotices = childProcess.execFileSync("tar", ["-xOf",
+    path.join(packageRoot, packResult[0].filename), "package/THIRD_PARTY_NOTICES.txt"]);
+  assert.deepEqual(packedNotices, await fsp.readFile(path.join(assetsRoot, "THIRD_PARTY_NOTICES.txt")));
   assert.equal(packedFiles.some((filename) => filename.startsWith("test/") || filename.includes("evidence-root")), false);
 });
 
@@ -455,6 +536,7 @@ test("legacy manifests are audit-only and never gate eligible", async (t) => {
     await fsp.writeFile(path.join(root, expectedAssetName(version, info)), `${info.key}\n`);
   }
   const { assets } = prepareRelease(root, `agentplugins-v${version}`, COMMIT);
+  await fsp.rm(path.join(root, "THIRD_PARTY_NOTICES.txt"));
   await fsp.writeFile(path.join(root, "release-manifest.json"), JSON.stringify({
     schema_version: 1,
     tag: `agentplugins-v${version}`,

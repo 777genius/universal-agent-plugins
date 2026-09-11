@@ -96,3 +96,15 @@ The npm facade remains available for users who prefer `npx`:
 ```bash
 npx universal-agent-plugins add context7
 ```
+
+## After installation
+
+If `agentplugins` is not found, add the installation directory to `PATH` as
+printed by the installer, or invoke the binary by its full path. The one-shot
+Unix command above already invokes the installed binary by its full path.
+
+Follow the CLI's activation or sign-in instructions, then start a new agent
+session. Installation does not by itself prove activation or plugin runtime.
+See the [client compatibility evidence](https://777genius.github.io/universal-agent-plugins/docs/en/reference/client-compatibility.html)
+for tested versions and platform limitations, or [installer support](./SUPPORT.md#universal-agent-plugins-installer)
+if you need help.

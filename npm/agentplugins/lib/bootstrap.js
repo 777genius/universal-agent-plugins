@@ -29,8 +29,9 @@ const VERSION = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?(?
 const DIGEST = /^[0-9a-f]{64}$/;
 const PROOF_MODE = "local-frozen-release-asset-v1";
 const PRODUCER_REPOSITORY = "777genius/plugin-kit-ai";
-const HISTORICAL_EVIDENCE_COMMIT = "4b25a45e1574bab7a4f49e48905a3b3b2647e917";
-const HISTORICAL_EVIDENCE_DOCUMENT_SHA256 = "df6769bf430a337f116cd9df75bcc3ea26df166a016eacf9bc9fbc6cfbf9b100";
+// Source-document snapshot; the tested installer retains its own identity.
+const HISTORICAL_EVIDENCE_COMMIT = "01f02cb51cfe5f664d4d5f52b295c59c7ea03495";
+const HISTORICAL_EVIDENCE_DOCUMENT_SHA256 = "0cecbf12a96cf578d12e1cb2f582aa13dca2d9d900ccaefd223f5d7c1030ea65";
 const HISTORICAL_EVIDENCE_RECORD_SHA256 = "437da1bc7423a85b231be139ff9bfbd7e89c942ef216a61ebde668c08a9c2ee3";
 const COMMIT = /^[0-9a-f]{40}$/;
 

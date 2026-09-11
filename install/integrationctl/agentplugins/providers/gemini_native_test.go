@@ -182,6 +182,9 @@ func TestGeminiTransportProjection(t *testing.T) {
 		t.Fatalf("stdio projection = %+v, %v", stdio, err)
 	}
 	packageRoot := filepath.Join(t.TempDir(), "plugin", "${PLUGIN_DATA}")
+	if err := os.MkdirAll(filepath.Join(packageRoot, "${PLUGIN_CACHE}"), 0700); err != nil {
+		t.Fatal(err)
+	}
 	dataRoot := filepath.Join(t.TempDir(), "data")
 	stdio, err = materializeGeminiServer(stdio, packageRoot, dataRoot)
 	if err != nil {

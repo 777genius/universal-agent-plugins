@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/prompt"
+	"github.com/777genius/plugin-kit-ai/cli/internal/promptio"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/spf13/cobra"
 )
@@ -24,7 +26,21 @@ func authorizeSecurityAssessment(cmd *cobra.Command, app App, opts *options, loa
 	}
 	assessment := *loaded.security
 	if opts.format == "human" {
-		renderSecurityAssessment(cmd, assessment, opts.securityDetails)
+		writer := cmd.OutOrStdout()
+		if app.Terminal && assessment.Counts.Blocking > 0 && !opts.dryRun && !opts.acceptSecurityRisk {
+			var err error
+			writer, err = promptio.VisibleOutput(writer, cmd.ErrOrStderr())
+			if err != nil {
+				return err
+			}
+		}
+		checked := &planWriter{writer: writer}
+		display := &cobra.Command{}
+		display.SetOut(checked)
+		renderSecurityAssessment(display, assessment, opts.securityDetails)
+		if checked.err != nil {
+			return checked.err
+		}
 	}
 	if assessment.Counts.Blocking == 0 || opts.dryRun {
 		loaded.securityAuthorized = true
@@ -48,7 +64,7 @@ func authorizeSecurityAssessment(cmd *cobra.Command, app App, opts *options, loa
 		}
 		return fmt.Errorf("installation stopped: automated security checks found %d blocking finding(s); review them and rerun with --accept-security-risk to continue", assessment.Counts.Blocking)
 	}
-	confirmed, err := promptYesNo(cmd.InOrStdin(), cmd.OutOrStdout(), "Blocking security findings were detected. Continue anyway? [y/N]")
+	confirmed, err := promptYesNo(cmd.Context(), cmd.InOrStdin(), cmd.OutOrStdout(), cmd.ErrOrStderr(), "Blocking security findings were detected. Continue anyway? [y/N]")
 	if err != nil {
 		return err
 	}
@@ -76,7 +92,7 @@ func renderSecurityAssessment(cmd *cobra.Command, assessment domain.SecurityAsse
 
 	visible := visibleSecurityFindings(assessment, installNotes, maintenanceNotes, showAll)
 	for _, finding := range visible {
-		location := strings.TrimSpace(finding.Path)
+		location := prompt.SafeText(strings.TrimSpace(finding.Path))
 		if finding.Line > 0 {
 			location = fmt.Sprintf("%s:%d", location, finding.Line)
 		}
@@ -87,7 +103,7 @@ func renderSecurityAssessment(cmd *cobra.Command, assessment domain.SecurityAsse
 		if finding.Disposition == "blocking" {
 			label = "BLOCKING"
 		}
-		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "  [%s] %s %s%s\n", label, finding.Code, location, finding.Message)
+		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "  [%s] %s %s%s\n", label, prompt.SafeText(finding.Code), location, prompt.SafeText(finding.Message))
 	}
 	visibleBlocking, visibleWarnings := findingDispositionCounts(visible)
 	if hiddenBlocking := assessment.Counts.Blocking - visibleBlocking; hiddenBlocking > 0 {

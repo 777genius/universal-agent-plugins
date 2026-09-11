@@ -1,3 +1,4 @@
+import { publishedLocales, localeMetadata } from '../../data/i18n';
 import { expect, test } from '@playwright/test';
 
 const parseJsonLd = async (page: import('@playwright/test').Page) => {
@@ -62,11 +63,11 @@ test('homepage installs with auto-detection and exposes the full directory', asy
   await expect(securityTooltip).toContainText(/exact indexed revision [0-9a-f]{12}/);
   await expect(securityTooltip).toContainText(/does not run the plugin or guarantee safety/i);
   await expect(page.getByText(/guarantee of safety/i)).toHaveCount(0);
-  await expect(page.locator('.catalog-count')).toContainText(/[2-9]\d{3} plugins/, {
+  await expect(page.locator('.catalog-count')).toContainText(/[2-9],?\d{3} plugins/, {
     timeout: 15_000,
   });
   const catalogSummary = await page.locator('.catalog-count').innerText();
-  const totalPlugins = Number(catalogSummary.match(/(\d+) plugins/)![1]);
+  const totalPlugins = Number(catalogSummary.match(/([\d,]+) plugins/)![1].replaceAll(',', ''));
   await expect(explorePlugins).toHaveAccessibleName(
     `Explore ${totalPlugins.toLocaleString('en')} plugins`,
     { timeout: 5_000 },
@@ -152,7 +153,8 @@ test('plugin counter stays inside the hero on a narrow screen', async ({ page })
   await page.evaluate(() => document.fonts.ready);
   const initialWidth = (await page.locator('.hero__actions .button--primary').boundingBox())!.width;
   releaseDiscovery();
-  await expect(page.locator('.hero__plugin-count')).toContainText(/[\d,]+/);
+  // The count appears after the signed discovery snapshot has been verified.
+  await expect(page.locator('.hero__plugin-count')).toContainText(/[\d,]+/, { timeout: 15_000 });
   const container = (await page.locator('.hero.container').boundingBox())!;
   const button = (await page.locator('.hero__actions .button--primary').boundingBox())!;
   expect(button.width).toBe(initialWidth);
@@ -170,7 +172,7 @@ test('homepage publishes canonical social metadata and complete product schema',
     'href',
     'https://777genius.github.io/universal-agent-plugins/',
   );
-  await expect(page.locator('link[rel="alternate"][hreflang]')).toHaveCount(0);
+  await expect(page.locator('link[rel="alternate"][hreflang]')).toHaveCount(publishedLocales.length + 1);
   await expect(page.locator('meta[property="og:image"]')).toHaveAttribute(
     'content',
     'https://777genius.github.io/universal-agent-plugins/og-image.png',
@@ -246,6 +248,12 @@ test.describe('mobile navigation and catalog', () => {
 
   test('keeps advanced filters compact and makes search easy to clear', async ({ page }) => {
     await page.goto('./');
+    // SSR controls are visible before Vue has installed their event handlers.
+    await page.waitForFunction(() => {
+      const app = (document.querySelector('#__nuxt') as any)?.__vue_app__;
+      const nuxt = app?.$nuxt || app?.config.globalProperties.$nuxt;
+      return Boolean(app?.config.globalProperties.$router && nuxt?.isHydrating === false);
+    });
     await page.locator('.catalog .section-heading').scrollIntoViewIfNeeded();
 
     const toggle = page.locator('.catalog-filter-toggle');
@@ -295,6 +303,7 @@ test('security badges explain the exact checked revision and open full findings'
   const badge = page.locator('.plugin-card__security--warnings').first();
   await expect(badge).toBeVisible({ timeout: 15_000 });
   await expect(badge).not.toHaveAttribute('title');
+  await badge.scrollIntoViewIfNeeded();
   await badge.focus();
   const tooltip = page.locator('.app-tooltip');
   await expect(tooltip).toBeVisible();
@@ -393,7 +402,7 @@ test('directory filters and reviewed detail keep automatic detection as the defa
   page,
 }) => {
   await page.goto('./plugins');
-  await expect(page.locator('.catalog-count')).toContainText(/[2-9]\d{3}/, {
+  await expect(page.locator('.catalog-count')).toContainText(/[2-9],?\d{3}/, {
     timeout: 15_000,
   });
   await page.getByPlaceholder(/Search by name/).fill('gitlab');
@@ -453,11 +462,15 @@ test('sitemap lists only live canonical pages and unstable routes stay out of th
   const locations = [...sitemap.matchAll(/<loc>([^<]+)<\/loc>/g)].map((match) => match[1]!);
   expect(locations.length).toBeGreaterThanOrEqual(20);
   expect(locations.every((location) => location.endsWith('/'))).toBe(true);
-  expect(locations.some((location) => /\/(ru|es|fr|zh)(?:\/|$)/.test(location))).toBe(false);
+  for (const code of Object.keys(localeMetadata).filter(code => code !== 'en')) {
+    expect(locations.some(location => new URL(location).pathname.includes(`/${code}/`))).toBe(
+      (publishedLocales as readonly string[]).includes(code),
+    );
+  }
   expect(sitemap).not.toContain('<lastmod>');
   expect(sitemap).not.toContain('/plugins/community/');
   expect(sitemap).not.toContain('/create-plugin/');
-  expect(locations.filter((location) => location.includes('/agents/'))).toHaveLength(11);
+  expect(locations.filter((location) => location.includes('/agents/'))).toHaveLength(11 * publishedLocales.length);
 
   const prefix = '/universal-agent-plugins/';
   const statuses = await Promise.all(
@@ -486,6 +499,16 @@ test('sitemap lists only live canonical pages and unstable routes stay out of th
 
   await page.goto('./create-plugin');
   await expect(page.locator('meta[name="robots"]')).toHaveAttribute('content', 'noindex, follow');
+  await expect(page.getByRole('heading', { name: 'Use plugins / Build plugins', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Use plugins', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Build plugins', exact: true })).toBeVisible();
+  await expect(page.locator('#use-plugins code')).toHaveText('npx universal-agent-plugins add context7');
+  await expect(page.locator('#build-plugins')).toContainText('Preparation — unreleased');
+  await expect(page.locator('#build-plugins')).toContainText('not standard-first v2');
+  await expect(page.locator('#historical-v1 a')).toHaveAttribute(
+    'href',
+    'https://777genius.github.io/universal-agent-plugins/docs/en/guide/quickstart.html#historical-v1',
+  );
 });
 
 test('the authoring frontdoor distinguishes Use from unreleased Build and links to real docs journeys', async ({

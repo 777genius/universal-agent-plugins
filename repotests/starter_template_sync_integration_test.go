@@ -57,8 +57,15 @@ func TestStarterTemplateSyncContractFilesStayAligned(t *testing.T) {
 	}
 	mustContain(t, strings.Join(strings.Fields(historicalReadme), " "), "The repository preserves Codex and Claude starters across Go, Python, and Node/TypeScript.")
 	mustContain(t, historicalReadme, "[starters](examples/starters/README.md)")
+	mustContain(t, historicalReadme, "the stable local Python and Node subset on `codex-runtime` and `claude`")
 	mustContain(t, startersReadme, "Historical plugin-kit-ai v1 managed examples; baseline 1.2.4.")
 	mustContain(t, startersReadme, "These are not root `plugin.json` starters for the standard MVP.")
+	for starter, repo := range expected {
+		mustContain(t, cliReadme, "https://github.com/777genius/"+repo)
+		if !fileExists(filepath.Join(root, "examples", "starters", starter, "plugin", "plugin.yaml")) {
+			t.Fatalf("historical starter %s missing plugin/plugin.yaml", starter)
+		}
+	}
 	mustContain(t, cliReadme, "Official starter templates:")
 	mustContain(t, startersReadme, "These starter repos are the fastest way to get one working plugin repo that can later expand to more supported outputs.")
 	mustContain(t, startersReadme, "Use this template")

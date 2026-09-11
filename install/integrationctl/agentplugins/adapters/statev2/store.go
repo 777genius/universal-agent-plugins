@@ -159,6 +159,14 @@ func Validate(state domain.StateFileV2) error {
 	clientBindingIDs := map[string]struct{}{}
 	operationIDs := map[string]struct{}{}
 	for index, installation := range state.Installations {
+		if mapping := installation.LocalChatGPTMapping; mapping != nil {
+			if err := mapping.Validate(); err != nil && !mapping.IsLegacyContext7Registration() {
+				return err
+			}
+			if installation.OriginMode != domain.OriginModeDirectory || installation.Directory == nil || installation.Directory.ProductID != mapping.ProductID || installation.Directory.DistributionID != mapping.Repository || installation.Source.Repository != mapping.Repository || installation.Source.PackageSubpath != mapping.PackagePath {
+				return fmt.Errorf("personal ChatGPT receipt source does not match installation")
+			}
+		}
 		prefix := fmt.Sprintf("installations[%d]", index)
 		if err := pathpolicy.ValidateLeafID(installation.InstallationID); err != nil {
 			return fmt.Errorf("%s has invalid installation_id: %w", prefix, err)
@@ -202,6 +210,17 @@ func Validate(state domain.StateFileV2) error {
 			}
 		default:
 			return fmt.Errorf("%s origin_mode must be directory or direct", prefix)
+		}
+		preferences := map[string]bool{}
+		for _, preference := range installation.InstallPreferences {
+			if err := preference.InstallIntent.Validate(preference.ClientID); err != nil {
+				return err
+			}
+			key := string(preference.ClientID) + ":" + string(preference.Scope)
+			if preference.InstallIntent != domain.InstallIntentPrepare || preference.Scope != domain.ScopeUser || preferences[key] {
+				return fmt.Errorf("invalid or duplicate install preference %q", key)
+			}
+			preferences[key] = true
 		}
 		if installation.DataRetained && len(installation.Clients) != 0 {
 			return fmt.Errorf("%s data_retained installation must have no client bindings", prefix)
@@ -251,6 +270,12 @@ func Validate(state domain.StateFileV2) error {
 				return fmt.Errorf("duplicate client_binding_id %q", client.ClientBindingID)
 			}
 			clientBindingIDs[client.ClientBindingID] = struct{}{}
+			if client.InstallIntent == domain.InstallIntentPrepare && client.Scope != string(domain.ScopeUser) {
+				return fmt.Errorf("prepare binding requires user scope")
+			}
+			if err := client.InstallIntent.Validate(domain.ClientID(client.ClientID)); err != nil {
+				return err
+			}
 			if strings.TrimSpace(client.ClientID) == "" || strings.TrimSpace(client.TargetLocator) == "" {
 				return fmt.Errorf("%s client binding %q is incomplete", prefix, client.ClientBindingID)
 			}

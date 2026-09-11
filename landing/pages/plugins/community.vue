@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import type { ClientID } from '~/types/registry';
+const { t } = useI18n();
+const localePath = useLocalePath();
 
 const route = useRoute();
 const registry = await useRegistryPage({
@@ -38,9 +40,9 @@ watch(
 usePageSeo(
   () =>
     plugin.value
-      ? `${plugin.value.display_name} Agent Plugin | Universal Agent Plugins`
-      : 'Community Agent Plugin | Universal Agent Plugins',
-  () => plugin.value?.description ?? 'Install a community Agent Plugin across supported AI agents.',
+      ? t('registryUi.community.title', { name: plugin.value.display_name })
+      : t('registryUi.community.defaultTitle'),
+  () => plugin.value?.description ?? t('registryUi.community.description'),
   {
     translate: false,
     robots: 'noindex, follow',
@@ -54,20 +56,25 @@ usePageSeo(
   <div class="registry-surface plugin-page community-plugin-page">
     <PageBackground />
     <div class="container">
-      <nav class="breadcrumbs" aria-label="Breadcrumb">
-        <NuxtLink to="/plugins/">Plugins</NuxtLink><span aria-hidden="true">/</span
-        ><span>{{ plugin?.display_name ?? 'Community plugin' }}</span>
+      <nav class="breadcrumbs" :aria-label="t('registryUi.community.breadcrumb')">
+        <NuxtLink :to="localePath('/plugins/')"> {{ t('registryUi.community.plugins') }} </NuxtLink
+        ><span aria-hidden="true">/</span
+        ><span>{{ plugin?.display_name ?? t('registryUi.community.communityPlugin') }}</span>
       </nav>
 
       <div v-if="plugin" class="plugin-page__grid">
         <article class="plugin-profile">
           <div class="plugin-profile__heading">
             <span v-if="pluginIcon(plugin)" class="plugin-profile__icon">
-              <img :src="pluginIcon(plugin)" alt="" width="54" height="54" loading="eager" >
+              <img :src="pluginIcon(plugin)" alt="" width="54" height="54" loading="eager" />
             </span>
             <div>
               <div class="plugin-profile__meta">
-                {{ plugin.installable ? 'Community plugin' : 'Community listing' }}
+                {{
+                  plugin.installable
+                    ? t('registryUi.community.communityPlugin')
+                    : t('registryUi.community.communityListing')
+                }}
               </div>
               <h1>{{ plugin.display_name }}</h1>
             </div>
@@ -76,31 +83,51 @@ usePageSeo(
 
           <dl class="plugin-facts">
             <div>
-              <dt>Author</dt>
-              <dd>{{ plugin.author.name || 'Not declared' }}</dd>
+              <dt>{{ t('registryUi.community.author') }}</dt>
+              <dd>{{ plugin.author.name || t('registryUi.community.notDeclared') }}</dd>
             </div>
             <div>
-              <dt>{{ sourceUnavailable ? 'Last known agents' : 'Works with' }}</dt>
+              <dt>
+                {{
+                  sourceUnavailable
+                    ? t('registryUi.community.lastKnownAgents')
+                    : t('registryUi.community.worksWith')
+                }}
+              </dt>
               <dd>
                 {{
                   availableClients.length
                     ? availableClients.map((client) => client.name).join(', ')
                     : plugin.client_support.resolution === 'install_time' && plugin.installable
-                      ? 'Detected at install time'
-                      : 'Not declared'
+                      ? t('registryUi.community.detectedAtInstallTime')
+                      : t('registryUi.community.notDeclared')
                 }}
               </dd>
             </div>
             <div>
-              <dt>{{ sourceUnavailable ? 'Last known components' : 'Components' }}</dt>
+              <dt>
+                {{
+                  sourceUnavailable
+                    ? t('registryUi.community.lastKnownComponents')
+                    : t('registryUi.community.components')
+                }}
+              </dt>
               <dd>
-                {{ plugin.components.length ? plugin.components.join(', ') : 'Not declared' }}
+                {{
+                  plugin.components.length
+                    ? plugin.components
+                        .map((component) => t(`registryUi.components.${component}`))
+                        .join(', ')
+                    : t('registryUi.community.notDeclared')
+                }}
               </dd>
             </div>
             <div>
-              <dt>Source</dt>
+              <dt>{{ t('registryUi.community.source') }}</dt>
               <dd>
-                <a :href="sourceUrl(plugin)" target="_blank" rel="noreferrer">View on GitHub</a>
+                <a :href="sourceUrl(plugin)" target="_blank" rel="noreferrer">
+                  {{ t('registryUi.community.viewOnGithub') }}
+                </a>
               </dd>
             </div>
           </dl>
@@ -112,13 +139,15 @@ usePageSeo(
       </div>
 
       <div v-else-if="!discoverySettled" class="community-plugin-state" role="status">
-        <h1>Loading plugin…</h1>
-        <p>Checking the current community directory.</p>
+        <h1>{{ t('registryUi.community.loadingPlugin') }}</h1>
+        <p>{{ t('registryUi.community.checkingTheCurrentCommunityDirectory') }}</p>
       </div>
       <div v-else class="community-plugin-state">
-        <h1>Plugin not found</h1>
-        <p>This package is no longer available in the current directory.</p>
-        <NuxtLink class="button button--primary" to="/plugins/">Explore plugins</NuxtLink>
+        <h1>{{ t('registryUi.community.pluginNotFound') }}</h1>
+        <p>{{ t('registryUi.community.thisPackageIsNoLongerAvailableInTheCurrentDirectory') }}</p>
+        <NuxtLink class="button button--primary" :to="localePath('/plugins/')">
+          {{ t('registryUi.community.explorePlugins') }}
+        </NuxtLink>
       </div>
     </div>
   </div>

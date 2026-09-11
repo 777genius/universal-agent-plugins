@@ -1,6 +1,9 @@
+import { fileURLToPath } from 'node:url';
 import { defineConfig } from '@playwright/test';
 
 const repositoryBase = process.env.UAP_E2E_REPOSITORY_BASE?.replace(/^\/+|\/+$/g, '') || '';
+const serverConfig = fileURLToPath(new URL('./tests/browser/serve.json', import.meta.url));
+const quotedServerConfig = "'" + serverConfig.replaceAll("'", "'\\''") + "'";
 const webRoot = process.env.UAP_E2E_WEB_ROOT || '.output/public';
 
 export default defineConfig({
@@ -11,7 +14,7 @@ export default defineConfig({
     trace: 'retain-on-failure',
   },
   webServer: {
-    command: `corepack pnpm@8.15.1 exec serve ${webRoot} -l tcp://127.0.0.1:4173`,
+    command: `corepack pnpm@8.15.1 exec serve ${webRoot} -c ${quotedServerConfig} -l tcp://127.0.0.1:4173`,
     port: 4173,
     reuseExistingServer: false,
     timeout: 60_000,

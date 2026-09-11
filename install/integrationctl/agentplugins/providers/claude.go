@@ -8,6 +8,8 @@ import (
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/pathpolicy"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/managedstdio"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/pathcontract"
 )
 
 const (
@@ -57,7 +59,7 @@ func projectClaude(root string, envelope domain.PackageEnvelope, plan domain.Del
 		return fmt.Errorf("write Claude Code plugin manifest: %w", err)
 	}
 	activeRuntimeRoot := filepath.Join(plan.ActivePath, claudeRuntimeDirectory)
-	if err := projectClaudeMCP(root, envelope, serverNames, activeRuntimeRoot, dataPath); err != nil {
+	if err := projectClaudeMCP(root, envelope, serverNames, activeRuntimeRoot, dataPath, runtimeRoot); err != nil {
 		return err
 	}
 	return validateClaudeProjectionRoot(root, len(serverNames) > 0)
@@ -146,7 +148,11 @@ func validateClaudeProjectionRoot(root string, wantMCP bool) error {
 	return nil
 }
 
-func projectClaudeMCP(root string, envelope domain.PackageEnvelope, serverNames []string, pluginRoot, dataPath string) error {
+func projectClaudeMCP(root string, envelope domain.PackageEnvelope, serverNames []string, pluginRoot, dataPath string, observationRoot ...string) error {
+	observedRuntimeRoot := root
+	if len(observationRoot) > 0 {
+		observedRuntimeRoot = observationRoot[0]
+	}
 	path := filepath.Join(root, ".mcp.json")
 	if len(serverNames) == 0 {
 		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
@@ -161,9 +167,34 @@ func projectClaudeMCP(root string, envelope domain.PackageEnvelope, serverNames 
 		switch server.Type {
 		case "stdio":
 			delete(config, "type")
-			if err := applyStdioDataContract(config, pluginRoot, dataPath); err != nil {
+			rawCommand, _ := config["command"].(string)
+			rawCWD, _ := config["cwd"].(string)
+			if err := applyStdioDataContract(config, pluginRoot, dataPath, observedRuntimeRoot); err != nil {
 				return fmt.Errorf("project Claude stdio MCP server %s: %w", name, err)
 			}
+			// Claude does not honor cwd on stdio entries. The trusted process
+			// adapter makes both default and explicit cwd part of its argv,
+			// preserving otherwise identical servers as distinct native entries.
+			cwd, err := pathcontract.ParseCWD(rawCWD)
+			if err != nil {
+				return err
+			}
+			var args []string
+			switch values := config["args"].(type) {
+			case []string:
+				args = values
+			case []any:
+				for _, value := range values {
+					text, ok := value.(string)
+					if !ok {
+						return fmt.Errorf("Claude stdio args must be strings")
+					}
+					args = append(args, text)
+				}
+			}
+			config["args"] = managedstdio.Arguments(pluginRoot, dataPath, config["cwd"].(string), cwd.Anchor, rawCommand, args)
+			config["command"] = filepath.Join(pluginRoot, filepath.FromSlash(managedstdio.RelativeDirectory), managedstdio.ExecutableName)
+			delete(config, "cwd")
 		case "streamable-http":
 			config["type"] = "http"
 		case "sse":

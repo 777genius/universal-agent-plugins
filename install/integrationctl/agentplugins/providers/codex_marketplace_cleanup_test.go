@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"testing"
 )
 
@@ -24,7 +25,7 @@ func TestManagedCodexMarketplaceRegisteredAcceptsFilesystemAlias(t *testing.T) {
 	if err := os.Symlink(root, aliasRoot); err != nil {
 		t.Fatal(err)
 	}
-	config := "[marketplaces.agentplugins-test]\nsource_type = \"local\"\nsource = \"" + filepath.Join(aliasRoot, "managed") + "\"\n"
+	config := "[marketplaces.agentplugins-test]\nsource_type = \"local\"\nsource = " + strconv.Quote(filepath.Join(aliasRoot, "managed")) + "\n"
 	if err := os.WriteFile(filepath.Join(configRoot, "config.toml"), []byte(config), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -47,12 +48,30 @@ func TestManagedCodexMarketplaceRegisteredRejectsDifferentResolvedPath(t *testin
 			t.Fatal(err)
 		}
 	}
-	config := "[marketplaces.agentplugins-test]\nsource_type = \"local\"\nsource = \"" + other + "\"\n"
+	config := "[marketplaces.agentplugins-test]\nsource_type = \"local\"\nsource = " + strconv.Quote(other) + "\n"
 	if err := os.WriteFile(filepath.Join(configRoot, "config.toml"), []byte(config), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	registered, err := managedCodexMarketplaceRegistered(configRoot, "agentplugins-test", managed)
 	if err == nil || registered {
 		t.Fatalf("different resolved path must fail closed: registered=%v err=%v", registered, err)
+	}
+}
+
+func TestEquivalentLocalPathRejectsUnresolvedAlias(t *testing.T) {
+	root := t.TempDir()
+	missing := filepath.Join(root, "missing")
+	for _, pair := range [][2]string{{missing, root}, {root, missing}} {
+		if equivalentLocalPath(pair[0], pair[1]) {
+			t.Fatalf("unresolved alias must fail closed: %q and %q", pair[0], pair[1])
+		}
+	}
+}
+
+func TestEquivalentLocalPathAcceptsIdenticalCleanedPath(t *testing.T) {
+	root := t.TempDir()
+	missing := filepath.Join(root, "missing")
+	if !equivalentLocalPath(missing+string(filepath.Separator)+".", missing) {
+		t.Fatal("identical cleaned paths must remain accepted without filesystem evidence")
 	}
 }

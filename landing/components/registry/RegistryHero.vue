@@ -1,10 +1,12 @@
 <script setup lang="ts">
+import { useInstallPreferencesStore } from '~/stores/installPreferences';
 import type { ClientID, RegistryIndex } from '~/types/registry';
 import { pluginCommands } from '~/utils/commands';
 import { countAtElapsed, PLUGIN_COUNT_ANIMATION_MS } from '~/utils/countAnimation';
 import { catalogVisiblePlugins, groupCatalogPlugins } from '~/utils/filter';
-import { deliveryLabel, expectedDistribution, resolveDistribution } from '~/utils/registry';
+import { expectedDistribution, resolveDistribution } from '~/utils/registry';
 
+const { t, locale } = useI18n();
 const props = defineProps<{ registry: RegistryIndex }>();
 const config = useRuntimeConfig();
 const { current, expired, published } = useDirectoryStatus();
@@ -16,7 +18,7 @@ const displayedPluginCount = ref<number | null>(null);
 const pluginCount = computed(() =>
   displayedPluginCount.value === null
     ? null
-    : new Intl.NumberFormat('en').format(displayedPluginCount.value),
+    : new Intl.NumberFormat(locale.value).format(displayedPluginCount.value),
 );
 const countAnimationCompleted = useState('hero-plugin-count-animated', () => false);
 let countAnimationFrame: number | undefined;
@@ -74,16 +76,34 @@ const demoPlugin = computed(() => {
 const compatibleClients = computed(() =>
   clients.filter((client) => demoPlugin.value.client_support.clients.includes(client.id)),
 );
-const initialTarget =
-  compatibleClients.value.find((client) => client.id === 'cursor')?.id ??
-  compatibleClients.value[0]!.id;
-const selectedTargets = ref<ClientID[]>([initialTarget]);
-const autoDetect = ref(true);
-const autoOption = {
-  label: 'All installed agents (recommended)',
-  summary: 'All installed agents',
-  description: 'Detected when you run the command',
-};
+const preferences = useInstallPreferencesStore();
+const availableTargets = computed(() => compatibleClients.value.map((client) => client.id));
+const selectionIdentity = computed(() => `hero:${demoPlugin.value.install_source}`);
+const choice = computed(() =>
+  preferences.readPackage(selectionIdentity.value, availableTargets.value),
+);
+const selectedTargets = computed<ClientID[]>(() =>
+  choice.value.targetIds.length
+    ? (choice.value.targetIds as ClientID[])
+    : [
+        compatibleClients.value.find((client) => client.id === 'cursor')?.id ??
+          availableTargets.value[0]!,
+      ],
+);
+const autoDetect = computed({
+  get: () => choice.value.autoDetect,
+  set: (value: boolean) =>
+    preferences.selectPackage(
+      selectionIdentity.value,
+      { ...choice.value, targetIds: selectedTargets.value, autoDetect: value },
+      availableTargets.value,
+    ),
+});
+const autoOption = computed(() => ({
+  label: t('shell.hero.autoLabel'),
+  summary: t('shell.hero.autoSummary'),
+  description: t('shell.hero.autoDescription'),
+}));
 
 const targetOptions = computed(() =>
   clients.map((client) => ({
@@ -92,14 +112,16 @@ const targetOptions = computed(() =>
     icon: asset(`client-icons/${client.icon}`),
     disabled: !demoPlugin.value.client_support.clients.includes(client.id),
     description: (() => {
-      if (!published.value) return 'Temporarily unavailable';
-      if (expired.value) return 'Refreshing plugin data';
+      if (!published.value) return t('shell.hero.unavailable');
+      if (expired.value) return t('shell.hero.refreshing');
       const target = expectedDistribution(demoPlugin.value, [client.id])?.targets.find(
         (item) => item.client === client.id,
       );
       if (client.id === 'chatgpt')
-        return target?.app_binding ? 'Finish setup in ChatGPT' : 'Not available';
-      return target ? deliveryLabel(target.delivery) : 'Not available for this plugin';
+        return target?.app_binding ? t('shell.hero.chatgptSetup') : t('shell.hero.notAvailable');
+      return target
+        ? t(`shell.hero.delivery.${target.delivery}`)
+        : t('shell.hero.notAvailableForPlugin');
     })(),
   })),
 );
@@ -113,6 +135,49 @@ const resolution = computed(() =>
     selectedClients.value.map((client) => client.id),
   ),
 );
+// Additive descriptors are supplied by the registry lane. Older/unknown diagnostics
+// remain original text; presentation never parses English to make domain decisions.
+type ShellDiagnostic = {
+  code: string;
+  params?: Record<string, string | number>;
+  reasons?: ShellDiagnostic[];
+};
+function diagnosticText(diagnostic: ShellDiagnostic): string | null {
+  const codes = [
+    'distributionStatus',
+    'releaseStatus',
+    'missingComponents',
+    'unsupportedTargets',
+    'blockingFailure',
+    'missingEvidence',
+    'noReleases',
+    'defaultIneligible',
+  ];
+  const nested = (diagnostic.reasons ?? []).map(diagnosticText);
+  if (nested.some((reason) => reason === null)) return null;
+  const reasons = nested.join(t('shell.hero.diagnostics.reasonSeparator'));
+  if (diagnostic.code === 'reasons') return reasons;
+  if (!codes.includes(diagnostic.code)) return null;
+  const params = { ...diagnostic.params };
+  if (
+    typeof params.status === 'string' &&
+    ['candidate', 'active', 'suspended', 'superseded', 'revoked'].includes(params.status)
+  ) {
+    params.status = t(`shell.hero.diagnostics.status.${params.status}`);
+  }
+  return t(`shell.hero.diagnostics.${diagnostic.code}`, { ...params, reasons });
+}
+const fallbackReason = computed(() => {
+  const diagnostic = (
+    resolution.value as typeof resolution.value & {
+      fallback_diagnostic?: ShellDiagnostic;
+    }
+  ).fallback_diagnostic;
+  return (
+    (diagnostic && diagnosticText(diagnostic)) ??
+    t('shell.hero.sourceReason', { reason: resolution.value.fallback_reason ?? '' })
+  );
+});
 const command = computed(() => {
   if (!current.value || (!autoDetect.value && !resolution.value.distribution)) return '';
   return pluginCommands(
@@ -124,7 +189,12 @@ const command = computed(() => {
 function updateTargets(values: string[]) {
   const allowed = new Set(compatibleClients.value.map((client) => client.id));
   const next = values.filter((value): value is ClientID => allowed.has(value as ClientID));
-  if (next.length) selectedTargets.value = next;
+  if (next.length)
+    preferences.selectPackage(
+      selectionIdentity.value,
+      { ...choice.value, targetIds: next },
+      availableTargets.value,
+    );
 }
 </script>
 
@@ -132,23 +202,32 @@ function updateTargets(values: string[]) {
   <section class="hero-shell">
     <div class="hero container">
       <div class="hero__copy">
-        <h1>One plugin<br /><em>All your agents</em></h1>
+        <h1>
+          {{ t('shell.hero.title') }}<br ><em>{{ t('shell.hero.subtitle') }}</em>
+        </h1>
         <p class="hero__lead">
-          Install, update, repair, and remove Agent Plugins 1.0 across supported AI agents with one
-          command. Let the CLI detect installed agents, or choose exactly where the plugin goes.
+          {{ t('shell.hero.intro') }}
         </p>
         <div class="hero__actions">
           <a class="button button--primary" href="#plugins">
-            Explore
-            <span v-if="pluginCount !== null" class="hero__plugin-count">{{ pluginCount }}</span>
-            plugins <span aria-hidden="true">→</span>
+            <i18n-t
+              v-if="pluginCount !== null"
+              keypath="shell.hero.exploreCount"
+              tag="span"
+              :plural="displayedPluginCount ?? 0"
+            >
+              <template #count
+                ><span class="hero__plugin-count">{{ pluginCount }}</span></template
+              >
+            </i18n-t>
+            <span v-else>{{ t('shell.hero.explore') }}</span> <span aria-hidden="true">→</span>
           </a>
           <a
             class="button button--secondary"
             :href="cliRepositoryUrl"
             target="_blank"
             rel="noreferrer"
-            >Open GitHub</a
+            >{{ t('shell.hero.github') }}</a
           >
         </div>
       </div>
@@ -158,7 +237,7 @@ function updateTargets(values: string[]) {
         <div class="hero__window">
           <div class="hero__window-body">
             <div class="hero-quick-start__header">
-              <h2>Install {{ demoPlugin.display_name }}</h2>
+              <h2>{{ t('shell.hero.install', { name: demoPlugin.display_name }) }}</h2>
               <a href="https://agent-plugins.org/specification" target="_blank" rel="noreferrer"
                 >Agent Plugins 1.0</a
               >
@@ -167,13 +246,14 @@ function updateTargets(values: string[]) {
               <li class="hero-quick-start__step">
                 <span class="hero-quick-start__number">1</span>
                 <span class="hero-quick-start__label"
-                  ><strong>Choose agents</strong><small>One, many, or auto-detect</small></span
+                  ><strong>{{ t('shell.hero.choose') }}</strong
+                  ><small>{{ t('shell.hero.chooseHint') }}</small></span
                 >
                 <AppMultiSelect
                   :model-value="selectedTargets"
                   :auto-selected="autoDetect"
                   :auto-option="autoOption"
-                  label="Choose target agents"
+                  :label="t('shell.accessibility.chooseTargets')"
                   :options="targetOptions"
                   @update:auto-selected="autoDetect = $event"
                   @update:model-value="updateTargets"
@@ -182,30 +262,28 @@ function updateTargets(values: string[]) {
               <li class="hero-quick-start__step">
                 <span class="hero-quick-start__number hero-quick-start__number--run">2</span>
                 <span class="hero-quick-start__label"
-                  ><strong>Copy and run</strong><small>In your terminal</small></span
+                  ><strong>{{ t('shell.hero.run') }}</strong
+                  ><small>{{ t('shell.hero.terminal') }}</small></span
                 >
                 <div class="hero-quick-start__command">
                   <CommandSnippet v-if="command" :command="command" kind="add" inline />
                   <p v-else class="install-panel__notice" role="status">
-                    Plugin data is refreshing. Try again shortly.
+                    {{ t('shell.hero.refreshNotice') }}
                   </p>
                   <a
                     class="hero-quick-start__more-install"
                     href="https://github.com/777genius/universal-agent-plugins#quick-start"
                     target="_blank"
                     rel="noreferrer"
-                    >Other installation methods <span aria-hidden="true">↗</span></a
+                    >{{ t('shell.hero.otherMethods') }} <span aria-hidden="true">↗</span></a
                   >
                 </div>
               </li>
             </ol>
             <div class="hero-quick-start__footer">
-              <p>
-                <span aria-hidden="true">✓</span> One command plans every selected agent before
-                changing files
-              </p>
+              <p><span aria-hidden="true">✓</span> {{ t('shell.hero.planNotice') }}</p>
               <p v-if="!autoDetect && resolution.fallback_reason">
-                {{ resolution.fallback_reason }}
+                {{ fallbackReason }}
               </p>
             </div>
           </div>
@@ -215,11 +293,10 @@ function updateTargets(values: string[]) {
 
     <div class="client-section" aria-labelledby="supported-clients-title">
       <div class="client-section__inner container">
-        <p id="supported-clients-title">Supported clients</p>
+        <p id="supported-clients-title">{{ t('shell.hero.supportedClients') }}</p>
         <ClientStrip />
         <p class="client-section__note">
-          The CLI installs or prepares the native format each client supports. Some clients may ask
-          you to finish activation or sign in.
+          {{ t('shell.hero.clientNote') }}
         </p>
       </div>
     </div>

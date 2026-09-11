@@ -87,7 +87,7 @@ func prepareUpdateMany(ctx context.Context, app App, opts *options, installation
 		}
 	}
 	allTargets := installationTargets(installation, opts.scope)
-	_, detected, err := preflightSelectedTargets(ctx, app, targets, nil, probeVersion && installation.OriginMode == domain.OriginModeDirectory)
+	_, detected, err := preflightSelectedTargets(ctx, app, targets, nil, probeVersion && installation.OriginMode == domain.OriginModeDirectory, lifecycleInstallIntents(installation, opts.scope, nil))
 	if err != nil {
 		return nil, err
 	}
@@ -349,6 +349,9 @@ func renderUpdateMultiResult(cmd *cobra.Command, opts *options, result updateMul
 	}
 	values := make([]string, len(result.Targets))
 	for index, target := range result.Targets {
+		if err := renderOpenCodeRuntimeNotice(cmd.OutOrStdout(), target.Output.Result); err != nil {
+			return err
+		}
 		values[index] = target.Target
 		rollout := "preflight only"
 		if target.Selected {
@@ -358,7 +361,7 @@ func renderUpdateMultiResult(cmd *cobra.Command, opts *options, result updateMul
 			return err
 		}
 		if target.NextAction != "" && !fullyInstalled(target.Output.Result.Activation) {
-			if _, err := fmt.Fprintf(cmd.OutOrStdout(), "    Next: %s\n", target.NextAction); err != nil {
+			if _, err := fmt.Fprintf(cmd.OutOrStdout(), "    Next: %s\n", localTargetLifecycleAction(target.Output.Result, target.NextAction)); err != nil {
 				return err
 			}
 		}

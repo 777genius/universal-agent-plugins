@@ -14,6 +14,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/prompt"
+	"github.com/777genius/plugin-kit-ai/cli/internal/terminalprompts"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/dirswap"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/locks"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/loader"
@@ -676,7 +678,7 @@ func TestGroupedPartialFailureDoesNotMarkEveryTargetPassed(t *testing.T) {
 	fixture := newCLIFixture(t, []domain.DetectedClient{fixtureClient(t, domain.ClientCodex), fixtureClient(t, domain.ClientCursor), fixtureClient(t, domain.ClientKiro)})
 	fixture.app.Lifecycle.Activator = &failSecondCLIGroupActivator{}
 	stdout, _, err := fixture.execute(false, "add", writeCLIPlugin(t), "--target", "codex,cursor,kiro", "--format", "json")
-	if err == nil || !strings.Contains(err.Error(), "injected grouped activation failure") {
+	if err == nil || !strings.Contains(err.Error(), "1 of 3 client installations failed; see results above") {
 		t.Fatalf("grouped partial failure = %v", err)
 	}
 	var output struct {
@@ -694,8 +696,25 @@ func TestGroupedPartialFailureDoesNotMarkEveryTargetPassed(t *testing.T) {
 			t.Fatalf("failed target %s lost acquisition binding: %+v", target, targetProof)
 		}
 	}
-	if len(output.Data.TargetOutcomes) != 3 || passed != 1 || output.Data.TargetOutcomes["cursor"].Outcome != "failed" || output.Data.TargetOutcomes["kiro"].Outcome == "passed" {
+	if len(output.Data.TargetOutcomes) != 3 || passed != 2 || output.Data.TargetOutcomes["cursor"].Outcome != "failed" || output.Data.TargetOutcomes["kiro"].Outcome != "passed" {
 		t.Fatalf("partial failure target outcomes = %+v", output.Data.TargetOutcomes)
+	}
+	if output.Data.Failed != 1 || output.Data.Succeeded != 2 {
+		t.Fatalf("counts succeeded=%d failed=%d", output.Data.Succeeded, output.Data.Failed)
+	}
+	var failedTarget *addTargetResult
+	for index := range output.Data.Targets {
+		if output.Data.Targets[index].Target == "cursor" {
+			failedTarget = &output.Data.Targets[index]
+			break
+		}
+	}
+	if failedTarget == nil || failedTarget.Status != string(usecase.GroupTargetExternalFailed) || failedTarget.Error == nil {
+		t.Fatalf("failed target JSON = %+v", failedTarget)
+	}
+	// Local fixture paths must not leak into retry_command; remote-safe retries are covered elsewhere.
+	if failedTarget.RetryCommand != "" {
+		t.Fatalf("local fixture emitted filesystem retry: %q", failedTarget.RetryCommand)
 	}
 }
 
@@ -820,7 +839,7 @@ func TestMissingManagedStdioRuntimeFailsAutomaticActivationPreflightWithoutMutat
 	}
 }
 
-func TestKiroMissingDuplexFailsLifecyclePreflightWithoutMutation(t *testing.T) {
+func TestKiroGuidedSetupDoesNotRequireDuplexRunner(t *testing.T) {
 	t.Parallel()
 	client := fixtureClient(t, domain.ClientKiro)
 	client.ExecutablePath = "/test/bin/kiro-cli"
@@ -830,30 +849,30 @@ func TestKiroMissingDuplexFailsLifecyclePreflightWithoutMutation(t *testing.T) {
 	plugin := writeCLIPlugin(t)
 	writeCLIMCP(t, plugin)
 
-	_, _, err := fixture.execute(false, "add", plugin, "--target", string(domain.ClientKiro))
-	if err == nil || !strings.Contains(err.Error(), "requires an ACP duplex process runner") {
-		t.Fatalf("duplex preflight error = %v", err)
+	out, _, err := fixture.execute(false, "add", plugin, "--target", string(domain.ClientKiro))
+	if err != nil || !strings.Contains(out, "Runtime connections have not been verified") {
+		t.Fatalf("guided setup = %q %v", out, err)
 	}
 	state, loadErr := fixture.store.Load()
 	if loadErr != nil {
 		t.Fatal(loadErr)
 	}
-	if len(state.Installations) != 0 || runner.calls != 0 {
-		t.Fatalf("duplex preflight mutated state or invoked Kiro: state=%+v calls=%d", state, runner.calls)
+	if len(state.Installations) != 1 || onlyCLIClient(state.Installations[0]).InstallIntent != domain.InstallIntentPrepare || runner.calls != 0 {
+		t.Fatalf("guided setup did not persist preparation safely: state=%+v calls=%d", state, runner.calls)
 	}
 	_, _, retryErr := fixture.execute(false, "add", plugin, "--target", string(domain.ClientKiro))
-	if retryErr == nil || !strings.Contains(retryErr.Error(), "requires an ACP duplex process runner") {
-		t.Fatalf("duplex preflight retry = %v", retryErr)
+	if retryErr != nil {
+		t.Fatalf("guided setup retry = %v", retryErr)
 	}
 	state, loadErr = fixture.store.Load()
 	if loadErr != nil {
 		t.Fatal(loadErr)
 	}
-	if len(state.Installations) != 0 || runner.calls != 0 {
-		t.Fatalf("duplex retry entered verify-only or mutated: state=%+v calls=%d", state, runner.calls)
+	if len(state.Installations) != 1 || runner.calls != 0 {
+		t.Fatalf("guided retry invoked Kiro or lost state: state=%+v calls=%d", state, runner.calls)
 	}
-	if _, statErr := os.Stat(client.ConfigRoot); !os.IsNotExist(statErr) {
-		t.Fatalf("duplex preflight created Kiro package/config root %q: %v", client.ConfigRoot, statErr)
+	if _, statErr := os.Stat(filepath.Join(client.ConfigRoot, "settings", "mcp.json")); statErr != nil {
+		t.Fatalf("guided setup did not create Kiro MCP config: %v", statErr)
 	}
 }
 
@@ -906,7 +925,7 @@ func TestInteractiveAddDefaultsDetectedMultiselectToAll(t *testing.T) {
 		fixtureClient(t, domain.ClientCursor), fixtureClient(t, domain.ClientCodex),
 	})
 	plugin := writeCLIPlugin(t)
-	stdout, _, err := fixture.executeInput(true, "\n", "add", plugin)
+	stdout, _, err := fixture.executeInput(true, "\ny\n", "add", plugin)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -927,7 +946,7 @@ func TestInteractiveAddSkipsDetectedClientThatPackageCannotServe(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(stdout, "Skipped installed clients that this package cannot install together: chatgpt") {
+	if !strings.Contains(stdout, "Skipped (not installed in this attempt): chatgpt") {
 		t.Fatalf("package-aware interactive output = %q", stdout)
 	}
 	if strings.Contains(stdout, "Detected supported clients (all selected by default)") {
@@ -935,7 +954,7 @@ func TestInteractiveAddSkipsDetectedClientThatPackageCannotServe(t *testing.T) {
 	}
 }
 
-func TestInteractiveAddSkipsDetectedClientThatCannotPassActivationPreflight(t *testing.T) {
+func TestInteractiveAddOffersKiroPreparationWhenAutomaticPreflightFails(t *testing.T) {
 	t.Parallel()
 	kiro := fixtureClient(t, domain.ClientKiro)
 	kiro.ExecutablePath = "/test/bin/kiro-cli"
@@ -950,11 +969,11 @@ func TestInteractiveAddSkipsDetectedClientThatCannotPassActivationPreflight(t *t
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(stdout, "Skipped installed clients that this package cannot install together: kiro") {
+	if !strings.Contains(stdout, "prepare configuration; automatic MCP verification unavailable") {
 		t.Fatalf("activation-aware interactive output = %q", stdout)
 	}
-	if strings.Contains(stdout, "Detected supported clients (all selected by default)") {
-		t.Fatalf("single preflight-capable target unexpectedly prompted for multiple clients: %q", stdout)
+	if !strings.Contains(stdout, "Detected supported clients (all selected by default)") {
+		t.Fatalf("preparation-capable target unexpectedly prompted for multiple clients: %q", stdout)
 	}
 	state, loadErr := fixture.store.Load()
 	if loadErr != nil {
@@ -972,7 +991,9 @@ func TestInteractiveAddProbesOnlyTargetsSelectedAfterReadOnlyDetection(t *testin
 	fixture := newCLIFixture(t, nil)
 	fixture.app.Detector = detector
 	command := &cobra.Command{}
+	command.SetContext(context.Background())
 	command.SetIn(strings.NewReader("1\n"))
+	fixture.app.Prompter = terminalprompts.PlainPrompter{Input: command.InOrStdin(), Output: io.Discard}
 	command.SetOut(io.Discard)
 	selection, clients, loaded, err := promptCompatibleDetectedTargets(context.Background(), command, fixture.app, writeCLIPlugin(t))
 	if err != nil {
@@ -984,10 +1005,7 @@ func TestInteractiveAddProbesOnlyTargetsSelectedAfterReadOnlyDetection(t *testin
 	if loaded.cleanup != nil {
 		defer loaded.cleanup()
 	}
-	targets, err := parseTargetOption(selection)
-	if err != nil {
-		t.Fatal(err)
-	}
+	targets := selection
 	if _, err := detectSelectedTargetsForLifecycleResolution(context.Background(), detector, targets, clients, true); err != nil {
 		t.Fatal(err)
 	}
@@ -1533,7 +1551,7 @@ func TestHumanCodexFlowNeverClaimsPreparedPackageIsInstalled(t *testing.T) {
 	t.Parallel()
 	fixture := newCLIFixture(t, []domain.DetectedClient{fixtureClient(t, domain.ClientCodex)})
 	plugin := writeCLIPlugin(t)
-	stdout, _, err := fixture.execute(true, "add", plugin, "--target", "codex")
+	stdout, _, err := fixture.executeInput(true, "n\n", "add", plugin, "--target", "codex")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1556,7 +1574,7 @@ func TestRepeatedAddResumesManualLifecycleWithoutAnotherReceipt(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Count(stdout, "Next:") != 1 || !strings.Contains(stdout, "verify") || !strings.Contains(stdout, "plugins/local") {
+	if strings.Count(stdout, "Next:") != 1 || !strings.Contains(stdout, "verify") || !strings.Contains(stdout, filepath.Join("plugins", "local")) {
 		t.Fatalf("resume output = %q", stdout)
 	}
 	state, err := fixture.store.Load()
@@ -2062,10 +2080,10 @@ func TestChatGPTMCPWithoutAppBindingFailsBeforeMutation(t *testing.T) {
 	plugin := writeCLIPlugin(t)
 	writeCLIMCP(t, plugin)
 	stdout, _, err := fixture.execute(false, "add", plugin, "--target", "chatgpt")
-	if err == nil || !strings.Contains(err.Error(), "Developer Mode") || !strings.Contains(err.Error(), ".app.json") {
+	if err == nil || !strings.Contains(err.Error(), "Plugins developer mode") || !strings.Contains(err.Error(), ".app.json") {
 		t.Fatalf("missing app error = %v", err)
 	}
-	if !strings.Contains(stdout, "Developer Mode") || !strings.Contains(stdout, ".app.json") || !strings.Contains(stdout, "demo") {
+	if !strings.Contains(stdout, "Plugins developer mode") || !strings.Contains(stdout, ".app.json") || !strings.Contains(stdout, "demo") {
 		t.Fatalf("human unsupported plan omitted recovery guidance: %s", stdout)
 	}
 	state, err := fixture.store.Load()
@@ -2086,7 +2104,7 @@ func TestChatGPTUnsupportedPlanRendersStructuredJSONGuidance(t *testing.T) {
 	if err == nil {
 		t.Fatal("unsupported ChatGPT dry-run succeeded")
 	}
-	if !strings.Contains(stdout, `"status":"unsupported"`) || !strings.Contains(stdout, `"user_actions"`) || !strings.Contains(stdout, "Developer Mode") || !strings.Contains(stdout, ".app.json") {
+	if !strings.Contains(stdout, `"status":"unsupported"`) || !strings.Contains(stdout, `"user_actions"`) || !strings.Contains(stdout, "Plugins developer mode") || !strings.Contains(stdout, ".app.json") {
 		t.Fatalf("JSON unsupported plan omitted structured guidance: %s", stdout)
 	}
 	state, stateErr := fixture.store.Load()
@@ -2141,7 +2159,7 @@ func TestChatGPTUnsupportedUpdateRendersRecoveryWithoutMutation(t *testing.T) {
 					t.Fatalf("JSON update omitted structured user actions: %s", stdout)
 				}
 			}
-			for _, expected := range []string{"Developer Mode", ".app.json", "demo"} {
+			for _, expected := range []string{"Plugins developer mode", ".app.json", "demo"} {
 				if !strings.Contains(stdout, expected) || !strings.Contains(updateErr.Error(), expected) {
 					t.Fatalf("%s update omitted %q recovery guidance: stdout=%q error=%v", test.format, expected, stdout, updateErr)
 				}
@@ -2210,7 +2228,7 @@ func TestNoDetectedClientSuggestsExplicitChatGPTTarget(t *testing.T) {
 	fixture := newCLIFixture(t, nil)
 	plugin := writeCLIPlugin(t)
 	_, _, err := fixture.execute(true, "add", plugin)
-	if err == nil || !strings.Contains(err.Error(), "--target chatgpt") || !strings.Contains(err.Error(), "install/detect another client") {
+	if err == nil || !strings.Contains(err.Error(), "--target chatgpt") || !strings.Contains(err.Error(), "Install/detect a supported client") {
 		t.Fatalf("zero-client guidance = %v", err)
 	}
 	state, stateErr := fixture.store.Load()
@@ -2975,6 +2993,9 @@ func newCLIFixture(t *testing.T, clients []domain.DetectedClient) cliFixture {
 	return cliFixture{
 		root: root, store: store, operations: operations,
 		app: App{
+			PromptFactory: func(in io.Reader, out, stderr io.Writer, plain, noColor bool) (prompt.Prompter, io.Writer, error) {
+				return terminalprompts.PlainPrompter{Input: in, Output: out}, out, nil
+			},
 			Version: "0.1.0", UserHome: filepath.Join(root, "home"),
 			ManagedRoot: managedRoot, StateStore: store, Detector: staticDetector{clients: clients},
 			SourceAcquirer: sourceacquisition.Acquirer{TempRoot: root},

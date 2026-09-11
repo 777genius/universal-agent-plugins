@@ -31,28 +31,15 @@ func projectClineNative(root string, envelope domain.PackageEnvelope, plan domai
 		portable := envelope.MCP.Servers[name]
 		if portable.Type == "stdio" {
 			portable.Decoded = cloneObject(portable.Decoded)
-			authorCWD := false
-			if rawCWD, exists := portable.Decoded["cwd"]; exists {
-				cwd, ok := rawCWD.(string)
-				if !ok {
-					return fmt.Errorf("project Cline MCP server %s: stdio cwd must be a string", name)
-				}
-				authorCWD = strings.TrimSpace(cwd) != ""
-			}
-			if err := applyStdioDataContract(portable.Decoded, plan.ActivePath, dataPath); err != nil {
+			if err := applyStdioDataContract(portable.Decoded, plan.ActivePath, dataPath, root); err != nil {
 				return fmt.Errorf("project Cline MCP server %s: %w", name, err)
-			}
-			// The portable stdio contract defaults cwd to PLUGIN_ROOT, but Cline's
-			// native format cannot encode cwd. Only discard that synthesized value;
-			// an explicit author requirement must continue to fail closed below.
-			if !authorCWD {
-				delete(portable.Decoded, "cwd")
 			}
 		}
 		server, err := clineNeutralServer(portable)
 		if err != nil {
 			return fmt.Errorf("project Cline MCP server %s: %w", name, err)
 		}
+		server.StdioValuesResolved = portable.Type == "stdio"
 		// This first pass validates the codec without touching client state. The
 		// exact configured path is bound later when ownership objects are built.
 		settingsPath := filepath.Join(root, ".cline-settings-validation.json")
@@ -493,6 +480,10 @@ func readClineProjection(root string) (clineProjection, error) {
 	if err := json.Unmarshal(body, &projection); err != nil || projection.Servers == nil {
 		return clineProjection{}, fmt.Errorf("decode projected Cline MCP configuration: %w", err)
 	}
+	for name, server := range projection.Servers {
+		server.StdioValuesResolved = server.Type == "stdio"
+		projection.Servers[name] = server
+	}
 	return projection, nil
 }
 
@@ -569,9 +560,7 @@ func clineNeutralServer(server domain.MCPServer) (nativeconfig.Server, error) {
 			if !ok {
 				return result, fmt.Errorf("Cline stdio MCP server cwd must be a string")
 			}
-			if strings.TrimSpace(cwd) != "" {
-				return result, fmt.Errorf("Cline stdio MCP server does not support cwd")
-			}
+			result.CWD = cwd
 		}
 	}
 	if server.Type == "streamable-http" || server.Type == "sse" {

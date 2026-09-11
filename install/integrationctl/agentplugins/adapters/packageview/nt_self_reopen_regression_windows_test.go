@@ -39,7 +39,7 @@ func TestWindowsNTSelfOpenAccessAndRead(t *testing.T) {
 					t.Fatalf("metadata probe read: n=%d err=%v", n, err)
 				}
 			}
-			pin, err := s.rememberMustDuplicate(probe)
+			pin, err := s.rememberMustDuplicate(probe, false)
 			bootstrapCheck(t, "protected pin", err)
 			defer pin.file.Close()
 			access := uint32(windows.FILE_READ_ATTRIBUTES | windows.DELETE)
@@ -112,7 +112,7 @@ func TestWindowsNTSelfOpenDirectoryAfterNameReplacement(t *testing.T) {
 	// Prove the first protected self-open and subsequent list still select the
 	// held directory. Existing file replacement tests cover both read boundaries
 	// and the production requirement to reject changed capture metadata.
-	pin, err := s.rememberMustDuplicate(probe)
+	pin, err := s.rememberMustDuplicate(probe, false)
 	bootstrapCheck(t, "protect renamed directory", err)
 	defer pin.file.Close()
 	if !os.SameFile(original, pin.info) {
@@ -165,7 +165,7 @@ func TestWindowsNTSelfOpenExistingConflictsAndCleanup(t *testing.T) {
 					directoryGuardMetadataAccess(t, probe)
 					// remember owns/consumes probe even on failed protection. Require
 					// NTSTATUS conversion to the precise existing Win32 contract.
-					pin, err := s.remember(probe)
+					pin, err := s.remember(probe, false)
 					if pin != nil {
 						pin.file.Close()
 						t.Fatal("protected pin accepted incompatible existing handle")

@@ -88,7 +88,7 @@ func runRepairMany(ctx context.Context, cmd *cobra.Command, app App, opts *optio
 			requests[key] = &request
 		}
 	}
-	_, detected, err := preflightSelectedTargets(ctx, app, targets, nil, !opts.dryRun && installation.OriginMode == domain.OriginModeDirectory)
+	_, detected, err := preflightSelectedTargets(ctx, app, targets, nil, !opts.dryRun && installation.OriginMode == domain.OriginModeDirectory, lifecycleInstallIntents(installation, opts.scope, nil))
 	if err != nil {
 		return err
 	}
@@ -208,11 +208,14 @@ func renderRepairMultiResult(cmd *cobra.Command, opts *options, result repairMul
 		return err
 	}
 	for _, target := range result.Targets {
+		if err := renderOpenCodeRuntimeNotice(cmd.OutOrStdout(), target.Output.Result); err != nil {
+			return err
+		}
 		if _, err := fmt.Fprintf(cmd.OutOrStdout(), "  %s: %s\n", target.Target, target.Status); err != nil {
 			return err
 		}
 		if target.NextAction != "" {
-			if _, err := fmt.Fprintf(cmd.OutOrStdout(), "    Next: %s\n", target.NextAction); err != nil {
+			if _, err := fmt.Fprintf(cmd.OutOrStdout(), "    Next: %s\n", localTargetLifecycleAction(target.Output.Result, target.NextAction)); err != nil {
 				return err
 			}
 		}

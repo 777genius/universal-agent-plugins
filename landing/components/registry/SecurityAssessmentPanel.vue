@@ -9,13 +9,18 @@ import {
   securityFindingLocation,
   shortRevision,
 } from '~/utils/securityPresentation';
+const { t, locale, n } = useI18n();
+const translate = (key: string, params: Record<string, string | number> = {}, plural?: number) =>
+  plural === undefined ? t(key, params) : t(key, { ...params, count: n(plural) }, plural);
 
 const props = defineProps<{ plugin: RegistryPlugin }>();
 const assessment = computed(() => props.plugin.security!);
 const groups = computed(() => groupSecurityFindings(assessment.value));
-const heading = computed(() => securityAssessmentHeading(assessment.value));
-const label = computed(() => securityAssessmentLabel(assessment.value));
-const revision = computed(() => shortRevision(props.plugin.source.revision));
+const heading = computed(() => securityAssessmentHeading(assessment.value, translate));
+const label = computed(() => securityAssessmentLabel(assessment.value, translate));
+const revision = computed(() =>
+  shortRevision(props.plugin.source.revision, t('registryUi.security.unknown')),
+);
 
 function findingLocation(finding: SecurityFinding) {
   return securityFindingLocation(finding);
@@ -31,24 +36,27 @@ function findingLocation(finding: SecurityFinding) {
   >
     <div class="security-review__header">
       <div>
-        <p class="security-review__eyebrow">Automated security review</p>
+        <p class="security-review__eyebrow">{{ t('registryUi.security.eyebrow') }}</p>
         <h2 id="security-review-title">{{ heading }}</h2>
       </div>
       <span class="security-review__status">{{ label }}</span>
     </div>
 
     <p class="security-review__scope">
-      LintAI {{ assessment.scanner.version }} checked the exact indexed revision
-      <code>{{ revision }}</code> on {{ formatSecurityDate(assessment.generated_at) }}. This result
-      applies only to those package files.
+      {{
+        t('registryUi.security.scope', {
+          version: assessment.scanner.version,
+          revision,
+          date: formatSecurityDate(assessment.generated_at, locale),
+        })
+      }}
     </p>
     <p class="security-review__freshness">
-      A newer upstream revision is different code. It must be indexed and checked again; the CLI
-      will not reuse this result for changed files.
+      {{ t('registryUi.security.freshness') }}
     </p>
 
     <div v-if="groups.installer.length" class="security-review__group">
-      <h3>Things to review before installing</h3>
+      <h3>{{ t('registryUi.security.before') }}</h3>
       <ul class="security-review__findings">
         <li
           v-for="(finding, index) in groups.installer"
@@ -64,10 +72,11 @@ function findingLocation(finding: SecurityFinding) {
     </div>
 
     <details v-if="groups.maintainer.length" class="security-review__maintainer">
-      <summary>Repository maintenance notes ({{ groups.maintainer.length }})</summary>
+      <summary>
+        {{ t('registryUi.security.maintenanceCount', { count: n(groups.maintainer.length) }) }}
+      </summary>
       <p>
-        These findings concern the author's repository automation. They are useful hardening advice,
-        but those workflows are not run by the installer.
+        {{ t('registryUi.security.maintenanceHelp') }}
       </p>
       <ul class="security-review__findings">
         <li
@@ -84,15 +93,18 @@ function findingLocation(finding: SecurityFinding) {
     </details>
 
     <p v-if="groups.hidden" class="security-review__truncated">
-      Showing {{ assessment.findings.length }} of {{ assessment.counts.total }} findings. The signed
-      public summary is size-limited; the totals include every finding from the scan.
+      {{
+        t('registryUi.security.truncated', {
+          shown: n(assessment.findings.length),
+          total: n(assessment.counts.total),
+        })
+      }}
     </p>
     <p v-if="assessment.counts.total === 0" class="security-review__empty">
-      The automated rules did not detect a blocking pattern in the checked files.
+      {{ t('registryUi.security.empty') }}
     </p>
     <p class="security-review__disclaimer">
-      Automated checks reduce risk; they do not prove that a plugin is safe. Review the source and
-      permissions before installing software you do not trust.
+      {{ t('registryUi.security.disclaimer') }}
     </p>
   </section>
 </template>

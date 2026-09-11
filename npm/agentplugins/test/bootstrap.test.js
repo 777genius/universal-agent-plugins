@@ -41,12 +41,12 @@ async function fixturePackage(t, binary = BINARY) {
       schema_version: 1,
       kind: "agentplugins_client_lifecycle",
       recorded_at: "2026-08-30",
-      document_sha256: "df6769bf430a337f116cd9df75bcc3ea26df166a016eacf9bc9fbc6cfbf9b100",
+      document_sha256: "0cecbf12a96cf578d12e1cb2f582aa13dca2d9d900ccaefd223f5d7c1030ea65",
       record_sha256: "437da1bc7423a85b231be139ff9bfbd7e89c942ef216a61ebde668c08a9c2ee3",
       source: {
         repository: "777genius/plugin-kit-ai",
-        commit: "4b25a45e1574bab7a4f49e48905a3b3b2647e917",
-        document: { path: "docs/AGENTPLUGINS_CLIENT_E2E.md", sha256: "df6769bf430a337f116cd9df75bcc3ea26df166a016eacf9bc9fbc6cfbf9b100" },
+        commit: "01f02cb51cfe5f664d4d5f52b295c59c7ea03495",
+        document: { path: "docs/AGENTPLUGINS_CLIENT_E2E.md", sha256: "0cecbf12a96cf578d12e1cb2f582aa13dca2d9d900ccaefd223f5d7c1030ea65" },
         record: { path: "docs/evidence/agentplugins-client-e2e-2026-08-30.json", sha256: "437da1bc7423a85b231be139ff9bfbd7e89c942ef216a61ebde668c08a9c2ee3" }
       },
       installer: {
@@ -369,6 +369,7 @@ test("runtime rejects malformed historical evidence metadata without binding it 
     (evidence) => { evidence.package.selector = `owner/other@${"9".repeat(40)}`; },
     (evidence) => { evidence.claim_boundary.oauth_e2e = true; },
     (evidence) => { evidence.source.commit = "A".repeat(40); },
+    (evidence) => { evidence.source.commit = "4b25a45e1574bab7a4f49e48905a3b3b2647e917"; },
     (evidence) => { evidence.source.record.sha256 = "0".repeat(64); },
     (evidence) => { evidence.document_sha256 = "0".repeat(64); evidence.source.document.sha256 = evidence.document_sha256; },
     (evidence) => { delete evidence.record_sha256; }

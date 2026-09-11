@@ -1710,6 +1710,22 @@
           "link": "/en/api/capabilities/"
         },
         {
+          "text": "codex_permission_request",
+          "link": "/en/api/capabilities/codex_permission_request"
+        },
+        {
+          "text": "codex_pre_tool_use",
+          "link": "/en/api/capabilities/codex_pre_tool_use"
+        },
+        {
+          "text": "codex_stop",
+          "link": "/en/api/capabilities/codex_stop"
+        },
+        {
+          "text": "codex_subagent_stop",
+          "link": "/en/api/capabilities/codex_subagent_stop"
+        },
+        {
           "text": "config_change",
           "link": "/en/api/capabilities/config_change"
         },

@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { isKnownLocale } from '~/data/i18n';
+import { localizedPath } from '~/utils/localizedRoutes';
 import { mdiHome } from '@mdi/js'
 import type { NuxtError } from "#app";
 
@@ -6,7 +8,8 @@ const props = defineProps<{
   error: NuxtError;
 }>();
 
-const { t } = useI18n();
+const { t, locale } = useI18n();
+
 
 const statusCode = computed(() => props.error?.statusCode || 404);
 const isNotFound = computed(() => statusCode.value === 404);
@@ -16,7 +19,7 @@ useSeoMeta({
   robots: 'noindex, nofollow',
 });
 
-const handleGoHome = () => clearError({ redirect: "/" });
+const handleGoHome = () => clearError({ redirect: localizedPath('/', isKnownLocale(locale.value) ? locale.value : 'en') });
 </script>
 
 <template>

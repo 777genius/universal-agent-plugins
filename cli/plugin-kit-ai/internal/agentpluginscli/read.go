@@ -10,6 +10,8 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/prompt"
+	"github.com/777genius/plugin-kit-ai/cli/internal/terminaltheme"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/dirswap"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	clientplanner "github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/planner"
@@ -18,6 +20,7 @@ import (
 )
 
 type publicClient struct {
+	InstallIntent             domain.InstallIntent           `json:"install_intent,omitempty"`
 	BindingID                 string                         `json:"-"`
 	ClientID                  string                         `json:"client_id"`
 	Scope                     string                         `json:"scope"`
@@ -241,22 +244,22 @@ func runDoctor(ctx context.Context, cmd *cobra.Command, app App, opts *options, 
 		return writeJSONOutput(cmd.OutOrStdout(), "doctor", report)
 	}
 	_, _ = fmt.Fprintln(cmd.OutOrStdout(), "agentplugins doctor (read-only)")
-	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Tool version: %s\n", report.ToolVersion)
+	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "%s: %s\n", terminaltheme.For(cmd.OutOrStdout()).Text(terminaltheme.Label, "Tool version"), report.ToolVersion)
 	for _, client := range clients {
 		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "  %s: %s\n", client.DisplayName, client.Status)
 	}
-	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Tracked installations: %d\n", report.InstallationCount)
-	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Open recovery operations: %d\n", report.OpenOperationCount)
+	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "%s: %d\n", terminaltheme.For(cmd.OutOrStdout()).Text(terminaltheme.Label, "Tracked installations"), report.InstallationCount)
+	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "%s: %d\n", terminaltheme.For(cmd.OutOrStdout()).Text(terminaltheme.Label, "Open recovery operations"), report.OpenOperationCount)
 	for _, finding := range report.Findings {
 		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "  [%s] %s: %s\n", finding.Status, finding.Code, finding.Message)
 		if finding.InstallationID != "" {
-			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "    Installation: %s (%s)\n", finding.InstallationName, finding.InstallationID)
+			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "    %s: %s (%s)\n", terminaltheme.For(cmd.OutOrStdout()).Text(terminaltheme.Label, "Installation"), finding.InstallationName, finding.InstallationID)
 		}
 		if finding.ClientID != "" {
-			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "    Client: %s\n", finding.ClientID)
+			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "    %s: %s\n", terminaltheme.For(cmd.OutOrStdout()).Text(terminaltheme.Label, "Client"), finding.ClientID)
 		}
 		if finding.RecoveryAction != "" {
-			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "    Recovery: %s\n", finding.RecoveryAction)
+			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "    %s: %s\n", terminaltheme.For(cmd.OutOrStdout()).Text(terminaltheme.Label, "Recovery"), finding.RecoveryAction)
 		}
 	}
 	if report.Installation != nil {
@@ -535,8 +538,9 @@ func publicInstallationView(installation domain.Installation, includeAbsent bool
 		affectedSurfaces := append([]string(nil), client.AffectedSurfaces...)
 		sort.Strings(affectedSurfaces)
 		value.Clients = append(value.Clients, publicClient{
-			BindingID: client.ClientBindingID,
-			ClientID:  client.ClientID, Scope: client.Scope, Materialization: client.Materialization,
+			InstallIntent: client.InstallIntent,
+			BindingID:     client.ClientBindingID,
+			ClientID:      client.ClientID, Scope: client.Scope, Materialization: client.Materialization,
 			Activation: client.Activation, Authentication: client.Authentication,
 			Policy: client.Policy, Verification: client.Verification,
 			PackageRevision:  publicPackageRevision(client.PackageRevision),
@@ -614,7 +618,7 @@ func selectInstallation(state domain.StateFileV2, selector string) (domain.Insta
 
 func renderInstallationList(writer io.Writer, installations []publicInstallation) error {
 	if len(installations) == 0 {
-		_, _ = fmt.Fprintln(writer, "No Agent Plugins installations are tracked.")
+		_, _ = fmt.Fprintln(writer, terminaltheme.For(writer).Text(terminaltheme.Muted, "No Agent Plugins installations are tracked."))
 		return nil
 	}
 	for _, installation := range installations {
@@ -627,10 +631,10 @@ func renderInstallationList(writer io.Writer, installations []publicInstallation
 
 func renderInstallation(writer io.Writer, installation publicInstallation) error {
 	_, _ = fmt.Fprintf(writer, "%s %s (%s)\n", installation.Name, installation.Version, installation.InstallationID)
-	_, _ = fmt.Fprintf(writer, "  Source: %s\n", installation.Source)
+	_, _ = fmt.Fprintf(writer, "  %s: %s\n", terminaltheme.For(writer).Text(terminaltheme.Label, "Source"), installation.Source)
 	for _, client := range installation.Clients {
 		_, _ = fmt.Fprintf(writer, "  %s: materialization=%s activation=%s auth=%s verification=%s\n",
-			client.ClientID, client.Materialization, client.Activation, client.Authentication, client.Verification)
+			terminaltheme.For(writer).Text(terminaltheme.Label, prompt.SafeText(string(client.ClientID))), client.Materialization, client.Activation, client.Authentication, client.Verification)
 		if client.ReceiptReconciled != nil && client.NativeDiscoveryReconciled != nil {
 			_, _ = fmt.Fprintf(writer, "    native_identity=%s receipt_reconciled=%t native_discovery_reconciled=%t client_version=%s\n",
 				client.NativeIdentityState, *client.ReceiptReconciled, *client.NativeDiscoveryReconciled, client.ClientVersion)
@@ -638,7 +642,7 @@ func renderInstallation(writer io.Writer, installation publicInstallation) error
 	}
 	if installation.Directory != nil {
 		value := installation.Directory
-		_, _ = fmt.Fprintf(writer, "  Directory: recorded=%s@%s release=%d current=%s@%s release=%d\n",
+		_, _ = fmt.Fprintf(writer, "  %s: recorded=%s@%s release=%d current=%s@%s release=%d\n", terminaltheme.For(writer).Text(terminaltheme.Label, "Directory"),
 			value.RecordedDistribution, value.RecordedRevision, value.RecordedReleaseSequence,
 			value.CurrentDistribution, value.CurrentRevision, value.CurrentReleaseSequence)
 	}
@@ -646,9 +650,9 @@ func renderInstallation(writer io.Writer, installation publicInstallation) error
 		_, _ = fmt.Fprintf(writer, "  Mixed version: true\n  Convergence: %s\n", installation.ConvergenceAction)
 	}
 	for _, warning := range installation.Warnings {
-		_, _ = fmt.Fprintf(writer, "  WARNING [%s]: %s\n", warning.Code, warning.Message)
+		_, _ = fmt.Fprintf(writer, "  %s [%s]: %s\n", terminaltheme.For(writer).Text(terminaltheme.Warning, "WARNING"), warning.Code, warning.Message)
 		if warning.Action != "" {
-			_, _ = fmt.Fprintf(writer, "    Action: %s\n", warning.Action)
+			_, _ = fmt.Fprintf(writer, "    %s: %s\n", terminaltheme.For(writer).Text(terminaltheme.Label, "Action"), warning.Action)
 		}
 	}
 	return nil

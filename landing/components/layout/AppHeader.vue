@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { publishedLocales } from '~/data/i18n';
 import { mdiClose, mdiGithub, mdiMenu } from '@mdi/js';
 import {
   DialogClose,
@@ -17,16 +18,21 @@ const router = useRouter();
 const localePath = useLocalePath();
 const config = useRuntimeConfig();
 const menuOpen = ref(false);
+const languageMenuOpen = ref(false);
+function onMobileEscape(event: KeyboardEvent) {
+  // Let Vuetify close the nested menu first; the next Escape closes the dialog.
+  if (languageMenuOpen.value) event.preventDefault();
+}
 const interactiveReady = ref(false);
 const githubUrl = `https://github.com/${config.public.githubRepo}`;
 const homePath = computed(() => localePath('/'));
 const homeHref = computed(() => router.resolve(homePath.value).href);
 
-const navItems = [
-  { id: 'plugins', label: 'Plugins' },
-  { id: 'why', label: 'Why it works' },
-  { id: 'faq', label: 'FAQ' },
-];
+const navItems = computed(() => [
+  { id: 'plugins', label: t('shell.navigation.plugins') },
+  { id: 'why', label: t('shell.navigation.why') },
+  { id: 'faq', label: t('shell.navigation.faq') },
+]);
 
 const normalizePath = (value: string) => (value !== '/' ? value.replace(/\/+$/, '') : '/');
 
@@ -63,6 +69,7 @@ onMounted(() => {
           {{ t('nav.viewOnGithub') }}
         </v-btn>
         <template v-if="interactiveReady">
+          <LanguageSwitcher v-if="publishedLocales.length > 1" compact />
           <ThemeToggle />
         </template>
         <div v-else class="app-header__control-fallback" aria-hidden="true" />
@@ -70,14 +77,14 @@ onMounted(() => {
       <div class="app-header__mobile-actions">
         <DialogRoot v-model:open="menuOpen">
           <DialogTrigger as-child>
-            <v-btn :icon="mdiMenu" variant="text" aria-label="Open navigation menu" />
+            <v-btn :icon="mdiMenu" variant="text" :disabled="!interactiveReady" :aria-label="t('shell.navigation.open')" />
           </DialogTrigger>
           <DialogPortal>
             <DialogOverlay class="mobile-menu-overlay" />
-            <DialogContent class="mobile-menu">
-              <DialogTitle class="sr-only">Navigation menu</DialogTitle>
+            <DialogContent class="mobile-menu" @escape-key-down="onMobileEscape">
+              <DialogTitle class="sr-only">{{ t('shell.navigation.title') }}</DialogTitle>
               <DialogDescription class="sr-only">
-                Jump to plugins, product details, frequently asked questions, or GitHub.
+                {{ t('shell.navigation.description') }}
               </DialogDescription>
               <div class="mobile-menu__header">
                 <div @click="menuOpen = false">
@@ -85,7 +92,7 @@ onMounted(() => {
                 </div>
                 <div style="flex: 1" />
                 <DialogClose as-child>
-                  <v-btn :icon="mdiClose" variant="text" aria-label="Close navigation menu" />
+                  <v-btn :icon="mdiClose" variant="text" :aria-label="t('shell.navigation.close')" />
                 </DialogClose>
               </div>
               <hr class="mobile-menu__divider" >
@@ -111,8 +118,9 @@ onMounted(() => {
               </nav>
               <hr class="mobile-menu__divider" >
               <div class="mobile-menu__actions">
-                <span>Appearance</span>
+                <span>{{ t('shell.navigation.appearance') }}</span>
                 <template v-if="interactiveReady">
+                  <LanguageSwitcher v-if="publishedLocales.length > 1" compact contain-menu @menu-open="languageMenuOpen = $event" />
                   <ThemeToggle />
                 </template>
                 <template v-else>

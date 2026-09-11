@@ -27,7 +27,7 @@ const githubOwnerUrl = `https://github.com/${githubOwner}`;
           t('footer.github')
         }}</a>
         <span class="app-footer__divider" />
-        <a class="app-footer__link" href="https://www.apache.org/licenses/LICENSE-2.0" target="_blank" rel="noopener noreferrer">Apache 2.0</a>
+        <a class="app-footer__link" :aria-label="t('shell.accessibility.license')" href="https://www.apache.org/licenses/LICENSE-2.0" target="_blank" rel="noopener noreferrer">Apache 2.0</a>
       </div>
     </v-container>
   </footer>

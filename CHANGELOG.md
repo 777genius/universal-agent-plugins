@@ -18,6 +18,16 @@ Changes after `v1.2.4` land here.
 
 ### Fixed
 
+- A pending ChatGPT registration no longer cancels a multi-client Context7
+  installation. Other selected clients are installed and ChatGPT is reported
+  as a separate setup step with a ChatGPT-only resume command.
+- `agentplugins add` now enters the guided Context7 setup for ChatGPT and Kiro
+  automatically. The former `--prepare` flag has been removed, and ChatGPT
+  registration guidance is formatted as four short, executable steps.
+- Context7 preparation for ChatGPT now directs users to the working public
+  `/mcp` endpoint with no authentication, accepts the `asdk_app_` identifier
+  shown by ChatGPT, and reports authentication as not required. The previous
+  `/mcp/oauth` guidance failed before Context7's OAuth flow could start.
 - NPM registry publish workflows now require an explicit `NPM_PUBLISH_READY=true` repository variable before auto-running from release asset publication, while keeping manual dispatch available for credential repair.
 - npm publication workflows now support npm Trusted Publishing through GitHub OIDC by default, while keeping token-based publishing as an explicit `NPM_PUBLISH_AUTH=token` fallback.
 - Runtime package registry smoke now falls back to the registry's published latest version when a manual publish workflow cannot expose its dispatch tag through `workflow_run`.

@@ -17,8 +17,13 @@ func TestGeminiDisposableHomeAddUpdateRemoveE2E(t *testing.T) {
 	client := fixtureClient(t, domain.ClientGemini)
 	fixture := newCLIFixture(t, []domain.DetectedClient{client})
 	plugin := writeCLIPlugin(t)
-	mcpFixture := `{"$schema":"https://agent-plugins.org/schemas/1.0.0/mcp.schema.json","mcpServers":{"demo":{"type":"streamable-http","url":"https://example.test/mcp"},"local-fixture":{"type":"stdio","command":"node","args":["${PLUGIN_ROOT}/server.js"],"env":{"DATA":"${PLUGIN_DATA}"},"cwd":"./workspace"}}}`
+	// The Go toolchain is already required to run this test. This fixture only
+	// exercises configuration delivery; it never starts the configured command.
+	mcpFixture := `{"$schema":"https://agent-plugins.org/schemas/1.0.0/mcp.schema.json","mcpServers":{"demo":{"type":"streamable-http","url":"https://example.test/mcp"},"local-fixture":{"type":"stdio","command":"go","args":["version"],"env":{"DATA":"${PLUGIN_DATA}"},"cwd":"./workspace"}}}`
 	if err := os.WriteFile(filepath.Join(plugin, "mcp.json"), []byte(mcpFixture), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(plugin, "workspace"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	skill := filepath.Join(plugin, "skills", "docs", "SKILL.md")
@@ -106,7 +111,7 @@ func assertGeminiCLIProjection(t *testing.T, root, url, marker string, present b
 		t.Fatalf("Gemini local MCP presence = %v, want %v", localExists, present)
 	}
 	if present {
-		if local["command"] != "node" || !strings.HasSuffix(local["cwd"].(string), "/workspace") {
+		if local["command"] != "go" || !strings.HasSuffix(local["cwd"].(string), string(filepath.Separator)+"workspace") {
 			t.Fatalf("Gemini local MCP projection = %+v", local)
 		}
 	}

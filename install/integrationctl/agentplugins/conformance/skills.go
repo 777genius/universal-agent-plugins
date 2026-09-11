@@ -55,8 +55,8 @@ func parseSkill(directoryName string, body []byte, front func([]byte) (map[strin
 	if err != nil {
 		return domain.Skill{}, err
 	}
-	if utf8.RuneCountInString(compatibility) > 500 || (author && frontmatter["compatibility"] != nil && compatibility == "") {
-		return domain.Skill{}, skillError("skill_compatibility_length", "compatibility exceeds 500 characters")
+	if utf8.RuneCountInString(compatibility) > 500 || (frontmatter["compatibility"] != nil && compatibility == "") {
+		return domain.Skill{}, skillError("skill_compatibility_length", "compatibility length must be between 1 and 500 characters when supplied")
 	}
 	allowedTools, err := optionalString(frontmatter, "allowed-tools")
 	if err != nil {
@@ -70,11 +70,9 @@ func parseSkill(directoryName string, body []byte, front func([]byte) (map[strin
 			return domain.Skill{}, skillError("skill_metadata_type", "metadata must be an object")
 		}
 	}
-	if author {
-		for _, value := range metadata {
-			if _, ok := value.(string); !ok {
-				return domain.Skill{}, skillError("skill_metadata_type", "metadata values must be strings")
-			}
+	for _, value := range metadata {
+		if _, ok := value.(string); !ok {
+			return domain.Skill{}, skillError("skill_metadata_type", "metadata values must be strings")
 		}
 	}
 	return domain.Skill{

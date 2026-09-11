@@ -572,7 +572,7 @@ func TestWindowsMetadataProbeReplacement(t *testing.T) {
 	if e := nativeDistinctReplacement(filepath.Join(root, "old"), filepath.Join(root, "plugin.json")); e != nil {
 		t.Fatal(e)
 	}
-	p, e := s.remember(f) // consumes f, upgrades by handle, never by replaced name
+	p, e := s.remember(f, false) // consumes f, upgrades by handle, never by replaced name
 	if e != nil {
 		t.Fatal(e)
 	}

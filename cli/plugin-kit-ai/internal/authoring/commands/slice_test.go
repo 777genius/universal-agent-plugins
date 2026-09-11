@@ -81,6 +81,7 @@ type rawExecution struct {
 	out, errout         []byte
 	err                 error
 	diagnosticGoroutine string
+	operationErr        error
 }
 
 func executeRaw(a commands.App, args []string, mount bool) rawExecution {
@@ -90,10 +91,34 @@ func executeRaw(a commands.App, args []string, mount bool) rawExecution {
 		builder = mounted
 		args = append([]string{"author"}, args...)
 	}
-	e := a.Execute(context.Background(), args, authoringcli.Streams{Out: &out, Err: &errout}, builder)
+	// Each fresh command tree and captured error belong to this invocation.
+	// Capture before App.Execute replaces private causes with its public error.
+	var operationErr error
+	capture := func(factories ...authoringcli.Factory) (*cobra.Command, error) {
+		root, err := builder(factories...)
+		if err != nil {
+			return nil, err
+		}
+		var visit func(*cobra.Command)
+		visit = func(cmd *cobra.Command) {
+			if cmd.Name() == "init" && cmd.RunE != nil {
+				run := cmd.RunE
+				cmd.RunE = func(cmd *cobra.Command, args []string) error {
+					operationErr = run(cmd, args)
+					return operationErr
+				}
+			}
+			for _, child := range cmd.Commands() {
+				visit(child)
+			}
+		}
+		visit(root)
+		return root, nil
+	}
+	e := a.Execute(context.Background(), args, authoringcli.Streams{Out: &out, Err: &errout}, capture)
 	var stack [64]byte
 	gid := strings.Fields(string(stack[:runtime.Stack(stack[:], false)]))[1]
-	return rawExecution{out.Bytes(), errout.Bytes(), e, gid}
+	return rawExecution{out: out.Bytes(), errout: errout.Bytes(), err: e, diagnosticGoroutine: gid, operationErr: operationErr}
 }
 
 func decodeExecution(t *testing.T, result rawExecution) (report.Report, int, []byte) {
@@ -234,7 +259,10 @@ func TestReportsAndFreshFactory(t *testing.T) {
 		{"non-semver", plugin(`,"version":"banana"`), "", "", report.Pass, report.Pass, report.Pass},
 		{"unknown", plugin(`,"ordinary-fixture-marker":{"value":"ordinary-fixture-marker"}`), "", "", report.Pass, report.Fail, report.Pass},
 		{"extensions", plugin(`,"extensions":17`), "", "", report.Pass, report.Fail, report.Pass},
-		{"unsafe-name", strings.Replace(plugin(""), `"demo"`, `"con"`, 1), "", "", report.Pass, report.Pass, report.Fail},
+		{"reserved-con", strings.Replace(plugin(""), `"demo"`, `"con"`, 1), "", "", report.Pass, report.Pass, report.Pass},
+		{"reserved-con-dot", strings.Replace(plugin(""), `"demo"`, `"con.foo"`, 1), "", "", report.Pass, report.Pass, report.Pass},
+		{"reserved-aux-dot", strings.Replace(plugin(""), `"demo"`, `"aux.tools"`, 1), "", "", report.Pass, report.Pass, report.Pass},
+		{"invalid-name", strings.Replace(plugin(""), `"demo"`, `"demo..invalid"`, 1), "", "", report.Fail, report.Fail, report.NotEvaluated},
 		{"bad-core", `{"name":`, mcp(`{"good":{"type":"stdio","command":"missing-fixture-command"}}`), "", report.Fail, report.Fail, report.NotEvaluated},
 		{"wrong-type", plugin(`,"version":17`), "", "", report.Fail, report.Fail, report.NotEvaluated},
 		{"duplicate", plugin(`,"name":"ordinary-fixture-marker"`), "", "", report.Fail, report.NotEvaluated, report.Fail},
@@ -419,7 +447,7 @@ func TestConcurrentInitAndCanceledInvocation(t *testing.T) {
 		if r.Committed {
 			wins++
 		} else if r.Error == nil || r.Error.Code != "destination_exists" {
-			t.Fatalf("unexpected race failure pid=%d goroutine=%s: %+v", os.Getpid(), result.diagnosticGoroutine, r)
+			t.Fatalf("unexpected race failure pid=%d goroutine=%s: %+v; operation_error=%T %v", os.Getpid(), result.diagnosticGoroutine, r, result.operationErr, result.operationErr)
 		}
 	}
 	if wins != 1 {
@@ -728,6 +756,34 @@ func TestNativeBinaryVerticalSlice(t *testing.T) {
 			}
 		})
 	}
+	// Portable names remain valid when their generated physical IDs are safe.
+	for _, name := range []string{"con", "con.foo", "aux.tools"} {
+		t.Run("portable-name-"+name, func(t *testing.T) {
+			first := map[string][]byte{}
+			for i := range binaries {
+				root := filepath.Join(roots[i], "portable-name-"+name)
+				write(t, root, "plugin.json", strings.Replace(plugin(""), `"demo"`, `"`+name+`"`, 1))
+				before := tree(t, root)
+				for _, command := range []string{"validate", "inspect", "test"} {
+					r, c, b := run(i, command, root)
+					if c != 0 || r.Loadability.Status != report.Pass || r.Conformance.Status != report.Pass || r.HostSafety.Status != report.Pass {
+						t.Fatalf("native portable name %s %s failed (%d): %s", name, command, c, b)
+					}
+					if r.Runtime.Status != report.NotEvaluated {
+						t.Fatal("static runtime evidence fabricated")
+					}
+					if i == 0 {
+						first[command] = append([]byte{}, b...)
+					} else if !bytes.Equal(first[command], b) {
+						t.Fatalf("native portable name parity: %s / %s", first[command], b)
+					}
+				}
+				if !reflect.DeepEqual(before, tree(t, root)) {
+					t.Fatal("native portable name read changed source")
+				}
+			}
+		})
+	}
 	// Native failure parity, including raw flag values and an unresolvable binary.
 	for _, tc := range []struct{ name, body, mc string }{
 		{"unknown", plugin(`,"ordinary-fixture-marker":true`), ""},
@@ -737,7 +793,7 @@ func TestNativeBinaryVerticalSlice(t *testing.T) {
 		{"duplicate", plugin(`,"name":"ordinary-fixture-marker"`), ""},
 		{"bad-schema", strings.Replace(plugin(""), "1.0.0", "7.0.0", 1), ""},
 		{"bad-sibling", plugin(""), mcp(`{"good":{"type":"stdio","command":"missing-fixture-command"},"bad":{"type":"stdio","command":4}}`)},
-		{"unsafe", strings.Replace(plugin(""), `"demo"`, `"con"`, 1), ""},
+		{"invalid-name", strings.Replace(plugin(""), `"demo"`, `"demo..invalid"`, 1), ""},
 		{"missing-executable", plugin(""), mcp(`{"good":{"type":"stdio","command":"absent-fixture-executable"}}`)},
 		{"legacy-only", "", ""},
 		{"native-only", "", ""},
@@ -772,6 +828,9 @@ func TestNativeBinaryVerticalSlice(t *testing.T) {
 			}
 			if tc.name != "missing-executable" && c == 0 {
 				t.Fatalf("native negative accepted: %s", b)
+			}
+			if tc.name == "invalid-name" && (r.Loadability.Status != report.Fail || r.Conformance.Status != report.Fail || r.HostSafety.Status != report.NotEvaluated || r.Coverage.ComponentsRequested) {
+				t.Fatalf("invalid portable name assessment: %s", b)
 			}
 			if tc.name == "coexisting" {
 				if r.Conformance.Status != report.Pass || r.Readiness.Status == report.Pass || r.Identity.TreeDigest != "" {

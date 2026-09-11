@@ -34,6 +34,8 @@ type loadedPackage struct {
 	directory             *domain.DirectoryOrigin
 	distributionSuspended bool
 	releaseRevoked        bool
+	localChatGPTMapping   *domain.ChatGPTLocalMapping
+	chatGPTPreparation    bool
 	directorySelection    *domain.DirectorySelection
 	cleanup               func() error
 }
@@ -480,12 +482,27 @@ func (app App) acquireDirectory(ctx context.Context, selector string, request pa
 	if request.Selector != "" {
 		resolveSelector = request.Selector
 	}
+	productID, _ := directorySelectorProductID(bundle.Snapshot, resolveSelector)
 	affectedTargets := expandAffectedSurfaceTargets(request.Targets)
 	resolveRequest := domain.DirectoryResolveRequest{
 		Selector: resolveSelector, Targets: affectedTargets, Scope: domain.ScopeUser,
 		InstallerVersion: app.Version, ClientVersions: environment.ClientVersions, OS: environment.OS, Architecture: environment.Architecture,
 		DependencyIdentity: environment.DependencyIdentity,
 		SchemaVersion:      "1.0.0", Operation: operation, Recorded: request.Recorded,
+	}
+	preparingChatGPT := false
+	var retainedMapping *domain.ChatGPTLocalMapping
+	installation, _ := locallyMatchedInstallation(state, resolveSelector)
+	intents := lifecycleInstallIntents(installation, "user", nil)
+	for _, target := range affectedTargets {
+		if target == domain.ClientChatGPT && (productID == "context7" || app.chatGPTPreparation || intents[target] == domain.InstallIntentPrepare) {
+			preparingChatGPT = true
+		}
+	}
+	if preparingChatGPT {
+		resolveRequest.Purpose = domain.DirectoryResolveContext7ChatGPTPreparation
+		resolveRequest.Targets = []domain.ClientID{domain.ClientChatGPT}
+		retainedMapping = installation.LocalChatGPTMapping
 	}
 	selection, err := domain.ResolveDirectory(bundle.Snapshot, resolveRequest)
 	if err != nil {
@@ -541,6 +558,56 @@ func (app App) acquireDirectory(ctx context.Context, selector string, request pa
 			return loadedPackage{}, fmt.Errorf("acquired exact Directory release failed compatibility recheck: %w", err)
 		}
 		return loadedPackage{}, fmt.Errorf("acquired exact Directory release changed during compatibility recheck")
+	}
+	// The preparation resolver intentionally accepts exactly ChatGPT. Compose
+	// mixed requests by checking peers against its exact immutable selection with
+	// normal signed eligibility; never acquire another target's substitute package.
+	if preparingChatGPT {
+		var peers []domain.ClientID
+		for _, target := range affectedTargets {
+			if target != domain.ClientChatGPT {
+				peers = append(peers, target)
+			}
+		}
+		if len(peers) > 0 {
+			peerRequest := exactRequest
+			peerRequest.Purpose = ""
+			peerRequest.Targets = peers
+			peer, peerErr := domain.ResolveDirectory(bundle.Snapshot, peerRequest)
+			if peerErr != nil || peer.DistributionID != selection.DistributionID || peer.ReleaseSequence != selection.ReleaseSequence || peer.TreeDigest != selection.TreeDigest {
+				_ = loaded.cleanup()
+				return loadedPackage{}, fmt.Errorf("mixed preparation peers must qualify the same immutable Context7 release: %v", peerErr)
+			}
+		}
+		if err := domain.ValidateContext7PreparationPackage(loaded.envelope); err != nil {
+			_ = loaded.cleanup()
+			return loadedPackage{}, err
+		}
+		if loaded.envelope.App.Present || loaded.envelope.App.Declared {
+			_ = loaded.cleanup()
+			return loadedPackage{}, fmt.Errorf("refuse personal registration for a publisher-mapped package")
+		}
+		loaded.chatGPTPreparation = true
+		loaded.localChatGPTMapping = retainedMapping
+		if retainedMapping != nil && retainedMapping.IsLegacyContext7Registration() {
+			// The 0.1.56 receipt came from guidance that cannot produce a working
+			// ChatGPT registration. Require a new explicit app ID to migrate it.
+			loaded.localChatGPTMapping = nil
+		}
+		if app.chatGPTAppID != "" {
+			mapping := domain.ChatGPTLocalMapping{ProductID: "context7", Repository: "upstash/context7", PackagePath: "plugins/agent-plugins/context7", Server: "context7", URL: domain.Context7ChatGPTURL, AppID: app.chatGPTAppID}
+			if retainedMapping != nil && *retainedMapping != mapping && !retainedMapping.IsLegacyContext7Registration() {
+				_ = loaded.cleanup()
+				return loadedPackage{}, fmt.Errorf("explicit ChatGPT ID conflicts with retained personal registration receipt")
+			}
+			loaded.localChatGPTMapping = &mapping
+		}
+		if loaded.localChatGPTMapping != nil {
+			if err := loaded.localChatGPTMapping.ValidatePackage(loaded.envelope); err != nil {
+				_ = loaded.cleanup()
+				return loadedPackage{}, err
+			}
+		}
 	}
 	loaded.distributionSuspended = distribution.Status == domain.DistributionSuspended
 	loaded.releaseRevoked = policy.Status == domain.ReleaseRevoked || snapshotRevokes(bundle.Snapshot, selection)
@@ -874,6 +941,28 @@ func prepareLoadedPackageForClient(loaded *loadedPackage, clientID domain.Client
 	if loaded == nil || clientID != domain.ClientChatGPT {
 		return nil
 	}
+	if loaded.chatGPTPreparation {
+		if loaded.localChatGPTMapping == nil {
+			return fmt.Errorf("action_required: %s", domain.ChatGPTRegistrationAction)
+		}
+		mapping := *loaded.localChatGPTMapping
+		if err := mapping.ValidatePackage(loaded.envelope); err != nil {
+			return err
+		}
+		if loaded.envelope.App.Present || loaded.envelope.App.Declared {
+			return fmt.Errorf("refuse to replace publisher app mapping with personal registration")
+		}
+		raw, err := json.Marshal(map[string]any{"apps": map[string]any{mapping.Server: map[string]string{"id": mapping.AppID}}})
+		if err != nil {
+			return err
+		}
+		entryRaw, _ := json.Marshal(map[string]string{"id": mapping.AppID})
+		loaded.envelope.LocalChatGPTMapping = &mapping
+		loaded.envelope.App = domain.AppComponent{Present: true, Declared: true, Enabled: true, Raw: raw, Bindings: map[string]domain.AppBinding{mapping.Server: {Alias: mapping.Server, ID: mapping.AppID, Raw: entryRaw}}}
+		loaded.envelope.Inventory.AppPresent = true
+		loaded.envelope.Inventory.AppBindings = []string{mapping.Server}
+		return nil
+	}
 	compatibility, ok := loaded.hints.Compatibility[string(domain.ClientChatGPT)]
 	if !ok || compatibility.AppBinding == nil {
 		return nil
@@ -956,11 +1045,11 @@ func isShortName(value string) bool {
 }
 
 func explicitLocalPath(value string) bool {
-	if filepath.IsAbs(value) || strings.HasPrefix(value, "./") || strings.HasPrefix(value, "../") || strings.HasPrefix(value, `.\`) || strings.HasPrefix(value, `..\`) {
+	if strings.HasPrefix(value, "/") || strings.HasPrefix(value, "./") || strings.HasPrefix(value, "../") || strings.HasPrefix(value, `.\`) || strings.HasPrefix(value, `..\`) {
 		return true
 	}
-	// filepath.IsAbs follows the host OS. Recognize only genuinely absolute
-	// Windows spellings as well so a source copied between shells is stable;
+	// Classify syntax independently of the host OS, including Unix roots and
+	// only genuinely absolute Windows spellings, so copied sources are stable;
 	// drive-relative forms such as C:plugin intentionally remain selectors.
 	if len(value) >= 3 && ((value[0] >= 'A' && value[0] <= 'Z') || (value[0] >= 'a' && value[0] <= 'z')) && value[1] == ':' && (value[2] == '\\' || value[2] == '/') {
 		return true

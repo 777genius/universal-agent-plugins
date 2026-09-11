@@ -1,4 +1,5 @@
 import type {
+  RegistryDiagnostic,
   ClientEvidence,
   ClientID,
   ComponentID,
@@ -948,20 +949,37 @@ export function defaultDistribution(plugin: RegistryPlugin): DistributionView {
 function eligibleRelease(
   distribution: DistributionView,
   targets: ReadonlySet<ClientID>,
-): { release?: DistributionReleaseView; reason?: string } {
-  if (distribution.status !== 'active') return { reason: `distribution is ${distribution.status}` };
+): { release?: DistributionReleaseView; reason?: string; diagnostic?: RegistryDiagnostic } {
+  if (distribution.status !== 'active')
+    return {
+      reason: `distribution is ${distribution.status}`,
+      diagnostic: { code: 'distributionStatus', params: { status: distribution.status } },
+    };
   const reasons: string[] = [];
+  const diagnostics: RegistryDiagnostic[] = [];
   for (const release of [...distribution.releases].sort(
     (a, b) => b.release_sequence - a.release_sequence,
   )) {
     const supported = new Set(release.targets.map((target) => target.client));
     if (release.release_status !== 'active') {
       reasons.push(`release ${release.release_sequence} is ${release.release_status}`);
+      diagnostics.push({
+        code: 'releaseStatus',
+        params: { sequence: release.release_sequence, status: release.release_status },
+      });
     } else if (!release.meets_minimum_capabilities) {
       reasons.push(`release ${release.release_sequence} misses required components`);
+      diagnostics.push({
+        code: 'missingComponents',
+        params: { sequence: release.release_sequence },
+      });
     } else if ([...targets].some((target) => !supported.has(target))) {
       const missing = [...targets].filter((target) => !supported.has(target)).sort();
       reasons.push(`release ${release.release_sequence} does not support ${missing.join(',')}`);
+      diagnostics.push({
+        code: 'unsupportedTargets',
+        params: { sequence: release.release_sequence, targets: missing.join(',') },
+      });
     } else {
       const failures = [...targets]
         .filter((target) => release.blocking_clients.includes(target))
@@ -970,6 +988,10 @@ function eligibleRelease(
         reasons.push(
           `release ${release.release_sequence} has blocking trusted failure for ${failures.join(',')}`,
         );
+        diagnostics.push({
+          code: 'blockingFailure',
+          params: { sequence: release.release_sequence, targets: failures.join(',') },
+        });
         continue;
       }
       if (distribution.kind === 'upstream') {
@@ -980,13 +1002,22 @@ function eligibleRelease(
           reasons.push(
             `release ${release.release_sequence} lacks current positive package compatibility evidence (passed materialization) for ${missing.join(',')}`,
           );
+          diagnostics.push({
+            code: 'missingEvidence',
+            params: { sequence: release.release_sequence, targets: missing.join(',') },
+          });
           continue;
         }
       }
       return { release };
     }
   }
-  return { reason: reasons.join('; ') || 'no releases' };
+  return {
+    reason: reasons.join('; ') || 'no releases',
+    diagnostic: diagnostics.length
+      ? { code: 'reasons', reasons: diagnostics }
+      : { code: 'noReleases' },
+  };
 }
 
 export function resolveDistribution(
@@ -994,7 +1025,10 @@ export function resolveDistribution(
   targets: readonly ClientID[],
 ): DistributionResolution {
   if (!targets.length || new Set(targets).size !== targets.length)
-    return { unavailable_reason: 'targets must be unique supported client IDs' };
+    return {
+      unavailable_reason: 'targets must be unique supported client IDs',
+      unavailable_diagnostic: { code: 'invalidTargets' },
+    };
   const selectedTargets = new Set(targets);
   const resolved = (distribution: DistributionView): DistributionView | undefined => {
     const release = eligibleRelease(distribution, selectedTargets).release;
@@ -1022,7 +1056,9 @@ export function resolveDistribution(
   if (!declared) throw new Error(`${plugin.name}: declared default distribution is unavailable`);
   const selectedDefault = resolved(declared);
   if (selectedDefault) return { distribution: selectedDefault };
-  const defaultReason = eligibleRelease(declared, selectedTargets).reason ?? 'no releases';
+  const defaultEligibility = eligibleRelease(declared, selectedTargets);
+  const defaultReason = defaultEligibility.reason ?? 'no releases';
+  const defaultDiagnostic = defaultEligibility.diagnostic ?? { code: 'noReleases' as const };
   const priority: Record<DistributionKind, number> = {
     upstream: 0,
     community_bridge: 1,
@@ -1040,6 +1076,11 @@ export function resolveDistribution(
       return {
         distribution: { ...release, fallback_reason: fallbackReason },
         fallback_reason: fallbackReason,
+        fallback_diagnostic: {
+          code: 'defaultIneligible',
+          params: { distribution: declared.id },
+          reasons: [defaultDiagnostic],
+        },
       };
     }
     ineligibleReasons.push({
@@ -1051,6 +1092,17 @@ export function resolveDistribution(
   return {
     unavailable_reason: `${plugin.name}: no eligible distribution supports the complete target set ${targetList}; ${ineligibleReasons.map((item) => `${item.distribution_id}: ${item.reason}`).join('; ')}`,
     ineligible_reasons: ineligibleReasons,
+    unavailable_diagnostic: {
+      code: 'noEligibleDistribution',
+      params: { name: plugin.name, targets: targetList },
+      reasons: [declared, ...alternatives].map((distribution) => ({
+        code: 'distributionReason',
+        params: { distribution: distribution.id },
+        reasons: [
+          eligibleRelease(distribution, selectedTargets).diagnostic ?? { code: 'noReleases' },
+        ],
+      })),
+    },
   };
 }
 
@@ -1082,23 +1134,39 @@ export function targetAuthenticationLabel(authentication: TargetAuthentication):
   return 'Check package requirements';
 }
 
+export function authenticationState(
+  distribution: Pick<DistributionView, 'targets'> | undefined,
+  selectedClients: readonly ClientID[],
+  legacyAuthentication?: RegistryPlugin['authentication'],
+): 'not_required' | 'oauth' | 'client_managed' | 'unknown' | 'varies' | 'required' {
+  // The flat legacy catalog has only a product-wide value. Keep its established
+  // labels, but never infer OAuth from a signed target's generic `required`.
+  if (legacyAuthentication === 'none') return 'not_required';
+  if (legacyAuthentication === 'oauth') return 'oauth';
+  if (legacyAuthentication === 'client_managed') return 'client_managed';
+
+  if (!distribution || !selectedClients.length) return 'unknown';
+  const selected = distribution.targets.filter((target) => selectedClients.includes(target.client));
+  if (selected.length !== selectedClients.length) return 'unknown';
+  const values = new Set(selected.map((target) => target.authentication));
+  if (values.size > 1) return 'varies';
+  return selected[0]!.authentication;
+}
+
 export function authenticationLabel(
   distribution: Pick<DistributionView, 'targets'> | undefined,
   selectedClients: readonly ClientID[],
   legacyAuthentication?: RegistryPlugin['authentication'],
 ): string {
-  // The flat legacy catalog has only a product-wide value. Keep its established
-  // labels, but never infer OAuth from a signed target's generic `required`.
-  if (legacyAuthentication === 'none') return 'No account required';
-  if (legacyAuthentication === 'oauth') return 'OAuth required';
-  if (legacyAuthentication === 'client_managed') return 'Client-managed authentication';
-
-  if (!distribution || !selectedClients.length) return 'Check package requirements';
-  const selected = distribution.targets.filter((target) => selectedClients.includes(target.client));
-  if (selected.length !== selectedClients.length) return 'Check package requirements';
-  const values = new Set(selected.map((target) => target.authentication));
-  if (values.size > 1) return 'Authentication varies';
-  return targetAuthenticationLabel(selected[0]!.authentication);
+  const labels = {
+    not_required: 'No account required',
+    oauth: 'OAuth required',
+    client_managed: 'Client-managed authentication',
+    unknown: 'Check package requirements',
+    varies: 'Authentication varies',
+    required: 'Authentication required',
+  };
+  return labels[authenticationState(distribution, selectedClients, legacyAuthentication)];
 }
 
 export function githubSourceUrl(

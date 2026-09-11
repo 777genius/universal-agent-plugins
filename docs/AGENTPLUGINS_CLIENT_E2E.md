@@ -1,5 +1,10 @@
 # Agent Plugins client E2E evidence
 
+For the current source-built Linux client matrix and its release boundary, see
+the [public compatibility reference](../website/source/en/reference/client-compatibility.md)
+and [compact evidence identities](evidence/client-compatibility-2026-09-07.json).
+The macOS record below remains historical evidence for UAP 0.1.22.
+
 This record binds the public client-support claims to one exact, disposable
 macOS run. It is lifecycle and client-discovery evidence, not a browser tool,
 model, OAuth, or login runtime claim.
@@ -80,3 +85,7 @@ checks proved:
 Plugin data was retained by default, matching the CLI's documented safe-remove
 contract. No browser, model, tool call, consent screen, or OAuth session was
 used in this evidence run.
+
+Compatibility work dated 2026-09-06 is tracked separately in
+[release preparation](AGENTPLUGINS_RELEASE_PREPARATION.md). This historical
+transcript does not prove the unreleased candidate's cwd or transport behavior.

@@ -8,7 +8,11 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/prompt"
+	"github.com/777genius/plugin-kit-ai/cli/internal/promptio"
+	"github.com/777genius/plugin-kit-ai/cli/internal/terminaltheme"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	clientplanner "github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/planner"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/usecase"
 	"github.com/spf13/cobra"
@@ -20,14 +24,45 @@ func newAddCommand(app App, opts *options) *cobra.Command {
 		Use:     "add <name-or-source>",
 		Aliases: []string{"install"},
 		Short:   "Plan and install one Agent Plugins 1.0 package for one or more clients",
-		Args:    cobra.ExactArgs(1),
+		Args: func(cmd *cobra.Command, args []string) error {
+			if err := cobra.ExactArgs(1)(cmd, args); err != nil {
+				if len(args) == 0 && opts.format != "json" {
+					return fmt.Errorf("%w\nProvide a plugin name or source, for example:\n  agentplugins add ./my-plugin\nSee agentplugins add --help", err)
+				}
+				return err
+			}
+			return nil
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
+			app := app // execution-local lazy prompt session
 			if err := validateCommonOptions(opts); err != nil {
 				return err
 			}
+			opts.installIntents = make(map[domain.ClientID]domain.InstallIntent)
+			requestedTargets, err := parseTargetOption(opts.target)
+			if err != nil {
+				return err
+			}
+			opts.installIntents, err = app.addLifecycleIntents(cmd.Context(), args[0], opts.scope, opts.installIntents, requestedTargets)
+			if err != nil {
+				return err
+			}
+			app.chatGPTPreparation = opts.installIntents[domain.ClientChatGPT] == domain.InstallIntentPrepare
+			if opts.chatGPTAppID != "" {
+				if err := domain.ValidateChatGPTAppID(opts.chatGPTAppID); err != nil {
+					return err
+				}
+				app.chatGPTAppID = opts.chatGPTAppID
+			}
 			var detectedClients []domain.DetectedClient
-			if strings.TrimSpace(opts.target) == "" && app.Terminal {
-				selection, clients, preloaded, err := promptCompatibleDetectedTargets(cmd.Context(), cmd, app, args[0])
+			targetProvided := cmd.Flags().Changed("target") && strings.TrimSpace(opts.target) != ""
+			if !targetProvided && app.Terminal && opts.format == "human" {
+				var err error
+				app, err = withPrompter(cmd, app, opts)
+				if err != nil {
+					return err
+				}
+				selection, clients, preloaded, err := promptCompatibleDetectedTargets(cmd.Context(), cmd, app, args[0], opts.installIntents)
 				if err != nil {
 					return err
 				}
@@ -35,13 +70,18 @@ func newAddCommand(app App, opts *options) *cobra.Command {
 					defer preloaded.cleanup()
 				}
 				detectedClients = clients
-				opts.target = selection
-				defer func() { opts.target = "" }()
-				targets, err := parseTargetOption(opts.target)
-				if err != nil {
-					return err
+				targets := selection
+				selectedChatGPT := false
+				for _, target := range targets {
+					if target == domain.ClientChatGPT {
+						selectedChatGPT = true
+					}
 				}
-				detectedClients, err = detectSelectedTargetsForLifecycleResolution(cmd.Context(), app.Detector, targets, detectedClients, !opts.dryRun && isDirectorySelector(args[0]))
+				if preloaded != nil && !selectedChatGPT {
+					preloaded.chatGPTPreparation = false
+					preloaded.localChatGPTMapping = nil
+				}
+				detectedClients, err = detectSelectedTargetsForLifecycleResolution(cmd.Context(), app.Detector, automaticInstallTargets(targets, opts.installIntents), detectedClients, !opts.dryRun && isDirectorySelector(args[0]))
 				if err != nil {
 					return fmt.Errorf("detect selected AI clients: %w", err)
 				}
@@ -62,7 +102,7 @@ func newAddCommand(app App, opts *options) *cobra.Command {
 						defer loaded.cleanup()
 					}
 				}
-				return runAddManyLoaded(cmd.Context(), cmd, app, opts, loaded, targets, activationComplete, authComplete, detectedClientValues(detected))
+				return runAddManyLoaded(cmd.Context(), cmd, app, opts, loaded, targets, activationComplete, authComplete, detectedClientValues(detected), true)
 			}
 			targets, err := parseTargetOption(opts.target)
 			if err != nil {
@@ -74,6 +114,7 @@ func newAddCommand(app App, opts *options) *cobra.Command {
 			return runAddManyWithClients(cmd.Context(), cmd, app, opts, args[0], targets, activationComplete, authComplete, detectedClients)
 		},
 	}
+	command.Flags().StringVar(&opts.chatGPTAppID, "chatgpt-app-id", "", "personal Context7 registration ID copied from ChatGPT Developer Mode")
 	command.Flags().BoolVar(&activationComplete, "activation-complete", false, "attest that manual client activation is complete")
 	command.Flags().BoolVar(&authComplete, "auth-complete", false, "attest that required authentication is complete or none is required after review")
 	return command
@@ -88,7 +129,7 @@ func runAddWithClients(ctx context.Context, cmd *cobra.Command, app App, opts *o
 	if err != nil {
 		return err
 	}
-	_, detected, err := preflightSelectedTargets(ctx, app, targets, clients, !opts.dryRun && isDirectorySelector(source))
+	_, detected, err := preflightAddTargets(ctx, app, opts, source, targets, clients)
 	if err != nil {
 		return err
 	}
@@ -100,10 +141,18 @@ func runAddWithClients(ctx context.Context, cmd *cobra.Command, app App, opts *o
 	if loaded.cleanup != nil {
 		defer loaded.cleanup()
 	}
-	return runAddLoaded(ctx, cmd, app, opts, loaded, activationComplete, authComplete, detectedClientValues(detected))
+	return runAddLoaded(ctx, cmd, app, opts, loaded, activationComplete, authComplete, detectedClientValues(detected), false)
 }
 
-func runAddLoaded(ctx context.Context, cmd *cobra.Command, app App, opts *options, loaded loadedPackage, activationComplete, authComplete bool, clients []domain.DetectedClient) error {
+func runAddLoaded(ctx context.Context, cmd *cobra.Command, app App, opts *options, loaded loadedPackage, activationComplete, authComplete bool, clients []domain.DetectedClient, needsInstallConfirmation bool) error {
+	targets, err := parseTargetOption(opts.target)
+	if err != nil {
+		return err
+	}
+	applyLoadedGuidedIntents(opts, loaded, targets)
+	if opts.chatGPTAppID != "" && !loaded.chatGPTPreparation {
+		return fmt.Errorf("--chatgpt-app-id requires the signed Context7 Directory source and --target chatgpt")
+	}
 	if err := authorizeSecurityAssessment(cmd, app, opts, &loaded); err != nil {
 		return err
 	}
@@ -119,7 +168,8 @@ func runAddLoaded(ctx context.Context, cmd *cobra.Command, app App, opts *option
 	}
 	service := lifecycleService(app, detectedMap)
 	input := usecase.AddInput{
-		Envelope: loaded.envelope, Client: selected, Scope: domain.InstallScope(opts.scope),
+		InstallIntent: opts.installIntents[selected.ClientID],
+		Envelope:      loaded.envelope, Client: selected, Scope: domain.InstallScope(opts.scope),
 		DryRun: opts.dryRun, Confirmed: false, Interactive: app.Terminal,
 		Hints: loaded.hints, BackendExecutable: backendExecutable(selected, detectedMap),
 		ActivationComplete: activationComplete, AuthComplete: authComplete,
@@ -151,13 +201,19 @@ func runAddLoaded(ctx context.Context, cmd *cobra.Command, app App, opts *option
 		}
 		return resumeInteractiveLifecycle(ctx, cmd, service, input, loaded.envelope, planned)
 	}
-	confirmed := mutationConfirmed(app, opts)
-	if !confirmed && opts.format == "human" && app.Terminal {
+	confirmed := mutationConfirmed(app, opts) && !needsInstallConfirmation
+	if needsInstallConfirmation {
+		confirmed, err = confirmInstall(ctx, cmd, app, loaded, []usecase.AddResult{planned})
+		if err != nil {
+			return err
+		}
+	}
+	if !confirmed && !needsInstallConfirmation && opts.format == "human" && app.Terminal {
 		prompt := "Apply this plan? [y/N]"
 		if !freshInstall {
 			prompt = "Apply these explicit lifecycle attestations? [y/N]"
 		}
-		confirmed, err = promptYesNo(cmd.InOrStdin(), cmd.OutOrStdout(), prompt)
+		confirmed, err = promptYesNo(cmd.Context(), cmd.InOrStdin(), cmd.OutOrStdout(), cmd.ErrOrStderr(), prompt)
 		if err != nil {
 			return err
 		}
@@ -168,6 +224,9 @@ func runAddLoaded(ctx context.Context, cmd *cobra.Command, app App, opts *option
 		}
 		_, _ = fmt.Fprintln(cmd.OutOrStdout(), "No changes made.")
 		return nil
+	}
+	if err := ctx.Err(); err != nil {
+		return err
 	}
 	writeProgress(app, opts.format, "Applying transactional client package...")
 	input.Confirmed = true
@@ -182,53 +241,51 @@ func runAddLoaded(ctx context.Context, cmd *cobra.Command, app App, opts *option
 	return err
 }
 
-func promptTargetChoices(cmd *cobra.Command, detected, skipped, allClients []domain.DetectedClient) (string, []domain.DetectedClient, error) {
-	if len(detected) == 0 {
-		return "", nil, fmt.Errorf("no supported local AI client was detected; use --target chatgpt for ChatGPT, or install/detect another client")
-	}
+func promptTargetChoices(cmd *cobra.Command, app App, detected []domain.DetectedClient, skipped []targetSkip, allClients []domain.DetectedClient) ([]domain.ClientID, []domain.DetectedClient, error) {
+	detected = append([]domain.DetectedClient(nil), detected...)
+	skipped = append([]targetSkip(nil), skipped...)
 	sort.SliceStable(detected, func(i, j int) bool { return targetOrder(detected[i].ClientID) < targetOrder(detected[j].ClientID) })
-	sort.SliceStable(skipped, func(i, j int) bool { return targetOrder(skipped[i].ClientID) < targetOrder(skipped[j].ClientID) })
-	if len(skipped) > 0 {
-		names := make([]string, len(skipped))
-		for index, client := range skipped {
-			names[index] = client.DisplayName
+	sort.SliceStable(skipped, func(i, j int) bool { return targetOrder(skipped[i].Client) < targetOrder(skipped[j].Client) })
+	request := prompt.TargetSelectionRequest{}
+	for _, c := range detected {
+		request.Choices = append(request.Choices, prompt.TargetChoice{ID: c.ClientID, Label: prompt.SafeText(c.DisplayName)})
+		request.DefaultIDs = append(request.DefaultIDs, c.ClientID)
+	}
+	for _, c := range skipped {
+		request.SkippedLabels = append(request.SkippedLabels, prompt.SafeText(string(c.Client)+": "+c.Reason))
+	}
+	if len(detected) > 0 {
+		if err := prompt.ValidateRequest(request); err != nil {
+			return nil, nil, err
 		}
-		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Skipped installed clients that this package cannot install together: %s\n", strings.Join(names, ", "))
 	}
-	if len(detected) == 1 {
-		return string(detected[0].ClientID), allClients, nil
-	}
-	_, _ = fmt.Fprintln(cmd.OutOrStdout(), "Detected supported clients (all selected by default):")
-	for index, client := range detected {
-		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "  %d. [x] %s (%s)\n", index+1, client.DisplayName, client.ClientID)
-	}
-	_, _ = fmt.Fprint(cmd.OutOrStdout(), "Choose targets by number, comma-separated [all]: ")
-	line, readErr := readInputLine(cmd.InOrStdin())
-	if readErr != nil && readErr != io.EOF {
-		return "", nil, readErr
-	}
-	line = strings.TrimSpace(line)
-	if line == "" {
-		values := make([]string, len(detected))
-		for index, client := range detected {
-			values[index] = string(client.ClientID)
+	personalPreparationChoice := len(detected) == 1 && detected[0].ClientID == domain.ClientChatGPT && strings.Contains(detected[0].DisplayName, "prepare personal marketplace")
+	if len(detected) <= 1 && !personalPreparationChoice {
+		for _, label := range request.SkippedLabels {
+			if _, err := fmt.Fprintln(reviewWriter(cmd, app), "Skipped (not installed in this attempt): "+label); err != nil {
+				return nil, nil, err
+			}
 		}
-		return strings.Join(values, ","), allClients, nil
-	}
-	seen := make(map[int]struct{})
-	var values []string
-	for _, raw := range strings.Split(line, ",") {
-		choice, err := strconv.Atoi(strings.TrimSpace(raw))
-		if err != nil || choice < 1 || choice > len(detected) {
-			return "", nil, fmt.Errorf("invalid client multiselect")
+		if len(detected) == 0 {
+			return nil, nil, fmt.Errorf("no eligible detected client; nothing was installed. Install/detect a supported client or address the skipped reasons. --target chatgpt checks package eligibility for ChatGPT; it does not register remote MCP or install the full plugin in ChatGPT Plugins")
 		}
-		if _, duplicate := seen[choice]; duplicate {
-			return "", nil, fmt.Errorf("duplicate client multiselect choice %d", choice)
-		}
-		seen[choice] = struct{}{}
-		values = append(values, string(detected[choice-1].ClientID))
+		return request.DefaultIDs, allClients, cmd.Context().Err()
 	}
-	return strings.Join(values, ","), allClients, nil
+	if app.Prompter == nil {
+		return nil, nil, prompt.ErrPromptUnavailable
+	}
+	result, err := app.Prompter.SelectTargets(cmd.Context(), request)
+	if err != nil {
+		return nil, nil, err
+	}
+	if err = cmd.Context().Err(); err != nil {
+		return nil, nil, err
+	}
+	result, err = prompt.ValidateSelection(request, result.IDs)
+	if err != nil {
+		return nil, nil, err
+	}
+	return result.IDs, allClients, nil
 }
 
 // detectSelectedTargetsForLifecycleResolution keeps ambient discovery strictly
@@ -237,7 +294,7 @@ func promptTargetChoices(cmd *cobra.Command, detected, skipped, allClients []dom
 // retain the read-only observations rather than falling back to executing every
 // discovered client binary.
 func detectSelectedTargetsForLifecycleResolution(ctx context.Context, detector ports.ClientDetector, targets []domain.ClientID, detected []domain.DetectedClient, probeVersion bool) ([]domain.DetectedClient, error) {
-	if !probeVersion {
+	if !probeVersion || len(targets) == 0 {
 		return detected, nil
 	}
 	if targeted, ok := detector.(ports.TargetedVersionProbingClientDetector); ok {
@@ -254,8 +311,11 @@ func resumeInteractiveLifecycle(
 	envelope domain.PackageEnvelope,
 	current usecase.AddResult,
 ) error {
+	if current.Plan.InstallIntent == domain.InstallIntentPrepare {
+		return nil
+	}
 	if current.Activation.Activation != domain.ActivationActive || current.Activation.Verification != domain.VerificationInstalled {
-		complete, err := promptYesNo(cmd.InOrStdin(), cmd.OutOrStdout(), "Have you completed activation and verified the plugin is enabled in the client? [y/N]")
+		complete, err := promptYesNo(cmd.Context(), cmd.InOrStdin(), cmd.OutOrStdout(), cmd.ErrOrStderr(), "Have you completed activation and verified the plugin is enabled in the client? [y/N]")
 		if err != nil {
 			return err
 		}
@@ -278,7 +338,7 @@ func resumeInteractiveLifecycle(
 	}
 
 	if current.Activation.Authentication == domain.AuthenticationPending || current.Activation.Authentication == domain.AuthenticationNotChecked {
-		complete, err := promptYesNo(cmd.InOrStdin(), cmd.OutOrStdout(), "Have you completed required authentication, or reviewed the package and confirmed none is required? [y/N]")
+		complete, err := promptYesNo(cmd.Context(), cmd.InOrStdin(), cmd.OutOrStdout(), cmd.ErrOrStderr(), "Have you completed required authentication, or reviewed the package and confirmed none is required? [y/N]")
 		if err != nil {
 			return err
 		}
@@ -352,7 +412,7 @@ func selectClient(
 		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "  %d. %s\n", index+1, client.DisplayName)
 	}
 	_, _ = fmt.Fprint(cmd.OutOrStdout(), "Choose one target: ")
-	line, err := readInputLine(cmd.InOrStdin())
+	line, err := readInputLine(cmd.Context(), cmd.InOrStdin())
 	if err != nil && err != io.EOF {
 		return domain.DetectedClient{}, detectedMap, err
 	}
@@ -423,58 +483,53 @@ func detectedSharedClient(target domain.ClientID, clients map[domain.ClientID]do
 	return client, true
 }
 
-func promptYesNo(reader io.Reader, writer io.Writer, prompt string) (bool, error) {
-	if _, err := fmt.Fprint(writer, prompt+" "); err != nil {
+func promptYesNo(ctx context.Context, reader io.Reader, writer, alternate io.Writer, question string) (bool, error) {
+	var err error
+	writer, err = promptio.VisibleOutput(writer, alternate)
+	if err != nil {
 		return false, err
 	}
-	line, err := readInputLine(reader)
-	if err != nil && err != io.EOF {
+	if _, err := fmt.Fprint(&planWriter{writer: writer}, prompt.SafeText(question)+" "); err != nil {
+		return false, err
+	}
+	line, err := promptio.ReadLine(ctx, reader)
+	if err != nil {
 		return false, err
 	}
 	answer := strings.ToLower(strings.TrimSpace(line))
 	return answer == "y" || answer == "yes", nil
 }
 
-func readInputLine(reader io.Reader) (string, error) {
-	var line strings.Builder
-	var buffer [1]byte
-	for {
-		read, err := reader.Read(buffer[:])
-		if read > 0 {
-			if buffer[0] == '\n' {
-				return line.String(), nil
-			}
-			line.WriteByte(buffer[0])
-		}
-		if err != nil {
-			return line.String(), err
-		}
-	}
+func readInputLine(ctx context.Context, reader io.Reader) (string, error) {
+	return promptio.ReadLine(ctx, reader)
 }
 
 func renderHumanPlan(writer io.Writer, envelope domain.PackageEnvelope, result usecase.AddResult) error {
-	_, _ = fmt.Fprintf(writer, "Plugin: %s %s\n", envelope.Manifest.Name, envelope.Manifest.Version)
-	_, _ = fmt.Fprintf(writer, "Target: %s\n", result.Plan.ClientID)
-	_, _ = fmt.Fprintf(writer, "Package: %s\n", result.Plan.PackageMode)
-	_, _ = fmt.Fprintf(writer, "Result: %s\n", result.Plan.Status)
-	_, _ = fmt.Fprintf(writer, "Authentication: %s\n", result.Plan.Authentication)
-	_, _ = fmt.Fprintf(writer, "Verification: %s\n", result.Plan.Verification)
+	result = withOpenCodeRuntimeNotice(result)
+	checked := &planWriter{writer: writer}
+	writer = checked
+	_, _ = fmt.Fprintf(writer, "%s: %s %s\n", terminaltheme.For(writer).Text(terminaltheme.Label, "Plugin"), prompt.SafeText(string(envelope.Manifest.Name)), prompt.SafeText(string(envelope.Manifest.Version)))
+	_, _ = fmt.Fprintf(writer, "%s: %s\n", terminaltheme.For(writer).Text(terminaltheme.Label, "Target"), prompt.SafeText(string(result.Plan.ClientID)))
+	_, _ = fmt.Fprintf(writer, "%s: %s\n", terminaltheme.For(writer).Text(terminaltheme.Label, "Package"), prompt.SafeText(string(result.Plan.PackageMode)))
+	_, _ = fmt.Fprintf(writer, "%s: %s\n", terminaltheme.For(writer).Text(terminaltheme.Label, "Result"), prompt.SafeText(string(result.Plan.Status)))
+	_, _ = fmt.Fprintf(writer, "%s: %s\n", terminaltheme.For(writer).Text(terminaltheme.Label, "Authentication"), prompt.SafeText(string(result.Plan.Authentication)))
+	_, _ = fmt.Fprintf(writer, "%s: %s\n", terminaltheme.For(writer).Text(terminaltheme.Label, "Verification"), prompt.SafeText(string(result.Plan.Verification)))
 	for _, component := range result.Plan.Components {
-		_, _ = fmt.Fprintf(writer, "  - %s %s: %s\n", component.Kind, component.Name, component.Support)
+		_, _ = fmt.Fprintf(writer, "  - %s %s: %s\n", prompt.SafeText(string(component.Kind)), prompt.SafeText(string(component.Name)), prompt.SafeText(string(component.Support)))
 	}
 	for _, diagnostic := range result.Plan.Diagnostics {
-		_, _ = fmt.Fprintf(writer, "  Warning: %s: %s\n", diagnostic.Code, diagnostic.Message)
+		_, _ = fmt.Fprintf(writer, "  %s: %s: %s\n", terminaltheme.For(writer).Text(terminaltheme.Warning, "Warning"), prompt.SafeText(string(diagnostic.Code)), prompt.SafeText(string(diagnostic.Message)))
 	}
 	for _, warning := range result.Plan.Warnings {
-		_, _ = fmt.Fprintf(writer, "  Warning: %s\n", warning)
+		_, _ = fmt.Fprintf(writer, "  %s: %s\n", terminaltheme.For(writer).Text(terminaltheme.Warning, "Warning"), prompt.SafeText(string(warning)))
 	}
 	for _, action := range result.Plan.UserActions {
-		_, _ = fmt.Fprintf(writer, "  Planned action: %s\n", action)
+		_, _ = fmt.Fprintf(writer, "  %s: %s\n", terminaltheme.For(writer).Text(terminaltheme.Label, "Planned action"), prompt.SafeText(string(action)))
 	}
 	for _, action := range result.Plan.LocalActions {
-		_, _ = fmt.Fprintf(writer, "  Planned action: %s\n", action)
+		_, _ = fmt.Fprintf(writer, "  %s: %s\n", terminaltheme.For(writer).Text(terminaltheme.Label, "Planned action"), prompt.SafeText(string(action)))
 	}
-	return nil
+	return checked.err
 }
 
 func renderAddResult(writer io.Writer, format string, envelope domain.PackageEnvelope, result usecase.AddResult, dryRun bool) error {
@@ -498,44 +553,67 @@ func renderAddResultErrorWithSecurity(writer io.Writer, format string, envelope 
 	}
 	if failure := addFailureStatus(result, commandErr); failure != "" {
 		if result.Plan.Status == domain.PlanUnsupported {
-			if _, err := fmt.Fprintf(writer, "Add: %s\n", failure); err != nil {
+			if _, err := fmt.Fprintf(writer, "%s: %s\n", terminaltheme.For(writer).Text(terminaltheme.Error, "Add"), failure); err != nil {
 				return err
 			}
 			return renderHumanPlan(writer, envelope, result)
 		}
-		_, err := fmt.Fprintf(writer, "Add: %s\n", failure)
-		return err
+		if _, err := fmt.Fprintf(writer, "%s: %s\n", terminaltheme.For(writer).Text(terminaltheme.Error, "Add"), failure); err != nil {
+			return err
+		}
+		// Lifecycle recovery is useful after a failed phase, but must not imply
+		// that a rolled-back or uncertain transaction left a usable installation.
+		if failure == "activation_failed" || failure == "authentication_failed" || failure == "verification_failed" {
+			_, err := fmt.Fprintf(writer, "%s: %s\n", terminaltheme.For(writer).Text(terminaltheme.Label, "Next"), nextLocalLifecycleAction(result))
+			return err
+		}
+		return nil
 	}
 	if dryRun {
 		return renderHumanPlan(writer, envelope, result)
 	}
+	if err := renderOpenCodeRuntimeNotice(writer, result); err != nil {
+		return err
+	}
+	if result.NoChange && result.Plan.InstallIntent == domain.InstallIntentPrepare {
+		message := "Owned Kiro configuration remains prepared. No changes made."
+		if result.Plan.ClientID == domain.ClientChatGPT {
+			message = "Owned ChatGPT package remains prepared. Remote connection and tool calls have not been verified."
+		}
+		_, err := fmt.Fprintln(writer, message+"\nNext: "+nextLocalLifecycleAction(result))
+		return err
+	}
 	if result.NoChange {
-		_, _ = fmt.Fprintln(writer, "Already installed and lifecycle verification is complete. No changes made.")
+		_, _ = fmt.Fprintln(writer, terminaltheme.For(writer).Text(terminaltheme.Muted, "Already installed and lifecycle verification is complete. No changes made."))
 		return nil
 	}
 	if result.Mutated && fullyInstalled(result.Activation) {
 		if result.Activation.ActivationAttested || result.Activation.AuthenticationAttested {
-			_, _ = fmt.Fprintln(writer, "Lifecycle is user-attested for the explicitly confirmed phase; it was not observed from the client.")
+			_, _ = fmt.Fprintln(writer, terminaltheme.For(writer).Text(terminaltheme.Warning, "Lifecycle is user-attested for the explicitly confirmed phase; it was not observed from the client."))
 		} else {
-			_, _ = fmt.Fprintln(writer, "Installed and verified for the selected client.")
+			if result.Plan.ClientID == domain.ClientOpenCode && len(domain.SelectedMCPNames(result.Plan)) > 0 {
+				_, _ = fmt.Fprintln(writer, terminaltheme.For(writer).Text(terminaltheme.Success, "OpenCode MCP configuration installed and verified."))
+			} else {
+				_, _ = fmt.Fprintln(writer, terminaltheme.For(writer).Text(terminaltheme.Success, "Installed and verified for the selected client."))
+			}
 		}
 		return nil
 	}
 	if result.Mutated {
 		if result.Activation.Authentication == domain.AuthenticationPending {
 			if result.Activation.Activation == domain.ActivationActive {
-				_, _ = fmt.Fprintln(writer, "Package materialized and client activation completed. Authentication is pending.")
+				_, _ = fmt.Fprintln(writer, terminaltheme.For(writer).Text(terminaltheme.Warning, "Package materialized and client activation completed. Authentication is pending."))
 			} else {
-				_, _ = fmt.Fprintln(writer, "Package prepared. Authentication and client activation are pending.")
+				_, _ = fmt.Fprintln(writer, terminaltheme.For(writer).Text(terminaltheme.Warning, "Package prepared. Authentication and client activation are pending."))
 			}
 		} else if result.Activation.Authentication == domain.AuthenticationNotChecked && result.Activation.Activation == domain.ActivationActive {
-			_, _ = fmt.Fprintln(writer, "Package materialized and client activation verified. Authentication requirements have not been checked.")
+			_, _ = fmt.Fprintln(writer, terminaltheme.For(writer).Text(terminaltheme.Warning, "Package materialized and client activation verified. Authentication requirements have not been checked."))
 		} else {
-			_, _ = fmt.Fprintln(writer, "Package prepared. Activation is not complete yet.")
+			_, _ = fmt.Fprintln(writer, terminaltheme.For(writer).Text(terminaltheme.Warning, "Package prepared. Activation is not complete yet."))
 		}
 	}
 	if action := nextLocalLifecycleAction(result); action != "" && !fullyInstalled(result.Activation) {
-		_, _ = fmt.Fprintf(writer, "Next: %s\n", action)
+		_, _ = fmt.Fprintf(writer, "%s: %s\n", terminaltheme.For(writer).Text(terminaltheme.Label, "Next"), action)
 	}
 	return nil
 }
@@ -592,6 +670,7 @@ func addFailureStatus(result usecase.AddResult, commandErr error) string {
 }
 
 func newAddResultData(envelope domain.PackageEnvelope, result usecase.AddResult, dryRun bool) addResultData {
+	result = withOpenCodeRuntimeNotice(result)
 	return addResultData{
 		OperationID: result.Receipt.OperationID, Plugin: envelope.Manifest.Name,
 		Version: envelope.Manifest.Version, Source: publicPackageSource(envelope.Source),
@@ -612,6 +691,22 @@ func nextLocalLifecycleAction(result usecase.AddResult) string {
 }
 
 func lifecycleAction(result usecase.AddResult, includePrivate bool) string {
+	if result.Plan.InstallIntent == domain.InstallIntentPrepare {
+		if result.Plan.ClientID == domain.ClientChatGPT {
+			if includePrivate && result.Activation.Activation == domain.ActivationPrepared {
+				if len(result.Activation.LocalActions) > 0 {
+					return result.Activation.LocalActions[0]
+				}
+				if result.Plan.ActivePath != "" {
+					// Personal preparation explicitly exposes its usable marketplace path,
+					// but never the private registration receipt or ID.
+					return domain.ChatGPTPreparedAction(result.Plan.ActivePath, result.Plan.DeclaredName)
+				}
+			}
+			return domain.ChatGPTMappedPreparationAction
+		}
+		return clientplanner.KiroPrepareAction
+	}
 	action := ""
 	if includePrivate && len(result.Activation.LocalActions) > 0 {
 		action = result.Activation.LocalActions[0]
@@ -646,4 +741,12 @@ func lifecycleAction(result usecase.AddResult, includePrivate bool) string {
 func fullyInstalled(outcome domain.ActivationOutcome) bool {
 	authComplete := outcome.Authentication == domain.AuthenticationNotRequired || outcome.Authentication == domain.AuthenticationComplete
 	return outcome.Activation == domain.ActivationActive && outcome.Verification == domain.VerificationInstalled && authComplete
+}
+
+// Preserve group preflight guidance unless a prepared personal marketplace exists.
+func localTargetLifecycleAction(result usecase.AddResult, publicAction string) string {
+	if result.Plan.ClientID == domain.ClientChatGPT && result.Plan.InstallIntent == domain.InstallIntentPrepare && result.Activation.Activation == domain.ActivationPrepared {
+		return nextLocalLifecycleAction(result)
+	}
+	return publicAction
 }

@@ -23,7 +23,17 @@ func reconcileInstalledInfo(ctx context.Context, app App, installation domain.In
 	for _, target := range targets {
 		selected[target] = true
 	}
-	clients, err := detectClientsForInfoReconciliation(ctx, app.Detector, targets)
+	probeTargets := append([]domain.ClientID(nil), targets...)
+	for _, binding := range installation.Clients {
+		if binding.InstallIntent == domain.InstallIntentPrepare {
+			for i := len(probeTargets) - 1; i >= 0; i-- {
+				if probeTargets[i] == domain.ClientID(binding.ClientID) {
+					probeTargets = append(probeTargets[:i], probeTargets[i+1:]...)
+				}
+			}
+		}
+	}
+	clients, err := detectClientsForInfoReconciliation(ctx, app.Detector, probeTargets)
 	if err != nil {
 		return err
 	}
@@ -120,7 +130,7 @@ func detectClientsForInfoReconciliation(ctx context.Context, detector ports.Clie
 		probeTargets = append(probeTargets, target)
 	}
 	sort.Slice(probeTargets, func(i, j int) bool { return probeTargets[i] < probeTargets[j] })
-	if targeted, ok := detector.(ports.TargetedVersionProbingClientDetector); ok {
+	if targeted, ok := detector.(ports.TargetedVersionProbingClientDetector); ok && len(probeTargets) > 0 {
 		return targeted.DetectTargetsWithVersionProbe(ctx, probeTargets)
 	}
 	return detector.Detect(ctx)
@@ -153,7 +163,8 @@ func reconcileClientIdentity(ctx context.Context, app App, installation domain.I
 		return result
 	}
 	plan := domain.DeliveryPlan{
-		ClientID: bindingClient.ClientID, Scope: domain.InstallScope(binding.Scope), DeclaredName: installation.DeclaredName,
+		InstallIntent: binding.InstallIntent,
+		ClientID:      bindingClient.ClientID, Scope: domain.InstallScope(binding.Scope), DeclaredName: installation.DeclaredName,
 		DeclaredVersion:    declaredVersion,
 		PhysicalArtifactID: expectedArtifact, TargetAnchor: target.TargetAnchor, TargetRoot: target.TargetRoot, ActivePath: target.ActivePath,
 		NativeRegistryRoot: observerClient.ConfigRoot, NativeRegistryExecutable: observerClient.ExecutablePath,

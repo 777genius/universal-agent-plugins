@@ -25,11 +25,12 @@ const EVIDENCE_FILES = [
   "AGENTPLUGINS_CLIENT_E2E.md",
   path.join("evidence", "agentplugins-client-e2e-2026-08-30.json")
 ];
+// Pins the source documents, not a rerun or the historical installer commit.
 const EVIDENCE_SOURCE = {
   repository: PRODUCER_REPOSITORY,
-  commit: "4b25a45e1574bab7a4f49e48905a3b3b2647e917",
+  commit: "01f02cb51cfe5f664d4d5f52b295c59c7ea03495",
   document_path: "docs/AGENTPLUGINS_CLIENT_E2E.md",
-  document_sha256: "df6769bf430a337f116cd9df75bcc3ea26df166a016eacf9bc9fbc6cfbf9b100",
+  document_sha256: "0cecbf12a96cf578d12e1cb2f582aa13dca2d9d900ccaefd223f5d7c1030ea65",
   record_path: "docs/evidence/agentplugins-client-e2e-2026-08-30.json",
   record_sha256: "437da1bc7423a85b231be139ff9bfbd7e89c942ef216a61ebde668c08a9c2ee3"
 };
@@ -304,7 +305,8 @@ function snapshotRelease(assetRoot, release, version, commit, options) {
     const names = [
       ...Object.values(release.assets).map((asset) => asset.file),
       "release-manifest.json",
-      "checksums.txt"
+      "checksums.txt",
+      ...(release.notices || []).map((notice) => notice.file)
     ];
     for (const name of names) {
       fs.copyFileSync(path.join(assetRoot, name), path.join(snapshotRoot, name), fs.constants.COPYFILE_EXCL);
@@ -323,6 +325,10 @@ function stage(packageRoot, assetRoot, version, commit, options = {}) {
   if (!initialRelease.gate_eligible || initialRelease.manifest_schema !== 2) {
     throw new Error("release staging requires a gate-eligible schema-v2 current producer manifest");
   }
+  const notice = initialRelease.notices?.[0];
+  if (!notice || notice.file !== "THIRD_PARTY_NOTICES.txt") {
+    throw new Error("release staging requires verified companion THIRD_PARTY_NOTICES.txt");
+  }
   const pkgPath = path.join(packageRoot, "package.json");
   const packageRootStat = fs.lstatSync(packageRoot);
   if (!packageRootStat.isDirectory() || packageRootStat.isSymbolicLink()) {
@@ -333,10 +339,21 @@ function stage(packageRoot, assetRoot, version, commit, options = {}) {
   const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
   const packageName = validatePackageMetadata(pkg);
   const loadedEvidence = loadEvidence(options.evidenceRoot);
+  let noticeBody;
+  if (notice) {
+    const source = path.resolve(__dirname, "..", notice.file);
+    requireSafeStagingFile(source, "packaged notices");
+    noticeBody = fs.readFileSync(source);
+    if (crypto.createHash("sha256").update(noticeBody).digest("hex") !== notice.sha256) {
+      throw new Error("packaged notices do not match the verified release notices");
+    }
+    requireSafeStagingFile(path.join(packageRoot, notice.file), "staged notices", true);
+  }
   if (options.afterInitialReleaseVerification) options.afterInitialReleaseVerification();
   const release = snapshotRelease(assetRoot, initialRelease, version, commit, options);
   if (JSON.stringify(release.assets) !== JSON.stringify(initialRelease.assets) ||
-      release.manifest_sha256 !== initialRelease.manifest_sha256) {
+      release.manifest_sha256 !== initialRelease.manifest_sha256 ||
+      JSON.stringify(release.notices) !== JSON.stringify(initialRelease.notices)) {
     throw new Error("release directory changed during staging");
   }
   if (options.afterReleaseSnapshotVerification) options.afterReleaseSnapshotVerification();
@@ -366,6 +383,7 @@ function stage(packageRoot, assetRoot, version, commit, options = {}) {
     assets
   };
   pkg.version = version;
+  if (noticeBody) fs.writeFileSync(path.join(packageRoot, notice.file), noticeBody);
   writeEvidence(packageRoot, loadedEvidence);
   fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + "\n");
   fs.writeFileSync(path.join(packageRoot, "assets.json"), JSON.stringify(manifest, null, 2) + "\n");

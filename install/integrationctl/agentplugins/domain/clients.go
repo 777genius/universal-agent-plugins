@@ -88,6 +88,10 @@ func withActivation(definition ClientDefinition, activation ActivationMode) Clie
 
 func clientDefinition(id ClientID, displayName, backendFamily, delivery, catalogPackage string, legacyRequired bool, packageMode PackageMode, skill, mcp, extension SupportLevel) ClientDefinition {
 	transports := map[string]SupportLevel{"stdio": mcp, "streamable-http": mcp, "sse": mcp}
+	// Codex rejects native SSE; OpenCode remote fallback cannot preserve SSE-first.
+	if id == ClientOpenCode || id == ClientCodex {
+		transports["sse"] = SupportUnsupported
+	}
 	appSupport := SupportUnsupported
 	if id == ClientChatGPT {
 		appSupport = SupportProjected
@@ -186,6 +190,9 @@ type ComponentDecision struct {
 }
 
 type DeliveryPlan struct {
+	PersonalChatGPTPreparation bool `json:"-"`
+
+	InstallIntent      InstallIntent       `json:"install_intent,omitempty"`
 	ClientID           ClientID            `json:"client_id"`
 	Scope              InstallScope        `json:"scope"`
 	Status             PlanStatus          `json:"status"`
@@ -202,7 +209,8 @@ type DeliveryPlan struct {
 	DeclaredVersion          string `json:"-"`
 	NativeRegistryRoot       string `json:"-"`
 	NativeRegistryExecutable string `json:"-"`
-	// LocalPreparationAuthorized records signed package evidence that permits
+	// LocalPreparationAuthorized records validated package evidence or an explicit
+	// personal Context7 registration receipt that permits
 	// creation of the local prepared package even when a remote, manually
 	// activated registry cannot be observed. It is never evidence that the
 	// remote identity is free, activated, authenticated, or verified.

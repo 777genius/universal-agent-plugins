@@ -1,17 +1,17 @@
 {
   "nav": {
-    "features": "功能",
+    "features": "特点",
     "plugins": "插件",
     "comparison": "为什么它有效",
     "download": "开始使用",
-    "faq": "FAQ",
+    "faq": "常见问题解答",
     "viewOnGithub": "打开 GitHub"
   },
   "hero": {
     "primaryCta": "打开 GitHub",
-    "secondaryCta": "See plugins",
+    "secondaryCta": "查看插件",
     "docsCta": "查看文档",
-    "preview": "Universal Agent Plugins流程预览",
+    "preview": "通用代理插件流程预览",
     "latestRelease": "最新发布",
     "status": "第一方插件现已可用",
     "trust": {
@@ -20,10 +20,10 @@
       "openSource": "开源"
     },
     "demo": {
-      "title": "Universal Agent Plugins 流",
+      "title": "通用代理插件流程",
       "subtitle": "一个仓库。清晰的阶段。多个输出。",
-      "live": "积极的",
-      "ready": "准备好",
+      "live": "活跃",
+      "ready": "准备好了",
       "waiting": "等待",
       "repo": "回购协议",
       "sourceOfTruth": "真理的来源",
@@ -32,7 +32,7 @@
       "steps": {
         "author": "定义插件",
         "generate": "生成输出",
-        "validate": "validate --strict",
+        "validate": "验证--strict",
         "ship": "发布"
       },
       "captions": {
@@ -44,63 +44,65 @@
       "logs": {
         "author": "从一个托管存储库定义一次插件...",
         "generate": "生成当前产品需求支持的输出...",
-        "validate": "在切换之前运行 validate --strict...",
+        "validate": "在切换之前运行验证 --strict...",
         "ship": "通过版本、文档和安装渠道进行发布..."
       }
     },
     "paths": {
       "onlineService": {
-        "title": "Connect an online service",
-        "description": "Start with a hosted integration like Notion, Stripe, Cloudflare, or Vercel.",
-        "example": "See the Notion example"
+        "title": "连接在线服务",
+        "description": "从 Notion、Stripe、Cloudflare 或 Vercel 等托管集成开始。",
+        "example": "请参阅概念示例"
       },
       "localTool": {
-        "title": "Connect a local tool",
-        "description": "Start with a repo-owned tool like Docker Hub, Chrome DevTools, or HubSpot Developer.",
-        "example": "See the Docker Hub example"
+        "title": "连接本地工具",
+        "description": "从存储库拥有的工具开始，例如 Docker Hub、Chrome DevTools 或 HubSpot Developer。",
+        "example": "请参阅 Docker Hub 示例"
       },
       "customLogic": {
-        "title": "Build custom plugin logic",
-        "badge": "Advanced",
-        "description": "Start with launcher-backed code when hooks, runtime logic, or custom behavior define the product.",
-        "example": "Open the advanced custom-logic guide"
+        "title": "构建自定义插件逻辑",
+        "badge": "高级",
+        "description": "当挂钩、运行时逻辑或自定义行为定义产品时，从启动器支持的代码开始。",
+        "example": "打开高级自定义逻辑指南"
       }
     }
   },
   "download": {
     "open": "打开",
-    "recommended": "受到推崇的",
+    "recommended": "推荐",
     "latestRelease": "最新发布",
-    "command": "Command",
+    "command": "命令",
     "copy": "复制",
     "copied": "已复制",
-    "quickstartTitle": "最快开始方式",
-    "quickstartSubtitle": "这是通往真实插件安装或已验证仓库的最快路径。",
-    "installTabsLabel": "选择如何运行 Universal Agent Plugins",
-    "detectedRecommendation": "已为 {platform} 选择最佳方式",
-    "mobileUnsupported": "CLI 需要在电脑上运行。请在此复制命令，然后在 macOS、Linux 或 Windows 上执行。",
+    "quickstartTitle": "最快启动",
+    "quickstartSubtitle": "这是安装真正的插件或经过验证的存储库的最快路径。",
+    "installTabsLabel": "选择如何运行通用代理插件",
+    "detectedRecommendation": "已选择 {platform} 的最佳选项",
+    "mobileUnsupported": "CLI 在桌面上运行。在此处复制命令，然后在 macOS、Linux 或 Windows 上运行它。",
     "platforms": {
       "macos": "macOS",
-      "windows": "Windows",
+      "windows": "窗户",
       "linux": "Linux",
-      "other": "您的设备"
+      "other": "你的设备"
     },
-    "supportTitle": "支持快照",
-    "supportSubtitle": "今天的实际支持深度基于当前的支持政策和目标矩阵。",
+    "supportTitle": "支持代理",
+    "supportSubtitle": "兼容性取决于插件。 CLI 检查每个选定的代理并打印剩余的任何激活或登录步骤。",
     "supportLink": "读取支撑边界"
   },
   "common": {
-    "previous": "以前的",
-    "next": "下一个"
+    "previous": "上一页",
+    "next": "下一步"
   },
   "theme": {
-    "dark": "黑暗的",
+    "dark": "黑暗",
     "light": "光",
     "toggle": "切换主题"
   },
   "language": {
     "label": "语言",
-    "search": "搜索语言..."
+    "search": "搜索语言...",
+    "switchError": "无法更改语言。请再试一次。",
+    "retry": "重试"
   },
   "features": {
     "sectionTitle": "从一个插件存储库到多个代理的干净路径",
@@ -108,23 +110,23 @@
   },
   "plugins": {
     "sectionTitle": "我们的第一个插件从这里开始",
-    "sectionSubtitle": "浏览面向在线服务和本地工具的真实第一方插件目录。如果产品价值体现在你自己的运行时代码中，请改用高级 custom logic 路径。",
+    "sectionSubtitle": "浏览真正的第一方目录以获取在线服务和本地工具。如果产品价值存在于您自己的运行时代码中，请改用高级自定义逻辑路径。",
     "supports": "支持",
     "openPlugin": "打开插件",
     "viewDetails": "查看详情",
     "viewAll": "查看全部",
     "catalogEyebrow": "插件目录",
     "catalogTitle": "一个可搜索目录中的每个第一方插件",
-    "catalogSubtitle": "浏览面向在线服务和本地工具的真实目录，只有在确认这个插件适合你的工作后，再打开源仓库。",
-    "catalogAdvancedNote": "如果你需要 hooks、编排或运行时行为，而不是目录型插件，请改走高级路径。",
-    "catalogAdvancedLink": "打开高级 custom logic 指南。",
+    "catalogSubtitle": "浏览在线服务和本地工具的真实目录，然后仅在您知道插件适合工作后才打开源存储库。",
+    "catalogAdvancedNote": "需要挂钩、编排或运行时行为而不是目录插件？",
+    "catalogAdvancedLink": "打开高级自定义逻辑指南。",
     "searchLabel": "搜索插件",
     "searchPlaceholder": "搜索插件或工作流程...",
     "filterLabel": "按工作流程过滤",
     "allCategories": "所有工作流程",
     "clearSearch": "清除搜索",
     "emptyTitle": "没有与该搜索匹配的插件",
-    "emptyText": "尝试使用更广泛的关键字，例如 Git、文档、后端、规划，或重置活动工作流过滤器。",
+    "emptyText": "尝试使用更广泛的关键字，例如 Git、文档、后端、规划，或重置活动工作流程过滤器。",
     "backToCatalog": "返回目录",
     "openRepository": "打开存储库",
     "detailSummaryEyebrow": "插件总结",
@@ -132,83 +134,83 @@
     "useCasesTitle": "最适合",
     "highlightsTitle": "有何突出之处",
     "install": {
-      "eyebrow": "Install flow",
+      "eyebrow": "安装流程",
       "title": "安装这个插件",
-      "subtitle": "先选择你的代理，如果需要的话再选择如何运行 Universal Agent Plugins，然后复制这个插件的准确命令。",
-      "supportedLabel": "可用 targets",
-      "allAgents": "All",
-      "chooseAgentTitle": "选择你的代理",
-      "chooseAgentBody": "默认已经选中了全部 targets。如果你只想生成更窄的安装命令，可以改成更小的选择集合。",
-      "getCliTitle": "按你的方式运行 Universal Agent Plugins",
-      "getCliBody": "使用 npx 获得最快的首次体验，或安装 CLI 供日常使用。",
+      "subtitle": "选择您的代理，选择如何运行通用代理插件（如果需要），然后复制该插件的确切命令。",
+      "supportedLabel": "可用目标",
+      "allAgents": "全部",
+      "chooseAgentTitle": "选择您的代理人",
+      "chooseAgentBody": "默认情况下会选择所有目标。当您需要更窄的安装命令时，请选择较小的设置。",
+      "getCliTitle": "按照您的方式运行通用代理插件",
+      "getCliBody": "使用 npx 进行最快的首次尝试，或安装 CLI 进行日常使用。",
       "installTitle": "安装插件",
-      "installBody": "运行当前 target 的安装命令。命令保持显式，这样后续更容易看清最终 scope。",
-      "manualTitle": "原生 setup 链接",
-      "manualBody": "打开仓库或你的 agent 官方文档。",
-      "manageTitle": "之后再管理",
-      "manageBody": "安装完成后，可以用这些命令来更新、修复 drift，或者干净地删除插件。",
+      "installBody": "为您选择的目标运行安装命令。该命令保持明确，因此结果范围稍后保持明显。",
+      "manualTitle": "本机设置链接",
+      "manualBody": "打开您的代理的存储库或官方文档。",
+      "manageTitle": "稍后管理",
+      "manageBody": "安装后，使用这些命令来更新、修复漂移或彻底删除插件。",
       "recommended": "推荐",
       "showInstallCta": "安装",
-      "hideInstallCta": "收起安装步骤",
+      "hideInstallCta": "隐藏安装步骤",
       "cliCommandLabel": "CLI 安装命令",
       "installCommandLabel": "插件安装命令",
       "updateCommandLabel": "更新命令",
-      "repairCommandLabel": "Repair 命令",
+      "repairCommandLabel": "修复命令",
       "removeCommandLabel": "删除命令",
       "copy": "复制",
       "copied": "已复制",
-      "fullOnboardingCta": "打开完整 onboarding",
-      "alreadyInstalled": "已经通过其他方式运行 Universal Agent Plugins？那就直接去第 3 步。",
-      "repositoryCta": "插件仓库",
+      "fullOnboardingCta": "打开完整的入职流程",
+      "alreadyInstalled": "已经以另一种方式运行通用代理插件了吗？直接进入步骤 3。",
+      "repositoryCta": "插件库",
       "agentDocsCta": "{agent} 文档",
       "boundaryLabel": "注意",
-      "targetsLabel": "Targets",
-      "scopeLabel": "Scope",
+      "targetsLabel": "目标",
+      "scopeLabel": "适用范围",
       "writesToLabel": "写入到",
       "nextStepLabel": "安装后",
-      "userScope": "User scope",
-      "projectScope": "Project scope",
-      "mixedScope": "混合 scopes",
-      "projectRootHint": "这个 target 会把 workspace config 写进当前项目里，所以请从项目根目录运行命令。",
-      "projectRootHintMixed": "这次安装同时包含 user-level targets 和 project-owned targets。Claude、Codex、Gemini 会留在用户级范围内，而 OpenCode 和 Cursor 会写入当前项目，所以如果你想把这些 workspace configs 建在正确的仓库里，请从项目根目录运行命令。",
+      "userScope": "用户范围",
+      "projectScope": "项目范围",
+      "mixedScope": "混合范围",
+      "projectRootHint": "该目标将工作区配置写入当前项目，因此从项目根目录运行该命令。",
+      "projectRootHintMixed": "此安装将用户级目标与项目拥有的目标混合在一起。 Claude、Codex 和 Gemini 保留在用户范围内，而 OpenCode 和 Cursor 写入当前项目，因此如果您希望在正确的存储库中创建这些工作区配置，请从项目根运行命令。",
       "selectionBodies": {
-        "all": "一条命令安装这个插件支持的全部 targets。如果你只想要更窄的安装路径，可以改选具体代理。",
-        "multi": "安装所选 targets: {agents}。"
+        "all": "通过一个命令安装此插件的每个支持的目标。当您想要更窄的安装路径时，请使用代理芯片。",
+        "multi": "安装选定的目标：{agents}。"
       },
       "manualNotes": {
-        "all": "如果你想直接检查生成出来的 outputs，可以打开仓库；如果你想走原生路径，可以打开对应 agent 的官方文档。",
-        "multi": "如果你想检查或完成 {agents} 的原生配置，可以打开仓库或这些 agents 的文档。"
+        "all": "当您想要直接检查生成的输出时，请使用存储库，或者打开官方代理文档以获取特定于目标的本机路径。",
+        "multi": "当您想要检查或完成 {agents} 的本机设置时，请打开存储库或选定的代理文档。"
       },
       "followUps": {
         "none": "安装后即可使用",
-        "reload": "如果没有马上出现，请重新加载插件或重新打开代理",
-        "enable": "如果 Gemini 要求确认，请检查权限或启用扩展",
-        "activation": "Codex 所需的包已经准备好，但最终激活仍可能需要在 Codex 内执行原生安装或开启新 thread",
-        "depends": "取决于所选 targets"
+        "reload": "如果没有立即出现，请重新加载插件或重新打开代理",
+        "enable": "如果 Gemini 要求确认，请查看权限或启用扩展",
+        "activation": "该软件包是为 Codex 准备的，但最终激活可能仍需要本机安装或 Codex 内的新线程",
+        "depends": "取决于所选目标"
       },
       "targets": {
         "claude": {
-          "installBody": "把插件安装到 Claude 的托管插件流程里，默认走 user-level 安装。",
-          "manualNote": "如果你想检查生成出来的 Claude package，或者手动走 Claude 原生插件流程，可以打开仓库。",
-          "boundaryNote": "如果 Claude 已经打开，请重新加载插件或重新打开当前会话，让新插件显示出来。"
+          "installBody": "使用用户级默认值将插件安装到 Claude 的托管插件流中。",
+          "manualNote": "当您想要检查生成的 Claude 包或手动遵循本机 Claude 插件流程时，请使用存储库。",
+          "boundaryNote": "如果 Claude 已打开，请重新加载插件或重新打开会话，以便出现新插件。"
         },
         "codex": {
-          "installBody": "通过 integration control plane 为 Codex 准备 package 和本地 marketplace entry。",
-          "manualNote": "如果你想自己检查准备好的包，或者亲自完成原生激活路径，可以打开仓库或 Codex 文档。",
-          "boundaryNote": "这里对 Codex 的自动化是刻意保守的。Universal Agent Plugins 会准备好 package 和 marketplace，但 Codex 仍可能在真正激活前要求额外的原生步骤。"
+          "installBody": "通过集成控制平面准备 Codex 包和本地市场进入。",
+          "manualNote": "如果您想检查准备好的包或自己完成本机激活路径，请使用存储库或 Codex 文档。",
+          "boundaryNote": "Codex 自动化在这里保持保守。通用代理插件准备包和市场，但在插件激活之前，Codex 仍然需要本机后续步骤。"
         },
         "gemini": {
-          "installBody": "把 Gemini 扩展安装到用户扩展目录中，后续 update 和 repair 也会继续复用同一个 managed root。",
-          "manualNote": "如果你想检查生成出来的 Gemini extension package，或者直接使用 Gemini 原生命令管理它，可以打开仓库。",
-          "boundaryNote": "Gemini 可能会根据你本地的扩展安全设置要求确认或权限审查。"
+          "installBody": "将 Gemini 扩展安装到用户扩展目录中，并将以后的更新和修复流程保留在同一托管根目录中。",
+          "manualNote": "当您想要检查生成的 Gemini 扩展包或通过 Gemini 的本机扩展命令管理它时，请打开存储库。",
+          "boundaryNote": "Gemini 可以根据您本地分机的安全设置要求确认或权限审查。"
         },
         "opencode": {
-          "installBody": "把这个插件加入项目级 OpenCode 配置和托管的 .opencode 支持文件中。",
-          "manualNote": "如果你想手动接同样的配置，可以打开仓库或 OpenCode 插件文档。"
+          "installBody": "将此插件添加到项目拥有的 OpenCode 配置和托管 .opencode 支持文件中。",
+          "manualNote": "如果您想手动连接相同的配置，请打开存储库或 OpenCode 插件文档。"
         },
         "cursor": {
-          "installBody": "把这个插件加入项目级 Cursor MCP 配置，让集成保留在版本化的 workspace setup 里。",
-          "manualNote": "如果你想手动维护同样的服务项，可以打开仓库或 Cursor MCP 文档。"
+          "installBody": "将此插件添加到项目 Cursor MCP 配置中，以便存储库在版本化工作区设置中保持集成。",
+          "manualNote": "当您想要手动管理同一服务器条目时，请打开存储库或 Cursor MCP 文档。"
         }
       }
     },
@@ -218,57 +220,57 @@
       "codeSearch": "代码搜索",
       "git": "Git 工作流程",
       "planning": "规划",
-      "devops": "DevOps",
+      "devops": "开发运营",
       "review": "代码审查",
       "database": "数据库",
       "backend": "后端",
       "cloud": "云",
       "automation": "自动化",
-      "collaboration": "合作",
+      "collaboration": "协作",
       "search": "搜索",
       "observability": "可观测性",
       "developerTools": "开发者工具",
-      "crm": "CRM",
-      "cms": "CMS",
-      "payments": "支付",
+      "crm": "客户关系管理",
+      "cms": "内容管理系统",
+      "payments": "付款方式",
       "commerce": "商业",
-      "messaging": "消息"
+      "messaging": "消息传递"
     },
-    "allTypes": "All plugin types",
-    "typeFilterLabel": "Filter by plugin type",
-    "pathTitle": "Best starting path",
+    "allTypes": "所有插件类型",
+    "typeFilterLabel": "按插件类型过滤",
+    "pathTitle": "最佳起始路径",
     "types": {
-      "online-service": "Online service",
-      "local-tool": "Local tool",
-      "custom-logic": "Custom logic - Advanced"
+      "online-service": "在线服务",
+      "local-tool": "本地工具",
+      "custom-logic": "自定义逻辑 - 高级"
     }
   },
   "customLogic": {
-    "eyebrow": "Advanced path",
-    "title": "Build custom plugin logic when the product lives in your code",
-    "subtitle": "This path stays first-class, but it is not the same kind of starter as the catalog-backed service and tool plugins. Use it when runtime behavior, hooks, or orchestration define the product.",
-    "advancedBadge": "Advanced",
-    "commandLabel": "Start command",
-    "commandBody": "Start here when the plugin value lives in your code and you want one repo to keep authored source, generated outputs, and runtime behavior aligned.",
-    "openGuide": "Open advanced guide",
-    "openExample": "Open example repo",
+    "eyebrow": "进阶路径",
+    "title": "当产品存在于您的代码中时构建自定义插件逻辑",
+    "subtitle": "该路径仍然是一流的，但它与目录支持的服务和工具插件不是同一类型的启动器。当运行时行为、挂钩或编排定义产品时使用它。",
+    "advancedBadge": "高级",
+    "commandLabel": "启动命令",
+    "commandBody": "当插件值存在于您的代码中并且您希望一个存储库保持编写的源代码、生成的输出和运行时行为一致时，请从这里开始。",
+    "openGuide": "打开高级指南",
+    "openExample": "打开示例存储库",
     "points": {
-      "code": "Edit runtime-facing files under src/, plus the repo-owned entrypoint that defines the plugin behavior.",
-      "generated": "Keep generated root outputs managed instead of treating them like hand-edited source.",
-      "guide": "Use inspect --authoring and the advanced guide before you add more outputs."
+      "code": "编辑 src/ 下面向运行时的文件，以及定义插件行为的存储库拥有的入口点。",
+      "generated": "保持生成的根输出的管理，而不是像手工编辑的源一样对待它们。",
+      "guide": "在添加更多输出之前，请使用检查 --authoring 和高级指南。"
     }
   },
   "createPlugin": {
-    "eyebrow": "Build your own plugin",
-    "title": "Create your own plugin",
-    "subtitle": "Pick the repo shape that matches the job, then open the guide that explains that path in more detail.",
-    "onlineServiceCta": "Open the job-first guide",
-    "localToolCta": "Open the job-first guide",
-    "customLogicCta": "Open the advanced guide",
-    "customLogicDescription": "Choose this when your code, hooks, or runtime behavior define the product."
+    "eyebrow": "构建您自己的插件",
+    "title": "创建您自己的插件",
+    "subtitle": "选择与作业匹配的存储库形状，然后打开更详细地解释该路径的指南。",
+    "onlineServiceCta": "打开工作优先指南",
+    "localToolCta": "打开工作优先指南",
+    "customLogicCta": "打开高级指南",
+    "customLogicDescription": "当您的代码、挂钩或运行时行为定义产品时选择此选项。"
   },
   "faq": {
-    "sectionTitle": "Got 问题？我们已经有了答案",
+    "sectionTitle": "有疑问吗？我们已经有了答案",
     "subtitle": "实用版本：它解决了什么问题，它适用于谁，以及首先打开哪个页面。",
     "labels": {
       "default": "问题",
@@ -286,17 +288,17 @@
       "quickstartTitle": "打开快速入门",
       "quickstartBody": "从安装到经过验证的存储库的最短受支持路径。",
       "pythonTitle": "打开Python指南",
-      "pythonBody": "当您的团队已经是 Python-第一时，下一页是最佳选择。",
+      "pythonBody": "当您的团队已经是 Python 优先时，下一页是最佳选择。",
       "boundaryTitle": "检查支撑边界",
       "boundaryBody": "查看目前哪些产品已经可以投入生产，哪些仍处于测试阶段。"
     }
   },
   "comparison": {
     "sectionTitle": "为什么它有效",
-    "sectionSubtitle": "不是与竞争对手的斗争。只是与插件团队通常造成不必要漂移的三种方式进行实际比较。",
+    "sectionSubtitle": "不是与竞争对手的斗争。只是与插件团队通常产生不必要的漂移的三种方式进行实际比较。",
     "feature": "工作流程",
     "columns": {
-      "pluginKitAi": "Universal Agent Plugins",
+      "pluginKitAi": "通用代理插件",
       "manual": "手动设置",
       "duplicated": "重复的配置",
       "scripts": "一次性脚本"
@@ -304,25 +306,600 @@
   },
   "footer": {
     "copyright": "© {year}",
-    "tagline": "安装一次，即可管理所有 AI 代理中的插件。",
+    "tagline": "安装一次。管理 AI 代理中的插件。",
     "github": "GitHub",
     "docs": "文档"
   },
   "meta": {
-    "homeTitle": "Universal Agent Plugins | 一条命令连接 AI 代理",
-    "homeDescription": "Universal Agent Plugins 是我们第一方 AI 插件和开源工具包的所在地，用于构建一个插件存储库并针对多个代理生态系统。",
-    "downloadTitle": "开始使用 Universal Agent Plugins |安装Universal Agent Plugins",
-    "downloadDescription": "选择 Universal Agent Plugins 的安装路径，打开文档，然后从一个干净的插件存储库开始。",
-    "pluginsTitle": "插件目录 | Universal Agent Plugins 的第一方插件",
-    "pluginsDescription": "浏览 Universal Agent Plugins 的第一方插件目录，其中包含每个真实插件存储库的可搜索卡片、工作流程过滤器和轻量级页面。",
-    "pluginDetailTitle": "{plugin} 插件 | Universal Agent Plugins 目录",
-    "pluginDetailDescription": "{plugin} 是第一方 Universal Agent Plugins 目录的一部分。 {tagline}"
+    "homeTitle": "通用代理插件 |跨 AI 代理的一个命令",
+    "homeDescription": "使用一个命令即可在 AI 代理之间安装、更新、修复和删除代理插件 1.0。",
+    "downloadTitle": "开始使用通用代理插件",
+    "downloadDescription": "安装 CLI，选择一个或多个代理，然后运行您的第一个插件命令。",
+    "pluginsTitle": "插件目录 |通用代理插件",
+    "pluginsDescription": "浏览具有清晰客户端支持和生命周期命令的可安装代理插件 1.0。",
+    "pluginDetailTitle": "{plugin} |通用代理插件",
+    "pluginDetailDescription": "在支持的 AI 代理中安装 {plugin}。 {tagline}"
   },
   "error": {
     "notFoundTitle": "找不到页面",
     "notFoundDescription": "您要查找的页面不存在或已被移动。",
     "genericTitle": "出了点问题",
     "genericDescription": "发生意外错误。请稍后重试。",
-    "goHome": "Go 到主页"
+    "goHome": "前往主页"
+  },
+  "publicAuthoring": {
+    "title": "使用插件 / 构建插件",
+    "intro": "安装已发布的插件，或准备可移植的 Agent Plugins 1.0 包。",
+    "useTitle": "使用插件",
+    "available": "现已可用：通过 Universal Agent Plugins 安装插件。使用 Node.js 22+ 时运行：",
+    "installHelp": "如需在 macOS、Linux 或 Windows 上进行原生安装，请阅读安装指南。CLI 会询问要使用哪些兼容的客户端；个别插件可能需要自己的运行环境。",
+    "installLink": "安装指南",
+    "buildTitle": "构建插件",
+    "standard": "以 plugin.json 为核心构建可移植的 Agent Plugins 1.0 包，可选包含 skills/ 和 mcp.json。客户端支持取决于包及其组件。",
+    "preparation": "准备中 — 尚未发布",
+    "unreleased": "以标准为先的创作 CLI 正在准备中，尚未发布。npm 和 PyPI 上已发布的 plugin-kit-ai 1.2.4 是历史 v1 工具，并非 standard-first v2。安装 plugin-kit-ai{'@'}latest 不会提供未来的创作流程。",
+    "specLink": "Agent Plugins 1.0 规范",
+    "historyTitle": "历史 v1 维护",
+    "history": "请使用以下 v1 说明维护现有 plugin.yaml 项目。这些模板和生成输出属于历史 v1 流程，不会创建新的标准优先创作流程。",
+    "quickstartLink": "快速入门与 v1 维护",
+    "compatibilityLink": "客户端兼容性（英文）",
+    "limitations": "兼容性取决于包。通过模式验证并不证明运行、OAuth 或激活成功。Codex 不支持声明的 MCP SSE；stdio 和 Streamable HTTP 保留现有适配器支持。",
+    "versions": "版本核验日期为 2026-09-07：universal-agent-plugins 0.1.53（npm）、plugin-kit-ai 1.2.4（npm/PyPI），GitHub 稳定版本 agentplugins-v0.1.53。"
+  },
+  "shell": {
+    "docs": {
+      "englishLabel": "{label}（英文文档）"
+    },
+    "logo": {
+      "subtitle": "多代理CLI"
+    },
+    "accessibility": {
+      "home": "通用代理插件主页",
+      "chooseTargets": "选择目标代理商",
+      "supportedAgents": "支持代理",
+      "license": "阿帕奇2.0许可证"
+    },
+    "why": {
+      "eyebrow": "为什么它有效",
+      "title": "一个标准",
+      "subtitle": "原生交付",
+      "intro": "包裹保持便携；安装程序处理每个客户端的格式和生命周期。",
+      "standardTitle": "标准第一",
+      "clientTitle": "客户意识",
+      "clientDescription": "Codex、Cursor、Claude Code、Gemini CLI、OpenCode 和其他客户端接收它们支持的格式。",
+      "lifecycleTitle": "全生命周期",
+      "lifecycleDescription": "通过同一 CLI 添加、检查、更新、修复、切换源或删除插件。",
+      "sourceTitle": "来源可见",
+      "sourceDescription": "已审查的软件包和社区发现仍然有清晰的标签，并且在安装之前可以获取其来源。",
+      "standardDescription": "包从代理插件 1.0 {manifest} 读取，无需第二个安装清单。"
+    },
+    "faq": {
+      "eyebrow": "常见问题解答",
+      "title": "常见问题",
+      "items": {
+        "0": {
+          "question": "支持哪些人工智能代理？",
+          "answer": "Codex、ChatGPT、Cursor、GitHub Copilot CLI、VS Code、Kiro、Claude Code、Gemini CLI、OpenCode、Cline 和 Windsurf 通过显式的特定于客户端的路径进行支持或准备。"
+        },
+        "1": {
+          "question": "是否将一个命令安装到每个代理中？",
+          "answer": "默认情况下，CLI 会检测已安装的兼容代理并要求您确认。您还可以明确选择一名或多名代理。"
+        },
+        "2": {
+          "question": "当客服人员需要登录时会发生什么？",
+          "answer": "CLI 准备包并显示确切的激活或登录步骤。它永远不会收到您的 OAuth 密码。"
+        },
+        "3": {
+          "question": "我可以在该目录之外安装插件吗？",
+          "answer": "是的。使用包含有效代理插件 1.0 plugin.json 包的固定 GitHub 源。"
+        },
+        "4": {
+          "question": "所有发现的插件都会经过审核吗？",
+          "answer": "不会。已审阅的条目和自动发现的社区包均单独标记，因此您可以选择所需的信任级别。"
+        },
+        "5": {
+          "question": "我可以撤消安装吗？",
+          "answer": "是的。相同的 CLI 记录托管状态并支持检查、更新、修复、源切换和删除。"
+        }
+      }
+    },
+    "seo": {
+      "indexTitle": "通用代理插件 CLI {'|'} 安装代理插件 1.0",
+      "indexDescription": "使用一个 CLI 在受支持的 AI 代理中安装、更新、修复和删除代理插件 1.0。",
+      "downloadTitle": "下载通用代理插件 CLI",
+      "downloadDescription": "在 macOS、Linux 或 Windows 上安装通用代理插件 CLI，并通过一个命令管理代理插件 1.0。",
+      "applicationSubCategory": "代理插件管理器",
+      "softwareRequirements": "适用于 macOS、Linux 和 Windows 的本机 CLI；或适用于 npx 的 Node.js 22+",
+      "featureList": "安装、检查、更新、修复、切换源和删除代理插件 1.0",
+      "imageAlt": "通用代理插件 - 使用一个 CLI 在 AI 代理之间安装插件",
+      "organizationDescription": "Agent Plugins 1.0 的开源多代理安装程序和生命周期管理器。"
+    },
+    "hero": {
+      "autoLabel": "所有已安装的代理（推荐）",
+      "autoSummary": "所有已安装的代理",
+      "autoDescription": "运行命令时检测到",
+      "unavailable": "暂时不可用",
+      "refreshing": "刷新插件数据",
+      "chatgptSetup": "在 ChatGPT 中完成设置",
+      "notAvailable": "不可用",
+      "notAvailableForPlugin": "不适用于该插件",
+      "title": "一个插件",
+      "subtitle": "您所有的代理人",
+      "intro": "使用一个命令即可在受支持的 AI 代理中安装、更新、修复和删除代理插件 1.0。让 CLI 检测已安装的代理，或准确选择插件的位置。",
+      "github": "打开 GitHub",
+      "choose": "选择代理商",
+      "chooseHint": "一个、多个或自动检测",
+      "run": "复制并运行",
+      "terminal": "在您的终端中",
+      "refreshNotice": "插件数据正在刷新。稍后再试。",
+      "otherMethods": "其他安装方式",
+      "planNotice": "一个命令在更改文件之前规划每个选定的代理",
+      "supportedClients": "支持的客户",
+      "clientNote": "CLI 安装或准备每个客户端支持的本机格式。有些客户端可能会要求您完成激活或登录。",
+      "install": "安装{name}",
+      "explore": "探索插件",
+      "exploreCount": "探索 {count} 插件 |探索 {count} 插件 |探索 {count} 插件",
+      "delivery": {
+        "managed": "托管安装",
+        "prepared": "准备好了；客户进口仍然存在",
+        "manual_activation": "需要手动激活"
+      },
+      "sourceReason": "来源原因：{reason}",
+      "diagnostics": {
+        "distributionStatus": "分布是{status}",
+        "releaseStatus": "释放 {sequence} 为 {status}",
+        "missingComponents": "发布 {sequence} 缺少必需的组件",
+        "unsupportedTargets": "发布{sequence}不支持{targets}",
+        "blockingFailure": "版本 {sequence} 已阻止 {targets} 的可信故障",
+        "missingEvidence": "版本 {sequence} 缺乏 {targets} 当前积极的软件包兼容性证据（已通过实现）",
+        "noReleases": "没有发布",
+        "defaultIneligible": "声明的默认值 {distribution} 不符合条件：{reasons}",
+        "reasonSeparator": ";",
+        "status": {
+          "candidate": "候选人",
+          "active": "活跃的",
+          "suspended": "暂停",
+          "superseded": "被取代",
+          "revoked": "撤销"
+        }
+      }
+    },
+    "header": {
+      "plugins": "插件",
+      "why": "为什么它有效",
+      "faq": "常见问题解答",
+      "openMenu": "打开导航菜单",
+      "closeMenu": "关闭导航菜单",
+      "menuTitle": "导航菜单",
+      "menuDescription": "跳转至插件、产品详细信息、常见问题或 GitHub。",
+      "appearance": "外观"
+    },
+    "navigation": {
+      "plugins": "插件",
+      "why": "为什么它有效",
+      "faq": "常见问题解答",
+      "open": "打开导航菜单",
+      "close": "关闭导航菜单",
+      "title": "导航菜单",
+      "description": "跳转至插件、产品详细信息、常见问题或 GitHub。",
+      "appearance": "外观"
+    }
+  },
+  "registryUi": {
+    "select": {
+      "up": "向上滚动选项",
+      "down": "向下滚动选项"
+    },
+    "combobox": {
+      "open": "打开{label}",
+      "empty": "没有匹配的类别"
+    },
+    "multi": {
+      "agents": "{count}代理| {count} 代理",
+      "selected": "已选择 {count}",
+      "auto": "自动检测",
+      "choose": "或者选择特定的代理",
+      "automaticHelp": "CLI 根据已安装的代理检查此插件，跳过不兼容的代理，并让您确认目标。仅当插件提供经过验证的连接时，才会包含 ChatGPT。",
+      "manualHelp": "选择应接收此插件的每个代理。至少有一个保持选中状态。",
+      "summary": "{label}：{summary}"
+    },
+    "command": {
+      "terminal": "终端",
+      "copiedLabel": "命令已复制",
+      "copyLabel": "复制命令",
+      "copied": "已复制",
+      "copy": "复制",
+      "announcement": "命令已复制到剪贴板"
+    },
+    "directory": {
+      "heading": "找到你的插件",
+      "reviewed": "{count} 审查了插件。搜索、选择您的代理并复制一条命令。 | {count} 审查了插件。搜索、选择您的代理并复制一条命令。",
+      "combined": "{reviewed} 加 {community}。搜索、选择您的代理并复制一条命令。",
+      "reviewedCount": "{count} 审查插件 | {count} 审查插件",
+      "communityCount": "{count} 社区包 | {count} 社区包"
+    },
+    "security": {
+      "blocking": "自动审查：{count} 阻止发现 |自动审查：{count} 阻止结果",
+      "notes": "自动审核：{count} 注意 |自动审核：{count} 注释",
+      "clear": "自动审查：无阻塞发现",
+      "review": "安装前检查",
+      "noBlocking": "未检测到阻塞现象",
+      "maintenance": "存储库维护说明",
+      "reviewNotes": "自动审阅笔记",
+      "unknown": "未知",
+      "tooltipScope": "LintAI {version} 检查了精确的索引修订版 {revision}。",
+      "tooltipDisclaimer": "此静态检查会查找已配置的模式。它不运行插件或保证安全。",
+      "openReview": "{label}。打开 {name} 的完整评论",
+      "staticReview": "自动静态审查",
+      "more": "+{count} 完整评论中有更多内容",
+      "fullDetails": "打开插件页面了解完整详细信息。",
+      "eyebrow": "自动安全审查",
+      "scope": "LintAI {version} 检查了 {date} 上的确切索引修订版 {revision}。此结果仅适用于那些包文件。",
+      "freshness": "较新的上游修订版是不同的代码。必须对其进行索引并再次检查； CLI 不会对已更改的文件重复使用此结果。",
+      "before": "安装前要检查的事项",
+      "maintenanceCount": "存储库维护说明 ({count})",
+      "maintenanceHelp": "这些发现涉及作者的存储库自动化。它们是有用的强化建议，但这些工作流程不是由安装程序运行的。",
+      "truncated": "显示 {shown} 的 {total} 结果。签署的公开摘要的篇幅有限；总数包括扫描的每项发现。",
+      "empty": "自动规则未检测到已检查文件中的阻止模式。",
+      "disclaimer": "自动化检查降低风险；他们并不能证明插件是安全的。在安装您不信任的软件之前，请检查来源和权限。"
+    },
+    "catalog": {
+      "explorePlugins": "探索插件",
+      "searchByCapabilityComponentOrSource": "按功能、组件或来源搜索。",
+      "allCategories": "所有类别",
+      "allComponents": "所有组件",
+      "allSources": "所有来源",
+      "upstreamPackages": "上游包",
+      "communityBridges": "社区桥梁",
+      "communityPackages": "社区套餐",
+      "directSources": "直接来源",
+      "allTrustLevels": "所有信任级别",
+      "reviewedListings": "已审核的列表",
+      "communityDiscovery": "社区发现",
+      "allAgents": "所有代理商",
+      "allAuthentication": "全部认证",
+      "worksWithoutSignIn": "无需登录即可工作",
+      "mayRequireSignIn": "可能需要登录",
+      "allOwners": "所有业主",
+      "search": "搜索",
+      "category": "类别",
+      "component": "组件",
+      "source": "来源",
+      "trust": "信任",
+      "agent": "代理",
+      "authentication": "认证",
+      "owner": "业主",
+      "hideFilters": "隐藏过滤器",
+      "moreFilters": "更多过滤器",
+      "addAPlugin": "添加插件",
+      "filterPlugins": "过滤器插件",
+      "searchPlugins": "搜索插件",
+      "searchByNameAuthorOrCapability": "按名称、作者或能力搜索...",
+      "clearPluginSearch": "清除插件搜索",
+      "filterByCategory": "按类别过滤",
+      "searchCategories": "搜索类别...",
+      "filterByComponent": "按组件过滤",
+      "filterBySource": "按来源过滤",
+      "filterByTrustLevel": "按信任级别过滤",
+      "filterByAgent": "按代理过滤",
+      "filterByAuthentication": "按身份验证过滤",
+      "filterByOwner": "按所有者过滤",
+      "searchOwners": "搜索所有者...",
+      "activeFilters": "有源滤波器",
+      "pluginDirectory": "插件目录",
+      "addPlugin": "添加插件",
+      "resetFilters": "重置过滤器",
+      "findingMoreCommunityPluginsOnGithub": "在 GitHub 上查找更多社区插件...",
+      "communityResultsAreRefreshingReviewedListingsRemainAvailable": "社区结果令人耳目一新。已审核的列表仍然可用。",
+      "communityResultsAreTemporarilyUnavailableReviewedListingsRemainAvailable": "社区结果暂时不可用。已审核的列表仍然可用。",
+      "noMatchingPlugins": "没有匹配的插件",
+      "tryABroaderSearchOrClearOneOfTheFilters": "尝试更广泛的搜索或清除其中一个过滤器。",
+      "clearFilters": "清除过滤器",
+      "addAPluginByPullRequest": "通过拉取请求添加插件",
+      "removeFilter": "删除 {label}",
+      "activeCount": "{count} 已激活",
+      "showMore": "显示{count}更多",
+      "remaining": "{count} 剩余匹配插件 | {count} 剩余匹配插件",
+      "noMatches": "没有匹配项 · 总计 {total}",
+      "shown": "{shown} 显示 · {total} 插件 | {shown} 显示 · {total} 插件",
+      "shownMatching": "显示 {shown} · {matching} 匹配 · {total} 总计",
+      "matching": "{matching} 匹配 · {total} 总计"
+    },
+    "card": {
+      "foundOnGithub": "在 GitHub 上找到",
+      "notAvailable": "不可用",
+      "unavailableSignedDirectorySnapshotExpired": "不可用：签名的目录快照已过期",
+      "unavailableAtItsIndexedSourceNoInstallCommandIsGenerated": "在其索引源中不可用；没有生成安装命令。",
+      "unavailableAtItsIndexedSource": "在其索引源中不可用",
+      "checkedAgainBeforeInstallation": "安装前再次检查",
+      "reviewedListing": "审核清单",
+      "notAvailableForChatgpt": "不适用于 ChatGPT",
+      "verifiedConnectionFinishSetupInChatgpt": "已验证连接；在 ChatGPT 中完成设置",
+      "allInstalledAgents": "所有已安装的代理",
+      "commandsDisabledInPreview": "预览中禁用的命令。",
+      "allInstalledAgentsRecommended": "所有已安装的代理（推荐）",
+      "previewOnly": "仅预览",
+      "currentlyUnavailable": "目前不可用",
+      "agentCompatibilityCheckedWhenYouRunTheCommand": "运行命令时检查代理兼容性",
+      "communityListing": "社区列表",
+      "notInstallableFromAnActiveRelease": "无法从活动版本安装",
+      "detectedWhenYouRunTheCommand": "运行命令时检测到",
+      "commandsDisabledBecauseTheDirectoryIsTemporarilyStale": "由于目录暂时过时，命令被禁用。",
+      "unavailableReviewDataIsNotInstallationAuthority": "不可用：审核数据没有安装权限",
+      "temporarilyPaused": "暂时暂停",
+      "communityDirect": "社区/直接",
+      "installCandidateComponents": "安装候选组件",
+      "add": "添加",
+      "thisIsTheGithubRepositorySStarCountNotARatingForThisIndividualPlugin": "这是 GitHub 存储库的星级计数，而不是此单个插件的评级。",
+      "agentPlugins10": "代理插件 1.0",
+      "install": "安装",
+      "viewSource": "查看源码",
+      "deliverySummary": "{managed} 自动安装 · {prepared} 需要最后一步",
+      "installName": "安装{name}",
+      "chooseClients": "选择 {name} 的客户端",
+      "stars": "{count} 仓库中的星星",
+      "otherSources": "其他来源 ({count})",
+      "forPlugin": "对于 {name}",
+      "publisher": "通过 {publisher}",
+      "upstream": "上游",
+      "installable": "可安装的",
+      "unavailable": "不可用"
+    },
+    "install": {
+      "allInstalledAgentsRecommended": "所有已安装的代理（推荐）",
+      "useWithYourAgent": "与您的代理一起使用",
+      "notReadyToInstall": "尚未准备好安装",
+      "detectedWhenYouRunTheCommand": "运行命令时检测到",
+      "thisPackageIsNoLongerAvailableFromItsSource": "该软件包的来源不再可用。",
+      "notAvailableForChatgpt": "不适用于 ChatGPT",
+      "unavailableSignedDirectorySnapshotExpired": "不可用：签名的目录快照已过期",
+      "noActiveReleaseSupportsThisClient": "没有活动版本支持此客户端",
+      "unavailableReviewDataIsNotInstallationAuthority": "不可用：审核数据没有安装权限",
+      "thisPackageDoesNotSupportAnyOfTheAgentsAvailableInTheInstallerYet": "此软件包尚不支持安装程序中可用的任何代理。",
+      "verifiedConnectionFinishSetupInChatgpt": "已验证连接；在 ChatGPT 中完成设置",
+      "allInstalledAgents": "所有已安装的代理",
+      "weFoundThisProjectButItDoesnTIncludeAnyToolsTheInstallerCanAddYet": "我们找到了这个项目，但它不包含安装程序可以添加的任何工具。",
+      "chooseTargetAgents": "选择目标代理商",
+      "add": "添加",
+      "update": "更新",
+      "repair": "维修",
+      "remove": "删除",
+      "installer": "安装人员",
+      "runWithNpx": "使用 npx 运行",
+      "thisPluginIsNotInstallableYet": "该插件尚未安装",
+      "viewPackageSource": "查看包源码",
+      "agents": "代理商",
+      "commandsUnavailableStaleDirectory": "命令不可用：陈旧的目录。",
+      "thisSignedSnapshotHasExpiredBrowseItsHistoryThenReturnAfterAFreshSnapshotIsPublished": "此签名快照已过期。浏览其历史记录，然后在发布新快照后返回。",
+      "commandsUnavailableInReviewPreview": "命令在审阅预览中不可用。",
+      "unresolvedDataIsForReviewOnlyProductionCommandsRequireAPublishedSignedDirectorySnapshot": "未解决的数据仅供审核；生产命令需要已发布的签名目录快照。",
+      "commandsUnavailable": "命令不可用。",
+      "automaticDetection": "自动检测。",
+      "theCliChecksThisPluginAgainstInstalledAgentsSkipsIncompatibleOnesAndLetsYouConfirmTheTargetsChatgptIsIncludedOnlyWhenThisPluginProvidesAVerifiedConnection": "CLI 根据已安装的代理检查此插件，跳过不兼容的代理，并让您确认目标。仅当此插件提供经过验证的连接时，才会包含 ChatGPT。",
+      "oneStepRemainsInChatgpt": "ChatGPT 还剩下一步。",
+      "noSingleSourceServesThisTargetSet": "没有单一来源可以满足这一目标集。",
+      "theCliWillFailBeforeMutationAndSuggestCompatibleTargetSourceCombinationsItNeverMixesDistributionsAcrossClients": "CLI 将在突变之前失败并建议兼容的目标/源组合；它从不混合跨客户端的发行版。",
+      "theCliChecksEverySelectedAgentBeforeChangingFilesAndShowsAnySignInOrActivationStepOauthCredentialsStayWithTheAgent": "CLI 在更改文件之前检查每个选定的代理并显示任何登录或激活步骤。 OAuth 凭据由代理保留。",
+      "chatgptFinish": "打开ChatGPT，在应用程序或插件中选择{name}，连接它，然后开始新的聊天。可用性取决于您的帐户和工作空间。",
+      "expectedFallback": "预期的源回退：{source}。"
+    },
+    "authentication": {
+      "not_required": "无需帐户",
+      "oauth": "需要 OAuth",
+      "client_managed": "客户端管理的身份验证",
+      "unknown": "检查包裹要求",
+      "varies": "身份验证各不相同",
+      "required": "需要身份验证"
+    },
+    "delivery": {
+      "managed": "托管安装",
+      "prepared": "准备好了；客户进口仍然存在",
+      "manual_activation": "需要手动激活"
+    },
+    "reason": {
+      "distributionStatus": "分布是{status}",
+      "releaseStatus": "释放 {sequence} 为 {status}",
+      "missingComponents": "发布 {sequence} 缺少必需的组件",
+      "unsupportedTargets": "发布{sequence}不支持{targets}",
+      "blockingFailure": "版本 {sequence} 已阻止 {targets} 的可信故障",
+      "missingEvidence": "版本 {sequence} 缺乏 {targets} 当前积极的软件包兼容性证据（已通过实现）",
+      "noReleases": "没有发布",
+      "invalidTargets": "目标必须是唯一受支持的客户端 ID",
+      "defaultIneligible": "声明的默认值 {distribution} 不符合条件：{reasons}",
+      "distributionReason": "{distribution}：{reasons}",
+      "noEligibleDistribution": "{name}：没有符合条件的发行版支持完整的目标集{targets}； {reasons}",
+      "external": "来源提供的原因：{reason}",
+      "separator": ";"
+    },
+    "status": {
+      "candidate": "候选人",
+      "active": "活跃的",
+      "suspended": "暂停",
+      "superseded": "被取代",
+      "revoked": "撤销"
+    },
+    "clients": {
+      "codex": {
+        "note": "技能和支持的 MCP 传输",
+        "status": "支持",
+        "intro": "使用一个 CLI 命令安装 Codex 的便携式代理插件 1.0。技能和支持的 MCP 服务器以 Codex 理解的格式准备。",
+        "delivery": "CLI 准备 OpenAI 兼容包并保持其托管状态可逆。",
+        "activation": "按照 CLI 打印的任何激活提示进行操作，然后启动新的 Codex 会话。"
+      },
+      "chatgpt": {
+        "note": "已验证的 ChatGPT 连接",
+        "status": "在应用程序中设置",
+        "intro": "为 ChatGPT 准备兼容的代理插件 1.0，同时将应用程序激活和帐户同意保留在 ChatGPT 内。",
+        "delivery": "CLI 验证并准备兼容包或注册的应用程序绑定。",
+        "activation": "出现提示时，完成 ChatGPT 中的最终应用程序激活或登录步骤。"
+      },
+      "cursor": {
+        "note": "本机代理插件包",
+        "status": "支持",
+        "intro": "将 Agent Plugins 1.0 安装到 Cursor 项目中，无需手动翻译每个插件。 CLI 在更改文件之前规划本机包。",
+        "delivery": "CLI 为所选项目编写支持的 Cursor 插件、技能和 MCP 投影。",
+        "activation": "根据请求重新加载光标，然后验证是否已发现该插件。"
+      },
+      "copilot": {
+        "note": "托管本机插件",
+        "status": "支持",
+        "intro": "使用其本机插件工作流程和用于其他代理的相同生命周期命令，通过 GitHub Copilot CLI 安装代理插件 1.0。",
+        "delivery": "CLI 使用受支持的 Copilot 插件布局并验证最终的安装状态。",
+        "activation": "仅当本机 Copilot 工作流程需要时才重新启动或重新加载客户端。"
+      },
+      "vscode": {
+        "note": "副驾驶插件集成",
+        "status": "支持",
+        "intro": "通过支持的 GitHub Copilot 集成为 VS Code 准备代理插件 1.0，并在需要手动设置时提供准确的后续说明。",
+        "delivery": "当本机客户端路径可用时，CLI 会重用兼容的 Copilot 插件包。",
+        "activation": "如果自动激活不可用，请按照 CLI 打印的确切设置或导入路径进行操作。"
+      },
+      "kiro": {
+        "note": "本机文件夹包",
+        "status": "支持",
+        "intro": "从其他 AI 代理使用的同一便携式软件包中安装适用于 Kiro 的代理插件 1.0。",
+        "delivery": "CLI 使用兼容的插件组件准备 Kiro 的本机文件夹包。",
+        "activation": "当 Kiro 需要最终的客户端步骤时，请按照打印的导入或激活提示进行操作。"
+      },
+      "claude": {
+        "note": "托管 MCP 配置",
+        "status": "支持",
+        "intro": "使用托管技能和 MCP 配置安装适用于 Claude Code 的代理插件 1.0，而不是手动维护单独的设置。",
+        "delivery": "CLI 创建受支持的 Claude Code 投影并跟踪它们以进行更新、修复和删除。",
+        "activation": "根据请求重新加载 Claude 代码并完成客户端或提供商中的任何服务登录。"
+      },
+      "gemini": {
+        "note": "托管 MCP 配置",
+        "status": "支持",
+        "intro": "为 Gemini CLI 安装兼容的代理插件 1.0，同时保留可移植插件包作为事实来源。",
+        "delivery": "CLI 编写受支持的 Gemini CLI 配置和兼容的包组件。",
+        "activation": "当 Gemini CLI 打印后续步骤时启用或重新加载集成。"
+      },
+      "opencode": {
+        "note": "托管 MCP 配置",
+        "status": "支持",
+        "intro": "将代理插件 1.0 安装到具有托管 MCP 配置和可逆生命周期状态的 OpenCode 项目中。",
+        "delivery": "CLI 为 OpenCode 准备支持的项目配置和插件组件。",
+        "activation": "安装后打开一个新的 OpenCode 会话，以便重新加载项目配置。"
+      },
+      "cline": {
+        "note": "托管 MCP 配置",
+        "status": "支持",
+        "intro": "为 Cline 安装兼容的代理插件 1.0，无需为每个插件重建 MCP 配置。",
+        "delivery": "CLI 准备并跟踪支持的 Cline MCP 配置。",
+        "activation": "根据请求重新加载 Cline，并在插件包外部完成提供者身份验证。"
+      },
+      "windsurf": {
+        "note": "准备好的包裹；需要手动激活",
+        "status": "由 CLI 准备",
+        "intro": "使用一个 CLI 命令为 Windsurf 准备代理插件 1.0，然后显式完成客户端特定的激活步骤。",
+        "delivery": "CLI 验证并准备兼容的 Windsurf 软件包，无需声明自动激活。",
+        "activation": "按照准备后打印的确切手动激活路径进行操作。"
+      }
+    },
+    "directoryPage": {
+      "explorePlugins": "探索插件",
+      "filterByCapabilitySourceAuthenticationOrSupportedAgent": "按功能、来源、身份验证或支持的代理进行过滤。",
+      "pluginDirectory": "插件目录",
+      "findAgentPlugins10": "查找代理插件 1.0。",
+      "useThemEverywhere": "到处使用它们。",
+      "searchReviewedPackagesAndCommunityPluginsDiscoveredFromPublicGithubRepositories": "搜索从公共 GitHub 存储库中发现的已审阅的软件包和社区插件。",
+      "description": "搜索 Codex、Claude Code、Cursor、Gemini CLI、OpenCode 等已审查和社区代理插件 1.0。",
+      "title": "代理插件 1.0 目录 {'|'} 搜索 2,500+ 插件",
+      "listName": "审查了代理插件 1.0 包"
+    },
+    "detail": {
+      "backToPluginDirectory": "返回插件目录",
+      "breadcrumb": "面包屑",
+      "plugins": "插件",
+      "agentPlugins10": "代理插件 1.0",
+      "theListingAndMetadataWereReviewedAnAutomatedSecurityAssessmentWhenPresentAppliesOnlyToTheExactScannedRevisionRuntimeBehaviorIsNotAudited": "清单和元数据经过审查。自动安全评估（如果存在）仅适用于精确扫描的版本。不审核运行时行为。",
+      "installPlugin": "安装插件",
+      "viewSource": "查看源码",
+      "pluginOverview": "插件概述",
+      "components": "组件",
+      "package": "套餐",
+      "pluginNotFound": "找不到插件",
+      "reviewedListing": "审核清单",
+      "licenseNotSpecified": "未指定许可证",
+      "managedByCli": "由 CLI 管理",
+      "requiresAFinalStepInTheApp": "需要在应用程序中执行最后一步",
+      "deliveryDetailsNotSpecified": "未指定交货详细信息",
+      "descriptionLead": "安装 {clients} 的 {name} 代理插件。",
+      "title": "{name} 代理插件 {'|'} 通用代理插件",
+      "schemaName": "{name} 代理插件",
+      "directory": "插件目录",
+      "version": "版本 {version}"
+    },
+    "community": {
+      "breadcrumb": "面包屑",
+      "plugins": "插件",
+      "author": "作者",
+      "source": "来源",
+      "viewOnGithub": "在 GitHub 上查看",
+      "loadingPlugin": "正在加载插件...",
+      "checkingTheCurrentCommunityDirectory": "检查当前社区目录。",
+      "pluginNotFound": "找不到插件",
+      "thisPackageIsNoLongerAvailableInTheCurrentDirectory": "该包在当前目录中不再可用。",
+      "explorePlugins": "探索插件",
+      "notDeclared": "未申报",
+      "communityPlugin": "社区插件",
+      "communityListing": "社区列表",
+      "lastKnownAgents": "最后已知的代理人",
+      "worksWith": "与",
+      "detectedAtInstallTime": "安装时检测到",
+      "lastKnownComponents": "最后已知的组件",
+      "components": "组件",
+      "title": "{name} 代理插件 {'|'} 通用代理插件",
+      "defaultTitle": "社区代理插件 {'|'} 通用代理插件",
+      "description": "在受支持的 AI 代理之间安装社区代理插件。"
+    },
+    "agentPage": {
+      "breadcrumb": "面包屑",
+      "backToUniversalAgentPlugins": "返回通用代理插件",
+      "install": "安装",
+      "home": "首页",
+      "agentPlugins10": "代理插件 1.0",
+      "oneCommand": "一个命令",
+      "chooseAPluginAndInstallIt": "选择一个插件并安装它",
+      "nativeDelivery": "原生交付",
+      "packageDelivery": "包裹递送",
+      "activation": "激活",
+      "lifecycle": "生命周期",
+      "useTheSameCliToInspectUpdateRepairSwitchSourceOrRemoveThePlugin": "使用相同的 CLI 来检查、更新、修复、切换源或删除插件。",
+      "reviewedDirectory": "已审核目录",
+      "exploreTheFullPluginDirectory": "探索完整的插件目录",
+      "agentNotFound": "未找到代理",
+      "title": "{name} {'|'} 通用代理插件的代理插件",
+      "listName": "审查了 {name} 的代理插件 1.0 包",
+      "installFor": "安装 {name} 的代理插件",
+      "whatHappens": "{name} 会发生什么",
+      "vendorDocs": "阅读 {name} 文档",
+      "availableFor": "适用于 {name} 的插件",
+      "count": "{count} 已审核的软件包支持此客户端。 | {count} 已审核的软件包支持此客户端。",
+      "tryPlugin": "尝试 Context7，或将 {source} 替换为另一个兼容插件的经过审核的短名称或固定的 GitHub 包源。"
+    },
+    "components": {
+      "extensions": "扩展",
+      "mcp": "MCP",
+      "skills": "技能"
+    },
+    "distribution": {
+      "upstream": "上游包",
+      "community_bridge": "社区桥梁",
+      "community": "社区套餐",
+      "direct": "直接来源"
+    },
+    "errors": {
+      "unavailable": "插件目录不可用",
+      "uninitialized": "插件目录未初始化",
+      "discoveryUnavailable": "签名发现索引不可用"
+    },
+    "controls": {
+      "optionsRequired": "{component} \"{label}\" 至少需要一个选项",
+      "nonEmptyOptions": "{component}“{label}”选项必须使用非空值",
+      "unknownValue": "{component}“{label}”收到未知值",
+      "selectionRequired": "{component} “{label}” 需要至少一个选定的值"
+    }
   }
 }

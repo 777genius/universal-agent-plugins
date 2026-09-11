@@ -152,7 +152,7 @@ func runRepair(ctx context.Context, cmd *cobra.Command, app App, opts *options, 
 	}
 	confirmed := mutationConfirmed(app, opts)
 	if !confirmed && opts.format == "human" && app.Terminal {
-		confirmed, err = promptYesNo(stdin, cmd.OutOrStdout(), "Repair the managed package and its recorded verification state? [y/N]")
+		confirmed, err = promptYesNo(cmd.Context(), stdin, cmd.OutOrStdout(), cmd.ErrOrStderr(), "Repair the managed package and its recorded verification state? [y/N]")
 		if err != nil {
 			return err
 		}
@@ -176,6 +176,16 @@ func renderRepairResult(writer io.Writer, format string, installation domain.Ins
 	data := newRepairResultData(installation, result, dryRun)
 	if format == "json" {
 		return writeJSONOutput(writer, "repair", data)
+	}
+	if err := renderOpenCodeRuntimeNotice(writer, result); err != nil {
+		return err
+	}
+	if !dryRun {
+		if action := localTargetLifecycleAction(result, ""); action != "" {
+			if _, err := fmt.Fprintf(writer, "Next: %s\n", action); err != nil {
+				return err
+			}
+		}
 	}
 	if result.NoChange {
 		_, err := fmt.Fprintln(writer, "Managed package digest is valid. No repair was needed.")
@@ -210,6 +220,7 @@ type repairResultData struct {
 }
 
 func newRepairResultData(installation domain.Installation, result usecase.AddResult, dryRun bool) repairResultData {
+	result = withOpenCodeRuntimeNotice(result)
 	return repairResultData{
 		OperationID: result.Receipt.OperationID, Plugin: installation.DeclaredName,
 		Version: installation.Package.Version, Source: publicSource(installation.Source),
@@ -291,7 +302,7 @@ func runUpdate(ctx context.Context, cmd *cobra.Command, app App, opts *options, 
 	}
 	confirmed := mutationConfirmed(app, opts)
 	if !confirmed && opts.format == "human" && app.Terminal {
-		confirmed, err = promptYesNo(cmd.InOrStdin(), cmd.OutOrStdout(), "Apply this update? [y/N]")
+		confirmed, err = promptYesNo(cmd.Context(), cmd.InOrStdin(), cmd.OutOrStdout(), cmd.ErrOrStderr(), "Apply this update? [y/N]")
 		if err != nil {
 			return err
 		}
@@ -420,7 +431,7 @@ func promptBoundTargets(cmd *cobra.Command, app App, selector, scope string) (st
 		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "  %d. [x] %s\n", index+1, target)
 	}
 	_, _ = fmt.Fprint(cmd.OutOrStdout(), "Choose targets by number, comma-separated [all]: ")
-	line, readErr := readInputLine(cmd.InOrStdin())
+	line, readErr := readInputLine(cmd.Context(), cmd.InOrStdin())
 	if readErr != nil && readErr != io.EOF {
 		return "", readErr
 	}
@@ -499,7 +510,7 @@ func runRemove(ctx context.Context, cmd *cobra.Command, app App, opts *options, 
 	}
 	confirmed := mutationConfirmed(app, opts)
 	if !confirmed && opts.format == "human" && app.Terminal {
-		confirmed, err = promptYesNo(cmd.InOrStdin(), cmd.OutOrStdout(), "Remove this target? [y/N]")
+		confirmed, err = promptYesNo(cmd.Context(), cmd.InOrStdin(), cmd.OutOrStdout(), cmd.ErrOrStderr(), "Remove this target? [y/N]")
 		if err != nil {
 			return err
 		}
@@ -547,7 +558,7 @@ func runLegacyRemove(ctx context.Context, cmd *cobra.Command, app App, opts *opt
 	}
 	confirmed := mutationConfirmed(app, opts)
 	if !confirmed && opts.format == "human" && app.Terminal {
-		confirmed, err = promptYesNo(cmd.InOrStdin(), cmd.OutOrStdout(), "Remove every legacy target listed above? [y/N]")
+		confirmed, err = promptYesNo(cmd.Context(), cmd.InOrStdin(), cmd.OutOrStdout(), cmd.ErrOrStderr(), "Remove every legacy target listed above? [y/N]")
 		if err != nil {
 			return err
 		}
@@ -748,7 +759,7 @@ func selectBoundClient(
 	if _, err := fmt.Fprint(cmd.OutOrStdout(), "Choose one target: "); err != nil {
 		return domain.DetectedClient{}, detectedMap, err
 	}
-	line, readErr := readInputLine(reader)
+	line, readErr := readInputLine(cmd.Context(), reader)
 	if readErr != nil && readErr != io.EOF {
 		return domain.DetectedClient{}, detectedMap, readErr
 	}
@@ -768,12 +779,24 @@ func renderUpdateResult(writer io.Writer, format string, envelope domain.Package
 	if dryRun {
 		return renderHumanPlan(writer, envelope, result)
 	}
+	if err := renderOpenCodeRuntimeNotice(writer, result); err != nil {
+		return err
+	}
 	if result.NoChange {
+		if action := localTargetLifecycleAction(result, ""); action != "" {
+			if _, err := fmt.Fprintf(writer, "Next: %s\n", action); err != nil {
+				return err
+			}
+		}
 		_, _ = fmt.Fprintln(writer, "Already up to date. No changes made.")
 		return nil
 	}
 	if result.Mutated && fullyInstalled(result.Activation) {
-		_, _ = fmt.Fprintln(writer, "Updated and verified for the selected client.")
+		if result.Plan.ClientID == domain.ClientOpenCode && len(domain.SelectedMCPNames(result.Plan)) > 0 {
+			_, _ = fmt.Fprintln(writer, "OpenCode MCP configuration updated and verified.")
+		} else {
+			_, _ = fmt.Fprintln(writer, "Updated and verified for the selected client.")
+		}
 		return nil
 	}
 	if result.Mutated {
@@ -789,7 +812,7 @@ func renderUpdateResult(writer io.Writer, format string, envelope domain.Package
 			_, _ = fmt.Fprintln(writer, "Package updated. Activation is not complete yet.")
 		}
 	}
-	if action := nextLifecycleAction(result); action != "" && !fullyInstalled(result.Activation) {
+	if action := nextLocalLifecycleAction(result); action != "" && !fullyInstalled(result.Activation) {
 		_, _ = fmt.Fprintf(writer, "Next: %s\n", action)
 	}
 	return nil

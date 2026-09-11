@@ -110,7 +110,7 @@ func TestWindowsBootstrapStages(t *testing.T) {
 			t.Fatal("bootstrap fixture requires NTFS; native success unproven")
 		}
 		bootstrapMetadata(t, "drive", f)
-		p, err := s.rememberMustDuplicate(f)
+		p, err := s.rememberMustDuplicate(f, true)
 		bootstrapCheck(t, "drive/remember(DuplicateHandle,ReOpenFile,metadata)", err)
 		old := s.anchor
 		s.anchor = p.file
@@ -126,7 +126,7 @@ func TestWindowsBootstrapStages(t *testing.T) {
 			func() {
 				defer f.Close()
 				bootstrapMetadata(t, stage, f)
-				p, err = s.rememberMustDuplicate(f)
+				p, err = s.rememberMustDuplicate(f, true)
 				bootstrapCheck(t, stage+"/remember(DuplicateHandle,ReOpenFile,metadata)", err)
 			}()
 			old = s.anchor

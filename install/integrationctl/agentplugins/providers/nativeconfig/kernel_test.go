@@ -452,8 +452,8 @@ func TestCodecSpecificUnsupportedFieldsFailClosed(t *testing.T) {
 		t.Fatalf("Windsurf silently discarded cwd: %v", err)
 	}
 	_, err = DesiredReceipt(path, CodecCline, "local", Server{Type: "stdio", Command: "node", CWD: "/server"}, Placeholders{})
-	if err == nil || !strings.Contains(err.Error(), "does not accept cwd") {
-		t.Fatalf("Cline silently discarded cwd: %v", err)
+	if err != nil {
+		t.Fatalf("Cline native cwd rejected: %v", err)
 	}
 }
 

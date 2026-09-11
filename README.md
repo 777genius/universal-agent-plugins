@@ -1,4 +1,4 @@
-<img width="1600" height="420" alt="image" src="https://github.com/user-attachments/assets/79dd800b-b348-4e78-8257-8367fa8a959b" />
+<img width="2172" height="724" alt="Universal Agent Plugins - install and create plugins across AI agents with one command" src="assets/readme-banner.png" />
 
 [![Required](https://github.com/777genius/universal-agent-plugins/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/777genius/universal-agent-plugins/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/777genius/universal-agent-plugins?label=release)](https://github.com/777genius/universal-agent-plugins/releases)
@@ -8,20 +8,15 @@
 
 Install and manage Agent Plugins 1.0 across your AI agents with one CLI.
 
-| Journey | Start here |
-| --- | --- |
-| **Use plugins** | [Install below](#quick-start), then [manage installed plugins](#more-commands). |
-| **Build plugins — unreleased preview** | [Prepare a portable package](#build-plugins--unreleased-preview); release acceptance and public activation are pending. |
-
 ## Use plugins
 
 Install, inspect, update, repair, and remove packages with the existing installer.
 The [Use guide source](website/source/en/use/index.md) collects this journey.
+See [Build plugins](#build-plugins--unreleased-preview) below for the unreleased authoring preview.
 
-## Quick start
+### Quick start
 
-Choose your operating system below. Already have Node.js 22+? You can use `npx`
-on any supported desktop OS without permanently installing the CLI.
+Choose your operating system and run the commands below.
 
 <details>
 <summary><strong>macOS</strong></summary>
@@ -70,8 +65,7 @@ irm https://raw.githubusercontent.com/777genius/universal-agent-plugins/main/ins
 <details>
 <summary><strong>Any OS with Node.js 22+ (npx)</strong></summary>
 
-Run the command without permanently installing the CLI. `npx` downloads the
-verified Go binary and immediately runs the plugin command:
+Run on a supported desktop OS without permanently installing the CLI:
 
 ```bash
 npx universal-agent-plugins add context7
@@ -79,26 +73,52 @@ npx universal-agent-plugins add context7
 
 </details>
 
-Homebrew and the installers select the native binary for your OS and
-architecture. The scripts verify its published SHA-256 and reported version,
-then replace the CLI atomically. They install into `$HOME/.local/bin` unless
+The CLI finds compatible agents installed on your computer.
+
+1. Choose one or more agents if prompted. If only one is found, it is selected automatically.
+2. Follow any activation or sign-in instructions printed by the CLI.
+3. Start a new agent session and try the plugin.
+
+For the verified Context7 setup in ChatGPT and Kiro:
+
+```bash
+npx universal-agent-plugins add context7 --target chatgpt,kiro
+```
+
+- ChatGPT: the CLI guides you to create a Developer Mode app for
+  `https://mcp.context7.com/mcp` with **No authentication**, accepts the
+  resulting `asdk_app_...` ID, and prepares a personal marketplace package.
+  You still install that package and select Context7 in a new chat. When other
+  clients are selected too, the CLI installs them first and reports ChatGPT as
+  a separate setup step instead of cancelling the whole batch.
+- Kiro: the CLI installs its owned skills and MCP entry while preserving
+  unrelated configuration. On macOS and Windows it reports the remaining
+  Kiro OAuth/restart step instead of claiming automatic runtime verification.
+
+The same retained installation supports repeat add, update, repair, remove,
+and reinstall. ChatGPT availability still depends on an account or workspace
+where Developer Mode and custom apps are enabled.
+
+See the [real Context7 ChatGPT and Kiro E2E evidence](docs/CONTEXT7_CHATGPT_KIRO_E2E.md).
+
+<details>
+<summary>Installation details</summary>
+
+Homebrew and the installers select the native binary for your OS and architecture.
+The installer scripts verify its published SHA-256 and reported version, then
+replace the CLI atomically. They install into `$HOME/.local/bin` unless
 `AGENTPLUGINS_BIN_DIR` is set.
 
-Node.js is not a requirement of the native CLI. Individual plugins may declare
-their own runtime requirements; the CLI checks those separately before
-installation.
+The native CLI does not require Node.js. The `npx` option requires Node.js 22+
+and downloads and runs the verified Go binary. Individual plugins may have
+their own runtime requirements, which the CLI checks before installation.
 
-The CLI finds compatible agents installed on your computer and asks where to
-install the plugin. Choose one or several. The package is downloaded and
-verified once, then prepared for every agent you selected.
+The plugin package is downloaded and verified once, then prepared for each
+selected agent.
 
-1. Run the command above.
-2. Select the installed agents you want to use. If only one is found, it is
-   selected automatically; if several are found, the CLI shows a multi-select.
-3. Follow any activation or sign-in instruction printed by the CLI.
-4. Start a new agent session and use the plugin.
+</details>
 
-[Browse 2,500+ plugins](https://777genius.github.io/universal-agent-plugins/plugins/)
+[Browse plugins](https://777genius.github.io/universal-agent-plugins/plugins/)
 
 ## What the CLI does
 
@@ -135,11 +155,11 @@ The CLI has adapters for:
 | Client | Delivery |
 | --- | --- |
 | <img src="landing/public/client-icons/openai.svg" width="24" height="24" alt="" align="middle"> Codex | managed package or OpenAI compatibility package |
-| <img src="landing/public/client-icons/openai.svg" width="24" height="24" alt="" align="middle"> ChatGPT | registered app/binding where the package provides one |
+| <img src="landing/public/client-icons/openai.svg" width="24" height="24" alt="" align="middle"> ChatGPT | verified publisher app binding, or guided personal Context7 app and marketplace preparation |
 | <img src="landing/public/client-icons/cursor.svg" width="24" height="24" alt="" align="middle"> Cursor | native Agent Plugin and MCP/skills projection |
 | <img src="landing/public/client-icons/github-copilot.svg" width="24" height="24" alt="" align="middle"> GitHub Copilot CLI | native plugin and managed marketplace path |
 | <img src="landing/public/client-icons/vscode.svg" width="24" height="24" alt="" align="middle"> VS Code | prepared Copilot-compatible package |
-| <img src="landing/public/client-icons/kiro.svg" width="24" height="24" alt="" align="middle"> Kiro | native folder and Power import guidance |
+| <img src="landing/public/client-icons/kiro.svg" width="24" height="24" alt="" align="middle"> Kiro | managed skills and MCP configuration; client OAuth/restart when required |
 | <img src="landing/public/client-icons/claude.svg" width="24" height="24" alt="" align="middle"> Claude Code | client-specific skills/MCP projection |
 | <img src="landing/public/client-icons/gemini.svg" width="24" height="24" alt="" align="middle"> Gemini CLI | client-specific configuration projection |
 | <picture><source media="(prefers-color-scheme: dark)" srcset="assets/client-icons/opencode-dark.svg"><img src="landing/public/client-icons/opencode.svg" width="24" height="24" alt="" align="middle"></picture> OpenCode | client-specific configuration projection |
@@ -151,10 +171,18 @@ well-formed; it does not prove runtime, OAuth, or activation in every client.
 The CLI prints installed, prepared, activation required, and authentication
 pending as separate outcomes.
 
+See the [client compatibility evidence](https://777genius.github.io/universal-agent-plugins/docs/en/reference/client-compatibility.html)
+for tested client versions, platforms, and release-specific limitations.
+
+For Codex, declared MCP SSE is unsupported; stdio and Streamable HTTP retain
+their existing adapter support. Valid SSE components are excluded from Codex
+delivery without invalidating the package. See [transport evidence and lifecycle
+behavior](docs/CODEX_TRANSPORT_EVIDENCE.md).
+
 ## Find and verify plugins
 
 search combines the reviewed Registry Directory with a signed public Discovery
-Index containing 2,500+ conformant package paths. Discovery records are
+Index containing conformant package paths. Discovery records are
 unreviewed metadata, not endorsements. They install only through a
 publisher-qualified exact-SHA selector and are validated again before mutation.
 
@@ -187,6 +215,9 @@ agentplugins info context7
 
 # Install in specific agents
 agentplugins add context7 --target codex,cursor,kiro
+
+# Prepare Context7 for ChatGPT and Kiro
+agentplugins add context7 --target chatgpt,kiro
 
 # Manage an installed plugin
 agentplugins update context7 --target codex,cursor
@@ -221,6 +252,8 @@ the recorded source, and `remove` changes only files owned by the CLI.
 
 ## Build plugins — unreleased preview
 
+<a id="authoring-and-development"></a>
+
 The [prepared Build guide source](website/source/en/build/index.md) describes
 root `plugin.json` with optional `skills/` and `mcp.json`, followed by the offline
 init → validate → inspect → static test loop and an installer planner handoff.
@@ -235,6 +268,11 @@ Authoring validation and project doctor are distinct from installer
 runtime execution, OAuth, or client activation. Runtime/dev/bootstrap,
 client generation, export/bundle, and publication are deferred from this MVP.
 There is no implicit YAML fallback or second supported YAML engine.
+
+**Preparation — unreleased:** as checked on 2026-09-07, npm `universal-agent-plugins`
+is 0.1.53 and the stable GitHub release is `agentplugins-v0.1.53`. npm/PyPI
+`plugin-kit-ai` is 1.2.4: `plugin-kit-ai@latest` is the historical v1 tool, not
+standard-first v2.
 
 ### Historical authoring and development
 
@@ -264,15 +302,7 @@ choose by job first: [Choose What You Are Building](https://github.com/777genius
 one repo, many outputs: [What You Can Build](https://github.com/777genius/universal-agent-plugins/blob/9beca10448ac50fbe526a52101d1433a12471980/website/source/en/guide/what-you-can-build.md)
 honest caveat: [Support Boundary](https://github.com/777genius/universal-agent-plugins/blob/9beca10448ac50fbe526a52101d1433a12471980/website/source/en/reference/support-boundary.md)
 
-## Choose What You Are Building
-
-### Connect an online service
-
-### Connect a local tool
-
-### Build custom plugin logic
-
-## Historical Quick Start
+### Legacy quick start
 
 Use an exact v1 1.2.4 executable for these commands. The Homebrew and fallback
 channels below are retained as historical references, not version-pinned setup.
@@ -280,9 +310,15 @@ channels below are retained as historical references, not version-pinned setup.
 ```bash
 # Historical Homebrew channel (not version-pinned):
 brew install 777genius/homebrew-plugin-kit-ai/plugin-kit-ai
+```
+
 npm: `npm i -g plugin-kit-ai@1.2.4` or `npx plugin-kit-ai@1.2.4 ...`
+
 pipx (`public-beta`, only when that release is published to PyPI): `pipx install plugin-kit-ai==1.2.4`
+
 fallback installer: `curl -fsSL https://raw.githubusercontent.com/777genius/plugin-kit-ai/main/scripts/install.sh | sh`
+
+```bash
 plugin-kit-ai init my-plugin --template online-service
 plugin-kit-ai init my-plugin --template local-tool
 plugin-kit-ai init my-plugin --template custom-logic
@@ -291,14 +327,7 @@ plugin-kit-ai generate .
 plugin-kit-ai validate . --platform codex-runtime --strict
 ```
 
-## Works Across Multiple Outputs
-## What To Do Next
-## Keep This Rule In Mind
-## Deep Product Details
-## Go Deeper By Goal
-### Fast Local Plugin
-### Production-Ready Plugin Repo
-### Already Have Native Config
+### Support and references
 
 [examples/starters/README.md](examples/starters/README.md)
 [examples/local/README.md](examples/local/README.md)
@@ -310,7 +339,7 @@ the stable local Python and Node subset on `codex-runtime` and `claude`
 [docs/generated/support_matrix.md](docs/generated/support_matrix.md)
 [docs/SUPPORT.md](docs/SUPPORT.md)
 
-## SDK And CLI
+### SDK and CLI
 
 Go SDK packages: `github.com/777genius/plugin-kit-ai/sdk/claude`, `github.com/777genius/plugin-kit-ai/sdk/codex`, and `github.com/777genius/plugin-kit-ai/sdk/gemini`.
 
@@ -327,17 +356,19 @@ Go SDK packages: `github.com/777genius/plugin-kit-ai/sdk/claude`, `github.com/77
 
 </details>
 
+Contributor checks:
+
 ```bash
 go test ./...
 make vet
 ```
 
-- Contributing: CONTRIBUTING.md
-- Security policy: SECURITY.md
-- Support boundary: docs/SUPPORT.md
-- Native CLI installation: docs/NATIVE_INSTALL.md
-- Client E2E evidence: docs/AGENTPLUGINS_CLIENT_E2E.md
-- Registry: https://github.com/777genius/universal-agent-plugins-registry
+- Contributing: [CONTRIBUTING.md](CONTRIBUTING.md)
+- Security policy: [SECURITY.md](SECURITY.md)
+- Support boundary: [docs/SUPPORT.md](docs/SUPPORT.md)
+- Native CLI installation: [docs/NATIVE_INSTALL.md](docs/NATIVE_INSTALL.md)
+- Client E2E evidence: [docs/AGENTPLUGINS_CLIENT_E2E.md](docs/AGENTPLUGINS_CLIENT_E2E.md)
+- Registry repository: https://github.com/777genius/universal-agent-plugins-registry
 
 ## License
 

@@ -1,6 +1,11 @@
 <script setup lang="ts">
+import { productRootUrl } from '~/utils/seo';
+import { localizedPath } from '~/utils/localizedRoutes';
+import type { KnownLocale } from '~/data/i18n';
 import { mdiArrowLeft, mdiOpenInNew } from '@mdi/js';
 import { clientLandingBySlug } from '~/data/clients';
+const { t, n, locale } = useI18n();
+const localePath = useLocalePath();
 
 const route = useRoute();
 const config = useRuntimeConfig();
@@ -8,7 +13,7 @@ const { asset, pluginIcon } = useSite();
 const client = clientLandingBySlug.get(String(route.params.client));
 
 if (!client) {
-  throw createError({ statusCode: 404, statusMessage: 'Agent not found' });
+  throw createError({ statusCode: 404, statusMessage: t('registryUi.agentPage.agentNotFound') });
 }
 
 const registry = await useRegistryPage({ projection: { kind: 'client', value: client.id } });
@@ -18,49 +23,52 @@ const reviewedPlugins = registry.plugins.filter(
     plugin.trust_state !== 'conformant_unreviewed' &&
     plugin.client_support.clients.includes(client.id),
 );
-const siteUrl = String(config.public.siteUrl).replace(/\/+$/, '');
-const pageUrl = `${siteUrl}/agents/${client.slug}/`;
-const breadcrumbId = `${pageUrl}#breadcrumb`;
-const listId = `${pageUrl}#plugin-list`;
-const title = `Agent Plugins for ${client.name} | Universal Agent Plugins`;
+const siteUrl = productRootUrl(
+  String(config.public.siteUrl),
+  String(config.app.baseURL),
+).replace(/\/+$/, '');
+const localizedUrl = (path: string) => `${siteUrl}${localizedPath(path, locale.value as KnownLocale)}`;
+const pageUrl = computed(() => localizedUrl(`/agents/${client.slug}/`));
+const breadcrumbId = computed(() => `${pageUrl.value}#breadcrumb`);
+const listId = computed(() => `${pageUrl.value}#plugin-list`);
+const title = computed(() => t('registryUi.agentPage.title', { name: client.name }));
 const installCommand = `npx universal-agent-plugins add context7 --target ${client.id}`;
 
-usePageSeo(title, client.intro, {
+usePageSeo(title, () => t(`${client.presentationKey}.intro`), {
   translate: false,
   pageType: 'CollectionPage',
-  canonicalPath: `/agents/${client.slug}/`,
-  pageProperties: {
-    breadcrumb: { '@id': breadcrumbId },
-    mainEntity: { '@id': listId },
-  },
-  structuredData: [
+  pageProperties: () => ({
+    breadcrumb: { '@id': breadcrumbId.value },
+    mainEntity: { '@id': listId.value },
+  }),
+  structuredData: () => [
     {
       '@type': 'ItemList',
-      '@id': listId,
-      name: `Reviewed Agent Plugins 1.0 packages for ${client.name}`,
+      '@id': listId.value,
+      name: t('registryUi.agentPage.listName', { name: client.name }),
       numberOfItems: reviewedPlugins.length,
       itemListElement: reviewedPlugins.map((plugin, index) => ({
         '@type': 'ListItem',
         position: index + 1,
         name: plugin.display_name,
-        url: `${siteUrl}/plugins/${plugin.name}/`,
+        url: localizedUrl(`/plugins/${plugin.name}/`),
       })),
     },
     {
       '@type': 'BreadcrumbList',
-      '@id': breadcrumbId,
+      '@id': breadcrumbId.value,
       itemListElement: [
         {
           '@type': 'ListItem',
           position: 1,
           name: 'Universal Agent Plugins',
-          item: `${siteUrl}/`,
+          item: localizedUrl('/'),
         },
         {
           '@type': 'ListItem',
           position: 2,
           name: client.name,
-          item: pageUrl,
+          item: pageUrl.value,
         },
       ],
     },
@@ -73,9 +81,12 @@ usePageSeo(title, client.intro, {
     <PageBackground />
     <section class="agent-page__hero section">
       <v-container>
-        <nav class="agent-page__breadcrumbs" aria-label="Breadcrumb">
-          <NuxtLink to="/" aria-label="Back to Universal Agent Plugins">
-            <v-icon :icon="mdiArrowLeft" size="18" /> Home
+        <nav class="agent-page__breadcrumbs" :aria-label="t('registryUi.agentPage.breadcrumb')">
+          <NuxtLink
+            :to="localePath('/')"
+            :aria-label="t('registryUi.agentPage.backToUniversalAgentPlugins')"
+          >
+            <v-icon :icon="mdiArrowLeft" size="18" /> {{ t('registryUi.agentPage.home') }}
           </NuxtLink>
           <span aria-hidden="true">/</span>
           <span>{{ client.name }}</span>
@@ -85,25 +96,30 @@ usePageSeo(title, client.intro, {
           <div class="agent-page__copy">
             <div class="agent-page__identity">
               <span class="agent-page__icon">
-                <img :src="asset(`client-icons/${client.icon}`)" alt="" width="54" height="54" >
+                <img :src="asset(`client-icons/${client.icon}`)" alt="" width="54" height="54" />
               </span>
               <div>
-                <p class="eyebrow">Agent Plugins 1.0</p>
-                <h1>Install Agent Plugins for {{ client.name }}</h1>
+                <p class="eyebrow">{{ t('registryUi.agentPage.agentPlugins10') }}</p>
+                <h1>{{ t('registryUi.agentPage.installFor', { name: client.name }) }}</h1>
               </div>
             </div>
-            <p class="agent-page__intro">{{ client.intro }}</p>
-            <span class="agent-page__status">{{ client.status }}</span>
+            <p class="agent-page__intro">{{ t(`${client.presentationKey}.intro`) }}</p>
+            <span class="agent-page__status">{{ t(`${client.presentationKey}.status`) }}</span>
           </div>
 
           <aside class="agent-page__install" aria-labelledby="agent-install-title">
-            <p class="eyebrow">One command</p>
-            <h2 id="agent-install-title">Choose a plugin and install it</h2>
-            <CommandSnippet :command="installCommand" kind="add" label="Install" />
-            <p>
-              Try Context7, or replace <code>context7</code> with another compatible plugin's
-              reviewed short name or pinned GitHub package source.
-            </p>
+            <p class="eyebrow">{{ t('registryUi.agentPage.oneCommand') }}</p>
+            <h2 id="agent-install-title">
+              {{ t('registryUi.agentPage.chooseAPluginAndInstallIt') }}
+            </h2>
+            <CommandSnippet
+              :command="installCommand"
+              kind="add"
+              :label="t('registryUi.agentPage.install')"
+            />
+            <i18n-t keypath="registryUi.agentPage.tryPlugin" tag="p" scope="global"
+              ><template #source><code>context7</code></template></i18n-t
+            >
           </aside>
         </div>
       </v-container>
@@ -112,24 +128,32 @@ usePageSeo(title, client.intro, {
     <section class="agent-page__flow section" aria-labelledby="delivery-title">
       <v-container>
         <div class="section-heading">
-          <p class="eyebrow">Native delivery</p>
-          <h2 id="delivery-title">What happens for {{ client.name }}</h2>
+          <p class="eyebrow">{{ t('registryUi.agentPage.nativeDelivery') }}</p>
+          <h2 id="delivery-title">
+            {{ t('registryUi.agentPage.whatHappens', { name: client.name }) }}
+          </h2>
         </div>
         <div class="agent-page__steps">
           <article>
             <span>01</span>
-            <h3>Package delivery</h3>
-            <p>{{ client.delivery }}</p>
+            <h3>{{ t('registryUi.agentPage.packageDelivery') }}</h3>
+            <p>{{ t(`${client.presentationKey}.delivery`) }}</p>
           </article>
           <article>
             <span>02</span>
-            <h3>Activation</h3>
-            <p>{{ client.activation }}</p>
+            <h3>{{ t('registryUi.agentPage.activation') }}</h3>
+            <p>{{ t(`${client.presentationKey}.activation`) }}</p>
           </article>
           <article>
             <span>03</span>
-            <h3>Lifecycle</h3>
-            <p>Use the same CLI to inspect, update, repair, switch source, or remove the plugin.</p>
+            <h3>{{ t('registryUi.agentPage.lifecycle') }}</h3>
+            <p>
+              {{
+                t(
+                  'registryUi.agentPage.useTheSameCliToInspectUpdateRepairSwitchSourceOrRemoveThePlugin',
+                )
+              }}
+            </p>
           </article>
         </div>
         <a
@@ -139,7 +163,7 @@ usePageSeo(title, client.intro, {
           target="_blank"
           rel="noreferrer noopener"
         >
-          Read {{ client.name }} documentation
+          {{ t('registryUi.agentPage.vendorDocs', { name: client.name }) }}
           <v-icon :icon="mdiOpenInNew" size="16" />
         </a>
       </v-container>
@@ -148,17 +172,23 @@ usePageSeo(title, client.intro, {
     <section class="agent-page__plugins section" aria-labelledby="agent-plugins-title">
       <v-container>
         <div class="section-heading">
-          <p class="eyebrow">Reviewed directory</p>
-          <h2 id="agent-plugins-title">Plugins available for {{ client.name }}</h2>
+          <p class="eyebrow">{{ t('registryUi.agentPage.reviewedDirectory') }}</p>
+          <h2 id="agent-plugins-title">
+            {{ t('registryUi.agentPage.availableFor', { name: client.name }) }}
+          </h2>
           <p>
-            {{ reviewedPlugins.length }} reviewed
-            {{ reviewedPlugins.length === 1 ? 'package supports' : 'packages support' }} this
-            client.
+            {{
+              t(
+                'registryUi.agentPage.count',
+                { count: n(reviewedPlugins.length) },
+                reviewedPlugins.length,
+              )
+            }}
           </p>
         </div>
         <ul class="agent-page__plugin-grid">
           <li v-for="plugin in reviewedPlugins" :key="plugin.name">
-            <NuxtLink :to="`/plugins/${plugin.name}/`">
+            <NuxtLink :to="localePath(`/plugins/${plugin.name}/`)">
               <span class="agent-page__plugin-icon">
                 <img
                   v-if="pluginIcon(plugin)"
@@ -167,7 +197,7 @@ usePageSeo(title, client.intro, {
                   width="34"
                   height="34"
                   loading="lazy"
-                >
+                />
                 <span v-else aria-hidden="true">{{ plugin.display_name.slice(0, 1) }}</span>
               </span>
               <span>
@@ -177,8 +207,12 @@ usePageSeo(title, client.intro, {
             </NuxtLink>
           </li>
         </ul>
-        <NuxtLink class="button button--secondary agent-page__directory-link" to="/plugins/">
-          Explore the full plugin directory <span aria-hidden="true">→</span>
+        <NuxtLink
+          class="button button--secondary agent-page__directory-link"
+          :to="localePath('/plugins/')"
+        >
+          {{ t('registryUi.agentPage.exploreTheFullPluginDirectory') }}
+          <span aria-hidden="true">→</span>
         </NuxtLink>
       </v-container>
     </section>

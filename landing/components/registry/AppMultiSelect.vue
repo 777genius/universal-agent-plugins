@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { PopoverArrow, PopoverContent, PopoverPortal, PopoverRoot, PopoverTrigger } from 'reka-ui';
+const { t, n } = useI18n();
 
 type MultiSelectOption = {
   value: string;
@@ -40,16 +41,25 @@ const summary = computed(() =>
     ? (props.autoOption.summary ?? props.autoOption.label)
     : selected.value.length === 1
       ? selected.value[0]!.label
-      : `${selected.value.length} agents`,
+      : t('registryUi.multi.agents', { count: n(selected.value.length) }, selected.value.length),
 );
 
 watchEffect(() => {
   if (!props.options.length)
-    throw new Error(`AppMultiSelect "${props.label}" requires at least one option`);
+    throw new Error(
+      t('registryUi.controls.optionsRequired', { component: 'AppMultiSelect', label: props.label }),
+    );
   if (!props.modelValue.length && !props.autoSelected)
-    throw new Error(`AppMultiSelect "${props.label}" requires at least one selected value`);
+    throw new Error(
+      t('registryUi.controls.selectionRequired', {
+        component: 'AppMultiSelect',
+        label: props.label,
+      }),
+    );
   if (props.modelValue.some((value) => !props.options.some((option) => option.value === value))) {
-    throw new Error(`AppMultiSelect "${props.label}" received an unknown value`);
+    throw new Error(
+      t('registryUi.controls.unknownValue', { component: 'AppMultiSelect', label: props.label }),
+    );
   }
 });
 
@@ -87,14 +97,14 @@ function toggle(value: string) {
   <PopoverRoot>
     <PopoverTrigger
       class="app-multiselect__trigger"
-      :aria-label="`${label}: ${summary}`"
+      :aria-label="t('registryUi.multi.summary', { label, summary })"
       :data-hydrated="hydrated ? 'true' : 'false'"
     >
       <span class="app-multiselect__value">
         <span v-if="!autoSelected" class="app-multiselect__icons" aria-hidden="true">
           <span v-for="option in selected.slice(0, 3)" :key="option.value"
             ><img v-if="option.icon" :src="option.icon" alt="" width="19" height="19"
-          ></span>
+          /></span>
         </span>
         <span v-else class="app-multiselect__auto-icon" aria-hidden="true"
           ><svg viewBox="0 0 24 24" fill="none">
@@ -121,7 +131,11 @@ function toggle(value: string) {
       >
         <div class="app-multiselect__heading">
           <strong>{{ label }}</strong
-          ><span>{{ autoSelected ? 'Auto-detect' : `${selected.length} selected` }}</span>
+          ><span>{{
+            autoSelected
+              ? t('registryUi.multi.auto')
+              : t('registryUi.multi.selected', { count: n(selected.length) })
+          }}</span>
         </div>
         <button
           v-if="autoOption"
@@ -148,7 +162,7 @@ function toggle(value: string) {
           <span class="app-multiselect__check" aria-hidden="true">✓</span>
         </button>
         <div v-if="autoOption" class="app-multiselect__separator">
-          <span>Or choose specific agents</span>
+          <span>{{ t('registryUi.multi.choose') }}</span>
         </div>
         <div class="app-multiselect__options" role="group" :aria-label="label">
           <button
@@ -169,7 +183,7 @@ function toggle(value: string) {
           >
             <span class="app-multiselect__item-icon"
               ><img v-if="option.icon" :src="option.icon" alt="" width="20" height="20"
-            ></span>
+            /></span>
             <span
               ><span>{{ option.label }}</span
               ><small v-if="option.description">{{ option.description }}</small></span
@@ -179,9 +193,7 @@ function toggle(value: string) {
         </div>
         <p>
           {{
-            autoSelected
-              ? 'The CLI checks this plugin against installed agents, skips incompatible ones, and lets you confirm the targets. ChatGPT is included only when the plugin provides a verified connection.'
-              : 'Select every agent that should receive this plugin. At least one stays selected.'
+            autoSelected ? t('registryUi.multi.automaticHelp') : t('registryUi.multi.manualHelp')
           }}
         </p>
         <PopoverArrow class="app-multiselect__arrow" />

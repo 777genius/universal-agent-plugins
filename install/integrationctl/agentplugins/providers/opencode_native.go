@@ -5,9 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/pathcontract"
 	"io"
 	"os"
-	"path"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -26,6 +26,7 @@ const (
 )
 
 type openCodeProjection struct {
+	ResolvedCWD map[string]bool                `json:"resolved_cwd,omitempty"`
 	Version     int                            `json:"version"`
 	ConfigPath  string                         `json:"config_path"`
 	ConfigJSON  string                         `json:"config_json"`
@@ -46,7 +47,7 @@ func projectOpenCodeNative(root string, envelope domain.PackageEnvelope, plan do
 		return err
 	}
 	projection := openCodeProjection{Version: 1, ConfigPath: selected, ConfigJSON: jsonPath, ConfigJSONC: jsoncPath,
-		PackageRoot: plan.ActivePath, DataRoot: dataRoot, MCPServers: map[string]nativeconfig.Server{}}
+		PackageRoot: plan.ActivePath, DataRoot: dataRoot, MCPServers: map[string]nativeconfig.Server{}, ResolvedCWD: map[string]bool{}}
 	for _, component := range plan.Components {
 		if component.Kind != domain.ComponentMCPServer || component.Support == domain.SupportUnsupported {
 			continue
@@ -59,6 +60,15 @@ func projectOpenCodeNative(root string, envelope domain.PackageEnvelope, plan do
 		if err != nil {
 			return fmt.Errorf("project OpenCode MCP server %q: %w", component.Name, err)
 		}
+		if neutral.Type == "stdio" {
+			command, cwd, pathErr := resolveStdioPaths(neutral.Command, neutral.CWD, plan.ActivePath, dataRoot, root)
+			if pathErr != nil {
+				return fmt.Errorf("project OpenCode MCP server %q: %w", component.Name, pathErr)
+			}
+			neutral.Command, neutral.CWD = command, cwd
+			projection.ResolvedCWD[component.Name] = true
+		}
+
 		projection.MCPServers[component.Name] = neutral
 	}
 	body, err := json.MarshalIndent(projection, "", "  ")
@@ -144,7 +154,9 @@ func neutralOpenCodeServer(server domain.MCPServer) (nativeconfig.Server, error)
 			cwd = "${PLUGIN_ROOT}"
 		}
 		return nativeconfig.Server{Type: "stdio", Command: command, Args: args, Env: env, CWD: cwd}, nil
-	case "streamable-http", "sse":
+	case "sse":
+		return nativeconfig.Server{}, fmt.Errorf("internal consistency: declared SSE is not supported by OpenCode (remote starts with Streamable HTTP)")
+	case "streamable-http":
 		url, ok := server.Decoded["url"].(string)
 		if !ok || strings.TrimSpace(url) == "" {
 			return nativeconfig.Server{}, fmt.Errorf("remote url is required")
@@ -171,18 +183,18 @@ func openCodeOptionalString(value any) (string, error) {
 }
 
 func normalizeOpenCodeCWD(value string) (string, error) {
-	value = strings.TrimSpace(value)
-	if value == "" || path.IsAbs(value) || filepath.IsAbs(value) || strings.Contains(value, "${") {
-		return value, nil
+	parsed, err := pathcontract.ParseCWD(value)
+	if err != nil {
+		return "", err
 	}
-	clean := path.Clean(strings.ReplaceAll(value, "\\", "/"))
-	if clean == ".." || strings.HasPrefix(clean, "../") {
-		return "", fmt.Errorf("plugin-relative path escapes the package root")
+	root := "${PLUGIN_ROOT}"
+	if parsed.Anchor == pathcontract.Data {
+		root = "${PLUGIN_DATA}"
 	}
-	if clean == "." {
-		return "${PLUGIN_ROOT}", nil
+	if parsed.Relative != "" {
+		root += "/" + parsed.Relative
 	}
-	return "${PLUGIN_ROOT}/" + clean, nil
+	return root, nil
 }
 
 func openCodeStrings(value any) ([]string, error) {
@@ -253,6 +265,14 @@ func readOpenCodeProjection(root string) (openCodeProjection, error) {
 	if projection.ConfigPath != projection.ConfigJSON && projection.ConfigPath != projection.ConfigJSONC {
 		return openCodeProjection{}, fmt.Errorf("OpenCode projection selects an unexpected config path")
 	}
+	for name, resolved := range projection.ResolvedCWD {
+		server, ok := projection.MCPServers[name]
+		if !ok || !resolved || server.Type != "stdio" || !filepath.IsAbs(server.CWD) {
+			return openCodeProjection{}, fmt.Errorf("invalid resolved OpenCode cwd provenance")
+		}
+		server.CWDResolved = true
+		projection.MCPServers[name] = server
+	}
 	return projection, nil
 }
 
@@ -272,9 +292,6 @@ func buildOpenCodeNativeObjects(stagingRoot string, envelope domain.PackageEnvel
 	objects := make([]domain.NativeObjectOwnership, 0, len(projection.MCPServers)+len(envelope.Skills))
 	placeholders := nativeconfig.Placeholders{PackageRoot: projection.PackageRoot, DataRoot: projection.DataRoot}
 	for name, server := range projection.MCPServers {
-		if err := pathpolicy.ValidateLeafID(name); err != nil {
-			return nil, fmt.Errorf("invalid OpenCode MCP server name %q: %w", name, err)
-		}
 		receipt, err := nativeconfig.DesiredReceipt(projection.ConfigPath, nativeconfig.CodecOpenCode, name, server, placeholders)
 		if err != nil {
 			return nil, err

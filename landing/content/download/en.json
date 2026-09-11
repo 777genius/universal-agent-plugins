@@ -1,0 +1,50 @@
+{
+  "shell": {
+    "download": {
+      "heading": {
+        "title": "Install your first plugin",
+        "note": "Choose how to run the CLI, select one or more agents, and copy the command."
+      },
+      "channels": {
+        "brew": {
+          "title": "Homebrew",
+          "description": "Native Go CLI for macOS and Linux. Node.js is not required.",
+          "note": "Recommended for a permanent install with automatic Homebrew upgrades."
+        },
+        "npm": {
+          "title": "npx · Node.js 22+",
+          "description": "Fastest when Node.js 22+ is already installed: run the plugin command immediately.",
+          "note": "Zero-install: npx downloads the verified CLI and runs the plugin command in one step."
+        },
+        "script": {
+          "title": "Verified install script",
+          "description": "Native install without a package manager. Node.js is not required.",
+          "note": "Downloads the correct release binary and verifies its SHA-256 and version."
+        },
+        "powershell": {
+          "title": "Windows PowerShell",
+          "description": "Native Go CLI for Windows. Node.js is not required.",
+          "note": "Downloads the Windows binary and verifies its SHA-256 and version."
+        }
+      },
+      "steps": {
+        "install-cli": {
+          "title": "Run the CLI",
+          "note": "Use npx for a quick start, or install the binary for daily use."
+        },
+        "try-plugin": {
+          "title": "Install a real plugin",
+          "note": "The same command accepts one target or a comma-separated list."
+        },
+        "build-plugin": {
+          "title": "Keep it current",
+          "note": "Use update for a new release and repair when a client drifts."
+        },
+        "validate": {
+          "title": "Remove cleanly",
+          "note": "The CLI removes managed client entries while retaining package data by default."
+        }
+      }
+    }
+  }
+}

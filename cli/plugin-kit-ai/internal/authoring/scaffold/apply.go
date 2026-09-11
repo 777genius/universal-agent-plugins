@@ -49,7 +49,7 @@ func (e *CleanupError) Error() string { return e.Err.Error() }
 func (e *CleanupError) Unwrap() error { return e.Err }
 
 func Apply(ctx context.Context, p Plan, o ApplyOptions) (Result, error) {
-	return apply(ctx, p, o, applyOps{write: writeTree, rename: renameExclusive})
+	return apply(ctx, p, o, applyOps{write: writeTree, publish: renamePackage})
 }
 
 // Private operation seam for deterministic I/O failure and commit-race tests.
@@ -57,6 +57,8 @@ func Apply(ctx context.Context, p Plan, o ApplyOptions) (Result, error) {
 type applyOps struct {
 	write  func(context.Context, *os.Root, []File) error
 	rename func(*os.File, string, *os.File, string) error
+	// Package publication alone supports a checked retry; ApplySkill uses rename.
+	publish func(context.Context, *os.File, string, *os.File, string, func() error) error
 }
 
 func apply(ctx context.Context, p Plan, o ApplyOptions, ops applyOps) (result Result, err error) {
@@ -178,20 +180,29 @@ func apply(ctx context.Context, p Plan, o ApplyOptions, ops applyOps) (result Re
 	if e = ctx.Err(); e != nil {
 		return result, e
 	}
-	if e = checkParent(parentPath, parentInfo); e != nil {
-		return result, e
-	}
-	current, e = parent.Lstat(stage)
-	if e != nil || !os.SameFile(stageInfo, current) {
-		return result, fmt.Errorf("staging ownership changed: %w", errOr(e, fs.ErrInvalid))
-	}
-	payloadNow, e := owned.Lstat("payload")
-	if e != nil || !payloadNow.IsDir() || payloadNow.Mode()&os.ModeSymlink != 0 || !os.SameFile(payloadInfo, payloadNow) {
-		return result, fmt.Errorf("payload ownership changed: %w", errOr(e, fs.ErrInvalid))
-	}
-	e = verifyTree(ctx, root, files)
-	if e != nil {
-		return result, e
+	check := func() error {
+		if e := ctx.Err(); e != nil {
+			return e
+		}
+		if e := checkParent(parentPath, parentInfo); e != nil {
+			return e
+		}
+		current, e := parent.Lstat(stage)
+		if e != nil || !os.SameFile(stageInfo, current) {
+			return fmt.Errorf("staging ownership changed: %w", errOr(e, fs.ErrInvalid))
+		}
+		payloadNow, e := owned.Lstat("payload")
+		if e != nil || !payloadNow.IsDir() || payloadNow.Mode()&os.ModeSymlink != 0 || !os.SameFile(payloadInfo, payloadNow) {
+			return fmt.Errorf("payload ownership changed: %w", errOr(e, fs.ErrInvalid))
+		}
+		if e := verifyTree(ctx, root, files); e != nil {
+			return e
+		}
+		// Diagnostic only; the kernel still enforces no replacement.
+		if e := absent(parent, destination); e != nil {
+			return e
+		}
+		return ctx.Err()
 	}
 	from, e := owned.Open(".")
 	if e != nil {
@@ -201,13 +212,9 @@ func apply(ctx context.Context, p Plan, o ApplyOptions, ops applyOps) (result Re
 	if e != nil {
 		return result, errors.Join(e, from.Close())
 	}
-	// Existence check improves diagnostics only. The kernel primitive below is
-	// the authoritative no-replace operation, including for empty directories.
-	e = absent(parent, destination)
-	if e == nil {
-		e = ctx.Err()
-	}
-	if e == nil {
+	if ops.publish != nil {
+		e = ops.publish(ctx, from, "payload", to, destination, check)
+	} else if e = check(); e == nil {
 		e = ops.rename(from, "payload", to, destination)
 	}
 	if e == nil {
