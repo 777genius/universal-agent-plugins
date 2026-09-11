@@ -29,7 +29,12 @@ function tree(root) {
   walk(root); return result;
 }
 
-test("PUBLIC NATIVE: exact integrated packs, both actual bins, static parity and lifecycle", t => {
+// Unset entirely: the default automatic CI lane never provides this, same as
+// the sibling private-npm-native.test.js opt-in. Set but invalid: still a
+// hard failure, since that means an explicit coordinator invocation is broken.
+test("PUBLIC NATIVE: exact integrated packs, both actual bins, static parity and lifecycle",
+  { skip: process.env.UAP_PUBLIC_AUTHORING_NATIVE_CONFIG === undefined && "coordinator-gated: set UAP_PUBLIC_AUTHORING_NATIVE_CONFIG to run" },
+  t => {
   const config = process.env.UAP_PUBLIC_AUTHORING_NATIVE_CONFIG;
   assert.ok(config && path.isAbsolute(config), "required UAP_PUBLIC_AUTHORING_NATIVE_CONFIG: exact integrated assets remain a coordinator gate");
   const cfg = JSON.parse(c.readFile(config, 1024 * 1024));

@@ -92,15 +92,19 @@ for(const name of ['mkdtempSync','chmodSync','symlinkSync','linkSync']) {
 }
 `);
   for (const platform of ["win32", "darwin"]) {
-    const r = cp.spawnSync(process.execPath, ["--require", guard, "--test", "--test-reporter=tap"], {
+    // Cross-platform C3 bridge tests in the same file are not Linux-only and
+    // need dependencies this minimal detached fixture never copies; scope
+    // this run to just the POSIX-fixture-gated tests under inspection.
+    const r = cp.spawnSync(process.execPath,
+      ["--require", guard, "--test", "--test-reporter=tap", "--test-name-pattern=SYNTHETIC|snapshot"], {
       cwd: detached, env: { ...env, DISCOVERY_PLATFORM: platform }, encoding: "utf8", timeout: 15000
     });
     assert.equal(r.error, undefined);
     assert.equal(r.status, 0, r.stdout + r.stderr);
-    assert.match(r.stdout, /^# tests 2$/m);
+    assert.match(r.stdout, /^# tests 4$/m);
     assert.match(r.stdout, /^# pass 0$/m);
     assert.match(r.stdout, /^# fail 0$/m);
-    assert.match(r.stdout, /^# skipped 2$/m);
-    assert.equal((r.stdout.match(/# SKIP Linux POSIX fixture only/g) || []).length, 2);
+    assert.match(r.stdout, /^# skipped 4$/m);
+    assert.equal((r.stdout.match(/# SKIP Linux POSIX fixture only/g) || []).length, 4);
   }
 });

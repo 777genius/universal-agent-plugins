@@ -91,11 +91,15 @@ function prepareRelease(assetRoot, tag, commit) {
     assets: assetMetadata(assetRoot, identity.version)
   };
   fs.writeFileSync(path.join(assetRoot, "release-manifest.json"), JSON.stringify(manifest, null, 2) + "\n");
+  // Standalone historical copies of this script have no sibling notices file;
+  // only package notices when the script still lives next to its package root.
   const noticeSource = path.resolve(__dirname, "..", NOTICES);
-  regularUnaliasedFile(noticeSource, "packaged notices");
-  const noticeTarget = path.join(assetRoot, NOTICES);
-  if (fs.readdirSync(assetRoot).includes(NOTICES)) regularUnaliasedFile(noticeTarget, "release notices");
-  fs.copyFileSync(noticeSource, noticeTarget);
+  if (fs.existsSync(noticeSource)) {
+    regularUnaliasedFile(noticeSource, "packaged notices");
+    const noticeTarget = path.join(assetRoot, NOTICES);
+    if (fs.readdirSync(assetRoot).includes(NOTICES)) regularUnaliasedFile(noticeTarget, "release notices");
+    fs.copyFileSync(noticeSource, noticeTarget);
+  }
   writeChecksums(assetRoot, manifest.assets);
   return manifest;
 }
