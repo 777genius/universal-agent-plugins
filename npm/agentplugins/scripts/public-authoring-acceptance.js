@@ -605,7 +605,7 @@ const PROFILES = freeze([
   ['agent-skills/2026-09-06', '69ef37e9424c0a7ea9dd2293b559e43ec8176379', 'b9079c0c10b7930e8c6a20ff2bc10cda2a3343c55185120e3f1116a1a529b220'],
   [PLUGIN_SCHEMA, '1.0.0', '0a4aad95ce337878ad38802ebf0daa3fde76abe3f65400c86bcbb1ec0b3ab883'],
   [MCP_SCHEMA, '1.0.0', '6539175bfcdf43085855183e86da40ea94b166547a72b47ae9a0a390516d3acb'],
-  ['author-document-bounds/v1', '1', '4b8ab8fd50481ccd1a0b777dcbbfa06cf89516a5ea61ce09d56d6dd6a2c43004']
+  ['author-document-bounds/v1', '1', '93ebbf02aa70a38b18fdc720ace9e45c8f911b91d94a5c85a26b96c2d69efa46']
 ].map(([id, revision, digest]) => ({ id, revision, digest: 'sha256:' + digest })));
 const SURFACE = freeze(['capabilities', 'compat', 'doctor', 'init', 'inspect', 'skills.init', 'skills.validate', 'test', 'validate', 'version'].map(x => 'author.' + x));
 function clientFacts() {

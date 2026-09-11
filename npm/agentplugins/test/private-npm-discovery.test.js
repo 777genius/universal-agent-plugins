@@ -17,7 +17,7 @@ before(() => {
   // Minimal detached package: default discovery sees ONLY the exact helper.
   dir("test");
   for (const name of ["scripts/dual-authoring-candidate.js", "scripts/stage-dual-authoring-npm.js",
-    "scripts/stage-dual-authoring-candidate.js", "scripts/private-npm/bootstrap.js",
+    "scripts/stage-dual-authoring-candidate.js", "scripts/npm-public-contract.js", "scripts/private-npm/bootstrap.js",
     "scripts/private-npm/launcher.js", "lib/verifier.js"]) {
     dir(path.dirname(name));
     fs.copyFileSync(path.join(__dirname, "..", name), path.join(root, name));
