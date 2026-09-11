@@ -342,7 +342,7 @@ func TestPublicLiteralExamplesAndEveryLeaf(t *testing.T) {
 			var first [][]byte
 			var firstTree map[string]string
 			for _, mount := range []bool{false, true} {
-				parent := t.TempDir()
+				parent := physicalMutationRoot(t)
 				t.Chdir(parent)
 				a := publicApp(t)
 				args := append([]string{"init", lane.name, "--format=json"}, lane.flags...)
@@ -408,7 +408,7 @@ func TestPublicLiteralExamplesAndEveryLeaf(t *testing.T) {
 }
 
 func TestPublicCWDAndExplicitInputs(t *testing.T) {
-	parent := t.TempDir()
+	parent := physicalMutationRoot(t)
 	t.Chdir(parent)
 	a := publicApp(t)
 	root := filepath.Join(parent, "explicit-destination")
@@ -681,7 +681,7 @@ func TestPublicAnnotatedErrorAndRealCleanup(t *testing.T) {
 	noPolicy(t, e)
 	for _, canceled := range []bool{false, true} {
 		for _, mount := range []bool{false, true} {
-			parent := t.TempDir()
+			parent := physicalMutationRoot(t)
 			ctx, cancel := context.WithCancel(context.Background())
 			stage := ""
 			fault := faultContext{Context: ctx, check: func() {

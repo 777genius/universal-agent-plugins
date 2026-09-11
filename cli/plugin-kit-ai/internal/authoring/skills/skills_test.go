@@ -31,9 +31,21 @@ func put(t *testing.T, root, path, body string) {
 		t.Fatal(err)
 	}
 }
+
+// physicalMutationRoot resolves only a fresh owned infrastructure directory,
+// before fixture inputs (including deliberate symlinks) are constructed.
+func physicalMutationRoot(t *testing.T) string {
+	t.Helper()
+	root, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	return root
+}
+
 func setup(t *testing.T) (skills.Service, string) {
 	t.Helper()
-	root := t.TempDir()
+	root := physicalMutationRoot(t)
 	put(t, root, "plugin.json", `{"$schema":"`+domain.PluginSchemaV1+`","name":"fixture"}`)
 	return skills.Service{Projects: project.Service{Scratch: t.TempDir()}, Revision: "skills-test"}, root
 }
@@ -212,7 +224,7 @@ func TestSkillContainmentAndSourceGate(t *testing.T) {
 			selected := root
 			switch kind {
 			case "root-link":
-				selected = filepath.Join(t.TempDir(), "link")
+				selected = filepath.Join(physicalMutationRoot(t), "link")
 				if e := os.Symlink(root, selected); e != nil {
 					t.Fatal(e)
 				}
