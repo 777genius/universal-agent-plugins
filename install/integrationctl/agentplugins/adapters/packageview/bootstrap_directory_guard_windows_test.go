@@ -46,7 +46,7 @@ func TestWindowsBootstrapDirectoryGuard(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Production must proceed through NTFS inventory and protected root pins.
-	s, err := openSource(root)
+	s, err := openSource(root, GeneratedStaging{})
 	if err != nil {
 		t.Fatalf("production bootstrap: %v", err)
 	}

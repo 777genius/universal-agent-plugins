@@ -8,7 +8,7 @@ const bridge = require("../scripts/packed-installer-bridge");
 const repo = path.resolve(__dirname, "../../.."), H = n => c.digest(Buffer.from(String(n)));
 const write = (file, value) => fs.writeFileSync(file, Buffer.isBuffer(value) ? value : c.encode(value), { mode: 0o600 });
 const hash = file => c.digest(fs.readFileSync(file));
-function fixture(t) {
+function fixture(t, key = 'linux-amd64/pair-node22') {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "C3-SYNTHETIC-")); t.diagnostic(`SYNTHETIC ONLY retained: ${root}`);
   const dir = name => { const file = path.join(root, name); fs.mkdirSync(file, { mode: 0o700 }); return file; };
   const inputRoot = dir("inputs"), stageRoot = dir("stage"), journeyRoot = dir("journey"), fixtureRoot = dir("fixtures"), work = dir("admission-scratch"), toolRoot = dir("tools");
@@ -68,11 +68,20 @@ function fixture(t) {
       }
     }
   }
+  const selectedCell = a.matrix.find(row => row.key === key), windows = key.startsWith('windows-');
+  const namespace = windows ? path.win32.join('Z:\\SYNTHETIC-retained', path.basename(root)) : root;
+  const recorded = file => windows ? path.win32.join(namespace, ...path.relative(root, file).split(path.sep)) : file;
+  for (const name of ['npm_node', 'shim_node']) tools[name].version = `v${selectedCell.node}.21.1`;
+  tools.host = { platform: windows ? 'win32' : selectedCell.target.split('-')[0], arch: selectedCell.target.endsWith('amd64') ? 'x64' : 'arm64' };
+  if (key !== 'linux-amd64/pair-node22') tools.go = null;
+  if (windows) for (const [name, tool] of Object.entries(tools)) if (tool && name !== 'host')
+    tool.path = path.win32.join('Z:\\SYNTHETIC-tools', selectedCell.target, name + '.exe');
   const j = { schema: a.SCHEMA, status: "completed", identity: id, authoring_mode: ic.MODE, asset_scope: ic.SCOPE,
     candidate_sha256: stage.candidate_sha256, pair_marker_sha256: stage.pair_marker_sha256, native_inputs: stage.native_inputs,
     stage: { sha256: c.digest(stageBytes), artifact: artifact(3) }, packs, producer: { ...stage.producer, workflow: a.WORKFLOW, run_id: 4 },
-    cell: "linux-amd64/pair-node22", tools, command_contract_sha256: H("pending"),
-    subjects: Object.fromEntries(c.PRODUCTS.map(p => [p, input.products[p].assets])), projects, evidence: [],
+    cell: key, tools, command_contract_sha256: H("pending"),
+    subjects: Object.fromEntries(c.PRODUCTS.map(p => [p, input.products[p].assets])),
+    projects: Object.fromEntries(selectedCell.products.map(p => [p, recorded(projects[p])])), evidence: [],
     assertions: Object.fromEntries(["fixed_commands", "pair_parity", "projects_preserved", "npm_lifecycle", "cache_process", "production_installer", "children_reaped"].map(k => [k, true])) };
   const commands = a.commandContract(j.cell);
   j.command_contract_sha256 = c.digest(c.encode(commands));
@@ -86,7 +95,11 @@ function fixture(t) {
       cwd: row.scenario === "projects" ? projects[row.product] : path.join(fixtureRoot, `${row.product} malformed-skill ü`),
       status: row.status, signal: null, stdout: row.id === "product-help" ? "SYNTHETIC help ".repeat(10) : JSON.stringify(result), stderr: "" };
   });
-  const evidence = { "commands.json": rows, "projects.json": Object.fromEntries(c.PRODUCTS.map(p => [p, bridge.snapshot(projects[p])])),
+  const evidence = { "commands.json": rows, "projects.json": Object.fromEntries(selectedCell.products.map(p => {
+    const snapshot = bridge.snapshot(projects[p]); snapshot.root = recorded(snapshot.root);
+    if (windows) for (const entry of snapshot.entries) entry.mode = entry.kind === 'directory' ? 0o777 : 0o666;
+    snapshot.sha256 = c.digest(c.encode(snapshot.entries)); return [p, snapshot];
+  })),
     "npm-lifecycle.json": { synthetic: true }, "cache-process.json": { synthetic: true }, "installer.json": { synthetic: true } };
   const save = () => {
     j.evidence = Object.entries(evidence).map(([name, value]) => { const file = path.join(journeyRoot, name); for (const [relative, bytes] of Object.entries(a.evidenceFiles(name, value))) { const target = path.join(journeyRoot, relative); fs.mkdirSync(path.dirname(target), { recursive: true }); write(target, bytes); } return { path: name, size: fs.statSync(file).size, sha256: hash(file) }; });
@@ -104,7 +117,7 @@ function fixture(t) {
   const inputSubjects = [{ file: path.join(inputRoot, ic.INPUT_FILE), sha256: c.digest(inputBytes) }];
   for (let i = 0; i < 18; i++) { const file = path.join(inputRoot, `synthetic-subject-${i}`); write(file, Buffer.from(`SYNTHETIC ${i}`)); inputSubjects.push({ file, sha256: hash(file) }); }
   const inputResult = { root: inputRoot, input, subjects: inputSubjects };
-  return { root, j, inputBytes, stageBytes, evidence, request, admission, stageResult, inputResult, save,
+  return { root, namespace, j, inputBytes, stageBytes, evidence, request, admission, stageResult, inputResult, save,
     repin() { save(); request.journeySha256 = hash(request.journey); write(admissionPath, admission); request.admissionSha256 = hash(admissionPath); } };
 }
 function withReaders(t, f, run) {
@@ -116,7 +129,8 @@ function withReaders(t, f, run) {
 // Every value below is explicitly SYNTHETIC. No pack, native process, scanner,
 // custody or observer implementation is executed by these semantic fixtures.
 function semanticFixture(f) {
-  const j = f.j, commands = a.commandContract(j.cell), roots = a.rootsFor(f.root, j.cell);
+  const j = f.j, commands = a.commandContract(j.cell), roots = a.rootsFor(f.namespace, j.cell);
+  const hostPath = j.cell.startsWith('windows-') ? path.win32 : path.posix;
   const snapshots = f.evidence['projects.json'];
   const assessment = status => ({ status, finding_ids: [] });
   const rows = commands.map(w => {
@@ -159,7 +173,7 @@ function semanticFixture(f) {
       clients: a.clientFacts(), commands: a.SURFACE, evidence_limits: ['static_only', 'no_path_lookup', 'no_executable_version_probe', 'no_runtime_or_oauth_evidence', 'native_files_metadata_only'] };
     if (w.id === 'engine-version' || w.product === 'plugin-kit-ai' && w.id === 'product-version') Object.assign(data, { product: w.product, product_version: j.identity.versions[w.product] });
     const result = { schema_version: 1, command: productVersion ? 'version' : operation, result: w.status ? 'failure' : 'success', data: productVersion ? { version: j.identity.versions.agentplugins } : data };
-    return { product: w.product, id: w.id, argv: w.argv, cwd: w.scenario === 'projects' ? j.projects[w.product] : path.join(path.dirname(j.projects[w.product]), `${w.product} malformed-skill ü`),
+    return { product: w.product, id: w.id, argv: w.argv, cwd: w.scenario === 'projects' ? j.projects[w.product] : hostPath.join(hostPath.dirname(j.projects[w.product]), `${w.product} malformed-skill ü`),
       status: w.status, signal: null, stdout: w.id === 'product-help' ? `SYNTHETIC ${w.product} help `.repeat(10) : JSON.stringify(result), stderr: '' };
   });
   f.evidence['commands.json'] = rows;
@@ -167,7 +181,7 @@ function semanticFixture(f) {
   const empty = () => Object.fromEntries(selected.products.map(p => [p, null]));
   const asset = (p, name) => ({ path: a.expectedCachePath(j, roots, { cache: name, prefix: 'unused', product: p, kind: 'cold' }, p), ...Object.fromEntries(['sha256', 'size'].map(k => [k, j.subjects[p][selected.target].binary[k]])), mode: j.cell.startsWith('windows-') ? 0o666 : 0o755 });
   const pkg = (p, prefix) => ({ tree: H(p + 'tree'), shims: (j.cell.startsWith('windows-') ? ['posix', 'cmd', 'powershell'] : ['posix']).map(kind => ({ kind,
-    path: path.join(roots.npm, prefix, 'prefix', ...(j.cell.startsWith('windows-') ? [] : ['bin']), p + ({ posix: '', cmd: '.cmd', powershell: '.ps1' }[kind])),
+    path: hostPath.join(roots.npm, prefix, 'prefix', ...(j.cell.startsWith('windows-') ? [] : ['bin']), p + ({ posix: '', cmd: '.cmd', powershell: '.ps1' }[kind])),
     sha256: H(p + 'shim'), mode: j.cell.startsWith('windows-') ? 0o666 : 0o777, target: j.cell.startsWith('windows-') ? null : `../lib/node_modules/${ic.PACKAGES[p]}/bin/${p}.js` })) });
   let projectState = H('initial-projects'); const lastMutation = inventory.cache.filter(s => s.command !== null && /\/(init|extra-skill)$/.test(commands[s.command].id)).at(-1).id;
   let next = 0; const groups = new Map();
@@ -197,7 +211,7 @@ function semanticFixture(f) {
       stdout: { size: Buffer.byteLength(stdout), sha256: H(stdout) }, stderr: { size: 0, sha256: H('') }, status: core ? core.status : s.kind.startsWith('invalid-') ? 1 : 0, signal: null,
       before, after, observation: ref(), events: !npm ? ['shim', ...(launches ? ['native'] : [])] : [],
       acquisitions, commits, downloads: 0, native_launches: launches, postinstall: null, interval: [next, next + 10],
-      literal: s.kind === 'literal-argv' ? { root: path.join(planned.cwd, 'literal project ü'), description: a.LITERAL_DESCRIPTION, manifest_sha256: H('synthetic literal manifest') } : null };
+      literal: s.kind === 'literal-argv' ? { root: hostPath.join(planned.cwd, 'literal project ü'), description: a.LITERAL_DESCRIPTION, manifest_sha256: H('synthetic literal manifest') } : null };
     if (s.group) { if (!groups.has(s.group)) groups.set(s.group, next); row.interval = [groups.get(s.group), groups.get(s.group) + 10]; } next += 20;
     if (s.kind === 'waiter-cancel') row.events.push('cache-waiter');
     if (s.kind === 'waiter-owner') row.events.splice(1, 0, 'lock-owner');
@@ -235,8 +249,383 @@ function withFacades(t, run) {
   try { const result = run(api); if (result && typeof result.then === 'function') return result.finally(restore); restore(); return result; } catch (e) { restore(); throw e; }
 }
 
+// All eighteen semantic records are synthetic; only existing public owner APIs
+// are substituted. The actual aggregate reader/encoder/filesystem code runs.
+function aggregateFixture(t, run, phase = 'assemble') {
+  const artifacts = new Map(), modes = new Map(), journeys = [], manifest = { controllers: {}, cells: {} };
+  let first, designated;
+  for (const { key, target } of a.matrix) {
+    const f = semanticFixture(fixture(t, key)), j = f.j;
+    if (!first) first = { j, root: f.root, admission: f.admission, inputBytes: f.inputBytes, stageBytes: f.stageBytes,
+      inputResult: f.inputResult, stageResult: f.stageResult };
+    assert.deepEqual(f.inputBytes, first.inputBytes); assert.deepEqual(f.stageBytes, first.stageBytes);
+    const artifact = { run_id: 4, run_attempt: 2, artifact_id: 1000 + journeys.length, artifact_sha256: H('SYNTHETIC archive ' + key) };
+    journeys.push({ cell: key, sha256: f.request.journeySha256, artifact });
+    artifacts.set(artifact.artifact_id, { root: f.admission.journey_root, artifact });
+    modes.set(artifact.artifact_id, 'produce');
+    manifest.controllers[target] = { node: j.tools.orchestrator_node, git: { path: '/SYNTHETIC/git' }, python: { path: '/SYNTHETIC/python' } };
+    manifest.cells[key] = { ...j.tools, runner: {}, image: {}, observer: {}, installer_policy: {} };
+    if (key === 'linux-amd64/pair-node22') designated = { j, root: f.admission.journey_root, located: journeys.at(-1) };
+  }
+  const attempt = (mode, run_id) => {
+    const producer = { ...first.j.producer, run_id };
+    return { producer, status: 'completed', conclusion: 'success', jobs: a.PUBLIC_JOBS[mode].map((name, i) => ({
+      id: run_id * 100 + i, name, run_id, run_attempt: producer.run_attempt, source: producer.source,
+      ref: producer.ref, status: 'completed', conclusion: 'success' })) };
+  };
+  for (const value of artifacts.values()) value.attempt = attempt('produce', 4);
+  for (const name of a.BRIDGE_FILES) {
+    const file = path.join(designated.root, 'bridge', name); fs.mkdirSync(path.dirname(file), { recursive: true });
+    write(file, Buffer.from('SYNTHETIC bridge transport ' + name));
+  }
+  const bridgeLocator = { sha256: hash(path.join(designated.root, 'bridge/summary.json')), artifact: designated.located.artifact };
+  const inputSubjects = first.inputResult.subjects.slice(0, 7);
+  for (const product of c.PRODUCTS) for (const target of c.TARGETS) {
+    const file = path.join(first.inputResult.root, first.j.subjects[product][target].file);
+    write(file, Buffer.from((product === 'agentplugins' ? '' : 'outer') + product + target));
+    inputSubjects.push({ file, sha256: hash(file) });
+  }
+  first.inputResult.subjects = inputSubjects;
+  const request = { schema: 'authoring-public-assemble/v1', selected: first.admission.selected, workflow_sha: first.j.identity.commit,
+    input_file: first.admission.input_file, stage: first.j.stage, repo, work_parent: first.admission.work_parent,
+    output: path.join(first.root, 'SYNTHETIC-R2'), producer: attempt('assemble', 5).producer, journeys, bridge: bridgeLocator };
+  const provision = require('../scripts/public-authoring-tools'), promotion = require('../scripts/authoring-promotion'), cp = require('node:child_process');
+  t.mock.method(provision, 'requireController', () => process.execPath);
+  t.mock.method(provision, 'readProvisioning', () => manifest);
+  t.mock.method(cp, 'execFileSync', (file, args) => {
+    assert.equal(file, '/SYNTHETIC/git');
+    if (args[0] === 'rev-parse') return Buffer.from(request.workflow_sha);
+    if (args[0] === 'status') return Buffer.alloc(0);
+    assert.deepEqual(args, ['ls-files', '-z']); return Buffer.from('npm/agentplugins/scripts/public-authoring-acceptance.js\0');
+  });
+  t.mock.method(cp, 'spawnSync', (file, args) => {
+    assert.equal(file, '/SYNTHETIC/python'); assert.deepEqual(args.slice(0, 3), ['-B', path.join(repo, 'scripts/check-packed-ci.py'), '--completed-bridge']);
+    assert.equal(args[3], path.join(designated.root, 'bridge')); assert.equal(args[4], request.workflow_sha);
+    return { status: 0, signal: null, stderr: Buffer.alloc(0), stdout: c.encode({ identity: designated.j.identity,
+      public_inputs: { journey_sha256: designated.located.sha256, producer: designated.j.producer } }) };
+  });
+  t.mock.method(promotion, 'inspectPublicCaller', (selected, sha, mode) => {
+    assert.deepEqual(selected, request.selected); assert.equal(sha, request.workflow_sha); assert.equal(mode, phase);
+    return attempt(mode, mode === 'attest' ? 6 : 5).producer;
+  });
+  t.mock.method(promotion, 'inspectPublicAttempt', (artifact, selected, mode) => {
+    assert.equal(mode, modes.get(artifact.artifact_id)); assert.deepEqual(selected, request.selected);
+    assert.deepEqual(artifact, artifacts.get(artifact.artifact_id).artifact); return artifacts.get(artifact.artifact_id).attempt;
+  });
+  const seedBundle = () => {
+    const root = path.join(first.root, 'SYNTHETIC-original-R2'), files = [];
+    for (const loc of journeys) {
+      const retained = artifacts.get(loc.artifact.artifact_id).root;
+      for (const name of ['public-journey.json', 'commands.json', 'projects.json', 'npm-lifecycle.json', 'cache-process.json', 'installer.json',
+        ...fs.readdirSync(path.join(retained, 'sidecars')).map(name => 'sidecars/' + name)])
+        files.push({ name: `journeys/${loc.cell}/${name}`, original: path.join(retained, name) });
+    }
+    files.push(...a.BRIDGE_FILES.map(name => ({ name: 'bridge/' + name, original: path.join(designated.root, 'bridge', name) })));
+    const e = { schema: a.ACCEPTANCE_SCHEMA, lane: 'public-packed-pair',
+      ...Object.fromEntries(['identity', 'authoring_mode', 'asset_scope', 'candidate_sha256', 'pair_marker_sha256', 'native_inputs', 'stage', 'packs'].map(k => [k, first.j[k]])),
+      producer: request.producer, matrix: { schema: a.MATRIX_SCHEMA, cells: a.matrix.map(row => row.key) }, journeys,
+      bridge: bridgeLocator, evidence: { path: a.INDEX_FILE, size: 1, sha256: H('pending index') }, assertions: first.j.assertions };
+    const index = { schema: a.INDEX_SCHEMA, matrix: e.matrix, journeys, bridge: bridgeLocator,
+      files: files.map(({ name, original }) => ({ path: name, size: fs.statSync(original).size, sha256: hash(original) }))
+        .sort((a, b) => a.path < b.path ? -1 : 1) };
+    const indexBytes = a.encodeAcceptanceIndex(index, e);
+    e.evidence = { path: a.INDEX_FILE, size: indexBytes.length, sha256: c.digest(indexBytes) };
+    const bytes = a.encodeAcceptance(e, first.inputBytes, first.stageBytes);
+    fs.mkdirSync(root);
+    for (const { name, original } of files) {
+      const file = path.join(root, name); fs.mkdirSync(path.dirname(file), { recursive: true }); fs.copyFileSync(original, file);
+    }
+    write(path.join(root, a.INDEX_FILE), indexBytes); write(path.join(root, a.ACCEPTANCE_FILE), bytes);
+    const locators = {};
+    for (const [mode, run_id, artifact_id] of [['assemble', 5, 2000], ['attest', 6, 2001]]) {
+      const artifact = { run_id, run_attempt: 2, artifact_id, artifact_sha256: H('SYNTHETIC bundle transport ' + mode) };
+      const retained = mode === 'assemble' ? root : path.join(first.root, 'SYNTHETIC-original-R3');
+      if (mode === 'attest') {
+        fs.mkdirSync(retained); write(path.join(retained, a.ATTESTATION_LINK), locators.assemble);
+        fs.cpSync(root, path.join(retained, 'evidence'), { recursive: true });
+      }
+      artifacts.set(artifact_id, { root: retained, artifact, attempt: attempt(mode, run_id) }); modes.set(artifact_id, mode);
+      locators[mode] = { sha256: c.digest(bytes), artifact };
+    }
+    return { e, index, root, bytes, assembly: locators.assemble, acceptance: locators.attest };
+  };
+  return withFacades(t, api => {
+    api['public-authoring-custody'].readPublicInputs = () => ({ input: first.inputResult, stage: first.stageResult });
+    api['public-authoring-custody'].readPublicArtifact = ({ kind, locator }) => {
+      assert.equal(kind, { produce: 'public-journeys', assemble: 'public-assembly', attest: 'public-evidence' }[modes.get(locator.artifact.artifact_id)]);
+      return artifacts.get(locator.artifact.artifact_id);
+    };
+    return run({ request, first, artifacts, manifest, api, seedBundle });
+  });
+}
+function substitutedAssemblyLink(t, late) {
+  return aggregateFixture(t, ({ request, seedBundle, artifacts }) => {
+    const original = seedBundle(), promotion = require('../scripts/authoring-promotion'); let signatures = 0;
+    const replace = () => {
+      const value = structuredClone(original.assembly); value.artifact.run_attempt++;
+      write(path.join(artifacts.get(original.acceptance.artifact.artifact_id).root, a.ATTESTATION_LINK), value);
+    };
+    if (!late) replace();
+    t.mock.method(promotion, 'verifyPublicSubject', () => { if (++signatures === 1 && late) replace(); });
+    const r = { schema: 'authoring-public-read/v1', ...Object.fromEntries(['selected', 'workflow_sha', 'input_file', 'stage', 'repo', 'work_parent'].map(k => [k, request[k]])),
+      assembly: original.assembly, acceptance: original.acceptance };
+    assert.throws(() => a.readAcceptance(r), /R3 original R2 locator/);
+    assert.equal(signatures, late ? 2 : 0);
+  }, 'read');
+}
+
 module.exports = { fixture, withReaders };
 if (require.main === module) {
+  test('C3 unit R3 original locator substitution rejects before signatures', t => substitutedAssemblyLink(t, false));
+  test('C3 unit R3 late original locator change cannot return acceptance', t => substitutedAssemblyLink(t, true));
+  test('C3 unit attestation inputs re-admit original aggregate without signing', t => aggregateFixture(t, ({ request, first, seedBundle }) => {
+    const original = seedBundle();
+    const r = { schema: 'authoring-public-attest/v1', ...Object.fromEntries(['selected', 'workflow_sha', 'input_file', 'stage', 'repo', 'work_parent'].map(k => [k, request[k]])),
+      assembly: original.assembly, output: path.join(first.root, 'SYNTHETIC-R3-intake') };
+    const result = a.attestAcceptanceInputs(r);
+    assert.deepEqual(result.assembly, original.assembly); assert.equal(result.sha256, original.assembly.sha256);
+    assert.deepEqual(fs.readFileSync(path.join(result.root, 'evidence', a.ACCEPTANCE_FILE)), original.bytes);
+    assert.deepEqual(a.readAcceptanceClosure(path.join(result.root, 'evidence'), original.e), original.index);
+    assert.deepEqual(JSON.parse(fs.readFileSync(path.join(result.root, a.ATTESTATION_LINK))), original.assembly);
+    assert.deepEqual(fs.readdirSync(result.root).sort(), [a.ATTESTATION_LINK, 'evidence']);
+    assert.deepEqual(result.subjects.map(row => path.basename(row.file)), [a.ACCEPTANCE_FILE, a.INDEX_FILE]);
+  }, 'attest'));
+  test('C3 unit completed aggregate reader binds original R2 and both R3 subjects', t => aggregateFixture(t, ({ request, seedBundle }) => {
+    const original = seedBundle(), promotion = require('../scripts/authoring-promotion'); let signatures = 0;
+    t.mock.method(promotion, 'verifyPublicSubject', (file, expected) => {
+      signatures++; assert.equal(hash(file), expected.sha256);
+      assert.equal(expected.run_id, 6); assert.equal(expected.run_attempt, 2);
+      assert.equal(expected.source, request.workflow_sha); assert.equal(expected.workflow_sha, request.workflow_sha);
+      assert.equal(expected.ref, request.selected.ref);
+      assert.deepEqual(expected.subjects, [{ name: a.ACCEPTANCE_FILE, digest: { sha256: original.assembly.sha256 } },
+        { name: a.INDEX_FILE, digest: { sha256: original.e.evidence.sha256 } }]);
+      assert.equal(expected.name, path.basename(file));
+    });
+    const r = { schema: 'authoring-public-read/v1', ...Object.fromEntries(['selected', 'workflow_sha', 'input_file', 'stage', 'repo', 'work_parent'].map(k => [k, request[k]])),
+      assembly: original.assembly, acceptance: original.acceptance };
+    const result = a.readAcceptance(r);
+    assert.equal(signatures, 2); assert.deepEqual(result.record, original.e);
+    assert.deepEqual(result.assembly, original.assembly); assert.deepEqual(result.acceptance, original.acceptance);
+  }, 'read'));
+  test('C3 unit assembly replays eighteen cells through fixed owner interfaces', t => aggregateFixture(t, ({ request, first, api }) => {
+    const assembled = a.assembleAcceptance(request);
+    assert.equal(assembled.root, request.output);
+    const bytes = fs.readFileSync(path.join(assembled.root, a.ACCEPTANCE_FILE));
+    assert.equal(c.digest(bytes), assembled.sha256);
+    const e = a.decodeAcceptance(bytes, first.inputBytes, first.stageBytes);
+    assert.deepEqual(e.journeys, request.journeys); assert.deepEqual(e.bridge, request.bridge);
+    assert.deepEqual(e.producer, request.producer); assert.equal(a.readAcceptanceClosure(assembled.root, e).journeys.length, 18);
+    assert.deepEqual(assembled.subjects.map(row => path.basename(row.file)), [a.ACCEPTANCE_FILE, a.INDEX_FILE]);
+    const custody = api['public-authoring-custody'], originalArtifact = custody.readPublicArtifact;
+    custody.readPublicArtifact = value => {
+      const retained = originalArtifact(value);
+      return { ...retained, artifact: { ...retained.artifact, run_attempt: 99 } };
+    };
+    const denied = { ...request, output: path.join(first.root, 'SYNTHETIC-rejected-R2') };
+    assert.throws(() => a.assembleAcceptance(denied), /exact public artifact custody/);
+    assert.equal(fs.existsSync(denied.output), false);
+    const badStage = structuredClone(first.stageResult.record); badStage.packs['plugin-kit-ai'].size++;
+    custody.readPublicInputs = () => ({ input: first.inputResult, stage: { ...first.stageResult, record: badStage } });
+    let artifactEffects = 0; custody.readPublicArtifact = () => { artifactEffects++; throw Error('unexpected artifact acquisition'); };
+    assert.throws(() => a.assembleAcceptance(denied), /authenticated S/);
+    assert.equal(artifactEffects, 0); assert.equal(fs.existsSync(denied.output), false);
+  }));
+  for (const { key } of a.matrix) test(`C3 unit completed cell ${key}`, t => {
+    const f = semanticFixture(fixture(t, key)), j = f.j;
+    const manifest = { cells: { [key]: { ...j.tools, runner: {}, image: {}, observer: {}, installer_policy: {} } },
+      controllers: { [key.split('/')[0]]: { node: j.tools.orchestrator_node } } };
+    const attempt = { producer: j.producer, status: 'completed', conclusion: 'success',
+      jobs: a.PUBLIC_JOBS.produce.map((name, i) => ({ id: i + 1, name, run_id: j.producer.run_id,
+        run_attempt: j.producer.run_attempt, source: j.producer.source, ref: j.producer.ref, status: 'completed', conclusion: 'success' })) };
+    const located = { sha256: f.request.journeySha256, artifact: { run_id: j.producer.run_id,
+      run_attempt: j.producer.run_attempt, artifact_id: 500, artifact_sha256: H('SYNTHETIC transport') } };
+    let remoteOpens = 0;
+    for (const name of ['lstatSync', 'statSync', 'realpathSync', 'readFileSync', 'openSync', 'readdirSync']) {
+      const original = fs[name];
+      t.mock.method(fs, name, function(file, ...args) {
+        if (typeof file === 'string' && (file.startsWith('Z:\\') || Object.values(j.projects).some(root => file === root || file.startsWith(root + path.sep)))) {
+          remoteOpens++; throw Error('original producer project/tool namespace opened');
+        }
+        return original.call(this, file, ...args);
+      });
+    }
+    withFacades(t, () => assert.deepEqual(a.retainedJourney(f.admission.journey_root, located, f.inputBytes,
+      f.stageBytes, manifest, attempt, f.admission.selected).record, j));
+    assert.equal(remoteOpens, 0);
+  });
+  test('C3 unit completed J replays retained bytes without opening original roots', t => {
+    const f = semanticFixture(fixture(t)), j = f.j;
+    const retained = path.join(f.root, 'retained-copy');
+    fs.cpSync(f.admission.journey_root, retained, { recursive: true });
+    const row = { ...j.tools, runner: {}, image: {}, observer: {}, installer_policy: {} };
+    const manifest = { cells: { [j.cell]: row }, controllers: { 'linux-amd64': { node: j.tools.orchestrator_node } } };
+    const located = { sha256: f.request.journeySha256, artifact: { run_id: j.producer.run_id,
+      run_attempt: j.producer.run_attempt, artifact_id: 500, artifact_sha256: H('SYNTHETIC retained transport') } };
+    const attempt = { producer: j.producer, status: 'completed', conclusion: 'success',
+      jobs: a.PUBLIC_JOBS.produce.map((name, i) => ({ id: i + 1, name, run_id: j.producer.run_id,
+        run_attempt: j.producer.run_attempt, source: j.producer.source, ref: j.producer.ref, status: 'completed', conclusion: 'success' })) };
+    const check = () => a.retainedJourney(retained, located, f.inputBytes, f.stageBytes, manifest, attempt, f.admission.selected);
+    let forbidden = 0;
+    for (const name of ['lstatSync', 'statSync', 'realpathSync', 'readFileSync', 'openSync', 'readdirSync']) {
+      const original = fs[name];
+      t.mock.method(fs, name, function(file, ...args) {
+        if (typeof file === 'string' && file.startsWith(f.root + path.sep) && file !== retained && !file.startsWith(retained + path.sep)) {
+          forbidden++; throw Error('original remote namespace opened');
+        }
+        return original.call(this, file, ...args);
+      });
+    }
+    withFacades(t, api => {
+      assert.deepEqual(check().record, j);
+      const original = attempt.jobs[0].run_attempt;
+      attempt.jobs[0].run_attempt++;
+      assert.throws(check, /public job run_attempt/); attempt.jobs[0].run_attempt = original;
+      const verify = api['public-process-observation'].verifyPublicObservation;
+      api['public-process-observation'].verifyPublicObservation = () => true;
+      assert.throws(check, /never boolean success/);
+      api['public-process-observation'].verifyPublicObservation = verify;
+      fs.appendFileSync(path.join(retained, 'sidecars/synthetic-observation.json'), 'changed');
+      assert.throws(check, /pin|size/);
+    });
+    assert.equal(forbidden, 0);
+  });
+  test('C3 unit E syntax binds all cells and distinct assembly attempt', t => {
+    const f = fixture(t), j = f.j;
+    const journeys = a.matrix.map((row, i) => ({ cell: row.key, sha256: H(`J-${i}`),
+      artifact: { run_id: 4, run_attempt: 2, artifact_id: 200 + i, artifact_sha256: H(`archive-${i}`) } }));
+    const e = { schema: a.ACCEPTANCE_SCHEMA, lane: 'public-packed-pair',
+      ...Object.fromEntries(['identity', 'authoring_mode', 'asset_scope', 'candidate_sha256', 'pair_marker_sha256', 'native_inputs', 'stage', 'packs'].map(k => [k, j[k]])),
+      producer: { ...j.producer, run_id: 5 }, matrix: { schema: a.MATRIX_SCHEMA, cells: a.matrix.map(row => row.key) }, journeys,
+      bridge: { sha256: H('bridge'), artifact: journeys[1].artifact },
+      evidence: { path: a.INDEX_FILE, size: 100, sha256: H('index') }, assertions: j.assertions };
+    const encoded = a.encodeAcceptance(e, f.inputBytes, f.stageBytes);
+    assert.deepEqual(a.decodeAcceptance(encoded, f.inputBytes, f.stageBytes), e);
+    const reversed = Object.fromEntries(Object.entries(e).reverse());
+    assert.deepEqual(a.encodeAcceptance(reversed, f.inputBytes, f.stageBytes), encoded);
+    assert.throws(() => a.decodeAcceptance(c.encode(reversed), f.inputBytes, f.stageBytes), /fixed E field order/);
+    const cases = [
+      ['missing cell', x => x.journeys.pop()],
+      ['duplicate cell', x => { x.journeys[2] = x.journeys[1]; }],
+      ['wrong R1 attempt', x => { x.journeys[17].artifact.run_attempt++; }],
+      ['wrong R1 run', x => { x.journeys[17].artifact.run_id++; }],
+      ['R2 self-completion cycle', x => { x.producer.run_id = 4; }],
+      ['R2 input cycle', x => { x.producer.run_id = 2; }],
+      ['wrong workflow', x => { x.producer.workflow = '.github/workflows/agentplugins-release.yml'; }],
+      ['wrong F', x => { x.producer.source = 'b'.repeat(40); }],
+      ['wrong ref', x => { x.producer.ref = 'refs/heads/master'; }],
+      ['wrong stage attempt', x => { x.stage.artifact.run_attempt++; }],
+      ['wrong bridge cell', x => { x.bridge.artifact = x.journeys[2].artifact; }],
+      ['bridge substituted J', x => { x.bridge.sha256 = x.journeys[1].sha256; }],
+      ['duplicate J digest', x => { x.journeys[2].sha256 = x.journeys[1].sha256; }],
+      ['duplicate archive digest', x => { x.journeys[2].artifact.artifact_sha256 = x.journeys[1].artifact.artifact_sha256; }],
+      ['duplicate artifact ID', x => { x.journeys[2].artifact.artifact_id = x.journeys[1].artifact.artifact_id; }],
+      ['wrong second pack SRI', x => { x.packs['plugin-kit-ai'].integrity = 'sha512-' + 'A'.repeat(88); }],
+      ['wrong I digest', x => { x.native_inputs.sha256 = H('other I'); }],
+      ['wrong matrix', x => x.matrix.cells.reverse()],
+      ['unknown assertion', x => { x.assertions.fixture_accepted = true; }],
+      ['false assertion', x => { x.assertions.children_reaped = false; }],
+      ['self locator', x => { x.artifact = x.bridge.artifact; }],
+      ['wrong index filename', x => { x.evidence.path = a.ACCEPTANCE_FILE; }],
+      ['oversized index', x => { x.evidence.size = a.LIMIT + 1; }]
+    ];
+    for (const [name, mutate] of cases) {
+      const bad = structuredClone(e); mutate(bad);
+      assert.throws(() => a.encodeAcceptance(bad, f.inputBytes, f.stageBytes), name); t.diagnostic(name);
+    }
+    for (const body of [Buffer.concat([encoded, Buffer.from(' ')]), Buffer.from('{"schema":1,"schema":2}\n'), Buffer.alloc(a.LIMIT + 1),
+      Buffer.from('['.repeat(17) + ']'.repeat(17)), encoded.subarray(0, -5)]) assert.throws(() => a.decodeAcceptance(body, f.inputBytes, f.stageBytes));
+    // A canonical E fixture remains unable to cross completed custody admission.
+    assert.throws(() => a.readAcceptance(e), /PUBLIC_PROVISIONING_REQUIRED/);
+    const selected = f.admission.selected;
+    const attempt = (mode, run_id) => {
+      const producer = { ...j.producer, run_id };
+      return { producer, status: 'completed', conclusion: 'success', jobs: a.PUBLIC_JOBS[mode].map((name, i) => ({
+        id: run_id * 100 + i, name, run_id, run_attempt: producer.run_attempt, source: producer.source,
+        ref: producer.ref, status: 'completed', conclusion: 'success' })) };
+    };
+    const attempts = { produce: attempt('produce', 4), assemble: attempt('assemble', 5), attest: attempt('attest', 6) };
+    const assembly = { sha256: c.digest(encoded), artifact: { run_id: 5, run_attempt: 2, artifact_id: 300, artifact_sha256: H('R2') } };
+    const signed = { sha256: c.digest(encoded), artifact: { run_id: 6, run_attempt: 2, artifact_id: 301, artifact_sha256: H('R3') } };
+    assert.deepEqual(a.acceptanceGraph(e, attempts, selected, assembly, signed),
+      Object.fromEntries(Object.entries(attempts).map(([k, v]) => [k, v.producer])));
+    for (const [name, mutate] of [
+      ['R1 incomplete', x => { x.produce.status = 'in_progress'; }],
+      ['R2 wrong attempt', x => { x.assemble.producer.run_attempt++; }],
+      ['R3 wrong attempt', x => { x.attest.producer.run_attempt++; }],
+      ['missing bridge cell', x => { x.produce.jobs.splice(2, 1); }],
+      ['duplicate job', x => { x.produce.jobs[3] = x.produce.jobs[2]; }],
+      ['skipped cell', x => { x.produce.jobs[3].conclusion = 'skipped'; }],
+      ['wrong job F', x => { x.attest.jobs[1].source = 'b'.repeat(40); }],
+      ['R3 self-completion', x => { x.attest.producer.run_id = 5; }]
+    ]) {
+      const bad = structuredClone(attempts); mutate(bad);
+      assert.throws(() => a.acceptanceGraph(e, bad, selected, assembly, signed), name);
+    }
+    assert.throws(() => a.acceptanceGraph(e, attempts, selected, assembly, { ...signed, sha256: H('changed E') }), /unchanged R2 E/);
+    const index = { schema: a.INDEX_SCHEMA, matrix: e.matrix, journeys: e.journeys, bridge: e.bridge,
+      files: e.journeys.flatMap(j => ['public-journey.json', 'commands.json', 'projects.json', 'npm-lifecycle.json', 'cache-process.json', 'installer.json'].map(name => ({
+        path: `journeys/${j.cell}/${name}`, size: 1, sha256: name === 'public-journey.json' ? j.sha256 : H(j.cell + name) }))) };
+    index.files.push(...a.BRIDGE_FILES.map(name => ({ path: 'bridge/' + name, size: 1,
+      sha256: name === 'summary.json' ? e.bridge.sha256 : H('bridge/' + name) })));
+    index.files.sort((a, b) => a.path < b.path ? -1 : 1);
+    const indexBytes = a.encodeAcceptanceIndex(index, e);
+    assert.deepEqual(a.decodeAcceptanceIndex(indexBytes, e), index);
+    for (const [name, mutate] of [
+      ['missing cell record', x => x.files.pop()],
+      ['missing bridge', x => x.files.shift()],
+      ['duplicate member', x => x.files.push(x.files[0])],
+      ['closure traversal', x => { x.files[0].path = 'bridge/../summary.json'; }],
+      ['index self cycle', x => { x.files[0].path = a.INDEX_FILE; }],
+      ['unknown cell', x => { x.files[1].path = 'journeys/linux-other/kit-node18/public-journey.json'; }],
+      ['wrong J digest', x => { x.files.find(r => r.path.endsWith('/public-journey.json')).sha256 = H('other J'); }],
+      ['wrong bridge digest', x => { x.files.find(r => r.path === 'bridge/summary.json').sha256 = H('other bridge'); }],
+      ['aggregate overflow', x => { x.files.forEach(r => { r.size = 16 * a.LIMIT; }); }]
+    ]) {
+      const bad = structuredClone(index); mutate(bad); assert.throws(() => a.encodeAcceptanceIndex(bad, e), name);
+    }
+    // Exercise the actual retained filesystem reader, including empty directory
+    // additions. These bytes are only transport fixtures, never completed E.
+    const closure = path.join(f.root, 'SYNTHETIC-closure'); fs.mkdirSync(closure);
+    for (const row of index.files) {
+      const i = e.journeys.findIndex(j => row.path === `journeys/${j.cell}/public-journey.json`);
+      const bytes = Buffer.from(i >= 0 ? `J-${i}` : row.path === 'bridge/summary.json' ? 'bridge' : row.path);
+      row.size = bytes.length; row.sha256 = c.digest(bytes);
+      const file = path.join(closure, row.path); fs.mkdirSync(path.dirname(file), { recursive: true }); write(file, bytes);
+    }
+    const retainedIndex = a.encodeAcceptanceIndex(index, e);
+    e.evidence = { path: a.INDEX_FILE, size: retainedIndex.length, sha256: c.digest(retainedIndex) };
+    write(path.join(closure, a.INDEX_FILE), retainedIndex);
+    write(path.join(closure, a.ACCEPTANCE_FILE), a.encodeAcceptance(e, f.inputBytes, f.stageBytes));
+    assert.deepEqual(a.readAcceptanceClosure(closure, e), index);
+    fs.mkdirSync(path.join(closure, 'extra-empty'));
+    assert.throws(() => a.readAcceptanceClosure(closure, e), /unindexed retained directory/);
+    fs.renameSync(path.join(closure, 'extra-empty'), path.join(f.root, 'retained-extra-empty'));
+    const member = path.join(closure, index.files[0].path), displaced = path.join(f.root, 'retained-missing-member');
+    fs.renameSync(member, displaced);
+    assert.throws(() => a.readAcceptanceClosure(closure, e), /exhaustive retained closure/);
+    fs.renameSync(displaced, member);
+    assert.deepEqual(a.readAcceptanceClosure(closure, e), index);
+    fs.appendFileSync(member, 'changed');
+    assert.throws(() => a.readAcceptanceClosure(closure, e), /closure digest/);
+  });
+  test('C3 unit historical tools use remote namespace without local filesystem access', t => {
+    const f = fixture(t), j = structuredClone(f.j); j.cell = 'windows-arm64/pair-node24';
+    j.tools.host = { platform: 'win32', arch: 'arm64' }; j.tools.go = null;
+    for (const key of ['orchestrator_node', 'npm_node', 'shim_node', 'npm']) {
+      j.tools[key].path = `Z:\\retained remote ü\\${key}.exe`;
+      if (key.endsWith('_node')) j.tools[key].version = key === 'orchestrator_node' ? 'v22.21.1' : 'v24.1.0';
+    }
+    const row = { ...structuredClone(j.tools), runner: {}, image: {}, observer: {}, installer_policy: {} };
+    const manifest = { cells: { [j.cell]: row }, controllers: { 'windows-arm64': { node: j.tools.orchestrator_node } } };
+    t.mock.method(fs, 'lstatSync', () => { throw new Error('remote path opened'); });
+    t.mock.method(fs, 'readFileSync', () => { throw new Error('remote path opened'); });
+    assert.deepEqual(a.historicalTools(j, manifest), j.tools);
+    for (const key of ['npm_node', 'shim_node', 'npm']) {
+      const bad = structuredClone(manifest); bad.cells[j.cell][key].sha256 = H('substituted');
+      assert.throws(() => a.historicalTools(j, bad), /historical source-frozen/);
+    }
+    row.observer = null; assert.throws(() => a.historicalTools(j, manifest), /PUBLIC_PROVISIONING_REQUIRED/);
+  });
   test("C3 unit closed schemas and immutable pair bindings", t => {
     const f = fixture(t), encoded = a.encodeJourney(f.j, f.inputBytes, f.stageBytes);
     assert.deepEqual(a.decodeJourney(encoded, f.inputBytes, f.stageBytes), f.j);
@@ -383,10 +772,14 @@ if (require.main === module) {
     });
   });
   test("C3 unit same invocation bridge cannot authenticate remote E", t => {
-    const f = fixture(t); assert.throws(() => a.readAcceptance(f.request), /completed remote E reader is closed/);
+    const f = fixture(t); assert.throws(() => a.readAcceptance(f.request), /PUBLIC_PROVISIONING_REQUIRED/);
     assert.throws(() => a.request({ ...f.request, expectedCommit: f.request.expectedCommit + "\n" }));
     for (const extra of [{ authenticated: true }, { completed: true }, { allowPublic: true }]) assert.throws(() => a.request({ ...f.request, ...extra }));
-    assert.throws(() => a.main(["--assemble", f.request.journey]), /only --read-local-inputs/);
+    const before = fs.readdirSync(f.root); let effects = 0;
+    t.mock.method(require('node:child_process'), 'spawnSync', () => { effects++; throw Error('unexpected effect'); });
+    for (const mode of ['--assemble', '--attest-inputs', '--read'])
+      assert.throws(() => a.main([mode, f.request.journey]), /PUBLIC_PROVISIONING_REQUIRED/);
+    assert.equal(effects, 0); assert.deepEqual(fs.readdirSync(f.root), before);
   });
   test("C3 unit legacy fixtures cannot qualify authentic acceptance", t => {
     const f = fixture(t);

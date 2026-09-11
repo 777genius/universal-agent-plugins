@@ -557,7 +557,8 @@ class C3bProvisionControls(unittest.TestCase):
         (root / '.github').mkdir(); (root / 'scripts').mkdir()
         source = root / 'scripts/check-packed-ci.py'; source.write_text('SYNTHETIC SOURCE\n')
         (root / 'scripts/run-packed-ci.py').write_text('SYNTHETIC RUNNER\n')
-        for folder in ('npm/agentplugins/scripts', 'npm/agentplugins/lib', 'npm/plugin-kit-ai/lib'):
+        for folder in ('npm/agentplugins/scripts', 'npm/agentplugins/lib', 'npm/plugin-kit-ai/lib',
+                       'cli/plugin-kit-ai/internal/authoring/scaffold/templates'):
             (root / folder).mkdir(parents=True); (root / folder / 'source.js').write_text('SYNTHETIC SOURCE\n')
         value = p.read_provisioning(); file = root / '.github/authoring-public-tools.json'
         tool = root / 'node'; tool.write_text('SYNTHETIC TOOL\n')
@@ -628,6 +629,7 @@ class C3bProvisionControls(unittest.TestCase):
             child.reset_mock()
             with self.assertRaisesRegex(ValueError, 'comparison mismatch'): p.authenticated_verify('/receipt/node', [])
             child.assert_not_called()
+
             def changed(*args, **kwargs):
                 tool.write_text('LATE CHANGE\n'); return SimpleNamespace(returncode=0, stderr=b'', stdout=b'{}')
             child.side_effect = changed
@@ -646,6 +648,16 @@ class C3bProvisionControls(unittest.TestCase):
             with patch.object(p, 'require_authenticated_controller', side_effect=before_launch):
                 with self.assertRaisesRegex(ValueError, 'trusted source/controller changed'): p.authenticated_verify(str(tool), [])
             child.assert_not_called()
+
+    def test_generated_validator_templates_are_in_source_seal(self):
+        root, source, file, tool, value = self.fixture()
+        template = root / 'cli/plugin-kit-ai/internal/authoring/scaffold/templates/package.json'
+        template.write_text('SYNTHETIC TEMPLATE\n')
+        with patch.object(p, '__file__', str(source)):
+            before = p.authenticated_source()
+            self.assertEqual(before[str(template)], p.digest(template))
+            template.write_text('CHANGED TEMPLATE\n')
+            self.assertNotEqual(p.authenticated_source(), before)
 
     def test_supplementary_unicode_path_code_point_boundary(self):
         root, source, file, tool, value = self.fixture()
@@ -693,6 +705,30 @@ class C3bProvisionControls(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, 'C3b execution incomplete'): call()
             child.assert_not_called(); write.assert_not_called(); planner.assert_not_called()
             self.assertFalse(output.exists())
+
+
+class PublicWorkflowControls(unittest.TestCase):
+    def test_fixed_dispatch_and_controller_precede_effects(self):
+        import subprocess
+        selected = dict(tag='agentplugins-v0.1.99', ref='refs/tags/agentplugins-v0.1.99', source='a' * 40, versions={})
+        env = dict(PUBLIC_SELECTED=json.dumps(selected), GITHUB_REPOSITORY='777genius/universal-agent-plugins',
+                   GITHUB_EVENT_NAME='workflow_dispatch', GITHUB_SHA=selected['source'], GITHUB_WORKFLOW_SHA=selected['source'],
+                   GITHUB_REF=selected['ref'])
+        with patch.dict(os.environ, env, clear=True), patch.object(subprocess, 'run') as child, \
+                patch.object(p, 'require_public_controller', side_effect=ValueError('PUBLIC_PROVISIONING_REQUIRED')) as controller:
+            for mode in ('inputs', 'assemble', 'attest', 'read'):
+                with self.assertRaisesRegex(ValueError, 'PUBLIC_PROVISIONING_REQUIRED'): p.public_workflow(mode)
+            for cell in p.PROVISION_CELLS:
+                with self.assertRaisesRegex(ValueError, 'PUBLIC_PROVISIONING_REQUIRED'): p.public_workflow('produce', cell)
+                self.assertEqual(controller.call_args.args, (cell.split('/')[0],))
+            count = controller.call_count
+            for key, value in [('GITHUB_REPOSITORY', 'other/repo'), ('GITHUB_EVENT_NAME', 'push'),
+                               ('GITHUB_WORKFLOW_SHA', 'b' * 40), ('GITHUB_REF', 'refs/heads/main')]:
+                with patch.dict(os.environ, {key: value}), self.assertRaises(ValueError): p.public_workflow('attest')
+            for mode, cell in [('publish', None), ('produce', 'linux-other/pair-node22'), ('attest', p.PROVISION_CELLS[0])]:
+                with self.assertRaises(ValueError): p.public_workflow(mode, cell)
+            self.assertEqual(controller.call_count, count)
+            child.assert_not_called()
 
 
 if __name__ == '__main__': unittest.main()

@@ -766,17 +766,22 @@ function normalizeResult(v) {
 function evidenceFiles(name, value) {
   const files = {};
   if (['npm-lifecycle.json', 'cache-process.json', 'installer.json'].includes(name) && Array.isArray(value.rows)) {
-    const refs = []; let shard = [], size = 3;
+    const refs = []; let shard = [], size = 4;
     const flush = () => {
       if (!shard.length) return;
       const file = `sidecars/${name.slice(0, -5)}-rows-${refs.length}.json`, bytes = c.encode(shard);
       assert.ok(bytes.length <= TRANSCRIPT_LIMIT, '16MiB transcript shard'); files[file] = bytes;
-      refs.push({ path: file, size: bytes.length, sha256: c.digest(bytes) }); shard = []; size = 3;
+      refs.push({ path: file, size: bytes.length, sha256: c.digest(bytes) }); shard = []; size = 4;
     };
     for (const row of value.rows) {
       const bytes = c.encode(row); assert.ok(bytes.length <= LIMIT, '1MiB process record');
-      if (size + bytes.length + 1 > TRANSCRIPT_LIMIT) flush();
-      shard.push(row); size += bytes.length + 1;
+      // c.encode indents every line two more spaces inside an array. Count
+      // actual encoded bytes, including commas; path length must not make a
+      // nominally bounded shard exceed its byte limit at flush time.
+      let lines = 0; for (const byte of bytes) if (byte === 10) lines++;
+      const nested = bytes.length + 2 * lines;
+      if (size + nested + (shard.length ? 1 : 0) > TRANSCRIPT_LIMIT) flush();
+      size += nested + (shard.length ? 1 : 0); shard.push(row);
     }
     flush(); value = { ...value, rows: { shards: refs } };
   }
@@ -1184,9 +1189,538 @@ function readJourney(value) {
   const local = readJourneyInputs(value); verifyJourney(local); verifySidecars(local.evidence, path.dirname(value.journey));
   provision.requireCellTools(selected.key); agree(sourceSeal(admission.repo, r.expectedCommit, frozen), before, 'late source closure'); return local;
 }
-function readAcceptance() { throw new Error("C3b required: completed remote E reader is closed; local J and fixture success are not E"); }
+// E syntax is deliberately separate from completed-attempt admission. Encoding
+// these records cannot establish custody, recompute assertions, or qualify E.
+const ACCEPTANCE_SCHEMA = 'authoring-public-packed/v1';
+const ACCEPTANCE_FILE = 'public-packed-completion.json';
+const INDEX_FILE = 'public-packed-evidence.json';
+const ATTESTATION_LINK = 'assembly-locator.json';
+const E_FIELDS = ['schema', 'lane', 'identity', 'authoring_mode', 'asset_scope', 'candidate_sha256', 'pair_marker_sha256',
+  'native_inputs', 'stage', 'packs', 'producer', 'matrix', 'journeys', 'bridge', 'evidence', 'assertions'];
+const BRIDGE_CELL = 'linux-amd64/pair-node22';
+function orderedLocator(value) {
+  locator(value);
+  return { sha256: value.sha256, artifact: Object.fromEntries(
+    ['run_id', 'run_attempt', 'artifact_id', 'artifact_sha256'].map(k => [k, value.artifact[k]])) };
+}
+function acceptance(value, inputBytes, stageBytes) {
+  const input = contract.decodeInputs(inputBytes), stage = require('./stage-authoring-npm').decodeStage(stageBytes, inputBytes);
+  fields(value, E_FIELDS, 'C3 E'); fixed(value.schema, ACCEPTANCE_SCHEMA, 'E schema');
+  fixed(value.lane, 'public-packed-pair', 'single public Q lane');
+  const inherited = ['identity', 'authoring_mode', 'asset_scope', 'candidate_sha256', 'pair_marker_sha256', 'native_inputs', 'packs'];
+  for (const k of inherited) agree(value[k], stage[k], `E original S ${k}`);
+  const retainedStage = orderedLocator(value.stage);
+  agree(retainedStage.sha256, c.digest(stageBytes), 'E exact original S bytes');
+  agree([retainedStage.artifact.run_id, retainedStage.artifact.run_attempt],
+    [stage.producer.run_id, stage.producer.run_attempt], 'E original S attempt');
+  producer(value.producer, input);
+  const upstreamRuns = [input.preparation.artifact.run_id, input.producer.run_id, stage.producer.run_id];
+  assert.ok(!upstreamRuns.includes(value.producer.run_id), 'R2 separate from frozen input invocations');
+  agree(value.matrix, { schema: MATRIX_SCHEMA, cells: matrix.map(row => row.key) }, 'E exact eighteen-cell matrix');
+  list(value.journeys, matrix.length, 'E eighteen ordered journeys');
+  const ids = new Set([input.preparation.artifact.artifact_id, stage.native_inputs.artifact.artifact_id, retainedStage.artifact.artifact_id]);
+  assert.equal(ids.size, 3, 'distinct upstream artifact identities');
+  const digests = new Set(), archives = new Set(); let attempt;
+  const journeys = value.journeys.map((row, i) => {
+    fields(row, ['cell', 'sha256', 'artifact'], 'E journey locator'); fixed(row.cell, matrix[i].key, 'E ordered cell');
+    const located = orderedLocator({ sha256: row.sha256, artifact: row.artifact });
+    const current = [row.artifact.run_id, row.artifact.run_attempt];
+    if (attempt === undefined) attempt = current;
+    agree(current, attempt, 'all eighteen J from the same exact R1 attempt');
+    assert.ok(!upstreamRuns.includes(current[0]) && current[0] !== value.producer.run_id, 'R1 and R2 are independent invocations');
+    assert.ok(!ids.has(row.artifact.artifact_id), 'unique cell artifact ID'); ids.add(row.artifact.artifact_id);
+    assert.ok(!digests.has(row.sha256), 'unique cell J digest'); digests.add(row.sha256);
+    assert.ok(!archives.has(row.artifact.artifact_sha256), 'unique cell archive digest'); archives.add(row.artifact.artifact_sha256);
+    return { cell: row.cell, ...located };
+  });
+  const bridge = orderedLocator(value.bridge), designated = journeys.find(row => row.cell === BRIDGE_CELL);
+  agree(bridge.artifact, designated.artifact, 'bridge retained in designated same-cell R1 artifact');
+  assert.ok(!digests.has(bridge.sha256), 'bridge record is separate from J');
+  fields(value.evidence, ['path', 'size', 'sha256'], 'E index pin'); fixed(value.evidence.path, INDEX_FILE, 'E index filename');
+  positive(value.evidence.size, LIMIT, 'index byte bound'); hash(value.evidence.sha256, 'index');
+  fields(value.assertions, ASSERTIONS, 'E assertion syntax');
+  for (const k of ASSERTIONS) fixed(value.assertions[k], true, 'E assertion syntax only');
+  const normalized = { schema: ACCEPTANCE_SCHEMA, lane: 'public-packed-pair',
+    ...Object.fromEntries(inherited.map(k => [k, stage[k]])), stage: retainedStage,
+    producer: Object.fromEntries(['workflow', 'source', 'ref', 'run_id', 'run_attempt'].map(k => [k, value.producer[k]])),
+    matrix: { schema: MATRIX_SCHEMA, cells: matrix.map(row => row.key) }, journeys, bridge,
+    evidence: { path: INDEX_FILE, size: value.evidence.size, sha256: value.evidence.sha256 },
+    assertions: Object.fromEntries(ASSERTIONS.map(k => [k, true])) };
+  return Object.fromEntries(E_FIELDS.map(k => [k, normalized[k]]));
+}
+function encodeAcceptance(value, input, stage) {
+  const body = c.encode(acceptance(value, input, stage)); assert.ok(body.length <= LIMIT, 'E byte bound'); return body;
+}
+function decodeAcceptance(body, input, stage) {
+  const result = acceptance(bounded(body, LIMIT), input, stage);
+  agree(body, c.encode(result), 'fixed E field order'); return result;
+}
+// This table is shared by the completed reader and the fixed workflow wrappers.
+// Distinct invocations are essential: an executing job cannot attest its own
+// eventual success. Artifact names alone never identify an attempt.
+const PUBLIC_JOBS = freeze({
+  produce: ['public_inputs', ...matrix.map(row => `public_cell (${row.key})`), 'public_producer_complete'],
+  assemble: ['public_assemble'],
+  attest: ['public_evidence_intake', 'public_evidence_attestation'],
+  check: ['public_check']
+});
+const INDEX_SCHEMA = 'authoring-public-packed-evidence/v1';
+const BRIDGE_FILES = freeze(['authenticated-run.json', 'summary.json', 'bridge-config/request.json', 'bridge-config/sealed.json',
+  'results/completion.json', ...['head', 'clean', 'seal', 'discovery', 'planner', 'post-verify', 'terminal-clean'].flatMap(n =>
+    ['json', 'stdout', 'stderr'].map(ext => `logs/${n}.${ext}`))].sort());
+function closureBytes(file, maximum = TRANSCRIPT_LIMIT) {
+  // Empty bridge stdout/stderr is valid evidence. All nonempty members use the
+  // existing bounded reader; never interpret these retained bytes as an archive.
+  c.safeDirectory(path.dirname(file)); const st = fs.lstatSync(file);
+  if (st.size !== 0) return c.readFile(file, maximum);
+  assert.ok(st.isFile() && st.nlink === 1, 'empty retained regular file');
+  const fd = fs.openSync(file, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW || 0));
+  try {
+    for (const after of [fs.fstatSync(fd), fs.lstatSync(file)])
+      assert.ok(['dev', 'ino', 'size', 'mode', 'nlink', 'mtimeMs', 'ctimeMs'].every(k => after[k] === st[k]), 'empty retained file changed');
+    return Buffer.alloc(0);
+  } finally { fs.closeSync(fd); }
+}
+function acceptanceIndex(value, e) {
+  fields(value, ['schema', 'matrix', 'journeys', 'bridge', 'files'], 'E exhaustive evidence index');
+  fixed(value.schema, INDEX_SCHEMA, 'E index schema'); agree(value.matrix, e.matrix, 'index matrix');
+  agree(value.journeys, e.journeys, 'index original J locators'); agree(value.bridge, e.bridge, 'index original bridge locator');
+  assert.ok(Array.isArray(value.files) && value.files.length > 0 && value.files.length <= 32768, 'bounded exhaustive file inventory');
+  let previous = '', total = 0; const names = new Set();
+  for (const row of value.files) {
+    fields(row, ['path', 'size', 'sha256'], 'index member'); hash(row.sha256, 'index member');
+    assert.ok(typeof row.path === 'string' && row.path.length <= 4096 &&
+      /^[a-zA-Z0-9_.-]+(?:\/[a-zA-Z0-9_.-]+)*$/.test(row.path) &&
+      !row.path.split('/').some(p => p === '.' || p === '..') && row.path > previous, 'canonical sorted unique index path');
+    previous = row.path;
+    assert.ok(!names.has(row.path.toLowerCase()), 'case-independent unique closure path'); names.add(row.path.toLowerCase());
+    assert.ok(row.path.startsWith('journeys/') || row.path.startsWith('bridge/'), 'fixed closure namespace; no E/index digest cycle');
+    nonnegative(row.size, TRANSCRIPT_LIMIT, 'bounded closure member'); total += row.size;
+    assert.ok(total <= AGGREGATE_LIMIT, '128MiB aggregate acceptance closure');
+    if (row.path.startsWith('journeys/')) {
+      const parts = row.path.split('/'), key = parts.slice(1, 3).join('/'); cell(key);
+      const member = parts.slice(3).join('/');
+      assert.ok(member === 'public-journey.json' || EVIDENCE.includes(member) || /^sidecars\/[a-zA-Z0-9_.-]+$/.test(member), 'fixed J closure member');
+    } else assert.ok(BRIDGE_FILES.includes(row.path.slice(7)), 'fixed retained bridge closure');
+  }
+  for (const j of e.journeys) {
+    const prefix = `journeys/${j.cell}/`, record = value.files.find(row => row.path === prefix + 'public-journey.json');
+    assert.ok(record && record.sha256 === j.sha256 && record.size > 0 && record.size <= LIMIT, 'each original J in exhaustive closure');
+    for (const name of EVIDENCE) assert.ok(names.has(prefix + name), 'all five evidence records for each J');
+  }
+  assert.ok(value.files.some(row => row.path === 'bridge/summary.json' && row.sha256 === e.bridge.sha256 && row.size > 0), 'same-cell bridge summary pin');
+  for (const name of BRIDGE_FILES) assert.ok(names.has('bridge/' + name), 'complete bridge closure');
+  return { schema: INDEX_SCHEMA, matrix: e.matrix, journeys: e.journeys, bridge: e.bridge,
+    files: value.files.map(row => ({ path: row.path, size: row.size, sha256: row.sha256 })) };
+}
+function encodeAcceptanceIndex(value, e) {
+  const bytes = c.encode(acceptanceIndex(value, e)); assert.ok(bytes.length <= LIMIT, 'bounded index'); return bytes;
+}
+function decodeAcceptanceIndex(bytes, e) {
+  const index = acceptanceIndex(bounded(bytes, LIMIT), e); agree(bytes, c.encode(index), 'fixed index field order'); return index;
+}
+function readAcceptanceClosure(root, e) {
+  c.safeDirectory(absolute(root));
+  const bytes = pin(path.join(root, INDEX_FILE), e.evidence.sha256); agree(bytes.length, e.evidence.size, 'index pin size');
+  const index = decodeAcceptanceIndex(bytes, e), found = [], directories = new Set(); let count = 0;
+  for (const row of index.files) {
+    const parts = row.path.split('/'); parts.pop();
+    while (parts.length) { directories.add(parts.join('/')); parts.pop(); }
+  }
+  const visit = (directory, prefix) => {
+    c.safeDirectory(directory);
+    for (const name of fs.readdirSync(directory).sort()) {
+      assert.ok(++count <= 65536, 'bounded closure entries');
+      const file = path.join(directory, name), st = fs.lstatSync(file), relative = prefix + name;
+      if (st.isDirectory()) {
+        assert.ok(directories.has(relative), 'no unindexed retained directory');
+        visit(file, relative + '/');
+      }
+      else {
+        assert.ok(st.isFile() && st.nlink === 1, 'regular unaliased retained closure');
+        if (prefix === '' && [ACCEPTANCE_FILE, INDEX_FILE].includes(name)) continue;
+        const row = index.files.find(row => row.path === relative); assert.ok(row, 'no unindexed retained member');
+        const body = closureBytes(file); agree(c.digest(body), row.sha256, 'retained closure digest'); agree(body.length, row.size, 'retained closure size'); found.push(relative);
+      }
+    }
+  };
+  visit(root, ''); agree(found.sort(), index.files.map(row => row.path), 'exhaustive retained closure');
+  agree(pin(path.join(root, INDEX_FILE), e.evidence.sha256), bytes, 'late index bytes'); return index;
+}
+function completedAttempt(value, selected, mode) {
+  fields(value, ['producer', 'status', 'conclusion', 'jobs'], 'completed public attempt');
+  fields(selected, ['tag', 'ref', 'source', 'versions'], 'public selection');
+  fields(value.producer, ['workflow', 'source', 'ref', 'run_id', 'run_attempt'], 'public attempt producer');
+  fixed(value.producer.workflow, WORKFLOW, 'public attempt workflow');
+  fixed(value.producer.source, selected.source, 'public attempt F');
+  fixed(value.producer.ref, selected.ref, 'public attempt ref');
+  fixed(selected.ref, `refs/tags/${selected.tag}`, 'canonical selected tag ref');
+  positive(value.producer.run_id, Number.MAX_SAFE_INTEGER, 'public attempt run');
+  positive(value.producer.run_attempt, 1000, 'public attempt number');
+  fixed(value.status, 'completed', 'completed public invocation'); fixed(value.conclusion, 'success', 'successful public invocation');
+  assert.ok(Object.hasOwn(PUBLIC_JOBS, mode), 'fixed public mode');
+  list(value.jobs, PUBLIC_JOBS[mode].length, 'all fixed attempt jobs');
+  const ids = new Set(), names = new Set();
+  for (const job of value.jobs) {
+    fields(job, ['id', 'name', 'run_id', 'run_attempt', 'source', 'ref', 'status', 'conclusion'], 'public attempt job');
+    positive(job.id, Number.MAX_SAFE_INTEGER, 'public job ID');
+    assert.ok(!ids.has(job.id) && !names.has(job.name), 'unique public attempt job'); ids.add(job.id); names.add(job.name);
+    assert.ok(PUBLIC_JOBS[mode].includes(job.name), 'fixed public attempt job name');
+    for (const k of ['run_id', 'run_attempt', 'source', 'ref']) agree(job[k], value.producer[k], `public job ${k}`);
+    fixed(job.status, 'completed', 'completed public job'); fixed(job.conclusion, 'success', 'no successful skips');
+  }
+  return value.producer;
+}
+function acceptanceGraph(e, attempts, selected, assembly, attested) {
+  fields(attempts, ['produce', 'assemble', 'attest'], 'R1 R2 R3 graph');
+  locator(assembly); locator(attested);
+  const producers = Object.fromEntries(['produce', 'assemble', 'attest'].map(mode =>
+    [mode, completedAttempt(attempts[mode], selected, mode)]));
+  agree(producers.assemble, e.producer, 'original E producer is R2');
+  assert.equal(new Set(Object.values(producers).map(p => p.run_id)).size, 3, 'R1 R2 R3 distinct invocations');
+  const bind = (loc, p) => agree([loc.artifact.run_id, loc.artifact.run_attempt], [p.run_id, p.run_attempt], 'exact graph artifact attempt');
+  e.journeys.forEach(j => bind(j, producers.produce)); bind(e.bridge, producers.produce);
+  bind(assembly, producers.assemble); bind(attested, producers.attest);
+  agree(assembly.sha256, attested.sha256, 'unchanged R2 E carried into R3');
+  assert.ok(!e.journeys.some(j => [assembly.artifact.artifact_id, attested.artifact.artifact_id].includes(j.artifact.artifact_id)) &&
+    assembly.artifact.artifact_id !== attested.artifact.artifact_id, 'separate assembly and attestation artifacts');
+  return producers;
+}
+// Pure historical comparison: never stat or execute a recorded remote tool.
+function historicalTools(j, manifest) {
+  const selected = cell(j.cell), provisioned = manifest.cells[j.cell], controller = manifest.controllers[selected.target];
+  assert.ok(provisioned && controller, `PUBLIC_PROVISIONING_REQUIRED:${j.cell}:entry`);
+  for (const key of ['runner', 'image', 'observer', ...(selected.node === 18 ? [] : ['installer_policy']), 'npm_node', 'shim_node', 'npm'])
+    assert.ok(provisioned[key] != null, `PUBLIC_PROVISIONING_REQUIRED:${j.cell}:${key}`);
+  const fixedTools = { orchestrator_node: controller.node, npm_node: provisioned.npm_node, shim_node: provisioned.shim_node,
+    npm: provisioned.npm, go: j.cell === BRIDGE_CELL ? provisioned.go : null };
+  for (const [key, expected] of Object.entries(fixedTools)) {
+    if (key === 'go' && j.cell !== BRIDGE_CELL) { agree(j.tools[key], null, 'remote Go absent outside bridge cell'); continue; }
+    assert.ok(expected, `PUBLIC_PROVISIONING_REQUIRED:${j.cell}:${key}`);
+    agree(j.tools[key], Object.fromEntries(['path', 'sha256', 'version'].map(k => [k, expected[k]])), 'historical source-frozen tool identity');
+  }
+  return j.tools;
+}
+function retainedJourney(root, located, inputBytes, stageBytes, manifest, attempt, selected) {
+  c.safeDirectory(absolute(root)); locator(located);
+  const body = pin(path.join(root, 'public-journey.json'), located.sha256), j = decodeJourney(body, inputBytes, stageBytes);
+  agree(j.producer, completedAttempt(attempt, selected, 'produce'), 'J completed R1 producer');
+  agree([j.producer.run_id, j.producer.run_attempt], [located.artifact.run_id, located.artifact.run_attempt], 'J artifact exact attempt');
+  historicalTools(j, manifest);
+  const evidence = {}, budget = { size: j.evidence.reduce((sum, row) => sum + row.size, body.length) };
+  for (const row of j.evidence) {
+    const maximum = row.path === 'commands.json' ? TRANSCRIPT_LIMIT : LIMIT;
+    const bytes = pin(path.join(root, row.path), row.sha256, maximum); agree(bytes.length, row.size, 'retained remote evidence size');
+    evidence[row.path] = expandEvidence(row.path, bounded(bytes, maximum), root, budget);
+  }
+  // Only retained closure paths are opened. Original project paths remain the
+  // recorded host namespace consumed by the same semantic validators as R1.
+  const result = verifyJourney({ record: j, evidence }); verifySidecars(evidence, root);
+  agree(pin(path.join(root, 'public-journey.json'), located.sha256), body, 'late retained J bytes');
+  return result;
+}
+function readCompletedJourney(value) {
+  fields(value, ['schema', 'selected', 'workflow_sha', 'input_file', 'stage', 'repo', 'work_parent', 'journey'], 'completed J request');
+  fixed(value.schema, 'authoring-public-completed-journey/v1', 'completed J request schema'); locator(value.journey); locator(value.stage);
+  const provision = require('./public-authoring-tools');
+  agree(provision.requireController('linux-amd64'), process.execPath, 'independently provisioned reader controller');
+  const api = requireFacades(BRIDGE_CELL)['public-authoring-custody'];
+  assert.equal(typeof api.readPublicArtifact, 'function', 'PUBLIC_FACADE_REQUIRED:public-authoring-custody.js#readPublicArtifact');
+  const manifest = provision.readProvisioning(), frozen = { ...manifest, key: BRIDGE_CELL };
+  agree(value.repo, path.resolve(__dirname, '../../..'), 'executing completed reader source');
+  const before = sourceSeal(value.repo, value.workflow_sha, frozen);
+  const retained = api.readPublicArtifact({ kind: 'public-journeys', locator: value.journey, selected: value.selected,
+    workflow_sha: value.workflow_sha, work_parent: value.work_parent });
+  // Owner-supplied custody returns checked retained bytes and exact attempt
+  // identity; no caller callback, completion boolean or archive engine here.
+  fields(retained, ['root', 'artifact', 'attempt'], 'retained public artifact');
+  agree(retained.artifact, value.journey.artifact, 'retained artifact provider identity');
+  const p = completedAttempt(retained.attempt, value.selected, 'produce');
+  const inputs = admitProducerInputs({ ...value, producer: p, tools: null }, api);
+  const result = retainedJourney(retained.root, value.journey, inputs.inputBytes, inputs.stageBytes, manifest, retained.attempt, value.selected);
+  const after = api.readPublicArtifact({ kind: 'public-journeys', locator: value.journey, selected: value.selected,
+    workflow_sha: value.workflow_sha, work_parent: value.work_parent });
+  agree(after.artifact, retained.artifact, 'late J artifact identity'); agree(after.attempt, retained.attempt, 'late R1 attempt');
+  const rechecked = retainedJourney(after.root, value.journey, inputs.inputBytes, inputs.stageBytes, manifest, after.attempt, value.selected);
+  agree(rechecked, result, 'late completed J closure');
+  provision.requireController('linux-amd64'); agree(sourceSeal(value.repo, value.workflow_sha, frozen), before, 'late reader source closure');
+  return result;
+}
+const READER_FIELDS = ['schema', 'selected', 'workflow_sha', 'input_file', 'stage', 'repo', 'work_parent'];
+function readerContext(r, mode) {
+  const provision = require('./public-authoring-tools');
+  agree(provision.requireController('linux-amd64'), process.execPath, 'independently provisioned E reader');
+  const extra = { assemble: ['output', 'producer', 'journeys', 'bridge'], attest: ['assembly', 'output'], read: ['acceptance', 'assembly'] };
+  fields(r, [...READER_FIELDS, ...extra[mode]], 'closed completed E request');
+  fixed(r.schema, `authoring-public-${mode}/v1`, 'fixed completed E operation');
+  fields(r.selected, ['tag', 'ref', 'source', 'versions'], 'selected E identity');
+  agree(r.workflow_sha, r.selected.source, 'E reader F'); locator(r.stage);
+  for (const k of ['input_file', 'repo', 'work_parent']) absolute(r[k]);
+  agree(r.repo, path.resolve(__dirname, '../../..'), 'executing E source'); c.safeDirectory(r.work_parent);
+  disjoint([r.repo, r.work_parent, r.input_file]);
+  if (mode !== 'read') { absolute(r.output); c.safeDirectory(path.dirname(r.output)); assert.ok(!fs.existsSync(r.output), 'fresh E output'); disjoint([r.repo, r.work_parent, r.input_file, r.output]); }
+  const api = requireFacades(BRIDGE_CELL)['public-authoring-custody'];
+  assert.equal(typeof api.readPublicArtifact, 'function', 'PUBLIC_FACADE_REQUIRED:public-authoring-custody.js#readPublicArtifact');
+  const manifest = provision.readProvisioning(), frozen = { ...manifest, key: BRIDGE_CELL }, before = sourceSeal(r.repo, r.workflow_sha, frozen);
+  const recheck = () => {
+    agree(provision.requireController('linux-amd64'), process.execPath, 'late E controller');
+    agree(provision.readProvisioning(), manifest, 'late E manifest'); agree(sourceSeal(r.repo, r.workflow_sha, frozen), before, 'late E full source closure');
+  };
+  return { r, api, manifest, recheck };
+}
+function completedArtifact(ctx, located, mode) {
+  locator(located); ctx.recheck();
+  const { r, api } = ctx, kind = { produce: 'public-journeys', assemble: 'public-assembly', attest: 'public-evidence' }[mode];
+  const result = api.readPublicArtifact({ kind, locator: located, selected: r.selected, workflow_sha: r.workflow_sha, work_parent: r.work_parent });
+  fields(result, ['root', 'artifact', 'attempt'], 'owner retained public artifact');
+  c.safeDirectory(absolute(result.root)); agree(result.artifact, located.artifact, 'exact public artifact custody');
+  agree(result.attempt, require('./authoring-promotion').inspectPublicAttempt(located.artifact, r.selected, mode, r.work_parent), 'independent fixed public attempt');
+  completedAttempt(result.attempt, r.selected, mode); ctx.recheck(); return result;
+}
+function bridgeReplay(ctx, root, j, jroot, located) {
+  agree(c.digest(c.readFile(path.join(root, 'summary.json'), LIMIT)), located.sha256, 'designated original bridge digest');
+  const python = ctx.manifest.controllers['linux-amd64'].python;
+  assert.ok(python, 'PUBLIC_PROVISIONING_REQUIRED:linux-amd64:python'); ctx.recheck();
+  const result = require('node:child_process').spawnSync(python.path, ['-B', path.join(ctx.r.repo, 'scripts/check-packed-ci.py'),
+    '--completed-bridge', root, ctx.r.workflow_sha, path.join(jroot, 'public-journey.json'), path.join(jroot, 'projects.json')], {
+    cwd: ctx.r.repo, env: { PATH: '/usr/local/bin:/usr/bin:/bin', LANG: 'C.UTF-8', LC_ALL: 'C.UTF-8' }, timeout: 60000, maxBuffer: TRANSCRIPT_LIMIT
+  });
+  ctx.recheck(); assert.ok(!result.error && result.status === 0 && result.signal === null && result.stderr.length === 0, 'completed bridge semantic replay');
+  const inputs = bounded(result.stdout, TRANSCRIPT_LIMIT);
+  agree(inputs.public_inputs.journey_sha256, c.digest(c.readFile(path.join(jroot, 'public-journey.json'), LIMIT)), 'bridge exact original J pin');
+  agree(inputs.identity, j.identity, 'bridge J identity'); agree(inputs.public_inputs.producer, j.producer, 'bridge same-live-root R1'); return inputs;
+}
+function collectJourneys(ctx, e, intake) {
+  const files = new Map(), journeys = [], attempts = []; let total = 0, designated;
+  const add = (name, file) => {
+    assert.ok(!files.has(name), 'unique aggregate member'); const bytes = closureBytes(file); total += bytes.length;
+    assert.ok(total <= AGGREGATE_LIMIT, '128MiB aggregate E'); files.set(name, bytes);
+  };
+  for (const loc of e.journeys) {
+    const located = { sha256: loc.sha256, artifact: loc.artifact }, retained = completedArtifact(ctx, located, 'produce');
+    const local = retainedJourney(retained.root, located, intake.inputBytes, intake.stageBytes, ctx.manifest, retained.attempt, ctx.r.selected);
+    agree(local.record.cell, loc.cell, 'ordered retained E cell'); agree(local.record.stage, ctx.r.stage, 'same original S across cells');
+    if (attempts.length) agree(retained.attempt, attempts[0], 'one exact completed R1'); attempts.push(retained.attempt); journeys.push(local);
+    const names = ['public-journey.json', ...EVIDENCE, ...fs.readdirSync(path.join(retained.root, 'sidecars')).map(n => 'sidecars/' + n)];
+    for (const name of names) add(`journeys/${loc.cell}/${name}`, path.join(retained.root, name));
+    if (loc.cell === BRIDGE_CELL) designated = { retained, local };
+  }
+  assert.ok(designated, 'designated bridge cell'); agree(e.bridge.artifact, designated.retained.artifact, 'same artifact bridge');
+  const bridgeRoot = path.join(designated.retained.root, 'bridge');
+  const bridge = bridgeReplay(ctx, bridgeRoot, designated.local.record, designated.retained.root, e.bridge);
+  for (const name of BRIDGE_FILES) add('bridge/' + name, path.join(bridgeRoot, name));
+  return { files, journeys, bridge, attempt: attempts[0] };
+}
+function compareFiles(a, b) {
+  agree([...a.keys()].sort(), [...b.keys()].sort(), 'same complete retained closure');
+  for (const [name, body] of a) agree(body, b.get(name), 'late retained closure bytes');
+}
+function intakeAgain(ctx, producer, first) {
+  const next = admitProducerInputs({ ...ctx.r, producer, tools: null }, ctx.api);
+  agree(next.inputBytes, first.inputBytes, 'late E authenticated I'); agree(next.stageBytes, first.stageBytes, 'late E authenticated S');
+  agree(next.retained.map(({ kind, relative, sha256, mode }) => ({ kind, relative, sha256, mode })),
+    first.retained.map(({ kind, relative, sha256, mode }) => ({ kind, relative, sha256, mode })), 'late E full I19 S3 custody'); ctx.recheck();
+}
+function writeBundle(ctx, eBytes, indexBytes, files) {
+  ctx.recheck(); fs.mkdirSync(ctx.r.output, { mode: 0o700 });
+  // E is written last. Any interrupted/failed copy lacks its completion record.
+  for (const [name, bytes] of [...files, [INDEX_FILE, indexBytes]]) {
+    const file = path.join(ctx.r.output, name); fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
+    fs.writeFileSync(file, bytes, { flag: 'wx', mode: 0o600 });
+  }
+  ctx.recheck(); fs.writeFileSync(path.join(ctx.r.output, ACCEPTANCE_FILE), eBytes, { flag: 'wx', mode: 0o600 });
+  return { root: ctx.r.output, sha256: c.digest(eBytes), subjects: [ACCEPTANCE_FILE, INDEX_FILE].map(name => ({
+    file: path.join(ctx.r.output, name), sha256: c.digest(name === ACCEPTANCE_FILE ? eBytes : indexBytes) })) };
+}
+function assembleAcceptance(r) {
+  const ctx = readerContext(r, 'assemble'), promotion = require('./authoring-promotion');
+  agree(r.producer, promotion.inspectPublicCaller(r.selected, r.workflow_sha, 'assemble', r.work_parent), 'current R2 producer');
+  const intake = admitProducerInputs({ ...r, tools: null }, ctx.api);
+  const e = { schema: ACCEPTANCE_SCHEMA, lane: 'public-packed-pair',
+    ...Object.fromEntries(['identity', 'authoring_mode', 'asset_scope', 'candidate_sha256', 'pair_marker_sha256', 'native_inputs', 'packs'].map(k => [k, intake.stage[k]])),
+    stage: r.stage, producer: r.producer, matrix: { schema: MATRIX_SCHEMA, cells: matrix.map(row => row.key) }, journeys: r.journeys, bridge: r.bridge,
+    evidence: { path: INDEX_FILE, size: 1, sha256: c.digest(Buffer.from('pending index')) }, assertions: Object.fromEntries(ASSERTIONS.map(k => [k, true])) };
+  // Syntax admission precedes custody acquisition; assertions are recomputed by
+  // collectJourneys and never accepted merely because this table says true.
+  acceptance(e, intake.inputBytes, intake.stageBytes);
+  const first = collectJourneys(ctx, e, intake), second = collectJourneys(ctx, e, intake); compareFiles(first.files, second.files);
+  intakeAgain(ctx, r.producer, intake);
+  agree(r.producer, promotion.inspectPublicCaller(r.selected, r.workflow_sha, 'assemble', r.work_parent), 'late R2 caller');
+  const index = { schema: INDEX_SCHEMA, matrix: e.matrix, journeys: e.journeys, bridge: e.bridge,
+    files: [...first.files].map(([path, bytes]) => ({ path, size: bytes.length, sha256: c.digest(bytes) })).sort((a, b) => a.path < b.path ? -1 : 1) };
+  const indexBytes = encodeAcceptanceIndex(index, e); e.evidence = { path: INDEX_FILE, size: indexBytes.length, sha256: c.digest(indexBytes) };
+  return writeBundle(ctx, encodeAcceptance(e, intake.inputBytes, intake.stageBytes), indexBytes, first.files);
+}
+function admittedAssembly(ctx, located) {
+  const retained = completedArtifact(ctx, located, 'assemble'), p = retained.attempt.producer;
+  const intake = admitProducerInputs({ ...ctx.r, producer: p, tools: null }, ctx.api);
+  const bytes = pin(path.join(retained.root, ACCEPTANCE_FILE), located.sha256), e = decodeAcceptance(bytes, intake.inputBytes, intake.stageBytes);
+  agree(e.producer, p, 'original completed R2 producer'); agree(e.stage, ctx.r.stage, 'requested original S');
+  const index = readAcceptanceClosure(retained.root, e), collected = collectJourneys(ctx, e, intake);
+  const copied = new Map(index.files.map(row => [row.path, closureBytes(path.join(retained.root, row.path))])); compareFiles(copied, collected.files);
+  intakeAgain(ctx, p, intake);
+  const after = completedArtifact(ctx, located, 'assemble'); agree(after.attempt, retained.attempt, 'late R2 attempt');
+  agree(pin(path.join(after.root, ACCEPTANCE_FILE), located.sha256), bytes, 'late R2 E'); readAcceptanceClosure(after.root, e);
+  return { retained, intake, bytes, e, index, collected };
+}
+function attestAcceptanceInputs(r) {
+  const ctx = readerContext(r, 'attest'), promotion = require('./authoring-promotion'); locator(r.assembly);
+  const caller = promotion.inspectPublicCaller(r.selected, r.workflow_sha, 'attest', r.work_parent);
+  const first = admittedAssembly(ctx, r.assembly);
+  assert.ok(![first.e.producer.run_id, first.collected.attempt.producer.run_id].includes(caller.run_id), 'R3 separate from R1 R2');
+  const second = admittedAssembly(ctx, r.assembly); agree(second.bytes, first.bytes, 'unchanged attestation E'); compareFiles(first.collected.files, second.collected.files);
+  agree(caller, promotion.inspectPublicCaller(r.selected, r.workflow_sha, 'attest', r.work_parent), 'late R3 caller');
+  // R3 carries the original completed R2 locator outside the unchanged E/index
+  // closure. Neither signed subject contains its own artifact identity or digest.
+  ctx.recheck(); fs.mkdirSync(r.output, { mode: 0o700 });
+  fs.writeFileSync(path.join(r.output, ATTESTATION_LINK), c.encode(orderedLocator(r.assembly)), { flag: 'wx', mode: 0o600 });
+  const nested = { ...ctx, r: { ...r, output: path.join(r.output, 'evidence') } };
+  const result = writeBundle(nested, first.bytes, encodeAcceptanceIndex(first.index, first.e), first.collected.files);
+  return { ...result, root: r.output, assembly: r.assembly };
+}
+function attestedRoot(root, assembly) {
+  c.safeDirectory(absolute(root));
+  agree(fs.readdirSync(root).sort(), [ATTESTATION_LINK, 'evidence'], 'fixed R3 transport closure');
+  const bytes = c.readFile(path.join(root, ATTESTATION_LINK), LIMIT), value = orderedLocator(bounded(bytes, LIMIT));
+  agree(bytes, c.encode(value), 'canonical original assembly locator'); agree(value, assembly, 'R3 original R2 locator');
+  const evidence = path.join(root, 'evidence'); c.safeDirectory(evidence); return evidence;
+}
+function readAcceptance(r) {
+  const ctx = readerContext(r, 'read'); locator(r.acceptance); locator(r.assembly);
+  const first = admittedAssembly(ctx, r.assembly), signed = completedArtifact(ctx, r.acceptance, 'attest');
+  acceptanceGraph(first.e, { produce: first.collected.attempt, assemble: first.retained.attempt, attest: signed.attempt }, r.selected, r.assembly, r.acceptance);
+  const signedRoot = attestedRoot(signed.root, r.assembly);
+  agree(pin(path.join(signedRoot, ACCEPTANCE_FILE), r.acceptance.sha256), first.bytes, 'R3 unchanged original E');
+  agree(readAcceptanceClosure(signedRoot, first.e), first.index, 'R3 unchanged exhaustive index');
+  const subjects = [ACCEPTANCE_FILE, INDEX_FILE].map(name => ({ name, digest: { sha256: name === ACCEPTANCE_FILE ? r.acceptance.sha256 : first.e.evidence.sha256 } }));
+  for (const subject of subjects) require('./authoring-promotion').verifyPublicSubject(path.join(signedRoot, subject.name), {
+    name: subject.name, sha256: subject.digest.sha256, source: r.selected.source, workflow_sha: r.workflow_sha, ref: r.selected.ref,
+    run_id: r.acceptance.artifact.run_id, run_attempt: r.acceptance.artifact.run_attempt, subjects
+  }, r.work_parent);
+  ctx.recheck(); readAcceptanceClosure(attestedRoot(signed.root, r.assembly), first.e);
+  agree(pin(path.join(signedRoot, ACCEPTANCE_FILE), r.acceptance.sha256), first.bytes, 'post-signature unchanged E');
+  const last = admittedAssembly(ctx, r.assembly); compareFiles(last.collected.files, first.collected.files); agree(last.bytes, first.bytes, 'late original R2');
+  const lateSigner = completedArtifact(ctx, r.acceptance, 'attest'); agree(lateSigner.attempt, signed.attempt, 'late completed R3');
+  const lateRoot = attestedRoot(lateSigner.root, r.assembly);
+  readAcceptanceClosure(lateRoot, first.e); agree(pin(path.join(lateRoot, ACCEPTANCE_FILE), r.acceptance.sha256), first.bytes, 'late signer artifact bytes');
+  ctx.recheck(); return { record: first.e, input: first.intake.input, stage: first.intake.stage,
+    subjects, assembly: r.assembly, acceptance: r.acceptance };
+}
+const DISPATCH_INPUTS = freeze({
+  produce: [],
+  assemble: ['journeys', 'bridge'],
+  attest: ['assembly'],
+  check: ['assembly', 'acceptance']
+});
+const DISPATCH_ENV = freeze({ selected: 'PUBLIC_SELECTED', input: 'PUBLIC_INPUT', stage: 'PUBLIC_STAGE',
+  journeys: 'PUBLIC_JOURNEYS', bridge: 'PUBLIC_BRIDGE', assembly: 'PUBLIC_ASSEMBLY', acceptance: 'PUBLIC_ACCEPTANCE' });
+function dispatchInputs(mode) {
+  const dispatchMode = mode === 'inputs' ? 'produce' : mode === 'read' ? 'check' : mode;
+  assert.ok(Object.hasOwn(DISPATCH_INPUTS, dispatchMode), 'fixed workflow operation');
+  const required = new Set(['selected', 'input', 'stage', ...DISPATCH_INPUTS[dispatchMode]]), values = {};
+  for (const [name, env] of Object.entries(DISPATCH_ENV)) {
+    const body = process.env[env] || '';
+    if (required.has(name)) assert.ok(body.length > 0, `required ${dispatchMode} dispatch input: ${name}`);
+    else assert.equal(body, '', `foreign ${dispatchMode} dispatch input: ${name}`);
+    if (body) values[name] = bounded(Buffer.from(body), LIMIT);
+  }
+  // Reuse P's complete selected-source contract while dispatch is still pure:
+  // canonical bytes and every selection semantic precede provisioning/facades.
+  values.selected = require('./authoring-promotion').workflowSelection(values.selected, process.env.GITHUB_WORKFLOW_SHA);
+  locator(values.input); locator(values.stage);
+  if (dispatchMode === 'assemble') {
+    list(values.journeys, matrix.length, 'eighteen dispatch journey locators');
+    values.journeys.forEach((row, i) => { fields(row, ['cell', 'sha256', 'artifact'], 'dispatch journey locator'); fixed(row.cell, matrix[i].key, 'ordered dispatch cell'); locator({ sha256: row.sha256, artifact: row.artifact }); });
+    locator(values.bridge);
+  }
+  if (values.assembly) locator(values.assembly);
+  if (values.acceptance) locator(values.acceptance);
+  return values;
+}
+function workflowRequest(mode, key) {
+  assert.ok(['inputs', 'produce', 'assemble', 'attest', 'read'].includes(mode), 'fixed workflow operation');
+  const dispatch = dispatchInputs(mode);
+  if (mode === 'produce') cell(key);
+  const provisioning = require('./public-authoring-tools'), manifest = provisioning.readProvisioning();
+  const target = mode === 'produce' ? cell(key).target : 'linux-amd64';
+  agree(provisioning.requireController(target), process.execPath, 'workflow independent controller');
+  const api = requireFacades(mode === 'produce' ? key : BRIDGE_CELL)['public-authoring-custody'];
+  assert.equal(typeof api.readPublicArtifact, 'function', 'PUBLIC_FACADE_REQUIRED:public-authoring-custody.js#readPublicArtifact');
+  const { selected, stage, input } = dispatch;
+  const repo = path.resolve(__dirname, '../../..'), parent = absolute(process.env.RUNNER_TEMP);
+  const source = sourceSeal(repo, selected.source, { ...manifest, key: mode === 'produce' ? key : BRIDGE_CELL });
+  const promotion = require('./authoring-promotion'), graphMode = mode === 'inputs' ? 'produce' : mode === 'read' ? 'check' : mode;
+  const producer = promotion.inspectPublicCaller(selected, process.env.GITHUB_WORKFLOW_SHA, graphMode, parent);
+  if (mode === 'produce') agree(process.env.PUBLIC_CELL, key, 'fixed workflow cell');
+  c.safeDirectory(parent); const invocation = fs.mkdtempSync(path.join(parent, 'public-packed-'));
+  const work = path.join(invocation, 'work'), custody = path.join(invocation, 'custody');
+  fs.mkdirSync(work, { mode: 0o700 }); fs.mkdirSync(custody, { mode: 0o700 });
+  // The fixed custody facade accepts the original input locator for workflow
+  // intake, returning the same checked I19/S3 roots as byte-based admission.
+  const admitted = api.readPublicInputs({ input, selected, workflow_sha: selected.source, stage, repo, work_parent: custody, tools: null });
+  const inputFile = path.join(admitted.input.root, contract.INPUT_FILE); pin(inputFile, input.sha256);
+  const r = { schema: `authoring-public-${mode}/v1`, selected, workflow_sha: selected.source, input_file: inputFile,
+    stage, repo, work_parent: work };
+  agree(sourceSeal(repo, selected.source, { ...manifest, key: mode === 'produce' ? key : BRIDGE_CELL }), source, 'workflow full source unchanged');
+  const output = path.join(invocation, 'output');
+  if (mode === 'inputs') {
+    const checked = admitProducerInputs({ ...r, producer, tools: null }, api);
+    const include = matrix.map(({ key }) => {
+      const row = manifest.cells[key];
+      for (const name of ['runner', 'image', 'observer', 'npm_node', 'shim_node', 'npm',
+        ...(key.endsWith('kit-node18') ? [] : ['installer_policy']), ...(key === BRIDGE_CELL ? ['go', 'mod_cache'] : [])])
+        assert.ok(row[name] !== null, `PUBLIC_PROVISIONING_REQUIRED:${key}:${name}`);
+      for (const name of ['node', 'python', 'git', 'gh', 'tar'])
+        assert.ok(manifest.controllers[row.controller][name] !== null, `PUBLIC_PROVISIONING_REQUIRED:${row.controller}:${name}`);
+      return { cell: key, runner: row.runner.id };
+    });
+    return { selected, input: { sha256: c.digest(checked.inputBytes), artifact: input.artifact }, stage, matrix: { include } };
+  }
+  if (mode === 'produce') {
+    const row = provisioning.requireCellTools(key), tools = { orchestrator_node: manifest.controllers[target].node,
+      ...Object.fromEntries(['npm_node', 'shim_node', 'npm', 'go'].map(k => [k, row[k] === null ? null :
+        Object.fromEntries(['path', 'sha256', 'version'].map(n => [n, row[k][n]]))])),
+      host: { platform: process.platform, arch: process.arch } };
+    return { ...r, schema: 'authoring-public-produce/v1', output, cell: key, tools, producer };
+  }
+  if (mode === 'assemble') return { ...r, output, producer, journeys: dispatch.journeys, bridge: dispatch.bridge };
+  if (mode === 'attest') return { ...r, output, assembly: dispatch.assembly };
+  return { ...r, acceptance: dispatch.acceptance, assembly: dispatch.assembly };
+}
+async function workflowOperation(mode, key) {
+  const r = workflowRequest(mode, key);
+  if (mode === 'inputs') return r;
+  if (mode === 'assemble') return assembleAcceptance(r);
+  if (mode === 'attest') return attestAcceptanceInputs(r);
+  if (mode === 'read') return readAcceptance(r);
+  const produced = await produceJourney(r), manifest = require('./public-authoring-tools').readProvisioning();
+  let bridgeRoot;
+  if (key === BRIDGE_CELL) {
+    bridgeRoot = r.output + '-bridge'; const file = path.join(r.work_parent, 'bridge-options.json');
+    fs.writeFileSync(file, c.encode({ request: produced.request, go: r.tools.go.path, node: r.tools.orchestrator_node.path,
+      modCache: manifest.cells[key].mod_cache.root }), { flag: 'wx', mode: 0o600 });
+    const result = require('node:child_process').spawnSync(manifest.controllers['linux-amd64'].python.path,
+      ['-B', path.join(r.repo, 'scripts/run-packed-ci.py'), '--public-authenticated', bridgeRoot, r.workflow_sha, file],
+      { cwd: r.repo, env: { PATH: '/usr/local/bin:/usr/bin:/bin', LANG: 'C.UTF-8', LC_ALL: 'C.UTF-8' }, timeout: 2400000, maxBuffer: TRANSCRIPT_LIMIT });
+    assert.ok(!result.error && result.status === 0 && result.signal === null, 'same-live-root bridge completed');
+  }
+  readJourney(produced.request);
+  const retained = r.output + '-retained'; fs.mkdirSync(retained, { mode: 0o700 });
+  const original = path.dirname(produced.request.journey), names = ['public-journey.json', ...EVIDENCE,
+    ...fs.readdirSync(path.join(original, 'sidecars')).map(n => 'sidecars/' + n)];
+  for (const name of [...names, ...(bridgeRoot ? BRIDGE_FILES.map(n => 'bridge/' + n) : [])]) {
+    const bytes = closureBytes(name.startsWith('bridge/') ? path.join(bridgeRoot, name.slice(7)) : path.join(original, name));
+    const file = path.join(retained, name); fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 }); fs.writeFileSync(file, bytes, { flag: 'wx', mode: 0o600 });
+  }
+  readJourney(produced.request);
+  return { root: retained, cell: key, sha256: produced.request.journeySha256,
+    bridge_sha256: bridgeRoot ? c.digest(c.readFile(path.join(bridgeRoot, 'summary.json'), LIMIT)) : null };
+}
 function main(args) {
+  if ((args.length === 2 || args.length === 3) && args[0] === '--workflow') return workflowOperation(args[1], args[2]);
   if (args.length === 2 && args[0] === "--produce-journey") return produceJourney(fileJSON(args[1]));
+  if (args.length === 2 && ['--assemble', '--attest-inputs', '--read'].includes(args[0]))
+    return ({ '--assemble': assembleAcceptance, '--attest-inputs': attestAcceptanceInputs, '--read': readAcceptance })[args[0]](fileJSON(args[1]));
   assert.ok(args.length === 2 && args[0] === "--read-local-inputs", "C3a supports only --read-local-inputs REQUEST; public execution and E are closed");
   const requestValue = fileJSON(args[1]), result = readJourneyInputs(requestValue);
   return { scope: "authenticated-input-custody-only", cell: result.record.cell, source: result.identity.commit,
@@ -1195,7 +1729,10 @@ function main(args) {
 // No producer or completed-E CLI can return a success-shaped placeholder.
 module.exports = { generatedFiles, generatedTreeIdentity, evidenceFiles, expandEvidence, scenarioContract, plannedInvocation, rootsFor, requireFacades, verifyNpmLifecycle, verifyCacheProcess, verifyResults, produceJourney,
   expectedCachePath, PROFILES, SURFACE, clientFacts, componentFacts, LITERAL_DESCRIPTION, outputJSON, matrix, commandContract, encodeJourney, decodeJourney, readJourneyInputs, verifyJourney, readJourney,
-  readAcceptance, request, fileJSON, disjoint, main, LIMIT, SCHEMA, MATRIX_SCHEMA, INTAKE, WORKFLOW, MISSING };
+  encodeAcceptance, decodeAcceptance, ACCEPTANCE_SCHEMA, ACCEPTANCE_FILE, INDEX_FILE, ATTESTATION_LINK,
+  PUBLIC_JOBS, completedAttempt, acceptanceGraph, historicalTools, retainedJourney, readCompletedJourney,
+  INDEX_SCHEMA, encodeAcceptanceIndex, decodeAcceptanceIndex, readAcceptanceClosure,
+  BRIDGE_FILES, assembleAcceptance, attestAcceptanceInputs, readAcceptance, dispatchInputs, workflowRequest, request, fileJSON, disjoint, main, LIMIT, SCHEMA, MATRIX_SCHEMA, INTAKE, WORKFLOW, MISSING };
 if (require.main === module) {
   Promise.resolve().then(() => main(process.argv.slice(2))).then(result => process.stdout.write(c.encode(result))).catch(error => { process.stderr.write(`C3 public journey: ${error.message}\n`); process.exitCode = 1; });
 }

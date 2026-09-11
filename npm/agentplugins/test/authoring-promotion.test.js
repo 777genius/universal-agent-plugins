@@ -874,6 +874,53 @@ test("C1 provenance fixed tag adapter rejects a moved second product tag", t => 
 
 // New fixed-stage adapter tests mock the existing process interface IN MEMORY.
 // No verifier execution or authentic signature compatibility is claimed.
+test('C3 public adapter rejects non-E2 subject sets before verifier effects', t => {
+  let effects = 0;
+  t.mock.method(cp, 'spawnSync', () => { effects++; throw new Error('unexpected verifier effect'); });
+  for (const subjects of [[], [{ name: 'public-packed-completion.json' }],
+    [{ name: 'public-packed-completion.json' }, { name: 'public-packed-completion.json' }],
+    [{ name: 'public-packed-completion.json' }, { name: 'package.tgz' }]])
+    assert.throws(() => p.verifyPublicSubject('/not-opened/public-packed-completion.json',
+      { name: 'public-packed-completion.json', subjects }, '/not-opened'), /E2/);
+  assert.equal(effects, 0);
+});
+
+test('C3 public adapter binds completed reader to Q and retains native gate', t => {
+  const f = fixture(), a = require('../scripts/public-authoring-acceptance');
+  const lane = f.record.qualification.lanes.at(-1);
+  lane.schema = a.ACCEPTANCE_SCHEMA; lane.workflow = a.WORKFLOW;
+  const request = { schema: 'authoring-public-read/v1', selected, workflow_sha: ID.commit,
+    acceptance: { sha256: lane.sha256, artifact: lane.artifact }, stage: { sha256: hash('S'), artifact: pin } };
+  const context = { request, preparation: pin };
+  const result = { record: Object.fromEntries(['identity', 'authoring_mode', 'asset_scope', 'candidate_sha256', 'pair_marker_sha256']
+    .map(k => [k, structuredClone(f.record[k])])), input: { preparation: { artifact: pin }, products: structuredClone(f.record.products) },
+    stage: { native_inputs: { sha256: hash('I'), artifact: pin }, packs: { agentplugins: { sha256: hash('pack1') }, 'plugin-kit-ai': { sha256: hash('pack2') } } } };
+  Object.assign(result.record, { native_inputs: result.stage.native_inputs, packs: result.stage.packs, stage: request.stage });
+  let reads = 0, effects = 0, returned = result;
+  t.mock.method(cp, 'spawnSync', () => { effects++; throw Error('protected effect'); });
+  t.mock.method(a, 'readAcceptance', value => { reads++; assert.equal(value, request); return returned; });
+  assert.equal(p.admitPublicEvidence(f.record, context), result);
+  for (const mutate of [
+    r => { r.record.identity.commit = 'b'.repeat(40); },
+    r => { r.input.preparation.artifact.run_attempt++; },
+    r => { r.input.products['plugin-kit-ai'].assets['windows-arm64'].binary.sha256 = hash('other inner'); },
+    r => { r.input.products.agentplugins.assets['linux-arm64'].sha256 = hash('other outer'); },
+    r => { r.record.packs['plugin-kit-ai'].sha256 = hash('other pack'); },
+    r => { r.record.native_inputs.sha256 = hash('other I'); }
+  ]) {
+    // JSON cloning intentionally separates repeated object references so a
+    // changed admitted E pin cannot also change the independent S expectation.
+    returned = JSON.parse(JSON.stringify(result)); mutate(returned);
+    assert.throws(() => p.admitPublicEvidence(f.record, context));
+  }
+  const count = reads;
+  assert.throws(() => p.admitPublicEvidence(f.record, { ...context, request: { ...request,
+    acceptance: { ...request.acceptance, artifact: { ...pin, run_attempt: 99 } } } }), /exact completed R3 locator/);
+  assert.equal(reads, count);
+  assert.throws(() => p.requireNativeContracts(f.record.qualification.lanes), /NATIVE_EVIDENCE_INTEGRATION_REQUIRED/);
+  assert.equal(effects, 0);
+});
+
 test("C1 stage integration fixed npm signer uses existing verification interface with exact three subjects", t => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "c1-stage-signer-"));
   const rows = ["completion.json", "universal-agent-plugins-0.1.54.tgz", "plugin-kit-ai-2.0.0.tgz"].map(name => {

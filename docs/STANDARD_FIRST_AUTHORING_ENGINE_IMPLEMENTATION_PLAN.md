@@ -1,5 +1,185 @@
 # Standard-First Authoring Engine Implementation Plan
 
+## Owner decision: accelerated MVP scope (2026-09-10)
+
+The current delivery target is **Milestone A**, shipped as the smallest coherent
+standard-first vertical slice. Phases 7-11 remain an approved roadmap, but they
+do not block the current MVP PR, draft qualification, or merge. Re-enter each
+later phase through its own bounded plan and PR after the MVP is stable.
+
+The accelerated MVP contains only:
+
+- one shared Go implementation behind `agentplugins author` and
+  `plugin-kit-ai`;
+- `init`, `validate`, `inspect`, `compat`, `doctor`, and offline `test`;
+- Skill and stdio/remote MCP templates that validate without running package
+  content;
+- local installer planning through `agentplugins add <path> --dry-run` in a
+  disposable client root;
+- truthful public documentation and historical v1 guidance;
+- draft artifacts and provenance sufficient to test the exact candidate.
+
+The accelerated MVP explicitly defers runtime execution, `dev`, `bootstrap`,
+normalize/import/migration, client projection generation, export/bundle,
+Directory submission, remote publishing, and legacy code isolation. Deferred
+commands stay absent from public help. Useful YAML implementation, dependencies,
+tests, templates, and design ideas remain preserved under the capability
+preservation contract; narrower `plugin.json` support is never deletion
+authorization.
+
+### Minimal evidence gate
+
+Run the following evidence once on the exact merge candidate:
+
+1. Focused unit and contract tests for changed boundaries, including forbidden
+   legacy reads, atomic filesystem behavior, entrypoint parity, and unchanged
+   installer safety.
+2. One genuine clean-root E2E through **each** public entrypoint:
+   `init -> validate -> inspect -> test -> local add --dry-run`, using only new
+   sandbox projects and fixture client homes. Compare normalized JSON contracts
+   and resulting package tree digests.
+   Package acquisition is exact-candidate and local: the E2E must never resolve
+   the authored package from a registry or `latest` tag. The production
+   installer security boundary remains enabled and may perform credential-free,
+   read-only requests to its pinned public Directory, Discovery, Security Index,
+   and scanner-release endpoints. Record that distinction in evidence; do not
+   claim the complete installer journey is offline and do not introduce a
+   test-only bypass into the release binary.
+3. Linux amd64 runs the complete E2E. Windows amd64 and macOS arm64 run packaged
+   launcher smoke for both entrypoints plus init/validate and cleanup. Other
+   released architectures require build/package checks, not duplicate full
+   product/runtime matrices.
+4. Exact-head required repository CI and one independent code review.
+5. Draft artifact identity, checksum, provenance, install, and readback. Public
+   release still requires separate owner approval for the concrete version.
+
+Do not require an eighteen-cell product/runtime matrix, four independent hosted
+workflow invocations, duplicate evidence replays, every package-manager channel,
+or phases 7-11 for this MVP. Existing tests that cheaply protect a real defect
+may remain, but their repetition is not a release gate. Do not weaken security,
+path containment, cancellation/cleanup, deterministic output, fail-closed
+verification, or the ban on real user-project execution.
+
+### Delivery choice
+
+Chosen: thin Milestone A release slice.
+
+- 🎯 confidence 9/10   🛡️ reliability 9/10   🧠 complexity 4/10
+- Approximate remaining change: 1,500-3,500 total changed lines, including
+  tests, CI fixes, wrappers and docs; 450-1,200 logical production lines.
+
+Alternatives rejected for the current delivery:
+
+- Complete phases 0-11 before merge: 🎯 5/10   🛡️ 8/10   🧠 10/10;
+  approximately 12,000-30,000 changed lines remain and useful delivery waits
+  behind unrelated migration/publication work.
+- Ship only wording and mocks: 🎯 4/10   🛡️ 2/10   🧠 2/10;
+  approximately 100-500 lines, but it does not satisfy the requested working
+  E2E and is not an acceptable substitute.
+
+Future hosted implementation and review workers use `gpt-5.6-sol`, reasoning
+effort `low`, service tier `default` (no fast), unless the owner changes this
+profile again.
+
+## Owner clarification: preserve legacy capabilities (2026-09-06)
+
+This clarification controls every phase, inventory, worker assignment and
+acceptance check below. Standard-first command retirement is not permission to
+delete the corresponding implementation. A capability missing from plugin.json
+or Agent Plugins 1.0 must not be discarded for that reason.
+
+Preserve useful plugin.yaml implementation, necessary dependencies, tests and
+design documentation outside the standard authoring dependency graph. Reuse or
+adapt it through a narrow neutral interface when a planned consumer needs it;
+do not build a second engine or move files merely to create an archive.
+
+Before any legacy deletion, record each capability's implementation, tests,
+consumers, exact standard mapping if one exists, preservation destination and
+support status. Classify it as reuse, adapt, preserve/defer, or explicitly
+approved removal. Default unresolved cases to preserve/defer. Neither lack of a
+standard field nor lack of a current standard-first caller proves dead code.
+Deletion requires the owner's explicit acceptance of that capability's removal.
+
+Normal standard authoring still reads only plugin.json and its standard
+components, with no YAML fallback or legacy model dependency. Keeping source
+does not advertise a supported v2 command. A maintained separate YAML entrypoint
+is not implicitly authorized and remains a separate product decision.
+
+Historical v1 binaries alone do not satisfy code preservation. See
+[the preservation contract](./AUTHORING_CAPABILITY_PRESERVATION.md) and the
+Phase 11 inventory gate. Current standard CLI/npm work may continue; blanket
+legacy deletion is not authorized.
+
+## Owner decision: early public wording and site checkpoint (2026-09-08)
+
+The owner explicitly authorizes prioritizing a stable intermediate PR merge and
+public site update before the full v2 CLI release and phases 7-11. This is a
+partial delivery of this plan, not a smaller replacement for its full objective.
+It supersedes preparation-document rules that require D5 merely to publish
+truthful public wording; full executable release qualification still requires D5.
+
+Scope: replace obsolete primary positioning with clear Use plugins / Build
+plugins journeys, consistent maintained locales, canonical links and explicit
+availability labels. Describe unreleased standard authoring commands as
+preparation, never as installed or currently executable features. Preserve
+accurate instructions for currently available products and the historical v1
+reference, including redirects. Verify actual published versions before claiming
+availability; do not relabel an unreleased candidate as the current version.
+
+Implement a minimal explicit public-documentation boundary. The existing
+DOCS_PREPARATION_PREVIEW flag remains restricted to disposable non-published
+previews: do not enable it in production, remove the check without a replacement,
+or use noindex alone as proof of safe publication. Update conflicting preparation
+docs and their tests in the same bounded PR so subsequent agents see this owner
+decision. Do not create a second docs engine or a generic release platform.
+
+Checkpoint acceptance:
+
+- Every maintained locale distinguishes available installation from unreleased
+  authoring; no runnable future command is presented as current.
+- All Use/Build/history links and redirects resolve in the actual built site;
+  canonical-English fallback is explicit where a translation is absent.
+- Counter, geometry, catalog and affected navigation E2E pass with genuine
+  verified feeds, original assertions/timeouts and no masked retries.
+- The production-mode docs/landing build succeeds without the preview flag;
+  actual Pages assembly and public-boundary checks pass on the merge candidate.
+- Independent review and required CI cover the exact merge candidate. Merge a
+  dependency-safe, reversible checkpoint and verify the resulting deployed site.
+
+Do not hold this checkpoint for unrelated runtime, migration, export, publish or
+legacy-isolation phases. Do not merge the current preparation stack unchanged:
+main/master auto-deploys Pages, so establish and verify the boundary first.
+CLI asset release, npm/PyPI tags, Homebrew and native qualification remain
+separate gates; this checkpoint does not attest them or activate future commands.
+Useful YAML capabilities and all preservation constraints above remain intact.
+
+The preliminary 100-500 changed-line estimate is a target, not a guarantee.
+Re-estimate after bounded intake against the actual merge base; do not weaken
+acceptance or expand scope just to satisfy that number. Hosted workers use the
+current owner-selected profile recorded above: `gpt-5.6-sol`, reasoning `low`,
+service tier `default` (no fast).
+
+Checkpoint delivery evidence (2026-09-08): [PR #190](https://github.com/777genius/universal-agent-plugins/pull/190)
+merged as `dc28313ab6f567eb86eecac3ef903f79b584d4c3`.
+Final source head `e93a8ee0ceaba62befe42aa125c10c7c1aff5f8b` passed
+all applicable CI; the separate native Windows authoring rename-sharing test
+still failed and is not claimed as qualified. Production-artifact browser proof
+was 34 passing scenarios plus one tooltip failure; independent trace review
+identified an offscreen-focus scroll race, a one-line test positioning fix kept
+all assertions/timeouts, and the complete affected scenario passed without retry.
+This is composite evidence, not a fresh 35-test pass. Pages run 34170377916 was
+superseded by [34170488596](https://github.com/777genius/universal-agent-plugins/actions/runs/34170488596)
+on descendant `758c1656e1d3e6f1783b96638839486416921453` after independently
+merged PR #194. The newer deployment passed. Public HTTP readback on 2026-09-08 verified
+HTTP 200, availability wording and all 62 historical fragment IDs across five
+quickstarts, plus the create-plugin journey and history link. The owner lifted the storage pause for this task. Full deployed-site browser E2E
+then completed: 30 passed, 5 failed, no skipped tests or retries (179091.334 ms).
+All nine added locale/anchor/geometry cases passed. Five navigation/detail cases
+remain unresolved and are under independent hosted trace review; publication
+alone is not proof that this remaining acceptance is complete. PR #194 changes Windows init; its qualification is separate from
+PR #190 evidence and must be checked before carrying it into the authoring stack.
+This checkpoint does not complete phases 0-11 or release the new authoring CLI.
+
 ## Status
 
 - Decision: approved for planning.
@@ -50,13 +230,14 @@ The migration is a strangler refactor:
 2. Move reusable command construction out of `package main`.
 3. Convert commands by user job, starting with a complete `init -> validate ->
    inspect -> test` vertical slice.
-4. Preserve useful command names, but do not preserve behavior whose only
-   purpose was generating client manifests from `plugin/plugin.yaml`.
+4. Preserve useful command names and implementations. Keep YAML-specific
+   generation outside standard authoring; classify it for preservation or
+   adaptation instead of deleting it because the portable standard is narrower.
 5. Provide one explicit, non-destructive legacy project importer.
 6. Migrate first-party examples and documentation.
-7. Remove the old manifest engine from normal authoring after the migration
-   acceptance gate, while retaining one isolated read-only importer for the
-   announced migration-support window.
+7. Detach legacy wiring from normal standard authoring after the migration
+   gate. Retain the isolated importer and useful legacy implementations with
+   their tests; deletion follows the explicit capability-preservation gate.
 
 Expected implementation size:
 
@@ -96,8 +277,10 @@ Go/no-go gates:
    through both entrypoints in disposable roots.
 4. **Release gate:** native assets and wrappers bind the same authoring engine
    revision and current documentation teaches no legacy format.
-5. **Retirement gate:** old production packages are deleted only after consumer
-   inventory, first-party migration, and released migration tooling.
+5. **Preservation gate:** after consumer inventory, first-party migration and
+   released migration tooling, detach legacy standard-command wiring. Preserve
+   useful implementations and tests; each deletion needs an inventoried
+   capability decision explicitly accepted by the owner.
 
 ## Highest-risk assumptions
 
@@ -124,9 +307,10 @@ Go/no-go gates:
 4. Keep installation and authoring in one source repository and one domain
    model while preserving separate command responsibilities.
 5. Keep both public entrypoints behaviorally identical for authoring commands.
-6. Remove the current `plugin/plugin.yaml` authoring path from new documentation,
-   templates, source packages, and future releases after first-party migration;
-   historical release artifacts remain immutable.
+6. Stop teaching `plugin/plugin.yaml` as the current standard authoring path
+   after first-party migration. Preserve historical design docs, useful templates
+   and implementation in explicitly labelled legacy boundaries; historical
+   release artifacts remain immutable.
 7. Preserve installer security, lifecycle state, rollback, Directory trust,
    and client adapters without coupling them to authoring concerns.
 8. Remain forward-compatible with later Agent Plugins specification versions
@@ -382,7 +566,7 @@ The adaptation boundary is the project model. Reused services must accept a
 standard-first project or narrower capability interface, not
 `pluginmanifest.Manifest`.
 
-### Must be replaced or retired
+### Excluded from the standard domain; preserve implementation pending review
 
 - `plugin/plugin.yaml` as the authored root.
 - `targets` stored inside the authored manifest.
@@ -1259,7 +1443,9 @@ Record the approved standard-first authoring decision before behavior changes.
 3. Mark `PLUGIN_STANDARD_AND_PUBLISH_PLAN.md` and
    `PLUGIN_YAML_V1_SPEC.md` as historical, not current Agent Plugins guidance.
 4. Record the forbidden dependency directions and classify every current
-   command as reuse, adapt, migrate, or retire.
+   command as reuse, adapt, migrate, or retire from the standard interface.
+   Track implementation disposition separately as reuse, adapt, preserve/defer,
+   or owner-approved removal; retiring a command never implies code deletion.
 5. Capture current CLI `--help`, JSON outputs, release artifacts, and test
    baselines for intentional-diff review.
 
@@ -1545,8 +1731,9 @@ Complete a useful offline authoring loop without executing package content.
 2. Make default `test` compose conformance, authoring hygiene, static Skills,
    and MCP configuration checks without resolving or starting executables.
 3. Reuse Skills init/validate logic under the package `skills/` root.
-4. Remove the external npm Skills lifecycle wrappers from the authoring tree;
-   document their independent replacement when needed.
+4. Exclude external npm Skills lifecycle wrappers from standard authoring
+   command wiring; preserve their implementation and tests under the capability
+   inventory contract. Document an independent replacement only when it exists.
 5. Record the embedded Agent Skills profile identity in JSON results.
 
 ### Edge cases
@@ -1582,6 +1769,10 @@ installer's ability to load otherwise usable package components.
 - Agent Skills validation provenance is visible and reproducible.
 
 ## Phase 6 - Dual-entrypoint MVP release and documentation
+
+Delivery order: first deliver the owner-approved early public wording/site
+checkpoint above; then qualify and publish the full dual-entrypoint MVP. Public
+wording acceptance does not satisfy executable-release acceptance below.
 
 ### Summary
 
@@ -1629,10 +1820,12 @@ building migration, advanced packaging, and remote publication features.
 ### Tests
 
 - install both entrypoints in fresh isolated environments;
-- run the same golden authoring flow through each;
+- run the same golden authoring flow through each once on Linux amd64;
 - compare JSON output and resulting tree digests;
-- upgrade/uninstall/reinstall smoke on supported OSes;
-- npm provenance/checksum/cache tests;
+- run packaged launcher/init/validate/cleanup smoke on Windows amd64 and macOS
+  arm64; use build/package checks for other released architectures;
+- verify only the package channels included in this MVP candidate;
+- verify draft provenance, checksum, install and readback;
 - docs build, link checker, and landing smoke;
 - v1-to-v2 invocation tests for every removed, renamed, or deferred command.
 
@@ -1646,7 +1839,9 @@ package.
 ### Acceptance criteria
 
 - both entrypoints execute the same authoring engine revision;
-- Milestone A is usable without a registry, account, OAuth, or client install;
+- Milestone A authors and acquires the candidate package without a package
+  registry, account, OAuth, or preinstalled client. Local installer planning may
+  read the production public security feeds required by its fail-closed policy;
 - the main docs contain no current workflow requiring `plugin/plugin.yaml`;
 - a new user can distinguish install versus author in one screen;
 - deferred commands are absent; bounded v1 error shims never claim success or
@@ -1865,12 +2060,12 @@ artifacts.
 - the CLI performs no direct merge or ownership claim; any conditional merge is
   attributable to registry-owned protected policy and remains auditable.
 
-## Phase 11 - Legacy retirement
+## Phase 11 - Legacy isolation and capability preservation
 
 ### Summary
 
-Remove the old authoring model after standard-first parity and migration are
-proven.
+Detach the old model from standard authoring after parity and migration are
+proven, while preserving useful legacy capabilities and their implementation.
 
 ### Preconditions
 
@@ -1878,22 +2073,29 @@ proven.
 - standard-first CLI and docs released;
 - migration command released and tested;
 - npm/Homebrew/PyPI transition documented;
-- no current CI job depends on old manifests;
+- standard authoring/release CI does not require legacy manifests; isolated
+  tests for preserved implementations may still use explicit legacy fixtures;
 - repository-wide search classifies every remaining `plugin.yaml` reference as
-  a canonical legacy path, historical fixture, or migration test.
+  a preserved legacy implementation/design, canonical legacy path, historical
+  fixture, or migration test;
+- every capability has a reviewed preservation disposition before removal.
 
 ### Detailed implementation steps
 
-1. Remove old templates and normal command wiring.
+1. Detach old templates and command wiring from standard authoring; preserve
+   useful template source and tests in their documented legacy boundary.
 2. Remove old lifecycle aliases from the authoring binary.
-3. Remove unused `pluginmanifest`, generation, and publication code in bounded
-   dependency-safe PRs.
-4. Retain only the isolated read-only legacy importer, its minimal fixtures, and
-   migration documentation. It does not become a general legacy domain library.
+3. Complete the capability inventory with source, tests, consumers, mapping,
+   preservation destination and support status. Preserve unresolved code.
+4. Retain the isolated read-only importer plus useful legacy implementations,
+   required dependencies, tests and design documentation outside the standard
+   authoring graph. Remove only individually reviewed, owner-approved items in
+   bounded PRs. No automatic deletion based on unused standard-first imports.
 5. Mark `plugin-kit-ai` v1 npm/PyPI versions deprecated without deleting
    historical artifacts.
-6. Remove old runtime packages only after a consumer audit proves they are not
-   needed by maintained examples.
+6. Audit old runtime consumers and preserve useful packages even when no
+   maintained example currently calls them. Removal needs a recorded capability
+   decision and explicit owner acceptance, not only an unused-import search.
 
 ### Edge cases
 
@@ -1909,12 +2111,15 @@ proven.
 - repository-wide forbidden-import and forbidden-generated-file checks;
 - clean build/test/package from a fresh clone;
 - released standard-first smoke;
-- legacy source accepted only by migration command;
-- old releases remain downloadable.
+- standard authoring accepts legacy source only through explicit migration;
+  preserved legacy tests remain isolated and do not create implicit fallback;
+- old releases remain downloadable;
+- retained implementations and their required tests remain in source;
+- every deletion matches a reviewed inventory item explicitly accepted by the owner.
 
 ### Rollback / kill switch
 
-Revert one bounded removal PR. Do not restore the old authoring path inside a
+Revert one bounded isolation or owner-approved removal PR. Do not restore the old authoring path inside a
 new standard package. Historical binaries remain the fallback for an old
 project while it is migrated.
 
@@ -1924,6 +2129,8 @@ project while it is migrated.
   `plugin/plugin.yaml`;
 - explicit migration remains available through a narrow isolated reader until a
   future major version removes it under a separately announced support policy;
+- every legacy capability has an explicit preservation/adaptation destination
+  or owner-approved removal decision; unresolved cases remain preserved;
 - `plugin-kit-ai` means standard-first authoring;
 - `agentplugins` and `plugin-kit-ai` share one authoring implementation.
 
@@ -2015,6 +2222,10 @@ project while it is migrated.
 
 ## Test strategy
 
+For the accelerated MVP, the minimal evidence gate near the top of this plan
+controls. The broader strategy below applies when the corresponding deferred
+phase is entered; it is not cumulative pre-MVP work.
+
 ### Unit tests
 
 - command factories and flag isolation;
@@ -2066,17 +2277,23 @@ At minimum:
 ## CI gates
 
 Each bounded PR runs only the relevant focused suite plus required repository
-checks. The final release candidate runs:
+checks. The accelerated MVP merge candidate runs:
 
 1. Go tests for standard domain, loader, authoring, installer, and command roots.
 2. Conformance adapter suite.
 3. Template golden and generated-package validation matrix.
 4. Static forbidden-import/forbidden-manifest checks.
-5. Cross-platform build and launcher smoke.
-6. Deterministic archive comparison.
-7. npm/Homebrew/PyPI package verification where affected.
+5. Full Linux amd64 E2E for both entrypoints, packaged launcher/init/validate
+   smoke on Windows amd64 and macOS arm64, and build/package checks for other
+   released architectures.
+6. Deterministic generated-tree comparison between the two entrypoints.
+7. Verification for only the package channels changed by the candidate.
 8. Documentation build and link check.
-9. One full clean-clone E2E of each public authoring entrypoint.
+9. One full clean-clone E2E of each public authoring entrypoint on Linux amd64.
+
+The full eighteen-cell runtime matrix, repeated cross-host evidence replay, and
+four-invocation orchestration are not MVP gates. Add them later only when a
+specific supported runtime, publisher, or custody boundary requires them.
 
 Do not block independent implementation work on long CI when focused gates are
 already available. Do not rerun a fully proven exact head unless code,
@@ -2114,6 +2331,9 @@ may include the selected root only when explicitly requested.
 
 ## Proposed PR sequence and review budget
 
+For the accelerated delivery, PRs 1-8 comprise the active roadmap through
+Milestone A. Items 9-16 are deferred backlog and do not block the current MVP.
+
 Approximate implementation budget: Phase 0 counts handwritten ADR/plan lines;
 Phases 1-10 estimate production code and exclude tests, generated fixtures, and
 generated documentation.
@@ -2131,7 +2351,7 @@ generated documentation.
 | 8 | Normalize/import/migration | 800-1,400 lines |
 | 9 | Preview/export/bundle | 700-1,200 lines |
 | 10 | GitHub/Directory publication | 500-900 lines |
-| 11 | Legacy retirement | Net deletion; migration shims only |
+| 11 | Legacy isolation and preservation | Re-estimate from capability inventory; no assumed net deletion |
 
 Re-estimate after Phases 2 and 6 using actual changed production/test lines and
 reuse achieved. Do not protect an early estimate by hiding necessary policy
@@ -2173,8 +2393,9 @@ identified generated docs, golden fixtures, and mechanical file moves.
     - deterministic archives and bundle inspection.
 15. `feat(authoring): publish standard packages`
     - exact GitHub release and Directory submission plan.
-16. `refactor(authoring): retire plugin yaml engine`
-    - one or more bounded deletion PRs after preconditions pass.
+16. `refactor(authoring): isolate legacy capabilities`
+    - preserve useful implementation and tests outside standard authoring;
+      deletion PRs only for individually owner-approved inventory items.
 
 The exact PR count may shrink when adjacent changes remain below the review
 budget and share one invariant. Do not combine installer lifecycle changes,
@@ -2206,10 +2427,15 @@ Exit criteria:
   shared MCP, and client-specific activation outcomes;
 - no legacy manifest emitted or read;
 - installer tests remain green;
-- both native entrypoints and supported wrappers are released from the same
-  engine revision.
+- both native entrypoints and included wrappers are qualified from the same
+  engine revision as draft artifacts; public release requires the separate
+  version-specific owner approval;
+- the minimal evidence gate above passes on the exact merge candidate.
 
 ### Milestone B - Useful parity
+
+Deferred after the accelerated MVP. It is not part of the current PR's
+completion denominator.
 
 Adds:
 
@@ -2230,12 +2456,15 @@ Exit criteria:
 - standard archives are deterministic;
 - old authoring docs are no longer primary.
 
-### Milestone C - Publish and retirement
+### Milestone C - Publish and capability preservation
+
+Deferred after Milestone B. It is not part of the current PR's completion
+denominator.
 
 Adds:
 
 - GitHub release and Directory submission;
-- legacy code retirement.
+- legacy isolation and reviewed capability preservation.
 
 Size depends on how much existing publication infrastructure can be cleanly
 adapted. Re-estimate after Milestone B rather than inventing a large platform
@@ -2243,11 +2472,16 @@ up front.
 
 ## Final acceptance criteria
 
+The checklist below remains the **full roadmap** acceptance. For the current
+accelerated delivery, completion means Milestone A plus its minimal evidence
+gate; unchecked Milestone B/C items are tracked backlog, not a reason to hold
+the MVP merge.
+
 The program is complete when all of the following are true:
 
-- [ ] `plugin.json` is the only current authoring manifest.
-- [ ] No normal command reads or creates `plugin/plugin.yaml`.
-- [ ] Legacy input is accepted only by explicit non-destructive migration.
+- [ ] `plugin.json` is the only current standard authoring manifest.
+- [ ] No normal standard authoring command reads or creates `plugin/plugin.yaml`.
+- [ ] Standard authoring accepts legacy input only by explicit non-destructive migration.
 - [ ] `plugin-kit-ai` and `agentplugins author` invoke one Go implementation.
 - [ ] Equivalent commands have equivalent JSON contracts, exit codes, and
       filesystem effects.
@@ -2264,7 +2498,9 @@ The program is complete when all of the following are true:
 - [ ] Current docs and templates do not teach the old format.
 - [ ] First-party examples are migrated or explicitly classified as non-portable
       client extensions.
-- [ ] Old current-release authoring engine is removed after migration gates.
+- [ ] Standard command wiring is independent of the legacy model after migration gates.
+- [ ] Useful legacy implementation, dependencies, tests and design documentation
+      are preserved; each deletion has an explicit owner-approved inventory decision.
 
 ## Decision summary
 
