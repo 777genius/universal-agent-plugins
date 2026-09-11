@@ -52,24 +52,27 @@ func context7GuidedFixture(t *testing.T) (cliFixture, *fixedDirectoryClient, *lo
 func TestContext7GuidedMissingRegistrationAndResume(t *testing.T) {
 	f, directory, acquirer := context7GuidedFixture(t)
 	out, _, err := f.execute(false, "add", "context7", "--target", "kiro,chatgpt", "--format", "json")
-	if err == nil {
-		t.Fatal("missing registration must require action")
+	if err != nil {
+		t.Fatalf("install peers before ChatGPT setup: %s %v", out, err)
 	}
 	var response struct {
 		Data map[string]any `json:"data"`
 	}
-	if json.Unmarshal([]byte(out), &response) != nil || response.Data["status"] != "action_required" || response.Data["mcp_url"] != domain.Context7ChatGPTURL || response.Data["authentication"] != "none" || response.Data["remote_verified"] != true {
+	if json.Unmarshal([]byte(out), &response) != nil || response.Data["status"] != "completed_with_action_required" || response.Data["succeeded"] != float64(1) || !strings.Contains(out, `"target":"chatgpt"`) || !strings.Contains(out, `"status":"action_required"`) {
 		t.Fatalf("action response %s: %v", out, err)
 	}
 	state, _ := f.store.Load()
-	if len(state.Installations) != 0 {
-		t.Fatal("missing registration mutated state")
+	if len(state.Installations) != 1 || len(state.Installations[0].Clients) != 1 {
+		t.Fatalf("peer installation state: %+v", state)
+	}
+	if !installationHasTarget(state.Installations[0], domain.ClientKiro, string(domain.ScopeUser)) {
+		t.Fatalf("Kiro peer missing from installation state: %+v", state)
 	}
 	if acquirer.verifiedCalls != 1 || acquirer.directGitCalls != 0 || acquirer.localCalls != 0 {
 		t.Fatalf("acquisition %#v", acquirer)
 	}
 	before, _ := json.Marshal(directory.bundle)
-	out, _, err = f.execute(false, "add", "context7", "--target", "kiro,chatgpt", "--chatgpt-app-id", fixturePersonalAppID, "--format", "json")
+	out, _, err = f.execute(false, "add", "context7", "--target", "chatgpt", "--chatgpt-app-id", fixturePersonalAppID, "--format", "json")
 	if err != nil {
 		t.Fatalf("resume: %s %v", out, err)
 	}

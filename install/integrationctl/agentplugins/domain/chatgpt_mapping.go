@@ -7,7 +7,7 @@ import (
 
 const Context7OAuthURL = "https://mcp.context7.com/mcp/oauth"
 const Context7ChatGPTURL = "https://mcp.context7.com/mcp"
-const ChatGPTRegistrationAction = "ChatGPT setup required:\n1. In Developer Mode, create and connect an app for https://mcp.context7.com/mcp with No authentication.\n2. Copy its asdk_app_ ID from app settings.\n3. Run: npx universal-agent-plugins add context7 --target chatgpt --chatgpt-app-id <ID>\n4. Install Context7 from your personal marketplace and select it in a new chat.\nGuide: https://developers.openai.com/plugins/build/plugins"
+const ChatGPTRegistrationAction = "ChatGPT needs setup:\n1. Create a Developer Mode app for https://mcp.context7.com/mcp (No authentication) and copy its asdk_app_ ID.\n2. Resume: npx universal-agent-plugins add context7 --target chatgpt --chatgpt-app-id <ID>\n3. Install Context7 from Personal marketplace and select it in a new chat.\nGuide: https://developers.openai.com/plugins/build/plugins"
 
 // ChatGPTMappedPreparationAction applies only after the personal mapping exists.
 const ChatGPTMappedPreparationAction = "Install Context7 from your personal marketplace in ChatGPT, then select it in a new chat."

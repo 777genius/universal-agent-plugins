@@ -48,7 +48,7 @@ func TestContext7InteractivePreparationChoice(t *testing.T) {
 
 func emittedRegistrationCommand(t *testing.T, action string) string {
 	t.Helper()
-	_, command, ok := strings.Cut(action, "3. Run: npx universal-agent-plugins ")
+	_, command, ok := strings.Cut(action, "2. Resume: npx universal-agent-plugins ")
 	if !ok {
 		t.Fatalf("missing resume command: %s", action)
 	}
@@ -63,20 +63,31 @@ func TestContext7ResumeEmittedMixedCommandAndPreparedGuidance(t *testing.T) {
 	f, d, a := context7GuidedFixture(t)
 	before, _ := json.Marshal(d.bundle)
 	out, _, err := f.execute(false, "add", "context7-alias", "--target", "kiro,chatgpt", "--format", "json", "--scope", "user", "--plain", "--security-details", "--no-color")
-	if err == nil {
-		t.Fatal("expected registration")
+	if err != nil {
+		t.Fatalf("peer installation: %s %v", out, err)
 	}
 	var response struct {
-		Data map[string]any `json:"data"`
+		Data struct {
+			Targets []addTargetResult `json:"targets"`
+		} `json:"data"`
 	}
 	if err := json.Unmarshal([]byte(out), &response); err != nil {
 		t.Fatal(err)
 	}
-	command := emittedRegistrationCommand(t, response.Data["next_action"].(string))
-	for _, flag := range []string{"context7-alias", "kiro,chatgpt", "--format=json", "--scope=user", "--plain=true", "--security-details=true", "--no-color=true"} {
+	action := ""
+	for _, target := range response.Data.Targets {
+		if target.Target == string(domain.ClientChatGPT) {
+			action = target.NextAction
+		}
+	}
+	command := emittedRegistrationCommand(t, action)
+	for _, flag := range []string{"context7-alias", "--target chatgpt", "--format=json", "--scope=user", "--plain=true", "--security-details=true", "--no-color=true"} {
 		if !strings.Contains(command, flag) {
 			t.Fatalf("lost %s: %s", flag, command)
 		}
+	}
+	if strings.Contains(command, "kiro") {
+		t.Fatalf("resume must not reinstall completed peers: %s", command)
 	}
 	out, _, err = f.execute(false, strings.Fields(command)...)
 	if err != nil {
@@ -161,10 +172,10 @@ func TestContext7InteractiveSelectionOnlyAppliesSelectedIntent(t *testing.T) {
 			}
 			out, _, err := f.executeInput(true, "", "add", "context7", "--plain")
 			if chooseChatGPT {
-				if err == nil || !strings.Contains(err.Error(), "action_required") {
+				if err != nil || !strings.Contains(out, "chatgpt: setup required") {
 					t.Fatalf("%s %v", out, err)
 				}
-				command := emittedRegistrationCommand(t, err.Error())
+				command := emittedRegistrationCommand(t, out)
 				out, _, err = f.execute(false, strings.Fields(command)...)
 			}
 			if err != nil {
@@ -312,24 +323,33 @@ func TestContext7GuidedSelectionKeepsEligibleCodex(t *testing.T) {
 			if len(request.Choices) != 3 {
 				t.Fatalf("prepare choices: %+v", request)
 			}
-			return prompt.TargetSelectionResult{IDs: []domain.ClientID{domain.ClientKiro, domain.ClientChatGPT}}, nil
+			return prompt.TargetSelectionResult{IDs: []domain.ClientID{domain.ClientCodex, domain.ClientKiro, domain.ClientChatGPT}}, nil
 		},
 		confirmFn: func() (prompt.ConfirmationResult, error) { return prompt.ConfirmationResult{Accepted: true}, nil },
 	}
 	out, _, err := f.executeInput(true, "", "add", "context7", "--plain")
-	if err == nil || !strings.Contains(err.Error(), "action_required") {
+	if err != nil || !strings.Contains(out, "chatgpt: setup required") {
 		t.Fatalf("registration: %s %v", out, err)
 	}
-	command := emittedRegistrationCommand(t, err.Error())
-	if strings.Contains(command, "codex") || !strings.Contains(command, "chatgpt,kiro") {
+	command := emittedRegistrationCommand(t, out)
+	if strings.Contains(command, "codex") || strings.Contains(command, "kiro") || !strings.Contains(command, "--target chatgpt") {
 		t.Fatal(command)
+	}
+	state, _ := f.store.Load()
+	if len(state.Installations) != 1 || len(state.Installations[0].Clients) != 2 {
+		t.Fatalf("peer installation state: %+v", state)
+	}
+	for _, target := range []domain.ClientID{domain.ClientCodex, domain.ClientKiro} {
+		if !installationHasTarget(state.Installations[0], target, string(domain.ScopeUser)) {
+			t.Fatalf("%s peer missing from installation state: %+v", target, state)
+		}
 	}
 	out, _, err = f.execute(false, strings.Fields(command)...)
 	if err != nil {
 		t.Fatalf("resume %s: %s %v", command, out, err)
 	}
-	state, _ := f.store.Load()
-	if len(state.Installations) != 1 || len(state.Installations[0].Clients) != 2 {
+	state, _ = f.store.Load()
+	if len(state.Installations) != 1 || len(state.Installations[0].Clients) != 3 {
 		t.Fatalf("resume state: %+v", state)
 	}
 }
