@@ -1,7 +1,6 @@
 package commands_test
 
-// Packed acceptance is opt-in and consumes ROOT's completed, pinned npm run.
-// The separate source harness below tests this seam, never packed acceptance.
+// Shared planner fixtures remain in ordinary native coverage.
 import (
 	"bytes"
 	"context"
@@ -11,7 +10,6 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"reflect"
 	"runtime"
@@ -32,100 +30,6 @@ import (
 )
 
 type packedProject struct{ Product, Lane, Source string }
-type packedInputs struct {
-	Repo      string
-	Projects  []packedProject
-	Snapshots []struct{ Root string }
-}
-
-func TestPackedGeneratedPackagesReachExistingInstallerPlanner(t *testing.T) {
-	config := os.Getenv("UAP_PACKED_INSTALLER_CONFIG")
-	if config == "" {
-		for _, key := range []string{"UAP_PACKED_INSTALLER_CONFIG_SHA256", "UAP_PACKED_INSTALLER_COMMIT", "UAP_PACKED_INSTALLER_NODE", "UAP_PACKED_INSTALLER_OUTPUT"} {
-			if os.Getenv(key) != "" {
-				t.Fatalf("partial opt-in: %s without config", key)
-			}
-		}
-		t.Skip("ROOT-owned terminal packed-native input required")
-	}
-	if runtime.GOOS != "linux" || runtime.GOARCH != "amd64" {
-		t.Fatal("packed bridge requires Linux amd64")
-	}
-	_, file, _, _ := runtime.Caller(0)
-	repo := filepath.Clean(filepath.Join(filepath.Dir(file), "../../../../.."))
-	script := filepath.Join(repo, "npm/agentplugins/scripts/packed-installer-bridge.js")
-	node, digest, commit, output := os.Getenv("UAP_PACKED_INSTALLER_NODE"), os.Getenv("UAP_PACKED_INSTALLER_CONFIG_SHA256"), os.Getenv("UAP_PACKED_INSTALLER_COMMIT"), os.Getenv("UAP_PACKED_INSTALLER_OUTPUT")
-	if !filepath.IsAbs(node) || !filepath.IsAbs(config) || !filepath.IsAbs(output) || filepath.Clean(output) != output || len(digest) != 64 || len(commit) != 40 {
-		t.Fatal("complete absolute opt-in and identity pins required")
-	}
-	git := exec.Command("/usr/bin/git", "rev-parse", "HEAD")
-	git.Dir = repo
-	head, err := git.Output()
-	if err != nil || strings.TrimSpace(string(head)) != commit {
-		t.Fatalf("planner checkout is not intended commit: %v", err)
-	}
-	git = exec.Command("/usr/bin/git", "status", "--porcelain=v1", "--untracked-files=all")
-	git.Dir = repo
-	status, err := git.Output()
-	if err != nil || len(status) != 0 {
-		t.Fatalf("packed acceptance requires clean integrated checkout: %v\n%s", err, status)
-	}
-	verify := func() []byte {
-		t.Helper()
-		cmd := exec.Command(node, script, "verify", config, digest, commit)
-		var stderr bytes.Buffer
-		cmd.Stderr = &stderr
-		b, err := cmd.Output()
-		if err != nil {
-			t.Fatalf("sealed native intake: %v\n%s", err, stderr.String())
-		}
-		return b
-	}
-	before := verify()
-	var inputs packedInputs
-	if err := json.Unmarshal(before, &inputs); err != nil {
-		t.Fatal(err)
-	}
-	if inputs.Repo != repo || len(inputs.Projects) != 10 {
-		t.Fatal("wrong source checkout or incomplete project matrix")
-	}
-	for _, s := range inputs.Snapshots {
-		if within(s.Root, output) || within(output, s.Root) {
-			t.Fatal("bridge output overlaps input")
-		}
-	}
-	if within(repo, output) || within(filepath.Dir(config), output) {
-		t.Fatal("keep bridge output outside checkout and config directory")
-	}
-	var plans []map[string]any
-	for _, p := range inputs.Projects {
-		t.Run(p.Product+"/"+p.Lane, func(t *testing.T) { plans = append(plans, packedPlanner(t, p)...) })
-	}
-	if !bytes.Equal(before, verify()) {
-		t.Fatal("native inputs changed during planning")
-	}
-	if t.Failed() {
-		return
-	}
-	record := map[string]any{"kind": "packed-generated-existing-injected-installer-planner", "commit": commit, "config_sha256": digest, "inputs": json.RawMessage(before), "plans": plans, "release_eligible": false, "platform_acceptance": false, "attested": false}
-	b, err := json.MarshalIndent(record, "", "  ")
-	if err != nil {
-		t.Fatal(err)
-	}
-	// Exclusive terminal evidence only after all 30 plans and preservation checks.
-	if resolved, err := filepath.EvalSymlinks(filepath.Dir(output)); err != nil || resolved != filepath.Dir(output) {
-		t.Fatal("unsafe output parent")
-	}
-	f, err := os.OpenFile(output, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = f.Write(append(b, '\n'))
-	closeErr := f.Close()
-	if err != nil || closeErr != nil {
-		t.Fatalf("write evidence: %v %v", err, closeErr)
-	}
-}
 
 func within(root, p string) bool {
 	return p == root || strings.HasPrefix(p, root+string(filepath.Separator))
@@ -316,8 +220,8 @@ func packedPlanner(t *testing.T, p packedProject) []map[string]any {
 }
 
 func TestPackedInstallerSourceHarness(t *testing.T) {
-	if runtime.GOOS != "linux" {
-		t.Skip("disposable Linux source harness only")
+	if (runtime.GOOS != "linux" && runtime.GOOS != "windows") || (runtime.GOARCH != "amd64" && runtime.GOARCH != "arm64") {
+		t.Skip("source harness requires supported Linux/Windows amd64/arm64 host")
 	}
 	author := commands.App{Projects: project.Service{Scratch: t.TempDir()}, Revision: publicRevision, PublicContract: true}
 	for _, lane := range []string{"skill", "mcp-remote", "mcp-stdio", "hybrid-remote", "hybrid-stdio"} {
@@ -346,6 +250,75 @@ func TestPackedInstallerSourceHarness(t *testing.T) {
 				t.Fatalf("SOURCE HARNESS extra skill: %s", out)
 			}
 			packedPlanner(t, packedProject{Product: "SOURCE HARNESS ONLY", Lane: lane, Source: source})
+		})
+	}
+}
+
+// Assessment values here are deliberate test inputs, never lintai output/cache.
+type boundaryAssessment struct {
+	*packedScanner
+	fail       bool
+	assessment domain.SecurityAssessment
+}
+
+func (s *boundaryAssessment) Evaluate(ctx context.Context, in domain.SecurityEvaluationInput) (domain.SecurityAssessment, error) {
+	a, err := s.packedScanner.Evaluate(ctx, in)
+	if err != nil {
+		return a, err
+	}
+	if s.fail {
+		return a, fmt.Errorf("injected assessment failure")
+	}
+	a.Outcome = domain.SecurityBlockingFindings
+	a.Counts = domain.SecurityCounts{Blocking: 1, Total: 1}
+	a.Findings = []domain.SecurityFinding{{Code: "TEST-BLOCKING", Disposition: "block", Severity: "high", Path: "plugin.json", Message: "Deliberate test input"}}
+	s.assessment = a
+	return a, nil
+}
+func TestPackedInstallerAssessmentBoundaries(t *testing.T) {
+	for _, fail := range []bool{true, false} {
+		t.Run(fmt.Sprintf("assessment-error-%t", fail), func(t *testing.T) {
+			source := filepath.Join(t.TempDir(), "demo")
+			author := commands.App{Projects: project.Service{Scratch: t.TempDir()}, Revision: publicRevision, PublicContract: true}
+			if _, code, out := publicRun(t, author, []string{"init", source, "--name=demo", "--template=skill", "--format=json"}, false); code != 0 {
+				t.Fatal(out)
+			}
+			fixture, scratch := t.TempDir(), t.TempDir()
+			beforeSource, beforeFixture, beforeScratch := packedTree(t, source), packedTree(t, fixture), packedTree(t, scratch)
+			registry, err := specregistry.New()
+			if err != nil {
+				t.Fatal(err)
+			}
+			detector := &fixtureDetector{clients: []domain.DetectedClient{{ClientID: domain.ClientCodex, Status: domain.DetectionDetected, ConfigRoot: fixture}}}
+			scanner := &boundaryAssessment{packedScanner: &packedScanner{fixtureScanner: fixtureScanner{t: t}, source: source, scratch: scratch, tree: beforeSource}, fail: fail}
+			app := agentpluginscli.App{UserHome: fixture, ManagedRoot: filepath.Join(fixture, "managed"), Detector: detector, StateStore: noEffectState{},
+				SourceAcquirer: sourceacquisition.Acquirer{TempRoot: scratch}, PackageLoader: loader.Loader{Registry: registry}, NativePackageLoader: loader.OpenAILoader{Loader: loader.Loader{Registry: registry}}, SecurityEvaluator: scanner,
+				Lifecycle: usecase.Service{Stager: noEffectStager{}, Activator: noEffectActivator{}}}
+			var out, stderr bytes.Buffer
+			err = authoringcli.Factory(func() (*cobra.Command, error) { return agentpluginscli.NewRoot(app), nil }).Execute(context.Background(),
+				[]string{"add", source, "--target=codex", "--dry-run", "--format=json"}, authoringcli.Streams{Out: &out, Err: &stderr})
+			if fail {
+				if err == nil || !strings.Contains(err.Error(), "injected assessment failure") || out.Len() != 0 {
+					t.Fatal("assessment error published result", err, out.String())
+				}
+			} else {
+				var report struct {
+					Result string
+					Data   struct {
+						DryRun   bool `json:"dry_run"`
+						Security domain.SecurityAssessment
+					}
+				}
+				if err != nil || json.Unmarshal(out.Bytes(), &report) != nil || report.Result != "success" || !report.Data.DryRun || !reflect.DeepEqual(report.Data.Security, scanner.assessment) {
+					t.Fatal("blocking findings lost", err, out.String())
+				}
+			}
+			if stderr.Len() != 0 || detector.calls != 1 || scanner.calls != 1 {
+				t.Fatal("wrong seam or output", stderr.String(), detector.calls, scanner.calls)
+			}
+			if !reflect.DeepEqual(beforeSource, packedTree(t, source)) || !reflect.DeepEqual(beforeFixture, packedTree(t, fixture)) || !reflect.DeepEqual(beforeScratch, packedTree(t, scratch)) {
+				t.Fatal("assessment path mutated fixture or leaked acquisition")
+			}
 		})
 	}
 }

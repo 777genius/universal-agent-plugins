@@ -100,7 +100,9 @@ func checkTemplateJavaScriptSyntax(t *testing.T, source []byte) {
 	if err := os.WriteFile(path, source, 0600); err != nil {
 		t.Fatal(err)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	// Allow bounded headroom for slow CI process startup, including Windows.
+	const timeout = 60 * time.Second
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	// Parse only a newly generated temporary fixture. Do not import or execute
 	// the module, load the SDK, install dependencies, or inherit Node preload flags.
@@ -111,7 +113,13 @@ func checkTemplateJavaScriptSyntax(t *testing.T, source []byte) {
 		volume := filepath.VolumeName(dir)
 		cmd.Env = append(cmd.Env, "SystemRoot="+os.Getenv("SystemRoot"), "HOMEDRIVE="+volume, "HOMEPATH="+strings.TrimPrefix(dir, volume))
 	}
-	if out, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("node --check: %v\n%s", err, out)
+	// Bound output-pipe waits as well as process execution. OS process startup
+	// itself may delay cancellation, so this is not a hard wall-clock guarantee.
+	cmd.WaitDelay = 5 * time.Second
+	started := time.Now()
+	out, err := cmd.CombinedOutput()
+	ctxErr := ctx.Err()
+	if err != nil || ctxErr != nil {
+		t.Fatalf("node --check: elapsed=%s timeout=%s context=%v process=%v output=%q", time.Since(started), timeout, ctxErr, err, out)
 	}
 }

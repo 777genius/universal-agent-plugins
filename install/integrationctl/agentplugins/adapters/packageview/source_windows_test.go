@@ -195,7 +195,7 @@ func TestWindowsHandleLifetimeAndFailureCleanup(t *testing.T) {
 		}
 	}
 	// Windows denies removal if a directory handle leaked without delete sharing.
-	s, e := openSource(root)
+	s, e := openSource(root, GeneratedStaging{})
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -368,7 +368,7 @@ func TestWindowsJunctionsAndNamespaceRoots(t *testing.T) {
 		}
 	}
 	for _, name := range []string{filepath.Join(root, "contained-junction"), `\\.\pipe\packageview-disposable-nonexistent`, `\\?\GLOBALROOT\Device\NamedPipe`, `C:relative`, `\\server\share`} {
-		other, e := openSource(name)
+		other, e := openSource(name, GeneratedStaging{})
 		if e == nil {
 			other.close()
 			t.Fatal("namespace/reparse root accepted", name)
@@ -586,7 +586,7 @@ func TestWindowsRootAndIntermediateReparseRejected(t *testing.T) {
 	root := nativeFixture(t, func(root string) { nativeWrite(t, root, "real/plugin.json", "core") })
 	nativeLink(t, root, "real", "link")
 	for _, path := range []string{root + `\link\..\real`, root + `\link\.`} {
-		s, e := openSource(path)
+		s, e := openSource(path, GeneratedStaging{})
 		if e == nil {
 			s.close()
 			t.Fatalf("root traversal followed reparse: %s", path)
@@ -594,7 +594,7 @@ func TestWindowsRootAndIntermediateReparseRejected(t *testing.T) {
 	}
 	before := winRecordCount()
 	for i := 0; i < 10; i++ {
-		s, e := openSource(root + `\missing\root`)
+		s, e := openSource(root + `\missing\root`, GeneratedStaging{})
 		if e == nil {
 			s.close()
 			t.Fatal("accepted missing root")

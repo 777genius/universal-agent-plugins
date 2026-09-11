@@ -75,6 +75,49 @@ const locks = f => fs.existsSync(path.join(f.cache, ".locks")) ? fs.readdirSync(
 const run = (f, product = "agentplugins", extra = {}, hooks = {}) => p.ensureBinary(product, f.options(product, extra), hooks);
 function changeJSON(file, change) { const value = JSON.parse(fs.readFileSync(file)); change(value); write(file, c.encode(value)); }
 
+// Platform-independent: these check the digest/segment structure of cachePath
+// itself, not a live filesystem, so they run everywhere (not gated to Linux).
+nodeTest("cache path identity digest changes with every distinguishing tuple field", () => {
+  const base = { descriptor: { authoring_mode: "vertical-slice-v1", candidate_sha256: "a".repeat(64) },
+    version: "0.1.23", asset: { binary: { sha256: "b".repeat(64), file: "agentplugins" } } };
+  const baseline = p.cachePath("/cache", "agentplugins", "linux-amd64", base);
+  const variants = [
+    () => p.cachePath("/cache", "plugin-kit-ai", "linux-amd64", { ...base, asset: { binary: { ...base.asset.binary, file: "plugin-kit-ai" } } }),
+    () => p.cachePath("/cache", "agentplugins", "windows-amd64", base),
+    () => p.cachePath("/cache", "agentplugins", "linux-amd64", { ...base, version: "0.1.24" }),
+    () => p.cachePath("/cache", "agentplugins", "linux-amd64", { ...base, descriptor: { ...base.descriptor, candidate_sha256: "c".repeat(64) } }),
+    () => p.cachePath("/cache", "agentplugins", "linux-amd64", { ...base, descriptor: { ...base.descriptor, authoring_mode: "release-cli-contract-v1" } }),
+    () => p.cachePath("/cache", "agentplugins", "linux-amd64", { ...base, asset: { binary: { ...base.asset.binary, sha256: "d".repeat(64) } } }),
+  ];
+  const seen = new Set([baseline]);
+  for (const build of variants) {
+    const value = build();
+    assert.equal(seen.has(value), false, `tuple change did not change cache path: ${value}`);
+    seen.add(value);
+  }
+  assert.equal(seen.size, variants.length + 1);
+});
+
+nodeTest("resolved Windows cache path stays well under legacy MAX_PATH", () => {
+  // cachePath's fixed suffix is "v2" + sep + 64 hex digest chars + sep + binary
+  // filename; the digest folds in mode/candidate/product/version/target/binary
+  // identity so the suffix width no longer grows with those fields' lengths.
+  const longest = { descriptor: { authoring_mode: "vertical-slice-v1", candidate_sha256: "f".repeat(64) },
+    version: "999.999.999", asset: { binary: { sha256: "e".repeat(64), file: "plugin-kit-ai.exe" } } };
+  const suffix = p.cachePath("", "plugin-kit-ai", "windows-amd64", longest);
+  assert.ok(suffix.length <= 90, `cache path suffix grew unexpectedly: ${suffix.length}`);
+  // Legacy Windows MAX_PATH is 260 characters. A realistic, deeply nested,
+  // space-containing resolved cache root (a long username under
+  // AppData\Local) is comfortably under 170 characters, which leaves >90
+  // characters of headroom for the fixed suffix above -- unlike the prior
+  // nested-segment layout, whose fixed suffix alone (~265 chars) already
+  // exceeded MAX_PATH regardless of root length.
+  const realisticRoot = "C:\\Users\\Jane Alexandra Doe-Whitfield\\AppData\\Local\\uap\\private-npm-cache";
+  assert.ok(realisticRoot.length < 170, `test root assumption no longer realistic: ${realisticRoot.length}`);
+  const resolved = path.win32.join(realisticRoot, "v2", "f".repeat(64), "plugin-kit-ai.exe");
+  assert.ok(resolved.length < 260, `resolved windows path too long: ${resolved.length}`);
+});
+
 for (const product of c.PRODUCTS) test(`STRUCTURAL ${product}: cold, source-free warm, and ordinary corruption repair`, async () => {
   const f = fixture(); const before = snapshot(f.source); const rootMode = fs.statSync(f.source).mode;
   let acquisitions = 0; const hooks = { afterFreeze() { acquisitions++; } };
@@ -105,8 +148,8 @@ test("STRUCTURAL explicit roots, complete identity and product isolation; legacy
   write(path.join(f.cache, ID.versions.agentplugins, "agentplugins"), "wrong engine");
   const [a, b] = await Promise.all(c.PRODUCTS.map(product => run(f, product)));
   assert.notEqual(a.binaryPath, b.binaryPath);
-  assert.match(a.binaryPath, new RegExp(f.descriptors.agentplugins.candidate_sha256));
-  assert.match(a.binaryPath, new RegExp(f.manifest.products.agentplugins.assets[TARGET].binary.sha256));
+  assert.equal(a.binaryPath, p.cachePath(f.cache, "agentplugins", TARGET, f.release("agentplugins")));
+  assert.equal(path.basename(a.binaryPath), f.manifest.products.agentplugins.assets[TARGET].binary.file);
   const newer = fixture("linux-amd64-pair", { ...ID, versions: { agentplugins: "0.1.24", "plugin-kit-ai": "2.0.1" } });
   const unlockVersion = await v.acquireLock(a.binaryPath, { lockRoot: path.join(f.cache, ".locks") });
   try {
