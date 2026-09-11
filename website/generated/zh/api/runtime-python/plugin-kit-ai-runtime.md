@@ -12,7 +12,7 @@ maturity: "stable"
 sourceRef: "python/plugin-kit-ai-runtime/src/plugin_kit_ai_runtime/__init__.py"
 translationRequired: false
 ---
-<DocMetaCard surface="runtime-python" stability="public-stable" maturity="stable" source-ref="python/plugin-kit-ai-runtime/src/plugin_kit_ai_runtime/__init__.py" source-href="https://github.com/777genius/plugin-kit-ai/blob/main/python/plugin-kit-ai-runtime/src/plugin_kit_ai_runtime/__init__.py" />
+<DocMetaCard surface="runtime-python" stability="public-stable" maturity="stable" source-ref="python/plugin-kit-ai-runtime/src/plugin_kit_ai_runtime/__init__.py" source-href="https://github.com/777genius/universal-agent-plugins/blob/main/python/plugin-kit-ai-runtime/src/plugin_kit_ai_runtime/__init__.py" />
 
 # plugin_kit_ai_runtime
 

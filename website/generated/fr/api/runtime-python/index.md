@@ -19,6 +19,6 @@ Open this area when you need the shared runtime helper API for a repo-local Pyth
 - This page is the API reference, not the setup tutorial.
 - If you want the simplest end-to-end setup, start with [Build A Python Runtime Plugin](/fr/guide/python-runtime).
 - If you are still choosing the project shape, read [What You Can Build](/fr/guide/what-you-can-build) and [Choosing Runtime](/fr/concepts/choosing-runtime).
-- If you want the shared-dependency path instead of a repo-local generated helper file, use the [`plugin-kit-ai-runtime`](https://github.com/777genius/plugin-kit-ai/tree/main/python/plugin-kit-ai-runtime) package.
+- If you want the shared-dependency path instead of a repo-local generated helper file, use the [`plugin-kit-ai-runtime`](https://github.com/777genius/universal-agent-plugins/tree/main/python/plugin-kit-ai-runtime) package.
 
 - [`plugin_kit_ai_runtime`](/fr/api/runtime-python/plugin-kit-ai-runtime)

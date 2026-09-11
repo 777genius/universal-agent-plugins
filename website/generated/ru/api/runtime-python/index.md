@@ -19,6 +19,6 @@ translationRequired: false
 - Это справочник по API, а не пошаговый гайд.
 - Если нужен простой путь от нуля до рабочего Python-плагина, начните с [гайда по Python runtime](/ru/guide/python-runtime).
 - Если выбираете форму проекта, откройте [Что можно построить](/ru/guide/what-you-can-build) и [Выбор runtime](/ru/concepts/choosing-runtime).
-- Если нужен общий dependency-вариант вместо локально сгенерированного helper-файла, используйте пакет [`plugin-kit-ai-runtime`](https://github.com/777genius/plugin-kit-ai/tree/main/python/plugin-kit-ai-runtime).
+- Если нужен общий dependency-вариант вместо локально сгенерированного helper-файла, используйте пакет [`plugin-kit-ai-runtime`](https://github.com/777genius/universal-agent-plugins/tree/main/python/plugin-kit-ai-runtime).
 
 - [`plugin_kit_ai_runtime`](/ru/api/runtime-python/plugin-kit-ai-runtime)
