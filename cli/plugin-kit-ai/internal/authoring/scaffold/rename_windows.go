@@ -37,7 +37,11 @@ func renameResult(from *os.File, old string, to *os.File, new string, err error)
 		// Win32 errno so callers can classify collisions with os.ErrExist.
 		var status windows.NTStatus
 		if errors.As(err, &status) {
-			err = fmt.Errorf("%v: %w", err, status.Errno())
+			// Both %w verbs keep err's own chain (including the NTStatus
+			// windowsRenameError already classified) reachable via errors.As,
+			// not just its printed text; a lone %v here would otherwise hide
+			// it behind the newly added errno.
+			err = fmt.Errorf("%w: %w", err, status.Errno())
 		}
 		return &os.LinkError{Op: "rename-exclusive", Old: old, New: new, Err: err}
 	}

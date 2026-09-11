@@ -238,6 +238,17 @@ func TestReleasePairedPreparationReadOnlyGraph(t *testing.T) {
 			}
 			continue
 		}
+		if name == "verified-draft" {
+			// No explicit if: by design (draftReceiptJob's own forbidden-"if:"
+			// check in the release contract test). Reachability is entirely
+			// transitive through needs on the binary-only-gated stage-draft
+			// and platform-proof jobs, which Actions skips (not succeeds) for
+			// any other producer_mode, so this job never runs off that route.
+			if job.If != "" {
+				t.Fatalf("%s must stay gated only through needs, not an explicit if:", name)
+			}
+			continue
+		}
 		if name != "paired-preparation" {
 			if job.If != "${{ inputs.producer_mode == 'binary-only' }}" {
 				t.Fatalf("%s reachable from paired route", name)
@@ -554,7 +565,7 @@ func TestReleasePairedPromotionShellSyntax(t *testing.T) {
 			if step.Run == "" {
 				continue
 			}
-			cmd := exec.Command("/bin/bash", "-n")
+			cmd := exec.Command("bash", "-n")
 			cmd.Dir = t.TempDir()
 			cmd.Env = []string{"PATH=/usr/local/bin:/usr/bin:/bin"}
 			cmd.Stdin = strings.NewReader(step.Run)
@@ -588,7 +599,7 @@ func TestFrozenNativeReadOnlyWorkflowContract(t *testing.T) {
 	for _, step := range job.Steps {
 		scripts.WriteString(step.Run)
 		if step.Run != "" {
-			command := exec.Command("/bin/bash", "-n")
+			command := exec.Command("bash", "-n")
 			command.Env = []string{"PATH=/usr/local/bin:/usr/bin:/bin"}
 			command.Stdin = strings.NewReader(step.Run)
 			if output, err := command.CombinedOutput(); err != nil {
@@ -1042,7 +1053,7 @@ func TestC1WorkflowPreflightNoEffects(t *testing.T) {
 			}
 			for _, step := range job.Steps {
 				if step.Run != "" {
-					cmd := exec.Command("/bin/bash", "-n")
+					cmd := exec.Command("bash", "-n")
 					cmd.Stdin = strings.NewReader(step.Run)
 					if out, err := cmd.CombinedOutput(); err != nil {
 						t.Fatalf("shell syntax %s: %v %s", name, err, out)

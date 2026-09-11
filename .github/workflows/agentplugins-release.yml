@@ -418,7 +418,6 @@ jobs:
       release_assets_artifact: ${{ needs.stage-draft.outputs.assets_artifact }}
 
   verified-draft:
-    if: ${{ inputs.producer_mode == 'binary-only' }}
     needs: [validate, stage-draft, platform-proof]
     runs-on: ubuntu-latest
     permissions:
