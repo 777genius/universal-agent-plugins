@@ -418,6 +418,7 @@ jobs:
       release_assets_artifact: ${{ needs.stage-draft.outputs.assets_artifact }}
 
   verified-draft:
+    if: ${{ inputs.producer_mode == 'binary-only' }}
     needs: [validate, stage-draft, platform-proof]
     runs-on: ubuntu-latest
     permissions:
@@ -456,7 +457,7 @@ jobs:
           retention-days: 7
 
   promote-release:
-    if: ${{ inputs.publish_release == true }}
+    if: ${{ inputs.producer_mode == 'binary-only' && inputs.publish_release == true }}
     needs: [validate, stage-draft, platform-proof, verified-draft]
     runs-on: ubuntu-latest
     environment: agentplugins-release

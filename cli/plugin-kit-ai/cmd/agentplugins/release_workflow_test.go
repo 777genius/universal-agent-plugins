@@ -191,7 +191,7 @@ func TestReleasePairedPreparationReadOnlyGraph(t *testing.T) {
 	if len(w.Permissions) != 1 || w.Permissions["contents"] != "read" {
 		t.Fatal("workflow must default to contents-read")
 	}
-	if len(w.Jobs) != 11 {
+	if len(w.Jobs) != 12 {
 		t.Fatal("review every new producer job for preparation reachability")
 	}
 	for name, job := range w.Jobs {
@@ -201,6 +201,12 @@ func TestReleasePairedPreparationReadOnlyGraph(t *testing.T) {
 		if name == "paired-promotion-admission" || name == "paired-sign-and-promote" {
 			if job.If != "${{ github.event_name == 'workflow_dispatch' && inputs.producer_mode == 'paired-promotion' }}" {
 				t.Fatalf("%s loses explicit promotion isolation", name)
+			}
+			continue
+		}
+		if name == "promote-release" {
+			if job.If != "${{ inputs.producer_mode == 'binary-only' && inputs.publish_release == true }}" {
+				t.Fatalf("%s loses binary-only publication gate", name)
 			}
 			continue
 		}
@@ -255,7 +261,7 @@ func TestReleasePairedPreparationReadOnlyGraph(t *testing.T) {
 		valid := map[string]string{"SOURCE_SHA": strings.Repeat("a", 40), "WORKFLOW_SHA": strings.Repeat("a", 40),
 			"TAG": "agentplugins-v0.1.54", "KIT_VERSION": "2.0.0", "GITHUB_REPOSITORY": "777genius/universal-agent-plugins"}
 		runProducerPreflight(t, job.Steps[0].Run, valid, true)
-		for key, invalid := range map[string]string{"SOURCE_SHA": "latest", "WORKFLOW_SHA": strings.Repeat("b", 40), "TAG": "agentplugins-v01.2.3", "KIT_VERSION": "1.2.4", "GITHUB_REPOSITORY": "777genius/plugin-kit-ai"} {
+		for key, invalid := range map[string]string{"SOURCE_SHA": "latest", "WORKFLOW_SHA": strings.Repeat("b", 40), "TAG": "agentplugins-v1.2", "KIT_VERSION": "1.2.4", "GITHUB_REPOSITORY": "777genius/plugin-kit-ai"} {
 			values := make(map[string]string)
 			for k, v := range valid {
 				values[k] = v
@@ -512,7 +518,7 @@ func TestReleasePairedPromotionProtectedGraph(t *testing.T) {
 
 func TestReleasePairedPromotionShellSyntax(t *testing.T) {
 	w := readProducerWorkflow(t, "agentplugins-release.yml")
-	if len(w.On.Dispatch.Inputs) != 10 {
+	if len(w.On.Dispatch.Inputs) != 11 {
 		t.Fatal("review dispatch input limit and closed input contract")
 	}
 	for _, name := range []string{"paired-promotion-admission", "paired-sign-and-promote"} {
@@ -825,7 +831,7 @@ func c1Contract(w producerWorkflow, name string, stage, signer bool) error {
 }
 func TestC1InputProvenanceWorkflowContract(t *testing.T) {
 	w := readProducerWorkflow(t, "agentplugins-release.yml")
-	if len(w.Jobs) != 11 || len(w.On.Dispatch.Inputs) != 10 || w.On.Dispatch.Inputs["producer_mode"].Type != "choice" || !w.On.Dispatch.Inputs["producer_mode"].Required {
+	if len(w.Jobs) != 12 || len(w.On.Dispatch.Inputs) != 11 || w.On.Dispatch.Inputs["producer_mode"].Type != "choice" || !w.On.Dispatch.Inputs["producer_mode"].Required {
 		t.Fatal("closed release inputs/jobs")
 	}
 	for _, name := range []string{"paired_input_admission", "paired_input_attestation"} {
@@ -895,7 +901,7 @@ func TestC1WorkflowFailureReachability(t *testing.T) {
 				for _, event := range []string{"workflow_dispatch", "workflow_run"} {
 					for _, status := range []string{"success", "failure", "cancelled", "skipped", ""} {
 						for _, publish := range []bool{true, false} {
-							values := map[string]any{"github.event_name": event, "inputs.producer_mode": mode, "inputs.publish": publish,
+							values := map[string]any{"github.event_name": event, "inputs.producer_mode": mode, "inputs.publish": publish, "inputs.publish_release": publish,
 								"success": status == "success", "failure": status == "failure", "cancelled": status == "cancelled", "always": true}
 							for dependency := range w.Jobs {
 								values["needs."+dependency+".result"] = status

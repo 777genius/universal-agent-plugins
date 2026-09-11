@@ -258,7 +258,8 @@ The [prepared Build guide source](website/source/en/build/index.md) describes
 root `plugin.json` with optional `skills/` and `mcp.json`, followed by the offline
 init → validate → inspect → static test loop and an installer planner handoff.
 `agentplugins author` and `plugin-kit-ai` are the two prepared entrypoints to
-one standard authoring engine. This is unreleased preview documentation, not
+one standard authoring engine. The standard-first authoring CLI is not released.
+This is unreleased preview documentation, not
 an announcement that `plugin-kit-ai@2` is available on npm. Public deployment
 remains gated on release acceptance; the installer instructions above retain
 their existing behavior. See the [Use / Build quickstart](https://777genius.github.io/universal-agent-plugins/docs/en/guide/quickstart.html).

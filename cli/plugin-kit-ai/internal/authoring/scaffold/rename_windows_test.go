@@ -60,7 +60,7 @@ func TestWindowsRenameNativeClassification(t *testing.T) {
 			// Source delete denial fails NtCreateFile, before NtSetInformationFile;
 			// an independent destination tests only the diagnostic contract.
 			raw := renameWindows(root, old, root, "dest", nil)
-			if raw != want {
+			if !errors.Is(raw, want) {
 				t.Fatalf("native %s: raw=%v (%T), want %#x", kind, raw, raw, uint32(want))
 			}
 			err = &os.LinkError{Op: "rename-exclusive", Old: old, New: "dest", Err: windowsRenameError(raw, root, "dest")}
@@ -178,7 +178,7 @@ func TestWindowsApplyNativeCollisionCleanup(t *testing.T) {
 						// Source NtCreateFile really fails sharing. Remove only our empty
 						// destination before one probe, keeping the same source lease.
 						err = renameWindows(from, old, to, new, nil)
-						if err != windows.STATUS_SHARING_VIOLATION {
+						if !errors.Is(err, windows.STATUS_SHARING_VIOLATION) {
 							t.Fatalf("raw source sharing: %v", err)
 						}
 						if !reflect.DeepEqual(before, skillTree(t, parent)) {
