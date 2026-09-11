@@ -34,7 +34,11 @@ function workspace(label) {
 }
 function sourceFixture(root, env) {
   const repo = mkdir(path.join(root, "source repo"));
-  for (const file of s.ALLOWLIST) write(path.join(repo, file), fs.readFileSync(path.resolve(__dirname, "../../..", file)));
+  // blobs() always verifies npm-public-contract.js via its own packHelper check,
+  // independent of ALLOWLIST membership; the synthetic repo needs it too.
+  for (const file of [...s.ALLOWLIST, "npm/agentplugins/scripts/npm-public-contract.js"]) {
+    write(path.join(repo, file), fs.readFileSync(path.resolve(__dirname, "../../..", file)));
+  }
   checked("/usr/bin/git", ["init", "--quiet", repo], env);
   checked("/usr/bin/git", ["config", "user.name", "iliya"], env, repo);
   checked("/usr/bin/git", ["config", "user.email", "iliyazelenkog@gmail.com"], env, repo);
