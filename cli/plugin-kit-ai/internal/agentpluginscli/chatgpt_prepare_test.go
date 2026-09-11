@@ -15,7 +15,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/providers"
 )
 
-const fixturePersonalAppID = "asdk_app_0123456789abcdef0123456789abcdef"
+const fixturePersonalAppID = "plugin_asdk_app_0123456789abcdef0123456789abcdef"
 
 // This fixture exercises the verified-acquisition interface with immutable local
 // bytes. It is deliberately not a live catalog or remote ChatGPT qualification.
@@ -180,7 +180,7 @@ func TestContext7GuidedLifecycleRetainsReceipt(t *testing.T) {
 }
 
 func TestContext7GuidedRejectsInvalidIDsAndUnverifiedSource(t *testing.T) {
-	for _, id := range []string{"connector_old", "asdk_app_", "asdk_app_short", "asdk_app_bad/id", " asdk_app_abc", "plugin_asdk_app_0123456789abcdef0123456789abcdef"} {
+	for _, id := range []string{"connector_old", "asdk_app_", "asdk_app_short", "asdk_app_bad/id", " asdk_app_abc", "plugin_asdk_app_"} {
 		t.Run(id, func(t *testing.T) {
 			f, _, a := context7GuidedFixture(t)
 			_, _, err := f.execute(false, "add", "context7", "--target", "chatgpt", "--chatgpt-app-id", id)
