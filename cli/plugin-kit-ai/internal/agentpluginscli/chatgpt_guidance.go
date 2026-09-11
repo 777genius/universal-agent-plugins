@@ -13,9 +13,6 @@ import (
 // echo a personal ID; the only added value is a registration placeholder.
 func chatGPTRegistrationResumeAction(cmd *cobra.Command, source string, targets []domain.ClientID) string {
 	targetOption := strings.Join(clientIDStrings(targets), ",")
-	if cmd.Flags().Changed("target") {
-		targetOption, _ = cmd.Flags().GetString("target")
-	}
 	args := []string{"add", quoteResumeArgument(source), "--target", quoteResumeArgument(targetOption)}
 	cmd.Flags().Visit(func(flag *pflag.Flag) {
 		switch flag.Name {

@@ -18,6 +18,9 @@ Changes after `v1.2.4` land here.
 
 ### Fixed
 
+- A pending ChatGPT registration no longer cancels a multi-client Context7
+  installation. Other selected clients are installed and ChatGPT is reported
+  as a separate setup step with a ChatGPT-only resume command.
 - `agentplugins add` now enters the guided Context7 setup for ChatGPT and Kiro
   automatically. The former `--prepare` flag has been removed, and ChatGPT
   registration guidance is formatted as four short, executable steps.

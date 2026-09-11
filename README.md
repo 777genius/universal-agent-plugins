@@ -84,7 +84,9 @@ npx universal-agent-plugins add context7 --target chatgpt,kiro
 - ChatGPT: the CLI guides you to create a Developer Mode app for
   `https://mcp.context7.com/mcp` with **No authentication**, accepts the
   resulting `asdk_app_...` ID, and prepares a personal marketplace package.
-  You still install that package and select Context7 in a new chat.
+  You still install that package and select Context7 in a new chat. When other
+  clients are selected too, the CLI installs them first and reports ChatGPT as
+  a separate setup step instead of cancelling the whole batch.
 - Kiro: the CLI installs its owned skills and MCP entry while preserving
   unrelated configuration. On macOS and Windows it reports the remaining
   Kiro OAuth/restart step instead of claiming automatic runtime verification.
