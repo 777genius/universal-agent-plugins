@@ -267,6 +267,27 @@
     "customLogicCta": "Open the advanced guide",
     "customLogicDescription": "Choose this when your code, hooks, or runtime behavior define the product."
   },
+  "pluginAuthoring": {
+    "eyebrow": "Standard-first authoring",
+    "title": "Use plugins. Build plugins.",
+    "subtitle": "Two separate jobs, two separate journeys: install and manage Agent Plugins 1.0 packages today, or prepare your own portable package while standard-first authoring is in preview.",
+    "use": {
+      "badge": "Available now",
+      "title": "Use plugins",
+      "description": "Install, inspect, update, repair, and remove packages with the existing installer.",
+      "cta": "Open the Use guide"
+    },
+    "build": {
+      "badge": "Unreleased preview",
+      "title": "Build plugins",
+      "description": "Prepare a portable Agent Plugins 1.0 package: root plugin.json with optional skills/ and mcp.json, then the offline init → validate → inspect → static test loop. This is unreleased preview documentation, not an announcement that the standard-first plugin-kit-ai v2 package is available on npm.",
+      "cta": "Open the Build guide (preview)"
+    },
+    "historical": {
+      "eyebrow": "Maintaining an existing v1 project?",
+      "cta": "Historical plugin-kit-ai v1 guide"
+    }
+  },
   "faq": {
     "sectionTitle": "Got questions? We've got answers",
     "subtitle": "The practical version: what this solves, who it is for, and which page to open first.",

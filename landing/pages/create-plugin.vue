@@ -1,9 +1,11 @@
 <script setup lang="ts">
-// Keep the legacy authoring page out of search until its plugin.yaml workflow
-// is replaced by the approved plugin.json-first Agent Plugins 1.0 flow.
+// Keep this page out of search until standard-first authoring reaches its own
+// release gate (see docs/AUTHORING_CAPABILITY_PRESERVATION.md and the release
+// holds in the implementation plan) — the page itself stays reachable only by
+// direct URL and is not linked from the header/footer yet.
 usePageSeo(
-  'Create an Agent Plugin 1.0 Package | Universal Agent Plugins',
-  'A future guide for creating portable Agent Plugins 1.0 packages for multiple AI agents.',
+  'Use plugins. Build plugins. | Universal Agent Plugins',
+  'Install and manage Agent Plugins 1.0 packages today, or prepare your own portable package while standard-first authoring is in preview.',
   {
     translate: false,
     robots: 'noindex, follow',
@@ -16,18 +18,10 @@ const { containerRef } = useParallaxSections();
 <template>
   <div ref="containerRef" class="page">
     <PageBackground />
-    <HeroSection />
+    <AuthoringHeroSection />
     <SectionDivider />
-    <LazyFeaturesSection />
+    <AuthoringJourneysSection />
     <SectionDivider :flip="true" />
-    <LazyScreenshotsSection />
-    <SectionDivider />
     <LazyCustomLogicSection />
-    <SectionDivider :flip="true" />
-    <LazyDownloadSection />
-    <SectionDivider :flip="true" />
-    <LazyComparisonSection />
-    <SectionDivider />
-    <LazyFAQSection />
   </div>
 </template>
