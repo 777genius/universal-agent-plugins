@@ -515,38 +515,26 @@ test('the authoring frontdoor distinguishes Use from unreleased Build and links 
   page,
 }) => {
   await page.goto('./create-plugin');
-  await expect(page.locator('#authoring-hero h1')).toHaveText('Use plugins. Build plugins.');
 
-  const useCard = page.locator('.authoring-journeys-section__card--use');
-  await expect(useCard.locator('.authoring-journeys-section__card-title')).toHaveText(
-    'Use plugins',
-  );
-  await expect(useCard.locator('.authoring-journeys-section__badge')).toHaveText('Available now');
-  await expect(useCard.locator('.authoring-journeys-section__link')).toHaveAttribute(
+  await expect(page.locator('#use-plugins a')).toHaveAttribute(
     'href',
-    'https://777genius.github.io/universal-agent-plugins/docs/en/use/',
+    'https://github.com/777genius/universal-agent-plugins#quick-start',
   );
-
-  const buildCard = page.locator('.authoring-journeys-section__card--build');
-  await expect(buildCard.locator('.authoring-journeys-section__card-title')).toHaveText(
-    'Build plugins',
-  );
-  await expect(buildCard.locator('.authoring-journeys-section__badge')).toHaveText(
-    'Unreleased preview',
-  );
-  await expect(buildCard.locator('.authoring-journeys-section__link')).toHaveAttribute(
+  await expect(page.locator('#build-plugins a').first()).toHaveAttribute(
     'href',
-    'https://777genius.github.io/universal-agent-plugins/docs/en/build/',
+    'https://agent-plugins.org/specification',
   );
-  // The unreleased preview must explicitly disclaim an npm announcement, not
+  await expect(page.locator('#build-plugins a').nth(1)).toHaveAttribute(
+    'href',
+    'https://github.com/777genius/universal-agent-plugins#supported-clients',
+  );
+  // The unreleased preview must explicitly disclaim availability, not
   // silently omit the topic.
-  await expect(buildCard).toContainText('not an announcement that');
+  await expect(page.locator('#build-plugins')).toContainText('is in preparation and is unreleased');
 
-  await expect(
-    page.locator('.authoring-journeys-section__historical a'),
-  ).toHaveAttribute(
+  await expect(page.locator('#historical-v1 a')).toHaveAttribute(
     'href',
-    'https://777genius.github.io/universal-agent-plugins/docs/en/legacy/v1/',
+    'https://777genius.github.io/universal-agent-plugins/docs/en/guide/quickstart.html#historical-v1',
   );
 });
 

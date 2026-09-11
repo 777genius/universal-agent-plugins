@@ -133,7 +133,10 @@ func readProducerWorkflow(t *testing.T, name string) producerWorkflow {
 
 func runProducerPreflight(t *testing.T, script string, values map[string]string, success bool) {
 	t.Helper()
-	command := exec.Command("/bin/bash", "-c", script)
+	// A resolved "bash" (not the fixed macOS system /bin/bash) is required:
+	// Apple's frozen bash 3.2 does not reliably abort on a failing bare [[ ]]
+	// under set -e, which would silently accept invalid preflight input.
+	command := exec.Command("bash", "-c", script)
 	command.Dir = t.TempDir()
 	command.Env = []string{"PATH=/usr/local/bin:/usr/bin:/bin"}
 	for key, value := range values {
@@ -271,7 +274,7 @@ func TestReleasePairedPreparationReadOnlyGraph(t *testing.T) {
 		}
 	}
 	// Preserve the existing publication gate dependency chain.
-	for name, expected := range map[string]string{"build": "validate", "stage-draft": "validate,build", "platform-proof": "validate,stage-draft", "promote-release": "validate,stage-draft,platform-proof"} {
+	for name, expected := range map[string]string{"build": "validate", "stage-draft": "validate,build", "platform-proof": "validate,stage-draft", "verified-draft": "validate,stage-draft,platform-proof", "promote-release": "validate,stage-draft,platform-proof,verified-draft"} {
 		var needs []string
 		switch value := w.Jobs[name].Needs.(type) {
 		case string:
@@ -684,7 +687,7 @@ func TestN2ExcludedNativeExecutionRemainsFailure(t *testing.T) {
 	if job.Steps[0].Uses != "" || !strings.Contains(job.Steps[0].Run, "NATIVE_EXECUTION_PENDING") {
 		t.Fatal("excluded platforms must not download or execute products")
 	}
-	command := exec.Command("/bin/bash", "-e", "-c", job.Steps[0].Run)
+	command := exec.Command("bash", "-e", "-c", job.Steps[0].Run)
 	command.Env = []string{"PATH=/usr/local/bin:/usr/bin:/bin"}
 	if output, err := command.CombinedOutput(); err == nil || !strings.Contains(string(output), "No terminal emitted") {
 		t.Fatalf("pending execution must fail, not become skipped qualification: %v %s", err, output)
@@ -1055,7 +1058,7 @@ func TestC1WorkflowPreflightNoEffects(t *testing.T) {
 						t.Fatal(err)
 					}
 				}
-				cmd := exec.Command("/bin/bash", "-c", job.Steps[0].Run)
+				cmd := exec.Command("bash", "-c", job.Steps[0].Run)
 				cmd.Dir = dir
 				cmd.Env = []string{"PATH=/usr/local/bin:" + bin + ":/usr/bin:/bin", "MARKER=" + filepath.Join(dir, "effect")}
 				for key, value := range good {

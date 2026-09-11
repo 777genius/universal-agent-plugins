@@ -46,10 +46,15 @@ func renameResult(from *os.File, old string, to *os.File, new string, err error)
 
 func windowsRenameError(err error, to *os.File, new string) error {
 	// Both NT calls return NTStatus, which lacks Is/Unwrap in pinned x/sys, but
-	// renameWindows already wraps failures with %w so errors.Is still unwraps
-	// them. Leave err untouched here: callers (renameResult) attach the Win32
-	// errno afterward, and any "commit exclusive directory rename" context
-	// from renameWindows must survive into the final error unchanged.
+	// renameWindows already wraps failures with %w so errors.As still finds
+	// them. Join rather than replace so any "commit exclusive directory
+	// rename" context from renameWindows survives into the final error, while
+	// the Win32 errno becomes discoverable for os.ErrExist/os.ErrNotExist
+	// classification even for callers that never call renameResult.
+	var status windows.NTStatus
+	if errors.As(err, &status) {
+		err = errors.Join(err, status.Errno())
+	}
 	if !errors.Is(err, windows.STATUS_SHARING_VIOLATION) {
 		return err
 	}
