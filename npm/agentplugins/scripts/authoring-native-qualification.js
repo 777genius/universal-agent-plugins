@@ -58,7 +58,7 @@ const PROFILES = [
   { id: "agent-plugins/1.0.0", revision: "ff8ab5e392cc87bd88d87c060815a87490e51003", digest: "sha256:97a658b7dca3ce1b4c2266b95da300fa51d9dc4ade59d73168e5f9104272da18" },
   { id: "agent-skills/2026-09-06", revision: "69ef37e9424c0a7ea9dd2293b559e43ec8176379", digest: "sha256:b9079c0c10b7930e8c6a20ff2bc10cda2a3343c55185120e3f1116a1a529b220" },
   ...SCHEMAS.map(x => ({ ...x, revision: "1.0.0" })),
-  { id: "author-document-bounds/v1", revision: "1", digest: "sha256:4b8ab8fd50481ccd1a0b777dcbbfa06cf89516a5ea61ce09d56d6dd6a2c43004" }
+  { id: "author-document-bounds/v1", revision: "1", digest: "sha256:93ebbf02aa70a38b18fdc720ace9e45c8f911b91d94a5c85a26b96c2d69efa46" }
 ];
 function capabilities() {
   const rows = [
