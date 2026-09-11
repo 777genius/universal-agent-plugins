@@ -180,9 +180,9 @@ and attestation remain false. Local synthetic/source tests are not this run.
 
 Public preparation is **not** private native completion. The public producer
 `test/public-authoring-native.test.js` now emits an exclusive
-`public-native-completion.json` (`dual-authoring-public-native/v1`) only after
+`public-native-completion.json` (`dual-authoring-public-native/v2`) only after
 both products finish five lanes, `extra-skill`, static parity, isolation, cache
-recovery, and lifecycle checks. Its 70 authoring/installer invocation records
+recovery, and lifecycle checks. Its 71 authoring/installer invocation records
 are ordered and complete. Five successful npm installations separately bind
 actual fixture tarball paths and SHA256 values (independent prefixes, shared
 prefix, and reinstall). Preparation tarballs remain separate, unqualified
@@ -200,7 +200,7 @@ read-only byte consistency; it does not authenticate an arbitrary supplied log.
 Use the existing six request fields (`expectedCommit`, `nativeConfig`,
 `nativeConfigSha256`, `nativeCompletionSha256`, `fixtureRoot`,
 `disposableEvidence`) with the additional exact field
-`"intake": "public-fixture/v1"`. The completion digest must independently pin
+`"intake": "public-fixture/v2"`. The completion digest must independently pin
 `public-native-completion.json`. Omitting `intake` still selects the unchanged
 strict private schema. Unknown intake values and public/private substitution
 fail closed. Seal with the same `packed-installer-bridge.js seal REQUEST OUTPUT`
@@ -233,3 +233,289 @@ The final integrated source (including the independently owned preparation
 initialization fix) still needs owner-scheduled public native execution and
 packed planner acceptance. These focused synthetic tests do not satisfy that
 E2E or the external release/required-check prerequisites.
+
+Public v2 explicitly narrows executable installer evidence to command visibility
+and preflight rejection. Rows 1–69 retain the original authoring sequence; row 70
+is `agentplugins add --help --format=json` (one successful help JSON document,
+empty stderr); row 71 adds `--scope=project` to the original generated Skill
+vector and requires exit 1, no signal, empty stdout and the exact user-scope-only
+error. Totals are 69 zero exits, one retired-command exit 2, and one preflight
+exit 1. Both project trees, client and installer roots retain entries/bytes/modes.
+The test-only helper rejects valid installer vectors before spawning; it does
+not establish process-level network denial for Go descendants.
+
+The required `installer_boundary` is sealed into `public_evidence` and the
+public summary: `executable_observation: help-and-preflight-rejection`,
+`valid_add_dry_run: not_evaluated`, `reason: production-security-inputs-not-offline`,
+and `argv` retains the original valid add vector without the rejected scope.
+Strict v1 intake remains explicitly selectable and cannot accept v2; private
+schemas/counts remain unchanged. `check_public(..., require_valid_add=True)`
+rejects this evidence as insufficient for successful production add.
+
+The existing ten-project/thirty-plan acceptance still runs the real Go CLI and
+planner with injected detector/security/effects. It does not execute production
+main, Security Index or lintai. Help, rejection and injected assessments cannot
+close Milestone A's still-required successful distributed installer dry-run on
+generated projects. That separate legitimate installer acceptance must bind
+actual public launcher/native bytes, genuine security inputs, structured plans,
+source/client preservation and separately accounted scanner/cache/acquisition
+effects. It remains outstanding after v2 core success, independent review and
+fresh successor E2E; no historical candidate bytes may be relabelled.
+
+### C2 production acquisition boundary
+
+The same public launchers and kit postinstall accept the fixed v2 descriptor
+and complete `native-inputs.json` binding. V1 qualification/null behavior stays
+unchanged. V2 alone recognizes `UAP_PUBLIC_AUTHORING_ASSET_FILE` as an untrusted
+absolute locator in an owned private custody directory. Every supplied locator
+is checked before cache effects, including on warm hits; invalid input never
+falls back to download. Outer and inner pins come only from package metadata.
+Local and absent-locator anonymous acquisition converge on the existing locked,
+verified cache under `public-authoring-v2`. The supplied file is never executed.
+
+Bounded retained metadata/asset snapshots are rechecked before commit and return;
+close or cleanup uncertainty returns failure. The child environment removes the
+locator and existing proof controls. These checks assume an owned, quiescent
+namespace, without hostile same-UID, mount-replacement or all-host guarantees.
+Callers must separately keep project/client/evidence outputs outside custody.
+
+C2 source fixtures establish structural and interface behavior only. They do
+not authenticate C1 custody, qualify native inputs, or change either existing
+bridge intake. Genuine C3 execution needs a separately reviewed authenticated
+intake and actual installed launchers/postinstall and installer lifecycle.
+N2, C3 E, P/Q, B, anonymous public readbacks, pair channels, PyPI/Homebrew,
+full-platform E2E, release and phases 0–11 remain open.
+
+## C3a local authenticated input contract (execution remains closed)
+
+C3a adds a distinct `public-authenticated/v1` request, with exactly
+`intake,expectedCommit,journey,journeySha256,admission,admissionSha256,fixtureRoot`.
+It does not translate private, public-fixture/v1 or public-fixture/v2 receipts.
+Their existing false/null/not_evaluated claims and the offline v2 71-call
+boundary remain unchanged. No workflow, promotion, native qualification export,
+public launcher, dependency or package closure changes are part of C3a.
+
+`public-authoring-acceptance.js` fixes `public-wrapper-matrix/v1`'s eighteen
+host/runtime cells and thirty product/runtime executions. Its J codec binds the
+exact canonical I and S, both unchanged packs including SHA256/size/SRI/SHA1,
+all twelve native outer/inner subject pins, source F, producer run/attempt/ref,
+actual host and distinct controller/npm/shim Node/tool pins. It rejects unknown
+fields, alternate canonical spelling, duplicate keys, invalid UTF-8, excessive
+nesting and oversized records. Local paths must be canonical and quiescent;
+this does not introduce a hostile concurrent filesystem security guarantee.
+
+The fixed local receipt schema is `authoring-public-local-inputs/v1`. Its fields
+are `schema,selected,workflow_sha,input_file,stage,repo,work_parent,stage_root,
+input_root,journey_root,fixture_root,cell,tools,producer`. It contains comparison
+pins, never an authenticated/completed boolean. `readJourneyInputs` genuinely
+calls the existing completed `readStage` and `readInputs`, retaining their
+three- and nineteen-subject contracts. The existing stage reader supplies source,
+pack closure and pack inspection; C3a adds no extractor or verifier engine.
+Fresh authenticated subjects are compared with the original retained S/I/packs.
+Re-admission scratch is separate from original custody, source, projects and
+journey evidence, so later seal checks refer to the same original roots.
+
+J is `authoring-public-journey/v1`, with the plan's exact top-level fields.
+Evidence is an ordered table of fixed `commands.json`, `projects.json`,
+`npm-lifecycle.json`, `cache-process.json`, `installer.json` path/size/SHA256 rows.
+The limit is 1 MiB per record and non-command evidence file, 16 MiB for commands,
+and 1 MiB for each command stdout/stderr. The five-file closure therefore fits
+within the plan's 128 MiB aggregate cap. Original project snapshots include
+empty directories, bytes, sizes and modes. No regeneration or project copy is
+implemented. A fixed core inventory contains 55 kit-only or 127 pair command
+rows, including the eighteen genuine installer operations required per pair.
+Core argv/cwd/status/signal and bounded author result checks are recomputed;
+structural true assertions never imply their truth.
+
+**Live J admission deliberately fails.** Full npm shim/postinstall and peer
+lifecycle, cache/process/cancellation, complete conformance/parity and genuine
+installer result/observation validators belong to C3b. In particular there is
+no reviewed public-shim installer validator or whole-descendant observer
+interface available at this boundary. `verifyJourney` emits an explicit C3b
+missing-capability error even for structurally consistent transcripts. The
+three corresponding evidence payloads are bound bytes, not semantically
+validated results. No production producer returns synthetic success.
+`readJourneyInputs` is input-custody-only; `readJourney` cannot publish a seal.
+The local reader CLI exposes only `--read-local-inputs REQUEST` and explicitly
+labels that scope. Completed remote `readAcceptance` always fails in C3a.
+
+The bridge has separate `authenticated-options`, `authenticated-intake` and
+`authenticated-seal` commands. Its new seal pins the reader source in addition
+to the existing verifier/helper and repeats admission on `verify`. The runner's
+`--public-authenticated ROOT F OPTIONS` accepts exactly `request,go,node,modCache`.
+Python authentic runner, checker and direct reader entrypoints unconditionally
+reject with `missing independently provisioned trusted controller; C3b capability required`
+before interpreter subprocesses, planner effects, output creation or authenticated
+success. Receipt-selected `node` and self-supplied tool/reader hashes are not
+independent interpreter authority; no receipt or environment override opens this
+boundary. Prepared intake, Linux planner commands, five environment variables and
+terminal validations remain for C3b, covered only by explicitly synthetic gate
+mocks. C3b must independently provision the controller and make full public
+execution work; this closed subcheckpoint is not its completion.
+A local J/bridge, successful fixture TAP or injected planner cannot stand for E.
+
+Positive tests explicitly mock custody interfaces and, for bridge-only seal
+controls, the unavailable J result boundary. These are source controls only;
+they execute no npm, native, installer, scanner, verifier or provider. C3b must
+supply the genuine producer, full result validators, fixed workflow, completed
+E aggregate/authenticated reader and P adapter together. Its npm/process,
+workflow and P test names remain outstanding. Native/N2, genuine E, P/Q/B,
+anonymous acquisition/readbacks/channels, stable release and phases 0–11
+remain open; independent review and required remote CI are not waived.
+
+### C3b first invariant: source-frozen public tools
+
+The controller now reads only `.github/authoring-public-tools.json` beside the
+executing trusted checkout. `expectedCommit`, receipt pins, PATH and environment
+cannot select that root or an interpreter. `options.node` is comparison only.
+`authoring-public-tools/v1` fixes six controller keys, eighteen cell keys and the
+Linux-amd64 reader. The closed, ordered JSON encoding is two-space indentation
+plus one LF, using the existing encoding/checked-file interface in JavaScript
+and minimal standard-library checks in Python. Limits are 1 MiB and depth eight;
+unknown, missing, duplicate, reordered and alternate-encoded fields fail.
+
+All fields remain present. `null` means approved provision is unavailable;
+there are no approved pins in this checkout. Controller rows contain
+`node,python,git,gh,tar`, each eventually `{path,version,sha256}`. Cell
+`runner,image,observer,installer_policy` are immutable `{id,sha256}` bindings
+supplied by approved provisioning, not guessed runner labels. `npm_node` and
+`shim_node` must match the cell major. npm additionally requires
+`closure:{root,files:[{path,sha256}]}`: the sorted exhaustive regular-file closure,
+including its CLI and dependencies. `mod_cache` uses that same closure shape.
+Closures allow at most 4096 files, 8192 entries and 256 MiB; links and path aliases
+fail. Go and module cache are required only for Linux-amd64/pair-node22;
+installer policy is required for pair cells. Other null capabilities fail with
+`PUBLIC_PROVISIONING_REQUIRED:<controller-or-cell>:<field>` before execution.
+Provisioned versions are frozen metadata bound to bytes, not inferred by running
+a tool. Provisioning owners must supply authentic supply-chain instructions and
+immutable host/image identities before any real cell can run.
+
+`readProvisioning()` takes no root argument. `requireController(key)` returns a
+verified fixed Node path; `requireCellTools(key)` checks that cell's provision.
+Python `require_authenticated_controller()` accepts no caller input. Its initial
+TCB is trusted checkout plus trusted Python/workflow OS. Prepared subprocess paths
+recheck tools and trusted source before and after invocation, using an environment
+that excludes interpreter injection settings. The external provision contract
+must keep paths immutable throughout execution; hashes do not prevent hostile
+same-UID replacement between checks.
+
+A verified controller does **not** open authenticated summary success. A separate
+explicit `C3b execution incomplete` gate remains before receipt reads/effects:
+full result/installer/observer validation and independent invocation authority
+are still missing. Synthetic unit fixtures mock that later capability and child
+execution only; harmless tool bytes are never executed and establish no authentic
+acceptance. Full producer/validators/facades, workflow, J/E/P, genuine matrix and
+remaining release gates remain mandatory next-lane work.
+
+### C3b delivery step 2: fixed scenarios and producer
+
+This checkpoint implements `scenarioContract`, `verifyNpmLifecycle`,
+`verifyCacheProcess`, `verifyResults` and `produceJourney` in the authentic
+reader module. The original 55 kit / 127 pair core rows, including all eighteen
+installer rows per pair, remain unchanged. A separate immutable inventory adds
+five kit or 34 pair npm lifecycle rows, cache acquisition/repair/invalid-locator
+rows, simultaneous requests, literal arguments and host cancellation scenarios.
+Core command indices link observed processes to `commands.json`; they do not
+replace its inventory. No caller supplies commands, validators or policy.
+
+The producer uses the accepted source-frozen tools API and closed
+`authoring-public-produce/v1` request. It authenticates I/S before installing,
+compares both original packs and all native subject pins, derives fresh disjoint
+roots, invokes actual npm and its installed shims, finalizes the supported
+observer, rechecks source/tools/custody and then writes J plus local admission.
+Kit postinstall must use the selected npm Node. POSIX invokes the installed
+shim directly; Windows uses fixed `.cmd` version invocations and PowerShell
+`.ps1` calls with separately quoted literal arguments. npm install retains
+`--offline --ignore-scripts=false --foreground-scripts --no-audit --no-fund`;
+uninstall retains the corresponding fixed flags and exact package name.
+
+The three new records are closed, ordered schema/cell/row tables. Process rows
+bind ID/core index, actual argv/cwd/environment, executable/runtime identities,
+stdout/stderr size and SHA256, exit/signal, before/after project/prefix/cache/
+client/state/input identities, observed boundaries/counts, postinstall and
+monotonic intervals and the pinned literal-argument manifest effect. Boundary
+events are chronological: reached native/waiter boundary before cancellation,
+then final reaping; a cancelled waiter never launches native code. Repair
+records the exact intentional corruption before checked recovery. Cache
+evidence also binds descendant finalization;
+installer evidence binds assessment and eighteen readbacks. Raw observations
+and assessment are pinned `sidecars/` files, checked exhaustively with the
+128 MiB aggregate ceiling. The three scenario record files carry
+`rows: {shards: [{path,size,sha256}]}` with fixed ordered
+`sidecars/<record-name>-rows-<index>.json` transcript names. Each process row
+and envelope stays within 1 MiB; each ordered transcript shard stays within
+16 MiB. Readers verify pins, canonical partitioning and the aggregate before
+accepting expanded rows. Long workspace paths do not require omitting rows.
+Core transcripts retain 16 MiB and each output retains 1 MiB limits. Overflow
+prevents completion. Equality failures report a bounded assertion label rather
+than constructing potentially enormous diagnostic object diffs.
+
+Result validation checks engine/product versions, embedded schema and profile
+pins, command and client inventories, read profile, independent policy states,
+exact components and names, mutation effects, manifest identities and pair JSON
+and tree equality. Only explicit product/version and displayed invocation
+prefix differences are normalized. Directory and file modes and empty
+directories remain evidence. Cache checks require real repair, warm zero new
+acquisition/commit/download, four overlapping cold requests plus two warm,
+peer namespace preservation and reached cancellation/waiter boundaries.
+
+**Execution prerequisites remain absent on this source.** The fixed modules
+must be supplied and reviewed by their existing owners:
+
+- `public-authoring-custody.js`: `readPublicInputs` returning authenticated
+  `{stage,input}` with original retained subjects and checked pack closure.
+- `public-process-observation.js`: `openPublicObservation` and
+  `verifyPublicObservation`. Its session supplies `run`, `cancel`, `finish`.
+- `public-installer-evidence.js`: `requirePublicInstaller` and
+  `verifyPublicInstaller`, covering actual clean Codex detection, all three
+  lifecycle sources, genuine assessment/services and state/client readbacks.
+
+The process port's concrete return protocol for this consumer is
+`run -> {row,stdout,stderr}` and
+`finish -> {finalization,assessment,readbacks}`. The observer owns pinned raw
+sidecars in the supplied evidence root. `cancel({id,event})` uses the fixed
+scenario's reached boundary; it cannot silently pass an unreached signal.
+`verifyPublicObservation` returns checked `{rows,finalization}`;
+`verifyPublicInstaller` returns checked `{assessment,readbacks}`. Boolean
+success is rejected. These are required integration contracts, not supplied
+observer/security implementations or authentic execution evidence.
+
+Missing exports fail before npm/native effects with their exact module/export
+names. Post-admission setup, process, cancellation and finalization failures
+retain bounded diagnostics, including nested primary causes, without writing J.
+Synthetic unit fixtures establish semantic and orchestration controls
+only. The same-live-root bridge receives the producer's original ten projects;
+it must still run and independently verify its ten leaves/thirty plans in the
+later authorized integrated invocation. No Go gate is executed by this writer.
+Completed remote J/E, aggregation, E2, workflow and P remain mandatory step 3;
+`readAcceptance` stays closed. Full phases 0–11, genuine E2E, native/N2, release
+qualification and distribution gates remain open. This patch awaits independent
+review and does not constitute authentic public acceptance.
+
+### R1/R2 bounded source correction (2026-09-10)
+
+The authentic public validator now requires the exact five fixed `publicInit`
+closures: original and extra Skills, manifest, README, .gitignore, remote MCP
+references and the complete generated Node stdio sources/package/lock bytes.
+File and directory inventories and host modes are checked independently for each
+product. Captured file sizes/hashes bind the expected bytes before ordinary
+`agentplugins-tree-sha256-v1` framing is recomputed and compared with every
+retained read identity. The root is omitted from that engine digest; directory
+entries are included. The snapshot still seals the root and all empty directories.
+No additional empty directory is generated by these fixed commands. Existing
+live snapshot, bridge, evidence bounds and command inventories remain mandatory.
+
+Successful observer acquisition enters finalization scope before session method
+validation. An available finish is called exactly once even when run/cancel is
+missing; validation and finalizer errors are retained together, with no J.
+The observation owner must release all resources if open throws or returns no
+usable finalizer. The caller cannot finalize an absent method; its failure receipt
+is not evidence of quiescence. Only synthetic owner-interface tests cover this
+correction; no real observer experiment or substitute observer was performed.
+
+This correction does not authenticate execution or accept E2E/release. Genuine
+facades/provision, step 3 and full phases 0–11 remain open. N2 cyber refusal is
+NOT ACCEPTED. Refused security/crypto/ZIP work must not be retried, rerouted or
+replaced. Quarantined Windows parent-sharing/concurrency reproducers, ptrace or
+alternate observers, denied localhost/private-network/raw-download probes,
+network/auth/download/native execution and provisioning remain excluded.

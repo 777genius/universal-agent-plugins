@@ -61,11 +61,11 @@ function internal(observation = false, fastTimeout = false) {
   if (observation) source = source.replace('    e["scans.json"] = observationGate(); //', '    e["scans.json"] = JSON.parse(fs.readFileSync(path.join(install.env.TMPDIR, "fixture-scans.json"))); // Test-only captured child fixtures.');
   // Only this isolated test module pins the tiny synthetic tar. Unmodified
   // production readers must reject it; no runtime pin parameter is introduced.
-  if (observation) source = source.replace("2b3d176db752433b904a4b42375543ff398f4841d22e48f7d4f23ded925b72da", c.digest(scannerFixtureArchive));
+  if (observation) for (const pin of ["2b3d176db752433b904a4b42375543ff398f4841d22e48f7d4f23ded925b72da", "132a37610575bd251ecaf0be4c6090dad144dd1397c99aad989a3944c63c3d4a"]) source = source.replace(pin, c.digest(scannerFixtureArchive));
   if (fastTimeout) source = source.replace('installer ? 120000 : 15000', '100');
   // Expose lexical contracts only in this test VM. Production exports no policy,
   // verifier, command inventory, child executable or success switch.
-  source += '\nmodule.exports.test = { commands, installationCommands, verifyJourney, terminal, tree, canonical, context, subprocess, observationGate, jsonDocument, treeShape, packageIdentity, capabilities, PROFILES, POLICY, scannerArchive, SCANNER_RELEASES, publicInfoClient, publicInfoInstallation, installed };';
+  source += '\nmodule.exports.test = { HOSTS, hostContract, executableHost, subject, acquisition, commands, installationCommands, verifyJourney, terminal, tree, canonical, context, subprocess, observationGate, jsonDocument, treeShape, packageIdentity, capabilities, PROFILES, POLICY, scannerArchive, SCANNER_RELEASES, publicInfoClient, publicInfoInstallation, installed };';
   const Module = require("node:module");
   const instance = new Module(moduleFile, module);
   instance.filename = moduleFile; instance.paths = Module._nodeModulePaths(path.dirname(moduleFile));
@@ -1195,4 +1195,112 @@ test("scanner archive parsing fails closed on bounded malformed test archives", 
       url: "https://github.com/777genius/lintai/releases/download/v0.1.3/lintai-v0.1.3-x86_64-unknown-linux-gnu.tar.gz",
       bytes: body.toString("base64") } }, scannerFixture), name);
   });
+});
+
+
+test("N2 six closed host contracts preserve excluded execution and exact roots", async t => {
+  const api = internal().test;
+  assert.deepEqual(Object.keys(api.HOSTS).sort(), [...c.TARGETS].sort());
+  const known = {
+    'linux-amd64': ['linux', 'x64', 'x86_64', 'amd64'],
+    'linux-arm64': ['linux', 'arm64', 'aarch64', 'arm64'],
+    'darwin-amd64': ['darwin', 'x64', 'x86_64', 'amd64'],
+    'darwin-arm64': ['darwin', 'arm64', 'arm64', 'arm64'],
+    'windows-amd64': ['win32', 'x64', 'x86_64', 'amd64'],
+    'windows-arm64': ['win32', 'arm64', 'aarch64', 'arm64']
+  };
+  for (const [target, expected] of Object.entries(known)) await t.test(target, async () => {
+    const host = api.hostContract(target);
+    assert.deepEqual([host.platform, host.architecture, host.machine, host.goarch], expected);
+    assert.equal(host.client_root, 'home/.codex'); assert.equal(host.state_root, 'state');
+    assert.equal(host.project_root, 'projects'); assert.equal(host.argv, 'direct-array-no-shell');
+    assert.equal(host.binary_suffix, target.startsWith('windows-') ? '.exe' : '');
+    assert.equal(host.modes, target.startsWith('windows-') ? 'pending-native-acl-evidence' : 'posix-exact');
+    assert.equal(host.cancellation, target.startsWith('windows-') ? 'pending-owned-job-cleanup' : 'owned-process-group-sigkill');
+    const f = fixture(); f.options.target = target;
+    if (!target.startsWith('linux-')) {
+      await assert.rejects(native.produce(f.options), /NATIVE_EXECUTION_PENDING/);
+      assert.throws(() => native.readTerminals(f.root, f.root, f.pins, { ...expectations(f), target }), /NATIVE_EXECUTION_PENDING/);
+      noTerminal(f); assert.equal(fs.existsSync(f.options.work), false);
+    }
+  });
+  for (const target of ['linux-x64', 'linux-386', 'windows-x64', '__proto__', '', null]) {
+    assert.throws(() => api.hostContract(target), /unsupported native target contract/);
+  }
+});
+
+test("N2 native host mismatch cannot execute a selected foreign architecture", async t => {
+  const f = fixture(); f.options.target = 'linux-arm64';
+  let calls = 0; t.mock.method(cp, 'spawn', () => { calls++; throw Error('must not execute'); });
+  await assert.rejects(native.produce(f.options), /actual native host OS\/architecture/);
+  assert.equal(calls, 0); noTerminal(f); assert.equal(fs.existsSync(f.options.work), false);
+});
+
+test("N2 arm64 replay binds both selected subjects, scanner platform and unchanged full custody", async t => {
+  const f = fixture(); subprocessFixtures(t, f);
+  await internal(true).produce(f.options);
+  const api = internal(true).test, root = f.options.output;
+  for (const name of fs.readdirSync(root)) fs.chmodSync(path.join(root, name), 0o600);
+  const files = ['transcripts.json', 'trees.json', 'build-info.json', 'preservation.json',
+    'preparation.json', 'host.json', 'scans.json', 'acquisition.json'];
+  const evidence = Object.fromEntries(files.map(name => [name, JSON.parse(fs.readFileSync(path.join(root, name)))]));
+  const custody = structuredClone(evidence['preservation.json']);
+  for (const row of evidence['transcripts.json'].installer) for (const state of [row.before, row.after])
+    for (const entry of state.acquisition) entry.path = entry.path.replace('linux-amd64', 'linux-arm64');
+  for (const scan of evidence['scans.json']) {
+    scan.executable.path = scan.executable.path.replace('linux-amd64', 'linux-arm64');
+    scan.archive.url = scan.archive.url.replace('x86_64-unknown-linux-gnu', 'aarch64-unknown-linux-gnu');
+  }
+  for (const info of Object.values(evidence['build-info.json'])) {
+    const setting = info.Settings.find(x => x.Key === 'GOARCH'); assert.ok(setting); setting.Value = 'arm64';
+  }
+  Object.assign(evidence['host.json'], { architecture: 'arm64', machine: 'aarch64', target: 'linux-arm64' });
+  const expected = { ...expectations(f), target: 'linux-arm64' };
+  const manifest = JSON.parse(fs.readFileSync(path.join(f.root, 'candidate/candidate.json')));
+  const seal = () => {
+    for (const name of files) fs.writeFileSync(path.join(root, name), c.encode(evidence[name]));
+    for (const product of c.PRODUCTS) fs.writeFileSync(path.join(root, `${product}-terminal.json`),
+      c.encode(api.terminal(product, f.pins, manifest, expected, evidence, expected.tools)));
+  };
+  seal();
+  const result = fixtureReader(root, f.root, f.pins, expected);
+  assert.deepEqual(result.map(x => x.lane), c.PRODUCTS.map(p => `${p}/linux-arm64`));
+  assert.deepEqual(evidence['preservation.json'], custody);
+  for (const product of c.PRODUCTS) {
+    const terminal = result.find(x => x.subject.product === product);
+    assert.deepEqual(terminal.subject, { product, target: 'linux-arm64', ...manifest.products[product].assets['linux-arm64'] });
+  }
+  // Independently change each bound subject/host/invocation; the selected lane
+  // does not authorize trusting an embedded target or successful status field.
+  for (const mutate of [
+    x => { x.subject.target = 'linux-amd64'; },
+    x => { x.peer_subject.binary.sha256 = 'b'.repeat(64); },
+    x => { x.producer.run_attempt++; },
+    x => { x.host.machine = 'x86_64'; },
+    x => { x.assertions.runtime = 'pass'; },
+    x => { x.evidence.pop(); }
+  ]) {
+    const value = structuredClone(result[0]); mutate(value);
+    fs.writeFileSync(path.join(root, 'agentplugins-terminal.json'), c.encode(value));
+    assert.throws(() => fixtureReader(root, f.root, f.pins, expected));
+    seal();
+  }
+  assert.throws(() => fixtureReader(root, f.root, f.pins, expectations(f)));
+  assert.equal(fixtureReader(root, f.root, f.pins, expected).length, 2);
+  // Production still rejects the synthetic scanner archive; replay above is
+  // exclusively fixture control flow and never actual arm64 qualification.
+  assert.throws(() => native.readTerminals(root, f.root, f.pins, expected), /independently pinned scanner release archive/);
+});
+
+test('N2 explicit invalid target never falls back to accepted N1 default', async t => {
+  const f = fixture(); let processes = 0;
+  t.mock.method(cp, 'spawn', () => { processes++; throw Error('no process permitted'); });
+  for (const target of [null, undefined, '', 'linux-x64', 'linux-386', 'darwin-x64', 'windows-x64', '__proto__', 1, true, {}, []]) {
+    f.options.target = target;
+    await assert.rejects(native.produce(f.options), /unsupported native target contract/);
+    assert.throws(() => native.readTerminals(f.root, f.root, f.pins,
+      { ...expectations(f), target }), /unsupported native target contract/);
+    noTerminal(f); assert.equal(fs.existsSync(f.options.work), false);
+  }
+  assert.equal(processes, 0);
 });

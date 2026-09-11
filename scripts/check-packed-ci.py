@@ -269,11 +269,26 @@ def unchanged_snapshots(inputs):
         require(actual == expected, 'sealed tree changed')
 
 
-def check_public(root, sha):
+def public_boundary(native, intake, require_valid_add=False):
+    require(intake in ('public-fixture/v1', 'public-fixture/v2'), 'explicit public intake')
+    v2 = intake == 'public-fixture/v2'
+    require(native['schema'] == 'dual-authoring-public-native/' + ('v2' if v2 else 'v1'), 'public schema substitution')
+    if v2:
+        expected = dict(executable_observation='help-and-preflight-rejection', valid_add_dry_run='not_evaluated',
+            argv=['add', str(Path(native['projects']['agentplugins']) / 'skill'), '--target=codex', '--dry-run', '--format=json'],
+            reason='production-security-inputs-not-offline')
+        require(native.get('installer_boundary') == expected, 'outstanding production add requirement')
+    else:
+        require('installer_boundary' not in native, 'v2 boundary in v1')
+    require(not require_valid_add, 'insufficient evidence for successful production add: separate installer acceptance required')
+    return native.get('installer_boundary')
+
+
+def check_public(root, sha, require_valid_add=False, require_summary=True):
     run = read(root / 'public-run.json'); false_claims(run)
     require(run['schema'] == 'public-packed-run/v1' and run['head'] == sha and re.fullmatch('[0-9a-f]{40}', sha), 'public run identity')
     options = run['options']; request = options['request']
-    require(request['intake'] == 'public-fixture/v1' and request['expectedCommit'] == sha, 'public request identity')
+    require(request['intake'] in ('public-fixture/v1', 'public-fixture/v2') and request['expectedCommit'] == sha, 'public request identity')
     require(digest(options['nativeTap']) == options['nativeTapSha256'], 'changed public TAP')
     public_tap(data(options['nativeTap']).decode(), request)
     require(digest(request['nativeConfig']) == request['nativeConfigSha256'], 'changed public config')
@@ -281,11 +296,17 @@ def check_public(root, sha):
     terminal_path = Path(cfg['evidenceOutput']) / 'public-native-completion.json'
     require(digest(terminal_path) == request['nativeCompletionSha256'], 'changed public terminal')
     native = read(terminal_path); false_claims(native, (*CLAIMS, 'signed_promotion', 'public_eligible'))
-    require(native['schema'] == 'dual-authoring-public-native/v1' and native['status'] == 'completed' and
+    boundary = public_boundary(native, request['intake'], require_valid_add)
+    require(native['status'] == 'completed' and
         native['qualification'] is None and native['identity']['commit'] == native['identity']['engine_revision'] == sha, 'public terminal contract')
     require(digest(Path(cfg['evidenceOutput']) / 'invocations.json') == native['invocations_sha256'], 'public invocation pin')
     sealed_path = root / 'bridge-config/sealed.json'; sealed = read(sealed_path); false_claims(sealed)
     require(sealed['schema'] == 'packed-installer-bridge/v1' and sealed['request'] == request == read(root / 'bridge-config/request.json'), 'public sealed request')
+    evidence = sealed['inputs'].get('public_evidence', {})
+    if boundary is not None:
+        require(evidence.get('schema') == native['schema'] and evidence.get('installer_boundary') == boundary, 'sealed installer boundary')
+    else:
+        require('installer_boundary' not in evidence, 'v2 sealed boundary in v1')
     repo = Path(__file__).resolve().parent.parent; bridge = repo / 'npm/agentplugins/scripts/packed-installer-bridge.js'
     require(sealed['verifier_sha256'] == digest(bridge) and sealed['helper_sha256'] == digest(bridge.with_name('dual-authoring-candidate.js')), 'public verifier changed')
     for key in ('go', 'node'):
@@ -322,10 +343,268 @@ def check_public(root, sha):
         len({p['source'] for p in projects}) == 10, 'public ten distinct projects')
     plans(result)
     require(log('head').strip() == sha and log('clean') == log('terminal-clean') == '', 'public exact clean checkout')
+    if boundary is not None and require_summary:
+        summary = read(root / 'summary.json'); false_claims(summary, (*CLAIMS, 'signed_promotion', 'public_eligible'))
+        require(summary == dict(status='passed', intake=request['intake'], head=sha, projects=10, plans=30,
+            scope='public-authoring-help-preflight-and-injected-planner', installer_boundary=boundary,
+            release_eligible=False, platform_acceptance=False, attested=False, signed_promotion=False, public_eligible=False), 'public summary scope/gap')
+
+
+AUTHENTIC = 'public-authenticated/v1'
+AUTHENTIC_SEAL = 'packed-installer-bridge/public-authenticated/v1'
+
+
+def authenticated_options(options, sha):
+    require(type(options) is dict and set(options) == {'request', 'go', 'node', 'modCache'}, 'closed authenticated options')
+    request = options['request']
+    require(type(request) is dict and set(request) == {'intake', 'expectedCommit', 'journey', 'journeySha256',
+        'admission', 'admissionSha256', 'fixtureRoot'}, 'closed authenticated request')
+    require(request['intake'] == AUTHENTIC and request['expectedCommit'] == sha and
+        re.fullmatch('[0-9a-f]{40}', sha) and sha != '0' * 40, 'authentic source identity')
+    for key in ('journeySha256', 'admissionSha256'):
+        require(type(request[key]) is str and re.fullmatch('[0-9a-f]{64}', request[key]) and request[key] != '0' * 64, 'authentic pin')
+    for name in ('go', 'node', 'modCache'):
+        file = Path(options[name])
+        require(file.is_absolute() and file.resolve(strict=True) == file, 'canonical authenticated tool/cache')
+    for key in ('journey', 'admission'):
+        require(Path(request[key]).lstat().st_size <= 1024 * 1024, 'bounded authentic input')
+        require(digest(request[key]) == request[key + 'Sha256'], 'changed authentic input')
+    return request
+
+
+def authentic_read(path):
+    require(Path(path).lstat().st_size <= 1024 * 1024, 'bounded authentic JSON')
+    value = read(path)
+    require(data(path) == (json.dumps(value, indent=2, ensure_ascii=False) + '\n').encode(), 'canonical authentic JSON')
+    return value
+
+
+PROVISION_TARGETS = ('linux-amd64', 'linux-arm64', 'darwin-amd64', 'darwin-arm64', 'windows-amd64', 'windows-arm64')
+PROVISION_CELLS = tuple(t + '/' + lane for t in PROVISION_TARGETS for lane in ('kit-node18', 'pair-node22', 'pair-node24'))
+PROVISION_TOOLS = ('node', 'python', 'git', 'gh', 'tar')
+PROVISION_FIELDS = ('runner', 'image', 'controller', 'npm_node', 'shim_node', 'npm', 'go', 'mod_cache', 'observer', 'installer_policy')
+
+
+def provision_fields(value, names, label='manifest'):
+    if type(value) is dict:
+        for name in names:
+            missing = name + ':entry' if label in ('controllers', 'cells') else label + ':' + name
+            require(name in value, 'PUBLIC_PROVISIONING_REQUIRED:' + missing)
+    require(type(value) is dict and list(value) == list(names), 'closed ordered provision fields')
+
+
+def provision_bytes(file, maximum=1024 * 1024):
+    import os
+    file = Path(file)
+    require(str(file) == os.path.abspath(file) and file.resolve() == file, 'canonical provision path')
+    before = file.lstat()
+    require(stat.S_ISREG(before.st_mode) and before.st_nlink == 1 and 0 < before.st_size <= maximum,
+            'bounded regular unaliased provision file')
+    with open(file, 'rb') as stream:
+        opened = os.fstat(stream.fileno())
+        require((opened.st_dev, opened.st_ino) == (before.st_dev, before.st_ino), 'provision file changed')
+        body = stream.read(maximum + 1)
+        after = os.fstat(stream.fileno())
+    # Reading may update atime (e.g. relatime on a fresh checkout). Compare
+    # identity and mutation metadata explicitly, retaining nanosecond precision.
+    def identity(st):
+        return (st.st_dev, st.st_ino, st.st_mode, st.st_nlink, st.st_uid, st.st_gid,
+                st.st_size, st.st_mtime_ns, st.st_ctime_ns)
+    require(identity(before) == identity(opened) == identity(after) == identity(file.lstat()) and
+            len(body) == before.st_size, 'provision file changed')
+    return body
+
+
+def read_provisioning():
+    # No caller root, expectedCommit, receipt, PATH or environment selection.
+    file = Path(__file__).absolute().parent.parent / '.github/authoring-public-tools.json'
+    try: body = provision_bytes(file)
+    except FileNotFoundError: raise ValueError('PUBLIC_PROVISIONING_REQUIRED:linux-amd64:manifest') from None
+    text = body.decode('utf-8'); depth = 0; quoted = escaped = False
+    for ch in text:
+        if quoted:
+            if escaped: escaped = False
+            elif ch == '\\': escaped = True
+            elif ch == '"': quoted = False
+        elif ch == '"': quoted = True
+        elif ch in '{[':
+            depth += 1; require(depth <= 8, 'provision depth')
+        elif ch in '}]': depth -= 1
+    value = json.loads(text)
+    require(body == (json.dumps(value, indent=2, ensure_ascii=False) + '\n').encode(), 'canonical provision JSON')
+    def pin(v): require(type(v) is str and re.fullmatch('[0-9a-f]{64}', v) and v != '0' * 64, 'provision pin')
+    def label(v): require(type(v) is str and re.fullmatch('[!-~]{1,256}', v), 'bounded provision identity')
+    # Absolute path limit: 4096 Unicode code points, shared with JS.
+    def absolute(v, target):
+        import ntpath, posixpath
+        p = ntpath if target.startswith('windows-') else posixpath
+        require(type(v) is str and 0 < len(v) <= 4096 and not re.search('[\x00-\x1f\x7f]', v) and
+                p.isabs(v) and p.normpath(v) == v and v not in ('/', p.splitdrive(v)[0] + '\\') and
+                not v.startswith(('\\\\', '//')), 'canonical provision path')
+    def closure(v, target):
+        provision_fields(v, ('root', 'files')); absolute(v['root'], target)
+        require(type(v['files']) is list and 0 < len(v['files']) <= 4096, 'bounded provision closure')
+        last = ''
+        for row in v['files']:
+            provision_fields(row, ('path', 'sha256')); pin(row['sha256']); name = row['path']
+            require(type(name) is str and len(name) <= 4096 and re.fullmatch(r'[A-Za-z0-9_.@+-]+(?:/[A-Za-z0-9_.@+-]+)*', name) and
+                    not set(name.split('/')) & {'.', '..'} and name > last, 'ordered unique relative closure files')
+            last = name
+    def tool(v, target, npm=False):
+        provision_fields(v, ('path', 'version', 'sha256', 'closure') if npm else ('path', 'version', 'sha256'))
+        absolute(v['path'], target); label(v['version']); pin(v['sha256'])
+        if npm:
+            import ntpath, posixpath
+            closure(v['closure'], target); p = ntpath if target.startswith('windows-') else posixpath
+            require(any(p.join(v['closure']['root'], *f['path'].split('/')) == v['path'] and f['sha256'] == v['sha256']
+                        for f in v['closure']['files']), 'npm CLI in complete closure')
+    provision_fields(value, ('schema', 'controllers', 'cells', 'reader'))
+    require(value['schema'] == 'authoring-public-tools/v1' and value['reader'] == 'linux-amd64', 'fixed provision reader/schema')
+    provision_fields(value['controllers'], PROVISION_TARGETS, 'controllers'); provision_fields(value['cells'], PROVISION_CELLS, 'cells')
+    for target, row in value['controllers'].items():
+        provision_fields(row, PROVISION_TOOLS, target)
+        for v in row.values():
+            if v is not None: tool(v, target)
+    for key, row in value['cells'].items():
+        target = key.split('/')[0]; provision_fields(row, PROVISION_FIELDS, key)
+        require(row['controller'] == target, 'fixed cell controller')
+        for name in ('runner', 'image', 'observer', 'installer_policy'):
+            if row[name] is not None:
+                provision_fields(row[name], ('id', 'sha256')); label(row[name]['id']); pin(row[name]['sha256'])
+        for name in ('npm_node', 'shim_node', 'npm', 'go'):
+            if row[name] is not None:
+                tool(row[name], target, name == 'npm')
+                if name.endswith('_node'):
+                    require(re.fullmatch('v' + key.split('node')[1] + r'\.[0-9]+\.[0-9]+', row[name]['version']), 'selected Node major')
+        if row['mod_cache'] is not None: closure(row['mod_cache'], target)
+    return value
+
+
+def require_authenticated_controller():
+    value = read_provisioning()
+    for name, tool in value['controllers']['linux-amd64'].items():
+        message = 'PUBLIC_PROVISIONING_REQUIRED:linux-amd64:' + name
+        require(tool is not None, message)
+        try: body = provision_bytes(tool['path'], 256 * 1024 * 1024)
+        except FileNotFoundError: raise ValueError(message) from None
+        require(hashlib.sha256(body).hexdigest() == tool['sha256'], 'source-frozen provision pin mismatch:' + name)
+    return value['controllers']['linux-amd64']['node']['path']
+
+
+def require_authenticated_execution():
+    raise ValueError('C3b execution incomplete: result/installer/observer validators and independent invocation authority required')
+
+
+def authenticated_source():
+    # Snapshot trusted source, never receipt-selected source. External provisioning
+    # keeps this namespace immutable; before/after hashing is not same-UID isolation.
+    repo = Path(__file__).absolute().parent.parent
+    files = []
+    for directory in ('.github', 'scripts', 'npm/agentplugins/scripts', 'npm/agentplugins/lib', 'npm/plugin-kit-ai/lib'):
+        def walk(folder):
+            require(folder.resolve() == folder and stat.S_ISDIR(folder.lstat().st_mode), 'trusted source directory')
+            for file in sorted(folder.iterdir()):
+                require(not file.is_symlink(), 'trusted source link')
+                if file.is_dir(): walk(file)
+                else: files.append(file)
+                require(len(files) <= 4096, 'trusted source closure bound')
+        walk(repo / directory)
+    return {str(f): hashlib.sha256(provision_bytes(f, 16 * 1024 * 1024)).hexdigest() for f in files}
+
+
+def authenticated_verify(node, argv):
+    controller = require_authenticated_controller()
+    require(str(node) == controller, 'source-frozen controller comparison mismatch')
+    require_authenticated_execution()
+    import subprocess
+    repo = Path(__file__).absolute().parent.parent
+    bridge = repo / 'npm/agentplugins/scripts/packed-installer-bridge.js'
+    source = authenticated_source()
+    require(require_authenticated_controller() == controller and authenticated_source() == source, 'trusted source/controller changed')
+    try:
+        result = subprocess.run([controller, str(bridge), *map(str, argv)], cwd=repo,
+            env={'PATH': '/usr/local/bin:/usr/bin:/bin', 'LANG': 'C.UTF-8', 'LC_ALL': 'C.UTF-8'},
+            capture_output=True, timeout=1200)
+    finally:
+        require(require_authenticated_controller() == controller and authenticated_source() == source, 'trusted source/controller changed')
+    require(result.returncode == 0 and result.stderr == b'', 'authenticated reader failed: ' + result.stderr.decode(errors='replace')[:4096])
+    require(len(result.stdout) <= 32 * 1024 * 1024, 'bounded authenticated reader output')
+    return json.loads(result.stdout)
+
+def authenticated_plans(root, sha, inputs, sealed_pin, fixture_root):
+    """Complementary injected plans only; does not authenticate J or remote E."""
+    result = read(root / 'results/completion.json'); false_claims(result)
+    require(result['kind'] == 'packed-generated-existing-injected-installer-planner' and result['commit'] == sha and
+        result['config_sha256'] == sealed_pin, 'authentic planner identity')
+    require(result['inputs'] == inputs == json.loads(data(root / 'logs/post-verify.stdout')), 'authentic post-plan seal')
+    projects = inputs['projects']
+    require(Counter((x['product'], x['lane']) for x in projects) == Counter({(p, l): 1 for p in PRODUCTS for l in LANES}) and
+        len({x['source'] for x in projects}) == 10, 'same ten authentic projects')
+    for row in projects:
+        require(row['source'] == str(Path(fixture_root) / (row['product'] + ' projects ü') / row['lane']), 'original project path')
+    unchanged_snapshots(inputs); plans(result)
+
+
+def check_authenticated(root, sha, require_summary=True, require_completed_e=False):
+    require(not require_completed_e, 'completed E cannot use local J or fixture success; C3b E reader required')
+    controller = require_authenticated_controller()
+    require_authenticated_execution()
+    run = authentic_read(root / 'authenticated-run.json'); false_claims(run)
+    require(set(run) == {'schema', 'head', 'options', 'tools', *CLAIMS} and
+        run['schema'] == 'public-authenticated-packed-run/v1' and run['head'] == sha, 'authentic run schema')
+    options = run['options']; require(options['node'] == controller, 'source-frozen controller comparison mismatch')
+    request = authenticated_options(options, sha)
+    sealed_path = root / 'bridge-config/sealed.json'; sealed = read(sealed_path); false_claims(sealed)
+    require(set(sealed) == {'schema', 'request', 'verifier_sha256', 'helper_sha256', 'reader_sha256', 'inputs', *CLAIMS} and
+        sealed['schema'] == AUTHENTIC_SEAL and sealed['request'] == request == read(root / 'bridge-config/request.json'), 'authentic seal schema')
+    repo = Path(__file__).resolve().parent.parent; bridge = repo / 'npm/agentplugins/scripts/packed-installer-bridge.js'
+    for key, file in [('verifier_sha256', bridge), ('helper_sha256', bridge.with_name('dual-authoring-candidate.js')),
+        ('reader_sha256', bridge.with_name('public-authoring-acceptance.js'))]:
+        require(sealed[key] == digest(file), 'authentic verifier pin')
+    for key in ('go', 'node'):
+        require(run['tools'][key] == dict(path=options[key], sha256=digest(options[key])), 'authentic tool pin')
+    node, go = options['node'], options['go']; sealed_pin = digest(sealed_path)
+    fresh = authenticated_verify(node, ['verify', sealed_path, sealed_pin, sha])
+    require(fresh == sealed['inputs'], 'fresh authenticated seal')
+    public = fresh['public_inputs']
+    require(public['schema'] == 'authoring-public-local-inputs/v1' and public['cell'] == 'linux-amd64/pair-node22' and
+        public['journey_sha256'] == request['journeySha256'] and public['admission_sha256'] == request['admissionSha256'], 'local custody boundary')
+    false_claims(public, ('signed_promotion', 'public_eligible')); require(public['qualification'] is None, 'no local qualification')
+    for key, tool in [('node', 'orchestrator_node'), ('go', 'go')]:
+        require(public['tools'][tool]['path'] == options[key] and public['tools'][tool]['sha256'] == digest(options[key]), 'journey planner tools')
+    commands = {'head': ['/usr/bin/git', 'rev-parse', 'HEAD'],
+        'clean': ['/usr/bin/git', 'status', '--porcelain=v1', '--untracked-files=all'],
+        'terminal-clean': ['/usr/bin/git', 'status', '--porcelain=v1', '--untracked-files=all'],
+        'seal': [node, str(bridge), 'authenticated-seal', str(root / 'bridge-config/request.json'), str(sealed_path)],
+        'post-verify': [node, str(bridge), 'verify', str(sealed_path), sealed_pin, sha]}
+    for name, flag in [('discovery', '-list'), ('planner', '-run')]:
+        commands[name] = [go, 'test', '-p=2', '-tags=packedci', '-json',
+            *([] if name == 'discovery' else ['-count=1', '-timeout=20m']), flag, REGEX, PACKAGE_PATH]
+    for name, command in commands.items():
+        phase = read(root / 'logs' / (name + '.json'))
+        require(type(phase['exit']) is int and phase['exit'] == 0 and phase['argv'] == command and phase['cwd'] == str(repo), 'authentic phase ' + name)
+        require(all(phase['env'].get(k) == v for k, v in dict(GOPROXY='off', GOSUMDB='off', GOVCS='*:off', GOENV='off', GOTOOLCHAIN='local').items()), 'authentic offline planner environment')
+        require(not any(k in phase['env'] for k in ('GOFLAGS', 'NODE_OPTIONS', 'AGENTPLUGINS_STAGED_TEST_CHILD')), 'authentic inherited override')
+        if name in ('discovery', 'planner'):
+            expected = dict(UAP_PACKED_INSTALLER_NODE=node, UAP_PACKED_INSTALLER_CONFIG=str(sealed_path),
+                UAP_PACKED_INSTALLER_CONFIG_SHA256=sealed_pin, UAP_PACKED_INSTALLER_COMMIT=sha,
+                UAP_PACKED_INSTALLER_OUTPUT=str(root / 'results/completion.json'))
+            require({k: v for k, v in phase['env'].items() if k.startswith('UAP_PACKED_INSTALLER_')} == expected, 'five exact planner variables')
+        require(data(root / 'logs' / (name + '.stderr')) == b'', 'authentic phase stderr')
+    log = lambda name: data(root / 'logs' / (name + '.stdout')).decode()
+    go_discovery(log('discovery')); go_results(log('planner'))
+    require(log('seal').strip() == sealed_pin and log('head').strip() == sha and log('clean') == log('terminal-clean') == '', 'authentic source/seal logs')
+    authenticated_plans(root, sha, fresh, sealed_pin, request['fixtureRoot'])
+    if require_summary:
+        require(authentic_read(root / 'summary.json') == dict(status='passed', scope='local-authenticated-inputs-and-injected-planner',
+            intake=AUTHENTIC, head=sha, projects=10, plans=30, release_eligible=False, platform_acceptance=False,
+            attested=False, signed_promotion=False, public_eligible=False, qualification=None), 'authentic summary scope')
 
 
 if __name__ == '__main__':
-    if len(sys.argv) == 4 and sys.argv[1] == '--public':
+    if len(sys.argv) == 4 and sys.argv[1] == '--public-authenticated':
+        check_authenticated(Path(sys.argv[2]), sys.argv[3])
+    elif len(sys.argv) == 4 and sys.argv[1] == '--public':
         check_public(Path(sys.argv[2]), sys.argv[3])
     elif len(sys.argv) == 3:
         check(Path(sys.argv[1]), sys.argv[2])

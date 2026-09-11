@@ -1,6 +1,6 @@
 name: Frozen Authoring Native Observations
 
-# N1 only. No automatic event, source build, promotion, signing or publication.
+# Frozen inputs only. No automatic event, source build, signing or publication.
 # Local closed receipts are not authenticated provider admission. Whole-OS
 # observation and real installer services remain required execution prerequisites.
 on:
@@ -42,25 +42,27 @@ on:
         description: Exact two-product manifest and checksum pins as bounded JSON
         required: true
         type: string
-      host_go_sha256:
-        description: Independent Linux amd64 Go 1.25.13 executable digest
+      host_contract:
+        description: Exact JSON target, agent_version and go_sha256; six targets, excluded execution stays pending
         required: true
         type: string
 permissions:
   contents: read
 concurrency:
-  group: frozen-native-${{ inputs.source_sha }}-${{ inputs.artifact_id }}
+  group: frozen-native-${{ inputs.source_sha }}-${{ inputs.artifact_id }}-${{ fromJSON(inputs.host_contract).target }}
   cancel-in-progress: false
 jobs:
   linux-amd64:
-    if: ${{ github.event_name == 'workflow_dispatch' }}
-    runs-on: ubuntu-24.04
+    if: ${{ github.event_name == 'workflow_dispatch' && (fromJSON(inputs.host_contract).target == 'linux-amd64' || fromJSON(inputs.host_contract).target == 'linux-arm64') }}
+    runs-on: ${{ fromJSON(inputs.host_contract).target == 'linux-arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
     timeout-minutes: 25
     permissions:
       contents: read
       actions: read
     env:
       PATH: /usr/local/bin:/usr/bin:/bin
+      NATIVE_TARGET: ${{ fromJSON(inputs.host_contract).target }}
+      AGENT_VERSION: ${{ fromJSON(inputs.host_contract).agent_version }}
       SOURCE_SHA: ${{ inputs.source_sha }}
       WORKFLOW_SHA: ${{ github.sha }}
       PREPARATION_RUN: ${{ inputs.preparation_run }}
@@ -71,7 +73,8 @@ jobs:
       PAIR_SHA256: ${{ inputs.pair_sha256 }}
       CANDIDATE_SHA256: ${{ inputs.candidate_sha256 }}
       PROJECTION_PINS: ${{ inputs.projection_pins }}
-      HOST_GO_SHA256: ${{ inputs.host_go_sha256 }}
+      HOST_GO_SHA256: ${{ fromJSON(inputs.host_contract).go_sha256 }}
+      HOST_CONTRACT: ${{ inputs.host_contract }}
     steps:
       - name: Validate exact read-only selection before acquisition
         shell: bash
@@ -80,6 +83,8 @@ jobs:
           test "${GITHUB_REPOSITORY}" = "777genius/universal-agent-plugins"
           [[ "${SOURCE_SHA}" =~ ^[0-9a-f]{40}$ && ! "${SOURCE_SHA}" =~ ^0{40}$ ]]
           test "${SOURCE_SHA}" = "${WORKFLOW_SHA}"
+          [[ "${AGENT_VERSION}" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]
+          case "${NATIVE_TARGET}" in linux-amd64|linux-arm64) ;; *) exit 1 ;; esac
           for value in "${PREPARATION_RUN}" "${PREPARATION_ATTEMPT}" "${ARTIFACT_ID}"; do
             [[ "${value}" =~ ^[1-9][0-9]{0,14}$ ]]
           done
@@ -98,31 +103,44 @@ jobs:
         with:
           node-version: 22.21.1
           package-manager-cache: false
+      - name: Validate the closed selected host contract
+        run: |
+          node <<'NODE'
+          const c = require('./npm/agentplugins/scripts/dual-authoring-candidate');
+          const text = process.env.HOST_CONTRACT;
+          if (Buffer.byteLength(text) > 512) throw Error('bounded host contract required');
+          const value = JSON.parse(text);
+          c.keys(value, ['target', 'agent_version', 'go_sha256'], 'host contract');
+          if (!c.TARGETS.includes(value.target) || !['linux-amd64', 'linux-arm64'].includes(value.target))
+            throw Error('NATIVE_EXECUTION_PENDING');
+          if (value.target !== process.env.NATIVE_TARGET || value.agent_version !== process.env.AGENT_VERSION ||
+              value.go_sha256 !== process.env.HOST_GO_SHA256) throw Error('host contract binding');
+          NODE
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: 1.25.13
           cache: false
-      - name: Inspect exact preparation attempt and artifact metadata
+      - name: Acquire and extract the same checked preparation ZIP
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           node <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
           const p = require('./npm/agentplugins/scripts/authoring-promotion');
-          // Read-only consistency check, not accepted cryptographic custody.
-          p.inspectArtifact({ run_id: Number(process.env.PREPARATION_RUN),
+          const c = require('./npm/agentplugins/scripts/dual-authoring-candidate');
+          const scratch = fs.mkdtempSync(path.join(process.env.RUNNER_TEMP, 'native-acquisition-'));
+          const pin = { run_id: Number(process.env.PREPARATION_RUN),
             run_attempt: Number(process.env.PREPARATION_ATTEMPT),
-            artifact_id: Number(process.env.ARTIFACT_ID), artifact_sha256: process.env.ARTIFACT_SHA256 },
-            '.github/workflows/agentplugins-release.yml', process.env.SOURCE_SHA, process.env.RUNNER_TEMP);
+            artifact_id: Number(process.env.ARTIFACT_ID), artifact_sha256: process.env.ARTIFACT_SHA256 };
+          const file = p.acquireArtifact(pin, p.WORKFLOW, process.env.SOURCE_SHA, scratch);
+          const versions = { agentplugins: process.env.AGENT_VERSION, 'plugin-kit-ai': '2.0.0' };
+          const files = ['preparation-run.json', 'candidate-identity.json', 'candidate/candidate.json', 'pair-prepared.json',
+            ...c.PRODUCTS.flatMap(product => [...c.TARGETS.map(target => `${product}/${c.assetName(product, versions[product], target)}`),
+              `${product}/checksums.txt`, `${product}/release-manifest.json`])];
+          p.extractArtifact(file, pin, 'preparation', files, path.join(process.env.RUNNER_TEMP, 'frozen-inputs'), scratch);
           NODE
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
-        with:
-          artifact-ids: ${{ inputs.artifact_id }}
-          run-id: ${{ inputs.preparation_run }}
-          github-token: ${{ github.token }}
-          repository: 777genius/universal-agent-plugins
-          merge-multiple: true
-          path: ${{ runner.temp }}/frozen-inputs
       - name: Inspect host Go and execute the fixed pair journey
         shell: bash
         run: |
@@ -136,12 +154,12 @@ jobs:
           const pair = c.readFile(path.join(root, 'pair-prepared.json'));
           if (c.digest(pair) !== process.env.PAIR_SHA256) throw Error('pair pin');
           const identity = JSON.parse(pair).identity;
-          if (identity.commit !== process.env.SOURCE_SHA) throw Error('source pin');
+          if (identity.commit !== process.env.SOURCE_SHA || identity.versions.agentplugins !== process.env.AGENT_VERSION) throw Error('source/version pin');
           const producer = { repository: process.env.GITHUB_REPOSITORY,
             workflow: '.github/workflows/authoring-frozen-native.yml', source: process.env.SOURCE_SHA,
             workflow_sha: process.env.WORKFLOW_SHA, run_id: Number(process.env.GITHUB_RUN_ID),
             run_attempt: Number(process.env.GITHUB_RUN_ATTEMPT) };
-          const options = { root, pins: { identity, candidate_sha256: process.env.CANDIDATE_SHA256,
+          const options = { root, target: process.env.NATIVE_TARGET, pins: { identity, candidate_sha256: process.env.CANDIDATE_SHA256,
             pair_marker_sha256: process.env.PAIR_SHA256, products: JSON.parse(process.env.PROJECTION_PINS) },
             preparation: { sha256: process.env.RECEIPT_SHA256, producer: { ...producer,
               workflow: '.github/workflows/agentplugins-release.yml', run_id: Number(process.env.PREPARATION_RUN),
@@ -156,11 +174,21 @@ jobs:
         if: ${{ always() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
         with:
-          name: frozen-native-linux-amd64-${{ github.run_id }}-${{ github.run_attempt }}
+          name: frozen-native-${{ fromJSON(inputs.host_contract).target }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/frozen-native-evidence/*
           if-no-files-found: error
           retention-days: 7
-# N2 must replace metadata-plus-download with same-checked-ZIP intake before
-# provider admission. This job does not claim that a supplied boolean verifies
-# the attempt. N1 terminals bind embedded attempts and reject stale preparation.
-# No OS observer is provisioned here: production retains failure diagnostics.
+  excluded-native-execution:
+    if: ${{ github.event_name == 'workflow_dispatch' && fromJSON(inputs.host_contract).target != 'linux-amd64' && fromJSON(inputs.host_contract).target != 'linux-arm64' }}
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - name: Preserve excluded execution as an unresolved failure
+        run: |
+          echo 'NATIVE_EXECUTION_PENDING: Windows and writable macOS are not enabled by portable source.' >&2
+          echo 'No terminal emitted. No excluded-platform runner, product invocation or diagnosis.' >&2
+          exit 1
+# Every target still needs an actual supported observation boundary, scanner/feed
+# custody and native execution. The original authoring-native security matrix is
+# separate and unchanged. A failure or skipped job never supplies terminal proof.

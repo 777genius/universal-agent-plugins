@@ -20,6 +20,10 @@ const SCHEMA = "authoring-promotion/v1";
 const SLSA = "https://slsa.dev/provenance/v1";
 const LIMIT = 1024 * 1024;
 const LANES = Object.freeze([...c.PRODUCTS.flatMap(p => c.TARGETS.map(t => `${p}/${t}`)), "public-packed-pair"]);
+const NATIVE_SCHEMA = "authoring-frozen-native/v1";
+const NATIVE_WORKFLOW = ".github/workflows/authoring-frozen-native.yml";
+const NATIVE_FILES = Object.freeze(["transcripts.json", "trees.json", "build-info.json", "preservation.json",
+  "preparation.json", "host.json", "scans.json", "acquisition.json", ...c.PRODUCTS.map(p => `${p}-terminal.json`)]);
 const fail = message => { throw new Error(message); };
 const exact = (a, b, label) => { if (!equal(a, b)) fail(`${label}: binding mismatch`); };
 const sha = (v, n = 64) => {
@@ -119,12 +123,14 @@ function requireNativeContracts(lanes) {
     seen.add(value.lane);
   }
   const missing = LANES.filter(x => !seen.has(x));
-  // Deliberately NO caller-supplied adapter, issuer, success boolean or policy.
-  // Native owners must deliver reviewed terminal schemas AND their producer
-  // source asserting the concrete native/installer and public packed gates.
-  const unsupported = lanes.map(x => `${x.lane}:${String(x.schema).slice(0, 100)}`);
+  // This is only the registered-contract inventory, never evidence admission.
+  // Public packed has no accepted producer. Even twelve admitted native lanes
+  // cannot authorize the thirteen-lane global gate or a protected effect.
+  const unsupported = lanes.filter(x => x.lane === "public-packed-pair" ||
+    x.schema !== NATIVE_SCHEMA || x.workflow !== NATIVE_WORKFLOW)
+    .map(x => `${x.lane}:${String(x.schema).slice(0, 100)}`);
   fail(`NATIVE_EVIDENCE_INTEGRATION_REQUIRED: missing lanes [${missing.join(", ")}]; unsupported contracts [${unsupported.join(", ")}]. ` +
-    "No accepted frozen-pair all-target terminal producer/schema is integrated. dual-authoring-public-native/v1 is Linux fixture evidence with false release claims; private-packed or SLSA build success cannot qualify this pair. Signing and promotion are disabled.");
+    "Public-packed producer/schema remains unsupported. dual-authoring-public-native/v1 is Linux fixture evidence with false release claims; private-packed or SLSA build success cannot qualify this pair. Signing and promotion are disabled.");
 }
 function validateSelection(body, selected) {
   const record = decodeRecord(body);
@@ -180,21 +186,310 @@ function inspectArtifact(pin, workflow, source, cwd) {
 function acquireArtifact(pin, workflow, source, cwd) {
   cliVersion(cwd);
   const before = inspectArtifact(pin, workflow, source, cwd);
+  return downloadArtifactBytes(pin, before.item, cwd, () =>
+    exact(inspectArtifact(pin, workflow, source, cwd), before, "artifact changed during acquisition"));
+}
+// Same private bounded byte path after distinct completed/current admission.
+function downloadArtifactBytes(pin, item, cwd, recheck) {
   const file = path.join(cwd, `artifact-${pin.artifact_id}.zip`);
   if (fs.existsSync(file)) fail("artifact destination already exists");
-  // gh api follows the provider's supported artifact ZIP redirect. No free URL.
-  // Binary output is bounded in memory, never extracted or executed here.
   const zip = gh(["api", "--hostname", "github.com", `repos/${REPOSITORY}/actions/artifacts/${pin.artifact_id}/zip`], cwd, 2 * 1024 * LIMIT, null);
-  if (zip.length !== before.item.size_in_bytes || c.digest(zip) !== pin.artifact_sha256) fail("artifact ZIP digest/size mismatch");
-  exact(inspectArtifact(pin, workflow, source, cwd), before, "artifact changed during acquisition");
+  if (zip.length !== item.size_in_bytes || c.digest(zip) !== pin.artifact_sha256) fail("artifact ZIP digest/size mismatch");
+  recheck();
   fs.writeFileSync(file, zip, { flag: "wx", mode: 0o400 });
   return file;
+}
+
+// Fixed C1 provider adapters. Log mapping and runner/process custody require
+// independent genuine acceptance before positive execution. These checks do not
+// confer that acceptance, and unsupported checked-ZIP kinds remain closed.
+const STAGE_WORKFLOW = ".github/workflows/agentplugins-npm-publish.yml";
+function workflowSelection(value, workflowSha) {
+  c.keys(value, ["tag", "ref", "source", "versions"], "workflow selection");
+  c.keys(value.versions, c.PRODUCTS, "selected versions");
+  const identityValue = { repository: REPOSITORY, commit: value.source, engine_revision: value.source, versions: value.versions };
+  identity(identityValue); sha(value.source, 40);
+  if (value.source.length !== 40 || Object.values(value.versions).some(v => typeof v !== "string" || v.length > 32 || /[\r\n]/.test(v))) fail("bounded workflow identity required");
+  exact(value.versions["plugin-kit-ai"], "2.0.0", "first kit version");
+  exact([value.tag, value.ref, workflowSha], [tag(identityValue, "agentplugins"), `refs/tags/${tag(identityValue, "agentplugins")}`, value.source], "selected workflow ref/source");
+  return { tag: value.tag, ref: value.ref, source: value.source, versions: { ...value.versions } };
+}
+function callerNumber(name, maximum = Number.MAX_SAFE_INTEGER) {
+  const text = process.env[name];
+  if (typeof text !== "string" || !/^[1-9][0-9]{0,15}$/.test(text)) fail("exact caller integer required");
+  return integer(Number(text), maximum);
+}
+function currentCaller(selected, workflow, jobs) {
+  const expected = { GITHUB_ACTIONS: "true", GITHUB_EVENT_NAME: "workflow_dispatch", GITHUB_REPOSITORY: REPOSITORY,
+    GITHUB_SHA: selected.source, GITHUB_WORKFLOW_SHA: selected.source, GITHUB_REF: selected.ref,
+    GITHUB_WORKFLOW_REF: `${REPOSITORY}/${workflow}@${selected.ref}` };
+  exact(Object.fromEntries(Object.keys(expected).map(k => [k, process.env[k]])), expected, "current workflow caller");
+  if (!jobs.includes(process.env.GITHUB_JOB)) fail("fixed C1 caller job required");
+  return { workflow, source: selected.source, run_id: callerNumber("GITHUB_RUN_ID"), run_attempt: callerNumber("GITHUB_RUN_ATTEMPT", 1000) };
+}
+function attemptAtRef(pin, workflow, selected, cwd, status) {
+  const run = api(`actions/runs/${integer(pin.run_id)}/attempts/${integer(pin.run_attempt, 1000)}`, cwd);
+  exact([run.id, run.run_attempt, run.repository?.full_name, run.head_repository?.full_name,
+    run.head_sha, run.path, run.event, run.head_branch, run.status, run.conclusion],
+  [pin.run_id, pin.run_attempt, REPOSITORY, REPOSITORY, selected.source, workflow,
+    "workflow_dispatch", selected.tag, status, status === "completed" ? "success" : null], "provider invocation/ref");
+  return run;
+}
+function attemptJobs(pin, selected, cwd) {
+  const response = api(`actions/runs/${pin.run_id}/attempts/${pin.run_attempt}/jobs?per_page=100`, cwd);
+  if (!Array.isArray(response.jobs) || response.jobs.length > 100 || response.total_count !== response.jobs.length) fail("complete bounded attempt jobs required");
+  for (const job of response.jobs) {
+    integer(job.id);
+    exact([job.run_id, job.run_attempt, job.head_sha, job.head_branch],
+      [pin.run_id, pin.run_attempt, selected.source, selected.tag], "provider job attempt/ref");
+  }
+  if (new Set(response.jobs.map(j => j.id)).size !== response.jobs.length) fail("duplicate provider job ID");
+  return response.jobs;
+}
+function oneJob(jobs, name, status) {
+  const found = jobs.filter(job => job.name === name);
+  if (found.length !== 1 || found[0].status !== status || found[0].conclusion !== (status === "completed" ? "success" : null)) {
+    fail("exact fixed successful producer/current job required");
+  }
+  return found[0];
+}
+function checkPreparationRef(pin, selected, cwd) {
+  return attemptAtRef(pin, WORKFLOW, selected, cwd, "completed");
+}
+function inspectInputCaller(selected, workflowSha, cwd) {
+  selected = workflowSelection(selected, workflowSha);
+  const caller = currentCaller(selected, WORKFLOW, ["paired_input_admission", "paired_input_attestation"]);
+  cliVersion(cwd);
+  attemptAtRef(caller, WORKFLOW, selected, cwd, "in_progress");
+  const jobs = attemptJobs(caller, selected, cwd);
+  oneJob(jobs, process.env.GITHUB_JOB, "in_progress");
+  if (process.env.GITHUB_JOB === "paired_input_attestation") oneJob(jobs, "paired_input_admission", "completed");
+  for (const p of c.PRODUCTS) checkTag({ identity: { commit: selected.source, versions: selected.versions } }, p, cwd);
+  return caller;
+}
+function inspectStageCaller(selected, workflowSha, cwd) {
+  selected = workflowSelection(selected, workflowSha);
+  const caller = currentCaller(selected, STAGE_WORKFLOW, ["paired_stage"]);
+  cliVersion(cwd);
+  attemptAtRef(caller, STAGE_WORKFLOW, selected, cwd, "in_progress");
+  oneJob(attemptJobs(caller, selected, cwd), "paired_stage", "in_progress");
+  for (const p of c.PRODUCTS) checkTag({ identity: { commit: selected.source, versions: selected.versions } }, p, cwd);
+  return { ...caller, ref: selected.ref };
+}
+function stageJobEvidence(pin, selected, cwd) {
+  const job = oneJob(attemptJobs(pin, selected, cwd), "paired_stage", "completed");
+  // Names are fixed in YAML; provider records expose step names, not YAML IDs.
+  const names = ["C1 preflight", "C1 checkout", "C1 setup", "C1 stage", "C1 upload", "C1 upload evidence"];
+  if (!Array.isArray(job.steps)) fail("retained producer steps required");
+  const allowed = ["Set up job", ...names, "Post C1 setup", "Post C1 checkout", "Complete job"];
+  if (job.steps.some(step => !allowed.includes(step.name))) fail("unreviewed producer step");
+  let last = 0;
+  for (const name of names) {
+    const rows = job.steps.filter(step => step.name === name);
+    if (rows.length !== 1 || rows[0].status !== "completed" || rows[0].conclusion !== "success" ||
+        !Number.isSafeInteger(rows[0].number) || rows[0].number <= last) fail("fixed ordered successful stage steps required");
+    last = rows[0].number;
+  }
+  const log = gh(["api", "--hostname", "github.com", `repos/${REPOSITORY}/actions/jobs/${job.id}/logs`], cwd, 4 * LIMIT);
+  const records = [];
+  for (const line of log.split("\n")) {
+    // Only standalone timestamped log records; echoed command source is not evidence.
+    const match = /^\d{4}-\d\d-\d\dT[0-9:.]+Z C1_STAGE (.*)\r?$/.exec(line);
+    if (match) records.push(JSON.parse(match[1]));
+  }
+  if (records.length !== 5) fail("five ordered retained stage operation records required");
+  const [start, agent, kit, completion, upload] = records;
+  c.keys(start, ["operation", "source", "ref", "run_id", "run_attempt", "input_sha256", "input_artifact"], "stage start transcript");
+  exact([start.operation, start.source, start.ref, start.run_id, start.run_attempt],
+    ["start", selected.source, selected.ref, pin.run_id, pin.run_attempt], "stage start invocation");
+  sha(start.input_sha256); locator(start.input_artifact);
+  for (const [i, row] of [agent, kit].entries()) {
+    c.keys(row, ["operation", "product", "pack"], "stage pack transcript");
+    exact([row.operation, row.product], ["pack", c.PRODUCTS[i]], "ordered two packs");
+  }
+  c.keys(completion, ["operation", "stage_sha256"], "stage completion transcript");
+  exact(completion.operation, "completion", "completed stage operation"); sha(completion.stage_sha256);
+  c.keys(upload, ["operation", "artifact_id", "artifact_sha256", "stage_sha256"], "stage upload transcript");
+  exact(upload, { operation: "upload", artifact_id: pin.artifact_id, artifact_sha256: pin.artifact_sha256,
+    stage_sha256: completion.stage_sha256 }, "retained upload selector");
+  return { job, records };
+}
+function inspectCurrentStage(value) {
+  c.keys(value, ["artifact", "selected", "workflow_sha", "scratch"], "current stage options");
+  const pin = locator(value.artifact), selected = workflowSelection(value.selected, value.workflow_sha);
+  c.safeDirectory(value.scratch);
+  const caller = currentCaller(selected, STAGE_WORKFLOW, ["paired_stage_attestation"]);
+  exact([pin.run_id, pin.run_attempt], [caller.run_id, caller.run_attempt], "current stage locator");
+  cliVersion(value.scratch);
+  attemptAtRef(pin, STAGE_WORKFLOW, selected, value.scratch, "in_progress");
+  oneJob(attemptJobs(pin, selected, value.scratch), "paired_stage_attestation", "in_progress");
+  const evidence = stageJobEvidence(pin, selected, value.scratch);
+  const item = api(`actions/artifacts/${pin.artifact_id}`, value.scratch);
+  exact([item.id, item.expired, item.digest, item.workflow_run?.id, item.workflow_run?.head_sha, item.name],
+    [pin.artifact_id, false, `sha256:${pin.artifact_sha256}`, pin.run_id, selected.source,
+      `authoring-public-stage-${selected.source}-${pin.run_id}-${pin.run_attempt}`], "current stage artifact custody");
+  integer(item.size_in_bytes, 2 * 1024 * LIMIT);
+  const created = Date.parse(item.created_at), started = Date.parse(evidence.job.started_at), ended = Date.parse(evidence.job.completed_at);
+  if (![created, started, ended].every(Number.isFinite) || created < started || created > ended) fail("artifact outside producer upload interval");
+  // Incidental timestamps and growing unrelated jobs are deliberately omitted.
+  return { item: { id: item.id, digest: item.digest, size_in_bytes: item.size_in_bytes, name: item.name },
+    job_id: evidence.job.id, records: evidence.records };
+}
+function acquireCurrentStage(value) {
+  const before = inspectCurrentStage(value);
+  return downloadArtifactBytes(value.artifact, before.item, value.scratch, () =>
+    exact(inspectCurrentStage(value), before, "current stage custody changed"));
+}
+function checkStageEvidence(artifact, selected, workflowSha, record, stageSha, cwd) {
+  selected = workflowSelection(selected, workflowSha); locator(artifact);
+  const evidence = stageJobEvidence(artifact, selected, cwd);
+  const expected = [
+    { operation: "start", source: record.producer.source, ref: record.producer.ref, run_id: record.producer.run_id,
+      run_attempt: record.producer.run_attempt, input_sha256: record.native_inputs.sha256, input_artifact: record.native_inputs.artifact },
+    ...c.PRODUCTS.map(product => ({ operation: "pack", product, pack: record.packs[product] })),
+    { operation: "completion", stage_sha256: stageSha },
+    { operation: "upload", artifact_id: artifact.artifact_id, artifact_sha256: artifact.artifact_sha256, stage_sha256: stageSha }];
+  exact(evidence.records, expected, "retained operation transcript versus exact S");
+  return { job_id: evidence.job.id, records: evidence.records };
+}
+
+// Extract only the file already checked by acquireArtifact. Python opens once,
+// snapshots and rehashes it, then parses/extracts that same immutable byte array.
+// There is no second provider download, archive-name selection or unzip command.
+function extractArtifact(file, pin, kind, files, output, cwd) {
+  locator(pin); c.safeDirectory(cwd);
+  if (path.basename(file) !== `artifact-${pin.artifact_id}.zip`) fail("exact acquired ZIP path required");
+  const st = fs.lstatSync(file);
+  if (!st.isFile() || st.nlink !== 1) fail("regular unaliased ZIP required");
+  const result = cp.spawnSync("/usr/bin/python3", ["-B", path.resolve(__dirname, "../../../scripts/read-authoring-evidence-zip.py"),
+    "--archive", file, "--sha256", pin.artifact_sha256, "--size", String(st.size),
+    "--kind", kind, "--files", JSON.stringify(files), "--output", output], {
+    cwd, env: { PATH: "/usr/bin:/bin", HOME: cwd, LC_ALL: "C.UTF-8", PYTHONNOUSERSITE: "1" },
+    encoding: "utf8", timeout: 120000, killSignal: "SIGKILL", maxBuffer: LIMIT, shell: false
+  });
+  if (result.error || result.signal || result.status !== 0) fail("checked authoring ZIP extraction rejected; no admission or protected effect");
+  exact(JSON.parse(result.stdout), { archive_sha256: pin.artifact_sha256, files: [...files].sort() }, "extracted archive closure");
+  return output;
+}
+function preparationFiles(record) {
+  return ["preparation-run.json", "candidate-identity.json", "candidate/candidate.json", "pair-prepared.json",
+    ...c.PRODUCTS.flatMap(p => [...c.TARGETS.map(t => `${p}/${record.products[p].assets[t].file}`),
+      `${p}/release-manifest.json`, `${p}/checksums.txt`])];
+}
+function invocationFor(pin, workflow, source) {
+  return { repository: REPOSITORY, workflow, source, workflow_sha: source,
+    run_id: pin.run_id, run_attempt: pin.run_attempt };
+}
+function projectedPins(record) {
+  return { identity: record.identity, candidate_sha256: record.candidate_sha256,
+    pair_marker_sha256: record.pair_marker_sha256, products: Object.fromEntries(c.PRODUCTS.map(p => [p, {
+      manifest_sha256: record.products[p].manifest_sha256, checksums_sha256: record.products[p].checksums_sha256 }])) };
+}
+function acquirePreparation(pin, record, scratch) {
+  return acquirePreparationBinding(pin, recordShape(record), scratch);
+}
+// Shared preparation intake below Q validation. Only the Q wrapper above and
+// the canonical I adapter below supply this private binding; no synthetic Q.
+function acquirePreparationBinding(pin, record, scratch, receiptSha256) {
+  c.safeDirectory(scratch); locator(pin);
+  const work = fs.mkdtempSync(path.join(scratch, "preparation-"));
+  const file = acquireArtifact(pin, WORKFLOW, record.identity.commit, work);
+  const root = extractArtifact(file, pin, "preparation", preparationFiles(record), path.join(work, "frozen"), work);
+  return readPreparationBinding(root, pin, record, receiptSha256);
+}
+function readPreparationBinding(root, pin, record, receiptSha256) {
+  frozenSubjects(root, record);
+  const metadataBody = c.readFile(path.join(root, "candidate-identity.json"), LIMIT);
+  const metadata = JSON.parse(metadataBody);
+  exact(metadataBody, c.encode(metadata), "canonical preparation identity metadata");
+  c.keys(metadata, ["identity", "status", "manifest_sha256", "output", "local_build_evidence",
+    "release_eligible", "platform_acceptance", "attested"], "preparation identity metadata");
+  exact(metadata.identity, record.identity, "preparation metadata identity");
+  exact([metadata.status, metadata.manifest_sha256, metadata.release_eligible, metadata.platform_acceptance, metadata.attested],
+    ["CANDIDATE", record.candidate_sha256, false, false, false], "preparation metadata claims");
+  // Historical builder locations are descriptive strings only. Never resolve,
+  // follow or read them in the consumer's namespace, including during recovery.
+  for (const name of ["output", "local_build_evidence"]) {
+    const value = metadata[name];
+    if (typeof value !== "string" || value.length > 4096 || !value.startsWith("/") || /[\x00-\x1f]/.test(value))
+      fail("bounded preparation location metadata required");
+  }
+  const preparation = { sha256: c.digest(c.readFile(path.join(root, "preparation-run.json"), LIMIT)),
+    producer: invocationFor(pin, WORKFLOW, record.identity.commit) };
+  if (receiptSha256 !== undefined) exact(preparation.sha256, receiptSha256, "exact I preparation receipt");
+  require("./authoring-native-qualification").readPreparation(root, projectedPins(record), preparation);
+  // Metadata cannot substitute for the receipt or the frozen subject pins.
+  // Independently acquired provider bytes, not this file's claims, bind attempt.
+  return { root, preparation };
+}
+// These are fixed structural/custody adapters, not signature admission. The
+// existing Q wrapper retains its recordShape requirement and return encoding.
+function acquireInputPreparation(inputBytes, scratch) {
+  const input = require("./authoring-native-inputs").decodeInputs(inputBytes);
+  return acquirePreparationBinding(input.preparation.artifact, input, scratch, input.preparation.sha256);
+}
+function readInputPreparation(root, inputBytes) {
+  const input = require("./authoring-native-inputs").decodeInputs(inputBytes);
+  return readPreparationBinding(root, input.preparation.artifact, input, input.preparation.sha256);
+}
+function checkInputTags(inputBytes, cwd) {
+  const input = require("./authoring-native-inputs").decodeInputs(inputBytes);
+  c.safeDirectory(cwd); cliVersion(cwd);
+  for (const product of c.PRODUCTS) checkTag(input, product, cwd);
+}
+function nativeContract(lane) {
+  if (!LANES.slice(0, 12).includes(lane.lane) || lane.schema !== NATIVE_SCHEMA || lane.workflow !== NATIVE_WORKFLOW)
+    fail(`NATIVE_EVIDENCE_INTEGRATION_REQUIRED: unsupported contracts [${lane.lane}:${lane.schema}]`);
+}
+// Registered identifiers are a syntactic precondition only. No success value,
+// provider assertion or authorization is returned by this inexpensive check.
+function checkNativeContracts(record) {
+  recordShape(record).qualification.lanes.slice(0, 12).forEach(nativeContract);
+}
+function admitNativeEvidence(record, preparationPin, scratch) {
+  // Full canonical record validation precedes every acquisition. This return
+  // represents only twelve native observations, never global authorization.
+  record = recordShape(record);
+  const lanes = record.qualification.lanes.slice(0, 12);
+  lanes.forEach(nativeContract);
+  const prepared = acquirePreparation(preparationPin, record, scratch);
+  const receipts = [];
+  const seenArtifacts = new Set();
+  for (const target of ["linux-amd64", ...c.TARGETS.filter(t => t !== "linux-amd64")]) {
+    const pair = c.PRODUCTS.map(p => lanes.find(x => x.lane === `${p}/${target}`));
+    exact(pair[0].artifact, pair[1].artifact, "paired terminals must share one exact artifact");
+    const pin = pair[0].artifact;
+    if (seenArtifacts.has(pin.artifact_id) || pin.artifact_id === preparationPin.artifact_id) fail("native artifact reused across targets or preparation");
+    seenArtifacts.add(pin.artifact_id);
+    const work = fs.mkdtempSync(path.join(scratch, `native-${target}-`));
+    const file = acquireArtifact(pin, NATIVE_WORKFLOW, record.identity.commit, work);
+    const root = extractArtifact(file, pin, "native", NATIVE_FILES, path.join(work, "evidence"), work);
+    for (let i = 0; i < pair.length; i++) {
+      const body = c.readFile(path.join(root, `${c.PRODUCTS[i]}-terminal.json`), LIMIT);
+      exact(c.digest(body), pair[i].sha256, "independently pinned terminal digest");
+    }
+    // The accepted reader validates the complete paired journey and evidence,
+    // not merely producer metadata, success booleans, or the selected subject.
+    const terminal = JSON.parse(c.readFile(path.join(root, "agentplugins-terminal.json"), LIMIT));
+    const observed = require("./authoring-native-qualification").readTerminals(root, prepared.root, projectedPins(record), {
+      producer: invocationFor(pin, NATIVE_WORKFLOW, record.identity.commit), preparation: prepared.preparation,
+      tools: terminal.tools, target
+    });
+    exact(observed.map(x => x.lane), pair.map(x => x.lane), "admitted target lanes");
+    receipts.push(...observed);
+  }
+  return { ...prepared, receipts };
 }
 
 // Mapping for fresh `gh attestation verify --format json` results. This function
 // is structural; only verifySubject calls the cryptographic boundary. B must
 // never promote supplied JSON into authenticated proof by calling this mapper.
 function mapVerifiedOutput(output, expected) {
+  return mapWorkflowOutput(output, expected, WORKFLOW);
+}
+// Private policy selection only. Cryptographic output fields and their mapping
+// are unchanged; callers cannot supply a workflow or a verifier.
+function mapWorkflowOutput(output, expected, workflow) {
   if (typeof output !== "string" || Buffer.byteLength(output) > 4 * LIMIT) fail("bounded verifier output required");
   const results = JSON.parse(output);
   if (!Array.isArray(results) || results.length !== 1) fail("one verified attestation required");
@@ -217,7 +512,7 @@ function mapVerifiedOutput(output, expected) {
   exact(order(statement.subject), order(normalized), "verified subject set");
   const build = statement.predicate?.buildDefinition;
   if (build?.buildType !== "https://actions.github.io/buildtypes/workflow/v1") fail("verified Actions build type mismatch");
-  exact(build.externalParameters?.workflow, { ref: expected.ref, repository: URL, path: WORKFLOW }, "verified workflow");
+  exact(build.externalParameters?.workflow, { ref: expected.ref, repository: URL, path: workflow }, "verified workflow");
   exact(build.resolvedDependencies, [{ uri: `git+${URL}@${expected.ref}`, digest: { gitCommit: expected.source } }], "verified source");
   const run = statement.predicate?.runDetails;
   exact(run?.metadata?.invocationId, `${URL}/actions/runs/${expected.run_id}/attempts/${expected.run_attempt}`, "verified invocation");
@@ -225,6 +520,17 @@ function mapVerifiedOutput(output, expected) {
   return statement;
 }
 function verifySubject(file, expected, cwd) {
+  return verifyWorkflowSubject(file, expected, cwd, WORKFLOW);
+}
+function verifyStageSubject(file, expected, cwd) {
+  exact(expected.workflow_sha, expected.source, "stage signer revision F");
+  if (!Array.isArray(expected.subjects) || expected.subjects.length !== 3 ||
+      expected.subjects.filter(s => s.name === "completion.json").length !== 1 ||
+      expected.subjects.filter(s => /^universal-agent-plugins-[0-9]+\.[0-9]+\.[0-9]+\.tgz$/.test(s.name)).length !== 1 ||
+      expected.subjects.filter(s => s.name === "plugin-kit-ai-2.0.0.tgz").length !== 1) fail("exact three stage subjects required");
+  return verifyWorkflowSubject(file, expected, cwd, ".github/workflows/agentplugins-npm-publish.yml");
+}
+function verifyWorkflowSubject(file, expected, cwd, workflow) {
   c.keys(expected, ["name", "sha256", "source", "workflow_sha", "ref", "run_id", "run_attempt", "subjects"], "verification expectations");
   sha(expected.sha256); sha(expected.source, 40); sha(expected.workflow_sha, 40);
   integer(expected.run_id); integer(expected.run_attempt, 1000);
@@ -232,11 +538,11 @@ function verifySubject(file, expected, cwd) {
   if (c.digest(c.readFile(file)) !== expected.sha256) fail("subject changed before signature verification");
   cliVersion(cwd);
   const output = gh(["attestation", "verify", file, "--repo", REPOSITORY,
-    "--signer-workflow", SIGNER, "--signer-digest", expected.workflow_sha,
+    "--signer-workflow", workflow === WORKFLOW ? SIGNER : `github.com/${REPOSITORY}/${workflow}`, "--signer-digest", expected.workflow_sha,
     "--source-digest", expected.source, "--source-ref", expected.ref,
     "--cert-oidc-issuer", "https://token.actions.githubusercontent.com",
     "--deny-self-hosted-runners", "--predicate-type", SLSA, "--format", "json"], cwd);
-  const statement = mapVerifiedOutput(output, expected);
+  const statement = mapWorkflowOutput(output, expected, workflow);
   if (c.digest(c.readFile(file)) !== expected.sha256) fail("subject changed after signature verification");
   return statement;
 }
@@ -311,13 +617,11 @@ function options(v) {
 }
 function admittedInputs(input) {
   const o = options(input);
-  const record = admitRecord(c.readFile(o.record, LIMIT), o.selected); // Before gh, output or attestation.
+  const record = validateSelection(c.readFile(o.record, LIMIT), o.selected);
   exact(o.workflow_sha, record.identity.commit, "integrated workflow source");
-  cliVersion(o.scratch);
-  inspectArtifact(o.preparation, WORKFLOW, record.identity.commit, o.scratch);
-  // Integration must acquire/validate the accepted native terminal artifacts
-  // here, including actual asserted gates and exact attempt/subject bindings.
-  // requireNativeContracts remains unconditional until that implementation lands.
+  const native = admitNativeEvidence(record, o.preparation, o.scratch);
+  require("./authoring-native-qualification").readPreparation(o.root, projectedPins(record), native.preparation);
+  requireNativeContracts(record.qualification.lanes); // Public adapter still unavailable; zero effects.
   const subjects = frozenSubjects(o.root, record);
   subjects.push({ file: o.record, sha256: c.digest(encodeRecord(record)) });
   return { o, record, subjects };
@@ -417,5 +721,7 @@ if (require.main === module) {
   try { process.stdout.write(JSON.stringify(main(process.argv.slice(2))) + "\n"); }
   catch (error) { process.stderr.write(`authoring promotion: ${error.message}\n`); process.exitCode = 1; }
 }
-module.exports = { SCHEMA, WORKFLOW, GH_VERSION, LANES, encodeRecord, decodeRecord, validateSelection, admitRecord, requireNativeContracts,
-  inspectArtifact, acquireArtifact, mapVerifiedOutput, verifySubject, frozenSubjects, releasePins, inspectPair, promote };
+module.exports = { inspectStageCaller, workflowSelection, inspectInputCaller, checkPreparationRef, acquireCurrentStage, inspectCurrentStage, checkStageEvidence, SCHEMA, WORKFLOW, GH_VERSION, LANES, encodeRecord, decodeRecord, validateSelection, admitRecord, requireNativeContracts,
+  inspectArtifact, acquireArtifact, extractArtifact, acquirePreparation, checkNativeContracts, admitNativeEvidence,
+  acquireInputPreparation, readInputPreparation, checkInputTags,
+  mapVerifiedOutput, verifySubject, verifyStageSubject, frozenSubjects, releasePins, inspectPair, promote };

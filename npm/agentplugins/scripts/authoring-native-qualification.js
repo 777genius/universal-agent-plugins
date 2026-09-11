@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 "use strict";
 
-// N1 observes one frozen pair. This is not provider admission or qualification
-// signing. No promotion caller accepts these local records in this checkpoint.
+// Fixed paired observations, separately acquired and replayed by N2 admission.
+// Portable contracts do not provision observation or enable excluded execution.
 const fs = require("node:fs");
 const path = require("node:path");
 const os = require("node:os");
@@ -17,7 +17,31 @@ const { lifecycleResult } = require("./platform-proof");
 const SCHEMA = "authoring-frozen-native/v1";
 const WORKFLOW = ".github/workflows/authoring-frozen-native.yml";
 const PREPARATION = ".github/workflows/agentplugins-release.yml";
-const TARGET = "linux-amd64";
+const TARGET = "linux-amd64"; // Retain the accepted N1 default and encoding.
+const HOSTS = Object.freeze(Object.fromEntries([
+  ["linux-amd64", "linux", "x64", "x86_64", "amd64", true],
+  ["linux-arm64", "linux", "arm64", "aarch64", "arm64", true],
+  ["darwin-amd64", "darwin", "x64", "x86_64", "amd64", false],
+  ["darwin-arm64", "darwin", "arm64", "arm64", "arm64", false],
+  ["windows-amd64", "win32", "x64", "x86_64", "amd64", false],
+  ["windows-arm64", "win32", "arm64", "aarch64", "arm64", false]
+].map(([target, platform, architecture, machine, goarch, executable]) => [target, Object.freeze({
+  target, platform, architecture, machine, goos: target.split("-")[0], goarch, executable,
+  read_profile: `packageview-local-${target.split("-")[0]}-v1`,
+  client_root: "home/.codex", state_root: "state", project_root: "projects",
+  argv: "direct-array-no-shell", binary_suffix: platform === "win32" ? ".exe" : "",
+  modes: platform === "win32" ? "pending-native-acl-evidence" : "posix-exact",
+  cancellation: platform === "win32" ? "pending-owned-job-cleanup" : "owned-process-group-sigkill"
+})])));
+function hostContract(target) {
+  assert.ok(Object.hasOwn(HOSTS, target), "unsupported native target contract");
+  return HOSTS[target];
+}
+function executableHost(target) {
+  const host = hostContract(target);
+  assert.ok(host.executable, "NATIVE_EXECUTION_PENDING: Windows and writable macOS remain excluded; portable source cannot admit a skipped observation");
+  return host;
+}
 const MODE = "release-cli-contract-v1";
 const LIMIT = 1024 * 1024;
 const CASES = Object.freeze(["skill", "mcp-remote", "mcp-stdio", "hybrid-remote", "hybrid-stdio"]);
@@ -99,8 +123,9 @@ function invocation(v, workflow, source) {
   sha(source, 40); positive(v.run_id); positive(v.run_attempt); assert.ok(v.run_attempt <= 1000);
   return v;
 }
-function subject(manifest, product) {
-  return { product, target: TARGET, ...manifest.products[product].assets[TARGET] };
+function subject(manifest, product, target = TARGET) {
+  hostContract(target);
+  return { product, target, ...manifest.products[product].assets[target] };
 }
 function preparationRecord(root, pins, producer) {
   const verified = verifyProjectedPair(root, pins);
@@ -270,7 +295,7 @@ function envelope(row, expected) {
   exact(v.schema_version, 1); exact(v.result, expected.status === 0 ? "success" : "failure");
   assert.ok(v.data && !Array.isArray(v.data)); return v;
 }
-function authorResult(row, spec, product, identity) {
+function authorResult(row, spec, product, identity, target = TARGET) {
   const r = envelope(row, spec);
   if (!r) return;
   if (!spec.author) {
@@ -297,7 +322,7 @@ function authorResult(row, spec, product, identity) {
   else exact(d.committed, false);
   if (!spec.lane || /\/(existing)$/.test(spec.id) || spec.id === "installer-flag") return;
   assert.match(d.identity.tree_digest, /^sha256:[0-9a-f]{64}$/);
-  exact(d.identity.read_profile, "packageview-local-linux-v1");
+  exact(d.identity.read_profile, hostContract(target).read_profile);
   exact(d.profiles, PROFILES, "exact conformance profiles");
   exact(d.schema_ids, (spec.lane === "skill" ? [SCHEMAS[0].id] : SCHEMAS.map(x => x.id).sort()), "accepted package schema inventory");
   exact(d.loadability.status, "pass");
@@ -446,29 +471,33 @@ function scanEvidence(r, source, project) {
   assert.match(security.report_digest, /^sha256:[0-9a-f]{64}$/);
   return security;
 }
-function acquisition(state, bodies) {
+function acquisition(state, bodies, target = TARGET) {
+  const platforms = target === TARGET ? [TARGET, "linux-amd64-musl"] : [target];
+  const scannerRoots = platforms.map(t => `security/lintai/0.1.3/${t}`);
   const root = { path: ".", mode: 448, kind: "directory" };
   assert.ok(Array.isArray(state.acquisition)); treeShape([root, ...state.acquisition]);
   for (const item of state.acquisition) {
-    const directory = /^(?:security(?:\/(?:lintai|assessments))?|security\/lintai\/0\.1\.3(?:\/linux-amd64(?:-musl)?)?)$/.test(item.path);
-    const file = /^(?:security\/lintai\/0\.1\.3\/linux-amd64(?:-musl)?\/lintai|security\/assessments\/[0-9a-f]{64}\.json|(?:directory|discovery)-v1-cache\.json)$/.test(item.path);
+    const directory = ["security", "security/lintai", "security/assessments", "security/lintai/0.1.3", ...scannerRoots].includes(item.path);
+    const file = scannerRoots.some(root => item.path === `${root}/lintai${hostContract(target).binary_suffix}`) ||
+      /^(?:security\/assessments\/[0-9a-f]{64}\.json|(?:directory|discovery)-v1-cache\.json)$/.test(item.path);
     assert.ok(directory || file, "fixed acquisition paths"); exact(item.kind, directory ? "directory" : "file");
   }
   return capturedBytes(state.acquisition, Object.fromEntries(state.acquisition.filter(x => x.kind === "file")
     .map(x => [x.path, bodies[x.sha256]])));
 }
-function acquisitionClosure(rows, bodies) {
+function acquisitionClosure(rows, bodies, target = TARGET) {
   const files = rows.flatMap(row => [row.before, row.after].flatMap(state => state.acquisition.filter(x => x.kind === "file")));
   const pins = [...new Map(files.map(x => [x.sha256, x])).values()];
   c.keys(bodies, pins.map(x => x.sha256), "closed acquisition byte subjects");
   let total = 0;
   for (const item of pins) { total += item.size; assert.ok(total <= 16 * LIMIT, "total acquisition byte bound"); }
-  for (const row of rows) for (const state of [row.before, row.after]) acquisition(state, bodies);
+  for (const row of rows) for (const state of [row.before, row.after]) acquisition(state, bodies, target);
 }
 // Fixed ReleaseScanner release.go pins, never supplied by an evidence caller.
 // HTTP bodies are observer evidence, not files invented in the scanner cache.
 const SCANNER_RELEASES = Object.freeze({
   "linux-amd64": { name: "lintai-v0.1.3-x86_64-unknown-linux-gnu.tar.gz", sha256: "2b3d176db752433b904a4b42375543ff398f4841d22e48f7d4f23ded925b72da" },
+  "linux-arm64": { name: "lintai-v0.1.3-aarch64-unknown-linux-gnu.tar.gz", sha256: "132a37610575bd251ecaf0be4c6090dad144dd1397c99aad989a3944c63c3d4a" },
   "linux-amd64-musl": { name: "lintai-v0.1.3-x86_64-unknown-linux-musl.tar.gz", sha256: "3da60f749c61e2caca029a44a9ce422d570aef8c57f82ce51c411c8cec12f61b" }
 });
 function scannerArchive(scan, executable) {
@@ -512,7 +541,7 @@ function scannerArchive(scan, executable) {
   assert.ok(binary?.length, "release archive contains lintai");
   exact(binary, executable, "scanner executable is the pinned archive member");
 }
-function scanReplay(rows, projects, scans, bodies) {
+function scanReplay(rows, projects, scans, bodies, target = TARGET) {
   assert.ok(Array.isArray(scans)); exact(scans.length, 3, "three observed fresh scans and report bytes");
   const fresh = new Map(); let executable;
   for (let i = 0; i < 4; i++) {
@@ -520,7 +549,7 @@ function scanReplay(rows, projects, scans, bodies) {
     const assessment = scanEvidence(jsonDocument(row.stdout), i < 3 ? "local_scan" : "cache", projects[lane]);
     const key = c.digest(Buffer.from([assessment.subject.tree_digest, assessment.subject.manifest_digest,
       "lintai", "0.1.3", POLICY.id, String(POLICY.version), POLICY.digest].join("\0")));
-    const file = `security/assessments/${key}.json`, before = acquisition(row.before, bodies), after = acquisition(row.after, bodies);
+    const file = `security/assessments/${key}.json`, before = acquisition(row.before, bodies, target), after = acquisition(row.after, bodies, target);
     const cached = { ...assessment }; delete cached.evidence_source;
     assert.ok(after[file], "required assessment cache bytes"); exact(jsonDocument(after[file].toString("utf8")), cached);
     if (i < 3) {
@@ -528,7 +557,8 @@ function scanReplay(rows, projects, scans, bodies) {
       const scan = scans[i]; c.keys(scan, ["id", "args", "subject", "executable", "archive", "report"], "observed scanner call");
       exact([scan.id, scan.args, scan.subject], [row.id, ["scan-agent-plugin", `<source>/${lane}`], assessment.subject]);
       c.keys(scan.executable, ["path", "sha256"], "observed scanner executable");
-      assert.match(scan.executable.path, /^security\/lintai\/0\.1\.3\/linux-amd64(?:-musl)?\/lintai$/);
+      assert.ok((target === TARGET ? [TARGET, "linux-amd64-musl"] : [target])
+        .some(t => scan.executable.path === `security/lintai/0.1.3/${t}/lintai`), "scanner matches selected host target");
       assert.ok(after[scan.executable.path], "required scanner acquisition bytes");
       exact(c.digest(after[scan.executable.path]), sha(scan.executable.sha256));
       scannerArchive(scan, after[scan.executable.path]);
@@ -790,7 +820,8 @@ function custodyCoverage(entries, preparation) {
     const identity = `${v.dev}:${v.ino}`; assert.ok(!inodes.has(identity)); inodes.add(identity);
   });
 }
-function verifyJourney(e, pins) {
+function verifyJourney(e, pins, target = TARGET) {
+  executableHost(target);
   c.keys(e, FILES, "evidence bundle");
   const transcript = e["transcripts.json"], projects = e["trees.json"];
   c.keys(transcript, [...c.PRODUCTS, "installer"], "transcripts"); c.keys(projects, c.PRODUCTS, "trees");
@@ -800,7 +831,7 @@ function verifyJourney(e, pins) {
       const row = rows[i], spec = specs[i];
       c.keys(row, ["id", "args", "status", "stdout", "stderr", "before", "after"], "command transcript");
       treeShape(row.before); treeShape(row.after);
-      exact([row.id, row.args], [spec.id, spec.args]); authorResult(row, spec, p, pins.identity);
+      exact([row.id, row.args], [spec.id, spec.args]); authorResult(row, spec, p, pins.identity, target);
       if (!/\/(init|extra-skill)$/.test(spec.id)) exact(row.before, row.after, "read/rejection preservation");
     }
     c.keys(projects[p], CASES, "five templates");
@@ -827,7 +858,7 @@ function verifyJourney(e, pins) {
       }
       treeShape(state.client); treeShape(state.state);
       capturedBytes(state.state.filter(x => /\/(?:\.codex-plugin\/plugin|\.agents\/plugins\/marketplace)\.json$/.test(x.path)), state.projection_documents);
-      acquisition(state, e["acquisition.json"]); stateDocument(state);
+      acquisition(state, e["acquisition.json"], target); stateDocument(state);
     }
     if (i) exact(row.before, transcript.installer[i - 1].after, "installer state continuity");
     else { exact(row.before.acquisition, []); exact(stateDocument(row.before).installations, []); }
@@ -836,8 +867,8 @@ function verifyJourney(e, pins) {
       exact(row.after.client.find(x => x.path === original.path), original, "preexisting client preservation");
     exact([row.id, row.args], [specs[i].id, specs[i].args]); installed(row, specs[i], projects.agentplugins);
   }
-  acquisitionClosure(transcript.installer, e["acquisition.json"]);
-  scanReplay(transcript.installer, projects.agentplugins, e["scans.json"], e["acquisition.json"]);
+  acquisitionClosure(transcript.installer, e["acquisition.json"], target);
+  scanReplay(transcript.installer, projects.agentplugins, e["scans.json"], e["acquisition.json"], target);
   const preserve = e["preservation.json"];
   c.keys(preserve, ["inputs_before", "inputs_after", "projects_before", "projects_after", "author_homes_before", "author_homes_after", "custody_before", "custody_after"], "preservation");
   for (const name of ["inputs", "projects", "author_homes", "custody"]) exact(preserve[`${name}_before`], preserve[`${name}_after`]);
@@ -854,14 +885,16 @@ function verifyJourney(e, pins) {
     installer: specs.map(x => x.id), parity: "both-products", preservation: "inputs-projects-client-state", runtime: "not_evaluated" };
 }
 function terminal(p, pins, manifest, options, evidence, tools) {
-  return { schema: SCHEMA, lane: `${p}/${TARGET}`, identity: pins.identity, candidate_sha256: pins.candidate_sha256,
-    pair_marker_sha256: pins.pair_marker_sha256, projection_pins: pins.products, subject: subject(manifest, p),
-    peer_subject: subject(manifest, c.PRODUCTS.find(x => x !== p)), preparation: options.preparation,
-    producer: options.producer, host: evidence["host.json"], tools, assertions: verifyJourney(evidence, pins),
+  const target = Object.hasOwn(options, "target") ? options.target : TARGET;
+  return { schema: SCHEMA, lane: `${p}/${target}`, identity: pins.identity, candidate_sha256: pins.candidate_sha256,
+    pair_marker_sha256: pins.pair_marker_sha256, projection_pins: pins.products, subject: subject(manifest, p, target),
+    peer_subject: subject(manifest, c.PRODUCTS.find(x => x !== p), target), preparation: options.preparation,
+    producer: options.producer, host: evidence["host.json"], tools, assertions: verifyJourney(evidence, pins, target),
     evidence: FILES.map(file => ({ file, ...c.metadata(c.encode(evidence[file])) })) };
 }
 function readTerminals(root, inputRoot, pins, expected) {
-  c.safeDirectory(root); c.keys(expected, ["producer", "preparation", "tools"], "terminal expectations");
+  c.safeDirectory(root); c.keys(expected, ["producer", "preparation", "tools", ...(Object.hasOwn(expected, "target") ? ["target"] : [])], "terminal expectations");
+  const target = Object.hasOwn(expected, "target") ? expected.target : TARGET, contract = executableHost(target);
   invocation(expected.producer, WORKFLOW, pins.identity.commit);
   const prepared = readPreparation(inputRoot, pins, expected.preparation);
   const { manifest } = verifyProjectedPair(inputRoot, pins);
@@ -870,9 +903,9 @@ function readTerminals(root, inputRoot, pins, expected) {
   const evidence = Object.fromEntries(FILES.map(file => [file, canonical(c.readFile(path.join(root, file), 32 * LIMIT), 32 * LIMIT)]));
   exact(evidence["preparation.json"], prepared);
   const build = evidence["build-info.json"]; c.keys(build, c.PRODUCTS, "selected build info");
-  for (const p of c.PRODUCTS) buildInfo(build[p], p, TARGET, pins.identity, MODE);
+  for (const p of c.PRODUCTS) buildInfo(build[p], p, target, pins.identity, MODE);
   const host = evidence["host.json"];
-  exact(host, { platform: "linux", architecture: "x64", machine: "x86_64", target: TARGET,
+  exact(host, { platform: contract.platform, architecture: contract.architecture, machine: contract.machine, target,
     observation: "whole-descendant-authoring-no-process-network/1" });
   c.keys(expected.tools, ["go", "node"], "host tools");
   for (const [name, version] of [["go", "go1.25.13"], ["node", "v22.21.1"]]) {
@@ -889,10 +922,11 @@ function readTerminals(root, inputRoot, pins, expected) {
   return result;
 }
 async function produce(options, signal) {
-  c.keys(options, ["root", "pins", "preparation", "producer", "go", "go_sha256", "output", "work"], "native options");
+  c.keys(options, ["root", "pins", "preparation", "producer", "go", "go_sha256", "output", "work", ...(Object.hasOwn(options, "target") ? ["target"] : [])], "native options");
   const { root, pins } = options;
+  const target = Object.hasOwn(options, "target") ? options.target : TARGET, contract = executableHost(target);
   invocation(options.producer, WORKFLOW, pins.identity.commit);
-  exact([process.platform, process.arch, os.machine()], ["linux", "x64", "x86_64"], "actual Linux amd64 host");
+  exact([process.platform, process.arch, os.machine()], [contract.platform, contract.architecture, contract.machine], "actual native host OS/architecture; no emulation");
   exact(process.version, "v22.21.1"); sha(options.go_sha256);
   assert.ok(path.isAbsolute(options.go)); exact(c.digest(c.readFile(options.go)), options.go_sha256);
   // Host Go has its own pin; a different-platform builder executable need not hash identically.
@@ -910,15 +944,15 @@ async function produce(options, signal) {
     const tool = context(path.join(options.work, "host-tool"));
     const go = await subprocess(options.go, ["env", "-json", "GOVERSION", "GOHOSTOS", "GOHOSTARCH"], tool, signal);
     exact(go.status, 0); exact(go.stderr, "");
-    exact(JSON.parse(go.stdout), { GOVERSION: "go1.25.13", GOHOSTOS: "linux", GOHOSTARCH: "amd64" });
+    exact(JSON.parse(go.stdout), { GOVERSION: "go1.25.13", GOHOSTOS: contract.goos, GOHOSTARCH: contract.goarch });
     for (const p of c.PRODUCTS) {
       contexts[p] = context(path.join(options.work, p));
-      const a = frozen.manifest.products[p].assets[TARGET], bytes = c.readFile(path.join(root, p, a.file));
+      const a = frozen.manifest.products[p].assets[target], bytes = c.readFile(path.join(root, p, a.file));
       const binary = p === "plugin-kit-ai" ? c.unpack(bytes, a.binary.file) : bytes;
       binaries[p] = path.join(contexts[p].root, p); fs.writeFileSync(binaries[p], binary, { flag: "wx", mode: 0o500 });
       exact(c.metadata(c.readFile(binaries[p])), { sha256: a.binary.sha256, size: a.binary.size });
       const r = await subprocess(options.go, ["version", "-m", "-json", binaries[p]], tool, signal);
-      exact(r.status, 0); exact(r.stderr, ""); build[p] = JSON.parse(r.stdout); buildInfo(build[p], p, TARGET, pins.identity, MODE);
+      exact(r.status, 0); exact(r.stderr, ""); build[p] = JSON.parse(r.stdout); buildInfo(build[p], p, target, pins.identity, MODE);
     }
     const protectedHomes = () => Object.fromEntries(c.PRODUCTS.map(p => [p, Object.fromEntries(["home", "state", "config", "cache", "data", "tmp"].map(n => [n, tree(path.join(contexts[p].root, n))]))]));
     const homesBefore = protectedHomes();
@@ -931,7 +965,7 @@ async function produce(options, signal) {
         }
         const before = tree(projectRoot), r = await subprocess(binaries[p], spec.args, ctx, signal);
         const row = { id: spec.id, args: spec.args, ...r, before, after: tree(projectRoot) };
-        rows[p].push(row); authorResult(row, spec, p, pins.identity);
+        rows[p].push(row); authorResult(row, spec, p, pins.identity, target);
         if (!/\/(init|extra-skill)$/.test(spec.id)) exact(row.before, row.after);
         if (spec.id === "malformed-skill") { fs.unlinkSync(path.join(malformed, "SKILL.md")); fs.rmdirSync(malformed); }
       }
@@ -982,7 +1016,7 @@ async function produce(options, signal) {
     const after = verifyProjectedPair(root, pins); readPreparation(root, pins, options.preparation);
     exact(c.digest(c.readFile(options.go)), options.go_sha256);
     for (const p of c.PRODUCTS) {
-      exact(c.digest(c.readFile(binaries[p])), frozen.manifest.products[p].assets[TARGET].binary.sha256);
+      exact(c.digest(c.readFile(binaries[p])), frozen.manifest.products[p].assets[target].binary.sha256);
       exact(fs.lstatSync(binaries[p]).mode & 0o777, 0o500, "selected executable mode preserved");
     }
     normalizeInstaller(rows.installer, install.env.AGENTPLUGINS_HOME);
@@ -996,9 +1030,9 @@ async function produce(options, signal) {
     // ReleaseScanner keeps neither its raw report stdout nor acquisition HTTP
     // bytes. No scan record can be inferred from a cached assessment. A future
     // reviewed observer must close that custody; production has no positive seam.
-    e["host.json"] = { platform: process.platform, architecture: process.arch, machine: os.machine(), target: TARGET,
+    e["host.json"] = { platform: process.platform, architecture: process.arch, machine: os.machine(), target,
       observation: "whole-descendant-authoring-no-process-network/1" };
-    verifyJourney(e, pins);
+    verifyJourney(e, pins, target);
     const tools = { go: { sha256: options.go_sha256, version: "go1.25.13" }, node: { sha256: c.digest(c.readFile(process.execPath)), version: process.version } };
     for (const file of FILES) fs.writeFileSync(path.join(options.output, file), c.encode(e[file]), { flag: "wx", mode: 0o400 });
     if (signal?.aborted) fail("cancelled before terminal");
@@ -1008,7 +1042,7 @@ async function produce(options, signal) {
       try { fs.writeFileSync(fd, c.encode(terminal(p, pins, frozen.manifest, options, e, tools))); }
       finally { fs.closeSync(fd); }
     }
-    return readTerminals(options.output, root, pins, { producer: options.producer, preparation: options.preparation, tools });
+    return readTerminals(options.output, root, pins, { producer: options.producer, preparation: options.preparation, tools, ...(options.target ? { target } : {}) });
   } catch (error) {
     for (const file of ownedTerminals) fs.unlinkSync(file);
     fs.writeFileSync(path.join(options.output, "failure-transcripts.json"), c.encode({
