@@ -2,6 +2,8 @@
 import { computed, onMounted, ref } from "vue";
 import { withBase } from "vitepress";
 
+import { preferredLocale as selectLocale } from "./locale-routes.mjs";
+
 type LocaleEntry = {
   code: string;
   title: string;
@@ -75,27 +77,11 @@ function rememberLocale(code: string) {
   }
 }
 
-function detectBrowserLocale(): string {
-  const candidates = [
+function redirectToPreferredLocale() {
+  const targetCode = selectLocale(preferredCode.value, [
     ...(Array.isArray(window.navigator.languages) ? window.navigator.languages : []),
     window.navigator.language || ""
-  ];
-  const patterns: Array<[string, RegExp]> = [
-    ["zh", /^zh\b/i],
-    ["es", /^es\b/i],
-    ["fr", /^fr\b/i],
-    ["ru", /^ru\b/i]
-  ];
-  for (const [locale, pattern] of patterns) {
-    if (candidates.some((candidate) => pattern.test(String(candidate)))) {
-      return locale;
-    }
-  }
-  return "en";
-}
-
-function redirectToPreferredLocale() {
-  const targetCode = preferredCode.value || detectBrowserLocale();
+  ]);
   const targetLocale = locales.find((locale) => locale.code.toLowerCase() === targetCode.toLowerCase());
   if (!targetLocale) {
     return;

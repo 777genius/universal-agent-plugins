@@ -7,6 +7,14 @@ locale: "zh"
 generated: false
 translationRequired: true
 ---
+
+[使用插件](/zh/use/) · [构建插件](/zh/build/) — 仅为准备内容，尚未发布。v2 暂不支持项目迁移。
+<p class="locale-historical-identity">构建一个团队就绪的插件</p>
+
+[plugin-kit-ai v1 分支的历史快照。1.2.4 是命令基准，并非此快照的确切版本。](/en/legacy/v1/)
+
+<details><summary>plugin-kit-ai v1 分支的历史快照。1.2.4 是命令基准，并非此快照的确切版本。</summary>
+
 # 构建一个团队就绪的插件
 
 本教程将从第一个成功的插件停止的地方开始。目标不仅仅是“它可以在我的机器上运行”，而是另一个队友可以在没有隐藏知识的情况下克隆、验证和发布的存储库。
@@ -125,3 +133,5 @@ plugin-kit-ai validate . --platform codex-runtime --strict
 当另一个队友可以克隆它、了解路径和目标范围、重现生成的输出并通过严格的验证门而无需即兴创作时，该存储库就已准备就绪。
 
 将本教程与[构建您的第一个插件](/zh/guide/first-plugin)、[创作架构](/zh/concepts/authoring-architecture)和[支持边界](/zh/reference/support-boundary)配对。
+
+</details>

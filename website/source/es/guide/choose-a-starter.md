@@ -7,6 +7,14 @@ locale: "es"
 generated: false
 translationRequired: true
 ---
+
+[Usar plugins](/es/use/) · [Crear plugins](/es/build/) — Preparación, no es un lanzamiento. La migración de proyectos a v2 aún no está disponible.
+<p class="locale-historical-identity">Elija un repositorio inicial</p>
+
+[Instantánea histórica de la rama plugin-kit-ai v1. 1.2.4 es la referencia de comandos, no la versión exacta de esta instantánea.](/en/legacy/v1/)
+
+<details><summary>Instantánea histórica de la rama plugin-kit-ai v1. 1.2.4 es la referencia de comandos, no la versión exacta de esta instantánea.</summary>
+
 # Elija un repositorio inicial
 
 Utilice esta página cuando desee la ruta más rápida a un repositorio que luego pueda expandirse a salidas más compatibles.
@@ -95,3 +103,5 @@ La elección de un titular para todo el equipo debe ser consistente el tiempo su
 Pero una elección inicial estable aún no impide que un repositorio agregue otros objetivos más adelante si el producto los requiere.
 
 Empareje esta página con [Plantillas de inicio](/es/guide/starter-templates), [Elegir modelo de entrega](/es/guide/choose-delivery-model) y [Estándar de repositorio](/es/reference/repository-standard).
+
+</details>

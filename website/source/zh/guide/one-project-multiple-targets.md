@@ -9,6 +9,14 @@ translationRequired: true
 aside: true
 outline: [2, 3]
 ---
+
+[使用插件](/zh/use/) · [构建插件](/zh/build/) — 仅为准备内容，尚未发布。v2 暂不支持项目迁移。
+<p class="locale-historical-identity">一个项目，多个目标</p>
+
+[plugin-kit-ai v1 分支的历史快照。1.2.4 是命令基准，并非此快照的确切版本。](/en/legacy/v1/)
+
+<details><summary>plugin-kit-ai v1 分支的历史快照。1.2.4 是命令基准，并非此快照的确切版本。</summary>
+
 # 一个项目，多个目标
 
 在第一个可用的存储库之后使用此页面，此时真正的问题是：同一个存储库是否应该增长，如果是，增长到什么程度？
@@ -42,3 +50,5 @@ outline: [2, 3]
 ## 安全心理模型
 
 开始缩小范围，验证一个工作输出，然后才使用另一个受支持的输出来扩展存储库。
+
+</details>

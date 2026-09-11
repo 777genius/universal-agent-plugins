@@ -1,3 +1,4 @@
+import { runSiteConsumerSmoke } from "./site-consumer-browser.mjs";
 import fs from "node:fs/promises";
 import http from "node:http";
 import path from "node:path";
@@ -37,6 +38,7 @@ try {
   const browser = await chromium.launch({ headless: true });
   try {
     await runSmoke(browser, base);
+    await runSiteConsumerSmoke(browser, base, artifactsRoot);
   } finally {
     await browser.close();
   }

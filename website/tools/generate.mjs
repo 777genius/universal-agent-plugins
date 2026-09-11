@@ -1,3 +1,9 @@
+import { requireAuthoringSource } from "./lib/source-contract.mjs";
+import { pathToFileURL } from "node:url";
+import { requireGenerationPrerequisites } from "./lib/preflight.mjs";
+import fs from "node:fs/promises";
+import { buildRedirects } from "./lib/redirects.mjs";
+import { bindGeneratedPaths, entityPath as resolveEntityPath, isPreparedSource, journeySidebar, requirePreparationPreview } from "./lib/journeys.mjs";
 import path from "node:path";
 import { extractCLI } from "./extractors/cli.mjs";
 import { extractGoSDK } from "./extractors/go-sdk.mjs";
@@ -12,54 +18,74 @@ const docsLocales = ["en", "ru", "es", "fr", "zh"];
 const sourceLocales = docsLocales;
 const mirroredGeneratedLocales = ["es", "fr", "zh"];
 
-for (const locale of docsLocales) {
-  await rimraf(path.join(generatedRoot, locale));
-}
-await ensureDir(path.join(generatedRoot, "registries"));
+export async function generate() {
+  requirePreparationPreview();
+  await requireAuthoringSource();
+  await requireGenerationPrerequisites();
+  const bundles = await Promise.all([
+    extractCLI(),
+    extractGoSDK(),
+    extractNodeRuntime(),
+    extractPythonRuntime(),
+    extractPlatformData()
+  ]);
 
-const bundles = await Promise.all([
-  extractCLI(),
-  extractGoSDK(),
-  extractNodeRuntime(),
-  extractPythonRuntime(),
-  extractPlatformData()
-]);
-
-const generatedEntities = bundles.flatMap((bundle) => bundle.entities);
-const baseGeneratedPages = bundles.flatMap((bundle) => bundle.pages);
-const generatedPages = [
-  ...baseGeneratedPages,
-  ...baseGeneratedPages
-    .filter((page) => page.locale === "en")
-    .flatMap((page) => mirroredGeneratedLocales.map((locale) => mirrorGeneratedPage(page, locale)))
-];
-
-for (const page of generatedPages) {
-  await writeFile(path.join(generatedRoot, page.relativePath), page.content);
+  await assembleBundles(bundles);
 }
 
-const sourceEntities = await scanSourceEntities();
-const allEntities = [...sourceEntities, ...generatedEntities].sort((a, b) =>
-  a.canonicalId.localeCompare(b.canonicalId)
-);
-await writeJson(generatedRegistryPaths.entities, allEntities);
-await writeJson(generatedRegistryPaths.sidebarsEn, buildSidebar("en", allEntities));
-await writeJson(generatedRegistryPaths.sidebarsRu, buildSidebar("ru", allEntities));
-await writeJson(path.join(generatedRoot, "registries", "sidebars.es.json"), buildSidebar("es", allEntities));
-await writeJson(path.join(generatedRoot, "registries", "sidebars.fr.json"), buildSidebar("fr", allEntities));
-await writeJson(path.join(generatedRoot, "registries", "sidebars.zh.json"), buildSidebar("zh", allEntities));
-await writeJson(generatedRegistryPaths.redirects, {});
+// Shared production assembly seam: integration writes the real generated tree and runtime.
+export async function assembleBundles(bundles) {
+  const rawGeneratedEntities = bundles.flatMap((bundle) => bundle.entities);
+  const baseGeneratedPages = bundles.flatMap((bundle) => bundle.pages);
+  const generatedPages = [
+    ...baseGeneratedPages,
+    ...baseGeneratedPages
+      .filter((page) => page.locale === "en" && page.mirror !== false)
+      .flatMap((page) => mirroredGeneratedLocales.map((locale) => mirrorGeneratedPage(page, locale)))
+  ];
 
-await rimraf(runtimeRoot);
-await ensureDir(runtimeRoot);
-await copyTree(path.join(websiteRoot, "public"), path.join(runtimeRoot, "public"));
-await copyTree(path.join(sourceRoot, "gateway"), runtimeRoot);
-for (const locale of docsLocales) {
-  await copyTree(path.join(sourceRoot, locale), path.join(runtimeRoot, locale));
-  await copyTree(path.join(generatedRoot, locale), path.join(runtimeRoot, locale));
+  const generatedEntities = bindGeneratedPaths(rawGeneratedEntities, generatedPages);
+
+  for (const locale of docsLocales) {
+    await rimraf(path.join(generatedRoot, locale));
+  }
+  await ensureDir(path.join(generatedRoot, "registries"));
+
+  for (const page of generatedPages) {
+    await writeFile(path.join(generatedRoot, page.relativePath), page.content);
+  }
+
+  const sourceEntities = await scanSourceEntities();
+  const allEntities = [...sourceEntities, ...generatedEntities].sort((a, b) =>
+    a.canonicalId.localeCompare(b.canonicalId)
+  );
+  await writeJson(generatedRegistryPaths.entities, allEntities);
+  await writeJson(generatedRegistryPaths.sidebarsEn, buildSidebar("en", allEntities));
+  await writeJson(generatedRegistryPaths.sidebarsRu, buildSidebar("ru", allEntities));
+  await writeJson(path.join(generatedRoot, "registries", "sidebars.es.json"), buildSidebar("es", allEntities));
+  await writeJson(path.join(generatedRoot, "registries", "sidebars.fr.json"), buildSidebar("fr", allEntities));
+  await writeJson(path.join(generatedRoot, "registries", "sidebars.zh.json"), buildSidebar("zh", allEntities));
+  const inventory = JSON.parse(await fs.readFile(new URL("./config/routes.json", import.meta.url), "utf8"));
+  const sourceFiles = await listMarkdownFiles(sourceRoot);
+  const routes = [...sourceFiles.map((file) => path.relative(sourceRoot, file)), ...generatedPages.map((page) => page.relativePath)]
+    .filter((file) => !file.startsWith("gateway/"))
+    .map((file) => `/${file.replace(/index\.md$/, "").replace(/\.md$/, "")}`);
+  await writeJson(generatedRegistryPaths.redirects, buildRedirects(inventory, routes));
+
+  await rimraf(runtimeRoot);
+  await ensureDir(runtimeRoot);
+  await copyTree(path.join(websiteRoot, "public"), path.join(runtimeRoot, "public"));
+  await copyTree(path.join(sourceRoot, "gateway"), runtimeRoot);
+  for (const locale of docsLocales) {
+    await copyTree(path.join(sourceRoot, locale), path.join(runtimeRoot, locale));
+    await copyTree(path.join(generatedRoot, locale), path.join(runtimeRoot, locale));
+  }
+
 }
 
-async function scanSourceEntities() {
+if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) await generate();
+
+export async function scanSourceEntities() {
   const entities = [];
   for (const locale of sourceLocales) {
     const files = await listMarkdownFiles(path.join(sourceRoot, locale));
@@ -80,12 +106,13 @@ async function scanSourceEntities() {
         canonicalId: meta.canonicalId,
         kind: "page",
         surface: meta.section || "page",
-        localeStrategy: "mirrored",
+        localeStrategy: isPreparedSource(relative) ? "canonical-en" : "mirrored",
         title: meta.title || relative,
         summary: meta.description || "",
-        stability: meta.stability || "public-stable",
-        maturity: meta.maturity || "stable",
-        publicVisibility: "public",
+        stability: isPreparedSource(relative) ? "prepared-not-release" : meta.stability || "public-stable",
+        maturity: isPreparedSource(relative) ? "prepared" : meta.maturity || "stable",
+        publicVisibility: isPreparedSource(relative) ? "preparation" : "public",
+        ...(isPreparedSource(relative) ? { status: "prepared-not-release", released: false } : {}),
         sourceKind: "hand-authored",
         sourceRef: relative,
         pathEn: locale === "en" ? targetPath : "",
@@ -117,18 +144,10 @@ function localePathField(locale) {
   return "pathZh";
 }
 
-function buildSidebar(locale, entities) {
+export function buildSidebar(locale, entities) {
   const prefix = `/${locale}/`;
   const labels = localeLabels(locale);
-  const entityPath = (entry) => {
-    if (locale === "en") {
-      return entry.pathEn;
-    }
-    if (locale === "ru") {
-      return entry.pathRu;
-    }
-    return entry.pathEn ? entry.pathEn.replace(/^\/en\//, `/${locale}/`) : "";
-  };
+  const entityPath = (entry) => resolveEntityPath(entry, locale);
   const linkItem = (text, link) => ({ text, link });
   const pageLink = (canonicalId, fallback) => {
     const entry = entities.find((candidate) => candidate.canonicalId === canonicalId);
@@ -206,8 +225,13 @@ function buildSidebar(locale, entities) {
     }
   ];
 
+  const journeys = journeySidebar(locale, entities);
   return {
-    [prefix]: guideSidebar,
+    [prefix]: journeys,
+    [`${prefix}use/`]: journeys,
+    [`${prefix}build/`]: journeys,
+    [`${prefix}legacy/v1/`]: journeys,
+    [`${prefix}api/cli/prepared-authoring-v2`]: journeys,
     [`${prefix}guide/`]: guideSidebar,
     [`${prefix}concepts/`]: [
       {

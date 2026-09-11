@@ -7,6 +7,14 @@ locale: "zh"
 generated: false
 translationRequired: true
 ---
+
+[使用插件](/zh/use/) · [构建插件](/zh/build/) — 仅为准备内容，尚未发布。v2 暂不支持项目迁移。
+<p class="locale-historical-identity">plugin-kit-ai 文档</p>
+
+[plugin-kit-ai v1 分支的历史快照。1.2.4 是命令基准，并非此快照的确切版本。](/en/legacy/v1/)
+
+<details><summary>plugin-kit-ai v1 分支的历史快照。1.2.4 是命令基准，并非此快照的确切版本。</summary>
+
 <div class="docs-hero docs-hero--feature">
   <p class="docs-kicker">公共文档</p>
   <h1>plugin-kit-ai</h1>
@@ -103,3 +111,5 @@ translationRequired: true
 - 稍后将相同的存储库扩展到更多运输路径
 - 随着存储库的增长保留一个审查和验证故事
 - 仅在需要时找到确切的合同
+
+</details>

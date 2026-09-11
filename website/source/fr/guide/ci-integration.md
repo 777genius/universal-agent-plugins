@@ -7,6 +7,14 @@ locale: "fr"
 generated: false
 translationRequired: true
 ---
+
+[Utiliser des plugins](/fr/use/) · [Créer des plugins](/fr/build/) — Préparation, pas une version publiée. La migration des projets vers v2 est indisponible.
+<p class="locale-historical-identity">Intégration CI</p>
+
+[Instantané historique de la branche plugin-kit-ai v1. 1.2.4 est la référence des commandes, pas la version exacte de cet instantané.](/en/legacy/v1/)
+
+<details><summary>Instantané historique de la branche plugin-kit-ai v1. 1.2.4 est la référence des commandes, pas la version exacte de cet instantané.</summary>
+
 # Intégration CI
 
 L’histoire de l’IC la plus sûre n’est pas compliquée. C'est juste strict en ce qui concerne le marché public.
@@ -82,3 +90,5 @@ Utilisez le même modèle que Node et rendez la version Python explicite dans CI
 Si CI ne peut pas reproduire les sorties créées et transmettre `validate --strict`, le dépôt n'est pas prêt pour un transfert stable. Pour un dépôt multi-cibles, cela signifie une exécution verte explicite pour chaque cible à l'intérieur de la portée de support.
 
 Associez cette page à [Préparation à la production](/fr/guide/production-readiness), [Limite de support](/fr/reference/support-boundary) et [Dépannage](/fr/reference/troubleshooting).
+
+</details>

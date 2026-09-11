@@ -7,6 +7,14 @@ locale: "fr"
 generated: false
 translationRequired: true
 ---
+
+[Utiliser des plugins](/fr/use/) · [Créer des plugins](/fr/build/) — Préparation, pas une version publiée. La migration des projets vers v2 est indisponible.
+<p class="locale-historical-identity">Glossaire</p>
+
+[Instantané historique de la branche plugin-kit-ai v1. 1.2.4 est la référence des commandes, pas la version exacte de cet instantané.](/en/legacy/v1/)
+
+<details><summary>Instantané historique de la branche plugin-kit-ai v1. 1.2.4 est la référence des commandes, pas la version exacte de cet instantané.</summary>
+
 # Glossaire
 
 Utilisez cette page lorsqu'un terme de documentation vous ralentit. Le but n’est pas une théorie parfaite. Le but est un sens partagé rapidement.
@@ -60,3 +68,4 @@ Le chèque que vous devez traiter comme le signal qu’un repo est suffisamment 
 Le point où un autre coéquipier, une autre machine ou un autre utilisateur peut utiliser le dépôt sans connaissances cachées en matière de configuration.
 
 Pages associées : [Modèle cible](/fr/concepts/target-model), [Limite de support](/fr/reference/support-boundary) et [Préparation à la production](/fr/guide/production-readiness).
+</details>

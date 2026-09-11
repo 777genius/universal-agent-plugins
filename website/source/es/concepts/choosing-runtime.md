@@ -7,6 +7,14 @@ locale: "es"
 generated: false
 translationRequired: true
 ---
+
+[Usar plugins](/es/use/) · [Crear plugins](/es/build/) — Preparación, no es un lanzamiento. La migración de proyectos a v2 aún no está disponible.
+<p class="locale-historical-identity">Elegir el tiempo de ejecución</p>
+
+[Instantánea histórica de la rama plugin-kit-ai v1. 1.2.4 es la referencia de comandos, no la versión exacta de esta instantánea.](/en/legacy/v1/)
+
+<details><summary>Instantánea histórica de la rama plugin-kit-ai v1. 1.2.4 es la referencia de comandos, no la versión exacta de esta instantánea.</summary>
+
 # Elegir el tiempo de ejecución
 
 La elección del tiempo de ejecución no se trata solo de la preferencia de idioma. Cambia la forma en que se ejecuta el complemento, qué debe tener instalada la máquina de ejecución y qué tan simples serán la CI y la transferencia.
@@ -51,3 +59,4 @@ flowchart TD
 | Carril de tiempo de ejecución principal no Go | `node --typescript` |
 | Local Python-primer equipo | `python` |
 | Trampilla de evacuación | `shell` |
+</details>

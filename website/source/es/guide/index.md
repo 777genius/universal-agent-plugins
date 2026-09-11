@@ -9,6 +9,14 @@ translationRequired: true
 aside: false
 outline: false
 ---
+
+[Usar plugins](/es/use/) · [Crear plugins](/es/build/) — Preparación, no es un lanzamiento. La migración de proyectos a v2 aún no está disponible.
+<p class="locale-historical-identity">Guías</p>
+
+[Instantánea histórica de la rama plugin-kit-ai v1. 1.2.4 es la referencia de comandos, no la versión exacta de esta instantánea.](/en/legacy/v1/)
+
+<details><summary>Instantánea histórica de la rama plugin-kit-ai v1. 1.2.4 es la referencia de comandos, no la versión exacta de esta instantánea.</summary>
+
 <div class="docs-hero docs-hero--compact">
   <p class="docs-kicker">GUÍAS</p>
   <h1>Comience con un repositorio funcional</h1>
@@ -70,3 +78,5 @@ outline: false
     <p>Vea cómo los flujos de publicación Codex, Claude y Gemini difieren para que pueda realizar un ensayo en el carril derecho antes del día del lanzamiento.</p>
   </a>
 </div>
+
+</details>

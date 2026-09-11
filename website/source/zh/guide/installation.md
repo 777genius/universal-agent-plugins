@@ -7,6 +7,14 @@ locale: "zh"
 generated: false
 translationRequired: true
 ---
+
+[使用插件](/zh/use/) · [构建插件](/zh/build/) — 仅为准备内容，尚未发布。v2 暂不支持项目迁移。
+<p class="locale-historical-identity">安装</p>
+
+[plugin-kit-ai v1 分支的历史快照。1.2.4 是命令基准，并非此快照的确切版本。](/en/legacy/v1/)
+
+<details><summary>plugin-kit-ai v1 分支的历史快照。1.2.4 是命令基准，并非此快照的确切版本。</summary>
+
 # 安装
 
 当适合您的环境时，默认使用 Homebrew。这里的目标很简单：安装 CLI 并快速到达您的第一个工作存储库。
@@ -69,3 +77,4 @@ plugin-kit-ai version
 npm 和 PyPI 软件包是 CLI 的安装通道。它们不是运行时 APIs，也不是 SDKs。
 
 有关合约边界，请参阅[参考 > 安装通道](/zh/reference/install-channels)。
+</details>

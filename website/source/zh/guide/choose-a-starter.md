@@ -7,6 +7,14 @@ locale: "zh"
 generated: false
 translationRequired: true
 ---
+
+[使用插件](/zh/use/) · [构建插件](/zh/build/) — 仅为准备内容，尚未发布。v2 暂不支持项目迁移。
+<p class="locale-historical-identity">选择一个入门存储库</p>
+
+[plugin-kit-ai v1 分支的历史快照。1.2.4 是命令基准，并非此快照的确切版本。](/en/legacy/v1/)
+
+<details><summary>plugin-kit-ai v1 分支的历史快照。1.2.4 是命令基准，并非此快照的确切版本。</summary>
+
 # 选择一个入门存储库
 
 当您想要以最快的路径进入存储库并随后扩展到更多受支持的输出时，请使用此页面。
@@ -95,3 +103,5 @@ flowchart TD
 但是，稳定的 starter 选择仍然不会阻止一个仓库在产品需要时稍后添加其他目标。
 
 将此页面与[入门模板](/zh/guide/starter-templates)、[选择交付模型](/zh/guide/choose-delivery-model)和[存储库标准](/zh/reference/repository-standard)配对。
+
+</details>

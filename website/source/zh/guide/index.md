@@ -9,6 +9,14 @@ translationRequired: true
 aside: false
 outline: false
 ---
+
+[使用插件](/zh/use/) · [构建插件](/zh/build/) — 仅为准备内容，尚未发布。v2 暂不支持项目迁移。
+<p class="locale-historical-identity">指南</p>
+
+[plugin-kit-ai v1 分支的历史快照。1.2.4 是命令基准，并非此快照的确切版本。](/en/legacy/v1/)
+
+<details><summary>plugin-kit-ai v1 分支的历史快照。1.2.4 是命令基准，并非此快照的确切版本。</summary>
+
 <div class="docs-hero docs-hero--compact">
   <p class="docs-kicker">指南</p>
   <h1>从一个工作存储库开始</h1>
@@ -70,3 +78,5 @@ outline: false
     <p>查看 Codex、Claude 和 Gemini 发布流程有何不同，以便您可以在发布日之前试运行正确的通道。</p>
   </a>
 </div>
+
+</details>

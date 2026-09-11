@@ -7,6 +7,14 @@ locale: "zh"
 generated: false
 translationRequired: true
 ---
+
+[使用插件](/zh/use/) · [构建插件](/zh/build/) — 仅为准备内容，尚未发布。v2 暂不支持项目迁移。
+<p class="locale-historical-identity">如何发布插件</p>
+
+[plugin-kit-ai v1 分支的历史快照。1.2.4 是命令基准，并非此快照的确切版本。](/en/legacy/v1/)
+
+<details><summary>plugin-kit-ai v1 分支的历史快照。1.2.4 是命令基准，并非此快照的确切版本。</summary>
+
 # 如何发布插件
 
 当您的存储库已在 `plugin-kit-ai` 中编写，并且您希望为 Codex、Claude 或 Gemini 发布提供最清晰的下一步时，请使用本指南。
@@ -154,3 +162,5 @@ plugin-kit-ai publish ./my-plugin --all --dry-run --format json
 - [`plugin-kit-ai publish`](/zh/api/cli/plugin-kit-ai-publish)
 - [`plugin-kit-ai publication`](/zh/api/cli/plugin-kit-ai-publication)
 - [`plugin-kit-ai publication doctor`](/zh/api/cli/plugin-kit-ai-publication-doctor)
+
+</details>

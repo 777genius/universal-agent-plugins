@@ -7,6 +7,14 @@ locale: "es"
 generated: false
 translationRequired: true
 ---
+
+[Usar plugins](/es/use/) · [Crear plugins](/es/build/) — Preparación, no es un lanzamiento. La migración de proyectos a v2 aún no está disponible.
+<p class="locale-historical-identity">Política de versión y compatibilidad</p>
+
+[Instantánea histórica de la rama plugin-kit-ai v1. 1.2.4 es la referencia de comandos, no la versión exacta de esta instantánea.](/en/legacy/v1/)
+
+<details><summary>Instantánea histórica de la rama plugin-kit-ai v1. 1.2.4 es la referencia de comandos, no la versión exacta de esta instantánea.</summary>
+
 # Política de versión y compatibilidad
 
 Esta página es para una decisión práctica del equipo: ¿qué estamos estandarizando y qué tan sólida es esa promesa?
@@ -87,3 +95,4 @@ Los equipos sanos suelen estandarizar:
 ## Regla final
 
 Estandarice solo la línea de lanzamiento y la ruta cuya promesa pública su equipo esté realmente dispuesto a defender en CI, transferencia e implementación.
+</details>

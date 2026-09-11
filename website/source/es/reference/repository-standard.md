@@ -7,6 +7,14 @@ locale: "es"
 generated: false
 translationRequired: true
 ---
+
+[Usar plugins](/es/use/) · [Crear plugins](/es/build/) — Preparación, no es un lanzamiento. La migración de proyectos a v2 aún no está disponible.
+<p class="locale-historical-identity">Estándar de repositorio</p>
+
+[Instantánea histórica de la rama plugin-kit-ai v1. 1.2.4 es la referencia de comandos, no la versión exacta de esta instantánea.](/en/legacy/v1/)
+
+<details><summary>Instantánea histórica de la rama plugin-kit-ai v1. 1.2.4 es la referencia de comandos, no la versión exacta de esta instantánea.</summary>
+
 # Estándar de repositorio
 
 Esta página define la forma pública de un repositorio `plugin-kit-ai` saludable.
@@ -64,3 +72,4 @@ Este sitio de documentos públicos trata el estándar de repositorio como el lug
 - el traspaso se vuelve creíble
 
 Empareje esta página con [Flujo de trabajo de creación](/es/reference/authoring-workflow), [Preparación para la producción](/es/guide/production-readiness) y [Glosario](/es/reference/glossary).
+</details>

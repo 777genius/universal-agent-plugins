@@ -9,6 +9,14 @@ translationRequired: true
 aside: true
 outline: [2, 3]
 ---
+
+[使用插件](/zh/use/) · [构建插件](/zh/build/) — 仅为准备内容，尚未发布。v2 暂不支持项目迁移。
+<p class="locale-historical-identity">plugin-kit-ai 的工作原理</p>
+
+[plugin-kit-ai v1 分支的历史快照。1.2.4 是命令基准，并非此快照的确切版本。](/en/legacy/v1/)
+
+<details><summary>plugin-kit-ai v1 分支的历史快照。1.2.4 是命令基准，并非此快照的确切版本。</summary>
+
 # plugin-kit-ai 的工作原理
 
 plugin-kit-ai 将一个存储库保留为插件的真实来源。您编辑您拥有的文件，生成您需要的输出，严格验证结果，并交付随时间推移保持可预测的存储库。
@@ -54,3 +62,5 @@ source -> generate -> validate --strict -> handoff
 - 阅读[项目源和输出](/zh/concepts/authoring-architecture) 了解创作与生成的边界。
 - 阅读[目标模型](/zh/concepts/target-model) 了解不同的输出类型。
 - 当您想进一步扩展一个存储库时，请阅读[一个项目，多个目标](/zh/guide/one-project-multiple-targets)。
+
+</details>

@@ -7,6 +7,14 @@ locale: "zh"
 generated: false
 translationRequired: true
 ---
+
+[使用插件](/zh/use/) · [构建插件](/zh/build/) — 仅为准备内容，尚未发布。v2 暂不支持项目迁移。
+<p class="locale-historical-identity">构建 Python 运行时插件</p>
+
+[plugin-kit-ai v1 分支的历史快照。1.2.4 是命令基准，并非此快照的确切版本。](/en/legacy/v1/)
+
+<details><summary>plugin-kit-ai v1 分支的历史快照。1.2.4 是命令基准，并非此快照的确切版本。</summary>
+
 # 构建 Python 运行时插件
 
 当您的团队已经编写 Python 并且您希望插件从此存储库运行时，请使用此路径。
@@ -174,3 +182,5 @@ plugin-kit-ai init my-plugin --platform codex-runtime --runtime python --runtime
 - 阅读[选择运行时](/zh/concepts/choosing-runtime) 了解运行时权衡。
 - 阅读[选择交付模型](/zh/guide/choose-delivery-model) 了解本地帮助程序与共享包决策。
 - 当您需要帮助程序引用时，打开 [Python 运行时 API](/zh/api/runtime-python/)。
+
+</details>

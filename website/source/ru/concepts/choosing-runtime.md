@@ -8,6 +8,14 @@ generated: false
 translationRequired: true
 ---
 
+[Использовать плагины](/ru/use/) · [Создавать плагины](/ru/build/) — Подготовка, не релиз. Миграция проектов в v2 пока недоступна.
+<p class="locale-historical-identity">Выбор runtime</p>
+
+[Исторический снимок ветки plugin-kit-ai v1. 1.2.4 — базовая версия команд, а не точная версия этого снимка.](/en/legacy/v1/)
+
+<details><summary>Исторический снимок ветки plugin-kit-ai v1. 1.2.4 — базовая версия команд, а не точная версия этого снимка.</summary>
+
+
 # Выбор runtime
 
 Выбор runtime - это не только вопрос языка. Он меняет то, как запускается plugin, что должно быть установлено на машине исполнения и насколько простыми будут CI и handoff.
@@ -52,3 +60,5 @@ flowchart TD
 | Основной non-Go runtime lane | `node --typescript` |
 | Локальная Python-first команда | `python` |
 | Escape hatch | `shell` |
+
+</details>

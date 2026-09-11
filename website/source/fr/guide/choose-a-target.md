@@ -7,6 +7,14 @@ locale: "fr"
 generated: false
 translationRequired: true
 ---
+
+[Utiliser des plugins](/fr/use/) · [Créer des plugins](/fr/build/) — Préparation, pas une version publiée. La migration des projets vers v2 est indisponible.
+<p class="locale-historical-identity">Choisissez une cible</p>
+
+[Instantané historique de la branche plugin-kit-ai v1. 1.2.4 est la référence des commandes, pas la version exacte de cet instantané.](/en/legacy/v1/)
+
+<details><summary>Instantané historique de la branche plugin-kit-ai v1. 1.2.4 est la référence des commandes, pas la version exacte de cet instantané.</summary>
+
 # Choisissez une cible
 
 Utilisez cette page lorsque vous savez déjà que vous voulez `plugin-kit-ai`, mais que vous devez toujours faire correspondre le dépôt à la manière dont vous souhaitez expédier le plugin.
@@ -64,3 +72,5 @@ Si vous démarrez intentionnellement sur Node/TypeScript ou Python pris en charg
 - ajouter plus de cibles uniquement lorsqu'une réelle exigence de livraison ou d'intégration apparaît
 
 Lisez [Un projet, plusieurs cibles](/fr/guide/one-project-multiple-targets) lorsque vous souhaitez un modèle mental multi-cibles plus large.
+
+</details>

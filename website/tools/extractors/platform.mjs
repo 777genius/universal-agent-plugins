@@ -1,3 +1,7 @@
+import { extractHistorical } from "./historical.mjs";
+
+export const extractPlatformData = () => extractHistorical(["platform-events", "capabilities"], ["target-support"]);
+
 import fs from "node:fs/promises";
 import path from "node:path";
 import { docsToolsRoot, repoBrowserUrl, repoRoot, sourceRefs } from "../config/site.mjs";
@@ -6,7 +10,7 @@ import { ensureDir } from "../lib/fs.mjs";
 import { makeEntity } from "../lib/site-model.mjs";
 import { run } from "../lib/process.mjs";
 
-export async function extractPlatformData() {
+export async function extractLegacyPlatformData() {
   const root = path.join(docsToolsRoot, "platform");
   const eventsPath = path.join(root, "events.json");
   const targetsPath = path.join(root, "targets.json");

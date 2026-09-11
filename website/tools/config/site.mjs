@@ -7,9 +7,10 @@ const __dirname = path.dirname(__filename);
 export const websiteRoot = path.resolve(__dirname, "..", "..");
 export const repoRoot = path.resolve(websiteRoot, "..");
 export const sourceRoot = path.join(websiteRoot, "source");
-export const generatedRoot = path.join(websiteRoot, "generated");
-export const runtimeRoot = path.join(websiteRoot, ".site");
-export const docsToolsRoot = path.join(websiteRoot, ".docs-tools");
+export const outputRoot = process.env.DOCS_SITE_OUTPUT_ROOT ? path.resolve(process.env.DOCS_SITE_OUTPUT_ROOT) : websiteRoot;
+export const generatedRoot = path.join(outputRoot, "generated");
+export const runtimeRoot = path.join(outputRoot, ".site");
+export const docsToolsRoot = process.env.DOCS_TOOLS_ROOT ? path.resolve(process.env.DOCS_TOOLS_ROOT) : path.join(websiteRoot, ".docs-tools");
 
 export const locales = [
   { code: "en", label: "English", lang: "en-US" },
@@ -28,7 +29,7 @@ export const publicGoPackages = [
 ];
 
 export const docsHostname = process.env.DOCS_HOSTNAME || "https://777genius.github.io";
-export const docsBasePath = process.env.DOCS_BASE_PATH || "/plugin-kit-ai/docs/";
+export const docsBasePath = process.env.DOCS_BASE_PATH || "/universal-agent-plugins/docs/";
 export const docsBaseUrl = new URL(docsBasePath, docsHostname).toString();
 
 export const generatedRegistryPaths = {
@@ -50,9 +51,9 @@ export function repoBrowserUrl(sourceRef) {
     return "";
   }
   if (sourceRef.startsWith("cli:")) {
-    return "https://github.com/777genius/plugin-kit-ai/tree/main/cli/plugin-kit-ai";
+    return "https://github.com/777genius/universal-agent-plugins/tree/main/cli/plugin-kit-ai";
   }
 
   const mode = /\.[a-z0-9]+$/i.test(sourceRef) ? "blob" : "tree";
-  return `https://github.com/777genius/plugin-kit-ai/${mode}/main/${sourceRef}`;
+  return `https://github.com/777genius/universal-agent-plugins/${mode}/main/${sourceRef}`;
 }
