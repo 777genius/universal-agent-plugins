@@ -7,6 +7,14 @@ locale: "fr"
 generated: false
 translationRequired: true
 ---
+
+[Utiliser des plugins](/fr/use/) · [Créer des plugins](/fr/build/) — Préparation, pas une version publiée. La migration des projets vers v2 est indisponible.
+<p class="locale-historical-identity">Politique de version et de compatibilité</p>
+
+[Instantané historique de la branche plugin-kit-ai v1. 1.2.4 est la référence des commandes, pas la version exacte de cet instantané.](/en/legacy/v1/)
+
+<details><summary>Instantané historique de la branche plugin-kit-ai v1. 1.2.4 est la référence des commandes, pas la version exacte de cet instantané.</summary>
+
 # Politique de version et de compatibilité
 
 Cette page est destinée à une décision pratique d'équipe : que normalisons-nous et quelle est la force de cette promesse ?
@@ -87,3 +95,5 @@ Les équipes saines standardisent généralement :
 ## Règle finale
 
 Standardisez uniquement la ligne de publication et le chemin dont votre équipe est réellement prête à défendre la promesse publique lors de l'IC, du transfert et du déploiement.
+
+</details>

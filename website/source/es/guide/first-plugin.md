@@ -7,6 +7,14 @@ locale: "es"
 generated: false
 translationRequired: true
 ---
+
+[Usar plugins](/es/use/) · [Crear plugins](/es/build/) — Preparación, no es un lanzamiento. La migración de proyectos a v2 aún no está disponible.
+<p class="locale-historical-identity">Cree su primer complemento</p>
+
+[Instantánea histórica de la rama plugin-kit-ai v1. 1.2.4 es la referencia de comandos, no la versión exacta de esta instantánea.](/en/legacy/v1/)
+
+<details><summary>Instantánea histórica de la rama plugin-kit-ai v1. 1.2.4 es la referencia de comandos, no la versión exacta de esta instantánea.</summary>
+
 # Cree su primer complemento
 
 Este tutorial le brinda el primer repositorio de trabajo más simple en la ruta predeterminada más sólida.
@@ -76,3 +84,5 @@ Eso no significa que el repositorio deba permanecer con un único objetivo para 
 - Lea [Un proyecto, múltiples objetivos](/es/guide/one-project-multiple-targets) si la idea de un repositorio y muchos resultados es la razón principal por la que le interesa el producto.
 - Utilice [Plantillas de inicio](/es/guide/starter-templates) cuando desee un repositorio de ejemplo en buen estado.
 - Busque [CLI Referencia](/es/api/cli/) cuando necesite un comportamiento de comando exacto.
+
+</details>

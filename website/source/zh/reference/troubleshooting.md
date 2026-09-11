@@ -7,6 +7,14 @@ locale: "zh"
 generated: false
 translationRequired: true
 ---
+
+[使用插件](/zh/use/) · [构建插件](/zh/build/) — 仅为准备内容，尚未发布。v2 暂不支持项目迁移。
+<p class="locale-historical-identity">故障排除</p>
+
+[plugin-kit-ai v1 分支的历史快照。1.2.4 是命令基准，并非此快照的确切版本。](/en/legacy/v1/)
+
+<details><summary>plugin-kit-ai v1 分支的历史快照。1.2.4 是命令基准，并非此快照的确切版本。</summary>
+
 # 故障排除
 
 当工作流程停止移动时使用此页面。首先从最简单的检查开始。
@@ -58,3 +66,4 @@ plugin-kit-ai validate ./my-plugin --platform codex-runtime --strict
 仅当本地运行时权衡是真实且有意的时，才转向 Node/TypeScript 或 Python 。
 
 请参阅[构建 Python 运行时插件](/zh/guide/python-runtime)、[创作工作流程](/zh/reference/authoring-workflow) 和 [FAQ](/zh/reference/faq)。
+</details>

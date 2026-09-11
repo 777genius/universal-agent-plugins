@@ -1,3 +1,13 @@
+import { extractPreparedCLI } from "./prepared-cli.mjs";
+import { extractHistorical } from "./historical.mjs";
+
+export async function extractCLI() {
+  const historical = await extractHistorical(["cli"]);
+  const prepared = await extractPreparedCLI();
+  return { entities: [...historical.entities, ...prepared.entities],
+    pages: [...historical.pages, ...prepared.pages] };
+}
+
 import fs from "node:fs/promises";
 import path from "node:path";
 import { docsToolsRoot, repoBrowserUrl, repoRoot } from "../config/site.mjs";
@@ -6,7 +16,8 @@ import { ensureDir, listMarkdownFiles } from "../lib/fs.mjs";
 import { makeEntity, localeTitle } from "../lib/site-model.mjs";
 import { run } from "../lib/process.mjs";
 
-export async function extractCLI() {
+// Preserved legacy capability; deliberately outside the preparation graph.
+export async function extractLegacyCLI() {
   const root = path.join(docsToolsRoot, "cli");
   const markdownDir = path.join(root, "markdown");
   const manifestPath = path.join(root, "manifest.json");

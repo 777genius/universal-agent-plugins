@@ -7,6 +7,14 @@ locale: "es"
 generated: false
 translationRequired: true
 ---
+
+[Usar plugins](/es/use/) · [Crear plugins](/es/build/) — Preparación, no es un lanzamiento. La migración de proyectos a v2 aún no está disponible.
+<p class="locale-historical-identity">Glosario</p>
+
+[Instantánea histórica de la rama plugin-kit-ai v1. 1.2.4 es la referencia de comandos, no la versión exacta de esta instantánea.](/en/legacy/v1/)
+
+<details><summary>Instantánea histórica de la rama plugin-kit-ai v1. 1.2.4 es la referencia de comandos, no la versión exacta de esta instantánea.</summary>
+
 # Glosario
 
 Utilice esta página cuando un término de documentos le resulte lento. El objetivo no es una teoría perfecta. El objetivo es un significado compartido rápidamente.
@@ -60,3 +68,4 @@ El cheque que debe tratar como la señal de que un repositorio está lo suficien
 El punto en el que otro compañero de equipo, otra máquina u otro usuario puede usar el repositorio sin conocimientos de configuración ocultos.
 
 Páginas relacionadas: [Modelo de destino](/es/concepts/target-model), [Límite de soporte](/es/reference/support-boundary) y [Preparación para la producción](/es/guide/production-readiness).
+</details>

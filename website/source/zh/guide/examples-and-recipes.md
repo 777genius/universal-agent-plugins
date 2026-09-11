@@ -7,6 +7,14 @@ locale: "zh"
 generated: false
 translationRequired: true
 ---
+
+[使用插件](/zh/use/) · [构建插件](/zh/build/) — 仅为准备内容，尚未发布。v2 暂不支持项目迁移。
+<p class="locale-historical-identity">示例和食谱</p>
+
+[plugin-kit-ai v1 分支的历史快照。1.2.4 是命令基准，并非此快照的确切版本。](/en/legacy/v1/)
+
+<details><summary>plugin-kit-ai v1 分支的历史快照。1.2.4 是命令基准，并非此快照的确切版本。</summary>
+
 # 示例和食谱
 
 当您想查看 `plugin-kit-ai` 在真实存储库中的样子而不是仅阅读抽象指南时，请使用此页面。
@@ -89,3 +97,5 @@ translationRequired: true
 示例应该阐明公共契约，而不是取代它。
 
 使用示例存储库来查看形状和健康的输出。对于单存储库多目标心智模型，请阅读[一个项目，多个目标](/zh/guide/one-project-multiple-targets)。
+
+</details>

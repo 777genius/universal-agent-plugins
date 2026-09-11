@@ -7,6 +7,14 @@ locale: "zh"
 generated: false
 translationRequired: true
 ---
+
+[使用插件](/zh/use/) · [构建插件](/zh/build/) — 仅为准备内容，尚未发布。v2 暂不支持项目迁移。
+<p class="locale-historical-identity">选择一个目标</p>
+
+[plugin-kit-ai v1 分支的历史快照。1.2.4 是命令基准，并非此快照的确切版本。](/en/legacy/v1/)
+
+<details><summary>plugin-kit-ai v1 分支的历史快照。1.2.4 是命令基准，并非此快照的确切版本。</summary>
+
 # 选择一个目标
 
 当您已经知道需要 `plugin-kit-ai` 时，请使用此页面，但您仍然需要将存储库与您想要发送插件的方式相匹配。
@@ -64,3 +72,5 @@ flowchart TD
 - 仅当出现实际交付或集成需求时才添加更多目标
 
 当您想要更广泛的多目标心智模型时，请阅读[一个项目，多个目标](/zh/guide/one-project-multiple-targets)。
+
+</details>

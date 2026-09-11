@@ -8,6 +8,14 @@ generated: false
 translationRequired: true
 ---
 
+[Использовать плагины](/ru/use/) · [Создавать плагины](/ru/build/) — Подготовка, не релиз. Миграция проектов в v2 пока недоступна.
+<p class="locale-historical-identity">Готовность к продакшену</p>
+
+[Исторический снимок ветки plugin-kit-ai v1. 1.2.4 — базовая версия команд, а не точная версия этого снимка.](/en/legacy/v1/)
+
+<details><summary>Исторический снимок ветки plugin-kit-ai v1. 1.2.4 — базовая версия команд, а не точная версия этого снимка.</summary>
+
+
 # Готовность к продакшену
 
 Используйте этот checklist перед тем, как называть проект production-ready, handoff-ready или готовым к широкому показу.
@@ -81,3 +89,5 @@ plugin-kit-ai validate . --platform codex-runtime --strict
 ## Финальное правило
 
 Если коллега не может клонировать repo, пройти задокументированный flow, успешно выполнить `validate --strict` и понять выбранный lane без tribal knowledge, значит проект ещё не готов к продакшену.
+
+</details>

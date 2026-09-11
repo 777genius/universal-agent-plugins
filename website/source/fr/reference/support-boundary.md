@@ -7,6 +7,14 @@ locale: "fr"
 generated: false
 translationRequired: true
 ---
+
+[Utiliser des plugins](/fr/use/) · [Créer des plugins](/fr/build/) — Préparation, pas une version publiée. La migration des projets vers v2 est indisponible.
+<p class="locale-historical-identity">Limite de support</p>
+
+[Instantané historique de la branche plugin-kit-ai v1. 1.2.4 est la référence des commandes, pas la version exacte de cet instantané.](/en/legacy/v1/)
+
+<details><summary>Instantané historique de la branche plugin-kit-ai v1. 1.2.4 est la référence des commandes, pas la version exacte de cet instantané.</summary>
+
 # Limite de support
 
 Utilisez cette page lorsque vous avez besoin de la réponse honnête la plus courte concernant l'assistance.
@@ -65,3 +73,5 @@ Ils peuvent être utiles aux premiers utilisateurs, mais ils ne devraient pas de
 ## Règle pratique
 
 Si vous choisissez une équipe, standardisez le chemin le plus étroit dont vous êtes réellement prêt à défendre la promesse en matière d'IC, de déploiement et de transfert.
+
+</details>

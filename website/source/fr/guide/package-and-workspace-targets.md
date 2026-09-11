@@ -9,6 +9,14 @@ translationRequired: true
 aside: true
 outline: [2, 3]
 ---
+
+[Utiliser des plugins](/fr/use/) · [Créer des plugins](/fr/build/) — Préparation, pas une version publiée. La migration des projets vers v2 est indisponible.
+<p class="locale-historical-identity">Packages et configuration de l&#x27;intégration</p>
+
+[Instantané historique de la branche plugin-kit-ai v1. 1.2.4 est la référence des commandes, pas la version exacte de cet instantané.](/en/legacy/v1/)
+
+<details><summary>Instantané historique de la branche plugin-kit-ai v1. 1.2.4 est la référence des commandes, pas la version exacte de cet instantané.</summary>
+
 # Packages et configuration de l'intégration
 
 Tous les projets ne doivent pas être livrés sous forme de plugin d'exécution exécutable.
@@ -46,3 +54,4 @@ Pour le package officiel Codex, gardez la disposition du bundle explicite et ét
 - facultatif `.app.json` et `.mcp.json` restent à la racine du plugin
 
 Ce chemin de package est destiné à la surface officielle du bundle de plugins Codex, et non à mélanger le câblage du runtime du référentiel local dans la présentation du package.
+</details>

@@ -7,6 +7,14 @@ locale: "zh"
 generated: false
 translationRequired: true
 ---
+
+[使用插件](/zh/use/) · [构建插件](/zh/build/) — 仅为准备内容，尚未发布。v2 暂不支持项目迁移。
+<p class="locale-historical-identity">安装频道</p>
+
+[plugin-kit-ai v1 分支的历史快照。1.2.4 是命令基准，并非此快照的确切版本。](/en/legacy/v1/)
+
+<details><summary>plugin-kit-ai v1 分支的历史快照。1.2.4 是命令基准，并非此快照的确切版本。</summary>
+
 # 安装频道
 
 `plugin-kit-ai` 支持多种安装 CLI 本身的方法。
@@ -23,3 +31,4 @@ translationRequired: true
 这些安装包未记录为公共 SDKs 或运行时 APIs。公共 API 位于生成的 [API](/zh/api/) 部分下。
 
 如果您真正的问题不是“如何安装它？”，请阅读[版本和兼容性政策](/zh/reference/version-and-compatibility)但是“到底什么承载了公共兼容性承诺？”。
+</details>

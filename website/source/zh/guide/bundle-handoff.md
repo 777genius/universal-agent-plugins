@@ -7,6 +7,14 @@ locale: "zh"
 generated: false
 translationRequired: true
 ---
+
+[使用插件](/zh/use/) · [构建插件](/zh/build/) — 仅为准备内容，尚未发布。v2 暂不支持项目迁移。
+<p class="locale-historical-identity">捆绑交接</p>
+
+[plugin-kit-ai v1 分支的历史快照。1.2.4 是命令基准，并非此快照的确切版本。](/en/legacy/v1/)
+
+<details><summary>plugin-kit-ai v1 分支的历史快照。1.2.4 是命令基准，并非此快照的确切版本。</summary>
+
 # 捆绑交接
 
 当 Python 或 Node 插件应作为便携式工件而不是作为实时存储库签出时，请使用本指南。
@@ -93,3 +101,5 @@ plugin-kit-ai bundle fetch <owner/repo> --tag <tag> --platform <codex-runtime|cl
 ## 推荐阅读顺序
 
 将此页面与[选择交付模型](/zh/guide/choose-delivery-model)、[生产准备情况](/zh/guide/production-readiness) 和[支持边界](/zh/reference/support-boundary) 配对。
+
+</details>

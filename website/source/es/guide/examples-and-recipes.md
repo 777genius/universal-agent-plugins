@@ -7,6 +7,14 @@ locale: "es"
 generated: false
 translationRequired: true
 ---
+
+[Usar plugins](/es/use/) · [Crear plugins](/es/build/) — Preparación, no es un lanzamiento. La migración de proyectos a v2 aún no está disponible.
+<p class="locale-historical-identity">Ejemplos y recetas</p>
+
+[Instantánea histórica de la rama plugin-kit-ai v1. 1.2.4 es la referencia de comandos, no la versión exacta de esta instantánea.](/en/legacy/v1/)
+
+<details><summary>Instantánea histórica de la rama plugin-kit-ai v1. 1.2.4 es la referencia de comandos, no la versión exacta de esta instantánea.</summary>
+
 # Ejemplos y recetas
 
 Utilice esta página cuando desee ver cómo se ve `plugin-kit-ai` en repositorios reales en lugar de leer solo una guía abstracta.
@@ -89,3 +97,5 @@ Estos no son el punto de entrada principal para la mayoría de los autores de co
 Los ejemplos deberían aclarar el contrato público, no reemplazarlo.
 
 Utilice repositorios de ejemplo para ver la forma y los resultados saludables. Para el modelo mental de un repositorio y múltiples objetivos, lea [Un proyecto, múltiples objetivos](/es/guide/one-project-multiple-targets).
+
+</details>

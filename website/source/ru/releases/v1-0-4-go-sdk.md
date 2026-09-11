@@ -8,6 +8,14 @@ generated: false
 translationRequired: true
 ---
 
+[Использовать плагины](/ru/use/) · [Создавать плагины](/ru/build/) — Подготовка, не релиз. Миграция проектов в v2 пока недоступна.
+<p class="locale-historical-identity">v1.0.4 Go SDK</p>
+
+[Исторический снимок ветки plugin-kit-ai v1. 1.2.4 — базовая версия команд, а не точная версия этого снимка.](/en/legacy/v1/)
+
+<details><summary>Исторический снимок ветки plugin-kit-ai v1. 1.2.4 — базовая версия команд, а не точная версия этого снимка.</summary>
+
+
 # v1.0.4 Go SDK
 
 Дата релиза: `2026-03-29`
@@ -30,3 +38,5 @@ translationRequired: true
 ## Почему это важно пользователям
 
 Этот patch убрал лишнее трение для обычных Go consumers и сделал рекомендуемый SDK path похожим на нормальный public module, а не на special-case workaround.
+
+</details>

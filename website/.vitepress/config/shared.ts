@@ -1,6 +1,10 @@
+import { requirePreparationPreview } from "../../tools/lib/journeys.mjs";
+
 import fs from "node:fs";
 import path from "node:path";
 import { defineConfig } from "vitepress";
+
+requirePreparationPreview();
 
 const websiteRoot = path.resolve(__dirname, "..", "..");
 const generatedRoot = path.join(websiteRoot, "generated", "registries");
@@ -21,7 +25,7 @@ function readJson<T>(fileName: string, fallback: T): T {
   return JSON.parse(fs.readFileSync(full, "utf8")) as T;
 }
 
-export const docsBasePath = process.env.DOCS_BASE_PATH || "/plugin-kit-ai/docs/";
+export const docsBasePath = process.env.DOCS_BASE_PATH || "/universal-agent-plugins/docs/";
 export const docsHostname = process.env.DOCS_HOSTNAME || "https://777genius.github.io";
 const docsBaseUrl = new URL(docsBasePath, docsHostname).toString();
 const socialImageUrl = new URL("og-docs.svg", docsBaseUrl).toString();
@@ -200,13 +204,14 @@ export const sharedConfig = defineConfig({
     fr: { label: "Français", lang: "fr-FR" },
     zh: { label: "简体中文", lang: "zh-CN" }
   },
-  rewrites: readJson<Record<string, string>>("redirects.json", {}),
+  // Static aliases are emitted by postbuild; VitePress rewrites move pages.
+  rewrites: {},
   themeConfig: {
     logo: "/icon.svg",
     siteTitle: "plugin-kit-ai Docs",
     search: {
       provider: "local"
     },
-    socialLinks: [{ icon: "github", link: "https://github.com/777genius/plugin-kit-ai" }]
+    socialLinks: [{ icon: "github", link: "https://github.com/777genius/universal-agent-plugins" }]
   }
 });

@@ -9,6 +9,14 @@ translationRequired: true
 aside: true
 outline: [2, 3]
 ---
+
+[Utiliser des plugins](/fr/use/) · [Créer des plugins](/fr/build/) — Préparation, pas une version publiée. La migration des projets vers v2 est indisponible.
+<p class="locale-historical-identity">Source et résultats du projet</p>
+
+[Instantané historique de la branche plugin-kit-ai v1. 1.2.4 est la référence des commandes, pas la version exacte de cet instantané.](/en/legacy/v1/)
+
+<details><summary>Instantané historique de la branche plugin-kit-ai v1. 1.2.4 est la référence des commandes, pas la version exacte de cet instantané.</summary>
+
 # Source et résultats du projet
 
 Cette page est plus étroite que le modèle de produit principal. Il explique la limite de travail à l'intérieur du dépôt : ce que vous créez, ce qui est généré et pourquoi cette division maintient le projet maintenable.
@@ -43,3 +51,4 @@ Avec une répartition claire, vous pouvez :
 ## Quel est le rapport avec le modèle plus grand
 
 Si vous souhaitez une explication de niveau supérieur, commencez par [Comment fonctionne plugin-kit-ai](/fr/concepts/managed-project-model).
+</details>

@@ -1,3 +1,4 @@
+import { docsLocales, localePathField } from "../lib/journeys.mjs";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { generatedRegistryPaths, generatedRoot, repoRoot, runtimeRoot, sourceRoot, websiteRoot } from "../config/site.mjs";
@@ -28,8 +29,9 @@ async function checkRegistryEntities(allEntities) {
     }
     ids.add(entity.canonicalId);
 
-    for (const locale of ["en", "ru"]) {
-      const localePath = locale === "en" ? entity.pathEn : entity.pathRu;
+    for (const locale of docsLocales) {
+      const localePath = entity[localePathField(locale)];
+      if (!localePath && entity.localeStrategy === "canonical-en" && entity.pathEn && locale !== "en") continue;
       if (!localePath) {
         errors.push(`Missing ${locale.toUpperCase()} path for entity: ${entity.canonicalId}`);
         continue;
@@ -57,7 +59,11 @@ async function checkRegistryEntities(allEntities) {
       }
     }
 
-    if (entity.publicVisibility !== "public") {
+    if (entity.publicVisibility === "preparation" &&
+        (entity.status !== "prepared-not-release" || entity.released !== false || entity.stability !== "prepared-not-release")) {
+      errors.push(`Invalid preparation status: ${entity.canonicalId}`);
+    }
+    if (!["public", "preparation"].includes(entity.publicVisibility)) {
       errors.push(`Unexpected non-public entity in public registry: ${entity.canonicalId} (${entity.publicVisibility})`);
     }
 
@@ -71,7 +77,7 @@ async function checkRegistryEntities(allEntities) {
       if (!entity.sourceRef.startsWith("http")) {
         const candidatePaths =
           entity.sourceKind === "hand-authored"
-            ? [path.join(sourceRoot, "en", entity.sourceRef), path.join(sourceRoot, "ru", entity.sourceRef)]
+            ? docsLocales.map((locale) => path.join(sourceRoot, locale, entity.sourceRef))
             : [path.join(repoRoot, entity.sourceRef)];
         let found = false;
         for (const candidate of candidatePaths) {
@@ -96,10 +102,7 @@ async function checkRegistryEntities(allEntities) {
 }
 
 async function checkGeneratedMarkdownParity() {
-  const generatedFiles = [
-    ...(await listMarkdownFiles(path.join(generatedRoot, "en"))),
-    ...(await listMarkdownFiles(path.join(generatedRoot, "ru")))
-  ];
+  const generatedFiles = (await Promise.all(docsLocales.map((locale) => listMarkdownFiles(path.join(generatedRoot, locale))))).flat();
   const localeCoverage = new Map();
 
   for (const filePath of generatedFiles) {
@@ -127,7 +130,9 @@ async function checkGeneratedMarkdownParity() {
   }
 
   for (const [canonicalId, locales] of localeCoverage.entries()) {
-    if (!locales.has("en") || !locales.has("ru")) {
+    const entity = entities.find((entry) => entry.canonicalId === canonicalId);
+    const required = entity?.localeStrategy === "canonical-en" ? ["en"] : docsLocales;
+    if (required.some((locale) => !locales.has(locale))) {
       errors.push(`Generated locale parity failure for ${canonicalId}: have [${[...locales].sort().join(", ")}]`);
     }
   }

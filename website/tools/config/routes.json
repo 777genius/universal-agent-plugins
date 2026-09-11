@@ -1,0 +1,8 @@
+{
+  "schema": "docs-aliases-v1",
+  "englishAliases": true,
+  "excludedEnglishPages": ["/en/", "/en/404"],
+  "aliases": {
+    "/en/legacy/v1/cli/": "/en/api/cli/"
+  }
+}

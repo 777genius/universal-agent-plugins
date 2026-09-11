@@ -7,6 +7,14 @@ locale: "es"
 generated: false
 translationRequired: true
 ---
+
+[Usar plugins](/es/use/) · [Crear plugins](/es/build/) — Preparación, no es un lanzamiento. La migración de proyectos a v2 aún no está disponible.
+<p class="locale-historical-identity">Cree un complemento de tiempo de ejecución Node/TypeScript</p>
+
+[Instantánea histórica de la rama plugin-kit-ai v1. 1.2.4 es la referencia de comandos, no la versión exacta de esta instantánea.](/en/legacy/v1/)
+
+<details><summary>Instantánea histórica de la rama plugin-kit-ai v1. 1.2.4 es la referencia de comandos, no la versión exacta de esta instantánea.</summary>
+
 # Cree un complemento de tiempo de ejecución Node/TypeScript
 
 Esta es la ruta principal admitida que no es Go cuando su equipo quiere TypeScript pero aún necesita un complemento de tiempo de ejecución local compatible.
@@ -42,3 +50,5 @@ Prefiere Go en su lugar cuando:
 - desea la menor fricción de arranque en CI y en otras máquinas
 
 Consulte [Elegir tiempo de ejecución](/es/concepts/choosing-runtime) y [Node Tiempo de ejecución API](/es/api/runtime-node/) para conocer la siguiente capa de detalles.
+
+</details>

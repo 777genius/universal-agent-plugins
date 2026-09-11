@@ -7,6 +7,14 @@ locale: "zh"
 generated: false
 translationRequired: true
 ---
+
+[使用插件](/zh/use/) · [构建插件](/zh/build/) — 仅为准备内容，尚未发布。v2 暂不支持项目迁移。
+<p class="locale-historical-identity">构建 Claude 插件</p>
+
+[plugin-kit-ai v1 分支的历史快照。1.2.4 是命令基准，并非此快照的确切版本。](/en/legacy/v1/)
+
+<details><summary>plugin-kit-ai v1 分支的历史快照。1.2.4 是命令基准，并非此快照的确切版本。</summary>
+
 # 构建 Claude 插件
 
 当您显式定位 Claude 挂钩而不是默认的 Codex 运行时路径时，请选择此路径。
@@ -44,3 +52,5 @@ plugin-kit-ai init my-claude-plugin --platform claude --claude-extended-hooks
 
 - 阅读 [目标模型](/zh/concepts/target-model) 以了解 Claude 与打包或工作区配置目标有何不同。
 - 检查[平台事件](/zh/api/platform-events/claude)以获取事件级参考。
+
+</details>

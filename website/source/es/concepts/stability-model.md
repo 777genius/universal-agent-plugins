@@ -7,6 +7,14 @@ locale: "es"
 generated: false
 translationRequired: true
 ---
+
+[Usar plugins](/es/use/) · [Crear plugins](/es/build/) — Preparación, no es un lanzamiento. La migración de proyectos a v2 aún no está disponible.
+<p class="locale-historical-identity">Modelo de estabilidad</p>
+
+[Instantánea histórica de la rama plugin-kit-ai v1. 1.2.4 es la referencia de comandos, no la versión exacta de esta instantánea.](/en/legacy/v1/)
+
+<details><summary>Instantánea histórica de la rama plugin-kit-ai v1. 1.2.4 es la referencia de comandos, no la versión exacta de esta instantánea.</summary>
+
 # Modelo de estabilidad
 
 `plugin-kit-ai` utiliza términos contractuales formales para que los equipos puedan decidir exactamente qué quieren estandarizar.
@@ -63,3 +71,4 @@ Puede ser útil para el aprendizaje o la adopción temprana, pero no debería co
 1. Prefiera la ruta recomendada para el producto que está creando.
 2. Utilice los términos formales exactos sólo cuando necesite precisión en la política o la compatibilidad.
 3. Utilice `validate --strict` como puerta de preparación para el repositorio que planea enviar.
+</details>

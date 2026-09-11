@@ -9,6 +9,14 @@ translationRequired: true
 aside: false
 outline: false
 ---
+
+[Usar plugins](/es/use/) · [Crear plugins](/es/build/) — Preparación, no es un lanzamiento. La migración de proyectos a v2 aún no está disponible.
+<p class="locale-historical-identity">Lanzamientos</p>
+
+[Instantánea histórica de la rama plugin-kit-ai v1. 1.2.4 es la referencia de comandos, no la versión exacta de esta instantánea.](/en/legacy/v1/)
+
+<details><summary>Instantánea histórica de la rama plugin-kit-ai v1. 1.2.4 es la referencia de comandos, no la versión exacta de esta instantánea.</summary>
+
 <div class="docs-hero docs-hero--compact">
   <p class="docs-kicker">RELEASES</p>
   <h1>Qué cambió para los usuarios</h1>
@@ -53,3 +61,5 @@ outline: false
     <p>El proyecto declaró su primer contrato público estable y envió la línea base que las versiones posteriores siguen perfeccionando.</p>
   </a>
 </div>
+
+</details>

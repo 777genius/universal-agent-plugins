@@ -9,6 +9,14 @@ translationRequired: true
 aside: true
 outline: [2, 3]
 ---
+
+[Utiliser des plugins](/fr/use/) · [Créer des plugins](/fr/build/) — Préparation, pas une version publiée. La migration des projets vers v2 est indisponible.
+<p class="locale-historical-identity">Comment fonctionne plugin-kit-ai</p>
+
+[Instantané historique de la branche plugin-kit-ai v1. 1.2.4 est la référence des commandes, pas la version exacte de cet instantané.](/en/legacy/v1/)
+
+<details><summary>Instantané historique de la branche plugin-kit-ai v1. 1.2.4 est la référence des commandes, pas la version exacte de cet instantané.</summary>
+
 # Comment fonctionne plugin-kit-ai
 
 plugin-kit-ai conserve un dépôt comme source de vérité pour votre plugin. Vous modifiez les fichiers que vous possédez, générez les sorties dont vous avez besoin, validez strictement le résultat et transmettez un dépôt qui reste prévisible dans le temps.
@@ -54,3 +62,5 @@ Un modèle de démarrage vous donne une forme initiale. plugin-kit-ai continue d
 - Lisez [Source et résultats du projet](/fr/concepts/authoring-architecture) pour connaître la limite entre création et génération.
 - Lisez [Modèle cible](/fr/concepts/target-model) pour les différents types de sortie.
 - Lisez [Un projet, plusieurs cibles](/fr/guide/one-project-multiple-targets) lorsque vous souhaitez développer davantage un dépôt.
+
+</details>

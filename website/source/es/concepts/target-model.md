@@ -9,6 +9,14 @@ translationRequired: true
 aside: true
 outline: [2, 3]
 ---
+
+[Usar plugins](/es/use/) · [Crear plugins](/es/build/) — Preparación, no es un lanzamiento. La migración de proyectos a v2 aún no está disponible.
+<p class="locale-historical-identity">Modelo objetivo</p>
+
+[Instantánea histórica de la rama plugin-kit-ai v1. 1.2.4 es la referencia de comandos, no la versión exacta de esta instantánea.](/en/legacy/v1/)
+
+<details><summary>Instantánea histórica de la rama plugin-kit-ai v1. 1.2.4 es la referencia de comandos, no la versión exacta de esta instantánea.</summary>
+
 # Modelo objetivo
 
 Un objetivo es el tipo de resultado que desea que produzca el repositorio.
@@ -41,3 +49,4 @@ Algunas salidas son en su mayoría configuraciones registradas que ayudan a otra
 ## El modelo mental seguro
 
 Comience con el resultado que necesita primero. Si el repositorio crece más adelante, puede agregar otra salida compatible sin cambiar el hecho de que un proyecto sigue teniendo autoridad.
+</details>

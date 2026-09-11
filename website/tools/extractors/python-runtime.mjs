@@ -9,15 +9,10 @@ import fs from "node:fs/promises";
 async function ensurePythonVenv(venvDir) {
   const pythonPath = path.join(venvDir, "bin", "python");
   try {
-    await run(pythonPath, ["-c", "import pydoc_markdown"], { cwd: websiteRoot });
+    await run(pythonPath, ["-c", "import importlib.metadata; assert importlib.metadata.version('pydoc-markdown') == '4.8.2'"], { cwd: websiteRoot });
     return { pythonPath };
-  } catch {
-    await fs.rm(venvDir, { recursive: true, force: true });
-    await run("python3", ["-m", "venv", venvDir], { cwd: websiteRoot });
-    await run(pythonPath, ["-m", "pip", "install", "--disable-pip-version-check", "pydoc-markdown==4.8.2"], {
-      cwd: websiteRoot
-    });
-    return { pythonPath };
+  } catch (cause) {
+    throw new Error(`Offline docs prerequisite missing: ${pythonPath} with pydoc-markdown==4.8.2; provision separately in the disposable sandbox`, { cause });
   }
 }
 
@@ -106,8 +101,8 @@ export async function extractPythonRuntime() {
             : "Open this area when you need the shared runtime helper API for a repo-local Python plugin."
         }\n\n${
           locale === "ru"
-            ? "- Это справочник по API, а не пошаговый гайд.\n- Если нужен простой путь от нуля до рабочего Python-плагина, начните с [гайда по Python runtime](/ru/guide/python-runtime).\n- Если выбираете форму проекта, откройте [Что можно построить](/ru/guide/what-you-can-build) и [Выбор runtime](/ru/concepts/choosing-runtime).\n- Если нужен общий dependency-вариант вместо локально сгенерированного helper-файла, используйте пакет [`plugin-kit-ai-runtime`](https://github.com/777genius/plugin-kit-ai/tree/main/python/plugin-kit-ai-runtime)."
-            : "- This page is the API reference, not the setup tutorial.\n- If you want the simplest end-to-end setup, start with [Build A Python Runtime Plugin](/en/guide/python-runtime).\n- If you are still choosing the project shape, read [What You Can Build](/en/guide/what-you-can-build) and [Choosing Runtime](/en/concepts/choosing-runtime).\n- If you want the shared-dependency path instead of a repo-local generated helper file, use the [`plugin-kit-ai-runtime`](https://github.com/777genius/plugin-kit-ai/tree/main/python/plugin-kit-ai-runtime) package."
+            ? "- Это справочник по API, а не пошаговый гайд.\n- Если нужен простой путь от нуля до рабочего Python-плагина, начните с [гайда по Python runtime](/ru/guide/python-runtime).\n- Если выбираете форму проекта, откройте [Что можно построить](/ru/guide/what-you-can-build) и [Выбор runtime](/ru/concepts/choosing-runtime).\n- Если нужен общий dependency-вариант вместо локально сгенерированного helper-файла, используйте пакет [`plugin-kit-ai-runtime`](https://github.com/777genius/universal-agent-plugins/tree/main/python/plugin-kit-ai-runtime)."
+            : "- This page is the API reference, not the setup tutorial.\n- If you want the simplest end-to-end setup, start with [Build A Python Runtime Plugin](/en/guide/python-runtime).\n- If you are still choosing the project shape, read [What You Can Build](/en/guide/what-you-can-build) and [Choosing Runtime](/en/concepts/choosing-runtime).\n- If you want the shared-dependency path instead of a repo-local generated helper file, use the [`plugin-kit-ai-runtime`](https://github.com/777genius/universal-agent-plugins/tree/main/python/plugin-kit-ai-runtime) package."
         }\n\n- [\`plugin_kit_ai_runtime\`](/${locale}/api/runtime-python/plugin-kit-ai-runtime)`
       )
     });
@@ -157,4 +152,20 @@ function localizePythonRuntimeBody(locale, body) {
     .replace("Hook names that this binary accepts on argv.", "Имена hooks, которые этот бинарник принимает через argv.")
     .replace("Usage string printed when the invocation is invalid.", "Строка помощи, которая печатается при некорректном вызове.")
     .replaceAll("Dispatch the current process invocation and return the exit code.", "Обрабатывает текущий запуск процесса и возвращает код выхода.");
+}
+
+// Preserved provisioning capability; never called by offline preparation.
+export async function provisionLegacyPythonVenv(venvDir) {
+  const pythonPath = path.join(venvDir, "bin", "python");
+  try {
+    await run(pythonPath, ["-c", "import pydoc_markdown"], { cwd: websiteRoot });
+    return { pythonPath };
+  } catch {
+    await fs.rm(venvDir, { recursive: true, force: true });
+    await run("python3", ["-m", "venv", venvDir], { cwd: websiteRoot });
+    await run(pythonPath, ["-m", "pip", "install", "--disable-pip-version-check", "pydoc-markdown==4.8.2"], {
+      cwd: websiteRoot
+    });
+    return { pythonPath };
+  }
 }

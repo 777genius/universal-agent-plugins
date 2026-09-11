@@ -9,6 +9,14 @@ translationRequired: true
 aside: true
 outline: [2, 3]
 ---
+
+[Usar plugins](/es/use/) · [Crear plugins](/es/build/) — Preparación, no es un lanzamiento. La migración de proyectos a v2 aún no está disponible.
+<p class="locale-historical-identity">Fuente y resultados del proyecto</p>
+
+[Instantánea histórica de la rama plugin-kit-ai v1. 1.2.4 es la referencia de comandos, no la versión exacta de esta instantánea.](/en/legacy/v1/)
+
+<details><summary>Instantánea histórica de la rama plugin-kit-ai v1. 1.2.4 es la referencia de comandos, no la versión exacta de esta instantánea.</summary>
+
 # Fuente y resultados del proyecto
 
 Esta página es más estrecha que el modelo principal del producto. Explica los límites de trabajo dentro del repositorio: lo que usted crea, lo que se genera y por qué esa división mantiene el proyecto mantenible.
@@ -43,3 +51,4 @@ Con una división clara, puedes:
 ## Cómo se relaciona esto con el modelo más amplio
 
 Si desea una explicación de nivel superior, comience con [Cómo funciona plugin-kit-ai](/es/concepts/managed-project-model).
+</details>

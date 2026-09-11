@@ -7,6 +7,14 @@ locale: "es"
 generated: false
 translationRequired: true
 ---
+
+[Usar plugins](/es/use/) · [Crear plugins](/es/build/) — Preparación, no es un lanzamiento. La migración de proyectos a v2 aún no está disponible.
+<p class="locale-historical-identity">Cree un complemento listo para el equipo</p>
+
+[Instantánea histórica de la rama plugin-kit-ai v1. 1.2.4 es la referencia de comandos, no la versión exacta de esta instantánea.](/en/legacy/v1/)
+
+<details><summary>Instantánea histórica de la rama plugin-kit-ai v1. 1.2.4 es la referencia de comandos, no la versión exacta de esta instantánea.</summary>
+
 # Cree un complemento listo para el equipo
 
 Este tutorial continúa donde termina el primer complemento exitoso. El objetivo no es simplemente "funciona en mi máquina", sino un repositorio que otro compañero de equipo pueda clonar, validar y enviar sin conocimientos ocultos.
@@ -125,3 +133,5 @@ Un repositorio de complementos listo para el equipo debería indicar a las perso
 El repositorio está listo cuando otro compañero de equipo puede clonarlo, comprender la ruta y el alcance objetivo, reproducir los resultados generados y pasar la estricta puerta de validación sin improvisación.
 
 Combine este tutorial con [Cree su primer complemento](/es/guide/first-plugin), [Arquitectura de creación](/es/concepts/authoring-architecture) y [Límite de soporte](/es/reference/support-boundary).
+
+</details>

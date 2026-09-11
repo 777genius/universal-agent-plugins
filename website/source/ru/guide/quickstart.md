@@ -8,6 +8,14 @@ generated: false
 translationRequired: true
 ---
 
+[Использовать плагины](/ru/use/) · [Создавать плагины](/ru/build/) — Подготовка, не релиз. Миграция проектов в v2 пока недоступна.
+<p class="locale-historical-identity">Быстрый старт</p>
+
+[Исторический снимок ветки plugin-kit-ai v1. 1.2.4 — базовая версия команд, а не точная версия этого снимка.](/en/legacy/v1/)
+
+<details><summary>Исторический снимок ветки plugin-kit-ai v1. 1.2.4 — базовая версия команд, а не точная версия этого снимка.</summary>
+
+
 # Быстрый старт
 
 Это самый короткий рекомендуемый путь, если вам нужен один plugin repo, который потом можно расширять новыми способами поставки.
@@ -143,3 +151,5 @@ plugin-kit-ai validate ./my-plugin --platform codex-runtime --strict
 - [Создайте первый plugin](/ru/guide/first-plugin)
 - [Что можно собрать](/ru/guide/what-you-can-build)
 - [Выбор target](/ru/guide/choose-a-target)
+
+</details>

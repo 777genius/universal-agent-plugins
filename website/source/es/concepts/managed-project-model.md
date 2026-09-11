@@ -9,6 +9,14 @@ translationRequired: true
 aside: true
 outline: [2, 3]
 ---
+
+[Usar plugins](/es/use/) · [Crear plugins](/es/build/) — Preparación, no es un lanzamiento. La migración de proyectos a v2 aún no está disponible.
+<p class="locale-historical-identity">Cómo funciona plugin-kit-ai</p>
+
+[Instantánea histórica de la rama plugin-kit-ai v1. 1.2.4 es la referencia de comandos, no la versión exacta de esta instantánea.](/en/legacy/v1/)
+
+<details><summary>Instantánea histórica de la rama plugin-kit-ai v1. 1.2.4 es la referencia de comandos, no la versión exacta de esta instantánea.</summary>
+
 # Cómo funciona plugin-kit-ai
 
 plugin-kit-ai mantiene un repositorio como fuente de verdad para su complemento. Usted edita los archivos que posee, genera los resultados que necesita, valida el resultado estrictamente y entrega un repositorio que se mantiene predecible a lo largo del tiempo.
@@ -54,3 +62,4 @@ Una plantilla inicial te da una forma inicial. plugin-kit-ai sigue gestionando e
 - Lea [Fuente y resultados del proyecto](/es/concepts/authoring-architecture) para conocer el límite entre creación y generación.
 - Lea [Modelo de destino](/es/concepts/target-model) para conocer los diferentes tipos de salida.
 - Lea [Un proyecto, múltiples objetivos](/es/guide/one-project-multiple-targets) cuando desee hacer crecer un repositorio más.
+</details>

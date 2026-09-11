@@ -7,6 +7,14 @@ locale: "es"
 generated: false
 translationRequired: true
 ---
+
+[Usar plugins](/es/use/) · [Crear plugins](/es/build/) — Preparación, no es un lanzamiento. La migración de proyectos a v2 aún no está disponible.
+<p class="locale-historical-identity">Cree un complemento Claude</p>
+
+[Instantánea histórica de la rama plugin-kit-ai v1. 1.2.4 es la referencia de comandos, no la versión exacta de esta instantánea.](/en/legacy/v1/)
+
+<details><summary>Instantánea histórica de la rama plugin-kit-ai v1. 1.2.4 es la referencia de comandos, no la versión exacta de esta instantánea.</summary>
+
 # Cree un complemento Claude
 
 Elija esta ruta cuando esté apuntando explícitamente a ganchos Claude en lugar de la ruta de tiempo de ejecución predeterminada Codex.
@@ -44,3 +52,5 @@ Solo elija ganchos extendidos cuando intencionalmente desee el conjunto con sopo
 
 - Lea [Modelo de destino](/es/concepts/target-model) para ver en qué se diferencia Claude de los objetivos de empaquetado o de configuración del espacio de trabajo.
 - Consulte [Eventos de plataforma](/es/api/platform-events/claude) para obtener una referencia a nivel de evento.
+
+</details>

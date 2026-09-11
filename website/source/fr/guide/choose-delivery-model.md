@@ -7,6 +7,14 @@ locale: "fr"
 generated: false
 translationRequired: true
 ---
+
+[Utiliser des plugins](/fr/use/) · [Créer des plugins](/fr/build/) — Préparation, pas une version publiée. La migration des projets vers v2 est indisponible.
+<p class="locale-historical-identity">Choisissez le modèle de livraison</p>
+
+[Instantané historique de la branche plugin-kit-ai v1. 1.2.4 est la référence des commandes, pas la version exacte de cet instantané.](/en/legacy/v1/)
+
+<details><summary>Instantané historique de la branche plugin-kit-ai v1. 1.2.4 est la référence des commandes, pas la version exacte de cet instantané.</summary>
+
 # Choisissez le modèle de livraison
 
 Les plugins Python et Node ont deux méthodes prises en charge pour expédier la logique d'assistance. Ils résolvent différents problèmes pratiques.
@@ -84,3 +92,5 @@ Il s'agit de la valeur par défaut car c'est le point de départ le plus simple 
 - choisissez le package d'exécution partagé lorsque vous savez déjà que vous souhaitez une stratégie de dépendance réutilisable entre les dépôts
 
 Associez cette page à [Créer un plugin d'exécution Python](/fr/guide/python-runtime), [Choisissez un dépôt de démarrage](/fr/guide/choose-a-starter), [Modèles de démarrage](/fr/guide/starter-templates) et [Préparation à la production](/fr/guide/production-readiness).
+
+</details>

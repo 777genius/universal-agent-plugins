@@ -7,6 +7,14 @@ locale: "es"
 generated: false
 translationRequired: true
 ---
+
+[Usar plugins](/es/use/) · [Crear plugins](/es/build/) — Preparación, no es un lanzamiento. La migración de proyectos a v2 aún no está disponible.
+<p class="locale-historical-identity">Plantillas de inicio</p>
+
+[Instantánea histórica de la rama plugin-kit-ai v1. 1.2.4 es la referencia de comandos, no la versión exacta de esta instantánea.](/en/legacy/v1/)
+
+<details><summary>Instantánea histórica de la rama plugin-kit-ai v1. 1.2.4 es la referencia de comandos, no la versión exacta de esta instantánea.</summary>
+
 # Plantillas de inicio
 
 Si desea un buen punto de partida conocido en lugar de un andamiaje desde un directorio en blanco, utilice los repositorios de inicio oficiales.
@@ -60,3 +68,5 @@ Utilice `plugin-kit-ai init` directamente cuando:
 - elige un iniciador para la **primera** ruta correcta
 - no trate a la familia inicial como el límite final del repositorio
 - mantenga un repositorio y amplíelo solo cuando el producto realmente necesite más resultados
+
+</details>

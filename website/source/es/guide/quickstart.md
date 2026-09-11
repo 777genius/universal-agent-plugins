@@ -7,6 +7,14 @@ locale: "es"
 generated: false
 translationRequired: true
 ---
+
+[Usar plugins](/es/use/) · [Crear plugins](/es/build/) — Preparación, no es un lanzamiento. La migración de proyectos a v2 aún no está disponible.
+<p class="locale-historical-identity">Inicio rápido</p>
+
+[Instantánea histórica de la rama plugin-kit-ai v1. 1.2.4 es la referencia de comandos, no la versión exacta de esta instantánea.](/en/legacy/v1/)
+
+<details><summary>Instantánea histórica de la rama plugin-kit-ai v1. 1.2.4 es la referencia de comandos, no la versión exacta de esta instantánea.</summary>
+
 # Inicio rápido
 
 Esta es la ruta más corta recomendada cuando desea un repositorio de complementos que luego pueda convertirse en más formas de enviar el complemento.
@@ -110,3 +118,5 @@ Elija `claude` primero solo cuando los ganchos Claude ya sean el requisito real 
 - Continúe con [Lo que puede construir](/es/guide/what-you-can-build) si desea el mapa completo del producto.
 - Continúe con [Elija un objetivo](/es/guide/choose-a-target) cuando esté listo para hacer coincidir el repositorio con la forma en que desea enviarlo.
 - Continúe con [Un proyecto, múltiples objetivos](/es/guide/one-project-multiple-targets) cuando esté listo para expandirse más allá de la primera ruta.
+
+</details>
