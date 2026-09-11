@@ -9,7 +9,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"path/filepath"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -694,10 +693,10 @@ func batchAttentionLines(target addTargetResult) []string {
 		return []string{"Managed installation was rolled back; no client changes were kept."}
 	case batchPresentationFailed, batchPresentationNotCompleted:
 		if phase == usecase.GroupTargetManagedUnknown {
-			return []string{"Managed commit state is unknown; run agentplugins doctor before retrying."}
+			return []string{"Managed commit state is unknown; run npx universal-agent-plugins doctor before retrying."}
 		}
 		if batchFailureNeedsDoctor(target) {
-			return []string{"Installation state could not be saved safely; run agentplugins doctor before retrying."}
+			return []string{"Installation state could not be saved safely; run npx universal-agent-plugins doctor before retrying."}
 		}
 		if target.Error != nil && strings.TrimSpace(target.Error.Message) != "" {
 			return []string{target.Error.Message}
@@ -799,10 +798,12 @@ func isLocalFilesystemSource(source string) bool {
 	if source == "" || strings.Contains(source, "://") {
 		return false
 	}
-	if strings.HasPrefix(source, ".") || strings.HasPrefix(source, "~") {
+	// Match acquisition's portable local-path detector so Windows spellings such
+	// as d:/plugin are suppressed on every host, not only on Windows.
+	if strings.HasPrefix(source, "~") {
 		return true
 	}
-	return filepath.IsAbs(source)
+	return explicitLocalPath(source)
 }
 
 func batchRetryCommandFor(target addTargetResult, source string) string {

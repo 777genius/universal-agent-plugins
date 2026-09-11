@@ -280,6 +280,12 @@ func TestBatchActivationApplySummaryAndExitCodes(t *testing.T) {
 		if got := batchRetrySource(domain.PackageEnvelope{Source: domain.SourceIdentity{RequestedSource: localPath}}, "", "direct local source"); got != "" {
 			t.Fatalf("local absolute path leaked into retry source: %q", got)
 		}
+		if got := batchRetrySource(domain.PackageEnvelope{Source: domain.SourceIdentity{RequestedSource: "d:/private/plugin"}}, "", "direct local source"); got != "" {
+			t.Fatalf("windows local path leaked into retry source: %q", got)
+		}
+		if !isLocalFilesystemSource("d:/private/plugin") || !isLocalFilesystemSource(`D:\private\plugin`) {
+			t.Fatal("portable windows local paths must be detected")
+		}
 		dir := domain.PackageEnvelope{Source: domain.SourceIdentity{
 			RequestedSource: "context7", Repository: "upstash/context7", PackageSubpath: "plugins/agent-plugins/context7",
 			ResolvedRevision: strings.Repeat("a", 40),
