@@ -2,6 +2,7 @@ package usecase
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"sort"
@@ -47,14 +48,22 @@ const (
 type GroupTargetPhase string
 
 const (
-	GroupTargetPlanned           GroupTargetPhase = "planned"
-	GroupTargetManagedRolledBack GroupTargetPhase = "managed_rolled_back"
-	GroupTargetManagedCommitted  GroupTargetPhase = "managed_committed"
-	GroupTargetManagedUnknown    GroupTargetPhase = "managed_commit_unknown"
-	GroupTargetExternalCompleted GroupTargetPhase = "external_completed"
-	GroupTargetExternalFailed    GroupTargetPhase = "external_failed"
-	GroupTargetExternalPartial   GroupTargetPhase = "external_completed_managed_incomplete"
+	GroupTargetPlanned              GroupTargetPhase = "planned"
+	GroupTargetManagedRolledBack    GroupTargetPhase = "managed_rolled_back"
+	GroupTargetManagedCommitted     GroupTargetPhase = "managed_committed"
+	GroupTargetManagedUnknown       GroupTargetPhase = "managed_commit_unknown"
+	GroupTargetExternalCompleted    GroupTargetPhase = "external_completed"
+	GroupTargetExternalFailed       GroupTargetPhase = "external_failed"
+	GroupTargetExternalPartial      GroupTargetPhase = "external_completed_managed_incomplete"
+	GroupTargetExternalNotAttempted GroupTargetPhase = "external_not_attempted"
 )
+
+// GroupTargetFailure records why one logical surface failed or was skipped
+// during external activation. Retry commands belong in CLI presentation.
+type GroupTargetFailure struct {
+	Stage   string `json:"stage"`
+	Message string `json:"message"`
+}
 
 func (service Service) AddGroup(ctx context.Context, input GroupInput) (GroupResult, error) {
 	return service.applyGroup(ctx, input, false)
@@ -615,7 +624,31 @@ func (service Service) applyGroup(ctx context.Context, input GroupInput, replace
 		planned[index].dataCreated = false
 	}
 	externalCompleted := 0
-	for _, target := range planned {
+	externalFailed := 0
+	logicalTotal := len(result.Targets)
+	var firstActivationErr error
+	markRemainingNotAttempted := func(fromIndex int, stage, message string) {
+		for index := fromIndex; index < len(planned); index++ {
+			target := planned[index]
+			for _, resultIndex := range target.resultIndexes {
+				result.Targets[resultIndex].GroupPhase = GroupTargetExternalNotAttempted
+				result.Targets[resultIndex].Failure = &GroupTargetFailure{Stage: stage, Message: message}
+			}
+		}
+	}
+	classifyActivationFailure := func() {
+		if externalCompleted > 0 {
+			result.Phase = GroupPhaseExternalPartialFailure
+			return
+		}
+		result.Phase = GroupPhaseManagedActivationFailed
+	}
+	for plannedIndex, target := range planned {
+		if err := ctx.Err(); err != nil {
+			classifyActivationFailure()
+			markRemainingNotAttempted(plannedIndex, "canceled", "processing stopped because the operation was canceled before remaining clients could be activated safely")
+			return result, fmt.Errorf("%d of %d client activations failed: %w", externalFailed+countNotAttempted(result.Targets), logicalTotal, err)
+		}
 		delivery := target.delivery
 		if target.noChange && target.managed != nil {
 			delivery = domain.StagedDelivery{
@@ -635,6 +668,22 @@ func (service Service) applyGroup(ctx context.Context, input GroupInput, replace
 			VerifyOnly: target.noChange, ActivationComplete: target.input.ActivationComplete})
 		if input.Repair && target.managed != nil {
 			outcome = preserveManagedAuthentication(outcome, target.managed.Authentication)
+		}
+		if activationErr == nil && outcome.Activation == "" {
+			if err := ctx.Err(); err != nil {
+				activationErr = err
+			} else {
+				activationErr = fmt.Errorf("activator returned an empty activation outcome")
+			}
+		}
+		if activationErr == nil && (outcome.Activation == domain.ActivationFailed || outcome.Verification == domain.VerificationFailed || outcome.Authentication == domain.AuthenticationFailed) {
+			activationErr = fmt.Errorf("activator reported a failed activation outcome without an error")
+		}
+		if activationErr != nil && outcome.Activation == "" {
+			outcome = domain.ActivationOutcome{
+				Activation: domain.ActivationFailed, Authentication: target.plan.Authentication,
+				Policy: domain.PolicyAllowed, Verification: domain.VerificationFailed,
+			}
 		}
 		if target.noChange && target.managed != nil {
 			if activationErr == nil && !clientVerifierAvailable(target.input, target.plan) && target.managed.Activation == domain.ActivationActive && target.managed.Verification == domain.VerificationInstalled {
@@ -662,28 +711,82 @@ func (service Service) applyGroup(ctx context.Context, input GroupInput, replace
 			if lifecycleChanged {
 				result.Targets[resultIndex].NoChange = false
 			}
-			if activationErr == nil && persistErr == nil {
-				result.Targets[resultIndex].GroupPhase = GroupTargetExternalCompleted
-			} else {
+			switch {
+			case persistErr != nil:
 				result.Targets[resultIndex].GroupPhase = GroupTargetExternalFailed
+				result.Targets[resultIndex].Failure = &GroupTargetFailure{Stage: "persist", Message: persistErr.Error()}
+			case activationErr != nil:
+				result.Targets[resultIndex].GroupPhase = GroupTargetExternalFailed
+				result.Targets[resultIndex].Failure = groupTargetFailureFromActivation(activationErr, outcome)
+			default:
+				result.Targets[resultIndex].GroupPhase = GroupTargetExternalCompleted
 			}
-		}
-		if activationErr != nil {
-			if externalCompleted > 0 {
-				result.Phase = GroupPhaseExternalPartialFailure
-			} else {
-				result.Phase = GroupPhaseManagedActivationFailed
-			}
-			return result, activationErr
 		}
 		if persistErr != nil {
-			result.Phase = GroupPhaseManagedActivationFailed
-			return result, persistErr
+			externalFailed += len(target.resultIndexes)
+			classifyActivationFailure()
+			markRemainingNotAttempted(plannedIndex+1, "persist", "processing stopped because installation state could not be saved safely")
+			return result, fmt.Errorf("%d of %d client activations failed: %w", externalFailed+countNotAttempted(result.Targets), logicalTotal, persistErr)
+		}
+		if activationErr != nil {
+			externalFailed += len(target.resultIndexes)
+			if firstActivationErr == nil {
+				firstActivationErr = activationErr
+			}
+			if errors.Is(activationErr, context.Canceled) || errors.Is(activationErr, context.DeadlineExceeded) || ctx.Err() != nil {
+				classifyActivationFailure()
+				markRemainingNotAttempted(plannedIndex+1, "canceled", "processing stopped because the operation was canceled before remaining clients could be activated safely")
+				cause := activationErr
+				if ctxErr := ctx.Err(); ctxErr != nil && !errors.Is(activationErr, context.Canceled) && !errors.Is(activationErr, context.DeadlineExceeded) {
+					cause = ctxErr
+				}
+				return result, fmt.Errorf("%d of %d client activations failed: %w", externalFailed+countNotAttempted(result.Targets), logicalTotal, cause)
+			}
+			continue
 		}
 		externalCompleted += len(target.resultIndexes)
 	}
+	if externalFailed > 0 {
+		classifyActivationFailure()
+		if firstActivationErr != nil {
+			return result, fmt.Errorf("%d of %d client activations failed: %w", externalFailed, logicalTotal, firstActivationErr)
+		}
+		return result, fmt.Errorf("%d of %d client activations failed", externalFailed, logicalTotal)
+	}
 	result.Phase = GroupPhaseCompleted
 	return result, nil
+}
+
+func groupTargetFailureFromActivation(err error, outcome domain.ActivationOutcome) *GroupTargetFailure {
+	stage := "activation"
+	switch {
+	case errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
+		stage = "canceled"
+	case outcome.Authentication == domain.AuthenticationFailed &&
+		outcome.Activation != domain.ActivationFailed &&
+		outcome.Verification != domain.VerificationFailed:
+		stage = "authentication"
+	case outcome.Verification == domain.VerificationFailed &&
+		outcome.Activation != domain.ActivationFailed:
+		// Providers often set VerificationFailed together with ActivationFailed.
+		// Prefer activation unless verification is the only failed dimension.
+		stage = "verification"
+	}
+	message := "activation failed"
+	if err != nil {
+		message = err.Error()
+	}
+	return &GroupTargetFailure{Stage: stage, Message: message}
+}
+
+func countNotAttempted(targets []AddResult) int {
+	count := 0
+	for _, target := range targets {
+		if target.GroupPhase == GroupTargetExternalNotAttempted {
+			count++
+		}
+	}
+	return count
 }
 
 func preservedGroupAuthentication(planned, current domain.AuthenticationState) domain.AuthenticationState {

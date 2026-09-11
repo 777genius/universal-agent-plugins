@@ -678,7 +678,7 @@ func TestGroupedPartialFailureDoesNotMarkEveryTargetPassed(t *testing.T) {
 	fixture := newCLIFixture(t, []domain.DetectedClient{fixtureClient(t, domain.ClientCodex), fixtureClient(t, domain.ClientCursor), fixtureClient(t, domain.ClientKiro)})
 	fixture.app.Lifecycle.Activator = &failSecondCLIGroupActivator{}
 	stdout, _, err := fixture.execute(false, "add", writeCLIPlugin(t), "--target", "codex,cursor,kiro", "--format", "json")
-	if err == nil || !strings.Contains(err.Error(), "injected grouped activation failure") {
+	if err == nil || !strings.Contains(err.Error(), "1 of 3 client installations failed; see results above") {
 		t.Fatalf("grouped partial failure = %v", err)
 	}
 	var output struct {
@@ -696,8 +696,25 @@ func TestGroupedPartialFailureDoesNotMarkEveryTargetPassed(t *testing.T) {
 			t.Fatalf("failed target %s lost acquisition binding: %+v", target, targetProof)
 		}
 	}
-	if len(output.Data.TargetOutcomes) != 3 || passed != 1 || output.Data.TargetOutcomes["cursor"].Outcome != "failed" || output.Data.TargetOutcomes["kiro"].Outcome == "passed" {
+	if len(output.Data.TargetOutcomes) != 3 || passed != 2 || output.Data.TargetOutcomes["cursor"].Outcome != "failed" || output.Data.TargetOutcomes["kiro"].Outcome != "passed" {
 		t.Fatalf("partial failure target outcomes = %+v", output.Data.TargetOutcomes)
+	}
+	if output.Data.Failed != 1 || output.Data.Succeeded != 2 {
+		t.Fatalf("counts succeeded=%d failed=%d", output.Data.Succeeded, output.Data.Failed)
+	}
+	var failedTarget *addTargetResult
+	for index := range output.Data.Targets {
+		if output.Data.Targets[index].Target == "cursor" {
+			failedTarget = &output.Data.Targets[index]
+			break
+		}
+	}
+	if failedTarget == nil || failedTarget.Status != string(usecase.GroupTargetExternalFailed) || failedTarget.Error == nil {
+		t.Fatalf("failed target JSON = %+v", failedTarget)
+	}
+	// Local fixture paths must not leak into retry_command; remote-safe retries are covered elsewhere.
+	if failedTarget.RetryCommand != "" {
+		t.Fatalf("local fixture emitted filesystem retry: %q", failedTarget.RetryCommand)
 	}
 }
 
