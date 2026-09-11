@@ -47,6 +47,7 @@ func darwinFS(fd int) (unix.Statfs_t, error) {
 	}
 	return fs, nil
 }
+
 // This profile already permits ordinary quiescent writable local APFS (see
 // ADR 0006), so a generated-staging proof adds nothing here and is
 // intentionally ignored, matching source_linux.go's identical reasoning.

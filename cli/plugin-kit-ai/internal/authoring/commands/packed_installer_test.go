@@ -278,7 +278,7 @@ func (s *boundaryAssessment) Evaluate(ctx context.Context, in domain.SecurityEva
 func TestPackedInstallerAssessmentBoundaries(t *testing.T) {
 	for _, fail := range []bool{true, false} {
 		t.Run(fmt.Sprintf("assessment-error-%t", fail), func(t *testing.T) {
-			source := filepath.Join(t.TempDir(), "demo")
+			source := filepath.Join(physicalMutationRoot(t), "demo")
 			author := commands.App{Projects: project.Service{Scratch: t.TempDir()}, Revision: publicRevision, PublicContract: true}
 			if _, code, out := publicRun(t, author, []string{"init", source, "--name=demo", "--template=skill", "--format=json"}, false); code != 0 {
 				t.Fatal(out)

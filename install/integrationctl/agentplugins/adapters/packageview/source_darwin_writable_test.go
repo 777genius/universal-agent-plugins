@@ -239,7 +239,7 @@ func TestDarwinWritableOuterSiblingAndPaths(t *testing.T) {
 		t.Fatal("unrelated sibling rejected", e)
 	}
 	l.Close()
-	s, e := openSource(root + "/linked/..")
+	s, e := openSource(root+"/linked/..", GeneratedStaging{})
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -252,7 +252,7 @@ func TestDarwinWritableOuterSiblingAndPaths(t *testing.T) {
 	if e != nil || !sameIdentity(got, want) {
 		t.Fatal("a/.. was cleaned", e)
 	}
-	if linked, e := openSource(root + "/linked/"); e == nil {
+	if linked, e := openSource(root+"/linked/", GeneratedStaging{}); e == nil {
 		linked.close()
 		t.Fatal("linked final root accepted")
 	}
