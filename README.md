@@ -78,7 +78,7 @@ The CLI finds compatible agents installed on your computer.
 For the verified Context7 setup in ChatGPT and Kiro:
 
 ```bash
-npx universal-agent-plugins add context7 --target chatgpt,kiro --prepare
+npx universal-agent-plugins add context7 --target chatgpt,kiro
 ```
 
 - ChatGPT: the CLI guides you to create a Developer Mode app for
@@ -207,7 +207,7 @@ agentplugins info context7
 agentplugins add context7 --target codex,cursor,kiro
 
 # Prepare Context7 for ChatGPT and Kiro
-agentplugins add context7 --target chatgpt,kiro --prepare
+agentplugins add context7 --target chatgpt,kiro
 
 # Manage an installed plugin
 agentplugins update context7 --target codex,cursor

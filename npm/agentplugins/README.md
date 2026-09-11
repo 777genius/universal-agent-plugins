@@ -26,7 +26,7 @@ verified scripts in the [project README](https://github.com/777genius/universal-
 For the verified Context7 setup in ChatGPT and Kiro:
 
 ```bash
-npx universal-agent-plugins add context7 --target chatgpt,kiro --prepare
+npx universal-agent-plugins add context7 --target chatgpt,kiro
 ```
 
 For ChatGPT, follow the printed Developer Mode steps, use
@@ -76,7 +76,7 @@ npx universal-agent-plugins info context7
 npx universal-agent-plugins add context7 --target codex,cursor,kiro
 
 # Prepare Context7 for ChatGPT and Kiro
-npx universal-agent-plugins add context7 --target chatgpt,kiro --prepare
+npx universal-agent-plugins add context7 --target chatgpt,kiro
 
 # Manage installed plugins
 npx universal-agent-plugins update context7 --target codex,cursor

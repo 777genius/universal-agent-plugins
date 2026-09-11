@@ -822,7 +822,7 @@ func TestMissingManagedStdioRuntimeFailsAutomaticActivationPreflightWithoutMutat
 	}
 }
 
-func TestKiroMissingDuplexFailsLifecyclePreflightWithoutMutation(t *testing.T) {
+func TestKiroGuidedSetupDoesNotRequireDuplexRunner(t *testing.T) {
 	t.Parallel()
 	client := fixtureClient(t, domain.ClientKiro)
 	client.ExecutablePath = "/test/bin/kiro-cli"
@@ -832,30 +832,30 @@ func TestKiroMissingDuplexFailsLifecyclePreflightWithoutMutation(t *testing.T) {
 	plugin := writeCLIPlugin(t)
 	writeCLIMCP(t, plugin)
 
-	_, _, err := fixture.execute(false, "add", plugin, "--target", string(domain.ClientKiro))
-	if err == nil || !strings.Contains(err.Error(), "requires an ACP duplex process runner") {
-		t.Fatalf("duplex preflight error = %v", err)
+	out, _, err := fixture.execute(false, "add", plugin, "--target", string(domain.ClientKiro))
+	if err != nil || !strings.Contains(out, "Runtime connections have not been verified") {
+		t.Fatalf("guided setup = %q %v", out, err)
 	}
 	state, loadErr := fixture.store.Load()
 	if loadErr != nil {
 		t.Fatal(loadErr)
 	}
-	if len(state.Installations) != 0 || runner.calls != 0 {
-		t.Fatalf("duplex preflight mutated state or invoked Kiro: state=%+v calls=%d", state, runner.calls)
+	if len(state.Installations) != 1 || onlyCLIClient(state.Installations[0]).InstallIntent != domain.InstallIntentPrepare || runner.calls != 0 {
+		t.Fatalf("guided setup did not persist preparation safely: state=%+v calls=%d", state, runner.calls)
 	}
 	_, _, retryErr := fixture.execute(false, "add", plugin, "--target", string(domain.ClientKiro))
-	if retryErr == nil || !strings.Contains(retryErr.Error(), "requires an ACP duplex process runner") {
-		t.Fatalf("duplex preflight retry = %v", retryErr)
+	if retryErr != nil {
+		t.Fatalf("guided setup retry = %v", retryErr)
 	}
 	state, loadErr = fixture.store.Load()
 	if loadErr != nil {
 		t.Fatal(loadErr)
 	}
-	if len(state.Installations) != 0 || runner.calls != 0 {
-		t.Fatalf("duplex retry entered verify-only or mutated: state=%+v calls=%d", state, runner.calls)
+	if len(state.Installations) != 1 || runner.calls != 0 {
+		t.Fatalf("guided retry invoked Kiro or lost state: state=%+v calls=%d", state, runner.calls)
 	}
-	if _, statErr := os.Stat(client.ConfigRoot); !os.IsNotExist(statErr) {
-		t.Fatalf("duplex preflight created Kiro package/config root %q: %v", client.ConfigRoot, statErr)
+	if _, statErr := os.Stat(filepath.Join(client.ConfigRoot, "settings", "mcp.json")); statErr != nil {
+		t.Fatalf("guided setup did not create Kiro MCP config: %v", statErr)
 	}
 }
 

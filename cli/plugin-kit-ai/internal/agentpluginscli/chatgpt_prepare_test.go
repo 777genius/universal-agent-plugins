@@ -51,7 +51,7 @@ func context7GuidedFixture(t *testing.T) (cliFixture, *fixedDirectoryClient, *lo
 
 func TestContext7GuidedMissingRegistrationAndResume(t *testing.T) {
 	f, directory, acquirer := context7GuidedFixture(t)
-	out, _, err := f.execute(false, "add", "context7", "--target", "kiro,chatgpt", "--prepare", "--format", "json")
+	out, _, err := f.execute(false, "add", "context7", "--target", "kiro,chatgpt", "--format", "json")
 	if err == nil {
 		t.Fatal("missing registration must require action")
 	}
@@ -69,7 +69,7 @@ func TestContext7GuidedMissingRegistrationAndResume(t *testing.T) {
 		t.Fatalf("acquisition %#v", acquirer)
 	}
 	before, _ := json.Marshal(directory.bundle)
-	out, _, err = f.execute(false, "add", "context7", "--target", "kiro,chatgpt", "--prepare", "--chatgpt-app-id", fixturePersonalAppID, "--format", "json")
+	out, _, err = f.execute(false, "add", "context7", "--target", "kiro,chatgpt", "--chatgpt-app-id", fixturePersonalAppID, "--format", "json")
 	if err != nil {
 		t.Fatalf("resume: %s %v", out, err)
 	}
@@ -145,7 +145,7 @@ func TestContext7GuidedLifecycleRetainsReceipt(t *testing.T) {
 					t.Fatalf("%v: %s %v", args, out, err)
 				}
 			}
-			run("add", "context7", "--target", "chatgpt", "--prepare", "--chatgpt-app-id", fixturePersonalAppID)
+			run("add", "context7", "--target", "chatgpt", "--chatgpt-app-id", fixturePersonalAppID)
 			run("add", "context7-alias", "--target", "chatgpt")
 			run("update", "context7", "--target", "chatgpt")
 			run("repair", "context7", "--target", "chatgpt")
@@ -180,7 +180,7 @@ func TestContext7GuidedRejectsInvalidIDsAndUnverifiedSource(t *testing.T) {
 	for _, id := range []string{"connector_old", "asdk_app_", "asdk_app_short", "asdk_app_bad/id", " asdk_app_abc", "plugin_asdk_app_0123456789abcdef0123456789abcdef"} {
 		t.Run(id, func(t *testing.T) {
 			f, _, a := context7GuidedFixture(t)
-			_, _, err := f.execute(false, "add", "context7", "--target", "chatgpt", "--prepare", "--chatgpt-app-id", id)
+			_, _, err := f.execute(false, "add", "context7", "--target", "chatgpt", "--chatgpt-app-id", id)
 			if err == nil || a.verifiedCalls != 0 {
 				t.Fatalf("invalid ID reached acquisition: %v", err)
 			}
@@ -202,7 +202,7 @@ func TestContext7GuidedRejectsInvalidIDsAndUnverifiedSource(t *testing.T) {
 			case "mixed-peer":
 				d.bundle.Snapshot.Distributions[0].ReleasePolicies[0].Targets[0].Scopes = []domain.InstallScope{domain.ScopeProject}
 			}
-			_, _, err := f.execute(false, "add", "context7", "--target", "kiro,chatgpt", "--prepare", "--chatgpt-app-id", fixturePersonalAppID)
+			_, _, err := f.execute(false, "add", "context7", "--target", "kiro,chatgpt", "--chatgpt-app-id", fixturePersonalAppID)
 			if err == nil {
 				t.Fatal("accepted invalid source")
 			}
@@ -216,11 +216,11 @@ func TestContext7GuidedRejectsInvalidIDsAndUnverifiedSource(t *testing.T) {
 
 func TestContext7GuidedReceiptRejectsChangedRegistrationAndSignedEndpoint(t *testing.T) {
 	f, d, a := context7GuidedFixture(t)
-	if out, _, err := f.execute(false, "add", "context7", "--target", "chatgpt", "--prepare", "--chatgpt-app-id", fixturePersonalAppID); err != nil {
+	if out, _, err := f.execute(false, "add", "context7", "--target", "chatgpt", "--chatgpt-app-id", fixturePersonalAppID); err != nil {
 		t.Fatalf("%s %v", out, err)
 	}
 	before, _ := os.ReadFile(f.store.Path)
-	_, _, err := f.execute(false, "add", "context7", "--target", "chatgpt", "--prepare", "--chatgpt-app-id", "asdk_app_ffffffffffffffffffffffffffffffff")
+	_, _, err := f.execute(false, "add", "context7", "--target", "chatgpt", "--chatgpt-app-id", "asdk_app_ffffffffffffffffffffffffffffffff")
 	if err == nil || !strings.Contains(err.Error(), "conflicts with retained") {
 		t.Fatalf("replaced receipt: %v", err)
 	}
@@ -259,7 +259,7 @@ func TestContext7GuidedReceiptRejectsChangedRegistrationAndSignedEndpoint(t *tes
 
 func TestContext7GuidedReceiptMigratesLegacyRegistrationOnlyWithExplicitID(t *testing.T) {
 	f, _, _ := context7GuidedFixture(t)
-	if out, _, err := f.execute(false, "add", "context7", "--target", "chatgpt", "--prepare", "--chatgpt-app-id", fixturePersonalAppID); err != nil {
+	if out, _, err := f.execute(false, "add", "context7", "--target", "chatgpt", "--chatgpt-app-id", fixturePersonalAppID); err != nil {
 		t.Fatalf("initial preparation failed: %s %v", out, err)
 	}
 	state, err := f.store.Load()
@@ -271,10 +271,10 @@ func TestContext7GuidedReceiptMigratesLegacyRegistrationOnlyWithExplicitID(t *te
 	if err := f.store.Save(state); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := f.execute(false, "add", "context7", "--target", "chatgpt", "--prepare"); err == nil || !strings.Contains(err.Error(), "action_required") {
+	if _, _, err := f.execute(false, "add", "context7", "--target", "chatgpt"); err == nil || !strings.Contains(err.Error(), "action_required") {
 		t.Fatalf("legacy receipt did not require a new explicit ID: %v", err)
 	}
-	if out, _, err := f.execute(false, "add", "context7", "--target", "chatgpt", "--prepare", "--chatgpt-app-id", fixturePersonalAppID); err != nil {
+	if out, _, err := f.execute(false, "add", "context7", "--target", "chatgpt", "--chatgpt-app-id", fixturePersonalAppID); err != nil {
 		t.Fatalf("legacy receipt migration failed: %s %v", out, err)
 	}
 	got, err := f.store.Load()
@@ -296,7 +296,7 @@ func TestContext7GuidedForeignFilesAndCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	command := NewRoot(f.app)
-	command.SetArgs([]string{"add", "context7", "--target", "chatgpt", "--prepare", "--chatgpt-app-id", fixturePersonalAppID})
+	command.SetArgs([]string{"add", "context7", "--target", "chatgpt", "--chatgpt-app-id", fixturePersonalAppID})
 	if err := command.ExecuteContext(ctx); err == nil {
 		t.Fatal("cancelled command completed")
 	}
@@ -305,7 +305,7 @@ func TestContext7GuidedForeignFilesAndCancellation(t *testing.T) {
 		t.Fatalf("cancel mutated state %+v %v", state, err)
 	}
 	for _, args := range [][]string{
-		{"add", "context7", "--target", "chatgpt", "--prepare", "--chatgpt-app-id", fixturePersonalAppID},
+		{"add", "context7", "--target", "chatgpt", "--chatgpt-app-id", fixturePersonalAppID},
 		{"remove", "context7", "--target", "chatgpt", "--external-uninstalled", "--purge-data"},
 	} {
 		if out, _, err := f.execute(false, args...); err != nil {
@@ -320,7 +320,7 @@ func TestContext7GuidedForeignFilesAndCancellation(t *testing.T) {
 
 func TestContext7GuidedMixedUpdateUsesOneNewImmutableRelease(t *testing.T) {
 	f, d, a := context7GuidedFixture(t)
-	if out, _, err := f.execute(false, "add", "context7", "--target", "kiro,chatgpt", "--prepare", "--chatgpt-app-id", fixturePersonalAppID); err != nil {
+	if out, _, err := f.execute(false, "add", "context7", "--target", "kiro,chatgpt", "--chatgpt-app-id", fixturePersonalAppID); err != nil {
 		t.Fatalf("%s %v", out, err)
 	}
 	raw, err := os.ReadFile(filepath.Join(a.root, "plugin.json"))
@@ -374,13 +374,13 @@ func TestContext7GuidedMixedUpdateUsesOneNewImmutableRelease(t *testing.T) {
 func TestContext7GuidedDoesNotBypassSignatureOrScope(t *testing.T) {
 	f, d, a := context7GuidedFixture(t)
 	d.err = fmt.Errorf("signed Directory signature verification failed")
-	out, _, err := f.execute(false, "add", "context7", "--target", "chatgpt", "--prepare", "--format", "json")
+	out, _, err := f.execute(false, "add", "context7", "--target", "chatgpt", "--format", "json")
 	if err == nil || a.verifiedCalls != 0 || strings.Contains(out, "action_required") {
 		t.Fatalf("signature failure hidden: %s %v", out, err)
 	}
 	for _, args := range [][]string{
-		{"add", a.root, "--target", "chatgpt", "--prepare"},
-		{"add", "context7", "--target", "chatgpt", "--prepare", "--scope", "project"},
+		{"add", a.root, "--target", "chatgpt"},
+		{"add", "context7", "--target", "chatgpt", "--scope", "project"},
 		{"add", "context7", "--target", "chatgpt", "--chatgpt-app-id", fixturePersonalAppID},
 	} {
 		if _, _, err := f.execute(false, args...); err == nil {

@@ -16,63 +16,43 @@ import (
 )
 
 func TestContext7InteractivePreparationChoice(t *testing.T) {
-	for _, explicit := range []bool{false, true} {
-		t.Run(map[bool]string{false: "ordinary-ineligible", true: "requested"}[explicit], func(t *testing.T) {
-			f, d, a := context7GuidedFixture(t)
-			f.app.Detector = staticDetector{clients: []domain.DetectedClient{fixtureClient(t, domain.ClientChatGPT)}}
-			before, _ := json.Marshal(d.bundle)
-			args := []string{"add", "context7-alias", "--plain"}
-			if explicit {
-				args = append(args, "--prepare")
-			}
-			out, _, err := f.executeInput(true, "\n", args...)
-			if !explicit {
-				if err == nil || strings.Contains(out, "prepare personal marketplace") || a.verifiedCalls != 0 || a.directGitCalls != 0 || a.localCalls != 0 {
-					t.Fatalf("ordinary add entered preparation: %s %v acquisition=%+v", out, err, a)
-				}
-				state, _ := f.store.Load()
-				after, _ := json.Marshal(d.bundle)
-				if len(state.Installations) != 0 || string(before) != string(after) {
-					t.Fatal("ordinary add mutated state or signed metadata")
-				}
-				return
-			}
-
-			if err == nil || !strings.Contains(err.Error(), "action_required") || !strings.Contains(out, "prepare personal marketplace") {
-				t.Fatalf("choice/guidance: %s %v", out, err)
-			}
-			if a.verifiedCalls != 1 || a.directGitCalls != 0 || a.localCalls != 0 {
-				t.Fatalf("acquisition: %+v", a)
-			}
-			state, _ := f.store.Load()
-			after, _ := json.Marshal(d.bundle)
-			if len(state.Installations) != 0 || string(before) != string(after) {
-				t.Fatal("registration changed state or signed metadata")
-			}
-			command := emittedRegistrationCommand(t, err.Error())
-			if !strings.Contains(command, "context7-alias") {
-				t.Fatal(command)
-			}
-			out, _, err = f.execute(false, strings.Fields(command)...)
-			if err != nil {
-				t.Fatalf("resume %s: %s %v", command, out, err)
-			}
-			state, _ = f.store.Load()
-			b := onlyCLIClient(state.Installations[0])
-			if b.ClientID != "chatgpt" || b.InstallIntent != domain.InstallIntentPrepare || b.Activation != domain.ActivationPrepared {
-				t.Fatalf("intent not retained: %+v", b)
-			}
-		})
+	f, d, a := context7GuidedFixture(t)
+	f.app.Detector = staticDetector{clients: []domain.DetectedClient{fixtureClient(t, domain.ClientChatGPT)}}
+	before, _ := json.Marshal(d.bundle)
+	out, _, err := f.executeInput(true, "\n", "add", "context7-alias", "--plain")
+	if err == nil || !strings.Contains(err.Error(), "action_required") || !strings.Contains(out, "prepare personal marketplace") {
+		t.Fatalf("choice/guidance: %s %v", out, err)
+	}
+	if a.verifiedCalls != 1 || a.directGitCalls != 0 || a.localCalls != 0 {
+		t.Fatalf("acquisition: %+v", a)
+	}
+	state, _ := f.store.Load()
+	after, _ := json.Marshal(d.bundle)
+	if len(state.Installations) != 0 || string(before) != string(after) {
+		t.Fatal("registration changed state or signed metadata")
+	}
+	command := emittedRegistrationCommand(t, err.Error())
+	if !strings.Contains(command, "context7-alias") {
+		t.Fatal(command)
+	}
+	out, _, err = f.execute(false, strings.Fields(command)...)
+	if err != nil {
+		t.Fatalf("resume %s: %s %v", command, out, err)
+	}
+	state, _ = f.store.Load()
+	b := onlyCLIClient(state.Installations[0])
+	if b.ClientID != "chatgpt" || b.InstallIntent != domain.InstallIntentPrepare || b.Activation != domain.ActivationPrepared {
+		t.Fatalf("intent not retained: %+v", b)
 	}
 }
 
 func emittedRegistrationCommand(t *testing.T, action string) string {
 	t.Helper()
-	_, command, ok := strings.Cut(action, "Rerun ")
+	_, command, ok := strings.Cut(action, "3. Run: npx universal-agent-plugins ")
 	if !ok {
-		t.Fatalf("missing rerun: %s", action)
+		t.Fatalf("missing resume command: %s", action)
 	}
-	command, _, ok = strings.Cut(command, ". Then")
+	command, _, ok = strings.Cut(command, "\n")
 	if !ok {
 		t.Fatalf("missing command boundary: %s", action)
 	}
@@ -82,7 +62,7 @@ func emittedRegistrationCommand(t *testing.T, action string) string {
 func TestContext7ResumeEmittedMixedCommandAndPreparedGuidance(t *testing.T) {
 	f, d, a := context7GuidedFixture(t)
 	before, _ := json.Marshal(d.bundle)
-	out, _, err := f.execute(false, "add", "context7-alias", "--target", "kiro,chatgpt", "--prepare", "--format", "json", "--scope", "user", "--plain", "--security-details", "--no-color")
+	out, _, err := f.execute(false, "add", "context7-alias", "--target", "kiro,chatgpt", "--format", "json", "--scope", "user", "--plain", "--security-details", "--no-color")
 	if err == nil {
 		t.Fatal("expected registration")
 	}
@@ -123,7 +103,7 @@ func TestContext7ResumeEmittedMixedCommandAndPreparedGuidance(t *testing.T) {
 			}
 		}
 	}
-	for _, text := range []string{"No authentication is required", "new chat", "both Context7 tools have been verified in ChatGPT", "including --purge-data"} {
+	for _, text := range []string{"personal marketplace", "new chat"} {
 		if !strings.Contains(out, text) {
 			t.Fatalf("missing %q: %s", text, out)
 		}
@@ -149,7 +129,7 @@ func TestContext7InteractivePreparationPolicyGates(t *testing.T) {
 			case "revoked":
 				d.bundle.Snapshot.Distributions[0].ReleasePolicies[0].Status = domain.ReleaseRevoked
 			}
-			out, _, err := f.executeInput(true, "\n", "add", "context7", "--prepare", "--plain")
+			out, _, err := f.executeInput(true, "\n", "add", "context7", "--plain")
 			if err == nil || strings.Contains(out, "prepare personal marketplace") || a.verifiedCalls != 0 {
 				t.Fatalf("gate bypass: %s %v calls=%d", out, err, a.verifiedCalls)
 			}
@@ -179,7 +159,7 @@ func TestContext7InteractiveSelectionOnlyAppliesSelectedIntent(t *testing.T) {
 				},
 				confirmFn: func() (prompt.ConfirmationResult, error) { return prompt.ConfirmationResult{Accepted: true}, nil },
 			}
-			out, _, err := f.executeInput(true, "", "add", "context7", "--prepare", "--plain")
+			out, _, err := f.executeInput(true, "", "add", "context7", "--plain")
 			if chooseChatGPT {
 				if err == nil || !strings.Contains(err.Error(), "action_required") {
 					t.Fatalf("%s %v", out, err)
@@ -207,7 +187,7 @@ func TestContext7InteractiveSelectionOnlyAppliesSelectedIntent(t *testing.T) {
 
 func TestContext7PreparedGuidanceAcrossLifecycle(t *testing.T) {
 	f, _, _ := context7GuidedFixture(t)
-	prepared, _, err := f.execute(false, "add", "context7", "--target", "chatgpt", "--prepare", "--chatgpt-app-id", fixturePersonalAppID)
+	prepared, _, err := f.execute(false, "add", "context7", "--target", "chatgpt", "--chatgpt-app-id", fixturePersonalAppID)
 	if err != nil {
 		t.Fatalf("%s %v", prepared, err)
 	}
@@ -221,7 +201,7 @@ func TestContext7PreparedGuidanceAcrossLifecycle(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%s: %s %v", op, out, err)
 		}
-		if strings.Contains(out, path) || strings.Contains(out, fixturePersonalAppID) || strings.Contains(out, "Rerun add") || !strings.Contains(out, "both Context7 tools have been verified in ChatGPT") {
+		if strings.Contains(out, path) || strings.Contains(out, fixturePersonalAppID) || !strings.Contains(out, "personal marketplace") {
 			t.Fatalf("%s public guidance: %s", op, out)
 		}
 	}
@@ -250,7 +230,7 @@ func TestContext7HumanPathsAcrossSingleAndMixedLifecycle(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			out, _, err := f.execute(false, "add", "context7", "--target", targets, "--prepare", "--chatgpt-app-id", fixturePersonalAppID)
+			out, _, err := f.execute(false, "add", "context7", "--target", targets, "--chatgpt-app-id", fixturePersonalAppID)
 			if err != nil {
 				t.Fatalf("initial: %s %v", out, err)
 			}
@@ -302,7 +282,7 @@ func TestContext7HumanPathsAcrossSingleAndMixedLifecycle(t *testing.T) {
 	}
 }
 
-func TestContext7PreparationExcludesEligibleCodexAndResumes(t *testing.T) {
+func TestContext7GuidedSelectionKeepsEligibleCodex(t *testing.T) {
 	f, d, _ := context7GuidedFixture(t)
 	snapshot := &d.bundle.Snapshot
 	policy := &snapshot.Distributions[0].ReleasePolicies[0]
@@ -329,19 +309,14 @@ func TestContext7PreparationExcludesEligibleCodexAndResumes(t *testing.T) {
 	}
 	f.app.Prompter = fakePrompter{
 		selectFn: func(request prompt.TargetSelectionRequest) (prompt.TargetSelectionResult, error) {
-			if len(request.Choices) != 2 {
+			if len(request.Choices) != 3 {
 				t.Fatalf("prepare choices: %+v", request)
-			}
-			for _, choice := range request.Choices {
-				if choice.ID != domain.ClientKiro && choice.ID != domain.ClientChatGPT {
-					t.Fatalf("unsupported preparation choice: %+v", choice)
-				}
 			}
 			return prompt.TargetSelectionResult{IDs: []domain.ClientID{domain.ClientKiro, domain.ClientChatGPT}}, nil
 		},
 		confirmFn: func() (prompt.ConfirmationResult, error) { return prompt.ConfirmationResult{Accepted: true}, nil },
 	}
-	out, _, err := f.executeInput(true, "", "add", "context7", "--prepare", "--plain")
+	out, _, err := f.executeInput(true, "", "add", "context7", "--plain")
 	if err == nil || !strings.Contains(err.Error(), "action_required") {
 		t.Fatalf("registration: %s %v", out, err)
 	}

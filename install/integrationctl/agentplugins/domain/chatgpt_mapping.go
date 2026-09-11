@@ -7,14 +7,14 @@ import (
 
 const Context7OAuthURL = "https://mcp.context7.com/mcp/oauth"
 const Context7ChatGPTURL = "https://mcp.context7.com/mcp"
-const ChatGPTRegistrationAction = "In ChatGPT Developer Mode, create an app using https://mcp.context7.com/mcp and select No authentication. Connect it, copy its asdk_app_ ID from app settings, and Rerun add context7 --target chatgpt --prepare --chatgpt-app-id <ID>. Then install the prepared plugin from the personal marketplace and select it in a new chat. Official steps: https://developers.openai.com/plugins/build/plugins. The public Context7 endpoint and both Context7 tools have been verified in ChatGPT. The personal registration receipt is retained locally after remove, including --purge-data, for reinstall."
+const ChatGPTRegistrationAction = "ChatGPT setup required:\n1. In Developer Mode, create and connect an app for https://mcp.context7.com/mcp with No authentication.\n2. Copy its asdk_app_ ID from app settings.\n3. Run: npx universal-agent-plugins add context7 --target chatgpt --chatgpt-app-id <ID>\n4. Install Context7 from your personal marketplace and select it in a new chat.\nGuide: https://developers.openai.com/plugins/build/plugins"
 
 // ChatGPTMappedPreparationAction applies only after the personal mapping exists.
-const ChatGPTMappedPreparationAction = "Prepare the personal local marketplace, then install it in ChatGPT and select Context7 in a new chat. No authentication is required for the public Context7 endpoint. The endpoint and both Context7 tools have been verified in ChatGPT. The personal registration receipt is retained locally after remove, including --purge-data, for reinstall."
+const ChatGPTMappedPreparationAction = "Install Context7 from your personal marketplace in ChatGPT, then select it in a new chat."
 
 // ChatGPTPreparedAction names the local artifact after successful preparation.
 func ChatGPTPreparedAction(path, name string) string {
-	return fmt.Sprintf("In ChatGPT, add the personal local marketplace at %s (.agents/plugins/marketplace.json), install %s, and select it in a new chat. No authentication is required for the public Context7 endpoint. The endpoint and both Context7 tools have been verified in ChatGPT. The registration receipt is retained locally after remove, including --purge-data, for reinstall.", path, name)
+	return fmt.Sprintf("ChatGPT: add the personal marketplace at %s (.agents/plugins/marketplace.json), install %s, then select it in a new chat.", path, name)
 }
 
 // ChatGPTLocalMapping is a personal registration receipt, never catalog evidence.

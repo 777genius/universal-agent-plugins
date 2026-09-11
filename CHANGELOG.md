@@ -18,6 +18,9 @@ Changes after `v1.2.4` land here.
 
 ### Fixed
 
+- `agentplugins add` now enters the guided Context7 setup for ChatGPT and Kiro
+  automatically. The former `--prepare` flag has been removed, and ChatGPT
+  registration guidance is formatted as four short, executable steps.
 - Context7 preparation for ChatGPT now directs users to the working public
   `/mcp` endpoint with no authentication, accepts the `asdk_app_` identifier
   shown by ChatGPT, and reports authentication as not required. The previous

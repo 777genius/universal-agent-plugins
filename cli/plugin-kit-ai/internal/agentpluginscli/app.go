@@ -67,7 +67,6 @@ type App struct {
 
 type options struct {
 	chatGPTAppID        string
-	prepare             bool
 	installIntents      map[domain.ClientID]domain.InstallIntent
 	color               terminaltheme.Policy
 	target              string

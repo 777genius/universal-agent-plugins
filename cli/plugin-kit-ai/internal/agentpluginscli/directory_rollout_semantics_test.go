@@ -359,7 +359,7 @@ func TestInteractiveDirectoryAddOffersOnlyOneCompleteSignedTargetSet(t *testing.
 	}
 }
 
-func TestInteractiveDirectoryAddOffersKiroPreparationWhenAutomaticPreflightFails(t *testing.T) {
+func TestInteractiveDirectoryAddOffersKiroGuidedPreparation(t *testing.T) {
 	rollout := newRolloutDirectoryFixture(t,
 		[]domain.ClientID{domain.ClientCursor, domain.ClientKiro},
 		[]domain.ClientID{domain.ClientCursor, domain.ClientKiro})

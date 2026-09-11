@@ -84,6 +84,10 @@ func runAddManyWithClients(ctx context.Context, cmd *cobra.Command, app App, opt
 }
 
 func runAddManyLoaded(ctx context.Context, cmd *cobra.Command, app App, opts *options, loaded loadedPackage, targets []domain.ClientID, activationComplete, authComplete bool, clients []domain.DetectedClient, needsInstallConfirmation bool) error {
+	applyLoadedGuidedIntents(opts, loaded, targets)
+	if opts.chatGPTAppID != "" && !loaded.chatGPTPreparation {
+		return fmt.Errorf("--chatgpt-app-id requires the signed Context7 Directory source and --target chatgpt")
+	}
 	if err := authorizeSecurityAssessment(cmd, app, opts, &loaded); err != nil {
 		return err
 	}
