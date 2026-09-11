@@ -109,9 +109,9 @@ func TestMissingParentSymlinkParentAndSourceOverlap(t *testing.T) {
 	p := planFor(t, "skill")
 	validationCalls := 0
 	realValidate := realValidation(t)
-	validate := func(ctx context.Context, stage string) error {
+	validate := func(ctx context.Context, stage string, dir *os.Root) error {
 		validationCalls++
-		return realValidate(ctx, stage)
+		return realValidate(ctx, stage, dir)
 	}
 	// Prove this physical fixture reaches real validation before adding aliases.
 	if result, err := Apply(context.Background(), p, ApplyOptions{Destination: filepath.Join(root, "positive"), Validate: validate}); err != nil || !result.Committed || validationCalls != 1 {
