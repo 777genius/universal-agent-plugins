@@ -58,7 +58,7 @@ func TestContext7GuidedMissingRegistrationAndResume(t *testing.T) {
 	var response struct {
 		Data map[string]any `json:"data"`
 	}
-	if json.Unmarshal([]byte(out), &response) != nil || response.Data["status"] != "completed_with_action_required" || response.Data["succeeded"] != float64(1) || !strings.Contains(out, `"target":"chatgpt"`) || !strings.Contains(out, `"status":"action_required"`) {
+	if json.Unmarshal([]byte(out), &response) != nil || response.Data["status"] != "completed_with_action_required" || response.Data["failed"] != float64(0) || response.Data["succeeded"] != float64(1) || response.Data["action_required"] != float64(2) || !strings.Contains(out, `"target":"chatgpt"`) || !strings.Contains(out, `"status":"action_required"`) {
 		t.Fatalf("action response %s: %v", out, err)
 	}
 	state, _ := f.store.Load()
@@ -274,8 +274,13 @@ func TestContext7GuidedReceiptMigratesLegacyRegistrationOnlyWithExplicitID(t *te
 	if err := f.store.Save(state); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := f.execute(false, "add", "context7", "--target", "chatgpt"); err == nil || !strings.Contains(err.Error(), "action_required") {
-		t.Fatalf("legacy receipt did not require a new explicit ID: %v", err)
+	out, _, err := f.execute(false, "add", "context7", "--target", "chatgpt", "--format", "json")
+	if err != nil || !strings.Contains(out, `"result":"success"`) || !strings.Contains(out, `"status":"action_required"`) {
+		t.Fatalf("legacy receipt did not require a new explicit ID via action_required success: %s %v", out, err)
+	}
+	mid, loadErr := f.store.Load()
+	if loadErr != nil || mid.Installations[0].LocalChatGPTMapping == nil || mid.Installations[0].LocalChatGPTMapping.URL != domain.Context7OAuthURL {
+		t.Fatalf("action_required setup mutated legacy receipt early: %+v %v", mid.Installations, loadErr)
 	}
 	if out, _, err := f.execute(false, "add", "context7", "--target", "chatgpt", "--chatgpt-app-id", fixturePersonalAppID); err != nil {
 		t.Fatalf("legacy receipt migration failed: %s %v", out, err)

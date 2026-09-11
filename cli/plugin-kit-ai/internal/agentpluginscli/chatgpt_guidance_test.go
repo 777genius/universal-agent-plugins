@@ -20,7 +20,7 @@ func TestContext7InteractivePreparationChoice(t *testing.T) {
 	f.app.Detector = staticDetector{clients: []domain.DetectedClient{fixtureClient(t, domain.ClientChatGPT)}}
 	before, _ := json.Marshal(d.bundle)
 	out, _, err := f.executeInput(true, "\n", "add", "context7-alias", "--plain")
-	if err == nil || !strings.Contains(err.Error(), "action_required") || !strings.Contains(out, "prepare personal marketplace") {
+	if err != nil || !strings.Contains(out, "prepare personal marketplace") || !strings.Contains(out, "npx universal-agent-plugins") {
 		t.Fatalf("choice/guidance: %s %v", out, err)
 	}
 	if a.verifiedCalls != 1 || a.directGitCalls != 0 || a.localCalls != 0 {
@@ -31,7 +31,7 @@ func TestContext7InteractivePreparationChoice(t *testing.T) {
 	if len(state.Installations) != 0 || string(before) != string(after) {
 		t.Fatal("registration changed state or signed metadata")
 	}
-	command := emittedRegistrationCommand(t, err.Error())
+	command := emittedRegistrationCommand(t, out)
 	if !strings.Contains(command, "context7-alias") {
 		t.Fatal(command)
 	}
@@ -44,6 +44,52 @@ func TestContext7InteractivePreparationChoice(t *testing.T) {
 	if b.ClientID != "chatgpt" || b.InstallIntent != domain.InstallIntentPrepare || b.Activation != domain.ActivationPrepared {
 		t.Fatalf("intent not retained: %+v", b)
 	}
+}
+
+
+func TestContext7ChatGPTOnlyActionRequiredIsSuccess(t *testing.T) {
+	f, d, a := context7GuidedFixture(t)
+	f.app.Detector = staticDetector{clients: []domain.DetectedClient{fixtureClient(t, domain.ClientChatGPT)}}
+	before, _ := json.Marshal(d.bundle)
+	out, _, err := f.execute(false, "add", "context7", "--target", "chatgpt", "--format", "json")
+	if err != nil {
+		t.Fatalf("chatgpt-only setup should exit zero: %s %v", out, err)
+	}
+	if !strings.Contains(out, `"result":"success"`) || !strings.Contains(out, `"status":"action_required"`) || !strings.Contains(out, `"target":"chatgpt"`) {
+		t.Fatalf("chatgpt-only json = %s", out)
+	}
+	if a.verifiedCalls != 1 {
+		t.Fatalf("acquisition calls = %d", a.verifiedCalls)
+	}
+	state, _ := f.store.Load()
+	after, _ := json.Marshal(d.bundle)
+	if len(state.Installations) != 0 || string(before) != string(after) {
+		t.Fatal("chatgpt-only setup mutated state")
+	}
+}
+
+func TestContext7DeferredChatGPTSurvivesPeerActivationFailure(t *testing.T) {
+	f, _, _ := context7GuidedFixture(t)
+	f.app.Detector = staticDetector{clients: []domain.DetectedClient{fixtureClient(t, domain.ClientKiro), fixtureClient(t, domain.ClientChatGPT)}}
+	f.app.Lifecycle.Activator = &failAllCLIGroupActivator{}
+	out, _, err := f.execute(false, "add", "context7", "--target", "kiro,chatgpt")
+	if err == nil {
+		t.Fatal("expected kiro activation failure")
+	}
+	if !strings.Contains(out, "ChatGPT") || !strings.Contains(out, "Setup required") || !strings.Contains(out, "npx universal-agent-plugins") {
+		t.Fatalf("deferred chatgpt missing after peer failure: %s", out)
+	}
+}
+
+type failAllCLIGroupActivator struct{ calls int }
+
+func (activator *failAllCLIGroupActivator) Activate(context.Context, domain.ActivationRequest) (domain.ActivationOutcome, error) {
+	activator.calls++
+	return domain.ActivationOutcome{Activation: domain.ActivationFailed, Authentication: domain.AuthenticationNotRequired, Policy: domain.PolicyAllowed, Verification: domain.VerificationFailed}, fmt.Errorf("injected peer activation failure")
+}
+
+func (*failAllCLIGroupActivator) Deactivate(context.Context, domain.DeactivationRequest) (domain.DeactivationOutcome, error) {
+	return domain.DeactivationOutcome{Activation: domain.ActivationNotRequired, ArtifactRemovalAllowed: true, ExternalRemovalComplete: true}, nil
 }
 
 func emittedRegistrationCommand(t *testing.T, action string) string {
@@ -172,7 +218,7 @@ func TestContext7InteractiveSelectionOnlyAppliesSelectedIntent(t *testing.T) {
 			}
 			out, _, err := f.executeInput(true, "", "add", "context7", "--plain")
 			if chooseChatGPT {
-				if err != nil || !strings.Contains(out, "chatgpt: setup required") {
+				if err != nil || !strings.Contains(out, "Setup required") || !strings.Contains(out, "ChatGPT") {
 					t.Fatalf("%s %v", out, err)
 				}
 				command := emittedRegistrationCommand(t, out)
@@ -328,7 +374,7 @@ func TestContext7GuidedSelectionKeepsEligibleCodex(t *testing.T) {
 		confirmFn: func() (prompt.ConfirmationResult, error) { return prompt.ConfirmationResult{Accepted: true}, nil },
 	}
 	out, _, err := f.executeInput(true, "", "add", "context7", "--plain")
-	if err != nil || !strings.Contains(out, "chatgpt: setup required") {
+	if err != nil || !strings.Contains(out, "Setup required") || !strings.Contains(out, "ChatGPT") {
 		t.Fatalf("registration: %s %v", out, err)
 	}
 	command := emittedRegistrationCommand(t, out)
