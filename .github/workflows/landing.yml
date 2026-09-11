@@ -110,6 +110,12 @@ jobs:
       NUXT_PUBLIC_DOCS_SITEMAP_URL: https://777genius.github.io${{ matrix.base }}docs/sitemap.xml
       DOCS_BASE_PATH: ${{ matrix.base }}docs/
       DOCS_HOSTNAME: https://777genius.github.io
+      GOTOOLCHAIN: local
+      GOMAXPROCS: "2"
+      GOCACHE: ${{ runner.temp }}/docs-consumer-gocache
+      GOMODCACHE: ${{ runner.temp }}/docs-consumer-gomodcache
+      DOCS_TOOLS_ROOT: ${{ runner.temp }}/docs-tools-root
+      TMPDIR: ${{ runner.temp }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -168,8 +174,15 @@ jobs:
           pnpm run lint
           pnpm run generate
 
+      - name: Warm Go module cache for offline docs consumer integration
+        run: go list -p 2 -deps ./cli/plugin-kit-ai/tools/authoring-docs
+
       - name: Validate and build public docs
         working-directory: website
+        env:
+          GOPROXY: "off"
+          GOSUMDB: "off"
+          GOENV: "off"
         run: |
           export PATH="${{ steps.pnpm-docs.outputs.bin_dest }}:$PATH"
           pnpm run docs:check

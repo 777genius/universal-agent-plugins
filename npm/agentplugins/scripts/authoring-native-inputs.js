@@ -162,7 +162,7 @@ function produceInputsFromPreparation(value) {
   const originals = snapshot();
   const candidateBytes = c.readFile(path.join(root, "candidate/candidate.json"), MAX_INPUT_BYTES);
   const candidate = JSON.parse(candidateBytes);
-  const id = identity({ repository: c.REPOSITORY, commit: selected.source, engine_revision: selected.source, versions: selected.versions });
+  const id = c.identity({ repository: c.REPOSITORY, commit: selected.source, engine_revision: selected.source, versions: selected.versions });
   const tentative = { schema: INPUT_SCHEMA, identity: id, authoring_mode: MODE, asset_scope: SCOPE,
     candidate_sha256: c.digest(candidateBytes), pair_marker_sha256: c.digest(c.readFile(path.join(root, "pair-prepared.json"), MAX_INPUT_BYTES)),
     products: Object.fromEntries(c.PRODUCTS.map(product => [product, {
