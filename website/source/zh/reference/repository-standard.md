@@ -7,6 +7,14 @@ locale: "zh"
 generated: false
 translationRequired: true
 ---
+
+[使用插件](/zh/use/) · [构建插件](/zh/build/) — 仅为准备内容，尚未发布。v2 暂不支持项目迁移。
+<p class="locale-historical-identity">存储库标准</p>
+
+[plugin-kit-ai v1 分支的历史快照。1.2.4 是命令基准，并非此快照的确切版本。](/en/legacy/v1/)
+
+<details><summary>plugin-kit-ai v1 分支的历史快照。1.2.4 是命令基准，并非此快照的确切版本。</summary>
+
 # 存储库标准
 
 此页面定义了健康的 `plugin-kit-ai` 存储库的公共形状。
@@ -64,3 +72,5 @@ translationRequired: true
 - 交接变得可信
 
 将此页面与[创作工作流程](/zh/reference/authoring-workflow)、[生产准备情况](/zh/guide/production-readiness) 和[词汇表](/zh/reference/glossary) 配对。
+
+</details>

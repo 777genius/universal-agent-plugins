@@ -63,7 +63,7 @@ func TestAgentpluginsReleaseContractsStayFailClosed(t *testing.T) {
 	mustContain(t, releaseProofJob, "expected_asset_set_digest: ${{ needs.stage-draft.outputs.asset_set_digest }}")
 	mustContain(t, releaseProofJob, "release_assets_artifact: ${{ needs.stage-draft.outputs.assets_artifact }}")
 	mustContain(t, releasePromoteJob, "needs: [validate, stage-draft, platform-proof, verified-draft]")
-	mustContain(t, releasePromoteJob, "if: ${{ inputs.publish_release == true }}")
+	mustContain(t, releasePromoteJob, "if: ${{ inputs.producer_mode == 'binary-only' && inputs.publish_release == true }}")
 	mustContain(t, releaseWorkflow, "publish_release:\n        description: Explicitly promote after all verification succeeds\n        required: false\n        type: boolean\n        default: false")
 	draftReceiptJob := yamlJob(t, releaseWorkflow, "verified-draft")
 	for _, want := range []string{

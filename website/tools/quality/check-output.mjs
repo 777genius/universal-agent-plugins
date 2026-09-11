@@ -7,7 +7,7 @@ const distRoot = path.join(websiteRoot, "dist");
 const repoRoot = path.resolve(websiteRoot, "..");
 const htmlFiles = (await listHtmlFiles(distRoot)).sort();
 const generatedMarkdownFiles = (await listMarkdownFiles(runtimeRoot)).sort();
-const editPrefix = `https://github.com/777genius/plugin-kit-ai/edit/main/website/source/`;
+const editPrefix = `https://github.com/777genius/universal-agent-plugins/edit/main/website/source/`;
 
 let hasError = false;
 for (const filePath of htmlFiles) {

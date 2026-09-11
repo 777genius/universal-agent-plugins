@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"runtime"
 	"time"
@@ -31,15 +32,58 @@ func renameResult(from *os.File, old string, to *os.File, new string, err error)
 	runtime.KeepAlive(from)
 	runtime.KeepAlive(to)
 	if err != nil {
+		err = windowsRenameError(err, to, new)
 		// Native NTSTATUS errors do not implement errors.Is. Convert to the
 		// Win32 errno so callers can classify collisions with os.ErrExist.
 		var status windows.NTStatus
 		if errors.As(err, &status) {
-			err = fmt.Errorf("%v: %w", err, status.Errno())
+			// Both %w verbs keep err's own chain (including the NTStatus
+			// windowsRenameError already classified) reachable via errors.As,
+			// not just its printed text; a lone %v here would otherwise hide
+			// it behind the newly added errno.
+			err = fmt.Errorf("%w: %w", err, status.Errno())
 		}
 		return &os.LinkError{Op: "rename-exclusive", Old: old, New: new, Err: err}
 	}
 	return nil
+}
+
+func windowsRenameError(err error, to *os.File, new string) error {
+	// Both NT calls return NTStatus, which lacks Is/Unwrap in pinned x/sys, but
+	// renameWindows already wraps failures with %w so errors.As still finds
+	// them. Join rather than replace so any "commit exclusive directory
+	// rename" context from renameWindows survives into the final error, while
+	// the Win32 errno becomes discoverable for os.ErrExist/os.ErrNotExist
+	// classification even for callers that never call renameResult.
+	var status windows.NTStatus
+	if errors.As(err, &status) {
+		err = errors.Join(err, status.Errno())
+	}
+	if !errors.Is(err, windows.STATUS_SHARING_VIOLATION) {
+		return err
+	}
+	// A winner's delete-denying data handle can make sharing failure precede
+	// name collision. Observe existence only after failure; never retry rename.
+	// Metadata access avoids data opens, and the single rooted component is
+	// opened as a reparse point so even a dangling/outside link counts as existing.
+	name, e := windows.NewNTUnicodeString(new)
+	if e != nil {
+		return err
+	}
+	oa := windows.OBJECT_ATTRIBUTES{RootDirectory: windows.Handle(to.Fd()), ObjectName: name, Attributes: windows.OBJ_CASE_INSENSITIVE}
+	oa.Length = uint32(unsafe.Sizeof(oa))
+	var handle windows.Handle
+	e = windows.NtCreateFile(&handle, windows.FILE_READ_ATTRIBUTES|windows.SYNCHRONIZE, &oa, &windows.IO_STATUS_BLOCK{}, nil, 0,
+		windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE|windows.FILE_SHARE_DELETE, windows.FILE_OPEN,
+		windows.FILE_OPEN_REPARSE_POINT|windows.FILE_SYNCHRONOUS_IO_NONALERT, 0, 0)
+	runtime.KeepAlive(to)
+	if e != nil {
+		return err // Missing or unobservable destination: no new existence claim.
+	}
+	if e = windows.CloseHandle(handle); e != nil {
+		return errors.Join(err, e)
+	}
+	return errors.Join(err, fmt.Errorf("destination already exists: %w", fs.ErrExist))
 }
 
 // Retry belongs to package publication only. A nil policy is the original

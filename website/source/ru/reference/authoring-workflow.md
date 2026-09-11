@@ -8,6 +8,14 @@ generated: false
 translationRequired: true
 ---
 
+[Использовать плагины](/ru/use/) · [Создавать плагины](/ru/build/) — Подготовка, не релиз. Миграция проектов в v2 пока недоступна.
+<p class="locale-historical-identity">Процесс авторинга</p>
+
+[Исторический снимок ветки plugin-kit-ai v1. 1.2.4 — базовая версия команд, а не точная версия этого снимка.](/en/legacy/v1/)
+
+<details><summary>Исторический снимок ветки plugin-kit-ai v1. 1.2.4 — базовая версия команд, а не точная версия этого снимка.</summary>
+
+
 # Процесс авторинга
 
 Рекомендуемый workflow намеренно простой:
@@ -57,3 +65,5 @@ Workflow может расширяться в специальных случа�
 - bundle commands важны для portable Python и Node handoff flows
 
 Начинайте с [Быстрого старта](/ru/guide/quickstart), если нужен самый короткий путь.
+
+</details>

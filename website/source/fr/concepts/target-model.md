@@ -9,6 +9,14 @@ translationRequired: true
 aside: true
 outline: [2, 3]
 ---
+
+[Utiliser des plugins](/fr/use/) · [Créer des plugins](/fr/build/) — Préparation, pas une version publiée. La migration des projets vers v2 est indisponible.
+<p class="locale-historical-identity">Modèle cible</p>
+
+[Instantané historique de la branche plugin-kit-ai v1. 1.2.4 est la référence des commandes, pas la version exacte de cet instantané.](/en/legacy/v1/)
+
+<details><summary>Instantané historique de la branche plugin-kit-ai v1. 1.2.4 est la référence des commandes, pas la version exacte de cet instantané.</summary>
+
 # Modèle cible
 
 Une cible est le type de sortie que vous souhaitez que le dépôt produise.
@@ -41,3 +49,4 @@ Certaines sorties sont pour la plupart une configuration enregistrée qui aide u
 ## Le modèle mental sûr
 
 Commencez par le résultat dont vous avez besoin en premier. Si le référentiel s'agrandit plus tard, vous pouvez ajouter une autre sortie prise en charge sans modifier le fait qu'un projet reste faisant autorité.
+</details>

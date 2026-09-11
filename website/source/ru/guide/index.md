@@ -10,6 +10,14 @@ aside: false
 outline: false
 ---
 
+[Использовать плагины](/ru/use/) · [Создавать плагины](/ru/build/) — Подготовка, не релиз. Миграция проектов в v2 пока недоступна.
+<p class="locale-historical-identity">Гайды</p>
+
+[Исторический снимок ветки plugin-kit-ai v1. 1.2.4 — базовая версия команд, а не точная версия этого снимка.](/en/legacy/v1/)
+
+<details><summary>Исторический снимок ветки plugin-kit-ai v1. 1.2.4 — базовая версия команд, а не точная версия этого снимка.</summary>
+
+
 <div class="docs-hero docs-hero--compact">
   <p class="docs-kicker">GUIDES</p>
   <h1>Начните с одного рабочего repo</h1>
@@ -76,3 +84,5 @@ outline: false
     <p>Посмотрите, чем отличаются publication flows для Codex, Claude и Gemini, чтобы прогнать правильный lane до релиза.</p>
   </a>
 </div>
+
+</details>

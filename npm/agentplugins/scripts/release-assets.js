@@ -91,11 +91,15 @@ function prepareRelease(assetRoot, tag, commit) {
     assets: assetMetadata(assetRoot, identity.version)
   };
   fs.writeFileSync(path.join(assetRoot, "release-manifest.json"), JSON.stringify(manifest, null, 2) + "\n");
+  // Standalone historical copies of this script have no sibling notices file;
+  // only package notices when the script still lives next to its package root.
   const noticeSource = path.resolve(__dirname, "..", NOTICES);
-  regularUnaliasedFile(noticeSource, "packaged notices");
-  const noticeTarget = path.join(assetRoot, NOTICES);
-  if (fs.readdirSync(assetRoot).includes(NOTICES)) regularUnaliasedFile(noticeTarget, "release notices");
-  fs.copyFileSync(noticeSource, noticeTarget);
+  if (fs.existsSync(noticeSource)) {
+    regularUnaliasedFile(noticeSource, "packaged notices");
+    const noticeTarget = path.join(assetRoot, NOTICES);
+    if (fs.readdirSync(assetRoot).includes(NOTICES)) regularUnaliasedFile(noticeTarget, "release notices");
+    fs.copyFileSync(noticeSource, noticeTarget);
+  }
   writeChecksums(assetRoot, manifest.assets);
   return manifest;
 }
@@ -188,8 +192,25 @@ function verifyRelease(assetRoot, tag, commit, options = {}) {
   };
 }
 
+// Load the opt-in v3 adapter only for authoring operations. Historical callers
+// may still distribute this standalone v1/v2 script without candidate tooling.
+function prepareAuthoringRelease(options) {
+  return require("./authoring-release").prepareAuthoringRelease(options);
+}
+
+function verifyAuthoringRelease(options) {
+  return require("./authoring-release").verifyAuthoringRelease(options);
+}
+
 function main() {
   const [command, rootArg, tag, commit, policy] = process.argv.slice(2);
+  if (["prepare-authoring", "verify-authoring"].includes(command)) {
+    if (process.argv.length !== 4 || !path.isAbsolute(rootArg || "")) throw new Error("authoring operation requires one absolute options JSON path");
+    const options = JSON.parse(require("./dual-authoring-candidate").readFile(rootArg, 1024 * 1024));
+    const result = command === "prepare-authoring" ? prepareAuthoringRelease(options) : verifyAuthoringRelease(options);
+    process.stdout.write(JSON.stringify(result, null, 2) + "\n");
+    return;
+  }
   if (!command || !rootArg || !tag || !commit) {
     throw new Error("usage: release-assets.js <prepare|verify> <asset-root> <tag> <commit> [allow-legacy-v1]");
   }
@@ -211,4 +232,4 @@ if (require.main === module) {
   }
 }
 
-module.exports = { PRODUCER_REPOSITORY, expectedAssets, prepareRelease, verifyRelease };
+module.exports = { PRODUCER_REPOSITORY, expectedAssets, prepareRelease, verifyRelease, prepareAuthoringRelease, verifyAuthoringRelease };

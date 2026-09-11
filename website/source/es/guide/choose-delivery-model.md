@@ -7,6 +7,14 @@ locale: "es"
 generated: false
 translationRequired: true
 ---
+
+[Usar plugins](/es/use/) · [Crear plugins](/es/build/) — Preparación, no es un lanzamiento. La migración de proyectos a v2 aún no está disponible.
+<p class="locale-historical-identity">Elija el modelo de entrega</p>
+
+[Instantánea histórica de la rama plugin-kit-ai v1. 1.2.4 es la referencia de comandos, no la versión exacta de esta instantánea.](/en/legacy/v1/)
+
+<details><summary>Instantánea histórica de la rama plugin-kit-ai v1. 1.2.4 es la referencia de comandos, no la versión exacta de esta instantánea.</summary>
+
 # Elija el modelo de entrega
 
 Los complementos Python y Node tienen dos formas compatibles de enviar lógica auxiliar. Resuelven diferentes problemas prácticos.
@@ -84,3 +92,4 @@ Este es el valor predeterminado porque es el punto de partida más sencillo para
 - elija el paquete de tiempo de ejecución compartido cuando ya sepa que desea una estrategia de dependencia reutilizable en todos los repositorios
 
 Empareje esta página con [Crear un complemento de tiempo de ejecución Python](/es/guide/python-runtime), [Elegir un repositorio inicial](/es/guide/choose-a-starter), [Plantillas iniciales](/es/guide/starter-templates) y [Preparación para la producción](/es/guide/production-readiness).
+</details>

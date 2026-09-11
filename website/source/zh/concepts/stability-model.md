@@ -7,6 +7,14 @@ locale: "zh"
 generated: false
 translationRequired: true
 ---
+
+[使用插件](/zh/use/) · [构建插件](/zh/build/) — 仅为准备内容，尚未发布。v2 暂不支持项目迁移。
+<p class="locale-historical-identity">稳定性模型</p>
+
+[plugin-kit-ai v1 分支的历史快照。1.2.4 是命令基准，并非此快照的确切版本。](/en/legacy/v1/)
+
+<details><summary>plugin-kit-ai v1 分支的历史快照。1.2.4 是命令基准，并非此快照的确切版本。</summary>
+
 # 稳定性模型
 
 `plugin-kit-ai` 使用正式的合同条款，因此团队可以准确决定他们想要标准化的内容。
@@ -63,3 +71,5 @@ flowchart TD
 1. 优先选择您正在构建的产品的推荐路径。
 2. 仅当您需要策略或兼容性精确性时才使用准确的正式术语。
 3. 使用 `validate --strict` 作为您计划发送的存储库的就绪门。
+
+</details>

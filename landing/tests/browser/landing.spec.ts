@@ -511,6 +511,33 @@ test('sitemap lists only live canonical pages and unstable routes stay out of th
   );
 });
 
+test('the authoring frontdoor distinguishes Use from unreleased Build and links to real docs journeys', async ({
+  page,
+}) => {
+  await page.goto('./create-plugin');
+
+  await expect(page.locator('#use-plugins a')).toHaveAttribute(
+    'href',
+    'https://github.com/777genius/universal-agent-plugins#quick-start',
+  );
+  await expect(page.locator('#build-plugins a').first()).toHaveAttribute(
+    'href',
+    'https://agent-plugins.org/specification',
+  );
+  await expect(page.locator('#build-plugins a').nth(1)).toHaveAttribute(
+    'href',
+    'https://github.com/777genius/universal-agent-plugins#supported-clients',
+  );
+  // The unreleased preview must explicitly disclaim availability, not
+  // silently omit the topic.
+  await expect(page.locator('#build-plugins')).toContainText('is in preparation and is unreleased');
+
+  await expect(page.locator('#historical-v1 a')).toHaveAttribute(
+    'href',
+    'https://777genius.github.io/universal-agent-plugins/docs/en/guide/quickstart.html#historical-v1',
+  );
+});
+
 test('an unsupported localized route is never selected for browser-language visitors', async ({
   browser,
   baseURL,

@@ -18,7 +18,14 @@ import (
 // all leases before returning. A no-op success callback violates this contract.
 // This service deliberately contains no second package parser. A function's
 // semantics cannot be checked at runtime; composition tests must prove them.
-type Validate func(ctx context.Context, stagingRoot string) error
+//
+// dir is a live handle to the exact stagingRoot directory, still held open by
+// Apply. It exists only so the callback can prove -- by identity, not by a
+// second path lookup -- that it is validating this operation's own freshly
+// created, exclusively owned payload, never caller-selected content. The
+// callback MUST NOT write through dir; it is passed only for that identity
+// proof (see packageview.GeneratedStaging).
+type Validate func(ctx context.Context, stagingRoot string, dir *os.Root) error
 
 type ApplyOptions struct {
 	Destination string   // clean absolute missing destination; parent must exist
@@ -167,7 +174,7 @@ func apply(ctx context.Context, p Plan, o ApplyOptions, ops applyOps) (result Re
 	if e = ctx.Err(); e != nil {
 		return result, e
 	}
-	if e = o.Validate(ctx, stagingPath); e != nil {
+	if e = o.Validate(ctx, stagingPath, root); e != nil {
 		return result, fmt.Errorf("validate generated package: %w", e)
 	}
 	if e = ctx.Err(); e != nil {

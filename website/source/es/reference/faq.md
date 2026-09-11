@@ -7,6 +7,14 @@ locale: "es"
 generated: false
 translationRequired: true
 ---
+
+[Usar plugins](/es/use/) · [Crear plugins](/es/build/) — Preparación, no es un lanzamiento. La migración de proyectos a v2 aún no está disponible.
+<p class="locale-historical-identity">FAQ</p>
+
+[Instantánea histórica de la rama plugin-kit-ai v1. 1.2.4 es la referencia de comandos, no la versión exacta de esta instantánea.](/en/legacy/v1/)
+
+<details><summary>Instantánea histórica de la rama plugin-kit-ai v1. 1.2.4 es la referencia de comandos, no la versión exacta de esta instantánea.</summary>
+
 # FAQ
 
 ## ¿Debería empezar con Go, Python o Node?
@@ -76,3 +84,4 @@ Consulte [Un proyecto, múltiples objetivos](/es/guide/one-project-multiple-targ
 No.
 
 Diferentes caminos conllevan diferentes promesas de apoyo. Utilice [Límite de soporte](/es/reference/support-boundary) para la respuesta corta y [Soporte objetivo](/es/reference/target-support) para la matriz exacta.
+</details>

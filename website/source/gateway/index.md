@@ -19,9 +19,10 @@ head:
 
         const storageKey = "plugin-kit-ai-docs-locale";
         const candidates = [];
+        const supportedLocales = ["en", "ru", "es", "fr", "zh"];
         try {
           const saved = window.localStorage.getItem(storageKey);
-          if (saved) {
+          if (supportedLocales.includes(String(saved).toLowerCase())) {
             candidates.push(saved);
           }
         } catch {
@@ -33,14 +34,9 @@ head:
           : [window.navigator.language || ""];
         candidates.push(...browserLanguages);
 
-        const preferredLocales = [
-          ["zh", /^zh\b/i],
-          ["es", /^es\b/i],
-          ["fr", /^fr\b/i],
-          ["ru", /^ru\b/i]
-        ];
-        const locale =
-          preferredLocales.find(([, pattern]) => candidates.some((candidate) => pattern.test(String(candidate))))?.[0] || "en";
+        const locale = candidates
+          .map((candidate) => String(candidate).toLowerCase().split(/[-_]/)[0])
+          .find((candidate) => supportedLocales.includes(candidate)) || "en";
         try {
           window.localStorage.setItem(storageKey, locale);
         } catch {

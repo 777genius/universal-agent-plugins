@@ -69,7 +69,7 @@ func TestPagesSite_CombinesLandingRootAndDocsSubpath(t *testing.T) {
 		t.Fatal(err)
 	}
 	site := string(siteBody)
-	mustContain(t, site, `export const docsBasePath = process.env.DOCS_BASE_PATH || "/plugin-kit-ai/docs/";`)
+	mustContain(t, site, `export const docsBasePath = process.env.DOCS_BASE_PATH || "/universal-agent-plugins/docs/";`)
 
 	nuxtConfigBody, err := os.ReadFile(filepath.Join(root, "landing", "nuxt.config.ts"))
 	if err != nil {

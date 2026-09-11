@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { useData, useRoute, withBase } from "vitepress";
+import { localeDestination, localeFromPath as routeLocale } from "./locale-routes.mjs";
 import entities from "../../../generated/registries/entities.json";
 
 type Variant = "navbar" | "screen";
@@ -52,85 +53,24 @@ const currentEntity = computed(() => {
   return typeof canonicalId === "string" ? entityByCanonicalId.get(canonicalId) ?? null : null;
 });
 
-const localeLinks = computed(() =>
-  locales.flatMap((locale) => {
-    const entityPath = currentEntity.value ? pathForLocale(currentEntity.value, locale.code) : null;
-    const href = withBase(entityPath || buildLocalePath(locale.code));
-
-    if (currentEntity.value && !entityPath) {
-      return [];
-    }
-
-    return [
-      {
-        ...locale,
-        href
-      }
-    ];
-  })
-);
+const fallbackLabels = {
+  en: "Translation unavailable — English", ru: "Перевод недоступен — English",
+  es: "Traducción no disponible — English", fr: "Traduction indisponible — English",
+  zh: "暂无译文 — English"
+};
+const localeLinks = computed(() => locales.map((locale) => {
+  const target = localeDestination(currentEntity.value, locale.code);
+  return { ...locale, href: withBase(target.path), language: target.language,
+    title: target.fallback ? `${locale.title} · ${fallbackLabels[locale.code]}`
+      : target.home ? `${locale.title} · Home` : locale.title };
+}));
 
 const buttonLabel = computed(() => currentLocale.value?.title || "Language");
 const buttonCode = computed(() => currentLocale.value?.shortTitle || "EN");
 const currentLocaleCode = computed(() => currentLocale.value?.code || null);
 
 function localeFromPath(path: string): LocaleCode | null {
-  const normalized = stripBase(normalizePath(path));
-  for (const locale of locales) {
-    if (normalized === `/${locale.code}` || normalized.startsWith(`/${locale.code}/`)) {
-      return locale.code;
-    }
-  }
-  return null;
-}
-
-function normalizePath(path: string): string {
-  if (!path || path === "/") {
-    return "/";
-  }
-  return path.replace(/\/+$/, "");
-}
-
-function stripBase(path: string): string {
-  const base = normalizePath(site.value.base || "/");
-  if (base === "/" || !path.startsWith(base)) {
-    return path;
-  }
-  const stripped = path.slice(base.length);
-  return stripped.startsWith("/") ? stripped : `/${stripped}`;
-}
-
-function buildLocalePath(target: LocaleCode): string {
-  const normalized = stripBase(normalizePath(route.path));
-  if (normalized === "/") {
-    return `/${target}/`;
-  }
-
-  const current = localeFromPath(normalized);
-  if (!current) {
-    return `/${target}/`;
-  }
-
-  const currentPrefix = `/${current}`;
-  const suffix = normalized.slice(currentPrefix.length) || "/";
-  const nextPath = `/${target}${suffix === "/" ? "/" : suffix}`;
-  return nextPath.endsWith("/") ? nextPath : `${nextPath}/`;
-}
-
-function pathForLocale(entity: RegistryEntity, target: LocaleCode): string | null {
-  if (target === "en") {
-    return entity.pathEn || null;
-  }
-  if (target === "ru") {
-    return entity.pathRu || null;
-  }
-  if (target === "es") {
-    return entity.pathEs || null;
-  }
-  if (target === "fr") {
-    return entity.pathFr || null;
-  }
-  return entity.pathZh || null;
+  return routeLocale(path, site.value.base) as LocaleCode | null;
 }
 
 function toggle() {
@@ -197,8 +137,8 @@ onBeforeUnmount(() => {
           class="locale-switcher__link"
           :class="{ 'is-active': locale.code === currentLocaleCode }"
           :href="locale.href"
-          :lang="locale.code"
-          :hreflang="locale.code"
+          :lang="locale.language"
+          :hreflang="locale.language"
           @click="close"
         >
           <span>{{ locale.title }}</span>
@@ -213,8 +153,8 @@ onBeforeUnmount(() => {
         class="locale-switcher__screen-link"
         :class="{ 'is-active': locale.code === currentLocaleCode }"
         :href="locale.href"
-        :lang="locale.code"
-        :hreflang="locale.code"
+        :lang="locale.language"
+        :hreflang="locale.language"
         @click="close"
       >
         <span>{{ locale.title }}</span>

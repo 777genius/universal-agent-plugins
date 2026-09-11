@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 
 	"github.com/777genius/plugin-kit-ai/cli/internal/authoring/report"
+	"github.com/777genius/plugin-kit-ai/cli/internal/authoring/scaffold"
 	"github.com/777genius/plugin-kit-ai/cli/internal/authoring/skills"
 	"github.com/777genius/plugin-kit-ai/cli/internal/authoringcli"
 	"github.com/spf13/cobra"
@@ -47,6 +48,14 @@ func (a App) skillsCommand(capture func(report.Report)) (*cobra.Command, error) 
 				root := ""
 				if len(args) > 0 {
 					root = args[0]
+				}
+				if a.PublicContract && verb == "init" {
+					if _, err := scaffold.BuildSkillPlan(c.Context(), req.Name, req.Description); err != nil {
+						if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+							return req, err
+						}
+						return req, &inputError{"skill_options_invalid", "Supply an exact portable Skill name and --description (1–1024 characters); names are never normalized."}
+					}
 				}
 				var err error
 				// Accept the documented ./package spelling on Windows too. Only

@@ -7,6 +7,14 @@ locale: "es"
 generated: false
 translationRequired: true
 ---
+
+[Usar plugins](/es/use/) · [Crear plugins](/es/build/) — Preparación, no es un lanzamiento. La migración de proyectos a v2 aún no está disponible.
+<p class="locale-historical-identity">Preparación para la producción</p>
+
+[Instantánea histórica de la rama plugin-kit-ai v1. 1.2.4 es la referencia de comandos, no la versión exacta de esta instantánea.](/en/legacy/v1/)
+
+<details><summary>Instantánea histórica de la rama plugin-kit-ai v1. 1.2.4 es la referencia de comandos, no la versión exacta de esta instantánea.</summary>
+
 # Preparación para la producción
 
 Utilice esta lista de verificación antes de calificar un proyecto como listo para producción, listo para entregar o listo para mostrar ampliamente.
@@ -80,3 +88,5 @@ Un repositorio público debería dejar estas cosas obvias:
 ## Regla final
 
 Si un compañero de equipo no puede clonar el repositorio, ejecutar el flujo documentado, pasar `validate --strict` y comprender el carril elegido sin conocimientos tribales, el proyecto aún no está listo para producción.
+
+</details>

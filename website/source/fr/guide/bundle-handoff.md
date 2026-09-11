@@ -7,6 +7,14 @@ locale: "fr"
 generated: false
 translationRequired: true
 ---
+
+[Utiliser des plugins](/fr/use/) · [Créer des plugins](/fr/build/) — Préparation, pas une version publiée. La migration des projets vers v2 est indisponible.
+<p class="locale-historical-identity">Transfert du bundle</p>
+
+[Instantané historique de la branche plugin-kit-ai v1. 1.2.4 est la référence des commandes, pas la version exacte de cet instantané.](/en/legacy/v1/)
+
+<details><summary>Instantané historique de la branche plugin-kit-ai v1. 1.2.4 est la référence des commandes, pas la version exacte de cet instantané.</summary>
+
 # Transfert du bundle
 
 Utilisez ce guide lorsqu'un plugin Python ou Node doit voyager comme un artefact portable plutôt que comme une extraction de dépôt en direct.
@@ -93,3 +101,5 @@ Ne présumez pas que le même contrat s’applique à :
 ## Ordre de lecture recommandé
 
 Associez cette page à [Choisir le modèle de livraison](/fr/guide/choose-delivery-model), [Préparation à la production](/fr/guide/production-readiness) et [Limite de support](/fr/reference/support-boundary).
+
+</details>

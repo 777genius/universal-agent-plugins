@@ -1,4 +1,4 @@
-//go:build (darwin && arm64) || (windows && amd64)
+//go:build (darwin && arm64) || (windows && (amd64 || arm64))
 
 package packageview
 
@@ -32,7 +32,7 @@ func nativeLink(t *testing.T, root, target, name string) {
 }
 func nativeSource(t *testing.T, root string) *source {
 	t.Helper()
-	s, e := openSource(root)
+	s, e := openSource(root, GeneratedStaging{})
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -211,7 +211,7 @@ func TestNativeRootLinkRejected(t *testing.T) {
 		t.Fatal(e)
 	}
 	for _, p := range []string{link, link + string(filepath.Separator)} {
-		s, e := openSource(p)
+		s, e := openSource(p, GeneratedStaging{})
 		if e == nil {
 			s.close()
 			t.Fatal("accepted root link", p)

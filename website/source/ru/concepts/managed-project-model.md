@@ -10,6 +10,14 @@ aside: true
 outline: [2, 3]
 ---
 
+[Использовать плагины](/ru/use/) · [Создавать плагины](/ru/build/) — Подготовка, не релиз. Миграция проектов в v2 пока недоступна.
+<p class="locale-historical-identity">Как работает plugin-kit-ai</p>
+
+[Исторический снимок ветки plugin-kit-ai v1. 1.2.4 — базовая версия команд, а не точная версия этого снимка.](/en/legacy/v1/)
+
+<details><summary>Исторический снимок ветки plugin-kit-ai v1. 1.2.4 — базовая версия команд, а не точная версия этого снимка.</summary>
+
+
 # Как работает plugin-kit-ai
 
 plugin-kit-ai держит один repo как source of truth для плагина. Вы редактируете только те файлы, которыми владеете, генерируете нужные outputs, строго валидируете результат и передаёте дальше repo, который остаётся предсказуемым со временем.
@@ -55,3 +63,5 @@ Starter template даёт стартовую форму. plugin-kit-ai прод�
 - Читайте [Исходники и generated outputs](/ru/concepts/authoring-architecture), если нужен authored-vs-generated boundary.
 - Читайте [Модель target'ов](/ru/concepts/target-model), если нужно понять типы outputs.
 - Читайте [Один проект, несколько target'ов](/ru/guide/one-project-multiple-targets), если хотите дальше растить один repo.
+
+</details>

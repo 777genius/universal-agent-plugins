@@ -13,6 +13,13 @@ jobs:
     defaults:
       run:
         working-directory: website
+    env:
+      GOTOOLCHAIN: local
+      GOMAXPROCS: "2"
+      GOCACHE: ${{ runner.temp }}/docs-consumer-gocache
+      GOMODCACHE: ${{ runner.temp }}/docs-consumer-gomodcache
+      DOCS_TOOLS_ROOT: ${{ runner.temp }}/docs-tools-root
+      TMPDIR: ${{ runner.temp }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -40,7 +47,15 @@ jobs:
       - name: Install docs toolchain
         run: pnpm install --frozen-lockfile
 
+      - name: Warm Go module cache for offline docs consumer integration
+        working-directory: .
+        run: go list -p 2 -deps ./cli/plugin-kit-ai/tools/authoring-docs
+
       - name: Run docs checks
+        env:
+          GOPROXY: "off"
+          GOSUMDB: "off"
+          GOENV: "off"
         run: pnpm run docs:check
 
       - name: Install Chromium for docs smoke

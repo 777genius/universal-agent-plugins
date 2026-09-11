@@ -9,6 +9,14 @@ translationRequired: true
 aside: true
 outline: [2, 3]
 ---
+
+[Usar plugins](/es/use/) · [Crear plugins](/es/build/) — Preparación, no es un lanzamiento. La migración de proyectos a v2 aún no está disponible.
+<p class="locale-historical-identity">Configuración de paquetes y integración</p>
+
+[Instantánea histórica de la rama plugin-kit-ai v1. 1.2.4 es la referencia de comandos, no la versión exacta de esta instantánea.](/en/legacy/v1/)
+
+<details><summary>Instantánea histórica de la rama plugin-kit-ai v1. 1.2.4 es la referencia de comandos, no la versión exacta de esta instantánea.</summary>
+
 # Configuración de paquetes y integración
 
 No todos los proyectos deberían enviarse como un complemento de tiempo de ejecución ejecutable.
@@ -46,3 +54,5 @@ Para la ruta oficial del paquete Codex, mantenga el diseño del paquete explíci
 - `.app.json` y `.mcp.json` opcionales permanecen en la raíz del complemento
 
 Esta ruta del paquete es para la superficie oficial del paquete de complementos Codex, no para mezclar el cableado del tiempo de ejecución local del repositorio en el diseño del paquete.
+
+</details>

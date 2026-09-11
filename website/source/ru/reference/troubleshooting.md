@@ -8,6 +8,14 @@ generated: false
 translationRequired: true
 ---
 
+[Использовать плагины](/ru/use/) · [Создавать плагины](/ru/build/) — Подготовка, не релиз. Миграция проектов в v2 пока недоступна.
+<p class="locale-historical-identity">Диагностика проблем</p>
+
+[Исторический снимок ветки plugin-kit-ai v1. 1.2.4 — базовая версия команд, а не точная версия этого снимка.](/en/legacy/v1/)
+
+<details><summary>Исторический снимок ветки plugin-kit-ai v1. 1.2.4 — базовая версия команд, а не точная версия этого снимка.</summary>
+
+
 # Диагностика проблем
 
 Используйте эту страницу, когда workflow перестал двигаться. Начинайте с самой простой проверки.
@@ -59,3 +67,5 @@ plugin-kit-ai validate ./my-plugin --platform codex-runtime --strict
 Переходите на Node/TypeScript или Python только тогда, когда локальный runtime tradeoff действительно осознан и нужен.
 
 См. [Python runtime-плагин](/ru/guide/python-runtime), [Процесс авторинга](/ru/reference/authoring-workflow) и [Частые вопросы](/ru/reference/faq).
+
+</details>

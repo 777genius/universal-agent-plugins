@@ -4,7 +4,8 @@ const assert = require("node:assert/strict");
 const crypto = require("node:crypto");
 const fs = require("node:fs");
 const fsp = require("node:fs/promises");
-const http = require("node:http");
+const { EventEmitter } = require("node:events");
+const { PassThrough } = require("node:stream");
 const os = require("node:os");
 const path = require("node:path");
 const { spawnSync } = require("node:child_process");
@@ -82,16 +83,33 @@ async function fixturePackage(t, binary = BINARY) {
   return { binary, file, root };
 }
 
+// Preserve the historical transport assertions with injected streams, no socket.
+const endpoints = new Map();
 async function listen(t, handler) {
-  const server = http.createServer(handler);
-  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
-  t.after(() => new Promise((resolve) => server.close(resolve)));
-  const address = server.address();
-  return { server, url: `http://127.0.0.1:${address.port}` };
+  const url = `fixture:${endpoints.size}`;
+  endpoints.set(url, handler);
+  const server = { close(done) { endpoints.delete(url); done(); } };
+  t.after(() => endpoints.delete(url));
+  return { server, url };
 }
 
 function requestThrough(endpoint) {
-  return (_target, options) => http.get(endpoint, options);
+  return (_target, options) => {
+    const request = new EventEmitter();
+    request.setTimeout = () => {};
+    request.destroy = error => request.emit("error", error);
+    process.nextTick(() => {
+      const handler = endpoints.get(endpoint);
+      if (!handler) return request.emit("error", new Error("fixture offline"));
+      const response = new PassThrough();
+      response.statusCode = 200;
+      response.headers = {};
+      response.writeHead = (status, headers) => { response.statusCode = status; response.headers = headers; };
+      handler({ headers: options.headers }, response);
+      request.emit("response", response);
+    });
+    return request;
+  };
 }
 
 test("cold, warm, corrupted, and concurrent cache paths stay verified", async (t) => {
@@ -263,7 +281,7 @@ test("redirected public download never inherits GITHUB_TOKEN", async (t) => {
   await ensureBinary({
     packageRoot: fixture.root,
     cacheRoot: cache,
-    request: (url, options) => http.get(url.hostname === "github.com" ? redirect.url : target.url, options),
+    request: (url, options) => requestThrough(url.hostname === "github.com" ? redirect.url : target.url)(url, options),
     platform: "linux",
     arch: "x64"
   });
@@ -494,7 +512,7 @@ test("a redirect to an unapproved host is rejected before a second request", asy
     }, {
       request: (_target, options) => {
         requests += 1;
-        return http.get(endpoint.url, options);
+        return requestThrough(endpoint.url)(_target, options);
       }
     }),
     /approved GitHub HTTPS host/
@@ -522,4 +540,19 @@ test("a non-regular binary cache target is preserved", async (t) => {
     arch: "x64"
   }), /not a regular file/);
   assert.equal(await fsp.readFile(path.join(binaryPath, "owned.txt"), "utf8"), "keep");
+});
+
+test("default facade delegates canonical primitives without selecting private metadata", async (t) => {
+  const facade = require("../lib/bootstrap");
+  const core = require("../lib/verifier");
+  for (const key of ["sha256File", "validCachedBinary", "downloadFile"]) assert.equal(facade[key], core[key]);
+  assert.deepEqual(Object.keys(facade).sort(), ["PROOF_MODE", "acquireLock", "downloadFile", "ensureBinary",
+    "formatBootstrapError", "loadRelease", "localProofAsset", "sha256File", "validCachedBinary"].sort());
+  const fixture = await fixturePackage(t);
+  await fsp.writeFile(path.join(fixture.root, "private-release.json"), "invalid private descriptor");
+  await fsp.writeFile(path.join(fixture.root, "candidate.json"), "invalid private candidate");
+  assert.equal(loadRelease(fixture.root, detectPlatform("linux", "x64")).manifest.repository, "777genius/plugin-kit-ai");
+  const file = path.join(fixture.root, "ordinary-cache");
+  await fsp.writeFile(file, BINARY, { mode: 0o600 });
+  assert.equal(await facade.validCachedBinary(file, crypto.createHash("sha256").update(BINARY).digest("hex")), true);
 });

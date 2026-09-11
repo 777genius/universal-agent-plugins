@@ -1,112 +1,1075 @@
 {
   "/en/": [
     {
-      "text": "Start",
+      "text": "Use plugins",
       "items": [
         {
-          "text": "Overview",
-          "link": "/en/guide/"
+          "text": "Use plugins",
+          "link": "/en/use/"
         },
         {
-          "text": "Installation",
-          "link": "/en/guide/installation"
+          "text": "Find and install a plugin",
+          "link": "/en/use/install"
         },
         {
-          "text": "Quickstart",
-          "link": "/en/guide/quickstart"
+          "text": "Maintain installed plugins",
+          "link": "/en/use/manage"
         }
       ]
     },
     {
-      "text": "Core Idea",
+      "text": "Build plugins",
       "items": [
         {
-          "text": "What You Can Build",
-          "link": "/en/guide/what-you-can-build"
+          "text": "Build plugins",
+          "link": "/en/build/"
         },
         {
-          "text": "One Project, Multiple Targets",
-          "link": "/en/guide/one-project-multiple-targets"
+          "text": "Build a standalone Skill",
+          "link": "/en/build/skill"
         },
         {
-          "text": "Choose A Target",
-          "link": "/en/guide/choose-a-target"
+          "text": "Build a remote MCP package",
+          "link": "/en/build/mcp-remote"
+        },
+        {
+          "text": "Build a stdio MCP package",
+          "link": "/en/build/mcp-stdio"
+        },
+        {
+          "text": "Build a hybrid package",
+          "link": "/en/build/hybrid"
+        },
+        {
+          "text": "Add extra Skills",
+          "link": "/en/build/skills"
+        },
+        {
+          "text": "Understand the package root",
+          "link": "/en/build/layout"
+        },
+        {
+          "text": "Check a package without running it",
+          "link": "/en/build/checks"
+        },
+        {
+          "text": "Hand a package to the installer planner",
+          "link": "/en/build/handoff"
         }
       ]
     },
     {
-      "text": "Build Plugins",
+      "text": "Historical v1 · baseline 1.2.4",
       "items": [
         {
-          "text": "Build Your First Plugin",
-          "link": "/en/guide/first-plugin"
-        },
-        {
-          "text": "Build A Python Runtime Plugin",
-          "link": "/en/guide/python-runtime"
-        },
-        {
-          "text": "Build A Team-Ready Plugin",
-          "link": "/en/guide/team-ready-plugin"
-        },
-        {
-          "text": "Build A Claude Plugin",
-          "link": "/en/guide/claude-plugin"
-        },
-        {
-          "text": "Node/TypeScript Runtime",
-          "link": "/en/guide/node-typescript-runtime"
+          "text": "Historical plugin-kit-ai v1, baseline 1.2.4",
+          "link": "/en/legacy/v1/"
         }
       ]
     },
     {
-      "text": "Starters And Examples",
+      "text": "plugin-kit-ai · prepared, not released",
       "items": [
         {
-          "text": "Starter Templates",
-          "link": "/en/guide/starter-templates"
+          "text": "plugin-kit-ai",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai"
         },
         {
-          "text": "Choose A Starter Repo",
-          "link": "/en/guide/choose-a-starter"
+          "text": "plugin-kit-ai capabilities",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-capabilities"
         },
         {
-          "text": "Examples And Recipes",
-          "link": "/en/guide/examples-and-recipes"
+          "text": "plugin-kit-ai compat",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-compat"
+        },
+        {
+          "text": "plugin-kit-ai completion",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion"
+        },
+        {
+          "text": "plugin-kit-ai completion bash",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion-bash"
+        },
+        {
+          "text": "plugin-kit-ai completion fish",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion-fish"
+        },
+        {
+          "text": "plugin-kit-ai completion help",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion-help"
+        },
+        {
+          "text": "plugin-kit-ai completion powershell",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion-powershell"
+        },
+        {
+          "text": "plugin-kit-ai completion zsh",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion-zsh"
+        },
+        {
+          "text": "plugin-kit-ai doctor",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-doctor"
+        },
+        {
+          "text": "plugin-kit-ai help",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-help"
+        },
+        {
+          "text": "plugin-kit-ai init",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-init"
+        },
+        {
+          "text": "plugin-kit-ai inspect",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-inspect"
+        },
+        {
+          "text": "plugin-kit-ai skills",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-skills"
+        },
+        {
+          "text": "plugin-kit-ai skills help",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-skills-help"
+        },
+        {
+          "text": "plugin-kit-ai skills init",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-skills-init"
+        },
+        {
+          "text": "plugin-kit-ai skills validate",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-skills-validate"
+        },
+        {
+          "text": "plugin-kit-ai test",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-test"
+        },
+        {
+          "text": "plugin-kit-ai validate",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-validate"
+        },
+        {
+          "text": "plugin-kit-ai version",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-version"
         }
       ]
     },
     {
-      "text": "Delivery And Targets",
+      "text": "agentplugins author · prepared, not released",
       "items": [
         {
-          "text": "Choose Delivery Model",
-          "link": "/en/guide/choose-delivery-model"
+          "text": "agentplugins author",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author"
         },
         {
-          "text": "Bundle Handoff",
-          "link": "/en/guide/bundle-handoff"
+          "text": "agentplugins author capabilities",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-capabilities"
         },
         {
-          "text": "Packages And Integration Setup",
-          "link": "/en/guide/package-and-workspace-targets"
+          "text": "agentplugins author compat",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-compat"
         },
         {
-          "text": "How To Publish Plugins",
-          "link": "/en/guide/how-to-publish-plugins"
+          "text": "agentplugins author doctor",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-doctor"
+        },
+        {
+          "text": "agentplugins author help",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-help"
+        },
+        {
+          "text": "agentplugins author init",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-init"
+        },
+        {
+          "text": "agentplugins author inspect",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-inspect"
+        },
+        {
+          "text": "agentplugins author skills",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills"
+        },
+        {
+          "text": "agentplugins author skills help",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills-help"
+        },
+        {
+          "text": "agentplugins author skills init",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills-init"
+        },
+        {
+          "text": "agentplugins author skills validate",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills-validate"
+        },
+        {
+          "text": "agentplugins author test",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-test"
+        },
+        {
+          "text": "agentplugins author validate",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-validate"
+        },
+        {
+          "text": "agentplugins author version",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-version"
+        }
+      ]
+    }
+  ],
+  "/en/use/": [
+    {
+      "text": "Use plugins",
+      "items": [
+        {
+          "text": "Use plugins",
+          "link": "/en/use/"
+        },
+        {
+          "text": "Find and install a plugin",
+          "link": "/en/use/install"
+        },
+        {
+          "text": "Maintain installed plugins",
+          "link": "/en/use/manage"
         }
       ]
     },
     {
-      "text": "Production And CI",
+      "text": "Build plugins",
       "items": [
         {
-          "text": "Production Readiness",
-          "link": "/en/guide/production-readiness"
+          "text": "Build plugins",
+          "link": "/en/build/"
         },
         {
-          "text": "CI Integration",
-          "link": "/en/guide/ci-integration"
+          "text": "Build a standalone Skill",
+          "link": "/en/build/skill"
+        },
+        {
+          "text": "Build a remote MCP package",
+          "link": "/en/build/mcp-remote"
+        },
+        {
+          "text": "Build a stdio MCP package",
+          "link": "/en/build/mcp-stdio"
+        },
+        {
+          "text": "Build a hybrid package",
+          "link": "/en/build/hybrid"
+        },
+        {
+          "text": "Add extra Skills",
+          "link": "/en/build/skills"
+        },
+        {
+          "text": "Understand the package root",
+          "link": "/en/build/layout"
+        },
+        {
+          "text": "Check a package without running it",
+          "link": "/en/build/checks"
+        },
+        {
+          "text": "Hand a package to the installer planner",
+          "link": "/en/build/handoff"
+        }
+      ]
+    },
+    {
+      "text": "Historical v1 · baseline 1.2.4",
+      "items": [
+        {
+          "text": "Historical plugin-kit-ai v1, baseline 1.2.4",
+          "link": "/en/legacy/v1/"
+        }
+      ]
+    },
+    {
+      "text": "plugin-kit-ai · prepared, not released",
+      "items": [
+        {
+          "text": "plugin-kit-ai",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai"
+        },
+        {
+          "text": "plugin-kit-ai capabilities",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-capabilities"
+        },
+        {
+          "text": "plugin-kit-ai compat",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-compat"
+        },
+        {
+          "text": "plugin-kit-ai completion",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion"
+        },
+        {
+          "text": "plugin-kit-ai completion bash",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion-bash"
+        },
+        {
+          "text": "plugin-kit-ai completion fish",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion-fish"
+        },
+        {
+          "text": "plugin-kit-ai completion help",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion-help"
+        },
+        {
+          "text": "plugin-kit-ai completion powershell",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion-powershell"
+        },
+        {
+          "text": "plugin-kit-ai completion zsh",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion-zsh"
+        },
+        {
+          "text": "plugin-kit-ai doctor",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-doctor"
+        },
+        {
+          "text": "plugin-kit-ai help",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-help"
+        },
+        {
+          "text": "plugin-kit-ai init",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-init"
+        },
+        {
+          "text": "plugin-kit-ai inspect",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-inspect"
+        },
+        {
+          "text": "plugin-kit-ai skills",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-skills"
+        },
+        {
+          "text": "plugin-kit-ai skills help",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-skills-help"
+        },
+        {
+          "text": "plugin-kit-ai skills init",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-skills-init"
+        },
+        {
+          "text": "plugin-kit-ai skills validate",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-skills-validate"
+        },
+        {
+          "text": "plugin-kit-ai test",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-test"
+        },
+        {
+          "text": "plugin-kit-ai validate",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-validate"
+        },
+        {
+          "text": "plugin-kit-ai version",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-version"
+        }
+      ]
+    },
+    {
+      "text": "agentplugins author · prepared, not released",
+      "items": [
+        {
+          "text": "agentplugins author",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author"
+        },
+        {
+          "text": "agentplugins author capabilities",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-capabilities"
+        },
+        {
+          "text": "agentplugins author compat",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-compat"
+        },
+        {
+          "text": "agentplugins author doctor",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-doctor"
+        },
+        {
+          "text": "agentplugins author help",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-help"
+        },
+        {
+          "text": "agentplugins author init",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-init"
+        },
+        {
+          "text": "agentplugins author inspect",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-inspect"
+        },
+        {
+          "text": "agentplugins author skills",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills"
+        },
+        {
+          "text": "agentplugins author skills help",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills-help"
+        },
+        {
+          "text": "agentplugins author skills init",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills-init"
+        },
+        {
+          "text": "agentplugins author skills validate",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills-validate"
+        },
+        {
+          "text": "agentplugins author test",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-test"
+        },
+        {
+          "text": "agentplugins author validate",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-validate"
+        },
+        {
+          "text": "agentplugins author version",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-version"
+        }
+      ]
+    }
+  ],
+  "/en/build/": [
+    {
+      "text": "Use plugins",
+      "items": [
+        {
+          "text": "Use plugins",
+          "link": "/en/use/"
+        },
+        {
+          "text": "Find and install a plugin",
+          "link": "/en/use/install"
+        },
+        {
+          "text": "Maintain installed plugins",
+          "link": "/en/use/manage"
+        }
+      ]
+    },
+    {
+      "text": "Build plugins",
+      "items": [
+        {
+          "text": "Build plugins",
+          "link": "/en/build/"
+        },
+        {
+          "text": "Build a standalone Skill",
+          "link": "/en/build/skill"
+        },
+        {
+          "text": "Build a remote MCP package",
+          "link": "/en/build/mcp-remote"
+        },
+        {
+          "text": "Build a stdio MCP package",
+          "link": "/en/build/mcp-stdio"
+        },
+        {
+          "text": "Build a hybrid package",
+          "link": "/en/build/hybrid"
+        },
+        {
+          "text": "Add extra Skills",
+          "link": "/en/build/skills"
+        },
+        {
+          "text": "Understand the package root",
+          "link": "/en/build/layout"
+        },
+        {
+          "text": "Check a package without running it",
+          "link": "/en/build/checks"
+        },
+        {
+          "text": "Hand a package to the installer planner",
+          "link": "/en/build/handoff"
+        }
+      ]
+    },
+    {
+      "text": "Historical v1 · baseline 1.2.4",
+      "items": [
+        {
+          "text": "Historical plugin-kit-ai v1, baseline 1.2.4",
+          "link": "/en/legacy/v1/"
+        }
+      ]
+    },
+    {
+      "text": "plugin-kit-ai · prepared, not released",
+      "items": [
+        {
+          "text": "plugin-kit-ai",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai"
+        },
+        {
+          "text": "plugin-kit-ai capabilities",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-capabilities"
+        },
+        {
+          "text": "plugin-kit-ai compat",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-compat"
+        },
+        {
+          "text": "plugin-kit-ai completion",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion"
+        },
+        {
+          "text": "plugin-kit-ai completion bash",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion-bash"
+        },
+        {
+          "text": "plugin-kit-ai completion fish",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion-fish"
+        },
+        {
+          "text": "plugin-kit-ai completion help",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion-help"
+        },
+        {
+          "text": "plugin-kit-ai completion powershell",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion-powershell"
+        },
+        {
+          "text": "plugin-kit-ai completion zsh",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion-zsh"
+        },
+        {
+          "text": "plugin-kit-ai doctor",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-doctor"
+        },
+        {
+          "text": "plugin-kit-ai help",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-help"
+        },
+        {
+          "text": "plugin-kit-ai init",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-init"
+        },
+        {
+          "text": "plugin-kit-ai inspect",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-inspect"
+        },
+        {
+          "text": "plugin-kit-ai skills",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-skills"
+        },
+        {
+          "text": "plugin-kit-ai skills help",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-skills-help"
+        },
+        {
+          "text": "plugin-kit-ai skills init",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-skills-init"
+        },
+        {
+          "text": "plugin-kit-ai skills validate",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-skills-validate"
+        },
+        {
+          "text": "plugin-kit-ai test",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-test"
+        },
+        {
+          "text": "plugin-kit-ai validate",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-validate"
+        },
+        {
+          "text": "plugin-kit-ai version",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-version"
+        }
+      ]
+    },
+    {
+      "text": "agentplugins author · prepared, not released",
+      "items": [
+        {
+          "text": "agentplugins author",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author"
+        },
+        {
+          "text": "agentplugins author capabilities",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-capabilities"
+        },
+        {
+          "text": "agentplugins author compat",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-compat"
+        },
+        {
+          "text": "agentplugins author doctor",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-doctor"
+        },
+        {
+          "text": "agentplugins author help",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-help"
+        },
+        {
+          "text": "agentplugins author init",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-init"
+        },
+        {
+          "text": "agentplugins author inspect",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-inspect"
+        },
+        {
+          "text": "agentplugins author skills",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills"
+        },
+        {
+          "text": "agentplugins author skills help",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills-help"
+        },
+        {
+          "text": "agentplugins author skills init",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills-init"
+        },
+        {
+          "text": "agentplugins author skills validate",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills-validate"
+        },
+        {
+          "text": "agentplugins author test",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-test"
+        },
+        {
+          "text": "agentplugins author validate",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-validate"
+        },
+        {
+          "text": "agentplugins author version",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-version"
+        }
+      ]
+    }
+  ],
+  "/en/legacy/v1/": [
+    {
+      "text": "Use plugins",
+      "items": [
+        {
+          "text": "Use plugins",
+          "link": "/en/use/"
+        },
+        {
+          "text": "Find and install a plugin",
+          "link": "/en/use/install"
+        },
+        {
+          "text": "Maintain installed plugins",
+          "link": "/en/use/manage"
+        }
+      ]
+    },
+    {
+      "text": "Build plugins",
+      "items": [
+        {
+          "text": "Build plugins",
+          "link": "/en/build/"
+        },
+        {
+          "text": "Build a standalone Skill",
+          "link": "/en/build/skill"
+        },
+        {
+          "text": "Build a remote MCP package",
+          "link": "/en/build/mcp-remote"
+        },
+        {
+          "text": "Build a stdio MCP package",
+          "link": "/en/build/mcp-stdio"
+        },
+        {
+          "text": "Build a hybrid package",
+          "link": "/en/build/hybrid"
+        },
+        {
+          "text": "Add extra Skills",
+          "link": "/en/build/skills"
+        },
+        {
+          "text": "Understand the package root",
+          "link": "/en/build/layout"
+        },
+        {
+          "text": "Check a package without running it",
+          "link": "/en/build/checks"
+        },
+        {
+          "text": "Hand a package to the installer planner",
+          "link": "/en/build/handoff"
+        }
+      ]
+    },
+    {
+      "text": "Historical v1 · baseline 1.2.4",
+      "items": [
+        {
+          "text": "Historical plugin-kit-ai v1, baseline 1.2.4",
+          "link": "/en/legacy/v1/"
+        }
+      ]
+    },
+    {
+      "text": "plugin-kit-ai · prepared, not released",
+      "items": [
+        {
+          "text": "plugin-kit-ai",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai"
+        },
+        {
+          "text": "plugin-kit-ai capabilities",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-capabilities"
+        },
+        {
+          "text": "plugin-kit-ai compat",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-compat"
+        },
+        {
+          "text": "plugin-kit-ai completion",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion"
+        },
+        {
+          "text": "plugin-kit-ai completion bash",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion-bash"
+        },
+        {
+          "text": "plugin-kit-ai completion fish",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion-fish"
+        },
+        {
+          "text": "plugin-kit-ai completion help",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion-help"
+        },
+        {
+          "text": "plugin-kit-ai completion powershell",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion-powershell"
+        },
+        {
+          "text": "plugin-kit-ai completion zsh",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion-zsh"
+        },
+        {
+          "text": "plugin-kit-ai doctor",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-doctor"
+        },
+        {
+          "text": "plugin-kit-ai help",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-help"
+        },
+        {
+          "text": "plugin-kit-ai init",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-init"
+        },
+        {
+          "text": "plugin-kit-ai inspect",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-inspect"
+        },
+        {
+          "text": "plugin-kit-ai skills",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-skills"
+        },
+        {
+          "text": "plugin-kit-ai skills help",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-skills-help"
+        },
+        {
+          "text": "plugin-kit-ai skills init",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-skills-init"
+        },
+        {
+          "text": "plugin-kit-ai skills validate",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-skills-validate"
+        },
+        {
+          "text": "plugin-kit-ai test",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-test"
+        },
+        {
+          "text": "plugin-kit-ai validate",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-validate"
+        },
+        {
+          "text": "plugin-kit-ai version",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-version"
+        }
+      ]
+    },
+    {
+      "text": "agentplugins author · prepared, not released",
+      "items": [
+        {
+          "text": "agentplugins author",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author"
+        },
+        {
+          "text": "agentplugins author capabilities",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-capabilities"
+        },
+        {
+          "text": "agentplugins author compat",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-compat"
+        },
+        {
+          "text": "agentplugins author doctor",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-doctor"
+        },
+        {
+          "text": "agentplugins author help",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-help"
+        },
+        {
+          "text": "agentplugins author init",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-init"
+        },
+        {
+          "text": "agentplugins author inspect",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-inspect"
+        },
+        {
+          "text": "agentplugins author skills",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills"
+        },
+        {
+          "text": "agentplugins author skills help",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills-help"
+        },
+        {
+          "text": "agentplugins author skills init",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills-init"
+        },
+        {
+          "text": "agentplugins author skills validate",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills-validate"
+        },
+        {
+          "text": "agentplugins author test",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-test"
+        },
+        {
+          "text": "agentplugins author validate",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-validate"
+        },
+        {
+          "text": "agentplugins author version",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-version"
+        }
+      ]
+    }
+  ],
+  "/en/api/cli/prepared-authoring-v2": [
+    {
+      "text": "Use plugins",
+      "items": [
+        {
+          "text": "Use plugins",
+          "link": "/en/use/"
+        },
+        {
+          "text": "Find and install a plugin",
+          "link": "/en/use/install"
+        },
+        {
+          "text": "Maintain installed plugins",
+          "link": "/en/use/manage"
+        }
+      ]
+    },
+    {
+      "text": "Build plugins",
+      "items": [
+        {
+          "text": "Build plugins",
+          "link": "/en/build/"
+        },
+        {
+          "text": "Build a standalone Skill",
+          "link": "/en/build/skill"
+        },
+        {
+          "text": "Build a remote MCP package",
+          "link": "/en/build/mcp-remote"
+        },
+        {
+          "text": "Build a stdio MCP package",
+          "link": "/en/build/mcp-stdio"
+        },
+        {
+          "text": "Build a hybrid package",
+          "link": "/en/build/hybrid"
+        },
+        {
+          "text": "Add extra Skills",
+          "link": "/en/build/skills"
+        },
+        {
+          "text": "Understand the package root",
+          "link": "/en/build/layout"
+        },
+        {
+          "text": "Check a package without running it",
+          "link": "/en/build/checks"
+        },
+        {
+          "text": "Hand a package to the installer planner",
+          "link": "/en/build/handoff"
+        }
+      ]
+    },
+    {
+      "text": "Historical v1 · baseline 1.2.4",
+      "items": [
+        {
+          "text": "Historical plugin-kit-ai v1, baseline 1.2.4",
+          "link": "/en/legacy/v1/"
+        }
+      ]
+    },
+    {
+      "text": "plugin-kit-ai · prepared, not released",
+      "items": [
+        {
+          "text": "plugin-kit-ai",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai"
+        },
+        {
+          "text": "plugin-kit-ai capabilities",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-capabilities"
+        },
+        {
+          "text": "plugin-kit-ai compat",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-compat"
+        },
+        {
+          "text": "plugin-kit-ai completion",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion"
+        },
+        {
+          "text": "plugin-kit-ai completion bash",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion-bash"
+        },
+        {
+          "text": "plugin-kit-ai completion fish",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion-fish"
+        },
+        {
+          "text": "plugin-kit-ai completion help",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion-help"
+        },
+        {
+          "text": "plugin-kit-ai completion powershell",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion-powershell"
+        },
+        {
+          "text": "plugin-kit-ai completion zsh",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion-zsh"
+        },
+        {
+          "text": "plugin-kit-ai doctor",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-doctor"
+        },
+        {
+          "text": "plugin-kit-ai help",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-help"
+        },
+        {
+          "text": "plugin-kit-ai init",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-init"
+        },
+        {
+          "text": "plugin-kit-ai inspect",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-inspect"
+        },
+        {
+          "text": "plugin-kit-ai skills",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-skills"
+        },
+        {
+          "text": "plugin-kit-ai skills help",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-skills-help"
+        },
+        {
+          "text": "plugin-kit-ai skills init",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-skills-init"
+        },
+        {
+          "text": "plugin-kit-ai skills validate",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-skills-validate"
+        },
+        {
+          "text": "plugin-kit-ai test",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-test"
+        },
+        {
+          "text": "plugin-kit-ai validate",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-validate"
+        },
+        {
+          "text": "plugin-kit-ai version",
+          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-version"
+        }
+      ]
+    },
+    {
+      "text": "agentplugins author · prepared, not released",
+      "items": [
+        {
+          "text": "agentplugins author",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author"
+        },
+        {
+          "text": "agentplugins author capabilities",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-capabilities"
+        },
+        {
+          "text": "agentplugins author compat",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-compat"
+        },
+        {
+          "text": "agentplugins author doctor",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-doctor"
+        },
+        {
+          "text": "agentplugins author help",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-help"
+        },
+        {
+          "text": "agentplugins author init",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-init"
+        },
+        {
+          "text": "agentplugins author inspect",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-inspect"
+        },
+        {
+          "text": "agentplugins author skills",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills"
+        },
+        {
+          "text": "agentplugins author skills help",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills-help"
+        },
+        {
+          "text": "agentplugins author skills init",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills-init"
+        },
+        {
+          "text": "agentplugins author skills validate",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills-validate"
+        },
+        {
+          "text": "agentplugins author test",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-test"
+        },
+        {
+          "text": "agentplugins author validate",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-validate"
+        },
+        {
+          "text": "agentplugins author version",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-version"
         }
       ]
     }

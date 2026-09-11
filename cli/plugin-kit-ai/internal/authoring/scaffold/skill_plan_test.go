@@ -21,7 +21,7 @@ import (
 
 func skillFixture(t *testing.T) (string, SkillPlan, SkillSourceGate) {
 	t.Helper()
-	root, scratch := t.TempDir(), t.TempDir()
+	root, scratch := tempRoot(t), t.TempDir()
 	body := []byte(`{"$schema":"` + domain.PluginSchemaV1 + `","name":"fixture"}`)
 	if e := os.WriteFile(filepath.Join(root, "plugin.json"), body, 0600); e != nil {
 		t.Fatal(e)
@@ -135,7 +135,9 @@ func TestSkillAtomicFailureAndStagedValidation(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 			injected := errors.New("injected I/O failure")
+			writeReached := false
 			ops := applyOps{write: func(ctx context.Context, r *os.Root, files []File) error {
+				writeReached = true
 				if mode == "write-failure" {
 					if e := r.Mkdir("partial", 0700); e != nil {
 						return e
@@ -189,6 +191,9 @@ func TestSkillAtomicFailureAndStagedValidation(t *testing.T) {
 				return nil
 			}}
 			r, e := applySkill(ctx, p, root, gate, sharedSkillValidation("new-skill"), ops)
+			if !writeReached {
+				t.Fatalf("write fault callback not reached: %v", e)
+			}
 			if e == nil {
 				t.Fatal("injected failure reported success")
 			}

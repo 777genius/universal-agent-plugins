@@ -1,4 +1,4 @@
-//go:build windows && amd64
+//go:build windows && (amd64 || arm64)
 
 package packageview
 
@@ -7,8 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
-	"strings"
 	"syscall"
 	"testing"
 
@@ -16,9 +14,9 @@ import (
 )
 
 // This is an independent, bounded diagnostic, not a retry of Reader.Open.
-// Stage acquisition uses production primitives before openSource/scratchParent
-// sanitize their errors. The fixture has only literal directory components;
-// this helper is not a replacement resolver or an alternate reader profile.
+// Acquisition calls the production resolver with metadata-only observations.
+// Sanitized errors are reported as such; optional native overlays supply deeper
+// causality without maintaining a second resolver in this test.
 // Native codes are logged only when the called primitive actually returns one.
 func TestWindowsFinalCleanupAcquisitionStages(t *testing.T) {
 	root := nativeFixture(t, func(root string) { nativeWrite(t, root, "plugin.json", "core") })
@@ -71,99 +69,18 @@ func windowsFinalCleanupStage(t *testing.T, stage string, err error) error {
 	return fmt.Errorf("%s: %w", stage, err)
 }
 
-func windowsFinalCleanupSource(t *testing.T, role, name string) (_ *source, err error) {
-	name = strings.ReplaceAll(name, "/", `\`)
-	if len(name) < 3 || name[1] != ':' || name[2] != '\\' || !((name[0] >= 'A' && name[0] <= 'Z') || (name[0] >= 'a' && name[0] <= 'z')) {
-		return nil, windowsFinalCleanupStage(t, role+".literal-drive", fail("root_unreadable"))
+// Observe the actual production resolver. A copied walker can silently diverge
+// from source-root role and namespace protection, invalidating this diagnostic.
+func windowsFinalCleanupSource(t *testing.T, role, name string) (*source, error) {
+	open := openSourceWithMetadataStage
+	if role == "scratch" {
+		open = openTrustedScratchWithMetadataStage
 	}
-	u, e := windows.UTF16PtrFromString(name[:3])
-	if err = windowsFinalCleanupStage(t, role+".drive-utf16", e); err != nil {
-		return nil, err
-	}
-	kind := windows.GetDriveType(u)
-	t.Logf("stage=%s.drive-type kind=%d", role, kind)
-	if kind != windows.DRIVE_FIXED {
-		return nil, windowsFinalCleanupStage(t, role+".drive-type", fail("filesystem_unavailable"))
-	}
-	f, e := winOpen(0, `\??\`+name[:3], true)
-	if err = windowsFinalCleanupStage(t, role+".bootstrap.winOpen", e); err != nil {
-		return nil, err
-	}
-	s := &source{anchor: f, records: make(map[winSnapshot]*winObservation)}
-	defer func() {
-		if err != nil {
-			if e := s.close(); e != nil {
-				t.Errorf("%s acquisition cleanup: %v", role, e)
-			}
-		}
-	}()
-	var fs [32]uint16
-	e = windows.GetVolumeInformationByHandle(windows.Handle(f.Fd()), nil, 0, &s.volume, nil, nil, &fs[0], uint32(len(fs)))
-	if err = windowsFinalCleanupStage(t, role+".volume-information", e); err != nil {
-		return nil, err
-	}
-	t.Logf("stage=%s.filesystem type=%q volume=%08x", role, windows.UTF16ToString(fs[:]), s.volume)
-	if windows.UTF16ToString(fs[:]) != "NTFS" {
-		return nil, windowsFinalCleanupStage(t, role+".filesystem", fail("filesystem_unavailable"))
-	}
-	p, err := windowsFinalCleanupRemember(t, role+".bootstrap.remember", s, f)
-	if err != nil {
-		return nil, err
-	}
-	if e = winCheckDirectory(p.file); e != nil {
-		p.file.Close()
-		return nil, windowsFinalCleanupStage(t, role+".bootstrap.protected-directory", e)
-	}
-	s.anchor.Close()
-	s.anchor = p.file
-	rest := strings.TrimRight(name[3:], `\`)
-	if rest == "" {
-		return s, nil
-	}
-	parts, e := winParts(rest)
-	if err = windowsFinalCleanupStage(t, role+".parts", e); err != nil {
-		return nil, err
-	}
-	for i, part := range parts {
-		// Only the fresh fixture's simple components may use staged walking.
-		if part == "" || part == "." || part == ".." {
-			return nil, windowsFinalCleanupStage(t, role+".fixture-component", syscall.EXDEV)
-		}
-		stage := fmt.Sprintf("%s.component[%d]=%q", role, i, part)
-		// Match walk's root-selection validation for literal fixture names.
-		if !filepath.IsLocal(part) || strings.HasSuffix(part, ".") || strings.HasSuffix(part, " ") || strings.ContainsAny(part, "<>|") {
-			return nil, windowsFinalCleanupStage(t, stage+".name", syscall.EXDEV)
-		}
-		f, e := winOpen(windows.Handle(s.anchor.Fd()), part, false)
-		if err = windowsFinalCleanupStage(t, stage+".winOpen", e); err != nil {
-			return nil, err
-		}
-		p, e = windowsFinalCleanupRemember(t, stage+".remember", s, f)
-		f.Close()
-		if e != nil {
-			return nil, e
-		}
-		if p.info.Mode()&os.ModeSymlink != 0 || !p.info.IsDir() {
-			p.file.Close()
-			return nil, windowsFinalCleanupStage(t, stage+".directory", fail("root_wrong_kind"))
-		}
-		s.anchor.Close()
-		s.anchor = p.file
-	}
-	return s, nil
-}
-
-// These snapshots surround the real remember call. They are NOT its internal
-// snapshots and do not establish which comparison failed. No path is reopened
-// to obtain them, and the diagnostic never retries remember after failure.
-func windowsFinalCleanupRemember(t *testing.T, stage string, s *source, f *os.File) (*pinned, error) {
-	before, beforeErr := winMeta(f)
-	p, err := s.rememberMustDuplicate(f, true)
-	if err != nil {
-		after, afterErr := winMeta(f)
-		t.Logf("stage=%s surrounding snapshots before=%+v err=%v after=%+v err=%v (not internal comparison evidence)", stage, before, beforeErr, after, afterErr)
-	}
-	return p, windowsFinalCleanupStage(t, stage, err)
+	s, err := open(name, func(f *os.File, stage string) {
+		snapshot, e := winMeta(f)
+		t.Logf("stage=%s.%s observation=%+v err=%v (not internal comparison evidence)", role, stage, snapshot, e)
+	})
+	return s, windowsFinalCleanupStage(t, role+".openSource", err)
 }
 
 func windowsFinalCleanupAttempt(t *testing.T, root, scratch string) (err error) {

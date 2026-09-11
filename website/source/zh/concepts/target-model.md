@@ -9,6 +9,14 @@ translationRequired: true
 aside: true
 outline: [2, 3]
 ---
+
+[使用插件](/zh/use/) · [构建插件](/zh/build/) — 仅为准备内容，尚未发布。v2 暂不支持项目迁移。
+<p class="locale-historical-identity">目标模型</p>
+
+[plugin-kit-ai v1 分支的历史快照。1.2.4 是命令基准，并非此快照的确切版本。](/en/legacy/v1/)
+
+<details><summary>plugin-kit-ai v1 分支的历史快照。1.2.4 是命令基准，并非此快照的确切版本。</summary>
+
 # 目标模型
 
 目标是您希望存储库产生的输出类型。
@@ -41,3 +49,5 @@ outline: [2, 3]
 ## 安全心理模型
 
 首先从您需要的输出开始。如果存储库稍后增长，您可以添加另一个受支持的输出，而不会改变一个项目保持权威的事实。
+
+</details>

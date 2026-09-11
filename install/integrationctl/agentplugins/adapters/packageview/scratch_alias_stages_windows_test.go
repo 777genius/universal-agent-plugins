@@ -1,4 +1,4 @@
-//go:build windows && amd64
+//go:build windows && (amd64 || arm64)
 
 package packageview
 
@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -38,7 +39,7 @@ func TestWindowsScratchAliasResolutionStages(t *testing.T) {
 			t.Logf("stdlib EvalSymlinks=%q err=%v", eval, evalErr)
 			before := winRecordCount()
 			if evalErr == nil {
-				old, oldErr := openSource(eval)
+				old, oldErr := openSource(eval, GeneratedStaging{})
 				t.Logf("stdlib result openSource err=%v", oldErr)
 				if old != nil {
 					if e := old.close(); e != nil {
@@ -51,13 +52,15 @@ func TestWindowsScratchAliasResolutionStages(t *testing.T) {
 			if e != nil {
 				t.Fatal("scratch resolution stage:", e)
 			}
-			scratch, e := openSource(resolved)
-			t.Logf("resolved openSource err=%v", e)
+			var stack [64]byte
+			t.Logf("resolved acquisition pid=%d goroutine=%s", os.Getpid(), strings.Fields(string(stack[:runtime.Stack(stack[:], false)]))[1])
+			scratch, e := openTrustedScratchWithMetadataStage(resolved, nil)
+			t.Logf("resolved trusted scratch acquisition err=%v", e)
 			if e != nil {
 				t.Fatal("protected acquisition stage:", e)
 			}
 			defer scratch.close()
-			source, e := openSource(target)
+			source, e := openSource(target, GeneratedStaging{})
 			if e != nil {
 				t.Fatal("target acquisition stage:", e)
 			}

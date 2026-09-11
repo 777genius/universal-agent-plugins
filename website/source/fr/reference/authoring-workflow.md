@@ -7,6 +7,14 @@ locale: "fr"
 generated: false
 translationRequired: true
 ---
+
+[Utiliser des plugins](/fr/use/) · [Créer des plugins](/fr/build/) — Préparation, pas une version publiée. La migration des projets vers v2 est indisponible.
+<p class="locale-historical-identity">Flux de travail de création</p>
+
+[Instantané historique de la branche plugin-kit-ai v1. 1.2.4 est la référence des commandes, pas la version exacte de cet instantané.](/en/legacy/v1/)
+
+<details><summary>Instantané historique de la branche plugin-kit-ai v1. 1.2.4 est la référence des commandes, pas la version exacte de cet instantané.</summary>
+
 # Flux de travail de création
 
 Le flux de travail recommandé est volontairement simple :
@@ -56,3 +64,5 @@ Le flux de travail peut s'élargir pour des cas particuliers :
 - les commandes groupées sont importantes pour les flux de transfert portables Python et Node
 
 Commencez par [Démarrage rapide](/fr/guide/quickstart) lorsque vous avez besoin du chemin le plus court.
+
+</details>

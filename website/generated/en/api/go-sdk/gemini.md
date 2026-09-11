@@ -12,7 +12,7 @@ maturity: "stable"
 sourceRef: "sdk/gemini"
 translationRequired: false
 ---
-<DocMetaCard surface="go-sdk" stability="public-stable" maturity="stable" source-ref="sdk/gemini" source-href="https://github.com/777genius/plugin-kit-ai/tree/main/sdk/gemini" />
+<DocMetaCard surface="go-sdk" stability="public-stable" maturity="stable" source-ref="sdk/gemini" source-href="https://github.com/777genius/universal-agent-plugins/tree/main/sdk/gemini" />
 
 # gemini
 

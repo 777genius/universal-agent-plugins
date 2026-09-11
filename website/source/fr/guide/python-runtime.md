@@ -7,6 +7,14 @@ locale: "fr"
 generated: false
 translationRequired: true
 ---
+
+[Utiliser des plugins](/fr/use/) · [Créer des plugins](/fr/build/) — Préparation, pas une version publiée. La migration des projets vers v2 est indisponible.
+<p class="locale-historical-identity">Créer un plugin d&#x27;exécution Python</p>
+
+[Instantané historique de la branche plugin-kit-ai v1. 1.2.4 est la référence des commandes, pas la version exacte de cet instantané.](/en/legacy/v1/)
+
+<details><summary>Instantané historique de la branche plugin-kit-ai v1. 1.2.4 est la référence des commandes, pas la version exacte de cet instantané.</summary>
+
 # Créer un plugin d'exécution Python
 
 Utilisez ce chemin lorsque votre équipe écrit déjà Python et que vous souhaitez que le plugin s'exécute à partir de ce dépôt.
@@ -174,3 +182,5 @@ Les CLI stables publiés déduisent automatiquement la version d'assistance corr
 - Lisez [Choisir l'environnement d'exécution](/fr/concepts/choosing-runtime) pour connaître les compromis d'exécution.
 - Lisez [Choisir le modèle de livraison](/fr/guide/choose-delivery-model) pour connaître la décision entre l'assistance locale et le package partagé.
 - Ouvrez [API Python Runtime](/fr/api/runtime-python/) lorsque vous avez besoin de la référence d'assistance.
+
+</details>

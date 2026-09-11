@@ -41,26 +41,45 @@ function validateExpected(version, integrity, shasum) {
   if (!SHASUM.test(shasum)) fail("shasum must be an exact lowercase SHA-1 value");
 }
 
-function validatePackJSON(value, version) {
+// Fixed packing identities only; registry/provenance policy remains agent-only.
+function validateProductPackJSON(value, product, version) {
+  const name = product === "agentplugins" ? PACKAGE_NAME :
+    product === "plugin-kit-ai" ? "plugin-kit-ai" : null;
+  if (!name) fail("unknown fixed npm product");
+  if (typeof version !== "string" || version.match(VERSION)?.[0] !== version) {
+    fail("version must be an exact stable semantic version");
+  }
   let record;
   if (Array.isArray(value)) {
     if (value.length !== 1) fail("npm pack JSON must contain exactly one record");
     [record] = value;
   } else if (value && typeof value === "object") {
     const keys = Object.keys(value);
-    if (keys.length !== 1 || keys[0] !== PACKAGE_NAME) {
+    if (keys.length !== 1 || keys[0] !== name) {
       fail("npm pack JSON must contain exactly one package-named record");
     }
-    record = value[PACKAGE_NAME];
+    record = value[name];
   } else {
     fail("npm pack JSON must contain exactly one record");
   }
-  if (!record || record.name !== PACKAGE_NAME || record.version !== version ||
-      record.filename !== `${PACKAGE_NAME}-${version}.tgz`) {
+  if (!record || typeof record !== "object" || Array.isArray(record) || record.name !== name ||
+      record.version !== version ||
+      record.filename !== `${name}-${version}.tgz`) {
     fail("npm pack JSON package identity does not match the release");
   }
+  if (typeof record.integrity !== "string" || typeof record.shasum !== "string") {
+    fail("npm pack JSON integrity and shasum must be strings");
+  }
+  if (record.shasum.length !== 40) fail("shasum must be an exact lowercase SHA-1 value");
   validateExpected(version, record.integrity, record.shasum);
+  if ("sha512-" + Buffer.from(record.integrity.slice(7), "base64").toString("base64") !== record.integrity) {
+    fail("npm pack JSON integrity must be canonical SHA-512 SRI");
+  }
   return record;
+}
+
+function validatePackJSON(value, version) {
+  return validateProductPackJSON(value, "agentplugins", version);
 }
 
 function validatePublicMetadata(metadata, version, integrity, shasum) {
@@ -261,6 +280,7 @@ module.exports = {
   validateDownloadedTarball,
   validateAuditSignatures,
   validatePackJSON,
+  validateProductPackJSON,
   validatePublicMetadata,
   validateSLSAAttestation
 };

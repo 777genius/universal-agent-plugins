@@ -39,8 +39,8 @@ func TestFailureCancellationAndCleanup(t *testing.T) {
 			if kind == "commit-failure" {
 				ops.rename = func(*os.File, string, *os.File, string) error { return sentinel }
 			}
-			result, err := apply(ctx, planFor(t, "skill"), ApplyOptions{Destination: dest, Validate: func(ctx context.Context, s string) error {
-				if err := validate(ctx, s); err != nil {
+			result, err := apply(ctx, planFor(t, "skill"), ApplyOptions{Destination: dest, Validate: func(ctx context.Context, s string, root *os.Root) error {
+				if err := validate(ctx, s, root); err != nil {
 					return err
 				}
 				switch kind {
@@ -107,7 +107,16 @@ func TestMissingParentSymlinkParentAndSourceOverlap(t *testing.T) {
 		t.Fatal(err)
 	}
 	p := planFor(t, "skill")
-	validate := realValidation(t)
+	validationCalls := 0
+	realValidate := realValidation(t)
+	validate := func(ctx context.Context, stage string, dir *os.Root) error {
+		validationCalls++
+		return realValidate(ctx, stage, dir)
+	}
+	// Prove this physical fixture reaches real validation before adding aliases.
+	if result, err := Apply(context.Background(), p, ApplyOptions{Destination: filepath.Join(root, "positive"), Validate: validate}); err != nil || !result.Committed || validationCalls != 1 {
+		t.Fatalf("physical root positive control: %+v %v calls=%d", result, err, validationCalls)
+	}
 	for _, o := range []ApplyOptions{
 		{Destination: filepath.Join(root, "missing", "out")},
 		{Destination: filepath.Join(source, "out"), SourceRoots: []string{source}},
@@ -132,6 +141,9 @@ func TestMissingParentSymlinkParentAndSourceOverlap(t *testing.T) {
 	}
 	if _, err := Apply(context.Background(), p, ApplyOptions{Destination: filepath.Join(source, "out"), SourceRoots: []string{alias}, Validate: validate}); err == nil {
 		t.Fatal("source alias overlap")
+	}
+	if validationCalls != 1 {
+		t.Fatalf("unsafe input reached validation: calls=%d", validationCalls)
 	}
 	assertOnly(t, source, "sentinel")
 	b, _ := os.ReadFile(filepath.Join(source, "sentinel"))
@@ -169,8 +181,8 @@ func TestStagingReplacementRefusesForeignCleanup(t *testing.T) {
 	fault := errors.New("abort after denied stage replacement")
 	blocked := false
 	var original, replaced string
-	result, err := Apply(context.Background(), p, ApplyOptions{Destination: dest, Validate: func(ctx context.Context, s string) error {
-		if err := validate(ctx, s); err != nil {
+	result, err := Apply(context.Background(), p, ApplyOptions{Destination: dest, Validate: func(ctx context.Context, s string, root *os.Root) error {
+		if err := validate(ctx, s, root); err != nil {
 			return err
 		}
 		original = filepath.Dir(s)
@@ -197,7 +209,7 @@ func TestStagingReplacementRefusesForeignCleanup(t *testing.T) {
 		if err != nil || !result.Committed || result.Destination != dest {
 			t.Fatalf("commit after denied attack: %+v %v", result, err)
 		}
-		if err := validate(context.Background(), dest); err != nil {
+		if err := validate(context.Background(), dest, nil); err != nil {
 			t.Fatal(err)
 		}
 		assertOnly(t, parent, "out", "unowned")
@@ -238,8 +250,8 @@ func TestParentReplacementRefusesCommitAndCleansOwnedStage(t *testing.T) {
 	attempted, blocked := false, false
 	dest := filepath.Join(parent, "out")
 	p := planFor(t, "skill")
-	result, err := Apply(context.Background(), p, ApplyOptions{Destination: dest, Validate: func(ctx context.Context, s string) error {
-		if err := validate(ctx, s); err != nil {
+	result, err := Apply(context.Background(), p, ApplyOptions{Destination: dest, Validate: func(ctx context.Context, s string, root *os.Root) error {
+		if err := validate(ctx, s, root); err != nil {
 			return err
 		}
 		attempted = true
@@ -265,7 +277,7 @@ func TestParentReplacementRefusesCommitAndCleansOwnedStage(t *testing.T) {
 		if err != nil || !result.Committed || result.Destination != dest {
 			t.Fatalf("commit after denied attack: %+v %v", result, err)
 		}
-		if err := validate(context.Background(), dest); err != nil {
+		if err := validate(context.Background(), dest, nil); err != nil {
 			t.Fatal(err)
 		}
 		assertOnly(t, parent, "out", "unowned")
@@ -315,8 +327,8 @@ func TestPayloadReplacementDoesNotDeleteForeignTree(t *testing.T) {
 	parent := tempRoot(t)
 	validate := realValidation(t)
 	var foreign, moved string
-	result, err := Apply(context.Background(), planFor(t, "skill"), ApplyOptions{Destination: filepath.Join(parent, "out"), Validate: func(ctx context.Context, s string) error {
-		if err := validate(ctx, s); err != nil {
+	result, err := Apply(context.Background(), planFor(t, "skill"), ApplyOptions{Destination: filepath.Join(parent, "out"), Validate: func(ctx context.Context, s string, root *os.Root) error {
+		if err := validate(ctx, s, root); err != nil {
 			return err
 		}
 		foreign = s
@@ -428,12 +440,12 @@ func TestPostCommitCleanupErrorRetainsCommittedResult(t *testing.T) {
 		}
 		return nil
 	}}
-	result, err := apply(context.Background(), planFor(t, "skill"), ApplyOptions{Destination: dest, Validate: func(ctx context.Context, s string) error { container = filepath.Dir(s); return validate(ctx, s) }}, ops)
+	result, err := apply(context.Background(), planFor(t, "skill"), ApplyOptions{Destination: dest, Validate: func(ctx context.Context, s string, root *os.Root) error { container = filepath.Dir(s); return validate(ctx, s, root) }}, ops)
 	var cleanup *CleanupError
 	if !errors.As(err, &cleanup) || !result.Committed || result.Destination != dest {
 		t.Fatalf("lost committed result: %+v %v", result, err)
 	}
-	if err := validate(context.Background(), dest); err != nil {
+	if err := validate(context.Background(), dest, nil); err != nil {
 		t.Fatal(err)
 	}
 	b, readErr := os.ReadFile(filepath.Join(container, "retained"))

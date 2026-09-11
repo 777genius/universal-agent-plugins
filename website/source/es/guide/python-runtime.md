@@ -7,6 +7,14 @@ locale: "es"
 generated: false
 translationRequired: true
 ---
+
+[Usar plugins](/es/use/) · [Crear plugins](/es/build/) — Preparación, no es un lanzamiento. La migración de proyectos a v2 aún no está disponible.
+<p class="locale-historical-identity">Cree un complemento de tiempo de ejecución Python</p>
+
+[Instantánea histórica de la rama plugin-kit-ai v1. 1.2.4 es la referencia de comandos, no la versión exacta de esta instantánea.](/en/legacy/v1/)
+
+<details><summary>Instantánea histórica de la rama plugin-kit-ai v1. 1.2.4 es la referencia de comandos, no la versión exacta de esta instantánea.</summary>
+
 # Cree un complemento de tiempo de ejecución Python
 
 Utilice esta ruta cuando su equipo ya escriba Python y desee que el complemento se ejecute desde este repositorio.
@@ -174,3 +182,5 @@ Los CLIs estables publicados infieren automáticamente la versión auxiliar corr
 - Lea [Elección del tiempo de ejecución](/es/concepts/choosing-runtime) para conocer las compensaciones del tiempo de ejecución.
 - Lea [Elegir modelo de entrega](/es/guide/choose-delivery-model) para conocer la decisión entre ayuda local y paquete compartido.
 - Abra [Python Runtime API](/es/api/runtime-python/) cuando necesite la referencia de ayuda.
+
+</details>

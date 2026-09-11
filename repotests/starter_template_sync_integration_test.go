@@ -49,13 +49,17 @@ func TestStarterTemplateSyncContractFilesStayAligned(t *testing.T) {
 	mustContain(t, workflow, "run: ./scripts/update-starter-template.sh")
 	mustContain(t, workflow, "default: \"all\"")
 	mustContain(t, workflow, "- all-runtime-package")
-	// Templates remain available for historical YAML projects across both targets
-	// and all three runtimes; the public Build entry does not claim v2 is released.
-	mustContain(t, rootReadme, "**Preparation — unreleased:** the standard-first authoring CLI is not released.")
-	mustContain(t, strings.ReplaceAll(rootReadme, "\r\n", "\n"), "For existing v1 `plugin.yaml` projects, retain the original templates, generation,\nvalidation and export workflows in [the historical authoring guide](docs/PLUGIN_KIT_AI_AUTHORING.md).")
-	mustContain(t, rootReadme, "The reference below is for historical v1 maintenance.")
-	mustContain(t, rootReadme, "[examples/starters/README.md](examples/starters/README.md)")
-	mustContain(t, rootReadme, "the stable local Python and Node subset on `codex-runtime` and `claude`")
+	// Preserved v1 starters remain discoverable without being advertised as
+	// root plugin.json templates for the unreleased standard authoring MVP.
+	_, historicalReadme, found := cutHistoricalReadme(rootReadme)
+	if !found {
+		t.Fatal("README missing historical authoring boundary")
+	}
+	mustContain(t, strings.Join(strings.Fields(historicalReadme), " "), "The repository preserves Codex and Claude starters across Go, Python, and Node/TypeScript.")
+	mustContain(t, historicalReadme, "[starters](examples/starters/README.md)")
+	mustContain(t, historicalReadme, "the stable local Python and Node subset on `codex-runtime` and `claude`")
+	mustContain(t, startersReadme, "Historical plugin-kit-ai v1 managed examples; baseline 1.2.4.")
+	mustContain(t, startersReadme, "These are not root `plugin.json` starters for the standard MVP.")
 	for starter, repo := range expected {
 		mustContain(t, cliReadme, "https://github.com/777genius/"+repo)
 		if !fileExists(filepath.Join(root, "examples", "starters", starter, "plugin", "plugin.yaml")) {

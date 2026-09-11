@@ -7,6 +7,14 @@ locale: "es"
 generated: false
 translationRequired: true
 ---
+
+[Usar plugins](/es/use/) · [Crear plugins](/es/build/) — Preparación, no es un lanzamiento. La migración de proyectos a v2 aún no está disponible.
+<p class="locale-historical-identity">Límite de soporte</p>
+
+[Instantánea histórica de la rama plugin-kit-ai v1. 1.2.4 es la referencia de comandos, no la versión exacta de esta instantánea.](/en/legacy/v1/)
+
+<details><summary>Instantánea histórica de la rama plugin-kit-ai v1. 1.2.4 es la referencia de comandos, no la versión exacta de esta instantánea.</summary>
+
 # Límite de soporte
 
 Utilice esta página cuando necesite la respuesta más breve y honesta sobre soporte.
@@ -65,3 +73,4 @@ Pueden ser útiles para los primeros usuarios, pero no deberían convertirse sil
 ## Regla práctica
 
 Si elige formar parte de un equipo, estandarice el camino más estrecho cuya promesa realmente esté dispuesto a defender en CI, implementación y transferencia.
+</details>

@@ -1,4 +1,4 @@
-//go:build windows && amd64
+//go:build windows && (amd64 || arm64)
 
 package packageview
 
@@ -20,7 +20,7 @@ func scratchParent(s *source, _ string, tempDir string) (_ string, release func(
 	if e != nil {
 		return "", nil, fail("scratch_unavailable")
 	}
-	scratch, e := openSource(tmp)
+	scratch, e := openTrustedScratchWithMetadataStage(tmp, nil)
 	if e != nil {
 		return "", nil, fail("scratch_unavailable")
 	}
@@ -37,11 +37,17 @@ func scratchParent(s *source, _ string, tempDir string) (_ string, release func(
 	return tmp, scratch.close, nil
 }
 
+// Only trusted scratch configuration may select this purpose. The ordinary
+// source APIs remain strict even when a source happens to live in a temp path.
+func openTrustedScratchWithMetadataStage(name string, stage func(*os.File, string)) (*source, error) {
+	return openWindowsRoot(name, winTrustedScratch, stage)
+}
+
 // winResolveScratch is only for the trusted, cleanable scratch configuration.
 // Go 1.23+ reports junctions as ModeIrregular, so EvalSymlinks leaves a leaf
-// junction unresolved (and rejects one in an ancestor). openSource must still
+// junction unresolved (and rejects one in an ancestor). Acquisition must still
 // reject those reparse points. Resolve known links here using metadata only,
-// then let openSource acquire and protect the entire resolved directory ancestry.
+// then acquire and protect the entire resolved directory ancestry.
 // Never use this resolver for a source path or as physical identity evidence.
 func winResolveScratch(name string) (string, error) {
 	name, e := filepath.Abs(name)

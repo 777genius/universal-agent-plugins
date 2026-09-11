@@ -52,7 +52,7 @@ func TestConcurrentApplyWithSharedProjectService(t *testing.T) {
 			}()
 			result, err := scaffold.Apply(context.Background(), plan, scaffold.ApplyOptions{
 				Destination: dest,
-				Validate: func(ctx context.Context, stage string) error {
+				Validate: func(ctx context.Context, stage string, _ *os.Root) error {
 					p, err := service.Read(ctx, stage)
 					if err != nil {
 						return err

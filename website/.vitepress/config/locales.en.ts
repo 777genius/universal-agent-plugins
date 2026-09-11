@@ -1,3 +1,4 @@
+import { journeyNav } from "../../tools/lib/journeys.mjs";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -30,6 +31,7 @@ export const enLocaleConfig = {
       copyright: "Apache-2.0 Licensed"
     },
     nav: [
+      ...journeyNav("en"),
       { text: "Guide", link: "/en/guide/" },
       { text: "Concepts", link: "/en/concepts/" },
       { text: "Reference", link: "/en/reference/" },
@@ -38,7 +40,7 @@ export const enLocaleConfig = {
     ],
     sidebar: readSidebar("sidebars.en.json"),
     editLink: {
-      pattern: "https://github.com/777genius/plugin-kit-ai/edit/main/website/source/:path",
+      pattern: "https://github.com/777genius/universal-agent-plugins/edit/main/website/source/:path",
       text: "Edit this page"
     }
   }

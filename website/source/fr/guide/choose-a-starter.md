@@ -7,6 +7,14 @@ locale: "fr"
 generated: false
 translationRequired: true
 ---
+
+[Utiliser des plugins](/fr/use/) · [Créer des plugins](/fr/build/) — Préparation, pas une version publiée. La migration des projets vers v2 est indisponible.
+<p class="locale-historical-identity">Choisissez un dépôt de démarrage</p>
+
+[Instantané historique de la branche plugin-kit-ai v1. 1.2.4 est la référence des commandes, pas la version exacte de cet instantané.](/en/legacy/v1/)
+
+<details><summary>Instantané historique de la branche plugin-kit-ai v1. 1.2.4 est la référence des commandes, pas la version exacte de cet instantané.</summary>
+
 # Choisissez un dépôt de démarrage
 
 Utilisez cette page lorsque vous souhaitez accéder au chemin le plus rapide vers un référentiel pouvant ensuite être étendu à des sorties plus prises en charge.
@@ -95,3 +103,5 @@ Un choix de partant à l’échelle de l’équipe doit rester cohérent suffisa
 Mais un choix de démarrage stable n’empêche toujours pas un dépôt d’ajouter d’autres cibles ultérieurement si le produit les nécessite.
 
 Associez cette page à [Modèles de démarrage](/fr/guide/starter-templates), [Choisir le modèle de livraison](/fr/guide/choose-delivery-model) et [Norme de référentiel](/fr/reference/repository-standard).
+
+</details>

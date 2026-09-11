@@ -1,9 +1,10 @@
 package agentpluginscli
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
+
+	"github.com/777genius/plugin-kit-ai/cli/internal/outputjson"
 )
 
 const outputSchemaVersion = 1
@@ -17,12 +18,7 @@ type outputResultProvider interface {
 	outputResult() string
 }
 
-type outputEnvelope struct {
-	SchemaVersion int    `json:"schema_version"`
-	Command       string `json:"command"`
-	Result        string `json:"result"`
-	Data          any    `json:"data"`
-}
+type outputEnvelope = outputjson.Envelope
 
 func writeJSONOutput(writer io.Writer, command string, data any) error {
 	result := outputResultSuccess
@@ -35,9 +31,7 @@ func writeJSONOutput(writer io.Writer, command string, data any) error {
 }
 
 func writeJSONResult(writer io.Writer, command, result string, data any) error {
-	encoder := json.NewEncoder(writer)
-	encoder.SetEscapeHTML(false)
-	return encoder.Encode(outputEnvelope{SchemaVersion: outputSchemaVersion, Command: command, Result: result, Data: data})
+	return outputjson.Write(writer, command, result, data)
 }
 
 func writeProgress(app App, _ string, message string) {

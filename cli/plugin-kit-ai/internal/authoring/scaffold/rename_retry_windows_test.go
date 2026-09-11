@@ -186,15 +186,15 @@ func TestPackageRenameRetryWithReaderProcess(t *testing.T) {
 				}
 				return renameResult(from, old, to, new, renameWindows(from, old, to, new, r))
 			}
-			result, err := apply(ctx, planFor(t, "skill"), ApplyOptions{Destination: dest, Validate: func(ctx context.Context, path string) error {
+			result, err := apply(ctx, planFor(t, "skill"), ApplyOptions{Destination: dest, Validate: func(ctx context.Context, path string, root *os.Root) error {
 				payload = path
-				return validate(ctx, path)
+				return validate(ctx, path, root)
 			}}, ops)
 			if kind == "release" || kind == "nested-reader" || blockedTamper {
 				if err != nil || !result.Committed || waits != 1 {
 					t.Fatalf("result=%+v waits=%d err=%v", result, waits, err)
 				}
-				if err := validate(context.Background(), dest); err != nil {
+				if err := validate(context.Background(), dest, nil); err != nil {
 					t.Fatal(err)
 				}
 			} else {

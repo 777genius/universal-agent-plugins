@@ -183,7 +183,7 @@ func TestMutationDuringReadAndBetweenStages(t *testing.T) {
 
 func TestVerifiedHandleReopensPinnedInode(t *testing.T) {
 	root, r := fixture(t)
-	s, e := openSource(root)
+	s, e := openSource(root, GeneratedStaging{})
 	if e != nil {
 		t.Fatal(e)
 	}

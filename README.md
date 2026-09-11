@@ -10,6 +10,10 @@ Install and manage Agent Plugins 1.0 across your AI agents with one CLI.
 
 ## Use plugins
 
+Install, inspect, update, repair, and remove packages with the existing installer.
+The [Use guide source](website/source/en/use/index.md) collects this journey.
+See [Build plugins](#build-plugins--unreleased-preview) below for the unreleased authoring preview.
+
 ### Quick start
 
 Choose your operating system and run the commands below.
@@ -130,8 +134,12 @@ The installed package is standard-first:
 ```text
 plugin.json
 ├── skills/       optional reusable instructions
-└── mcp.json      optional MCP servers
+├── mcp.json      optional MCP servers
+└── hooks/        optional client-specific extension
 ```
+
+Skills and MCP are portable components. Hooks and other client-specific
+extensions depend on the target client; they do not imply portable behavior.
 
 You can also install a local package or a pinned GitHub package without adding
 it to the registry. Direct-install examples are collected near the end of this
@@ -242,43 +250,72 @@ path and package digest are stored for safe replay. Direct full-SHA installation
 remain immutable; use `switch` to move to another exact source. `repair` reapplies
 the recorded source, and `remove` changes only files owned by the CLI.
 
+## Build plugins — unreleased preview
+
 <a id="authoring-and-development"></a>
 
-## Build plugins
+The [prepared Build guide source](website/source/en/build/index.md) describes
+root `plugin.json` with optional `skills/` and `mcp.json`, followed by the offline
+init → validate → inspect → static test loop and an installer planner handoff.
+`agentplugins author` and `plugin-kit-ai` are the two prepared entrypoints to
+one standard authoring engine. The standard-first authoring CLI is not released.
+This is unreleased preview documentation, not
+an announcement that `plugin-kit-ai@2` is available on npm. Public deployment
+remains gated on release acceptance; the installer instructions above retain
+their existing behavior. See the [Use / Build quickstart](https://777genius.github.io/universal-agent-plugins/docs/en/guide/quickstart.html).
 
-Build portable Agent Plugins 1.0 packages around `plugin.json`, with optional
-`skills/` and `mcp.json`. See the [Agent Plugins 1.0 specification](https://agent-plugins.org/specification)
-and the [Use / Build quickstart](https://777genius.github.io/universal-agent-plugins/docs/en/guide/quickstart.html).
+Authoring validation and project doctor are distinct from installer
+`agentplugins validate` and `agentplugins doctor`. Static checks do not prove
+runtime execution, OAuth, or client activation. Runtime/dev/bootstrap,
+client generation, export/bundle, and publication are deferred from this MVP.
+There is no implicit YAML fallback or second supported YAML engine.
 
-**Preparation — unreleased:** the standard-first authoring CLI is not released.
-As checked on 2026-09-07, npm `universal-agent-plugins` is 0.1.53 and the stable
-GitHub release is `agentplugins-v0.1.53`. npm/PyPI `plugin-kit-ai` is 1.2.4:
-`plugin-kit-ai@latest` is the historical v1 tool, not standard-first v2.
+**Preparation — unreleased:** as checked on 2026-09-07, npm `universal-agent-plugins`
+is 0.1.53 and the stable GitHub release is `agentplugins-v0.1.53`. npm/PyPI
+`plugin-kit-ai` is 1.2.4: `plugin-kit-ai@latest` is the historical v1 tool, not
+standard-first v2.
 
-For existing v1 `plugin.yaml` projects, retain the original templates, generation,
-validation and export workflows in [the historical authoring guide](docs/PLUGIN_KIT_AI_AUTHORING.md).
-The reference below is for historical v1 maintenance.
+### Historical authoring and development
+
+[Historical plugin-kit-ai v1, baseline 1.2.4](website/source/en/legacy/v1/index.md)
+provides version context. Project migration is not available in v2 yet.
+Maintain legacy projects using the v1 1.2.4 command set.
+The [preserved authoring guide](docs/PLUGIN_KIT_AI_AUTHORING.md) explains the
+historical YAML, generation, and export workflows; it is not the standard MVP.
+
+Build one plugin and ship it to many AI agents was the legacy authoring goal.
+The repository preserves Codex and Claude starters across Go, Python, and
+Node/TypeScript. See the classified [starters](examples/starters/README.md),
+[production examples](examples/plugins/README.md), [local examples](examples/local/README.md),
+and [Skills components](examples/skills/README.md).
 
 <details>
-<summary>Legacy authoring and SDK reference</summary>
+<summary>Historical v1 authoring and SDK reference — baseline 1.2.4</summary>
+
+All commands, stability labels, and supported-output claims in this section
+describe the preserved v1 workflow, not the unreleased standard authoring MVP.
 
 `plugin-kit-ai` keeps authored source under `plugin/`, generates the supported outputs you need, and helps you validate the repo before handoff. This includes supported outputs for Claude, Codex, Gemini, Cursor, and OpenCode where the repo shape allows it. The honest promise is `one repo / many supported outputs`, not fake parity everywhere.
 
-overview: [plugin-kit-ai documentation](https://777genius.github.io/universal-agent-plugins/docs/en/)
-Use / Build and historical v1 maintenance: [Quickstart](https://777genius.github.io/universal-agent-plugins/docs/en/guide/quickstart.html)
-historical v1 template selection: [Choose What You Are Building](https://777genius.github.io/universal-agent-plugins/docs/en/guide/choose-what-you-are-building.html)
-one repo, many outputs: [What You Can Build](https://777genius.github.io/universal-agent-plugins/docs/en/guide/what-you-can-build.html)
-honest caveat: [Support Boundary](https://777genius.github.io/universal-agent-plugins/docs/en/reference/support-boundary.html)
+overview: [plugin-kit-ai documentation](https://github.com/777genius/universal-agent-plugins/blob/9beca10448ac50fbe526a52101d1433a12471980/website/source/en/index.md)
+fastest start: [Quickstart](https://777genius.github.io/universal-agent-plugins/docs/en/guide/quickstart.html)
+choose by job first: [Choose What You Are Building](https://github.com/777genius/universal-agent-plugins/blob/9beca10448ac50fbe526a52101d1433a12471980/website/source/en/guide/choose-what-you-are-building.md)
+one repo, many outputs: [What You Can Build](https://github.com/777genius/universal-agent-plugins/blob/9beca10448ac50fbe526a52101d1433a12471980/website/source/en/guide/what-you-can-build.md)
+honest caveat: [Support Boundary](https://github.com/777genius/universal-agent-plugins/blob/9beca10448ac50fbe526a52101d1433a12471980/website/source/en/reference/support-boundary.md)
 
 ### Legacy quick start
 
+Use an exact v1 1.2.4 executable for these commands. The Homebrew and fallback
+channels below are retained as historical references, not version-pinned setup.
+
 ```bash
+# Historical Homebrew channel (not version-pinned):
 brew install 777genius/homebrew-plugin-kit-ai/plugin-kit-ai
 ```
 
-npm: `npm i -g plugin-kit-ai` or `npx plugin-kit-ai@latest ...`
+npm: `npm i -g plugin-kit-ai@1.2.4` or `npx plugin-kit-ai@1.2.4 ...`
 
-pipx (`public-beta`, only when that release is published to PyPI): `pipx install plugin-kit-ai`
+pipx (`public-beta`, only when that release is published to PyPI): `pipx install plugin-kit-ai==1.2.4`
 
 fallback installer: `curl -fsSL https://raw.githubusercontent.com/777genius/plugin-kit-ai/main/scripts/install.sh | sh`
 

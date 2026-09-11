@@ -8,6 +8,14 @@ generated: false
 translationRequired: true
 ---
 
+[Использовать плагины](/ru/use/) · [Создавать плагины](/ru/build/) — Подготовка, не релиз. Миграция проектов в v2 пока недоступна.
+<p class="locale-historical-identity">Как публиковать плагины</p>
+
+[Исторический снимок ветки plugin-kit-ai v1. 1.2.4 — базовая версия команд, а не точная версия этого снимка.](/en/legacy/v1/)
+
+<details><summary>Исторический снимок ветки plugin-kit-ai v1. 1.2.4 — базовая версия команд, а не точная версия этого снимка.</summary>
+
+
 # Как публиковать плагины
 
 Откройте этот гайд, когда repo уже авторится через `plugin-kit-ai`, и вам нужен самый понятный следующий шаг для публикации в Codex, Claude или Gemini.
@@ -155,3 +163,5 @@ plugin-kit-ai publish ./my-plugin --all --dry-run --format json
 - [`plugin-kit-ai publish`](/ru/api/cli/plugin-kit-ai-publish)
 - [`plugin-kit-ai publication`](/ru/api/cli/plugin-kit-ai-publication)
 - [`plugin-kit-ai publication doctor`](/ru/api/cli/plugin-kit-ai-publication-doctor)
+
+</details>

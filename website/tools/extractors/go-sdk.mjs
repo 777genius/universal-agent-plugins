@@ -1,3 +1,4 @@
+import { verifiedGomarkdoc } from "../lib/preflight.mjs";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { docsToolsRoot, publicGoPackages, repoBrowserUrl, repoRoot } from "../config/site.mjs";
@@ -7,6 +8,7 @@ import { makeEntity, localeTitle } from "../lib/site-model.mjs";
 import { run } from "../lib/process.mjs";
 
 export async function extractGoSDK() {
+  const gomarkdoc = await verifiedGomarkdoc();
   const root = path.join(docsToolsRoot, "go-sdk");
   await ensureDir(root);
   const entities = [];
@@ -15,12 +17,10 @@ export async function extractGoSDK() {
   for (const pkg of publicGoPackages) {
     const outPath = path.join(root, `${pkg.id}.md`);
     await run(
-      "go",
+      gomarkdoc,
       [
-        "run",
-        "github.com/princjef/gomarkdoc/cmd/gomarkdoc@v1.1.0",
         "--repository.url",
-        "https://github.com/777genius/plugin-kit-ai",
+        "https://github.com/777genius/universal-agent-plugins",
         "--repository.default-branch",
         "main",
         "--output",

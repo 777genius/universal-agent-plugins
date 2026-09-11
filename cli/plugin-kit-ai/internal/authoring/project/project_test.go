@@ -35,8 +35,8 @@ func empty(t *testing.T, root string) {
 }
 func writableNative(t *testing.T) {
 	t.Helper()
-	if runtime.GOOS != "linux" && !(runtime.GOOS == "windows" && runtime.GOARCH == "amd64") {
-		t.Skip("writable native authoring requires Linux or Windows amd64")
+	if runtime.GOOS != "linux" && !(runtime.GOOS == "windows" && (runtime.GOARCH == "amd64" || runtime.GOARCH == "arm64")) {
+		t.Skip("writable native authoring requires Linux or Windows amd64/arm64")
 	}
 }
 
@@ -188,4 +188,40 @@ func TestCapturedCommandContainment(t *testing.T) {
 		}
 		empty(t, scratch)
 	}
+}
+
+// ReadGeneratedStaging is the seam scaffold.Apply's own self-validation uses;
+// it must behave exactly like Read for an ordinary caller-owned root (same
+// facts, same cleanup) and must require a live directory handle, never a bare
+// path. A proof built for a different directory is rejected only where the
+// profile can act on it at all (Darwin; see source_darwin_test.go) -- Linux
+// and Windows never required a read-only mount and ignore it, exactly as
+// they ignore the zero value.
+func TestReadGeneratedStagingMatchesReadAndRequiresLiveHandle(t *testing.T) {
+	writableNative(t)
+	root, scratch := t.TempDir(), t.TempDir()
+	put(t, root, "plugin.json", core)
+	s := Service{Scratch: scratch}
+	want, e := s.Read(context.Background(), root)
+	if e != nil {
+		t.Fatal(e)
+	}
+	empty(t, scratch)
+	dir, e := os.OpenRoot(root)
+	if e != nil {
+		t.Fatal(e)
+	}
+	defer dir.Close()
+	got, e := s.ReadGeneratedStaging(context.Background(), root, dir)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if got.Input.Identity.Digest != want.Input.Identity.Digest || got.Facts.Package == nil {
+		t.Fatalf("ReadGeneratedStaging diverged from Read: %+v vs %+v", got, want)
+	}
+	empty(t, scratch)
+	if _, e := s.ReadGeneratedStaging(context.Background(), root, nil); e == nil {
+		t.Fatal("nil handle accepted")
+	}
+	empty(t, scratch)
 }

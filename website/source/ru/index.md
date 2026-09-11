@@ -8,6 +8,14 @@ generated: false
 translationRequired: true
 ---
 
+[Использовать плагины](/ru/use/) · [Создавать плагины](/ru/build/) — Подготовка, не релиз. Миграция проектов в v2 пока недоступна.
+<p class="locale-historical-identity">Документация plugin-kit-ai</p>
+
+[Исторический снимок ветки plugin-kit-ai v1. 1.2.4 — базовая версия команд, а не точная версия этого снимка.](/en/legacy/v1/)
+
+<details><summary>Исторический снимок ветки plugin-kit-ai v1. 1.2.4 — базовая версия команд, а не точная версия этого снимка.</summary>
+
+
 <div class="docs-hero docs-hero--feature">
   <p class="docs-kicker">ПУБЛИЧНАЯ ДОКУМЕНТАЦИЯ</p>
   <h1>plugin-kit-ai</h1>
@@ -92,3 +100,5 @@ translationRequired: true
 - Текущая публичная опорная версия в этом наборе docs - [`v1.1.2`](/ru/releases/v1-1-2).
 - Эта patch-линейка вернула совместимость first-party installs между legacy и current authored layouts, а затем починила Gemini full multi-target installs для GitHub repo-path sources.
 - Начинайте с него, если нужен актуальный baseline.
+
+</details>
