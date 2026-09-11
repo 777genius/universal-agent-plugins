@@ -16,7 +16,7 @@ const COMMON = ["lib/verifier.js", "scripts/dual-authoring-candidate.js",
 const PREFIX = "npm/agentplugins/";
 const ALLOWLIST = Object.freeze([...COMMON.map(n => PREFIX + n),
   PREFIX + "scripts/stage-dual-authoring-npm.js", PREFIX + "scripts/stage-dual-authoring-candidate.js",
-  PREFIX + "scripts/private-npm/README.md",
+  PREFIX + "scripts/npm-public-contract.js", PREFIX + "scripts/private-npm/README.md",
   ...["agentplugins", "plugin-kit-ai"].flatMap(p => ["package.json", "LICENSE", "README.md"].map(n => `npm/${p}/${n}`))]);
 const run = (exe, argv, env, cwd) => cp.execFileSync(exe, argv, {
   env, cwd, timeout: 120000, maxBuffer: 64 * 1024 * 1024
