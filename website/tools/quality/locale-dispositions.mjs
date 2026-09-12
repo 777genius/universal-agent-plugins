@@ -4,6 +4,8 @@ export const inventory = JSON.parse(await fs.readFile(new URL("./locale-disposit
 const hash = (text) => createHash("sha256").update(text).digest("hex");
 const embeddedArchiveStart = "<!-- locale-historical-source:start";
 const embeddedArchiveEnd = "locale-historical-source:end -->";
+const embeddedFrontmatterStart = "\nlocale-historical-frontmatter:start\n";
+const embeddedFrontmatterEnd = "\nlocale-historical-frontmatter:end";
 
 // Archive membership is immutable. A later translation can precede the preserved
 // disclosure; new current pages opt in through localeDisposition frontmatter.
@@ -19,6 +21,7 @@ export function dispositionErrors(relative, body, meta) {
   }
   if (entry?.disposition === "historical-snapshot") {
     const end = body.indexOf("\n---", 4) + 4;
+    let frontmatter = body.slice(0, end);
     const detailsStart = body.indexOf("</summary>");
     const embeddedStart = body.indexOf(embeddedArchiveStart);
     const embeddedEnd = body.indexOf(embeddedArchiveEnd);
@@ -30,12 +33,21 @@ export function dispositionErrors(relative, body, meta) {
     } else if (embeddedStart >= 0 && embeddedEnd > embeddedStart &&
         body.indexOf(embeddedArchiveStart, embeddedStart + 1) < 0 &&
         body.indexOf(embeddedArchiveEnd, embeddedEnd + 1) < 0) {
-      archive = body.slice(embeddedStart + embeddedArchiveStart.length, embeddedEnd);
+      const embedded = body.slice(embeddedStart + embeddedArchiveStart.length, embeddedEnd);
+      if (embedded.startsWith(embeddedFrontmatterStart)) {
+        const frontmatterEnd = embedded.indexOf(embeddedFrontmatterEnd, embeddedFrontmatterStart.length);
+        if (frontmatterEnd >= 0) {
+          frontmatter = embedded.slice(embeddedFrontmatterStart.length, frontmatterEnd);
+          archive = embedded.slice(frontmatterEnd + embeddedFrontmatterEnd.length);
+        }
+      } else {
+        archive = embedded;
+      }
       preserved = true;
     }
-    if (hash(body.slice(0, end)) !== entry.frontmatterSha256) errors.push("preserved frontmatter changed");
+    if (hash(frontmatter) !== entry.frontmatterSha256) errors.push("preserved frontmatter changed");
     if (!preserved || hash(archive) !== entry.bodySha256) errors.push("preserved historical body changed/missing");
-    if (hash(body.slice(0, end) + archive) !== entry.originalSha256) errors.push("original file identity mismatch");
+    if (hash(frontmatter + archive) !== entry.originalSha256) errors.push("original file identity mismatch");
   } else if (disposition === "historical-snapshot") errors.push("historical snapshot needs reviewed preservation inventory");
   return errors;
 }

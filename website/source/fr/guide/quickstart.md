@@ -1,6 +1,6 @@
 ---
 title: "Démarrage rapide"
-description: "Le chemin recommandé le plus rapide vers un projet plugin-kit-ai fonctionnel."
+description: "Installez des plugins disponibles ou préparez un paquet portable Agent Plugins 1.0."
 canonicalId: "page:guide:quickstart"
 section: "guide"
 locale: "fr"
@@ -131,6 +131,17 @@ Choisissez d'abord `claude` uniquement lorsque les crochets Claude constituent d
 - Continuez avec [Un projet, plusieurs cibles](/fr/guide/one-project-multiple-targets) lorsque vous êtes prêt à vous développer au-delà du premier chemin.
 
 <!-- locale-historical-source:start
+locale-historical-frontmatter:start
+---
+title: "Démarrage rapide"
+description: "Le chemin recommandé le plus rapide vers un projet plugin-kit-ai fonctionnel."
+canonicalId: "page:guide:quickstart"
+section: "guide"
+locale: "fr"
+generated: false
+translationRequired: true
+---
+locale-historical-frontmatter:end
 # Démarrage rapide
 
 Il s'agit du chemin recommandé le plus court lorsque vous souhaitez un dépôt de plugin qui peut ensuite évoluer vers d'autres façons d'expédier le plugin.

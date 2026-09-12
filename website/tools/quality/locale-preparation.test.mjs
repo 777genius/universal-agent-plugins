@@ -88,6 +88,10 @@ test("all 192 inventoried original files survive independently of private Git hi
       ? body.replace("</details>", "lost archive")
       : body.replace("locale-historical-source:end -->", "lost archive");
     assert.ok(dispositionErrors(relative, damaged, meta).length);
+    if (body.includes("locale-historical-frontmatter:start")) {
+      const damagedFrontmatter = body.replace("locale-historical-frontmatter:start", "locale-historical-frontmatter:start\nchanged: true");
+      assert.ok(dispositionErrors(relative, damagedFrontmatter, meta).includes("preserved frontmatter changed"));
+    }
     // A future adapted translation is current prose outside the immutable
     // archival disclosure; preserving old frontmatter needs no metadata edit.
     entry.currentDisposition = "current-translation";

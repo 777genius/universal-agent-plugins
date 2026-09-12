@@ -1,6 +1,6 @@
 ---
 title: "快速入门"
-description: "通往工作 plugin-kit-ai 项目的最快推荐路径。"
+description: "安装已发布的插件，或准备可移植的 Agent Plugins 1.0 包。"
 canonicalId: "page:guide:quickstart"
 section: "guide"
 locale: "zh"
@@ -131,6 +131,17 @@ plugin-kit-ai validate ./my-plugin --platform codex-runtime --strict
 - 当您准备好扩展第一条路径之外时，继续[一个项目，多个目标](/zh/guide/one-project-multiple-targets)。
 
 <!-- locale-historical-source:start
+locale-historical-frontmatter:start
+---
+title: "快速入门"
+description: "通往工作 plugin-kit-ai 项目的最快推荐路径。"
+canonicalId: "page:guide:quickstart"
+section: "guide"
+locale: "zh"
+generated: false
+translationRequired: true
+---
+locale-historical-frontmatter:end
 # 快速入门
 
 当您想要一个插件存储库稍后可以发展为更多方式来运送插件时，这是最短的推荐路径。

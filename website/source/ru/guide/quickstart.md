@@ -1,6 +1,6 @@
 ---
 title: "Быстрый старт"
-description: "Самый быстрый рекомендуемый путь к рабочему проекту на plugin-kit-ai."
+description: "Установите доступные плагины или подготовьте переносимый пакет Agent Plugins 1.0."
 canonicalId: "page:guide:quickstart"
 section: "guide"
 locale: "ru"
@@ -147,6 +147,17 @@ plugin-kit-ai validate ./my-plugin --platform codex-runtime --strict
 - [Выбор target](/ru/guide/choose-a-target)
 
 <!-- locale-historical-source:start
+locale-historical-frontmatter:start
+---
+title: "Быстрый старт"
+description: "Самый быстрый рекомендуемый путь к рабочему проекту на plugin-kit-ai."
+canonicalId: "page:guide:quickstart"
+section: "guide"
+locale: "ru"
+generated: false
+translationRequired: true
+---
+locale-historical-frontmatter:end
 
 # Быстрый старт
 

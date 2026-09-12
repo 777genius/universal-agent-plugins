@@ -1,6 +1,6 @@
 ---
 title: "Inicio rápido"
-description: "La ruta recomendada más rápida para un proyecto plugin-kit-ai en funcionamiento."
+description: "Instala plugins disponibles o prepara un paquete portable Agent Plugins 1.0."
 canonicalId: "page:guide:quickstart"
 section: "guide"
 locale: "es"
@@ -131,6 +131,17 @@ Elija `claude` primero solo cuando los ganchos Claude ya sean el requisito real 
 - Continúe con [Un proyecto, múltiples objetivos](/es/guide/one-project-multiple-targets) cuando esté listo para expandirse más allá de la primera ruta.
 
 <!-- locale-historical-source:start
+locale-historical-frontmatter:start
+---
+title: "Inicio rápido"
+description: "La ruta recomendada más rápida para un proyecto plugin-kit-ai en funcionamiento."
+canonicalId: "page:guide:quickstart"
+section: "guide"
+locale: "es"
+generated: false
+translationRequired: true
+---
+locale-historical-frontmatter:end
 # Inicio rápido
 
 Esta es la ruta más corta recomendada cuando desea un repositorio de complementos que luego pueda convertirse en más formas de enviar el complemento.

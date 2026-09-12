@@ -74,6 +74,8 @@ test('all quickstarts separate installation, preparation and historical commands
     const publishedText = preservation === -1 ? text : text.slice(0, preservation);
     const copy = renderedCopy(locale);
     assert.ok(text.includes('canonicalId: "page:guide:quickstart"'));
+    assert.match(publishedText, /^description: .*Agent Plugins 1\.0.*$/m);
+    assert.doesNotMatch(publishedText, /^description: .*plugin-kit-ai.*$/m);
     for (const key of ['standard', 'unreleased', 'versions', 'limitations', 'history']) {
       assert.ok(text.includes(copy[key]), `${locale}:${key}`);
     }
