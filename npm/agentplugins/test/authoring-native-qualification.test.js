@@ -3,6 +3,7 @@
 // All executable responses below are test-local subprocess fixtures. No real
 // frozen binary, installer, scanner, network service or OS observer is executed.
 const test = require("node:test");
+const STAGED_SOURCE_CHECKOUT = process.env.AGENTPLUGINS_STAGED_TEST_CHILD === "1";
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
@@ -469,7 +470,7 @@ for (const kind of ["missing", "attempt", "workflow", "source", "duplicate-key",
   });
 }
 
-test("fixed production orchestration and closed reader with subprocess fixtures only", async t => {
+test("fixed production orchestration and closed reader with subprocess fixtures only", { skip: STAGED_SOURCE_CHECKOUT && "requires the complete repository source tree" }, async t => {
   const f=fixture();subprocessFixtures(t,f);
   const n=internal(true), result=await n.produce(f.options);
   assert.equal(result.length,2);
@@ -528,7 +529,7 @@ for (const name of ["missing", "false", "string"]) {
     noTerminal(f);
   });
 }
-test("public installation replay rejects all coherently rehashed enclosing contradictions", async t => {
+test("public installation replay rejects all coherently rehashed enclosing contradictions", { skip: STAGED_SOURCE_CHECKOUT && "requires the complete repository source tree" }, async t => {
   const f = fixture(); subprocessFixtures(t, f); await internal(true).produce(f.options);
   const root = f.options.output, expected = expectations(f);
   assert.equal(fixtureReader(root, f.root, f.pins, expected).length, 2);
@@ -551,7 +552,7 @@ test("public installation replay rejects all coherently rehashed enclosing contr
   });
   assert.equal(fixtureReader(root, f.root, f.pins, expected).length, 2);
 });
-test("public installation preserves Go omission and exact stdout with isolated true rebind info", async t => {
+test("public installation preserves Go omission and exact stdout with isolated true rebind info", { skip: STAGED_SOURCE_CHECKOUT && "requires the complete repository source tree" }, async t => {
   const f = fixture(); subprocessFixtures(t, f);
   // Deliberately noncanonical public bytes must survive both assertion paths.
   const script = path.join(f.sandbox, "child-fixture.js"), source = fs.readFileSync(script, "utf8");
@@ -593,7 +594,7 @@ test("registered rebind child info succeeds but mandatory unchanged update rejec
   assert.equal(reg.needs_rebind, true); assert.equal(reg.package.loader_kind, "agent_plugins");
   internal().test.publicInfoInstallation(JSON.parse(info.stdout).data, reg, Object.values(reg.clients)[0]);
 });
-test("update replay rejects ineligible registration with coherent state and all evidence pins", async t => {
+test("update replay rejects ineligible registration with coherent state and all evidence pins", { skip: STAGED_SOURCE_CHECKOUT && "requires the complete repository source tree" }, async t => {
   const f = fixture(); subprocessFixtures(t, f); await internal(true).produce(f.options);
   const root = f.options.output, expected = expectations(f), api = internal().test;
   const originals = Object.fromEntries(fs.readdirSync(root).map(file => [file, fs.readFileSync(path.join(root, file))]));
@@ -657,7 +658,7 @@ for (const name of ["scope", "materialization", "revision", "target_locator", "p
     assert.ok(fs.existsSync(path.join(f.options.output, "diagnostic.json")));
   });
 }
-test("public info replay rejects coherently rehashed client contradictions", async t => {
+test("public info replay rejects coherently rehashed client contradictions", { skip: STAGED_SOURCE_CHECKOUT && "requires the complete repository source tree" }, async t => {
   const f = fixture(); subprocessFixtures(t, f); await internal(true).produce(f.options);
   const root = f.options.output, expected = expectations(f);
   const originals = Object.fromEntries(fs.readdirSync(root).map(file => [file, fs.readFileSync(path.join(root, file))]));
@@ -741,7 +742,7 @@ test("already-cancelled invocation never starts child or emits terminal",async t
   assert.equal(fs.existsSync(f.log),false);
 });
 
-test("closed reader rejects terminal and evidence mutations independently", async t => {
+test("closed reader rejects terminal and evidence mutations independently", { skip: STAGED_SOURCE_CHECKOUT && "requires the complete repository source tree" }, async t => {
   const f=fixture();subprocessFixtures(t,f);await internal(true).produce(f.options);
   const expected=expectations(f),root=f.options.output;
   const original=Object.fromEntries(fs.readdirSync(root).map(name=>[name,fs.readFileSync(path.join(root,name))]));
@@ -784,7 +785,7 @@ test("closed reader rejects terminal and evidence mutations independently", asyn
   assert.equal(fixtureReader(root,f.root,f.pins,expected).length,2);
 });
 
-test("rehashed evidence cannot hide omitted commands, bad plans or false preservation",async t=>{
+test("rehashed evidence cannot hide omitted commands, bad plans or false preservation", { skip: STAGED_SOURCE_CHECKOUT && "requires the complete repository source tree" },async t=>{
   const f=fixture();subprocessFixtures(t,f);const n=internal(true);await n.produce(f.options);
   const root=f.options.output,expected=expectations(f);
   const originals=Object.fromEntries(fs.readdirSync(root).map(file=>[file,fs.readFileSync(path.join(root,file))]));
@@ -855,7 +856,7 @@ test("owned child cleanup denial rejects without any terminal",async t=>{
   await assert.rejects(internal(true).produce(f.options),/cleanup uncertain/);noTerminal(f);
 });
 
-test("failed second exclusive terminal write removes both owned terminal names",async t=>{
+test("failed second exclusive terminal write removes both owned terminal names", { skip: STAGED_SOURCE_CHECKOUT && "requires the complete repository source tree" },async t=>{
   const f=fixture();subprocessFixtures(t,f);
   const open=fs.openSync,write=fs.writeFileSync;let fd;
   t.mock.method(fs,'openSync',(file,...args)=>{
@@ -878,7 +879,7 @@ test("input modes and candidate/projection bytes remain unchanged by receipt cre
   assert.equal(JSON.parse(c.readFile(path.join(f.root,'agentplugins/release-manifest.json'))).attested,false);
 });
 
-test("changed host/source/attempt expectations cannot read a matching local terminal",async t=>{
+test("changed host/source/attempt expectations cannot read a matching local terminal", { skip: STAGED_SOURCE_CHECKOUT && "requires the complete repository source tree" },async t=>{
   const f=fixture();subprocessFixtures(t,f);await internal(true).produce(f.options);
   for(const kind of ['source','workflow-sha','run','attempt','preparation-attempt','tool']){
     const expect=structuredClone(expectations(f));
@@ -914,7 +915,7 @@ test("input and output placement reject overlap before subprocess effects",async
 
 // Rehash every outer pin as the independent reviewer did: each rejection must
 // come from semantic replay, not a stale digest or a broken fixture baseline.
-test("N1 reader rejects rehashed semantic omissions and contradictions", async t => {
+test("N1 reader rejects rehashed semantic omissions and contradictions", { skip: STAGED_SOURCE_CHECKOUT && "requires the complete repository source tree" }, async t => {
   const f = fixture(); subprocessFixtures(t, f); await internal(true).produce(f.options);
   const root = f.options.output, expected = expectations(f);
   const originals = Object.fromEntries(fs.readdirSync(root).map(file => [file, fs.readFileSync(path.join(root, file))]));
@@ -1135,7 +1136,7 @@ test("independent package identity uses content framing and portable executable 
   project.documents["plugin.json"] = Buffer.from("other bytes").toString("base64"); assert.throws(() => digest(project));
 });
 
-test("fixed profile and schema pins agree with preserved domain contracts", () => {
+test("fixed profile and schema pins agree with preserved domain contracts", { skip: STAGED_SOURCE_CHECKOUT && "requires the complete repository source tree" }, () => {
   const n = internal().test, root = path.resolve(__dirname, "../../..");
   for (const schema of n.capabilities().schemas) {
     const name = schema.id.endsWith("/plugin.schema.json") ? "plugin" : "mcp";
@@ -1149,7 +1150,7 @@ test("fixed profile and schema pins agree with preserved domain contracts", () =
 
 // No genuine release archive is provisioned. These validators exercise only
 // tiny test tar bytes; source-pinned production acceptance is checked separately.
-test("scanner release pins match production source and synthetic acquisition is rejected", () => {
+test("scanner release pins match production source and synthetic acquisition is rejected", { skip: STAGED_SOURCE_CHECKOUT && "requires the complete repository source tree" }, () => {
   const contract = internal().test, source = fs.readFileSync(path.resolve(__dirname,
     "../../../install/integrationctl/agentplugins/adapters/securityscan/release.go"), "utf8");
   for (const asset of Object.values(contract.SCANNER_RELEASES)) {
@@ -1198,7 +1199,7 @@ test("scanner archive parsing fails closed on bounded malformed test archives", 
 });
 
 
-test("N2 six closed host contracts preserve excluded execution and exact roots", async t => {
+test("N2 six closed host contracts preserve excluded execution and exact roots", { skip: STAGED_SOURCE_CHECKOUT && "requires the complete repository source tree" }, async t => {
   const api = internal().test;
   assert.deepEqual(Object.keys(api.HOSTS).sort(), [...c.TARGETS].sort());
   const known = {
@@ -1236,7 +1237,7 @@ test("N2 native host mismatch cannot execute a selected foreign architecture", a
   assert.equal(calls, 0); noTerminal(f); assert.equal(fs.existsSync(f.options.work), false);
 });
 
-test("N2 arm64 replay binds both selected subjects, scanner platform and unchanged full custody", async t => {
+test("N2 arm64 replay binds both selected subjects, scanner platform and unchanged full custody", { skip: STAGED_SOURCE_CHECKOUT && "requires the complete repository source tree" }, async t => {
   const f = fixture(); subprocessFixtures(t, f);
   await internal(true).produce(f.options);
   const api = internal(true).test, root = f.options.output;
@@ -1292,7 +1293,7 @@ test("N2 arm64 replay binds both selected subjects, scanner platform and unchang
   assert.throws(() => native.readTerminals(root, f.root, f.pins, expected), /independently pinned scanner release archive/);
 });
 
-test('N2 explicit invalid target never falls back to accepted N1 default', async t => {
+test('N2 explicit invalid target never falls back to accepted N1 default', { skip: STAGED_SOURCE_CHECKOUT && "requires the complete repository source tree" }, async t => {
   const f = fixture(); let processes = 0;
   t.mock.method(cp, 'spawn', () => { processes++; throw Error('no process permitted'); });
   for (const target of [null, undefined, '', 'linux-x64', 'linux-386', 'darwin-x64', 'windows-x64', '__proto__', 1, true, {}, []]) {

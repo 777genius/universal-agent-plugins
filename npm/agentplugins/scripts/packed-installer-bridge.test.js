@@ -1,4 +1,7 @@
 "use strict";
+if (process.env.AGENTPLUGINS_STAGED_TEST_CHILD === "1") {
+  require("node:test")("source-checkout-only suite", { skip: "requires the complete repository source tree" }, () => {});
+} else {
 // SYNTHETIC INTAKE HARNESS ONLY. No native program, packed product or candidate
 // is built/executed. The one stub is explicit and never used by the CLI verifier.
 const test = require("node:test");
@@ -260,3 +263,4 @@ test('C3 bridge seal binds original ten projects', t => {
   assert.equal(fs.existsSync(path.join(f.root, 'late-seal.json')), false);
  });
 });
+}

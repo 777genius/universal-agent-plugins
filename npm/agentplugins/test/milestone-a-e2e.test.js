@@ -1,4 +1,7 @@
 "use strict";
+if (process.env.AGENTPLUGINS_STAGED_TEST_CHILD === "1") {
+  require("node:test")("source-checkout-only suite", { skip: "requires the complete repository source tree" }, () => {});
+} else {
 const test=require("node:test"),assert=require("node:assert/strict"),fs=require("node:fs"),os=require("node:os"),path=require("node:path");
 const harness=require("../scripts/milestone-a-e2e"),HEAD="9db754c93c713219c72206eab54d71ee39e88abf";
 const D="sha256:"+"a".repeat(64),R="sha256:"+"b".repeat(64),P="sha256:"+"c".repeat(64);
@@ -93,3 +96,4 @@ test("workflow precreates portable run evidence before execution and uploads tha
 test("workflow converts the MSYS run config path to native Win32 before writing and invoking",()=>{const run=workflow.slice(workflow.indexOf("Run both packaged public entrypoints"));assert.match(run,/native_config=.*nativeAbsolute\(process\.argv\[1\]\)[\s\S]*writeFileSync\(process\.argv\[1\][\s\S]*\"\$native_config\"[\s\S]*milestone-a-e2e\.js run \"\$native_config\"/);assert.doesNotMatch(run,/milestone-a-e2e\.js run \"\$config\"/);});
 test("workflow gives Darwin packageview a local read-only APFS candidate and always detaches it",()=>{assert.match(workflow,/runner\.os == 'macOS'[\s\S]*hdiutil create[^\n]*-fs APFS -format UDRO[\s\S]*hdiutil attach[^\n]*-readonly/);assert.match(workflow,/candidateRoot:process\.argv\[5\]/);assert.match(workflow,/if: always\(\) && runner\.os == 'macOS'[\s\S]*hdiutil detach/);});
 test("workflow canonicalizes trusted prepare tools before constructing config",()=>{assert.match(workflow,/resolveTrustedTools\(process\.argv\[3\],process\.argv\[5\]\)/);assert.doesNotMatch(workflow,/npm:process\.argv\[5\]/);});
+}

@@ -1,4 +1,7 @@
 "use strict";
+if (process.env.AGENTPLUGINS_STAGED_TEST_CHILD === "1") {
+  require("node:test")("source-checkout-only suite", { skip: "requires the complete repository source tree" }, () => {});
+} else {
 
 // Dedicated lane: missing configuration is a failure, never a skipped acceptance.
 // Run only after the coordinator commits/integrates A and freezes native assets
@@ -226,4 +229,5 @@ test("PUBLIC NATIVE: exact integrated packs, both actual bins, static parity and
   const terminalPath = path.join(cfg.evidenceOutput, "public-native-completion.json");
   fs.writeFileSync(terminalPath, c.encode(terminal), { flag: "wx", mode: 0o600 });
   t.diagnostic("public native completion: " + JSON.stringify({ file: terminalPath, sha256: c.digest(c.readFile(terminalPath)), source: candidate.identity.commit }));
-});
+  });
+}

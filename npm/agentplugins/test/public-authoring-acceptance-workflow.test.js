@@ -1,4 +1,7 @@
 'use strict';
+if (process.env.AGENTPLUGINS_STAGED_TEST_CHILD === "1") {
+  require("node:test")("source-checkout-only suite", { skip: "requires the complete repository source tree" }, () => {});
+} else {
 // Source contracts only. These tests never dispatch, sign, or qualify E.
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -197,3 +200,4 @@ test('C3 trusted pre-checkout bootstraps reject the selected-source semantic byp
     }
   }
 });
+}

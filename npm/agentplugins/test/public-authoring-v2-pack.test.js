@@ -1,4 +1,7 @@
 "use strict";
+if (process.env.AGENTPLUGINS_STAGED_TEST_CHILD === "1") {
+  require("node:test")("source-checkout-only suite", { skip: "requires the complete repository source tree" }, () => {});
+} else {
 
 // In-memory package closure and actual JavaScript launcher interfaces only.
 const test = require("node:test");
@@ -175,3 +178,4 @@ test("C2 closure producer codecs and v1 bytes stay compatible", () => {
 
 }
 module.exports = { loader, launchers };
+}
