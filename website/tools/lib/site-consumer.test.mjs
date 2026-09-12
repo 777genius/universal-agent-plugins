@@ -259,8 +259,12 @@ test("emitted HTML redirects preserve query/deep fragments at canonical base; no
   }
 });
 
-test("new canonical source links retain Go module identity", () => {
-  assert.equal(docsBaseUrl, "https://777genius.github.io/universal-agent-plugins/docs/");
+test("configured canonical base and new source links retain their identities", () => {
+  const expectedDocsBase = new URL(
+    process.env.DOCS_BASE_PATH || "/universal-agent-plugins/docs/",
+    process.env.DOCS_HOSTNAME || "https://777genius.github.io",
+  ).toString();
+  assert.equal(docsBaseUrl, expectedDocsBase);
   assert.equal(repoBrowserUrl("cli:x"), "https://github.com/777genius/universal-agent-plugins/tree/main/cli/plugin-kit-ai");
 });
 
