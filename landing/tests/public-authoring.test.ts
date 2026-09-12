@@ -70,8 +70,12 @@ test('the authoring front door renders Use/Build and preserves its indexing poli
 test('all quickstarts separate installation, preparation and historical commands', () => {
   for (const locale of locales) {
     const text = read(`website/source/${locale}/guide/quickstart.md`);
+    const preservation = text.indexOf('<!-- locale-historical-source:start');
+    const publishedText = preservation === -1 ? text : text.slice(0, preservation);
     const copy = renderedCopy(locale);
     assert.ok(text.includes('canonicalId: "page:guide:quickstart"'));
+    assert.match(publishedText, /^description: .*Agent Plugins 1\.0.*$/m);
+    assert.doesNotMatch(publishedText, /^description: .*plugin-kit-ai.*$/m);
     for (const key of ['standard', 'unreleased', 'versions', 'limitations', 'history']) {
       assert.ok(text.includes(copy[key]), `${locale}:${key}`);
     }
@@ -81,7 +85,7 @@ test('all quickstarts separate installation, preparation and historical commands
     assert.deepEqual([...front.matchAll(/```bash\n([\s\S]*?)```/g)].map(m => m[1].trim()),
       ['npx universal-agent-plugins add context7']);
     assert.ok(!front.includes('plugin-kit-ai init'));
-    assert.ok(!text.includes('npx plugin-kit-ai@latest add notion'));
+    assert.ok(!publishedText.includes('npx plugin-kit-ai@latest add notion'));
     for (const command of ['plugin-kit-ai init my-plugin', 'plugin-kit-ai generate',
       'plugin-kit-ai validate', '--runtime node --typescript', '--runtime python']) {
       assert.ok(text.slice(history).includes(command), `${locale}:${command}`);

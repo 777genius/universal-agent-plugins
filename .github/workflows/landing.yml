@@ -112,14 +112,11 @@ jobs:
       DOCS_HOSTNAME: https://777genius.github.io
       GOTOOLCHAIN: local
       GOMAXPROCS: "2"
-      GOCACHE: ${{ runner.temp }}/docs-consumer-gocache
-      GOMODCACHE: ${{ runner.temp }}/docs-consumer-gomodcache
-      DOCS_TOOLS_ROOT: ${{ runner.temp }}/docs-tools-root
-      TMPDIR: ${{ runner.temp }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          fetch-depth: 0
 
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
@@ -144,6 +141,10 @@ jobs:
           cache: pnpm
           cache-dependency-path: landing/pnpm-lock.yaml
 
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.0.0
+        with:
+          python-version: "3.12"
+
       - name: Verify and stage signed registry feeds
         run: |
           go run ./cmd/agentplugins-registry-mirror \
@@ -164,6 +165,13 @@ jobs:
           export PATH="${{ steps.pnpm-docs.outputs.bin_dest }}:$PATH"
           pnpm install --frozen-lockfile
 
+      - name: Install pinned docs generators
+        run: |
+          python -m venv "${RUNNER_TEMP}/docs-tools-root/python-venv"
+          "${RUNNER_TEMP}/docs-tools-root/python-venv/bin/pip" install --require-hashes -r "${GITHUB_WORKSPACE}/website/tools/pydoc-markdown-requirements.txt"
+          mkdir -p "${RUNNER_TEMP}/docs-tools-root/bin"
+          GOBIN="${RUNNER_TEMP}/docs-tools-root/bin" go install github.com/princjef/gomarkdoc/cmd/gomarkdoc@v1.1.0
+
       - name: Prepare and validate landing
         working-directory: landing
         run: |
@@ -174,12 +182,31 @@ jobs:
           pnpm run lint
           pnpm run generate
 
+      - name: Prepare immutable authoring source
+        run: |
+          source_sha=$(node --input-type=module -e 'import { acceptedAuthoringSHA } from "./website/tools/lib/source-contract.mjs"; process.stdout.write(acceptedAuthoringSHA)')
+          git clone --no-local --no-checkout . "${RUNNER_TEMP}/docs-authoring-source"
+          git -C "${RUNNER_TEMP}/docs-authoring-source" checkout --quiet --detach "$source_sha"
+          chmod -R a-w "${RUNNER_TEMP}/docs-authoring-source"
+          echo "DOCS_AUTHORING_CHECKOUT=${RUNNER_TEMP}/docs-authoring-source" >> "$GITHUB_ENV"
+
       - name: Warm Go module cache for offline docs consumer integration
-        run: go list -p 2 -deps ./cli/plugin-kit-ai/tools/authoring-docs
+        env:
+          GOCACHE: ${{ runner.temp }}/docs-consumer-gocache
+          GOMODCACHE: ${{ runner.temp }}/docs-consumer-gomodcache
+        run: |
+          cd "$DOCS_AUTHORING_CHECKOUT"
+          GOWORK="$DOCS_AUTHORING_CHECKOUT/go.work" go build -p 2 -o "$RUNNER_TEMP/docs-authoring-preflight" ./cli/plugin-kit-ai/tools/authoring-docs
 
       - name: Validate and build public docs
         working-directory: website
         env:
+          GOCACHE: ${{ runner.temp }}/docs-consumer-gocache
+          GOMODCACHE: ${{ runner.temp }}/docs-consumer-gomodcache
+          DOCS_TOOLS_ROOT: ${{ runner.temp }}/docs-tools-root
+          DOCS_GOMARKDOC: ${{ runner.temp }}/docs-tools-root/bin/gomarkdoc
+          TMPDIR: ${{ runner.temp }}
+          GOWORK: ${{ github.workspace }}/go.work
           GOPROXY: "off"
           GOSUMDB: "off"
           GOENV: "off"

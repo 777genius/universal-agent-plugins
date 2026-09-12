@@ -3,7 +3,7 @@ import { pathToFileURL } from "node:url";
 import { requireGenerationPrerequisites } from "./lib/preflight.mjs";
 import fs from "node:fs/promises";
 import { buildRedirects } from "./lib/redirects.mjs";
-import { bindGeneratedPaths, entityPath as resolveEntityPath, isPreparedSource, journeySidebar, requirePreparationPreview } from "./lib/journeys.mjs";
+import { bindGeneratedPaths, entityPath as resolveEntityPath, isPreparedSource, journeySidebar, requirePublicationBoundary } from "./lib/journeys.mjs";
 import path from "node:path";
 import { extractCLI } from "./extractors/cli.mjs";
 import { extractGoSDK } from "./extractors/go-sdk.mjs";
@@ -19,7 +19,6 @@ const sourceLocales = docsLocales;
 const mirroredGeneratedLocales = ["es", "fr", "zh"];
 
 export async function generate() {
-  requirePreparationPreview();
   await requireAuthoringSource();
   await requireGenerationPrerequisites();
   const bundles = await Promise.all([
@@ -59,6 +58,7 @@ export async function assembleBundles(bundles) {
   const allEntities = [...sourceEntities, ...generatedEntities].sort((a, b) =>
     a.canonicalId.localeCompare(b.canonicalId)
   );
+  requirePublicationBoundary(allEntities);
   await writeJson(generatedRegistryPaths.entities, allEntities);
   await writeJson(generatedRegistryPaths.sidebarsEn, buildSidebar("en", allEntities));
   await writeJson(generatedRegistryPaths.sidebarsRu, buildSidebar("ru", allEntities));

@@ -8,7 +8,7 @@ import { consumePreparedCLI, extractPreparedCLI, namespace } from "../extractors
 import { extractPlatformData } from "../extractors/platform.mjs";
 import { extractHistorical, historicalSHA } from "../extractors/historical.mjs";
 import { scanSourceEntities, buildSidebar } from "../generate.mjs";
-import { bindGeneratedPaths, docsLocales, entityPath, journeyNav, journeyLabels, journeyPageLabels, localePathField, requirePreparationPreview } from "./journeys.mjs";
+import { bindGeneratedPaths, docsLocales, entityPath, journeyNav, journeyLabels, journeyPageLabels, localePathField, requirePublicationBoundary } from "./journeys.mjs";
 import { buildRedirects, createRedirectDocument, emitRedirects, htmlPath } from "./redirects.mjs";
 import { sourceRoot, repoRoot, docsBaseUrl, repoBrowserUrl } from "../config/site.mjs";
 import { run } from "./process.mjs";
@@ -32,10 +32,15 @@ function flattenLinks(sidebar) {
   return Object.values(sidebar).flatMap(visit);
 }
 
-test("preparation cannot run under the ordinary publication build", () => {
-  assert.throws(() => requirePreparationPreview({}), /D3 locale.*D5 release/);
-  assert.throws(() => requirePreparationPreview({ DOCS_PREPARATION_PREVIEW: "true" }));
-  assert.doesNotThrow(() => requirePreparationPreview({ DOCS_PREPARATION_PREVIEW: "1" }));
+test("production publication requires truthful preparation metadata and maintained locale routes", () => {
+  assert.throws(() => requirePublicationBoundary([], {}), /non-empty/);
+  assert.equal(requirePublicationBoundary(sourceEntities, {}), "truthful-public-checkpoint");
+  const prepared = sourceEntities.find((entry) => entry.publicVisibility === "preparation");
+  assert.ok(prepared);
+  assert.throws(() => requirePublicationBoundary([{ ...prepared, released: true }], {}), /misclassifies/);
+  assert.throws(() => requirePublicationBoundary([{ ...prepared, pathZh: "" }], {}), /maintained-locale/);
+  assert.equal(requirePublicationBoundary([], { DOCS_PREPARATION_PREVIEW: "1" }), "disposable-preview");
+  assert.throws(() => requirePublicationBoundary([], { DOCS_PREPARATION_PREVIEW: "true" }), /non-empty/);
 });
 
 test("all five navigations expose real Use and Build journeys with truthful English fallback", async () => {
@@ -254,8 +259,12 @@ test("emitted HTML redirects preserve query/deep fragments at canonical base; no
   }
 });
 
-test("new canonical source links retain Go module identity", () => {
-  assert.equal(docsBaseUrl, "https://777genius.github.io/universal-agent-plugins/docs/");
+test("configured canonical base and new source links retain their identities", () => {
+  const expectedDocsBase = new URL(
+    process.env.DOCS_BASE_PATH || "/universal-agent-plugins/docs/",
+    process.env.DOCS_HOSTNAME || "https://777genius.github.io",
+  ).toString();
+  assert.equal(docsBaseUrl, expectedDocsBase);
   assert.equal(repoBrowserUrl("cli:x"), "https://github.com/777genius/universal-agent-plugins/tree/main/cli/plugin-kit-ai");
 });
 

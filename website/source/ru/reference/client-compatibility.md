@@ -6,6 +6,7 @@ section: "reference"
 locale: "ru"
 generated: false
 translationRequired: false
+localeDisposition: "current-translation"
 ---
 
 # Матрица проверок клиентов UAP

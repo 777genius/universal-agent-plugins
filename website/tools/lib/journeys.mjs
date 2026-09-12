@@ -145,8 +145,21 @@ export function bindGeneratedPaths(entities, pages) {
   });
 }
 
-export function requirePreparationPreview(env = process.env) {
-  if (env.DOCS_PREPARATION_PREVIEW !== "1") {
-    throw new Error("D2b is preparation only. D3 locale parity/fallback and D5 release activation remain required; use DOCS_PREPARATION_PREVIEW=1 only in a disposable, non-published preview.");
+export function requirePublicationBoundary(entities, env = process.env) {
+  if (env.DOCS_PREPARATION_PREVIEW === "1") return "disposable-preview";
+  if (!Array.isArray(entities) || entities.length === 0) {
+    throw new Error("Public documentation requires a non-empty, truthfully classified entity registry.");
   }
+  const prepared = entities.filter((entry) => entry.publicVisibility === "preparation");
+  if (prepared.length === 0) throw new Error("Public documentation lost its explicit preparation boundary.");
+  for (const entry of prepared) {
+    if (entry.status !== "prepared-not-release" || entry.released !== false ||
+        entry.stability !== "prepared-not-release" || entry.maturity !== "prepared") {
+      throw new Error(`Public documentation misclassifies unreleased preparation: ${entry.canonicalId || "unknown"}`);
+    }
+    if (entry.sourceKind === "hand-authored" && docsLocales.some((locale) => !entry[localePathField(locale)])) {
+      throw new Error(`Public documentation lacks a maintained-locale preparation route: ${entry.canonicalId || "unknown"}`);
+    }
+  }
+  return "truthful-public-checkpoint";
 }
