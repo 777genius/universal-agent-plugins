@@ -43,6 +43,10 @@ jobs:
           go-version: "1.25.13"
           cache: false
 
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
       - name: Install landing toolchain
         working-directory: landing
         run: pnpm install --frozen-lockfile
@@ -52,6 +56,29 @@ jobs:
         run: |
           export PATH="${{ steps.pnpm-docs.outputs.bin_dest }}:$PATH"
           pnpm install --frozen-lockfile
+
+      - name: Install pinned docs generators
+        run: |
+          python -m venv "${RUNNER_TEMP}/docs-tools-root/python-venv"
+          "${RUNNER_TEMP}/docs-tools-root/python-venv/bin/pip" install --require-hashes -r "${GITHUB_WORKSPACE}/website/tools/pydoc-markdown-requirements.txt"
+          mkdir -p "${RUNNER_TEMP}/docs-tools-root/bin"
+          GOBIN="${RUNNER_TEMP}/docs-tools-root/bin" go install github.com/princjef/gomarkdoc/cmd/gomarkdoc@v1.1.0
+
+      - name: Prepare immutable authoring source
+        run: |
+          source_sha=$(node --input-type=module -e 'import { acceptedAuthoringSHA } from "./website/tools/lib/source-contract.mjs"; process.stdout.write(acceptedAuthoringSHA)')
+          git clone --no-local --no-checkout . "${RUNNER_TEMP}/docs-authoring-source"
+          git -C "${RUNNER_TEMP}/docs-authoring-source" checkout --quiet --detach "$source_sha"
+          chmod -R a-w "${RUNNER_TEMP}/docs-authoring-source"
+          echo "DOCS_AUTHORING_CHECKOUT=${RUNNER_TEMP}/docs-authoring-source" >> "$GITHUB_ENV"
+
+      - name: Warm Go module cache for offline docs generation
+        env:
+          GOCACHE: ${{ runner.temp }}/docs-consumer-gocache
+          GOMODCACHE: ${{ runner.temp }}/docs-consumer-gomodcache
+        run: |
+          cd "$DOCS_AUTHORING_CHECKOUT"
+          GOWORK="$DOCS_AUTHORING_CHECKOUT/go.work" go build -p 2 -o "$RUNNER_TEMP/docs-authoring-preflight" ./cli/plugin-kit-ai/tools/authoring-docs
 
       # Keep the renamed CLI Pages site self-contained: every deployment carries
       # a verified, byte-exact compatibility copy of the registry feeds. This
@@ -90,6 +117,17 @@ jobs:
         env:
           DOCS_BASE_PATH: /universal-agent-plugins/docs/
           DOCS_HOSTNAME: https://777genius.github.io
+          GOCACHE: ${{ runner.temp }}/docs-consumer-gocache
+          GOMODCACHE: ${{ runner.temp }}/docs-consumer-gomodcache
+          DOCS_TOOLS_ROOT: ${{ runner.temp }}/docs-tools-root
+          DOCS_GOMARKDOC: ${{ runner.temp }}/docs-tools-root/bin/gomarkdoc
+          TMPDIR: ${{ runner.temp }}
+          GOWORK: ${{ github.workspace }}/go.work
+          GOPROXY: "off"
+          GOSUMDB: "off"
+          GOENV: "off"
+          GOTOOLCHAIN: "local"
+          GOMAXPROCS: "2"
         working-directory: website
         run: |
           export PATH="${{ steps.pnpm-docs.outputs.bin_dest }}:$PATH"
