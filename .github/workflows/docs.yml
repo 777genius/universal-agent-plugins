@@ -51,13 +51,6 @@ jobs:
           mkdir -p "${RUNNER_TEMP}/docs-tools-root/bin"
           GOBIN="${RUNNER_TEMP}/docs-tools-root/bin" go install github.com/princjef/gomarkdoc/cmd/gomarkdoc@v1.1.0
 
-      - name: Warm Go module cache for offline docs consumer integration
-        working-directory: .
-        env:
-          GOCACHE: ${{ runner.temp }}/docs-consumer-gocache
-          GOMODCACHE: ${{ runner.temp }}/docs-consumer-gomodcache
-        run: go list -p 2 -deps ./cli/plugin-kit-ai/tools/authoring-docs
-
       - name: Prepare immutable authoring source
         working-directory: .
         run: |
@@ -66,6 +59,15 @@ jobs:
           git -C "${RUNNER_TEMP}/docs-authoring-source" checkout --quiet --detach "$source_sha"
           chmod -R a-w "${RUNNER_TEMP}/docs-authoring-source"
           echo "DOCS_AUTHORING_CHECKOUT=${RUNNER_TEMP}/docs-authoring-source" >> "$GITHUB_ENV"
+
+      - name: Warm Go module cache for offline docs consumer integration
+        working-directory: .
+        env:
+          GOCACHE: ${{ runner.temp }}/docs-consumer-gocache
+          GOMODCACHE: ${{ runner.temp }}/docs-consumer-gomodcache
+        run: |
+          cd "$DOCS_AUTHORING_CHECKOUT"
+          GOWORK="$DOCS_AUTHORING_CHECKOUT/go.work" go build -p 2 -o "$RUNNER_TEMP/docs-authoring-preflight" ./cli/plugin-kit-ai/tools/authoring-docs
 
       - name: Run docs checks
         env:

@@ -182,12 +182,6 @@ jobs:
           pnpm run lint
           pnpm run generate
 
-      - name: Warm Go module cache for offline docs consumer integration
-        env:
-          GOCACHE: ${{ runner.temp }}/docs-consumer-gocache
-          GOMODCACHE: ${{ runner.temp }}/docs-consumer-gomodcache
-        run: go list -p 2 -deps ./cli/plugin-kit-ai/tools/authoring-docs
-
       - name: Prepare immutable authoring source
         run: |
           source_sha=$(node --input-type=module -e 'import { acceptedAuthoringSHA } from "./website/tools/lib/source-contract.mjs"; process.stdout.write(acceptedAuthoringSHA)')
@@ -195,6 +189,14 @@ jobs:
           git -C "${RUNNER_TEMP}/docs-authoring-source" checkout --quiet --detach "$source_sha"
           chmod -R a-w "${RUNNER_TEMP}/docs-authoring-source"
           echo "DOCS_AUTHORING_CHECKOUT=${RUNNER_TEMP}/docs-authoring-source" >> "$GITHUB_ENV"
+
+      - name: Warm Go module cache for offline docs consumer integration
+        env:
+          GOCACHE: ${{ runner.temp }}/docs-consumer-gocache
+          GOMODCACHE: ${{ runner.temp }}/docs-consumer-gomodcache
+        run: |
+          cd "$DOCS_AUTHORING_CHECKOUT"
+          GOWORK="$DOCS_AUTHORING_CHECKOUT/go.work" go build -p 2 -o "$RUNNER_TEMP/docs-authoring-preflight" ./cli/plugin-kit-ai/tools/authoring-docs
 
       - name: Validate and build public docs
         working-directory: website

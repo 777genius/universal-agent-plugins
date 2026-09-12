@@ -69,7 +69,8 @@ test('the authoring front door renders Use/Build and preserves its indexing poli
 
 test('all quickstarts separate installation, preparation and historical commands', () => {
   for (const locale of locales) {
-    const text = read(`website/source/${locale}/guide/quickstart.md`);
+    const source = read(`website/source/${locale}/guide/quickstart.md`);
+    const text = source.replaceAll(/<!--[\s\S]*?-->/g, '');
     const copy = renderedCopy(locale);
     assert.ok(text.includes('canonicalId: "page:guide:quickstart"'));
     for (const key of ['standard', 'unreleased', 'versions', 'limitations', 'history']) {
