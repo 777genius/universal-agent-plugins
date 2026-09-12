@@ -696,3 +696,70 @@ func TestReadOpenFailureDistinctFromAbsentAndRedacted(t *testing.T) {
 		t.Fatal("raw read-open error leaked")
 	}
 }
+
+func TestInventoryPanicClosesPins(t *testing.T) {
+	root, r := fixture(t)
+	put(t, root, "opaque", "inert payload")
+	warm, e := r.Open(context.Background(), root)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if e := warm.Close(); e != nil {
+		t.Fatal(e)
+	}
+	count := func() int {
+		entries, e := os.ReadDir("/proc/self/fd")
+		if e != nil {
+			t.Fatal(e)
+		}
+		return len(entries)
+	}
+	before := count()
+	held, e := os.Open(filepath.Join(root, "opaque"))
+	if e != nil {
+		t.Fatal(e)
+	}
+	defer held.Close()
+	if count() != before+1 {
+		t.Fatal("FD observer failed positive control")
+	}
+	if e := held.Close(); e != nil {
+		t.Fatal(e)
+	}
+	if count() != before {
+		t.Fatal("FD observer failed closed control")
+	}
+	for i := 0; i < 3; i++ {
+		fired := false
+		l, e := r.open(context.Background(), root, &captureHooks{afterChunk: func(n string) {
+			if n == "opaque" {
+				fired = true
+				panic("inventory panic")
+			}
+		}})
+		if e != nil {
+			t.Fatal(e)
+		}
+		var caught any
+		func() {
+			defer func() { caught = recover() }()
+			_, _ = l.Capture(context.Background())
+		}()
+		if !fired || caught != "inventory panic" {
+			t.Fatal("panic prerequisite", fired, caught)
+		}
+		if count() != before {
+			t.Fatal("descriptor leak after inventory panic")
+		}
+		if !reflect.DeepEqual(l.Data(), Input{}) {
+			t.Fatal("usable partial Input")
+		}
+		if e := l.Close(); e != nil {
+			t.Fatal(e)
+		}
+		if e := l.Close(); e != nil {
+			t.Fatal(e)
+		}
+		empty(t, r.TempDir)
+	}
+}

@@ -4,7 +4,7 @@
 // component and opaque-tree capture. Never call Capture after a fatal core/schema
 // result. Convert these private input records to conformance types in the caller.
 //
-// Linux uses openat2/O_PATH. Darwin requires read-only local APFS; Windows
+// Linux uses openat2/O_PATH. Darwin requires quiescent local APFS; Windows
 // requires local fixed-drive NTFS. Native execution remains a release gate.
 // The profile assumes a trusted kernel/mount namespace and ordinary local files;
 // it is not an atomic filesystem snapshot or protection from the same principal
@@ -20,16 +20,12 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
-	"runtime"
 	"sort"
 	"strconv"
 	"sync"
 )
 
 const ScopeID = "agentplugins-captured-input-sha256-v1"
-
-// Each native profile has its own filesystem and kernel capability contract.
-const ReadProfile = "packageview-local-" + runtime.GOOS + "-v1"
 
 const TreeAlgorithm = "agentplugins-tree-sha256-v1"
 
@@ -227,6 +223,9 @@ type Lease struct {
 	hooks *captureHooks
 }
 type captureHooks struct {
+	scratchOpen func(string, int) // Darwin scratch traversal only
+	nativeOpen  func(string, int) // immediately before Darwin single-name openat
+
 	beforeDataOpen func(string)
 	dataOpenError  func(string) error
 	afterNameCheck func(string)
@@ -238,7 +237,21 @@ type captureHooks struct {
 func (r Reader) Open(ctx context.Context, exactRoot string) (_ *Lease, err error) {
 	return r.open(ctx, exactRoot, nil)
 }
-func (r Reader) open(ctx context.Context, exactRoot string, hooks *captureHooks) (_ *Lease, err error) {
+func (r Reader) open(ctx context.Context, exactRoot string, hooks *captureHooks) (*Lease, error) {
+	var l *Lease
+	err := sourceIO(func() (err error) { l, err = r.openPhase(ctx, exactRoot, hooks); return }, func() {
+		if l != nil {
+			l.input = Input{}
+			_ = l.close()
+		}
+	})
+	if err != nil {
+		markCleanupFailure(err, l)
+		return nil, err
+	}
+	return l, nil
+}
+func (r Reader) openPhase(ctx context.Context, exactRoot string, hooks *captureHooks) (_ *Lease, err error) {
 	if err = contextError(ctx); err != nil {
 		return nil, err
 	}
@@ -249,12 +262,19 @@ func (r Reader) open(ctx context.Context, exactRoot string, hooks *captureHooks)
 	if exactRoot == "" || r.TempDir == "" {
 		return nil, fail("explicit_roots_required")
 	}
-	s, err := openSource(exactRoot, r.Generated)
+	// GeneratedStaging (r.Generated) is intentionally not threaded through here:
+	// every platform's openSource already ignores it (see each source_*.go's
+	// comment), since this profile already admits ordinary writable local
+	// sources without needing that narrower proof. openSourceContext instead
+	// carries ctx through for platforms (Darwin v2) that observe cancellation
+	// during acquisition.
+	s, err := openSourceContext(ctx, exactRoot)
 	if err != nil {
 		return nil, err
 	}
 	l := &Lease{source: s, limits: limits, observations: map[string]os.FileInfo{}, linkInfos: map[string]os.FileInfo{}, directoryEntries: map[string][]string{}, contents: map[string][]byte{}, hooks: hooks}
 	defer l.finish(&err)
+	s.sourceHooks(hooks)
 	tmp, release, err := scratchParent(s, exactRoot, r.TempDir)
 	if err != nil {
 		return nil, err
@@ -326,7 +346,31 @@ func clone(v Input) Input {
 	v.Findings = append([]Finding(nil), v.Findings...)
 	return v
 }
-func (l *Lease) Close() error { l.mu.Lock(); defer l.mu.Unlock(); return l.close() }
+func (l *Lease) Close() error {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.closed {
+		return l.closeErr
+	}
+	if l.source == nil && l.private == "" && l.scratchClose == nil {
+		return l.close()
+	}
+	err := sourceIO(func() error {
+		if l.source != nil {
+			l.source.phaseContext(context.Background())
+			if e := l.source.verifyBindings(); e != nil {
+				return e
+			}
+		}
+		return l.close()
+	}, func() { l.input = Input{}; _ = l.close() })
+	if err != nil {
+		l.input = Input{}
+		markCleanupFailure(err, l)
+		l.closeErr = err
+	}
+	return err
+}
 func (l *Lease) close() error {
 	if l.closed {
 		return l.closeErr
@@ -347,6 +391,12 @@ func (l *Lease) close() error {
 				e = l.hooks.cleanup()
 			} else {
 				e = nil
+			}
+			if e == nil {
+				current, statErr := os.Lstat(l.private)
+				if statErr != nil || !os.SameFile(current, l.privateInfo) || !current.IsDir() {
+					e = fail("cleanup_failed")
+				}
 			}
 			if e == nil {
 				e = os.Chmod(l.private, 0700)
@@ -433,4 +483,18 @@ func (l *Lease) identity() {
 	}{ScopeID, ReadProfile, l.limits, l.input.Coverage, l.input.Legacy, l.input.SkillsRoot, records, l.input.Findings})
 	l.input.Identity.ScopeID = ScopeID
 	l.input.Identity.Digest = "sha256:" + hex.EncodeToString(h.Sum(nil))
+}
+
+func markCleanupFailure(err error, l *Lease) {
+	if l == nil || l.closeErr == nil {
+		return
+	}
+	var cleanup *Error
+	if !errors.As(l.closeErr, &cleanup) || !cleanup.CleanupFailed {
+		return
+	}
+	var safe *Error
+	if errors.As(err, &safe) {
+		safe.CleanupFailed = true
+	}
 }

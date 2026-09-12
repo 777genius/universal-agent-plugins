@@ -142,3 +142,88 @@ commands, implement a second manifest, or establish an authoring runtime SDK.
   conformance with security and weakens an established safety boundary.
 - Replacing the current public root before the vertical slice: breaks working
   v1 behavior and advertises unfinished commands.
+
+## Darwin acquisition clarification (2026-09-07, PR 1)
+
+Accepted delegated technical decision: bounded quiescent writable APFS, an
+explicit reduction of the hostile concurrent writer guarantee, **not equivalent
+security**. This supersedes read-only-only authoring admission, not installer
+acquisition. Implementation stays unmerged until actual native review/proof;
+Linux cross-compilation cannot qualify Darwin. PR 2 owns public composition,
+release producers, workflows, help and current user-guide activation.
+
+Writable macOS local authoring uses `packageview-local-darwin-v2` on supported
+local APFS. During each Reader.Open-through-Lease.Close acquisition interval,
+the source tree and ancestor bindings establishing its selected location and
+containment must remain quiescent, including the gap between core decoding and
+component capture. Static package content remains untrusted. The reader retains
+metadata-first type checks, legacy identity/alias exclusion, contained resolution,
+bounded private capture, offline operation and observed-change failure. It does
+not protect acquisition from an active concurrent source or ancestor writer.
+Violation can cause a forbidden open or an out-of-scope/excluded read before an
+error; repeated checks do not equal Linux's inode-bound acquisition or prove an
+atomic source revision. Mutation-plan rechecks, public stage validation, installer
+invariants and full native macOS release gates remain required.
+
+Quiescence begins before the first source-path resolution/metadata operation
+and ends only after source access and cleanup through Close (or failed Open
+cleanup). It includes writes, truncation, rename/replacement, link changes,
+permissions/types and directory membership, including excluded legacy metadata.
+Root-name, relative CWD, allowed ancestor symlink targets and descendant bindings
+must remain stable and attached. Unrelated siblings outside the package may
+change; ancestor comparisons therefore ignore size/mtime/ctime/link-count changes
+caused by siblings, while checking identity, type, access mode, owner, flags and
+generation. Trusted kernel/mount administration and private storage remain
+assumptions. A private 0700 directory does not exclude another same-account process.
+
+Use public fstatat(AT_SYMLINK_NOFOLLOW), bounded readlinkat, single-component
+openat with O_DIRECTORY/O_NOFOLLOW for directories, and metadata-approved
+regular opens with O_NOFOLLOW/O_NONBLOCK/O_NOCTTY. The held pin owns the parent,
+not the final inode. Directory prefixes are replayed with finite metadata
+records instead of retaining a handle per entry. Checks detect observed identity,
+metadata, entry-set, link, byte and legacy changes as fatal `source_changed`,
+discarding partial Input/digest. No retry-until-stable loop is added. ABA,
+same-tick changes and substitutions after checks can evade observation; a FIFO
+or device open, detached-tree read or legacy read cannot be undone by fstat or
+zero subsequent Read calls. The writable profile relinquishes precisely this
+hostile-concurrency protection. Read-only APFS/EROFS tests remain separate,
+stronger evidence for their filesystem precondition.
+
+Each synchronous Open/Capture/Close phase runs on a short-lived locked OS
+thread. A small Darwin arm64 cgo binding to system libSystem saves the documented
+getiopolicy_np/setiopolicy_np thread materialization policy, sets
+IOPOL_MATERIALIZE_DATALESS_FILES_OFF, reads back, runs the phase, then restores
+and verifies the saved policy. Restore failure invalidates success and retires
+the still-locked thread; panic/error cleanup precedes delivery. Cancellation
+waits for terminal cleanup. No process-wide policy change, helper, dependency,
+source hardlink, source lockfile, snapshot, watch or second engine is added.
+Darwin without cgo rejects before source acquisition as `platform_unavailable`.
+Observed SF_DATALESS entries reject before payload open. Supported resolution
+paths are already mounted ordinary local APFS, not autofs triggers, network or
+third-party redirectors; trusted mounts must stay stable. APFS alone does not
+prove residency and OFF does not suppress unrelated OS background traffic.
+
+Existing limits remain 10,000 entries, depth 64, file 64 MiB, total 256 MiB,
+plugin 1 MiB, MCP 4 MiB, Skill 1 MiB and documents 16 MiB; paths/links 4,096 bytes,
+40 expansions and 8,192 resolver steps. Metadata records are separately bounded
+by entries plus resolver work. Reads retain size+1, <=32 KiB chunks and finite
+byte verification, private 0600 numeric files sealed to 0400, and exact-child
+cleanup. Source writes are never performed. Legacy initial/current identities
+and conservative multiple-hardlink rejection remain; independently copied bytes
+are not identified by semantic resemblance to YAML.
+
+Init must finish staging before real public validation. Skills must close its
+initial and core-recheck leases before staging/publication and acquire fresh
+post-commit evidence. Mutation root/parent/stage/payload checks, affected-input
+digests, exclusive publication and committed-state reporting remain mandatory.
+No CLI flag, environment opt-in or advisory ritual enforces quiescence.
+
+Native proof requires disposable writable local APFS on macOS arm64, unprivileged
+reader execution, exact revision/binary hashes, Go 1.25.13, Apple SDK/clang and
+deployment target, OS floor/build, FSID/device/mount flags, native open observations,
+real thread policy restoration and genuine disposable dataless rejection without
+download. No real cloud/profile/device/provisioning experiment is authorized.
+Missing device/dataless prerequisites remain required-unproven. Both entrypoints,
+five template journeys, installer dry-run and same-revision native cgo release
+assets/wrappers remain PR 2 and release gates. Keep `macos_writable=unproven`
+until native evidence passes; no CGO=0 replacement asset qualifies.

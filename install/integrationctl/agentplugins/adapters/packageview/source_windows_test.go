@@ -594,7 +594,7 @@ func TestWindowsRootAndIntermediateReparseRejected(t *testing.T) {
 	}
 	before := winRecordCount()
 	for i := 0; i < 10; i++ {
-		s, e := openSource(root + `\missing\root`, GeneratedStaging{})
+		s, e := openSource(root+`\missing\root`, GeneratedStaging{})
 		if e == nil {
 			s.close()
 			t.Fatal("accepted missing root")
