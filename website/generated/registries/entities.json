@@ -2,82 +2,6 @@
   {
     "relatedIds": [],
     "searchTerms": [
-      "codex_permission_request"
-    ],
-    "publicVisibility": "public",
-    "canonicalId": "capability:codex_permission_request",
-    "kind": "capability",
-    "surface": "capabilities",
-    "localeStrategy": "mirrored",
-    "title": "codex_permission_request",
-    "summary": "Capability codex_permission_request",
-    "stability": "public-stable",
-    "maturity": "stable",
-    "sourceKind": "support-export",
-    "sourceRef": "docs/generated/support_matrix.md",
-    "pathEn": "/en/api/capabilities/codex_permission_request",
-    "pathRu": "/ru/api/capabilities/codex_permission_request"
-  },
-  {
-    "relatedIds": [],
-    "searchTerms": [
-      "codex_pre_tool_use"
-    ],
-    "publicVisibility": "public",
-    "canonicalId": "capability:codex_pre_tool_use",
-    "kind": "capability",
-    "surface": "capabilities",
-    "localeStrategy": "mirrored",
-    "title": "codex_pre_tool_use",
-    "summary": "Capability codex_pre_tool_use",
-    "stability": "public-stable",
-    "maturity": "stable",
-    "sourceKind": "support-export",
-    "sourceRef": "docs/generated/support_matrix.md",
-    "pathEn": "/en/api/capabilities/codex_pre_tool_use",
-    "pathRu": "/ru/api/capabilities/codex_pre_tool_use"
-  },
-  {
-    "relatedIds": [],
-    "searchTerms": [
-      "codex_stop"
-    ],
-    "publicVisibility": "public",
-    "canonicalId": "capability:codex_stop",
-    "kind": "capability",
-    "surface": "capabilities",
-    "localeStrategy": "mirrored",
-    "title": "codex_stop",
-    "summary": "Capability codex_stop",
-    "stability": "public-stable",
-    "maturity": "stable",
-    "sourceKind": "support-export",
-    "sourceRef": "docs/generated/support_matrix.md",
-    "pathEn": "/en/api/capabilities/codex_stop",
-    "pathRu": "/ru/api/capabilities/codex_stop"
-  },
-  {
-    "relatedIds": [],
-    "searchTerms": [
-      "codex_subagent_stop"
-    ],
-    "publicVisibility": "public",
-    "canonicalId": "capability:codex_subagent_stop",
-    "kind": "capability",
-    "surface": "capabilities",
-    "localeStrategy": "mirrored",
-    "title": "codex_subagent_stop",
-    "summary": "Capability codex_subagent_stop",
-    "stability": "public-stable",
-    "maturity": "stable",
-    "sourceKind": "support-export",
-    "sourceRef": "docs/generated/support_matrix.md",
-    "pathEn": "/en/api/capabilities/codex_subagent_stop",
-    "pathRu": "/ru/api/capabilities/codex_subagent_stop"
-  },
-  {
-    "relatedIds": [],
-    "searchTerms": [
       "config_change"
     ],
     "publicVisibility": "public",
@@ -2337,11 +2261,7 @@
     "relatedIds": [],
     "searchTerms": [
       "codex",
-      "Notify",
-      "Stop",
-      "SubagentStop",
-      "PreToolUse",
-      "PermissionRequest"
+      "Notify"
     ],
     "publicVisibility": "public",
     "canonicalId": "event-platform:codex",
@@ -3718,9 +3638,9 @@
     "sourceRef": "reference/client-compatibility.md",
     "pathEn": "/en/reference/client-compatibility",
     "pathRu": "/ru/reference/client-compatibility",
-    "pathEs": "",
-    "pathFr": "",
-    "pathZh": "",
+    "pathEs": "/es/reference/client-compatibility",
+    "pathFr": "/fr/reference/client-compatibility",
+    "pathZh": "/zh/reference/client-compatibility",
     "relatedIds": [],
     "searchTerms": [
       "UAP client compatibility evidence"

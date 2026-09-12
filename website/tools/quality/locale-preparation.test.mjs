@@ -84,12 +84,18 @@ test("all 192 inventoried original files survive independently of private Git hi
     const body = await fs.readFile(file, "utf8");
     const meta = await readFrontmatter(file);
     assert.deepEqual(dispositionErrors(relative, body, meta), [], relative);
-    assert.ok(dispositionErrors(relative, body.replace("</details>", "lost archive"), meta).length);
+    const damaged = body.includes("</details>")
+      ? body.replace("</details>", "lost archive")
+      : body.replace("locale-historical-source:end -->", "lost archive");
+    assert.ok(dispositionErrors(relative, damaged, meta).length);
     // A future adapted translation is current prose outside the immutable
     // archival disclosure; preserving old frontmatter needs no metadata edit.
     entry.currentDisposition = "current-translation";
     try {
-      const adapted = body.replace("<details><summary>", "```sh\nagentplugins author check\n```\n\n<details><summary>");
+      const marker = body.includes("<details><summary>")
+        ? "<details><summary>"
+        : "<!-- locale-historical-source:start";
+      const adapted = body.replace(marker, `\`\`\`sh\nagentplugins author check\n\`\`\`\n\n${marker}`);
       assert.deepEqual(dispositionErrors(relative, adapted, meta), [], relative);
     } finally { delete entry.currentDisposition; }
   }

@@ -1,10 +1,8 @@
-import { requirePreparationPreview } from "../../tools/lib/journeys.mjs";
+import { requirePublicationBoundary } from "../../tools/lib/journeys.mjs";
 
 import fs from "node:fs";
 import path from "node:path";
 import { defineConfig } from "vitepress";
-
-requirePreparationPreview();
 
 const websiteRoot = path.resolve(__dirname, "..", "..");
 const generatedRoot = path.join(websiteRoot, "generated", "registries");
@@ -30,6 +28,7 @@ export const docsHostname = process.env.DOCS_HOSTNAME || "https://777genius.gith
 const docsBaseUrl = new URL(docsBasePath, docsHostname).toString();
 const socialImageUrl = new URL("og-docs.svg", docsBaseUrl).toString();
 const entities = readJson<RegistryEntity[]>("entities.json", []);
+requirePublicationBoundary(entities);
 const entityByCanonicalId = new Map(
   entities
     .filter((entity) => typeof entity.canonicalId === "string" && entity.canonicalId.length > 0)
