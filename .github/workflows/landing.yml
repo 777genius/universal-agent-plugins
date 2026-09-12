@@ -168,7 +168,7 @@ jobs:
       - name: Install pinned docs generators
         run: |
           python -m venv "${RUNNER_TEMP}/docs-tools-root/python-venv"
-          "${RUNNER_TEMP}/docs-tools-root/python-venv/bin/pip" install pydoc-markdown==4.8.2
+          "${RUNNER_TEMP}/docs-tools-root/python-venv/bin/pip" install --require-hashes -r "${GITHUB_WORKSPACE}/website/tools/pydoc-markdown-requirements.txt"
           mkdir -p "${RUNNER_TEMP}/docs-tools-root/bin"
           GOBIN="${RUNNER_TEMP}/docs-tools-root/bin" go install github.com/princjef/gomarkdoc/cmd/gomarkdoc@v1.1.0
 
