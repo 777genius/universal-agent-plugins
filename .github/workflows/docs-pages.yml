@@ -43,7 +43,7 @@ jobs:
           go-version: "1.25.13"
           cache: false
 
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.0.0
         with:
           python-version: "3.12"
 
