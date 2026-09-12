@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { test } from 'node:test';
@@ -13,6 +13,15 @@ const { createMarkdownRenderer } = await import(pathToFileURL(
   process.env.VITEPRESS_TEST_MODULE || websiteRequire.resolve('vitepress'),
 ).href);
 const md = await createMarkdownRenderer(fileURLToPath(new URL('website/', root)));
+
+test('published source never claims it is on a non-deploying branch', () => {
+  const sourceRoot = fileURLToPath(new URL('website/source/', root));
+  for (const relative of readdirSync(sourceRoot, { recursive: true })) {
+    if (!relative.endsWith('.md')) continue;
+    const source = readFileSync(`${sourceRoot}/${relative}`, 'utf8');
+    assert.doesNotMatch(source, /non-deploying preparation branch/, relative);
+  }
+});
 
 // Exact heading sequence extracted from original main
 // 01f02cb51cfe5f664d4d5f52b295c59c7ea03495:website/source/{locale}/guide/quickstart.md.

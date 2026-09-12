@@ -10,9 +10,9 @@ translationRequired: true
 
 # Build a hybrid package
 
-> **Prepared, unreleased authoring contract.** This page is a review draft on a
-> non-deploying preparation branch. Future authoring examples require the accepted
-> release; they do not claim that `plugin-kit-ai@2` is available. Existing installer
+> **Prepared, unreleased authoring contract.** This public page documents a reviewed
+> future authoring workflow. The commands shown here are not available in current
+> releases; they do not claim that `plugin-kit-ai@2` is available. Existing installer
 > examples are identified separately. Public activation remains pending.
 
 A hybrid is useful when instructions explain how and when to use tools. Both

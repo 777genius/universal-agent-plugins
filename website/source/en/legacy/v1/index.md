@@ -10,9 +10,9 @@ translationRequired: true
 
 # Historical plugin-kit-ai v1, baseline 1.2.4
 
-> **Prepared, unreleased authoring contract.** This page is a review draft on a
-> non-deploying preparation branch. Future authoring examples require the accepted
-> release; they do not claim that `plugin-kit-ai@2` is available. Existing installer
+> **Prepared, unreleased authoring contract.** This public page documents a reviewed
+> future authoring workflow. The commands shown here are not available in current
+> releases; they do not claim that `plugin-kit-ai@2` is available. Existing installer
 > examples are identified separately. Public activation remains pending.
 
 This index preserves a way to understand existing projects. Its command baseline
