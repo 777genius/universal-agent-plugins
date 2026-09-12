@@ -1,4 +1,7 @@
 "use strict";
+if (process.env.AGENTPLUGINS_STAGED_TEST_CHILD === "1") {
+  require("node:test")("source-checkout-only suite", { skip: "requires the complete repository source tree" }, () => {});
+} else {
 // SYNTHETIC provision only. Harmless bytes are hashed, never executed.
 const test = require("node:test"), assert = require("node:assert/strict");
 const fs = require("node:fs"), path = require("node:path"), os = require("node:os"), vm = require("node:vm");
@@ -151,3 +154,4 @@ print(json.dumps(results))
     exit: result.status, stdout: result.stdout, stderr: result.stderr, fixtures: bodies.map(c.digest), expected }, null, 2) + "\n");
   assert.equal(result.status, 0, result.stderr); assert.equal(result.stderr, ""); assert.deepEqual(JSON.parse(result.stdout), expected);
 });
+}

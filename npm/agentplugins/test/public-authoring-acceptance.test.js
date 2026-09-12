@@ -1,4 +1,7 @@
 "use strict";
+if (process.env.AGENTPLUGINS_STAGED_TEST_CHILD === "1") {
+  require("node:test")("source-checkout-only suite", { skip: "requires the complete repository source tree" }, () => {});
+} else {
 // SYNTHETIC SOURCE CONTROLS ONLY. No npm, native, provider or verifier executes.
 const test = require("node:test"), assert = require("node:assert/strict");
 const fs = require("node:fs"), path = require("node:path"), os = require("node:os"), crypto = require("node:crypto");
@@ -964,4 +967,5 @@ if (require.main === module) {
     });
   });
 
+}
 }

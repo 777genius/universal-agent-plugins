@@ -3,6 +3,7 @@
 // Pure contracts and mocked source orchestration only. No authentic custody,
 // signatures, npm pack, native launch, network or qualification is tested.
 const test = require("node:test");
+const STAGED_SOURCE_CHECKOUT = process.env.AGENTPLUGINS_STAGED_TEST_CHILD === "1";
 const assert = require("node:assert/strict");
 const crypto = require("node:crypto");
 const c = require("../scripts/dual-authoring-candidate");
@@ -407,7 +408,7 @@ test("C1 pure inventories: separate exact stage additions and unchanged legacy e
     "encodeStage", "decodeStage", "pairedPackageFiles", "STAGE_ALLOWLIST", "stagePrepublication", "readStage", "validateUnsignedStage", "main"]);
 });
 
-test("C1 pure runtime regression: loadRelease accepts structural v2 and rejects v1/null using only in-memory reads", t => {
+test("C1 pure runtime regression: loadRelease accepts structural v2 and rejects v1/null using only in-memory reads", { skip: STAGED_SOURCE_CHECKOUT && "requires the complete repository source tree" }, t => {
   const f = fixture(), pair = stage.pairedPackageFiles(f.source, f.manifests, f.inputBytes);
   const { memory } = require("./public-authoring-v2.test");
   for (const p of products) {
@@ -685,7 +686,7 @@ for (const defect of ["digest", "attempt", "signature", "source-pins", "generate
   });
 }
 
-test("C1 stage integration existing blobs checks every committed, checkout and executing entry including mode and HEAD", t => {
+test("C1 stage integration existing blobs checks every committed, checkout and executing entry including mode and HEAD", { skip: STAGED_SOURCE_CHECKOUT && "requires the complete repository source tree" }, t => {
   const f = fixture(), root = fs.mkdtempSync(path.join(os.tmpdir(), "c1-stage-blobs-"));
   const executing = path.resolve(__dirname, "../../.."), normalRead = c.readFile, normalStat = fs.lstatSync;
   let changed, absent, changedMode, head = f.input.identity.commit, reads = [], commands = [];
