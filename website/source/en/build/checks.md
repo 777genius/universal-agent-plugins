@@ -11,7 +11,7 @@ translationRequired: true
 # Check a package without running it
 
 > **Prepared, unreleased authoring contract.** This public page documents a reviewed
-> future authoring workflow. The commands shown here are not available in current
+> future authoring workflow. Future authoring commands described here are not available in current
 > releases; they do not claim that `plugin-kit-ai@2` is available. Existing installer
 > examples are identified separately. Public activation remains pending.
 
