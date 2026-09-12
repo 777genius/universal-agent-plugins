@@ -182,8 +182,46 @@ This checkpoint does not complete phases 0-11 or release the new authoring CLI.
 
 ## Status
 
-- Decision: approved for planning.
-- Implementation: not started by this document.
+- Decision: accelerated Milestone A delivered on 2026-09-12; phases 7-11 remain
+  deferred to later bounded plans and PRs.
+- Implementation: Milestone A and its truthful public-documentation checkpoint
+  merged through PRs
+  [#240](https://github.com/777genius/universal-agent-plugins/pull/240)-[#250](https://github.com/777genius/universal-agent-plugins/pull/250).
+  Their merge commits are `11472216d5ef4c3d5570fd8c1ae6c4c774ed1df4`,
+  `6af7f412cb4a35d2e623fcba110f1fe53d9a2a5d`,
+  `1898fa8bcebeac880a27e1018d7fd6b3a1e36e7a`,
+  `fab40a497f02e74a9bfb8f9df5fc05f6296cdef7`,
+  `6e665aa367f364bba372d276d00bce6db3307d18`,
+  `f87aebe50c6698e070745a95ce68f8071d8c9849`,
+  `9a964303f4f063d98038e40c4a3e7194f4e4e9f9`,
+  `21c9b9341c33a44e8625bf8ae2636e7d27b3488e`,
+  `1468873789d63b96e49f20baddce559857c2a6ea`,
+  `d44f7c6d5db8882ac44bfb04b444e802a656bb68`, and
+  `9ea2a790000846592e9471eb8b6201ec62d700c6` respectively.
+- Exact PR #248 head `141b29bc5f50a9f334fd6984daa705d7121a8997`
+  passed Required, docs, landing, both Pages-base validations, dependency review,
+  CodeQL, native authoring, polyglot smoke, and Milestone A E2E on Linux amd64,
+  Windows amd64, and macOS arm64. Independent exact-head review found no
+  actionable issues.
+- PR #249 made Pages authoring inputs immutable and fail-closed. Its merge commit
+  `d44f7c6d5db8882ac44bfb04b444e802a656bb68` deployed successfully in Pages run
+  [34708071716](https://github.com/777genius/universal-agent-plugins/actions/runs/34708071716).
+- Exact PR #250 head `5e656894d4e4ad00e55f737e4407c1a6e5c29a9b`
+  passed Docs, Required, Landing browser E2E, both Pages-base validations, and
+  the exact candidate package gate. Independent exact-head review found no
+  actionable issues. Its main commit deployed successfully in Pages run
+  [34709938629](https://github.com/777genius/universal-agent-plugins/actions/runs/34709938629),
+  deployment `6412771742`.
+- Public HTTP readback after that deployment passed 136 checks: the landing,
+  all 13 changed Use/Build/legacy pages, five locale quickstarts, 85 fragment
+  targets, existing installer and v1.2.4 availability, the unreleased-authoring
+  notice, and absence of the stale non-deploying-branch wording.
+- The known non-required Windows Terminal UI synthetic target-discovery test
+  remains unrelated to these documentation and Pages changes; its native
+  terminal/ConPTY qualification steps passed.
+- This Milestone A delivery published no new CLI, npm, PyPI, Homebrew, or native
+  release; existing releases remain unchanged. Publishing a new concrete version
+  still requires separate owner approval.
 - Baseline inspected: `b0b4268e964fa5808debbcc998bd174670faeb6e` on 2026-09-06.
 - Product repository: `777genius/universal-agent-plugins` (the former `plugin-kit-ai` URL redirects to it).
 - Directory repository: `777genius/universal-agent-plugins-registry`.
