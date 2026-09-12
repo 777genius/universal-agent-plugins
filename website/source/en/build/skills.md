@@ -10,9 +10,9 @@ translationRequired: true
 
 # Add extra Skills
 
-> **Prepared, unreleased authoring contract.** This page is a review draft on a
-> non-deploying preparation branch. Future authoring examples require the accepted
-> release; they do not claim that `plugin-kit-ai@2` is available. Existing installer
+> **Prepared, unreleased authoring contract.** This public page documents a reviewed
+> future authoring workflow. Future authoring commands described here are not available in current
+> releases; they do not claim that `plugin-kit-ai@2` is available. Existing installer
 > examples are identified separately. Public activation remains pending.
 
 Use the future `skills init` job to add one Skill to an existing standard package.

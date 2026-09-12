@@ -10,9 +10,9 @@ translationRequired: true
 
 # Maintain installed plugins
 
-> **Prepared, unreleased authoring contract.** This page is a review draft on a
-> non-deploying preparation branch. Future authoring examples require the accepted
-> release; they do not claim that `plugin-kit-ai@2` is available. Existing installer
+> **Prepared, unreleased authoring contract.** This public page documents a reviewed
+> future authoring workflow. Future authoring commands described here are not available in current
+> releases; they do not claim that `plugin-kit-ai@2` is available. Existing installer
 > examples are identified separately. Public activation remains pending.
 
 These are **existing installer commands**. They operate on managed installation
