@@ -1,4 +1,7 @@
 "use strict";
+if (process.env.AGENTPLUGINS_STAGED_TEST_CHILD === "1") {
+  require("node:test")("source-checkout-only suite", { skip: "requires the complete repository source tree" }, () => {});
+} else {
 
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -277,3 +280,4 @@ if (require.main === module) test("shared completion helper preserves a collisio
   assert.equal(fs.existsSync(path.join(second, "completion.json")), false);
   assert.equal(fs.readFileSync(path.join(second, "completion.pending.json"), "utf8"), c.encode({ fixture: true }).toString());
 });
+}

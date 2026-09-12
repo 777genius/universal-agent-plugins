@@ -1,4 +1,7 @@
 "use strict";
+if (process.env.AGENTPLUGINS_STAGED_TEST_CHILD === "1") {
+  require("node:test")("source-checkout-only suite", { skip: "requires the complete repository source tree" }, () => {});
+} else {
 
 // Source/unit/interface evidence only: harmless bytes, deterministic fs and
 // external-engine outcomes. No archive, native process, transport or custody proof.
@@ -436,3 +439,4 @@ if (require.main === module) {
   });
 }
 module.exports = { fixture, memory, engine, source, local, LOCATOR, native };
+}

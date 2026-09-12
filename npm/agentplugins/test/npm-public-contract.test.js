@@ -7,6 +7,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const test = require("node:test");
+const STAGED_SOURCE_CHECKOUT = process.env.AGENTPLUGINS_STAGED_TEST_CHILD === "1";
 
 const {
   validateAuditSignatures,
@@ -345,7 +346,7 @@ for (const product of Object.keys(products)) for (const [form, wrap] of Object.e
   });
 }
 
-test("C1 blob checks bind the helper while preserving both historical receipt inventories", t => {
+test("C1 blob checks bind the helper while preserving both historical receipt inventories", { skip: STAGED_SOURCE_CHECKOUT && "requires the complete repository source tree" }, t => {
   const packing = require("../scripts/stage-dual-authoring-npm");
   const publicPacking = require("../scripts/stage-authoring-npm");
   const c = require("../scripts/dual-authoring-candidate");
