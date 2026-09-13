@@ -20,6 +20,7 @@ on:
           - binary-only
           - paired-preparation
           - paired-promotion
+          - milestone-a-paired-promotion
           - paired-input-provenance
       source_sha:
         description: Exact source and workflow SHA (required for paired preparation)
@@ -49,6 +50,12 @@ on:
           - reconcile
       promotion_record:
         description: Fixed canonical promotion record bindings; unsupported native contracts reject
+        required: false
+      milestone_a_run:
+        description: Exact successful Authoring Milestone A E2E run ID
+        required: false
+      milestone_a_attempt:
+        description: Exact successful Authoring Milestone A E2E run attempt
         required: false
 
 permissions:
@@ -83,7 +90,7 @@ jobs:
           export PATH="/usr/local/bin:${PATH}"
           [[ "${GITHUB_EVENT_NAME}" == workflow_dispatch ]]
           case "${PRODUCER_MODE}" in
-            binary-only|paired-preparation|paired-promotion) exit 0 ;;
+            binary-only|paired-preparation|paired-promotion|milestone-a-paired-promotion) exit 0 ;;
             paired-input-provenance) [[ -z "${PROMOTION_RECORD}" && "${PROMOTION_OPERATION}" == promote ]] ;;
             *) exit 1 ;;
           esac
@@ -785,6 +792,134 @@ jobs:
         run: |
           case "${PROMOTION_OPERATION}" in promote|reconcile) ;; *) exit 1 ;; esac
           node npm/agentplugins/scripts/authoring-promotion.js "${PROMOTION_OPERATION}" "${PROMOTION_ROOT}/options.json"
+
+  milestone-a-promotion-admission:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.producer_mode == 'milestone-a-paired-promotion' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - name: Validate fixed manual cut identity before checkout
+        shell: bash
+        env:
+          TAG: ${{ inputs.tag }}
+          KIT_VERSION: ${{ inputs.plugin_kit_version }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          WORKFLOW_SHA: ${{ github.sha }}
+          WORKFLOW_REF: ${{ github.ref }}
+        run: |
+          set -euo pipefail
+          test "${TAG}" = agentplugins-v0.1.60
+          test "${KIT_VERSION}" = 2.0.0
+          [[ "${SOURCE_SHA}" =~ ^[0-9a-f]{40}$ && ! "${SOURCE_SHA}" =~ ^0{40}$ ]]
+          test "${SOURCE_SHA}" = "${WORKFLOW_SHA}"
+          test "${WORKFLOW_REF}" = refs/tags/agentplugins-v0.1.60
+          test "${GITHUB_REPOSITORY}" = 777genius/universal-agent-plugins
+          [[ "${{ inputs.milestone_a_run }}" =~ ^[1-9][0-9]{0,15}$ ]]
+          [[ "${{ inputs.milestone_a_attempt }}" =~ ^[1-9][0-9]{0,3}$ ]]
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ inputs.source_sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: '22.23.2'
+          package-manager-cache: false
+      - name: Independently admit preparation and authenticated Milestone A evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PROMOTION_RECORD: ${{ inputs.promotion_record }}
+          PREPARATION_RUN: ${{ inputs.preparation_run }}
+          PREPARATION_ATTEMPT: ${{ inputs.preparation_attempt }}
+          PREPARATION_ARTIFACT: ${{ inputs.preparation_artifact }}
+          PREPARATION_DIGEST: ${{ inputs.preparation_digest }}
+          MILESTONE_A_RUN: ${{ inputs.milestone_a_run }}
+          MILESTONE_A_ATTEMPT: ${{ inputs.milestone_a_attempt }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs'), path = require('node:path');
+          const p = require('./npm/agentplugins/scripts/authoring-promotion');
+          const scratch = fs.mkdtempSync(path.join(process.env.RUNNER_TEMP, 'milestone-a-admission-'));
+          const record = path.join(scratch, 'authoring-promotion.json');
+          fs.writeFileSync(record, Buffer.from(process.env.PROMOTION_RECORD), {flag: 'wx', mode: 0o400});
+          const selected = {tag: 'agentplugins-v0.1.60', ref: 'refs/tags/agentplugins-v0.1.60', source: process.env.SOURCE_SHA,
+            versions: {agentplugins: '0.1.60', 'plugin-kit-ai': '2.0.0'}};
+          const number = name => Number(process.env[name]);
+          require('./npm/agentplugins/scripts/milestone-a-release-admission').admit({record, scratch,
+            workflow_sha: process.env.SOURCE_SHA, selected,
+            preparation: {run_id: number('PREPARATION_RUN'), run_attempt: number('PREPARATION_ATTEMPT'),
+              artifact_id: number('PREPARATION_ARTIFACT'), artifact_sha256: process.env.PREPARATION_DIGEST},
+            milestone_a: {run_id: number('MILESTONE_A_RUN'), run_attempt: number('MILESTONE_A_ATTEMPT')}}});
+          NODE
+
+  milestone-a-sign-and-promote:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.producer_mode == 'milestone-a-paired-promotion' }}
+    needs: milestone-a-promotion-admission
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    environment: agentplugins-release
+    permissions:
+      contents: write
+      actions: read
+      id-token: write
+      attestations: write
+      artifact-metadata: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ inputs.source_sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: '22.23.2'
+          package-manager-cache: false
+      - name: Reacquire and re-admit the exact frozen pair and Milestone A run
+        id: admission
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PROMOTION_RECORD: ${{ inputs.promotion_record }}
+          PREPARATION_RUN: ${{ inputs.preparation_run }}
+          PREPARATION_ATTEMPT: ${{ inputs.preparation_attempt }}
+          PREPARATION_ARTIFACT: ${{ inputs.preparation_artifact }}
+          PREPARATION_DIGEST: ${{ inputs.preparation_digest }}
+          MILESTONE_A_RUN: ${{ inputs.milestone_a_run }}
+          MILESTONE_A_ATTEMPT: ${{ inputs.milestone_a_attempt }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs'), path = require('node:path');
+          const scratch = fs.mkdtempSync(path.join(process.env.RUNNER_TEMP, 'milestone-a-promotion-'));
+          const record = path.join(scratch, 'authoring-promotion.json');
+          fs.writeFileSync(record, Buffer.from(process.env.PROMOTION_RECORD), {flag: 'wx', mode: 0o400});
+          const n = name => Number(process.env[name]);
+          const options = {record, scratch, workflow_sha: process.env.SOURCE_SHA,
+            selected: {tag: 'agentplugins-v0.1.60', ref: 'refs/tags/agentplugins-v0.1.60', source: process.env.SOURCE_SHA,
+              versions: {agentplugins: '0.1.60', 'plugin-kit-ai': '2.0.0'}},
+            preparation: {run_id: n('PREPARATION_RUN'), run_attempt: n('PREPARATION_ATTEMPT'),
+              artifact_id: n('PREPARATION_ARTIFACT'), artifact_sha256: process.env.PREPARATION_DIGEST},
+            milestone_a: {run_id: n('MILESTONE_A_RUN'), run_attempt: n('MILESTONE_A_ATTEMPT')}};
+          const file = path.join(scratch, 'options.json'); fs.writeFileSync(file, JSON.stringify(options), {flag: 'wx', mode: 0o400});
+          const state = require('./npm/agentplugins/scripts/milestone-a-release-admission').admit(options);
+          fs.appendFileSync(process.env.GITHUB_ENV, `MILESTONE_A_PROMOTION=${file}\n`);
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `subjects<<PATHS\n${state.subjects.map(s => s.file).join('\n')}\nPATHS\n`);
+          NODE
+      - uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6
+        with:
+          subject-path: ${{ steps.admission.outputs.subjects }}
+      - name: Reverify provenance and publish or reconcile both native releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PROMOTION_OPERATION: ${{ inputs.promotion_operation }}
+        run: |
+          case "${PROMOTION_OPERATION}" in
+            promote) command=milestone-a-promote ;;
+            reconcile) command=milestone-a-reconcile ;;
+            *) exit 1 ;;
+          esac
+          node npm/agentplugins/scripts/authoring-promotion.js "${command}" "${MILESTONE_A_PROMOTION}"
 
   paired_input_admission:
     name: paired_input_admission
