@@ -17,7 +17,7 @@ const RELEASE_WORKFLOW = ".github/workflows/agentplugins-release.yml";
 const RECORD_SCHEMA = "milestone-a-promotion/v1";
 const RECORD_FILE = "milestone-a-promotion.json";
 const TAG = "agentplugins-v0.1.60";
-const KIT_TAG = "v2.0.0";
+const KIT_TAG = "plugin-kit-ai-v2.0.0";
 const GH = "/usr/bin/gh";
 const GH_VERSION = promotion.GH_VERSION;
 const JOBS = Object.freeze([
@@ -67,7 +67,7 @@ function recordShape(value) {
   for (const product of c.PRODUCTS) {
     const source = value.products[product];
     c.keys(source, ["tag", "manifest_sha256", "checksums_sha256", "assets"], "Milestone A product");
-    exact(source.tag, product === "agentplugins" ? "agentplugins-v0.1.60" : "v2.0.0", "Milestone A product tag");
+    exact(source.tag, product === "agentplugins" ? "agentplugins-v0.1.60" : "plugin-kit-ai-v2.0.0", "Milestone A product tag");
     c.keys(source.assets, c.TARGETS, "Milestone A product assets");
     const assets = {};
     for (const target of c.TARGETS) {

@@ -301,7 +301,7 @@ for (const [label, mutate] of Object.entries({
   "extra asset": r => { r[endpoint("releases/201")].body.assets.push({ name: "extra" }); },
   "wrong digest": r => { r[endpoint("releases/201")].body.assets[0].digest = `sha256:${hash("other")}`; },
   "changed download": r => { r[endpoint("releases/assets/1100")].binary = Buffer.from("other").toString("base64"); },
-  "uncertain not-found": r => { r["graphql:tag=v2.0.0"] = { body: { errors: [{ message: "provider denied" }] } }; }
+  "uncertain not-found": r => { r["graphql:tag=plugin-kit-ai-v2.0.0"] = { body: { errors: [{ message: "provider denied" }] } }; }
 })) test(`pair ${label} never reports success`, t => {
   const f = fixture(), routes = releaseRoutes(f, ["public", "public"]); mutate(routes); provider(t, f, routes);
   assert.throws(() => p.inspectPair(f.record, f.scratch));
@@ -474,7 +474,7 @@ function reconciliationFixture(t, states = ["draft", "draft"], mutation = {}) {
   return {f,seq,calls,change,state,recheck,writes};
 }
 for (const failure of ["second-edit", "final-readback"]) test(`completed public pair reconciliation route after ${failure} uncertainty`, t => {
-  const b=reconciliationFixture(t,undefined,failure === "second-edit" ? {failEdit:"v2.0.0"} : {});
+  const b=reconciliationFixture(t,undefined,failure === "second-edit" ? {failEdit:"plugin-kit-ai-v2.0.0"} : {});
   assert.throws(() => b.seq.promotePair(() => {
     if (failure === "final-readback" && b.writes().filter(a => a[1] === "edit").length === 2) throw Error("interrupted final readback");
     return b.recheck();
