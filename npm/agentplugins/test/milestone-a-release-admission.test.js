@@ -194,3 +194,38 @@ test("Milestone A admission and promotion embedded Node programs parse", t => {
     assert.doesNotThrow(() => new Function(block[1].split("\n").map(line => line.slice(10)).join("\n")), name);
   }
 });
+
+// Start the real CLI in a fresh process: requiring promotion first in this test
+// process would hide its circular import with Milestone A admission.
+test("Milestone A CLI initializes promotion exports before admission", (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "promotion-cli-"));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const record = promotionRecord();
+  const recordPath = path.join(root, a.RECORD_FILE);
+  fs.writeFileSync(recordPath, a.encodeRecord(record));
+  const { receipt_sha256, ...preparation } = record.preparation;
+  const config = path.join(root, "config.json");
+  fs.writeFileSync(config, JSON.stringify({ record: recordPath, scratch: root,
+    workflow_sha: source, preparation, selected, milestone_a: pin }));
+  const preload = path.join(root, "provider.cjs");
+  fs.writeFileSync(preload, `
+    require("node:child_process").spawnSync = (command, args) => {
+      if (command !== "/usr/bin/gh") throw new Error("unexpected subprocess");
+      if (args.length === 1 && args[0] === "--version")
+        return { status: 0, signal: null, stdout: process.env.TEST_GH_VERSION };
+      throw new Error("CLI reached evidence provider after version admission");
+    };
+  `);
+  for (const [version, expected] of [
+    ["2.84.0", /CLI reached evidence provider after version admission/],
+    ["2.83.1", /trusted \/usr\/bin\/gh 2\.83\.2 or newer compatible 2\.x required/],
+  ]) {
+    const result = cp.spawnSync(process.execPath, ["--require", preload,
+      path.resolve(__dirname, "../scripts/authoring-promotion.js"), "milestone-a-admit", config],
+    { encoding: "utf8", env: { ...process.env, NODE_OPTIONS: "", TEST_GH_VERSION: `gh version ${version} (test)\n` } });
+    assert.equal(result.status, 1, result.stderr);
+    assert.equal(result.stdout, "");
+    assert.match(result.stderr, expected);
+    assert.doesNotMatch(result.stderr, /is not a function|undefined|circular dependency/);
+  }
+});
