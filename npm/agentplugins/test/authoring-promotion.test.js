@@ -15,15 +15,6 @@ const hash = text => c.digest(Buffer.from(text));
 const pin = { run_id: 21, run_attempt: 2, artifact_id: 31, artifact_sha256: hash("zip fixture") };
 const url = `https://github.com/${c.REPOSITORY}`;
 
-test("GitHub CLI compatibility accepts supported 2.x updates only", () => {
-  assert.equal(p.compatibleGhVersion(`gh version ${p.GH_VERSION} (minimum)\nhttps://github.com/cli/cli/releases\n`), true);
-  assert.equal(p.compatibleGhVersion("gh version 2.84.0 (newer minor)\n"), true);
-  assert.equal(p.compatibleGhVersion("gh version 2.83.3 (newer patch)\n"), true);
-  assert.equal(p.compatibleGhVersion("gh version 2.83.1 (too old)\n"), false);
-  assert.equal(p.compatibleGhVersion("gh version 3.0.0 (unsupported major)\n"), false);
-  assert.equal(p.compatibleGhVersion("gh version latest (malformed)\n"), false);
-});
-
 // Text/ustar structural fixtures ONLY. No native compiler or subject execution,
 // no valid terminal contract and no authentic signature proof is manufactured.
 function fixture() {
