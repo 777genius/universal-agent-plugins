@@ -213,13 +213,13 @@ func TestReleaseWorkflowRunnerCacheContext(t *testing.T) {
 func TestReleasePairedPreparationReadOnlyGraph(t *testing.T) {
 	w := readProducerWorkflow(t, "agentplugins-release.yml")
 	mode := w.On.Dispatch.Inputs["producer_mode"]
-	if mode.Default != "binary-only" || strings.Join(mode.Options, ",") != "binary-only,paired-preparation,paired-promotion,paired-input-provenance" {
+	if mode.Default != "binary-only" || strings.Join(mode.Options, ",") != "binary-only,paired-preparation,paired-promotion,milestone-a-paired-promotion,paired-input-provenance" {
 		t.Fatal("default binary-only dispatch contract changed")
 	}
 	if len(w.Permissions) != 1 || w.Permissions["contents"] != "read" {
 		t.Fatal("workflow must default to contents-read")
 	}
-	if len(w.Jobs) != 12 {
+	if len(w.Jobs) != 14 {
 		t.Fatal("review every new producer job for preparation reachability")
 	}
 	for name, job := range w.Jobs {
@@ -229,6 +229,12 @@ func TestReleasePairedPreparationReadOnlyGraph(t *testing.T) {
 		if name == "paired-promotion-admission" || name == "paired-sign-and-promote" {
 			if job.If != "${{ github.event_name == 'workflow_dispatch' && inputs.producer_mode == 'paired-promotion' }}" {
 				t.Fatalf("%s loses explicit promotion isolation", name)
+			}
+			continue
+		}
+		if name == "milestone-a-promotion-admission" || name == "milestone-a-sign-and-promote" {
+			if job.If != "${{ github.event_name == 'workflow_dispatch' && inputs.producer_mode == 'milestone-a-paired-promotion' }}" {
+				t.Fatalf("%s loses explicit Milestone A promotion isolation", name)
 			}
 			continue
 		}
@@ -557,10 +563,10 @@ func TestReleasePairedPromotionProtectedGraph(t *testing.T) {
 
 func TestReleasePairedPromotionShellSyntax(t *testing.T) {
 	w := readProducerWorkflow(t, "agentplugins-release.yml")
-	if len(w.On.Dispatch.Inputs) != 11 {
+	if len(w.On.Dispatch.Inputs) != 13 {
 		t.Fatal("review dispatch input limit and closed input contract")
 	}
-	for _, name := range []string{"paired-promotion-admission", "paired-sign-and-promote"} {
+	for _, name := range []string{"paired-promotion-admission", "paired-sign-and-promote", "milestone-a-promotion-admission", "milestone-a-sign-and-promote"} {
 		for _, step := range w.Jobs[name].Steps {
 			if step.Run == "" {
 				continue
@@ -571,6 +577,46 @@ func TestReleasePairedPromotionShellSyntax(t *testing.T) {
 			cmd.Stdin = strings.NewReader(step.Run)
 			if output, err := cmd.CombinedOutput(); err != nil {
 				t.Fatalf("%s: %v %s", step.Name, err, output)
+			}
+		}
+	}
+}
+
+func TestReleaseMilestoneAPromotionProtectedGraph(t *testing.T) {
+	w := readProducerWorkflow(t, "agentplugins-release.yml")
+	condition := "${{ github.event_name == 'workflow_dispatch' && inputs.producer_mode == 'milestone-a-paired-promotion' }}"
+	admission := w.Jobs["milestone-a-promotion-admission"]
+	signing := w.Jobs["milestone-a-sign-and-promote"]
+	if admission.If != condition || admission.Needs != nil || admission.Environment != nil ||
+		!reflect.DeepEqual(admission.Permissions, map[string]string{"contents": "read", "actions": "read"}) {
+		t.Fatal("Milestone A admission must remain an isolated read-only dispatch job")
+	}
+	if signing.If != condition || signing.Needs != "milestone-a-promotion-admission" || signing.Environment != "agentplugins-release" ||
+		!reflect.DeepEqual(signing.Permissions, map[string]string{"contents": "write", "actions": "read", "id-token": "write", "attestations": "write", "artifact-metadata": "write"}) {
+		t.Fatal("Milestone A publication must remain behind admission and the protected release environment")
+	}
+	if len(admission.Steps) == 0 || admission.Steps[0].Name != "Validate fixed manual cut identity before checkout" || admission.Steps[0].Uses != "" {
+		t.Fatal("Milestone A fixed identity must reject before checkout or provider effects")
+	}
+	for _, name := range []string{"milestone-a-promotion-admission", "milestone-a-sign-and-promote"} {
+		job := w.Jobs[name]
+		body := ""
+		hasMilestoneEnv := false
+		for _, step := range job.Steps {
+			body += step.Run
+			if strings.Contains(step.Run, "${{ inputs.milestone_a_") {
+				t.Fatalf("%s interpolates untrusted dispatch input directly into shell", name)
+			}
+			if step.Env["MILESTONE_A_RUN"] == "${{ inputs.milestone_a_run }}" && step.Env["MILESTONE_A_ATTEMPT"] == "${{ inputs.milestone_a_attempt }}" {
+				hasMilestoneEnv = true
+			}
+		}
+		if !hasMilestoneEnv {
+			t.Fatalf("%s lacks environment-bound Milestone A run selection", name)
+		}
+		for _, required := range []string{"agentplugins-v0.1.60", "2.0.0", "milestone-a-release-admission"} {
+			if !strings.Contains(body, required) {
+				t.Fatalf("%s lacks fixed release binding %q", name, required)
 			}
 		}
 	}
@@ -870,7 +916,7 @@ func c1Contract(w producerWorkflow, name string, stage, signer bool) error {
 }
 func TestC1InputProvenanceWorkflowContract(t *testing.T) {
 	w := readProducerWorkflow(t, "agentplugins-release.yml")
-	if len(w.Jobs) != 12 || len(w.On.Dispatch.Inputs) != 11 || w.On.Dispatch.Inputs["producer_mode"].Type != "choice" || !w.On.Dispatch.Inputs["producer_mode"].Required {
+	if len(w.Jobs) != 14 || len(w.On.Dispatch.Inputs) != 13 || w.On.Dispatch.Inputs["producer_mode"].Type != "choice" || !w.On.Dispatch.Inputs["producer_mode"].Required {
 		t.Fatal("closed release inputs/jobs")
 	}
 	for _, name := range []string{"paired_input_admission", "paired_input_attestation"} {
@@ -919,14 +965,16 @@ func TestC1PublicStageWorkflowContract(t *testing.T) {
 func TestC1WorkflowFailureReachability(t *testing.T) {
 	for _, file := range []string{"agentplugins-release.yml", "agentplugins-npm-publish.yml"} {
 		w := readProducerWorkflow(t, file)
-		modes := []string{"binary-only", "paired-preparation", "paired-promotion", "paired-input-provenance", "legacy", "paired-stage", "unknown"}
+		modes := []string{"binary-only", "paired-preparation", "paired-promotion", "milestone-a-paired-promotion", "paired-input-provenance", "legacy", "paired-stage", "unknown"}
 		legacyPermissions := map[string]map[string]string{
 			"dispatch_contract": {"contents": "read"}, "validate": {"checks": "read", "contents": "read", "pull-requests": "read"},
 			"build": {"contents": "read"}, "stage-draft": {"contents": "write", "id-token": "write", "attestations": "write", "artifact-metadata": "write"},
 			"platform-proof": {"contents": "read", "attestations": "read"}, "promote-release": {"contents": "write", "attestations": "read"},
 			"paired-preparation": {"contents": "read"}, "paired-promotion-admission": {"contents": "read", "actions": "read"},
-			"paired-sign-and-promote": {"contents": "write", "actions": "read", "id-token": "write", "attestations": "write", "artifact-metadata": "write"},
-			"prepare":                 {"contents": "read", "attestations": "read"}, "publish": {"contents": "read", "id-token": "write"},
+			"paired-sign-and-promote":         {"contents": "write", "actions": "read", "id-token": "write", "attestations": "write", "artifact-metadata": "write"},
+			"milestone-a-promotion-admission": {"contents": "read", "actions": "read"},
+			"milestone-a-sign-and-promote":    {"contents": "write", "actions": "read", "id-token": "write", "attestations": "write", "artifact-metadata": "write"},
+			"prepare":                         {"contents": "read", "attestations": "read"}, "publish": {"contents": "read", "id-token": "write"},
 			"verify-public": {"contents": "read", "attestations": "read"},
 		}
 		for name, job := range w.Jobs {
@@ -955,6 +1003,12 @@ func TestC1WorkflowFailureReachability(t *testing.T) {
 							}
 							if (status != "success") && reachable {
 								t.Fatalf("%s reachable after %s", name, status)
+							}
+							if name == "milestone-a-promotion-admission" || name == "milestone-a-sign-and-promote" {
+								expected := status == "success" && event == "workflow_dispatch" && mode == "milestone-a-paired-promotion"
+								if reachable != expected {
+									t.Fatalf("Milestone A reachability %s %s %s %s", name, mode, event, status)
+								}
 							}
 							if strings.HasPrefix(name, "paired_input_") || strings.HasPrefix(name, "paired_stage") {
 								expected := status == "success" && event == "workflow_dispatch" && ((strings.HasPrefix(name, "paired_input_") && mode == "paired-input-provenance") || (strings.HasPrefix(name, "paired_stage") && mode == "paired-stage" && !publish))
