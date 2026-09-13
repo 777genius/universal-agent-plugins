@@ -243,8 +243,8 @@ fallback. Workflow concurrency never cancels an in-progress attempt.
 
 Only a completed registry HTTP 404 authorizes a first publication. Authentication,
 rate-limit, server, redirect, and network errors stop the operation. An existing
-version fails closed, including an identical version. A publish error or timeout is also
-reconciled without another publish attempt: exact public tarball bytes,
+version is never republished: it is accepted only after the same full reconciliation
+used for an ambiguous publish result. Exact public tarball bytes,
 integrity/shasum, npm signature audit and verified attestation bundles, expected
 GitHub workflow/ref/source, and installed source binding must all match.
 Uncertain or unavailable readback fails closed; investigate the retained artifact
@@ -265,6 +265,7 @@ with no bare-v alias for v2. The legacy copy-only `npm-publish.yml` refuses majo
 v1 numeric/bare-v tags. Wrong-product and malformed tags fail before acquisition.
 
 The two registry writes are not atomic: one product can publish while its peer
-fails. Inspect retained evidence and public state after a partial or ambiguous
-attempt; do not retry an existing version. This remediation itself does not
+fails. After inspecting retained evidence and public state, the same workflow can
+resume: it fully reconciles the existing product without republishing it and publishes
+only an absent peer. This remediation itself does not
 publish packages, create tags or releases, or change public availability labels.
