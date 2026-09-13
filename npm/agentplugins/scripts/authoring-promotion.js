@@ -14,6 +14,7 @@ const URL = `https://github.com/${REPOSITORY}`;
 const SIGNER = `github.com/${REPOSITORY}/${WORKFLOW}`;
 const GH = "/usr/bin/gh";
 const GH_VERSION = "2.83.2";
+const GH_VERSION_PARTS = Object.freeze(GH_VERSION.split(".").map(Number));
 const MODE = "release-cli-contract-v1";
 const SCOPE = "six-platform-pair";
 const SCHEMA = "authoring-promotion/v1";
@@ -25,6 +26,18 @@ const NATIVE_WORKFLOW = ".github/workflows/authoring-frozen-native.yml";
 const NATIVE_FILES = Object.freeze(["transcripts.json", "trees.json", "build-info.json", "preservation.json",
   "preparation.json", "host.json", "scans.json", "acquisition.json", ...c.PRODUCTS.map(p => `${p}-terminal.json`)]);
 const fail = message => { throw new Error(message); };
+function compatibleGhVersion(output) {
+  if (typeof output !== "string") return false;
+  const first = output.split(/\r?\n/, 1)[0];
+  const match = /^gh version (0|[1-9][0-9]{0,5})\.(0|[1-9][0-9]{0,5})\.(0|[1-9][0-9]{0,5}) \([^\r\n]{1,200}\)$/.exec(first);
+  if (!match) return false;
+  const actual = match.slice(1).map(Number);
+  if (actual[0] !== GH_VERSION_PARTS[0]) return false;
+  for (let i = 1; i < actual.length; i++) {
+    if (actual[i] !== GH_VERSION_PARTS[i]) return actual[i] > GH_VERSION_PARTS[i];
+  }
+  return true;
+}
 const exact = (a, b, label) => { if (!equal(a, b)) fail(`${label}: binding mismatch`); };
 const sha = (v, n = 64) => {
   if (typeof v !== "string" || !new RegExp(`^[0-9a-f]{${n}}$`).test(v) || /^0+$/.test(v)) fail(`exact nonzero SHA-${n === 40 ? "1 source" : "256"} required`);
@@ -161,7 +174,7 @@ function gh(args, cwd, maximum = 4 * LIMIT, encoding = "utf8") {
   return result.stdout;
 }
 function cliVersion(cwd) {
-  if (!gh(["--version"], cwd).startsWith(`gh version ${GH_VERSION} (`)) fail(`trusted /usr/bin/gh ${GH_VERSION} required`);
+  if (!compatibleGhVersion(gh(["--version"], cwd))) fail(`trusted /usr/bin/gh ${GH_VERSION} or newer compatible 2.x required`);
 }
 function api(endpoint, cwd) {
   return JSON.parse(gh(["api", "--hostname", "github.com", "-H", "Accept: application/vnd.github+json",
@@ -822,7 +835,7 @@ function admitPublicEvidence(value, context) {
   exact(e.stage, request.stage, 'public Q original S locator');
   return admitted;
 }
-module.exports = { admitPublicEvidence, inspectPublicCaller, inspectPublicAttempt, verifyPublicSubject, inspectStageCaller, workflowSelection, inspectInputCaller, checkPreparationRef, acquireCurrentStage, inspectCurrentStage, checkStageEvidence, SCHEMA, WORKFLOW, GH_VERSION, LANES, encodeRecord, decodeRecord, validateSelection, admitRecord, requireNativeContracts,
+module.exports = { admitPublicEvidence, inspectPublicCaller, inspectPublicAttempt, verifyPublicSubject, inspectStageCaller, workflowSelection, inspectInputCaller, checkPreparationRef, acquireCurrentStage, inspectCurrentStage, checkStageEvidence, SCHEMA, WORKFLOW, GH_VERSION, compatibleGhVersion, LANES, encodeRecord, decodeRecord, validateSelection, admitRecord, requireNativeContracts,
   inspectArtifact, acquireArtifact, extractArtifact, acquirePreparation, checkNativeContracts, admitNativeEvidence,
   acquireInputPreparation, readInputPreparation, checkInputTags,
   mapVerifiedOutput, verifySubject, verifyStageSubject, frozenSubjects, releasePins, promotionRecord, acquireMilestonePreparation, inspectPair, promote, promoteMilestoneA };

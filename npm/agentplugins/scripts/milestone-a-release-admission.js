@@ -9,6 +9,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { isDeepStrictEqual } = require("node:util");
 const c = require("./dual-authoring-candidate");
+const promotion = require("./authoring-promotion");
 
 const REPOSITORY = c.REPOSITORY;
 const WORKFLOW = ".github/workflows/authoring-milestone-a-e2e.yml";
@@ -18,7 +19,7 @@ const RECORD_FILE = "milestone-a-promotion.json";
 const TAG = "agentplugins-v0.1.60";
 const KIT_TAG = "v2.0.0";
 const GH = "/usr/bin/gh";
-const GH_VERSION = "2.83.2";
+const GH_VERSION = promotion.GH_VERSION;
 const JOBS = Object.freeze([
   "Exact candidate package",
   "Milestone A / linux-amd64",
@@ -229,7 +230,7 @@ function evidenceContract(run, jobs, selected, pin) {
 }
 function inspectEvidence(pin, selected, cwd) {
   const version = gh(["--version"], cwd);
-  if (!version.startsWith(`gh version ${GH_VERSION} (`)) fail(`trusted /usr/bin/gh ${GH_VERSION} required`);
+  if (!promotion.compatibleGhVersion(version)) fail(`trusted /usr/bin/gh ${GH_VERSION} or newer compatible 2.x required`);
   const run = api(`actions/runs/${positive(pin.run_id)}/attempts/${positive(pin.run_attempt, 1000)}`, cwd);
   const response = api(`actions/runs/${pin.run_id}/attempts/${pin.run_attempt}/jobs?per_page=100`, cwd);
   if (response.total_count !== response.jobs?.length || response.jobs.length > 100) fail("complete bounded job response required");
