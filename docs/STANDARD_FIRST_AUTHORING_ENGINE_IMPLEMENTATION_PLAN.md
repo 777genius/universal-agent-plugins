@@ -2662,3 +2662,22 @@ This approach maximizes reuse without preserving a second package model. It
 keeps the existing command investment, gives authors a dedicated
 `plugin-kit-ai` experience, exposes the same capabilities from `agentplugins`,
 and leaves Agent Plugins 1.0 `plugin.json` as the sole portable authority.
+
+### Bounded paired npm publication consumer
+
+The consumer follows the release-contract foundation merged through PR #265.
+Its own final merged source, selected before the release tags exist, is the
+single source, execution, and workflow identity;
+there is no consumer SHA/control-tag split. The isolated `paired-publish` route
+consumes the fixed `agentplugins-v0.1.61` / `plugin-kit-ai-v2.0.1` pair and
+publishes only the verified `universal-agent-plugins@0.1.61` tarball. See the
+[fixed paired consumer contract](./agentplugins-release.md#fixed-paired-npm-consumer-before-release-tags).
+
+Admission reuses the audited release reader, Milestone A retained receipt
+admission, promotion signature verifier, qualified public package constructor,
+and closed tar verifier. It neither relaxes those contracts nor requires the
+legacy notices asset on paired releases. Legacy and paired-stage job bodies and
+all useful YAML capabilities remain preserved. The consumer does not authorize
+tag/release mutations, actual publication during implementation, phases 7-11,
+or changes to PR190 availability labels/historical links. D5 still qualifies
+executables and does not block truthful public wording.

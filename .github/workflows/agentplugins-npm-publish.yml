@@ -13,11 +13,11 @@ on:
         default: false
         type: boolean
       producer_mode:
-        description: Legacy publication or isolated prepublication pair staging
+        description: Legacy publication, isolated pair staging, or fixed paired publication
         required: true
         type: choice
         default: legacy
-        options: [legacy, paired-stage]
+        options: [legacy, paired-stage, paired-publish]
       source_sha:
         description: Exact paired source and workflow SHA
         type: string
@@ -67,6 +67,16 @@ jobs:
           case "${PRODUCER_MODE}" in
             legacy) [[ -z "${SOURCE_SHA}${KIT_VERSION}${NATIVE_INPUTS}${INPUT_ARTIFACT}" ]]; exit 0 ;;
             paired-stage) [[ "${PUBLISH}" == false ]] ;;
+            paired-publish)
+              [[ "${GITHUB_ACTIONS}" == true && "${GITHUB_EVENT_NAME}" == workflow_dispatch && "${GITHUB_REPOSITORY}" == 777genius/universal-agent-plugins ]] || exit 1
+              [[ "${TAG}" == agentplugins-v0.1.61 && "${KIT_VERSION}" == 2.0.1 ]] || exit 1
+              [[ "${SOURCE_SHA}" =~ ^[0-9a-f]{40}$ && ! "${SOURCE_SHA}" =~ ^0+$ ]] || exit 1
+              [[ "${SOURCE_SHA}" == "${GITHUB_SHA}" && "${SOURCE_SHA}" == "${GITHUB_WORKFLOW_SHA}" ]] || exit 1
+              [[ "${GITHUB_REF}" == "refs/tags/${TAG}" ]] || exit 1
+              [[ "${GITHUB_WORKFLOW_REF}" == "777genius/universal-agent-plugins/.github/workflows/agentplugins-npm-publish.yml@refs/tags/${TAG}" ]] || exit 1
+              [[ -z "${NATIVE_INPUTS}${INPUT_ARTIFACT}" ]] || exit 1
+              [[ "${PUBLISH}" == true || "${PUBLISH}" == false ]] || exit 1
+              exit 0 ;;
             *) exit 1 ;;
           esac
           [[ "${GITHUB_ACTIONS}" == true && "${GITHUB_REPOSITORY}" == 777genius/universal-agent-plugins ]]
@@ -606,3 +616,102 @@ jobs:
           output('payload', payload.map(n => path.join(result.root, n)).join('\n'));
           output('stage_sha256', c.digest(c.readFile(path.join(result.root, 'completion.json'))));
           NODE
+
+  paired_publish_prepare:
+    name: Admit public pair and pack once
+    needs: dispatch_contract
+    if: ${{ success() && github.event_name == 'workflow_dispatch' && inputs.producer_mode == 'paired-publish' && needs.dispatch_contract.result == 'success' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      actions: read
+      contents: read
+      attestations: read
+    outputs:
+      artifact_id: ${{ steps.upload.outputs.artifact-id }}
+      artifact_digest: ${{ steps.upload.outputs.artifact-digest }}
+    env:
+      PRODUCER_MODE: ${{ inputs.producer_mode }}
+      TAG: ${{ inputs.tag }}
+      SOURCE_SHA: ${{ inputs.source_sha }}
+      KIT_VERSION: ${{ inputs.plugin_kit_version }}
+      PUBLISH: ${{ inputs.publish }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.source_sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22.23.2"
+          package-manager-cache: false
+      - name: Install pinned npm client
+        run: npm install --global npm@12.0.2 --ignore-scripts
+      - name: Read-only admission and exact pack
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(npm --version)" = 12.0.2
+          npm_cli="$(realpath "$(dirname "$(command -v node)")/../lib/node_modules/npm/bin/npm-cli.js")"
+          node npm/agentplugins/scripts/publish-paired-authoring-npm.js prepare "${RUNNER_TEMP}/paired-publication" "${npm_cli}"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        id: upload
+        with:
+          name: paired-publication-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/paired-publication/
+          if-no-files-found: error
+          retention-days: 30
+
+  paired_publish:
+    name: Publish exact paired package and verify public readback
+    needs: paired_publish_prepare
+    if: ${{ success() && github.event_name == 'workflow_dispatch' && inputs.producer_mode == 'paired-publish' && inputs.publish == true && needs.paired_publish_prepare.result == 'success' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment: npm-agentplugins
+    permissions:
+      actions: read
+      contents: read
+      attestations: read
+      id-token: write
+    env:
+      PRODUCER_MODE: ${{ inputs.producer_mode }}
+      TAG: ${{ inputs.tag }}
+      SOURCE_SHA: ${{ inputs.source_sha }}
+      KIT_VERSION: ${{ inputs.plugin_kit_version }}
+      PUBLISH: ${{ inputs.publish }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.source_sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22.23.2"
+          package-manager-cache: false
+      - name: Install pinned trusted publishing client
+        run: npm install --global npm@12.0.2 --ignore-scripts
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          artifact-ids: ${{ needs.paired_publish_prepare.outputs.artifact_id }}
+          merge-multiple: true
+          path: ${{ runner.temp }}/paired-publication
+      - name: Verify transferred artifact identity
+        env:
+          ARTIFACT_ID: ${{ needs.paired_publish_prepare.outputs.artifact_id }}
+          ARTIFACT_DIGEST: ${{ needs.paired_publish_prepare.outputs.artifact_digest }}
+        run: |
+          set -euo pipefail
+          [[ "${ARTIFACT_ID}" =~ ^[1-9][0-9]{0,15}$ ]]
+          [[ "${ARTIFACT_DIGEST}" =~ ^sha256:[0-9a-f]{64}$ && ! "${ARTIFACT_DIGEST}" =~ ^sha256:0+$ ]]
+          actual="$(gh api --hostname github.com "repos/${GITHUB_REPOSITORY}/actions/artifacts/${ARTIFACT_ID}" --jq .digest)"
+          test "${actual}" = "${ARTIFACT_DIGEST}"
+      - name: Reauthenticate, publish without repacking, and reconcile
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(npm --version)" = 12.0.2
+          npm_cli="$(realpath "$(dirname "$(command -v node)")/../lib/node_modules/npm/bin/npm-cli.js")"
+          node npm/agentplugins/scripts/publish-paired-authoring-npm.js publish "${RUNNER_TEMP}/paired-publication" "${npm_cli}"
