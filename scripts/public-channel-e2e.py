@@ -52,8 +52,11 @@ def main(channel):
             directory = root / key
             directory.mkdir()
             env[key] = str(directory)
-        env.update(CI='1', PIP_CONFIG_FILE=os.devnull, npm_config_userconfig=os.devnull,
-                   npm_config_globalconfig=os.devnull, HOMEBREW_NO_AUTO_UPDATE='1',
+        for kind in ('user', 'global'):
+            config = root / f'npm-{kind}.rc'
+            config.touch()
+            env[f'npm_config_{kind}config'] = str(config)
+        env.update(CI='1', PIP_CONFIG_FILE=os.devnull, HOMEBREW_NO_AUTO_UPDATE='1',
                    HOMEBREW_NO_ANALYTICS='1', HOMEBREW_NO_INSTALL_CLEANUP='1')
 
         def run(args):

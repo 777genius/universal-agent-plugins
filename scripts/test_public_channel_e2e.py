@@ -52,6 +52,8 @@ class DisposableJourney(unittest.TestCase):
             env = kwargs['env']
             for key in ('HOME', 'USERPROFILE', 'XDG_CACHE_HOME', 'npm_config_cache'):
                 self.assertTrue(Path(env[key]).is_relative_to(root))
+            self.assertNotEqual(env['npm_config_userconfig'], env['npm_config_globalconfig'])
+            self.assertTrue(Path(env['npm_config_userconfig']).is_file())
             self.assertNotIn('GITHUB_TOKEN', env)
             status = 0
             data = {'revision': channels.REVISION}
