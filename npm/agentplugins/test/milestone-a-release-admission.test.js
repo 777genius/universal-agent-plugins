@@ -1,7 +1,10 @@
 "use strict";
 
 const assert = require("node:assert/strict");
+const cp = require("node:child_process");
 const test = require("node:test");
+const os = require("node:os");
+const fs = require("node:fs");
 const a = require("../scripts/milestone-a-release-admission");
 
 const source = "a".repeat(40);
@@ -34,6 +37,53 @@ test("binds behavioral receipts to the source and synthetic 0.1.91 test package 
   assert.deepEqual(result.test_versions, { agentplugins: "0.1.91", "plugin-kit-ai": "2.0.0" });
   assert.deepEqual(result.release_versions, { agentplugins: "0.1.60", "plugin-kit-ai": "2.0.0" });
   assert.equal(result.engine_revision, source);
+});
+
+function artifactFixture(attempt) {
+  const labels = ["exact-candidate", ...a.PLATFORMS.map(value => value.join("-"))];
+  return labels.map((label, index) => ({ id: attempt * 100 + index + 1,
+    name: `milestone-a-${label}-${pin.run_id}-${attempt}`, expired: false,
+    workflow_run: { id: pin.run_id, head_sha: source }, digest: `sha256:${String(attempt).repeat(64)}` }));
+}
+
+function withMockedReceiptProvider(t, artifacts, operation) {
+  const promotion = require("../scripts/authoring-promotion");
+  const bodies = new Map();
+  artifactFixture(2).forEach((item, index) => bodies.set(item.id,
+    index === 0 ? prepareReceipt() : runReceipts()[index - 1]));
+  t.mock.method(promotion, "acquireArtifact", locator => `/provider/artifact-${locator.artifact_id}.zip`);
+  t.mock.method(cp, "spawnSync", (command, args) => {
+    if (command === "/usr/bin/gh") return { status: 0, signal: null, stdout: JSON.stringify({ total_count: artifacts.length, artifacts }) };
+    if (command === "/usr/bin/python3") {
+      const id = Number(/artifact-(\d+)\.zip$/.exec(args[3])?.[1]);
+      return { status: 0, signal: null, stdout: JSON.stringify(bodies.get(id)) };
+    }
+    throw new Error(`unexpected mocked command: ${command}`);
+  });
+  const scratch = fs.mkdtempSync(`${os.tmpdir()}/milestone-a-provider-fixture-`);
+  try { return operation(scratch); } finally { fs.rmSync(scratch, { recursive: true, force: true }); }
+}
+
+test("selects attempt 2 receipts while attempt 1 artifacts remain retained", t => {
+  const artifacts = [...artifactFixture(1), ...artifactFixture(2)];
+  const result = withMockedReceiptProvider(t, artifacts, scratch => a.inspectReceipts(pin, selected, scratch));
+  assert.equal(result.source, source);
+  assert.deepEqual(result.test_versions, a.E2E_VERSIONS);
+});
+
+test("rejects malformed or ambiguous selected-attempt artifact closure", async t => {
+  await t.test("malformed selected name leaves the canonical receipt absent", child => {
+    const artifacts = [...artifactFixture(1), ...artifactFixture(2)];
+    artifacts.at(-1).name += "-malformed";
+    assert.throws(() => withMockedReceiptProvider(child, artifacts,
+      scratch => a.inspectReceipts(pin, selected, scratch)), /exact Milestone A artifact closure required/);
+  });
+  await t.test("duplicate selected canonical name is ambiguous", child => {
+    const artifacts = [...artifactFixture(1), ...artifactFixture(2)];
+    artifacts.push({ ...artifacts.at(-1), id: 999 });
+    assert.throws(() => withMockedReceiptProvider(child, artifacts,
+      scratch => a.inspectReceipts(pin, selected, scratch)), /exact retained Milestone A artifact required/);
+  });
 });
 
 test("requires the authentic ordered Linux command receipt", () => {

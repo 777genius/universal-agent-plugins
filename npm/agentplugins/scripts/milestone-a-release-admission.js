@@ -104,10 +104,22 @@ function readReceipt(archive, member, cwd) {
 }
 function inspectReceipts(pin, selected, cwd) {
   const p = require("./authoring-promotion");
+  positive(pin.run_id); positive(pin.run_attempt, 1000); sha(selected.source);
   const response = api(`actions/runs/${pin.run_id}/artifacts?per_page=100`, cwd);
   const names = [`milestone-a-exact-candidate-${pin.run_id}-${pin.run_attempt}`,
     ...PLATFORMS.map(([platform, arch]) => `milestone-a-${platform}-${arch}-${pin.run_id}-${pin.run_attempt}`)];
-  if (response.total_count !== 4 || response.artifacts?.length !== 4) fail("exact Milestone A artifact closure required");
+  // A rerun retains artifacts from earlier attempts under the same run. Require
+  // a complete provider page, then close over the four names for the explicitly
+  // selected attempt instead of treating valid earlier-attempt artifacts as an
+  // ambiguity in that selection.
+  if (!Array.isArray(response.artifacts) || response.total_count !== response.artifacts.length ||
+      response.artifacts.length > 100) fail("complete bounded Milestone A artifact response required");
+  const retainedName = new RegExp(`^milestone-a-(?:exact-candidate|${PLATFORMS.map(value => value.join("-")).join("|")})-${pin.run_id}-([1-9][0-9]{0,3})$`);
+  for (const item of response.artifacts) {
+    const match = typeof item?.name === "string" && retainedName.exec(item.name);
+    if (!match) fail("exact Milestone A artifact closure required");
+    positive(Number(match[1]), 1000);
+  }
   const receipts = names.map((name, index) => {
     const rows = response.artifacts.filter(item => item.name === name);
     if (rows.length !== 1 || rows[0].expired !== false || rows[0].workflow_run?.id !== pin.run_id ||

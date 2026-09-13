@@ -809,6 +809,8 @@ jobs:
           SOURCE_SHA: ${{ inputs.source_sha }}
           WORKFLOW_SHA: ${{ github.sha }}
           WORKFLOW_REF: ${{ github.ref }}
+          MILESTONE_A_RUN: ${{ inputs.milestone_a_run }}
+          MILESTONE_A_ATTEMPT: ${{ inputs.milestone_a_attempt }}
         run: |
           set -euo pipefail
           test "${TAG}" = agentplugins-v0.1.60
@@ -817,8 +819,10 @@ jobs:
           test "${SOURCE_SHA}" = "${WORKFLOW_SHA}"
           test "${WORKFLOW_REF}" = refs/tags/agentplugins-v0.1.60
           test "${GITHUB_REPOSITORY}" = 777genius/universal-agent-plugins
-          [[ "${{ inputs.milestone_a_run }}" =~ ^[1-9][0-9]{0,15}$ ]]
-          [[ "${{ inputs.milestone_a_attempt }}" =~ ^[1-9][0-9]{0,3}$ ]]
+          [[ "${MILESTONE_A_RUN}" =~ ^[1-9][0-9]{0,15}$ ]]
+          [[ "${MILESTONE_A_ATTEMPT}" =~ ^[1-9][0-9]{0,3}$ ]]
+          (( MILESTONE_A_RUN <= 9007199254740991 ))
+          (( MILESTONE_A_ATTEMPT <= 1000 ))
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ inputs.source_sha }}
@@ -847,12 +851,18 @@ jobs:
           fs.writeFileSync(record, Buffer.from(process.env.PROMOTION_RECORD), {flag: 'wx', mode: 0o400});
           const selected = {tag: 'agentplugins-v0.1.60', ref: 'refs/tags/agentplugins-v0.1.60', source: process.env.SOURCE_SHA,
             versions: {agentplugins: '0.1.60', 'plugin-kit-ai': '2.0.0'}};
-          const number = name => Number(process.env[name]);
+          const number = (name, maximum = Number.MAX_SAFE_INTEGER) => {
+            const value = process.env[name];
+            if (typeof value !== 'string' || !/^[1-9][0-9]{0,15}$/.test(value)) throw Error(`invalid ${name}`);
+            const parsed = Number(value);
+            if (!Number.isSafeInteger(parsed) || parsed > maximum) throw Error(`invalid ${name}`);
+            return parsed;
+          };
           require('./npm/agentplugins/scripts/milestone-a-release-admission').admit({record, scratch,
             workflow_sha: process.env.SOURCE_SHA, selected,
             preparation: {run_id: number('PREPARATION_RUN'), run_attempt: number('PREPARATION_ATTEMPT'),
               artifact_id: number('PREPARATION_ARTIFACT'), artifact_sha256: process.env.PREPARATION_DIGEST},
-            milestone_a: {run_id: number('MILESTONE_A_RUN'), run_attempt: number('MILESTONE_A_ATTEMPT')}}});
+            milestone_a: {run_id: number('MILESTONE_A_RUN'), run_attempt: number('MILESTONE_A_ATTEMPT', 1000)}}});
           NODE
 
   milestone-a-sign-and-promote:
@@ -894,13 +904,19 @@ jobs:
           const scratch = fs.mkdtempSync(path.join(process.env.RUNNER_TEMP, 'milestone-a-promotion-'));
           const record = path.join(scratch, 'authoring-promotion.json');
           fs.writeFileSync(record, Buffer.from(process.env.PROMOTION_RECORD), {flag: 'wx', mode: 0o400});
-          const n = name => Number(process.env[name]);
+          const n = (name, maximum = Number.MAX_SAFE_INTEGER) => {
+            const value = process.env[name];
+            if (typeof value !== 'string' || !/^[1-9][0-9]{0,15}$/.test(value)) throw Error(`invalid ${name}`);
+            const parsed = Number(value);
+            if (!Number.isSafeInteger(parsed) || parsed > maximum) throw Error(`invalid ${name}`);
+            return parsed;
+          };
           const options = {record, scratch, workflow_sha: process.env.SOURCE_SHA,
             selected: {tag: 'agentplugins-v0.1.60', ref: 'refs/tags/agentplugins-v0.1.60', source: process.env.SOURCE_SHA,
               versions: {agentplugins: '0.1.60', 'plugin-kit-ai': '2.0.0'}},
             preparation: {run_id: n('PREPARATION_RUN'), run_attempt: n('PREPARATION_ATTEMPT'),
               artifact_id: n('PREPARATION_ARTIFACT'), artifact_sha256: process.env.PREPARATION_DIGEST},
-            milestone_a: {run_id: n('MILESTONE_A_RUN'), run_attempt: n('MILESTONE_A_ATTEMPT')}};
+            milestone_a: {run_id: n('MILESTONE_A_RUN'), run_attempt: n('MILESTONE_A_ATTEMPT', 1000)}};
           const file = path.join(scratch, 'options.json'); fs.writeFileSync(file, JSON.stringify(options), {flag: 'wx', mode: 0o400});
           const state = require('./npm/agentplugins/scripts/milestone-a-release-admission').admit(options);
           fs.appendFileSync(process.env.GITHUB_ENV, `MILESTONE_A_PROMOTION=${file}\n`);
