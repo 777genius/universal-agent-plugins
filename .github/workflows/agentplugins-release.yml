@@ -813,11 +813,11 @@ jobs:
           MILESTONE_A_ATTEMPT: ${{ inputs.milestone_a_attempt }}
         run: |
           set -euo pipefail
-          test "${TAG}" = agentplugins-v0.1.61
-          test "${KIT_VERSION}" = 2.0.1
+          test "${TAG}" = agentplugins-v0.1.62
+          test "${KIT_VERSION}" = 2.0.2
           [[ "${SOURCE_SHA}" =~ ^[0-9a-f]{40}$ && ! "${SOURCE_SHA}" =~ ^0{40}$ ]]
           test "${SOURCE_SHA}" = "${WORKFLOW_SHA}"
-          test "${WORKFLOW_REF}" = refs/tags/agentplugins-v0.1.61
+          test "${WORKFLOW_REF}" = refs/tags/agentplugins-v0.1.62
           test "${GITHUB_REPOSITORY}" = 777genius/universal-agent-plugins
           [[ "${MILESTONE_A_RUN}" =~ ^[1-9][0-9]{0,15}$ ]]
           [[ "${MILESTONE_A_ATTEMPT}" =~ ^[1-9][0-9]{0,3}$ ]]
@@ -848,8 +848,8 @@ jobs:
           const scratch = fs.mkdtempSync(path.join(process.env.RUNNER_TEMP, 'milestone-a-admission-'));
           const record = path.join(scratch, 'milestone-a-promotion.json');
           fs.writeFileSync(record, Buffer.from(process.env.PROMOTION_RECORD), {flag: 'wx', mode: 0o400});
-          const selected = {tag: 'agentplugins-v0.1.61', ref: 'refs/tags/agentplugins-v0.1.61', source: process.env.SOURCE_SHA,
-            versions: {agentplugins: '0.1.61', 'plugin-kit-ai': '2.0.1'}};
+          const selected = {tag: 'agentplugins-v0.1.62', ref: 'refs/tags/agentplugins-v0.1.62', source: process.env.SOURCE_SHA,
+            versions: {agentplugins: '0.1.62', 'plugin-kit-ai': '2.0.2'}};
           const number = (name, maximum = Number.MAX_SAFE_INTEGER) => {
             const value = process.env[name];
             if (typeof value !== 'string' || !/^[1-9][0-9]{0,15}$/.test(value)) throw Error(`invalid ${name}`);
@@ -911,8 +911,8 @@ jobs:
             return parsed;
           };
           const options = {record, scratch, workflow_sha: process.env.SOURCE_SHA,
-            selected: {tag: 'agentplugins-v0.1.61', ref: 'refs/tags/agentplugins-v0.1.61', source: process.env.SOURCE_SHA,
-              versions: {agentplugins: '0.1.61', 'plugin-kit-ai': '2.0.1'}},
+            selected: {tag: 'agentplugins-v0.1.62', ref: 'refs/tags/agentplugins-v0.1.62', source: process.env.SOURCE_SHA,
+              versions: {agentplugins: '0.1.62', 'plugin-kit-ai': '2.0.2'}},
             preparation: {run_id: n('PREPARATION_RUN'), run_attempt: n('PREPARATION_ATTEMPT'),
               artifact_id: n('PREPARATION_ARTIFACT'), artifact_sha256: process.env.PREPARATION_DIGEST},
             milestone_a: {run_id: n('MILESTONE_A_RUN'), run_attempt: n('MILESTONE_A_ATTEMPT', 1000)}};

@@ -15,6 +15,11 @@ const INTEGRITY = /^sha512-([A-Za-z0-9+/]{86}==)$/;
 const SHASUM = /^[0-9a-f]{40}$/;
 const COMMIT = /^[0-9a-f]{40}$/;
 
+function productName(product) {
+  if (!["agentplugins", "plugin-kit-ai"].includes(product)) fail("unknown paired product");
+  return product === "agentplugins" ? PACKAGE_NAME : "plugin-kit-ai";
+}
+
 function fail(message) {
   throw new Error(message);
 }
@@ -82,7 +87,8 @@ function validatePackJSON(value, version) {
   return validateProductPackJSON(value, "agentplugins", version);
 }
 
-function validatePublicMetadata(metadata, version, integrity, shasum) {
+function validatePublicMetadata(metadata, version, integrity, shasum, product = "agentplugins") {
+  const PACKAGE_NAME = productName(product);
   validateExpected(version, integrity, shasum);
   if (Array.isArray(metadata)) {
     if (metadata.length !== 1) {
@@ -93,17 +99,25 @@ function validatePublicMetadata(metadata, version, integrity, shasum) {
   if (!metadata || metadata.name !== PACKAGE_NAME || metadata.version !== version) {
     fail("public npm name/version does not match the package contract");
   }
-  exactObject(metadata.repository, {
-    type: "git",
-    url: "git+https://github.com/777genius/universal-agent-plugins.git",
-    directory: "npm/agentplugins"
-  }, "public npm repository");
-  if (metadata.homepage !== "https://777genius.github.io/universal-agent-plugins/") {
-    fail("public npm homepage does not match the UAP Pages contract");
+  if (product === "agentplugins") {
+    exactObject(metadata.repository, {
+      type: "git",
+      url: "git+https://github.com/777genius/universal-agent-plugins.git",
+      directory: "npm/agentplugins"
+    }, "public npm repository");
+    if (metadata.homepage !== "https://777genius.github.io/universal-agent-plugins/") {
+      fail("public npm homepage does not match the UAP Pages contract");
+    }
+    exactObject(metadata.engines, { node: ">=22" }, "public npm engines");
+    exactObject(metadata.bin, { agentplugins: "bin/agentplugins.js" }, "public npm bin");
+    exactObject(metadata.scripts, { test: "node --test" }, "public npm scripts/lifecycle hooks");
+  } else {
+    exactObject(metadata.repository, { type: "git", url: "git+https://github.com/777genius/universal-agent-plugins.git" }, "kit repository");
+    if (metadata.homepage !== "https://github.com/777genius/universal-agent-plugins") fail("kit homepage mismatch");
+    exactObject(metadata.engines, { node: ">=18" }, "kit engines");
+    exactObject(metadata.bin, { "plugin-kit-ai": "bin/plugin-kit-ai.js" }, "kit bin");
+    exactObject(metadata.scripts, { postinstall: "node ./lib/install.js" }, "kit lifecycle");
   }
-  exactObject(metadata.engines, { node: ">=22" }, "public npm engines");
-  exactObject(metadata.bin, { agentplugins: "bin/agentplugins.js" }, "public npm bin");
-  exactObject(metadata.scripts, { test: "node --test" }, "public npm scripts/lifecycle hooks");
 
   const expectedTarball = `https://registry.npmjs.org/${PACKAGE_NAME}/-/${PACKAGE_NAME}-${version}.tgz`;
   const expectedAttestation = `https://registry.npmjs.org/-/npm/v1/attestations/${PACKAGE_NAME}@${version}`;
@@ -141,13 +155,15 @@ function validatePublicMetadata(metadata, version, integrity, shasum) {
 // Paired publication adds exact checkout binding without changing the legacy
 // metadata/notices contract. The descriptor is also compared byte-for-byte
 // against the authenticated publication tarball by the consumer.
-function validatePairedSource(metadata, descriptor, source, promotionSha256) {
-  if (metadata?.name !== PACKAGE_NAME || metadata.version !== "0.1.61" ||
+function validatePairedSource(metadata, descriptor, source, promotionSha256, product = "agentplugins") {
+  const PACKAGE_NAME = productName(product);
+  const version = product === "agentplugins" ? "0.1.62" : "2.0.2";
+  if (metadata?.name !== PACKAGE_NAME || metadata.version !== version ||
       typeof source !== "string" || !/^(?!0{40}$)[0-9a-f]{40}$/.test(source) ||
-      metadata.gitHead !== source) fail("paired npm source binding mismatch");
+      (metadata.gitHead !== undefined && metadata.gitHead !== source)) fail("paired npm source binding mismatch");
   exactObject(descriptor?.identity, {
     repository: "777genius/universal-agent-plugins", commit: source, engine_revision: source,
-    versions: { agentplugins: "0.1.61", "plugin-kit-ai": "2.0.1" }
+    versions: { agentplugins: "0.1.62", "plugin-kit-ai": "2.0.2" }
   }, "paired package source identity");
   if (typeof promotionSha256 !== "string" || !/^(?!0{64}$)[0-9a-f]{64}$/.test(promotionSha256)) {
     fail("paired promotion SHA256 required");
@@ -172,9 +188,10 @@ function decodeBase64JSON(encoded, label) {
   }
 }
 
-function validateSLSAAttestation(response, version, integrity, uapTag, uapCommit) {
+function validateSLSAAttestation(response, version, integrity, uapTag, uapCommit, product = "agentplugins") {
+  const PACKAGE_NAME = productName(product);
   validateExpected(version, integrity, "0".repeat(40));
-  if (uapTag !== `agentplugins-v${version}`) fail("UAP tag does not match the package version");
+  if (uapTag !== `agentplugins-v${product === "agentplugins" ? version : "0.1.62"}` || (product === "plugin-kit-ai" && version !== "2.0.2")) fail("UAP tag does not match the package version");
   if (!COMMIT.test(uapCommit)) fail("UAP commit must be an exact lowercase commit");
   if (!response || !Array.isArray(response.attestations)) fail("npm attestation response is invalid");
   const provenance = response.attestations.filter((item) => item?.predicateType === SLSA_PREDICATE);
@@ -224,7 +241,8 @@ function validateSLSAAttestation(response, version, integrity, uapTag, uapCommit
   return statement;
 }
 
-function validateAuditSignatures(audit, response, version) {
+function validateAuditSignatures(audit, response, version, product = "agentplugins") {
+  const PACKAGE_NAME = productName(product);
   if (!VERSION.test(version) || !audit || !Array.isArray(audit.invalid) || audit.invalid.length !== 0 ||
       !Array.isArray(audit.missing) || audit.missing.length !== 0 ||
       !Array.isArray(audit.verified) || audit.verified.length !== 1) {
