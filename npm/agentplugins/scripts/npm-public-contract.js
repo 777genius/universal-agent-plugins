@@ -138,6 +138,27 @@ function validatePublicMetadata(metadata, version, integrity, shasum) {
   return metadata;
 }
 
+// Paired publication adds exact checkout binding without changing the legacy
+// metadata/notices contract. The descriptor is also compared byte-for-byte
+// against the authenticated publication tarball by the consumer.
+function validatePairedSource(metadata, descriptor, source, promotionSha256) {
+  if (metadata?.name !== PACKAGE_NAME || metadata.version !== "0.1.61" ||
+      typeof source !== "string" || !/^(?!0{40}$)[0-9a-f]{40}$/.test(source) ||
+      metadata.gitHead !== source) fail("paired npm source binding mismatch");
+  exactObject(descriptor?.identity, {
+    repository: "777genius/universal-agent-plugins", commit: source, engine_revision: source,
+    versions: { agentplugins: "0.1.61", "plugin-kit-ai": "2.0.1" }
+  }, "paired package source identity");
+  if (typeof promotionSha256 !== "string" || !/^(?!0{64}$)[0-9a-f]{64}$/.test(promotionSha256)) {
+    fail("paired promotion SHA256 required");
+  }
+  exactObject(descriptor?.qualification?.signed_subject, {
+    sha256: promotionSha256,
+    workflow: "777genius/universal-agent-plugins/.github/workflows/agentplugins-release.yml",
+    source
+  }, "paired signed promotion source");
+}
+
 function decodeBase64JSON(encoded, label) {
   if (typeof encoded !== "string" || !/^[A-Za-z0-9+/]+={0,2}$/.test(encoded) || encoded.length % 4 !== 0) {
     fail(`${label} is not canonical base64`);
@@ -277,6 +298,7 @@ if (require.main === module) {
 }
 
 module.exports = {
+  validatePairedSource,
   validateDownloadedTarball,
   validateAuditSignatures,
   validatePackJSON,
