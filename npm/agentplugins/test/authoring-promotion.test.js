@@ -104,7 +104,7 @@ if(args[0]==='release' && mutation) {
       if(!pin || release.assets.some(a=>a.name===name) || require('node:crypto').createHash('sha256').update(fs.readFileSync(file)).digest('hex')!==pin.digest.slice(7)) throw Error('immutable upload violation');
       release.assets.push(pin);
     }
-    if(mutation.moveTag) routes[${JSON.stringify(endpoint('commits/plugin-kit-ai-v2.0.1'))}].body.sha='b'.repeat(40);
+    if(mutation.moveTag) routes[${JSON.stringify(endpoint('git/ref/tags/plugin-kit-ai-v2.0.1'))}].body.object.sha='b'.repeat(40);
     if(mutation.replaceID) { release.id+=10000; routes['graphql:tag='+args[2]].body.data.repository.release.databaseId=release.id; routes[${JSON.stringify(endpoint('releases/'))}+release.id]={body:release}; }
   } else if(args[1]==='edit') { if(release.assets.length!==11) throw Error('premature public effect'); release.draft=false; }
   else throw Error('forbidden fixture mutation');
@@ -145,7 +145,7 @@ function releaseRoutes(f, states = ["draft", "draft"]) {
   const routes = {};
   c.PRODUCTS.forEach((product, i) => {
     const tag = f.record.products[product].tag;
-    routes[endpoint(`commits/${tag}`)] = { body: { sha: ID.commit } };
+    routes[endpoint(`git/ref/tags/${tag}`)] = { body: { ref: `refs/tags/${tag}`, object: { type: "commit", sha: ID.commit } } };
     routes[`graphql:tag=${tag}`] = { body: { data: { repository: { release: states[i] === "absent" ? null : { databaseId: 200 + i } } } } };
     const assets = p.releasePins(f.record, product).map((a, j) => {
       const file = a.name === "authoring-promotion.json" ? f.recordFile : a.name === "candidate.json" ? path.join(f.root, "candidate", a.name) :
@@ -289,8 +289,19 @@ for (const states of [["absent", "absent"], ["draft", "draft"], ["public", "draf
   assert.deepEqual(observed.states, states); assert.equal(observed.reconciliation_required, states[0] === "public" && states[1] === "draft");
   assert(calls().every(x => x.args[0] === "api"));
 });
+test("pair observation peels an exact annotated tag ref", t => {
+  const f = fixture(), routes = releaseRoutes(f, ["public", "public"]);
+  const name = "plugin-kit-ai-v2.0.1", tagObject = "c".repeat(40);
+  routes[endpoint(`git/ref/tags/${name}`)].body.object = { type: "tag", sha: tagObject };
+  routes[endpoint(`git/tags/${tagObject}`)] = { body: { sha: tagObject, object: { type: "commit", sha: ID.commit } } };
+  const calls = provider(t, f, routes);
+  assert.deepEqual(p.inspectPair(f.record, f.scratch).states, ["public", "public"]);
+  assert(calls().some(x => x.args.at(-1) === endpoint(`git/tags/${tagObject}`)));
+});
 for (const [label, mutate] of Object.entries({
-  "moved tag": r => { r[endpoint("commits/plugin-kit-ai-v2.0.1")].body.sha = "b".repeat(40); },
+  "moved tag": r => { r[endpoint("git/ref/tags/plugin-kit-ai-v2.0.1")].body.object.sha = "b".repeat(40); },
+  "branch-only tag lookup": r => { delete r[endpoint("git/ref/tags/plugin-kit-ai-v2.0.1")]; r[endpoint("git/ref/tags/plugin-kit-ai-v2.0.1")] = { exit: 1 }; },
+  "wrong tag ref": r => { r[endpoint("git/ref/tags/plugin-kit-ai-v2.0.1")].body.ref = "refs/heads/plugin-kit-ai-v2.0.1"; },
   "prerelease": r => { r[endpoint("releases/201")].body.prerelease = true; },
   "missing second readback": r => { r[endpoint("releases/201")] = { exit: 1 }; },
   "missing public asset": r => { r[endpoint("releases/201")].body.assets.pop(); },
@@ -371,7 +382,7 @@ for (const count of [0, 10, 11]) test(`exact ${count}/11 draft sequencing and fu
     if(call.admission) segment=[];
     else if(call.args[0]==="release") {
       assert.equal(segment.filter(a=>a.includes("verify")).length,19);
-      for(const product of c.PRODUCTS) assert(segment.some(a=>a.at(-1)===endpoint(`commits/${f.record.products[product].tag}`)));
+      for(const product of c.PRODUCTS) assert(segment.some(a=>a.at(-1)===endpoint(`git/ref/tags/${f.record.products[product].tag}`)));
       for(const id of [200,201]) assert(segment.some(a=>a.at(-1)===endpoint(`releases/${id}`)));
     } else segment.push(call.args);
   }
@@ -761,7 +772,15 @@ readPreparationBinding = (root,pin,record,receiptSha256) => {
   return {root,preparation:{sha256:receiptSha256 ?? "Q-computed-receipt",producer:invocationFor(pin,WORKFLOW,record.identity.commit)}};
 };
 cliVersion = cwd => c1Calls.push({operation:"version",cwd});
-api = (endpoint,cwd) => { c1Calls.push({operation:"api",endpoint,cwd}); return c1Responses.get(endpoint) ?? {sha:"a".repeat(40)}; };
+api = (endpoint,cwd) => {
+  c1Calls.push({operation:"api",endpoint,cwd});
+  if (c1Responses.has(endpoint)) return c1Responses.get(endpoint);
+  if (endpoint.startsWith("git/ref/tags/")) {
+    const name = endpoint.slice("git/ref/tags/".length);
+    return {ref:"refs/tags/"+name,object:{type:"commit",sha:"a".repeat(40)}};
+  }
+  return {sha:"a".repeat(40)};
+};
 module.exports.c1Calls = c1Calls;
 module.exports.c1Responses = c1Responses;
 `, filename);
@@ -834,8 +853,8 @@ test("C1 provenance Q wrapper preserves full record validation, bytes and receip
 test("C1 provenance fixed tag adapter reuses both existing derived release-tag endpoints", t => {
   const f = c1PromotionInterface(t); f.adapter.checkInputTags(f.body,f.scratch);
   assert.deepEqual(f.adapter.c1Calls,[{operation:"version",cwd:f.scratch},
-    {operation:"api",endpoint:"commits/agentplugins-v0.1.54",cwd:f.scratch},
-    {operation:"api",endpoint:"commits/plugin-kit-ai-v2.0.1",cwd:f.scratch}]);
+    {operation:"api",endpoint:"git/ref/tags/agentplugins-v0.1.54",cwd:f.scratch},
+    {operation:"api",endpoint:"git/ref/tags/plugin-kit-ai-v2.0.1",cwd:f.scratch}]);
 });
 
 test("C1 provenance malformed preparation adapter input rejects before any intake operation", t => {
@@ -879,7 +898,8 @@ test("C1 provenance fixed completed-attempt inspector rejects foreign or stale p
 
 test("C1 provenance fixed tag adapter rejects a moved second product tag", t => {
   const f = c1PromotionInterface(t);
-  f.adapter.c1Responses.set("commits/plugin-kit-ai-v2.0.1",{sha:"b".repeat(40)});
+  f.adapter.c1Responses.set("git/ref/tags/plugin-kit-ai-v2.0.1",
+    {ref:"refs/tags/plugin-kit-ai-v2.0.1",object:{type:"commit",sha:"b".repeat(40)}});
   assert.throws(() => f.adapter.checkInputTags(f.body,f.scratch),/moved release tag/);
   assert.ok(f.adapter.c1Calls.every(c => ["version","api"].includes(c.operation)));
 });
@@ -1014,7 +1034,10 @@ function c1WorkflowProvider(t) {
     else if (endpoint.endsWith('/logs')) stdout = records.map(r => `2026-09-09T01:06:00.000Z C1_STAGE ${JSON.stringify(r)}\n`).join('');
     else if (endpoint.endsWith('/jobs?per_page=100')) stdout = JSON.stringify(jobs);
     else if (endpoint.includes('/attempts/')) stdout = JSON.stringify(run);
-    else if (endpoint.includes('/commits/')) stdout = JSON.stringify({sha: selected.source});
+    else if (endpoint.includes('/git/ref/tags/')) {
+      const name = endpoint.slice(endpoint.lastIndexOf('/') + 1);
+      stdout = JSON.stringify({ref: `refs/tags/${name}`, object: {type: 'commit', sha: selected.source}});
+    }
     else if (endpoint.endsWith('/artifacts/801')) stdout = JSON.stringify(item);
     else assert.fail(`unexpected provider request ${endpoint}`);
     return {status: 0, stdout};

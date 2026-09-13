@@ -604,9 +604,25 @@ function promotionRecord(record) {
   fail("unsupported promotion record schema");
 }
 function checkTag(record, p, cwd) {
-  // The commit endpoint peels annotated tags too; tag names are derived, never URLs.
-  const result = api(`commits/${tag(record.identity, p)}`, cwd);
-  exact(result.sha, record.identity.commit, "moved release tag");
+  const name = tag(record.identity, p);
+  const result = api(`git/ref/tags/${name}`, cwd);
+  exact(result.ref, `refs/tags/${name}`, "exact release tag ref");
+  let object = result.object;
+  const seen = new Set();
+  for (let depth = 0; depth < 8; depth++) {
+    if (!object || !["commit", "tag"].includes(object.type)) fail("release tag target type");
+    sha(object.sha, 40);
+    if (seen.has(object.sha)) fail("release tag cycle");
+    seen.add(object.sha);
+    if (object.type === "commit") {
+      exact(object.sha, record.identity.commit, "moved release tag");
+      return;
+    }
+    const annotated = api(`git/tags/${object.sha}`, cwd);
+    exact(annotated.sha, object.sha, "annotated release tag identity");
+    object = annotated.object;
+  }
+  fail("release tag chain too deep");
 }
 function inspectRelease(record, p, cwd) {
   checkTag(record, p, cwd);
