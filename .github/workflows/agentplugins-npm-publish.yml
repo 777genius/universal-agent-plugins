@@ -68,14 +68,14 @@ jobs:
             legacy) [[ -z "${SOURCE_SHA}${KIT_VERSION}${NATIVE_INPUTS}${INPUT_ARTIFACT}" ]]; exit 0 ;;
             paired-stage) [[ "${PUBLISH}" == false ]] ;;
             paired-publish)
-              [[ "${GITHUB_ACTIONS}" == true && "${GITHUB_REPOSITORY}" == 777genius/universal-agent-plugins ]]
-              [[ "${TAG}" == agentplugins-v0.1.61 && "${KIT_VERSION}" == 2.0.1 ]]
-              [[ "${SOURCE_SHA}" =~ ^[0-9a-f]{40}$ && ! "${SOURCE_SHA}" =~ ^0+$ ]]
-              [[ "${SOURCE_SHA}" == "${GITHUB_SHA}" && "${SOURCE_SHA}" == "${GITHUB_WORKFLOW_SHA}" ]]
-              [[ "${GITHUB_REF}" == "refs/tags/${TAG}" ]]
-              [[ "${GITHUB_WORKFLOW_REF}" == "777genius/universal-agent-plugins/.github/workflows/agentplugins-npm-publish.yml@refs/tags/${TAG}" ]]
-              [[ -z "${NATIVE_INPUTS}${INPUT_ARTIFACT}" ]]
-              [[ "${PUBLISH}" == true || "${PUBLISH}" == false ]]
+              [[ "${GITHUB_ACTIONS}" == true && "${GITHUB_EVENT_NAME}" == workflow_dispatch && "${GITHUB_REPOSITORY}" == 777genius/universal-agent-plugins ]] || exit 1
+              [[ "${TAG}" == agentplugins-v0.1.61 && "${KIT_VERSION}" == 2.0.1 ]] || exit 1
+              [[ "${SOURCE_SHA}" =~ ^[0-9a-f]{40}$ && ! "${SOURCE_SHA}" =~ ^0+$ ]] || exit 1
+              [[ "${SOURCE_SHA}" == "${GITHUB_SHA}" && "${SOURCE_SHA}" == "${GITHUB_WORKFLOW_SHA}" ]] || exit 1
+              [[ "${GITHUB_REF}" == "refs/tags/${TAG}" ]] || exit 1
+              [[ "${GITHUB_WORKFLOW_REF}" == "777genius/universal-agent-plugins/.github/workflows/agentplugins-npm-publish.yml@refs/tags/${TAG}" ]] || exit 1
+              [[ -z "${NATIVE_INPUTS}${INPUT_ARTIFACT}" ]] || exit 1
+              [[ "${PUBLISH}" == true || "${PUBLISH}" == false ]] || exit 1
               exit 0 ;;
             *) exit 1 ;;
           esac
@@ -624,10 +624,12 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
+      actions: read
       contents: read
       attestations: read
     outputs:
       artifact_id: ${{ steps.upload.outputs.artifact-id }}
+      artifact_digest: ${{ steps.upload.outputs.artifact-digest }}
     env:
       PRODUCER_MODE: ${{ inputs.producer_mode }}
       TAG: ${{ inputs.tag }}
@@ -669,6 +671,7 @@ jobs:
     timeout-minutes: 30
     environment: npm-agentplugins
     permissions:
+      actions: read
       contents: read
       attestations: read
       id-token: write
@@ -695,6 +698,16 @@ jobs:
           artifact-ids: ${{ needs.paired_publish_prepare.outputs.artifact_id }}
           merge-multiple: true
           path: ${{ runner.temp }}/paired-publication
+      - name: Verify transferred artifact identity
+        env:
+          ARTIFACT_ID: ${{ needs.paired_publish_prepare.outputs.artifact_id }}
+          ARTIFACT_DIGEST: ${{ needs.paired_publish_prepare.outputs.artifact_digest }}
+        run: |
+          set -euo pipefail
+          [[ "${ARTIFACT_ID}" =~ ^[1-9][0-9]{0,15}$ ]]
+          [[ "${ARTIFACT_DIGEST}" =~ ^sha256:[0-9a-f]{64}$ && ! "${ARTIFACT_DIGEST}" =~ ^sha256:0+$ ]]
+          actual="$(gh api --hostname github.com "repos/${GITHUB_REPOSITORY}/actions/artifacts/${ARTIFACT_ID}" --jq .digest)"
+          test "${actual}" = "${ARTIFACT_DIGEST}"
       - name: Reauthenticate, publish without repacking, and reconcile
         shell: bash
         run: |

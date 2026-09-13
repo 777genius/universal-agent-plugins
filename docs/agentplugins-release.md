@@ -220,7 +220,8 @@ contract and all legacy and paired-stage job bodies remain unchanged. Packing
 runs once with scripts disabled; the existing verifier checks the closed tar
 entry, mode, and byte set. The single uploaded artifact contains the tarball and
 `publication.json` with source, promotion digest, entry digests, SHA-256,
-SHA-512 integrity, SHA-1 shasum, and byte length.
+SHA-512 integrity, SHA-1 shasum, and byte length. The protected job binds its
+immutable artifact ID and GitHub-reported SHA-256 digest before consuming it.
 
 With `publish=true`, the separate `npm-agentplugins` protected job reacquires
 and authenticates the release evidence and reconstructs the expected file set.

@@ -2665,9 +2665,9 @@ and leaves Agent Plugins 1.0 `plugin.json` as the sole portable authority.
 
 ### Bounded paired npm publication consumer
 
-The consumer is authored on the exact PR #265 head
-`9f3dbdd94e8205ad8908209e6a68635b5ded78f7`, before the release tags exist.
-Its final merged source is the single source, execution, and workflow identity;
+The consumer follows the release-contract foundation merged through PR #265.
+Its own final merged source, selected before the release tags exist, is the
+single source, execution, and workflow identity;
 there is no consumer SHA/control-tag split. The isolated `paired-publish` route
 consumes the fixed `agentplugins-v0.1.61` / `plugin-kit-ai-v2.0.1` pair and
 publishes only the verified `universal-agent-plugins@0.1.61` tarball. See the
@@ -2681,7 +2681,3 @@ all useful YAML capabilities remain preserved. The consumer does not authorize
 tag/release mutations, actual publication during implementation, phases 7-11,
 or changes to PR190 availability labels/historical links. D5 still qualifies
 executables and does not block truthful public wording.
-
-Current hosted work for this bounded task uses `gpt-6-astra`, reasoning `medium`,
-service tier `default`; fast mode is not authorized. This overrides the earlier
-hosted worker profile for this task.

@@ -217,6 +217,10 @@ test("workflow isolates paired route and retains exact legacy/stage job bytes", 
   assert.match(paired, /environment: npm-agentplugins/);
   assert.match(paired, /id-token: write/);
   assert.match(paired, /artifact-ids: \$\{\{ needs.paired_publish_prepare.outputs.artifact_id \}\}/);
+  assert.match(paired, /artifact_digest: \$\{\{ steps.upload.outputs.artifact-digest \}\}/);
+  assert.match(paired, /ARTIFACT_DIGEST: \$\{\{ needs.paired_publish_prepare.outputs.artifact_digest \}\}/);
+  assert.equal((paired.match(/actions: read/g) || []).length, 2);
+  assert.match(paired, /actions\/artifacts\/\$\{ARTIFACT_ID\}/);
   assert.equal((paired.match(/inputs.producer_mode == 'paired-publish'/g) || []).length, 2);
   assert.match(current, /cancel-in-progress: false/);
   assert.doesNotMatch(paired, /THIRD_PARTY_NOTICES|npm publish|npm pack|registry-url:/);
