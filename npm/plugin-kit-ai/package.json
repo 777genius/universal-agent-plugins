@@ -3,13 +3,13 @@
   "version": "0.0.0-development",
   "description": "Thin npm wrapper for the plugin-kit-ai CLI GitHub Releases binary",
   "license": "Apache-2.0",
-  "homepage": "https://github.com/777genius/plugin-kit-ai",
+  "homepage": "https://github.com/777genius/universal-agent-plugins",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/777genius/plugin-kit-ai.git"
+    "url": "git+https://github.com/777genius/universal-agent-plugins.git"
   },
   "bugs": {
-    "url": "https://github.com/777genius/plugin-kit-ai/issues"
+    "url": "https://github.com/777genius/universal-agent-plugins/issues"
   },
   "keywords": [
     "plugin-kit-ai",

@@ -281,7 +281,9 @@ async function reconcile(receipt, body, scratch, npm, env, product = "agentplugi
 }
 async function publishOnce({ lookup, publish, reconcile }) {
   const existing = await lookup();
-  assert.equal(existing, null, "existing npm version: publication forbidden");
+  // Resume a partially completed pair only through the same full readback.
+  // Existing immutable versions must never reach npm publish.
+  if (existing !== null) return reconcile();
   // Even a success response is not proof. A timeout/error is never retried:
   // exact public bytes plus cryptographic provenance are the only reconciliation.
   try { await publish(); } catch { /* ambiguous; read back once, fail closed */ }

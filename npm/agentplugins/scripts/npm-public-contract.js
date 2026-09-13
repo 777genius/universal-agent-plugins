@@ -112,8 +112,8 @@ function validatePublicMetadata(metadata, version, integrity, shasum, product = 
     exactObject(metadata.bin, { agentplugins: "bin/agentplugins.js" }, "public npm bin");
     exactObject(metadata.scripts, { test: "node --test" }, "public npm scripts/lifecycle hooks");
   } else {
-    exactObject(metadata.repository, { type: "git", url: "git+https://github.com/777genius/plugin-kit-ai.git" }, "kit repository");
-    if (metadata.homepage !== "https://github.com/777genius/plugin-kit-ai") fail("kit homepage mismatch");
+    exactObject(metadata.repository, { type: "git", url: "git+https://github.com/777genius/universal-agent-plugins.git" }, "kit repository");
+    if (metadata.homepage !== "https://github.com/777genius/universal-agent-plugins") fail("kit homepage mismatch");
     exactObject(metadata.engines, { node: ">=18" }, "kit engines");
     exactObject(metadata.bin, { "plugin-kit-ai": "bin/plugin-kit-ai.js" }, "kit bin");
     exactObject(metadata.scripts, { postinstall: "node ./lib/install.js" }, "kit lifecycle");

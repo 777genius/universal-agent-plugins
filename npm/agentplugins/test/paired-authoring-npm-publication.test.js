@@ -270,8 +270,8 @@ function publicFixture(product = "agentplugins") {
       attestations: { url: `https://registry.npmjs.org/-/npm/v1/attestations/${name}@${version}`,
         provenance: { predicateType: "https://slsa.dev/provenance/v1" } } } };
   if (product === "plugin-kit-ai") {
-    Object.assign(metadata, { homepage: "https://github.com/777genius/plugin-kit-ai",
-      repository: { type: "git", url: "git+https://github.com/777genius/plugin-kit-ai.git" },
+    Object.assign(metadata, { homepage: "https://github.com/777genius/universal-agent-plugins",
+      repository: { type: "git", url: "git+https://github.com/777genius/universal-agent-plugins.git" },
       engines: { node: ">=18" }, bin: { "plugin-kit-ai": "bin/plugin-kit-ai.js" },
       scripts: { postinstall: "node ./lib/install.js" } });
     delete metadata.gitHead;
@@ -399,6 +399,11 @@ for (const product of c.PRODUCTS) test(`exact ${product} published pack runs col
   const files = p.packageFiles(blobs, manifests[product], f.record, product);
   const pkg = JSON.parse(files["package.json"]);
   assert.equal(pkg.private, false); assert.equal(pkg.gitHead, undefined);
+  assert.equal(pkg.repository.url, "git+https://github.com/777genius/universal-agent-plugins.git");
+  if (product === "plugin-kit-ai") {
+    assert.equal(pkg.homepage, repository);
+    assert.equal(pkg.bugs.url, repository + "/issues");
+  }
   for (const name of ["public-release.json", "lib/public-authoring.js", "lib/public-authoring-contract.js", "lib/public-authoring-input.js"]) {
     assert.ok(files[name]); assert.ok(pkg.files.includes(name));
   }
@@ -435,9 +440,13 @@ for (const product of c.PRODUCTS) test(`exact ${product} published pack runs col
   assert.equal(fs.readFileSync(log, "utf8").trim().split("\n").length, 1);
 });
 
-test("existing identical version also refuses publication and reconciliation", async () => {
-  await assert.rejects(p.publishOnce({ lookup: () => Buffer.from("even exact metadata"),
-    publish: () => assert.fail("must not publish"), reconcile: () => assert.fail("must not reconcile existing versions") }), /existing npm version/);
+test("existing identical version reconciles without republishing", async () => {
+  let reads = 0;
+  const result = await p.publishOnce({ lookup: () => Buffer.from("existing metadata"),
+    publish: () => assert.fail("must not publish"),
+    reconcile: () => { reads++; return { status: "verified" }; } });
+  assert.deepEqual(result, { status: "verified" });
+  assert.equal(reads, 1);
 });
 
 test("prepublication smoke uses exact tarball, actual lifecycle, disposable roots and no publisher credentials", t => {
@@ -510,4 +519,72 @@ test("legacy copy-only publisher refuses v2 before authentication or package sta
       env: { PATH: "/usr/bin:/bin", GITHUB_EVENT_NAME: "workflow_dispatch", GITHUB_OUTPUT: path.join(root(t), "output"), TEST_TAG: tag } });
     assert.equal(result.status === 0, tag.includes("1.2.4"), `${tag}: ${result.stderr}`);
   }
+});
+
+for (const product of c.PRODUCTS) {
+  for (const defect of [null, "bytes", "integrity", "provenance", "signature", "source", "installed", "promotion", "redirected repository"]) {
+    test(`resume ${product}: ${defect || "exact receipt"} never republishes`, async t => {
+      const f = publicFixture(product), dir = root(t), retained = Buffer.from(f.body);
+      if (defect === "bytes") f.body = Buffer.from("different registry bytes");
+      if (defect === "integrity") f.metadata.dist.integrity = p.byteIdentity(Buffer.from("other")).integrity;
+      if (defect === "provenance") f.statement.predicate.buildDefinition.externalParameters.workflow.path = "other.yml";
+      if (defect === "source") f.statement.predicate.buildDefinition.resolvedDependencies[0].digest.gitCommit = "b".repeat(40);
+      if (defect === "promotion") f.receipt.promotion_sha256 = "e".repeat(64);
+      if (defect === "redirected repository") f.metadata.repository.url = "git+https://github.com/777genius/plugin-kit-ai.git";
+      publicReads(t, f);
+      let installs = 0, reconciliations = 0, writes = 0;
+      t.mock.method(cp, "execFileSync", (exe, args, options) => {
+        if (args.includes("install")) {
+          installs++;
+          const installed = path.join(options.cwd, "node_modules", f.metadata.name);
+          fs.mkdirSync(installed, { recursive: true });
+          fs.writeFileSync(path.join(installed, "public-release.json"),
+            defect === "installed" ? Buffer.from("changed") : f.descriptorBytes);
+        } else if (args.includes("audit")) {
+          return Buffer.from(JSON.stringify({ invalid: defect === "signature" ? [{}] : [], missing: [], verified: [{
+            name: f.metadata.name, version: f.metadata.version, location: `node_modules/${f.metadata.name}`,
+            registry: "https://registry.npmjs.org/", attestations: f.metadata.dist.attestations,
+            attestationBundles: f.response.attestations
+          }] }));
+        } else if (defect) assert.fail("mismatch must fail before smoke");
+        return Buffer.from("");
+      });
+      const attempt = p.publishOnce({
+        lookup: () => p.registry(`https://registry.npmjs.org/${f.metadata.name}/${f.metadata.version}`, true),
+        publish: () => { writes++; throw Error("immutable version must not be republished"); },
+        reconcile: () => {
+          reconciliations++;
+          return p.reconcile(f.receipt, retained, dir, "/fixture/npm.js", {}, product);
+        }
+      });
+      if (defect) await assert.rejects(attempt);
+      else {
+        assert.deepEqual(await attempt, { status: "verified", ...p.byteIdentity(retained) });
+        assert.equal(installs, 1);
+      }
+      assert.equal(reconciliations, 1);
+      assert.equal(writes, 0);
+    });
+  }
+}
+
+test("partial matrix resumes the completed product and publishes only the absent peer", async () => {
+  const existing = new Set(["agentplugins"]), writes = [], readbacks = [];
+  for (const product of c.PRODUCTS) {
+    await p.publishOnce({
+      lookup: () => existing.has(product) ? Buffer.from("immutable metadata") : null,
+      publish: () => { writes.push(product); existing.add(product); },
+      reconcile: () => { readbacks.push(product); return { status: "verified" }; }
+    });
+  }
+  assert.deepEqual(writes, ["plugin-kit-ai"]);
+  assert.deepEqual(readbacks, c.PRODUCTS);
+});
+
+test("lookup uncertainty stops before publication or reconciliation", async () => {
+  await assert.rejects(p.publishOnce({
+    lookup: () => { throw Error("registry unavailable"); },
+    publish: () => assert.fail("must not publish"),
+    reconcile: () => assert.fail("must not reconcile")
+  }), /registry unavailable/);
 });
