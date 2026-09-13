@@ -96,7 +96,7 @@ jobs:
           assert set(s) == {'tag', 'ref', 'source', 'versions'} and type(s['versions']) is dict
           assert set(s['versions']) == {'agentplugins', 'plugin-kit-ai'}
           assert all(type(version) is str and len(version) <= 32 and re.fullmatch('(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)', version) for version in s['versions'].values())
-          assert s['versions']['plugin-kit-ai'] == '2.0.0' and s['versions']['agentplugins'] != s['versions']['plugin-kit-ai']
+          assert re.fullmatch(r'2\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)', s['versions']['plugin-kit-ai']) and s['versions']['agentplugins'] != s['versions']['plugin-kit-ai']
           assert os.environ['GITHUB_REPOSITORY'] == '777genius/universal-agent-plugins'
           assert os.environ['GITHUB_EVENT_NAME'] == 'workflow_dispatch'
           assert re.fullmatch('[0-9a-f]{40}', s['source']) and s['source'] != '0' * 40
@@ -166,7 +166,7 @@ jobs:
           assert set(s) == {'tag', 'ref', 'source', 'versions'} and type(s['versions']) is dict
           assert set(s['versions']) == {'agentplugins', 'plugin-kit-ai'}
           assert all(type(version) is str and len(version) <= 32 and re.fullmatch('(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)', version) for version in s['versions'].values())
-          assert s['versions']['plugin-kit-ai'] == '2.0.0' and s['versions']['agentplugins'] != s['versions']['plugin-kit-ai']
+          assert re.fullmatch(r'2\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)', s['versions']['plugin-kit-ai']) and s['versions']['agentplugins'] != s['versions']['plugin-kit-ai']
           assert os.environ['GITHUB_REPOSITORY'] == '777genius/universal-agent-plugins'
           assert os.environ['GITHUB_EVENT_NAME'] == 'workflow_dispatch'
           assert re.fullmatch('[0-9a-f]{40}', s['source']) and s['source'] != '0' * 40
@@ -249,7 +249,7 @@ jobs:
           assert set(s) == {'tag', 'ref', 'source', 'versions'} and type(s['versions']) is dict
           assert set(s['versions']) == {'agentplugins', 'plugin-kit-ai'}
           assert all(type(version) is str and len(version) <= 32 and re.fullmatch('(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)', version) for version in s['versions'].values())
-          assert s['versions']['plugin-kit-ai'] == '2.0.0' and s['versions']['agentplugins'] != s['versions']['plugin-kit-ai']
+          assert re.fullmatch(r'2\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)', s['versions']['plugin-kit-ai']) and s['versions']['agentplugins'] != s['versions']['plugin-kit-ai']
           assert os.environ['GITHUB_REPOSITORY'] == '777genius/universal-agent-plugins'
           assert os.environ['GITHUB_EVENT_NAME'] == 'workflow_dispatch'
           assert re.fullmatch('[0-9a-f]{40}', s['source']) and s['source'] != '0' * 40
@@ -318,7 +318,7 @@ jobs:
           assert set(s) == {'tag', 'ref', 'source', 'versions'} and type(s['versions']) is dict
           assert set(s['versions']) == {'agentplugins', 'plugin-kit-ai'}
           assert all(type(version) is str and len(version) <= 32 and re.fullmatch('(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)', version) for version in s['versions'].values())
-          assert s['versions']['plugin-kit-ai'] == '2.0.0' and s['versions']['agentplugins'] != s['versions']['plugin-kit-ai']
+          assert re.fullmatch(r'2\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)', s['versions']['plugin-kit-ai']) and s['versions']['agentplugins'] != s['versions']['plugin-kit-ai']
           assert os.environ['GITHUB_REPOSITORY'] == '777genius/universal-agent-plugins'
           assert os.environ['GITHUB_EVENT_NAME'] == 'workflow_dispatch'
           assert re.fullmatch('[0-9a-f]{40}', s['source']) and s['source'] != '0' * 40
@@ -388,7 +388,7 @@ jobs:
           assert set(s) == {'tag', 'ref', 'source', 'versions'} and type(s['versions']) is dict
           assert set(s['versions']) == {'agentplugins', 'plugin-kit-ai'}
           assert all(type(version) is str and len(version) <= 32 and re.fullmatch('(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)', version) for version in s['versions'].values())
-          assert s['versions']['plugin-kit-ai'] == '2.0.0' and s['versions']['agentplugins'] != s['versions']['plugin-kit-ai']
+          assert re.fullmatch(r'2\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)', s['versions']['plugin-kit-ai']) and s['versions']['agentplugins'] != s['versions']['plugin-kit-ai']
           assert os.environ['GITHUB_REPOSITORY'] == '777genius/universal-agent-plugins'
           assert os.environ['GITHUB_EVENT_NAME'] == 'workflow_dispatch'
           assert re.fullmatch('[0-9a-f]{40}', s['source']) and s['source'] != '0' * 40
@@ -483,7 +483,7 @@ jobs:
           assert set(s) == {'tag', 'ref', 'source', 'versions'} and type(s['versions']) is dict
           assert set(s['versions']) == {'agentplugins', 'plugin-kit-ai'}
           assert all(type(version) is str and len(version) <= 32 and re.fullmatch('(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)', version) for version in s['versions'].values())
-          assert s['versions']['plugin-kit-ai'] == '2.0.0' and s['versions']['agentplugins'] != s['versions']['plugin-kit-ai']
+          assert re.fullmatch(r'2\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)', s['versions']['plugin-kit-ai']) and s['versions']['agentplugins'] != s['versions']['plugin-kit-ai']
           assert os.environ['GITHUB_REPOSITORY'] == '777genius/universal-agent-plugins'
           assert os.environ['GITHUB_EVENT_NAME'] == 'workflow_dispatch'
           assert re.fullmatch('[0-9a-f]{40}', s['source']) and s['source'] != '0' * 40

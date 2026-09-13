@@ -60,7 +60,7 @@ function identity(value) {
   if (typeof value.commit !== "string" || value.commit.length !== 40) fail("exact source revision length/type");
   c.identity(value);
   if (/^0+$/.test(value.commit)) fail("nonzero source revision required");
-  fixed(value.versions["plugin-kit-ai"], "2.0.0", "kit version");
+  if (!/^2\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?![\s\S])/.test(value.versions["plugin-kit-ai"])) throw new Error("stable major 2 kit version required");
   return { repository: value.repository, commit: value.commit, engine_revision: value.engine_revision,
     versions: { agentplugins: value.versions.agentplugins, "plugin-kit-ai": value.versions["plugin-kit-ai"] } };
 }

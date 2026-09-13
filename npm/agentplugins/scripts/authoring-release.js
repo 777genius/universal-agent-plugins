@@ -20,8 +20,8 @@ function authoringOptions(options, preparing) {
   c.identity(options.identity);
   c.keys(options.outputs, c.PRODUCTS, "product outputs");
   if (options.candidate !== true || options.authoringMode !== AUTHORING_MODE ||
-      options.assetScope !== AUTHORING_SCOPE || options.identity.versions["plugin-kit-ai"] !== "2.0.0" ||
-      /^0{40}$/.test(options.identity.commit)) throw new Error("explicit first-cut release pair required");
+      options.assetScope !== AUTHORING_SCOPE || !/^2\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?![\s\S])/.test(options.identity.versions["plugin-kit-ai"]) ||
+      /^0{40}$/.test(options.identity.commit)) throw new Error("explicit stable major 2 release pair required");
   if (typeof options.go !== "string" || !path.isAbsolute(options.go)) throw new Error("absolute trusted Go tool required");
   const protectedRoots = [options.root, options.workParent, path.dirname(options.go), path.resolve(__dirname, "../../..")];
   protectedRoots.forEach(c.safeDirectory);
@@ -154,7 +154,7 @@ function verifyAuthoringRelease(input) {
 function verifyProjectedPair(root, pins) {
   c.keys(pins, ["identity", "candidate_sha256", "pair_marker_sha256", "products"], "projected pair pins");
   c.identity(pins.identity);
-  if (/^0{40}$/.test(pins.identity.commit) || pins.identity.versions["plugin-kit-ai"] !== "2.0.0") fail("first-cut identity required");
+  if (/^0{40}$/.test(pins.identity.commit) || !/^2\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?![\s\S])/.test(pins.identity.versions["plugin-kit-ai"])) fail("stable major 2 identity required");
   c.keys(pins.products, c.PRODUCTS, "projection pins");
   const record = pins;
   const seen = new Set();

@@ -13,17 +13,17 @@ const sha = n => n.toString(16).padStart(64, "0");
 const json = value => Buffer.from(JSON.stringify(value, null, 2) + "\n");
 const copy = value => structuredClone(value);
 
-function fixture(version = "0.1.99") {
+function fixture(version = "0.1.99", kitVersion = "2.0.1") {
   const value = { schema: "authoring-native-inputs/v1", identity: {
     repository: "777genius/universal-agent-plugins", commit: "a".repeat(40), engine_revision: "a".repeat(40),
-    versions: { agentplugins: version, "plugin-kit-ai": "2.0.0" } },
+    versions: { agentplugins: version, "plugin-kit-ai": kitVersion } },
   authoring_mode: "release-cli-contract-v1", asset_scope: "six-platform-pair",
   candidate_sha256: sha(30), pair_marker_sha256: sha(31), products: {},
   preparation: { sha256: sha(32), artifact: { run_id: 101, run_attempt: 2, artifact_id: 301, artifact_sha256: sha(33) } },
   producer: { workflow: ".github/workflows/agentplugins-release.yml", source: "a".repeat(40), run_id: 201, run_attempt: 3 } };
   products.forEach((product, pi) => {
     const v = value.identity.versions[product];
-    const p = value.products[product] = { tag: pi ? "plugin-kit-ai-v2.0.0" : `agentplugins-v${v}`,
+    const p = value.products[product] = { tag: pi ? `plugin-kit-ai-v${v}` : `agentplugins-v${v}`,
       manifest_sha256: sha(40 + pi), checksums_sha256: sha(50 + pi), assets: {} };
     targets.forEach((target, ti) => {
       const extension = target.startsWith("windows-") ? ".exe" : "";
@@ -34,6 +34,19 @@ function fixture(version = "0.1.99") {
   });
   return value;
 }
+
+test("stable major 2 exact versions retain prefixed tag and asset binding", () => {
+  for (const version of ["2.0.0", "2.0.1", "2.1.0"]) {
+    const input = fixture("0.1.61", version);
+    assert.deepEqual(decodeInputs(encodeInputs(input)), input);
+    assert.equal(input.products["plugin-kit-ai"].tag, `plugin-kit-ai-v${version}`);
+    input.products["plugin-kit-ai"].tag = `v${version}`;
+    assert.throws(() => encodeInputs(input));
+  }
+  for (const version of ["1.2.4", "3.0.0", "2.01.0", "2.0.01", "2.0.1-rc.1", "2.0.1+build", "v2.0.1", "2.0.1\n"]) {
+    assert.throws(() => encodeInputs(fixture("0.1.61", version)), version);
+  }
+});
 
 function descriptor(input, inputBytes, product) {
   return { schema: "dual-authoring-public-npm/v2", product,
@@ -158,11 +171,11 @@ test("structural consistency only: fixed source, versions, workflows, tags, mode
   }
   rejectInput(f => { f.identity.engine_revision = "b".repeat(40); });
   rejectInput(f => { f.producer.source = "b".repeat(40); });
-  for (const version of ["2.0.0", "0.1.1-beta", "01.1.1", "0.1.1+build", "v0.1.1", 1, null,
+  for (const version of ["2.0.1", "0.1.1-beta", "01.1.1", "0.1.1+build", "v0.1.1", 1, null,
     "0.1.99\n", "0.1.99\r", "0.1.99\r\n"]) {
     rejectInput(f => { f.identity.versions.agentplugins = version; });
   }
-  rejectInput(f => { f.identity.versions["plugin-kit-ai"] = "2.0.1"; });
+  rejectInput(f => { f.identity.versions["plugin-kit-ai"] = "2.0.2"; });
   for (const workflow of [".github/workflows/authoring-frozen-native.yml", ".github/workflows/agentplugins-npm-publish.yml", null]) {
     rejectInput(f => { f.producer.workflow = workflow; });
   }
@@ -450,7 +463,7 @@ test("C1 provenance rejects malformed closed options and independent identity di
   const f = c1Fixture(t);
   const mutations = [o => o.input = null, o => o.input = Buffer.from('{}\n'), o => o.input = Buffer.concat([o.input, Buffer.from('\n')]),
     o => o.verifier = () => true, o => o.success = true, o => o.selected.source = "b".repeat(40),
-    o => o.selected.ref = "refs/heads/main", o => o.selected.tag = "v2.0.0", o => o.workflow_sha = "b".repeat(40),
+    o => o.selected.ref = "refs/heads/main", o => o.selected.tag = "v2.0.1", o => o.workflow_sha = "b".repeat(40),
     o => o.selected.versions.agentplugins = "0.1.98", o => o.scratch = "relative"];
   for (const reading of [false, true]) for (const mutate of mutations) {
     const o = { ...f.options, input: Buffer.from(f.body), selected: copy(f.options.selected), ...(reading ? { artifact: copy(f.reading.artifact) } : {}) };

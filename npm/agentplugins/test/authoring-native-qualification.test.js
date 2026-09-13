@@ -18,7 +18,7 @@ const promotion = require("../scripts/authoring-promotion");
 const moduleFile = path.resolve(__dirname, "../scripts/authoring-native-qualification.js");
 const hash = s => c.digest(Buffer.from(s));
 const ID = { repository: c.REPOSITORY, commit: "a".repeat(40), engine_revision: "a".repeat(40),
-  versions: { agentplugins: "0.1.54", "plugin-kit-ai": "2.0.0" } };
+  versions: { agentplugins: "0.1.54", "plugin-kit-ai": "2.0.1" } };
 const invocation = workflow => ({ repository: c.REPOSITORY, workflow, source: ID.commit,
   workflow_sha: ID.commit, run_id: 42, run_attempt: 2 });
 

@@ -31,7 +31,7 @@ function blob(bytes, mode = "100644") {
 function fixture(version = "0.1.99") {
   const input = { schema: "authoring-native-inputs/v1", identity: {
     repository: "777genius/universal-agent-plugins", commit: "a".repeat(40), engine_revision: "a".repeat(40),
-    versions: { agentplugins: version, "plugin-kit-ai": "2.0.0" } },
+    versions: { agentplugins: version, "plugin-kit-ai": "2.0.1" } },
   authoring_mode: "release-cli-contract-v1", asset_scope: "six-platform-pair",
   candidate_sha256: sha(30), pair_marker_sha256: sha(31), products: {},
   preparation: { sha256: sha(32), artifact: { run_id: 101, run_attempt: 2, artifact_id: 301, artifact_sha256: sha(33) } },
@@ -39,7 +39,7 @@ function fixture(version = "0.1.99") {
   const manifests = {};
   products.forEach((product, pi) => {
     const v = input.identity.versions[product];
-    const p = input.products[product] = { tag: pi ? "plugin-kit-ai-v2.0.0" : `agentplugins-v${v}`,
+    const p = input.products[product] = { tag: pi ? "plugin-kit-ai-v2.0.1" : `agentplugins-v${v}`,
       manifest_sha256: sha(40 + pi), checksums_sha256: sha(50 + pi), assets: {} };
     targets.forEach((target, ti) => {
       const extension = target.startsWith("windows-") ? ".exe" : "";
@@ -142,7 +142,7 @@ test("C1 pure pair: caller bytes and objects unchanged and returned buffers inde
 
 test("C1 pure pair: validate both manifests, selected hashes, assets and checksum pins", () => {
   for (const p of products) {
-    for (const mutate of [m => m.product = "wrong", m => m.commit = "b".repeat(40), m => m.version = "2.0.1",
+    for (const mutate of [m => m.product = "wrong", m => m.commit = "b".repeat(40), m => m.version = "2.0.2",
       m => m.assets["linux-amd64"].binary.sha256 = sha(500), m => m.release_eligible = true,
       m => m.qualification = null, m => delete m.attested]) {
       const f = fixture(), m = JSON.parse(f.manifests[p]); mutate(m); f.manifests[p] = json(m);
@@ -270,10 +270,10 @@ test("C1 pure S: fixed I identity, projection, artifact attempt, workflow/source
   for (const mutate of [v => v.schema = "dual-authoring-public-preparation/v1", v => v.authoring_mode = "vertical-slice-v1",
     v => v.asset_scope = "host-pair", v => v.identity.repository = "fork/repo", v => v.identity.commit = "b".repeat(40),
     v => v.identity.engine_revision = "b".repeat(40), v => v.identity.versions.agentplugins = "0.1.98",
-    v => v.identity.versions["plugin-kit-ai"] = "2.0.1", v => v.candidate_sha256 = sha(999), v => v.pair_marker_sha256 = sha(999),
+    v => v.identity.versions["plugin-kit-ai"] = "2.0.2", v => v.candidate_sha256 = sha(999), v => v.pair_marker_sha256 = sha(999),
     v => v.native_inputs.sha256 = sha(999), v => v.native_inputs.artifact.run_id++, v => v.native_inputs.artifact.run_attempt++,
     v => v.producer.workflow = inputs.WORKFLOW, v => v.producer.source = "b".repeat(40),
-    v => v.producer.ref = "refs/heads/main", v => v.producer.ref = "refs/tags/v2.0.0"]) rejectStage(f, mutate);
+    v => v.producer.ref = "refs/heads/main", v => v.producer.ref = "refs/tags/v2.0.1"]) rejectStage(f, mutate);
   for (const p of products) for (const k of ["manifest_sha256", "checksums_sha256"]) {
     rejectStage(f, v => { v.projection_pins[p][k] = sha(999); });
   }
@@ -571,7 +571,7 @@ test("C1 stage integration malformed options fail before scratch, authentication
     o => o.selected.ref = "refs/heads/main", o => o.workflow_sha = "b".repeat(40),
     o => o.artifact.run_attempt++, o => o.artifact.artifact_sha256 = "0".repeat(64),
     o => o.producer.workflow = inputs.WORKFLOW, o => o.producer.source = "b".repeat(40),
-    o => o.producer.ref = "refs/tags/v2.0.0", o => o.producer.run_id = 201, o => o.producer.run_attempt = 1001,
+    o => o.producer.ref = "refs/tags/v2.0.1", o => o.producer.run_id = 201, o => o.producer.run_attempt = 1001,
     o => o.output = o.repo, o => o.workParent = o.repo, o => o.node = "relative", o => o.verifier = () => true]) {
     const o = { ...clone(f.options), input: Buffer.from(f.inputBytes) }; mutate(o);
     assert.throws(() => f.api.stagePrepublication(o)); assert.equal(f.calls.length, 0);
@@ -615,14 +615,14 @@ for (const defect of ["auth", "source-before", "source-after", "input", "I", "sn
           const prior = process.execArgv; process.execArgv = ["--changed-fixture"]; t.after(() => { process.execArgv = prior; });
         }
         if (defect === "half-pair") throw new Error("failed second pack fixture");
-        if (defect === "second-modified") fs.appendFileSync(path.join(options.output, "plugin-kit-ai-2.0.0.tgz"), "changed");
+        if (defect === "second-modified") fs.appendFileSync(path.join(options.output, "plugin-kit-ai-2.0.1.tgz"), "changed");
         if (defect === "first-late") fs.appendFileSync(path.join(options.output, `universal-agent-plugins-${f.input.identity.versions.agentplugins}.tgz`), "changed");
         if (defect === "generated") fs.appendFileSync(path.join(data.root, "README.md"), "changed");
         if (defect === "generated-mode") fs.chmodSync(path.join(data.root, "README.md"), 0o755);
         if (defect === "generated-extra") put(data.root, "unexpected", Buffer.from("extra"));
         if (defect === "collision") put(options.output, "completion.json", Buffer.from("existing owner bytes"));
       }
-      if (event === "verify-pack" && data.file.endsWith("plugin-kit-ai-2.0.0.tgz")) {
+      if (event === "verify-pack" && data.file.endsWith("plugin-kit-ai-2.0.1.tgz")) {
         if (defect === "verified-late") fs.appendFileSync(path.join(options.output, `universal-agent-plugins-${f.input.identity.versions.agentplugins}.tgz`), "late");
         if (defect === "generated-late") fs.appendFileSync(path.join(options.output, "agentplugins/README.md"), "late");
       }

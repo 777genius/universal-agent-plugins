@@ -25,7 +25,7 @@ function fixture(product, binaryFor = (p, t) => Buffer.from(`fixture ${p} ${t}\n
   fs.mkdirSync(packageRoot, { mode: 0o700 });
   fs.mkdirSync(cacheRoot, { mode: 0o700 });
   const identity = { repository: c.REPOSITORY, commit: "1".repeat(40), engine_revision: "1".repeat(40),
-    versions: { agentplugins: "0.1.99", "plugin-kit-ai": "2.0.0" } };
+    versions: { agentplugins: "0.1.99", "plugin-kit-ai": "2.0.1" } };
   const candidate = { identity, manifestDigest: "2".repeat(64) };
   const assets = {}, bodies = {};
   for (const t of c.TARGETS) {
@@ -36,7 +36,7 @@ function fixture(product, binaryFor = (p, t) => Buffer.from(`fixture ${p} ${t}\n
     bodies[file] = body;
   }
   const manifest = { schema_version: 3, status: "CANDIDATE", product, repository: c.REPOSITORY,
-    tag: product === "agentplugins" ? "agentplugins-v0.1.99" : "plugin-kit-ai-v2.0.0", version: identity.versions[product],
+    tag: product === "agentplugins" ? "agentplugins-v0.1.99" : "plugin-kit-ai-v2.0.1", version: identity.versions[product],
     commit: identity.commit, engine_revision: identity.engine_revision, versions: identity.versions,
     candidate_sha256: candidate.manifestDigest, authoring_mode: publicAPI.MODE, asset_scope: publicAPI.SCOPE,
     assets, release_eligible: false, platform_acceptance: false, attested: false };
@@ -125,6 +125,7 @@ if (require.main === module) {
       ["npm", f => { f.descriptor.npm_package = "peer"; }],
       ["repo", f => { f.descriptor.identity.repository = "owner/other"; }],
       ["zero source", f => { f.descriptor.identity.commit = "0".repeat(40); }],
+      ["kit version newline", f => { f.descriptor.identity.versions["plugin-kit-ai"] = "2.0.1\n"; }],
       ["engine", f => { f.manifest.engine_revision = "a".repeat(40); }],
       ["peer version", f => { f.manifest.versions = { ...f.manifest.versions, [p === "agentplugins" ? "plugin-kit-ai" : "agentplugins"]: "9.0.0" }; }],
       ["tag", f => { f.manifest.tag = "latest"; }],

@@ -60,7 +60,7 @@ function validateRelease(product, packageRoot, target, read = json, inputBytes) 
     "candidate_sha256", "release_manifest_sha256", v2 ? "input_binding" : "qualification"], "public release");
   c.identity(d.identity);
   if (d.schema !== (v2 ? contract.DESCRIPTOR_SCHEMA : SCHEMA) || d.product !== product || d.npm_package !== PACKAGES[product] ||
-      /^0{40}$/.test(d.identity.commit) || d.identity.versions["plugin-kit-ai"] !== "2.0.0" ||
+      /^0{40}$/.test(d.identity.commit) || !/^2\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?![\s\S])/.test(d.identity.versions["plugin-kit-ai"]) ||
       d.authoring_mode !== MODE || d.asset_scope !== SCOPE || !hash(d.candidate_sha256) || !hash(d.release_manifest_sha256)) {
     throw new Error("public release identity mismatch");
   }

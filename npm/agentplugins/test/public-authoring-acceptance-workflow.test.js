@@ -20,7 +20,7 @@ const locator = n => ({ sha256: digest(`payload-${n}`), artifact: {
   run_id: n + 1, run_attempt: 1, artifact_id: n + 101, artifact_sha256: digest(`artifact-${n}`)
 } });
 const selected = () => ({ tag: 'agentplugins-v2.1.0', ref: 'refs/tags/agentplugins-v2.1.0', source: 'a'.repeat(40),
-  versions: { agentplugins: '2.1.0', 'plugin-kit-ai': '2.0.0' } });
+  versions: { agentplugins: '2.1.0', 'plugin-kit-ai': '2.0.1' } });
 const dispatch = mode => {
   const values = {
     selected: selected(),
@@ -63,7 +63,7 @@ test('C3 runtime rejects every open, missing, and malformed dispatch before effe
         ['extra version', s => { s.versions.extra = '1.0.0'; }],
         ['non-string version', s => { s.versions.agentplugins = 210; }],
         ['oversized version', s => { s.versions.agentplugins = '1'.repeat(33); }],
-        ['wrong kit version', s => { s.versions['plugin-kit-ai'] = '2.0.1'; }],
+        ['wrong kit version', s => { s.versions['plugin-kit-ai'] = '3.0.0'; }],
         ['wrong tag', s => { s.tag = 'agentplugins-v9.9.9'; }],
         ['wrong ref', s => { s.ref = 'refs/tags/agentplugins-v9.9.9'; }],
         ['wrong workflow source', s => { s.source = 'b'.repeat(40); }]
@@ -174,7 +174,7 @@ test('C3 trusted pre-checkout bootstraps reject the selected-source semantic byp
     ['extra version', s => { s.versions.extra = '1.0.0'; }],
     ['non-string version', s => { s.versions.agentplugins = 210; }],
     ['oversized version', s => { s.versions.agentplugins = '1'.repeat(33); }],
-    ['wrong kit value', s => { s.versions['plugin-kit-ai'] = '2.0.1'; }],
+    ['wrong kit value', s => { s.versions['plugin-kit-ai'] = '3.0.0'; }],
     ['wrong tag', s => { s.tag = 'agentplugins-v9.9.9'; }],
     ['wrong ref', s => { s.ref = 'refs/tags/agentplugins-v9.9.9'; }]
   ];
