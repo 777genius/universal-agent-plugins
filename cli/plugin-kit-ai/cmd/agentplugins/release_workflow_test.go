@@ -944,7 +944,7 @@ func TestC1InputProvenanceWorkflowContract(t *testing.T) {
 }
 func TestC1PublicStageWorkflowContract(t *testing.T) {
 	w := readProducerWorkflow(t, "agentplugins-npm-publish.yml")
-	if len(w.Jobs) != 6 || len(w.On.Dispatch.Inputs) != 7 || strings.Join(w.On.Dispatch.Inputs["producer_mode"].Options, ",") != "legacy,paired-stage" || w.On.Dispatch.Inputs["producer_mode"].Default != "legacy" || w.On.Dispatch.Inputs["publish"].Type != "boolean" {
+	if len(w.Jobs) != 8 || len(w.On.Dispatch.Inputs) != 7 || strings.Join(w.On.Dispatch.Inputs["producer_mode"].Options, ",") != "legacy,paired-stage,paired-publish" || w.On.Dispatch.Inputs["producer_mode"].Default != "legacy" || w.On.Dispatch.Inputs["publish"].Type != "boolean" {
 		t.Fatal("closed stage inputs/jobs")
 	}
 	for _, name := range []string{"paired_stage", "paired_stage_attestation"} {
@@ -973,7 +973,7 @@ func TestC1PublicStageWorkflowContract(t *testing.T) {
 func TestC1WorkflowFailureReachability(t *testing.T) {
 	for _, file := range []string{"agentplugins-release.yml", "agentplugins-npm-publish.yml"} {
 		w := readProducerWorkflow(t, file)
-		modes := []string{"binary-only", "paired-preparation", "paired-promotion", "milestone-a-paired-promotion", "paired-input-provenance", "legacy", "paired-stage", "unknown"}
+		modes := []string{"binary-only", "paired-preparation", "paired-promotion", "milestone-a-paired-promotion", "paired-input-provenance", "legacy", "paired-stage", "paired-publish", "unknown"}
 		legacyPermissions := map[string]map[string]string{
 			"dispatch_contract": {"contents": "read"}, "validate": {"checks": "read", "contents": "read", "pull-requests": "read"},
 			"build": {"contents": "read"}, "stage-draft": {"contents": "write", "id-token": "write", "attestations": "write", "artifact-metadata": "write"},
@@ -983,7 +983,9 @@ func TestC1WorkflowFailureReachability(t *testing.T) {
 			"milestone-a-promotion-admission": {"contents": "read", "actions": "read"},
 			"milestone-a-sign-and-promote":    {"contents": "write", "actions": "read", "id-token": "write", "attestations": "write", "artifact-metadata": "write"},
 			"prepare":                         {"contents": "read", "attestations": "read"}, "publish": {"contents": "read", "id-token": "write"},
-			"verify-public": {"contents": "read", "attestations": "read"},
+			"verify-public":          {"contents": "read", "attestations": "read"},
+			"paired_publish_prepare": {"actions": "read", "attestations": "read", "contents": "read"},
+			"paired_publish":         {"actions": "read", "attestations": "read", "contents": "read", "id-token": "write"},
 		}
 		for name, job := range w.Jobs {
 			if expected, ok := legacyPermissions[name]; ok && !reflect.DeepEqual(c1Permissions(w, name), expected) {
@@ -1045,8 +1047,14 @@ func TestC1WorkflowFailureReachability(t *testing.T) {
 									t.Fatalf("legacy reachability %s %s %s %s %v", name, mode, event, status, publish)
 								}
 							}
-							if mode == "paired-stage" && (name == "prepare" || name == "publish" || name == "verify-public") && reachable {
-								t.Fatal("paired stage reaches legacy")
+							if file == "agentplugins-npm-publish.yml" && (name == "paired_publish_prepare" || name == "paired_publish") {
+								expected := status == "success" && event == "workflow_dispatch" && mode == "paired-publish" && (name == "paired_publish_prepare" || publish)
+								if reachable != expected {
+									t.Fatalf("paired publish reachability %s %s %s %s %v", name, mode, event, status, publish)
+								}
+							}
+							if (mode == "paired-stage" || mode == "paired-publish") && (name == "prepare" || name == "publish" || name == "verify-public") && reachable {
+								t.Fatal("paired route reaches legacy")
 							}
 						}
 					}
