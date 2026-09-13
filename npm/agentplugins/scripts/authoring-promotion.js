@@ -774,10 +774,6 @@ function main(args) {
   if (!signRequired) verifyAll(state);
   return { status: observed.states.includes("incomplete-draft") ? "reconciliation-required" : "qualified-for-promotion", missing_assets: observed.pair.map(r => r?.missing_assets ?? []), subjects: state.subjects, sign_required: signRequired };
 }
-if (require.main === module) {
-  try { process.stdout.write(JSON.stringify(main(process.argv.slice(2))) + "\n"); }
-  catch (error) { process.stderr.write(`authoring promotion: ${error.message}\n`); process.exitCode = 1; }
-}
 // Fixed public wrappers reuse the existing provider and verifier policy. They
 // introduce no accepted-native override and grant no publication authority.
 function inspectPublicAttempt(pin, selected, mode, cwd) {
@@ -839,3 +835,9 @@ module.exports = { admitPublicEvidence, inspectPublicCaller, inspectPublicAttemp
   inspectArtifact, acquireArtifact, extractArtifact, acquirePreparation, checkNativeContracts, admitNativeEvidence,
   acquireInputPreparation, readInputPreparation, checkInputTags,
   mapVerifiedOutput, verifySubject, verifyStageSubject, frozenSubjects, releasePins, promotionRecord, acquireMilestonePreparation, inspectPair, promote, promoteMilestoneA };
+
+// Admission reimports this module; initialize exports before entering the CLI.
+if (require.main === module) {
+  try { process.stdout.write(JSON.stringify(main(process.argv.slice(2))) + "\n"); }
+  catch (error) { process.stderr.write(`authoring promotion: ${error.message}\n`); process.exitCode = 1; }
+}

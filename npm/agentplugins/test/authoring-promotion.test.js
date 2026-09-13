@@ -339,7 +339,7 @@ function sequencing() {
   // Model only the state AFTER admission; never replace admittedInputs or make
   // the unconditional native gate positive, even inside this private VM.
   const tail = body.slice(body.indexOf("  const observed = inspectPair(state.record, state.o.scratch);", body.indexOf("function main(args)")),
-    body.indexOf("\nif (require.main === module)"));
+    body.indexOf("\n// Fixed public wrappers"));
   require("node:vm").runInThisContext(Module.wrap(body.replace(/^#!.*\n/, "") +
     "\nmodule.exports = { promotePair, verifyAll, admissionTail: (state,args) => {\n" + tail + "};"), { filename: file })(m.exports, Module.createRequire(file), m, file, path.dirname(file));
   assert.equal(p.promotePair, undefined);
