@@ -18,7 +18,7 @@ import (
 // Every volume is newly created inside t.TempDir, populated while writable,
 // then detached and mounted read-only. No environment-provided mount/project is
 // accepted. hdiutil is fixture tooling, never production reader behavior.
-func nativeFixture(t *testing.T, build func(string)) string {
+func readOnlyFixture(t *testing.T, build func(string)) string {
 	t.Helper()
 	tmp := t.TempDir()
 	mount := filepath.Join(tmp, "mount")
@@ -55,14 +55,25 @@ func nativeFixture(t *testing.T, build func(string)) string {
 	run("attach", "-readonly", "-nobrowse", "-noautoopen", "-mountpoint", mount, dmg)
 	return root
 }
-func TestDarwinWritableProfileRejected(t *testing.T) {
-	s, e := openSource(t.TempDir(), GeneratedStaging{})
-	if e == nil {
-		s.close()
-		t.Fatal("writable filesystem accepted")
+
+// Ordinary sources are new writable local APFS directories, never user projects.
+func nativeFixture(t *testing.T, build func(string)) string {
+	t.Helper()
+	root := t.TempDir()
+	build(root)
+	return root
+}
+func TestDarwinWritableProfileAccepted(t *testing.T) {
+	root := nativeFixture(t, func(root string) { nativeWrite(t, root, "plugin.json", "core") })
+	l, e := (Reader{TempDir: t.TempDir()}).Open(context.Background(), root)
+	if e != nil {
+		t.Fatal(e)
 	}
-	var safe *Error
-	if !errors.As(e, &safe) || safe.Code != "filesystem_unavailable" {
+	defer l.Close()
+	if string(l.Data().Plugin.Bytes) != "core" {
+		t.Fatal("writable source not captured")
+	}
+	if _, e := l.Capture(context.Background()); e != nil {
 		t.Fatal(e)
 	}
 }
@@ -118,7 +129,7 @@ func TestDarwinDeviceMetadataNeverOpened(t *testing.T) {
 	}
 }
 func TestDarwinReplacementDeniedByProfile(t *testing.T) {
-	root := nativeFixture(t, func(root string) { nativeWrite(t, root, "plugin.json", "core") })
+	root := readOnlyFixture(t, func(root string) { nativeWrite(t, root, "plugin.json", "core") })
 	scratch := t.TempDir()
 	attempted := false
 	l, e := (Reader{TempDir: scratch}).open(context.Background(), root, &captureHooks{afterNameCheck: func(p string) {
@@ -154,48 +165,49 @@ func TestDarwinHandleCleanupAndTypeChecks(t *testing.T) {
 			t.Fatal(e)
 		}
 	})
-	// Enumerate descriptor names only; no device node is data-opened.
-	count := func() int {
+	// Check saved descriptor numbers immediately after close, before reuse.
+	assertClosed := func(fd uintptr) {
 		t.Helper()
-		entries, e := os.ReadDir("/dev/fd")
-		if e != nil {
-			t.Fatal(e)
+		if _, e := unix.FcntlInt(fd, unix.F_GETFD, 0); !errors.Is(e, unix.EBADF) {
+			t.Fatalf("descriptor %d: expected EBADF after close, got %v", fd, e)
 		}
-		return len(entries)
 	}
-	before := count()
 	for i := 0; i < 10; i++ {
 		s, e := openSource(root, GeneratedStaging{})
 		if e != nil {
 			t.Fatal(e)
 		}
+		sourceFD := s.anchor.Fd()
 		for _, name := range []string{".", "plugin.json", "fifo"} {
 			p, e := s.pin(name, true)
 			if e != nil {
 				s.close()
 				t.Fatal(e)
 			}
+			pinFD := p.file.Fd()
 			// Every mismatch is rejected before opening any target data.
 			if f, e := p.reopen(!p.info.IsDir()); e == nil {
 				f.Close()
 				t.Fatal("wrong-kind reopen succeeded")
 			}
-			p.file.Close()
+			if e := p.file.Close(); e != nil {
+				t.Fatal(e)
+			}
+			assertClosed(pinFD)
 		}
 		if e := s.close(); e != nil {
 			t.Fatal(e)
 		}
+		assertClosed(sourceFD)
 		if e := s.close(); e != nil {
 			t.Fatal(e)
 		}
-	}
-	if after := count(); after != before {
-		t.Fatalf("descriptor leak: before=%d after=%d", before, after)
+		assertClosed(sourceFD)
 	}
 }
 
 func TestDarwinReplacementAtBothReadBoundaries(t *testing.T) {
-	root := nativeFixture(t, func(root string) { nativeWrite(t, root, "plugin.json", "core") })
+	root := readOnlyFixture(t, func(root string) { nativeWrite(t, root, "plugin.json", "core") })
 	for _, after := range []bool{false, true} {
 		t.Run(map[bool]string{false: "before", true: "after"}[after], func(t *testing.T) {
 			attempted := false
@@ -245,9 +257,7 @@ func TestDarwinRootSelectionTraversalOrder(t *testing.T) {
 	}
 }
 
-// A matching GeneratedStaging proof is the only way an ordinary writable
-// local APFS directory is ever accepted; TestDarwinWritableProfileRejected
-// above proves the zero-value (untrusted) path still rejects it.
+// A matching proof remains accepted and an unmatched proof still fails closed.
 func TestDarwinGeneratedStagingProofAcceptsOwnWritableRoot(t *testing.T) {
 	root := t.TempDir()
 	nativeWrite(t, root, "plugin.json", "core")
@@ -265,9 +275,6 @@ func TestDarwinGeneratedStagingProofAcceptsOwnWritableRoot(t *testing.T) {
 		t.Fatal("trusted generated-staging proof rejected on its own writable root:", e)
 	}
 	defer s.close()
-	if !s.trustedWritable {
-		t.Fatal("trusted flag not set from a matching proof")
-	}
 	// The relaxation must still require local APFS and every other check:
 	// this exercises the same darwinFS/pin/reopen path the untrusted case uses.
 	p, e := s.pin("plugin.json", true)

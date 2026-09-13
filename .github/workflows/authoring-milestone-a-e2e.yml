@@ -94,6 +94,20 @@ jobs:
         with:
           node-version: '22.23.2'
           check-latest: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        if: runner.os == 'macOS'
+        with:
+          go-version: '1.25.13'
+          cache: false
+      - name: Check Darwin writable acquisition and separate read-only regressions
+        if: runner.os == 'macOS'
+        shell: bash
+        working-directory: install/integrationctl
+        env:
+          CGO_ENABLED: '0'
+          GOTOOLCHAIN: local
+          GOMAXPROCS: '2'
+        run: go test -count=1 ./agentplugins/adapters/packageview
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
           name: milestone-a-exact-candidate-${{ github.run_id }}-${{ github.run_attempt }}
@@ -102,7 +116,7 @@ jobs:
         if: runner.os != 'Windows'
         shell: bash
         run: chmod -R a-w "${RUNNER_TEMP}/milestone-a-input/candidate"
-      - name: Place candidate on the Darwin packageview read-only profile
+      - name: Seal the Darwin launcher candidate independently of the writable project
         if: runner.os == 'macOS'
         shell: bash
         run: |
@@ -115,6 +129,8 @@ jobs:
           hdiutil create -quiet -srcfolder "$RUNNER_TEMP/milestone-a-input/candidate" -fs APFS -format UDRO "$image"
           hdiutil attach -quiet -readonly -nobrowse -mountpoint "$mount" "$image"
           printf 'MILESTONE_A_CANDIDATE=%s\n' "$mount" >> "$GITHUB_ENV"
+      # Darwin authoring reads the ordinary writable project in each fresh journey.
+      # The read-only candidate above is launcher integrity, not source acceptance.
       - name: Run both packaged public entrypoints in fresh roots
         shell: bash
         run: |

@@ -35,8 +35,8 @@ func empty(t *testing.T, root string) {
 }
 func writableNative(t *testing.T) {
 	t.Helper()
-	if runtime.GOOS != "linux" && !(runtime.GOOS == "windows" && (runtime.GOARCH == "amd64" || runtime.GOARCH == "arm64")) {
-		t.Skip("writable native authoring requires Linux or Windows amd64/arm64")
+	if runtime.GOOS != "linux" && !(runtime.GOOS == "darwin" && runtime.GOARCH == "arm64") && !(runtime.GOOS == "windows" && (runtime.GOARCH == "amd64" || runtime.GOARCH == "arm64")) {
+		t.Skip("writable native authoring requires Linux, Darwin arm64 APFS or Windows amd64/arm64 NTFS")
 	}
 }
 
@@ -195,8 +195,7 @@ func TestCapturedCommandContainment(t *testing.T) {
 // facts, same cleanup) and must require a live directory handle, never a bare
 // path. A proof built for a different directory is rejected only where the
 // profile can act on it at all (Darwin; see source_darwin_test.go) -- Linux
-// and Windows never required a read-only mount and ignore it, exactly as
-// they ignore the zero value.
+// and Windows ignore it, exactly as they ignore the zero value.
 func TestReadGeneratedStagingMatchesReadAndRequiresLiveHandle(t *testing.T) {
 	writableNative(t)
 	root, scratch := t.TempDir(), t.TempDir()

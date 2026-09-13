@@ -32,7 +32,7 @@ func (l *Lease) legacyGuard(info os.FileInfo) bool {
 	if multipleLinks(info) {
 		return false
 	}
-	if l.source.legacyInfo != nil && os.SameFile(info, l.source.legacyInfo) {
+	if l.source.legacyInfo != nil && sameIdentity(info, l.source.legacyInfo) {
 		return false
 	}
 	p, e := l.source.pin("plugin/plugin.yaml", false)
@@ -40,7 +40,7 @@ func (l *Lease) legacyGuard(info os.FileInfo) bool {
 		return stateOf(e) == Absent || stateOf(e) == WrongKind
 	}
 	defer p.file.Close()
-	return !os.SameFile(info, p.info)
+	return !sameIdentity(info, p.info)
 }
 func (l *Lease) metadata(rel string, nofollow bool) (*pinned, error) {
 	if l.hooks != nil && l.hooks.metadata != nil {
@@ -108,8 +108,8 @@ func (l *Lease) read(ctx context.Context, rel string, p *pinned, limit int64) ([
 	if l.hooks != nil && l.hooks.beforeDataOpen != nil {
 		l.hooks.beforeDataOpen(rel)
 	}
-	// Recheck the name before data access; a replacement cannot be opened because
-	// reopen uses the already-verified inode. Changes also invalidate the capture.
+	// Recheck the name before data access. Darwin additionally requires a
+	// quiescent source and verifies the opened descriptor before any data read.
 	current, e := l.source.pin(rel, false)
 	if e != nil {
 		return nil, fail("source_changed")

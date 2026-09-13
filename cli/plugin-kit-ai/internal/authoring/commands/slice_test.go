@@ -25,6 +25,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/cli/internal/authoring/report"
 	"github.com/777genius/plugin-kit-ai/cli/internal/authoringcli"
 	"github.com/777genius/plugin-kit-ai/cli/internal/exitx"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/packageview"
 	"github.com/spf13/cobra"
 )
 
@@ -561,8 +562,8 @@ func TestCleanupFailureSurvivesCancellation(t *testing.T) {
 }
 
 func TestNativeBinaryVerticalSlice(t *testing.T) {
-	if runtime.GOOS != "linux" && !(runtime.GOOS == "windows" && (runtime.GOARCH == "amd64" || runtime.GOARCH == "arm64")) {
-		t.Skip("writable native authoring requires Linux or Windows amd64/arm64")
+	if runtime.GOOS != "linux" && !(runtime.GOOS == "darwin" && runtime.GOARCH == "arm64") && !(runtime.GOOS == "windows" && (runtime.GOARCH == "amd64" || runtime.GOARCH == "arm64")) {
+		t.Skip("writable native authoring requires Linux, Darwin arm64 APFS or Windows amd64/arm64 NTFS")
 	}
 	_, file, _, _ := runtime.Caller(0)
 	module := filepath.Clean(filepath.Join(filepath.Dir(file), "../../.."))
@@ -745,7 +746,7 @@ func TestNativeBinaryVerticalSlice(t *testing.T) {
 				if r.Identity.TreeDigest == "" || r.Identity.ScopeDigest == "" || r.Identity.ScopeDigest == r.Identity.TreeDigest {
 					t.Fatal("missing or conflated identity")
 				}
-				if r.Identity.ReadProfile != "packageview-local-"+runtime.GOOS+"-v1" {
+				if r.Identity.ReadProfile != packageview.ReadProfile {
 					t.Fatalf("unexpected native filesystem read profile: %s", r.Identity.ReadProfile)
 				}
 				readProfile = r.Identity.ReadProfile
