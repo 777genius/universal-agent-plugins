@@ -36,7 +36,7 @@ function fixture(product, binaryFor = (p, t) => Buffer.from(`fixture ${p} ${t}\n
     bodies[file] = body;
   }
   const manifest = { schema_version: 3, status: "CANDIDATE", product, repository: c.REPOSITORY,
-    tag: product === "agentplugins" ? "agentplugins-v0.1.99" : "v2.0.0", version: identity.versions[product],
+    tag: product === "agentplugins" ? "agentplugins-v0.1.99" : "plugin-kit-ai-v2.0.0", version: identity.versions[product],
     commit: identity.commit, engine_revision: identity.engine_revision, versions: identity.versions,
     candidate_sha256: candidate.manifestDigest, authoring_mode: publicAPI.MODE, asset_scope: publicAPI.SCOPE,
     assets, release_eligible: false, platform_acceptance: false, attested: false };

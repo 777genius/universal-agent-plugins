@@ -63,7 +63,7 @@ function verifiedAuthoringCandidate(options) {
 function productManifest(frozen, product) {
   const id = frozen.manifest.identity;
   return { schema_version: 3, status: "CANDIDATE", product, repository: id.repository,
-    tag: product === "agentplugins" ? `agentplugins-v${id.versions[product]}` : `v${id.versions[product]}`,
+    tag: product === "agentplugins" ? `agentplugins-v${id.versions[product]}` : `plugin-kit-ai-v${id.versions[product]}`,
     version: id.versions[product], commit: id.commit, engine_revision: id.engine_revision,
     versions: id.versions, candidate_sha256: frozen.manifest_sha256,
     authoring_mode: AUTHORING_MODE, asset_scope: AUTHORING_SCOPE,

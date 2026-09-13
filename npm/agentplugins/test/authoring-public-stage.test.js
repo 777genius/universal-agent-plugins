@@ -39,7 +39,7 @@ function fixture(version = "0.1.99") {
   const manifests = {};
   products.forEach((product, pi) => {
     const v = input.identity.versions[product];
-    const p = input.products[product] = { tag: pi ? "v2.0.0" : `agentplugins-v${v}`,
+    const p = input.products[product] = { tag: pi ? "plugin-kit-ai-v2.0.0" : `agentplugins-v${v}`,
       manifest_sha256: sha(40 + pi), checksums_sha256: sha(50 + pi), assets: {} };
     targets.forEach((target, ti) => {
       const extension = target.startsWith("windows-") ? ".exe" : "";

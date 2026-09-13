@@ -15,7 +15,7 @@ func buildFormula(tag, repo, checksumsPath, downloadBase string) (Formula, error
 	if err != nil {
 		return Formula{}, err
 	}
-	version := strings.TrimPrefix(tag, "v")
+	version := versionFromTag(tag)
 	assets, err := buildFormulaAssets(version, downloadBase, sumByAsset)
 	if err != nil {
 		return Formula{}, err

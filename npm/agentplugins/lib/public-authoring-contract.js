@@ -83,7 +83,7 @@ function inputs(value) {
   for (const product of c.PRODUCTS) {
     const p = value.products[product], assets = {};
     fields(p, ["tag", "manifest_sha256", "checksums_sha256", "assets"], "product");
-    const tag = (product === "agentplugins" ? "agentplugins-v" : "v") + id.versions[product];
+    const tag = (product === "agentplugins" ? "agentplugins-v" : "plugin-kit-ai-v") + id.versions[product];
     fixed(p.tag, tag, "product tag");
     fields(p.assets, c.TARGETS, "assets");
     for (const target of c.TARGETS) {

@@ -47,7 +47,7 @@ const integer = (v, max = Number.MAX_SAFE_INTEGER) => {
   if (!Number.isSafeInteger(v) || v < 1 || v > max) fail("bounded positive integer required");
   return v;
 };
-const tag = (id, p) => `${p === "agentplugins" ? "agentplugins-" : ""}v${id.versions[p]}`;
+const tag = (id, p) => `${p === "agentplugins" ? "agentplugins" : "plugin-kit-ai"}-v${id.versions[p]}`;
 function identity(v) {
   c.identity(v); sha(v.commit, 40);
   if (v.versions["plugin-kit-ai"] !== "2.0.0" || Object.values(v.versions).some(x => x.length > 32)) fail("first-cut paired versions required");

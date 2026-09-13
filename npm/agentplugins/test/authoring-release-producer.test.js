@@ -106,7 +106,7 @@ test("v3 prepares and verifies exactly both pinned products without compilation 
     assert.equal(manifest.engine_revision, ID.commit);
     assert.deepEqual(manifest.versions, ID.versions);
     assert.equal(manifest.candidate_sha256, f.options.manifestDigest);
-    assert.equal(manifest.tag, product === "agentplugins" ? "agentplugins-v0.1.54" : "v2.0.0");
+    assert.equal(manifest.tag, product === "agentplugins" ? "agentplugins-v0.1.54" : "plugin-kit-ai-v2.0.0");
     assert.equal(manifest.authoring_mode, MODE);
     assert.equal(manifest.status, "CANDIDATE");
     assert.deepEqual(Object.keys(manifest.assets), c.TARGETS);

@@ -242,7 +242,7 @@ function publicEvidence(cfg, native, configPath, intake = "public-fixture/v1") {
     pin(path.join(projection, "checksums.txt"), o.projectionPins[product].checksums_sha256);
     const manifest = json(manifestPath);
     assert.deepEqual(manifest, { schema_version: 3, status: "CANDIDATE", product, repository: v.identity.repository,
-      tag: product === "agentplugins" ? `agentplugins-v${v.identity.versions[product]}` : `v${v.identity.versions[product]}`,
+      tag: product === "agentplugins" ? `agentplugins-v${v.identity.versions[product]}` : `plugin-kit-ai-v${v.identity.versions[product]}`,
       version: v.identity.versions[product], commit: v.identity.commit, engine_revision: v.identity.engine_revision,
       versions: v.identity.versions, candidate_sha256: v.manifestDigest, authoring_mode: MODE, asset_scope: v.assetScope,
       assets: frozen.manifest.products[product].assets, release_eligible: false, platform_acceptance: false, attested: false });

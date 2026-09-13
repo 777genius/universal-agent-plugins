@@ -89,7 +89,7 @@ function validateRelease(product, packageRoot, target, read = json, inputBytes) 
     "versions", "candidate_sha256", "authoring_mode", "asset_scope", "assets", "release_eligible", "platform_acceptance", "attested"], "producer projection");
   if (c.digest(bytes) !== d.release_manifest_sha256 || m.schema_version !== 3 || m.status !== "CANDIDATE" ||
       m.product !== product || m.repository !== c.REPOSITORY || m.version !== pkg.version ||
-      m.tag !== (product === "agentplugins" ? `agentplugins-v${pkg.version}` : `v${pkg.version}`) ||
+      m.tag !== (product === "agentplugins" ? `agentplugins-v${pkg.version}` : `plugin-kit-ai-v${pkg.version}`) ||
       m.commit !== d.identity.commit || m.engine_revision !== d.identity.engine_revision || !equal(m.versions, d.identity.versions) ||
       m.candidate_sha256 !== d.candidate_sha256 || m.authoring_mode !== MODE || m.asset_scope !== SCOPE ||
       m.release_eligible !== false || m.platform_acceptance !== false || m.attested !== false) {
