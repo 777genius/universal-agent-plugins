@@ -165,43 +165,44 @@ func TestDarwinHandleCleanupAndTypeChecks(t *testing.T) {
 			t.Fatal(e)
 		}
 	})
-	// Enumerate descriptor names only; no device node is data-opened.
-	count := func() int {
+	// Check saved descriptor numbers immediately after close, before reuse.
+	assertClosed := func(fd uintptr) {
 		t.Helper()
-		entries, e := os.ReadDir("/dev/fd")
-		if e != nil {
-			t.Fatal(e)
+		if _, e := unix.FcntlInt(fd, unix.F_GETFD, 0); !errors.Is(e, unix.EBADF) {
+			t.Fatalf("descriptor %d: expected EBADF after close, got %v", fd, e)
 		}
-		return len(entries)
 	}
-	before := count()
 	for i := 0; i < 10; i++ {
 		s, e := openSource(root, GeneratedStaging{})
 		if e != nil {
 			t.Fatal(e)
 		}
+		sourceFD := s.anchor.Fd()
 		for _, name := range []string{".", "plugin.json", "fifo"} {
 			p, e := s.pin(name, true)
 			if e != nil {
 				s.close()
 				t.Fatal(e)
 			}
+			pinFD := p.file.Fd()
 			// Every mismatch is rejected before opening any target data.
 			if f, e := p.reopen(!p.info.IsDir()); e == nil {
 				f.Close()
 				t.Fatal("wrong-kind reopen succeeded")
 			}
-			p.file.Close()
+			if e := p.file.Close(); e != nil {
+				t.Fatal(e)
+			}
+			assertClosed(pinFD)
 		}
 		if e := s.close(); e != nil {
 			t.Fatal(e)
 		}
+		assertClosed(sourceFD)
 		if e := s.close(); e != nil {
 			t.Fatal(e)
 		}
-	}
-	if after := count(); after != before {
-		t.Fatalf("descriptor leak: before=%d after=%d", before, after)
+		assertClosed(sourceFD)
 	}
 }
 
