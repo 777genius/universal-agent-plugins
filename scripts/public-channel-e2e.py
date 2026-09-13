@@ -66,8 +66,10 @@ def main(channel, versions=None, tags=None, revision=REVISION):
     versions = dict(VERSIONS if versions is None else versions)
     tags = tags or {product: f'{product}-v{version}' for product, version in versions.items()}
     evidence = {'channel': channel, 'revision': revision, 'versions': versions, 'tags': tags, 'results': []}
-    with tempfile.TemporaryDirectory(prefix='uap-public-channel-') as temporary:
-        root = Path(temporary)
+    failures = []
+    temporary = tempfile.TemporaryDirectory(prefix='uap-public-channel-')
+    try:
+        root = Path(temporary.name)
         env = {k: v for k, v in os.environ.items() if k in (
             'PATH', 'SystemRoot', 'SYSTEMROOT', 'WINDIR', 'COMSPEC', 'PATHEXT')}
         for key in ('HOME', 'USERPROFILE', 'APPDATA', 'LOCALAPPDATA', 'XDG_CONFIG_HOME',
@@ -84,17 +86,25 @@ def main(channel, versions=None, tags=None, revision=REVISION):
                    HOMEBREW_NO_ANALYTICS='1', HOMEBREW_NO_INSTALL_CLEANUP='1')
 
         def run(args):
-            result = subprocess.run(list(map(str, args)), cwd=root, env=env,
-                                    capture_output=True, text=True, timeout=240)
-            evidence['results'].append({'argv': list(map(str, args)), 'status': result.returncode,
+            argv = list(map(str, args))
+            try:
+                result = subprocess.run(argv, cwd=root, env=env,
+                                        capture_output=True, text=True, timeout=240)
+            except subprocess.TimeoutExpired as error:
+                def partial_text(value):
+                    return value.decode('utf-8', errors='replace') if isinstance(value, bytes) else value
+                evidence['results'].append({
+                    'argv': argv, 'status': 'timeout', 'timeout': error.timeout,
+                    'stdout': partial_text(error.stdout), 'stderr': partial_text(error.stderr)})
+                raise
+            evidence['results'].append({'argv': argv, 'status': result.returncode,
                                         'stdout': result.stdout, 'stderr': result.stderr})
             result.check_returncode()
             return result.stdout
 
-        try:
-            products = versions if channel in ('npm', 'github') else ['plugin-kit-ai']
-            command_failures = []
-            for product in products:
+        products = versions if channel in ('npm', 'github') else ['plugin-kit-ai']
+        for product in products:
+            try:
                 version = versions[product]
                 install = root / product
                 install.mkdir()
@@ -175,15 +185,24 @@ def main(channel, versions=None, tags=None, revision=REVISION):
                         if report.get('data', report).get('revision') != revision:
                             raise ValueError('command source revision mismatch')
                     except Exception as error:
-                        command_failures.append(f'{product} {command}: {error}')
-            if command_failures:
-                raise ValueError('; '.join(command_failures))
-            evidence['status'] = 'passed'
+                        failures.append(f'{product} {command}: {error}')
+            except Exception as error:
+                failures.append(f'{product}: {error}')
+    except Exception as error:
+        failures.append(str(error))
+    finally:
+        try:
+            temporary.cleanup()
+            evidence['cleanup'] = {'status': 'passed'}
         except Exception as error:
-            evidence.update(status='failed', error=str(error))
-            raise
-        finally:
-            print(json.dumps(evidence, indent=2), flush=True)
+            evidence['cleanup'] = {'status': 'failed', 'error': str(error)}
+            failures.append(f'cleanup: {error}')
+        evidence['status'] = 'failed' if failures else 'passed'
+        if failures:
+            evidence['error'] = '; '.join(failures)
+        print(json.dumps(evidence, indent=2), flush=True)
+    if failures:
+        raise ValueError(evidence['error'])
 
 
 if __name__ == '__main__':

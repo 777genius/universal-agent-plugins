@@ -60,7 +60,23 @@ class DisposableJourney(unittest.TestCase):
             with self.subTest(fail=fail):
                 self.check_journey(fail)
 
-    def check_journey(self, fail):
+    def test_cleanup_failure_is_recorded_before_failed_evidence(self):
+        self.check_journey(False, cleanup_failure=True)
+        self.check_journey(True, cleanup_failure=True)
+
+    def test_early_product_failures_still_check_second_product(self):
+        for stage in ('install', 'version', 'init'):
+            with self.subTest(stage=stage):
+                self.check_journey(False, early_failure=stage)
+
+    def test_timeout_retains_partial_output_and_continues(self):
+        for partial in ((b'partial stdout', b'partial stderr'),
+                        ('partial stdout', 'partial stderr'), (None, None)):
+            with self.subTest(partial=partial):
+                self.check_journey(False, timeout_output=partial)
+
+    def check_journey(self, fail, cleanup_failure=False, early_failure=None,
+                      timeout_output=None):
         import contextlib
         import io
         import json
@@ -78,6 +94,12 @@ class DisposableJourney(unittest.TestCase):
             self.assertNotEqual(env['npm_config_userconfig'], env['npm_config_globalconfig'])
             self.assertTrue(Path(env['npm_config_userconfig']).is_file())
             self.assertNotIn('GITHUB_TOKEN', env)
+            first_product = 'author' in args or any('universal-agent-plugins@' in arg for arg in args)
+            if first_product and early_failure is not None and early_failure in args:
+                raise subprocess.CalledProcessError(1, args, 'early failure', '')
+            if first_product and 'validate' in args and timeout_output is not None:
+                raise subprocess.TimeoutExpired(args, 240, output=timeout_output[0],
+                                                stderr=timeout_output[1])
             status = 0
             data = {'revision': channels.REVISION}
             if 'version' in args:
@@ -91,19 +113,54 @@ class DisposableJourney(unittest.TestCase):
             return subprocess.CompletedProcess(args, status, json.dumps({'data': data}), '')
 
         output = io.StringIO()
+        cleanup = channels.tempfile.TemporaryDirectory.cleanup
+        cleanup_calls = []
+
+        def clean(temporary):
+            # Evidence must not be emitted until cleanup has completed.
+            self.assertEqual(output.getvalue(), '')
+            cleanup_calls.append(temporary.name)
+            cleanup(temporary)
+            if cleanup_failure:
+                raise OSError('cleanup denied')
+
+        failed = fail or cleanup_failure or early_failure or timeout_output is not None
         with patch.object(channels.subprocess, 'run', side_effect=execute), \
+                patch.object(channels.tempfile.TemporaryDirectory, 'cleanup', clean), \
+                patch.object(channels.time, 'sleep'), \
                 contextlib.redirect_stdout(output):
-            if fail:
-                with self.assertRaisesRegex(ValueError, 'validate'):
+            if failed:
+                with self.assertRaises(ValueError):
                     channels.main('npm')
             else:
                 channels.main('npm')
-        self.assertEqual(sum('compat' in args for args in calls), 2)
-        self.assertEqual(sum('test' in args for args in calls), 2)
+        self.assertEqual(len(cleanup_calls), 1)
+        self.assertEqual(sum('compat' in args for args in calls), 1 if early_failure else 2)
+        self.assertEqual(sum('test' in args for args in calls), 1 if early_failure else 2)
         self.assertTrue(all(not root.exists() for root in roots))
         evidence = json.loads(output.getvalue())
-        self.assertEqual(evidence['status'], 'failed' if fail else 'passed')
-        self.assertEqual(len(evidence['results']), len(calls))
+        self.assertEqual(evidence['status'], 'failed' if failed else 'passed')
+        self.assertEqual(evidence['cleanup']['status'], 'failed' if cleanup_failure else 'passed')
+        if cleanup_failure:
+            self.assertIn('cleanup denied', evidence['cleanup']['error'])
+            self.assertIn('cleanup denied', evidence['error'])
+        if fail:
+            self.assertIn('agentplugins validate', evidence['error'])
+            self.assertIn('plugin-kit-ai validate', evidence['error'])
+        if early_failure:
+            self.assertIn('agentplugins:', evidence['error'])
+            self.assertTrue(any('test' in args and 'author' not in args for args in calls))
+        else:
+            self.assertEqual(len(evidence['results']), len(calls))
+        if timeout_output is not None:
+            timed_out = [result for result in evidence['results'] if result['status'] == 'timeout']
+            self.assertEqual(len(timed_out), 1)
+            result = timed_out[0]
+            self.assertEqual(result['argv'], next(args for args in calls if 'validate' in args))
+            self.assertEqual(result['timeout'], 240)
+            self.assertEqual(result['stdout'], 'partial stdout' if timeout_output[0] else None)
+            self.assertEqual(result['stderr'], 'partial stderr' if timeout_output[1] else None)
+            self.assertIn('agentplugins validate', evidence['error'])
 
 
 if __name__ == '__main__':
