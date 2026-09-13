@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/packagedigest"
@@ -95,10 +96,7 @@ func TestClosePreservesReplacementPrivateDirectory(t *testing.T) {
 	}
 }
 
-// GeneratedStaging is the only seam that can relax Darwin's read-only-mount
-// requirement. It must be impossible to build one without an already open,
-// live directory handle: a caller holding only a path string (every ordinary
-// validate/inspect/test request) can never obtain one, on any platform.
+// GeneratedStaging binds a caller-owned directory to its live identity.
 func TestGeneratedStagingRequiresLiveHandle(t *testing.T) {
 	if _, e := NewGeneratedStaging(nil); e == nil {
 		t.Fatal("nil handle accepted")
@@ -146,5 +144,15 @@ func TestGeneratedStagingRequiresLiveHandle(t *testing.T) {
 	// Close does not invalidate the already captured identity snapshot.
 	if !g.present() || !g.matches(info) {
 		t.Fatal("proof invalidated by closing the source handle")
+	}
+}
+
+func TestNativeReadProfileIdentity(t *testing.T) {
+	want := "packageview-local-" + runtime.GOOS + "-v1"
+	if runtime.GOOS == "darwin" && runtime.GOARCH == "arm64" {
+		want = "packageview-local-darwin-quiescent-apfs-v2"
+	}
+	if ReadProfile != want {
+		t.Fatalf("read profile %q, want %q", ReadProfile, want)
 	}
 }

@@ -5,7 +5,7 @@ package packageview
 import "path/filepath"
 
 // Preserve the existing Linux/Darwin path and error semantics.
-func scratchParent(_ *source, exactRoot, tempDir string) (string, func() error, error) {
+func scratchParent(source *source, exactRoot, tempDir string) (string, func() error, error) {
 	// Resolve scratch parents only to reject overlap; source I/O remains rooted.
 	src, err := filepath.EvalSymlinks(exactRoot)
 	if err != nil {
@@ -22,6 +22,9 @@ func scratchParent(_ *source, exactRoot, tempDir string) (string, func() error, 
 	tmp, err = filepath.Abs(tmp)
 	if err != nil {
 		return "", nil, fail("scratch_unavailable")
+	}
+	if err := scratchIdentityCheck(source, tmp); err != nil {
+		return "", nil, err
 	}
 	rel, err := filepath.Rel(src, tmp)
 	if err != nil || rel == "." || (rel != ".." && !isParentRelative(rel)) {

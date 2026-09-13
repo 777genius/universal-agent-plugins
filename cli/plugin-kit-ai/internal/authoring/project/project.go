@@ -24,6 +24,8 @@ type Service struct {
 	Limits  packageview.Limits
 }
 
+// Read requires a quiescent source for the entire call on Darwin local APFS.
+// Stop writers to directory entries, links and contents; writable APFS is supported.
 func (s Service) Read(ctx context.Context, exactRoot string) (Result, error) {
 	return s.read(ctx, exactRoot, packageview.GeneratedStaging{})
 }
@@ -35,11 +37,8 @@ func (s Service) Read(ctx context.Context, exactRoot string) (Result, error) {
 // dir must be the live handle scaffold's own Validate callback received for
 // stagingRoot; it is used only to prove identity (see
 // packageview.NewGeneratedStaging), never for a second read path. That proof
-// authorizes relaxing only the Darwin profile's read-only-mount requirement
-// for this one directory. Ordinary validate/inspect/test/doctor/compat
-// requests call Read, which never receives this proof, and they never hold a
-// pre-opened handle for a caller-supplied root, so they have no path to this
-// method either.
+// binds that staging identity on Darwin. Ordinary Read requests need no proof
+// and accept quiescent writable APFS; a supplied mismatched proof fails closed.
 func (s Service) ReadGeneratedStaging(ctx context.Context, exactRoot string, dir *os.Root) (result Result, err error) {
 	generated, err := packageview.NewGeneratedStaging(dir)
 	if err != nil {
