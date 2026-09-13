@@ -14,7 +14,7 @@ const release = require("../scripts/release-assets");
 const MODE = "release-cli-contract-v1";
 const SCOPE = "six-platform-pair";
 const ID = { repository: c.REPOSITORY, commit: "a".repeat(40), engine_revision: "a".repeat(40),
-  versions: { agentplugins: "0.1.54", "plugin-kit-ai": "2.0.0" } };
+  versions: { agentplugins: "0.1.54", "plugin-kit-ai": "2.0.1" } };
 
 // Structural fixtures, not native acceptance. The trusted-tool stub returns
 // embedded fixture records only for env/version; any compile or subject launch
@@ -106,7 +106,7 @@ test("v3 prepares and verifies exactly both pinned products without compilation 
     assert.equal(manifest.engine_revision, ID.commit);
     assert.deepEqual(manifest.versions, ID.versions);
     assert.equal(manifest.candidate_sha256, f.options.manifestDigest);
-    assert.equal(manifest.tag, product === "agentplugins" ? "agentplugins-v0.1.54" : "plugin-kit-ai-v2.0.0");
+    assert.equal(manifest.tag, product === "agentplugins" ? "agentplugins-v0.1.54" : "plugin-kit-ai-v2.0.1");
     assert.equal(manifest.authoring_mode, MODE);
     assert.equal(manifest.status, "CANDIDATE");
     assert.deepEqual(Object.keys(manifest.assets), c.TARGETS);
@@ -134,7 +134,7 @@ const invalidCandidates = {
   "stale engine": (f) => { f.manifest.identity.engine_revision = "b".repeat(40); },
   "stale source and engine": (f) => { f.manifest.identity.commit = f.manifest.identity.engine_revision = "b".repeat(40); },
   "historical repository": (f) => { f.manifest.identity.repository = "777genius/plugin-kit-ai"; },
-  "version swap": (f) => { f.manifest.identity.versions = { agentplugins: "2.0.0", "plugin-kit-ai": "0.1.54" }; },
+  "version swap": (f) => { f.manifest.identity.versions = { agentplugins: "2.0.1", "plugin-kit-ai": "0.1.54" }; },
   "product swap": (f) => { [f.manifest.products.agentplugins, f.manifest.products["plugin-kit-ai"]] = [f.manifest.products["plugin-kit-ai"], f.manifest.products.agentplugins]; },
   "asset corruption": (f) => { const file = path.join(f.options.root, f.manifest.products["plugin-kit-ai"].assets["linux-amd64"].file); fs.chmodSync(file, 0o644); fs.writeFileSync(file, "corrupt"); },
   "inner binary digest": (f) => { f.manifest.products["plugin-kit-ai"].assets["linux-amd64"].binary.sha256 = "d".repeat(64); },
@@ -151,7 +151,8 @@ test("wrong or missing independent pin and invalid caller identity fail closed",
   for (const change of [
     (o) => { o.manifestDigest = "d".repeat(64); }, (o) => { o.manifestDigest = ""; },
     (o) => { o.identity.repository = "777genius/plugin-kit-ai"; },
-    (o) => { o.identity.versions["plugin-kit-ai"] = "2.0.1"; },
+    (o) => { o.identity.versions["plugin-kit-ai"] = "2.0.2"; },
+    (o) => { o.identity.versions["plugin-kit-ai"] = "2.0.1\n"; },
     (o) => { o.identity.commit = o.identity.engine_revision = "0".repeat(40); },
     (o) => { o.authoringMode = "vertical-slice-v1"; }, (o) => { delete o.authoringMode; },
     (o) => { o.assetScope = "linux-amd64-pair"; }, (o) => { o.candidate = false; }

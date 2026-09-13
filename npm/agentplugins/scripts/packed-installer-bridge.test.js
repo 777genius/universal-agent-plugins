@@ -23,7 +23,7 @@ function fixture(t) {
  const repo=dir("repo"), candidate=dir("candidate"), output=dir("pack"), evidence=dir("native"), work=dir("work");
  fs.writeFileSync(path.join(candidate,"SYNTHETIC-NOT-A-CANDIDATE"),"synthetic");
  const fixtureRoot=path.join(work,"dual-authoring-SYNTHETIC"); fs.mkdirSync(fixtureRoot,{mode:0o700});
- const identity={repository:"777genius/universal-agent-plugins",engine_revision:"1".repeat(40),commit:"1".repeat(40),versions:{agentplugins:"0.1.23","plugin-kit-ai":"2.0.0"}};
+ const identity={repository:"777genius/universal-agent-plugins",engine_revision:"1".repeat(40),commit:"1".repeat(40),versions:{agentplugins:"0.1.23","plugin-kit-ai":"2.0.1"}};
  const packs={},projects={},invocations=[];
  for (const product of bridge.PRODUCTS) {
   const bytes=Buffer.from("SYNTHETIC pack bytes "+product), file=`${product==="agentplugins"?"universal-agent-plugins":product}-${identity.versions[product]}.tgz`;

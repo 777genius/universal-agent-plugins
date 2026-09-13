@@ -30,7 +30,7 @@ const LOCATOR = "UAP_PUBLIC_AUTHORING_ASSET_FILE";
 const native = (product, target) => Buffer.from(`harmless ${product} ${target}\n`);
 function fixture() {
   const input = { schema: codec.INPUT_SCHEMA, identity: { repository: c.REPOSITORY, commit: "a".repeat(40),
-    engine_revision: "a".repeat(40), versions: { agentplugins: "0.1.99", "plugin-kit-ai": "2.0.0" } },
+    engine_revision: "a".repeat(40), versions: { agentplugins: "0.1.99", "plugin-kit-ai": "2.0.1" } },
   authoring_mode: codec.MODE, asset_scope: codec.SCOPE, candidate_sha256: hash(30), pair_marker_sha256: hash(31), products: {},
   preparation: { sha256: hash(32), artifact: { run_id: 101, run_attempt: 2, artifact_id: 301, artifact_sha256: hash(33) } },
   producer: { workflow: codec.WORKFLOW, source: "a".repeat(40), run_id: 201, run_attempt: 3 } };
@@ -48,7 +48,7 @@ function fixture() {
     // Independent literal oracle: no call to the shared projection constructor.
     manifests[product] = Buffer.from(JSON.stringify({ schema_version: 3, status: "CANDIDATE", product,
       repository: "777genius/universal-agent-plugins", tag: input.products[product].tag, version,
-      commit: "a".repeat(40), engine_revision: "a".repeat(40), versions: { agentplugins: "0.1.99", "plugin-kit-ai": "2.0.0" },
+      commit: "a".repeat(40), engine_revision: "a".repeat(40), versions: { agentplugins: "0.1.99", "plugin-kit-ai": "2.0.1" },
       candidate_sha256: hash(30), authoring_mode: "release-cli-contract-v1", asset_scope: "six-platform-pair", assets,
       release_eligible: false, platform_acceptance: false, attested: false }, null, 2) + "\n");
     const p = input.products[product]; p.manifest_sha256 = c.digest(manifests[product]);

@@ -304,8 +304,16 @@ func TestReleasePairedPreparationReadOnlyGraph(t *testing.T) {
 			t.Fatal("identity must fail before checkout/setup/build")
 		}
 		valid := map[string]string{"SOURCE_SHA": strings.Repeat("a", 40), "WORKFLOW_SHA": strings.Repeat("a", 40),
-			"TAG": "agentplugins-v0.1.54", "KIT_VERSION": "2.0.0", "GITHUB_REPOSITORY": "777genius/universal-agent-plugins"}
+			"TAG": "agentplugins-v0.1.54", "KIT_VERSION": "2.0.1", "GITHUB_REPOSITORY": "777genius/universal-agent-plugins"}
 		runProducerPreflight(t, job.Steps[0].Run, valid, true)
+		for _, version := range []string{"2.0.0", "2.0.1", "2.1.0", "1.2.4", "3.0.0", "2.01.0", "2.0.01", "2.0.1-rc.1", "2.0.1+build", "v2.0.1", "2.0.1\n"} {
+			values := make(map[string]string)
+			for k, v := range valid {
+				values[k] = v
+			}
+			values["KIT_VERSION"] = version
+			runProducerPreflight(t, job.Steps[0].Run, values, version == "2.0.0" || version == "2.0.1" || version == "2.1.0")
+		}
 		for key, invalid := range map[string]string{"SOURCE_SHA": "latest", "WORKFLOW_SHA": strings.Repeat("b", 40), "TAG": "agentplugins-v1.2", "KIT_VERSION": "1.2.4", "GITHUB_REPOSITORY": "777genius/plugin-kit-ai"} {
 			values := make(map[string]string)
 			for k, v := range valid {
@@ -524,7 +532,7 @@ func TestReleasePairedPromotionProtectedGraph(t *testing.T) {
 		t.Fatal("missing protected signing boundary")
 	}
 	valid := map[string]string{"SOURCE_SHA": strings.Repeat("a", 40), "WORKFLOW_SHA": strings.Repeat("a", 40),
-		"TAG": "agentplugins-v0.1.54", "KIT_VERSION": "2.0.0", "GITHUB_REPOSITORY": "777genius/universal-agent-plugins", "WORKFLOW_REF": "refs/tags/agentplugins-v0.1.54"}
+		"TAG": "agentplugins-v0.1.54", "KIT_VERSION": "2.0.1", "GITHUB_REPOSITORY": "777genius/universal-agent-plugins", "WORKFLOW_REF": "refs/tags/agentplugins-v0.1.54"}
 	runProducerPreflight(t, admission.Steps[0].Run, valid, true)
 	for _, key := range []string{"SOURCE_SHA", "WORKFLOW_SHA", "TAG", "KIT_VERSION", "GITHUB_REPOSITORY", "WORKFLOW_REF"} {
 		values := make(map[string]string)
@@ -614,7 +622,7 @@ func TestReleaseMilestoneAPromotionProtectedGraph(t *testing.T) {
 		if !hasMilestoneEnv {
 			t.Fatalf("%s lacks environment-bound Milestone A run selection", name)
 		}
-		for _, required := range []string{"agentplugins-v0.1.60", "2.0.0", "milestone-a-release-admission"} {
+		for _, required := range []string{"agentplugins-v0.1.61", "2.0.1", "milestone-a-release-admission"} {
 			if !strings.Contains(body, required) {
 				t.Fatalf("%s lacks fixed release binding %q", name, required)
 			}
@@ -1085,7 +1093,7 @@ func TestC1WorkflowPreflightNoEffects(t *testing.T) {
 		if stage {
 			mode = "paired-stage"
 		}
-		good := map[string]string{"PRODUCER_MODE": mode, "TAG": "agentplugins-v0.1.54", "KIT_VERSION": "2.0.0", "SOURCE_SHA": strings.Repeat("a", 40),
+		good := map[string]string{"PRODUCER_MODE": mode, "TAG": "agentplugins-v0.1.54", "KIT_VERSION": "2.0.1", "SOURCE_SHA": strings.Repeat("a", 40),
 			"GITHUB_EVENT_NAME": "workflow_dispatch", "GITHUB_ACTIONS": "true", "GITHUB_REPOSITORY": "777genius/universal-agent-plugins",
 			"GITHUB_SHA": strings.Repeat("a", 40), "GITHUB_WORKFLOW_SHA": strings.Repeat("a", 40), "GITHUB_REF": "refs/tags/agentplugins-v0.1.54",
 			"GITHUB_WORKFLOW_REF": "777genius/universal-agent-plugins/.github/workflows/" + file + "@refs/tags/agentplugins-v0.1.54",

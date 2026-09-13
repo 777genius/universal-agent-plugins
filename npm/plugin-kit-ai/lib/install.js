@@ -174,7 +174,7 @@ async function ensureInstalled(options = {}) {
   catch (error) { if (error.code !== "ENOENT") throw error; }
   if (descriptor || (major && Number(major[1]) >= 2)) {
     try {
-      if (packageVersion !== "2.0.0") throw new Error("unsupported public plugin-kit-ai version");
+      if (!/^2\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?![\s\S])/.test(packageVersion)) throw new Error("unsupported public plugin-kit-ai version");
       if (!descriptor) throw new Error("plugin-kit-ai major 2 requires public-release.json");
       const result = await require("./public-authoring").ensureBinary("plugin-kit-ai", { ...options, packageRoot });
       return { ...result, installedBinary: result.binaryPath };

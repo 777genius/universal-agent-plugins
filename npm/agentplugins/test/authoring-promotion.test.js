@@ -9,7 +9,7 @@ const test = (name, fn) => nodeTest(name, { skip: process.env.AGENTPLUGINS_STAGE
 const c = require("../scripts/dual-authoring-candidate");
 const p = require("../scripts/authoring-promotion");
 const ID = { repository: c.REPOSITORY, commit: "a".repeat(40), engine_revision: "a".repeat(40),
-  versions: { agentplugins: "0.1.54", "plugin-kit-ai": "2.0.0" } };
+  versions: { agentplugins: "0.1.54", "plugin-kit-ai": "2.0.1" } };
 const selected = { tag: "agentplugins-v0.1.54", ref: "refs/tags/agentplugins-v0.1.54", source: ID.commit, versions: ID.versions };
 const hash = text => c.digest(Buffer.from(text));
 const pin = { run_id: 21, run_attempt: 2, artifact_id: 31, artifact_sha256: hash("zip fixture") };
@@ -104,7 +104,7 @@ if(args[0]==='release' && mutation) {
       if(!pin || release.assets.some(a=>a.name===name) || require('node:crypto').createHash('sha256').update(fs.readFileSync(file)).digest('hex')!==pin.digest.slice(7)) throw Error('immutable upload violation');
       release.assets.push(pin);
     }
-    if(mutation.moveTag) routes[${JSON.stringify(endpoint('commits/plugin-kit-ai-v2.0.0'))}].body.sha='b'.repeat(40);
+    if(mutation.moveTag) routes[${JSON.stringify(endpoint('git/ref/tags/plugin-kit-ai-v2.0.1'))}].body.object.sha='b'.repeat(40);
     if(mutation.replaceID) { release.id+=10000; routes['graphql:tag='+args[2]].body.data.repository.release.databaseId=release.id; routes[${JSON.stringify(endpoint('releases/'))}+release.id]={body:release}; }
   } else if(args[1]==='edit') { if(release.assets.length!==11) throw Error('premature public effect'); release.draft=false; }
   else throw Error('forbidden fixture mutation');
@@ -145,7 +145,7 @@ function releaseRoutes(f, states = ["draft", "draft"]) {
   const routes = {};
   c.PRODUCTS.forEach((product, i) => {
     const tag = f.record.products[product].tag;
-    routes[endpoint(`commits/${tag}`)] = { body: { sha: ID.commit } };
+    routes[endpoint(`git/ref/tags/${tag}`)] = { body: { ref: `refs/tags/${tag}`, object: { type: "commit", sha: ID.commit } } };
     routes[`graphql:tag=${tag}`] = { body: { data: { repository: { release: states[i] === "absent" ? null : { databaseId: 200 + i } } } } };
     const assets = p.releasePins(f.record, product).map((a, j) => {
       const file = a.name === "authoring-promotion.json" ? f.recordFile : a.name === "candidate.json" ? path.join(f.root, "candidate", a.name) :
@@ -177,6 +177,7 @@ for (const [label, mutate] of Object.entries({
   "duplicate report": r => { r.qualification.lanes[1].sha256 = r.qualification.lanes[0].sha256; },
   "duplicate lane": r => { r.qualification.lanes[1] = r.qualification.lanes[0]; },
   "mixed version": r => { r.identity.versions["plugin-kit-ai"] = "1.2.4"; },
+  "kit version newline": r => { r.identity.versions["plugin-kit-ai"] = "2.0.1\n"; },
   "missing target": r => { delete r.products.agentplugins.assets["darwin-arm64"]; },
   "subject swap": r => { r.qualification.lanes[0].subjects[0].sha256 = hash("swapped"); },
   "inner swap": r => { r.qualification.lanes[0].subjects[0].binary_sha256 = hash("swapped"); },
@@ -288,8 +289,19 @@ for (const states of [["absent", "absent"], ["draft", "draft"], ["public", "draf
   assert.deepEqual(observed.states, states); assert.equal(observed.reconciliation_required, states[0] === "public" && states[1] === "draft");
   assert(calls().every(x => x.args[0] === "api"));
 });
+test("pair observation peels an exact annotated tag ref", t => {
+  const f = fixture(), routes = releaseRoutes(f, ["public", "public"]);
+  const name = "plugin-kit-ai-v2.0.1", tagObject = "c".repeat(40);
+  routes[endpoint(`git/ref/tags/${name}`)].body.object = { type: "tag", sha: tagObject };
+  routes[endpoint(`git/tags/${tagObject}`)] = { body: { sha: tagObject, object: { type: "commit", sha: ID.commit } } };
+  const calls = provider(t, f, routes);
+  assert.deepEqual(p.inspectPair(f.record, f.scratch).states, ["public", "public"]);
+  assert(calls().some(x => x.args.at(-1) === endpoint(`git/tags/${tagObject}`)));
+});
 for (const [label, mutate] of Object.entries({
-  "moved tag": r => { r[endpoint("commits/plugin-kit-ai-v2.0.0")].body.sha = "b".repeat(40); },
+  "moved tag": r => { r[endpoint("git/ref/tags/plugin-kit-ai-v2.0.1")].body.object.sha = "b".repeat(40); },
+  "branch-only tag lookup": r => { delete r[endpoint("git/ref/tags/plugin-kit-ai-v2.0.1")]; r[endpoint("git/ref/tags/plugin-kit-ai-v2.0.1")] = { exit: 1 }; },
+  "wrong tag ref": r => { r[endpoint("git/ref/tags/plugin-kit-ai-v2.0.1")].body.ref = "refs/heads/plugin-kit-ai-v2.0.1"; },
   "prerelease": r => { r[endpoint("releases/201")].body.prerelease = true; },
   "missing second readback": r => { r[endpoint("releases/201")] = { exit: 1 }; },
   "missing public asset": r => { r[endpoint("releases/201")].body.assets.pop(); },
@@ -301,7 +313,7 @@ for (const [label, mutate] of Object.entries({
   "extra asset": r => { r[endpoint("releases/201")].body.assets.push({ name: "extra" }); },
   "wrong digest": r => { r[endpoint("releases/201")].body.assets[0].digest = `sha256:${hash("other")}`; },
   "changed download": r => { r[endpoint("releases/assets/1100")].binary = Buffer.from("other").toString("base64"); },
-  "uncertain not-found": r => { r["graphql:tag=plugin-kit-ai-v2.0.0"] = { body: { errors: [{ message: "provider denied" }] } }; }
+  "uncertain not-found": r => { r["graphql:tag=plugin-kit-ai-v2.0.1"] = { body: { errors: [{ message: "provider denied" }] } }; }
 })) test(`pair ${label} never reports success`, t => {
   const f = fixture(), routes = releaseRoutes(f, ["public", "public"]); mutate(routes); provider(t, f, routes);
   assert.throws(() => p.inspectPair(f.record, f.scratch));
@@ -370,7 +382,7 @@ for (const count of [0, 10, 11]) test(`exact ${count}/11 draft sequencing and fu
     if(call.admission) segment=[];
     else if(call.args[0]==="release") {
       assert.equal(segment.filter(a=>a.includes("verify")).length,19);
-      for(const product of c.PRODUCTS) assert(segment.some(a=>a.at(-1)===endpoint(`commits/${f.record.products[product].tag}`)));
+      for(const product of c.PRODUCTS) assert(segment.some(a=>a.at(-1)===endpoint(`git/ref/tags/${f.record.products[product].tag}`)));
       for(const id of [200,201]) assert(segment.some(a=>a.at(-1)===endpoint(`releases/${id}`)));
     } else segment.push(call.args);
   }
@@ -416,7 +428,7 @@ test("actual preflight and record shells bind dispatch before native acquisition
   const script=name=>{ const step=yaml.slice(yaml.indexOf(`      - name: ${name}\n`));
     return step.match(/        run: \|\n((?:          .*\n|\n)+)/)[1].split("\n").map(l=>l.slice(10)).join("\n"); };
   const env={PATH:path.dirname(process.execPath)+":/usr/local/bin:/usr/bin:/bin",SOURCE_SHA:ID.commit,WORKFLOW_SHA:ID.commit,
-    TAG:selected.tag,WORKFLOW_REF:selected.ref,KIT_VERSION:"2.0.0",GITHUB_REPOSITORY:c.REPOSITORY,PROMOTION_RECORD:fs.readFileSync(f.recordFile,"utf8")};
+    TAG:selected.tag,WORKFLOW_REF:selected.ref,KIT_VERSION:"2.0.1",GITHUB_REPOSITORY:c.REPOSITORY,PROMOTION_RECORD:fs.readFileSync(f.recordFile,"utf8")};
   const trap=path.join(f.sandbox,"effect-trap.js"), effects=path.join(f.sandbox,"shell-effects");
   fs.writeFileSync(trap, `require('node:child_process').spawnSync=()=>{require('node:fs').appendFileSync(${JSON.stringify(effects)},'effect');throw Error('unexpected process effect')}`);
   env.NODE_OPTIONS=`--require=${trap}`; env.RUNNER_TEMP=f.scratch;
@@ -440,7 +452,7 @@ test("actual preflight and record shells bind dispatch before native acquisition
   }
   assert.equal(fs.existsSync(effects),false);
   const calls=provider(t,f,{});
-  for(const mutation of [{tag:"agentplugins-v0.1.55",ref:"refs/tags/agentplugins-v0.1.55",versions:{...ID.versions,agentplugins:"0.1.55"}}, {ref:"refs/heads/main"}, {source:"b".repeat(40)}, {versions:{...ID.versions,"plugin-kit-ai":"2.0.1"}}]) {
+  for(const mutation of [{tag:"agentplugins-v0.1.55",ref:"refs/tags/agentplugins-v0.1.55",versions:{...ID.versions,agentplugins:"0.1.55"}}, {ref:"refs/heads/main"}, {source:"b".repeat(40)}, {versions:{...ID.versions,"plugin-kit-ai":"3.0.0"}}]) {
     const options={...f.options,selected:{...selected,...mutation}};
     for(const resume of [false,true]) assert.throws(()=>p.promote(options,resume),/selected promotion identity/);
   }
@@ -474,7 +486,7 @@ function reconciliationFixture(t, states = ["draft", "draft"], mutation = {}) {
   return {f,seq,calls,change,state,recheck,writes};
 }
 for (const failure of ["second-edit", "final-readback"]) test(`completed public pair reconciliation route after ${failure} uncertainty`, t => {
-  const b=reconciliationFixture(t,undefined,failure === "second-edit" ? {failEdit:"plugin-kit-ai-v2.0.0"} : {});
+  const b=reconciliationFixture(t,undefined,failure === "second-edit" ? {failEdit:"plugin-kit-ai-v2.0.1"} : {});
   assert.throws(() => b.seq.promotePair(() => {
     if (failure === "final-readback" && b.writes().filter(a => a[1] === "edit").length === 2) throw Error("interrupted final readback");
     return b.recheck();
@@ -760,7 +772,15 @@ readPreparationBinding = (root,pin,record,receiptSha256) => {
   return {root,preparation:{sha256:receiptSha256 ?? "Q-computed-receipt",producer:invocationFor(pin,WORKFLOW,record.identity.commit)}};
 };
 cliVersion = cwd => c1Calls.push({operation:"version",cwd});
-api = (endpoint,cwd) => { c1Calls.push({operation:"api",endpoint,cwd}); return c1Responses.get(endpoint) ?? {sha:"a".repeat(40)}; };
+api = (endpoint,cwd) => {
+  c1Calls.push({operation:"api",endpoint,cwd});
+  if (c1Responses.has(endpoint)) return c1Responses.get(endpoint);
+  if (endpoint.startsWith("git/ref/tags/")) {
+    const name = endpoint.slice("git/ref/tags/".length);
+    return {ref:"refs/tags/"+name,object:{type:"commit",sha:"a".repeat(40)}};
+  }
+  return {sha:"a".repeat(40)};
+};
 module.exports.c1Calls = c1Calls;
 module.exports.c1Responses = c1Responses;
 `, filename);
@@ -833,8 +853,8 @@ test("C1 provenance Q wrapper preserves full record validation, bytes and receip
 test("C1 provenance fixed tag adapter reuses both existing derived release-tag endpoints", t => {
   const f = c1PromotionInterface(t); f.adapter.checkInputTags(f.body,f.scratch);
   assert.deepEqual(f.adapter.c1Calls,[{operation:"version",cwd:f.scratch},
-    {operation:"api",endpoint:"commits/agentplugins-v0.1.54",cwd:f.scratch},
-    {operation:"api",endpoint:"commits/plugin-kit-ai-v2.0.0",cwd:f.scratch}]);
+    {operation:"api",endpoint:"git/ref/tags/agentplugins-v0.1.54",cwd:f.scratch},
+    {operation:"api",endpoint:"git/ref/tags/plugin-kit-ai-v2.0.1",cwd:f.scratch}]);
 });
 
 test("C1 provenance malformed preparation adapter input rejects before any intake operation", t => {
@@ -878,7 +898,8 @@ test("C1 provenance fixed completed-attempt inspector rejects foreign or stale p
 
 test("C1 provenance fixed tag adapter rejects a moved second product tag", t => {
   const f = c1PromotionInterface(t);
-  f.adapter.c1Responses.set("commits/plugin-kit-ai-v2.0.0",{sha:"b".repeat(40)});
+  f.adapter.c1Responses.set("git/ref/tags/plugin-kit-ai-v2.0.1",
+    {ref:"refs/tags/plugin-kit-ai-v2.0.1",object:{type:"commit",sha:"b".repeat(40)}});
   assert.throws(() => f.adapter.checkInputTags(f.body,f.scratch),/moved release tag/);
   assert.ok(f.adapter.c1Calls.every(c => ["version","api"].includes(c.operation)));
 });
@@ -934,7 +955,7 @@ test('C3 public adapter binds completed reader to Q and retains native gate', t 
 
 test("C1 stage integration fixed npm signer uses existing verification interface with exact three subjects", t => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "c1-stage-signer-"));
-  const rows = ["completion.json", "universal-agent-plugins-0.1.54.tgz", "plugin-kit-ai-2.0.0.tgz"].map(name => {
+  const rows = ["completion.json", "universal-agent-plugins-0.1.54.tgz", "plugin-kit-ai-2.0.1.tgz"].map(name => {
     const file = path.join(root, name), body = Buffer.from(`unsigned interface fixture ${name}`);
     fs.writeFileSync(file, body); return { name, file, digest: { sha256: c.digest(body) } };
   });
@@ -1013,7 +1034,10 @@ function c1WorkflowProvider(t) {
     else if (endpoint.endsWith('/logs')) stdout = records.map(r => `2026-09-09T01:06:00.000Z C1_STAGE ${JSON.stringify(r)}\n`).join('');
     else if (endpoint.endsWith('/jobs?per_page=100')) stdout = JSON.stringify(jobs);
     else if (endpoint.includes('/attempts/')) stdout = JSON.stringify(run);
-    else if (endpoint.includes('/commits/')) stdout = JSON.stringify({sha: selected.source});
+    else if (endpoint.includes('/git/ref/tags/')) {
+      const name = endpoint.slice(endpoint.lastIndexOf('/') + 1);
+      stdout = JSON.stringify({ref: `refs/tags/${name}`, object: {type: 'commit', sha: selected.source}});
+    }
     else if (endpoint.endsWith('/artifacts/801')) stdout = JSON.stringify(item);
     else assert.fail(`unexpected provider request ${endpoint}`);
     return {status: 0, stdout};

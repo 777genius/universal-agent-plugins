@@ -130,7 +130,7 @@ if (require.main === module) {
     const options = { candidate: { root, workParent, outputs, pairMarker, manifestDigest: digest,
       authoringMode: "release-cli-contract-v1", assetScope: "six-platform-pair",
       identity: { repository: c.REPOSITORY, commit: head, engine_revision: head,
-        versions: { agentplugins: "0.1.99", "plugin-kit-ai": "2.0.0" } } },
+        versions: { agentplugins: "0.1.99", "plugin-kit-ai": "2.0.1" } } },
       repo: REPO, node: NODE, npm: NPM, output: path.join(parent, "output"), projectionPins, pairMarkerDigest: digest };
     const optionsFile = path.join(parent, "options.json"), loader = path.join(parent, "boundary.cjs");
     fs.writeFileSync(optionsFile, c.encode(options));
@@ -242,7 +242,7 @@ packing.blobs = (...args) => {
         assert.match(run(NODE, [path.join(f.packageRoot, "lib/install.js")], env, f.root).stderr, /requires public-release/);
         const pkgFile = path.join(f.packageRoot, "package.json"), pkg = JSON.parse(fs.readFileSync(pkgFile));
         pkg.version = "1.2.4"; fs.writeFileSync(pkgFile, c.encode(pkg));
-        assert.match(run(NODE, [path.join(f.packageRoot, "lib/install.js")], { ...env, PLUGIN_KIT_AI_VERSION: "v2.0.0" }, f.root).stderr, /legacy wrapper cannot/);
+        assert.match(run(NODE, [path.join(f.packageRoot, "lib/install.js")], { ...env, PLUGIN_KIT_AI_VERSION: "v2.0.1" }, f.root).stderr, /legacy wrapper cannot/);
       }
     }
   });

@@ -50,9 +50,9 @@ const integer = (v, max = Number.MAX_SAFE_INTEGER) => {
 const tag = (id, p) => `${p === "agentplugins" ? "agentplugins" : "plugin-kit-ai"}-v${id.versions[p]}`;
 function identity(v) {
   c.identity(v); sha(v.commit, 40);
-  if (v.versions["plugin-kit-ai"] !== "2.0.0" || Object.values(v.versions).some(x => x.length > 32)) fail("first-cut paired versions required");
+  if (!/^2\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?![\s\S])/.test(v.versions["plugin-kit-ai"]) || Object.values(v.versions).some(x => x.length > 32)) fail("stable major 2 paired versions required");
   return { repository: REPOSITORY, commit: v.commit, engine_revision: v.commit,
-    versions: { agentplugins: v.versions.agentplugins, "plugin-kit-ai": "2.0.0" } };
+    versions: { agentplugins: v.versions.agentplugins, "plugin-kit-ai": v.versions["plugin-kit-ai"] } };
 }
 // Fixed field ordering, even when input objects were constructed in another order.
 function asset(v, id, product, target) {
@@ -225,7 +225,6 @@ function workflowSelection(value, workflowSha) {
   const identityValue = { repository: REPOSITORY, commit: value.source, engine_revision: value.source, versions: value.versions };
   identity(identityValue); sha(value.source, 40);
   if (value.source.length !== 40 || Object.values(value.versions).some(v => typeof v !== "string" || v.length > 32 || /[\r\n]/.test(v))) fail("bounded workflow identity required");
-  exact(value.versions["plugin-kit-ai"], "2.0.0", "first kit version");
   exact([value.tag, value.ref, workflowSha], [tag(identityValue, "agentplugins"), `refs/tags/${tag(identityValue, "agentplugins")}`, value.source], "selected workflow ref/source");
   return { tag: value.tag, ref: value.ref, source: value.source, versions: { ...value.versions } };
 }
@@ -557,7 +556,7 @@ function verifyStageSubject(file, expected, cwd) {
   if (!Array.isArray(expected.subjects) || expected.subjects.length !== 3 ||
       expected.subjects.filter(s => s.name === "completion.json").length !== 1 ||
       expected.subjects.filter(s => /^universal-agent-plugins-[0-9]+\.[0-9]+\.[0-9]+\.tgz$/.test(s.name)).length !== 1 ||
-      expected.subjects.filter(s => s.name === "plugin-kit-ai-2.0.0.tgz").length !== 1) fail("exact three stage subjects required");
+      expected.subjects.filter(s => /^plugin-kit-ai-2\.(0|[1-9]\d*)\.(0|[1-9]\d*)\.tgz$/.test(s.name)).length !== 1) fail("exact three stage subjects required");
   return verifyWorkflowSubject(file, expected, cwd, ".github/workflows/agentplugins-npm-publish.yml");
 }
 function verifyWorkflowSubject(file, expected, cwd, workflow) {
@@ -605,9 +604,25 @@ function promotionRecord(record) {
   fail("unsupported promotion record schema");
 }
 function checkTag(record, p, cwd) {
-  // The commit endpoint peels annotated tags too; tag names are derived, never URLs.
-  const result = api(`commits/${tag(record.identity, p)}`, cwd);
-  exact(result.sha, record.identity.commit, "moved release tag");
+  const name = tag(record.identity, p);
+  const result = api(`git/ref/tags/${name}`, cwd);
+  exact(result.ref, `refs/tags/${name}`, "exact release tag ref");
+  let object = result.object;
+  const seen = new Set();
+  for (let depth = 0; depth < 8; depth++) {
+    if (!object || !["commit", "tag"].includes(object.type)) fail("release tag target type");
+    sha(object.sha, 40);
+    if (seen.has(object.sha)) fail("release tag cycle");
+    seen.add(object.sha);
+    if (object.type === "commit") {
+      exact(object.sha, record.identity.commit, "moved release tag");
+      return;
+    }
+    const annotated = api(`git/tags/${object.sha}`, cwd);
+    exact(annotated.sha, object.sha, "annotated release tag identity");
+    object = annotated.object;
+  }
+  fail("release tag chain too deep");
 }
 function inspectRelease(record, p, cwd) {
   checkTag(record, p, cwd);

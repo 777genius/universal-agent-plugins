@@ -12,8 +12,12 @@ const promotion = require("../scripts/authoring-promotion");
 const workflowPath = path.resolve(__dirname, "../../../.github/workflows/agentplugins-release.yml");
 
 const source = "a".repeat(40);
+test("current release tags are the exact prefixed patch pair", () => {
+  assert.equal(a.TAG, "agentplugins-v0.1.61");
+  assert.equal(a.KIT_TAG, "plugin-kit-ai-v2.0.1");
+});
 const selected = { tag: a.TAG, ref: `refs/tags/${a.TAG}`, source,
-  versions: { agentplugins: "0.1.60", "plugin-kit-ai": "2.0.0" } };
+  versions: { agentplugins: "0.1.61", "plugin-kit-ai": "2.0.1" } };
 const pin = { run_id: 42, run_attempt: 2 };
 const run = { id: 42, run_attempt: 2, repository: { full_name: a.REPOSITORY },
   head_repository: { full_name: a.REPOSITORY }, head_sha: source, path: a.WORKFLOW,
@@ -82,10 +86,10 @@ const runReceipts = () => a.PLATFORMS.map(([platform, arch]) => ({ schema: "mile
   cleanup: "complete", clean_root_separation: true,
   provenances: { agentplugins: { revision: source }, "plugin-kit-ai": { revision: source } } }));
 
-test("binds behavioral receipts to the source and synthetic 0.1.91 test package without claiming release 0.1.60", () => {
+test("binds behavioral receipts to the source and synthetic 0.1.91 test package without claiming release 0.1.61", () => {
   const result = a.receiptContract(prepareReceipt(), runReceipts(), source);
   assert.deepEqual(result.test_versions, { agentplugins: "0.1.91", "plugin-kit-ai": "2.0.0" });
-  assert.deepEqual(result.release_versions, { agentplugins: "0.1.60", "plugin-kit-ai": "2.0.0" });
+  assert.deepEqual(result.release_versions, { agentplugins: "0.1.61", "plugin-kit-ai": "2.0.1" });
   assert.equal(result.engine_revision, source);
 });
 
@@ -212,7 +216,7 @@ test("requires the authentic ordered Linux command receipt", () => {
 });
 
 for (const [name, mutate] of [
-  ["synthetic package presented as 0.1.60", value => { value.prepare.identity.versions.agentplugins = "0.1.60"; }],
+  ["synthetic package presented as 0.1.61", value => { value.prepare.identity.versions.agentplugins = "0.1.61"; }],
   ["engine revision differs", value => { value.prepare.identity.engine_revision = "b".repeat(40); }],
   ["entrypoint omitted", value => { value.runs[1].entrypoints.pop(); }],
   ["Windows runs Linux-only commands", value => { value.runs[1].commands.push("inspect", "test"); }],
@@ -232,7 +236,7 @@ for (const [name, mutate] of [
   ["missing Windows smoke", value => { value.jobs.splice(2, 1); }],
   ["extra matrix lane", value => { value.jobs.push({ ...value.jobs[0], id: 999, name: "Milestone A / linux-arm64" }); }],
   ["stale agentplugins version", value => { value.selected.versions.agentplugins = "0.1.59"; }],
-  ["stale plugin-kit tag", value => { value.selected.versions["plugin-kit-ai"] = "2.0.1"; }]
+  ["stale plugin-kit tag", value => { value.selected.versions["plugin-kit-ai"] = "2.0.0"; }]
 ]) test(`rejects ${name}`, () => {
   const value = { run: structuredClone(run), jobs: jobs(), selected: structuredClone(selected) };
   mutate(value);

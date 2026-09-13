@@ -184,10 +184,11 @@ This checkpoint does not complete phases 0-11 or release the new authoring CLI.
 
 ### Milestone A paired release cut (2026-09-13)
 
-The first public cut is fixed to the paired GitHub-native releases
-`agentplugins-v0.1.60` and the historical immutable `v2.0.0` from one exact
-source SHA. `plugin-kit-ai-v2.0.0` is the same-SHA compatibility alias; every
-later plugin-kit-ai release uses `plugin-kit-ai-vX.Y.Z`. A protected manual
+The next prepared public cut is fixed to `agentplugins-v0.1.61` and
+`plugin-kit-ai-v2.0.1` from one exact source SHA. npm and PyPI versions remain
+numeric SemVer. The historical immutable `v2.0.0` and its same-SHA
+`plugin-kit-ai-v2.0.0` compatibility alias remain historical; every later
+plugin-kit-ai release uses `plugin-kit-ai-vX.Y.Z`. A protected manual
 promotion may use the accelerated Milestone A evidence gate above: the complete
 Linux amd64 journey and packaged launcher/init/validate smoke on Windows amd64
 and macOS arm64. It must independently read back one exact authenticated,
@@ -195,9 +196,9 @@ successful `Authoring Milestone A E2E` workflow-dispatch attempt, reacquire the
 run's retained receipts, and verify their exact source and engine-revision
 contract for both packaged entrypoints. Those behavioral receipts deliberately
 stage synthetic `universal-agent-plugins@0.1.91` with `plugin-kit-ai@2.0.0`;
-they are not evidence that `universal-agent-plugins@0.1.60` was packaged or
+they are not evidence that `universal-agent-plugins@0.1.61` was packaged or
 published. Promotion remains separately and exactly bound to the frozen release
-pair `0.1.60` + `2.0.0`, and its final public-channel readback must report those
+pair `0.1.61` + `2.0.1`, and its final public-channel readback must report those
 exact versions. The promotion must also reacquire the
 exact digest-pinned paired preparation, verify its frozen identity, checksums and
 provenance, and reverify signed subjects before any release mutation. Both tags
@@ -210,6 +211,23 @@ all legacy code remain available unchanged. Neither route may execute in a real
 user project, and workflow dispatch alone never implies publication approval;
 the protected `agentplugins-release` environment remains the explicit manual
 effect boundary.
+
+The `0.1.61` npm publication route remains blocked. The reported prior
+`Agentplugins NPM Publish` run `34759887004` failed in legacy preparation:
+that route requires a binary-only v2 manifest asset set with
+`THIRD_PARTY_NOTICES.txt`, whereas paired promotion supplies a v3 manifest,
+six binaries, `checksums.txt`, `candidate.json`, `pair-prepared.json`, and
+`milestone-a-promotion.json`, without a notices asset. `paired-stage` only
+stages and attests; it has no npm publish job. Do not dispatch legacy
+publication for this pair or treat GitHub promotion as npm release proof.
+The missing contract is a protected publication consumer that authenticates
+the exact paired source/ref/workflow SHA and both public prefixed tags, binds
+this closed manifest/evidence set and its digests to the Milestone A record,
+then publishes and reads back the exact verified `universal-agent-plugins`
+tarball with npm provenance. Any notices must come from a pinned source
+closure; accepting arbitrary release extras or substituting the legacy
+installer-only pack does not satisfy that contract. This patch prepares the
+version/tag contracts and does not resolve that publication blocker.
 
 - Decision: accelerated Milestone A delivered on 2026-09-12; phases 7-11 remain
   deferred to later bounded plans and PRs.
