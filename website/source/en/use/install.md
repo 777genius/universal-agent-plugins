@@ -10,13 +10,16 @@ translationRequired: true
 
 # Find and install a plugin
 
-> **Prepared, unreleased authoring contract.** This public page documents a reviewed
-> future authoring workflow. Future authoring commands described here are not available in current
-> releases; they do not claim that `plugin-kit-ai@2` is available. Existing installer
-> examples are identified separately. Public activation remains pending.
+> **Milestone A release candidate.** Standard-first static authoring targets
+> `universal-agent-plugins@0.1.62` (`agentplugins author`) and `plugin-kit-ai@2.0.2`.
+> Candidate GitHub tags: `agentplugins-v0.1.62` and `plugin-kit-ai-v2.0.2`.
+> Runtime/dev/bootstrap, migration, export and publication remain deferred.
+> Historical YAML v1 workflows remain separate and preserved.
+> Availability is unverified: wait for npm, PyPI, Homebrew and GitHub readbacks
+> and public-channel E2E before using these candidate authoring instructions.
 
 These are **existing installer commands**, sourced from the frozen installer
-README and contract. They are separate from the future Build examples.
+README and contract. They are separate from the Build examples.
 Choose a package because it solves your task and its source is acceptable to you.
 
 ## Discover the package

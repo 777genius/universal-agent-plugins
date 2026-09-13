@@ -199,15 +199,15 @@
     "installLink": "دليل المُثبّت",
     "buildTitle": "بناء المكونات الإضافية",
     "standard": "ابنِ حزمة Agent Plugins 1.0 قابلة للنقل حول plugin.json، مع skills/ وmcp.json اختياريًا. يعتمد دعم العملاء على الحزمة ومكوناتها.",
-    "preparation": "قيد التحضير - غير مُصدر",
-    "unreleased": "واجهة CLI للتأليف المبدئي وفق المعيار قيد التحضير ولم تُصدر بعد. إصدار plugin-kit-ai 1.2.4 المنشور على npm وPyPI هو أداة v1 التاريخية، وليس v2 المبني أولًا على المعيار. تثبيت plugin-kit-ai{'@'}latest لا يوفر سير عمل التأليف المستقبلي.",
+    "preparation": "Milestone A — إصدار مرشح",
+    "unreleased": "Milestone A — إصدار مرشح. universal-agent-plugins{'@'}0.1.62 / plugin-kit-ai{'@'}2.0.2; GitHub: agentplugins-v0.1.62 / plugin-kit-ai-v2.0.2. التوفر غير متحقق منه. انتظر التحقق من npm وPyPI وHomebrew وGitHub واختبارات E2E للقنوات العامة. التأليف الثابت فقط؛ المراحل 7–11 وruntime/dev/bootstrap والترحيل والتصدير والنشر مؤجلة. إمكانات plugin.yaml محفوظة؛ استخدم plugin-kit-ai{'@'}1.2.4 لمشاريع v1.",
     "specLink": "اقرأ مواصفة Agent Plugins 1.0",
     "historyTitle": "صيانة v1 التاريخية",
     "history": "حافظ على مشاريع plugin.yaml الحالية باستخدام تعليمات v1 أدناه. هذه القوالب والمخرجات المولدة هي مسارات عمل تاريخية لـ v1؛ ولا تنشئ تدفق التأليف الجديد المبني أولًا على المعيار.",
     "quickstartLink": "البدء السريع وصيانة v1",
     "compatibilityLink": "توافق العملاء (بالإنجليزية)",
     "limitations": "التوافق خاص بكل حزمة. التحقق من المخطط لا يثبت وقت التشغيل أو OAuth أو التفعيل. لا يدعم Codex بروتوكول MCP SSE المعلن؛ ويحتفظ stdio وStreamable HTTP بدعم المحولات الحالي.",
-    "versions": "الإصدارات المنشورة التي تم التحقق منها في 2026-09-07: universal-agent-plugins 0.1.53 (npm)، وplugin-kit-ai 1.2.4 (npm/PyPI)، وإصدار GitHub المستقر agentplugins-v0.1.53."
+    "versions": "Milestone A — إصدار مرشح: universal-agent-plugins{'@'}0.1.62 / plugin-kit-ai{'@'}2.0.2; GitHub: agentplugins-v0.1.62 / plugin-kit-ai-v2.0.2."
   },
   "shell": {
     "docs": {

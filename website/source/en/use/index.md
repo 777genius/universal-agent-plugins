@@ -10,10 +10,13 @@ translationRequired: true
 
 # Use plugins
 
-> **Prepared, unreleased authoring contract.** This public page documents a reviewed
-> future authoring workflow. Future authoring commands described here are not available in current
-> releases; they do not claim that `plugin-kit-ai@2` is available. Existing installer
-> examples are identified separately. Public activation remains pending.
+> **Milestone A release candidate.** Standard-first static authoring targets
+> `universal-agent-plugins@0.1.62` (`agentplugins author`) and `plugin-kit-ai@2.0.2`.
+> Candidate GitHub tags: `agentplugins-v0.1.62` and `plugin-kit-ai-v2.0.2`.
+> Runtime/dev/bootstrap, migration, export and publication remain deferred.
+> Historical YAML v1 workflows remain separate and preserved.
+> Availability is unverified: wait for npm, PyPI, Homebrew and GitHub readbacks
+> and public-channel E2E before using these candidate authoring instructions.
 
 Choose by the result you need:
 
@@ -55,8 +58,8 @@ npx universal-agent-plugins search docs
 
 For installer acquisition, use the repository's
 [native installation guide](https://github.com/777genius/universal-agent-plugins/blob/ec0883bf0bfb7f4044321bba9dfd4fd8d6467721/docs/NATIVE_INSTALL.md).
-The examples here assume the chosen installer is already available. No future
-Build package installation command is implied by this installer guidance.
+The examples here assume the chosen installer is already available. For the
+candidate static authoring entrypoints, follow the [Build guide](/en/build/).
 
 ## Similar command names, different jobs
 

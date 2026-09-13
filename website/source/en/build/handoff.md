@@ -10,10 +10,13 @@ translationRequired: true
 
 # Hand a package to the installer planner
 
-> **Prepared, unreleased authoring contract.** This public page documents a reviewed
-> future authoring workflow. Future authoring commands described here are not available in current
-> releases; they do not claim that `plugin-kit-ai@2` is available. Existing installer
-> examples are identified separately. Public activation remains pending.
+> **Milestone A release candidate.** Standard-first static authoring targets
+> `universal-agent-plugins@0.1.62` (`agentplugins author`) and `plugin-kit-ai@2.0.2`.
+> Candidate GitHub tags: `agentplugins-v0.1.62` and `plugin-kit-ai-v2.0.2`.
+> Runtime/dev/bootstrap, migration, export and publication remain deferred.
+> Historical YAML v1 workflows remain separate and preserved.
+> Availability is unverified: wait for npm, PyPI, Homebrew and GitHub readbacks
+> and public-channel E2E before using these candidate authoring instructions.
 
 The author's output is a standard package directory plus evidence. The installer
 makes a separate plan for selected agents. This page deliberately ends at a dry
@@ -50,7 +53,7 @@ agentplugins author compat ./review-helper --target codex
 agentplugins author doctor ./review-helper
 ```
 
-The equivalent future prefix is `plugin-kit-ai`. These commands do not inspect
+The equivalent prefix is `plugin-kit-ai`. These commands do not inspect
 or modify a real user's client profile. Runtime execution and activation remain
 separate from this static package review.
 
@@ -98,5 +101,4 @@ commit SHA and an explicit package subpath when discovery is ambiguous. That is
 source selection, not a v2 publication operation. Registry submission and public
 release evidence belong to their own owners.
 
-At release time, recheck examples against the final accepted engine and published
-channels. This prepared source contract alone cannot make that acceptance true.
+After release qualification, use the exact candidate versions above for this Milestone A journey.

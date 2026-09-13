@@ -10,10 +10,13 @@ translationRequired: true
 
 # Build a standalone Skill
 
-> **Prepared, unreleased authoring contract.** This public page documents a reviewed
-> future authoring workflow. Future authoring commands described here are not available in current
-> releases; they do not claim that `plugin-kit-ai@2` is available. Existing installer
-> examples are identified separately. Public activation remains pending.
+> **Milestone A release candidate.** Standard-first static authoring targets
+> `universal-agent-plugins@0.1.62` (`agentplugins author`) and `plugin-kit-ai@2.0.2`.
+> Candidate GitHub tags: `agentplugins-v0.1.62` and `plugin-kit-ai-v2.0.2`.
+> Runtime/dev/bootstrap, migration, export and publication remain deferred.
+> Historical YAML v1 workflows remain separate and preserved.
+> Availability is unverified: wait for npm, PyPI, Homebrew and GitHub readbacks
+> and public-channel E2E before using these candidate authoring instructions.
 
 Use this path when the agent needs a repeatable method, checklist, or writing
 instruction and does not need an MCP tool connection. The package contains one
@@ -36,7 +39,7 @@ agentplugins author init ./review-helper \
   --skill-name review-docs
 ```
 
-Equivalent future `plugin-kit-ai` invocation; choose one, not both:
+Equivalent `plugin-kit-ai` invocation; choose one, not both:
 
 ```bash
 plugin-kit-ai init ./review-helper \

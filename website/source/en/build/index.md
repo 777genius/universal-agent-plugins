@@ -10,10 +10,13 @@ translationRequired: true
 
 # Build plugins
 
-> **Prepared, unreleased authoring contract.** This public page documents a reviewed
-> future authoring workflow. Future authoring commands described here are not available in current
-> releases; they do not claim that `plugin-kit-ai@2` is available. Existing installer
-> examples are identified separately. Public activation remains pending.
+> **Milestone A release candidate.** Standard-first static authoring targets
+> `universal-agent-plugins@0.1.62` (`agentplugins author`) and `plugin-kit-ai@2.0.2`.
+> Candidate GitHub tags: `agentplugins-v0.1.62` and `plugin-kit-ai-v2.0.2`.
+> Runtime/dev/bootstrap, migration, export and publication remain deferred.
+> Historical YAML v1 workflows remain separate and preserved.
+> Availability is unverified: wait for npm, PyPI, Homebrew and GitHub readbacks
+> and public-channel E2E before using these candidate authoring instructions.
 
 | Your job | Journey | Result |
 | --- | --- | --- |
@@ -21,10 +24,9 @@ translationRequired: true
 | Write a new portable package | Continue below | Root `plugin.json`, Skills and/or MCP configuration. |
 | Keep an existing YAML/runtime project working | [Historical v1](/en/legacy/v1/) | Version-pinned 1.2.4 context; no v2 migration. |
 
-This journey describes the prepared future authoring contract at source revision
-`070663efb27f69ecae8609e6b839f86f843efbb0`. It is not installation advice for a
-published v2 package. Use the accepted release supplied by the release owner
-before running these examples; an older executable may have different semantics.
+After release qualification, use `npm install -g universal-agent-plugins@0.1.62` for `agentplugins author`,
+or `npm install -g plugin-kit-ai@2.0.2` for the standalone entrypoint (Node.js 22+).
+Only Milestone A static authoring is pending release qualification; phases 7–11 remain deferred.
 
 ## Choose the smallest useful package
 
@@ -55,7 +57,7 @@ Choose one spelling and use it consistently:
 | Add or validate Skills | `agentplugins author skills` | `plugin-kit-ai skills` |
 
 The table names jobs, not complete invocations. The tutorials supply explicit
-paths and template inputs. Both entrypoints use the same prepared authoring
+paths and template inputs. Both entrypoints use the same shared authoring
 engine; neither is a second YAML implementation.
 
 ## Follow the authoring loop

@@ -28,7 +28,7 @@ For native installation on macOS, Linux or Windows, follow the installer guide. 
 
 [Installer guide](https://github.com/777genius/universal-agent-plugins#quick-start)
 
-Published versions checked on 2026-09-07: universal-agent-plugins 0.1.53 (npm), plugin-kit-ai 1.2.4 (npm/PyPI), stable GitHub release agentplugins-v0.1.53.
+Milestone A release candidate: universal-agent-plugins@0.1.62 / plugin-kit-ai@2.0.2; GitHub: agentplugins-v0.1.62 / plugin-kit-ai-v2.0.2.
 
 Compatibility is package-specific. Schema validation does not prove runtime, OAuth or activation. Codex does not support declared MCP SSE; stdio and Streamable HTTP keep their existing adapter support.
 
@@ -43,9 +43,9 @@ Compatibility is package-specific. Schema validation does not prove runtime, OAu
 
 Build a portable Agent Plugins 1.0 package around plugin.json, with optional skills/ and mcp.json. Client support depends on the package and its components.
 
-**Preparation — unreleased**
+**Milestone A release candidate**
 
-The standard-first authoring CLI is in preparation and is unreleased. Published plugin-kit-ai 1.2.4 on npm and PyPI is the historical v1 tool, not standard-first v2. Installing plugin-kit-ai@latest does not provide the future authoring workflow.
+Milestone A release candidate. universal-agent-plugins@0.1.62 / plugin-kit-ai@2.0.2; GitHub: agentplugins-v0.1.62 / plugin-kit-ai-v2.0.2. Availability is unverified. Wait for npm, PyPI, Homebrew and GitHub readbacks and public-channel E2E. Static authoring only; phases 7–11, runtime/dev/bootstrap, migration, export and publication remain deferred. Legacy plugin.yaml capabilities remain preserved; maintain v1 projects with plugin-kit-ai@1.2.4.
 
 [Read the Agent Plugins 1.0 specification](https://agent-plugins.org/specification)
 

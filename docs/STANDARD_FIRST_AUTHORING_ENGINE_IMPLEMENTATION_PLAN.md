@@ -1,5 +1,22 @@
 # Standard-First Authoring Engine Implementation Plan
 
+> **Current availability (2026-09-13):** Milestone A static authoring is pending release qualification
+> targeting npm `universal-agent-plugins@0.1.62` and `plugin-kit-ai@2.0.2`, with GitHub
+> candidate tags `agentplugins-v0.1.62` and `plugin-kit-ai-v2.0.2`. See the
+> [current Build guide](../website/source/en/build/index.md).
+> Phases 7–11, runtime/dev/bootstrap, migration, export and publication remain
+> deferred. Historical v1 YAML capabilities remain preserved.
+> Release correction (owner direction, 2026-09-13): public E2E found PyPI
+> `plugin-kit-ai==2.0.1` broken because it resolves the old bare `v2.0.1`
+> GitHub release URL; npm v2 was still unpublished at that checkpoint.
+> The accepted remediation is the coherent 0.1.62 / 2.0.2 pair above, using
+> prefixed tags only; do not add a bare-v compatibility alias. Keep this docs
+> cutover unmerged and availability unverified until npm, PyPI, Homebrew and
+> GitHub readbacks and public-channel E2E all pass. Installer release proof
+> does not qualify standard authoring.
+> The dated decisions and preparation evidence below retain their original scope;
+> they describe prior checkpoints, not current package availability.
+
 ## Owner decision: accelerated MVP scope (2026-09-10)
 
 The current delivery target is **Milestone A**, shipped as the smallest coherent
