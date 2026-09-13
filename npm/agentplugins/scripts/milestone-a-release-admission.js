@@ -140,8 +140,11 @@ function receiptContract(prepare, runs, source) {
     exact([receipt?.schema, receipt?.platform, receipt?.arch, receipt?.exact_candidate, receipt?.entrypoints,
       receipt?.commands, receipt?.cleanup, receipt?.clean_root_separation],
     ["milestone-a-e2e-run/v1", platform, arch, true, ["agentplugins", "plugin-kit-ai"],
-      platform === "linux" ? ["init", "validate", "inspect", "test", "local-add-dry-run"] : ["init", "validate"],
+      platform === "linux" ? ["init", "validate", "inspect", "test", "local-add-dry-run"] :
+        platform === "darwin" ? ["init", "validate", "inspect", "test", "doctor", "compat"] : ["init", "validate"],
       "complete", true], `Milestone A ${platform}-${arch} receipt`);
+    if (platform === "darwin") exact(receipt?.source_contract, "quiescent-writable-local-apfs",
+      "Milestone A darwin-arm64 source contract");
     for (const product of ["agentplugins", "plugin-kit-ai"])
       exact(receipt?.provenances?.[product]?.revision, source, `${product} ${platform}-${arch} engine revision`);
   }

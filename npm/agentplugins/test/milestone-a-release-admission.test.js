@@ -76,7 +76,9 @@ const prepareReceipt = () => ({ schema: "milestone-a-e2e-prepare/v1",
   candidate_head: source, publication: false });
 const runReceipts = () => a.PLATFORMS.map(([platform, arch]) => ({ schema: "milestone-a-e2e-run/v1",
   platform, arch, exact_candidate: true, entrypoints: ["agentplugins", "plugin-kit-ai"],
-  commands: platform === "linux" ? ["init", "validate", "inspect", "test", "local-add-dry-run"] : ["init", "validate"],
+  commands: platform === "linux" ? ["init", "validate", "inspect", "test", "local-add-dry-run"] :
+    platform === "darwin" ? ["init", "validate", "inspect", "test", "doctor", "compat"] : ["init", "validate"],
+  ...(platform === "darwin" ? { source_contract: "quiescent-writable-local-apfs" } : {}),
   cleanup: "complete", clean_root_separation: true,
   provenances: { agentplugins: { revision: source }, "plugin-kit-ai": { revision: source } } }));
 
@@ -85,6 +87,67 @@ test("binds behavioral receipts to the source and synthetic 0.1.91 test package 
   assert.deepEqual(result.test_versions, { agentplugins: "0.1.91", "plugin-kit-ai": "2.0.0" });
   assert.deepEqual(result.release_versions, { agentplugins: "0.1.60", "plugin-kit-ai": "2.0.0" });
   assert.equal(result.engine_revision, source);
+});
+
+test("admits the persisted Darwin producer receipt with disposable mocked entrypoints", t => {
+  const harness = require("../scripts/milestone-a-e2e");
+  const outer = fs.mkdtempSync(path.join(os.tmpdir(), "milestone-a-admission-producer-"));
+  t.after(() => fs.rmSync(outer, { recursive: true, force: true }));
+  const input = path.join(outer, "input"), root = path.join(outer, "run");
+  fs.mkdirSync(input);
+  const entrypoints = Object.fromEntries(["agentplugins", "plugin-kit-ai"].map(product => {
+    const pkg = path.join(input, product);
+    fs.mkdirSync(pkg);
+    fs.writeFileSync(path.join(pkg, "package.json"), JSON.stringify({ gitHead: source }));
+    const entrypoint = path.join(pkg, `${product}.js`);
+    fs.writeFileSync(entrypoint, "// Mocked entrypoint; never executed.\n");
+    return [product, entrypoint];
+  }));
+  const calls = [];
+  t.mock.method(cp, "spawnSync", (command, args) => {
+    assert.equal(command, process.execPath);
+    assert.ok(Object.values(entrypoints).includes(args[0]));
+    const argv = args.slice(args[1] === "author" ? 2 : 1);
+    const [operation, project] = argv;
+    calls.push({ entrypoint: args[0], operation });
+    if (operation === "init") {
+      fs.mkdirSync(project);
+      fs.writeFileSync(path.join(project, "fixture.txt"), "same");
+    }
+    return { status: 0, stdout: JSON.stringify({ schema_version: 1, result: "success",
+      data: { revision: source, operation,
+        identity: { read_profile: "packageview-local-darwin-quiescent-apfs-v2" } } }) };
+  });
+  harness.consume({ root, input, expectedHead: source, platform: "darwin", arch: "arm64", entrypoints });
+  const receipt = JSON.parse(fs.readFileSync(path.join(root, "evidence", "run.json"), "utf8"));
+  const commands = ["init", "validate", "inspect", "test", "doctor", "compat"];
+  for (const entrypoint of Object.values(entrypoints))
+    assert.deepEqual(calls.filter(call => call.entrypoint === entrypoint).map(call => call.operation), commands);
+  assert.deepEqual(receipt.commands, commands);
+  assert.equal(receipt.source_contract, "quiescent-writable-local-apfs");
+  assert.equal(receipt.cleanup, "complete");
+  assert.deepEqual(fs.readdirSync(path.join(root, "journeys")), []);
+  const receipts = runReceipts();
+  receipts[2] = receipt;
+  assert.doesNotThrow(() => a.receiptContract(prepareReceipt(), receipts, source));
+});
+
+for (const [name, mutate, error] of [
+  ["old two-command evidence", r => { r.commands = ["init", "validate"]; }, /darwin-arm64 receipt/],
+  ["omitted command", r => { r.commands.pop(); }, /darwin-arm64 receipt/],
+  ["reordered commands", r => { [r.commands[4], r.commands[5]] = [r.commands[5], r.commands[4]]; }, /darwin-arm64 receipt/],
+  ["extra command", r => { r.commands.push("local-add-dry-run"); }, /darwin-arm64 receipt/],
+  ["missing source contract", r => { delete r.source_contract; }, /darwin-arm64 source contract/],
+  ["read-only source contract", r => { r.source_contract = "readonly-regression"; }, /darwin-arm64 source contract/],
+  ["read-only regression receipt", r => {
+    r.schema = "milestone-a-e2e-readonly-regression/v1";
+    r.commands = ["init", "validate"];
+    r.source_contract = "readonly-regression";
+  }, /darwin-arm64 receipt/]
+]) test(`rejects Darwin ${name}`, () => {
+  const receipts = runReceipts();
+  mutate(receipts[2]);
+  assert.throws(() => a.receiptContract(prepareReceipt(), receipts, source), error);
 });
 
 function artifactFixture(attempt) {
