@@ -9,7 +9,7 @@ const path = require("node:path");
 const a = require("../scripts/milestone-a-release-admission");
 const candidate = require("../scripts/dual-authoring-candidate");
 const promotion = require("../scripts/authoring-promotion");
-const workflow = fs.readFileSync(path.resolve(__dirname, "../../../.github/workflows/agentplugins-release.yml"), "utf8");
+const workflowPath = path.resolve(__dirname, "../../../.github/workflows/agentplugins-release.yml");
 
 const source = "a".repeat(40);
 const selected = { tag: a.TAG, ref: `refs/tags/${a.TAG}`, source,
@@ -182,7 +182,9 @@ test("legacy thirteen-lane admission remains present and separate", () => {
   assert.throws(() => promotion.requireNativeContracts([]), /missing lanes/);
 });
 
-test("Milestone A admission and promotion embedded Node programs parse", () => {
+test("Milestone A admission and promotion embedded Node programs parse", t => {
+  if (!fs.existsSync(workflowPath)) return t.skip("detached npm package has no source workflow");
+  const workflow = fs.readFileSync(workflowPath, "utf8");
   for (const name of ["Independently admit preparation and authenticated Milestone A evidence",
     "Reacquire and re-admit the exact frozen pair and Milestone A run"]) {
     const start = workflow.indexOf(`      - name: ${name}\n`);
