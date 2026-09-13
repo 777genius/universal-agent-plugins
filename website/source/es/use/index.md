@@ -10,6 +10,6 @@ translationRequired: true
 
 # Use plugins
 
-[Traducción no disponible; consulte la página actual en inglés](/en/use/). Preparación, no es un lanzamiento. La migración de proyectos a v2 aún no está disponible. Milestone A — candidato de lanzamiento: universal-agent-plugins@0.1.62 / plugin-kit-ai@2.0.2; GitHub: agentplugins-v0.1.62 / plugin-kit-ai-v2.0.2.
+[Traducción no disponible; consulte la página actual en inglés](/en/use/). Milestone A está disponible. La migración de proyectos a v2 aún no está disponible. Milestone A disponible: universal-agent-plugins@0.1.62 / plugin-kit-ai@2.0.2; GitHub: agentplugins-v0.1.62 / plugin-kit-ai-v2.0.2.
 
 [Usar plugins](/es/use/) · [Crear plugins](/es/build/) · [plugin-kit-ai v1 · 1.2.4](/en/legacy/v1/)

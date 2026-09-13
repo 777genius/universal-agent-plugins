@@ -2,7 +2,7 @@
 
 These are **portable Skills components with historical v1 tooling metadata**,
 not complete root `plugin.json` packages or proof of current standard validation.
-See the [prepared Milestone A Skill guide](../../website/source/en/build/skill.md)
+See the [Milestone A Skill guide](../../website/source/en/build/skill.md)
 for package context and [historical v1, baseline 1.2.4](../../website/source/en/legacy/v1/index.md)
 for the preserved generation workflow. Public activation remains gated.
 

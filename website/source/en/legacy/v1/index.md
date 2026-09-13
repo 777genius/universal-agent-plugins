@@ -10,13 +10,12 @@ translationRequired: true
 
 # Historical plugin-kit-ai v1, baseline 1.2.4
 
-> **Milestone A release candidate.** Standard-first static authoring targets
+> **Milestone A is available.** Standard-first static authoring is published as
 > `universal-agent-plugins@0.1.62` (`agentplugins author`) and `plugin-kit-ai@2.0.2`.
-> Candidate GitHub tags: `agentplugins-v0.1.62` and `plugin-kit-ai-v2.0.2`.
+> GitHub tags: `agentplugins-v0.1.62` and `plugin-kit-ai-v2.0.2`.
+> npm, PyPI, Homebrew, GitHub Releases and the public-channel E2E are verified.
 > Runtime/dev/bootstrap, migration, export and publication remain deferred.
 > Historical YAML v1 workflows remain separate and preserved.
-> Availability is unverified: wait for npm, PyPI, Homebrew and GitHub readbacks
-> and public-channel E2E before using these candidate authoring instructions.
 
 This index preserves a way to understand existing projects. Its command baseline
 is tag **v1.2.4**, resolving to commit
@@ -31,7 +30,7 @@ promise a second maintained YAML engine or a new support commitment.
 
 | What you have | Where to go |
 | --- | --- |
-| A new root `plugin.json` package | [Prepared Build journey](/en/build/). |
+| A new root `plugin.json` package | [Milestone A Build journey](/en/build/). |
 | A package to install into an agent | [Use plugins](/en/use/). |
 | `plugin/plugin.yaml`, generated targets, or launcher source | Use the historical baseline and retained references below. |
 | A plan to convert a legacy project automatically | Migration is unavailable in v2; preserve the project. |

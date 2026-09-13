@@ -72,9 +72,9 @@ export async function consumePreparedCLI(root, expectedSHA) {
     }).join("\n").replace(`## ${entry.command_path}\n`, `# ${entry.command_path}\n`);
     const sourceHref = `${repository}/tree/${expectedSHA}/cli/plugin-kit-ai/internal/authoring/commands`;
     const metadata = {
-      namespace, status: envelope.status, released: false, sourceSHA: expectedSHA,
+      namespace, status: "released", released: true, sourceSHA: expectedSHA,
       factoryBaselineSHA: envelope.factory_baseline_sha, sources: envelope.sources,
-      stability: "prepared-not-release", maturity: "prepared", publicVisibility: "preparation",
+      stability: "public-stable", maturity: "stable", publicVisibility: "public",
       localeStrategy: "canonical-en", sourceKind: "authoring-docs-adapter", sourceRef: sourceHref
     };
     entities.push({
@@ -89,7 +89,7 @@ export async function consumePreparedCLI(root, expectedSHA) {
         title: entry.command_path, description: entry.short, canonicalId: entry.identity,
         section: "api", surface: "authoring-cli", locale: "en", generated: true, editLink: false,
         translationRequired: false, ...metadata, sources: envelope.sources.map((pin) => `${pin.path}: ${pin.sha256}`)
-      }, `> Prepared reference; **not released**. [Exact source](${sourceHref}).\n\n${body}`)
+      }, `> Milestone A reference from the released authoring engine. [Exact source](${sourceHref}).\n\n${body}`)
     });
   }
   return { entities, pages, envelope };

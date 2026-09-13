@@ -336,15 +336,15 @@
     "installLink": "Посібник інсталятора",
     "buildTitle": "Створюйте плагіни",
     "standard": "Створіть портативний пакет Agent Plugins 1.0 навколо plugin.json з необов’язковими skills/ і mcp.json. Підтримка клієнта залежить від пакета та його компонентів.",
-    "preparation": "Milestone A — кандидат на випуск",
-    "unreleased": "Milestone A — кандидат на випуск. universal-agent-plugins{'@'}0.1.62 / plugin-kit-ai{'@'}2.0.2; GitHub: agentplugins-v0.1.62 / plugin-kit-ai-v2.0.2. Доступність не підтверджено. Потрібні перевірки npm, PyPI, Homebrew і GitHub та E2E публічних каналів. Лише статичний авторинг; етапи 7–11, runtime/dev/bootstrap, міграцію, експорт і публікацію відкладено. Можливості plugin.yaml збережено; для v1 використовуйте plugin-kit-ai{'@'}1.2.4.",
+    "preparation": "Milestone A доступний",
+    "unreleased": "Milestone A доступний. universal-agent-plugins{'@'}0.1.62 / plugin-kit-ai{'@'}2.0.2; GitHub: agentplugins-v0.1.62 / plugin-kit-ai-v2.0.2. npm, PyPI, Homebrew, GitHub Releases та E2E публічних каналів перевірено. Лише статичний авторинг; етапи 7–11, runtime/dev/bootstrap, міграцію, експорт і публікацію відкладено. Можливості plugin.yaml збережено; для v1 використовуйте plugin-kit-ai{'@'}1.2.4.",
     "specLink": "Прочитати специфікацію Agent Plugins 1.0",
     "historyTitle": "Підтримка історичного v1",
     "history": "Підтримуйте наявні проєкти plugin.yaml за інструкціями v1 нижче. Ці шаблони та згенеровані результати — історичні процеси v1; вони не створюють новий standard-first процес авторингу.",
     "quickstartLink": "Швидкий старт і підтримка v1",
     "compatibilityLink": "Сумісність клієнтів (англійською)",
     "limitations": "Сумісність залежить від пакета. Перевірка схеми не доводить фактичну роботу під час виконання, роботу OAuth або активацію. Codex не підтримує оголошений MCP SSE; stdio та Streamable HTTP зберігають наявну підтримку адаптерів.",
-    "versions": "Milestone A — кандидат на випуск: universal-agent-plugins{'@'}0.1.62 / plugin-kit-ai{'@'}2.0.2; GitHub: agentplugins-v0.1.62 / plugin-kit-ai-v2.0.2."
+    "versions": "Milestone A доступний: universal-agent-plugins{'@'}0.1.62 / plugin-kit-ai{'@'}2.0.2; GitHub: agentplugins-v0.1.62 / plugin-kit-ai-v2.0.2."
   },
   "shell": {
     "docs": {

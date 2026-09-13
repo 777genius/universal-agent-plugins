@@ -108,10 +108,10 @@ test('README retains the available installer and canonical client limitations', 
   assert.ok(text.includes('## Build plugins'));
   assert.ok(text.includes('### Quick start'));
   assert.ok(text.includes('id="authoring-and-development"'));
-  assert.ok(text.includes('Only Milestone A static authoring is pending release qualification'));
-  assert.ok(text.includes('Availability is unverified'));
-  assert.ok(text.includes('These candidate commands are not current installation advice'));
-  assert.doesNotMatch(text, /static authoring is (?:now )?released/);
+  assert.ok(text.includes('Milestone A static authoring is available'));
+  assert.ok(text.includes('Verified GitHub release tags'));
+  assert.ok(text.includes('Install an exact npm version'));
+  assert.doesNotMatch(text, /Availability is unverified|candidate commands are not current installation advice/);
   assert.ok(text.includes('For Codex, declared MCP SSE is unsupported'));
   assert.ok(text.includes('docs/CODEX_TRANSPORT_EVIDENCE.md'));
 });

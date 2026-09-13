@@ -1,6 +1,6 @@
 ---
 title: "Build plugins"
-description: "Prepare a Skill, MCP package, or hybrid through the shared future authoring contract."
+description: "Build a Skill, MCP package, or hybrid through the shared Milestone A authoring contract."
 canonicalId: "page:build:index"
 section: "build"
 locale: "en"
@@ -10,13 +10,12 @@ translationRequired: true
 
 # Build plugins
 
-> **Milestone A release candidate.** Standard-first static authoring targets
+> **Milestone A is available.** Standard-first static authoring is published as
 > `universal-agent-plugins@0.1.62` (`agentplugins author`) and `plugin-kit-ai@2.0.2`.
-> Candidate GitHub tags: `agentplugins-v0.1.62` and `plugin-kit-ai-v2.0.2`.
+> GitHub tags: `agentplugins-v0.1.62` and `plugin-kit-ai-v2.0.2`.
+> npm, PyPI, Homebrew, GitHub Releases and the public-channel E2E are verified.
 > Runtime/dev/bootstrap, migration, export and publication remain deferred.
 > Historical YAML v1 workflows remain separate and preserved.
-> Availability is unverified: wait for npm, PyPI, Homebrew and GitHub readbacks
-> and public-channel E2E before using these candidate authoring instructions.
 
 | Your job | Journey | Result |
 | --- | --- | --- |
@@ -24,9 +23,9 @@ translationRequired: true
 | Write a new portable package | Continue below | Root `plugin.json`, Skills and/or MCP configuration. |
 | Keep an existing YAML/runtime project working | [Historical v1](/en/legacy/v1/) | Version-pinned 1.2.4 context; no v2 migration. |
 
-After release qualification, use `npm install -g universal-agent-plugins@0.1.62` for `agentplugins author`,
+Use `npm install -g universal-agent-plugins@0.1.62` for `agentplugins author`,
 or `npm install -g plugin-kit-ai@2.0.2` for the standalone entrypoint (Node.js 22+).
-Only Milestone A static authoring is pending release qualification; phases 7–11 remain deferred.
+Milestone A static authoring is available; phases 7–11 remain deferred.
 
 ## Choose the smallest useful package
 

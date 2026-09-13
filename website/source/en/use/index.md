@@ -10,20 +10,19 @@ translationRequired: true
 
 # Use plugins
 
-> **Milestone A release candidate.** Standard-first static authoring targets
+> **Milestone A is available.** Standard-first static authoring is published as
 > `universal-agent-plugins@0.1.62` (`agentplugins author`) and `plugin-kit-ai@2.0.2`.
-> Candidate GitHub tags: `agentplugins-v0.1.62` and `plugin-kit-ai-v2.0.2`.
+> GitHub tags: `agentplugins-v0.1.62` and `plugin-kit-ai-v2.0.2`.
+> npm, PyPI, Homebrew, GitHub Releases and the public-channel E2E are verified.
 > Runtime/dev/bootstrap, migration, export and publication remain deferred.
 > Historical YAML v1 workflows remain separate and preserved.
-> Availability is unverified: wait for npm, PyPI, Homebrew and GitHub readbacks
-> and public-channel E2E before using these candidate authoring instructions.
 
 Choose by the result you need:
 
 | Your job | Start here | Tool boundary |
 | --- | --- | --- |
 | Use an existing plugin in an agent | [Find and install](./install) | `agentplugins` manages installation and activation instructions. |
-| Write instructions or connect tools in a new package | [Build plugins](/en/build/) | Future `agentplugins author` and `plugin-kit-ai` share the authoring engine. |
+| Write instructions or connect tools in a new package | [Build plugins](/en/build/) | `agentplugins author` and `plugin-kit-ai` share the authoring engine. |
 | Maintain a YAML or launcher project | [Historical v1](/en/legacy/v1/) | Use the historical 1.2.4 context; migration is unavailable in v2. |
 
 You do not need to create a project to use someone else's plugin. The installer
@@ -59,7 +58,7 @@ npx universal-agent-plugins search docs
 For installer acquisition, use the repository's
 [native installation guide](https://github.com/777genius/universal-agent-plugins/blob/ec0883bf0bfb7f4044321bba9dfd4fd8d6467721/docs/NATIVE_INSTALL.md).
 The examples here assume the chosen installer is already available. For the
-candidate static authoring entrypoints, follow the [Build guide](/en/build/).
+released static authoring entrypoints, follow the [Build guide](/en/build/).
 
 ## Similar command names, different jobs
 
@@ -67,8 +66,8 @@ candidate static authoring entrypoints, follow the [Build guide](/en/build/).
 | --- | --- |
 | `agentplugins validate ./my-plugin` | Can the installer read this local standard package? |
 | `agentplugins doctor` | What needs attention in installer-managed state? |
-| Future `agentplugins author validate ./my-plugin` | Does this authored package conform, and is its static readiness complete? |
-| Future `agentplugins author doctor ./my-plugin` | What project and toolchain evidence can be inspected without execution? |
+| `agentplugins author validate ./my-plugin` | Does this authored package conform, and is its static readiness complete? |
+| `agentplugins author doctor ./my-plugin` | What project and toolchain evidence can be inspected without execution? |
 
 Installer doctor does not author a package. Authoring doctor does not repair an
 installation. Keep reports from these jobs separate when asking for help.

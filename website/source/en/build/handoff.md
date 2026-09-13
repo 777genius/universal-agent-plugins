@@ -10,13 +10,12 @@ translationRequired: true
 
 # Hand a package to the installer planner
 
-> **Milestone A release candidate.** Standard-first static authoring targets
+> **Milestone A is available.** Standard-first static authoring is published as
 > `universal-agent-plugins@0.1.62` (`agentplugins author`) and `plugin-kit-ai@2.0.2`.
-> Candidate GitHub tags: `agentplugins-v0.1.62` and `plugin-kit-ai-v2.0.2`.
+> GitHub tags: `agentplugins-v0.1.62` and `plugin-kit-ai-v2.0.2`.
+> npm, PyPI, Homebrew, GitHub Releases and the public-channel E2E are verified.
 > Runtime/dev/bootstrap, migration, export and publication remain deferred.
 > Historical YAML v1 workflows remain separate and preserved.
-> Availability is unverified: wait for npm, PyPI, Homebrew and GitHub readbacks
-> and public-channel E2E before using these candidate authoring instructions.
 
 The author's output is a standard package directory plus evidence. The installer
 makes a separate plan for selected agents. This page deliberately ends at a dry
@@ -101,4 +100,4 @@ commit SHA and an explicit package subpath when discovery is ambiguous. That is
 source selection, not a v2 publication operation. Registry submission and public
 release evidence belong to their own owners.
 
-After release qualification, use the exact candidate versions above for this Milestone A journey.
+Use the exact released versions above for this Milestone A journey.

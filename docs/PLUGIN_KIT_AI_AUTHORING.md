@@ -1,12 +1,12 @@
 # plugin-kit-ai
 
 > **Historical v1 reference — baseline 1.2.4.** The commands and capabilities
-> below describe the preserved YAML v1 workflow. Prepared Milestone A static
-> authoring targets npm `universal-agent-plugins@0.1.62` or `plugin-kit-ai@2.0.2`;
+> below describe the preserved YAML v1 workflow. Released Milestone A static
+> authoring is available from npm as `universal-agent-plugins@0.1.62` or `plugin-kit-ai@2.0.2`;
 > see the [current Build guide](../website/source/en/build/index.md). Runtime/dev/bootstrap, migration,
 > export and publication remain deferred from v2. Use `plugin-kit-ai@1.2.4`
-> explicitly for the historical instructions below. Candidate availability is
-> unverified pending npm/PyPI/Homebrew/GitHub readbacks and public-channel E2E.
+> explicitly for the historical instructions below. npm, PyPI, Homebrew,
+> GitHub Releases and public-channel E2E have been verified for Milestone A.
 
 [![Required](https://github.com/777genius/plugin-kit-ai/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/777genius/plugin-kit-ai/actions/workflows/ci.yml)
 [![Docs](https://github.com/777genius/plugin-kit-ai/actions/workflows/docs.yml/badge.svg?branch=main)](https://github.com/777genius/plugin-kit-ai/actions/workflows/docs.yml)

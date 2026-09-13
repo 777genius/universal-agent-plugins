@@ -280,10 +280,10 @@
       "cta": "Open the Use guide"
     },
     "build": {
-      "badge": "Unreleased preview",
+      "badge": "Available now",
       "title": "Build plugins",
-      "description": "Prepare a portable Agent Plugins 1.0 package: root plugin.json with optional skills/ and mcp.json, then the offline init → validate → inspect → static test loop. Milestone A release candidate: universal-agent-plugins 0.1.62 / plugin-kit-ai 2.0.2. Availability is unverified; runtime, migration, export and publication remain deferred.",
-      "cta": "Open the Build guide (preview)"
+      "description": "Build a portable Agent Plugins 1.0 package: root plugin.json with optional skills/ and mcp.json, then the offline init → validate → inspect → static test loop. Milestone A is available as universal-agent-plugins 0.1.62 and plugin-kit-ai 2.0.2; runtime, migration, export and publication remain deferred.",
+      "cta": "Open the Build guide"
     },
     "historical": {
       "eyebrow": "Maintaining an existing v1 project?",
@@ -357,15 +357,15 @@
     "installLink": "Installer guide",
     "buildTitle": "Build plugins",
     "standard": "Build a portable Agent Plugins 1.0 package around plugin.json, with optional skills/ and mcp.json. Client support depends on the package and its components.",
-    "preparation": "Milestone A release candidate",
-    "unreleased": "Milestone A release candidate. universal-agent-plugins{'@'}0.1.62 / plugin-kit-ai{'@'}2.0.2; GitHub: agentplugins-v0.1.62 / plugin-kit-ai-v2.0.2. Availability is unverified. Wait for npm, PyPI, Homebrew and GitHub readbacks and public-channel E2E. Static authoring only; phases 7–11, runtime/dev/bootstrap, migration, export and publication remain deferred. Legacy plugin.yaml capabilities remain preserved; maintain v1 projects with plugin-kit-ai{'@'}1.2.4.",
+    "preparation": "Milestone A available",
+    "unreleased": "Milestone A is available. universal-agent-plugins{'@'}0.1.62 / plugin-kit-ai{'@'}2.0.2; GitHub: agentplugins-v0.1.62 / plugin-kit-ai-v2.0.2. npm, PyPI, Homebrew, GitHub Releases and public-channel E2E are verified. Static authoring only; phases 7–11, runtime/dev/bootstrap, migration, export and publication remain deferred. Legacy plugin.yaml capabilities remain preserved; maintain v1 projects with plugin-kit-ai{'@'}1.2.4.",
     "specLink": "Read the Agent Plugins 1.0 specification",
     "historyTitle": "Historical v1 maintenance",
     "history": "Maintain existing plugin.yaml projects with the v1 instructions below. These templates and generated outputs are historical v1 workflows; they do not create the new standard-first authoring flow.",
     "quickstartLink": "Quickstart and v1 maintenance",
     "compatibilityLink": "Client compatibility (English)",
     "limitations": "Compatibility is package-specific. Schema validation does not prove runtime, OAuth or activation. Codex does not support declared MCP SSE; stdio and Streamable HTTP keep their existing adapter support.",
-    "versions": "Milestone A release candidate: universal-agent-plugins{'@'}0.1.62 / plugin-kit-ai{'@'}2.0.2; GitHub: agentplugins-v0.1.62 / plugin-kit-ai-v2.0.2."
+    "versions": "Milestone A available: universal-agent-plugins{'@'}0.1.62 / plugin-kit-ai{'@'}2.0.2; GitHub: agentplugins-v0.1.62 / plugin-kit-ai-v2.0.2."
   },
   "shell": {
     "docs": {

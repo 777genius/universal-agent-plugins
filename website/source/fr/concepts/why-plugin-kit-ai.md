@@ -10,7 +10,7 @@ aside: true
 outline: [2, 3]
 ---
 
-[Utiliser des plugins](/fr/use/) · [Créer des plugins](/fr/build/) — Préparation, pas une version publiée. La migration des projets vers v2 est indisponible.
+[Utiliser des plugins](/fr/use/) · [Créer des plugins](/fr/build/) — Milestone A est disponible. La migration des projets vers v2 reste indisponible.
 <p class="locale-historical-identity">Pourquoi plugin-kit-ai</p>
 
 [Instantané historique de la branche plugin-kit-ai v1. 1.2.4 est la référence des commandes, pas la version exacte de cet instantané.](/en/legacy/v1/)
