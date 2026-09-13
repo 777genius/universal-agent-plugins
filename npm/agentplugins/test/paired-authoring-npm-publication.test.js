@@ -58,7 +58,9 @@ function fixture() {
 function provider(t, f, mutate = () => {}) {
   const replies = new Map();
   f.releases.forEach(release => {
-    replies.set(`repos/${c.REPOSITORY}/commits/${release.tag_name}`, { sha: source });
+    replies.set(`repos/${c.REPOSITORY}/git/ref/tags/${release.tag_name}`, {
+      ref: `refs/tags/${release.tag_name}`, object: { type: "commit", sha: source }
+    });
     replies.set(`tag=${release.tag_name}`, { data: { repository: { release: { databaseId: release.id } } } });
     replies.set(`repos/${c.REPOSITORY}/releases/${release.id}`, release);
     release.assets.forEach(asset => replies.set(`repos/${c.REPOSITORY}/releases/assets/${asset.id}`, asset.body));
@@ -89,8 +91,8 @@ test("audited pair reader authenticates both exact eleven-asset sets", t => {
   assert.ok(result.pair.every(r => !r.assets.some(a => a.name === "THIRD_PARTY_NOTICES.txt")));
 });
 const mutations = {
-  "moved agent tag": (f, replies) => replies.set(`repos/${c.REPOSITORY}/commits/${m.TAG}`, { sha: "b".repeat(40) }),
-  "moved kit tag": (f, replies) => replies.set(`repos/${c.REPOSITORY}/commits/${m.KIT_TAG}`, { sha: "b".repeat(40) }),
+  "moved agent tag": (f, replies) => replies.get(`repos/${c.REPOSITORY}/git/ref/tags/${m.TAG}`).object.sha = "b".repeat(40),
+  "moved kit tag": (f, replies) => replies.get(`repos/${c.REPOSITORY}/git/ref/tags/${m.KIT_TAG}`).object.sha = "b".repeat(40),
   "wrong release tag": f => { f.releases[0].tag_name = "agentplugins-v0.1.91"; },
   "draft": f => { f.releases[0].draft = true; },
   "prerelease": f => { f.releases[1].prerelease = true; },
