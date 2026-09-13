@@ -196,10 +196,10 @@ untested platforms remain outside those claims.
 ### Fixed paired npm consumer (before release tags)
 
 The isolated `producer_mode=paired-publish` route consumes only
-`agentplugins-v0.1.61` and `plugin-kit-ai-v2.0.1`. Merge the consumer first, then
+`agentplugins-v0.1.62` and `plugin-kit-ai-v2.0.2`. Merge the consumer first, then
 select the **final merged source SHA** for both tags and all retained release
-qualification. Dispatch this workflow at `refs/tags/agentplugins-v0.1.61` with
-`tag=agentplugins-v0.1.61`, `plugin_kit_version=2.0.1`, and that `source_sha`.
+qualification. Dispatch this workflow at `refs/tags/agentplugins-v0.1.62` with
+`tag=agentplugins-v0.1.62`, `plugin_kit_version=2.0.2`, and that `source_sha`.
 `SOURCE_SHA`, `GITHUB_SHA`, and `GITHUB_WORKFLOW_SHA` must be identical. There is
 no separate consumer revision or control tag. Leave `native_inputs` and
 `input_artifact` empty; those inputs belong to the unchanged paired-stage route.
@@ -213,34 +213,58 @@ expired retained evidence stops admission. Shared evidence is pinned to the same
 bytes in both releases and the retained preparation. No release creation,
 promotion, editing, tag creation, or tag movement occurs in this consumer.
 
-The job constructs only `universal-agent-plugins@0.1.61` through the existing
-qualified public-authoring package path. It retains the paired package closure;
+The job constructs `universal-agent-plugins@0.1.62` and `plugin-kit-ai@2.0.2`
+through the existing qualified public-authoring stager. Both packs retain
+`private: false`, omit `gitHead`, and include `public-release.json` plus the shared
+public-authoring modules; signed provenance and the descriptor bind the source.
 `THIRD_PARTY_NOTICES.txt` is not a paired GitHub release asset. The legacy notices
-contract and all legacy and paired-stage job bodies remain unchanged. Packing
-runs once with scripts disabled; the existing verifier checks the closed tar
-entry, mode, and byte set. The single uploaded artifact contains the tarball and
-`publication.json` with source, promotion digest, entry digests, SHA-256,
+contract and the paired workflow’s legacy installer and paired-stage job bodies
+remain unchanged. Packing
+runs once per product with scripts disabled; the existing verifier checks the
+closed tar entry, mode, and byte set. Before upload, each exact tarball is installed
+in a fresh disposable home with lifecycle scripts enabled (including kit
+postinstall). npm 12’s script policy allows only the exact local tarball, and
+strict script admission rejects a missing permission. Its launcher then runs
+help, Skill init and validate. npm acquisition
+is local/offline; the verified native bootstrap reads the exact public release.
+The single uploaded artifact contains one subdirectory per product with its
+tarball and `publication.json` with source, promotion digest, entry digests, SHA-256,
 SHA-512 integrity, SHA-1 shasum, and byte length. The protected job binds its
 immutable artifact ID and GitHub-reported SHA-256 digest before consuming it.
 
-With `publish=true`, the separate `npm-agentplugins` protected job reacquires
-and authenticates the release evidence and reconstructs the expected file set.
+With `publish=true`, the matrix jobs use the separate `npm-agentplugins` and
+`npm-plugin-kit-ai` protected environments. Configure each package’s npm trusted
+publisher for this workflow and its matching environment before dispatch; the
+kit path has no token fallback. Each job reacquires and authenticates the release
+evidence and reconstructs the expected file set.
 It verifies the downloaded artifact without repacking, then uses npm 12.0.2
 trusted publishing with OIDC, empty user/global npmrc files, and no token
 fallback. Workflow concurrency never cancels an in-progress attempt.
 
 Only a completed registry HTTP 404 authorizes a first publication. Authentication,
 rate-limit, server, redirect, and network errors stop the operation. An existing
-version is reconciled without publication. A publish error or timeout is also
+version fails closed, including an identical version. A publish error or timeout is also
 reconciled without another publish attempt: exact public tarball bytes,
 integrity/shasum, npm signature audit and verified attestation bundles, expected
 GitHub workflow/ref/source, and installed source binding must all match.
 Uncertain or unavailable readback fails closed; investigate the retained artifact
 and workflow logs before another dispatch. A successful readback runs only
-`author --help`, Skill `author init`, and `author validate` in a disposable
-project. It does not replay installer or broader product E2E journeys.
+help, Skill init and validate through the selected product’s authoring
+entrypoint in a disposable project; kit readback also runs its exact postinstall. It does not replay installer or broader product E2E journeys.
 
 Landing this consumer is not evidence of an npm publication or executable release
 qualification. Public availability labels and historical guidance change only
 with separate verified release evidence. This work adds no phases 7-11 or YAML
 capability changes.
+
+The prior 0.1.61/2.0.1 pair remains historical evidence, not a release alias for
+this remediation. Registry versions are numeric; GitHub tags are product-prefixed,
+with no bare-v alias for v2. The legacy copy-only `npm-publish.yml` refuses major
+2 and later. The Python wrapper accepts numeric 2.0.2 or
+`plugin-kit-ai-v2.0.2`, extracts numeric asset versions, and preserves historical
+v1 numeric/bare-v tags. Wrong-product and malformed tags fail before acquisition.
+
+The two registry writes are not atomic: one product can publish while its peer
+fails. Inspect retained evidence and public state after a partial or ambiguous
+attempt; do not retry an existing version. This remediation itself does not
+publish packages, create tags or releases, or change public availability labels.

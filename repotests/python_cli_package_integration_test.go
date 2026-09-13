@@ -325,3 +325,15 @@ func pythonRuntimeBinaryName() string {
 	}
 	return "plugin-kit-ai"
 }
+
+func TestPythonCLIReleaseTagRegressions(t *testing.T) {
+	t.Parallel()
+	requirePythonRuntime(t)
+	root := RepoRoot(t)
+	cmd := exec.Command("python3", "-m", "unittest", "discover", "-s", filepath.Join(root, "python", "plugin-kit-ai", "tests"), "-v")
+	cmd.Dir = t.TempDir()
+	cmd.Env = append(os.Environ(), "PYTHONPATH="+filepath.Join(root, "python", "plugin-kit-ai", "src"), "PYTHONDONTWRITEBYTECODE=1")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("Python release tag and cold-cache regressions: %v\n%s", err, out)
+	}
+}

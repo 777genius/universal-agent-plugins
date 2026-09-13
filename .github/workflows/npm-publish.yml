@@ -59,6 +59,12 @@ jobs:
             echo "Invalid plugin-kit-ai release tag: ${tag}" >&2
             exit 1
           fi
+          version="${tag#plugin-kit-ai-v}"
+          if [ "${version}" = "${tag}" ]; then version="${tag#v}"; fi
+          if [ "${version%%.*}" -ge 2 ]; then
+            echo "Major 2+ requires the protected paired authoring publisher." >&2
+            exit 1
+          fi
           echo "tag=${tag}" >> "${GITHUB_OUTPUT}"
 
       - name: Configure npm publish authentication

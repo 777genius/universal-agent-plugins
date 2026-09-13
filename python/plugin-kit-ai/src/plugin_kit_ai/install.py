@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import shutil
 import stat
 import subprocess
@@ -25,10 +26,27 @@ PLACEHOLDER_VERSION = "0.0.0.dev0"
 
 
 def normalize_tag(raw: str) -> str:
-    value = str(raw or "").strip()
+    value = str(raw or "")
     if not value or value == "latest":
         return ""
-    return value if value.startswith("v") else f"v{value}"
+    match = re.fullmatch(r"(plugin-kit-ai-v|v)?((0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*))", value)
+    if not match:
+        raise ValueError(f"invalid plugin-kit-ai release tag: {value}")
+    prefix, version, major = match.group(1), match.group(2), int(match.group(3))
+    if major >= 2:
+        if prefix == "v":
+            raise ValueError("plugin-kit-ai v2+ requires a product-prefixed release tag")
+        return f"plugin-kit-ai-v{version}"
+    return f"{prefix or 'v'}{version}"
+
+
+def version_from_tag(tag: str) -> str:
+    normalized = normalize_tag(tag)
+    if not normalized:
+        raise ValueError("an exact plugin-kit-ai release tag is required")
+    if normalized.startswith("plugin-kit-ai-v"):
+        return normalized[len("plugin-kit-ai-v") :]
+    return normalized[1:]
 
 
 def derive_release_base(api_base: str, override: str) -> str:
@@ -79,7 +97,7 @@ def fetch_text(url: str, accept_json: bool = False) -> str:
 def latest_tag(api_base: str, repository: str) -> str:
     clean_base = str(api_base or DEFAULT_API_BASE).strip().rstrip("/")
     payload = json.loads(fetch_text(f"{clean_base}/repos/{repository}/releases/latest", accept_json=True))
-    tag_name = str(payload.get("tag_name", "")).strip()
+    tag_name = str(payload.get("tag_name", ""))
     if not tag_name:
         raise RuntimeError(f"could not resolve latest release tag from {clean_base}")
     return normalize_tag(tag_name)
@@ -142,7 +160,7 @@ def ensure_installed(*, quiet: bool = False) -> Dict[str, str]:
     tag = resolve_requested_tag()
     if not tag:
         tag = latest_tag(api_base, repository)
-    version = tag[1:]
+    version = version_from_tag(tag)
     asset_name = asset_name_for_version(version, platform_info)
 
     cache_root = default_cache_root()

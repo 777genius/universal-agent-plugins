@@ -69,7 +69,7 @@ jobs:
             paired-stage) [[ "${PUBLISH}" == false ]] ;;
             paired-publish)
               [[ "${GITHUB_ACTIONS}" == true && "${GITHUB_EVENT_NAME}" == workflow_dispatch && "${GITHUB_REPOSITORY}" == 777genius/universal-agent-plugins ]] || exit 1
-              [[ "${TAG}" == agentplugins-v0.1.61 && "${KIT_VERSION}" == 2.0.1 ]] || exit 1
+              [[ "${TAG}" == agentplugins-v0.1.62 && "${KIT_VERSION}" == 2.0.2 ]] || exit 1
               [[ "${SOURCE_SHA}" =~ ^[0-9a-f]{40}$ && ! "${SOURCE_SHA}" =~ ^0+$ ]] || exit 1
               [[ "${SOURCE_SHA}" == "${GITHUB_SHA}" && "${SOURCE_SHA}" == "${GITHUB_WORKFLOW_SHA}" ]] || exit 1
               [[ "${GITHUB_REF}" == "refs/tags/${TAG}" ]] || exit 1
@@ -654,7 +654,10 @@ jobs:
           set -euo pipefail
           test "$(npm --version)" = 12.0.2
           npm_cli="$(realpath "$(dirname "$(command -v node)")/../lib/node_modules/npm/bin/npm-cli.js")"
-          node npm/agentplugins/scripts/publish-paired-authoring-npm.js prepare "${RUNNER_TEMP}/paired-publication" "${npm_cli}"
+          mkdir "${RUNNER_TEMP}/paired-publication"
+          for product in agentplugins plugin-kit-ai; do
+            node npm/agentplugins/scripts/publish-paired-authoring-npm.js prepare "${RUNNER_TEMP}/paired-publication/${product}" "${npm_cli}" "${product}"
+          done
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         id: upload
         with:
@@ -669,7 +672,15 @@ jobs:
     if: ${{ success() && github.event_name == 'workflow_dispatch' && inputs.producer_mode == 'paired-publish' && inputs.publish == true && needs.paired_publish_prepare.result == 'success' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
-    environment: npm-agentplugins
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - product: agentplugins
+            environment: npm-agentplugins
+          - product: plugin-kit-ai
+            environment: npm-plugin-kit-ai
+    environment: ${{ matrix.environment }}
     permissions:
       actions: read
       contents: read
@@ -714,4 +725,4 @@ jobs:
           set -euo pipefail
           test "$(npm --version)" = 12.0.2
           npm_cli="$(realpath "$(dirname "$(command -v node)")/../lib/node_modules/npm/bin/npm-cli.js")"
-          node npm/agentplugins/scripts/publish-paired-authoring-npm.js publish "${RUNNER_TEMP}/paired-publication" "${npm_cli}"
+          node npm/agentplugins/scripts/publish-paired-authoring-npm.js publish "${RUNNER_TEMP}/paired-publication/${{ matrix.product }}" "${npm_cli}" "${{ matrix.product }}"
