@@ -29,3 +29,11 @@ second entrypoint still run after a command failure. On 2026-09-13, a direct GET
 of https://registry.npmjs.org/universal-agent-plugins/0.1.61 returned HTTP 404.
 No public-channel success or cross-platform execution is claimed by static tests.
 Dispatch after publication is necessary to establish executable evidence.
+
+A subsequent real Linux run verified both GitHub release binaries' checksums,
+versions and requested source revision. Both entrypoints passed init, validate,
+inspect and compat; both rejected pack with exit status 2. PyPI 2.0.1 installed,
+but its launcher requested the historical `777genius/plugin-kit-ai` repository's
+`v2.0.1/checksums.txt`, which returned 404. Both pinned npm version endpoints
+returned 404. These are release/requirement blockers, not successful channel
+qualification. Windows, macOS and Homebrew execution remains unverified.
