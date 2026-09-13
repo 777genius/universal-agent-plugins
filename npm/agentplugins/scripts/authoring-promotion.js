@@ -390,6 +390,11 @@ function projectedPins(record) {
 function acquirePreparation(pin, record, scratch) {
   return acquirePreparationBinding(pin, recordShape(record), scratch);
 }
+function acquireMilestonePreparation(pin, record, scratch) {
+  const milestone = require("./milestone-a-release-admission");
+  record = milestone.recordShape(record);
+  return acquirePreparationBinding(pin, record, scratch, record.preparation.receipt_sha256);
+}
 // Shared preparation intake below Q validation. Only the Q wrapper above and
 // the canonical I adapter below supply this private binding; no synthetic Q.
 function acquirePreparationBinding(pin, record, scratch, receiptSha256) {
@@ -494,8 +499,15 @@ function mapVerifiedOutput(output, expected) {
 function mapWorkflowOutput(output, expected, workflow) {
   if (typeof output !== "string" || Buffer.byteLength(output) > 4 * LIMIT) fail("bounded verifier output required");
   const results = JSON.parse(output);
-  if (!Array.isArray(results) || results.length !== 1) fail("one verified attestation required");
-  const statement = results[0]?.verificationResult?.statement;
+  if (!Array.isArray(results) || results.length < 1 || results.length > 64) fail("bounded verified attestations required");
+  const invocationId = `${URL}/actions/runs/${expected.run_id}/attempts/${expected.run_attempt}`;
+  // A reconcile run can see signatures retained from earlier attempts over the
+  // same immutable subject set. Select the one cryptographically verified
+  // statement from this exact invocation, then apply the complete binding below.
+  const current = results.filter(result =>
+    result?.verificationResult?.statement?.predicate?.runDetails?.metadata?.invocationId === invocationId);
+  if (current.length !== 1) fail("one current-invocation verified attestation required");
+  const statement = current[0].verificationResult.statement;
   if (statement?._type !== "https://in-toto.io/Statement/v1" || statement.predicateType !== SLSA) fail("verified in-toto/SLSA type mismatch");
   // actions/attest signs the complete subject-path set in one statement. Both
   // products legitimately have a release-manifest.json/checksums.txt basename.
@@ -517,7 +529,7 @@ function mapWorkflowOutput(output, expected, workflow) {
   exact(build.externalParameters?.workflow, { ref: expected.ref, repository: URL, path: workflow }, "verified workflow");
   exact(build.resolvedDependencies, [{ uri: `git+${URL}@${expected.ref}`, digest: { gitCommit: expected.source } }], "verified source");
   const run = statement.predicate?.runDetails;
-  exact(run?.metadata?.invocationId, `${URL}/actions/runs/${expected.run_id}/attempts/${expected.run_attempt}`, "verified invocation");
+  exact(run?.metadata?.invocationId, invocationId, "verified invocation");
   exact(run?.builder?.id, "https://github.com/actions/runner/github-hosted", "verified runner");
   return statement;
 }
@@ -562,12 +574,19 @@ function frozenSubjects(root, record) {
   return verified.subjects;
 }
 function releasePins(record, p) {
+  const promotion = promotionRecord(record);
   return [...Object.values(record.products[p].assets).map(a => ({ name: a.file, sha256: a.sha256, size: a.size })),
     { name: "release-manifest.json", sha256: record.products[p].manifest_sha256 },
     { name: "checksums.txt", sha256: record.products[p].checksums_sha256 },
     { name: "candidate.json", sha256: record.candidate_sha256 },
     { name: "pair-prepared.json", sha256: record.pair_marker_sha256 },
-    { name: "authoring-promotion.json", sha256: c.digest(encodeRecord(record)) }];
+    { name: promotion.name, sha256: c.digest(promotion.body) }];
+}
+function promotionRecord(record) {
+  if (record?.schema === SCHEMA) return { name: "authoring-promotion.json", body: encodeRecord(record) };
+  const milestone = require("./milestone-a-release-admission");
+  if (record?.schema === milestone.RECORD_SCHEMA) return { name: milestone.RECORD_FILE, body: milestone.encodeRecord(record) };
+  fail("unsupported promotion record schema");
 }
 function checkTag(record, p, cwd) {
   // The commit endpoint peels annotated tags too; tag names are derived, never URLs.
@@ -680,7 +699,7 @@ function promotePair(recheck, reconciliation) {
       if (existing && !reconciliation) fail("incomplete draft requires explicit reconciliation");
       const projection = path.join(state.o.root, p);
       const files = releasePins(state.record, p).filter(pin => !existing || existing.missing_assets.includes(pin.name)).map(pin => {
-        if (pin.name === "authoring-promotion.json") return state.o.record;
+        if (pin.name === promotionRecord(state.record).name) return state.o.record;
         if (pin.name === "candidate.json") return path.join(state.o.root, "candidate", pin.name);
         if (pin.name === "pair-prepared.json") return path.join(state.o.root, pin.name);
         return path.join(projection, pin.name);
@@ -806,4 +825,4 @@ function admitPublicEvidence(value, context) {
 module.exports = { admitPublicEvidence, inspectPublicCaller, inspectPublicAttempt, verifyPublicSubject, inspectStageCaller, workflowSelection, inspectInputCaller, checkPreparationRef, acquireCurrentStage, inspectCurrentStage, checkStageEvidence, SCHEMA, WORKFLOW, GH_VERSION, LANES, encodeRecord, decodeRecord, validateSelection, admitRecord, requireNativeContracts,
   inspectArtifact, acquireArtifact, extractArtifact, acquirePreparation, checkNativeContracts, admitNativeEvidence,
   acquireInputPreparation, readInputPreparation, checkInputTags,
-  mapVerifiedOutput, verifySubject, verifyStageSubject, frozenSubjects, releasePins, inspectPair, promote, promoteMilestoneA };
+  mapVerifiedOutput, verifySubject, verifyStageSubject, frozenSubjects, releasePins, promotionRecord, acquireMilestonePreparation, inspectPair, promote, promoteMilestoneA };

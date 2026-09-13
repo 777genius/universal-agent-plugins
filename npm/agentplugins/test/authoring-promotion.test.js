@@ -216,6 +216,17 @@ test("fresh verifier subprocess binds independently selected signer revision and
   }
   assert(args.includes("--deny-self-hosted-runners"));
 });
+test("reconciliation selects one exact current invocation while retaining older attestations", () => {
+  const f = fixture(), e = expected(f);
+  const current = verified(e)[0];
+  const older = verified({ ...e, run_id: e.run_id - 1 })[0];
+  assert.deepEqual(p.mapVerifiedOutput(JSON.stringify([older, current]), e),
+    current.verificationResult.statement);
+  assert.throws(() => p.mapVerifiedOutput(JSON.stringify([current, structuredClone(current)]), e),
+    /one current-invocation verified attestation/);
+  assert.throws(() => p.mapVerifiedOutput(JSON.stringify([older]), e),
+    /one current-invocation verified attestation/);
+});
 for (const [label, mutate] of Object.entries({
   "wrong subject": s => { s.subject[0].digest.sha256 = hash("other"); }, "wrong name": s => { s.subject[0].name = "other"; },
   "predicate": s => { s.predicateType = "test/terminal"; }, "statement": s => { s._type = "wrong"; },
