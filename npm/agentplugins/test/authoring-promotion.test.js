@@ -78,7 +78,7 @@ function verified(e) {
     predicate: { buildDefinition: { buildType: "https://actions.github.io/buildtypes/workflow/v1",
       externalParameters: { workflow: { ref: e.ref, repository: url, path: p.WORKFLOW } },
       resolvedDependencies: [{ uri: `git+${url}@${e.ref}`, digest: { gitCommit: e.source } }] },
-    runDetails: { builder: { id: "https://github.com/actions/runner/github-hosted" }, metadata: { invocationId: `${url}/actions/runs/${e.run_id}/attempts/${e.run_attempt}` } } }
+    runDetails: { builder: { id: `${url}/${p.WORKFLOW}@${e.ref}` }, metadata: { invocationId: `${url}/actions/runs/${e.run_id}/attempts/${e.run_attempt}` } } }
   } } }];
 }
 // Actual subprocesses execute the production orchestration. Only the test
@@ -950,6 +950,7 @@ test("C1 stage integration fixed npm signer uses existing verification interface
     assert.equal(args[args.indexOf("--source-ref") + 1], selected.ref);
     const statement = verified(active.expected); // existing output fixture shape only
     statement[0].verificationResult.statement.predicate.buildDefinition.externalParameters.workflow.path = workflow;
+    statement[0].verificationResult.statement.predicate.runDetails.builder.id = `${url}/${workflow}@${active.expected.ref}`;
     return { status: 0, stdout: JSON.stringify(statement) };
   });
   for (const row of rows) {

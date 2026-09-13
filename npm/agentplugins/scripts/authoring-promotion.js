@@ -543,7 +543,10 @@ function mapWorkflowOutput(output, expected, workflow) {
   exact(build.resolvedDependencies, [{ uri: `git+${URL}@${expected.ref}`, digest: { gitCommit: expected.source } }], "verified source");
   const run = statement.predicate?.runDetails;
   exact(run?.metadata?.invocationId, invocationId, "verified invocation");
-  exact(run?.builder?.id, "https://github.com/actions/runner/github-hosted", "verified runner");
+  // Current GitHub SLSA provenance binds the builder to the exact signer
+  // workflow and ref. The verifier separately rejects self-hosted runners via
+  // --deny-self-hosted-runners before this structural binding is evaluated.
+  exact(run?.builder?.id, `${URL}/${workflow}@${expected.ref}`, "verified runner");
   return statement;
 }
 function verifySubject(file, expected, cwd) {
