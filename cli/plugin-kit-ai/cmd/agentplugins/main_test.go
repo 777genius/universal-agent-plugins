@@ -175,6 +175,7 @@ func TestOfflinePublicInstallerSecurityBoundary(t *testing.T) {
 		}
 	}
 	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
 	t.Setenv("CODEX_HOME", client)
 	t.Setenv("AGENTPLUGINS_HOME", state)
 	t.Setenv("PATH", home)

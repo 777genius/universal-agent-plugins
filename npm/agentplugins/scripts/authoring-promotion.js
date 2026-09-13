@@ -640,6 +640,20 @@ function verifyAll(state) {
 function promote(input, reconciliation = false) {
   return promotePair(() => { const state = admittedInputs(input); verifyAll(state); return state; }, reconciliation);
 }
+function milestoneAState(input) {
+  const state = require("./milestone-a-release-admission").admit(input);
+  const runId = callerNumber("GITHUB_RUN_ID"), runAttempt = callerNumber("GITHUB_RUN_ATTEMPT", 1000);
+  for (const subject of state.subjects) verifySubject(subject.file, {
+    name: path.basename(subject.file), sha256: subject.sha256, source: state.record.identity.commit,
+    workflow_sha: state.o.workflow_sha, ref: `refs/tags/${tag(state.record.identity, "agentplugins")}`,
+    run_id: runId, run_attempt: runAttempt,
+    subjects: state.subjects.map(s => ({ name: path.basename(s.file), digest: { sha256: s.sha256 } }))
+  }, state.o.scratch);
+  return state;
+}
+function promoteMilestoneA(input, reconciliation = false) {
+  return promotePair(() => milestoneAState(input), reconciliation);
+}
 // Private sequencing seam: the only production caller supplies fresh admission
 // AND signature verification. It is not exported or configurable through input.
 function promotePair(recheck, reconciliation) {
@@ -705,9 +719,17 @@ function promotePair(recheck, reconciliation) {
   return { status: "qualified-for-promotion", public_readback: observed.states };
 }
 function main(args) {
-  if (args.length !== 2 || !["admit", "admit-reconciliation", "promote", "reconcile", "check-contracts"].includes(args[0]) || !path.isAbsolute(args[1])) fail("usage: authoring-promotion.js <check-contracts|admit|admit-reconciliation|promote|reconcile> <absolute-config.json>");
+  if (args.length !== 2 || !["admit", "admit-reconciliation", "promote", "reconcile", "milestone-a-admit", "milestone-a-promote", "milestone-a-reconcile", "check-contracts"].includes(args[0]) || !path.isAbsolute(args[1])) fail("usage: authoring-promotion.js <check-contracts|admit|admit-reconciliation|promote|reconcile|milestone-a-admit|milestone-a-promote|milestone-a-reconcile> <absolute-config.json>");
   const value = JSON.parse(c.readFile(args[1], LIMIT));
   if (args[0] === "check-contracts") { c.keys(value, ["lanes"], "terminal contracts"); requireNativeContracts(value.lanes); }
+  if (args[0] === "milestone-a-admit") {
+    const state = require("./milestone-a-release-admission").admit(value);
+    const milestoneObserved = inspectPair(state.record, state.o.scratch);
+    return { status: milestoneObserved.reconciliation_required ? "reconciliation-required" : "qualified-for-promotion",
+      subjects: state.subjects, sign_required: true };
+  }
+  if (args[0] === "milestone-a-promote" || args[0] === "milestone-a-reconcile")
+    return promoteMilestoneA(value, args[0] === "milestone-a-reconcile");
   if (args[0] === "promote" || args[0] === "reconcile") return promote(value, args[0] === "reconcile");
   const state = admittedInputs(value);
   const observed = inspectPair(state.record, state.o.scratch);
@@ -784,4 +806,4 @@ function admitPublicEvidence(value, context) {
 module.exports = { admitPublicEvidence, inspectPublicCaller, inspectPublicAttempt, verifyPublicSubject, inspectStageCaller, workflowSelection, inspectInputCaller, checkPreparationRef, acquireCurrentStage, inspectCurrentStage, checkStageEvidence, SCHEMA, WORKFLOW, GH_VERSION, LANES, encodeRecord, decodeRecord, validateSelection, admitRecord, requireNativeContracts,
   inspectArtifact, acquireArtifact, extractArtifact, acquirePreparation, checkNativeContracts, admitNativeEvidence,
   acquireInputPreparation, readInputPreparation, checkInputTags,
-  mapVerifiedOutput, verifySubject, verifyStageSubject, frozenSubjects, releasePins, inspectPair, promote };
+  mapVerifiedOutput, verifySubject, verifyStageSubject, frozenSubjects, releasePins, inspectPair, promote, promoteMilestoneA };

@@ -182,6 +182,33 @@ This checkpoint does not complete phases 0-11 or release the new authoring CLI.
 
 ## Status
 
+### Milestone A paired release cut (2026-09-13)
+
+The first public cut is fixed to the paired GitHub-native releases
+`agentplugins-v0.1.60` and `v2.0.0` from one exact source SHA. A protected manual
+promotion may use the accelerated Milestone A evidence gate above: the complete
+Linux amd64 journey and packaged launcher/init/validate smoke on Windows amd64
+and macOS arm64. It must independently read back one exact authenticated,
+successful `Authoring Milestone A E2E` workflow-dispatch attempt, reacquire the
+run's retained receipts, and verify their exact source and engine-revision
+contract for both packaged entrypoints. Those behavioral receipts deliberately
+stage synthetic `universal-agent-plugins@0.1.91` with `plugin-kit-ai@2.0.0`;
+they are not evidence that `universal-agent-plugins@0.1.60` was packaged or
+published. Promotion remains separately and exactly bound to the frozen release
+pair `0.1.60` + `2.0.0`, and its final public-channel readback must report those
+exact versions. The promotion must also reacquire the
+exact digest-pinned paired preparation, verify its frozen identity, checksums and
+provenance, and reverify signed subjects before any release mutation. Both tags
+must already resolve to that same SHA. Drafts, interrupted partial publication,
+idempotent replay, and final public readback remain fail-closed and reconcilable.
+
+This is an additional narrow admission route, not a relaxation or replacement
+of the existing thirteen-lane/eighteen-cell qualification path. That path and
+all legacy code remain available unchanged. Neither route may execute in a real
+user project, and workflow dispatch alone never implies publication approval;
+the protected `agentplugins-release` environment remains the explicit manual
+effect boundary.
+
 - Decision: accelerated Milestone A delivered on 2026-09-12; phases 7-11 remain
   deferred to later bounded plans and PRs.
 - Implementation: Milestone A and its truthful public-documentation checkpoint
