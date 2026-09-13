@@ -13,6 +13,7 @@ const packing = require("../scripts/stage-dual-authoring-npm");
 const contract = require("../scripts/npm-public-contract");
 const source = "a".repeat(40), workflow = ".github/workflows/agentplugins-npm-publish.yml";
 const repository = `https://github.com/${c.REPOSITORY}`;
+const sourceOnly = { skip: process.env.AGENTPLUGINS_STAGED_TEST_CHILD === "1" && "requires the complete repository source tree" };
 const clone = value => structuredClone(value);
 function root(t) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "paired-publication-test-"));
@@ -208,12 +209,12 @@ test("exact paired source contract rejects synthetic versions and different prom
   const bad = clone(descriptor); bad.identity.versions = m.E2E_VERSIONS;
   assert.throws(() => contract.validatePairedSource(metadata, bad, source, "d".repeat(64)));
 });
-test("workflow isolates paired route and retains exact legacy/stage job bytes", () => {
+test("workflow isolates paired route and retains exact legacy/stage job bytes", sourceOnly, () => {
   const repo = path.resolve(__dirname, "../../..");
   const file = ".github/workflows/agentplugins-npm-publish.yml";
   const current = fs.readFileSync(path.join(repo, file), "utf8");
-  const base = cp.execFileSync("git", ["show", `9f3dbdd94e8205ad8908209e6a68635b5ded78f7:${file}`], { cwd: repo, encoding: "utf8" });
-  assert.equal(current.slice(current.indexOf("  prepare:"), current.indexOf("\n\n  paired_publish_prepare:")).trimEnd(), base.slice(base.indexOf("  prepare:")).trimEnd());
+  const legacy = current.slice(current.indexOf("  prepare:"), current.indexOf("\n\n  paired_publish_prepare:")).trimEnd();
+  assert.equal(c.digest(Buffer.from(legacy)), "a457dc11e3931232c3dec51abffc2c69dc9d9bd51d46b4935093d21e21d20f2c");
   const paired = current.slice(current.indexOf("\n\n  paired_publish_prepare:"));
   assert.equal((paired.match(/actions\/upload-artifact@/g) || []).length, 1);
   assert.match(paired, /environment: npm-agentplugins/);
@@ -228,7 +229,7 @@ test("workflow isolates paired route and retains exact legacy/stage job bytes", 
   assert.doesNotMatch(paired, /THIRD_PARTY_NOTICES|npm publish|npm pack|registry-url:/);
 });
 
-test("qualified public package packs once with exact closure and no GitHub notices asset", t => {
+test("qualified public package packs once with exact closure and no GitHub notices asset", sourceOnly, t => {
   const f = fixture(), dir = root(t), repo = path.resolve(__dirname, "../../..");
   const stager = require("../scripts/stage-authoring-npm");
   const blobs = Object.fromEntries(stager.ALLOWLIST.map(name => [name, { bytes: fs.readFileSync(path.join(repo, name)) }]));
@@ -314,7 +315,7 @@ test("unsigned or cryptographically invalid npm audit cannot reach authoring smo
   assert.equal(calls.length, 2);
 });
 
-test("dispatch shell admits only exact paired publication identity before checkout", t => {
+test("dispatch shell admits only exact paired publication identity before checkout", sourceOnly, t => {
   const repo = path.resolve(__dirname, "../../..");
   const text = fs.readFileSync(path.join(repo, ".github/workflows/agentplugins-npm-publish.yml"), "utf8");
   const preflight = text.slice(text.indexOf("        run: |") + "        run: |\n".length, text.indexOf("  prepare:"))
