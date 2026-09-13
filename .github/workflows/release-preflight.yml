@@ -49,7 +49,7 @@ jobs:
           if [[ ! "${tag}" =~ ^(plugin-kit-ai-)?v ]]; then
             tag="plugin-kit-ai-v${tag}"
           fi
-          if [[ ! "${tag}" =~ ^(plugin-kit-ai-)?v[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.-]+)?$ ]]; then
+          if [[ ! "${tag}" =~ ^(plugin-kit-ai-)?v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
             echo "invalid stable tag format: ${tag}" >&2
             exit 1
           fi

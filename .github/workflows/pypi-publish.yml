@@ -48,7 +48,7 @@ jobs:
             fi
             tag="${tags[0]}"
           fi
-          if [[ ! "${tag}" =~ ^(plugin-kit-ai-)?v[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.-]+)?$ ]]; then
+          if [[ ! "${tag}" =~ ^(plugin-kit-ai-)?v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
             echo "Invalid plugin-kit-ai release tag: ${tag}" >&2
             exit 1
           fi

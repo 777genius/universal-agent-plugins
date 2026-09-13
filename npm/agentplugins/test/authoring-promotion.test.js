@@ -104,7 +104,7 @@ if(args[0]==='release' && mutation) {
       if(!pin || release.assets.some(a=>a.name===name) || require('node:crypto').createHash('sha256').update(fs.readFileSync(file)).digest('hex')!==pin.digest.slice(7)) throw Error('immutable upload violation');
       release.assets.push(pin);
     }
-    if(mutation.moveTag) routes[${JSON.stringify(endpoint('commits/v2.0.0'))}].body.sha='b'.repeat(40);
+    if(mutation.moveTag) routes[${JSON.stringify(endpoint('commits/plugin-kit-ai-v2.0.0'))}].body.sha='b'.repeat(40);
     if(mutation.replaceID) { release.id+=10000; routes['graphql:tag='+args[2]].body.data.repository.release.databaseId=release.id; routes[${JSON.stringify(endpoint('releases/'))}+release.id]={body:release}; }
   } else if(args[1]==='edit') { if(release.assets.length!==11) throw Error('premature public effect'); release.draft=false; }
   else throw Error('forbidden fixture mutation');
@@ -289,7 +289,7 @@ for (const states of [["absent", "absent"], ["draft", "draft"], ["public", "draf
   assert(calls().every(x => x.args[0] === "api"));
 });
 for (const [label, mutate] of Object.entries({
-  "moved tag": r => { r[endpoint("commits/v2.0.0")].body.sha = "b".repeat(40); },
+  "moved tag": r => { r[endpoint("commits/plugin-kit-ai-v2.0.0")].body.sha = "b".repeat(40); },
   "prerelease": r => { r[endpoint("releases/201")].body.prerelease = true; },
   "missing second readback": r => { r[endpoint("releases/201")] = { exit: 1 }; },
   "missing public asset": r => { r[endpoint("releases/201")].body.assets.pop(); },
@@ -834,7 +834,7 @@ test("C1 provenance fixed tag adapter reuses both existing derived release-tag e
   const f = c1PromotionInterface(t); f.adapter.checkInputTags(f.body,f.scratch);
   assert.deepEqual(f.adapter.c1Calls,[{operation:"version",cwd:f.scratch},
     {operation:"api",endpoint:"commits/agentplugins-v0.1.54",cwd:f.scratch},
-    {operation:"api",endpoint:"commits/v2.0.0",cwd:f.scratch}]);
+    {operation:"api",endpoint:"commits/plugin-kit-ai-v2.0.0",cwd:f.scratch}]);
 });
 
 test("C1 provenance malformed preparation adapter input rejects before any intake operation", t => {
@@ -878,7 +878,7 @@ test("C1 provenance fixed completed-attempt inspector rejects foreign or stale p
 
 test("C1 provenance fixed tag adapter rejects a moved second product tag", t => {
   const f = c1PromotionInterface(t);
-  f.adapter.c1Responses.set("commits/v2.0.0",{sha:"b".repeat(40)});
+  f.adapter.c1Responses.set("commits/plugin-kit-ai-v2.0.0",{sha:"b".repeat(40)});
   assert.throws(() => f.adapter.checkInputTags(f.body,f.scratch),/moved release tag/);
   assert.ok(f.adapter.c1Calls.every(c => ["version","api"].includes(c.operation)));
 });

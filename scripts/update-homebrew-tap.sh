@@ -24,7 +24,7 @@ fi
 if [[ ! "${TAG}" =~ ^(plugin-kit-ai-)?v ]]; then
   TAG="plugin-kit-ai-v${TAG}"
 fi
-if [[ ! "${TAG}" =~ ^(plugin-kit-ai-)?v[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.-]+)?$ ]]; then
+if [[ ! "${TAG}" =~ ^(plugin-kit-ai-)?v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
   echo "invalid plugin-kit-ai release tag: ${TAG}" >&2
   exit 1
 fi
