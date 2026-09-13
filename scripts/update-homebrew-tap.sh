@@ -6,7 +6,7 @@ cd "$ROOT"
 
 TAG="${TAG:-}"
 if [[ -z "$TAG" ]]; then
-  echo "set TAG=vX.Y.Z for the release to publish into the Homebrew tap" >&2
+  echo "set TAG=plugin-kit-ai-vX.Y.Z for the release to publish into the Homebrew tap" >&2
   exit 1
 fi
 
@@ -21,8 +21,13 @@ if [[ -z "$TOKEN" ]]; then
   exit 1
 fi
 
-TAG="${TAG#v}"
-TAG="v${TAG}"
+if [[ ! "${TAG}" =~ ^(plugin-kit-ai-)?v ]]; then
+  TAG="plugin-kit-ai-v${TAG}"
+fi
+if [[ ! "${TAG}" =~ ^(plugin-kit-ai-)?v[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.-]+)?$ ]]; then
+  echo "invalid plugin-kit-ai release tag: ${TAG}" >&2
+  exit 1
+fi
 DOWNLOAD_BASE="${RELEASE_BASE%/}/${REPO}/releases/download/${TAG}"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT

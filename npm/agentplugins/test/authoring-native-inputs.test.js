@@ -23,7 +23,7 @@ function fixture(version = "0.1.99") {
   producer: { workflow: ".github/workflows/agentplugins-release.yml", source: "a".repeat(40), run_id: 201, run_attempt: 3 } };
   products.forEach((product, pi) => {
     const v = value.identity.versions[product];
-    const p = value.products[product] = { tag: pi ? "v2.0.0" : `agentplugins-v${v}`,
+    const p = value.products[product] = { tag: pi ? "plugin-kit-ai-v2.0.0" : `agentplugins-v${v}`,
       manifest_sha256: sha(40 + pi), checksums_sha256: sha(50 + pi), assets: {} };
     targets.forEach((target, ti) => {
       const extension = target.startsWith("windows-") ? ".exe" : "";

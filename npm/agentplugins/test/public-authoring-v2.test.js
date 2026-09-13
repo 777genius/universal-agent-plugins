@@ -43,7 +43,7 @@ function fixture() {
         binary: { file: c.executableName(product, target), ...c.metadata(binary) } };
       outers[assets[target].file] = outer;
     }
-    input.products[product] = { tag: (product === "agentplugins" ? "agentplugins-v" : "v") + version,
+    input.products[product] = { tag: (product === "agentplugins" ? "agentplugins-v" : "plugin-kit-ai-v") + version,
       manifest_sha256: hash(40), checksums_sha256: hash(41), assets };
     // Independent literal oracle: no call to the shared projection constructor.
     manifests[product] = Buffer.from(JSON.stringify({ schema_version: 3, status: "CANDIDATE", product,

@@ -19,12 +19,15 @@ func TestBuildSelectsAllSupportedAssets(t *testing.T) {
 	if err := os.WriteFile(checksumsPath, []byte(body), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	got, err := Build("v1.2.3", "777genius/plugin-kit-ai", checksumsPath, "https://github.com/777genius/plugin-kit-ai/releases/download/v1.2.3")
+	got, err := Build("plugin-kit-ai-v1.2.3", "777genius/plugin-kit-ai", checksumsPath, "https://github.com/777genius/plugin-kit-ai/releases/download/plugin-kit-ai-v1.2.3")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if got.Version != "1.2.3" {
 		t.Fatalf("version = %q", got.Version)
+	}
+	if got.Tag != "plugin-kit-ai-v1.2.3" {
+		t.Fatalf("tag = %q", got.Tag)
 	}
 	if len(got.Assets) != 4 {
 		t.Fatalf("assets len = %d", len(got.Assets))

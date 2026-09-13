@@ -43,7 +43,7 @@ function fixture() {
   const marker = { schema: "authoring-release-pair/v1", status: "CANDIDATE", identity: structuredClone(ID), candidate_sha256: record.candidate_sha256,
     authoring_mode: record.authoring_mode, asset_scope: record.asset_scope, products: {}, release_eligible: false, platform_acceptance: false, attested: false };
   for (const product of c.PRODUCTS) {
-    const tag = `${product === "agentplugins" ? "agentplugins-" : ""}v${ID.versions[product]}`;
+    const tag = `${product === "agentplugins" ? "agentplugins" : "plugin-kit-ai"}-v${ID.versions[product]}`;
     const assets = manifest.products[product].assets;
     const projected = { schema_version: 3, status: "CANDIDATE", product, repository: c.REPOSITORY, tag,
       version: ID.versions[product], commit: ID.commit, engine_revision: ID.commit, versions: ID.versions,
@@ -776,7 +776,7 @@ module.exports.c1Responses = c1Responses;
       assets[target] = {file:c.assetName(product,ID.versions[product],target),
         sha256:product === "agentplugins" ? binary.sha256 : hash("outer"+target),size:10,binary};
     }
-    input.products[product] = {tag:(product === "agentplugins" ? "agentplugins-v" : "v")+ID.versions[product],
+    input.products[product] = {tag:(product === "agentplugins" ? "agentplugins-v" : "plugin-kit-ai-v")+ID.versions[product],
       manifest_sha256:hash(product+"manifest"),checksums_sha256:hash(product+"checksums"),assets};
   }
   const {preparation:_prep,...common} = input;

@@ -166,7 +166,7 @@ function produceInputsFromPreparation(value) {
   const tentative = { schema: INPUT_SCHEMA, identity: id, authoring_mode: MODE, asset_scope: SCOPE,
     candidate_sha256: c.digest(candidateBytes), pair_marker_sha256: c.digest(c.readFile(path.join(root, "pair-prepared.json"), MAX_INPUT_BYTES)),
     products: Object.fromEntries(c.PRODUCTS.map(product => [product, {
-      tag: (product === "agentplugins" ? "agentplugins-v" : "v") + selected.versions[product],
+      tag: (product === "agentplugins" ? "agentplugins-v" : "plugin-kit-ai-v") + selected.versions[product],
       manifest_sha256: c.digest(c.readFile(path.join(root, product, "release-manifest.json"), MAX_INPUT_BYTES)),
       checksums_sha256: c.digest(c.readFile(path.join(root, product, "checksums.txt"), MAX_INPUT_BYTES)),
       assets: candidate.products?.[product]?.assets }])),

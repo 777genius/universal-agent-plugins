@@ -11,7 +11,7 @@ import (
 
 func main() {
 	var (
-		tag          = flag.String("tag", "", "release tag (for example v1.2.3)")
+		tag          = flag.String("tag", "", "release tag (for example plugin-kit-ai-v2.0.1)")
 		repo         = flag.String("repo", "777genius/plugin-kit-ai", "repository owner/repo")
 		checksums    = flag.String("checksums", "", "path to checksums.txt")
 		downloadBase = flag.String("download-base", "", "release download base URL")

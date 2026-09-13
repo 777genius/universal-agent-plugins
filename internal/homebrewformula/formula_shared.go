@@ -19,8 +19,15 @@ func normalizeTag(tag string) string {
 	if tag == "" {
 		return ""
 	}
-	if strings.HasPrefix(tag, "v") {
+	if strings.HasPrefix(tag, "plugin-kit-ai-v") || strings.HasPrefix(tag, "v") {
 		return tag
 	}
-	return "v" + tag
+	return "plugin-kit-ai-v" + tag
+}
+
+func versionFromTag(tag string) string {
+	if strings.HasPrefix(tag, "plugin-kit-ai-v") {
+		return strings.TrimPrefix(tag, "plugin-kit-ai-v")
+	}
+	return strings.TrimPrefix(tag, "v")
 }

@@ -27,7 +27,7 @@ function fixture(t, key = 'linux-amd64/pair-node22') {
       const binary = { file: c.executableName(p, target), sha256: H(p + target), size: 32 };
       assets[target] = { file: c.assetName(p, id.versions[p], target), sha256: p === "agentplugins" ? binary.sha256 : H("outer" + p + target), size: 32, binary };
     }
-    input.products[p] = { tag: (p === "agentplugins" ? "agentplugins-v" : "v") + id.versions[p], manifest_sha256: H("manifest"), checksums_sha256: H("checksums"), assets };
+    input.products[p] = { tag: (p === "agentplugins" ? "agentplugins-v" : "plugin-kit-ai-v") + id.versions[p], manifest_sha256: H("manifest"), checksums_sha256: H("checksums"), assets };
     const projection = ic.projectionBytes(input, p);
     input.products[p].manifest_sha256 = c.digest(projection.manifest); input.products[p].checksums_sha256 = c.digest(projection.checksums);
   }

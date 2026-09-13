@@ -31,15 +31,21 @@ jobs:
         run: |
           if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
             tag="${{ inputs.tag }}"
-            tag="${tag#v}"
-            tag="v${tag}"
+            if [[ ! "${tag}" =~ ^(plugin-kit-ai-)?v ]]; then
+              tag="plugin-kit-ai-v${tag}"
+            fi
           else
             git fetch --force --tags origin
-            tag="$(git describe --tags --exact-match HEAD 2>/dev/null || true)"
+            mapfile -t tags < <(git tag --points-at HEAD --list 'plugin-kit-ai-v*')
+            if [ "${#tags[@]}" -eq 0 ]; then mapfile -t tags < <(git tag --points-at HEAD --list 'v*'); fi
+            if [ "${#tags[@]}" -ne 1 ]; then
+              echo "Expected exactly one plugin-kit-ai tag at $(git rev-parse HEAD), found ${#tags[@]}." >&2
+              exit 1
+            fi
+            tag="${tags[0]}"
           fi
-          if [ -z "${tag}" ]; then
-            echo "Unable to resolve an exact stable tag for commit $(git rev-parse HEAD)." >&2
-            echo "Use workflow_dispatch with an explicit tag as the manual fallback." >&2
+          if [[ ! "${tag}" =~ ^(plugin-kit-ai-)?v[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.-]+)?$ ]]; then
+            echo "Invalid plugin-kit-ai release tag: ${tag}" >&2
             exit 1
           fi
           echo "tag=${tag}" >> "${GITHUB_OUTPUT}"

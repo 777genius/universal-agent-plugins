@@ -185,7 +185,9 @@ This checkpoint does not complete phases 0-11 or release the new authoring CLI.
 ### Milestone A paired release cut (2026-09-13)
 
 The first public cut is fixed to the paired GitHub-native releases
-`agentplugins-v0.1.60` and `v2.0.0` from one exact source SHA. A protected manual
+`agentplugins-v0.1.60` and the historical immutable `v2.0.0` from one exact
+source SHA. `plugin-kit-ai-v2.0.0` is the same-SHA compatibility alias; every
+later plugin-kit-ai release uses `plugin-kit-ai-vX.Y.Z`. A protected manual
 promotion may use the accelerated Milestone A evidence gate above: the complete
 Linux amd64 journey and packaged launcher/init/validate smoke on Windows amd64
 and macOS arm64. It must independently read back one exact authenticated,
