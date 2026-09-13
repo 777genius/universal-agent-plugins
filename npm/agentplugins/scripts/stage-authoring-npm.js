@@ -367,7 +367,7 @@ function stageTools(o, context) {
   const tools = Object.fromEntries(Object.entries(paths).map(([name, file]) => [name, {
     version: (name === "npm" ? command(o.node, [o.npm, "--version"]) : command(file, ["--version"])).split("\n")[0],
     sha256: c.digest(c.readFile(file)) }]));
-  if (!tools.gh.version.startsWith(`gh version ${promotion.GH_VERSION} (`)) throw new Error("fixed stage gh provision required");
+  if (!promotion.compatibleGhVersion(tools.gh.version)) throw new Error("compatible stage gh provision required");
   return tools;
 }
 function toolSnapshot(o) {
