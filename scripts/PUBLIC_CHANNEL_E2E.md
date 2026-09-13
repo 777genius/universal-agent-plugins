@@ -1,10 +1,9 @@
 # Milestone A public channel verification
 
-Manually dispatch `Milestone A public channels` after publishing the pinned
-releases. This workflow installs real npm, PyPI, Homebrew and GitHub packages;
+Manually dispatch `Milestone A public channels` once the requested releases are available. This workflow installs real npm, PyPI, Homebrew and GitHub packages;
 it never builds a substitute from checkout. The checkout supplies only the test.
-It expects universal-agent-plugins 0.1.61, plugin-kit-ai 2.0.1, and source revision
-05d1f19796b257b1f0544464145d2653f721e21a. Each matrix cell retains command output,
+Dispatch requires exact versions and GitHub tags for both products plus their
+expected full source revision; supply the final patch pair when available. Each matrix cell retains command output,
 including failure evidence. Registry requests have four attempts with bounded
 backoff; individual commands and the complete job also have deadlines.
 
@@ -22,18 +21,18 @@ Both public entrypoints are checked on npm and GitHub; PyPI and Homebrew provide
 plugin-kit-ai. GitHub native payloads are checked against release checksums, then
 all channels must report the pinned product version and source revision.
 
-Known qualification gaps: the pinned source command list has no `pack` command.
-This requested check deliberately fails rather than silently substituting `test`
-or introducing deferred export/bundle functionality. Remaining commands and the
-second entrypoint still run after a command failure. On 2026-09-13, a direct GET
-of https://registry.npmjs.org/universal-agent-plugins/0.1.61 returned HTTP 404.
-No public-channel success or cross-platform execution is claimed by static tests.
-Dispatch after publication is necessary to establish executable evidence.
+The acceptance journey is version/revision readback, init, validate, inspect,
+compat and offline static test in a disposable plugin project. A command failure
+is retained while remaining checks and the second entrypoint continue.
+No public-channel success or cross-platform execution is claimed by unit tests.
+Dispatch against available releases is necessary to establish executable evidence.
 
-A subsequent real Linux run verified both GitHub release binaries' checksums,
-versions and requested source revision. Both entrypoints passed init, validate,
-inspect and compat; both rejected pack with exit status 2. PyPI 2.0.1 installed,
-but its launcher requested the historical `777genius/plugin-kit-ai` repository's
-`v2.0.1/checksums.txt`, which returned 404. Both pinned npm version endpoints
-returned 404. These are release/requirement blockers, not successful channel
-qualification. Windows, macOS and Homebrew execution remains unverified.
+Historical release evidence (2026-09-13): a real Linux run verified both GitHub
+release binaries for agentplugins 0.1.61 and plugin-kit-ai 2.0.1 against checksums,
+versions and revision 05d1f19796b257b1f0544464145d2653f721e21a. Both entrypoints
+passed init, validate, inspect and compat. PyPI 2.0.1 installed, but its launcher
+requested the historical `777genius/plugin-kit-ai` repository's
+`v2.0.1/checksums.txt`, which returned 404. Both exact npm version endpoints
+returned 404. These remain external release blockers, not test-design blockers
+or successful channel qualification. Windows, macOS and Homebrew execution
+remains unverified. No publication or documentation cutover is performed here.

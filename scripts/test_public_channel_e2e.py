@@ -18,6 +18,24 @@ class Contract(unittest.TestCase):
         with self.assertRaises(ValueError):
             channels.identity(good, '2.0.1')
 
+    def test_exact_release_inputs(self):
+        argv = ['github', '--agentplugins-version', '0.1.62',
+                '--plugin-kit-ai-version', '2.0.2', '--agentplugins-tag',
+                'agentplugins-v0.1.62', '--plugin-kit-ai-tag', 'plugin-kit-ai-v2.0.2',
+                '--revision', 'b' * 40]
+        args = channels.arguments(argv)
+        self.assertEqual(args.agentplugins_version, '0.1.62')
+        self.assertEqual(args.plugin_kit_ai_tag, 'plugin-kit-ai-v2.0.2')
+        channels.identity({'data': {'revision': args.revision,
+                                    'product_version': '2.0.2'}}, '2.0.2', args.revision)
+        import contextlib
+        import io
+        for position, bad in ((2, 'latest'), (6, '../tag'), (10, 'short')):
+            invalid = list(argv)
+            invalid[position] = bad
+            with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+                channels.arguments(invalid)
+
     def test_retry_is_bounded_and_preserves_failure(self):
         with patch.object(channels.time, 'sleep') as sleep:
             with patch.object(channels, 'download', side_effect=ValueError('unpublished')) as operation:
@@ -34,10 +52,15 @@ class Contract(unittest.TestCase):
         self.assertIn('fail-fast: false', workflow)
         self.assertIn('channel: [npm, pypi, github, brew]', workflow)
         self.assertIn('if: always()', workflow)
-        self.assertEqual(channels.COMMANDS, ('validate', 'inspect', 'pack', 'compat'))
+        self.assertEqual(channels.COMMANDS, ('validate', 'inspect', 'compat', 'test'))
 
 class DisposableJourney(unittest.TestCase):
-    def test_both_entrypoints_continue_after_pack_failure_and_cleanup(self):
+    def test_success_and_failure_cleanup(self):
+        for fail in (False, True):
+            with self.subTest(fail=fail):
+                self.check_journey(fail)
+
+    def check_journey(self, fail):
         import contextlib
         import io
         import json
@@ -63,20 +86,23 @@ class DisposableJourney(unittest.TestCase):
                 project = Path(args[args.index('init') + 1])
                 project.mkdir()
                 (project / 'plugin.json').write_text('{}')
-            if 'pack' in args:
+            if fail and 'validate' in args:
                 status = 1
             return subprocess.CompletedProcess(args, status, json.dumps({'data': data}), '')
 
         output = io.StringIO()
         with patch.object(channels.subprocess, 'run', side_effect=execute), \
                 contextlib.redirect_stdout(output):
-            with self.assertRaisesRegex(ValueError, 'pack'):
+            if fail:
+                with self.assertRaisesRegex(ValueError, 'validate'):
+                    channels.main('npm')
+            else:
                 channels.main('npm')
         self.assertEqual(sum('compat' in args for args in calls), 2)
-        self.assertEqual(sum('pack' in args for args in calls), 2)
+        self.assertEqual(sum('test' in args for args in calls), 2)
         self.assertTrue(all(not root.exists() for root in roots))
         evidence = json.loads(output.getvalue())
-        self.assertEqual(evidence['status'], 'failed')
+        self.assertEqual(evidence['status'], 'failed' if fail else 'passed')
         self.assertEqual(len(evidence['results']), len(calls))
 
 

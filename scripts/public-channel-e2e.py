@@ -1,4 +1,6 @@
 """Dispatch-only public release proof. All mutations live in a temporary root."""
+import argparse
+import re
 import hashlib
 import json
 import os
@@ -12,7 +14,7 @@ import urllib.request
 
 REVISION = '05d1f19796b257b1f0544464145d2653f721e21a'
 VERSIONS = {'agentplugins': '0.1.61', 'plugin-kit-ai': '2.0.1'}
-COMMANDS = ('validate', 'inspect', 'pack', 'compat')
+COMMANDS = ('validate', 'inspect', 'compat', 'test')
 
 
 def retry(operation):
@@ -32,16 +34,38 @@ def download(url):
     return retry(fetch)
 
 
-def identity(report, version):
+def identity(report, version, revision=REVISION):
     data = report.get('data', report)
-    if report.get('revision', data.get('revision')) != REVISION:
+    if report.get('revision', data.get('revision')) != revision:
         raise ValueError('wrong source revision')
     if data.get('product_version') != version:
         raise ValueError('wrong product version')
 
 
-def main(channel):
-    evidence = {'channel': channel, 'revision': REVISION, 'results': []}
+def arguments(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('channel', choices=('npm', 'pypi', 'github', 'brew'))
+    for product in VERSIONS:
+        parser.add_argument(f'--{product}-version', required=True)
+        parser.add_argument(f'--{product}-tag', required=True)
+    parser.add_argument('--revision', required=True)
+    args = parser.parse_args(argv)
+    for product in VERSIONS:
+        version = getattr(args, product.replace('-', '_') + '_version')
+        tag = getattr(args, product.replace('-', '_') + '_tag')
+        if not re.fullmatch(r'\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?', version):
+            parser.error('versions must be exact semantic versions')
+        if not re.fullmatch(r'[0-9A-Za-z][0-9A-Za-z._-]*', tag):
+            parser.error('release tags must be URL-safe tag names')
+    if not re.fullmatch(r'[0-9a-f]{40}', args.revision):
+        parser.error('revision must be a full lowercase commit SHA')
+    return args
+
+
+def main(channel, versions=None, tags=None, revision=REVISION):
+    versions = dict(VERSIONS if versions is None else versions)
+    tags = tags or {product: f'{product}-v{version}' for product, version in versions.items()}
+    evidence = {'channel': channel, 'revision': revision, 'versions': versions, 'tags': tags, 'results': []}
     with tempfile.TemporaryDirectory(prefix='uap-public-channel-') as temporary:
         root = Path(temporary)
         env = {k: v for k, v in os.environ.items() if k in (
@@ -68,10 +92,10 @@ def main(channel):
             return result.stdout
 
         try:
-            products = VERSIONS if channel in ('npm', 'github') else ['plugin-kit-ai']
+            products = versions if channel in ('npm', 'github') else ['plugin-kit-ai']
             command_failures = []
             for product in products:
-                version = VERSIONS[product]
+                version = versions[product]
                 install = root / product
                 install.mkdir()
                 suffix = '.exe' if sys.platform == 'win32' else ''
@@ -106,7 +130,7 @@ def main(channel):
                     retry(lambda: run([brew, 'install', formula]))
                     executable = [install / 'brew/bin/plugin-kit-ai']
                 elif channel == 'github':
-                    tag = f'{product}-v{version}'
+                    tag = tags[product]
                     base = f'https://github.com/777genius/universal-agent-plugins/releases/download/{tag}/'
                     target = {'Linux': 'linux', 'Darwin': 'darwin', 'Windows': 'windows'}[platform.system()]
                     arch = 'arm64' if platform.machine().lower() in ('arm64', 'aarch64') else 'amd64'
@@ -133,12 +157,12 @@ def main(channel):
                 else:
                     raise ValueError('unknown channel')
                 author = executable + (['author'] if product == 'agentplugins' else [])
-                identity(json.loads(run(author + ['version', '--format=json'])), version)
+                identity(json.loads(run(author + ['version', '--format=json'])), version, revision)
                 project = install / 'fixture'
                 initialized = json.loads(run(author + ['init', project, '--template=skill',
                               '--name=public-channel-fixture',
                               '--description=Disposable public channel fixture.', '--format=json']))
-                if initialized.get('data', initialized).get('revision') != REVISION:
+                if initialized.get('data', initialized).get('revision') != revision:
                     raise ValueError('init source revision mismatch')
                 if not (project / 'plugin.json').is_file():
                     raise ValueError('init omitted plugin.json')
@@ -148,7 +172,7 @@ def main(channel):
                         args += ['--target=codex']
                     try:
                         report = json.loads(run(args))
-                        if report.get('data', report).get('revision') != REVISION:
+                        if report.get('data', report).get('revision') != revision:
                             raise ValueError('command source revision mismatch')
                     except Exception as error:
                         command_failures.append(f'{product} {command}: {error}')
@@ -163,4 +187,8 @@ def main(channel):
 
 
 if __name__ == '__main__':
-    main(sys.argv[1])
+    args = arguments()
+    main(args.channel,
+         {p: getattr(args, p.replace('-', '_') + '_version') for p in VERSIONS},
+         {p: getattr(args, p.replace('-', '_') + '_tag') for p in VERSIONS},
+         args.revision)

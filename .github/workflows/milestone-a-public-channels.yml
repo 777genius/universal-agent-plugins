@@ -1,6 +1,27 @@
 name: Milestone A public channels
 on:
   workflow_dispatch:
+    inputs:
+      agentplugins_version:
+        description: Exact universal-agent-plugins version
+        required: true
+        type: string
+      plugin_kit_ai_version:
+        description: Exact plugin-kit-ai version
+        required: true
+        type: string
+      agentplugins_tag:
+        description: Exact agentplugins GitHub release tag
+        required: true
+        type: string
+      plugin_kit_ai_tag:
+        description: Exact plugin-kit-ai GitHub release tag
+        required: true
+        type: string
+      revision:
+        description: Expected full source commit SHA for both products
+        required: true
+        type: string
 permissions:
   contents: read
 jobs:
@@ -24,9 +45,20 @@ jobs:
           node-version: '22.23.2'
       - name: Verify real public packages in disposable roots
         shell: bash
+        env:
+          AGENTPLUGINS_VERSION: ${{ inputs.agentplugins_version }}
+          PLUGIN_KIT_AI_VERSION: ${{ inputs.plugin_kit_ai_version }}
+          AGENTPLUGINS_TAG: ${{ inputs.agentplugins_tag }}
+          PLUGIN_KIT_AI_TAG: ${{ inputs.plugin_kit_ai_tag }}
+          RELEASE_REVISION: ${{ inputs.revision }}
         run: |
           set -euo pipefail
-          python3 scripts/public-channel-e2e.py '${{ matrix.channel }}' > "$RUNNER_TEMP/public-channel-evidence.json"
+          python3 scripts/public-channel-e2e.py '${{ matrix.channel }}' \
+            --agentplugins-version "$AGENTPLUGINS_VERSION" \
+            --plugin-kit-ai-version "$PLUGIN_KIT_AI_VERSION" \
+            --agentplugins-tag "$AGENTPLUGINS_TAG" \
+            --plugin-kit-ai-tag "$PLUGIN_KIT_AI_TAG" \
+            --revision "$RELEASE_REVISION" > "$RUNNER_TEMP/public-channel-evidence.json"
       - name: Retain success or failure evidence
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
