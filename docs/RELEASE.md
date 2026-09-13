@@ -113,8 +113,8 @@ GitHub Release assets stay on the product-prefixed tag. The SDK is published
 through the Go module proxy path via the `sdk/vX.Y.Z` tag, not through separate
 tarballs. Historical `vX.Y.Z` tags remain valid compatibility references and
 must not be moved or deleted.
-Root GitHub Release assets are published through
-`.github/workflows/release-assets.yml`, which runs GoReleaser from the selected
+Root GitHub Release assets are published through `.github/workflows/release-assets.yml`,
+which runs GoReleaser from the selected
 stable tag and uploads the `plugin-kit-ai_*` archives plus `checksums.txt`;
 that workflow remains restricted to the legacy v1 line.
 Downstream `.github/workflows/homebrew-tap.yml`, `.github/workflows/npm-publish.yml`, `.github/workflows/pypi-publish.yml`, `.github/workflows/npm-runtime-publish.yml`, and `.github/workflows/pypi-runtime-publish.yml` follow successful `Release Assets` completion and resolve the exact stable tag from that commit; `.github/workflows/runtime-package-registry-smoke.yml` then verifies the published `plugin-kit-ai-runtime` channels from npm/PyPI by that exact version. Manual `workflow_dispatch` remains the fallback when a maintainer needs to rerun a channel by tag.
