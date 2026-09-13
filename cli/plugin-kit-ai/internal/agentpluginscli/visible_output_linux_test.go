@@ -59,6 +59,9 @@ func readConsentPTY(t *testing.T, master *os.File) string {
 		}
 		fds := []unix.PollFd{{Fd: int32(master.Fd()), Events: unix.POLLIN}}
 		n, err := unix.Poll(fds, 100)
+		if errors.Is(err, unix.EINTR) {
+			continue
+		}
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -67,10 +70,15 @@ func readConsentPTY(t *testing.T, master *os.File) string {
 		}
 		buf := make([]byte, 4096)
 		n, err = master.Read(buf)
+		if n > 0 {
+			visible.Write(buf[:n])
+		}
+		if errors.Is(err, unix.EINTR) {
+			continue
+		}
 		if err != nil {
 			t.Fatal(err)
 		}
-		visible.Write(buf[:n])
 	}
 	return visible.String()
 }
