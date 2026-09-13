@@ -861,7 +861,7 @@ jobs:
             workflow_sha: process.env.SOURCE_SHA, selected,
             preparation: {run_id: number('PREPARATION_RUN'), run_attempt: number('PREPARATION_ATTEMPT'),
               artifact_id: number('PREPARATION_ARTIFACT'), artifact_sha256: process.env.PREPARATION_DIGEST},
-            milestone_a: {run_id: number('MILESTONE_A_RUN'), run_attempt: number('MILESTONE_A_ATTEMPT', 1000)}}});
+            milestone_a: {run_id: number('MILESTONE_A_RUN'), run_attempt: number('MILESTONE_A_ATTEMPT', 1000)}});
           NODE
 
   milestone-a-sign-and-promote:

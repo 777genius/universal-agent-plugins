@@ -499,8 +499,15 @@ function mapVerifiedOutput(output, expected) {
 function mapWorkflowOutput(output, expected, workflow) {
   if (typeof output !== "string" || Buffer.byteLength(output) > 4 * LIMIT) fail("bounded verifier output required");
   const results = JSON.parse(output);
-  if (!Array.isArray(results) || results.length !== 1) fail("one verified attestation required");
-  const statement = results[0]?.verificationResult?.statement;
+  if (!Array.isArray(results) || results.length < 1 || results.length > 64) fail("bounded verified attestations required");
+  const invocationId = `${URL}/actions/runs/${expected.run_id}/attempts/${expected.run_attempt}`;
+  // A reconcile run can see signatures retained from earlier attempts over the
+  // same immutable subject set. Select the one cryptographically verified
+  // statement from this exact invocation, then apply the complete binding below.
+  const current = results.filter(result =>
+    result?.verificationResult?.statement?.predicate?.runDetails?.metadata?.invocationId === invocationId);
+  if (current.length !== 1) fail("one current-invocation verified attestation required");
+  const statement = current[0].verificationResult.statement;
   if (statement?._type !== "https://in-toto.io/Statement/v1" || statement.predicateType !== SLSA) fail("verified in-toto/SLSA type mismatch");
   // actions/attest signs the complete subject-path set in one statement. Both
   // products legitimately have a release-manifest.json/checksums.txt basename.
@@ -522,7 +529,7 @@ function mapWorkflowOutput(output, expected, workflow) {
   exact(build.externalParameters?.workflow, { ref: expected.ref, repository: URL, path: workflow }, "verified workflow");
   exact(build.resolvedDependencies, [{ uri: `git+${URL}@${expected.ref}`, digest: { gitCommit: expected.source } }], "verified source");
   const run = statement.predicate?.runDetails;
-  exact(run?.metadata?.invocationId, `${URL}/actions/runs/${expected.run_id}/attempts/${expected.run_attempt}`, "verified invocation");
+  exact(run?.metadata?.invocationId, invocationId, "verified invocation");
   exact(run?.builder?.id, "https://github.com/actions/runner/github-hosted", "verified runner");
   return statement;
 }

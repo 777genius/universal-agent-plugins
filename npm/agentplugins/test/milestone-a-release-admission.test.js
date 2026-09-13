@@ -5,9 +5,11 @@ const cp = require("node:child_process");
 const test = require("node:test");
 const os = require("node:os");
 const fs = require("node:fs");
+const path = require("node:path");
 const a = require("../scripts/milestone-a-release-admission");
 const candidate = require("../scripts/dual-authoring-candidate");
 const promotion = require("../scripts/authoring-promotion");
+const workflow = fs.readFileSync(path.resolve(__dirname, "../../../.github/workflows/agentplugins-release.yml"), "utf8");
 
 const source = "a".repeat(40);
 const selected = { tag: a.TAG, ref: `refs/tags/${a.TAG}`, source,
@@ -178,4 +180,15 @@ test("legacy thirteen-lane admission remains present and separate", () => {
   const promotion = require("../scripts/authoring-promotion");
   assert.equal(promotion.LANES.length, 13);
   assert.throws(() => promotion.requireNativeContracts([]), /missing lanes/);
+});
+
+test("Milestone A admission and promotion embedded Node programs parse", () => {
+  for (const name of ["Independently admit preparation and authenticated Milestone A evidence",
+    "Reacquire and re-admit the exact frozen pair and Milestone A run"]) {
+    const start = workflow.indexOf(`      - name: ${name}\n`);
+    assert.notEqual(start, -1, `missing workflow step ${name}`);
+    const block = workflow.slice(start).match(/          node <<'NODE'\n([\s\S]*?)\n          NODE/);
+    assert.ok(block, `missing embedded Node program for ${name}`);
+    assert.doesNotThrow(() => new Function(block[1].split("\n").map(line => line.slice(10)).join("\n")), name);
+  }
 });
