@@ -62,7 +62,10 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: milestone-a-exact-candidate-${{ github.run_id }}-${{ github.run_attempt }}
-          path: ${{ env.MILESTONE_A_BUNDLE }}
+          path: |
+            ${{ env.MILESTONE_A_BUNDLE }}/candidate
+            ${{ env.MILESTONE_A_BUNDLE }}/packages
+            ${{ env.MILESTONE_A_BUNDLE }}/evidence
           include-hidden-files: true
           if-no-files-found: error
           retention-days: 14
