@@ -95,6 +95,7 @@ func (l *Lease) Capture(ctx context.Context) (_ Input, err error) {
 		if e != nil {
 			return Input{}, fail("source_changed")
 		}
+		defer p.file.Close() // panic ownership; normal iterations close immediately
 		ok := same(l.observations[rel], p.info)
 		if ok && p.info.IsDir() {
 			if e := l.verifyDirectory(ctx, rel, p); e != nil {
@@ -126,6 +127,7 @@ func (l *Lease) Capture(ctx context.Context) (_ Input, err error) {
 		if e != nil {
 			return Input{}, fail("source_changed")
 		}
+		defer p.file.Close() // panic ownership; normal iterations close immediately
 		target, e := p.link(l.limits.FileBytes)
 		ok := same(l.linkInfos[o.Path], p.info)
 		ce := p.file.Close()
@@ -354,6 +356,7 @@ func (l *Lease) walk(ctx context.Context, dir string, depth int) error {
 			l.omit(Observation{Path: rel, State: stateOf(e)}, "inventory_"+string(stateOf(e)))
 			continue
 		}
+		defer p.file.Close() // bounded entry count; close on panic before loop cleanup
 		if rel == ".plugin-kit-ai.lock" && !p.info.IsDir() {
 			if ce := p.file.Close(); ce != nil {
 				return fail("close_failed")
@@ -384,6 +387,7 @@ func (l *Lease) walk(ctx context.Context, dir string, depth int) error {
 			if e != nil {
 				o.State = stateOf(e)
 			} else {
+				defer q.file.Close() // own the target if a later hook panics
 				if !q.info.IsDir() && !q.info.Mode().IsRegular() {
 					o.State = WrongKind
 				}

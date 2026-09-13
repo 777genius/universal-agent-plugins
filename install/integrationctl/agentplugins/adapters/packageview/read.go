@@ -270,6 +270,7 @@ func (l *Lease) verifyCaptured(ctx context.Context, rel string, p *pinned) error
 	if e != nil {
 		return fail("verification_failed")
 	}
+	defer f.Close() // panic ownership; the normal path closes and checks below
 	e = verifyRead(ctx, f, want)
 	after, se := f.Stat()
 	ce := f.Close()
