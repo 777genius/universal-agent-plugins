@@ -49,7 +49,7 @@ on:
           - promote
           - reconcile
       promotion_record:
-        description: Fixed canonical promotion record bindings; unsupported native contracts reject
+        description: Fixed canonical promotion record; Milestone A uses milestone-a-promotion/v1
         required: false
       milestone_a_run:
         description: Exact successful Authoring Milestone A E2E run ID
@@ -845,9 +845,8 @@ jobs:
         run: |
           node <<'NODE'
           const fs = require('node:fs'), path = require('node:path');
-          const p = require('./npm/agentplugins/scripts/authoring-promotion');
           const scratch = fs.mkdtempSync(path.join(process.env.RUNNER_TEMP, 'milestone-a-admission-'));
-          const record = path.join(scratch, 'authoring-promotion.json');
+          const record = path.join(scratch, 'milestone-a-promotion.json');
           fs.writeFileSync(record, Buffer.from(process.env.PROMOTION_RECORD), {flag: 'wx', mode: 0o400});
           const selected = {tag: 'agentplugins-v0.1.60', ref: 'refs/tags/agentplugins-v0.1.60', source: process.env.SOURCE_SHA,
             versions: {agentplugins: '0.1.60', 'plugin-kit-ai': '2.0.0'}};
@@ -902,7 +901,7 @@ jobs:
           node <<'NODE'
           const fs = require('node:fs'), path = require('node:path');
           const scratch = fs.mkdtempSync(path.join(process.env.RUNNER_TEMP, 'milestone-a-promotion-'));
-          const record = path.join(scratch, 'authoring-promotion.json');
+          const record = path.join(scratch, 'milestone-a-promotion.json');
           fs.writeFileSync(record, Buffer.from(process.env.PROMOTION_RECORD), {flag: 'wx', mode: 0o400});
           const n = (name, maximum = Number.MAX_SAFE_INTEGER) => {
             const value = process.env[name];

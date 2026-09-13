@@ -6,6 +6,8 @@ const test = require("node:test");
 const os = require("node:os");
 const fs = require("node:fs");
 const a = require("../scripts/milestone-a-release-admission");
+const candidate = require("../scripts/dual-authoring-candidate");
+const promotion = require("../scripts/authoring-promotion");
 
 const source = "a".repeat(40);
 const selected = { tag: a.TAG, ref: `refs/tags/${a.TAG}`, source,
@@ -16,6 +18,50 @@ const run = { id: 42, run_attempt: 2, repository: { full_name: a.REPOSITORY },
   event: "workflow_dispatch", head_branch: a.TAG, status: "completed", conclusion: "success" };
 const jobs = () => a.JOBS.map((name, index) => ({ id: 100 + index, name, run_id: 42, run_attempt: 2,
   head_sha: source, head_branch: a.TAG, status: "completed", conclusion: "success" }));
+
+function promotionRecord() {
+  let binary = 1;
+  const products = Object.fromEntries(candidate.PRODUCTS.map(product => [product, {
+    tag: product === "agentplugins" ? a.TAG : a.KIT_TAG,
+    manifest_sha256: product === "agentplugins" ? "d".repeat(64) : "e".repeat(64),
+    checksums_sha256: product === "agentplugins" ? "f".repeat(64) : "1".repeat(64),
+    assets: Object.fromEntries(candidate.TARGETS.map(target => {
+      const digest = (++binary).toString(16).repeat(64);
+      const size = 1000 + binary;
+      const binaryPin = { file: candidate.executableName(product, target), sha256: digest, size };
+      return [target, { file: candidate.assetName(product, selected.versions[product], target),
+        sha256: digest,
+        size: product === "agentplugins" ? size : size + 20, binary: binaryPin }];
+    }))
+  }]));
+  return { schema: a.RECORD_SCHEMA,
+    identity: { repository: a.REPOSITORY, commit: source, engine_revision: source, versions: selected.versions },
+    authoring_mode: "release-cli-contract-v1", asset_scope: "six-platform-pair",
+    candidate_sha256: "a".repeat(64), pair_marker_sha256: "b".repeat(64), products,
+    preparation: { run_id: 41, run_attempt: 1, artifact_id: 91,
+      artifact_sha256: "c".repeat(64), receipt_sha256: "2".repeat(64) },
+    milestone_a: { workflow: a.WORKFLOW, run_id: pin.run_id, run_attempt: pin.run_attempt },
+    signer: { workflow: a.RELEASE_WORKFLOW, source } };
+}
+
+test("uses a canonical Milestone A record without legacy qualification lanes", () => {
+  const record = promotionRecord();
+  const body = a.encodeRecord(record);
+  assert.deepEqual(a.decodeRecord(body), record);
+  assert.deepEqual(a.validateSelection(body, selected), record);
+  assert.equal(promotion.promotionRecord(record).name, a.RECORD_FILE);
+  assert.equal(promotion.releasePins(record, "agentplugins").at(-1).name, a.RECORD_FILE);
+  assert.equal(Object.hasOwn(record, "qualification"), false);
+});
+
+test("rejects legacy or invented qualification content on the Milestone A route", () => {
+  const record = promotionRecord();
+  record.qualification = { lanes: [] };
+  assert.throws(() => a.encodeRecord(record), /Milestone A promotion record/);
+  const legacy = { ...record, schema: promotion.SCHEMA };
+  delete legacy.qualification;
+  assert.throws(() => a.encodeRecord(legacy));
+});
 
 test("admits exactly the accelerated Milestone A run and three-platform job closure", () => {
   const result = a.evidenceContract(structuredClone(run), jobs(), structuredClone(selected), pin);
