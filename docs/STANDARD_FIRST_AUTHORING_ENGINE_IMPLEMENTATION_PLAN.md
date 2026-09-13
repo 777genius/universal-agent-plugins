@@ -219,9 +219,12 @@ and the corrected agentplugins Homebrew sync completed in run
 
 npm remains the only incomplete public channel at this checkpoint:
 `universal-agent-plugins@0.1.62` and `plugin-kit-ai@2.0.2` are not yet public.
-The paired publisher contract is implemented, but both npm packages must first
-authorize `.github/workflows/agentplugins-npm-publish.yml` through their
-respective GitHub environments `npm-agentplugins` and `npm-plugin-kit-ai`.
+The paired publisher contract is implemented. Existing provenance proves that
+`universal-agent-plugins` already authorizes
+`.github/workflows/agentplugins-npm-publish.yml` through `npm-agentplugins`.
+The `plugin-kit-ai` package must replace its historical publisher binding to the
+old `.github/workflows/npm-publish.yml` with the paired workflow and environment
+`npm-plugin-kit-ai`.
 After protected OIDC publication, verify exact npm metadata, provenance, clean
 installs, and shared engine revision, then run the final all-channel matrix from
 `main`. Only that successful readback authorizes merging the public docs cutover.
