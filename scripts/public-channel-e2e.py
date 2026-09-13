@@ -96,10 +96,11 @@ def main(channel):
                     run(['git', 'clone', '--depth=1', 'https://github.com/Homebrew/brew', install / 'brew'])
                     brew = install / 'brew/bin/brew'
                     formula = '777genius/plugin-kit-ai/plugin-kit-ai'
-                    retry(lambda: run([brew, 'install', formula]))
+                    retry(lambda: run([brew, 'tap', '777genius/plugin-kit-ai']))
                     metadata = json.loads(run([brew, 'info', '--json=v2', formula]))
                     if metadata['formulae'][0]['versions']['stable'] != version:
                         raise ValueError('Homebrew formula is not exact requested version')
+                    retry(lambda: run([brew, 'install', formula]))
                     executable = [install / 'brew/bin/plugin-kit-ai']
                 elif channel == 'github':
                     tag = f'{product}-v{version}'
@@ -131,8 +132,11 @@ def main(channel):
                 author = executable + (['author'] if product == 'agentplugins' else [])
                 identity(json.loads(run(author + ['version', '--format=json'])), version)
                 project = install / 'fixture'
-                run(author + ['init', project, '--template=skill', '--name=public-channel-fixture',
-                              '--description=Disposable public channel fixture.', '--format=json'])
+                initialized = json.loads(run(author + ['init', project, '--template=skill',
+                              '--name=public-channel-fixture',
+                              '--description=Disposable public channel fixture.', '--format=json']))
+                if initialized.get('data', initialized).get('revision') != REVISION:
+                    raise ValueError('init source revision mismatch')
                 if not (project / 'plugin.json').is_file():
                     raise ValueError('init omitted plugin.json')
                 for command in COMMANDS:

@@ -36,6 +36,47 @@ class Contract(unittest.TestCase):
         self.assertIn('if: always()', workflow)
         self.assertEqual(channels.COMMANDS, ('validate', 'inspect', 'pack', 'compat'))
 
+class DisposableJourney(unittest.TestCase):
+    def test_both_entrypoints_continue_after_pack_failure_and_cleanup(self):
+        import contextlib
+        import io
+        import json
+        import subprocess
+        calls = []
+        roots = set()
+
+        def execute(args, **kwargs):
+            calls.append(args)
+            root = Path(kwargs['cwd'])
+            roots.add(root)
+            env = kwargs['env']
+            for key in ('HOME', 'USERPROFILE', 'XDG_CACHE_HOME', 'npm_config_cache'):
+                self.assertTrue(Path(env[key]).is_relative_to(root))
+            self.assertNotIn('GITHUB_TOKEN', env)
+            status = 0
+            data = {'revision': channels.REVISION}
+            if 'version' in args:
+                data['product_version'] = '0.1.61' if 'author' in args else '2.0.1'
+            if 'init' in args:
+                project = Path(args[args.index('init') + 1])
+                project.mkdir()
+                (project / 'plugin.json').write_text('{}')
+            if 'pack' in args:
+                status = 1
+            return subprocess.CompletedProcess(args, status, json.dumps({'data': data}), '')
+
+        output = io.StringIO()
+        with patch.object(channels.subprocess, 'run', side_effect=execute), \
+                contextlib.redirect_stdout(output):
+            with self.assertRaisesRegex(ValueError, 'pack'):
+                channels.main('npm')
+        self.assertEqual(sum('compat' in args for args in calls), 2)
+        self.assertEqual(sum('pack' in args for args in calls), 2)
+        self.assertTrue(all(not root.exists() for root in roots))
+        evidence = json.loads(output.getvalue())
+        self.assertEqual(evidence['status'], 'failed')
+        self.assertEqual(len(evidence['results']), len(calls))
+
 
 if __name__ == '__main__':
     unittest.main()
