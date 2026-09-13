@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/packagedigest"
@@ -60,6 +61,37 @@ func TestLimitsAndSafeErrors(t *testing.T) {
 	var l Lease
 	if e := l.Close(); e != nil {
 		t.Fatal(e)
+	}
+}
+
+func TestClosePreservesReplacementPrivateDirectory(t *testing.T) {
+	parent := t.TempDir()
+	private := filepath.Join(parent, "private")
+	if e := os.Mkdir(private, 0700); e != nil {
+		t.Fatal(e)
+	}
+	info, e := os.Lstat(private)
+	if e != nil {
+		t.Fatal(e)
+	}
+	l := &Lease{private: private, privateInfo: info}
+	l.hooks = &captureHooks{cleanup: func() error {
+		if e := os.Rename(private, private+"-owned-moved"); e != nil {
+			return e
+		}
+		if e := os.Mkdir(private, 0700); e != nil {
+			return e
+		}
+		return os.WriteFile(filepath.Join(private, "foreign"), []byte("keep"), 0600)
+	}}
+	e = l.Close()
+	var safe *Error
+	if !errors.As(e, &safe) || !safe.CleanupFailed {
+		t.Fatal("cleanup replacement not detected", e)
+	}
+	got, e := os.ReadFile(filepath.Join(private, "foreign"))
+	if e != nil || string(got) != "keep" {
+		t.Fatal("foreign replacement modified", e)
 	}
 }
 

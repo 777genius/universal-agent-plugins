@@ -349,6 +349,12 @@ func (l *Lease) close() error {
 				e = nil
 			}
 			if e == nil {
+				current, statErr := os.Lstat(l.private)
+				if statErr != nil || !os.SameFile(current, l.privateInfo) || !current.IsDir() {
+					e = fail("cleanup_failed")
+				}
+			}
+			if e == nil {
 				e = os.Chmod(l.private, 0700)
 			}
 			if e == nil {
