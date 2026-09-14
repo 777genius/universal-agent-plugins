@@ -15,7 +15,6 @@ func TestStarterTemplateSyncContractFilesStayAligned(t *testing.T) {
 	runtimePackageMapping := readRepoFile(t, root, "examples", "starters", "runtime-package-template-repos.txt")
 	script := readRepoFile(t, root, "scripts", "update-starter-template.sh")
 	workflow := readRepoFile(t, root, ".github", "workflows", "starter-templates.yml")
-	rootReadme := readRepoFile(t, root, "README.md")
 	cliReadme := readRepoFile(t, root, "cli", "plugin-kit-ai", "README.md")
 	startersReadme := readRepoFile(t, root, "examples", "starters", "README.md")
 
@@ -49,14 +48,8 @@ func TestStarterTemplateSyncContractFilesStayAligned(t *testing.T) {
 	mustContain(t, workflow, "run: ./scripts/update-starter-template.sh")
 	mustContain(t, workflow, "default: \"all\"")
 	mustContain(t, workflow, "- all-runtime-package")
-	// Preserved v1 starters remain discoverable without being advertised as
-	// root plugin.json templates for the unreleased standard authoring MVP.
-	_, historicalReadme, found := cutHistoricalReadme(rootReadme)
-	if !found {
-		t.Fatal("README missing historical authoring boundary")
-	}
-	mustContain(t, strings.Join(strings.Fields(historicalReadme), " "), "The repository preserves Codex and Claude starters across Go, Python, and Node/TypeScript.")
-	mustContain(t, historicalReadme, "[starters](examples/starters/README.md)")
+	// Preserved v1 starters remain in their dedicated historical documentation
+	// without being advertised from the current root README.
 	mustContain(t, startersReadme, "Historical plugin-kit-ai v1 managed examples; baseline 1.2.4.")
 	mustContain(t, startersReadme, "These are not root `plugin.json` starters for the standard MVP.")
 	for starter, repo := range expected {

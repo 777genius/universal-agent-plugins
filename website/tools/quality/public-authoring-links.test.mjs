@@ -83,7 +83,7 @@ for (const locale of ['en', 'ru', 'es', 'fr', 'zh']) {
   });
 }
 
-test('README promotes the canonical quickstart and preserves entry fragments', () => {
+test('README promotes the canonical quickstart and current build section', () => {
   const source = read('README.md');
   const canonical = 'https://777genius.github.io/universal-agent-plugins/docs/en/guide/quickstart.html';
   const links = [...source.matchAll(/\[([^\]]+)\]\(([^)]+)\)/g)];
@@ -91,5 +91,6 @@ test('README promotes the canonical quickstart and preserves entry fragments', (
     assert.deepEqual(links.filter(m => m[1] === label).map(m => m[2]), [canonical]);
   }
   assert.match(source, /^### Quick start$/m);
-  assert.match(source, /<a id="authoring-and-development"><\/a>/);
+  assert.match(source, /^## Build plugins$/m);
+  assert.match(source, /\[Build plugins\]\(#build-plugins\)/);
 });
