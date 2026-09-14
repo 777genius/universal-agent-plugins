@@ -30,7 +30,8 @@ class Contract(unittest.TestCase):
                                     'product_version': '2.0.2'}}, '2.0.2', args.revision)
         import contextlib
         import io
-        for position, bad in ((2, 'latest'), (6, '../tag'), (10, 'short')):
+        for position, bad in ((2, 'latest'), (6, '../tag'), (6, 'v0.1.62'),
+                              (8, 'agentplugins-v0.1.62'), (10, 'short')):
             invalid = list(argv)
             invalid[position] = bad
             with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
@@ -53,6 +54,19 @@ class Contract(unittest.TestCase):
         self.assertIn('channel: [npm, pypi, github, brew]', workflow)
         self.assertIn('if: always()', workflow)
         self.assertEqual(channels.COMMANDS, ('validate', 'inspect', 'compat', 'test'))
+
+    def test_temporary_root_is_canonicalized(self):
+        source = Path(__file__).with_name('public-channel-e2e.py').read_text()
+        self.assertIn('root = Path(temporary.name).resolve()', source)
+
+    def test_homebrew_trust_is_exact_and_precedes_formula_evaluation(self):
+        source = Path(__file__).with_name('public-channel-e2e.py').read_text()
+        trust = "run([brew, 'trust', '--tap', '777genius/plugin-kit-ai'])"
+        tap = "run([brew, 'tap', '777genius/plugin-kit-ai'])"
+        info = "run([brew, 'info', '--json=v2', formula])"
+        self.assertEqual(source.count(trust), 1)
+        self.assertLess(source.index(trust), source.index(tap))
+        self.assertLess(source.index(tap), source.index(info))
 
 class DisposableJourney(unittest.TestCase):
     def test_success_and_failure_cleanup(self):

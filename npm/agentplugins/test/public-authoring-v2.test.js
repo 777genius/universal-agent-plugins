@@ -278,13 +278,17 @@ if (require.main === module) {
     for (const p of c.PRODUCTS) for (const target of c.TARGETS) {
       const m = memory(t, f.pair[p]), r = runtime.loadRelease(p, m.root, target);
       const pathname = runtime.cachePath("/cache", p, target, r); paths.add(pathname);
-      assert.ok(pathname.startsWith("/cache/public-authoring-v2/"));
+      assert.ok(pathname.startsWith("/cache/p2/"));
       assert.notEqual(pathname, runtime.cachePath("/cache", p, target, { ...r, descriptor: { ...r.descriptor, schema: runtime.SCHEMA } }));
       for (const changed of [{ ...r, version: "3.0.0" }, { ...r, descriptor: { ...r.descriptor, identity: { ...r.descriptor.identity, commit: "b".repeat(40) } } },
         { ...r, asset: { ...r.asset, binary: { ...r.asset.binary, sha256: hash(99) } } }]) assert.notEqual(pathname, runtime.cachePath("/cache", p, target, changed));
       t.mock.restoreAll();
     }
     assert.equal(paths.size, 12);
+    const windows = runtime.cachePath("", "plugin-kit-ai", "windows-amd64",
+      runtime.loadRelease("plugin-kit-ai", memory(t, f.pair["plugin-kit-ai"]).root, "windows-amd64"), path.win32);
+    assert.ok(windows.startsWith("p2\\"));
+    assert.ok(windows.length <= 90, `Windows cache suffix is too long: ${windows.length}`);
     let expected;
     for (const supplied of [false, true]) for (const warm of [false, true]) {
       const m = memory(t, f.pair.agentplugins), e = engine(t, f, "agentplugins", warm);

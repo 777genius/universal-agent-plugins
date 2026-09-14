@@ -13,11 +13,11 @@ const workflowPath = path.resolve(__dirname, "../../../.github/workflows/agentpl
 
 const source = "a".repeat(40);
 test("current release tags are the exact prefixed patch pair", () => {
-  assert.equal(a.TAG, "agentplugins-v0.1.64");
-  assert.equal(a.KIT_TAG, "plugin-kit-ai-v2.0.4");
+  assert.equal(a.TAG, "agentplugins-v0.1.65");
+  assert.equal(a.KIT_TAG, "plugin-kit-ai-v2.0.5");
 });
 const selected = { tag: a.TAG, ref: `refs/tags/${a.TAG}`, source,
-  versions: { agentplugins: "0.1.64", "plugin-kit-ai": "2.0.4" } };
+  versions: { agentplugins: "0.1.65", "plugin-kit-ai": "2.0.5" } };
 const pin = { run_id: 42, run_attempt: 2 };
 const run = { id: 42, run_attempt: 2, repository: { full_name: a.REPOSITORY },
   head_repository: { full_name: a.REPOSITORY }, head_sha: source, path: a.WORKFLOW,
@@ -86,10 +86,10 @@ const runReceipts = () => a.PLATFORMS.map(([platform, arch]) => ({ schema: "mile
   cleanup: "complete", clean_root_separation: true,
   provenances: { agentplugins: { revision: source }, "plugin-kit-ai": { revision: source } } }));
 
-test("binds behavioral receipts to the source and synthetic 0.1.91 test package without claiming release 0.1.64", () => {
+test("binds behavioral receipts to the source and synthetic 0.1.91 test package without claiming release 0.1.65", () => {
   const result = a.receiptContract(prepareReceipt(), runReceipts(), source);
   assert.deepEqual(result.test_versions, { agentplugins: "0.1.91", "plugin-kit-ai": "2.0.0" });
-  assert.deepEqual(result.release_versions, { agentplugins: "0.1.64", "plugin-kit-ai": "2.0.4" });
+  assert.deepEqual(result.release_versions, { agentplugins: "0.1.65", "plugin-kit-ai": "2.0.5" });
   assert.equal(result.engine_revision, source);
 });
 
@@ -216,7 +216,7 @@ test("requires the authentic ordered Linux command receipt", () => {
 });
 
 for (const [name, mutate] of [
-  ["synthetic package presented as 0.1.64", value => { value.prepare.identity.versions.agentplugins = "0.1.64"; }],
+  ["synthetic package presented as 0.1.65", value => { value.prepare.identity.versions.agentplugins = "0.1.65"; }],
   ["engine revision differs", value => { value.prepare.identity.engine_revision = "b".repeat(40); }],
   ["entrypoint omitted", value => { value.runs[1].entrypoints.pop(); }],
   ["Windows runs Linux-only commands", value => { value.runs[1].commands.push("inspect", "test"); }],

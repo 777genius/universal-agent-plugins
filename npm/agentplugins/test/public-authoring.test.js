@@ -109,7 +109,8 @@ if (require.main === module) {
       const f = fixture(p); f.qualify(); const seen = [];
       const cold = await publicAPI.ensureBinary(p, options(f, { request: transport(f, seen) }));
       assert.equal(cold.cacheHit, false); assert.equal(seen.length, 1);
-      assert.ok(cold.binaryPath.includes(`/public-authoring-v1/${publicAPI.MODE}/${f.identity.commit}/`));
+      assert.ok(cold.binaryPath.includes(`${path.sep}p1${path.sep}`));
+      assert.equal(path.relative(f.cacheRoot, cold.binaryPath).split(path.sep).length, 3);
       const warm = await publicAPI.ensureBinary(p, options(f, { request: () => assert.fail("warm network") }));
       assert.equal(warm.cacheHit, true); assert.equal(warm.binaryPath, cold.binaryPath);
       assert.equal(fs.statSync(cold.binaryPath).mode & 0o777, 0o755);
@@ -118,7 +119,7 @@ if (require.main === module) {
       assert.equal(c.digest(fs.readFileSync(cold.binaryPath)), f.manifest.assets[target].binary.sha256);
       f.descriptor.qualification = null; f.save();
       await assert.rejects(publicAPI.ensureBinary(p, options(f)), /not qualified/);
-      assert.deepEqual(fs.readdirSync(path.join(f.cacheRoot, "public-authoring-v1")).sort(), [".locks", publicAPI.MODE].sort());
+      assert.deepEqual(fs.readdirSync(path.join(f.cacheRoot, "p1")).sort(), [".locks", path.basename(path.dirname(cold.binaryPath))].sort());
     });
     const mutations = [
       ["product", f => { f.descriptor.product = "peer"; }],
@@ -185,7 +186,7 @@ if (require.main === module) {
       const alias = path.join(f.root, "alias"); fs.symlinkSync(f.cacheRoot, alias);
       await assert.rejects(publicAPI.ensureBinary(p, options(f, { cacheRoot: alias })), /safe ancestors/);
       const cold = await publicAPI.ensureBinary(p, options(f));
-      const lockRoot = path.join(f.cacheRoot, "public-authoring-v1", ".locks");
+      const lockRoot = path.join(f.cacheRoot, "p1", ".locks");
       const unlock = await v.acquireLock(cold.binaryPath, { lockRoot });
       try { await assert.rejects(publicAPI.ensureBinary(p, options(f, { lockOptions: { timeoutMs: 2, pollMs: 1 } })), /timed out/); }
       finally { await unlock(); }
@@ -212,7 +213,7 @@ if (require.main === module) {
           res.end(kind === "digest" ? Buffer.alloc(body.length) : kind === "overflow" ? Buffer.concat([body, body]) : body.subarray(1));
         });
         await assert.rejects(publicAPI.ensureBinary(p, options(f, { request })));
-        const namespace = path.join(f.cacheRoot, "public-authoring-v1");
+        const namespace = path.join(f.cacheRoot, "p1");
         assert.equal(fs.readdirSync(namespace).some(n => n.startsWith(".download-")), false);
         assert.deepEqual(fs.readdirSync(path.join(namespace, ".locks")), []);
       }
