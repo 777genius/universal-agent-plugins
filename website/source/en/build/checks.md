@@ -38,7 +38,7 @@ It does not launch scripts, perform a handshake, or execute a tool fixture.
 PR #278 contains an unreleased Phase 7 candidate for explicit MCP runtime tests
 and continuous dev. Its presence in source or candidate CLI reference is not a
 released-command claim; this current journey remains the shipped static
-Milestone A contract until a later executable release is qualified.
+authoring contract until a later executable release is qualified.
 
 ## Read the evidence layers
 
