@@ -5,198 +5,143 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"gopkg.in/yaml.v3"
 )
 
-func TestReleaseSurface_MakefileDocsAndWorkflowsStayAligned(t *testing.T) {
+func TestReleaseSurface_CurrentGuidanceAndExecutableWorkflows(t *testing.T) {
 	root := RepoRoot(t)
+	workflowRoot := filepath.Join(root, ".github", "workflows")
+	retired := []string{
+		"release-assets.yml",
+		"release-preflight.yml",
+		"homebrew-tap.yml",
+		"npm-publish.yml",
+		"pypi-publish.yml",
+	}
+	for _, name := range retired {
+		if _, err := os.Stat(filepath.Join(workflowRoot, name)); !os.IsNotExist(err) {
+			t.Fatalf("retired plugin-kit-ai publisher %s remains executable or cannot be checked: %v", name, err)
+		}
+	}
 
-	makefile := readRepoFile(t, root, "Makefile")
+	entries, err := os.ReadDir(workflowRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range entries {
+		if entry.IsDir() || (!strings.HasSuffix(entry.Name(), ".yml") && !strings.HasSuffix(entry.Name(), ".yaml")) {
+			continue
+		}
+		body := readRepoFile(t, root, ".github", "workflows", entry.Name())
+		for _, retiredPublisher := range []string{
+			"name: Release Assets\n",
+			"name: Release Preflight\n",
+			"name: Homebrew Tap\n",
+			"name: NPM Publish\n",
+			"name: PyPI Publish\n",
+			"goreleaser/goreleaser-action@",
+			"./scripts/update-homebrew-tap.sh",
+		} {
+			if strings.Contains(body, retiredPublisher) {
+				t.Fatalf("executable workflow %s restores retired CLI publisher marker %q", entry.Name(), retiredPublisher)
+			}
+		}
+	}
+
+	for _, name := range []string{"agentplugins-release.yml", "agentplugins-npm-publish.yml"} {
+		if info, err := os.Stat(filepath.Join(workflowRoot, name)); err != nil || info.Size() < 1000 {
+			t.Fatalf("current agentplugins workflow %s is missing or not substantive: %v", name, err)
+		}
+	}
+
+	for _, name := range []string{"npm-runtime-publish.yml", "pypi-runtime-publish.yml"} {
+		body := readRepoFile(t, root, ".github", "workflows", name)
+		assertDispatchOnlyWorkflow(t, name, body)
+		for _, trigger := range []string{"push", "schedule", "repository_dispatch", "workflow_run"} {
+			mutated := strings.Replace(body, "  workflow_dispatch:", "  "+trigger+":\n  workflow_dispatch:", 1)
+			if ok, err := isDispatchOnlyWorkflow(mutated); err != nil || ok {
+				t.Fatalf("%s must reject additional %s trigger: dispatchOnly=%v err=%v", name, trigger, ok, err)
+			}
+		}
+		mustNotContain(t, body, "workflows: [\"Release Assets\"]")
+		mustContain(t, body, "plugin-kit-ai-runtime")
+		mustContain(t, body, "ref: ${{ github.workflow_sha }}")
+		mustContain(t, body, "ref: ${{ needs.preflight.outputs.commit }}")
+		mustContain(t, body, `git rev-parse --verify "refs/tags/${TAG}^{commit}"`)
+		mustContain(t, body, `git merge-base --is-ancestor "${tag_commit}" refs/remotes/origin/main`)
+		mustContain(t, body, `git diff --quiet "${WORKFLOW_SHA}" "${tag_commit}" -- "${WORKFLOW_PATH}"`)
+	}
+
 	releaseDoc := readRepoFile(t, root, "docs", "RELEASE.md")
 	checklist := readRepoFile(t, root, "docs", "RELEASE_CHECKLIST.md")
-	releaseNotes := readRepoFile(t, root, "docs", "RELEASE_NOTES_TEMPLATE.md")
-	statusDoc := readRepoFile(t, root, "docs", "STATUS.md")
-	rootReadme := readRepoFile(t, root, "README.md")
-	licenseBody := readRepoFile(t, root, "LICENSE")
-	securityBody := readRepoFile(t, root, "SECURITY.md")
-	ciWorkflow := readRepoFile(t, root, ".github", "workflows", "ci.yml")
-	polyglotWorkflow := readRepoFile(t, root, ".github", "workflows", "polyglot-smoke.yml")
-	extendedWorkflow := readRepoFile(t, root, ".github", "workflows", "extended.yml")
-	liveWorkflow := readRepoFile(t, root, ".github", "workflows", "live.yml")
-	runtimePackageRegistrySmokeWorkflow := readRepoFile(t, root, ".github", "workflows", "runtime-package-registry-smoke.yml")
-	releasePreflightWorkflow := readRepoFile(t, root, ".github", "workflows", "release-preflight.yml")
-	releaseAssetsWorkflow := readRepoFile(t, root, ".github", "workflows", "release-assets.yml")
-	npmPublishWorkflow := readRepoFile(t, root, ".github", "workflows", "npm-publish.yml")
-	pypiPublishWorkflow := readRepoFile(t, root, ".github", "workflows", "pypi-publish.yml")
-	npmRuntimePublishWorkflow := readRepoFile(t, root, ".github", "workflows", "npm-runtime-publish.yml")
-	pypiRuntimePublishWorkflow := readRepoFile(t, root, ".github", "workflows", "pypi-runtime-publish.yml")
-	versionContract := readRepoFile(t, root, "scripts", "version-contract.env")
-	versionSyncScript := readRepoFile(t, root, "scripts", "check-version-sync.sh")
+	runbook := readRepoFile(t, root, "docs", "agentplugins-release.md")
+	for _, body := range []string{releaseDoc, checklist, runbook} {
+		mustNotContain(t, body, "pipx install plugin-kit-ai")
+		mustNotContain(t, body, "npm i -g plugin-kit-ai")
+	}
+	mustContain(t, releaseDoc, "`agentplugins` is the sole public CLI")
+	mustContain(t, releaseDoc, "No new `plugin-kit-ai` CLI GitHub, npm, PyPI, Homebrew, or native release is supported")
+	mustContain(t, checklist, "dispatch `agentplugins-release.yml`")
+	mustContain(t, checklist, "protected `npm-agentplugins`")
+	mustContain(t, runbook, "Standalone `plugin-kit-ai` npm and PyPI publishing and all paired release modes are retired")
+}
 
-	mustContain(t, makefile, "release-gate:\n\t$(MAKE) test-required\n\t$(MAKE) vet\n\t$(MAKE) generated-check")
-	mustContain(t, makefile, "version-sync-check:\n\tbash ./scripts/check-version-sync.sh")
-	mustContain(t, makefile, "release-rehearsal: release-gate\n\t$(MAKE) test-install-compat\n\t$(MAKE) test-polyglot-smoke")
+func TestReleaseSurface_RetiredImplementationsAndSourceArePreserved(t *testing.T) {
+	root := RepoRoot(t)
+	history := filepath.Join(root, "docs", "history", "plugin-kit-ai-release-workflows")
+	readme := readRepoFile(t, root, "docs", "history", "plugin-kit-ai-release-workflows", "README.md")
+	mustContain(t, readme, "historical source, not GitHub Actions entrypoints")
+	mustContain(t, readme, "The sole public CLI is `agentplugins`")
 
-	mustContain(t, releaseDoc, "- `generated-sync`: deterministic generated-artifact drift check used by release gates and rehearsal")
-	mustContain(t, releaseDoc, "- `version-sync-check`: deterministic pinned-version contract check for Go SDK and shared runtime package references across scaffolds, examples, docs, and release-facing tests.")
-	mustContain(t, releaseDoc, "- `make release-gate`: `test-required -> vet -> generated-check`")
-	mustContain(t, releaseDoc, "- `make version-sync-check`: validates pinned Go SDK and shared runtime package references against `scripts/version-contract.env`")
-	mustContain(t, releaseDoc, "- `make release-rehearsal`: `release-gate -> test-install-compat -> test-polyglot-smoke`")
-	mustContain(t, releaseDoc, "- `release-preflight.yml`: manual release prerequisite check for tag format, metadata hygiene, and downstream publish secrets/vars")
-	mustContain(t, releaseDoc, "- `runtime-package-registry-smoke.yml`: automatic postpublish registry verification for the shared runtime helper packages, plus manual rerun by tag")
-	mustContain(t, releaseDoc, "2. run `make release-gate`")
-	mustContain(t, releaseDoc, "3. run `make test-install-compat`")
-	mustContain(t, releaseDoc, "4. run `make test-polyglot-smoke`")
-	mustContain(t, releaseDoc, "11. run `release-preflight.yml` against the planned stable tag and required downstream channels")
-	mustContain(t, releaseDoc, "13. publish root GitHub Release assets from the finalized stable tag through `release-assets.yml`")
-	mustContain(t, releaseDoc, "- generated-artifact sync result")
-	mustContain(t, releaseDoc, "- version-sync-check result")
-	mustContain(t, releaseDoc, "- generated-config/runtime-contract drift result")
-	mustContain(t, releaseDoc, "- release preflight result")
-	mustContain(t, releaseDoc, "- root GitHub Release asset publish result")
-	mustContain(t, releaseDoc, "- `required`: blocking on normal PR flow")
-	mustContain(t, releaseDoc, "- `polyglot-smoke`: separate deterministic lane required for runtime/ABI/bootstrap-affecting changes and for release rehearsal")
-	mustContain(t, releaseDoc, "generated Claude/Codex config canaries")
-	mustContain(t, releaseDoc, "the `public-beta` npm wrapper contract")
-	mustContain(t, releaseDoc, "the `public-beta` PyPI/pipx wrapper contract")
-	mustContain(t, releaseDoc, "the `plugin-kit-ai-runtime` npm/PyPI authoring packages")
-	mustContain(t, releaseDoc, "Root GitHub Release assets are published through `.github/workflows/release-assets.yml`")
-	mustContain(t, releaseDoc, "Downstream `.github/workflows/homebrew-tap.yml`, `.github/workflows/npm-publish.yml`, `.github/workflows/pypi-publish.yml`, `.github/workflows/npm-runtime-publish.yml`, and `.github/workflows/pypi-runtime-publish.yml` follow successful `Release Assets` completion")
-	mustContain(t, releaseDoc, "npm publish result and optional live npm smoke result")
-	mustContain(t, releaseDoc, "PyPI publish result and optional live pipx smoke result")
-	mustContain(t, releaseDoc, "npm runtime-package publish result when the Node/TypeScript authoring helper package changed")
-	mustContain(t, releaseDoc, "npm runtime-package postpublish registry smoke result when the Node/TypeScript authoring helper package changed")
-	mustContain(t, releaseDoc, "optional live npm runtime-package install smoke result when the Node/TypeScript authoring helper package changed")
-	mustContain(t, releaseDoc, "PyPI runtime-package publish result when the Python authoring helper package changed")
-	mustContain(t, releaseDoc, "PyPI runtime-package postpublish registry smoke result when the Python authoring helper package changed")
-	mustContain(t, releaseDoc, "optional live PyPI runtime-package install smoke result when the Python authoring helper package changed")
-	mustContain(t, releaseDoc, "Go SDK module proxy evidence when the Go SDK public consumption contract changed")
-	mustContain(t, releaseDoc, "SDK submodule tag: `sdk/vX.Y.Z`")
+	expectedMarkers := map[string]string{
+		"agentplugins-paired-release.yml":     "Independently admit preparation and authenticated Milestone A evidence",
+		"agentplugins-paired-npm-publish.yml": "paired_stage_attestation",
+		"release-assets.yml":                  "goreleaser/goreleaser-action@v7",
+		"release-preflight.yml":               "Check downstream publish prerequisites",
+		"homebrew-tap.yml":                    "./scripts/update-homebrew-tap.sh",
+		"npm-publish.yml":                     "npm publish --access public",
+		"pypi-publish.yml":                    "pypa/gh-action-pypi-publish@release/v1",
+	}
+	for name, marker := range expectedMarkers {
+		info, err := os.Stat(filepath.Join(history, name))
+		if err != nil || info.Size() < 500 {
+			t.Fatalf("preserved workflow %s is missing or not substantive: %v", name, err)
+		}
+		mustContain(t, readRepoFile(t, root, "docs", "history", "plugin-kit-ai-release-workflows", name), marker)
+	}
+	for _, path := range []string{
+		"cli/plugin-kit-ai/cmd/plugin-kit-ai/main.go",
+		"npm/plugin-kit-ai/lib/install.js",
+		"python/plugin-kit-ai/src/plugin_kit_ai/install.py",
+	} {
+		info, err := os.Stat(filepath.Join(root, filepath.FromSlash(path)))
+		if err != nil || !info.Mode().IsRegular() || info.Size() < 100 {
+			t.Fatalf("preserved implementation source %s is missing or not substantive: %v", path, err)
+		}
+	}
+}
 
-	mustContain(t, checklist, "- `make release-gate` green")
-	mustContain(t, checklist, "- `make release-gate` includes `test-required`, `vet`, and `generated-check`")
-	mustContain(t, checklist, "- `make version-sync-check` green")
-	mustContain(t, checklist, "- `make release-rehearsal` may be used as the canonical deterministic local rehearsal shortcut")
-	mustContain(t, checklist, "- `make test-install-compat` green")
-	mustContain(t, checklist, "- `release-preflight` green for the planned stable tag and required downstream channels")
-	mustContain(t, checklist, "- generated-config/runtime-contract drift evidence recorded when changes affect `generate`, scaffolded target files, target contracts, or runtime docs")
-	mustContain(t, checklist, "- root GitHub Release asset publish result recorded")
-	mustContain(t, checklist, "- release notes use the same evidence fields as the release playbook")
-	mustContain(t, checklist, "- `release-preflight` workflow result recorded")
-	mustContain(t, checklist, "- `release-assets` workflow result recorded")
-	mustContain(t, checklist, "- npm publish result recorded when the `plugin-kit-ai` CLI npm channel changed")
-	mustContain(t, checklist, "- PyPI publish result recorded when the `plugin-kit-ai` CLI Python channel changed")
-	mustContain(t, checklist, "- npm runtime-package publish result recorded when the `plugin-kit-ai-runtime` npm authoring package changed")
-	mustContain(t, checklist, "- npm runtime-package postpublish registry smoke result recorded when the `plugin-kit-ai-runtime` npm authoring package changed")
-	mustContain(t, checklist, "- optional live npm runtime-package install result recorded when the `plugin-kit-ai-runtime` npm authoring package changed")
-	mustContain(t, checklist, "- PyPI runtime-package publish result recorded when the `plugin-kit-ai-runtime` PyPI authoring package changed")
-	mustContain(t, checklist, "- PyPI runtime-package postpublish registry smoke result recorded when the `plugin-kit-ai-runtime` PyPI authoring package changed")
-	mustContain(t, checklist, "- optional live PyPI runtime-package install result recorded when the `plugin-kit-ai-runtime` PyPI authoring package changed")
-	mustContain(t, checklist, "- when the public Go SDK consumption contract changed:")
-	mustContain(t, checklist, "- clean-module `go get github.com/777genius/plugin-kit-ai/sdk@vX.Y.Z` recorded")
+func isDispatchOnlyWorkflow(body string) (bool, error) {
+	var workflow struct {
+		On map[string]any `yaml:"on"`
+	}
+	if err := yaml.Unmarshal([]byte(body), &workflow); err != nil {
+		return false, err
+	}
+	_, dispatch := workflow.On["workflow_dispatch"]
+	return dispatch && len(workflow.On) == 1, nil
+}
 
-	mustContain(t, releaseNotes, "- candidate commit SHA:")
-	mustContain(t, releaseNotes, "- required:")
-	mustContain(t, releaseNotes, "- install-compat:")
-	mustContain(t, releaseNotes, "- polyglot-smoke:")
-	mustContain(t, releaseNotes, "- generated-config/runtime-contract drift:")
-	mustContain(t, releaseNotes, "- version-sync-check:")
-	mustContain(t, releaseNotes, "- extended:")
-	mustContain(t, releaseNotes, "- live:")
-	mustContain(t, releaseNotes, "- release-preflight:")
-	mustContain(t, releaseNotes, "- release-assets:")
-	mustContain(t, releaseNotes, "- Homebrew tap:")
-	mustContain(t, releaseNotes, "- npm publish:")
-	mustContain(t, releaseNotes, "- PyPI publish:")
-	mustContain(t, releaseNotes, "- npm runtime-package publish:")
-	mustContain(t, releaseNotes, "- npm runtime-package postpublish registry smoke:")
-	mustContain(t, releaseNotes, "- npm runtime-package live install:")
-	mustContain(t, releaseNotes, "- PyPI runtime-package publish:")
-	mustContain(t, releaseNotes, "- PyPI runtime-package postpublish registry smoke:")
-	mustContain(t, releaseNotes, "- PyPI runtime-package live install:")
-	mustContain(t, releaseNotes, "- waivers:")
-	mustContain(t, licenseBody, "Apache License")
-	mustContain(t, licenseBody, "Version 2.0")
-	mustContain(t, rootReadme, "licensed under the [Apache License 2.0](LICENSE)")
-	mustNotContain(t, rootReadme, "repository remain under the existing MIT license")
-	mustContain(t, securityBody, "GitHub Security Advisories")
-	mustContain(t, securityBody, "checksums.txt")
-	versionInfo := repoVersionContract(t)
-	mustContain(t, versionContract, "GO_SDK_VERSION="+versionInfo.GoSDKVersion)
-	mustContain(t, versionContract, "RUNTIME_PACKAGE_VERSION="+versionInfo.RuntimePackageVersion)
-	mustContain(t, versionSyncScript, "version references are in sync")
-	mustContain(t, versionSyncScript, "GO_SDK_VERSION")
-	mustContain(t, versionSyncScript, "RUNTIME_PACKAGE_VERSION")
-
-	mustContain(t, statusDoc, "| Quality gates | done | `required`, `polyglot-smoke`, `extended`, and `live` lanes exist in repo automation. `required` now includes generated-artifact drift checks, and `polyglot-smoke` runs on `main` plus PRs for launcher/ABI checks, generated Claude/Codex config canaries, and generated runtime-artifact drift protection.")
-	mustContain(t, statusDoc, "generated-sync gate")
-	mustContain(t, statusDoc, "Release rehearsal now includes the executable-runtime deterministic gate.")
-
-	mustContain(t, ciWorkflow, "name: Required")
-	mustContain(t, ciWorkflow, "- name: Run required lane")
-	mustContain(t, ciWorkflow, "- name: Check generated artifacts")
-	mustContain(t, ciWorkflow, "npm ci --ignore-scripts --no-audit --no-fund")
-	mustContain(t, polyglotWorkflow, "name: Polyglot Smoke")
-	mustContain(t, polyglotWorkflow, "push:")
-	mustContain(t, polyglotWorkflow, "name: polyglot-smoke (${{ matrix.os }})")
-	mustContain(t, polyglotWorkflow, "- name: Run polyglot-smoke lane")
-	mustContain(t, extendedWorkflow, "name: Extended")
-	mustContain(t, extendedWorkflow, "name: extended")
-	mustContain(t, extendedWorkflow, "- name: Run extended evidence lane")
-	mustContain(t, liveWorkflow, "name: Live")
-	mustContain(t, liveWorkflow, "name: live")
-	mustContain(t, liveWorkflow, "- name: Run live evidence lane")
-	mustContain(t, liveWorkflow, "run_npm_install")
-	mustContain(t, liveWorkflow, "npm i -g --prefix \"${prefix}\" \"plugin-kit-ai@${version}\"")
-	mustContain(t, liveWorkflow, "npm list -g --prefix \"${PLUGIN_KIT_AI_NPM_PREFIX}\" plugin-kit-ai --depth=0")
-	mustContain(t, liveWorkflow, "\"${PLUGIN_KIT_AI_NPM_PREFIX}/bin/plugin-kit-ai\" version")
-	mustContain(t, liveWorkflow, "run_pipx_install")
-	mustContain(t, liveWorkflow, "python3 -m pipx install --python \"$(command -v python3)\" \"plugin-kit-ai==${version}\"")
-	mustContain(t, liveWorkflow, "\"${PIPX_BIN_DIR}/plugin-kit-ai\" version")
-	mustContain(t, liveWorkflow, "python3 -m pipx run --spec \"plugin-kit-ai==${version}\" plugin-kit-ai version")
-	mustContain(t, liveWorkflow, "run_npm_runtime_install")
-	mustContain(t, liveWorkflow, "npm install \"plugin-kit-ai-runtime@${version}\"")
-	mustContain(t, liveWorkflow, "plugin-kit-ai-runtime npm smoke ok")
-	mustContain(t, liveWorkflow, "run_pypi_runtime_install")
-	mustContain(t, liveWorkflow, "python3 -m pip install \"plugin-kit-ai-runtime==${version}\"")
-	mustContain(t, liveWorkflow, "plugin-kit-ai-runtime PyPI smoke ok")
-	mustContain(t, runtimePackageRegistrySmokeWorkflow, "name: Runtime Package Registry Smoke")
-	mustContain(t, runtimePackageRegistrySmokeWorkflow, "workflow_run:")
-	mustContain(t, runtimePackageRegistrySmokeWorkflow, "workflows: [\"NPM Runtime Publish\", \"PyPI Runtime Publish\"]")
-	mustContain(t, runtimePackageRegistrySmokeWorkflow, "workflow_dispatch:")
-	mustContain(t, runtimePackageRegistrySmokeWorkflow, "npm install \"plugin-kit-ai-runtime@${version}\"")
-	mustContain(t, runtimePackageRegistrySmokeWorkflow, "plugin-kit-ai-runtime npm postpublish smoke ok")
-	mustContain(t, runtimePackageRegistrySmokeWorkflow, "python -m pip install \"plugin-kit-ai-runtime==${version}\"")
-	mustContain(t, runtimePackageRegistrySmokeWorkflow, "plugin-kit-ai-runtime PyPI postpublish smoke ok")
-	mustContain(t, releasePreflightWorkflow, "name: Release Preflight")
-	mustContain(t, releasePreflightWorkflow, "workflow_dispatch:")
-	mustContain(t, releasePreflightWorkflow, "require_pypi")
-	mustContain(t, releasePreflightWorkflow, "PYPI_TRUSTED_PUBLISHING_READY")
-	mustContain(t, releaseAssetsWorkflow, "name: Release Assets")
-	mustContain(t, releaseAssetsWorkflow, "workflow_dispatch:")
-	mustContain(t, releaseAssetsWorkflow, "goreleaser/goreleaser-action@v7")
-	mustContain(t, releaseAssetsWorkflow, "args: release --clean")
-	mustContain(t, npmPublishWorkflow, "name: NPM Publish")
-	mustContain(t, npmPublishWorkflow, "workflow_run:")
-	mustContain(t, npmPublishWorkflow, "workflows: [\"Release Assets\"]")
-	mustContain(t, npmPublishWorkflow, "NPM_TOKEN")
-	mustContain(t, npmPublishWorkflow, "checksums.txt")
-	mustContain(t, npmPublishWorkflow, "npm publish --access public")
-	mustContain(t, pypiPublishWorkflow, "name: PyPI Publish")
-	mustContain(t, pypiPublishWorkflow, "workflow_run:")
-	mustContain(t, pypiPublishWorkflow, "workflows: [\"Release Assets\"]")
-	mustContain(t, pypiPublishWorkflow, "id-token: write")
-	mustContain(t, pypiPublishWorkflow, "pypa/gh-action-pypi-publish@release/v1")
-	mustContain(t, npmRuntimePublishWorkflow, "name: NPM Runtime Publish")
-	mustContain(t, npmRuntimePublishWorkflow, "workflows: [\"Release Assets\"]")
-	mustContain(t, npmRuntimePublishWorkflow, "plugin-kit-ai-runtime")
-	mustContain(t, npmRuntimePublishWorkflow, "npm pack")
-	mustContain(t, npmRuntimePublishWorkflow, "plugin-kit-ai-runtime npm prepublish smoke ok")
-	mustContain(t, npmRuntimePublishWorkflow, "npm publish --access public")
-	mustContain(t, pypiRuntimePublishWorkflow, "name: PyPI Runtime Publish")
-	mustContain(t, pypiRuntimePublishWorkflow, "workflows: [\"Release Assets\"]")
-	mustContain(t, pypiRuntimePublishWorkflow, "plugin-kit-ai-runtime")
-	mustContain(t, pypiRuntimePublishWorkflow, "plugin-kit-ai-runtime PyPI prepublish smoke ok")
-	mustContain(t, pypiRuntimePublishWorkflow, "pypa/gh-action-pypi-publish@release/v1")
+func assertDispatchOnlyWorkflow(t *testing.T, name, body string) {
+	t.Helper()
+	ok, err := isDispatchOnlyWorkflow(body)
+	if err != nil {
+		t.Fatalf("parse workflow %s: %v", name, err)
+	}
+	if !ok {
+		t.Fatalf("workflow %s must expose exactly workflow_dispatch", name)
+	}
 }
 
 func readRepoFile(t *testing.T, root string, parts ...string) string {

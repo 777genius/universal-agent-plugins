@@ -9,6 +9,23 @@
 > roadmap by the owner decision below. Historical package artifacts remain
 > immutable evidence and are not current installation guidance.
 
+## Owner decision: current-only README and retained runtime publishers (2026-09-14)
+
+This decision supersedes the earlier PR #190 availability-label preservation
+rule wherever that rule would require adding release-history framing to the
+repository README. The README remains unchanged and current-only for this work:
+do not add a Milestone A section or a Historical authoring section. Preserve
+the existing PR #190 links and availability evidence in their historical site
+and plan locations; do not copy their labels into the README.
+
+The separately retained `plugin-kit-ai-runtime` npm and PyPI helpers remain
+supported legacy capabilities, not public authoring entrypoints. Their active
+manual publishers must admit only v1 tags contained by the approved
+`origin/main`, run only from the canonical main-branch workflow, bind the
+executed workflow content to the admitted tagged revision, and keep publication
+behind the existing `npm-plugin-kit-ai` and `pypi` environments. This decision
+does not authorize a package publication or any new `plugin-kit-ai` CLI release.
+
 ## Owner decision: one public CLI and no legacy migration (2026-09-14)
 
 This decision supersedes every older roadmap item below that proposes a public
@@ -2699,5 +2716,6 @@ and closed tar verifier. It neither relaxes those contracts nor requires the
 legacy notices asset on paired releases. Legacy and paired-stage job bodies and
 all useful YAML capabilities remain preserved. The consumer does not authorize
 tag/release mutations, actual publication during implementation, phases 7-11,
-or changes to PR190 availability labels/historical links. D5 still qualifies
-executables and does not block truthful public wording.
+or changes to PR #190 historical links. The current-only README decision above
+supersedes the older availability-label rule. D5 still qualifies executables
+and does not block truthful public wording.

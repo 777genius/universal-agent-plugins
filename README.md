@@ -15,7 +15,7 @@ Install and manage Agent Plugins 1.0 across your AI agents with one CLI.
 
 Install, inspect, update, repair, and remove packages with the existing installer.
 The [Use guide source](website/source/en/use/index.md) collects this journey.
-See [Build plugins](#build-plugins--milestone-a) below for the released Milestone A static authoring flow.
+See [Build plugins](#build-plugins) below to create and check a package.
 
 ### Quick start
 
@@ -253,16 +253,12 @@ path and package digest are stored for safe replay. Direct full-SHA installation
 remain immutable; use `switch` to move to another exact source. `repair` reapplies
 the recorded source, and `remove` changes only files owned by the CLI.
 
-## Build plugins — Milestone A
+## Build plugins
 
-<a id="authoring-and-development"></a>
-<a id="build-plugins--milestone-a"></a>
-
-The [Build guide](website/source/en/build/index.md) describes Milestone A:
-root `plugin.json` with optional `skills/` and `mcp.json`, followed by the offline
-init → validate → inspect → static test loop and an installer planner handoff.
-`agentplugins author` is the sole public entrypoint to the shared standard
-authoring engine.
+Create a portable Agent Plugins 1.0 package from a root `plugin.json`, with
+optional `skills/` and `mcp.json`. The same package can then be checked and
+installed across supported agents. `agentplugins author` is the public
+authoring entrypoint.
 
 Install an exact npm version (Node.js 22+):
 
@@ -273,34 +269,26 @@ npm install -g universal-agent-plugins@0.1.65
 Verified GitHub release tag: [agentplugins-v0.1.65](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.65).
 See the [Use / Build quickstart](https://777genius.github.io/universal-agent-plugins/docs/en/guide/quickstart.html).
 
+Create and check a Skill package:
+
+```bash
+agentplugins author init ./my-plugin --template skill --name my-plugin
+agentplugins author validate ./my-plugin
+agentplugins author inspect ./my-plugin
+agentplugins author test ./my-plugin
+```
+
+The [Build guide](website/source/en/build/index.md) also covers remote MCP,
+stdio MCP, hybrid packages, extra Skills, compatibility checks, and the handoff
+to installation.
+
 Authoring validation and project doctor are distinct from installer
 `agentplugins validate` and `agentplugins doctor`. Static checks do not prove
 runtime execution, OAuth, or client activation. Runtime/dev/bootstrap,
-client generation, export/bundle, and publication are deferred from this MVP.
-There is no implicit YAML fallback or second supported YAML engine.
+client generation, export/bundle, and publication are not exposed by the
+current authoring CLI. `plugin.json` is the only supported authoring manifest.
 
-Milestone A static authoring is available. Runtime, preview/export and
-publication phases remain deferred. Legacy YAML migration is cancelled because
-there are no known users; preserved source is not a supported product.
-
-### Historical authoring and development
-
-[Historical plugin-kit-ai v1, baseline 1.2.4](website/source/en/legacy/v1/index.md)
-provides immutable version context only. The legacy product is retired and no
-migration journey is planned. Do not use this section as current installation
-guidance.
-The [preserved authoring guide](docs/PLUGIN_KIT_AI_AUTHORING.md) explains the
-historical YAML, generation, and export workflows; it is not the standard MVP.
-
-Build one plugin and ship it to many AI agents was the legacy authoring goal.
-The repository preserves Codex and Claude starters across Go, Python, and
-Node/TypeScript. See the classified [starters](examples/starters/README.md),
-[production examples](examples/plugins/README.md), [local examples](examples/local/README.md),
-and [Skills components](examples/skills/README.md).
-
-The exact historical source remains available from the pinned archive above.
-It is retained for implementation research, not installation or migration.
-
+## Contributing
 
 Contributor checks:
 

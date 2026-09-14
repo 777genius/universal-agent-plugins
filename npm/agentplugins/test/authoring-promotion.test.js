@@ -424,8 +424,8 @@ for (const mode of ["create0", "create10", "upload", "edit", "moveTag", "replace
   }
 });
 
-test("actual preflight and record shells bind dispatch before native acquisition, including resume", t => {
-  const f=fixture(), yaml=fs.readFileSync(path.resolve(__dirname,"../../../.github/workflows/agentplugins-release.yml"),"utf8");
+test("archived paired-release shells bind dispatch before native acquisition, including resume", t => {
+  const f=fixture(), yaml=fs.readFileSync(path.resolve(__dirname,"../../../docs/history/plugin-kit-ai-release-workflows/agentplugins-paired-release.yml"),"utf8");
   const script=name=>{ const step=yaml.slice(yaml.indexOf(`      - name: ${name}\n`));
     return step.match(/        run: \|\n((?:          .*\n|\n)+)/)[1].split("\n").map(l=>l.slice(10)).join("\n"); };
   const env={PATH:path.dirname(process.execPath)+":/usr/local/bin:/usr/bin:/bin",SOURCE_SHA:ID.commit,WORKFLOW_SHA:ID.commit,

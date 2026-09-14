@@ -1,6 +1,6 @@
 # Release Notes Template
 
-Use this template for release notes after `v1.0.0`, including post-`v1` stable-subset promotions.
+Use this template for an owner-approved `agentplugins` release.
 
 Pair this with [REHEARSAL_TEMPLATE.md](./REHEARSAL_TEMPLATE.md) when collecting the actual evidence that feeds the final decision.
 
@@ -32,28 +32,17 @@ Pair this with [REHEARSAL_TEMPLATE.md](./REHEARSAL_TEMPLATE.md) when collecting 
 - list the default recommendation after this release
 - list any migration or upgrade action a user should actually take
 
-## Still Public-Beta
-
-- list remaining beta surfaces
-
-## Beta Contract Changes
-
-- list beta-contract changes and whether each affected surface stays `public-beta`
-
-## External Smoke Status
+## Release evidence
 
 - required:
-- install-compat:
 - polyglot-smoke:
 - generated-config/runtime-contract drift:
 - version-sync-check:
 - extended:
 - live:
-- release-preflight:
-- release-assets:
-- Homebrew tap:
-- npm publish:
-- PyPI publish:
+- agentplugins draft qualification:
+- agentplugins native release and attestations:
+- universal-agent-plugins npm publish and public verification:
 - npm runtime-package publish:
 - npm runtime-package postpublish registry smoke:
 - npm runtime-package live install:
@@ -65,7 +54,7 @@ Pair this with [REHEARSAL_TEMPLATE.md](./REHEARSAL_TEMPLATE.md) when collecting 
 ## Known Limitations
 
 - list documented limitations
-- include Codex external runtime-health note if applicable
+- distinguish historical tests from current product claims
 
 ## Decision Record
 

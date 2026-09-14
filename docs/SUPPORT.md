@@ -14,11 +14,13 @@ Use the [security reporting process](../SECURITY.md) for vulnerabilities.
 
 ## Historical plugin-kit-ai v1 policy
 
-The remaining sections define the approved public contract for `plugin-kit-ai` after the `v1.0.0` release.
+The remaining sections preserve the contract recorded for `plugin-kit-ai` after
+the `v1.0.0` release. They are implementation history, not current installation
+or release guidance, and do not authorize another release.
 
 ## Recommended Production Lanes
 
-Treat these as the main production lanes the project is prepared to recommend publicly today.
+At the time of the historical v1 contract, these were its main production lanes.
 
 - `Codex runtime Go`
   - promise: stable production-ready runtime lane inside the `Notify` contract

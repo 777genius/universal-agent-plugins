@@ -61,11 +61,11 @@ func TestNPMCLIPackageContractFiles(t *testing.T) {
 	mustContain(t, installJS, "checksum mismatch")
 	mustContain(t, installJS, "brew install 777genius/homebrew-plugin-kit-ai/plugin-kit-ai")
 
-	workflowBody, err := os.ReadFile(filepath.Join(root, ".github", "workflows", "npm-publish.yml"))
+	workflowBody, err := os.ReadFile(filepath.Join(root, "docs", "history", "plugin-kit-ai-release-workflows", "npm-publish.yml"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	workflow := string(workflowBody)
+	workflow := string(workflowBody) // Preserved implementation history, not executable CI.
 	for _, want := range []string{
 		"name: NPM Publish",
 		"workflow_run:",

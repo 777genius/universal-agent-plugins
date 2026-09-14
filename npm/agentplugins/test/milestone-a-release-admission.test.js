@@ -9,7 +9,7 @@ const path = require("node:path");
 const a = require("../scripts/milestone-a-release-admission");
 const candidate = require("../scripts/dual-authoring-candidate");
 const promotion = require("../scripts/authoring-promotion");
-const workflowPath = path.resolve(__dirname, "../../../.github/workflows/agentplugins-release.yml");
+const workflowPath = path.resolve(__dirname, "../../../docs/history/plugin-kit-ai-release-workflows/agentplugins-paired-release.yml");
 
 const source = "a".repeat(40);
 test("current release tags are the exact prefixed patch pair", () => {
@@ -249,7 +249,7 @@ test("legacy thirteen-lane admission remains present and separate", () => {
   assert.throws(() => promotion.requireNativeContracts([]), /missing lanes/);
 });
 
-test("Milestone A admission and promotion embedded Node programs parse", t => {
+test("archived Milestone A admission and promotion embedded Node programs parse", t => {
   if (!fs.existsSync(workflowPath)) return t.skip("detached npm package has no source workflow");
   const workflow = fs.readFileSync(workflowPath, "utf8");
   for (const name of ["Independently admit preparation and authenticated Milestone A evidence",

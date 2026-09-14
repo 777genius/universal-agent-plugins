@@ -104,12 +104,10 @@ test('README retains the available installer and canonical client limitations', 
   assert.ok(text.includes('## Use plugins'));
   assert.ok(text.includes('## Build plugins'));
   assert.ok(text.includes('### Quick start'));
-  assert.ok(text.includes('id="authoring-and-development"'));
-  assert.ok(text.includes('Milestone A static authoring is available'));
+  assert.ok(text.includes('[Build plugins](#build-plugins)'));
   assert.ok(text.includes('Verified GitHub release tag'));
   assert.ok(text.includes('Install an exact npm version'));
-  const current = text.slice(0, text.indexOf('### Historical authoring and development'));
-  assert.doesNotMatch(current, /plugin-kit-ai|PyPI|pipx/i);
+  assert.doesNotMatch(text, /Milestone A|Historical authoring and development|plugin-kit-ai|PyPI|pipx/i);
   assert.doesNotMatch(text, /Availability is unverified|candidate commands are not current installation advice/);
   assert.ok(text.includes('For Codex, declared MCP SSE is unsupported'));
   assert.ok(text.includes('docs/CODEX_TRANSPORT_EVIDENCE.md'));
