@@ -5,7 +5,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { inventory, dispositionErrors } from "./locale-dispositions.mjs";
 import { journeyNav, journeyLabels, journeySidebar } from "../lib/journeys.mjs";
-import { sourceRoot, repoRoot } from "../config/site.mjs";
+import { generatedRoot, sourceRoot, repoRoot } from "../config/site.mjs";
 import { listMarkdownFiles } from "../lib/fs.mjs";
 import { readFrontmatter } from "../lib/site-model.mjs";
 import { localeCodes, localeDestination, localeFromPath, preferredLocale } from "../../.vitepress/theme/components/locale-routes.mjs";
@@ -21,6 +21,9 @@ for (const locale of localeCodes) for (const file of await listMarkdownFiles(pat
   entity[`path${locale[0].toUpperCase()}${locale.slice(1)}`] = routeFor(relative);
   entities.set(meta.canonicalId, entity);
 }
+for (const locale of localeCodes) for (const file of await listMarkdownFiles(path.join(generatedRoot, locale))) {
+  routes.set(routeFor(path.relative(generatedRoot, file)), file);
+}
 
 test("all five locales switch through existing counterpart routes and matching canonical IDs", async () => {
   for (const [id, entity] of entities) for (const locale of localeCodes) {
@@ -32,8 +35,8 @@ test("all five locales switch through existing counterpart routes and matching c
 });
 test("missing generated translation uses English and never fabricates a locale URL", () => {
   for (const code of localeCodes.slice(1)) {
-    assert.deepEqual(localeDestination({ pathEn: "/en/api/prepared-authoring-v2/plugin-kit-ai" }, code), {
-      path: "/en/api/prepared-authoring-v2/plugin-kit-ai", language: "en", fallback: true, home: false
+    assert.deepEqual(localeDestination({ pathEn: "/en/api/cli/prepared-authoring-v2-agentplugins-author" }, code), {
+      path: "/en/api/cli/prepared-authoring-v2-agentplugins-author", language: "en", fallback: true, home: false
     });
     assert.equal(localeDestination(null, code).path, `/${code}/`);
   }
