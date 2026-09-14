@@ -446,8 +446,11 @@ function observedState(value, j, corruptedProduct = null) {
 }
 function expectedCachePath(j, roots, scenario, product) {
   const p = hostPath(j.cell), native = j.subjects[product][cell(j.cell).target].binary;
-  return p.join(scopePaths(j, scenario, roots).home, '.cache', 'universal-agent-plugins', 'public-authoring-v2', contract.MODE,
-    j.identity.commit, j.candidate_sha256, product, j.identity.versions[product], cell(j.cell).target, native.sha256, native.file);
+  const release = { descriptor: { schema: contract.DESCRIPTOR_SCHEMA, identity: j.identity, candidate_sha256: j.candidate_sha256 },
+    version: j.identity.versions[product], asset: { binary: native } };
+  return require('../lib/public-authoring').cachePath(
+    p.join(scopePaths(j, scenario, roots).home, '.cache', 'universal-agent-plugins'),
+    product, cell(j.cell).target, release);
 }
 function verifyObservedRow(row, scenario, j, roots, commands) {
   fields(row, ['id', 'command', 'argv', 'cwd', 'env', 'executable', 'runtime', 'stdout', 'stderr', 'status', 'signal',

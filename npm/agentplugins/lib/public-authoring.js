@@ -203,10 +203,8 @@ const releaseNamespace = release => release.descriptor.schema === SCHEMA ? "p1" 
 function cacheIdentity(product, target, release) {
   return c.digest(c.encode({
     namespace: releaseNamespace(release),
-    authoring_mode: release.descriptor.authoring_mode,
     identity: release.descriptor.identity,
     candidate_sha256: release.descriptor.candidate_sha256,
-    release_manifest_sha256: release.descriptor.release_manifest_sha256,
     product,
     version: release.version,
     target,

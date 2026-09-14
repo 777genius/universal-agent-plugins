@@ -271,7 +271,8 @@ absolute locator in an owned private custody directory. Every supplied locator
 is checked before cache effects, including on warm hits; invalid input never
 falls back to download. Outer and inner pins come only from package metadata.
 Local and absent-locator anonymous acquisition converge on the existing locked,
-verified cache under `public-authoring-v2`. The supplied file is never executed.
+verified cache under the bounded `p2/<identity-digest>` namespace. The supplied
+file is never executed.
 
 Bounded retained metadata/asset snapshots are rechecked before commit and return;
 close or cleanup uncertainty returns failure. The child environment removes the
