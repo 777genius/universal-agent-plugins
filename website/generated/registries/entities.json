@@ -3561,8 +3561,8 @@
     "kind": "page",
     "surface": "home",
     "localeStrategy": "mirrored",
-    "title": "plugin-kit-ai Documentation",
-    "summary": "Public documentation for plugin-kit-ai.",
+    "title": "Agent Plugins Documentation",
+    "summary": "Public documentation for Agent Plugins.",
     "stability": "public-stable",
     "maturity": "stable",
     "publicVisibility": "public",
@@ -3575,7 +3575,7 @@
     "pathZh": "/zh/",
     "relatedIds": [],
     "searchTerms": [
-      "plugin-kit-ai Documentation"
+      "Agent Plugins Documentation"
     ]
   },
   {

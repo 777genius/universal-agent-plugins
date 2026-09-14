@@ -10,10 +10,9 @@ translationRequired: true
 
 # Add extra Skills
 
-> **Milestone A is available.** Standard-first static authoring is published as
-> `universal-agent-plugins@0.1.65` (`agentplugins author`) and `plugin-kit-ai@2.0.5`.
-> GitHub tags: `agentplugins-v0.1.65` and `plugin-kit-ai-v2.0.5`.
-> npm, PyPI, Homebrew, GitHub Releases and the public-channel E2E are verified.
+> **Milestone A is available.** Install `agentplugins` from
+> `universal-agent-plugins@0.1.65` on npm or the `777genius/agentplugins` Homebrew tap.
+> GitHub release: `agentplugins-v0.1.65`. Public-channel E2E is verified.
 > Runtime/dev/bootstrap, migration, export and publication remain deferred.
 > Historical YAML v1 workflows remain separate and preserved.
 
@@ -26,17 +25,10 @@ It works for Skill, MCP, or hybrid packages. Select the package root containing
 Assume `./review-helper` is the package from the [standalone Skill journey](./skill)
 and `skills/release-notes/` does not exist.
 
-Future installer-hosted spelling:
+Run the released authoring command:
 
 ```bash
 agentplugins author skills init release-notes ./review-helper \
-  --description 'Use when drafting release notes from reviewed changes'
-```
-
-Equivalent Milestone A authoring executable spelling; choose one:
-
-```bash
-plugin-kit-ai skills init release-notes ./review-helper \
   --description 'Use when drafting release notes from reviewed changes'
 ```
 
@@ -70,10 +62,9 @@ same care as the instruction text.
 
 ```bash
 agentplugins author skills validate ./review-helper
-plugin-kit-ai skills validate ./review-helper
 ```
 
-These are equivalent checks; one entrypoint is sufficient. The command reports
+The command reports
 package-wide readiness and isolated immediate Skills. An error elsewhere in the
 package can therefore affect the overall result even when the new Skill's own
 findings are clean.

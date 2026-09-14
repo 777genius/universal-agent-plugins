@@ -1,6 +1,6 @@
 # Public Docs Website
 
-This workspace hosts the public VitePress 2 documentation site for `plugin-kit-ai`.
+This workspace hosts the public VitePress 2 documentation site for Agent Plugins.
 
 Architecture:
 

@@ -73,12 +73,18 @@ if (!handAuthoredHome.includes(`${editPrefix}en/index.md`)) {
   console.error("Hand-authored EN home page is missing its edit link.");
   hasError = true;
 }
-if (!handAuthoredHome.includes("Default Start")) {
-  console.error("EN home page is missing its expected default-start framing.");
+if (!handAuthoredHome.includes("Choose your journey")) {
+  console.error("EN home page is missing its Use/Build journey choice.");
   hasError = true;
 }
-if (!handAuthoredHome.includes("Supported Node And Python Paths")) {
-  console.error("EN home page is missing its expected non-Go support block.");
+if (!handAuthoredHome.includes("Build with Agent Plugins") ||
+    !handAuthoredHome.includes("agentplugins author init")) {
+  console.error("EN home page is missing its primary Agent Plugins authoring path.");
+  hasError = true;
+}
+if (handAuthoredHome.includes("Supported Node And Python Paths") ||
+    handAuthoredHome.includes("codex-runtime --runtime")) {
+  console.error("EN home page still promotes the historical runtime-first journey.");
   hasError = true;
 }
 if (handAuthoredHome.includes("delivery model") || handAuthoredHome.includes("repo-managed integration")) {

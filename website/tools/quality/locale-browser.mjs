@@ -94,7 +94,7 @@ export async function runLocaleSmoke(browser, base, artifactsRoot) {
       await inspectSwitcher("/?gateway=manual", code => `/${code}/`, code => code, false, true);
       evidence.push({ variant, fiveCounterparts: true, englishFallback: true, unknownHomes: true });
       async function inspectSwitcher(label, destination, language, fallback, home = false) {
-        const homeIdentities = { en: "plugin-kit-ai", ru: "Документация plugin-kit-ai", es: "Documentación de plugin-kit-ai", fr: "Documentation de plugin-kit-ai", zh: "plugin-kit-ai 文档" };
+        const homeIdentities = { en: "Agent Plugins", ru: "Документация Agent Plugins", es: "Documentación de Agent Plugins", fr: "Documentation de Agent Plugins", zh: "Agent Plugins 文档" };
         for (const [index, code] of locales.entries()) {
           // Every activation starts at its own origin, including same-route
           // English fallbacks; no previous selection supplies the next menu.

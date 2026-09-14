@@ -9,7 +9,7 @@ translationRequired: true
 ---
 
 [Usar plugins](/es/use/) · [Crear plugins](/es/build/) — Milestone A está disponible. La migración de proyectos a v2 aún no está disponible.
-<p class="locale-historical-identity">Documentación de plugin-kit-ai</p>
+<p class="locale-historical-identity">Documentación de Agent Plugins</p>
 
 [Instantánea histórica de la rama plugin-kit-ai v1. 1.2.4 es la referencia de comandos, no la versión exacta de esta instantánea.](/en/legacy/v1/)
 

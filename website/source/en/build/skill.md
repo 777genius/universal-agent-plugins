@@ -10,10 +10,9 @@ translationRequired: true
 
 # Build a standalone Skill
 
-> **Milestone A is available.** Standard-first static authoring is published as
-> `universal-agent-plugins@0.1.65` (`agentplugins author`) and `plugin-kit-ai@2.0.5`.
-> GitHub tags: `agentplugins-v0.1.65` and `plugin-kit-ai-v2.0.5`.
-> npm, PyPI, Homebrew, GitHub Releases and the public-channel E2E are verified.
+> **Milestone A is available.** Install `agentplugins` from
+> `universal-agent-plugins@0.1.65` on npm or the `777genius/agentplugins` Homebrew tap.
+> GitHub release: `agentplugins-v0.1.65`. Public-channel E2E is verified.
 > Runtime/dev/bootstrap, migration, export and publication remain deferred.
 > Historical YAML v1 workflows remain separate and preserved.
 
@@ -28,20 +27,8 @@ The examples assume your working directory is a disposable parent directory and
 `./review-helper` does not exist. Choose a lowercase portable package identity.
 The path names the destination; `--name` names the package inside its manifest.
 
-`agentplugins author` invocation:
-
 ```bash
 agentplugins author init ./review-helper \
-  --template skill \
-  --name review-helper \
-  --description 'Review documentation changes for clarity and evidence' \
-  --skill-name review-docs
-```
-
-Equivalent `plugin-kit-ai` invocation; choose one, not both:
-
-```bash
-plugin-kit-ai init ./review-helper \
   --template skill \
   --name review-helper \
   --description 'Review documentation changes for clarity and evidence' \
@@ -95,8 +82,7 @@ agentplugins author inspect ./review-helper
 agentplugins author test ./review-helper
 ```
 
-For the other entrypoint, replace `agentplugins author` with `plugin-kit-ai` and
-keep every path and argument unchanged. These checks are static. They do not
+These checks are static. They do not
 ask an agent to follow the instructions or score the quality of its response.
 
 Review the report's conformance and readiness separately. A well-formed Skill

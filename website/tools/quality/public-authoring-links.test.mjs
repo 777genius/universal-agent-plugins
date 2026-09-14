@@ -23,6 +23,22 @@ test('published source never claims it is on a non-deploying branch', () => {
   }
 });
 
+test('current Build journey uses Agent Plugins as its single documented command surface', () => {
+  const buildRoot = fileURLToPath(new URL('website/source/en/build/', root));
+  const command = /\bplugin-kit-ai (?:init|validate|inspect|test|compat|doctor|capabilities|skills)\b/;
+  for (const relative of readdirSync(buildRoot)) {
+    if (!relative.endsWith('.md')) continue;
+    const source = readFileSync(`${buildRoot}/${relative}`, 'utf8');
+    assert.match(source, /agentplugins author/, relative);
+    assert.doesNotMatch(source, command, relative);
+  }
+
+  const index = read('website/source/en/build/index.md');
+  assert.match(index, /npm install -g universal-agent-plugins@0\.1\.65/);
+  assert.match(index, /plugin-kit-ai@2\.0\.5.*PyPI/s);
+  assert.match(index, /plugin-kit-ai@1\.2\.4.*YAML v1/s);
+});
+
 // Exact heading sequence extracted from original main
 // 01f02cb51cfe5f664d4d5f52b295c59c7ea03495:website/source/{locale}/guide/quickstart.md.
 // Render with VitePress's actual slugger: accents, Cyrillic and punctuation matter.

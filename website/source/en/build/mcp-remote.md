@@ -10,10 +10,9 @@ translationRequired: true
 
 # Build a remote MCP package
 
-> **Milestone A is available.** Standard-first static authoring is published as
-> `universal-agent-plugins@0.1.65` (`agentplugins author`) and `plugin-kit-ai@2.0.5`.
-> GitHub tags: `agentplugins-v0.1.65` and `plugin-kit-ai-v2.0.5`.
-> npm, PyPI, Homebrew, GitHub Releases and the public-channel E2E are verified.
+> **Milestone A is available.** Install `agentplugins` from
+> `universal-agent-plugins@0.1.65` on npm or the `777genius/agentplugins` Homebrew tap.
+> GitHub release: `agentplugins-v0.1.65`. Public-channel E2E is verified.
 > Runtime/dev/bootstrap, migration, export and publication remain deferred.
 > Historical YAML v1 workflows remain separate and preserved.
 
@@ -29,20 +28,10 @@ Replace it with your service's real MCP endpoint when preparing your own package
 The authoring command accepts the URL as configuration; it does not verify that
 the address serves MCP or that your account can use it.
 
-Future installer-hosted authoring spelling:
+Run the released authoring command:
 
 ```bash
 agentplugins author init ./docs-service \
-  --template mcp-remote \
-  --name docs-service \
-  --description 'Connect to the team documentation MCP service' \
-  --url https://mcp.example.com/mcp
-```
-
-Equivalent Milestone A authoring executable spelling; run only one:
-
-```bash
-plugin-kit-ai init ./docs-service \
   --template mcp-remote \
   --name docs-service \
   --description 'Connect to the team documentation MCP service' \
@@ -82,8 +71,8 @@ agentplugins author compat ./docs-service --target codex,claude
 agentplugins author doctor ./docs-service
 ```
 
-The same arguments work with the `plugin-kit-ai` prefix. `inspect` can
-show components and unresolved requirements. `compat` evaluates the selected
+`inspect` can show components and unresolved requirements. `compat` evaluates
+the selected
 clients' static adapter support; neither command needs those clients installed.
 Doctor does not contact the endpoint.
 

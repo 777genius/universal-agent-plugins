@@ -1,7 +1,7 @@
 {
-  "name": "plugin-kit-ai Docs",
-  "short_name": "plugin-kit-ai Docs",
-  "description": "Public documentation for plugin-kit-ai.",
+  "name": "Agent Plugins Docs",
+  "short_name": "Agent Plugins",
+  "description": "Public documentation for Agent Plugins.",
   "start_url": "./",
   "display": "standalone",
   "background_color": "#f7f7f8",
