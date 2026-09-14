@@ -127,7 +127,7 @@ test("actual controlled Linux pair: offline verification, engine reports, frozen
   // contract, while every shared report field must remain byte-for-byte equal.
   const sharedReports = reports.map((productReports, productIndex) => productReports.map(({ argv, report }) => {
     const normalized = structuredClone(report);
-    if (argv[0] === "capabilities") {
+    if (argv.includes("capabilities")) {
       const commands = normalized.capabilities.commands;
       const evidence = normalized.capabilities.evidence_limits;
       if (productIndex === 0) {
