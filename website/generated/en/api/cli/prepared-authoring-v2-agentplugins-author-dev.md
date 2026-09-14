@@ -1,7 +1,7 @@
 ---
-title: "agentplugins author skills help"
-description: "Help about any command"
-canonicalId: "prepared-authoring-v2:agentplugins author skills help"
+title: "agentplugins author dev"
+description: "Rerun one explicit MCP server when the selected package changes"
+canonicalId: "prepared-authoring-v2:agentplugins author dev"
 section: "api"
 surface: "authoring-cli"
 locale: "en"
@@ -89,23 +89,34 @@ sourceRef: "https://github.com/777genius/universal-agent-plugins/tree/28a1748f97
 
 Released Agent Plugins CLI reference.
 
-# agentplugins author skills help
+# agentplugins author dev
 
-Help about any command
+Rerun one explicit MCP server when the selected package changes
 
 ### Synopsis
 
-Help provides help for any command in the application.
-Simply type skills help [path to command] for full details.
+Rerun one explicit MCP server when the selected package changes
+
+Installer-only inherited flags --scope, --accept-security-risk, and --security-details
+are rejected. Use the positional package path and author doctor for project checks;
+use agentplugins add for installation/security policy.
 
 ```
-agentplugins author skills help [command] [flags]
+agentplugins author dev [package-path] [flags]
 ```
 
 ### Options
 
 ```
-  -h, --help   help for help
+      --allow-network       allow the selected streamable HTTP endpoint
+      --deadline duration   per-cycle runtime deadline (maximum 1m) (default 10s)
+      --fixture string      package-relative JSON object; requires --tool
+  -h, --help                help for dev
+      --include-root        disclose the explicitly selected root in this report
+      --once                run one bounded development cycle
+      --release-policy      also evaluate bounded release hygiene (not publication approval)
+      --server string       exact MCP server name
+      --tool string         exact tool name; requires --fixture
 ```
 
 ### Options inherited from parent commands
@@ -124,4 +135,4 @@ agentplugins author skills help [command] [flags]
 
 ### SEE ALSO
 
-* [agentplugins author skills](/en/api/cli/prepared-authoring-v2-agentplugins-author-skills)	 - Create and validate standard package Skills
+* [agentplugins author](/en/api/cli/prepared-authoring-v2-agentplugins-author)	 - Build Agent Plugins packages

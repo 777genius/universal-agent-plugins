@@ -11,10 +11,10 @@ translationRequired: false
 namespace: "prepared-authoring-v2"
 status: "released"
 released: true
-sourceSHA: "ec9397a63f7c7550a680fcb0f5565902acbf7243"
+sourceSHA: "28a1748f97fe1945fc8edcd718ddd44c3f40b215"
 factoryBaselineSHA: "070663efb27f69ecae8609e6b839f86f843efbb0"
 sources:
-  - "cli/plugin-kit-ai/cmd/agentplugins/release_root.go: c0465f90903c7ad3fcdc2283c241558d1b73bd9633f0e6af247ccd692a0e155e"
+  - "cli/plugin-kit-ai/cmd/agentplugins/release_root.go: 120a9ba8ac9b6116cd8f11e81eb599bebeb94907e8710106d98daa41691232bf"
   - "cli/plugin-kit-ai/cmd/plugin-kit-ai/release_compat.go: d2f11a845c116160114ddd1b0ba8b825e9e5a4794354742749db7122c0c674c8"
   - "cli/plugin-kit-ai/go.mod: d388e12cb393cca6fcf8034e4a05d3c4eb8777427fed47ed064ef0623c377606"
   - "cli/plugin-kit-ai/go.sum: 0cf114be6b68dd165b75b588776e0bb7b9cc4aaa08fae382f7fa42b580bfa2da"
@@ -49,10 +49,10 @@ sources:
   - "cli/plugin-kit-ai/internal/agentpluginscli/update_all.go: 7b791dc9fe04cf3ceae4f3ade5c36c308104761242cb3cb37474d1551961cc65"
   - "cli/plugin-kit-ai/internal/agentpluginscli/update_multi.go: 0ff5bedf401e3736178ea7274e4e7b3eac113867288f0f86bb354ae724991f23"
   - "cli/plugin-kit-ai/internal/agentpluginscli/validate.go: 8c643a08c657431d623197364f5f47d7f23ed0b4e6cf926f40a521a8bac7ee9d"
-  - "cli/plugin-kit-ai/internal/authoring/commands/commands.go: 9ed49814d6145f61e28ac8c5b914383749f06d946dcece15db2c1059fd290220"
-  - "cli/plugin-kit-ai/internal/authoring/commands/public_contract.go: 39c79f491f0733d352ffc0fa3a8ff4eaa169612e8876e92e5fb74c856663ec65"
+  - "cli/plugin-kit-ai/internal/authoring/commands/commands.go: 7e0263c0b9a390263ad68d206b2a020e5c31bfcb55977c5ed678ab3161249f9f"
+  - "cli/plugin-kit-ai/internal/authoring/commands/public_contract.go: 2fcfcadc403c32c69f9e63ded5dc679759ea7db42d615c64cecf858befa7fbbb"
   - "cli/plugin-kit-ai/internal/authoring/commands/skills.go: 566e36e02d58c5d76e92369987d901feb1bcb6f3e59d3225e02961fa041d606b"
-  - "cli/plugin-kit-ai/internal/authoring/commands/version.go: ffe6cfef352faeb9a3c00722a628a2093876c14120cd6725131b3e105fda6b29"
+  - "cli/plugin-kit-ai/internal/authoring/commands/version.go: 44ccc86f9b4a52b2258a4f04f4999e07fd964223d569812f4bbc74d63dbdeb37"
   - "cli/plugin-kit-ai/internal/authoringcli/command.go: ab3ea92ca93a676a49cb99898a23386e1766e6f8becb2468bcfbb84ec22e1ec4"
   - "cli/plugin-kit-ai/internal/authoringcli/flags.go: 5f745c810e90586899cff2170433dbc58483ba17496167738387388f29be49c0"
   - "cli/plugin-kit-ai/internal/authoringcli/release.go: 45cb7a7000a31bb8477d1301fc70ce4521140b9f2a4760d5f84da3283134877f"
@@ -81,13 +81,13 @@ maturity: "stable"
 publicVisibility: "public"
 localeStrategy: "canonical-en"
 sourceKind: "authoring-docs-adapter"
-sourceRef: "https://github.com/777genius/universal-agent-plugins/tree/ec9397a63f7c7550a680fcb0f5565902acbf7243/cli/plugin-kit-ai/internal/authoring/commands"
+sourceRef: "https://github.com/777genius/universal-agent-plugins/tree/28a1748f97fe1945fc8edcd718ddd44c3f40b215/cli/plugin-kit-ai/internal/authoring/commands"
 ---
-> Milestone A reference from the released authoring engine. [Exact source](https://github.com/777genius/universal-agent-plugins/tree/ec9397a63f7c7550a680fcb0f5565902acbf7243/cli/plugin-kit-ai/internal/authoring/commands).
+> Released Agent Plugins CLI reference from the exact source. [Exact source](https://github.com/777genius/universal-agent-plugins/tree/28a1748f97fe1945fc8edcd718ddd44c3f40b215/cli/plugin-kit-ai/internal/authoring/commands).
 
-<!-- namespace: prepared-authoring-v2; status: released; source-sha: ec9397a63f7c7550a680fcb0f5565902acbf7243 -->
+<!-- namespace: prepared-authoring-v2; status: released; source-sha: 28a1748f97fe1945fc8edcd718ddd44c3f40b215 -->
 
-Released Milestone A reference.
+Released Agent Plugins CLI reference.
 
 # agentplugins author
 
@@ -123,13 +123,14 @@ for project diagnostics. Use agentplugins add for installation/security policy.
 
 ### SEE ALSO
 
-* [agentplugins](https://github.com/777genius/universal-agent-plugins/blob/ec9397a63f7c7550a680fcb0f5565902acbf7243/cli/plugin-kit-ai/internal/agentpluginscli/root.go)	 - Install and manage Agent Plugins 1.0 packages across AI clients
+* [agentplugins](https://github.com/777genius/universal-agent-plugins/blob/28a1748f97fe1945fc8edcd718ddd44c3f40b215/cli/plugin-kit-ai/internal/agentpluginscli/root.go)	 - Install and manage Agent Plugins 1.0 packages across AI clients
 * [agentplugins author capabilities](/en/api/cli/prepared-authoring-v2-agentplugins-author-capabilities)	 - Show embedded schemas, profiles, live client metadata and implemented commands
 * [agentplugins author compat](/en/api/cli/prepared-authoring-v2-agentplugins-author-compat)	 - Evaluate explicit --target clients using static adapter support; no installed clients required
+* [agentplugins author dev](/en/api/cli/prepared-authoring-v2-agentplugins-author-dev)	 - Rerun one explicit MCP server when the selected package changes
 * [agentplugins author doctor](/en/api/cli/prepared-authoring-v2-agentplugins-author-doctor)	 - Inspect captured native files and executable metadata; no processes or network
 * [agentplugins author init](/en/api/cli/prepared-authoring-v2-agentplugins-author-init)	 - Create an offline standard package in an absent destination
 * [agentplugins author inspect](/en/api/cli/prepared-authoring-v2-agentplugins-author-inspect)	 - Inspect captured components and unresolved runtime requirements
 * [agentplugins author skills](/en/api/cli/prepared-authoring-v2-agentplugins-author-skills)	 - Create and validate standard package Skills
-* [agentplugins author test](/en/api/cli/prepared-authoring-v2-agentplugins-author-test)	 - Check configuration, hygiene, Skills and MCP statically; runtime is not evaluated
+* [agentplugins author test](/en/api/cli/prepared-authoring-v2-agentplugins-author-test)	 - Check statically by default, or run one explicit MCP server with --runtime=mcp
 * [agentplugins author validate](/en/api/cli/prepared-authoring-v2-agentplugins-author-validate)	 - Validate exact-root standard configuration and authoring readiness
 * [agentplugins author version](/en/api/cli/prepared-authoring-v2-agentplugins-author-version)	 - Print product version and shared authoring engine revision

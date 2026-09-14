@@ -58,7 +58,7 @@ export async function consumePreparedCLI(root, expectedSHA) {
     const releasedMarker = `<!-- namespace: ${namespace}; status: released; source-sha: ${expectedSHA} -->`;
     const linked = original
       .replace(`<!-- namespace: ${namespace}; status: prepared-not-release; source-sha: ${expectedSHA} -->`, releasedMarker)
-      .replace("Prepared reference only; not a public release.", "Released Milestone A reference.")
+      .replace("Prepared reference only; not a public release.", "Released Agent Plugins CLI reference.")
       .replace(/\]\(([^)]+)\)/g, (full, target) => {
       if (/^https:\/\//.test(target)) {
         if (!target.startsWith(`${repository}/blob/${expectedSHA}/`)) fail(`unexpected source link ${target}`);
@@ -93,7 +93,7 @@ export async function consumePreparedCLI(root, expectedSHA) {
         title: entry.command_path, description: entry.short, canonicalId: entry.identity,
         section: "api", surface: "authoring-cli", locale: "en", generated: true, editLink: false,
         translationRequired: false, ...metadata, sources: envelope.sources.map((pin) => `${pin.path}: ${pin.sha256}`)
-      }, `> Milestone A reference from the released authoring engine. [Exact source](${sourceHref}).\n\n${body}`)
+      }, `> Released Agent Plugins CLI reference from the exact source. [Exact source](${sourceHref}).\n\n${body}`)
     });
   }
   return { entities, pages, envelope };

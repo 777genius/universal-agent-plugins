@@ -140,7 +140,7 @@ test("actual accepted adapter envelope preserves all commands/flags/provenance a
   const publicCommands = bundle.envelope.surfaces
     .filter((surface) => surface.command_path === "agentplugins author")
     .flatMap((surface) => surface.commands);
-  assert.equal(publicCommands.length, 14);
+  assert.equal(publicCommands.length, 15);
   assert.equal(bundle.entities.length, publicCommands.length);
   assert.ok(bundle.envelope.surfaces.some((surface) => surface.command_path === "plugin-kit-ai"));
   assert.ok(bundle.entities.every((entry) => entry.title === "agentplugins author" || entry.title.startsWith("agentplugins author ")));
@@ -156,7 +156,7 @@ test("actual accepted adapter envelope preserves all commands/flags/provenance a
       assert.equal(entity.publicVisibility, "public");
       assert.equal(entity.sourceSHA, sourceSHA);
       assert.deepEqual(entity.sources, bundle.envelope.sources);
-      assert.ok(!/\b(__\w+|migrate|migration|bootstrap|dev|generate|import|export|bundle|publish|normalize)\b/.test(command.command_path));
+      assert.ok(!/\b(__\w+|migrate|migration|bootstrap|generate|import|export|bundle|publish|normalize)\b/.test(command.command_path));
       assert.ok(!entity.pathEn.endsWith(`/api/cli/${command.command_path.replaceAll(" ", "-")}`));
     }
   }
@@ -170,7 +170,8 @@ test("actual accepted adapter envelope preserves all commands/flags/provenance a
   for (const page of bundle.pages) {
     assert.equal(page.mirror, false);
     assert.match(page.content, /status: released/);
-    assert.match(page.content, /Released Milestone A reference/);
+    assert.match(page.content, /Released Agent Plugins CLI reference/);
+    assert.doesNotMatch(page.content, /Milestone A/);
     assert.doesNotMatch(page.content, /prepared-not-release|not a public release/);
     assert.ok(!/\]\([^)]*\.md\)/.test(page.content));
     for (const match of page.content.matchAll(/\]\((\/en\/[^)]+)\)/g)) {
