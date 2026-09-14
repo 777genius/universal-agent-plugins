@@ -34,7 +34,7 @@ export async function runSiteConsumerSmoke(browser, base, artifactsRoot) {
     }
     await page.goto(`${base}/en/api/cli/prepared-authoring-v2-agentplugins-author`, { waitUntil: "networkidle" });
     const reference = await page.locator(".vp-doc").innerText();
-    assert.match(reference, /released authoring engine/i);
+    assert.match(reference, /released Agent Plugins CLI reference/i);
     assert.doesNotMatch(reference, /not released|not a public release/i);
     await page.screenshot({ path: path.join(artifactsRoot, "d2b-agentplugins-author.png"), fullPage: true });
     const redirects = JSON.parse(await fs.readFile(generatedRegistryPaths.redirects, "utf8"));
