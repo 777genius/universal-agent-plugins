@@ -248,7 +248,7 @@ test("emitted HTML redirects preserve query/deep fragments at canonical base; no
     for (const fragment of ["#options", "#a%20b", ""]) {
       let actual;
       const location = { search: "?view=legacy&x=1", hash: fragment, replace: (url) => { actual = url; } };
-      const script = html.match(/<script>([\s\S]*?)<\/script>/)[1];
+      const script = html.match(/<script>([\s\S]*?)<\/script>/i)[1];
       vm.runInNewContext(script, { location });
       assert.equal(actual, new URL(target.slice(1), docsBaseUrl).href + location.search + fragment);
       evidence.push({ alias, target, fragment, actual });
