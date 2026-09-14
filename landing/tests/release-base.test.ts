@@ -13,6 +13,14 @@ const source = readFileSync(
   .replace(/^import[\s\S]*?from '[^']+';\n/gm, '')
   .replaceAll('export ', '');
 const script = stripTypeScriptTypes(source) + '\nuseReleaseDownloads;';
+
+test('release metadata normalizes each supported product-prefixed tag', () => {
+  for (const tag_name of ['agentplugins-v0.1.65', 'plugin-kit-ai-v2.0.5']) {
+    const parsed = parseGitHubRelease({ tag_name, published_at: '', assets: [] });
+    assert.equal(parsed.version, tag_name.match(/v(\d+\.\d+\.\d+)$/)?.[1]);
+  }
+});
+
 for (const base of ['/', '/universal-agent-plugins/']) {
   test(`release handler uses ${base} with stable cache key and ten-minute TTL`, async () => {
     const storage = new Map<string, string>();

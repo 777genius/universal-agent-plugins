@@ -53,7 +53,7 @@ function toVariant(
 }
 
 export function parseGitHubRelease(release: GitHubRelease): DownloadsApiResponse {
-  const version = release.tag_name?.replace(/^v/, "") || null
+  const version = release.tag_name?.replace(/^(?:(?:agentplugins|plugin-kit-ai)-)?v/, "") || null
   const assets = release.assets || []
 
   return {
