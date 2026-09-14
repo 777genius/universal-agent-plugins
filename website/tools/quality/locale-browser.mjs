@@ -89,7 +89,9 @@ export async function runLocaleSmoke(browser, base, artifactsRoot) {
       }
       const fallback = "/en/api/cli/prepared-authoring-v2-plugin-kit-ai";
       await goto(fallback);
-      await inspectSwitcher(fallback, () => fallback, () => "en", true);
+      // Archived pages are intentionally absent from the current entity
+      // registry, so their language switcher returns to each locale home.
+      await inspectSwitcher(fallback, code => `/${code}/`, code => code, false, true);
       await goto("/?gateway=manual");
       await inspectSwitcher("/?gateway=manual", code => `/${code}/`, code => code, false, true);
       evidence.push({ variant, fiveCounterparts: true, englishFallback: true, unknownHomes: true });
