@@ -28,7 +28,7 @@ For native installation on macOS, Linux or Windows, follow the installer guide. 
 
 [Installer guide](https://github.com/777genius/universal-agent-plugins#quick-start)
 
-Milestone A is available: universal-agent-plugins@0.1.65 / plugin-kit-ai@2.0.5; GitHub: agentplugins-v0.1.65 / plugin-kit-ai-v2.0.5.
+Milestone A is available in `universal-agent-plugins@0.1.65`; GitHub release: `agentplugins-v0.1.65`.
 
 Compatibility is package-specific. Schema validation does not prove runtime, OAuth or activation. Codex does not support declared MCP SSE; stdio and Streamable HTTP keep their existing adapter support.
 
@@ -45,7 +45,22 @@ Build a portable Agent Plugins 1.0 package around plugin.json, with optional ski
 
 **Milestone A is available**
 
-Milestone A static authoring is available as universal-agent-plugins@0.1.65 / plugin-kit-ai@2.0.5; GitHub: agentplugins-v0.1.65 / plugin-kit-ai-v2.0.5. npm, PyPI, Homebrew, GitHub Releases and public-channel E2E are verified. Static authoring only; phases 7–11, runtime/dev/bootstrap, migration, export and publication remain deferred. Legacy plugin.yaml capabilities remain preserved; maintain v1 projects with plugin-kit-ai@1.2.4.
+Milestone A static authoring is available through `agentplugins author` in `universal-agent-plugins@0.1.65`; GitHub release: `agentplugins-v0.1.65`. npm, Homebrew, GitHub Releases and public-channel E2E are verified. Static authoring only; phases 7–11, runtime/dev/bootstrap, migration, export and publication remain deferred. Legacy plugin.yaml capabilities remain preserved; maintain v1 projects with plugin-kit-ai@1.2.4.
+
+The PyPI compatibility channel remains `plugin-kit-ai@2.0.5`; it exposes the
+same Milestone A engine under the standalone `plugin-kit-ai` executable. The
+recommended documentation path below uses `agentplugins author`.
+
+```bash
+npm install --global universal-agent-plugins@0.1.65
+agentplugins author init ./my-plugin --template skill --name my-plugin \
+  --description 'Instructions for a repeatable agent task'
+agentplugins author validate ./my-plugin
+agentplugins author inspect ./my-plugin
+agentplugins author test ./my-plugin
+```
+
+[Open the complete Build guide](/en/build/)
 
 [Read the Agent Plugins 1.0 specification](https://agent-plugins.org/specification)
 

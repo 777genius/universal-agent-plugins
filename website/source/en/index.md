@@ -1,6 +1,6 @@
 ---
-title: "plugin-kit-ai Documentation"
-description: "Public documentation for plugin-kit-ai."
+title: "Agent Plugins Documentation"
+description: "Public documentation for Agent Plugins."
 canonicalId: "page:home"
 section: "home"
 locale: "en"
@@ -10,108 +10,56 @@ translationRequired: true
 
 <div class="docs-hero docs-hero--feature">
   <p class="docs-kicker">PUBLIC DOCUMENTATION</p>
-  <h1>plugin-kit-ai</h1>
+  <h1>Agent Plugins</h1>
   <p class="docs-lead">
-    Build one plugin repo and ship it to many AI agents without learning the whole target model on day one.
+    Build one portable plugin package and validate it for multiple AI agents with <code>agentplugins author</code>.
   </p>
 </div>
 
-## Default Start
 
-If you are new, start with the job-first path.
-
-That keeps the first decision small, gets one working repo into your hands quickly, and leaves room to expand the same repo later.
-
-## Start By Job
-
-- [Connect an online service](/en/guide/choose-what-you-are-building#connect-an-online-service)
-- [Connect a local tool](/en/guide/choose-what-you-are-building#connect-a-local-tool)
-- [Build custom plugin logic - Advanced](/en/guide/build-custom-plugin-logic)
-
-## What To Know Right Away
-
-- one repo remains the source of truth as you add more lanes
-- choose the starting path that matches the job you need today
-- expand later from the same repo when the product needs more outputs
-- use `generate` and `validate --strict` as the shared readiness workflow
-
-## Supported Node And Python Paths
-
-Node/TypeScript and Python remain supported when the language choice is already real for the team or the product.
-
-- `codex-runtime --runtime node --typescript` stays the main supported non-Go path
-- `codex-runtime --runtime python` stays the supported Python-first path
-- both are repo-local interpreted runtime lanes, so the target machine still needs Node.js or Python installed
-- Go remains the default when you want the strongest general production story
+## Choose your journey
 
 <div class="docs-grid">
-  <a class="docs-card" href="./guide/choose-what-you-are-building">
-    <h2>Choose What You Are Building</h2>
-    <p>Start with the job first, then learn the deeper target model only when you need it.</p>
+  <a class="docs-card" href="./use/">
+    <h2>Use plugins</h2>
+    <p>Find a reviewed package, preview the installation plan, and install it for selected AI agents.</p>
   </a>
-  <a class="docs-card" href="./guide/quickstart">
-    <h2>Start Fast</h2>
-    <p>Get a working repo fast from the new job-first entry path.</p>
-  </a>
-  <a class="docs-card" href="./guide/build-custom-plugin-logic">
-    <h2>Advanced Custom Logic</h2>
-    <p>Open the guided path for runtime code, hooks, and orchestration when wiring alone is not enough.</p>
-  </a>
-  <a class="docs-card" href="./guide/what-you-can-build">
-    <h2>See The Product Shape</h2>
-    <p>See how one repo grows into runtime, package, extension, and repo-owned integration setup.</p>
-  </a>
-  <a class="docs-card" href="./guide/choose-a-target">
-    <h2>Choose A Target</h2>
-    <p>Match the target to how you want to ship the plugin instead of treating every output like the same thing.</p>
-  </a>
-  <a class="docs-card" href="./reference/support-boundary">
-    <h2>Check The Exact Contract</h2>
-    <p>Use the reference pages when you need the precise support boundary and compatibility terms.</p>
+  <a class="docs-card" href="./build/">
+    <h2>Build plugins</h2>
+    <p>Create a standard package with plugin.json, Skills, MCP configuration, or a supported combination.</p>
   </a>
 </div>
 
-## Read In This Order
+## Build with Agent Plugins
 
-<div class="docs-grid">
-  <a class="docs-card" href="./guide/choose-what-you-are-building">
-    <h2>1. Choose What You Are Building</h2>
-    <p>Pick online service, local tool, or custom logic before you go deeper.</p>
-  </a>
-  <a class="docs-card" href="./guide/quickstart">
-    <h2>2. Quickstart</h2>
-    <p>Turn that choice into a working repo and a clean first validation loop.</p>
-  </a>
-  <a class="docs-card" href="./guide/build-custom-plugin-logic">
-    <h2>3. Advanced Custom Logic</h2>
-    <p>Use this when the plugin's value lives in your code, hooks, and runtime behavior.</p>
-  </a>
-  <a class="docs-card" href="./guide/what-you-can-build">
-    <h2>4. What You Can Build</h2>
-    <p>See the product shape across runtime, package, extension, and integration lanes.</p>
-  </a>
-  <a class="docs-card" href="./guide/choose-a-target">
-    <h2>5. Choose A Target</h2>
-    <p>Use this later when you are ready for target-specific shipping decisions.</p>
-  </a>
-  <a class="docs-card" href="./reference/support-boundary">
-    <h2>6. Support Boundary</h2>
-    <p>Use the reference cluster when you need exact compatibility language and support details.</p>
-  </a>
-</div>
+Install the released CLI, then use the `agentplugins author` command group:
 
-If you are new, stop after the starter pages. Everything else is deeper reference or implementation detail.
+```bash
+npm install --global universal-agent-plugins@0.1.65
+agentplugins author init ./my-plugin --template skill --name my-plugin \
+  --description 'Instructions for a repeatable agent task'
+agentplugins author validate ./my-plugin
+agentplugins author inspect ./my-plugin
+agentplugins author test ./my-plugin
+```
 
-## Current Repo Baseline
+[Open the complete Build guide](/en/build/)
 
-- The current public baseline in this docs set is [`v1.1.2`](/en/releases/v1-1-2).
-- This patch line restored first-party install compatibility across legacy and current authored layouts, then fixed Gemini full multi-target installs for GitHub repo-path sources.
-- Start there when you want the current recommended baseline.
+## Current scope
 
-## What This Site Helps You Do
+Milestone A creates and statically checks portable Agent Plugins 1.0 packages.
+Runtime execution, dev loops, dependency bootstrap, migration, export, and
+publication are planned separately. Static validation does not prove client
+activation, service authentication, or runtime behavior.
 
-- start one plugin repo instead of splitting source of truth by ecosystem
-- pick a recommended starting path without learning every target detail up front
-- expand the same repo later into more shipping paths
-- keep one review and validation story as the repo grows
-- find the exact contract only when you need it
+Existing `plugin.yaml` projects remain supported through the preserved
+[plugin-kit-ai v1 documentation](/en/legacy/v1/). Their useful capabilities and
+implementation have not been removed.
+
+## Reference
+
+- [Quickstart](/en/guide/quickstart)
+- [Package layout](/en/build/layout)
+- [Static checks and evidence](/en/build/checks)
+- [Support boundary](/en/reference/support-boundary)
+- [Agent Plugins 1.0 specification](https://agent-plugins.org/specification)

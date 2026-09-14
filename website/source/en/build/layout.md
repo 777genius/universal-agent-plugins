@@ -10,14 +10,13 @@ translationRequired: true
 
 # Understand the package root
 
-> **Milestone A is available.** Standard-first static authoring is published as
-> `universal-agent-plugins@0.1.65` (`agentplugins author`) and `plugin-kit-ai@2.0.5`.
-> GitHub tags: `agentplugins-v0.1.65` and `plugin-kit-ai-v2.0.5`.
-> npm, PyPI, Homebrew, GitHub Releases and the public-channel E2E are verified.
+> **Milestone A is available.** Install `agentplugins` from
+> `universal-agent-plugins@0.1.65` on npm or the `777genius/agentplugins` Homebrew tap.
+> GitHub release: `agentplugins-v0.1.65`. Public-channel E2E is verified.
 > Runtime/dev/bootstrap, migration, export and publication remain deferred.
 > Historical YAML v1 workflows remain separate and preserved.
 
-The selected directory is the package root. Future authoring reads root
+The selected directory is the package root. Authoring reads root
 `plugin.json` and its standard components. It does not search parents for a
 project, convert YAML, or fall back to a native client's hidden manifest.
 
@@ -84,10 +83,10 @@ There is no default license selection.
 ```bash
 agentplugins author validate ./research-helper
 agentplugins author inspect ./research-helper
-plugin-kit-ai test ./research-helper
+agentplugins author test ./research-helper
 ```
 
-All three select the same root despite the different command prefixes. Passing
+All three select the same package root. Passing
 `./research-helper/skills` would select the wrong directory. The optional path
 on read commands defaults only to the current directory, not a discovered parent.
 

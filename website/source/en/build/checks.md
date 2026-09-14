@@ -10,10 +10,9 @@ translationRequired: true
 
 # Check a package without running it
 
-> **Milestone A is available.** Standard-first static authoring is published as
-> `universal-agent-plugins@0.1.65` (`agentplugins author`) and `plugin-kit-ai@2.0.5`.
-> GitHub tags: `agentplugins-v0.1.65` and `plugin-kit-ai-v2.0.5`.
-> npm, PyPI, Homebrew, GitHub Releases and the public-channel E2E are verified.
+> **Milestone A is available.** Install `agentplugins` from
+> `universal-agent-plugins@0.1.65` on npm or the `777genius/agentplugins` Homebrew tap.
+> GitHub release: `agentplugins-v0.1.65`. Public-channel E2E is verified.
 > Runtime/dev/bootstrap, migration, export and publication remain deferred.
 > Historical YAML v1 workflows remain separate and preserved.
 
@@ -31,15 +30,7 @@ agentplugins author inspect ./review-helper
 agentplugins author test ./review-helper
 ```
 
-Equivalent Milestone A authoring executable commands:
-
-```bash
-plugin-kit-ai validate ./review-helper
-plugin-kit-ai inspect ./review-helper
-plugin-kit-ai test ./review-helper
-```
-
-Choose one entrypoint. Validate evaluates exact-root standard configuration and
+Validate evaluates exact-root standard configuration and
 authoring readiness. Inspect shows captured components and unresolved runtime
 requirements. Test checks configuration, hygiene, Skills, and MCP statically.
 It does not launch scripts, perform a handshake, or execute a tool fixture.
@@ -66,7 +57,6 @@ agentplugins author compat ./review-helper --target codex,claude
 agentplugins author inspect ./review-helper --target codex,claude
 ```
 
-The equivalent forms begin `plugin-kit-ai compat` and `plugin-kit-ai inspect`.
 Compat requires distinct comma-separated client IDs. Use explicit IDs rather
 than `all` or historical target names such as `codex-runtime`. These are static
 adapter checks; installed clients are not required. Inspect accepts an optional
@@ -79,11 +69,6 @@ agentplugins author doctor ./review-helper
 agentplugins author capabilities
 ```
 
-```bash
-plugin-kit-ai doctor ./review-helper
-plugin-kit-ai capabilities
-```
-
 Doctor reads captured native files and executable metadata without processes or
 network. Capabilities takes no package path and reports embedded schemas,
 profiles, client metadata, and implemented commands. It describes this engine;
@@ -93,7 +78,7 @@ it does not certify a package or prove the engine has been publicly released.
 
 ```bash
 agentplugins author validate ./review-helper --format json
-plugin-kit-ai inspect ./review-helper --format json
+agentplugins author inspect ./review-helper --format json
 ```
 
 Human output is `--format human`; `--no-color` is supported. Package commands can

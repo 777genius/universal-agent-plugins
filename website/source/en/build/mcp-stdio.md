@@ -10,10 +10,9 @@ translationRequired: true
 
 # Build a stdio MCP package
 
-> **Milestone A is available.** Standard-first static authoring is published as
-> `universal-agent-plugins@0.1.65` (`agentplugins author`) and `plugin-kit-ai@2.0.5`.
-> GitHub tags: `agentplugins-v0.1.65` and `plugin-kit-ai-v2.0.5`.
-> npm, PyPI, Homebrew, GitHub Releases and the public-channel E2E are verified.
+> **Milestone A is available.** Install `agentplugins` from
+> `universal-agent-plugins@0.1.65` on npm or the `777genius/agentplugins` Homebrew tap.
+> GitHub release: `agentplugins-v0.1.65`. Public-channel E2E is verified.
 > Runtime/dev/bootstrap, migration, export and publication remain deferred.
 > Historical YAML v1 workflows remain separate and preserved.
 
@@ -27,20 +26,10 @@ host can start the server or that the tools behave correctly.
 Use an existing disposable parent directory with no `./local-tools` child.
 The runtime is an explicit template input.
 
-Future installer-hosted authoring spelling:
+Run the released authoring command:
 
 ```bash
 agentplugins author init ./local-tools \
-  --template mcp-stdio \
-  --name local-tools \
-  --description 'Provide local tools through a Node MCP server' \
-  --runtime node
-```
-
-Equivalent standalone authoring spelling; choose one:
-
-```bash
-plugin-kit-ai init ./local-tools \
   --template mcp-stdio \
   --name local-tools \
   --description 'Provide local tools through a Node MCP server' \
@@ -85,8 +74,7 @@ agentplugins author compat ./local-tools --target codex,claude
 agentplugins author doctor ./local-tools
 ```
 
-Use `plugin-kit-ai` in place of `agentplugins author` for the equivalent
-entrypoint. Static test inspects configuration, hygiene, Skills, and MCP; it is
+Static test inspects configuration, hygiene, Skills, and MCP; it is
 not an MCP handshake or a test invocation of `hello`.
 
 Doctor inspects captured native files and executable metadata without processes

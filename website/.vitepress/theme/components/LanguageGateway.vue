@@ -17,13 +17,13 @@ const locales: LocaleEntry[] = [
   {
     code: "EN",
     title: "English",
-    description: "Public documentation for the global plugin-kit-ai community.",
+    description: "Public documentation for the global Agent Plugins community.",
     href: withBase("/en/")
   },
   {
     code: "RU",
     title: "Русский",
-    description: "Публичная документация для русскоязычных пользователей plugin-kit-ai.",
+    description: "Публичная документация Agent Plugins для русскоязычных пользователей.",
     href: withBase("/ru/")
   },
   {
@@ -35,13 +35,13 @@ const locales: LocaleEntry[] = [
   {
     code: "FR",
     title: "Français",
-    description: "Documentation publique pour les équipes francophones sur plugin-kit-ai.",
+    description: "Documentation publique Agent Plugins pour les équipes francophones.",
     href: withBase("/fr/")
   },
   {
     code: "ZH",
     title: "简体中文",
-    description: "面向中文团队的 plugin-kit-ai 公共文档。",
+    description: "面向中文团队的 Agent Plugins 公共文档。",
     href: withBase("/zh/")
   }
 ];
@@ -94,7 +94,7 @@ function redirectToPreferredLocale() {
 <template>
   <div class="language-gateway">
     <div class="language-gateway__intro">
-      <p class="language-gateway__eyebrow">plugin-kit-ai docs</p>
+      <p class="language-gateway__eyebrow">Agent Plugins docs</p>
       <h1>Choose your language</h1>
       <p>
         This gateway stays minimal on purpose. Pick a locale to enter the public documentation.

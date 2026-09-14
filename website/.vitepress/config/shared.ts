@@ -71,8 +71,8 @@ export const sharedConfig = defineConfig({
   cleanUrls: true,
   lastUpdated: true,
   base: docsBasePath,
-  title: "plugin-kit-ai Docs",
-  description: "Public documentation for plugin-kit-ai",
+  title: "Agent Plugins Docs",
+  description: "Public documentation for Agent Plugins",
   head: [
     ["link", { rel: "icon", href: `${docsBasePath}icon.svg`, type: "image/svg+xml" }],
     ["link", { rel: "manifest", href: `${docsBasePath}site.webmanifest` }],
@@ -83,13 +83,13 @@ export const sharedConfig = defineConfig({
     const relativePath = pageData.relativePath.replace(/\\/g, "/");
     const isGateway = relativePath.startsWith("gateway/");
     const isNotFound = pageData.isNotFound || relativePath === "gateway/404.md";
-    const pageTitle = title || pageData.title || "plugin-kit-ai Docs";
+    const pageTitle = title || pageData.title || "Agent Plugins Docs";
     const pageDescription =
-      description || pageData.description || "Public documentation for plugin-kit-ai.";
+      description || pageData.description || "Public documentation for Agent Plugins.";
     const pageUrl = isNotFound ? null : toDocsPageUrl(relativePath);
     const head = [
       ["meta", { property: "og:type", content: "website" }],
-      ["meta", { property: "og:site_name", content: "plugin-kit-ai Docs" }],
+      ["meta", { property: "og:site_name", content: "Agent Plugins Docs" }],
       ["meta", { property: "og:title", content: pageTitle }],
       ["meta", { property: "og:description", content: pageDescription }],
       ["meta", { property: "og:image", content: socialImageUrl }],
@@ -207,7 +207,7 @@ export const sharedConfig = defineConfig({
   rewrites: {},
   themeConfig: {
     logo: "/icon.svg",
-    siteTitle: "plugin-kit-ai Docs",
+    siteTitle: "Agent Plugins Docs",
     search: {
       provider: "local"
     },

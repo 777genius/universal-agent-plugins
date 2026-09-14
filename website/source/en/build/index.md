@@ -10,10 +10,9 @@ translationRequired: true
 
 # Build plugins
 
-> **Milestone A is available.** Standard-first static authoring is published as
-> `universal-agent-plugins@0.1.65` (`agentplugins author`) and `plugin-kit-ai@2.0.5`.
-> GitHub tags: `agentplugins-v0.1.65` and `plugin-kit-ai-v2.0.5`.
-> npm, PyPI, Homebrew, GitHub Releases and the public-channel E2E are verified.
+> **Milestone A is available.** Install `agentplugins` from
+> `universal-agent-plugins@0.1.65` on npm or the `777genius/agentplugins` Homebrew tap.
+> GitHub release: `agentplugins-v0.1.65`. Public-channel E2E is verified.
 > Runtime/dev/bootstrap, migration, export and publication remain deferred.
 > Historical YAML v1 workflows remain separate and preserved.
 
@@ -23,9 +22,15 @@ translationRequired: true
 | Write a new portable package | Continue below | Root `plugin.json`, Skills and/or MCP configuration. |
 | Keep an existing YAML/runtime project working | [Historical v1](/en/legacy/v1/) | Version-pinned 1.2.4 context; no v2 migration. |
 
-Use `npm install -g universal-agent-plugins@0.1.65` for `agentplugins author`,
-or `npm install -g plugin-kit-ai@2.0.5` for the standalone entrypoint (Node.js 22+).
-Milestone A static authoring is available; phases 7–11 remain deferred.
+Install the primary CLI with npm or Homebrew:
+
+```bash
+npm install -g universal-agent-plugins@0.1.65
+# or: brew install 777genius/agentplugins/agentplugins
+```
+
+Then use `agentplugins author` throughout this guide. Milestone A static
+authoring is available; phases 7–11 remain deferred.
 
 ## Choose the smallest useful package
 
@@ -40,24 +45,23 @@ A standalone Skill here means a standard package whose portable component is a
 Skill. It still has root `plugin.json`; it is not an external Skills installer.
 Add more instructions later with [extra Skills](./skills).
 
-## Two equivalent authoring entrypoints
+## Primary authoring commands
 
-Choose one spelling and use it consistently:
+| Job | Command |
+| --- | --- |
+| Create a package | `agentplugins author init` |
+| Validate | `agentplugins author validate` |
+| Inspect | `agentplugins author inspect` |
+| Static test | `agentplugins author test` |
+| Static client compatibility | `agentplugins author compat` |
+| Project doctor | `agentplugins author doctor` |
+| Engine capabilities | `agentplugins author capabilities` |
+| Add or validate Skills | `agentplugins author skills` |
 
-| Shared authoring job | Installer executable | Authoring executable |
-| --- | --- | --- |
-| Create a package | `agentplugins author init` | `plugin-kit-ai init` |
-| Validate | `agentplugins author validate` | `plugin-kit-ai validate` |
-| Inspect | `agentplugins author inspect` | `plugin-kit-ai inspect` |
-| Static test | `agentplugins author test` | `plugin-kit-ai test` |
-| Static client compatibility | `agentplugins author compat` | `plugin-kit-ai compat` |
-| Project doctor | `agentplugins author doctor` | `plugin-kit-ai doctor` |
-| Engine capabilities | `agentplugins author capabilities` | `plugin-kit-ai capabilities` |
-| Add or validate Skills | `agentplugins author skills` | `plugin-kit-ai skills` |
-
-The table names jobs, not complete invocations. The tutorials supply explicit
-paths and template inputs. Both entrypoints use the same shared authoring
-engine; neither is a second YAML implementation.
+The separately published `plugin-kit-ai@2.0.5` executable exposes the same
+Milestone A authoring engine for compatibility and for the PyPI installation
+channel. New documentation and examples use `agentplugins author`. The older
+`plugin-kit-ai@1.2.4` line remains available only for existing YAML v1 projects.
 
 ## Follow the authoring loop
 

@@ -10,10 +10,9 @@ translationRequired: true
 
 # Hand a package to the installer planner
 
-> **Milestone A is available.** Standard-first static authoring is published as
-> `universal-agent-plugins@0.1.65` (`agentplugins author`) and `plugin-kit-ai@2.0.5`.
-> GitHub tags: `agentplugins-v0.1.65` and `plugin-kit-ai-v2.0.5`.
-> npm, PyPI, Homebrew, GitHub Releases and the public-channel E2E are verified.
+> **Milestone A is available.** Install `agentplugins` from
+> `universal-agent-plugins@0.1.65` on npm or the `777genius/agentplugins` Homebrew tap.
+> GitHub release: `agentplugins-v0.1.65`. Public-channel E2E is verified.
 > Runtime/dev/bootstrap, migration, export and publication remain deferred.
 > Historical YAML v1 workflows remain separate and preserved.
 
@@ -42,7 +41,7 @@ Avoid secrets and unnecessary absolute paths in shared evidence.
 
 ## Finish the authoring side
 
-Future authoring commands for the selected root:
+Released authoring commands for the selected root:
 
 ```bash
 agentplugins author validate ./review-helper
@@ -52,8 +51,8 @@ agentplugins author compat ./review-helper --target codex
 agentplugins author doctor ./review-helper
 ```
 
-The equivalent prefix is `plugin-kit-ai`. These commands do not inspect
-or modify a real user's client profile. Runtime execution and activation remain
+These commands do not inspect or modify a real user's client profile. Runtime
+execution and activation remain
 separate from this static package review.
 
 ## Ask the existing installer to plan

@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" role="img" aria-labelledby="title desc">
-  <title id="title">plugin-kit-ai Docs</title>
-  <desc id="desc">Social preview card for the plugin-kit-ai public documentation site.</desc>
+  <title id="title">Agent Plugins Docs</title>
+  <desc id="desc">Social preview card for the Agent Plugins public documentation site.</desc>
   <defs>
     <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" stop-color="#fff7ed" />
@@ -16,7 +16,7 @@
   <rect x="66" y="66" width="1068" height="498" rx="36" fill="url(#card)" />
   <rect x="110" y="116" width="180" height="42" rx="21" fill="#fed7aa" />
   <text x="138" y="144" font-size="22" font-family="Arial, sans-serif" fill="#9a3412" letter-spacing="3">PUBLIC DOCS</text>
-  <text x="110" y="245" font-size="82" font-weight="700" font-family="Arial, sans-serif" fill="#f8fafc">plugin-kit-ai</text>
+  <text x="110" y="245" font-size="82" font-weight="700" font-family="Arial, sans-serif" fill="#f8fafc">Agent Plugins</text>
   <text x="110" y="318" font-size="42" font-family="Arial, sans-serif" fill="#cbd5e1">Guides, reference, and generated API</text>
   <text x="110" y="376" font-size="42" font-family="Arial, sans-serif" fill="#cbd5e1">for CLI, runtimes, events, and capabilities.</text>
   <rect x="110" y="436" width="250" height="72" rx="22" fill="#f97316" />

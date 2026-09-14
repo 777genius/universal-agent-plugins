@@ -10,10 +10,9 @@ translationRequired: true
 
 # Build a hybrid package
 
-> **Milestone A is available.** Standard-first static authoring is published as
-> `universal-agent-plugins@0.1.65` (`agentplugins author`) and `plugin-kit-ai@2.0.5`.
-> GitHub tags: `agentplugins-v0.1.65` and `plugin-kit-ai-v2.0.5`.
-> npm, PyPI, Homebrew, GitHub Releases and the public-channel E2E are verified.
+> **Milestone A is available.** Install `agentplugins` from
+> `universal-agent-plugins@0.1.65` on npm or the `777genius/agentplugins` Homebrew tap.
+> GitHub release: `agentplugins-v0.1.65`. Public-channel E2E is verified.
 > Runtime/dev/bootstrap, migration, export and publication remain deferred.
 > Historical YAML v1 workflows remain separate and preserved.
 
@@ -27,22 +26,10 @@ The hybrid flag is `--mcp-template`. Choose `mcp-remote` or `mcp-stdio`, then su
 that template's required inputs. A hybrid does not infer a transport from the
 URL, local files, or installed runtimes.
 
-Future remote hybrid example:
+Remote hybrid example:
 
 ```bash
 agentplugins author init ./research-helper \
-  --template hybrid \
-  --name research-helper \
-  --description 'Guide research using the team MCP service' \
-  --skill-name research-guide \
-  --mcp-template mcp-remote \
-  --url https://mcp.example.com/mcp
-```
-
-Equivalent Milestone A authoring executable example; choose one:
-
-```bash
-plugin-kit-ai init ./research-helper \
   --template hybrid \
   --name research-helper \
   --description 'Guide research using the team MCP service' \
@@ -68,7 +55,6 @@ agentplugins author init ./local-research \
   --runtime node
 ```
 
-The equivalent prefix is `plugin-kit-ai init`; every argument stays the same.
 Do not add `--url` to the stdio variant. Review the
 [stdio prerequisite and runtime limits](./mcp-stdio).
 

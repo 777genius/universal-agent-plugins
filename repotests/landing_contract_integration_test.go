@@ -273,6 +273,9 @@ func TestLandingSurface_LocalesLinksAndBrandingStayAligned(t *testing.T) {
 	hero := string(heroBody)
 	mustContain(t, hero, `class="hero-section__logo"`)
 	mustContain(t, hero, `:src="asset('icon.svg')"`)
+	mustContain(t, hero, `const { docsUrl } = useDocsLinks()`)
+	mustContain(t, hero, `:href="docsUrl"`)
+	mustContain(t, hero, `t("hero.docsCta")`)
 	mustNotContain(t, hero, `<span class="hero-section__logo">`)
 
 	indexBody, err := os.ReadFile(filepath.Join(landingRoot, "pages", "index.vue"))
