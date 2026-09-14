@@ -2,6 +2,7 @@ package processlock
 
 import (
 	"context"
+	"errors"
 	"path/filepath"
 	"testing"
 )
@@ -13,8 +14,8 @@ func TestLockIsExclusiveAndReleasedWithProcessHandle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := lock.Acquire(context.Background()); err == nil {
-		t.Fatal("second process handle acquired the same lock")
+	if _, err := lock.Acquire(context.Background()); !errors.Is(err, ErrActive) {
+		t.Fatalf("second process handle conflict = %v", err)
 	}
 	if err := release(); err != nil {
 		t.Fatal(err)

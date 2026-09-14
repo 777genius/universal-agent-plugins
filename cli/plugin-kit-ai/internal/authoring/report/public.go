@@ -242,7 +242,7 @@ func (r Report) PublicResult(operation, mode string, attempted bool, surface []s
 			p.NextActions = append(p.NextActions, Action{"inspect_package", "author.inspect", "Inspect the created package using its explicit package path."})
 		}
 		if r.Runtime.Status == Pass {
-			p.NextActions = append(p.NextActions, Action{"runtime_verified", operation, "The selected MCP runtime stages passed in an isolated, bounded sandbox."})
+			p.NextActions = append(p.NextActions, Action{"runtime_verified", operation, "The selected MCP runtime stages passed under the transport-specific bounded runtime policy."})
 		} else {
 			p.NextActions = append(p.NextActions, Action{"static_test", "author.test", "Run the offline static test with the package path; runtime behavior remains unevaluated."})
 		}

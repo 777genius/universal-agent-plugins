@@ -10,8 +10,9 @@ export const factoryBaseline = "070663efb27f69ecae8609e6b839f86f843efbb0";
 const repository = "https://github.com/777genius/universal-agent-plugins";
 const commandPathPattern = /^(plugin-kit-ai|agentplugins author)( [a-z0-9-]+)*$/;
 
-// This consumes only the reviewed adapter contract. It never guesses a legacy
-// array's version, filters additional commands, or fabricates translated pages.
+// This consumes only the reviewed adapter contract. The explicit Phase 7
+// projection below keeps unreleased runtime commands out of the released site;
+// it never guesses a legacy array's version or fabricates translated pages.
 export async function consumePreparedCLI(root, expectedSHA) {
   const envelope = JSON.parse(await fs.readFile(path.join(root, namespace, "manifest.json"), "utf8"));
   const fail = (message) => { throw new Error(`Prepared CLI contract: ${message}`); };
@@ -33,6 +34,12 @@ export async function consumePreparedCLI(root, expectedSHA) {
         fail("command outside surface");
     }
     return surface.commands;
+  }).filter((entry) => entry.command_path !== "agentplugins author dev").map((entry) => {
+    if (entry.command_path !== "agentplugins author test") return entry;
+    const runtimeFlags = new Set(["allow-network", "deadline", "fixture", "runtime", "server", "tool"]);
+    const summary = "Check package configuration and hygiene without executing package code";
+    return { ...entry, short: summary, long: entry.long.replace(entry.short, summary),
+      local_flags: entry.local_flags.filter((flag) => !runtimeFlags.has(flag.name)) };
   });
   const ids = new Set();
   const links = new Map();
@@ -57,6 +64,13 @@ export async function consumePreparedCLI(root, expectedSHA) {
       fail("Markdown provenance mismatch");
     const releasedMarker = `<!-- namespace: ${namespace}; status: released; source-sha: ${expectedSHA} -->`;
     const linked = original
+      .split("\n").filter((line) => !line.includes("agentplugins_author_dev.md") &&
+        !(entry.command_path === "agentplugins author test" &&
+          /^\s+--(?:allow-network|deadline|fixture|runtime|server|tool)(?:\s|$)/.test(line))).join("\n")
+      .replaceAll("Check statically by default, or run one explicit MCP server with --runtime=mcp",
+        "Check package configuration and hygiene without executing package code")
+      .replaceAll("Check statically; the unreleased Phase 7 candidate can run one explicit MCP server",
+        "Check package configuration and hygiene without executing package code")
       .replace(`<!-- namespace: ${namespace}; status: prepared-not-release; source-sha: ${expectedSHA} -->`, releasedMarker)
       .replace("Prepared reference only; not a public release.", "Released Agent Plugins CLI reference.")
       .replace(/\]\(([^)]+)\)/g, (full, target) => {

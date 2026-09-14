@@ -3,6 +3,7 @@ package processlock
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -12,6 +13,10 @@ import (
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
 )
+
+// ErrActive lets callers report deterministic conflict diagnostics without
+// parsing platform-specific advisory-lock errors.
+var ErrActive = errors.New("another agentplugins mutation is active")
 
 type Lock struct {
 	Path string
@@ -58,7 +63,7 @@ func (lock Lock) Acquire(ctx context.Context) (ports.UnlockFunc, error) {
 		return closeOnError(fmt.Errorf("protect mutation lock: %w", err))
 	}
 	if err := acquireFile(file); err != nil {
-		return closeOnError(fmt.Errorf("another agentplugins mutation is active: %w", err))
+		return closeOnError(fmt.Errorf("%w: %v", ErrActive, err))
 	}
 	now := time.Now().UTC()
 	if lock.Now != nil {

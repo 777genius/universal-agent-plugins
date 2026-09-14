@@ -3,6 +3,7 @@ package mcpruntime
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -16,6 +17,7 @@ import (
 
 	"github.com/777genius/plugin-kit-ai/cli/internal/authoring/project"
 	processadapter "github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/process"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
 func writeProject(t *testing.T, server map[string]any, extras map[string]string) (string, project.Service, project.Result) {
@@ -63,8 +65,8 @@ process.stdout.write(JSON.stringify({jsonrpc:'2.0',id:q.id,result})+'\n');}`
 	root, service, p := writeProject(t, map[string]any{"type": "stdio", "command": "node", "args": []any{"${PLUGIN_ROOT}/server.mjs"}}, map[string]string{"server.mjs": source, "fixture.json": `{"value":"not-reported"}`})
 	t.Setenv("GITHUB_TOKEN", "must-not-be-inherited")
 	ev, err := Run(context.Background(), Options{SourceRoot: root, Scratch: service.Scratch, Project: p, Server: "selected", Tool: "echo", Fixture: "fixture.json", Deadline: 5 * time.Second, Projects: service})
-	if containmentErr != nil {
-		if code(err) != "runtime_process_containment_unavailable" || !ev.Cleanup {
+	if err != nil {
+		if got := code(err); got != "runtime_stdio_containment_unavailable" && (containmentErr == nil || got != "runtime_process_containment_unavailable") || !ev.Cleanup {
 			t.Fatalf("unavailable containment evidence=%+v err=%v capability=%v", ev, err, containmentErr)
 		}
 		entries, readErr := os.ReadDir(service.Scratch)
@@ -97,8 +99,7 @@ func TestStreamableHTTPRejectsReservedHeaders(t *testing.T) {
 
 func TestStreamableHTTPRejectsNonLoopbackCleartext(t *testing.T) {
 	for _, rawURL := range []string{"http://example.com/mcp", "ftp://example.com/mcp", "https://example.com/mcp#fragment"} {
-		root, service, p := writeProject(t, map[string]any{"type": "streamable-http", "url": rawURL}, nil)
-		_, err := Run(context.Background(), Options{SourceRoot: root, Scratch: service.Scratch, Project: p, Server: "selected", AllowNetwork: true, Deadline: time.Second, Projects: service})
+		err := runHTTP(context.Background(), domain.MCPServer{Decoded: map[string]any{"url": rawURL}}, "", nil, &Evidence{})
 		if code(err) != "runtime_http_config_invalid" {
 			t.Fatalf("URL %q: %v", rawURL, err)
 		}
@@ -115,12 +116,74 @@ func TestReadHTTPPayloadSelectsMatchingMultilineSSEEvent(t *testing.T) {
 	}
 }
 
+func TestReadHTTPPayloadReturnsBeforeLongLivedSSEEOF(t *testing.T) {
+	reader, writer := io.Pipe()
+	defer reader.Close()
+	release := make(chan struct{})
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		_, _ = io.WriteString(writer, "event: message\ndata: {\"jsonrpc\":\"2.0\",\"id\":7,\"result\":{}}\n\n")
+		<-release
+		_ = writer.Close()
+	}()
+	resp := &http.Response{Header: http.Header{"Content-Type": []string{"text/event-stream"}}, Body: reader}
+	type result struct {
+		payload []byte
+		err     error
+	}
+	returned := make(chan result, 1)
+	go func() {
+		payload, err := readHTTPPayload(resp, 7)
+		returned <- result{payload, err}
+	}()
+	select {
+	case got := <-returned:
+		if got.err != nil || !strings.Contains(string(got.payload), `"id":7`) {
+			t.Errorf("payload=%q err=%v", got.payload, got.err)
+		}
+	case <-time.After(time.Second):
+		t.Error("matching SSE event waited for response EOF")
+	}
+	close(release)
+	<-done
+}
+
 func TestInitializeRequiresNegotiatedProtocolVersion(t *testing.T) {
 	for _, version := range []string{"", "2024-11-05", "future"} {
 		body := json.RawMessage(fmt.Sprintf(`{"protocolVersion":%q,"capabilities":{},"serverInfo":{"name":"x","version":"1"}}`, version))
 		if validInitialize(body) {
 			t.Fatalf("accepted protocol version %q", version)
 		}
+	}
+}
+
+func TestInitializeNegotiatesToolsCapability(t *testing.T) {
+	without := json.RawMessage(`{"protocolVersion":"2025-06-18","capabilities":{},"serverInfo":{"name":"x","version":"1"}}`)
+	if tools, valid := initializeCapabilities(without); tools || !valid {
+		t.Fatalf("capabilities without tools = tools %v valid %v", tools, valid)
+	}
+	with := json.RawMessage(`{"protocolVersion":"2025-06-18","capabilities":{"tools":{"listChanged":true}},"serverInfo":{"name":"x","version":"1"}}`)
+	if tools, valid := initializeCapabilities(with); !tools || !valid {
+		t.Fatalf("tools capability = tools %v valid %v", tools, valid)
+	}
+	for _, malformed := range []string{"null", "true", `[]`} {
+		body := json.RawMessage(`{"protocolVersion":"2025-06-18","capabilities":{"tools":` + malformed + `},"serverInfo":{"name":"x","version":"1"}}`)
+		if _, valid := initializeCapabilities(body); valid {
+			t.Fatalf("accepted malformed tools capability %s", malformed)
+		}
+	}
+}
+
+func TestToolListRejectsMissingNullAndMalformedArrays(t *testing.T) {
+	for _, body := range []string{`{}`, `{"tools":null}`, `{"tools":{}}`, `{"tools":7}`, `{"tools":[null]}`, `{"tools":[{}]}`} {
+		if _, err := decodeToolList(json.RawMessage(body)); code(err) != "runtime_protocol_invalid" {
+			t.Fatalf("tool list %s: %v", body, err)
+		}
+	}
+	tools, err := decodeToolList(json.RawMessage(`{"tools":[]}`))
+	if err != nil || tools == nil || len(tools) != 0 {
+		t.Fatalf("empty non-null tool list rejected: %#v %v", tools, err)
 	}
 }
 
@@ -150,8 +213,6 @@ func TestStreamableHTTPRequiresOptInAndRunsBoundedStages(t *testing.T) {
 		switch q.Method {
 		case "initialize":
 			result = map[string]any{"protocolVersion": "2025-06-18", "capabilities": map[string]any{}, "serverInfo": map[string]any{"name": "x", "version": "1"}}
-		case "tools/list":
-			result = map[string]any{"tools": []any{}}
 		default:
 			t.Errorf("unexpected method %s", q.Method)
 		}
@@ -166,8 +227,40 @@ func TestStreamableHTTPRequiresOptInAndRunsBoundedStages(t *testing.T) {
 	}
 	base.AllowNetwork = true
 	ev, err := Run(context.Background(), base)
-	if err != nil || ev.Transport != "streamable_http" || !ev.Initialize || !ev.ListTools || !ev.Cleanup {
+	if err != nil || ev.Transport != "streamable_http" || !ev.Initialize || ev.ListTools || !ev.Cleanup {
 		t.Fatalf("HTTP evidence=%+v err=%v", ev, err)
+	}
+}
+
+func TestStreamableHTTPListsOnlyAdvertisedToolsAndRejectsNullList(t *testing.T) {
+	var methods []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer r.Body.Close()
+		var q struct {
+			ID     int    `json:"id"`
+			Method string `json:"method"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&q)
+		methods = append(methods, q.Method)
+		if q.ID == 0 {
+			w.WriteHeader(http.StatusAccepted)
+			return
+		}
+		result := `{"tools":null}`
+		if q.Method == "initialize" {
+			result = `{"protocolVersion":"2025-06-18","capabilities":{"tools":{}},"serverInfo":{"name":"x","version":"1"}}`
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = fmt.Fprintf(w, `{"jsonrpc":"2.0","id":%d,"result":%s}`, q.ID, result)
+	}))
+	defer server.Close()
+	root, service, p := writeProject(t, map[string]any{"type": "streamable-http", "url": server.URL}, nil)
+	ev, err := Run(context.Background(), Options{SourceRoot: root, Scratch: service.Scratch, Project: p, Server: "selected", AllowNetwork: true, Deadline: 5 * time.Second, Projects: service})
+	if code(err) != "runtime_protocol_invalid" || !ev.Initialize || ev.ListTools || !ev.Cleanup {
+		t.Fatalf("evidence=%+v err=%v", ev, err)
+	}
+	if got := strings.Join(methods, ","); got != "initialize,notifications/initialized,tools/list" {
+		t.Fatalf("methods=%s", got)
 	}
 }
 
@@ -226,6 +319,100 @@ func TestHTTPDeadlineCleansPrivateRoots(t *testing.T) {
 	}
 }
 
+func TestLongLivedSSEHonorsDeadlineAndCleansPrivateRoots(t *testing.T) {
+	requestCanceled := make(chan struct{})
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		if flush, ok := w.(http.Flusher); ok {
+			flush.Flush()
+		}
+		<-r.Context().Done()
+		select {
+		case <-requestCanceled:
+		default:
+			close(requestCanceled)
+		}
+	}))
+	defer server.Close()
+	root, service, p := writeProject(t, map[string]any{"type": "streamable-http", "url": server.URL}, nil)
+	_, err := Run(context.Background(), Options{SourceRoot: root, Scratch: service.Scratch, Project: p, Server: "selected", AllowNetwork: true, Deadline: 50 * time.Millisecond, Projects: service})
+	if code(err) != "runtime_deadline_exceeded" {
+		t.Fatalf("deadline result: %v", err)
+	}
+	select {
+	case <-requestCanceled:
+	case <-time.After(time.Second):
+		t.Fatal("SSE request context was not canceled")
+	}
+	if entries, readErr := os.ReadDir(service.Scratch); readErr != nil || len(entries) != 0 {
+		t.Fatalf("deadline retained private roots: %v %v", entries, readErr)
+	}
+}
+
+func TestLongLivedSSEHonorsCallerCancellationAndCleansPrivateRoots(t *testing.T) {
+	requestStarted := make(chan struct{})
+	requestCanceled := make(chan struct{})
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		if flush, ok := w.(http.Flusher); ok {
+			flush.Flush()
+		}
+		close(requestStarted)
+		<-r.Context().Done()
+		close(requestCanceled)
+	}))
+	defer server.Close()
+	root, service, p := writeProject(t, map[string]any{"type": "streamable-http", "url": server.URL}, nil)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	returned := make(chan error, 1)
+	go func() {
+		_, err := Run(ctx, Options{SourceRoot: root, Scratch: service.Scratch, Project: p, Server: "selected", AllowNetwork: true, Deadline: 5 * time.Second, Projects: service})
+		returned <- err
+	}()
+	select {
+	case <-requestStarted:
+	case <-time.After(time.Second):
+		t.Fatal("SSE request did not start")
+	}
+	cancel()
+	select {
+	case err := <-returned:
+		if code(err) != "runtime_canceled" || !errors.Is(err, context.Canceled) {
+			t.Fatalf("cancellation result: %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("SSE request did not return after cancellation")
+	}
+	select {
+	case <-requestCanceled:
+	case <-time.After(time.Second):
+		t.Fatal("SSE request context was not canceled")
+	}
+	if entries, readErr := os.ReadDir(service.Scratch); readErr != nil || len(entries) != 0 {
+		t.Fatalf("cancellation retained private roots: %v %v", entries, readErr)
+	}
+}
+
+func TestPrivateCopyPreservesConstructionAndCleanupFailures(t *testing.T) {
+	root, service, p := writeProject(t, map[string]any{"type": "stdio", "command": "node"}, nil)
+	p.Input.Inventory[0].Captured = false
+	cleanupFailure := errors.New("synthetic cleanup failure")
+	_, _, _, err := privateCopy(context.Background(), Options{SourceRoot: root, Scratch: service.Scratch, Project: p, Projects: service, removeAll: func(string) error { return cleanupFailure }})
+	if !errors.Is(err, cleanupFailure) || !hasErrorCode(err, "runtime_cleanup_failed") || !hasErrorCode(err, "runtime_package_not_copyable") {
+		t.Fatalf("construction/cleanup errors were not both preserved: %v", err)
+	}
+	if entries, readErr := os.ReadDir(service.Scratch); readErr != nil || len(entries) != 1 {
+		t.Fatalf("failed cleanup fixture was not retained as expected: %v %v", entries, readErr)
+	}
+	entries, _ := os.ReadDir(service.Scratch)
+	if len(entries) == 1 {
+		_ = os.RemoveAll(filepath.Join(service.Scratch, entries[0].Name()))
+	}
+}
+
 func mustJSON(t *testing.T, v any) string {
 	t.Helper()
 	b, err := json.Marshal(v)
@@ -239,4 +426,24 @@ func code(err error) string {
 		return value.Code
 	}
 	return ""
+}
+
+func hasErrorCode(err error, want string) bool {
+	if err == nil {
+		return false
+	}
+	if value, ok := err.(*Error); ok && value.Code == want {
+		return true
+	}
+	if many, ok := err.(interface{ Unwrap() []error }); ok {
+		for _, child := range many.Unwrap() {
+			if hasErrorCode(child, want) {
+				return true
+			}
+		}
+	}
+	if one, ok := err.(interface{ Unwrap() error }); ok {
+		return hasErrorCode(one.Unwrap(), want)
+	}
+	return false
 }

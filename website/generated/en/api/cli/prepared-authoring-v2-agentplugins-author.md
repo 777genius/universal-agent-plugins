@@ -126,11 +126,10 @@ for project diagnostics. Use agentplugins add for installation/security policy.
 * [agentplugins](https://github.com/777genius/universal-agent-plugins/blob/28a1748f97fe1945fc8edcd718ddd44c3f40b215/cli/plugin-kit-ai/internal/agentpluginscli/root.go)	 - Install and manage Agent Plugins 1.0 packages across AI clients
 * [agentplugins author capabilities](/en/api/cli/prepared-authoring-v2-agentplugins-author-capabilities)	 - Show embedded schemas, profiles, live client metadata and implemented commands
 * [agentplugins author compat](/en/api/cli/prepared-authoring-v2-agentplugins-author-compat)	 - Evaluate explicit --target clients using static adapter support; no installed clients required
-* [agentplugins author dev](/en/api/cli/prepared-authoring-v2-agentplugins-author-dev)	 - Rerun one explicit MCP server when the selected package changes
 * [agentplugins author doctor](/en/api/cli/prepared-authoring-v2-agentplugins-author-doctor)	 - Inspect captured native files and executable metadata; no processes or network
 * [agentplugins author init](/en/api/cli/prepared-authoring-v2-agentplugins-author-init)	 - Create an offline standard package in an absent destination
 * [agentplugins author inspect](/en/api/cli/prepared-authoring-v2-agentplugins-author-inspect)	 - Inspect captured components and unresolved runtime requirements
 * [agentplugins author skills](/en/api/cli/prepared-authoring-v2-agentplugins-author-skills)	 - Create and validate standard package Skills
-* [agentplugins author test](/en/api/cli/prepared-authoring-v2-agentplugins-author-test)	 - Check statically by default, or run one explicit MCP server with --runtime=mcp
+* [agentplugins author test](/en/api/cli/prepared-authoring-v2-agentplugins-author-test)	 - Check package configuration and hygiene without executing package code
 * [agentplugins author validate](/en/api/cli/prepared-authoring-v2-agentplugins-author-validate)	 - Validate exact-root standard configuration and authoring readiness
 * [agentplugins author version](/en/api/cli/prepared-authoring-v2-agentplugins-author-version)	 - Print product version and shared authoring engine revision

@@ -64,6 +64,14 @@ The template includes the official MCP SDK dependency and its lockfile.
 for your intended behavior, keeping application logs away from protocol output.
 No dependency install occurs during init, and no server process starts.
 
+The Phase 7 runtime work in PR #278 is not released. Its candidate stdio path
+does not describe the existing child-process adapter as a sandbox: execution is
+admitted only on Linux when bubblewrap successfully establishes isolated
+filesystem and network namespaces and the process-tree cleanup preflight also
+succeeds. It refuses before package-authored child effects on other hosts or
+when either primitive is unavailable. Static authoring on Linux, macOS, and
+Windows is unchanged.
+
 ## Gather static evidence
 
 ```bash

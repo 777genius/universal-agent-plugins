@@ -1,6 +1,6 @@
 ---
 title: "agentplugins author test"
-description: "Check statically by default, or run one explicit MCP server with --runtime=mcp"
+description: "Check package configuration and hygiene without executing package code"
 canonicalId: "prepared-authoring-v2:agentplugins author test"
 section: "api"
 surface: "authoring-cli"
@@ -91,11 +91,11 @@ Released Agent Plugins CLI reference.
 
 # agentplugins author test
 
-Check statically by default, or run one explicit MCP server with --runtime=mcp
+Check package configuration and hygiene without executing package code
 
 ### Synopsis
 
-Check statically by default, or run one explicit MCP server with --runtime=mcp
+Check package configuration and hygiene without executing package code
 
 Installer-only inherited flags --scope, --accept-security-risk, and --security-details
 are rejected. Use the positional package path and author doctor for project checks;
@@ -108,15 +108,9 @@ agentplugins author test [package-path] [flags]
 ### Options
 
 ```
-      --allow-network       allow the selected streamable HTTP endpoint
-      --deadline duration   per-cycle runtime deadline (maximum 1m) (default 10s)
-      --fixture string      package-relative JSON object; requires --tool
   -h, --help                help for test
       --include-root        disclose the explicitly selected root in this report
       --release-policy      also evaluate bounded release hygiene (not publication approval)
-      --runtime string      explicit runtime mode: mcp
-      --server string       exact MCP server name
-      --tool string         exact tool name; requires --fixture
 ```
 
 ### Options inherited from parent commands

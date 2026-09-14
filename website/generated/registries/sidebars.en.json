@@ -74,10 +74,6 @@
           "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-compat"
         },
         {
-          "text": "agentplugins author dev",
-          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-dev"
-        },
-        {
           "text": "agentplugins author doctor",
           "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-doctor"
         },
@@ -197,10 +193,6 @@
         {
           "text": "agentplugins author compat",
           "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-compat"
-        },
-        {
-          "text": "agentplugins author dev",
-          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-dev"
         },
         {
           "text": "agentplugins author doctor",
@@ -324,10 +316,6 @@
           "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-compat"
         },
         {
-          "text": "agentplugins author dev",
-          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-dev"
-        },
-        {
           "text": "agentplugins author doctor",
           "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-doctor"
         },
@@ -447,10 +435,6 @@
         {
           "text": "agentplugins author compat",
           "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-compat"
-        },
-        {
-          "text": "agentplugins author dev",
-          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-dev"
         },
         {
           "text": "agentplugins author doctor",
@@ -591,10 +575,6 @@
         {
           "text": "agentplugins author compat",
           "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-compat"
-        },
-        {
-          "text": "agentplugins author dev",
-          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-dev"
         },
         {
           "text": "agentplugins author doctor",

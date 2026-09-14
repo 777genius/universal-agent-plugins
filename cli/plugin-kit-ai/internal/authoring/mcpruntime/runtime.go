@@ -41,6 +41,9 @@ type Options struct {
 	AllowNetwork        bool
 	Deadline            time.Duration
 	Projects            project.Service
+	// removeAll is an operation-owned test seam for proving cleanup-error
+	// preservation. Production callers always use os.RemoveAll.
+	removeAll func(string) error
 }
 
 // Evidence intentionally contains no argv, URL, headers, environment, fixture,
@@ -80,9 +83,9 @@ func Run(ctx context.Context, o Options) (ev Evidence, err error) {
 		return ev, err
 	}
 	defer func() {
-		if cleanup() != nil {
+		if cleanupErr := cleanup(); cleanupErr != nil {
 			ev.Cleanup = false
-			err = errors.Join(fail("runtime_cleanup_failed"), err)
+			err = errors.Join(fail("runtime_cleanup_failed"), err, cleanupErr)
 		} else {
 			ev.Cleanup = true
 		}
@@ -107,8 +110,11 @@ func Run(ctx context.Context, o Options) (ev Evidence, err error) {
 	default:
 		err = fail("runtime_transport_unsupported")
 	}
-	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-		return ev, fail("runtime_deadline_exceeded")
+	switch ctx.Err() {
+	case context.DeadlineExceeded:
+		return ev, errors.Join(fail("runtime_deadline_exceeded"), context.DeadlineExceeded)
+	case context.Canceled:
+		return ev, errors.Join(fail("runtime_canceled"), context.Canceled)
 	}
 	return ev, err
 }
@@ -119,16 +125,22 @@ func privateCopy(ctx context.Context, o Options) (string, string, func() error, 
 		return "", "", nil, fail("runtime_sandbox_unavailable")
 	}
 	owned := true
+	removeAll := o.removeAll
+	if removeAll == nil {
+		removeAll = os.RemoveAll
+	}
 	cleanup := func() error {
 		if !owned {
 			return nil
 		}
 		owned = false
-		return os.RemoveAll(base)
+		return removeAll(base)
 	}
 	bad := func(e error) (string, string, func() error, error) {
-		ce := cleanup()
-		return "", "", func() error { return ce }, e
+		if cleanupErr := cleanup(); cleanupErr != nil {
+			return "", "", nil, errors.Join(fail("runtime_cleanup_failed"), e, cleanupErr)
+		}
+		return "", "", nil, e
 	}
 	if err := os.Chmod(base, 0700); err != nil {
 		return bad(fail("runtime_sandbox_unavailable"))
@@ -299,15 +311,19 @@ func runStdio(ctx context.Context, root, data string, server domain.MCPServer, t
 	if err := (processadapter.OS{}).DuplexCapability(); err != nil {
 		return fail("runtime_process_containment_unavailable")
 	}
-	env, err := restrictedEnv(root, data, node, server.Decoded["env"])
+	commandLine, sandboxRoot, sandboxData, sandboxNode, err := stdioSandboxCommand(ctx, root, data, node, args, cwd)
+	if err != nil {
+		return fail("runtime_stdio_containment_unavailable")
+	}
+	env, err := restrictedEnv(sandboxRoot, sandboxData, sandboxNode, server.Decoded["env"])
 	if err != nil {
 		return fail("runtime_stdio_config_invalid")
 	}
-	commandLine := append([]string{node}, args...)
-	err = (processadapter.OS{}).RunDuplexWithPlannedShutdown(ctx, ports.Command{Argv: commandLine, Env: env, Dir: cwd}, func(stdin io.Writer, stdout io.Reader) error {
+	err = (processadapter.OS{}).RunDuplexWithPlannedShutdown(ctx, ports.Command{Argv: commandLine, Env: env}, func(stdin io.Writer, stdout io.Reader) error {
 		client := &stdioClient{in: bufio.NewReaderSize(stdout, 64<<10), out: stdin}
 		initialized, err := client.call(1, "initialize", map[string]any{"protocolVersion": protocolVersion, "capabilities": map[string]any{}, "clientInfo": map[string]any{"name": "agentplugins-author", "version": "1"}})
-		if err != nil || !validInitialize(initialized) {
+		tools, valid := initializeCapabilities(initialized)
+		if err != nil || !valid {
 			if err == nil {
 				err = fail("runtime_protocol_invalid")
 			}
@@ -317,22 +333,24 @@ func runStdio(ctx context.Context, root, data string, server domain.MCPServer, t
 		if err := client.notify("notifications/initialized", map[string]any{}); err != nil {
 			return err
 		}
-		result, err := client.call(2, "tools/list", map[string]any{})
-		if err != nil {
-			return err
+		var result json.RawMessage
+		var listed []listedTool
+		if tools {
+			result, err = client.call(2, "tools/list", map[string]any{})
+			if err != nil {
+				return err
+			}
+			listed, err = decodeToolList(result)
+			if err != nil {
+				return err
+			}
+			ev.ListTools = true
+			ev.ToolCount = len(listed)
+		} else if tool != "" {
+			return fail("runtime_tools_not_supported")
 		}
-		ev.ListTools = true
-		var listed struct {
-			Tools []struct {
-				Name string `json:"name"`
-			} `json:"tools"`
-		}
-		if json.Unmarshal(result, &listed) != nil {
-			return fail("runtime_protocol_invalid")
-		}
-		ev.ToolCount = len(listed.Tools)
 		if tool != "" {
-			if !hasTool(listed.Tools, tool) {
+			if !hasTool(listed, tool) {
 				return fail("runtime_tool_unknown")
 			}
 			result, err = client.call(3, "tools/call", map[string]any{"name": tool, "arguments": arguments})
@@ -494,7 +512,8 @@ func runHTTP(ctx context.Context, server domain.MCPServer, tool string, argument
 		return r.Result, nil
 	}
 	initialized, err := call(1, "initialize", map[string]any{"protocolVersion": protocolVersion, "capabilities": map[string]any{}, "clientInfo": map[string]any{"name": "agentplugins-author", "version": "1"}}, false)
-	if err != nil || !validInitialize(initialized) {
+	tools, valid := initializeCapabilities(initialized)
+	if err != nil || !valid {
 		if err == nil {
 			err = fail("runtime_protocol_invalid")
 		}
@@ -505,25 +524,27 @@ func runHTTP(ctx context.Context, server domain.MCPServer, tool string, argument
 	if _, err := call(0, "notifications/initialized", map[string]any{}, true); err != nil {
 		return err
 	}
-	result, err := call(2, "tools/list", map[string]any{}, false)
-	if err != nil {
-		return err
+	var result json.RawMessage
+	var listed []listedTool
+	if tools {
+		result, err = call(2, "tools/list", map[string]any{}, false)
+		if err != nil {
+			return err
+		}
+		listed, err = decodeToolList(result)
+		if err != nil {
+			return err
+		}
+		ev.ListTools = true
+		ev.ToolCount = len(listed)
+	} else if tool != "" {
+		return fail("runtime_tools_not_supported")
 	}
-	ev.ListTools = true
-	var listed struct {
-		Tools []struct {
-			Name string `json:"name"`
-		} `json:"tools"`
-	}
-	if json.Unmarshal(result, &listed) != nil {
-		return fail("runtime_protocol_invalid")
-	}
-	ev.ToolCount = len(listed.Tools)
 	if tool != "" {
-		if !hasTool(listed.Tools, tool) {
+		if !hasTool(listed, tool) {
 			return fail("runtime_tool_unknown")
 		}
-		result, err = call(3, "tools/call", map[string]any{"name": tool, "arguments": arguments}, false)
+		result, err := call(3, "tools/call", map[string]any{"name": tool, "arguments": arguments}, false)
 		if err != nil {
 			return err
 		}
@@ -539,7 +560,7 @@ func runHTTP(ctx context.Context, server domain.MCPServer, tool string, argument
 	return nil
 }
 
-func validInitialize(result json.RawMessage) bool {
+func initializeCapabilities(result json.RawMessage) (bool, bool) {
 	var initialized struct {
 		ProtocolVersion string                     `json:"protocolVersion"`
 		Capabilities    map[string]json.RawMessage `json:"capabilities"`
@@ -548,12 +569,49 @@ func validInitialize(result json.RawMessage) bool {
 			Version string `json:"version"`
 		} `json:"serverInfo"`
 	}
-	return json.Unmarshal(result, &initialized) == nil && initialized.ProtocolVersion == protocolVersion && initialized.Capabilities != nil && initialized.ServerInfo.Name != "" && initialized.ServerInfo.Version != ""
+	if json.Unmarshal(result, &initialized) != nil || initialized.ProtocolVersion != protocolVersion || initialized.Capabilities == nil || initialized.ServerInfo.Name == "" || initialized.ServerInfo.Version == "" {
+		return false, false
+	}
+	tools, advertised := initialized.Capabilities["tools"]
+	if !advertised {
+		return false, true
+	}
+	var capability map[string]json.RawMessage
+	if len(tools) == 0 || bytes.Equal(bytes.TrimSpace(tools), []byte("null")) || json.Unmarshal(tools, &capability) != nil || capability == nil {
+		return false, false
+	}
+	return true, true
 }
 
-func hasTool(tools []struct {
+func validInitialize(result json.RawMessage) bool {
+	_, valid := initializeCapabilities(result)
+	return valid
+}
+
+type listedTool struct {
 	Name string `json:"name"`
-}, name string) bool {
+}
+
+func decodeToolList(result json.RawMessage) ([]listedTool, error) {
+	var envelope struct {
+		Tools json.RawMessage `json:"tools"`
+	}
+	if json.Unmarshal(result, &envelope) != nil || len(envelope.Tools) == 0 || bytes.Equal(bytes.TrimSpace(envelope.Tools), []byte("null")) {
+		return nil, fail("runtime_protocol_invalid")
+	}
+	var tools []listedTool
+	if json.Unmarshal(envelope.Tools, &tools) != nil || tools == nil {
+		return nil, fail("runtime_protocol_invalid")
+	}
+	for _, tool := range tools {
+		if tool.Name == "" {
+			return nil, fail("runtime_protocol_invalid")
+		}
+	}
+	return tools, nil
+}
+
+func hasTool(tools []listedTool, name string) bool {
 	for _, tool := range tools {
 		if tool.Name == name {
 			return true
@@ -563,51 +621,69 @@ func hasTool(tools []struct {
 }
 
 func readHTTPPayload(resp *http.Response, id int) ([]byte, error) {
+	contentType := strings.ToLower(resp.Header.Get("Content-Type"))
+	if strings.Contains(contentType, "text/event-stream") {
+		return readSSEPayload(bufio.NewReaderSize(resp.Body, 64<<10), id)
+	}
 	body, err := io.ReadAll(io.LimitReader(resp.Body, maxFrame+1))
 	if err != nil || len(body) > maxFrame {
 		return nil, fail("runtime_protocol_io_failed")
-	}
-	contentType := strings.ToLower(resp.Header.Get("Content-Type"))
-	if strings.Contains(contentType, "text/event-stream") {
-		var data []string
-		flush := func() []byte {
-			if len(data) == 0 {
-				return nil
-			}
-			payload := []byte(strings.Join(data, "\n"))
-			data = nil
-			var candidate response
-			var responseID int
-			if json.Unmarshal(payload, &candidate) == nil && candidate.JSONRPC == "2.0" && json.Unmarshal(candidate.ID, &responseID) == nil && responseID == id {
-				return payload
-			}
-			return nil
-		}
-		for _, raw := range strings.Split(strings.ReplaceAll(string(body), "\r\n", "\n"), "\n") {
-			line := strings.TrimSuffix(raw, "\r")
-			if line == "" {
-				if payload := flush(); payload != nil {
-					return payload, nil
-				}
-				continue
-			}
-			if strings.HasPrefix(line, "data:") {
-				value := strings.TrimPrefix(line, "data:")
-				if strings.HasPrefix(value, " ") {
-					value = value[1:]
-				}
-				data = append(data, value)
-			}
-		}
-		if payload := flush(); payload != nil {
-			return payload, nil
-		}
-		return nil, fail("runtime_protocol_invalid")
 	}
 	if !strings.Contains(contentType, "application/json") {
 		return nil, fail("runtime_protocol_invalid")
 	}
 	return body, nil
+}
+
+func readSSEPayload(reader *bufio.Reader, id int) ([]byte, error) {
+	var data []string
+	size := 0
+	flush := func() ([]byte, error) {
+		if len(data) == 0 {
+			return nil, nil
+		}
+		payload := []byte(strings.Join(data, "\n"))
+		data = nil
+		size = 0
+		var candidate response
+		var responseID int
+		if json.Unmarshal(payload, &candidate) == nil && candidate.JSONRPC == "2.0" && json.Unmarshal(candidate.ID, &responseID) == nil && responseID == id {
+			return payload, nil
+		}
+		return nil, nil
+	}
+	for {
+		line, err := readLine(reader)
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				if payload, flushErr := flush(); flushErr != nil || payload != nil {
+					return payload, flushErr
+				}
+				return nil, fail("runtime_protocol_invalid")
+			}
+			return nil, fail("runtime_protocol_io_failed")
+		}
+		line = bytes.TrimSuffix(line, []byte("\n"))
+		line = bytes.TrimSuffix(line, []byte("\r"))
+		if len(line) == 0 {
+			if payload, flushErr := flush(); flushErr != nil || payload != nil {
+				return payload, flushErr
+			}
+			continue
+		}
+		text := string(line)
+		if strings.HasPrefix(text, "data:") {
+			value := strings.TrimPrefix(text, "data:")
+			if strings.HasPrefix(value, " ") {
+				value = value[1:]
+			}
+			size += len(value)
+			if size+len(data) > maxFrame {
+				return nil, fail("runtime_protocol_io_failed")
+			}
+			data = append(data, value)
+		}
+	}
 }
 
 func stringSlice(v any) ([]string, error) {
