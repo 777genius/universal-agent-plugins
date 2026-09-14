@@ -200,14 +200,14 @@
     "buildTitle": "بناء المكونات الإضافية",
     "standard": "ابنِ حزمة Agent Plugins 1.0 قابلة للنقل حول plugin.json، مع skills/ وmcp.json اختياريًا. يعتمد دعم العملاء على الحزمة ومكوناتها.",
     "preparation": "Milestone A متاح",
-    "unreleased": "Milestone A متاح. universal-agent-plugins{'@'}0.1.62 / plugin-kit-ai{'@'}2.0.2؛ GitHub: agentplugins-v0.1.62 / plugin-kit-ai-v2.0.2. تم التحقق من npm وPyPI وHomebrew وGitHub Releases واختبارات E2E للقنوات العامة. التأليف الثابت فقط؛ المراحل 7–11 وruntime/dev/bootstrap والترحيل والتصدير والنشر مؤجلة. إمكانات plugin.yaml محفوظة؛ استخدم plugin-kit-ai{'@'}1.2.4 لمشاريع v1.",
+    "unreleased": "Milestone A متاح. universal-agent-plugins{'@'}0.1.65 / plugin-kit-ai{'@'}2.0.5؛ GitHub: agentplugins-v0.1.65 / plugin-kit-ai-v2.0.5. تم التحقق من npm وPyPI وHomebrew وGitHub Releases واختبارات E2E للقنوات العامة. التأليف الثابت فقط؛ المراحل 7–11 وruntime/dev/bootstrap والترحيل والتصدير والنشر مؤجلة. إمكانات plugin.yaml محفوظة؛ استخدم plugin-kit-ai{'@'}1.2.4 لمشاريع v1.",
     "specLink": "اقرأ مواصفة Agent Plugins 1.0",
     "historyTitle": "صيانة v1 التاريخية",
     "history": "حافظ على مشاريع plugin.yaml الحالية باستخدام تعليمات v1 أدناه. هذه القوالب والمخرجات المولدة هي مسارات عمل تاريخية لـ v1؛ ولا تنشئ تدفق التأليف الجديد المبني أولًا على المعيار.",
     "quickstartLink": "البدء السريع وصيانة v1",
     "compatibilityLink": "توافق العملاء (بالإنجليزية)",
     "limitations": "التوافق خاص بكل حزمة. التحقق من المخطط لا يثبت وقت التشغيل أو OAuth أو التفعيل. لا يدعم Codex بروتوكول MCP SSE المعلن؛ ويحتفظ stdio وStreamable HTTP بدعم المحولات الحالي.",
-    "versions": "Milestone A متاح: universal-agent-plugins{'@'}0.1.62 / plugin-kit-ai{'@'}2.0.2؛ GitHub: agentplugins-v0.1.62 / plugin-kit-ai-v2.0.2."
+    "versions": "Milestone A متاح: universal-agent-plugins{'@'}0.1.65 / plugin-kit-ai{'@'}2.0.5؛ GitHub: agentplugins-v0.1.65 / plugin-kit-ai-v2.0.5."
   },
   "shell": {
     "docs": {

@@ -267,13 +267,13 @@ standard authoring engine.
 Install an exact npm version (Node.js 22+):
 
 ```bash
-npm install -g universal-agent-plugins@0.1.62
+npm install -g universal-agent-plugins@0.1.65
 # Or the standalone authoring entrypoint:
-npm install -g plugin-kit-ai@2.0.2
+npm install -g plugin-kit-ai@2.0.5
 ```
 
-Verified GitHub release tags: [agentplugins-v0.1.62](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.62)
-and [plugin-kit-ai-v2.0.2](https://github.com/777genius/universal-agent-plugins/releases/tag/plugin-kit-ai-v2.0.2).
+Verified GitHub release tags: [agentplugins-v0.1.65](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.65)
+and [plugin-kit-ai-v2.0.5](https://github.com/777genius/universal-agent-plugins/releases/tag/plugin-kit-ai-v2.0.5).
 See the [Use / Build quickstart](https://777genius.github.io/universal-agent-plugins/docs/en/guide/quickstart.html).
 
 Authoring validation and project doctor are distinct from installer

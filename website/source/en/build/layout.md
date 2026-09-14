@@ -11,8 +11,8 @@ translationRequired: true
 # Understand the package root
 
 > **Milestone A is available.** Standard-first static authoring is published as
-> `universal-agent-plugins@0.1.62` (`agentplugins author`) and `plugin-kit-ai@2.0.2`.
-> GitHub tags: `agentplugins-v0.1.62` and `plugin-kit-ai-v2.0.2`.
+> `universal-agent-plugins@0.1.65` (`agentplugins author`) and `plugin-kit-ai@2.0.5`.
+> GitHub tags: `agentplugins-v0.1.65` and `plugin-kit-ai-v2.0.5`.
 > npm, PyPI, Homebrew, GitHub Releases and the public-channel E2E are verified.
 > Runtime/dev/bootstrap, migration, export and publication remain deferred.
 > Historical YAML v1 workflows remain separate and preserved.

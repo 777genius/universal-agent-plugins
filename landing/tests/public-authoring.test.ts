@@ -25,7 +25,7 @@ test('all public authoring messages compile and render literal pinned npm versio
     for (const key of Object.keys(source)) {
       assert.equal(rendered[key], source[key].replaceAll("{'@'}", '@'), `${locale}:${key}`);
     }
-    assert.ok(rendered.unreleased.includes('plugin-kit-ai@2.0.2'), locale);
+    assert.ok(rendered.unreleased.includes('plugin-kit-ai@2.0.5'), locale);
     assert.equal(errors.mock.callCount(), 0, `${locale}: message compilation errors`);
   }
 });
@@ -46,9 +46,9 @@ test('the authoring front door renders Use/Build and preserves its indexing poli
     for (const key of [...keys, 'intro']) assert.equal(typeof copy[key], 'string', `${locale}:${key}`);
     assert.ok(copy.standard.includes('plugin.json'));
     assert.ok(copy.unreleased.includes('1.2.4'));
-    assert.ok(copy.unreleased.includes('plugin-kit-ai@2.0.2'));
-    assert.ok(copy.versions.includes('agentplugins-v0.1.62'));
-    assert.ok(copy.versions.includes('plugin-kit-ai-v2.0.2'));
+    assert.ok(copy.unreleased.includes('plugin-kit-ai@2.0.5'));
+    assert.ok(copy.versions.includes('agentplugins-v0.1.65'));
+    assert.ok(copy.versions.includes('plugin-kit-ai-v2.0.5'));
     for (const channel of ['npm', 'PyPI', 'Homebrew', 'GitHub', 'E2E'])
       assert.ok(copy.unreleased.includes(channel), `${locale}:${channel}`);
     assert.ok(copy.unreleased.includes('7–11'));
@@ -85,8 +85,8 @@ test('all quickstarts separate installation, released authoring and historical c
     for (const key of ['standard', 'limitations', 'history']) {
       assert.ok(text.includes(copy[key]), `${locale}:${key}`);
     }
-    for (const releaseFact of ['universal-agent-plugins@0.1.62', 'plugin-kit-ai@2.0.2',
-      'agentplugins-v0.1.62', 'plugin-kit-ai-v2.0.2', 'plugin-kit-ai@1.2.4']) {
+    for (const releaseFact of ['universal-agent-plugins@0.1.65', 'plugin-kit-ai@2.0.5',
+      'agentplugins-v0.1.65', 'plugin-kit-ai-v2.0.5', 'plugin-kit-ai@1.2.4']) {
       assert.ok(text.includes(releaseFact), `${locale}:${releaseFact}`);
     }
     assert.doesNotMatch(publishedText, /(?:0\.1\.61|2\.0\.1|not released|release candidate)/i);

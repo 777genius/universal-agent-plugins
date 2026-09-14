@@ -10,7 +10,7 @@ const start = source.indexOf("for (const claim of", source.indexOf("const quicks
 const end = source.indexOf("const ciIntegration =", start);
 assert.ok(start >= 0 && end > start);
 const assertions = source.slice(start, end);
-const claims = ["Use plugins", "Build plugins", "Milestone A is available", "public-channel E2E are verified", "0.1.62", "2.0.2",
+const claims = ["Use plugins", "Build plugins", "Milestone A is available", "public-channel E2E are verified", "0.1.65", "2.0.5",
   "Historical v1 maintenance", "plugin.json", "Supported Node And Python Paths",
   "If You Are Intentionally Starting On Node Or Python", "What You Get", "What To Do Next"];
 const highlight = (command) => `<pre><code><span class="line">${command.split(/(?= )/)

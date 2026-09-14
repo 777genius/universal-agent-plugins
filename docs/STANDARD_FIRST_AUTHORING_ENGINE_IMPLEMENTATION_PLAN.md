@@ -1,19 +1,18 @@
 # Standard-First Authoring Engine Implementation Plan
 
-> **Current availability (2026-09-14):** Milestone A static authoring is pending final npm qualification
-> for `universal-agent-plugins@0.1.62` and `plugin-kit-ai@2.0.2`. Native GitHub
-> releases use `agentplugins-v0.1.62` and `plugin-kit-ai-v2.0.2`. See the
+> **Current availability (2026-09-14):** Milestone A static authoring is publicly available
+> for `universal-agent-plugins@0.1.65` and `plugin-kit-ai@2.0.5`. Native GitHub
+> releases use `agentplugins-v0.1.65` and `plugin-kit-ai-v2.0.5`. See the
 > [current Build guide](../website/source/en/build/index.md).
 > Phases 7–11, runtime/dev/bootstrap, migration, export and publication remain
 > deferred. Historical v1 YAML capabilities remain preserved.
 > Release correction (owner direction, 2026-09-13): public E2E found PyPI
 > `plugin-kit-ai==2.0.1` broken because it resolves the old bare `v2.0.1`
 > GitHub release URL; npm v2 was still unpublished at that checkpoint.
-> The accepted remediation is the coherent 0.1.62 / 2.0.2 pair above, using
-> prefixed tags only; do not add a bare-v compatibility alias. Keep this docs
-> cutover unmerged and availability unverified until npm, PyPI, Homebrew and
-> GitHub readbacks and public-channel E2E all pass. Installer release proof
-> does not qualify standard authoring.
+> The accepted remediation is the coherent 0.1.65 / 2.0.5 pair above, using
+> prefixed tags only; do not add a bare-v compatibility alias. npm, PyPI,
+> Homebrew and GitHub readbacks and the 11-cell public-channel E2E matrix pass.
+> Installer release proof alone does not qualify standard authoring.
 > The dated decisions and preparation evidence below retain their original scope;
 > they describe prior checkpoints, not current package availability.
 
@@ -201,33 +200,34 @@ This checkpoint does not complete phases 0-11 or release the new authoring CLI.
 
 ### Milestone A paired release cut (2026-09-14)
 
-The corrected public cut is fixed to `agentplugins-v0.1.62` and
-`plugin-kit-ai-v2.0.2` at exact source SHA
-`59e0e5b95979e19fbe21ab9f49c0ea68500b116e`. npm and PyPI versions remain
-numeric SemVer; GitHub release tags remain product-prefixed. The historical
-immutable bare `v2.0.0` tag and the failed `0.1.61` / `2.0.1` checkpoint remain
+The public cut is fixed to `agentplugins-v0.1.65` and
+`plugin-kit-ai-v2.0.5` at exact source SHA
+`ec9397a63f7c7550a680fcb0f5565902acbf7243`. npm and PyPI versions remain
+numeric SemVer; GitHub release tags are product-prefixed. The historical bare
+`v2.0.0` tag and the `.62/.2` and `.64/.4` remediation checkpoints remain
 historical evidence only. Do not add a new bare-v compatibility alias.
 
-The native GitHub releases, PyPI `plugin-kit-ai==2.0.2`, and both Homebrew taps
-are public and have passed exact-version readback. Tag-bound release E2E passed
-on Linux, macOS, and Windows in workflow run
-[34785628473](https://github.com/777genius/universal-agent-plugins/actions/runs/34785628473).
-PyPI publication completed in run
-[34787439892](https://github.com/777genius/universal-agent-plugins/actions/runs/34787439892),
-and the corrected agentplugins Homebrew sync completed in run
-[34788368238](https://github.com/777genius/universal-agent-plugins/actions/runs/34788368238).
+Release preparation passed in run
+[34811716108](https://github.com/777genius/universal-agent-plugins/actions/runs/34811716108).
+Tag-bound release E2E passed on Linux, macOS, and Windows in run
+[34812472302](https://github.com/777genius/universal-agent-plugins/actions/runs/34812472302),
+and promotion completed in run
+[34812898252](https://github.com/777genius/universal-agent-plugins/actions/runs/34812898252).
+The native GitHub releases, PyPI `plugin-kit-ai==2.0.5`, both Homebrew taps,
+npm `universal-agent-plugins@0.1.65`, and npm `plugin-kit-ai@2.0.5` are public.
+PyPI publication passed in run
+[34817923030](https://github.com/777genius/universal-agent-plugins/actions/runs/34817923030),
+Homebrew publication passed in run
+[34817926108](https://github.com/777genius/universal-agent-plugins/actions/runs/34817926108),
+and protected paired npm publication plus immutable provenance/readback passed
+on attempt 2 of run
+[34818077702](https://github.com/777genius/universal-agent-plugins/actions/runs/34818077702).
 
-npm remains the only incomplete public channel at this checkpoint:
-`universal-agent-plugins@0.1.62` and `plugin-kit-ai@2.0.2` are not yet public.
-The paired publisher contract is implemented. Existing provenance proves that
-`universal-agent-plugins` already authorizes
-`.github/workflows/agentplugins-npm-publish.yml` through `npm-agentplugins`.
-The `plugin-kit-ai` package must replace its historical publisher binding to the
-old `.github/workflows/npm-publish.yml` with the paired workflow and environment
-`npm-plugin-kit-ai`.
-After protected OIDC publication, verify exact npm metadata, provenance, clean
-installs, and shared engine revision, then run the final all-channel matrix from
-`main`. Only that successful readback authorizes merging the public docs cutover.
+Final public-channel E2E passed all 11 supported OS/channel cells in run
+[34819260806](https://github.com/777genius/universal-agent-plugins/actions/runs/34819260806):
+GitHub, npm, PyPI and Homebrew on Linux and macOS, plus GitHub, npm and PyPI on
+Windows. Each cell used disposable roots and checked the exact public versions
+and shared source revision. This evidence authorizes the public docs cutover.
 
 All release and E2E work uses disposable roots and must not execute agent or
 runtime commands in real user projects. Historical `plugin.yaml` implementation,

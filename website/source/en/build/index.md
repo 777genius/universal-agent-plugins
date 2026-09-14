@@ -11,8 +11,8 @@ translationRequired: true
 # Build plugins
 
 > **Milestone A is available.** Standard-first static authoring is published as
-> `universal-agent-plugins@0.1.62` (`agentplugins author`) and `plugin-kit-ai@2.0.2`.
-> GitHub tags: `agentplugins-v0.1.62` and `plugin-kit-ai-v2.0.2`.
+> `universal-agent-plugins@0.1.65` (`agentplugins author`) and `plugin-kit-ai@2.0.5`.
+> GitHub tags: `agentplugins-v0.1.65` and `plugin-kit-ai-v2.0.5`.
 > npm, PyPI, Homebrew, GitHub Releases and the public-channel E2E are verified.
 > Runtime/dev/bootstrap, migration, export and publication remain deferred.
 > Historical YAML v1 workflows remain separate and preserved.
@@ -23,8 +23,8 @@ translationRequired: true
 | Write a new portable package | Continue below | Root `plugin.json`, Skills and/or MCP configuration. |
 | Keep an existing YAML/runtime project working | [Historical v1](/en/legacy/v1/) | Version-pinned 1.2.4 context; no v2 migration. |
 
-Use `npm install -g universal-agent-plugins@0.1.62` for `agentplugins author`,
-or `npm install -g plugin-kit-ai@2.0.2` for the standalone entrypoint (Node.js 22+).
+Use `npm install -g universal-agent-plugins@0.1.65` for `agentplugins author`,
+or `npm install -g plugin-kit-ai@2.0.5` for the standalone entrypoint (Node.js 22+).
 Milestone A static authoring is available; phases 7–11 remain deferred.
 
 ## Choose the smallest useful package

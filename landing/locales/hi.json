@@ -337,14 +337,14 @@
     "buildTitle": "प्लगइन्स बनाएँ",
     "standard": "वैकल्पिक कौशल/ और mcp.json के साथ, प्लगइन.जेसन के आसपास एक पोर्टेबल एजेंट प्लगइन्स 1.0 पैकेज बनाएं। ग्राहक सहायता पैकेज और उसके घटकों पर निर्भर करती है।",
     "preparation": "Milestone A उपलब्ध है",
-    "unreleased": "Milestone A उपलब्ध है। universal-agent-plugins{'@'}0.1.62 / plugin-kit-ai{'@'}2.0.2; GitHub: agentplugins-v0.1.62 / plugin-kit-ai-v2.0.2। npm, PyPI, Homebrew, GitHub Releases और सार्वजनिक चैनल E2E सत्यापित हैं। केवल स्थिर ऑथरिंग; चरण 7–11, runtime/dev/bootstrap, माइग्रेशन, निर्यात और प्रकाशन स्थगित हैं। plugin.yaml की क्षमताएँ सुरक्षित हैं; v1 परियोजनाओं के लिए plugin-kit-ai{'@'}1.2.4 का उपयोग करें।",
+    "unreleased": "Milestone A उपलब्ध है। universal-agent-plugins{'@'}0.1.65 / plugin-kit-ai{'@'}2.0.5; GitHub: agentplugins-v0.1.65 / plugin-kit-ai-v2.0.5। npm, PyPI, Homebrew, GitHub Releases और सार्वजनिक चैनल E2E सत्यापित हैं। केवल स्थिर ऑथरिंग; चरण 7–11, runtime/dev/bootstrap, माइग्रेशन, निर्यात और प्रकाशन स्थगित हैं। plugin.yaml की क्षमताएँ सुरक्षित हैं; v1 परियोजनाओं के लिए plugin-kit-ai{'@'}1.2.4 का उपयोग करें।",
     "specLink": "एजेंट प्लगइन्स 1.0 विनिर्देश पढ़ें",
     "historyTitle": "ऐतिहासिक v1 रखरखाव",
     "history": "नीचे दिए गए v1 निर्देशों के साथ मौजूदा प्लगइन.yaml प्रोजेक्ट्स को बनाए रखें। ये टेम्प्लेट और जेनरेट किए गए आउटपुट ऐतिहासिक v1 वर्कफ़्लो हैं; वे नया मानक-प्रथम संलेखन प्रवाह नहीं बनाते हैं।",
     "quickstartLink": "क्विकस्टार्ट और v1 रखरखाव",
     "compatibilityLink": "ग्राहक अनुकूलता (अंग्रेजी)",
     "limitations": "अनुकूलता पैकेज-विशिष्ट है. स्कीमा सत्यापन रनटाइम, OAuth या सक्रियण को सिद्ध नहीं करता है। कोडेक्स घोषित एमसीपी एसएसई का समर्थन नहीं करता है; stdio और स्ट्रीमेबल HTTP अपने मौजूदा एडाप्टर समर्थन को बनाए रखते हैं।",
-    "versions": "Milestone A उपलब्ध है: universal-agent-plugins{'@'}0.1.62 / plugin-kit-ai{'@'}2.0.2; GitHub: agentplugins-v0.1.62 / plugin-kit-ai-v2.0.2।"
+    "versions": "Milestone A उपलब्ध है: universal-agent-plugins{'@'}0.1.65 / plugin-kit-ai{'@'}2.0.5; GitHub: agentplugins-v0.1.65 / plugin-kit-ai-v2.0.5।"
   },
   "shell": {
     "docs": {
