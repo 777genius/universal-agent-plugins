@@ -62,7 +62,7 @@ func TestPythonRuntimePackageContractFiles(t *testing.T) {
 	workflow := readRepoFile(t, root, ".github", "workflows", "pypi-runtime-publish.yml")
 	for _, want := range []string{
 		"name: PyPI Runtime Publish",
-		`workflows: ["Release Assets"]`,
+		"workflow_dispatch:",
 		"plugin-kit-ai-runtime",
 		"plugin-kit-ai-runtime PyPI prepublish smoke ok",
 		"id-token: write",
@@ -70,6 +70,7 @@ func TestPythonRuntimePackageContractFiles(t *testing.T) {
 	} {
 		mustContain(t, workflow, want)
 	}
+	mustNotContain(t, workflow, "workflow_run:")
 }
 
 func TestPythonRuntimePackageClaudeAndCodexSmoke(t *testing.T) {
@@ -239,7 +240,7 @@ func TestNPMRuntimePackageContractFiles(t *testing.T) {
 	workflow := readRepoFile(t, root, ".github", "workflows", "npm-runtime-publish.yml")
 	for _, want := range []string{
 		"name: NPM Runtime Publish",
-		`workflows: ["Release Assets"]`,
+		"workflow_dispatch:",
 		"plugin-kit-ai-runtime",
 		"plugin-kit-ai-runtime npm prepublish smoke ok",
 		"NPM_TOKEN",
@@ -247,6 +248,7 @@ func TestNPMRuntimePackageContractFiles(t *testing.T) {
 	} {
 		mustContain(t, workflow, want)
 	}
+	mustNotContain(t, workflow, "workflow_run:")
 }
 
 func TestNPMRuntimePackageClaudeAndCodexSmoke(t *testing.T) {
