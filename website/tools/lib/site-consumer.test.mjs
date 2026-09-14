@@ -161,6 +161,9 @@ test("actual accepted adapter envelope preserves all commands/flags/provenance a
   assert.match(skill.content, /plugin-kit-ai skills init <name>/);
   for (const page of bundle.pages) {
     assert.equal(page.mirror, false);
+    assert.match(page.content, /status: released/);
+    assert.match(page.content, /Released Milestone A reference/);
+    assert.doesNotMatch(page.content, /prepared-not-release|not a public release/);
     assert.ok(!/\]\([^)]*\.md\)/.test(page.content));
     for (const match of page.content.matchAll(/\]\((\/en\/[^)]+)\)/g)) {
       assert.ok(bundle.entities.some((entry) => entry.pathEn === match[1]), match[1]);

@@ -55,7 +55,11 @@ export async function consumePreparedCLI(root, expectedSHA) {
     const original = await fs.readFile(path.join(root, entry.file_name), "utf8");
     if (!original.startsWith(`<!-- namespace: ${namespace}; status: prepared-not-release; source-sha: ${expectedSHA} -->`))
       fail("Markdown provenance mismatch");
-    const linked = original.replace(/\]\(([^)]+)\)/g, (full, target) => {
+    const releasedMarker = `<!-- namespace: ${namespace}; status: released; source-sha: ${expectedSHA} -->`;
+    const linked = original
+      .replace(`<!-- namespace: ${namespace}; status: prepared-not-release; source-sha: ${expectedSHA} -->`, releasedMarker)
+      .replace("Prepared reference only; not a public release.", "Released Milestone A reference.")
+      .replace(/\]\(([^)]+)\)/g, (full, target) => {
       if (/^https:\/\//.test(target)) {
         if (!target.startsWith(`${repository}/blob/${expectedSHA}/`)) fail(`unexpected source link ${target}`);
         return full;
@@ -63,7 +67,7 @@ export async function consumePreparedCLI(root, expectedSHA) {
       const match = target.match(/^([^#]+\.md)(#.*)?$/);
       if (!match || !links.has(match[1])) fail(`unresolved command link ${target}`);
       return `](${links.get(match[1])}${match[2] || ""})`;
-    });
+      });
     let fence = false;
     const body = linked.split("\n").map((line) => {
       if (line.startsWith("```")) { fence = !fence; return line; }
@@ -102,7 +106,10 @@ export async function extractPreparedCLI() {
   const output = path.join(parent, "export"); // Adapter requires an absent destination.
   await run("go", ["run", "-p", "2", "./cli/plugin-kit-ai/tools/authoring-docs",
     "--source-sha", sha, "--checkout", checkout, "--out-dir", output], {
-    cwd: checkout, env: { GOWORK: path.join(checkout, "go.work") }
+    // The adapter belongs to this docs consumer commit. It verifies and reads
+    // the immutable release checkout instead of relying on the older adapter
+    // bytes that happened to ship in that release.
+    cwd: repoRoot, env: { GOWORK: path.join(repoRoot, "go.work") }
   });
   return consumePreparedCLI(output, sha);
 }

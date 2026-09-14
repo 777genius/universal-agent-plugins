@@ -73,7 +73,7 @@ test('the authoring front door renders Use/Build and preserves its indexing poli
   }
 });
 
-test('all quickstarts separate installation, candidate authoring and historical commands', () => {
+test('all quickstarts separate installation, released authoring and historical commands', () => {
   for (const locale of ['en', 'ru', 'es', 'fr', 'zh'] as const) {
     const text = read(`website/source/${locale}/guide/quickstart.md`);
     const preservation = text.indexOf('<!-- locale-historical-source:start');
@@ -82,9 +82,14 @@ test('all quickstarts separate installation, candidate authoring and historical 
     assert.ok(text.includes('canonicalId: "page:guide:quickstart"'));
     assert.match(publishedText, /^description: .*Agent Plugins 1\.0.*$/m);
     assert.doesNotMatch(publishedText, /^description: .*plugin-kit-ai.*$/m);
-    for (const key of ['standard', 'unreleased', 'versions', 'limitations', 'history']) {
+    for (const key of ['standard', 'limitations', 'history']) {
       assert.ok(text.includes(copy[key]), `${locale}:${key}`);
     }
+    for (const releaseFact of ['universal-agent-plugins@0.1.62', 'plugin-kit-ai@2.0.2',
+      'agentplugins-v0.1.62', 'plugin-kit-ai-v2.0.2', 'plugin-kit-ai@1.2.4']) {
+      assert.ok(text.includes(releaseFact), `${locale}:${releaseFact}`);
+    }
+    assert.doesNotMatch(publishedText, /(?:0\.1\.61|2\.0\.1|not released|release candidate)/i);
     const history = text.indexOf('{#historical-v1}');
     assert.ok(history > text.indexOf('{#build-plugins}'));
     const front = text.slice(0, history);
