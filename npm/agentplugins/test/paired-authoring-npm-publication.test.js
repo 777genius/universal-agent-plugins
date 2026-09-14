@@ -493,7 +493,7 @@ for (const product of c.PRODUCTS) {
     test(`${product} readback rejects substituted ${defect}`, async t => {
       const f = publicFixture(product), dir = root(t);
       if (defect === "name") f.metadata.name = "other-package";
-      if (defect === "version") f.metadata.version = "2.0.3";
+      if (defect === "version") f.metadata.version = product === "plugin-kit-ai" ? "2.0.4" : "0.1.64";
       if (defect === "scripts") f.metadata.scripts = { postinstall: "node malicious.js" };
       if (defect === "repository") f.metadata.repository.url = "git+https://github.com/attacker/fork.git";
       if (defect === "tarball") f.metadata.dist.tarball = "https://registry.npmjs.org/other/-/other-2.0.3.tgz";
@@ -502,8 +502,10 @@ for (const product of c.PRODUCTS) {
       if (defect === "ref") f.statement.predicate.buildDefinition.externalParameters.workflow.ref = "refs/tags/plugin-kit-ai-v2.0.3";
       if (defect === "subject") f.statement.subject[0].name = "pkg:npm/other@2.0.3";
       publicReads(t, f);
-      t.mock.method(cp, "execFileSync", () => assert.fail("substitution must fail before installed code executes"));
+      let executableCalls = 0;
+      t.mock.method(cp, "execFileSync", () => { executableCalls += 1; return Buffer.from(""); });
       await assert.rejects(p.reconcile(f.receipt, f.body, dir, "/fixture/npm.js", {}, product));
+      assert.equal(executableCalls, 0, "substitution must fail before installed code executes");
     });
   }
 }
