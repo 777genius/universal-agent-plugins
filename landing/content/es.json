@@ -22,7 +22,7 @@
     {
       "id": "clearBoundary",
       "title": "Límite honesto estable versus beta",
-      "description": "plugin-kit-ai es explícito sobre qué está listo para producción, qué es la versión beta pública y dónde no se debe prometer una paridad falsa todavía."
+      "description": "Agent Plugins distingue claramente lo que está listo para producción, lo que sigue aplazado y los límites de compatibilidad actuales."
     },
     {
       "id": "installAcrossAgents",
@@ -1018,14 +1018,6 @@
       "invocation": "npx universal-agent-plugins"
     },
     {
-      "id": "pipx",
-      "title": "pipx",
-      "description": "Python contenedor del ecosistema cuando la versión correspondiente se publica en PyPI.",
-      "href": "https://pypi.org/project/plugin-kit-ai/",
-      "note": "Envoltorio beta público. Utilice este canal solo cuando la versión de destino esté disponible en PyPI.",
-      "command": "pipx install plugin-kit-ai"
-    },
-    {
       "id": "script",
       "title": "Script de instalación verificado",
       "description": "Instalación nativa sin gestor de paquetes. No requiere Node.js.",
@@ -1047,17 +1039,17 @@
       "id": "releases",
       "title": "GitHub Lanzamientos",
       "description": "Explore directamente las notas de la versión publicadas, los artefactos y el historial de versiones.",
-      "href": "https://github.com/777genius/plugin-kit-ai/releases",
+      "href": "https://github.com/777genius/universal-agent-plugins/releases",
       "note": "Úselo cuando desee la superficie de liberación sin procesar.",
-      "command": "https://github.com/777genius/plugin-kit-ai/releases"
+      "command": "https://github.com/777genius/universal-agent-plugins/releases"
     },
     {
       "id": "docs",
       "title": "Inicio rápido de Documentos",
       "description": "Vaya directamente al inicio rápido y al sitio de documentos más amplio.",
-      "href": "https://777genius.github.io/plugin-kit-ai/docs/en/guide/quickstart.html",
+      "href": "https://777genius.github.io/universal-agent-plugins/docs/en/guide/quickstart.html",
       "note": "El mejor siguiente paso es una vez instalado el CLI.",
-      "command": "plugin-kit-ai init my-plugin"
+      "command": "agentplugins author init ./my-plugin"
     }
   ],
   "quickstartSteps": [

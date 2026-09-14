@@ -59,100 +59,6 @@
       ]
     },
     {
-      "text": "Histórico v1 · referencia 1.2.4",
-      "items": [
-        {
-          "text": "Contexto histórico",
-          "link": "/es/legacy/v1/"
-        }
-      ]
-    },
-    {
-      "text": "plugin-kit-ai · Milestone A disponible",
-      "items": [
-        {
-          "text": "plugin-kit-ai (En inglés)",
-          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai"
-        },
-        {
-          "text": "plugin-kit-ai capabilities (En inglés)",
-          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-capabilities"
-        },
-        {
-          "text": "plugin-kit-ai compat (En inglés)",
-          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-compat"
-        },
-        {
-          "text": "plugin-kit-ai completion (En inglés)",
-          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion"
-        },
-        {
-          "text": "plugin-kit-ai completion bash (En inglés)",
-          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion-bash"
-        },
-        {
-          "text": "plugin-kit-ai completion fish (En inglés)",
-          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion-fish"
-        },
-        {
-          "text": "plugin-kit-ai completion help (En inglés)",
-          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion-help"
-        },
-        {
-          "text": "plugin-kit-ai completion powershell (En inglés)",
-          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion-powershell"
-        },
-        {
-          "text": "plugin-kit-ai completion zsh (En inglés)",
-          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion-zsh"
-        },
-        {
-          "text": "plugin-kit-ai doctor (En inglés)",
-          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-doctor"
-        },
-        {
-          "text": "plugin-kit-ai help (En inglés)",
-          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-help"
-        },
-        {
-          "text": "plugin-kit-ai init (En inglés)",
-          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-init"
-        },
-        {
-          "text": "plugin-kit-ai inspect (En inglés)",
-          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-inspect"
-        },
-        {
-          "text": "plugin-kit-ai skills (En inglés)",
-          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-skills"
-        },
-        {
-          "text": "plugin-kit-ai skills help (En inglés)",
-          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-skills-help"
-        },
-        {
-          "text": "plugin-kit-ai skills init (En inglés)",
-          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-skills-init"
-        },
-        {
-          "text": "plugin-kit-ai skills validate (En inglés)",
-          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-skills-validate"
-        },
-        {
-          "text": "plugin-kit-ai test (En inglés)",
-          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-test"
-        },
-        {
-          "text": "plugin-kit-ai validate (En inglés)",
-          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-validate"
-        },
-        {
-          "text": "plugin-kit-ai version (En inglés)",
-          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-version"
-        }
-      ]
-    },
-    {
       "text": "agentplugins author · Milestone A disponible",
       "items": [
         {
@@ -270,100 +176,6 @@
         {
           "text": "Entrega",
           "link": "/es/build/handoff"
-        }
-      ]
-    },
-    {
-      "text": "Histórico v1 · referencia 1.2.4",
-      "items": [
-        {
-          "text": "Contexto histórico",
-          "link": "/es/legacy/v1/"
-        }
-      ]
-    },
-    {
-      "text": "plugin-kit-ai · Milestone A disponible",
-      "items": [
-        {
-          "text": "plugin-kit-ai (En inglés)",
-          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai"
-        },
-        {
-          "text": "plugin-kit-ai capabilities (En inglés)",
-          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-capabilities"
-        },
-        {
-          "text": "plugin-kit-ai compat (En inglés)",
-          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-compat"
-        },
-        {
-          "text": "plugin-kit-ai completion (En inglés)",
-          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion"
-        },
-        {
-          "text": "plugin-kit-ai completion bash (En inglés)",
-          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion-bash"
-        },
-        {
-          "text": "plugin-kit-ai completion fish (En inglés)",
-          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion-fish"
-        },
-        {
-          "text": "plugin-kit-ai completion help (En inglés)",
-          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion-help"
-        },
-        {
-          "text": "plugin-kit-ai completion powershell (En inglés)",
-          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion-powershell"
-        },
-        {
-          "text": "plugin-kit-ai completion zsh (En inglés)",
-          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion-zsh"
-        },
-        {
-          "text": "plugin-kit-ai doctor (En inglés)",
-          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-doctor"
-        },
-        {
-          "text": "plugin-kit-ai help (En inglés)",
-          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-help"
-        },
-        {
-          "text": "plugin-kit-ai init (En inglés)",
-          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-init"
-        },
-        {
-          "text": "plugin-kit-ai inspect (En inglés)",
-          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-inspect"
-        },
-        {
-          "text": "plugin-kit-ai skills (En inglés)",
-          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-skills"
-        },
-        {
-          "text": "plugin-kit-ai skills help (En inglés)",
-          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-skills-help"
-        },
-        {
-          "text": "plugin-kit-ai skills init (En inglés)",
-          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-skills-init"
-        },
-        {
-          "text": "plugin-kit-ai skills validate (En inglés)",
-          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-skills-validate"
-        },
-        {
-          "text": "plugin-kit-ai test (En inglés)",
-          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-test"
-        },
-        {
-          "text": "plugin-kit-ai validate (En inglés)",
-          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-validate"
-        },
-        {
-          "text": "plugin-kit-ai version (En inglés)",
-          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-version"
         }
       ]
     },
@@ -489,315 +301,6 @@
       ]
     },
     {
-      "text": "Histórico v1 · referencia 1.2.4",
-      "items": [
-        {
-          "text": "Contexto histórico",
-          "link": "/es/legacy/v1/"
-        }
-      ]
-    },
-    {
-      "text": "plugin-kit-ai · Milestone A disponible",
-      "items": [
-        {
-          "text": "plugin-kit-ai (En inglés)",
-          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai"
-        },
-        {
-          "text": "plugin-kit-ai capabilities (En inglés)",
-          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-capabilities"
-        },
-        {
-          "text": "plugin-kit-ai compat (En inglés)",
-          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-compat"
-        },
-        {
-          "text": "plugin-kit-ai completion (En inglés)",
-          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion"
-        },
-        {
-          "text": "plugin-kit-ai completion bash (En inglés)",
-          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion-bash"
-        },
-        {
-          "text": "plugin-kit-ai completion fish (En inglés)",
-          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion-fish"
-        },
-        {
-          "text": "plugin-kit-ai completion help (En inglés)",
-          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion-help"
-        },
-        {
-          "text": "plugin-kit-ai completion powershell (En inglés)",
-          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion-powershell"
-        },
-        {
-          "text": "plugin-kit-ai completion zsh (En inglés)",
-          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion-zsh"
-        },
-        {
-          "text": "plugin-kit-ai doctor (En inglés)",
-          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-doctor"
-        },
-        {
-          "text": "plugin-kit-ai help (En inglés)",
-          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-help"
-        },
-        {
-          "text": "plugin-kit-ai init (En inglés)",
-          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-init"
-        },
-        {
-          "text": "plugin-kit-ai inspect (En inglés)",
-          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-inspect"
-        },
-        {
-          "text": "plugin-kit-ai skills (En inglés)",
-          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-skills"
-        },
-        {
-          "text": "plugin-kit-ai skills help (En inglés)",
-          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-skills-help"
-        },
-        {
-          "text": "plugin-kit-ai skills init (En inglés)",
-          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-skills-init"
-        },
-        {
-          "text": "plugin-kit-ai skills validate (En inglés)",
-          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-skills-validate"
-        },
-        {
-          "text": "plugin-kit-ai test (En inglés)",
-          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-test"
-        },
-        {
-          "text": "plugin-kit-ai validate (En inglés)",
-          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-validate"
-        },
-        {
-          "text": "plugin-kit-ai version (En inglés)",
-          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-version"
-        }
-      ]
-    },
-    {
-      "text": "agentplugins author · Milestone A disponible",
-      "items": [
-        {
-          "text": "agentplugins author (En inglés)",
-          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author"
-        },
-        {
-          "text": "agentplugins author capabilities (En inglés)",
-          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-capabilities"
-        },
-        {
-          "text": "agentplugins author compat (En inglés)",
-          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-compat"
-        },
-        {
-          "text": "agentplugins author doctor (En inglés)",
-          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-doctor"
-        },
-        {
-          "text": "agentplugins author help (En inglés)",
-          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-help"
-        },
-        {
-          "text": "agentplugins author init (En inglés)",
-          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-init"
-        },
-        {
-          "text": "agentplugins author inspect (En inglés)",
-          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-inspect"
-        },
-        {
-          "text": "agentplugins author skills (En inglés)",
-          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills"
-        },
-        {
-          "text": "agentplugins author skills help (En inglés)",
-          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills-help"
-        },
-        {
-          "text": "agentplugins author skills init (En inglés)",
-          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills-init"
-        },
-        {
-          "text": "agentplugins author skills validate (En inglés)",
-          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills-validate"
-        },
-        {
-          "text": "agentplugins author test (En inglés)",
-          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-test"
-        },
-        {
-          "text": "agentplugins author validate (En inglés)",
-          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-validate"
-        },
-        {
-          "text": "agentplugins author version (En inglés)",
-          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-version"
-        }
-      ]
-    }
-  ],
-  "/es/legacy/v1/": [
-    {
-      "text": "Usar plugins",
-      "items": [
-        {
-          "text": "Resumen",
-          "link": "/es/use/"
-        },
-        {
-          "text": "Instalar",
-          "link": "/es/use/install"
-        },
-        {
-          "text": "Gestionar",
-          "link": "/es/use/manage"
-        }
-      ]
-    },
-    {
-      "text": "Crear plugins",
-      "items": [
-        {
-          "text": "Resumen",
-          "link": "/es/build/"
-        },
-        {
-          "text": "Un Skill",
-          "link": "/es/build/skill"
-        },
-        {
-          "text": "MCP remoto",
-          "link": "/es/build/mcp-remote"
-        },
-        {
-          "text": "MCP local",
-          "link": "/es/build/mcp-stdio"
-        },
-        {
-          "text": "Plugin híbrido",
-          "link": "/es/build/hybrid"
-        },
-        {
-          "text": "Varios Skills",
-          "link": "/es/build/skills"
-        },
-        {
-          "text": "Estructura",
-          "link": "/es/build/layout"
-        },
-        {
-          "text": "Comprobaciones",
-          "link": "/es/build/checks"
-        },
-        {
-          "text": "Entrega",
-          "link": "/es/build/handoff"
-        }
-      ]
-    },
-    {
-      "text": "Histórico v1 · referencia 1.2.4",
-      "items": [
-        {
-          "text": "Contexto histórico",
-          "link": "/es/legacy/v1/"
-        }
-      ]
-    },
-    {
-      "text": "plugin-kit-ai · Milestone A disponible",
-      "items": [
-        {
-          "text": "plugin-kit-ai (En inglés)",
-          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai"
-        },
-        {
-          "text": "plugin-kit-ai capabilities (En inglés)",
-          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-capabilities"
-        },
-        {
-          "text": "plugin-kit-ai compat (En inglés)",
-          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-compat"
-        },
-        {
-          "text": "plugin-kit-ai completion (En inglés)",
-          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion"
-        },
-        {
-          "text": "plugin-kit-ai completion bash (En inglés)",
-          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion-bash"
-        },
-        {
-          "text": "plugin-kit-ai completion fish (En inglés)",
-          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion-fish"
-        },
-        {
-          "text": "plugin-kit-ai completion help (En inglés)",
-          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion-help"
-        },
-        {
-          "text": "plugin-kit-ai completion powershell (En inglés)",
-          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion-powershell"
-        },
-        {
-          "text": "plugin-kit-ai completion zsh (En inglés)",
-          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion-zsh"
-        },
-        {
-          "text": "plugin-kit-ai doctor (En inglés)",
-          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-doctor"
-        },
-        {
-          "text": "plugin-kit-ai help (En inglés)",
-          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-help"
-        },
-        {
-          "text": "plugin-kit-ai init (En inglés)",
-          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-init"
-        },
-        {
-          "text": "plugin-kit-ai inspect (En inglés)",
-          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-inspect"
-        },
-        {
-          "text": "plugin-kit-ai skills (En inglés)",
-          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-skills"
-        },
-        {
-          "text": "plugin-kit-ai skills help (En inglés)",
-          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-skills-help"
-        },
-        {
-          "text": "plugin-kit-ai skills init (En inglés)",
-          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-skills-init"
-        },
-        {
-          "text": "plugin-kit-ai skills validate (En inglés)",
-          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-skills-validate"
-        },
-        {
-          "text": "plugin-kit-ai test (En inglés)",
-          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-test"
-        },
-        {
-          "text": "plugin-kit-ai validate (En inglés)",
-          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-validate"
-        },
-        {
-          "text": "plugin-kit-ai version (En inglés)",
-          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-version"
-        }
-      ]
-    },
-    {
       "text": "agentplugins author · Milestone A disponible",
       "items": [
         {
@@ -919,100 +422,6 @@
       ]
     },
     {
-      "text": "Histórico v1 · referencia 1.2.4",
-      "items": [
-        {
-          "text": "Contexto histórico",
-          "link": "/es/legacy/v1/"
-        }
-      ]
-    },
-    {
-      "text": "plugin-kit-ai · Milestone A disponible",
-      "items": [
-        {
-          "text": "plugin-kit-ai (En inglés)",
-          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai"
-        },
-        {
-          "text": "plugin-kit-ai capabilities (En inglés)",
-          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-capabilities"
-        },
-        {
-          "text": "plugin-kit-ai compat (En inglés)",
-          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-compat"
-        },
-        {
-          "text": "plugin-kit-ai completion (En inglés)",
-          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion"
-        },
-        {
-          "text": "plugin-kit-ai completion bash (En inglés)",
-          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion-bash"
-        },
-        {
-          "text": "plugin-kit-ai completion fish (En inglés)",
-          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion-fish"
-        },
-        {
-          "text": "plugin-kit-ai completion help (En inglés)",
-          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion-help"
-        },
-        {
-          "text": "plugin-kit-ai completion powershell (En inglés)",
-          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion-powershell"
-        },
-        {
-          "text": "plugin-kit-ai completion zsh (En inglés)",
-          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-completion-zsh"
-        },
-        {
-          "text": "plugin-kit-ai doctor (En inglés)",
-          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-doctor"
-        },
-        {
-          "text": "plugin-kit-ai help (En inglés)",
-          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-help"
-        },
-        {
-          "text": "plugin-kit-ai init (En inglés)",
-          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-init"
-        },
-        {
-          "text": "plugin-kit-ai inspect (En inglés)",
-          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-inspect"
-        },
-        {
-          "text": "plugin-kit-ai skills (En inglés)",
-          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-skills"
-        },
-        {
-          "text": "plugin-kit-ai skills help (En inglés)",
-          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-skills-help"
-        },
-        {
-          "text": "plugin-kit-ai skills init (En inglés)",
-          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-skills-init"
-        },
-        {
-          "text": "plugin-kit-ai skills validate (En inglés)",
-          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-skills-validate"
-        },
-        {
-          "text": "plugin-kit-ai test (En inglés)",
-          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-test"
-        },
-        {
-          "text": "plugin-kit-ai validate (En inglés)",
-          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-validate"
-        },
-        {
-          "text": "plugin-kit-ai version (En inglés)",
-          "link": "/en/api/cli/prepared-authoring-v2-plugin-kit-ai-version"
-        }
-      ]
-    },
-    {
       "text": "agentplugins author · Milestone A disponible",
       "items": [
         {
@@ -1074,38 +483,40 @@
       ]
     }
   ],
-  "/es/guide/": [
+  "/es/guide/quickstart": [
     {
       "text": "Inicio",
       "items": [
         {
-          "text": "Resumen",
-          "link": "/es/guide/"
+          "text": "Usar plugins",
+          "link": "/es/use/"
         },
         {
-          "text": "Instalación",
-          "link": "/es/guide/installation"
+          "text": "Crear plugins",
+          "link": "/es/build/"
         },
         {
           "text": "Inicio rápido",
           "link": "/es/guide/quickstart"
         }
       ]
-    },
+    }
+  ],
+  "/es/reference/client-compatibility": [
     {
-      "text": "Idea central",
+      "text": "Usar plugins",
       "items": [
         {
-          "text": "Lo que puedes construir",
-          "link": "/es/guide/what-you-can-build"
+          "text": "Resumen",
+          "link": "/es/use/"
         },
         {
-          "text": "Un proyecto, múltiples objetivos",
-          "link": "/es/guide/one-project-multiple-targets"
+          "text": "Instalar",
+          "link": "/es/use/install"
         },
         {
-          "text": "Elige un objetivo",
-          "link": "/es/guide/choose-a-target"
+          "text": "Gestionar",
+          "link": "/es/use/manage"
         }
       ]
     },
@@ -1113,744 +524,101 @@
       "text": "Crear plugins",
       "items": [
         {
-          "text": "Cree su primer complemento",
-          "link": "/es/guide/first-plugin"
-        },
-        {
-          "text": "Cree un complemento de tiempo de ejecución Python",
-          "link": "/es/guide/python-runtime"
-        },
-        {
-          "text": "Cree un complemento listo para el equipo",
-          "link": "/es/guide/team-ready-plugin"
-        },
-        {
-          "text": "Cree un complemento Claude",
-          "link": "/es/guide/claude-plugin"
-        },
-        {
-          "text": "Cree un complemento de tiempo de ejecución Node/TypeScript",
-          "link": "/es/guide/node-typescript-runtime"
-        }
-      ]
-    },
-    {
-      "text": "Starters y ejemplos",
-      "items": [
-        {
-          "text": "Plantillas de inicio",
-          "link": "/es/guide/starter-templates"
-        },
-        {
-          "text": "Elija un repositorio inicial",
-          "link": "/es/guide/choose-a-starter"
-        },
-        {
-          "text": "Ejemplos y recetas",
-          "link": "/es/guide/examples-and-recipes"
-        }
-      ]
-    },
-    {
-      "text": "Entrega y targets",
-      "items": [
-        {
-          "text": "Elija el modelo de entrega",
-          "link": "/es/guide/choose-delivery-model"
-        },
-        {
-          "text": "Transferencia de paquete",
-          "link": "/es/guide/bundle-handoff"
-        },
-        {
-          "text": "Configuración de paquetes y integración",
-          "link": "/es/guide/package-and-workspace-targets"
-        },
-        {
-          "text": "Cómo publicar complementos",
-          "link": "/es/guide/how-to-publish-plugins"
-        }
-      ]
-    },
-    {
-      "text": "Producción y CI",
-      "items": [
-        {
-          "text": "Preparación para la producción",
-          "link": "/es/guide/production-readiness"
-        },
-        {
-          "text": "Integración de CI",
-          "link": "/es/guide/ci-integration"
-        }
-      ]
-    }
-  ],
-  "/es/concepts/": [
-    {
-      "text": "Base",
-      "items": [
-        {
           "text": "Resumen",
-          "link": "/es/concepts/"
+          "link": "/es/build/"
         },
         {
-          "text": "Por qué plugin-kit-ai",
-          "link": "/es/concepts/why-plugin-kit-ai"
+          "text": "Un Skill",
+          "link": "/es/build/skill"
         },
         {
-          "text": "Cómo funciona plugin-kit-ai",
-          "link": "/es/concepts/managed-project-model"
+          "text": "MCP remoto",
+          "link": "/es/build/mcp-remote"
         },
         {
-          "text": "Fuente y resultados del proyecto",
-          "link": "/es/concepts/authoring-architecture"
+          "text": "MCP local",
+          "link": "/es/build/mcp-stdio"
+        },
+        {
+          "text": "Plugin híbrido",
+          "link": "/es/build/hybrid"
+        },
+        {
+          "text": "Varios Skills",
+          "link": "/es/build/skills"
+        },
+        {
+          "text": "Estructura",
+          "link": "/es/build/layout"
+        },
+        {
+          "text": "Comprobaciones",
+          "link": "/es/build/checks"
+        },
+        {
+          "text": "Entrega",
+          "link": "/es/build/handoff"
         }
       ]
     },
     {
-      "text": "Modelos de decisión",
+      "text": "agentplugins author · Milestone A disponible",
       "items": [
         {
-          "text": "Modelo de estabilidad",
-          "link": "/es/concepts/stability-model"
+          "text": "agentplugins author (En inglés)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author"
         },
         {
-          "text": "Modelo objetivo",
-          "link": "/es/concepts/target-model"
+          "text": "agentplugins author capabilities (En inglés)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-capabilities"
         },
         {
-          "text": "Elegir el tiempo de ejecución",
-          "link": "/es/concepts/choosing-runtime"
-        }
-      ]
-    }
-  ],
-  "/es/reference/": [
-    {
-      "text": "Referencia operativa",
-      "items": [
-        {
-          "text": "Resumen",
-          "link": "/es/reference/"
-        },
-        {
-          "text": "Canales de instalación",
-          "link": "/es/reference/install-channels"
-        },
-        {
-          "text": "Política de versión y compatibilidad",
-          "link": "/es/reference/version-and-compatibility"
-        },
-        {
-          "text": "Flujo de trabajo de creación",
-          "link": "/es/reference/authoring-workflow"
-        },
-        {
-          "text": "Estándar de repositorio",
-          "link": "/es/reference/repository-standard"
-        }
-      ]
-    },
-    {
-      "text": "Soporte y límites",
-      "items": [
-        {
-          "text": "Límite de soporte",
-          "link": "/es/reference/support-boundary"
-        },
-        {
-          "text": "Soporte de targets",
-          "link": "/es/reference/target-support"
-        }
-      ]
-    },
-    {
-      "text": "Ayuda",
-      "items": [
-        {
-          "text": "FAQ",
-          "link": "/es/reference/faq"
-        },
-        {
-          "text": "Solución de problemas",
-          "link": "/es/reference/troubleshooting"
-        },
-        {
-          "text": "Glosario",
-          "link": "/es/reference/glossary"
-        }
-      ]
-    }
-  ],
-  "/es/api/": [
-    {
-      "text": "Resumen de API",
-      "items": [
-        {
-          "text": "Resumen de API",
-          "link": "/es/api/"
-        },
-        {
-          "text": "Referencia CLI",
-          "link": "/es/api/cli/"
-        },
-        {
-          "text": "Go SDK",
-          "link": "/es/api/go-sdk/"
-        },
-        {
-          "text": "Node Runtime",
-          "link": "/es/api/runtime-node/"
-        },
-        {
-          "text": "Python Runtime",
-          "link": "/es/api/runtime-python/"
-        },
-        {
-          "text": "Eventos de plataforma",
-          "link": "/es/api/platform-events/"
-        },
-        {
-          "text": "Capacidades",
-          "link": "/es/api/capabilities/"
-        }
-      ]
-    }
-  ],
-  "/es/api/cli/": [
-    {
-      "text": "Referencia CLI",
-      "items": [
-        {
-          "text": "Resumen",
-          "link": "/es/api/cli/"
-        }
-      ]
-    },
-    {
-      "text": "Comandos principales",
-      "items": [
-        {
-          "text": "plugin-kit-ai",
-          "link": "/es/api/cli/plugin-kit-ai"
-        },
-        {
-          "text": "add",
-          "link": "/es/api/cli/plugin-kit-ai-add"
-        },
-        {
-          "text": "bootstrap",
-          "link": "/es/api/cli/plugin-kit-ai-bootstrap"
-        },
-        {
-          "text": "capabilities",
-          "link": "/es/api/cli/plugin-kit-ai-capabilities"
-        },
-        {
-          "text": "compat",
-          "link": "/es/api/cli/plugin-kit-ai-compat"
-        },
-        {
-          "text": "dev",
-          "link": "/es/api/cli/plugin-kit-ai-dev"
-        },
-        {
-          "text": "doctor",
-          "link": "/es/api/cli/plugin-kit-ai-doctor"
-        },
-        {
-          "text": "export",
-          "link": "/es/api/cli/plugin-kit-ai-export"
-        },
-        {
-          "text": "generate",
-          "link": "/es/api/cli/plugin-kit-ai-generate"
-        },
-        {
-          "text": "help",
-          "link": "/es/api/cli/plugin-kit-ai-help"
-        },
-        {
-          "text": "import",
-          "link": "/es/api/cli/plugin-kit-ai-import"
-        },
-        {
-          "text": "init",
-          "link": "/es/api/cli/plugin-kit-ai-init"
-        },
-        {
-          "text": "inspect",
-          "link": "/es/api/cli/plugin-kit-ai-inspect"
-        },
-        {
-          "text": "install",
-          "link": "/es/api/cli/plugin-kit-ai-install"
-        },
-        {
-          "text": "integrations",
-          "link": "/es/api/cli/plugin-kit-ai-integrations"
-        },
-        {
-          "text": "integrations add",
-          "link": "/es/api/cli/plugin-kit-ai-integrations-add"
-        },
-        {
-          "text": "integrations disable",
-          "link": "/es/api/cli/plugin-kit-ai-integrations-disable"
-        },
-        {
-          "text": "integrations doctor",
-          "link": "/es/api/cli/plugin-kit-ai-integrations-doctor"
-        },
-        {
-          "text": "integrations enable",
-          "link": "/es/api/cli/plugin-kit-ai-integrations-enable"
-        },
-        {
-          "text": "integrations help",
-          "link": "/es/api/cli/plugin-kit-ai-integrations-help"
-        },
-        {
-          "text": "integrations list",
-          "link": "/es/api/cli/plugin-kit-ai-integrations-list"
-        },
-        {
-          "text": "integrations remove",
-          "link": "/es/api/cli/plugin-kit-ai-integrations-remove"
-        },
-        {
-          "text": "integrations repair",
-          "link": "/es/api/cli/plugin-kit-ai-integrations-repair"
-        },
-        {
-          "text": "integrations sync",
-          "link": "/es/api/cli/plugin-kit-ai-integrations-sync"
-        },
-        {
-          "text": "integrations update",
-          "link": "/es/api/cli/plugin-kit-ai-integrations-update"
-        },
-        {
-          "text": "normalize",
-          "link": "/es/api/cli/plugin-kit-ai-normalize"
-        },
-        {
-          "text": "publication",
-          "link": "/es/api/cli/plugin-kit-ai-publication"
-        },
-        {
-          "text": "publication doctor",
-          "link": "/es/api/cli/plugin-kit-ai-publication-doctor"
-        },
-        {
-          "text": "publication help",
-          "link": "/es/api/cli/plugin-kit-ai-publication-help"
-        },
-        {
-          "text": "publication materialize",
-          "link": "/es/api/cli/plugin-kit-ai-publication-materialize"
-        },
-        {
-          "text": "publication remove",
-          "link": "/es/api/cli/plugin-kit-ai-publication-remove"
-        },
-        {
-          "text": "publish",
-          "link": "/es/api/cli/plugin-kit-ai-publish"
-        },
-        {
-          "text": "remove",
-          "link": "/es/api/cli/plugin-kit-ai-remove"
-        },
-        {
-          "text": "repair",
-          "link": "/es/api/cli/plugin-kit-ai-repair"
-        },
-        {
-          "text": "test",
-          "link": "/es/api/cli/plugin-kit-ai-test"
-        },
-        {
-          "text": "update",
-          "link": "/es/api/cli/plugin-kit-ai-update"
-        },
-        {
-          "text": "validate",
-          "link": "/es/api/cli/plugin-kit-ai-validate"
-        },
-        {
-          "text": "version",
-          "link": "/es/api/cli/plugin-kit-ai-version"
-        }
-      ]
-    },
-    {
-      "text": "Bundle",
-      "items": [
-        {
-          "text": "bundle",
-          "link": "/es/api/cli/plugin-kit-ai-bundle"
-        },
-        {
-          "text": "bundle fetch",
-          "link": "/es/api/cli/plugin-kit-ai-bundle-fetch"
-        },
-        {
-          "text": "bundle help",
-          "link": "/es/api/cli/plugin-kit-ai-bundle-help"
-        },
-        {
-          "text": "bundle install",
-          "link": "/es/api/cli/plugin-kit-ai-bundle-install"
-        },
-        {
-          "text": "bundle publish",
-          "link": "/es/api/cli/plugin-kit-ai-bundle-publish"
-        }
-      ]
-    },
-    {
-      "text": "Completion",
-      "items": [
-        {
-          "text": "completion",
-          "link": "/es/api/cli/plugin-kit-ai-completion"
-        },
-        {
-          "text": "completion bash",
-          "link": "/es/api/cli/plugin-kit-ai-completion-bash"
-        },
-        {
-          "text": "completion fish",
-          "link": "/es/api/cli/plugin-kit-ai-completion-fish"
-        },
-        {
-          "text": "completion help",
-          "link": "/es/api/cli/plugin-kit-ai-completion-help"
-        },
-        {
-          "text": "completion powershell",
-          "link": "/es/api/cli/plugin-kit-ai-completion-powershell"
-        },
-        {
-          "text": "completion zsh",
-          "link": "/es/api/cli/plugin-kit-ai-completion-zsh"
-        }
-      ]
-    },
-    {
-      "text": "Skills",
-      "items": [
-        {
-          "text": "skills",
-          "link": "/es/api/cli/plugin-kit-ai-skills"
-        },
-        {
-          "text": "skills generate",
-          "link": "/es/api/cli/plugin-kit-ai-skills-generate"
-        },
-        {
-          "text": "skills help",
-          "link": "/es/api/cli/plugin-kit-ai-skills-help"
-        },
-        {
-          "text": "skills init",
-          "link": "/es/api/cli/plugin-kit-ai-skills-init"
-        },
-        {
-          "text": "skills install",
-          "link": "/es/api/cli/plugin-kit-ai-skills-install"
-        },
-        {
-          "text": "skills list",
-          "link": "/es/api/cli/plugin-kit-ai-skills-list"
-        },
-        {
-          "text": "skills remove",
-          "link": "/es/api/cli/plugin-kit-ai-skills-remove"
-        },
-        {
-          "text": "skills update",
-          "link": "/es/api/cli/plugin-kit-ai-skills-update"
-        },
-        {
-          "text": "skills validate",
-          "link": "/es/api/cli/plugin-kit-ai-skills-validate"
-        }
-      ]
-    }
-  ],
-  "/es/api/go-sdk/": [
-    {
-      "text": "Go SDK",
-      "items": [
-        {
-          "text": "Resumen",
-          "link": "/es/api/go-sdk/"
-        },
-        {
-          "text": "claude",
-          "link": "/es/api/go-sdk/claude"
-        },
-        {
-          "text": "codex",
-          "link": "/es/api/go-sdk/codex"
-        },
-        {
-          "text": "gemini",
-          "link": "/es/api/go-sdk/gemini"
-        },
-        {
-          "text": "platformmeta",
-          "link": "/es/api/go-sdk/platformmeta"
-        },
-        {
-          "text": "sdk",
-          "link": "/es/api/go-sdk/sdk"
-        }
-      ]
-    }
-  ],
-  "/es/api/runtime-node/": [
-    {
-      "text": "Node Runtime",
-      "items": [
-        {
-          "text": "Resumen",
-          "link": "/es/api/runtime-node/"
-        },
-        {
-          "text": "allow",
-          "link": "/es/api/runtime-node/allow"
-        },
-        {
-          "text": "Claude App",
-          "link": "/es/api/runtime-node/claudeapp"
-        },
-        {
-          "text": "Claude Handler",
-          "link": "/es/api/runtime-node/claudehandler"
-        },
-        {
-          "text": "CLAUDE_EXTENDED_HOOKS",
-          "link": "/es/api/runtime-node/claude_extended_hooks"
-        },
-        {
-          "text": "CLAUDE_STABLE_HOOKS",
-          "link": "/es/api/runtime-node/claude_stable_hooks"
-        },
-        {
-          "text": "Codex App",
-          "link": "/es/api/runtime-node/codexapp"
-        },
-        {
-          "text": "Codex Handler",
-          "link": "/es/api/runtime-node/codexhandler"
-        },
-        {
-          "text": "continue",
-          "link": "/es/api/runtime-node/continue"
-        },
-        {
-          "text": "JSONMap",
-          "link": "/es/api/runtime-node/jsonmap"
+          "text": "agentplugins author compat (En inglés)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-compat"
         },
         {
-          "text": "Overview",
-          "link": "/es/api/runtime-node/runtime"
-        }
-      ]
-    }
-  ],
-  "/es/api/runtime-python/": [
-    {
-      "text": "Python Runtime",
-      "items": [
-        {
-          "text": "Resumen",
-          "link": "/es/api/runtime-python/"
-        },
-        {
-          "text": "plugin_kit_ai_runtime",
-          "link": "/es/api/runtime-python/plugin-kit-ai-runtime"
-        }
-      ]
-    }
-  ],
-  "/es/api/platform-events/": [
-    {
-      "text": "Eventos de plataforma",
-      "items": [
-        {
-          "text": "Resumen",
-          "link": "/es/api/platform-events/"
-        },
-        {
-          "text": "claude",
-          "link": "/es/api/platform-events/claude"
-        },
-        {
-          "text": "codex",
-          "link": "/es/api/platform-events/codex"
-        },
-        {
-          "text": "gemini",
-          "link": "/es/api/platform-events/gemini"
-        }
-      ]
-    }
-  ],
-  "/es/api/capabilities/": [
-    {
-      "text": "Capacidades",
-      "items": [
-        {
-          "text": "Resumen",
-          "link": "/es/api/capabilities/"
-        },
-        {
-          "text": "config_change",
-          "link": "/es/api/capabilities/config_change"
-        },
-        {
-          "text": "gemini_after_agent",
-          "link": "/es/api/capabilities/gemini_after_agent"
-        },
-        {
-          "text": "gemini_after_model",
-          "link": "/es/api/capabilities/gemini_after_model"
-        },
-        {
-          "text": "gemini_after_tool",
-          "link": "/es/api/capabilities/gemini_after_tool"
-        },
-        {
-          "text": "gemini_before_agent",
-          "link": "/es/api/capabilities/gemini_before_agent"
-        },
-        {
-          "text": "gemini_before_model",
-          "link": "/es/api/capabilities/gemini_before_model"
-        },
-        {
-          "text": "gemini_before_tool",
-          "link": "/es/api/capabilities/gemini_before_tool"
-        },
-        {
-          "text": "gemini_before_tool_selection",
-          "link": "/es/api/capabilities/gemini_before_tool_selection"
-        },
-        {
-          "text": "gemini_session_end",
-          "link": "/es/api/capabilities/gemini_session_end"
+          "text": "agentplugins author doctor (En inglés)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-doctor"
         },
         {
-          "text": "gemini_session_start",
-          "link": "/es/api/capabilities/gemini_session_start"
+          "text": "agentplugins author help (En inglés)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-help"
         },
         {
-          "text": "notify",
-          "link": "/es/api/capabilities/notify"
+          "text": "agentplugins author init (En inglés)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-init"
         },
         {
-          "text": "permission_request",
-          "link": "/es/api/capabilities/permission_request"
+          "text": "agentplugins author inspect (En inglés)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-inspect"
         },
-        {
-          "text": "post_tool",
-          "link": "/es/api/capabilities/post_tool"
-        },
-        {
-          "text": "post_tool_failure",
-          "link": "/es/api/capabilities/post_tool_failure"
-        },
-        {
-          "text": "pre_compact",
-          "link": "/es/api/capabilities/pre_compact"
-        },
-        {
-          "text": "prompt_submit_gate",
-          "link": "/es/api/capabilities/prompt_submit_gate"
-        },
-        {
-          "text": "session_end",
-          "link": "/es/api/capabilities/session_end"
-        },
-        {
-          "text": "session_start",
-          "link": "/es/api/capabilities/session_start"
-        },
-        {
-          "text": "setup",
-          "link": "/es/api/capabilities/setup"
-        },
-        {
-          "text": "stop_gate",
-          "link": "/es/api/capabilities/stop_gate"
-        },
-        {
-          "text": "subagent_start",
-          "link": "/es/api/capabilities/subagent_start"
-        },
-        {
-          "text": "subagent_stop",
-          "link": "/es/api/capabilities/subagent_stop"
-        },
-        {
-          "text": "task_completed",
-          "link": "/es/api/capabilities/task_completed"
-        },
-        {
-          "text": "teammate_idle",
-          "link": "/es/api/capabilities/teammate_idle"
-        },
-        {
-          "text": "tool_gate",
-          "link": "/es/api/capabilities/tool_gate"
-        },
-        {
-          "text": "worktree_create",
-          "link": "/es/api/capabilities/worktree_create"
-        },
-        {
-          "text": "worktree_remove",
-          "link": "/es/api/capabilities/worktree_remove"
-        }
-      ]
-    }
-  ],
-  "/es/releases/": [
-    {
-      "text": "Lanzamientos",
-      "items": [
         {
-          "text": "Resumen",
-          "link": "/es/releases/"
+          "text": "agentplugins author skills (En inglés)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills"
         },
         {
-          "text": "v1.1.2",
-          "link": "/es/releases/v1-1-2"
+          "text": "agentplugins author skills help (En inglés)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills-help"
         },
         {
-          "text": "v1.1.1",
-          "link": "/es/releases/v1-1-1"
+          "text": "agentplugins author skills init (En inglés)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills-init"
         },
         {
-          "text": "v1.1.0",
-          "link": "/es/releases/v1-1-0"
+          "text": "agentplugins author skills validate (En inglés)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills-validate"
         },
         {
-          "text": "v1.0.6",
-          "link": "/es/releases/v1-0-6"
+          "text": "agentplugins author test (En inglés)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-test"
         },
         {
-          "text": "v1.0.0",
-          "link": "/es/releases/v1-0-0"
+          "text": "agentplugins author validate (En inglés)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-validate"
         },
         {
-          "text": "v1.0.4 Go SDK",
-          "link": "/es/releases/v1-0-4-go-sdk"
+          "text": "agentplugins author version (En inglés)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-version"
         }
       ]
     }

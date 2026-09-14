@@ -89,12 +89,14 @@ export async function runLocaleSmoke(browser, base, artifactsRoot) {
       }
       const fallback = "/en/api/cli/prepared-authoring-v2-plugin-kit-ai";
       await goto(fallback);
-      await inspectSwitcher(fallback, () => fallback, () => "en", true);
+      // Archived pages are intentionally absent from the current entity
+      // registry, so their language switcher returns to each locale home.
+      await inspectSwitcher(fallback, code => `/${code}/`, code => code, false, true);
       await goto("/?gateway=manual");
       await inspectSwitcher("/?gateway=manual", code => `/${code}/`, code => code, false, true);
       evidence.push({ variant, fiveCounterparts: true, englishFallback: true, unknownHomes: true });
       async function inspectSwitcher(label, destination, language, fallback, home = false) {
-        const homeIdentities = { en: "Agent Plugins", ru: "Документация Agent Plugins", es: "Documentación de Agent Plugins", fr: "Documentation de Agent Plugins", zh: "Agent Plugins 文档" };
+        const homeIdentities = { en: "Agent Plugins", ru: "Используйте плагины / Создавайте плагины", es: "Usar plugins / Crear plugins", fr: "Utiliser des plugins / Créer des plugins", zh: "使用插件 / 构建插件" };
         for (const [index, code] of locales.entries()) {
           // Every activation starts at its own origin, including same-route
           // English fallbacks; no previous selection supplies the next menu.
@@ -136,7 +138,7 @@ export async function runLocaleSmoke(browser, base, artifactsRoot) {
           const expectedPath = new URL(`${base}${destination(code)}`).pathname;
           const actualLanguage = language(code);
           const identity = home ? homeIdentities[actualLanguage] : fallback ? "plugin-kit-ai" : "Use plugins";
-          const selector = home && actualLanguage !== "en" ? ".locale-historical-identity" : ".vp-doc h1";
+          const selector = ".vp-doc h1";
           await links.nth(index).click();
           await page.waitForURL(url => url.pathname === expectedPath);
           // URL changes can precede the client route render and head update.

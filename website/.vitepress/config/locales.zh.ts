@@ -32,13 +32,8 @@ export const zhLocaleConfig = {
     },
     nav: [
       ...journeyNav("zh"),
-      { text: "v1", items: [
-        { text: "指南 · v1", link: "/zh/guide/" },
-        { text: "概念 · v1", link: "/zh/concepts/" },
-        { text: "参考 · v1", link: "/zh/reference/" },
-        { text: "API · v1", link: "/zh/api/" },
-      ] },
-      { text: "发布", link: "/zh/releases/" }
+      { text: "快速开始", link: "/zh/guide/quickstart" },
+      { text: "API", link: "/en/api/cli/prepared-authoring-v2-agentplugins-author" }
     ],
     sidebar: readSidebar("sidebars.zh.json"),
     editLink: {

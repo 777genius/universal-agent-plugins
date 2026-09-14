@@ -13,8 +13,8 @@ translationRequired: true
 > **Milestone A is available.** Install `agentplugins` from
 > `universal-agent-plugins@0.1.65` on npm or the `777genius/agentplugins` Homebrew tap.
 > GitHub release: `agentplugins-v0.1.65`. Public-channel E2E is verified.
-> Runtime/dev/bootstrap, migration, export and publication remain deferred.
-> Historical YAML v1 workflows remain separate and preserved.
+> Runtime/dev/bootstrap, export and publication remain deferred. Legacy YAML
+> migration is cancelled; preserved source is not a supported workflow.
 
 Choose stdio MCP when the package should supply a local process that communicates
 with the agent over standard input and output. The prepared template supports
@@ -37,7 +37,7 @@ agentplugins author init ./local-tools \
 ```
 
 Do not substitute a legacy Go, Python, shell, or TypeScript runtime flag. Those
-historical authoring lanes are described in [v1 context](/en/legacy/v1/), not
+preserved historical authoring lanes are not
 implemented by this template.
 
 ## Review the runtime boundary

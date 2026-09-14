@@ -6,25 +6,24 @@ section: "legacy"
 locale: "en"
 generated: false
 translationRequired: true
+stability: "historical"
+maturity: "historical"
 ---
 
 # Historical plugin-kit-ai v1, baseline 1.2.4
 
-> **Milestone A is available.** Standard-first static authoring is published as
-> `universal-agent-plugins@0.1.65` (`agentplugins author`) and `plugin-kit-ai@2.0.5`.
-> GitHub tags: `agentplugins-v0.1.65` and `plugin-kit-ai-v2.0.5`.
-> npm, PyPI, Homebrew, GitHub Releases and the public-channel E2E are verified.
-> Runtime/dev/bootstrap, migration, export and publication remain deferred.
-> Historical YAML v1 workflows remain separate and preserved.
+> **Retired historical reference.** Standard-first authoring is available only
+> through `agentplugins author`. No new releases, support journey, or YAML
+> migration are planned for the product described on this page. Its source and
+> published artifacts remain preserved as immutable history.
 
-This index preserves a way to understand existing projects. Its command baseline
+This index preserves the old design and implementation context. Its command baseline
 is tag **v1.2.4**, resolving to commit
 `9beca10448ac50fbe526a52101d1433a12471980`, rather than the broader command tree
 on the current documentation branch.
 
-**Project migration is not available in v2 yet. Maintain legacy projects using
-the v1 1.2.4 command set.** A version pin records historical behavior; it does not
-promise a second maintained YAML engine or a new support commitment.
+**YAML migration is intentionally cancelled.** A version pin records historical
+behavior; it does not promise a maintained YAML engine or support commitment.
 
 ## Choose the right context
 
@@ -32,8 +31,8 @@ promise a second maintained YAML engine or a new support commitment.
 | --- | --- |
 | A new root `plugin.json` package | [Milestone A Build journey](/en/build/). |
 | A package to install into an agent | [Use plugins](/en/use/). |
-| `plugin/plugin.yaml`, generated targets, or launcher source | Use the historical baseline and retained references below. |
-| A plan to convert a legacy project automatically | Migration is unavailable in v2; preserve the project. |
+| Historical `plugin/plugin.yaml`, generated targets, or launcher source | Use the baseline below only to inspect preserved implementation. |
+| A plan to convert a legacy project automatically | No migration product is planned. |
 
 Do not run new Build commands against a legacy directory expecting conversion.
 Standard authoring has no YAML fallback, temporary conversion, or native hidden
@@ -54,10 +53,10 @@ under `plugin/`. Runtime and platform switches there have historical meanings.
 For example, v1 test exercises launcher fixtures, while v2 test is a
 static package check. The same command name does not imply the same behavior.
 
-Use version 1.2.4 deliberately when maintaining those projects; avoid unversioned
-or latest-channel historical installation snippets. This index does not install
-or replace any executable. Package-wrapper development version placeholders in
-the tagged source are not the historical release version.
+The archived 1.2.4 sources are evidence, not current installation instructions.
+This index does not install or replace any executable. Package-wrapper
+development version placeholders in the tagged source are not the historical
+release version.
 
 ## Retained explanations
 

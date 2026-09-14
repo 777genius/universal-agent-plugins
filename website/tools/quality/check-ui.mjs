@@ -66,8 +66,8 @@ async function runSmoke(browser, base) {
   });
 
   const desktopChecks = [
-    ["en home", `${base}/en/`, "plugin-kit-ai"],
-    ["ru home", `${base}/ru/`, "plugin-kit-ai"],
+    ["en home", `${base}/en/`, "Agent Plugins"],
+    ["ru home", `${base}/ru/`, "Agent Plugins"],
     ["what you can build", `${base}/en/guide/what-you-can-build`, "One Repo, Many Supported Outputs"],
     ["one project multiple targets", `${base}/en/guide/one-project-multiple-targets`, "The Short Rule"],
     ["choose a target", `${base}/en/guide/choose-a-target`, "Target Directory"],
@@ -135,14 +135,14 @@ async function runSmoke(browser, base) {
     errors.push("Hand-authored page is missing the visible edit link.");
   }
 
-  await page.goto(`${base}/en/api/cli/plugin-kit-ai`, { waitUntil: "networkidle" });
+  await page.goto(`${base}/en/api/cli/prepared-authoring-v2-agentplugins-author`, { waitUntil: "networkidle" });
   const generatedEditLink = page.getByRole("link", { name: "Edit this page", exact: true });
   if ((await generatedEditLink.count()) > 0) {
     errors.push("Generated CLI page should not show a hand-authored edit link.");
   }
-  const sourceLink = page.getByRole("link", { name: "Source", exact: true });
+  const sourceLink = page.getByRole("link", { name: "Exact source", exact: true });
   if ((await sourceLink.count()) < 1) {
-    errors.push("Generated CLI page is missing the Source link.");
+    errors.push("Generated CLI page is missing the Exact source link.");
   }
 
   await page.goto(`${base}/?gateway=1`, { waitUntil: "networkidle" });

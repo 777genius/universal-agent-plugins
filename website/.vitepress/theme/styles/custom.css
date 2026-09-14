@@ -452,3 +452,12 @@ a.docs-card * {
     grid-template-columns: 1fr;
   }
 }
+.retired-archive-notice {
+  margin: 0 0 1.5rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--vp-c-warning-2);
+  border-radius: 8px;
+  color: var(--vp-c-warning-1);
+  background: var(--vp-c-warning-soft);
+  font-weight: 600;
+}

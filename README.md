@@ -148,8 +148,8 @@ You can also install a local package or a pinned GitHub package without adding
 it to the registry. Direct-install examples are collected near the end of this
 README.
 
-plugin.yaml is the legacy plugin-kit-ai authoring format. It is not merged with
-or allowed to override plugin.json.
+`plugin.json` is the sole supported authoring manifest. Other manifest formats
+are ignored and cannot override it.
 
 ## Supported clients
 
@@ -261,19 +261,16 @@ the recorded source, and `remove` changes only files owned by the CLI.
 The [Build guide](website/source/en/build/index.md) describes Milestone A:
 root `plugin.json` with optional `skills/` and `mcp.json`, followed by the offline
 init → validate → inspect → static test loop and an installer planner handoff.
-`agentplugins author` and `plugin-kit-ai` are two entrypoints to one shared
-standard authoring engine.
+`agentplugins author` is the sole public entrypoint to the shared standard
+authoring engine.
 
 Install an exact npm version (Node.js 22+):
 
 ```bash
 npm install -g universal-agent-plugins@0.1.65
-# Or the standalone authoring entrypoint:
-npm install -g plugin-kit-ai@2.0.5
 ```
 
-Verified GitHub release tags: [agentplugins-v0.1.65](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.65)
-and [plugin-kit-ai-v2.0.5](https://github.com/777genius/universal-agent-plugins/releases/tag/plugin-kit-ai-v2.0.5).
+Verified GitHub release tag: [agentplugins-v0.1.65](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.65).
 See the [Use / Build quickstart](https://777genius.github.io/universal-agent-plugins/docs/en/guide/quickstart.html).
 
 Authoring validation and project doctor are distinct from installer
@@ -282,15 +279,16 @@ runtime execution, OAuth, or client activation. Runtime/dev/bootstrap,
 client generation, export/bundle, and publication are deferred from this MVP.
 There is no implicit YAML fallback or second supported YAML engine.
 
-Milestone A static authoring is available. Phases 7–11 remain deferred.
-Historical YAML projects use `plugin-kit-ai@1.2.4`; v1 maintenance is separate
-from the planned npm v2 authoring CLI.
+Milestone A static authoring is available. Runtime, preview/export and
+publication phases remain deferred. Legacy YAML migration is cancelled because
+there are no known users; preserved source is not a supported product.
 
 ### Historical authoring and development
 
 [Historical plugin-kit-ai v1, baseline 1.2.4](website/source/en/legacy/v1/index.md)
-provides version context. Project migration is not available in v2 yet.
-Maintain legacy projects using the v1 1.2.4 command set.
+provides immutable version context only. The legacy product is retired and no
+migration journey is planned. Do not use this section as current installation
+guidance.
 The [preserved authoring guide](docs/PLUGIN_KIT_AI_AUTHORING.md) explains the
 historical YAML, generation, and export workflows; it is not the standard MVP.
 
@@ -300,73 +298,9 @@ Node/TypeScript. See the classified [starters](examples/starters/README.md),
 [production examples](examples/plugins/README.md), [local examples](examples/local/README.md),
 and [Skills components](examples/skills/README.md).
 
-<details>
-<summary>Historical v1 authoring and SDK reference — baseline 1.2.4</summary>
+The exact historical source remains available from the pinned archive above.
+It is retained for implementation research, not installation or migration.
 
-All commands, stability labels, and supported-output claims in this section
-describe the preserved v1 workflow, not the released standard authoring MVP.
-
-`plugin-kit-ai` keeps authored source under `plugin/`, generates the supported outputs you need, and helps you validate the repo before handoff. This includes supported outputs for Claude, Codex, Gemini, Cursor, and OpenCode where the repo shape allows it. The honest promise is `one repo / many supported outputs`, not fake parity everywhere.
-
-overview: [plugin-kit-ai documentation](https://github.com/777genius/universal-agent-plugins/blob/9beca10448ac50fbe526a52101d1433a12471980/website/source/en/index.md)
-fastest start: [Quickstart](https://777genius.github.io/universal-agent-plugins/docs/en/guide/quickstart.html)
-choose by job first: [Choose What You Are Building](https://github.com/777genius/universal-agent-plugins/blob/9beca10448ac50fbe526a52101d1433a12471980/website/source/en/guide/choose-what-you-are-building.md)
-one repo, many outputs: [What You Can Build](https://github.com/777genius/universal-agent-plugins/blob/9beca10448ac50fbe526a52101d1433a12471980/website/source/en/guide/what-you-can-build.md)
-honest caveat: [Support Boundary](https://github.com/777genius/universal-agent-plugins/blob/9beca10448ac50fbe526a52101d1433a12471980/website/source/en/reference/support-boundary.md)
-
-### Legacy quick start
-
-Use an exact v1 1.2.4 executable for these commands. The Homebrew and fallback
-channels below are retained as historical references, not version-pinned setup.
-
-```bash
-# Historical Homebrew channel (not version-pinned):
-brew install 777genius/homebrew-plugin-kit-ai/plugin-kit-ai
-```
-
-npm: `npm i -g plugin-kit-ai@1.2.4` or `npx plugin-kit-ai@1.2.4 ...`
-
-pipx (`public-beta`, only when that release is published to PyPI): `pipx install plugin-kit-ai==1.2.4`
-
-fallback installer: `curl -fsSL https://raw.githubusercontent.com/777genius/plugin-kit-ai/main/scripts/install.sh | sh`
-
-```bash
-plugin-kit-ai init my-plugin --template online-service
-plugin-kit-ai init my-plugin --template local-tool
-plugin-kit-ai init my-plugin --template custom-logic
-plugin-kit-ai init my-plugin
-plugin-kit-ai generate .
-plugin-kit-ai validate . --platform codex-runtime --strict
-```
-
-### Support and references
-
-[examples/starters/README.md](examples/starters/README.md)
-[examples/local/README.md](examples/local/README.md)
-[docs/CHOOSING_HELPER_DELIVERY_MODE.md](docs/CHOOSING_HELPER_DELIVERY_MODE.md)
-the stable local Python and Node subset on `codex-runtime` and `claude`
-`doctor`, `bootstrap`, `validate --strict`, `export`, and bundle handoff for that stable local subset
-`generate`, `import`, and `normalize` are still `public-beta`
-[docs/generated/target_support_matrix.md](docs/generated/target_support_matrix.md)
-[docs/generated/support_matrix.md](docs/generated/support_matrix.md)
-[docs/SUPPORT.md](docs/SUPPORT.md)
-
-### SDK and CLI
-
-Go SDK packages: `github.com/777genius/plugin-kit-ai/sdk/claude`, `github.com/777genius/plugin-kit-ai/sdk/codex`, and `github.com/777genius/plugin-kit-ai/sdk/gemini`.
-
-```bash
-./bin/plugin-kit-ai doctor ./my-plugin
-./bin/plugin-kit-ai bootstrap ./my-plugin
-./bin/plugin-kit-ai import ./native-plugin --from codex-runtime
-./bin/plugin-kit-ai capabilities --format json
-```
-
-`plugin-kit-ai validate --format json` now emits the versioned `plugin-kit-ai/validate-report` contract.
-[docs/CODEX_TARGET_BOUNDARY.md](docs/CODEX_TARGET_BOUNDARY.md)
-[docs/VALIDATE_JSON_CONTRACT.md](docs/VALIDATE_JSON_CONTRACT.md)
-
-</details>
 
 Contributor checks:
 

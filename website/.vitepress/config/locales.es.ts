@@ -32,13 +32,8 @@ export const esLocaleConfig = {
     },
     nav: [
       ...journeyNav("es"),
-      { text: "v1", items: [
-        { text: "Guía · v1", link: "/es/guide/" },
-        { text: "Conceptos · v1", link: "/es/concepts/" },
-        { text: "Referencia · v1", link: "/es/reference/" },
-        { text: "API · v1", link: "/es/api/" },
-      ] },
-      { text: "Lanzamientos", link: "/es/releases/" }
+      { text: "Inicio rápido", link: "/es/guide/quickstart" },
+      { text: "API", link: "/en/api/cli/prepared-authoring-v2-agentplugins-author" }
     ],
     sidebar: readSidebar("sidebars.es.json"),
     editLink: {

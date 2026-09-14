@@ -8,7 +8,7 @@ generated: false
 translationRequired: true
 ---
 
-[Utiliser des plugins](/fr/use/) · [Créer des plugins](/fr/build/) — Milestone A est disponible. La migration des projets vers v2 reste indisponible.
+[Utiliser des plugins](/fr/use/) · [Créer des plugins](/fr/build/) — Milestone A est disponible. La migration YAML est annulée.
 <p class="locale-historical-identity">Préparation à la production</p>
 
 [Instantané historique de la branche plugin-kit-ai v1. 1.2.4 est la référence des commandes, pas la version exacte de cet instantané.](/en/legacy/v1/)

@@ -10,17 +10,18 @@ const start = source.indexOf("for (const claim of", source.indexOf("const quicks
 const end = source.indexOf("const ciIntegration =", start);
 assert.ok(start >= 0 && end > start);
 const assertions = source.slice(start, end);
-const claims = ["Use plugins", "Build plugins", "Milestone A is available", "public-channel E2E are verified", "0.1.65", "2.0.5",
-  "Historical v1 maintenance", "plugin.json", "Supported Node And Python Paths",
-  "If You Are Intentionally Starting On Node Or Python", "What You Get", "What To Do Next"];
+const claims = ["Use plugins", "Build plugins", "Milestone A is available", "public-channel E2E are verified", "0.1.65",
+  "plugin.json", "agentplugins author"];
 const highlight = (command) => `<pre><code><span class="line">${command.split(/(?= )/)
   .map(token => `<span style="--shiki-light:#032F62;--shiki-dark:#9ECBFF;">${token}</span>`)
   .join("")}</span></code></pre>`;
 const command = "npx universal-agent-plugins add context7";
 function check(code, includedClaims = claims) {
   const errors = [];
+  const rendered = includedClaims.map(claim => `<p>${claim}</p>`).join("") + code;
   const failed = runInNewContext(`${assertions}\nhasError;`, {
-    quickstart: includedClaims.map(claim => `<p>${claim}</p>`).join("") + code,
+    quickstart: rendered,
+    quickstartVisible: rendered,
     hasError: false,
     console: { error: message => errors.push(message) },
   });

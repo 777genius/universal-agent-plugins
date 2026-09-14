@@ -1,4 +1,28 @@
 ---
+title: "Documentación de Agent Plugins"
+description: "Documentación pública de Agent Plugins."
+canonicalId: "page:home"
+section: "home"
+locale: "es"
+generated: false
+translationRequired: true
+---
+
+# Usar plugins / Crear plugins
+
+Instala Agent Plugins 1.0 disponibles o crea paquetes portables basados en `plugin.json`.
+
+- [Usar plugins](/es/use/)
+- [Crear plugins](/es/build/)
+- [Inicio rápido](/es/guide/quickstart)
+
+Milestone A está disponible mediante `agentplugins author`. La migración YAML se ha cancelado; el código heredado conservado no es un producto compatible.
+
+[Agent Plugins 1.0 specification](https://agent-plugins.org/specification)
+
+<!-- locale-historical-source:start
+locale-historical-frontmatter:start
+---
 title: "Documentación de plugin-kit-ai"
 description: "Documentación pública para plugin-kit-ai."
 canonicalId: "page:home"
@@ -7,14 +31,7 @@ locale: "es"
 generated: false
 translationRequired: true
 ---
-
-[Usar plugins](/es/use/) · [Crear plugins](/es/build/) — Milestone A está disponible. La migración de proyectos a v2 aún no está disponible.
-<p class="locale-historical-identity">Documentación de Agent Plugins</p>
-
-[Instantánea histórica de la rama plugin-kit-ai v1. 1.2.4 es la referencia de comandos, no la versión exacta de esta instantánea.](/en/legacy/v1/)
-
-<details><summary>Instantánea histórica de la rama plugin-kit-ai v1. 1.2.4 es la referencia de comandos, no la versión exacta de esta instantánea.</summary>
-
+locale-historical-frontmatter:end
 <div class="docs-hero docs-hero--feature">
   <p class="docs-kicker">DOCUMENTACIÓN PÚBLICA</p>
   <h1>plugin-kit-ai</h1>
@@ -111,5 +128,4 @@ Si es nuevo, puede detenerse después de las páginas iniciales. Todo lo demás 
 - expandir el mismo repositorio más adelante a más rutas de envío
 - mantenga una historia de revisión y validación a medida que crece el repositorio
 - encuentre el contrato exacto sólo cuando lo necesite
-
-</details>
+locale-historical-source:end -->

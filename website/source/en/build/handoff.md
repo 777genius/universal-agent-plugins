@@ -13,8 +13,8 @@ translationRequired: true
 > **Milestone A is available.** Install `agentplugins` from
 > `universal-agent-plugins@0.1.65` on npm or the `777genius/agentplugins` Homebrew tap.
 > GitHub release: `agentplugins-v0.1.65`. Public-channel E2E is verified.
-> Runtime/dev/bootstrap, migration, export and publication remain deferred.
-> Historical YAML v1 workflows remain separate and preserved.
+> Runtime/dev/bootstrap, export and publication remain deferred. Legacy YAML
+> migration is cancelled; preserved source is not a supported workflow.
 
 The author's output is a standard package directory plus evidence. The installer
 makes a separate plan for selected agents. This page deliberately ends at a dry
@@ -92,7 +92,7 @@ is not permission to run against a real user's profile during preparation.
 
 Do not ask the receiver to run v2 import, migrate, export, bundle, publish,
 bootstrap, or dev commands. Do not label a YAML example as a migrated standard
-package. Historical workflows remain linked from [v1 context](/en/legacy/v1/).
+package.
 
 For remote source sharing, the existing installer requires a full 40-character
 commit SHA and an explicit package subpath when discovery is ambiguous. That is

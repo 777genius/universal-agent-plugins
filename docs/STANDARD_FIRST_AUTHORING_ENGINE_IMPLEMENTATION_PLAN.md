@@ -1,20 +1,69 @@
 # Standard-First Authoring Engine Implementation Plan
 
-> **Current availability (2026-09-14):** Milestone A static authoring is publicly available
-> for `universal-agent-plugins@0.1.65` and `plugin-kit-ai@2.0.5`. Native GitHub
-> releases use `agentplugins-v0.1.65` and `plugin-kit-ai-v2.0.5`. See the
+> **Current availability (2026-09-14):** Milestone A static authoring is publicly
+> available through `agentplugins author` in `universal-agent-plugins@0.1.65`.
+> Native GitHub releases use `agentplugins-v0.1.65`; npm, Homebrew, native
+> archives and public-channel E2E are verified. See the
 > [current Build guide](../website/source/en/build/index.md).
-> Phases 7–11, runtime/dev/bootstrap, migration, export and publication remain
-> deferred. Historical v1 YAML capabilities remain preserved.
-> Release correction (owner direction, 2026-09-13): public E2E found PyPI
-> `plugin-kit-ai==2.0.1` broken because it resolves the old bare `v2.0.1`
-> GitHub release URL; npm v2 was still unpublished at that checkpoint.
-> The accepted remediation is the coherent 0.1.65 / 2.0.5 pair above, using
-> prefixed tags only; do not add a bare-v compatibility alias. npm, PyPI,
-> Homebrew and GitHub readbacks and the 11-cell public-channel E2E matrix pass.
-> Installer release proof alone does not qualify standard authoring.
-> The dated decisions and preparation evidence below retain their original scope;
-> they describe prior checkpoints, not current package availability.
+> Phases 7-11 remain deferred, except legacy YAML migration is removed from the
+> roadmap by the owner decision below. Historical package artifacts remain
+> immutable evidence and are not current installation guidance.
+
+## Owner decision: one public CLI and no legacy migration (2026-09-14)
+
+This decision supersedes every older roadmap item below that proposes a public
+`plugin-kit-ai` entrypoint, a PyPI authoring channel, YAML maintenance guidance,
+or migration from `plugin/plugin.yaml`. There are no known users of the YAML
+product line, so compatibility and migration work would add cost without a
+consumer.
+
+The product contract is now:
+
+- `agentplugins` is the only public CLI and `agentplugins author` is the only
+  documented authoring entrypoint;
+- npm (`universal-agent-plugins`), Homebrew and native GitHub archives are the
+  supported cross-platform installation channels;
+- do not publish an `agentplugins` PyPI wrapper unless real Python package-manager
+  demand is demonstrated; PyPI would only wrap the same Go binary;
+- stop new `plugin-kit-ai` releases and remove that package from current guides,
+  navigation and release requirements; already published artifacts remain
+  downloadable historical records and must not be rewritten or deleted;
+- do not build a YAML migration command, compatibility shim or user migration
+  journey; Phase 8 retains only standard JSON normalization and native import;
+- preserve useful legacy source, tests and design material outside the standard
+  dependency graph. This decision authorizes retirement of product wiring and
+  documentation, not deletion of preserved implementation.
+
+Acceptance is repository-searchable: current journeys contain no install or run
+command for the retired package, release gates require only `agentplugins`, and
+remaining package-name/YAML references are classified as internal paths,
+attribution, tests, or immutable history. Any future revival requires a concrete
+consumer and a new owner decision.
+
+### Executable remaining roadmap
+
+This is the only active definition of Phases 7-11. Re-plan each phase against
+current `main` in its own dependency-safe PR. The older detailed design below is
+retained as decision history and must not be used to restore retired commands,
+packages, migration work, or release channels.
+
+1. **Phase 7 - runtime loop:** add explicit runtime testing, `dev`, and safe
+   lockfile-based `bootstrap` for standard `plugin.json` packages.
+2. **Phase 8 - JSON maintenance:** add deterministic normalization and explicit
+   native-to-standard import. No YAML reader, migration command, compatibility
+   shim, or legacy-project journey is in scope.
+3. **Phase 9 - portable outputs:** add disposable client projection previews,
+   deterministic export, and the minimum useful bundle inspection/fetch flow.
+4. **Phase 10 - publication:** add one explicit publish flow and Directory
+   submission with provenance, idempotency, and rollback evidence.
+5. **Phase 11 - dependency isolation:** detach legacy wiring from the standard
+   dependency graph while preserving source, tests, fixtures, and design ideas.
+   Removal still requires a separate capability inventory and owner decision.
+
+All public commands remain under `agentplugins`; all authoring commands remain
+under `agentplugins author`. Supported distribution remains npm, Homebrew, and
+native GitHub archives. PyPI and new `plugin-kit-ai` releases are outside the
+roadmap unless real demand produces a new owner decision.
 
 ## Owner decision: accelerated MVP scope (2026-09-10)
 
@@ -25,19 +74,19 @@ later phase through its own bounded plan and PR after the MVP is stable.
 
 The accelerated MVP contains only:
 
-- one shared Go implementation behind `agentplugins author` and
-  `plugin-kit-ai`;
+- one shared Go implementation exposed publicly through `agentplugins author`;
 - `init`, `validate`, `inspect`, `compat`, `doctor`, and offline `test`;
 - Skill and stdio/remote MCP templates that validate without running package
   content;
 - local installer planning through `agentplugins add <path> --dry-run` in a
   disposable client root;
-- truthful public documentation and historical v1 guidance;
+- truthful public documentation with one Agent Plugins journey;
 - draft artifacts and provenance sufficient to test the exact candidate.
 
 The accelerated MVP explicitly defers runtime execution, `dev`, `bootstrap`,
-normalize/import/migration, client projection generation, export/bundle,
-Directory submission, remote publishing, and legacy code isolation. Deferred
+normalize/native import, client projection generation, export/bundle, Directory
+submission, remote publishing, and legacy code isolation. YAML migration is
+cancelled rather than deferred. Deferred
 commands stay absent from public help. Useful YAML implementation, dependencies,
 tests, templates, and design ideas remain preserved under the capability
 preservation contract; narrower `plugin.json` support is never deletion
@@ -198,7 +247,7 @@ This checkpoint does not complete phases 0-11 or release the new authoring CLI.
 
 ## Status
 
-### Milestone A paired release cut (2026-09-14)
+### Historical Milestone A paired release cut (2026-09-14)
 
 The public cut is fixed to `agentplugins-v0.1.65` and
 `plugin-kit-ai-v2.0.5` at exact source SHA
@@ -288,7 +337,15 @@ This plan supersedes the open decision in
 silently rewrite ADR 0005. Phase 0 adds a focused authoring ADR that extends the
 existing standard-first installer decision without weakening its invariants.
 
-## Executive summary
+## Superseded detailed design archive
+
+Everything below this heading is preserved to explain earlier implementation
+choices and historical evidence. Where it mentions two public entrypoints,
+`plugin-kit-ai` v2, PyPI, YAML migration, or compatibility shims, the owner
+decision and executable roadmap above override it. Agents must not implement
+those superseded items.
+
+### Historical executive summary
 
 Build one standard-first authoring engine in Go and expose it through two thin
 entrypoints:
@@ -2055,58 +2112,44 @@ not affect offline validate/inspect/test or installation lifecycle commands.
 - every process, process group, temp directory, and partial dependency staging
   root is removed after success, failure, timeout, or cancellation.
 
-## Phase 8 - Normalize, import, and migration
+## Phase 8 - Normalize and import native configuration
 
 ### Summary
 
-Add explicit controlled mutation and a one-way exit from legacy projects.
+Add controlled JSON mutation and portable native import without a legacy YAML
+reader or migration product.
 
 ### Detailed implementation steps
 
 1. Implement lossless JSON document editing helpers.
 2. Add digest-bound mutation plans and atomic file replacement.
-3. Adapt portable native MCP/Skills importers.
-4. Add the narrow migration-only legacy reader.
-5. Produce migration reports and unsupported-feature diagnostics.
-6. Convert representative first-party legacy projects before broad migration.
+3. Adapt portable native MCP and Skills importers for supported client formats.
 
 ### Edge cases
 
-- mixed valid/invalid native entries;
-- omitted, symlinked, or concurrently changed native source path;
-- duplicate MCP names;
-- secrets embedded in native config;
-- absolute local paths;
-- unsupported hooks and commands;
-- two manifests present;
-- source and output overlap;
-- stale plan after concurrent edit;
-- case/normalization collisions;
-- partial cross-filesystem rename.
+- mixed valid and invalid native entries;
+- omitted, symlinked, or concurrently changed native source paths;
+- duplicate MCP names, embedded secrets, and absolute local paths;
+- source/output overlap, stale plans, case collisions, and partial writes.
 
 ### Tests
 
-- fixture corpus covering each old target type;
+- fixture corpus for supported native client formats;
 - explicit no-secret-copy assertions;
-- unsupported behavior is never silently dropped;
-- source tree remains byte-identical;
-- generated standard package validates;
-- rerun is deterministic or fails with a clear existing-output message.
+- source remains byte-identical and output validates;
+- reruns are deterministic or fail clearly on existing output.
 
 ### Rollback / kill switch
 
-Keep normalize, native import, and legacy migration behind separate command
-registrations. A failed or reverted mutation feature leaves standard read-only
-authoring available; migration never modifies its source, so rollback removes
-only the exact tool-owned output/staging root.
+Keep normalize and each native importer behind separate command registrations.
+A failed mutation removes only its exact tool-owned staging/output root and
+leaves read-only authoring available.
 
 ### Acceptance criteria
 
-- every maintained first-party legacy example has either a valid migrated
-  package or an explicit documented reason it cannot be an Agent Plugins 1.0
-  package;
-- normal authoring code does not import legacy packages;
-- migration is the sole legacy reader.
+- supported native input produces a valid standard package;
+- normal authoring and import code never reads legacy YAML packages;
+- no migration command or compatibility shim is registered.
 
 ## Phase 9 - Generate previews, export, and bundle
 
@@ -2208,79 +2251,54 @@ artifacts.
 - the CLI performs no direct merge or ownership claim; any conditional merge is
   attributable to registry-owned protected policy and remains auditable.
 
-## Phase 11 - Legacy isolation and capability preservation
+## Phase 11 - Legacy isolation and source preservation
 
 ### Summary
 
-Detach the old model from standard authoring after parity and migration are
-proven, while preserving useful legacy capabilities and their implementation.
+Detach the retired product from current authoring and release wiring while
+preserving useful implementation as non-shipping reference material.
 
 ### Preconditions
 
-- first-party examples migrated;
-- standard-first CLI and docs released;
-- migration command released and tested;
-- npm/Homebrew/PyPI transition documented;
-- standard authoring/release CI does not require legacy manifests; isolated
-  tests for preserved implementations may still use explicit legacy fixtures;
-- repository-wide search classifies every remaining `plugin.yaml` reference as
-  a preserved legacy implementation/design, canonical legacy path, historical
-  fixture, or migration test;
-- every capability has a reviewed preservation disposition before removal.
+- the standard-first CLI and docs are released through `agentplugins`;
+- current authoring and release CI do not require legacy manifests or the retired
+  package;
+- repository search classifies remaining `plugin.yaml` and retired package-name
+  references as internal paths, attribution, tests, or immutable history.
 
 ### Detailed implementation steps
 
-1. Detach old templates and command wiring from standard authoring; preserve
-   useful template source and tests in their documented legacy boundary.
-2. Remove old lifecycle aliases from the authoring binary.
-3. Complete the capability inventory with source, tests, consumers, mapping,
-   preservation destination and support status. Preserve unresolved code.
-4. Retain the isolated read-only importer plus useful legacy implementations,
-   required dependencies, tests and design documentation outside the standard
-   authoring graph. Remove only individually reviewed, owner-approved items in
-   bounded PRs. No automatic deletion based on unused standard-first imports.
-5. Mark `plugin-kit-ai` v1 npm/PyPI versions deprecated without deleting
-   historical artifacts.
-6. Audit old runtime consumers and preserve useful packages even when no
-   maintained example currently calls them. Removal needs a recorded capability
-   decision and explicit owner acceptance, not only an unused-import search.
-
-### Edge cases
-
-- hidden CI/generator imports;
-- old examples referenced from external docs;
-- Go module paths retained for compatibility;
-- release scripts expecting both binaries;
-- migration tests accidentally importing production legacy packages.
-- removal of the migration reader while users still need to convert v1 projects.
+1. Detach old templates, aliases and command wiring from standard authoring.
+2. Remove the retired package from current navigation and future release jobs.
+3. Preserve useful implementation, dependencies, tests and design documentation
+   outside the standard dependency graph; do not move files merely to simulate
+   an archive.
+4. Keep already published package and release artifacts immutable and
+   downloadable. Do not publish compatibility or migration releases.
+5. Remove code only in separately reviewed PRs with explicit owner approval for
+   each capability; unresolved implementation remains preserved.
 
 ### Tests
 
-- repository-wide forbidden-import and forbidden-generated-file checks;
+- repository-wide forbidden-import and current-doc command checks;
 - clean build/test/package from a fresh clone;
-- released standard-first smoke;
-- standard authoring accepts legacy source only through explicit migration;
-  preserved legacy tests remain isolated and do not create implicit fallback;
-- old releases remain downloadable;
-- retained implementations and their required tests remain in source;
-- every deletion matches a reviewed inventory item explicitly accepted by the owner.
+- released `agentplugins` smoke across supported platforms;
+- retained legacy implementation tests stay isolated from current commands;
+- historical artifacts remain downloadable.
 
 ### Rollback / kill switch
 
-Revert one bounded isolation or owner-approved removal PR. Do not restore the old authoring path inside a
-new standard package. Historical binaries remain the fallback for an old
-project while it is migrated.
+Revert one bounded isolation PR. Do not restore the old product in current docs
+or standard command wiring.
 
 ### Acceptance criteria
 
-- current source and releases contain no normal authoring dependency on
-  `plugin/plugin.yaml`;
-- explicit migration remains available through a narrow isolated reader until a
-  future major version removes it under a separately announced support policy;
-- every legacy capability has an explicit preservation/adaptation destination
-  or owner-approved removal decision; unresolved cases remain preserved;
-- `plugin-kit-ai` means standard-first authoring;
-- `agentplugins` and `plugin-kit-ai` share one authoring implementation.
+- `agentplugins` is the sole public CLI and release requirement;
+- current authoring has no dependency on `plugin/plugin.yaml`;
+- no migration command, YAML fallback, compatibility shim or current legacy
+  journey exists;
+- useful legacy source and tests remain preserved without being shipped as a
+  supported product.
 
 ## Cross-cutting edge-case checklist
 
@@ -2290,7 +2308,7 @@ project while it is migrated.
 - The loader registry chooses behavior by schema identity.
 - A newer unknown schema fails as unsupported without network schema fetch.
 - Unknown fields are not promoted into tool semantics.
-- `normalize`, `pack`, and migration preserve supported opaque extension data.
+- `normalize`, native import, and `pack` preserve supported opaque extension data.
 - New spec support is added as a new loader/validator implementation, not a
   global conditional spread across commands.
 
@@ -2496,7 +2514,7 @@ generated documentation.
 | 5 | Offline test and Skills | 300-550 lines |
 | 6 | Dual-entrypoint release/wrappers | 300-550 lines |
 | 7 | Runtime test/dev/bootstrap | 700-1,200 lines |
-| 8 | Normalize/import/migration | 800-1,400 lines |
+| 8 | Normalize/native import | 500-900 lines |
 | 9 | Preview/export/bundle | 700-1,200 lines |
 | 10 | GitHub/Directory publication | 500-900 lines |
 | 11 | Legacy isolation and preservation | Re-estimate from capability inventory; no assumed net deletion |
@@ -2523,18 +2541,18 @@ identified generated docs, golden fixtures, and mechanical file moves.
    - inspect, compat, capabilities, doctor.
 7. `feat(authoring): test standard components offline`
    - static test and Agent Skills init/validate.
-8. `feat(cli): release shared authoring entrypoints`
-   - native assets, launchers, v2 migration errors, README and generated command
-     docs. Split packaging and public docs only if the review budget requires it.
+8. `feat(cli): release Agent Plugins authoring`
+   - native assets, launchers, README and generated command docs for the sole
+     public `agentplugins` entrypoint.
 9. `feat(authoring): test and develop MCP runtimes`
    - explicit MCP runtime test and dev watcher.
 10. `feat(authoring): bootstrap generated runtimes`
    - deterministic recognized templates only.
 11. `feat(authoring): normalize standard documents`
    - lossless CAS writes.
-12. `feat(authoring): import and migrate projects`
-   - native import and one-way legacy conversion; split native and legacy only
-     if their shared plan/result contract remains stable independently.
+12. `feat(authoring): import native configuration`
+   - supported client MCP and Skills import through digest-bound plans; no YAML
+     reader or migration path.
 13. `feat(authoring): preview client projections`
     - pure generate boundary.
 14. `feat(authoring): export standard packages`
@@ -2547,7 +2565,7 @@ identified generated docs, golden fixtures, and mechanical file moves.
 
 The exact PR count may shrink when adjacent changes remain below the review
 budget and share one invariant. Do not combine installer lifecycle changes,
-authoring migration, runtime execution, and remote publication into one mega-PR.
+native import, runtime execution, and remote publication into one mega-PR.
 
 ## Delivery milestones
 
@@ -2629,10 +2647,8 @@ The program is complete when all of the following are true:
 
 - [ ] `plugin.json` is the only current standard authoring manifest.
 - [ ] No normal standard authoring command reads or creates `plugin/plugin.yaml`.
-- [ ] Standard authoring accepts legacy input only by explicit non-destructive migration.
-- [ ] `plugin-kit-ai` and `agentplugins author` invoke one Go implementation.
-- [ ] Equivalent commands have equivalent JSON contracts, exit codes, and
-      filesystem effects.
+- [ ] No current command accepts legacy YAML input or offers migration.
+- [ ] `agentplugins author` is the sole public authoring entrypoint.
 - [ ] New Skill, remote MCP, stdio MCP, and hybrid projects validate immediately.
 - [ ] Standard conformance is separated from compatibility and runtime evidence.
 - [ ] Default validation/testing launches no agent, model, OAuth, or network.
@@ -2644,9 +2660,9 @@ The program is complete when all of the following are true:
 - [ ] Supported release assets and launchers pass isolated cross-platform smoke.
 - [ ] Public docs have clear `Use plugins` and `Build plugins` paths.
 - [ ] Current docs and templates do not teach the old format.
-- [ ] First-party examples are migrated or explicitly classified as non-portable
-      client extensions.
-- [ ] Standard command wiring is independent of the legacy model after migration gates.
+- [ ] First-party examples use the standard format or are classified as archived,
+      non-portable client extensions.
+- [ ] Standard command and release wiring is independent of the legacy model.
 - [ ] Useful legacy implementation, dependencies, tests and design documentation
       are preserved; each deletion has an explicit owner-approved inventory decision.
 
@@ -2654,7 +2670,7 @@ The program is complete when all of the following are true:
 
 Chosen approach:
 
-**Shared standard-first Go authoring engine with two thin entrypoints.**
+**One standard-first Go authoring engine exposed through `agentplugins`.**
 
 - Confidence: 10/10.
 - Reliability: 9/10.
@@ -2663,10 +2679,9 @@ Chosen approach:
   changed logical lines, plus separately identified mechanical documentation or
   fixture migrations.
 
-This approach maximizes reuse without preserving a second package model. It
-keeps the existing command investment, gives authors a dedicated
-`plugin-kit-ai` experience, exposes the same capabilities from `agentplugins`,
-and leaves Agent Plugins 1.0 `plugin.json` as the sole portable authority.
+This approach maximizes reuse without preserving a second package model. It keeps the existing implementation investment, exposes one clear public CLI,
+and leaves Agent Plugins 1.0 `plugin.json` as the sole portable authority. The
+retired package remains only as immutable release history and preserved source.
 
 ### Bounded paired npm publication consumer
 

@@ -13,8 +13,8 @@ translationRequired: true
 > **Milestone A is available.** Install `agentplugins` from
 > `universal-agent-plugins@0.1.65` on npm or the `777genius/agentplugins` Homebrew tap.
 > GitHub release: `agentplugins-v0.1.65`. Public-channel E2E is verified.
-> Runtime/dev/bootstrap, migration, export and publication remain deferred.
-> Historical YAML v1 workflows remain separate and preserved.
+> Runtime/dev/bootstrap, export and publication remain deferred. Legacy YAML
+> migration is cancelled; preserved source is not a supported workflow.
 
 The selected directory is the package root. Authoring reads root
 `plugin.json` and its standard components. It does not search parents for a
@@ -98,7 +98,7 @@ can leave required component evidence incomplete. Use the full report.
 
 Existing `plugin/plugin.yaml`, launcher source, generated client files, SDK docs,
 and runtime examples remain preserved in their existing locations. They are
-[historical or supporting material](/en/legacy/v1/), not implicit inputs to this
-standard root. Do not copy them wholesale into a new package to satisfy a check.
+historical material, not implicit inputs to this standard root. Do not copy
+them wholesale into a new package to satisfy a check.
 
 Continue with [static checks](./checks), then [handoff](./handoff).

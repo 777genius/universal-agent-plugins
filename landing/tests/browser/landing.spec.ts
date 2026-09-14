@@ -505,10 +505,7 @@ test('sitemap lists only live canonical pages and unstable routes stay out of th
   await expect(page.locator('#use-plugins code')).toHaveText('npx universal-agent-plugins add context7');
   await expect(page.locator('#build-plugins')).toContainText('Milestone A is available');
   await expect(page.locator('#build-plugins')).toContainText('public-channel E2E are verified');
-  await expect(page.locator('#historical-v1 a')).toHaveAttribute(
-    'href',
-    'https://777genius.github.io/universal-agent-plugins/docs/en/guide/quickstart.html#historical-v1',
-  );
+  await expect(page.locator('#historical-v1')).toHaveCount(0);
 });
 
 test('the authoring frontdoor distinguishes Use from released Build and links to real docs journeys', async ({
@@ -530,10 +527,7 @@ test('the authoring frontdoor distinguishes Use from released Build and links to
   );
   await expect(page.locator('#build-plugins')).toContainText('public-channel E2E are verified');
 
-  await expect(page.locator('#historical-v1 a')).toHaveAttribute(
-    'href',
-    'https://777genius.github.io/universal-agent-plugins/docs/en/guide/quickstart.html#historical-v1',
-  );
+  await expect(page.locator('#historical-v1')).toHaveCount(0);
 });
 
 test('an unsupported localized route is never selected for browser-language visitors', async ({

@@ -11,19 +11,18 @@ translationRequired: true
 # Use plugins
 
 > **Milestone A is available.** Standard-first static authoring is published as
-> `universal-agent-plugins@0.1.65` (`agentplugins author`) and `plugin-kit-ai@2.0.5`.
-> GitHub tags: `agentplugins-v0.1.65` and `plugin-kit-ai-v2.0.5`.
-> npm, PyPI, Homebrew, GitHub Releases and the public-channel E2E are verified.
-> Runtime/dev/bootstrap, migration, export and publication remain deferred.
-> Historical YAML v1 workflows remain separate and preserved.
+> `agentplugins author` in `universal-agent-plugins@0.1.65`.
+> GitHub tag: `agentplugins-v0.1.65`. npm, Homebrew, native archives and the
+> public-channel E2E are verified. Runtime/dev/bootstrap, export and publication
+> remain deferred. Legacy YAML migration is cancelled; its source remains
+> preserved internally and is not a supported product.
 
 Choose by the result you need:
 
 | Your job | Start here | Tool boundary |
 | --- | --- | --- |
 | Use an existing plugin in an agent | [Find and install](./install) | `agentplugins` manages installation and activation instructions. |
-| Write instructions or connect tools in a new package | [Build plugins](/en/build/) | `agentplugins author` and `plugin-kit-ai` share the authoring engine. |
-| Maintain a YAML or launcher project | [Historical v1](/en/legacy/v1/) | Use the historical 1.2.4 context; migration is unavailable in v2. |
+| Write instructions or connect tools in a new package | [Build plugins](/en/build/) | `agentplugins author` is the supported authoring surface. |
 
 You do not need to create a project to use someone else's plugin. The installer
 accepts standard packages from the registry, local directories, or exact GitHub

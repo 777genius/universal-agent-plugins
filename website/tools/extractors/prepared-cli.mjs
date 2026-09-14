@@ -25,7 +25,7 @@ export async function consumePreparedCLI(root, expectedSHA) {
   if (!Array.isArray(envelope.surfaces) || envelope.surfaces.length !== 2 ||
       envelope.surfaces.map((surface) => surface.command_path).sort().join("|") !==
       "agentplugins author|plugin-kit-ai") fail("expected both actual surfaces");
-  const entries = envelope.surfaces.flatMap((surface) => {
+  const entries = envelope.surfaces.filter((surface) => surface.command_path === "agentplugins author").flatMap((surface) => {
     if (surface.identity !== `${namespace}:${surface.command_path}` || !Array.isArray(surface.commands) ||
         !surface.commands.some((entry) => entry.command_path === surface.command_path)) fail("invalid surface root");
     for (const entry of surface.commands) {

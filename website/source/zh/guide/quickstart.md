@@ -26,7 +26,7 @@ npx universal-agent-plugins add context7
 
 [安装指南](https://github.com/777genius/universal-agent-plugins#quick-start)
 
-Milestone A 已发布: universal-agent-plugins@0.1.65 / plugin-kit-ai@2.0.5; GitHub: agentplugins-v0.1.65 / plugin-kit-ai-v2.0.5.
+Milestone A is available in `universal-agent-plugins@0.1.65`; GitHub release: `agentplugins-v0.1.65`.
 
 兼容性取决于包。通过模式验证并不证明运行、OAuth 或激活成功。Codex 不支持声明的 MCP SSE；stdio 和 Streamable HTTP 保留现有适配器支持。
 
@@ -38,97 +38,9 @@ Milestone A 已发布: universal-agent-plugins@0.1.65 / plugin-kit-ai@2.0.5; Git
 
 **Milestone A 已发布**
 
-Milestone A 已发布. universal-agent-plugins@0.1.65 / plugin-kit-ai@2.0.5; GitHub: agentplugins-v0.1.65 / plugin-kit-ai-v2.0.5. npm、PyPI、Homebrew、GitHub Releases 和公共渠道 E2E 均已验证。仅静态创作；第 7–11 阶段、runtime/dev/bootstrap、迁移、导出和发布仍推迟。保留 plugin.yaml 能力；v1 项目使用 plugin-kit-ai@1.2.4。
+Milestone A 已通过 `universal-agent-plugins@0.1.65` 中的 `agentplugins author` 发布；GitHub 版本：`agentplugins-v0.1.65`。npm、Homebrew、原生归档和公共 E2E 已验证。当前仅支持静态创作；runtime/dev/bootstrap、导出和发布仍延后。旧版 YAML 迁移已取消；保留的源代码不是受支持产品。
 
 [Agent Plugins 1.0 规范](https://agent-plugins.org/specification)
-
-## 历史 v1 维护 {#historical-v1}
-
-<a id="如果你只读一件事"></a>
-<a id="推荐默认值"></a>
-<a id="为什么这是默认值"></a>
-
-请使用以下 v1 说明维护现有 plugin.yaml 项目。这些模板和生成输出属于历史 v1 流程，不会创建新的标准优先创作流程。
-
-```bash
-brew install 777genius/homebrew-plugin-kit-ai/plugin-kit-ai
-plugin-kit-ai version
-plugin-kit-ai init my-plugin
-cd my-plugin
-go mod tidy
-plugin-kit-ai generate .
-plugin-kit-ai validate . --platform codex-runtime --strict
-```
-
-### 你得到什么
-
-- 从第一天起就有一个插件仓库
-- 新仓库在 `plugin/` 下创作文件
-- 从同一存储库生成 Codex 运行时输出
-- 通过 `validate --strict` 进行干净的准备检查
-
-### 支持 Node 和 Python 路径
-
-如果您的团队已位于 Node/TypeScript 或 Python 中，则这些路径从一开始就受支持且可见：
-
-- `codex-runtime --runtime node --typescript`
-- `codex-runtime --runtime python`
-- 两者都是本地解释运行时路径，因此目标机器仍然需要 Node.js `20+` 或 Python `3.10+`
-- 当您想要最强的一般制作故事时，Go 仍然保持默认值
-
-### 如果您有意从 Node 或 Python 开始
-
-仅当语言选择已是产品要求的一部分时才使用此替代流程：
-
-```bash
-plugin-kit-ai init my-plugin --platform codex-runtime --runtime node --typescript
-plugin-kit-ai doctor ./my-plugin
-plugin-kit-ai bootstrap ./my-plugin
-plugin-kit-ai generate ./my-plugin
-plugin-kit-ai validate ./my-plugin --platform codex-runtime --strict
-```
-
-或者以 Python 开头：
-
-```bash
-plugin-kit-ai init my-plugin --platform codex-runtime --runtime python
-plugin-kit-ai doctor ./my-plugin
-plugin-kit-ai bootstrap ./my-plugin
-plugin-kit-ai generate ./my-plugin
-plugin-kit-ai validate ./my-plugin --platform codex-runtime --strict
-```
-
-### 接下来做什么
-
-- 编辑 `plugin/` 下的插件
-- 更改后再次运行 `plugin-kit-ai generate ./my-plugin`
-- 再次运行 `plugin-kit-ai validate ./my-plugin --platform codex-runtime --strict`
-- 只有在产品需要时才添加另一种运输方式
-
-### 稍后展开
-
-|如果你想要|稍后添加 |
-| --- | --- |
-| Claude 与真实产品挂钩 | `claude` |
-|官方Codex包| `codex-package` |
-| Gemini 扩展包 | `gemini` |
-|回购拥有的集成设置 | `opencode` 或 `cursor` |
-
-仅当 Claude 挂钩已经是实际产品需求时，才首先选择 `claude`。
-
-### 稍后扩展的内容
-
-- 当您添加更多通道时，存储库保持统一
-- 包和扩展通道来自同一来源
-- 当存储库应该拥有集成设置时，OpenCode 和 Cursor 适合
-- 确切的支持边界保留在参考文档中，而不是在您的首次启动流程中
-
-### 快速入门后
-
-- 历史 v1 教程：[构建您的第一个插件](/zh/guide/first-plugin)。
-- 如果您想要完整的产品地图，请继续[您可以构建什么](/zh/guide/what-you-can-build)。
-- 当您准备好将存储库与您想要的运输方式相匹配时，继续[选择目标](/zh/guide/choose-a-target)。
-- 当您准备好扩展第一条路径之外时，继续[一个项目，多个目标](/zh/guide/one-project-multiple-targets)。
 
 <!-- locale-historical-source:start
 locale-historical-frontmatter:start

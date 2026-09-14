@@ -57,7 +57,6 @@ func TestStarterTemplateSyncContractFilesStayAligned(t *testing.T) {
 	}
 	mustContain(t, strings.Join(strings.Fields(historicalReadme), " "), "The repository preserves Codex and Claude starters across Go, Python, and Node/TypeScript.")
 	mustContain(t, historicalReadme, "[starters](examples/starters/README.md)")
-	mustContain(t, historicalReadme, "the stable local Python and Node subset on `codex-runtime` and `claude`")
 	mustContain(t, startersReadme, "Historical plugin-kit-ai v1 managed examples; baseline 1.2.4.")
 	mustContain(t, startersReadme, "These are not root `plugin.json` starters for the standard MVP.")
 	for starter, repo := range expected {

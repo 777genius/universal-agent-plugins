@@ -1,4 +1,28 @@
 ---
+title: "Documentation Agent Plugins"
+description: "Documentation publique pour Agent Plugins."
+canonicalId: "page:home"
+section: "home"
+locale: "fr"
+generated: false
+translationRequired: true
+---
+
+# Utiliser des plugins / Créer des plugins
+
+Installez des Agent Plugins 1.0 disponibles ou créez des paquets portables basés sur `plugin.json`.
+
+- [Utiliser des plugins](/fr/use/)
+- [Créer des plugins](/fr/build/)
+- [Démarrage rapide](/fr/guide/quickstart)
+
+Milestone A est disponible via `agentplugins author`. La migration YAML est annulée ; le code historique conservé n’est pas un produit pris en charge.
+
+[Agent Plugins 1.0 specification](https://agent-plugins.org/specification)
+
+<!-- locale-historical-source:start
+locale-historical-frontmatter:start
+---
 title: "Documentation de plugin-kit-ai"
 description: "Documentation publique pour plugin-kit-ai."
 canonicalId: "page:home"
@@ -7,14 +31,7 @@ locale: "fr"
 generated: false
 translationRequired: true
 ---
-
-[Utiliser des plugins](/fr/use/) · [Créer des plugins](/fr/build/) — Milestone A est disponible. La migration des projets vers v2 reste indisponible.
-<p class="locale-historical-identity">Documentation de Agent Plugins</p>
-
-[Instantané historique de la branche plugin-kit-ai v1. 1.2.4 est la référence des commandes, pas la version exacte de cet instantané.](/en/legacy/v1/)
-
-<details><summary>Instantané historique de la branche plugin-kit-ai v1. 1.2.4 est la référence des commandes, pas la version exacte de cet instantané.</summary>
-
+locale-historical-frontmatter:end
 <div class="docs-hero docs-hero--feature">
   <p class="docs-kicker">DOCUMENTATION PUBLIQUE</p>
   <h1>plugin-kit-ai</h1>
@@ -111,5 +128,4 @@ Si vous êtes nouveau, vous pouvez vous arrêter après les pages de départ. To
 - étendre le même dépôt plus tard dans plus de chemins d'expédition
 - conserver une histoire de révision et de validation à mesure que le dépôt se développe
 - trouvez le contrat exact uniquement lorsque vous en avez besoin
-
-</details>
+locale-historical-source:end -->

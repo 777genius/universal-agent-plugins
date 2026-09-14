@@ -32,16 +32,14 @@ export async function runSiteConsumerSmoke(browser, base, artifactsRoot) {
         assert.ok((await link.getAttribute("href")).endsWith(route));
       }
     }
-    for (const root of ["plugin-kit-ai", "agentplugins-author"]) {
-      await page.goto(`${base}/en/api/cli/prepared-authoring-v2-${root}`, { waitUntil: "networkidle" });
-      const reference = await page.locator(".vp-doc").innerText();
-      assert.match(reference, /released authoring engine/i);
-      assert.doesNotMatch(reference, /not released|not a public release/i);
-      await page.screenshot({ path: path.join(artifactsRoot, `d2b-${root}.png`), fullPage: true });
-    }
+    await page.goto(`${base}/en/api/cli/prepared-authoring-v2-agentplugins-author`, { waitUntil: "networkidle" });
+    const reference = await page.locator(".vp-doc").innerText();
+    assert.match(reference, /released authoring engine/i);
+    assert.doesNotMatch(reference, /not released|not a public release/i);
+    await page.screenshot({ path: path.join(artifactsRoot, "d2b-agentplugins-author.png"), fullPage: true });
     const redirects = JSON.parse(await fs.readFile(generatedRegistryPaths.redirects, "utf8"));
     const samples = ["/use/", "/build/", "/en/legacy/v1/cli/", "/api/cli/plugin-kit-ai-generate",
-      "/api/cli/prepared-authoring-v2-plugin-kit-ai-init", "/api/cli/prepared-authoring-v2-agentplugins-author-init"];
+      "/api/cli/prepared-authoring-v2-agentplugins-author-init"];
     for (const alias of samples) {
       const target = redirects[alias];
       assert.ok(target, `Missing built alias inventory: ${alias}`);

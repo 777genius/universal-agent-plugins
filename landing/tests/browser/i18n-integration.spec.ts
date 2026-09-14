@@ -147,10 +147,7 @@ for (const locale of publishedLocales) {
       await expect(page.locator('#use-plugins code')).toHaveText(
         'npx universal-agent-plugins add context7',
       );
-      await expect(page.locator('#historical-v1 a')).toHaveAttribute(
-        'href',
-        /docs\/(en|ru)\/guide\/quickstart\.html#historical-v1$/,
-      );
+      await expect(page.locator('#historical-v1')).toHaveCount(0);
     } finally {
       await context.close();
     }

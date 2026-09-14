@@ -13,14 +13,13 @@ translationRequired: true
 > **Milestone A is available.** Install `agentplugins` from
 > `universal-agent-plugins@0.1.65` on npm or the `777genius/agentplugins` Homebrew tap.
 > GitHub release: `agentplugins-v0.1.65`. Public-channel E2E is verified.
-> Runtime/dev/bootstrap, migration, export and publication remain deferred.
-> Historical YAML v1 workflows remain separate and preserved.
+> Runtime/dev/bootstrap, export and publication remain deferred. Legacy YAML
+> migration is cancelled; preserved source is not a supported workflow.
 
 | Your job | Journey | Result |
 | --- | --- | --- |
 | Install someone else's package | [Use plugins](/en/use/) | Managed client installation and activation instructions. |
 | Write a new portable package | Continue below | Root `plugin.json`, Skills and/or MCP configuration. |
-| Keep an existing YAML/runtime project working | [Historical v1](/en/legacy/v1/) | Version-pinned 1.2.4 context; no v2 migration. |
 
 Install the primary CLI with npm or Homebrew:
 
@@ -58,11 +57,6 @@ Add more instructions later with [extra Skills](./skills).
 | Engine capabilities | `agentplugins author capabilities` |
 | Add or validate Skills | `agentplugins author skills` |
 
-The separately published `plugin-kit-ai@2.0.5` executable exposes the same
-Milestone A authoring engine for compatibility and for the PyPI installation
-channel. New documentation and examples use `agentplugins author`. The older
-`plugin-kit-ai@1.2.4` line remains available only for existing YAML v1 projects.
-
 ## Follow the authoring loop
 
 1. Choose a template and an absent destination under an existing parent.
@@ -77,10 +71,10 @@ static report is useful evidence, but it does not establish runtime success.
 
 ## What this journey does not expose
 
-Runtime execution, dev loops, dependency bootstrap, import, normalization,
-project migration, client generation, export/bundle, and publication are deferred
-from the v2 journey. Their retained v1 source and documentation remain useful;
-they are not runnable v2 features. Hooks remain client-specific extensions.
+Runtime execution, dev loops, dependency bootstrap, native import,
+normalization, client generation, export/bundle, and publication are deferred.
+Legacy YAML migration is cancelled. Preserved legacy source is internal reference
+material, not a runnable product. Hooks remain client-specific extensions.
 
 Do not add legacy `--platform`, `--strict`, `--typescript`, `--output`, or
 `--force` flags to these examples. Select destinations positionally and read

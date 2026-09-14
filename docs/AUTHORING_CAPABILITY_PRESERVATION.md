@@ -3,6 +3,13 @@
 Accepted owner clarification, 2026-09-06. This controls legacy treatment in the
 [implementation plan](./STANDARD_FIRST_AUTHORING_ENGINE_IMPLEMENTATION_PLAN.md).
 
+Owner update, 2026-09-14: there are no known users of the YAML product line.
+`agentplugins` is the sole public CLI, no YAML migration or compatibility journey
+will be built, and no new `plugin-kit-ai` CLI releases are planned. Existing
+artifacts remain immutable history. The implementation and useful tests stay
+preserved below the public product boundary unless the owner separately approves
+a specific deletion.
+
 - A narrower portable standard is not a reason to discard useful plugin.yaml code.
 - Retiring a command from standard-first help/wiring does not delete its service.
 - Preserve useful implementation, required dependencies, tests and design docs.

@@ -12,6 +12,7 @@ import { bindGeneratedPaths, docsLocales, entityPath, isMilestoneAJourney, journ
 import { buildRedirects, createRedirectDocument, emitRedirects, htmlPath } from "./redirects.mjs";
 import { sourceRoot, repoRoot, docsBaseUrl, repoBrowserUrl } from "../config/site.mjs";
 import { run } from "./process.mjs";
+import { isRetiredArchive } from "./public-routes.mjs";
 
 const actualOutput = process.env.DOCS_TEST_ADAPTER_OUTPUT;
 if (!actualOutput) throw new Error("Required fresh adapter fixture missing; run pnpm docs:test (integration runner)");
@@ -47,7 +48,7 @@ test("all five navigations expose real Use and Build journeys with truthful Engl
   const released = sourceEntities.filter((entry) => entry.status === "released");
   const requiredJourneys = ["use:index", "use:install", "use:manage", "build:index", "build:skill",
     "build:mcp-remote", "build:mcp-stdio", "build:hybrid", "build:skills", "build:layout",
-    "build:checks", "build:handoff", "legacy:v1:index"];
+    "build:checks", "build:handoff"];
   for (const id of requiredJourneys) assert.ok(released.some(entry => entry.canonicalId === `page:${id}`), id);
   for (const entry of released) {
     assert.equal(entry.released, true);
@@ -70,7 +71,8 @@ test("all five navigations expose real Use and Build journeys with truthful Engl
     const links = flattenLinks({ use: sidebar[`/${locale}/use/`], build: sidebar[`/${locale}/build/`] });
     for (const entry of released.filter(entry => requiredJourneys.includes(entry.canonicalId.slice("page:".length))))
       assert.ok(links.includes(entityPath(entry, locale)), entry.canonicalId);
-    const missing = { canonicalId: "generated:missing", title: "plugin-kit-ai missing translation", surface: "authoring-cli", pathEn: "/en/api/missing" };
+    for (const link of flattenLinks(sidebar)) assert.equal(isRetiredArchive(link), false, link);
+    const missing = { canonicalId: "generated:missing", title: "agentplugins author missing translation", surface: "authoring-cli", pathEn: "/en/api/cli/prepared-authoring-v2-agentplugins-author-missing" };
     assert.equal(entityPath(missing, locale), missing.pathEn);
     assert.ok(flattenLinks(buildSidebar(locale, [...sourceEntities, missing])).includes(missing.pathEn));
   }
@@ -123,7 +125,7 @@ test("historical 1.2.4 keeps every pinned CLI page, command fact and old URL", a
   }
   for (const page of historical.pages) {
     assert.match(page.content, /Historical plugin-kit-ai v1, baseline \*\*1\.2\.4\*\*/);
-    assert.match(page.content, /Project migration is not available in v2 yet/);
+    assert.match(page.content, /product is retired and migration is intentionally not planned/);
     const original = await run("git", ["show", `${historicalSHA}:website/generated/${page.relativePath}`], { cwd: repoRoot });
     // Preserve every code fence verbatim, including flags, defaults and examples.
     assert.deepEqual([...page.content.matchAll(/```[\s\S]*?```/g)].map((m) => m[0]),
@@ -135,10 +137,16 @@ test("historical 1.2.4 keeps every pinned CLI page, command fact and old URL", a
 
 test("actual accepted adapter envelope preserves all commands/flags/provenance and source parent", {}, async () => {
   const bundle = await consumePreparedCLI(actualOutput, sourceSHA);
-  assert.equal(bundle.entities.length, bundle.envelope.surfaces.flatMap((surface) => surface.commands).length);
+  const publicCommands = bundle.envelope.surfaces
+    .filter((surface) => surface.command_path === "agentplugins author")
+    .flatMap((surface) => surface.commands);
+  assert.equal(publicCommands.length, 14);
+  assert.equal(bundle.entities.length, publicCommands.length);
+  assert.ok(bundle.envelope.surfaces.some((surface) => surface.command_path === "plugin-kit-ai"));
+  assert.ok(bundle.entities.every((entry) => entry.title === "agentplugins author" || entry.title.startsWith("agentplugins author ")));
   const second = await consumePreparedCLI(actualOutput, sourceSHA);
   assert.deepEqual(second, bundle);
-  for (const surface of bundle.envelope.surfaces) {
+  for (const surface of bundle.envelope.surfaces.filter((surface) => surface.command_path === "agentplugins author")) {
     for (const command of surface.commands) {
       const entity = bundle.entities.find((entry) => entry.canonicalId === command.identity);
       assert.deepEqual(entity.command, command);
@@ -156,9 +164,9 @@ test("actual accepted adapter envelope preserves all commands/flags/provenance a
   assert.match(parent.content, new RegExp(`https://github.com/777genius/universal-agent-plugins/blob/${sourceSHA}/cli/plugin-kit-ai/internal/agentpluginscli/root.go`));
   assert.match(parent.content, /--accept-security-risk/);
   assert.match(parent.content, /installer-only\nand rejected here/);
-  const skill = bundle.pages.find((page) => page.relativePath.endsWith("plugin-kit-ai-skills-init.md"));
+  const skill = bundle.pages.find((page) => page.relativePath.endsWith("agentplugins-author-skills-init.md"));
   assert.match(skill.content, /skills\/&lt;name&gt;/);
-  assert.match(skill.content, /plugin-kit-ai skills init <name>/);
+  assert.match(skill.content, /agentplugins author skills init <name>/);
   for (const page of bundle.pages) {
     assert.equal(page.mirror, false);
     assert.match(page.content, /status: released/);
@@ -173,6 +181,7 @@ test("actual accepted adapter envelope preserves all commands/flags/provenance a
     const sidebar = buildSidebar(locale, [...sourceEntities, ...bundle.entities]);
     const links = flattenLinks({ prepared: sidebar[`/${locale}/api/cli/prepared-authoring-v2`] });
     for (const entity of bundle.entities) assert.ok(links.includes(entity.pathEn));
+    for (const link of flattenLinks(sidebar)) assert.equal(isRetiredArchive(link), false, link);
   }
   if (artifacts) {
     await fs.mkdir(path.join(artifacts, "consumer-output"), { recursive: true });
@@ -205,16 +214,16 @@ test("reject legacy arrays, wrong source/release, path traversal, missing surfac
     (m) => ({ ...m, status: "public-stable" }),
     (m) => ({ ...m, source_sha: "0".repeat(40) }),
     (m) => ({ ...m, surfaces: m.surfaces.slice(0, 1) }),
-    (m) => { m.surfaces[0].commands[0].file_name = "../../v1.md"; return m; },
-    (m) => { m.surfaces[0].commands.push(m.surfaces[0].commands[0]); return m; },
-    (m) => { m.surfaces[0].commands[0].inherited_flags = null; return m; }
+    (m) => { m.surfaces.find(s => s.command_path === "agentplugins author").commands[0].file_name = "../../v1.md"; return m; },
+    (m) => { const s = m.surfaces.find(s => s.command_path === "agentplugins author"); s.commands.push(s.commands[0]); return m; },
+    (m) => { m.surfaces.find(s => s.command_path === "agentplugins author").commands[0].inherited_flags = null; return m; }
   ];
   for (const mutate of mutations) {
     await fs.writeFile(manifestFile, JSON.stringify(mutate(structuredClone(original))));
     await assert.rejects(consumePreparedCLI(directory, sourceSHA), /Prepared CLI contract/);
   }
   await fs.writeFile(manifestFile, JSON.stringify(original));
-  const file = path.join(directory, original.surfaces[0].commands[0].file_name);
+  const file = path.join(directory, original.surfaces.find(s => s.command_path === "agentplugins author").commands[0].file_name);
   await fs.appendFile(file, "\n[missing](missing.md)\n");
   await assert.rejects(consumePreparedCLI(directory, sourceSHA), /unresolved command link/);
 });
@@ -323,7 +332,7 @@ test("every pinned historical registry route produces a page, including Claude f
       .map(line => line.split("|").slice(1, -1).map(cell => cell.trim())), facts);
     assert.match(page.content, /status: "historical"/);
     assert.ok(page.content.includes(`sourceSHA: "${historicalSHA}"`));
-    assert.ok(page.content.includes("Project migration is not available in v2 yet."));
+    assert.ok(page.content.includes("The product is retired and migration is intentionally not planned."));
   }
   assert.deepEqual(await extractPlatformData(), bundles[1]);
 });

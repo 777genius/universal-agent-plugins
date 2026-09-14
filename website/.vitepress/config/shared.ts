@@ -1,4 +1,5 @@
 import { requirePublicationBoundary } from "../../tools/lib/journeys.mjs";
+import { isRetiredArchive } from "../../tools/lib/public-routes.mjs";
 
 import fs from "node:fs";
 import path from "node:path";
@@ -79,6 +80,12 @@ export const sharedConfig = defineConfig({
     ["meta", { name: "theme-color", content: "#f7f7f8" }],
     ["meta", { name: "color-scheme", content: "light dark" }]
   ],
+  transformPageData(pageData) {
+    if (isRetiredArchive(pageData.relativePath)) {
+      pageData.frontmatter.search = false;
+      pageData.frontmatter.retiredArchive = true;
+    }
+  },
   transformHead({ pageData, title, description }) {
     const relativePath = pageData.relativePath.replace(/\\/g, "/");
     const isGateway = relativePath.startsWith("gateway/");
@@ -98,6 +105,10 @@ export const sharedConfig = defineConfig({
       ["meta", { name: "twitter:description", content: pageDescription }],
       ["meta", { name: "twitter:image", content: socialImageUrl }]
     ] as [string, Record<string, string>][];
+
+    if (isRetiredArchive(relativePath)) {
+      head.push(["meta", { name: "robots", content: "noindex,follow" }]);
+    }
 
     if (pageUrl) {
       head.push(["meta", { property: "og:url", content: pageUrl }]);
