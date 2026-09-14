@@ -66,8 +66,11 @@ func TestReleaseSurface_CurrentGuidanceAndExecutableWorkflows(t *testing.T) {
 		}
 		mustNotContain(t, body, "workflows: [\"Release Assets\"]")
 		mustContain(t, body, "plugin-kit-ai-runtime")
-		mustContain(t, body, "ref: refs/tags/${{ steps.release.outputs.tag }}")
+		mustContain(t, body, "ref: ${{ github.workflow_sha }}")
+		mustContain(t, body, "ref: ${{ needs.preflight.outputs.commit }}")
 		mustContain(t, body, `git rev-parse --verify "refs/tags/${TAG}^{commit}"`)
+		mustContain(t, body, `git merge-base --is-ancestor "${tag_commit}" refs/remotes/origin/main`)
+		mustContain(t, body, `git diff --quiet "${WORKFLOW_SHA}" "${tag_commit}" -- "${WORKFLOW_PATH}"`)
 	}
 
 	releaseDoc := readRepoFile(t, root, "docs", "RELEASE.md")

@@ -9,7 +9,243 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+
+	"gopkg.in/yaml.v3"
 )
+
+type runtimePublishWorkflow struct {
+	On   map[string]any               `yaml:"on"`
+	Jobs map[string]runtimePublishJob `yaml:"jobs"`
+}
+
+type runtimePublishJob struct {
+	If          string                       `yaml:"if"`
+	Needs       string                       `yaml:"needs"`
+	Environment any                          `yaml:"environment"`
+	Permissions map[string]string            `yaml:"permissions"`
+	Steps       []runtimePublishWorkflowStep `yaml:"steps"`
+}
+
+type runtimePublishWorkflowStep struct {
+	Name string         `yaml:"name"`
+	Uses string         `yaml:"uses"`
+	Run  string         `yaml:"run"`
+	With map[string]any `yaml:"with"`
+}
+
+func TestRuntimePublishersBindV1TagsAndWorkflowBeforeEffects(t *testing.T) {
+	t.Parallel()
+	root := RepoRoot(t)
+
+	for _, tc := range []struct {
+		file, publishJob, environment, effect string
+	}{
+		{"npm-runtime-publish.yml", "publish-npm-runtime", "npm-plugin-kit-ai", "Configure npm publish authentication"},
+		{"pypi-runtime-publish.yml", "publish-pypi-runtime", "pypi", "Check PyPI trusted publishing readiness"},
+	} {
+		t.Run(tc.file, func(t *testing.T) {
+			body := readRepoFile(t, root, ".github", "workflows", tc.file)
+			var workflow runtimePublishWorkflow
+			if err := yaml.Unmarshal([]byte(body), &workflow); err != nil {
+				t.Fatalf("parse %s: %v", tc.file, err)
+			}
+			if _, dispatch := workflow.On["workflow_dispatch"]; len(workflow.On) != 1 || !dispatch {
+				t.Fatalf("%s triggers = %#v, want dispatch only", tc.file, workflow.On)
+			}
+
+			preflight, ok := workflow.Jobs["preflight"]
+			if !ok {
+				t.Fatalf("%s has no isolated preflight job", tc.file)
+			}
+			for _, marker := range []string{
+				"github.event_name == 'workflow_dispatch'",
+				"github.repository == '777genius/universal-agent-plugins'",
+				"github.ref == 'refs/heads/main'",
+				"@refs/heads/main",
+			} {
+				mustContain(t, preflight.If, marker)
+			}
+			if len(preflight.Permissions) != 1 || preflight.Permissions["contents"] != "read" {
+				t.Fatalf("%s preflight permissions = %#v, want contents: read only", tc.file, preflight.Permissions)
+			}
+
+			publish, ok := workflow.Jobs[tc.publishJob]
+			if !ok {
+				t.Fatalf("%s has no %s job", tc.file, tc.publishJob)
+			}
+			if publish.Needs != "preflight" {
+				t.Fatalf("%s publish needs = %q, want preflight", tc.file, publish.Needs)
+			}
+			for _, marker := range []string{"needs.preflight.result == 'success'", "github.event_name == 'workflow_dispatch'"} {
+				mustContain(t, publish.If, marker)
+			}
+			if runtimePublishEnvironmentName(publish.Environment) != tc.environment {
+				t.Fatalf("%s environment = %#v, want %q", tc.file, publish.Environment, tc.environment)
+			}
+			if publish.Permissions["contents"] != "read" || publish.Permissions["id-token"] != "write" {
+				t.Fatalf("%s publish permissions = %#v", tc.file, publish.Permissions)
+			}
+
+			preflightScript := runtimePublishNamedStep(t, preflight, "Verify approved runtime tag and workflow source").Run
+			for _, marker := range []string{
+				`^v1\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$`,
+				`git merge-base --is-ancestor "${tag_commit}" refs/remotes/origin/main`,
+				`git merge-base --is-ancestor "${WORKFLOW_SHA}" refs/remotes/origin/main`,
+				`git diff --quiet "${WORKFLOW_SHA}" "${tag_commit}" -- "${WORKFLOW_PATH}"`,
+			} {
+				mustContain(t, preflightScript, marker)
+			}
+
+			revalidate := runtimePublishStepIndex(publish, "Revalidate approved revision before effects")
+			effect := runtimePublishStepIndex(publish, tc.effect)
+			if revalidate < 0 || effect < 0 || revalidate >= effect {
+				t.Fatalf("%s does not revalidate before effect-bearing setup: revalidate=%d effect=%d", tc.file, revalidate, effect)
+			}
+			mustContain(t, publish.Steps[revalidate].Run, `test "${tag_commit}" = "${COMMIT}"`)
+			mustContain(t, publish.Steps[revalidate].Run, `git diff --quiet "${WORKFLOW_SHA}" "${COMMIT}" -- "${WORKFLOW_PATH}"`)
+		})
+	}
+}
+
+func TestRuntimePublisherPreflightRejectsUnapprovedInputs(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("runtime publisher preflight is a bash workflow")
+	}
+	root := RepoRoot(t)
+	for _, file := range []string{"npm-runtime-publish.yml", "pypi-runtime-publish.yml"} {
+		t.Run(file, func(t *testing.T) {
+			body := readRepoFile(t, root, ".github", "workflows", file)
+			var workflow runtimePublishWorkflow
+			if err := yaml.Unmarshal([]byte(body), &workflow); err != nil {
+				t.Fatal(err)
+			}
+			script := runtimePublishNamedStep(t, workflow.Jobs["preflight"], "Verify approved runtime tag and workflow source").Run
+
+			for _, tc := range []struct {
+				name, fixture, tag, event string
+				wantSuccess               bool
+			}{
+				{"approved-v1", "approved", "v1.2.3", "workflow_dispatch", true},
+				{"major-version", "approved", "v2.0.0", "workflow_dispatch", false},
+				{"wrong-event", "approved", "v1.2.3", "push", false},
+				{"tag-off-main", "off-main", "v1.2.3", "workflow_dispatch", false},
+				{"workflow-content-mismatch", "mismatch", "v1.2.3", "workflow_dispatch", false},
+			} {
+				t.Run(tc.name, func(t *testing.T) {
+					checkout, workflowSHA := runtimePublisherGitFixture(t, body, file, tc.fixture)
+					output := filepath.Join(t.TempDir(), "github-output")
+					cmd := exec.Command("bash", "-c", script)
+					cmd.Dir = checkout
+					cmd.Env = append(os.Environ(),
+						"TAG="+tc.tag,
+						"WORKFLOW_PATH=.github/workflows/"+file,
+						"WORKFLOW_REF=777genius/universal-agent-plugins/.github/workflows/"+file+"@refs/heads/main",
+						"WORKFLOW_SHA="+workflowSHA,
+						"GITHUB_EVENT_NAME="+tc.event,
+						"GITHUB_REPOSITORY=777genius/universal-agent-plugins",
+						"GITHUB_REF=refs/heads/main",
+						"GITHUB_OUTPUT="+output,
+					)
+					out, err := cmd.CombinedOutput()
+					if tc.wantSuccess && err != nil {
+						t.Fatalf("approved preflight failed: %v\n%s", err, out)
+					}
+					if !tc.wantSuccess && err == nil {
+						t.Fatalf("unapproved preflight succeeded:\n%s", out)
+					}
+				})
+			}
+		})
+	}
+}
+
+func runtimePublishEnvironmentName(value any) string {
+	switch environment := value.(type) {
+	case string:
+		return environment
+	case map[string]any:
+		name, _ := environment["name"].(string)
+		return name
+	default:
+		return ""
+	}
+}
+
+func runtimePublishNamedStep(t *testing.T, job runtimePublishJob, name string) runtimePublishWorkflowStep {
+	t.Helper()
+	for _, step := range job.Steps {
+		if step.Name == name {
+			return step
+		}
+	}
+	t.Fatalf("workflow job has no step %q", name)
+	return runtimePublishWorkflowStep{}
+}
+
+func runtimePublishStepIndex(job runtimePublishJob, name string) int {
+	for index, step := range job.Steps {
+		if step.Name == name {
+			return index
+		}
+	}
+	return -1
+}
+
+func runtimePublisherGitFixture(t *testing.T, workflowBody, workflowFile, mode string) (string, string) {
+	t.Helper()
+	fixture := t.TempDir()
+	origin := filepath.Join(fixture, "origin.git")
+	work := filepath.Join(fixture, "work")
+	checkout := filepath.Join(fixture, "checkout")
+	mustRun(t, "", "git", "init", "--bare", origin)
+	mustRun(t, "", "git", "init", "-b", "main", work)
+	mustRun(t, work, "git", "config", "user.name", "Runtime Publisher Test")
+	mustRun(t, work, "git", "config", "user.email", "runtime-publisher@example.invalid")
+	mustRun(t, work, "git", "remote", "add", "origin", origin)
+
+	path := filepath.Join(work, ".github", "workflows", workflowFile)
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	initial := workflowBody
+	if mode == "mismatch" {
+		initial = "name: stale runtime publisher\n"
+	}
+	if err := os.WriteFile(path, []byte(initial), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	mustRun(t, work, "git", "add", ".")
+	mustRun(t, work, "git", "commit", "-m", "workflow base")
+
+	switch mode {
+	case "approved":
+		mustRun(t, work, "git", "tag", "v1.2.3")
+	case "mismatch":
+		mustRun(t, work, "git", "tag", "v1.2.3")
+		if err := os.WriteFile(path, []byte(workflowBody), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		mustRun(t, work, "git", "add", ".")
+		mustRun(t, work, "git", "commit", "-m", "change workflow")
+	case "off-main":
+		mustRun(t, work, "git", "checkout", "-b", "unapproved")
+		if err := os.WriteFile(filepath.Join(work, "unapproved.txt"), []byte("not on main\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		mustRun(t, work, "git", "add", ".")
+		mustRun(t, work, "git", "commit", "-m", "unapproved tag")
+		mustRun(t, work, "git", "tag", "v1.2.3")
+		mustRun(t, work, "git", "checkout", "main")
+	default:
+		t.Fatalf("unknown runtime publisher fixture %q", mode)
+	}
+
+	mustRun(t, work, "git", "push", "origin", "main")
+	mustRun(t, work, "git", "push", "origin", "refs/tags/v1.2.3")
+	mustRun(t, "", "git", "clone", "--branch", "main", origin, checkout)
+	workflowSHA := strings.TrimSpace(mustRun(t, checkout, "git", "rev-parse", "HEAD"))
+	return checkout, workflowSHA
+}
 
 func TestPythonRuntimePackageContractFiles(t *testing.T) {
 	t.Parallel()
