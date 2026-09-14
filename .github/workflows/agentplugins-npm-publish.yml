@@ -69,7 +69,7 @@ jobs:
             paired-stage) [[ "${PUBLISH}" == false ]] ;;
             paired-publish)
               [[ "${GITHUB_ACTIONS}" == true && "${GITHUB_EVENT_NAME}" == workflow_dispatch && "${GITHUB_REPOSITORY}" == 777genius/universal-agent-plugins ]] || exit 1
-              [[ "${TAG}" == agentplugins-v0.1.63 && "${KIT_VERSION}" == 2.0.3 ]] || exit 1
+              [[ "${TAG}" == agentplugins-v0.1.64 && "${KIT_VERSION}" == 2.0.4 ]] || exit 1
               [[ "${SOURCE_SHA}" =~ ^[0-9a-f]{40}$ && ! "${SOURCE_SHA}" =~ ^0+$ ]] || exit 1
               [[ "${SOURCE_SHA}" == "${GITHUB_SHA}" && "${SOURCE_SHA}" == "${GITHUB_WORKFLOW_SHA}" ]] || exit 1
               [[ "${GITHUB_REF}" == "refs/tags/${TAG}" ]] || exit 1
@@ -716,9 +716,12 @@ jobs:
         run: |
           set -euo pipefail
           [[ "${ARTIFACT_ID}" =~ ^[1-9][0-9]{0,15}$ ]]
-          [[ "${ARTIFACT_DIGEST}" =~ ^sha256:[0-9a-f]{64}$ && ! "${ARTIFACT_DIGEST}" =~ ^sha256:0+$ ]]
+          [[ "${ARTIFACT_DIGEST}" =~ ^[0-9a-f]{64}$ ]]
+          test "${ARTIFACT_DIGEST}" != "$(printf '0%.0s' {1..64})"
           actual="$(gh api --hostname github.com "repos/${GITHUB_REPOSITORY}/actions/artifacts/${ARTIFACT_ID}" --jq .digest)"
-          test "${actual}" = "${ARTIFACT_DIGEST}"
+          [[ "${actual}" =~ ^sha256:[0-9a-f]{64}$ ]]
+          test "${actual}" != "sha256:$(printf '0%.0s' {1..64})"
+          test "${actual}" = "sha256:${ARTIFACT_DIGEST}"
       - name: Reauthenticate, publish without repacking, and reconcile
         shell: bash
         run: |
