@@ -133,7 +133,7 @@ if (!productionReadiness.includes("Pick The Right Path On Purpose")) {
 }
 
 const quickstart = await fs.readFile(path.join(distRoot, "en", "guide", "quickstart.html"), "utf8");
-const quickstartWithoutComments = quickstart.replace(/<!--[\s\S]*?-->/g, "");
+const quickstartWithoutComments = stripHtmlComments(quickstart);
 const quickstartVisible = quickstartWithoutComments.match(/<main\b[\s\S]*?<\/main>/)?.[0] || quickstartWithoutComments;
 for (const claim of ["Use plugins", "Build plugins", "Milestone A is available", "public-channel E2E are verified", "0.1.65", "plugin.json", "agentplugins author"]) {
   if (!quickstartVisible.includes(claim)) {
@@ -391,6 +391,20 @@ if (releasesIndex.includes("first-class public path") || releasesIndex.includes(
 
 if (hasError) {
   process.exit(1);
+}
+
+function stripHtmlComments(input) {
+  let output = "";
+  let cursor = 0;
+  while (cursor < input.length) {
+    const start = input.indexOf("<!--", cursor);
+    if (start === -1) return output + input.slice(cursor);
+    output += input.slice(cursor, start);
+    const end = input.indexOf("-->", start + 4);
+    if (end === -1) return output;
+    cursor = end + 3;
+  }
+  return output;
 }
 
 async function listHtmlFiles(rootDir) {
