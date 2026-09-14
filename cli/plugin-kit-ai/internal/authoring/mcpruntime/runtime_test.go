@@ -173,17 +173,46 @@ func TestInitializeNegotiatesToolsCapability(t *testing.T) {
 			t.Fatalf("accepted malformed tools capability %s", malformed)
 		}
 	}
+	for _, body := range []string{
+		`{"protocolVersion":"2025-06-18","protocolVersion":"2025-06-18","capabilities":{},"serverInfo":{"name":"x","version":"1"}}`,
+		`{"protocolVersion":"2025-06-18","capabilities":{"tools":{"listChanged":"true"}},"serverInfo":{"name":"x","version":"1"}}`,
+		`{"protocolVersion":"2025-06-18","capabilities":{"tools":{"listChanged":true,"listChanged":false}},"serverInfo":{"name":"x","version":"1"}}`,
+		`{"protocolVersion":"2025-06-18","capabilities":{},"serverInfo":null}`,
+		`{"protocolVersion":"2025-06-18","capabilities":{},"serverInfo":{"name":7,"version":"1"}}`,
+	} {
+		if _, valid := initializeCapabilities(json.RawMessage(body)); valid {
+			t.Fatalf("accepted malformed initialize result %s", body)
+		}
+	}
+	extensions := json.RawMessage(`{"protocolVersion":"2025-06-18","capabilities":{"tools":{"listChanged":false,"vendor.example":{"enabled":true}},"vendor.capability":{"mode":"test"}},"serverInfo":{"name":"x","version":"1","vendor.info":7},"vendor.top":[]}`)
+	if tools, valid := initializeCapabilities(extensions); !tools || !valid {
+		t.Fatal("permitted initialize extensions were rejected")
+	}
 }
 
 func TestToolListRejectsMissingNullAndMalformedArrays(t *testing.T) {
-	for _, body := range []string{`{}`, `{"tools":null}`, `{"tools":{}}`, `{"tools":7}`, `{"tools":[null]}`, `{"tools":[{}]}`} {
+	for _, body := range []string{
+		`{}`, `{"tools":null}`, `{"tools":{}}`, `{"tools":7}`, `{"tools":[null]}`, `{"tools":[{}]}`,
+		`{"tools":[{"name":"echo"}]}`,
+		`{"tools":[{"name":"echo","inputSchema":null}]}`,
+		`{"tools":[{"name":"echo","inputSchema":[]}]}`,
+		`{"tools":[{"name":7,"inputSchema":{}}]}`,
+		`{"tools":[{"name":"echo","inputSchema":{}},{"name":"echo","inputSchema":{}}]}`,
+		`{"tools":[{"name":"echo","name":"other","inputSchema":{}}]}`,
+		`{"tools":[{"name":"echo","inputSchema":{"type":"object","type":"array"}}]}`,
+		`{"tools":[],"nextCursor":null}`,
+		`{"tools":[],"nextCursor":7}`,
+	} {
 		if _, err := decodeToolList(json.RawMessage(body)); code(err) != "runtime_protocol_invalid" {
 			t.Fatalf("tool list %s: %v", body, err)
 		}
 	}
-	tools, err := decodeToolList(json.RawMessage(`{"tools":[]}`))
-	if err != nil || tools == nil || len(tools) != 0 {
-		t.Fatalf("empty non-null tool list rejected: %#v %v", tools, err)
+	tools, err := decodeToolList(json.RawMessage(`{"tools":[{"name":"echo","description":"kept","inputSchema":{},"vendor.extension":true}],"nextCursor":""}`))
+	if err != nil || len(tools) != 1 || tools[0].Name != "echo" {
+		t.Fatalf("valid tool list rejected: %#v %v", tools, err)
+	}
+	if _, err := decodeToolList(json.RawMessage(`{"tools":[],"nextCursor":"more"}`)); code(err) != "runtime_tools_pagination_unsupported" {
+		t.Fatalf("non-empty pagination cursor was not explicit: %v", err)
 	}
 }
 

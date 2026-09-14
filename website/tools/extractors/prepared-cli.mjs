@@ -113,17 +113,51 @@ export async function consumePreparedCLI(root, expectedSHA) {
   return { entities, pages, envelope };
 }
 
-export async function extractPreparedCLI() {
+async function releaseAdapterOverlay(checkout, parent) {
+  const sourceName = "cli/plugin-kit-ai/tools/authoring-docs/source.go";
+  let source = await fs.readFile(path.join(repoRoot, sourceName), "utf8");
+  const releasePins = new Map([
+    ["cli/plugin-kit-ai/cmd/agentplugins/release_root.go", "c0465f90903c7ad3fcdc2283c241558d1b73bd9633f0e6af247ccd692a0e155e"],
+    ["cli/plugin-kit-ai/internal/authoring/commands/commands.go", "9ed49814d6145f61e28ac8c5b914383749f06d946dcece15db2c1059fd290220"],
+    ["cli/plugin-kit-ai/internal/authoring/commands/public_contract.go", "39c79f491f0733d352ffc0fa3a8ff4eaa169612e8876e92e5fb74c856663ec65"],
+    ["cli/plugin-kit-ai/internal/authoring/commands/version.go", "ffe6cfef352faeb9a3c00722a628a2093876c14120cd6725131b3e105fda6b29"]
+  ]);
+  for (const [name, digest] of releasePins) {
+    const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const pattern = new RegExp(`\\{"${escaped}", "[0-9a-f]{64}"\\}`);
+    if (!pattern.test(source)) throw new Error(`Released authoring adapter pin missing: ${name}`);
+    source = source.replace(pattern, `{"${name}", "${digest}"}`);
+  }
+  const devPin = /^\s*\{"cli\/plugin-kit-ai\/internal\/authoring\/commands\/dev_session\.go", "[0-9a-f]{64}"\},\n/m;
+  if (!devPin.test(source)) throw new Error("Released authoring adapter projection lost the Phase 7 boundary");
+  source = source.replace(devPin, "");
+  const projected = path.join(parent, "agentplugins-v0.1.65-source.go");
+  const overlay = path.join(parent, "agentplugins-v0.1.65-overlay.json");
+  await fs.writeFile(projected, source, { flag: "wx" });
+  await fs.writeFile(overlay, JSON.stringify({ Replace: { [path.join(checkout, sourceName)]: projected } }) + "\n", { flag: "wx" });
+  return overlay;
+}
+
+export async function exportPreparedCLI(output) {
   const { checkout, sha } = await requireAuthoringSource();
   await fs.mkdir(docsToolsRoot, { recursive: true });
   const parent = await fs.mkdtemp(path.join(docsToolsRoot, "authoring-"));
-  const output = path.join(parent, "export"); // Adapter requires an absent destination.
-  await run("go", ["run", "-p", "2", "./cli/plugin-kit-ai/tools/authoring-docs",
+  const overlay = await releaseAdapterOverlay(checkout, parent);
+  await run("go", ["run", "-overlay", overlay, "-p", "2", "./cli/plugin-kit-ai/tools/authoring-docs",
     "--source-sha", sha, "--checkout", checkout, "--out-dir", output], {
-    // The adapter belongs to this docs consumer commit. It verifies and reads
-    // the immutable release checkout instead of relying on the older adapter
-    // bytes that happened to ship in that release.
-    cwd: repoRoot, env: { GOWORK: path.join(repoRoot, "go.work") }
+    // The command tree is compiled wholly from the immutable release checkout.
+    // The overlay only refreshes that tag's stale source inventory so it covers
+    // unrelated Go files added before the final v0.1.65 tag; it does not replace
+    // commands, factories, flags, renderers, or generated documentation.
+    cwd: checkout, env: { GOWORK: path.join(checkout, "go.work") }
   });
+  return { checkout, sha };
+}
+
+export async function extractPreparedCLI() {
+  await fs.mkdir(docsToolsRoot, { recursive: true });
+  const parent = await fs.mkdtemp(path.join(docsToolsRoot, "authoring-output-"));
+  const output = path.join(parent, "export"); // Adapter requires an absent destination.
+  const { sha } = await exportPreparedCLI(output);
   return consumePreparedCLI(output, sha);
 }

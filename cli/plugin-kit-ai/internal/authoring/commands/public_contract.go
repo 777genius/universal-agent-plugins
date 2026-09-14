@@ -236,7 +236,13 @@ func (a App) executePublic(ctx context.Context, args []string, streams authoring
 		factories := make([]authoringcli.Factory, 0, len(a.commandNames()))
 		for _, name := range a.commandNames() {
 			factories = append(factories, func() (*cobra.Command, error) {
-				c, err := a.command(name, func(r report.Report) { captured = &r })
+				c, err := a.command(name, func(r report.Report) { captured = &r }, func(r report.Report, cycleErr error) error {
+					result := outputjson.Success
+					if cycleErr != nil {
+						result = outputjson.Failure
+					}
+					return writePublicHuman(streams.Out, r.PublicResult("author.dev", "read", true, nil), result)
+				})
 				if err == nil {
 					tagOperations(c, "author."+name)
 				}

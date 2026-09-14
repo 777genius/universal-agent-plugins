@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"os"
 	"path/filepath"
 	"time"
 
@@ -20,17 +21,31 @@ const (
 	devMaxCoalesce  = time.Second
 )
 
-func acquireDevSession(ctx context.Context, scratch, root string) (func() error, error) {
+func devSessionLockPath(cache, root string) (string, error) {
+	if cache == "" || !filepath.IsAbs(cache) {
+		return "", &mcpruntime.Error{Code: "runtime_dev_session_lock_unavailable"}
+	}
 	canonical, err := filepath.Abs(root)
 	if err != nil {
-		return nil, &mcpruntime.Error{Code: "runtime_dev_session_lock_unavailable"}
+		return "", &mcpruntime.Error{Code: "runtime_dev_session_lock_unavailable"}
 	}
 	canonical, err = filepath.EvalSymlinks(canonical)
 	if err != nil {
-		return nil, &mcpruntime.Error{Code: "runtime_dev_session_lock_unavailable"}
+		return "", &mcpruntime.Error{Code: "runtime_dev_session_lock_unavailable"}
 	}
 	digest := sha256.Sum256([]byte(filepath.Clean(canonical)))
-	lockPath := filepath.Join(scratch, "agentplugins-author-dev-locks", hex.EncodeToString(digest[:])+".lock")
+	return filepath.Join(cache, "agentplugins", "author-dev-locks", hex.EncodeToString(digest[:])+".lock"), nil
+}
+
+func acquireDevSession(ctx context.Context, root string) (func() error, error) {
+	cache, err := os.UserCacheDir()
+	if err != nil {
+		return nil, &mcpruntime.Error{Code: "runtime_dev_session_lock_unavailable"}
+	}
+	lockPath, err := devSessionLockPath(cache, root)
+	if err != nil {
+		return nil, err
+	}
 	release, err := (processlock.Lock{Path: lockPath}).Acquire(ctx)
 	if err != nil {
 		code := "runtime_dev_session_lock_unavailable"
@@ -76,20 +91,9 @@ func (a App) dev(ctx context.Context, req request) (r report.Report, err error) 
 		report report.Report
 		err    error
 	}
-	p, err := a.Projects.Read(ctx, req.root)
-	r = report.Build("dev", a.Revision, p, req.release)
-	if err != nil {
-		code, action := failure(err, "read")
-		r.AddError(code, action)
-		return r, err
-	}
-	last := p.Input.Identity.TreeDigest
-	if last == "" {
-		r.AddError("runtime_source_identity_unavailable", "Make the exact package tree readable and quiescent, then retry.")
-		return r, errors.New("runtime source identity unavailable")
-	}
-	release, lockErr := acquireDevSession(ctx, a.Projects.Scratch, req.root)
+	release, lockErr := acquireDevSession(ctx, req.root)
 	if lockErr != nil {
+		r = report.New("dev", a.Revision)
 		code := runtimeErrorCode(lockErr)
 		r.SetRuntime("", false, false, false, 0, false, code)
 		return r, lockErr
@@ -109,30 +113,65 @@ func (a App) dev(ctx context.Context, req request) (r report.Report, err error) 
 			err = errors.Join(err, cleanupErr, releaseErr)
 		}
 	}()
+	emit := func(next report.Report, cycleErr error) error {
+		r = next
+		if req.cycleOutput != nil {
+			return req.cycleOutput(next, cycleErr)
+		}
+		return nil
+	}
+	readFailure := func(p project.Result, readErr error) (report.Report, error) {
+		result := report.Build("dev", a.Revision, p, req.release)
+		if readErr != nil {
+			code, action := failure(readErr, "read")
+			result.AddError(code, action)
+			return result, readErr
+		}
+		identityErr := errors.New("runtime source identity unavailable")
+		result.AddError("runtime_source_identity_unavailable", "Make the exact package tree readable and quiescent, then retry.")
+		return result, identityErr
+	}
 	var cycle context.CancelFunc
 	var done chan cycleResult
 	start := func(p project.Result) {
 		cycleCtx, cancel := context.WithCancel(ctx)
 		cycle = cancel
-		done = make(chan cycleResult, 1)
-		go func() {
+		resultChannel := make(chan cycleResult, 1)
+		done = resultChannel
+		go func(ch chan<- cycleResult) {
 			result := report.Build("dev", a.Revision, p, req.release)
 			evidence, runErr := mcpruntime.Run(cycleCtx, mcpruntime.Options{SourceRoot: req.root, Scratch: a.Projects.Scratch, Project: p, Server: req.server, Tool: req.tool, Fixture: req.fixture, AllowNetwork: req.allowNetwork, Deadline: req.deadline, Projects: a.Projects})
 			result.SetRuntime(evidence.Transport, evidence.Initialize, evidence.ListTools, evidence.ToolCall, evidence.ToolCount, evidence.Cleanup, runtimeErrorCode(runErr))
-			done <- cycleResult{result, runErr}
-		}()
+			ch <- cycleResult{result, runErr}
+		}(resultChannel)
 	}
-	start(p)
+	p, readErr := a.Projects.Read(ctx, req.root)
+	last := p.Input.Identity.TreeDigest
+	failureCode := ""
+	if readErr != nil || last == "" {
+		failed, failedErr := readFailure(p, readErr)
+		failureCode = runtimeErrorCode(failedErr)
+		if failureCode == "runtime_failed" && failed.Error != nil {
+			failureCode = failed.Error.Code
+		}
+		if outputErr := emit(failed, failedErr); outputErr != nil {
+			return r, outputErr
+		}
+	} else {
+		start(p)
+	}
 	ticker := time.NewTicker(devPollInterval)
 	defer ticker.Stop()
 	var pending devPending
 	for {
 		select {
 		case result := <-done:
-			r = result.report
 			done = nil
 			cycle = nil
-			if result.err != nil {
+			if outputErr := emit(result.report, result.err); outputErr != nil {
+				return r, outputErr
+			}
+			if runtimeErrorCode(result.err) == "runtime_cleanup_failed" {
 				return r, result.err
 			}
 		case <-ctx.Done():
@@ -140,37 +179,37 @@ func (a App) dev(ctx context.Context, req request) (r report.Report, err error) 
 				cycle()
 				result := <-done
 				if result.err != nil && runtimeErrorCode(result.err) == "runtime_cleanup_failed" {
+					_ = emit(result.report, result.err)
 					return result.report, errors.Join(ctx.Err(), result.err)
 				}
 			}
+			if r.Command == "" {
+				r = report.New("dev", a.Revision)
+			}
+			code, action := failure(ctx.Err(), "read")
+			r.AddError(code, action)
 			return r, ctx.Err()
 		case now := <-ticker.C:
 			next, readErr := a.Projects.Read(ctx, req.root)
-			if readErr != nil {
-				if cycle != nil {
-					cycle()
-					result := <-done
-					if result.err != nil && runtimeErrorCode(result.err) == "runtime_cleanup_failed" {
-						return result.report, errors.Join(readErr, result.err)
+			if readErr != nil || next.Input.Identity.TreeDigest == "" {
+				failed, failedErr := readFailure(next, readErr)
+				code := runtimeErrorCode(failedErr)
+				if code == "runtime_failed" && failed.Error != nil {
+					code = failed.Error.Code
+				}
+				if code != failureCode {
+					failureCode = code
+					if outputErr := emit(failed, failedErr); outputErr != nil {
+						return r, outputErr
 					}
 				}
-				r = report.Build("dev", a.Revision, next, req.release)
-				code, action := failure(readErr, "read")
-				r.AddError(code, action)
-				return r, readErr
+				continue
 			}
-			if next.Input.Identity.TreeDigest == "" {
-				identityErr := errors.New("runtime source identity unavailable")
-				if cycle != nil {
-					cycle()
-					result := <-done
-					if result.err != nil && runtimeErrorCode(result.err) == "runtime_cleanup_failed" {
-						return result.report, errors.Join(identityErr, result.err)
-					}
-				}
-				r = report.Build("dev", a.Revision, next, req.release)
-				r.AddError("runtime_source_identity_unavailable", "Make the exact package tree readable and quiescent, then retry.")
-				return r, identityErr
+			failureCode = ""
+			if last == "" {
+				last = next.Input.Identity.TreeDigest
+				start(next)
+				continue
 			}
 			if next.Input.Identity.TreeDigest == last {
 				if !pending.ready(now) {
@@ -190,6 +229,7 @@ func (a App) dev(ctx context.Context, req request) (r report.Report, err error) 
 				cycle = nil
 				done = nil
 				if result.err != nil && runtimeErrorCode(result.err) == "runtime_cleanup_failed" {
+					_ = emit(result.report, result.err)
 					return result.report, result.err
 				}
 			}

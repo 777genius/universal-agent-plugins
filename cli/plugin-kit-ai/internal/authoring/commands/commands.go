@@ -66,6 +66,7 @@ type request struct {
 	allowNetwork      bool
 	once              bool
 	deadline          time.Duration
+	cycleOutput       func(report.Report, error) error
 }
 
 // Execute renders once, after Factory.Execute handles every Cobra lifecycle exit.
@@ -80,7 +81,11 @@ func (a App) Execute(ctx context.Context, args []string, streams authoringcli.St
 	factory := authoringcli.Factory(func() (*cobra.Command, error) {
 		factories := make([]authoringcli.Factory, 0, 4)
 		for _, name := range a.commandNames() {
-			factories = append(factories, func() (*cobra.Command, error) { return a.command(name, func(r report.Report) { captured = &r }) })
+			factories = append(factories, func() (*cobra.Command, error) {
+				return a.command(name, func(r report.Report) { captured = &r }, func(r report.Report, _ error) error {
+					return writePrivateHuman(streams.Out, r)
+				})
+			})
 		}
 		root, err := build(factories...)
 		if err != nil {
@@ -192,7 +197,7 @@ func (a App) Execute(ctx context.Context, args []string, streams authoringcli.St
 	}
 	return nil
 }
-func (a App) command(name string, capture func(report.Report)) (*cobra.Command, error) {
+func (a App) command(name string, capture func(report.Report), cycleOutput func(report.Report, error) error) (*cobra.Command, error) {
 	if name == "skills" {
 		return a.skillsCommand(capture)
 	}
@@ -250,7 +255,7 @@ func (a App) command(name string, capture func(report.Report)) (*cobra.Command, 
 			if len(args) > 0 {
 				root = args[0]
 			}
-			req := request{root: root, disclose: disclose}
+			req := request{root: root, disclose: disclose, cycleOutput: cycleOutput}
 			if a.PublicContract {
 				var err error
 				req.root, err = skills.ExactRoot(filepath.FromSlash(root))
@@ -440,6 +445,24 @@ func summary(name string) string {
 	default:
 		return "Validate exact-root standard configuration and authoring readiness"
 	}
+}
+
+// writePrivateHuman emits only allowlisted report fields. Continuous dev uses
+// it directly so completed cycles are visible without waiting for cancellation.
+func writePrivateHuman(w io.Writer, r report.Report) error {
+	var b strings.Builder
+	fmt.Fprintf(&b, "%s: readiness %s; conformance %s; host %s; compatibility %s; toolchain %s; runtime %s\n", r.Command, r.Readiness.Status, r.Conformance.Status, r.HostSafety.Status, r.Compatibility.Status, r.Toolchain.Status, r.Runtime.Status)
+	if runtime := r.RuntimeDetail; runtime != nil {
+		fmt.Fprintf(&b, "mcp runtime: transport %s; initialize %s; list tools %s; tool call %s; tools %d; cleanup %s\n", runtime.Transport, runtime.Initialize, runtime.ListTools, runtime.ToolCall, runtime.ToolCount, runtime.Cleanup)
+	}
+	for _, finding := range r.Findings {
+		fmt.Fprintf(&b, "%s: %s (%s)\n", finding.Severity, finding.Code, finding.Layer)
+	}
+	if r.Error != nil {
+		fmt.Fprintln(&b, r.Error.Action)
+	}
+	_, err := io.WriteString(w, b.String())
+	return err
 }
 
 func runtimeErrorCode(err error) string {

@@ -140,8 +140,8 @@ test("actual accepted adapter envelope preserves all commands/flags/provenance a
   const publicCommands = bundle.envelope.surfaces
     .filter((surface) => surface.command_path === "agentplugins author")
     .flatMap((surface) => surface.commands);
-  assert.equal(publicCommands.length, 15);
-  assert.equal(bundle.entities.length, publicCommands.length - 1);
+  assert.equal(publicCommands.length, 14);
+  assert.equal(bundle.entities.length, publicCommands.length);
   assert.ok(bundle.envelope.surfaces.some((surface) => surface.command_path === "plugin-kit-ai"));
   assert.ok(bundle.entities.every((entry) => entry.title === "agentplugins author" || entry.title.startsWith("agentplugins author ")));
   assert.ok(!bundle.entities.some((entry) => entry.title === "agentplugins author dev"));

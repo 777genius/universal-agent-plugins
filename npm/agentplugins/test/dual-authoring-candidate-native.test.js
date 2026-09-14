@@ -134,8 +134,9 @@ test("actual controlled Linux pair: offline verification, engine reports, frozen
       if (productIndex === 0) {
         assert.ok(commands.includes("author.dev"));
         assert.ok(surface.includes("author.dev"));
-        assert.deepEqual(evidence, ["runtime_explicit_only", "mcp_stdio_node", "mcp_streamable_http_network_opt_in",
-          "bounded_private_runtime_root", "no_oauth_evidence"]);
+        assert.deepEqual(evidence, ["runtime_explicit_only", "mcp_stdio_linux_containment_required",
+          "mcp_streamable_http_network_opt_in", "bounded_private_runtime_root", "single_project_dev_session",
+          "no_oauth_evidence", "phase_7_not_released"]);
       } else {
         assert.equal(commands.includes("author.dev"), false);
         assert.equal(surface.includes("author.dev"), false);

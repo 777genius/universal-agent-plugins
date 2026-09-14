@@ -4072,12 +4072,12 @@
     "namespace": "prepared-authoring-v2",
     "status": "released",
     "released": true,
-    "sourceSHA": "28a1748f97fe1945fc8edcd718ddd44c3f40b215",
+    "sourceSHA": "ec9397a63f7c7550a680fcb0f5565902acbf7243",
     "factoryBaselineSHA": "070663efb27f69ecae8609e6b839f86f843efbb0",
     "sources": [
       {
         "path": "cli/plugin-kit-ai/cmd/agentplugins/release_root.go",
-        "sha256": "120a9ba8ac9b6116cd8f11e81eb599bebeb94907e8710106d98daa41691232bf"
+        "sha256": "c0465f90903c7ad3fcdc2283c241558d1b73bd9633f0e6af247ccd692a0e155e"
       },
       {
         "path": "cli/plugin-kit-ai/cmd/plugin-kit-ai/release_compat.go",
@@ -4217,11 +4217,11 @@
       },
       {
         "path": "cli/plugin-kit-ai/internal/authoring/commands/commands.go",
-        "sha256": "7e0263c0b9a390263ad68d206b2a020e5c31bfcb55977c5ed678ab3161249f9f"
+        "sha256": "9ed49814d6145f61e28ac8c5b914383749f06d946dcece15db2c1059fd290220"
       },
       {
         "path": "cli/plugin-kit-ai/internal/authoring/commands/public_contract.go",
-        "sha256": "2fcfcadc403c32c69f9e63ded5dc679759ea7db42d615c64cecf858befa7fbbb"
+        "sha256": "39c79f491f0733d352ffc0fa3a8ff4eaa169612e8876e92e5fb74c856663ec65"
       },
       {
         "path": "cli/plugin-kit-ai/internal/authoring/commands/skills.go",
@@ -4229,7 +4229,7 @@
       },
       {
         "path": "cli/plugin-kit-ai/internal/authoring/commands/version.go",
-        "sha256": "44ccc86f9b4a52b2258a4f04f4999e07fd964223d569812f4bbc74d63dbdeb37"
+        "sha256": "ffe6cfef352faeb9a3c00722a628a2093876c14120cd6725131b3e105fda6b29"
       },
       {
         "path": "cli/plugin-kit-ai/internal/authoringcli/command.go",
@@ -4329,7 +4329,7 @@
     "publicVisibility": "public",
     "localeStrategy": "canonical-en",
     "sourceKind": "authoring-docs-adapter",
-    "sourceRef": "https://github.com/777genius/universal-agent-plugins/tree/28a1748f97fe1945fc8edcd718ddd44c3f40b215/cli/plugin-kit-ai/internal/authoring/commands",
+    "sourceRef": "https://github.com/777genius/universal-agent-plugins/tree/ec9397a63f7c7550a680fcb0f5565902acbf7243/cli/plugin-kit-ai/internal/authoring/commands",
     "canonicalId": "prepared-authoring-v2:agentplugins author",
     "kind": "command",
     "surface": "authoring-cli",
@@ -4430,12 +4430,12 @@
     "namespace": "prepared-authoring-v2",
     "status": "released",
     "released": true,
-    "sourceSHA": "28a1748f97fe1945fc8edcd718ddd44c3f40b215",
+    "sourceSHA": "ec9397a63f7c7550a680fcb0f5565902acbf7243",
     "factoryBaselineSHA": "070663efb27f69ecae8609e6b839f86f843efbb0",
     "sources": [
       {
         "path": "cli/plugin-kit-ai/cmd/agentplugins/release_root.go",
-        "sha256": "120a9ba8ac9b6116cd8f11e81eb599bebeb94907e8710106d98daa41691232bf"
+        "sha256": "c0465f90903c7ad3fcdc2283c241558d1b73bd9633f0e6af247ccd692a0e155e"
       },
       {
         "path": "cli/plugin-kit-ai/cmd/plugin-kit-ai/release_compat.go",
@@ -4575,11 +4575,11 @@
       },
       {
         "path": "cli/plugin-kit-ai/internal/authoring/commands/commands.go",
-        "sha256": "7e0263c0b9a390263ad68d206b2a020e5c31bfcb55977c5ed678ab3161249f9f"
+        "sha256": "9ed49814d6145f61e28ac8c5b914383749f06d946dcece15db2c1059fd290220"
       },
       {
         "path": "cli/plugin-kit-ai/internal/authoring/commands/public_contract.go",
-        "sha256": "2fcfcadc403c32c69f9e63ded5dc679759ea7db42d615c64cecf858befa7fbbb"
+        "sha256": "39c79f491f0733d352ffc0fa3a8ff4eaa169612e8876e92e5fb74c856663ec65"
       },
       {
         "path": "cli/plugin-kit-ai/internal/authoring/commands/skills.go",
@@ -4587,7 +4587,7 @@
       },
       {
         "path": "cli/plugin-kit-ai/internal/authoring/commands/version.go",
-        "sha256": "44ccc86f9b4a52b2258a4f04f4999e07fd964223d569812f4bbc74d63dbdeb37"
+        "sha256": "ffe6cfef352faeb9a3c00722a628a2093876c14120cd6725131b3e105fda6b29"
       },
       {
         "path": "cli/plugin-kit-ai/internal/authoringcli/command.go",
@@ -4687,7 +4687,7 @@
     "publicVisibility": "public",
     "localeStrategy": "canonical-en",
     "sourceKind": "authoring-docs-adapter",
-    "sourceRef": "https://github.com/777genius/universal-agent-plugins/tree/28a1748f97fe1945fc8edcd718ddd44c3f40b215/cli/plugin-kit-ai/internal/authoring/commands",
+    "sourceRef": "https://github.com/777genius/universal-agent-plugins/tree/ec9397a63f7c7550a680fcb0f5565902acbf7243/cli/plugin-kit-ai/internal/authoring/commands",
     "canonicalId": "prepared-authoring-v2:agentplugins author capabilities",
     "kind": "command",
     "surface": "authoring-cli",
@@ -4788,12 +4788,12 @@
     "namespace": "prepared-authoring-v2",
     "status": "released",
     "released": true,
-    "sourceSHA": "28a1748f97fe1945fc8edcd718ddd44c3f40b215",
+    "sourceSHA": "ec9397a63f7c7550a680fcb0f5565902acbf7243",
     "factoryBaselineSHA": "070663efb27f69ecae8609e6b839f86f843efbb0",
     "sources": [
       {
         "path": "cli/plugin-kit-ai/cmd/agentplugins/release_root.go",
-        "sha256": "120a9ba8ac9b6116cd8f11e81eb599bebeb94907e8710106d98daa41691232bf"
+        "sha256": "c0465f90903c7ad3fcdc2283c241558d1b73bd9633f0e6af247ccd692a0e155e"
       },
       {
         "path": "cli/plugin-kit-ai/cmd/plugin-kit-ai/release_compat.go",
@@ -4933,11 +4933,11 @@
       },
       {
         "path": "cli/plugin-kit-ai/internal/authoring/commands/commands.go",
-        "sha256": "7e0263c0b9a390263ad68d206b2a020e5c31bfcb55977c5ed678ab3161249f9f"
+        "sha256": "9ed49814d6145f61e28ac8c5b914383749f06d946dcece15db2c1059fd290220"
       },
       {
         "path": "cli/plugin-kit-ai/internal/authoring/commands/public_contract.go",
-        "sha256": "2fcfcadc403c32c69f9e63ded5dc679759ea7db42d615c64cecf858befa7fbbb"
+        "sha256": "39c79f491f0733d352ffc0fa3a8ff4eaa169612e8876e92e5fb74c856663ec65"
       },
       {
         "path": "cli/plugin-kit-ai/internal/authoring/commands/skills.go",
@@ -4945,7 +4945,7 @@
       },
       {
         "path": "cli/plugin-kit-ai/internal/authoring/commands/version.go",
-        "sha256": "44ccc86f9b4a52b2258a4f04f4999e07fd964223d569812f4bbc74d63dbdeb37"
+        "sha256": "ffe6cfef352faeb9a3c00722a628a2093876c14120cd6725131b3e105fda6b29"
       },
       {
         "path": "cli/plugin-kit-ai/internal/authoringcli/command.go",
@@ -5045,7 +5045,7 @@
     "publicVisibility": "public",
     "localeStrategy": "canonical-en",
     "sourceKind": "authoring-docs-adapter",
-    "sourceRef": "https://github.com/777genius/universal-agent-plugins/tree/28a1748f97fe1945fc8edcd718ddd44c3f40b215/cli/plugin-kit-ai/internal/authoring/commands",
+    "sourceRef": "https://github.com/777genius/universal-agent-plugins/tree/ec9397a63f7c7550a680fcb0f5565902acbf7243/cli/plugin-kit-ai/internal/authoring/commands",
     "canonicalId": "prepared-authoring-v2:agentplugins author compat",
     "kind": "command",
     "surface": "authoring-cli",
@@ -5160,12 +5160,12 @@
     "namespace": "prepared-authoring-v2",
     "status": "released",
     "released": true,
-    "sourceSHA": "28a1748f97fe1945fc8edcd718ddd44c3f40b215",
+    "sourceSHA": "ec9397a63f7c7550a680fcb0f5565902acbf7243",
     "factoryBaselineSHA": "070663efb27f69ecae8609e6b839f86f843efbb0",
     "sources": [
       {
         "path": "cli/plugin-kit-ai/cmd/agentplugins/release_root.go",
-        "sha256": "120a9ba8ac9b6116cd8f11e81eb599bebeb94907e8710106d98daa41691232bf"
+        "sha256": "c0465f90903c7ad3fcdc2283c241558d1b73bd9633f0e6af247ccd692a0e155e"
       },
       {
         "path": "cli/plugin-kit-ai/cmd/plugin-kit-ai/release_compat.go",
@@ -5305,11 +5305,11 @@
       },
       {
         "path": "cli/plugin-kit-ai/internal/authoring/commands/commands.go",
-        "sha256": "7e0263c0b9a390263ad68d206b2a020e5c31bfcb55977c5ed678ab3161249f9f"
+        "sha256": "9ed49814d6145f61e28ac8c5b914383749f06d946dcece15db2c1059fd290220"
       },
       {
         "path": "cli/plugin-kit-ai/internal/authoring/commands/public_contract.go",
-        "sha256": "2fcfcadc403c32c69f9e63ded5dc679759ea7db42d615c64cecf858befa7fbbb"
+        "sha256": "39c79f491f0733d352ffc0fa3a8ff4eaa169612e8876e92e5fb74c856663ec65"
       },
       {
         "path": "cli/plugin-kit-ai/internal/authoring/commands/skills.go",
@@ -5317,7 +5317,7 @@
       },
       {
         "path": "cli/plugin-kit-ai/internal/authoring/commands/version.go",
-        "sha256": "44ccc86f9b4a52b2258a4f04f4999e07fd964223d569812f4bbc74d63dbdeb37"
+        "sha256": "ffe6cfef352faeb9a3c00722a628a2093876c14120cd6725131b3e105fda6b29"
       },
       {
         "path": "cli/plugin-kit-ai/internal/authoringcli/command.go",
@@ -5417,7 +5417,7 @@
     "publicVisibility": "public",
     "localeStrategy": "canonical-en",
     "sourceKind": "authoring-docs-adapter",
-    "sourceRef": "https://github.com/777genius/universal-agent-plugins/tree/28a1748f97fe1945fc8edcd718ddd44c3f40b215/cli/plugin-kit-ai/internal/authoring/commands",
+    "sourceRef": "https://github.com/777genius/universal-agent-plugins/tree/ec9397a63f7c7550a680fcb0f5565902acbf7243/cli/plugin-kit-ai/internal/authoring/commands",
     "canonicalId": "prepared-authoring-v2:agentplugins author doctor",
     "kind": "command",
     "surface": "authoring-cli",
@@ -5532,12 +5532,12 @@
     "namespace": "prepared-authoring-v2",
     "status": "released",
     "released": true,
-    "sourceSHA": "28a1748f97fe1945fc8edcd718ddd44c3f40b215",
+    "sourceSHA": "ec9397a63f7c7550a680fcb0f5565902acbf7243",
     "factoryBaselineSHA": "070663efb27f69ecae8609e6b839f86f843efbb0",
     "sources": [
       {
         "path": "cli/plugin-kit-ai/cmd/agentplugins/release_root.go",
-        "sha256": "120a9ba8ac9b6116cd8f11e81eb599bebeb94907e8710106d98daa41691232bf"
+        "sha256": "c0465f90903c7ad3fcdc2283c241558d1b73bd9633f0e6af247ccd692a0e155e"
       },
       {
         "path": "cli/plugin-kit-ai/cmd/plugin-kit-ai/release_compat.go",
@@ -5677,11 +5677,11 @@
       },
       {
         "path": "cli/plugin-kit-ai/internal/authoring/commands/commands.go",
-        "sha256": "7e0263c0b9a390263ad68d206b2a020e5c31bfcb55977c5ed678ab3161249f9f"
+        "sha256": "9ed49814d6145f61e28ac8c5b914383749f06d946dcece15db2c1059fd290220"
       },
       {
         "path": "cli/plugin-kit-ai/internal/authoring/commands/public_contract.go",
-        "sha256": "2fcfcadc403c32c69f9e63ded5dc679759ea7db42d615c64cecf858befa7fbbb"
+        "sha256": "39c79f491f0733d352ffc0fa3a8ff4eaa169612e8876e92e5fb74c856663ec65"
       },
       {
         "path": "cli/plugin-kit-ai/internal/authoring/commands/skills.go",
@@ -5689,7 +5689,7 @@
       },
       {
         "path": "cli/plugin-kit-ai/internal/authoring/commands/version.go",
-        "sha256": "44ccc86f9b4a52b2258a4f04f4999e07fd964223d569812f4bbc74d63dbdeb37"
+        "sha256": "ffe6cfef352faeb9a3c00722a628a2093876c14120cd6725131b3e105fda6b29"
       },
       {
         "path": "cli/plugin-kit-ai/internal/authoringcli/command.go",
@@ -5789,7 +5789,7 @@
     "publicVisibility": "public",
     "localeStrategy": "canonical-en",
     "sourceKind": "authoring-docs-adapter",
-    "sourceRef": "https://github.com/777genius/universal-agent-plugins/tree/28a1748f97fe1945fc8edcd718ddd44c3f40b215/cli/plugin-kit-ai/internal/authoring/commands",
+    "sourceRef": "https://github.com/777genius/universal-agent-plugins/tree/ec9397a63f7c7550a680fcb0f5565902acbf7243/cli/plugin-kit-ai/internal/authoring/commands",
     "canonicalId": "prepared-authoring-v2:agentplugins author help",
     "kind": "command",
     "surface": "authoring-cli",
@@ -5890,12 +5890,12 @@
     "namespace": "prepared-authoring-v2",
     "status": "released",
     "released": true,
-    "sourceSHA": "28a1748f97fe1945fc8edcd718ddd44c3f40b215",
+    "sourceSHA": "ec9397a63f7c7550a680fcb0f5565902acbf7243",
     "factoryBaselineSHA": "070663efb27f69ecae8609e6b839f86f843efbb0",
     "sources": [
       {
         "path": "cli/plugin-kit-ai/cmd/agentplugins/release_root.go",
-        "sha256": "120a9ba8ac9b6116cd8f11e81eb599bebeb94907e8710106d98daa41691232bf"
+        "sha256": "c0465f90903c7ad3fcdc2283c241558d1b73bd9633f0e6af247ccd692a0e155e"
       },
       {
         "path": "cli/plugin-kit-ai/cmd/plugin-kit-ai/release_compat.go",
@@ -6035,11 +6035,11 @@
       },
       {
         "path": "cli/plugin-kit-ai/internal/authoring/commands/commands.go",
-        "sha256": "7e0263c0b9a390263ad68d206b2a020e5c31bfcb55977c5ed678ab3161249f9f"
+        "sha256": "9ed49814d6145f61e28ac8c5b914383749f06d946dcece15db2c1059fd290220"
       },
       {
         "path": "cli/plugin-kit-ai/internal/authoring/commands/public_contract.go",
-        "sha256": "2fcfcadc403c32c69f9e63ded5dc679759ea7db42d615c64cecf858befa7fbbb"
+        "sha256": "39c79f491f0733d352ffc0fa3a8ff4eaa169612e8876e92e5fb74c856663ec65"
       },
       {
         "path": "cli/plugin-kit-ai/internal/authoring/commands/skills.go",
@@ -6047,7 +6047,7 @@
       },
       {
         "path": "cli/plugin-kit-ai/internal/authoring/commands/version.go",
-        "sha256": "44ccc86f9b4a52b2258a4f04f4999e07fd964223d569812f4bbc74d63dbdeb37"
+        "sha256": "ffe6cfef352faeb9a3c00722a628a2093876c14120cd6725131b3e105fda6b29"
       },
       {
         "path": "cli/plugin-kit-ai/internal/authoringcli/command.go",
@@ -6147,7 +6147,7 @@
     "publicVisibility": "public",
     "localeStrategy": "canonical-en",
     "sourceKind": "authoring-docs-adapter",
-    "sourceRef": "https://github.com/777genius/universal-agent-plugins/tree/28a1748f97fe1945fc8edcd718ddd44c3f40b215/cli/plugin-kit-ai/internal/authoring/commands",
+    "sourceRef": "https://github.com/777genius/universal-agent-plugins/tree/ec9397a63f7c7550a680fcb0f5565902acbf7243/cli/plugin-kit-ai/internal/authoring/commands",
     "canonicalId": "prepared-authoring-v2:agentplugins author init",
     "kind": "command",
     "surface": "authoring-cli",
@@ -6321,12 +6321,12 @@
     "namespace": "prepared-authoring-v2",
     "status": "released",
     "released": true,
-    "sourceSHA": "28a1748f97fe1945fc8edcd718ddd44c3f40b215",
+    "sourceSHA": "ec9397a63f7c7550a680fcb0f5565902acbf7243",
     "factoryBaselineSHA": "070663efb27f69ecae8609e6b839f86f843efbb0",
     "sources": [
       {
         "path": "cli/plugin-kit-ai/cmd/agentplugins/release_root.go",
-        "sha256": "120a9ba8ac9b6116cd8f11e81eb599bebeb94907e8710106d98daa41691232bf"
+        "sha256": "c0465f90903c7ad3fcdc2283c241558d1b73bd9633f0e6af247ccd692a0e155e"
       },
       {
         "path": "cli/plugin-kit-ai/cmd/plugin-kit-ai/release_compat.go",
@@ -6466,11 +6466,11 @@
       },
       {
         "path": "cli/plugin-kit-ai/internal/authoring/commands/commands.go",
-        "sha256": "7e0263c0b9a390263ad68d206b2a020e5c31bfcb55977c5ed678ab3161249f9f"
+        "sha256": "9ed49814d6145f61e28ac8c5b914383749f06d946dcece15db2c1059fd290220"
       },
       {
         "path": "cli/plugin-kit-ai/internal/authoring/commands/public_contract.go",
-        "sha256": "2fcfcadc403c32c69f9e63ded5dc679759ea7db42d615c64cecf858befa7fbbb"
+        "sha256": "39c79f491f0733d352ffc0fa3a8ff4eaa169612e8876e92e5fb74c856663ec65"
       },
       {
         "path": "cli/plugin-kit-ai/internal/authoring/commands/skills.go",
@@ -6478,7 +6478,7 @@
       },
       {
         "path": "cli/plugin-kit-ai/internal/authoring/commands/version.go",
-        "sha256": "44ccc86f9b4a52b2258a4f04f4999e07fd964223d569812f4bbc74d63dbdeb37"
+        "sha256": "ffe6cfef352faeb9a3c00722a628a2093876c14120cd6725131b3e105fda6b29"
       },
       {
         "path": "cli/plugin-kit-ai/internal/authoringcli/command.go",
@@ -6578,7 +6578,7 @@
     "publicVisibility": "public",
     "localeStrategy": "canonical-en",
     "sourceKind": "authoring-docs-adapter",
-    "sourceRef": "https://github.com/777genius/universal-agent-plugins/tree/28a1748f97fe1945fc8edcd718ddd44c3f40b215/cli/plugin-kit-ai/internal/authoring/commands",
+    "sourceRef": "https://github.com/777genius/universal-agent-plugins/tree/ec9397a63f7c7550a680fcb0f5565902acbf7243/cli/plugin-kit-ai/internal/authoring/commands",
     "canonicalId": "prepared-authoring-v2:agentplugins author inspect",
     "kind": "command",
     "surface": "authoring-cli",
@@ -6693,12 +6693,12 @@
     "namespace": "prepared-authoring-v2",
     "status": "released",
     "released": true,
-    "sourceSHA": "28a1748f97fe1945fc8edcd718ddd44c3f40b215",
+    "sourceSHA": "ec9397a63f7c7550a680fcb0f5565902acbf7243",
     "factoryBaselineSHA": "070663efb27f69ecae8609e6b839f86f843efbb0",
     "sources": [
       {
         "path": "cli/plugin-kit-ai/cmd/agentplugins/release_root.go",
-        "sha256": "120a9ba8ac9b6116cd8f11e81eb599bebeb94907e8710106d98daa41691232bf"
+        "sha256": "c0465f90903c7ad3fcdc2283c241558d1b73bd9633f0e6af247ccd692a0e155e"
       },
       {
         "path": "cli/plugin-kit-ai/cmd/plugin-kit-ai/release_compat.go",
@@ -6838,11 +6838,11 @@
       },
       {
         "path": "cli/plugin-kit-ai/internal/authoring/commands/commands.go",
-        "sha256": "7e0263c0b9a390263ad68d206b2a020e5c31bfcb55977c5ed678ab3161249f9f"
+        "sha256": "9ed49814d6145f61e28ac8c5b914383749f06d946dcece15db2c1059fd290220"
       },
       {
         "path": "cli/plugin-kit-ai/internal/authoring/commands/public_contract.go",
-        "sha256": "2fcfcadc403c32c69f9e63ded5dc679759ea7db42d615c64cecf858befa7fbbb"
+        "sha256": "39c79f491f0733d352ffc0fa3a8ff4eaa169612e8876e92e5fb74c856663ec65"
       },
       {
         "path": "cli/plugin-kit-ai/internal/authoring/commands/skills.go",
@@ -6850,7 +6850,7 @@
       },
       {
         "path": "cli/plugin-kit-ai/internal/authoring/commands/version.go",
-        "sha256": "44ccc86f9b4a52b2258a4f04f4999e07fd964223d569812f4bbc74d63dbdeb37"
+        "sha256": "ffe6cfef352faeb9a3c00722a628a2093876c14120cd6725131b3e105fda6b29"
       },
       {
         "path": "cli/plugin-kit-ai/internal/authoringcli/command.go",
@@ -6950,7 +6950,7 @@
     "publicVisibility": "public",
     "localeStrategy": "canonical-en",
     "sourceKind": "authoring-docs-adapter",
-    "sourceRef": "https://github.com/777genius/universal-agent-plugins/tree/28a1748f97fe1945fc8edcd718ddd44c3f40b215/cli/plugin-kit-ai/internal/authoring/commands",
+    "sourceRef": "https://github.com/777genius/universal-agent-plugins/tree/ec9397a63f7c7550a680fcb0f5565902acbf7243/cli/plugin-kit-ai/internal/authoring/commands",
     "canonicalId": "prepared-authoring-v2:agentplugins author skills",
     "kind": "command",
     "surface": "authoring-cli",
@@ -7051,12 +7051,12 @@
     "namespace": "prepared-authoring-v2",
     "status": "released",
     "released": true,
-    "sourceSHA": "28a1748f97fe1945fc8edcd718ddd44c3f40b215",
+    "sourceSHA": "ec9397a63f7c7550a680fcb0f5565902acbf7243",
     "factoryBaselineSHA": "070663efb27f69ecae8609e6b839f86f843efbb0",
     "sources": [
       {
         "path": "cli/plugin-kit-ai/cmd/agentplugins/release_root.go",
-        "sha256": "120a9ba8ac9b6116cd8f11e81eb599bebeb94907e8710106d98daa41691232bf"
+        "sha256": "c0465f90903c7ad3fcdc2283c241558d1b73bd9633f0e6af247ccd692a0e155e"
       },
       {
         "path": "cli/plugin-kit-ai/cmd/plugin-kit-ai/release_compat.go",
@@ -7196,11 +7196,11 @@
       },
       {
         "path": "cli/plugin-kit-ai/internal/authoring/commands/commands.go",
-        "sha256": "7e0263c0b9a390263ad68d206b2a020e5c31bfcb55977c5ed678ab3161249f9f"
+        "sha256": "9ed49814d6145f61e28ac8c5b914383749f06d946dcece15db2c1059fd290220"
       },
       {
         "path": "cli/plugin-kit-ai/internal/authoring/commands/public_contract.go",
-        "sha256": "2fcfcadc403c32c69f9e63ded5dc679759ea7db42d615c64cecf858befa7fbbb"
+        "sha256": "39c79f491f0733d352ffc0fa3a8ff4eaa169612e8876e92e5fb74c856663ec65"
       },
       {
         "path": "cli/plugin-kit-ai/internal/authoring/commands/skills.go",
@@ -7208,7 +7208,7 @@
       },
       {
         "path": "cli/plugin-kit-ai/internal/authoring/commands/version.go",
-        "sha256": "44ccc86f9b4a52b2258a4f04f4999e07fd964223d569812f4bbc74d63dbdeb37"
+        "sha256": "ffe6cfef352faeb9a3c00722a628a2093876c14120cd6725131b3e105fda6b29"
       },
       {
         "path": "cli/plugin-kit-ai/internal/authoringcli/command.go",
@@ -7308,7 +7308,7 @@
     "publicVisibility": "public",
     "localeStrategy": "canonical-en",
     "sourceKind": "authoring-docs-adapter",
-    "sourceRef": "https://github.com/777genius/universal-agent-plugins/tree/28a1748f97fe1945fc8edcd718ddd44c3f40b215/cli/plugin-kit-ai/internal/authoring/commands",
+    "sourceRef": "https://github.com/777genius/universal-agent-plugins/tree/ec9397a63f7c7550a680fcb0f5565902acbf7243/cli/plugin-kit-ai/internal/authoring/commands",
     "canonicalId": "prepared-authoring-v2:agentplugins author skills help",
     "kind": "command",
     "surface": "authoring-cli",
@@ -7409,12 +7409,12 @@
     "namespace": "prepared-authoring-v2",
     "status": "released",
     "released": true,
-    "sourceSHA": "28a1748f97fe1945fc8edcd718ddd44c3f40b215",
+    "sourceSHA": "ec9397a63f7c7550a680fcb0f5565902acbf7243",
     "factoryBaselineSHA": "070663efb27f69ecae8609e6b839f86f843efbb0",
     "sources": [
       {
         "path": "cli/plugin-kit-ai/cmd/agentplugins/release_root.go",
-        "sha256": "120a9ba8ac9b6116cd8f11e81eb599bebeb94907e8710106d98daa41691232bf"
+        "sha256": "c0465f90903c7ad3fcdc2283c241558d1b73bd9633f0e6af247ccd692a0e155e"
       },
       {
         "path": "cli/plugin-kit-ai/cmd/plugin-kit-ai/release_compat.go",
@@ -7554,11 +7554,11 @@
       },
       {
         "path": "cli/plugin-kit-ai/internal/authoring/commands/commands.go",
-        "sha256": "7e0263c0b9a390263ad68d206b2a020e5c31bfcb55977c5ed678ab3161249f9f"
+        "sha256": "9ed49814d6145f61e28ac8c5b914383749f06d946dcece15db2c1059fd290220"
       },
       {
         "path": "cli/plugin-kit-ai/internal/authoring/commands/public_contract.go",
-        "sha256": "2fcfcadc403c32c69f9e63ded5dc679759ea7db42d615c64cecf858befa7fbbb"
+        "sha256": "39c79f491f0733d352ffc0fa3a8ff4eaa169612e8876e92e5fb74c856663ec65"
       },
       {
         "path": "cli/plugin-kit-ai/internal/authoring/commands/skills.go",
@@ -7566,7 +7566,7 @@
       },
       {
         "path": "cli/plugin-kit-ai/internal/authoring/commands/version.go",
-        "sha256": "44ccc86f9b4a52b2258a4f04f4999e07fd964223d569812f4bbc74d63dbdeb37"
+        "sha256": "ffe6cfef352faeb9a3c00722a628a2093876c14120cd6725131b3e105fda6b29"
       },
       {
         "path": "cli/plugin-kit-ai/internal/authoringcli/command.go",
@@ -7666,7 +7666,7 @@
     "publicVisibility": "public",
     "localeStrategy": "canonical-en",
     "sourceKind": "authoring-docs-adapter",
-    "sourceRef": "https://github.com/777genius/universal-agent-plugins/tree/28a1748f97fe1945fc8edcd718ddd44c3f40b215/cli/plugin-kit-ai/internal/authoring/commands",
+    "sourceRef": "https://github.com/777genius/universal-agent-plugins/tree/ec9397a63f7c7550a680fcb0f5565902acbf7243/cli/plugin-kit-ai/internal/authoring/commands",
     "canonicalId": "prepared-authoring-v2:agentplugins author skills init",
     "kind": "command",
     "surface": "authoring-cli",
@@ -7780,12 +7780,12 @@
     "namespace": "prepared-authoring-v2",
     "status": "released",
     "released": true,
-    "sourceSHA": "28a1748f97fe1945fc8edcd718ddd44c3f40b215",
+    "sourceSHA": "ec9397a63f7c7550a680fcb0f5565902acbf7243",
     "factoryBaselineSHA": "070663efb27f69ecae8609e6b839f86f843efbb0",
     "sources": [
       {
         "path": "cli/plugin-kit-ai/cmd/agentplugins/release_root.go",
-        "sha256": "120a9ba8ac9b6116cd8f11e81eb599bebeb94907e8710106d98daa41691232bf"
+        "sha256": "c0465f90903c7ad3fcdc2283c241558d1b73bd9633f0e6af247ccd692a0e155e"
       },
       {
         "path": "cli/plugin-kit-ai/cmd/plugin-kit-ai/release_compat.go",
@@ -7925,11 +7925,11 @@
       },
       {
         "path": "cli/plugin-kit-ai/internal/authoring/commands/commands.go",
-        "sha256": "7e0263c0b9a390263ad68d206b2a020e5c31bfcb55977c5ed678ab3161249f9f"
+        "sha256": "9ed49814d6145f61e28ac8c5b914383749f06d946dcece15db2c1059fd290220"
       },
       {
         "path": "cli/plugin-kit-ai/internal/authoring/commands/public_contract.go",
-        "sha256": "2fcfcadc403c32c69f9e63ded5dc679759ea7db42d615c64cecf858befa7fbbb"
+        "sha256": "39c79f491f0733d352ffc0fa3a8ff4eaa169612e8876e92e5fb74c856663ec65"
       },
       {
         "path": "cli/plugin-kit-ai/internal/authoring/commands/skills.go",
@@ -7937,7 +7937,7 @@
       },
       {
         "path": "cli/plugin-kit-ai/internal/authoring/commands/version.go",
-        "sha256": "44ccc86f9b4a52b2258a4f04f4999e07fd964223d569812f4bbc74d63dbdeb37"
+        "sha256": "ffe6cfef352faeb9a3c00722a628a2093876c14120cd6725131b3e105fda6b29"
       },
       {
         "path": "cli/plugin-kit-ai/internal/authoringcli/command.go",
@@ -8037,7 +8037,7 @@
     "publicVisibility": "public",
     "localeStrategy": "canonical-en",
     "sourceKind": "authoring-docs-adapter",
-    "sourceRef": "https://github.com/777genius/universal-agent-plugins/tree/28a1748f97fe1945fc8edcd718ddd44c3f40b215/cli/plugin-kit-ai/internal/authoring/commands",
+    "sourceRef": "https://github.com/777genius/universal-agent-plugins/tree/ec9397a63f7c7550a680fcb0f5565902acbf7243/cli/plugin-kit-ai/internal/authoring/commands",
     "canonicalId": "prepared-authoring-v2:agentplugins author skills validate",
     "kind": "command",
     "surface": "authoring-cli",
@@ -8145,12 +8145,12 @@
     "namespace": "prepared-authoring-v2",
     "status": "released",
     "released": true,
-    "sourceSHA": "28a1748f97fe1945fc8edcd718ddd44c3f40b215",
+    "sourceSHA": "ec9397a63f7c7550a680fcb0f5565902acbf7243",
     "factoryBaselineSHA": "070663efb27f69ecae8609e6b839f86f843efbb0",
     "sources": [
       {
         "path": "cli/plugin-kit-ai/cmd/agentplugins/release_root.go",
-        "sha256": "120a9ba8ac9b6116cd8f11e81eb599bebeb94907e8710106d98daa41691232bf"
+        "sha256": "c0465f90903c7ad3fcdc2283c241558d1b73bd9633f0e6af247ccd692a0e155e"
       },
       {
         "path": "cli/plugin-kit-ai/cmd/plugin-kit-ai/release_compat.go",
@@ -8290,11 +8290,11 @@
       },
       {
         "path": "cli/plugin-kit-ai/internal/authoring/commands/commands.go",
-        "sha256": "7e0263c0b9a390263ad68d206b2a020e5c31bfcb55977c5ed678ab3161249f9f"
+        "sha256": "9ed49814d6145f61e28ac8c5b914383749f06d946dcece15db2c1059fd290220"
       },
       {
         "path": "cli/plugin-kit-ai/internal/authoring/commands/public_contract.go",
-        "sha256": "2fcfcadc403c32c69f9e63ded5dc679759ea7db42d615c64cecf858befa7fbbb"
+        "sha256": "39c79f491f0733d352ffc0fa3a8ff4eaa169612e8876e92e5fb74c856663ec65"
       },
       {
         "path": "cli/plugin-kit-ai/internal/authoring/commands/skills.go",
@@ -8302,7 +8302,7 @@
       },
       {
         "path": "cli/plugin-kit-ai/internal/authoring/commands/version.go",
-        "sha256": "44ccc86f9b4a52b2258a4f04f4999e07fd964223d569812f4bbc74d63dbdeb37"
+        "sha256": "ffe6cfef352faeb9a3c00722a628a2093876c14120cd6725131b3e105fda6b29"
       },
       {
         "path": "cli/plugin-kit-ai/internal/authoringcli/command.go",
@@ -8402,7 +8402,7 @@
     "publicVisibility": "public",
     "localeStrategy": "canonical-en",
     "sourceKind": "authoring-docs-adapter",
-    "sourceRef": "https://github.com/777genius/universal-agent-plugins/tree/28a1748f97fe1945fc8edcd718ddd44c3f40b215/cli/plugin-kit-ai/internal/authoring/commands",
+    "sourceRef": "https://github.com/777genius/universal-agent-plugins/tree/ec9397a63f7c7550a680fcb0f5565902acbf7243/cli/plugin-kit-ai/internal/authoring/commands",
     "canonicalId": "prepared-authoring-v2:agentplugins author test",
     "kind": "command",
     "surface": "authoring-cli",
@@ -8517,12 +8517,12 @@
     "namespace": "prepared-authoring-v2",
     "status": "released",
     "released": true,
-    "sourceSHA": "28a1748f97fe1945fc8edcd718ddd44c3f40b215",
+    "sourceSHA": "ec9397a63f7c7550a680fcb0f5565902acbf7243",
     "factoryBaselineSHA": "070663efb27f69ecae8609e6b839f86f843efbb0",
     "sources": [
       {
         "path": "cli/plugin-kit-ai/cmd/agentplugins/release_root.go",
-        "sha256": "120a9ba8ac9b6116cd8f11e81eb599bebeb94907e8710106d98daa41691232bf"
+        "sha256": "c0465f90903c7ad3fcdc2283c241558d1b73bd9633f0e6af247ccd692a0e155e"
       },
       {
         "path": "cli/plugin-kit-ai/cmd/plugin-kit-ai/release_compat.go",
@@ -8662,11 +8662,11 @@
       },
       {
         "path": "cli/plugin-kit-ai/internal/authoring/commands/commands.go",
-        "sha256": "7e0263c0b9a390263ad68d206b2a020e5c31bfcb55977c5ed678ab3161249f9f"
+        "sha256": "9ed49814d6145f61e28ac8c5b914383749f06d946dcece15db2c1059fd290220"
       },
       {
         "path": "cli/plugin-kit-ai/internal/authoring/commands/public_contract.go",
-        "sha256": "2fcfcadc403c32c69f9e63ded5dc679759ea7db42d615c64cecf858befa7fbbb"
+        "sha256": "39c79f491f0733d352ffc0fa3a8ff4eaa169612e8876e92e5fb74c856663ec65"
       },
       {
         "path": "cli/plugin-kit-ai/internal/authoring/commands/skills.go",
@@ -8674,7 +8674,7 @@
       },
       {
         "path": "cli/plugin-kit-ai/internal/authoring/commands/version.go",
-        "sha256": "44ccc86f9b4a52b2258a4f04f4999e07fd964223d569812f4bbc74d63dbdeb37"
+        "sha256": "ffe6cfef352faeb9a3c00722a628a2093876c14120cd6725131b3e105fda6b29"
       },
       {
         "path": "cli/plugin-kit-ai/internal/authoringcli/command.go",
@@ -8774,7 +8774,7 @@
     "publicVisibility": "public",
     "localeStrategy": "canonical-en",
     "sourceKind": "authoring-docs-adapter",
-    "sourceRef": "https://github.com/777genius/universal-agent-plugins/tree/28a1748f97fe1945fc8edcd718ddd44c3f40b215/cli/plugin-kit-ai/internal/authoring/commands",
+    "sourceRef": "https://github.com/777genius/universal-agent-plugins/tree/ec9397a63f7c7550a680fcb0f5565902acbf7243/cli/plugin-kit-ai/internal/authoring/commands",
     "canonicalId": "prepared-authoring-v2:agentplugins author validate",
     "kind": "command",
     "surface": "authoring-cli",
@@ -8889,12 +8889,12 @@
     "namespace": "prepared-authoring-v2",
     "status": "released",
     "released": true,
-    "sourceSHA": "28a1748f97fe1945fc8edcd718ddd44c3f40b215",
+    "sourceSHA": "ec9397a63f7c7550a680fcb0f5565902acbf7243",
     "factoryBaselineSHA": "070663efb27f69ecae8609e6b839f86f843efbb0",
     "sources": [
       {
         "path": "cli/plugin-kit-ai/cmd/agentplugins/release_root.go",
-        "sha256": "120a9ba8ac9b6116cd8f11e81eb599bebeb94907e8710106d98daa41691232bf"
+        "sha256": "c0465f90903c7ad3fcdc2283c241558d1b73bd9633f0e6af247ccd692a0e155e"
       },
       {
         "path": "cli/plugin-kit-ai/cmd/plugin-kit-ai/release_compat.go",
@@ -9034,11 +9034,11 @@
       },
       {
         "path": "cli/plugin-kit-ai/internal/authoring/commands/commands.go",
-        "sha256": "7e0263c0b9a390263ad68d206b2a020e5c31bfcb55977c5ed678ab3161249f9f"
+        "sha256": "9ed49814d6145f61e28ac8c5b914383749f06d946dcece15db2c1059fd290220"
       },
       {
         "path": "cli/plugin-kit-ai/internal/authoring/commands/public_contract.go",
-        "sha256": "2fcfcadc403c32c69f9e63ded5dc679759ea7db42d615c64cecf858befa7fbbb"
+        "sha256": "39c79f491f0733d352ffc0fa3a8ff4eaa169612e8876e92e5fb74c856663ec65"
       },
       {
         "path": "cli/plugin-kit-ai/internal/authoring/commands/skills.go",
@@ -9046,7 +9046,7 @@
       },
       {
         "path": "cli/plugin-kit-ai/internal/authoring/commands/version.go",
-        "sha256": "44ccc86f9b4a52b2258a4f04f4999e07fd964223d569812f4bbc74d63dbdeb37"
+        "sha256": "ffe6cfef352faeb9a3c00722a628a2093876c14120cd6725131b3e105fda6b29"
       },
       {
         "path": "cli/plugin-kit-ai/internal/authoringcli/command.go",
@@ -9146,7 +9146,7 @@
     "publicVisibility": "public",
     "localeStrategy": "canonical-en",
     "sourceKind": "authoring-docs-adapter",
-    "sourceRef": "https://github.com/777genius/universal-agent-plugins/tree/28a1748f97fe1945fc8edcd718ddd44c3f40b215/cli/plugin-kit-ai/internal/authoring/commands",
+    "sourceRef": "https://github.com/777genius/universal-agent-plugins/tree/ec9397a63f7c7550a680fcb0f5565902acbf7243/cli/plugin-kit-ai/internal/authoring/commands",
     "canonicalId": "prepared-authoring-v2:agentplugins author version",
     "kind": "command",
     "surface": "authoring-cli",

@@ -561,24 +561,43 @@ func runHTTP(ctx context.Context, server domain.MCPServer, tool string, argument
 }
 
 func initializeCapabilities(result json.RawMessage) (bool, bool) {
-	var initialized struct {
-		ProtocolVersion string                     `json:"protocolVersion"`
-		Capabilities    map[string]json.RawMessage `json:"capabilities"`
-		ServerInfo      struct {
-			Name    string `json:"name"`
-			Version string `json:"version"`
-		} `json:"serverInfo"`
-	}
-	if json.Unmarshal(result, &initialized) != nil || initialized.ProtocolVersion != protocolVersion || initialized.Capabilities == nil || initialized.ServerInfo.Name == "" || initialized.ServerInfo.Version == "" {
+	if conformance.RejectDuplicateJSONKeys(result) != nil {
 		return false, false
 	}
-	tools, advertised := initialized.Capabilities["tools"]
+	var initialized map[string]json.RawMessage
+	if json.Unmarshal(result, &initialized) != nil || initialized == nil {
+		return false, false
+	}
+	var negotiated string
+	if json.Unmarshal(initialized["protocolVersion"], &negotiated) != nil || negotiated != protocolVersion {
+		return false, false
+	}
+	var capabilities map[string]json.RawMessage
+	if json.Unmarshal(initialized["capabilities"], &capabilities) != nil || capabilities == nil {
+		return false, false
+	}
+	var serverInfo map[string]json.RawMessage
+	if json.Unmarshal(initialized["serverInfo"], &serverInfo) != nil || serverInfo == nil {
+		return false, false
+	}
+	var serverName, serverVersion string
+	if json.Unmarshal(serverInfo["name"], &serverName) != nil || serverName == "" ||
+		json.Unmarshal(serverInfo["version"], &serverVersion) != nil || serverVersion == "" {
+		return false, false
+	}
+	tools, advertised := capabilities["tools"]
 	if !advertised {
 		return false, true
 	}
 	var capability map[string]json.RawMessage
-	if len(tools) == 0 || bytes.Equal(bytes.TrimSpace(tools), []byte("null")) || json.Unmarshal(tools, &capability) != nil || capability == nil {
+	if json.Unmarshal(tools, &capability) != nil || capability == nil {
 		return false, false
+	}
+	if listChanged, present := capability["listChanged"]; present {
+		var value bool
+		if bytes.Equal(bytes.TrimSpace(listChanged), []byte("null")) || json.Unmarshal(listChanged, &value) != nil {
+			return false, false
+		}
 	}
 	return true, true
 }
@@ -593,20 +612,45 @@ type listedTool struct {
 }
 
 func decodeToolList(result json.RawMessage) ([]listedTool, error) {
-	var envelope struct {
-		Tools json.RawMessage `json:"tools"`
-	}
-	if json.Unmarshal(result, &envelope) != nil || len(envelope.Tools) == 0 || bytes.Equal(bytes.TrimSpace(envelope.Tools), []byte("null")) {
+	if conformance.RejectDuplicateJSONKeys(result) != nil {
 		return nil, fail("runtime_protocol_invalid")
 	}
-	var tools []listedTool
-	if json.Unmarshal(envelope.Tools, &tools) != nil || tools == nil {
+	var envelope map[string]json.RawMessage
+	if json.Unmarshal(result, &envelope) != nil || envelope == nil {
 		return nil, fail("runtime_protocol_invalid")
 	}
-	for _, tool := range tools {
-		if tool.Name == "" {
+	if cursor, present := envelope["nextCursor"]; present {
+		var value string
+		if bytes.Equal(bytes.TrimSpace(cursor), []byte("null")) || json.Unmarshal(cursor, &value) != nil {
 			return nil, fail("runtime_protocol_invalid")
 		}
+		if value != "" {
+			return nil, fail("runtime_tools_pagination_unsupported")
+		}
+	}
+	var rawTools []map[string]json.RawMessage
+	if json.Unmarshal(envelope["tools"], &rawTools) != nil || rawTools == nil {
+		return nil, fail("runtime_protocol_invalid")
+	}
+	tools := make([]listedTool, 0, len(rawTools))
+	seen := make(map[string]struct{}, len(rawTools))
+	for _, raw := range rawTools {
+		if raw == nil {
+			return nil, fail("runtime_protocol_invalid")
+		}
+		var name string
+		if json.Unmarshal(raw["name"], &name) != nil || name == "" {
+			return nil, fail("runtime_protocol_invalid")
+		}
+		if _, duplicate := seen[name]; duplicate {
+			return nil, fail("runtime_protocol_invalid")
+		}
+		seen[name] = struct{}{}
+		var schema map[string]json.RawMessage
+		if json.Unmarshal(raw["inputSchema"], &schema) != nil || schema == nil {
+			return nil, fail("runtime_protocol_invalid")
+		}
+		tools = append(tools, listedTool{Name: name})
 	}
 	return tools, nil
 }
