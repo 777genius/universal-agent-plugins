@@ -450,7 +450,7 @@ function expectedCachePath(j, roots, scenario, product) {
     version: j.identity.versions[product], asset: { binary: native } };
   return require('../lib/public-authoring').cachePath(
     p.join(scopePaths(j, scenario, roots).home, '.cache', 'universal-agent-plugins'),
-    product, cell(j.cell).target, release);
+    product, cell(j.cell).target, release, p);
 }
 function verifyObservedRow(row, scenario, j, roots, commands) {
   fields(row, ['id', 'command', 'argv', 'cwd', 'env', 'executable', 'runtime', 'stdout', 'stderr', 'status', 'signal',
@@ -1013,7 +1013,7 @@ function actualState(j, roots, scenario) {
     }) };
     const release = { descriptor: { schema: contract.DESCRIPTOR_SCHEMA, identity: j.identity, candidate_sha256: j.candidate_sha256 },
       version: j.identity.versions[product], asset: j.subjects[product][cell(j.cell).target] };
-    const file = require('../lib/public-authoring').cachePath(p.join(scope.home, '.cache', 'universal-agent-plugins'), product, cell(j.cell).target, release);
+    const file = require('../lib/public-authoring').cachePath(p.join(scope.home, '.cache', 'universal-agent-plugins'), product, cell(j.cell).target, release, p);
     cache[product] = fs.existsSync(file) ? { path: file, sha256: c.digest(c.readFile(file, contract.MAX_NATIVE_BYTES)), size: fs.statSync(file).size, mode: fs.statSync(file).mode & 0o777 } : null;
   }
   return { projects: c.digest(c.encode(Object.fromEntries(cell(j.cell).products.map(p => [p, bridge.snapshot(j.projects[p])])))), prefix, cache, client: snap(roots.client), state: snap(roots.state),

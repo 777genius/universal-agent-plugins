@@ -212,8 +212,8 @@ function cacheIdentity(product, target, release) {
   }));
 }
 
-function cachePath(root, product, target, release) {
-  return path.join(root, releaseNamespace(release), cacheIdentity(product, target, release), release.asset.binary.file);
+function cachePath(root, product, target, release, pathApi = path) {
+  return pathApi.join(root, releaseNamespace(release), cacheIdentity(product, target, release), release.asset.binary.file);
 }
 
 // Create only missing directories; never chmod an existing historical cache.

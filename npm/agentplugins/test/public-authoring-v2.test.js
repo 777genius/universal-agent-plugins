@@ -286,7 +286,8 @@ if (require.main === module) {
     }
     assert.equal(paths.size, 12);
     const windows = runtime.cachePath("", "plugin-kit-ai", "windows-amd64",
-      runtime.loadRelease("plugin-kit-ai", memory(t, f.pair["plugin-kit-ai"]).root, "windows-amd64"));
+      runtime.loadRelease("plugin-kit-ai", memory(t, f.pair["plugin-kit-ai"]).root, "windows-amd64"), path.win32);
+    assert.ok(windows.startsWith("p2\\"));
     assert.ok(windows.length <= 90, `Windows cache suffix is too long: ${windows.length}`);
     let expected;
     for (const supplied of [false, true]) for (const warm of [false, true]) {
