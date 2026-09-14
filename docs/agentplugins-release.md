@@ -196,10 +196,10 @@ untested platforms remain outside those claims.
 ### Fixed paired npm consumer (before release tags)
 
 The isolated `producer_mode=paired-publish` route consumes only
-`agentplugins-v0.1.62` and `plugin-kit-ai-v2.0.2`. Merge the consumer first, then
+`agentplugins-v0.1.63` and `plugin-kit-ai-v2.0.3`. Merge the consumer first, then
 select the **final merged source SHA** for both tags and all retained release
-qualification. Dispatch this workflow at `refs/tags/agentplugins-v0.1.62` with
-`tag=agentplugins-v0.1.62`, `plugin_kit_version=2.0.2`, and that `source_sha`.
+qualification. Dispatch this workflow at `refs/tags/agentplugins-v0.1.63` with
+`tag=agentplugins-v0.1.63`, `plugin_kit_version=2.0.3`, and that `source_sha`.
 `SOURCE_SHA`, `GITHUB_SHA`, and `GITHUB_WORKFLOW_SHA` must be identical. There is
 no separate consumer revision or control tag. Leave `native_inputs` and
 `input_artifact` empty; those inputs belong to the unchanged paired-stage route.
@@ -213,7 +213,7 @@ expired retained evidence stops admission. Shared evidence is pinned to the same
 bytes in both releases and the retained preparation. No release creation,
 promotion, editing, tag creation, or tag movement occurs in this consumer.
 
-The job constructs `universal-agent-plugins@0.1.62` and `plugin-kit-ai@2.0.2`
+The job constructs `universal-agent-plugins@0.1.63` and `plugin-kit-ai@2.0.3`
 through the existing qualified public-authoring stager. Both packs retain
 `private: false`, omit `gitHead`, and include `public-release.json` plus the shared
 public-authoring modules; signed provenance and the descriptor bind the source.
@@ -257,11 +257,11 @@ qualification. Public availability labels and historical guidance change only
 with separate verified release evidence. This work adds no phases 7-11 or YAML
 capability changes.
 
-The prior 0.1.61/2.0.1 pair remains historical evidence, not a release alias for
-this remediation. Registry versions are numeric; GitHub tags are product-prefixed,
+The prior 0.1.61/2.0.1 and 0.1.62/2.0.2 pairs remain historical evidence, not
+release aliases for this remediation. Registry versions are numeric; GitHub tags are product-prefixed,
 with no bare-v alias for v2. The legacy copy-only `npm-publish.yml` refuses major
-2 and later. The Python wrapper accepts numeric 2.0.2 or
-`plugin-kit-ai-v2.0.2`, extracts numeric asset versions, and preserves historical
+2 and later. The Python wrapper accepts numeric 2.0.3 or
+`plugin-kit-ai-v2.0.3`, extracts numeric asset versions, and preserves historical
 v1 numeric/bare-v tags. Wrong-product and malformed tags fail before acquisition.
 
 The two registry writes are not atomic: one product can publish while its peer

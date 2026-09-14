@@ -123,7 +123,8 @@ else process.stdout.write(typeof r.body==='string'?r.body:JSON.stringify(r.body)
   const spawn = cp.spawnSync;
   t.mock.method(cp, "spawnSync", function(executable, args, options) {
     if (executable === "/usr/bin/python3") return spawn(executable, args, options);
-    assert.equal(executable, "/usr/bin/gh"); assert.equal(options.shell, false); assert.equal(options.timeout, 30000);
+    assert.equal(executable, "/usr/bin/gh"); assert.equal(options.shell, false);
+    assert.equal(options.timeout, args.at(-1).endsWith("/zip") ? 300000 : 30000);
     assert.equal(options.killSignal, "SIGKILL"); assert.equal(options.env.PATH, "/usr/local/bin:/usr/bin:/bin");
     assert.ok(options.env.HOME === f.scratch || options.env.HOME.startsWith(f.scratch + path.sep)); assert.equal(options.env.GH_CONFIG_DIR, options.env.HOME);
     assert.equal(options.env.GH_TOKEN, undefined); assert.equal(options.env.NODE_OPTIONS, undefined);
@@ -253,7 +254,7 @@ test("subject mutation rejects before invoking verifier", t => {
   fs.writeFileSync(f.recordFile, "corruption"); assert.throws(() => p.verifySubject(f.recordFile, e, f.scratch), /changed before/); assert.deepEqual(calls(), []);
 });
 
-test("exact provider run attempt and artifact ZIP acquired without extraction", t => {
+test("artifact byte acquisition has a longer bounded timeout while metadata keeps the normal timeout", t => {
   const f = fixture(), calls = provider(t, f, artifactRoutes());
   const file = p.acquireArtifact(pin, p.WORKFLOW, ID.commit, f.scratch);
   assert.equal(fs.readFileSync(file, "utf8"), "zip fixture"); assert.equal(calls().length, 6);

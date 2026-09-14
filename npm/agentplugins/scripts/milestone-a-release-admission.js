@@ -16,8 +16,8 @@ const WORKFLOW = ".github/workflows/authoring-milestone-a-e2e.yml";
 const RELEASE_WORKFLOW = ".github/workflows/agentplugins-release.yml";
 const RECORD_SCHEMA = "milestone-a-promotion/v1";
 const RECORD_FILE = "milestone-a-promotion.json";
-const TAG = "agentplugins-v0.1.62";
-const KIT_TAG = "plugin-kit-ai-v2.0.2";
+const TAG = "agentplugins-v0.1.63";
+const KIT_TAG = "plugin-kit-ai-v2.0.3";
 const GH = "/usr/bin/gh";
 const GH_VERSION = promotion.GH_VERSION;
 const JOBS = Object.freeze([
@@ -60,14 +60,14 @@ function recordShape(value) {
   const identity = c.identity(value.identity);
   sha(identity.commit);
   exact(identity, { repository: REPOSITORY, commit: identity.commit, engine_revision: identity.commit,
-    versions: { agentplugins: "0.1.62", "plugin-kit-ai": "2.0.2" } }, "Milestone A record identity");
+    versions: { agentplugins: "0.1.63", "plugin-kit-ai": "2.0.3" } }, "Milestone A record identity");
   c.keys(value.products, c.PRODUCTS, "Milestone A products");
   const products = {};
   const binaries = new Set();
   for (const product of c.PRODUCTS) {
     const source = value.products[product];
     c.keys(source, ["tag", "manifest_sha256", "checksums_sha256", "assets"], "Milestone A product");
-    exact(source.tag, product === "agentplugins" ? "agentplugins-v0.1.62" : "plugin-kit-ai-v2.0.2", "Milestone A product tag");
+    exact(source.tag, product === "agentplugins" ? "agentplugins-v0.1.63" : "plugin-kit-ai-v2.0.3", "Milestone A product tag");
     c.keys(source.assets, c.TARGETS, "Milestone A product assets");
     const assets = {};
     for (const target of c.TARGETS) {
@@ -149,7 +149,7 @@ function receiptContract(prepare, runs, source) {
       exact(receipt?.provenances?.[product]?.revision, source, `${product} ${platform}-${arch} engine revision`);
   }
   return { source, engine_revision: source, test_versions: E2E_VERSIONS,
-    release_versions: { agentplugins: "0.1.62", "plugin-kit-ai": "2.0.2" } };
+    release_versions: { agentplugins: "0.1.63", "plugin-kit-ai": "2.0.3" } };
 }
 const RECEIPT_READER = String.raw`
 import json,os,re,stat,sys,zipfile
@@ -217,7 +217,7 @@ function inspectReceipts(pin, selected, cwd) {
 function evidenceContract(run, jobs, selected, pin) {
   sha(selected.source); positive(pin.run_id); positive(pin.run_attempt, 1000);
   exact(selected, { tag: TAG, ref: `refs/tags/${TAG}`, source: selected.source,
-    versions: { agentplugins: "0.1.62", "plugin-kit-ai": "2.0.2" } }, "fixed paired release selection");
+    versions: { agentplugins: "0.1.63", "plugin-kit-ai": "2.0.3" } }, "fixed paired release selection");
   exact([run.id, run.run_attempt, run.repository?.full_name, run.head_repository?.full_name, run.head_sha,
     run.path, run.event, run.head_branch, run.status, run.conclusion],
   [pin.run_id, pin.run_attempt, REPOSITORY, REPOSITORY, selected.source, WORKFLOW,

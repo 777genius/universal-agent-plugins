@@ -20,6 +20,10 @@ const SCOPE = "six-platform-pair";
 const SCHEMA = "authoring-promotion/v1";
 const SLSA = "https://slsa.dev/provenance/v1";
 const LIMIT = 1024 * 1024;
+const GH_TIMEOUT_MS = 30_000;
+// The admitted ZIP may be as large as the 2 GiB maxBuffer below. Keep this
+// byte transfer finite without applying its budget to small provider reads.
+const ARTIFACT_DOWNLOAD_TIMEOUT_MS = 300_000;
 const LANES = Object.freeze([...c.PRODUCTS.flatMap(p => c.TARGETS.map(t => `${p}/${t}`)), "public-packed-pair"]);
 const NATIVE_SCHEMA = "authoring-frozen-native/v1";
 const NATIVE_WORKFLOW = ".github/workflows/authoring-frozen-native.yml";
@@ -162,13 +166,13 @@ function admitRecord(body, selected) {
 
 // No executable/issuer configuration input. Offline tests replace spawnSync in
 // their own process, never through production flags or inherited environment.
-function gh(args, cwd, maximum = 4 * LIMIT, encoding = "utf8") {
+function gh(args, cwd, maximum = 4 * LIMIT, encoding = "utf8", timeout = GH_TIMEOUT_MS) {
   c.safeDirectory(cwd);
   const env = { PATH: "/usr/local/bin:/usr/bin:/bin", HOME: cwd, GH_CONFIG_DIR: cwd,
     GH_HOST: "github.com", GH_PROMPT_DISABLED: "1", GH_PAGER: "cat", GH_NO_UPDATE_NOTIFIER: "1" };
   // Only the supported workflow token context is forwarded; no auth-store reads.
   if (process.env.GITHUB_ACTIONS === "true" && process.env.GITHUB_REPOSITORY === REPOSITORY && process.env.GH_TOKEN) env.GH_TOKEN = process.env.GH_TOKEN;
-  const result = cp.spawnSync(GH, args, { cwd, env, encoding, timeout: 30000,
+  const result = cp.spawnSync(GH, args, { cwd, env, encoding, timeout,
     killSignal: "SIGKILL", maxBuffer: maximum, shell: false });
   if (result.error || result.signal || result.status !== 0) fail(`trusted gh failed (${result.error?.code || result.signal || result.status}); provider denial or uncertain state: stop, do not retry or reroute`);
   return result.stdout;
@@ -208,7 +212,8 @@ function acquireArtifact(pin, workflow, source, cwd) {
 function downloadArtifactBytes(pin, item, cwd, recheck) {
   const file = path.join(cwd, `artifact-${pin.artifact_id}.zip`);
   if (fs.existsSync(file)) fail("artifact destination already exists");
-  const zip = gh(["api", "--hostname", "github.com", `repos/${REPOSITORY}/actions/artifacts/${pin.artifact_id}/zip`], cwd, 2 * 1024 * LIMIT, null);
+  const zip = gh(["api", "--hostname", "github.com", `repos/${REPOSITORY}/actions/artifacts/${pin.artifact_id}/zip`],
+    cwd, 2 * 1024 * LIMIT, null, ARTIFACT_DOWNLOAD_TIMEOUT_MS);
   if (zip.length !== item.size_in_bytes || c.digest(zip) !== pin.artifact_sha256) fail("artifact ZIP digest/size mismatch");
   recheck();
   fs.writeFileSync(file, zip, { flag: "wx", mode: 0o400 });
