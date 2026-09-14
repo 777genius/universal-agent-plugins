@@ -4,11 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -50,9 +52,7 @@ func TestStdioHandshakeToolAndPrivateEnvironment(t *testing.T) {
 	if _, err := exec.LookPath("node"); err != nil {
 		t.Skip("Node is not installed")
 	}
-	if err := (processadapter.OS{}).DuplexCapability(); err != nil {
-		t.Skipf("host cannot prove bounded process-tree cleanup: %v", err)
-	}
+	containmentErr := (processadapter.OS{}).DuplexCapability()
 	source := `import readline from 'node:readline';
 const r=readline.createInterface({input:process.stdin});
 for await(const line of r){const q=JSON.parse(line);if(q.method==='notifications/initialized')continue;let result;
@@ -63,6 +63,16 @@ process.stdout.write(JSON.stringify({jsonrpc:'2.0',id:q.id,result})+'\n');}`
 	root, service, p := writeProject(t, map[string]any{"type": "stdio", "command": "node", "args": []any{"${PLUGIN_ROOT}/server.mjs"}}, map[string]string{"server.mjs": source, "fixture.json": `{"value":"not-reported"}`})
 	t.Setenv("GITHUB_TOKEN", "must-not-be-inherited")
 	ev, err := Run(context.Background(), Options{SourceRoot: root, Scratch: service.Scratch, Project: p, Server: "selected", Tool: "echo", Fixture: "fixture.json", Deadline: 5 * time.Second, Projects: service})
+	if containmentErr != nil {
+		if code(err) != "runtime_process_containment_unavailable" || !ev.Cleanup {
+			t.Fatalf("unavailable containment evidence=%+v err=%v capability=%v", ev, err, containmentErr)
+		}
+		entries, readErr := os.ReadDir(service.Scratch)
+		if readErr != nil || len(entries) != 0 {
+			t.Fatalf("private runtime root retained: %v %v", entries, readErr)
+		}
+		return
+	}
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -72,6 +82,35 @@ process.stdout.write(JSON.stringify({jsonrpc:'2.0',id:q.id,result})+'\n');}`
 	entries, err := os.ReadDir(service.Scratch)
 	if err != nil || len(entries) != 0 {
 		t.Fatalf("private runtime root retained: %v %v", entries, err)
+	}
+}
+
+func TestStreamableHTTPRejectsReservedHeaders(t *testing.T) {
+	for _, name := range []string{"Accept", "content-type", "MCP-SESSION-ID"} {
+		root, service, p := writeProject(t, map[string]any{"type": "streamable-http", "url": "https://example.invalid/mcp", "headers": map[string]any{name: "authored"}}, nil)
+		_, err := Run(context.Background(), Options{SourceRoot: root, Scratch: service.Scratch, Project: p, Server: "selected", AllowNetwork: true, Deadline: time.Second, Projects: service})
+		if code(err) != "runtime_http_config_invalid" {
+			t.Fatalf("reserved header %q: %v", name, err)
+		}
+	}
+}
+
+func TestReadHTTPPayloadSelectsMatchingMultilineSSEEvent(t *testing.T) {
+	body := "event: message\ndata: {\"jsonrpc\":\"2.0\",\"method\":\"notifications/progress\"}\n\n" +
+		"event: message\ndata: {\"jsonrpc\":\"2.0\",\ndata: \"id\":2,\"result\":{}}\n\n"
+	resp := &http.Response{Header: http.Header{"Content-Type": []string{"text/event-stream"}}, Body: io.NopCloser(strings.NewReader(body))}
+	payload, err := readHTTPPayload(resp, 2)
+	if err != nil || string(payload) != "{\"jsonrpc\":\"2.0\",\n\"id\":2,\"result\":{}}" {
+		t.Fatalf("payload=%q err=%v", payload, err)
+	}
+}
+
+func TestInitializeRequiresNegotiatedProtocolVersion(t *testing.T) {
+	for _, version := range []string{"", "2024-11-05", "future"} {
+		body := json.RawMessage(fmt.Sprintf(`{"protocolVersion":%q,"capabilities":{},"serverInfo":{"name":"x","version":"1"}}`, version))
+		if validInitialize(body) {
+			t.Fatalf("accepted protocol version %q", version)
+		}
 	}
 }
 

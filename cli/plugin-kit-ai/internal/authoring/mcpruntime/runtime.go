@@ -27,8 +27,9 @@ import (
 )
 
 const (
-	maxFrame   = 1 << 20
-	maxFixture = 1 << 20
+	maxFrame        = 1 << 20
+	maxFixture      = 1 << 20
+	protocolVersion = "2025-06-18"
 )
 
 type Options struct {
@@ -304,7 +305,7 @@ func runStdio(ctx context.Context, root, data string, server domain.MCPServer, t
 	commandLine := append([]string{node}, args...)
 	err = (processadapter.OS{}).RunDuplexWithPlannedShutdown(ctx, ports.Command{Argv: commandLine, Env: env, Dir: cwd}, func(stdin io.Writer, stdout io.Reader) error {
 		client := &stdioClient{in: bufio.NewReaderSize(stdout, 64<<10), out: stdin}
-		initialized, err := client.call(1, "initialize", map[string]any{"protocolVersion": "2025-06-18", "capabilities": map[string]any{}, "clientInfo": map[string]any{"name": "agentplugins-author", "version": "1"}})
+		initialized, err := client.call(1, "initialize", map[string]any{"protocolVersion": protocolVersion, "capabilities": map[string]any{}, "clientInfo": map[string]any{"name": "agentplugins-author", "version": "1"}})
 		if err != nil || !validInitialize(initialized) {
 			if err == nil {
 				err = fail("runtime_protocol_invalid")
@@ -425,6 +426,12 @@ func runHTTP(ctx context.Context, server domain.MCPServer, tool string, argument
 	if err != nil {
 		return fail("runtime_http_config_invalid")
 	}
+	for name := range headers {
+		switch http.CanonicalHeaderKey(name) {
+		case "Accept", "Content-Type", "Mcp-Session-Id":
+			return fail("runtime_http_config_invalid")
+		}
+	}
 	client := &http.Client{Transport: &http.Transport{Proxy: nil}, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 	defer client.CloseIdleConnections()
 	session := ""
@@ -459,7 +466,7 @@ func runHTTP(ctx context.Context, server domain.MCPServer, tool string, argument
 		if notification && resp.StatusCode == http.StatusAccepted {
 			return nil, nil
 		}
-		payload, err := readHTTPPayload(resp)
+		payload, err := readHTTPPayload(resp, id)
 		if err != nil {
 			return nil, err
 		}
@@ -470,7 +477,7 @@ func runHTTP(ctx context.Context, server domain.MCPServer, tool string, argument
 		}
 		return r.Result, nil
 	}
-	initialized, err := call(1, "initialize", map[string]any{"protocolVersion": "2025-06-18", "capabilities": map[string]any{}, "clientInfo": map[string]any{"name": "agentplugins-author", "version": "1"}}, false)
+	initialized, err := call(1, "initialize", map[string]any{"protocolVersion": protocolVersion, "capabilities": map[string]any{}, "clientInfo": map[string]any{"name": "agentplugins-author", "version": "1"}}, false)
 	if err != nil || !validInitialize(initialized) {
 		if err == nil {
 			err = fail("runtime_protocol_invalid")
@@ -524,7 +531,7 @@ func validInitialize(result json.RawMessage) bool {
 			Version string `json:"version"`
 		} `json:"serverInfo"`
 	}
-	return json.Unmarshal(result, &initialized) == nil && initialized.ProtocolVersion != "" && initialized.Capabilities != nil && initialized.ServerInfo.Name != "" && initialized.ServerInfo.Version != ""
+	return json.Unmarshal(result, &initialized) == nil && initialized.ProtocolVersion == protocolVersion && initialized.Capabilities != nil && initialized.ServerInfo.Name != "" && initialized.ServerInfo.Version != ""
 }
 
 func hasTool(tools []struct {
@@ -538,17 +545,45 @@ func hasTool(tools []struct {
 	return false
 }
 
-func readHTTPPayload(resp *http.Response) ([]byte, error) {
+func readHTTPPayload(resp *http.Response, id int) ([]byte, error) {
 	body, err := io.ReadAll(io.LimitReader(resp.Body, maxFrame+1))
 	if err != nil || len(body) > maxFrame {
 		return nil, fail("runtime_protocol_io_failed")
 	}
 	contentType := strings.ToLower(resp.Header.Get("Content-Type"))
 	if strings.Contains(contentType, "text/event-stream") {
-		for _, line := range strings.Split(string(body), "\n") {
-			if strings.HasPrefix(line, "data:") {
-				return []byte(strings.TrimSpace(strings.TrimPrefix(line, "data:"))), nil
+		var data []string
+		flush := func() []byte {
+			if len(data) == 0 {
+				return nil
 			}
+			payload := []byte(strings.Join(data, "\n"))
+			data = nil
+			var candidate response
+			var responseID int
+			if json.Unmarshal(payload, &candidate) == nil && candidate.JSONRPC == "2.0" && json.Unmarshal(candidate.ID, &responseID) == nil && responseID == id {
+				return payload
+			}
+			return nil
+		}
+		for _, raw := range strings.Split(strings.ReplaceAll(string(body), "\r\n", "\n"), "\n") {
+			line := strings.TrimSuffix(raw, "\r")
+			if line == "" {
+				if payload := flush(); payload != nil {
+					return payload, nil
+				}
+				continue
+			}
+			if strings.HasPrefix(line, "data:") {
+				value := strings.TrimPrefix(line, "data:")
+				if strings.HasPrefix(value, " ") {
+					value = value[1:]
+				}
+				data = append(data, value)
+			}
+		}
+		if payload := flush(); payload != nil {
+			return payload, nil
 		}
 		return nil, fail("runtime_protocol_invalid")
 	}
