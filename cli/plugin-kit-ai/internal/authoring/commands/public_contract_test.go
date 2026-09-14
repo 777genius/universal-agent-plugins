@@ -115,6 +115,9 @@ func TestMCPRuntimePublicArgumentBoundary(t *testing.T) {
 	}{
 		{[]string{"test", "--runtime=mcp", "--server", "selected", "--tool", "echo", "--format=json"}, "author.test", "runtime_arguments_invalid"},
 		{[]string{"test", "--server", "selected", "--format=json"}, "author.test", "runtime_arguments_invalid"},
+		{[]string{"test", "--server=", "--format=json"}, "author.test", "runtime_arguments_invalid"},
+		{[]string{"test", "--allow-network=false", "--format=json"}, "author.test", "runtime_arguments_invalid"},
+		{[]string{"test", "--deadline=5s", "--format=json"}, "author.test", "runtime_arguments_invalid"},
 		{[]string{"dev", "--server", "selected", "--format=json"}, "author.dev", "runtime_arguments_invalid"},
 	} {
 		e, exit, _ := publicRun(t, a, tc.args, true)

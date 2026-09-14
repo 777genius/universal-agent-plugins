@@ -107,7 +107,7 @@ func (a App) Execute(ctx context.Context, args []string, streams authoringcli.St
 	})
 	err := factory.Execute(ctx, args, authoringcli.Streams{In: streams.In, Out: &human, Err: io.Discard})
 	if captured == nil {
-		r := report.New(selectedCommand(args), a.Revision)
+		r := report.New(selectedCommand(args, a.commandNames()), a.Revision)
 		if err != nil {
 			code, action := failure(err, "arguments")
 			r.AddError(code, action)
@@ -298,7 +298,9 @@ func (a App) command(name string, capture func(report.Report)) (*cobra.Command, 
 					invalid = invalid || len(req.server) > 128 || len(req.tool) > 128 || len(req.fixture) > 4096
 					invalid = invalid || name == "test" && req.runtime != "" && req.runtime != "mcp"
 					invalid = invalid || name == "test" && c.Flags().Changed("runtime") && req.runtime == ""
-					invalid = invalid || name == "test" && req.runtime == "" && (req.server != "" || req.tool != "" || req.fixture != "" || req.allowNetwork)
+					runtimeFlagsChanged := c.Flags().Changed("server") || c.Flags().Changed("tool") ||
+						c.Flags().Changed("fixture") || c.Flags().Changed("allow-network") || c.Flags().Changed("deadline")
+					invalid = invalid || name == "test" && req.runtime == "" && runtimeFlagsChanged
 					invalid = invalid || req.runtime == "mcp" && req.server == "" || name == "dev" && opts.Format == "json" && !req.once
 					if invalid {
 						return request{}, &inputError{"runtime_arguments_invalid", "Use test --runtime=mcp --server <name>, or dev --server <name>. --tool and --fixture are required together; deadlines are positive and at most 1m. Continuous dev requires human output; use --once with JSON."}
@@ -511,6 +513,15 @@ func (a App) dev(ctx context.Context, req request) (report.Report, error) {
 				r.AddError(code, action)
 				return r, readErr
 			}
+			if next.Input.Identity.TreeDigest == "" {
+				if cycle != nil {
+					cycle()
+					<-done
+				}
+				r = report.Build("dev", a.Revision, next, req.release)
+				r.AddError("runtime_source_identity_unavailable", "Make the exact package tree readable and quiescent, then retry.")
+				return r, errors.New("runtime source identity unavailable")
+			}
 			if next.Input.Identity.TreeDigest == last {
 				continue
 			}
@@ -576,10 +587,17 @@ func wantsJSON(args []string) bool {
 	}
 	return false
 }
-func selectedCommand(args []string) string {
+func selectedCommand(args, supported []string) string {
+	allowed := make(map[string]struct{}, len(supported))
+	for _, name := range supported {
+		allowed[name] = struct{}{}
+	}
 	for _, a := range args {
 		for _, n := range []string{"init", "validate", "inspect", "test", "compat", "capabilities", "doctor", "skills", "dev"} {
 			if a == n {
+				if _, ok := allowed[n]; !ok {
+					return "author"
+				}
 				return n
 			}
 		}

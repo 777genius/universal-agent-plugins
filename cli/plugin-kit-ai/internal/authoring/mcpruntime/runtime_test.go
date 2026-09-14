@@ -86,11 +86,21 @@ process.stdout.write(JSON.stringify({jsonrpc:'2.0',id:q.id,result})+'\n');}`
 }
 
 func TestStreamableHTTPRejectsReservedHeaders(t *testing.T) {
-	for _, name := range []string{"Accept", "content-type", "MCP-SESSION-ID"} {
+	for _, name := range []string{"Accept", "content-type", "MCP-SESSION-ID", "mcp-protocol-version"} {
 		root, service, p := writeProject(t, map[string]any{"type": "streamable-http", "url": "https://example.invalid/mcp", "headers": map[string]any{name: "authored"}}, nil)
 		_, err := Run(context.Background(), Options{SourceRoot: root, Scratch: service.Scratch, Project: p, Server: "selected", AllowNetwork: true, Deadline: time.Second, Projects: service})
 		if code(err) != "runtime_http_config_invalid" {
 			t.Fatalf("reserved header %q: %v", name, err)
+		}
+	}
+}
+
+func TestStreamableHTTPRejectsNonLoopbackCleartext(t *testing.T) {
+	for _, rawURL := range []string{"http://example.com/mcp", "ftp://example.com/mcp", "https://example.com/mcp#fragment"} {
+		root, service, p := writeProject(t, map[string]any{"type": "streamable-http", "url": rawURL}, nil)
+		_, err := Run(context.Background(), Options{SourceRoot: root, Scratch: service.Scratch, Project: p, Server: "selected", AllowNetwork: true, Deadline: time.Second, Projects: service})
+		if code(err) != "runtime_http_config_invalid" {
+			t.Fatalf("URL %q: %v", rawURL, err)
 		}
 	}
 }
@@ -124,6 +134,13 @@ func TestStreamableHTTPRequiresOptInAndRunsBoundedStages(t *testing.T) {
 		if err := json.NewDecoder(r.Body).Decode(&q); err != nil {
 			t.Error(err)
 			return
+		}
+		if q.Method == "initialize" {
+			if value := r.Header.Get("Mcp-Protocol-Version"); value != "" {
+				t.Errorf("initialize unexpectedly carried protocol header %q", value)
+			}
+		} else if value := r.Header.Get("Mcp-Protocol-Version"); value != protocolVersion {
+			t.Errorf("%s protocol header=%q", q.Method, value)
 		}
 		if q.ID == 0 {
 			w.WriteHeader(http.StatusAccepted)

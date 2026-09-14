@@ -10,6 +10,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"os"
 	"os/exec"
@@ -419,8 +420,19 @@ func readLine(reader *bufio.Reader) ([]byte, error) {
 func runHTTP(ctx context.Context, server domain.MCPServer, tool string, arguments map[string]any, ev *Evidence) error {
 	raw, _ := server.Decoded["url"].(string)
 	u, err := url.Parse(raw)
-	if err != nil || u.User != nil || u.Hostname() == "" {
+	if err != nil || u == nil {
 		return fail("runtime_http_config_invalid")
+	}
+	scheme := strings.ToLower(u.Scheme)
+	if u.Opaque != "" || u.User != nil || u.Hostname() == "" || strings.Contains(raw, "#") ||
+		(scheme != "http" && scheme != "https") {
+		return fail("runtime_http_config_invalid")
+	}
+	if scheme == "http" && !strings.EqualFold(u.Hostname(), "localhost") {
+		address, parseErr := netip.ParseAddr(u.Hostname())
+		if parseErr != nil || address.Zone() != "" || !address.IsLoopback() {
+			return fail("runtime_http_config_invalid")
+		}
 	}
 	headers, err := stringMap(server.Decoded["headers"])
 	if err != nil {
@@ -428,13 +440,14 @@ func runHTTP(ctx context.Context, server domain.MCPServer, tool string, argument
 	}
 	for name := range headers {
 		switch http.CanonicalHeaderKey(name) {
-		case "Accept", "Content-Type", "Mcp-Session-Id":
+		case "Accept", "Content-Type", "Mcp-Session-Id", "Mcp-Protocol-Version":
 			return fail("runtime_http_config_invalid")
 		}
 	}
 	client := &http.Client{Transport: &http.Transport{Proxy: nil}, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 	defer client.CloseIdleConnections()
 	session := ""
+	negotiated := false
 	call := func(id int, method string, params any, notification bool) (json.RawMessage, error) {
 		body, _ := json.Marshal(map[string]any{"jsonrpc": "2.0", "id": id, "method": method, "params": params})
 		if notification {
@@ -448,6 +461,9 @@ func runHTTP(ctx context.Context, server domain.MCPServer, tool string, argument
 		req.Header.Set("Accept", "application/json, text/event-stream")
 		if session != "" {
 			req.Header.Set("Mcp-Session-Id", session)
+		}
+		if negotiated {
+			req.Header.Set("Mcp-Protocol-Version", protocolVersion)
 		}
 		for k, v := range headers {
 			req.Header.Set(k, v)
@@ -485,6 +501,7 @@ func runHTTP(ctx context.Context, server domain.MCPServer, tool string, argument
 		return err
 	}
 	ev.Initialize = true
+	negotiated = true
 	if _, err := call(0, "notifications/initialized", map[string]any{}, true); err != nil {
 		return err
 	}
