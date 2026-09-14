@@ -140,9 +140,9 @@ async function runSmoke(browser, base) {
   if ((await generatedEditLink.count()) > 0) {
     errors.push("Generated CLI page should not show a hand-authored edit link.");
   }
-  const sourceLink = page.getByRole("link", { name: "Source", exact: true });
+  const sourceLink = page.getByRole("link", { name: "Exact source", exact: true });
   if ((await sourceLink.count()) < 1) {
-    errors.push("Generated CLI page is missing the Source link.");
+    errors.push("Generated CLI page is missing the Exact source link.");
   }
 
   await page.goto(`${base}/?gateway=1`, { waitUntil: "networkidle" });
