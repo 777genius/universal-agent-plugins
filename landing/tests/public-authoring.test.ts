@@ -93,8 +93,17 @@ test('all quickstarts separate installation, released authoring and historical c
     const history = text.indexOf('{#historical-v1}');
     assert.ok(history > text.indexOf('{#build-plugins}'));
     const front = text.slice(0, history);
-    assert.deepEqual([...front.matchAll(/```bash\n([\s\S]*?)```/g)].map(m => m[1].trim()),
-      ['npx universal-agent-plugins add context7']);
+    const expectedCommands = ['npx universal-agent-plugins add context7'];
+    if (locale === 'en') {
+      expectedCommands.push(`npm install --global universal-agent-plugins@0.1.65
+agentplugins author init ./my-plugin --template skill --name my-plugin \\
+  --description 'Instructions for a repeatable agent task'
+agentplugins author validate ./my-plugin
+agentplugins author inspect ./my-plugin
+agentplugins author test ./my-plugin`);
+    }
+    assert.deepEqual(
+      [...front.matchAll(/```bash\n([\s\S]*?)```/g)].map(m => m[1].trim()), expectedCommands);
     assert.ok(!front.includes('plugin-kit-ai init'));
     assert.ok(!publishedText.includes('npx plugin-kit-ai@latest add notion'));
     for (const command of ['plugin-kit-ai init my-plugin', 'plugin-kit-ai generate',
@@ -102,7 +111,11 @@ test('all quickstarts separate installation, released authoring and historical c
       assert.ok(text.slice(history).includes(command), `${locale}:${command}`);
     }
     for (const match of text.matchAll(/\]\(\/(en|ru|es|fr|zh)\/([^#)]+)(?:#[^)]*)?\)/g)) {
-      assert.ok(existsSync(fileURLToPath(new URL(`website/source/${match[1]}/${match[2]}.md`, root))), match[0]);
+      const target = `website/source/${match[1]}/${match[2]}`.replace(/\/$/, '');
+      assert.ok(
+        existsSync(fileURLToPath(new URL(`${target}.md`, root))) ||
+          existsSync(fileURLToPath(new URL(`${target}/index.md`, root))),
+        match[0]);
     }
   }
 });

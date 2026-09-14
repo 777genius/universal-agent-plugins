@@ -47,8 +47,9 @@ Build a portable Agent Plugins 1.0 package around plugin.json, with optional ski
 
 Milestone A static authoring is available through `agentplugins author` in `universal-agent-plugins@0.1.65`; GitHub release: `agentplugins-v0.1.65`. npm, Homebrew, GitHub Releases and public-channel E2E are verified. Static authoring only; phases 7–11, runtime/dev/bootstrap, migration, export and publication remain deferred. Legacy plugin.yaml capabilities remain preserved; maintain v1 projects with plugin-kit-ai@1.2.4.
 
-The PyPI compatibility channel remains `plugin-kit-ai@2.0.5`; it exposes the
-same Milestone A engine under the standalone `plugin-kit-ai` executable. The
+The PyPI compatibility channel remains `plugin-kit-ai@2.0.5`; its GitHub release is
+`plugin-kit-ai-v2.0.5`. It exposes the same Milestone A engine under the standalone
+`plugin-kit-ai` executable. The
 recommended documentation path below uses `agentplugins author`.
 
 ```bash
