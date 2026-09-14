@@ -24,10 +24,13 @@ function productContract(product = "agentplugins") {
 const WORKFLOW = ".github/workflows/agentplugins-npm-publish.yml";
 const REGISTRY = "https://registry.npmjs.org";
 const LIMIT = 128 * 1024 * 1024;
+// npm trusted publishing can accept a package, sign provenance, and keep the
+// client open while the registry finishes asynchronous processing.
+const PUBLISH_TIMEOUT = 10 * 60 * 1000;
 const hash = (bytes, algorithm, encoding = "hex") => crypto.createHash(algorithm).update(bytes).digest(encoding);
 const write = (file, body) => fs.writeFileSync(file, body, { flag: "wx", mode: 0o600 });
-function run(exe, args, cwd, env = process.env) {
-  return cp.execFileSync(exe, args, { cwd, env, timeout: 120000, maxBuffer: LIMIT });
+function run(exe, args, cwd, env = process.env, timeout = 120000) {
+  return cp.execFileSync(exe, args, { cwd, env, timeout, maxBuffer: LIMIT });
 }
 function gh(args, cwd) {
   return run("/usr/bin/gh", args, cwd, { PATH: "/usr/local/bin:/usr/bin:/bin", GH_TOKEN: process.env.GH_TOKEN });
@@ -320,7 +323,7 @@ async function publish(selected, repo, scratch, root, npm, product = "agentplugi
   return publishOnce({ lookup: () => registry(`${REGISTRY}/${NAME}/${VERSION}`, true),
     publish: () => {
       assert.ok(c.readFile(path.join(root, FILE), LIMIT).equals(body));
-      return run(process.execPath, [npm, "publish", path.join(root, FILE), "--ignore-scripts", "--provenance", "--access", "public"], scratch, env);
+      return run(process.execPath, [npm, "publish", path.join(root, FILE), "--ignore-scripts", "--provenance", "--access", "public"], scratch, env, PUBLISH_TIMEOUT);
     }, reconcile: () => reconcile(receipt, body, scratch, npm, env, product) });
 }
 async function main(args) {
