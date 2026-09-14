@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 
@@ -178,7 +179,11 @@ func TestNativeBinaryReadiness(t *testing.T) {
 		}
 		return a
 	}
-	c := parity([]string{"capabilities"}, 0)
+	c, cc, cb := run(0, "capabilities")
+	ac, agentCode, agentBody := run(1, "capabilities")
+	if cc != 0 || agentCode != 0 || bytes.Equal(cb, agentBody) || ac.Capabilities == nil || len(ac.Capabilities.Commands) != 9 || !slices.Contains(ac.Capabilities.Commands, "dev") {
+		t.Fatalf("bounded agentplugins-only capability surface: %d %d\n%s\n%s", cc, agentCode, cb, agentBody)
+	}
 	if c.Capabilities == nil || len(c.Capabilities.Commands) != 8 || c.Readiness.Status != report.NotEvaluated {
 		t.Fatal("capabilities evidence", c)
 	}

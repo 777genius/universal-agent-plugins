@@ -11,7 +11,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
+	"github.com/777genius/plugin-kit-ai/cli/internal/authoring/mcpruntime"
 	"github.com/777genius/plugin-kit-ai/cli/internal/authoring/project"
 	"github.com/777genius/plugin-kit-ai/cli/internal/authoring/readiness"
 	"github.com/777genius/plugin-kit-ai/cli/internal/authoring/report"
@@ -41,10 +43,15 @@ type App struct {
 	// PublicContract opts into the private Phase 6 contract; mains retain their existing mode.
 	PublicContract bool
 	Release        *ReleaseOptions
+	MCPRuntime     bool
 }
 
-func commandNames() []string {
-	return []string{"init", "validate", "inspect", "test", "compat", "capabilities", "doctor", "skills"}
+func (a App) commandNames() []string {
+	names := []string{"init", "validate", "inspect", "test", "compat", "capabilities", "doctor", "skills"}
+	if a.MCPRuntime {
+		names = append(names, "dev")
+	}
+	return names
 }
 
 type request struct {
@@ -53,6 +60,12 @@ type request struct {
 	root              string
 	disclose, release bool
 	template          scaffold.Options
+	runtime           string
+	server, tool      string
+	fixture           string
+	allowNetwork      bool
+	once              bool
+	deadline          time.Duration
 }
 
 // Execute renders once, after Factory.Execute handles every Cobra lifecycle exit.
@@ -66,7 +79,7 @@ func (a App) Execute(ctx context.Context, args []string, streams authoringcli.St
 	var human bytes.Buffer
 	factory := authoringcli.Factory(func() (*cobra.Command, error) {
 		factories := make([]authoringcli.Factory, 0, 4)
-		for _, name := range commandNames() {
+		for _, name := range a.commandNames() {
 			factories = append(factories, func() (*cobra.Command, error) { return a.command(name, func(r report.Report) { captured = &r }) })
 		}
 		root, err := build(factories...)
@@ -212,6 +225,19 @@ func (a App) command(name string, capture func(report.Report)) (*cobra.Command, 
 				}
 			} else {
 				f.Bool("release-policy", false, "also evaluate bounded release hygiene (not publication approval)")
+				if a.MCPRuntime && (name == "test" || name == "dev") {
+					if name == "test" {
+						f.String("runtime", "", "explicit runtime mode: mcp")
+					}
+					f.String("server", "", "exact MCP server name")
+					f.String("tool", "", "exact tool name; requires --fixture")
+					f.String("fixture", "", "package-relative JSON object; requires --tool")
+					f.Bool("allow-network", false, "allow the selected streamable HTTP endpoint")
+					f.Duration("deadline", 10*time.Second, "per-cycle runtime deadline (maximum 1m)")
+					if name == "dev" {
+						f.Bool("once", false, "run one bounded development cycle")
+					}
+				}
 			}
 		},
 		Decode: func(c *cobra.Command, opts authoringcli.Options, args []string) (request, error) {
@@ -258,13 +284,33 @@ func (a App) command(name string, capture func(report.Report)) (*cobra.Command, 
 				}
 			} else {
 				req.release, _ = c.Flags().GetBool("release-policy")
+				if a.MCPRuntime && (name == "test" || name == "dev") {
+					req.server, req.tool, req.fixture = get("server"), get("tool"), get("fixture")
+					req.allowNetwork, _ = c.Flags().GetBool("allow-network")
+					req.deadline, _ = c.Flags().GetDuration("deadline")
+					if name == "test" {
+						req.runtime = get("runtime")
+					} else {
+						req.runtime = "mcp"
+						req.once, _ = c.Flags().GetBool("once")
+					}
+					invalid := (req.tool == "") != (req.fixture == "") || req.deadline <= 0 || req.deadline > time.Minute
+					invalid = invalid || len(req.server) > 128 || len(req.tool) > 128 || len(req.fixture) > 4096
+					invalid = invalid || name == "test" && req.runtime != "" && req.runtime != "mcp"
+					invalid = invalid || name == "test" && c.Flags().Changed("runtime") && req.runtime == ""
+					invalid = invalid || name == "test" && req.runtime == "" && (req.server != "" || req.tool != "" || req.fixture != "" || req.allowNetwork)
+					invalid = invalid || req.runtime == "mcp" && req.server == "" || name == "dev" && opts.Format == "json" && !req.once
+					if invalid {
+						return request{}, &inputError{"runtime_arguments_invalid", "Use test --runtime=mcp --server <name>, or dev --server <name>. --tool and --fixture are required together; deadlines are positive and at most 1m. Continuous dev requires human output; use --once with JSON."}
+					}
+				}
 			}
 			return req, nil
 		},
 		Runner: authoringcli.RunnerFunc[request, report.Report](func(ctx context.Context, req request) (report.Report, error) {
 			if name == "capabilities" {
 				r := report.New(name, a.Revision)
-				names := commandNames()
+				names := a.commandNames()
 				if a.PublicContract {
 					names = req.inventory
 				}
@@ -277,6 +323,9 @@ func (a App) command(name string, capture func(report.Report)) (*cobra.Command, 
 			}
 			if name == "init" {
 				return a.init(ctx, req)
+			}
+			if name == "dev" && !req.once {
+				return a.dev(ctx, req)
 			}
 			p, e := a.Projects.Read(ctx, req.root)
 			r := report.Build(name, a.Revision, p, req.release)
@@ -298,6 +347,14 @@ func (a App) command(name string, capture func(report.Report)) (*cobra.Command, 
 			}
 			if name == "doctor" {
 				r.AddDoctor(readiness.Doctor(p))
+			}
+			if req.runtime == "mcp" {
+				evidence, runtimeErr := mcpruntime.Run(ctx, mcpruntime.Options{SourceRoot: req.root, Scratch: a.Projects.Scratch, Project: p, Server: req.server, Tool: req.tool, Fixture: req.fixture, AllowNetwork: req.allowNetwork, Deadline: req.deadline, Projects: a.Projects})
+				code := runtimeErrorCode(runtimeErr)
+				r.SetRuntime(evidence.Transport, evidence.Initialize, evidence.ListTools, evidence.ToolCall, evidence.ToolCount, evidence.Cleanup, code)
+				if runtimeErr != nil {
+					return r, runtimeErr
+				}
 			}
 			if !r.Successful() {
 				return r, errors.New("authoring checks incomplete or failed")
@@ -375,9 +432,95 @@ func summary(name string) string {
 	case "inspect":
 		return "Inspect captured components and unresolved runtime requirements"
 	case "test":
-		return "Check configuration, hygiene, Skills and MCP statically; runtime is not evaluated"
+		return "Check statically by default, or run one explicit MCP server with --runtime=mcp"
+	case "dev":
+		return "Rerun one explicit MCP server when the selected package changes"
 	default:
 		return "Validate exact-root standard configuration and authoring readiness"
+	}
+}
+
+func runtimeErrorCode(err error) string {
+	if err == nil {
+		return ""
+	}
+	var runtimeErr *mcpruntime.Error
+	if errors.As(err, &runtimeErr) {
+		return runtimeErr.Code
+	}
+	return "runtime_failed"
+}
+
+func (a App) dev(ctx context.Context, req request) (report.Report, error) {
+	type cycleResult struct {
+		report report.Report
+		err    error
+	}
+	p, err := a.Projects.Read(ctx, req.root)
+	r := report.Build("dev", a.Revision, p, req.release)
+	if err != nil {
+		code, action := failure(err, "read")
+		r.AddError(code, action)
+		return r, err
+	}
+	last := p.Input.Identity.TreeDigest
+	if last == "" {
+		r.AddError("runtime_source_identity_unavailable", "Make the exact package tree readable and quiescent, then retry.")
+		return r, errors.New("runtime source identity unavailable")
+	}
+	var cycle context.CancelFunc
+	var done chan cycleResult
+	start := func(p project.Result) {
+		cycleCtx, cancel := context.WithCancel(ctx)
+		cycle = cancel
+		done = make(chan cycleResult, 1)
+		go func() {
+			result := report.Build("dev", a.Revision, p, req.release)
+			evidence, runErr := mcpruntime.Run(cycleCtx, mcpruntime.Options{SourceRoot: req.root, Scratch: a.Projects.Scratch, Project: p, Server: req.server, Tool: req.tool, Fixture: req.fixture, AllowNetwork: req.allowNetwork, Deadline: req.deadline, Projects: a.Projects})
+			result.SetRuntime(evidence.Transport, evidence.Initialize, evidence.ListTools, evidence.ToolCall, evidence.ToolCount, evidence.Cleanup, runtimeErrorCode(runErr))
+			done <- cycleResult{result, runErr}
+		}()
+	}
+	start(p)
+	ticker := time.NewTicker(250 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		select {
+		case result := <-done:
+			r = result.report
+			done = nil
+			cycle = nil
+			if result.err != nil {
+				return r, result.err
+			}
+		case <-ctx.Done():
+			if cycle != nil {
+				cycle()
+				<-done
+			}
+			return r, ctx.Err()
+		case <-ticker.C:
+			next, readErr := a.Projects.Read(ctx, req.root)
+			if readErr != nil {
+				if cycle != nil {
+					cycle()
+					<-done
+				}
+				r = report.Build("dev", a.Revision, next, req.release)
+				code, action := failure(readErr, "read")
+				r.AddError(code, action)
+				return r, readErr
+			}
+			if next.Input.Identity.TreeDigest == last {
+				continue
+			}
+			last = next.Input.Identity.TreeDigest
+			if cycle != nil {
+				cycle()
+				<-done
+			}
+			start(next)
+		}
 	}
 }
 func failure(err error, phase string) (string, string) {
@@ -435,7 +578,7 @@ func wantsJSON(args []string) bool {
 }
 func selectedCommand(args []string) string {
 	for _, a := range args {
-		for _, n := range commandNames() {
+		for _, n := range []string{"init", "validate", "inspect", "test", "compat", "capabilities", "doctor", "skills", "dev"} {
 			if a == n {
 				return n
 			}

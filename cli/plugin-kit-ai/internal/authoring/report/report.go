@@ -73,6 +73,14 @@ type Check struct {
 	ID string `json:"id"`
 	Assessment
 }
+type RuntimeDetail struct {
+	Transport  string `json:"transport,omitempty"`
+	Initialize State  `json:"initialize"`
+	ListTools  State  `json:"list_tools"`
+	ToolCall   State  `json:"tool_call"`
+	ToolCount  int    `json:"tool_count"`
+	Cleanup    State  `json:"cleanup"`
+}
 type Error struct {
 	Code   string `json:"code"`
 	Action string `json:"action"`
@@ -102,12 +110,38 @@ type Report struct {
 	Readiness     Assessment                    `json:"authoring_readiness"`
 	Release       Assessment                    `json:"release_policy"`
 	Runtime       Assessment                    `json:"runtime_evidence"`
+	RuntimeDetail *RuntimeDetail                `json:"runtime_details,omitempty"`
 	Findings      []Finding                     `json:"findings"`
 	Components    []Component                   `json:"components"`
 	Checks        []Check                       `json:"checks"`
 	Committed     bool                          `json:"committed"`
 	Paths         []string                      `json:"affected_paths"`
 	Error         *Error                        `json:"error,omitempty"`
+}
+
+func (r *Report) SetRuntime(transport string, initialized, listed, called bool, toolCount int, cleanup bool, code string) {
+	stateOf := func(v bool) State {
+		if v {
+			return Pass
+		}
+		return NotEvaluated
+	}
+	r.RuntimeDetail = &RuntimeDetail{Transport: transport, Initialize: stateOf(initialized), ListTools: stateOf(listed), ToolCall: stateOf(called), ToolCount: toolCount, Cleanup: stateOf(cleanup)}
+	r.Runtime = assessment(Pass)
+	if code != "" {
+		id := r.add(Finding{Code: code, Layer: "runtime", Rule: "authoring/mcp-runtime-v1", Severity: "error"})
+		r.Runtime.Status = Fail
+		r.Runtime.FindingIDs = append(r.Runtime.FindingIDs, id)
+	}
+	if !cleanup {
+		r.Runtime.Status = Fail
+	}
+	for i := range r.Checks {
+		if r.Checks[i].ID == "runtime" {
+			r.Checks[i].Assessment = r.Runtime
+		}
+	}
+	r.finish()
 }
 
 func assessment(s State) Assessment { return Assessment{Status: s, FindingIDs: []string{}} }
@@ -370,7 +404,7 @@ func (r Report) Successful() bool {
 	if r.Command == "capabilities" {
 		return r.Error == nil && r.Capabilities != nil
 	}
-	return r.Error == nil && r.Readiness.Status == Pass && r.Release.Status != Fail && r.Compatibility.Status != Fail && (r.Command != "doctor" || r.Toolchain.Status == Pass)
+	return r.Error == nil && r.Readiness.Status == Pass && r.Release.Status != Fail && r.Compatibility.Status != Fail && r.Runtime.Status != Fail && (r.Command != "doctor" || r.Toolchain.Status == Pass)
 }
 
 // AddCompatibility attaches only the planner's explicitly sanitized static DTO.
