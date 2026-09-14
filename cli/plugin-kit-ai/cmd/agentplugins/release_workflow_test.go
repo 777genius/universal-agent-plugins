@@ -622,7 +622,7 @@ func TestReleaseMilestoneAPromotionProtectedGraph(t *testing.T) {
 		if !hasMilestoneEnv {
 			t.Fatalf("%s lacks environment-bound Milestone A run selection", name)
 		}
-		for _, required := range []string{"agentplugins-v0.1.63", "2.0.3", "milestone-a-release-admission"} {
+		for _, required := range []string{"agentplugins-v0.1.64", "2.0.4", "milestone-a-release-admission"} {
 			if !strings.Contains(body, required) {
 				t.Fatalf("%s lacks fixed release binding %q", name, required)
 			}
