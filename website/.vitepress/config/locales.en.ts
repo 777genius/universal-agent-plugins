@@ -32,11 +32,8 @@ export const enLocaleConfig = {
     },
     nav: [
       ...journeyNav("en"),
-      { text: "Guide", link: "/en/guide/" },
-      { text: "Concepts", link: "/en/concepts/" },
-      { text: "Reference", link: "/en/reference/" },
-      { text: "API", link: "/en/api/" },
-      { text: "Releases", link: "/en/releases/" }
+      { text: "Quickstart", link: "/en/guide/quickstart" },
+      { text: "API", link: "/en/api/cli/prepared-authoring-v2-agentplugins-author" }
     ],
     sidebar: readSidebar("sidebars.en.json"),
     editLink: {

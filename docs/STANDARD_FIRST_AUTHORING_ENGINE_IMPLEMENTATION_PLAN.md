@@ -40,6 +40,31 @@ remaining package-name/YAML references are classified as internal paths,
 attribution, tests, or immutable history. Any future revival requires a concrete
 consumer and a new owner decision.
 
+### Executable remaining roadmap
+
+This is the only active definition of Phases 7-11. Re-plan each phase against
+current `main` in its own dependency-safe PR. The older detailed design below is
+retained as decision history and must not be used to restore retired commands,
+packages, migration work, or release channels.
+
+1. **Phase 7 - runtime loop:** add explicit runtime testing, `dev`, and safe
+   lockfile-based `bootstrap` for standard `plugin.json` packages.
+2. **Phase 8 - JSON maintenance:** add deterministic normalization and explicit
+   native-to-standard import. No YAML reader, migration command, compatibility
+   shim, or legacy-project journey is in scope.
+3. **Phase 9 - portable outputs:** add disposable client projection previews,
+   deterministic export, and the minimum useful bundle inspection/fetch flow.
+4. **Phase 10 - publication:** add one explicit publish flow and Directory
+   submission with provenance, idempotency, and rollback evidence.
+5. **Phase 11 - dependency isolation:** detach legacy wiring from the standard
+   dependency graph while preserving source, tests, fixtures, and design ideas.
+   Removal still requires a separate capability inventory and owner decision.
+
+All public commands remain under `agentplugins`; all authoring commands remain
+under `agentplugins author`. Supported distribution remains npm, Homebrew, and
+native GitHub archives. PyPI and new `plugin-kit-ai` releases are outside the
+roadmap unless real demand produces a new owner decision.
+
 ## Owner decision: accelerated MVP scope (2026-09-10)
 
 The current delivery target is **Milestone A**, shipped as the smallest coherent
@@ -222,7 +247,7 @@ This checkpoint does not complete phases 0-11 or release the new authoring CLI.
 
 ## Status
 
-### Milestone A paired release cut (2026-09-14)
+### Historical Milestone A paired release cut (2026-09-14)
 
 The public cut is fixed to `agentplugins-v0.1.65` and
 `plugin-kit-ai-v2.0.5` at exact source SHA
@@ -312,7 +337,15 @@ This plan supersedes the open decision in
 silently rewrite ADR 0005. Phase 0 adds a focused authoring ADR that extends the
 existing standard-first installer decision without weakening its invariants.
 
-## Executive summary
+## Superseded detailed design archive
+
+Everything below this heading is preserved to explain earlier implementation
+choices and historical evidence. Where it mentions two public entrypoints,
+`plugin-kit-ai` v2, PyPI, YAML migration, or compatibility shims, the owner
+decision and executable roadmap above override it. Agents must not implement
+those superseded items.
+
+### Historical executive summary
 
 Build one standard-first authoring engine in Go and expose it through two thin
 entrypoints:

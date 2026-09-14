@@ -32,13 +32,8 @@ export const ruLocaleConfig = {
     },
     nav: [
       ...journeyNav("ru"),
-      { text: "v1", items: [
-        { text: "Гайды · v1", link: "/ru/guide/" },
-        { text: "Концепции · v1", link: "/ru/concepts/" },
-        { text: "Справочник · v1", link: "/ru/reference/" },
-        { text: "API · v1", link: "/ru/api/" },
-      ] },
-      { text: "Релизы", link: "/ru/releases/" }
+      { text: "Быстрый старт", link: "/ru/guide/quickstart" },
+      { text: "API", link: "/en/api/cli/prepared-authoring-v2-agentplugins-author" }
     ],
     sidebar: readSidebar("sidebars.ru.json"),
     editLink: {

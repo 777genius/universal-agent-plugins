@@ -12,6 +12,7 @@ import { bindGeneratedPaths, docsLocales, entityPath, isMilestoneAJourney, journ
 import { buildRedirects, createRedirectDocument, emitRedirects, htmlPath } from "./redirects.mjs";
 import { sourceRoot, repoRoot, docsBaseUrl, repoBrowserUrl } from "../config/site.mjs";
 import { run } from "./process.mjs";
+import { isRetiredArchive } from "./public-routes.mjs";
 
 const actualOutput = process.env.DOCS_TEST_ADAPTER_OUTPUT;
 if (!actualOutput) throw new Error("Required fresh adapter fixture missing; run pnpm docs:test (integration runner)");
@@ -70,7 +71,8 @@ test("all five navigations expose real Use and Build journeys with truthful Engl
     const links = flattenLinks({ use: sidebar[`/${locale}/use/`], build: sidebar[`/${locale}/build/`] });
     for (const entry of released.filter(entry => requiredJourneys.includes(entry.canonicalId.slice("page:".length))))
       assert.ok(links.includes(entityPath(entry, locale)), entry.canonicalId);
-    const missing = { canonicalId: "generated:missing", title: "agentplugins author missing translation", surface: "authoring-cli", pathEn: "/en/api/missing" };
+    for (const link of flattenLinks(sidebar)) assert.equal(isRetiredArchive(link), false, link);
+    const missing = { canonicalId: "generated:missing", title: "agentplugins author missing translation", surface: "authoring-cli", pathEn: "/en/api/cli/prepared-authoring-v2-agentplugins-author-missing" };
     assert.equal(entityPath(missing, locale), missing.pathEn);
     assert.ok(flattenLinks(buildSidebar(locale, [...sourceEntities, missing])).includes(missing.pathEn));
   }
@@ -138,6 +140,7 @@ test("actual accepted adapter envelope preserves all commands/flags/provenance a
   const publicCommands = bundle.envelope.surfaces
     .filter((surface) => surface.command_path === "agentplugins author")
     .flatMap((surface) => surface.commands);
+  assert.equal(publicCommands.length, 14);
   assert.equal(bundle.entities.length, publicCommands.length);
   assert.ok(bundle.envelope.surfaces.some((surface) => surface.command_path === "plugin-kit-ai"));
   assert.ok(bundle.entities.every((entry) => entry.title === "agentplugins author" || entry.title.startsWith("agentplugins author ")));
@@ -178,6 +181,7 @@ test("actual accepted adapter envelope preserves all commands/flags/provenance a
     const sidebar = buildSidebar(locale, [...sourceEntities, ...bundle.entities]);
     const links = flattenLinks({ prepared: sidebar[`/${locale}/api/cli/prepared-authoring-v2`] });
     for (const entity of bundle.entities) assert.ok(links.includes(entity.pathEn));
+    for (const link of flattenLinks(sidebar)) assert.equal(isRetiredArchive(link), false, link);
   }
   if (artifacts) {
     await fs.mkdir(path.join(artifacts, "consumer-output"), { recursive: true });

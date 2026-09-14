@@ -50,6 +50,24 @@ test('current Build journey uses Agent Plugins as its single documented command 
   assert.match(index, /Legacy YAML migration is cancelled/);
 });
 
+test('current locale journeys and top navigation do not expose the retired product', () => {
+  for (const locale of ['en', 'ru', 'es', 'fr', 'zh']) {
+    for (const section of ['use', 'build']) {
+      const directory = fileURLToPath(new URL(`website/source/${locale}/${section}/`, root));
+      for (const relative of readdirSync(directory)) {
+        if (!relative.endsWith('.md')) continue;
+        const visible = readFileSync(`${directory}/${relative}`, 'utf8')
+          .split('<!-- locale-historical-source:start', 1)[0];
+        assert.doesNotMatch(visible, /plugin-kit-ai|\/legacy\/v1\//i, `${locale}/${section}/${relative}`);
+      }
+    }
+    const localeConfig = read(`website/.vitepress/config/locales.${locale}.ts`);
+    for (const match of localeConfig.matchAll(/link:\s*"([^"]+)"/g)) {
+      assert.equal(isRetiredArchive(match[1]), false, `${locale}: ${match[1]}`);
+    }
+  }
+});
+
 const ids = (html) => [...html.matchAll(/\bid="([^"]+)"/g)].map(m => m[1]);
 const quickstartIds = { en: 'quickstart', ru: 'быстрыи-старт', es: 'inicio-rapido', fr: 'demarrage-rapide', zh: '快速入门' };
 for (const locale of ['en', 'ru', 'es', 'fr', 'zh']) {

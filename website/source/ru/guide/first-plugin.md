@@ -8,7 +8,7 @@ generated: false
 translationRequired: true
 ---
 
-[Использовать плагины](/ru/use/) · [Создавать плагины](/ru/build/) — Milestone A доступен. Миграция проектов в v2 пока недоступна.
+[Использовать плагины](/ru/use/) · [Создавать плагины](/ru/build/) — Milestone A доступен. Миграция YAML отменена.
 <p class="locale-historical-identity">Соберите первый плагин</p>
 
 [Исторический снимок ветки plugin-kit-ai v1. 1.2.4 — базовая версия команд, а не точная версия этого снимка.](/en/legacy/v1/)

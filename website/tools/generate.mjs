@@ -3,7 +3,7 @@ import { pathToFileURL } from "node:url";
 import { requireGenerationPrerequisites } from "./lib/preflight.mjs";
 import fs from "node:fs/promises";
 import { buildRedirects } from "./lib/redirects.mjs";
-import { bindGeneratedPaths, entityPath as resolveEntityPath, isMilestoneAJourney, journeyLabels, journeySidebar, requirePublicationBoundary } from "./lib/journeys.mjs";
+import { bindGeneratedPaths, isMilestoneAJourney, journeyLabels, journeySidebar, requirePublicationBoundary } from "./lib/journeys.mjs";
 import path from "node:path";
 import { extractCLI } from "./extractors/cli.mjs";
 import { extractGoSDK } from "./extractors/go-sdk.mjs";
@@ -148,31 +148,7 @@ function localePathField(locale) {
 export function buildSidebar(locale, entities) {
   const prefix = `/${locale}/`;
   const labels = localeLabels(locale);
-  const entityPath = (entry) => resolveEntityPath(entry, locale);
   const linkItem = (text, link) => ({ text, link });
-  const pageLink = (canonicalId, fallback) => {
-    const entry = entities.find((candidate) => candidate.canonicalId === canonicalId);
-    return entry ? entityPath(entry) : fallback;
-  };
-  const section = (name, items) => [{ text: name, items }];
-  const surfaceItems = (surface, formatter = (entry) => entry.title) =>
-    entities
-      .filter((entry) => entry.surface === surface && entry.kind !== "page")
-      .map((entry) => ({
-        text: formatter(entry),
-        link: entityPath(entry)
-      }))
-      .sort((a, b) => a.text.localeCompare(b.text));
-
-  const cliEntries = entities
-    .filter((entry) => entry.surface === "cli" && entry.kind === "command")
-    .sort((a, b) => a.title.localeCompare(b.title));
-  const cliGroups = buildCliGroups(locale, cliEntries, entityPath);
-  const goItems = surfaceItems("go-sdk");
-  const nodeItems = surfaceItems("runtime-node");
-  const pythonItems = surfaceItems("runtime-python");
-  const platformItems = surfaceItems("platform-events");
-  const capabilityItems = surfaceItems("capabilities");
   const guideSidebar = [{
     text: labels.guideStart,
     items: [
@@ -187,123 +163,10 @@ export function buildSidebar(locale, entities) {
     [prefix]: journeys,
     [`${prefix}use/`]: journeys,
     [`${prefix}build/`]: journeys,
-    [`${prefix}legacy/v1/`]: journeys,
     [`${prefix}api/cli/prepared-authoring-v2`]: journeys,
-    [`${prefix}guide/`]: guideSidebar,
-    [`${prefix}concepts/`]: [
-      {
-        text: labels.conceptsFoundation,
-        items: [
-          linkItem(labels.conceptsOverview, `${prefix}concepts/`),
-          linkItem(labels.whyPluginKitAi, `${prefix}concepts/why-plugin-kit-ai`),
-          linkItem(labels.managedProjectModel, `${prefix}concepts/managed-project-model`),
-          linkItem(labels.authoringArchitecture, `${prefix}concepts/authoring-architecture`)
-        ]
-      },
-      {
-        text: labels.conceptsDecisions,
-        items: [
-          linkItem(labels.stabilityModel, `${prefix}concepts/stability-model`),
-          linkItem(labels.targetModel, `${prefix}concepts/target-model`),
-          linkItem(labels.choosingRuntime, `${prefix}concepts/choosing-runtime`)
-        ]
-      }
-    ],
-    [`${prefix}reference/`]: [
-      {
-        text: labels.referenceOperational,
-        items: [
-          linkItem(labels.referenceOverview, `${prefix}reference/`),
-          linkItem(labels.installChannels, `${prefix}reference/install-channels`),
-          linkItem(labels.versionAndCompatibility, `${prefix}reference/version-and-compatibility`),
-          linkItem(labels.authoringWorkflow, `${prefix}reference/authoring-workflow`),
-          linkItem(labels.repositoryStandard, `${prefix}reference/repository-standard`)
-        ]
-      },
-      {
-        text: labels.referenceSupport,
-        items: [
-          linkItem(labels.supportBoundary, `${prefix}reference/support-boundary`),
-          linkItem(labels.targetSupport, `${prefix}reference/target-support`)
-        ]
-      },
-      {
-        text: labels.referenceHelp,
-        items: [
-          linkItem(labels.faq, `${prefix}reference/faq`),
-          linkItem(labels.troubleshooting, `${prefix}reference/troubleshooting`),
-          linkItem(labels.glossary, `${prefix}reference/glossary`)
-        ]
-      }
-    ],
-    [`${prefix}api/`]: section(labels.apiOverview, [
-      linkItem(labels.apiOverview, `${prefix}api/`),
-      linkItem(labels.cliReference, pageLink("page:api:cli:index", `${prefix}api/cli/`)),
-      linkItem(labels.goSdk, pageLink("page:api:go-sdk:index", `${prefix}api/go-sdk/`)),
-      linkItem(labels.nodeRuntime, pageLink("page:api:runtime-node:index", `${prefix}api/runtime-node/`)),
-      linkItem(labels.pythonRuntime, pageLink("page:api:runtime-python:index", `${prefix}api/runtime-python/`)),
-      linkItem(labels.platformEvents, pageLink("page:api:platform-events:index", `${prefix}api/platform-events/`)),
-      linkItem(labels.capabilities, pageLink("page:api:capabilities:index", `${prefix}api/capabilities/`))
-    ]),
-    [`${prefix}api/cli/`]: [
-      { text: labels.cliReference, items: [linkItem(labels.cliOverview, pageLink("page:api:cli:index", `${prefix}api/cli/`))] },
-      ...cliGroups
-    ],
-    [`${prefix}api/go-sdk/`]: section(labels.goSdk, [
-      linkItem(labels.goSdkOverview, pageLink("page:api:go-sdk:index", `${prefix}api/go-sdk/`)),
-      ...goItems
-    ]),
-    [`${prefix}api/runtime-node/`]: section(labels.nodeRuntime, [
-      linkItem(labels.nodeRuntimeOverview, pageLink("page:api:runtime-node:index", `${prefix}api/runtime-node/`)),
-      ...nodeItems
-    ]),
-    [`${prefix}api/runtime-python/`]: section(labels.pythonRuntime, [
-      linkItem(labels.pythonRuntimeOverview, pageLink("page:api:runtime-python:index", `${prefix}api/runtime-python/`)),
-      ...pythonItems
-    ]),
-    [`${prefix}api/platform-events/`]: section(labels.platformEvents, [
-      linkItem(labels.platformEventsOverview, pageLink("page:api:platform-events:index", `${prefix}api/platform-events/`)),
-      ...platformItems
-    ]),
-    [`${prefix}api/capabilities/`]: section(labels.capabilities, [
-      linkItem(labels.capabilitiesOverview, pageLink("page:api:capabilities:index", `${prefix}api/capabilities/`)),
-      ...capabilityItems
-    ]),
-    [`${prefix}releases/`]: section(labels.releases, [
-      linkItem(labels.releasesOverview, `${prefix}releases/`),
-      linkItem("v1.1.2", `${prefix}releases/v1-1-2`),
-      linkItem("v1.1.1", `${prefix}releases/v1-1-1`),
-      linkItem("v1.1.0", `${prefix}releases/v1-1-0`),
-      linkItem("v1.0.6", `${prefix}releases/v1-0-6`),
-      linkItem("v1.0.0", `${prefix}releases/v1-0-0`),
-      linkItem("v1.0.4 Go SDK", `${prefix}releases/v1-0-4-go-sdk`)
-    ])
+    [`${prefix}guide/quickstart`]: guideSidebar,
+    [`${prefix}reference/client-compatibility`]: journeys
   };
-}
-
-function buildCliGroups(locale, cliEntries, entityPath) {
-  const labels = localeLabels(locale);
-  const buckets = new Map([
-    ["core", []],
-    ["bundle", []],
-    ["completion", []],
-    ["skills", []]
-  ]);
-
-  for (const entry of cliEntries) {
-    const parts = entry.title.split(" ");
-    const family = parts[1];
-    const groupKey = buckets.has(family) ? family : "core";
-    const shortText = parts.length <= 1 ? entry.title : parts.slice(1).join(" ");
-    buckets.get(groupKey).push({ text: shortText, link: entityPath(entry) });
-  }
-
-  return [
-    { text: labels.cliCore, items: buckets.get("core") },
-    { text: labels.cliBundle, items: buckets.get("bundle") },
-    { text: labels.cliCompletion, items: buckets.get("completion") },
-    { text: labels.cliSkills, items: buckets.get("skills") }
-  ].filter((group) => group.items.length > 0);
 }
 
 function localeLabels(locale) {

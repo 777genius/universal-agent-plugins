@@ -32,13 +32,8 @@ export const frLocaleConfig = {
     },
     nav: [
       ...journeyNav("fr"),
-      { text: "v1", items: [
-        { text: "Guide · v1", link: "/fr/guide/" },
-        { text: "Concepts · v1", link: "/fr/concepts/" },
-        { text: "Référence · v1", link: "/fr/reference/" },
-        { text: "API · v1", link: "/fr/api/" },
-      ] },
-      { text: "Versions", link: "/fr/releases/" }
+      { text: "Démarrage rapide", link: "/fr/guide/quickstart" },
+      { text: "API", link: "/en/api/cli/prepared-authoring-v2-agentplugins-author" }
     ],
     sidebar: readSidebar("sidebars.fr.json"),
     editLink: {

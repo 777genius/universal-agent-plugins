@@ -37,7 +37,7 @@ agentplugins author init ./local-tools \
 ```
 
 Do not substitute a legacy Go, Python, shell, or TypeScript runtime flag. Those
-historical authoring lanes are described in [v1 context](/en/legacy/v1/), not
+preserved historical authoring lanes are not
 implemented by this template.
 
 ## Review the runtime boundary

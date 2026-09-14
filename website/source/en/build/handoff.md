@@ -92,7 +92,7 @@ is not permission to run against a real user's profile during preparation.
 
 Do not ask the receiver to run v2 import, migrate, export, bundle, publish,
 bootstrap, or dev commands. Do not label a YAML example as a migrated standard
-package. Historical workflows remain linked from [v1 context](/en/legacy/v1/).
+package.
 
 For remote source sharing, the existing installer requires a full 40-character
 commit SHA and an explicit package subpath when discovery is ambiguous. That is

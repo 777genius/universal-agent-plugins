@@ -98,7 +98,7 @@ can leave required component evidence incomplete. Use the full report.
 
 Existing `plugin/plugin.yaml`, launcher source, generated client files, SDK docs,
 and runtime examples remain preserved in their existing locations. They are
-[historical or supporting material](/en/legacy/v1/), not implicit inputs to this
-standard root. Do not copy them wholesale into a new package to satisfy a check.
+historical material, not implicit inputs to this standard root. Do not copy
+them wholesale into a new package to satisfy a check.
 
 Continue with [static checks](./checks), then [handoff](./handoff).
