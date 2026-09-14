@@ -157,13 +157,13 @@ function validatePublicMetadata(metadata, version, integrity, shasum, product = 
 // against the authenticated publication tarball by the consumer.
 function validatePairedSource(metadata, descriptor, source, promotionSha256, product = "agentplugins") {
   const PACKAGE_NAME = productName(product);
-  const version = product === "agentplugins" ? "0.1.62" : "2.0.2";
+  const version = product === "agentplugins" ? "0.1.63" : "2.0.3";
   if (metadata?.name !== PACKAGE_NAME || metadata.version !== version ||
       typeof source !== "string" || !/^(?!0{40}$)[0-9a-f]{40}$/.test(source) ||
       (metadata.gitHead !== undefined && metadata.gitHead !== source)) fail("paired npm source binding mismatch");
   exactObject(descriptor?.identity, {
     repository: "777genius/universal-agent-plugins", commit: source, engine_revision: source,
-    versions: { agentplugins: "0.1.62", "plugin-kit-ai": "2.0.2" }
+    versions: { agentplugins: "0.1.63", "plugin-kit-ai": "2.0.3" }
   }, "paired package source identity");
   if (typeof promotionSha256 !== "string" || !/^(?!0{64}$)[0-9a-f]{64}$/.test(promotionSha256)) {
     fail("paired promotion SHA256 required");
@@ -191,7 +191,7 @@ function decodeBase64JSON(encoded, label) {
 function validateSLSAAttestation(response, version, integrity, uapTag, uapCommit, product = "agentplugins") {
   const PACKAGE_NAME = productName(product);
   validateExpected(version, integrity, "0".repeat(40));
-  if (uapTag !== `agentplugins-v${product === "agentplugins" ? version : "0.1.62"}` || (product === "plugin-kit-ai" && version !== "2.0.2")) fail("UAP tag does not match the package version");
+  if (uapTag !== `agentplugins-v${product === "agentplugins" ? version : "0.1.63"}` || (product === "plugin-kit-ai" && version !== "2.0.3")) fail("UAP tag does not match the package version");
   if (!COMMIT.test(uapCommit)) fail("UAP commit must be an exact lowercase commit");
   if (!response || !Array.isArray(response.attestations)) fail("npm attestation response is invalid");
   const provenance = response.attestations.filter((item) => item?.predicateType === SLSA_PREDICATE);

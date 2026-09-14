@@ -13,12 +13,12 @@ const promotion = require("./authoring-promotion");
 const milestone = require("./milestone-a-release-admission");
 const packing = require("./stage-dual-authoring-npm");
 const contract = require("./npm-public-contract");
-const VERSION = "0.1.62";
+const VERSION = "0.1.63";
 const NAME = "universal-agent-plugins";
 function productContract(product = "agentplugins") {
   assert.ok(c.PRODUCTS.includes(product), "fixed paired product required");
   const name = product === "agentplugins" ? NAME : "plugin-kit-ai";
-  const version = product === "agentplugins" ? VERSION : "2.0.2";
+  const version = product === "agentplugins" ? VERSION : "2.0.3";
   return { NAME: name, VERSION: version, FILE: `${name}-${version}.tgz` };
 }
 const WORKFLOW = ".github/workflows/agentplugins-npm-publish.yml";
@@ -41,7 +41,7 @@ function selection(e) {
   assert.equal(e.GITHUB_REPOSITORY, c.REPOSITORY);
   assert.equal(e.PRODUCER_MODE, "paired-publish");
   assert.equal(e.TAG, milestone.TAG);
-  assert.equal(e.KIT_VERSION, "2.0.2");
+  assert.equal(e.KIT_VERSION, "2.0.3");
   assert.match(e.SOURCE_SHA, /^(?!0{40}$)[0-9a-f]{40}$/);
   assert.equal(e.GITHUB_SHA, e.SOURCE_SHA);
   assert.equal(e.GITHUB_WORKFLOW_SHA, e.SOURCE_SHA);
@@ -51,7 +51,7 @@ function selection(e) {
   assert.equal(e.INPUT_ARTIFACT || "", "");
   assert.ok(["true", "false"].includes(e.PUBLISH));
   return { tag: milestone.TAG, ref: e.GITHUB_REF, source: e.SOURCE_SHA,
-    versions: { agentplugins: VERSION, "plugin-kit-ai": "2.0.2" } };
+    versions: { agentplugins: VERSION, "plugin-kit-ai": "2.0.3" } };
 }
 function checkout(repo, source) {
   assert.equal(run("/usr/bin/git", ["rev-parse", "HEAD"], repo).toString().trim(), source);

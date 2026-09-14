@@ -69,7 +69,7 @@ jobs:
             paired-stage) [[ "${PUBLISH}" == false ]] ;;
             paired-publish)
               [[ "${GITHUB_ACTIONS}" == true && "${GITHUB_EVENT_NAME}" == workflow_dispatch && "${GITHUB_REPOSITORY}" == 777genius/universal-agent-plugins ]] || exit 1
-              [[ "${TAG}" == agentplugins-v0.1.62 && "${KIT_VERSION}" == 2.0.2 ]] || exit 1
+              [[ "${TAG}" == agentplugins-v0.1.63 && "${KIT_VERSION}" == 2.0.3 ]] || exit 1
               [[ "${SOURCE_SHA}" =~ ^[0-9a-f]{40}$ && ! "${SOURCE_SHA}" =~ ^0+$ ]] || exit 1
               [[ "${SOURCE_SHA}" == "${GITHUB_SHA}" && "${SOURCE_SHA}" == "${GITHUB_WORKFLOW_SHA}" ]] || exit 1
               [[ "${GITHUB_REF}" == "refs/tags/${TAG}" ]] || exit 1

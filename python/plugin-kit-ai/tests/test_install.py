@@ -14,8 +14,9 @@ from plugin_kit_ai import install
 class ReleaseTags(unittest.TestCase):
     def test_numeric_and_product_tags(self):
         for raw, tag, version in [
+            ('2.0.3', 'plugin-kit-ai-v2.0.3', '2.0.3'),
+            ('plugin-kit-ai-v2.0.3', 'plugin-kit-ai-v2.0.3', '2.0.3'),
             ('2.0.2', 'plugin-kit-ai-v2.0.2', '2.0.2'),
-            ('plugin-kit-ai-v2.0.2', 'plugin-kit-ai-v2.0.2', '2.0.2'),
             ('1.2.4', 'v1.2.4', '1.2.4'),
             ('v1.2.4', 'v1.2.4', '1.2.4'),
             ('plugin-kit-ai-v1.2.4', 'plugin-kit-ai-v1.2.4', '1.2.4'),
@@ -25,17 +26,17 @@ class ReleaseTags(unittest.TestCase):
                 self.assertEqual(install.version_from_tag(tag), version)
 
     def test_reject_wrong_product_and_malformed_tags(self):
-        for tag in ['agentplugins-v0.1.62', 'v2.0.2', '2.00.2', '2.0',
-                    'plugin-kit-ai-plugin-kit-ai-v2.0.2', '2.0.2-rc.1',
-                    '2.0.2+build', '../2.0.2', 'vlatest', '2.0.2\n',
-                    ' plugin-kit-ai-v2.0.2']:
+        for tag in ['agentplugins-v0.1.63', 'v2.0.3', '2.00.3', '2.0',
+                    'plugin-kit-ai-plugin-kit-ai-v2.0.3', '2.0.3-rc.1',
+                    '2.0.3+build', '../2.0.3', 'vlatest', '2.0.3\n',
+                    ' plugin-kit-ai-v2.0.3']:
             with self.subTest(tag=tag), self.assertRaises(ValueError):
                 install.normalize_tag(tag)
 
     def test_packaged_version_and_latest_product_validation(self):
-        with patch.dict(os.environ, {}, clear=True), patch.object(install, '__version__', '2.0.2'):
-            self.assertEqual(install.resolve_requested_tag(), 'plugin-kit-ai-v2.0.2')
-        with patch.object(install, 'fetch_text', return_value='{"tag_name":"agentplugins-v0.1.62"}'):
+        with patch.dict(os.environ, {}, clear=True), patch.object(install, '__version__', '2.0.3'):
+            self.assertEqual(install.resolve_requested_tag(), 'plugin-kit-ai-v2.0.3')
+        with patch.object(install, 'fetch_text', return_value='{"tag_name":"agentplugins-v0.1.63"}'):
             with self.assertRaises(ValueError):
                 install.latest_tag(install.DEFAULT_API_BASE, install.DEFAULT_REPOSITORY)
 
@@ -48,7 +49,7 @@ class ReleaseTags(unittest.TestCase):
             member.size = len(binary)
             archive.addfile(member, io.BytesIO(binary))
         body = stream.getvalue()
-        for raw in ['2.0.2', 'plugin-kit-ai-v2.0.2', '1.2.4', 'v1.2.4']:
+        for raw in ['2.0.3', 'plugin-kit-ai-v2.0.3', '2.0.2', 'plugin-kit-ai-v2.0.2', '1.2.4', 'v1.2.4']:
             for bad_checksum in [False, True]:
                 with self.subTest(raw=raw, bad_checksum=bad_checksum), tempfile.TemporaryDirectory() as root:
                     tag = install.normalize_tag(raw)
