@@ -28,9 +28,10 @@ import (
 )
 
 const (
-	maxFrame        = 1 << 20
-	maxFixture      = 1 << 20
-	protocolVersion = "2025-06-18"
+	maxFrame                = 1 << 20
+	maxFixture              = 1 << 20
+	protocolVersion         = "2025-06-18"
+	httpSessionCleanupLimit = 2 * time.Second
 )
 
 type Options struct {
@@ -112,9 +113,9 @@ func Run(ctx context.Context, o Options) (ev Evidence, err error) {
 	}
 	switch ctx.Err() {
 	case context.DeadlineExceeded:
-		return ev, errors.Join(fail("runtime_deadline_exceeded"), context.DeadlineExceeded)
+		return ev, errors.Join(fail("runtime_deadline_exceeded"), context.DeadlineExceeded, err)
 	case context.Canceled:
-		return ev, errors.Join(fail("runtime_canceled"), context.Canceled)
+		return ev, errors.Join(fail("runtime_canceled"), context.Canceled, err)
 	}
 	return ev, err
 }
@@ -397,6 +398,9 @@ func (c *stdioClient) call(id int, method string, params any) (json.RawMessage, 
 		if err != nil {
 			return nil, fail("runtime_protocol_io_failed")
 		}
+		if conformance.RejectDuplicateJSONKeys(line) != nil {
+			return nil, fail("runtime_protocol_invalid")
+		}
 		var r response
 		if json.Unmarshal(line, &r) != nil {
 			return nil, fail("runtime_protocol_invalid")
@@ -435,7 +439,7 @@ func readLine(reader *bufio.Reader) ([]byte, error) {
 	}
 }
 
-func runHTTP(ctx context.Context, server domain.MCPServer, tool string, arguments map[string]any, ev *Evidence) error {
+func runHTTP(ctx context.Context, server domain.MCPServer, tool string, arguments map[string]any, ev *Evidence) (err error) {
 	raw, _ := server.Decoded["url"].(string)
 	u, err := url.Parse(raw)
 	if err != nil || u == nil {
@@ -466,6 +470,14 @@ func runHTTP(ctx context.Context, server domain.MCPServer, tool string, argument
 	defer client.CloseIdleConnections()
 	session := ""
 	negotiated := false
+	defer func() {
+		if session == "" {
+			return
+		}
+		if cleanupErr := terminateHTTPSession(ctx, client, u, headers, session, negotiated); cleanupErr != nil {
+			err = errors.Join(err, cleanupErr)
+		}
+	}()
 	call := func(id int, method string, params any, notification bool) (json.RawMessage, error) {
 		body, _ := json.Marshal(map[string]any{"jsonrpc": "2.0", "id": id, "method": method, "params": params})
 		if notification {
@@ -491,11 +503,11 @@ func runHTTP(ctx context.Context, server domain.MCPServer, tool string, argument
 			return nil, fail("runtime_http_request_failed")
 		}
 		defer resp.Body.Close()
-		if resp.StatusCode >= 300 {
-			return nil, fail("runtime_http_status_failed")
-		}
 		if value := resp.Header.Get("Mcp-Session-Id"); value != "" {
 			session = value
+		}
+		if resp.StatusCode >= 300 {
+			return nil, fail("runtime_http_status_failed")
 		}
 		if notification && resp.StatusCode == http.StatusAccepted {
 			return nil, nil
@@ -503,6 +515,9 @@ func runHTTP(ctx context.Context, server domain.MCPServer, tool string, argument
 		payload, err := readHTTPPayload(resp, id)
 		if err != nil {
 			return nil, err
+		}
+		if conformance.RejectDuplicateJSONKeys(payload) != nil {
+			return nil, fail("runtime_protocol_invalid")
 		}
 		var r response
 		var responseID int
@@ -556,6 +571,42 @@ func runHTTP(ctx context.Context, server domain.MCPServer, tool string, argument
 			return fail("runtime_tool_failed")
 		}
 		ev.ToolCall = true
+	}
+	return nil
+}
+
+func terminateHTTPSession(parent context.Context, client *http.Client, endpoint *url.URL, headers map[string]string, session string, negotiated bool) error {
+	cleanupFor := httpSessionCleanupLimit
+	if deadline, ok := parent.Deadline(); ok {
+		remaining := time.Until(deadline)
+		if remaining <= 0 {
+			return fail("runtime_http_session_cleanup_failed")
+		}
+		if remaining < cleanupFor {
+			cleanupFor = remaining
+		}
+	}
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(parent), cleanupFor)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, endpoint.String(), nil)
+	if err != nil {
+		return fail("runtime_http_session_cleanup_failed")
+	}
+	req.Header.Set("Accept", "application/json, text/event-stream")
+	req.Header.Set("Mcp-Session-Id", session)
+	if negotiated {
+		req.Header.Set("Mcp-Protocol-Version", protocolVersion)
+	}
+	for name, value := range headers {
+		req.Header.Set(name, value)
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return fail("runtime_http_session_cleanup_failed")
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+		return fail("runtime_http_session_cleanup_failed")
 	}
 	return nil
 }
@@ -648,6 +699,10 @@ func decodeToolList(result json.RawMessage) ([]listedTool, error) {
 		seen[name] = struct{}{}
 		var schema map[string]json.RawMessage
 		if json.Unmarshal(raw["inputSchema"], &schema) != nil || schema == nil {
+			return nil, fail("runtime_protocol_invalid")
+		}
+		var schemaType string
+		if json.Unmarshal(schema["type"], &schemaType) != nil || schemaType != "object" {
 			return nil, fail("runtime_protocol_invalid")
 		}
 		tools = append(tools, listedTool{Name: name})

@@ -283,10 +283,10 @@ stdio MCP, hybrid packages, extra Skills, compatibility checks, and the handoff
 to installation.
 
 Authoring validation and project doctor are distinct from installer
-`agentplugins validate` and `agentplugins doctor`. Use
-`agentplugins author test --runtime=mcp` for a bounded MCP runtime check, or
-`agentplugins author dev` while developing an MCP package. OAuth and activation
-inside a supported client still require client-specific verification.
+`agentplugins validate` and `agentplugins doctor`. Runtime/dev/bootstrap, client
+generation, export/bundle, and publication are not exposed by the current
+authoring CLI. OAuth and activation inside a supported client still require
+client-specific verification.
 `plugin.json` is the only supported authoring manifest.
 
 ## Contributing

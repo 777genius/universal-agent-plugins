@@ -1,6 +1,7 @@
 package mcpruntime
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"errors"
@@ -149,6 +150,43 @@ func TestReadHTTPPayloadReturnsBeforeLongLivedSSEEOF(t *testing.T) {
 	<-done
 }
 
+func TestStdioRejectsDuplicateResponseEnvelopeMembers(t *testing.T) {
+	for name, payload := range duplicateResponseEnvelopes() {
+		t.Run(name, func(t *testing.T) {
+			client := stdioClient{in: bufio.NewReader(strings.NewReader(payload + "\n")), out: io.Discard}
+			if _, err := client.call(1, "initialize", map[string]any{}); code(err) != "runtime_protocol_invalid" {
+				t.Fatalf("duplicate %s response member: %v", name, err)
+			}
+		})
+	}
+}
+
+func TestStreamableHTTPRejectsDuplicateResponseEnvelopeMembers(t *testing.T) {
+	for name, payload := range duplicateResponseEnvelopes() {
+		t.Run(name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = io.WriteString(w, payload)
+			}))
+			defer server.Close()
+			err := runHTTP(context.Background(), domain.MCPServer{Decoded: map[string]any{"url": server.URL}}, "", nil, &Evidence{})
+			if code(err) != "runtime_protocol_invalid" {
+				t.Fatalf("duplicate %s response member: %v", name, err)
+			}
+		})
+	}
+}
+
+func duplicateResponseEnvelopes() map[string]string {
+	result := `{"protocolVersion":"2025-06-18","capabilities":{},"serverInfo":{"name":"x","version":"1"}}`
+	return map[string]string{
+		"jsonrpc": `{"jsonrpc":"2.0","jsonrpc":"2.0","id":1,"result":` + result + `}`,
+		"id":      `{"jsonrpc":"2.0","id":1,"id":1,"result":` + result + `}`,
+		"result":  `{"jsonrpc":"2.0","id":1,"result":` + result + `,"result":` + result + `}`,
+		"error":   `{"jsonrpc":"2.0","id":1,"error":null,"error":null,"result":` + result + `}`,
+	}
+}
+
 func TestInitializeRequiresNegotiatedProtocolVersion(t *testing.T) {
 	for _, version := range []string{"", "2024-11-05", "future"} {
 		body := json.RawMessage(fmt.Sprintf(`{"protocolVersion":%q,"capabilities":{},"serverInfo":{"name":"x","version":"1"}}`, version))
@@ -196,10 +234,15 @@ func TestToolListRejectsMissingNullAndMalformedArrays(t *testing.T) {
 		`{"tools":[{"name":"echo"}]}`,
 		`{"tools":[{"name":"echo","inputSchema":null}]}`,
 		`{"tools":[{"name":"echo","inputSchema":[]}]}`,
-		`{"tools":[{"name":7,"inputSchema":{}}]}`,
-		`{"tools":[{"name":"echo","inputSchema":{}},{"name":"echo","inputSchema":{}}]}`,
-		`{"tools":[{"name":"echo","name":"other","inputSchema":{}}]}`,
+		`{"tools":[{"name":"echo","inputSchema":{}}]}`,
+		`{"tools":[{"name":"echo","inputSchema":{"type":"array"}}]}`,
+		`{"tools":[{"name":"echo","inputSchema":{"type":7}}]}`,
+		`{"tools":[{"name":"echo","inputSchema":{"type":null}}]}`,
+		`{"tools":[{"name":7,"inputSchema":{"type":"object"}}]}`,
+		`{"tools":[{"name":"echo","inputSchema":{"type":"object"}},{"name":"echo","inputSchema":{"type":"object"}}]}`,
+		`{"tools":[{"name":"echo","name":"other","inputSchema":{"type":"object"}}]}`,
 		`{"tools":[{"name":"echo","inputSchema":{"type":"object","type":"array"}}]}`,
+		`{"tools":[{"name":"echo","inputSchema":{"type":"object","type":"object"}}]}`,
 		`{"tools":[],"nextCursor":null}`,
 		`{"tools":[],"nextCursor":7}`,
 	} {
@@ -207,7 +250,7 @@ func TestToolListRejectsMissingNullAndMalformedArrays(t *testing.T) {
 			t.Fatalf("tool list %s: %v", body, err)
 		}
 	}
-	tools, err := decodeToolList(json.RawMessage(`{"tools":[{"name":"echo","description":"kept","inputSchema":{},"vendor.extension":true}],"nextCursor":""}`))
+	tools, err := decodeToolList(json.RawMessage(`{"tools":[{"name":"echo","description":"kept","inputSchema":{"type":"object","properties":{}},"vendor.extension":true}],"nextCursor":""}`))
 	if err != nil || len(tools) != 1 || tools[0].Name != "echo" {
 		t.Fatalf("valid tool list rejected: %#v %v", tools, err)
 	}
@@ -258,6 +301,185 @@ func TestStreamableHTTPRequiresOptInAndRunsBoundedStages(t *testing.T) {
 	ev, err := Run(context.Background(), base)
 	if err != nil || ev.Transport != "streamable_http" || !ev.Initialize || ev.ListTools || !ev.Cleanup {
 		t.Fatalf("HTTP evidence=%+v err=%v", ev, err)
+	}
+}
+
+func TestStreamableHTTPSessionTerminatesAfterSuccess(t *testing.T) {
+	const session = "fixture-session"
+	var methods []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		methods = append(methods, r.Method)
+		if r.Header.Get("Authorization") != "Bearer fixture" {
+			t.Errorf("authorization header was not retained for %s", r.Method)
+		}
+		if r.Method == http.MethodDelete {
+			if got := r.Header.Get("Mcp-Session-Id"); got != session {
+				t.Errorf("DELETE session=%q", got)
+			}
+			if got := r.Header.Get("Mcp-Protocol-Version"); got != protocolVersion {
+				t.Errorf("DELETE protocol=%q", got)
+			}
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		defer r.Body.Close()
+		var q struct {
+			ID     int    `json:"id"`
+			Method string `json:"method"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&q); err != nil {
+			t.Error(err)
+			return
+		}
+		if q.Method == "initialize" {
+			w.Header().Set("Mcp-Session-Id", session)
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = fmt.Fprintf(w, `{"jsonrpc":"2.0","id":%d,"result":{"protocolVersion":"2025-06-18","capabilities":{},"serverInfo":{"name":"x","version":"1"}}}`, q.ID)
+			return
+		}
+		if q.Method != "notifications/initialized" || r.Header.Get("Mcp-Session-Id") != session {
+			t.Errorf("notification method=%q session=%q", q.Method, r.Header.Get("Mcp-Session-Id"))
+		}
+		w.WriteHeader(http.StatusAccepted)
+	}))
+	defer server.Close()
+	err := runHTTP(context.Background(), domain.MCPServer{Decoded: map[string]any{
+		"url": server.URL, "headers": map[string]any{"Authorization": "Bearer fixture"},
+	}}, "", nil, &Evidence{})
+	if err != nil || strings.Join(methods, ",") != "POST,POST,DELETE" {
+		t.Fatalf("methods=%v err=%v", methods, err)
+	}
+}
+
+func TestStreamableHTTPSessionCleanupJoinsPrimaryFailure(t *testing.T) {
+	const secret = "cleanup-secret-must-not-leak"
+	deleteCount := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodDelete {
+			deleteCount++
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
+		w.Header().Set("Mcp-Session-Id", "failure-session")
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"jsonrpc":"2.0","id":1,"id":1,"result":{}}`)
+	}))
+	defer server.Close()
+	err := runHTTP(context.Background(), domain.MCPServer{Decoded: map[string]any{
+		"url": server.URL, "headers": map[string]any{"Authorization": "Bearer " + secret},
+	}}, "", nil, &Evidence{})
+	if !hasErrorCode(err, "runtime_protocol_invalid") || !hasErrorCode(err, "runtime_http_session_cleanup_failed") || deleteCount != 1 {
+		t.Fatalf("delete count=%d err=%v", deleteCount, err)
+	}
+	if strings.Contains(err.Error(), secret) {
+		t.Fatalf("cleanup failure leaked credentials: %v", err)
+	}
+}
+
+func TestStreamableHTTPSessionTerminatesAfterStatusFailure(t *testing.T) {
+	deleteCount := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodDelete {
+			deleteCount++
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		w.Header().Set("Mcp-Session-Id", "status-failure-session")
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	defer server.Close()
+	err := runHTTP(context.Background(), domain.MCPServer{Decoded: map[string]any{"url": server.URL}}, "", nil, &Evidence{})
+	if code(err) != "runtime_http_status_failed" || deleteCount != 1 {
+		t.Fatalf("delete count=%d err=%v", deleteCount, err)
+	}
+}
+
+func TestStreamableHTTPSessionTerminatesAfterToolFailure(t *testing.T) {
+	deleteCount := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodDelete {
+			deleteCount++
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		defer r.Body.Close()
+		var q struct {
+			ID     int    `json:"id"`
+			Method string `json:"method"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&q)
+		if q.Method == "initialize" {
+			w.Header().Set("Mcp-Session-Id", "tool-failure-session")
+		}
+		if q.ID == 0 {
+			w.WriteHeader(http.StatusAccepted)
+			return
+		}
+		result := `{"content":[],"isError":true}`
+		switch q.Method {
+		case "initialize":
+			result = `{"protocolVersion":"2025-06-18","capabilities":{"tools":{}},"serverInfo":{"name":"x","version":"1"}}`
+		case "tools/list":
+			result = `{"tools":[{"name":"echo","inputSchema":{"type":"object"}}]}`
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = fmt.Fprintf(w, `{"jsonrpc":"2.0","id":%d,"result":%s}`, q.ID, result)
+	}))
+	defer server.Close()
+	err := runHTTP(context.Background(), domain.MCPServer{Decoded: map[string]any{"url": server.URL}}, "echo", map[string]any{}, &Evidence{})
+	if code(err) != "runtime_tool_failed" || deleteCount != 1 {
+		t.Fatalf("delete count=%d err=%v", deleteCount, err)
+	}
+}
+
+func TestStreamableHTTPSessionTerminatesAfterCancellation(t *testing.T) {
+	requestStarted := make(chan struct{})
+	deleteSeen := make(chan struct{}, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodDelete {
+			deleteSeen <- struct{}{}
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		defer r.Body.Close()
+		var q struct {
+			ID     int    `json:"id"`
+			Method string `json:"method"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&q)
+		if q.Method == "initialize" {
+			w.Header().Set("Mcp-Session-Id", "canceled-session")
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = fmt.Fprintf(w, `{"jsonrpc":"2.0","id":%d,"result":{"protocolVersion":"2025-06-18","capabilities":{},"serverInfo":{"name":"x","version":"1"}}}`, q.ID)
+			return
+		}
+		close(requestStarted)
+		<-r.Context().Done()
+	}))
+	defer server.Close()
+	ctx, cancel := context.WithCancel(context.Background())
+	returned := make(chan error, 1)
+	go func() {
+		returned <- runHTTP(ctx, domain.MCPServer{Decoded: map[string]any{"url": server.URL}}, "", nil, &Evidence{})
+	}()
+	select {
+	case <-requestStarted:
+	case <-time.After(time.Second):
+		t.Fatal("notification request did not start")
+	}
+	cancel()
+	select {
+	case err := <-returned:
+		if code(err) != "runtime_http_request_failed" {
+			t.Fatalf("canceled run error=%v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("canceled run did not return")
+	}
+	select {
+	case <-deleteSeen:
+	default:
+		t.Fatal("canceled session was not terminated before return")
 	}
 }
 

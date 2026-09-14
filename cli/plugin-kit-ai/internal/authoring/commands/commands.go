@@ -67,6 +67,7 @@ type request struct {
 	once              bool
 	deadline          time.Duration
 	cycleOutput       func(report.Report, error) error
+	runMCP            func(context.Context, mcpruntime.Options) (mcpruntime.Evidence, error)
 }
 
 // Execute renders once, after Factory.Execute handles every Cobra lifecycle exit.

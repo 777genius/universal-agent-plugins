@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/777genius/plugin-kit-ai/cli/internal/authoring/mcpruntime"
 	"github.com/777genius/plugin-kit-ai/cli/internal/authoring/project"
 	"github.com/777genius/plugin-kit-ai/cli/internal/authoring/report"
 )
@@ -155,5 +156,66 @@ func TestContinuousDevReportsFailuresAndKeepsWatching(t *testing.T) {
 	}
 	if strings.Count(human.String(), "dev: readiness") != 4 || strings.Contains(human.String(), root) || strings.Contains(human.String(), cache) {
 		t.Fatalf("continuous human cycle output was missing or unsafe: %s", human.String())
+	}
+}
+
+func TestContinuousDevOutputFailureCancelsAndJoinsActiveCycle(t *testing.T) {
+	cache := t.TempDir()
+	for _, name := range []string{"HOME", "LOCALAPPDATA", "XDG_CACHE_HOME"} {
+		t.Setenv(name, cache)
+	}
+	cycleStarted := make(chan struct{})
+	cycleReturned := make(chan struct{})
+
+	root := t.TempDir()
+	plugin := filepath.Join(root, "plugin.json")
+	if err := os.WriteFile(plugin, []byte(`{"$schema":"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json","name":"dev-output-fixture"}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	mcp := `{"$schema":"https://agent-plugins.org/schemas/1.0.0/mcp.schema.json","mcpServers":{"selected":{"type":"streamable-http","url":"https://example.test/mcp"}}}`
+	if err := os.WriteFile(filepath.Join(root, "mcp.json"), []byte(mcp), 0600); err != nil {
+		t.Fatal(err)
+	}
+	writeErr := make(chan error, 1)
+	go func() {
+		<-cycleStarted
+		writeErr <- os.WriteFile(plugin, []byte(`{"broken":`), 0600)
+	}()
+
+	scratch := t.TempDir()
+	outputFailure := errors.New("synthetic cycle output failure")
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	app := App{Projects: project.Service{Scratch: scratch}, Revision: "dev-output-test"}
+	_, err := app.dev(ctx, request{
+		root: root, server: "selected", allowNetwork: true, deadline: 5 * time.Second,
+		cycleOutput: func(report.Report, error) error { return outputFailure },
+		runMCP: func(ctx context.Context, _ mcpruntime.Options) (mcpruntime.Evidence, error) {
+			close(cycleStarted)
+			<-ctx.Done()
+			close(cycleReturned)
+			return mcpruntime.Evidence{}, ctx.Err()
+		},
+	})
+	if writeFailure := <-writeErr; writeFailure != nil {
+		t.Fatal(writeFailure)
+	}
+	if !errors.Is(err, outputFailure) {
+		t.Fatalf("output failure was not preserved: %v", err)
+	}
+	select {
+	case <-cycleReturned:
+	default:
+		t.Fatal("runtime cycle continued after dev returned")
+	}
+	if entries, readErr := os.ReadDir(scratch); readErr != nil || len(entries) != 0 {
+		t.Fatalf("active runtime cycle was not joined and cleaned: %v %v", entries, readErr)
+	}
+	release, lockErr := acquireDevSession(context.Background(), root)
+	if lockErr != nil {
+		t.Fatalf("project lock remained held after joined cycle: %v", lockErr)
+	}
+	if releaseErr := release(); releaseErr != nil {
+		t.Fatalf("release reacquired project lock: %v", releaseErr)
 	}
 }

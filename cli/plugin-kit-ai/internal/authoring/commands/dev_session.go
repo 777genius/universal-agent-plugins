@@ -133,14 +133,36 @@ func (a App) dev(ctx context.Context, req request) (r report.Report, err error) 
 	}
 	var cycle context.CancelFunc
 	var done chan cycleResult
+	stopCycle := func() (cycleResult, bool) {
+		if cycle == nil {
+			return cycleResult{}, false
+		}
+		cycle()
+		result := <-done
+		cycle = nil
+		done = nil
+		return result, true
+	}
+	// This defer is registered after the project-lock defer, so an active
+	// runtime is always canceled and joined before the lock is released.
+	defer func() {
+		result, stopped := stopCycle()
+		if stopped && result.err != nil && runtimeErrorCode(result.err) == "runtime_cleanup_failed" {
+			err = errors.Join(err, result.err)
+		}
+	}()
 	start := func(p project.Result) {
 		cycleCtx, cancel := context.WithCancel(ctx)
 		cycle = cancel
 		resultChannel := make(chan cycleResult, 1)
 		done = resultChannel
+		run := req.runMCP
+		if run == nil {
+			run = mcpruntime.Run
+		}
 		go func(ch chan<- cycleResult) {
 			result := report.Build("dev", a.Revision, p, req.release)
-			evidence, runErr := mcpruntime.Run(cycleCtx, mcpruntime.Options{SourceRoot: req.root, Scratch: a.Projects.Scratch, Project: p, Server: req.server, Tool: req.tool, Fixture: req.fixture, AllowNetwork: req.allowNetwork, Deadline: req.deadline, Projects: a.Projects})
+			evidence, runErr := run(cycleCtx, mcpruntime.Options{SourceRoot: req.root, Scratch: a.Projects.Scratch, Project: p, Server: req.server, Tool: req.tool, Fixture: req.fixture, AllowNetwork: req.allowNetwork, Deadline: req.deadline, Projects: a.Projects})
 			result.SetRuntime(evidence.Transport, evidence.Initialize, evidence.ListTools, evidence.ToolCall, evidence.ToolCount, evidence.Cleanup, runtimeErrorCode(runErr))
 			ch <- cycleResult{result, runErr}
 		}(resultChannel)
@@ -175,9 +197,7 @@ func (a App) dev(ctx context.Context, req request) (r report.Report, err error) 
 				return r, result.err
 			}
 		case <-ctx.Done():
-			if cycle != nil {
-				cycle()
-				result := <-done
+			if result, stopped := stopCycle(); stopped {
 				if result.err != nil && runtimeErrorCode(result.err) == "runtime_cleanup_failed" {
 					_ = emit(result.report, result.err)
 					return result.report, errors.Join(ctx.Err(), result.err)
@@ -223,11 +243,7 @@ func (a App) dev(ctx context.Context, req request) (r report.Report, err error) 
 				continue
 			}
 			selected := pending.take()
-			if cycle != nil {
-				cycle()
-				result := <-done
-				cycle = nil
-				done = nil
+			if result, stopped := stopCycle(); stopped {
 				if result.err != nil && runtimeErrorCode(result.err) == "runtime_cleanup_failed" {
 					_ = emit(result.report, result.err)
 					return result.report, result.err
