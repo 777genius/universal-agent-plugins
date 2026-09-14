@@ -4074,7 +4074,7 @@
     "namespace": "prepared-authoring-v2",
     "status": "released",
     "released": true,
-    "sourceSHA": "59e0e5b95979e19fbe21ab9f49c0ea68500b116e",
+    "sourceSHA": "ec9397a63f7c7550a680fcb0f5565902acbf7243",
     "factoryBaselineSHA": "070663efb27f69ecae8609e6b839f86f843efbb0",
     "sources": [
       {
@@ -4331,7 +4331,7 @@
     "publicVisibility": "public",
     "localeStrategy": "canonical-en",
     "sourceKind": "authoring-docs-adapter",
-    "sourceRef": "https://github.com/777genius/universal-agent-plugins/tree/59e0e5b95979e19fbe21ab9f49c0ea68500b116e/cli/plugin-kit-ai/internal/authoring/commands",
+    "sourceRef": "https://github.com/777genius/universal-agent-plugins/tree/ec9397a63f7c7550a680fcb0f5565902acbf7243/cli/plugin-kit-ai/internal/authoring/commands",
     "canonicalId": "prepared-authoring-v2:agentplugins author",
     "kind": "command",
     "surface": "authoring-cli",
@@ -4432,7 +4432,7 @@
     "namespace": "prepared-authoring-v2",
     "status": "released",
     "released": true,
-    "sourceSHA": "59e0e5b95979e19fbe21ab9f49c0ea68500b116e",
+    "sourceSHA": "ec9397a63f7c7550a680fcb0f5565902acbf7243",
     "factoryBaselineSHA": "070663efb27f69ecae8609e6b839f86f843efbb0",
     "sources": [
       {
@@ -4689,7 +4689,7 @@
     "publicVisibility": "public",
     "localeStrategy": "canonical-en",
     "sourceKind": "authoring-docs-adapter",
-    "sourceRef": "https://github.com/777genius/universal-agent-plugins/tree/59e0e5b95979e19fbe21ab9f49c0ea68500b116e/cli/plugin-kit-ai/internal/authoring/commands",
+    "sourceRef": "https://github.com/777genius/universal-agent-plugins/tree/ec9397a63f7c7550a680fcb0f5565902acbf7243/cli/plugin-kit-ai/internal/authoring/commands",
     "canonicalId": "prepared-authoring-v2:agentplugins author capabilities",
     "kind": "command",
     "surface": "authoring-cli",
@@ -4790,7 +4790,7 @@
     "namespace": "prepared-authoring-v2",
     "status": "released",
     "released": true,
-    "sourceSHA": "59e0e5b95979e19fbe21ab9f49c0ea68500b116e",
+    "sourceSHA": "ec9397a63f7c7550a680fcb0f5565902acbf7243",
     "factoryBaselineSHA": "070663efb27f69ecae8609e6b839f86f843efbb0",
     "sources": [
       {
@@ -5047,7 +5047,7 @@
     "publicVisibility": "public",
     "localeStrategy": "canonical-en",
     "sourceKind": "authoring-docs-adapter",
-    "sourceRef": "https://github.com/777genius/universal-agent-plugins/tree/59e0e5b95979e19fbe21ab9f49c0ea68500b116e/cli/plugin-kit-ai/internal/authoring/commands",
+    "sourceRef": "https://github.com/777genius/universal-agent-plugins/tree/ec9397a63f7c7550a680fcb0f5565902acbf7243/cli/plugin-kit-ai/internal/authoring/commands",
     "canonicalId": "prepared-authoring-v2:agentplugins author compat",
     "kind": "command",
     "surface": "authoring-cli",
@@ -5162,7 +5162,7 @@
     "namespace": "prepared-authoring-v2",
     "status": "released",
     "released": true,
-    "sourceSHA": "59e0e5b95979e19fbe21ab9f49c0ea68500b116e",
+    "sourceSHA": "ec9397a63f7c7550a680fcb0f5565902acbf7243",
     "factoryBaselineSHA": "070663efb27f69ecae8609e6b839f86f843efbb0",
     "sources": [
       {
@@ -5419,7 +5419,7 @@
     "publicVisibility": "public",
     "localeStrategy": "canonical-en",
     "sourceKind": "authoring-docs-adapter",
-    "sourceRef": "https://github.com/777genius/universal-agent-plugins/tree/59e0e5b95979e19fbe21ab9f49c0ea68500b116e/cli/plugin-kit-ai/internal/authoring/commands",
+    "sourceRef": "https://github.com/777genius/universal-agent-plugins/tree/ec9397a63f7c7550a680fcb0f5565902acbf7243/cli/plugin-kit-ai/internal/authoring/commands",
     "canonicalId": "prepared-authoring-v2:agentplugins author doctor",
     "kind": "command",
     "surface": "authoring-cli",
@@ -5534,7 +5534,7 @@
     "namespace": "prepared-authoring-v2",
     "status": "released",
     "released": true,
-    "sourceSHA": "59e0e5b95979e19fbe21ab9f49c0ea68500b116e",
+    "sourceSHA": "ec9397a63f7c7550a680fcb0f5565902acbf7243",
     "factoryBaselineSHA": "070663efb27f69ecae8609e6b839f86f843efbb0",
     "sources": [
       {
@@ -5791,7 +5791,7 @@
     "publicVisibility": "public",
     "localeStrategy": "canonical-en",
     "sourceKind": "authoring-docs-adapter",
-    "sourceRef": "https://github.com/777genius/universal-agent-plugins/tree/59e0e5b95979e19fbe21ab9f49c0ea68500b116e/cli/plugin-kit-ai/internal/authoring/commands",
+    "sourceRef": "https://github.com/777genius/universal-agent-plugins/tree/ec9397a63f7c7550a680fcb0f5565902acbf7243/cli/plugin-kit-ai/internal/authoring/commands",
     "canonicalId": "prepared-authoring-v2:agentplugins author help",
     "kind": "command",
     "surface": "authoring-cli",
@@ -5892,7 +5892,7 @@
     "namespace": "prepared-authoring-v2",
     "status": "released",
     "released": true,
-    "sourceSHA": "59e0e5b95979e19fbe21ab9f49c0ea68500b116e",
+    "sourceSHA": "ec9397a63f7c7550a680fcb0f5565902acbf7243",
     "factoryBaselineSHA": "070663efb27f69ecae8609e6b839f86f843efbb0",
     "sources": [
       {
@@ -6149,7 +6149,7 @@
     "publicVisibility": "public",
     "localeStrategy": "canonical-en",
     "sourceKind": "authoring-docs-adapter",
-    "sourceRef": "https://github.com/777genius/universal-agent-plugins/tree/59e0e5b95979e19fbe21ab9f49c0ea68500b116e/cli/plugin-kit-ai/internal/authoring/commands",
+    "sourceRef": "https://github.com/777genius/universal-agent-plugins/tree/ec9397a63f7c7550a680fcb0f5565902acbf7243/cli/plugin-kit-ai/internal/authoring/commands",
     "canonicalId": "prepared-authoring-v2:agentplugins author init",
     "kind": "command",
     "surface": "authoring-cli",
@@ -6323,7 +6323,7 @@
     "namespace": "prepared-authoring-v2",
     "status": "released",
     "released": true,
-    "sourceSHA": "59e0e5b95979e19fbe21ab9f49c0ea68500b116e",
+    "sourceSHA": "ec9397a63f7c7550a680fcb0f5565902acbf7243",
     "factoryBaselineSHA": "070663efb27f69ecae8609e6b839f86f843efbb0",
     "sources": [
       {
@@ -6580,7 +6580,7 @@
     "publicVisibility": "public",
     "localeStrategy": "canonical-en",
     "sourceKind": "authoring-docs-adapter",
-    "sourceRef": "https://github.com/777genius/universal-agent-plugins/tree/59e0e5b95979e19fbe21ab9f49c0ea68500b116e/cli/plugin-kit-ai/internal/authoring/commands",
+    "sourceRef": "https://github.com/777genius/universal-agent-plugins/tree/ec9397a63f7c7550a680fcb0f5565902acbf7243/cli/plugin-kit-ai/internal/authoring/commands",
     "canonicalId": "prepared-authoring-v2:agentplugins author inspect",
     "kind": "command",
     "surface": "authoring-cli",
@@ -6695,7 +6695,7 @@
     "namespace": "prepared-authoring-v2",
     "status": "released",
     "released": true,
-    "sourceSHA": "59e0e5b95979e19fbe21ab9f49c0ea68500b116e",
+    "sourceSHA": "ec9397a63f7c7550a680fcb0f5565902acbf7243",
     "factoryBaselineSHA": "070663efb27f69ecae8609e6b839f86f843efbb0",
     "sources": [
       {
@@ -6952,7 +6952,7 @@
     "publicVisibility": "public",
     "localeStrategy": "canonical-en",
     "sourceKind": "authoring-docs-adapter",
-    "sourceRef": "https://github.com/777genius/universal-agent-plugins/tree/59e0e5b95979e19fbe21ab9f49c0ea68500b116e/cli/plugin-kit-ai/internal/authoring/commands",
+    "sourceRef": "https://github.com/777genius/universal-agent-plugins/tree/ec9397a63f7c7550a680fcb0f5565902acbf7243/cli/plugin-kit-ai/internal/authoring/commands",
     "canonicalId": "prepared-authoring-v2:agentplugins author skills",
     "kind": "command",
     "surface": "authoring-cli",
@@ -7053,7 +7053,7 @@
     "namespace": "prepared-authoring-v2",
     "status": "released",
     "released": true,
-    "sourceSHA": "59e0e5b95979e19fbe21ab9f49c0ea68500b116e",
+    "sourceSHA": "ec9397a63f7c7550a680fcb0f5565902acbf7243",
     "factoryBaselineSHA": "070663efb27f69ecae8609e6b839f86f843efbb0",
     "sources": [
       {
@@ -7310,7 +7310,7 @@
     "publicVisibility": "public",
     "localeStrategy": "canonical-en",
     "sourceKind": "authoring-docs-adapter",
-    "sourceRef": "https://github.com/777genius/universal-agent-plugins/tree/59e0e5b95979e19fbe21ab9f49c0ea68500b116e/cli/plugin-kit-ai/internal/authoring/commands",
+    "sourceRef": "https://github.com/777genius/universal-agent-plugins/tree/ec9397a63f7c7550a680fcb0f5565902acbf7243/cli/plugin-kit-ai/internal/authoring/commands",
     "canonicalId": "prepared-authoring-v2:agentplugins author skills help",
     "kind": "command",
     "surface": "authoring-cli",
@@ -7411,7 +7411,7 @@
     "namespace": "prepared-authoring-v2",
     "status": "released",
     "released": true,
-    "sourceSHA": "59e0e5b95979e19fbe21ab9f49c0ea68500b116e",
+    "sourceSHA": "ec9397a63f7c7550a680fcb0f5565902acbf7243",
     "factoryBaselineSHA": "070663efb27f69ecae8609e6b839f86f843efbb0",
     "sources": [
       {
@@ -7668,7 +7668,7 @@
     "publicVisibility": "public",
     "localeStrategy": "canonical-en",
     "sourceKind": "authoring-docs-adapter",
-    "sourceRef": "https://github.com/777genius/universal-agent-plugins/tree/59e0e5b95979e19fbe21ab9f49c0ea68500b116e/cli/plugin-kit-ai/internal/authoring/commands",
+    "sourceRef": "https://github.com/777genius/universal-agent-plugins/tree/ec9397a63f7c7550a680fcb0f5565902acbf7243/cli/plugin-kit-ai/internal/authoring/commands",
     "canonicalId": "prepared-authoring-v2:agentplugins author skills init",
     "kind": "command",
     "surface": "authoring-cli",
@@ -7782,7 +7782,7 @@
     "namespace": "prepared-authoring-v2",
     "status": "released",
     "released": true,
-    "sourceSHA": "59e0e5b95979e19fbe21ab9f49c0ea68500b116e",
+    "sourceSHA": "ec9397a63f7c7550a680fcb0f5565902acbf7243",
     "factoryBaselineSHA": "070663efb27f69ecae8609e6b839f86f843efbb0",
     "sources": [
       {
@@ -8039,7 +8039,7 @@
     "publicVisibility": "public",
     "localeStrategy": "canonical-en",
     "sourceKind": "authoring-docs-adapter",
-    "sourceRef": "https://github.com/777genius/universal-agent-plugins/tree/59e0e5b95979e19fbe21ab9f49c0ea68500b116e/cli/plugin-kit-ai/internal/authoring/commands",
+    "sourceRef": "https://github.com/777genius/universal-agent-plugins/tree/ec9397a63f7c7550a680fcb0f5565902acbf7243/cli/plugin-kit-ai/internal/authoring/commands",
     "canonicalId": "prepared-authoring-v2:agentplugins author skills validate",
     "kind": "command",
     "surface": "authoring-cli",
@@ -8147,7 +8147,7 @@
     "namespace": "prepared-authoring-v2",
     "status": "released",
     "released": true,
-    "sourceSHA": "59e0e5b95979e19fbe21ab9f49c0ea68500b116e",
+    "sourceSHA": "ec9397a63f7c7550a680fcb0f5565902acbf7243",
     "factoryBaselineSHA": "070663efb27f69ecae8609e6b839f86f843efbb0",
     "sources": [
       {
@@ -8404,7 +8404,7 @@
     "publicVisibility": "public",
     "localeStrategy": "canonical-en",
     "sourceKind": "authoring-docs-adapter",
-    "sourceRef": "https://github.com/777genius/universal-agent-plugins/tree/59e0e5b95979e19fbe21ab9f49c0ea68500b116e/cli/plugin-kit-ai/internal/authoring/commands",
+    "sourceRef": "https://github.com/777genius/universal-agent-plugins/tree/ec9397a63f7c7550a680fcb0f5565902acbf7243/cli/plugin-kit-ai/internal/authoring/commands",
     "canonicalId": "prepared-authoring-v2:agentplugins author test",
     "kind": "command",
     "surface": "authoring-cli",
@@ -8519,7 +8519,7 @@
     "namespace": "prepared-authoring-v2",
     "status": "released",
     "released": true,
-    "sourceSHA": "59e0e5b95979e19fbe21ab9f49c0ea68500b116e",
+    "sourceSHA": "ec9397a63f7c7550a680fcb0f5565902acbf7243",
     "factoryBaselineSHA": "070663efb27f69ecae8609e6b839f86f843efbb0",
     "sources": [
       {
@@ -8776,7 +8776,7 @@
     "publicVisibility": "public",
     "localeStrategy": "canonical-en",
     "sourceKind": "authoring-docs-adapter",
-    "sourceRef": "https://github.com/777genius/universal-agent-plugins/tree/59e0e5b95979e19fbe21ab9f49c0ea68500b116e/cli/plugin-kit-ai/internal/authoring/commands",
+    "sourceRef": "https://github.com/777genius/universal-agent-plugins/tree/ec9397a63f7c7550a680fcb0f5565902acbf7243/cli/plugin-kit-ai/internal/authoring/commands",
     "canonicalId": "prepared-authoring-v2:agentplugins author validate",
     "kind": "command",
     "surface": "authoring-cli",
@@ -8891,7 +8891,7 @@
     "namespace": "prepared-authoring-v2",
     "status": "released",
     "released": true,
-    "sourceSHA": "59e0e5b95979e19fbe21ab9f49c0ea68500b116e",
+    "sourceSHA": "ec9397a63f7c7550a680fcb0f5565902acbf7243",
     "factoryBaselineSHA": "070663efb27f69ecae8609e6b839f86f843efbb0",
     "sources": [
       {
@@ -9148,7 +9148,7 @@
     "publicVisibility": "public",
     "localeStrategy": "canonical-en",
     "sourceKind": "authoring-docs-adapter",
-    "sourceRef": "https://github.com/777genius/universal-agent-plugins/tree/59e0e5b95979e19fbe21ab9f49c0ea68500b116e/cli/plugin-kit-ai/internal/authoring/commands",
+    "sourceRef": "https://github.com/777genius/universal-agent-plugins/tree/ec9397a63f7c7550a680fcb0f5565902acbf7243/cli/plugin-kit-ai/internal/authoring/commands",
     "canonicalId": "prepared-authoring-v2:agentplugins author version",
     "kind": "command",
     "surface": "authoring-cli",
@@ -9249,7 +9249,7 @@
     "namespace": "prepared-authoring-v2",
     "status": "released",
     "released": true,
-    "sourceSHA": "59e0e5b95979e19fbe21ab9f49c0ea68500b116e",
+    "sourceSHA": "ec9397a63f7c7550a680fcb0f5565902acbf7243",
     "factoryBaselineSHA": "070663efb27f69ecae8609e6b839f86f843efbb0",
     "sources": [
       {
@@ -9506,7 +9506,7 @@
     "publicVisibility": "public",
     "localeStrategy": "canonical-en",
     "sourceKind": "authoring-docs-adapter",
-    "sourceRef": "https://github.com/777genius/universal-agent-plugins/tree/59e0e5b95979e19fbe21ab9f49c0ea68500b116e/cli/plugin-kit-ai/internal/authoring/commands",
+    "sourceRef": "https://github.com/777genius/universal-agent-plugins/tree/ec9397a63f7c7550a680fcb0f5565902acbf7243/cli/plugin-kit-ai/internal/authoring/commands",
     "canonicalId": "prepared-authoring-v2:plugin-kit-ai",
     "kind": "command",
     "surface": "authoring-cli",
@@ -9586,7 +9586,7 @@
     "namespace": "prepared-authoring-v2",
     "status": "released",
     "released": true,
-    "sourceSHA": "59e0e5b95979e19fbe21ab9f49c0ea68500b116e",
+    "sourceSHA": "ec9397a63f7c7550a680fcb0f5565902acbf7243",
     "factoryBaselineSHA": "070663efb27f69ecae8609e6b839f86f843efbb0",
     "sources": [
       {
@@ -9843,7 +9843,7 @@
     "publicVisibility": "public",
     "localeStrategy": "canonical-en",
     "sourceKind": "authoring-docs-adapter",
-    "sourceRef": "https://github.com/777genius/universal-agent-plugins/tree/59e0e5b95979e19fbe21ab9f49c0ea68500b116e/cli/plugin-kit-ai/internal/authoring/commands",
+    "sourceRef": "https://github.com/777genius/universal-agent-plugins/tree/ec9397a63f7c7550a680fcb0f5565902acbf7243/cli/plugin-kit-ai/internal/authoring/commands",
     "canonicalId": "prepared-authoring-v2:plugin-kit-ai capabilities",
     "kind": "command",
     "surface": "authoring-cli",
@@ -9924,7 +9924,7 @@
     "namespace": "prepared-authoring-v2",
     "status": "released",
     "released": true,
-    "sourceSHA": "59e0e5b95979e19fbe21ab9f49c0ea68500b116e",
+    "sourceSHA": "ec9397a63f7c7550a680fcb0f5565902acbf7243",
     "factoryBaselineSHA": "070663efb27f69ecae8609e6b839f86f843efbb0",
     "sources": [
       {
@@ -10181,7 +10181,7 @@
     "publicVisibility": "public",
     "localeStrategy": "canonical-en",
     "sourceKind": "authoring-docs-adapter",
-    "sourceRef": "https://github.com/777genius/universal-agent-plugins/tree/59e0e5b95979e19fbe21ab9f49c0ea68500b116e/cli/plugin-kit-ai/internal/authoring/commands",
+    "sourceRef": "https://github.com/777genius/universal-agent-plugins/tree/ec9397a63f7c7550a680fcb0f5565902acbf7243/cli/plugin-kit-ai/internal/authoring/commands",
     "canonicalId": "prepared-authoring-v2:plugin-kit-ai compat",
     "kind": "command",
     "surface": "authoring-cli",
@@ -10276,7 +10276,7 @@
     "namespace": "prepared-authoring-v2",
     "status": "released",
     "released": true,
-    "sourceSHA": "59e0e5b95979e19fbe21ab9f49c0ea68500b116e",
+    "sourceSHA": "ec9397a63f7c7550a680fcb0f5565902acbf7243",
     "factoryBaselineSHA": "070663efb27f69ecae8609e6b839f86f843efbb0",
     "sources": [
       {
@@ -10533,7 +10533,7 @@
     "publicVisibility": "public",
     "localeStrategy": "canonical-en",
     "sourceKind": "authoring-docs-adapter",
-    "sourceRef": "https://github.com/777genius/universal-agent-plugins/tree/59e0e5b95979e19fbe21ab9f49c0ea68500b116e/cli/plugin-kit-ai/internal/authoring/commands",
+    "sourceRef": "https://github.com/777genius/universal-agent-plugins/tree/ec9397a63f7c7550a680fcb0f5565902acbf7243/cli/plugin-kit-ai/internal/authoring/commands",
     "canonicalId": "prepared-authoring-v2:plugin-kit-ai completion",
     "kind": "command",
     "surface": "authoring-cli",
@@ -10614,7 +10614,7 @@
     "namespace": "prepared-authoring-v2",
     "status": "released",
     "released": true,
-    "sourceSHA": "59e0e5b95979e19fbe21ab9f49c0ea68500b116e",
+    "sourceSHA": "ec9397a63f7c7550a680fcb0f5565902acbf7243",
     "factoryBaselineSHA": "070663efb27f69ecae8609e6b839f86f843efbb0",
     "sources": [
       {
@@ -10871,7 +10871,7 @@
     "publicVisibility": "public",
     "localeStrategy": "canonical-en",
     "sourceKind": "authoring-docs-adapter",
-    "sourceRef": "https://github.com/777genius/universal-agent-plugins/tree/59e0e5b95979e19fbe21ab9f49c0ea68500b116e/cli/plugin-kit-ai/internal/authoring/commands",
+    "sourceRef": "https://github.com/777genius/universal-agent-plugins/tree/ec9397a63f7c7550a680fcb0f5565902acbf7243/cli/plugin-kit-ai/internal/authoring/commands",
     "canonicalId": "prepared-authoring-v2:plugin-kit-ai completion bash",
     "kind": "command",
     "surface": "authoring-cli",
@@ -10959,7 +10959,7 @@
     "namespace": "prepared-authoring-v2",
     "status": "released",
     "released": true,
-    "sourceSHA": "59e0e5b95979e19fbe21ab9f49c0ea68500b116e",
+    "sourceSHA": "ec9397a63f7c7550a680fcb0f5565902acbf7243",
     "factoryBaselineSHA": "070663efb27f69ecae8609e6b839f86f843efbb0",
     "sources": [
       {
@@ -11216,7 +11216,7 @@
     "publicVisibility": "public",
     "localeStrategy": "canonical-en",
     "sourceKind": "authoring-docs-adapter",
-    "sourceRef": "https://github.com/777genius/universal-agent-plugins/tree/59e0e5b95979e19fbe21ab9f49c0ea68500b116e/cli/plugin-kit-ai/internal/authoring/commands",
+    "sourceRef": "https://github.com/777genius/universal-agent-plugins/tree/ec9397a63f7c7550a680fcb0f5565902acbf7243/cli/plugin-kit-ai/internal/authoring/commands",
     "canonicalId": "prepared-authoring-v2:plugin-kit-ai completion fish",
     "kind": "command",
     "surface": "authoring-cli",
@@ -11304,7 +11304,7 @@
     "namespace": "prepared-authoring-v2",
     "status": "released",
     "released": true,
-    "sourceSHA": "59e0e5b95979e19fbe21ab9f49c0ea68500b116e",
+    "sourceSHA": "ec9397a63f7c7550a680fcb0f5565902acbf7243",
     "factoryBaselineSHA": "070663efb27f69ecae8609e6b839f86f843efbb0",
     "sources": [
       {
@@ -11561,7 +11561,7 @@
     "publicVisibility": "public",
     "localeStrategy": "canonical-en",
     "sourceKind": "authoring-docs-adapter",
-    "sourceRef": "https://github.com/777genius/universal-agent-plugins/tree/59e0e5b95979e19fbe21ab9f49c0ea68500b116e/cli/plugin-kit-ai/internal/authoring/commands",
+    "sourceRef": "https://github.com/777genius/universal-agent-plugins/tree/ec9397a63f7c7550a680fcb0f5565902acbf7243/cli/plugin-kit-ai/internal/authoring/commands",
     "canonicalId": "prepared-authoring-v2:plugin-kit-ai completion help",
     "kind": "command",
     "surface": "authoring-cli",
@@ -11642,7 +11642,7 @@
     "namespace": "prepared-authoring-v2",
     "status": "released",
     "released": true,
-    "sourceSHA": "59e0e5b95979e19fbe21ab9f49c0ea68500b116e",
+    "sourceSHA": "ec9397a63f7c7550a680fcb0f5565902acbf7243",
     "factoryBaselineSHA": "070663efb27f69ecae8609e6b839f86f843efbb0",
     "sources": [
       {
@@ -11899,7 +11899,7 @@
     "publicVisibility": "public",
     "localeStrategy": "canonical-en",
     "sourceKind": "authoring-docs-adapter",
-    "sourceRef": "https://github.com/777genius/universal-agent-plugins/tree/59e0e5b95979e19fbe21ab9f49c0ea68500b116e/cli/plugin-kit-ai/internal/authoring/commands",
+    "sourceRef": "https://github.com/777genius/universal-agent-plugins/tree/ec9397a63f7c7550a680fcb0f5565902acbf7243/cli/plugin-kit-ai/internal/authoring/commands",
     "canonicalId": "prepared-authoring-v2:plugin-kit-ai completion powershell",
     "kind": "command",
     "surface": "authoring-cli",
@@ -11987,7 +11987,7 @@
     "namespace": "prepared-authoring-v2",
     "status": "released",
     "released": true,
-    "sourceSHA": "59e0e5b95979e19fbe21ab9f49c0ea68500b116e",
+    "sourceSHA": "ec9397a63f7c7550a680fcb0f5565902acbf7243",
     "factoryBaselineSHA": "070663efb27f69ecae8609e6b839f86f843efbb0",
     "sources": [
       {
@@ -12244,7 +12244,7 @@
     "publicVisibility": "public",
     "localeStrategy": "canonical-en",
     "sourceKind": "authoring-docs-adapter",
-    "sourceRef": "https://github.com/777genius/universal-agent-plugins/tree/59e0e5b95979e19fbe21ab9f49c0ea68500b116e/cli/plugin-kit-ai/internal/authoring/commands",
+    "sourceRef": "https://github.com/777genius/universal-agent-plugins/tree/ec9397a63f7c7550a680fcb0f5565902acbf7243/cli/plugin-kit-ai/internal/authoring/commands",
     "canonicalId": "prepared-authoring-v2:plugin-kit-ai completion zsh",
     "kind": "command",
     "surface": "authoring-cli",
@@ -12332,7 +12332,7 @@
     "namespace": "prepared-authoring-v2",
     "status": "released",
     "released": true,
-    "sourceSHA": "59e0e5b95979e19fbe21ab9f49c0ea68500b116e",
+    "sourceSHA": "ec9397a63f7c7550a680fcb0f5565902acbf7243",
     "factoryBaselineSHA": "070663efb27f69ecae8609e6b839f86f843efbb0",
     "sources": [
       {
@@ -12589,7 +12589,7 @@
     "publicVisibility": "public",
     "localeStrategy": "canonical-en",
     "sourceKind": "authoring-docs-adapter",
-    "sourceRef": "https://github.com/777genius/universal-agent-plugins/tree/59e0e5b95979e19fbe21ab9f49c0ea68500b116e/cli/plugin-kit-ai/internal/authoring/commands",
+    "sourceRef": "https://github.com/777genius/universal-agent-plugins/tree/ec9397a63f7c7550a680fcb0f5565902acbf7243/cli/plugin-kit-ai/internal/authoring/commands",
     "canonicalId": "prepared-authoring-v2:plugin-kit-ai doctor",
     "kind": "command",
     "surface": "authoring-cli",
@@ -12684,7 +12684,7 @@
     "namespace": "prepared-authoring-v2",
     "status": "released",
     "released": true,
-    "sourceSHA": "59e0e5b95979e19fbe21ab9f49c0ea68500b116e",
+    "sourceSHA": "ec9397a63f7c7550a680fcb0f5565902acbf7243",
     "factoryBaselineSHA": "070663efb27f69ecae8609e6b839f86f843efbb0",
     "sources": [
       {
@@ -12941,7 +12941,7 @@
     "publicVisibility": "public",
     "localeStrategy": "canonical-en",
     "sourceKind": "authoring-docs-adapter",
-    "sourceRef": "https://github.com/777genius/universal-agent-plugins/tree/59e0e5b95979e19fbe21ab9f49c0ea68500b116e/cli/plugin-kit-ai/internal/authoring/commands",
+    "sourceRef": "https://github.com/777genius/universal-agent-plugins/tree/ec9397a63f7c7550a680fcb0f5565902acbf7243/cli/plugin-kit-ai/internal/authoring/commands",
     "canonicalId": "prepared-authoring-v2:plugin-kit-ai help",
     "kind": "command",
     "surface": "authoring-cli",
@@ -13022,7 +13022,7 @@
     "namespace": "prepared-authoring-v2",
     "status": "released",
     "released": true,
-    "sourceSHA": "59e0e5b95979e19fbe21ab9f49c0ea68500b116e",
+    "sourceSHA": "ec9397a63f7c7550a680fcb0f5565902acbf7243",
     "factoryBaselineSHA": "070663efb27f69ecae8609e6b839f86f843efbb0",
     "sources": [
       {
@@ -13279,7 +13279,7 @@
     "publicVisibility": "public",
     "localeStrategy": "canonical-en",
     "sourceKind": "authoring-docs-adapter",
-    "sourceRef": "https://github.com/777genius/universal-agent-plugins/tree/59e0e5b95979e19fbe21ab9f49c0ea68500b116e/cli/plugin-kit-ai/internal/authoring/commands",
+    "sourceRef": "https://github.com/777genius/universal-agent-plugins/tree/ec9397a63f7c7550a680fcb0f5565902acbf7243/cli/plugin-kit-ai/internal/authoring/commands",
     "canonicalId": "prepared-authoring-v2:plugin-kit-ai init",
     "kind": "command",
     "surface": "authoring-cli",
@@ -13433,7 +13433,7 @@
     "namespace": "prepared-authoring-v2",
     "status": "released",
     "released": true,
-    "sourceSHA": "59e0e5b95979e19fbe21ab9f49c0ea68500b116e",
+    "sourceSHA": "ec9397a63f7c7550a680fcb0f5565902acbf7243",
     "factoryBaselineSHA": "070663efb27f69ecae8609e6b839f86f843efbb0",
     "sources": [
       {
@@ -13690,7 +13690,7 @@
     "publicVisibility": "public",
     "localeStrategy": "canonical-en",
     "sourceKind": "authoring-docs-adapter",
-    "sourceRef": "https://github.com/777genius/universal-agent-plugins/tree/59e0e5b95979e19fbe21ab9f49c0ea68500b116e/cli/plugin-kit-ai/internal/authoring/commands",
+    "sourceRef": "https://github.com/777genius/universal-agent-plugins/tree/ec9397a63f7c7550a680fcb0f5565902acbf7243/cli/plugin-kit-ai/internal/authoring/commands",
     "canonicalId": "prepared-authoring-v2:plugin-kit-ai inspect",
     "kind": "command",
     "surface": "authoring-cli",
@@ -13785,7 +13785,7 @@
     "namespace": "prepared-authoring-v2",
     "status": "released",
     "released": true,
-    "sourceSHA": "59e0e5b95979e19fbe21ab9f49c0ea68500b116e",
+    "sourceSHA": "ec9397a63f7c7550a680fcb0f5565902acbf7243",
     "factoryBaselineSHA": "070663efb27f69ecae8609e6b839f86f843efbb0",
     "sources": [
       {
@@ -14042,7 +14042,7 @@
     "publicVisibility": "public",
     "localeStrategy": "canonical-en",
     "sourceKind": "authoring-docs-adapter",
-    "sourceRef": "https://github.com/777genius/universal-agent-plugins/tree/59e0e5b95979e19fbe21ab9f49c0ea68500b116e/cli/plugin-kit-ai/internal/authoring/commands",
+    "sourceRef": "https://github.com/777genius/universal-agent-plugins/tree/ec9397a63f7c7550a680fcb0f5565902acbf7243/cli/plugin-kit-ai/internal/authoring/commands",
     "canonicalId": "prepared-authoring-v2:plugin-kit-ai skills",
     "kind": "command",
     "surface": "authoring-cli",
@@ -14123,7 +14123,7 @@
     "namespace": "prepared-authoring-v2",
     "status": "released",
     "released": true,
-    "sourceSHA": "59e0e5b95979e19fbe21ab9f49c0ea68500b116e",
+    "sourceSHA": "ec9397a63f7c7550a680fcb0f5565902acbf7243",
     "factoryBaselineSHA": "070663efb27f69ecae8609e6b839f86f843efbb0",
     "sources": [
       {
@@ -14380,7 +14380,7 @@
     "publicVisibility": "public",
     "localeStrategy": "canonical-en",
     "sourceKind": "authoring-docs-adapter",
-    "sourceRef": "https://github.com/777genius/universal-agent-plugins/tree/59e0e5b95979e19fbe21ab9f49c0ea68500b116e/cli/plugin-kit-ai/internal/authoring/commands",
+    "sourceRef": "https://github.com/777genius/universal-agent-plugins/tree/ec9397a63f7c7550a680fcb0f5565902acbf7243/cli/plugin-kit-ai/internal/authoring/commands",
     "canonicalId": "prepared-authoring-v2:plugin-kit-ai skills help",
     "kind": "command",
     "surface": "authoring-cli",
@@ -14461,7 +14461,7 @@
     "namespace": "prepared-authoring-v2",
     "status": "released",
     "released": true,
-    "sourceSHA": "59e0e5b95979e19fbe21ab9f49c0ea68500b116e",
+    "sourceSHA": "ec9397a63f7c7550a680fcb0f5565902acbf7243",
     "factoryBaselineSHA": "070663efb27f69ecae8609e6b839f86f843efbb0",
     "sources": [
       {
@@ -14718,7 +14718,7 @@
     "publicVisibility": "public",
     "localeStrategy": "canonical-en",
     "sourceKind": "authoring-docs-adapter",
-    "sourceRef": "https://github.com/777genius/universal-agent-plugins/tree/59e0e5b95979e19fbe21ab9f49c0ea68500b116e/cli/plugin-kit-ai/internal/authoring/commands",
+    "sourceRef": "https://github.com/777genius/universal-agent-plugins/tree/ec9397a63f7c7550a680fcb0f5565902acbf7243/cli/plugin-kit-ai/internal/authoring/commands",
     "canonicalId": "prepared-authoring-v2:plugin-kit-ai skills init",
     "kind": "command",
     "surface": "authoring-cli",
@@ -14812,7 +14812,7 @@
     "namespace": "prepared-authoring-v2",
     "status": "released",
     "released": true,
-    "sourceSHA": "59e0e5b95979e19fbe21ab9f49c0ea68500b116e",
+    "sourceSHA": "ec9397a63f7c7550a680fcb0f5565902acbf7243",
     "factoryBaselineSHA": "070663efb27f69ecae8609e6b839f86f843efbb0",
     "sources": [
       {
@@ -15069,7 +15069,7 @@
     "publicVisibility": "public",
     "localeStrategy": "canonical-en",
     "sourceKind": "authoring-docs-adapter",
-    "sourceRef": "https://github.com/777genius/universal-agent-plugins/tree/59e0e5b95979e19fbe21ab9f49c0ea68500b116e/cli/plugin-kit-ai/internal/authoring/commands",
+    "sourceRef": "https://github.com/777genius/universal-agent-plugins/tree/ec9397a63f7c7550a680fcb0f5565902acbf7243/cli/plugin-kit-ai/internal/authoring/commands",
     "canonicalId": "prepared-authoring-v2:plugin-kit-ai skills validate",
     "kind": "command",
     "surface": "authoring-cli",
@@ -15157,7 +15157,7 @@
     "namespace": "prepared-authoring-v2",
     "status": "released",
     "released": true,
-    "sourceSHA": "59e0e5b95979e19fbe21ab9f49c0ea68500b116e",
+    "sourceSHA": "ec9397a63f7c7550a680fcb0f5565902acbf7243",
     "factoryBaselineSHA": "070663efb27f69ecae8609e6b839f86f843efbb0",
     "sources": [
       {
@@ -15414,7 +15414,7 @@
     "publicVisibility": "public",
     "localeStrategy": "canonical-en",
     "sourceKind": "authoring-docs-adapter",
-    "sourceRef": "https://github.com/777genius/universal-agent-plugins/tree/59e0e5b95979e19fbe21ab9f49c0ea68500b116e/cli/plugin-kit-ai/internal/authoring/commands",
+    "sourceRef": "https://github.com/777genius/universal-agent-plugins/tree/ec9397a63f7c7550a680fcb0f5565902acbf7243/cli/plugin-kit-ai/internal/authoring/commands",
     "canonicalId": "prepared-authoring-v2:plugin-kit-ai test",
     "kind": "command",
     "surface": "authoring-cli",
@@ -15509,7 +15509,7 @@
     "namespace": "prepared-authoring-v2",
     "status": "released",
     "released": true,
-    "sourceSHA": "59e0e5b95979e19fbe21ab9f49c0ea68500b116e",
+    "sourceSHA": "ec9397a63f7c7550a680fcb0f5565902acbf7243",
     "factoryBaselineSHA": "070663efb27f69ecae8609e6b839f86f843efbb0",
     "sources": [
       {
@@ -15766,7 +15766,7 @@
     "publicVisibility": "public",
     "localeStrategy": "canonical-en",
     "sourceKind": "authoring-docs-adapter",
-    "sourceRef": "https://github.com/777genius/universal-agent-plugins/tree/59e0e5b95979e19fbe21ab9f49c0ea68500b116e/cli/plugin-kit-ai/internal/authoring/commands",
+    "sourceRef": "https://github.com/777genius/universal-agent-plugins/tree/ec9397a63f7c7550a680fcb0f5565902acbf7243/cli/plugin-kit-ai/internal/authoring/commands",
     "canonicalId": "prepared-authoring-v2:plugin-kit-ai validate",
     "kind": "command",
     "surface": "authoring-cli",
@@ -15861,7 +15861,7 @@
     "namespace": "prepared-authoring-v2",
     "status": "released",
     "released": true,
-    "sourceSHA": "59e0e5b95979e19fbe21ab9f49c0ea68500b116e",
+    "sourceSHA": "ec9397a63f7c7550a680fcb0f5565902acbf7243",
     "factoryBaselineSHA": "070663efb27f69ecae8609e6b839f86f843efbb0",
     "sources": [
       {
@@ -16118,7 +16118,7 @@
     "publicVisibility": "public",
     "localeStrategy": "canonical-en",
     "sourceKind": "authoring-docs-adapter",
-    "sourceRef": "https://github.com/777genius/universal-agent-plugins/tree/59e0e5b95979e19fbe21ab9f49c0ea68500b116e/cli/plugin-kit-ai/internal/authoring/commands",
+    "sourceRef": "https://github.com/777genius/universal-agent-plugins/tree/ec9397a63f7c7550a680fcb0f5565902acbf7243/cli/plugin-kit-ai/internal/authoring/commands",
     "canonicalId": "prepared-authoring-v2:plugin-kit-ai version",
     "kind": "command",
     "surface": "authoring-cli",

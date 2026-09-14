@@ -11,7 +11,7 @@ translationRequired: false
 namespace: "prepared-authoring-v2"
 status: "released"
 released: true
-sourceSHA: "59e0e5b95979e19fbe21ab9f49c0ea68500b116e"
+sourceSHA: "ec9397a63f7c7550a680fcb0f5565902acbf7243"
 factoryBaselineSHA: "070663efb27f69ecae8609e6b839f86f843efbb0"
 sources:
   - "cli/plugin-kit-ai/cmd/agentplugins/release_root.go: c0465f90903c7ad3fcdc2283c241558d1b73bd9633f0e6af247ccd692a0e155e"
@@ -81,11 +81,11 @@ maturity: "stable"
 publicVisibility: "public"
 localeStrategy: "canonical-en"
 sourceKind: "authoring-docs-adapter"
-sourceRef: "https://github.com/777genius/universal-agent-plugins/tree/59e0e5b95979e19fbe21ab9f49c0ea68500b116e/cli/plugin-kit-ai/internal/authoring/commands"
+sourceRef: "https://github.com/777genius/universal-agent-plugins/tree/ec9397a63f7c7550a680fcb0f5565902acbf7243/cli/plugin-kit-ai/internal/authoring/commands"
 ---
-> Milestone A reference from the released authoring engine. [Exact source](https://github.com/777genius/universal-agent-plugins/tree/59e0e5b95979e19fbe21ab9f49c0ea68500b116e/cli/plugin-kit-ai/internal/authoring/commands).
+> Milestone A reference from the released authoring engine. [Exact source](https://github.com/777genius/universal-agent-plugins/tree/ec9397a63f7c7550a680fcb0f5565902acbf7243/cli/plugin-kit-ai/internal/authoring/commands).
 
-<!-- namespace: prepared-authoring-v2; status: released; source-sha: 59e0e5b95979e19fbe21ab9f49c0ea68500b116e -->
+<!-- namespace: prepared-authoring-v2; status: released; source-sha: ec9397a63f7c7550a680fcb0f5565902acbf7243 -->
 
 Released Milestone A reference.
 
@@ -123,7 +123,7 @@ for project diagnostics. Use agentplugins add for installation/security policy.
 
 ### SEE ALSO
 
-* [agentplugins](https://github.com/777genius/universal-agent-plugins/blob/59e0e5b95979e19fbe21ab9f49c0ea68500b116e/cli/plugin-kit-ai/internal/agentpluginscli/root.go)	 - Install and manage Agent Plugins 1.0 packages across AI clients
+* [agentplugins](https://github.com/777genius/universal-agent-plugins/blob/ec9397a63f7c7550a680fcb0f5565902acbf7243/cli/plugin-kit-ai/internal/agentpluginscli/root.go)	 - Install and manage Agent Plugins 1.0 packages across AI clients
 * [agentplugins author capabilities](/en/api/cli/prepared-authoring-v2-agentplugins-author-capabilities)	 - Show embedded schemas, profiles, live client metadata and implemented commands
 * [agentplugins author compat](/en/api/cli/prepared-authoring-v2-agentplugins-author-compat)	 - Evaluate explicit --target clients using static adapter support; no installed clients required
 * [agentplugins author doctor](/en/api/cli/prepared-authoring-v2-agentplugins-author-doctor)	 - Inspect captured native files and executable metadata; no processes or network
