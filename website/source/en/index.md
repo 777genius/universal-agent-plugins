@@ -48,18 +48,17 @@ agentplugins author test ./my-plugin
 ## Current scope
 
 Milestone A creates and statically checks portable Agent Plugins 1.0 packages.
-Runtime execution, dev loops, dependency bootstrap, migration, export, and
-publication are planned separately. Static validation does not prove client
+Runtime execution, dev loops, dependency bootstrap, export, and publication are
+planned separately. YAML migration is cancelled. Static validation does not prove client
 activation, service authentication, or runtime behavior.
 
-Existing `plugin.yaml` projects remain supported through the preserved
-[plugin-kit-ai v1 documentation](/en/legacy/v1/). Their useful capabilities and
-implementation have not been removed.
+The retired YAML implementation remains in source control as historical
+reference. It is not a supported product or migration path.
 
 ## Reference
 
 - [Quickstart](/en/guide/quickstart)
 - [Package layout](/en/build/layout)
 - [Static checks and evidence](/en/build/checks)
-- [Support boundary](/en/reference/support-boundary)
+- [Current support boundary](/en/build/)
 - [Agent Plugins 1.0 specification](https://agent-plugins.org/specification)

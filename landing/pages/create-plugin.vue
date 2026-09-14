@@ -1,6 +1,5 @@
 <script setup lang="ts">
 const { t } = useI18n();
-const { quickstartUrl, docsLabel, quickstartEnglishFallback } = useDocsLinks();
 // This checkpoint preserves the existing route and indexing policy.
 // Availability is stated in visible copy, independently of robots metadata.
 usePageSeo('publicAuthoring.title', 'publicAuthoring.intro', {
@@ -41,14 +40,6 @@ usePageSeo('publicAuthoring.title', 'publicAuthoring.intro', {
         <p>{{ t('publicAuthoring.limitations') }}</p>
         <a href="https://github.com/777genius/universal-agent-plugins#supported-clients">
           {{ t('publicAuthoring.compatibilityLink') }}
-        </a>
-      </section>
-
-      <section id="historical-v1" aria-labelledby="history-title">
-        <h2 id="history-title">{{ t('publicAuthoring.historyTitle') }}</h2>
-        <p>{{ t('publicAuthoring.history') }}</p>
-        <a :href="quickstartUrl.split('#')[0] + '#historical-v1'">
-          {{ docsLabel(t('publicAuthoring.quickstartLink'), quickstartEnglishFallback) }}
         </a>
       </section>
     </div>

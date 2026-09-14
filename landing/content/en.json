@@ -1018,14 +1018,6 @@
       "invocation": "npx universal-agent-plugins"
     },
     {
-      "id": "pipx",
-      "title": "pipx",
-      "description": "Python ecosystem wrapper when the corresponding release is published to PyPI.",
-      "href": "https://pypi.org/project/plugin-kit-ai/",
-      "note": "Public-beta wrapper. Use this channel only when the target release is available on PyPI.",
-      "command": "pipx install plugin-kit-ai"
-    },
-    {
       "id": "script",
       "title": "Verified install script",
       "description": "Native install without a package manager. Node.js is not required.",
@@ -1047,9 +1039,9 @@
       "id": "releases",
       "title": "GitHub Releases",
       "description": "Browse published release notes, artifacts, and version history directly.",
-      "href": "https://github.com/777genius/plugin-kit-ai/releases",
+      "href": "https://github.com/777genius/universal-agent-plugins/releases",
       "note": "Use this when you want the raw release surface.",
-      "command": "https://github.com/777genius/plugin-kit-ai/releases"
+      "command": "https://github.com/777genius/universal-agent-plugins/releases"
     },
     {
       "id": "docs",
@@ -1057,7 +1049,7 @@
       "description": "Jump straight into the quickstart and the broader docs site.",
       "href": "https://777genius.github.io/universal-agent-plugins/docs/en/guide/quickstart.html",
       "note": "Best next step once the CLI is installed.",
-      "command": "plugin-kit-ai init my-plugin"
+      "command": "agentplugins author init ./my-plugin"
     }
   ],
   "quickstartSteps": [

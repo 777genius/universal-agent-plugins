@@ -60,7 +60,7 @@ export async function extractHistorical(surfaces, referencePages = []) {
       .replace(/\bmaturity="[^"]*"/g, 'maturity="historical"')
       .replace(/https:\/\/github\.com\/777genius\/plugin-kit-ai\/(tree|blob)\/main\//g,
         `${repository}/$1/${historicalSHA}/`);
-    const banner = `> Historical plugin-kit-ai v1, baseline **1.2.4** ([exact source](${repository}/tree/${historicalSHA})). Project migration is not available in v2 yet. Maintain legacy projects using the v1 1.2.4 command set.\n\n`;
+    const banner = `> Historical plugin-kit-ai v1, baseline **1.2.4** ([exact source](${repository}/tree/${historicalSHA})). The product is retired and migration is intentionally not planned. These commands are immutable reference, not current installation guidance.\n\n`;
     content = content.replace(/^(---\n[\s\S]*?\n)(---\n)/,
       `$1historicalVersion: "1.2.4"\nsourceSHA: "${historicalSHA}"\nstatus: "historical"\n$2\n${banner}`);
     pages.push({ locale: file.split("/")[2], mirror: false,

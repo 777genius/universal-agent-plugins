@@ -1,4 +1,28 @@
 ---
+title: "Документация Agent Plugins"
+description: "Публичная документация Agent Plugins."
+canonicalId: "page:home"
+section: "home"
+locale: "ru"
+generated: false
+translationRequired: true
+---
+
+# Используйте плагины / Создавайте плагины
+
+Устанавливайте готовые Agent Plugins 1.0 или создавайте переносимые пакеты на основе `plugin.json`.
+
+- [Использовать плагины](/ru/use/)
+- [Создавать плагины](/ru/build/)
+- [Быстрый старт](/ru/guide/quickstart)
+
+Milestone A доступен через `agentplugins author`. Миграция YAML отменена; сохранённый legacy-код не является поддерживаемым продуктом.
+
+[Agent Plugins 1.0 specification](https://agent-plugins.org/specification)
+
+<!-- locale-historical-source:start
+locale-historical-frontmatter:start
+---
 title: "Документация plugin-kit-ai"
 description: "Публичная документация по plugin-kit-ai."
 canonicalId: "page:home"
@@ -7,14 +31,7 @@ locale: "ru"
 generated: false
 translationRequired: true
 ---
-
-[Использовать плагины](/ru/use/) · [Создавать плагины](/ru/build/) — Milestone A доступен. Миграция проектов в v2 пока недоступна.
-<p class="locale-historical-identity">Документация Agent Plugins</p>
-
-[Исторический снимок ветки plugin-kit-ai v1. 1.2.4 — базовая версия команд, а не точная версия этого снимка.](/en/legacy/v1/)
-
-<details><summary>Исторический снимок ветки plugin-kit-ai v1. 1.2.4 — базовая версия команд, а не точная версия этого снимка.</summary>
-
+locale-historical-frontmatter:end
 
 <div class="docs-hero docs-hero--feature">
   <p class="docs-kicker">ПУБЛИЧНАЯ ДОКУМЕНТАЦИЯ</p>
@@ -100,5 +117,4 @@ translationRequired: true
 - Текущая публичная опорная версия в этом наборе docs - [`v1.1.2`](/ru/releases/v1-1-2).
 - Эта patch-линейка вернула совместимость first-party installs между legacy и current authored layouts, а затем починила Gemini full multi-target installs для GitHub repo-path sources.
 - Начинайте с него, если нужен актуальный baseline.
-
-</details>
+locale-historical-source:end -->

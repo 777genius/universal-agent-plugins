@@ -1,7 +1,7 @@
 export const docsLocales = ["en", "ru", "es", "fr", "zh"];
 export const localePathField = (locale) => `path${locale[0].toUpperCase()}${locale.slice(1)}`;
 export const entityPath = (entry, locale) => entry[localePathField(locale)] || entry.pathEn || "";
-export const isMilestoneAJourney = (relative) => /^(use|build|legacy\/v1)\//.test(relative);
+export const isMilestoneAJourney = (relative) => /^(use|build)\//.test(relative);
 
 export const journeyLabels = {
   "en": [
@@ -111,8 +111,7 @@ const releaseLabels = {
 export function journeySidebar(locale, entities) {
   const groups = [
     [journeyLabels[locale][0], "use", ["index", "install", "manage"]],
-    [journeyLabels[locale][1], "build", ["index", "skill", "mcp-remote", "mcp-stdio", "hybrid", "skills", "layout", "checks", "handoff"]],
-    [journeyLabels[locale][2], "legacy:v1", ["index"]]
+    [journeyLabels[locale][1], "build", ["index", "skill", "mcp-remote", "mcp-stdio", "hybrid", "skills", "layout", "checks", "handoff"]]
   ].map(([text, section, pages]) => ({ text, items: pages.map((page) => {
     const id = `page:${section}:${page}`;
     const entity = entities.find((entry) => entry.canonicalId === id);
@@ -120,7 +119,7 @@ export function journeySidebar(locale, entities) {
     return { text: (journeyPageLabels[locale]?.[id] || entity.title) + (locale === "en" || entity[localePathField(locale)] ? "" : ` (${journeyLabels[locale][3]})`),
       link: entityPath(entity, locale) };
   }) }));
-  groups.push(...["plugin-kit-ai", "agentplugins author"].map((surface) => ({
+  groups.push(...["agentplugins author"].map((surface) => ({
     text: `${surface} · ${releaseLabels[locale]}`,
     items: entities.filter((entry) => entry.surface === "authoring-cli" &&
       (entry.title === surface || entry.title.startsWith(`${surface} `)))

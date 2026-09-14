@@ -337,14 +337,14 @@
     "buildTitle": "Crear plugins",
     "standard": "Crea un paquete portable Agent Plugins 1.0 basado en plugin.json, con skills/ y mcp.json opcionales. El soporte de cada cliente depende del paquete y sus componentes.",
     "preparation": "Milestone A disponible",
-    "unreleased": "Milestone A está disponible. universal-agent-plugins{'@'}0.1.65 / plugin-kit-ai{'@'}2.0.5; GitHub: agentplugins-v0.1.65 / plugin-kit-ai-v2.0.5. npm, PyPI, Homebrew, GitHub Releases y el E2E de canales públicos están verificados. Solo creación estática; fases 7–11, runtime/dev/bootstrap, migración, exportación y publicación pendientes. Se conservan las capacidades de plugin.yaml; use plugin-kit-ai{'@'}1.2.4 para v1.",
+    "unreleased": "Milestone A está disponible. universal-agent-plugins{'@'}0.1.65; GitHub: agentplugins-v0.1.65. npm, Homebrew, archivos nativos, GitHub Releases y E2E público están verificados. Solo creación estática; runtime/dev/bootstrap, exportación y publicación siguen pendientes. La migración YAML heredada está cancelada; el código conservado no es un producto compatible.",
     "specLink": "Especificación Agent Plugins 1.0",
     "historyTitle": "Mantenimiento histórico de v1",
     "history": "Mantén los proyectos plugin.yaml existentes con las instrucciones v1 siguientes. Estas plantillas y salidas generadas son flujos históricos v1; no crean el nuevo flujo de autoría basado en el estándar.",
     "quickstartLink": "Inicio rápido y mantenimiento v1",
     "compatibilityLink": "Compatibilidad de clientes (en inglés)",
     "limitations": "La compatibilidad depende del paquete. Validar el esquema no demuestra ejecución, OAuth ni activación. Codex no admite MCP SSE declarado; stdio y Streamable HTTP conservan el soporte de sus adaptadores actuales.",
-    "versions": "Milestone A disponible: universal-agent-plugins{'@'}0.1.65 / plugin-kit-ai{'@'}2.0.5; GitHub: agentplugins-v0.1.65 / plugin-kit-ai-v2.0.5."
+    "versions": "Milestone A disponible: universal-agent-plugins{'@'}0.1.65; GitHub: agentplugins-v0.1.65."
   },
   "shell": {
     "docs": {

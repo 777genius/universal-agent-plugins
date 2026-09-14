@@ -22,7 +22,7 @@
     {
       "id": "clearBoundary",
       "title": "诚实的稳定版与测试版边界",
-      "description": "plugin-kit-ai 明确说明了什么是生产就绪型、什么是公开测试版以及您不应该在哪些方面承诺虚假平价。"
+      "description": "Agent Plugins 清楚说明哪些功能已可用于生产、哪些仍处于延期状态，以及当前的兼容性边界。"
     },
     {
       "id": "installAcrossAgents",
@@ -1018,14 +1018,6 @@
       "invocation": "npx universal-agent-plugins"
     },
     {
-      "id": "pipx",
-      "title": "皮克斯",
-      "description": "当相应版本发布到 PyPI 时，Python 生态系统包装器。",
-      "href": "https://pypi.org/project/plugin-kit-ai/",
-      "note": "公共测试版包装器。仅当目标版本在 PyPI 上可用时才使用此通道。",
-      "command": "pipx install plugin-kit-ai"
-    },
-    {
       "id": "script",
       "title": "已验证的安装脚本",
       "description": "无需包管理器的原生安装，无需 Node.js。",
@@ -1047,17 +1039,17 @@
       "id": "releases",
       "title": "GitHub 发布",
       "description": "直接浏览已发布的发行说明、工件和版本历史记录。",
-      "href": "https://github.com/777genius/plugin-kit-ai/releases",
+      "href": "https://github.com/777genius/universal-agent-plugins/releases",
       "note": "当您需要原始释放表面时使用此选项。",
-      "command": "https://github.com/777genius/plugin-kit-ai/releases"
+      "command": "https://github.com/777genius/universal-agent-plugins/releases"
     },
     {
       "id": "docs",
       "title": "文档快速入门",
       "description": "直接跳转到快速入门和更广泛的文档站点。",
-      "href": "https://777genius.github.io/plugin-kit-ai/docs/en/guide/quickstart.html",
+      "href": "https://777genius.github.io/universal-agent-plugins/docs/en/guide/quickstart.html",
       "note": "安装 CLI 后最好进行下一步。",
-      "command": "plugin-kit-ai init my-plugin"
+      "command": "agentplugins author init ./my-plugin"
     }
   ],
   "quickstartSteps": [

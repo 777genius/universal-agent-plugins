@@ -3,7 +3,7 @@ import { pathToFileURL } from "node:url";
 import { requireGenerationPrerequisites } from "./lib/preflight.mjs";
 import fs from "node:fs/promises";
 import { buildRedirects } from "./lib/redirects.mjs";
-import { bindGeneratedPaths, entityPath as resolveEntityPath, isMilestoneAJourney, journeySidebar, requirePublicationBoundary } from "./lib/journeys.mjs";
+import { bindGeneratedPaths, entityPath as resolveEntityPath, isMilestoneAJourney, journeyLabels, journeySidebar, requirePublicationBoundary } from "./lib/journeys.mjs";
 import path from "node:path";
 import { extractCLI } from "./extractors/cli.mjs";
 import { extractGoSDK } from "./extractors/go-sdk.mjs";
@@ -173,58 +173,14 @@ export function buildSidebar(locale, entities) {
   const pythonItems = surfaceItems("runtime-python");
   const platformItems = surfaceItems("platform-events");
   const capabilityItems = surfaceItems("capabilities");
-  const guideSidebar = [
-    {
-      text: labels.guideStart,
-      items: [
-        linkItem(labels.guideOverview, `${prefix}guide/`),
-        linkItem(labels.installation, `${prefix}guide/installation`),
-        linkItem(labels.quickstart, `${prefix}guide/quickstart`)
-      ]
-    },
-    {
-      text: labels.guideCoreIdea,
-      items: [
-        linkItem(labels.whatYouCanBuild, `${prefix}guide/what-you-can-build`),
-        linkItem(labels.oneProjectMultipleTargets, `${prefix}guide/one-project-multiple-targets`),
-        linkItem(labels.chooseTarget, `${prefix}guide/choose-a-target`)
-      ]
-    },
-    {
-      text: labels.guideBuild,
-      items: [
-        linkItem(labels.firstPlugin, `${prefix}guide/first-plugin`),
-        linkItem(labels.pythonRuntimeGuide, `${prefix}guide/python-runtime`),
-        linkItem(labels.teamReadyPlugin, `${prefix}guide/team-ready-plugin`),
-        linkItem(labels.claudePlugin, `${prefix}guide/claude-plugin`),
-        linkItem(labels.nodeTypescriptRuntime, `${prefix}guide/node-typescript-runtime`)
-      ]
-    },
-    {
-      text: labels.guideStarters,
-      items: [
-        linkItem(labels.starterTemplates, `${prefix}guide/starter-templates`),
-        linkItem(labels.chooseStarterRepo, `${prefix}guide/choose-a-starter`),
-        linkItem(labels.examplesAndRecipes, `${prefix}guide/examples-and-recipes`)
-      ]
-    },
-    {
-      text: labels.guideDelivery,
-      items: [
-        linkItem(labels.chooseDeliveryModel, `${prefix}guide/choose-delivery-model`),
-        linkItem(labels.bundleHandoff, `${prefix}guide/bundle-handoff`),
-        linkItem(labels.packageAndWorkspaceTargets, `${prefix}guide/package-and-workspace-targets`),
-        linkItem(labels.howToPublishPlugins, `${prefix}guide/how-to-publish-plugins`)
-      ]
-    },
-    {
-      text: labels.guideOperate,
-      items: [
-        linkItem(labels.productionReadiness, `${prefix}guide/production-readiness`),
-        linkItem(labels.ciIntegration, `${prefix}guide/ci-integration`)
-      ]
-    }
-  ];
+  const guideSidebar = [{
+    text: labels.guideStart,
+    items: [
+      linkItem(journeyLabels[locale][0], `${prefix}use/`),
+      linkItem(journeyLabels[locale][1], `${prefix}build/`),
+      linkItem(labels.quickstart, `${prefix}guide/quickstart`)
+    ]
+  }];
 
   const journeys = journeySidebar(locale, entities);
   return {

@@ -16,7 +16,7 @@ sourceSHA: "9beca10448ac50fbe526a52101d1433a12471980"
 status: "historical"
 ---
 
-> Historical plugin-kit-ai v1, baseline **1.2.4** ([exact source](https://github.com/777genius/universal-agent-plugins/tree/9beca10448ac50fbe526a52101d1433a12471980)). Project migration is not available in v2 yet. Maintain legacy projects using the v1 1.2.4 command set.
+> Historical plugin-kit-ai v1, baseline **1.2.4** ([exact source](https://github.com/777genius/universal-agent-plugins/tree/9beca10448ac50fbe526a52101d1433a12471980)). The product is retired and migration is intentionally not planned. These commands are immutable reference, not current installation guidance.
 
 # gemini_after_tool
 

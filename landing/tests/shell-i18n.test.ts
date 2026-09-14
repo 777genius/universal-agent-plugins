@@ -109,7 +109,7 @@ test('narrow overlay preserves every active English field and technical byte', (
   }
 });
 
-test('owned docs routes preserve extensions and history; UK is explicitly English', () => {
+test('owned docs routes preserve extensions and current fragments; UK is explicitly English', () => {
   for (const id of Object.keys(docsAvailability) as Array<keyof typeof docsAvailability>) {
     for (const locale of ['en', 'ru', 'uk']) {
       const resolved = resolveDocsLink(id, locale);
@@ -127,15 +127,15 @@ test('owned docs routes preserve extensions and history; UK is explicitly Englis
     const result = resolveDocsLink(
       'quickstart',
       locale,
-      `${ownedDocsRoot}en/guide/quickstart.html?source=x#historical-v1`,
+      `${ownedDocsRoot}en/guide/quickstart.html?source=x#build-plugins`,
     );
-    assert.ok(result.url.endsWith('.html?source=x#historical-v1'));
+    assert.ok(result.url.endsWith('.html?source=x#build-plugins'));
     const language = locale === 'ru' ? 'ru' : 'en';
     assert.ok(
       readFileSync(
         new URL(`../../website/source/${language}/guide/quickstart.md`, import.meta.url),
         'utf8',
-      ).includes('{#historical-v1}'),
+      ).includes('{#build-plugins}'),
     );
   }
   for (const url of [

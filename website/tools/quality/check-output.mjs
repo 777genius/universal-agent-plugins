@@ -133,8 +133,10 @@ if (!productionReadiness.includes("Pick The Right Path On Purpose")) {
 }
 
 const quickstart = await fs.readFile(path.join(distRoot, "en", "guide", "quickstart.html"), "utf8");
-for (const claim of ["Use plugins", "Build plugins", "Milestone A is available", "public-channel E2E are verified", "0.1.65", "2.0.5", "Historical v1 maintenance", "plugin.json"]) {
-  if (!quickstart.includes(claim)) {
+const quickstartWithoutComments = quickstart.replace(/<!--[\s\S]*?-->/g, "");
+const quickstartVisible = quickstartWithoutComments.match(/<main\b[\s\S]*?<\/main>/)?.[0] || quickstartWithoutComments;
+for (const claim of ["Use plugins", "Build plugins", "Milestone A is available", "public-channel E2E are verified", "0.1.65", "plugin.json", "agentplugins author"]) {
+  if (!quickstartVisible.includes(claim)) {
     console.error(`Quickstart page is missing its public availability claim: ${claim}`);
     hasError = true;
   }
@@ -147,28 +149,18 @@ if (!quickstartCommands.some((text) => text.includes("npx universal-agent-plugin
   console.error("Quickstart page is missing its public availability claim: npx universal-agent-plugins add context7");
   hasError = true;
 }
-if (quickstart.includes("Recommended Default") || quickstart.includes("npx plugin-kit-ai@latest add notion") ||
+if (quickstartVisible.includes("Recommended Default") || quickstartVisible.includes("npx plugin-kit-ai@latest add notion") ||
     quickstartCommands.some((text) => text.includes("npx plugin-kit-ai@latest add notion"))) {
   console.error("Quickstart still recommends the old v1 first-run journey.");
   hasError = true;
 }
-if (!quickstart.includes("Supported Node And Python Paths")) {
-  console.error("Quickstart page is missing its expected non-Go support block.");
-  hasError = true;
+for (const retired of ["plugin-kit-ai", "PyPI", "pipx", "Historical v1 maintenance"]) {
+  if (quickstartVisible.includes(retired)) {
+    console.error(`Quickstart page still exposes retired product guidance: ${retired}`);
+    hasError = true;
+  }
 }
-if (!quickstart.includes("If You Are Intentionally Starting On Node Or Python")) {
-  console.error("Quickstart page is missing its expected intentional non-Go flow.");
-  hasError = true;
-}
-if (!quickstart.includes("What You Get")) {
-  console.error("Quickstart page is missing its expected outcome-first section.");
-  hasError = true;
-}
-if (!quickstart.includes("What To Do Next")) {
-  console.error("Quickstart page is missing its expected next-steps section.");
-  hasError = true;
-}
-if (quickstart.includes("runtime language") || quickstart.includes("repo-managed integration")) {
+if (quickstartVisible.includes("runtime language") || quickstartVisible.includes("repo-managed integration")) {
   console.error("Quickstart page still contains heavy front-door jargon.");
   hasError = true;
 }
@@ -176,6 +168,13 @@ if (quickstart.includes("runtime language") || quickstart.includes("repo-managed
 const ciIntegration = await fs.readFile(path.join(distRoot, "en", "guide", "ci-integration.html"), "utf8");
 if (!ciIntegration.includes("The Minimal CI Gate")) {
   console.error("CI Integration page is missing its expected CI gate section.");
+  hasError = true;
+}
+
+const retiredInstallation = await fs.readFile(path.join(distRoot, "en", "guide", "installation.html"), "utf8");
+if (!retiredInstallation.includes("noindex,follow") ||
+    !retiredInstallation.includes("Archive: this page describes a retired product")) {
+  console.error("Retired guide page is missing its noindex archive boundary.");
   hasError = true;
 }
 

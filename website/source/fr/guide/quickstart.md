@@ -26,7 +26,7 @@ Pour une installation native sur macOS, Linux ou Windows, consultez le guide. Le
 
 [Guide d’installation](https://github.com/777genius/universal-agent-plugins#quick-start)
 
-Milestone A disponible: universal-agent-plugins@0.1.65 / plugin-kit-ai@2.0.5; GitHub: agentplugins-v0.1.65 / plugin-kit-ai-v2.0.5.
+Milestone A is available in `universal-agent-plugins@0.1.65`; GitHub release: `agentplugins-v0.1.65`.
 
 La compatibilité dépend du paquet. La validation du schéma ne prouve ni l’exécution, ni OAuth, ni l’activation. Codex ne prend pas en charge MCP SSE déclaré ; stdio et Streamable HTTP conservent leur prise en charge par les adaptateurs existants.
 
@@ -38,97 +38,9 @@ Créez un paquet portable Agent Plugins 1.0 autour de plugin.json, avec skills/ 
 
 **Milestone A disponible**
 
-Milestone A disponible. universal-agent-plugins@0.1.65 / plugin-kit-ai@2.0.5; GitHub: agentplugins-v0.1.65 / plugin-kit-ai-v2.0.5. npm, PyPI, Homebrew, GitHub Releases et les E2E des canaux publics sont vérifiés. Création statique uniquement ; phases 7–11, runtime/dev/bootstrap, migration, export et publication différés. Les capacités plugin.yaml sont préservées ; utiliser plugin-kit-ai@1.2.4 pour v1.
+Milestone A est disponible via `agentplugins author` dans `universal-agent-plugins@0.1.65`; version GitHub : `agentplugins-v0.1.65`. npm, Homebrew, archives natives et E2E public sont vérifiés. Création statique uniquement ; runtime/dev/bootstrap, export et publication restent différés. La migration YAML historique est annulée ; le code conservé n’est pas un produit pris en charge.
 
 [Spécification Agent Plugins 1.0](https://agent-plugins.org/specification)
-
-## Maintenance historique v1 {#historical-v1}
-
-<a id="si-vous-ne-lisez-qu-une-chose"></a>
-<a id="valeur-par-defaut-recommandee"></a>
-<a id="pourquoi-c-est-la-valeur-par-defaut"></a>
-
-Maintenez les projets plugin.yaml existants avec les instructions v1 ci-dessous. Ces modèles et sorties générées relèvent des parcours historiques v1 ; ils ne créent pas le nouveau parcours fondé sur le standard.
-
-```bash
-brew install 777genius/homebrew-plugin-kit-ai/plugin-kit-ai
-plugin-kit-ai version
-plugin-kit-ai init my-plugin
-cd my-plugin
-go mod tidy
-plugin-kit-ai generate .
-plugin-kit-ai validate . --platform codex-runtime --strict
-```
-
-### Ce que vous obtenez
-
-- un dépôt de plugin dès le premier jour
-- fichiers créés sous `plugin/`
-- généré une sortie d'exécution Codex à partir du même dépôt
-- un contrôle de préparation propre via `validate --strict`
-
-### Chemins Node et Python pris en charge
-
-Si votre équipe habite déjà à Node/TypeScript ou Python, ces chemins sont pris en charge et visibles dès le départ :
-
-- `codex-runtime --runtime node --typescript`
-- `codex-runtime --runtime python`
-- les deux sont des chemins d'exécution interprétés localement, donc la machine cible a toujours besoin de Node.js `20+` ou Python `3.10+`
-- Go reste toujours la valeur par défaut lorsque vous souhaitez l'histoire de production générale la plus forte
-
-### Si vous commencez intentionnellement le Node ou Python
-
-Utilisez ce flux alternatif uniquement lorsque le choix de la langue fait déjà partie des exigences du produit :
-
-```bash
-plugin-kit-ai init my-plugin --platform codex-runtime --runtime node --typescript
-plugin-kit-ai doctor ./my-plugin
-plugin-kit-ai bootstrap ./my-plugin
-plugin-kit-ai generate ./my-plugin
-plugin-kit-ai validate ./my-plugin --platform codex-runtime --strict
-```
-
-Ou commencez par Python :
-
-```bash
-plugin-kit-ai init my-plugin --platform codex-runtime --runtime python
-plugin-kit-ai doctor ./my-plugin
-plugin-kit-ai bootstrap ./my-plugin
-plugin-kit-ai generate ./my-plugin
-plugin-kit-ai validate ./my-plugin --platform codex-runtime --strict
-```
-
-### Que faire ensuite
-
-- modifiez le plugin sous `plugin/`
-- exécutez à nouveau `plugin-kit-ai generate ./my-plugin` après les modifications
-- exécutez à nouveau `plugin-kit-ai validate ./my-plugin --platform codex-runtime --strict`
-- ensuite seulement, ajoutez un autre moyen de l'expédier si le produit en a besoin
-
-### Développer plus tard
-
-| Si tu veux | Ajoutez ceci plus tard |
-| --- | --- |
-| Claude crochets comme produit réel | `claude` |
-| Forfait officiel Codex | `codex-package` |
-| Gemini package d'extension | `gemini` |
-| Configuration de l'intégration appartenant au dépôt | `opencode` ou `cursor` |
-
-Choisissez d'abord `claude` uniquement lorsque les crochets Claude constituent déjà la véritable exigence du produit.
-
-### Ce qui se développera plus tard
-
-- le dépôt reste unifié à mesure que vous ajoutez plus de voies
-- les voies de package et d'extension proviennent de la même source d'auteur
-- OpenCode et Cursor conviennent lorsque le dépôt doit posséder la configuration d'intégration
-- la limite exacte du support reste dans les documents de référence, pas dans votre flux de premier démarrage
-
-### Après le démarrage rapide
-
-- Continuez avec [Créez votre premier plugin](/fr/guide/first-plugin) pour le tutoriel historique v1.
-- Continuez avec [Ce que vous pouvez construire](/fr/guide/what-you-can-build) si vous souhaitez la carte complète des produits.
-- Continuez avec [Choisir une cible](/fr/guide/choose-a-target) lorsque vous êtes prêt à faire correspondre le dépôt à la manière dont vous souhaitez l'expédier.
-- Continuez avec [Un projet, plusieurs cibles](/fr/guide/one-project-multiple-targets) lorsque vous êtes prêt à vous développer au-delà du premier chemin.
 
 <!-- locale-historical-source:start
 locale-historical-frontmatter:start

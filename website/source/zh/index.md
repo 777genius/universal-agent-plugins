@@ -1,4 +1,28 @@
 ---
+title: "Agent Plugins 文档"
+description: "Agent Plugins 公共文档。"
+canonicalId: "page:home"
+section: "home"
+locale: "zh"
+generated: false
+translationRequired: true
+---
+
+# 使用插件 / 构建插件
+
+安装现有的 Agent Plugins 1.0，或基于 `plugin.json` 构建可移植插件包。
+
+- [使用插件](/zh/use/)
+- [构建插件](/zh/build/)
+- [快速入门](/zh/guide/quickstart)
+
+Milestone A 已通过 `agentplugins author` 发布。YAML 迁移已取消；保留的旧代码不是受支持的产品。
+
+[Agent Plugins 1.0 specification](https://agent-plugins.org/specification)
+
+<!-- locale-historical-source:start
+locale-historical-frontmatter:start
+---
 title: "plugin-kit-ai 文档"
 description: "plugin-kit-ai 的公共文档。"
 canonicalId: "page:home"
@@ -7,14 +31,7 @@ locale: "zh"
 generated: false
 translationRequired: true
 ---
-
-[使用插件](/zh/use/) · [构建插件](/zh/build/) — Milestone A 已发布。v2 暂不支持项目迁移。
-<p class="locale-historical-identity">Agent Plugins 文档</p>
-
-[plugin-kit-ai v1 分支的历史快照。1.2.4 是命令基准，并非此快照的确切版本。](/en/legacy/v1/)
-
-<details><summary>plugin-kit-ai v1 分支的历史快照。1.2.4 是命令基准，并非此快照的确切版本。</summary>
-
+locale-historical-frontmatter:end
 <div class="docs-hero docs-hero--feature">
   <p class="docs-kicker">公共文档</p>
   <h1>plugin-kit-ai</h1>
@@ -111,5 +128,4 @@ translationRequired: true
 - 稍后将相同的存储库扩展到更多运输路径
 - 随着存储库的增长保留一个审查和验证故事
 - 仅在需要时找到确切的合同
-
-</details>
+locale-historical-source:end -->
