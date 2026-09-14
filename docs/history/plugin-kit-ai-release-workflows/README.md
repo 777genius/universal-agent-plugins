@@ -2,8 +2,9 @@
 
 These files preserve the last executable implementations of the retired
 `plugin-kit-ai` CLI release, preflight, npm, PyPI, and Homebrew publication
-workflows. They are historical source, not GitHub Actions entrypoints: keeping
-them under `docs/history/` ensures GitHub cannot dispatch or trigger them.
+workflows, plus the paired `agentplugins` / `plugin-kit-ai` promotion workflow.
+They are historical source, not GitHub Actions entrypoints: keeping them under
+`docs/history/` ensures GitHub cannot dispatch or trigger them.
 
 The files are retained for capability and design review under
 `docs/AUTHORING_CAPABILITY_PRESERVATION.md`. Do not copy them back into
