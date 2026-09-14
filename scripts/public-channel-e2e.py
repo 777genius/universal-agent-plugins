@@ -57,6 +57,9 @@ def arguments(argv=None):
             parser.error('versions must be exact semantic versions')
         if not re.fullmatch(r'[0-9A-Za-z][0-9A-Za-z._-]*', tag):
             parser.error('release tags must be URL-safe tag names')
+        prefix = 'agentplugins-v' if product == 'agentplugins' else 'plugin-kit-ai-v'
+        if tag != prefix + version:
+            parser.error(f'{product} tag must exactly match its version')
     if not re.fullmatch(r'[0-9a-f]{40}', args.revision):
         parser.error('revision must be a full lowercase commit SHA')
     return args

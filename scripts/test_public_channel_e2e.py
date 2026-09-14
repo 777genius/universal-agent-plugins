@@ -30,7 +30,8 @@ class Contract(unittest.TestCase):
                                     'product_version': '2.0.2'}}, '2.0.2', args.revision)
         import contextlib
         import io
-        for position, bad in ((2, 'latest'), (6, '../tag'), (10, 'short')):
+        for position, bad in ((2, 'latest'), (6, '../tag'), (6, 'v0.1.62'),
+                              (8, 'agentplugins-v0.1.62'), (10, 'short')):
             invalid = list(argv)
             invalid[position] = bad
             with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
