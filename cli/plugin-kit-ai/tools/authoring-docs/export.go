@@ -65,7 +65,7 @@ type flagFact struct {
 // Nil args only observes the root; no ParseFlags, Execute, Args, Run, completion,
 // project service, or installer callback is invoked by this adapter.
 func trees() ([]*cobra.Command, error) {
-	app := commands.App{PublicContract: true, Release: &commands.ReleaseOptions{}}
+	app := commands.App{PublicContract: true, MCPRuntime: true, Release: &commands.ReleaseOptions{}}
 	plugin, _, _, err := app.ReleaseSelection(nil, authoringcli.NewReleasePluginKitRoot)
 	if err != nil {
 		return nil, err
@@ -213,7 +213,7 @@ func exportTrees(checkout, sha, out string, load func() ([]*cobra.Command, error
 // Hash the actual deterministic rendered facts, with fixed provenance rather
 // than caller SHA/host paths. Length framing and sorted names bind every byte.
 // This is a reviewed golden, never regenerated automatically during export.
-const reviewedProjection = "ba8587a8db8ad200c4fe0a5294e7574afae1f3ea337fd3cad113c5384c3efa7a"
+const reviewedProjection = "0da8b96fa3fe8e4a6715cda637fc4f72f0ead1cce986d4aafa79dc2c4292fcda"
 
 func projectionFingerprint(roots []*cobra.Command) (string, error) {
 	files, err := render("SOURCE_SHA", nil, roots)
