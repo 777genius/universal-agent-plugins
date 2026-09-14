@@ -1,6 +1,8 @@
 package pluginkitairepo_test
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -35,14 +37,29 @@ func TestAgentpluginsReleaseContractsStayFailClosed(t *testing.T) {
 		mustContain(t, makefile, want)
 	}
 
-	for _, want := range []string{
-		"producer_mode:",
-		"default: binary-only",
-		"options:\n          - binary-only",
-		"PRODUCER_MODE: ${{ inputs.producer_mode }}",
-		"unsupported agentplugins producer mode",
+	for _, retired := range []string{"producer_mode", "paired-preparation", "paired-promotion", "plugin_kit_version"} {
+		mustNotContain(t, releaseWorkflow, retired)
+		mustNotContain(t, npmWorkflow, retired)
+	}
+	for _, retiredWorkflow := range []string{"release-assets.yml", "release-preflight.yml", "homebrew-tap.yml", "npm-publish.yml", "pypi-publish.yml"} {
+		if _, err := os.Stat(filepath.Join(root, ".github", "workflows", retiredWorkflow)); !os.IsNotExist(err) {
+			t.Fatalf("retired standalone workflow %s still exists or cannot be checked: %v", retiredWorkflow, err)
+		}
+	}
+	for _, preserved := range []string{
+		"cli/plugin-kit-ai",
+		"npm/plugin-kit-ai",
+		"python/plugin-kit-ai",
+		"npm/agentplugins/scripts/publish-paired-authoring-npm.js",
+		"docs/history/plugin-kit-ai-release-workflows/release-assets.yml",
+		"docs/history/plugin-kit-ai-release-workflows/release-preflight.yml",
+		"docs/history/plugin-kit-ai-release-workflows/homebrew-tap.yml",
+		"docs/history/plugin-kit-ai-release-workflows/npm-publish.yml",
+		"docs/history/plugin-kit-ai-release-workflows/pypi-publish.yml",
 	} {
-		mustContain(t, releaseWorkflow, want)
+		if _, err := os.Stat(filepath.Join(root, filepath.FromSlash(preserved))); err != nil {
+			t.Fatalf("preserved legacy implementation %s is missing: %v", preserved, err)
+		}
 	}
 	mustContain(t, releaseWorkflow, "actions/attest@")
 	mustContain(t, releaseWorkflow, "gh release create")
@@ -63,7 +80,7 @@ func TestAgentpluginsReleaseContractsStayFailClosed(t *testing.T) {
 	mustContain(t, releaseProofJob, "expected_asset_set_digest: ${{ needs.stage-draft.outputs.asset_set_digest }}")
 	mustContain(t, releaseProofJob, "release_assets_artifact: ${{ needs.stage-draft.outputs.assets_artifact }}")
 	mustContain(t, releasePromoteJob, "needs: [validate, stage-draft, platform-proof, verified-draft]")
-	mustContain(t, releasePromoteJob, "if: ${{ inputs.producer_mode == 'binary-only' && inputs.publish_release == true }}")
+	mustContain(t, releasePromoteJob, "if: ${{ inputs.publish_release == true }}")
 	mustContain(t, releaseWorkflow, "publish_release:\n        description: Explicitly promote after all verification succeeds\n        required: false\n        type: boolean\n        default: false")
 	draftReceiptJob := yamlJob(t, releaseWorkflow, "verified-draft")
 	for _, want := range []string{
@@ -146,6 +163,7 @@ func TestAgentpluginsReleaseContractsStayFailClosed(t *testing.T) {
 	} {
 		mustContain(t, npmWorkflow, want)
 	}
+	mustContain(t, npmPrepareJob, "if: ${{ github.event_name == 'workflow_dispatch' }}")
 	for _, want := range []string{
 		"Verify exact public release identity and attestations",
 		"release-assets.js verify",
@@ -294,7 +312,6 @@ func TestAgentpluginsReleaseContractsStayFailClosed(t *testing.T) {
 		"short-lived bootstrap",
 		"disallow bypass-2FA tokens",
 		"Do not add a bootstrap token back",
-		"required `binary-only` producer mode",
 		"same six assets\nplus `checksums.txt`, `release-manifest.json`, and `THIRD_PARTY_NOTICES.txt`",
 		"npm facade is staged from",
 		"manual trusted publisher",

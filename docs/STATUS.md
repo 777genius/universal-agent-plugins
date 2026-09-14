@@ -1,8 +1,11 @@
 # Delivery Status Ledger
 
-This ledger tracks the current delivery state of the shipped architecture after `v1.0.0`.
+This ledger preserves the historical delivery state of the retired
+`plugin-kit-ai` v1 architecture after `v1.0.0`. It is implementation history,
+not current installation or release guidance. The sole public CLI is now
+`agentplugins`; see [its release runbook](./agentplugins-release.md).
 
-## Current Release Phase
+## Historical Release Phase
 
 - `v1.0.0 released`
 - `community-first interpreted stable subset promoted on main`

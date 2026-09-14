@@ -1,6 +1,6 @@
 # Release Rehearsal Worksheet
 
-Use this worksheet for release rehearsal after `v1.0.0`, including post-`v1` stable-subset promotions.
+Use this worksheet only for an owner-approved `agentplugins` candidate.
 
 ## Candidate
 
@@ -16,35 +16,32 @@ Use this worksheet for release rehearsal after `v1.0.0`, including post-`v1` sta
 - generated artifacts in sync:
 - `extended`:
 - `live`:
-- Homebrew tap:
-- npm publish:
-- PyPI publish:
+- agentplugins draft qualification:
+- agentplugins native release and attestations:
+- universal-agent-plugins npm publish and public verification:
 - waivers:
 
-## Candidate Surface Decisions
+## Candidate product decisions
 
-- SDK root API:
-- Claude event set:
-- Codex event set:
-- CLI command set:
-- generated scaffold contract:
+- sole public CLI remains `agentplugins`:
+- `agentplugins author` standard-first contract:
+- installer/runtime behavior changed:
+- supported npm, Homebrew, and native channels affected:
+- historical implementation affected but still preserved:
 
-## Audit Updates
+## Documentation updates
 
-- `docs/V0_9_AUDIT.md` updated:
-- `docs/INTERPRETED_STABLE_SUBSET_AUDIT.md` updated when the Node/Python local-runtime stable subset changed:
 - changelog / release notes updated:
-- beta change notes updated:
-- final statuses assigned:
+- current installation and release guidance updated:
+- historical links and availability labels preserved:
 
 ## Known Limitations
 
-- Codex external runtime note:
+- external client/runtime note:
 - other limitations:
 
 ## Release Decision
 
 - rehearsal outcome:
-- promote to `public-stable` now:
-- surfaces that stay `public-beta`:
-- follow-up work before `v1.0`:
+- owner authorization to promote this exact version:
+- follow-up work:

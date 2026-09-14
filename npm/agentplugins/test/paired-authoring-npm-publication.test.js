@@ -20,17 +20,6 @@ function root(t) {
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   return dir;
 }
-function workflowRunStep(workflowText, name) {
-  const marker = `      - name: ${name}\n`;
-  const start = workflowText.indexOf(marker);
-  assert.notEqual(start, -1, `missing workflow step: ${name}`);
-  const run = workflowText.indexOf("        run: |\n", start);
-  assert.notEqual(run, -1, `missing run block: ${name}`);
-  const bodyStart = run + "        run: |\n".length;
-  const nextStep = workflowText.indexOf("      - name:", bodyStart);
-  return workflowText.slice(bodyStart, nextStep < 0 ? undefined : nextStep)
-    .split("\n").map(line => line.startsWith("          ") ? line.slice(10) : line).join("\n");
-}
 function env() {
   return { GITHUB_ACTIONS: "true", GITHUB_EVENT_NAME: "workflow_dispatch", GITHUB_REPOSITORY: c.REPOSITORY,
     PRODUCER_MODE: "paired-publish", TAG: m.TAG, KIT_VERSION: "2.0.5", SOURCE_SHA: source,
@@ -220,53 +209,6 @@ test("exact paired source contract rejects synthetic versions and different prom
   const bad = clone(descriptor); bad.identity.versions = m.E2E_VERSIONS;
   assert.throws(() => contract.validatePairedSource(metadata, bad, source, "d".repeat(64)));
 });
-test("workflow isolates paired route and retains exact legacy/stage job bytes", sourceOnly, () => {
-  const repo = path.resolve(__dirname, "../../..");
-  const file = ".github/workflows/agentplugins-npm-publish.yml";
-  const current = fs.readFileSync(path.join(repo, file), "utf8");
-  const legacy = current.slice(current.indexOf("  prepare:"), current.indexOf("\n\n  paired_publish_prepare:")).trimEnd();
-  assert.equal(c.digest(Buffer.from(legacy)), "a457dc11e3931232c3dec51abffc2c69dc9d9bd51d46b4935093d21e21d20f2c");
-  const paired = current.slice(current.indexOf("\n\n  paired_publish_prepare:"));
-  assert.equal((paired.match(/actions\/upload-artifact@/g) || []).length, 1);
-  assert.match(paired, /environment: npm-agentplugins/);
-  assert.match(paired, /id-token: write/);
-  assert.match(paired, /artifact-ids: \$\{\{ needs.paired_publish_prepare.outputs.artifact_id \}\}/);
-  assert.match(paired, /artifact_digest: \$\{\{ steps.upload.outputs.artifact-digest \}\}/);
-  assert.match(paired, /ARTIFACT_DIGEST: \$\{\{ needs.paired_publish_prepare.outputs.artifact_digest \}\}/);
-  assert.equal((paired.match(/actions: read/g) || []).length, 2);
-  assert.match(paired, /actions\/artifacts\/\$\{ARTIFACT_ID\}/);
-  assert.equal((paired.match(/inputs.producer_mode == 'paired-publish'/g) || []).length, 2);
-  assert.match(current, /cancel-in-progress: false/);
-  assert.doesNotMatch(paired, /THIRD_PARTY_NOTICES|npm publish|npm pack|registry-url:/);
-});
-
-test("transferred artifact gate accepts only matching action and API digest formats", sourceOnly, t => {
-  const workflowText = fs.readFileSync(path.join(__dirname, "../../../.github/workflows/agentplugins-npm-publish.yml"), "utf8");
-  const shell = workflowRunStep(workflowText, "Verify transferred artifact identity");
-  assert.ok(workflowText.indexOf("- name: Verify transferred artifact identity") <
-    workflowText.indexOf("- name: Reauthenticate, publish without repacking, and reconcile"));
-  const digest = "a".repeat(64);
-  const cases = [
-    ["matching formats", digest, `sha256:${digest}`, 0, true],
-    ["mismatch", digest, `sha256:${"b".repeat(64)}`, 0, false],
-    ["prefixed producer", `sha256:${digest}`, `sha256:${digest}`, 0, false],
-    ["uppercase producer", "A".repeat(64), `sha256:${digest}`, 0, false],
-    ["zero producer", "0".repeat(64), `sha256:${"0".repeat(64)}`, 0, false],
-    ["malformed API digest", digest, digest, 0, false],
-    ["API failure", digest, "", 1, false],
-  ];
-  for (const [label, producer, apiDigest, apiStatus, succeeds] of cases) {
-    const dir = root(t), bin = path.join(dir, "bin"), gh = path.join(bin, "gh");
-    fs.mkdirSync(bin);
-    fs.writeFileSync(gh, `#!/bin/sh\nprintf '%s\\n' \"${apiDigest}\"\nexit ${apiStatus}\n`, { mode: 0o700 });
-    const result = cp.spawnSync("/bin/bash", ["-e", "-s"], { input: shell, encoding: "utf8", env: {
-      PATH: `${bin}:/usr/bin:/bin`, ARTIFACT_ID: "10331277162", ARTIFACT_DIGEST: producer,
-      GITHUB_REPOSITORY: c.REPOSITORY,
-    } });
-    assert.equal(result.status === 0, succeeds, `${label}: ${result.stderr}`);
-  }
-});
-
 test("qualified public package packs once with exact closure and no GitHub notices asset", sourceOnly, t => {
   const f = fixture(), dir = root(t), repo = path.resolve(__dirname, "../../..");
   const stager = require("../scripts/stage-authoring-npm");
@@ -358,22 +300,6 @@ test("unsigned or cryptographically invalid npm audit cannot reach authoring smo
   });
   await assert.rejects(p.reconcile(f.receipt, f.body, dir, "/fixture/npm.js", {}), /cryptographically verify/);
   assert.equal(calls.length, 2);
-});
-
-test("dispatch shell admits only exact paired publication identity before checkout", sourceOnly, t => {
-  const repo = path.resolve(__dirname, "../../..");
-  const text = fs.readFileSync(path.join(repo, ".github/workflows/agentplugins-npm-publish.yml"), "utf8");
-  const preflight = text.slice(text.indexOf("        run: |") + "        run: |\n".length, text.indexOf("  prepare:"))
-    .split("\n").map(line => line.startsWith("          ") ? line.slice(10) : line).join("\n");
-  const execute = values => cp.spawnSync("/bin/bash", ["-e", "-o", "pipefail", "-s"], {
-    input: preflight, cwd: root(t), env: { PATH: "/usr/bin:/bin", ...env(), ...values }, encoding: "utf8" });
-  assert.equal(execute({}).status, 0);
-  assert.equal(execute({ PUBLISH: "false" }).status, 0);
-  for (const values of [{ SOURCE_SHA: "b".repeat(40) }, { TAG: "agentplugins-v0.1.91" }, { KIT_VERSION: "2.0.0" },
-    { GITHUB_WORKFLOW_SHA: "b".repeat(40) }, { GITHUB_REF: "refs/heads/main" }, { INPUT_ARTIFACT: "{}" },
-    { GITHUB_EVENT_NAME: "workflow_run" }, { GITHUB_WORKFLOW_REF: "attacker/workflow" }]) {
-    assert.notEqual(execute(values).status, 0);
-  }
 });
 
 test("verified readback performs only disposable exact-version smoke, with publisher credentials removed", async t => {
@@ -547,21 +473,6 @@ for (const product of c.PRODUCTS) {
     });
   }
 }
-
-test("legacy copy-only publisher refuses v2 before authentication or package staging", sourceOnly, t => {
-  const workflowText = fs.readFileSync(path.resolve(__dirname, "../../../.github/workflows/npm-publish.yml"), "utf8");
-  const block = workflowText.slice(workflowText.indexOf("      - name: Resolve stable tag"), workflowText.indexOf("      - name: Configure npm publish authentication"));
-  const shell = block.slice(block.indexOf("        run: |\n") + "        run: |\n".length)
-    .split("\n").map(line => line.startsWith("          ") ? line.slice(10) : line).join("\n")
-    .replace('${{ inputs.tag }}', '${TEST_TAG}');
-  for (const tag of ["1.2.4", "v1.2.4", "plugin-kit-ai-v1.2.4", "2.0.2", "v2.0.2", "plugin-kit-ai-v2.0.2",
-    "2.0.3", "v2.0.3", "plugin-kit-ai-v2.0.3",
-    "2.0.5", "v2.0.5", "plugin-kit-ai-v2.0.5", "agentplugins-v0.1.65"]) {
-    const result = cp.spawnSync("/bin/bash", ["-e", "-s"], { input: shell, encoding: "utf8", cwd: root(t),
-      env: { PATH: "/usr/bin:/bin", GITHUB_EVENT_NAME: "workflow_dispatch", GITHUB_OUTPUT: path.join(root(t), "output"), TEST_TAG: tag } });
-    assert.equal(result.status === 0, tag.includes("1.2.4"), `${tag}: ${result.stderr}`);
-  }
-});
 
 for (const product of c.PRODUCTS) {
   for (const defect of [null, "bytes", "integrity", "provenance", "signature", "source", "installed", "promotion", "redirected repository"]) {
