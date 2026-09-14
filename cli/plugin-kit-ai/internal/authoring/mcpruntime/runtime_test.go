@@ -310,7 +310,7 @@ func TestHTTPDeadlineCleansPrivateRoots(t *testing.T) {
 	defer server.Close()
 	root, service, p := writeProject(t, map[string]any{"type": "streamable-http", "url": server.URL}, nil)
 	_, err := Run(context.Background(), Options{SourceRoot: root, Scratch: service.Scratch, Project: p, Server: "selected", AllowNetwork: true, Deadline: 25 * time.Millisecond, Projects: service})
-	if code(err) != "runtime_deadline_exceeded" {
+	if !hasErrorCode(err, "runtime_deadline_exceeded") {
 		t.Fatalf("deadline result: %v", err)
 	}
 	entries, readErr := os.ReadDir(service.Scratch)
@@ -337,7 +337,7 @@ func TestLongLivedSSEHonorsDeadlineAndCleansPrivateRoots(t *testing.T) {
 	defer server.Close()
 	root, service, p := writeProject(t, map[string]any{"type": "streamable-http", "url": server.URL}, nil)
 	_, err := Run(context.Background(), Options{SourceRoot: root, Scratch: service.Scratch, Project: p, Server: "selected", AllowNetwork: true, Deadline: 50 * time.Millisecond, Projects: service})
-	if code(err) != "runtime_deadline_exceeded" {
+	if !hasErrorCode(err, "runtime_deadline_exceeded") {
 		t.Fatalf("deadline result: %v", err)
 	}
 	select {
@@ -380,7 +380,7 @@ func TestLongLivedSSEHonorsCallerCancellationAndCleansPrivateRoots(t *testing.T)
 	cancel()
 	select {
 	case err := <-returned:
-		if code(err) != "runtime_canceled" || !errors.Is(err, context.Canceled) {
+		if !hasErrorCode(err, "runtime_canceled") || !errors.Is(err, context.Canceled) {
 			t.Fatalf("cancellation result: %v", err)
 		}
 	case <-time.After(time.Second):
