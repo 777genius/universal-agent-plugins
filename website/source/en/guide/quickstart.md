@@ -59,7 +59,7 @@ Maintain existing plugin.yaml projects with the v1 instructions below. These tem
 <a id="install-the-cli-for-daily-use"></a>
 
 ```bash
-brew install 777genius/homebrew-plugin-kit-ai/plugin-kit-ai
+npm install --global plugin-kit-ai@1.2.4
 plugin-kit-ai version
 plugin-kit-ai init my-plugin
 cd my-plugin

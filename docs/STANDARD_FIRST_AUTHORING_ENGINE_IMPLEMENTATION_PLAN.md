@@ -272,8 +272,8 @@ tests, dependencies, and `plugin-kit-ai@1.2.4` guidance remain preserved. Phases
   remains unrelated to these documentation and Pages changes; its native
   terminal/ConPTY qualification steps passed.
 - Current publication evidence is scoped to the channels and exact versions
-  recorded above. npm and the final all-channel E2E remain required before the
-  public availability documentation is merged.
+  recorded above. npm publication and the final all-channel E2E are complete;
+  public availability documentation is ready to merge after its exact-head CI.
 - Baseline inspected: `b0b4268e964fa5808debbcc998bd174670faeb6e` on 2026-09-06.
 - Product repository: `777genius/universal-agent-plugins` (the former `plugin-kit-ai` URL redirects to it).
 - Directory repository: `777genius/universal-agent-plugins-registry`.
