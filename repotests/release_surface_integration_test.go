@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"gopkg.in/yaml.v3"
 )
 
 func TestReleaseSurface_CurrentGuidanceAndExecutableWorkflows(t *testing.T) {
@@ -55,10 +57,17 @@ func TestReleaseSurface_CurrentGuidanceAndExecutableWorkflows(t *testing.T) {
 
 	for _, name := range []string{"npm-runtime-publish.yml", "pypi-runtime-publish.yml"} {
 		body := readRepoFile(t, root, ".github", "workflows", name)
-		mustContain(t, body, "workflow_dispatch:")
-		mustNotContain(t, body, "workflow_run:")
+		assertDispatchOnlyWorkflow(t, name, body)
+		for _, trigger := range []string{"push", "schedule", "repository_dispatch", "workflow_run"} {
+			mutated := strings.Replace(body, "  workflow_dispatch:", "  "+trigger+":\n  workflow_dispatch:", 1)
+			if ok, err := isDispatchOnlyWorkflow(mutated); err != nil || ok {
+				t.Fatalf("%s must reject additional %s trigger: dispatchOnly=%v err=%v", name, trigger, ok, err)
+			}
+		}
 		mustNotContain(t, body, "workflows: [\"Release Assets\"]")
 		mustContain(t, body, "plugin-kit-ai-runtime")
+		mustContain(t, body, "ref: refs/tags/${{ steps.release.outputs.tag }}")
+		mustContain(t, body, `git rev-parse --verify "refs/tags/${TAG}^{commit}"`)
 	}
 
 	releaseDoc := readRepoFile(t, root, "docs", "RELEASE.md")
@@ -83,11 +92,13 @@ func TestReleaseSurface_RetiredImplementationsAndSourceArePreserved(t *testing.T
 	mustContain(t, readme, "The sole public CLI is `agentplugins`")
 
 	expectedMarkers := map[string]string{
-		"release-assets.yml": "goreleaser/goreleaser-action@v7",
-		"release-preflight.yml": "Check downstream publish prerequisites",
-		"homebrew-tap.yml": "./scripts/update-homebrew-tap.sh",
-		"npm-publish.yml": "npm publish --access public",
-		"pypi-publish.yml": "pypa/gh-action-pypi-publish@release/v1",
+		"agentplugins-paired-release.yml":     "Independently admit preparation and authenticated Milestone A evidence",
+		"agentplugins-paired-npm-publish.yml": "paired_stage_attestation",
+		"release-assets.yml":                  "goreleaser/goreleaser-action@v7",
+		"release-preflight.yml":               "Check downstream publish prerequisites",
+		"homebrew-tap.yml":                    "./scripts/update-homebrew-tap.sh",
+		"npm-publish.yml":                     "npm publish --access public",
+		"pypi-publish.yml":                    "pypa/gh-action-pypi-publish@release/v1",
 	}
 	for name, marker := range expectedMarkers {
 		info, err := os.Stat(filepath.Join(history, name))
@@ -105,6 +116,28 @@ func TestReleaseSurface_RetiredImplementationsAndSourceArePreserved(t *testing.T
 		if err != nil || !info.Mode().IsRegular() || info.Size() < 100 {
 			t.Fatalf("preserved implementation source %s is missing or not substantive: %v", path, err)
 		}
+	}
+}
+
+func isDispatchOnlyWorkflow(body string) (bool, error) {
+	var workflow struct {
+		On map[string]any `yaml:"on"`
+	}
+	if err := yaml.Unmarshal([]byte(body), &workflow); err != nil {
+		return false, err
+	}
+	_, dispatch := workflow.On["workflow_dispatch"]
+	return dispatch && len(workflow.On) == 1, nil
+}
+
+func assertDispatchOnlyWorkflow(t *testing.T, name, body string) {
+	t.Helper()
+	ok, err := isDispatchOnlyWorkflow(body)
+	if err != nil {
+		t.Fatalf("parse workflow %s: %v", name, err)
+	}
+	if !ok {
+		t.Fatalf("workflow %s must expose exactly workflow_dispatch", name)
 	}
 }
 
