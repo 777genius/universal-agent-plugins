@@ -69,7 +69,10 @@ def main(channel, versions=None, tags=None, revision=REVISION):
     failures = []
     temporary = tempfile.TemporaryDirectory(prefix='uap-public-channel-')
     try:
-        root = Path(temporary.name)
+        # TemporaryDirectory can report /var/... on macOS while subprocesses
+        # observe the same directory through /private/var/....  Keep every
+        # containment-sensitive path in the subprocess-visible namespace.
+        root = Path(temporary.name).resolve()
         env = {k: v for k, v in os.environ.items() if k in (
             'PATH', 'SystemRoot', 'SYSTEMROOT', 'WINDIR', 'COMSPEC', 'PATHEXT')}
         for key in ('HOME', 'USERPROFILE', 'APPDATA', 'LOCALAPPDATA', 'XDG_CONFIG_HOME',
@@ -133,6 +136,10 @@ def main(channel, versions=None, tags=None, revision=REVISION):
                     run(['git', 'clone', '--depth=1', 'https://github.com/Homebrew/brew', install / 'brew'])
                     brew = install / 'brew/bin/brew'
                     formula = '777genius/plugin-kit-ai/plugin-kit-ai'
+                    # Formula Ruby is evaluated only from this one explicitly
+                    # trusted disposable tap; dependencies remain bottled core
+                    # formulae and all formula platform guards stay effective.
+                    run([brew, 'trust', '--tap', '777genius/plugin-kit-ai'])
                     retry(lambda: run([brew, 'tap', '777genius/plugin-kit-ai']))
                     metadata = json.loads(run([brew, 'info', '--json=v2', formula]))
                     if metadata['formulae'][0]['versions']['stable'] != version:

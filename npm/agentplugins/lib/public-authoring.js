@@ -194,16 +194,33 @@ function loadRelease(product, packageRoot, target) {
   snapshot.close();
   return snapshot.release;
 }
-const releaseNamespace = release => release.descriptor.schema === SCHEMA ? "public-authoring-v1" : "public-authoring-v2";
+const releaseNamespace = release => release.descriptor.schema === SCHEMA ? "p1" : "p2";
+
+// A canonical digest retains the complete immutable release identity while
+// bounding the verified executable's path for Windows CreateProcess.  Do not
+// truncate individual identity fields: the constant-width digest is the cache
+// isolation boundary for both descriptor generations and all public targets.
+function cacheIdentity(product, target, release) {
+  return c.digest(c.encode({
+    namespace: releaseNamespace(release),
+    authoring_mode: release.descriptor.authoring_mode,
+    identity: release.descriptor.identity,
+    candidate_sha256: release.descriptor.candidate_sha256,
+    release_manifest_sha256: release.descriptor.release_manifest_sha256,
+    product,
+    version: release.version,
+    target,
+    binary_sha256: release.asset.binary.sha256,
+  }));
+}
 
 function cachePath(root, product, target, release) {
-  return path.join(root, releaseNamespace(release), MODE, release.descriptor.identity.commit,
-    release.descriptor.candidate_sha256, product, release.version, target, release.asset.binary.sha256, release.asset.binary.file);
+  return path.join(root, releaseNamespace(release), cacheIdentity(product, target, release), release.asset.binary.file);
 }
 
 // Create only missing directories; never chmod an existing historical cache.
 // PR167 validates every ancestor before the next child can be created.
-async function namespace(root, io, name = "public-authoring-v1") {
+async function namespace(root, io, name = "p1") {
   if (typeof root !== "string" || !path.isAbsolute(root) || path.resolve(root) !== root ||
       root.includes("\0") || root.split(/[\\/]/).includes("..")) throw new Error("unsafe public cache root");
   let current = path.parse(root).root;

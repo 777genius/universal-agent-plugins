@@ -33,7 +33,7 @@ function workflowRunStep(workflowText, name) {
 }
 function env() {
   return { GITHUB_ACTIONS: "true", GITHUB_EVENT_NAME: "workflow_dispatch", GITHUB_REPOSITORY: c.REPOSITORY,
-    PRODUCER_MODE: "paired-publish", TAG: m.TAG, KIT_VERSION: "2.0.4", SOURCE_SHA: source,
+    PRODUCER_MODE: "paired-publish", TAG: m.TAG, KIT_VERSION: "2.0.5", SOURCE_SHA: source,
     GITHUB_SHA: source, GITHUB_WORKFLOW_SHA: source, GITHUB_REF: `refs/tags/${m.TAG}`,
     GITHUB_WORKFLOW_REF: `${c.REPOSITORY}/${workflow}@refs/tags/${m.TAG}`, PUBLISH: "true", NATIVE_INPUTS: "", INPUT_ARTIFACT: "" };
 }
@@ -41,7 +41,7 @@ function fixture() {
   const bodies = new Map();
   const put = (name, bytes) => { bodies.set(name, bytes); return c.digest(bytes); };
   const products = Object.fromEntries(c.PRODUCTS.map(product => {
-    const version = product === "agentplugins" ? "0.1.64" : "2.0.4";
+    const version = product === "agentplugins" ? "0.1.65" : "2.0.5";
     const assets = Object.fromEntries(c.TARGETS.map(target => {
       const file = c.assetName(product, version, target), bytes = Buffer.from(`${product}/${target}`);
       return [target, { file, sha256: put(file, bytes), size: bytes.length,
@@ -52,7 +52,7 @@ function fixture() {
       checksums_sha256: put(`${product}/checksums.txt`, Buffer.from(`checksums ${product}`)), assets }];
   }));
   const record = { schema: m.RECORD_SCHEMA, identity: { repository: c.REPOSITORY, commit: source,
-    engine_revision: source, versions: { agentplugins: "0.1.64", "plugin-kit-ai": "2.0.4" } },
+    engine_revision: source, versions: { agentplugins: "0.1.65", "plugin-kit-ai": "2.0.5" } },
     authoring_mode: "release-cli-contract-v1", asset_scope: "six-platform-pair",
     candidate_sha256: put("candidate.json", Buffer.from("candidate fixture")),
     pair_marker_sha256: put("pair-prepared.json", Buffer.from("marker fixture")), products,
@@ -179,18 +179,18 @@ for (const kind of ["mode", "extra", "link", "unsafe", "duplicate", "bytes"]) te
 for (const status of [401, 403, 429, 500, 503]) test(`registry HTTP ${status} cannot authorize publication`, async t => {
   t.mock.method(globalThis, "fetch", async () => new Response("failed", { status }));
   let writes = 0;
-  await assert.rejects(p.publishOnce({ lookup: () => p.registry("https://registry.npmjs.org/universal-agent-plugins/0.1.64", true),
+  await assert.rejects(p.publishOnce({ lookup: () => p.registry("https://registry.npmjs.org/universal-agent-plugins/0.1.65", true),
     publish: () => writes++, reconcile: () => assert.fail("unexpected reconciliation") }));
   assert.equal(writes, 0);
 });
 test("network uncertainty cannot authorize publication", async t => {
   t.mock.method(globalThis, "fetch", async () => { throw new Error("network timeout"); });
-  await assert.rejects(p.registry("https://registry.npmjs.org/universal-agent-plugins/0.1.64", true));
+  await assert.rejects(p.registry("https://registry.npmjs.org/universal-agent-plugins/0.1.65", true));
 });
 test("only completed 404 is absence", async t => {
   t.mock.method(globalThis, "fetch", async () => new Response("not found", { status: 404 }));
-  assert.equal(await p.registry("https://registry.npmjs.org/universal-agent-plugins/0.1.64", true), null);
-  await assert.rejects(p.registry("https://registry.npmjs.org/universal-agent-plugins/0.1.64"));
+  assert.equal(await p.registry("https://registry.npmjs.org/universal-agent-plugins/0.1.65", true), null);
+  await assert.rejects(p.registry("https://registry.npmjs.org/universal-agent-plugins/0.1.65"));
 });
 for (const ambiguous of [false, true]) test(`publish ${ambiguous ? "timeout" : "success"} requires reconciliation and never retries`, async () => {
   let writes = 0, reads = 0;
@@ -211,7 +211,7 @@ test("existing different bytes fail without overwriting", async () => {
   assert.equal(writes, 0);
 });
 test("exact paired source contract rejects synthetic versions and different promotion", () => {
-  const f = fixture(), metadata = { name: "universal-agent-plugins", version: "0.1.64", gitHead: source };
+  const f = fixture(), metadata = { name: "universal-agent-plugins", version: "0.1.65", gitHead: source };
   const descriptor = { identity: f.record.identity, qualification: { signed_subject: {
     source, sha256: "d".repeat(64), workflow: `${c.REPOSITORY}/${m.RELEASE_WORKFLOW}` } } };
   contract.validatePairedSource(metadata, descriptor, source, "d".repeat(64));
@@ -274,7 +274,7 @@ test("qualified public package packs once with exact closure and no GitHub notic
   const manifest = Buffer.from("manifest agentplugins");
   const files = p.packageFiles(blobs, manifest, f.record);
   const pkg = JSON.parse(files["package.json"]), descriptor = JSON.parse(files["public-release.json"]);
-  assert.equal(pkg.version, "0.1.64"); assert.equal(pkg.private, false);
+  assert.equal(pkg.version, "0.1.65"); assert.equal(pkg.private, false);
   assert.equal(pkg.gitHead, undefined);
   assert.deepEqual(pkg.scripts, { test: "node --test" });
   assert.equal(descriptor.qualification.signed_subject.sha256, c.digest(m.encodeRecord(f.record)));
@@ -352,7 +352,7 @@ test("unsigned or cryptographically invalid npm audit cannot reach authoring smo
   t.mock.method(cp, "execFileSync", (exe, args, options) => {
     calls.push(args); assert.equal(exe, process.execPath);
     assert.ok(options.cwd.startsWith(dir + path.sep));
-    if (args.includes("install")) { assert.ok(args.includes("--ignore-scripts")); assert.ok(args.includes("universal-agent-plugins@0.1.64")); return Buffer.from(""); }
+    if (args.includes("install")) { assert.ok(args.includes("--ignore-scripts")); assert.ok(args.includes("universal-agent-plugins@0.1.65")); return Buffer.from(""); }
     assert.ok(args.includes("audit"));
     return Buffer.from(JSON.stringify({ invalid: [{ name: "universal-agent-plugins" }], missing: [], verified: [] }));
   });
@@ -385,14 +385,14 @@ test("verified readback performs only disposable exact-version smoke, with publi
     assert.equal(options.env.ACTIONS_ID_TOKEN_REQUEST_TOKEN, undefined);
     assert.equal(options.env.ACTIONS_ID_TOKEN_REQUEST_URL, undefined);
     if (args.includes("install")) {
-      assert.equal(args.at(-1), "universal-agent-plugins@0.1.64");
+      assert.equal(args.at(-1), "universal-agent-plugins@0.1.65");
       const installed = path.join(project, "node_modules/universal-agent-plugins");
       fs.mkdirSync(installed, { recursive: true });
       fs.writeFileSync(path.join(installed, "public-release.json"), f.descriptorBytes);
     } else if (args.includes("audit")) {
       // Fixture assertion of the npm verifier boundary, not a real signature.
       return Buffer.from(JSON.stringify({ invalid: [], missing: [], verified: [{ name: "universal-agent-plugins",
-        version: "0.1.64", location: "node_modules/universal-agent-plugins", registry: "https://registry.npmjs.org/",
+        version: "0.1.65", location: "node_modules/universal-agent-plugins", registry: "https://registry.npmjs.org/",
         attestations: f.metadata.dist.attestations, attestationBundles: f.response.attestations }] }));
     } else assert.equal(args[1], "author");
     return Buffer.from("");
@@ -495,12 +495,12 @@ test("prepublication smoke uses exact tarball, actual lifecycle, disposable root
     assert.ok(options.cwd.startsWith(dir + path.sep));
     assert.ok(options.env.HOME.startsWith(options.cwd + path.sep));
     const project = JSON.parse(fs.readFileSync(path.join(options.cwd, "package.json")));
-    assert.deepEqual(project.allowScripts, { "file:/exact/plugin-kit-ai-2.0.4.tgz": true });
+    assert.deepEqual(project.allowScripts, { "file:/exact/plugin-kit-ai-2.0.5.tgz": true });
     for (const name of ["GH_TOKEN", "NPM_TOKEN", "NODE_AUTH_TOKEN", "NODE_OPTIONS", "ACTIONS_ID_TOKEN_REQUEST_TOKEN", "ACTIONS_ID_TOKEN_REQUEST_URL"]) assert.equal(options.env[name], undefined);
     return Buffer.from("");
   });
-  p.packedSmoke("plugin-kit-ai", "/exact/plugin-kit-ai-2.0.4.tgz", dir, "/fixture/npm.js", context);
-  assert.ok(calls[0].includes("--ignore-scripts=false")); assert.equal(calls[0].at(-1), "/exact/plugin-kit-ai-2.0.4.tgz");
+  p.packedSmoke("plugin-kit-ai", "/exact/plugin-kit-ai-2.0.5.tgz", dir, "/fixture/npm.js", context);
+  assert.ok(calls[0].includes("--ignore-scripts=false")); assert.equal(calls[0].at(-1), "/exact/plugin-kit-ai-2.0.5.tgz");
   assert.deepEqual(calls.slice(1).map(args => args[1]), ["--help", "init", "validate"]);
   assert.equal(fs.readdirSync(dir).some(n => n.startsWith("packed-smoke-")), false);
 });
@@ -512,11 +512,11 @@ test("kit readback verifies product-specific registry, signatures, postinstall a
     calls.push(args);
     assert.equal(exe, process.execPath); assert.ok(options.cwd.startsWith(dir + path.sep));
     if (args.includes("install")) {
-      assert.equal(args.at(-1), "plugin-kit-ai@2.0.4"); assert.ok(args.includes("--ignore-scripts"));
+      assert.equal(args.at(-1), "plugin-kit-ai@2.0.5"); assert.ok(args.includes("--ignore-scripts"));
       const installed = path.join(options.cwd, "node_modules/plugin-kit-ai"); fs.mkdirSync(installed, { recursive: true });
       fs.writeFileSync(path.join(installed, "public-release.json"), f.descriptorBytes);
     } else if (args.includes("audit")) return Buffer.from(JSON.stringify({ invalid: [], missing: [], verified: [{
-      name: product, version: "2.0.4", location: `node_modules/${product}`, registry: "https://registry.npmjs.org/",
+      name: product, version: "2.0.5", location: `node_modules/${product}`, registry: "https://registry.npmjs.org/",
       attestations: f.metadata.dist.attestations, attestationBundles: f.response.attestations }] }));
     return Buffer.from("");
   });
@@ -531,14 +531,14 @@ for (const product of c.PRODUCTS) {
     test(`${product} readback rejects substituted ${defect}`, async t => {
       const f = publicFixture(product), dir = root(t);
       if (defect === "name") f.metadata.name = "other-package";
-      if (defect === "version") f.metadata.version = product === "plugin-kit-ai" ? "2.0.5" : "0.1.65";
+      if (defect === "version") f.metadata.version = product === "plugin-kit-ai" ? "2.0.6" : "0.1.66";
       if (defect === "scripts") f.metadata.scripts = { postinstall: "node malicious.js" };
       if (defect === "repository") f.metadata.repository.url = "git+https://github.com/attacker/fork.git";
-      if (defect === "tarball") f.metadata.dist.tarball = "https://registry.npmjs.org/other/-/other-2.0.4.tgz";
+      if (defect === "tarball") f.metadata.dist.tarball = "https://registry.npmjs.org/other/-/other-2.0.5.tgz";
       if (defect === "attestation") f.metadata.dist.attestations.url += "/wrong";
       if (defect === "source") f.statement.predicate.buildDefinition.resolvedDependencies[0].digest.gitCommit = "b".repeat(40);
-      if (defect === "ref") f.statement.predicate.buildDefinition.externalParameters.workflow.ref = "refs/tags/plugin-kit-ai-v2.0.4";
-      if (defect === "subject") f.statement.subject[0].name = "pkg:npm/other@2.0.4";
+      if (defect === "ref") f.statement.predicate.buildDefinition.externalParameters.workflow.ref = "refs/tags/plugin-kit-ai-v2.0.5";
+      if (defect === "subject") f.statement.subject[0].name = "pkg:npm/other@2.0.5";
       publicReads(t, f);
       let executableCalls = 0;
       t.mock.method(cp, "execFileSync", () => { executableCalls += 1; return Buffer.from(""); });
@@ -556,7 +556,7 @@ test("legacy copy-only publisher refuses v2 before authentication or package sta
     .replace('${{ inputs.tag }}', '${TEST_TAG}');
   for (const tag of ["1.2.4", "v1.2.4", "plugin-kit-ai-v1.2.4", "2.0.2", "v2.0.2", "plugin-kit-ai-v2.0.2",
     "2.0.3", "v2.0.3", "plugin-kit-ai-v2.0.3",
-    "2.0.4", "v2.0.4", "plugin-kit-ai-v2.0.4", "agentplugins-v0.1.64"]) {
+    "2.0.5", "v2.0.5", "plugin-kit-ai-v2.0.5", "agentplugins-v0.1.65"]) {
     const result = cp.spawnSync("/bin/bash", ["-e", "-s"], { input: shell, encoding: "utf8", cwd: root(t),
       env: { PATH: "/usr/bin:/bin", GITHUB_EVENT_NAME: "workflow_dispatch", GITHUB_OUTPUT: path.join(root(t), "output"), TEST_TAG: tag } });
     assert.equal(result.status === 0, tag.includes("1.2.4"), `${tag}: ${result.stderr}`);
