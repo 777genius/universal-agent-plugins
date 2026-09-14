@@ -10,10 +10,12 @@ translationRequired: true
 
 # Build a remote MCP package
 
-> **Prepared, unreleased authoring contract.** This public page documents a reviewed
-> future authoring workflow. Future authoring commands described here are not available in current
-> releases; they do not claim that `plugin-kit-ai@2` is available. Existing installer
-> examples are identified separately. Public activation remains pending.
+> **Milestone A is available.** Standard-first static authoring is published as
+> `universal-agent-plugins@0.1.65` (`agentplugins author`) and `plugin-kit-ai@2.0.5`.
+> GitHub tags: `agentplugins-v0.1.65` and `plugin-kit-ai-v2.0.5`.
+> npm, PyPI, Homebrew, GitHub Releases and the public-channel E2E are verified.
+> Runtime/dev/bootstrap, migration, export and publication remain deferred.
+> Historical YAML v1 workflows remain separate and preserved.
 
 Choose remote MCP when the server already exists and the package should describe
 how an agent connects to it. Authoring records the URL without contacting it.
@@ -37,7 +39,7 @@ agentplugins author init ./docs-service \
   --url https://mcp.example.com/mcp
 ```
 
-Equivalent future authoring executable spelling; run only one:
+Equivalent Milestone A authoring executable spelling; run only one:
 
 ```bash
 plugin-kit-ai init ./docs-service \
@@ -80,7 +82,7 @@ agentplugins author compat ./docs-service --target codex,claude
 agentplugins author doctor ./docs-service
 ```
 
-The same arguments work with the future `plugin-kit-ai` prefix. `inspect` can
+The same arguments work with the `plugin-kit-ai` prefix. `inspect` can
 show components and unresolved requirements. `compat` evaluates the selected
 clients' static adapter support; neither command needs those clients installed.
 Doctor does not contact the endpoint.

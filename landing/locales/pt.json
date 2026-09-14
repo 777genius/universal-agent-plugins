@@ -199,15 +199,15 @@
     "installLink": "Guia do instalador",
     "buildTitle": "Criar plugins",
     "standard": "Crie um pacote portátil do Agent Plugins 1.0 em torno de plugin.json, com skills/ e mcp.json opcionais. O suporte dos clientes depende do pacote e de seus componentes.",
-    "preparation": "Preparação - não lançado",
-    "unreleased": "A CLI de autoria orientada ao padrão está em preparação e ainda não foi lançada. O plugin-kit-ai 1.2.4 publicado no npm e no PyPI é a ferramenta histórica v1, não a v2 orientada ao padrão. Instalar plugin-kit-ai{'@'}latest não fornece o futuro fluxo de autoria.",
+    "preparation": "Milestone A disponível",
+    "unreleased": "Milestone A está disponível. universal-agent-plugins{'@'}0.1.65 / plugin-kit-ai{'@'}2.0.5; GitHub: agentplugins-v0.1.65 / plugin-kit-ai-v2.0.5. npm, PyPI, Homebrew, GitHub Releases e o E2E dos canais públicos estão verificados. Apenas autoria estática; fases 7–11, runtime/dev/bootstrap, migração, exportação e publicação continuam adiados. As capacidades de plugin.yaml estão preservadas; use plugin-kit-ai{'@'}1.2.4 para projetos v1.",
     "specLink": "Ler a especificação Agent Plugins 1.0",
     "historyTitle": "Manutenção histórica da v1",
     "history": "Mantenha projetos plugin.yaml existentes com as instruções da v1 abaixo. Estes modelos e saídas geradas são fluxos históricos da v1; eles não criam o novo fluxo de autoria orientado ao padrão.",
     "quickstartLink": "Início rápido e manutenção da v1",
     "compatibilityLink": "Compatibilidade de clientes (em inglês)",
     "limitations": "A compatibilidade é específica de cada pacote. A validação de esquema não comprova execução, OAuth nem ativação. O Codex não oferece suporte a MCP SSE declarado; stdio e Streamable HTTP mantêm o suporte existente por adaptador.",
-    "versions": "Versões publicadas verificadas em 2026-09-07: universal-agent-plugins 0.1.53 (npm), plugin-kit-ai 1.2.4 (npm/PyPI), versão estável no GitHub agentplugins-v0.1.53."
+    "versions": "Milestone A disponível: universal-agent-plugins{'@'}0.1.65 / plugin-kit-ai{'@'}2.0.5; GitHub: agentplugins-v0.1.65 / plugin-kit-ai-v2.0.5."
   },
   "shell": {
     "docs": {

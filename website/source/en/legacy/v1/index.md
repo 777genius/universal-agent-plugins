@@ -10,10 +10,12 @@ translationRequired: true
 
 # Historical plugin-kit-ai v1, baseline 1.2.4
 
-> **Prepared, unreleased authoring contract.** This public page documents a reviewed
-> future authoring workflow. Future authoring commands described here are not available in current
-> releases; they do not claim that `plugin-kit-ai@2` is available. Existing installer
-> examples are identified separately. Public activation remains pending.
+> **Milestone A is available.** Standard-first static authoring is published as
+> `universal-agent-plugins@0.1.65` (`agentplugins author`) and `plugin-kit-ai@2.0.5`.
+> GitHub tags: `agentplugins-v0.1.65` and `plugin-kit-ai-v2.0.5`.
+> npm, PyPI, Homebrew, GitHub Releases and the public-channel E2E are verified.
+> Runtime/dev/bootstrap, migration, export and publication remain deferred.
+> Historical YAML v1 workflows remain separate and preserved.
 
 This index preserves a way to understand existing projects. Its command baseline
 is tag **v1.2.4**, resolving to commit
@@ -28,7 +30,7 @@ promise a second maintained YAML engine or a new support commitment.
 
 | What you have | Where to go |
 | --- | --- |
-| A new root `plugin.json` package | [Prepared Build journey](/en/build/). |
+| A new root `plugin.json` package | [Milestone A Build journey](/en/build/). |
 | A package to install into an agent | [Use plugins](/en/use/). |
 | `plugin/plugin.yaml`, generated targets, or launcher source | Use the historical baseline and retained references below. |
 | A plan to convert a legacy project automatically | Migration is unavailable in v2; preserve the project. |
@@ -49,7 +51,7 @@ These are historical names, not the v2 command navigation.
 The tagged [init source](https://github.com/777genius/universal-agent-plugins/blob/9beca10448ac50fbe526a52101d1433a12471980/cli/plugin-kit-ai/cmd/plugin-kit-ai/init.go)
 describes `online-service`, `local-tool`, and `custom-logic`, with authored source
 under `plugin/`. Runtime and platform switches there have historical meanings.
-For example, v1 test exercises launcher fixtures, while prepared v2 test is a
+For example, v1 test exercises launcher fixtures, while v2 test is a
 static package check. The same command name does not imply the same behavior.
 
 Use version 1.2.4 deliberately when maintaining those projects; avoid unversioned
@@ -96,5 +98,4 @@ capabilities remain preserved outside the standard dependency graph.
 
 This index does not copy all historical pages, bulk-migrate examples, or advertise
 a maintained parallel engine. Future source removal requires an inventory and
-explicit owner acceptance. Public navigation and redirects need separate review
-before this preparation can be activated.
+explicit owner acceptance. Historical navigation and redirects remain available for v1 users.

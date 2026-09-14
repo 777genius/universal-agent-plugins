@@ -218,7 +218,7 @@ func TestContractClarity_RuntimeMetadataAndDocsStayAligned(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// The root README separates the installer and unreleased standard preview
+	// The root README separates the installer and released Milestone A surface
 	// from preserved v1 capabilities. Keep legacy claims inside that boundary.
 	currentReadme, historicalReadme, found := cutHistoricalReadme(string(rootReadme))
 	if !found {
@@ -226,18 +226,23 @@ func TestContractClarity_RuntimeMetadataAndDocsStayAligned(t *testing.T) {
 	}
 	mustContain(t, currentReadme, "## Use plugins")
 	mustContain(t, currentReadme, "npx universal-agent-plugins add context7")
-	mustContain(t, currentReadme, "## Build plugins — unreleased preview")
+	mustContain(t, currentReadme, "## Build plugins — Milestone A")
 	currentProse := strings.Join(strings.Fields(currentReadme), " ")
 	mustContain(t, currentProse, "root `plugin.json` with optional `skills/` and `mcp.json`")
-	mustContain(t, currentProse, "`agentplugins author` and `plugin-kit-ai` are the two prepared entrypoints to one standard authoring engine.")
-	mustContain(t, currentProse, "Public deployment remains gated on release acceptance")
+	mustContain(t, currentProse, "`agentplugins author` and `plugin-kit-ai` are two entrypoints to one shared standard authoring engine.")
+	mustContain(t, currentProse, "npm install -g universal-agent-plugins@0.1.65")
+	mustContain(t, currentProse, "npm install -g plugin-kit-ai@2.0.5")
+	mustContain(t, currentProse, "agentplugins-v0.1.65")
+	mustContain(t, currentProse, "plugin-kit-ai-v2.0.5")
+	mustContain(t, currentProse, "Milestone A static authoring is available. Phases 7–11 remain deferred.")
+	mustContain(t, currentProse, "Runtime/dev/bootstrap, client generation, export/bundle, and publication are deferred from this MVP.")
 	mustContain(t, currentProse, "There is no implicit YAML fallback or second supported YAML engine.")
-	mustContain(t, currentProse, "`plugin-kit-ai@latest` is the historical v1 tool, not standard-first v2.")
+	mustContain(t, currentProse, "Historical YAML projects use `plugin-kit-ai@1.2.4`")
 	mustContain(t, historicalReadme, "[Historical plugin-kit-ai v1, baseline 1.2.4](website/source/en/legacy/v1/index.md)")
 	mustContain(t, historicalReadme, "Project migration is not available in v2 yet.")
 	mustContain(t, historicalReadme, "Maintain legacy projects using the v1 1.2.4 command set.")
 	mustContain(t, historicalReadme, "[preserved authoring guide](docs/PLUGIN_KIT_AI_AUTHORING.md)")
-	mustContain(t, strings.Join(strings.Fields(historicalReadme), " "), "All commands, stability labels, and supported-output claims in this section describe the preserved v1 workflow, not the unreleased standard authoring MVP.")
+	mustContain(t, strings.Join(strings.Fields(historicalReadme), " "), "All commands, stability labels, and supported-output claims in this section describe the preserved v1 workflow, not the released standard authoring MVP.")
 	mustContain(t, historicalReadme, "Build one plugin and ship it to many AI agents was the legacy authoring goal.")
 	mustContain(t, string(sdkReadme), "`(*plugin-kit-ai.App).Gemini()`")
 	mustContain(t, string(sdkReadme), "`github.com/777genius/plugin-kit-ai/sdk/gemini`")

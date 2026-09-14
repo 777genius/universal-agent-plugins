@@ -26,7 +26,7 @@ npx universal-agent-plugins add context7
 
 [安装指南](https://github.com/777genius/universal-agent-plugins#quick-start)
 
-版本核验日期为 2026-09-07：universal-agent-plugins 0.1.53（npm）、plugin-kit-ai 1.2.4（npm/PyPI），GitHub 稳定版本 agentplugins-v0.1.53。
+Milestone A 已发布: universal-agent-plugins@0.1.65 / plugin-kit-ai@2.0.5; GitHub: agentplugins-v0.1.65 / plugin-kit-ai-v2.0.5.
 
 兼容性取决于包。通过模式验证并不证明运行、OAuth 或激活成功。Codex 不支持声明的 MCP SSE；stdio 和 Streamable HTTP 保留现有适配器支持。
 
@@ -36,9 +36,9 @@ npx universal-agent-plugins add context7
 
 以 plugin.json 为核心构建可移植的 Agent Plugins 1.0 包，可选包含 skills/ 和 mcp.json。客户端支持取决于包及其组件。
 
-**准备中 — 尚未发布**
+**Milestone A 已发布**
 
-以标准为先的创作 CLI 正在准备中，尚未发布。npm 和 PyPI 上已发布的 plugin-kit-ai 1.2.4 是历史 v1 工具，并非 standard-first v2。安装 plugin-kit-ai@latest 不会提供未来的创作流程。
+Milestone A 已发布. universal-agent-plugins@0.1.65 / plugin-kit-ai@2.0.5; GitHub: agentplugins-v0.1.65 / plugin-kit-ai-v2.0.5. npm、PyPI、Homebrew、GitHub Releases 和公共渠道 E2E 均已验证。仅静态创作；第 7–11 阶段、runtime/dev/bootstrap、迁移、导出和发布仍推迟。保留 plugin.yaml 能力；v1 项目使用 plugin-kit-ai@1.2.4。
 
 [Agent Plugins 1.0 规范](https://agent-plugins.org/specification)
 

@@ -8,7 +8,7 @@ import { consumePreparedCLI, extractPreparedCLI, namespace } from "../extractors
 import { extractPlatformData } from "../extractors/platform.mjs";
 import { extractHistorical, historicalSHA } from "../extractors/historical.mjs";
 import { scanSourceEntities, buildSidebar } from "../generate.mjs";
-import { bindGeneratedPaths, docsLocales, entityPath, journeyNav, journeyLabels, journeyPageLabels, localePathField, requirePublicationBoundary } from "./journeys.mjs";
+import { bindGeneratedPaths, docsLocales, entityPath, isMilestoneAJourney, journeyNav, journeyLabels, journeyPageLabels, localePathField, requirePublicationBoundary } from "./journeys.mjs";
 import { buildRedirects, createRedirectDocument, emitRedirects, htmlPath } from "./redirects.mjs";
 import { sourceRoot, repoRoot, docsBaseUrl, repoBrowserUrl } from "../config/site.mjs";
 import { run } from "./process.mjs";
@@ -32,26 +32,26 @@ function flattenLinks(sidebar) {
   return Object.values(sidebar).flatMap(visit);
 }
 
-test("production publication requires truthful preparation metadata and maintained locale routes", () => {
+test("production publication requires released metadata and maintained locale routes", () => {
   assert.throws(() => requirePublicationBoundary([], {}), /non-empty/);
-  assert.equal(requirePublicationBoundary(sourceEntities, {}), "truthful-public-checkpoint");
-  const prepared = sourceEntities.find((entry) => entry.publicVisibility === "preparation");
-  assert.ok(prepared);
-  assert.throws(() => requirePublicationBoundary([{ ...prepared, released: true }], {}), /misclassifies/);
-  assert.throws(() => requirePublicationBoundary([{ ...prepared, pathZh: "" }], {}), /maintained-locale/);
+  assert.equal(requirePublicationBoundary(sourceEntities, {}), "released-public");
+  const released = sourceEntities.find((entry) => entry.status === "released");
+  assert.ok(released);
+  assert.throws(() => requirePublicationBoundary([{ ...released, released: false }], {}), /unreleased preparation/);
+  assert.throws(() => requirePublicationBoundary([{ ...released, pathZh: "" }], {}), /maintained-locale/);
   assert.equal(requirePublicationBoundary([], { DOCS_PREPARATION_PREVIEW: "1" }), "disposable-preview");
   assert.throws(() => requirePublicationBoundary([], { DOCS_PREPARATION_PREVIEW: "true" }), /non-empty/);
 });
 
 test("all five navigations expose real Use and Build journeys with truthful English fallback", async () => {
-  const prepared = sourceEntities.filter((entry) => entry.publicVisibility === "preparation");
+  const released = sourceEntities.filter((entry) => entry.status === "released");
   const requiredJourneys = ["use:index", "use:install", "use:manage", "build:index", "build:skill",
     "build:mcp-remote", "build:mcp-stdio", "build:hybrid", "build:skills", "build:layout",
     "build:checks", "build:handoff", "legacy:v1:index"];
-  for (const id of requiredJourneys) assert.ok(prepared.some(entry => entry.canonicalId === `page:${id}`), id);
-  for (const entry of prepared) {
-    assert.equal(entry.released, false);
-    assert.equal(entry.stability, "prepared-not-release");
+  for (const id of requiredJourneys) assert.ok(released.some(entry => entry.canonicalId === `page:${id}`), id);
+  for (const entry of released) {
+    assert.equal(entry.released, true);
+    assert.equal(entry.stability, "public-stable");
     for (const locale of docsLocales) {
       const expected = entry.pathEn.replace(/^\/en\//, `/${locale}/`);
       assert.equal(entityPath(entry, locale), expected);
@@ -68,7 +68,7 @@ test("all five navigations expose real Use and Build journeys with truthful Engl
     assert.equal(sidebar[`/${locale}/build/`][1].text, journeyLabels[locale][1]);
     if (locale !== "en") assert.equal(sidebar[`/${locale}/use/`][0].items[0].text, journeyPageLabels[locale]["page:use:index"]);
     const links = flattenLinks({ use: sidebar[`/${locale}/use/`], build: sidebar[`/${locale}/build/`] });
-    for (const entry of prepared.filter(entry => requiredJourneys.includes(entry.canonicalId.slice("page:".length))))
+    for (const entry of released.filter(entry => requiredJourneys.includes(entry.canonicalId.slice("page:".length))))
       assert.ok(links.includes(entityPath(entry, locale)), entry.canonicalId);
     const missing = { canonicalId: "generated:missing", title: "plugin-kit-ai missing translation", surface: "authoring-cli", pathEn: "/en/api/missing" };
     assert.equal(entityPath(missing, locale), missing.pathEn);
@@ -90,7 +90,7 @@ test("locale registry fields require actual generated pages; explicit translated
 
 test("D1 journey relative links resolve against real source and retained reference", async () => {
   const errors = [];
-  for (const entity of sourceEntities.filter((entry) => entry.publicVisibility === "preparation")) {
+  for (const entity of sourceEntities.filter((entry) => typeof entry.sourceRef === "string" && isMilestoneAJourney(entry.sourceRef))) {
     const file = path.join(sourceRoot, "en", entity.sourceRef);
     const body = await fs.readFile(file, "utf8");
     for (const match of body.matchAll(/\]\(([^)]+)\)/g)) {
@@ -142,8 +142,10 @@ test("actual accepted adapter envelope preserves all commands/flags/provenance a
     for (const command of surface.commands) {
       const entity = bundle.entities.find((entry) => entry.canonicalId === command.identity);
       assert.deepEqual(entity.command, command);
-      assert.equal(entity.released, false);
-      assert.equal(entity.stability, "prepared-not-release");
+      assert.equal(entity.released, true);
+      assert.equal(entity.status, "released");
+      assert.equal(entity.stability, "public-stable");
+      assert.equal(entity.publicVisibility, "public");
       assert.equal(entity.sourceSHA, sourceSHA);
       assert.deepEqual(entity.sources, bundle.envelope.sources);
       assert.ok(!/\b(__\w+|migrate|migration|bootstrap|dev|generate|import|export|bundle|publish|normalize)\b/.test(command.command_path));
@@ -159,6 +161,9 @@ test("actual accepted adapter envelope preserves all commands/flags/provenance a
   assert.match(skill.content, /plugin-kit-ai skills init <name>/);
   for (const page of bundle.pages) {
     assert.equal(page.mirror, false);
+    assert.match(page.content, /status: released/);
+    assert.match(page.content, /Released Milestone A reference/);
+    assert.doesNotMatch(page.content, /prepared-not-release|not a public release/);
     assert.ok(!/\]\([^)]*\.md\)/.test(page.content));
     for (const match of page.content.matchAll(/\]\((\/en\/[^)]+)\)/g)) {
       assert.ok(bundle.entities.some((entry) => entry.pathEn === match[1]), match[1]);
@@ -243,7 +248,7 @@ test("emitted HTML redirects preserve query/deep fragments at canonical base; no
     for (const fragment of ["#options", "#a%20b", ""]) {
       let actual;
       const location = { search: "?view=legacy&x=1", hash: fragment, replace: (url) => { actual = url; } };
-      const script = html.match(/<script>([\s\S]*?)<\/script>/)[1];
+      const script = html.match(/<script>([\s\S]*?)<\/script>/i)[1];
       vm.runInNewContext(script, { location });
       assert.equal(actual, new URL(target.slice(1), docsBaseUrl).href + location.search + fragment);
       evidence.push({ alias, target, fragment, actual });

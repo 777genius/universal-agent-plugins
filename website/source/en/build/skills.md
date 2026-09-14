@@ -10,12 +10,14 @@ translationRequired: true
 
 # Add extra Skills
 
-> **Prepared, unreleased authoring contract.** This public page documents a reviewed
-> future authoring workflow. Future authoring commands described here are not available in current
-> releases; they do not claim that `plugin-kit-ai@2` is available. Existing installer
-> examples are identified separately. Public activation remains pending.
+> **Milestone A is available.** Standard-first static authoring is published as
+> `universal-agent-plugins@0.1.65` (`agentplugins author`) and `plugin-kit-ai@2.0.5`.
+> GitHub tags: `agentplugins-v0.1.65` and `plugin-kit-ai-v2.0.5`.
+> npm, PyPI, Homebrew, GitHub Releases and the public-channel E2E are verified.
+> Runtime/dev/bootstrap, migration, export and publication remain deferred.
+> Historical YAML v1 workflows remain separate and preserved.
 
-Use the future `skills init` job to add one Skill to an existing standard package.
+Use the `skills init` job to add one Skill to an existing standard package.
 It works for Skill, MCP, or hybrid packages. Select the package root containing
 `plugin.json`, not the `skills/` directory or an individual `SKILL.md` file.
 
@@ -31,7 +33,7 @@ agentplugins author skills init release-notes ./review-helper \
   --description 'Use when drafting release notes from reviewed changes'
 ```
 
-Equivalent future authoring executable spelling; choose one:
+Equivalent Milestone A authoring executable spelling; choose one:
 
 ```bash
 plugin-kit-ai skills init release-notes ./review-helper \

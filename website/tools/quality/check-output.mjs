@@ -127,7 +127,7 @@ if (!productionReadiness.includes("Pick The Right Path On Purpose")) {
 }
 
 const quickstart = await fs.readFile(path.join(distRoot, "en", "guide", "quickstart.html"), "utf8");
-for (const claim of ["Use plugins", "Build plugins", "Preparation", "unreleased", "Historical v1 maintenance", "plugin.json"]) {
+for (const claim of ["Use plugins", "Build plugins", "Milestone A is available", "public-channel E2E are verified", "0.1.65", "2.0.5", "Historical v1 maintenance", "plugin.json"]) {
   if (!quickstart.includes(claim)) {
     console.error(`Quickstart page is missing its public availability claim: ${claim}`);
     hasError = true;

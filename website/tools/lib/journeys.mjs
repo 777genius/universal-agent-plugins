@@ -1,7 +1,7 @@
 export const docsLocales = ["en", "ru", "es", "fr", "zh"];
 export const localePathField = (locale) => `path${locale[0].toUpperCase()}${locale.slice(1)}`;
 export const entityPath = (entry, locale) => entry[localePathField(locale)] || entry.pathEn || "";
-export const isPreparedSource = (relative) => /^(use|build|legacy\/v1)\//.test(relative);
+export const isMilestoneAJourney = (relative) => /^(use|build|legacy\/v1)\//.test(relative);
 
 export const journeyLabels = {
   "en": [
@@ -103,9 +103,9 @@ export const journeyPageLabels = {
   }
 };
 
-const preparationLabels = {
-  en: "prepared, not released", ru: "подготовка, не релиз", es: "preparación, no publicado",
-  fr: "préparation, non publié", zh: "准备中，尚未发布"
+const releaseLabels = {
+  en: "Milestone A available", ru: "Milestone A доступен", es: "Milestone A disponible",
+  fr: "Milestone A disponible", zh: "Milestone A 已发布"
 };
 
 export function journeySidebar(locale, entities) {
@@ -121,7 +121,7 @@ export function journeySidebar(locale, entities) {
       link: entityPath(entity, locale) };
   }) }));
   groups.push(...["plugin-kit-ai", "agentplugins author"].map((surface) => ({
-    text: `${surface} · ${preparationLabels[locale]}`,
+    text: `${surface} · ${releaseLabels[locale]}`,
     items: entities.filter((entry) => entry.surface === "authoring-cli" &&
       (entry.title === surface || entry.title.startsWith(`${surface} `)))
       .map((entry) => ({ text: entry.title + (locale === "en" || entry[localePathField(locale)] ? "" : ` (${journeyLabels[locale][3]})`), link: entityPath(entry, locale) }))
@@ -148,18 +148,24 @@ export function bindGeneratedPaths(entities, pages) {
 export function requirePublicationBoundary(entities, env = process.env) {
   if (env.DOCS_PREPARATION_PREVIEW === "1") return "disposable-preview";
   if (!Array.isArray(entities) || entities.length === 0) {
-    throw new Error("Public documentation requires a non-empty, truthfully classified entity registry.");
+    throw new Error("Public documentation requires a non-empty entity registry.");
   }
-  const prepared = entities.filter((entry) => entry.publicVisibility === "preparation");
-  if (prepared.length === 0) throw new Error("Public documentation lost its explicit preparation boundary.");
-  for (const entry of prepared) {
-    if (entry.status !== "prepared-not-release" || entry.released !== false ||
-        entry.stability !== "prepared-not-release" || entry.maturity !== "prepared") {
-      throw new Error(`Public documentation misclassifies unreleased preparation: ${entry.canonicalId || "unknown"}`);
+  const stale = entities.filter((entry) => entry.publicVisibility === "preparation" ||
+    entry.status === "prepared-not-release" || entry.released === false ||
+    entry.stability === "prepared-not-release" || entry.maturity === "prepared");
+  if (stale.length) {
+    throw new Error(`Public documentation retains unreleased preparation metadata: ${stale[0].canonicalId || "unknown"}`);
+  }
+  const journeys = entities.filter((entry) => entry.sourceKind === "hand-authored" &&
+    typeof entry.sourceRef === "string" && isMilestoneAJourney(entry.sourceRef));
+  for (const entry of journeys) {
+    if (entry.status !== "released" || entry.released !== true || entry.publicVisibility !== "public" ||
+        entry.stability !== "public-stable" || entry.maturity !== "stable") {
+      throw new Error(`Public documentation misclassifies a released journey: ${entry.canonicalId || "unknown"}`);
     }
-    if (entry.sourceKind === "hand-authored" && docsLocales.some((locale) => !entry[localePathField(locale)])) {
-      throw new Error(`Public documentation lacks a maintained-locale preparation route: ${entry.canonicalId || "unknown"}`);
+    if (docsLocales.some((locale) => !entry[localePathField(locale)])) {
+      throw new Error(`Public documentation lacks a maintained-locale release route: ${entry.canonicalId || "unknown"}`);
     }
   }
-  return "truthful-public-checkpoint";
+  return "released-public";
 }

@@ -30,7 +30,7 @@ for (const cwd of [source, site]) await run("git", ["checkout", "--quiet", "--de
 await requireAuthoringSource();
 const output = path.join(directory, "adapter-output");
 await run("go", ["run", "-p", "2", "./cli/plugin-kit-ai/tools/authoring-docs", "--source-sha", acceptedAuthoringSHA,
-  "--checkout", source, "--out-dir", output], { cwd: source, env: { GOWORK: path.join(source, "go.work") } });
+  "--checkout", source, "--out-dir", output], { cwd: repository, env: { GOWORK: path.join(repository, "go.work") } });
 const envelope = JSON.parse(await fs.readFile(path.join(output, "prepared-authoring-v2/manifest.json"), "utf8"));
 for (const pin of envelope.sources) {
   const digest = createHash("sha256").update(await fs.readFile(path.join(source, pin.path))).digest("hex");
@@ -83,7 +83,7 @@ const dirtyFile = path.join(source, envelope.sources[0].path);
 await fs.appendFile(dirtyFile, "\n");
 await assert.rejects(requireAuthoringSource(), /tracked changes/);
 await assert.rejects(run("go", ["run", "-p", "2", "./cli/plugin-kit-ai/tools/authoring-docs", "--source-sha", acceptedAuthoringSHA,
-  "--checkout", source, "--out-dir", path.join(directory, "dirty-rejected")], { cwd: source, env: { GOWORK: path.join(source, "go.work") } }));
+  "--checkout", source, "--out-dir", path.join(directory, "dirty-rejected")], { cwd: repository, env: { GOWORK: path.join(repository, "go.work") } }));
 await run("git", ["restore", "--", envelope.sources[0].path], { cwd: source });
 await requireAuthoringSource();
 await fs.writeFile(path.join(directory, "assembly-evidence.json"), JSON.stringify({

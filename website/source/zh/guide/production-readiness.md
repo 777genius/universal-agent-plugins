@@ -8,7 +8,7 @@ generated: false
 translationRequired: true
 ---
 
-[使用插件](/zh/use/) · [构建插件](/zh/build/) — 仅为准备内容，尚未发布。v2 暂不支持项目迁移。
+[使用插件](/zh/use/) · [构建插件](/zh/build/) — Milestone A 已发布。v2 暂不支持项目迁移。
 <p class="locale-historical-identity">生产准备情况</p>
 
 [plugin-kit-ai v1 分支的历史快照。1.2.4 是命令基准，并非此快照的确切版本。](/en/legacy/v1/)

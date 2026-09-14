@@ -503,15 +503,15 @@ test('sitemap lists only live canonical pages and unstable routes stay out of th
   await expect(page.getByRole('heading', { name: 'Use plugins', exact: true })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Build plugins', exact: true })).toBeVisible();
   await expect(page.locator('#use-plugins code')).toHaveText('npx universal-agent-plugins add context7');
-  await expect(page.locator('#build-plugins')).toContainText('Preparation — unreleased');
-  await expect(page.locator('#build-plugins')).toContainText('not standard-first v2');
+  await expect(page.locator('#build-plugins')).toContainText('Milestone A is available');
+  await expect(page.locator('#build-plugins')).toContainText('public-channel E2E are verified');
   await expect(page.locator('#historical-v1 a')).toHaveAttribute(
     'href',
     'https://777genius.github.io/universal-agent-plugins/docs/en/guide/quickstart.html#historical-v1',
   );
 });
 
-test('the authoring frontdoor distinguishes Use from unreleased Build and links to real docs journeys', async ({
+test('the authoring frontdoor distinguishes Use from released Build and links to real docs journeys', async ({
   page,
 }) => {
   await page.goto('./create-plugin');
@@ -528,9 +528,7 @@ test('the authoring frontdoor distinguishes Use from unreleased Build and links 
     'href',
     'https://github.com/777genius/universal-agent-plugins#supported-clients',
   );
-  // The unreleased preview must explicitly disclaim availability, not
-  // silently omit the topic.
-  await expect(page.locator('#build-plugins')).toContainText('is in preparation and is unreleased');
+  await expect(page.locator('#build-plugins')).toContainText('public-channel E2E are verified');
 
   await expect(page.locator('#historical-v1 a')).toHaveAttribute(
     'href',

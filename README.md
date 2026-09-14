@@ -15,7 +15,7 @@ Install and manage Agent Plugins 1.0 across your AI agents with one CLI.
 
 Install, inspect, update, repair, and remove packages with the existing installer.
 The [Use guide source](website/source/en/use/index.md) collects this journey.
-See [Build plugins](#build-plugins--unreleased-preview) below for the unreleased authoring preview.
+See [Build plugins](#build-plugins--milestone-a) below for the released Milestone A static authoring flow.
 
 ### Quick start
 
@@ -253,19 +253,28 @@ path and package digest are stored for safe replay. Direct full-SHA installation
 remain immutable; use `switch` to move to another exact source. `repair` reapplies
 the recorded source, and `remove` changes only files owned by the CLI.
 
-## Build plugins — unreleased preview
+## Build plugins — Milestone A
 
 <a id="authoring-and-development"></a>
+<a id="build-plugins--milestone-a"></a>
 
-The [prepared Build guide source](website/source/en/build/index.md) describes
+The [Build guide](website/source/en/build/index.md) describes Milestone A:
 root `plugin.json` with optional `skills/` and `mcp.json`, followed by the offline
 init → validate → inspect → static test loop and an installer planner handoff.
-`agentplugins author` and `plugin-kit-ai` are the two prepared entrypoints to
-one standard authoring engine. The standard-first authoring CLI is not released.
-This is unreleased preview documentation, not
-an announcement that `plugin-kit-ai@2` is available on npm. Public deployment
-remains gated on release acceptance; the installer instructions above retain
-their existing behavior. See the [Use / Build quickstart](https://777genius.github.io/universal-agent-plugins/docs/en/guide/quickstart.html).
+`agentplugins author` and `plugin-kit-ai` are two entrypoints to one shared
+standard authoring engine.
+
+Install an exact npm version (Node.js 22+):
+
+```bash
+npm install -g universal-agent-plugins@0.1.65
+# Or the standalone authoring entrypoint:
+npm install -g plugin-kit-ai@2.0.5
+```
+
+Verified GitHub release tags: [agentplugins-v0.1.65](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.65)
+and [plugin-kit-ai-v2.0.5](https://github.com/777genius/universal-agent-plugins/releases/tag/plugin-kit-ai-v2.0.5).
+See the [Use / Build quickstart](https://777genius.github.io/universal-agent-plugins/docs/en/guide/quickstart.html).
 
 Authoring validation and project doctor are distinct from installer
 `agentplugins validate` and `agentplugins doctor`. Static checks do not prove
@@ -273,10 +282,9 @@ runtime execution, OAuth, or client activation. Runtime/dev/bootstrap,
 client generation, export/bundle, and publication are deferred from this MVP.
 There is no implicit YAML fallback or second supported YAML engine.
 
-**Preparation — unreleased:** as checked on 2026-09-07, npm `universal-agent-plugins`
-is 0.1.53 and the stable GitHub release is `agentplugins-v0.1.53`. npm/PyPI
-`plugin-kit-ai` is 1.2.4: `plugin-kit-ai@latest` is the historical v1 tool, not
-standard-first v2.
+Milestone A static authoring is available. Phases 7–11 remain deferred.
+Historical YAML projects use `plugin-kit-ai@1.2.4`; v1 maintenance is separate
+from the planned npm v2 authoring CLI.
 
 ### Historical authoring and development
 
@@ -296,7 +304,7 @@ and [Skills components](examples/skills/README.md).
 <summary>Historical v1 authoring and SDK reference — baseline 1.2.4</summary>
 
 All commands, stability labels, and supported-output claims in this section
-describe the preserved v1 workflow, not the unreleased standard authoring MVP.
+describe the preserved v1 workflow, not the released standard authoring MVP.
 
 `plugin-kit-ai` keeps authored source under `plugin/`, generates the supported outputs you need, and helps you validate the repo before handoff. This includes supported outputs for Claude, Codex, Gemini, Cursor, and OpenCode where the repo shape allows it. The honest promise is `one repo / many supported outputs`, not fake parity everywhere.
 

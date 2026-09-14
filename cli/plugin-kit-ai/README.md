@@ -1,5 +1,13 @@
 # plugin-kit-ai CLI
 
+> **Historical v1 reference — baseline 1.2.4.** The commands and capabilities
+> below describe the preserved YAML v1 workflow. Released Milestone A static
+> authoring is available from npm as `universal-agent-plugins@0.1.65` or `plugin-kit-ai@2.0.5`;
+> see the [current Build guide](../../website/source/en/build/index.md). Runtime/dev/bootstrap, migration,
+> export and publication remain deferred from v2. Use `plugin-kit-ai@1.2.4`
+> explicitly for the historical instructions below. npm, PyPI, Homebrew,
+> GitHub Releases and public-channel E2E have been verified for Milestone A.
+
 Canonical repo: `github.com/777genius/plugin-kit-ai`. The CLI lives in the submodule `github.com/777genius/plugin-kit-ai/cli` and builds the **`plugin-kit-ai`** binary: `init`, `bootstrap`, `doctor`, `dev`, `test`, `export`, `bundle install`, `bundle fetch`, `bundle publish`, `generate`, `import`, `inspect`, `normalize`, `validate`, `capabilities`, `install`, `version`, plus experimental `skills` authoring commands.
 
 The CLI is the repo authoring tool for one managed plugin project that can expand into multiple production-ready lanes and repo-managed integration lanes without splitting source of truth.

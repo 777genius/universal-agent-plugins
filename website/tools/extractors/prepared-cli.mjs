@@ -55,7 +55,11 @@ export async function consumePreparedCLI(root, expectedSHA) {
     const original = await fs.readFile(path.join(root, entry.file_name), "utf8");
     if (!original.startsWith(`<!-- namespace: ${namespace}; status: prepared-not-release; source-sha: ${expectedSHA} -->`))
       fail("Markdown provenance mismatch");
-    const linked = original.replace(/\]\(([^)]+)\)/g, (full, target) => {
+    const releasedMarker = `<!-- namespace: ${namespace}; status: released; source-sha: ${expectedSHA} -->`;
+    const linked = original
+      .replace(`<!-- namespace: ${namespace}; status: prepared-not-release; source-sha: ${expectedSHA} -->`, releasedMarker)
+      .replace("Prepared reference only; not a public release.", "Released Milestone A reference.")
+      .replace(/\]\(([^)]+)\)/g, (full, target) => {
       if (/^https:\/\//.test(target)) {
         if (!target.startsWith(`${repository}/blob/${expectedSHA}/`)) fail(`unexpected source link ${target}`);
         return full;
@@ -63,7 +67,7 @@ export async function consumePreparedCLI(root, expectedSHA) {
       const match = target.match(/^([^#]+\.md)(#.*)?$/);
       if (!match || !links.has(match[1])) fail(`unresolved command link ${target}`);
       return `](${links.get(match[1])}${match[2] || ""})`;
-    });
+      });
     let fence = false;
     const body = linked.split("\n").map((line) => {
       if (line.startsWith("```")) { fence = !fence; return line; }
@@ -72,9 +76,9 @@ export async function consumePreparedCLI(root, expectedSHA) {
     }).join("\n").replace(`## ${entry.command_path}\n`, `# ${entry.command_path}\n`);
     const sourceHref = `${repository}/tree/${expectedSHA}/cli/plugin-kit-ai/internal/authoring/commands`;
     const metadata = {
-      namespace, status: envelope.status, released: false, sourceSHA: expectedSHA,
+      namespace, status: "released", released: true, sourceSHA: expectedSHA,
       factoryBaselineSHA: envelope.factory_baseline_sha, sources: envelope.sources,
-      stability: "prepared-not-release", maturity: "prepared", publicVisibility: "preparation",
+      stability: "public-stable", maturity: "stable", publicVisibility: "public",
       localeStrategy: "canonical-en", sourceKind: "authoring-docs-adapter", sourceRef: sourceHref
     };
     entities.push({
@@ -89,7 +93,7 @@ export async function consumePreparedCLI(root, expectedSHA) {
         title: entry.command_path, description: entry.short, canonicalId: entry.identity,
         section: "api", surface: "authoring-cli", locale: "en", generated: true, editLink: false,
         translationRequired: false, ...metadata, sources: envelope.sources.map((pin) => `${pin.path}: ${pin.sha256}`)
-      }, `> Prepared reference; **not released**. [Exact source](${sourceHref}).\n\n${body}`)
+      }, `> Milestone A reference from the released authoring engine. [Exact source](${sourceHref}).\n\n${body}`)
     });
   }
   return { entities, pages, envelope };
@@ -102,7 +106,10 @@ export async function extractPreparedCLI() {
   const output = path.join(parent, "export"); // Adapter requires an absent destination.
   await run("go", ["run", "-p", "2", "./cli/plugin-kit-ai/tools/authoring-docs",
     "--source-sha", sha, "--checkout", checkout, "--out-dir", output], {
-    cwd: checkout, env: { GOWORK: path.join(checkout, "go.work") }
+    // The adapter belongs to this docs consumer commit. It verifies and reads
+    // the immutable release checkout instead of relying on the older adapter
+    // bytes that happened to ship in that release.
+    cwd: repoRoot, env: { GOWORK: path.join(repoRoot, "go.work") }
   });
   return consumePreparedCLI(output, sha);
 }

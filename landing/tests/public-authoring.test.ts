@@ -7,7 +7,7 @@ import { resolveDocsLink } from '../data/docsAvailability.ts';
 
 const root = new URL('../../', import.meta.url);
 const read = (path: string) => readFileSync(new URL(path, root), 'utf8');
-const locales = ['en', 'ru', 'es', 'fr', 'zh'] as const;
+const locales = ['en', 'ru', 'uk', 'es', 'fr', 'zh', 'ar', 'hi', 'pt'] as const;
 const renderedCopy = (locale: typeof locales[number]) => {
   const messages = JSON.parse(read(`landing/locales/${locale}.json`));
   // Render each preserved dictionary in an isolated EN test host; Nuxt publishes only EN/RU/UK.
@@ -17,7 +17,7 @@ const renderedCopy = (locale: typeof locales[number]) => {
     [key, t(`publicAuthoring.${key}`)]));
 };
 
-test('all public authoring messages compile and render literal npm latest tags', (context) => {
+test('all public authoring messages compile and render literal pinned npm versions', (context) => {
   const errors = context.mock.method(console, 'error', () => {});
   for (const locale of locales) {
     const source = JSON.parse(read(`landing/locales/${locale}.json`)).publicAuthoring;
@@ -25,7 +25,7 @@ test('all public authoring messages compile and render literal npm latest tags',
     for (const key of Object.keys(source)) {
       assert.equal(rendered[key], source[key].replaceAll("{'@'}", '@'), `${locale}:${key}`);
     }
-    assert.ok(rendered.unreleased.includes('plugin-kit-ai@latest'), locale);
+    assert.ok(rendered.unreleased.includes('plugin-kit-ai@2.0.5'), locale);
     assert.equal(errors.mock.callCount(), 0, `${locale}: message compilation errors`);
   }
 });
@@ -41,13 +41,19 @@ test('the authoring front door renders Use/Build and preserves its indexing poli
   assert.ok(page.includes("robots: 'noindex, follow'"));
   assert.ok(page.includes('npx universal-agent-plugins add context7'));
   const keys = [...page.matchAll(/(?:t|usePageSeo)\('publicAuthoring\.([^']+)'/g)].map(m => m[1]);
-  for (const locale of locales) {
+  for (const locale of ['en', 'ru', 'uk', 'es', 'fr', 'zh'] as const) {
     const copy = renderedCopy(locale);
     for (const key of [...keys, 'intro']) assert.equal(typeof copy[key], 'string', `${locale}:${key}`);
     assert.ok(copy.standard.includes('plugin.json'));
     assert.ok(copy.unreleased.includes('1.2.4'));
-    assert.ok(copy.unreleased.includes('plugin-kit-ai@latest'));
-    assert.ok(copy.versions.includes('agentplugins-v0.1.53'));
+    assert.ok(copy.unreleased.includes('plugin-kit-ai@2.0.5'));
+    assert.ok(copy.versions.includes('agentplugins-v0.1.65'));
+    assert.ok(copy.versions.includes('plugin-kit-ai-v2.0.5'));
+    for (const channel of ['npm', 'PyPI', 'Homebrew', 'GitHub', 'E2E'])
+      assert.ok(copy.unreleased.includes(channel), `${locale}:${channel}`);
+    assert.ok(copy.unreleased.includes('7–11'));
+    assert.ok(copy.unreleased.includes('plugin.yaml'));
+    assert.doesNotMatch(copy.unreleased, /(?:0\.1\.61|2\.0\.1)/);
     assert.ok(copy.limitations.includes('SSE'));
   }
   assert.ok(page.includes('useDocsLinks()'));
@@ -67,8 +73,8 @@ test('the authoring front door renders Use/Build and preserves its indexing poli
   }
 });
 
-test('all quickstarts separate installation, preparation and historical commands', () => {
-  for (const locale of locales) {
+test('all quickstarts separate installation, released authoring and historical commands', () => {
+  for (const locale of ['en', 'ru', 'es', 'fr', 'zh'] as const) {
     const text = read(`website/source/${locale}/guide/quickstart.md`);
     const preservation = text.indexOf('<!-- locale-historical-source:start');
     const publishedText = preservation === -1 ? text : text.slice(0, preservation);
@@ -76,9 +82,14 @@ test('all quickstarts separate installation, preparation and historical commands
     assert.ok(text.includes('canonicalId: "page:guide:quickstart"'));
     assert.match(publishedText, /^description: .*Agent Plugins 1\.0.*$/m);
     assert.doesNotMatch(publishedText, /^description: .*plugin-kit-ai.*$/m);
-    for (const key of ['standard', 'unreleased', 'versions', 'limitations', 'history']) {
+    for (const key of ['standard', 'limitations', 'history']) {
       assert.ok(text.includes(copy[key]), `${locale}:${key}`);
     }
+    for (const releaseFact of ['universal-agent-plugins@0.1.65', 'plugin-kit-ai@2.0.5',
+      'agentplugins-v0.1.65', 'plugin-kit-ai-v2.0.5', 'plugin-kit-ai@1.2.4']) {
+      assert.ok(text.includes(releaseFact), `${locale}:${releaseFact}`);
+    }
+    assert.doesNotMatch(publishedText, /(?:0\.1\.61|2\.0\.1|not released|release candidate)/i);
     const history = text.indexOf('{#historical-v1}');
     assert.ok(history > text.indexOf('{#build-plugins}'));
     const front = text.slice(0, history);
@@ -102,7 +113,10 @@ test('README retains the available installer and canonical client limitations', 
   assert.ok(text.includes('## Build plugins'));
   assert.ok(text.includes('### Quick start'));
   assert.ok(text.includes('id="authoring-and-development"'));
-  assert.ok(text.includes('standard-first authoring CLI is not released'));
+  assert.ok(text.includes('Milestone A static authoring is available'));
+  assert.ok(text.includes('Verified GitHub release tags'));
+  assert.ok(text.includes('Install an exact npm version'));
+  assert.doesNotMatch(text, /Availability is unverified|candidate commands are not current installation advice/);
   assert.ok(text.includes('For Codex, declared MCP SSE is unsupported'));
   assert.ok(text.includes('docs/CODEX_TRANSPORT_EVIDENCE.md'));
 });

@@ -30,7 +30,7 @@ npx universal-agent-plugins add context7
 
 [Проверенные версии клиентов и ограничения платформ](/ru/reference/client-compatibility)
 
-Версии проверены 2026-09-07: universal-agent-plugins 0.1.53 (npm), plugin-kit-ai 1.2.4 (npm/PyPI), стабильный релиз GitHub agentplugins-v0.1.53.
+Milestone A доступен: universal-agent-plugins@0.1.65 / plugin-kit-ai@2.0.5; GitHub: agentplugins-v0.1.65 / plugin-kit-ai-v2.0.5.
 
 Совместимость зависит от пакета. Проверка схемы не доказывает работу, OAuth или активацию. Codex не поддерживает заявленный MCP SSE; поддержка stdio и Streamable HTTP сохраняется в существующих адаптерах.
 
@@ -42,9 +42,9 @@ npx universal-agent-plugins add context7
 
 Создавайте переносимый пакет Agent Plugins 1.0 на основе plugin.json с необязательными skills/ и mcp.json. Поддержка клиентов зависит от пакета и его компонентов.
 
-**Подготовка — ещё не выпущено**
+**Milestone A доступен**
 
-CLI для разработки со стандартом в основе находится в подготовке и ещё не выпущен. Опубликованный plugin-kit-ai 1.2.4 в npm и PyPI — исторический инструмент v1, а не v2 со стандартом в основе. Установка plugin-kit-ai@latest не предоставляет будущий процесс разработки.
+Milestone A доступен. universal-agent-plugins@0.1.65 / plugin-kit-ai@2.0.5; GitHub: agentplugins-v0.1.65 / plugin-kit-ai-v2.0.5. npm, PyPI, Homebrew, GitHub Releases и E2E публичных каналов проверены. Только статический авторинг; этапы 7–11, runtime/dev/bootstrap, миграция, экспорт и публикация отложены. Возможности plugin.yaml сохранены; для v1 используйте plugin-kit-ai@1.2.4.
 
 [Спецификация Agent Plugins 1.0](https://agent-plugins.org/specification)
 

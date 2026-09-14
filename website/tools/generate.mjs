@@ -3,7 +3,7 @@ import { pathToFileURL } from "node:url";
 import { requireGenerationPrerequisites } from "./lib/preflight.mjs";
 import fs from "node:fs/promises";
 import { buildRedirects } from "./lib/redirects.mjs";
-import { bindGeneratedPaths, entityPath as resolveEntityPath, isPreparedSource, journeySidebar, requirePublicationBoundary } from "./lib/journeys.mjs";
+import { bindGeneratedPaths, entityPath as resolveEntityPath, isMilestoneAJourney, journeySidebar, requirePublicationBoundary } from "./lib/journeys.mjs";
 import path from "node:path";
 import { extractCLI } from "./extractors/cli.mjs";
 import { extractGoSDK } from "./extractors/go-sdk.mjs";
@@ -102,17 +102,18 @@ export async function scanSourceEntities() {
         existing[localeKey] = targetPath;
         continue;
       }
+      const milestoneAJourney = isMilestoneAJourney(relative);
       entities.push({
         canonicalId: meta.canonicalId,
         kind: "page",
         surface: meta.section || "page",
-        localeStrategy: isPreparedSource(relative) ? "canonical-en" : "mirrored",
+        localeStrategy: milestoneAJourney ? "canonical-en" : "mirrored",
         title: meta.title || relative,
         summary: meta.description || "",
-        stability: isPreparedSource(relative) ? "prepared-not-release" : meta.stability || "public-stable",
-        maturity: isPreparedSource(relative) ? "prepared" : meta.maturity || "stable",
-        publicVisibility: isPreparedSource(relative) ? "preparation" : "public",
-        ...(isPreparedSource(relative) ? { status: "prepared-not-release", released: false } : {}),
+        stability: milestoneAJourney ? "public-stable" : meta.stability || "public-stable",
+        maturity: milestoneAJourney ? "stable" : meta.maturity || "stable",
+        publicVisibility: "public",
+        ...(milestoneAJourney ? { status: "released", released: true } : {}),
         sourceKind: "hand-authored",
         sourceRef: relative,
         pathEn: locale === "en" ? targetPath : "",

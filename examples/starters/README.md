@@ -5,7 +5,7 @@
 > workflow. These are not root `plugin.json` starters for the standard MVP.
 > Project migration is not available in v2 yet. Maintain legacy projects using
 > the v1 1.2.4 command set. See [historical context](../../website/source/en/legacy/v1/index.md)
-> and the [prepared, unreleased Build guide](../../website/source/en/build/index.md).
+> and the [Milestone A Build guide](../../website/source/en/build/index.md).
 > Public activation remains gated; no v2 npm availability is implied.
 
 All eight starters have `plugin/plugin.yaml`: the four Codex starters target

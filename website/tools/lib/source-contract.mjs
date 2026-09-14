@@ -4,7 +4,7 @@ import { repoRoot, outputRoot, docsToolsRoot } from "../config/site.mjs";
 import { run } from "./process.mjs";
 
 // Accepted adapter provenance is an input pin, never the generated-output commit.
-export const acceptedAuthoringSHA = "801f846cac40f47c344983ccb61122cbdd3ae2f8";
+export const acceptedAuthoringSHA = "ec9397a63f7c7550a680fcb0f5565902acbf7243";
 export async function requireAuthoringSource() {
   const sha = process.env.DOCS_AUTHORING_SOURCE_SHA || acceptedAuthoringSHA;
   if (sha !== acceptedAuthoringSHA) throw new Error("DOCS_AUTHORING_SOURCE_SHA differs from the checked-in accepted authoring pin; review a source-contract update first");

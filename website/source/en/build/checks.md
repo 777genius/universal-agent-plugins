@@ -10,12 +10,14 @@ translationRequired: true
 
 # Check a package without running it
 
-> **Prepared, unreleased authoring contract.** This public page documents a reviewed
-> future authoring workflow. Future authoring commands described here are not available in current
-> releases; they do not claim that `plugin-kit-ai@2` is available. Existing installer
-> examples are identified separately. Public activation remains pending.
+> **Milestone A is available.** Standard-first static authoring is published as
+> `universal-agent-plugins@0.1.65` (`agentplugins author`) and `plugin-kit-ai@2.0.5`.
+> GitHub tags: `agentplugins-v0.1.65` and `plugin-kit-ai-v2.0.5`.
+> npm, PyPI, Homebrew, GitHub Releases and the public-channel E2E are verified.
+> Runtime/dev/bootstrap, migration, export and publication remain deferred.
+> Historical YAML v1 workflows remain separate and preserved.
 
-Use these future commands against the same exact package root after editing.
+Use these commands against the same exact package root after editing.
 The example assumes `./review-helper` exists and contains root `plugin.json`.
 Run these relative-path examples from the package's parent directory.
 An explicit root avoids relying on the current-directory default; use an absolute
@@ -29,7 +31,7 @@ agentplugins author inspect ./review-helper
 agentplugins author test ./review-helper
 ```
 
-Equivalent future authoring executable commands:
+Equivalent Milestone A authoring executable commands:
 
 ```bash
 plugin-kit-ai validate ./review-helper

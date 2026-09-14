@@ -10,10 +10,12 @@ translationRequired: true
 
 # Build a hybrid package
 
-> **Prepared, unreleased authoring contract.** This public page documents a reviewed
-> future authoring workflow. Future authoring commands described here are not available in current
-> releases; they do not claim that `plugin-kit-ai@2` is available. Existing installer
-> examples are identified separately. Public activation remains pending.
+> **Milestone A is available.** Standard-first static authoring is published as
+> `universal-agent-plugins@0.1.65` (`agentplugins author`) and `plugin-kit-ai@2.0.5`.
+> GitHub tags: `agentplugins-v0.1.65` and `plugin-kit-ai-v2.0.5`.
+> npm, PyPI, Homebrew, GitHub Releases and the public-channel E2E are verified.
+> Runtime/dev/bootstrap, migration, export and publication remain deferred.
+> Historical YAML v1 workflows remain separate and preserved.
 
 A hybrid is useful when instructions explain how and when to use tools. Both
 components live under one root manifest. A client may support them differently,
@@ -37,7 +39,7 @@ agentplugins author init ./research-helper \
   --url https://mcp.example.com/mcp
 ```
 
-Equivalent future authoring executable example; choose one:
+Equivalent Milestone A authoring executable example; choose one:
 
 ```bash
 plugin-kit-ai init ./research-helper \
@@ -54,7 +56,7 @@ actual endpoint. Read the [remote MCP requirements](./mcp-remote).
 
 ## Or choose a local process
 
-For a different, absent destination, the future stdio variant is:
+For a different, absent destination, the stdio variant is:
 
 ```bash
 agentplugins author init ./local-research \

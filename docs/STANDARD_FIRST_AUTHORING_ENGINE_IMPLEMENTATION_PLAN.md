@@ -1,5 +1,21 @@
 # Standard-First Authoring Engine Implementation Plan
 
+> **Current availability (2026-09-14):** Milestone A static authoring is publicly available
+> for `universal-agent-plugins@0.1.65` and `plugin-kit-ai@2.0.5`. Native GitHub
+> releases use `agentplugins-v0.1.65` and `plugin-kit-ai-v2.0.5`. See the
+> [current Build guide](../website/source/en/build/index.md).
+> Phases 7–11, runtime/dev/bootstrap, migration, export and publication remain
+> deferred. Historical v1 YAML capabilities remain preserved.
+> Release correction (owner direction, 2026-09-13): public E2E found PyPI
+> `plugin-kit-ai==2.0.1` broken because it resolves the old bare `v2.0.1`
+> GitHub release URL; npm v2 was still unpublished at that checkpoint.
+> The accepted remediation is the coherent 0.1.65 / 2.0.5 pair above, using
+> prefixed tags only; do not add a bare-v compatibility alias. npm, PyPI,
+> Homebrew and GitHub readbacks and the 11-cell public-channel E2E matrix pass.
+> Installer release proof alone does not qualify standard authoring.
+> The dated decisions and preparation evidence below retain their original scope;
+> they describe prior checkpoints, not current package availability.
+
 ## Owner decision: accelerated MVP scope (2026-09-10)
 
 The current delivery target is **Milestone A**, shipped as the smallest coherent
@@ -182,52 +198,41 @@ This checkpoint does not complete phases 0-11 or release the new authoring CLI.
 
 ## Status
 
-### Milestone A paired release cut (2026-09-13)
+### Milestone A paired release cut (2026-09-14)
 
-The next prepared public cut is fixed to `agentplugins-v0.1.61` and
-`plugin-kit-ai-v2.0.1` from one exact source SHA. npm and PyPI versions remain
-numeric SemVer. The historical immutable `v2.0.0` and its same-SHA
-`plugin-kit-ai-v2.0.0` compatibility alias remain historical; every later
-plugin-kit-ai release uses `plugin-kit-ai-vX.Y.Z`. A protected manual
-promotion may use the accelerated Milestone A evidence gate above: the complete
-Linux amd64 journey and packaged launcher/init/validate smoke on Windows amd64
-and macOS arm64. It must independently read back one exact authenticated,
-successful `Authoring Milestone A E2E` workflow-dispatch attempt, reacquire the
-run's retained receipts, and verify their exact source and engine-revision
-contract for both packaged entrypoints. Those behavioral receipts deliberately
-stage synthetic `universal-agent-plugins@0.1.91` with `plugin-kit-ai@2.0.0`;
-they are not evidence that `universal-agent-plugins@0.1.61` was packaged or
-published. Promotion remains separately and exactly bound to the frozen release
-pair `0.1.61` + `2.0.1`, and its final public-channel readback must report those
-exact versions. The promotion must also reacquire the
-exact digest-pinned paired preparation, verify its frozen identity, checksums and
-provenance, and reverify signed subjects before any release mutation. Both tags
-must already resolve to that same SHA. Drafts, interrupted partial publication,
-idempotent replay, and final public readback remain fail-closed and reconcilable.
+The public cut is fixed to `agentplugins-v0.1.65` and
+`plugin-kit-ai-v2.0.5` at exact source SHA
+`ec9397a63f7c7550a680fcb0f5565902acbf7243`. npm and PyPI versions remain
+numeric SemVer; GitHub release tags are product-prefixed. The historical bare
+`v2.0.0` tag and the `.62/.2` and `.64/.4` remediation checkpoints remain
+historical evidence only. Do not add a new bare-v compatibility alias.
 
-This is an additional narrow admission route, not a relaxation or replacement
-of the existing thirteen-lane/eighteen-cell qualification path. That path and
-all legacy code remain available unchanged. Neither route may execute in a real
-user project, and workflow dispatch alone never implies publication approval;
-the protected `agentplugins-release` environment remains the explicit manual
-effect boundary.
+Release preparation passed in run
+[34811716108](https://github.com/777genius/universal-agent-plugins/actions/runs/34811716108).
+Tag-bound release E2E passed on Linux, macOS, and Windows in run
+[34812472302](https://github.com/777genius/universal-agent-plugins/actions/runs/34812472302),
+and promotion completed in run
+[34812898252](https://github.com/777genius/universal-agent-plugins/actions/runs/34812898252).
+The native GitHub releases, PyPI `plugin-kit-ai==2.0.5`, both Homebrew taps,
+npm `universal-agent-plugins@0.1.65`, and npm `plugin-kit-ai@2.0.5` are public.
+PyPI publication passed in run
+[34817923030](https://github.com/777genius/universal-agent-plugins/actions/runs/34817923030),
+Homebrew publication passed in run
+[34817926108](https://github.com/777genius/universal-agent-plugins/actions/runs/34817926108),
+and protected paired npm publication plus immutable provenance/readback passed
+on attempt 2 of run
+[34818077702](https://github.com/777genius/universal-agent-plugins/actions/runs/34818077702).
 
-The `0.1.61` npm publication route remains blocked. The reported prior
-`Agentplugins NPM Publish` run `34759887004` failed in legacy preparation:
-that route requires a binary-only v2 manifest asset set with
-`THIRD_PARTY_NOTICES.txt`, whereas paired promotion supplies a v3 manifest,
-six binaries, `checksums.txt`, `candidate.json`, `pair-prepared.json`, and
-`milestone-a-promotion.json`, without a notices asset. `paired-stage` only
-stages and attests; it has no npm publish job. Do not dispatch legacy
-publication for this pair or treat GitHub promotion as npm release proof.
-The missing contract is a protected publication consumer that authenticates
-the exact paired source/ref/workflow SHA and both public prefixed tags, binds
-this closed manifest/evidence set and its digests to the Milestone A record,
-then publishes and reads back the exact verified `universal-agent-plugins`
-tarball with npm provenance. Any notices must come from a pinned source
-closure; accepting arbitrary release extras or substituting the legacy
-installer-only pack does not satisfy that contract. This patch prepares the
-version/tag contracts and does not resolve that publication blocker.
+Final public-channel E2E passed all 11 supported OS/channel cells in run
+[34819260806](https://github.com/777genius/universal-agent-plugins/actions/runs/34819260806):
+GitHub, npm, PyPI and Homebrew on Linux and macOS, plus GitHub, npm and PyPI on
+Windows. Each cell used disposable roots and checked the exact public versions
+and shared source revision. This evidence authorizes the public docs cutover.
+
+All release and E2E work uses disposable roots and must not execute agent or
+runtime commands in real user projects. Historical `plugin.yaml` implementation,
+tests, dependencies, and `plugin-kit-ai@1.2.4` guidance remain preserved. Phases
+7-11 remain deferred and are not implied by this Milestone A release.
 
 - Decision: accelerated Milestone A delivered on 2026-09-12; phases 7-11 remain
   deferred to later bounded plans and PRs.
@@ -266,9 +271,9 @@ version/tag contracts and does not resolve that publication blocker.
 - The known non-required Windows Terminal UI synthetic target-discovery test
   remains unrelated to these documentation and Pages changes; its native
   terminal/ConPTY qualification steps passed.
-- This Milestone A delivery published no new CLI, npm, PyPI, Homebrew, or native
-  release; existing releases remain unchanged. Publishing a new concrete version
-  still requires separate owner approval.
+- Current publication evidence is scoped to the channels and exact versions
+  recorded above. npm publication and the final all-channel E2E are complete;
+  public availability documentation is ready to merge after its exact-head CI.
 - Baseline inspected: `b0b4268e964fa5808debbcc998bd174670faeb6e` on 2026-09-06.
 - Product repository: `777genius/universal-agent-plugins` (the former `plugin-kit-ai` URL redirects to it).
 - Directory repository: `777genius/universal-agent-plugins-registry`.

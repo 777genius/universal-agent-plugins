@@ -26,7 +26,7 @@ Para la instalación nativa en macOS, Linux o Windows, consulta la guía. El CLI
 
 [Guía de instalación](https://github.com/777genius/universal-agent-plugins#quick-start)
 
-Versiones verificadas el 2026-09-07: universal-agent-plugins 0.1.53 (npm), plugin-kit-ai 1.2.4 (npm/PyPI), versión estable de GitHub agentplugins-v0.1.53.
+Milestone A disponible: universal-agent-plugins@0.1.65 / plugin-kit-ai@2.0.5; GitHub: agentplugins-v0.1.65 / plugin-kit-ai-v2.0.5.
 
 La compatibilidad depende del paquete. Validar el esquema no demuestra ejecución, OAuth ni activación. Codex no admite MCP SSE declarado; stdio y Streamable HTTP conservan el soporte de sus adaptadores actuales.
 
@@ -36,9 +36,9 @@ La compatibilidad depende del paquete. Validar el esquema no demuestra ejecució
 
 Crea un paquete portable Agent Plugins 1.0 basado en plugin.json, con skills/ y mcp.json opcionales. El soporte de cada cliente depende del paquete y sus componentes.
 
-**En preparación — sin publicar**
+**Milestone A disponible**
 
-El CLI de autoría basado en el estándar está en preparación y aún no se ha publicado. plugin-kit-ai 1.2.4, publicado en npm y PyPI, es la herramienta histórica v1, no standard-first v2. Instalar plugin-kit-ai@latest no proporciona el futuro flujo de autoría.
+Milestone A disponible. universal-agent-plugins@0.1.65 / plugin-kit-ai@2.0.5; GitHub: agentplugins-v0.1.65 / plugin-kit-ai-v2.0.5. npm, PyPI, Homebrew, GitHub Releases y el E2E de canales públicos están verificados. Solo creación estática; fases 7–11, runtime/dev/bootstrap, migración, exportación y publicación pendientes. Se conservan las capacidades de plugin.yaml; use plugin-kit-ai@1.2.4 para v1.
 
 [Especificación Agent Plugins 1.0](https://agent-plugins.org/specification)
 
