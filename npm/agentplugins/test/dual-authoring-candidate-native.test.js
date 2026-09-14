@@ -129,17 +129,21 @@ test("actual controlled Linux pair: offline verification, engine reports, frozen
     const normalized = structuredClone(report);
     if (argv.includes("capabilities")) {
       const commands = normalized.capabilities.commands;
+      const surface = normalized.commands;
       const evidence = normalized.capabilities.evidence_limits;
       if (productIndex === 0) {
         assert.ok(commands.includes("author.dev"));
+        assert.ok(surface.includes("author.dev"));
         assert.deepEqual(evidence, ["runtime_explicit_only", "mcp_stdio_node", "mcp_streamable_http_network_opt_in",
           "bounded_private_runtime_root", "no_oauth_evidence"]);
       } else {
         assert.equal(commands.includes("author.dev"), false);
+        assert.equal(surface.includes("author.dev"), false);
         assert.deepEqual(evidence, ["static_only", "no_path_lookup", "no_executable_version_probe",
           "no_runtime_or_oauth_evidence", "native_files_metadata_only"]);
       }
       normalized.capabilities.commands = commands.filter((name) => name !== "author.dev");
+      normalized.commands = surface.filter((name) => name !== "author.dev");
       delete normalized.capabilities.evidence_limits;
     }
     return normalized;
