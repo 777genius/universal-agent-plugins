@@ -65,12 +65,13 @@ type flagFact struct {
 // Nil args only observes the root; no ParseFlags, Execute, Args, Run, completion,
 // project service, or installer callback is invoked by this adapter.
 func trees() ([]*cobra.Command, error) {
-	app := commands.App{PublicContract: true, MCPRuntime: true, Release: &commands.ReleaseOptions{}}
-	plugin, _, _, err := app.ReleaseSelection(nil, authoringcli.NewReleasePluginKitRoot)
+	pluginApp := commands.App{PublicContract: true, MCPRuntime: true, Release: &commands.ReleaseOptions{}}
+	plugin, _, _, err := pluginApp.ReleaseSelection(nil, authoringcli.NewReleasePluginKitRoot)
 	if err != nil {
 		return nil, err
 	}
-	installer, _, _, err := app.ReleaseSelection(nil, func(factories ...authoringcli.Factory) (*cobra.Command, error) {
+	agentApp := commands.App{PublicContract: true, MCPRuntime: true, JSONMaintenance: true, Release: &commands.ReleaseOptions{}}
+	installer, _, _, err := agentApp.ReleaseSelection(nil, func(factories ...authoringcli.Factory) (*cobra.Command, error) {
 		root := agentpluginscli.NewRoot(agentpluginscli.App{})
 		author, err := authoringcli.NewReleaseAuthorCommand(factories...)
 		if err != nil {
@@ -213,7 +214,7 @@ func exportTrees(checkout, sha, out string, load func() ([]*cobra.Command, error
 // Hash the actual deterministic rendered facts, with fixed provenance rather
 // than caller SHA/host paths. Length framing and sorted names bind every byte.
 // This is a reviewed golden, never regenerated automatically during export.
-const reviewedProjection = "0da8b96fa3fe8e4a6715cda637fc4f72f0ead1cce986d4aafa79dc2c4292fcda"
+const reviewedProjection = "63e299ed76263369094e744c5088df02f2984eddaf4503a88b2a2ad6e1a23991"
 
 func projectionFingerprint(roots []*cobra.Command) (string, error) {
 	files, err := render("SOURCE_SHA", nil, roots)

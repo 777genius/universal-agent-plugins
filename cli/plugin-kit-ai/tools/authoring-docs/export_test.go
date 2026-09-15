@@ -77,6 +77,10 @@ func TestDeterministicSurfacesAndNoActions(t *testing.T) {
 			for _, n := range []string{"completion", "completion bash", "completion fish", "completion help", "completion powershell", "completion zsh"} {
 				want[s.CommandPath+" "+n] = true
 			}
+		} else {
+			for _, n := range []string{"import", "import help", "import native", "normalize"} {
+				want[s.CommandPath+" "+n] = true
+			}
 		}
 		for _, e := range s.Commands {
 			if !want[e.CommandPath] {
@@ -230,7 +234,7 @@ func TestExportBytesAndLinks(t *testing.T) {
 	if err := json.Unmarshal(expected[namespace+"/manifest.json"], &m); err != nil {
 		t.Fatal(err)
 	}
-	if len(m.Surfaces) != 2 || len(m.Surfaces[0].Commands) != 21 || len(m.Surfaces[1].Commands) != 15 || m.FactoryBaseline != factoryBaselineSHA || m.SourceSHA != sha || m.Released || m.Status != "prepared-not-release" {
+	if len(m.Surfaces) != 2 || len(m.Surfaces[0].Commands) != 21 || len(m.Surfaces[1].Commands) != 19 || m.FactoryBaseline != factoryBaselineSHA || m.SourceSHA != sha || m.Released || m.Status != "prepared-not-release" {
 		t.Fatal("untouched tree inventory/provenance")
 	}
 	for _, surface := range m.Surfaces {
@@ -280,7 +284,7 @@ func TestExportBytesAndLinks(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if seen != 37 {
+	if seen != 41 {
 		t.Fatalf("disk file count: %d", seen)
 	}
 }

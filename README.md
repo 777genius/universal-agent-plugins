@@ -282,12 +282,29 @@ The [Build guide](website/source/en/build/index.md) also covers remote MCP,
 stdio MCP, hybrid packages, extra Skills, compatibility checks, and the handoff
 to installation.
 
+Current source builds also expose Phase 8A JSON maintenance through
+`agentplugins author`; the released `agentplugins-v0.1.65` binary above does not.
+Plan mode is read-only, and `--write` is required for either mutation:
+
+```bash
+agentplugins author normalize ./my-plugin --document plugin.json
+agentplugins author normalize ./my-plugin --document mcp.json --write
+agentplugins author import native ./claude.json --from claude \
+  --output /absolute/path/to/new-plugin --name new-plugin \
+  --description "Imported Claude MCP package" --write
+```
+
+Native import reads only the explicit strict-JSON file, skips unsafe or
+credential-bearing servers, and publishes only to an absent output. This source
+checkpoint is not executable-release qualification for a version after 0.1.65.
+
 Authoring validation and project doctor are distinct from installer
 `agentplugins validate` and `agentplugins doctor`. Runtime/dev/bootstrap, client
 generation, export/bundle, and publication are not exposed by the current
 authoring CLI. OAuth and activation inside a supported client still require
 client-specific verification.
-`plugin.json` is the only supported authoring manifest.
+`plugin.json` is the only supported authoring manifest. JSON maintenance does
+not add a YAML reader, fallback, or migration workflow.
 
 ## Contributing
 

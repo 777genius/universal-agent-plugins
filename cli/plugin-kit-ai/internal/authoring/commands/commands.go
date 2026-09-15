@@ -41,13 +41,17 @@ type App struct {
 	Projects project.Service
 	Revision string
 	// PublicContract opts into the private Phase 6 contract; mains retain their existing mode.
-	PublicContract bool
-	Release        *ReleaseOptions
-	MCPRuntime     bool
+	PublicContract  bool
+	Release         *ReleaseOptions
+	MCPRuntime      bool
+	JSONMaintenance bool
 }
 
 func (a App) commandNames() []string {
 	names := []string{"init", "validate", "inspect", "test", "compat", "capabilities", "doctor", "skills"}
+	if a.JSONMaintenance {
+		names = append(names, "normalize", "import")
+	}
 	if a.MCPRuntime {
 		names = append(names, "dev")
 	}
@@ -201,6 +205,12 @@ func (a App) Execute(ctx context.Context, args []string, streams authoringcli.St
 func (a App) command(name string, capture func(report.Report), cycleOutput func(report.Report, error) error) (*cobra.Command, error) {
 	if name == "skills" {
 		return a.skillsCommand(capture)
+	}
+	if name == "normalize" {
+		return a.normalizeCommand(capture)
+	}
+	if name == "import" {
+		return a.importCommand(capture)
 	}
 	use, args := name+" <path>", cobra.ExactArgs(1)
 	if a.PublicContract && name != "init" {
@@ -443,6 +453,10 @@ func summary(name string) string {
 		return "Check statically by default, or run one explicit MCP server with --runtime=mcp"
 	case "dev":
 		return "Rerun one explicit MCP server when the selected package changes"
+	case "normalize":
+		return "Plan or atomically normalize one standard JSON document"
+	case "import":
+		return "Import one explicit native configuration into an absent standard package"
 	default:
 		return "Validate exact-root standard configuration and authoring readiness"
 	}
@@ -453,6 +467,20 @@ func summary(name string) string {
 func writePrivateHuman(w io.Writer, r report.Report) error {
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s: readiness %s; conformance %s; host %s; compatibility %s; toolchain %s; runtime %s\n", r.Command, r.Readiness.Status, r.Conformance.Status, r.HostSafety.Status, r.Compatibility.Status, r.Toolchain.Status, r.Runtime.Status)
+	if document := r.JSONDocument; document != nil {
+		fmt.Fprintf(&b, "json document: %s; changed %t; before %s; after %s\n", document.Path, document.Changed, document.BeforeSHA256, document.AfterSHA256)
+	}
+	if imported := r.NativeImport; imported != nil {
+		fmt.Fprintf(&b, "native import: client %s; source %s; safe servers %d; skipped servers %d; unsupported top-level fields %d\n", imported.Client, imported.SourceSHA256, imported.SafeServers, len(imported.SkippedServers), len(imported.UnsupportedTopLevel))
+	}
+	if r.Committed {
+		fmt.Fprintln(&b, "committed: true")
+	}
+	for _, path := range r.Paths {
+		if filepath.IsLocal(path) {
+			fmt.Fprintf(&b, "affected path: %s\n", filepath.ToSlash(path))
+		}
+	}
 	if runtime := r.RuntimeDetail; runtime != nil {
 		fmt.Fprintf(&b, "mcp runtime: transport %s; initialize %s; list tools %s; tool call %s; tools %d; cleanup %s\n", runtime.Transport, runtime.Initialize, runtime.ListTools, runtime.ToolCall, runtime.ToolCount, runtime.Cleanup)
 	}
@@ -536,7 +564,7 @@ func selectedCommand(args, supported []string) string {
 		allowed[name] = struct{}{}
 	}
 	for _, a := range args {
-		for _, n := range []string{"init", "validate", "inspect", "test", "compat", "capabilities", "doctor", "skills", "dev"} {
+		for _, n := range []string{"init", "validate", "inspect", "test", "compat", "capabilities", "doctor", "skills", "dev", "normalize", "import"} {
 			if a == n {
 				if _, ok := allowed[n]; !ok {
 					return "author"

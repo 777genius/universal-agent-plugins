@@ -1,24 +1,26 @@
 # Standard-First Authoring Engine Implementation Plan
 
-> **Current availability (2026-09-14):** Milestone A static authoring is publicly
+> **Current availability (2026-09-15):** Milestone A static authoring is publicly
 > available through `agentplugins author` in `universal-agent-plugins@0.1.65`.
 > Native GitHub releases use `agentplugins-v0.1.65`; npm, Homebrew, native
 > archives and public-channel E2E are verified. See the
 > [current Build guide](../website/source/en/build/index.md).
-> Phases 7-11 remain unreleased, except legacy YAML migration is removed from the
-> roadmap by the owner decision below. Phase 7 has an implementation candidate
-> in PR #278, but that review state is not a merge, executable release, or public
-> availability claim. Historical package artifacts remain immutable evidence and
-> are not current installation guidance.
+> Phase 7 and the Phase 8A JSON-maintenance vertical slice are implemented in
+> current source. They are not included in 0.1.65 and do not constitute a later
+> executable release or public-channel qualification. Phases 9-11 remain
+> unreleased, and legacy YAML migration is removed from the roadmap by the owner
+> decision below. Historical package artifacts and linked release runs remain
+> immutable evidence, not current installation guidance.
 
 ## Owner decision: current-only README and retained runtime publishers (2026-09-14)
 
 This decision supersedes the earlier PR #190 availability-label preservation
 rule wherever that rule would require adding release-history framing to the
-repository README. The README remains unchanged and current-only for this work:
-do not add a Milestone A section or a Historical authoring section. Preserve
-the existing PR #190 links and availability evidence in their historical site
-and plan locations; do not copy their labels into the README.
+repository README. The owner approved and merged the README's current-source
+Phase 8A update; preserve it and keep the README current-only. Do not add a
+Milestone A section or a Historical authoring section. Preserve the existing PR
+#190 links and availability evidence in their historical site and plan
+locations; do not copy their labels into the README.
 
 The separately retained `plugin-kit-ai-runtime` npm and PyPI helpers remain
 supported legacy capabilities, not public authoring entrypoints. Their active
@@ -66,11 +68,13 @@ current `main` in its own dependency-safe PR. The older detailed design below is
 retained as decision history and must not be used to restore retired commands,
 packages, migration work, or release channels.
 
-1. **Phase 7 - runtime loop:** add explicit runtime testing, `dev`, and safe
-   lockfile-based `bootstrap` for standard `plugin.json` packages.
-2. **Phase 8 - JSON maintenance:** add deterministic normalization and explicit
-   native-to-standard import. No YAML reader, migration command, compatibility
-   shim, or legacy-project journey is in scope.
+1. **Phase 7 - runtime loop (implemented in source):** explicit runtime testing,
+   `dev`, and safe lockfile-based `bootstrap` for standard `plugin.json` packages.
+2. **Phase 8A - JSON maintenance (implemented in source):** deterministic
+   normalization of one selected `plugin.json` or `mcp.json`, plus explicit safe
+   Claude MCP import to an absent standard package. No YAML reader, migration
+   command, compatibility shim, profile discovery, or additional native client
+   is in scope.
 3. **Phase 9 - portable outputs:** add disposable client projection previews,
    deterministic export, and the minimum useful bundle inspection/fetch flow.
 4. **Phase 10 - publication:** add one explicit publish flow and Directory
@@ -162,7 +166,7 @@ Alternatives rejected for the current delivery:
   E2E and is not an acceptable substitute.
 
 Future hosted implementation and review workers use `gpt-5.6-sol`, reasoning
-effort `low`, service tier `default` (no fast), unless the owner changes this
+effort selected as needed, service tier `default` (no fast), unless the owner changes this
 profile again.
 
 ## Owner clarification: preserve legacy capabilities (2026-09-06)
@@ -240,7 +244,7 @@ Useful YAML capabilities and all preservation constraints above remain intact.
 The preliminary 100-500 changed-line estimate is a target, not a guarantee.
 Re-estimate after bounded intake against the actual merge base; do not weaken
 acceptance or expand scope just to satisfy that number. Hosted workers use the
-current owner-selected profile recorded above: `gpt-5.6-sol`, reasoning `low`,
+current owner-selected profile recorded above: `gpt-5.6-sol`, reasoning selected as needed,
 service tier `default` (no fast).
 
 Checkpoint delivery evidence (2026-09-08): [PR #190](https://github.com/777genius/universal-agent-plugins/pull/190)
@@ -1329,11 +1333,20 @@ Rules:
 - never repair an invalid schema by guessing;
 - never change semantic JSON value types;
 - reject duplicate keys rather than choosing a winner;
-- use compare-and-swap against the read digest;
+- bind the plan to the read identity and digest, recheck immediately before the
+  atomic replacement, and require non-cooperating external writers to remain
+  quiescent until validation and rollback cleanup finish. Portable filesystems
+  do not provide the implementation a linearizable content compare-and-swap;
+  detected changes fail closed, but undetected final-window writer safety is not
+  claimed;
 - write through a same-directory temporary file, sync, and atomic rename where
   supported;
-- preserve permissions unless the standard requires tightening them;
-- fail without partial writes when one planned file changes concurrently.
+- preserve the document's Go `FileMode.Perm` permission bits. Phase 8A does not
+  promise preservation of ownership, POSIX ACLs, extended attributes, file
+  flags, or timestamps; operators relying on that metadata must not use
+  `normalize --write` until a later contract supports it;
+- fail closed on changes detected before or after replacement and restore the
+  detected external replacement when ownership can still be proved.
 
 ## Import and migration contract
 
@@ -2150,6 +2163,11 @@ not affect offline validate/inspect/test or installation lifecycle commands.
 
 ## Phase 8 - Normalize and import native configuration
 
+Current source status (2026-09-15): the Phase 8A vertical slice implements
+single-document standard JSON normalization and explicit Claude `mcpServers`
+import. It does not qualify a release, add Skills import, or authorize another
+native client.
+
 ### Summary
 
 Add controlled JSON mutation and portable native import without a legacy YAML
@@ -2159,7 +2177,7 @@ reader or migration product.
 
 1. Implement lossless JSON document editing helpers.
 2. Add digest-bound mutation plans and atomic file replacement.
-3. Adapt portable native MCP and Skills importers for supported client formats.
+3. Import portable stdio MCP entries from one explicit Claude strict-JSON file.
 
 ### Edge cases
 
@@ -2354,7 +2372,9 @@ or standard command wiring.
 - no path traversal, symlink escape, junction, reparse point, device, or FIFO;
 - case-insensitive path collision is rejected;
 - read plans bind exact digests;
-- writes use compare-and-swap and atomic replacement where supported;
+- mutation plans bind read identity/digests and use atomic replacement where
+  supported; commands state any quiescent-source requirement instead of
+  claiming a portable linearizable compare-and-swap;
 - interrupted commands leave no partial success claim;
 - output directories cannot overlap inputs;
 - temporary roots use private permissions and are always cleaned;
@@ -2585,7 +2605,8 @@ identified generated docs, golden fixtures, and mechanical file moves.
 10. `feat(authoring): bootstrap generated runtimes`
    - deterministic recognized templates only.
 11. `feat(authoring): normalize standard documents`
-   - lossless CAS writes.
+   - lossless digest-checked atomic writes under the documented quiescent-source
+     contract.
 12. `feat(authoring): import native configuration`
    - supported client MCP and Skills import through digest-bound plans; no YAML
      reader or migration path.

@@ -128,23 +128,28 @@ test("actual controlled Linux pair: offline verification, engine reports, frozen
   const sharedReports = reports.map((productReports, productIndex) => productReports.map(({ argv, report }) => {
     const normalized = structuredClone(report);
     if (normalized.commands) {
-      assert.equal(normalized.commands.includes("author.dev"), productIndex === 0);
-      normalized.commands = normalized.commands.filter((name) => name !== "author.dev");
+      for (const name of ["author.dev", "author.import.native", "author.normalize"])
+        assert.equal(normalized.commands.includes(name), productIndex === 0);
+      normalized.commands = normalized.commands.filter((name) =>
+        !["author.dev", "author.import.native", "author.normalize"].includes(name));
     }
     if (argv.includes("capabilities")) {
       const commands = normalized.capabilities.commands;
       const evidence = normalized.capabilities.evidence_limits;
       if (productIndex === 0) {
-        assert.ok(commands.includes("author.dev"));
+        for (const name of ["author.dev", "author.import.native", "author.normalize"])
+          assert.ok(commands.includes(name));
         assert.deepEqual(evidence, ["runtime_explicit_only", "mcp_stdio_linux_containment_required",
           "mcp_streamable_http_network_opt_in", "bounded_private_runtime_root", "single_project_dev_session",
           "no_oauth_evidence", "phase_7_not_released"]);
       } else {
-        assert.equal(commands.includes("author.dev"), false);
+        for (const name of ["author.dev", "author.import.native", "author.normalize"])
+          assert.equal(commands.includes(name), false);
         assert.deepEqual(evidence, ["static_only", "no_path_lookup", "no_executable_version_probe",
           "no_runtime_or_oauth_evidence", "native_files_metadata_only"]);
       }
-      normalized.capabilities.commands = commands.filter((name) => name !== "author.dev");
+      normalized.capabilities.commands = commands.filter((name) =>
+        !["author.dev", "author.import.native", "author.normalize"].includes(name));
       delete normalized.capabilities.evidence_limits;
     }
     return normalized;

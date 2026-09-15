@@ -200,6 +200,17 @@ func selectPublic(root *cobra.Command, args []string) selection {
 	if s.operation == "author.init" || s.operation == "author.skills.init" {
 		s.mode = "local_mutation"
 	}
+	if s.operation == "author.normalize" || s.operation == "author.import.native" {
+		values := s.values["write"]
+		if len(values) > 0 {
+			write, err := strconv.ParseBool(values[len(values)-1])
+			if err != nil {
+				s.invalid = true
+			} else if write {
+				s.mode = "local_mutation"
+			}
+		}
+	}
 	if s.operation == "author.test" && len(s.values["runtime"]) > 0 || s.operation == "author.dev" {
 		s.mode = "runtime"
 	}
@@ -417,6 +428,12 @@ func writePublicHuman(w io.Writer, p report.Public, result string) error {
 	var b strings.Builder
 	if p.Help != nil {
 		fmt.Fprintf(&b, "Usage: %s\nFlags: %s\n%s\n", p.Help.Use, strings.Join(p.Help.Flags, ", "), p.Help.Guidance)
+	}
+	if d := p.JSONDocument; d != nil {
+		fmt.Fprintf(&b, "%s: %s -> %s; changed %t\n", d.Path, d.BeforeSHA256, d.AfterSHA256, d.Changed)
+	}
+	if n := p.NativeImport; n != nil {
+		fmt.Fprintf(&b, "native %s import: source %s; safe servers %d; skipped %d; unsupported top-level fields %d\n", n.Client, n.SourceSHA256, n.SafeServers, len(n.SkippedServers), len(n.UnsupportedTopLevel))
 	}
 	fmt.Fprintf(&b, "%s: %s; readiness %s; conformance %s; runtime %s\n", p.Command, result, p.Readiness.Status, p.Conformance.Status, p.Runtime.Status)
 	if runtime := p.RuntimeDetail; runtime != nil {
