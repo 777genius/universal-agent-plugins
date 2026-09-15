@@ -78,11 +78,10 @@ const onChange = async (value: unknown) => {
 
 <template>
   <!-- attach=true renders inline inside the mobile modal focus/inert boundary. -->
-  <v-menu :attach="props.containMenu || false" ref="menu" v-model="menuOpen" location="bottom end" :close-on-content-click="false" @after-enter="focusOpeningItem">
+  <v-menu v-model="menuOpen" ref="menu" :attach="props.containMenu || false" location="bottom end" :close-on-content-click="false" @after-enter="focusOpeningItem">
     <template #activator="{ props: menuProps }">
       <v-btn
         v-bind="menuProps"
-        @keydown.capture="onActivatorKeydown"
         :variant="props.compact || props.iconOnly ? 'text' : 'outlined'"
         :block="props.fullWidth"
         :size="props.compact ? 'small' : 'default'"
@@ -90,6 +89,7 @@ const onChange = async (value: unknown) => {
         :loading="pending"
         :aria-busy="pending"
         :aria-label="`${t('language.label')}: ${currentName}`"
+        @keydown.capture="onActivatorKeydown"
       >
         <Icon :name="currentFlagIcon" class="language-switcher__flag-icon" aria-hidden="true" />
         <span v-if="!props.iconOnly" class="language-switcher__name">{{ currentName }}</span>

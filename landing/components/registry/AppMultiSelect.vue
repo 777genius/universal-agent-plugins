@@ -103,8 +103,7 @@ function toggle(value: string) {
       <span class="app-multiselect__value">
         <span v-if="!autoSelected" class="app-multiselect__icons" aria-hidden="true">
           <span v-for="option in selected.slice(0, 3)" :key="option.value"
-            ><img v-if="option.icon" :src="option.icon" alt="" width="19" height="19"
-          /></span>
+            ><img v-if="option.icon" :src="option.icon" alt="" width="19" height="19"></span>
         </span>
         <span v-else class="app-multiselect__auto-icon" aria-hidden="true"
           ><svg viewBox="0 0 24 24" fill="none">
