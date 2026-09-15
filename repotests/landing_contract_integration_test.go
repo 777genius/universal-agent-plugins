@@ -47,7 +47,7 @@ func TestLandingSurface_LocalesLinksAndBrandingStayAligned(t *testing.T) {
 		docs := readRepoFile(t, landingRoot, "data", "docsAvailability.ts")
 		for _, contract := range []string{
 			"home: ''", "quickstart: 'guide/quickstart.html'",
-			"supportBoundary: 'reference/support-boundary.html'",
+			"supportBoundary: 'build/'",
 			"customLogicGuide: 'guide/build-custom-plugin-logic.html'",
 			"https://777genius.github.io/universal-agent-plugins/docs/",
 			"const docsLanguages = ['en', 'ru', 'es', 'fr', 'zh'] as const",
