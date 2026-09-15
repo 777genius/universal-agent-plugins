@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	authorbootstrap "github.com/777genius/plugin-kit-ai/cli/internal/authoring/bootstrap"
 	"github.com/777genius/plugin-kit-ai/cli/internal/authoring/mcpruntime"
 	"github.com/777genius/plugin-kit-ai/cli/internal/authoring/project"
 	"github.com/777genius/plugin-kit-ai/cli/internal/authoring/readiness"
@@ -44,6 +45,8 @@ type App struct {
 	PublicContract  bool
 	Release         *ReleaseOptions
 	MCPRuntime      bool
+	Bootstrap       bool
+	BootstrapRunner authorbootstrap.Runner
 	JSONMaintenance bool
 }
 
@@ -54,6 +57,9 @@ func (a App) commandNames() []string {
 	}
 	if a.MCPRuntime {
 		names = append(names, "dev")
+	}
+	if a.Bootstrap {
+		names = append(names, "bootstrap")
 	}
 	return names
 }
@@ -72,6 +78,7 @@ type request struct {
 	deadline          time.Duration
 	cycleOutput       func(report.Report, error) error
 	runMCP            func(context.Context, mcpruntime.Options) (mcpruntime.Evidence, error)
+	dryRun            bool
 }
 
 // Execute renders once, after Factory.Execute handles every Cobra lifecycle exit.
@@ -216,11 +223,14 @@ func (a App) command(name string, capture func(report.Report), cycleOutput func(
 	if a.PublicContract && name != "init" {
 		use, args = name+" [package-path]", cobra.MaximumNArgs(1)
 	}
+	if a.PublicContract && name == "bootstrap" {
+		use = "bootstrap [path]"
+	}
 	if name == "capabilities" {
 		use, args = name, cobra.NoArgs
 	}
 	return authoringcli.NewCommand(authoringcli.Spec[request, report.Report]{Use: use, Short: summary(name), Args: args,
-		Support: authoringcli.Support{Format: true, NoColor: true, Target: name == "compat" || name == "inspect"},
+		Support: authoringcli.Support{Format: true, NoColor: true, DryRun: name == "bootstrap", Target: name == "compat" || name == "inspect"},
 		Configure: func(c *cobra.Command) {
 			f := c.Flags()
 			if name == "capabilities" {
@@ -267,6 +277,9 @@ func (a App) command(name string, capture func(report.Report), cycleOutput func(
 				root = args[0]
 			}
 			req := request{root: root, disclose: disclose, cycleOutput: cycleOutput}
+			if name == "bootstrap" {
+				req.dryRun = opts.DryRun
+			}
 			if a.PublicContract {
 				var err error
 				req.root, err = skills.ExactRoot(filepath.FromSlash(root))
@@ -354,6 +367,43 @@ func (a App) command(name string, capture func(report.Report), cycleOutput func(
 				code, action := failure(e, "read")
 				r.AddError(code, action)
 				return r, e
+			}
+			if name == "bootstrap" {
+				if req.dryRun {
+					r.Mode = "read"
+				} else {
+					r.Mode = "local_mutation"
+				}
+				if !r.Successful() {
+					planErr := &authorbootstrap.Error{Code: "bootstrap_template_unrecognized"}
+					code, action := bootstrapFailure(planErr)
+					r.AddError(code, action)
+					return r, planErr
+				}
+				plan, planErr := (authorbootstrap.Service{Runner: a.BootstrapRunner}).Plan(req.root, p)
+				r.Bootstrap = &report.BootstrapDetail{Runtime: plan.Runtime, Manager: plan.Manager, Command: append([]string{}, plan.Command...), Planned: planErr == nil}
+				if planErr != nil {
+					code, action := bootstrapFailure(planErr)
+					r.AddError(code, action)
+					return r, planErr
+				}
+				if req.dryRun {
+					return r, nil
+				}
+				committed, applyErr := (authorbootstrap.Service{Runner: a.BootstrapRunner}).Apply(ctx, req.root, plan)
+				r.Committed = committed
+				if committed {
+					r.Paths = append(r.Paths, "node_modules")
+				}
+				if applyErr != nil {
+					code, action := bootstrapFailure(applyErr)
+					if errors.Is(applyErr, context.Canceled) || errors.Is(applyErr, context.DeadlineExceeded) {
+						code, action = failure(applyErr, "bootstrap")
+					}
+					r.AddError(code, action)
+					return r, applyErr
+				}
+				return r, nil
 			}
 			if len(req.targets) > 0 {
 				clients, err := readiness.Compatibility(p, req.targets)
@@ -453,12 +503,35 @@ func summary(name string) string {
 		return "Check statically by default, or run one explicit MCP server with --runtime=mcp"
 	case "dev":
 		return "Rerun one explicit MCP server when the selected package changes"
+	case "bootstrap":
+		return "Install locked dependencies for a recognized generated standard template"
 	case "normalize":
 		return "Plan or atomically normalize one standard JSON document"
 	case "import":
 		return "Import one explicit native configuration into an absent standard package"
 	default:
 		return "Validate exact-root standard configuration and authoring readiness"
+	}
+}
+
+func bootstrapFailure(err error) (string, string) {
+	var e *authorbootstrap.Error
+	if !errors.As(err, &e) {
+		return "bootstrap_failed", "Retry in a disposable generated package after checking the reported plan."
+	}
+	switch e.Code {
+	case "bootstrap_lock_required":
+		return e.Code, "Use the checked-in package-lock.json emitted with the generated Node template."
+	case "bootstrap_layout_ambiguous":
+		return e.Code, "Remove competing runtime or package-manager files; bootstrap requires one unambiguous generated layout."
+	case "bootstrap_destination_exists":
+		return e.Code, "Remove the existing node_modules directory explicitly before bootstrapping again."
+	case "bootstrap_template_unrecognized":
+		return e.Code, "Bootstrap supports only the exact tool-generated standard Node stdio template and its checked-in lockfile."
+	case "bootstrap_process_failed":
+		return e.Code, "The locked npm ci process failed; source and lockfiles were left unchanged and partial staging was removed."
+	default:
+		return e.Code, "Bootstrap could not complete its bounded project-local operation; inspect the disposable project before retrying."
 	}
 }
 
@@ -472,6 +545,9 @@ func writePrivateHuman(w io.Writer, r report.Report) error {
 	}
 	if imported := r.NativeImport; imported != nil {
 		fmt.Fprintf(&b, "native import: client %s; source %s; safe servers %d; skipped servers %d; unsupported top-level fields %d\n", imported.Client, imported.SourceSHA256, imported.SafeServers, len(imported.SkippedServers), len(imported.UnsupportedTopLevel))
+	}
+	if bootstrap := r.Bootstrap; bootstrap != nil {
+		fmt.Fprintf(&b, "bootstrap: runtime %s; manager %s; command %s; planned %t\n", bootstrap.Runtime, bootstrap.Manager, strings.Join(bootstrap.Command, " "), bootstrap.Planned)
 	}
 	if r.Committed {
 		fmt.Fprintln(&b, "committed: true")
@@ -564,7 +640,7 @@ func selectedCommand(args, supported []string) string {
 		allowed[name] = struct{}{}
 	}
 	for _, a := range args {
-		for _, n := range []string{"init", "validate", "inspect", "test", "compat", "capabilities", "doctor", "skills", "dev", "normalize", "import"} {
+		for _, n := range []string{"init", "validate", "inspect", "test", "compat", "capabilities", "doctor", "skills", "dev", "bootstrap", "normalize", "import"} {
 			if a == n {
 				if _, ok := allowed[n]; !ok {
 					return "author"

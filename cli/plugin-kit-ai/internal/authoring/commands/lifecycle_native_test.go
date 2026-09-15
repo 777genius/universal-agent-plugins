@@ -58,7 +58,7 @@ func TestNativeBinaryLifecycle(t *testing.T) {
 				if !bytes.Equal(output, out) {
 					t.Fatalf("report parity args=%q:\n%s\n%s", args, output, out)
 				}
-			} else if r.Capabilities == nil || len(r.Capabilities.Commands) != 11 || !slices.Contains(r.Capabilities.Commands, "dev") || !slices.Contains(r.Capabilities.Commands, "normalize") || !slices.Contains(r.Capabilities.Commands, "import") {
+			} else if r.Capabilities == nil || len(r.Capabilities.Commands) != 12 || !slices.Contains(r.Capabilities.Commands, "bootstrap") || !slices.Contains(r.Capabilities.Commands, "dev") || !slices.Contains(r.Capabilities.Commands, "normalize") || !slices.Contains(r.Capabilities.Commands, "import") {
 				t.Fatalf("agentplugins Phase 8 surface missing: %+v", r.Capabilities)
 			}
 		}

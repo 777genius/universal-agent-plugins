@@ -97,7 +97,7 @@ func selectPublic(root *cobra.Command, args []string) selection {
 			}
 		}
 		switch f.Name {
-		case "scope", "accept-security-risk", "security-details", "dry-run":
+		case "scope", "accept-security-risk", "security-details":
 			s.invalid = true
 		}
 	}
@@ -197,8 +197,16 @@ func selectPublic(root *cobra.Command, args []string) selection {
 	} else if s.command.Annotations[authoringcli.RejectionKey] == "" && !isCompletion(s.command) {
 		s.invalid = true
 	}
-	if s.operation == "author.init" || s.operation == "author.skills.init" {
+	if s.operation == "author.init" || s.operation == "author.skills.init" || s.operation == "author.bootstrap" {
 		s.mode = "local_mutation"
+	}
+	if values := s.values["dry-run"]; len(values) > 0 {
+		dry, err := strconv.ParseBool(values[len(values)-1])
+		if err != nil || s.operation != "author.bootstrap" {
+			s.invalid = true
+		} else if dry {
+			s.mode = "read"
+		}
 	}
 	if s.operation == "author.normalize" || s.operation == "author.import.native" {
 		values := s.values["write"]
@@ -329,7 +337,7 @@ func (a App) executePublic(ctx context.Context, args []string, streams authoring
 			if err := selected.command.ParseFlags(selected.flags); err != nil {
 				return nil, &inputError{"arguments_invalid", publicArguments}
 			}
-			if _, err := authoringcli.AdaptFlags(selected.command, authoringcli.Support{Format: true, NoColor: true, Target: selected.operation == "author.inspect" || selected.operation == "author.compat"}); err != nil {
+			if _, err := authoringcli.AdaptFlags(selected.command, authoringcli.Support{Format: true, NoColor: true, DryRun: selected.operation == "author.bootstrap", Target: selected.operation == "author.inspect" || selected.operation == "author.compat"}); err != nil {
 				return nil, &inputError{"arguments_invalid", publicArguments}
 			}
 			return nil, errPublicHelp
@@ -420,7 +428,7 @@ func (a App) executePublic(ctx context.Context, args []string, streams authoring
 
 var errPublicHelp = errors.New("authoring command surface requested")
 
-const publicArguments = "Use an implemented authoring command; read paths default to the exact current directory. Use --format human or json. Compat requires explicit comma-separated --target clients. Inherited --scope, --accept-security-risk and --security-details are installer-only; use agentplugins add for installation policy. Unsupported --dry-run is rejected; MCP runtime flags are accepted only by author test and author dev."
+const publicArguments = "Use an implemented authoring command; read paths default to the exact current directory. Use --format human or json. Compat requires explicit comma-separated --target clients. Inherited --scope, --accept-security-risk and --security-details are installer-only; use agentplugins add for installation policy. --dry-run is supported only by bootstrap; MCP runtime flags are accepted only by author test and author dev."
 
 func writePublicHuman(w io.Writer, p report.Public, result string) error {
 	// Buffer only trusted projected data and write once, preserving output failure

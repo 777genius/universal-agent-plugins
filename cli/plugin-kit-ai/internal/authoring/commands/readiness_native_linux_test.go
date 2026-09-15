@@ -181,7 +181,7 @@ func TestNativeBinaryReadiness(t *testing.T) {
 	}
 	c, cc, cb := run(0, "capabilities")
 	ac, agentCode, agentBody := run(1, "capabilities")
-	if cc != 0 || agentCode != 0 || bytes.Equal(cb, agentBody) || ac.Capabilities == nil || len(ac.Capabilities.Commands) != 11 || !slices.Contains(ac.Capabilities.Commands, "dev") || !slices.Contains(ac.Capabilities.Commands, "normalize") || !slices.Contains(ac.Capabilities.Commands, "import") {
+	if cc != 0 || agentCode != 0 || bytes.Equal(cb, agentBody) || ac.Capabilities == nil || len(ac.Capabilities.Commands) != 12 || !slices.Contains(ac.Capabilities.Commands, "bootstrap") || !slices.Contains(ac.Capabilities.Commands, "dev") || !slices.Contains(ac.Capabilities.Commands, "normalize") || !slices.Contains(ac.Capabilities.Commands, "import") {
 		t.Fatalf("bounded agentplugins-only capability surface: %d %d\n%s\n%s", cc, agentCode, cb, agentBody)
 	}
 	if c.Capabilities == nil || len(c.Capabilities.Commands) != 8 || slices.Contains(c.Capabilities.Commands, "normalize") || slices.Contains(c.Capabilities.Commands, "import") || c.Readiness.Status != report.NotEvaluated {
