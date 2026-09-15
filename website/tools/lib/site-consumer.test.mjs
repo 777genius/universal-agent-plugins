@@ -155,8 +155,12 @@ test("actual accepted adapter envelope preserves all commands/flags/provenance a
         assert.ok(entity.command.local_flags.every((flag) =>
           !["allow-network", "deadline", "fixture", "runtime", "server", "tool"].includes(flag.name)));
       } else {
-        assert.deepEqual(entity.command, command);
+        assert.deepEqual(entity.command, {
+          ...command,
+          example: command.example.replaceAll("plugin-kit-ai skills", "agentplugins author skills"),
+        });
       }
+      assert.doesNotMatch(entity.command.example, /\bplugin-kit-ai\s/);
       assert.equal(entity.released, true);
       assert.equal(entity.status, "released");
       assert.equal(entity.stability, "public-stable");
