@@ -13,6 +13,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -150,6 +151,23 @@ func TestReadHTTPPayloadReturnsBeforeLongLivedSSEEOF(t *testing.T) {
 	<-done
 }
 
+func TestReadHTTPPayloadRejectsDuplicateSSEEnvelopeBeforeIDSelection(t *testing.T) {
+	for name, duplicate := range map[string]string{
+		"id":     `{"jsonrpc":"2.0","id":7,"id":8,"result":{}}`,
+		"result": `{"jsonrpc":"2.0","id":8,"result":{},"result":null}`,
+		"error":  `{"jsonrpc":"2.0","id":8,"error":{"code":-32603,"message":"first"},"error":{"code":-32603,"message":"second"}}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			body := "event: message\ndata: " + duplicate + "\n\n" +
+				"event: message\ndata: {\"jsonrpc\":\"2.0\",\"id\":7,\"result\":{}}\n\n"
+			resp := &http.Response{Header: http.Header{"Content-Type": []string{"text/event-stream"}}, Body: io.NopCloser(strings.NewReader(body))}
+			if payload, err := readHTTPPayload(resp, 7); code(err) != "runtime_protocol_invalid" || payload != nil {
+				t.Fatalf("payload=%q err=%v", payload, err)
+			}
+		})
+	}
+}
+
 func TestStdioRejectsDuplicateResponseEnvelopeMembers(t *testing.T) {
 	for name, payload := range duplicateResponseEnvelopes() {
 		t.Run(name, func(t *testing.T) {
@@ -174,6 +192,63 @@ func TestStreamableHTTPRejectsDuplicateResponseEnvelopeMembers(t *testing.T) {
 				t.Fatalf("duplicate %s response member: %v", name, err)
 			}
 		})
+	}
+}
+
+func TestStdioRequiresExclusiveResponseResultOrError(t *testing.T) {
+	for name, tc := range responseEnvelopeExclusivityCases() {
+		t.Run(name, func(t *testing.T) {
+			client := stdioClient{in: bufio.NewReader(strings.NewReader(tc.payload + "\n")), out: io.Discard}
+			if _, err := client.call(1, "initialize", map[string]any{}); code(err) != tc.want {
+				t.Fatalf("error=%v, want %s", err, tc.want)
+			}
+		})
+	}
+}
+
+func TestStreamableHTTPRequiresExclusiveResponseResultOrError(t *testing.T) {
+	for name, tc := range responseEnvelopeExclusivityCases() {
+		t.Run(name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = io.WriteString(w, tc.payload)
+			}))
+			defer server.Close()
+			err := runHTTP(context.Background(), domain.MCPServer{Decoded: map[string]any{"url": server.URL}}, "", nil, &Evidence{})
+			if code(err) != tc.want {
+				t.Fatalf("error=%v, want %s", err, tc.want)
+			}
+		})
+	}
+}
+
+type responseEnvelopeCase struct {
+	payload string
+	want    string
+}
+
+func responseEnvelopeExclusivityCases() map[string]responseEnvelopeCase {
+	return map[string]responseEnvelopeCase{
+		"result and null error": {
+			payload: `{"jsonrpc":"2.0","id":1,"result":null,"error":null}`,
+			want:    "runtime_protocol_invalid",
+		},
+		"result and valid error": {
+			payload: `{"jsonrpc":"2.0","id":1,"result":{},"error":{"code":-32603,"message":"failure"}}`,
+			want:    "runtime_protocol_invalid",
+		},
+		"neither result nor error": {
+			payload: `{"jsonrpc":"2.0","id":1}`,
+			want:    "runtime_protocol_invalid",
+		},
+		"null error only": {
+			payload: `{"jsonrpc":"2.0","id":1,"error":null}`,
+			want:    "runtime_protocol_invalid",
+		},
+		"valid error only": {
+			payload: `{"jsonrpc":"2.0","id":1,"error":{"code":-32603,"message":"failure"}}`,
+			want:    "runtime_protocol_error",
+		},
 	}
 }
 
@@ -480,6 +555,57 @@ func TestStreamableHTTPSessionTerminatesAfterCancellation(t *testing.T) {
 	case <-deleteSeen:
 	default:
 		t.Fatal("canceled session was not terminated before return")
+	}
+}
+
+func TestStreamableHTTPSessionTerminatesAfterOperationDeadline(t *testing.T) {
+	const session = "deadline-session"
+	notificationStarted := make(chan struct{})
+	var deleteCount atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodDelete {
+			if got := r.Header.Get("Mcp-Session-Id"); got != session {
+				t.Errorf("DELETE session=%q", got)
+			}
+			deleteCount.Add(1)
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		defer r.Body.Close()
+		var q struct {
+			ID     int    `json:"id"`
+			Method string `json:"method"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&q)
+		if q.Method == "initialize" {
+			w.Header().Set("Mcp-Session-Id", session)
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = fmt.Fprintf(w, `{"jsonrpc":"2.0","id":%d,"result":{"protocolVersion":"2025-06-18","capabilities":{},"serverInfo":{"name":"x","version":"1"}}}`, q.ID)
+			return
+		}
+		close(notificationStarted)
+		<-r.Context().Done()
+	}))
+	defer server.Close()
+	root, service, p := writeProject(t, map[string]any{"type": "streamable-http", "url": server.URL}, nil)
+	started := time.Now()
+	ev, err := Run(context.Background(), Options{SourceRoot: root, Scratch: service.Scratch, Project: p, Server: "selected", AllowNetwork: true, Deadline: 500 * time.Millisecond, Projects: service})
+	if !hasErrorCode(err, "runtime_deadline_exceeded") || !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("deadline evidence=%+v err=%v", ev, err)
+	}
+	if elapsed := time.Since(started); elapsed > 2*time.Second {
+		t.Fatalf("deadline cleanup hung for %v", elapsed)
+	}
+	select {
+	case <-notificationStarted:
+	default:
+		t.Fatal("operation did not reach the post-initialize request")
+	}
+	if got := deleteCount.Load(); got != 1 {
+		t.Fatalf("deadline session DELETE count=%d, want 1", got)
+	}
+	if entries, readErr := os.ReadDir(service.Scratch); readErr != nil || len(entries) != 0 || !ev.Cleanup {
+		t.Fatalf("deadline retained private roots: evidence=%+v entries=%v err=%v", ev, entries, readErr)
 	}
 }
 

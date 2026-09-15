@@ -386,6 +386,30 @@ type response struct {
 	Error   json.RawMessage `json:"error"`
 }
 
+func responseResult(r response) (json.RawMessage, error) {
+	hasResult := len(r.Result) != 0
+	hasError := len(r.Error) != 0
+	if hasResult == hasError {
+		return nil, fail("runtime_protocol_invalid")
+	}
+	if hasResult {
+		return r.Result, nil
+	}
+	if bytes.Equal(bytes.TrimSpace(r.Error), []byte("null")) {
+		return nil, fail("runtime_protocol_invalid")
+	}
+	var rpcError map[string]json.RawMessage
+	if json.Unmarshal(r.Error, &rpcError) != nil || rpcError == nil {
+		return nil, fail("runtime_protocol_invalid")
+	}
+	var errorCode int64
+	var message string
+	if json.Unmarshal(rpcError["code"], &errorCode) != nil || json.Unmarshal(rpcError["message"], &message) != nil {
+		return nil, fail("runtime_protocol_invalid")
+	}
+	return nil, fail("runtime_protocol_error")
+}
+
 func (c *stdioClient) notify(method string, params any) error {
 	return json.NewEncoder(c.out).Encode(map[string]any{"jsonrpc": "2.0", "method": method, "params": params})
 }
@@ -412,13 +436,7 @@ func (c *stdioClient) call(id int, method string, params any) (json.RawMessage, 
 		if r.JSONRPC != "2.0" {
 			return nil, fail("runtime_protocol_invalid")
 		}
-		if len(r.Error) != 0 && string(r.Error) != "null" {
-			return nil, fail("runtime_protocol_error")
-		}
-		if len(r.Result) == 0 {
-			return nil, fail("runtime_protocol_invalid")
-		}
-		return r.Result, nil
+		return responseResult(r)
 	}
 }
 
@@ -521,10 +539,10 @@ func runHTTP(ctx context.Context, server domain.MCPServer, tool string, argument
 		}
 		var r response
 		var responseID int
-		if json.Unmarshal(payload, &r) != nil || r.JSONRPC != "2.0" || json.Unmarshal(r.ID, &responseID) != nil || responseID != id || len(r.Error) != 0 && string(r.Error) != "null" || len(r.Result) == 0 {
+		if json.Unmarshal(payload, &r) != nil || r.JSONRPC != "2.0" || json.Unmarshal(r.ID, &responseID) != nil || responseID != id {
 			return nil, fail("runtime_protocol_invalid")
 		}
-		return r.Result, nil
+		return responseResult(r)
 	}
 	initialized, err := call(1, "initialize", map[string]any{"protocolVersion": protocolVersion, "capabilities": map[string]any{}, "clientInfo": map[string]any{"name": "agentplugins-author", "version": "1"}}, false)
 	tools, valid := initializeCapabilities(initialized)
@@ -576,17 +594,7 @@ func runHTTP(ctx context.Context, server domain.MCPServer, tool string, argument
 }
 
 func terminateHTTPSession(parent context.Context, client *http.Client, endpoint *url.URL, headers map[string]string, session string, negotiated bool) error {
-	cleanupFor := httpSessionCleanupLimit
-	if deadline, ok := parent.Deadline(); ok {
-		remaining := time.Until(deadline)
-		if remaining <= 0 {
-			return fail("runtime_http_session_cleanup_failed")
-		}
-		if remaining < cleanupFor {
-			cleanupFor = remaining
-		}
-	}
-	ctx, cancel := context.WithTimeout(context.WithoutCancel(parent), cleanupFor)
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(parent), httpSessionCleanupLimit)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, endpoint.String(), nil)
 	if err != nil {
@@ -744,6 +752,10 @@ func readSSEPayload(reader *bufio.Reader, id int) ([]byte, error) {
 		payload := []byte(strings.Join(data, "\n"))
 		data = nil
 		size = 0
+		trimmed := bytes.TrimSpace(payload)
+		if len(trimmed) > 0 && trimmed[0] == '{' && conformance.RejectDuplicateJSONKeys(payload) != nil {
+			return nil, fail("runtime_protocol_invalid")
+		}
 		var candidate response
 		var responseID int
 		if json.Unmarshal(payload, &candidate) == nil && candidate.JSONRPC == "2.0" && json.Unmarshal(candidate.ID, &responseID) == nil && responseID == id {
