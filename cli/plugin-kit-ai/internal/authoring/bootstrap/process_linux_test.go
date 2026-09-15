@@ -3,10 +3,13 @@
 package bootstrap_test
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -16,6 +19,34 @@ import (
 
 	"github.com/777genius/plugin-kit-ai/cli/internal/authoring/bootstrap"
 )
+
+const fakeNPMConfigName = "fake-npm-config.json"
+
+type fakeNPMConfig struct {
+	OwnerPID         int
+	Root             string
+	MovedRoot        string
+	PackageJSON      []byte
+	Replaced         string
+	Continue         string
+	GrandchildChecks string
+	SetsidIdentity   string
+	Ready            string
+}
+
+type linuxProcessIdentity struct {
+	PID       int
+	StartTime uint64
+	Session   int
+	Zombie    bool
+}
+
+func TestMain(m *testing.M) {
+	if filepath.Base(os.Args[0]) == "npm" {
+		os.Exit(runFakeNPM())
+	}
+	os.Exit(m.Run())
+}
 
 func TestFinalVerificationToLaunchReplacementUsesCapturedStaging(t *testing.T) {
 	root, project := generated(t)
@@ -77,6 +108,146 @@ func TestFinalVerificationToLaunchReplacementUsesCapturedStaging(t *testing.T) {
 	}
 	if _, statErr := os.Lstat(filepath.Join(moved, "node_modules")); !errors.Is(statErr, os.ErrNotExist) {
 		t.Fatalf("failed apply retained staged dependency output: %v", statErr)
+	}
+}
+
+func TestDefaultRunnerKeepsCapturedStagingAndContainsSetsidDescendant(t *testing.T) {
+	root, project := generated(t)
+	plan, err := (bootstrap.Service{}).Plan(root, project)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantPackage, err := os.ReadFile(filepath.Join(root, "package.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	control := t.TempDir()
+	bin := filepath.Join(control, "bin")
+	if err := os.Mkdir(bin, 0700); err != nil {
+		t.Fatal(err)
+	}
+	testExecutable, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(testExecutable, filepath.Join(bin, "npm")); err != nil {
+		t.Fatal(err)
+	}
+	config := fakeNPMConfig{
+		OwnerPID:         os.Getpid(),
+		Root:             root,
+		MovedRoot:        root + "-captured",
+		PackageJSON:      wantPackage,
+		Replaced:         filepath.Join(control, "replaced.json"),
+		Continue:         filepath.Join(control, "continue"),
+		GrandchildChecks: filepath.Join(control, "grandchild-checks"),
+		SetsidIdentity:   filepath.Join(control, "setsid.json"),
+		Ready:            filepath.Join(control, "ready.json"),
+	}
+	configBody, err := json.Marshal(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(bin, fakeNPMConfigName), configBody, 0600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	done := make(chan error, 1)
+	go func() {
+		_, applyErr := (bootstrap.Service{}).Apply(ctx, root, plan)
+		done <- applyErr
+	}()
+
+	replacedBody, err := waitForFile(config.Replaced, 5*time.Second)
+	if err != nil {
+		cancel()
+		_ = waitForApply(done, 5*time.Second)
+		t.Fatal(err)
+	}
+	var manager linuxProcessIdentity
+	if err := json.Unmarshal(replacedBody, &manager); err != nil {
+		cancel()
+		_ = waitForApply(done, 5*time.Second)
+		t.Fatal(err)
+	}
+	if current, identityErr := readLinuxProcessIdentity(manager.PID); identityErr != nil || current.StartTime != manager.StartTime || current.Zombie {
+		cancel()
+		_ = waitForApply(done, 5*time.Second)
+		t.Fatalf("fake npm was not alive at the replacement barrier: current=%+v err=%v", current, identityErr)
+	}
+	replacementPackage, err := os.ReadFile(filepath.Join(root, "package.json"))
+	if err != nil || bytes.Equal(replacementPackage, wantPackage) {
+		cancel()
+		_ = waitForApply(done, 5*time.Second)
+		t.Fatalf("public package root was not replaced before manager checks: package=%q err=%v", replacementPackage, err)
+	}
+	if movedPackage, readErr := os.ReadFile(filepath.Join(config.MovedRoot, "package.json")); readErr != nil || !bytes.Equal(movedPackage, wantPackage) {
+		cancel()
+		_ = waitForApply(done, 5*time.Second)
+		t.Fatalf("captured package root after replacement: package=%q err=%v", movedPackage, readErr)
+	}
+	if err := atomicWrite(config.Continue, []byte("continue")); err != nil {
+		cancel()
+		_ = waitForApply(done, 5*time.Second)
+		t.Fatal(err)
+	}
+
+	readyBody, err := waitForFile(config.Ready, 5*time.Second)
+	if err != nil {
+		cancel()
+		_ = waitForApply(done, 5*time.Second)
+		t.Fatal(err)
+	}
+	var readyManager linuxProcessIdentity
+	if err := json.Unmarshal(readyBody, &readyManager); err != nil || readyManager.PID != manager.PID || readyManager.StartTime != manager.StartTime {
+		cancel()
+		_ = waitForApply(done, 5*time.Second)
+		t.Fatalf("manager identity changed before cancellation: ready=%+v err=%v", readyManager, err)
+	}
+	if current, identityErr := readLinuxProcessIdentity(manager.PID); identityErr != nil || current.StartTime != manager.StartTime || current.Zombie {
+		cancel()
+		_ = waitForApply(done, 5*time.Second)
+		t.Fatalf("fake npm did not stay alive across grandchild checks: current=%+v err=%v", current, identityErr)
+	}
+	if marker, readErr := os.ReadFile(config.GrandchildChecks); readErr != nil || string(marker) != "ok" {
+		cancel()
+		_ = waitForApply(done, 5*time.Second)
+		t.Fatalf("grandchild did not repeat captured-staging checks: marker=%q err=%v", marker, readErr)
+	}
+	setsidBody, err := os.ReadFile(config.SetsidIdentity)
+	if err != nil {
+		cancel()
+		_ = waitForApply(done, 5*time.Second)
+		t.Fatal(err)
+	}
+	var setsid linuxProcessIdentity
+	if err := json.Unmarshal(setsidBody, &setsid); err != nil || setsid.PID == 0 || setsid.Session != setsid.PID {
+		cancel()
+		_ = waitForApply(done, 5*time.Second)
+		t.Fatalf("immediate descendant did not establish a new session: identity=%+v err=%v", setsid, err)
+	}
+	if current, identityErr := readLinuxProcessIdentity(setsid.PID); identityErr != nil || current.StartTime != setsid.StartTime || current.Session != setsid.PID || current.Zombie {
+		cancel()
+		_ = waitForApply(done, 5*time.Second)
+		t.Fatalf("setsid descendant was not alive at the cancellation barrier: current=%+v err=%v", current, identityErr)
+	}
+
+	cancel()
+	applyErr := waitForApply(done, 5*time.Second)
+	if errorCode(applyErr) != "bootstrap_process_failed" || !errors.Is(applyErr, context.Canceled) {
+		t.Fatalf("cancellation error = %v", applyErr)
+	}
+	for _, identity := range []linuxProcessIdentity{manager, setsid} {
+		if err := waitForProcessIdentityStopped(identity, time.Second); err != nil {
+			t.Error(err)
+		}
+	}
+	if _, err := os.Lstat(filepath.Join(root, "node_modules")); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("replacement root received dependency output: %v", err)
 	}
 }
 
@@ -202,4 +373,299 @@ func processStopped(pid int) bool {
 	}
 	fields := strings.Fields(string(body))
 	return len(fields) > 2 && fields[2] == "Z"
+}
+
+func runFakeNPM() int {
+	configBody, err := os.ReadFile(filepath.Join(filepath.Dir(os.Args[0]), fakeNPMConfigName))
+	if err != nil {
+		return fakeNPMError(err)
+	}
+	var config fakeNPMConfig
+	if err := json.Unmarshal(configBody, &config); err != nil {
+		return fakeNPMError(err)
+	}
+	if len(os.Args) == 2 {
+		switch os.Args[1] {
+		case "--grandchild-parent":
+			child := exec.Command(os.Args[0], "--grandchild-check")
+			child.Stdout, child.Stderr = os.Stdout, os.Stderr
+			if err := child.Run(); err != nil {
+				return fakeNPMError(fmt.Errorf("run check grandchild: %w", err))
+			}
+			return 0
+		case "--grandchild-check":
+			if err := checkFakeNPMBoundary(config); err != nil {
+				return fakeNPMError(fmt.Errorf("grandchild checks: %w", err))
+			}
+			if err := atomicWrite(config.GrandchildChecks, []byte("ok")); err != nil {
+				return fakeNPMError(err)
+			}
+			return 0
+		case "--setsid-descendant":
+			identity, err := readLinuxProcessIdentity(os.Getpid())
+			if err != nil {
+				return fakeNPMError(err)
+			}
+			if identity.Session != identity.PID {
+				return fakeNPMError(fmt.Errorf("setsid identity = %+v", identity))
+			}
+			body, err := json.Marshal(identity)
+			if err != nil {
+				return fakeNPMError(err)
+			}
+			if err := atomicWrite(config.SetsidIdentity, body); err != nil {
+				return fakeNPMError(err)
+			}
+			for {
+				time.Sleep(time.Hour)
+			}
+		}
+	}
+	if len(os.Args) != 5 || os.Args[1] != "ci" || os.Args[2] != "--ignore-scripts" || os.Args[3] != "--no-audit" || os.Args[4] != "--no-fund" {
+		return fakeNPMError(fmt.Errorf("unexpected npm arguments: %q", os.Args[1:]))
+	}
+	// Replace the public name before opening any package or isolated manager
+	// path. The barrier lets the parent test observe this exact launch window.
+	if err := os.Rename(config.Root, config.MovedRoot); err != nil {
+		return fakeNPMError(err)
+	}
+	if err := os.Mkdir(config.Root, 0700); err != nil {
+		return fakeNPMError(err)
+	}
+	if err := os.WriteFile(filepath.Join(config.Root, "package.json"), []byte(`{"name":"replacement"}`), 0600); err != nil {
+		return fakeNPMError(err)
+	}
+	manager, err := readLinuxProcessIdentity(os.Getpid())
+	if err != nil {
+		return fakeNPMError(err)
+	}
+	managerBody, err := json.Marshal(manager)
+	if err != nil {
+		return fakeNPMError(err)
+	}
+	if err := atomicWrite(config.Replaced, managerBody); err != nil {
+		return fakeNPMError(err)
+	}
+	if _, err := waitForFile(config.Continue, 5*time.Second); err != nil {
+		return fakeNPMError(err)
+	}
+	if err := checkFakeNPMBoundary(config); err != nil {
+		return fakeNPMError(fmt.Errorf("manager checks: %w", err))
+	}
+
+	grandchildParent := exec.Command(os.Args[0], "--grandchild-parent")
+	grandchildParent.Stdout, grandchildParent.Stderr = os.Stdout, os.Stderr
+	if err := grandchildParent.Run(); err != nil {
+		return fakeNPMError(err)
+	}
+	setsid := exec.Command(os.Args[0], "--setsid-descendant")
+	setsid.Stdout, setsid.Stderr = os.Stdout, os.Stderr
+	setsid.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+	if err := setsid.Start(); err != nil {
+		return fakeNPMError(err)
+	}
+	if _, err := waitForFile(config.SetsidIdentity, 5*time.Second); err != nil {
+		_ = setsid.Process.Kill()
+		_ = setsid.Wait()
+		return fakeNPMError(err)
+	}
+	if err := atomicWrite(config.Ready, managerBody); err != nil {
+		_ = setsid.Process.Kill()
+		_ = setsid.Wait()
+		return fakeNPMError(err)
+	}
+	if err := setsid.Wait(); err != nil {
+		return fakeNPMError(err)
+	}
+	return fakeNPMError(errors.New("setsid descendant exited without cancellation"))
+}
+
+func checkFakeNPMBoundary(config fakeNPMConfig) error {
+	packageBody, err := os.ReadFile("package.json")
+	if err != nil || !bytes.Equal(packageBody, config.PackageJSON) {
+		return fmt.Errorf("read staged package through cwd: package=%q err=%w", packageBody, err)
+	}
+	home := os.Getenv("HOME")
+	const homeSuffix = "/../home"
+	if !strings.HasSuffix(home, homeSuffix) {
+		return fmt.Errorf("HOME is not handle-relative: %q", home)
+	}
+	workHandle := strings.TrimSuffix(home, homeSuffix)
+	wantHandlePrefix := fmt.Sprintf("/proc/%d/fd/", config.OwnerPID)
+	// The fake npm is launched by the isolated supervisor, while the fd belongs
+	// to the original Apply process. Validate the stable /proc fd spelling by
+	// identity instead of depending on a particular supervisor PID depth.
+	if !strings.HasPrefix(workHandle, wantHandlePrefix) {
+		return fmt.Errorf("working directory is not owned by the Apply process handle: %q, want prefix %q", workHandle, wantHandlePrefix)
+	}
+	workInfo, err := os.Stat(workHandle)
+	if err != nil {
+		return err
+	}
+	cwdInfo, err := os.Stat(".")
+	if err != nil || !os.SameFile(workInfo, cwdInfo) {
+		return fmt.Errorf("cwd does not use captured work handle: %w", err)
+	}
+	stageInfo, err := os.Stat("..")
+	if err != nil {
+		return err
+	}
+	boundStageInfo, err := os.Stat(workHandle + "/..")
+	if err != nil || !os.SameFile(stageInfo, boundStageInfo) {
+		return fmt.Errorf("stage does not use captured work handle: %w", err)
+	}
+
+	paths := map[string]string{
+		"HOME":                    "home",
+		"USERPROFILE":             "home",
+		"NPM_CONFIG_CACHE":        "cache",
+		"NPM_CONFIG_USERCONFIG":   "user-npmrc",
+		"NPM_CONFIG_GLOBALCONFIG": "global-npmrc",
+		"NPM_CONFIG_PREFIX":       "prefix",
+		"TMPDIR":                  "tmp",
+		"TMP":                     "tmp",
+		"TEMP":                    "tmp",
+	}
+	files := map[string]bool{"NPM_CONFIG_USERCONFIG": true, "NPM_CONFIG_GLOBALCONFIG": true}
+	for key, leaf := range paths {
+		value := os.Getenv(key)
+		want := workHandle + "/../" + leaf
+		if value != want {
+			return fmt.Errorf("%s = %q, want %q", key, value, want)
+		}
+		if files[key] {
+			file, openErr := os.OpenFile(value, os.O_RDWR|os.O_CREATE, 0600)
+			if openErr != nil {
+				return fmt.Errorf("open %s: %w", key, openErr)
+			}
+			if closeErr := file.Close(); closeErr != nil {
+				return closeErr
+			}
+		} else if mkdirErr := os.MkdirAll(value, 0700); mkdirErr != nil {
+			return fmt.Errorf("create %s: %w", key, mkdirErr)
+		}
+		resolvedInfo, statErr := os.Stat(value)
+		relativeInfo, relativeErr := os.Stat(filepath.Join("..", leaf))
+		if statErr != nil || relativeErr != nil || !os.SameFile(resolvedInfo, relativeInfo) {
+			return fmt.Errorf("%s did not resolve into captured staging: %w", key, errors.Join(statErr, relativeErr))
+		}
+		resolved, evalErr := filepath.EvalSymlinks(value)
+		if evalErr != nil || !pathWithin(config.MovedRoot, resolved) || pathWithin(config.Root, resolved) {
+			return fmt.Errorf("%s resolved outside moved staging tree: path=%q err=%w", key, resolved, evalErr)
+		}
+	}
+	return nil
+}
+
+func pathWithin(root, path string) bool {
+	relative, err := filepath.Rel(root, path)
+	return err == nil && relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator))
+}
+
+func fakeNPMError(err error) int {
+	_, _ = fmt.Fprintln(os.Stderr, "fake npm:", err)
+	return 97
+}
+
+func atomicWrite(path string, body []byte) error {
+	temporary, err := os.CreateTemp(filepath.Dir(path), ".fake-npm-")
+	if err != nil {
+		return err
+	}
+	temporaryPath := temporary.Name()
+	cleanup := true
+	defer func() {
+		if cleanup {
+			_ = os.Remove(temporaryPath)
+		}
+	}()
+	if _, err := temporary.Write(body); err != nil {
+		_ = temporary.Close()
+		return err
+	}
+	if err := temporary.Close(); err != nil {
+		return err
+	}
+	if err := os.Rename(temporaryPath, path); err != nil {
+		return err
+	}
+	cleanup = false
+	return nil
+}
+
+func waitForFile(path string, timeout time.Duration) ([]byte, error) {
+	deadline := time.NewTimer(timeout)
+	defer deadline.Stop()
+	ticker := time.NewTicker(time.Millisecond)
+	defer ticker.Stop()
+	for {
+		body, err := os.ReadFile(path)
+		if err == nil {
+			return body, nil
+		}
+		if !errors.Is(err, os.ErrNotExist) {
+			return nil, err
+		}
+		select {
+		case <-ticker.C:
+		case <-deadline.C:
+			return nil, fmt.Errorf("timed out waiting for %s", filepath.Base(path))
+		}
+	}
+}
+
+func waitForApply(done <-chan error, timeout time.Duration) error {
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+	select {
+	case err := <-done:
+		return err
+	case <-timer.C:
+		return errors.New("timed out waiting for bootstrap Apply")
+	}
+}
+
+func readLinuxProcessIdentity(pid int) (linuxProcessIdentity, error) {
+	body, err := os.ReadFile(filepath.Join("/proc", strconv.Itoa(pid), "stat"))
+	if err != nil {
+		return linuxProcessIdentity{}, err
+	}
+	closing := strings.LastIndexByte(string(body), ')')
+	if closing < 0 {
+		return linuxProcessIdentity{}, errors.New("malformed Linux process stat")
+	}
+	fields := strings.Fields(string(body[closing+1:]))
+	if len(fields) < 20 {
+		return linuxProcessIdentity{}, errors.New("short Linux process stat")
+	}
+	session, err := strconv.Atoi(fields[3])
+	if err != nil {
+		return linuxProcessIdentity{}, err
+	}
+	startTime, err := strconv.ParseUint(fields[19], 10, 64)
+	if err != nil {
+		return linuxProcessIdentity{}, err
+	}
+	return linuxProcessIdentity{PID: pid, StartTime: startTime, Session: session, Zombie: fields[0] == "Z"}, nil
+}
+
+func waitForProcessIdentityStopped(want linuxProcessIdentity, timeout time.Duration) error {
+	deadline := time.NewTimer(timeout)
+	defer deadline.Stop()
+	ticker := time.NewTicker(time.Millisecond)
+	defer ticker.Stop()
+	for {
+		current, err := readLinuxProcessIdentity(want.PID)
+		if errors.Is(err, os.ErrNotExist) || (err == nil && (current.StartTime != want.StartTime || current.Zombie)) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		select {
+		case <-ticker.C:
+		case <-deadline.C:
+			return fmt.Errorf("process %d with start time %d remained after cancellation (current=%+v)", want.PID, want.StartTime, current)
+		}
+	}
 }

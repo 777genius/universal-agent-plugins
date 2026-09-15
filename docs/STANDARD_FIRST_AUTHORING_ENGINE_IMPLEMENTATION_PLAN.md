@@ -68,6 +68,15 @@ current `main` in its own dependency-safe PR. The older detailed design below is
 retained as decision history and must not be used to restore retired commands,
 packages, migration work, or release channels.
 
+> **Owner hold (2026-09-15): Phases 9-11 are a separate future roadmap and are
+> not part of the current delivery. Do not implement, continue, or merge work
+> from these phases until the owner gives a new explicit command.** The current
+> delivery ends with Phase 7, the Agent Plugins public-doc refresh, an
+> `agentplugins` CLI/package release, and disposable public-channel E2E. Releasing
+> the CLI package is not Phase 10's plugin-publication command. Any partial Phase
+> 9 prototype is non-authoritative and must remain unmerged while this hold is
+> active.
+
 1. **Phase 7 - runtime loop (implemented in source):** explicit runtime testing,
    `dev`, and safe lockfile-based `bootstrap` for standard `plugin.json` packages.
 2. **Phase 8A - JSON maintenance (implemented in source):** deterministic
@@ -75,11 +84,11 @@ packages, migration work, or release channels.
    Claude MCP import to an absent standard package. No YAML reader, migration
    command, compatibility shim, profile discovery, or additional native client
    is in scope.
-3. **Phase 9 - portable outputs:** add disposable client projection previews,
+3. **Phase 9 - portable outputs (owner hold):** add disposable client projection previews,
    deterministic export, and the minimum useful bundle inspection/fetch flow.
-4. **Phase 10 - publication:** add one explicit publish flow and Directory
+4. **Phase 10 - publication (owner hold):** add one explicit publish flow and Directory
    submission with provenance, idempotency, and rollback evidence.
-5. **Phase 11 - dependency isolation:** detach legacy wiring from the standard
+5. **Phase 11 - dependency isolation (owner hold):** detach legacy wiring from the standard
    dependency graph while preserving source, tests, fixtures, and design ideas.
    Removal still requires a separate capability inventory and owner decision.
 
