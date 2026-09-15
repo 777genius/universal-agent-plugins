@@ -72,6 +72,9 @@ func TestApplyNoopMtimeSymlinkConcurrentAndRollback(t *testing.T) {
 			t.Fatal(err)
 		}
 		plan, _ := Build("plugin.json", body)
+		if code := errorCode(t, Verify(root, plan)); code != "document_unavailable" {
+			t.Fatal(code)
+		}
 		if committed, err := Apply(ctx, plan, ApplyOptions{Root: root, Validate: func(context.Context) error { return nil }}); committed || errorCode(t, err) != "source_changed" {
 			t.Fatalf("commit=%t err=%v", committed, err)
 		}

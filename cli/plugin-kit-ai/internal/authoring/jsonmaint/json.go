@@ -30,6 +30,27 @@ type Plan struct {
 
 func (p Plan) Changed() bool { return !bytes.Equal(p.before, p.after) }
 
+// Verify binds a plan to the current regular, non-symlink document without
+// changing it. Apply repeats this check immediately before replacement.
+func Verify(rootPath string, plan Plan) error {
+	if !filepath.IsAbs(rootPath) || filepath.Clean(rootPath) != rootPath {
+		return fail("arguments_invalid")
+	}
+	root, err := os.OpenRoot(rootPath)
+	if err != nil {
+		return fail("root_unreadable")
+	}
+	defer root.Close()
+	_, current, err := readCurrent(root, plan.Document)
+	if err != nil {
+		return err
+	}
+	if !bytes.Equal(current, plan.before) {
+		return fail("source_changed")
+	}
+	return nil
+}
+
 // Build creates an immutable plan from bytes already captured by packageview.
 func Build(document string, source []byte) (Plan, error) {
 	if document != "plugin.json" && document != "mcp.json" {
@@ -150,7 +171,7 @@ func Apply(ctx context.Context, plan Plan, opts ApplyOptions) (committed bool, e
 		return false, fail("arguments_invalid")
 	}
 	if !plan.Changed() {
-		return false, nil
+		return false, Verify(opts.Root, plan)
 	}
 	root, err := os.OpenRoot(opts.Root)
 	if err != nil {

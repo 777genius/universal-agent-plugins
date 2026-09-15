@@ -73,6 +73,9 @@ func (a App) runNormalize(ctx context.Context, req normalizeRequest) (report.Rep
 	if err != nil {
 		return operationFailed(r, err, "normalize")
 	}
+	if err = jsonmaint.Verify(req.root, plan); err != nil {
+		return operationFailed(r, err, "normalize")
+	}
 	r.JSONDocument = &report.JSONDocument{Path: plan.Document, BeforeSHA256: plan.BeforeSHA256, AfterSHA256: plan.AfterSHA256, Changed: plan.Changed()}
 	if !req.write || !plan.Changed() {
 		return r, nil
