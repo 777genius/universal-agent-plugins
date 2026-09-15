@@ -169,7 +169,7 @@ func portableAbsolute(value string) bool {
 }
 
 func portableArg(value string) bool {
-	if len(value) > 4096 || !utf8.ValidString(value) || strings.ContainsRune(value, 0) || filepath.IsAbs(value) || filepath.VolumeName(value) != "" || portableAbsolute(value) || strings.HasPrefix(value, `\\`) || secretLike(value) {
+	if len(value) > 4096 || !utf8.ValidString(value) || strings.ContainsRune(value, 0) || filepath.IsAbs(value) || filepath.VolumeName(value) != "" || portableAbsolute(value) || strings.HasPrefix(value, `\\`) || credentialArg(value) {
 		return false
 	}
 	for _, r := range value {
@@ -181,9 +181,38 @@ func portableArg(value string) bool {
 	return err != nil || u.Scheme == "" || u.User == nil && u.RawQuery == "" && u.Fragment == ""
 }
 
+// credentialArg deliberately rejects credential option names even when their
+// values do not look secret. Import reports only the server's hashed identity;
+// it never needs to retain a rejected native argument for diagnostics.
+func credentialArg(value string) bool {
+	if secretLike(value) {
+		return true
+	}
+	label := strings.ToLower(strings.TrimSpace(value))
+	optionLike := strings.HasPrefix(label, "-") || strings.HasPrefix(label, "/")
+	if i := strings.IndexAny(label, "=:"); i >= 0 {
+		optionLike = true
+		label = label[:i]
+	}
+	if !optionLike {
+		return false
+	}
+	label = strings.TrimLeft(label, "-/")
+	label = strings.NewReplacer("-", "", "_", "", ".", "").Replace(label)
+	if label == "h" || label == "e" {
+		return true
+	}
+	for _, marker := range []string{"key", "auth", "header", "env"} {
+		if strings.Contains(label, marker) {
+			return true
+		}
+	}
+	return false
+}
+
 func secretLike(value string) bool {
 	lower := strings.ToLower(value)
-	for _, marker := range []string{"secret", "token", "password", "passwd", "credential", "authorization", "bearer", "api_key", "apikey", "ghp_", "github_pat", "sk-", "akia"} {
+	for _, marker := range []string{"secret", "token", "password", "passwd", "credential", "authorization", "bearer", "api_key", "api-key", "api.key", "apikey", "ghp_", "github_pat", "sk-", "sk_", "akia"} {
 		if strings.Contains(lower, marker) {
 			return true
 		}

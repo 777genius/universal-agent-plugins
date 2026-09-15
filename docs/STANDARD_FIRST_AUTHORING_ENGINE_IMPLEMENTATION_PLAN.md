@@ -16,10 +16,11 @@
 
 This decision supersedes the earlier PR #190 availability-label preservation
 rule wherever that rule would require adding release-history framing to the
-repository README. The README remains unchanged and current-only for this work:
-do not add a Milestone A section or a Historical authoring section. Preserve
-the existing PR #190 links and availability evidence in their historical site
-and plan locations; do not copy their labels into the README.
+repository README. The owner approved and merged the README's current-source
+Phase 8A update; preserve it and keep the README current-only. Do not add a
+Milestone A section or a Historical authoring section. Preserve the existing PR
+#190 links and availability evidence in their historical site and plan
+locations; do not copy their labels into the README.
 
 The separately retained `plugin-kit-ai-runtime` npm and PyPI helpers remain
 supported legacy capabilities, not public authoring entrypoints. Their active
@@ -1332,11 +1333,20 @@ Rules:
 - never repair an invalid schema by guessing;
 - never change semantic JSON value types;
 - reject duplicate keys rather than choosing a winner;
-- use compare-and-swap against the read digest;
+- bind the plan to the read identity and digest, recheck immediately before the
+  atomic replacement, and require non-cooperating external writers to remain
+  quiescent until validation and rollback cleanup finish. Portable filesystems
+  do not provide the implementation a linearizable content compare-and-swap;
+  detected changes fail closed, but undetected final-window writer safety is not
+  claimed;
 - write through a same-directory temporary file, sync, and atomic rename where
   supported;
-- preserve permissions unless the standard requires tightening them;
-- fail without partial writes when one planned file changes concurrently.
+- preserve the document's Go `FileMode.Perm` permission bits. Phase 8A does not
+  promise preservation of ownership, POSIX ACLs, extended attributes, file
+  flags, or timestamps; operators relying on that metadata must not use
+  `normalize --write` until a later contract supports it;
+- fail closed on changes detected before or after replacement and restore the
+  detected external replacement when ownership can still be proved.
 
 ## Import and migration contract
 
@@ -2362,7 +2372,9 @@ or standard command wiring.
 - no path traversal, symlink escape, junction, reparse point, device, or FIFO;
 - case-insensitive path collision is rejected;
 - read plans bind exact digests;
-- writes use compare-and-swap and atomic replacement where supported;
+- mutation plans bind read identity/digests and use atomic replacement where
+  supported; commands state any quiescent-source requirement instead of
+  claiming a portable linearizable compare-and-swap;
 - interrupted commands leave no partial success claim;
 - output directories cannot overlap inputs;
 - temporary roots use private permissions and are always cleaned;
@@ -2593,7 +2605,8 @@ identified generated docs, golden fixtures, and mechanical file moves.
 10. `feat(authoring): bootstrap generated runtimes`
    - deterministic recognized templates only.
 11. `feat(authoring): normalize standard documents`
-   - lossless CAS writes.
+   - lossless digest-checked atomic writes under the documented quiescent-source
+     contract.
 12. `feat(authoring): import native configuration`
    - supported client MCP and Skills import through digest-bound plans; no YAML
      reader or migration path.

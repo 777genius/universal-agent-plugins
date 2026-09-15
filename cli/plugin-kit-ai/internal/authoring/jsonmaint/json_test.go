@@ -1,6 +1,7 @@
 package jsonmaint
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"os"
@@ -97,7 +98,30 @@ func TestApplyNoopMtimeSymlinkConcurrentAndRollback(t *testing.T) {
 			t.Fatalf("commit=%t err=%v body=%s", committed, err, got)
 		}
 	})
-	t.Run("success", func(t *testing.T) {
+	t.Run("final replacement window restores detected writer", func(t *testing.T) {
+		root := t.TempDir()
+		path := filepath.Join(root, "plugin.json")
+		original := []byte(`{"b":2,"a":1}`)
+		user := []byte(`{"external_writer":true}`)
+		if err := os.WriteFile(path, original, 0640); err != nil {
+			t.Fatal(err)
+		}
+		plan, _ := Build("plugin.json", original)
+		committed, err := apply(ctx, plan, ApplyOptions{Root: root, Validate: func(context.Context) error { return nil }}, func() {
+			if removeErr := os.Remove(path); removeErr != nil {
+				t.Fatal(removeErr)
+			}
+			if writeErr := os.WriteFile(path, user, 0600); writeErr != nil {
+				t.Fatal(writeErr)
+			}
+		})
+		got, readErr := os.ReadFile(path)
+		entries, entriesErr := os.ReadDir(root)
+		if committed || errorCode(t, err) != "source_changed" || readErr != nil || entriesErr != nil || !bytes.Equal(got, user) || len(entries) != 1 {
+			t.Fatalf("commit=%t err=%v read=%v entries_err=%v body=%s entries=%v", committed, err, readErr, entriesErr, got, entries)
+		}
+	})
+	t.Run("success preserves supported permission bits", func(t *testing.T) {
 		root := t.TempDir()
 		path := filepath.Join(root, "plugin.json")
 		original := []byte(`{"b":2,"a":1}`)

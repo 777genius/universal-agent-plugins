@@ -123,6 +123,14 @@ clients activate automatically, while others finish as prepared and print a
 manual activation step. OAuth and consent prompts stay visible and
 user-controlled; cancelling one preserves the package and reports
 authentication as pending or cancelled.
+
+The same boundary applies to current-source `author normalize --write`: keep
+the selected JSON document free of external writers until validation and
+rollback cleanup finish. The command preserves the permission bits represented
+by Go's `FileMode.Perm`; it does not claim to preserve ownership, ACLs, extended
+attributes, file flags, or timestamps. Detected identity or content changes fail
+closed, but Phase 8A does not claim linearizable compare-and-swap protection
+against an undetected non-cooperating writer in the final replacement window.
 Kiro skills are installed directly into the documented global skills path.
 For packages with MCP servers, agentplugins atomically merges only its owned
 entries into Kiro's global `mcp.json`, preserving unrelated user configuration,

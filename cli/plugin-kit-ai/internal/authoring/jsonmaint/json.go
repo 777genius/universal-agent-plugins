@@ -1,5 +1,5 @@
 // Package jsonmaint provides bounded, lossless-value JSON normalization and
-// digest-bound replacement for one standard package document.
+// digest-checked replacement for one standard package document.
 package jsonmaint
 
 import (
@@ -31,7 +31,8 @@ type Plan struct {
 func (p Plan) Changed() bool { return !bytes.Equal(p.before, p.after) }
 
 // Verify binds a plan to the current regular, non-symlink document without
-// changing it. Apply repeats this check immediately before replacement.
+// changing it. Apply repeats this check immediately before replacement. The
+// caller must keep non-cooperating writers quiescent while Apply is running.
 func Verify(rootPath string, plan Plan) error {
 	if !filepath.IsAbs(rootPath) || filepath.Clean(rootPath) != rootPath {
 		return fail("arguments_invalid")
@@ -167,6 +168,12 @@ type ApplyOptions struct {
 // Apply replaces one selected document. The atomic exchange keeps the old
 // inode recoverable until full-package validation succeeds.
 func Apply(ctx context.Context, plan Plan, opts ApplyOptions) (committed bool, err error) {
+	return apply(ctx, plan, opts, nil)
+}
+
+// apply's final callback is a deterministic test seam for the documented
+// non-cooperating-writer window. Production has no callback or public hook.
+func apply(ctx context.Context, plan Plan, opts ApplyOptions, beforeReplace func()) (committed bool, err error) {
 	if ctx == nil || opts.Validate == nil || !filepath.IsAbs(opts.Root) || filepath.Clean(opts.Root) != opts.Root {
 		return false, fail("arguments_invalid")
 	}
@@ -230,6 +237,9 @@ func Apply(ctx context.Context, plan Plan, opts ApplyOptions) (committed bool, e
 	}
 	if err = ctx.Err(); err != nil {
 		return false, err
+	}
+	if beforeReplace != nil {
+		beforeReplace()
 	}
 	oldPath, replaceErr := replaceOwned(parent, opts.Root, temp, plan.Document)
 	if replaceErr != nil {

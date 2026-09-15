@@ -76,6 +76,46 @@ func TestClaudeBuildDeterministicSkipsAndRedacts(t *testing.T) {
 	}
 }
 
+func TestClaudeBuildRejectsCredentialBearingArgumentsAndRedactsReport(t *testing.T) {
+	variants := []string{
+		`"--api-key=sk_live_direct"`,
+		`"--api-key","opaque-value"`,
+		`"--api_key=opaque-value"`,
+		`"--access-key","opaque-value"`,
+		`"--token","opaque-value"`,
+		`"--header","Authorization: Bearer opaque-value"`,
+		`"-H","X-API-Key: opaque-value"`,
+		`"API_KEY=opaque-value"`,
+		`"--env","CREDENTIAL=opaque-value"`,
+		`"sk_live_positional"`,
+	}
+	for i, args := range variants {
+		t.Run(string(rune('a'+i)), func(t *testing.T) {
+			sensitiveName := "unsafe-credential-server"
+			source := writeSource(t, `{"mcpServers":{"safe":{"command":"node","args":["relative.js","--quiet"]},"`+sensitiveName+`":{"command":"node","args":[`+args+`]}}}`)
+			plan, err := Build(context.Background(), source, "claude", "imported-plugin", "Imported package.")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if plan.SafeServers != 1 || len(plan.SkippedServers) != 1 {
+				t.Fatalf("safe=%d skipped=%+v", plan.SafeServers, plan.SkippedServers)
+			}
+			public, err := json.Marshal(plan)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if bytes.Contains(public, []byte("opaque-value")) || bytes.Contains(public, []byte("sk_live")) || bytes.Contains(public, []byte(sensitiveName)) {
+				t.Fatalf("credential or native identity disclosed: %s", public)
+			}
+			for _, file := range plan.Package.Files() {
+				if bytes.Contains(file.Bytes, []byte("opaque-value")) || bytes.Contains(file.Bytes, []byte("sk_live")) || bytes.Contains(file.Bytes, []byte(sensitiveName)) {
+					t.Fatalf("credential-bearing server copied to %s: %s", file.Path, file.Bytes)
+				}
+			}
+		})
+	}
+}
+
 func TestClaudeRejectsMalformedDuplicateSymlinkAndChangedSource(t *testing.T) {
 	for _, body := range []string{`// jsonc\n{"mcpServers":{}}`, `{"mcpServers":{"x":{"command":"node","args":{"bad":true}}},"mcpServers":{}}`, `[]`} {
 		source := writeSource(t, body)
