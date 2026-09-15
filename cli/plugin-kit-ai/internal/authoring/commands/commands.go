@@ -387,9 +387,13 @@ func (a App) command(name string, capture func(report.Report), cycleOutput func(
 					r.AddError(code, action)
 					return r, planErr
 				}
-				defer plan.Close()
 				if req.dryRun {
-					return r, nil
+					closeErr := plan.Close()
+					if closeErr != nil {
+						code, action := bootstrapFailure(closeErr)
+						r.AddError(code, action)
+					}
+					return r, closeErr
 				}
 				committed, applyErr := (authorbootstrap.Service{Runner: a.BootstrapRunner}).Apply(ctx, req.root, plan)
 				r.Committed = committed

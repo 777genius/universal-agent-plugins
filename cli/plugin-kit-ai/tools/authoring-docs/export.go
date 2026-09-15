@@ -70,7 +70,7 @@ func trees() ([]*cobra.Command, error) {
 	if err != nil {
 		return nil, err
 	}
-	agentApp := commands.App{PublicContract: true, MCPRuntime: true, Bootstrap: true, JSONMaintenance: true, Release: &commands.ReleaseOptions{}}
+	agentApp := commands.App{PublicContract: true, MCPRuntime: true, JSONMaintenance: true, Release: &commands.ReleaseOptions{}}
 	installer, _, _, err := agentApp.ReleaseSelection(nil, func(factories ...authoringcli.Factory) (*cobra.Command, error) {
 		root := agentpluginscli.NewRoot(agentpluginscli.App{})
 		author, err := authoringcli.NewReleaseAuthorCommand(factories...)
@@ -214,7 +214,7 @@ func exportTrees(checkout, sha, out string, load func() ([]*cobra.Command, error
 // Hash the actual deterministic rendered facts, with fixed provenance rather
 // than caller SHA/host paths. Length framing and sorted names bind every byte.
 // This is a reviewed golden, never regenerated automatically during export.
-const reviewedProjection = "6c3f74735d593a0a584ecb1cc4f0fde440a12dab915f9be97557c113dcb7a668"
+const reviewedProjection = "63e299ed76263369094e744c5088df02f2984eddaf4503a88b2a2ad6e1a23991"
 
 func projectionFingerprint(roots []*cobra.Command) (string, error) {
 	files, err := render("SOURCE_SHA", nil, roots)

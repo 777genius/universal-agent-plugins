@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/777genius/plugin-kit-ai/cli/internal/authoring/bootstrap"
+	"golang.org/x/sys/unix"
 )
 
 const fakeNPMConfigName = "fake-npm-config.json"
@@ -36,6 +37,7 @@ type fakeNPMConfig struct {
 
 type linuxProcessIdentity struct {
 	PID       int
+	ParentPID int
 	StartTime uint64
 	Session   int
 	Zombie    bool
@@ -155,93 +157,128 @@ func TestDefaultRunnerKeepsCapturedStagingAndContainsSetsidDescendant(t *testing
 	t.Setenv("PATH", bin)
 
 	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	t.Cleanup(cancel)
 	done := make(chan error, 1)
 	go func() {
 		_, applyErr := (bootstrap.Service{}).Apply(ctx, root, plan)
 		done <- applyErr
 	}()
+	var manager, supervisor, setsid linuxProcessIdentity
+	var applyErr error
+	applyFinished := false
+	waitApply := func(timeout time.Duration) error {
+		if applyFinished {
+			return applyErr
+		}
+		applyErr = waitForApply(done, timeout)
+		applyFinished = !errors.Is(applyErr, errWaitForApplyTimeout)
+		return applyErr
+	}
+	tracked := func() []linuxProcessIdentity {
+		for path, identity := range map[string]*linuxProcessIdentity{
+			config.Replaced: &manager, config.SetsidIdentity: &setsid,
+		} {
+			if identity.PID == 0 {
+				if body, err := os.ReadFile(path); err == nil {
+					_ = json.Unmarshal(body, identity)
+				}
+			}
+		}
+		if supervisor.PID == 0 && manager.ParentPID > 1 {
+			supervisor, _ = readLinuxProcessIdentity(manager.ParentPID)
+		}
+		return []linuxProcessIdentity{setsid, manager, supervisor}
+	}
+	// This cleanup is independent of the behavior under test. On every failure
+	// path it cancels Apply, waits for its owned reap, then uses stable pidfds to
+	// stop any exact captured identity that production cleanup left behind.
+	t.Cleanup(func() {
+		cancel()
+		if !applyFinished {
+			if err := waitApply(5 * time.Second); errors.Is(err, errWaitForApplyTimeout) {
+				for _, identity := range tracked() {
+					if stopErr := stopLinuxProcessIdentity(identity, time.Second); stopErr != nil {
+						t.Errorf("fallback cleanup: %v", stopErr)
+					}
+				}
+				if err = waitApply(5 * time.Second); errors.Is(err, errWaitForApplyTimeout) {
+					t.Errorf("fallback cleanup: %v", err)
+				}
+			}
+		}
+		if applyFinished {
+			if err := cleanCancellationError(applyErr); err != nil {
+				t.Errorf("fallback cancellation result: %v", err)
+			}
+		}
+		for _, identity := range tracked() {
+			if err := stopLinuxProcessIdentity(identity, time.Second); err != nil {
+				t.Errorf("fallback cleanup: %v", err)
+			}
+		}
+	})
 
 	replacedBody, err := waitForFile(config.Replaced, 5*time.Second)
 	if err != nil {
-		cancel()
-		_ = waitForApply(done, 5*time.Second)
 		t.Fatal(err)
 	}
-	var manager linuxProcessIdentity
 	if err := json.Unmarshal(replacedBody, &manager); err != nil {
-		cancel()
-		_ = waitForApply(done, 5*time.Second)
 		t.Fatal(err)
+	}
+	if manager.ParentPID <= 1 || manager.ParentPID == config.OwnerPID {
+		t.Fatalf("fake npm did not report its isolated supervisor: manager=%+v", manager)
+	}
+	supervisor, err = readLinuxProcessIdentity(manager.ParentPID)
+	if err != nil || supervisor.Zombie {
+		t.Fatalf("isolated supervisor was not alive before cancellation: identity=%+v err=%v", supervisor, err)
 	}
 	if current, identityErr := readLinuxProcessIdentity(manager.PID); identityErr != nil || current.StartTime != manager.StartTime || current.Zombie {
-		cancel()
-		_ = waitForApply(done, 5*time.Second)
 		t.Fatalf("fake npm was not alive at the replacement barrier: current=%+v err=%v", current, identityErr)
 	}
 	replacementPackage, err := os.ReadFile(filepath.Join(root, "package.json"))
 	if err != nil || bytes.Equal(replacementPackage, wantPackage) {
-		cancel()
-		_ = waitForApply(done, 5*time.Second)
 		t.Fatalf("public package root was not replaced before manager checks: package=%q err=%v", replacementPackage, err)
 	}
 	if movedPackage, readErr := os.ReadFile(filepath.Join(config.MovedRoot, "package.json")); readErr != nil || !bytes.Equal(movedPackage, wantPackage) {
-		cancel()
-		_ = waitForApply(done, 5*time.Second)
 		t.Fatalf("captured package root after replacement: package=%q err=%v", movedPackage, readErr)
 	}
 	if err := atomicWrite(config.Continue, []byte("continue")); err != nil {
-		cancel()
-		_ = waitForApply(done, 5*time.Second)
 		t.Fatal(err)
 	}
 
 	readyBody, err := waitForFile(config.Ready, 5*time.Second)
 	if err != nil {
-		cancel()
-		_ = waitForApply(done, 5*time.Second)
 		t.Fatal(err)
 	}
 	var readyManager linuxProcessIdentity
-	if err := json.Unmarshal(readyBody, &readyManager); err != nil || readyManager.PID != manager.PID || readyManager.StartTime != manager.StartTime {
-		cancel()
-		_ = waitForApply(done, 5*time.Second)
+	if err := json.Unmarshal(readyBody, &readyManager); err != nil || readyManager.PID != manager.PID || readyManager.ParentPID != supervisor.PID || readyManager.StartTime != manager.StartTime {
 		t.Fatalf("manager identity changed before cancellation: ready=%+v err=%v", readyManager, err)
 	}
+	if current, identityErr := readLinuxProcessIdentity(supervisor.PID); identityErr != nil || current.StartTime != supervisor.StartTime || current.Zombie {
+		t.Fatalf("isolated supervisor did not stay alive before cancellation: current=%+v err=%v", current, identityErr)
+	}
 	if current, identityErr := readLinuxProcessIdentity(manager.PID); identityErr != nil || current.StartTime != manager.StartTime || current.Zombie {
-		cancel()
-		_ = waitForApply(done, 5*time.Second)
 		t.Fatalf("fake npm did not stay alive across grandchild checks: current=%+v err=%v", current, identityErr)
 	}
 	if marker, readErr := os.ReadFile(config.GrandchildChecks); readErr != nil || string(marker) != "ok" {
-		cancel()
-		_ = waitForApply(done, 5*time.Second)
 		t.Fatalf("grandchild did not repeat captured-staging checks: marker=%q err=%v", marker, readErr)
 	}
 	setsidBody, err := os.ReadFile(config.SetsidIdentity)
 	if err != nil {
-		cancel()
-		_ = waitForApply(done, 5*time.Second)
 		t.Fatal(err)
 	}
-	var setsid linuxProcessIdentity
 	if err := json.Unmarshal(setsidBody, &setsid); err != nil || setsid.PID == 0 || setsid.Session != setsid.PID {
-		cancel()
-		_ = waitForApply(done, 5*time.Second)
 		t.Fatalf("immediate descendant did not establish a new session: identity=%+v err=%v", setsid, err)
 	}
 	if current, identityErr := readLinuxProcessIdentity(setsid.PID); identityErr != nil || current.StartTime != setsid.StartTime || current.Session != setsid.PID || current.Zombie {
-		cancel()
-		_ = waitForApply(done, 5*time.Second)
 		t.Fatalf("setsid descendant was not alive at the cancellation barrier: current=%+v err=%v", current, identityErr)
 	}
 
 	cancel()
-	applyErr := waitForApply(done, 5*time.Second)
-	if errorCode(applyErr) != "bootstrap_process_failed" || !errors.Is(applyErr, context.Canceled) {
-		t.Fatalf("cancellation error = %v", applyErr)
+	if err := cleanCancellationError(waitApply(5 * time.Second)); err != nil {
+		t.Fatal(err)
 	}
-	for _, identity := range []linuxProcessIdentity{manager, setsid} {
+	for _, identity := range []linuxProcessIdentity{supervisor, manager, setsid} {
 		if err := waitForProcessIdentityStopped(identity, time.Second); err != nil {
 			t.Error(err)
 		}
@@ -614,6 +651,8 @@ func waitForFile(path string, timeout time.Duration) ([]byte, error) {
 	}
 }
 
+var errWaitForApplyTimeout = errors.New("timed out waiting for bootstrap Apply")
+
 func waitForApply(done <-chan error, timeout time.Duration) error {
 	timer := time.NewTimer(timeout)
 	defer timer.Stop()
@@ -621,8 +660,23 @@ func waitForApply(done <-chan error, timeout time.Duration) error {
 	case err := <-done:
 		return err
 	case <-timer.C:
-		return errors.New("timed out waiting for bootstrap Apply")
+		return errWaitForApplyTimeout
 	}
+}
+
+func cleanCancellationError(err error) error {
+	if errorCode(err) != "bootstrap_process_failed" || !errors.Is(err, context.Canceled) {
+		return fmt.Errorf("cancellation error = %v", err)
+	}
+	for _, diagnostic := range []string{
+		"cleanup deadline",
+		"sole reaper retains ownership until process exit",
+	} {
+		if strings.Contains(err.Error(), diagnostic) {
+			return fmt.Errorf("cancellation reported incomplete containment or reap: %v", err)
+		}
+	}
+	return nil
 }
 
 func readLinuxProcessIdentity(pid int) (linuxProcessIdentity, error) {
@@ -638,6 +692,10 @@ func readLinuxProcessIdentity(pid int) (linuxProcessIdentity, error) {
 	if len(fields) < 20 {
 		return linuxProcessIdentity{}, errors.New("short Linux process stat")
 	}
+	parentPID, err := strconv.Atoi(fields[1])
+	if err != nil {
+		return linuxProcessIdentity{}, err
+	}
 	session, err := strconv.Atoi(fields[3])
 	if err != nil {
 		return linuxProcessIdentity{}, err
@@ -646,10 +704,13 @@ func readLinuxProcessIdentity(pid int) (linuxProcessIdentity, error) {
 	if err != nil {
 		return linuxProcessIdentity{}, err
 	}
-	return linuxProcessIdentity{PID: pid, StartTime: startTime, Session: session, Zombie: fields[0] == "Z"}, nil
+	return linuxProcessIdentity{PID: pid, ParentPID: parentPID, StartTime: startTime, Session: session, Zombie: fields[0] == "Z"}, nil
 }
 
 func waitForProcessIdentityStopped(want linuxProcessIdentity, timeout time.Duration) error {
+	if want.PID == 0 {
+		return nil
+	}
 	deadline := time.NewTimer(timeout)
 	defer deadline.Stop()
 	ticker := time.NewTicker(time.Millisecond)
@@ -668,4 +729,29 @@ func waitForProcessIdentityStopped(want linuxProcessIdentity, timeout time.Durat
 			return fmt.Errorf("process %d with start time %d remained after cancellation (current=%+v)", want.PID, want.StartTime, current)
 		}
 	}
+}
+
+func stopLinuxProcessIdentity(want linuxProcessIdentity, timeout time.Duration) error {
+	if want.PID == 0 {
+		return nil
+	}
+	pidfd, err := unix.PidfdOpen(want.PID, 0)
+	if errors.Is(err, syscall.ESRCH) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("open stable cleanup handle for process %d: %w", want.PID, err)
+	}
+	defer unix.Close(pidfd)
+	current, err := readLinuxProcessIdentity(want.PID)
+	if errors.Is(err, os.ErrNotExist) || (err == nil && (current.StartTime != want.StartTime || current.Zombie)) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("verify cleanup identity for process %d: %w", want.PID, err)
+	}
+	if err := unix.PidfdSendSignal(pidfd, unix.SIGKILL, nil, 0); err != nil && !errors.Is(err, syscall.ESRCH) {
+		return fmt.Errorf("stop exact cleanup identity for process %d: %w", want.PID, err)
+	}
+	return waitForProcessIdentityStopped(want, timeout)
 }
