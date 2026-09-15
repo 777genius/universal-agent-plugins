@@ -67,6 +67,38 @@ type devPending struct {
 	last    time.Time
 }
 
+type devFailurePending struct {
+	project project.Result
+	err     error
+	code    string
+	set     bool
+	first   time.Time
+	last    time.Time
+}
+
+func (pending *devFailurePending) observe(next project.Result, err error, code string, now time.Time) {
+	pending.project = next
+	pending.err = err
+	if !pending.set {
+		pending.set = true
+		pending.first = now
+		pending.last = now
+	} else if pending.code != code {
+		pending.last = now
+	}
+	pending.code = code
+}
+
+func (pending devFailurePending) ready(now time.Time) bool {
+	return pending.set && (now.Sub(pending.last) >= devDebounce || now.Sub(pending.first) >= devMaxCoalesce)
+}
+
+func (pending *devFailurePending) take() (project.Result, error, string) {
+	next, err, code := pending.project, pending.err, pending.code
+	*pending = devFailurePending{}
+	return next, err, code
+}
+
 func (pending *devPending) observe(next project.Result, now time.Time) {
 	pending.project = next
 	pending.last = now
@@ -185,6 +217,7 @@ func (a App) dev(ctx context.Context, req request) (r report.Report, err error) 
 	ticker := time.NewTicker(devPollInterval)
 	defer ticker.Stop()
 	var pending devPending
+	var failedPending devFailurePending
 	for {
 		select {
 		case result := <-done:
@@ -224,7 +257,13 @@ func (a App) dev(ctx context.Context, req request) (r report.Report, err error) 
 				if code == "runtime_failed" && failed.Error != nil {
 					code = failed.Error.Code
 				}
+				failedPending.observe(next, readErr, code, now)
+				if !failedPending.ready(now) {
+					continue
+				}
+				next, readErr, code = failedPending.take()
 				if code != failureCode {
+					failed, failedErr = readFailure(next, readErr)
 					failureCode = code
 					if outputErr := emit(failed, failedErr); outputErr != nil {
 						return r, outputErr
@@ -232,6 +271,7 @@ func (a App) dev(ctx context.Context, req request) (r report.Report, err error) 
 				}
 				continue
 			}
+			failedPending = devFailurePending{}
 			failureCode = ""
 			if last == "" {
 				last = next.Input.Identity.TreeDigest

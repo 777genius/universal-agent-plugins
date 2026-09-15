@@ -240,6 +240,13 @@ func TestContinuousDevMalformedEditJoinsLongRunningCycleBeforeReport(t *testing.
 	writeDone := make(chan error, 1)
 	go func() {
 		<-cycleStarted
+		if err := os.WriteFile(plugin, nil, 0600); err != nil {
+			writeDone <- err
+			return
+		}
+		// Model an editor's non-atomic truncate/write sequence long enough for
+		// the watcher to observe the transient empty file.
+		time.Sleep(2 * devPollInterval)
 		writeDone <- os.WriteFile(plugin, []byte(`{"broken":`), 0600)
 	}()
 
