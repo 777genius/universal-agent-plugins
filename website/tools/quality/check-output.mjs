@@ -36,6 +36,13 @@ export const currentSourceBody = (body) => stripDelimitedBlocks(
   "locale-historical-source:end -->"
 );
 
+export function currentSourceErrors(body, relative) {
+  const current = currentSourceBody(body);
+  return /Milestone A|\bplugin-kit-ai (?:install|init|doctor|generate|bootstrap|validate)\b|\/legacy\/v1\//i.test(current)
+    ? [`Current public source contains retired authoring copy: ${relative}`]
+    : [];
+}
+
 function stripHtmlComments(html) {
   return stripDelimitedBlocks(html, "<!--", "-->");
 }
@@ -119,8 +126,7 @@ export async function checkOutput() {
   for (const file of currentSources) {
     const relative = path.relative(runtimeRoot, file).replaceAll("\\", "/");
     if (isRetiredArchive(relative)) errors.push(`Retired source entered the assembled site: ${relative}`);
-    const body = await fs.readFile(file, "utf8");
-    if (/Milestone A|\bplugin-kit-ai (?:install|init|doctor|generate|bootstrap|validate)\b|\/legacy\/v1\//i.test(body)) errors.push(`Current public source contains retired authoring copy: ${relative}`);
+    errors.push(...currentSourceErrors(await fs.readFile(file, "utf8"), relative));
   }
   if (errors.length) throw new Error(errors.join("\n"));
   console.log(`Public output passed: ${htmlFiles.length} HTML files, current Agent Plugins routes only.`);

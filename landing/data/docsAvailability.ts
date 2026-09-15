@@ -3,7 +3,10 @@ export const docsAvailability = {
   home: '',
   quickstart: 'guide/quickstart.html',
   build: 'build/',
-  supportBoundary: 'reference/support-boundary.html',
+  // The former standalone support-boundary page is preserved historically and
+  // is no longer a published route. The maintained build journey carries the
+  // current support limits.
+  supportBoundary: 'build/',
   customLogicGuide: 'guide/build-custom-plugin-logic.html',
 } as const;
 export type DocsPageId = keyof typeof docsAvailability;

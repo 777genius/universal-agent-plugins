@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { currentSourceBody, quickstartClaims, quickstartErrors } from "./check-output.mjs";
+import { currentSourceBody, currentSourceErrors, quickstartClaims, quickstartErrors } from "./check-output.mjs";
 
 const highlight = (command) => `<pre><code><span class="line">${command.split(/(?= )/).map((token) => `<span>${token}</span>`).join("")}</span></code></pre>`;
 const command = "npx universal-agent-plugins add context7";
@@ -23,4 +23,8 @@ test("retired authoring copy is rejected even inside highlighted code", () => {
 test("embedded historical locale snapshots are excluded from current-source scanning", () => {
   const source = `current copy\n<!-- locale-historical-source:start\nplugin-kit-ai generate .\nlocale-historical-source:end -->`;
   assert.equal(currentSourceBody(source), "current copy\n");
+  assert.deepEqual(currentSourceErrors(source, "ru/guide/quickstart.md"), []);
+  assert.deepEqual(currentSourceErrors("plugin-kit-ai generate .", "ru/guide/quickstart.md"), [
+    "Current public source contains retired authoring copy: ru/guide/quickstart.md"
+  ]);
 });
