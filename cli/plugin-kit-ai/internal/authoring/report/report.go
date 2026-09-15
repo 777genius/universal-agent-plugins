@@ -128,6 +128,7 @@ type Report struct {
 	Release       Assessment                    `json:"release_policy"`
 	Runtime       Assessment                    `json:"runtime_evidence"`
 	RuntimeDetail *RuntimeDetail                `json:"runtime_details,omitempty"`
+	Bootstrap     *BootstrapDetail              `json:"bootstrap,omitempty"`
 	Findings      []Finding                     `json:"findings"`
 	Components    []Component                   `json:"components"`
 	Checks        []Check                       `json:"checks"`
@@ -136,6 +137,13 @@ type Report struct {
 	JSONDocument  *JSONDocument                 `json:"json_document,omitempty"`
 	NativeImport  *NativeImport                 `json:"native_import,omitempty"`
 	Error         *Error                        `json:"error,omitempty"`
+}
+
+type BootstrapDetail struct {
+	Runtime string   `json:"runtime"`
+	Manager string   `json:"manager"`
+	Argv    []string `json:"argv"`
+	Planned bool     `json:"planned"`
 }
 
 func (r *Report) SetRuntime(transport string, initialized, listed, called bool, toolCount int, cleanup bool, code string) {

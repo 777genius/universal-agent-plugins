@@ -68,6 +68,15 @@ current `main` in its own dependency-safe PR. The older detailed design below is
 retained as decision history and must not be used to restore retired commands,
 packages, migration work, or release channels.
 
+> **Owner hold (2026-09-15): Phases 9-11 are a separate future roadmap and are
+> not part of the current delivery. Do not implement, continue, or merge work
+> from these phases until the owner gives a new explicit command.** The current
+> delivery ends with Phase 7, the Agent Plugins public-doc refresh, an
+> `agentplugins` CLI/package release, and disposable public-channel E2E. Releasing
+> the CLI package is not Phase 10's plugin-publication command. Any partial Phase
+> 9 prototype is non-authoritative and must remain unmerged while this hold is
+> active.
+
 1. **Phase 7 - runtime loop (implemented in source):** explicit runtime testing,
    `dev`, and safe lockfile-based `bootstrap` for standard `plugin.json` packages.
 2. **Phase 8A - JSON maintenance (implemented in source):** deterministic
@@ -75,11 +84,11 @@ packages, migration work, or release channels.
    Claude MCP import to an absent standard package. No YAML reader, migration
    command, compatibility shim, profile discovery, or additional native client
    is in scope.
-3. **Phase 9 - portable outputs:** add disposable client projection previews,
+3. **Phase 9 - portable outputs (owner hold):** add disposable client projection previews,
    deterministic export, and the minimum useful bundle inspection/fetch flow.
-4. **Phase 10 - publication:** add one explicit publish flow and Directory
+4. **Phase 10 - publication (owner hold):** add one explicit publish flow and Directory
    submission with provenance, idempotency, and rollback evidence.
-5. **Phase 11 - dependency isolation:** detach legacy wiring from the standard
+5. **Phase 11 - dependency isolation (owner hold):** detach legacy wiring from the standard
    dependency graph while preserving source, tests, fixtures, and design ideas.
    Removal still requires a separate capability inventory and owner decision.
 
@@ -2103,6 +2112,30 @@ package.
 > a filesystem or network sandbox. Do not mark Phase 7 released until the candidate
 > is merged, qualified, and shipped through the executable release gate.
 
+**Current source status (2026-09-15):** The remaining bootstrap slice is an
+unreleased candidate implemented only as `agentplugins author bootstrap [path]`.
+It recognizes the
+exact generated standard Node stdio template from its public `plugin.json`,
+`mcp.json`, `package.json`, and checked-in `package-lock.json`, then uses staged
+`npm ci --ignore-scripts --no-audit --no-fund` with operation-local npm homes.
+`--dry-run` reports that plan without mutation. Competing manager/runtime files,
+custom layouts, missing or changed locks, and existing dependency output fail
+closed. Mutating apply is supported only on Linux hosts where the supervisor's
+`/proc/<pid>/fd` view proves a handle-bound execution directory; the manager
+working directory and its isolated home/cache/temp paths stay anchored to that
+captured staging directory across replacement of the public package-root name.
+Apply fails before staging or process execution on Darwin because the current
+process group adapter cannot contain detached `setsid` descendants. It also
+fails closed on Windows at this checkpoint because a handle-bound manager
+working directory has not been proven there. Plan and `--dry-run` remain
+useful on both platforms.
+The native Windows authoring matrix exercises that fail-closed contract; the
+Darwin-specific test is retained for a native Darwin run and a cross-build is
+not counted as runtime evidence. Node is the current generated-template
+checkpoint. Python and Go remain future work only if the standard generator adds
+recognized locked templates for them. This source status does not qualify or
+release Phase 7 and does not add a legacy CLI or YAML path.
+
 ### Summary
 
 Add process and dependency mutation only after the offline authoring MVP is
@@ -2138,9 +2171,14 @@ released and stable.
 - network and tool calls denied by default;
 - empty credential environment;
 - watcher debounce/cancellation and single-project lock;
-- Node/Python/Go bootstrap only in new isolated test projects;
+- Node bootstrap only in new isolated test projects for this exact generated-
+  template checkpoint; Python and Go are not implemented;
 - bootstrap uses disposable package-manager homes and never touches the real
   user cache or credential files;
+- Linux runtime tests exercise handle-bound launch, final-window root
+  replacement, sanitized environment, cancellation, and detached-descendant
+  cleanup; the existing native Windows matrix executes its pre-process refusal,
+  while the Darwin-specific refusal test still requires a native Darwin run;
 - dependency failure leaves source files and lockfiles unchanged unless their
   exact planned update was explicitly selected.
 

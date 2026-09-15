@@ -868,7 +868,11 @@ func TestNativeBinaryVerticalSlice(t *testing.T) {
 	}
 	for i := range homes {
 		for _, args := range [][]string{{"test", roots[i], "--runtime"}, {"bootstrap", roots[i]}, {"compat", roots[i]}} {
-			if _, code, b := run(i, args...); code != 2 {
+			want := 2
+			if i == 1 && args[0] == "bootstrap" {
+				want = 1 // Public agentplugins enters the bounded recognizer; this fixture is unsupported.
+			}
+			if _, code, b := run(i, args...); code != want {
 				t.Fatalf("unsupported action accepted: %s", b)
 			}
 		}

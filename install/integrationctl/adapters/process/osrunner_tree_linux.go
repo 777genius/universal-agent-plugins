@@ -48,6 +48,12 @@ const linuxDescendantScanInterval = 25 * time.Millisecond
 const linuxStartupDescendantScanInterval = time.Millisecond
 const linuxStartupDescendantScanWindow = 250 * time.Millisecond
 
+// An ordinary-command cleanup has one processReapTimeout window. Bound each
+// procfs traversal to that same window and to the number of processes that can
+// be visited at the startup scan cadence, so a fork storm cannot keep the
+// supervisor inside one breadth-first scan beyond its cleanup boundary.
+const linuxSupervisorTraversalMaxVisits = int(processReapTimeout / linuxStartupDescendantScanInterval)
+
 const linuxOrdinarySupervisorEnvironment = "PLUGIN_KIT_AI_ORDINARY_PROCESS_SUPERVISOR=1"
 
 type linuxOrdinarySupervisorSpec struct {
@@ -296,7 +302,6 @@ func superviseLinuxOrdinaryChildren(leaderPID int, requested <-chan struct{}, gr
 	emptyBoundary := linuxQuiescentBoundary{required: 3}
 	groupSignaled := false
 	for {
-		live, inspectErr := linuxSupervisorLiveDescendants(os.Getpid())
 		if !waitComplete {
 			var info unix.Siginfo
 			if err := unix.Waitid(unix.P_PID, leaderPID, &info, unix.WEXITED|unix.WNOWAIT|unix.WNOHANG, nil); err != nil {
@@ -314,6 +319,11 @@ func superviseLinuxOrdinaryChildren(leaderPID int, requested <-chan struct{}, gr
 			}
 		default:
 		}
+		traversalDeadline := time.Now().Add(processReapTimeout)
+		if forced && !deadline.IsZero() && deadline.Before(traversalDeadline) {
+			traversalDeadline = deadline
+		}
+		live, inspectErr := linuxSupervisorLiveDescendants(os.Getpid(), traversalDeadline)
 		if waitComplete && live > 0 && !deadline.IsZero() && time.Now().After(deadline) && !forced {
 			forced = true
 			deadline = time.Now().Add(processReapTimeout)
@@ -328,7 +338,7 @@ func superviseLinuxOrdinaryChildren(leaderPID int, requested <-chan struct{}, gr
 					cleanupErr = errors.Join(cleanupErr, fmt.Errorf("terminate supervised command group: %w", err))
 				}
 			}
-			cleanupErr = errors.Join(cleanupErr, killLinuxSupervisorDescendants(os.Getpid()))
+			cleanupErr = errors.Join(cleanupErr, killLinuxSupervisorDescendants(os.Getpid(), traversalDeadline))
 		}
 		// A single non-atomic procfs traversal can race a fork/reparent. Require
 		// three error-free, time-separated empty snapshots after leader exit.
@@ -371,72 +381,146 @@ func (boundary *linuxQuiescentBoundary) observe(empty bool, scanErr error) bool 
 	return boundary.passes >= boundary.required
 }
 
-func linuxSupervisorLiveDescendants(root int) (int, error) {
-	identities, err := linuxDescendantIdentities(root)
+func linuxSupervisorLiveDescendants(root int, deadline time.Time) (int, error) {
+	identities, err := linuxDescendantIdentities(root, deadline)
+	defer closeLinuxSupervisorDescendants(identities)
 	if err != nil {
 		return 0, err
 	}
 	live := 0
-	for _, identity := range identities {
-		if identity.zombie {
-			continue
+	for pid, tracked := range identities {
+		isLive, inspectErr := liveLinuxTrackedProcess(pid, tracked.process)
+		if inspectErr != nil {
+			err = errors.Join(err, fmt.Errorf("classify stable supervisor descendant %d: %w", pid, inspectErr))
+		} else if isLive {
+			live++
 		}
-		live++
 	}
-	return live, nil
+	return live, err
 }
 
-func killLinuxSupervisorDescendants(root int) error {
-	identities, err := linuxDescendantIdentities(root)
+func killLinuxSupervisorDescendants(root int, deadline time.Time) error {
+	identities, err := linuxDescendantIdentities(root, deadline)
+	defer closeLinuxSupervisorDescendants(identities)
 	var resultErr = err
-	for pid, identity := range identities {
-		if identity.zombie {
+	for pid, tracked := range identities {
+		live, inspectErr := liveLinuxTrackedProcess(pid, tracked.process)
+		if inspectErr != nil {
+			resultErr = errors.Join(resultErr, fmt.Errorf("classify stable supervisor descendant %d before termination: %w", pid, inspectErr))
 			continue
 		}
-		pidfd, err := unix.PidfdOpen(pid, 0)
-		if err != nil {
-			if !errors.Is(err, syscall.ESRCH) {
-				resultErr = errors.Join(resultErr, fmt.Errorf("open stable supervisor child handle for %d: %w", pid, err))
-			}
-			continue
-		}
-		current, err := readLinuxProcessIdentity(pid)
-		if err == nil && current.startTime == identity.startTime && !current.zombie {
-			if err := unix.PidfdSendSignal(pidfd, unix.SIGKILL, nil, 0); err != nil && !errors.Is(err, syscall.ESRCH) {
+		if live {
+			if err := unix.PidfdSendSignal(tracked.process.pidfd, unix.SIGKILL, nil, 0); err != nil && !errors.Is(err, syscall.ESRCH) {
 				resultErr = errors.Join(resultErr, fmt.Errorf("terminate stable supervisor child %d: %w", pid, err))
 			}
 		}
-		_ = unix.Close(pidfd)
 	}
 	return resultErr
 }
 
-func linuxDescendantIdentities(root int) (map[int]linuxProcessIdentity, error) {
-	result := make(map[int]linuxProcessIdentity)
+type linuxSupervisorDescendant struct {
+	process linuxTrackedProcess
+}
+
+type linuxDescendantTraversalOps struct {
+	directChildren func(int, time.Time, int) (map[int]uint64, error)
+	readIdentity   func(int) (linuxProcessIdentity, error)
+	openPidfd      func(int, int) (int, error)
+	closePidfd     func(int) error
+}
+
+var defaultLinuxDescendantTraversalOps = linuxDescendantTraversalOps{
+	directChildren: linuxDirectChildIdentities,
+	readIdentity:   readLinuxProcessIdentity,
+	openPidfd:      unix.PidfdOpen,
+	closePidfd:     unix.Close,
+}
+
+func closeLinuxSupervisorDescendants(descendants map[int]linuxSupervisorDescendant) {
+	for _, descendant := range descendants {
+		_ = unix.Close(descendant.process.pidfd)
+	}
+}
+
+func linuxDescendantIdentities(root int, deadline time.Time) (map[int]linuxSupervisorDescendant, error) {
+	return linuxDescendantIdentitiesWith(root, deadline, linuxSupervisorTraversalMaxVisits, defaultLinuxDescendantTraversalOps)
+}
+
+func linuxDescendantIdentitiesWith(root int, deadline time.Time, maxVisits int, ops linuxDescendantTraversalOps) (map[int]linuxSupervisorDescendant, error) {
+	result := make(map[int]linuxSupervisorDescendant)
 	queue := []int{root}
+	visited := map[int]struct{}{root: {}}
 	for len(queue) > 0 {
+		if !time.Now().Before(deadline) {
+			return result, fmt.Errorf("Linux supervisor descendant traversal exceeded cleanup deadline after %d visit(s)", len(visited))
+		}
 		parent := queue[0]
 		queue = queue[1:]
-		children, err := linuxDirectChildIdentities(parent)
-		if err != nil {
-			if linuxProcessGone(err) {
+		children, childrenErr := ops.directChildren(parent, deadline, maxVisits-len(visited))
+		if childrenErr != nil {
+			if linuxProcessGone(childrenErr) {
 				continue
 			}
-			return result, err
 		}
-		for pid := range children {
-			if _, exists := result[pid]; exists {
+		for pid, observedStartTime := range children {
+			if !time.Now().Before(deadline) {
+				return result, fmt.Errorf("Linux supervisor descendant traversal exceeded cleanup deadline after %d visit(s)", len(visited))
+			}
+			if _, exists := visited[pid]; exists {
 				continue
 			}
-			identity, err := readLinuxProcessIdentity(pid)
+			if len(visited) >= maxVisits {
+				return result, fmt.Errorf("Linux supervisor descendant traversal exceeded %d-process cleanup bound", maxVisits)
+			}
+			pidfd, err := ops.openPidfd(pid, 0)
+			if err != nil {
+				current, currentErr := ops.readIdentity(pid)
+				if linuxProcessGone(err) || linuxProcessGone(currentErr) || (currentErr == nil && current.startTime != observedStartTime) {
+					continue
+				}
+				return result, fmt.Errorf("open stable supervisor descendant handle for %d: %w", pid, err)
+			}
+			identity, err := ops.readIdentity(pid)
 			if linuxProcessGone(err) {
+				_ = ops.closePidfd(pidfd)
 				continue
 			}
 			if err != nil {
-				return result, err
+				_ = ops.closePidfd(pidfd)
+				return result, fmt.Errorf("revalidate stable supervisor descendant %d: %w", pid, err)
 			}
-			result[pid] = identity
+			if identity.startTime != observedStartTime {
+				_ = ops.closePidfd(pidfd)
+				return result, fmt.Errorf("revalidate stable supervisor descendant %d: process start time changed", pid)
+			}
+			if identity.ppid != parent && !identity.zombie {
+				parentIdentity, parentErr := ops.readIdentity(parent)
+				// Linux can expose an exiting task briefly with state X and PPID 0.
+				// It no longer anchors the captured parent relationship; PID 1 is
+				// the only live process for which a zero parent is expected.
+				parentStillOwned := parentErr == nil && !parentIdentity.zombie && (parentIdentity.ppid != 0 || parent == 1)
+				if trackedParent, exists := result[parent]; exists {
+					parentStillOwned = parentStillOwned && parentIdentity.startTime == trackedParent.process.startTime
+				}
+				if parentErr != nil && !linuxProcessGone(parentErr) {
+					_ = ops.closePidfd(pidfd)
+					return result, fmt.Errorf("revalidate stable supervisor descendant %d parent %d: %w", pid, parent, parentErr)
+				}
+				if parentStillOwned {
+					_ = ops.closePidfd(pidfd)
+					return result, fmt.Errorf("revalidate stable supervisor descendant %d: live parent changed from %d to %d", pid, parent, identity.ppid)
+				}
+				// The first children snapshot proved ancestry and the pidfd plus
+				// start time proves the same child survived. If its exact parent
+				// exited during acquisition, accept the kernel reparenting race;
+				// signaling remains bound to the child's stable handle.
+			}
+			visited[pid] = struct{}{}
+			result[pid] = linuxSupervisorDescendant{process: linuxTrackedProcess{startTime: identity.startTime, pidfd: pidfd}}
 			queue = append(queue, pid)
+		}
+		if childrenErr != nil {
+			return result, childrenErr
 		}
 	}
 	return result, nil
@@ -1148,7 +1232,9 @@ func readLinuxProcessIdentity(pid int) (linuxProcessIdentity, error) {
 	if err != nil {
 		return linuxProcessIdentity{}, err
 	}
-	return linuxProcessIdentity{pid: pid, ppid: ppid, pgid: pgid, startTime: startTime, zombie: fields[0] == "Z", stopped: fields[0] == "T" || fields[0] == "t"}, nil
+	return linuxProcessIdentity{pid: pid, ppid: ppid, pgid: pgid, startTime: startTime,
+		zombie:  fields[0] == "Z" || fields[0] == "X" || fields[0] == "x",
+		stopped: fields[0] == "T" || fields[0] == "t"}, nil
 }
 
 func liveLinuxProcessGroupMembers(pgid int) (int, error) {
@@ -1209,13 +1295,16 @@ func liveLinuxTrackedProcess(pid int, tracked linuxTrackedProcess) (bool, error)
 	return !identity.zombie, nil
 }
 
-func linuxDirectChildIdentities(pid int) (map[int]uint64, error) {
+func linuxDirectChildIdentities(pid int, deadline time.Time, limit int) (map[int]uint64, error) {
 	childrenByIdentity := make(map[int]uint64)
 	tasks, err := os.ReadDir(fmt.Sprintf("/proc/%d/task", pid))
 	if err != nil {
 		return nil, err
 	}
 	for _, task := range tasks {
+		if !time.Now().Before(deadline) {
+			return childrenByIdentity, fmt.Errorf("Linux supervisor descendant traversal exceeded cleanup deadline while inspecting process %d", pid)
+		}
 		children, err := os.ReadFile(fmt.Sprintf("/proc/%d/task/%s/children", pid, task.Name()))
 		if err != nil {
 			if linuxProcessGone(err) {
@@ -1224,6 +1313,9 @@ func linuxDirectChildIdentities(pid int) (map[int]uint64, error) {
 			return nil, err
 		}
 		for _, rawChild := range strings.Fields(string(children)) {
+			if !time.Now().Before(deadline) {
+				return childrenByIdentity, fmt.Errorf("Linux supervisor descendant traversal exceeded cleanup deadline while inspecting children of process %d", pid)
+			}
 			child, err := strconv.Atoi(rawChild)
 			if err != nil {
 				continue
@@ -1234,6 +1326,16 @@ func linuxDirectChildIdentities(pid int) (map[int]uint64, error) {
 			}
 			if err != nil {
 				return nil, err
+			}
+			observedStartTime, exists := childrenByIdentity[child]
+			if !exists && len(childrenByIdentity) >= limit {
+				return childrenByIdentity, fmt.Errorf("Linux supervisor descendant traversal exceeded %d-process cleanup bound", linuxSupervisorTraversalMaxVisits)
+			}
+			if exists {
+				if observedStartTime != identity.startTime {
+					return childrenByIdentity, fmt.Errorf("Linux supervisor child %d changed identity during task inspection", child)
+				}
+				continue
 			}
 			childrenByIdentity[child] = identity.startTime
 		}

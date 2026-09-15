@@ -77,11 +77,12 @@ func validateSource(checkout, sha string) ([]sourcePin, error) {
 	return pins, nil
 }
 
-// Pins cover construction packages (all non-test Go files, including definitions
-// beside callbacks), target registry, composition references and all five
-// workspace module controls. They do not recursively attest installer engines.
+// Pins cover the release-selected construction packages (all non-test Go files,
+// including definitions beside callbacks), target registry, composition
+// references and all five workspace module controls. Current-only bootstrap
+// stays outside this inventory until the released source pin advances.
 var factoryPins = []sourcePin{
-	{"cli/plugin-kit-ai/cmd/agentplugins/release_root.go", "9b76cb9079a3d668625ab48f65159aa40036dbce13558857219a5455b75bd8d7"},
+	{"cli/plugin-kit-ai/cmd/agentplugins/release_root.go", "4a8566038d22e34fd2509075d97df10b422ee15ce01619bf35b2a8c397c7c944"},
 	{"cli/plugin-kit-ai/cmd/plugin-kit-ai/release_compat.go", "d2f11a845c116160114ddd1b0ba8b825e9e5a4794354742749db7122c0c674c8"},
 	{"cli/plugin-kit-ai/go.mod", "d388e12cb393cca6fcf8034e4a05d3c4eb8777427fed47ed064ef0623c377606"},
 	{"cli/plugin-kit-ai/go.sum", "0cf114be6b68dd165b75b588776e0bb7b9cc4aaa08fae382f7fa42b580bfa2da"},
@@ -116,10 +117,10 @@ var factoryPins = []sourcePin{
 	{"cli/plugin-kit-ai/internal/agentpluginscli/update_all.go", "7b791dc9fe04cf3ceae4f3ade5c36c308104761242cb3cb37474d1551961cc65"},
 	{"cli/plugin-kit-ai/internal/agentpluginscli/update_multi.go", "0ff5bedf401e3736178ea7274e4e7b3eac113867288f0f86bb354ae724991f23"},
 	{"cli/plugin-kit-ai/internal/agentpluginscli/validate.go", "8c643a08c657431d623197364f5f47d7f23ed0b4e6cf926f40a521a8bac7ee9d"},
-	{"cli/plugin-kit-ai/internal/authoring/commands/commands.go", "50711d9f6804ecc73fbd1f1a9d0606999e61992d5717e8b89a2f76e87b4deea3"},
+	{"cli/plugin-kit-ai/internal/authoring/commands/commands.go", "a4cb98daebd5b2a1048b8af6b2c4d452a3a42c7125fa27b523795a6f16fb7c1d"},
 	{"cli/plugin-kit-ai/internal/authoring/commands/dev_session.go", "b548b05cb659eef10dee2e6a783ec576a589c098de4d55075acec09138c4373a"},
 	{"cli/plugin-kit-ai/internal/authoring/commands/maintenance.go", "7fb03c69b48cb0fb5fdacff08930d4b034895be7a65f336e7f7374e607ed0f5a"},
-	{"cli/plugin-kit-ai/internal/authoring/commands/public_contract.go", "30b609f68d1f32900d13fcf85a81c9a82ec776f226f217db466d07ef50e5637f"},
+	{"cli/plugin-kit-ai/internal/authoring/commands/public_contract.go", "332d209e5453b51e086cebe96baca7ac4542e1f7e5ad2718c18afda3eeb9c55e"},
 	{"cli/plugin-kit-ai/internal/authoring/commands/skills.go", "566e36e02d58c5d76e92369987d901feb1bcb6f3e59d3225e02961fa041d606b"},
 	{"cli/plugin-kit-ai/internal/authoring/commands/version.go", "966a468f07573eed3a3e876c6b5d3a4354332500802b1b24bf6dfedc7b855273"},
 	{"cli/plugin-kit-ai/internal/authoring/jsonmaint/exchange_darwin.go", "7e2b742a50c4375484c6cb452be8d6adabaf6563c911965707047c5bdd9ff4e2"},
@@ -138,11 +139,12 @@ var factoryPins = []sourcePin{
 	{"cli/plugin-kit-ai/internal/authoring/nativeimport/nofollow_unix.go", "e643bab4b2774ce4de51e1af8061bb09ddd67b454c09496552d44e7e673ed526"},
 	{"cli/plugin-kit-ai/internal/authoring/nativeimport/output.go", "c20355804b42897c844abad0c9a8d7a3b069e1ca3b85a99f2f81ce1a27645432"},
 	{"cli/plugin-kit-ai/internal/authoring/report/public.go", "2d8aafbd4833a7982160a3ea8c25564bce1cc8bd39d792bc245fdf9e29cdf6e8"},
-	{"cli/plugin-kit-ai/internal/authoring/report/report.go", "501476ac2b0dc7eca2d715931e3d953d9e9508082f5377c4b0a3e99811a4b5bc"},
+	{"cli/plugin-kit-ai/internal/authoring/report/report.go", "6952de5556409574f22bd537b0ff4a18af72dcc7e03c3996940b64a26a56a149"},
 	{"cli/plugin-kit-ai/internal/authoring/scaffold/apply.go", "b9709a2a0f2f454b913eea8bd4df11dfeb96ecc2d5ac6579216215be86a9d42c"},
 	{"cli/plugin-kit-ai/internal/authoring/scaffold/paths.go", "1eb1d5f09798c43a236f05d4dabf309078506e786b4b25d02c654a8bcd2d2488"},
 	{"cli/plugin-kit-ai/internal/authoring/scaffold/plan.go", "51c098b203fe3a5d6145b67a73fd8dacd3f8c9df9c5c147fcfe56d0d78591807"},
 	{"cli/plugin-kit-ai/internal/authoring/scaffold/rename_darwin.go", "2b31a18bf69125a971785662759b1bf2c681b222d1a4b5808fd8442e1ea671b8"},
+	{"cli/plugin-kit-ai/internal/authoring/scaffold/rename_export.go", "4183e1109d60c2391d12ed725b334cc6bc97b1fdfe16322aeb052a97a135a09b"},
 	{"cli/plugin-kit-ai/internal/authoring/scaffold/rename_linux.go", "613c5beb3179e41c4adcc1184b4b91027a5d1497880db63d5d3d8bf030eda259"},
 	{"cli/plugin-kit-ai/internal/authoring/scaffold/rename_package_other.go", "80b2359d7811644e96551fcc68b2fb6b74a13c3e3495e8819f14f056d5c9869a"},
 	{"cli/plugin-kit-ai/internal/authoring/scaffold/rename_unsupported.go", "594b631c59ac54964568a2f9abf816ab1a2d25cbc7af95e90f74cae0b54f89f0"},
@@ -150,7 +152,7 @@ var factoryPins = []sourcePin{
 	{"cli/plugin-kit-ai/internal/authoring/scaffold/skill_plan.go", "a8e5b6ddb8a638dd729aedc947cf8fef627e992214ea39fe17b0ed6ade5cb481"},
 	{"cli/plugin-kit-ai/internal/authoring/scaffold/stage_posix.go", "1fca38bb261d637666dbd47a232bda801968662ef55bbd7ee609d122d6c9999e"},
 	{"cli/plugin-kit-ai/internal/authoring/scaffold/stage_windows.go", "3bced06b906245cfd61ab6d2a453dd6c0fd3f7791b3c76de54bbf2c320d137a5"},
-	{"cli/plugin-kit-ai/internal/authoring/scaffold/templates.go", "fcdab82ecc338921337cfe8c157e05f2a7bc460ba36b0aa90230b0721fb476c4"},
+	{"cli/plugin-kit-ai/internal/authoring/scaffold/templates.go", "958b895a4e35a95b2ee9a43aaeb45f83f483e4295b2b14dada5226b795bb3835"},
 	{"cli/plugin-kit-ai/internal/authoringcli/command.go", "ab3ea92ca93a676a49cb99898a23386e1766e6f8becb2468bcfbb84ec22e1ec4"},
 	{"cli/plugin-kit-ai/internal/authoringcli/flags.go", "5f745c810e90586899cff2170433dbc58483ba17496167738387388f29be49c0"},
 	{"cli/plugin-kit-ai/internal/authoringcli/release.go", "45cb7a7000a31bb8477d1301fc70ce4521140b9f2a4760d5f84da3283134877f"},

@@ -27,6 +27,14 @@ func nodePackages(name string) ([]byte, []byte, error) {
 	return bytes.Replace(nodePackage, old, []byte(`"name":"`+name+`"`), 1), bytes.Replace(nodeLock, lockOld, []byte(`"name": "`+name+`"`), 2), nil
 }
 
+// MatchesGeneratedNodePackage recognizes the exact public Node dependency files
+// emitted by BuildPlan. The plugin identity is the only generated substitution;
+// no private marker or legacy manifest participates in recognition.
+func MatchesGeneratedNodePackage(name string, packageJSON, packageLock []byte) bool {
+	pkg, lock, err := nodePackages(name)
+	return err == nil && bytes.Equal(pkg, packageJSON) && bytes.Equal(lock, packageLock)
+}
+
 var yearPattern = regexp.MustCompile(`^[0-9]{4}$`)
 
 func licenseText(o Options) (string, error) {

@@ -248,6 +248,98 @@ func TestSupervisorEmptyBoundaryRequiresQuiescentErrorFreePasses(t *testing.T) {
 	}
 }
 
+func TestLinuxSupervisorTraversalRejectsChangedChildIdentityAndParentage(t *testing.T) {
+	for _, test := range []struct {
+		name     string
+		identity linuxProcessIdentity
+		want     string
+	}{
+		{name: "reused PID", identity: linuxProcessIdentity{pid: 41, ppid: 7, startTime: 102}, want: "start time changed"},
+		{name: "changed parent", identity: linuxProcessIdentity{pid: 41, ppid: 8, startTime: 101}, want: "live parent changed from 7 to 8"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			closed := 0
+			ops := linuxDescendantTraversalOps{
+				directChildren: func(pid int, _ time.Time, _ int) (map[int]uint64, error) {
+					if pid != 7 {
+						t.Fatalf("unexpected traversal of process %d", pid)
+					}
+					return map[int]uint64{41: 101}, nil
+				},
+				readIdentity: func(pid int) (linuxProcessIdentity, error) {
+					if pid == 7 {
+						return linuxProcessIdentity{pid: 7, ppid: 1, startTime: 11}, nil
+					}
+					if pid != 41 {
+						t.Fatalf("unexpected identity read for process %d", pid)
+					}
+					return test.identity, nil
+				},
+				openPidfd: func(pid, flags int) (int, error) {
+					if pid != 41 || flags != 0 {
+						t.Fatalf("pidfd open = (%d, %d)", pid, flags)
+					}
+					return 91, nil
+				},
+				closePidfd: func(pidfd int) error {
+					if pidfd != 91 {
+						t.Fatalf("closed pidfd = %d", pidfd)
+					}
+					closed++
+					return nil
+				},
+			}
+			descendants, err := linuxDescendantIdentitiesWith(7, time.Now().Add(time.Second), 4, ops)
+			if err == nil || !strings.Contains(err.Error(), test.want) {
+				t.Fatalf("identity revalidation error = %v, want %q", err, test.want)
+			}
+			if len(descendants) != 0 || closed != 1 {
+				t.Fatalf("rejected descendants = %#v, closed handles = %d", descendants, closed)
+			}
+		})
+	}
+}
+
+func TestLinuxSupervisorTraversalEnforcesProcessAndDeadlineBounds(t *testing.T) {
+	closed := 0
+	ops := linuxDescendantTraversalOps{
+		directChildren: func(pid int, _ time.Time, _ int) (map[int]uint64, error) {
+			return map[int]uint64{pid + 1: uint64(pid + 100)}, nil
+		},
+		readIdentity: func(pid int) (linuxProcessIdentity, error) {
+			return linuxProcessIdentity{pid: pid, ppid: pid - 1, startTime: uint64(pid + 99)}, nil
+		},
+		openPidfd: func(pid, _ int) (int, error) { return pid + 1000, nil },
+		closePidfd: func(int) error {
+			closed++
+			return nil
+		},
+	}
+	descendants, err := linuxDescendantIdentitiesWith(10, time.Now().Add(time.Second), 3, ops)
+	if err == nil || !strings.Contains(err.Error(), "exceeded 3-process cleanup bound") {
+		t.Fatalf("process-bound traversal error = %v", err)
+	}
+	if len(descendants) != 2 {
+		t.Fatalf("bounded traversal retained %d descendants, want 2", len(descendants))
+	}
+	for _, descendant := range descendants {
+		_ = ops.closePidfd(descendant.process.pidfd)
+	}
+	if closed != 2 {
+		t.Fatalf("closed accepted handles = %d, want 2", closed)
+	}
+
+	called := false
+	ops.directChildren = func(int, time.Time, int) (map[int]uint64, error) {
+		called = true
+		return nil, nil
+	}
+	descendants, err = linuxDescendantIdentitiesWith(10, time.Now().Add(-time.Millisecond), 3, ops)
+	if err == nil || !strings.Contains(err.Error(), "exceeded cleanup deadline") || called || len(descendants) != 0 {
+		t.Fatalf("deadline-bound traversal = (%#v, %v, called %v)", descendants, err, called)
+	}
+}
+
 func TestOSRunnerRapidSuccessfulCommandsPreserveNaturalExit(t *testing.T) {
 	// /bin/true commonly becomes waitable before the runner can acquire its
 	// post-Start pidfd. Exercise that attachment boundary enough times to prove
