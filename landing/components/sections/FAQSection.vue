@@ -57,14 +57,14 @@ const faqQuickLinks = computed(() => {
       href: `${docsBase}/guide/quickstart.html`,
     },
     {
-      title: t('faq.quickLinks.pythonTitle'),
-      body: t('faq.quickLinks.pythonBody'),
-      href: `${docsBase}/guide/python-runtime.html`,
+      title: t('faq.quickLinks.buildTitle'),
+      body: t('faq.quickLinks.buildBody'),
+      href: `${docsBase}/build/`,
     },
     {
-      title: t('faq.quickLinks.boundaryTitle'),
-      body: t('faq.quickLinks.boundaryBody'),
-      href: `${docsBase}/reference/support-boundary.html`,
+      title: t('faq.quickLinks.useTitle'),
+      body: t('faq.quickLinks.useBody'),
+      href: `${docsBase}/use/`,
     },
   ];
 });

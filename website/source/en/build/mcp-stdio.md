@@ -10,11 +10,6 @@ translationRequired: true
 
 # Build a stdio MCP package
 
-> **Milestone A is available.** Install `agentplugins` from
-> `universal-agent-plugins@0.1.65` on npm or the `777genius/agentplugins` Homebrew tap.
-> GitHub release: `agentplugins-v0.1.65`. Public-channel E2E is verified.
-> Runtime/dev/bootstrap, export and publication remain deferred. Legacy YAML
-> migration is cancelled; preserved source is not a supported workflow.
 
 Choose stdio MCP when the package should supply a local process that communicates
 with the agent over standard input and output. The prepared template supports
@@ -36,9 +31,8 @@ agentplugins author init ./local-tools \
   --runtime node
 ```
 
-Do not substitute a legacy Go, Python, shell, or TypeScript runtime flag. Those
-preserved historical authoring lanes are not
-implemented by this template.
+The released portable stdio template accepts the documented Node runtime
+choice. Other runtime flags are not part of this authoring command.
 
 ## Review the runtime boundary
 
@@ -64,13 +58,8 @@ The template includes the official MCP SDK dependency and its lockfile.
 for your intended behavior, keeping application logs away from protocol output.
 No dependency install occurs during init, and no server process starts.
 
-The Phase 7 runtime work in PR #278 is not released. Its candidate stdio path
-does not describe the existing child-process adapter as a sandbox: execution is
-admitted only on Linux when bubblewrap successfully establishes isolated
-filesystem and network namespaces and the process-tree cleanup preflight also
-succeeds. It refuses before package-authored child effects on other hosts or
-when either primitive is unavailable. Static authoring on Linux, macOS, and
-Windows is unchanged.
+Version 0.1.65 performs static checks only. It does not start the package
+process or infer an executable.
 
 ## Gather static evidence
 

@@ -284,13 +284,13 @@
     "quickLinks": {
       "badge": "Empieza aquí",
       "title": "¿Necesita un siguiente paso más claro?",
-      "subtitle": "La mayoría de las personas solo necesitan tres páginas: inicio rápido, la ruta de Python si esa es su pila y el límite de soporte antes de prometer demasiado.",
+      "subtitle": "La mayoría de las personas solo necesitan tres páginas: el inicio rápido, la guía Crear para la autoría y la guía Usar para instalar y administrar plugins.",
       "quickstartTitle": "Abrir inicio rápido",
       "quickstartBody": "La ruta admitida más corta desde la instalación hasta un repositorio validado.",
-      "pythonTitle": "Abrir guía de Python",
-      "pythonBody": "La mejor página siguiente cuando su equipo ya es el primero en Python.",
-      "boundaryTitle": "Verificar el límite de soporte",
-      "boundaryBody": "Vea qué está listo para producción hoy y qué aún está en fase beta."
+      "buildTitle": "Abrir la guía Crear",
+      "buildBody": "Cree y compruebe paquetes plugin.json con agentplugins author.",
+      "useTitle": "Abrir la guía Usar",
+      "useBody": "Busque, previsualice, instale y mantenga plugins con agentplugins."
     }
   },
   "comparison": {
@@ -336,15 +336,13 @@
     "installLink": "Guía de instalación",
     "buildTitle": "Crear plugins",
     "standard": "Crea un paquete portable Agent Plugins 1.0 basado en plugin.json, con skills/ y mcp.json opcionales. El soporte de cada cliente depende del paquete y sus componentes.",
-    "preparation": "Milestone A disponible",
-    "unreleased": "Milestone A está disponible. universal-agent-plugins{'@'}0.1.65; GitHub: agentplugins-v0.1.65. npm, Homebrew, archivos nativos, GitHub Releases y E2E público están verificados. Solo creación estática; runtime/dev/bootstrap, exportación y publicación siguen pendientes. La migración YAML heredada está cancelada; el código conservado no es un producto compatible.",
     "specLink": "Especificación Agent Plugins 1.0",
-    "historyTitle": "Mantenimiento histórico de v1",
-    "history": "Mantén los proyectos plugin.yaml existentes con las instrucciones v1 siguientes. Estas plantillas y salidas generadas son flujos históricos v1; no crean el nuevo flujo de autoría basado en el estándar.",
-    "quickstartLink": "Inicio rápido y mantenimiento v1",
     "compatibilityLink": "Compatibilidad de clientes (en inglés)",
     "limitations": "La compatibilidad depende del paquete. Validar el esquema no demuestra ejecución, OAuth ni activación. Codex no admite MCP SSE declarado; stdio y Streamable HTTP conservan el soporte de sus adaptadores actuales.",
-    "versions": "Milestone A disponible: universal-agent-plugins{'@'}0.1.65; GitHub: agentplugins-v0.1.65."
+    "versions": "Creación de Agent Plugins disponible: universal-agent-plugins{'@'}0.1.65; GitHub: agentplugins-v0.1.65.",
+    "availability": "Creación de Agent Plugins disponible",
+    "releaseScope": "La creación de Agent Plugins está disponible en universal-agent-plugins{'@'}0.1.65; GitHub: agentplugins-v0.1.65. npm, Homebrew, archivos nativos, GitHub Releases y E2E público están verificados. La versión incluye creación estática; no incluye ejecución, servidores de desarrollo, instalación de dependencias, exportación ni publicación.",
+    "buildGuideLink": "Abrir la guía de creación"
   },
   "shell": {
     "docs": {

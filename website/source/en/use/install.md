@@ -10,12 +10,6 @@ translationRequired: true
 
 # Find and install a plugin
 
-> **Milestone A is available.** Standard-first static authoring is published as
-> `agentplugins author` in `universal-agent-plugins@0.1.65`.
-> GitHub tag: `agentplugins-v0.1.65`. npm, Homebrew, native archives and the
-> public-channel E2E are verified. Runtime/dev/bootstrap, export and publication
-> remain deferred. Legacy YAML migration is cancelled; its source remains
-> preserved internally and is not a supported product.
 
 These are **existing installer commands**, sourced from the frozen installer
 README and contract. They are separate from the Build examples.
@@ -86,8 +80,7 @@ agentplugins add ./my-plugin --target codex --dry-run
 The first command is installer validation. The second previews installation;
 it deliberately stops short of applying it. See the author's
 [handoff checklist](/en/build/handoff) for the static evidence to request.
-`plugin.json` is the installation authority; legacy `plugin.yaml` cannot
-replace it or override its identity.
+`plugin.json` is the installation authority and defines the package identity.
 
 ## Use an exact remote source
 

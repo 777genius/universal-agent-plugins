@@ -23,6 +23,9 @@ test('current journeys stay searchable while retired product pages are archived'
   for (const page of ['en/guide/installation.md', 'en/concepts/why-plugin-kit-ai.md',
     'en/api/cli/plugin-kit-ai.md', 'en/legacy/v1/index.md'])
     assert.equal(isRetiredArchive(page), true, page);
+  assert.equal(isRetiredArchive('en/index.html'), false);
+  assert.equal(isRetiredArchive('en/build/index.html'), false);
+  assert.equal(isRetiredArchive('en/legacy/v1/index.html'), true);
 });
 
 test('published source never claims it is on a non-deploying branch', () => {
@@ -46,8 +49,7 @@ test('current Build journey uses Agent Plugins as its single documented command 
 
   const index = read('website/source/en/build/index.md');
   assert.match(index, /npm install -g universal-agent-plugins@0\.1\.65/);
-  assert.doesNotMatch(index, /plugin-kit-ai|PyPI|pipx/i);
-  assert.match(index, /Legacy YAML migration is cancelled/);
+  assert.doesNotMatch(index, /plugin-kit-ai|plugin\.yaml|PyPI|pipx|YAML migration/i);
 });
 
 test('current locale journeys and top navigation do not expose the retired product', () => {

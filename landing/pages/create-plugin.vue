@@ -1,5 +1,6 @@
 <script setup lang="ts">
 const { t } = useI18n();
+const { quickstartUrl, buildGuideUrl } = useDocsLinks();
 // This checkpoint preserves the existing route and indexing policy.
 // Availability is stated in visible copy, independently of robots metadata.
 usePageSeo('publicAuthoring.title', 'publicAuthoring.intro', {
@@ -21,7 +22,7 @@ usePageSeo('publicAuthoring.title', 'publicAuthoring.intro', {
         <p>{{ t('publicAuthoring.available') }}</p>
         <pre><code>npx universal-agent-plugins add context7</code></pre>
         <p>{{ t('publicAuthoring.installHelp') }}</p>
-        <a href="https://github.com/777genius/universal-agent-plugins#quick-start">
+        <a :href="quickstartUrl">
           {{ t('publicAuthoring.installLink') }}
         </a>
         <p>{{ t('publicAuthoring.versions') }}</p>
@@ -31,9 +32,12 @@ usePageSeo('publicAuthoring.title', 'publicAuthoring.intro', {
         <h2 id="build-title">{{ t('publicAuthoring.buildTitle') }}</h2>
         <p>{{ t('publicAuthoring.standard') }}</p>
         <p>
-          <strong>{{ t('publicAuthoring.preparation') }}</strong>
+          <strong>{{ t('publicAuthoring.availability') }}</strong>
         </p>
-        <p>{{ t('publicAuthoring.unreleased') }}</p>
+        <p>{{ t('publicAuthoring.releaseScope') }}</p>
+        <a :href="buildGuideUrl">
+          {{ t('publicAuthoring.buildGuideLink') }}
+        </a>
         <a href="https://agent-plugins.org/specification">
           {{ t('publicAuthoring.specLink') }}
         </a>

@@ -10,11 +10,6 @@ translationRequired: true
 
 # Add extra Skills
 
-> **Milestone A is available.** Install `agentplugins` from
-> `universal-agent-plugins@0.1.65` on npm or the `777genius/agentplugins` Homebrew tap.
-> GitHub release: `agentplugins-v0.1.65`. Public-channel E2E is verified.
-> Runtime/dev/bootstrap, export and publication remain deferred. Legacy YAML
-> migration is cancelled; preserved source is not a supported workflow.
 
 Use the `skills init` job to add one Skill to an existing standard package.
 It works for Skill, MCP, or hybrid packages. Select the package root containing

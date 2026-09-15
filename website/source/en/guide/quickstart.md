@@ -28,7 +28,7 @@ For native installation on macOS, Linux or Windows, follow the installer guide. 
 
 [Installer guide](https://github.com/777genius/universal-agent-plugins#quick-start)
 
-Milestone A is available in `universal-agent-plugins@0.1.65`; GitHub release: `agentplugins-v0.1.65`.
+Agent Plugins authoring is available in `universal-agent-plugins@0.1.65`; GitHub release: `agentplugins-v0.1.65`.
 
 Compatibility is package-specific. Schema validation does not prove runtime, OAuth or activation. Codex does not support declared MCP SSE; stdio and Streamable HTTP keep their existing adapter support.
 
@@ -43,9 +43,9 @@ Compatibility is package-specific. Schema validation does not prove runtime, OAu
 
 Build a portable Agent Plugins 1.0 package around plugin.json, with optional skills/ and mcp.json. Client support depends on the package and its components.
 
-**Milestone A is available**
+**Agent Plugins authoring is available**
 
-Milestone A static authoring is available through `agentplugins author` in `universal-agent-plugins@0.1.65`; GitHub release: `agentplugins-v0.1.65`. npm, Homebrew, native archives and public-channel E2E are verified. Static authoring only; runtime/dev/bootstrap, export and publication remain deferred. Legacy YAML migration is cancelled; preserved source is not a supported product.
+Static authoring is available through `agentplugins author` in `universal-agent-plugins@0.1.65`; GitHub release: `agentplugins-v0.1.65`. npm, Homebrew, native archives and public-channel E2E are verified. The release does not run package code, start development servers, bootstrap dependencies, export bundles, or publish packages.
 
 ```bash
 npm install --global universal-agent-plugins@0.1.65

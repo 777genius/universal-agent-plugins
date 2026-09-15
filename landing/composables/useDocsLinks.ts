@@ -8,16 +8,16 @@ export const useDocsLinks = () => {
     computed(() => resolveDocsLink(id, locale.value, configured));
   const docs = link('home', String(config.public.docsUrl || ''));
   const quickstart = link('quickstart', String(config.public.quickstartUrl || ''));
+  const buildGuide = link('build');
   const supportBoundary = link('supportBoundary');
-  const customLogicGuide = link('customLogicGuide');
   const docsLabel = (label: string, englishFallback = docs.value.englishFallback) =>
     englishFallback ? t('shell.docs.englishLabel', { label }) : label;
 
   return {
     docsUrl: computed(() => docs.value.url),
     quickstartUrl: computed(() => quickstart.value.url),
+    buildGuideUrl: computed(() => buildGuide.value.url),
     supportBoundaryUrl: computed(() => supportBoundary.value.url),
-    customLogicGuideUrl: computed(() => customLogicGuide.value.url),
     docsLabel,
     quickstartEnglishFallback: computed(() => quickstart.value.englishFallback),
     supportBoundaryEnglishFallback: computed(() => supportBoundary.value.englishFallback),

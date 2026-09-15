@@ -8,13 +8,18 @@ import { resolveDocsLink } from '../data/docsAvailability.ts';
 const root = new URL('../../', import.meta.url);
 const read = (path: string) => readFileSync(new URL(path, root), 'utf8');
 const locales = ['en', 'ru', 'uk', 'es', 'fr', 'zh', 'ar', 'hi', 'pt'] as const;
-const renderedCopy = (locale: typeof locales[number]) => {
+const renderedCopy = (locale: (typeof locales)[number]) => {
   const messages = JSON.parse(read(`landing/locales/${locale}.json`));
-  // Render each preserved dictionary in an isolated EN test host; Nuxt publishes only EN/RU/UK.
-  const { t } = createI18n<[LocaleMessageDictionary<VueMessageType>], 'en', false>({ legacy: false, locale: 'en', fallbackLocale: false,
-    messages: { en: messages } }).global;
-  return Object.fromEntries(Object.keys(messages.publicAuthoring).map(key =>
-    [key, t(`publicAuthoring.${key}`)]));
+  // Render each dictionary in an isolated EN test host.
+  const { t } = createI18n<[LocaleMessageDictionary<VueMessageType>], 'en', false>({
+    legacy: false,
+    locale: 'en',
+    fallbackLocale: false,
+    messages: { en: messages },
+  }).global;
+  return Object.fromEntries(
+    Object.keys(messages.publicAuthoring).map((key) => [key, t(`publicAuthoring.${key}`)]),
+  );
 };
 
 test('all public authoring messages compile and expose only Agent Plugins release facts', (context) => {
@@ -25,9 +30,9 @@ test('all public authoring messages compile and expose only Agent Plugins releas
     for (const key of Object.keys(source)) {
       assert.equal(rendered[key], source[key].replaceAll("{'@'}", '@'), `${locale}:${key}`);
     }
-    assert.ok(rendered.unreleased.includes('universal-agent-plugins@0.1.65'), locale);
-    assert.ok(rendered.unreleased.includes('agentplugins-v0.1.65'), locale);
-    assert.doesNotMatch(rendered.unreleased, /plugin-kit-ai|PyPI|pipx/i, locale);
+    assert.ok(rendered.releaseScope.includes('universal-agent-plugins@0.1.65'), locale);
+    assert.ok(rendered.releaseScope.includes('agentplugins-v0.1.65'), locale);
+    assert.doesNotMatch(rendered.releaseScope, /plugin-kit-ai|PyPI|pipx/i, locale);
     assert.equal(errors.mock.callCount(), 0, `${locale}: message compilation errors`);
   }
 });
@@ -42,22 +47,45 @@ test('the authoring front door renders Use/Build and preserves its indexing poli
   }
   assert.ok(page.includes("robots: 'noindex, follow'"));
   assert.ok(page.includes('npx universal-agent-plugins add context7'));
-  const keys = [...page.matchAll(/(?:t|usePageSeo)\('publicAuthoring\.([^']+)'/g)].map(m => m[1]);
+  const keys = [...page.matchAll(/(?:t|usePageSeo)\('publicAuthoring\.([^']+)'/g)].map((m) => m[1]);
   for (const locale of ['en', 'ru', 'uk', 'es', 'fr', 'zh'] as const) {
     const copy = renderedCopy(locale);
-    for (const key of [...keys, 'intro']) assert.equal(typeof copy[key], 'string', `${locale}:${key}`);
+    for (const key of [...keys, 'intro', 'availability', 'releaseScope', 'buildGuideLink'])
+      assert.equal(typeof copy[key], 'string', `${locale}:${key}`);
     assert.ok(copy.standard.includes('plugin.json'));
-    assert.doesNotMatch(copy.unreleased, /plugin-kit-ai|PyPI|pipx|1\.2\.4/i);
+    assert.doesNotMatch(copy.releaseScope, /plugin-kit-ai|PyPI|pipx|1\.2\.4/i);
     assert.ok(copy.versions.includes('agentplugins-v0.1.65'));
+    assert.equal(Object.hasOwn(copy, 'history'), false);
+    assert.equal(Object.hasOwn(copy, 'historyTitle'), false);
     assert.doesNotMatch(copy.versions, /plugin-kit-ai|PyPI|pipx/i);
     for (const channel of ['npm', 'Homebrew', 'GitHub'])
-      assert.ok(copy.unreleased.includes(channel), `${locale}:${channel}`);
-    assert.doesNotMatch(copy.unreleased, /(?:0\.1\.61|2\.0\.1)/);
+      assert.ok(copy.releaseScope.includes(channel), `${locale}:${channel}`);
+    assert.doesNotMatch(copy.releaseScope, /(?:0\.1\.61|2\.0\.1)/);
     assert.ok(copy.limitations.includes('SSE'));
   }
-  for (const locale of ['en', 'ru', 'uk']) {
-    assert.equal(resolveDocsLink('quickstart', locale).url,
-      `https://777genius.github.io/universal-agent-plugins/docs/${locale === 'ru' ? 'ru' : 'en'}/guide/quickstart.html`);
+  for (const locale of ['en', 'ru', 'uk', 'es', 'fr', 'zh']) {
+    assert.equal(
+      resolveDocsLink('quickstart', locale).url,
+      `https://777genius.github.io/universal-agent-plugins/docs/${locale === 'uk' ? 'en' : locale}/guide/quickstart.html`,
+    );
+  }
+});
+
+test('landing FAQ sends readers only to maintained public docs routes', () => {
+  const section = read('landing/components/sections/FAQSection.vue');
+  for (const route of ['/guide/quickstart.html', '/build/', '/use/']) {
+    assert.ok(section.includes(route), route);
+  }
+  assert.doesNotMatch(section, /guide\/python-runtime|reference\/support-boundary/);
+  for (const locale of locales) {
+    const links = JSON.parse(read(`landing/locales/${locale}.json`)).faq.quickLinks;
+    for (const key of ['quickstartTitle', 'quickstartBody', 'buildTitle', 'buildBody', 'useTitle', 'useBody']) {
+      assert.equal(typeof links[key], 'string', `${locale}:${key}`);
+      assert.ok(links[key].length > 0, `${locale}:${key}`);
+    }
+    for (const retiredKey of ['pythonTitle', 'pythonBody', 'boundaryTitle', 'boundaryBody']) {
+      assert.equal(Object.hasOwn(links, retiredKey), false, `${locale}:${retiredKey}`);
+    }
   }
 });
 
@@ -88,13 +116,16 @@ agentplugins author inspect ./my-plugin
 agentplugins author test ./my-plugin`);
     }
     assert.deepEqual(
-      [...publishedText.matchAll(/```bash\n([\s\S]*?)```/g)].map(m => m[1].trim()), expectedCommands);
+      [...publishedText.matchAll(/```bash\n([\s\S]*?)```/g)].map((m) => m[1].trim()),
+      expectedCommands,
+    );
     for (const match of publishedText.matchAll(/\]\(\/(en|ru|es|fr|zh)\/([^#)]+)(?:#[^)]*)?\)/g)) {
       const target = `website/source/${match[1]}/${match[2]}`.replace(/\/$/, '');
       assert.ok(
         existsSync(fileURLToPath(new URL(`${target}.md`, root))) ||
           existsSync(fileURLToPath(new URL(`${target}/index.md`, root))),
-        match[0]);
+        match[0],
+      );
     }
   }
 });
@@ -107,8 +138,14 @@ test('README retains the available installer and canonical client limitations', 
   assert.ok(text.includes('[Build plugins](#build-plugins)'));
   assert.ok(text.includes('Verified GitHub release tag'));
   assert.ok(text.includes('Install an exact npm version'));
-  assert.doesNotMatch(text, /Milestone A|Historical authoring and development|plugin-kit-ai|PyPI|pipx/i);
-  assert.doesNotMatch(text, /Availability is unverified|candidate commands are not current installation advice/);
+  assert.doesNotMatch(
+    text,
+    /Milestone A|Historical authoring and development|plugin-kit-ai|PyPI|pipx/i,
+  );
+  assert.doesNotMatch(
+    text,
+    /Availability is unverified|candidate commands are not current installation advice/,
+  );
   assert.ok(text.includes('For Codex, declared MCP SSE is unsupported'));
   assert.ok(text.includes('docs/CODEX_TRANSPORT_EVIDENCE.md'));
 });

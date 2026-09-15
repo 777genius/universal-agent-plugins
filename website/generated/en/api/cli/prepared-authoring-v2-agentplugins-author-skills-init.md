@@ -110,9 +110,9 @@ agentplugins author skills init <name> [package-path] [flags]
 ### Examples
 
 ```
-  plugin-kit-ai skills init docs-helper ./package --description 'Use for documentation requests'
+  agentplugins author skills init docs-helper ./package --description 'Use for documentation requests'
   agentplugins author skills validate ./package
-  plugin-kit-ai skills validate
+  agentplugins author skills validate
 ```
 
 ### Options

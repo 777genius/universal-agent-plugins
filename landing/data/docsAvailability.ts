@@ -2,15 +2,15 @@
 export const docsAvailability = {
   home: '',
   quickstart: 'guide/quickstart.html',
-  supportBoundary: 'reference/support-boundary.html',
-  customLogicGuide: 'guide/build-custom-plugin-logic.html',
+  build: 'build/',
+  supportBoundary: 'build/',
 } as const;
 export type DocsPageId = keyof typeof docsAvailability;
 export const ownedDocsRoot = 'https://777genius.github.io/universal-agent-plugins/docs/';
 const docsLanguages = ['en', 'ru', 'es', 'fr', 'zh'] as const;
 
 export function resolveDocsLink(id: DocsPageId, locale: string, configuredUrl?: string) {
-  const language = locale === 'ru' ? 'ru' : 'en';
+  const language = (docsLanguages as readonly string[]).includes(locale) ? locale : 'en';
   const defaultUrl = `${ownedDocsRoot}en/${docsAvailability[id]}`;
   const source = configuredUrl || defaultUrl;
   // Preserve unrecognized/custom destinations byte-for-byte, including external /en/ paths.

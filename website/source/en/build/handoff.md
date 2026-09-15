@@ -10,11 +10,6 @@ translationRequired: true
 
 # Hand a package to the installer planner
 
-> **Milestone A is available.** Install `agentplugins` from
-> `universal-agent-plugins@0.1.65` on npm or the `777genius/agentplugins` Homebrew tap.
-> GitHub release: `agentplugins-v0.1.65`. Public-channel E2E is verified.
-> Runtime/dev/bootstrap, export and publication remain deferred. Legacy YAML
-> migration is cancelled; preserved source is not a supported workflow.
 
 The author's output is a standard package directory plus evidence. The installer
 makes a separate plan for selected agents. This page deliberately ends at a dry
@@ -90,13 +85,13 @@ is not permission to run against a real user's profile during preparation.
 
 ## Keep unavailable jobs out of the handoff
 
-Do not ask the receiver to run v2 import, migrate, export, bundle, publish,
-bootstrap, or dev commands. Do not label a YAML example as a migrated standard
-package.
+Ask the receiver to use only the released commands documented in the current
+Use and Build guides. A static handoff does not include runtime, development,
+dependency installation, export, or publication evidence.
 
 For remote source sharing, the existing installer requires a full 40-character
 commit SHA and an explicit package subpath when discovery is ambiguous. That is
 source selection, not a v2 publication operation. Registry submission and public
 release evidence belong to their own owners.
 
-Use the exact released versions above for this Milestone A journey.
+Use the exact released versions above for this authoring journey.

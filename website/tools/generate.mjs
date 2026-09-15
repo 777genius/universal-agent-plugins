@@ -3,7 +3,8 @@ import { pathToFileURL } from "node:url";
 import { requireGenerationPrerequisites } from "./lib/preflight.mjs";
 import fs from "node:fs/promises";
 import { buildRedirects } from "./lib/redirects.mjs";
-import { bindGeneratedPaths, isMilestoneAJourney, journeyLabels, journeySidebar, requirePublicationBoundary } from "./lib/journeys.mjs";
+import { bindGeneratedPaths, isCurrentJourney, journeyLabels, journeySidebar, requirePublicationBoundary } from "./lib/journeys.mjs";
+import { isRetiredArchive } from "./lib/public-routes.mjs";
 import path from "node:path";
 import { extractCLI } from "./extractors/cli.mjs";
 import { extractGoSDK } from "./extractors/go-sdk.mjs";
@@ -34,7 +35,8 @@ export async function generate() {
 
 // Shared production assembly seam: integration writes the real generated tree and runtime.
 export async function assembleBundles(bundles) {
-  const rawGeneratedEntities = bundles.flatMap((bundle) => bundle.entities);
+  const rawGeneratedEntities = bundles.flatMap((bundle) => bundle.entities)
+    .filter((entry) => !entry.pathEn || !isRetiredArchive(entry.pathEn));
   const baseGeneratedPages = bundles.flatMap((bundle) => bundle.pages);
   const generatedPages = [
     ...baseGeneratedPages,
@@ -69,6 +71,7 @@ export async function assembleBundles(bundles) {
   const sourceFiles = await listMarkdownFiles(sourceRoot);
   const routes = [...sourceFiles.map((file) => path.relative(sourceRoot, file)), ...generatedPages.map((page) => page.relativePath)]
     .filter((file) => !file.startsWith("gateway/"))
+    .filter((file) => !isRetiredArchive(file))
     .map((file) => `/${file.replace(/index\.md$/, "").replace(/\.md$/, "")}`);
   await writeJson(generatedRegistryPaths.redirects, buildRedirects(inventory, routes));
 
@@ -77,8 +80,8 @@ export async function assembleBundles(bundles) {
   await copyTree(path.join(websiteRoot, "public"), path.join(runtimeRoot, "public"));
   await copyTree(path.join(sourceRoot, "gateway"), runtimeRoot);
   for (const locale of docsLocales) {
-    await copyTree(path.join(sourceRoot, locale), path.join(runtimeRoot, locale));
-    await copyTree(path.join(generatedRoot, locale), path.join(runtimeRoot, locale));
+    await copyCurrentPages(path.join(sourceRoot, locale), path.join(runtimeRoot, locale), locale);
+    await copyCurrentPages(path.join(generatedRoot, locale), path.join(runtimeRoot, locale), locale);
   }
 
 }
@@ -95,6 +98,7 @@ export async function scanSourceEntities() {
         continue;
       }
       const relative = path.relative(path.join(sourceRoot, locale), filePath).replace(/\\/g, "/");
+      if (isRetiredArchive(path.join(locale, relative))) continue;
       const existing = entities.find((entry) => entry.canonicalId === meta.canonicalId);
       const targetPath = `/${locale}/${relative.replace(/index\.md$/, "").replace(/\.md$/, "")}`;
       const localeKey = localePathField(locale);
@@ -102,18 +106,18 @@ export async function scanSourceEntities() {
         existing[localeKey] = targetPath;
         continue;
       }
-      const milestoneAJourney = isMilestoneAJourney(relative);
+      const currentJourney = isCurrentJourney(relative);
       entities.push({
         canonicalId: meta.canonicalId,
         kind: "page",
         surface: meta.section || "page",
-        localeStrategy: milestoneAJourney ? "canonical-en" : "mirrored",
+        localeStrategy: currentJourney ? "canonical-en" : "mirrored",
         title: meta.title || relative,
         summary: meta.description || "",
-        stability: milestoneAJourney ? "public-stable" : meta.stability || "public-stable",
-        maturity: milestoneAJourney ? "stable" : meta.maturity || "stable",
+        stability: currentJourney ? "public-stable" : meta.stability || "public-stable",
+        maturity: currentJourney ? "stable" : meta.maturity || "stable",
         publicVisibility: "public",
-        ...(milestoneAJourney ? { status: "released", released: true } : {}),
+        ...(currentJourney ? { status: "released", released: true } : {}),
         sourceKind: "hand-authored",
         sourceRef: relative,
         pathEn: locale === "en" ? targetPath : "",
@@ -127,6 +131,14 @@ export async function scanSourceEntities() {
     }
   }
   return entities;
+}
+
+async function copyCurrentPages(fromRoot, toRoot, locale) {
+  for (const file of await listMarkdownFiles(fromRoot)) {
+    const relative = path.relative(fromRoot, file);
+    if (isRetiredArchive(path.join(locale, relative))) continue;
+    await writeFile(path.join(toRoot, relative), await fs.readFile(file, "utf8"));
+  }
 }
 
 function localePathField(locale) {

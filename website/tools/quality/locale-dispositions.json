@@ -212,11 +212,7 @@
       "reviewedSha256": "6a9cdca20e34e86675ffe05dccb2ff5cdb6481c0a2411f34b28afde69fdc6945"
     },
     "ru/guide/quickstart.md": {
-      "disposition": "historical-snapshot",
-      "originalSha256": "0b0c2a0a35690e6c9eed71941199a66302f553b691aea0ea4aca055d0de28069",
-      "frontmatterSha256": "1fbc7e5779d0d8d626dfb8797d9a72f50910d78fcf8b422f1c06b0c0602396fb",
-      "bodySha256": "ba633d47798131229ed099dfbcfc356458fa4e4b7a4627bd0e8eef3d9f64ba32",
-      "reviewedSha256": "86458ad4678c7050e51feb96054580b143e29ffb6206328e8578f11dceeec703"
+      "disposition": "current-translation"
     },
     "ru/guide/starter-templates.md": {
       "disposition": "historical-snapshot",
@@ -240,11 +236,7 @@
       "reviewedSha256": "4f0623f1edf79c678d1bba2725d8426b875986867b0a7420cc54d1a3608e56b4"
     },
     "ru/index.md": {
-      "disposition": "historical-snapshot",
-      "originalSha256": "5f6a7aa0d0ae77852bfdb74be7f6cb082c72b4b2f19bdd645ce40e8703b0718d",
-      "frontmatterSha256": "05a6ef04c0ff8ef3269e047dd5f46c5428c7a79ea62d51e03bc497b350205f41",
-      "bodySha256": "a6518ae2027fccd9890725ed945bcf7328e5bc1545f41b7e304819cc8fad9b81",
-      "reviewedSha256": "c691fc1f4ff74527602c49e413415448957758a075a593044a54f144d7a4307c"
+      "disposition": "current-translation"
     },
     "ru/legacy/v1/index.md": {
       "disposition": "english-fallback"
@@ -587,11 +579,7 @@
       "reviewedSha256": "6381a6f2d309f424e65567738616869c639ddcb90cf3e249e6911d4a7a410715"
     },
     "es/guide/quickstart.md": {
-      "disposition": "historical-snapshot",
-      "originalSha256": "bb92c2f992acb16bc177fc9cb68792d90666cc8633bc749602afc5409800fdb9",
-      "frontmatterSha256": "a5d8bc70e370e5154c1e7b22b11244b2da650a0f664a5bd7dfd632903962b00a",
-      "bodySha256": "2d92af82bf3865a5e3702fcb679b7326da8066921fbcb95aab4a3e72d4f123a8",
-      "reviewedSha256": "bb4591a77fdf542b3883bc6739dd52ff892700dfda4d8ef4445fdb6ee3b00e3c"
+      "disposition": "current-translation"
     },
     "es/guide/starter-templates.md": {
       "disposition": "historical-snapshot",
@@ -615,11 +603,7 @@
       "reviewedSha256": "8756231209b7f59e3c13e7f5c53c1bc336cc926741d281fd65934263d4affd8b"
     },
     "es/index.md": {
-      "disposition": "historical-snapshot",
-      "originalSha256": "0e7f059bd39851ad4d30687002ac5eb66d16c54e08e1517911bca06d46b23fb7",
-      "frontmatterSha256": "71d0f4cd30e804d148a82008d6459461f349c7cbf573b64e6718bf4cea875486",
-      "bodySha256": "05f4ff859300b40700be52df5ebc6ab2df429e10a93d5e17a0edf1ccd21dcc9e",
-      "reviewedSha256": "93d829ebaa6cf0cffe898591a633b1c61b36caaff28aad52b7f7859c061e42d2"
+      "disposition": "current-translation"
     },
     "es/legacy/v1/index.md": {
       "disposition": "english-fallback"
@@ -962,11 +946,7 @@
       "reviewedSha256": "5166b94f15ebaaf86fb617e3037fd631d28f2a16c75ed84c99144b02779ee219"
     },
     "fr/guide/quickstart.md": {
-      "disposition": "historical-snapshot",
-      "originalSha256": "bb0c495add3be4fd3c71367cac0e003a7f014b5e242709fe7623ad37f1c90dc7",
-      "frontmatterSha256": "108deba590a1de2fa9cf8ca7066c8c70a4b0ddaff4b2a9cd2662a096a1ae44df",
-      "bodySha256": "4ea044eadaeaeb94dfde067d7ec5beaf45161fe7ffd8b5e60f55a7792ba7dd67",
-      "reviewedSha256": "9c2a6724bcc647e4dd4bfa0de12fde6c966c66c9a4487062e85da38097e8fed2"
+      "disposition": "current-translation"
     },
     "fr/guide/starter-templates.md": {
       "disposition": "historical-snapshot",
@@ -990,11 +970,7 @@
       "reviewedSha256": "49d9bf0baa380f1315cdd8837f5de78806171a588644e2192e432c901fb454af"
     },
     "fr/index.md": {
-      "disposition": "historical-snapshot",
-      "originalSha256": "0c9a7a1f0ade2442db0ed6998f586a62a3a16ae9951ec93042aa57ae019aee42",
-      "frontmatterSha256": "f814dec2c4a5181a82c5a6eb9242a6654f428ed2435f644637e100dc307d723e",
-      "bodySha256": "9f075e66c0f14b939db3edb227bfa5b1879ffbc4a2e95fe8009566837061948f",
-      "reviewedSha256": "3a1854cf361c772e8faeb309dfcf813181d85424c473cf9a3baa6ed25bc1f50a"
+      "disposition": "current-translation"
     },
     "fr/legacy/v1/index.md": {
       "disposition": "english-fallback"
@@ -1337,11 +1313,7 @@
       "reviewedSha256": "2a733a65b8427f6aa6171eced9bf6275c3cff2d90a81002c8dd8cb74b03a4d8b"
     },
     "zh/guide/quickstart.md": {
-      "disposition": "historical-snapshot",
-      "originalSha256": "42295b740807081d25c282ca747b596d21ddc2b7feb08053abe2b1c7b107408d",
-      "frontmatterSha256": "83e7d9412d8d22ce3355aef87bcb9ebaddd679add629efb3e9972bf29ac42e33",
-      "bodySha256": "4f0d7fc1a6eb183ccd6085e2071f2da0a2bd93665a4970493ec0d7a4dee23814",
-      "reviewedSha256": "c18d32c4a276c2f2e2d665a414cc2bdb2445d9adddb7a5cfbee1c2d01b1e9975"
+      "disposition": "current-translation"
     },
     "zh/guide/starter-templates.md": {
       "disposition": "historical-snapshot",
@@ -1365,11 +1337,7 @@
       "reviewedSha256": "766027089ede8c07dfb5e25fe6d7aa320027b55a977f22cdc52f804965bfe13b"
     },
     "zh/index.md": {
-      "disposition": "historical-snapshot",
-      "originalSha256": "eeee5fc76122ecf3d252dc07a2cfc9d034f4ce7aeb49a74f12cf23f5af9f4f48",
-      "frontmatterSha256": "4eb16b7246ea250d4eef64f0d39c7ab9291c51cd32ec1d1c435a80ce74920011",
-      "bodySha256": "43751088303f2f65c88cd2ad6d55e83635b4c786ad0ab58705ea135d9c42659a",
-      "reviewedSha256": "3ffb822e1b7d30d9a283f5c3c88176e0fa06640f944138c76885368017ea90ba"
+      "disposition": "current-translation"
     },
     "zh/legacy/v1/index.md": {
       "disposition": "english-fallback"

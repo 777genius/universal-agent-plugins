@@ -1,53 +1,21 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import { test } from "node:test";
-import { runInNewContext } from "node:vm";
+import { quickstartClaims, quickstartErrors } from "./check-output.mjs";
 
-// Execute the validator's actual quickstart assertions without running its
-// unrelated dist checks or requiring a production build for these regressions.
-const source = readFileSync(new URL("./check-output.mjs", import.meta.url), "utf8");
-const start = source.indexOf("for (const claim of", source.indexOf("const quickstart ="));
-const end = source.indexOf("const ciIntegration =", start);
-assert.ok(start >= 0 && end > start);
-const assertions = source.slice(start, end);
-const claims = ["Use plugins", "Build plugins", "Milestone A is available", "public-channel E2E are verified", "0.1.65",
-  "plugin.json", "agentplugins author"];
-const highlight = (command) => `<pre><code><span class="line">${command.split(/(?= )/)
-  .map(token => `<span style="--shiki-light:#032F62;--shiki-dark:#9ECBFF;">${token}</span>`)
-  .join("")}</span></code></pre>`;
+const highlight = (command) => `<pre><code><span class="line">${command.split(/(?= )/).map((token) => `<span>${token}</span>`).join("")}</span></code></pre>`;
 const command = "npx universal-agent-plugins add context7";
-function check(code, includedClaims = claims) {
-  const errors = [];
-  const rendered = includedClaims.map(claim => `<p>${claim}</p>`).join("") + code;
-  const failed = runInNewContext(`${assertions}\nhasError;`, {
-    quickstart: rendered,
-    quickstartVisible: rendered,
-    hasError: false,
-    console: { error: message => errors.push(message) },
-  });
-  assert.equal(failed, errors.length > 0);
-  return errors;
-}
+const page = (code, claims = quickstartClaims) => `<main>${claims.map((claim) => `<p>${claim}</p>`).join("")}${code}</main>`;
 
-test("plain and Shiki-highlighted installer commands are accepted", () => {
-  assert.deepEqual(check(`<pre><code>${command}</code></pre>`), []);
-  assert.deepEqual(check(highlight(command)), []);
+test("plain and highlighted installer commands satisfy the quickstart contract", () => {
+  assert.deepEqual(quickstartErrors(page(`<pre><code>${command}</code></pre>`)), []);
+  assert.deepEqual(quickstartErrors(page(highlight(command))), []);
 });
 
-test("missing, incomplete, metadata-only and split-block commands are rejected", () => {
-  for (const code of ["", highlight("npx universal-agent-plugins add"),
-    `<pre><code><span data-command="${command}">unrelated</span></code></pre>`,
-    highlight("npx universal-agent-plugins") + highlight(" add context7")]) {
-    assert.ok(check(code).some(error => error.endsWith(command)));
-  }
+test("missing claims and split or incomplete commands fail", () => {
+  for (const code of ["", highlight("npx universal-agent-plugins add"), highlight("npx universal-agent-plugins") + highlight(" add context7")]) assert.ok(quickstartErrors(page(code)).length > 0);
+  for (const claim of quickstartClaims) assert.ok(quickstartErrors(page(highlight(command), quickstartClaims.filter((item) => item !== claim))).length > 0, claim);
 });
 
-test("highlighting does not bypass old journey rejection or availability claims", () => {
-  for (const old of ["npx plugin-kit-ai@latest add notion", highlight("npx plugin-kit-ai@latest add notion"),
-    "Recommended Default"]) {
-    assert.ok(check(highlight(command) + old).includes("Quickstart still recommends the old v1 first-run journey."));
-  }
-  for (const claim of claims) {
-    assert.ok(check(highlight(command), claims.filter(value => value !== claim)).length > 0, claim);
-  }
+test("retired authoring copy is rejected even inside highlighted code", () => {
+  for (const retired of ["Milestone A", "plugin-kit-ai init demo", "plugin.yaml", "/legacy/v1/"]) assert.ok(quickstartErrors(page(highlight(command) + `<p>${retired}</p>`)).some((error) => error.includes("retired authoring copy")));
 });

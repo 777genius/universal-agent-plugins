@@ -10,6 +10,6 @@ translationRequired: true
 
 # Check a package without running it
 
-[Traducción no disponible; consulte la página actual en inglés](/en/build/checks). Milestone A está disponible. La migración YAML está cancelada. Milestone A disponible: universal-agent-plugins@0.1.65; GitHub: agentplugins-v0.1.65.
+[Traducción no disponible; consulte la página actual en inglés](/en/build/checks). La creación de Agent Plugins está disponible mediante Agent Plugins en `universal-agent-plugins@0.1.65`.
 
 [Usar plugins](/es/use/) · [Crear plugins](/es/build/)

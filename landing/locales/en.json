@@ -282,12 +282,8 @@
     "build": {
       "badge": "Available now",
       "title": "Build plugins",
-      "description": "Build a portable Agent Plugins 1.0 package: root plugin.json with optional skills/ and mcp.json, then use the offline init → validate → inspect → static test loop. Milestone A is available in universal-agent-plugins 0.1.65; runtime, export and publication remain deferred.",
+      "description": "Build a portable Agent Plugins 1.0 package: root plugin.json with optional skills/ and mcp.json, then use the offline init → validate → inspect → static test loop. Static authoring is available in universal-agent-plugins 0.1.65; runtime execution, export and publication are not included.",
       "cta": "Open the Build guide"
-    },
-    "historical": {
-      "eyebrow": "Legacy implementation archive",
-      "cta": "View immutable v1 history"
     }
   },
   "faq": {
@@ -305,13 +301,13 @@
     "quickLinks": {
       "badge": "Start here",
       "title": "Need a clearer next step?",
-      "subtitle": "Most people only need three pages: quickstart, the Python path if that is your stack, and the support boundary before promising too much.",
+      "subtitle": "Most people only need three pages: quickstart, the Build guide for authoring, and the Use guide for installing and managing plugins.",
       "quickstartTitle": "Open quickstart",
       "quickstartBody": "The shortest supported path from install to a validated repo.",
-      "pythonTitle": "Open Python guide",
-      "pythonBody": "Best next page when your team is already Python-first.",
-      "boundaryTitle": "Check support boundary",
-      "boundaryBody": "See what is production-ready today and what is still beta."
+      "buildTitle": "Open Build guide",
+      "buildBody": "Create and check plugin.json packages with agentplugins author.",
+      "useTitle": "Open Use guide",
+      "useBody": "Find, preview, install, and maintain plugins with agentplugins."
     }
   },
   "comparison": {
@@ -357,15 +353,13 @@
     "installLink": "Installer guide",
     "buildTitle": "Build plugins",
     "standard": "Build a portable Agent Plugins 1.0 package around plugin.json, with optional skills/ and mcp.json. Client support depends on the package and its components.",
-    "preparation": "Milestone A available",
-    "unreleased": "Milestone A is available. universal-agent-plugins{'@'}0.1.65; GitHub: agentplugins-v0.1.65. npm, Homebrew, native archives, GitHub Releases and public-channel E2E are verified. Static authoring only; runtime/dev/bootstrap, export and publication remain deferred. Legacy YAML migration is cancelled; preserved source is not a supported product.",
     "specLink": "Read the Agent Plugins 1.0 specification",
-    "historyTitle": "Historical v1 maintenance",
-    "history": "Maintain existing plugin.yaml projects with the v1 instructions below. These templates and generated outputs are historical v1 workflows; they do not create the new standard-first authoring flow.",
-    "quickstartLink": "Quickstart and v1 maintenance",
     "compatibilityLink": "Client compatibility (English)",
     "limitations": "Compatibility is package-specific. Schema validation does not prove runtime, OAuth or activation. Codex does not support declared MCP SSE; stdio and Streamable HTTP keep their existing adapter support.",
-    "versions": "Milestone A available: universal-agent-plugins{'@'}0.1.65; GitHub: agentplugins-v0.1.65."
+    "versions": "Agent Plugins authoring available: universal-agent-plugins{'@'}0.1.65; GitHub: agentplugins-v0.1.65.",
+    "availability": "Agent Plugins authoring available",
+    "releaseScope": "Agent Plugins authoring is available in universal-agent-plugins{'@'}0.1.65; GitHub: agentplugins-v0.1.65. npm, Homebrew, native archives, GitHub Releases and public-channel E2E are verified. The release provides static authoring; runtime execution, development servers, dependency bootstrap, export and publication are not included.",
+    "buildGuideLink": "Open the Build guide"
   },
   "shell": {
     "docs": {

@@ -284,13 +284,13 @@
     "quickLinks": {
       "badge": "从这里开始",
       "title": "需要更清晰的下一步吗？",
-      "subtitle": "大多数人只需要三页：快速入门、Python 路径（如果这是您的堆栈）以及在承诺太多之前的支持边界。",
+      "subtitle": "大多数人只需要三个页面：快速入门、用于创作的“构建”指南，以及用于安装和管理插件的“使用”指南。",
       "quickstartTitle": "打开快速入门",
       "quickstartBody": "从安装到经过验证的存储库的最短受支持路径。",
-      "pythonTitle": "打开Python指南",
-      "pythonBody": "当您的团队已经是 Python 优先时，下一页是最佳选择。",
-      "boundaryTitle": "检查支撑边界",
-      "boundaryBody": "查看目前哪些产品已经可以投入生产，哪些仍处于测试阶段。"
+      "buildTitle": "打开构建指南",
+      "buildBody": "使用 agentplugins author 创建并检查 plugin.json 包。",
+      "useTitle": "打开使用指南",
+      "useBody": "使用 agentplugins 查找、预览、安装和维护插件。"
     }
   },
   "comparison": {
@@ -336,15 +336,13 @@
     "installLink": "安装指南",
     "buildTitle": "构建插件",
     "standard": "以 plugin.json 为核心构建可移植的 Agent Plugins 1.0 包，可选包含 skills/ 和 mcp.json。客户端支持取决于包及其组件。",
-    "preparation": "Milestone A 已发布",
-    "unreleased": "Milestone A 已发布。universal-agent-plugins{'@'}0.1.65；GitHub：agentplugins-v0.1.65。npm、Homebrew、原生归档、GitHub Releases 和公共 E2E 已验证。当前仅支持静态创作；runtime/dev/bootstrap、导出和发布仍延后。旧版 YAML 迁移已取消；保留的源代码不是受支持产品。",
     "specLink": "Agent Plugins 1.0 规范",
-    "historyTitle": "历史 v1 维护",
-    "history": "请使用以下 v1 说明维护现有 plugin.yaml 项目。这些模板和生成输出属于历史 v1 流程，不会创建新的标准优先创作流程。",
-    "quickstartLink": "快速入门与 v1 维护",
     "compatibilityLink": "客户端兼容性（英文）",
     "limitations": "兼容性取决于包。通过模式验证并不证明运行、OAuth 或激活成功。Codex 不支持声明的 MCP SSE；stdio 和 Streamable HTTP 保留现有适配器支持。",
-    "versions": "Milestone A 已发布：universal-agent-plugins{'@'}0.1.65；GitHub：agentplugins-v0.1.65。"
+    "versions": "Agent Plugins 创作已发布: universal-agent-plugins{'@'}0.1.65; GitHub: agentplugins-v0.1.65.",
+    "availability": "Agent Plugins 创作已发布",
+    "releaseScope": "Agent Plugins 创作已在 universal-agent-plugins{'@'}0.1.65 中发布；GitHub：agentplugins-v0.1.65。npm、Homebrew、原生归档、GitHub Releases 和公共 E2E 已验证。此版本提供静态创作；不包含运行插件、开发服务器、依赖项安装、导出或发布。",
+    "buildGuideLink": "打开构建指南"
   },
   "shell": {
     "docs": {

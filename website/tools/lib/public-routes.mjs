@@ -3,10 +3,11 @@ const currentPage = new RegExp(`^${localePrefix}/(?:index\\.md|use/.+\\.md|build
 
 export function isRetiredArchive(relativePath) {
   const pathOnly = relativePath.replace(/\\/g, "/").split(/[?#]/, 1)[0].replace(/^\/+/, "");
-  const normalized = pathOnly.endsWith(".md")
-    ? pathOnly
-    : pathOnly.endsWith("/")
-      ? `${pathOnly}index.md`
-      : `${pathOnly}.md`;
+  const markdownPath = pathOnly.endsWith(".html") ? pathOnly.slice(0, -".html".length) + ".md" : pathOnly;
+  const normalized = markdownPath.endsWith(".md")
+    ? markdownPath
+    : markdownPath.endsWith("/")
+      ? `${markdownPath}index.md`
+      : `${markdownPath}.md`;
   return new RegExp(`^${localePrefix}/`).test(normalized) && !currentPage.test(normalized);
 }
