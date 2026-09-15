@@ -164,8 +164,8 @@ Alternatives rejected for the current delivery:
   approximately 100-500 lines, but it does not satisfy the requested working
   E2E and is not an acceptable substitute.
 
-Future hosted implementation and review workers use `gpt-6-astra`, reasoning
-effort `medium`, service tier `default` (no fast), unless the owner changes this
+Future hosted implementation and review workers use `gpt-5.6-sol`, reasoning
+effort selected as needed, service tier `default` (no fast), unless the owner changes this
 profile again.
 
 ## Owner clarification: preserve legacy capabilities (2026-09-06)
@@ -243,7 +243,7 @@ Useful YAML capabilities and all preservation constraints above remain intact.
 The preliminary 100-500 changed-line estimate is a target, not a guarantee.
 Re-estimate after bounded intake against the actual merge base; do not weaken
 acceptance or expand scope just to satisfy that number. Hosted workers use the
-current owner-selected profile recorded above: `gpt-6-astra`, reasoning `medium`,
+current owner-selected profile recorded above: `gpt-5.6-sol`, reasoning selected as needed,
 service tier `default` (no fast).
 
 Checkpoint delivery evidence (2026-09-08): [PR #190](https://github.com/777genius/universal-agent-plugins/pull/190)

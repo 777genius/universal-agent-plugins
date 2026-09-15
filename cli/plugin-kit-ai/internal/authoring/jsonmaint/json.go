@@ -220,7 +220,7 @@ func Apply(ctx context.Context, plan Plan, opts ApplyOptions) (committed bool, e
 	defer func() {
 		if owned {
 			if now, e := root.Lstat(cleanupPath); e == nil && os.SameFile(now, cleanupInfo) {
-				err = errors.Join(err, root.Remove(cleanupPath), parent.Sync())
+				err = errors.Join(err, root.Remove(cleanupPath), syncParent(parent))
 			}
 		}
 	}()
@@ -258,7 +258,7 @@ func Apply(ctx context.Context, plan Plan, opts ApplyOptions) (committed bool, e
 	if readErr != nil || !os.SameFile(oldInfo, originalInfo) || !bytes.Equal(old, plan.before) {
 		return committed, rollback(fail("source_changed"))
 	}
-	if err = parent.Sync(); err != nil {
+	if err = syncParent(parent); err != nil {
 		return committed, rollback(fail("sync_failed"))
 	}
 	if err = opts.Validate(ctx); err != nil {

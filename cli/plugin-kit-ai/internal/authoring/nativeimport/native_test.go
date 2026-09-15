@@ -10,6 +10,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/777genius/plugin-kit-ai/cli/internal/authoring/scaffold"
 )
 
 func nativeCode(t *testing.T, err error) string {
@@ -41,8 +43,22 @@ func TestClaudeBuildDeterministicSkipsAndRedacts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if first.SafeServers != 1 || len(first.SkippedServers) != 5 || len(first.UnsupportedTopLevel) != 1 || first.SourceSHA256 != second.SourceSHA256 || !reflect.DeepEqual(first.Package.Files(), second.Package.Files()) {
+	if first.SafeServers != 1 || len(first.SkippedServers) != 5 || len(first.UnsupportedTopLevel) != 1 {
 		t.Fatalf("first=%+v second=%+v", first, second)
+	}
+	// sourceInfo deliberately retains platform-specific file identity for Apply
+	// revalidation. Compare only the deterministic, reviewable plan contract.
+	publicPlan := func(p Plan) any {
+		return struct {
+			SourceSHA256        string
+			SafeServers         int
+			SkippedServers      []Issue
+			UnsupportedTopLevel []Issue
+			Files               []scaffold.File
+		}{p.SourceSHA256, p.SafeServers, p.SkippedServers, p.UnsupportedTopLevel, p.Package.Files()}
+	}
+	if !reflect.DeepEqual(publicPlan(first), publicPlan(second)) {
+		t.Fatalf("public plans differ: first=%+v second=%+v", publicPlan(first), publicPlan(second))
 	}
 	public, _ := json.Marshal(first)
 	if bytes.Contains(public, []byte(secret)) || bytes.Contains(public, []byte("TOKEN")) || bytes.Contains(public, []byte("env")) {

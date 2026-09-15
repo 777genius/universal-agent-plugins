@@ -131,6 +131,30 @@ async function releaseAdapterOverlay(checkout, parent) {
   const devPin = /^\s*\{"cli\/plugin-kit-ai\/internal\/authoring\/commands\/dev_session\.go", "[0-9a-f]{64}"\},\n/m;
   if (!devPin.test(source)) throw new Error("Released authoring adapter projection lost the Phase 7 boundary");
   source = source.replace(devPin, "");
+  // Phase 8A is present only in current source. The released command tree is
+  // compiled from v0.1.65, so its overlaid source inventory must not require
+  // current-only packages or broaden the immutable release attestation.
+  for (const prefix of [
+    "cli/plugin-kit-ai/internal/authoring/commands/maintenance.go",
+    "cli/plugin-kit-ai/internal/authoring/jsonmaint/",
+    "cli/plugin-kit-ai/internal/authoring/nativeimport/",
+    "cli/plugin-kit-ai/internal/authoring/report/",
+    "cli/plugin-kit-ai/internal/authoring/scaffold/"
+  ]) {
+    let found = false;
+    source = source.split("\n").filter((line) => {
+      const match = line.trim().match(/^\{"([^"]+)", "[0-9a-f]{64}"\},$/);
+      const remove = match && (prefix.endsWith("/") ? match[1].startsWith(prefix) : match[1] === prefix);
+      found ||= Boolean(remove);
+      return !remove;
+    }).join("\n");
+    if (!found) throw new Error(`Current-only authoring adapter pin missing: ${prefix}`);
+  }
+  for (const dir of ["jsonmaint", "nativeimport", "report", "scaffold"]) {
+    const line = `\t"cli/plugin-kit-ai/internal/authoring/${dir}",\n`;
+    if (!source.includes(line)) throw new Error(`Current-only authoring adapter directory missing: ${dir}`);
+    source = source.replace(line, "");
+  }
   const projected = path.join(parent, "agentplugins-v0.1.65-source.go");
   const overlay = path.join(parent, "agentplugins-v0.1.65-overlay.json");
   await fs.writeFile(projected, source, { flag: "wx" });
