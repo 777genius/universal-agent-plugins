@@ -81,6 +81,7 @@ func TestClaudeBuildRejectsCredentialBearingArgumentsAndRedactsReport(t *testing
 		`"--api-key=sk_live_direct"`,
 		`"--api-key","opaque-value"`,
 		`"--api_key=opaque-value"`,
+		`"--apiKey=opaque-value"`,
 		`"--access-key","opaque-value"`,
 		`"--token","opaque-value"`,
 		`"--header","Authorization: Bearer opaque-value"`,
@@ -113,6 +114,31 @@ func TestClaudeBuildRejectsCredentialBearingArgumentsAndRedactsReport(t *testing
 				}
 			}
 		})
+	}
+}
+
+func TestClaudeBuildAllowsBenignCredentialOptionNearMatches(t *testing.T) {
+	args := []string{
+		"--monkey",
+		"--keyboard-layout",
+		"--authentication-mode=none",
+		"--environment-name=prod",
+		"--tokenizer",
+	}
+	body, err := json.Marshal(map[string]any{
+		"mcpServers": map[string]any{
+			"safe": map[string]any{"command": "node", "args": args},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	plan, err := Build(context.Background(), writeSource(t, string(body)), "claude", "imported-plugin", "Imported package.")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if plan.SafeServers != 1 || len(plan.SkippedServers) != 0 {
+		t.Fatalf("safe=%d skipped=%+v", plan.SafeServers, plan.SkippedServers)
 	}
 }
 

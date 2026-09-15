@@ -169,7 +169,7 @@ func portableAbsolute(value string) bool {
 }
 
 func portableArg(value string) bool {
-	if len(value) > 4096 || !utf8.ValidString(value) || strings.ContainsRune(value, 0) || filepath.IsAbs(value) || filepath.VolumeName(value) != "" || portableAbsolute(value) || strings.HasPrefix(value, `\\`) || credentialArg(value) {
+	if len(value) > 4096 || !utf8.ValidString(value) || strings.ContainsRune(value, 0) || strings.HasPrefix(value, "/") || filepath.IsAbs(value) || filepath.VolumeName(value) != "" || portableAbsolute(value) || strings.HasPrefix(value, `\\`) || credentialArg(value) {
 		return false
 	}
 	for _, r := range value {
@@ -185,29 +185,32 @@ func portableArg(value string) bool {
 // values do not look secret. Import reports only the server's hashed identity;
 // it never needs to retain a rejected native argument for diagnostics.
 func credentialArg(value string) bool {
-	if secretLike(value) {
-		return true
-	}
-	label := strings.ToLower(strings.TrimSpace(value))
+	trimmed := strings.TrimSpace(value)
+	label := strings.ToLower(trimmed)
 	optionLike := strings.HasPrefix(label, "-") || strings.HasPrefix(label, "/")
+	payload := ""
 	if i := strings.IndexAny(label, "=:"); i >= 0 {
 		optionLike = true
+		payload = label[i+1:]
 		label = label[:i]
 	}
 	if !optionLike {
-		return false
+		return secretLike(trimmed)
 	}
 	label = strings.TrimLeft(label, "-/")
-	label = strings.NewReplacer("-", "", "_", "", ".", "").Replace(label)
 	if label == "h" || label == "e" {
 		return true
 	}
-	for _, marker := range []string{"key", "auth", "header", "env"} {
-		if strings.Contains(label, marker) {
+	for _, part := range strings.FieldsFunc(label, func(r rune) bool {
+		return r == '-' || r == '_' || r == '.'
+	}) {
+		switch part {
+		case "key", "secret", "token", "password", "passwd", "credential", "credentials", "auth", "authorization", "bearer", "header", "env",
+			"apikey", "accesskey", "secretkey", "authtoken", "accesstoken", "clientsecret", "clientkey", "authheader":
 			return true
 		}
 	}
-	return false
+	return payload != "" && secretLike(payload)
 }
 
 func secretLike(value string) bool {

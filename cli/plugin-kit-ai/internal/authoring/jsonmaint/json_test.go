@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -133,7 +134,8 @@ func TestApplyNoopMtimeSymlinkConcurrentAndRollback(t *testing.T) {
 		got, _ := os.ReadFile(path)
 		info, _ := os.Stat(path)
 		entries, _ := os.ReadDir(root)
-		if err != nil || !committed || string(got) != "{\n  \"a\": 1,\n  \"b\": 2\n}\n" || info.Mode().Perm() != 0640 || len(entries) != 1 {
+		modePreserved := runtime.GOOS == "windows" || info.Mode().Perm() == 0640
+		if err != nil || !committed || string(got) != "{\n  \"a\": 1,\n  \"b\": 2\n}\n" || !modePreserved || len(entries) != 1 {
 			t.Fatalf("commit=%t err=%v body=%s mode=%o entries=%v", committed, err, got, info.Mode().Perm(), entries)
 		}
 	})
@@ -150,7 +152,8 @@ func TestApplyNoopMtimeSymlinkConcurrentAndRollback(t *testing.T) {
 		got, _ := os.ReadFile(path)
 		info, _ := os.Stat(path)
 		entries, _ := os.ReadDir(root)
-		if committed || !errors.Is(err, sentinel) || string(got) != string(original) || info.Mode().Perm() != 0750 || len(entries) != 1 || strings.HasPrefix(entries[0].Name(), ".authoring-json-") {
+		modePreserved := runtime.GOOS == "windows" || info.Mode().Perm() == 0750
+		if committed || !errors.Is(err, sentinel) || string(got) != string(original) || !modePreserved || len(entries) != 1 || strings.HasPrefix(entries[0].Name(), ".authoring-json-") {
 			t.Fatalf("commit=%t err=%v body=%s mode=%o entries=%v", committed, err, got, info.Mode().Perm(), entries)
 		}
 	})

@@ -133,7 +133,7 @@ var factoryPins = []sourcePin{
 	{"cli/plugin-kit-ai/internal/authoring/jsonmaint/replace_windows.go", "74e3e6e63e36bfd06a83167544780ba97fd0401e657a8602208becebd4d1edf8"},
 	{"cli/plugin-kit-ai/internal/authoring/jsonmaint/sync_other.go", "40d9f089db776abe7b1235bd9e72f6689e16e3bbe8f872a552138d0581bcdd17"},
 	{"cli/plugin-kit-ai/internal/authoring/jsonmaint/sync_windows.go", "a95e6093b542bfd61ec121344dbbc548fb9a4dfd8d0aa6f9b808ac536d4bd1a0"},
-	{"cli/plugin-kit-ai/internal/authoring/nativeimport/native.go", "f6e1f7a205a7e423e1c8c9fe16ff8342ea782e314013a5e29497a632e51f3f79"},
+	{"cli/plugin-kit-ai/internal/authoring/nativeimport/native.go", "edc46fbe8db91c56df921dd966900cbbd6762aebdda48bb78895afef6499e96f"},
 	{"cli/plugin-kit-ai/internal/authoring/nativeimport/nofollow_other.go", "e14d367e18567b65da7aabd319e63861e20818b26e91691bf77abf17e137de6b"},
 	{"cli/plugin-kit-ai/internal/authoring/nativeimport/nofollow_unix.go", "8736f01f2575156d5d114d9e14b4025afa13e6aee694ed9df91e28af5153f505"},
 	{"cli/plugin-kit-ai/internal/authoring/nativeimport/output.go", "c20355804b42897c844abad0c9a8d7a3b069e1ca3b85a99f2f81ce1a27645432"},
