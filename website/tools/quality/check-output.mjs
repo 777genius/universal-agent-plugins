@@ -10,6 +10,9 @@ export const quickstartClaims = [
   "public-channel E2E are verified", "0.1.65", "plugin.json", "agentplugins author"
 ];
 
+const embeddedHistoricalSource = /<!-- locale-historical-source:start[\s\S]*?locale-historical-source:end -->/g;
+export const currentSourceBody = (body) => body.replace(embeddedHistoricalSource, "");
+
 export function quickstartErrors(html) {
   const errors = [];
   const visible = html.replace(/<!--[\s\S]*?-->/g, "").match(/<main\b[\s\S]*?<\/main>/)?.[0] || html;
@@ -45,7 +48,9 @@ export async function checkOutput() {
   const htmlFiles = await listHtmlFiles(distRoot);
   for (const file of htmlFiles) {
     const relative = path.relative(distRoot, file).replaceAll("\\", "/");
-    const body = await fs.readFile(file, "utf8");
+    // Historical locale snapshots are embedded for immutable preservation and
+    // are not current public copy. Scan only the visible/current source.
+    const body = currentSourceBody(await fs.readFile(file, "utf8"));
     if (body.includes("maintainer-docs")) errors.push(`Internal docs leaked into built output: ${relative}`);
     if (/href="\/(en|ru|es|fr|zh)\//.test(body) || /src="\/assets\//.test(body)) errors.push(`Root-relative path detected in built output: ${relative}`);
     if (isRetiredArchive(relative)) errors.push(`Retired documentation was published: ${relative}`);

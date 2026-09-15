@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { quickstartClaims, quickstartErrors } from "./check-output.mjs";
+import { currentSourceBody, quickstartClaims, quickstartErrors } from "./check-output.mjs";
 
 const highlight = (command) => `<pre><code><span class="line">${command.split(/(?= )/).map((token) => `<span>${token}</span>`).join("")}</span></code></pre>`;
 const command = "npx universal-agent-plugins add context7";
@@ -18,4 +18,9 @@ test("missing claims and split or incomplete commands fail", () => {
 
 test("retired authoring copy is rejected even inside highlighted code", () => {
   for (const retired of ["Milestone A", "plugin-kit-ai init demo", "plugin.yaml", "/legacy/v1/"]) assert.ok(quickstartErrors(page(highlight(command) + `<p>${retired}</p>`)).some((error) => error.includes("retired authoring copy")));
+});
+
+test("embedded historical locale snapshots are excluded from current-source scanning", () => {
+  const source = `current copy\n<!-- locale-historical-source:start\nplugin-kit-ai generate .\nlocale-historical-source:end -->`;
+  assert.equal(currentSourceBody(source), "current copy\n");
 });
