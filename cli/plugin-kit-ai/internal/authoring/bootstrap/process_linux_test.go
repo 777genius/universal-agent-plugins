@@ -5,6 +5,7 @@ package bootstrap_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -15,6 +16,69 @@ import (
 
 	"github.com/777genius/plugin-kit-ai/cli/internal/authoring/bootstrap"
 )
+
+func TestFinalVerificationToLaunchReplacementUsesCapturedStaging(t *testing.T) {
+	root, project := generated(t)
+	plan, err := (bootstrap.Service{}).Plan(root, project)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantPackage, err := os.ReadFile(filepath.Join(root, "package.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	moved := root + "-reviewed"
+	calls := 0
+	runner := func(_ context.Context, _ string, _ []string, dir string, env []string) error {
+		calls++
+		// This is the deterministic final-verification-to-manager-read window:
+		// replace the public root name before the simulated manager opens inputs.
+		if err := os.Rename(root, moved); err != nil {
+			return err
+		}
+		if err := os.Mkdir(root, 0700); err != nil {
+			return err
+		}
+		if err := os.WriteFile(filepath.Join(root, "package.json"), []byte(`{"name":"replacement"}`), 0600); err != nil {
+			return err
+		}
+		if !strings.HasPrefix(dir, fmt.Sprintf("/proc/%d/fd/", os.Getpid())) {
+			t.Fatalf("launch directory is not handle-bound: %q", dir)
+		}
+		gotPackage, readErr := os.ReadFile(filepath.Join(dir, "package.json"))
+		if readErr != nil || string(gotPackage) != string(wantPackage) {
+			t.Fatalf("manager input came from replacement root: %q, %v", gotPackage, readErr)
+		}
+		values := map[string]string{}
+		for _, item := range env {
+			if key, value, ok := strings.Cut(item, "="); ok {
+				values[key] = value
+			}
+		}
+		for _, key := range []string{"HOME", "NPM_CONFIG_CACHE", "NPM_CONFIG_USERCONFIG", "NPM_CONFIG_GLOBALCONFIG", "NPM_CONFIG_PREFIX", "TMPDIR"} {
+			value := values[key]
+			if value == "" || !filepath.IsAbs(value) || !strings.HasPrefix(value, dir+string(filepath.Separator)+".."+string(filepath.Separator)) {
+				t.Fatalf("%s is not anchored to captured work directory: %q", key, value)
+			}
+		}
+		for _, key := range []string{"HOME", "NPM_CONFIG_CACHE", "TMPDIR"} {
+			if info, statErr := os.Stat(values[key]); statErr != nil || !info.IsDir() {
+				t.Fatalf("%s did not resolve inside captured staging: %v", key, statErr)
+			}
+		}
+		return os.Mkdir(filepath.Join(dir, "node_modules"), 0700)
+	}
+	committed, err := (bootstrap.Service{Runner: runner}).Apply(context.Background(), root, plan)
+	if committed || calls != 1 || errorCode(err) != "bootstrap_source_changed" {
+		t.Fatalf("apply = %t, %v; calls=%d", committed, err, calls)
+	}
+	if _, statErr := os.Lstat(filepath.Join(root, "node_modules")); !errors.Is(statErr, os.ErrNotExist) {
+		t.Fatalf("replacement root received dependency output: %v", statErr)
+	}
+	if _, statErr := os.Lstat(filepath.Join(moved, "node_modules")); !errors.Is(statErr, os.ErrNotExist) {
+		t.Fatalf("failed apply retained staged dependency output: %v", statErr)
+	}
+}
 
 func TestDefaultRunnerExecutesOnlyLockedCommandWithSanitizedEnvironment(t *testing.T) {
 	root, project := generated(t)
@@ -36,7 +100,12 @@ test -n "$NPM_CONFIG_USERCONFIG"
 test -n "$NPM_CONFIG_GLOBALCONFIG"
 test -n "$TMPDIR"
 test -z "${NPM_TOKEN:-}"
+test -z "${NODE_AUTH_TOKEN:-}"
+test -z "${GH_TOKEN:-}"
+test -z "${GITHUB_TOKEN:-}"
 test -z "${HTTPS_PROXY:-}"
+test -z "${http_proxy:-}"
+test -z "${npm_config_proxy:-}"
 /bin/mkdir node_modules
 `
 	if err := os.WriteFile(filepath.Join(bin, "npm"), []byte(script), 0700); err != nil {
@@ -44,7 +113,12 @@ test -z "${HTTPS_PROXY:-}"
 	}
 	t.Setenv("PATH", bin)
 	t.Setenv("NPM_TOKEN", "must-not-reach-process")
+	t.Setenv("NODE_AUTH_TOKEN", "must-not-reach-process")
+	t.Setenv("GH_TOKEN", "must-not-reach-process")
+	t.Setenv("GITHUB_TOKEN", "must-not-reach-process")
 	t.Setenv("HTTPS_PROXY", "https://must-not-reach-process.invalid")
+	t.Setenv("http_proxy", "http://must-not-reach-process.invalid")
+	t.Setenv("npm_config_proxy", "http://must-not-reach-process.invalid")
 	committed, err := (bootstrap.Service{}).Apply(context.Background(), root, plan)
 	if err != nil || !committed {
 		t.Fatalf("apply = %t, %v", committed, err)

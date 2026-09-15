@@ -529,6 +529,8 @@ func bootstrapFailure(err error) (string, string) {
 		return e.Code, "Remove the existing node_modules directory explicitly before bootstrapping again."
 	case "bootstrap_template_unrecognized":
 		return e.Code, "Bootstrap supports only the exact tool-generated standard Node stdio template and its checked-in lockfile."
+	case "bootstrap_platform_unsupported":
+		return e.Code, "Mutating bootstrap apply requires Linux handle-bound execution; use --dry-run for a non-mutating plan on this platform."
 	case "bootstrap_process_failed":
 		return e.Code, "The locked npm ci process failed; source and lockfiles were left unchanged and partial staging was removed."
 	default:

@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"sync"
 
 	"github.com/777genius/plugin-kit-ai/cli/internal/authoring/project"
@@ -296,6 +297,9 @@ func (s Service) Apply(ctx context.Context, root string, plan Plan) (committed b
 	}
 	held := plan.lease.root
 	defer func() { err = errors.Join(err, plan.Close()) }()
+	if err = bootstrapApplyPreflight(held); err != nil {
+		return false, err
+	}
 	if err = verifyPlan(root, held, plan); err != nil {
 		return false, err
 	}
@@ -343,13 +347,23 @@ func (s Service) Apply(ctx context.Context, root string, plan Plan) (committed b
 	if err = verifyPlan(root, held, plan); err != nil { // immediately before launch
 		return false, err
 	}
-	stagePath := filepath.Join(root, stageName)
-	workPath := filepath.Join(stagePath, "project")
+	workDirectory, openErr := work.Open(".")
+	if openErr != nil {
+		return false, &Error{Code: "bootstrap_stage_failed", Cause: openErr}
+	}
+	defer func() { err = errors.Join(err, workDirectory.Close()) }()
+	workPath, pathErr := handleBoundDirectoryPath(workDirectory)
+	if pathErr != nil {
+		return false, pathErr
+	}
 	run := s.Runner
 	if run == nil {
 		run = runCommand
 	}
-	env := cleanEnvironment(stagePath, filepath.Join(stagePath, "home"), filepath.Join(stagePath, "cache"), filepath.Join(stagePath, "tmp"))
+	// These paths descend from the handle-bound working directory. They resolve
+	// to the captured staging directory even if the user-visible package-root
+	// name is replaced after final verification.
+	env := cleanEnvironment(workPath)
 	if runErr := run(ctx, plan.Command[0], plan.Command[1:], workPath, env); runErr != nil {
 		return false, &Error{Code: "bootstrap_process_failed", Cause: errors.Join(runErr, ctx.Err())}
 	}
@@ -426,10 +440,14 @@ func errorOr(err, fallback error) error {
 	return fallback
 }
 
-func cleanEnvironment(stage, home, cache, tmp string) []string {
+func cleanEnvironment(work string) []string {
+	// Do not filepath.Clean these paths: the lexical /fd/N/.. spelling must be
+	// resolved by the kernel after /fd/N binds to the captured work directory.
+	stage := work + string(filepath.Separator) + ".."
+	home, cache, tmp := stage+string(filepath.Separator)+"home", stage+string(filepath.Separator)+"cache", stage+string(filepath.Separator)+"tmp"
 	env := []string{"HOME=" + home, "USERPROFILE=" + home, "NPM_CONFIG_CACHE=" + cache,
-		"NPM_CONFIG_USERCONFIG=" + filepath.Join(stage, "user-npmrc"), "NPM_CONFIG_GLOBALCONFIG=" + filepath.Join(stage, "global-npmrc"),
-		"NPM_CONFIG_PREFIX=" + filepath.Join(stage, "prefix"), "NPM_CONFIG_UPDATE_NOTIFIER=false", "NPM_CONFIG_AUDIT=false", "NPM_CONFIG_FUND=false",
+		"NPM_CONFIG_USERCONFIG=" + stage + string(filepath.Separator) + "user-npmrc", "NPM_CONFIG_GLOBALCONFIG=" + stage + string(filepath.Separator) + "global-npmrc",
+		"NPM_CONFIG_PREFIX=" + stage + string(filepath.Separator) + "prefix", "NPM_CONFIG_UPDATE_NOTIFIER=false", "NPM_CONFIG_AUDIT=false", "NPM_CONFIG_FUND=false",
 		"TMPDIR=" + tmp, "TMP=" + tmp, "TEMP=" + tmp}
 	for _, key := range []string{"PATH", "PATHEXT", "SYSTEMROOT", "WINDIR", "COMSPEC"} {
 		if value := os.Getenv(key); value != "" {
@@ -437,6 +455,36 @@ func cleanEnvironment(stage, home, cache, tmp string) []string {
 		}
 	}
 	return env
+}
+
+func bootstrapApplyPreflight(root *os.Root) error {
+	if runtime.GOOS != "linux" {
+		return &Error{Code: "bootstrap_platform_unsupported", Cause: fmt.Errorf("handle-bound bootstrap apply is unavailable on %s", runtime.GOOS)}
+	}
+	dir, err := root.Open(".")
+	if err != nil {
+		return &Error{Code: "bootstrap_platform_unsupported", Cause: err}
+	}
+	_, pathErr := handleBoundDirectoryPath(dir)
+	if closeErr := dir.Close(); pathErr != nil || closeErr != nil {
+		return &Error{Code: "bootstrap_platform_unsupported", Cause: errors.Join(pathErr, closeErr)}
+	}
+	return nil
+}
+
+func handleBoundDirectoryPath(dir *os.File) (string, error) {
+	if runtime.GOOS != "linux" {
+		return "", &Error{Code: "bootstrap_platform_unsupported"}
+	}
+	// The manager cannot use /proc/self after exec closes this CLOEXEC handle.
+	// It can resolve the supervising process's live handle for the full Run call.
+	path := fmt.Sprintf("/proc/%d/fd/%d", os.Getpid(), dir.Fd())
+	held, heldErr := dir.Stat()
+	resolved, pathErr := os.Stat(path)
+	if heldErr != nil || pathErr != nil || !os.SameFile(held, resolved) || !resolved.IsDir() {
+		return "", &Error{Code: "bootstrap_platform_unsupported", Cause: errors.Join(heldErr, pathErr)}
+	}
+	return path, nil
 }
 
 func runCommand(ctx context.Context, name string, args []string, dir string, env []string) error {

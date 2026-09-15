@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"testing"
 
 	"github.com/777genius/plugin-kit-ai/cli/internal/authoring/scaffold"
@@ -59,20 +60,29 @@ func TestPublicBootstrapExposurePlanApplyAndFailure(t *testing.T) {
 		t.Fatalf("human plan = %v %s", human.err, human.out)
 	}
 	e, code, _ = publicRun(t, a, []string{"bootstrap", root, "--format=json"}, true)
-	if code != 0 || calls != 1 || e.Data.Requested.Mode != "local_mutation" || !e.Data.Effects.Committed || !reflect.DeepEqual(e.Data.Paths, []string{"node_modules"}) {
-		t.Fatalf("apply = %+v, calls=%d", e, calls)
-	}
+	if runtime.GOOS != "linux" {
+		if code != 1 || calls != 0 || e.Data.Error == nil || e.Data.Error.Code != "bootstrap_platform_unsupported" || e.Data.Effects.Committed {
+			t.Fatalf("unsupported apply = %+v, calls=%d", e, calls)
+		}
+		if !reflect.DeepEqual(before, tree(t, root)) {
+			t.Fatal("unsupported apply changed project")
+		}
+	} else {
+		if code != 0 || calls != 1 || e.Data.Requested.Mode != "local_mutation" || !e.Data.Effects.Committed || !reflect.DeepEqual(e.Data.Paths, []string{"node_modules"}) {
+			t.Fatalf("apply = %+v, calls=%d", e, calls)
+		}
 
-	failureRoot := generatedBootstrapRoot(t)
-	a.BootstrapRunner = func(context.Context, string, []string, string, []string) error {
-		return errors.New("fixture process failure")
-	}
-	e, code, _ = publicRun(t, a, []string{"bootstrap", failureRoot, "--format=json"}, false)
-	if code != 1 || e.Data.Error == nil || e.Data.Error.Code != "bootstrap_process_failed" || e.Data.Effects.Committed {
-		t.Fatalf("failure = %+v", e)
-	}
-	if _, err := os.Stat(filepath.Join(failureRoot, "node_modules")); !errors.Is(err, os.ErrNotExist) {
-		t.Fatal("failure committed dependencies")
+		failureRoot := generatedBootstrapRoot(t)
+		a.BootstrapRunner = func(context.Context, string, []string, string, []string) error {
+			return errors.New("fixture process failure")
+		}
+		e, code, _ = publicRun(t, a, []string{"bootstrap", failureRoot, "--format=json"}, false)
+		if code != 1 || e.Data.Error == nil || e.Data.Error.Code != "bootstrap_process_failed" || e.Data.Effects.Committed {
+			t.Fatalf("failure = %+v", e)
+		}
+		if _, err := os.Stat(filepath.Join(failureRoot, "node_modules")); !errors.Is(err, os.ErrNotExist) {
+			t.Fatal("failure committed dependencies")
+		}
 	}
 
 	e, code, _ = publicRun(t, a, []string{"capabilities", "--format=json"}, false)

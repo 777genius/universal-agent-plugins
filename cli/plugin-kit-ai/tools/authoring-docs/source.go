@@ -82,7 +82,7 @@ func validateSource(checkout, sha string) ([]sourcePin, error) {
 // workspace module controls. They do not recursively attest installer engines.
 var factoryPins = []sourcePin{
 	{"cli/plugin-kit-ai/cmd/agentplugins/release_root.go", "4a8566038d22e34fd2509075d97df10b422ee15ce01619bf35b2a8c397c7c944"},
-	{"cli/plugin-kit-ai/internal/authoring/bootstrap/bootstrap.go", "19eb04f1f7e3598b76d668c9d847d6313e10af3e5a01e3b45a7049511854254e"},
+	{"cli/plugin-kit-ai/internal/authoring/bootstrap/bootstrap.go", "0395a34ed65c44c2a040a48ce167b32421033909e6c75a163dadf90d4b71880a"},
 	{"cli/plugin-kit-ai/cmd/plugin-kit-ai/release_compat.go", "d2f11a845c116160114ddd1b0ba8b825e9e5a4794354742749db7122c0c674c8"},
 	{"cli/plugin-kit-ai/go.mod", "d388e12cb393cca6fcf8034e4a05d3c4eb8777427fed47ed064ef0623c377606"},
 	{"cli/plugin-kit-ai/go.sum", "0cf114be6b68dd165b75b588776e0bb7b9cc4aaa08fae382f7fa42b580bfa2da"},
@@ -117,7 +117,7 @@ var factoryPins = []sourcePin{
 	{"cli/plugin-kit-ai/internal/agentpluginscli/update_all.go", "7b791dc9fe04cf3ceae4f3ade5c36c308104761242cb3cb37474d1551961cc65"},
 	{"cli/plugin-kit-ai/internal/agentpluginscli/update_multi.go", "0ff5bedf401e3736178ea7274e4e7b3eac113867288f0f86bb354ae724991f23"},
 	{"cli/plugin-kit-ai/internal/agentpluginscli/validate.go", "8c643a08c657431d623197364f5f47d7f23ed0b4e6cf926f40a521a8bac7ee9d"},
-	{"cli/plugin-kit-ai/internal/authoring/commands/commands.go", "916c0f4a7e254dfca35d31fd5bfa7bb99f0d0bde8e07e23d56fdbd07fc56fc8f"},
+	{"cli/plugin-kit-ai/internal/authoring/commands/commands.go", "5079c80df5181002745c8c9a7ded1d9c927113a95b8107ffc32bba71661be940"},
 	{"cli/plugin-kit-ai/internal/authoring/commands/dev_session.go", "b548b05cb659eef10dee2e6a783ec576a589c098de4d55075acec09138c4373a"},
 	{"cli/plugin-kit-ai/internal/authoring/commands/maintenance.go", "7fb03c69b48cb0fb5fdacff08930d4b034895be7a65f336e7f7374e607ed0f5a"},
 	{"cli/plugin-kit-ai/internal/authoring/commands/public_contract.go", "332d209e5453b51e086cebe96baca7ac4542e1f7e5ad2718c18afda3eeb9c55e"},

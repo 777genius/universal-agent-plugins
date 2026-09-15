@@ -2111,10 +2111,21 @@ exact generated standard Node stdio template from its public `plugin.json`,
 `npm ci --ignore-scripts --no-audit --no-fund` with operation-local npm homes.
 `--dry-run` reports that plan without mutation. Competing manager/runtime files,
 custom layouts, missing or changed locks, and existing dependency output fail
-closed. Node is the current generated-template checkpoint. Python and Go remain
-future work only if the standard generator adds recognized locked templates for
-them. This source status does not qualify or release Phase 7 and does not add a
-legacy CLI or YAML path.
+closed. Mutating apply is supported only on Linux hosts where the supervisor's
+`/proc/<pid>/fd` view proves a handle-bound execution directory; the manager
+working directory and its isolated home/cache/temp paths stay anchored to that
+captured staging directory across replacement of the public package-root name.
+Apply fails before staging or process execution on Darwin because the current
+process group adapter cannot contain detached `setsid` descendants. It also
+fails closed on Windows at this checkpoint because a handle-bound manager
+working directory has not been proven there. Plan and `--dry-run` remain
+useful on both platforms.
+The native Windows authoring matrix exercises that fail-closed contract; the
+Darwin-specific test is retained for a native Darwin run and a cross-build is
+not counted as runtime evidence. Node is the current generated-template
+checkpoint. Python and Go remain future work only if the standard generator adds
+recognized locked templates for them. This source status does not qualify or
+release Phase 7 and does not add a legacy CLI or YAML path.
 
 ### Summary
 
@@ -2151,9 +2162,14 @@ released and stable.
 - network and tool calls denied by default;
 - empty credential environment;
 - watcher debounce/cancellation and single-project lock;
-- Node/Python/Go bootstrap only in new isolated test projects;
+- Node bootstrap only in new isolated test projects for this exact generated-
+  template checkpoint; Python and Go are not implemented;
 - bootstrap uses disposable package-manager homes and never touches the real
   user cache or credential files;
+- Linux runtime tests exercise handle-bound launch, final-window root
+  replacement, sanitized environment, cancellation, and detached-descendant
+  cleanup; the existing native Windows matrix executes its pre-process refusal,
+  while the Darwin-specific refusal test still requires a native Darwin run;
 - dependency failure leaves source files and lockfiles unchanged unless their
   exact planned update was explicitly selected.
 

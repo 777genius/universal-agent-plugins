@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -43,6 +44,30 @@ func errorCode(err error) string {
 		return target.Code
 	}
 	return ""
+}
+
+func proveUnsupportedApply(t *testing.T, root string, plan bootstrap.Plan) {
+	t.Helper()
+	called := false
+	committed, err := (bootstrap.Service{Runner: func(context.Context, string, []string, string, []string) error {
+		called = true
+		return errors.New("unsupported platform executed the manager")
+	}}).Apply(context.Background(), root, plan)
+	if committed || called || errorCode(err) != "bootstrap_platform_unsupported" {
+		t.Fatalf("unsupported apply = %t, %v; called=%t", committed, err, called)
+	}
+	if _, statErr := os.Lstat(filepath.Join(root, "node_modules")); !errors.Is(statErr, os.ErrNotExist) {
+		t.Fatalf("unsupported apply created dependency output: %v", statErr)
+	}
+	entries, readErr := os.ReadDir(root)
+	if readErr != nil {
+		t.Fatal(readErr)
+	}
+	for _, entry := range entries {
+		if strings.HasPrefix(entry.Name(), ".agentplugins-bootstrap-") {
+			t.Fatal("unsupported apply created staging")
+		}
+	}
 }
 
 func TestPlanRecognizesOnlyExactGeneratedLockedNodeTemplate(t *testing.T) {
@@ -83,6 +108,10 @@ func TestApplyUsesIsolatedHomesAndCommitsOnlyNodeModules(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if runtime.GOOS != "linux" {
+		proveUnsupportedApply(t, root, plan)
+		return
+	}
 	beforePackage, _ := os.ReadFile(filepath.Join(root, "package.json"))
 	beforeLock, _ := os.ReadFile(filepath.Join(root, "package-lock.json"))
 	calls := 0
@@ -92,7 +121,7 @@ func TestApplyUsesIsolatedHomesAndCommitsOnlyNodeModules(t *testing.T) {
 			t.Fatalf("process = %s %v", name, args)
 		}
 		joined := "\n" + strings.Join(env, "\n") + "\n"
-		for _, forbidden := range []string{"HTTP_PROXY=", "HTTPS_PROXY=", "NPM_TOKEN=", "NODE_AUTH_TOKEN="} {
+		for _, forbidden := range []string{"HTTP_PROXY=", "HTTPS_PROXY=", "NO_PROXY=", "NPM_TOKEN=", "NODE_AUTH_TOKEN=", "GH_TOKEN=", "GITHUB_TOKEN=", "NPM_CONFIG_PROXY=", "NPM_CONFIG_HTTPS_PROXY="} {
 			if strings.Contains(strings.ToUpper(joined), "\n"+forbidden) {
 				t.Fatalf("ambient variable inherited: %s", forbidden)
 			}
@@ -131,6 +160,10 @@ func TestApplyFailureRemovesPartialStaging(t *testing.T) {
 	plan, err := (bootstrap.Service{}).Plan(root, p)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if runtime.GOOS != "linux" {
+		proveUnsupportedApply(t, root, plan)
+		return
 	}
 	failure := func(_ context.Context, _ string, _ []string, dir string, _ []string) error {
 		_ = os.Mkdir(filepath.Join(dir, "node_modules"), 0700)
@@ -200,6 +233,15 @@ func TestPlanAndApplyRejectSourceIdentityChanges(t *testing.T) {
 			t.Fatalf("directory symlink plan error = %v", err)
 		}
 	})
+	if runtime.GOOS != "linux" {
+		root, p := generated(t)
+		plan, err := (bootstrap.Service{}).Plan(root, p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		proveUnsupportedApply(t, root, plan)
+		return
+	}
 
 	for _, tc := range []struct {
 		name   string
@@ -248,6 +290,15 @@ func TestPlanAndApplyRejectSourceIdentityChanges(t *testing.T) {
 }
 
 func TestApplyRejectsLateSourceAndDestinationChanges(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		root, p := generated(t)
+		plan, err := (bootstrap.Service{}).Plan(root, p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		proveUnsupportedApply(t, root, plan)
+		return
+	}
 	for _, tc := range []struct {
 		name   string
 		mutate func(*testing.T, string)
@@ -306,11 +357,19 @@ func TestApplyReportsCleanupFailureWithoutHidingCommit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if runtime.GOOS != "linux" {
+		proveUnsupportedApply(t, root, plan)
+		return
+	}
 	runner := func(_ context.Context, _ string, _ []string, dir string, _ []string) error {
 		if err := os.Mkdir(filepath.Join(dir, "node_modules"), 0700); err != nil {
 			return err
 		}
-		stage := filepath.Dir(dir)
+		resolved, err := filepath.EvalSymlinks(dir)
+		if err != nil {
+			return err
+		}
+		stage := filepath.Dir(resolved)
 		moved := stage + "-owned"
 		if err := os.Rename(stage, moved); err != nil {
 			return err
@@ -332,9 +391,17 @@ func TestApplyJoinsProcessAndCleanupFailures(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if runtime.GOOS != "linux" {
+		proveUnsupportedApply(t, root, plan)
+		return
+	}
 	processErr := errors.New("primary fixture process error")
 	runner := func(_ context.Context, _ string, _ []string, dir string, _ []string) error {
-		stage := filepath.Dir(dir)
+		resolved, err := filepath.EvalSymlinks(dir)
+		if err != nil {
+			return err
+		}
+		stage := filepath.Dir(resolved)
 		if err := os.Rename(stage, stage+"-owned"); err != nil {
 			return err
 		}
