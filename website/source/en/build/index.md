@@ -29,7 +29,9 @@ npm install -g universal-agent-plugins@0.1.65
 ```
 
 Then use `agentplugins author` throughout this guide. Milestone A static
-authoring is available; phases 7–11 remain deferred.
+authoring is available in 0.1.65. Phase 7 and Phase 8A are implemented in
+current source, but that source checkpoint is not a later executable release.
+Phases 9–11 remain deferred.
 
 ## Choose the smallest useful package
 
@@ -57,6 +59,20 @@ Add more instructions later with [extra Skills](./skills).
 | Engine capabilities | `agentplugins author capabilities` |
 | Add or validate Skills | `agentplugins author skills` |
 
+Current source builds add these Phase 8A commands; they are not part of the
+0.1.65 installation shown above:
+
+| Job | Command |
+| --- | --- |
+| Plan or write canonical standard JSON | `agentplugins author normalize [package-path] --document plugin.json\|mcp.json [--write]` |
+| Plan or write a safe Claude MCP import | `agentplugins author import native <source-file> --from claude --output <absolute-absent-path> --name <plugin-name> --description <text> [--write]` |
+
+Both default to read-only planning. Normalize selects exactly one existing
+standard JSON document. Native import reads only the explicit strict-JSON
+source, skips unsafe or credential-bearing server entries, and writes only to
+an absent package path. Neither command discovers client profiles or introduces
+YAML migration.
+
 ## Follow the authoring loop
 
 1. Choose a template and an absent destination under an existing parent.
@@ -71,8 +87,8 @@ static report is useful evidence, but it does not establish runtime success.
 
 ## What this journey does not expose
 
-Runtime execution, dev loops, dependency bootstrap, native import,
-normalization, client generation, export/bundle, and publication are deferred.
+The 0.1.65 public release does not include Phase 7 or Phase 8A. Client
+generation, export/bundle, and publication remain deferred in current source.
 Legacy YAML migration is cancelled. Preserved legacy source is internal reference
 material, not a runnable product. Hooks remain client-specific extensions.
 

@@ -1,15 +1,16 @@
 # Standard-First Authoring Engine Implementation Plan
 
-> **Current availability (2026-09-14):** Milestone A static authoring is publicly
+> **Current availability (2026-09-15):** Milestone A static authoring is publicly
 > available through `agentplugins author` in `universal-agent-plugins@0.1.65`.
 > Native GitHub releases use `agentplugins-v0.1.65`; npm, Homebrew, native
 > archives and public-channel E2E are verified. See the
 > [current Build guide](../website/source/en/build/index.md).
-> Phases 7-11 remain unreleased, except legacy YAML migration is removed from the
-> roadmap by the owner decision below. Phase 7 has an implementation candidate
-> in PR #278, but that review state is not a merge, executable release, or public
-> availability claim. Historical package artifacts remain immutable evidence and
-> are not current installation guidance.
+> Phase 7 and the Phase 8A JSON-maintenance vertical slice are implemented in
+> current source. They are not included in 0.1.65 and do not constitute a later
+> executable release or public-channel qualification. Phases 9-11 remain
+> unreleased, and legacy YAML migration is removed from the roadmap by the owner
+> decision below. Historical package artifacts and linked release runs remain
+> immutable evidence, not current installation guidance.
 
 ## Owner decision: current-only README and retained runtime publishers (2026-09-14)
 
@@ -66,11 +67,13 @@ current `main` in its own dependency-safe PR. The older detailed design below is
 retained as decision history and must not be used to restore retired commands,
 packages, migration work, or release channels.
 
-1. **Phase 7 - runtime loop:** add explicit runtime testing, `dev`, and safe
-   lockfile-based `bootstrap` for standard `plugin.json` packages.
-2. **Phase 8 - JSON maintenance:** add deterministic normalization and explicit
-   native-to-standard import. No YAML reader, migration command, compatibility
-   shim, or legacy-project journey is in scope.
+1. **Phase 7 - runtime loop (implemented in source):** explicit runtime testing,
+   `dev`, and safe lockfile-based `bootstrap` for standard `plugin.json` packages.
+2. **Phase 8A - JSON maintenance (implemented in source):** deterministic
+   normalization of one selected `plugin.json` or `mcp.json`, plus explicit safe
+   Claude MCP import to an absent standard package. No YAML reader, migration
+   command, compatibility shim, profile discovery, or additional native client
+   is in scope.
 3. **Phase 9 - portable outputs:** add disposable client projection previews,
    deterministic export, and the minimum useful bundle inspection/fetch flow.
 4. **Phase 10 - publication:** add one explicit publish flow and Directory
@@ -161,8 +164,8 @@ Alternatives rejected for the current delivery:
   approximately 100-500 lines, but it does not satisfy the requested working
   E2E and is not an acceptable substitute.
 
-Future hosted implementation and review workers use `gpt-5.6-sol`, reasoning
-effort `low`, service tier `default` (no fast), unless the owner changes this
+Future hosted implementation and review workers use `gpt-6-astra`, reasoning
+effort `medium`, service tier `default` (no fast), unless the owner changes this
 profile again.
 
 ## Owner clarification: preserve legacy capabilities (2026-09-06)
@@ -240,7 +243,7 @@ Useful YAML capabilities and all preservation constraints above remain intact.
 The preliminary 100-500 changed-line estimate is a target, not a guarantee.
 Re-estimate after bounded intake against the actual merge base; do not weaken
 acceptance or expand scope just to satisfy that number. Hosted workers use the
-current owner-selected profile recorded above: `gpt-5.6-sol`, reasoning `low`,
+current owner-selected profile recorded above: `gpt-6-astra`, reasoning `medium`,
 service tier `default` (no fast).
 
 Checkpoint delivery evidence (2026-09-08): [PR #190](https://github.com/777genius/universal-agent-plugins/pull/190)
@@ -2150,6 +2153,11 @@ not affect offline validate/inspect/test or installation lifecycle commands.
 
 ## Phase 8 - Normalize and import native configuration
 
+Current source status (2026-09-15): the Phase 8A vertical slice implements
+single-document standard JSON normalization and explicit Claude `mcpServers`
+import. It does not qualify a release, add Skills import, or authorize another
+native client.
+
 ### Summary
 
 Add controlled JSON mutation and portable native import without a legacy YAML
@@ -2159,7 +2167,7 @@ reader or migration product.
 
 1. Implement lossless JSON document editing helpers.
 2. Add digest-bound mutation plans and atomic file replacement.
-3. Adapt portable native MCP and Skills importers for supported client formats.
+3. Import portable stdio MCP entries from one explicit Claude strict-JSON file.
 
 ### Edge cases
 
