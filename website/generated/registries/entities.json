@@ -8407,7 +8407,7 @@
     "kind": "command",
     "surface": "authoring-cli",
     "title": "agentplugins author test",
-    "summary": "Check configuration, hygiene, Skills and MCP statically; runtime is not evaluated",
+    "summary": "Check package configuration and hygiene without executing package code",
     "pathEn": "/en/api/cli/prepared-authoring-v2-agentplugins-author-test",
     "pathRu": "",
     "pathEs": "",
@@ -8423,8 +8423,8 @@
       "slug": "prepared-authoring-v2-agentplugins-author-test",
       "file_name": "prepared-authoring-v2/agentplugins_author_test.md",
       "use": "test [package-path]",
-      "short": "Check configuration, hygiene, Skills and MCP statically; runtime is not evaluated",
-      "long": "Check configuration, hygiene, Skills and MCP statically; runtime is not evaluated\n\nInstaller-only inherited flags --scope, --accept-security-risk, and --security-details\nare rejected. Use the positional package path and author doctor for project checks;\nuse agentplugins add for installation/security policy.",
+      "short": "Check package configuration and hygiene without executing package code",
+      "long": "Check package configuration and hygiene without executing package code\n\nInstaller-only inherited flags --scope, --accept-security-risk, and --security-details\nare rejected. Use the positional package path and author doctor for project checks;\nuse agentplugins add for installation/security policy.",
       "example": "",
       "local_flags": [
         {

@@ -72,9 +72,9 @@ func (a App) ReleaseSelection(args []string, build RootBuilder) (root *cobra.Com
 
 func (a App) releaseTree(build RootBuilder) (*cobra.Command, error) {
 	var factories []authoringcli.Factory
-	for _, name := range commandNames() {
+	for _, name := range a.commandNames() {
 		factories = append(factories, func() (*cobra.Command, error) {
-			c, e := a.command(name, func(report.Report) {})
+			c, e := a.command(name, func(report.Report) {}, nil)
 			if e == nil {
 				tagOperations(c, "author."+name)
 			}

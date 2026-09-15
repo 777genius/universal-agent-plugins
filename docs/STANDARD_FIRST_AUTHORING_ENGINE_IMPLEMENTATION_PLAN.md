@@ -5,9 +5,11 @@
 > Native GitHub releases use `agentplugins-v0.1.65`; npm, Homebrew, native
 > archives and public-channel E2E are verified. See the
 > [current Build guide](../website/source/en/build/index.md).
-> Phases 7-11 remain deferred, except legacy YAML migration is removed from the
-> roadmap by the owner decision below. Historical package artifacts remain
-> immutable evidence and are not current installation guidance.
+> Phases 7-11 remain unreleased, except legacy YAML migration is removed from the
+> roadmap by the owner decision below. Phase 7 has an implementation candidate
+> in PR #278, but that review state is not a merge, executable release, or public
+> availability claim. Historical package artifacts remain immutable evidence and
+> are not current installation guidance.
 
 ## Owner decision: current-only README and retained runtime publishers (2026-09-14)
 
@@ -1262,6 +1264,9 @@ Runtime test rules:
 - never inherit client auth stores;
 - never run inside a real user project;
 - supervise child processes with deadlines and complete cleanup;
+- refuse stdio before package-authored child effects unless the host proves both
+  filesystem/network isolation and process-tree cleanup; a private copy and a
+  restricted environment alone are not a sandbox;
 - distinguish process start, MCP initialize, tool listing, and actual tool
   execution as separate evidence levels;
 - do not call tools unless an explicit fixture requests them;
@@ -1270,9 +1275,12 @@ Runtime test rules:
 - retain sanitized failure metadata, not raw secrets.
 
 `dev` reuses the same validation and test services. It watches only the selected
-package root, uses bounded debounce, ignores its output directory, and cancels
-the previous cycle before starting another. It must not watch the whole home or
-workspace recursively when a narrower package root is available.
+package root, takes one deterministic cross-process session lock per canonical
+project, uses bounded debounce with a maximum coalescing window, ignores its
+output directory, and cancels the previous cycle before starting another. It
+must release the session lock on every ordinary return and cancellation and must
+not watch the whole home or workspace recursively when a narrower package root
+is available.
 
 ## Generate contract
 
@@ -2070,6 +2078,17 @@ package.
   mutate state.
 
 ## Phase 7 - Explicit runtime test, dev, and bootstrap
+
+> **PR #278 checkpoint (2026-09-14):** The MCP runtime vertical slice is an
+> unreleased candidate. It does not include bootstrap or later-phase work. Remote
+> execution still requires explicit network opt-in. Stdio execution is fail-closed:
+> it is eligible only on Linux when an installed bubblewrap primitive successfully
+> establishes filesystem and network namespaces and the existing process-tree
+> containment preflight also succeeds. Darwin and Windows remain supported for
+> static authoring, but this candidate refuses stdio runtime execution there before
+> package-authored child effects. Process-tree supervision by itself is not called
+> a filesystem or network sandbox. Do not mark Phase 7 released until the candidate
+> is merged, qualified, and shipped through the executable release gate.
 
 ### Summary
 

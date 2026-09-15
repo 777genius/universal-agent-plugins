@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -102,6 +103,31 @@ func noPolicy(t *testing.T, e publicEnvelope) {
 	}
 	if e.Data.Effects.Attempted || e.Data.Committed || len(e.Data.Paths) != 0 {
 		t.Fatalf("syntax/help claimed effects: %+v", e)
+	}
+}
+
+func TestMCPRuntimePublicArgumentBoundary(t *testing.T) {
+	a := publicApp(t)
+	a.MCPRuntime = true
+	for _, tc := range []struct {
+		args            []string
+		operation, code string
+	}{
+		{[]string{"test", "--runtime=mcp", "--server", "selected", "--tool", "echo", "--format=json"}, "author.test", "runtime_arguments_invalid"},
+		{[]string{"test", "--server", "selected", "--format=json"}, "author.test", "runtime_arguments_invalid"},
+		{[]string{"test", "--server=", "--format=json"}, "author.test", "runtime_arguments_invalid"},
+		{[]string{"test", "--allow-network=false", "--format=json"}, "author.test", "runtime_arguments_invalid"},
+		{[]string{"test", "--deadline=5s", "--format=json"}, "author.test", "runtime_arguments_invalid"},
+		{[]string{"dev", "--server", "selected", "--format=json"}, "author.dev", "runtime_arguments_invalid"},
+	} {
+		e, exit, _ := publicRun(t, a, tc.args, true)
+		if exit != 2 || e.Command != tc.operation || e.Result != "failure" || e.Data.Error == nil || e.Data.Error.Code != tc.code || e.Data.Effects.Attempted {
+			t.Fatalf("args=%v result=%+v exit=%d", tc.args, e, exit)
+		}
+	}
+	e, exit, _ := publicRun(t, a, []string{"capabilities", "--format=json"}, true)
+	if exit != 0 || !slices.Contains(e.Data.Surface, "author.dev") {
+		t.Fatalf("runtime surface missing: %+v", e.Data.Surface)
 	}
 }
 

@@ -200,6 +200,9 @@ func selectPublic(root *cobra.Command, args []string) selection {
 	if s.operation == "author.init" || s.operation == "author.skills.init" {
 		s.mode = "local_mutation"
 	}
+	if s.operation == "author.test" && len(s.values["runtime"]) > 0 || s.operation == "author.dev" {
+		s.mode = "runtime"
+	}
 	if s.format != "human" && s.format != "json" {
 		s.invalid = true
 	}
@@ -230,10 +233,16 @@ func (a App) executePublic(ctx context.Context, args []string, streams authoring
 	var selected = selection{operation: "author", mode: "read", format: "human"}
 	var surface []string
 	factory := authoringcli.Factory(func() (*cobra.Command, error) {
-		factories := make([]authoringcli.Factory, 0, len(commandNames()))
-		for _, name := range commandNames() {
+		factories := make([]authoringcli.Factory, 0, len(a.commandNames()))
+		for _, name := range a.commandNames() {
 			factories = append(factories, func() (*cobra.Command, error) {
-				c, err := a.command(name, func(r report.Report) { captured = &r })
+				c, err := a.command(name, func(r report.Report) { captured = &r }, func(r report.Report, cycleErr error) error {
+					result := outputjson.Success
+					if cycleErr != nil {
+						result = outputjson.Failure
+					}
+					return writePublicHuman(streams.Out, r.PublicResult("author.dev", "read", true, nil), result)
+				})
 				if err == nil {
 					tagOperations(c, "author."+name)
 				}
@@ -400,7 +409,7 @@ func (a App) executePublic(ctx context.Context, args []string, streams authoring
 
 var errPublicHelp = errors.New("authoring command surface requested")
 
-const publicArguments = "Use an implemented authoring command; read paths default to the exact current directory. Use --format human or json. Compat requires explicit comma-separated --target clients. Inherited --scope, --accept-security-risk and --security-details are installer-only; use agentplugins add for installation policy. Unsupported --dry-run and runtime flags are rejected."
+const publicArguments = "Use an implemented authoring command; read paths default to the exact current directory. Use --format human or json. Compat requires explicit comma-separated --target clients. Inherited --scope, --accept-security-risk and --security-details are installer-only; use agentplugins add for installation policy. Unsupported --dry-run is rejected; MCP runtime flags are accepted only by author test and author dev."
 
 func writePublicHuman(w io.Writer, p report.Public, result string) error {
 	// Buffer only trusted projected data and write once, preserving output failure
@@ -410,6 +419,9 @@ func writePublicHuman(w io.Writer, p report.Public, result string) error {
 		fmt.Fprintf(&b, "Usage: %s\nFlags: %s\n%s\n", p.Help.Use, strings.Join(p.Help.Flags, ", "), p.Help.Guidance)
 	}
 	fmt.Fprintf(&b, "%s: %s; readiness %s; conformance %s; runtime %s\n", p.Command, result, p.Readiness.Status, p.Conformance.Status, p.Runtime.Status)
+	if runtime := p.RuntimeDetail; runtime != nil {
+		fmt.Fprintf(&b, "mcp runtime: transport %s; initialize %s; list tools %s; tool call %s; tools %d; cleanup %s\n", runtime.Transport, runtime.Initialize, runtime.ListTools, runtime.ToolCall, runtime.ToolCount, runtime.Cleanup)
+	}
 	if p.Inspection != nil {
 		fmt.Fprintf(&b, "package: %s; version: %s; schema: %s\n", p.Inspection.Name, p.Inspection.Version, p.Inspection.Schema)
 		for _, c := range p.Inspection.Components {

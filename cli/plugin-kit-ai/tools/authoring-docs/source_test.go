@@ -124,7 +124,7 @@ func TestCommittedSourceAndDocsOnlyCommit(t *testing.T) {
 				}
 			}
 		}
-		if count != 34 {
+		if count != 36 {
 			t.Fatal(count)
 		}
 	}

@@ -1,0 +1,911 @@
+// Package mcpruntime runs one explicitly selected standard MCP server in an
+// operation-owned copy of the package. It has no legacy manifest dependency.
+package mcpruntime
+
+import (
+	"bufio"
+	"bytes"
+	"context"
+	"encoding/json"
+	"errors"
+	"io"
+	"net/http"
+	"net/netip"
+	"net/url"
+	"os"
+	"os/exec"
+	"path"
+	"path/filepath"
+	"sort"
+	"strings"
+	"time"
+
+	"github.com/777genius/plugin-kit-ai/cli/internal/authoring/project"
+	processadapter "github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/process"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/conformance"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
+)
+
+const (
+	maxFrame                = 1 << 20
+	maxFixture              = 1 << 20
+	protocolVersion         = "2025-06-18"
+	httpSessionCleanupLimit = 2 * time.Second
+)
+
+type Options struct {
+	SourceRoot, Scratch string
+	Project             project.Result
+	Server, Tool        string
+	Fixture             string
+	AllowNetwork        bool
+	Deadline            time.Duration
+	Projects            project.Service
+	// removeAll is an operation-owned test seam for proving cleanup-error
+	// preservation. Production callers always use os.RemoveAll.
+	removeAll func(string) error
+}
+
+// Evidence intentionally contains no argv, URL, headers, environment, fixture,
+// response body, temporary path, or server/tool name.
+type Evidence struct {
+	Transport  string
+	Initialize bool
+	ListTools  bool
+	ToolCall   bool
+	ToolCount  int
+	Cleanup    bool
+}
+
+type Error struct{ Code string }
+
+func (e *Error) Error() string { return "MCP runtime: " + e.Code }
+func fail(code string) error   { return &Error{Code: code} }
+
+func Run(ctx context.Context, o Options) (ev Evidence, err error) {
+	if o.Project.Facts.Package == nil || o.Project.Facts.Package.FormatID != domain.FormatIDAgentPluginsV1 {
+		return ev, fail("runtime_package_invalid")
+	}
+	server, ok := o.Project.Facts.Package.MCP.Servers[o.Server]
+	if !ok {
+		return ev, fail("runtime_server_unknown")
+	}
+	if (o.Tool == "") != (o.Fixture == "") {
+		return ev, fail("runtime_tool_fixture_pair_required")
+	}
+	if o.Deadline <= 0 || o.Deadline > time.Minute {
+		return ev, fail("runtime_deadline_invalid")
+	}
+	ctx, cancel := context.WithTimeout(ctx, o.Deadline)
+	defer cancel()
+	root, data, cleanup, err := privateCopy(ctx, o)
+	if err != nil {
+		return ev, err
+	}
+	defer func() {
+		if cleanupErr := cleanup(); cleanupErr != nil {
+			ev.Cleanup = false
+			err = errors.Join(fail("runtime_cleanup_failed"), err, cleanupErr)
+		} else {
+			ev.Cleanup = true
+		}
+	}()
+	var arguments map[string]any
+	if o.Fixture != "" {
+		arguments, err = fixture(root, o.Fixture)
+		if err != nil {
+			return ev, err
+		}
+	}
+	switch server.Type {
+	case "stdio":
+		ev.Transport = "stdio"
+		err = runStdio(ctx, root, data, server, o.Tool, arguments, &ev)
+	case "streamable-http":
+		ev.Transport = "streamable_http"
+		if !o.AllowNetwork {
+			return ev, fail("runtime_network_opt_in_required")
+		}
+		err = runHTTP(ctx, server, o.Tool, arguments, &ev)
+	default:
+		err = fail("runtime_transport_unsupported")
+	}
+	switch ctx.Err() {
+	case context.DeadlineExceeded:
+		return ev, errors.Join(fail("runtime_deadline_exceeded"), context.DeadlineExceeded, err)
+	case context.Canceled:
+		return ev, errors.Join(fail("runtime_canceled"), context.Canceled, err)
+	}
+	return ev, err
+}
+
+func privateCopy(ctx context.Context, o Options) (string, string, func() error, error) {
+	base, err := os.MkdirTemp(o.Scratch, "author-mcp-")
+	if err != nil {
+		return "", "", nil, fail("runtime_sandbox_unavailable")
+	}
+	owned := true
+	removeAll := o.removeAll
+	if removeAll == nil {
+		removeAll = os.RemoveAll
+	}
+	cleanup := func() error {
+		if !owned {
+			return nil
+		}
+		owned = false
+		return removeAll(base)
+	}
+	bad := func(e error) (string, string, func() error, error) {
+		if cleanupErr := cleanup(); cleanupErr != nil {
+			return "", "", nil, errors.Join(fail("runtime_cleanup_failed"), e, cleanupErr)
+		}
+		return "", "", nil, e
+	}
+	if err := os.Chmod(base, 0700); err != nil {
+		return bad(fail("runtime_sandbox_unavailable"))
+	}
+	runtimeRoot, data := filepath.Join(base, "package"), filepath.Join(base, "data")
+	if err := os.Mkdir(runtimeRoot, 0700); err != nil {
+		return bad(fail("runtime_sandbox_unavailable"))
+	}
+	for _, d := range []string{data, filepath.Join(data, "home"), filepath.Join(data, "tmp"), filepath.Join(data, "config"), filepath.Join(data, "cache")} {
+		if err := os.Mkdir(d, 0700); err != nil {
+			return bad(fail("runtime_sandbox_unavailable"))
+		}
+	}
+	var observations []struct {
+		path, kind     string
+		target         string
+		exec, captured bool
+		size           int64
+	}
+	for _, v := range o.Project.Input.Inventory {
+		observations = append(observations, struct {
+			path, kind     string
+			target         string
+			exec, captured bool
+			size           int64
+		}{v.Path, v.Kind, v.Target, v.Executable, v.Captured, v.Size})
+	}
+	sort.Slice(observations, func(i, j int) bool { return observations[i].path < observations[j].path })
+	source, err := os.OpenRoot(o.SourceRoot)
+	if err != nil {
+		return bad(fail("runtime_source_changed"))
+	}
+	defer source.Close()
+	for _, v := range observations {
+		if err := ctx.Err(); err != nil {
+			return bad(err)
+		}
+		if v.path == ".git" || v.path == ".plugin-kit-ai.lock" && v.kind != "directory" {
+			continue
+		}
+		if !safePackagePath(v.path) {
+			return bad(fail("runtime_package_not_copyable"))
+		}
+		if !v.captured {
+			return bad(fail("runtime_package_not_copyable"))
+		}
+		to := filepath.Join(runtimeRoot, filepath.FromSlash(v.path))
+		if v.kind == "directory" {
+			if err := os.MkdirAll(to, 0700); err != nil {
+				return bad(fail("runtime_sandbox_unavailable"))
+			}
+			continue
+		}
+		if v.kind == "symlink" {
+			if !safeLink(v.path, v.target) || os.Symlink(filepath.FromSlash(v.target), to) != nil {
+				return bad(fail("runtime_package_not_copyable"))
+			}
+			continue
+		}
+		if v.kind != "file" {
+			return bad(fail("runtime_package_not_copyable"))
+		}
+		from, err := source.Open(filepath.FromSlash(v.path))
+		if err != nil {
+			return bad(fail("runtime_source_changed"))
+		}
+		info, statErr := from.Stat()
+		body, readErr := io.ReadAll(io.LimitReader(from, v.size+1))
+		closeErr := from.Close()
+		if statErr != nil || !info.Mode().IsRegular() || info.Size() != v.size || int64(len(body)) != v.size || readErr != nil || closeErr != nil {
+			return bad(fail("runtime_source_changed"))
+		}
+		mode := os.FileMode(0600)
+		if v.exec {
+			mode = 0700
+		}
+		if err := os.WriteFile(to, body, mode); err != nil {
+			return bad(fail("runtime_sandbox_unavailable"))
+		}
+	}
+	copyProject, err := o.Projects.Read(ctx, runtimeRoot)
+	if err != nil || copyProject.Input.Identity.TreeDigest == "" || copyProject.Input.Identity.TreeDigest != o.Project.Input.Identity.TreeDigest {
+		return bad(fail("runtime_source_changed"))
+	}
+	return runtimeRoot, data, cleanup, nil
+}
+
+func safePackagePath(name string) bool {
+	return name != "" && !strings.Contains(name, `\`) && !path.IsAbs(name) && path.Clean(name) == name && name != "." && !strings.HasPrefix(name, "../")
+}
+
+func safeLink(name, target string) bool {
+	if target == "" || strings.Contains(target, `\`) || path.IsAbs(target) {
+		return false
+	}
+	resolved := path.Clean(path.Join(path.Dir(name), target))
+	return safePackagePath(resolved)
+}
+
+func fixture(root, name string) (map[string]any, error) {
+	if name == "" || strings.Contains(name, `\`) || path.IsAbs(name) || path.Clean(name) != name || name == "." || strings.HasPrefix(name, "../") {
+		return nil, fail("runtime_fixture_outside_package")
+	}
+	name = filepath.FromSlash(name)
+	f, err := os.OpenRoot(root)
+	if err != nil {
+		return nil, fail("runtime_fixture_unavailable")
+	}
+	defer f.Close()
+	r, err := f.Open(name)
+	if err != nil {
+		return nil, fail("runtime_fixture_unavailable")
+	}
+	defer r.Close()
+	limited := io.LimitReader(r, maxFixture+1)
+	body, err := io.ReadAll(limited)
+	if err != nil || len(body) > maxFixture {
+		return nil, fail("runtime_fixture_invalid")
+	}
+	var value map[string]any
+	if conformance.RejectDuplicateJSONKeys(body) != nil {
+		return nil, fail("runtime_fixture_invalid")
+	}
+	d := json.NewDecoder(bytes.NewReader(body))
+	d.UseNumber()
+	if err := d.Decode(&value); err != nil || value == nil || d.Decode(&struct{}{}) != io.EOF {
+		return nil, fail("runtime_fixture_invalid")
+	}
+	return value, nil
+}
+
+func runStdio(ctx context.Context, root, data string, server domain.MCPServer, tool string, arguments map[string]any, ev *Evidence) error {
+	command, _ := server.Decoded["command"].(string)
+	if command != "node" {
+		return fail("runtime_stdio_requires_node")
+	}
+	node, err := exec.LookPath("node")
+	if err != nil {
+		return fail("runtime_node_unavailable")
+	}
+	args, err := stringSlice(server.Decoded["args"])
+	if err != nil || len(args) == 0 || !(strings.HasPrefix(args[0], "./") || strings.HasPrefix(args[0], "${PLUGIN_ROOT}/")) {
+		return fail("runtime_stdio_config_invalid")
+	}
+	for i := range args {
+		args[i] = expand(args[i], root, data)
+	}
+	script, err := contained(args[0], root)
+	if err != nil {
+		return fail("runtime_command_outside_package")
+	}
+	info, err := os.Lstat(script)
+	if err != nil || !info.Mode().IsRegular() {
+		return fail("runtime_command_unavailable")
+	}
+	args[0] = script
+	cwd := root
+	if authored, _ := server.Decoded["cwd"].(string); authored != "" {
+		cwd, err = contained(expand(authored, root, data), root, data)
+		if err != nil {
+			return fail("runtime_cwd_outside_sandbox")
+		}
+		info, err := os.Lstat(cwd)
+		if err != nil || !info.IsDir() {
+			return fail("runtime_cwd_unavailable")
+		}
+	}
+	if err := (processadapter.OS{}).DuplexCapability(); err != nil {
+		return fail("runtime_process_containment_unavailable")
+	}
+	commandLine, sandboxRoot, sandboxData, sandboxNode, err := stdioSandboxCommand(ctx, root, data, node, args, cwd)
+	if err != nil {
+		return fail("runtime_stdio_containment_unavailable")
+	}
+	env, err := restrictedEnv(sandboxRoot, sandboxData, sandboxNode, server.Decoded["env"])
+	if err != nil {
+		return fail("runtime_stdio_config_invalid")
+	}
+	err = (processadapter.OS{}).RunDuplexWithPlannedShutdown(ctx, ports.Command{Argv: commandLine, Env: env}, func(stdin io.Writer, stdout io.Reader) error {
+		client := &stdioClient{in: bufio.NewReaderSize(stdout, 64<<10), out: stdin}
+		initialized, err := client.call(1, "initialize", map[string]any{"protocolVersion": protocolVersion, "capabilities": map[string]any{}, "clientInfo": map[string]any{"name": "agentplugins-author", "version": "1"}})
+		tools, valid := initializeCapabilities(initialized)
+		if err != nil || !valid {
+			if err == nil {
+				err = fail("runtime_protocol_invalid")
+			}
+			return err
+		}
+		ev.Initialize = true
+		if err := client.notify("notifications/initialized", map[string]any{}); err != nil {
+			return err
+		}
+		var result json.RawMessage
+		var listed []listedTool
+		if tools {
+			result, err = client.call(2, "tools/list", map[string]any{})
+			if err != nil {
+				return err
+			}
+			listed, err = decodeToolList(result)
+			if err != nil {
+				return err
+			}
+			ev.ListTools = true
+			ev.ToolCount = len(listed)
+		} else if tool != "" {
+			return fail("runtime_tools_not_supported")
+		}
+		if tool != "" {
+			if !hasTool(listed, tool) {
+				return fail("runtime_tool_unknown")
+			}
+			result, err = client.call(3, "tools/call", map[string]any{"name": tool, "arguments": arguments})
+			if err != nil {
+				return err
+			}
+			if err := acceptToolCall(result, ev); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+type stdioClient struct {
+	in  *bufio.Reader
+	out io.Writer
+}
+type response struct {
+	JSONRPC string          `json:"jsonrpc"`
+	ID      json.RawMessage `json:"id"`
+	Result  json.RawMessage `json:"result"`
+	Error   json.RawMessage `json:"error"`
+}
+
+func responseResult(r response) (json.RawMessage, error) {
+	hasResult := len(r.Result) != 0
+	hasError := len(r.Error) != 0
+	if hasResult == hasError {
+		return nil, fail("runtime_protocol_invalid")
+	}
+	if hasResult {
+		return r.Result, nil
+	}
+	if bytes.Equal(bytes.TrimSpace(r.Error), []byte("null")) {
+		return nil, fail("runtime_protocol_invalid")
+	}
+	var rpcError map[string]json.RawMessage
+	if json.Unmarshal(r.Error, &rpcError) != nil || rpcError == nil {
+		return nil, fail("runtime_protocol_invalid")
+	}
+	var errorCode int64
+	var message string
+	if json.Unmarshal(rpcError["code"], &errorCode) != nil || json.Unmarshal(rpcError["message"], &message) != nil {
+		return nil, fail("runtime_protocol_invalid")
+	}
+	return nil, fail("runtime_protocol_error")
+}
+
+func (c *stdioClient) notify(method string, params any) error {
+	return json.NewEncoder(c.out).Encode(map[string]any{"jsonrpc": "2.0", "method": method, "params": params})
+}
+func (c *stdioClient) call(id int, method string, params any) (json.RawMessage, error) {
+	if err := json.NewEncoder(c.out).Encode(map[string]any{"jsonrpc": "2.0", "id": id, "method": method, "params": params}); err != nil {
+		return nil, fail("runtime_protocol_io_failed")
+	}
+	for {
+		line, err := readLine(c.in)
+		if err != nil {
+			return nil, fail("runtime_protocol_io_failed")
+		}
+		if conformance.RejectDuplicateJSONKeys(line) != nil {
+			return nil, fail("runtime_protocol_invalid")
+		}
+		var r response
+		if json.Unmarshal(line, &r) != nil {
+			return nil, fail("runtime_protocol_invalid")
+		}
+		var got int
+		if len(r.ID) == 0 || json.Unmarshal(r.ID, &got) != nil || got != id {
+			continue
+		}
+		if r.JSONRPC != "2.0" {
+			return nil, fail("runtime_protocol_invalid")
+		}
+		return responseResult(r)
+	}
+}
+
+func readLine(reader *bufio.Reader) ([]byte, error) {
+	var line []byte
+	for {
+		part, err := reader.ReadSlice('\n')
+		if len(line)+len(part) > maxFrame {
+			return nil, fail("runtime_protocol_io_failed")
+		}
+		line = append(line, part...)
+		if err == nil {
+			return line, nil
+		}
+		if !errors.Is(err, bufio.ErrBufferFull) {
+			return nil, err
+		}
+	}
+}
+
+func runHTTP(ctx context.Context, server domain.MCPServer, tool string, arguments map[string]any, ev *Evidence) (err error) {
+	raw, _ := server.Decoded["url"].(string)
+	u, err := url.Parse(raw)
+	if err != nil || u == nil {
+		return fail("runtime_http_config_invalid")
+	}
+	scheme := strings.ToLower(u.Scheme)
+	if u.Opaque != "" || u.User != nil || u.Hostname() == "" || strings.Contains(raw, "#") ||
+		(scheme != "http" && scheme != "https") {
+		return fail("runtime_http_config_invalid")
+	}
+	if scheme == "http" && !strings.EqualFold(u.Hostname(), "localhost") {
+		address, parseErr := netip.ParseAddr(u.Hostname())
+		if parseErr != nil || address.Zone() != "" || !address.IsLoopback() {
+			return fail("runtime_http_config_invalid")
+		}
+	}
+	headers, err := stringMap(server.Decoded["headers"])
+	if err != nil {
+		return fail("runtime_http_config_invalid")
+	}
+	for name := range headers {
+		switch http.CanonicalHeaderKey(name) {
+		case "Accept", "Content-Type", "Mcp-Session-Id", "Mcp-Protocol-Version":
+			return fail("runtime_http_config_invalid")
+		}
+	}
+	client := &http.Client{Transport: &http.Transport{Proxy: nil}, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	defer client.CloseIdleConnections()
+	session := ""
+	negotiated := false
+	defer func() {
+		if session == "" {
+			return
+		}
+		if cleanupErr := terminateHTTPSession(ctx, client, u, headers, session, negotiated); cleanupErr != nil {
+			err = errors.Join(err, cleanupErr)
+		}
+	}()
+	call := func(id int, method string, params any, notification bool) (json.RawMessage, error) {
+		body, _ := json.Marshal(map[string]any{"jsonrpc": "2.0", "id": id, "method": method, "params": params})
+		if notification {
+			body, _ = json.Marshal(map[string]any{"jsonrpc": "2.0", "method": method, "params": params})
+		}
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, u.String(), bytes.NewReader(body))
+		if err != nil {
+			return nil, fail("runtime_http_request_failed")
+		}
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Accept", "application/json, text/event-stream")
+		if session != "" {
+			req.Header.Set("Mcp-Session-Id", session)
+		}
+		if negotiated {
+			req.Header.Set("Mcp-Protocol-Version", protocolVersion)
+		}
+		for k, v := range headers {
+			req.Header.Set(k, v)
+		}
+		resp, err := client.Do(req)
+		if err != nil {
+			return nil, fail("runtime_http_request_failed")
+		}
+		defer resp.Body.Close()
+		responseSession := resp.Header.Get("Mcp-Session-Id")
+		// The streamable HTTP contract establishes a session only on the
+		// initialization response. Later responses need not repeat the header,
+		// but a present value must identify that original session.
+		if method == "initialize" {
+			session = responseSession
+		} else if responseSession != "" && responseSession != session {
+			return nil, fail("runtime_http_session_mismatch")
+		}
+		if resp.StatusCode >= 300 {
+			return nil, fail("runtime_http_status_failed")
+		}
+		if notification && resp.StatusCode == http.StatusAccepted {
+			return nil, nil
+		}
+		payload, err := readHTTPPayload(resp, id)
+		if err != nil {
+			return nil, err
+		}
+		if conformance.RejectDuplicateJSONKeys(payload) != nil {
+			return nil, fail("runtime_protocol_invalid")
+		}
+		var r response
+		var responseID int
+		if json.Unmarshal(payload, &r) != nil || r.JSONRPC != "2.0" || json.Unmarshal(r.ID, &responseID) != nil || responseID != id {
+			return nil, fail("runtime_protocol_invalid")
+		}
+		return responseResult(r)
+	}
+	initialized, err := call(1, "initialize", map[string]any{"protocolVersion": protocolVersion, "capabilities": map[string]any{}, "clientInfo": map[string]any{"name": "agentplugins-author", "version": "1"}}, false)
+	tools, valid := initializeCapabilities(initialized)
+	if err != nil || !valid {
+		if err == nil {
+			err = fail("runtime_protocol_invalid")
+		}
+		return err
+	}
+	ev.Initialize = true
+	negotiated = true
+	if _, err := call(0, "notifications/initialized", map[string]any{}, true); err != nil {
+		return err
+	}
+	var result json.RawMessage
+	var listed []listedTool
+	if tools {
+		result, err = call(2, "tools/list", map[string]any{}, false)
+		if err != nil {
+			return err
+		}
+		listed, err = decodeToolList(result)
+		if err != nil {
+			return err
+		}
+		ev.ListTools = true
+		ev.ToolCount = len(listed)
+	} else if tool != "" {
+		return fail("runtime_tools_not_supported")
+	}
+	if tool != "" {
+		if !hasTool(listed, tool) {
+			return fail("runtime_tool_unknown")
+		}
+		result, err := call(3, "tools/call", map[string]any{"name": tool, "arguments": arguments}, false)
+		if err != nil {
+			return err
+		}
+		if err := acceptToolCall(result, ev); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// acceptToolCall deliberately supports only the content form emitted by the
+// milestone's generated MCP template. Unknown future MCP content forms remain
+// fail-closed until the runtime has a concrete consumer and focused tests.
+func acceptToolCall(result json.RawMessage, ev *Evidence) error {
+	if conformance.RejectDuplicateJSONKeys(result) != nil {
+		return fail("runtime_protocol_invalid")
+	}
+	var envelope map[string]json.RawMessage
+	if json.Unmarshal(result, &envelope) != nil || envelope == nil {
+		return fail("runtime_protocol_invalid")
+	}
+	rawContent, present := envelope["content"]
+	if !present {
+		return fail("runtime_protocol_invalid")
+	}
+	var content []map[string]json.RawMessage
+	if json.Unmarshal(rawContent, &content) != nil || content == nil {
+		return fail("runtime_protocol_invalid")
+	}
+	for _, block := range content {
+		if block == nil {
+			return fail("runtime_protocol_invalid")
+		}
+		var blockType string
+		if json.Unmarshal(block["type"], &blockType) != nil || blockType != "text" {
+			return fail("runtime_protocol_invalid")
+		}
+		var text string
+		if bytes.Equal(bytes.TrimSpace(block["text"]), []byte("null")) || json.Unmarshal(block["text"], &text) != nil {
+			return fail("runtime_protocol_invalid")
+		}
+	}
+	if rawIsError, present := envelope["isError"]; present {
+		var isError bool
+		if bytes.Equal(bytes.TrimSpace(rawIsError), []byte("null")) || json.Unmarshal(rawIsError, &isError) != nil {
+			return fail("runtime_protocol_invalid")
+		}
+		if isError {
+			return fail("runtime_tool_failed")
+		}
+	}
+	ev.ToolCall = true
+	return nil
+}
+
+func terminateHTTPSession(parent context.Context, client *http.Client, endpoint *url.URL, headers map[string]string, session string, negotiated bool) error {
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(parent), httpSessionCleanupLimit)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, endpoint.String(), nil)
+	if err != nil {
+		return fail("runtime_http_session_cleanup_failed")
+	}
+	req.Header.Set("Accept", "application/json, text/event-stream")
+	req.Header.Set("Mcp-Session-Id", session)
+	if negotiated {
+		req.Header.Set("Mcp-Protocol-Version", protocolVersion)
+	}
+	for name, value := range headers {
+		req.Header.Set(name, value)
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return fail("runtime_http_session_cleanup_failed")
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+		return fail("runtime_http_session_cleanup_failed")
+	}
+	return nil
+}
+
+func initializeCapabilities(result json.RawMessage) (bool, bool) {
+	if conformance.RejectDuplicateJSONKeys(result) != nil {
+		return false, false
+	}
+	var initialized map[string]json.RawMessage
+	if json.Unmarshal(result, &initialized) != nil || initialized == nil {
+		return false, false
+	}
+	var negotiated string
+	if json.Unmarshal(initialized["protocolVersion"], &negotiated) != nil || negotiated != protocolVersion {
+		return false, false
+	}
+	var capabilities map[string]json.RawMessage
+	if json.Unmarshal(initialized["capabilities"], &capabilities) != nil || capabilities == nil {
+		return false, false
+	}
+	var serverInfo map[string]json.RawMessage
+	if json.Unmarshal(initialized["serverInfo"], &serverInfo) != nil || serverInfo == nil {
+		return false, false
+	}
+	var serverName, serverVersion string
+	if json.Unmarshal(serverInfo["name"], &serverName) != nil || serverName == "" ||
+		json.Unmarshal(serverInfo["version"], &serverVersion) != nil || serverVersion == "" {
+		return false, false
+	}
+	tools, advertised := capabilities["tools"]
+	if !advertised {
+		return false, true
+	}
+	var capability map[string]json.RawMessage
+	if json.Unmarshal(tools, &capability) != nil || capability == nil {
+		return false, false
+	}
+	if listChanged, present := capability["listChanged"]; present {
+		var value bool
+		if bytes.Equal(bytes.TrimSpace(listChanged), []byte("null")) || json.Unmarshal(listChanged, &value) != nil {
+			return false, false
+		}
+	}
+	return true, true
+}
+
+func validInitialize(result json.RawMessage) bool {
+	_, valid := initializeCapabilities(result)
+	return valid
+}
+
+type listedTool struct {
+	Name string `json:"name"`
+}
+
+func decodeToolList(result json.RawMessage) ([]listedTool, error) {
+	if conformance.RejectDuplicateJSONKeys(result) != nil {
+		return nil, fail("runtime_protocol_invalid")
+	}
+	var envelope map[string]json.RawMessage
+	if json.Unmarshal(result, &envelope) != nil || envelope == nil {
+		return nil, fail("runtime_protocol_invalid")
+	}
+	if cursor, present := envelope["nextCursor"]; present {
+		var value string
+		if bytes.Equal(bytes.TrimSpace(cursor), []byte("null")) || json.Unmarshal(cursor, &value) != nil {
+			return nil, fail("runtime_protocol_invalid")
+		}
+		if value != "" {
+			return nil, fail("runtime_tools_pagination_unsupported")
+		}
+	}
+	var rawTools []map[string]json.RawMessage
+	if json.Unmarshal(envelope["tools"], &rawTools) != nil || rawTools == nil {
+		return nil, fail("runtime_protocol_invalid")
+	}
+	tools := make([]listedTool, 0, len(rawTools))
+	seen := make(map[string]struct{}, len(rawTools))
+	for _, raw := range rawTools {
+		if raw == nil {
+			return nil, fail("runtime_protocol_invalid")
+		}
+		var name string
+		if json.Unmarshal(raw["name"], &name) != nil || name == "" {
+			return nil, fail("runtime_protocol_invalid")
+		}
+		if _, duplicate := seen[name]; duplicate {
+			return nil, fail("runtime_protocol_invalid")
+		}
+		seen[name] = struct{}{}
+		var schema map[string]json.RawMessage
+		if json.Unmarshal(raw["inputSchema"], &schema) != nil || schema == nil {
+			return nil, fail("runtime_protocol_invalid")
+		}
+		var schemaType string
+		if json.Unmarshal(schema["type"], &schemaType) != nil || schemaType != "object" {
+			return nil, fail("runtime_protocol_invalid")
+		}
+		tools = append(tools, listedTool{Name: name})
+	}
+	return tools, nil
+}
+
+func hasTool(tools []listedTool, name string) bool {
+	for _, tool := range tools {
+		if tool.Name == name {
+			return true
+		}
+	}
+	return false
+}
+
+func readHTTPPayload(resp *http.Response, id int) ([]byte, error) {
+	contentType := strings.ToLower(resp.Header.Get("Content-Type"))
+	if strings.Contains(contentType, "text/event-stream") {
+		return readSSEPayload(bufio.NewReaderSize(resp.Body, 64<<10), id)
+	}
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxFrame+1))
+	if err != nil || len(body) > maxFrame {
+		return nil, fail("runtime_protocol_io_failed")
+	}
+	if !strings.Contains(contentType, "application/json") {
+		return nil, fail("runtime_protocol_invalid")
+	}
+	return body, nil
+}
+
+func readSSEPayload(reader *bufio.Reader, id int) ([]byte, error) {
+	var data []string
+	size := 0
+	flush := func() ([]byte, error) {
+		if len(data) == 0 {
+			return nil, nil
+		}
+		payload := []byte(strings.Join(data, "\n"))
+		data = nil
+		size = 0
+		trimmed := bytes.TrimSpace(payload)
+		if len(trimmed) > 0 && trimmed[0] == '{' && conformance.RejectDuplicateJSONKeys(payload) != nil {
+			return nil, fail("runtime_protocol_invalid")
+		}
+		var candidate response
+		var responseID int
+		if json.Unmarshal(payload, &candidate) == nil && candidate.JSONRPC == "2.0" && json.Unmarshal(candidate.ID, &responseID) == nil && responseID == id {
+			return payload, nil
+		}
+		return nil, nil
+	}
+	for {
+		line, err := readLine(reader)
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				if payload, flushErr := flush(); flushErr != nil || payload != nil {
+					return payload, flushErr
+				}
+				return nil, fail("runtime_protocol_invalid")
+			}
+			return nil, fail("runtime_protocol_io_failed")
+		}
+		line = bytes.TrimSuffix(line, []byte("\n"))
+		line = bytes.TrimSuffix(line, []byte("\r"))
+		if len(line) == 0 {
+			if payload, flushErr := flush(); flushErr != nil || payload != nil {
+				return payload, flushErr
+			}
+			continue
+		}
+		text := string(line)
+		if strings.HasPrefix(text, "data:") {
+			value := strings.TrimPrefix(text, "data:")
+			if strings.HasPrefix(value, " ") {
+				value = value[1:]
+			}
+			size += len(value)
+			if size+len(data) > maxFrame {
+				return nil, fail("runtime_protocol_io_failed")
+			}
+			data = append(data, value)
+		}
+	}
+}
+
+func stringSlice(v any) ([]string, error) {
+	if v == nil {
+		return nil, nil
+	}
+	values, ok := v.([]any)
+	if !ok {
+		return nil, errors.New("invalid")
+	}
+	out := make([]string, len(values))
+	for i, value := range values {
+		out[i], ok = value.(string)
+		if !ok {
+			return nil, errors.New("invalid")
+		}
+	}
+	return out, nil
+}
+func stringMap(v any) (map[string]string, error) {
+	out := map[string]string{}
+	if v == nil {
+		return out, nil
+	}
+	values, ok := v.(map[string]any)
+	if !ok {
+		return nil, errors.New("invalid")
+	}
+	for k, value := range values {
+		s, ok := value.(string)
+		if !ok {
+			return nil, errors.New("invalid")
+		}
+		out[k] = s
+	}
+	return out, nil
+}
+func expand(value, root, data string) string {
+	return strings.NewReplacer("${PLUGIN_ROOT}", root, "${PLUGIN_DATA}", data).Replace(value)
+}
+func contained(value string, bases ...string) (string, error) {
+	root := bases[0]
+	if !filepath.IsAbs(value) {
+		value = filepath.Join(root, filepath.FromSlash(value))
+	}
+	clean := filepath.Clean(value)
+	for _, base := range bases {
+		if rel, err := filepath.Rel(base, clean); err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+			return clean, nil
+		}
+	}
+	return "", errors.New("outside")
+}
+func restrictedEnv(root, data, runtimeExecutable string, authored any) ([]string, error) {
+	env := []string{"HOME=" + filepath.Join(data, "home"), "TMPDIR=" + filepath.Join(data, "tmp"), "XDG_CONFIG_HOME=" + filepath.Join(data, "config"), "XDG_CACHE_HOME=" + filepath.Join(data, "cache"), "PLUGIN_ROOT=" + root, "PLUGIN_DATA=" + data, "PATH=" + filepath.Dir(runtimeExecutable)}
+	values, err := stringMap(authored)
+	if err != nil {
+		return nil, err
+	}
+	keys := make([]string, 0, len(values))
+	for k := range values {
+		upper := strings.ToUpper(k)
+		if k == "" || strings.ContainsRune(k, '=') || upper == "HOME" || upper == "PATH" || upper == "TMP" || upper == "TEMP" || upper == "TMPDIR" || upper == "PLUGIN_ROOT" || upper == "PLUGIN_DATA" || strings.HasPrefix(upper, "XDG_") {
+			return nil, errors.New("reserved runtime environment name")
+		}
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		env = append(env, k+"="+expand(values[k], root, data))
+	}
+	return env, nil
+}

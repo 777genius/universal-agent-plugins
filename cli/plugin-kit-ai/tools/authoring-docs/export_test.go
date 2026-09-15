@@ -67,7 +67,7 @@ func TestDeterministicSurfacesAndNoActions(t *testing.T) {
 	if len(m.Surfaces) != 2 || m.Surfaces[0].CommandPath != "plugin-kit-ai" || m.Surfaces[1].CommandPath != "agentplugins author" {
 		t.Fatal("surfaces")
 	}
-	authorNames := []string{"", "capabilities", "compat", "doctor", "init", "inspect", "skills", "skills init", "skills validate", "help", "skills help", "test", "validate", "version"}
+	authorNames := []string{"", "capabilities", "compat", "dev", "doctor", "init", "inspect", "skills", "skills init", "skills validate", "help", "skills help", "test", "validate", "version"}
 	for i, s := range m.Surfaces {
 		want := map[string]bool{}
 		for _, n := range authorNames {
@@ -230,7 +230,7 @@ func TestExportBytesAndLinks(t *testing.T) {
 	if err := json.Unmarshal(expected[namespace+"/manifest.json"], &m); err != nil {
 		t.Fatal(err)
 	}
-	if len(m.Surfaces) != 2 || len(m.Surfaces[0].Commands) != 20 || len(m.Surfaces[1].Commands) != 14 || m.FactoryBaseline != factoryBaselineSHA || m.SourceSHA != sha || m.Released || m.Status != "prepared-not-release" {
+	if len(m.Surfaces) != 2 || len(m.Surfaces[0].Commands) != 21 || len(m.Surfaces[1].Commands) != 15 || m.FactoryBaseline != factoryBaselineSHA || m.SourceSHA != sha || m.Released || m.Status != "prepared-not-release" {
 		t.Fatal("untouched tree inventory/provenance")
 	}
 	for _, surface := range m.Surfaces {
@@ -280,7 +280,7 @@ func TestExportBytesAndLinks(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if seen != 35 {
+	if seen != 37 {
 		t.Fatalf("disk file count: %d", seen)
 	}
 }

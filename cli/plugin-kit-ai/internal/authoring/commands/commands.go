@@ -11,7 +11,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
+	"github.com/777genius/plugin-kit-ai/cli/internal/authoring/mcpruntime"
 	"github.com/777genius/plugin-kit-ai/cli/internal/authoring/project"
 	"github.com/777genius/plugin-kit-ai/cli/internal/authoring/readiness"
 	"github.com/777genius/plugin-kit-ai/cli/internal/authoring/report"
@@ -41,10 +43,15 @@ type App struct {
 	// PublicContract opts into the private Phase 6 contract; mains retain their existing mode.
 	PublicContract bool
 	Release        *ReleaseOptions
+	MCPRuntime     bool
 }
 
-func commandNames() []string {
-	return []string{"init", "validate", "inspect", "test", "compat", "capabilities", "doctor", "skills"}
+func (a App) commandNames() []string {
+	names := []string{"init", "validate", "inspect", "test", "compat", "capabilities", "doctor", "skills"}
+	if a.MCPRuntime {
+		names = append(names, "dev")
+	}
+	return names
 }
 
 type request struct {
@@ -53,6 +60,14 @@ type request struct {
 	root              string
 	disclose, release bool
 	template          scaffold.Options
+	runtime           string
+	server, tool      string
+	fixture           string
+	allowNetwork      bool
+	once              bool
+	deadline          time.Duration
+	cycleOutput       func(report.Report, error) error
+	runMCP            func(context.Context, mcpruntime.Options) (mcpruntime.Evidence, error)
 }
 
 // Execute renders once, after Factory.Execute handles every Cobra lifecycle exit.
@@ -66,8 +81,12 @@ func (a App) Execute(ctx context.Context, args []string, streams authoringcli.St
 	var human bytes.Buffer
 	factory := authoringcli.Factory(func() (*cobra.Command, error) {
 		factories := make([]authoringcli.Factory, 0, 4)
-		for _, name := range commandNames() {
-			factories = append(factories, func() (*cobra.Command, error) { return a.command(name, func(r report.Report) { captured = &r }) })
+		for _, name := range a.commandNames() {
+			factories = append(factories, func() (*cobra.Command, error) {
+				return a.command(name, func(r report.Report) { captured = &r }, func(r report.Report, _ error) error {
+					return writePrivateHuman(streams.Out, r)
+				})
+			})
 		}
 		root, err := build(factories...)
 		if err != nil {
@@ -94,7 +113,7 @@ func (a App) Execute(ctx context.Context, args []string, streams authoringcli.St
 	})
 	err := factory.Execute(ctx, args, authoringcli.Streams{In: streams.In, Out: &human, Err: io.Discard})
 	if captured == nil {
-		r := report.New(selectedCommand(args), a.Revision)
+		r := report.New(selectedCommand(args, a.commandNames()), a.Revision)
 		if err != nil {
 			code, action := failure(err, "arguments")
 			r.AddError(code, action)
@@ -179,7 +198,7 @@ func (a App) Execute(ctx context.Context, args []string, streams authoringcli.St
 	}
 	return nil
 }
-func (a App) command(name string, capture func(report.Report)) (*cobra.Command, error) {
+func (a App) command(name string, capture func(report.Report), cycleOutput func(report.Report, error) error) (*cobra.Command, error) {
 	if name == "skills" {
 		return a.skillsCommand(capture)
 	}
@@ -212,6 +231,19 @@ func (a App) command(name string, capture func(report.Report)) (*cobra.Command, 
 				}
 			} else {
 				f.Bool("release-policy", false, "also evaluate bounded release hygiene (not publication approval)")
+				if a.MCPRuntime && (name == "test" || name == "dev") {
+					if name == "test" {
+						f.String("runtime", "", "explicit runtime mode: mcp")
+					}
+					f.String("server", "", "exact MCP server name")
+					f.String("tool", "", "exact tool name; requires --fixture")
+					f.String("fixture", "", "package-relative JSON object; requires --tool")
+					f.Bool("allow-network", false, "allow the selected streamable HTTP endpoint")
+					f.Duration("deadline", 10*time.Second, "per-cycle runtime deadline (maximum 1m)")
+					if name == "dev" {
+						f.Bool("once", false, "run one bounded development cycle")
+					}
+				}
 			}
 		},
 		Decode: func(c *cobra.Command, opts authoringcli.Options, args []string) (request, error) {
@@ -224,7 +256,7 @@ func (a App) command(name string, capture func(report.Report)) (*cobra.Command, 
 			if len(args) > 0 {
 				root = args[0]
 			}
-			req := request{root: root, disclose: disclose}
+			req := request{root: root, disclose: disclose, cycleOutput: cycleOutput}
 			if a.PublicContract {
 				var err error
 				req.root, err = skills.ExactRoot(filepath.FromSlash(root))
@@ -258,13 +290,35 @@ func (a App) command(name string, capture func(report.Report)) (*cobra.Command, 
 				}
 			} else {
 				req.release, _ = c.Flags().GetBool("release-policy")
+				if a.MCPRuntime && (name == "test" || name == "dev") {
+					req.server, req.tool, req.fixture = get("server"), get("tool"), get("fixture")
+					req.allowNetwork, _ = c.Flags().GetBool("allow-network")
+					req.deadline, _ = c.Flags().GetDuration("deadline")
+					if name == "test" {
+						req.runtime = get("runtime")
+					} else {
+						req.runtime = "mcp"
+						req.once, _ = c.Flags().GetBool("once")
+					}
+					invalid := (req.tool == "") != (req.fixture == "") || req.deadline <= 0 || req.deadline > time.Minute
+					invalid = invalid || len(req.server) > 128 || len(req.tool) > 128 || len(req.fixture) > 4096
+					invalid = invalid || name == "test" && req.runtime != "" && req.runtime != "mcp"
+					invalid = invalid || name == "test" && c.Flags().Changed("runtime") && req.runtime == ""
+					runtimeFlagsChanged := c.Flags().Changed("server") || c.Flags().Changed("tool") ||
+						c.Flags().Changed("fixture") || c.Flags().Changed("allow-network") || c.Flags().Changed("deadline")
+					invalid = invalid || name == "test" && req.runtime == "" && runtimeFlagsChanged
+					invalid = invalid || req.runtime == "mcp" && req.server == "" || name == "dev" && opts.Format == "json" && !req.once
+					if invalid {
+						return request{}, &inputError{"runtime_arguments_invalid", "Use test --runtime=mcp --server <name>, or dev --server <name>. --tool and --fixture are required together; deadlines are positive and at most 1m. Continuous dev requires human output; use --once with JSON."}
+					}
+				}
 			}
 			return req, nil
 		},
 		Runner: authoringcli.RunnerFunc[request, report.Report](func(ctx context.Context, req request) (report.Report, error) {
 			if name == "capabilities" {
 				r := report.New(name, a.Revision)
-				names := commandNames()
+				names := a.commandNames()
 				if a.PublicContract {
 					names = req.inventory
 				}
@@ -277,6 +331,9 @@ func (a App) command(name string, capture func(report.Report)) (*cobra.Command, 
 			}
 			if name == "init" {
 				return a.init(ctx, req)
+			}
+			if name == "dev" && !req.once {
+				return a.dev(ctx, req)
 			}
 			p, e := a.Projects.Read(ctx, req.root)
 			r := report.Build(name, a.Revision, p, req.release)
@@ -298,6 +355,14 @@ func (a App) command(name string, capture func(report.Report)) (*cobra.Command, 
 			}
 			if name == "doctor" {
 				r.AddDoctor(readiness.Doctor(p))
+			}
+			if req.runtime == "mcp" {
+				evidence, runtimeErr := mcpruntime.Run(ctx, mcpruntime.Options{SourceRoot: req.root, Scratch: a.Projects.Scratch, Project: p, Server: req.server, Tool: req.tool, Fixture: req.fixture, AllowNetwork: req.allowNetwork, Deadline: req.deadline, Projects: a.Projects})
+				code := runtimeErrorCode(runtimeErr)
+				r.SetRuntime(evidence.Transport, evidence.Initialize, evidence.ListTools, evidence.ToolCall, evidence.ToolCount, evidence.Cleanup, code)
+				if runtimeErr != nil {
+					return r, runtimeErr
+				}
 			}
 			if !r.Successful() {
 				return r, errors.New("authoring checks incomplete or failed")
@@ -375,11 +440,43 @@ func summary(name string) string {
 	case "inspect":
 		return "Inspect captured components and unresolved runtime requirements"
 	case "test":
-		return "Check configuration, hygiene, Skills and MCP statically; runtime is not evaluated"
+		return "Check statically by default, or run one explicit MCP server with --runtime=mcp"
+	case "dev":
+		return "Rerun one explicit MCP server when the selected package changes"
 	default:
 		return "Validate exact-root standard configuration and authoring readiness"
 	}
 }
+
+// writePrivateHuman emits only allowlisted report fields. Continuous dev uses
+// it directly so completed cycles are visible without waiting for cancellation.
+func writePrivateHuman(w io.Writer, r report.Report) error {
+	var b strings.Builder
+	fmt.Fprintf(&b, "%s: readiness %s; conformance %s; host %s; compatibility %s; toolchain %s; runtime %s\n", r.Command, r.Readiness.Status, r.Conformance.Status, r.HostSafety.Status, r.Compatibility.Status, r.Toolchain.Status, r.Runtime.Status)
+	if runtime := r.RuntimeDetail; runtime != nil {
+		fmt.Fprintf(&b, "mcp runtime: transport %s; initialize %s; list tools %s; tool call %s; tools %d; cleanup %s\n", runtime.Transport, runtime.Initialize, runtime.ListTools, runtime.ToolCall, runtime.ToolCount, runtime.Cleanup)
+	}
+	for _, finding := range r.Findings {
+		fmt.Fprintf(&b, "%s: %s (%s)\n", finding.Severity, finding.Code, finding.Layer)
+	}
+	if r.Error != nil {
+		fmt.Fprintln(&b, r.Error.Action)
+	}
+	_, err := io.WriteString(w, b.String())
+	return err
+}
+
+func runtimeErrorCode(err error) string {
+	if err == nil {
+		return ""
+	}
+	var runtimeErr *mcpruntime.Error
+	if errors.As(err, &runtimeErr) {
+		return runtimeErr.Code
+	}
+	return "runtime_failed"
+}
+
 func failure(err error, phase string) (string, string) {
 	var cleanup *scaffold.CleanupError
 	if errors.As(err, &cleanup) {
@@ -433,10 +530,17 @@ func wantsJSON(args []string) bool {
 	}
 	return false
 }
-func selectedCommand(args []string) string {
+func selectedCommand(args, supported []string) string {
+	allowed := make(map[string]struct{}, len(supported))
+	for _, name := range supported {
+		allowed[name] = struct{}{}
+	}
 	for _, a := range args {
-		for _, n := range commandNames() {
+		for _, n := range []string{"init", "validate", "inspect", "test", "compat", "capabilities", "doctor", "skills", "dev"} {
 			if a == n {
+				if _, ok := allowed[n]; !ok {
+					return "author"
+				}
 				return n
 			}
 		}

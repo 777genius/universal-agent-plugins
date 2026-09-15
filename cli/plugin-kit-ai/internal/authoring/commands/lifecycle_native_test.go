@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"testing"
 
 	"github.com/777genius/plugin-kit-ai/cli/internal/authoring/report"
@@ -53,8 +54,12 @@ func TestNativeBinaryLifecycle(t *testing.T) {
 			t.Logf("binary=%d command=%s exit=%d report_sha256=%x", i, r.Command, code, sha256.Sum256(out))
 			if i == 0 {
 				first, output = r, out
-			} else if !bytes.Equal(output, out) {
-				t.Fatalf("report parity args=%q:\n%s\n%s", args, output, out)
+			} else if len(args) != 1 || args[0] != "capabilities" {
+				if !bytes.Equal(output, out) {
+					t.Fatalf("report parity args=%q:\n%s\n%s", args, output, out)
+				}
+			} else if r.Capabilities == nil || len(r.Capabilities.Commands) != 9 || !slices.Contains(r.Capabilities.Commands, "dev") {
+				t.Fatalf("agentplugins Phase 7 surface missing: %+v", r.Capabilities)
 			}
 		}
 		if !reflect.DeepEqual(tree(t, parents[0]), tree(t, parents[1])) {

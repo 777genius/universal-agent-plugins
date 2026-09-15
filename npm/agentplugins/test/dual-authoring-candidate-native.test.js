@@ -122,7 +122,34 @@ test("actual controlled Linux pair: offline verification, engine reports, frozen
     }
     reports.push(productReports); trees.push(productTrees);
   }
-  assert.deepEqual(reports[0].map((r) => r.report), reports[1].map((r) => r.report));
+  // The public agentplugins binary owns the released runtime surface. The
+  // retained plugin-kit-ai binary intentionally stays on its static legacy
+  // contract, while every shared report field must remain byte-for-byte equal.
+  const sharedReports = reports.map((productReports, productIndex) => productReports.map(({ argv, report }) => {
+    const normalized = structuredClone(report);
+    if (normalized.commands) {
+      assert.equal(normalized.commands.includes("author.dev"), productIndex === 0);
+      normalized.commands = normalized.commands.filter((name) => name !== "author.dev");
+    }
+    if (argv.includes("capabilities")) {
+      const commands = normalized.capabilities.commands;
+      const evidence = normalized.capabilities.evidence_limits;
+      if (productIndex === 0) {
+        assert.ok(commands.includes("author.dev"));
+        assert.deepEqual(evidence, ["runtime_explicit_only", "mcp_stdio_linux_containment_required",
+          "mcp_streamable_http_network_opt_in", "bounded_private_runtime_root", "single_project_dev_session",
+          "no_oauth_evidence", "phase_7_not_released"]);
+      } else {
+        assert.equal(commands.includes("author.dev"), false);
+        assert.deepEqual(evidence, ["static_only", "no_path_lookup", "no_executable_version_probe",
+          "no_runtime_or_oauth_evidence", "native_files_metadata_only"]);
+      }
+      normalized.capabilities.commands = commands.filter((name) => name !== "author.dev");
+      delete normalized.capabilities.evidence_limits;
+    }
+    return normalized;
+  }));
+  assert.deepEqual(sharedReports[0], sharedReports[1]);
   assert.deepEqual(trees[0], trees[1]);
   for (const [name, hash] of before) {
     assert.equal(c.digest(c.readFile(path.join(options.root, name))), hash);

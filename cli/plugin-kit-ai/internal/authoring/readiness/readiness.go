@@ -4,6 +4,7 @@ package readiness
 
 import (
 	"errors"
+	"slices"
 	"sort"
 	"strings"
 
@@ -70,6 +71,9 @@ func Engine(commands []string) (*Capabilities, error) {
 	}
 	c := &Capabilities{Profiles: conformance.ProfileIdentities(), Commands: append([]string{}, commands...),
 		Evidence: []string{"static_only", "no_path_lookup", "no_executable_version_probe", "no_runtime_or_oauth_evidence", "native_files_metadata_only"}}
+	if slices.Contains(commands, "dev") || slices.Contains(commands, "author.dev") {
+		c.Evidence = []string{"runtime_explicit_only", "mcp_stdio_linux_containment_required", "mcp_streamable_http_network_opt_in", "bounded_private_runtime_root", "single_project_dev_session", "no_oauth_evidence", "phase_7_not_released"}
+	}
 	for _, id := range []string{domain.PluginSchemaV1, domain.MCPSchemaV1} {
 		digest, ok := registry.Digest(id)
 		if !ok || !registry.Supports(id) {

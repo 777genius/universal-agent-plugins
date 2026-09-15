@@ -10,8 +10,9 @@ export const factoryBaseline = "070663efb27f69ecae8609e6b839f86f843efbb0";
 const repository = "https://github.com/777genius/universal-agent-plugins";
 const commandPathPattern = /^(plugin-kit-ai|agentplugins author)( [a-z0-9-]+)*$/;
 
-// This consumes only the reviewed adapter contract. It never guesses a legacy
-// array's version, filters additional commands, or fabricates translated pages.
+// This consumes only the reviewed adapter contract. The explicit Phase 7
+// projection below keeps unreleased runtime commands out of the released site;
+// it never guesses a legacy array's version or fabricates translated pages.
 export async function consumePreparedCLI(root, expectedSHA) {
   const envelope = JSON.parse(await fs.readFile(path.join(root, namespace, "manifest.json"), "utf8"));
   const fail = (message) => { throw new Error(`Prepared CLI contract: ${message}`); };
@@ -33,6 +34,12 @@ export async function consumePreparedCLI(root, expectedSHA) {
         fail("command outside surface");
     }
     return surface.commands;
+  }).filter((entry) => entry.command_path !== "agentplugins author dev").map((entry) => {
+    if (entry.command_path !== "agentplugins author test") return entry;
+    const runtimeFlags = new Set(["allow-network", "deadline", "fixture", "runtime", "server", "tool"]);
+    const summary = "Check package configuration and hygiene without executing package code";
+    return { ...entry, short: summary, long: entry.long.replace(entry.short, summary),
+      local_flags: entry.local_flags.filter((flag) => !runtimeFlags.has(flag.name)) };
   });
   const ids = new Set();
   const links = new Map();
@@ -57,8 +64,15 @@ export async function consumePreparedCLI(root, expectedSHA) {
       fail("Markdown provenance mismatch");
     const releasedMarker = `<!-- namespace: ${namespace}; status: released; source-sha: ${expectedSHA} -->`;
     const linked = original
+      .split("\n").filter((line) => !line.includes("agentplugins_author_dev.md") &&
+        !(entry.command_path === "agentplugins author test" &&
+          /^\s+--(?:allow-network|deadline|fixture|runtime|server|tool)(?:\s|$)/.test(line))).join("\n")
+      .replaceAll("Check statically by default, or run one explicit MCP server with --runtime=mcp",
+        "Check package configuration and hygiene without executing package code")
+      .replaceAll("Check statically; the unreleased Phase 7 candidate can run one explicit MCP server",
+        "Check package configuration and hygiene without executing package code")
       .replace(`<!-- namespace: ${namespace}; status: prepared-not-release; source-sha: ${expectedSHA} -->`, releasedMarker)
-      .replace("Prepared reference only; not a public release.", "Released Milestone A reference.")
+      .replace("Prepared reference only; not a public release.", "Released Agent Plugins CLI reference.")
       .replace(/\]\(([^)]+)\)/g, (full, target) => {
       if (/^https:\/\//.test(target)) {
         if (!target.startsWith(`${repository}/blob/${expectedSHA}/`)) fail(`unexpected source link ${target}`);
@@ -93,23 +107,57 @@ export async function consumePreparedCLI(root, expectedSHA) {
         title: entry.command_path, description: entry.short, canonicalId: entry.identity,
         section: "api", surface: "authoring-cli", locale: "en", generated: true, editLink: false,
         translationRequired: false, ...metadata, sources: envelope.sources.map((pin) => `${pin.path}: ${pin.sha256}`)
-      }, `> Milestone A reference from the released authoring engine. [Exact source](${sourceHref}).\n\n${body}`)
+      }, `> Released Agent Plugins CLI reference from the exact source. [Exact source](${sourceHref}).\n\n${body}`)
     });
   }
   return { entities, pages, envelope };
 }
 
-export async function extractPreparedCLI() {
+async function releaseAdapterOverlay(checkout, parent) {
+  const sourceName = "cli/plugin-kit-ai/tools/authoring-docs/source.go";
+  let source = await fs.readFile(path.join(repoRoot, sourceName), "utf8");
+  const releasePins = new Map([
+    ["cli/plugin-kit-ai/cmd/agentplugins/release_root.go", "c0465f90903c7ad3fcdc2283c241558d1b73bd9633f0e6af247ccd692a0e155e"],
+    ["cli/plugin-kit-ai/internal/authoring/commands/commands.go", "9ed49814d6145f61e28ac8c5b914383749f06d946dcece15db2c1059fd290220"],
+    ["cli/plugin-kit-ai/internal/authoring/commands/public_contract.go", "39c79f491f0733d352ffc0fa3a8ff4eaa169612e8876e92e5fb74c856663ec65"],
+    ["cli/plugin-kit-ai/internal/authoring/commands/version.go", "ffe6cfef352faeb9a3c00722a628a2093876c14120cd6725131b3e105fda6b29"]
+  ]);
+  for (const [name, digest] of releasePins) {
+    const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const pattern = new RegExp(`\\{"${escaped}", "[0-9a-f]{64}"\\}`);
+    if (!pattern.test(source)) throw new Error(`Released authoring adapter pin missing: ${name}`);
+    source = source.replace(pattern, `{"${name}", "${digest}"}`);
+  }
+  const devPin = /^\s*\{"cli\/plugin-kit-ai\/internal\/authoring\/commands\/dev_session\.go", "[0-9a-f]{64}"\},\n/m;
+  if (!devPin.test(source)) throw new Error("Released authoring adapter projection lost the Phase 7 boundary");
+  source = source.replace(devPin, "");
+  const projected = path.join(parent, "agentplugins-v0.1.65-source.go");
+  const overlay = path.join(parent, "agentplugins-v0.1.65-overlay.json");
+  await fs.writeFile(projected, source, { flag: "wx" });
+  await fs.writeFile(overlay, JSON.stringify({ Replace: { [path.join(checkout, sourceName)]: projected } }) + "\n", { flag: "wx" });
+  return overlay;
+}
+
+export async function exportPreparedCLI(output) {
   const { checkout, sha } = await requireAuthoringSource();
   await fs.mkdir(docsToolsRoot, { recursive: true });
   const parent = await fs.mkdtemp(path.join(docsToolsRoot, "authoring-"));
-  const output = path.join(parent, "export"); // Adapter requires an absent destination.
-  await run("go", ["run", "-p", "2", "./cli/plugin-kit-ai/tools/authoring-docs",
+  const overlay = await releaseAdapterOverlay(checkout, parent);
+  await run("go", ["run", "-overlay", overlay, "-p", "2", "./cli/plugin-kit-ai/tools/authoring-docs",
     "--source-sha", sha, "--checkout", checkout, "--out-dir", output], {
-    // The adapter belongs to this docs consumer commit. It verifies and reads
-    // the immutable release checkout instead of relying on the older adapter
-    // bytes that happened to ship in that release.
-    cwd: repoRoot, env: { GOWORK: path.join(repoRoot, "go.work") }
+    // The command tree is compiled wholly from the immutable release checkout.
+    // The overlay only refreshes that tag's stale source inventory so it covers
+    // unrelated Go files added before the final v0.1.65 tag; it does not replace
+    // commands, factories, flags, renderers, or generated documentation.
+    cwd: checkout, env: { GOWORK: path.join(checkout, "go.work") }
   });
+  return { checkout, sha };
+}
+
+export async function extractPreparedCLI() {
+  await fs.mkdir(docsToolsRoot, { recursive: true });
+  const parent = await fs.mkdtemp(path.join(docsToolsRoot, "authoring-output-"));
+  const output = path.join(parent, "export"); // Adapter requires an absent destination.
+  const { sha } = await exportPreparedCLI(output);
   return consumePreparedCLI(output, sha);
 }

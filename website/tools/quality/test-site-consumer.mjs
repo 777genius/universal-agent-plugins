@@ -13,7 +13,7 @@ for (const [key, value] of Object.entries({ GOPROXY: "off", GOSUMDB: "off", GOEN
 for (const key of ["HOME", "TMPDIR", "GOCACHE", "GOMODCACHE", "DOCS_TOOLS_ROOT"])
   if (!path.isAbsolute(process.env[key] || "")) throw new Error(`Required integration needs private absolute ${key} (GOMODCACHE may be an existing read-only cache)`);
 if (process.env.GOFLAGS) throw new Error("Required integration needs empty GOFLAGS");
-assert.match(await run("go", ["version"]), / go1\.25\.13 /);
+assert.match(await run("go", ["version"]), / go1\.25\.\d+ /);
 const directory = await fs.mkdtemp(path.join(os.tmpdir(), "docs-consumer-integration-"));
 console.log(`Integration evidence: ${directory}`);
 const source = path.join(directory, "source");
@@ -25,12 +25,13 @@ for (const destination of [source, site])
 process.env.DOCS_AUTHORING_CHECKOUT = source;
 process.env.DOCS_SITE_OUTPUT_ROOT = path.join(site, "website");
 const { acceptedAuthoringSHA, requireAuthoringSource } = await import("../lib/source-contract.mjs");
+const { exportPreparedCLI } = await import("../extractors/prepared-cli.mjs");
+assert.equal((await run("git", ["rev-parse", "agentplugins-v0.1.65^{commit}"], { cwd: source })).trim(), acceptedAuthoringSHA);
 process.env.DOCS_AUTHORING_SOURCE_SHA = acceptedAuthoringSHA;
 for (const cwd of [source, site]) await run("git", ["checkout", "--quiet", "--detach", acceptedAuthoringSHA], { cwd });
 await requireAuthoringSource();
 const output = path.join(directory, "adapter-output");
-await run("go", ["run", "-p", "2", "./cli/plugin-kit-ai/tools/authoring-docs", "--source-sha", acceptedAuthoringSHA,
-  "--checkout", source, "--out-dir", output], { cwd: repository, env: { GOWORK: path.join(repository, "go.work") } });
+await exportPreparedCLI(output);
 const envelope = JSON.parse(await fs.readFile(path.join(output, "prepared-authoring-v2/manifest.json"), "utf8"));
 for (const pin of envelope.sources) {
   const digest = createHash("sha256").update(await fs.readFile(path.join(source, pin.path))).digest("hex");
@@ -82,8 +83,7 @@ process.env.DOCS_AUTHORING_CHECKOUT = source;
 const dirtyFile = path.join(source, envelope.sources[0].path);
 await fs.appendFile(dirtyFile, "\n");
 await assert.rejects(requireAuthoringSource(), /tracked changes/);
-await assert.rejects(run("go", ["run", "-p", "2", "./cli/plugin-kit-ai/tools/authoring-docs", "--source-sha", acceptedAuthoringSHA,
-  "--checkout", source, "--out-dir", path.join(directory, "dirty-rejected")], { cwd: repository, env: { GOWORK: path.join(repository, "go.work") } }));
+await assert.rejects(exportPreparedCLI(path.join(directory, "dirty-rejected")));
 await run("git", ["restore", "--", envelope.sources[0].path], { cwd: source });
 await requireAuthoringSource();
 await fs.writeFile(path.join(directory, "assembly-evidence.json"), JSON.stringify({

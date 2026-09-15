@@ -180,7 +180,40 @@ test("NATIVE opt-in: exact two Linux tarballs, five accepted template lanes and 
     const release = b.loadRelease(product, packageRoot, "linux-amd64", s.MODE);
     assert.equal(c.digest(c.readFile(b.cachePath(caches[product], product, "linux-amd64", release))), frozen.manifest.products[product].assets["linux-amd64"].binary.sha256);
   }
-  assert.deepEqual(reports.agentplugins, reports["plugin-kit-ai"]); assert.deepEqual(trees.agentplugins, trees["plugin-kit-ai"]);
+  // The public agentplugins binary owns the runtime surface. The retained
+  // plugin-kit-ai binary intentionally stays on its static legacy contract.
+  const sharedReports = c.PRODUCTS.map((product, productIndex) => reports[product].map(report => {
+    const normalized = structuredClone(report);
+    if (normalized.data.commands) {
+      assert.equal(normalized.data.commands.includes("author.dev"), productIndex === 0);
+      normalized.data.commands = normalized.data.commands.filter(name => name !== "author.dev");
+    }
+    if (normalized.command === "author.test" && normalized.data.help) {
+      const flags = normalized.data.help.flags;
+      const runtimeFlags = ["--allow-network", "--deadline <value>", "--fixture <value>",
+        "--runtime <value>", "--server <value>", "--tool <value>"];
+      for (const flag of runtimeFlags) assert.equal(flags.includes(flag), productIndex === 0);
+      normalized.data.help.flags = flags.filter(flag => !runtimeFlags.includes(flag));
+    }
+    if (normalized.command === "author.capabilities") {
+      const commands = normalized.data.capabilities.commands;
+      const evidence = normalized.data.capabilities.evidence_limits;
+      if (productIndex === 0) {
+        assert.ok(commands.includes("author.dev"));
+        assert.deepEqual(evidence, ["runtime_explicit_only", "mcp_stdio_linux_containment_required",
+          "mcp_streamable_http_network_opt_in", "bounded_private_runtime_root", "single_project_dev_session",
+          "no_oauth_evidence", "phase_7_not_released"]);
+      } else {
+        assert.equal(commands.includes("author.dev"), false);
+        assert.deepEqual(evidence, ["static_only", "no_path_lookup", "no_executable_version_probe",
+          "no_runtime_or_oauth_evidence", "native_files_metadata_only"]);
+      }
+      normalized.data.capabilities.commands = commands.filter(name => name !== "author.dev");
+      delete normalized.data.capabilities.evidence_limits;
+    }
+    return normalized;
+  }));
+  assert.deepEqual(sharedReports[0], sharedReports[1]); assert.deepEqual(trees.agentplugins, trees["plugin-kit-ai"]);
   // Reuse B's exact committed inventory as data; do not maintain a second list.
   const inventory = checked("/usr/bin/git", ["show", `${o.identity.commit}:cli/plugin-kit-ai/cmd/plugin-kit-ai/release_compat.go`], o.repo);
   const rows = [...inventory.matchAll(/\{"([^"]+)", "([^"]*)", (true|false)\}/g)]; assert.ok(rows.length >= 50);

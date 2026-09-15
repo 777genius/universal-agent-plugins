@@ -83,11 +83,11 @@ localeStrategy: "canonical-en"
 sourceKind: "authoring-docs-adapter"
 sourceRef: "https://github.com/777genius/universal-agent-plugins/tree/ec9397a63f7c7550a680fcb0f5565902acbf7243/cli/plugin-kit-ai/internal/authoring/commands"
 ---
-> Milestone A reference from the released authoring engine. [Exact source](https://github.com/777genius/universal-agent-plugins/tree/ec9397a63f7c7550a680fcb0f5565902acbf7243/cli/plugin-kit-ai/internal/authoring/commands).
+> Released Agent Plugins CLI reference from the exact source. [Exact source](https://github.com/777genius/universal-agent-plugins/tree/ec9397a63f7c7550a680fcb0f5565902acbf7243/cli/plugin-kit-ai/internal/authoring/commands).
 
 <!-- namespace: prepared-authoring-v2; status: released; source-sha: ec9397a63f7c7550a680fcb0f5565902acbf7243 -->
 
-Released Milestone A reference.
+Released Agent Plugins CLI reference.
 
 # agentplugins author version
 

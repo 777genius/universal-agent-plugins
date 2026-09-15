@@ -3,7 +3,8 @@ import path from "node:path";
 import { repoRoot, outputRoot, docsToolsRoot } from "../config/site.mjs";
 import { run } from "./process.mjs";
 
-// Accepted adapter provenance is an input pin, never the generated-output commit.
+// Accepted authoring provenance is the immutable v0.1.65 release source, never
+// the generated-output commit or the unreleased Phase 7 candidate.
 export const acceptedAuthoringSHA = "ec9397a63f7c7550a680fcb0f5565902acbf7243";
 export async function requireAuthoringSource() {
   const sha = process.env.DOCS_AUTHORING_SOURCE_SHA || acceptedAuthoringSHA;
