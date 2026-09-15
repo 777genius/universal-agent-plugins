@@ -42,6 +42,14 @@ func TestBuildCanonicalPreservesNumbersAndRejectsDuplicates(t *testing.T) {
 	}
 }
 
+func TestBuildRejectsInvalidUTF8(t *testing.T) {
+	body := append([]byte(`{"name":"`), 0xff)
+	body = append(body, []byte(`"}`)...)
+	if _, err := Build("plugin.json", body); errorCode(t, err) != "json_malformed" {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestApplyNoopMtimeSymlinkConcurrentAndRollback(t *testing.T) {
 	ctx := context.Background()
 	t.Run("noop", func(t *testing.T) {

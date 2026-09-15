@@ -14,6 +14,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"unicode/utf8"
 )
 
 const MaxDocumentBytes = 4 << 20
@@ -83,7 +84,7 @@ func digest(b []byte) string {
 // Decode rejects duplicate object keys at every depth and retains json.Number
 // spellings so canonical formatting does not coerce integer or decimal values.
 func Decode(body []byte) (any, error) {
-	if len(body) == 0 || len(body) > MaxDocumentBytes {
+	if len(body) == 0 || len(body) > MaxDocumentBytes || !utf8.Valid(body) {
 		return nil, fail("json_malformed")
 	}
 	d := json.NewDecoder(bytes.NewReader(body))

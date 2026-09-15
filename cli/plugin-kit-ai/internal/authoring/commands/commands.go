@@ -467,6 +467,20 @@ func summary(name string) string {
 func writePrivateHuman(w io.Writer, r report.Report) error {
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s: readiness %s; conformance %s; host %s; compatibility %s; toolchain %s; runtime %s\n", r.Command, r.Readiness.Status, r.Conformance.Status, r.HostSafety.Status, r.Compatibility.Status, r.Toolchain.Status, r.Runtime.Status)
+	if document := r.JSONDocument; document != nil {
+		fmt.Fprintf(&b, "json document: %s; changed %t; before %s; after %s\n", document.Path, document.Changed, document.BeforeSHA256, document.AfterSHA256)
+	}
+	if imported := r.NativeImport; imported != nil {
+		fmt.Fprintf(&b, "native import: client %s; source %s; safe servers %d; skipped servers %d; unsupported top-level fields %d\n", imported.Client, imported.SourceSHA256, imported.SafeServers, len(imported.SkippedServers), len(imported.UnsupportedTopLevel))
+	}
+	if r.Committed {
+		fmt.Fprintln(&b, "committed: true")
+	}
+	for _, path := range r.Paths {
+		if filepath.IsLocal(path) {
+			fmt.Fprintf(&b, "affected path: %s\n", filepath.ToSlash(path))
+		}
+	}
 	if runtime := r.RuntimeDetail; runtime != nil {
 		fmt.Fprintf(&b, "mcp runtime: transport %s; initialize %s; list tools %s; tool call %s; tools %d; cleanup %s\n", runtime.Transport, runtime.Initialize, runtime.ListTools, runtime.ToolCall, runtime.ToolCount, runtime.Cleanup)
 	}
