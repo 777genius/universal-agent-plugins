@@ -194,10 +194,12 @@ func Apply(ctx context.Context, plan Plan, opts ApplyOptions) (committed bool, e
 		return false, fail("temporary_write_failed")
 	}
 	owned := true
+	cleanupPath := temp
+	cleanupInfo := tempInfo
 	defer func() {
 		if owned {
-			if now, e := root.Lstat(temp); e == nil && os.SameFile(now, tempInfo) {
-				err = errors.Join(err, root.Remove(temp))
+			if now, e := root.Lstat(cleanupPath); e == nil && os.SameFile(now, cleanupInfo) {
+				err = errors.Join(err, root.Remove(cleanupPath), parent.Sync())
 			}
 		}
 	}()
@@ -208,24 +210,30 @@ func Apply(ctx context.Context, plan Plan, opts ApplyOptions) (committed bool, e
 	if err = ctx.Err(); err != nil {
 		return false, err
 	}
-	if err = exchange(parent, temp, plan.Document); err != nil {
+	oldPath, replaceErr := replaceOwned(parent, opts.Root, temp, plan.Document)
+	if replaceErr != nil {
 		return false, fail("atomic_replace_unavailable")
 	}
 	committed = true
+	cleanupPath = oldPath
+	cleanupInfo = originalInfo
 	rollback := func(cause error) error {
 		now, _, check := readCurrent(root, plan.Document)
 		if check != nil || !os.SameFile(now, tempInfo) {
 			owned = false
 			return errors.Join(cause, fail("rollback_refused"))
 		}
-		if swapErr := exchange(parent, temp, plan.Document); swapErr != nil {
+		discardPath, swapErr := restoreOwned(parent, opts.Root, cleanupPath, plan.Document)
+		if swapErr != nil {
 			owned = false
 			return errors.Join(cause, fail("rollback_failed"))
 		}
 		committed = false
+		cleanupPath = discardPath
+		cleanupInfo = tempInfo
 		return cause
 	}
-	oldInfo, old, readErr := readCurrent(root, temp)
+	oldInfo, old, readErr := readCurrent(root, cleanupPath)
 	if readErr != nil || !os.SameFile(oldInfo, originalInfo) || !bytes.Equal(old, plan.before) {
 		return committed, rollback(fail("source_changed"))
 	}
@@ -243,7 +251,7 @@ func readCurrent(root *os.Root, name string) (os.FileInfo, []byte, error) {
 	if err != nil || !info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 || info.Size() < 0 || info.Size() > MaxDocumentBytes {
 		return nil, nil, fail("document_unavailable")
 	}
-	f, err := root.Open(name)
+	f, err := openNoFollow(root, name)
 	if err != nil {
 		return nil, nil, fail("document_unavailable")
 	}

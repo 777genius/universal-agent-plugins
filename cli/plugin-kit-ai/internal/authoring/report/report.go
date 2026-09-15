@@ -85,6 +85,23 @@ type Error struct {
 	Code   string `json:"code"`
 	Action string `json:"action"`
 }
+type JSONDocument struct {
+	Path         string `json:"path"`
+	BeforeSHA256 string `json:"before_sha256"`
+	AfterSHA256  string `json:"after_sha256"`
+	Changed      bool   `json:"changed"`
+}
+type ImportIssue struct {
+	Code   string `json:"code"`
+	ItemID string `json:"item_id"`
+}
+type NativeImport struct {
+	Client              string        `json:"client"`
+	SourceSHA256        string        `json:"source_sha256"`
+	SafeServers         int           `json:"safe_servers"`
+	SkippedServers      []ImportIssue `json:"skipped_servers"`
+	UnsupportedTopLevel []ImportIssue `json:"unsupported_top_level"`
+}
 type Report struct {
 	// Display is a sanitized projection retained only for explicit public rendering.
 	Display       *Inspection                   `json:"-"`
@@ -116,6 +133,8 @@ type Report struct {
 	Checks        []Check                       `json:"checks"`
 	Committed     bool                          `json:"committed"`
 	Paths         []string                      `json:"affected_paths"`
+	JSONDocument  *JSONDocument                 `json:"json_document,omitempty"`
+	NativeImport  *NativeImport                 `json:"native_import,omitempty"`
 	Error         *Error                        `json:"error,omitempty"`
 }
 

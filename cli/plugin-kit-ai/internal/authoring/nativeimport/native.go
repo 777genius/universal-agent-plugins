@@ -9,7 +9,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"net/url"
 	"os"
@@ -22,6 +21,7 @@ import (
 
 	"github.com/777genius/plugin-kit-ai/cli/internal/authoring/jsonmaint"
 	"github.com/777genius/plugin-kit-ai/cli/internal/authoring/scaffold"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/specregistry"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
@@ -95,6 +95,10 @@ func Build(ctx context.Context, source, from, name, description string) (Plan, e
 	result.SafeServers = len(portable)
 	plugin := map[string]any{"$schema": domain.PluginSchemaV1, "description": description, "name": name, "version": "0.1.0"}
 	mcp := map[string]any{"$schema": domain.MCPSchemaV1, "mcpServers": portable}
+	registry, err := specregistry.New()
+	if err != nil || registry.Validate(domain.PluginSchemaV1, plugin) != nil || registry.Validate(domain.MCPSchemaV1, mcp) != nil {
+		return Plan{}, fail("identity_invalid")
+	}
 	pluginJSON, err := canonical(plugin)
 	if err != nil {
 		return Plan{}, fail("identity_invalid")
@@ -147,7 +151,7 @@ func convertServer(server map[string]any) (map[string]any, bool) {
 		if !ok || len(values) > 128 {
 			return nil, false
 		}
-		args := make([]string, len(values))
+		args := make([]any, len(values))
 		for i, raw := range values {
 			arg, ok := raw.(string)
 			if !ok || !portableArg(arg) {
@@ -160,8 +164,12 @@ func convertServer(server map[string]any) (map[string]any, bool) {
 	return result, true
 }
 
+func portableAbsolute(value string) bool {
+	return len(value) >= 3 && ((value[0] >= 'A' && value[0] <= 'Z') || (value[0] >= 'a' && value[0] <= 'z')) && value[1] == ':' && (value[2] == '/' || value[2] == '\\')
+}
+
 func portableArg(value string) bool {
-	if len(value) > 4096 || !utf8.ValidString(value) || strings.ContainsRune(value, 0) || filepath.IsAbs(value) || filepath.VolumeName(value) != "" || strings.HasPrefix(value, `\\`) || secretLike(value) {
+	if len(value) > 4096 || !utf8.ValidString(value) || strings.ContainsRune(value, 0) || filepath.IsAbs(value) || filepath.VolumeName(value) != "" || portableAbsolute(value) || strings.HasPrefix(value, `\\`) || secretLike(value) {
 		return false
 	}
 	for _, r := range value {
@@ -206,7 +214,7 @@ func capture(ctx context.Context, path string) (os.FileInfo, []byte, error) {
 	if err != nil || !before.Mode().IsRegular() || before.Mode()&os.ModeSymlink != 0 || before.Size() < 0 || before.Size() > MaxSourceBytes {
 		return nil, nil, fail("source_unavailable")
 	}
-	f, err := os.Open(path)
+	f, err := openNoFollow(path)
 	if err != nil {
 		return nil, nil, fail("source_unavailable")
 	}
@@ -254,5 +262,3 @@ func codeOf(err error, fallback string) string {
 	}
 	return fallback
 }
-
-var _ = fmt.Sprintf
