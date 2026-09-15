@@ -10,12 +10,39 @@ export const quickstartClaims = [
   "public-channel E2E are verified", "0.1.65", "plugin.json", "agentplugins author"
 ];
 
-const embeddedHistoricalSource = /<!-- locale-historical-source:start[\s\S]*?locale-historical-source:end -->/g;
-export const currentSourceBody = (body) => body.replace(embeddedHistoricalSource, "");
+function stripDelimitedBlocks(body, startMarker, endMarker) {
+  let output = "";
+  let offset = 0;
+  while (offset < body.length) {
+    const start = body.indexOf(startMarker, offset);
+    if (start < 0) {
+      output += body.slice(offset);
+      break;
+    }
+    output += body.slice(offset, start);
+    const end = body.indexOf(endMarker, start + startMarker.length);
+    if (end < 0) {
+      output += body.slice(start);
+      break;
+    }
+    offset = end + endMarker.length;
+  }
+  return output;
+}
+
+export const currentSourceBody = (body) => stripDelimitedBlocks(
+  body,
+  "<!-- locale-historical-source:start",
+  "locale-historical-source:end -->"
+);
+
+function stripHtmlComments(html) {
+  return stripDelimitedBlocks(html, "<!--", "-->");
+}
 
 export function quickstartErrors(html) {
   const errors = [];
-  const visible = html.replace(/<!--[\s\S]*?-->/g, "").match(/<main\b[\s\S]*?<\/main>/)?.[0] || html;
+  const visible = stripHtmlComments(html).match(/<main\b[\s\S]*?<\/main>/)?.[0] || html;
   for (const claim of quickstartClaims) {
     if (!visible.includes(claim)) errors.push(`Quickstart page is missing its public availability claim: ${claim}`);
   }
