@@ -62,6 +62,23 @@ func (p Plan) Files() []File {
 	return files
 }
 
+// NewPlan admits a deterministic, already-rendered standard package tree into
+// the same validated staging and absence-preserving publication used by init.
+// It is intentionally a narrow seam for explicit native import, not a generic
+// filesystem builder.
+func NewPlan(files []File) (Plan, error) {
+	p := Plan{files: make([]File, len(files))}
+	for i, f := range files {
+		p.files[i] = f
+		p.files[i].Bytes = append([]byte(nil), f.Bytes...)
+	}
+	sort.Slice(p.files, func(i, j int) bool { return p.files[i].Path < p.files[j].Path })
+	if err := validateFiles(p.files); err != nil {
+		return Plan{}, err
+	}
+	return p, nil
+}
+
 type IdentityError struct{ Field, Value, Suggestion string }
 
 func (e *IdentityError) Error() string {
