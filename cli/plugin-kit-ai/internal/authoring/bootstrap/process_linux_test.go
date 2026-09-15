@@ -43,6 +43,12 @@ type linuxProcessIdentity struct {
 	Zombie    bool
 }
 
+type linuxProcessHandle struct {
+	Identity linuxProcessIdentity
+	Parent   linuxProcessIdentity
+	PIDFD    int
+}
+
 func TestMain(m *testing.M) {
 	if filepath.Base(os.Args[0]) == "npm" {
 		os.Exit(runFakeNPM())
@@ -164,6 +170,7 @@ func TestDefaultRunnerKeepsCapturedStagingAndContainsSetsidDescendant(t *testing
 		done <- applyErr
 	}()
 	var manager, supervisor, setsid linuxProcessIdentity
+	handles := make(map[int]linuxProcessHandle)
 	var applyErr error
 	applyFinished := false
 	waitApply := func(timeout time.Duration) error {
@@ -185,19 +192,43 @@ func TestDefaultRunnerKeepsCapturedStagingAndContainsSetsidDescendant(t *testing
 			}
 		}
 		if supervisor.PID == 0 && manager.ParentPID > 1 {
-			supervisor, _ = readLinuxProcessIdentity(manager.ParentPID)
+			if handle, exists := handles[manager.PID]; exists {
+				supervisor = handle.Parent
+			} else if current, identityErr := readLinuxProcessIdentity(manager.PID); identityErr == nil && current.StartTime == manager.StartTime && current.ParentPID == manager.ParentPID && !current.Zombie {
+				candidate, parentErr := readLinuxProcessIdentity(current.ParentPID)
+				if parentErr == nil && !candidate.Zombie && candidate.ParentPID == os.Getpid() {
+					supervisor = candidate
+				}
+			}
 		}
 		return []linuxProcessIdentity{setsid, manager, supervisor}
+	}
+	ensureHandles := func() {
+		for _, identity := range tracked() {
+			if identity.PID == 0 {
+				continue
+			}
+			if _, exists := handles[identity.PID]; exists {
+				continue
+			}
+			handle, err := captureLinuxProcessHandle(identity)
+			if err == nil {
+				handles[identity.PID] = handle
+			}
+		}
 	}
 	// This cleanup is independent of the behavior under test. On every failure
 	// path it cancels Apply, waits for its owned reap, then uses stable pidfds to
 	// stop any exact captured identity that production cleanup left behind.
 	t.Cleanup(func() {
+		defer closeLinuxProcessHandles(handles)
 		cancel()
+		ensureHandles()
+		reportMissingLinuxProcessHandles(t, tracked(), handles)
 		if !applyFinished {
 			if err := waitApply(5 * time.Second); errors.Is(err, errWaitForApplyTimeout) {
 				for _, identity := range tracked() {
-					if stopErr := stopLinuxProcessIdentity(identity, time.Second); stopErr != nil {
+					if stopErr := stopLinuxProcessHandle(handles[identity.PID], time.Second); stopErr != nil {
 						t.Errorf("fallback cleanup: %v", stopErr)
 					}
 				}
@@ -212,7 +243,7 @@ func TestDefaultRunnerKeepsCapturedStagingAndContainsSetsidDescendant(t *testing
 			}
 		}
 		for _, identity := range tracked() {
-			if err := stopLinuxProcessIdentity(identity, time.Second); err != nil {
+			if err := stopLinuxProcessHandle(handles[identity.PID], time.Second); err != nil {
 				t.Errorf("fallback cleanup: %v", err)
 			}
 		}
@@ -231,6 +262,13 @@ func TestDefaultRunnerKeepsCapturedStagingAndContainsSetsidDescendant(t *testing
 	supervisor, err = readLinuxProcessIdentity(manager.ParentPID)
 	if err != nil || supervisor.Zombie {
 		t.Fatalf("isolated supervisor was not alive before cancellation: identity=%+v err=%v", supervisor, err)
+	}
+	for _, identity := range []linuxProcessIdentity{manager, supervisor} {
+		handle, captureErr := captureLinuxProcessHandle(identity)
+		if captureErr != nil {
+			t.Fatalf("capture stable process handle for %+v: %v", identity, captureErr)
+		}
+		handles[identity.PID] = handle
 	}
 	if current, identityErr := readLinuxProcessIdentity(manager.PID); identityErr != nil || current.StartTime != manager.StartTime || current.Zombie {
 		t.Fatalf("fake npm was not alive at the replacement barrier: current=%+v err=%v", current, identityErr)
@@ -270,6 +308,11 @@ func TestDefaultRunnerKeepsCapturedStagingAndContainsSetsidDescendant(t *testing
 	if err := json.Unmarshal(setsidBody, &setsid); err != nil || setsid.PID == 0 || setsid.Session != setsid.PID {
 		t.Fatalf("immediate descendant did not establish a new session: identity=%+v err=%v", setsid, err)
 	}
+	setsidHandle, err := captureLinuxProcessHandle(setsid)
+	if err != nil {
+		t.Fatalf("capture stable setsid descendant handle: %v", err)
+	}
+	handles[setsid.PID] = setsidHandle
 	if current, identityErr := readLinuxProcessIdentity(setsid.PID); identityErr != nil || current.StartTime != setsid.StartTime || current.Session != setsid.PID || current.Zombie {
 		t.Fatalf("setsid descendant was not alive at the cancellation barrier: current=%+v err=%v", current, identityErr)
 	}
@@ -368,12 +411,110 @@ func TestDefaultRunnerCancellationStopsDescendants(t *testing.T) {
 		_, applyErr := (bootstrap.Service{}).Apply(ctx, root, plan)
 		done <- applyErr
 	}()
-	var pid int
+	var child, manager, supervisor linuxProcessIdentity
+	handles := make(map[int]linuxProcessHandle)
+	var applyErr error
+	applyFinished := false
+	waitApply := func(timeout time.Duration) error {
+		if applyFinished {
+			return applyErr
+		}
+		applyErr = waitForApply(done, timeout)
+		applyFinished = !errors.Is(applyErr, errWaitForApplyTimeout)
+		return applyErr
+	}
+	captureTree := func() {
+		if child.PID == 0 {
+			if body, readErr := os.ReadFile(pidFile); readErr == nil {
+				if pid, parseErr := strconv.Atoi(strings.TrimSpace(string(body))); parseErr == nil {
+					child, _ = readLinuxProcessIdentity(pid)
+				}
+			}
+		}
+		if child.PID != 0 {
+			if _, exists := handles[child.PID]; !exists {
+				if handle, captureErr := captureLinuxProcessHandle(child); captureErr == nil {
+					handles[child.PID] = handle
+				}
+			}
+		}
+		if manager.PID == 0 {
+			if handle, exists := handles[child.PID]; exists {
+				manager = handle.Parent
+			} else if child.ParentPID > 1 {
+				if current, identityErr := readLinuxProcessIdentity(child.PID); identityErr == nil && current.StartTime == child.StartTime && current.ParentPID == child.ParentPID && !current.Zombie {
+					manager, _ = readLinuxProcessIdentity(current.ParentPID)
+				}
+			}
+		}
+		if manager.PID != 0 {
+			if _, exists := handles[manager.PID]; !exists {
+				if handle, captureErr := captureLinuxProcessHandle(manager); captureErr == nil {
+					handles[manager.PID] = handle
+				}
+			}
+		}
+		if supervisor.PID == 0 {
+			if handle, exists := handles[manager.PID]; exists {
+				supervisor = handle.Parent
+			} else if manager.ParentPID > 1 {
+				if current, identityErr := readLinuxProcessIdentity(manager.PID); identityErr == nil && current.StartTime == manager.StartTime && current.ParentPID == manager.ParentPID && !current.Zombie {
+					candidate, parentErr := readLinuxProcessIdentity(current.ParentPID)
+					if parentErr == nil && !candidate.Zombie && candidate.ParentPID == os.Getpid() {
+						supervisor = candidate
+					}
+				}
+			}
+		}
+		if supervisor.PID != 0 {
+			if _, exists := handles[supervisor.PID]; !exists {
+				if handle, captureErr := captureLinuxProcessHandle(supervisor); captureErr == nil {
+					handles[supervisor.PID] = handle
+				}
+			}
+		}
+	}
+	// Register the independent fallback before any assertion can terminate the
+	// test. Stable handles captured at the ownership barrier prevent a reused
+	// numeric PID from being signaled during emergency cleanup.
+	t.Cleanup(func() {
+		defer closeLinuxProcessHandles(handles)
+		cancel()
+		captureTree()
+		reportMissingLinuxProcessHandles(t, []linuxProcessIdentity{child, manager, supervisor}, handles)
+		if !applyFinished {
+			if err := waitApply(5 * time.Second); errors.Is(err, errWaitForApplyTimeout) {
+				for _, identity := range []linuxProcessIdentity{child, manager, supervisor} {
+					if stopErr := stopLinuxProcessHandle(handles[identity.PID], time.Second); stopErr != nil {
+						t.Errorf("fallback cleanup: %v", stopErr)
+					}
+				}
+				if err = waitApply(5 * time.Second); errors.Is(err, errWaitForApplyTimeout) {
+					t.Errorf("fallback cleanup: %v", err)
+				}
+			}
+		}
+		if applyFinished {
+			if err := cleanCancellationError(applyErr); err != nil {
+				t.Errorf("fallback cancellation result: %v", err)
+			}
+		}
+		for _, identity := range []linuxProcessIdentity{child, manager, supervisor} {
+			if err := stopLinuxProcessHandle(handles[identity.PID], time.Second); err != nil {
+				t.Errorf("fallback cleanup: %v", err)
+			}
+		}
+	})
+
 	deadline := time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) {
 		body, readErr := os.ReadFile(pidFile)
 		if readErr == nil {
-			pid, err = strconv.Atoi(strings.TrimSpace(string(body)))
+			pid, parseErr := strconv.Atoi(strings.TrimSpace(string(body)))
+			if parseErr != nil {
+				t.Fatal(parseErr)
+			}
+			child, err = readLinuxProcessIdentity(pid)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -381,35 +522,33 @@ func TestDefaultRunnerCancellationStopsDescendants(t *testing.T) {
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
-	if pid == 0 {
+	if child.PID == 0 {
 		t.Fatal("fixture descendant did not start")
 	}
+	manager, err = readLinuxProcessIdentity(child.ParentPID)
+	if err != nil || manager.Zombie {
+		t.Fatalf("fixture manager identity = %+v, error = %v", manager, err)
+	}
+	supervisor, err = readLinuxProcessIdentity(manager.ParentPID)
+	if err != nil || supervisor.Zombie || supervisor.ParentPID != os.Getpid() {
+		t.Fatalf("isolated supervisor identity = %+v, error = %v", supervisor, err)
+	}
+	for _, identity := range []linuxProcessIdentity{child, manager, supervisor} {
+		handle, captureErr := captureLinuxProcessHandle(identity)
+		if captureErr != nil {
+			t.Fatalf("capture stable process handle for %+v: %v", identity, captureErr)
+		}
+		handles[identity.PID] = handle
+	}
 	cancel()
-	select {
-	case err = <-done:
-		if errorCode(err) != "bootstrap_process_failed" || !errors.Is(err, context.Canceled) {
-			t.Fatalf("cancellation error = %v", err)
+	if err := cleanCancellationError(waitApply(5 * time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	for _, identity := range []linuxProcessIdentity{supervisor, manager, child} {
+		if err := waitForProcessIdentityStopped(identity, time.Second); err != nil {
+			t.Error(err)
 		}
-	case <-time.After(5 * time.Second):
-		t.Fatal("bootstrap cancellation did not return")
 	}
-	for deadline = time.Now().Add(time.Second); time.Now().Before(deadline); {
-		killErr := syscall.Kill(pid, 0)
-		if errors.Is(killErr, syscall.ESRCH) || processStopped(pid) {
-			return
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
-	t.Fatalf("descendant %d remained after cancellation", pid)
-}
-
-func processStopped(pid int) bool {
-	body, err := os.ReadFile(filepath.Join("/proc", strconv.Itoa(pid), "stat"))
-	if errors.Is(err, os.ErrNotExist) {
-		return true
-	}
-	fields := strings.Fields(string(body))
-	return len(fields) > 2 && fields[2] == "Z"
 }
 
 func runFakeNPM() int {
@@ -671,6 +810,11 @@ func cleanCancellationError(err error) error {
 	for _, diagnostic := range []string{
 		"cleanup deadline",
 		"sole reaper retains ownership until process exit",
+		"ownership transferred to reaper",
+		"ownership was transferred to its reaper",
+		"shutdown was not proved",
+		"did not empty",
+		"survived cleanup",
 	} {
 		if strings.Contains(err.Error(), diagnostic) {
 			return fmt.Errorf("cancellation reported incomplete containment or reap: %v", err)
@@ -731,18 +875,58 @@ func waitForProcessIdentityStopped(want linuxProcessIdentity, timeout time.Durat
 	}
 }
 
-func stopLinuxProcessIdentity(want linuxProcessIdentity, timeout time.Duration) error {
+func captureLinuxProcessHandle(want linuxProcessIdentity) (linuxProcessHandle, error) {
+	if want.PID == 0 {
+		return linuxProcessHandle{}, errors.New("cannot capture an empty process identity")
+	}
+	pidfd, err := unix.PidfdOpen(want.PID, 0)
+	if err != nil {
+		return linuxProcessHandle{}, fmt.Errorf("open stable handle for process %d: %w", want.PID, err)
+	}
+	current, err := readLinuxProcessIdentity(want.PID)
+	if err != nil || current.StartTime != want.StartTime || current.ParentPID != want.ParentPID || current.Zombie {
+		_ = unix.Close(pidfd)
+		return linuxProcessHandle{}, fmt.Errorf("revalidate process %d after stable handle acquisition: current=%+v error=%v", want.PID, current, err)
+	}
+	parent, err := readLinuxProcessIdentity(want.ParentPID)
+	if err != nil || parent.Zombie {
+		_ = unix.Close(pidfd)
+		return linuxProcessHandle{}, fmt.Errorf("capture parent identity for process %d: parent=%+v error=%v", want.PID, parent, err)
+	}
+	return linuxProcessHandle{Identity: current, Parent: parent, PIDFD: pidfd}, nil
+}
+
+func closeLinuxProcessHandles(handles map[int]linuxProcessHandle) {
+	for pid, handle := range handles {
+		_ = unix.Close(handle.PIDFD)
+		delete(handles, pid)
+	}
+}
+
+func reportMissingLinuxProcessHandles(t testing.TB, identities []linuxProcessIdentity, handles map[int]linuxProcessHandle) {
+	t.Helper()
+	for _, want := range identities {
+		if want.PID == 0 {
+			continue
+		}
+		if _, exists := handles[want.PID]; exists {
+			continue
+		}
+		current, err := readLinuxProcessIdentity(want.PID)
+		if err == nil && current.StartTime == want.StartTime && !current.Zombie {
+			t.Errorf("fallback cleanup lacks stable handle for live process identity %+v", want)
+		}
+	}
+}
+
+func stopLinuxProcessHandle(handle linuxProcessHandle, timeout time.Duration) error {
+	want := handle.Identity
 	if want.PID == 0 {
 		return nil
 	}
-	pidfd, err := unix.PidfdOpen(want.PID, 0)
-	if errors.Is(err, syscall.ESRCH) {
+	if !linuxPidfdAlive(handle.PIDFD) {
 		return nil
 	}
-	if err != nil {
-		return fmt.Errorf("open stable cleanup handle for process %d: %w", want.PID, err)
-	}
-	defer unix.Close(pidfd)
 	current, err := readLinuxProcessIdentity(want.PID)
 	if errors.Is(err, os.ErrNotExist) || (err == nil && (current.StartTime != want.StartTime || current.Zombie)) {
 		return nil
@@ -750,8 +934,19 @@ func stopLinuxProcessIdentity(want linuxProcessIdentity, timeout time.Duration) 
 	if err != nil {
 		return fmt.Errorf("verify cleanup identity for process %d: %w", want.PID, err)
 	}
-	if err := unix.PidfdSendSignal(pidfd, unix.SIGKILL, nil, 0); err != nil && !errors.Is(err, syscall.ESRCH) {
+	if current.ParentPID != want.ParentPID {
+		parent, parentErr := readLinuxProcessIdentity(handle.Parent.PID)
+		if parentErr == nil && parent.StartTime == handle.Parent.StartTime && !parent.Zombie {
+			return fmt.Errorf("verify cleanup parentage for process %d: live parent changed from %d to %d", want.PID, want.ParentPID, current.ParentPID)
+		}
+	}
+	if err := unix.PidfdSendSignal(handle.PIDFD, unix.SIGKILL, nil, 0); err != nil && !errors.Is(err, syscall.ESRCH) {
 		return fmt.Errorf("stop exact cleanup identity for process %d: %w", want.PID, err)
 	}
 	return waitForProcessIdentityStopped(want, timeout)
+}
+
+func linuxPidfdAlive(pidfd int) bool {
+	err := unix.PidfdSendSignal(pidfd, 0, nil, 0)
+	return err == nil || errors.Is(err, syscall.EPERM)
 }
