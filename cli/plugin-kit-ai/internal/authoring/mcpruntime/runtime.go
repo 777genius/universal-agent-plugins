@@ -358,14 +358,9 @@ func runStdio(ctx context.Context, root, data string, server domain.MCPServer, t
 			if err != nil {
 				return err
 			}
-			var called struct {
-				Content []json.RawMessage `json:"content"`
-				IsError bool              `json:"isError"`
+			if err := acceptToolCall(result, ev); err != nil {
+				return err
 			}
-			if json.Unmarshal(result, &called) != nil || called.IsError || called.Content == nil {
-				return fail("runtime_tool_failed")
-			}
-			ev.ToolCall = true
 		}
 		return nil
 	})
@@ -521,8 +516,14 @@ func runHTTP(ctx context.Context, server domain.MCPServer, tool string, argument
 			return nil, fail("runtime_http_request_failed")
 		}
 		defer resp.Body.Close()
-		if value := resp.Header.Get("Mcp-Session-Id"); value != "" {
-			session = value
+		responseSession := resp.Header.Get("Mcp-Session-Id")
+		// The streamable HTTP contract establishes a session only on the
+		// initialization response. Later responses need not repeat the header,
+		// but a present value must identify that original session.
+		if method == "initialize" {
+			session = responseSession
+		} else if responseSession != "" && responseSession != session {
+			return nil, fail("runtime_http_session_mismatch")
 		}
 		if resp.StatusCode >= 300 {
 			return nil, fail("runtime_http_status_failed")
@@ -581,15 +582,55 @@ func runHTTP(ctx context.Context, server domain.MCPServer, tool string, argument
 		if err != nil {
 			return err
 		}
-		var called struct {
-			Content []json.RawMessage `json:"content"`
-			IsError bool              `json:"isError"`
+		if err := acceptToolCall(result, ev); err != nil {
+			return err
 		}
-		if json.Unmarshal(result, &called) != nil || called.IsError || called.Content == nil {
+	}
+	return nil
+}
+
+// acceptToolCall deliberately supports only the content form emitted by the
+// milestone's generated MCP template. Unknown future MCP content forms remain
+// fail-closed until the runtime has a concrete consumer and focused tests.
+func acceptToolCall(result json.RawMessage, ev *Evidence) error {
+	if conformance.RejectDuplicateJSONKeys(result) != nil {
+		return fail("runtime_protocol_invalid")
+	}
+	var envelope map[string]json.RawMessage
+	if json.Unmarshal(result, &envelope) != nil || envelope == nil {
+		return fail("runtime_protocol_invalid")
+	}
+	rawContent, present := envelope["content"]
+	if !present {
+		return fail("runtime_protocol_invalid")
+	}
+	var content []map[string]json.RawMessage
+	if json.Unmarshal(rawContent, &content) != nil || content == nil {
+		return fail("runtime_protocol_invalid")
+	}
+	for _, block := range content {
+		if block == nil {
+			return fail("runtime_protocol_invalid")
+		}
+		var blockType string
+		if json.Unmarshal(block["type"], &blockType) != nil || blockType != "text" {
+			return fail("runtime_protocol_invalid")
+		}
+		var text string
+		if bytes.Equal(bytes.TrimSpace(block["text"]), []byte("null")) || json.Unmarshal(block["text"], &text) != nil {
+			return fail("runtime_protocol_invalid")
+		}
+	}
+	if rawIsError, present := envelope["isError"]; present {
+		var isError bool
+		if bytes.Equal(bytes.TrimSpace(rawIsError), []byte("null")) || json.Unmarshal(rawIsError, &isError) != nil {
+			return fail("runtime_protocol_invalid")
+		}
+		if isError {
 			return fail("runtime_tool_failed")
 		}
-		ev.ToolCall = true
 	}
+	ev.ToolCall = true
 	return nil
 }
 

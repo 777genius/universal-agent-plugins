@@ -219,3 +219,75 @@ func TestContinuousDevOutputFailureCancelsAndJoinsActiveCycle(t *testing.T) {
 		t.Fatalf("release reacquired project lock: %v", releaseErr)
 	}
 }
+
+func TestContinuousDevMalformedEditJoinsLongRunningCycleBeforeReport(t *testing.T) {
+	cache := t.TempDir()
+	for _, name := range []string{"HOME", "LOCALAPPDATA", "XDG_CACHE_HOME"} {
+		t.Setenv(name, cache)
+	}
+	root := t.TempDir()
+	plugin := filepath.Join(root, "plugin.json")
+	if err := os.WriteFile(plugin, []byte(`{"$schema":"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json","name":"dev-invalidation-fixture"}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	mcp := `{"$schema":"https://agent-plugins.org/schemas/1.0.0/mcp.schema.json","mcpServers":{"selected":{"type":"streamable-http","url":"https://example.test/mcp"}}}`
+	if err := os.WriteFile(filepath.Join(root, "mcp.json"), []byte(mcp), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	cycleStarted := make(chan struct{})
+	cycleJoined := make(chan struct{})
+	writeDone := make(chan error, 1)
+	go func() {
+		<-cycleStarted
+		writeDone <- os.WriteFile(plugin, []byte(`{"broken":`), 0600)
+	}()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	var activeChildren atomic.Int32
+	var reports atomic.Int32
+	app := App{Projects: project.Service{Scratch: t.TempDir()}, Revision: "dev-invalidation-test"}
+	_, err := app.dev(ctx, request{
+		root: root, server: "selected", allowNetwork: true, deadline: 5 * time.Second,
+		cycleOutput: func(r report.Report, cycleErr error) error {
+			if reports.Add(1) != 1 {
+				return errors.New("late stale runtime report")
+			}
+			select {
+			case <-cycleJoined:
+			default:
+				return errors.New("invalid-cycle report preceded runtime join")
+			}
+			if activeChildren.Load() != 0 {
+				return errors.New("runtime child remained active at invalid-cycle report")
+			}
+			if cycleErr == nil || r.Error == nil {
+				return errors.New("malformed edit did not produce an invalid-cycle report")
+			}
+			cancel()
+			return nil
+		},
+		runMCP: func(ctx context.Context, _ mcpruntime.Options) (mcpruntime.Evidence, error) {
+			activeChildren.Add(1)
+			close(cycleStarted)
+			<-ctx.Done()
+			activeChildren.Add(-1)
+			close(cycleJoined)
+			return mcpruntime.Evidence{Transport: "streamable_http"}, ctx.Err()
+		},
+	})
+	if writeErr := <-writeDone; writeErr != nil {
+		t.Fatal(writeErr)
+	}
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("continuous dev result=%v", err)
+	}
+	time.Sleep(2 * devPollInterval)
+	if got := reports.Load(); got != 1 {
+		t.Fatalf("reports=%d, want only the invalid cycle", got)
+	}
+	if got := activeChildren.Load(); got != 0 {
+		t.Fatalf("active runtime children=%d after dev return", got)
+	}
+}

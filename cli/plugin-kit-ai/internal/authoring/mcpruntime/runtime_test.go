@@ -206,6 +206,61 @@ func TestStdioRequiresExclusiveResponseResultOrError(t *testing.T) {
 	}
 }
 
+func TestStdioRejectsMalformedToolCallContent(t *testing.T) {
+	const secret = "malformed-stdio-content-must-not-leak"
+	client := stdioClient{
+		in:  bufio.NewReader(strings.NewReader(`{"jsonrpc":"2.0","id":3,"result":{"content":[null],"detail":"` + secret + `"}}` + "\n")),
+		out: io.Discard,
+	}
+	result, err := client.call(3, "tools/call", map[string]any{"name": "echo", "arguments": map[string]any{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var ev Evidence
+	err = acceptToolCall(result, &ev)
+	if code(err) != "runtime_protocol_invalid" || ev.ToolCall {
+		t.Fatalf("malformed stdio tool result evidence=%+v err=%v", ev, err)
+	}
+	if strings.Contains(err.Error(), secret) {
+		t.Fatalf("protocol error leaked malformed stdio content: %v", err)
+	}
+}
+
+func TestToolCallContentIsBoundedToMilestoneTextShape(t *testing.T) {
+	for _, body := range []string{
+		`{"content":[]}`,
+		`{"content":[{"type":"text","text":""}]}`,
+		`{"content":[{"type":"text","text":"hello","annotations":{"audience":["user"]},"vendor.extension":true}],"isError":false}`,
+	} {
+		var ev Evidence
+		if err := acceptToolCall(json.RawMessage(body), &ev); err != nil || !ev.ToolCall {
+			t.Fatalf("valid tool result %s evidence=%+v err=%v", body, ev, err)
+		}
+	}
+	for _, body := range []string{
+		`{}`,
+		`{"content":null}`,
+		`{"content":{}}`,
+		`{"content":[null]}`,
+		`{"content":[{}]}`,
+		`{"content":[{"type":"text"}]}`,
+		`{"content":[{"type":"text","text":null}]}`,
+		`{"content":[{"type":"image","data":"AA==","mimeType":"image/png"}]}`,
+		`{"content":[],"isError":null}`,
+		`{"content":[],"isError":"false"}`,
+		`{"content":[],"content":[]}`,
+	} {
+		var ev Evidence
+		if err := acceptToolCall(json.RawMessage(body), &ev); code(err) != "runtime_protocol_invalid" || ev.ToolCall {
+			t.Fatalf("malformed tool result %s evidence=%+v err=%v", body, ev, err)
+		}
+	}
+	var ev Evidence
+	if err := acceptToolCall(json.RawMessage(`{"content":[],"isError":true}`), &ev); code(err) != "runtime_tool_failed" || ev.ToolCall {
+		t.Fatalf("tool-declared failure evidence=%+v err=%v", ev, err)
+	}
+}
+
 func TestStreamableHTTPRequiresExclusiveResponseResultOrError(t *testing.T) {
 	for name, tc := range responseEnvelopeExclusivityCases() {
 		t.Run(name, func(t *testing.T) {
@@ -379,7 +434,7 @@ func TestStreamableHTTPRequiresOptInAndRunsBoundedStages(t *testing.T) {
 	}
 }
 
-func TestStreamableHTTPSessionTerminatesAfterSuccess(t *testing.T) {
+func TestStreamableHTTPAllowsLaterMissingSessionHeaderAndTerminates(t *testing.T) {
 	const session = "fixture-session"
 	var methods []string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -423,6 +478,52 @@ func TestStreamableHTTPSessionTerminatesAfterSuccess(t *testing.T) {
 	}}, "", nil, &Evidence{})
 	if err != nil || strings.Join(methods, ",") != "POST,POST,DELETE" {
 		t.Fatalf("methods=%v err=%v", methods, err)
+	}
+}
+
+func TestStreamableHTTPRejectsSessionMismatchAndCleansOriginal(t *testing.T) {
+	const original = "original-session"
+	const replacement = "replacement-session"
+	var requestSessions []string
+	deleteSession := ""
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodDelete {
+			deleteSession = r.Header.Get("Mcp-Session-Id")
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		requestSessions = append(requestSessions, r.Header.Get("Mcp-Session-Id"))
+		defer r.Body.Close()
+		var q struct {
+			ID     int    `json:"id"`
+			Method string `json:"method"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&q); err != nil {
+			t.Error(err)
+			return
+		}
+		if q.Method == "initialize" {
+			w.Header().Set("Mcp-Session-Id", original)
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = fmt.Fprintf(w, `{"jsonrpc":"2.0","id":%d,"result":{"protocolVersion":"2025-06-18","capabilities":{},"serverInfo":{"name":"x","version":"1"}}}`, q.ID)
+			return
+		}
+		w.Header().Set("Mcp-Session-Id", replacement)
+		w.WriteHeader(http.StatusAccepted)
+	}))
+	defer server.Close()
+	err := runHTTP(context.Background(), domain.MCPServer{Decoded: map[string]any{"url": server.URL}}, "", nil, &Evidence{})
+	if code(err) != "runtime_http_session_mismatch" {
+		t.Fatalf("session mismatch error=%v", err)
+	}
+	if got := strings.Join(requestSessions, ","); got != ","+original {
+		t.Fatalf("request sessions=%q", got)
+	}
+	if deleteSession != original {
+		t.Fatalf("cleanup session=%q, want original", deleteSession)
+	}
+	if strings.Contains(err.Error(), original) || strings.Contains(err.Error(), replacement) {
+		t.Fatalf("session mismatch leaked identifiers: %v", err)
 	}
 }
 
@@ -638,6 +739,36 @@ func TestStreamableHTTPListsOnlyAdvertisedToolsAndRejectsNullList(t *testing.T) 
 	}
 	if got := strings.Join(methods, ","); got != "initialize,notifications/initialized,tools/list" {
 		t.Fatalf("methods=%s", got)
+	}
+}
+
+func TestStreamableHTTPRejectsMalformedToolCallContent(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer r.Body.Close()
+		var q struct {
+			ID     int    `json:"id"`
+			Method string `json:"method"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&q)
+		if q.ID == 0 {
+			w.WriteHeader(http.StatusAccepted)
+			return
+		}
+		result := `{"content":[null]}`
+		switch q.Method {
+		case "initialize":
+			result = `{"protocolVersion":"2025-06-18","capabilities":{"tools":{}},"serverInfo":{"name":"x","version":"1"}}`
+		case "tools/list":
+			result = `{"tools":[{"name":"echo","inputSchema":{"type":"object"}}]}`
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = fmt.Fprintf(w, `{"jsonrpc":"2.0","id":%d,"result":%s}`, q.ID, result)
+	}))
+	defer server.Close()
+	var ev Evidence
+	err := runHTTP(context.Background(), domain.MCPServer{Decoded: map[string]any{"url": server.URL}}, "echo", map[string]any{}, &ev)
+	if code(err) != "runtime_protocol_invalid" || !ev.Initialize || !ev.ListTools || ev.ToolCall {
+		t.Fatalf("malformed HTTP tool result evidence=%+v err=%v", ev, err)
 	}
 }
 

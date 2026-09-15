@@ -212,6 +212,13 @@ func (a App) dev(ctx context.Context, req request) (r report.Report, err error) 
 		case now := <-ticker.C:
 			next, readErr := a.Projects.Read(ctx, req.root)
 			if readErr != nil || next.Input.Identity.TreeDigest == "" {
+				pending = devPending{}
+				if result, stopped := stopCycle(); stopped {
+					if result.err != nil && runtimeErrorCode(result.err) == "runtime_cleanup_failed" {
+						_ = emit(result.report, result.err)
+						return result.report, result.err
+					}
+				}
 				failed, failedErr := readFailure(next, readErr)
 				code := runtimeErrorCode(failedErr)
 				if code == "runtime_failed" && failed.Error != nil {
