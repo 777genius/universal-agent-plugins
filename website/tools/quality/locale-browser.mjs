@@ -24,7 +24,7 @@ export async function runLocaleSmoke(browser, base, artifactsRoot) {
     for (const locale of locales.slice(1)) {
       const route = `/${locale}/guide/quickstart`;
       await goto(route);
-      assert.ok(await page.getByRole("heading", { name: /Use plugins \/ Build plugins|Использовать плагины|Usar plugins|Utiliser des plugins|使用插件/ }).isVisible(), `${locale}: visible quickstart identity`);
+      assert.ok(await page.getByRole("heading", { name: /Use plugins \/ Build plugins|Использовать плагины|Используйте плагины|Usar plugins|Utiliser des plugins|使用插件/ }).isVisible(), `${locale}: visible quickstart identity`);
       const id = "build-plugins";
       const fragment = `#${id}`;
       for (const spelling of [route, `${route}.html`]) {
