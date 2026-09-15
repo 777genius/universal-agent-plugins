@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { isRetiredArchive } from "../../website/tools/lib/public-routes.mjs";
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const landingRoot = path.resolve(scriptDir, "..");
@@ -12,6 +13,7 @@ const source = JSON.parse(await fs.readFile(sourcePath, "utf8"));
 
 const realPaths = {};
 for (const [pageKey, entry] of Object.entries(source.pages)) {
+  if (isRetiredArchive(pageKey)) continue;
   const [locale, ...rest] = pageKey.split("/");
   if (locale === "en") continue;
   if (entry.disposition !== "historical-snapshot" && entry.disposition !== "current-translation") continue;

@@ -47,13 +47,11 @@ agentplugins author test ./my-plugin
 
 ## Current scope
 
-Milestone A creates and statically checks portable Agent Plugins 1.0 packages.
-Runtime execution, dev loops, dependency bootstrap, export, and publication are
-planned separately. YAML migration is cancelled. Static validation does not prove client
-activation, service authentication, or runtime behavior.
-
-The retired YAML implementation remains in source control as historical
-reference. It is not a supported product or migration path.
+Agent Plugins authoring creates and statically checks portable Agent Plugins 1.0
+packages. The released `agentplugins author` commands do not run package code,
+start development servers, bootstrap dependencies, export bundles, or publish
+packages. Static validation does not prove client activation, service
+authentication, or runtime behavior.
 
 ## Reference
 

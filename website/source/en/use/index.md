@@ -10,12 +10,6 @@ translationRequired: true
 
 # Use plugins
 
-> **Milestone A is available.** Standard-first static authoring is published as
-> `agentplugins author` in `universal-agent-plugins@0.1.65`.
-> GitHub tag: `agentplugins-v0.1.65`. npm, Homebrew, native archives and the
-> public-channel E2E are verified. Runtime/dev/bootstrap, export and publication
-> remain deferred. Legacy YAML migration is cancelled; its source remains
-> preserved internally and is not a supported product.
 
 Choose by the result you need:
 
@@ -74,7 +68,7 @@ installation. Keep reports from these jobs separate when asking for help.
 ## What travels between the journeys
 
 The handoff is a directory with root `plugin.json` and the package's components.
-It is not a generated YAML project or a promise that a server has been tested.
+It is not a promise that a server has been tested.
 Authors can prepare [a local planner handoff](/en/build/handoff); installers then
 make their own target, security, and activation decisions.
 

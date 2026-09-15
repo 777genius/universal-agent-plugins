@@ -16,7 +16,7 @@ Instala Agent Plugins 1.0 disponibles o crea paquetes portables basados en `plug
 - [Crear plugins](/es/build/)
 - [Inicio rápido](/es/guide/quickstart)
 
-Milestone A está disponible mediante `agentplugins author`. La migración YAML se ha cancelado; el código heredado conservado no es un producto compatible.
+La creación de Agent Plugins está disponible mediante `agentplugins author` en `universal-agent-plugins@0.1.65`.
 
 [Agent Plugins 1.0 specification](https://agent-plugins.org/specification)
 

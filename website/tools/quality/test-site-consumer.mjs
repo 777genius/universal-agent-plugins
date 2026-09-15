@@ -75,7 +75,8 @@ await assert.rejects(run(process.execPath, [path.join(site, "website/tools/quali
 await assemble();
 assert.deepEqual(await snapshot(path.join(site, "website/generated")), first);
 const aliases = JSON.parse(await fs.readFile(path.join(site, "website/generated/registries/redirects.json"), "utf8"));
-assert.equal(aliases["/reference/target-support"], "/en/reference/target-support");
+assert.equal(aliases["/reference/target-support"], undefined);
+assert.equal(aliases["/guide/quickstart"], "/en/guide/quickstart");
 // Fail before output writes if callers select their writable site as provenance.
 process.env.DOCS_AUTHORING_CHECKOUT = site;
 await assert.rejects(requireAuthoringSource(), /separate/);
@@ -89,6 +90,6 @@ await requireAuthoringSource();
 await fs.writeFile(path.join(directory, "assembly-evidence.json"), JSON.stringify({
   sourceSHA: acceptedAuthoringSHA, sourcePins: envelope.sources, generatedHashes: first, runtimeHashes: runtime,
   repeatability: "three real assemblies; equal bytes; source clean; committed output baseline stable; intentional drift rejected",
-  scope: "Actual CLI adapter + complete historical CLI/platform bundles through production assembly. SDK/runtime extractors and full site/browser are separate gates."
+  scope: "Actual CLI adapter plus preserved platform source through production assembly; published routes are the maintained Agent Plugins inventory. SDK/runtime extractors and full site/browser are separate gates."
 }, null, 2) + "\n");
 console.log("Required adapter and real assembly integration passed; no skipped acceptance checks.");

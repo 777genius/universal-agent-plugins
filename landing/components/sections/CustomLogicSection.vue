@@ -1,39 +1,40 @@
 <script setup lang="ts">
-import CommandSnippetCard from "~/components/shared/CommandSnippetCard.vue";
+import CommandSnippetCard from '~/components/shared/CommandSnippetCard.vue';
 
 const { t } = useI18n();
-const { docsUrl, customLogicGuideUrl } = useDocsLinks();
-
-const choiceGuideUrl = computed(() => `${docsUrl.value.replace(/\/$/, '')}/guide/choose-what-you-are-building.html`);
+const { buildGuideUrl } = useDocsLinks();
 
 const pathCards = computed(() => [
   {
-    id: "online-service",
-    title: t("hero.paths.onlineService.title"),
-    description: t("hero.paths.onlineService.description"),
-    command: "plugin-kit-ai init my-plugin --template online-service",
-    href: choiceGuideUrl.value,
-    cta: t("createPlugin.onlineServiceCta"),
-    accent: "#00f0ff",
+    id: 'online-service',
+    title: t('hero.paths.onlineService.title'),
+    description: t('hero.paths.onlineService.description'),
+    command:
+      "agentplugins author init ./my-plugin --template mcp-remote --name my-plugin --description 'Connect an online service' --url https://example.com/mcp",
+    href: buildGuideUrl.value,
+    cta: t('createPlugin.onlineServiceCta'),
+    accent: '#00f0ff',
   },
   {
-    id: "local-tool",
-    title: t("hero.paths.localTool.title"),
-    description: t("hero.paths.localTool.description"),
-    command: "plugin-kit-ai init my-plugin --template local-tool",
-    href: choiceGuideUrl.value,
-    cta: t("createPlugin.localToolCta"),
-    accent: "#ff6ee7",
+    id: 'local-tool',
+    title: t('hero.paths.localTool.title'),
+    description: t('hero.paths.localTool.description'),
+    command:
+      "agentplugins author init ./my-plugin --template mcp-stdio --name my-plugin --description 'Provide local tools' --runtime node",
+    href: buildGuideUrl.value,
+    cta: t('createPlugin.localToolCta'),
+    accent: '#ff6ee7',
   },
   {
-    id: "custom-logic",
-    title: t("hero.paths.customLogic.title"),
-    description: t("createPlugin.customLogicDescription"),
-    command: "plugin-kit-ai init my-plugin --template custom-logic",
-    href: customLogicGuideUrl.value,
-    cta: t("createPlugin.customLogicCta"),
-    badge: t("hero.paths.customLogic.badge"),
-    accent: "#ffd166",
+    id: 'custom-logic',
+    title: t('hero.paths.customLogic.title'),
+    description: t('createPlugin.customLogicDescription'),
+    command:
+      "agentplugins author init ./my-plugin --template hybrid --mcp-template mcp-remote --name my-plugin --description 'Instructions and tools' --url https://example.com/mcp",
+    href: buildGuideUrl.value,
+    cta: t('createPlugin.customLogicCta'),
+    badge: t('hero.paths.customLogic.badge'),
+    accent: '#ffd166',
   },
 ]);
 </script>
@@ -54,11 +55,7 @@ const pathCards = computed(() => [
       </div>
 
       <div class="custom-logic-section__grid">
-        <article
-          v-for="path in pathCards"
-          :key="path.id"
-          class="custom-logic-section__card"
-        >
+        <article v-for="path in pathCards" :key="path.id" class="custom-logic-section__card">
           <div class="custom-logic-section__card-top">
             <h3 class="custom-logic-section__card-title">{{ path.title }}</h3>
             <span v-if="path.badge" class="custom-logic-section__badge">{{ path.badge }}</span>

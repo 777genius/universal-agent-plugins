@@ -1,45 +1,38 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from "vue";
-import { mdiCheckCircleOutline, mdiClockOutline } from "@mdi/js";
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
+import { mdiCheckCircleOutline, mdiClockOutline } from '@mdi/js';
 
 const { t } = useI18n();
 
 const steps = computed(() => [
   {
-    id: "author",
-    label: t("hero.demo.steps.author"),
-    caption: t("hero.demo.captions.author"),
-    accent: "#00f0ff"
+    id: 'author',
+    label: t('hero.demo.steps.author'),
+    caption: t('hero.demo.captions.author'),
+    accent: '#00f0ff',
   },
   {
-    id: "generate",
-    label: t("hero.demo.steps.generate"),
-    caption: t("hero.demo.captions.generate"),
-    accent: "#ff00ff"
+    id: 'generate',
+    label: t('hero.demo.steps.generate'),
+    caption: t('hero.demo.captions.generate'),
+    accent: '#ff00ff',
   },
   {
-    id: "validate",
-    label: t("hero.demo.steps.validate"),
-    caption: t("hero.demo.captions.validate"),
-    accent: "#ffd700"
+    id: 'validate',
+    label: t('hero.demo.steps.validate'),
+    caption: t('hero.demo.captions.validate'),
+    accent: '#ffd700',
   },
   {
-    id: "ship",
-    label: t("hero.demo.steps.ship"),
-    caption: t("hero.demo.captions.ship"),
-    accent: "#39ff14"
-  }
+    id: 'ship',
+    label: t('hero.demo.steps.ship'),
+    caption: t('hero.demo.captions.ship'),
+    accent: '#39ff14',
+  },
 ]);
 
-const outputs = ["Claude", "Codex", "Gemini", "OpenCode", "Cursor"];
-const repoFiles = [
-  "plugin.yaml",
-  "targets/codex-runtime/",
-  "targets/claude/",
-  "targets/gemini/",
-  "targets/opencode/",
-  "targets/cursor/"
-];
+const outputs = ['Claude', 'Codex', 'Gemini', 'OpenCode', 'Cursor'];
+const repoFiles = ['plugin.json', 'skills/', 'mcp.json'];
 
 const containerRef = ref<HTMLElement | null>(null);
 const activeStep = ref(0);
@@ -72,7 +65,7 @@ onMounted(() => {
     ([entry]) => {
       visible.value = entry.isIntersecting;
     },
-    { threshold: 0.15 }
+    { threshold: 0.15 },
   );
   if (containerRef.value) observer.observe(containerRef.value);
 });
@@ -95,7 +88,7 @@ onUnmounted(() => {
           :style="{ '--accent': step.accent }"
         >
           <div class="hero-demo__step-index">
-            {{ String(index + 1).padStart(2, "0") }}
+            {{ String(index + 1).padStart(2, '0') }}
           </div>
           <div class="hero-demo__step-copy">
             <div class="hero-demo__step-text">
@@ -118,18 +111,18 @@ onUnmounted(() => {
       <div class="hero-demo__files">
         <div class="hero-demo__file-card">
           <div class="hero-demo__file-header">
-            <span>{{ t("hero.demo.repo") }}</span>
-            <span>{{ t("hero.demo.sourceOfTruth") }}</span>
+            <span>{{ t('hero.demo.repo') }}</span>
+            <span>{{ t('hero.demo.sourceOfTruth') }}</span>
           </div>
           <div class="hero-demo__file-list">
-            {{ repoFiles.join("\n") }}
+            {{ repoFiles.join('\n') }}
           </div>
         </div>
 
         <div class="hero-demo__output-card">
           <div class="hero-demo__file-header">
-            <span>{{ t("hero.demo.outputs") }}</span>
-            <span>{{ t("hero.demo.supportedAgents") }}</span>
+            <span>{{ t('hero.demo.outputs') }}</span>
+            <span>{{ t('hero.demo.supportedAgents') }}</span>
           </div>
           <div class="hero-demo__output-list">
             <span
@@ -142,7 +135,6 @@ onUnmounted(() => {
           </div>
         </div>
       </div>
-
     </div>
   </div>
 </template>
@@ -185,7 +177,7 @@ onUnmounted(() => {
 }
 
 .hero-demo__step::after {
-  content: "";
+  content: '';
   position: absolute;
   left: 12px;
   right: 12px;
@@ -201,12 +193,11 @@ onUnmounted(() => {
 
 .hero-demo__step--active {
   border-color: color-mix(in srgb, var(--accent) 44%, rgba(255, 255, 255, 0.12));
-  background:
-    linear-gradient(
-      135deg,
-      color-mix(in srgb, var(--accent) 12%, rgba(255, 255, 255, 0.02)),
-      rgba(255, 255, 255, 0.02)
-    );
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--accent) 12%, rgba(255, 255, 255, 0.02)),
+    rgba(255, 255, 255, 0.02)
+  );
   box-shadow:
     inset 0 0 0 1px color-mix(in srgb, var(--accent) 14%, transparent),
     0 0 0 1px color-mix(in srgb, var(--accent) 8%, transparent);
@@ -219,7 +210,7 @@ onUnmounted(() => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-family: "JetBrains Mono", monospace;
+  font-family: 'JetBrains Mono', monospace;
   font-size: 0.66rem;
   font-weight: 700;
   letter-spacing: 0.08em;
@@ -246,7 +237,7 @@ onUnmounted(() => {
 
 .hero-demo__step-label {
   color: #e0e6ff;
-  font-family: "JetBrains Mono", monospace;
+  font-family: 'JetBrains Mono', monospace;
   font-size: 0.76rem;
   line-height: 1.2;
 }
@@ -294,13 +285,13 @@ onUnmounted(() => {
   font-size: 0.62rem;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  font-family: "JetBrains Mono", monospace;
+  font-family: 'JetBrains Mono', monospace;
 }
 
 .hero-demo__file-list {
   white-space: pre-line;
   color: #dbeafe;
-  font-family: "JetBrains Mono", monospace;
+  font-family: 'JetBrains Mono', monospace;
   font-size: 0.72rem;
   line-height: 1.7;
 }
@@ -346,12 +337,11 @@ onUnmounted(() => {
 
 .v-theme--light .hero-demo__step--active {
   border-color: color-mix(in srgb, var(--accent) 38%, rgba(15, 23, 42, 0.12));
-  background:
-    linear-gradient(
-      135deg,
-      color-mix(in srgb, var(--accent) 10%, rgba(255, 255, 255, 0.86)),
-      rgba(255, 255, 255, 0.92)
-    );
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--accent) 10%, rgba(255, 255, 255, 0.86)),
+    rgba(255, 255, 255, 0.92)
+  );
   box-shadow:
     inset 0 0 0 1px color-mix(in srgb, var(--accent) 10%, transparent),
     0 10px 24px rgba(15, 23, 42, 0.05);

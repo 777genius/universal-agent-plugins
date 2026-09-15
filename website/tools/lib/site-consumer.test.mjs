@@ -8,7 +8,7 @@ import { consumePreparedCLI, extractPreparedCLI, namespace } from "../extractors
 import { extractPlatformData } from "../extractors/platform.mjs";
 import { extractHistorical, historicalSHA } from "../extractors/historical.mjs";
 import { scanSourceEntities, buildSidebar } from "../generate.mjs";
-import { bindGeneratedPaths, docsLocales, entityPath, isMilestoneAJourney, journeyNav, journeyLabels, journeyPageLabels, localePathField, requirePublicationBoundary } from "./journeys.mjs";
+import { bindGeneratedPaths, docsLocales, entityPath, isCurrentJourney, journeyNav, journeyLabels, journeyPageLabels, localePathField, requirePublicationBoundary } from "./journeys.mjs";
 import { buildRedirects, createRedirectDocument, emitRedirects, htmlPath } from "./redirects.mjs";
 import { sourceRoot, repoRoot, docsBaseUrl, repoBrowserUrl } from "../config/site.mjs";
 import { run } from "./process.mjs";
@@ -92,7 +92,7 @@ test("locale registry fields require actual generated pages; explicit translated
 
 test("D1 journey relative links resolve against real source and retained reference", async () => {
   const errors = [];
-  for (const entity of sourceEntities.filter((entry) => typeof entry.sourceRef === "string" && isMilestoneAJourney(entry.sourceRef))) {
+  for (const entity of sourceEntities.filter((entry) => typeof entry.sourceRef === "string" && isCurrentJourney(entry.sourceRef))) {
     const file = path.join(sourceRoot, "en", entity.sourceRef);
     const body = await fs.readFile(file, "utf8");
     for (const match of body.matchAll(/\]\(([^)]+)\)/g)) {
@@ -155,8 +155,12 @@ test("actual accepted adapter envelope preserves all commands/flags/provenance a
         assert.ok(entity.command.local_flags.every((flag) =>
           !["allow-network", "deadline", "fixture", "runtime", "server", "tool"].includes(flag.name)));
       } else {
-        assert.deepEqual(entity.command, command);
+        assert.deepEqual(entity.command, {
+          ...command,
+          example: command.example.replaceAll("plugin-kit-ai skills", "agentplugins author skills"),
+        });
       }
+      assert.doesNotMatch(entity.command.example, /\bplugin-kit-ai\s/);
       assert.equal(entity.released, true);
       assert.equal(entity.status, "released");
       assert.equal(entity.stability, "public-stable");
@@ -182,6 +186,7 @@ test("actual accepted adapter envelope preserves all commands/flags/provenance a
     assert.match(page.content, /status: released/);
     assert.match(page.content, /Released Agent Plugins CLI reference/);
     assert.doesNotMatch(page.content, /Milestone A/);
+    assert.doesNotMatch(page.content, /\bplugin-kit-ai\s/);
     assert.doesNotMatch(page.content, /prepared-not-release|not a public release/);
     assert.ok(!/\]\([^)]*\.md\)/.test(page.content));
     for (const match of page.content.matchAll(/\]\((\/en\/[^)]+)\)/g)) {
@@ -240,10 +245,10 @@ test("reject legacy arrays, wrong source/release, path traversal, missing surfac
 });
 
 test("source-owned aliases reject missing destinations, loops, chains and existing page collisions", () => {
-  const routes = ["/en/", "/en/use/", "/en/build/", "/en/api/cli/", "/en/api/cli/plugin-kit-ai-generate"];
+  const routes = ["/en/", "/en/use/", "/en/build/", "/en/guide/quickstart", "/en/api/cli/prepared-authoring-v2-agentplugins-author-init"];
   const aliases = buildRedirects(inventory, routes);
   assert.equal(aliases["/use/"], "/en/use/");
-  assert.equal(aliases["/api/cli/plugin-kit-ai-generate"], "/en/api/cli/plugin-kit-ai-generate");
+  assert.equal(aliases["/guide/quickstart"], "/en/guide/quickstart");
   assert.ok(!( "/" in aliases));
   for (const extra of [
     { "/bad": "/missing" }, { "/bad": "/bad" }, { "/bad": "/other", "/other": "/en/use/" },
@@ -251,9 +256,9 @@ test("source-owned aliases reject missing destinations, loops, chains and existi
   ]) assert.throws(() => buildRedirects({ ...inventory, aliases: extra }, routes));
 });
 
-test("emitted HTML redirects preserve query/deep fragments at canonical base; no v1-to-v2 redirect", async (t) => {
+test("maintained-route HTML redirects preserve query and deep fragments at the canonical base", async (t) => {
   const directory = await fixture(t);
-  const routes = ["/en/use/", "/en/build/", "/en/api/cli/", "/en/api/cli/plugin-kit-ai-generate"];
+  const routes = ["/en/use/", "/en/build/", "/en/guide/quickstart", "/en/api/cli/prepared-authoring-v2-agentplugins-author-init"];
   const aliases = buildRedirects(inventory, routes);
   for (const route of routes) {
     const file = path.join(directory, htmlPath(route));

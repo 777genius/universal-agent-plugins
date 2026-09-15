@@ -22,12 +22,11 @@ export async function runLocaleSmoke(browser, base, artifactsRoot) {
   }
   try {
     for (const locale of locales.slice(1)) {
-      const route = `/${locale}/guide/installation`;
+      const route = `/${locale}/guide/quickstart`;
       await goto(route);
-      assert.ok(await page.locator(".locale-historical-identity").isVisible(), `${locale}: visible page identity`);
-      const id = await page.locator(".vp-doc details h2[id]").first().getAttribute("id");
-      assert.ok(id);
-      const fragment = `#${encodeURIComponent(id)}`;
+      assert.ok(await page.getByRole("heading", { name: /Use plugins \/ Build plugins|Использовать плагины|Usar plugins|Utiliser des plugins|使用插件/ }).isVisible(), `${locale}: visible quickstart identity`);
+      const id = "build-plugins";
+      const fragment = `#${id}`;
       for (const spelling of [route, `${route}.html`]) {
         await goto(spelling + fragment);
         await visibleTarget(id);
@@ -41,7 +40,7 @@ export async function runLocaleSmoke(browser, base, artifactsRoot) {
         // A real anchor exercises VitePress's installed client router.
         await page.evaluate(href => {
           const a = document.createElement("a"); a.href = href; a.id = "locale-browser-probe";
-          a.textContent = "Archived fragment"; document.querySelector(".vp-doc").append(a);
+          a.textContent = "Build plugins"; document.querySelector(".vp-doc").append(a);
         }, `${base}${spelling}${fragment}`);
         await page.locator("#locale-browser-probe").click();
         await visibleTarget(id);
@@ -50,12 +49,6 @@ export async function runLocaleSmoke(browser, base, artifactsRoot) {
         await visibleTarget(id);
         evidence.push({ locale, spelling, fragment, directClientReloadHistory: true });
       }
-      await goto(route);
-      const summary = page.locator(".vp-doc details > summary").first();
-      await summary.focus(); await page.keyboard.press("Enter");
-      assert.ok(await page.locator(".vp-doc details").first().evaluate(el => el.open));
-      await page.keyboard.press("Enter");
-      assert.equal(await page.locator(".vp-doc details").first().evaluate(el => el.open), false);
       await page.setViewportSize({ width: 390, height: 844 });
       await page.locator(".VPLocalNavOutlineDropdown > button").click();
       const outline = page.locator(".VPLocalNavOutlineDropdown .outline-link").first();
@@ -63,21 +56,7 @@ export async function runLocaleSmoke(browser, base, artifactsRoot) {
       await outline.click();
       await visibleTarget(outlineId);
       await page.setViewportSize({ width: 1440, height: 900 });
-      await goto(route);
-      await page.locator(".vp-doc").first().waitFor({ state: "visible" });
-      // No current archive has nested details. This explicit browser fixture
-      // verifies future nested disclosures without changing historical bytes.
-      await page.evaluate(() => {
-        const outer = document.querySelector(".vp-doc details");
-        outer.insertAdjacentHTML("beforeend", '<details><summary>Nested fixture</summary><h3 id="locale-嵌套">Nested target</h3></details>');
-        const a = document.createElement("a"); a.href = "#locale-%E5%B5%8C%E5%A5%97";
-        a.id = "nested-locale-probe"; a.textContent = "Nested fragment"; document.querySelector(".vp-doc").append(a);
-      });
-      await page.locator("#nested-locale-probe").click();
-      await visibleTarget("locale-嵌套");
-      assert.equal(await page.locator(".vp-doc details[open]").count(), 2);
-      assert.equal(await page.evaluate(() => document.activeElement?.id), "locale-嵌套");
-      evidence.push({ locale, mobileOutline: true, nestedBrowserFixture: true, keyboardDisclosure: true });
+      evidence.push({ locale, mobileOutline: true });
     }
     for (const variant of ["navbar", "screen"]) {
       await page.setViewportSize(variant === "navbar" ? { width: 1440, height: 900 } : { width: 390, height: 844 });
@@ -87,14 +66,9 @@ export async function runLocaleSmoke(browser, base, artifactsRoot) {
         for (const code of locales) assert.equal(await page.locator(`link[rel="alternate"][hreflang="${languageTags[code]}"]`).first().getAttribute("href"), new URL(`${code}/use/`, docsBaseUrl).href);
         await inspectSwitcher(`/${current}/use/`, code => `/${code}/use/`, code => code, false);
       }
-      const fallback = "/en/api/cli/prepared-authoring-v2-plugin-kit-ai";
-      await goto(fallback);
-      // Archived pages are intentionally absent from the current entity
-      // registry, so their language switcher returns to each locale home.
-      await inspectSwitcher(fallback, code => `/${code}/`, code => code, false, true);
       await goto("/?gateway=manual");
       await inspectSwitcher("/?gateway=manual", code => `/${code}/`, code => code, false, true);
-      evidence.push({ variant, fiveCounterparts: true, englishFallback: true, unknownHomes: true });
+      evidence.push({ variant, fiveCounterparts: true, gatewayHomes: true });
       async function inspectSwitcher(label, destination, language, fallback, home = false) {
         const homeIdentities = { en: "Agent Plugins", ru: "Используйте плагины / Создавайте плагины", es: "Usar plugins / Crear plugins", fr: "Utiliser des plugins / Créer des plugins", zh: "使用插件 / 构建插件" };
         for (const [index, code] of locales.entries()) {
@@ -137,7 +111,7 @@ export async function runLocaleSmoke(browser, base, artifactsRoot) {
           }
           const expectedPath = new URL(`${base}${destination(code)}`).pathname;
           const actualLanguage = language(code);
-          const identity = home ? homeIdentities[actualLanguage] : fallback ? "plugin-kit-ai" : "Use plugins";
+          const identity = home ? homeIdentities[actualLanguage] : "Use plugins";
           const selector = ".vp-doc h1";
           await links.nth(index).click();
           await page.waitForURL(url => url.pathname === expectedPath);

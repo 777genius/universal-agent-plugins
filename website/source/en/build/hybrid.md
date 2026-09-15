@@ -10,11 +10,6 @@ translationRequired: true
 
 # Build a hybrid package
 
-> **Milestone A is available.** Install `agentplugins` from
-> `universal-agent-plugins@0.1.65` on npm or the `777genius/agentplugins` Homebrew tap.
-> GitHub release: `agentplugins-v0.1.65`. Public-channel E2E is verified.
-> Runtime/dev/bootstrap, export and publication remain deferred. Legacy YAML
-> migration is cancelled; preserved source is not a supported workflow.
 
 A hybrid is useful when instructions explain how and when to use tools. Both
 components live under one root manifest. A client may support them differently,

@@ -61,7 +61,7 @@ async function checkRegistryEntities(allEntities) {
 
     if (entity.publicVisibility === "preparation" || entity.status === "prepared-not-release" ||
         entity.released === false || entity.stability === "prepared-not-release" || entity.maturity === "prepared") {
-      errors.push(`Unreleased preparation metadata remains after Milestone A publication: ${entity.canonicalId}`);
+      errors.push(`Unreleased preparation metadata remains after Agent Plugins publication: ${entity.canonicalId}`);
     }
     if (!["public", "preparation"].includes(entity.publicVisibility)) {
       errors.push(`Unexpected non-public entity in public registry: ${entity.canonicalId} (${entity.publicVisibility})`);

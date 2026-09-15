@@ -35,11 +35,12 @@ export async function consumePreparedCLI(root, expectedSHA) {
     }
     return surface.commands;
   }).filter((entry) => entry.command_path !== "agentplugins author dev").map((entry) => {
-    if (entry.command_path !== "agentplugins author test") return entry;
+    const current = { ...entry, example: entry.example.replaceAll("plugin-kit-ai skills", "agentplugins author skills") };
+    if (current.command_path !== "agentplugins author test") return current;
     const runtimeFlags = new Set(["allow-network", "deadline", "fixture", "runtime", "server", "tool"]);
     const summary = "Check package configuration and hygiene without executing package code";
-    return { ...entry, short: summary, long: entry.long.replace(entry.short, summary),
-      local_flags: entry.local_flags.filter((flag) => !runtimeFlags.has(flag.name)) };
+    return { ...current, short: summary, long: current.long.replace(current.short, summary),
+      local_flags: current.local_flags.filter((flag) => !runtimeFlags.has(flag.name)) };
   });
   const ids = new Set();
   const links = new Map();
@@ -71,6 +72,7 @@ export async function consumePreparedCLI(root, expectedSHA) {
         "Check package configuration and hygiene without executing package code")
       .replaceAll("Check statically; the unreleased Phase 7 candidate can run one explicit MCP server",
         "Check package configuration and hygiene without executing package code")
+      .replaceAll("plugin-kit-ai skills", "agentplugins author skills")
       .replace(`<!-- namespace: ${namespace}; status: prepared-not-release; source-sha: ${expectedSHA} -->`, releasedMarker)
       .replace("Prepared reference only; not a public release.", "Released Agent Plugins CLI reference.")
       .replace(/\]\(([^)]+)\)/g, (full, target) => {
@@ -82,6 +84,7 @@ export async function consumePreparedCLI(root, expectedSHA) {
       if (!match || !links.has(match[1])) fail(`unresolved command link ${target}`);
       return `](${links.get(match[1])}${match[2] || ""})`;
       });
+    if (/\bplugin-kit-ai\s/.test(linked)) fail(`retired command example in ${entry.command_path}`);
     let fence = false;
     const body = linked.split("\n").map((line) => {
       if (line.startsWith("```")) { fence = !fence; return line; }

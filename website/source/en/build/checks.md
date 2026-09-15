@@ -10,11 +10,6 @@ translationRequired: true
 
 # Check a package without running it
 
-> **Milestone A is available.** Install `agentplugins` from
-> `universal-agent-plugins@0.1.65` on npm or the `777genius/agentplugins` Homebrew tap.
-> GitHub release: `agentplugins-v0.1.65`. Public-channel E2E is verified.
-> Runtime/dev/bootstrap, export and publication remain deferred. Legacy YAML
-> migration is cancelled; preserved source is not a supported workflow.
 
 Use these commands against the same exact package root after editing.
 The example assumes `./review-helper` exists and contains root `plugin.json`.
@@ -35,10 +30,8 @@ authoring readiness. Inspect shows captured components and unresolved runtime
 requirements. Test checks configuration, hygiene, Skills, and MCP statically.
 It does not launch scripts, perform a handshake, or execute a tool fixture.
 
-PR #278 contains an unreleased Phase 7 candidate for explicit MCP runtime tests
-and continuous dev. Its presence in source or candidate CLI reference is not a
-released-command claim; this current journey remains the shipped static
-authoring contract until a later executable release is qualified.
+Version 0.1.65 performs static tests only. It does not start MCP servers or
+provide a development server.
 
 ## Read the evidence layers
 
@@ -63,9 +56,9 @@ agentplugins author inspect ./review-helper --target codex,claude
 ```
 
 Compat requires distinct comma-separated client IDs. Use explicit IDs rather
-than `all` or historical target names such as `codex-runtime`. These are static
-adapter checks; installed clients are not required. Inspect accepts an optional
-target selection when you want client-specific component findings.
+than `all`. These are static adapter checks; installed clients are not required.
+Inspect accepts an optional target selection when you want client-specific
+component findings.
 
 ## Inspect project and engine evidence
 
@@ -100,8 +93,8 @@ package flag also applies to `skills validate`.
 
 Installer `--dry-run` and security/scope policy are not authoring flags. Authoring
 init is a real local file creation job, even when another root's help lists
-installer flags. Legacy `--strict`, runtime fixture flags, and overwrite flags
-are not shortcuts to stronger v2 checks.
+installer flags. Runtime fixture flags and overwrite flags are not shortcuts to
+stronger authoring checks.
 
 `agentplugins validate ./review-helper` is the separate installer validation
 job. `agentplugins doctor` diagnoses managed installation state. Neither is an

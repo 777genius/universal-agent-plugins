@@ -16,7 +16,7 @@ translationRequired: true
 - [构建插件](/zh/build/)
 - [快速入门](/zh/guide/quickstart)
 
-Milestone A 已通过 `agentplugins author` 发布。YAML 迁移已取消；保留的旧代码不是受支持的产品。
+Agent Plugins 创作已通过 `universal-agent-plugins@0.1.65` 中的 `agentplugins author` 发布。
 
 [Agent Plugins 1.0 specification](https://agent-plugins.org/specification)
 

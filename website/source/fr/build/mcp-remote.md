@@ -10,6 +10,6 @@ translationRequired: true
 
 # Build a remote MCP package
 
-[Traduction indisponible ; consultez la page actuelle en anglais](/en/build/mcp-remote). Milestone A est disponible. La migration YAML est annulée. Milestone A disponible: universal-agent-plugins@0.1.65; GitHub: agentplugins-v0.1.65.
+[Traduction indisponible ; consultez la page actuelle en anglais](/en/build/mcp-remote). La création Agent Plugins est disponible via Agent Plugins dans `universal-agent-plugins@0.1.65`.
 
 [Utiliser des plugins](/fr/use/) · [Créer des plugins](/fr/build/)

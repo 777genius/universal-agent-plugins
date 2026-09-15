@@ -1,37 +1,32 @@
 export const docsLocales = ["en", "ru", "es", "fr", "zh"];
 export const localePathField = (locale) => `path${locale[0].toUpperCase()}${locale.slice(1)}`;
 export const entityPath = (entry, locale) => entry[localePathField(locale)] || entry.pathEn || "";
-export const isMilestoneAJourney = (relative) => /^(use|build)\//.test(relative);
+export const isCurrentJourney = (relative) => /^(use|build)\//.test(relative);
 
 export const journeyLabels = {
   "en": [
     "Use plugins",
     "Build plugins",
-    "Historical v1 · baseline 1.2.4",
     "English"
   ],
   "ru": [
     "Использовать плагины",
     "Создавать плагины",
-    "История v1 · базовая версия 1.2.4",
     "На английском"
   ],
   "es": [
     "Usar plugins",
     "Crear plugins",
-    "Histórico v1 · referencia 1.2.4",
     "En inglés"
   ],
   "fr": [
     "Utiliser des plugins",
     "Créer des plugins",
-    "Historique v1 · référence 1.2.4",
     "En anglais"
   ],
   "zh": [
     "使用插件",
     "构建插件",
-    "历史 v1 · 基准 1.2.4",
     "英语"
   ]
 };
@@ -53,8 +48,7 @@ export const journeyPageLabels = {
     "page:build:skills": "Несколько Skills",
     "page:build:layout": "Структура",
     "page:build:checks": "Проверки",
-    "page:build:handoff": "Передача",
-    "page:legacy:v1:index": "Исторический контекст"
+    "page:build:handoff": "Передача"
   },
   "es": {
     "page:use:index": "Resumen",
@@ -68,8 +62,7 @@ export const journeyPageLabels = {
     "page:build:skills": "Varios Skills",
     "page:build:layout": "Estructura",
     "page:build:checks": "Comprobaciones",
-    "page:build:handoff": "Entrega",
-    "page:legacy:v1:index": "Contexto histórico"
+    "page:build:handoff": "Entrega"
   },
   "fr": {
     "page:use:index": "Présentation",
@@ -83,8 +76,7 @@ export const journeyPageLabels = {
     "page:build:skills": "Plusieurs Skills",
     "page:build:layout": "Structure",
     "page:build:checks": "Vérifications",
-    "page:build:handoff": "Transmission",
-    "page:legacy:v1:index": "Contexte historique"
+    "page:build:handoff": "Transmission"
   },
   "zh": {
     "page:use:index": "概览",
@@ -98,14 +90,13 @@ export const journeyPageLabels = {
     "page:build:skills": "多个 Skills",
     "page:build:layout": "结构",
     "page:build:checks": "检查",
-    "page:build:handoff": "交接",
-    "page:legacy:v1:index": "历史背景"
+    "page:build:handoff": "交接"
   }
 };
 
 const releaseLabels = {
-  en: "Milestone A available", ru: "Milestone A доступен", es: "Milestone A disponible",
-  fr: "Milestone A disponible", zh: "Milestone A 已发布"
+  en: "available in 0.1.65", ru: "доступно в 0.1.65", es: "disponible en 0.1.65",
+  fr: "disponible dans 0.1.65", zh: "0.1.65 已发布"
 };
 
 export function journeySidebar(locale, entities) {
@@ -116,14 +107,14 @@ export function journeySidebar(locale, entities) {
     const id = `page:${section}:${page}`;
     const entity = entities.find((entry) => entry.canonicalId === id);
     if (!entity?.pathEn) throw new Error(`Missing journey source: ${id}`);
-    return { text: (journeyPageLabels[locale]?.[id] || entity.title) + (locale === "en" || entity[localePathField(locale)] ? "" : ` (${journeyLabels[locale][3]})`),
+    return { text: (journeyPageLabels[locale]?.[id] || entity.title) + (locale === "en" || entity[localePathField(locale)] ? "" : ` (${journeyLabels[locale][2]})`),
       link: entityPath(entity, locale) };
   }) }));
   groups.push(...["agentplugins author"].map((surface) => ({
     text: `${surface} · ${releaseLabels[locale]}`,
     items: entities.filter((entry) => entry.surface === "authoring-cli" &&
       (entry.title === surface || entry.title.startsWith(`${surface} `)))
-      .map((entry) => ({ text: entry.title + (locale === "en" || entry[localePathField(locale)] ? "" : ` (${journeyLabels[locale][3]})`), link: entityPath(entry, locale) }))
+      .map((entry) => ({ text: entry.title + (locale === "en" || entry[localePathField(locale)] ? "" : ` (${journeyLabels[locale][2]})`), link: entityPath(entry, locale) }))
   })));
   return groups;
 }
@@ -156,7 +147,7 @@ export function requirePublicationBoundary(entities, env = process.env) {
     throw new Error(`Public documentation retains unreleased preparation metadata: ${stale[0].canonicalId || "unknown"}`);
   }
   const journeys = entities.filter((entry) => entry.sourceKind === "hand-authored" &&
-    typeof entry.sourceRef === "string" && isMilestoneAJourney(entry.sourceRef));
+    typeof entry.sourceRef === "string" && isCurrentJourney(entry.sourceRef));
   for (const entry of journeys) {
     if (entry.status !== "released" || entry.released !== true || entry.publicVisibility !== "public" ||
         entry.stability !== "public-stable" || entry.maturity !== "stable") {

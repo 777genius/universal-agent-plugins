@@ -68,35 +68,20 @@ async function runSmoke(browser, base) {
   const desktopChecks = [
     ["en home", `${base}/en/`, "Agent Plugins"],
     ["ru home", `${base}/ru/`, "Agent Plugins"],
-    ["what you can build", `${base}/en/guide/what-you-can-build`, "One Repo, Many Supported Outputs"],
-    ["one project multiple targets", `${base}/en/guide/one-project-multiple-targets`, "The Short Rule"],
-    ["choose a target", `${base}/en/guide/choose-a-target`, "Target Directory"],
-    ["why plugin-kit-ai", `${base}/en/concepts/why-plugin-kit-ai`, "What It Gives You"],
-    ["authoring architecture", `${base}/en/concepts/authoring-architecture`, "The Core Shape"],
-    ["choosing runtime", `${base}/en/concepts/choosing-runtime`, "Safe Default Matrix"],
-    ["target model", `${base}/en/concepts/target-model`, "Quick Rule"],
-    ["production readiness", `${base}/en/guide/production-readiness`, "Pick The Right Path On Purpose"],
-    ["python runtime guide", `${base}/en/guide/python-runtime`, "Build A Python Runtime Plugin"],
-    ["team ready plugin", `${base}/en/guide/team-ready-plugin`, "Outcome"],
-    ["examples and recipes", `${base}/en/guide/examples-and-recipes`, "Production Plugin Examples"],
-    ["choose starter", `${base}/en/guide/choose-a-starter`, "Starter Matrix"],
-    ["choose delivery model", `${base}/en/guide/choose-delivery-model`, "The Two Modes"],
-    ["bundle handoff", `${base}/en/guide/bundle-handoff`, "What It Covers"],
-    ["package and workspace targets", `${base}/en/guide/package-and-workspace-targets`, "The Short Rule"],
-    ["how to publish plugins", `${base}/en/guide/how-to-publish-plugins`, "Quick Comparison"],
-    ["ci integration", `${base}/en/guide/ci-integration`, "The Minimal CI Gate"],
-    ["faq", `${base}/en/reference/faq`, "Should I Start With Go, Python, Or Node?"],
-    ["glossary", `${base}/en/reference/glossary`, "Authored State"],
-    ["repository standard", `${base}/en/reference/repository-standard`, "The Main Rule"],
-    ["support boundary", `${base}/en/reference/support-boundary`, "Safe Defaults"],
-    ["troubleshooting", `${base}/en/reference/troubleshooting`, "The CLI Installs But Does Not Run"],
-    ["api home", `${base}/en/api/`, "API Surfaces"],
-    ["cli reference", `${base}/en/api/cli/`, "CLI Reference"],
-    ["go sdk", `${base}/en/api/go-sdk/`, "Go SDK"],
-    ["node runtime", `${base}/en/api/runtime-node/`, "Node Runtime"],
-    ["python runtime", `${base}/en/api/runtime-python/`, "Python Runtime"],
-    ["target support", `${base}/en/reference/target-support`, "Target Support"],
-    ["latest release", `${base}/en/releases/v1-1-2`, "Why This Release Matters"]
+    ["quickstart", `${base}/en/guide/quickstart`, "Use plugins / Build plugins"],
+    ["use overview", `${base}/en/use/`, "The installer journey"],
+    ["use install", `${base}/en/use/install`, "Discover the package"],
+    ["use manage", `${base}/en/use/manage`, "Inspect the situation first"],
+    ["build overview", `${base}/en/build/`, "Primary authoring commands"],
+    ["build skill", `${base}/en/build/skill`, "Choose an explicit destination"],
+    ["build remote MCP", `${base}/en/build/mcp-remote`, "Supply the endpoint explicitly"],
+    ["build stdio MCP", `${base}/en/build/mcp-stdio`, "Create the scaffold"],
+    ["build hybrid", `${base}/en/build/hybrid`, "Choose the MCP side explicitly"],
+    ["build skills", `${base}/en/build/skills`, "Name the new Skill and package"],
+    ["build layout", `${base}/en/build/layout`, "Minimal and combined layouts"],
+    ["build checks", `${base}/en/build/checks`, "Run the offline authoring loop"],
+    ["build handoff", `${base}/en/build/handoff`, "Prepare the package and evidence"],
+    ["CLI reference", `${base}/en/api/cli/prepared-authoring-v2-agentplugins-author`, "Released Agent Plugins CLI reference"]
   ];
 
   for (const [name, url, expected] of desktopChecks) {
@@ -124,9 +109,9 @@ async function runSmoke(browser, base) {
   }
 
   await page.goto(`${base}/en/`, { waitUntil: "networkidle" });
-  await page.locator(".VPNavBarMenu").getByRole("link", { name: "API", exact: true }).click();
-  if (!page.url().includes("/en/api/")) {
-    errors.push("Top navigation API link did not navigate to /en/api/.");
+  await page.locator(".VPNavBarMenu").getByRole("link", { name: "Build plugins", exact: true }).click();
+  if (!page.url().includes("/en/build/")) {
+    errors.push("Top navigation Build link did not navigate to /en/build/.");
   }
 
   await page.goto(`${base}/en/`, { waitUntil: "networkidle" });
@@ -180,7 +165,7 @@ async function runSmoke(browser, base) {
   const mobilePage = await mobileContext.newPage();
   const mobileChecks = [
     ["gateway mobile manual", `${base}/?gateway=1`, "Choose your language"],
-    ["cli mobile", `${base}/en/api/cli/`, "CLI Reference"]
+    ["build mobile", `${base}/en/build/`, "Build plugins"]
   ];
 
   for (const [name, url, expected] of mobileChecks) {
@@ -201,11 +186,11 @@ async function runSmoke(browser, base) {
   await context.close();
 
   const runtimeExists = await fs
-    .access(path.join(runtimeRoot, "en", "api", "runtime-node", "index.md"))
+    .access(path.join(runtimeRoot, "en", "build", "index.md"))
     .then(() => true)
     .catch(() => false);
   if (!runtimeExists) {
-    errors.push("Assembled runtime source is missing Node runtime API index.");
+    errors.push("Assembled runtime source is missing the current Build index.");
   }
 }
 

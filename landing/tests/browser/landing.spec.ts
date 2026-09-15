@@ -172,7 +172,9 @@ test('homepage publishes canonical social metadata and complete product schema',
     'href',
     'https://777genius.github.io/universal-agent-plugins/',
   );
-  await expect(page.locator('link[rel="alternate"][hreflang]')).toHaveCount(publishedLocales.length + 1);
+  await expect(page.locator('link[rel="alternate"][hreflang]')).toHaveCount(
+    publishedLocales.length + 1,
+  );
   await expect(page.locator('meta[property="og:image"]')).toHaveAttribute(
     'content',
     'https://777genius.github.io/universal-agent-plugins/og-image.png',
@@ -462,15 +464,17 @@ test('sitemap lists only live canonical pages and unstable routes stay out of th
   const locations = [...sitemap.matchAll(/<loc>([^<]+)<\/loc>/g)].map((match) => match[1]!);
   expect(locations.length).toBeGreaterThanOrEqual(20);
   expect(locations.every((location) => location.endsWith('/'))).toBe(true);
-  for (const code of Object.keys(localeMetadata).filter(code => code !== 'en')) {
-    expect(locations.some(location => new URL(location).pathname.includes(`/${code}/`))).toBe(
+  for (const code of Object.keys(localeMetadata).filter((code) => code !== 'en')) {
+    expect(locations.some((location) => new URL(location).pathname.includes(`/${code}/`))).toBe(
       (publishedLocales as readonly string[]).includes(code),
     );
   }
   expect(sitemap).not.toContain('<lastmod>');
   expect(sitemap).not.toContain('/plugins/community/');
   expect(sitemap).not.toContain('/create-plugin/');
-  expect(locations.filter((location) => location.includes('/agents/'))).toHaveLength(11 * publishedLocales.length);
+  expect(locations.filter((location) => location.includes('/agents/'))).toHaveLength(
+    11 * publishedLocales.length,
+  );
 
   const prefix = '/universal-agent-plugins/';
   const statuses = await Promise.all(
@@ -499,11 +503,17 @@ test('sitemap lists only live canonical pages and unstable routes stay out of th
 
   await page.goto('./create-plugin');
   await expect(page.locator('meta[name="robots"]')).toHaveAttribute('content', 'noindex, follow');
-  await expect(page.getByRole('heading', { name: 'Use plugins / Build plugins', exact: true })).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Use plugins / Build plugins', exact: true }),
+  ).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Use plugins', exact: true })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Build plugins', exact: true })).toBeVisible();
-  await expect(page.locator('#use-plugins code')).toHaveText('npx universal-agent-plugins add context7');
-  await expect(page.locator('#build-plugins')).toContainText('Milestone A is available');
+  await expect(page.locator('#use-plugins code')).toHaveText(
+    'npx universal-agent-plugins add context7',
+  );
+  await expect(page.locator('#build-plugins')).toContainText(
+    'Agent Plugins authoring is available',
+  );
   await expect(page.locator('#build-plugins')).toContainText('public-channel E2E are verified');
   await expect(page.locator('#historical-v1')).toHaveCount(0);
 });
@@ -515,13 +525,17 @@ test('the authoring frontdoor distinguishes Use from released Build and links to
 
   await expect(page.locator('#use-plugins a')).toHaveAttribute(
     'href',
-    'https://github.com/777genius/universal-agent-plugins#quick-start',
+    'https://777genius.github.io/universal-agent-plugins/docs/en/guide/quickstart.html',
   );
-  await expect(page.locator('#build-plugins a').first()).toHaveAttribute(
+  await expect(page.locator('#build-plugins a').nth(0)).toHaveAttribute(
+    'href',
+    'https://777genius.github.io/universal-agent-plugins/docs/en/build/',
+  );
+  await expect(page.locator('#build-plugins a').nth(1)).toHaveAttribute(
     'href',
     'https://agent-plugins.org/specification',
   );
-  await expect(page.locator('#build-plugins a').nth(1)).toHaveAttribute(
+  await expect(page.locator('#build-plugins a').nth(2)).toHaveAttribute(
     'href',
     'https://github.com/777genius/universal-agent-plugins#supported-clients',
   );

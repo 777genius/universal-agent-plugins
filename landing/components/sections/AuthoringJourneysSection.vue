@@ -16,7 +16,9 @@ const currentLocale = computed<DocsLocale>(() => {
 // docs root and would silently serve untranslated pages once landing gets
 // locale-aware routing).
 const docsRoot = computed(() => {
-  const url = String(config.public.docsUrl || 'https://777genius.github.io/universal-agent-plugins/docs/en/');
+  const url = String(
+    config.public.docsUrl || 'https://777genius.github.io/universal-agent-plugins/docs/en/',
+  );
   return url.replace(/\/+$/, '') + '/';
 });
 const useGuideUrl = computed(() =>
@@ -25,10 +27,6 @@ const useGuideUrl = computed(() =>
 const buildGuideUrl = computed(() =>
   replaceDocsLocale(`${docsRoot.value}build/`, currentLocale.value, 'build'),
 );
-const historicalGuideUrl = computed(() =>
-  replaceDocsLocale(`${docsRoot.value}legacy/v1/`, currentLocale.value, 'legacy/v1'),
-);
-
 const journeys = computed(() => [
   {
     id: 'use',
@@ -72,13 +70,6 @@ const journeys = computed(() => [
           </a>
         </article>
       </div>
-
-      <p class="authoring-journeys-section__historical">
-        {{ t('pluginAuthoring.historical.eyebrow') }}
-        <a :href="historicalGuideUrl" target="_blank" rel="noopener noreferrer">
-          {{ t('pluginAuthoring.historical.cta') }}
-        </a>
-      </p>
     </v-container>
   </section>
 </template>
@@ -156,24 +147,6 @@ const journeys = computed(() => [
 }
 
 .authoring-journeys-section__link:hover {
-  text-decoration: underline;
-}
-
-.authoring-journeys-section__historical {
-  margin: 32px auto 0;
-  max-width: 980px;
-  text-align: center;
-  color: #91a0bf;
-  font-size: 0.9rem;
-}
-
-.authoring-journeys-section__historical a {
-  color: #ffd166;
-  margin-left: 6px;
-  text-decoration: none;
-}
-
-.authoring-journeys-section__historical a:hover {
   text-decoration: underline;
 }
 

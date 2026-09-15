@@ -30,7 +30,7 @@ npx universal-agent-plugins add context7
 
 [Проверенные версии клиентов и ограничения платформ](/ru/reference/client-compatibility)
 
-Milestone A is available in `universal-agent-plugins@0.1.65`; GitHub release: `agentplugins-v0.1.65`.
+Авторинг Agent Plugins доступен в `universal-agent-plugins@0.1.65`; GitHub-релиз: `agentplugins-v0.1.65`.
 
 Совместимость зависит от пакета. Проверка схемы не доказывает работу, OAuth или активацию. Codex не поддерживает заявленный MCP SSE; поддержка stdio и Streamable HTTP сохраняется в существующих адаптерах.
 
@@ -42,9 +42,9 @@ Milestone A is available in `universal-agent-plugins@0.1.65`; GitHub release: `a
 
 Создавайте переносимый пакет Agent Plugins 1.0 на основе plugin.json с необязательными skills/ и mcp.json. Поддержка клиентов зависит от пакета и его компонентов.
 
-**Milestone A доступен**
+**Авторинг Agent Plugins доступен**
 
-Milestone A доступен через `agentplugins author` в `universal-agent-plugins@0.1.65`; GitHub-релиз: `agentplugins-v0.1.65`. npm, Homebrew, нативные архивы и E2E публичных каналов проверены. Доступен только статический авторинг; runtime/dev/bootstrap, экспорт и публикация отложены. Миграция legacy YAML отменена; сохранённый исходный код не является поддерживаемым продуктом.
+Статический авторинг доступен через `agentplugins author` в `universal-agent-plugins@0.1.65`; GitHub-релиз: `agentplugins-v0.1.65`. npm, Homebrew, нативные архивы и E2E публичных каналов проверены. Этот выпуск не запускает код пакета или серверы разработки, не устанавливает зависимости, не экспортирует пакеты и не публикует их.
 
 [Спецификация Agent Plugins 1.0](https://agent-plugins.org/specification)
 

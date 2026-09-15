@@ -38,7 +38,7 @@ export async function runSiteConsumerSmoke(browser, base, artifactsRoot) {
     assert.doesNotMatch(reference, /not released|not a public release/i);
     await page.screenshot({ path: path.join(artifactsRoot, "d2b-agentplugins-author.png"), fullPage: true });
     const redirects = JSON.parse(await fs.readFile(generatedRegistryPaths.redirects, "utf8"));
-    const samples = ["/use/", "/build/", "/en/legacy/v1/cli/", "/api/cli/plugin-kit-ai-generate",
+    const samples = ["/use/", "/build/", "/guide/quickstart",
       "/api/cli/prepared-authoring-v2-agentplugins-author-init"];
     for (const alias of samples) {
       const target = redirects[alias];

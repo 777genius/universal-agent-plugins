@@ -10,15 +10,9 @@ translationRequired: true
 
 # Maintain installed plugins
 
-> **Milestone A is available.** Standard-first static authoring is published as
-> `agentplugins author` in `universal-agent-plugins@0.1.65`.
-> GitHub tag: `agentplugins-v0.1.65`. npm, Homebrew, native archives and the
-> public-channel E2E are verified. Runtime/dev/bootstrap, export and publication
-> remain deferred. Legacy YAML migration is cancelled; its source remains
-> preserved internally and is not a supported product.
 
 These are **existing installer commands**. They operate on managed installation
-state, not on Milestone A authoring scaffolds. Keep the package name, selected agents,
+state, not on authored package scaffolds. Keep the package name, selected agents,
 and any reported installation identity available when diagnosing a problem.
 
 ## Inspect the situation first
@@ -100,6 +94,6 @@ activation instruction. Share diagnostics with credentials removed. State
 whether the problem occurred during planning, managed-file application, client
 activation, authentication, or runtime use; these are different failure stages.
 
-Future authoring `doctor ./my-plugin` supplies project evidence only. It cannot
+Authoring `doctor ./my-plugin` supplies project evidence only. It cannot
 replace installer doctor, repair managed state, or complete OAuth. Authors and
 installers can compare evidence through the [handoff boundary](/en/build/handoff).

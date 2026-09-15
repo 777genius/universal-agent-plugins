@@ -26,7 +26,7 @@ Pour une installation native sur macOS, Linux ou Windows, consultez le guide. Le
 
 [Guide d’installation](https://github.com/777genius/universal-agent-plugins#quick-start)
 
-Milestone A is available in `universal-agent-plugins@0.1.65`; GitHub release: `agentplugins-v0.1.65`.
+La création Agent Plugins est disponible dans `universal-agent-plugins@0.1.65` ; version GitHub : `agentplugins-v0.1.65`.
 
 La compatibilité dépend du paquet. La validation du schéma ne prouve ni l’exécution, ni OAuth, ni l’activation. Codex ne prend pas en charge MCP SSE déclaré ; stdio et Streamable HTTP conservent leur prise en charge par les adaptateurs existants.
 
@@ -36,9 +36,9 @@ La compatibilité dépend du paquet. La validation du schéma ne prouve ni l’e
 
 Créez un paquet portable Agent Plugins 1.0 autour de plugin.json, avec skills/ et mcp.json facultatifs. La prise en charge dépend du paquet et de ses composants.
 
-**Milestone A disponible**
+**La création Agent Plugins est disponible**
 
-Milestone A est disponible via `agentplugins author` dans `universal-agent-plugins@0.1.65`; version GitHub : `agentplugins-v0.1.65`. npm, Homebrew, archives natives et E2E public sont vérifiés. Création statique uniquement ; runtime/dev/bootstrap, export et publication restent différés. La migration YAML historique est annulée ; le code conservé n’est pas un produit pris en charge.
+La création statique est disponible via `agentplugins author` dans `universal-agent-plugins@0.1.65` ; version GitHub : `agentplugins-v0.1.65`. npm, Homebrew, archives natives et E2E public sont vérifiés. Cette version n’exécute pas le code du paquet ni les serveurs de développement, n’installe pas les dépendances, n’exporte pas les paquets et ne les publie pas.
 
 [Spécification Agent Plugins 1.0](https://agent-plugins.org/specification)
 
