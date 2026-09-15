@@ -298,3 +298,111 @@ func TestContinuousDevMalformedEditJoinsLongRunningCycleBeforeReport(t *testing.
 		t.Fatalf("active runtime children=%d after dev return", got)
 	}
 }
+
+func TestContinuousDevRestartsAfterIdenticalContentRecovery(t *testing.T) {
+	cache := t.TempDir()
+	for _, name := range []string{"HOME", "LOCALAPPDATA", "XDG_CACHE_HOME"} {
+		t.Setenv(name, cache)
+	}
+	root := t.TempDir()
+	plugin := filepath.Join(root, "plugin.json")
+	original := []byte(`{"$schema":"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json","name":"dev-identical-recovery-fixture"}`)
+	if err := os.WriteFile(plugin, original, 0600); err != nil {
+		t.Fatal(err)
+	}
+	mcp := `{"$schema":"https://agent-plugins.org/schemas/1.0.0/mcp.schema.json","mcpServers":{"selected":{"type":"streamable-http","url":"https://example.test/mcp"}}}`
+	if err := os.WriteFile(filepath.Join(root, "mcp.json"), []byte(mcp), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	firstStarted := make(chan struct{})
+	firstJoined := make(chan struct{})
+	restarted := make(chan struct{})
+	restartJoined := make(chan struct{})
+	writeDone := make(chan error, 1)
+	go func() {
+		<-firstStarted
+		writeDone <- os.WriteFile(plugin, []byte(`{"broken":`), 0600)
+	}()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	go func() {
+		<-restarted
+		cancel()
+	}()
+	var activeChildren atomic.Int32
+	var reports atomic.Int32
+	var starts atomic.Int32
+	scratch := t.TempDir()
+	app := App{Projects: project.Service{Scratch: scratch}, Revision: "dev-identical-recovery-test"}
+	_, err := app.dev(ctx, request{
+		root: root, server: "selected", allowNetwork: true, deadline: 5 * time.Second,
+		cycleOutput: func(r report.Report, cycleErr error) error {
+			if reports.Add(1) != 1 {
+				return errors.New("late stale runtime report")
+			}
+			select {
+			case <-firstJoined:
+			default:
+				return errors.New("invalid-cycle report preceded runtime join")
+			}
+			if activeChildren.Load() != 0 {
+				return errors.New("runtime child remained active at invalid-cycle report")
+			}
+			if cycleErr == nil || r.Error == nil {
+				return errors.New("malformed edit did not produce an invalid-cycle report")
+			}
+			return os.WriteFile(plugin, original, 0600)
+		},
+		runMCP: func(ctx context.Context, _ mcpruntime.Options) (mcpruntime.Evidence, error) {
+			start := starts.Add(1)
+			if activeChildren.Add(1) != 1 {
+				return mcpruntime.Evidence{}, errors.New("overlapping runtime children")
+			}
+			switch start {
+			case 1:
+				close(firstStarted)
+			case 2:
+				close(restarted)
+			default:
+				return mcpruntime.Evidence{}, errors.New("unexpected extra runtime start")
+			}
+			<-ctx.Done()
+			activeChildren.Add(-1)
+			if start == 1 {
+				close(firstJoined)
+			} else {
+				close(restartJoined)
+			}
+			return mcpruntime.Evidence{Transport: "streamable_http"}, ctx.Err()
+		},
+	})
+	if writeErr := <-writeDone; writeErr != nil {
+		t.Fatal(writeErr)
+	}
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("continuous dev result=%v", err)
+	}
+	if got := starts.Load(); got != 2 {
+		t.Fatalf("runtime starts=%d, want initial and identical-content recovery", got)
+	}
+	select {
+	case <-restartJoined:
+	default:
+		t.Fatal("restarted runtime was not canceled and joined")
+	}
+	if got := reports.Load(); got != 1 {
+		t.Fatalf("reports=%d, want only the invalid cycle", got)
+	}
+	if got := activeChildren.Load(); got != 0 {
+		t.Fatalf("active runtime children=%d after dev return", got)
+	}
+	got, readErr := os.ReadFile(plugin)
+	if readErr != nil || !bytes.Equal(got, original) {
+		t.Fatalf("plugin was not restored byte-identically: %q %v", got, readErr)
+	}
+	if entries, readErr := os.ReadDir(scratch); readErr != nil || len(entries) != 0 {
+		t.Fatalf("runtime scratch was not clean after cancellation: %v %v", entries, readErr)
+	}
+}

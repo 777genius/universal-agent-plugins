@@ -246,6 +246,7 @@ func (a App) dev(ctx context.Context, req request) (r report.Report, err error) 
 			next, readErr := a.Projects.Read(ctx, req.root)
 			if readErr != nil || next.Input.Identity.TreeDigest == "" {
 				pending = devPending{}
+				last = ""
 				if result, stopped := stopCycle(); stopped {
 					if result.err != nil && runtimeErrorCode(result.err) == "runtime_cleanup_failed" {
 						_ = emit(result.report, result.err)
