@@ -1,6 +1,7 @@
 package commands_test
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"os"
@@ -47,8 +48,15 @@ func TestPublicBootstrapExposurePlanApplyAndFailure(t *testing.T) {
 	if code != 0 || calls != 0 || e.Data.Requested.Mode != "read" || e.Data.Effects.Committed || e.Data.Bootstrap == nil || !e.Data.Bootstrap.Planned {
 		t.Fatalf("plan = %+v, calls=%d", e, calls)
 	}
+	if e.Data.Bootstrap.Runtime != "node" || e.Data.Bootstrap.Manager != "npm" || !reflect.DeepEqual(e.Data.Bootstrap.Argv, []string{"npm", "ci", "--ignore-scripts", "--no-audit", "--no-fund"}) {
+		t.Fatalf("sanitized JSON plan = %+v", e.Data.Bootstrap)
+	}
 	if !reflect.DeepEqual(before, tree(t, root)) {
 		t.Fatal("dry-run changed project")
+	}
+	human := executeRaw(a, []string{"bootstrap", root, "--dry-run", "--format=human"}, false)
+	if human.err != nil || !bytes.Contains(human.out, []byte("bootstrap: runtime node; manager npm; argv npm ci --ignore-scripts --no-audit --no-fund; planned true")) {
+		t.Fatalf("human plan = %v %s", human.err, human.out)
 	}
 	e, code, _ = publicRun(t, a, []string{"bootstrap", root, "--format=json"}, true)
 	if code != 0 || calls != 1 || e.Data.Requested.Mode != "local_mutation" || !e.Data.Effects.Committed || !reflect.DeepEqual(e.Data.Paths, []string{"node_modules"}) {

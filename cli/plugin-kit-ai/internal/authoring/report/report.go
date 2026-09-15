@@ -142,7 +142,7 @@ type Report struct {
 type BootstrapDetail struct {
 	Runtime string   `json:"runtime"`
 	Manager string   `json:"manager"`
-	Command []string `json:"command"`
+	Argv    []string `json:"argv"`
 	Planned bool     `json:"planned"`
 }
 

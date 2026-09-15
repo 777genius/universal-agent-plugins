@@ -381,12 +381,13 @@ func (a App) command(name string, capture func(report.Report), cycleOutput func(
 					return r, planErr
 				}
 				plan, planErr := (authorbootstrap.Service{Runner: a.BootstrapRunner}).Plan(req.root, p)
-				r.Bootstrap = &report.BootstrapDetail{Runtime: plan.Runtime, Manager: plan.Manager, Command: append([]string{}, plan.Command...), Planned: planErr == nil}
+				r.Bootstrap = &report.BootstrapDetail{Runtime: plan.Runtime, Manager: plan.Manager, Argv: append([]string{}, plan.Command...), Planned: planErr == nil}
 				if planErr != nil {
 					code, action := bootstrapFailure(planErr)
 					r.AddError(code, action)
 					return r, planErr
 				}
+				defer plan.Close()
 				if req.dryRun {
 					return r, nil
 				}
@@ -547,7 +548,7 @@ func writePrivateHuman(w io.Writer, r report.Report) error {
 		fmt.Fprintf(&b, "native import: client %s; source %s; safe servers %d; skipped servers %d; unsupported top-level fields %d\n", imported.Client, imported.SourceSHA256, imported.SafeServers, len(imported.SkippedServers), len(imported.UnsupportedTopLevel))
 	}
 	if bootstrap := r.Bootstrap; bootstrap != nil {
-		fmt.Fprintf(&b, "bootstrap: runtime %s; manager %s; command %s; planned %t\n", bootstrap.Runtime, bootstrap.Manager, strings.Join(bootstrap.Command, " "), bootstrap.Planned)
+		fmt.Fprintf(&b, "bootstrap: runtime %s; manager %s; argv %s; planned %t\n", bootstrap.Runtime, bootstrap.Manager, strings.Join(bootstrap.Argv, " "), bootstrap.Planned)
 	}
 	if r.Committed {
 		fmt.Fprintln(&b, "committed: true")

@@ -2103,16 +2103,18 @@ package.
 > a filesystem or network sandbox. Do not mark Phase 7 released until the candidate
 > is merged, qualified, and shipped through the executable release gate.
 
-**Current source status (2026-09-15):** The remaining bootstrap slice is now
-implemented only as `agentplugins author bootstrap [path]`. It recognizes the
+**Current source status (2026-09-15):** The remaining bootstrap slice is an
+unreleased candidate implemented only as `agentplugins author bootstrap [path]`.
+It recognizes the
 exact generated standard Node stdio template from its public `plugin.json`,
 `mcp.json`, `package.json`, and checked-in `package-lock.json`, then uses staged
 `npm ci --ignore-scripts --no-audit --no-fund` with operation-local npm homes.
 `--dry-run` reports that plan without mutation. Competing manager/runtime files,
 custom layouts, missing or changed locks, and existing dependency output fail
-closed. Python and Go remain unsupported because the current standard generator
-does not emit locked templates for them. This source status does not qualify or
-release Phase 7 and does not add a legacy CLI or YAML path.
+closed. Node is the current generated-template checkpoint. Python and Go remain
+future work only if the standard generator adds recognized locked templates for
+them. This source status does not qualify or release Phase 7 and does not add a
+legacy CLI or YAML path.
 
 ### Summary
 

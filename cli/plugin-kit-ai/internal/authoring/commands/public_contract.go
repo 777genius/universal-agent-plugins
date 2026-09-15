@@ -443,6 +443,9 @@ func writePublicHuman(w io.Writer, p report.Public, result string) error {
 	if n := p.NativeImport; n != nil {
 		fmt.Fprintf(&b, "native %s import: source %s; safe servers %d; skipped %d; unsupported top-level fields %d\n", n.Client, n.SourceSHA256, n.SafeServers, len(n.SkippedServers), len(n.UnsupportedTopLevel))
 	}
+	if bootstrap := p.Bootstrap; bootstrap != nil {
+		fmt.Fprintf(&b, "bootstrap: runtime %s; manager %s; argv %s; planned %t\n", bootstrap.Runtime, bootstrap.Manager, strings.Join(bootstrap.Argv, " "), bootstrap.Planned)
+	}
 	fmt.Fprintf(&b, "%s: %s; readiness %s; conformance %s; runtime %s\n", p.Command, result, p.Readiness.Status, p.Conformance.Status, p.Runtime.Status)
 	if runtime := p.RuntimeDetail; runtime != nil {
 		fmt.Fprintf(&b, "mcp runtime: transport %s; initialize %s; list tools %s; tool call %s; tools %d; cleanup %s\n", runtime.Transport, runtime.Initialize, runtime.ListTools, runtime.ToolCall, runtime.ToolCount, runtime.Cleanup)
