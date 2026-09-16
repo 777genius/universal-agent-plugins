@@ -10,6 +10,6 @@ translationRequired: true
 
 # Hand a package to the installer planner
 
-[Traduction indisponible ; consultez la page actuelle en anglais](/en/build/handoff). La création Agent Plugins est disponible via Agent Plugins dans `universal-agent-plugins@0.1.65`.
+[Traduction indisponible ; consultez la page actuelle en anglais](/en/build/handoff). La création Agent Plugins est disponible via Agent Plugins dans `universal-agent-plugins`.
 
 [Utiliser des plugins](/fr/use/) · [Créer des plugins](/fr/build/)

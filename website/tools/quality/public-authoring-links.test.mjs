@@ -48,7 +48,8 @@ test('current Build journey uses Agent Plugins as its single documented command 
   }
 
   const index = read('website/source/en/build/index.md');
-  assert.match(index, /npm install -g universal-agent-plugins@0\.1\.65/);
+  assert.match(index, /npm install -g universal-agent-plugins/);
+  assert.doesNotMatch(index, /npm install -g universal-agent-plugins@\d+\.\d+\.\d+/);
   assert.doesNotMatch(index, /plugin-kit-ai|plugin\.yaml|PyPI|pipx|YAML migration/i);
 });
 

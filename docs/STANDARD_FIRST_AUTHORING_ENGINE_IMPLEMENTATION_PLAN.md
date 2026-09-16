@@ -1,8 +1,8 @@
 # Standard-First Authoring Engine Implementation Plan
 
 > **Current availability (2026-09-15):** Milestone A static authoring is publicly
-> available through `agentplugins author` in `universal-agent-plugins@0.1.65`.
-> Native GitHub releases use `agentplugins-v0.1.65`; npm, Homebrew, native
+> available through `agentplugins author` in `universal-agent-plugins`.
+> Native GitHub releases use `agentplugins-v*`; npm, Homebrew, native
 > archives and public-channel E2E are verified. See the
 > [current Build guide](../website/source/en/build/index.md).
 > Phase 7 and the Phase 8A JSON-maintenance vertical slice are implemented in

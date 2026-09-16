@@ -339,9 +339,9 @@
     "specLink": "Agent Plugins 1.0 规范",
     "compatibilityLink": "客户端兼容性（英文）",
     "limitations": "兼容性取决于包。通过模式验证并不证明运行、OAuth 或激活成功。Codex 不支持声明的 MCP SSE；stdio 和 Streamable HTTP 保留现有适配器支持。",
-    "versions": "Agent Plugins 创作已发布: universal-agent-plugins{'@'}0.1.65; GitHub: agentplugins-v0.1.65.",
+    "versions": "Agent Plugins 创作已发布: universal-agent-plugins; GitHub: agentplugins-v*.",
     "availability": "Agent Plugins 创作已发布",
-    "releaseScope": "Agent Plugins 创作已在 universal-agent-plugins{'@'}0.1.65 中发布；GitHub：agentplugins-v0.1.65。npm、Homebrew、原生归档、GitHub Releases 和公共 E2E 已验证。此版本提供静态创作；不包含运行插件、开发服务器、依赖项安装、导出或发布。",
+    "releaseScope": "Agent Plugins 创作已在 universal-agent-plugins 中发布；GitHub：agentplugins-v*。npm、Homebrew、原生归档、GitHub Releases 和公共 E2E 已验证。此版本提供静态创作；不包含运行插件、开发服务器、依赖项安装、导出或发布。",
     "buildGuideLink": "打开构建指南"
   },
   "shell": {

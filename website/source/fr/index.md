@@ -16,7 +16,7 @@ Installez des Agent Plugins 1.0 disponibles ou créez des paquets portables bas�
 - [Créer des plugins](/fr/build/)
 - [Démarrage rapide](/fr/guide/quickstart)
 
-La création Agent Plugins est disponible via `agentplugins author` dans `universal-agent-plugins@0.1.65`.
+La création Agent Plugins est disponible via `agentplugins author` dans `universal-agent-plugins`.
 
 [Agent Plugins 1.0 specification](https://agent-plugins.org/specification)
 

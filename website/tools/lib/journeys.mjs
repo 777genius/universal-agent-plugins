@@ -95,8 +95,8 @@ export const journeyPageLabels = {
 };
 
 const releaseLabels = {
-  en: "available in 0.1.65", ru: "доступно в 0.1.65", es: "disponible en 0.1.65",
-  fr: "disponible dans 0.1.65", zh: "0.1.65 已发布"
+  en: "available now", ru: "доступно сейчас", es: "disponible ahora",
+  fr: "disponible maintenant", zh: "现已发布"
 };
 
 export function journeySidebar(locale, entities) {

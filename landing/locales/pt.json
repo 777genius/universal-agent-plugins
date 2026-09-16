@@ -202,9 +202,9 @@
     "specLink": "Ler a especificação Agent Plugins 1.0",
     "compatibilityLink": "Compatibilidade de clientes (em inglês)",
     "limitations": "A compatibilidade é específica de cada pacote. A validação de esquema não comprova execução, OAuth nem ativação. O Codex não oferece suporte a MCP SSE declarado; stdio e Streamable HTTP mantêm o suporte existente por adaptador.",
-    "versions": "Autoria do Agent Plugins disponível: universal-agent-plugins{'@'}0.1.65; GitHub: agentplugins-v0.1.65.",
+    "versions": "Autoria do Agent Plugins disponível: universal-agent-plugins; GitHub: agentplugins-v*.",
     "availability": "Autoria do Agent Plugins disponível",
-    "releaseScope": "A autoria do Agent Plugins está disponível em universal-agent-plugins{'@'}0.1.65; GitHub: agentplugins-v0.1.65. npm, Homebrew, arquivos nativos, GitHub Releases e E2E público estão verificados. A versão inclui autoria estática; não inclui execução, servidores de desenvolvimento, instalação de dependências, exportação ou publicação.",
+    "releaseScope": "A autoria do Agent Plugins está disponível em universal-agent-plugins; GitHub: agentplugins-v*. npm, Homebrew, arquivos nativos, GitHub Releases e E2E público estão verificados. A versão inclui autoria estática; não inclui execução, servidores de desenvolvimento, instalação de dependências, exportação ou publicação.",
     "buildGuideLink": "Abrir o guia de criação"
   },
   "shell": {

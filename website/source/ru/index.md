@@ -16,7 +16,7 @@ translationRequired: true
 - [Создавать плагины](/ru/build/)
 - [Быстрый старт](/ru/guide/quickstart)
 
-Авторинг Agent Plugins доступен через `agentplugins author` в `universal-agent-plugins@0.1.65`.
+Авторинг Agent Plugins доступен через `agentplugins author` в `universal-agent-plugins`.
 
 [Agent Plugins 1.0 specification](https://agent-plugins.org/specification)
 

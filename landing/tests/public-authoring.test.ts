@@ -30,8 +30,9 @@ test('all public authoring messages compile and expose only Agent Plugins releas
     for (const key of Object.keys(source)) {
       assert.equal(rendered[key], source[key].replaceAll("{'@'}", '@'), `${locale}:${key}`);
     }
-    assert.ok(rendered.releaseScope.includes('universal-agent-plugins@0.1.65'), locale);
-    assert.ok(rendered.releaseScope.includes('agentplugins-v0.1.65'), locale);
+    assert.ok(rendered.releaseScope.includes('universal-agent-plugins'), locale);
+    assert.ok(rendered.releaseScope.includes('agentplugins-v*'), locale);
+    assert.doesNotMatch(rendered.releaseScope, /universal-agent-plugins@\d+\.\d+\.\d+/, locale);
     assert.doesNotMatch(rendered.releaseScope, /plugin-kit-ai|PyPI|pipx/i, locale);
     assert.equal(errors.mock.callCount(), 0, `${locale}: message compilation errors`);
   }
@@ -54,7 +55,7 @@ test('the authoring front door renders Use/Build and preserves its indexing poli
       assert.equal(typeof copy[key], 'string', `${locale}:${key}`);
     assert.ok(copy.standard.includes('plugin.json'));
     assert.doesNotMatch(copy.releaseScope, /plugin-kit-ai|PyPI|pipx|1\.2\.4/i);
-    assert.ok(copy.versions.includes('agentplugins-v0.1.65'));
+    assert.ok(copy.versions.includes('agentplugins-v*'));
     assert.equal(Object.hasOwn(copy, 'history'), false);
     assert.equal(Object.hasOwn(copy, 'historyTitle'), false);
     assert.doesNotMatch(copy.versions, /plugin-kit-ai|PyPI|pipx/i);
@@ -101,14 +102,14 @@ test('all current quickstarts expose Agent Plugins without a legacy product jour
     for (const key of ['standard', 'limitations']) {
       assert.ok(text.includes(copy[key]), `${locale}:${key}`);
     }
-    for (const releaseFact of ['universal-agent-plugins@0.1.65', 'agentplugins-v0.1.65']) {
+    for (const releaseFact of ['universal-agent-plugins', 'agentplugins-v*']) {
       assert.ok(publishedText.includes(releaseFact), `${locale}:${releaseFact}`);
     }
     assert.doesNotMatch(publishedText, /plugin-kit-ai|PyPI|pipx|historical-v1/i);
     assert.doesNotMatch(publishedText, /(?:0\.1\.61|2\.0\.1|not released|release candidate)/i);
     const expectedCommands = ['npx universal-agent-plugins add context7'];
     if (locale === 'en') {
-      expectedCommands.push(`npm install --global universal-agent-plugins@0.1.65
+      expectedCommands.push(`npm install --global universal-agent-plugins
 agentplugins author init ./my-plugin --template skill --name my-plugin \\
   --description 'Instructions for a repeatable agent task'
 agentplugins author validate ./my-plugin
@@ -141,8 +142,9 @@ test('README retains the available installer and canonical client limitations', 
       '[Read the documentation](https://777genius.github.io/universal-agent-plugins/docs/en/)',
     ),
   );
-  assert.ok(text.includes('Verified GitHub release tag'));
-  assert.ok(text.includes('Install an exact npm version'));
+  assert.ok(text.includes('Native Agent Plugins releases'));
+  assert.ok(text.includes('Install the latest npm release'));
+  assert.doesNotMatch(text, /npm install (?:--global|-g) universal-agent-plugins@\d+\.\d+\.\d+/);
   assert.doesNotMatch(
     text,
     /Milestone A|Historical authoring and development|plugin-kit-ai|PyPI|pipx/i,

@@ -7,7 +7,7 @@ import { isRetiredArchive } from "../lib/public-routes.mjs";
 
 export const quickstartClaims = [
   "Use plugins", "Build plugins", "Agent Plugins authoring is available",
-  "public-channel E2E are verified", "0.1.65", "plugin.json", "agentplugins author"
+  "public-channel E2E are verified", "universal-agent-plugins", "plugin.json", "agentplugins author"
 ];
 
 function stripDelimitedBlocks(body, startMarker, endMarker) {
@@ -57,6 +57,9 @@ export function quickstartErrors(html) {
     .map((match) => match[1].replace(/<\/?span\b[^>]*>/g, ""));
   const install = "npx universal-agent-plugins add context7";
   if (!commands.some((text) => text.includes(install))) errors.push(`Quickstart page is missing its public availability claim: ${install}`);
+  if (commands.some((text) => /npm install (?:--global|-g) universal-agent-plugins@\d+\.\d+\.\d+/.test(text))) {
+    errors.push("Quickstart page pins an npm version instead of installing the latest release");
+  }
   for (const retired of ["Milestone A", "plugin-kit-ai", "plugin.yaml", "/legacy/v1/", "Historical v1 maintenance", "PyPI", "pipx"]) {
     if (visible.includes(retired) || commands.some((text) => text.includes(retired))) errors.push(`Quickstart page still exposes retired authoring copy: ${retired}`);
   }

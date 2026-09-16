@@ -28,7 +28,7 @@ For native installation on macOS, Linux or Windows, follow the installer guide. 
 
 [Installer guide](https://github.com/777genius/universal-agent-plugins#quick-start)
 
-Agent Plugins authoring is available in `universal-agent-plugins@0.1.65`; GitHub release: `agentplugins-v0.1.65`.
+Agent Plugins authoring is available in `universal-agent-plugins`; GitHub release: `agentplugins-v*`.
 
 Compatibility is package-specific. Schema validation does not prove runtime, OAuth or activation. Codex does not support declared MCP SSE; stdio and Streamable HTTP keep their existing adapter support.
 
@@ -45,10 +45,10 @@ Build a portable Agent Plugins 1.0 package around plugin.json, with optional ski
 
 **Agent Plugins authoring is available**
 
-Static authoring is available through `agentplugins author` in `universal-agent-plugins@0.1.65`; GitHub release: `agentplugins-v0.1.65`. npm, Homebrew, native archives and public-channel E2E are verified. The release does not run package code, start development servers, bootstrap dependencies, export bundles, or publish packages.
+Static authoring is available through `agentplugins author` in `universal-agent-plugins`; GitHub release: `agentplugins-v*`. npm, Homebrew, native archives and public-channel E2E are verified. The release does not run package code, start development servers, bootstrap dependencies, export bundles, or publish packages.
 
 ```bash
-npm install --global universal-agent-plugins@0.1.65
+npm install --global universal-agent-plugins
 agentplugins author init ./my-plugin --template skill --name my-plugin \
   --description 'Instructions for a repeatable agent task'
 agentplugins author validate ./my-plugin
