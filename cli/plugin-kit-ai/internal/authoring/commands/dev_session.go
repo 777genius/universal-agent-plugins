@@ -218,11 +218,29 @@ func (a App) dev(ctx context.Context, req request) (r report.Report, err error) 
 	defer ticker.Stop()
 	var pending devPending
 	var failedPending devFailurePending
+	finishCanceled := func(result cycleResult, stopped bool) (report.Report, error) {
+		if stopped && result.err != nil && runtimeErrorCode(result.err) == "runtime_cleanup_failed" {
+			_ = emit(result.report, result.err)
+			return result.report, errors.Join(ctx.Err(), result.err)
+		}
+		if r.Command == "" {
+			r = report.New("dev", a.Revision)
+		}
+		code, action := failure(ctx.Err(), "read")
+		r.AddError(code, action)
+		return r, ctx.Err()
+	}
 	for {
 		select {
 		case result := <-done:
 			done = nil
 			cycle = nil
+			// Parent cancel also cancels the active cycle. The resulting done
+			// delivery must not emit a stale cycle report; ctx.Done() already
+			// returns without one unless cleanup failed.
+			if ctx.Err() != nil {
+				return finishCanceled(result, true)
+			}
 			if outputErr := emit(result.report, result.err); outputErr != nil {
 				return r, outputErr
 			}
@@ -230,18 +248,8 @@ func (a App) dev(ctx context.Context, req request) (r report.Report, err error) 
 				return r, result.err
 			}
 		case <-ctx.Done():
-			if result, stopped := stopCycle(); stopped {
-				if result.err != nil && runtimeErrorCode(result.err) == "runtime_cleanup_failed" {
-					_ = emit(result.report, result.err)
-					return result.report, errors.Join(ctx.Err(), result.err)
-				}
-			}
-			if r.Command == "" {
-				r = report.New("dev", a.Revision)
-			}
-			code, action := failure(ctx.Err(), "read")
-			r.AddError(code, action)
-			return r, ctx.Err()
+			result, stopped := stopCycle()
+			return finishCanceled(result, stopped)
 		case now := <-ticker.C:
 			next, readErr := a.Projects.Read(ctx, req.root)
 			if readErr != nil || next.Input.Identity.TreeDigest == "" {

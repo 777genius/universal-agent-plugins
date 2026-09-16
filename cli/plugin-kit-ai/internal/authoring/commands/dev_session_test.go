@@ -406,3 +406,44 @@ func TestContinuousDevRestartsAfterIdenticalContentRecovery(t *testing.T) {
 		t.Fatalf("runtime scratch was not clean after cancellation: %v %v", entries, readErr)
 	}
 }
+
+func TestContinuousDevParentCancelDoesNotEmitStoppedCycle(t *testing.T) {
+	for i := 0; i < 25; i++ {
+		cache := t.TempDir()
+		for _, name := range []string{"HOME", "LOCALAPPDATA", "XDG_CACHE_HOME"} {
+			t.Setenv(name, cache)
+		}
+		root := t.TempDir()
+		plugin := filepath.Join(root, "plugin.json")
+		if err := os.WriteFile(plugin, []byte(`{"$schema":"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json","name":"dev-cancel-fixture"}`), 0600); err != nil {
+			t.Fatal(err)
+		}
+		mcp := `{"$schema":"https://agent-plugins.org/schemas/1.0.0/mcp.schema.json","mcpServers":{"selected":{"type":"streamable-http","url":"https://example.test/mcp"}}}`
+		if err := os.WriteFile(filepath.Join(root, "mcp.json"), []byte(mcp), 0600); err != nil {
+			t.Fatal(err)
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		var reports atomic.Int32
+		app := App{Projects: project.Service{Scratch: t.TempDir()}, Revision: "dev-cancel-test"}
+		_, err := app.dev(ctx, request{
+			root: root, server: "selected", allowNetwork: true, deadline: 5 * time.Second,
+			cycleOutput: func(report.Report, error) error {
+				reports.Add(1)
+				return errors.New("late stale runtime report")
+			},
+			runMCP: func(ctx context.Context, _ mcpruntime.Options) (mcpruntime.Evidence, error) {
+				cancel()
+				<-ctx.Done()
+				return mcpruntime.Evidence{Transport: "streamable_http"}, ctx.Err()
+			},
+		})
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("iteration %d: continuous dev result=%v", i, err)
+		}
+		if got := reports.Load(); got != 0 {
+			t.Fatalf("iteration %d: reports=%d, want none after parent cancel", i, got)
+		}
+	}
+}
