@@ -10,6 +10,6 @@ translationRequired: true
 
 # Build a hybrid package
 
-[Перевод недоступен; читайте актуальную английскую страницу](/en/build/hybrid). Авторинг Agent Plugins доступен через Agent Plugins в `universal-agent-plugins@0.1.65`.
+[Перевод недоступен; читайте актуальную английскую страницу](/en/build/hybrid). Авторинг Agent Plugins доступен через Agent Plugins в `universal-agent-plugins`.
 
 [Использовать плагины](/ru/use/) · [Создавать плагины](/ru/build/)

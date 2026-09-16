@@ -339,9 +339,9 @@
     "specLink": "एजेंट प्लगइन्स 1.0 विनिर्देश पढ़ें",
     "compatibilityLink": "ग्राहक अनुकूलता (अंग्रेजी)",
     "limitations": "अनुकूलता पैकेज-विशिष्ट है. स्कीमा सत्यापन रनटाइम, OAuth या सक्रियण को सिद्ध नहीं करता है। कोडेक्स घोषित एमसीपी एसएसई का समर्थन नहीं करता है; stdio और स्ट्रीमेबल HTTP अपने मौजूदा एडाप्टर समर्थन को बनाए रखते हैं।",
-    "versions": "Agent Plugins ऑथरिंग उपलब्ध है: universal-agent-plugins{'@'}0.1.65; GitHub: agentplugins-v0.1.65.",
+    "versions": "Agent Plugins ऑथरिंग उपलब्ध है: universal-agent-plugins; GitHub: agentplugins-v*.",
     "availability": "Agent Plugins ऑथरिंग उपलब्ध है",
-    "releaseScope": "Agent Plugins ऑथरिंग universal-agent-plugins{'@'}0.1.65 में उपलब्ध है; GitHub: agentplugins-v0.1.65। npm, Homebrew, नेटिव आर्काइव, GitHub Releases और सार्वजनिक E2E सत्यापित हैं। रिलीज़ में स्थिर ऑथरिंग है; रनटाइम निष्पादन, डेवलपमेंट सर्वर, निर्भरता स्थापना, निर्यात और प्रकाशन शामिल नहीं हैं।",
+    "releaseScope": "Agent Plugins ऑथरिंग universal-agent-plugins में उपलब्ध है; GitHub: agentplugins-v*। npm, Homebrew, नेटिव आर्काइव, GitHub Releases और सार्वजनिक E2E सत्यापित हैं। रिलीज़ में स्थिर ऑथरिंग है; रनटाइम निष्पादन, डेवलपमेंट सर्वर, निर्भरता स्थापना, निर्यात और प्रकाशन शामिल नहीं हैं।",
     "buildGuideLink": "बिल्ड गाइड खोलें"
   },
   "shell": {

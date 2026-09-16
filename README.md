@@ -263,13 +263,13 @@ optional `skills/` and `mcp.json`. The same package can then be checked and
 installed across supported agents. `agentplugins author` is the public
 authoring entrypoint.
 
-Install an exact npm version (Node.js 22+):
+Install the latest npm release (Node.js 22+):
 
 ```bash
-npm install -g universal-agent-plugins@0.1.65
+npm install -g universal-agent-plugins
 ```
 
-Verified GitHub release tag: [agentplugins-v0.1.65](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.65).
+[Native Agent Plugins releases](https://github.com/777genius/universal-agent-plugins/releases) use the `agentplugins-v*` tag prefix.
 See the [Use / Build quickstart](https://777genius.github.io/universal-agent-plugins/docs/en/guide/quickstart.html).
 
 Create and check a Skill package:
@@ -286,8 +286,8 @@ stdio MCP, hybrid packages, extra Skills, compatibility checks, and the handoff
 to installation.
 
 Newer source builds also include JSON maintenance and a continuous MCP
-development loop. These commands are not part of the released
-`agentplugins-v0.1.65` binary yet. Plan mode is read-only, and `--write` is
+development loop. These commands are not part of the current released binary
+yet. Plan mode is read-only, and `--write` is
 required for JSON maintenance changes:
 
 ```bash

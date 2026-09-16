@@ -26,7 +26,7 @@ Para la instalación nativa en macOS, Linux o Windows, consulta la guía. El CLI
 
 [Guía de instalación](https://github.com/777genius/universal-agent-plugins#quick-start)
 
-La creación de Agent Plugins está disponible en `universal-agent-plugins@0.1.65`; versión de GitHub: `agentplugins-v0.1.65`.
+La creación de Agent Plugins está disponible en `universal-agent-plugins`; versión de GitHub: `agentplugins-v*`.
 
 La compatibilidad depende del paquete. Validar el esquema no demuestra ejecución, OAuth ni activación. Codex no admite MCP SSE declarado; stdio y Streamable HTTP conservan el soporte de sus adaptadores actuales.
 
@@ -38,7 +38,7 @@ Crea un paquete portable Agent Plugins 1.0 basado en plugin.json, con skills/ y 
 
 **La creación de Agent Plugins está disponible**
 
-La creación estática está disponible mediante `agentplugins author` en `universal-agent-plugins@0.1.65`; versión de GitHub: `agentplugins-v0.1.65`. npm, Homebrew, archivos nativos y E2E público están verificados. Esta versión no ejecuta el código del paquete ni servidores de desarrollo, no instala dependencias, no exporta paquetes y no los publica.
+La creación estática está disponible mediante `agentplugins author` en `universal-agent-plugins`; versión de GitHub: `agentplugins-v*`. npm, Homebrew, archivos nativos y E2E público están verificados. Esta versión no ejecuta el código del paquete ni servidores de desarrollo, no instala dependencias, no exporta paquetes y no los publica.
 
 [Especificación Agent Plugins 1.0](https://agent-plugins.org/specification)
 

@@ -35,7 +35,7 @@ translationRequired: true
 Install the released CLI, then use the `agentplugins author` command group:
 
 ```bash
-npm install --global universal-agent-plugins@0.1.65
+npm install --global universal-agent-plugins
 agentplugins author init ./my-plugin --template skill --name my-plugin \
   --description 'Instructions for a repeatable agent task'
 agentplugins author validate ./my-plugin

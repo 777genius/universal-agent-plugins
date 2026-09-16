@@ -66,7 +66,7 @@ onMounted(() => {
           class="app-header__docs-btn"
           :prepend-icon="mdiBookOpenPageVariant"
         >
-          {{ t('hero.docsCta') }}
+          Docs
         </v-btn>
         <v-btn
           variant="outlined"
@@ -78,7 +78,7 @@ onMounted(() => {
           class="app-header__github-btn"
           :prepend-icon="mdiGithub"
         >
-          <span class="app-header__github-label">{{ t('nav.viewOnGithub') }}</span>
+          GitHub
         </v-btn>
         <template v-if="interactiveReady">
           <LanguageSwitcher v-if="publishedLocales.length > 1" compact />
@@ -237,16 +237,6 @@ onMounted(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-@media (min-width: 960px) and (max-width: 1599px) {
-  .app-header__github-label {
-    display: none;
-  }
-
-  .app-header__github-btn :deep(.v-btn__prepend) {
-    margin-inline: 0;
-  }
 }
 
 .app-header__github-btn:hover {

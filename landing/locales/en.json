@@ -282,7 +282,7 @@
     "build": {
       "badge": "Available now",
       "title": "Build plugins",
-      "description": "Build a portable Agent Plugins 1.0 package: root plugin.json with optional skills/ and mcp.json, then use the offline init → validate → inspect → static test loop. Static authoring is available in universal-agent-plugins 0.1.65; runtime execution, export and publication are not included.",
+      "description": "Build a portable Agent Plugins 1.0 package: root plugin.json with optional skills/ and mcp.json, then use the offline init → validate → inspect → static test loop. Static authoring is available in universal-agent-plugins; runtime execution, export and publication are not included.",
       "cta": "Open the Build guide"
     }
   },
@@ -356,9 +356,9 @@
     "specLink": "Read the Agent Plugins 1.0 specification",
     "compatibilityLink": "Client compatibility (English)",
     "limitations": "Compatibility is package-specific. Schema validation does not prove runtime, OAuth or activation. Codex does not support declared MCP SSE; stdio and Streamable HTTP keep their existing adapter support.",
-    "versions": "Agent Plugins authoring available: universal-agent-plugins{'@'}0.1.65; GitHub: agentplugins-v0.1.65.",
+    "versions": "Agent Plugins authoring available: universal-agent-plugins; GitHub: agentplugins-v*.",
     "availability": "Agent Plugins authoring available",
-    "releaseScope": "Agent Plugins authoring is available in universal-agent-plugins{'@'}0.1.65; GitHub: agentplugins-v0.1.65. npm, Homebrew, native archives, GitHub Releases and public-channel E2E are verified. The release provides static authoring; runtime execution, development servers, dependency bootstrap, export and publication are not included.",
+    "releaseScope": "Agent Plugins authoring is available in universal-agent-plugins; GitHub: agentplugins-v*. npm, Homebrew, native archives, GitHub Releases and public-channel E2E are verified. The release provides static authoring; runtime execution, development servers, dependency bootstrap, export and publication are not included.",
     "buildGuideLink": "Open the Build guide"
   },
   "shell": {

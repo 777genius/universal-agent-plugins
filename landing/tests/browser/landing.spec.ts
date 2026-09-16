@@ -84,11 +84,15 @@ test('header exposes the documentation entrypoint on desktop and mobile', async 
   await page.goto('./');
   const desktopDocs = page.locator('.app-header__docs-btn');
   await expect(desktopDocs).toBeVisible();
+  await expect(desktopDocs).toHaveText('Docs');
   await expect(desktopDocs).toHaveAccessibleName('View docs');
   await expect(desktopDocs).toHaveAttribute(
     'href',
     'https://777genius.github.io/universal-agent-plugins/docs/en/',
   );
+  const desktopGitHub = page.locator('.app-header__github-btn');
+  await expect(desktopGitHub).toBeVisible();
+  await expect(desktopGitHub).toHaveText('GitHub');
 
   await page.setViewportSize({ width: 390, height: 844 });
   await page.getByRole('button', { name: 'Open navigation menu' }).click();

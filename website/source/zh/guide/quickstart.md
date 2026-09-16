@@ -26,7 +26,7 @@ npx universal-agent-plugins add context7
 
 [安装指南](https://github.com/777genius/universal-agent-plugins#quick-start)
 
-Agent Plugins 创作已在 `universal-agent-plugins@0.1.65` 中发布；GitHub 版本：`agentplugins-v0.1.65`。
+Agent Plugins 创作已在 `universal-agent-plugins` 中发布；GitHub 版本：`agentplugins-v*`。
 
 兼容性取决于包。通过模式验证并不证明运行、OAuth 或激活成功。Codex 不支持声明的 MCP SSE；stdio 和 Streamable HTTP 保留现有适配器支持。
 
@@ -38,7 +38,7 @@ Agent Plugins 创作已在 `universal-agent-plugins@0.1.65` 中发布；GitHub �
 
 **Agent Plugins 创作已发布**
 
-静态创作已通过 `universal-agent-plugins@0.1.65` 中的 `agentplugins author` 发布；GitHub 版本：`agentplugins-v0.1.65`。npm、Homebrew、原生归档和公共 E2E 已验证。此版本不运行插件代码或开发服务器，不安装依赖项，不导出插件包，也不发布插件包。
+静态创作已通过 `universal-agent-plugins` 中的 `agentplugins author` 发布；GitHub 版本：`agentplugins-v*`。npm、Homebrew、原生归档和公共 E2E 已验证。此版本不运行插件代码或开发服务器，不安装依赖项，不导出插件包，也不发布插件包。
 
 [Agent Plugins 1.0 规范](https://agent-plugins.org/specification)
 

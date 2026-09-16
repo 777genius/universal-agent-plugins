@@ -339,9 +339,9 @@
     "specLink": "Прочитати специфікацію Agent Plugins 1.0",
     "compatibilityLink": "Сумісність клієнтів (англійською)",
     "limitations": "Сумісність залежить від пакета. Перевірка схеми не доводить фактичну роботу під час виконання, роботу OAuth або активацію. Codex не підтримує оголошений MCP SSE; stdio та Streamable HTTP зберігають наявну підтримку адаптерів.",
-    "versions": "Авторинг Agent Plugins доступний: universal-agent-plugins{'@'}0.1.65; GitHub: agentplugins-v0.1.65.",
+    "versions": "Авторинг Agent Plugins доступний: universal-agent-plugins; GitHub: agentplugins-v*.",
     "availability": "Авторинг Agent Plugins доступний",
-    "releaseScope": "Авторинг Agent Plugins доступний в universal-agent-plugins{'@'}0.1.65; GitHub: agentplugins-v0.1.65. npm, Homebrew, нативні архіви, GitHub Releases та E2E публічних каналів перевірено. Випуск підтримує статичний авторинг; виконання, сервери розробки, встановлення залежностей, експорт і публікацію не включено.",
+    "releaseScope": "Авторинг Agent Plugins доступний в universal-agent-plugins; GitHub: agentplugins-v*. npm, Homebrew, нативні архіви, GitHub Releases та E2E публічних каналів перевірено. Випуск підтримує статичний авторинг; виконання, сервери розробки, встановлення залежностей, експорт і публікацію не включено.",
     "buildGuideLink": "Відкрити посібник зі створення"
   },
   "shell": {

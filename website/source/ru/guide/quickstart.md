@@ -30,7 +30,7 @@ npx universal-agent-plugins add context7
 
 [Проверенные версии клиентов и ограничения платформ](/ru/reference/client-compatibility)
 
-Авторинг Agent Plugins доступен в `universal-agent-plugins@0.1.65`; GitHub-релиз: `agentplugins-v0.1.65`.
+Авторинг Agent Plugins доступен в `universal-agent-plugins`; GitHub-релиз: `agentplugins-v*`.
 
 Совместимость зависит от пакета. Проверка схемы не доказывает работу, OAuth или активацию. Codex не поддерживает заявленный MCP SSE; поддержка stdio и Streamable HTTP сохраняется в существующих адаптерах.
 
@@ -44,7 +44,7 @@ npx universal-agent-plugins add context7
 
 **Авторинг Agent Plugins доступен**
 
-Статический авторинг доступен через `agentplugins author` в `universal-agent-plugins@0.1.65`; GitHub-релиз: `agentplugins-v0.1.65`. npm, Homebrew, нативные архивы и E2E публичных каналов проверены. Этот выпуск не запускает код пакета или серверы разработки, не устанавливает зависимости, не экспортирует пакеты и не публикует их.
+Статический авторинг доступен через `agentplugins author` в `universal-agent-plugins`; GitHub-релиз: `agentplugins-v*`. npm, Homebrew, нативные архивы и E2E публичных каналов проверены. Этот выпуск не запускает код пакета или серверы разработки, не устанавливает зависимости, не экспортирует пакеты и не публикует их.
 
 [Спецификация Agent Plugins 1.0](https://agent-plugins.org/specification)
 

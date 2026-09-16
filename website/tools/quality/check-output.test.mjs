@@ -13,7 +13,9 @@ test("plain and highlighted installer commands satisfy the quickstart contract",
 
 test("missing claims and split or incomplete commands fail", () => {
   for (const code of ["", highlight("npx universal-agent-plugins add"), highlight("npx universal-agent-plugins") + highlight(" add context7")]) assert.ok(quickstartErrors(page(code)).length > 0);
-  for (const claim of quickstartClaims) assert.ok(quickstartErrors(page(highlight(command), quickstartClaims.filter((item) => item !== claim))).length > 0, claim);
+  for (const claim of quickstartClaims.filter((item) => !command.includes(item))) {
+    assert.ok(quickstartErrors(page(highlight(command), quickstartClaims.filter((item) => item !== claim))).length > 0, claim);
+  }
 });
 
 test("retired authoring copy is rejected even inside highlighted code", () => {

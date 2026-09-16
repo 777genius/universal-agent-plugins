@@ -202,9 +202,9 @@
     "specLink": "اقرأ مواصفة Agent Plugins 1.0",
     "compatibilityLink": "توافق العملاء (بالإنجليزية)",
     "limitations": "التوافق خاص بكل حزمة. التحقق من المخطط لا يثبت وقت التشغيل أو OAuth أو التفعيل. لا يدعم Codex بروتوكول MCP SSE المعلن؛ ويحتفظ stdio وStreamable HTTP بدعم المحولات الحالي.",
-    "versions": "تأليف Agent Plugins متاح: universal-agent-plugins{'@'}0.1.65; GitHub: agentplugins-v0.1.65.",
+    "versions": "تأليف Agent Plugins متاح: universal-agent-plugins; GitHub: agentplugins-v*.",
     "availability": "تأليف Agent Plugins متاح",
-    "releaseScope": "تأليف Agent Plugins متاح في universal-agent-plugins{'@'}0.1.65؛ GitHub: agentplugins-v0.1.65. تم التحقق من npm وHomebrew والأرشيفات الأصلية وGitHub Releases واختبارات E2E العامة. يتضمن الإصدار التأليف الثابت؛ ولا يتضمن التنفيذ أو خوادم التطوير أو تثبيت التبعيات أو التصدير أو النشر.",
+    "releaseScope": "تأليف Agent Plugins متاح في universal-agent-plugins؛ GitHub: agentplugins-v*. تم التحقق من npm وHomebrew والأرشيفات الأصلية وGitHub Releases واختبارات E2E العامة. يتضمن الإصدار التأليف الثابت؛ ولا يتضمن التنفيذ أو خوادم التطوير أو تثبيت التبعيات أو التصدير أو النشر.",
     "buildGuideLink": "افتح دليل الإنشاء"
   },
   "shell": {

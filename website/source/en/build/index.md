@@ -18,7 +18,7 @@ translationRequired: true
 Install the primary CLI with npm or Homebrew:
 
 ```bash
-npm install -g universal-agent-plugins@0.1.65
+npm install -g universal-agent-plugins
 # or: brew install 777genius/agentplugins/agentplugins
 ```
 

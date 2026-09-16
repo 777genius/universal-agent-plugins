@@ -16,7 +16,7 @@ translationRequired: true
 - [构建插件](/zh/build/)
 - [快速入门](/zh/guide/quickstart)
 
-Agent Plugins 创作已通过 `universal-agent-plugins@0.1.65` 中的 `agentplugins author` 发布。
+Agent Plugins 创作已通过 `universal-agent-plugins` 中的 `agentplugins author` 发布。
 
 [Agent Plugins 1.0 specification](https://agent-plugins.org/specification)
 
