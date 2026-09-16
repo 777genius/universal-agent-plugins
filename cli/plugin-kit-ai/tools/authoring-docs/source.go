@@ -118,7 +118,7 @@ var factoryPins = []sourcePin{
 	{"cli/plugin-kit-ai/internal/agentpluginscli/update_multi.go", "0ff5bedf401e3736178ea7274e4e7b3eac113867288f0f86bb354ae724991f23"},
 	{"cli/plugin-kit-ai/internal/agentpluginscli/validate.go", "8c643a08c657431d623197364f5f47d7f23ed0b4e6cf926f40a521a8bac7ee9d"},
 	{"cli/plugin-kit-ai/internal/authoring/commands/commands.go", "a4cb98daebd5b2a1048b8af6b2c4d452a3a42c7125fa27b523795a6f16fb7c1d"},
-	{"cli/plugin-kit-ai/internal/authoring/commands/dev_session.go", "b548b05cb659eef10dee2e6a783ec576a589c098de4d55075acec09138c4373a"},
+	{"cli/plugin-kit-ai/internal/authoring/commands/dev_session.go", "fbfe779c0f376620902a8cfd3c7f37f3e9f4406e4e053d84d24dde02630eae6d"},
 	{"cli/plugin-kit-ai/internal/authoring/commands/maintenance.go", "7fb03c69b48cb0fb5fdacff08930d4b034895be7a65f336e7f7374e607ed0f5a"},
 	{"cli/plugin-kit-ai/internal/authoring/commands/public_contract.go", "332d209e5453b51e086cebe96baca7ac4542e1f7e5ad2718c18afda3eeb9c55e"},
 	{"cli/plugin-kit-ai/internal/authoring/commands/skills.go", "566e36e02d58c5d76e92369987d901feb1bcb6f3e59d3225e02961fa041d606b"},
