@@ -80,6 +80,28 @@ test('homepage installs with auto-detection and exposes the full directory', asy
   expect(errors).toEqual([]);
 });
 
+test('header exposes the documentation entrypoint on desktop and mobile', async ({ page }) => {
+  await page.goto('./');
+  const desktopDocs = page.locator('.app-header__docs-btn');
+  await expect(desktopDocs).toBeVisible();
+  await expect(desktopDocs).toHaveAccessibleName('View docs');
+  await expect(desktopDocs).toHaveAttribute(
+    'href',
+    'https://777genius.github.io/universal-agent-plugins/docs/en/',
+  );
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole('button', { name: 'Open navigation menu' }).click();
+  const mobileDocs = page.getByRole('dialog', { name: 'Navigation menu' }).getByRole('link', {
+    name: 'View docs',
+  });
+  await expect(mobileDocs).toBeVisible();
+  await expect(mobileDocs).toHaveAttribute(
+    'href',
+    'https://777genius.github.io/universal-agent-plugins/docs/en/',
+  );
+});
+
 test('homepage omits the counter when discovery cannot load', async ({ page }) => {
   await page.route('**/discovery/**', (route) => route.abort());
   await page.goto('./');

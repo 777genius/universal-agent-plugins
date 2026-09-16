@@ -136,6 +136,11 @@ test('README retains the available installer and canonical client limitations', 
   assert.ok(text.includes('## Build plugins'));
   assert.ok(text.includes('### Quick start'));
   assert.ok(text.includes('[Build plugins](#build-plugins)'));
+  assert.ok(
+    text.includes(
+      '[Read the documentation](https://777genius.github.io/universal-agent-plugins/docs/en/)',
+    ),
+  );
   assert.ok(text.includes('Verified GitHub release tag'));
   assert.ok(text.includes('Install an exact npm version'));
   assert.doesNotMatch(

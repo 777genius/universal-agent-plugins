@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { publishedLocales } from '~/data/i18n';
-import { mdiClose, mdiGithub, mdiMenu } from '@mdi/js';
+import { mdiBookOpenPageVariant, mdiClose, mdiGithub, mdiMenu } from '@mdi/js';
 import {
   DialogClose,
   DialogContent,
@@ -25,6 +25,7 @@ function onMobileEscape(event: KeyboardEvent) {
 }
 const interactiveReady = ref(false);
 const githubUrl = `https://github.com/${config.public.githubRepo}`;
+const { docsUrl, docsLabel } = useDocsLinks();
 const homePath = computed(() => localePath('/'));
 const homeHref = computed(() => router.resolve(homePath.value).href);
 
@@ -58,15 +59,26 @@ onMounted(() => {
       <div class="app-header__spacer" />
       <div class="app-header__desktop-actions">
         <v-btn
+          variant="tonal"
+          size="small"
+          :href="docsUrl"
+          :aria-label="docsLabel(t('hero.docsCta'))"
+          class="app-header__docs-btn"
+          :prepend-icon="mdiBookOpenPageVariant"
+        >
+          {{ t('hero.docsCta') }}
+        </v-btn>
+        <v-btn
           variant="outlined"
           size="small"
           :href="githubUrl"
           target="_blank"
           rel="noopener noreferrer"
+          :aria-label="t('nav.viewOnGithub')"
           class="app-header__github-btn"
           :prepend-icon="mdiGithub"
         >
-          {{ t('nav.viewOnGithub') }}
+          <span class="app-header__github-label">{{ t('nav.viewOnGithub') }}</span>
         </v-btn>
         <template v-if="interactiveReady">
           <LanguageSwitcher v-if="publishedLocales.length > 1" compact />
@@ -105,6 +117,13 @@ onMounted(() => {
                   @click="menuOpen = false"
                 >
                   {{ item.label }}
+                </a>
+                <a
+                  :href="docsUrl"
+                  class="mobile-menu__link"
+                  @click="menuOpen = false"
+                >
+                  {{ docsLabel(t('hero.docsCta')) }}
                 </a>
                 <a
                   :href="githubUrl"
@@ -206,6 +225,28 @@ onMounted(() => {
   font-weight: 600 !important;
   font-size: 12px !important;
   letter-spacing: 0.02em !important;
+}
+
+.app-header__docs-btn {
+  max-width: 190px;
+  font-weight: 700;
+}
+
+.app-header__docs-btn :deep(.v-btn__content) {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (min-width: 960px) and (max-width: 1599px) {
+  .app-header__github-label {
+    display: none;
+  }
+
+  .app-header__github-btn :deep(.v-btn__prepend) {
+    margin-inline: 0;
+  }
 }
 
 .app-header__github-btn:hover {

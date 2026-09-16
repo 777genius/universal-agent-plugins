@@ -9,6 +9,9 @@
 
 Install and manage Agent Plugins 1.0 across your AI agents with one CLI.
 
+[Read the documentation](https://777genius.github.io/universal-agent-plugins/docs/en/) ·
+[Browse plugins](https://777genius.github.io/universal-agent-plugins/plugins/)
+
 <img width="423" height="234" alt="image" src="https://github.com/user-attachments/assets/3f8786ea-bb3a-4869-aabe-99b245364b3d" />
 
 ## Use plugins
