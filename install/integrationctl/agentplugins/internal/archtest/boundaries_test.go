@@ -59,20 +59,20 @@ func checkImport(t *testing.T, rule boundary, file, imported string) {
 	if standardLibrary(imported) {
 		return
 	}
-	if rule.allow != nil || rule.deny == nil {
-		for _, allowed := range rule.allow {
-			if imported == allowed || strings.HasPrefix(imported, allowed+"/") {
-				return
+	if len(rule.deny) > 0 {
+		for _, denied := range rule.deny {
+			if imported == denied || strings.HasPrefix(imported, denied+"/") {
+				t.Errorf("%s imports %s, which the layer forbids", file, imported)
 			}
 		}
-		t.Errorf("%s imports %s, which the layer does not allow", file, imported)
 		return
 	}
-	for _, denied := range rule.deny {
-		if imported == denied || strings.HasPrefix(imported, denied+"/") {
-			t.Errorf("%s imports %s, which the layer forbids", file, imported)
+	for _, allowed := range rule.allow {
+		if imported == allowed || strings.HasPrefix(imported, allowed+"/") {
+			return
 		}
 	}
+	t.Errorf("%s imports %s, which the layer does not allow", file, imported)
 }
 
 // standardLibrary uses the same rule the go tool does: only standard library
