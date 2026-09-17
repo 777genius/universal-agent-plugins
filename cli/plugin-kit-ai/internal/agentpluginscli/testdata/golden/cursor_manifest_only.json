@@ -1,0 +1,64 @@
+{
+  "schema_version": 1,
+  "command": "add",
+  "result": "success",
+  "data": {
+    "operation_id": "op-<operation>",
+    "batch": true,
+    "status": "planned",
+    "succeeded": 1,
+    "failed": 0,
+    "plugin": "demo",
+    "version": "1.0.0",
+    "source": "direct local source",
+    "tree_digest": "sha256:1ce739f697d75678ab78146eecebca7a466c5f5db8255afb8d6a3c3043995f38",
+    "manifest_digest": "sha256:cd880f5b873e6011aac32306232152d06761ce00a469321f0c83813945f0a295",
+    "dry_run": true,
+    "targets": [
+      {
+        "target": "cursor",
+        "status": "manual_activation_required",
+        "next_action": "verify the plugin's authentication requirements before using it",
+        "output": {
+          "operation_id": "op-<operation>",
+          "plugin": "demo",
+          "version": "1.0.0",
+          "source": "direct local source",
+          "tree_digest": "sha256:1ce739f697d75678ab78146eecebca7a466c5f5db8255afb8d6a3c3043995f38",
+          "manifest_digest": "sha256:cd880f5b873e6011aac32306232152d06761ce00a469321f0c83813945f0a295",
+          "next_action": "verify the plugin's authentication requirements before using it",
+          "dry_run": true,
+          "result": {
+            "installation_id": "<uuid>",
+            "plan": {
+              "client_id": "cursor",
+              "scope": "user",
+              "status": "manual_activation_required",
+              "package_mode": "native",
+              "activation": "manual_activation_required",
+              "authentication": "not_checked",
+              "policy": "allowed",
+              "verification": "package_validated",
+              "physical_artifact_id": "demo-<artifact>",
+              "user_actions": [
+                "verify the plugin's authentication requirements before using it",
+                "reload Cursor, then verify the plugin appears before using its components"
+              ],
+              "warnings": [
+                "authentication_not_catalog_verified"
+              ]
+            },
+            "activation": {
+              "activation": "",
+              "authentication": "",
+              "policy": "",
+              "verification": ""
+            },
+            "requires_confirmation": false,
+            "mutated": false
+          }
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,521 @@
+{
+  "chatgpt": {
+    "Error": "",
+    "Plan": {
+      "Activation": "failed",
+      "ActivePath": "\u003croot\u003e/managed/clients/chatgpt/demo-0123456789ab",
+      "Authentication": "not_checked",
+      "ClientID": "chatgpt",
+      "Components": [
+        {
+          "Kind": "skill",
+          "Name": "docs",
+          "Reason": "",
+          "Support": "projected"
+        },
+        {
+          "Kind": "mcp_server",
+          "Name": "local",
+          "Reason": "component_not_supported_by_client",
+          "Support": "unsupported"
+        }
+      ],
+      "DeclaredName": "demo",
+      "DeclaredVersion": "1.0.0",
+      "Diagnostics": null,
+      "InstallIntent": "",
+      "LocalActions": null,
+      "LocalPreparationAuthorized": false,
+      "NativeRegistryExecutable": "\u003croot\u003e/bin/chatgpt",
+      "NativeRegistryRoot": "\u003croot\u003e/clients/chatgpt",
+      "PackageMode": "compatibility_projection",
+      "PersonalChatGPTPreparation": false,
+      "PhysicalArtifactID": "demo-0123456789ab",
+      "Policy": "allowed",
+      "Scope": "user",
+      "Status": "unsupported",
+      "TargetAnchor": "\u003croot\u003e/managed",
+      "TargetRoot": "\u003croot\u003e/managed/clients/chatgpt",
+      "UserActions": [
+        "this package is not ready for ChatGPT. Connect its remote MCP server in ChatGPT Plugins developer mode; full plugin installation also needs the publisher's registered connection mapping (.app.json). You do not need to create this file. Setup: https://developers.openai.com/plugins/build/plugins for: local"
+      ],
+      "Verification": "package_validated",
+      "Warnings": [
+        "authentication_not_catalog_verified",
+        "chatgpt_app_binding_required"
+      ]
+    }
+  },
+  "claude": {
+    "Error": "",
+    "Plan": {
+      "Activation": "active",
+      "ActivePath": "\u003croot\u003e/clients/claude/skills/demo-0123456789ab",
+      "Authentication": "not_checked",
+      "ClientID": "claude",
+      "Components": [
+        {
+          "Kind": "skill",
+          "Name": "docs",
+          "Reason": "",
+          "Support": "projected"
+        },
+        {
+          "Kind": "mcp_server",
+          "Name": "local",
+          "Reason": "",
+          "Support": "projected"
+        }
+      ],
+      "DeclaredName": "demo",
+      "DeclaredVersion": "1.0.0",
+      "Diagnostics": null,
+      "InstallIntent": "",
+      "LocalActions": null,
+      "LocalPreparationAuthorized": false,
+      "NativeRegistryExecutable": "\u003croot\u003e/bin/claude",
+      "NativeRegistryRoot": "\u003croot\u003e/clients/claude",
+      "PackageMode": "compatibility_projection",
+      "PersonalChatGPTPreparation": false,
+      "PhysicalArtifactID": "demo-0123456789ab",
+      "Policy": "allowed",
+      "Scope": "user",
+      "Status": "ready",
+      "TargetAnchor": "\u003croot\u003e/clients/claude",
+      "TargetRoot": "\u003croot\u003e/clients/claude/skills",
+      "UserActions": [
+        "verify the plugin's authentication requirements before using it",
+        "start a new Claude Code session or run /reload-plugins"
+      ],
+      "Verification": "package_validated",
+      "Warnings": [
+        "authentication_not_catalog_verified"
+      ]
+    }
+  },
+  "cline": {
+    "Error": "",
+    "Plan": {
+      "Activation": "prepared",
+      "ActivePath": "\u003croot\u003e/managed/clients/cline/demo-0123456789ab",
+      "Authentication": "not_checked",
+      "ClientID": "cline",
+      "Components": [
+        {
+          "Kind": "skill",
+          "Name": "docs",
+          "Reason": "",
+          "Support": "native"
+        },
+        {
+          "Kind": "mcp_server",
+          "Name": "local",
+          "Reason": "",
+          "Support": "native"
+        }
+      ],
+      "DeclaredName": "demo",
+      "DeclaredVersion": "1.0.0",
+      "Diagnostics": null,
+      "InstallIntent": "",
+      "LocalActions": null,
+      "LocalPreparationAuthorized": false,
+      "NativeRegistryExecutable": "\u003croot\u003e/bin/cline",
+      "NativeRegistryRoot": "\u003croot\u003e/clients/cline",
+      "PackageMode": "native",
+      "PersonalChatGPTPreparation": false,
+      "PhysicalArtifactID": "demo-0123456789ab",
+      "Policy": "allowed",
+      "Scope": "user",
+      "Status": "ready",
+      "TargetAnchor": "\u003croot\u003e/managed",
+      "TargetRoot": "\u003croot\u003e/managed/clients/cline",
+      "UserActions": [
+        "verify the plugin's authentication requirements before using it",
+        "agentplugins will install and verify Cline skills and MCP servers automatically; VS Code reloads MCP settings, while Cline CLI reads them on its next process"
+      ],
+      "Verification": "package_validated",
+      "Warnings": [
+        "authentication_not_catalog_verified"
+      ]
+    }
+  },
+  "codex": {
+    "Error": "",
+    "Plan": {
+      "Activation": "manual_activation_required",
+      "ActivePath": "\u003croot\u003e/managed/clients/codex/demo-0123456789ab",
+      "Authentication": "not_checked",
+      "ClientID": "codex",
+      "Components": [
+        {
+          "Kind": "skill",
+          "Name": "docs",
+          "Reason": "",
+          "Support": "projected"
+        },
+        {
+          "Kind": "mcp_server",
+          "Name": "local",
+          "Reason": "",
+          "Support": "projected"
+        }
+      ],
+      "DeclaredName": "demo",
+      "DeclaredVersion": "1.0.0",
+      "Diagnostics": null,
+      "InstallIntent": "",
+      "LocalActions": null,
+      "LocalPreparationAuthorized": false,
+      "NativeRegistryExecutable": "\u003croot\u003e/bin/codex",
+      "NativeRegistryRoot": "\u003croot\u003e/clients/codex",
+      "PackageMode": "compatibility_projection",
+      "PersonalChatGPTPreparation": false,
+      "PhysicalArtifactID": "demo-0123456789ab",
+      "Policy": "allowed",
+      "Scope": "user",
+      "Status": "manual_activation_required",
+      "TargetAnchor": "\u003croot\u003e/managed",
+      "TargetRoot": "\u003croot\u003e/managed/clients/codex",
+      "UserActions": [
+        "verify the plugin's authentication requirements before using it",
+        "finish installation in Codex Plugins, then start a new session"
+      ],
+      "Verification": "package_validated",
+      "Warnings": [
+        "authentication_not_catalog_verified"
+      ]
+    }
+  },
+  "copilot": {
+    "Error": "",
+    "Plan": {
+      "Activation": "prepared",
+      "ActivePath": "\u003croot\u003e/managed/clients/copilot/demo-0123456789ab",
+      "Authentication": "not_checked",
+      "ClientID": "copilot",
+      "Components": [
+        {
+          "Kind": "skill",
+          "Name": "docs",
+          "Reason": "",
+          "Support": "native"
+        },
+        {
+          "Kind": "mcp_server",
+          "Name": "local",
+          "Reason": "",
+          "Support": "native"
+        }
+      ],
+      "DeclaredName": "demo",
+      "DeclaredVersion": "1.0.0",
+      "Diagnostics": null,
+      "InstallIntent": "",
+      "LocalActions": null,
+      "LocalPreparationAuthorized": false,
+      "NativeRegistryExecutable": "\u003croot\u003e/bin/copilot",
+      "NativeRegistryRoot": "\u003croot\u003e/clients/copilot",
+      "PackageMode": "native",
+      "PersonalChatGPTPreparation": false,
+      "PhysicalArtifactID": "demo-0123456789ab",
+      "Policy": "allowed",
+      "Scope": "user",
+      "Status": "ready",
+      "TargetAnchor": "\u003croot\u003e/managed",
+      "TargetRoot": "\u003croot\u003e/managed/clients/copilot",
+      "UserActions": [
+        "verify the plugin's authentication requirements before using it",
+        "agentplugins will install and verify the plugin through GitHub Copilot CLI automatically"
+      ],
+      "Verification": "package_validated",
+      "Warnings": [
+        "authentication_not_catalog_verified"
+      ]
+    }
+  },
+  "cursor": {
+    "Error": "",
+    "Plan": {
+      "Activation": "manual_activation_required",
+      "ActivePath": "\u003croot\u003e/clients/cursor/plugins/local/demo-0123456789ab",
+      "Authentication": "not_checked",
+      "ClientID": "cursor",
+      "Components": [
+        {
+          "Kind": "skill",
+          "Name": "docs",
+          "Reason": "",
+          "Support": "native"
+        },
+        {
+          "Kind": "mcp_server",
+          "Name": "local",
+          "Reason": "",
+          "Support": "native"
+        }
+      ],
+      "DeclaredName": "demo",
+      "DeclaredVersion": "1.0.0",
+      "Diagnostics": null,
+      "InstallIntent": "",
+      "LocalActions": null,
+      "LocalPreparationAuthorized": false,
+      "NativeRegistryExecutable": "\u003croot\u003e/bin/cursor",
+      "NativeRegistryRoot": "\u003croot\u003e/clients/cursor",
+      "PackageMode": "native",
+      "PersonalChatGPTPreparation": false,
+      "PhysicalArtifactID": "demo-0123456789ab",
+      "Policy": "allowed",
+      "Scope": "user",
+      "Status": "manual_activation_required",
+      "TargetAnchor": "\u003croot\u003e/clients/cursor",
+      "TargetRoot": "\u003croot\u003e/clients/cursor/plugins/local",
+      "UserActions": [
+        "verify the plugin's authentication requirements before using it",
+        "reload Cursor, then verify the plugin appears before using its components"
+      ],
+      "Verification": "package_validated",
+      "Warnings": [
+        "authentication_not_catalog_verified"
+      ]
+    }
+  },
+  "gemini": {
+    "Error": "",
+    "Plan": {
+      "Activation": "prepared",
+      "ActivePath": "\u003croot\u003e/managed/clients/gemini/demo-0123456789ab",
+      "Authentication": "not_checked",
+      "ClientID": "gemini",
+      "Components": [
+        {
+          "Kind": "skill",
+          "Name": "docs",
+          "Reason": "",
+          "Support": "native"
+        },
+        {
+          "Kind": "mcp_server",
+          "Name": "local",
+          "Reason": "",
+          "Support": "native"
+        }
+      ],
+      "DeclaredName": "demo",
+      "DeclaredVersion": "1.0.0",
+      "Diagnostics": null,
+      "InstallIntent": "",
+      "LocalActions": null,
+      "LocalPreparationAuthorized": false,
+      "NativeRegistryExecutable": "\u003croot\u003e/bin/gemini",
+      "NativeRegistryRoot": "\u003croot\u003e/clients/gemini",
+      "PackageMode": "native",
+      "PersonalChatGPTPreparation": false,
+      "PhysicalArtifactID": "demo-0123456789ab",
+      "Policy": "allowed",
+      "Scope": "user",
+      "Status": "ready",
+      "TargetAnchor": "\u003croot\u003e/managed",
+      "TargetRoot": "\u003croot\u003e/managed/clients/gemini",
+      "UserActions": [
+        "verify the plugin's authentication requirements before using it",
+        "agentplugins will install and verify Gemini CLI skills and MCP servers automatically; reload them in a running session or restart Gemini CLI"
+      ],
+      "Verification": "package_validated",
+      "Warnings": [
+        "authentication_not_catalog_verified"
+      ]
+    }
+  },
+  "kiro": {
+    "Error": "",
+    "Plan": {
+      "Activation": "prepared",
+      "ActivePath": "\u003croot\u003e/managed/clients/kiro/demo-0123456789ab",
+      "Authentication": "not_checked",
+      "ClientID": "kiro",
+      "Components": [
+        {
+          "Kind": "skill",
+          "Name": "docs",
+          "Reason": "",
+          "Support": "native"
+        },
+        {
+          "Kind": "mcp_server",
+          "Name": "local",
+          "Reason": "",
+          "Support": "native"
+        }
+      ],
+      "DeclaredName": "demo",
+      "DeclaredVersion": "1.0.0",
+      "Diagnostics": null,
+      "InstallIntent": "",
+      "LocalActions": null,
+      "LocalPreparationAuthorized": false,
+      "NativeRegistryExecutable": "\u003croot\u003e/bin/kiro",
+      "NativeRegistryRoot": "\u003croot\u003e/clients/kiro",
+      "PackageMode": "native",
+      "PersonalChatGPTPreparation": false,
+      "PhysicalArtifactID": "demo-0123456789ab",
+      "Policy": "allowed",
+      "Scope": "user",
+      "Status": "ready",
+      "TargetAnchor": "\u003croot\u003e/managed",
+      "TargetRoot": "\u003croot\u003e/managed/clients/kiro",
+      "UserActions": [
+        "verify the plugin's authentication requirements before using it",
+        "agentplugins will install and verify the package's global Kiro skills and MCP servers automatically"
+      ],
+      "Verification": "package_validated",
+      "Warnings": [
+        "authentication_not_catalog_verified"
+      ]
+    }
+  },
+  "opencode": {
+    "Error": "",
+    "Plan": {
+      "Activation": "prepared",
+      "ActivePath": "\u003croot\u003e/managed/clients/opencode/demo-0123456789ab",
+      "Authentication": "not_checked",
+      "ClientID": "opencode",
+      "Components": [
+        {
+          "Kind": "skill",
+          "Name": "docs",
+          "Reason": "",
+          "Support": "prepared"
+        },
+        {
+          "Kind": "mcp_server",
+          "Name": "local",
+          "Reason": "",
+          "Support": "prepared"
+        }
+      ],
+      "DeclaredName": "demo",
+      "DeclaredVersion": "1.0.0",
+      "Diagnostics": null,
+      "InstallIntent": "",
+      "LocalActions": null,
+      "LocalPreparationAuthorized": false,
+      "NativeRegistryExecutable": "\u003croot\u003e/bin/opencode",
+      "NativeRegistryRoot": "\u003croot\u003e/clients/opencode",
+      "PackageMode": "prepared_package",
+      "PersonalChatGPTPreparation": false,
+      "PhysicalArtifactID": "demo-0123456789ab",
+      "Policy": "allowed",
+      "Scope": "user",
+      "Status": "ready",
+      "TargetAnchor": "\u003croot\u003e/managed",
+      "TargetRoot": "\u003croot\u003e/managed/clients/opencode",
+      "UserActions": [
+        "verify the plugin's authentication requirements before using it",
+        "agentplugins will install the package's skills and MCP servers; restart OpenCode when complete"
+      ],
+      "Verification": "package_validated",
+      "Warnings": [
+        "authentication_not_catalog_verified"
+      ]
+    }
+  },
+  "vscode": {
+    "Error": "",
+    "Plan": {
+      "Activation": "manual_activation_required",
+      "ActivePath": "\u003croot\u003e/managed/clients/vscode/demo-0123456789ab",
+      "Authentication": "not_checked",
+      "ClientID": "vscode",
+      "Components": [
+        {
+          "Kind": "skill",
+          "Name": "docs",
+          "Reason": "",
+          "Support": "prepared"
+        },
+        {
+          "Kind": "mcp_server",
+          "Name": "local",
+          "Reason": "",
+          "Support": "prepared"
+        }
+      ],
+      "DeclaredName": "demo",
+      "DeclaredVersion": "1.0.0",
+      "Diagnostics": null,
+      "InstallIntent": "",
+      "LocalActions": null,
+      "LocalPreparationAuthorized": false,
+      "NativeRegistryExecutable": "",
+      "NativeRegistryRoot": "",
+      "PackageMode": "prepared_package",
+      "PersonalChatGPTPreparation": false,
+      "PhysicalArtifactID": "demo-0123456789ab",
+      "Policy": "allowed",
+      "Scope": "user",
+      "Status": "manual_activation_required",
+      "TargetAnchor": "\u003croot\u003e/managed",
+      "TargetRoot": "\u003croot\u003e/managed/clients/vscode",
+      "UserActions": [
+        "verify the plugin's authentication requirements before using it",
+        "register the prepared local plugin in VS Code after installation"
+      ],
+      "Verification": "package_validated",
+      "Warnings": [
+        "authentication_not_catalog_verified"
+      ]
+    }
+  },
+  "windsurf": {
+    "Error": "",
+    "Plan": {
+      "Activation": "prepared",
+      "ActivePath": "\u003croot\u003e/managed/clients/windsurf/demo-0123456789ab",
+      "Authentication": "not_checked",
+      "ClientID": "windsurf",
+      "Components": [
+        {
+          "Kind": "skill",
+          "Name": "docs",
+          "Reason": "",
+          "Support": "prepared"
+        },
+        {
+          "Kind": "mcp_server",
+          "Name": "local",
+          "Reason": "",
+          "Support": "prepared"
+        }
+      ],
+      "DeclaredName": "demo",
+      "DeclaredVersion": "1.0.0",
+      "Diagnostics": null,
+      "InstallIntent": "",
+      "LocalActions": null,
+      "LocalPreparationAuthorized": false,
+      "NativeRegistryExecutable": "\u003croot\u003e/bin/windsurf",
+      "NativeRegistryRoot": "\u003croot\u003e/clients/windsurf",
+      "PackageMode": "prepared_package",
+      "PersonalChatGPTPreparation": false,
+      "PhysicalArtifactID": "demo-0123456789ab",
+      "Policy": "allowed",
+      "Scope": "user",
+      "Status": "ready",
+      "TargetAnchor": "\u003croot\u003e/managed",
+      "TargetRoot": "\u003croot\u003e/managed/clients/windsurf",
+      "UserActions": [
+        "verify the plugin's authentication requirements before using it",
+        "agentplugins will update the selected legacy Windsurf channel's local MCP configuration; refresh MCP servers before first use",
+        "Windsurf skills remain in the prepared package and are not claimed as activated"
+      ],
+      "Verification": "package_validated",
+      "Warnings": [
+        "authentication_not_catalog_verified",
+        "windsurf_skills_prepared_only"
+      ]
+    }
+  }
+}

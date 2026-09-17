@@ -1,8 +1,11 @@
 name: Required
 
 on:
+  # refactor/** is push-only on purpose: the stacked refactor parts are gated by
+  # core-fast.yml, and the full lane runs after each merge into the base branch
+  # instead of holding every part for 10-27 minutes.
   push:
-    branches: [main, master]
+    branches: [main, master, 'refactor/**']
   pull_request:
     branches: [main, master]
 

@@ -1,0 +1,87 @@
+{
+  "schema_version": 1,
+  "command": "add",
+  "result": "success",
+  "data": {
+    "operation_id": "op-<operation>",
+    "batch": true,
+    "status": "planned",
+    "succeeded": 1,
+    "failed": 0,
+    "plugin": "demo",
+    "version": "1.0.0",
+    "source": "direct local source",
+    "tree_digest": "sha256:231af19e2bc209e73f22b16897fda77192f5d665e03568582adf4d84d955889a",
+    "manifest_digest": "sha256:1d4d53e39e74058e8f6426de9739db215ee35fd42b85fdc092dd15d1fcf1a511",
+    "dry_run": true,
+    "targets": [
+      {
+        "target": "chatgpt",
+        "status": "manual_activation_required",
+        "next_action": "verify the plugin's authentication requirements before using it",
+        "output": {
+          "operation_id": "op-<operation>",
+          "plugin": "demo",
+          "version": "1.0.0",
+          "source": "direct local source",
+          "tree_digest": "sha256:231af19e2bc209e73f22b16897fda77192f5d665e03568582adf4d84d955889a",
+          "manifest_digest": "sha256:1d4d53e39e74058e8f6426de9739db215ee35fd42b85fdc092dd15d1fcf1a511",
+          "next_action": "verify the plugin's authentication requirements before using it",
+          "dry_run": true,
+          "result": {
+            "installation_id": "<uuid>",
+            "plan": {
+              "client_id": "chatgpt",
+              "scope": "user",
+              "status": "manual_activation_required",
+              "package_mode": "compatibility_projection",
+              "activation": "manual_activation_required",
+              "authentication": "not_checked",
+              "policy": "allowed",
+              "verification": "package_validated",
+              "physical_artifact_id": "demo-<artifact>",
+              "components": [
+                {
+                  "kind": "mcp_server",
+                  "name": "demo",
+                  "support": "projected"
+                },
+                {
+                  "kind": "app",
+                  "name": "demo",
+                  "support": "projected"
+                }
+              ],
+              "user_actions": [
+                "verify the plugin's authentication requirements before using it",
+                "install the prepared plugin from ChatGPT Plugins, verify its registered app connection, then start a new chat"
+              ],
+              "warnings": [
+                "authentication_not_catalog_verified",
+                "mcp_server_invalid"
+              ],
+              "diagnostics": [
+                {
+                  "severity": "error",
+                  "boundary": "mcp_server",
+                  "code": "mcp_server_invalid",
+                  "path": ".mcp.json",
+                  "item": "mcpServers",
+                  "message": "MCP server \"mcpServers\" was skipped because server requires a command for stdio or a URL for http/sse"
+                }
+              ]
+            },
+            "activation": {
+              "activation": "",
+              "authentication": "",
+              "policy": "",
+              "verification": ""
+            },
+            "requires_confirmation": false,
+            "mutated": false
+          }
+        }
+      }
+    ]
+  }
+}

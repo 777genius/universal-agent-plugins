@@ -1,0 +1,141 @@
+{
+  "chatgpt": {
+    "Commands": [],
+    "Error": "",
+    "Outcome": {
+      "Activation": "manual_activation_required",
+      "ArtifactRemovalAllowed": false,
+      "ExternalRemovalComplete": false,
+      "LocalActions": null,
+      "UserActions": [
+        "uninstall the plugin in ChatGPT Plugins, then rerun remove with `--external-uninstalled` (also use the flag if it was never activated)"
+      ]
+    }
+  },
+  "claude": {
+    "Commands": [],
+    "Error": "",
+    "Outcome": {
+      "Activation": "not_required",
+      "ArtifactRemovalAllowed": true,
+      "ExternalRemovalComplete": false,
+      "LocalActions": null,
+      "UserActions": [
+        "agentplugins will verify and remove its managed Claude Code @skills-dir plugin"
+      ]
+    }
+  },
+  "cline": {
+    "Commands": [],
+    "Error": "managed Cline native ownership is missing",
+    "Outcome": {
+      "Activation": "not_required",
+      "ArtifactRemovalAllowed": true,
+      "ExternalRemovalComplete": false,
+      "LocalActions": null,
+      "UserActions": null
+    }
+  },
+  "codex": {
+    "Commands": [],
+    "Error": "",
+    "Outcome": {
+      "Activation": "manual_activation_required",
+      "ArtifactRemovalAllowed": false,
+      "ExternalRemovalComplete": false,
+      "LocalActions": null,
+      "UserActions": [
+        "uninstall the plugin in Codex, then rerun remove with `--external-uninstalled` (also use the flag if it was never activated)"
+      ]
+    }
+  },
+  "copilot": {
+    "Commands": [],
+    "Error": "",
+    "Outcome": {
+      "Activation": "not_required",
+      "ArtifactRemovalAllowed": true,
+      "ExternalRemovalComplete": false,
+      "LocalActions": null,
+      "UserActions": [
+        "agentplugins will uninstall the plugin from GitHub Copilot CLI and VS Code automatically"
+      ]
+    }
+  },
+  "cursor": {
+    "Commands": [],
+    "Error": "",
+    "Outcome": {
+      "Activation": "not_required",
+      "ArtifactRemovalAllowed": true,
+      "ExternalRemovalComplete": false,
+      "LocalActions": null,
+      "UserActions": null
+    }
+  },
+  "gemini": {
+    "Commands": [],
+    "Error": "",
+    "Outcome": {
+      "Activation": "not_required",
+      "ArtifactRemovalAllowed": true,
+      "ExternalRemovalComplete": false,
+      "LocalActions": null,
+      "UserActions": [
+        "agentplugins will remove its managed Gemini CLI skills and MCP entries automatically"
+      ]
+    }
+  },
+  "kiro": {
+    "Commands": [],
+    "Error": "",
+    "Outcome": {
+      "Activation": "manual_activation_required",
+      "ArtifactRemovalAllowed": false,
+      "ExternalRemovalComplete": false,
+      "LocalActions": null,
+      "UserActions": [
+        "remove the legacy custom Power in Kiro, then rerun remove with `--external-uninstalled`"
+      ]
+    }
+  },
+  "opencode": {
+    "Commands": [],
+    "Error": "",
+    "Outcome": {
+      "Activation": "not_required",
+      "ArtifactRemovalAllowed": true,
+      "ExternalRemovalComplete": false,
+      "LocalActions": null,
+      "UserActions": [
+        "agentplugins will remove its managed OpenCode skills and MCP entries automatically"
+      ]
+    }
+  },
+  "vscode": {
+    "Commands": [],
+    "Error": "",
+    "Outcome": {
+      "Activation": "not_required",
+      "ArtifactRemovalAllowed": true,
+      "ExternalRemovalComplete": false,
+      "LocalActions": null,
+      "UserActions": [
+        "agentplugins will uninstall the plugin from GitHub Copilot CLI and VS Code automatically"
+      ]
+    }
+  },
+  "windsurf": {
+    "Commands": [],
+    "Error": "",
+    "Outcome": {
+      "Activation": "manual_activation_required",
+      "ArtifactRemovalAllowed": false,
+      "ExternalRemovalComplete": false,
+      "LocalActions": null,
+      "UserActions": [
+        "remove the prepared package manually, then rerun remove with `--external-uninstalled`"
+      ]
+    }
+  }
+}

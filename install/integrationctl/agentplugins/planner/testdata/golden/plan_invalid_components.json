@@ -1,0 +1,464 @@
+{
+  "chatgpt": {
+    "Error": "",
+    "Plan": {
+      "Activation": "failed",
+      "ActivePath": "\u003croot\u003e/managed/clients/chatgpt/demo-0123456789ab",
+      "Authentication": "not_checked",
+      "ClientID": "chatgpt",
+      "Components": [],
+      "DeclaredName": "broken",
+      "DeclaredVersion": "1.0.0",
+      "Diagnostics": [
+        {
+          "Boundary": "skill",
+          "Code": "skill_invalid",
+          "Item": "",
+          "Message": "all skills are invalid",
+          "Path": "",
+          "Severity": "error"
+        }
+      ],
+      "InstallIntent": "",
+      "LocalActions": null,
+      "LocalPreparationAuthorized": false,
+      "NativeRegistryExecutable": "\u003croot\u003e/bin/chatgpt",
+      "NativeRegistryRoot": "\u003croot\u003e/clients/chatgpt",
+      "PackageMode": "compatibility_projection",
+      "PersonalChatGPTPreparation": false,
+      "PhysicalArtifactID": "demo-0123456789ab",
+      "Policy": "allowed",
+      "Scope": "user",
+      "Status": "unsupported",
+      "TargetAnchor": "\u003croot\u003e/managed",
+      "TargetRoot": "\u003croot\u003e/managed/clients/chatgpt",
+      "UserActions": null,
+      "Verification": "package_validated",
+      "Warnings": [
+        "authentication_not_catalog_verified",
+        "skill_invalid",
+        "no_valid_components"
+      ]
+    }
+  },
+  "claude": {
+    "Error": "",
+    "Plan": {
+      "Activation": "failed",
+      "ActivePath": "\u003croot\u003e/clients/claude/skills/demo-0123456789ab",
+      "Authentication": "not_checked",
+      "ClientID": "claude",
+      "Components": [],
+      "DeclaredName": "broken",
+      "DeclaredVersion": "1.0.0",
+      "Diagnostics": [
+        {
+          "Boundary": "skill",
+          "Code": "skill_invalid",
+          "Item": "",
+          "Message": "all skills are invalid",
+          "Path": "",
+          "Severity": "error"
+        }
+      ],
+      "InstallIntent": "",
+      "LocalActions": null,
+      "LocalPreparationAuthorized": false,
+      "NativeRegistryExecutable": "\u003croot\u003e/bin/claude",
+      "NativeRegistryRoot": "\u003croot\u003e/clients/claude",
+      "PackageMode": "compatibility_projection",
+      "PersonalChatGPTPreparation": false,
+      "PhysicalArtifactID": "demo-0123456789ab",
+      "Policy": "allowed",
+      "Scope": "user",
+      "Status": "unsupported",
+      "TargetAnchor": "\u003croot\u003e/clients/claude",
+      "TargetRoot": "\u003croot\u003e/clients/claude/skills",
+      "UserActions": null,
+      "Verification": "package_validated",
+      "Warnings": [
+        "authentication_not_catalog_verified",
+        "skill_invalid",
+        "no_valid_components"
+      ]
+    }
+  },
+  "cline": {
+    "Error": "",
+    "Plan": {
+      "Activation": "failed",
+      "ActivePath": "\u003croot\u003e/managed/clients/cline/demo-0123456789ab",
+      "Authentication": "not_checked",
+      "ClientID": "cline",
+      "Components": [],
+      "DeclaredName": "broken",
+      "DeclaredVersion": "1.0.0",
+      "Diagnostics": [
+        {
+          "Boundary": "skill",
+          "Code": "skill_invalid",
+          "Item": "",
+          "Message": "all skills are invalid",
+          "Path": "",
+          "Severity": "error"
+        }
+      ],
+      "InstallIntent": "",
+      "LocalActions": null,
+      "LocalPreparationAuthorized": false,
+      "NativeRegistryExecutable": "\u003croot\u003e/bin/cline",
+      "NativeRegistryRoot": "\u003croot\u003e/clients/cline",
+      "PackageMode": "native",
+      "PersonalChatGPTPreparation": false,
+      "PhysicalArtifactID": "demo-0123456789ab",
+      "Policy": "allowed",
+      "Scope": "user",
+      "Status": "unsupported",
+      "TargetAnchor": "\u003croot\u003e/managed",
+      "TargetRoot": "\u003croot\u003e/managed/clients/cline",
+      "UserActions": null,
+      "Verification": "package_validated",
+      "Warnings": [
+        "authentication_not_catalog_verified",
+        "skill_invalid",
+        "no_valid_components"
+      ]
+    }
+  },
+  "codex": {
+    "Error": "",
+    "Plan": {
+      "Activation": "failed",
+      "ActivePath": "\u003croot\u003e/managed/clients/codex/demo-0123456789ab",
+      "Authentication": "not_checked",
+      "ClientID": "codex",
+      "Components": [],
+      "DeclaredName": "broken",
+      "DeclaredVersion": "1.0.0",
+      "Diagnostics": [
+        {
+          "Boundary": "skill",
+          "Code": "skill_invalid",
+          "Item": "",
+          "Message": "all skills are invalid",
+          "Path": "",
+          "Severity": "error"
+        }
+      ],
+      "InstallIntent": "",
+      "LocalActions": null,
+      "LocalPreparationAuthorized": false,
+      "NativeRegistryExecutable": "\u003croot\u003e/bin/codex",
+      "NativeRegistryRoot": "\u003croot\u003e/clients/codex",
+      "PackageMode": "compatibility_projection",
+      "PersonalChatGPTPreparation": false,
+      "PhysicalArtifactID": "demo-0123456789ab",
+      "Policy": "allowed",
+      "Scope": "user",
+      "Status": "unsupported",
+      "TargetAnchor": "\u003croot\u003e/managed",
+      "TargetRoot": "\u003croot\u003e/managed/clients/codex",
+      "UserActions": null,
+      "Verification": "package_validated",
+      "Warnings": [
+        "authentication_not_catalog_verified",
+        "skill_invalid",
+        "no_valid_components"
+      ]
+    }
+  },
+  "copilot": {
+    "Error": "",
+    "Plan": {
+      "Activation": "failed",
+      "ActivePath": "\u003croot\u003e/managed/clients/copilot/demo-0123456789ab",
+      "Authentication": "not_checked",
+      "ClientID": "copilot",
+      "Components": [],
+      "DeclaredName": "broken",
+      "DeclaredVersion": "1.0.0",
+      "Diagnostics": [
+        {
+          "Boundary": "skill",
+          "Code": "skill_invalid",
+          "Item": "",
+          "Message": "all skills are invalid",
+          "Path": "",
+          "Severity": "error"
+        }
+      ],
+      "InstallIntent": "",
+      "LocalActions": null,
+      "LocalPreparationAuthorized": false,
+      "NativeRegistryExecutable": "\u003croot\u003e/bin/copilot",
+      "NativeRegistryRoot": "\u003croot\u003e/clients/copilot",
+      "PackageMode": "native",
+      "PersonalChatGPTPreparation": false,
+      "PhysicalArtifactID": "demo-0123456789ab",
+      "Policy": "allowed",
+      "Scope": "user",
+      "Status": "unsupported",
+      "TargetAnchor": "\u003croot\u003e/managed",
+      "TargetRoot": "\u003croot\u003e/managed/clients/copilot",
+      "UserActions": null,
+      "Verification": "package_validated",
+      "Warnings": [
+        "authentication_not_catalog_verified",
+        "skill_invalid",
+        "no_valid_components"
+      ]
+    }
+  },
+  "cursor": {
+    "Error": "",
+    "Plan": {
+      "Activation": "failed",
+      "ActivePath": "\u003croot\u003e/clients/cursor/plugins/local/demo-0123456789ab",
+      "Authentication": "not_checked",
+      "ClientID": "cursor",
+      "Components": [],
+      "DeclaredName": "broken",
+      "DeclaredVersion": "1.0.0",
+      "Diagnostics": [
+        {
+          "Boundary": "skill",
+          "Code": "skill_invalid",
+          "Item": "",
+          "Message": "all skills are invalid",
+          "Path": "",
+          "Severity": "error"
+        }
+      ],
+      "InstallIntent": "",
+      "LocalActions": null,
+      "LocalPreparationAuthorized": false,
+      "NativeRegistryExecutable": "\u003croot\u003e/bin/cursor",
+      "NativeRegistryRoot": "\u003croot\u003e/clients/cursor",
+      "PackageMode": "native",
+      "PersonalChatGPTPreparation": false,
+      "PhysicalArtifactID": "demo-0123456789ab",
+      "Policy": "allowed",
+      "Scope": "user",
+      "Status": "unsupported",
+      "TargetAnchor": "\u003croot\u003e/clients/cursor",
+      "TargetRoot": "\u003croot\u003e/clients/cursor/plugins/local",
+      "UserActions": null,
+      "Verification": "package_validated",
+      "Warnings": [
+        "authentication_not_catalog_verified",
+        "skill_invalid",
+        "no_valid_components"
+      ]
+    }
+  },
+  "gemini": {
+    "Error": "",
+    "Plan": {
+      "Activation": "failed",
+      "ActivePath": "\u003croot\u003e/managed/clients/gemini/demo-0123456789ab",
+      "Authentication": "not_checked",
+      "ClientID": "gemini",
+      "Components": [],
+      "DeclaredName": "broken",
+      "DeclaredVersion": "1.0.0",
+      "Diagnostics": [
+        {
+          "Boundary": "skill",
+          "Code": "skill_invalid",
+          "Item": "",
+          "Message": "all skills are invalid",
+          "Path": "",
+          "Severity": "error"
+        }
+      ],
+      "InstallIntent": "",
+      "LocalActions": null,
+      "LocalPreparationAuthorized": false,
+      "NativeRegistryExecutable": "\u003croot\u003e/bin/gemini",
+      "NativeRegistryRoot": "\u003croot\u003e/clients/gemini",
+      "PackageMode": "native",
+      "PersonalChatGPTPreparation": false,
+      "PhysicalArtifactID": "demo-0123456789ab",
+      "Policy": "allowed",
+      "Scope": "user",
+      "Status": "unsupported",
+      "TargetAnchor": "\u003croot\u003e/managed",
+      "TargetRoot": "\u003croot\u003e/managed/clients/gemini",
+      "UserActions": null,
+      "Verification": "package_validated",
+      "Warnings": [
+        "authentication_not_catalog_verified",
+        "skill_invalid",
+        "no_valid_components"
+      ]
+    }
+  },
+  "kiro": {
+    "Error": "",
+    "Plan": {
+      "Activation": "failed",
+      "ActivePath": "\u003croot\u003e/managed/clients/kiro/demo-0123456789ab",
+      "Authentication": "not_checked",
+      "ClientID": "kiro",
+      "Components": [],
+      "DeclaredName": "broken",
+      "DeclaredVersion": "1.0.0",
+      "Diagnostics": [
+        {
+          "Boundary": "skill",
+          "Code": "skill_invalid",
+          "Item": "",
+          "Message": "all skills are invalid",
+          "Path": "",
+          "Severity": "error"
+        }
+      ],
+      "InstallIntent": "",
+      "LocalActions": null,
+      "LocalPreparationAuthorized": false,
+      "NativeRegistryExecutable": "\u003croot\u003e/bin/kiro",
+      "NativeRegistryRoot": "\u003croot\u003e/clients/kiro",
+      "PackageMode": "native",
+      "PersonalChatGPTPreparation": false,
+      "PhysicalArtifactID": "demo-0123456789ab",
+      "Policy": "allowed",
+      "Scope": "user",
+      "Status": "unsupported",
+      "TargetAnchor": "\u003croot\u003e/managed",
+      "TargetRoot": "\u003croot\u003e/managed/clients/kiro",
+      "UserActions": null,
+      "Verification": "package_validated",
+      "Warnings": [
+        "authentication_not_catalog_verified",
+        "skill_invalid",
+        "no_valid_components"
+      ]
+    }
+  },
+  "opencode": {
+    "Error": "",
+    "Plan": {
+      "Activation": "failed",
+      "ActivePath": "\u003croot\u003e/managed/clients/opencode/demo-0123456789ab",
+      "Authentication": "not_checked",
+      "ClientID": "opencode",
+      "Components": [],
+      "DeclaredName": "broken",
+      "DeclaredVersion": "1.0.0",
+      "Diagnostics": [
+        {
+          "Boundary": "skill",
+          "Code": "skill_invalid",
+          "Item": "",
+          "Message": "all skills are invalid",
+          "Path": "",
+          "Severity": "error"
+        }
+      ],
+      "InstallIntent": "",
+      "LocalActions": null,
+      "LocalPreparationAuthorized": false,
+      "NativeRegistryExecutable": "\u003croot\u003e/bin/opencode",
+      "NativeRegistryRoot": "\u003croot\u003e/clients/opencode",
+      "PackageMode": "prepared_package",
+      "PersonalChatGPTPreparation": false,
+      "PhysicalArtifactID": "demo-0123456789ab",
+      "Policy": "allowed",
+      "Scope": "user",
+      "Status": "unsupported",
+      "TargetAnchor": "\u003croot\u003e/managed",
+      "TargetRoot": "\u003croot\u003e/managed/clients/opencode",
+      "UserActions": null,
+      "Verification": "package_validated",
+      "Warnings": [
+        "authentication_not_catalog_verified",
+        "skill_invalid",
+        "no_valid_components"
+      ]
+    }
+  },
+  "vscode": {
+    "Error": "",
+    "Plan": {
+      "Activation": "failed",
+      "ActivePath": "\u003croot\u003e/managed/clients/vscode/demo-0123456789ab",
+      "Authentication": "not_checked",
+      "ClientID": "vscode",
+      "Components": [],
+      "DeclaredName": "broken",
+      "DeclaredVersion": "1.0.0",
+      "Diagnostics": [
+        {
+          "Boundary": "skill",
+          "Code": "skill_invalid",
+          "Item": "",
+          "Message": "all skills are invalid",
+          "Path": "",
+          "Severity": "error"
+        }
+      ],
+      "InstallIntent": "",
+      "LocalActions": null,
+      "LocalPreparationAuthorized": false,
+      "NativeRegistryExecutable": "",
+      "NativeRegistryRoot": "",
+      "PackageMode": "prepared_package",
+      "PersonalChatGPTPreparation": false,
+      "PhysicalArtifactID": "demo-0123456789ab",
+      "Policy": "allowed",
+      "Scope": "user",
+      "Status": "unsupported",
+      "TargetAnchor": "\u003croot\u003e/managed",
+      "TargetRoot": "\u003croot\u003e/managed/clients/vscode",
+      "UserActions": null,
+      "Verification": "package_validated",
+      "Warnings": [
+        "authentication_not_catalog_verified",
+        "skill_invalid",
+        "no_valid_components"
+      ]
+    }
+  },
+  "windsurf": {
+    "Error": "",
+    "Plan": {
+      "Activation": "failed",
+      "ActivePath": "\u003croot\u003e/managed/clients/windsurf/demo-0123456789ab",
+      "Authentication": "not_checked",
+      "ClientID": "windsurf",
+      "Components": [],
+      "DeclaredName": "broken",
+      "DeclaredVersion": "1.0.0",
+      "Diagnostics": [
+        {
+          "Boundary": "skill",
+          "Code": "skill_invalid",
+          "Item": "",
+          "Message": "all skills are invalid",
+          "Path": "",
+          "Severity": "error"
+        }
+      ],
+      "InstallIntent": "",
+      "LocalActions": null,
+      "LocalPreparationAuthorized": false,
+      "NativeRegistryExecutable": "\u003croot\u003e/bin/windsurf",
+      "NativeRegistryRoot": "\u003croot\u003e/clients/windsurf",
+      "PackageMode": "prepared_package",
+      "PersonalChatGPTPreparation": false,
+      "PhysicalArtifactID": "demo-0123456789ab",
+      "Policy": "allowed",
+      "Scope": "user",
+      "Status": "unsupported",
+      "TargetAnchor": "\u003croot\u003e/managed",
+      "TargetRoot": "\u003croot\u003e/managed/clients/windsurf",
+      "UserActions": null,
+      "Verification": "package_validated",
+      "Warnings": [
+        "authentication_not_catalog_verified",
+        "skill_invalid",
+        "no_valid_components"
+      ]
+    }
+  }
+}

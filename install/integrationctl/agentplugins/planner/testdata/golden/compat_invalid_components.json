@@ -1,0 +1,443 @@
+[
+  {
+    "Capabilities": {
+      "ActivationMode": "manual",
+      "AppSupport": "projected",
+      "ClientID": "chatgpt",
+      "ExtensionSupport": "unsupported",
+      "MCPTransports": {
+        "sse": "unsupported",
+        "stdio": "unsupported",
+        "streamable-http": "unsupported"
+      },
+      "PackageMode": "compatibility_projection",
+      "Scopes": [
+        "user"
+      ],
+      "SkillSupport": "projected"
+    },
+    "ClientID": "chatgpt",
+    "Components": [
+      {
+        "Index": 1,
+        "Kind": "skill",
+        "Limitations": [
+          "component_not_supported_by_client",
+          "invalid_component"
+        ],
+        "Support": "unsupported"
+      }
+    ],
+    "Limitations": [
+      "authentication_not_checked",
+      "catalog_publication_not_checked",
+      "chatgpt_manual_preparation_only",
+      "client_version_not_checked",
+      "input_has_errors",
+      "installation_not_checked",
+      "manual_activation_required",
+      "remote_app_registration_not_checked",
+      "runtime_not_checked",
+      "static_adapter_support_only"
+    ]
+  },
+  {
+    "Capabilities": {
+      "ActivationMode": "automatic",
+      "AppSupport": "unsupported",
+      "ClientID": "claude",
+      "ExtensionSupport": "unsupported",
+      "MCPTransports": {
+        "sse": "projected",
+        "stdio": "projected",
+        "streamable-http": "projected"
+      },
+      "PackageMode": "compatibility_projection",
+      "Scopes": [
+        "user"
+      ],
+      "SkillSupport": "projected"
+    },
+    "ClientID": "claude",
+    "Components": [
+      {
+        "Index": 1,
+        "Kind": "skill",
+        "Limitations": [
+          "component_not_supported_by_client",
+          "invalid_component"
+        ],
+        "Support": "unsupported"
+      }
+    ],
+    "Limitations": [
+      "authentication_not_checked",
+      "catalog_publication_not_checked",
+      "client_version_not_checked",
+      "input_has_errors",
+      "installation_not_checked",
+      "runtime_not_checked",
+      "static_adapter_support_only"
+    ]
+  },
+  {
+    "Capabilities": {
+      "ActivationMode": "automatic",
+      "AppSupport": "unsupported",
+      "ClientID": "cline",
+      "ExtensionSupport": "unsupported",
+      "MCPTransports": {
+        "sse": "native",
+        "stdio": "native",
+        "streamable-http": "native"
+      },
+      "PackageMode": "native",
+      "Scopes": [
+        "user"
+      ],
+      "SkillSupport": "native"
+    },
+    "ClientID": "cline",
+    "Components": [
+      {
+        "Index": 1,
+        "Kind": "skill",
+        "Limitations": [
+          "component_not_supported_by_client",
+          "invalid_component"
+        ],
+        "Support": "unsupported"
+      }
+    ],
+    "Limitations": [
+      "authentication_not_checked",
+      "catalog_publication_not_checked",
+      "client_version_not_checked",
+      "input_has_errors",
+      "installation_not_checked",
+      "runtime_not_checked",
+      "static_adapter_support_only"
+    ]
+  },
+  {
+    "Capabilities": {
+      "ActivationMode": "manual",
+      "AppSupport": "unsupported",
+      "ClientID": "codex",
+      "ExtensionSupport": "unsupported",
+      "MCPTransports": {
+        "sse": "unsupported",
+        "stdio": "projected",
+        "streamable-http": "projected"
+      },
+      "PackageMode": "compatibility_projection",
+      "Scopes": [
+        "user"
+      ],
+      "SkillSupport": "projected"
+    },
+    "ClientID": "codex",
+    "Components": [
+      {
+        "Index": 1,
+        "Kind": "skill",
+        "Limitations": [
+          "component_not_supported_by_client",
+          "invalid_component"
+        ],
+        "Support": "unsupported"
+      }
+    ],
+    "Limitations": [
+      "authentication_not_checked",
+      "catalog_publication_not_checked",
+      "client_version_not_checked",
+      "input_has_errors",
+      "installation_not_checked",
+      "manual_activation_required",
+      "runtime_not_checked",
+      "static_adapter_support_only"
+    ]
+  },
+  {
+    "Capabilities": {
+      "ActivationMode": "manual",
+      "AppSupport": "unsupported",
+      "ClientID": "copilot",
+      "ExtensionSupport": "native",
+      "MCPTransports": {
+        "sse": "native",
+        "stdio": "native",
+        "streamable-http": "native"
+      },
+      "PackageMode": "native",
+      "Scopes": [
+        "user"
+      ],
+      "SkillSupport": "native"
+    },
+    "ClientID": "copilot",
+    "Components": [
+      {
+        "Index": 1,
+        "Kind": "skill",
+        "Limitations": [
+          "component_not_supported_by_client",
+          "invalid_component"
+        ],
+        "Support": "unsupported"
+      }
+    ],
+    "Limitations": [
+      "authentication_not_checked",
+      "catalog_publication_not_checked",
+      "client_version_not_checked",
+      "input_has_errors",
+      "installation_not_checked",
+      "manual_activation_required",
+      "runtime_not_checked",
+      "static_adapter_support_only"
+    ]
+  },
+  {
+    "Capabilities": {
+      "ActivationMode": "manual",
+      "AppSupport": "unsupported",
+      "ClientID": "cursor",
+      "ExtensionSupport": "native",
+      "MCPTransports": {
+        "sse": "native",
+        "stdio": "native",
+        "streamable-http": "native"
+      },
+      "PackageMode": "native",
+      "Scopes": [
+        "user"
+      ],
+      "SkillSupport": "native"
+    },
+    "ClientID": "cursor",
+    "Components": [
+      {
+        "Index": 1,
+        "Kind": "skill",
+        "Limitations": [
+          "component_not_supported_by_client",
+          "invalid_component"
+        ],
+        "Support": "unsupported"
+      }
+    ],
+    "Limitations": [
+      "authentication_not_checked",
+      "catalog_publication_not_checked",
+      "client_version_not_checked",
+      "input_has_errors",
+      "installation_not_checked",
+      "manual_activation_required",
+      "runtime_not_checked",
+      "static_adapter_support_only"
+    ]
+  },
+  {
+    "Capabilities": {
+      "ActivationMode": "manual",
+      "AppSupport": "unsupported",
+      "ClientID": "gemini",
+      "ExtensionSupport": "unsupported",
+      "MCPTransports": {
+        "sse": "native",
+        "stdio": "native",
+        "streamable-http": "native"
+      },
+      "PackageMode": "native",
+      "Scopes": [
+        "user"
+      ],
+      "SkillSupport": "native"
+    },
+    "ClientID": "gemini",
+    "Components": [
+      {
+        "Index": 1,
+        "Kind": "skill",
+        "Limitations": [
+          "component_not_supported_by_client",
+          "invalid_component"
+        ],
+        "Support": "unsupported"
+      }
+    ],
+    "Limitations": [
+      "authentication_not_checked",
+      "catalog_publication_not_checked",
+      "client_version_not_checked",
+      "input_has_errors",
+      "installation_not_checked",
+      "manual_activation_required",
+      "runtime_not_checked",
+      "static_adapter_support_only"
+    ]
+  },
+  {
+    "Capabilities": {
+      "ActivationMode": "manual",
+      "AppSupport": "unsupported",
+      "ClientID": "kiro",
+      "ExtensionSupport": "unsupported",
+      "MCPTransports": {
+        "sse": "native",
+        "stdio": "native",
+        "streamable-http": "native"
+      },
+      "PackageMode": "native",
+      "Scopes": [
+        "user"
+      ],
+      "SkillSupport": "native"
+    },
+    "ClientID": "kiro",
+    "Components": [
+      {
+        "Index": 1,
+        "Kind": "skill",
+        "Limitations": [
+          "component_not_supported_by_client",
+          "invalid_component"
+        ],
+        "Support": "unsupported"
+      }
+    ],
+    "Limitations": [
+      "authentication_not_checked",
+      "catalog_publication_not_checked",
+      "client_version_not_checked",
+      "input_has_errors",
+      "installation_not_checked",
+      "manual_activation_required",
+      "runtime_not_checked",
+      "static_adapter_support_only"
+    ]
+  },
+  {
+    "Capabilities": {
+      "ActivationMode": "automatic",
+      "AppSupport": "unsupported",
+      "ClientID": "opencode",
+      "ExtensionSupport": "unsupported",
+      "MCPTransports": {
+        "sse": "unsupported",
+        "stdio": "prepared",
+        "streamable-http": "prepared"
+      },
+      "PackageMode": "prepared_package",
+      "Scopes": [
+        "user"
+      ],
+      "SkillSupport": "prepared"
+    },
+    "ClientID": "opencode",
+    "Components": [
+      {
+        "Index": 1,
+        "Kind": "skill",
+        "Limitations": [
+          "component_not_supported_by_client",
+          "invalid_component"
+        ],
+        "Support": "unsupported"
+      }
+    ],
+    "Limitations": [
+      "authentication_not_checked",
+      "catalog_publication_not_checked",
+      "client_version_not_checked",
+      "input_has_errors",
+      "installation_not_checked",
+      "runtime_not_checked",
+      "static_adapter_support_only"
+    ]
+  },
+  {
+    "Capabilities": {
+      "ActivationMode": "manual",
+      "AppSupport": "unsupported",
+      "ClientID": "vscode",
+      "ExtensionSupport": "prepared",
+      "MCPTransports": {
+        "sse": "prepared",
+        "stdio": "prepared",
+        "streamable-http": "prepared"
+      },
+      "PackageMode": "prepared_package",
+      "Scopes": [
+        "user"
+      ],
+      "SkillSupport": "prepared"
+    },
+    "ClientID": "vscode",
+    "Components": [
+      {
+        "Index": 1,
+        "Kind": "skill",
+        "Limitations": [
+          "component_not_supported_by_client",
+          "invalid_component"
+        ],
+        "Support": "unsupported"
+      }
+    ],
+    "Limitations": [
+      "authentication_not_checked",
+      "catalog_publication_not_checked",
+      "client_version_not_checked",
+      "input_has_errors",
+      "installation_not_checked",
+      "manual_activation_required",
+      "runtime_not_checked",
+      "static_adapter_support_only"
+    ]
+  },
+  {
+    "Capabilities": {
+      "ActivationMode": "manual",
+      "AppSupport": "unsupported",
+      "ClientID": "windsurf",
+      "ExtensionSupport": "prepared",
+      "MCPTransports": {
+        "sse": "prepared",
+        "stdio": "prepared",
+        "streamable-http": "prepared"
+      },
+      "PackageMode": "prepared_package",
+      "Scopes": [
+        "user"
+      ],
+      "SkillSupport": "prepared"
+    },
+    "ClientID": "windsurf",
+    "Components": [
+      {
+        "Index": 1,
+        "Kind": "skill",
+        "Limitations": [
+          "component_not_supported_by_client",
+          "invalid_component"
+        ],
+        "Support": "unsupported"
+      }
+    ],
+    "Limitations": [
+      "authentication_not_checked",
+      "catalog_publication_not_checked",
+      "client_version_not_checked",
+      "input_has_errors",
+      "installation_not_checked",
+      "manual_activation_required",
+      "runtime_not_checked",
+      "static_adapter_support_only",
+      "windsurf_channel_selection_required",
+      "windsurf_skills_prepared_only"
+    ]
+  }
+]
