@@ -24,6 +24,44 @@ Historical maintainer references live in:
 
 Rule: the CLI must not construct `plugininstall` adapters directly. It uses the `plugininstall` facade.
 
+## Agent Plugins Core: Layering, Import Rules, Size Limits
+
+The `agentplugins` install core spans three packages: `install/integrationctl/agentplugins/...`,
+`cli/plugin-kit-ai/internal/agentpluginscli/...` and `cli/plugin-kit-ai/cmd/agentplugins`.
+Dependencies point inward.
+
+| Layer | Package | May import |
+|-------|---------|------------|
+| Domain | `agentplugins/domain` | stdlib only |
+| Ports | `agentplugins/ports` | stdlib, `domain`, `install/integrationctl/ports` (see below) |
+| Use cases | `agentplugins/usecase` | stdlib, `domain`, `ports`, `transaction`, `pathcontract` |
+| Adapters | `agentplugins/{adapters,providers,planner}` | the layers above |
+| CLI | `agentpluginscli` | the public facades of the layers above |
+| Composition root | `cmd/agentplugins` | everything, and nothing imports it |
+
+Each rule in the table has a matching `depguard` rule in `.golangci.yml`, so the
+boundary is checked on every run rather than agreed in review. The `usecase` deny
+list currently forbids `adapters`, `providers` and `clients`; it grows as the
+remaining violations are removed.
+
+### Accepted exceptions
+
+**`ports` may import `install/integrationctl/ports`.** That package holds
+`Command` and `CommandResult`: plain data types with no behavior and no I/O, and
+`providers.CommandRunner` and `treeCommandRunner` are already defined on top of
+them. Their runtime implementation, `adapters/process.OS`, stays an adapter and
+is not covered by the exception. Duplicating the two types into `domain` would
+create a second source of truth and force a conversion on every call, which costs
+more than the formal purity is worth.
+
+### Size limits
+
+New code is held to 500 lines per file, 60 lines and 40 statements per function,
+cyclomatic complexity 20, cognitive complexity 25. Files that already exceeded
+these limits are listed in the shrink-only legacy baseline in `.golangci.yml`.
+See [CONTRIBUTING.md](../CONTRIBUTING.md#lint-gate-and-size-limits) for the
+commands and the baseline policy.
+
 ## SDK Runtime
 
 - `sdk` exposes only shared runtime composition.

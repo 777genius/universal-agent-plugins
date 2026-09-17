@@ -440,7 +440,10 @@ func TestPostCommitCleanupErrorRetainsCommittedResult(t *testing.T) {
 		}
 		return nil
 	}}
-	result, err := apply(context.Background(), planFor(t, "skill"), ApplyOptions{Destination: dest, Validate: func(ctx context.Context, s string, root *os.Root) error { container = filepath.Dir(s); return validate(ctx, s, root) }}, ops)
+	result, err := apply(context.Background(), planFor(t, "skill"), ApplyOptions{Destination: dest, Validate: func(ctx context.Context, s string, root *os.Root) error {
+		container = filepath.Dir(s)
+		return validate(ctx, s, root)
+	}}, ops)
 	var cleanup *CleanupError
 	if !errors.As(err, &cleanup) || !result.Committed || result.Destination != dest {
 		t.Fatalf("lost committed result: %+v %v", result, err)

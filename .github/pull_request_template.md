@@ -6,6 +6,7 @@
 ## Verification
 
 - [ ] `go test ./...`
+- [ ] `make lint`
 - [ ] `make vet`
 - [ ] `make generated-check`
 - [ ] added or updated focused tests

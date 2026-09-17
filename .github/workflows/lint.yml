@@ -1,0 +1,54 @@
+name: Lint
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        module: [".", "cli/plugin-kit-ai", "install/integrationctl"]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          # only-new-issues and the baseline check both need the base revision
+          fetch-depth: 0
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.25.13"
+          cache: false
+
+      # Correctness and style on changed lines only: the legacy tree predates the
+      # linter and fixing it wholesale is not this gate's job.
+      - name: Lint changed lines
+        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
+        with:
+          version: v2.13.2
+          working-directory: ${{ matrix.module }}
+          only-new-issues: true
+
+      # Size, complexity and import boundaries on whole files: --new-from-* would
+      # miss growth inside an already oversized function, and an import boundary
+      # has to hold everywhere, not only on touched lines.
+      - name: Size and architecture gate
+        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
+        with:
+          version: v2.13.2
+          working-directory: ${{ matrix.module }}
+          only-new-issues: false
+          args: --enable-only=revive,funlen,gocyclo,gocognit,dupl,depguard
+
+      - name: Legacy baseline is shrink-only
+        if: matrix.module == '.'
+        # Branch names reach the shell through the environment, never through
+        # expression interpolation inside run:.
+        env:
+          BASE_BRANCH: ${{ github.base_ref || github.ref_name }}
+        run: bash scripts/check-lint-baseline.sh "origin/$BASE_BRANCH"

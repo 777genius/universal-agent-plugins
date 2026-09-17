@@ -1,0 +1,698 @@
+version: "2"
+
+run:
+  timeout: 6m
+  tests: true
+  # Paths in exclusions are matched from the git root: the linter runs once per
+  # module (".", "cli/plugin-kit-ai", "install/integrationctl") and without this
+  # the same file would need a different pattern in every module.
+  relative-path-mode: gitroot
+
+linters:
+  default: none
+  enable:
+    # correctness
+    - errcheck
+    - govet
+    - staticcheck
+    - unused
+    - ineffassign
+    - errorlint
+    - nilerr
+    - bodyclose
+    - noctx
+    - copyloopvar
+    - intrange
+    - wastedassign
+    - unconvert
+    - unparam
+    - prealloc
+    - gosec
+    - nolintlint
+    # style
+    - gocritic
+    - misspell
+    - revive
+    # size / complexity / duplication (size gate)
+    - funlen
+    - gocyclo
+    - gocognit
+    - dupl
+    # architecture
+    - depguard
+  settings:
+    revive:
+      rules:
+        # The maximum key is `max`, NOT `maxLines`. revive normalizes argument
+        # names as ToLower(ReplaceAll(name, "-", "")), so `maxLines`/`max-lines`
+        # normalize to `maxlines`, never match `max`, and the limit is silently
+        # skipped.
+        - name: file-length-limit
+          arguments: [{ max: 500, skipComments: true, skipBlankLines: true }]
+        # Only rules with zero or cheap legacy noise, so revive can run in
+        # full-file mode together with the size gate.
+        - name: var-naming
+        - name: receiver-naming
+        - name: error-return
+        - name: error-strings
+        - name: errorf
+        - name: unreachable-code
+        - name: superfluous-else
+        - name: indent-error-flow
+        - name: context-as-argument
+        - name: redundant-import-alias
+        # `exported` (godoc on every export) is deliberately off: the project
+        # does not document that way and the rule would be pure noise.
+        # `unused-parameter` is off too: the first full run produced 172 hits,
+        # almost all of them interface implementations and test seams that must
+        # keep the parameter name for readability.
+    funlen:
+      lines: 60
+      statements: 40
+      ignore-comments: true
+    gocyclo:
+      min-complexity: 20
+    gocognit:
+      min-complexity: 25
+    dupl:
+      # 120 tokens. Lowering it does not buy the duplicate `*NativeComponents`
+      # predicates: they stay undetected even at 70, so DRY there is enforced by
+      # review and by the dedup parts of the refactor, not by dupl.
+      threshold: 120
+    gocritic:
+      enabled-tags: [diagnostic, style]
+      # Measured on the first full run (799 findings before exclusions). The six
+      # checks below account for 699 of them and each is a style preference this
+      # codebase deliberately does not share.
+      disabled-checks:
+        - octalLiteral # file modes are written as 0o644/0755 on purpose
+        - unnamedResult # multi-result helpers read fine unnamed here
+        - paramTypeCombine # signatures are kept one-type-per-parameter for diffability
+        - sloppyReassign # `if err = f(); err != nil` is used consistently
+        - filepathJoin # "plugin/plugin.yaml" as a single Join argument is intentional
+        - ifElseChain # explicit if/else ladders over client ids are intentional
+    gosec:
+      # Measured: 273 findings before exclusions, 266 of them in the six rules
+      # below. The remainder (G103, G118, G404, G703) stays enabled on purpose.
+      excludes:
+        - G104 # unhandled errors - already covered by errcheck, duplicate reports
+        - G204 # launching client CLIs with computed args is the product
+        - G301 # 0o755 for created directories is intentional
+        - G302
+        - G304 # reading/writing files by computed path is the product; pathpolicy provides containment
+        - G306 # 0o644 for generated config files is intentional
+    misspell:
+      locale: US
+    errorlint:
+      errorf: true
+    depguard:
+      rules:
+        domain-stdlib-only: # already satisfied today - locked in by Part 0a
+          files: ["**/install/integrationctl/agentplugins/domain/**", "!$test"]
+          allow: ["$gostd"]
+        ports-only-domain: # already satisfied today - locked in by Part 0a
+          files: ["**/install/integrationctl/agentplugins/ports/**"]
+          allow:
+            - "$gostd"
+            - "github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+            # DELIBERATE EXCEPTION. install/integrationctl/ports holds Command and
+            # CommandResult: plain data types with no behavior and no I/O, already
+            # the basis of providers.CommandRunner (activator.go) and
+            # treeCommandRunner (native_identity.go). Their runtime implementation
+            # (adapters/process.OS) stays an adapter and never lands here.
+            # Duplicating the types into domain would create two sources of truth
+            # and a conversion on every call. See docs/ARCHITECTURE.md.
+            - "github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
+        usecase-through-ports: # deny list grows as violations are removed
+          files: ["**/install/integrationctl/agentplugins/usecase/**", "!$test"]
+          deny:
+            - pkg: github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters
+              desc: usecase depends on ports, not adapters
+            - pkg: github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/providers
+              desc: usecase depends on ports, not providers
+            - pkg: github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients
+              desc: usecase never sees client adapters
+  exclusions:
+    generated: lax
+    paths:
+      - "docs/generated"
+      - ".*_gen\\.go$"
+      - "website/"
+    rules:
+      - path: _test\.go
+        linters: [funlen, gocyclo, gocognit, dupl, gosec]
+      - path: _test\.go
+        linters: [revive]
+        text: "file length is"
+      # BEGIN LEGACY SIZE BASELINE (shrink-only; scripts/check-lint-baseline.sh)
+      # Generated by the first full-file run of the size gate on golangci-lint v2.13.2.
+      # A file leaves this block in the refactor part that splits it. Entries are never
+      # added by hand: check-lint-baseline.sh fails the build if the block grows.
+      #
+      # Size and complexity of legacy files (163 files).
+      - path: ^cli/plugin-kit-ai/cmd/agentplugins/bootstrapgen/main\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^cli/plugin-kit-ai/cmd/agentplugins/main\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^cli/plugin-kit-ai/cmd/agentplugins/release_root\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^cli/plugin-kit-ai/cmd/plugin-kit-ai/compat\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^cli/plugin-kit-ai/cmd/plugin-kit-ai/dev\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^cli/plugin-kit-ai/cmd/plugin-kit-ai/init_success\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^cli/plugin-kit-ai/cmd/plugin-kit-ai/integrations_commands\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^cli/plugin-kit-ai/cmd/plugin-kit-ai/integrations_report\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^cli/plugin-kit-ai/cmd/plugin-kit-ai/integrations_run\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^cli/plugin-kit-ai/cmd/plugin-kit-ai/publication_cmd_materialize\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^cli/plugin-kit-ai/cmd/plugin-kit-ai/release_compat\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^cli/plugin-kit-ai/cmd/plugin-kit-ai/test\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^cli/plugin-kit-ai/internal/agentpluginscli/add\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^cli/plugin-kit-ai/internal/agentpluginscli/add_multi\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^cli/plugin-kit-ai/internal/agentpluginscli/binding\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^cli/plugin-kit-ai/internal/agentpluginscli/engine_boundary\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^cli/plugin-kit-ai/internal/agentpluginscli/interactive_targets\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^cli/plugin-kit-ai/internal/agentpluginscli/lifecycle\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^cli/plugin-kit-ai/internal/agentpluginscli/outdated\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^cli/plugin-kit-ai/internal/agentpluginscli/prepare\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^cli/plugin-kit-ai/internal/agentpluginscli/read\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^cli/plugin-kit-ai/internal/agentpluginscli/remove_multi\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^cli/plugin-kit-ai/internal/agentpluginscli/repair_multi\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^cli/plugin-kit-ai/internal/agentpluginscli/search\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^cli/plugin-kit-ai/internal/agentpluginscli/source\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^cli/plugin-kit-ai/internal/agentpluginscli/state_migration\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^cli/plugin-kit-ai/internal/agentpluginscli/update_all\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^cli/plugin-kit-ai/internal/agentpluginscli/update_multi\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^cli/plugin-kit-ai/internal/app/bootstrap\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^cli/plugin-kit-ai/internal/app/bootstrap_node\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^cli/plugin-kit-ai/internal/app/bootstrap_python\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^cli/plugin-kit-ai/internal/authoring/bootstrap/bootstrap\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^cli/plugin-kit-ai/internal/authoring/commands/commands\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^cli/plugin-kit-ai/internal/authoring/commands/dev_session\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^cli/plugin-kit-ai/internal/authoring/commands/public_contract\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^cli/plugin-kit-ai/internal/authoring/commands/skills\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^cli/plugin-kit-ai/internal/authoring/jsonmaint/json\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^cli/plugin-kit-ai/internal/authoring/mcpruntime/runtime\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^cli/plugin-kit-ai/internal/authoring/nativeimport/native\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^cli/plugin-kit-ai/internal/authoring/project/project\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^cli/plugin-kit-ai/internal/authoring/readiness/doctor\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^cli/plugin-kit-ai/internal/authoring/report/public\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^cli/plugin-kit-ai/internal/authoring/report/report\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^cli/plugin-kit-ai/internal/authoring/scaffold/apply\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^cli/plugin-kit-ai/internal/authoring/scaffold/paths\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^cli/plugin-kit-ai/internal/authoring/scaffold/plan\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^cli/plugin-kit-ai/internal/authoring/scaffold/skill_plan\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^cli/plugin-kit-ai/internal/authoring/skills/skills\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^cli/plugin-kit-ai/internal/authoringcli/flags\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^cli/plugin-kit-ai/internal/authoringcli/release\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^cli/plugin-kit-ai/internal/codexmanifest/manifest_import_decode\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^cli/plugin-kit-ai/internal/geminimanifest/manifest_decode\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^cli/plugin-kit-ai/internal/platformexec/claude_generate\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^cli/plugin-kit-ai/internal/platformexec/codex_validate_runtime\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^cli/plugin-kit-ai/internal/platformexec/cursor_workspace_validate\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^cli/plugin-kit-ai/internal/platformexec/gemini_validate_extension_settings\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^cli/plugin-kit-ai/internal/platformexec/gemini_validate_extension_themes\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^cli/plugin-kit-ai/internal/platformexec/opencode_import_inline_agent\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^cli/plugin-kit-ai/internal/platformexec/opencode_validate\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^cli/plugin-kit-ai/internal/platformexec/opencode_validate_config\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^cli/plugin-kit-ai/internal/platformexec/opencode_validate_plugin_files\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^cli/plugin-kit-ai/internal/platformexec/opencode_validate_tools\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^cli/plugin-kit-ai/internal/pluginmanifest/discover\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^cli/plugin-kit-ai/internal/pluginmanifest/import\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^cli/plugin-kit-ai/internal/pluginmanifest/parse_save\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^cli/plugin-kit-ai/internal/pluginmanifest/parse_schema\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^cli/plugin-kit-ai/internal/pluginmanifest/render\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^cli/plugin-kit-ai/internal/pluginmanifest/render_targets\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^cli/plugin-kit-ai/internal/pluginmodel/mcp_native\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^cli/plugin-kit-ai/internal/pluginmodel/mcp_validate\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^cli/plugin-kit-ai/internal/runtimecheck/runtimecheck_python_detect\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^cli/plugin-kit-ai/internal/skills/adapters/generate/claude\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^cli/plugin-kit-ai/internal/skills/adapters/generate/codex\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^cli/plugin-kit-ai/internal/skills/app/service_generate\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^cli/plugin-kit-ai/internal/terminalprompts/huh\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^cli/plugin-kit-ai/internal/validate/validate_paths\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^cli/plugin-kit-ai/tools/authoring-docs/source\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^cmd/agentplugins-registry-mirror/main\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^install/integrationctl/adapters/claude/materialize_authored\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^install/integrationctl/adapters/claude/materialize_mcp\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^install/integrationctl/adapters/codex/materialize_mcp\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^install/integrationctl/adapters/cursor/adapter_apply_install_update\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^install/integrationctl/adapters/cursor/adapter_apply_remove_repair\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^install/integrationctl/adapters/cursor/adapter_inspect\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^install/integrationctl/adapters/cursor/adapter_plugin_package\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^install/integrationctl/adapters/dirswap/dirswap\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^install/integrationctl/adapters/dirswap/publication\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^install/integrationctl/adapters/gemini/adapter_toggle\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^install/integrationctl/adapters/gemini/materialize_native\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^install/integrationctl/adapters/opencode/adapter_state_owned\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^install/integrationctl/adapters/process/osrunner\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^install/integrationctl/adapters/safemutate/osmutator\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^install/integrationctl/adapters/source/resolver\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^install/integrationctl/adapters/source/resolver_clone\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^install/integrationctl/adapters/source/resolver_shared\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^install/integrationctl/agentplugins/adapters/catalog/catalog\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^install/integrationctl/agentplugins/adapters/clientdetect/detector\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^install/integrationctl/agentplugins/adapters/directoryv1/cache\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^install/integrationctl/agentplugins/adapters/directoryv1/client\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^install/integrationctl/agentplugins/adapters/directoryv1/models\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^install/integrationctl/agentplugins/adapters/directoryv1/validate\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^install/integrationctl/agentplugins/adapters/discoveryv1/cache\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^install/integrationctl/agentplugins/adapters/discoveryv1/client\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^install/integrationctl/agentplugins/adapters/discoveryv1/models\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^install/integrationctl/agentplugins/adapters/loader/app\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^install/integrationctl/agentplugins/adapters/loader/loader\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^install/integrationctl/agentplugins/adapters/loader/mcp\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^install/integrationctl/agentplugins/adapters/loader/openai_plugin\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^install/integrationctl/agentplugins/adapters/loader/skills\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^install/integrationctl/agentplugins/adapters/packagedigest/captured\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^install/integrationctl/agentplugins/adapters/packagedigest/snapshot\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^install/integrationctl/agentplugins/adapters/packageview/inventory\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^install/integrationctl/agentplugins/adapters/packageview/read\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^install/integrationctl/agentplugins/adapters/packageview/source_darwin\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^install/integrationctl/agentplugins/adapters/packageview/view\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^install/integrationctl/agentplugins/adapters/processlock/lock\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^install/integrationctl/agentplugins/adapters/securityscan/release\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^install/integrationctl/agentplugins/adapters/securityv1/models\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^install/integrationctl/agentplugins/adapters/sourceacquisition/acquirer\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^install/integrationctl/agentplugins/adapters/statemigration/migrate\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^install/integrationctl/agentplugins/adapters/statev2/store\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^install/integrationctl/agentplugins/conformance/author\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^install/integrationctl/agentplugins/conformance/author_skills\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^install/integrationctl/agentplugins/conformance/decode\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^install/integrationctl/agentplugins/conformance/mcp\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^install/integrationctl/agentplugins/conformance/plugin\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^install/integrationctl/agentplugins/conformance/scan\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^install/integrationctl/agentplugins/conformance/skills\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^install/integrationctl/agentplugins/conformance/yaml_budget\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^install/integrationctl/agentplugins/domain/directory\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^install/integrationctl/agentplugins/domain/security\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^install/integrationctl/agentplugins/managedstdio/launcher\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^install/integrationctl/agentplugins/pathcontract/path\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^install/integrationctl/agentplugins/planner/compatibility\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^install/integrationctl/agentplugins/planner/planner\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^install/integrationctl/agentplugins/providers/activator\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^install/integrationctl/agentplugins/providers/claude\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^install/integrationctl/agentplugins/providers/cline_native\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^install/integrationctl/agentplugins/providers/gemini_native\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^install/integrationctl/agentplugins/providers/kiro_acp\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^install/integrationctl/agentplugins/providers/kiro_native\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^install/integrationctl/agentplugins/providers/native_identity\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^install/integrationctl/agentplugins/providers/nativeconfig/kernel\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^install/integrationctl/agentplugins/providers/nativeconfig/project\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^install/integrationctl/agentplugins/providers/opencode_native\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^install/integrationctl/agentplugins/providers/stager\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^install/integrationctl/agentplugins/providers/stdio_paths\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^install/integrationctl/agentplugins/providers/windsurf_native\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^install/integrationctl/agentplugins/transaction/kernel\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^install/integrationctl/agentplugins/usecase/binding\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^install/integrationctl/agentplugins/usecase/component_readiness\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^install/integrationctl/agentplugins/usecase/group\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^install/integrationctl/agentplugins/usecase/intent\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^install/integrationctl/agentplugins/usecase/legacy_remove\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^install/integrationctl/agentplugins/usecase/managed_selection\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^install/integrationctl/agentplugins/usecase/remove\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^install/integrationctl/agentplugins/usecase/remove_group\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^install/integrationctl/agentplugins/usecase/repair\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^install/integrationctl/agentplugins/usecase/service\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^install/integrationctl/packagesnapshot/snapshot\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^install/integrationctl/usecase/service_add\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^install/integrationctl/usecase/service_add_apply\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      - path: ^install/integrationctl/usecase/service_existing_apply_toggle\.go$
+        linters: [revive, funlen, gocyclo, gocognit, dupl]
+        text: file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of
+      #
+      # Legacy revive style findings (14 files). The rules stay enabled so new code
+      # is held to them; only these pre-existing sites are exempt.
+      - path: ^cli/plugin-kit-ai/cmd/plugin-kit-ai/release_compat\.go$
+        linters: [revive]
+        text: '^(indent-error-flow|error-strings|error-return):'
+      - path: ^cli/plugin-kit-ai/internal/agentpluginscli/lifecycle\.go$
+        linters: [revive]
+        text: '^(indent-error-flow|error-strings|error-return):'
+      - path: ^cli/plugin-kit-ai/internal/app/export_service_context_runtime\.go$
+        linters: [revive]
+        text: '^(indent-error-flow|error-strings|error-return):'
+      - path: ^cli/plugin-kit-ai/internal/app/publication_context_load_channel_target\.go$
+        linters: [revive]
+        text: '^(indent-error-flow|error-strings|error-return):'
+      - path: ^cli/plugin-kit-ai/internal/authoring/bootstrap/bootstrap\.go$
+        linters: [revive]
+        text: '^(indent-error-flow|error-strings|error-return):'
+      - path: ^cli/plugin-kit-ai/internal/authoring/commands/dev_session\.go$
+        linters: [revive]
+        text: '^(indent-error-flow|error-strings|error-return):'
+      - path: ^cli/plugin-kit-ai/internal/platformexec/claude_import\.go$
+        linters: [revive]
+        text: '^(indent-error-flow|error-strings|error-return):'
+      - path: ^cli/plugin-kit-ai/internal/platformexec/claude_import_native\.go$
+        linters: [revive]
+        text: '^(indent-error-flow|error-strings|error-return):'
+      - path: ^cli/plugin-kit-ai/internal/platformexec/codex_validate_package_contracts\.go$
+        linters: [revive]
+        text: '^(indent-error-flow|error-strings|error-return):'
+      - path: ^cli/plugin-kit-ai/internal/platformexec/cursor_package\.go$
+        linters: [revive]
+        text: '^(indent-error-flow|error-strings|error-return):'
+      - path: ^cli/plugin-kit-ai/internal/pluginmanifest/import\.go$
+        linters: [revive]
+        text: '^(indent-error-flow|error-strings|error-return):'
+      - path: ^install/integrationctl/adapters/process/osrunner\.go$
+        linters: [revive]
+        text: '^(indent-error-flow|error-strings|error-return):'
+      - path: ^install/integrationctl/agentplugins/transaction/kernel\.go$
+        linters: [revive]
+        text: '^(indent-error-flow|error-strings|error-return):'
+      - path: ^repotests/context7_catalog_live_e2e_test\.go$
+        linters: [revive]
+        text: '^(indent-error-flow|error-strings|error-return):'
+      # END LEGACY SIZE BASELINE
+
+formatters:
+  # gofumpt is deliberately absent: it would reformat many untouched files.
+  enable: [gofmt, goimports]
+  settings:
+    goimports:
+      local-prefixes: [github.com/777genius/plugin-kit-ai]
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0

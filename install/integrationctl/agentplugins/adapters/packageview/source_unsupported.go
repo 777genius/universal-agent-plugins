@@ -13,7 +13,7 @@ type pinned struct {
 }
 
 func openSource(string, GeneratedStaging) (*source, error) { return nil, fail("platform_unavailable") }
-func (*source) close() error                                { return nil }
+func (*source) close() error                               { return nil }
 func (*source) pin(string, bool) (*pinned, error) {
 	return nil, fail("platform_unavailable")
 }
