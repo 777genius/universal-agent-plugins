@@ -51,19 +51,26 @@ jobs:
       # Same target as the local preflight, so a green run here means the same
       # packages a contributor ran locally.
       - name: Run install core tests
-        # pipefail matters: without it tee would swallow a failing test run.
-        run: |
-          set -o pipefail
-          make test-core CORE_TEST_FLAGS=-cover 2>&1 | tee core-test.log
+        run: make test-core
 
+      # Informational, never a gate, and a second pass on purpose:
+      # adapters/clientdetect re-executes its own test binary to probe a client
+      # version, and under -cover the child prints a GOCOVERDIR warning into the
+      # output that probe parses. Excluding it from the instrumented run keeps
+      # the gate above identical to `make test-core`.
       - name: Report core coverage
-        if: always()
+        continue-on-error: true
         run: |
+          go list ./install/integrationctl/agentplugins/... \
+            | grep -v '/adapters/clientdetect$' \
+            | xargs go test -count=1 -cover > core-cover.log 2>&1 || true
+          (cd cli/plugin-kit-ai && go test -count=1 -cover ./internal/agentpluginscli/... ./cmd/agentplugins/...) >> core-cover.log 2>&1 || true
+          cat core-cover.log
           {
             echo '### Install core coverage'
             echo
             echo '```'
-            grep -E 'coverage:' core-test.log || echo 'no coverage lines produced'
+            grep -E 'coverage:' core-cover.log || echo 'no coverage lines produced'
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 

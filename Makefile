@@ -16,9 +16,6 @@ LINT_BASE ?= origin/main
 
 # Core packages for the fast local preflight.
 CORE_TEST_TIMEOUT ?= 10m
-# core-fast.yml passes -cover here so the workflow and the local preflight keep
-# one definition of which packages are the core.
-CORE_TEST_FLAGS ?=
 # A user-level core.hooksPath hook can reject the commits these tests create, so
 # the core lane runs git without any hooks. Same technique as
 # .github/workflows/authoring-native.yml.
@@ -48,8 +45,8 @@ lint-baseline-check:
 	bash ./scripts/check-lint-baseline.sh "$(LINT_BASE)"
 
 test-core:
-	$(CORE_TEST_GIT_ENV) go test -count=1 $(CORE_TEST_FLAGS) -timeout=$(CORE_TEST_TIMEOUT) ./install/integrationctl/agentplugins/...
-	cd cli/plugin-kit-ai && $(CORE_TEST_GIT_ENV) go test -count=1 $(CORE_TEST_FLAGS) -timeout=$(CORE_TEST_TIMEOUT) ./internal/agentpluginscli/... ./cmd/agentplugins/...
+	$(CORE_TEST_GIT_ENV) go test -count=1 -timeout=$(CORE_TEST_TIMEOUT) ./install/integrationctl/agentplugins/...
+	cd cli/plugin-kit-ai && $(CORE_TEST_GIT_ENV) go test -count=1 -timeout=$(CORE_TEST_TIMEOUT) ./internal/agentpluginscli/... ./cmd/agentplugins/...
 
 test:
 	$(MAKE) test-required
