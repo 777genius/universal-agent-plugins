@@ -140,6 +140,10 @@ func collectClientIdentities(file *ast.File, identities map[string]struct{}) {
 				declared = identifier.Name
 			} else if value.Type != nil {
 				declared = ""
+			} else if len(value.Values) > 0 {
+				// A spec inherits the previous type only when its expression
+				// list is empty. Its own untyped value ends the inheritance.
+				declared = ""
 			}
 			if declared != "ClientID" {
 				continue
