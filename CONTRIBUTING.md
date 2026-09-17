@@ -79,6 +79,11 @@ the `BEGIN LEGACY SIZE BASELINE` and `END LEGACY SIZE BASELINE` markers in
 actually trips, so a file exempt from `gocognit` is still checked by `funlen`,
 `gocyclo`, `dupl` and `revive`.
 
+The block covers three operating systems. golangci-lint only analyses files whose
+build tags match the target, so regenerating it means running the size gate under
+`GOOS=linux` and `GOOS=windows` as well as natively - otherwise every `*_linux.go`
+and `*_windows.go` file drops out of the list without a word.
+
 `scripts/check-lint-baseline.sh` keeps every lint exclusion **shrink-only**: an
 entry may be removed or narrowed, never added or widened, and that applies to
 exclusions outside the markers too. A file leaves the block when it is split or
