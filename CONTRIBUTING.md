@@ -75,9 +75,19 @@ Test files are exempt from the size and complexity limits.
 
 Files that already exceeded these limits when the gate landed are listed between
 the `BEGIN LEGACY SIZE BASELINE` and `END LEGACY SIZE BASELINE` markers in
-`.golangci.yml`. That block is **shrink-only**: `scripts/check-lint-baseline.sh`
-fails the build if an entry is added. A file leaves the block when it is split or
+`.golangci.yml`. Each entry names only the linters and message shapes that file
+actually trips, so a file exempt from `gocognit` is still checked by `funlen`,
+`gocyclo`, `dupl` and `revive`.
+
+`scripts/check-lint-baseline.sh` keeps every lint exclusion **shrink-only**: an
+entry may be removed or narrowed, never added or widened, and that applies to
+exclusions outside the markers too. A file leaves the block when it is split or
 simplified; it is never added to buy silence for new code.
+
+The script is a speed bump, not a proof. It reads the flat three-line entry shape
+the generator emits and compares linters and message patterns as literal strings,
+so restructuring the YAML or rewording a pattern will read as a change even when
+the effect is identical. That is deliberate: such an edit should be looked at.
 
 ### Suppressions
 

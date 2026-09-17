@@ -30,19 +30,22 @@ The `agentplugins` install core spans three packages: `install/integrationctl/ag
 `cli/plugin-kit-ai/internal/agentpluginscli/...` and `cli/plugin-kit-ai/cmd/agentplugins`.
 Dependencies point inward.
 
-| Layer | Package | May import |
-|-------|---------|------------|
-| Domain | `agentplugins/domain` | stdlib only |
-| Ports | `agentplugins/ports` | stdlib, `domain`, `install/integrationctl/ports` (see below) |
-| Use cases | `agentplugins/usecase` | stdlib, `domain`, `ports`, `transaction`, `pathcontract` |
-| Adapters | `agentplugins/{adapters,providers,planner}` | the layers above |
-| CLI | `agentpluginscli` | the public facades of the layers above |
-| Composition root | `cmd/agentplugins` | everything, and nothing imports it |
+| Layer | Package | May import | Enforced today |
+|-------|---------|------------|----------------|
+| Domain | `agentplugins/domain` | stdlib only | yes, `domain-stdlib-only` |
+| Ports | `agentplugins/ports` | stdlib, `domain`, `install/integrationctl/ports` (see below) | yes, `ports-only-domain` |
+| Use cases | `agentplugins/usecase` | stdlib, `domain`, `ports`, `transaction`, `pathcontract` | partly, `usecase-through-ports` |
+| Adapters | `agentplugins/{adapters,providers,planner}` | the layers above | no rule yet |
+| CLI | `agentpluginscli` | the public facades of the layers above | no rule yet |
+| Composition root | `cmd/agentplugins` | everything, and nothing imports it | no rule yet |
 
-Each rule in the table has a matching `depguard` rule in `.golangci.yml`, so the
-boundary is checked on every run rather than agreed in review. The `usecase` deny
-list currently forbids `adapters`, `providers` and `clients`; it grows as the
-remaining violations are removed.
+The "Enforced today" column is deliberate: the middle column is the target, and
+only the first three rows are currently checked by `depguard` in `.golangci.yml`.
+`usecase-through-ports` is partial - it forbids `adapters`, `providers` and
+`clients`, but `usecase` still legitimately imports `planner`, `pathpolicy` and
+`install/integrationctl/ports`. Those imports are removed, and the deny list
+extended, when the ports and DIP work lands. The adapter, CLI and composition
+root rows have no rule at all yet.
 
 ### Accepted exceptions
 

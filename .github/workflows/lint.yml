@@ -5,14 +5,29 @@ on:
 
 permissions:
   contents: read
+  # golangci-lint-action reads the PR diff through the pulls API for
+  # only-new-issues. Without this it silently falls back to a full run.
+  pull-requests: read
 
 jobs:
   lint:
+    name: ${{ matrix.name }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        module: [".", "cli/plugin-kit-ai", "install/integrationctl"]
+        include:
+          # working-directory MUST stay empty for the repo root. The action feeds
+          # the PR patch through path.relative(GITHUB_WORKSPACE, working-directory);
+          # for "." that yields "", every `diff --git` section then fails the
+          # ` a//` test and is dropped, and --new-from-patch gets an empty patch.
+          # The step would pass on any violation. Empty input skips the rewrite.
+          - name: root
+            module: ""
+          - name: cli/plugin-kit-ai
+            module: cli/plugin-kit-ai
+          - name: install/integrationctl
+            module: install/integrationctl
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -46,7 +61,7 @@ jobs:
           args: --enable-only=revive,funlen,gocyclo,gocognit,dupl,depguard
 
       - name: Legacy baseline is shrink-only
-        if: matrix.module == '.'
+        if: matrix.name == 'root'
         # Branch names reach the shell through the environment, never through
         # expression interpolation inside run:.
         env:
