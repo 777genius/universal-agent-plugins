@@ -160,7 +160,13 @@ linters:
       # A file leaves this block in the refactor part that splits it. Entries are
       # never added by hand: check-lint-baseline.sh fails the build if the block
       # grows or if an existing entry is widened.
-      # 170 files.
+      #
+      # REGENERATING: run the size gate under GOOS=linux and GOOS=windows in
+      # addition to the native OS. golangci-lint only analyses files whose build
+      # tags match the target, so a run on one OS silently omits every *_linux.go
+      # and *_windows.go file. The first generation happened on macOS and missed
+      # six of them; CI lints on ubuntu and went red on the linux one.
+      # 176 files.
       - path: ^cli/plugin-kit-ai/cmd/agentplugins/bootstrapgen/main\.go$
         linters: [funlen, gocyclo, gocognit]
         text: 'too many statements|cyclomatic complexity|cognitive complexity'
@@ -305,6 +311,9 @@ linters:
       - path: ^cli/plugin-kit-ai/internal/authoring/scaffold/plan\.go$
         linters: [funlen, gocyclo, gocognit]
         text: 'too many statements|cyclomatic complexity|cognitive complexity'
+      - path: ^cli/plugin-kit-ai/internal/authoring/scaffold/rename_windows\.go$
+        linters: [funlen, gocyclo, gocognit]
+        text: 'too many statements|cyclomatic complexity|cognitive complexity'
       - path: ^cli/plugin-kit-ai/internal/authoring/scaffold/skill_plan\.go$
         linters: [funlen, gocyclo, gocognit]
         text: 'too many statements|cyclomatic complexity|cognitive complexity'
@@ -389,6 +398,9 @@ linters:
       - path: ^cli/plugin-kit-ai/internal/pluginmodel/mcp_validate\.go$
         linters: [funlen, gocyclo, gocognit]
         text: 'too many statements|cyclomatic complexity|cognitive complexity'
+      - path: ^cli/plugin-kit-ai/internal/promptio/cancel_windows\.go$
+        linters: [funlen, gocyclo, gocognit]
+        text: 'too many statements|cyclomatic complexity|cognitive complexity'
       - path: ^cli/plugin-kit-ai/internal/runtimecheck/runtimecheck_python_detect\.go$
         linters: [funlen]
         text: 'too many statements'
@@ -452,6 +464,12 @@ linters:
       - path: ^install/integrationctl/adapters/process/osrunner\.go$
         linters: [revive, funlen, gocyclo, gocognit]
         text: 'file length is|^error-return:|too many statements|cyclomatic complexity|cognitive complexity'
+      - path: ^install/integrationctl/adapters/process/osrunner_tree_linux\.go$
+        linters: [revive, funlen, gocyclo, gocognit]
+        text: 'file length is|^error-return:|^indent-error-flow:|too many statements|cyclomatic complexity|cognitive complexity'
+      - path: ^install/integrationctl/adapters/process/osrunner_tree_windows\.go$
+        linters: [revive]
+        text: '^indent-error-flow:'
       - path: ^install/integrationctl/adapters/safemutate/osmutator\.go$
         linters: [funlen, gocognit]
         text: 'too many statements|cognitive complexity'
@@ -518,9 +536,15 @@ linters:
       - path: ^install/integrationctl/agentplugins/adapters/packageview/read\.go$
         linters: [funlen, gocyclo, gocognit]
         text: 'too many statements|cyclomatic complexity|cognitive complexity'
+      - path: ^install/integrationctl/agentplugins/adapters/packageview/scratch_windows\.go$
+        linters: [gocyclo, gocognit]
+        text: 'cyclomatic complexity|cognitive complexity'
       - path: ^install/integrationctl/agentplugins/adapters/packageview/source_darwin\.go$
         linters: [funlen, gocyclo, gocognit]
         text: 'too many statements|cyclomatic complexity|cognitive complexity'
+      - path: ^install/integrationctl/agentplugins/adapters/packageview/source_windows\.go$
+        linters: [revive, funlen, gocyclo, gocognit]
+        text: 'file length is|too many statements|cyclomatic complexity|cognitive complexity'
       - path: ^install/integrationctl/agentplugins/adapters/packageview/view\.go$
         linters: [gocyclo, gocognit]
         text: 'cyclomatic complexity|cognitive complexity'
