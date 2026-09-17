@@ -39,4 +39,3 @@ func renderGeminiHookArtifacts(root string, graph pluginmodel.PackageGraph, stat
 	}
 	return nil, nil
 }
-

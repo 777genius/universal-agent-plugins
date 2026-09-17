@@ -24,6 +24,47 @@ Historical maintainer references live in:
 
 Rule: the CLI must not construct `plugininstall` adapters directly. It uses the `plugininstall` facade.
 
+## Agent Plugins Core: Layering, Import Rules, Size Limits
+
+The `agentplugins` install core spans three packages: `install/integrationctl/agentplugins/...`,
+`cli/plugin-kit-ai/internal/agentpluginscli/...` and `cli/plugin-kit-ai/cmd/agentplugins`.
+Dependencies point inward.
+
+| Layer | Package | May import | Enforced today |
+|-------|---------|------------|----------------|
+| Domain | `agentplugins/domain` | stdlib only | yes, `domain-stdlib-only` |
+| Ports | `agentplugins/ports` | stdlib, `domain`, `install/integrationctl/ports` (see below) | yes, `ports-only-domain` |
+| Use cases | `agentplugins/usecase` | stdlib, `domain`, `ports`, `transaction`, `pathcontract` | partly, `usecase-through-ports` |
+| Adapters | `agentplugins/{adapters,providers,planner}` | the layers above | no rule yet |
+| CLI | `agentpluginscli` | the public facades of the layers above | no rule yet |
+| Composition root | `cmd/agentplugins` | everything, and nothing imports it | no rule yet |
+
+The "Enforced today" column is deliberate: the middle column is the target, and
+only the first three rows are currently checked by `depguard` in `.golangci.yml`.
+`usecase-through-ports` is partial - it forbids `adapters`, `providers` and
+`clients`, but `usecase` still legitimately imports `planner`, `pathpolicy` and
+`install/integrationctl/ports`. Those imports are removed, and the deny list
+extended, when the ports and DIP work lands. The adapter, CLI and composition
+root rows have no rule at all yet.
+
+### Accepted exceptions
+
+**`ports` may import `install/integrationctl/ports`.** That package holds
+`Command` and `CommandResult`: plain data types with no behavior and no I/O, and
+`providers.CommandRunner` and `treeCommandRunner` are already defined on top of
+them. Their runtime implementation, `adapters/process.OS`, stays an adapter and
+is not covered by the exception. Duplicating the two types into `domain` would
+create a second source of truth and force a conversion on every call, which costs
+more than the formal purity is worth.
+
+### Size limits
+
+New code is held to 500 lines per file, 60 lines and 40 statements per function,
+cyclomatic complexity 20, cognitive complexity 25. Files that already exceeded
+these limits are listed in the shrink-only legacy baseline in `.golangci.yml`.
+See [CONTRIBUTING.md](../CONTRIBUTING.md#lint-gate-and-size-limits) for the
+commands and the baseline policy.
+
 ## SDK Runtime
 
 - `sdk` exposes only shared runtime composition.

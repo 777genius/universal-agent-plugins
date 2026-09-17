@@ -7,6 +7,11 @@ on:
     branches: [main, master]
 
 jobs:
+  # Separate job rather than a step in `test`: `test` is the 9-27 min critical
+  # path, while the three lint matrix legs finish in a few minutes in parallel.
+  lint:
+    uses: ./.github/workflows/lint.yml
+
   test:
     runs-on: ubuntu-latest
     steps:

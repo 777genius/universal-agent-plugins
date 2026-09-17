@@ -22,10 +22,10 @@ type publicationDoctorInputData struct {
 }
 
 type publicationDoctorInspectionResult struct {
-	report     pluginmanifest.Inspection
-	warnings   []pluginmanifest.Warning
-	diagnosis  publicationDiagnosis
-	localRoot  *app.PluginPublicationVerifyRootResult
+	report    pluginmanifest.Inspection
+	warnings  []pluginmanifest.Warning
+	diagnosis publicationDiagnosis
+	localRoot *app.PluginPublicationVerifyRootResult
 }
 
 func publicationDoctorInput(flags publicationDoctorFlags, args []string) publicationDoctorInputData {

@@ -1,7 +1,5 @@
 package platformexec
 
-import ()
-
 func validateOpenCodeAgentFiles(root string, rels []string) []Diagnostic {
 	return validateOpenCodeAgentMarkdownFiles(root, rels)
 }
