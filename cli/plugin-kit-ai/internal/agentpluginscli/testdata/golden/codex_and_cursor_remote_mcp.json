@@ -1,0 +1,122 @@
+{
+  "schema_version": 1,
+  "command": "add",
+  "result": "success",
+  "data": {
+    "operation_id": "op-<operation>",
+    "batch": true,
+    "status": "planned",
+    "succeeded": 2,
+    "failed": 0,
+    "plugin": "demo",
+    "version": "1.0.0",
+    "source": "direct local source",
+    "tree_digest": "sha256:622a38739cfc0c5ac507888fca356030f218350c44f03c2ea2e1e3227dc00125",
+    "manifest_digest": "sha256:cd880f5b873e6011aac32306232152d06761ce00a469321f0c83813945f0a295",
+    "dry_run": true,
+    "targets": [
+      {
+        "target": "codex",
+        "status": "manual_activation_required",
+        "next_action": "verify the plugin's authentication requirements before using it",
+        "output": {
+          "operation_id": "op-<operation>",
+          "plugin": "demo",
+          "version": "1.0.0",
+          "source": "direct local source",
+          "tree_digest": "sha256:622a38739cfc0c5ac507888fca356030f218350c44f03c2ea2e1e3227dc00125",
+          "manifest_digest": "sha256:cd880f5b873e6011aac32306232152d06761ce00a469321f0c83813945f0a295",
+          "next_action": "verify the plugin's authentication requirements before using it",
+          "dry_run": true,
+          "result": {
+            "installation_id": "<uuid>",
+            "plan": {
+              "client_id": "codex",
+              "scope": "user",
+              "status": "manual_activation_required",
+              "package_mode": "compatibility_projection",
+              "activation": "manual_activation_required",
+              "authentication": "not_checked",
+              "policy": "allowed",
+              "verification": "package_validated",
+              "physical_artifact_id": "demo-<artifact>",
+              "components": [
+                {
+                  "kind": "mcp_server",
+                  "name": "demo",
+                  "support": "projected"
+                }
+              ],
+              "user_actions": [
+                "verify the plugin's authentication requirements before using it",
+                "finish installation in Codex Plugins, then start a new session"
+              ],
+              "warnings": [
+                "authentication_not_catalog_verified"
+              ]
+            },
+            "activation": {
+              "activation": "",
+              "authentication": "",
+              "policy": "",
+              "verification": ""
+            },
+            "requires_confirmation": false,
+            "mutated": false
+          }
+        }
+      },
+      {
+        "target": "cursor",
+        "status": "manual_activation_required",
+        "next_action": "verify the plugin's authentication requirements before using it",
+        "output": {
+          "operation_id": "op-<operation>",
+          "plugin": "demo",
+          "version": "1.0.0",
+          "source": "direct local source",
+          "tree_digest": "sha256:622a38739cfc0c5ac507888fca356030f218350c44f03c2ea2e1e3227dc00125",
+          "manifest_digest": "sha256:cd880f5b873e6011aac32306232152d06761ce00a469321f0c83813945f0a295",
+          "next_action": "verify the plugin's authentication requirements before using it",
+          "dry_run": true,
+          "result": {
+            "installation_id": "<uuid>",
+            "plan": {
+              "client_id": "cursor",
+              "scope": "user",
+              "status": "manual_activation_required",
+              "package_mode": "native",
+              "activation": "manual_activation_required",
+              "authentication": "not_checked",
+              "policy": "allowed",
+              "verification": "package_validated",
+              "physical_artifact_id": "demo-<artifact>",
+              "components": [
+                {
+                  "kind": "mcp_server",
+                  "name": "demo",
+                  "support": "native"
+                }
+              ],
+              "user_actions": [
+                "verify the plugin's authentication requirements before using it",
+                "reload Cursor, then verify the plugin appears before using its components"
+              ],
+              "warnings": [
+                "authentication_not_catalog_verified"
+              ]
+            },
+            "activation": {
+              "activation": "",
+              "authentication": "",
+              "policy": "",
+              "verification": ""
+            },
+            "requires_confirmation": false,
+            "mutated": false
+          }
+        }
+      }
+    ]
+  }
+}

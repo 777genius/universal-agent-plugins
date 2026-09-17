@@ -67,7 +67,7 @@
 1. Ядро сегодня: слой `domain` чистый (stdlib-only), но `usecase` зависит от конкретных адаптеров (`pathpolicy`, `planner`) и скрытых optional-контрактов; `providers.Activator` (1247 строк), `planner.Plan`, `providers.Stager`, `providers.NativeIdentityObserver`, `clientdetect.Detector` ветвятся по `ClientID`; шесть текстуально идентичных предикатов и три копии проекций; линтера нет.
 2. Целевое состояние: `domain → ports → usecase`, реализации портов — тонкие generic-диспетчеры, клиент-специфика — в пакетах `ap/clients/<id>` через контракт `ap/clients` (segregated capability-интерфейсы + `Registry` + `As[T]` + `Env`), декларативные трейты клиента в `domain.ClientTraits`, границы закреплены `depguard` и arch-тестом, размер/сложность — lint-гейтом с shrink-only baseline.
 3. Порядок: Part 0a (lint-гейт) → 0b (guardrails: golden-тесты, arch-тест, `core-fast` CI) → 1 (порты/DIP) → 2 (контракт + shared + дедупликация) → 3 detect → 4 plan → 5 перенос файлов → 6 staging → 7a/7b/7c lifecycle → 8 identity → 9a трейты → 9b резка монолитов usecase → 10 CLI/composition root → 11 финализация + ADR → финальный PR в `main`.
-4. CI: `core-fast` (4-6 мин: `lint` + `test-core` + `cross-build` + `vet-all` по 5 модулям `go.work`) как merge-gate для PR в базовую ветку; полный `Required` — на `push` в `refactor/**` после мерджа; локальный `make lint test-core` перед PR.
+4. CI: `core-fast` (4-6 мин: `lint` + `test-core` + `cross-build` + `vet-all` по 5 модулям `go.work`) как merge-gate для PR в базовую ветку; полный `Required` — на `push` в базовую ветку `refactor/installer-core-clean-architecture` (точное имя, не глоб) после мерджа; локальный `make lint test-core` перед PR.
 5. Прогноз: SOLID 7.5-8, DRY 7.5-8, Clean Architecture 7-7.5, Модульность 7-7.5, Качество кода 7 (среднее **≈ 7.0-7.5** против 7.4 у конкурента) — паритет, а не превосходство по каждому критерию. Обоснование понижения — §12.
 
 ---
@@ -627,7 +627,7 @@ jobs:
 ### 7.1. Файлы
 
 - `.github/workflows/core-fast.yml` (см. §10): `lint` (через `lint.yml`), `test-core`, `cross-build`, `vet-all`.
-- `.github/workflows/ci.yml`: добавить `push: branches: [main, master, 'refactor/**']`.
+- `.github/workflows/ci.yml`: добавить `push: branches: [main, master, refactor/installer-core-clean-architecture]`. Именно точное имя базовой ветки, а не глоб `refactor/**`: глоб ловит и ветки частей, и тогда полный Required (12-17 мин) идёт на каждый push каждой части — ровно тот двойной расход, которого §10 избегает.
 - Новый пакет `ap/internal/archtest` (см. §7.2).
 - Golden-тесты:
   - `planner/golden_test.go`: `Plan` для 11 клиентов × 4 репрезентативных envelope (skills-only; stdio MCP; remote MCP + app; invalid components) → JSON плана + `UserActions`/`Warnings`/`LocalActions` в `testdata/golden/*.json`. **Отдельный кейс фиксирует расхождение `Detected`**: planner с пустой картой (как в `cmd/main.go:136`) и с реальной картой (как в CLI) дают разные результаты для `hasNativeCopilotBackend` — это текущее поведение, и оно не должно «выровняться» при переходе на `PlanRequest`;
@@ -644,11 +644,18 @@ jobs:
 
 **(b) Бюджет ветвлений по ClientID** — метрика определена формально:
 
-> **Метрика:** количество AST-узлов `*ast.SelectorExpr`, у которых `X` — идентификатор, разрешающийся в импорт пакета `domain`, а `Sel.Name` соответствует регулярному выражению `^Client[A-Z][A-Za-z0-9]*$`, подсчитанное по non-test файлам (`!strings.HasSuffix(name, "_test.go")`) пакетов, не входящих в allow-list. Allow-list: `domain/clients.go`, `clients/<id>/**`, `clients/all/**`.
+> **Метрика:** количество AST-узлов `*ast.SelectorExpr`, у которых `X` — идентификатор, разрешающийся в импорт пакета `domain`, а `Sel.Name` — имя, объявленное в пакете `domain` как `const` типа `ClientID`, подсчитанное по non-test файлам (`!strings.HasSuffix(name, "_test.go")`) пакетов, не входящих в allow-list. Множество имён определяется парсингом самого `domain/*.go`, а не списком в инструменте. Allow-list: `domain/clients.go`, `clients/<id>/**`, `clients/all/**`.
 
-Свойства метрики: воспроизводима (один проход AST, без эвристик), не зависит от формы кода (`switch`, `if`, `map`-литерал считаются одинаково), не зависит от форматирования.
+Свойства метрики: воспроизводима (один проход AST, без эвристик), не зависит от формы кода (`switch`, `if`, `map`-литерал считаются одинаково), не зависит от форматирования, автоматически учитывает добавление двенадцатого клиента.
 
-**Baseline генерируется первым прогоном самого инструмента** (`go run ./internal/archtest -update`) и коммитится как `internal/archtest/testdata/client_id_budget.json`. Абсолютные числа в этом документе **намеренно не приводятся**: три разных способа подсчёта дают три разных набора значений, и ручные оценки черновика не воспроизводятся ни одним из них. В критериях приёмки каждой части фигурирует только направление («бюджет пакета X → 0») и запрет на рост (ratchet).
+**Исправление формулировки (Part 0b, по факту реализации).** В черновике метрика была задана регулярным выражением `^Client[A-Z][A-Za-z0-9]*$` по `Sel.Name`. Так она считает не только константы идентичности, но и типы/функции пакета `domain`: `ClientID` (383 вхождения в скане), `ClientBinding` (141), `ClientSurface` (36), `ClientPackageRevision` (21), `ClientCapabilities`, `ClientDefinitionFor`/`ClientDefinitions`/`ClientDefinition`. Это не ветвление по клиенту, а обычные ссылки на типы, и следствий два:
+
+1. Ratchet краснел бы на изменениях, которые предписывает сам план: `domain.PlanRequest{Detected map[domain.ClientID]domain.DetectedClient}` (§8.1), `clients.Registry.Lookup(domain.ClientID)` (§8.2), `domain.ParseClientID` (§8.10) добавляют вхождения `domain.ClientID`, не добавляя ни одного ветвления.
+2. Критерий DoD §11 «ноль ветвлений по `ClientID` вне allow-list» становится физически недостижимым: `usecase` и `ports` обязаны называть этот тип.
+
+Суженная формулировка выше воспроизводит независимый selector-подсчёт из §2.1 (cli 89, usecase 40, clientdetect 22, providers 79 = activator 38 + stager 21 + native_identity 16 + остальное) — это и есть подтверждение, что регулярка черновика была опиской, а не решением. **Все части ссылаются на исправленную формулировку.**
+
+**Baseline генерируется первым прогоном самого инструмента** (`cd install/integrationctl && go run ./agentplugins/internal/archtest -update`) и коммитится как `internal/archtest/testdata/client_id_budget.json`. Единственный источник правды по абсолютным числам — этот файл; в документе они **намеренно не дублируются**, потому что устареют с первой же частью. В критериях приёмки каждой части фигурирует только направление («бюджет пакета X → 0») и запрет на рост (ratchet).
 
 **Признанные ограничения метрики** (важно для §12): она ловит только selector-выражения `domain.Client<X>`. Обходится строковым литералом ID (`domain.ClientID("cursor")`) или сравнением по `BackendFamily`. Это детектор регрессии, а не доказательство отсутствия клиент-специфики. Компенсация — ревью и `contracttest`, а не иллюзия полноты.
 
@@ -848,7 +855,7 @@ Generic-pipeline `stage`: validate plan paths (`Paths` + `StagingLayout.Validate
 | Job | Что делает | Ожидаемое время |
 |---|---|---|
 | `lint` | через `lint.yml`, матрица 3 модуля | 3-5 мин |
-| `test-core` | `go test -count=1 -cover` для `ap/...`, `cli/…/agentpluginscli/...`, `cli/…/cmd/agentplugins/...`; проценты в job summary | 2-4 мин |
+| `test-core` | `make test-core` (те же пакеты, что в локальном preflight); отдельным информационным шагом `go test -cover` с процентами в job summary | 2-4 мин |
 | `cross-build` | `GOOS=windows\|darwin\|linux go build ./...` в `install/integrationctl` и `cli/plugin-kit-ai` | 1-2 мин |
 | **`vet-all`** (новый, правка C-1) | `go vet ./...` в каждом из **5** модулей `go.work`: `.`, `cli/plugin-kit-ai`, `install/integrationctl`, `install/plugininstall`, `sdk` | 1-2 мин |
 
@@ -857,7 +864,7 @@ Wall 4-6 мин. Это merge-gate для каждой части.
 **Зачем `vet-all`.** `test-core` не компилирует код вне ядра, который от ядра зависит, а Parts 1, 2, 4, 10 меняют именно те API, которые он использует: VERIFIED 16+ non-test файлов (`cli/internal/authoring/{commands,mcpruntime,nativeimport,project,readiness,report,scaffold,skills}`, `cli/internal/terminalprompts/{huh,plain}.go`, `cli/cmd/agentplugins-conformance-adapter/main.go`, `cmd/agentplugins-registry-mirror/main.go` в root-модуле) плюс тесты `repotests/*` и `authoring/*_test.go`. Без этого job поломка компиляции видна только post-merge через 10-27 мин. `go vet` компилирует пакеты вместе с тестами, то есть ловит и `repotests`.
 
 Остальное:
-- `ci.yml`: добавить `push: branches: [main, master, 'refactor/**']` → полный Required идёт после мерджа каждой части в базовую ветку, асинхронно. Правило: следующая часть не мерджится, пока Required на базовой ветке красный (fix-forward PR).
+- `ci.yml`: добавить `push: branches: [main, master, refactor/installer-core-clean-architecture]` → полный Required идёт после мерджа каждой части в базовую ветку, асинхронно. **Глоб `refactor/**` здесь неверен** (проверено на практике в Part 0b: 4 полных прогона по 12-17 мин на ветке одной части, по одному на каждый push) — он запускает Required и на ветках частей, где их гейтом должен быть только `core-fast`. Правило: следующая часть не мерджится, пока Required на базовой ветке красный (fix-forward PR).
 - Локально перед открытием PR: `make lint test-core` (1-3 мин, с обходом git-хука, §6.2). Полный локальный Required не требуем: дублирует CI.
 - Мердж части: `gh pr merge --squash` после зелёного `core-fast` и ревью; авто-мердж репозитория не включаем (настройка видна всем, требует отдельного согласия).
 - Сразу после мерджа — `git merge origin/main` в базовую ветку (§5.2).
@@ -881,7 +888,9 @@ Wall 5-7 мин и для `main`. Полезно, но меняет общий C
 
 Не рекомендую: локальный полный прогон ненадёжен на этой машине и не воспроизводим для ревьюера. Надёжность 3/10, уверенность 9/10.
 
-Дополнительно: Coverage бегает только на `main` — финальный PR его получит; для промежуточных частей контроль покрытия — счётчик тест-функций + `go test -cover` в `test-core` с выводом процентов по core-пакетам в job summary (без порога, информативно).
+Дополнительно: Coverage бегает только на `main` — финальный PR его получит; для промежуточных частей контроль покрытия — счётчик тест-функций + отдельный информационный шаг `go test -cover` с выводом процентов по core-пакетам в job summary (без порога, `continue-on-error`).
+
+**Почему coverage вынесен из гейта, а не добавлен флагом** (установлено в Part 0b): `-cover` на всём ядре роняет `clientdetect.TestExecutableVersionProbeIsSanitizedAndIsolated`. Тест перезапускает собственный тестовый бинарь и парсит его stdout как JSON, а инструментированный процесс дописывает туда `warning: GOCOVERDIR not set`; probe намеренно вычищает окружение, поэтому передать `GOCOVERDIR` ребёнку нельзя. Гейт остаётся побайтовым `make test-core` (паритет с локальным preflight), а информационный шаг исключает этот один пакет.
 
 ---
 

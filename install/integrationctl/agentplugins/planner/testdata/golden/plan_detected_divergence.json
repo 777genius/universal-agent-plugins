@@ -1,0 +1,78 @@
+{
+  "empty_detected_map": {
+    "Activation": "manual_activation_required",
+    "ActivePath": "\u003croot\u003e/managed/clients/vscode/demo-0123456789ab",
+    "Authentication": "not_checked",
+    "ClientID": "vscode",
+    "Components": [
+      {
+        "Kind": "skill",
+        "Name": "docs",
+        "Reason": "",
+        "Support": "prepared"
+      }
+    ],
+    "DeclaredName": "demo",
+    "DeclaredVersion": "1.0.0",
+    "Diagnostics": null,
+    "InstallIntent": "",
+    "LocalActions": null,
+    "LocalPreparationAuthorized": false,
+    "NativeRegistryExecutable": "",
+    "NativeRegistryRoot": "",
+    "PackageMode": "prepared_package",
+    "PersonalChatGPTPreparation": false,
+    "PhysicalArtifactID": "demo-0123456789ab",
+    "Policy": "allowed",
+    "Scope": "user",
+    "Status": "manual_activation_required",
+    "TargetAnchor": "\u003croot\u003e/managed",
+    "TargetRoot": "\u003croot\u003e/managed/clients/vscode",
+    "UserActions": [
+      "verify the plugin's authentication requirements before using it",
+      "register the prepared local plugin in VS Code after installation"
+    ],
+    "Verification": "package_validated",
+    "Warnings": [
+      "authentication_not_catalog_verified"
+    ]
+  },
+  "real_detected_map": {
+    "Activation": "prepared",
+    "ActivePath": "\u003croot\u003e/managed/clients/vscode/demo-0123456789ab",
+    "Authentication": "not_checked",
+    "ClientID": "vscode",
+    "Components": [
+      {
+        "Kind": "skill",
+        "Name": "docs",
+        "Reason": "",
+        "Support": "prepared"
+      }
+    ],
+    "DeclaredName": "demo",
+    "DeclaredVersion": "1.0.0",
+    "Diagnostics": null,
+    "InstallIntent": "",
+    "LocalActions": null,
+    "LocalPreparationAuthorized": false,
+    "NativeRegistryExecutable": "\u003croot\u003e/bin/copilot",
+    "NativeRegistryRoot": "\u003croot\u003e/clients/copilot",
+    "PackageMode": "prepared_package",
+    "PersonalChatGPTPreparation": false,
+    "PhysicalArtifactID": "demo-0123456789ab",
+    "Policy": "allowed",
+    "Scope": "user",
+    "Status": "ready",
+    "TargetAnchor": "\u003croot\u003e/managed",
+    "TargetRoot": "\u003croot\u003e/managed/clients/vscode",
+    "UserActions": [
+      "verify the plugin's authentication requirements before using it",
+      "agentplugins will install through GitHub Copilot CLI; VS Code discovers it automatically"
+    ],
+    "Verification": "package_validated",
+    "Warnings": [
+      "authentication_not_catalog_verified"
+    ]
+  }
+}

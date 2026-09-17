@@ -1,0 +1,265 @@
+{
+  "chatgpt": {
+    "Commands": [],
+    "Error": "",
+    "Outcome": {
+      "Activation": "manual_activation_required",
+      "ActivationAttested": false,
+      "Authentication": "not_checked",
+      "AuthenticationAttested": false,
+      "AuthoritativeObservation": false,
+      "LocalActions": [
+        "open ChatGPT Plugins and install demo from the prepared marketplace at \u003croot\u003e/managed/clients/chatgpt/demo-0123456789ab, then confirm it is enabled in a new chat"
+      ],
+      "Policy": "allowed",
+      "UserActions": [
+        "install the prepared skills-only plugin from ChatGPT Plugins, then confirm it is enabled in a new chat"
+      ],
+      "Verification": "package_validated"
+    }
+  },
+  "claude": {
+    "Commands": [
+      [
+        "\u003croot\u003e/bin/claude",
+        "plugin",
+        "list",
+        "--json"
+      ]
+    ],
+    "Error": "",
+    "Outcome": {
+      "Activation": "active",
+      "ActivationAttested": false,
+      "Authentication": "not_checked",
+      "AuthenticationAttested": false,
+      "AuthoritativeObservation": false,
+      "LocalActions": null,
+      "Policy": "allowed",
+      "UserActions": null,
+      "Verification": "installation_verified"
+    }
+  },
+  "cline": {
+    "Commands": [],
+    "Error": "",
+    "Outcome": {
+      "Activation": "active",
+      "ActivationAttested": false,
+      "Authentication": "not_checked",
+      "AuthenticationAttested": false,
+      "AuthoritativeObservation": false,
+      "LocalActions": null,
+      "Policy": "allowed",
+      "UserActions": [
+        "reload the Cline MCP view in VS Code, or start a new Cline CLI process"
+      ],
+      "Verification": "installation_verified"
+    }
+  },
+  "codex": {
+    "Commands": [
+      [
+        "\u003croot\u003e/bin/codex",
+        "plugin",
+        "marketplace",
+        "add",
+        "\u003croot\u003e/managed/clients/codex/demo-0123456789ab",
+        "--json"
+      ],
+      [
+        "\u003croot\u003e/bin/codex",
+        "plugin",
+        "add",
+        "demo@agentplugins-8f97b00da374",
+        "--json"
+      ],
+      [
+        "\u003croot\u003e/bin/codex",
+        "plugin",
+        "list",
+        "--json"
+      ]
+    ],
+    "Error": "",
+    "Outcome": {
+      "Activation": "manual_activation_required",
+      "ActivationAttested": false,
+      "Authentication": "not_checked",
+      "AuthenticationAttested": false,
+      "AuthoritativeObservation": false,
+      "LocalActions": [
+        "the `\u003croot\u003e/bin/codex plugin list --json` output contract was not recognized; inspect demo manually"
+      ],
+      "Policy": "allowed",
+      "UserActions": [
+        "confirm the managed plugin is installed and enabled in Codex"
+      ],
+      "Verification": "package_validated"
+    }
+  },
+  "copilot": {
+    "Commands": [
+      [
+        "\u003croot\u003e/bin/copilot",
+        "plugin",
+        "marketplace",
+        "add",
+        "\u003croot\u003e/managed/clients/copilot/demo-0123456789ab"
+      ],
+      [
+        "\u003croot\u003e/bin/copilot",
+        "plugin",
+        "install",
+        "demo@agentplugins-8f97b00da374"
+      ],
+      [
+        "\u003croot\u003e/bin/copilot",
+        "plugin",
+        "list"
+      ]
+    ],
+    "Error": "",
+    "Outcome": {
+      "Activation": "active",
+      "ActivationAttested": false,
+      "Authentication": "not_checked",
+      "AuthenticationAttested": false,
+      "AuthoritativeObservation": false,
+      "LocalActions": null,
+      "Policy": "allowed",
+      "UserActions": null,
+      "Verification": "installation_verified"
+    }
+  },
+  "cursor": {
+    "Commands": [],
+    "Error": "",
+    "Outcome": {
+      "Activation": "manual_activation_required",
+      "ActivationAttested": false,
+      "Authentication": "not_checked",
+      "AuthenticationAttested": false,
+      "AuthoritativeObservation": false,
+      "LocalActions": [
+        "open Cursor and register \u003croot\u003e/cursor/config/plugins/local/demo-0123456789ab, then reload Cursor and verify demo is visible"
+      ],
+      "Policy": "allowed",
+      "UserActions": [
+        "register the prepared package in Cursor and verify it is visible before using its components"
+      ],
+      "Verification": "package_validated"
+    }
+  },
+  "gemini": {
+    "Commands": [],
+    "Error": "",
+    "Outcome": {
+      "Activation": "active",
+      "ActivationAttested": false,
+      "Authentication": "not_checked",
+      "AuthenticationAttested": false,
+      "AuthoritativeObservation": false,
+      "LocalActions": null,
+      "Policy": "allowed",
+      "UserActions": [
+        "in a running Gemini CLI session use `/mcp reload` and `/skills reload`, or restart Gemini CLI"
+      ],
+      "Verification": "installation_verified"
+    }
+  },
+  "kiro": {
+    "Commands": [
+      [
+        "\u003croot\u003e/bin/kiro",
+        "acp",
+        "--agent-engine",
+        "v3",
+        "--auth-method",
+        "cli"
+      ]
+    ],
+    "Error": "",
+    "Outcome": {
+      "Activation": "active",
+      "ActivationAttested": false,
+      "Authentication": "not_checked",
+      "AuthenticationAttested": false,
+      "AuthoritativeObservation": false,
+      "LocalActions": null,
+      "Policy": "allowed",
+      "UserActions": null,
+      "Verification": "installation_verified"
+    }
+  },
+  "opencode": {
+    "Commands": [],
+    "Error": "",
+    "Outcome": {
+      "Activation": "active",
+      "ActivationAttested": false,
+      "Authentication": "not_checked",
+      "AuthenticationAttested": false,
+      "AuthoritativeObservation": false,
+      "LocalActions": null,
+      "Policy": "allowed",
+      "UserActions": [
+        "restart OpenCode to load the installed plugin"
+      ],
+      "Verification": "installation_verified"
+    }
+  },
+  "vscode": {
+    "Commands": [
+      [
+        "\u003croot\u003e/bin/vscode",
+        "plugin",
+        "marketplace",
+        "add",
+        "\u003croot\u003e/managed/clients/vscode/demo-0123456789ab"
+      ],
+      [
+        "\u003croot\u003e/bin/vscode",
+        "plugin",
+        "install",
+        "demo@agentplugins-8f97b00da374"
+      ],
+      [
+        "\u003croot\u003e/bin/vscode",
+        "plugin",
+        "list"
+      ]
+    ],
+    "Error": "",
+    "Outcome": {
+      "Activation": "active",
+      "ActivationAttested": false,
+      "Authentication": "not_checked",
+      "AuthenticationAttested": false,
+      "AuthoritativeObservation": false,
+      "LocalActions": null,
+      "Policy": "allowed",
+      "UserActions": null,
+      "Verification": "installation_verified"
+    }
+  },
+  "windsurf": {
+    "Commands": [],
+    "Error": "",
+    "Outcome": {
+      "Activation": "manual_activation_required",
+      "ActivationAttested": false,
+      "Authentication": "not_checked",
+      "AuthenticationAttested": false,
+      "AuthoritativeObservation": false,
+      "LocalActions": [
+        "Windsurf: import MCP servers from \u003croot\u003e/managed/clients/windsurf/demo-0123456789ab/mcp.json; Devin cloud-synced configuration is never changed automatically"
+      ],
+      "Policy": "allowed",
+      "UserActions": [
+        "select one legacy Windsurf channel and add the prepared MCP servers manually"
+      ],
+      "Verification": "package_validated"
+    }
+  }
+}

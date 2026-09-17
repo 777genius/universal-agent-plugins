@@ -105,6 +105,27 @@ the effect is identical. That is deliberate: such an edit should be looked at.
 Layering rules for the `agentplugins` install core are enforced by `depguard` and
 documented in [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md).
 
+## Golden Files and the Architecture Ratchet
+
+`make test-core` also runs two guardrails that do not need the linter.
+
+Golden files record what the install core produces today for every client. If a
+change is meant to alter that output, rewrite them in the same commit and say
+why in the message:
+
+```bash
+UPDATE_GOLDEN=1 go test -count=1 ./install/integrationctl/agentplugins/...
+cd cli/plugin-kit-ai && UPDATE_GOLDEN=1 go test -count=1 ./internal/agentpluginscli/...
+```
+
+`internal/archtest` counts how often each core package names a client identity
+and fails when a package grows. Regenerate the baseline only when the numbers
+went down:
+
+```bash
+cd install/integrationctl && go run ./agentplugins/internal/archtest -update
+```
+
 ## Pull Requests
 
 - keep PRs scoped to one change family

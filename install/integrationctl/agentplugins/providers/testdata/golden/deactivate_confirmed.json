@@ -1,0 +1,166 @@
+{
+  "chatgpt": {
+    "Commands": [],
+    "Error": "",
+    "Outcome": {
+      "Activation": "manual_activation_required",
+      "ArtifactRemovalAllowed": false,
+      "ExternalRemovalComplete": false,
+      "LocalActions": null,
+      "UserActions": [
+        "uninstall the plugin in ChatGPT Plugins, then rerun remove with `--external-uninstalled` (also use the flag if it was never activated)"
+      ]
+    }
+  },
+  "claude": {
+    "Commands": [
+      [
+        "\u003croot\u003e/bin/claude",
+        "plugin",
+        "list",
+        "--json"
+      ]
+    ],
+    "Error": "Claude Code plugin identity is not exact before removal",
+    "Outcome": {
+      "Activation": "not_required",
+      "ArtifactRemovalAllowed": true,
+      "ExternalRemovalComplete": false,
+      "LocalActions": null,
+      "UserActions": null
+    }
+  },
+  "cline": {
+    "Commands": [],
+    "Error": "managed Cline native ownership is missing",
+    "Outcome": {
+      "Activation": "not_required",
+      "ArtifactRemovalAllowed": true,
+      "ExternalRemovalComplete": false,
+      "LocalActions": null,
+      "UserActions": null
+    }
+  },
+  "codex": {
+    "Commands": [],
+    "Error": "",
+    "Outcome": {
+      "Activation": "manual_activation_required",
+      "ArtifactRemovalAllowed": false,
+      "ExternalRemovalComplete": false,
+      "LocalActions": null,
+      "UserActions": [
+        "uninstall the plugin in Codex, then rerun remove with `--external-uninstalled` (also use the flag if it was never activated)"
+      ]
+    }
+  },
+  "copilot": {
+    "Commands": [
+      [
+        "\u003croot\u003e/bin/copilot",
+        "plugin",
+        "uninstall",
+        "demo@agentplugins-8f97b00da374"
+      ],
+      [
+        "\u003croot\u003e/bin/copilot",
+        "plugin",
+        "marketplace",
+        "remove",
+        "agentplugins-8f97b00da374"
+      ]
+    ],
+    "Error": "",
+    "Outcome": {
+      "Activation": "not_required",
+      "ArtifactRemovalAllowed": true,
+      "ExternalRemovalComplete": true,
+      "LocalActions": null,
+      "UserActions": null
+    }
+  },
+  "cursor": {
+    "Commands": [],
+    "Error": "",
+    "Outcome": {
+      "Activation": "not_required",
+      "ArtifactRemovalAllowed": true,
+      "ExternalRemovalComplete": false,
+      "LocalActions": null,
+      "UserActions": null
+    }
+  },
+  "gemini": {
+    "Commands": [],
+    "Error": "",
+    "Outcome": {
+      "Activation": "not_required",
+      "ArtifactRemovalAllowed": true,
+      "ExternalRemovalComplete": true,
+      "LocalActions": null,
+      "UserActions": null
+    }
+  },
+  "kiro": {
+    "Commands": [],
+    "Error": "",
+    "Outcome": {
+      "Activation": "manual_activation_required",
+      "ArtifactRemovalAllowed": false,
+      "ExternalRemovalComplete": false,
+      "LocalActions": null,
+      "UserActions": [
+        "remove the legacy custom Power in Kiro, then rerun remove with `--external-uninstalled`"
+      ]
+    }
+  },
+  "opencode": {
+    "Commands": [],
+    "Error": "",
+    "Outcome": {
+      "Activation": "not_required",
+      "ArtifactRemovalAllowed": true,
+      "ExternalRemovalComplete": true,
+      "LocalActions": null,
+      "UserActions": null
+    }
+  },
+  "vscode": {
+    "Commands": [
+      [
+        "\u003croot\u003e/bin/vscode",
+        "plugin",
+        "uninstall",
+        "demo@agentplugins-8f97b00da374"
+      ],
+      [
+        "\u003croot\u003e/bin/vscode",
+        "plugin",
+        "marketplace",
+        "remove",
+        "agentplugins-8f97b00da374"
+      ]
+    ],
+    "Error": "",
+    "Outcome": {
+      "Activation": "not_required",
+      "ArtifactRemovalAllowed": true,
+      "ExternalRemovalComplete": true,
+      "LocalActions": null,
+      "UserActions": null
+    }
+  },
+  "windsurf": {
+    "Commands": [],
+    "Error": "",
+    "Outcome": {
+      "Activation": "manual_activation_required",
+      "ArtifactRemovalAllowed": false,
+      "ExternalRemovalComplete": false,
+      "LocalActions": null,
+      "UserActions": [
+        "remove the prepared package manually, then rerun remove with `--external-uninstalled`"
+      ]
+    }
+  }
+}
