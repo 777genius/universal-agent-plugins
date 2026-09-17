@@ -1,11 +1,13 @@
 name: Required
 
 on:
-  # refactor/** is push-only on purpose: the stacked refactor parts are gated by
-  # core-fast.yml, and the full lane runs after each merge into the base branch
-  # instead of holding every part for 10-27 minutes.
+  # The refactor base branch is listed by name, not as refactor/**: the part
+  # branches stacked on it are gated by core-fast.yml, and a glob would run this
+  # 12-17 minute lane again on every push to every part, which is the double
+  # spend the plan set out to avoid. The full lane belongs after a part merges
+  # into the base branch.
   push:
-    branches: [main, master, 'refactor/**']
+    branches: [main, master, refactor/installer-core-clean-architecture]
   pull_request:
     branches: [main, master]
 
