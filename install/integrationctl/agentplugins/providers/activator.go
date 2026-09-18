@@ -14,13 +14,8 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
 )
 
-// CommandRunner is an alias of the port. It stays exported here so callers and
-// the optional runner capabilities keep their current names until the rest of
-// the providers package is split into client adapters.
-type CommandRunner = ports.CommandRunner
-
 type Activator struct {
-	Runner       CommandRunner
+	Runner       ports.CommandRunner
 	NativeConfig *nativeconfig.Kernel
 	// Registry supplies the client adapters that own lifecycle. It is injected
 	// by the composition root and never defaulted to "every client".

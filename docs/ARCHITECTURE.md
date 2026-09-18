@@ -37,16 +37,17 @@ Dependencies point inward.
 | Use cases | `agentplugins/usecase` | stdlib, `domain`, `ports`, `transaction`, `pathcontract`, `install/integrationctl/ports` for the legacy lock (see below) | yes, `usecase-through-ports` |
 | Client contract | `agentplugins/clients` (+ `clients/shared`) | stdlib, `domain`, `ports`, `adapters/nativeconfig` (see below) | yes, `clients-no-upward`, `clients-no-concrete-clients` |
 | Client adapters | `agentplugins/clients/<id>` | the client contract, `clients/shared`, `domain`, `ports` | yes, `clients-no-upward`, `clients-no-concrete-clients` |
-| Adapters | `agentplugins/{adapters,providers,planner}` | the layers above, never `clients/all` | partly, `dispatchers-take-an-injected-registry` |
-| CLI | `agentpluginscli` | the public facades of the layers above | no rule yet |
-| Composition root | `cmd/agentplugins` | everything, and nothing imports it | no rule yet |
+| Adapters | `agentplugins/{adapters,providers,planner}` | the layers above, never `clients/all` | partly, `libraries-take-an-injected-registry` |
+| CLI | `agentpluginscli` | the public facades of the layers above, never providers or pathpolicy | yes, `cli-no-core-internals` |
+| Composition root | `cmd/agentplugins` | everything, and nothing imports it | yes: it is the only production importer of `clients/all` |
 
 The "Enforced today" column is deliberate: the middle column is the target, and
-only some of it is checked by `depguard` in `.golangci.yml` today. Domain, ports,
-the use cases, the client contract and the client adapters are covered in full.
-The adapter row is covered in part: `dispatchers-take-an-injected-registry`
+the left-hand rules are checked by `depguard` in `.golangci.yml`. Domain, ports,
+the use cases, the client contract, the client adapters and the CLI are covered
+in full. The adapter row is covered in part: `libraries-take-an-injected-registry`
 forbids `clients/all` there, but nothing yet stops an adapter from importing
-another one. The CLI and composition root rows have no rule at all.
+another one. The composition root is allowed to import everything because it is
+the wiring, not a layer.
 `usecase-through-ports` forbids `adapters` (both the `agentplugins` ones and
 `install/integrationctl/adapters`), `providers`, `planner` and `clients`; the use
 case reaches path containment through `ports.PathPolicy` and planning through
@@ -62,11 +63,18 @@ its shared helpers and any client package from importing another client package
 or the assembled `clients/all` registry. A nil `Registry` is an error, never a
 silent fallback to "every client": resolving it to a default would compile every
 adapter into any binary that imports a generic package and would put the registry
-outside the composition root's control. `dispatchers-take-an-injected-registry`
+outside the composition root's control. `libraries-take-an-injected-registry`
 holds the other side of that line: `providers`, `planner` and
 `adapters/clientdetect` may not import `clients/all` outside their tests, so the
 assembled registry reaches them only as an argument. `cmd/agentplugins` is the
-one place that builds it.
+one place that builds it. The CLI receives `Planner`, `Targets` and `Registry`
+from that root; it does not construct `planner.Planner{}`. Detection is
+request-scoped: `domain.PlanRequest.Detected` is the map `Planner.Plan` reads.
+
+`cli-no-core-internals` keeps `agentpluginscli` off `providers` and
+`pathpolicy`. The CLI may still import the thin public planner facade
+(`Capabilities`, `ApplyInstallIntent`, and the rest) because those names are a
+stable API for authoring, not a second composition root.
 
 Detection is the first capability to live behind the contract: each
 `clients/<id>` implements `HostDetector` and reports the surfaces it observed
@@ -143,7 +151,8 @@ hold for anyone running a plain `go test ./...` without golangci-lint.
 import rules as a test and measures a ratchet: how many times each core package
 names a client identity from `domain`. The committed baseline lives in
 `internal/archtest/testdata/client_id_budget.json`; a package may shrink, never
-grow. Its limitation is stated in the package: it reads selector expressions, so
+grow. Production ClientID selectors are allowed only in `domain/clients.go`,
+`clients/<id>`, and `clients/all` — the committed packages object is empty. Its limitation is stated in the package: it reads selector expressions, so
 a string literal client id or a comparison on `BackendFamily` slips past it. It
 detects regressions, it does not prove their absence.
 

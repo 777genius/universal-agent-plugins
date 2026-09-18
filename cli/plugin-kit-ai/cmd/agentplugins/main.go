@@ -15,36 +15,20 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/spf13/cobra"
+
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli"
 	"github.com/777genius/plugin-kit-ai/cli/internal/authoring/commands"
 	"github.com/777genius/plugin-kit-ai/cli/internal/authoring/project"
 	"github.com/777genius/plugin-kit-ai/cli/internal/authoringcli"
 	"github.com/777genius/plugin-kit-ai/cli/internal/exitx"
-	"github.com/777genius/plugin-kit-ai/cli/internal/terminalprompts"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/dirswap"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/locks"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/pathpolicy"
-	processadapter "github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/process"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/clientdetect"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/directoryv1"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/discoveryv1"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/loader"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/processlock"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/securityscan"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/securityv1"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/sourceacquisition"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/specregistry"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/statemigration"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/statev2"
 	clientregistry "github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/all"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/managedstdio"
-	clientplanner "github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/planner"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/providers"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/transaction"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/usecase"
-	"github.com/spf13/cobra"
-	"golang.org/x/term"
 )
 
 var (
@@ -102,91 +86,29 @@ func main() {
 }
 
 func run() error {
-	home, err := os.UserHomeDir()
-	if err != nil || strings.TrimSpace(home) == "" {
-		return fmt.Errorf("resolve user home: %w", err)
-	}
-	dataRoot, err := agentpluginsHome()
+	home, dataRoot, err := resolveAgentpluginsRoots()
 	if err != nil {
 		return err
 	}
-	directoryClient, err := directoryClientFactory(dataRoot)
+	app, err := composeAgentpluginsApp(home, dataRoot)
 	if err != nil {
 		return err
-	}
-	discoveryClient, err := discoveryClientFactory(dataRoot)
-	if err != nil {
-		return err
-	}
-	securityClient, err := securityClientFactory(dataRoot)
-	if err != nil {
-		return err
-	}
-	registry, err := specregistry.New()
-	if err != nil {
-		return err
-	}
-	packageLoader := loader.Loader{Registry: registry}
-	runner := processadapter.OS{}
-	v2Store := statev2.Store{Path: filepath.Join(dataRoot, "state-v2.json")}
-	directoryManager := dirswap.Manager{JournalDir: filepath.Join(dataRoot, "operations-v2")}
-	mutationLock := processlock.Lock{Path: filepath.Join(dataRoot, "mutation.lock")}
-	clientRegistry := clientregistry.Default()
-	activator := providers.Activator{Runner: runner, Registry: clientRegistry}
-	paths := pathpolicy.Policy{}
-	// The composition root is the one place that decides which clients this
-	// binary knows about, so it is also the only place that names the full set.
-	stager := providers.Stager{Registry: clientRegistry, Paths: paths}
-	if executable, err := os.Executable(); err == nil {
-		stager.LauncherSource, _ = managedstdio.NewSource(executable, version)
-	}
-	planner := clientplanner.Planner{ManagedRoot: filepath.Join(dataRoot, "managed"), Paths: paths, Registry: clientRegistry, Detected: map[domain.ClientID]domain.DetectedClient{}}
-	lifecycle := usecase.Service{
-		StateStore: v2Store, Paths: paths, Planner: planner, Targets: planner, Stager: stager, Activator: activator,
-		Lock: mutationLock, Kernel: transaction.Kernel{StateStore: v2Store, Directory: directoryManager},
-		NativeObserver: providers.NativeIdentityObserver{Stager: stager, Runner: runner, Registry: clientRegistry}, PluginData: providers.PluginDataManager{Base: filepath.Join(dataRoot, "plugin-data")},
-	}
-	detector := clientdetect.NewOS(home)
-	detector.Registry = clientRegistry
-	legacyStatePath := filepath.Join(home, ".plugin-kit-ai", "state.json")
-	migrator := statemigration.Migrator{
-		LegacyPath:     legacyStatePath,
-		V2Store:        v2Store,
-		Lock:           mutationLock,
-		RecoverJournal: lifecycle.Kernel.Recover,
-	}
-	app := agentpluginscli.App{
-		Version:             version,
-		UserHome:            home,
-		ManagedRoot:         filepath.Join(dataRoot, "managed"),
-		StateStore:          v2Store,
-		StateMigrator:       &migrator,
-		LegacyLifecycle:     agentpluginscli.NewLegacyLifecycle(legacyStatePath),
-		LegacyStateLock:     locks.FileLock{BaseDir: filepath.Join(home, ".plugin-kit-ai", "locks")},
-		Detector:            detector,
-		ClientRegistry:      clientRegistry,
-		Planner:             planner,
-		Targets:             planner,
-		DirectoryClient:     directoryClient,
-		DiscoveryClient:     discoveryClient,
-		SourceAcquirer:      lazySourceAcquirer{dataRoot: dataRoot, acquirer: sourceacquisition.Acquirer{TempRoot: dataRoot}},
-		PackageLoader:       packageLoader,
-		NativePackageLoader: loader.OpenAILoader{Loader: packageLoader},
-		SecurityIndex:       securityClient,
-		SecurityEvaluator: securityscan.Evaluator{
-			Scanner: securityscan.ReleaseScanner{Root: filepath.Join(dataRoot, "security", "lintai"), HTTPClient: lintaiReleaseHTTPClient()},
-			Cache:   securityscan.FileCache{Root: filepath.Join(dataRoot, "security", "assessments")}, Requirement: securityscan.DefaultRequirement(),
-		},
-		Lifecycle:     lifecycle,
-		Input:         os.Stdin,
-		Output:        os.Stdout,
-		ErrorOutput:   os.Stderr,
-		PromptFactory: terminalprompts.New,
-		Terminal:      term.IsTerminal(int(os.Stdin.Fd())),
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	return agentpluginscli.NewRoot(app).ExecuteContext(ctx)
+}
+
+func resolveAgentpluginsRoots() (string, string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil || strings.TrimSpace(home) == "" {
+		return "", "", fmt.Errorf("resolve user home: %w", err)
+	}
+	dataRoot, err := agentpluginsHome()
+	if err != nil {
+		return "", "", err
+	}
+	return home, dataRoot, nil
 }
 
 func newSecurityClient(_ string) (*securityv1.Client, error) {

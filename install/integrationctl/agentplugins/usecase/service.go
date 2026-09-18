@@ -8,11 +8,12 @@ import (
 	"strings"
 	"time"
 
+	"golang.org/x/mod/semver"
+
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/transaction"
 	legacyports "github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
-	"golang.org/x/mod/semver"
 )
 
 type Service struct {
@@ -20,9 +21,12 @@ type Service struct {
 	// Paths is required. There is deliberately no default: a silently supplied
 	// one would let a caller that forgot to wire it keep running with whatever
 	// containment rules that default happened to carry.
-	Paths          ports.PathPolicy
-	Planner        ports.DeliveryPlanner
-	Targets        ports.DeliveryTargetResolver
+	Paths   ports.PathPolicy
+	Planner ports.DeliveryPlanner
+	Targets ports.DeliveryTargetResolver
+	// Detected is the surface map for this operation. The planner is stateless
+	// about detection; the use case copies this onto every PlanRequest.
+	Detected       map[domain.ClientID]domain.DetectedClient
 	Stager         ports.PackageStager
 	Activator      ports.ClientActivator
 	Legacy         ports.LegacyLifecycle

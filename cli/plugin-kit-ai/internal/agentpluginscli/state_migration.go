@@ -6,8 +6,9 @@ import (
 	"io"
 	"os"
 
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/statemigration"
 	"github.com/spf13/cobra"
+
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/statemigration"
 )
 
 func newMigrateStateCommand(app App, opts *options) *cobra.Command {
@@ -24,78 +25,124 @@ func newMigrateStateCommand(app App, opts *options) *cobra.Command {
 	}
 }
 
+type migrateStateSession struct {
+	ctx     context.Context
+	cmd     *cobra.Command
+	app     App
+	opts    *options
+	current bool
+	plan    statemigration.Plan
+}
+
 func runMigrateState(ctx context.Context, cmd *cobra.Command, app App, opts *options) error {
-	if app.StateMigrator == nil {
+	session := &migrateStateSession{ctx: ctx, cmd: cmd, app: app, opts: opts}
+	if err := session.loadPlan(); err != nil {
+		return err
+	}
+	if opts.dryRun {
+		return renderStateMigration(cmd.OutOrStdout(), opts.format, session.plan, statemigration.Report{}, true)
+	}
+	confirmed, err := session.confirm()
+	if err != nil {
+		return err
+	}
+	if !confirmed {
+		return session.canceled()
+	}
+	if session.current {
+		return session.migrateCurrent()
+	}
+	return session.migrateExpected()
+}
+
+func (session *migrateStateSession) loadPlan() error {
+	if session.app.StateMigrator == nil {
 		return fmt.Errorf("state migration is not configured")
 	}
-	_, statErr := os.Stat(app.StateMigrator.V2Store.Path)
-	current := statErr == nil
+	_, statErr := os.Stat(session.app.StateMigrator.V2Store.Path)
+	session.current = statErr == nil
 	if statErr != nil && !os.IsNotExist(statErr) {
 		return statErr
 	}
 	var plan statemigration.Plan
 	var err error
-	if current {
-		plan, err = app.StateMigrator.PlanCurrentV2()
+	if session.current {
+		plan, err = session.app.StateMigrator.PlanCurrentV2()
 	} else {
-		plan, err = app.StateMigrator.Plan()
+		plan, err = session.app.StateMigrator.Plan()
 	}
 	if err != nil {
 		return err
 	}
-	if opts.dryRun {
-		return renderStateMigration(cmd.OutOrStdout(), opts.format, plan, statemigration.Report{}, true)
+	session.plan = plan
+	return nil
+}
+
+func (session *migrateStateSession) confirm() (bool, error) {
+	if session.opts.format == "human" {
+		renderStateMigrationPlan(session.cmd.OutOrStdout(), session.plan)
 	}
-	if opts.format == "human" {
-		renderStateMigrationPlan(cmd.OutOrStdout(), plan)
-	}
-	confirmed := mutationConfirmed(app, opts)
-	if !confirmed && opts.format == "human" && app.Terminal {
-		confirmed, err = promptYesNo(cmd.Context(), cmd.InOrStdin(), cmd.OutOrStdout(), cmd.ErrOrStderr(), "Create a backup and migrate this state? [y/N]")
+	confirmed := mutationConfirmed(session.app, session.opts)
+	if !confirmed && session.opts.format == "human" && session.app.Terminal {
+		var err error
+		confirmed, err = promptYesNo(session.cmd.Context(), session.cmd.InOrStdin(), session.cmd.OutOrStdout(), session.cmd.ErrOrStderr(), "Create a backup and migrate this state? [y/N]")
 		if err != nil {
-			return err
+			return false, err
 		}
 	}
-	if !confirmed {
-		if opts.format == "json" {
-			return renderStateMigration(cmd.OutOrStdout(), opts.format, plan, statemigration.Report{}, false)
-		}
-		_, _ = fmt.Fprintln(cmd.OutOrStdout(), "No changes made.")
-		return nil
+	return confirmed, nil
+}
+
+func (session *migrateStateSession) canceled() error {
+	if session.opts.format == "json" {
+		return renderStateMigration(session.cmd.OutOrStdout(), session.opts.format, session.plan, statemigration.Report{}, false)
 	}
-	if current {
-		report, err := app.StateMigrator.MigrateCurrentV2(ctx, plan.LegacyDigest)
-		if err != nil {
-			return err
-		}
-		return renderStateMigration(cmd.OutOrStdout(), opts.format, plan, report, false)
+	_, _ = fmt.Fprintln(session.cmd.OutOrStdout(), "No changes made.")
+	return nil
+}
+
+func (session *migrateStateSession) migrateCurrent() error {
+	report, err := session.app.StateMigrator.MigrateCurrentV2(session.ctx, session.plan.LegacyDigest)
+	if err != nil {
+		return err
 	}
-	if app.Lifecycle.Lock == nil {
+	return renderStateMigration(session.cmd.OutOrStdout(), session.opts.format, session.plan, report, false)
+}
+
+func (session *migrateStateSession) migrateExpected() error {
+	if session.app.Lifecycle.Lock == nil {
 		return fmt.Errorf("agentplugins mutation lock is required")
 	}
-	release, err := app.Lifecycle.Lock.Acquire(ctx)
+	release, err := session.app.Lifecycle.Lock.Acquire(session.ctx)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = release() }()
-	if app.LegacyStateLock == nil {
+	if session.app.LegacyStateLock == nil {
 		return fmt.Errorf("legacy state lock is required")
 	}
-	legacyRelease, err := app.LegacyStateLock.Acquire(ctx, "state")
+	legacyRelease, err := session.app.LegacyStateLock.Acquire(session.ctx, "state")
 	if err != nil {
 		return fmt.Errorf("acquire legacy state lock: %w", err)
 	}
 	defer func() { _ = legacyRelease() }()
-	kernel := app.Lifecycle.Kernel
-	kernel.StateStore = app.StateStore
-	if err := kernel.Recover(ctx); err != nil {
-		return fmt.Errorf("recover interrupted mutation before state migration: %w", err)
+	if err := session.recoverKernel(); err != nil {
+		return err
 	}
-	report, err := app.StateMigrator.MigrateExpected(plan.LegacyDigest)
+	report, err := session.app.StateMigrator.MigrateExpected(session.plan.LegacyDigest)
 	if err != nil {
 		return err
 	}
-	return renderStateMigration(cmd.OutOrStdout(), opts.format, plan, report, false)
+	return renderStateMigration(session.cmd.OutOrStdout(), session.opts.format, session.plan, report, false)
+}
+
+func (session *migrateStateSession) recoverKernel() error {
+	kernel := session.app.Lifecycle.Kernel
+	kernel.StateStore = session.app.StateStore
+	if err := kernel.Recover(session.ctx); err != nil {
+		return fmt.Errorf("recover interrupted mutation before state migration: %w", err)
+	}
+	return nil
 }
 
 func renderStateMigration(writer io.Writer, format string, plan statemigration.Plan, report statemigration.Report, dryRun bool) error {
@@ -117,6 +164,10 @@ func renderStateMigration(writer io.Writer, format string, plan statemigration.P
 		renderStateMigrationPlan(writer, plan)
 		return nil
 	}
+	return renderStateMigrationApplied(writer, plan, report)
+}
+
+func renderStateMigrationApplied(writer io.Writer, plan statemigration.Plan, report statemigration.Report) error {
 	if plan.SourceSchema != 0 {
 		_, _ = fmt.Fprintf(writer, "Migrated %d authoritative schema %d installation(s); backup created before Agent Plugins state commit.\n", report.Migrated, plan.SourceSchema)
 	} else {

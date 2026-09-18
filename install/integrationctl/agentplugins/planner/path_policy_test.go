@@ -57,39 +57,36 @@ func TestPlanAppliesTheRequestedInstallIntent(t *testing.T) {
 	}
 }
 
-// TestPlanPrefersTheRequestDetectedMap keeps the fallback explicit: a request
-// that carries no surface map still sees the one its composition root wired.
-func TestPlanPrefersTheRequestDetectedMap(t *testing.T) {
+// TestPlanUsesOnlyTheRequestDetectedMap pins Part 11: detection lives on the
+// request. A nil map is not a silent fallback to planner session state.
+func TestPlanUsesOnlyTheRequestDetectedMap(t *testing.T) {
 	t.Parallel()
 	root := t.TempDir()
 	copilot := domain.DetectedClient{
 		ClientID: domain.ClientCopilot, Status: domain.DetectionDetected,
 		ConfigRoot: filepath.Join(root, "copilot"), ExecutablePath: filepath.Join(root, "bin", "copilot"),
 	}
-	configured := testPlanner(Planner{
-		ManagedRoot: filepath.Join(root, "managed"),
-		Detected:    map[domain.ClientID]domain.DetectedClient{domain.ClientCopilot: copilot},
-	}).Planner
+	planner := testPlanner(Planner{ManagedRoot: filepath.Join(root, "managed")}).Planner
 	request := domain.PlanRequest{
 		Envelope:           testEnvelope(),
 		Client:             detectedClient(domain.ClientVSCode, filepath.Join(root, "vscode")),
 		Scope:              domain.ScopeUser,
 		PhysicalArtifactID: "demo-0123456789ab",
 	}
-	fallback, err := configured.Plan(context.Background(), request)
+	empty, err := planner.Plan(context.Background(), request)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if fallback.NativeRegistryExecutable != copilot.ExecutablePath {
-		t.Fatalf("a nil request map did not fall back to the configured one: %+v", fallback)
+	if empty.NativeRegistryExecutable != "" {
+		t.Fatalf("a nil request map still bridged through Copilot: %+v", empty)
 	}
 
-	request.Detected = map[domain.ClientID]domain.DetectedClient{}
-	overridden, err := configured.Plan(context.Background(), request)
+	request.Detected = map[domain.ClientID]domain.DetectedClient{domain.ClientCopilot: copilot}
+	bridged, err := planner.Plan(context.Background(), request)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if overridden.NativeRegistryExecutable != "" {
-		t.Fatalf("the request map did not replace the configured one: %+v", overridden)
+	if bridged.NativeRegistryExecutable != copilot.ExecutablePath {
+		t.Fatalf("the request map was ignored: %+v", bridged)
 	}
 }

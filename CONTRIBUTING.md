@@ -123,7 +123,11 @@ the effect is identical. That is deliberate: such an edit should be looked at.
 ```
 
 Layering rules for the `agentplugins` install core are enforced by `depguard` and
-documented in [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md).
+documented in [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md). Adding a production
+client is three edits plus the harness: a row in `domain.ClientDefinitions`, a
+package `clients/<id>`, a `New()` line in `clients/all`, then
+`clients/contracttest`. Generic packages are not in that list. See
+[ADR 0007](./docs/adr/0007-client-adapter-contract-and-registry.md).
 
 ## Golden Files and the Architecture Ratchet
 

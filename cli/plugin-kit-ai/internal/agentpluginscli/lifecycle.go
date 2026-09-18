@@ -10,10 +10,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/usecase"
 	"github.com/spf13/cobra"
+
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/usecase"
 )
 
 func newUpdateCommand(app App, opts *options) *cobra.Command {
@@ -610,29 +610,14 @@ func renderLegacyRemovePlan(writer io.Writer, result usecase.LegacyRemoveResult)
 func lifecycleService(app App, detected map[domain.ClientID]domain.DetectedClient) usecase.Service {
 	service := app.Lifecycle
 	service.StateStore = app.StateStore
-	if planner := bindPlannerDetected(app.Planner, detected); planner != nil {
-		service.Planner = planner
-		if targets, ok := planner.(ports.DeliveryTargetResolver); ok {
-			service.Targets = targets
-		} else if app.Targets != nil {
-			service.Targets = app.Targets
-		}
-	} else if app.Targets != nil {
+	if app.Planner != nil {
+		service.Planner = app.Planner
+	}
+	if app.Targets != nil {
 		service.Targets = app.Targets
 	}
+	service.Detected = detected
 	return service
-}
-
-func bindPlannerDetected(planner ports.DeliveryPlanner, detected map[domain.ClientID]domain.DetectedClient) ports.DeliveryPlanner {
-	if planner == nil {
-		return nil
-	}
-	if binder, ok := planner.(interface {
-		BindDetected(map[domain.ClientID]domain.DetectedClient) ports.DeliveryPlanner
-	}); ok {
-		return binder.BindDetected(detected)
-	}
-	return planner
 }
 
 func updateSource(installation domain.Installation) string {
