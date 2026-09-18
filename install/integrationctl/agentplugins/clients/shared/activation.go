@@ -2,7 +2,10 @@ package shared
 
 import (
 	"errors"
+	"fmt"
+	"strings"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
@@ -48,4 +51,36 @@ func AttestedUnknownVerification(outcome domain.ActivationOutcome, request domai
 	outcome.Verification = domain.VerificationInstalled
 	outcome.ActivationAttested = true
 	return outcome, true
+}
+
+// StartedActivation is the outcome every adapter begins from. Policy and
+// package verification are generic; the adapter fills in client-specific
+// activation, actions and observation.
+func StartedActivation(request domain.ActivationRequest) domain.ActivationOutcome {
+	return domain.ActivationOutcome{
+		Authentication: request.Plan.Authentication,
+		Policy:         domain.PolicyAllowed,
+		Verification:   domain.VerificationPackageValid,
+	}
+}
+
+// StartedDeactivation is the outcome every adapter begins from. Artifact
+// removal is allowed until a client-specific path says the client still
+// holds a registration that would dangle.
+func StartedDeactivation() domain.DeactivationOutcome {
+	return domain.DeactivationOutcome{Activation: domain.ActivationNotRequired, ArtifactRemovalAllowed: true}
+}
+
+// ActivationIdentityMismatch is the generic dispatcher invariant adapters also
+// enforce so contract tests can call them without going through Activator.
+func ActivationIdentityMismatch(request domain.ActivationRequest) error {
+	if request.Plan.ClientID != request.Client.ClientID || request.Delivery.ClientID != request.Client.ClientID {
+		return fmt.Errorf("activation client identity mismatch")
+	}
+	return nil
+}
+
+// HasClientCLI reports that a managed client executable can actually be run.
+func HasClientCLI(env clients.Env, executable string) bool {
+	return env.Runner != nil && strings.TrimSpace(executable) != ""
 }

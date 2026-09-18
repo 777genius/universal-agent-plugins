@@ -35,7 +35,7 @@ func TestClaudeSkillsDirAddUpdateRemoveUseOnlyExactListVerification(t *testing.T
 	runner := &recordingRunner{run: func(legacyports.Command) legacyports.CommandResult {
 		return legacyports.CommandResult{Stdout: []byte(listing)}
 	}}
-	activator := Activator{Runner: runner}
+	activator := testActivator(Activator{Runner: runner})
 
 	for _, replacing := range []bool{false, true} {
 		request.Replacing = replacing
@@ -114,11 +114,11 @@ func TestClaudeActivateAndRemoveBoundBlockingRunnerToSharedTimeout(t *testing.T)
 	request := newClaudeTimeoutActivationRequest(t)
 	operations := map[string]func(context.Context, *claudeBlockingRunner) error{
 		"activate": func(ctx context.Context, runner *claudeBlockingRunner) error {
-			_, err := (Activator{Runner: runner}).Activate(ctx, request)
+			_, err := testActivator(Activator{Runner: runner}).Activate(ctx, request)
 			return err
 		},
 		"remove": func(ctx context.Context, runner *claudeBlockingRunner) error {
-			_, err := (Activator{Runner: runner}).Deactivate(ctx, domain.DeactivationRequest{
+			_, err := testActivator(Activator{Runner: runner}).Deactivate(ctx, domain.DeactivationRequest{
 				Client: request.Client, DeclaredName: request.DeclaredName, CurrentActivation: domain.ActivationActive,
 				Confirmed: true, BackendExecutable: request.BackendExecutable, ManagedArtifactPath: request.Delivery.ActivePath,
 			})
@@ -152,11 +152,11 @@ func TestClaudeActivateAndRemoveRespectEarlierParentDeadline(t *testing.T) {
 	request := newClaudeTimeoutActivationRequest(t)
 	operations := map[string]func(context.Context, *claudeBlockingRunner) error{
 		"activate": func(ctx context.Context, runner *claudeBlockingRunner) error {
-			_, err := (Activator{Runner: runner}).Activate(ctx, request)
+			_, err := testActivator(Activator{Runner: runner}).Activate(ctx, request)
 			return err
 		},
 		"remove": func(ctx context.Context, runner *claudeBlockingRunner) error {
-			_, err := (Activator{Runner: runner}).Deactivate(ctx, domain.DeactivationRequest{
+			_, err := testActivator(Activator{Runner: runner}).Deactivate(ctx, domain.DeactivationRequest{
 				Client: request.Client, DeclaredName: request.DeclaredName, CurrentActivation: domain.ActivationActive,
 				Confirmed: true, BackendExecutable: request.BackendExecutable, ManagedArtifactPath: request.Delivery.ActivePath,
 			})
@@ -332,7 +332,7 @@ func environmentValue(environment []string, name string) (string, bool) {
 func TestClaudeDryRunRemovalExecutesNoCommand(t *testing.T) {
 	t.Parallel()
 	runner := &recordingRunner{}
-	outcome, err := (Activator{Runner: runner}).Deactivate(context.Background(), domain.DeactivationRequest{
+	outcome, err := testActivator(Activator{Runner: runner}).Deactivate(context.Background(), domain.DeactivationRequest{
 		Client: domain.DetectedClient{ClientID: domain.ClientClaude}, DeclaredName: "demo",
 		CurrentActivation: domain.ActivationActive, Confirmed: false, BackendExecutable: "/test/bin/claude",
 		ManagedArtifactPath: filepath.Join(t.TempDir(), "skills", "demo"),
@@ -359,7 +359,7 @@ func TestClaudeExactListVerificationRejectsCollisionAndDrivesInstallFailure(t *t
 	runner := &recordingRunner{run: func(legacyports.Command) legacyports.CommandResult {
 		return legacyports.CommandResult{Stdout: []byte(claudeListing("demo", foreign, true))}
 	}}
-	outcome, err := (Activator{Runner: runner}).Activate(context.Background(), request)
+	outcome, err := testActivator(Activator{Runner: runner}).Activate(context.Background(), request)
 	if err == nil || outcome.Activation != domain.ActivationFailed || outcome.Verification != domain.VerificationFailed || !outcome.AuthoritativeObservation {
 		t.Fatalf("outcome=%+v err=%v", outcome, err)
 	}
@@ -379,7 +379,7 @@ func TestClaudeProbeRejectsConfigAndManagedPathMismatchBeforeSpawn(t *testing.T)
 		t.Fatal(err)
 	}
 	runner := &recordingRunner{}
-	_, err := (Activator{Runner: runner}).Activate(context.Background(), request)
+	_, err := testActivator(Activator{Runner: runner}).Activate(context.Background(), request)
 	if err == nil || len(runner.commands) != 0 {
 		t.Fatalf("err=%v commands=%v", err, runner.commands)
 	}
@@ -395,7 +395,7 @@ func TestClaudeActivationPreflightRejectsUnsafeAnchorWithoutRunningClient(t *tes
 	request.Plan.ActivePath = filepath.Join(request.Plan.TargetRoot, "demo-managed")
 	runner := &recordingRunner{}
 
-	err := (Activator{Runner: runner}).PreflightActivation(request)
+	err := testActivator(Activator{Runner: runner}).PreflightActivation(request)
 	if err == nil || !strings.Contains(err.Error(), "delivery anchor") || len(runner.commands) != 0 {
 		t.Fatalf("preflight err=%v commands=%v", err, runner.commands)
 	}

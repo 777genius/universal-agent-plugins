@@ -22,3 +22,11 @@ func NewStager(base providers.Stager) providers.Stager {
 	}
 	return base
 }
+
+// NewActivator completes an activator literal with the full client registry.
+func NewActivator(base providers.Activator) providers.Activator {
+	if base.Registry == nil {
+		base.Registry = all.Default()
+	}
+	return base
+}

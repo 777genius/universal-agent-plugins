@@ -11,6 +11,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/providers"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/providerstest"
 )
 
 func TestSignedChatGPTPreparationSupportsAddUpdateAndRepairWhileRemoteActivationIsPending(t *testing.T) {
@@ -238,7 +239,7 @@ func TestClinePackageSupportsAutomaticAddUpdateRepairAndRemoveInIsolatedHome(t *
 			return nil
 		}, nil
 	})
-	service.Activator = providers.Activator{NativeConfig: &kernel}
+	service.Activator = providerstest.NewActivator(providers.Activator{NativeConfig: &kernel})
 	client := domain.DetectedClient{ClientID: domain.ClientCline, DisplayName: "Cline", Status: domain.DetectionDetected, ConfigRoot: filepath.Join(root, ".cline")}
 
 	add := clinePackageInput(t, client, "1.0.0", "sha256:cline-v1", "sha256:cline-manifest-v1", "sh")

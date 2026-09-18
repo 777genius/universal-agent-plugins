@@ -107,7 +107,7 @@ func TestClaudeBundledDotPathsInstallAndRepair(t *testing.T) {
 	service.Stager = providerstest.NewStager(providers.Stager{LauncherSource: source})
 	client := domain.DetectedClient{ClientID: domain.ClientClaude, Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), "claude"), ExecutablePath: "/test/bin/claude"}
 	runner := &fakeClaudeLifecycleRunner{configRoot: client.ConfigRoot}
-	service.Activator = providers.Activator{Runner: runner}
+	service.Activator = providerstest.NewActivator(providers.Activator{Runner: runner})
 	service.NativeObserver = providers.NativeIdentityObserver{Runner: runner, Stager: service.Stager}
 	input := addInput(t, client, "https://example.test/claude-bundled-paths")
 	input.BackendExecutable = client.ExecutablePath

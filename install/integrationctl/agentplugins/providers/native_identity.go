@@ -196,15 +196,15 @@ func (observer NativeIdentityObserver) inspectNativeRegistry(ctx context.Context
 		if result.ExitCode != 0 {
 			return registryIndeterminate, fmt.Errorf("Claude Code plugin registry command failed with exit code %d", result.ExitCode)
 		}
-		switch claudePluginStatus(result.Stdout, plan.DeclaredName, plan.ActivePath) {
-		case claudeStatusInstalled:
+		switch claude.PluginStatusFromList(result.Stdout, plan.DeclaredName, plan.ActivePath) {
+		case claude.StatusInstalled:
 			if managed == nil {
 				return registryCollision, nil
 			}
 			return registryExpected, nil
-		case claudeStatusAbsent:
+		case claude.StatusAbsent:
 			return registryClear, nil
-		case claudeStatusCollision:
+		case claude.StatusCollision:
 			return registryCollision, nil
 		default:
 			return registryIndeterminate, nil
@@ -364,14 +364,14 @@ func copilotRegistryFinding(stdout []byte, name, expectedMarketplace, expectedVe
 
 func copilotRegistryFindingAt(stdout []byte, name, expectedMarketplace, expectedVersion, expectedPath string, owned bool) registryFinding {
 	expected := name + "@" + expectedMarketplace
-	if status, recognized := copilotLivePluginStatus(stdout, expected, expectedVersion, expectedPath); recognized {
+	if status, recognized := shared.CopilotLivePluginStatus(stdout, expected, expectedVersion, expectedPath); recognized {
 		switch status {
-		case copilotStatusInstalled:
+		case shared.CopilotStatusInstalled:
 			if !owned {
 				return registryCollision
 			}
 			return registryExpected
-		case copilotStatusAbsent:
+		case shared.CopilotStatusAbsent:
 			return registryClear
 		default:
 			return registryIndeterminate
@@ -402,7 +402,7 @@ func copilotRegistryFindingAt(stdout []byte, name, expectedMarketplace, expected
 		if line != "" && line[0] != ' ' && line[0] != '\t' {
 			return registryIndeterminate
 		}
-		match := copilotInstalledEntry.FindStringSubmatch(line)
+		match := shared.CopilotInstalledEntry.FindStringSubmatch(line)
 		if len(match) == 3 {
 			if recognizedEmpty {
 				return registryIndeterminate

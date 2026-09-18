@@ -67,7 +67,7 @@ func TestClaudeLifecycleAddUpdateRepairRemoveWithIsolatedConfig(t *testing.T) {
 	runner := &fakeClaudeLifecycleRunner{configRoot: config}
 	stager := providerstest.NewStager(providers.Stager{})
 	service.Planner, service.Targets, service.Stager = planner, planner, stager
-	service.Activator = providers.Activator{Runner: runner}
+	service.Activator = providerstest.NewActivator(providers.Activator{Runner: runner})
 	service.NativeObserver = providers.NativeIdentityObserver{Runner: runner, Stager: stager}
 
 	input := addInput(t, client, "https://example.com/claude")
@@ -154,7 +154,7 @@ func TestClaudeFailedInstallVerificationHasDeterministicRemovalCompensation(t *t
 	runner := &fakeClaudeLifecycleRunner{configRoot: config}
 	stager := providerstest.NewStager(providers.Stager{})
 	service.Planner, service.Targets, service.Stager = planner, planner, stager
-	service.Activator = providers.Activator{Runner: runner}
+	service.Activator = providerstest.NewActivator(providers.Activator{Runner: runner})
 	service.NativeObserver = providers.NativeIdentityObserver{Runner: runner, Stager: stager}
 	input := addInput(t, client, "https://example.com/claude-failure")
 	input.BackendExecutable, input.Confirmed = client.ExecutablePath, true

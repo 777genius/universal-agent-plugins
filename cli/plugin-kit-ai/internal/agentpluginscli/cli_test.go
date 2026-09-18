@@ -819,7 +819,7 @@ func TestMissingManagedStdioRuntimeFailsAutomaticActivationPreflightWithoutMutat
 			client.ExecutablePath = test.executable
 			fixture := newCLIFixture(t, []domain.DetectedClient{client})
 			runner := &cliCommandRunner{}
-			fixture.app.Lifecycle.Activator = providers.Activator{Runner: runner}
+			fixture.app.Lifecycle.Activator = providerstest.NewActivator(providers.Activator{Runner: runner})
 			plugin := writeCLIPlugin(t)
 			mcp := `{"$schema":"https://agent-plugins.org/schemas/1.0.0/mcp.schema.json","mcpServers":{"demo":{"type":"stdio","command":"uap-runtime-that-does-not-exist"}}}`
 			if err := os.WriteFile(filepath.Join(plugin, "mcp.json"), []byte(mcp), 0o644); err != nil {
@@ -849,7 +849,7 @@ func TestKiroGuidedSetupDoesNotRequireDuplexRunner(t *testing.T) {
 	client.ExecutablePath = "/test/bin/kiro-cli"
 	fixture := newCLIFixture(t, []domain.DetectedClient{client})
 	runner := &cliRunOnlyRunner{}
-	fixture.app.Lifecycle.Activator = providers.Activator{Runner: runner}
+	fixture.app.Lifecycle.Activator = providerstest.NewActivator(providers.Activator{Runner: runner})
 	plugin := writeCLIPlugin(t)
 	writeCLIMCP(t, plugin)
 
@@ -965,7 +965,7 @@ func TestInteractiveAddOffersKiroPreparationWhenAutomaticPreflightFails(t *testi
 	fixture := newCLIFixture(t, []domain.DetectedClient{
 		fixtureClient(t, domain.ClientCursor), kiro,
 	})
-	fixture.app.Lifecycle.Activator = providers.Activator{Runner: &cliRunOnlyRunner{}}
+	fixture.app.Lifecycle.Activator = providerstest.NewActivator(providers.Activator{Runner: &cliRunOnlyRunner{}})
 	plugin := writeCLIPlugin(t)
 	writeCLIMCP(t, plugin)
 
@@ -1811,7 +1811,7 @@ func TestInteractiveUnknownCopilotOutputReverifiesBeforeAttestation(t *testing.T
 	client.ExecutablePath = "/test/bin/copilot"
 	fixture := newCLIFixture(t, []domain.DetectedClient{client})
 	runner := &cliCommandRunner{}
-	fixture.app.Lifecycle.Activator = providers.Activator{Runner: runner}
+	fixture.app.Lifecycle.Activator = providerstest.NewActivator(providers.Activator{Runner: runner})
 	plugin := writeCLIPlugin(t)
 	stdout, _, err := fixture.executeInput(true, "y\nn\n", "add", plugin, "--target", "copilot")
 	if err != nil {
@@ -1847,7 +1847,7 @@ func TestInteractiveUnknownRetryRecognizedNegativeFailsClosed(t *testing.T) {
 		}
 		return legacyports.CommandResult{}
 	}}
-	fixture.app.Lifecycle.Activator = providers.Activator{Runner: runner}
+	fixture.app.Lifecycle.Activator = providerstest.NewActivator(providers.Activator{Runner: runner})
 	plugin := writeCLIPlugin(t)
 	stdout, _, err := fixture.executeInput(true, "y\n", "add", plugin, "--target", "copilot")
 	if err == nil || !strings.Contains(err.Error(), "recognized negative client evidence") {
@@ -2992,7 +2992,7 @@ func newCLIFixture(t *testing.T, clients []domain.DetectedClient) cliFixture {
 	planner := plannertest.NewPlanner(clientplanner.Planner{ManagedRoot: managedRoot, Detected: map[domain.ClientID]domain.DetectedClient{}})
 	mutationLock := processlock.Lock{Path: filepath.Join(root, "data", "mutation.lock")}
 	directory := dirswap.Manager{JournalDir: operations}
-	lifecycle := usecasetest.NewService(usecase.Service{StateStore: store, Planner: planner, Targets: planner, Stager: stager, Activator: providers.Activator{}, Lock: mutationLock,
+	lifecycle := usecasetest.NewService(usecase.Service{StateStore: store, Planner: planner, Targets: planner, Stager: stager, Activator: providerstest.NewActivator(providers.Activator{}), Lock: mutationLock,
 		Kernel: transaction.Kernel{StateStore: store, Directory: directory}, NativeObserver: fixtureNativeObserver{}, PluginData: providers.PluginDataManager{Base: filepath.Join(root, "data", "plugin-data")}})
 	return cliFixture{
 		root: root, store: store, operations: operations,

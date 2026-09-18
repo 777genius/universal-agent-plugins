@@ -10,6 +10,7 @@ import (
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/providers"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/providerstest"
 )
 
 func TestKiroPrepareCLIPlainAndJSON(t *testing.T) {
@@ -18,7 +19,7 @@ func TestKiroPrepareCLIPlainAndJSON(t *testing.T) {
 			client := fixtureClient(t, domain.ClientKiro)
 			client.ExecutablePath = "/fixture/kiro-cli"
 			fixture := newCLIFixture(t, []domain.DetectedClient{client})
-			fixture.app.Lifecycle.Activator = providers.Activator{}
+			fixture.app.Lifecycle.Activator = providerstest.NewActivator(providers.Activator{})
 			plugin := writeCLIPlugin(t)
 			writeCLIMCP(t, plugin)
 			out, _, err := fixture.execute(false, "add", plugin, "--target", "kiro", "--format", format)

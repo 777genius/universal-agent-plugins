@@ -46,7 +46,7 @@ func TestActivateGoldenAcrossClients(t *testing.T) {
 				runner := &recordingRunner{}
 				request := goldenActivationRequest(t, definition.ID, root)
 				request.VerifyOnly = verifyOnly
-				outcome, err := (Activator{Runner: runner}).Activate(context.Background(), request)
+				outcome, err := testActivator(Activator{Runner: runner}).Activate(context.Background(), request)
 				records[string(definition.ID)] = activationRecord{
 					Outcome: outcome, Error: errorText(err), Commands: commandArgv(runner.commands),
 				}
@@ -75,7 +75,7 @@ func TestActivateGoldenWhenClientsRespond(t *testing.T) {
 				request := goldenActivationRequest(t, definition.ID, root)
 				request.VerifyOnly = verifyOnly
 				runner := goldenRespondingRunner(definition.ID, request)
-				outcome, err := (Activator{Runner: runner}).Activate(context.Background(), request)
+				outcome, err := testActivator(Activator{Runner: runner}).Activate(context.Background(), request)
 				records[string(definition.ID)] = activationRecord{
 					Outcome: outcome, Error: errorText(err), Commands: commandArgv(runner.commands),
 				}
@@ -102,7 +102,7 @@ func TestDeactivateGoldenAcrossClients(t *testing.T) {
 				runner := &recordingRunner{}
 				request := goldenDeactivationRequest(t, definition.ID, root)
 				request.Confirmed = confirmed
-				outcome, err := (Activator{Runner: runner}).Deactivate(context.Background(), request)
+				outcome, err := testActivator(Activator{Runner: runner}).Deactivate(context.Background(), request)
 				records[string(definition.ID)] = deactivationRecord{
 					Outcome: outcome, Error: errorText(err), Commands: commandArgv(runner.commands),
 				}
@@ -128,7 +128,7 @@ func TestDeactivateGoldenWhenOwnershipIsRecorded(t *testing.T) {
 			DeclaredName: request.DeclaredName,
 			Delivery:     domain.StagedDelivery{ActivePath: request.ManagedArtifactPath},
 		})
-		outcome, err := (Activator{Runner: runner}).Deactivate(context.Background(), request)
+		outcome, err := testActivator(Activator{Runner: runner}).Deactivate(context.Background(), request)
 		records[string(definition.ID)] = deactivationRecord{
 			Outcome: outcome, Error: errorText(err), Commands: commandArgv(runner.commands),
 		}

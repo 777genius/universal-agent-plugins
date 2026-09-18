@@ -37,7 +37,7 @@ func TestClineLifecycleInstallsUpdatesAndRemovesExactOwnedObjects(t *testing.T) 
 		Delivery:     domain.StagedDelivery{ClientID: domain.ClientCline, OwnedBase: filepath.Dir(active), ActivePath: active, NativeObjects: desired},
 		DeclaredName: "demo",
 	}
-	outcome, err := (Activator{}).Activate(context.Background(), request)
+	outcome, err := testActivator(Activator{}).Activate(context.Background(), request)
 	if err != nil || outcome.Activation != domain.ActivationActive || outcome.Verification != domain.VerificationInstalled {
 		t.Fatalf("activation = %+v, %v", outcome, err)
 	}
@@ -54,7 +54,7 @@ func TestClineLifecycleInstallsUpdatesAndRemovesExactOwnedObjects(t *testing.T) 
 	}
 
 	request.VerifyOnly = true
-	if _, err := (Activator{}).Activate(context.Background(), request); err != nil {
+	if _, err := testActivator(Activator{}).Activate(context.Background(), request); err != nil {
 		t.Fatalf("verify-only: %v", err)
 	}
 	request.VerifyOnly = false
@@ -64,7 +64,7 @@ func TestClineLifecycleInstallsUpdatesAndRemovesExactOwnedObjects(t *testing.T) 
 	writeClineProjectionFixture(t, active, map[string]nativeconfig.Server{"docs": updatedServer})
 	updated := clineFixtureObjects(t, configRoot, active, "guide", "docs", updatedServer)
 	request.Delivery.NativeObjects = updated
-	if _, err := (Activator{}).Activate(context.Background(), request); err != nil {
+	if _, err := testActivator(Activator{}).Activate(context.Background(), request); err != nil {
 		t.Fatalf("update: %v", err)
 	}
 	doc = readObject(t, settings)
@@ -79,7 +79,7 @@ func TestClineLifecycleInstallsUpdatesAndRemovesExactOwnedObjects(t *testing.T) 
 	writeTestFile(t, settings, `{"theme":"night","mcpServers":{"foreign":{"command":"foreign"}}}`)
 	request.PreviousNativeObjects = append([]domain.NativeObjectOwnership(nil), desired...)
 	request.Delivery.NativeObjects = append([]domain.NativeObjectOwnership(nil), desired...)
-	if _, err := (Activator{}).Activate(context.Background(), request); err != nil {
+	if _, err := testActivator(Activator{}).Activate(context.Background(), request); err != nil {
 		t.Fatalf("repair absent exact-owned Cline entry: %v", err)
 	}
 	doc = readObject(t, settings)
@@ -89,7 +89,7 @@ func TestClineLifecycleInstallsUpdatesAndRemovesExactOwnedObjects(t *testing.T) 
 
 	foreign := `{"mcpServers":{"docs":{"transport":{"type":"stdio","command":"foreign"}}}}`
 	writeTestFile(t, settings, foreign)
-	if _, err := (Activator{}).Activate(context.Background(), request); !errors.Is(err, nativeconfig.ErrNotOwned) && !strings.Contains(err.Error(), "changed outside") {
+	if _, err := testActivator(Activator{}).Activate(context.Background(), request); !errors.Is(err, nativeconfig.ErrNotOwned) && !strings.Contains(err.Error(), "changed outside") {
 		t.Fatalf("tampered Cline entry was not rejected: %v", err)
 	}
 	if body, err := os.ReadFile(settings); err != nil || string(body) != foreign {
@@ -101,7 +101,7 @@ func TestClineLifecycleInstallsUpdatesAndRemovesExactOwnedObjects(t *testing.T) 
 	writeTestFile(t, settings, `{"theme":"night","mcpServers":{"foreign":{"command":"foreign"}}}`)
 
 	remove := domain.DeactivationRequest{Client: request.Client, DeclaredName: "demo", CurrentActivation: domain.ActivationActive, Confirmed: true, NativeObjects: desired}
-	removed, err := (Activator{}).Deactivate(context.Background(), remove)
+	removed, err := testActivator(Activator{}).Deactivate(context.Background(), remove)
 	if err != nil || !removed.ExternalRemovalComplete || !removed.ArtifactRemovalAllowed {
 		t.Fatalf("remove = %+v, %v", removed, err)
 	}

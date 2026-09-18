@@ -66,7 +66,7 @@ func TestWindsurfNativeLifecyclePreservesForeignEntries(t *testing.T) {
 
 	first := stagedWindsurfDelivery(t, configRoot, "one", "first")
 	request := windsurfActivationRequest(first, configRoot, nil)
-	outcome, err := (Activator{}).Activate(context.Background(), request)
+	outcome, err := testActivator(Activator{}).Activate(context.Background(), request)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -77,14 +77,14 @@ func TestWindsurfNativeLifecyclePreservesForeignEntries(t *testing.T) {
 
 	verified := request
 	verified.VerifyOnly = true
-	if outcome, err := (Activator{}).Activate(context.Background(), verified); err != nil || outcome.Verification != domain.VerificationInstalled {
+	if outcome, err := testActivator(Activator{}).Activate(context.Background(), verified); err != nil || outcome.Verification != domain.VerificationInstalled {
 		t.Fatalf("verify outcome = %+v, %v", outcome, err)
 	}
 
 	second := stagedWindsurfDelivery(t, configRoot, "two", "second")
 	update := windsurfActivationRequest(second, configRoot, first.NativeObjects)
 	update.Replacing = true
-	if _, err := (Activator{}).Activate(context.Background(), update); err != nil {
+	if _, err := testActivator(Activator{}).Activate(context.Background(), update); err != nil {
 		t.Fatal(err)
 	}
 	assertWindsurfConfig(t, configPath, "two", true)
@@ -94,7 +94,7 @@ func TestWindsurfNativeLifecyclePreservesForeignEntries(t *testing.T) {
 	}
 	repair := update
 	repair.PreviousNativeObjects = second.NativeObjects
-	if _, err := (Activator{}).Activate(context.Background(), repair); err != nil {
+	if _, err := testActivator(Activator{}).Activate(context.Background(), repair); err != nil {
 		t.Fatalf("repair exact absent entry: %v", err)
 	}
 	assertWindsurfConfig(t, configPath, "two", true)
@@ -104,7 +104,7 @@ func TestWindsurfNativeLifecyclePreservesForeignEntries(t *testing.T) {
 		DeclaredName: "demo", CurrentActivation: domain.ActivationActive, Confirmed: true,
 		NativeObjects: second.NativeObjects,
 	}
-	removed, err := (Activator{}).Deactivate(context.Background(), remove)
+	removed, err := testActivator(Activator{}).Deactivate(context.Background(), remove)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -112,7 +112,7 @@ func TestWindsurfNativeLifecyclePreservesForeignEntries(t *testing.T) {
 		t.Fatalf("remove outcome = %+v", removed)
 	}
 	assertWindsurfConfig(t, configPath, "", true)
-	if _, err := (Activator{}).Deactivate(context.Background(), remove); err != nil {
+	if _, err := testActivator(Activator{}).Deactivate(context.Background(), remove); err != nil {
 		t.Fatalf("idempotent removal after exact absence: %v", err)
 	}
 }
@@ -125,7 +125,7 @@ func TestWindsurfCollisionAndTamperFailClosed(t *testing.T) {
 	delivery := stagedWindsurfDelivery(t, configRoot, "owned", "collision")
 	request := windsurfActivationRequest(delivery, configRoot, nil)
 	before, _ := os.ReadFile(configPath)
-	if _, err := (Activator{}).Activate(context.Background(), request); err == nil {
+	if _, err := testActivator(Activator{}).Activate(context.Background(), request); err == nil {
 		t.Fatal("unmanaged collision was overwritten")
 	}
 	after, _ := os.ReadFile(configPath)
@@ -136,13 +136,13 @@ func TestWindsurfCollisionAndTamperFailClosed(t *testing.T) {
 	if err := os.WriteFile(configPath, []byte(`{"mcpServers":{}}`), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := (Activator{}).Activate(context.Background(), request); err != nil {
+	if _, err := testActivator(Activator{}).Activate(context.Background(), request); err != nil {
 		t.Fatalf("add after exact absence: %v", err)
 	}
 	writeTestFile(t, configPath, `{"mcpServers":{"docs":{"url":"https://tampered.test"}}}`)
 	request.PreviousNativeObjects = delivery.NativeObjects
 	request.Replacing = true
-	if _, err := (Activator{}).Activate(context.Background(), request); err == nil {
+	if _, err := testActivator(Activator{}).Activate(context.Background(), request); err == nil {
 		t.Fatal("tampered managed entry was overwritten")
 	}
 }
@@ -153,7 +153,7 @@ func TestWindsurfSkillsOnlyAndDevinOnlyRemainManual(t *testing.T) {
 	request.Client.ConfigRoot = ""
 	request.Client.ExecutablePath = "/test/bin/devin"
 	request.Plan.Components = []domain.ComponentDecision{{Kind: domain.ComponentSkill, Name: "guide", Support: domain.SupportPrepared}}
-	outcome, err := (Activator{}).Activate(context.Background(), request)
+	outcome, err := testActivator(Activator{}).Activate(context.Background(), request)
 	if err != nil {
 		t.Fatal(err)
 	}
