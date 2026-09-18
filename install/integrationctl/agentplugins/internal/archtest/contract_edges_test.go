@@ -79,14 +79,14 @@ var contractExternalModules = []string{
 }
 
 // platformSweep lists every GOOS the closure is recomputed under.
-// adapters/nativeconfig (lock_windows.go, open_nofollow_windows.go) and
-// adapters/atomicfile (syncdir_windows.go) gate golang.org/x/sys behind a
-// Windows-only file: a single-platform scan sees it only on the GOOS it
-// happens to run under, and stays permanently blind to a dependency gated
-// behind any other platform's file - exactly the class of drift this test
-// exists to catch. GOARCH is fixed at amd64 because none of these packages
-// carry architecture-specific files today; CgoEnabled is off because none
-// use cgo.
+// adapters/nativeconfig gates golang.org/x/sys behind lock_windows.go and
+// open_nofollow_windows.go: a single-platform scan sees it only on Windows
+// and stays permanently blind to a dependency gated behind any other
+// platform's file - exactly the class of drift this test exists to catch.
+// adapters/atomicfile is stdlib-only on every GOOS, including
+// syncdir_windows.go. GOARCH is fixed at amd64 because none of these
+// packages carry architecture-specific files today; CgoEnabled is off
+// because none use cgo.
 var platformSweep = []string{"linux", "darwin", "windows"}
 
 // TestContractLayerDependencyClosure is the guard test from plan §12.1.G: it
@@ -204,12 +204,11 @@ func computeContractSnapshot(root string, ctxt build.Context) (contractSnapshot,
 
 // packageImports parses every immediate (non-recursive) .go file in dir that
 // ctxt would actually compile, split into production and _test.go imports.
-// Filtering through ctxt.MatchFile matters here: adapters/nativeconfig and
-// adapters/atomicfile carry GOOS-suffixed files (lock_windows.go pulls in
-// golang.org/x/sys/windows), and a plain directory walk would report that
-// module on every platform regardless of which one is actually building,
-// whereas `go list` - and this test, once ctxt sweeps GOOS - only reports it
-// for the platform that compiles the file.
+// Filtering through ctxt.MatchFile matters here: adapters/nativeconfig
+// carries GOOS-suffixed files (lock_windows.go pulls in
+// golang.org/x/sys/windows). A plain directory walk would report that
+// module on every platform; `go list` - and this test, once ctxt sweeps
+// GOOS - only reports it for the platform that compiles the file.
 func packageImports(ctxt build.Context, dir string, includeTests bool) (production, test []string, err error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {

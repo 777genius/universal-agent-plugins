@@ -115,19 +115,21 @@ Test-файлов в ядре контракта — **11**: 10 `_test.go` в `d
 `context`, `crypto/rand`, `crypto/sha256`, `encoding/hex`, `encoding/json`, `errors`, `fmt`, `io`, `io/fs`,
 `os`, `path/filepath`, `regexp`, `sort`, `strconv`, `strings`, `time`.
 
-**(b) Внешние модули (non-test) — ровно один на данной платформе, и только транзитивно:**
-`github.com/tailscale/hujson` (через `adapters/nativeconfig`). Прямых внешних импортов у контракта нет.
-Версия в `install/integrationctl/go.mod`: `v0.0.0-20260302212456-ecc657c15afd`.
+**(b) Внешние модули (non-test) — транзитивно, без прямых импортов у контракта:**
+на linux/darwin ровно `github.com/tailscale/hujson` (через `adapters/nativeconfig`); на Windows к нему
+добавляется `golang.org/x/sys` (см. `(b'')`). Версия `hujson` в `install/integrationctl/go.mod`:
+`v0.0.0-20260302212456-ecc657c15afd`.
 
 **(b') Внешние модули, приходящие через ТЕСТЫ:** `golang.org/x/text/transform`, `golang.org/x/text/unicode/norm`
 (через `adapters/pathpolicy`, Находка 4).
 
 **(b'') Внешний модуль, видимый только на Windows:** `golang.org/x/sys` — `adapters/nativeconfig/lock_windows.go`
-и `adapters/nativeconfig/open_nofollow_windows.go` (`//go:build windows`) импортируют `golang.org/x/sys/windows`;
-`adapters/atomicfile/syncdir_windows.go` не тянет ничего внешнего сам, но лежит в том же файловом наборе.
-`go list -deps` на любой отдельной платформе этого модуля не покажет — guard test из §12.1.G обязан
-пересчитывать замыкание для каждого GOOS отдельно (см. §12.1.G, инвариант 3), иначе он слеп к дрейфу за
-Windows-only файлом ровно так же, как черновик изначально был слеп к Находке 4 через тестовый импорт.
+и `adapters/nativeconfig/open_nofollow_windows.go` импортируют `golang.org/x/sys/windows`.
+`adapters/atomicfile` на всех трёх GOOS остаётся stdlib-only (`syncdir_windows.go` внешних импортов не имеет).
+`GOOS=windows go list -deps ./agentplugins/clients` этот модуль показывает; `go list` на linux/darwin — нет.
+Host-platform CI поэтому его не увидит, и guard test из §12.1.G обязан пересчитывать замыкание для каждого
+GOOS отдельно (см. §12.1.G, инвариант 3), иначе он слеп к дрейфу за Windows-only файлом ровно так же, как
+черновик изначально был слеп к Находке 4 через тестовый импорт.
 
 **(c) Внутримонорепные зависимости — ровно ТРИ (черновик знал две):**
 
@@ -145,8 +147,9 @@ Windows-only файлом ровно так же, как черновик изн
 `nativeconfig/io.go:39` одной функцией `atomicfile.Write`.
 
 Файлы `adapters/nativeconfig`, которым нужен `hujson`: `kernel.go`, `document.go`, `project.go`.
-Файлы без внешних зависимостей: `types.go`, `lock.go`, `lock_unix.go`, `lock_windows.go`,
-`open_nofollow_unix.go`, `open_nofollow_windows.go` (и `io.go` — только `atomicfile`).
+Файлы с `golang.org/x/sys/windows`: `lock_windows.go`, `open_nofollow_windows.go`.
+Файлы без внешних зависимостей: `types.go`, `lock.go`, `lock_unix.go`,
+`open_nofollow_unix.go` (и `io.go` — только `atomicfile`).
 
 **Тестовые импорты `contracttest`-пакетов (VERIFIED, подтверждает §12.3):** `ports/contracttest` импортирует
 только `agentplugins/ports` + `os`/`path/filepath`/`strings`/`testing`; `clients/contracttest` — только
@@ -248,10 +251,10 @@ agentplugins/clients}` (только эти три пакета, без подп
 
 3. **Внешние модули.** Множество внешних (не-stdlib, не-репозиторных) модулей в этом замыкании, по всем
    платформам, равно ровно `{github.com/tailscale/hujson, golang.org/x/sys, golang.org/x/text}`.
-   `golang.org/x/sys` попадает в множество только через Windows-only файлы `adapters/nativeconfig` и
-   `adapters/atomicfile` (§12.1, «Полный список зависимостей») — на любой отдельно взятой платформе
-   `go list -deps` его не покажет, поэтому тест обязан пересчитывать замыкание для каждого GOOS из
-   `{linux, darwin, windows}`, а не полагаться на платформу CI-раннера.
+   `golang.org/x/sys` попадает в множество только через Windows-only файлы `adapters/nativeconfig`
+   (`lock_windows.go`, `open_nofollow_windows.go`). `GOOS=windows go list -deps` его показывает;
+   linux/darwin CI — нет, поэтому тест обязан пересчитывать замыкание для каждого GOOS из
+   `{linux, darwin, windows}`, а не полагаться на платформу раннера.
 
 Каждый инвариант — с точным сообщением об ошибке в стиле «появилось новое ребро `X → Y`; если это осознанно,
 обнови §12.1(c) плана Part 12 и baseline этого теста, иначе — убери импорт».
@@ -295,8 +298,9 @@ PATH и от режима workspace, а в CI это лишняя поверхн
 `go/build.Context.MatchFile` для фильтрации файлов по GOOS/GOARCH — **не запасной вариант, а обязательная
 часть реализации**, вопреки первоначальному черновику этого раздела: в самих `domain`/`ports`/`clients`
 build-тегов действительно нет (§12.2.C), но инварианты 2-3 обходят весь достижимый снаружи них замыкание, а
-там теги есть — `adapters/nativeconfig` (`lock_windows.go`, `open_nofollow_windows.go`) и `adapters/atomicfile`
-(`syncdir_windows.go`) прячут `golang.org/x/sys` за файлом, который есть только на Windows. Без `MatchFile`
+там теги есть — `adapters/nativeconfig` (`lock_windows.go`, `open_nofollow_windows.go`) прячет
+`golang.org/x/sys` за файлом, который компилируется только на Windows; `adapters/atomicfile`
+(`syncdir_windows.go`) тоже платформенный, но внешних модулей не тянет. Без `MatchFile`
 инвариант 3 либо не увидел бы `golang.org/x/sys` вовсе на не-Windows раннере, либо ошибочно требовал бы его
 на всех платформах. Реализация поэтому прогоняет весь снимок (`computeContractSnapshot`) для каждого GOOS из
 `{linux, darwin, windows}` (GOARCH зафиксирован на `amd64`, `CgoEnabled: false` — архитектурных и
