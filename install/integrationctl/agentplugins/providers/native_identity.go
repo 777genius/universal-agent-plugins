@@ -11,14 +11,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/kiro"
+	"github.com/pelletier/go-toml/v2"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/kiro"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
 	legacyports "github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
-	"github.com/pelletier/go-toml/v2"
 )
 
 type packageVerifier interface {

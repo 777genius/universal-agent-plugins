@@ -27,7 +27,7 @@ func ReadMCPConfig(path string) (servers map[string]any, original []byte, mode o
 	}
 	info, statErr := os.Lstat(path)
 	if statErr != nil || info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
-		return nil, nil, mode, false, fmt.Errorf("Kiro MCP configuration must be a regular file")
+		return nil, nil, mode, false, kiroErrorf("Kiro MCP configuration must be a regular file")
 	}
 	document, decodeErr := shared.DecodeStrictJSONObject(body)
 	if decodeErr != nil {
@@ -36,7 +36,7 @@ func ReadMCPConfig(path string) (servers map[string]any, original []byte, mode o
 	if raw, present := document["mcpServers"]; present {
 		servers, exists = raw.(map[string]any)
 		if !exists {
-			return nil, nil, mode, false, fmt.Errorf("Kiro mcpServers must be an object")
+			return nil, nil, mode, false, kiroErrorf("Kiro mcpServers must be an object")
 		}
 	} else {
 		servers = map[string]any{}

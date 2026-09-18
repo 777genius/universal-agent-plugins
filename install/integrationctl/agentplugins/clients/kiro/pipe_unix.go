@@ -24,8 +24,12 @@ func queuedACPRealPipeEvidence(reader io.Reader) (queued, eof bool, resultErr er
 		return false, false, err
 	}
 	err = raw.Control(func(fd uintptr) {
+		if fd > uintptr(^uint32(0)>>1) {
+			resultErr = fmt.Errorf("ACP pipe descriptor overflows poll fd")
+			return
+		}
 		poll := []unix.PollFd{{Fd: int32(fd), Events: unix.POLLIN | unix.POLLHUP}}
-		for attempt := 0; attempt < 3; attempt++ {
+		for range 3 {
 			_, pollErr := unix.Poll(poll, 0)
 			if errors.Is(pollErr, unix.EINTR) {
 				resultErr = pollErr

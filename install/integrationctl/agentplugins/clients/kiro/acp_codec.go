@@ -94,34 +94,43 @@ func validateJSONSurrogateEscapes(document []byte) error {
 		case '"':
 			inString = !inString
 		case '\\':
-			if !inString || index+1 >= len(document) {
-				continue
+			next, err := validateJSONUnicodeEscape(document, inString, index)
+			if err != nil {
+				return err
 			}
-			index++
-			if document[index] != 'u' || index+4 >= len(document) {
-				continue
-			}
-			value, ok := parseJSONHexQuad(document[index+1 : index+5])
-			if !ok {
-				continue // encoding/json reports the malformed escape itself
-			}
-			index += 4
-			switch {
-			case value >= 0xd800 && value <= 0xdbff:
-				if index+6 >= len(document) || document[index+1] != '\\' || document[index+2] != 'u' {
-					return fmt.Errorf("unpaired high UTF-16 surrogate escape")
-				}
-				low, valid := parseJSONHexQuad(document[index+3 : index+7])
-				if !valid || low < 0xdc00 || low > 0xdfff {
-					return fmt.Errorf("unpaired high UTF-16 surrogate escape")
-				}
-				index += 6
-			case value >= 0xdc00 && value <= 0xdfff:
-				return fmt.Errorf("unpaired low UTF-16 surrogate escape")
-			}
+			index = next
 		}
 	}
 	return nil
+}
+
+func validateJSONUnicodeEscape(document []byte, inString bool, index int) (int, error) {
+	if !inString || index+1 >= len(document) {
+		return index, nil
+	}
+	index++
+	if document[index] != 'u' || index+4 >= len(document) {
+		return index, nil
+	}
+	value, ok := parseJSONHexQuad(document[index+1 : index+5])
+	if !ok {
+		return index, nil // encoding/json reports the malformed escape itself
+	}
+	index += 4
+	switch {
+	case value >= 0xd800 && value <= 0xdbff:
+		if index+6 >= len(document) || document[index+1] != '\\' || document[index+2] != 'u' {
+			return index, fmt.Errorf("unpaired high UTF-16 surrogate escape")
+		}
+		low, valid := parseJSONHexQuad(document[index+3 : index+7])
+		if !valid || low < 0xdc00 || low > 0xdfff {
+			return index, fmt.Errorf("unpaired high UTF-16 surrogate escape")
+		}
+		return index + 6, nil
+	case value >= 0xdc00 && value <= 0xdfff:
+		return index, fmt.Errorf("unpaired low UTF-16 surrogate escape")
+	}
+	return index, nil
 }
 
 func parseJSONHexQuad(value []byte) (uint16, bool) {
