@@ -12,7 +12,7 @@ const openCodeNamespaceNotice = "opencode_tool_namespace_not_evaluated"
 
 // This is output evidence, not a portable validation or component selection rule.
 func withOpenCodeRuntimeNotice(result usecase.AddResult) usecase.AddResult {
-	if result.Plan.ClientID != domain.ClientOpenCode || len(domain.SelectedMCPNames(result.Plan)) == 0 {
+	if !reportsMCPToolNamespaceCollision(result.Plan.ClientID) || len(domain.SelectedMCPNames(result.Plan)) == 0 {
 		return result
 	}
 	for _, diagnostic := range result.Plan.Diagnostics {

@@ -1,5 +1,7 @@
 package domain
 
+import "strings"
+
 type ClientID string
 type DetectionStatus string
 type InstallScope string
@@ -118,8 +120,9 @@ var clientDefinitions = []ClientDefinition{
 		LifecycleKind:  LifecycleNativeConfig,
 	}),
 	withActivation(clientDefinition(ClientOpenCode, "OpenCode", "opencode", "managed", "prepared", false, PackagePrepared, SupportPrepared, SupportPrepared, SupportUnsupported, SupportUnsupported, SupportUnsupported, ClientTraits{
-		InstallIntents: []InstallIntent{InstallIntentAutomatic},
-		LifecycleKind:  LifecycleNativeConfig,
+		InstallIntents:                   []InstallIntent{InstallIntentAutomatic},
+		LifecycleKind:                    LifecycleNativeConfig,
+		ReportsMCPToolNamespaceCollision: true,
 	}), ActivationAutomatic),
 	withActivation(clientDefinition(ClientCline, "Cline", "cline", "managed", "native", false, PackageNative, SupportNative, SupportNative, SupportNative, SupportUnsupported, SupportUnsupported, ClientTraits{
 		InstallIntents: []InstallIntent{InstallIntentAutomatic},
@@ -199,6 +202,29 @@ func IsSupportedClient(id ClientID) bool {
 	return ok
 }
 
+var clientAliases = map[string]ClientID{
+	"github-copilot": ClientCopilot,
+	"vs-code":        ClientVSCode,
+	"claude-code":    ClientClaude,
+	"gemini-cli":     ClientGemini,
+	"open-code":      ClientOpenCode,
+	"devin":          ClientWindsurf,
+}
+
+// ParseClientID folds case and whitespace, maps known aliases onto canonical
+// ids, and otherwise returns the lowercased value. Unknown names are not
+// rejected here so later diagnostics can name the supported targets.
+func ParseClientID(value string) (ClientID, bool) {
+	normalized := ClientID(strings.ToLower(strings.TrimSpace(value)))
+	if aliased, ok := clientAliases[string(normalized)]; ok {
+		return aliased, true
+	}
+	if IsSupportedClient(normalized) {
+		return normalized, true
+	}
+	return normalized, false
+}
+
 // BackendSiblings returns the other clients installed through the same backend,
 // in registry order. Copilot and VS Code are the only pair today: a package
 // installed through the Copilot CLI is what VS Code then discovers.
@@ -215,6 +241,13 @@ func BackendSiblings(id ClientID) []ClientID {
 		siblings = append(siblings, candidate.ID)
 	}
 	return siblings
+}
+
+func ClientDisplayName(id ClientID) string {
+	if definition, ok := ClientDefinitionFor(id); ok && definition.DisplayName != "" {
+		return definition.DisplayName
+	}
+	return string(id)
 }
 
 func SameClientBackend(first, second ClientID) bool {

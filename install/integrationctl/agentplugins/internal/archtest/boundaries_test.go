@@ -81,6 +81,10 @@ func TestLayerBoundaries(t *testing.T) {
 		// every adapter into the authoring binary, which is the cost this rule
 		// exists to keep visible in the mains that choose to pay it.
 		{pkg: "cli/plugin-kit-ai/internal", deny: injectedRegistry},
+		{pkg: "cli/plugin-kit-ai/internal/agentpluginscli", deny: []string{
+			modulePath + "/install/integrationctl/agentplugins/providers",
+			modulePath + "/install/integrationctl/adapters/pathpolicy",
+		}},
 	}
 	for _, rule := range boundaries {
 		t.Run(rule.pkg, func(t *testing.T) {

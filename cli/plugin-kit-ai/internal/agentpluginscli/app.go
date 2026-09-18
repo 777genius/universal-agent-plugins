@@ -50,9 +50,11 @@ type App struct {
 	StateStore  transaction.StateStore
 	Detector    ports.ClientDetector
 	// ClientRegistry is the set of client adapters this binary knows about. The
-	// composition root decides it; the CLI only hands it to the planners it
-	// still builds for read-only previews.
+	// composition root decides it; CLI commands receive the already-built planner
+	// and never reconstruct one.
 	ClientRegistry      *clients.Registry
+	Planner             ports.DeliveryPlanner
+	Targets             ports.DeliveryTargetResolver
 	DirectoryClient     DirectoryClient
 	DiscoveryClient     DiscoveryClient
 	SourceAcquirer      SourceAcquirer

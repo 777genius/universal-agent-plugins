@@ -45,6 +45,10 @@ func TestClientTraitsAreDeclarativeAndDrivePolicy(t *testing.T) {
 	if !ok || gemini.Traits.LifecycleKind != LifecycleNativeConfig {
 		t.Fatalf("Gemini traits = %+v", gemini.Traits)
 	}
+	opencode, ok := ClientDefinitionFor(ClientOpenCode)
+	if !ok || !opencode.Traits.ReportsMCPToolNamespaceCollision || opencode.Traits.LifecycleKind != LifecycleNativeConfig {
+		t.Fatalf("OpenCode traits = %+v", opencode.Traits)
+	}
 }
 
 func TestShouldReadOnlyVerifyFollowsTraitsNotClientIDs(t *testing.T) {

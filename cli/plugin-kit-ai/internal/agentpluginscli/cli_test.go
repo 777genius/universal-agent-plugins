@@ -3003,6 +3003,8 @@ func newCLIFixture(t *testing.T, clients []domain.DetectedClient) cliFixture {
 			Version: "0.1.0", UserHome: filepath.Join(root, "home"),
 			ManagedRoot: managedRoot, StateStore: store, Detector: staticDetector{clients: clients},
 			ClientRegistry: clientregistry.Default(),
+			Planner:        planner,
+			Targets:        planner,
 			SourceAcquirer: sourceacquisition.Acquirer{TempRoot: root},
 			PackageLoader:  packageLoader, NativePackageLoader: loader.OpenAILoader{Loader: packageLoader},
 			Lifecycle:       lifecycle,

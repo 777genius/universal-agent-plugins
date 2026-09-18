@@ -20,6 +20,8 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/specregistry"
 	clientregistry "github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/all"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	clientplanner "github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/planner"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/plannertest"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/usecase"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/usecasetest"
 	"github.com/spf13/cobra"
@@ -63,7 +65,9 @@ func TestGeneratedPackagesReachExistingInstallerPlanner(t *testing.T) {
 			}
 			detector := &fixtureDetector{clients: clients}
 			scanner := &fixtureScanner{t: t}
+			planner := plannertest.NewPlanner(clientplanner.Planner{ManagedRoot: filepath.Join(fixture, "managed"), Registry: clientregistry.Default()})
 			app := agentpluginscli.App{UserHome: fixture, ManagedRoot: filepath.Join(fixture, "managed"), Detector: detector, ClientRegistry: clientregistry.Default(),
+				Planner: planner, Targets: planner,
 				StateStore: noEffectState{}, SourceAcquirer: sourceacquisition.Acquirer{TempRoot: t.TempDir()}, PackageLoader: packageLoader, NativePackageLoader: loader.OpenAILoader{Loader: packageLoader}, SecurityEvaluator: scanner,
 				Lifecycle: usecasetest.NewService(usecase.Service{Stager: noEffectStager{}, Activator: noEffectActivator{}}),
 			}

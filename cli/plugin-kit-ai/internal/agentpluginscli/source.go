@@ -495,13 +495,15 @@ func (app App) acquireDirectory(ctx context.Context, selector string, request pa
 	installation, _ := locallyMatchedInstallation(state, resolveSelector)
 	intents := lifecycleInstallIntents(installation, "user", nil)
 	for _, target := range affectedTargets {
-		if target == domain.ClientChatGPT && (productID == "context7" || app.chatGPTPreparation || intents[target] == domain.InstallIntentPrepare) {
+		if requiresPersonalMapping(target) && (productID == "context7" || app.chatGPTPreparation || intents[target] == domain.InstallIntentPrepare) {
 			preparingChatGPT = true
 		}
 	}
 	if preparingChatGPT {
-		resolveRequest.Purpose = domain.DirectoryResolveContext7ChatGPTPreparation
-		resolveRequest.Targets = []domain.ClientID{domain.ClientChatGPT}
+		if id, purpose, ok := directoryPreparationClient(affectedTargets); ok {
+			resolveRequest.Purpose = purpose
+			resolveRequest.Targets = []domain.ClientID{id}
+		}
 		retainedMapping = installation.LocalChatGPTMapping
 	}
 	selection, err := domain.ResolveDirectory(bundle.Snapshot, resolveRequest)
@@ -565,7 +567,7 @@ func (app App) acquireDirectory(ctx context.Context, selector string, request pa
 	if preparingChatGPT {
 		var peers []domain.ClientID
 		for _, target := range affectedTargets {
-			if target != domain.ClientChatGPT {
+			if !requiresPersonalMapping(target) {
 				peers = append(peers, target)
 			}
 		}
@@ -938,7 +940,7 @@ func cloneCatalogCompatibility(source map[string]domain.CatalogCompatibility) ma
 }
 
 func prepareLoadedPackageForClient(loaded *loadedPackage, clientID domain.ClientID) error {
-	if loaded == nil || clientID != domain.ClientChatGPT {
+	if loaded == nil || !requiresPersonalMapping(clientID) {
 		return nil
 	}
 	if loaded.chatGPTPreparation {
@@ -963,7 +965,7 @@ func prepareLoadedPackageForClient(loaded *loadedPackage, clientID domain.Client
 		loaded.envelope.Inventory.AppBindings = []string{mapping.Server}
 		return nil
 	}
-	compatibility, ok := loaded.hints.Compatibility[string(domain.ClientChatGPT)]
+	compatibility, ok := loaded.hints.Compatibility[string(clientID)]
 	if !ok || compatibility.AppBinding == nil {
 		return nil
 	}

@@ -5,6 +5,40 @@ import (
 	"testing"
 )
 
+func TestParseClientIDAliasesAndLenientPassThrough(t *testing.T) {
+	canonical := map[string]ClientID{
+		"codex": ClientCodex, "chatgpt": ClientChatGPT, "cursor": ClientCursor,
+		"copilot": ClientCopilot, "vscode": ClientVSCode, "kiro": ClientKiro,
+		"claude": ClientClaude, "gemini": ClientGemini, "opencode": ClientOpenCode,
+		"cline": ClientCline, "windsurf": ClientWindsurf,
+	}
+	for input, want := range canonical {
+		got, ok := ParseClientID(input)
+		if !ok || got != want {
+			t.Errorf("ParseClientID(%q) = %q, %v, want %q, true", input, got, ok, want)
+		}
+	}
+	aliases := map[string]ClientID{
+		"github-copilot": ClientCopilot, "vs-code": ClientVSCode, "claude-code": ClientClaude,
+		"gemini-cli": ClientGemini, "open-code": ClientOpenCode, "devin": ClientWindsurf,
+		"  CURSOR  ": ClientCursor, "Claude-Code": ClientClaude,
+	}
+	for input, want := range aliases {
+		got, ok := ParseClientID(input)
+		if !ok || got != want {
+			t.Errorf("ParseClientID(%q) = %q, %v, want %q, true", input, got, ok, want)
+		}
+	}
+	got, ok := ParseClientID("Not-A-Client")
+	if ok || got != ClientID("not-a-client") {
+		t.Fatalf("unknown name = %q, %v, want not-a-client, false", got, ok)
+	}
+	got, ok = ParseClientID("  Zed  ")
+	if ok || got != ClientID("zed") {
+		t.Fatalf("unknown name = %q, %v, want zed, false", got, ok)
+	}
+}
+
 func TestClientRegistryHasStableOrderAndSharedCopilotBackend(t *testing.T) {
 	want := []ClientID{
 		ClientCodex, ClientChatGPT, ClientCursor, ClientCopilot, ClientVSCode, ClientKiro,
