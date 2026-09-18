@@ -11,6 +11,7 @@ import (
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	clientplanner "github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/planner"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/plannertest"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/providers"
 	legacyports "github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
 )
@@ -61,7 +62,7 @@ func TestClaudeLifecycleAddUpdateRepairRemoveWithIsolatedConfig(t *testing.T) {
 	service, store, _ := serviceFixture(t)
 	config := filepath.Join(t.TempDir(), "claude-config")
 	client := domain.DetectedClient{ClientID: domain.ClientClaude, Status: domain.DetectionDetected, ConfigRoot: config, ExecutablePath: "/test/bin/claude"}
-	planner := clientplanner.Planner{ManagedRoot: t.TempDir()}
+	planner := plannertest.NewPlanner(clientplanner.Planner{ManagedRoot: t.TempDir()})
 	runner := &fakeClaudeLifecycleRunner{configRoot: config}
 	stager := providers.Stager{}
 	service.Planner, service.Targets, service.Stager = planner, planner, stager
@@ -148,7 +149,7 @@ func TestClaudeFailedInstallVerificationHasDeterministicRemovalCompensation(t *t
 	service, store, _ := serviceFixture(t)
 	config := filepath.Join(t.TempDir(), "claude-config")
 	client := domain.DetectedClient{ClientID: domain.ClientClaude, Status: domain.DetectionDetected, ConfigRoot: config, ExecutablePath: "/test/bin/claude"}
-	planner := clientplanner.Planner{ManagedRoot: t.TempDir()}
+	planner := plannertest.NewPlanner(clientplanner.Planner{ManagedRoot: t.TempDir()})
 	runner := &fakeClaudeLifecycleRunner{configRoot: config}
 	stager := providers.Stager{}
 	service.Planner, service.Targets, service.Stager = planner, planner, stager

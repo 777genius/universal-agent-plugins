@@ -13,6 +13,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/prompt"
 	"github.com/777genius/plugin-kit-ai/cli/internal/terminaltheme"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/dirswap"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/pathpolicy"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	clientplanner "github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/planner"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
@@ -376,7 +377,7 @@ func checkManagedIntegrity(ctx context.Context, app App, client domain.DetectedC
 	if physicalID == "" {
 		return []doctorFinding{scopedFinding("degraded", "managed_target_unverifiable", installation, binding.ClientID, "the managed target has no physical artifact identity", blockedStateRecovery)}
 	}
-	target, err := (clientplanner.Planner{ManagedRoot: app.ManagedRoot}).ResolveTarget(ctx, client, domain.InstallScope(binding.Scope), physicalID)
+	target, err := (clientplanner.Planner{ManagedRoot: app.ManagedRoot, Paths: pathpolicy.Policy{}}).ResolveTarget(ctx, client, domain.InstallScope(binding.Scope), physicalID)
 	if err != nil || filepath.Clean(target.ActivePath) != filepath.Clean(binding.TargetLocator) {
 		return []doctorFinding{scopedFinding("degraded", "managed_target_mismatch", installation, binding.ClientID, "the recorded managed target does not match the current safe client target", blockedStateRecovery)}
 	}

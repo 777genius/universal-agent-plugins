@@ -10,7 +10,7 @@ import (
 
 func TestWindsurfPlanActivatesMCPOnlyForOneSelectedLegacyChannel(t *testing.T) {
 	t.Parallel()
-	planner := Planner{ManagedRoot: t.TempDir()}
+	planner := testPlanner(Planner{ManagedRoot: t.TempDir()})
 	configRoot := filepath.Join(t.TempDir(), ".codeium", "windsurf-next")
 	plan, err := planner.Plan(context.Background(), testEnvelope(), detectedClient(domain.ClientWindsurf, configRoot), domain.ScopeUser, "demo-0123456789ab")
 	if err != nil {

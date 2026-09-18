@@ -19,6 +19,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/statev2"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	clientplanner "github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/planner"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/plannertest"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/providers"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/transaction"
@@ -1973,8 +1974,8 @@ func serviceFixture(t *testing.T) (Service, statev2.Store, domain.DetectedClient
 		ConfigRoot: filepath.Join(root, "home", ".cursor"),
 	}
 	stager := providers.Stager{}
-	targetPlanner := clientplanner.Planner{ManagedRoot: managed}
-	return Service{
+	targetPlanner := plannertest.NewPlanner(clientplanner.Planner{ManagedRoot: managed})
+	return testService(Service{
 		StateStore: store,
 		Planner:    targetPlanner,
 		Targets:    targetPlanner,
@@ -1986,7 +1987,7 @@ func serviceFixture(t *testing.T) (Service, statev2.Store, domain.DetectedClient
 			Directory: dirswap.Manager{JournalDir: filepath.Join(root, "state", "operations-v2")},
 		},
 		Now: func() time.Time { return time.Date(2026, 8, 8, 12, 0, 0, 0, time.UTC) },
-	}, store, client
+	}), store, client
 }
 
 type verificationFailureStager struct {

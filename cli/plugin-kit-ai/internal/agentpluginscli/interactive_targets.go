@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/pathpolicy"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/discoveryv1"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	clientplanner "github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/planner"
@@ -281,7 +282,7 @@ func forEachDetectedSubset(values []domain.DetectedClient, size int, visit func(
 func (app App) compatibleLoadedTargets(ctx context.Context, loaded loadedPackage, detected []domain.DetectedClient, intents ...map[domain.ClientID]domain.InstallIntent) ([]domain.DetectedClient, []targetSkip) {
 	var skipped []targetSkip
 	clientMap := detectedClientMap(detected)
-	planner := clientplanner.Planner{ManagedRoot: app.ManagedRoot, Detected: clientMap}
+	planner := clientplanner.Planner{ManagedRoot: app.ManagedRoot, Paths: pathpolicy.Policy{}, Detected: clientMap}
 	physicalID := domain.ComputePhysicalArtifactID(loaded.envelope.Manifest.Name, "00000000-0000-4000-8000-000000000000")
 	if len(intents) > 0 && intents[0] != nil && app.StateStore != nil {
 		if state, err := app.StateStore.Load(); err == nil {
@@ -311,7 +312,9 @@ func (app App) compatibleLoadedTargets(ctx context.Context, loaded loadedPackage
 			skipped = append(skipped, targetSkip{client.ClientID, "package binding preparation failed; ask the package publisher to check its client mapping"})
 			continue
 		}
-		plan, err := planner.Plan(ctx, candidate.envelope, client, domain.ScopeUser, physicalID)
+		plan, err := planner.Plan(ctx, domain.PlanRequest{
+			Envelope: candidate.envelope, Client: client, Scope: domain.ScopeUser, PhysicalArtifactID: physicalID,
+		})
 		if err != nil || plan.Status == domain.PlanUnsupported {
 			reason := "package is unsupported for this client; ask the package publisher for supported components"
 			if err != nil {

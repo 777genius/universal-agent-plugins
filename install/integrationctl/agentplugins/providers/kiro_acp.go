@@ -15,6 +15,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
 	legacyports "github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
 )
 
@@ -32,14 +33,9 @@ var (
 	errKiroACPPartialExit     = fmt.Errorf("%w: Kiro ACP process exited with a partial trailing record", errRecognizedNegativeEvidence)
 )
 
-type duplexCommandRunner interface {
-	RunDuplexWithPlannedShutdown(context.Context, legacyports.Command, func(io.Writer, io.Reader) error) error
-}
+type duplexCommandRunner = ports.DuplexCommandRunner
 
-type duplexCapabilityRunner interface {
-	duplexCommandRunner
-	DuplexCapability() error
-}
+type duplexCapabilityRunner = ports.DuplexCapabilityRunner
 
 type kiroACPServerState struct {
 	connecting       bool

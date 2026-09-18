@@ -13,6 +13,7 @@ import (
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/usecase"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/usecasetest"
 )
 
 func TestInfoReconcilesExactCopilotIdentityWithoutMutationOrPathLeak(t *testing.T) {
@@ -131,9 +132,9 @@ func TestInfoLegacyBindingFallsBackToInstallationVersion(t *testing.T) {
 		ClientID: domain.ClientCopilot, Status: domain.DetectionDetected, Version: "1.0.82", ExecutablePath: "/test/bin/copilot",
 	}}}
 	observer := &capturingNativeObserver{observation: domain.NativeIdentityObservation{State: domain.NativeIdentityManaged}}
-	app := App{Detector: detector, Lifecycle: usecase.Service{
+	app := App{Detector: detector, Lifecycle: usecasetest.NewService(usecase.Service{
 		Targets: scopeTargetResolver{targets: map[domain.InstallScope]string{domain.ScopeUser: target}}, NativeObserver: observer,
-	}}
+	})}
 	public := publicInstallationView(installation, true)
 	if err := reconcileInstalledInfo(context.Background(), app, installation, "copilot", &public); err != nil {
 		t.Fatal(err)
@@ -157,10 +158,10 @@ func TestInfoReconcilesEachSameClientBindingByExactBindingIdentity(t *testing.T)
 	detector := &observedProbingDetector{clients: []domain.DetectedClient{{
 		ClientID: domain.ClientCopilot, Status: domain.DetectionDetected, Version: "1.0.80", ExecutablePath: "/test/bin/copilot",
 	}}}
-	app := App{Detector: detector, Lifecycle: usecase.Service{
+	app := App{Detector: detector, Lifecycle: usecasetest.NewService(usecase.Service{
 		Targets:        scopeTargetResolver{targets: map[domain.InstallScope]string{domain.ScopeUser: userTarget, domain.ScopeProject: projectTarget}},
 		NativeObserver: reconciledNativeObserver{},
-	}}
+	})}
 	public := publicInstallationView(installation, true)
 	if err := reconcileInstalledInfo(context.Background(), app, installation, "copilot", &public); err != nil {
 		t.Fatal(err)
@@ -206,9 +207,9 @@ func TestVSCodeInfoUsesCopilotAsAuthoritativeNativeBackend(t *testing.T) {
 				{ClientID: domain.ClientCopilot, Status: domain.DetectionDetected, Version: "1.0.80", ExecutablePath: "/test/bin/copilot", ConfigRoot: "/test/config/copilot"},
 			}}
 			observer := &capturingNativeObserver{observation: test.observation}
-			app := App{Detector: detector, Lifecycle: usecase.Service{
+			app := App{Detector: detector, Lifecycle: usecasetest.NewService(usecase.Service{
 				Targets: scopeTargetResolver{targets: map[domain.InstallScope]string{domain.ScopeUser: target}}, NativeObserver: observer,
-			}}
+			})}
 			public := publicInstallationView(installation, true)
 			if err := reconcileInstalledInfo(context.Background(), app, installation, "vscode", &public); err != nil {
 				t.Fatal(err)
@@ -257,9 +258,9 @@ func TestInfoFindsSharedBindingThroughEitherAffectedSurface(t *testing.T) {
 				State: domain.NativeIdentityManaged, ReceiptReconciled: true, NativeDiscoveryReconciled: true,
 				NativeDiscoveryState: domain.NativeIdentityManaged, NativeDiscoveryAttempted: true,
 			}}
-			app := App{Detector: detector, Lifecycle: usecase.Service{
+			app := App{Detector: detector, Lifecycle: usecasetest.NewService(usecase.Service{
 				Targets: scopeTargetResolver{targets: map[domain.InstallScope]string{domain.ScopeUser: target}}, NativeObserver: observer,
-			}}
+			})}
 			public := publicInstallationView(installation, true)
 			if err := reconcileInstalledInfo(context.Background(), app, installation, string(test.requested), &public); err != nil {
 				t.Fatal(err)
@@ -291,7 +292,7 @@ func TestInfoSharedBindingDoesNotMatchUnrelatedExplicitTarget(t *testing.T) {
 	detector := &observedProbingDetector{clients: []domain.DetectedClient{{ClientID: domain.ClientCursor, Status: domain.DetectionDetected, Version: "1.0.0"}}}
 	observer := &capturingNativeObserver{}
 	public := publicInstallationView(installation, true)
-	if err := reconcileInstalledInfo(context.Background(), App{Detector: detector, Lifecycle: usecase.Service{NativeObserver: observer}}, installation, "cursor", &public); err != nil {
+	if err := reconcileInstalledInfo(context.Background(), App{Detector: detector, Lifecycle: usecasetest.NewService(usecase.Service{NativeObserver: observer})}, installation, "cursor", &public); err != nil {
 		t.Fatal(err)
 	}
 	if len(public.Clients) != 0 || len(observer.clients) != 0 {
@@ -323,9 +324,9 @@ func TestInfoFailsClosedBeforeNativeDiscoveryWithoutAuthoritativeClientVersion(t
 		State: domain.NativeIdentityManaged, ReceiptReconciled: true, NativeDiscoveryReconciled: true,
 		NativeDiscoveryState: domain.NativeIdentityManaged, NativeDiscoveryAttempted: true,
 	}}
-	app := App{Detector: detector, Lifecycle: usecase.Service{
+	app := App{Detector: detector, Lifecycle: usecasetest.NewService(usecase.Service{
 		Targets: scopeTargetResolver{targets: map[domain.InstallScope]string{domain.ScopeUser: target}}, NativeObserver: observer,
-	}}
+	})}
 	public := publicInstallationView(installation, true)
 	if err := reconcileInstalledInfo(context.Background(), app, installation, "copilot", &public); err != nil {
 		t.Fatal(err)
@@ -354,9 +355,9 @@ func TestInfoOmitsNativeEvidenceWhenDiscoveryTimesOut(t *testing.T) {
 		observation: domain.NativeIdentityObservation{State: domain.NativeIdentityIndeterminate, NativeDiscoveryState: domain.NativeIdentityIndeterminate, NativeDiscoveryAttempted: true},
 		err:         context.DeadlineExceeded,
 	}
-	app := App{Detector: detector, Lifecycle: usecase.Service{
+	app := App{Detector: detector, Lifecycle: usecasetest.NewService(usecase.Service{
 		Targets: scopeTargetResolver{targets: map[domain.InstallScope]string{domain.ScopeUser: target}}, NativeObserver: observer,
-	}}
+	})}
 	public := publicInstallationView(installation, true)
 	if err := reconcileInstalledInfo(context.Background(), app, installation, "copilot", &public); err != nil {
 		t.Fatal(err)

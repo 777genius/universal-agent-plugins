@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/planner"
 )
 
 // planInstall resolves intent before any activation preflight, including grouped
@@ -48,9 +47,11 @@ func (service Service) planInstall(ctx context.Context, input *AddInput, physica
 			return domain.DeliveryPlan{}, fmt.Errorf("personal ChatGPT registration differs from retained receipt")
 		}
 	}
-	plan, err := service.Planner.Plan(ctx, input.Envelope, input.Client, input.Scope, physicalID)
-	if err == nil {
-		err = planner.ApplyInstallIntent(&plan, input.InstallIntent)
-	}
-	return plan, err
+	return service.Planner.Plan(ctx, domain.PlanRequest{
+		Envelope:           input.Envelope,
+		Client:             input.Client,
+		Scope:              input.Scope,
+		PhysicalArtifactID: physicalID,
+		InstallIntent:      input.InstallIntent,
+	})
 }

@@ -31,7 +31,7 @@ func TestPlanGoldenAcrossClientsAndEnvelopes(t *testing.T) {
 		t.Run(fixture.name, func(t *testing.T) {
 			t.Parallel()
 			root := goldenRoot(t)
-			planner := Planner{ManagedRoot: filepath.Join(root, "managed")}
+			planner := testPlanner(Planner{ManagedRoot: filepath.Join(root, "managed")})
 			outcomes := make(map[string]plannedOutcome, len(domain.ClientDefinitions()))
 			for _, definition := range domain.ClientDefinitions() {
 				plan, err := planner.Plan(
@@ -58,7 +58,7 @@ func TestPlanGoldenPinsDetectedMapDivergence(t *testing.T) {
 	client := goldenClient(domain.ClientVSCode, root)
 
 	// cmd/agentplugins/main.go hands the use case an empty map.
-	fromCommand, err := (Planner{ManagedRoot: managed}).Plan(
+	fromCommand, err := testPlanner(Planner{ManagedRoot: managed}).Plan(
 		context.Background(), envelope, client, domain.ScopeUser, "demo-0123456789ab")
 	if err != nil {
 		t.Fatal(err)
@@ -68,7 +68,7 @@ func TestPlanGoldenPinsDetectedMapDivergence(t *testing.T) {
 	detected := map[domain.ClientID]domain.DetectedClient{
 		domain.ClientCopilot: goldenClient(domain.ClientCopilot, root),
 	}
-	fromCLI, err := (Planner{ManagedRoot: managed, Detected: detected}).Plan(
+	fromCLI, err := testPlanner(Planner{ManagedRoot: managed, Detected: detected}).Plan(
 		context.Background(), envelope, client, domain.ScopeUser, "demo-0123456789ab")
 	if err != nil {
 		t.Fatal(err)

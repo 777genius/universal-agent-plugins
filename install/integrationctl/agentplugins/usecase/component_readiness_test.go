@@ -30,7 +30,7 @@ func TestSelectedReadinessIsolatesMissingAndUnsupportedStdio(t *testing.T) {
 		{Kind: domain.ComponentMCPServer, Name: "unsupported", Support: domain.SupportUnsupported},
 		{Kind: domain.ComponentMCPServer, Name: "remote", Support: domain.SupportNative},
 	}}
-	if err := (Service{}).preflightComponents(envelope, &plan, false); err != nil {
+	if err := testService(Service{}).preflightComponents(envelope, &plan, false); err != nil {
 		t.Fatal(err)
 	}
 	if got := domain.SelectedMCPNames(plan); !reflect.DeepEqual(got, []string{"remote"}) {

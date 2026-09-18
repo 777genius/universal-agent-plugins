@@ -12,7 +12,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/pathpolicy"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/transaction"
@@ -21,7 +20,11 @@ import (
 )
 
 type Service struct {
-	StateStore     transaction.StateStore
+	StateStore transaction.StateStore
+	// Paths is required. There is deliberately no default: a silently supplied
+	// one would let a caller that forgot to wire it keep running with whatever
+	// containment rules that default happened to carry.
+	Paths          ports.PathPolicy
 	Planner        ports.DeliveryPlanner
 	Targets        ports.DeliveryTargetResolver
 	Stager         ports.PackageStager
@@ -63,10 +66,6 @@ type PluginDataManager interface {
 	EnsureData(context.Context, string, string, string) (domain.DataReceipt, bool, error)
 	ValidateData(context.Context, domain.DataReceipt) error
 	PurgeData(context.Context, domain.DataReceipt) error
-}
-
-type pluginDataAwareStager interface {
-	StageWithPluginData(context.Context, domain.PackageEnvelope, domain.DeliveryPlan, string, domain.CompatibilityHints, string) (domain.StagedDelivery, error)
 }
 
 type AddInput struct {
@@ -126,7 +125,7 @@ func (service Service) apply(ctx context.Context, input AddInput, replace bool) 
 	if err := validateOperationOrigin(input.OriginMode, input.DirectoryResolution); err != nil {
 		return AddResult{}, err
 	}
-	if service.StateStore == nil || service.Planner == nil || service.Stager == nil || service.Activator == nil {
+	if service.StateStore == nil || service.Paths == nil || service.Planner == nil || service.Stager == nil || service.Activator == nil {
 		return AddResult{}, fmt.Errorf("agentplugins service dependencies are incomplete")
 	}
 	if input.Envelope.LoaderKind != domain.LoaderKindAgentPlugins {
@@ -492,7 +491,7 @@ func (service Service) stagePackage(ctx context.Context, envelope domain.Package
 	if strings.TrimSpace(dataPath) == "" {
 		return service.Stager.Stage(ctx, envelope, plan, operationID, hints)
 	}
-	aware, ok := service.Stager.(pluginDataAwareStager)
+	aware, ok := service.Stager.(ports.PluginDataAwareStager)
 	if !ok {
 		return domain.StagedDelivery{}, fmt.Errorf("package stager cannot bind the owned PLUGIN_DATA locator")
 	}
@@ -545,7 +544,7 @@ func (service Service) resume(
 	})
 	// Authentication completion is a separate phase. Client installation/list
 	// evidence must never silently complete it.
-	if activationErr == nil && !clientVerifierAvailable(input, result.Plan) && client.Activation == domain.ActivationActive && client.Verification == domain.VerificationInstalled {
+	if activationErr == nil && !service.clientVerifierAvailable(input, result.Plan) && client.Activation == domain.ActivationActive && client.Verification == domain.VerificationInstalled {
 		outcome.Activation = client.Activation
 		outcome.Verification = client.Verification
 	}
@@ -577,35 +576,15 @@ func (service Service) resume(
 	return result, nil
 }
 
-func clientVerifierAvailable(input AddInput, plan domain.DeliveryPlan) bool {
-	switch input.Client.ClientID {
-	case domain.ClientGemini, domain.ClientOpenCode, domain.ClientCline, domain.ClientWindsurf:
-		// These clients expose an exact, read-only native configuration verifier.
-		// It is intentionally independent of an optional client executable.
-		return len(plan.Components) > 0
-	}
-	if strings.TrimSpace(input.BackendExecutable) == "" {
+// clientVerifierAvailable asks the activator whether an exact client-side
+// verifier can observe this plan. An activator without the capability reports
+// no verifier, so prior evidence is re-derived rather than retained.
+func (service Service) clientVerifierAvailable(input AddInput, plan domain.DeliveryPlan) bool {
+	classifier, ok := service.Activator.(ports.ActivationVerifierClassifier)
+	if !ok {
 		return false
 	}
-	switch input.Client.ClientID {
-	case domain.ClientCodex, domain.ClientClaude, domain.ClientCopilot, domain.ClientVSCode:
-		return true
-	case domain.ClientKiro:
-		if !strings.Contains(strings.ToLower(input.BackendExecutable), "kiro") || len(plan.Components) == 0 {
-			return false
-		}
-		for _, component := range plan.Components {
-			if component.Support == domain.SupportUnsupported {
-				continue
-			}
-			if component.Kind != domain.ComponentSkill && component.Kind != domain.ComponentMCPServer {
-				return false
-			}
-		}
-		return true
-	default:
-		return false
-	}
+	return classifier.VerifierAvailable(input.Client, plan, input.BackendExecutable)
 }
 
 func (service Service) persistObservedLifecycle(input AddInput, result AddResult, installationID, clientBindingID string, outcome domain.ActivationOutcome) (AddResult, error) {
@@ -1258,16 +1237,8 @@ func packageNeedsPluginData(envelope domain.PackageEnvelope, plan domain.Deliver
 	return false
 }
 
-type automaticActivationClassifier interface {
-	AutomaticallyActivates(domain.ActivationRequest) bool
-}
-
-type activationPreflighter interface {
-	PreflightActivation(domain.ActivationRequest) error
-}
-
 func (service Service) preflightActivation(input AddInput, plan domain.DeliveryPlan) error {
-	preflighter, ok := service.Activator.(activationPreflighter)
+	preflighter, ok := service.Activator.(ports.ActivationPreflighter)
 	if !ok {
 		return nil
 	}
@@ -1278,7 +1249,7 @@ func (service Service) preflightActivation(input AddInput, plan domain.DeliveryP
 }
 
 func (service Service) automaticallyActivates(input AddInput, plan domain.DeliveryPlan) bool {
-	classifier, ok := service.Activator.(automaticActivationClassifier)
+	classifier, ok := service.Activator.(ports.AutomaticActivationClassifier)
 	if !ok {
 		return false
 	}
@@ -1327,7 +1298,7 @@ func (service Service) verifyManagedTarget(
 	if err != nil {
 		return fmt.Errorf("resolve managed %s target: %w", operation, err)
 	}
-	if err := pathpolicy.RequireExactPath(target.ActivePath, binding.TargetLocator); err != nil {
+	if err := service.Paths.RequireExactPath(target.ActivePath, binding.TargetLocator); err != nil {
 		return fmt.Errorf("refuse %s from untrusted persisted target: %w", operation, err)
 	}
 	if err := service.Stager.Verify(ctx, binding.TargetLocator, expectedDigest); err != nil {

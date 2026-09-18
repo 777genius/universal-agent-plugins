@@ -281,7 +281,7 @@ func TestGroupedRepairAllowsRecordedObjectToBeAbsentButNeverAdoptsForeignIdentit
 	client := domain.DetectedClient{ClientID: domain.ClientCursor}
 	plan := domain.DeliveryPlan{ClientID: domain.ClientCursor}
 
-	service := Service{NativeObserver: fixedNativeObserver{observation: domain.NativeIdentityObservation{State: domain.NativeIdentityAbsent}}}
+	service := testService(Service{NativeObserver: fixedNativeObserver{observation: domain.NativeIdentityObservation{State: domain.NativeIdentityAbsent}}})
 	if err := service.observeGroupNativeIdentity(context.Background(), client, plan, managed, true); err != nil {
 		t.Fatalf("absent recorded repair target was rejected: %v", err)
 	}
@@ -680,7 +680,7 @@ func TestGroupRecoveryPostApplyVerifyChecksEveryRecoveringTargetOnce(t *testing.
 	}
 	planned := []plannedGroupTarget{makeTarget("first"), makeTarget("second"), {noChange: true}}
 	observer := &recoveryProbeNativeObserver{stager: acceptingVerifier{}}
-	service := Service{NativeObserver: observer}
+	service := testService(Service{NativeObserver: observer})
 	verify := service.groupRecoveryPostApplyVerify(planned)
 	if verify == nil {
 		t.Fatal("expected a non-nil PostApplyVerify hook")

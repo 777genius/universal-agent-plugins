@@ -14,13 +14,15 @@ import (
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/pathpolicy"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/providers/nativeconfig"
 	legacyports "github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
 )
 
-type CommandRunner interface {
-	Run(context.Context, legacyports.Command) (legacyports.CommandResult, error)
-}
+// CommandRunner is an alias of the port. It stays exported here so callers and
+// the optional runner capabilities in kiro_acp.go and native_identity.go keep
+// their current names until the providers package is split into client adapters.
+type CommandRunner = ports.CommandRunner
 
 type Activator struct {
 	Runner       CommandRunner

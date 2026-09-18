@@ -8,6 +8,8 @@ on:
     branches: [main, 'refactor/**']
     paths:
       - 'install/integrationctl/agentplugins/**'
+      # The only ports.PathPolicy implementation lives here.
+      - 'install/integrationctl/adapters/pathpolicy/**'
       - 'cli/plugin-kit-ai/internal/agentpluginscli/**'
       - 'cli/plugin-kit-ai/cmd/agentplugins/**'
       - 'go.mod'

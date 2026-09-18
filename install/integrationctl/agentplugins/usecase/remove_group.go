@@ -7,7 +7,6 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/pathpolicy"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/transaction"
 )
@@ -43,7 +42,7 @@ func (service Service) RemoveGroup(ctx context.Context, input RemoveGroupInput) 
 	if len(input.Targets) == 0 {
 		return RemoveGroupResult{}, fmt.Errorf("at least one installed target is required")
 	}
-	if service.StateStore == nil || service.Targets == nil || service.Stager == nil || service.Activator == nil {
+	if service.StateStore == nil || service.Paths == nil || service.Targets == nil || service.Stager == nil || service.Activator == nil {
 		return RemoveGroupResult{}, fmt.Errorf("agentplugins group removal dependencies are incomplete")
 	}
 	release, err := service.beginMutation(ctx, input.DryRun, input.Confirmed)
@@ -118,7 +117,7 @@ func (service Service) RemoveGroup(ctx context.Context, input RemoveGroupInput) 
 			target.ActivePath = client.TargetLocator
 			target.TargetRoot = filepath.Dir(client.TargetLocator)
 		}
-		if err := pathpolicy.RequireExactPath(target.ActivePath, client.TargetLocator); err != nil {
+		if err := service.Paths.RequireExactPath(target.ActivePath, client.TargetLocator); err != nil {
 			return result, err
 		}
 		if err := service.Stager.Verify(ctx, client.TargetLocator, expected); err != nil {
