@@ -692,25 +692,25 @@ linters:
       - path: ^install/integrationctl/agentplugins/providers/activator\.go$
         linters: [revive, funlen, gocyclo, gocognit]
         text: 'file length is|too many statements|cyclomatic complexity|cognitive complexity'
-      - path: ^install/integrationctl/agentplugins/providers/claude\.go$
+      - path: ^install/integrationctl/agentplugins/clients/claude/claude\.go$
         linters: [funlen, gocognit]
         text: 'too many statements|cognitive complexity'
-      - path: ^install/integrationctl/agentplugins/providers/cline_native\.go$
+      - path: ^install/integrationctl/agentplugins/clients/cline/native\.go$
         linters: [revive, funlen, gocyclo, gocognit, dupl]
         text: 'file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of'
-      - path: ^install/integrationctl/agentplugins/providers/gemini_native\.go$
+      - path: ^install/integrationctl/agentplugins/clients/gemini/native\.go$
         linters: [revive, funlen, gocyclo, gocognit, dupl]
         text: 'file length is|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of'
       - path: ^install/integrationctl/agentplugins/providers/native_identity\.go$
         linters: [revive, funlen, gocyclo, gocognit]
         text: 'file length is|too many statements|cyclomatic complexity|cognitive complexity'
-      - path: ^install/integrationctl/agentplugins/providers/opencode_native\.go$
+      - path: ^install/integrationctl/agentplugins/clients/opencode/native\.go$
         linters: [revive, funlen, gocyclo, gocognit]
         text: 'file length is|too many statements|cyclomatic complexity|cognitive complexity'
       - path: ^install/integrationctl/agentplugins/providers/stager\.go$
         linters: [revive, funlen, gocyclo, gocognit]
         text: 'file length is|too many statements|cyclomatic complexity|cognitive complexity'
-      - path: ^install/integrationctl/agentplugins/providers/windsurf_native\.go$
+      - path: ^install/integrationctl/agentplugins/clients/windsurf/native\.go$
         linters: [revive, funlen, gocyclo, gocognit]
         text: 'file length is|too many statements|cyclomatic complexity|cognitive complexity'
       - path: ^install/integrationctl/agentplugins/transaction/kernel\.go$

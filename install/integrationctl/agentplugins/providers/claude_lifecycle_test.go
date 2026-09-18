@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/claude"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	legacyports "github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
 )
@@ -65,7 +66,7 @@ func TestClaudeSkillsDirAddUpdateRemoveUseOnlyExactListVerification(t *testing.T
 
 func TestClaudeProbeEnvironmentRejectsDuplicateAllowedVariableAndDropsOverrides(t *testing.T) {
 	home := t.TempDir()
-	environment, gotHome, err := boundedClaudeProbeEnvironmentFrom([]string{
+	environment, gotHome, err := claude.BoundedClaudeProbeEnvironmentFrom([]string{
 		"HOME=" + home,
 		"PATH=/usr/bin:/bin",
 		"NODE_OPTIONS=--require=attacker.js",
@@ -89,7 +90,7 @@ func TestClaudeProbeEnvironmentRejectsDuplicateAllowedVariableAndDropsOverrides(
 			t.Fatalf("dangerous override %s survived: %v", forbidden, environment)
 		}
 	}
-	if _, _, err := boundedClaudeProbeEnvironmentFrom([]string{"HOME=" + home, "PATH=/bin", "PATH=/attacker"}); err == nil {
+	if _, _, err := claude.BoundedClaudeProbeEnvironmentFrom([]string{"HOME=" + home, "PATH=/bin", "PATH=/attacker"}); err == nil {
 		t.Fatal("duplicate allowed environment variable was accepted")
 	}
 }
@@ -97,7 +98,7 @@ func TestClaudeProbeEnvironmentRejectsDuplicateAllowedVariableAndDropsOverrides(
 func TestClaudeProbeUsesFullDescendantContainmentWithFiveSecondGrace(t *testing.T) {
 	runner := &claudeGraceRecordingRunner{}
 	command := legacyports.Command{Argv: []string{"claude", "plugin", "list", "--json"}}
-	result, err := runClaudeListCommand(context.Background(), runner, command)
+	result, err := claude.RunClaudeListCommand(context.Background(), runner, command)
 	if err != nil || result.ExitCode != 0 {
 		t.Fatalf("run Claude list = %+v, err=%v", result, err)
 	}
@@ -133,8 +134,8 @@ func TestClaudeActivateAndRemoveBoundBlockingRunnerToSharedTimeout(t *testing.T)
 			go func() { done <- operation(context.Background(), runner) }()
 			deadline := <-runner.observed
 			remaining := time.Until(deadline)
-			if remaining < 14*time.Second || remaining > claudeProbeTimeout {
-				t.Fatalf("shared Claude deadline remaining=%s, want approximately %s", remaining, claudeProbeTimeout)
+			if remaining < 14*time.Second || remaining > claude.ClaudeProbeTimeout {
+				t.Fatalf("shared Claude deadline remaining=%s, want approximately %s", remaining, claude.ClaudeProbeTimeout)
 			}
 			close(release)
 			if err := <-done; !errors.Is(err, errClaudeBlockingRunnerReleased) {
@@ -225,7 +226,7 @@ printf '[]'
 	if err := os.WriteFile(script, []byte(body), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	command, err := claudeListCommand(script, config, active)
+	command, err := claude.ClaudeListCommand(script, config, active)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -412,14 +413,14 @@ func TestClaudeActivationProbeNormalizesPathsForPreflightAndActivation(t *testin
 	request.Plan.ActivePath = filepath.Join(config, "skills", "demo-managed")
 	request.Delivery.ActivePath = request.Plan.ActivePath
 
-	probe, err := prepareClaudeActivationProbe(request)
+	probe, err := claude.PrepareClaudeActivationProbe(request)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if probe.configRoot != filepath.Clean(config) || probe.activePath != filepath.Join(filepath.Clean(config), "skills", "demo-managed") {
+	if probe.ConfigRoot != filepath.Clean(config) || probe.ActivePath != filepath.Join(filepath.Clean(config), "skills", "demo-managed") {
 		t.Fatalf("normalized probe = %+v", probe)
 	}
-	if got, ok := environmentValue(probe.command.Env, "CLAUDE_CONFIG_DIR"); !ok || got != probe.configRoot {
+	if got, ok := environmentValue(probe.Command.Env, "CLAUDE_CONFIG_DIR"); !ok || got != probe.ConfigRoot {
 		t.Fatalf("probe environment config root = %q, %t", got, ok)
 	}
 }

@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/claude"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/kiro"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
@@ -206,7 +207,7 @@ func TestClaudeProjectionKeepsMultiTargetStdioContractsIndependent(t *testing.T)
 		if err := os.MkdirAll(target.root, 0o700); err != nil {
 			t.Fatal(err)
 		}
-		if err := projectClaudeMCP(target.root, envelope, []string{"local"}, target.pluginRoot, target.dataPath); err != nil {
+		if err := claude.ProjectClaudeMCP(target.root, envelope, []string{"local"}, target.pluginRoot, target.dataPath); err != nil {
 			t.Fatal(err)
 		}
 	}

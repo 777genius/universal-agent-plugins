@@ -11,6 +11,7 @@ import (
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/windsurf"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/managedstdio"
 )
@@ -46,7 +47,7 @@ func TestWindsurfStagerProjectsResolvedMCPAndExactOwnership(t *testing.T) {
 	if got := servers["docs"].(map[string]any)["url"]; got != "https://docs.test/one" {
 		t.Fatalf("remote URL = %v", got)
 	}
-	objects := windsurfObjects(delivery.NativeObjects)
+	objects := windsurf.WindsurfObjects(delivery.NativeObjects)
 	if len(objects) != 2 {
 		t.Fatalf("Windsurf native ownership = %+v", delivery.NativeObjects)
 	}
@@ -170,7 +171,7 @@ func TestWindsurfSkillsOnlyAndDevinOnlyRemainManual(t *testing.T) {
 func TestWindsurfSSEUsesLegacyURLKey(t *testing.T) {
 	t.Parallel()
 	configPath := filepath.Join(t.TempDir(), ".codeium", "windsurf-insiders", "mcp_config.json")
-	server, err := windsurfServer(domain.MCPServer{
+	server, err := windsurf.WindsurfServer(domain.MCPServer{
 		Type:    "sse",
 		Decoded: map[string]any{"type": "sse", "url": "https://events.test/sse"},
 	}, "/test/package", "/test/data")
@@ -196,7 +197,7 @@ func TestWindsurfExpandsOnlyPortableStdioValues(t *testing.T) {
 	t.Parallel()
 	packageRoot := filepath.Join(t.TempDir(), "plugin", "${PLUGIN_DATA}")
 	dataRoot := filepath.Join(t.TempDir(), "data")
-	stdio, err := windsurfServer(domain.MCPServer{
+	stdio, err := windsurf.WindsurfServer(domain.MCPServer{
 		Type: "stdio",
 		Decoded: map[string]any{
 			"type":    "stdio",
@@ -215,7 +216,7 @@ func TestWindsurfExpandsOnlyPortableStdioValues(t *testing.T) {
 		t.Fatalf("Windsurf recursively expanded replacement text: %+v", stdio.Args)
 	}
 
-	remote, err := windsurfServer(domain.MCPServer{
+	remote, err := windsurf.WindsurfServer(domain.MCPServer{
 		Type: "streamable-http",
 		Decoded: map[string]any{
 			"type":    "streamable-http",
@@ -243,7 +244,7 @@ func TestWindsurfStagerRejectsMissingCWDWithoutChangingProjection(t *testing.T) 
 	plan := stagingPlan(t, domain.ClientWindsurf, domain.PackagePrepared)
 	plan.Components = []domain.ComponentDecision{{Kind: domain.ComponentMCPServer, Name: "local", Support: domain.SupportPrepared}}
 
-	err := projectWindsurfMCP(root, envelope, plan, filepath.Join(t.TempDir(), "data"))
+	err := windsurf.ProjectWindsurfMCP(root, envelope, plan, filepath.Join(t.TempDir(), "data"))
 	if err == nil || !strings.Contains(err.Error(), "cwd unavailable") {
 		t.Fatalf("Windsurf cwd projection error = %v", err)
 	}
@@ -255,7 +256,7 @@ func TestWindsurfStagerRejectsMissingCWDWithoutChangingProjection(t *testing.T) 
 
 func TestWindsurfStandardProjectionNeverDropsCWD(t *testing.T) {
 	t.Parallel()
-	_, err := standardWindsurfServer(nativeconfig.Server{Type: "stdio", Command: "node", CWD: "/workspace"}, "stdio")
+	_, err := windsurf.StandardWindsurfServer(nativeconfig.Server{Type: "stdio", Command: "node", CWD: "/workspace"}, "stdio")
 	if err == nil || !strings.Contains(err.Error(), "does not support cwd") {
 		t.Fatalf("Windsurf standard projection accepted cwd: %v", err)
 	}
@@ -274,7 +275,7 @@ func TestWindsurfRejectsReservedStdioEnvWithoutChangingProjection(t *testing.T) 
 	plan := stagingPlan(t, domain.ClientWindsurf, domain.PackagePrepared)
 	plan.Components = []domain.ComponentDecision{{Kind: domain.ComponentMCPServer, Name: "local", Support: domain.SupportPrepared}}
 
-	err := projectWindsurfMCP(root, envelope, plan, filepath.Join(t.TempDir(), "data"))
+	err := windsurf.ProjectWindsurfMCP(root, envelope, plan, filepath.Join(t.TempDir(), "data"))
 	if err == nil || !strings.Contains(err.Error(), "PLUGIN_DATA is reserved") {
 		t.Fatalf("reserved Windsurf env error = %v", err)
 	}
@@ -307,14 +308,14 @@ func TestWindsurfBundledCommandUsesManagedPluginRoot(t *testing.T) {
 	plan.NativeRegistryRoot = filepath.Join(t.TempDir(), ".codeium", "windsurf")
 	plan.Components = []domain.ComponentDecision{{Kind: domain.ComponentMCPServer, Name: "local", Support: domain.SupportPrepared}}
 
-	if err := projectWindsurfMCP(activeRoot, envelope, plan, filepath.Join(t.TempDir(), "data")); err != nil {
+	if err := windsurf.ProjectWindsurfMCP(activeRoot, envelope, plan, filepath.Join(t.TempDir(), "data")); err != nil {
 		t.Fatal(err)
 	}
-	objects, err := buildWindsurfNativeObjects(activeRoot, plan)
+	objects, err := windsurf.BuildWindsurfNativeObjects(activeRoot, plan)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := applyWindsurfNativeMutation(plan.NativeRegistryRoot, activeRoot, nil, objects); err != nil {
+	if err := windsurf.ApplyWindsurfNativeMutation(plan.NativeRegistryRoot, activeRoot, nil, objects); err != nil {
 		t.Fatal(err)
 	}
 	configPath := filepath.Join(plan.NativeRegistryRoot, "mcp_config.json")
@@ -341,7 +342,7 @@ func TestWindsurfBundledCommandTraversalFailsBeforeProjectionMutation(t *testing
 	plan.ActivePath = filepath.Join(t.TempDir(), "managed-plugin")
 	plan.Components = []domain.ComponentDecision{{Kind: domain.ComponentMCPServer, Name: "local", Support: domain.SupportPrepared}}
 
-	err := projectWindsurfMCP(root, envelope, plan, filepath.Join(t.TempDir(), "data"))
+	err := windsurf.ProjectWindsurfMCP(root, envelope, plan, filepath.Join(t.TempDir(), "data"))
 	if err == nil || !strings.Contains(err.Error(), "escapes PLUGIN_ROOT") {
 		t.Fatalf("Windsurf traversal projection error = %v", err)
 	}

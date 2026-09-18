@@ -1,4 +1,4 @@
-package providers
+package cline
 
 import (
 	"context"
@@ -17,16 +17,16 @@ import (
 )
 
 const (
-	clineSkillObjectKind = "cline_global_skill_directory"
-	clineMCPObjectKind   = "cline_global_mcp_server"
-	clineProjectionFile  = ".agentplugins-cline-native.json"
+	ClineSkillObjectKind = "cline_global_skill_directory"
+	ClineMCPObjectKind   = "cline_global_mcp_server"
+	ClineProjectionFile  = ".agentplugins-cline-native.json"
 )
 
-type clineProjection struct {
+type ClineProjection struct {
 	Servers map[string]nativeconfig.Server `json:"servers"`
 }
 
-func projectClineNative(root string, envelope domain.PackageEnvelope, plan domain.DeliveryPlan, dataPath string) error {
+func ProjectClineNative(root string, envelope domain.PackageEnvelope, plan domain.DeliveryPlan, dataPath string) error {
 	servers := make(map[string]nativeconfig.Server)
 	for _, name := range shared.SupportedMCPNames(plan) {
 		portable := envelope.MCP.Servers[name]
@@ -36,7 +36,7 @@ func projectClineNative(root string, envelope domain.PackageEnvelope, plan domai
 				return fmt.Errorf("project Cline MCP server %s: %w", name, err)
 			}
 		}
-		server, err := clineNeutralServer(portable)
+		server, err := ClineNeutralServer(portable)
 		if err != nil {
 			return fmt.Errorf("project Cline MCP server %s: %w", name, err)
 		}
@@ -52,10 +52,10 @@ func projectClineNative(root string, envelope domain.PackageEnvelope, plan domai
 	if len(servers) == 0 {
 		return nil
 	}
-	return shared.WriteJSON(filepath.Join(root, clineProjectionFile), clineProjection{Servers: servers})
+	return shared.WriteJSON(filepath.Join(root, ClineProjectionFile), ClineProjection{Servers: servers})
 }
 
-func buildClineNativeObjects(stagingRoot string, envelope domain.PackageEnvelope, plan domain.DeliveryPlan) ([]domain.NativeObjectOwnership, error) {
+func BuildClineNativeObjects(stagingRoot string, envelope domain.PackageEnvelope, plan domain.DeliveryPlan) ([]domain.NativeObjectOwnership, error) {
 	root := strings.TrimSpace(plan.NativeRegistryRoot)
 	if root == "" || !filepath.IsAbs(root) {
 		return nil, fmt.Errorf("Cline config root is unavailable")
@@ -87,13 +87,13 @@ func buildClineNativeObjects(stagingRoot string, envelope domain.PackageEnvelope
 				return nil, err
 			}
 			objects = append(objects, domain.NativeObjectOwnership{
-				ObjectID: "cline-skill:" + component.Name, Kind: clineSkillObjectKind,
+				ObjectID: "cline-skill:" + component.Name, Kind: ClineSkillObjectKind,
 				LogicalName: component.Name, Path: filepath.Join(root, "skills", component.Name),
 				SourceRelative: filepath.ToSlash(filepath.Dir(relative)), ManagedDigest: digest,
 				ProtectionClass: "managed",
 			})
 		case domain.ComponentMCPServer:
-			projection, err := readClineProjection(stagingRoot)
+			projection, err := ReadClineProjection(stagingRoot)
 			if err != nil {
 				return nil, err
 			}
@@ -101,7 +101,7 @@ func buildClineNativeObjects(stagingRoot string, envelope domain.PackageEnvelope
 			if !ok {
 				return nil, fmt.Errorf("projected Cline MCP server %q is missing", component.Name)
 			}
-			settingsPath := clineMCPSettingsPath(root)
+			settingsPath := ClineMCPSettingsPath(root)
 			if !filepath.IsAbs(settingsPath) {
 				return nil, fmt.Errorf("Cline MCP settings path must be absolute")
 			}
@@ -110,9 +110,9 @@ func buildClineNativeObjects(stagingRoot string, envelope domain.PackageEnvelope
 				return nil, err
 			}
 			objects = append(objects, domain.NativeObjectOwnership{
-				ObjectID: "cline-mcp:" + component.Name, Kind: clineMCPObjectKind,
+				ObjectID: "cline-mcp:" + component.Name, Kind: ClineMCPObjectKind,
 				LogicalName: component.Name, Path: settingsPath, ManagedDigest: receipt.Digest,
-				SourceRelative: clineProjectionFile, ProtectionClass: "managed",
+				SourceRelative: ClineProjectionFile, ProtectionClass: "managed",
 			})
 		}
 	}
@@ -121,10 +121,10 @@ func buildClineNativeObjects(stagingRoot string, envelope domain.PackageEnvelope
 }
 
 func activateClineNative(ctx context.Context, request domain.ActivationRequest) error {
-	return activateClineNativeWithKernel(ctx, request, nativeconfig.New())
+	return ActivateClineNativeWithKernel(ctx, request, nativeconfig.New())
 }
 
-func activateClineNativeWithKernel(ctx context.Context, request domain.ActivationRequest, kernel nativeconfig.Kernel) error {
+func ActivateClineNativeWithKernel(ctx context.Context, request domain.ActivationRequest, kernel nativeconfig.Kernel) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -132,24 +132,24 @@ func activateClineNativeWithKernel(ctx context.Context, request domain.Activatio
 }
 
 func deactivateClineNative(ctx context.Context, request domain.DeactivationRequest) error {
-	return deactivateClineNativeWithKernel(ctx, request, nativeconfig.New())
+	return DeactivateClineNativeWithKernel(ctx, request, nativeconfig.New())
 }
 
-func deactivateClineNativeWithKernel(ctx context.Context, request domain.DeactivationRequest, kernel nativeconfig.Kernel) error {
+func DeactivateClineNativeWithKernel(ctx context.Context, request domain.DeactivationRequest, kernel nativeconfig.Kernel) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
 	return applyClineNativeMutationWithKernel(request.Client.ConfigRoot, "", request.NativeObjects, nil, kernel)
 }
 
-func verifyClineNativeObjects(configRoot string, objects []domain.NativeObjectOwnership, allowMissing bool) error {
+func VerifyClineNativeObjects(configRoot string, objects []domain.NativeObjectOwnership, allowMissing bool) error {
 	kernel := nativeconfig.New()
-	for _, object := range clineObjects(objects) {
+	for _, object := range ClineObjects(objects) {
 		if err := validateClineObject(configRoot, object); err != nil {
 			return err
 		}
 		switch object.Kind {
-		case clineSkillObjectKind:
+		case ClineSkillObjectKind:
 			digest, err := shared.DigestSkillDirectory(object.Path)
 			if os.IsNotExist(err) && allowMissing {
 				continue
@@ -157,7 +157,7 @@ func verifyClineNativeObjects(configRoot string, objects []domain.NativeObjectOw
 			if err != nil || digest != object.ManagedDigest {
 				return fmt.Errorf("managed Cline skill %q changed outside agentplugins", object.LogicalName)
 			}
-		case clineMCPObjectKind:
+		case ClineMCPObjectKind:
 			receipt := clineReceipt(object)
 			present, owned, err := kernel.Inspect(nativeconfig.Paths{JSON: object.Path}, nativeconfig.CodecCline, object.LogicalName, &receipt)
 			if err != nil {
@@ -176,15 +176,15 @@ func verifyClineNativeObjects(configRoot string, objects []domain.NativeObjectOw
 
 type clineRenameFunc func(string, string) error
 
-func renameClineDirectoryNoReplace(oldPath, newPath string, rename clineRenameFunc) error {
+func RenameClineDirectoryNoReplace(oldPath, newPath string, rename clineRenameFunc) error {
 	return rename(oldPath, newPath)
 }
 
-func applyClineNativeMutation(configRoot, activePath string, previous, desired []domain.NativeObjectOwnership) error {
+func ApplyClineNativeMutation(configRoot, activePath string, previous, desired []domain.NativeObjectOwnership) error {
 	return applyClineNativeMutationWithKernel(configRoot, activePath, previous, desired, nativeconfig.New())
 }
 
-func applyClineNativeMutationWithRename(configRoot, activePath string, previous, desired []domain.NativeObjectOwnership, rename clineRenameFunc) (resultErr error) {
+func ApplyClineNativeMutationWithRename(configRoot, activePath string, previous, desired []domain.NativeObjectOwnership, rename clineRenameFunc) (resultErr error) {
 	return applyClineNativeMutationWithKernelAndRename(configRoot, activePath, previous, desired, nativeconfig.New(), rename)
 }
 
@@ -193,10 +193,10 @@ func applyClineNativeMutationWithKernel(configRoot, activePath string, previous,
 }
 
 func applyClineNativeMutationWithKernelAndRename(configRoot, activePath string, previous, desired []domain.NativeObjectOwnership, kernel nativeconfig.Kernel, rename clineRenameFunc) (resultErr error) {
-	return applyClineNativeMutationWithKernelRenameAndCapacity(configRoot, activePath, previous, desired, kernel, rename, shared.CheckedCombinedCapacity)
+	return ApplyClineNativeMutationWithKernelRenameAndCapacity(configRoot, activePath, previous, desired, kernel, rename, shared.CheckedCombinedCapacity)
 }
 
-func applyClineNativeMutationWithKernelRenameAndCapacity(configRoot, activePath string, previous, desired []domain.NativeObjectOwnership, kernel nativeconfig.Kernel, rename clineRenameFunc, capacity shared.CombinedCapacityFunc) (resultErr error) {
+func ApplyClineNativeMutationWithKernelRenameAndCapacity(configRoot, activePath string, previous, desired []domain.NativeObjectOwnership, kernel nativeconfig.Kernel, rename clineRenameFunc, capacity shared.CombinedCapacityFunc) (resultErr error) {
 	if rename == nil {
 		return fmt.Errorf("Cline rename operation is unavailable")
 	}
@@ -207,8 +207,8 @@ func applyClineNativeMutationWithKernelRenameAndCapacity(configRoot, activePath 
 	if configRoot == "" || !filepath.IsAbs(configRoot) {
 		return fmt.Errorf("Cline config root is unavailable")
 	}
-	previous, desired = clineObjects(previous), clineObjects(desired)
-	if err := verifyClineNativeObjects(configRoot, previous, true); err != nil {
+	previous, desired = ClineObjects(previous), ClineObjects(desired)
+	if err := VerifyClineNativeObjects(configRoot, previous, true); err != nil {
 		return err
 	}
 	previousByID, desiredByID := shared.ObjectMap(previous), shared.ObjectMap(desired)
@@ -223,7 +223,7 @@ func applyClineNativeMutationWithKernelRenameAndCapacity(configRoot, activePath 
 			}
 			continue
 		}
-		if object.Kind == clineSkillObjectKind {
+		if object.Kind == ClineSkillObjectKind {
 			if _, err := os.Lstat(object.Path); err == nil {
 				return fmt.Errorf("Cline skill %q already exists without agentplugins ownership", object.LogicalName)
 			} else if !os.IsNotExist(err) {
@@ -247,7 +247,7 @@ func applyClineNativeMutationWithKernelRenameAndCapacity(configRoot, activePath 
 
 	staged := map[string]string{}
 	for id, object := range desiredByID {
-		if object.Kind != clineSkillObjectKind {
+		if object.Kind != ClineSkillObjectKind {
 			continue
 		}
 		if activePath == "" {
@@ -281,7 +281,7 @@ func applyClineNativeMutationWithKernelRenameAndCapacity(configRoot, activePath 
 				}
 			}
 			if backup := backups[id]; backup != "" {
-				if err := renameClineDirectoryNoReplace(backup, object.Path, rename); err != nil {
+				if err := RenameClineDirectoryNoReplace(backup, object.Path, rename); err != nil {
 					if first == nil {
 						first = err
 					}
@@ -294,7 +294,7 @@ func applyClineNativeMutationWithKernelRenameAndCapacity(configRoot, activePath 
 			if attempted[id] {
 				continue
 			}
-			if err := renameClineDirectoryNoReplace(backup, previousByID[id].Path, rename); err != nil {
+			if err := RenameClineDirectoryNoReplace(backup, previousByID[id].Path, rename); err != nil {
 				if first == nil {
 					first = err
 				}
@@ -319,7 +319,7 @@ func applyClineNativeMutationWithKernelRenameAndCapacity(configRoot, activePath 
 	}()
 
 	for id, object := range previousByID {
-		if object.Kind != clineSkillObjectKind {
+		if object.Kind != ClineSkillObjectKind {
 			continue
 		}
 		if _, err := os.Lstat(object.Path); os.IsNotExist(err) {
@@ -342,7 +342,7 @@ func applyClineNativeMutationWithKernelRenameAndCapacity(configRoot, activePath 
 	}
 	for id, source := range staged {
 		object := desiredByID[id]
-		if err := renameClineDirectoryNoReplace(source, object.Path, rename); err != nil {
+		if err := RenameClineDirectoryNoReplace(source, object.Path, rename); err != nil {
 			return err
 		}
 		installed[id] = object
@@ -351,7 +351,7 @@ func applyClineNativeMutationWithKernelRenameAndCapacity(configRoot, activePath 
 	// Prove the filesystem half before committing the single ownership-aware MCP
 	// batch. ApplyBatch is the final manager operation, so a reported config
 	// failure can still roll the skills back safely.
-	if err := verifyClineNativeObjects(configRoot, clineSkillObjects(desired), false); err != nil {
+	if err := VerifyClineNativeObjects(configRoot, clineSkillObjects(desired), false); err != nil {
 		return err
 	}
 	if err := mutateClineMCPWithKernelAndCapacity(configRoot, activePath, previousByID, desiredByID, kernel, idsCapacity); err != nil {
@@ -376,14 +376,14 @@ func mutateClineMCPWithKernelAndCapacity(configRoot, activePath string, previous
 	if !hasClineMCP(previous) && !hasClineMCP(desired) {
 		return nil
 	}
-	path := clineMCPSettingsPath(configRoot)
+	path := ClineMCPSettingsPath(configRoot)
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return err
 	}
-	projection := clineProjection{Servers: map[string]nativeconfig.Server{}}
+	projection := ClineProjection{Servers: map[string]nativeconfig.Server{}}
 	if activePath != "" {
 		var err error
-		projection, err = readClineProjection(activePath)
+		projection, err = ReadClineProjection(activePath)
 		if err != nil {
 			return err
 		}
@@ -391,12 +391,12 @@ func mutateClineMCPWithKernelAndCapacity(configRoot, activePath string, previous
 	ids := make([]string, 0, idsCapacity)
 	seen := map[string]bool{}
 	for id, object := range previous {
-		if object.Kind == clineMCPObjectKind {
+		if object.Kind == ClineMCPObjectKind {
 			ids, seen[id] = append(ids, id), true
 		}
 	}
 	for id, object := range desired {
-		if object.Kind == clineMCPObjectKind && !seen[id] {
+		if object.Kind == ClineMCPObjectKind && !seen[id] {
 			ids = append(ids, id)
 		}
 	}
@@ -468,18 +468,18 @@ func mutateClineMCPWithKernelAndCapacity(configRoot, activePath string, previous
 }
 
 func sameClineMCPObject(left, right domain.NativeObjectOwnership) bool {
-	return left.ObjectID == right.ObjectID && left.Kind == clineMCPObjectKind && right.Kind == clineMCPObjectKind &&
+	return left.ObjectID == right.ObjectID && left.Kind == ClineMCPObjectKind && right.Kind == ClineMCPObjectKind &&
 		left.LogicalName == right.LogicalName && shared.SameCleanPath(left.Path, right.Path) && left.ManagedDigest == right.ManagedDigest
 }
 
-func readClineProjection(root string) (clineProjection, error) {
-	body, err := os.ReadFile(filepath.Join(root, clineProjectionFile))
+func ReadClineProjection(root string) (ClineProjection, error) {
+	body, err := os.ReadFile(filepath.Join(root, ClineProjectionFile))
 	if err != nil {
-		return clineProjection{}, fmt.Errorf("read projected Cline MCP configuration: %w", err)
+		return ClineProjection{}, fmt.Errorf("read projected Cline MCP configuration: %w", err)
 	}
-	var projection clineProjection
+	var projection ClineProjection
 	if err := json.Unmarshal(body, &projection); err != nil || projection.Servers == nil {
-		return clineProjection{}, fmt.Errorf("decode projected Cline MCP configuration: %w", err)
+		return ClineProjection{}, fmt.Errorf("decode projected Cline MCP configuration: %w", err)
 	}
 	for name, server := range projection.Servers {
 		server.StdioValuesResolved = server.Type == "stdio"
@@ -488,7 +488,7 @@ func readClineProjection(root string) (clineProjection, error) {
 	return projection, nil
 }
 
-func clineMCPSettingsPath(configRoot string) string {
+func ClineMCPSettingsPath(configRoot string) string {
 	if path := strings.TrimSpace(os.Getenv("CLINE_MCP_SETTINGS_PATH")); path != "" {
 		return filepath.Clean(path)
 	}
@@ -502,10 +502,10 @@ func clineReceipt(object domain.NativeObjectOwnership) nativeconfig.Receipt {
 	return nativeconfig.Receipt{Version: "1", Path: object.Path, Codec: nativeconfig.CodecCline, Name: object.LogicalName, Digest: object.ManagedDigest}
 }
 
-func clineObjects(objects []domain.NativeObjectOwnership) []domain.NativeObjectOwnership {
+func ClineObjects(objects []domain.NativeObjectOwnership) []domain.NativeObjectOwnership {
 	result := make([]domain.NativeObjectOwnership, 0, len(objects))
 	for _, object := range objects {
-		if object.Kind == clineSkillObjectKind || object.Kind == clineMCPObjectKind {
+		if object.Kind == ClineSkillObjectKind || object.Kind == ClineMCPObjectKind {
 			result = append(result, object)
 		}
 	}
@@ -515,7 +515,7 @@ func clineObjects(objects []domain.NativeObjectOwnership) []domain.NativeObjectO
 func clineSkillObjects(objects []domain.NativeObjectOwnership) []domain.NativeObjectOwnership {
 	result := make([]domain.NativeObjectOwnership, 0, len(objects))
 	for _, object := range objects {
-		if object.Kind == clineSkillObjectKind {
+		if object.Kind == ClineSkillObjectKind {
 			result = append(result, object)
 		}
 	}
@@ -526,15 +526,16 @@ func validateClineObject(configRoot string, object domain.NativeObjectOwnership)
 	if object.ProtectionClass != "managed" || object.ObjectID == "" || object.LogicalName == "" || object.ManagedDigest == "" {
 		return fmt.Errorf("invalid Cline native ownership object")
 	}
-	if object.Kind == clineSkillObjectKind {
+	switch object.Kind {
+	case ClineSkillObjectKind:
 		if err := pathpolicy.RequireContainedChild(filepath.Join(configRoot, "skills"), object.Path); err != nil {
 			return fmt.Errorf("unsafe Cline skill path: %w", err)
 		}
-	} else if object.Kind == clineMCPObjectKind {
-		if !filepath.IsAbs(object.Path) || !shared.SameCleanPath(object.Path, clineMCPSettingsPath(configRoot)) {
+	case ClineMCPObjectKind:
+		if !filepath.IsAbs(object.Path) || !shared.SameCleanPath(object.Path, ClineMCPSettingsPath(configRoot)) {
 			return fmt.Errorf("Cline MCP ownership path changed")
 		}
-	} else {
+	default:
 		return fmt.Errorf("unsupported Cline native object kind %q", object.Kind)
 	}
 	return nil
@@ -542,14 +543,14 @@ func validateClineObject(configRoot string, object domain.NativeObjectOwnership)
 
 func hasClineMCP(objects map[string]domain.NativeObjectOwnership) bool {
 	for _, object := range objects {
-		if object.Kind == clineMCPObjectKind {
+		if object.Kind == ClineMCPObjectKind {
 			return true
 		}
 	}
 	return false
 }
 
-func clineNeutralServer(server domain.MCPServer) (nativeconfig.Server, error) {
+func ClineNeutralServer(server domain.MCPServer) (nativeconfig.Server, error) {
 	getString := func(key string) string {
 		value, _ := server.Decoded[key].(string)
 		return value

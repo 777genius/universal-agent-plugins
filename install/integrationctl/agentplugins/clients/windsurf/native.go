@@ -1,4 +1,4 @@
-package providers
+package windsurf
 
 import (
 	"context"
@@ -11,15 +11,16 @@ import (
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/pathpolicy"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/managedstdio"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/pathcontract"
 )
 
-const windsurfMCPObjectKind = "windsurf_mcp_entry"
+const WindsurfMCPObjectKind = "windsurf_mcp_entry"
 
-func projectWindsurfMCP(root string, envelope domain.PackageEnvelope, plan domain.DeliveryPlan, dataPath string) error {
+func ProjectWindsurfMCP(root string, envelope domain.PackageEnvelope, plan domain.DeliveryPlan, dataPath string) error {
 	if !shared.HasSupportedMCP(plan.Components) {
 		return nil
 	}
@@ -29,7 +30,7 @@ func projectWindsurfMCP(root string, envelope domain.PackageEnvelope, plan domai
 		if !ok {
 			return fmt.Errorf("Windsurf MCP server %q is missing from the package envelope", name)
 		}
-		resolved, err := windsurfServer(server, plan.ActivePath, dataPath)
+		resolved, err := WindsurfServer(server, plan.ActivePath, dataPath)
 		if err != nil {
 			return fmt.Errorf("project Windsurf MCP server %q: %w", name, err)
 		}
@@ -59,7 +60,7 @@ func projectWindsurfMCP(root string, envelope domain.PackageEnvelope, plan domai
 				return fmt.Errorf("stdio cwd unavailable: %v", observation.Err)
 			}
 		}
-		projected, err := standardWindsurfServer(resolved, server.Type)
+		projected, err := StandardWindsurfServer(resolved, server.Type)
 		if err != nil {
 			return fmt.Errorf("project Windsurf MCP server %q: %w", name, err)
 		}
@@ -71,7 +72,7 @@ func projectWindsurfMCP(root string, envelope domain.PackageEnvelope, plan domai
 	})
 }
 
-func buildWindsurfNativeObjects(stagingRoot string, plan domain.DeliveryPlan) ([]domain.NativeObjectOwnership, error) {
+func BuildWindsurfNativeObjects(stagingRoot string, plan domain.DeliveryPlan) ([]domain.NativeObjectOwnership, error) {
 	if strings.TrimSpace(plan.NativeRegistryRoot) == "" || !shared.HasSupportedMCP(plan.Components) {
 		return nil, nil
 	}
@@ -96,7 +97,7 @@ func buildWindsurfNativeObjects(stagingRoot string, plan domain.DeliveryPlan) ([
 		}
 		objects = append(objects, domain.NativeObjectOwnership{
 			ObjectID:        "windsurf:mcp:" + name,
-			Kind:            windsurfMCPObjectKind,
+			Kind:            WindsurfMCPObjectKind,
 			LogicalName:     name,
 			Path:            configPath,
 			SourceRelative:  "mcp.json",
@@ -108,10 +109,10 @@ func buildWindsurfNativeObjects(stagingRoot string, plan domain.DeliveryPlan) ([
 }
 
 func activateWindsurfNative(ctx context.Context, request domain.ActivationRequest) error {
-	return activateWindsurfNativeWithKernel(ctx, request, nativeconfig.New())
+	return ActivateWindsurfNativeWithKernel(ctx, request, nativeconfig.New())
 }
 
-func activateWindsurfNativeWithKernel(ctx context.Context, request domain.ActivationRequest, kernel nativeconfig.Kernel) error {
+func ActivateWindsurfNativeWithKernel(ctx context.Context, request domain.ActivationRequest, kernel nativeconfig.Kernel) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -119,10 +120,10 @@ func activateWindsurfNativeWithKernel(ctx context.Context, request domain.Activa
 }
 
 func deactivateWindsurfNative(ctx context.Context, request domain.DeactivationRequest) error {
-	return deactivateWindsurfNativeWithKernel(ctx, request, nativeconfig.New())
+	return DeactivateWindsurfNativeWithKernel(ctx, request, nativeconfig.New())
 }
 
-func deactivateWindsurfNativeWithKernel(ctx context.Context, request domain.DeactivationRequest, kernel nativeconfig.Kernel) error {
+func DeactivateWindsurfNativeWithKernel(ctx context.Context, request domain.DeactivationRequest, kernel nativeconfig.Kernel) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -137,7 +138,7 @@ type windsurfMutation struct {
 	desired  *nativeconfig.Receipt
 }
 
-func applyWindsurfNativeMutation(configRoot, activePath string, previous, desired []domain.NativeObjectOwnership) error {
+func ApplyWindsurfNativeMutation(configRoot, activePath string, previous, desired []domain.NativeObjectOwnership) error {
 	return applyWindsurfNativeMutationWithKernel(configRoot, activePath, previous, desired, nativeconfig.New())
 }
 
@@ -236,7 +237,7 @@ func applyWindsurfNativeMutationWithKernel(configRoot, activePath string, previo
 		mutations = append(mutations, mutation)
 	}
 	if len(mutations) == 0 {
-		return verifyWindsurfNativeObjects(configRoot, activePath, desired, false)
+		return VerifyWindsurfNativeObjects(configRoot, activePath, desired, false)
 	}
 	requests := make([]nativeconfig.Request, len(mutations))
 	for index := range mutations {
@@ -251,7 +252,7 @@ func applyWindsurfNativeMutationWithKernel(configRoot, activePath string, previo
 			return fmt.Errorf("Windsurf MCP entry %q ownership digest changed during apply", mutations[index].name)
 		}
 	}
-	return verifyWindsurfNativeObjects(configRoot, activePath, desired, false)
+	return VerifyWindsurfNativeObjects(configRoot, activePath, desired, false)
 }
 
 func windsurfNativeRequest(configPath string, mutation windsurfMutation) nativeconfig.Request {
@@ -265,7 +266,7 @@ func windsurfNativeRequest(configPath string, mutation windsurfMutation) nativec
 	}
 }
 
-func verifyWindsurfNativeObjects(configRoot, activePath string, objects []domain.NativeObjectOwnership, allowMissing bool) error {
+func VerifyWindsurfNativeObjects(configRoot, activePath string, objects []domain.NativeObjectOwnership, allowMissing bool) error {
 	objectMap, err := windsurfObjectMap(configRoot, objects)
 	if err != nil {
 		return err
@@ -306,20 +307,20 @@ func verifyWindsurfNativeObjects(configRoot, activePath string, objects []domain
 	return nil
 }
 
-func inspectWindsurfRegistry(plan domain.DeliveryPlan, managed *domain.ClientBinding) (registryFinding, error) {
+func InspectWindsurfRegistry(plan domain.DeliveryPlan, managed *domain.ClientBinding) (clients.RegistryFinding, error) {
 	if strings.TrimSpace(plan.NativeRegistryRoot) == "" {
-		return registryClear, nil
+		return clients.RegistryClear, nil
 	}
 	configPath, err := windsurfConfigPath(plan.NativeRegistryRoot)
 	if err != nil {
-		return registryIndeterminate, err
+		return clients.RegistryIndeterminate, err
 	}
 	if managed != nil {
-		if err := verifyWindsurfNativeObjects(plan.NativeRegistryRoot, plan.ActivePath, managed.NativeObjects, false); err != nil {
-			return registryIndeterminate, err
+		if err := VerifyWindsurfNativeObjects(plan.NativeRegistryRoot, plan.ActivePath, managed.NativeObjects, false); err != nil {
+			return clients.RegistryIndeterminate, err
 		}
-		if len(windsurfObjects(managed.NativeObjects)) > 0 {
-			return registryExpected, nil
+		if len(WindsurfObjects(managed.NativeObjects)) > 0 {
+			return clients.RegistryExpected, nil
 		}
 	}
 	kernel := nativeconfig.New()
@@ -329,13 +330,13 @@ func inspectWindsurfRegistry(plan domain.DeliveryPlan, managed *domain.ClientBin
 		}
 		present, _, inspectErr := kernel.Inspect(nativeconfig.Paths{JSON: configPath}, nativeconfig.CodecWindsurf, component.Name, nil)
 		if present {
-			return registryCollision, nil
+			return clients.RegistryCollision, nil
 		}
 		if inspectErr != nil {
-			return registryIndeterminate, inspectErr
+			return clients.RegistryIndeterminate, inspectErr
 		}
 	}
-	return registryClear, nil
+	return clients.RegistryClear, nil
 }
 
 func windsurfConfigPath(configRoot string) (string, error) {
@@ -360,7 +361,7 @@ func windsurfObjectMap(configRoot string, objects []domain.NativeObjectOwnership
 		if object.Kind == "managed_package_directory" {
 			continue
 		}
-		if object.Kind != windsurfMCPObjectKind || object.LogicalName == "" || object.ManagedDigest == "" || object.ProtectionClass != "managed_entry" || filepath.Clean(object.Path) != configPath {
+		if object.Kind != WindsurfMCPObjectKind || object.LogicalName == "" || object.ManagedDigest == "" || object.ProtectionClass != "managed_entry" || filepath.Clean(object.Path) != configPath {
 			return nil, fmt.Errorf("invalid Windsurf native ownership object %q", object.ObjectID)
 		}
 		if _, exists := result[object.LogicalName]; exists {
@@ -371,10 +372,10 @@ func windsurfObjectMap(configRoot string, objects []domain.NativeObjectOwnership
 	return result, nil
 }
 
-func windsurfObjects(objects []domain.NativeObjectOwnership) []domain.NativeObjectOwnership {
+func WindsurfObjects(objects []domain.NativeObjectOwnership) []domain.NativeObjectOwnership {
 	result := []domain.NativeObjectOwnership{}
 	for _, object := range objects {
-		if object.Kind == windsurfMCPObjectKind {
+		if object.Kind == WindsurfMCPObjectKind {
 			result = append(result, object)
 		}
 	}
@@ -414,7 +415,7 @@ func readProjectedWindsurfServers(root string) (map[string]nativeconfig.Server, 
 	return result, nil
 }
 
-func windsurfServer(server domain.MCPServer, packageRoot, dataRoot string) (nativeconfig.Server, error) {
+func WindsurfServer(server domain.MCPServer, packageRoot, dataRoot string) (nativeconfig.Server, error) {
 	decoded := server.Decoded
 	result := nativeconfig.Server{}
 	switch server.Type {
@@ -557,7 +558,7 @@ func resolveWindsurfPlaceholders(server nativeconfig.Server, packageRoot, dataRo
 	return server, nil
 }
 
-func standardWindsurfServer(server nativeconfig.Server, originalType string) (map[string]any, error) {
+func StandardWindsurfServer(server nativeconfig.Server, originalType string) (map[string]any, error) {
 	if server.Type == "stdio" {
 		if strings.TrimSpace(server.CWD) != "" {
 			return nil, fmt.Errorf("Windsurf stdio MCP server does not support cwd")

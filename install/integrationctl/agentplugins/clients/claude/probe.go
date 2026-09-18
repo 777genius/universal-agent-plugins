@@ -1,4 +1,4 @@
-package providers
+package claude
 
 import (
 	"context"
@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
 	legacyports "github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
 )
 
@@ -18,51 +19,51 @@ const (
 	claudeProbeMaxEnvironmentValue = 4096
 	claudeProbeMaxEnvironmentTotal = 32768
 	claudeProbeTreeExitGrace       = 5 * time.Second
-	claudeProbeTimeout             = 15 * time.Second
+	ClaudeProbeTimeout             = 15 * time.Second
 )
 
 type claudeDescendantGraceRunner interface {
 	RunWithDescendantExitGrace(context.Context, legacyports.Command, time.Duration) (legacyports.CommandResult, error)
 }
 
-type claudeActivationProbe struct {
-	command    legacyports.Command
-	configRoot string
-	activePath string
+type ClaudeActivationProbe struct {
+	Command    legacyports.Command
+	ConfigRoot string
+	ActivePath string
 }
 
-func prepareClaudeActivationProbe(request domain.ActivationRequest) (claudeActivationProbe, error) {
+func PrepareClaudeActivationProbe(request domain.ActivationRequest) (ClaudeActivationProbe, error) {
 	configRoot := filepath.Clean(strings.TrimSpace(request.Client.ConfigRoot))
 	if !filepath.IsAbs(configRoot) {
-		return claudeActivationProbe{}, fmt.Errorf("absolute Claude Code config root is required")
+		return ClaudeActivationProbe{}, fmt.Errorf("absolute Claude Code config root is required")
 	}
 	targetAnchor := filepath.Clean(strings.TrimSpace(request.Plan.TargetAnchor))
 	if !filepath.IsAbs(targetAnchor) || targetAnchor != configRoot {
-		return claudeActivationProbe{}, fmt.Errorf("Claude Code delivery anchor must match the configured root")
+		return ClaudeActivationProbe{}, fmt.Errorf("the Claude Code delivery anchor must match the configured root")
 	}
 	targetRoot := filepath.Clean(strings.TrimSpace(request.Plan.TargetRoot))
 	if targetRoot != filepath.Join(configRoot, "skills") {
-		return claudeActivationProbe{}, fmt.Errorf("Claude Code delivery root must be the exact configured skills root")
+		return ClaudeActivationProbe{}, fmt.Errorf("the Claude Code delivery root must be the exact configured skills root")
 	}
 	activePath := filepath.Clean(strings.TrimSpace(request.Plan.ActivePath))
 	if !filepath.IsAbs(activePath) || filepath.Dir(activePath) != targetRoot {
-		return claudeActivationProbe{}, fmt.Errorf("Claude Code managed plugin path is not an exact child of the configured skills root")
+		return ClaudeActivationProbe{}, fmt.Errorf("the Claude Code managed plugin path is not an exact child of the configured skills root")
 	}
 	if deliveryPath := strings.TrimSpace(request.Delivery.ActivePath); deliveryPath != "" && filepath.Clean(deliveryPath) != activePath {
-		return claudeActivationProbe{}, fmt.Errorf("Claude Code activation path does not match the preflighted delivery path")
+		return ClaudeActivationProbe{}, fmt.Errorf("the Claude Code activation path does not match the preflighted delivery path")
 	}
-	command, err := claudeListCommand(request.BackendExecutable, configRoot, activePath)
+	command, err := ClaudeListCommand(request.BackendExecutable, configRoot, activePath)
 	if err != nil {
-		return claudeActivationProbe{}, err
+		return ClaudeActivationProbe{}, err
 	}
-	return claudeActivationProbe{command: command, configRoot: configRoot, activePath: activePath}, nil
+	return ClaudeActivationProbe{Command: command, ConfigRoot: configRoot, ActivePath: activePath}, nil
 }
 
-func runClaudeListCommand(ctx context.Context, runner CommandRunner, command legacyports.Command) (legacyports.CommandResult, error) {
+func RunClaudeListCommand(ctx context.Context, runner ports.CommandRunner, command legacyports.Command) (legacyports.CommandResult, error) {
 	if runner == nil {
 		return legacyports.CommandResult{}, fmt.Errorf("Claude Code CLI runner is unavailable")
 	}
-	bounded, cancel := context.WithTimeout(ctx, claudeProbeTimeout)
+	bounded, cancel := context.WithTimeout(ctx, ClaudeProbeTimeout)
 	defer cancel()
 	if supervised, ok := runner.(claudeDescendantGraceRunner); ok {
 		return supervised.RunWithDescendantExitGrace(bounded, command, claudeProbeTreeExitGrace)
@@ -70,7 +71,7 @@ func runClaudeListCommand(ctx context.Context, runner CommandRunner, command leg
 	return runner.Run(bounded, command)
 }
 
-func claudeListCommand(executable, configRoot, activePath string) (legacyports.Command, error) {
+func ClaudeListCommand(executable, configRoot, activePath string) (legacyports.Command, error) {
 	executable = strings.TrimSpace(executable)
 	if executable == "" {
 		return legacyports.Command{}, fmt.Errorf("Claude Code executable is required")
@@ -82,7 +83,7 @@ func claudeListCommand(executable, configRoot, activePath string) (legacyports.C
 	configRoot = filepath.Clean(configRoot)
 	activePath = filepath.Clean(strings.TrimSpace(activePath))
 	if !filepath.IsAbs(activePath) || filepath.Dir(activePath) != filepath.Join(configRoot, "skills") {
-		return legacyports.Command{}, fmt.Errorf("Claude Code managed plugin path is not an exact child of the configured skills root")
+		return legacyports.Command{}, fmt.Errorf("the Claude Code managed plugin path is not an exact child of the configured skills root")
 	}
 	environment, home, err := boundedClaudeProbeEnvironment()
 	if err != nil {
@@ -104,10 +105,10 @@ func claudeListCommand(executable, configRoot, activePath string) (legacyports.C
 }
 
 func boundedClaudeProbeEnvironment() ([]string, string, error) {
-	return boundedClaudeProbeEnvironmentFrom(os.Environ())
+	return BoundedClaudeProbeEnvironmentFrom(os.Environ())
 }
 
-func boundedClaudeProbeEnvironmentFrom(ambient []string) ([]string, string, error) {
+func BoundedClaudeProbeEnvironmentFrom(ambient []string) ([]string, string, error) {
 	values := map[string]string{}
 	for _, entry := range ambient {
 		name, value, ok := strings.Cut(entry, "=")

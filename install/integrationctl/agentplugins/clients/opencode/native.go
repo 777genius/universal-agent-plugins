@@ -1,4 +1,4 @@
-package providers
+package opencode
 
 import (
 	"context"
@@ -22,12 +22,12 @@ import (
 )
 
 const (
-	openCodeProjectionFile = ".agentplugins-opencode.json"
-	openCodeMCPObjectKind  = "opencode_global_mcp_server"
+	OpenCodeProjectionFile = ".agentplugins-opencode.json"
+	OpenCodeMCPObjectKind  = "opencode_global_mcp_server"
 	openCodeSkillKind      = "opencode_global_skill_directory"
 )
 
-type openCodeProjection struct {
+type OpenCodeProjection struct {
 	ResolvedCWD map[string]bool                `json:"resolved_cwd,omitempty"`
 	Version     int                            `json:"version"`
 	ConfigPath  string                         `json:"config_path"`
@@ -38,7 +38,7 @@ type openCodeProjection struct {
 	MCPServers  map[string]nativeconfig.Server `json:"mcp_servers,omitempty"`
 }
 
-func projectOpenCodeNative(root string, envelope domain.PackageEnvelope, plan domain.DeliveryPlan, dataRoot string) error {
+func ProjectOpenCodeNative(root string, envelope domain.PackageEnvelope, plan domain.DeliveryPlan, dataRoot string) error {
 	configRoot := strings.TrimSpace(plan.NativeRegistryRoot)
 	if configRoot == "" || !filepath.IsAbs(configRoot) {
 		return fmt.Errorf("OpenCode config root is unavailable")
@@ -48,7 +48,7 @@ func projectOpenCodeNative(root string, envelope domain.PackageEnvelope, plan do
 	if err != nil {
 		return err
 	}
-	projection := openCodeProjection{Version: 1, ConfigPath: selected, ConfigJSON: jsonPath, ConfigJSONC: jsoncPath,
+	projection := OpenCodeProjection{Version: 1, ConfigPath: selected, ConfigJSON: jsonPath, ConfigJSONC: jsoncPath,
 		PackageRoot: plan.ActivePath, DataRoot: dataRoot, MCPServers: map[string]nativeconfig.Server{}, ResolvedCWD: map[string]bool{}}
 	for _, component := range plan.Components {
 		if component.Kind != domain.ComponentMCPServer || component.Support == domain.SupportUnsupported {
@@ -58,7 +58,7 @@ func projectOpenCodeNative(root string, envelope domain.PackageEnvelope, plan do
 		if !ok {
 			return fmt.Errorf("planned OpenCode MCP server %q is missing", component.Name)
 		}
-		neutral, err := neutralOpenCodeServer(server)
+		neutral, err := NeutralOpenCodeServer(server)
 		if err != nil {
 			return fmt.Errorf("project OpenCode MCP server %q: %w", component.Name, err)
 		}
@@ -77,9 +77,9 @@ func projectOpenCodeNative(root string, envelope domain.PackageEnvelope, plan do
 	if err != nil {
 		return err
 	}
-	projectionPath := filepath.Join(root, openCodeProjectionFile)
+	projectionPath := filepath.Join(root, OpenCodeProjectionFile)
 	if _, err := os.Lstat(projectionPath); err == nil {
-		return fmt.Errorf("package contains reserved OpenCode projection path %q", openCodeProjectionFile)
+		return fmt.Errorf("package contains reserved OpenCode projection path %q", OpenCodeProjectionFile)
 	} else if !os.IsNotExist(err) {
 		return err
 	}
@@ -118,7 +118,7 @@ func regularNativeFileExists(path string) (bool, error) {
 	return true, nil
 }
 
-func neutralOpenCodeServer(server domain.MCPServer) (nativeconfig.Server, error) {
+func NeutralOpenCodeServer(server domain.MCPServer) (nativeconfig.Server, error) {
 	switch server.Type {
 	case "stdio":
 		command, ok := server.Decoded["command"].(string)
@@ -247,30 +247,30 @@ func openCodeStringMap(value any) (map[string]string, error) {
 	return result, nil
 }
 
-func readOpenCodeProjection(root string) (openCodeProjection, error) {
-	body, err := os.ReadFile(filepath.Join(root, openCodeProjectionFile))
+func ReadOpenCodeProjection(root string) (OpenCodeProjection, error) {
+	body, err := os.ReadFile(filepath.Join(root, OpenCodeProjectionFile))
 	if err != nil {
-		return openCodeProjection{}, fmt.Errorf("read OpenCode native projection: %w", err)
+		return OpenCodeProjection{}, fmt.Errorf("read OpenCode native projection: %w", err)
 	}
 	decoder := json.NewDecoder(strings.NewReader(string(body)))
 	decoder.DisallowUnknownFields()
-	var projection openCodeProjection
+	var projection OpenCodeProjection
 	if err := decoder.Decode(&projection); err != nil || projection.Version != 1 {
-		return openCodeProjection{}, fmt.Errorf("decode OpenCode native projection")
+		return OpenCodeProjection{}, fmt.Errorf("decode OpenCode native projection")
 	}
 	if err := requireJSONEOF(decoder); err != nil {
-		return openCodeProjection{}, err
+		return OpenCodeProjection{}, err
 	}
 	if !filepath.IsAbs(projection.ConfigPath) || !filepath.IsAbs(projection.ConfigJSON) || !filepath.IsAbs(projection.ConfigJSONC) || !filepath.IsAbs(projection.PackageRoot) {
-		return openCodeProjection{}, fmt.Errorf("OpenCode projection contains relative paths")
+		return OpenCodeProjection{}, fmt.Errorf("OpenCode projection contains relative paths")
 	}
 	if projection.ConfigPath != projection.ConfigJSON && projection.ConfigPath != projection.ConfigJSONC {
-		return openCodeProjection{}, fmt.Errorf("OpenCode projection selects an unexpected config path")
+		return OpenCodeProjection{}, fmt.Errorf("OpenCode projection selects an unexpected config path")
 	}
 	for name, resolved := range projection.ResolvedCWD {
 		server, ok := projection.MCPServers[name]
 		if !ok || !resolved || server.Type != "stdio" || !filepath.IsAbs(server.CWD) {
-			return openCodeProjection{}, fmt.Errorf("invalid resolved OpenCode cwd provenance")
+			return OpenCodeProjection{}, fmt.Errorf("invalid resolved OpenCode cwd provenance")
 		}
 		server.CWDResolved = true
 		projection.MCPServers[name] = server
@@ -286,8 +286,8 @@ func requireJSONEOF(decoder *json.Decoder) error {
 	return nil
 }
 
-func buildOpenCodeNativeObjects(stagingRoot string, envelope domain.PackageEnvelope, plan domain.DeliveryPlan) ([]domain.NativeObjectOwnership, error) {
-	projection, err := readOpenCodeProjection(stagingRoot)
+func BuildOpenCodeNativeObjects(stagingRoot string, envelope domain.PackageEnvelope, plan domain.DeliveryPlan) ([]domain.NativeObjectOwnership, error) {
+	projection, err := ReadOpenCodeProjection(stagingRoot)
 	if err != nil {
 		return nil, err
 	}
@@ -298,7 +298,7 @@ func buildOpenCodeNativeObjects(stagingRoot string, envelope domain.PackageEnvel
 		if err != nil {
 			return nil, err
 		}
-		objects = append(objects, domain.NativeObjectOwnership{ObjectID: "opencode-mcp:" + name, Kind: openCodeMCPObjectKind,
+		objects = append(objects, domain.NativeObjectOwnership{ObjectID: "opencode-mcp:" + name, Kind: OpenCodeMCPObjectKind,
 			LogicalName: name, Path: receipt.Path, ManagedDigest: receipt.Digest, ProtectionClass: "managed"})
 	}
 	for _, component := range plan.Components {
@@ -336,10 +336,10 @@ func buildOpenCodeNativeObjects(stagingRoot string, envelope domain.PackageEnvel
 }
 
 func activateOpenCodeNative(ctx context.Context, request domain.ActivationRequest) error {
-	return activateOpenCodeNativeWithKernel(ctx, request, nativeconfig.New())
+	return ActivateOpenCodeNativeWithKernel(ctx, request, nativeconfig.New())
 }
 
-func activateOpenCodeNativeWithKernel(ctx context.Context, request domain.ActivationRequest, kernel nativeconfig.Kernel) error {
+func ActivateOpenCodeNativeWithKernel(ctx context.Context, request domain.ActivationRequest, kernel nativeconfig.Kernel) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -347,21 +347,21 @@ func activateOpenCodeNativeWithKernel(ctx context.Context, request domain.Activa
 }
 
 func deactivateOpenCodeNative(ctx context.Context, request domain.DeactivationRequest) error {
-	return deactivateOpenCodeNativeWithKernel(ctx, request, nativeconfig.New())
+	return DeactivateOpenCodeNativeWithKernel(ctx, request, nativeconfig.New())
 }
 
-func deactivateOpenCodeNativeWithKernel(ctx context.Context, request domain.DeactivationRequest, kernel nativeconfig.Kernel) error {
+func DeactivateOpenCodeNativeWithKernel(ctx context.Context, request domain.DeactivationRequest, kernel nativeconfig.Kernel) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
 	return applyOpenCodeNativeWithKernel(request.Client.ConfigRoot, "", request.NativeObjects, nil, kernel)
 }
 
-func verifyOpenCodeNativeObjects(configRoot, activePath string, objects []domain.NativeObjectOwnership) error {
-	projection := openCodeProjection{}
-	if len(openCodeObjects(objects)) > 0 && activePath != "" {
+func VerifyOpenCodeNativeObjects(configRoot, activePath string, objects []domain.NativeObjectOwnership) error {
+	projection := OpenCodeProjection{}
+	if len(OpenCodeObjects(objects)) > 0 && activePath != "" {
 		var err error
-		projection, err = readOpenCodeProjection(activePath)
+		projection, err = ReadOpenCodeProjection(activePath)
 		if err != nil {
 			return err
 		}
@@ -369,7 +369,7 @@ func verifyOpenCodeNativeObjects(configRoot, activePath string, objects []domain
 			return err
 		}
 	}
-	for _, object := range openCodeObjects(objects) {
+	for _, object := range OpenCodeObjects(objects) {
 		if err := validateOpenCodeObject(configRoot, projection, object); err != nil {
 			return err
 		}
@@ -392,7 +392,7 @@ func verifyOpenCodeNativeObjects(configRoot, activePath string, objects []domain
 	return nil
 }
 
-func applyOpenCodeNative(configRoot, activePath string, previous, desired []domain.NativeObjectOwnership) error {
+func ApplyOpenCodeNative(configRoot, activePath string, previous, desired []domain.NativeObjectOwnership) error {
 	return applyOpenCodeNativeWithKernel(configRoot, activePath, previous, desired, nativeconfig.New())
 }
 
@@ -400,11 +400,11 @@ func applyOpenCodeNativeWithKernel(configRoot, activePath string, previous, desi
 	return applyOpenCodeNativeWithKernelAndOps(configRoot, activePath, previous, desired, kernel, shared.RenameDirectoryExclusive, os.RemoveAll)
 }
 
-func applyOpenCodeNativeWithRename(configRoot, activePath string, previous, desired []domain.NativeObjectOwnership, rename openCodeRenameFunc) (resultErr error) {
+func ApplyOpenCodeNativeWithRename(configRoot, activePath string, previous, desired []domain.NativeObjectOwnership, rename openCodeRenameFunc) (resultErr error) {
 	return applyOpenCodeNativeWithKernelAndOps(configRoot, activePath, previous, desired, nativeconfig.New(), rename, os.RemoveAll)
 }
 
-func applyOpenCodeNativeWithOps(configRoot, activePath string, previous, desired []domain.NativeObjectOwnership, rename openCodeRenameFunc, removeAll func(string) error) (resultErr error) {
+func ApplyOpenCodeNativeWithOps(configRoot, activePath string, previous, desired []domain.NativeObjectOwnership, rename openCodeRenameFunc, removeAll func(string) error) (resultErr error) {
 	return applyOpenCodeNativeWithKernelAndOps(configRoot, activePath, previous, desired, nativeconfig.New(), rename, removeAll)
 }
 
@@ -418,11 +418,11 @@ func applyOpenCodeNativeWithKernelAndOps(configRoot, activePath string, previous
 	if strings.TrimSpace(configRoot) == "" || !filepath.IsAbs(configRoot) {
 		return fmt.Errorf("OpenCode config root is unavailable")
 	}
-	previous, desired = openCodeObjects(previous), openCodeObjects(desired)
-	projection := openCodeProjection{}
+	previous, desired = OpenCodeObjects(previous), OpenCodeObjects(desired)
+	projection := OpenCodeProjection{}
 	var err error
 	if len(desired) > 0 {
-		projection, err = readOpenCodeProjection(activePath)
+		projection, err = ReadOpenCodeProjection(activePath)
 		if err != nil {
 			return err
 		}
@@ -436,7 +436,7 @@ func applyOpenCodeNativeWithKernelAndOps(configRoot, activePath string, previous
 	expectedConfig := projection.ConfigPath
 	if expectedConfig == "" {
 		for _, object := range previous {
-			if object.Kind == openCodeMCPObjectKind {
+			if object.Kind == OpenCodeMCPObjectKind {
 				expectedConfig = object.Path
 				break
 			}
@@ -521,7 +521,7 @@ func applyOpenCodeNativeWithKernelAndOps(configRoot, activePath string, previous
 	return nil
 }
 
-func validateOpenCodeProjection(configRoot, activePath string, projection openCodeProjection) error {
+func validateOpenCodeProjection(configRoot, activePath string, projection OpenCodeProjection) error {
 	if !shared.SameCleanPath(projection.ConfigJSON, filepath.Join(configRoot, "opencode.json")) ||
 		!shared.SameCleanPath(projection.ConfigJSONC, filepath.Join(configRoot, "opencode.jsonc")) ||
 		!shared.SameCleanPath(projection.PackageRoot, activePath) {
@@ -533,12 +533,12 @@ func validateOpenCodeProjection(configRoot, activePath string, projection openCo
 	return nil
 }
 
-func openCodeMCPRequests(projection openCodeProjection, previous, desired []domain.NativeObjectOwnership) ([]nativeconfig.Request, error) {
+func openCodeMCPRequests(projection OpenCodeProjection, previous, desired []domain.NativeObjectOwnership) ([]nativeconfig.Request, error) {
 	previousByID, desiredByID := shared.ObjectMap(previous), shared.ObjectMap(desired)
 	paths := nativeconfig.Paths{JSON: projection.ConfigJSON, JSONC: projection.ConfigJSONC}
 	if paths.JSON == "" {
 		for _, object := range previous {
-			if object.Kind == openCodeMCPObjectKind {
+			if object.Kind == OpenCodeMCPObjectKind {
 				root := filepath.Dir(object.Path)
 				paths = nativeconfig.Paths{JSON: filepath.Join(root, "opencode.json"), JSONC: filepath.Join(root, "opencode.jsonc")}
 				break
@@ -549,7 +549,7 @@ func openCodeMCPRequests(projection openCodeProjection, previous, desired []doma
 	var result []nativeconfig.Request
 	kernel := nativeconfig.New()
 	for id, object := range previousByID {
-		if object.Kind != openCodeMCPObjectKind {
+		if object.Kind != OpenCodeMCPObjectKind {
 			continue
 		}
 		owned := receiptFromOpenCodeObject(object)
@@ -584,7 +584,7 @@ func openCodeMCPRequests(projection openCodeProjection, previous, desired []doma
 			Server: projection.MCPServers[next.LogicalName], Placeholders: placeholders, Owned: receipt, Desired: &desiredReceipt})
 	}
 	for id, object := range desiredByID {
-		if object.Kind != openCodeMCPObjectKind {
+		if object.Kind != OpenCodeMCPObjectKind {
 			continue
 		}
 		if _, replacing := previousByID[id]; replacing {
@@ -615,7 +615,7 @@ func openCodeConfigPresence(configRoot string) (jsonExists, jsoncExists bool, er
 }
 
 func sameOpenCodeMCPObject(left, right domain.NativeObjectOwnership) bool {
-	return left.ObjectID == right.ObjectID && left.Kind == openCodeMCPObjectKind && right.Kind == openCodeMCPObjectKind &&
+	return left.ObjectID == right.ObjectID && left.Kind == OpenCodeMCPObjectKind && right.Kind == OpenCodeMCPObjectKind &&
 		left.LogicalName == right.LogicalName && shared.SameCleanPath(left.Path, right.Path) && left.ManagedDigest == right.ManagedDigest
 }
 
@@ -623,23 +623,23 @@ func receiptFromOpenCodeObject(object domain.NativeObjectOwnership) nativeconfig
 	return nativeconfig.Receipt{Version: "1", Path: object.Path, Codec: nativeconfig.CodecOpenCode, Name: object.LogicalName, Digest: object.ManagedDigest}
 }
 
-func openCodeObjects(objects []domain.NativeObjectOwnership) []domain.NativeObjectOwnership {
+func OpenCodeObjects(objects []domain.NativeObjectOwnership) []domain.NativeObjectOwnership {
 	var result []domain.NativeObjectOwnership
 	for _, object := range objects {
-		if object.Kind == openCodeMCPObjectKind || object.Kind == openCodeSkillKind {
+		if object.Kind == OpenCodeMCPObjectKind || object.Kind == openCodeSkillKind {
 			result = append(result, object)
 		}
 	}
 	return result
 }
 
-func validateOpenCodeObject(configRoot string, projection openCodeProjection, object domain.NativeObjectOwnership) error {
+func validateOpenCodeObject(configRoot string, projection OpenCodeProjection, object domain.NativeObjectOwnership) error {
 	if object.LogicalName == "" || object.ManagedDigest == "" {
 		return fmt.Errorf("OpenCode native object is incomplete")
 	}
 	expected := object.Path
 	switch object.Kind {
-	case openCodeMCPObjectKind:
+	case OpenCodeMCPObjectKind:
 		if projection.ConfigPath != "" {
 			expected = projection.ConfigPath
 		}
@@ -654,7 +654,7 @@ func validateOpenCodeObject(configRoot string, projection openCodeProjection, ob
 	return pathpolicy.RequireContainedChild(configRoot, object.Path)
 }
 
-func preflightOpenCodeObjects(configRoot, activePath string, projection openCodeProjection, previous, desired []domain.NativeObjectOwnership) error {
+func preflightOpenCodeObjects(configRoot, activePath string, projection OpenCodeProjection, previous, desired []domain.NativeObjectOwnership) error {
 	previousByID, desiredByID := shared.ObjectMap(previous), shared.ObjectMap(desired)
 	for _, object := range previous {
 		if err := validateOpenCodeObject(configRoot, projection, object); err != nil {

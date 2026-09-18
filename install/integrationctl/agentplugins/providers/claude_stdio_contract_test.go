@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/claude"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/managedstdio"
 )
@@ -33,7 +34,7 @@ func TestClaudeStdioDistinctCWDAndOpaqueArguments(t *testing.T) {
 		t.Fatal(err)
 	}
 	document := readObject(t, filepath.Join(delivery.StagingPath, ".mcp.json"))
-	runtime := filepath.Join(plan.ActivePath, claudeRuntimeDirectory)
+	runtime := filepath.Join(plan.ActivePath, claude.ClaudeRuntimeDirectory)
 	for name, wantCWD := range map[string]string{"default": runtime, "explicit": filepath.Join(runtime, "work"), "data": data} {
 		server := document[name].(map[string]any)
 		args := server["args"].([]any)

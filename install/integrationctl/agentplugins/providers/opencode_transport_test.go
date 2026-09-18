@@ -7,18 +7,19 @@ import (
 	"testing"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/opencode"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
 func TestOpenCodeDeclaredTransportDoesNotSilentlyConvertSSE(t *testing.T) {
 	server := domain.MCPServer{Type: "sse", Decoded: map[string]any{"url": "https://example.test/sse"}}
-	if _, err := neutralOpenCodeServer(server); err == nil {
+	if _, err := opencode.NeutralOpenCodeServer(server); err == nil {
 		t.Fatal("SSE silently mapped to HTTP-first remote")
 	}
 	server.Type = "streamable-http"
 	server.Decoded["url"] = "https://example.test/${PLUGIN_ROOT}"
 	server.Decoded["headers"] = map[string]any{"Authorization": "Bearer ${PLUGIN_DATA}"}
-	neutral, err := neutralOpenCodeServer(server)
+	neutral, err := opencode.NeutralOpenCodeServer(server)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -49,13 +50,13 @@ func TestOpenCodeResolvedSymlinkCWDRoundTripIsNotExpandedAgain(t *testing.T) {
 		t.Fatal(err)
 	}
 	envelope.MCP.Servers["docs"] = domain.MCPServer{Name: "docs", Type: "stdio", Decoded: map[string]any{"command": "node", "cwd": "${PLUGIN_DATA}/link", "args": []any{"${PLUGIN_ROOT}/server.js", "${UNKNOWN}"}, "env": map[string]any{"DATA": "${PLUGIN_DATA}", "OTHER": "${HOME}"}}}
-	if err := os.Remove(filepath.Join(active, openCodeProjectionFile)); err != nil {
+	if err := os.Remove(filepath.Join(active, opencode.OpenCodeProjectionFile)); err != nil {
 		t.Fatal(err)
 	}
-	if err := projectOpenCodeNative(active, envelope, plan, data); err != nil {
+	if err := opencode.ProjectOpenCodeNative(active, envelope, plan, data); err != nil {
 		t.Fatal(err)
 	}
-	projection, err := readOpenCodeProjection(active)
+	projection, err := opencode.ReadOpenCodeProjection(active)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -71,11 +72,11 @@ func TestOpenCodeResolvedSymlinkCWDRoundTripIsNotExpandedAgain(t *testing.T) {
 	if observed != canonical || server.CWD != target || !server.CWDResolved || server.StdioValuesResolved {
 		t.Fatalf("wrong resolved boundary: %+v", server)
 	}
-	objects, err := buildOpenCodeNativeObjects(active, envelope, plan)
+	objects, err := opencode.BuildOpenCodeNativeObjects(active, envelope, plan)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := applyOpenCodeNative(configRoot, active, nil, objects); err != nil {
+	if err := opencode.ApplyOpenCodeNative(configRoot, active, nil, objects); err != nil {
 		t.Fatal(err)
 	}
 	var doc map[string]any
@@ -94,15 +95,15 @@ func TestOpenCodeResolvedSymlinkCWDRoundTripIsNotExpandedAgain(t *testing.T) {
 func TestOpenCodeHistoricalRawCWDProjectionStillExpandsOnce(t *testing.T) {
 	root := t.TempDir()
 	config := filepath.Join(root, "opencode.json")
-	projection := openCodeProjection{Version: 1, ConfigPath: config, ConfigJSON: config, ConfigJSONC: filepath.Join(root, "opencode.jsonc"), PackageRoot: root, MCPServers: map[string]nativeconfig.Server{"local": {Type: "stdio", Command: "node", CWD: "${PLUGIN_ROOT}/work"}}}
+	projection := opencode.OpenCodeProjection{Version: 1, ConfigPath: config, ConfigJSON: config, ConfigJSONC: filepath.Join(root, "opencode.jsonc"), PackageRoot: root, MCPServers: map[string]nativeconfig.Server{"local": {Type: "stdio", Command: "node", CWD: "${PLUGIN_ROOT}/work"}}}
 	body, err := json.Marshal(projection)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(root, openCodeProjectionFile), body, 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(root, opencode.OpenCodeProjectionFile), body, 0600); err != nil {
 		t.Fatal(err)
 	}
-	loaded, err := readOpenCodeProjection(root)
+	loaded, err := opencode.ReadOpenCodeProjection(root)
 	if err != nil {
 		t.Fatal(err)
 	}

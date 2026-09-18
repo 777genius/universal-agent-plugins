@@ -14,8 +14,11 @@ import (
 	"github.com/pelletier/go-toml/v2"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/claude"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/gemini"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/kiro"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/windsurf"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
 	legacyports "github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
@@ -179,11 +182,11 @@ func (observer NativeIdentityObserver) inspectNativeRegistry(ctx context.Context
 		if configRoot == "" && strings.TrimSpace(plan.TargetRoot) != "" {
 			configRoot = filepath.Dir(filepath.Clean(plan.TargetRoot))
 		}
-		command, err := claudeListCommand(plan.NativeRegistryExecutable, configRoot, plan.ActivePath)
+		command, err := claude.ClaudeListCommand(plan.NativeRegistryExecutable, configRoot, plan.ActivePath)
 		if err != nil {
 			return registryIndeterminate, err
 		}
-		result, err := runClaudeListCommand(ctx, observer.Runner, command)
+		result, err := claude.RunClaudeListCommand(ctx, observer.Runner, command)
 		if err != nil {
 			if ctxErr := ctx.Err(); ctxErr != nil {
 				return registryIndeterminate, ctxErr
@@ -250,9 +253,9 @@ func (observer NativeIdentityObserver) inspectNativeRegistry(ctx context.Context
 		// its skill paths are checked before the all-or-none native config batch.
 		return registryClear, nil
 	case domain.ClientGemini:
-		return inspectGeminiRegistry(plan, managed)
+		return gemini.InspectGeminiRegistry(plan, managed)
 	case domain.ClientWindsurf:
-		return inspectWindsurfRegistry(plan, managed)
+		return windsurf.InspectWindsurfRegistry(plan, managed)
 	default:
 		return registryIndeterminate, nil
 	}

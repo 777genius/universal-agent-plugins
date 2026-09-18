@@ -1,4 +1,4 @@
-package providers
+package gemini
 
 import (
 	"context"
@@ -12,21 +12,22 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/filetree"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/pathpolicy"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
 const (
-	geminiSkillObjectKind = "gemini_global_skill_directory"
-	geminiMCPObjectKind   = "gemini_global_mcp_server"
-	geminiDescriptorName  = ".agentplugins-gemini.json"
+	GeminiSkillObjectKind = "gemini_global_skill_directory"
+	GeminiMCPObjectKind   = "gemini_global_mcp_server"
+	GeminiDescriptorName  = ".agentplugins-gemini.json"
 )
 
-type geminiDescriptor struct {
+type GeminiDescriptor struct {
 	DataRoot string `json:"data_root"`
 }
 
-func buildGeminiNativeObjects(stagingRoot string, envelope domain.PackageEnvelope, plan domain.DeliveryPlan, pluginDataPath string) ([]domain.NativeObjectOwnership, error) {
+func BuildGeminiNativeObjects(stagingRoot string, envelope domain.PackageEnvelope, plan domain.DeliveryPlan, pluginDataPath string) ([]domain.NativeObjectOwnership, error) {
 	configRoot := strings.TrimSpace(plan.NativeRegistryRoot)
 	if configRoot == "" || !filepath.IsAbs(configRoot) {
 		return nil, fmt.Errorf("Gemini config root is unavailable")
@@ -59,7 +60,7 @@ func buildGeminiNativeObjects(stagingRoot string, envelope domain.PackageEnvelop
 				return nil, fmt.Errorf("digest Gemini skill %q: %w", component.Name, err)
 			}
 			objects = append(objects, domain.NativeObjectOwnership{
-				ObjectID: "gemini-skill:" + component.Name, Kind: geminiSkillObjectKind,
+				ObjectID: "gemini-skill:" + component.Name, Kind: GeminiSkillObjectKind,
 				LogicalName: component.Name, Path: filepath.Join(configRoot, "skills", component.Name),
 				SourceRelative: filepath.ToSlash(sourceRelative), ManagedDigest: digest, ProtectionClass: "managed",
 			})
@@ -68,11 +69,11 @@ func buildGeminiNativeObjects(stagingRoot string, envelope domain.PackageEnvelop
 			if !ok {
 				return nil, fmt.Errorf("planned Gemini MCP server %q is missing", component.Name)
 			}
-			native, err := geminiNativeServer(server)
+			native, err := GeminiNativeServer(server)
 			if err != nil {
 				return nil, fmt.Errorf("project Gemini MCP server %q: %w", component.Name, err)
 			}
-			native, err = materializeGeminiServer(native, plan.ActivePath, pluginDataPath, stagingRoot)
+			native, err = MaterializeGeminiServer(native, plan.ActivePath, pluginDataPath, stagingRoot)
 			if err != nil {
 				return nil, fmt.Errorf("bind Gemini MCP server %q: %w", component.Name, err)
 			}
@@ -81,17 +82,17 @@ func buildGeminiNativeObjects(stagingRoot string, envelope domain.PackageEnvelop
 				return nil, err
 			}
 			objects = append(objects, domain.NativeObjectOwnership{
-				ObjectID: "gemini-mcp:" + component.Name, Kind: geminiMCPObjectKind,
+				ObjectID: "gemini-mcp:" + component.Name, Kind: GeminiMCPObjectKind,
 				LogicalName: component.Name, Path: filepath.Join(configRoot, "settings.json"),
 				ManagedDigest: receipt.Digest, ProtectionClass: "managed",
 			})
 		}
 	}
-	descriptorBody, err := json.Marshal(geminiDescriptor{DataRoot: pluginDataPath})
+	descriptorBody, err := json.Marshal(GeminiDescriptor{DataRoot: pluginDataPath})
 	if err != nil {
 		return nil, err
 	}
-	if err := os.WriteFile(filepath.Join(stagingRoot, geminiDescriptorName), append(descriptorBody, '\n'), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(stagingRoot, GeminiDescriptorName), append(descriptorBody, '\n'), 0o600); err != nil {
 		return nil, fmt.Errorf("write Gemini projection descriptor: %w", err)
 	}
 	sort.Slice(objects, func(i, j int) bool { return objects[i].ObjectID < objects[j].ObjectID })
@@ -99,10 +100,10 @@ func buildGeminiNativeObjects(stagingRoot string, envelope domain.PackageEnvelop
 }
 
 func activateGeminiNative(ctx context.Context, request domain.ActivationRequest) error {
-	return activateGeminiNativeWithKernel(ctx, request, nativeconfig.New())
+	return ActivateGeminiNativeWithKernel(ctx, request, nativeconfig.New())
 }
 
-func activateGeminiNativeWithKernel(ctx context.Context, request domain.ActivationRequest, kernel nativeconfig.Kernel) error {
+func ActivateGeminiNativeWithKernel(ctx context.Context, request domain.ActivationRequest, kernel nativeconfig.Kernel) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -110,23 +111,23 @@ func activateGeminiNativeWithKernel(ctx context.Context, request domain.Activati
 }
 
 func deactivateGeminiNative(ctx context.Context, request domain.DeactivationRequest) error {
-	return deactivateGeminiNativeWithKernel(ctx, request, nativeconfig.New())
+	return DeactivateGeminiNativeWithKernel(ctx, request, nativeconfig.New())
 }
 
-func deactivateGeminiNativeWithKernel(ctx context.Context, request domain.DeactivationRequest, kernel nativeconfig.Kernel) error {
+func DeactivateGeminiNativeWithKernel(ctx context.Context, request domain.DeactivationRequest, kernel nativeconfig.Kernel) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
 	return applyGeminiNativeMutationWithKernel(request.Client.ConfigRoot, "", request.NativeObjects, nil, kernel)
 }
 
-func verifyGeminiNativeObjects(configRoot string, objects []domain.NativeObjectOwnership, allowMissing bool) error {
-	for _, object := range geminiObjects(objects) {
+func VerifyGeminiNativeObjects(configRoot string, objects []domain.NativeObjectOwnership, allowMissing bool) error {
+	for _, object := range GeminiObjects(objects) {
 		if err := validateGeminiObject(configRoot, object); err != nil {
 			return err
 		}
 		switch object.Kind {
-		case geminiSkillObjectKind:
+		case GeminiSkillObjectKind:
 			digest, err := shared.DigestSkillDirectory(object.Path)
 			if os.IsNotExist(err) && allowMissing {
 				continue
@@ -137,8 +138,8 @@ func verifyGeminiNativeObjects(configRoot string, objects []domain.NativeObjectO
 			if digest != object.ManagedDigest {
 				return fmt.Errorf("managed Gemini skill %q changed outside agentplugins", object.LogicalName)
 			}
-		case geminiMCPObjectKind:
-			present, owned, err := nativeconfig.New().Inspect(geminiConfigPaths(configRoot), nativeconfig.CodecGemini, object.LogicalName, geminiReceipt(object))
+		case GeminiMCPObjectKind:
+			present, owned, err := nativeconfig.New().Inspect(GeminiConfigPaths(configRoot), nativeconfig.CodecGemini, object.LogicalName, GeminiReceipt(object))
 			if err != nil {
 				return err
 			}
@@ -155,7 +156,7 @@ func verifyGeminiNativeObjects(configRoot string, objects []domain.NativeObjectO
 
 type geminiRenameFunc func(string, string) error
 
-func renameGeminiDirectoryNoReplace(oldPath, newPath string, rename geminiRenameFunc) error {
+func RenameGeminiDirectoryNoReplace(oldPath, newPath string, rename geminiRenameFunc) error {
 	if _, err := os.Lstat(newPath); err == nil {
 		return fmt.Errorf("destination already exists: %s", newPath)
 	} else if !os.IsNotExist(err) {
@@ -164,11 +165,11 @@ func renameGeminiDirectoryNoReplace(oldPath, newPath string, rename geminiRename
 	return rename(oldPath, newPath)
 }
 
-func applyGeminiNativeMutation(configRoot, activePath string, previous, desired []domain.NativeObjectOwnership) error {
+func ApplyGeminiNativeMutation(configRoot, activePath string, previous, desired []domain.NativeObjectOwnership) error {
 	return applyGeminiNativeMutationWithKernel(configRoot, activePath, previous, desired, nativeconfig.New())
 }
 
-func applyGeminiNativeMutationWithRename(configRoot, activePath string, previous, desired []domain.NativeObjectOwnership, rename geminiRenameFunc) (resultErr error) {
+func ApplyGeminiNativeMutationWithRename(configRoot, activePath string, previous, desired []domain.NativeObjectOwnership, rename geminiRenameFunc) (resultErr error) {
 	return applyGeminiNativeMutationWithKernelAndRename(configRoot, activePath, previous, desired, nativeconfig.New(), rename)
 }
 
@@ -177,10 +178,10 @@ func applyGeminiNativeMutationWithKernel(configRoot, activePath string, previous
 }
 
 func applyGeminiNativeMutationWithKernelAndRename(configRoot, activePath string, previous, desired []domain.NativeObjectOwnership, kernel nativeconfig.Kernel, rename geminiRenameFunc) (resultErr error) {
-	return applyGeminiNativeMutationWithKernelRenameAndCapacity(configRoot, activePath, previous, desired, kernel, rename, shared.CheckedCombinedCapacity)
+	return ApplyGeminiNativeMutationWithKernelRenameAndCapacity(configRoot, activePath, previous, desired, kernel, rename, shared.CheckedCombinedCapacity)
 }
 
-func applyGeminiNativeMutationWithKernelRenameAndCapacity(configRoot, activePath string, previous, desired []domain.NativeObjectOwnership, kernel nativeconfig.Kernel, rename geminiRenameFunc, capacity shared.CombinedCapacityFunc) (resultErr error) {
+func ApplyGeminiNativeMutationWithKernelRenameAndCapacity(configRoot, activePath string, previous, desired []domain.NativeObjectOwnership, kernel nativeconfig.Kernel, rename geminiRenameFunc, capacity shared.CombinedCapacityFunc) (resultErr error) {
 	if rename == nil {
 		return fmt.Errorf("Gemini rename operation is unavailable")
 	}
@@ -191,8 +192,8 @@ func applyGeminiNativeMutationWithKernelRenameAndCapacity(configRoot, activePath
 	if configRoot == "" || !filepath.IsAbs(configRoot) {
 		return fmt.Errorf("Gemini config root is unavailable")
 	}
-	previous, desired = geminiObjects(previous), geminiObjects(desired)
-	if err := verifyGeminiNativeObjects(configRoot, previous, true); err != nil {
+	previous, desired = GeminiObjects(previous), GeminiObjects(desired)
+	if err := VerifyGeminiNativeObjects(configRoot, previous, true); err != nil {
 		return err
 	}
 	previousByID, desiredByID := shared.ObjectMap(previous), shared.ObjectMap(desired)
@@ -212,12 +213,12 @@ func applyGeminiNativeMutationWithKernelRenameAndCapacity(configRoot, activePath
 		}
 	}
 
-	descriptor := geminiDescriptor{}
+	descriptor := GeminiDescriptor{}
 	if len(desired) > 0 {
 		if strings.TrimSpace(activePath) == "" {
 			return fmt.Errorf("active package path is required for Gemini native installation")
 		}
-		body, err := os.ReadFile(filepath.Join(activePath, geminiDescriptorName))
+		body, err := os.ReadFile(filepath.Join(activePath, GeminiDescriptorName))
 		if err != nil || json.Unmarshal(body, &descriptor) != nil || strings.TrimSpace(descriptor.DataRoot) == "" || !filepath.IsAbs(descriptor.DataRoot) {
 			return fmt.Errorf("read Gemini projection descriptor: invalid or missing descriptor")
 		}
@@ -242,7 +243,7 @@ func applyGeminiNativeMutationWithKernelRenameAndCapacity(configRoot, activePath
 
 	staged := map[string]string{}
 	for id, object := range desiredByID {
-		if object.Kind != geminiSkillObjectKind {
+		if object.Kind != GeminiSkillObjectKind {
 			continue
 		}
 		source := filepath.Join(activePath, filepath.FromSlash(object.SourceRelative))
@@ -271,7 +272,7 @@ func applyGeminiNativeMutationWithKernelRenameAndCapacity(configRoot, activePath
 				}
 			}
 			if backup := backups[id]; backup != "" {
-				if err := renameGeminiDirectoryNoReplace(backup, object.Path, rename); err != nil {
+				if err := RenameGeminiDirectoryNoReplace(backup, object.Path, rename); err != nil {
 					if rollbackErr == nil {
 						rollbackErr = err
 					}
@@ -284,7 +285,7 @@ func applyGeminiNativeMutationWithKernelRenameAndCapacity(configRoot, activePath
 			if attempted[id] {
 				continue
 			}
-			if err := renameGeminiDirectoryNoReplace(backup, previousByID[id].Path, rename); err != nil {
+			if err := RenameGeminiDirectoryNoReplace(backup, previousByID[id].Path, rename); err != nil {
 				if rollbackErr == nil {
 					rollbackErr = err
 				}
@@ -311,7 +312,7 @@ func applyGeminiNativeMutationWithKernelRenameAndCapacity(configRoot, activePath
 		}
 	}()
 	for id, object := range previousByID {
-		if object.Kind != geminiSkillObjectKind {
+		if object.Kind != GeminiSkillObjectKind {
 			continue
 		}
 		if _, err := os.Lstat(object.Path); os.IsNotExist(err) {
@@ -334,7 +335,7 @@ func applyGeminiNativeMutationWithKernelRenameAndCapacity(configRoot, activePath
 	}
 	for id, source := range staged {
 		object := desiredByID[id]
-		if err := renameGeminiDirectoryNoReplace(source, object.Path, rename); err != nil {
+		if err := RenameGeminiDirectoryNoReplace(source, object.Path, rename); err != nil {
 			return fmt.Errorf("activate Gemini skill %q: %w", object.LogicalName, err)
 		}
 		installed[id] = object
@@ -355,7 +356,7 @@ func applyGeminiNativeMutationWithKernelRenameAndCapacity(configRoot, activePath
 	for _, id := range ids {
 		prior, hadPrior := previousByID[id]
 		next, hasNext := desiredByID[id]
-		if (hadPrior && prior.Kind != geminiMCPObjectKind) || (hasNext && next.Kind != geminiMCPObjectKind) {
+		if (hadPrior && prior.Kind != GeminiMCPObjectKind) || (hasNext && next.Kind != GeminiMCPObjectKind) {
 			continue
 		}
 		if hasNext {
@@ -363,13 +364,13 @@ func applyGeminiNativeMutationWithKernelRenameAndCapacity(configRoot, activePath
 			if err != nil {
 				return err
 			}
-			server, err = materializeGeminiServer(server, activePath, descriptor.DataRoot)
+			server, err = MaterializeGeminiServer(server, activePath, descriptor.DataRoot)
 			if err != nil {
 				return err
 			}
 			present, owned := false, false
 			if hadPrior {
-				present, owned, err = nativeconfig.New().Inspect(geminiConfigPaths(configRoot), nativeconfig.CodecGemini, prior.LogicalName, geminiReceipt(prior))
+				present, owned, err = nativeconfig.New().Inspect(GeminiConfigPaths(configRoot), nativeconfig.CodecGemini, prior.LogicalName, GeminiReceipt(prior))
 				if err != nil {
 					return err
 				}
@@ -380,11 +381,11 @@ func applyGeminiNativeMutationWithKernelRenameAndCapacity(configRoot, activePath
 				if !owned {
 					return fmt.Errorf("Gemini MCP server %q is no longer owned", prior.LogicalName)
 				}
-				action, receipt = nativeconfig.ActionUpdate, geminiReceipt(prior)
+				action, receipt = nativeconfig.ActionUpdate, GeminiReceipt(prior)
 			}
-			requests = append(requests, nativeconfig.Request{Paths: geminiConfigPaths(configRoot), Codec: nativeconfig.CodecGemini, Action: action, Name: next.LogicalName, Server: server, Placeholders: nativeconfig.Placeholders{PackageRoot: activePath, DataRoot: descriptor.DataRoot}, Owned: receipt})
+			requests = append(requests, nativeconfig.Request{Paths: GeminiConfigPaths(configRoot), Codec: nativeconfig.CodecGemini, Action: action, Name: next.LogicalName, Server: server, Placeholders: nativeconfig.Placeholders{PackageRoot: activePath, DataRoot: descriptor.DataRoot}, Owned: receipt})
 		} else if hadPrior {
-			present, owned, err := nativeconfig.New().Inspect(geminiConfigPaths(configRoot), nativeconfig.CodecGemini, prior.LogicalName, geminiReceipt(prior))
+			present, owned, err := nativeconfig.New().Inspect(GeminiConfigPaths(configRoot), nativeconfig.CodecGemini, prior.LogicalName, GeminiReceipt(prior))
 			if err != nil {
 				return err
 			}
@@ -392,7 +393,7 @@ func applyGeminiNativeMutationWithKernelRenameAndCapacity(configRoot, activePath
 				if !owned {
 					return fmt.Errorf("Gemini MCP server %q is no longer owned", prior.LogicalName)
 				}
-				requests = append(requests, nativeconfig.Request{Paths: geminiConfigPaths(configRoot), Codec: nativeconfig.CodecGemini, Action: nativeconfig.ActionRemove, Name: prior.LogicalName, Owned: geminiReceipt(prior)})
+				requests = append(requests, nativeconfig.Request{Paths: GeminiConfigPaths(configRoot), Codec: nativeconfig.CodecGemini, Action: nativeconfig.ActionRemove, Name: prior.LogicalName, Owned: GeminiReceipt(prior)})
 			}
 		}
 	}
@@ -414,17 +415,17 @@ func applyGeminiNativeMutationWithKernelRenameAndCapacity(configRoot, activePath
 	return nil
 }
 
-func inspectGeminiRegistry(plan domain.DeliveryPlan, managed *domain.ClientBinding) (registryFinding, error) {
+func InspectGeminiRegistry(plan domain.DeliveryPlan, managed *domain.ClientBinding) (clients.RegistryFinding, error) {
 	root := strings.TrimSpace(plan.NativeRegistryRoot)
 	if root == "" {
-		return registryIndeterminate, nil
+		return clients.RegistryIndeterminate, nil
 	}
 	if managed != nil {
-		if err := verifyGeminiNativeObjects(root, managed.NativeObjects, true); err != nil {
-			return registryIndeterminate, err
+		if err := VerifyGeminiNativeObjects(root, managed.NativeObjects, true); err != nil {
+			return clients.RegistryIndeterminate, err
 		}
 	}
-	finding := registryClear
+	finding := clients.RegistryClear
 	for _, component := range plan.Components {
 		if component.Support == domain.SupportUnsupported {
 			continue
@@ -436,37 +437,37 @@ func inspectGeminiRegistry(plan domain.DeliveryPlan, managed *domain.ClientBindi
 			_, err := os.Lstat(path)
 			exists = err == nil
 			if err != nil && !os.IsNotExist(err) {
-				return registryIndeterminate, err
+				return clients.RegistryIndeterminate, err
 			}
-			owned = managed != nil && managedGeminiObjectExists(managed.NativeObjects, geminiSkillObjectKind, component.Name)
+			owned = managed != nil && managedGeminiObjectExists(managed.NativeObjects, GeminiSkillObjectKind, component.Name)
 		case domain.ComponentMCPServer:
 			var receipt *nativeconfig.Receipt
 			if managed != nil {
-				for _, object := range geminiObjects(managed.NativeObjects) {
-					if object.Kind == geminiMCPObjectKind && object.LogicalName == component.Name {
-						receipt = geminiReceipt(object)
+				for _, object := range GeminiObjects(managed.NativeObjects) {
+					if object.Kind == GeminiMCPObjectKind && object.LogicalName == component.Name {
+						receipt = GeminiReceipt(object)
 					}
 				}
 			}
 			var err error
-			exists, owned, err = nativeconfig.New().Inspect(geminiConfigPaths(root), nativeconfig.CodecGemini, component.Name, receipt)
+			exists, owned, err = nativeconfig.New().Inspect(GeminiConfigPaths(root), nativeconfig.CodecGemini, component.Name, receipt)
 			if err != nil {
-				return registryIndeterminate, err
+				return clients.RegistryIndeterminate, err
 			}
 		default:
 			continue
 		}
 		if exists && !owned {
-			return registryCollision, nil
+			return clients.RegistryCollision, nil
 		}
 		if exists && owned {
-			finding = registryExpected
+			finding = clients.RegistryExpected
 		}
 	}
 	return finding, nil
 }
 
-func geminiNativeServer(server domain.MCPServer) (nativeconfig.Server, error) {
+func GeminiNativeServer(server domain.MCPServer) (nativeconfig.Server, error) {
 	getString := func(key string) (string, error) {
 		value, exists := server.Decoded[key]
 		if !exists {
@@ -556,7 +557,7 @@ func geminiNativeServer(server domain.MCPServer) (nativeconfig.Server, error) {
 	return result, nil
 }
 
-func materializeGeminiServer(server nativeconfig.Server, packageRoot, dataRoot string, observationRoot ...string) (nativeconfig.Server, error) {
+func MaterializeGeminiServer(server nativeconfig.Server, packageRoot, dataRoot string, observationRoot ...string) (nativeconfig.Server, error) {
 	if server.Type != "stdio" {
 		return server, nil
 	}
@@ -587,19 +588,19 @@ func geminiServerFromPackage(root, name string) (nativeconfig.Server, error) {
 		return nativeconfig.Server{}, fmt.Errorf("Gemini MCP server %q is missing", name)
 	}
 	typeName, _ := decoded["type"].(string)
-	return geminiNativeServer(domain.MCPServer{Name: name, Type: typeName, Decoded: decoded})
+	return GeminiNativeServer(domain.MCPServer{Name: name, Type: typeName, Decoded: decoded})
 }
 
-func geminiReceipt(object domain.NativeObjectOwnership) *nativeconfig.Receipt {
+func GeminiReceipt(object domain.NativeObjectOwnership) *nativeconfig.Receipt {
 	return &nativeconfig.Receipt{Version: "1", Path: object.Path, Codec: nativeconfig.CodecGemini, Name: object.LogicalName, Digest: object.ManagedDigest}
 }
-func geminiConfigPaths(root string) nativeconfig.Paths {
+func GeminiConfigPaths(root string) nativeconfig.Paths {
 	return nativeconfig.Paths{JSON: filepath.Join(root, "settings.json")}
 }
-func geminiObjects(objects []domain.NativeObjectOwnership) []domain.NativeObjectOwnership {
+func GeminiObjects(objects []domain.NativeObjectOwnership) []domain.NativeObjectOwnership {
 	result := []domain.NativeObjectOwnership{}
 	for _, object := range objects {
-		if object.Kind == geminiSkillObjectKind || object.Kind == geminiMCPObjectKind {
+		if object.Kind == GeminiSkillObjectKind || object.Kind == GeminiMCPObjectKind {
 			result = append(result, object)
 		}
 	}
@@ -607,14 +608,14 @@ func geminiObjects(objects []domain.NativeObjectOwnership) []domain.NativeObject
 }
 func hasGeminiSkillObjects(objects []domain.NativeObjectOwnership) bool {
 	for _, object := range objects {
-		if object.Kind == geminiSkillObjectKind {
+		if object.Kind == GeminiSkillObjectKind {
 			return true
 		}
 	}
 	return false
 }
 func managedGeminiObjectExists(objects []domain.NativeObjectOwnership, kind, name string) bool {
-	for _, object := range geminiObjects(objects) {
+	for _, object := range GeminiObjects(objects) {
 		if object.Kind == kind && object.LogicalName == name {
 			return true
 		}
@@ -625,7 +626,7 @@ func requireGeminiObjectAbsent(root string, object domain.NativeObjectOwnership)
 	if err := validateGeminiObject(root, object); err != nil {
 		return err
 	}
-	if object.Kind == geminiSkillObjectKind {
+	if object.Kind == GeminiSkillObjectKind {
 		if _, err := os.Lstat(object.Path); err == nil {
 			return fmt.Errorf("Gemini skill %q already exists without agentplugins ownership", object.LogicalName)
 		} else if !os.IsNotExist(err) {
@@ -633,7 +634,7 @@ func requireGeminiObjectAbsent(root string, object domain.NativeObjectOwnership)
 		}
 		return nil
 	}
-	present, _, err := nativeconfig.New().Inspect(geminiConfigPaths(root), nativeconfig.CodecGemini, object.LogicalName, nil)
+	present, _, err := nativeconfig.New().Inspect(GeminiConfigPaths(root), nativeconfig.CodecGemini, object.LogicalName, nil)
 	if err != nil {
 		return err
 	}
@@ -647,9 +648,9 @@ func validateGeminiObject(root string, object domain.NativeObjectOwnership) erro
 		return err
 	}
 	expected := filepath.Join(root, "settings.json")
-	if object.Kind == geminiSkillObjectKind {
+	if object.Kind == GeminiSkillObjectKind {
 		expected = filepath.Join(root, "skills", object.LogicalName)
-	} else if object.Kind != geminiMCPObjectKind {
+	} else if object.Kind != GeminiMCPObjectKind {
 		return fmt.Errorf("unsupported Gemini native object kind %q", object.Kind)
 	}
 	if !shared.SameCleanPath(expected, object.Path) {
