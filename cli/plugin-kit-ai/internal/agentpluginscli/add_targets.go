@@ -2,16 +2,18 @@ package agentpluginscli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"sort"
 	"strconv"
 	"strings"
 
+	"github.com/spf13/cobra"
+
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/prompt"
 	"github.com/777genius/plugin-kit-ai/cli/internal/promptio"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
-	"github.com/spf13/cobra"
 )
 
 func selectClient(
@@ -60,7 +62,7 @@ func selectClient(
 	}
 	_, _ = fmt.Fprint(cmd.OutOrStdout(), "Choose one target: ")
 	line, err := readInputLine(cmd.Context(), cmd.InOrStdin())
-	if err != nil && err != io.EOF {
+	if err != nil && !errors.Is(err, io.EOF) {
 		return domain.DetectedClient{}, detectedMap, err
 	}
 	choice, err := strconv.Atoi(strings.TrimSpace(line))

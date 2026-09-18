@@ -87,7 +87,7 @@ func executePromptedAdd(cmd *cobra.Command, app App, opts *options, source strin
 		return err
 	}
 	if preloaded != nil && preloaded.cleanup != nil {
-		defer preloaded.cleanup()
+		defer func() { _ = preloaded.cleanup() }()
 	}
 	if preloaded != nil && !containsPersonalMappingTarget(selection) {
 		preloaded.chatGPTPreparation = false
@@ -111,7 +111,7 @@ func executePromptedAdd(cmd *cobra.Command, app App, opts *options, source strin
 			return err
 		}
 		if loaded.cleanup != nil {
-			defer loaded.cleanup()
+			defer func() { _ = loaded.cleanup() }()
 		}
 	}
 	return runAddManyLoaded(cmd.Context(), cmd, app, opts, loaded, selection, activationComplete, authComplete, detectedClientValues(detected), true)
@@ -237,11 +237,11 @@ func confirmPlannedAdd(ctx context.Context, cmd *cobra.Command, app App, opts *o
 	if confirmed || opts.format != "human" || !app.Terminal {
 		return confirmed, nil
 	}
-	prompt := "Apply this plan? [y/N]"
+	question := "Apply this plan? [y/N]"
 	if !freshInstall {
-		prompt = "Apply these explicit lifecycle attestations? [y/N]"
+		question = "Apply these explicit lifecycle attestations? [y/N]"
 	}
-	return promptYesNo(cmd.Context(), cmd.InOrStdin(), cmd.OutOrStdout(), cmd.ErrOrStderr(), prompt)
+	return promptYesNo(cmd.Context(), cmd.InOrStdin(), cmd.OutOrStdout(), cmd.ErrOrStderr(), question)
 }
 
 func promptTargetChoices(cmd *cobra.Command, app App, detected []domain.DetectedClient, skipped []targetSkip, allClients []domain.DetectedClient) ([]domain.ClientID, []domain.DetectedClient, error) {

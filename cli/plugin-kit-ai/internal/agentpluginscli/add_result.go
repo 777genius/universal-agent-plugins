@@ -16,26 +16,26 @@ func renderHumanPlan(writer io.Writer, envelope domain.PackageEnvelope, result u
 	result = withOpenCodeRuntimeNotice(result)
 	checked := &planWriter{writer: writer}
 	writer = checked
-	_, _ = fmt.Fprintf(writer, "%s: %s %s\n", terminaltheme.For(writer).Text(terminaltheme.Label, "Plugin"), prompt.SafeText(string(envelope.Manifest.Name)), prompt.SafeText(string(envelope.Manifest.Version)))
+	_, _ = fmt.Fprintf(writer, "%s: %s %s\n", terminaltheme.For(writer).Text(terminaltheme.Label, "Plugin"), prompt.SafeText(envelope.Manifest.Name), prompt.SafeText(envelope.Manifest.Version))
 	_, _ = fmt.Fprintf(writer, "%s: %s\n", terminaltheme.For(writer).Text(terminaltheme.Label, "Target"), prompt.SafeText(string(result.Plan.ClientID)))
 	_, _ = fmt.Fprintf(writer, "%s: %s\n", terminaltheme.For(writer).Text(terminaltheme.Label, "Package"), prompt.SafeText(string(result.Plan.PackageMode)))
 	_, _ = fmt.Fprintf(writer, "%s: %s\n", terminaltheme.For(writer).Text(terminaltheme.Label, "Result"), prompt.SafeText(string(result.Plan.Status)))
 	_, _ = fmt.Fprintf(writer, "%s: %s\n", terminaltheme.For(writer).Text(terminaltheme.Label, "Authentication"), prompt.SafeText(string(result.Plan.Authentication)))
 	_, _ = fmt.Fprintf(writer, "%s: %s\n", terminaltheme.For(writer).Text(terminaltheme.Label, "Verification"), prompt.SafeText(string(result.Plan.Verification)))
 	for _, component := range result.Plan.Components {
-		_, _ = fmt.Fprintf(writer, "  - %s %s: %s\n", prompt.SafeText(string(component.Kind)), prompt.SafeText(string(component.Name)), prompt.SafeText(string(component.Support)))
+		_, _ = fmt.Fprintf(writer, "  - %s %s: %s\n", prompt.SafeText(string(component.Kind)), prompt.SafeText(component.Name), prompt.SafeText(string(component.Support)))
 	}
 	for _, diagnostic := range result.Plan.Diagnostics {
-		_, _ = fmt.Fprintf(writer, "  %s: %s: %s\n", terminaltheme.For(writer).Text(terminaltheme.Warning, "Warning"), prompt.SafeText(string(diagnostic.Code)), prompt.SafeText(string(diagnostic.Message)))
+		_, _ = fmt.Fprintf(writer, "  %s: %s: %s\n", terminaltheme.For(writer).Text(terminaltheme.Warning, "Warning"), prompt.SafeText(diagnostic.Code), prompt.SafeText(diagnostic.Message))
 	}
 	for _, warning := range result.Plan.Warnings {
-		_, _ = fmt.Fprintf(writer, "  %s: %s\n", terminaltheme.For(writer).Text(terminaltheme.Warning, "Warning"), prompt.SafeText(string(warning)))
+		_, _ = fmt.Fprintf(writer, "  %s: %s\n", terminaltheme.For(writer).Text(terminaltheme.Warning, "Warning"), prompt.SafeText(warning))
 	}
 	for _, action := range result.Plan.UserActions {
-		_, _ = fmt.Fprintf(writer, "  %s: %s\n", terminaltheme.For(writer).Text(terminaltheme.Label, "Planned action"), prompt.SafeText(string(action)))
+		_, _ = fmt.Fprintf(writer, "  %s: %s\n", terminaltheme.For(writer).Text(terminaltheme.Label, "Planned action"), prompt.SafeText(action))
 	}
 	for _, action := range result.Plan.LocalActions {
-		_, _ = fmt.Fprintf(writer, "  %s: %s\n", terminaltheme.For(writer).Text(terminaltheme.Label, "Planned action"), prompt.SafeText(string(action)))
+		_, _ = fmt.Fprintf(writer, "  %s: %s\n", terminaltheme.For(writer).Text(terminaltheme.Label, "Planned action"), prompt.SafeText(action))
 	}
 	return checked.err
 }
