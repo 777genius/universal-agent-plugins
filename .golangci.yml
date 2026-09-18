@@ -244,7 +244,7 @@ linters:
       # tags match the target, so a run on one OS silently omits every *_linux.go
       # and *_windows.go file. The first generation happened on macOS and missed
       # six of them; CI lints on ubuntu and went red on the linux one.
-      # 174 files.
+      # 173 files.
       - path: ^cli/plugin-kit-ai/cmd/agentplugins/bootstrapgen/main\.go$
         linters: [funlen, gocyclo, gocognit]
         text: 'too many statements|cyclomatic complexity|cognitive complexity'
@@ -686,9 +686,6 @@ linters:
       - path: ^install/integrationctl/agentplugins/planner/compatibility\.go$
         linters: [funlen, gocyclo, gocognit]
         text: 'too many statements|cyclomatic complexity|cognitive complexity'
-      - path: ^install/integrationctl/agentplugins/planner/planner\.go$
-        linters: [revive, funlen, gocyclo, gocognit]
-        text: 'file length is|too many statements|cyclomatic complexity|cognitive complexity'
       - path: ^install/integrationctl/agentplugins/providers/activator\.go$
         linters: [revive, funlen, gocyclo, gocognit]
         text: 'file length is|too many statements|cyclomatic complexity|cognitive complexity'

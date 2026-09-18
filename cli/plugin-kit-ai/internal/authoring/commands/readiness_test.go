@@ -11,6 +11,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/cli/internal/authoring/project"
 	"github.com/777genius/plugin-kit-ai/cli/internal/authoring/report"
 	"github.com/777genius/plugin-kit-ai/cli/internal/authoringcli"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/all"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/planner"
 )
@@ -24,7 +25,7 @@ func TestReadinessComposition(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want, err := planner.Compatibility(*p.Facts.Package, domain.SupportedClientIDs())
+	want, err := planner.Compatibility(all.Default(), *p.Facts.Package, domain.SupportedClientIDs())
 	if err != nil {
 		t.Fatal(err)
 	}

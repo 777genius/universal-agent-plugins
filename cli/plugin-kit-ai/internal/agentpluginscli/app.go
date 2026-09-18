@@ -10,6 +10,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/directoryv1"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/discoveryv1"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/statemigration"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/transaction"
@@ -43,11 +44,15 @@ type App struct {
 	PromptFactory      func(io.Reader, io.Writer, io.Writer, bool, bool) (prompt.Prompter, io.Writer, error)
 	reviewOutput       io.Writer
 
-	Version             string
-	UserHome            string
-	ManagedRoot         string
-	StateStore          transaction.StateStore
-	Detector            ports.ClientDetector
+	Version     string
+	UserHome    string
+	ManagedRoot string
+	StateStore  transaction.StateStore
+	Detector    ports.ClientDetector
+	// ClientRegistry is the set of client adapters this binary knows about. The
+	// composition root decides it; the CLI only hands it to the planners it
+	// still builds for read-only previews.
+	ClientRegistry      *clients.Registry
 	DirectoryClient     DirectoryClient
 	DiscoveryClient     DiscoveryClient
 	SourceAcquirer      SourceAcquirer

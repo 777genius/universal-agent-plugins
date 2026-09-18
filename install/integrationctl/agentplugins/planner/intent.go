@@ -2,16 +2,24 @@ package planner
 
 import (
 	"fmt"
-	"strings"
 
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/kiro"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
-const KiroPrepareAction = "After preparation, open or restart Kiro, review the MCP servers and complete authentication in Kiro on first connection when prompted, then verify their tools in Kiro. Runtime connections have not been verified."
+// KiroPrepareAction is re-exported from the client adapter that owns it, so the
+// CLI keeps one name to render.
+const KiroPrepareAction = kiro.PrepareAction
 
 // ApplyInstallIntent retains all package and Directory compatibility decisions.
-func ApplyInstallIntent(plan *domain.DeliveryPlan, intent domain.InstallIntent) error {
+// It is also applied on its own, to a plan that was already built, when a
+// caller changes its mind about a target, which is why it takes the registry
+// rather than reading one from a planner.
+func ApplyInstallIntent(registry *clients.Registry, plan *domain.DeliveryPlan, intent domain.InstallIntent) error {
+	if registry == nil {
+		return clients.ErrRegistryRequired
+	}
 	if err := intent.Validate(plan.ClientID); err != nil {
 		return err
 	}
@@ -22,23 +30,9 @@ func ApplyInstallIntent(plan *domain.DeliveryPlan, intent domain.InstallIntent) 
 	if intent != domain.InstallIntentPrepare || plan.Status == domain.PlanUnsupported {
 		return nil
 	}
-	if plan.ClientID == domain.ClientChatGPT {
-		if !plan.PersonalChatGPTPreparation {
-			return fmt.Errorf("ChatGPT preparation requires a validated Context7 personal mapping")
-		}
-		plan.Status = domain.PlanReady
-		plan.Activation = domain.ActivationPrepared
-		plan.Authentication = domain.AuthenticationNotRequired
-		plan.Verification = domain.VerificationPackageValid
-		plan.UserActions = []string{domain.ChatGPTMappedPreparationAction}
-		return nil
+	refiner, ok := clients.As[clients.PreparationRefiner](registry, plan.ClientID)
+	if !ok {
+		return fmt.Errorf("unsupported install intent %q for client %s", intent, plan.ClientID)
 	}
-	if strings.TrimSpace(plan.NativeRegistryRoot) == "" || !shared.OnlyNativeComponents(plan.Components) {
-		return fmt.Errorf("Kiro preparation requires a native config root and supported skills or MCP servers")
-	}
-	plan.Status = domain.PlanReady
-	plan.Activation = domain.ActivationPrepared
-	plan.Verification = domain.VerificationPackageValid
-	plan.UserActions = []string{KiroPrepareAction}
-	return nil
+	return refiner.RefinePreparation(plan)
 }

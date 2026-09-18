@@ -64,12 +64,22 @@ type ClientDefinition struct {
 	DirectoryDelivery     string
 	CatalogPackage        string
 	LegacyCatalogRequired bool
-	Capabilities          ClientCapabilities
+	// PlansWithoutHostPresence marks a client that is not installed on this
+	// machine at all. Planning for it produces a prepared artifact plus
+	// instructions, so "not detected here" is not a planning failure.
+	PlansWithoutHostPresence bool
+	// DirectoryPreparationPurpose is the single bounded resolve purpose this
+	// client may acquire source under. An empty value means the client has
+	// none, which is the normal case.
+	DirectoryPreparationPurpose DirectoryResolvePurpose
+	Capabilities                ClientCapabilities
 }
 
 var clientDefinitions = []ClientDefinition{
 	clientDefinition(ClientCodex, "OpenAI Codex", "codex", "managed", "projected", true, PackageProjection, SupportProjected, SupportProjected, SupportUnsupported),
-	clientDefinition(ClientChatGPT, "ChatGPT", "chatgpt", "manual_activation", "projected", false, PackageProjection, SupportProjected, SupportUnsupported, SupportUnsupported),
+	withoutHostPresence(withDirectoryPreparation(
+		clientDefinition(ClientChatGPT, "ChatGPT", "chatgpt", "manual_activation", "projected", false, PackageProjection, SupportProjected, SupportUnsupported, SupportUnsupported),
+		DirectoryResolveContext7ChatGPTPreparation)),
 	clientDefinition(ClientCursor, "Cursor", "cursor", "managed", "native", true, PackageNative, SupportNative, SupportNative, SupportNative),
 	clientDefinition(ClientCopilot, "GitHub Copilot CLI", "github-copilot", "managed", "native", true, PackageNative, SupportNative, SupportNative, SupportNative),
 	clientDefinition(ClientVSCode, "Visual Studio Code", "github-copilot", "prepared", "prepared", true, PackagePrepared, SupportPrepared, SupportPrepared, SupportPrepared),
@@ -83,6 +93,16 @@ var clientDefinitions = []ClientDefinition{
 
 func withActivation(definition ClientDefinition, activation ActivationMode) ClientDefinition {
 	definition.Capabilities.ActivationMode = activation
+	return definition
+}
+
+func withoutHostPresence(definition ClientDefinition) ClientDefinition {
+	definition.PlansWithoutHostPresence = true
+	return definition
+}
+
+func withDirectoryPreparation(definition ClientDefinition, purpose DirectoryResolvePurpose) ClientDefinition {
+	definition.DirectoryPreparationPurpose = purpose
 	return definition
 }
 
@@ -142,6 +162,24 @@ func SupportedClientIDs() []ClientID {
 func IsSupportedClient(id ClientID) bool {
 	_, ok := ClientDefinitionFor(id)
 	return ok
+}
+
+// BackendSiblings returns the other clients installed through the same backend,
+// in registry order. Copilot and VS Code are the only pair today: a package
+// installed through the Copilot CLI is what VS Code then discovers.
+func BackendSiblings(id ClientID) []ClientID {
+	definition, ok := ClientDefinitionFor(id)
+	if !ok {
+		return nil
+	}
+	siblings := make([]ClientID, 0, len(clientDefinitions))
+	for _, candidate := range clientDefinitions {
+		if candidate.ID == id || candidate.BackendFamily != definition.BackendFamily {
+			continue
+		}
+		siblings = append(siblings, candidate.ID)
+	}
+	return siblings
 }
 
 func SameClientBackend(first, second ClientID) bool {

@@ -282,7 +282,7 @@ func forEachDetectedSubset(values []domain.DetectedClient, size int, visit func(
 func (app App) compatibleLoadedTargets(ctx context.Context, loaded loadedPackage, detected []domain.DetectedClient, intents ...map[domain.ClientID]domain.InstallIntent) ([]domain.DetectedClient, []targetSkip) {
 	var skipped []targetSkip
 	clientMap := detectedClientMap(detected)
-	planner := clientplanner.Planner{ManagedRoot: app.ManagedRoot, Paths: pathpolicy.Policy{}, Detected: clientMap}
+	planner := clientplanner.Planner{ManagedRoot: app.ManagedRoot, Paths: pathpolicy.Policy{}, Registry: app.ClientRegistry, Detected: clientMap}
 	physicalID := domain.ComputePhysicalArtifactID(loaded.envelope.Manifest.Name, "00000000-0000-4000-8000-000000000000")
 	if len(intents) > 0 && intents[0] != nil && app.StateStore != nil {
 		if state, err := app.StateStore.Load(); err == nil {
@@ -329,7 +329,7 @@ func (app App) compatibleLoadedTargets(ctx context.Context, loaded loadedPackage
 			continue
 		}
 		if len(intents) > 0 && intents[0][client.ClientID] == domain.InstallIntentPrepare {
-			if err := clientplanner.ApplyInstallIntent(&plan, domain.InstallIntentPrepare); err != nil {
+			if err := clientplanner.ApplyInstallIntent(app.ClientRegistry, &plan, domain.InstallIntentPrepare); err != nil {
 				skipped = append(skipped, targetSkip{client.ClientID, "persisted preparation cannot serve this package"})
 				continue
 			}
@@ -348,7 +348,7 @@ func (app App) compatibleLoadedTargets(ctx context.Context, loaded loadedPackage
 			if err != nil {
 				reason := "automatic activation/verification preflight failed; resolve this client's verification prerequisites before retrying --target " + string(client.ClientID)
 				if client.ClientID == domain.ClientKiro && len(intents) > 0 && intents[0] != nil {
-					if prepareErr := clientplanner.ApplyInstallIntent(&plan, domain.InstallIntentPrepare); prepareErr == nil {
+					if prepareErr := clientplanner.ApplyInstallIntent(app.ClientRegistry, &plan, domain.InstallIntentPrepare); prepareErr == nil {
 						prepareErr = preflighter.PreflightActivation(domain.ActivationRequest{Client: client, Plan: plan, VerifyOnly: true})
 						if prepareErr == nil {
 							intents[0][client.ClientID] = domain.InstallIntentPrepare

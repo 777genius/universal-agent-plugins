@@ -44,6 +44,9 @@ func TestDefaultRegistryAdaptersSatisfyTheContract(t *testing.T) {
 		t.Run(string(adapter.ID()), func(t *testing.T) {
 			t.Parallel()
 			contracttest.RunHostDetector(t, adapter)
+			if _, refines := adapter.(clients.PlanRefiner); refines {
+				contracttest.RunPlanRefiner(t, adapter)
+			}
 		})
 	}
 	contracttest.RunTraitParity(t, Default(), everyClientDetectsSurfaces())

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"sort"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
@@ -43,9 +44,12 @@ type ClientCompatibility struct {
 // retained without suppressing valid siblings. Neither a support level nor
 // registry activation metadata is evidence of installation, authentication,
 // OAuth, runtime readiness, client version compatibility, or publication.
-func Compatibility(envelope domain.PackageEnvelope, clients []domain.ClientID) ([]ClientCompatibility, error) {
+func Compatibility(registry *clients.Registry, envelope domain.PackageEnvelope, targetIDs []domain.ClientID) ([]ClientCompatibility, error) {
+	if registry == nil {
+		return nil, clients.ErrRegistryRequired
+	}
 	targets := make(map[domain.ClientID]domain.ClientCapabilities)
-	for _, id := range clients {
+	for _, id := range targetIDs {
 		if _, exists := targets[id]; exists {
 			continue
 		}
@@ -62,13 +66,13 @@ func Compatibility(envelope domain.PackageEnvelope, clients []domain.ClientID) (
 	}
 	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
 	for _, id := range ids {
-		capabilities := targets[id]
-		result = append(result, compatibilityFor(envelope, capabilities))
+		limiter, _ := clients.As[clients.CompatibilityLimiter](registry, id)
+		result = append(result, compatibilityFor(envelope, targets[id], limiter))
 	}
 	return result, nil
 }
 
-func compatibilityFor(envelope domain.PackageEnvelope, capabilities domain.ClientCapabilities) ClientCompatibility {
+func compatibilityFor(envelope domain.PackageEnvelope, capabilities domain.ClientCapabilities, limiter clients.CompatibilityLimiter) ClientCompatibility {
 	result := ClientCompatibility{
 		ClientID: capabilities.ClientID, Capabilities: capabilities,
 		Components:  make([]ComponentCompatibility, 0),
@@ -77,14 +81,8 @@ func compatibilityFor(envelope domain.PackageEnvelope, capabilities domain.Clien
 	if capabilities.ActivationMode == domain.ActivationByUser {
 		result.Limitations = append(result.Limitations, "manual_activation_required")
 	}
-	if capabilities.ClientID == domain.ClientChatGPT {
-		result.Limitations = append(result.Limitations, "chatgpt_manual_preparation_only", "remote_app_registration_not_checked")
-		if (!envelope.App.Enabled && (len(envelope.MCP.Servers) > 0 || envelope.App.Present || envelope.App.Declared)) || len(missingChatGPTAppBindings(envelope)) > 0 {
-			result.Limitations = append(result.Limitations, "chatgpt_app_binding_required")
-		}
-	}
-	if capabilities.ClientID == domain.ClientWindsurf {
-		result.Limitations = append(result.Limitations, "windsurf_channel_selection_required", "windsurf_skills_prepared_only")
+	if limiter != nil {
+		result.Limitations = append(result.Limitations, limiter.ClientLimitations(envelope)...)
 	}
 	// Reuse lifecycle component choices, then apply authoring-only uncertainty
 	// bounds. No detected client or DeliveryPlan is constructed.
@@ -175,24 +173,17 @@ func compatibilityFor(envelope domain.PackageEnvelope, capabilities domain.Clien
 			if envelope.MCP.Present && !envelope.MCP.Enabled {
 				reject("component_disabled")
 			}
-			if capabilities.ClientID == domain.ClientChatGPT {
-				server := envelope.MCP.Servers[item.Name]
-				binding, mapped := envelope.App.Bindings[item.Name]
-				if !envelope.App.Enabled || !mapped || binding.ID == "" {
-					reject("chatgpt_app_binding_required")
-				} else if server.Type != "streamable-http" && server.Type != "sse" {
-					reject("chatgpt_remote_mcp_required")
-				} else {
-					component.Limitations = append(component.Limitations, "remote_app_registration_not_checked")
-				}
-			}
 		case domain.ComponentApp:
 			if !envelope.App.Enabled || envelope.App.Bindings[item.Name].ID == "" {
 				reject("invalid_component")
 			}
-			if capabilities.ClientID == domain.ClientChatGPT {
-				component.Limitations = append(component.Limitations, "remote_app_registration_not_checked")
+		}
+		if limiter != nil {
+			rejected, notes := limiter.ComponentLimitations(envelope, item)
+			for _, code := range rejected {
+				reject(code)
 			}
+			component.Limitations = append(component.Limitations, notes...)
 		}
 		result.Components = append(result.Components, component)
 	}

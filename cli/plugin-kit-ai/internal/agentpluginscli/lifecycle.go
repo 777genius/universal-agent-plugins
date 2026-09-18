@@ -609,7 +609,7 @@ func renderLegacyRemovePlan(writer io.Writer, result usecase.LegacyRemoveResult)
 }
 
 func lifecycleService(app App, detected map[domain.ClientID]domain.DetectedClient) usecase.Service {
-	planner := clientplanner.Planner{ManagedRoot: app.ManagedRoot, Paths: pathpolicy.Policy{}, Detected: detected}
+	planner := clientplanner.Planner{ManagedRoot: app.ManagedRoot, Paths: pathpolicy.Policy{}, Registry: app.ClientRegistry, Detected: detected}
 	service := app.Lifecycle
 	service.StateStore = app.StateStore
 	service.Planner = planner
