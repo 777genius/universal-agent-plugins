@@ -91,10 +91,23 @@ simplified; it is never added to buy silence for new code.
 
 Moving an exempt file is the one case the rule cannot tell apart from buying
 silence for new code: the old path disappears and an unknown one appears. Declare
-the move in `scripts/lint-baseline-renames.txt` as `<old path><TAB><new path>`,
-using the patterns exactly as they are written in the `- path:` keys. The rename
-only maps the path - the entry still has to carry the same linters and the same
-message patterns, or the comparison fails as it would for any widening.
+the move in `scripts/lint-baseline-renames.txt` as
+`<old pattern><TAB><new pattern>`, copying both patterns from the `- path:` keys
+and nothing else - no surrounding quotes. The check strips the `^`/`$` anchors
+and the `\.` escapes to get the literal paths it compares against git, so a
+pattern that is not one literal file (a `.*`, a character class) is rejected
+rather than guessed at.
+
+A declaration grants nothing on its own. The move has to be one git can confirm:
+the old path was exempt in the base revision and is gone from the working tree,
+the new path exists and is new, no two lines name the same file, and `git diff -M`
+sees the pair as a rename. A move that also rewrites the file past the similarity
+threshold is a rewrite, and a rewritten file does not keep its amnesty. The
+entry itself still has to carry the same linters and the same message patterns,
+or the comparison fails as it would for any widening.
+
+Once the move has landed in the base branch the line is reported as removable and
+skipped, so a stale entry never blocks the next change.
 
 The script is a speed bump, not a proof. It reads the flat three-line entry shape
 the generator emits and compares linters and message patterns as literal strings,

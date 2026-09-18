@@ -101,7 +101,7 @@ func TestNativeIdentityUnqualifiedPluginRootIgnoresForeignNonDirectoryEntries(t 
 // TestNativeIdentityOpenCodeIgnoresForeignNonDirectoryEntries confirms the
 // same fix protects OpenCode too: OpenCode's own native registry check
 // (inspectNativeRegistry) never scans a directory, but its prepared-identity
-// check still goes through the shared shared.InspectUnqualifiedPluginRoot exactly
+// check still goes through shared.InspectUnqualifiedPluginRoot exactly
 // like Cursor's does (observeIdentity calls inspectPreparedRegistry
 // unconditionally for every client before any client-specific override), so
 // a foreign .DS_Store in OpenCode's managed clients root would have hit the

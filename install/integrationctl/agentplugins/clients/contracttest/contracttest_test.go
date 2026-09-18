@@ -72,3 +72,11 @@ func TestTraitParityDetectsADeclaredButUnimplementedCapability(t *testing.T) {
 		t.Fatal("traitParityViolations accepted a requirement without predicates")
 	}
 }
+
+// An unchecked error from NewRegistry leaves a nil registry, which iterates
+// zero adapters. Parity has to report that instead of passing on nothing.
+func TestTraitParityRejectsANilRegistry(t *testing.T) {
+	if violations := traitParityViolations(nil, nil); len(violations) != 1 {
+		t.Fatalf("traitParityViolations passed on a nil registry: %v", violations)
+	}
+}

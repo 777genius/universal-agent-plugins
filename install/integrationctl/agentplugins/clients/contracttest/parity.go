@@ -40,6 +40,12 @@ func RunTraitParity(t *testing.T, registry *clients.Registry, requirements []Cap
 }
 
 func traitParityViolations(registry *clients.Registry, requirements []CapabilityRequirement) []string {
+	// A nil registry iterates zero adapters, so without this the whole parity
+	// check passes on nothing at all. That is exactly what an unchecked error
+	// from NewRegistry leaves behind.
+	if registry == nil {
+		return []string{"client registry is nil, so no adapter was checked"}
+	}
 	violations := []string{}
 	for _, requirement := range requirements {
 		if requirement.Holds == nil || requirement.Implements == nil {

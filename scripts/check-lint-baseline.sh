@@ -9,8 +9,12 @@
 #
 # A `git mv` of an exempt file is indistinguishable from a new exemption here,
 # so moves are declared in scripts/lint-baseline-renames.txt and applied to the
-# base side before the comparison. A declared move still has to keep the same
-# linters and message patterns; the rename file only maps the path.
+# base side before the comparison. A declaration is not taken on faith: every
+# line is checked against git and the working tree, because a rename entry is
+# the one way the baseline may name a path it never named before, and an
+# unchecked one would let any new exemption in under that name. A declared move
+# still has to keep the same linters and message patterns; the rename file only
+# maps the path.
 #
 # This is a speed bump, not a proof. It understands the flat three-line entry
 # shape the generator emits and will not follow arbitrary YAML restructuring.
@@ -105,6 +109,103 @@ compare_rules() {
   ' "$1" "$2"
 }
 
+# The generator only ever emits anchored patterns with escaped dots, so undoing
+# those two is exact for every entry this gate understands. Anything else is
+# rejected rather than guessed at: a pattern that still carries a regex
+# metacharacter does not name one file, and the checks below are about one file.
+literal_path() {
+  local literal="$1" forbidden='\^$*+?()[]{}|' index=0 char
+  literal="${literal#^}"
+  literal="${literal%\$}"
+  literal="${literal//\\./.}"
+  while [ "$index" -lt "${#forbidden}" ]; do
+    char="${forbidden:index:1}"
+    case "$literal" in
+      *"$char"*) return 1 ;;
+    esac
+    index=$((index + 1))
+  done
+  printf '%s' "$literal"
+}
+
+rename_error() {
+  echo "check-lint-baseline: $RENAMES:$1: $2" >&2
+}
+
+# Writes "old pattern<TAB>new pattern<TAB>old path<TAB>new path" for the moves
+# that really happened, and fails the run for the ones that did not. A line that
+# describes a move already merged into the base is a leftover, not an error: it
+# is reported as removable and skipped.
+validate_renames() {
+  local failures=0 lineno=0 line old new extra old_path new_path
+  : >"$work_dir/renames"
+  while IFS= read -r line || [ -n "$line" ]; do
+    lineno=$((lineno + 1))
+    line="${line%%#*}"
+    case "$line" in
+      *[![:space:]]*) ;;
+      *) continue ;;
+    esac
+    read -r old new extra <<<"$line"
+    if [ -z "$new" ] || [ -n "$extra" ]; then
+      rename_error "$lineno" "malformed line, expected '<old path pattern><TAB><new path pattern>'"
+      failures=1
+      continue
+    fi
+    if ! old_path="$(literal_path "$old")" || ! new_path="$(literal_path "$new")"; then
+      rename_error "$lineno" "both fields must be anchored literal path patterns, as written in the '- path:' keys"
+      failures=1
+      continue
+    fi
+    if ! git cat-file -e "$BASE_REF:$old_path" 2>/dev/null; then
+      if git cat-file -e "$BASE_REF:$new_path" 2>/dev/null; then
+        echo "check-lint-baseline: $RENAMES:$lineno: '$old_path' -> '$new_path' already landed in $BASE_REF; the line can be removed"
+        continue
+      fi
+      rename_error "$lineno" "declared rename '$old_path' -> '$new_path' is not a git rename: neither path exists at $BASE_REF"
+      failures=1
+      continue
+    fi
+    if [ -e "$old_path" ]; then
+      rename_error "$lineno" "declared rename '$old_path' -> '$new_path' is not a git rename: the old path is still in the working tree"
+      failures=1
+      continue
+    fi
+    if [ ! -e "$new_path" ]; then
+      rename_error "$lineno" "declared rename '$old_path' -> '$new_path' is not a git rename: the new path does not exist"
+      failures=1
+      continue
+    fi
+    if git cat-file -e "$BASE_REF:$new_path" 2>/dev/null; then
+      rename_error "$lineno" "declared rename '$old_path' -> '$new_path' is not a git rename: the new path already existed at $BASE_REF"
+      failures=1
+      continue
+    fi
+    if ! git diff -M --name-status --diff-filter=R "$BASE_REF" -- "$old_path" "$new_path" |
+      awk -F'\t' -v o="$old_path" -v n="$new_path" '$1 ~ /^R/ && $2 == o && $3 == n { found = 1 } END { exit(found ? 0 : 1) }'; then
+      rename_error "$lineno" "declared rename '$old_path' -> '$new_path' is not a git rename: git sees no rename between them (a move that also rewrites the file below the -M similarity threshold is a rewrite, and a rewritten file does not keep its amnesty)"
+      failures=1
+      continue
+    fi
+    printf '%s\t%s\t%s\t%s\n' "$old" "$new" "$old_path" "$new_path" >>"$work_dir/renames"
+  done <"$RENAMES"
+
+  # One file moves to one place. Without this, two donor entries could be merged
+  # into a single wider one under a new name, and the union in compare_rules
+  # would read the result as unchanged.
+  local duplicate
+  for duplicate in 3 4; do
+    if cut -f"$duplicate" "$work_dir/renames" | sort | uniq -d | grep -q .; then
+      cut -f"$duplicate" "$work_dir/renames" | sort | uniq -d | while IFS= read -r path; do
+        echo "check-lint-baseline: $RENAMES: '$path' appears in more than one rename; a file moves from one path to one path" >&2
+      done
+      failures=1
+    fi
+  done
+
+  return "$failures"
+}
+
 if [ ! -f "$CONFIG" ]; then
   echo "check-lint-baseline: $CONFIG not found in the working tree" >&2
   exit 1
@@ -133,17 +234,20 @@ git show "$BASE_REF:$CONFIG" | extract_rules >"$work_dir/base"
 base_count="$(grep -c . "$work_dir/base" || true)"
 
 if [ -f "$RENAMES" ]; then
-  awk -F'\t' '
-    NR == FNR {
-      line = $0
-      sub(/#.*/, "", line)
-      split(line, field, /[[:space:]]+/)
-      if (field[1] != "" && field[2] != "") { moved[field[1]] = field[2] }
-      next
-    }
-    { if ($1 in moved) { $1 = moved[$1] } ; print $1 "\t" $2 "\t" $3 "\t" $4 }
-  ' "$RENAMES" "$work_dir/base" | sort >"$work_dir/base.renamed"
-  mv "$work_dir/base.renamed" "$work_dir/base"
+  if ! validate_renames; then
+    echo >&2
+    echo "A rename entry is the only way the baseline may name a path it did not name" >&2
+    echo "before, so it has to describe a move git can confirm. Fix the declaration, or" >&2
+    echo "split the file instead of carrying its amnesty to a new name." >&2
+    exit 1
+  fi
+  if [ -s "$work_dir/renames" ]; then
+    awk -F'\t' '
+      NR == FNR { moved[$1] = $2; next }
+      { if ($1 in moved) { $1 = moved[$1] } ; print $1 "\t" $2 "\t" $3 "\t" $4 }
+    ' "$work_dir/renames" "$work_dir/base" | sort >"$work_dir/base.renamed"
+    mv "$work_dir/base.renamed" "$work_dir/base"
+  fi
 fi
 
 if ! compare_rules "$work_dir/base" "$work_dir/head" >"$work_dir/violations"; then
