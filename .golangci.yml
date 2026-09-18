@@ -701,12 +701,6 @@ linters:
       - path: ^install/integrationctl/agentplugins/providers/gemini_native\.go$
         linters: [revive, funlen, gocyclo, gocognit, dupl]
         text: 'file length is|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of'
-      - path: ^install/integrationctl/agentplugins/providers/kiro_acp\.go$
-        linters: [revive, funlen, gocyclo, gocognit]
-        text: 'file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity'
-      - path: ^install/integrationctl/agentplugins/providers/kiro_native\.go$
-        linters: [revive, funlen, gocyclo, gocognit]
-        text: 'file length is|too many statements|cyclomatic complexity|cognitive complexity'
       - path: ^install/integrationctl/agentplugins/providers/native_identity\.go$
         linters: [revive, funlen, gocyclo, gocognit]
         text: 'file length is|too many statements|cyclomatic complexity|cognitive complexity'

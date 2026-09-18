@@ -1,6 +1,6 @@
 //go:build darwin || linux
 
-package providers
+package kiro
 
 import (
 	"errors"

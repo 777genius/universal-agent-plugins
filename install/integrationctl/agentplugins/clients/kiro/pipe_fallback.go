@@ -1,6 +1,6 @@
 //go:build !darwin && !linux && !windows
 
-package providers
+package kiro
 
 import (
 	"fmt"

@@ -1,4 +1,4 @@
-package providers
+package kiro
 
 import (
 	"encoding/json"
@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
@@ -76,7 +77,7 @@ func kiroNativeFixture(t *testing.T, configRoot, marker, url string) (string, []
 	active := filepath.Join(t.TempDir(), "active")
 	skillRoot := filepath.Join(active, "skills", "docs")
 	writeTestFile(t, filepath.Join(skillRoot, "SKILL.md"), marker+"\n")
-	digest, err := digestKiroSkillDirectory(skillRoot)
+	digest, err := shared.DigestSkillDirectory(skillRoot)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -88,7 +89,7 @@ func kiroNativeFixture(t *testing.T, configRoot, marker, url string) (string, []
 	writeTestFile(t, filepath.Join(active, "mcp.json"), string(body))
 	return active, []domain.NativeObjectOwnership{
 		{ObjectID: "kiro-skill:docs", Kind: kiroSkillObjectKind, LogicalName: "docs", Path: filepath.Join(configRoot, "skills", "docs"), SourceRelative: "skills/docs", ManagedDigest: digest, ProtectionClass: "managed"},
-		{ObjectID: "kiro-mcp:docs", Kind: kiroMCPObjectKind, LogicalName: "docs", Path: filepath.Join(configRoot, "settings", "mcp.json"), ManagedDigest: digestJSONObject(server), ProtectionClass: "managed"},
+		{ObjectID: "kiro-mcp:docs", Kind: kiroMCPObjectKind, LogicalName: "docs", Path: filepath.Join(configRoot, "settings", "mcp.json"), ManagedDigest: shared.DigestJSONObject(server), ProtectionClass: "managed"},
 	}
 }
 

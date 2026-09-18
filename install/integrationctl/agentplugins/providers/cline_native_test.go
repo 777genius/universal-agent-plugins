@@ -388,7 +388,7 @@ func clineFixtureObjects(t *testing.T, configRoot, active, skillName, serverName
 	t.Helper()
 	var objects []domain.NativeObjectOwnership
 	if skillName != "" {
-		digest, err := digestKiroSkillDirectory(filepath.Join(active, "skills", skillName))
+		digest, err := shared.DigestSkillDirectory(filepath.Join(active, "skills", skillName))
 		if err != nil {
 			t.Fatal(err)
 		}

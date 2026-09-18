@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/kiro"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
@@ -300,7 +301,7 @@ func TestStagerProjectsKiroStdioRuntimeContractBeforeNativeImport(t *testing.T) 
 	}
 	var foundMCP bool
 	for _, object := range delivery.NativeObjects {
-		if object.Kind == kiroMCPObjectKind && object.LogicalName == "local" {
+		if object.Kind == kiro.MCPObjectKind && object.LogicalName == "local" {
 			foundMCP = object.Path == filepath.Join(plan.NativeRegistryRoot, "settings", "mcp.json") && strings.HasPrefix(object.ManagedDigest, "sha256:")
 		}
 	}

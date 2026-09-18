@@ -320,7 +320,7 @@ func buildOpenCodeNativeObjects(stagingRoot string, envelope domain.PackageEnvel
 		if err := pathpolicy.RequireContainedChild(stagingRoot, source); err != nil {
 			return nil, err
 		}
-		digest, err := digestKiroSkillDirectory(source)
+		digest, err := shared.DigestSkillDirectory(source)
 		if err != nil {
 			return nil, err
 		}
@@ -374,7 +374,7 @@ func verifyOpenCodeNativeObjects(configRoot, activePath string, objects []domain
 			return err
 		}
 		if object.Kind == openCodeSkillKind {
-			digest, err := digestKiroSkillDirectory(object.Path)
+			digest, err := shared.DigestSkillDirectory(object.Path)
 			if err != nil || digest != object.ManagedDigest {
 				return fmt.Errorf("managed OpenCode skill %q is missing or changed", object.LogicalName)
 			}
@@ -495,7 +495,7 @@ func applyOpenCodeNativeWithKernelAndOps(configRoot, activePath string, previous
 		if applyErr == nil {
 			committed = true
 		}
-		desiredByID := objectMap(desired)
+		desiredByID := shared.ObjectMap(desired)
 		for index, request := range requests {
 			if request.Action == nativeconfig.ActionRemove {
 				continue
@@ -534,7 +534,7 @@ func validateOpenCodeProjection(configRoot, activePath string, projection openCo
 }
 
 func openCodeMCPRequests(projection openCodeProjection, previous, desired []domain.NativeObjectOwnership) ([]nativeconfig.Request, error) {
-	previousByID, desiredByID := objectMap(previous), objectMap(desired)
+	previousByID, desiredByID := shared.ObjectMap(previous), shared.ObjectMap(desired)
 	paths := nativeconfig.Paths{JSON: projection.ConfigJSON, JSONC: projection.ConfigJSONC}
 	if paths.JSON == "" {
 		for _, object := range previous {
@@ -655,7 +655,7 @@ func validateOpenCodeObject(configRoot string, projection openCodeProjection, ob
 }
 
 func preflightOpenCodeObjects(configRoot, activePath string, projection openCodeProjection, previous, desired []domain.NativeObjectOwnership) error {
-	previousByID, desiredByID := objectMap(previous), objectMap(desired)
+	previousByID, desiredByID := shared.ObjectMap(previous), shared.ObjectMap(desired)
 	for _, object := range previous {
 		if err := validateOpenCodeObject(configRoot, projection, object); err != nil {
 			return err
@@ -718,7 +718,7 @@ func installOpenCodeSkillsWithOps(configRoot, activePath string, previous, desir
 		return nil, fmt.Errorf("OpenCode cleanup operation is unavailable")
 	}
 	txn := &openCodeSkillTxn{backups: map[string]openCodeBackup{}, installed: map[string]domain.NativeObjectOwnership{}, rename: rename, removeAll: removeAll}
-	previousByID, desiredByID := objectMap(previous), objectMap(desired)
+	previousByID, desiredByID := shared.ObjectMap(previous), shared.ObjectMap(desired)
 	if !containsOpenCodeSkill(previous) && !containsOpenCodeSkill(desired) {
 		return txn, nil
 	}
@@ -750,7 +750,7 @@ func installOpenCodeSkillsWithOps(configRoot, activePath string, previous, desir
 		if err := filetree.CopyDir(source, target); err != nil {
 			return fail(err)
 		}
-		digest, err := digestKiroSkillDirectory(target)
+		digest, err := shared.DigestSkillDirectory(target)
 		if err != nil || digest != object.ManagedDigest {
 			return fail(fmt.Errorf("staged OpenCode skill %q differs from ownership digest", object.LogicalName))
 		}
@@ -765,7 +765,7 @@ func installOpenCodeSkillsWithOps(configRoot, activePath string, previous, desir
 		} else if err != nil {
 			return fail(err)
 		}
-		digest, err := digestKiroSkillDirectory(object.Path)
+		digest, err := shared.DigestSkillDirectory(object.Path)
 		if err != nil || digest != object.ManagedDigest {
 			return fail(fmt.Errorf("managed OpenCode skill %q changed outside agentplugins", object.LogicalName))
 		}
@@ -799,7 +799,7 @@ func containsOpenCodeSkill(objects []domain.NativeObjectOwnership) bool {
 func (txn *openCodeSkillTxn) rollback() error {
 	var result error
 	for id, object := range txn.installed {
-		digest, err := digestKiroSkillDirectory(object.Path)
+		digest, err := shared.DigestSkillDirectory(object.Path)
 		if err == nil && digest == object.ManagedDigest {
 			err = os.RemoveAll(object.Path)
 		}

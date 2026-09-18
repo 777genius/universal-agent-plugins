@@ -54,7 +54,7 @@ func buildGeminiNativeObjects(stagingRoot string, envelope domain.PackageEnvelop
 			if err := pathpolicy.RequireContainedChild(stagingRoot, sourceRoot); err != nil {
 				return nil, fmt.Errorf("unsafe Gemini skill source %q: %w", component.Name, err)
 			}
-			digest, err := digestKiroSkillDirectory(sourceRoot)
+			digest, err := shared.DigestSkillDirectory(sourceRoot)
 			if err != nil {
 				return nil, fmt.Errorf("digest Gemini skill %q: %w", component.Name, err)
 			}
@@ -127,7 +127,7 @@ func verifyGeminiNativeObjects(configRoot string, objects []domain.NativeObjectO
 		}
 		switch object.Kind {
 		case geminiSkillObjectKind:
-			digest, err := digestKiroSkillDirectory(object.Path)
+			digest, err := shared.DigestSkillDirectory(object.Path)
 			if os.IsNotExist(err) && allowMissing {
 				continue
 			}
@@ -195,7 +195,7 @@ func applyGeminiNativeMutationWithKernelRenameAndCapacity(configRoot, activePath
 	if err := verifyGeminiNativeObjects(configRoot, previous, true); err != nil {
 		return err
 	}
-	previousByID, desiredByID := objectMap(previous), objectMap(desired)
+	previousByID, desiredByID := shared.ObjectMap(previous), shared.ObjectMap(desired)
 	idsCapacity, capacityErr := capacity(len(previousByID), len(desiredByID))
 	if capacityErr != nil {
 		return fmt.Errorf("prepare managed Gemini object set: %w", capacityErr)
@@ -253,7 +253,7 @@ func applyGeminiNativeMutationWithKernelRenameAndCapacity(configRoot, activePath
 		if err := filetree.CopyDir(source, target); err != nil {
 			return fmt.Errorf("stage Gemini skill %q: %w", object.LogicalName, err)
 		}
-		if digest, err := digestKiroSkillDirectory(target); err != nil || digest != object.ManagedDigest {
+		if digest, err := shared.DigestSkillDirectory(target); err != nil || digest != object.ManagedDigest {
 			return fmt.Errorf("staged Gemini skill %q does not match its ownership digest", object.LogicalName)
 		}
 		staged[id] = target
@@ -265,7 +265,7 @@ func applyGeminiNativeMutationWithKernelRenameAndCapacity(configRoot, activePath
 		attempted := map[string]bool{}
 		for id, object := range installed {
 			attempted[id] = true
-			if digest, err := digestKiroSkillDirectory(object.Path); err == nil && digest == object.ManagedDigest {
+			if digest, err := shared.DigestSkillDirectory(object.Path); err == nil && digest == object.ManagedDigest {
 				if err := os.RemoveAll(object.Path); err != nil && rollbackErr == nil {
 					rollbackErr = err
 				}
@@ -324,7 +324,7 @@ func applyGeminiNativeMutationWithKernelRenameAndCapacity(configRoot, activePath
 			return fmt.Errorf("backup Gemini skill %q: %w", object.LogicalName, err)
 		}
 		backups[id] = backup
-		digest, digestErr := digestKiroSkillDirectory(backup)
+		digest, digestErr := shared.DigestSkillDirectory(backup)
 		if digestErr != nil || digest != object.ManagedDigest {
 			if digestErr != nil {
 				return fmt.Errorf("verify isolated Gemini skill backup %q: %w", object.LogicalName, digestErr)

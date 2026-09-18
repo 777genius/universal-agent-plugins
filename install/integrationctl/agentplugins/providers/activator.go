@@ -13,6 +13,7 @@ import (
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/pathpolicy"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/kiro"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
@@ -20,8 +21,8 @@ import (
 )
 
 // CommandRunner is an alias of the port. It stays exported here so callers and
-// the optional runner capabilities in kiro_acp.go and native_identity.go keep
-// their current names until the providers package is split into client adapters.
+// the optional runner capabilities keep their current names until the rest of
+// the providers package is split into client adapters.
 type CommandRunner = ports.CommandRunner
 
 type Activator struct {
@@ -104,7 +105,7 @@ func (activator Activator) PreflightActivation(request domain.ActivationRequest)
 	if !activator.AutomaticallyActivates(request) || request.Client.ClientID != domain.ClientKiro || !shared.HasSupportedMCP(request.Plan.Components) {
 		return nil
 	}
-	runner, ok := activator.Runner.(duplexCapabilityRunner)
+	runner, ok := activator.Runner.(ports.DuplexCapabilityRunner)
 	if !ok {
 		return fmt.Errorf("manual_activation_required: automatic native Kiro MCP lifecycle requires an ACP duplex process runner with capability preflight")
 	}
@@ -208,14 +209,14 @@ func (activator Activator) Deactivate(ctx context.Context, request domain.Deacti
 	case domain.ClientChatGPT:
 		return shared.RequireExternalUninstall(outcome, request.ExternalUninstalled, "uninstall the plugin in ChatGPT Plugins, then rerun remove with `--external-uninstalled` (also use the flag if it was never activated)"), nil
 	case domain.ClientKiro:
-		if len(kiroObjects(request.NativeObjects)) == 0 {
+		if len(kiro.NativeObjects(request.NativeObjects)) == 0 {
 			return shared.RequireExternalUninstall(outcome, request.ExternalUninstalled, "remove the legacy custom Power in Kiro, then rerun remove with `--external-uninstalled`"), nil
 		}
 		if !request.Confirmed {
 			outcome.UserActions = append(outcome.UserActions, "agentplugins will remove its managed Kiro skills and MCP entries automatically")
 			return outcome, nil
 		}
-		if err := deactivateKiroNative(ctx, request); err != nil {
+		if err := kiro.DeactivateNative(ctx, request); err != nil {
 			return outcome, err
 		}
 		outcome.ExternalRemovalComplete = true
@@ -347,9 +348,9 @@ func (activator Activator) Activate(ctx context.Context, request domain.Activati
 			return outcome, nil
 		}
 		if request.VerifyOnly {
-			err = verifyKiroNativeObjects(request.Client.ConfigRoot, request.Delivery.NativeObjects, false)
+			err = kiro.VerifyNativeObjects(request.Client.ConfigRoot, request.Delivery.NativeObjects, false)
 		} else {
-			err = activateKiroNative(ctx, request)
+			err = kiro.ActivateNative(ctx, request)
 		}
 		if err != nil {
 			return shared.FailedActivation(outcome, "repair the managed Kiro native configuration", err)
@@ -431,12 +432,12 @@ func (activator Activator) Activate(ctx context.Context, request domain.Activati
 			return outcome, nil
 		}
 		if request.VerifyOnly {
-			if err := verifyKiroNativeObjects(request.Client.ConfigRoot, request.Delivery.NativeObjects, false); err != nil {
+			if err := kiro.VerifyNativeObjects(request.Client.ConfigRoot, request.Delivery.NativeObjects, false); err != nil {
 				return shared.FailedActivation(outcome, "repair the managed Kiro skills and MCP configuration", err)
 			}
 			if shared.HasSupportedMCP(request.Plan.Components) {
 				if err := activator.verifyKiroMCP(ctx, request); err != nil {
-					if errors.Is(err, errKiroACPContractUnknown) {
+					if errors.Is(err, kiro.ErrACPContractUnknown) {
 						return manualKiroVerification(outcome, request), nil
 					}
 					return shared.FailedActivation(outcome, fmt.Sprintf("rerun structured Kiro ACP verification with `%s acp --agent-engine v3 --auth-method cli`", request.BackendExecutable), err)
@@ -446,12 +447,12 @@ func (activator Activator) Activate(ctx context.Context, request domain.Activati
 			outcome.Verification = domain.VerificationInstalled
 			return outcome, nil
 		}
-		if err := activateKiroNative(ctx, request); err != nil {
+		if err := kiro.ActivateNative(ctx, request); err != nil {
 			return shared.FailedActivation(outcome, "retry the managed Kiro native installation", err)
 		}
 		if shared.HasSupportedMCP(request.Plan.Components) {
 			if err := activator.verifyKiroMCP(ctx, request); err != nil {
-				if errors.Is(err, errKiroACPContractUnknown) {
+				if errors.Is(err, kiro.ErrACPContractUnknown) {
 					return manualKiroVerification(outcome, request), nil
 				}
 				return shared.FailedActivation(outcome, fmt.Sprintf("retry structured Kiro ACP verification with `%s acp --agent-engine v3 --auth-method cli`", request.BackendExecutable), err)
@@ -664,9 +665,9 @@ func (activator Activator) verifyClaude(ctx context.Context, request domain.Acti
 }
 
 func (activator Activator) verifyKiroMCP(ctx context.Context, request domain.ActivationRequest) error {
-	runner, ok := activator.Runner.(duplexCommandRunner)
+	runner, ok := activator.Runner.(ports.DuplexCommandRunner)
 	if !ok {
-		return fmt.Errorf("%w: the process runner does not support an ACP duplex exchange", errKiroACPContractUnknown)
+		return fmt.Errorf("%w: the process runner does not support an ACP duplex exchange", kiro.ErrACPContractUnknown)
 	}
 	var servers []string
 	for _, component := range request.Plan.Components {
@@ -674,7 +675,7 @@ func (activator Activator) verifyKiroMCP(ctx context.Context, request domain.Act
 			servers = append(servers, component.Name)
 		}
 	}
-	return verifyKiroACP(ctx, runner, request.BackendExecutable, request.Delivery.ActivePath, servers)
+	return kiro.VerifyACP(ctx, runner, request.BackendExecutable, request.Delivery.ActivePath, servers)
 }
 
 func (activator Activator) deactivateCopilot(ctx context.Context, request domain.DeactivationRequest) error {
@@ -1064,7 +1065,7 @@ func activationObservable(request domain.ActivationRequest, runner CommandRunner
 		if !shared.HasSupportedMCP(request.Plan.Components) {
 			return true
 		}
-		_, duplexAvailable := runner.(duplexCommandRunner)
+		_, duplexAvailable := runner.(ports.DuplexCommandRunner)
 		return duplexAvailable
 	default:
 		return false

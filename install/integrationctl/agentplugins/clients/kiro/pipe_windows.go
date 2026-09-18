@@ -1,6 +1,6 @@
 //go:build windows
 
-package providers
+package kiro
 
 import (
 	"fmt"
