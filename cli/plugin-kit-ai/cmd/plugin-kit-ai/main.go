@@ -10,13 +10,14 @@ import (
 	"github.com/777genius/plugin-kit-ai/cli/internal/authoring/project"
 	"github.com/777genius/plugin-kit-ai/cli/internal/authoringcli"
 	"github.com/777genius/plugin-kit-ai/cli/internal/exitx"
+	clientregistry "github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/all"
 )
 
 func main() {
 	if commands.IsEnabled() {
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 		defer stop()
-		app := commands.App{Projects: project.Service{Scratch: os.TempDir()}, Revision: commands.Revision}
+		app := commands.App{Projects: project.Service{Scratch: os.TempDir()}, Revision: commands.Revision, ClientRegistry: clientregistry.Default()}
 		build := commands.RootBuilder(authoringcli.NewPluginKitRoot)
 		if commands.IsRelease() {
 			app.PublicContract = true

@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/pathpolicy"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/all"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
@@ -24,10 +25,19 @@ func (planner completedPlanner) Plan(
 	})
 }
 
-// testPlanner completes a planner literal with the production path policy.
+// testPlanner completes a planner literal with the production path policy and
+// the full client registry.
 func testPlanner(base Planner) completedPlanner {
 	if base.Paths == nil {
 		base.Paths = pathpolicy.Policy{}
 	}
+	if base.Registry == nil {
+		base.Registry = all.Default()
+	}
 	return completedPlanner{base}
+}
+
+// testCompatibility completes the compatibility facade with the full registry.
+func testCompatibility(envelope domain.PackageEnvelope, ids []domain.ClientID) ([]ClientCompatibility, error) {
+	return Compatibility(all.Default(), envelope, ids)
 }

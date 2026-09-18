@@ -20,6 +20,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/cli/internal/authoring/report"
 	"github.com/777genius/plugin-kit-ai/cli/internal/authoring/scaffold"
 	"github.com/777genius/plugin-kit-ai/cli/internal/authoringcli"
+	clientregistry "github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/all"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/conformance"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/spf13/cobra"
@@ -168,7 +169,7 @@ func TestReviewInitCleanupFailurePrecedence(t *testing.T) {
 						}
 					}
 				} else {
-					a := commands.App{Projects: project.Service{Scratch: scratch}, Revision: "8d514ba723bf1c564ec1fbf92a3858f51d13e641"}
+					a := commands.App{ClientRegistry: clientregistry.Default(), Projects: project.Service{Scratch: scratch}, Revision: "8d514ba723bf1c564ec1fbf92a3858f51d13e641"}
 					var out, errout bytes.Buffer
 					err := a.Execute(fault, []string{"init", dest, "--template=skill", "--name=demo", "--description=A disposable review fixture.", "--format=json"}, authoringcli.Streams{Out: &out, Err: &errout}, authoringcli.NewPluginKitRoot)
 					var r report.Report

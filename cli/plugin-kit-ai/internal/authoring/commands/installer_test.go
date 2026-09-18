@@ -18,6 +18,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/loader"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/sourceacquisition"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/specregistry"
+	clientregistry "github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/all"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/usecase"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/usecasetest"
@@ -31,7 +32,7 @@ func TestGeneratedPackagesReachExistingInstallerPlanner(t *testing.T) {
 	if runtime.GOOS != "linux" && !(runtime.GOOS == "windows" && (runtime.GOARCH == "amd64" || runtime.GOARCH == "arm64")) {
 		t.Skip("writable native authoring requires Linux or Windows amd64/arm64")
 	}
-	author := commands.App{Projects: project.Service{Scratch: t.TempDir()}, Revision: baseline}
+	author := commands.App{ClientRegistry: clientregistry.Default(), Projects: project.Service{Scratch: t.TempDir()}, Revision: baseline}
 	registry, e := specregistry.New()
 	if e != nil {
 		t.Fatal(e)
@@ -62,7 +63,7 @@ func TestGeneratedPackagesReachExistingInstallerPlanner(t *testing.T) {
 			}
 			detector := &fixtureDetector{clients: clients}
 			scanner := &fixtureScanner{t: t}
-			app := agentpluginscli.App{UserHome: fixture, ManagedRoot: filepath.Join(fixture, "managed"), Detector: detector,
+			app := agentpluginscli.App{UserHome: fixture, ManagedRoot: filepath.Join(fixture, "managed"), Detector: detector, ClientRegistry: clientregistry.Default(),
 				StateStore: noEffectState{}, SourceAcquirer: sourceacquisition.Acquirer{TempRoot: t.TempDir()}, PackageLoader: packageLoader, NativePackageLoader: loader.OpenAILoader{Loader: packageLoader}, SecurityEvaluator: scanner,
 				Lifecycle: usecasetest.NewService(usecase.Service{Stager: noEffectStager{}, Activator: noEffectActivator{}}),
 			}

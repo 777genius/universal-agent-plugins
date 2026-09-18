@@ -16,11 +16,18 @@ func validateDirectoryResolvePurpose(request DirectoryResolveRequest) error {
 	if request.Purpose == "" {
 		return nil
 	}
-	if request.Purpose != DirectoryResolveContext7ChatGPTPreparation || request.Scope != ScopeUser ||
-		len(request.Targets) != 1 || request.Targets[0] != ClientChatGPT {
+	if request.Scope != ScopeUser || len(request.Targets) != 1 || !declaresDirectoryPreparation(request.Targets[0], request.Purpose) {
 		return fmt.Errorf("%w: invalid Context7 ChatGPT user-scope preparation purpose", ErrDirectoryIneligible)
 	}
 	return nil
+}
+
+// declaresDirectoryPreparation reports whether this client is the one the
+// bounded purpose was declared for. An unknown purpose matches no client, which
+// is how a purpose nobody declared is rejected.
+func declaresDirectoryPreparation(id ClientID, purpose DirectoryResolvePurpose) bool {
+	definition, ok := ClientDefinitionFor(id)
+	return ok && definition.DirectoryPreparationPurpose == purpose
 }
 
 func isContext7PreparationSource(distribution DirectoryDistribution, release DirectoryRelease) bool {

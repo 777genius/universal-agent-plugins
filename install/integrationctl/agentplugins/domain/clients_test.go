@@ -52,3 +52,24 @@ func TestNewClientsUsePreparedReadOnlyFoundation(t *testing.T) {
 		t.Fatalf("Gemini client definition = %+v", gemini)
 	}
 }
+
+// TestDirectoryPreparationPurposesAreDeclared keeps the table's bounded resolve
+// purposes joined to the constants the Directory eligibility rules compare
+// against. A typo here would silently declare a purpose nobody honors, and the
+// client would simply stop being eligible for preparation.
+func TestDirectoryPreparationPurposesAreDeclared(t *testing.T) {
+	known := map[DirectoryResolvePurpose]bool{DirectoryResolveContext7ChatGPTPreparation: true}
+	declared := 0
+	for _, definition := range ClientDefinitions() {
+		if definition.DirectoryPreparationPurpose == "" {
+			continue
+		}
+		declared++
+		if !known[definition.DirectoryPreparationPurpose] {
+			t.Errorf("client %q declares unknown resolve purpose %q", definition.ID, definition.DirectoryPreparationPurpose)
+		}
+	}
+	if declared != len(known) {
+		t.Fatalf("%d clients declare a preparation purpose, but %d purposes exist", declared, len(known))
+	}
+}

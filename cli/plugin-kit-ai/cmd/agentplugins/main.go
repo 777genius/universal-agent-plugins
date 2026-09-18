@@ -78,7 +78,7 @@ func main() {
 	if commands.IsEnabled() && commands.IsAuthorInvocation(os.Args[1:], agentpluginscli.NewRoot(agentpluginscli.App{Version: version})) {
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 		defer stop()
-		app := commands.App{Projects: project.Service{Scratch: os.TempDir()}, Revision: commands.Revision, MCPRuntime: true, Bootstrap: true, JSONMaintenance: true}
+		app := commands.App{Projects: project.Service{Scratch: os.TempDir()}, Revision: commands.Revision, ClientRegistry: clientregistry.Default(), MCPRuntime: true, Bootstrap: true, JSONMaintenance: true}
 		err := app.Execute(ctx, os.Args[1:], authoringcli.Streams{In: os.Stdin, Out: os.Stdout, Err: os.Stderr}, func(factories ...authoringcli.Factory) (*cobra.Command, error) {
 			// Construct the ENTIRE root and installer options on every invocation.
 			// Installer dependencies are deliberately unconfigured on this author route.
@@ -137,16 +137,17 @@ func run() error {
 	}
 	activator := providers.Activator{Runner: runner}
 	paths := pathpolicy.Policy{}
-	planner := clientplanner.Planner{ManagedRoot: filepath.Join(dataRoot, "managed"), Paths: paths, Detected: map[domain.ClientID]domain.DetectedClient{}}
+	// The composition root is the one place that decides which clients this
+	// binary knows about, so it is also the only place that names the full set.
+	clientRegistry := clientregistry.Default()
+	planner := clientplanner.Planner{ManagedRoot: filepath.Join(dataRoot, "managed"), Paths: paths, Registry: clientRegistry, Detected: map[domain.ClientID]domain.DetectedClient{}}
 	lifecycle := usecase.Service{
 		StateStore: v2Store, Paths: paths, Planner: planner, Targets: planner, Stager: stager, Activator: activator,
 		Lock: mutationLock, Kernel: transaction.Kernel{StateStore: v2Store, Directory: directoryManager},
 		NativeObserver: providers.NativeIdentityObserver{Stager: stager, Runner: runner}, PluginData: providers.PluginDataManager{Base: filepath.Join(dataRoot, "plugin-data")},
 	}
-	// The composition root is the one place that decides which clients this
-	// binary knows about, so it is also the only place that names the full set.
 	detector := clientdetect.NewOS(home)
-	detector.Registry = clientregistry.Default()
+	detector.Registry = clientRegistry
 	legacyStatePath := filepath.Join(home, ".plugin-kit-ai", "state.json")
 	migrator := statemigration.Migrator{
 		LegacyPath:     legacyStatePath,
@@ -163,6 +164,7 @@ func run() error {
 		LegacyLifecycle:     agentpluginscli.NewLegacyLifecycle(legacyStatePath),
 		LegacyStateLock:     locks.FileLock{BaseDir: filepath.Join(home, ".plugin-kit-ai", "locks")},
 		Detector:            detector,
+		ClientRegistry:      clientRegistry,
 		DirectoryClient:     directoryClient,
 		DiscoveryClient:     discoveryClient,
 		SourceAcquirer:      lazySourceAcquirer{dataRoot: dataRoot, acquirer: sourceacquisition.Acquirer{TempRoot: dataRoot}},

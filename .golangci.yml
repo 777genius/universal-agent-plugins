@@ -203,16 +203,19 @@ linters:
               desc: shared helpers are used by client packages and never use one
             - pkg: github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/windsurf
               desc: shared helpers are used by client packages and never use one
-        dispatchers-take-an-injected-registry:
-          # The generic dispatchers are handed a registry; they never assemble
-          # the default one. Importing clients/all here would link every adapter
-          # into any binary that merely detects or plans, which is the service
-          # locator the contract exists to avoid. Tests are exempt: building the
-          # full registry is exactly how they exercise a dispatcher.
+        libraries-take-an-injected-registry:
+          # Libraries are handed a registry; they never assemble the default
+          # one. Importing clients/all here would link every adapter into any
+          # binary that merely detects, plans or reads a project, which is the
+          # service locator the contract exists to avoid. Only a main may name
+          # the full set, so the binary that pays for it is the one that chose
+          # to. Tests are exempt: building the full registry is exactly how they
+          # exercise a dispatcher.
           files:
             - "**/install/integrationctl/agentplugins/providers/**"
             - "**/install/integrationctl/agentplugins/planner/**"
             - "**/install/integrationctl/agentplugins/adapters/clientdetect/**"
+            - "**/cli/plugin-kit-ai/internal/**"
             - "!$test"
           deny:
             - pkg: github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/all
@@ -244,7 +247,7 @@ linters:
       # tags match the target, so a run on one OS silently omits every *_linux.go
       # and *_windows.go file. The first generation happened on macOS and missed
       # six of them; CI lints on ubuntu and went red on the linux one.
-      # 174 files.
+      # 173 files.
       - path: ^cli/plugin-kit-ai/cmd/agentplugins/bootstrapgen/main\.go$
         linters: [funlen, gocyclo, gocognit]
         text: 'too many statements|cyclomatic complexity|cognitive complexity'
@@ -686,9 +689,6 @@ linters:
       - path: ^install/integrationctl/agentplugins/planner/compatibility\.go$
         linters: [funlen, gocyclo, gocognit]
         text: 'too many statements|cyclomatic complexity|cognitive complexity'
-      - path: ^install/integrationctl/agentplugins/planner/planner\.go$
-        linters: [revive, funlen, gocyclo, gocognit]
-        text: 'file length is|too many statements|cyclomatic complexity|cognitive complexity'
       - path: ^install/integrationctl/agentplugins/providers/activator\.go$
         linters: [revive, funlen, gocyclo, gocognit]
         text: 'file length is|too many statements|cyclomatic complexity|cognitive complexity'

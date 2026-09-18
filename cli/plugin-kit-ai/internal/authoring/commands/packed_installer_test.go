@@ -24,6 +24,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/loader"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/sourceacquisition"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/specregistry"
+	clientregistry "github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/all"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/usecase"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/usecasetest"
@@ -159,7 +160,7 @@ func packedPlanner(t *testing.T, p packedProject) []map[string]any {
 	detector := &fixtureDetector{clients: clients}
 	sourceBefore, fixtureBefore, scratchBefore := packedTree(t, p.Source), packedTree(t, fixture), packedTree(t, scratch)
 	scanner := &packedScanner{fixtureScanner: fixtureScanner{t: t}, source: p.Source, scratch: scratch, tree: sourceBefore}
-	app := agentpluginscli.App{UserHome: fixture, ManagedRoot: filepath.Join(fixture, "managed"), Detector: detector, StateStore: noEffectState{}, SourceAcquirer: sourceacquisition.Acquirer{TempRoot: scratch}, PackageLoader: packageLoader, NativePackageLoader: loader.OpenAILoader{Loader: packageLoader}, SecurityEvaluator: scanner, Lifecycle: usecasetest.NewService(usecase.Service{Stager: noEffectStager{}, Activator: noEffectActivator{}})}
+	app := agentpluginscli.App{UserHome: fixture, ManagedRoot: filepath.Join(fixture, "managed"), Detector: detector, ClientRegistry: clientregistry.Default(), StateStore: noEffectState{}, SourceAcquirer: sourceacquisition.Acquirer{TempRoot: scratch}, PackageLoader: packageLoader, NativePackageLoader: loader.OpenAILoader{Loader: packageLoader}, SecurityEvaluator: scanner, Lifecycle: usecasetest.NewService(usecase.Service{Stager: noEffectStager{}, Activator: noEffectActivator{}})}
 	var results []map[string]any
 	for _, client := range clients {
 		var out, stderr bytes.Buffer
@@ -224,7 +225,7 @@ func TestPackedInstallerSourceHarness(t *testing.T) {
 	if (runtime.GOOS != "linux" && runtime.GOOS != "windows") || (runtime.GOARCH != "amd64" && runtime.GOARCH != "arm64") {
 		t.Skip("source harness requires supported Linux/Windows amd64/arm64 host")
 	}
-	author := commands.App{Projects: project.Service{Scratch: t.TempDir()}, Revision: publicRevision, PublicContract: true}
+	author := commands.App{ClientRegistry: clientregistry.Default(), Projects: project.Service{Scratch: t.TempDir()}, Revision: publicRevision, PublicContract: true}
 	for _, lane := range []string{"skill", "mcp-remote", "mcp-stdio", "hybrid-remote", "hybrid-stdio"} {
 		t.Run(lane, func(t *testing.T) {
 			source := filepath.Join(t.TempDir(), lane)
@@ -280,7 +281,7 @@ func TestPackedInstallerAssessmentBoundaries(t *testing.T) {
 	for _, fail := range []bool{true, false} {
 		t.Run(fmt.Sprintf("assessment-error-%t", fail), func(t *testing.T) {
 			source := filepath.Join(t.TempDir(), "demo")
-			author := commands.App{Projects: project.Service{Scratch: t.TempDir()}, Revision: publicRevision, PublicContract: true}
+			author := commands.App{ClientRegistry: clientregistry.Default(), Projects: project.Service{Scratch: t.TempDir()}, Revision: publicRevision, PublicContract: true}
 			if _, code, out := publicRun(t, author, []string{"init", source, "--name=demo", "--template=skill", "--format=json"}, false); code != 0 {
 				t.Fatal(out)
 			}
@@ -292,7 +293,7 @@ func TestPackedInstallerAssessmentBoundaries(t *testing.T) {
 			}
 			detector := &fixtureDetector{clients: []domain.DetectedClient{{ClientID: domain.ClientCodex, Status: domain.DetectionDetected, ConfigRoot: fixture}}}
 			scanner := &boundaryAssessment{packedScanner: &packedScanner{fixtureScanner: fixtureScanner{t: t}, source: source, scratch: scratch, tree: beforeSource}, fail: fail}
-			app := agentpluginscli.App{UserHome: fixture, ManagedRoot: filepath.Join(fixture, "managed"), Detector: detector, StateStore: noEffectState{},
+			app := agentpluginscli.App{UserHome: fixture, ManagedRoot: filepath.Join(fixture, "managed"), Detector: detector, ClientRegistry: clientregistry.Default(), StateStore: noEffectState{},
 				SourceAcquirer: sourceacquisition.Acquirer{TempRoot: scratch}, PackageLoader: loader.Loader{Registry: registry}, NativePackageLoader: loader.OpenAILoader{Loader: loader.Loader{Registry: registry}}, SecurityEvaluator: scanner,
 				Lifecycle: usecasetest.NewService(usecase.Service{Stager: noEffectStager{}, Activator: noEffectActivator{}})}
 			var out, stderr bytes.Buffer
