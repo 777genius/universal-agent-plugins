@@ -22,7 +22,7 @@ func TestSignedChatGPTAppBindingAuthorizesPreparationWithoutClaimingRemoteVerifi
 				AppBinding: &domain.CatalogAppBinding{AppKey: "docs", ID: "asdk_app_docs_123", MCPServer: "docs", MCPURL: "https://example.test/mcp"}},
 		}},
 	}
-	plan, err := (Planner{ManagedRoot: t.TempDir()}).Plan(context.Background(), envelope, domain.DetectedClient{ClientID: domain.ClientChatGPT}, domain.ScopeUser, "remote-mcp-0123456789ab")
+	plan, err := testPlanner(Planner{ManagedRoot: t.TempDir()}).Plan(context.Background(), envelope, domain.DetectedClient{ClientID: domain.ClientChatGPT}, domain.ScopeUser, "remote-mcp-0123456789ab")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -31,7 +31,7 @@ func TestSignedChatGPTAppBindingAuthorizesPreparationWithoutClaimingRemoteVerifi
 	}
 
 	envelope.CatalogEvidence.Compatibility["chatgpt"] = domain.CatalogCompatibility{Package: "projected", Verification: "tested", Authentication: domain.AuthenticationRequirementRequired}
-	unsignedPlan, err := (Planner{ManagedRoot: t.TempDir()}).Plan(context.Background(), envelope, domain.DetectedClient{ClientID: domain.ClientChatGPT}, domain.ScopeUser, "remote-mcp-0123456789ab")
+	unsignedPlan, err := testPlanner(Planner{ManagedRoot: t.TempDir()}).Plan(context.Background(), envelope, domain.DetectedClient{ClientID: domain.ClientChatGPT}, domain.ScopeUser, "remote-mcp-0123456789ab")
 	if err != nil {
 		t.Fatal(err)
 	}

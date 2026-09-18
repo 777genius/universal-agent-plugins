@@ -36,9 +36,7 @@ type NativeIdentityObserver struct {
 	DiscoveryTimeout time.Duration
 }
 
-type treeCommandRunner interface {
-	RunWithTreeExitGrace(context.Context, legacyports.Command, time.Duration) (legacyports.CommandResult, error)
-}
+type treeCommandRunner = ports.TreeCommandRunner
 
 const defaultNativeDiscoveryTimeout = 15 * time.Second
 

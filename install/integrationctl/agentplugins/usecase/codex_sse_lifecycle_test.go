@@ -17,16 +17,17 @@ import (
 // stager, transaction and receipts. No client binary or network is invoked.
 type historicalCodexSSEPlanner struct{ ports.DeliveryPlanner }
 
-func (p historicalCodexSSEPlanner) Plan(ctx context.Context, e domain.PackageEnvelope, c domain.DetectedClient, s domain.InstallScope, id string) (domain.DeliveryPlan, error) {
-	planning := e
-	planning.MCP.Servers = make(map[string]domain.MCPServer, len(e.MCP.Servers))
-	for name, server := range e.MCP.Servers {
+func (p historicalCodexSSEPlanner) Plan(ctx context.Context, request domain.PlanRequest) (domain.DeliveryPlan, error) {
+	planning := request.Envelope
+	planning.MCP.Servers = make(map[string]domain.MCPServer, len(request.Envelope.MCP.Servers))
+	for name, server := range request.Envelope.MCP.Servers {
 		if server.Type == "sse" {
 			server.Type = "streamable-http"
 		}
 		planning.MCP.Servers[name] = server
 	}
-	return p.DeliveryPlanner.Plan(ctx, planning, c, s, id)
+	request.Envelope = planning
+	return p.DeliveryPlanner.Plan(ctx, request)
 }
 
 func codexSSEInput(t *testing.T, client domain.DetectedClient, healthy bool) AddInput {

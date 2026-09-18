@@ -34,10 +34,14 @@ func TestLayerBoundaries(t *testing.T) {
 		{pkg: agentplugins + "/domain", allow: nil},
 		{pkg: agentplugins + "/ports", tests: true, allow: []string{
 			modulePath + "/install/integrationctl/agentplugins/domain",
+			// ports/contracttest verifies the port interfaces, so it names them.
+			modulePath + "/install/integrationctl/agentplugins/ports",
 			legacyPortsPath,
 		}},
 		{pkg: agentplugins + "/usecase", deny: []string{
+			modulePath + "/install/integrationctl/adapters",
 			modulePath + "/install/integrationctl/agentplugins/adapters",
+			modulePath + "/install/integrationctl/agentplugins/planner",
 			modulePath + "/install/integrationctl/agentplugins/providers",
 			modulePath + "/install/integrationctl/agentplugins/clients",
 		}},

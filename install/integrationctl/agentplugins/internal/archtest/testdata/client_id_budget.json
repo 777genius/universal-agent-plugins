@@ -5,7 +5,7 @@
     "install/integrationctl/agentplugins/adapters/clientdetect": 22,
     "install/integrationctl/agentplugins/adapters/directoryv1": 1,
     "install/integrationctl/agentplugins/planner": 44,
-    "install/integrationctl/agentplugins/providers": 79,
-    "install/integrationctl/agentplugins/usecase": 40
+    "install/integrationctl/agentplugins/providers": 88,
+    "install/integrationctl/agentplugins/usecase": 31
   }
 }

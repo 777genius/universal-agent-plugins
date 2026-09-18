@@ -45,7 +45,10 @@ lint-baseline-check:
 	bash ./scripts/check-lint-baseline.sh "$(LINT_BASE)"
 
 test-core:
-	$(CORE_TEST_GIT_ENV) go test -count=1 -timeout=$(CORE_TEST_TIMEOUT) ./install/integrationctl/agentplugins/...
+	# adapters/pathpolicy is outside the agentplugins tree but holds the only
+	# ports.PathPolicy implementation and its contract harness, so the fast gate
+	# has to run it too.
+	$(CORE_TEST_GIT_ENV) go test -count=1 -timeout=$(CORE_TEST_TIMEOUT) ./install/integrationctl/agentplugins/... ./install/integrationctl/adapters/pathpolicy/...
 	cd cli/plugin-kit-ai && $(CORE_TEST_GIT_ENV) go test -count=1 -timeout=$(CORE_TEST_TIMEOUT) ./internal/agentpluginscli/... ./cmd/agentplugins/...
 
 test:

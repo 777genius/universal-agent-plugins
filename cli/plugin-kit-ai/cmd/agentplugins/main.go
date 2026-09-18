@@ -23,6 +23,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/cli/internal/terminalprompts"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/dirswap"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/locks"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/pathpolicy"
 	processadapter "github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/process"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/clientdetect"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/directoryv1"
@@ -134,9 +135,10 @@ func run() error {
 		stager.LauncherSource, _ = managedstdio.NewSource(executable, version)
 	}
 	activator := providers.Activator{Runner: runner}
-	planner := clientplanner.Planner{ManagedRoot: filepath.Join(dataRoot, "managed"), Detected: map[domain.ClientID]domain.DetectedClient{}}
+	paths := pathpolicy.Policy{}
+	planner := clientplanner.Planner{ManagedRoot: filepath.Join(dataRoot, "managed"), Paths: paths, Detected: map[domain.ClientID]domain.DetectedClient{}}
 	lifecycle := usecase.Service{
-		StateStore: v2Store, Planner: planner, Targets: planner, Stager: stager, Activator: activator,
+		StateStore: v2Store, Paths: paths, Planner: planner, Targets: planner, Stager: stager, Activator: activator,
 		Lock: mutationLock, Kernel: transaction.Kernel{StateStore: v2Store, Directory: directoryManager},
 		NativeObserver: providers.NativeIdentityObserver{Stager: stager, Runner: runner}, PluginData: providers.PluginDataManager{Base: filepath.Join(dataRoot, "plugin-data")},
 	}

@@ -22,7 +22,7 @@ func TestCodexTransportSelectionPreservesSiblings(t *testing.T) {
 				e.MCP.Servers["http"] = domain.MCPServer{Type: "streamable-http"}
 				e.MCP.Servers["stdio"] = domain.MCPServer{Type: "stdio"}
 			}
-			plan, err := (Planner{ManagedRoot: filepath.Join(root, "managed")}).Plan(context.Background(), e, detectedClient(domain.ClientCodex, filepath.Join(root, "config")), domain.ScopeUser, "demo-0123456789ab")
+			plan, err := testPlanner(Planner{ManagedRoot: filepath.Join(root, "managed")}).Plan(context.Background(), e, detectedClient(domain.ClientCodex, filepath.Join(root, "config")), domain.ScopeUser, "demo-0123456789ab")
 			if err != nil {
 				t.Fatal(err)
 			}

@@ -122,6 +122,10 @@ linters:
           allow:
             - "$gostd"
             - "github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+            # ports/contracttest holds the executable port contracts, so it has
+            # to name the interfaces it verifies. The rule still covers it: it
+            # may not reach for an adapter or a use case.
+            - "github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
             # DELIBERATE EXCEPTION. install/integrationctl/ports holds Command and
             # CommandResult: plain data types with no behavior and no I/O, already
             # the basis of providers.CommandRunner (activator.go) and
@@ -132,9 +136,18 @@ linters:
             - "github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
         usecase-through-ports: # deny list grows as violations are removed
           files: ["**/install/integrationctl/agentplugins/usecase/**", "!$test"]
+          # Deny list, not allow list: adding an `allow` key here would turn the
+          # rule into a whitelist and reject every import not named in it,
+          # including the standard library. agentplugins/pathcontract is a
+          # legitimate use case dependency and stays permitted because no deny
+          # prefix covers it.
           deny:
+            - pkg: github.com/777genius/plugin-kit-ai/install/integrationctl/adapters
+              desc: usecase reaches the path policy through ports.PathPolicy, not the adapter
             - pkg: github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters
               desc: usecase depends on ports, not adapters
+            - pkg: github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/planner
+              desc: usecase plans through ports.DeliveryPlanner, not the planner package
             - pkg: github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/providers
               desc: usecase depends on ports, not providers
             - pkg: github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients

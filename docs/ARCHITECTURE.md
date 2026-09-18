@@ -34,28 +34,48 @@ Dependencies point inward.
 |-------|---------|------------|----------------|
 | Domain | `agentplugins/domain` | stdlib only | yes, `domain-stdlib-only` |
 | Ports | `agentplugins/ports` | stdlib, `domain`, `install/integrationctl/ports` (see below) | yes, `ports-only-domain` |
-| Use cases | `agentplugins/usecase` | stdlib, `domain`, `ports`, `transaction`, `pathcontract` | partly, `usecase-through-ports` |
+| Use cases | `agentplugins/usecase` | stdlib, `domain`, `ports`, `transaction`, `pathcontract`, `install/integrationctl/ports` for the legacy lock (see below) | yes, `usecase-through-ports` |
 | Adapters | `agentplugins/{adapters,providers,planner}` | the layers above | no rule yet |
 | CLI | `agentpluginscli` | the public facades of the layers above | no rule yet |
 | Composition root | `cmd/agentplugins` | everything, and nothing imports it | no rule yet |
 
 The "Enforced today" column is deliberate: the middle column is the target, and
 only the first three rows are currently checked by `depguard` in `.golangci.yml`.
-`usecase-through-ports` is partial - it forbids `adapters`, `providers` and
-`clients`, but `usecase` still legitimately imports `planner`, `pathpolicy` and
-`install/integrationctl/ports`. Those imports are removed, and the deny list
-extended, when the ports and DIP work lands. The adapter, CLI and composition
-root rows have no rule at all yet.
+`usecase-through-ports` now forbids `adapters` (both the `agentplugins` ones and
+`install/integrationctl/adapters`), `providers`, `planner` and `clients`; the use
+case reaches path containment through `ports.PathPolicy` and planning through
+`ports.DeliveryPlanner`. It stays a deny list on purpose: adding an `allow` key
+would turn the rule into a whitelist and reject every import not named in it,
+including the standard library. The adapter, CLI and composition root rows have
+no rule at all yet.
 
 ### Accepted exceptions
 
 **`ports` may import `install/integrationctl/ports`.** That package holds
 `Command` and `CommandResult`: plain data types with no behavior and no I/O, and
-`providers.CommandRunner` and `treeCommandRunner` are already defined on top of
-them. Their runtime implementation, `adapters/process.OS`, stays an adapter and
-is not covered by the exception. Duplicating the two types into `domain` would
-create a second source of truth and force a conversion on every call, which costs
-more than the formal purity is worth.
+`ports.CommandRunner`, `ports.TreeCommandRunner`, `ports.DuplexCommandRunner` and
+`ports.DuplexCapabilityRunner` are defined on top of them. Their runtime
+implementation, `adapters/process.OS`, stays an adapter and is not covered by the
+exception. Duplicating the two types into `domain` would create a second source of
+truth and force a conversion on every call, which costs more than the formal
+purity is worth.
+
+**`usecase.Service.LegacyLock` is typed `install/integrationctl/ports.LockManager`.** This
+one is not the data-only exception above: `LockManager` is a behavioural
+interface, so the use case does name a package outside its layer. It is the
+remaining edge of the pre-refactor installer that still owns the lock, and it is
+listed here rather than quietly excluded, because the deny list permits it only
+by not mentioning it.
+
+**`ports.PathPolicy` has exactly one implementation.** Inverting path
+containment into an interface makes a permissive stand-in possible for the first
+time, and a stand-in that accepts a symlinked or escaping path removes the last
+check before a destructive operation. `adapters/pathpolicy.Policy` is the only
+implementation; `internal/archtest` fails the build on a second type that carries
+the whole method set, in test files too, and any candidate has to pass
+`ports/contracttest.RunPathPolicy`. `usecase.Service.Paths` and `planner.Planner.Paths`
+are required with no default, so a caller that forgets to wire one fails fast
+instead of running with weaker rules than it thinks.
 
 ### Size limits
 

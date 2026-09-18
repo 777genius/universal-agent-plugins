@@ -2,19 +2,25 @@ package planner
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"sort"
 	"strings"
 
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/pathpolicy"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
 )
 
 type Planner struct {
 	ManagedRoot string
-	Detected    map[domain.ClientID]domain.DetectedClient
+	Paths       ports.PathPolicy
+	// Detected is the fallback surface map for callers that do not yet pass one
+	// in the request. It is read only when domain.PlanRequest.Detected is nil.
+	Detected map[domain.ClientID]domain.DetectedClient
 }
+
+var errPathPolicyRequired = errors.New("planner path policy is required")
 
 // ChatGPTAppBindingAction describes registration and package-author responsibilities.
 const ChatGPTAppBindingAction = "this package is not ready for ChatGPT. Connect its remote MCP server in ChatGPT Plugins developer mode; full plugin installation also needs the publisher's registered connection mapping (.app.json). You do not need to create this file. Setup: https://developers.openai.com/plugins/build/plugins"
@@ -40,17 +46,33 @@ func DetectedPhysicalClient(bindingClient domain.ClientID, detected map[domain.C
 	return client, ok && client.Status == domain.DetectionDetected
 }
 
-func (planner Planner) Plan(
-	ctx context.Context,
-	envelope domain.PackageEnvelope,
-	client domain.DetectedClient,
-	scope domain.InstallScope,
-	physicalArtifactID string,
-) (domain.DeliveryPlan, error) {
+// Plan resolves the request into a delivery plan and applies its install
+// intent, so a caller never has to remember the second step. An empty intent is
+// the automatic one and leaves the plan unchanged.
+func (planner Planner) Plan(ctx context.Context, request domain.PlanRequest) (domain.DeliveryPlan, error) {
+	if planner.Paths == nil {
+		return domain.DeliveryPlan{}, errPathPolicyRequired
+	}
+	if request.Detected != nil {
+		planner.Detected = request.Detected
+	}
+	plan, err := planner.plan(ctx, request)
+	if err != nil {
+		return plan, err
+	}
+	if err := ApplyInstallIntent(&plan, request.InstallIntent); err != nil {
+		return plan, err
+	}
+	return plan, nil
+}
+
+func (planner Planner) plan(ctx context.Context, request domain.PlanRequest) (domain.DeliveryPlan, error) {
+	envelope, client := request.Envelope, request.Client
+	scope, physicalArtifactID := request.Scope, request.PhysicalArtifactID
 	if err := ctx.Err(); err != nil {
 		return domain.DeliveryPlan{}, err
 	}
-	if err := pathpolicy.ValidateLeafID(physicalArtifactID); err != nil {
+	if err := planner.Paths.ValidateLeafID(physicalArtifactID); err != nil {
 		return domain.DeliveryPlan{}, fmt.Errorf("invalid physical artifact id: %w", err)
 	}
 	capabilities, ok := Capabilities(client.ClientID)
@@ -360,10 +382,13 @@ func (planner Planner) ResolveTarget(
 	scope domain.InstallScope,
 	physicalArtifactID string,
 ) (domain.DeliveryTarget, error) {
+	if planner.Paths == nil {
+		return domain.DeliveryTarget{}, errPathPolicyRequired
+	}
 	if err := ctx.Err(); err != nil {
 		return domain.DeliveryTarget{}, err
 	}
-	if err := pathpolicy.ValidateLeafID(physicalArtifactID); err != nil {
+	if err := planner.Paths.ValidateLeafID(physicalArtifactID); err != nil {
 		return domain.DeliveryTarget{}, fmt.Errorf("invalid physical artifact id: %w", err)
 	}
 	capabilities, ok := Capabilities(client.ClientID)
@@ -378,7 +403,7 @@ func (planner Planner) ResolveTarget(
 		return domain.DeliveryTarget{}, err
 	}
 	activePath := filepath.Join(targetRoot, physicalArtifactID)
-	if err := pathpolicy.RequireContainedChild(targetRoot, activePath); err != nil {
+	if err := planner.Paths.RequireContainedChild(targetRoot, activePath); err != nil {
 		return domain.DeliveryTarget{}, fmt.Errorf("unsafe client target path: %w", err)
 	}
 	return domain.DeliveryTarget{TargetAnchor: targetAnchor, TargetRoot: targetRoot, ActivePath: activePath}, nil
@@ -390,6 +415,9 @@ func Capabilities(clientID domain.ClientID) (domain.ClientCapabilities, bool) {
 }
 
 func (planner Planner) targetRoot(client domain.DetectedClient, mode domain.PackageMode) (string, string, error) {
+	if planner.Paths == nil {
+		return "", "", errPathPolicyRequired
+	}
 	var anchor, root string
 	if client.ClientID == domain.ClientClaude && mode == domain.PackageProjection {
 		if strings.TrimSpace(client.ConfigRoot) == "" {
@@ -419,7 +447,7 @@ func (planner Planner) targetRoot(client domain.DetectedClient, mode domain.Pack
 		return "", "", err
 	}
 	absoluteAnchor, absolute = filepath.Clean(absoluteAnchor), filepath.Clean(absolute)
-	if err := pathpolicy.RequireContainedChild(absoluteAnchor, absolute); err != nil {
+	if err := planner.Paths.RequireContainedChild(absoluteAnchor, absolute); err != nil {
 		return "", "", fmt.Errorf("unsafe client target root: %w", err)
 	}
 	return absoluteAnchor, absolute, nil

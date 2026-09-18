@@ -26,10 +26,12 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/statev2"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	clientplanner "github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/planner"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/plannertest"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/providers"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/transaction"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/usecase"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/usecasetest"
 	legacyports "github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
 	"github.com/spf13/cobra"
 )
@@ -2985,11 +2987,11 @@ func newCLIFixture(t *testing.T, clients []domain.DetectedClient) cliFixture {
 	packageLoader := loader.Loader{Registry: registry}
 	managedRoot := filepath.Join(root, "data", "managed")
 	stager := providers.Stager{}
-	planner := clientplanner.Planner{ManagedRoot: managedRoot, Detected: map[domain.ClientID]domain.DetectedClient{}}
+	planner := plannertest.NewPlanner(clientplanner.Planner{ManagedRoot: managedRoot, Detected: map[domain.ClientID]domain.DetectedClient{}})
 	mutationLock := processlock.Lock{Path: filepath.Join(root, "data", "mutation.lock")}
 	directory := dirswap.Manager{JournalDir: operations}
-	lifecycle := usecase.Service{StateStore: store, Planner: planner, Targets: planner, Stager: stager, Activator: providers.Activator{}, Lock: mutationLock,
-		Kernel: transaction.Kernel{StateStore: store, Directory: directory}, NativeObserver: fixtureNativeObserver{}, PluginData: providers.PluginDataManager{Base: filepath.Join(root, "data", "plugin-data")}}
+	lifecycle := usecasetest.NewService(usecase.Service{StateStore: store, Planner: planner, Targets: planner, Stager: stager, Activator: providers.Activator{}, Lock: mutationLock,
+		Kernel: transaction.Kernel{StateStore: store, Directory: directory}, NativeObserver: fixtureNativeObserver{}, PluginData: providers.PluginDataManager{Base: filepath.Join(root, "data", "plugin-data")}})
 	return cliFixture{
 		root: root, store: store, operations: operations,
 		app: App{

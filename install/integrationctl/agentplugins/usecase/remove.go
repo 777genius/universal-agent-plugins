@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/pathpolicy"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/transaction"
 )
@@ -39,7 +38,7 @@ type RemoveResult struct {
 }
 
 func (service Service) Remove(ctx context.Context, input RemoveInput) (RemoveResult, error) {
-	if service.StateStore == nil || service.Targets == nil || service.Stager == nil || service.Activator == nil {
+	if service.StateStore == nil || service.Paths == nil || service.Targets == nil || service.Stager == nil || service.Activator == nil {
 		return RemoveResult{}, fmt.Errorf("agentplugins service dependencies are incomplete")
 	}
 	release, err := service.beginMutation(ctx, input.DryRun, input.Confirmed)
@@ -133,7 +132,7 @@ func (service Service) Remove(ctx context.Context, input RemoveInput) (RemoveRes
 	if err != nil {
 		return result, fmt.Errorf("resolve managed removal target: %w", err)
 	}
-	if err := pathpolicy.RequireExactPath(target.ActivePath, client.TargetLocator); err != nil {
+	if err := service.Paths.RequireExactPath(target.ActivePath, client.TargetLocator); err != nil {
 		return result, fmt.Errorf("refuse removal from untrusted persisted target: %w", err)
 	}
 	if err := service.Stager.Verify(ctx, client.TargetLocator, expectedDigest); err != nil {

@@ -7,6 +7,7 @@ import (
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/usecase"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/usecasetest"
 )
 
 func TestDoctorNativeProjectionVerificationIsExactReadOnlyAndFailClosed(t *testing.T) {
@@ -19,7 +20,7 @@ func TestDoctorNativeProjectionVerificationIsExactReadOnlyAndFailClosed(t *testi
 				NativeObjects: []domain.NativeObjectOwnership{{ObjectID: "native:demo", Kind: "owned_native_projection", LogicalName: "demo", ManagedDigest: "sha256:native"}},
 			}
 			target := domain.DeliveryTarget{TargetRoot: "/managed", ActivePath: "/managed/demo"}
-			findings := checkNativeProjectionIntegrity(context.Background(), App{Lifecycle: usecase.Service{Activator: activator}},
+			findings := checkNativeProjectionIntegrity(context.Background(), App{Lifecycle: usecasetest.NewService(usecase.Service{Activator: activator})},
 				domain.DetectedClient{ClientID: clientID, Status: domain.DetectionDetected, ConfigRoot: "/client-config"},
 				target, installation, binding, "sha256:package")
 
@@ -40,7 +41,7 @@ func TestDoctorNativeProjectionVerificationIsExactReadOnlyAndFailClosed(t *testi
 
 func TestDoctorNativeProjectionWithoutConfigVisibilityIsInconclusive(t *testing.T) {
 	activator := &doctorProjectionActivator{}
-	findings := checkNativeProjectionIntegrity(context.Background(), App{Lifecycle: usecase.Service{Activator: activator}},
+	findings := checkNativeProjectionIntegrity(context.Background(), App{Lifecycle: usecasetest.NewService(usecase.Service{Activator: activator})},
 		domain.DetectedClient{ClientID: domain.ClientGemini, Status: domain.DetectionDetected}, domain.DeliveryTarget{},
 		domain.Installation{InstallationID: "installation-id", DeclaredName: "demo"},
 		domain.ClientBinding{ClientID: string(domain.ClientGemini), NativeObjects: []domain.NativeObjectOwnership{{Kind: "owned_native_projection"}}}, "sha256:package")

@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/pathpolicy"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
 	"strings"
@@ -48,7 +47,7 @@ func (service Service) preflightTargetComponents(ctx context.Context, input AddI
 	if err != nil {
 		return err
 	}
-	if err := pathpolicy.RequireExactPath(target.ActivePath, prior.TargetLocator); err != nil {
+	if err := service.Paths.RequireExactPath(target.ActivePath, prior.TargetLocator); err != nil {
 		return fmt.Errorf("untrusted persisted target while reading managed MCP selection: %w", err)
 	}
 	names, err := reader.ManagedMCPNames(ctx, client.ClientID, prior.TargetLocator, managedDigest(*prior))

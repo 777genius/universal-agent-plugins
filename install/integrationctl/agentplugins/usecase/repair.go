@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/pathpolicy"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/transaction"
@@ -26,7 +25,7 @@ func (service Service) Repair(ctx context.Context, input AddInput) (AddResult, e
 	if err := validateOperationOrigin(input.OriginMode, input.DirectoryResolution); err != nil {
 		return AddResult{}, err
 	}
-	if service.StateStore == nil || service.Planner == nil || service.Targets == nil || service.Stager == nil {
+	if service.StateStore == nil || service.Paths == nil || service.Planner == nil || service.Targets == nil || service.Stager == nil {
 		return AddResult{}, fmt.Errorf("agentplugins repair dependencies are incomplete")
 	}
 	if input.ReleaseRevoked && normalizedOriginMode(input.OriginMode) == domain.OriginModeDirectory {
@@ -107,7 +106,7 @@ func (service Service) Repair(ctx context.Context, input AddInput) (AddResult, e
 	if err != nil {
 		return result, fmt.Errorf("resolve managed repair target: %w", err)
 	}
-	if err := pathpolicy.RequireExactPath(target.ActivePath, client.TargetLocator); err != nil {
+	if err := service.Paths.RequireExactPath(target.ActivePath, client.TargetLocator); err != nil {
 		return result, fmt.Errorf("refuse repair of untrusted persisted target: %w", err)
 	}
 	expectedDigest := managedDigest(client)

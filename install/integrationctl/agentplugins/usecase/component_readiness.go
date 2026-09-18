@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/pathcontract"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -12,12 +13,6 @@ import (
 	"strings"
 	"syscall"
 )
-
-type dataPathPreflighter interface {
-	PreflightDataPath(string) (string, bool, error)
-}
-
-type managedStdioPreflighter interface{ PreflightManagedStdio(string) error }
 
 // Readiness changes the selected plan, never source bytes or portable validity.
 // Existing installations are retained atomically on local unavailability.
@@ -32,7 +27,7 @@ func (service Service) preflightComponents(envelope domain.PackageEnvelope, plan
 		var failure *domain.ComponentReadinessError
 		if plan.ClientID == domain.ClientWindsurf || plan.ClientID == domain.ClientClaude {
 			if !helperChecked {
-				if checker, ok := service.Stager.(managedStdioPreflighter); ok {
+				if checker, ok := service.Stager.(ports.ManagedStdioPreflighter); ok {
 					helperErr = checker.PreflightManagedStdio(envelope.SnapshotRoot)
 				}
 				helperChecked = true
@@ -44,7 +39,7 @@ func (service Service) preflightComponents(envelope domain.PackageEnvelope, plan
 		if failure == nil {
 			dataRoot := ""
 			if strings.Contains(authoredPATH(server.Decoded["env"]), "${PLUGIN_DATA}") {
-				if checker, ok := service.PluginData.(dataPathPreflighter); ok {
+				if checker, ok := service.PluginData.(ports.DataPathPreflighter); ok {
 					var err error
 					dataRoot, _, err = checker.PreflightDataPath(plan.PhysicalArtifactID)
 					if err != nil {
@@ -60,7 +55,7 @@ func (service Service) preflightComponents(envelope domain.PackageEnvelope, plan
 				cwd, _ := server.Decoded["cwd"].(string)
 				parsed, _ := pathcontract.ParseCWD(cwd)
 				if parsed.Anchor == pathcontract.Data {
-					checker, ok := service.PluginData.(dataPathPreflighter)
+					checker, ok := service.PluginData.(ports.DataPathPreflighter)
 					if !ok {
 						failure = &domain.ComponentReadinessError{Code: "stdio_data_unavailable", Message: "readonly PLUGIN_DATA readiness is unavailable"}
 					} else {

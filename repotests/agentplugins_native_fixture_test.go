@@ -15,6 +15,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/specregistry"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/planner"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/plannertest"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -542,7 +543,12 @@ func TestAgentpluginsNativeFixtureAdmission(t *testing.T) {
 			t.Fatalf("fixture admission: %+v", d)
 		}
 	}
-	plan, err := (planner.Planner{ManagedRoot: filepath.Join(f.Root, "managed")}).Plan(context.Background(), envelope, domain.DetectedClient{ClientID: domain.ClientCodex, Status: domain.DetectionDetected, ConfigRoot: f.CodexHome}, domain.ScopeUser, "native-proof-0123456789ab")
+	plan, err := plannertest.NewPlanner(planner.Planner{ManagedRoot: filepath.Join(f.Root, "managed")}).Plan(context.Background(), domain.PlanRequest{
+		Envelope:           envelope,
+		Client:             domain.DetectedClient{ClientID: domain.ClientCodex, Status: domain.DetectionDetected, ConfigRoot: f.CodexHome},
+		Scope:              domain.ScopeUser,
+		PhysicalArtifactID: "native-proof-0123456789ab",
+	})
 	if err != nil {
 		t.Fatal(err)
 	}

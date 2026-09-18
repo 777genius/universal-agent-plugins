@@ -143,7 +143,7 @@ func (service Service) applyGroup(ctx context.Context, input GroupInput, replace
 	if len(input.Targets) == 0 {
 		return GroupResult{}, fmt.Errorf("at least one target is required")
 	}
-	if service.StateStore == nil || service.Planner == nil || service.Stager == nil || service.Activator == nil {
+	if service.StateStore == nil || service.Paths == nil || service.Planner == nil || service.Stager == nil || service.Activator == nil {
 		return GroupResult{}, fmt.Errorf("agentplugins group dependencies are incomplete")
 	}
 	groupID := strings.TrimSpace(input.OperationGroupID)
@@ -686,7 +686,7 @@ func (service Service) applyGroup(ctx context.Context, input GroupInput, replace
 			}
 		}
 		if target.noChange && target.managed != nil {
-			if activationErr == nil && !clientVerifierAvailable(target.input, target.plan) && target.managed.Activation == domain.ActivationActive && target.managed.Verification == domain.VerificationInstalled {
+			if activationErr == nil && !service.clientVerifierAvailable(target.input, target.plan) && target.managed.Activation == domain.ActivationActive && target.managed.Verification == domain.VerificationInstalled {
 				outcome.Activation = target.managed.Activation
 				outcome.Verification = target.managed.Verification
 			}
