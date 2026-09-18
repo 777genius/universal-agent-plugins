@@ -50,16 +50,23 @@ Pinned in `providers/install_slot_matrix_test.go`. Do not collapse the two rows.
 | Claude | in-place edit | `installPath` unchanged; bytes live in the skills folder |
 | Claude | damaged owned `ActivePath` | Indeterminate |
 | Claude | `plugin list` `name@skills-dir` + `installPath` same directory as ActivePath + `scope=user` | Installed. Compare with `os.SameFile` (`/tmp` vs `/private/tmp`), not only `filepath.Clean` |
-| Claude | leftover enabled `name@marketplace` without `@skills-dir` | Collision. Claude 2.1.275 lets marketplace win; skills-dir is `folder@skills-dir` failed. Disabled marketplace leftover is Absent |
+| Claude | leftover enabled `name@marketplace` without `@skills-dir` | Collision. Marketplace wins even if skills-dir was there first, including **project-scope** marketplace. Disabled marketplace leftover is Absent |
 | Claude | `name@skills-dir` at a different `installPath` | Collision |
-| Claude | `plugin disable` skills-dir | `enabled=false`, path still absolute → installer Absent |
 | Claude | in-place `plugin.json` rename | list id changes immediately; folder path unchanged |
 | Claude | directory symlink under `skills/` | Claude loads it; `installPath` is the symlink path. Activator still refuses a symlink ActivePath |
-| Claude | `plugin uninstall` of `@skills-dir` | fails: loaded from skills with no marketplace backing. Delete the folder (or disable). Confirms verify-only list, no uninstall CLI |
 | Claude | `/tmp` `CLAUDE_CONFIG_DIR` | list `installPath` keeps `/tmp/...`; `realpath` is `/private/tmp/...`. SameFile must match |
+| Claude | `plugin list --json --available` | Object `{installed, available}`, not an array. Installer must not pass `--available`; parser fail-closes on that object |
+| Claude | `plugin disable` / `plugin enable` | disable writes `settings.json` `enabledPlugins`; list keeps abs path `enabled=false` → installer Absent. Enable restores. Installer does not call enable |
+| Claude | `plugin update` / `uninstall` of `@skills-dir` | fail: no marketplace backing. Delete the folder (or disable) |
+| Claude | official `plugin init <name>` | writes `ConfigRoot/skills/<name>/` with root `SKILL.md`; lists as `name@skills-dir` immediately |
+| Claude | `plugin.json` name vs SKILL.md frontmatter | `plugin.json` name wins when both exist |
+| Claude | dotted `plugin.json` name | listed as `uap.r4.dot@skills-dir` |
+| Claude | empty name or `@` in name | failed `folder@skills-dir` empty path; parser skips |
+| Claude | spaces / symlink `CLAUDE_CONFIG_DIR` | list `installPath` follows that spelling; SameFile still matches |
+| Claude | probe CWD | bounded `HOME`, not the operator project. Project-scope plugins may be invisible during verify |
 | Claude | unicode `plugin.json` name | listed as `name@skills-dir` |
 | Claude | hidden `.agentplugins-staging-*` | not listed; installer still collides defense-in-depth |
-| Claude | activate | `plugin list --json` only; no `marketplace add` / `plugin install` |
+| Claude | activate | `plugin list --json` only; no `marketplace add` / `plugin install` / `--available` |
 | Claude | projection | `.claude-plugin/plugin.json`; no `marketplace.json`; stage beside `skills` |
 | Codex | target root | managed `clients/codex`; never `skills/` |
 | Codex | empty dir / dangling symlink / foreign marketplace other namespace | skip; prepared identity not Indeterminate |
@@ -80,6 +87,13 @@ Pinned in `providers/install_slot_matrix_test.go`. Do not collapse the two rows.
 | Codex | `plugin remove` | list empty, cache gone, marketplace stanza in `config.toml` remains, managed source remains. Uninstall must still `plugin remove` then `marketplace remove` |
 | Codex | `plugin marketplace remove` while plugin installed | list cleared, marketplace stanza gone, `[plugins."name@market"] enabled=true` leftover. Repair with CLI re-adds marketplace then `plugin add` |
 | Codex | versioned cache layout 0.152.0 | `plugins/cache/<market>/<plugin>/<version>/.codex-plugin/plugin.json`. File inspect must not require the older `local/` path |
+| Codex | `plugin list --json --available` | Object keeps `installed`; extra `available` is ignored. Unlike Claude, this flag is safe for our parser |
+| Codex | `enabled = false` in `config.toml` | list shows `installed:true enabled:false` → activate Absent. `plugin add` re-enables. Repair with CLI recovers |
+| Codex | delete cache | list becomes empty `installed`. Repair with CLI recopies |
+| Codex | missing local marketplace source | `plugin list` exits with snapshot error → identity Indeterminate |
+| Codex | two plugins in one marketplace | both listed; installer namespace is still `name@agentplugins-*` |
+| Codex | plugin names | ASCII letters, digits, `.`, `_`, `-` only. Unicode add is rejected |
+| Codex | `plugin remove` after marketplace already gone | 0.152.0 clears leftover `[plugins."id"]` and empties config |
 | Codex | stale cache / missing list while managed source digest is intact | repair re-runs Activate (`plugin add`) when a trusted CLI is present |
 
 ## Live follow-up (same day)
@@ -100,6 +114,16 @@ Round 3 also showed:
 - Codex marketplace add of a path with spaces stores `/private/tmp/...` in `config.toml`. Second add is `alreadyAdded: true`.
 - Codex `plugin marketplace remove` while the plugin is installed clears the list and the marketplace stanza, but leaves `[plugins."name@market"] enabled=true`. Re-add marketplace + `plugin add` restores the list.
 - Codex versioned cache is `plugins/cache/<market>/<plugin>/<version>/`, not `.../local/`.
+
+Round 4 also showed:
+
+- Official `plugin init` writes `CLAUDE_CONFIG_DIR/skills/<name>/` with root `SKILL.md` and lists immediately as `name@skills-dir`.
+- `plugin.json` name wins over a conflicting SKILL.md frontmatter name.
+- Dotted names (`uap.r4.dot`) list. Empty names and names containing `@` fail as `folder@skills-dir`.
+- `plugin list --json --available` is an object `{installed, available}`; without `--available` it stays an array. Disable writes `settings.json` `enabledPlugins`. Enable restores. `plugin update` of `@skills-dir` fails like uninstall.
+- Marketplace still wins if skills-dir was loaded first. Uninstalling the marketplace lets skills-dir load again as `name@skills-dir`. Project-scope marketplace of the same name also steals the user skills-dir slot. Probe CWD is bounded HOME, so project plugins may be invisible during verify.
+- Spaces and a symlink `CLAUDE_CONFIG_DIR` work; list `installPath` follows that spelling.
+- Codex second `plugin add` recopies cache from source. `list --json --available` keeps `installed`. `enabled=false` in `config.toml` shows in list; `plugin add` re-enables. Deleting cache empties list. Missing local marketplace source fails list. Two plugins in one marketplace both list. Plugin names are ASCII-only. `plugin remove` after marketplace is already gone clears the leftover `[plugins]` stanza on 0.152.0. Unset `CODEX_HOME` list may create `$HOME/.codex/tmp`.
 
 ## Agent Plugins implication
 

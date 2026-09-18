@@ -320,7 +320,9 @@ func codexRegistryFinding(body []byte, name, expectedMarketplace string, owned b
 			finding = registryExpected
 		}
 		// A different non-empty marketplace is positive namespace evidence and
-		// can coexist with the managed marketplace.
+		// can coexist with the managed marketplace. enabled/installed flags are
+		// not required here: Activate still demands installed+enabled, and a
+		// trusted Codex `plugin add` re-enables a toml-disabled owned plugin.
 	}
 	return finding
 }

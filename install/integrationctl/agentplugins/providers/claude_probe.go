@@ -97,6 +97,9 @@ func claudeListCommand(executable, configRoot, activePath string) (legacyports.C
 		return legacyports.Command{}, fmt.Errorf("Claude Code probe environment exceeds the bounded size")
 	}
 	return legacyports.Command{
+		// Claude 2.1.275 `plugin list --json --available` returns an object
+		// `{installed, available}` instead of the installed array. Never pass
+		// `--available`; the status parser fail-closes on that object.
 		Argv: []string{executable, "plugin", "list", "--json"},
 		Env:  environment,
 		Dir:  home,
