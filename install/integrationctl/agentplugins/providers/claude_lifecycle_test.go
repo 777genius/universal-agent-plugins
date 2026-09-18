@@ -431,13 +431,14 @@ func TestClaudePluginStatusRequiresExactOfficialIdentity(t *testing.T) {
 		body string
 		want claudeStatus
 	}{
-		"installed":  {claudeListing("demo", managed, true), claudeStatusInstalled},
-		"empty":      {`[]`, claudeStatusAbsent},
-		"disabled":   {claudeListing("demo", managed, false), claudeStatusAbsent},
-		"wrong path": {claudeListing("demo", filepath.Join(t.TempDir(), "foreign"), true), claudeStatusCollision},
-		"wrong id":   {claudeListing("other", managed, true), claudeStatusAbsent},
-		"malformed":  {`[{"id":"demo@skills-dir"}]`, claudeStatusUnknown},
-		"object":     {`{"plugins":[]}`, claudeStatusUnknown},
+		"installed":      {claudeListing("demo", managed, true), claudeStatusInstalled},
+		"empty":          {`[]`, claudeStatusAbsent},
+		"disabled":       {claudeListing("demo", managed, false), claudeStatusAbsent},
+		"wrong path":     {claudeListing("demo", filepath.Join(t.TempDir(), "foreign"), true), claudeStatusCollision},
+		"wrong id":       {claudeListing("other", managed, true), claudeStatusAbsent},
+		"marketplace id": {fmt.Sprintf(`[{"id":"demo@some-marketplace","scope":"user","enabled":true,"installPath":%q}]`, managed), claudeStatusAbsent},
+		"malformed":      {`[{"id":"demo@skills-dir"}]`, claudeStatusUnknown},
+		"object":         {`{"plugins":[]}`, claudeStatusUnknown},
 	}
 	for name, test := range cases {
 		t.Run(name, func(t *testing.T) {

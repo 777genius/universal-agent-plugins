@@ -48,8 +48,8 @@ func TestNativeIdentityCursorReadsEveryAuthoritativeLocalManifest(t *testing.T) 
 
 	writeIdentityFile(t, filepath.Join(root, "foreign-path", ".cursor-plugin", "plugin.json"), `{"name":`)
 	observation, err = (NativeIdentityObserver{}).ObserveNativeIdentity(context.Background(), domain.DetectedClient{ClientID: domain.ClientCursor}, plan, nil)
-	if observation.State != domain.NativeIdentityIndeterminate || err == nil {
-		t.Fatalf("malformed observation = %+v, err = %v", observation, err)
+	if err != nil || observation.State != domain.NativeIdentityAbsent {
+		t.Fatalf("malformed foreign sibling must not fail-close the root: observation = %+v, err = %v", observation, err)
 	}
 }
 
@@ -85,16 +85,23 @@ func TestNativeIdentityUnqualifiedPluginRootIgnoresForeignNonDirectoryEntries(t 
 		t.Fatalf("real collision was not caught alongside a foreign file: observation = %+v, err = %v", observation, err)
 	}
 
-	// A symlink entry must still fail closed.
 	if err := os.RemoveAll(filepath.Join(root, "foreign-path")); err != nil {
 		t.Fatal(err)
 	}
+	if err := os.Symlink(filepath.Join(root, "missing-target"), filepath.Join(root, "ccc")); err != nil {
+		t.Fatal(err)
+	}
+	observation, err = observer.ObserveNativeIdentity(context.Background(), domain.DetectedClient{ClientID: domain.ClientCursor}, plan, managed)
+	if err != nil || observation.State != domain.NativeIdentityManaged {
+		t.Fatalf("dangling symlink blocked classification: observation = %+v, err = %v", observation, err)
+	}
+
 	if err := os.Symlink(plan.ActivePath, filepath.Join(root, "suspicious-link")); err != nil {
 		t.Fatal(err)
 	}
 	observation, err = observer.ObserveNativeIdentity(context.Background(), domain.DetectedClient{ClientID: domain.ClientCursor}, plan, managed)
-	if observation.State != domain.NativeIdentityIndeterminate {
-		t.Fatalf("symlink entry was not refused: observation = %+v, err = %v", observation, err)
+	if err != nil || observation.State != domain.NativeIdentityUnmanaged {
+		t.Fatalf("directory symlink to a same-name plugin was not a collision: observation = %+v, err = %v", observation, err)
 	}
 }
 
@@ -145,14 +152,91 @@ func TestNativeIdentityClaudeSkillsRegistryIgnoresForeignNonDirectoryEntries(t *
 		t.Fatalf("foreign .DS_Store blocked Claude skill classification: observation = %+v, err = %v", observation, err)
 	}
 
-	// A directory that legitimately has no manifest and no SKILL.md is still
-	// genuinely ambiguous and must remain refused (unchanged behavior).
 	if err := os.MkdirAll(filepath.Join(root, "unrelated-empty-dir"), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	observation, err = observer.ObservePreparedIdentity(context.Background(), domain.DetectedClient{ClientID: domain.ClientClaude}, plan, managed)
+	if err != nil || observation.State != domain.NativeIdentityManaged {
+		t.Fatalf("empty sibling directory blocked Claude skill classification: observation = %+v, err = %v", observation, err)
+	}
+}
+
+func TestNativeIdentityClaudeSkillsRegistrySkipsHostileNeighbors(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "skills")
+	plan := identityPlan(root)
+	if err := os.MkdirAll(plan.ActivePath, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	writeIdentityFile(t, filepath.Join(plan.ActivePath, ".claude-plugin", "plugin.json"), `{"name":"demo"}`)
+	managed := &domain.ClientBinding{NativeObjects: []domain.NativeObjectOwnership{{Kind: "managed_package_directory", ManagedDigest: "sha256:owned"}}}
+	observer := NativeIdentityObserver{Stager: acceptingPackageVerifier{}}
+	observe := func() (domain.NativeIdentityObservation, error) {
+		return observer.ObservePreparedIdentity(context.Background(), domain.DetectedClient{ClientID: domain.ClientClaude}, plan, managed)
+	}
+
+	if err := os.WriteFile(filepath.Join(root, "SKILL.md"), []byte("# stray\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(root, "social-autoposter"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "social-autoposter", "SKILL.md"), []byte("# social\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join(root, "missing-target"), filepath.Join(root, "ccc")); err != nil {
+		t.Fatal(err)
+	}
+	writeIdentityFile(t, filepath.Join(root, "neighbor-plugin", ".claude-plugin", "plugin.json"), `{"name":"neighbor-plugin"}`)
+	observation, err := observe()
+	if err != nil || observation.State != domain.NativeIdentityManaged {
+		t.Fatalf("hostile neighborhood blocked Claude classification: observation = %+v, err = %v", observation, err)
+	}
+
+	writeIdentityFile(t, filepath.Join(root, "foreign-demo", ".claude-plugin", "plugin.json"), `{"name":"demo"}`)
+	observation, err = observe()
+	if err != nil || observation.State != domain.NativeIdentityUnmanaged {
+		t.Fatalf("same-name sibling was not a collision: observation = %+v, err = %v", observation, err)
+	}
+
+	if err := os.RemoveAll(filepath.Join(root, "foreign-demo")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(plan.ActivePath, filepath.Join(root, "alias-demo")); err != nil {
+		t.Fatal(err)
+	}
+	observation, err = observe()
+	if err != nil || observation.State != domain.NativeIdentityUnmanaged {
+		t.Fatalf("directory symlink to same-name plugin was not a collision: observation = %+v, err = %v", observation, err)
+	}
+
+	if err := os.Remove(filepath.Join(root, "alias-demo")); err != nil {
+		t.Fatal(err)
+	}
+	broken := filepath.Join(root, "broken-foreign", ".claude-plugin", "plugin.json")
+	writeIdentityFile(t, broken, `{"name":`)
+	observation, err = observe()
+	if err != nil || observation.State != domain.NativeIdentityManaged {
+		t.Fatalf("malformed foreign plugin.json blocked Claude classification: observation = %+v, err = %v", observation, err)
+	}
+
+	unreadable := filepath.Join(root, "unreadable-foreign", ".claude-plugin", "plugin.json")
+	writeIdentityFile(t, unreadable, `{"name":"other"}`)
+	if err := os.Chmod(unreadable, 0); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(unreadable, 0o600) })
+	if _, readErr := os.ReadFile(unreadable); readErr == nil {
+		t.Skip("cannot create an unreadable sibling on this filesystem")
+	}
+	observation, err = observe()
+	if err != nil || observation.State != domain.NativeIdentityManaged {
+		t.Fatalf("unreadable foreign sibling blocked Claude classification: observation = %+v, err = %v", observation, err)
+	}
+
+	writeIdentityFile(t, filepath.Join(plan.ActivePath, ".claude-plugin", "plugin.json"), `{"name":`)
+	observation, err = observe()
 	if observation.State != domain.NativeIdentityIndeterminate {
-		t.Fatalf("ambiguous foreign directory was not refused: observation = %+v, err = %v", observation, err)
+		t.Fatalf("damaged owned ActivePath was not indeterminate: observation = %+v, err = %v", observation, err)
 	}
 }
 
@@ -424,7 +508,7 @@ func TestNativeIdentityPreservesNativeDiscoveryWhenPreparedRegistryBlocksOverall
 		wantError bool
 	}{
 		{name: "collision", manifest: `{"name":"demo"}`, wantState: domain.NativeIdentityUnmanaged},
-		{name: "malformed", manifest: `{"name":`, wantState: domain.NativeIdentityIndeterminate, wantError: true},
+		{name: "malformed", manifest: `{"name":`, wantState: domain.NativeIdentityAbsent},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			plan := identityPlan(filepath.Join(t.TempDir(), "prepared"))

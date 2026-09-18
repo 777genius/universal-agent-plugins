@@ -157,10 +157,11 @@ func (stager Stager) stage(
 	suffix := sha256.Sum256([]byte(operationID))
 	stagingBase := shared.DefaultStagingLayout{}.StagingBase(plan)
 	// Claude Code discovers every plugin-shaped directory directly below its
-	// skills root. Keep the transaction staging directory beside that watched
-	// root so a pre-commit read-only `plugin list` cannot mistake it for an
-	// installed plugin. TargetAnchor and TargetRoot are on the same configured
-	// client filesystem; dirswap still performs the final atomic rename.
+	// skills root (the official in-place @skills-dir plugin slot). Keep the
+	// transaction staging directory beside that watched root so a pre-commit
+	// read-only `plugin list` cannot mistake it for an installed plugin.
+	// TargetAnchor and TargetRoot are on the same configured client
+	// filesystem; dirswap still performs the final atomic rename.
 	if plan.ClientID == domain.ClientClaude {
 		stagingBase = plan.TargetAnchor
 	}
