@@ -1,6 +1,6 @@
 //go:build darwin
 
-package providers
+package kiro
 
 import "golang.org/x/sys/unix"
 

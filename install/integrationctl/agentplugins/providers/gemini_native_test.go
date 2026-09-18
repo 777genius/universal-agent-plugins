@@ -211,7 +211,7 @@ func geminiNativeFixture(t *testing.T, configRoot, marker, url string) (string, 
 	active := filepath.Join(t.TempDir(), "active")
 	skillRoot := filepath.Join(active, "skills", "docs")
 	writeTestFile(t, filepath.Join(skillRoot, "SKILL.md"), marker+"\n")
-	digest, err := digestKiroSkillDirectory(skillRoot)
+	digest, err := shared.DigestSkillDirectory(skillRoot)
 	if err != nil {
 		t.Fatal(err)
 	}

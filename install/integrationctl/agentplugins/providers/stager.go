@@ -14,6 +14,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/atomicfile"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/filetree"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/pathpolicy"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/kiro"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/managedstdio"
@@ -271,7 +272,7 @@ func (stager Stager) stage(
 		},
 	}
 	if plan.ClientID == domain.ClientKiro {
-		kiroObjects, err := buildKiroNativeObjects(stagingPath, envelope, plan)
+		kiroObjects, err := kiro.BuildNativeObjects(stagingPath, envelope, plan)
 		if err != nil {
 			return domain.StagedDelivery{}, err
 		}

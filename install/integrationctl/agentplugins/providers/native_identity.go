@@ -11,12 +11,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/pelletier/go-toml/v2"
+
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/kiro"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
 	legacyports "github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
-	"github.com/pelletier/go-toml/v2"
 )
 
 type packageVerifier interface {
@@ -539,7 +541,7 @@ func inspectKiroRegistry(plan domain.DeliveryPlan, managed *domain.ClientBinding
 		return registryIndeterminate, err
 	}
 	if managed != nil {
-		if err := verifyKiroNativeObjects(root, managed.NativeObjects, true); err != nil {
+		if err := kiro.VerifyNativeObjects(root, managed.NativeObjects, true); err != nil {
 			return registryIndeterminate, err
 		}
 	}
@@ -547,11 +549,11 @@ func inspectKiroRegistry(plan domain.DeliveryPlan, managed *domain.ClientBinding
 	mcp := map[string]any{}
 	if shared.HasSupportedMCP(plan.Components) {
 		mcpPath := filepath.Join(root, "settings", "mcp.json")
-		if err := validateKiroNativePath(root, mcpPath); err != nil {
+		if err := kiro.ValidateNativePath(root, mcpPath); err != nil {
 			return registryIndeterminate, err
 		}
 		var err error
-		mcp, _, _, _, err = readKiroMCPConfig(mcpPath)
+		mcp, _, _, _, err = kiro.ReadMCPConfig(mcpPath)
 		if err != nil {
 			return registryIndeterminate, err
 		}
@@ -564,7 +566,7 @@ func inspectKiroRegistry(plan domain.DeliveryPlan, managed *domain.ClientBinding
 		switch component.Kind {
 		case domain.ComponentSkill:
 			skillPath := filepath.Join(root, "skills", component.Name)
-			if err := validateKiroNativePath(root, skillPath); err != nil {
+			if err := kiro.ValidateNativePath(root, skillPath); err != nil {
 				return registryIndeterminate, err
 			}
 			_, statErr := os.Lstat(skillPath)
@@ -592,9 +594,9 @@ func inspectKiroRegistry(plan domain.DeliveryPlan, managed *domain.ClientBinding
 }
 
 func managedKiroObjectExists(objects []domain.NativeObjectOwnership, kind domain.ComponentKind, name string) bool {
-	want := kiroSkillObjectKind
+	want := kiro.SkillObjectKind
 	if kind == domain.ComponentMCPServer {
-		want = kiroMCPObjectKind
+		want = kiro.MCPObjectKind
 	}
 	for _, object := range objects {
 		if object.Kind == want && object.LogicalName == name {

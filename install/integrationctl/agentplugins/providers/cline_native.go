@@ -82,7 +82,7 @@ func buildClineNativeObjects(stagingRoot string, envelope domain.PackageEnvelope
 			if err := pathpolicy.RequireContainedChild(stagingRoot, sourceRoot); err != nil {
 				return nil, err
 			}
-			digest, err := digestKiroSkillDirectory(sourceRoot)
+			digest, err := shared.DigestSkillDirectory(sourceRoot)
 			if err != nil {
 				return nil, err
 			}
@@ -150,7 +150,7 @@ func verifyClineNativeObjects(configRoot string, objects []domain.NativeObjectOw
 		}
 		switch object.Kind {
 		case clineSkillObjectKind:
-			digest, err := digestKiroSkillDirectory(object.Path)
+			digest, err := shared.DigestSkillDirectory(object.Path)
 			if os.IsNotExist(err) && allowMissing {
 				continue
 			}
@@ -211,7 +211,7 @@ func applyClineNativeMutationWithKernelRenameAndCapacity(configRoot, activePath 
 	if err := verifyClineNativeObjects(configRoot, previous, true); err != nil {
 		return err
 	}
-	previousByID, desiredByID := objectMap(previous), objectMap(desired)
+	previousByID, desiredByID := shared.ObjectMap(previous), shared.ObjectMap(desired)
 	idsCapacity, capacityErr := capacity(len(previousByID), len(desiredByID))
 	if capacityErr != nil {
 		return fmt.Errorf("prepare managed Cline MCP server set: %w", capacityErr)
@@ -261,7 +261,7 @@ func applyClineNativeMutationWithKernelRenameAndCapacity(configRoot, activePath 
 		if err := filetree.CopyDir(source, target); err != nil {
 			return err
 		}
-		digest, err := digestKiroSkillDirectory(target)
+		digest, err := shared.DigestSkillDirectory(target)
 		if err != nil || digest != object.ManagedDigest {
 			return fmt.Errorf("staged Cline skill %q does not match its ownership digest", object.LogicalName)
 		}
@@ -275,7 +275,7 @@ func applyClineNativeMutationWithKernelRenameAndCapacity(configRoot, activePath 
 		attempted := map[string]bool{}
 		for id, object := range installed {
 			attempted[id] = true
-			if digest, err := digestKiroSkillDirectory(object.Path); err == nil && digest == object.ManagedDigest {
+			if digest, err := shared.DigestSkillDirectory(object.Path); err == nil && digest == object.ManagedDigest {
 				if err := os.RemoveAll(object.Path); err != nil && first == nil {
 					first = err
 				}
@@ -332,7 +332,7 @@ func applyClineNativeMutationWithKernelRenameAndCapacity(configRoot, activePath 
 			return err
 		}
 		backups[id] = backup
-		digest, digestErr := digestKiroSkillDirectory(backup)
+		digest, digestErr := shared.DigestSkillDirectory(backup)
 		if digestErr != nil || digest != object.ManagedDigest {
 			if digestErr != nil {
 				return fmt.Errorf("verify isolated Cline skill backup %q: %w", object.LogicalName, digestErr)

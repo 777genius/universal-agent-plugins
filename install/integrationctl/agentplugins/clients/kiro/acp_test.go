@@ -1,4 +1,4 @@
-package providers
+package kiro
 
 import (
 	"bytes"
@@ -65,7 +65,7 @@ func (runner *fixtureDuplexRunner) RunDuplexWithPlannedShutdown(ctx context.Cont
 		if err != nil {
 			return err
 		}
-		defer liveReader.Close()
+		defer func() { _ = liveReader.Close() }()
 		liveWriter = writer
 		reader = liveReader
 		outputWritten = make(chan struct{})
@@ -110,20 +110,6 @@ type terminalErrorReader struct {
 	err error
 }
 
-type delayedReader struct {
-	delay  time.Duration
-	reader io.Reader
-	once   bool
-}
-
-func (reader *delayedReader) Read(value []byte) (int, error) {
-	if !reader.once {
-		reader.once = true
-		time.Sleep(reader.delay)
-	}
-	return reader.reader.Read(value)
-}
-
 type contextBlockingReader struct {
 	context.Context
 	prefix *bytes.Reader
@@ -152,8 +138,8 @@ func acpStatus(sessionID, name, status string, tools string) string {
 	return fmt.Sprintf("{\"jsonrpc\":\"2.0\",\"method\":\"_kiro/mcp/status\",\"params\":{\"sessionId\":%q,\"serverName\":%q,\"status\":%q,\"tools\":%s}}\n", sessionID, name, status, tools)
 }
 
-func acpArrayStatus(sessionID, servers string) string {
-	return fmt.Sprintf("{\"jsonrpc\":\"2.0\",\"method\":\"_kiro/mcp/status\",\"params\":{\"sessionId\":%q,\"servers\":%s}}\n", sessionID, servers)
+func acpArrayStatus(servers string) string {
+	return fmt.Sprintf("{\"jsonrpc\":\"2.0\",\"method\":\"_kiro/mcp/status\",\"params\":{\"sessionId\":%q,\"servers\":%s}}\n", "s", servers)
 }
 
 func acpArrayServer(name, status, tools string) string {
@@ -163,16 +149,15 @@ func acpArrayServer(name, status, tools string) string {
 	return fmt.Sprintf(`{"name":%q,"authType":"oauth","status":%q,"tools":%s}`, name, status, tools)
 }
 
-func connectedACP(name string) string {
+func connectedACP() string {
 	return acpResponse(0, `{"protocolVersion":1}`) +
 		acpResponse(1, `{"sessionId":"session-1"}`) +
-		acpStatus("session-1", name, "connected", `[{"name":"search","disabled":false}]`)
+		acpStatus("session-1", "alpha", "connected", `[{"name":"search","disabled":false}]`)
 }
 
 func TestKiroACPVerifiesOneAndMultipleNativeServersWithoutPrompt(t *testing.T) {
 	t.Parallel()
 	for _, servers := range [][]string{{"alpha"}, {"alpha", "beta"}} {
-		servers := servers
 		t.Run(strings.Join(servers, "+"), func(t *testing.T) {
 			t.Parallel()
 			output := acpResponse(0, `{"protocolVersion":1}`)
@@ -182,7 +167,7 @@ func TestKiroACPVerifiesOneAndMultipleNativeServersWithoutPrompt(t *testing.T) {
 			output += acpResponse(1, `{"sessionId":"session-1"}`)
 			runner := &fixtureDuplexRunner{output: output, keepAlive: true}
 			cwd := t.TempDir()
-			if err := verifyKiroACP(context.Background(), runner, filepath.Join("test", "kiro-cli"), cwd, servers); err != nil {
+			if err := VerifyACP(context.Background(), runner, filepath.Join("test", "kiro-cli"), cwd, servers); err != nil {
 				t.Fatal(err)
 			}
 			wantArgv := []string{filepath.Join("test", "kiro-cli"), "acp", "--agent-engine", "v3", "--auth-method", "cli"}
@@ -222,33 +207,33 @@ func TestKiroACPAllowsConnectingThenConnected(t *testing.T) {
 	runner := &fixtureDuplexRunner{output: acpResponse(0, `{"protocolVersion":1}`) +
 		acpStatus("s", "alpha", "connecting", "") + acpResponse(1, `{"sessionId":"s"}`) +
 		acpStatus("s", "alpha", "connected", `[{"name":"search","disabled":false}]`), keepAlive: true}
-	if err := verifyKiroACP(context.Background(), runner, "kiro-cli", t.TempDir(), []string{"alpha"}); err != nil {
+	if err := VerifyACP(context.Background(), runner, "kiro-cli", t.TempDir(), []string{"alpha"}); err != nil {
 		t.Fatal(err)
 	}
 }
 
 func TestKiroACPActualServersArrayOrderingAndDuplicateConnecting(t *testing.T) {
 	t.Parallel()
-	connecting := acpArrayStatus("s", "["+acpArrayServer("alpha", "connecting", "")+"]")
-	connected := acpArrayStatus("s", "["+acpArrayServer("alpha", "connected", `[{"name":"search","disabled":false}]`)+"]")
+	connecting := acpArrayStatus("[" + acpArrayServer("alpha", "connecting", "") + "]")
+	connected := acpArrayStatus("[" + acpArrayServer("alpha", "connected", `[{"name":"search","disabled":false}]`) + "]")
 	runner := &fixtureDuplexRunner{output: acpResponse(0, `{"protocolVersion":1}`) + connecting + connecting +
 		acpResponse(1, `{"sessionId":"s"}`) + connected, keepAlive: true}
-	if err := verifyKiroACP(context.Background(), runner, "kiro-cli", t.TempDir(), []string{"alpha"}); err != nil {
+	if err := VerifyACP(context.Background(), runner, "kiro-cli", t.TempDir(), []string{"alpha"}); err != nil {
 		t.Fatalf("captured Kiro ordering failed: %v", err)
 	}
 }
 
 func TestKiroACPCapturedDuplicateConnectingSnapshotsThenConnectedSnapshot(t *testing.T) {
 	t.Parallel()
-	connecting := acpArrayStatus("s", "["+acpArrayServer("alpha", "connecting", "")+","+acpArrayServer("beta", "connecting", "")+"]")
-	connected := acpArrayStatus("s", "["+
-		acpArrayServer("alpha", "connected", `[{"name":"search","disabled":false}]`)+","+
-		acpArrayServer("beta", "connected", `[{"name":"fetch","disabled":false}]`)+"]")
+	connecting := acpArrayStatus("[" + acpArrayServer("alpha", "connecting", "") + "," + acpArrayServer("beta", "connecting", "") + "]")
+	connected := acpArrayStatus("[" +
+		acpArrayServer("alpha", "connected", `[{"name":"search","disabled":false}]`) + "," +
+		acpArrayServer("beta", "connected", `[{"name":"fetch","disabled":false}]`) + "]")
 	runner := &fixtureDuplexRunner{
 		output:    acpResponse(0, `{"protocolVersion":1}`) + connecting + connecting + acpResponse(1, `{"sessionId":"s"}`) + connected,
 		keepAlive: true,
 	}
-	if err := verifyKiroACP(context.Background(), runner, "kiro-cli", t.TempDir(), []string{"alpha", "beta"}); err != nil {
+	if err := VerifyACP(context.Background(), runner, "kiro-cli", t.TempDir(), []string{"alpha", "beta"}); err != nil {
 		t.Fatalf("captured Kiro 2.19.1/KAS 0.48.0 sequence failed: %v", err)
 	}
 }
@@ -259,8 +244,8 @@ func TestKiroACPServersArraySupportsPlannedAndUnrelatedServers(t *testing.T) {
 		acpArrayServer("alpha", "connected", `[{"name":"a","disabled":false}]`) + "," +
 		acpArrayServer("beta", "connected", `[{"name":"b","disabled":false}]`) + "]"
 	runner := &fixtureDuplexRunner{output: acpResponse(0, `{"protocolVersion":1}`) +
-		acpArrayStatus("s", servers) + acpResponse(1, `{"sessionId":"s"}`), keepAlive: true}
-	if err := verifyKiroACP(context.Background(), runner, "kiro-cli", t.TempDir(), []string{"alpha", "beta"}); err != nil {
+		acpArrayStatus(servers) + acpResponse(1, `{"sessionId":"s"}`), keepAlive: true}
+	if err := VerifyACP(context.Background(), runner, "kiro-cli", t.TempDir(), []string{"alpha", "beta"}); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -272,11 +257,11 @@ func TestKiroACPServersArrayRepeatedConnectedSnapshotDuringPeerTransition(t *tes
 	alphaConnected := acpArrayServer("alpha", "connected", `[{"name":"a","disabled":false}]`)
 	betaConnected := acpArrayServer("beta", "connected", `[{"name":"b","disabled":false}]`)
 	runner := &fixtureDuplexRunner{output: acpResponse(0, `{"protocolVersion":1}`) +
-		acpArrayStatus("s", "["+alphaConnecting+","+betaConnecting+"]") +
+		acpArrayStatus("["+alphaConnecting+","+betaConnecting+"]") +
 		acpResponse(1, `{"sessionId":"s"}`) +
-		acpArrayStatus("s", "["+alphaConnected+","+betaConnecting+"]") +
-		acpArrayStatus("s", "["+alphaConnected+","+betaConnected+"]"), keepAlive: true}
-	if err := verifyKiroACP(context.Background(), runner, "kiro-cli", t.TempDir(), []string{"alpha", "beta"}); err != nil {
+		acpArrayStatus("["+alphaConnected+","+betaConnecting+"]") +
+		acpArrayStatus("["+alphaConnected+","+betaConnected+"]"), keepAlive: true}
+	if err := VerifyACP(context.Background(), runner, "kiro-cli", t.TempDir(), []string{"alpha", "beta"}); err != nil {
 		t.Fatalf("repeated connected entry in a later registry snapshot failed: %v", err)
 	}
 }
@@ -287,9 +272,9 @@ func TestKiroACPFullSnapshotOmissionRevokesConnectedState(t *testing.T) {
 	betaConnected := acpArrayServer("beta", "connected", `[{"name":"b","disabled":false}]`)
 	runner := &fixtureDuplexRunner{output: acpResponse(0, `{"protocolVersion":1}`) +
 		acpResponse(1, `{"sessionId":"s"}`) +
-		acpArrayStatus("s", "["+alphaConnected+","+betaConnected+"]") +
-		acpArrayStatus("s", "["+alphaConnected+"]"), keepAlive: true}
-	err := verifyKiroACP(context.Background(), runner, "kiro-cli", t.TempDir(), []string{"alpha", "beta"})
+		acpArrayStatus("["+alphaConnected+","+betaConnected+"]") +
+		acpArrayStatus("["+alphaConnected+"]"), keepAlive: true}
+	err := VerifyACP(context.Background(), runner, "kiro-cli", t.TempDir(), []string{"alpha", "beta"})
 	if !errors.Is(err, shared.ErrRecognizedNegativeEvidence) || !strings.Contains(err.Error(), "omitted planned server beta") {
 		t.Fatalf("connected -> omitted full snapshot error = %v", err)
 	}
@@ -312,7 +297,6 @@ func TestKiroACPRejectsMalformedOrAmbiguousServersArrays(t *testing.T) {
 			`{"jsonrpc":"2.0","method":"_kiro/mcp/status","params":{"sessionId":"s","servers":[{"name":"alpha","authType":"iam","status":"connecting"}]}}`,
 	}
 	for name, params := range tests {
-		params := params
 		t.Run(name, func(t *testing.T) {
 			status := `{"jsonrpc":"2.0","method":"_kiro/mcp/status","params":` + params + "}\n"
 			if name == "conflicting duplicate connecting" {
@@ -320,7 +304,7 @@ func TestKiroACPRejectsMalformedOrAmbiguousServersArrays(t *testing.T) {
 				status = `{"jsonrpc":"2.0","method":"_kiro/mcp/status","params":` + parts[0] + "}\n" + parts[1] + "\n"
 			}
 			runner := &fixtureDuplexRunner{output: acpResponse(0, `{"protocolVersion":1}`) + status + acpResponse(1, `{"sessionId":"s"}`)}
-			if err := verifyKiroACP(context.Background(), runner, "kiro-cli", t.TempDir(), []string{"alpha"}); err == nil {
+			if err := VerifyACP(context.Background(), runner, "kiro-cli", t.TempDir(), []string{"alpha"}); err == nil {
 				t.Fatal("ambiguous/malformed servers array unexpectedly succeeded")
 			}
 		})
@@ -328,14 +312,14 @@ func TestKiroACPRejectsMalformedOrAmbiguousServersArrays(t *testing.T) {
 }
 
 func TestKiroACPStartupTimeoutAllowsDelayedValidColdStart(t *testing.T) {
-	runner := &fixtureDuplexRunner{output: connectedACP("alpha"), keepAlive: true, writeDelay: 25 * time.Millisecond}
-	if err := verifyKiroACPWithTimeout(context.Background(), runner, "kiro-cli", t.TempDir(), []string{"alpha"}, 250*time.Millisecond); err != nil {
+	runner := &fixtureDuplexRunner{output: connectedACP(), keepAlive: true, writeDelay: 25 * time.Millisecond}
+	if err := verifyACPWithTimeout(context.Background(), runner, "kiro-cli", t.TempDir(), []string{"alpha"}, 250*time.Millisecond); err != nil {
 		t.Fatalf("delayed valid ACP startup failed: %v", err)
 	}
 }
 
 func TestKiroACPRealPipeDeadlineBoundary(t *testing.T) {
-	complete := connectedACP("alpha")
+	complete := connectedACP()
 	for name, test := range map[string]struct {
 		output  string
 		wantErr bool
@@ -347,7 +331,7 @@ func TestKiroACPRealPipeDeadlineBoundary(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			runner := &fixtureDuplexRunner{output: test.output, keepAlive: true, closeAfterWrite: true}
-			err := verifyKiroACPWithTimeout(context.Background(), runner, "kiro-cli", t.TempDir(), []string{"alpha"}, 250*time.Millisecond)
+			err := verifyACPWithTimeout(context.Background(), runner, "kiro-cli", t.TempDir(), []string{"alpha"}, 250*time.Millisecond)
 			if test.wantErr && !errors.Is(err, shared.ErrRecognizedNegativeEvidence) {
 				t.Fatalf("real-pipe error = %v, want negative evidence", err)
 			}
@@ -359,7 +343,7 @@ func TestKiroACPRealPipeDeadlineBoundary(t *testing.T) {
 
 	t.Run("no data timeout", func(t *testing.T) {
 		runner := &fixtureDuplexRunner{keepAlive: true, closeOnContext: true}
-		err := verifyKiroACPWithTimeout(context.Background(), runner, "kiro-cli", t.TempDir(), []string{"alpha"}, 25*time.Millisecond)
+		err := verifyACPWithTimeout(context.Background(), runner, "kiro-cli", t.TempDir(), []string{"alpha"}, 25*time.Millisecond)
 		if !errors.Is(err, context.DeadlineExceeded) || !errors.Is(err, shared.ErrRecognizedNegativeEvidence) {
 			t.Fatalf("real-pipe no-data error = %v, want bounded negative deadline evidence", err)
 		}
@@ -368,31 +352,30 @@ func TestKiroACPRealPipeDeadlineBoundary(t *testing.T) {
 
 func TestKiroACPRealPipePostSuccessSettlement(t *testing.T) {
 	for name, trailing := range map[string]string{
-		"complete contradiction": acpArrayStatus("s", "["+acpArrayServer("alpha", "disconnected", "")+"]"),
+		"complete contradiction": acpArrayStatus("[" + acpArrayServer("alpha", "disconnected", "") + "]"),
 		"partial record":         `{"jsonrpc":"2.0"`,
 	} {
-		trailing := trailing
 		t.Run(name, func(t *testing.T) {
 			stdout, peer, err := os.Pipe()
 			if err != nil {
 				t.Fatal(err)
 			}
-			defer stdout.Close()
-			defer peer.Close()
+			defer func() { _ = stdout.Close() }()
+			defer func() { _ = peer.Close() }()
 			stdinPeer, stdin, err := os.Pipe()
 			if err != nil {
 				t.Fatal(err)
 			}
-			defer stdinPeer.Close()
-			defer stdin.Close()
+			defer func() { _ = stdinPeer.Close() }()
+			defer func() { _ = stdin.Close() }()
 			go func() {
 				_, _ = io.WriteString(peer, acpResponse(0, `{"protocolVersion":1}`)+acpResponse(1, `{"sessionId":"s"}`)+
-					acpArrayStatus("s", "["+acpArrayServer("alpha", "connected", `[{"name":"search","disabled":false}]`)+"]"))
+					acpArrayStatus("["+acpArrayServer("alpha", "connected", `[{"name":"search","disabled":false}]`)+"]"))
 				time.Sleep(kiroACPSettlement / 3)
 				_, _ = io.WriteString(peer, trailing)
 			}()
 			err = exchangeKiroACP(stdin, stdout, t.TempDir(), map[string]*kiroACPServerState{"alpha": {}})
-			if !errors.Is(err, shared.ErrRecognizedNegativeEvidence) && !errors.Is(err, errKiroACPPartialExit) {
+			if !errors.Is(err, shared.ErrRecognizedNegativeEvidence) && !errors.Is(err, ErrACPPartialExit) {
 				t.Fatalf("settlement error = %v, want trailing negative evidence", err)
 			}
 		})
@@ -403,17 +386,17 @@ func TestKiroACPRealPipePostSuccessSettlement(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer stdout.Close()
-		defer peer.Close()
+		defer func() { _ = stdout.Close() }()
+		defer func() { _ = peer.Close() }()
 		stdinPeer, stdin, err := os.Pipe()
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer stdinPeer.Close()
-		defer stdin.Close()
+		defer func() { _ = stdinPeer.Close() }()
+		defer func() { _ = stdin.Close() }()
 		go func() {
 			_, _ = io.WriteString(peer, acpResponse(0, `{"protocolVersion":1}`)+acpResponse(1, `{"sessionId":"s"}`)+
-				acpArrayStatus("s", "["+acpArrayServer("alpha", "connected", `[{"name":"search","disabled":false}]`)+"]"))
+				acpArrayStatus("["+acpArrayServer("alpha", "connected", `[{"name":"search","disabled":false}]`)+"]"))
 		}()
 		started := time.Now()
 		if err := exchangeKiroACP(stdin, stdout, t.TempDir(), map[string]*kiroACPServerState{"alpha": {}}); err != nil {
@@ -433,7 +416,7 @@ func TestKiroACPSettlementBoundaryObservesAlreadyQueuedPipeEvidence(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer reader.Close()
+	defer func() { _ = reader.Close() }()
 	if _, err := io.WriteString(writer, "queued-before-boundary"); err != nil {
 		t.Fatal(err)
 	}
@@ -462,10 +445,9 @@ func TestKiroACPConsumesQueuedStatusesUntilCleanEOFAfterCompletion(t *testing.T)
 		"conflicting duplicate": acpStatus("s", "alpha", "connected", `[{"name":"different","disabled":false}]`),
 		"regression":            acpStatus("s", "alpha", "connecting", ""),
 	} {
-		queued := queued
 		t.Run(name, func(t *testing.T) {
 			runner := &fixtureDuplexRunner{output: acpResponse(0, `{"protocolVersion":1}`) + acpResponse(1, `{"sessionId":"s"}`) + connected + queued, keepAlive: true}
-			err := verifyKiroACP(context.Background(), runner, "kiro-cli", t.TempDir(), []string{"alpha"})
+			err := VerifyACP(context.Background(), runner, "kiro-cli", t.TempDir(), []string{"alpha"})
 			if !errors.Is(err, shared.ErrRecognizedNegativeEvidence) {
 				t.Fatalf("error = %v, want queued contradictory status to be recognized negative evidence", err)
 			}
@@ -488,7 +470,7 @@ func TestKiroACPRejectsQueuedDuplicateConnectingAfterConnected(t *testing.T) {
 			acpResponse(1, `{"sessionId":"s"}`) + connected + connecting,
 		keepAlive: true,
 	}
-	err := verifyKiroACP(context.Background(), runner, "kiro-cli", t.TempDir(), []string{"alpha"})
+	err := VerifyACP(context.Background(), runner, "kiro-cli", t.TempDir(), []string{"alpha"})
 	if !errors.Is(err, shared.ErrRecognizedNegativeEvidence) || !strings.Contains(err.Error(), "regressive connecting status after connected") {
 		t.Fatalf("queued connected -> connecting error = %v, want recognized regressive evidence", err)
 	}
@@ -499,8 +481,8 @@ func TestKiroACPRejectsQueuedDuplicateConnectingAfterConnected(t *testing.T) {
 
 func TestKiroACPCleanEOFAfterCompletionSucceedsAndClosesStdinOnce(t *testing.T) {
 	t.Parallel()
-	runner := &fixtureDuplexRunner{output: connectedACP("alpha"), keepAlive: true}
-	if err := verifyKiroACP(context.Background(), runner, "kiro-cli", t.TempDir(), []string{"alpha"}); err != nil {
+	runner := &fixtureDuplexRunner{output: connectedACP(), keepAlive: true}
+	if err := VerifyACP(context.Background(), runner, "kiro-cli", t.TempDir(), []string{"alpha"}); err != nil {
 		t.Fatal(err)
 	}
 	if runner.stdinCloses != 1 {
@@ -511,7 +493,7 @@ func TestKiroACPCleanEOFAfterCompletionSucceedsAndClosesStdinOnce(t *testing.T) 
 func TestKiroACPRequiresClosableStdinBeforeWritingRequests(t *testing.T) {
 	t.Parallel()
 	var stdin bytes.Buffer
-	err := exchangeKiroACP(&stdin, strings.NewReader(connectedACP("alpha")), t.TempDir(), map[string]*kiroACPServerState{"alpha": {}})
+	err := exchangeKiroACP(&stdin, strings.NewReader(connectedACP()), t.TempDir(), map[string]*kiroACPServerState{"alpha": {}})
 	if err == nil || !strings.Contains(err.Error(), "stdin does not support close") {
 		t.Fatalf("error = %v, want closable-stdin contract failure", err)
 	}
@@ -522,9 +504,9 @@ func TestKiroACPRequiresClosableStdinBeforeWritingRequests(t *testing.T) {
 
 func TestKiroACPRejectsPartialRecordAfterCompletion(t *testing.T) {
 	t.Parallel()
-	runner := &fixtureDuplexRunner{output: connectedACP("alpha") + `{"jsonrpc":"2.0"`, keepAlive: true}
-	err := verifyKiroACP(context.Background(), runner, "kiro-cli", t.TempDir(), []string{"alpha"})
-	if !errors.Is(err, errKiroACPPartialExit) || !errors.Is(err, shared.ErrRecognizedNegativeEvidence) {
+	runner := &fixtureDuplexRunner{output: connectedACP() + `{"jsonrpc":"2.0"`, keepAlive: true}
+	err := VerifyACP(context.Background(), runner, "kiro-cli", t.TempDir(), []string{"alpha"})
+	if !errors.Is(err, ErrACPPartialExit) || !errors.Is(err, shared.ErrRecognizedNegativeEvidence) {
 		t.Fatalf("error = %v, want partial trailing record failure", err)
 	}
 	if runner.stdinCloses != 1 {
@@ -536,9 +518,9 @@ func TestKiroACPNonClosingOutputFailsAtContextBound(t *testing.T) {
 	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 	defer cancel()
-	runner := &fixtureDuplexRunner{reader: &contextBlockingReader{Context: ctx, prefix: bytes.NewReader([]byte(connectedACP("alpha")))}}
+	runner := &fixtureDuplexRunner{reader: &contextBlockingReader{Context: ctx, prefix: bytes.NewReader([]byte(connectedACP()))}}
 	started := time.Now()
-	err := verifyKiroACP(ctx, runner, "kiro-cli", t.TempDir(), []string{"alpha"})
+	err := VerifyACP(ctx, runner, "kiro-cli", t.TempDir(), []string{"alpha"})
 	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("error = %v, want context deadline failure", err)
 	}
@@ -553,9 +535,9 @@ func TestKiroACPNonClosingOutputFailsAtContextBound(t *testing.T) {
 func TestKiroACPProcessFailureAfterCleanCompletionFailsClosed(t *testing.T) {
 	t.Parallel()
 	processErr := errors.New("ACP process exited unsuccessfully")
-	runner := &fixtureDuplexRunner{output: connectedACP("alpha"), postError: processErr}
-	err := verifyKiroACP(context.Background(), runner, "kiro-cli", t.TempDir(), []string{"alpha"})
-	if !errors.Is(err, processErr) || !errors.Is(err, shared.ErrRecognizedNegativeEvidence) || errors.Is(err, errKiroACPContractUnknown) {
+	runner := &fixtureDuplexRunner{output: connectedACP(), postError: processErr}
+	err := VerifyACP(context.Background(), runner, "kiro-cli", t.TempDir(), []string{"alpha"})
+	if !errors.Is(err, processErr) || !errors.Is(err, shared.ErrRecognizedNegativeEvidence) || errors.Is(err, ErrACPContractUnknown) {
 		t.Fatalf("error = %v, want fail-closed post-exchange process failure", err)
 	}
 }
@@ -571,11 +553,10 @@ func TestKiroACPRejectsEveryOutOfRangeNumberToken(t *testing.T) {
 		"notification unused member": initialize + session + strings.Replace(status, `"status":"connected"`,
 			`"status":"connected","unused":{"value":1e1000000}`, 1),
 	} {
-		output := output
 		t.Run(name, func(t *testing.T) {
 			runner := &fixtureDuplexRunner{output: output, keepAlive: true}
-			err := verifyKiroACP(context.Background(), runner, "kiro-cli", t.TempDir(), []string{"alpha"})
-			if !errors.Is(err, shared.ErrRecognizedNegativeEvidence) || errors.Is(err, errKiroACPContractUnknown) {
+			err := VerifyACP(context.Background(), runner, "kiro-cli", t.TempDir(), []string{"alpha"})
+			if !errors.Is(err, shared.ErrRecognizedNegativeEvidence) || errors.Is(err, ErrACPContractUnknown) {
 				t.Fatalf("error = %v, want out-of-range JSON number rejected as a protocol failure", err)
 			}
 		})
@@ -612,10 +593,9 @@ func TestKiroACPRejectsInvalidUTF8WithoutReplacement(t *testing.T) {
 			[]byte{invalid}, []byte(`"}}`+"\n")),
 	}
 	for name, output := range tests {
-		output := output
 		t.Run(name, func(t *testing.T) {
 			runner := &fixtureDuplexRunner{output: string(output), keepAlive: true, closeAfterWrite: true}
-			err := verifyKiroACP(context.Background(), runner, "kiro-cli", t.TempDir(), []string{"alpha"})
+			err := VerifyACP(context.Background(), runner, "kiro-cli", t.TempDir(), []string{"alpha"})
 			if !errors.Is(err, shared.ErrRecognizedNegativeEvidence) {
 				t.Fatalf("error = %v, want invalid UTF-8 to prevent connected success", err)
 			}
@@ -640,10 +620,9 @@ func TestKiroACPRejectsUnpairedUTF16EscapesWithoutReplacement(t *testing.T) {
 		"standalone low":    initialize + `{"jsonrpc":"2.0","id":1,"result":{"sessionId":"\udfff"}}` + "\n",
 	}
 	for name, output := range tests {
-		output := output
 		t.Run(name, func(t *testing.T) {
 			runner := &fixtureDuplexRunner{output: output, keepAlive: true, closeAfterWrite: true}
-			err := verifyKiroACP(context.Background(), runner, "kiro-cli", t.TempDir(), []string{"alpha"})
+			err := VerifyACP(context.Background(), runner, "kiro-cli", t.TempDir(), []string{"alpha"})
 			if !errors.Is(err, shared.ErrRecognizedNegativeEvidence) || !strings.Contains(err.Error(), "surrogate") {
 				t.Fatalf("error = %v, want unpaired UTF-16 escape rejected before evidence acceptance", err)
 			}
@@ -668,16 +647,16 @@ func TestKiroACPRealPipeRejectsInvalidUTF8QueuedDuringSettlement(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer stdout.Close()
-	defer peer.Close()
+	defer func() { _ = stdout.Close() }()
+	defer func() { _ = peer.Close() }()
 	stdinPeer, stdin, err := os.Pipe()
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer stdinPeer.Close()
-	defer stdin.Close()
+	defer func() { _ = stdinPeer.Close() }()
+	defer func() { _ = stdin.Close() }()
 	go func() {
-		_, _ = io.WriteString(peer, connectedACP("alpha"))
+		_, _ = io.WriteString(peer, connectedACP())
 		time.Sleep(kiroACPSettlement / 3)
 		_, _ = peer.Write(append([]byte(`{"jsonrpc":"2.0","method":"progress","params":{"extension":"`),
 			append([]byte{0xff}, []byte(`"}}`+"\n")...)...))
@@ -692,7 +671,7 @@ func TestDecodeACPMessageWideObjectRemainsResourceBounded(t *testing.T) {
 	t.Parallel()
 	var record strings.Builder
 	record.WriteString(`{"jsonrpc":"2.0","method":"progress","params":{"wide":{`)
-	for index := 0; index < 12000; index++ {
+	for index := range 12000 {
 		if index != 0 {
 			record.WriteByte(',')
 		}
@@ -724,11 +703,10 @@ func TestKiroACPPreservesPreSessionNegativeEvidenceAcrossLaterFailures(t *testin
 		"read":      io.MultiReader(strings.NewReader(prefix), terminalErrorReader{err: readFailure}),
 	}
 	for name, output := range tests {
-		output := output
 		t.Run(name, func(t *testing.T) {
 			runner := &fixtureDuplexRunner{reader: output}
-			err := verifyKiroACP(context.Background(), runner, "kiro-cli", t.TempDir(), []string{"alpha"})
-			if !errors.Is(err, shared.ErrRecognizedNegativeEvidence) || errors.Is(err, errKiroACPContractUnknown) {
+			err := VerifyACP(context.Background(), runner, "kiro-cli", t.TempDir(), []string{"alpha"})
+			if !errors.Is(err, shared.ErrRecognizedNegativeEvidence) || errors.Is(err, ErrACPContractUnknown) {
 				t.Fatalf("error = %v, want sticky recognized negative evidence", err)
 			}
 		})
@@ -742,7 +720,7 @@ func TestKiroACPMultiServerTimeoutPreservesIncompleteNegativeEvidence(t *testing
 			acpStatus("s", "alpha", "connected", `[{"name":"search","disabled":false}]`),
 		postError: context.DeadlineExceeded,
 	}
-	err := verifyKiroACP(context.Background(), runner, "kiro-cli", t.TempDir(), []string{"alpha", "beta"})
+	err := VerifyACP(context.Background(), runner, "kiro-cli", t.TempDir(), []string{"alpha", "beta"})
 	if !errors.Is(err, shared.ErrRecognizedNegativeEvidence) || !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("error = %v, want incomplete evidence and deadline identities", err)
 	}
@@ -753,8 +731,8 @@ func TestKiroACPPropagatesCallerCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	runner := &fixtureDuplexRunner{}
-	err := verifyKiroACP(ctx, runner, "kiro-cli", t.TempDir(), []string{"alpha"})
-	if !errors.Is(err, context.Canceled) || errors.Is(err, errKiroACPContractUnknown) {
+	err := VerifyACP(ctx, runner, "kiro-cli", t.TempDir(), []string{"alpha"})
+	if !errors.Is(err, context.Canceled) || errors.Is(err, ErrACPContractUnknown) {
 		t.Fatalf("error = %v, want caller cancellation without manual fallback", err)
 	}
 	if len(runner.command.Argv) != 0 {
@@ -776,11 +754,10 @@ func TestKiroACPRejectsNonExclusiveJSONRPCEnvelopes(t *testing.T) {
 		"session result and params":    validInitialize + `{"jsonrpc":"2.0","id":1,"result":{"sessionId":"s"},"params":{}}` + "\n",
 	}
 	for name, output := range tests {
-		output := output
 		t.Run(name, func(t *testing.T) {
 			runner := &fixtureDuplexRunner{output: output}
-			err := verifyKiroACP(context.Background(), runner, "kiro-cli", t.TempDir(), []string{"alpha"})
-			if !errors.Is(err, shared.ErrRecognizedNegativeEvidence) || errors.Is(err, errKiroACPContractUnknown) {
+			err := VerifyACP(context.Background(), runner, "kiro-cli", t.TempDir(), []string{"alpha"})
+			if !errors.Is(err, shared.ErrRecognizedNegativeEvidence) || errors.Is(err, ErrACPContractUnknown) {
 				t.Fatalf("error = %v, want rejected JSON-RPC protocol failure", err)
 			}
 		})
@@ -799,10 +776,9 @@ func TestKiroACPRejectsStructuredNegativeEvidence(t *testing.T) {
 		"disabled tool": acpStatus("s", "alpha", "connected", `[{"name":"search","disabled":true}]`),
 	}
 	for name, status := range tests {
-		status := status
 		t.Run(name, func(t *testing.T) {
 			runner := &fixtureDuplexRunner{output: acpResponse(0, `{"protocolVersion":1}`) + acpResponse(1, `{"sessionId":"s"}`) + status}
-			err := verifyKiroACP(context.Background(), runner, "kiro-cli", t.TempDir(), []string{"alpha"})
+			err := VerifyACP(context.Background(), runner, "kiro-cli", t.TempDir(), []string{"alpha"})
 			if !errors.Is(err, shared.ErrRecognizedNegativeEvidence) {
 				t.Fatalf("error = %v, want recognized negative evidence", err)
 			}
@@ -824,10 +800,9 @@ func TestKiroACPRejectsAmbiguousDuplicateAndWrongIdentity(t *testing.T) {
 		"wrong session":  acpResponse(0, `{"protocolVersion":1}`) + acpResponse(1, `{"sessionId":"s"}`) + acpStatus("other", "alpha", "connected", `[{"name":"search","disabled":false}]`),
 	}
 	for name, output := range tests {
-		output := output
 		t.Run(name, func(t *testing.T) {
 			runner := &fixtureDuplexRunner{output: output}
-			err := verifyKiroACP(context.Background(), runner, "kiro-cli", t.TempDir(), []string{"alpha"})
+			err := VerifyACP(context.Background(), runner, "kiro-cli", t.TempDir(), []string{"alpha"})
 			if err == nil {
 				t.Fatal("ambiguous ACP evidence unexpectedly succeeded")
 			}
@@ -862,15 +837,14 @@ func TestKiroACPProtocolFailuresFailClosedAndLaunchFailuresFallBack(t *testing.T
 		"timeout":                  {err: context.DeadlineExceeded},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			runner := &fixtureDuplexRunner{output: test.output, duplexErr: test.err}
-			err := verifyKiroACP(context.Background(), runner, "kiro-cli", t.TempDir(), []string{"alpha"})
+			err := VerifyACP(context.Background(), runner, "kiro-cli", t.TempDir(), []string{"alpha"})
 			if test.err == nil {
-				if !errors.Is(err, shared.ErrRecognizedNegativeEvidence) || errors.Is(err, errKiroACPContractUnknown) {
+				if !errors.Is(err, shared.ErrRecognizedNegativeEvidence) || errors.Is(err, ErrACPContractUnknown) {
 					t.Fatalf("error = %v, want fail-closed protocol evidence", err)
 				}
-			} else if !errors.Is(err, errKiroACPContractUnknown) || errors.Is(err, shared.ErrRecognizedNegativeEvidence) {
+			} else if !errors.Is(err, ErrACPContractUnknown) || errors.Is(err, shared.ErrRecognizedNegativeEvidence) {
 				t.Fatalf("error = %v, want safe pre-exchange fallback", err)
 			}
 		})
