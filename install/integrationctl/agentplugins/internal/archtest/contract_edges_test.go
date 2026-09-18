@@ -69,13 +69,25 @@ var contractClosure = []string{
 }
 
 // contractExternalModules is invariant 3: every non-stdlib, non-repository
-// module reachable from the contract layer, normalized to its first three
-// import-path segments (the module root for both github.com/<owner>/<repo>
-// and golang.org/x/<pkg> paths).
+// module reachable from the contract layer on any platform in platformSweep,
+// normalized to its first three import-path segments (the module root for
+// both github.com/<owner>/<repo> and golang.org/x/<pkg> paths).
 var contractExternalModules = []string{
 	"github.com/tailscale/hujson",
+	"golang.org/x/sys",
 	"golang.org/x/text",
 }
+
+// platformSweep lists every GOOS the closure is recomputed under.
+// adapters/nativeconfig (lock_windows.go, open_nofollow_windows.go) and
+// adapters/atomicfile (syncdir_windows.go) gate golang.org/x/sys behind a
+// Windows-only file: a single-platform scan sees it only on the GOOS it
+// happens to run under, and stays permanently blind to a dependency gated
+// behind any other platform's file - exactly the class of drift this test
+// exists to catch. GOARCH is fixed at amd64 because none of these packages
+// carry architecture-specific files today; CgoEnabled is off because none
+// use cgo.
+var platformSweep = []string{"linux", "darwin", "windows"}
 
 // TestContractLayerDependencyClosure is the guard test from plan §12.1.G: it
 // fails the moment domain, ports, clients, or any package they already reach,
@@ -85,80 +97,120 @@ func TestContractLayerDependencyClosure(t *testing.T) {
 	t.Parallel()
 	root := testRepoRoot(t)
 
+	gotNonTestEdges := make(map[string][]string, len(contractDirs))
+	gotTestEdges := make(map[string][]string, len(contractDirs))
 	closure := map[string]bool{}
-	for member := range contractDirs {
-		closure[member] = true
-	}
 	external := map[string]bool{}
+
+	for _, goos := range platformSweep {
+		ctxt := build.Default
+		ctxt.GOOS = goos
+		ctxt.GOARCH = "amd64"
+		ctxt.CgoEnabled = false
+
+		snapshot, err := computeContractSnapshot(root, ctxt)
+		if err != nil {
+			t.Fatalf("GOOS=%s: %v", goos, err)
+		}
+		for source, targets := range snapshot.nonTestEdges {
+			gotNonTestEdges[source] = append(gotNonTestEdges[source], targets...)
+		}
+		for source, targets := range snapshot.testEdges {
+			gotTestEdges[source] = append(gotTestEdges[source], targets...)
+		}
+		markAll(closure, setKeys(snapshot.closure))
+		markAll(external, setKeys(snapshot.external))
+	}
+
+	assertExactEdges(t, "production", gotNonTestEdges, contractNonTestEdges)
+	assertExactEdges(t, "test", gotTestEdges, contractTestEdges)
+	assertExactSet(t, "contract layer transitive closure", setKeys(closure), contractClosure)
+	assertExactSet(t, "contract layer external modules", setKeys(external), contractExternalModules)
+}
+
+// contractSnapshot is one platform's dependency picture of the contract
+// layer: its outgoing edges (invariant 1) and the transitive closure and
+// external modules reachable through them (invariants 2 and 3).
+type contractSnapshot struct {
+	nonTestEdges map[string][]string
+	testEdges    map[string][]string
+	closure      map[string]bool
+	external     map[string]bool
+}
+
+// computeContractSnapshot walks the contract layer's own files, then expands
+// the closure through the allowed edges' production imports - their test
+// files are not part of the future module and are skipped on purpose.
+func computeContractSnapshot(root string, ctxt build.Context) (contractSnapshot, error) {
+	snapshot := contractSnapshot{
+		nonTestEdges: make(map[string][]string, len(contractDirs)),
+		testEdges:    make(map[string][]string, len(contractDirs)),
+		closure:      map[string]bool{},
+		external:     map[string]bool{},
+	}
+	for member := range contractDirs {
+		snapshot.closure[member] = true
+	}
 	var frontier []string
 	enqueue := func(targets []string) {
 		for _, target := range targets {
-			if !closure[target] {
+			if !snapshot.closure[target] {
 				frontier = append(frontier, target)
 			}
 		}
 	}
 
-	gotNonTestEdges := make(map[string][]string, len(contractDirs))
-	gotTestEdges := make(map[string][]string, len(contractDirs))
 	for importPath, rel := range contractDirs {
 		dir := filepath.Join(root, filepath.FromSlash(rel))
-		production, tests, err := packageImports(dir, true)
+		production, tests, err := packageImports(ctxt, dir, true)
 		if err != nil {
-			t.Fatal(err)
+			return contractSnapshot{}, err
 		}
 
 		repoTargets, externalMods := classifyImports(production)
-		gotNonTestEdges[importPath] = repoTargets
-		markAll(external, externalMods)
+		snapshot.nonTestEdges[importPath] = repoTargets
+		markAll(snapshot.external, externalMods)
 		enqueue(repoTargets)
 
 		testRepoTargets, testExternalMods := classifyImports(tests)
-		gotTestEdges[importPath] = testRepoTargets
-		markAll(external, testExternalMods)
+		snapshot.testEdges[importPath] = testRepoTargets
+		markAll(snapshot.external, testExternalMods)
 		enqueue(testRepoTargets)
 	}
 
-	assertExactEdges(t, "production", gotNonTestEdges, contractNonTestEdges)
-	assertExactEdges(t, "test", gotTestEdges, contractTestEdges)
-
-	// Invariant 2/3 expand the closure through the already-allowed edges'
-	// own production imports. Their test files are not part of the future
-	// module and are skipped on purpose.
 	for len(frontier) > 0 {
 		next := frontier[0]
 		frontier = frontier[1:]
-		if closure[next] {
+		if snapshot.closure[next] {
 			continue
 		}
-		closure[next] = true
+		snapshot.closure[next] = true
 
 		dir, err := repoDirForImportPath(root, next)
 		if err != nil {
-			t.Fatal(err)
+			return contractSnapshot{}, err
 		}
-		production, _, err := packageImports(dir, false)
+		production, _, err := packageImports(ctxt, dir, false)
 		if err != nil {
-			t.Fatal(err)
+			return contractSnapshot{}, err
 		}
 		repoTargets, externalMods := classifyImports(production)
-		markAll(external, externalMods)
+		markAll(snapshot.external, externalMods)
 		enqueue(repoTargets)
 	}
 
-	assertExactSet(t, "contract layer transitive closure", setKeys(closure), contractClosure)
-	assertExactSet(t, "contract layer external modules", setKeys(external), contractExternalModules)
+	return snapshot, nil
 }
 
 // packageImports parses every immediate (non-recursive) .go file in dir that
-// the current build context would actually compile, split into production
-// and _test.go imports. Filtering through build.Default.MatchFile matters
-// here: adapters/nativeconfig and adapters/atomicfile carry GOOS-suffixed
-// files (lock_windows.go pulls in golang.org/x/sys/windows), and a plain
-// directory walk would report that module on every platform except the one
-// building it, whereas `go list` - and this test - only report it on
-// Windows.
-func packageImports(dir string, includeTests bool) (production, test []string, err error) {
+// ctxt would actually compile, split into production and _test.go imports.
+// Filtering through ctxt.MatchFile matters here: adapters/nativeconfig and
+// adapters/atomicfile carry GOOS-suffixed files (lock_windows.go pulls in
+// golang.org/x/sys/windows), and a plain directory walk would report that
+// module on every platform regardless of which one is actually building,
+// whereas `go list` - and this test, once ctxt sweeps GOOS - only reports it
+// for the platform that compiles the file.
+func packageImports(ctxt build.Context, dir string, includeTests bool) (production, test []string, err error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return nil, nil, err
@@ -172,7 +224,7 @@ func packageImports(dir string, includeTests bool) (production, test []string, e
 		if isTest && !includeTests {
 			continue
 		}
-		matched, err := build.Default.MatchFile(dir, entry.Name())
+		matched, err := ctxt.MatchFile(dir, entry.Name())
 		if err != nil {
 			return nil, nil, err
 		}
@@ -283,13 +335,18 @@ func sortedUnique(values []string) []string {
 
 // assertExactEdges reports both directions of drift with the message shape
 // §12.1.G asks for: a new edge names what appeared, a missing edge names what
-// the baseline still expects.
+// the baseline still expects. It walks the union of got's and want's source
+// keys, not just got's: a source that vanished from got entirely (contractDirs
+// shrinking without a matching update to the expectation maps) must still be
+// checked against a non-empty want, or the guard would go quiet instead of
+// failing.
 func assertExactEdges(t *testing.T, kind string, got, want map[string][]string) {
 	t.Helper()
-	for source, targets := range got {
-		gotSet := toSet(targets)
+	sources := sortedUnique(append(mapStringKeys(got), mapStringKeys(want)...))
+	for _, source := range sources {
+		gotSet := toSet(got[source])
 		wantSet := toSet(want[source])
-		for _, target := range sortedUnique(targets) {
+		for _, target := range sortedUnique(got[source]) {
 			if !wantSet[target] {
 				t.Errorf("contract layer: new %s import %s -> %s; if intentional, update §12.1(c) of docs/plans/installer-core-part-12-contract-module.md and this test's baseline, otherwise remove the import", kind, source, target)
 			}
@@ -300,6 +357,14 @@ func assertExactEdges(t *testing.T, kind string, got, want map[string][]string) 
 			}
 		}
 	}
+}
+
+func mapStringKeys(m map[string][]string) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	return keys
 }
 
 func assertExactSet(t *testing.T, label string, got, want []string) {

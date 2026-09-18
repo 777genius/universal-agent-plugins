@@ -76,16 +76,29 @@ go list -f '{{.ImportPath}}: {{join .TestImports " "}} | X: {{join .XTestImports
   ./agentplugins/domain ./agentplugins/ports ./agentplugins/clients
 ```
 
+**Примечание про LOC-снимок (найдено при ревью guard-теста, до старта 12a/12b).** `d5250a3d9` уже включает
+рост трёх файлов из ещё не смёрженного Part 4: `domain/clients.go` (313→351),
+`domain/directory_context7_preparation.go` (41→48), `clients/planning.go` (59→110). На HEAD ветки, где
+писался guard-тест из §12.1.G (Part 3, без Part 4), non-test LOC ядра контракта сейчас **2985**, а не 3081
+(`domain` 2178, `clients` 587; `ports` и все test-LOC не отличаются). Это не ошибка снимка — заголовок честно
+указывает коммит верификации, — но перед стартом 12b счётчики файлов и LOC нужно пересчитать заново той же
+командой. Зависимостный снимок §12.1(c) (рёбра, замыкание, внешние модули), на котором стоит guard-тест, от
+этого дрейфа не пострадал: он был независимо перепроверен на HEAD Part 3 и совпал с таблицей ниже один в
+один.
+
 ### Состав контрактного слоя
 
 | Пакет | non-test файлов | non-test LOC | test LOC |
 |---|---|---|---|
 | `agentplugins/domain` | 14 | 2223 | 1080 |
-| `agentplugins/ports` | 5 | 220 | 0 |
+| `agentplugins/ports` | 6 | 220 | 0 |
 | `agentplugins/clients` | 8 | 638 | 91 |
-| **Ядро контракта** | **27** | **3081** | **1171** |
+| **Ядро контракта** | **28** | **3081** | **1171** |
 | `ports/contracttest` (опционально, §12.3) | 1 | 144 | 0 |
 | `clients/contracttest` (опционально) | 4 | 439 | 189 |
+
+Test-файлов в ядре контракта — **11**: 10 `_test.go` в `domain` (1080 LOC) + 1 в `clients`
+(`registry_test.go`, 91 LOC); `ports` тестов не имеет.
 
 `domain`: `planning.go` 14, `selection.go` 24, `acquisition.go` 29, `errors.go` 38,
 `directory_context7_preparation.go` 48, `install_intent.go` 50, `chatgpt_mapping.go` 68, `identity.go` 79,
@@ -102,12 +115,19 @@ go list -f '{{.ImportPath}}: {{join .TestImports " "}} | X: {{join .XTestImports
 `context`, `crypto/rand`, `crypto/sha256`, `encoding/hex`, `encoding/json`, `errors`, `fmt`, `io`, `io/fs`,
 `os`, `path/filepath`, `regexp`, `sort`, `strconv`, `strings`, `time`.
 
-**(b) Внешние модули (non-test) — ровно один, и только транзитивно:**
+**(b) Внешние модули (non-test) — ровно один на данной платформе, и только транзитивно:**
 `github.com/tailscale/hujson` (через `adapters/nativeconfig`). Прямых внешних импортов у контракта нет.
 Версия в `install/integrationctl/go.mod`: `v0.0.0-20260302212456-ecc657c15afd`.
 
 **(b') Внешние модули, приходящие через ТЕСТЫ:** `golang.org/x/text/transform`, `golang.org/x/text/unicode/norm`
 (через `adapters/pathpolicy`, Находка 4).
+
+**(b'') Внешний модуль, видимый только на Windows:** `golang.org/x/sys` — `adapters/nativeconfig/lock_windows.go`
+и `adapters/nativeconfig/open_nofollow_windows.go` (`//go:build windows`) импортируют `golang.org/x/sys/windows`;
+`adapters/atomicfile/syncdir_windows.go` не тянет ничего внешнего сам, но лежит в том же файловом наборе.
+`go list -deps` на любой отдельной платформе этого модуля не покажет — guard test из §12.1.G обязан
+пересчитывать замыкание для каждого GOOS отдельно (см. §12.1.G, инвариант 3), иначе он слеп к дрейфу за
+Windows-only файлом ровно так же, как черновик изначально был слеп к Находке 4 через тестовый импорт.
 
 **(c) Внутримонорепные зависимости — ровно ТРИ (черновик знал две):**
 
@@ -226,8 +246,12 @@ agentplugins/clients}` (только эти три пакета, без подп
    Это ловит дрейф, который прячется за уже разрешённым ребром (например, если `adapters/nativeconfig`
    однажды начнёт импортировать `conformance`).
 
-3. **Внешние модули.** Множество внешних (не-stdlib, не-репозиторных) модулей в этом замыкании равно ровно
-   `{github.com/tailscale/hujson, golang.org/x/text}`.
+3. **Внешние модули.** Множество внешних (не-stdlib, не-репозиторных) модулей в этом замыкании, по всем
+   платформам, равно ровно `{github.com/tailscale/hujson, golang.org/x/sys, golang.org/x/text}`.
+   `golang.org/x/sys` попадает в множество только через Windows-only файлы `adapters/nativeconfig` и
+   `adapters/atomicfile` (§12.1, «Полный список зависимостей») — на любой отдельно взятой платформе
+   `go list -deps` его не покажет, поэтому тест обязан пересчитывать замыкание для каждого GOOS из
+   `{linux, darwin, windows}`, а не полагаться на платформу CI-раннера.
 
 Каждый инвариант — с точным сообщением об ошибке в стиле «появилось новое ребро `X → Y`; если это осознанно,
 обнови §12.1(c) плана Part 12 и baseline этого теста, иначе — убери импорт».
@@ -246,13 +270,19 @@ PATH и от режима workspace, а в CI это лишняя поверхн
 - умеет находить корень репозитория (`repoRoot()` идёт вверх до каталога с `go.work`);
 - уже знает нужные константы: `modulePath`, `domainImportPath`, `legacyPortsPath`.
 
-Реализация — новый файл `contract_edges_test.go` в том же пакете:
+Реализация — новый файл `contract_edges_test.go` в том же пакете (по факту реализации, а не как черновик
+изначально описывал ниже — эквивалентно дешевле):
 
-- собрать множество репозиторных пакетов и их импортов, обойдя дерево `install/integrationctl` и
-  `cli/plugin-kit-ai` через `filepath.WalkDir` + `parser.ParseDir` с `parser.ImportsOnly`
-  (быстро: разбирается только шапка файла);
-- **обязательно включать `_test.go`** — иначе Находка 4 не ловится. Это ключевое отличие от
-  depguard-правила `domain-stdlib-only`, которое объявлено с `"!$test"`;
+- собрать импорты только трёх пакетов `domain`/`ports`/`clients` (не рекурсивно — файлы, лежащие прямо в
+  каталоге, `parser.ParseFile` с `parser.ImportsOnly` через `os.ReadDir`, без `filepath.WalkDir`/
+  `parser.ParseDir` по всему `install/integrationctl`/`cli/plugin-kit-ai` — обход всего дерева не нужен: для
+  инвариантов 2-3 достаточно BFS от уже найденных исходящих рёбер по производственным (non-test) импортам
+  каждого следующего пакета до фиксированной точки, что на порядок дешевле полного обхода при тех же
+  гарантиях);
+- **обязательно включать `_test.go`** для самих `domain`/`ports`/`clients` — иначе Находка 4 не ловится. Это
+  ключевое отличие от depguard-правила `domain-stdlib-only`, которое объявлено с `"!$test"`. Тестовые файлы
+  пакетов, найденных на шаге BFS (не входящих в контрактную тройку), при этом не разбираются — они не часть
+  будущего модуля;
 - отличать stdlib от внешнего модуля по стандартной эвристике `goimports`: если первый сегмент пути импорта
   содержит точку — это внешний модуль, иначе stdlib. Репозиторные пакеты определяются по префиксу
   `modulePath`;
@@ -262,17 +292,30 @@ PATH и от режима workspace, а в CI это лишняя поверхн
 - baseline держать **константами в самом тесте**, а не в `testdata/*.json`: множеств три, они крошечные, и
   правка константы в diff'е PR читается лучше, чем правка JSON.
 
-Альтернатива, если по ходу выяснится, что AST-обход даёт ложные срабатывания на build-тегах (`_windows`/
-`_unix`): `go/build.Context` с `MatchFile` для фильтрации по текущей платформе. В контрактных пакетах
-build-тегов сегодня нет (§12.2.C), поэтому это запасной вариант, а не базовый.
+`go/build.Context.MatchFile` для фильтрации файлов по GOOS/GOARCH — **не запасной вариант, а обязательная
+часть реализации**, вопреки первоначальному черновику этого раздела: в самих `domain`/`ports`/`clients`
+build-тегов действительно нет (§12.2.C), но инварианты 2-3 обходят весь достижимый снаружи них замыкание, а
+там теги есть — `adapters/nativeconfig` (`lock_windows.go`, `open_nofollow_windows.go`) и `adapters/atomicfile`
+(`syncdir_windows.go`) прячут `golang.org/x/sys` за файлом, который есть только на Windows. Без `MatchFile`
+инвариант 3 либо не увидел бы `golang.org/x/sys` вовсе на не-Windows раннере, либо ошибочно требовал бы его
+на всех платформах. Реализация поэтому прогоняет весь снимок (`computeContractSnapshot`) для каждого GOOS из
+`{linux, darwin, windows}` (GOARCH зафиксирован на `amd64`, `CgoEnabled: false` — архитектурных и
+cgo-зависимых файлов в контракте нет) и объединяет результаты, а не полагается на GOOS раннера, на котором
+запущен `go test`.
 
 #### Приёмка guard-теста
 
 - Тест зелёный на текущем HEAD и фиксирует ровно три ребра из таблицы выше.
-- Искусственная проверка (делается локально, в коммит не попадает): добавить в `clients/planning.go` импорт
-  `agentplugins/pathcontract` — тест падает с внятным сообщением; добавить в `ports` тестовый файл с импортом
-  `gopkg.in/yaml.v3` — тест падает на инварианте 3.
-- Тест выполняется быстрее 1 с (ImportsOnly-разбор), то есть не утяжеляет `core-fast`.
+- Искусственная проверка (делается локально, в коммит не попадает):
+  - добавить в `clients/clients.go` импорт `agentplugins/pathcontract` (реально существующий пакет) — тест
+    падает сразу по всем трём инвариантам, включая каскад через `conformance`,
+    `github.com/santhosh-tekuri/jsonschema` и `gopkg.in/yaml.v3`, которые `pathcontract` тянет транзитивно;
+  - добавить в `ports` тестовый файл с импортом `gopkg.in/yaml.v3` — тест падает на инварианте 3;
+  - добавить `_ "gopkg.in/yaml.v3"` в `adapters/nativeconfig/lock_windows.go` (файл с `//go:build windows`) —
+    тест падает на инварианте 3, только если гоняет замыкание под `GOOS=windows`; это целевая проверка
+    GOOS-развёртки, без неё тест на macOS/Linux-раннере остался бы зелёным.
+- Тест выполняется быстрее 1 с даже при пересчёте замыкания для трёх GOOS (ImportsOnly-разбор), то есть не
+  утяжеляет `core-fast`.
 - Комментарий в шапке файла ссылается на §12.1(c) и §12.1.G этого документа.
 
 Надёжность 8/10, уверенность 8/10 (минус — эвристика «точка в первом сегменте» формально не покрывает
@@ -607,7 +650,7 @@ legacy `ProcessRunner` в `coreports.CommandRunner`. Плюс: legacy-пакет
   stdlib + `domain`. Чисто. Тестов у пакета `ports` нет вовсе (`TestImports` и `XTestImports` пусты).
 - `clients/host.go`, `clients/detection.go` используют `os`/`io/fs` — stdlib, для модуля безвредно.
 - `clients` в тестах импортирует только `domain` + `testing`. Чисто.
-- Build-тегов (`_windows`/`_darwin`/`_unix`/`linux_*`) в переезжающих 27 non-test файлах **нет**. Риск
+- Build-тегов (`_windows`/`_darwin`/`_unix`/`linux_*`) в переезжающих 28 non-test файлах **нет**. Риск
   `cross-build` для Part 12 низкий (в отличие от Part 5, где 39 платформенных файлов).
 
 ---
@@ -727,12 +770,20 @@ loop-семантикой и отказ от `toolchain`-директивы (о�
 для внешних адаптеров» остаётся декларативным. Оба уже stdlib-чистые (VERIFIED по `Imports`, `TestImports` и
 `XTestImports`, §12.1), дополнительных развязок не требуют.
 
+**Остаточный риск для guard-теста (§12.1.G).** `ports/contracttest` и `clients/contracttest` намеренно вне
+множества `C`, которое стережёт guard test — он видит только `agentplugins/domain`, `agentplugins/ports`,
+`agentplugins/clients` верхнего уровня. Если один из `contracttest`-пакетов до PR 12c наберёт зависимость,
+не совместимую с будущим модулем, guard test этого не заметит: его нужно либо явно расширить на оба
+`contracttest`-пакета к моменту, когда 12c реально становится следующим шагом, либо принять точечную
+повторную проверку `go list -f '{{.Imports}}' ./agentplugins/ports/contracttest ./agentplugins/clients/contracttest`
+непосредственно перед стартом 12c.
+
 ### Объём механических правок (VERIFIED подсчётом, с учётом правок критики)
 
 | Что | Файлов | Строк |
 |---|---|---|
 | Смена путей импорта `domain`/`ports`/`clients` | **294** (202 в `install/integrationctl`, 91 в `cli/plugin-kit-ai`, 1 в `repotests/`) | ~360 строк импортов (285 `domain` + 34 `ports` + 41 `clients`) |
-| Переезд файлов контракта (`git mv`) | 27 non-test + 10 test | 4252 LOC перемещения |
+| Переезд файлов контракта (`git mv`) | 28 non-test + 11 test | 4252 LOC перемещения |
 | Разделение `nativeconfig` (A1, пересчитано) | ~17 | **~240** (см. таблицу в §12.2.A1) |
 | Alias `Command`/`CommandResult` (B1) | 2 | ~10 |
 | Переезд `identity_portable_test.go` (D1) | 2 | 71 перемещения + ~5 |
@@ -761,7 +812,7 @@ loop-семантикой и отказ от `toolchain`-директивы (о�
   `agentplugins/adapters/nativeconfig` (сегодня его там нет — см. §12.5). Объём ~250 строк логики + ~80
   правок ссылок.
 - **12b — собственно модуль.**
-  `go.mod` (с бисектом версии Go), `go.work`, `git mv` 27+10 файлов, массовая смена импортов (294 файла),
+  `go.mod` (с бисектом версии Go), `go.work`, `git mv` 28+11 файлов, массовая смена импортов (294 файла),
   `require`/`replace` у потребителей, CI/Makefile/archtest/`.golangci.yml`. Объём ~4300 строк перемещения +
   ~400 правок.
 - **12c — `contracttest` в модуль + документация.**
