@@ -32,7 +32,7 @@ func TestGeneratedPackagesReachExistingInstallerPlanner(t *testing.T) {
 	if runtime.GOOS != "linux" && !(runtime.GOOS == "windows" && (runtime.GOARCH == "amd64" || runtime.GOARCH == "arm64")) {
 		t.Skip("writable native authoring requires Linux or Windows amd64/arm64")
 	}
-	author := commands.App{Projects: project.Service{Scratch: t.TempDir()}, Revision: baseline}
+	author := commands.App{ClientRegistry: clientregistry.Default(), Projects: project.Service{Scratch: t.TempDir()}, Revision: baseline}
 	registry, e := specregistry.New()
 	if e != nil {
 		t.Fatal(e)

@@ -225,7 +225,7 @@ func TestPackedInstallerSourceHarness(t *testing.T) {
 	if (runtime.GOOS != "linux" && runtime.GOOS != "windows") || (runtime.GOARCH != "amd64" && runtime.GOARCH != "arm64") {
 		t.Skip("source harness requires supported Linux/Windows amd64/arm64 host")
 	}
-	author := commands.App{Projects: project.Service{Scratch: t.TempDir()}, Revision: publicRevision, PublicContract: true}
+	author := commands.App{ClientRegistry: clientregistry.Default(), Projects: project.Service{Scratch: t.TempDir()}, Revision: publicRevision, PublicContract: true}
 	for _, lane := range []string{"skill", "mcp-remote", "mcp-stdio", "hybrid-remote", "hybrid-stdio"} {
 		t.Run(lane, func(t *testing.T) {
 			source := filepath.Join(t.TempDir(), lane)
@@ -281,7 +281,7 @@ func TestPackedInstallerAssessmentBoundaries(t *testing.T) {
 	for _, fail := range []bool{true, false} {
 		t.Run(fmt.Sprintf("assessment-error-%t", fail), func(t *testing.T) {
 			source := filepath.Join(t.TempDir(), "demo")
-			author := commands.App{Projects: project.Service{Scratch: t.TempDir()}, Revision: publicRevision, PublicContract: true}
+			author := commands.App{ClientRegistry: clientregistry.Default(), Projects: project.Service{Scratch: t.TempDir()}, Revision: publicRevision, PublicContract: true}
 			if _, code, out := publicRun(t, author, []string{"init", source, "--name=demo", "--template=skill", "--format=json"}, false); code != 0 {
 				t.Fatal(out)
 			}

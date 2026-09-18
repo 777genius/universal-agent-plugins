@@ -26,6 +26,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/cli/internal/authoringcli"
 	"github.com/777genius/plugin-kit-ai/cli/internal/exitx"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/packageview"
+	clientregistry "github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/all"
 	"github.com/spf13/cobra"
 )
 
@@ -251,7 +252,7 @@ func TestReportsAndFreshFactory(t *testing.T) {
 		t.Skip("writable native authoring requires Linux or Windows amd64/arm64")
 	}
 	scratch := t.TempDir()
-	a := commands.App{Projects: project.Service{Scratch: scratch}, Revision: baseline}
+	a := commands.App{ClientRegistry: clientregistry.Default(), Projects: project.Service{Scratch: scratch}, Revision: baseline}
 	cases := []struct {
 		name, core, mc, skill string
 		load, norm, host      report.State
@@ -352,7 +353,7 @@ func TestReportsAndFreshFactory(t *testing.T) {
 }
 
 func TestArgumentFailuresBeforeEffects(t *testing.T) {
-	a := commands.App{Projects: project.Service{Scratch: t.TempDir()}, Revision: baseline}
+	a := commands.App{ClientRegistry: clientregistry.Default(), Projects: project.Service{Scratch: t.TempDir()}, Revision: baseline}
 	parent := t.TempDir()
 	destination := filepath.Join(parent, "new")
 	for _, args := range [][]string{
@@ -379,7 +380,7 @@ func TestInitValidationAndFailurePolicy(t *testing.T) {
 		t.Skip("writable native authoring requires Linux or Windows amd64/arm64")
 	}
 	scratch := t.TempDir()
-	a := commands.App{Projects: project.Service{Scratch: scratch}, Revision: baseline}
+	a := commands.App{ClientRegistry: clientregistry.Default(), Projects: project.Service{Scratch: scratch}, Revision: baseline}
 	parent := t.TempDir()
 	dest := filepath.Join(parent, "demo")
 	baseArgs := []string{"init", dest, "--template=skill", "--name=demo", "--description=A fixture.", "--format=json"}
@@ -435,7 +436,7 @@ func TestConcurrentInitAndCanceledInvocation(t *testing.T) {
 		t.Skip("writable native authoring requires Linux or Windows amd64/arm64")
 	}
 	parent, scratch := t.TempDir(), t.TempDir()
-	a := commands.App{Projects: project.Service{Scratch: scratch}, Revision: baseline}
+	a := commands.App{ClientRegistry: clientregistry.Default(), Projects: project.Service{Scratch: scratch}, Revision: baseline}
 	dest := filepath.Join(parent, "demo")
 	args := []string{"init", dest, "--template=skill", "--name=demo", "--description=A fixture.", "--format=json"}
 	var jobs []func() rawExecution
@@ -488,7 +489,7 @@ func TestCleanupFailureSurvivesCancellation(t *testing.T) {
 	}
 	root, scratch := t.TempDir(), t.TempDir()
 	write(t, root, "plugin.json", plugin(""))
-	a := commands.App{Projects: project.Service{Scratch: scratch}, Revision: baseline}
+	a := commands.App{ClientRegistry: clientregistry.Default(), Projects: project.Service{Scratch: scratch}, Revision: baseline}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	replacement := ""

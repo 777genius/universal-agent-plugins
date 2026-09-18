@@ -17,6 +17,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/cli/internal/authoring/mcpruntime"
 	"github.com/777genius/plugin-kit-ai/cli/internal/authoring/project"
 	"github.com/777genius/plugin-kit-ai/cli/internal/authoring/report"
+	clientregistry "github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/all"
 )
 
 func TestDevSessionLockConflictsDeterministicallyAndReleases(t *testing.T) {
@@ -125,7 +126,7 @@ func TestContinuousDevReportsFailuresAndKeepsWatching(t *testing.T) {
 	var codes []string
 	cycles := 0
 	var human bytes.Buffer
-	app := App{Projects: project.Service{Scratch: t.TempDir()}, Revision: "dev-test"}
+	app := App{ClientRegistry: clientregistry.Default(), Projects: project.Service{Scratch: t.TempDir()}, Revision: "dev-test"}
 	_, err := app.dev(ctx, request{root: root, server: "selected", allowNetwork: true, deadline: time.Second,
 		cycleOutput: func(r report.Report, cycleErr error) error {
 			if err := writePrivateHuman(&human, r); err != nil {
@@ -186,7 +187,7 @@ func TestContinuousDevOutputFailureCancelsAndJoinsActiveCycle(t *testing.T) {
 	outputFailure := errors.New("synthetic cycle output failure")
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	app := App{Projects: project.Service{Scratch: scratch}, Revision: "dev-output-test"}
+	app := App{ClientRegistry: clientregistry.Default(), Projects: project.Service{Scratch: scratch}, Revision: "dev-output-test"}
 	_, err := app.dev(ctx, request{
 		root: root, server: "selected", allowNetwork: true, deadline: 5 * time.Second,
 		cycleOutput: func(report.Report, error) error { return outputFailure },
@@ -254,7 +255,7 @@ func TestContinuousDevMalformedEditJoinsLongRunningCycleBeforeReport(t *testing.
 	defer cancel()
 	var activeChildren atomic.Int32
 	var reports atomic.Int32
-	app := App{Projects: project.Service{Scratch: t.TempDir()}, Revision: "dev-invalidation-test"}
+	app := App{ClientRegistry: clientregistry.Default(), Projects: project.Service{Scratch: t.TempDir()}, Revision: "dev-invalidation-test"}
 	_, err := app.dev(ctx, request{
 		root: root, server: "selected", allowNetwork: true, deadline: 5 * time.Second,
 		cycleOutput: func(r report.Report, cycleErr error) error {
@@ -335,7 +336,7 @@ func TestContinuousDevRestartsAfterIdenticalContentRecovery(t *testing.T) {
 	var reports atomic.Int32
 	var starts atomic.Int32
 	scratch := t.TempDir()
-	app := App{Projects: project.Service{Scratch: scratch}, Revision: "dev-identical-recovery-test"}
+	app := App{ClientRegistry: clientregistry.Default(), Projects: project.Service{Scratch: scratch}, Revision: "dev-identical-recovery-test"}
 	_, err := app.dev(ctx, request{
 		root: root, server: "selected", allowNetwork: true, deadline: 5 * time.Second,
 		cycleOutput: func(r report.Report, cycleErr error) error {
@@ -426,7 +427,7 @@ func TestContinuousDevParentCancelDoesNotEmitStoppedCycle(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		var reports atomic.Int32
-		app := App{Projects: project.Service{Scratch: t.TempDir()}, Revision: "dev-cancel-test"}
+		app := App{ClientRegistry: clientregistry.Default(), Projects: project.Service{Scratch: t.TempDir()}, Revision: "dev-cancel-test"}
 		_, err := app.dev(ctx, request{
 			root: root, server: "selected", allowNetwork: true, deadline: 5 * time.Second,
 			cycleOutput: func(report.Report, error) error {

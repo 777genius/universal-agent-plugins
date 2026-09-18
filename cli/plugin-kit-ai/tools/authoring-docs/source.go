@@ -82,7 +82,7 @@ func validateSource(checkout, sha string) ([]sourcePin, error) {
 // references and all five workspace module controls. Current-only bootstrap
 // stays outside this inventory until the released source pin advances.
 var factoryPins = []sourcePin{
-	{"cli/plugin-kit-ai/cmd/agentplugins/release_root.go", "4a8566038d22e34fd2509075d97df10b422ee15ce01619bf35b2a8c397c7c944"},
+	{"cli/plugin-kit-ai/cmd/agentplugins/release_root.go", "eb89acb49dd6730ced91bc98d3ad50023f0d6309c270ba26275f0424c739aef9"},
 	{"cli/plugin-kit-ai/cmd/plugin-kit-ai/release_compat.go", "d2f11a845c116160114ddd1b0ba8b825e9e5a4794354742749db7122c0c674c8"},
 	{"cli/plugin-kit-ai/go.mod", "d388e12cb393cca6fcf8034e4a05d3c4eb8777427fed47ed064ef0623c377606"},
 	{"cli/plugin-kit-ai/go.sum", "0cf114be6b68dd165b75b588776e0bb7b9cc4aaa08fae382f7fa42b580bfa2da"},
@@ -117,7 +117,7 @@ var factoryPins = []sourcePin{
 	{"cli/plugin-kit-ai/internal/agentpluginscli/update_all.go", "7b791dc9fe04cf3ceae4f3ade5c36c308104761242cb3cb37474d1551961cc65"},
 	{"cli/plugin-kit-ai/internal/agentpluginscli/update_multi.go", "0ff5bedf401e3736178ea7274e4e7b3eac113867288f0f86bb354ae724991f23"},
 	{"cli/plugin-kit-ai/internal/agentpluginscli/validate.go", "8c643a08c657431d623197364f5f47d7f23ed0b4e6cf926f40a521a8bac7ee9d"},
-	{"cli/plugin-kit-ai/internal/authoring/commands/commands.go", "a4cb98daebd5b2a1048b8af6b2c4d452a3a42c7125fa27b523795a6f16fb7c1d"},
+	{"cli/plugin-kit-ai/internal/authoring/commands/commands.go", "62fb483ca5bb537e82e371a4268c837b399b77c365057f53fc850f517053bfb6"},
 	{"cli/plugin-kit-ai/internal/authoring/commands/dev_session.go", "fbfe779c0f376620902a8cfd3c7f37f3e9f4406e4e053d84d24dde02630eae6d"},
 	{"cli/plugin-kit-ai/internal/authoring/commands/maintenance.go", "7fb03c69b48cb0fb5fdacff08930d4b034895be7a65f336e7f7374e607ed0f5a"},
 	{"cli/plugin-kit-ai/internal/authoring/commands/public_contract.go", "332d209e5453b51e086cebe96baca7ac4542e1f7e5ad2718c18afda3eeb9c55e"},

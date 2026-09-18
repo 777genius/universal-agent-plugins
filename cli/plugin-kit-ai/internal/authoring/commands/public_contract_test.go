@@ -21,6 +21,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/cli/internal/authoring/report"
 	"github.com/777genius/plugin-kit-ai/cli/internal/authoringcli"
 	"github.com/777genius/plugin-kit-ai/cli/internal/exitx"
+	clientregistry "github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/all"
 	"github.com/spf13/cobra"
 )
 
@@ -35,7 +36,7 @@ type publicEnvelope struct {
 
 func publicApp(t *testing.T) commands.App {
 	t.Helper()
-	return commands.App{Projects: project.Service{Scratch: t.TempDir()}, Revision: publicRevision, PublicContract: true}
+	return commands.App{ClientRegistry: clientregistry.Default(), Projects: project.Service{Scratch: t.TempDir()}, Revision: publicRevision, PublicContract: true}
 }
 func publicDecode(t *testing.T, raw rawExecution) (publicEnvelope, int) {
 	t.Helper()
