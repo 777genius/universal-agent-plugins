@@ -18,8 +18,11 @@ type Adapter struct{}
 func New() *Adapter { return &Adapter{} }
 
 var (
-	_ clients.Adapter      = (*Adapter)(nil)
-	_ clients.HostDetector = (*Adapter)(nil)
+	_ clients.Adapter            = (*Adapter)(nil)
+	_ clients.HostDetector       = (*Adapter)(nil)
+	_ clients.Lifecycle          = (*Adapter)(nil)
+	_ clients.AutomaticActivator = (*Adapter)(nil)
+	_ clients.ReadOnlyVerifier   = (*Adapter)(nil)
 )
 
 // ID reports the client this adapter serves.
