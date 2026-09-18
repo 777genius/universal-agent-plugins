@@ -1,14 +1,28 @@
 package kiro
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/pathpolicy"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
+
+var _ clients.RegistryInspector = (*Adapter)(nil)
+
+func (*Adapter) UsesNativeRegistryExecutable() bool { return false }
+
+func (*Adapter) InspectNativeRegistry(ctx context.Context, _ clients.Env, _ domain.DetectedClient, plan domain.DeliveryPlan, managed *domain.ClientBinding) (clients.RegistryFinding, error) {
+	if err := ctx.Err(); err != nil {
+		return clients.RegistryIndeterminate, err
+	}
+	return inspectKiroRegistry(plan, managed)
+}
 
 func VerifyNativeObjects(configRoot string, objects []domain.NativeObjectOwnership, allowMissing bool) error {
 	filtered := NativeObjects(objects)
@@ -119,4 +133,95 @@ func ValidateNativePath(configRoot, path string) error {
 		return fmt.Errorf("unsafe Kiro native path: %w", err)
 	}
 	return nil
+}
+
+func inspectKiroRegistry(plan domain.DeliveryPlan, managed *domain.ClientBinding) (clients.RegistryFinding, error) {
+	root := strings.TrimSpace(plan.NativeRegistryRoot)
+	if root == "" {
+		return clients.RegistryIndeterminate, nil
+	}
+	if _, err := os.Lstat(root); os.IsNotExist(err) {
+		return clients.RegistryClear, nil
+	} else if err != nil {
+		return clients.RegistryIndeterminate, err
+	}
+	if managed != nil {
+		if err := VerifyNativeObjects(root, managed.NativeObjects, true); err != nil {
+			return clients.RegistryIndeterminate, err
+		}
+	}
+	mcp, err := kiroRegistryMCP(root, plan)
+	if err != nil {
+		return clients.RegistryIndeterminate, err
+	}
+	return kiroRegistryComponents(root, plan.Components, managed, mcp)
+}
+
+func kiroRegistryMCP(root string, plan domain.DeliveryPlan) (map[string]any, error) {
+	if !shared.HasSupportedMCP(plan.Components) {
+		return map[string]any{}, nil
+	}
+	mcpPath := filepath.Join(root, "settings", "mcp.json")
+	if err := ValidateNativePath(root, mcpPath); err != nil {
+		return nil, err
+	}
+	mcp, _, _, _, err := ReadMCPConfig(mcpPath)
+	return mcp, err
+}
+
+func kiroRegistryComponents(root string, components []domain.ComponentDecision, managed *domain.ClientBinding, mcp map[string]any) (clients.RegistryFinding, error) {
+	finding := clients.RegistryClear
+	for _, component := range components {
+		exists, err := kiroComponentExists(root, component, mcp)
+		if err != nil {
+			return clients.RegistryIndeterminate, err
+		}
+		if !exists {
+			continue
+		}
+		if managed == nil {
+			return clients.RegistryCollision, nil
+		}
+		if !managedKiroObjectExists(managed.NativeObjects, component.Kind, component.Name) {
+			return clients.RegistryIndeterminate, nil
+		}
+		finding = clients.RegistryExpected
+	}
+	return finding, nil
+}
+
+func kiroComponentExists(root string, component domain.ComponentDecision, mcp map[string]any) (bool, error) {
+	if component.Support == domain.SupportUnsupported {
+		return false, nil
+	}
+	switch component.Kind {
+	case domain.ComponentSkill:
+		skillPath := filepath.Join(root, "skills", component.Name)
+		if err := ValidateNativePath(root, skillPath); err != nil {
+			return false, err
+		}
+		_, statErr := os.Lstat(skillPath)
+		if statErr != nil && !os.IsNotExist(statErr) {
+			return false, statErr
+		}
+		return statErr == nil, nil
+	case domain.ComponentMCPServer:
+		_, exists := mcp[component.Name]
+		return exists, nil
+	default:
+		return false, nil
+	}
+}
+
+func managedKiroObjectExists(objects []domain.NativeObjectOwnership, kind domain.ComponentKind, name string) bool {
+	want := SkillObjectKind
+	if kind == domain.ComponentMCPServer {
+		want = MCPObjectKind
+	}
+	for _, object := range objects {
+		if object.Kind == want && object.LogicalName == name {
+			return true
+		}
+	}
+	return false
 }

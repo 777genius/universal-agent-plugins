@@ -8,7 +8,6 @@ import (
 	"sort"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/chatgpt"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
@@ -29,9 +28,10 @@ type Planner struct {
 var errPathPolicyRequired = errors.New("planner path policy is required")
 
 // ChatGPTAppBindingAction describes registration and package-author
-// responsibilities. It is re-exported from the client adapter that owns it, so
-// the CLI keeps one name to render.
-const ChatGPTAppBindingAction = chatgpt.AppBindingAction
+// responsibilities. The wording is owned by clients/chatgpt.AppBindingAction;
+// the facade keeps a copy so planner production code never imports a concrete
+// adapter. facade_actions_test.go locks the two strings together.
+const ChatGPTAppBindingAction = "this package is not ready for ChatGPT. Connect its remote MCP server in ChatGPT Plugins developer mode; full plugin installation also needs the publisher's registered connection mapping (.app.json). You do not need to create this file. Setup: https://developers.openai.com/plugins/build/plugins"
 
 // DetectedPhysicalClient returns a genuinely detected client that can address
 // an installed physical binding. Copilot and VS Code share one backend, so an

@@ -24,3 +24,11 @@ func testActivator(base Activator) Activator {
 	}
 	return base
 }
+
+// testObserver completes an identity observer literal with the full client registry.
+func testObserver(base NativeIdentityObserver) NativeIdentityObserver {
+	if base.Registry == nil {
+		base.Registry = all.Default()
+	}
+	return base
+}

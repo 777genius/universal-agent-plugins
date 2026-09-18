@@ -459,7 +459,7 @@ func TestClaudeNativeIdentityRejectsUnmanagedSkillsDirCollision(t *testing.T) {
 	plan.ActivePath = filepath.Join(root, "managed-demo")
 	plan.NativeRegistryExecutable = "/test/bin/claude"
 	runner := &identityRunner{result: legacyports.CommandResult{Stdout: []byte(claudeListing("demo", foreign, true))}}
-	observation, err := (NativeIdentityObserver{Runner: runner}).ObserveNativeIdentity(context.Background(), domain.DetectedClient{ClientID: domain.ClientClaude}, plan, nil)
+	observation, err := (testObserver(NativeIdentityObserver{Runner: runner})).ObserveNativeIdentity(context.Background(), domain.DetectedClient{ClientID: domain.ClientClaude}, plan, nil)
 	if err != nil || observation.State != domain.NativeIdentityUnmanaged || !observation.NativeDiscoveryAttempted {
 		t.Fatalf("observation=%+v err=%v", observation, err)
 	}
@@ -476,7 +476,7 @@ func TestClaudeNativeIdentityRejectsAnyStagingIdentityReportedByClient(t *testin
 		ActivePath: active, NativeRegistryExecutable: "/test/bin/claude",
 	}
 	runner := &identityRunner{result: legacyports.CommandResult{Stdout: []byte(claudeListing("demo", staging, true))}}
-	observation, err := (NativeIdentityObserver{Runner: runner}).ObserveNativeIdentity(
+	observation, err := (testObserver(NativeIdentityObserver{Runner: runner})).ObserveNativeIdentity(
 		context.Background(), domain.DetectedClient{ClientID: domain.ClientClaude}, plan, nil,
 	)
 	if err != nil || observation.State != domain.NativeIdentityUnmanaged {
@@ -485,7 +485,7 @@ func TestClaudeNativeIdentityRejectsAnyStagingIdentityReportedByClient(t *testin
 
 	foreign := filepath.Join(root, ".agentplugins-staging-foreign")
 	runner.result.Stdout = []byte(claudeListing("demo", foreign, true))
-	observation, err = (NativeIdentityObserver{Runner: runner}).ObserveNativeIdentity(
+	observation, err = (testObserver(NativeIdentityObserver{Runner: runner})).ObserveNativeIdentity(
 		context.Background(), domain.DetectedClient{ClientID: domain.ClientClaude}, plan, nil,
 	)
 	if err != nil || observation.State != domain.NativeIdentityUnmanaged {
@@ -503,7 +503,7 @@ func TestClaudePreparedIdentityDoesNotIgnoreWatchedStagingDirectory(t *testing.T
 		ClientID: domain.ClientClaude, DeclaredName: "demo", TargetAnchor: config, TargetRoot: root,
 		ActivePath: filepath.Join(root, "managed-demo"),
 	}
-	observation, err := (NativeIdentityObserver{}).ObservePreparedIdentity(
+	observation, err := (testObserver(NativeIdentityObserver{})).ObservePreparedIdentity(
 		context.Background(), domain.DetectedClient{ClientID: domain.ClientClaude, ConfigRoot: config}, plan, nil,
 	)
 	if err != nil || observation.State != domain.NativeIdentityUnmanaged {

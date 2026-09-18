@@ -4,13 +4,14 @@ import (
 	"fmt"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/kiro"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
-// KiroPrepareAction is re-exported from the client adapter that owns it, so the
-// CLI keeps one name to render.
-const KiroPrepareAction = kiro.PrepareAction
+// KiroPrepareAction is the user-facing leftover after a prepared Kiro
+// delivery. The wording is owned by clients/kiro.PrepareAction; the facade
+// keeps a copy so planner production code never imports a concrete adapter.
+// facade_actions_test.go locks the two strings together.
+const KiroPrepareAction = "After preparation, open or restart Kiro, review the MCP servers and complete authentication in Kiro on first connection when prompted, then verify their tools in Kiro. Runtime connections have not been verified."
 
 // ApplyInstallIntent retains all package and Directory compatibility decisions.
 // It is also applied on its own, to a plan that was already built, when a

@@ -178,7 +178,7 @@ func TestHelperUpgradeCannotMasqueradeAsExactRepair(t *testing.T) {
 				client.ExecutablePath = "/test/bin/claude"
 				runner := &fakeClaudeLifecycleRunner{configRoot: client.ConfigRoot}
 				service.Activator = providerstest.NewActivator(providers.Activator{Runner: runner})
-				service.NativeObserver = providers.NativeIdentityObserver{Runner: runner, Stager: service.Stager}
+				service.NativeObserver = providerstest.NewObserver(providers.NativeIdentityObserver{Runner: runner, Stager: service.Stager})
 			}
 			input := clinePackageInput(t, client, "1.0.0", "sha256:helper", "sha256:helper-manifest", "sh")
 			input.Confirmed = true
@@ -400,7 +400,7 @@ func TestMissingHelperOnlyExcludesManagedStdio(t *testing.T) {
 				client.ExecutablePath = "/test/bin/claude"
 				runner := &fakeClaudeLifecycleRunner{configRoot: client.ConfigRoot}
 				service.Activator = providerstest.NewActivator(providers.Activator{Runner: runner})
-				service.NativeObserver = providers.NativeIdentityObserver{Runner: runner, Stager: service.Stager}
+				service.NativeObserver = providerstest.NewObserver(providers.NativeIdentityObserver{Runner: runner, Stager: service.Stager})
 			}
 			input := clinePackageInput(t, client, "1.0.0", "sha256:missing-helper", "sha256:helper-manifest", "sh")
 			input.Confirmed = true

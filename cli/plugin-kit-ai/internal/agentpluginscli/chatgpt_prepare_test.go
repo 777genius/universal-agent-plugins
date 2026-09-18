@@ -24,7 +24,7 @@ func context7GuidedFixture(t *testing.T) (cliFixture, *fixedDirectoryClient, *lo
 	t.Helper()
 	kiro := fixtureClient(t, domain.ClientKiro)
 	f := newCLIFixture(t, []domain.DetectedClient{kiro})
-	f.app.Lifecycle.NativeObserver = providers.NativeIdentityObserver{Stager: providerstest.NewStager(providers.Stager{})}
+	f.app.Lifecycle.NativeObserver = providerstest.NewObserver(providers.NativeIdentityObserver{Stager: providerstest.NewStager(providers.Stager{})})
 	root := writeCLIPlugin(t)
 	manifest, err := os.ReadFile(filepath.Join(root, "plugin.json"))
 	if err != nil {

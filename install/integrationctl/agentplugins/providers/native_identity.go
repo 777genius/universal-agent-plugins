@@ -2,26 +2,15 @@ package providers
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
-	"fmt"
-	"io"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
-	"github.com/pelletier/go-toml/v2"
-
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/claude"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/gemini"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/kiro"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/windsurf"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
-	legacyports "github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
 )
 
 type packageVerifier interface {
@@ -41,15 +30,15 @@ type NativeIdentityObserver struct {
 	Stager           packageVerifier
 	Runner           CommandRunner
 	DiscoveryTimeout time.Duration
+	// Registry supplies the client adapters that inspect native identity. It is
+	// injected by the composition root and never defaulted to "every client".
+	Registry *clients.Registry
 }
-
-type treeCommandRunner = ports.TreeCommandRunner
 
 const defaultNativeDiscoveryTimeout = 15 * time.Second
 
-// The finding vocabulary belongs to the client contract: the identity
-// inspection moves into the adapters, and these names stay here as aliases
-// until the last in-package caller is gone.
+// The finding vocabulary belongs to the client contract: these names stay here
+// as aliases so in-package tests keep reading the same tokens.
 type registryFinding = clients.RegistryFinding
 
 const (
@@ -58,6 +47,17 @@ const (
 	registryCollision     = clients.RegistryCollision
 	registryIndeterminate = clients.RegistryIndeterminate
 )
+
+func (observer NativeIdentityObserver) requireRegistry() error {
+	if observer.Registry == nil {
+		return clients.ErrRegistryRequired
+	}
+	return nil
+}
+
+func (observer NativeIdentityObserver) env() clients.Env {
+	return clients.Env{Runner: observer.Runner}
+}
 
 func (observer NativeIdentityObserver) ObserveNativeIdentity(ctx context.Context, client domain.DetectedClient, plan domain.DeliveryPlan, managed *domain.ClientBinding) (domain.NativeIdentityObservation, error) {
 	return observer.observeIdentity(ctx, client, plan, managed, true)
@@ -78,63 +78,85 @@ func (observer NativeIdentityObserver) observeIdentity(ctx context.Context, clie
 	if name == "" {
 		return domain.NativeIdentityObservation{State: domain.NativeIdentityIndeterminate}, nil
 	}
-
-	prepared, preparedErr := inspectPreparedRegistry(plan, name, managed != nil)
-	if client.ClientID == domain.ClientClaude {
-		prepared, preparedErr = inspectClaudeSkillsRegistry(plan, name, managed != nil)
+	if err := observer.requireRegistry(); err != nil {
+		return domain.NativeIdentityObservation{State: domain.NativeIdentityIndeterminate}, err
 	}
+	prepared, preparedErr := observer.inspectPreparedRegistry(client.ClientID, plan, name, managed != nil)
 	if preparedErr != nil {
 		prepared = registryIndeterminate
 	}
-	nativeAttempted := includeNativeRegistry && observer.Runner != nil && strings.TrimSpace(plan.NativeRegistryExecutable) != "" &&
-		(client.ClientID == domain.ClientCodex || client.ClientID == domain.ClientClaude || client.ClientID == domain.ClientCopilot || client.ClientID == domain.ClientVSCode)
-	native := registryClear
-	if includeNativeRegistry {
-		nativeCtx := ctx
-		cancelNative := func() {}
-		if nativeAttempted {
-			timeout := observer.DiscoveryTimeout
-			if timeout <= 0 {
-				timeout = defaultNativeDiscoveryTimeout
-			}
-			nativeCtx, cancelNative = context.WithTimeout(ctx, timeout)
-		}
-		var err error
-		native, err = observer.inspectNativeRegistry(nativeCtx, client, plan, managed)
-		cancelNative()
-		if err != nil {
-			return domain.NativeIdentityObservation{State: domain.NativeIdentityIndeterminate, NativeDiscoveryState: domain.NativeIdentityIndeterminate,
-				NativeDiscoveryAttempted: nativeAttempted}, err
-		}
+	native, attempted, err := observer.discoverNativeFinding(ctx, client, plan, managed, includeNativeRegistry)
+	if err != nil {
+		return domain.NativeIdentityObservation{State: domain.NativeIdentityIndeterminate, NativeDiscoveryState: domain.NativeIdentityIndeterminate,
+			NativeDiscoveryAttempted: attempted}, err
 	}
+	return observer.finishIdentity(ctx, plan, managed, prepared, preparedErr, native, attempted)
+}
+
+func (observer NativeIdentityObserver) discoverNativeFinding(ctx context.Context, client domain.DetectedClient, plan domain.DeliveryPlan, managed *domain.ClientBinding, includeNativeRegistry bool) (registryFinding, bool, error) {
+	if !includeNativeRegistry {
+		return registryClear, false, nil
+	}
+	inspector, hasInspector := clients.As[clients.RegistryInspector](observer.Registry, client.ClientID)
+	attempted := observer.Runner != nil && strings.TrimSpace(plan.NativeRegistryExecutable) != "" &&
+		hasInspector && inspector.UsesNativeRegistryExecutable()
+	nativeCtx := ctx
+	cancelNative := func() {}
+	if attempted {
+		timeout := observer.DiscoveryTimeout
+		if timeout <= 0 {
+			timeout = defaultNativeDiscoveryTimeout
+		}
+		nativeCtx, cancelNative = context.WithTimeout(ctx, timeout)
+	}
+	native, err := observer.inspectNativeRegistry(nativeCtx, client, plan, managed)
+	cancelNative()
+	return native, attempted, err
+}
+
+func (observer NativeIdentityObserver) finishIdentity(ctx context.Context, plan domain.DeliveryPlan, managed *domain.ClientBinding, prepared registryFinding, preparedErr error, native registryFinding, attempted bool) (domain.NativeIdentityObservation, error) {
+	observed := func(state domain.NativeIdentityState) domain.NativeIdentityObservation {
+		return identityObservation(state, native, managed != nil, attempted)
+	}
+	if preparedErr != nil {
+		return observed(domain.NativeIdentityIndeterminate), preparedErr
+	}
+	if state, done := combinedIdentityState(prepared, native, managed != nil); done {
+		return observed(state), nil
+	}
+	return observer.verifyOwnedPackage(ctx, plan, managed, observed)
+}
+
+func identityObservation(state domain.NativeIdentityState, native registryFinding, owned, attempted bool) domain.NativeIdentityObservation {
 	discoveryState := domain.NativeIdentityAbsent
 	discoveryReconciled := false
 	switch native {
 	case registryExpected:
 		discoveryState = domain.NativeIdentityManaged
-		discoveryReconciled = managed != nil
+		discoveryReconciled = owned
 	case registryCollision:
 		discoveryState = domain.NativeIdentityUnmanaged
 	case registryIndeterminate:
 		discoveryState = domain.NativeIdentityIndeterminate
 	}
-	observed := func(state domain.NativeIdentityState) domain.NativeIdentityObservation {
-		return domain.NativeIdentityObservation{State: state, NativeDiscoveryState: discoveryState,
-			NativeDiscoveryReconciled: discoveryReconciled, NativeDiscoveryAttempted: nativeAttempted}
-	}
-	if preparedErr != nil {
-		return observed(domain.NativeIdentityIndeterminate), preparedErr
-	}
+	return domain.NativeIdentityObservation{State: state, NativeDiscoveryState: discoveryState,
+		NativeDiscoveryReconciled: discoveryReconciled, NativeDiscoveryAttempted: attempted}
+}
+
+func combinedIdentityState(prepared, native registryFinding, owned bool) (domain.NativeIdentityState, bool) {
 	if prepared == registryCollision || native == registryCollision {
-		return observed(domain.NativeIdentityUnmanaged), nil
+		return domain.NativeIdentityUnmanaged, true
 	}
 	if prepared == registryIndeterminate || native == registryIndeterminate {
-		return observed(domain.NativeIdentityIndeterminate), nil
+		return domain.NativeIdentityIndeterminate, true
 	}
-	if managed == nil && (prepared == registryExpected || native == registryExpected) {
-		return observed(domain.NativeIdentityUnmanaged), nil
+	if !owned && (prepared == registryExpected || native == registryExpected) {
+		return domain.NativeIdentityUnmanaged, true
 	}
+	return domain.NativeIdentityAbsent, false
+}
 
+func (observer NativeIdentityObserver) verifyOwnedPackage(ctx context.Context, plan domain.DeliveryPlan, managed *domain.ClientBinding, observed func(domain.NativeIdentityState) domain.NativeIdentityObservation) (domain.NativeIdentityObservation, error) {
 	_, statErr := os.Lstat(plan.ActivePath)
 	if os.IsNotExist(statErr) {
 		return observed(domain.NativeIdentityAbsent), nil
@@ -164,504 +186,17 @@ func (observer NativeIdentityObserver) observeIdentity(ctx context.Context, clie
 	return result, nil
 }
 
-func (observer NativeIdentityObserver) inspectNativeRegistry(ctx context.Context, client domain.DetectedClient, plan domain.DeliveryPlan, managed *domain.ClientBinding) (registryFinding, error) {
-	switch client.ClientID {
-	case domain.ClientCodex:
-		if strings.TrimSpace(plan.NativeRegistryExecutable) != "" {
-			return observer.inspectCodexCLI(ctx, plan, managed)
-		}
-		return inspectCodexFiles(plan, managed)
-	case domain.ClientClaude:
-		if strings.TrimSpace(plan.NativeRegistryExecutable) == "" || observer.Runner == nil {
-			return registryIndeterminate, nil
-		}
-		configRoot := strings.TrimSpace(plan.TargetAnchor)
-		if configRoot == "" {
-			configRoot = strings.TrimSpace(client.ConfigRoot)
-		}
-		if configRoot == "" && strings.TrimSpace(plan.TargetRoot) != "" {
-			configRoot = filepath.Dir(filepath.Clean(plan.TargetRoot))
-		}
-		command, err := claude.ClaudeListCommand(plan.NativeRegistryExecutable, configRoot, plan.ActivePath)
-		if err != nil {
-			return registryIndeterminate, err
-		}
-		result, err := claude.RunClaudeListCommand(ctx, observer.Runner, command)
-		if err != nil {
-			if ctxErr := ctx.Err(); ctxErr != nil {
-				return registryIndeterminate, ctxErr
-			}
-			return registryIndeterminate, err
-		}
-		if result.ExitCode != 0 {
-			return registryIndeterminate, fmt.Errorf("Claude Code plugin registry command failed with exit code %d", result.ExitCode)
-		}
-		switch claude.PluginStatusFromList(result.Stdout, plan.DeclaredName, plan.ActivePath) {
-		case claude.StatusInstalled:
-			if managed == nil {
-				return registryCollision, nil
-			}
-			return registryExpected, nil
-		case claude.StatusAbsent:
-			return registryClear, nil
-		case claude.StatusCollision:
-			return registryCollision, nil
-		default:
-			return registryIndeterminate, nil
-		}
-	case domain.ClientChatGPT:
-		// ChatGPT's installed-plugin registry is remote and this adapter has no
-		// authenticated read-only API. A validated explicit app binding (signed or
-		// a personal Context7 receipt) authorizes
-		// only preparation of a new local package, while an existing ownership
-		// receipt authorizes replacement of that owned local package. Neither is
-		// treated as proof of remote activation or registry availability.
-		if plan.LocalPreparationAuthorized || managed != nil {
-			return registryClear, nil
-		}
-		return registryIndeterminate, nil
-	case domain.ClientCursor:
-		// TargetRoot is Cursor's authoritative plugins/local registry and was
-		// inspected as the prepared/native boundary above.
-		return registryClear, nil
-	case domain.ClientCopilot, domain.ClientVSCode:
-		if strings.TrimSpace(plan.NativeRegistryExecutable) != "" {
-			return observer.inspectCopilotCLI(ctx, plan, managed)
-		}
-		root := strings.TrimSpace(plan.NativeRegistryRoot)
-		if root == "" {
-			return registryIndeterminate, nil
-		}
-		if _, err := os.Lstat(root); os.IsNotExist(err) {
-			return registryClear, nil
-		} else if err != nil {
-			return registryIndeterminate, err
-		}
-		// Copilot and VS Code share a backend, but its on-disk registry contract
-		// is not implemented by these adapters. An existing config root without
-		// the CLI therefore cannot prove absence.
-		return registryIndeterminate, nil
-	case domain.ClientKiro:
-		return inspectKiroRegistry(plan, managed)
-	case domain.ClientOpenCode:
-		// OpenCode MCP entries are keyed by individual server names rather than
-		// the package identity. Exact entry collision and ownership checks happen
-		// transactionally in the native config provider after staging.
-		return registryClear, nil
-	case domain.ClientCline:
-		// Cline MCP identities are per-server and protected by exact receipts;
-		// its skill paths are checked before the all-or-none native config batch.
-		return registryClear, nil
-	case domain.ClientGemini:
-		return gemini.InspectGeminiRegistry(plan, managed)
-	case domain.ClientWindsurf:
-		return windsurf.InspectWindsurfRegistry(plan, managed)
-	default:
-		return registryIndeterminate, nil
+func (observer NativeIdentityObserver) inspectPreparedRegistry(id domain.ClientID, plan domain.DeliveryPlan, name string, owned bool) (registryFinding, error) {
+	if inspector, ok := clients.As[clients.PreparedRegistryInspector](observer.Registry, id); ok {
+		return inspector.InspectPreparedRegistry(plan, name, owned)
 	}
-}
-
-func (observer NativeIdentityObserver) inspectCodexCLI(ctx context.Context, plan domain.DeliveryPlan, managed *domain.ClientBinding) (registryFinding, error) {
-	if observer.Runner == nil {
-		return registryIndeterminate, nil
-	}
-	result, err := observer.runNativeRegistry(ctx, legacyports.Command{Argv: []string{plan.NativeRegistryExecutable, "plugin", "list", "--json"}})
-	if err != nil {
-		if ctxErr := ctx.Err(); ctxErr != nil {
-			return registryIndeterminate, ctxErr
-		}
-		return registryIndeterminate, err
-	}
-	if result.ExitCode != 0 {
-		if diagnostic := shared.BoundedNativeDiagnostic(result.Stdout, result.Stderr); diagnostic != "" {
-			return registryIndeterminate, fmt.Errorf("Codex plugin registry command failed with exit code %d: %s", result.ExitCode, diagnostic)
-		}
-		return registryIndeterminate, fmt.Errorf("Codex plugin registry command failed with exit code %d", result.ExitCode)
-	}
-	return codexRegistryFinding(result.Stdout, plan.DeclaredName, shared.ManagedMarketplaceName(plan.PhysicalArtifactID), managed != nil), nil
-}
-
-func codexRegistryFinding(body []byte, name, expectedMarketplace string, owned bool) registryFinding {
-	decoder := json.NewDecoder(strings.NewReader(string(body)))
-	decoder.UseNumber()
-	value, err := shared.DecodeUniqueJSONValue(decoder)
-	if err != nil {
-		return registryIndeterminate
-	}
-	if _, err := decoder.Token(); !errors.Is(err, io.EOF) {
-		return registryIndeterminate
-	}
-	document, ok := value.(map[string]any)
-	if !ok {
-		return registryIndeterminate
-	}
-	entries, ok := document["installed"].([]any)
-	if !ok {
-		return registryIndeterminate
-	}
-	finding := registryClear
-	seen := map[string]bool{}
-	for _, raw := range entries {
-		entry, ok := raw.(map[string]any)
-		if !ok {
-			return registryIndeterminate
-		}
-		entryName, nameOK := entry["name"].(string)
-		marketplace, marketplaceOK := entry["marketplaceName"].(string)
-		pluginID, idOK := entry["pluginId"].(string)
-		_, installedOK := entry["installed"].(bool)
-		_, enabledOK := entry["enabled"].(bool)
-		if !nameOK || !marketplaceOK || !idOK || !installedOK || !enabledOK || entryName == "" || marketplace == "" || pluginID != entryName+"@"+marketplace || seen[pluginID] {
-			return registryIndeterminate
-		}
-		seen[pluginID] = true
-		if entryName != name {
-			continue
-		}
-		if marketplace == expectedMarketplace {
-			if !owned {
-				return registryCollision
-			}
-			finding = registryExpected
-		}
-		// A different non-empty marketplace is positive namespace evidence and
-		// can coexist with the managed marketplace.
-	}
-	return finding
-}
-
-func (observer NativeIdentityObserver) inspectCopilotCLI(ctx context.Context, plan domain.DeliveryPlan, managed *domain.ClientBinding) (registryFinding, error) {
-	if observer.Runner == nil {
-		return registryIndeterminate, nil
-	}
-	result, err := observer.runNativeRegistry(ctx, legacyports.Command{Argv: []string{plan.NativeRegistryExecutable, "plugin", "list"}})
-	if err != nil {
-		if ctxErr := ctx.Err(); ctxErr != nil {
-			return registryIndeterminate, ctxErr
-		}
-		return registryIndeterminate, err
-	}
-	if result.ExitCode != 0 {
-		return registryIndeterminate, fmt.Errorf("Copilot plugin registry command failed with exit code %d", result.ExitCode)
-	}
-	expectedPath := plan.ActivePath
-	if managed != nil && strings.TrimSpace(managed.TargetLocator) != "" {
-		expectedPath = managed.TargetLocator
-	}
-	return copilotRegistryFindingAt(result.Stdout, plan.DeclaredName, shared.ManagedMarketplaceName(plan.PhysicalArtifactID), copilotMarketplaceVersion(plan.DeclaredVersion), expectedPath, managed != nil), nil
-}
-
-func (observer NativeIdentityObserver) runNativeRegistry(ctx context.Context, command legacyports.Command) (legacyports.CommandResult, error) {
-	if runner, ok := observer.Runner.(treeCommandRunner); ok {
-		return runner.RunWithTreeExitGrace(ctx, command, time.Second)
-	}
-	return observer.Runner.Run(ctx, command)
-}
-
-func copilotRegistryFinding(stdout []byte, name, expectedMarketplace, expectedVersion string, owned bool) registryFinding {
-	return copilotRegistryFindingAt(stdout, name, expectedMarketplace, expectedVersion, "", owned)
-}
-
-func copilotRegistryFindingAt(stdout []byte, name, expectedMarketplace, expectedVersion, expectedPath string, owned bool) registryFinding {
-	expected := name + "@" + expectedMarketplace
-	if status, recognized := shared.CopilotLivePluginStatus(stdout, expected, expectedVersion, expectedPath); recognized {
-		switch status {
-		case shared.CopilotStatusInstalled:
-			if !owned {
-				return registryCollision
-			}
-			return registryExpected
-		case shared.CopilotStatusAbsent:
-			return registryClear
-		default:
-			return registryIndeterminate
-		}
-	}
-	normalized := strings.ReplaceAll(string(stdout), "\r\n", "\n")
-	document := strings.TrimSuffix(normalized, "\n")
-	if document == "No plugins installed.\n\nUse 'copilot plugin install <source>' to install a plugin." {
-		return registryClear
-	}
-	inInstalled := false
-	recognizedHeader := false
-	recognizedEmpty := false
-	recognizedEntry := false
-	finding := registryClear
-	seen := map[string]bool{}
-	for _, line := range strings.Split(document, "\n") {
-		if strings.TrimSpace(line) == "Installed plugins:" {
-			if inInstalled || recognizedHeader {
-				return registryIndeterminate
-			}
-			inInstalled, recognizedHeader = true, true
-			continue
-		}
-		if !inInstalled {
-			return registryIndeterminate
-		}
-		if line != "" && line[0] != ' ' && line[0] != '\t' {
-			return registryIndeterminate
-		}
-		match := shared.CopilotInstalledEntry.FindStringSubmatch(line)
-		if len(match) == 3 {
-			if recognizedEmpty {
-				return registryIndeterminate
-			}
-			recognizedEntry = true
-			identity := match[1]
-			if seen[identity] {
-				return registryIndeterminate
-			}
-			seen[identity] = true
-			parts := strings.Split(identity, "@")
-			if len(parts) != 2 {
-				return registryIndeterminate
-			}
-			if parts[0] == name && parts[1] == expectedMarketplace {
-				if match[2] != expectedVersion {
-					return registryIndeterminate
-				}
-				if !owned {
-					return registryCollision
-				}
-				finding = registryExpected
-			}
-			continue
-		}
-		trimmed := strings.TrimSpace(line)
-		if (trimmed == "No plugins installed." || trimmed == "No plugins installed") && !recognizedEntry && !recognizedEmpty {
-			recognizedEmpty = true
-			continue
-		}
-		return registryIndeterminate
-	}
-	if !recognizedHeader || (!recognizedEntry && !recognizedEmpty) {
-		return registryIndeterminate
-	}
-	return finding
-}
-
-func inspectCodexFiles(plan domain.DeliveryPlan, managed *domain.ClientBinding) (registryFinding, error) {
-	root := strings.TrimSpace(plan.NativeRegistryRoot)
-	if root == "" {
-		return registryIndeterminate, nil
-	}
-	if _, err := os.Lstat(root); os.IsNotExist(err) {
-		return registryClear, nil
-	} else if err != nil {
-		return registryIndeterminate, err
-	}
-	expectedMarketplace := shared.ManagedMarketplaceName(plan.PhysicalArtifactID)
-	finding := registryClear
-	configPath := filepath.Join(root, "config.toml")
-	body, err := os.ReadFile(configPath)
-	if err == nil {
-		var config struct {
-			Plugins map[string]map[string]any `toml:"plugins"`
-		}
-		if err := toml.Unmarshal(body, &config); err != nil {
-			return registryIndeterminate, err
-		}
-		for identity := range config.Plugins {
-			parts := strings.Split(identity, "@")
-			if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
-				return registryIndeterminate, nil
-			}
-			if parts[0] == plan.DeclaredName && parts[1] == expectedMarketplace {
-				if managed == nil {
-					return registryCollision, nil
-				}
-				finding = registryExpected
-			}
-		}
-	} else if !os.IsNotExist(err) {
-		return registryIndeterminate, err
-	}
-	cacheFinding, err := inspectCodexCache(filepath.Join(root, "plugins", "cache"), plan.DeclaredName, expectedMarketplace, managed != nil)
-	if err != nil {
-		return registryIndeterminate, err
-	}
-	if cacheFinding == registryCollision || cacheFinding == registryIndeterminate {
-		return cacheFinding, nil
-	}
-	if cacheFinding == registryExpected {
-		finding = registryExpected
-	}
-	return finding, nil
-}
-
-func inspectCodexCache(root, name, expectedMarketplace string, owned bool) (registryFinding, error) {
-	markets, err := os.ReadDir(root)
-	if os.IsNotExist(err) {
-		return registryClear, nil
-	}
-	if err != nil {
-		return registryIndeterminate, err
-	}
-	finding := registryClear
-	for _, market := range markets {
-		if market.Type()&os.ModeSymlink != 0 || !market.IsDir() {
-			return registryIndeterminate, nil
-		}
-		plugins, err := os.ReadDir(filepath.Join(root, market.Name()))
-		if err != nil {
-			return registryIndeterminate, err
-		}
-		for _, plugin := range plugins {
-			if plugin.Type()&os.ModeSymlink != 0 || !plugin.IsDir() {
-				return registryIndeterminate, nil
-			}
-			manifest := filepath.Join(root, market.Name(), plugin.Name(), "local", ".codex-plugin", "plugin.json")
-			manifestName, err := shared.ReadJSONManifestName(manifest)
-			if os.IsNotExist(err) {
-				return registryIndeterminate, nil
-			}
-			if err != nil {
-				return registryIndeterminate, err
-			}
-			if manifestName != name {
-				continue
-			}
-			if market.Name() == expectedMarketplace {
-				if !owned {
-					return registryCollision, nil
-				}
-				finding = registryExpected
-			}
-		}
-	}
-	return finding, nil
-}
-
-func inspectKiroRegistry(plan domain.DeliveryPlan, managed *domain.ClientBinding) (registryFinding, error) {
-	root := strings.TrimSpace(plan.NativeRegistryRoot)
-	if root == "" {
-		return registryIndeterminate, nil
-	}
-	if _, err := os.Lstat(root); os.IsNotExist(err) {
-		return registryClear, nil
-	} else if err != nil {
-		return registryIndeterminate, err
-	}
-	if managed != nil {
-		if err := kiro.VerifyNativeObjects(root, managed.NativeObjects, true); err != nil {
-			return registryIndeterminate, err
-		}
-	}
-	finding := registryClear
-	mcp := map[string]any{}
-	if shared.HasSupportedMCP(plan.Components) {
-		mcpPath := filepath.Join(root, "settings", "mcp.json")
-		if err := kiro.ValidateNativePath(root, mcpPath); err != nil {
-			return registryIndeterminate, err
-		}
-		var err error
-		mcp, _, _, _, err = kiro.ReadMCPConfig(mcpPath)
-		if err != nil {
-			return registryIndeterminate, err
-		}
-	}
-	for _, component := range plan.Components {
-		if component.Support == domain.SupportUnsupported {
-			continue
-		}
-		var exists bool
-		switch component.Kind {
-		case domain.ComponentSkill:
-			skillPath := filepath.Join(root, "skills", component.Name)
-			if err := kiro.ValidateNativePath(root, skillPath); err != nil {
-				return registryIndeterminate, err
-			}
-			_, statErr := os.Lstat(skillPath)
-			exists = statErr == nil
-			if statErr != nil && !os.IsNotExist(statErr) {
-				return registryIndeterminate, statErr
-			}
-		case domain.ComponentMCPServer:
-			_, exists = mcp[component.Name]
-		default:
-			continue
-		}
-		if !exists {
-			continue
-		}
-		if managed == nil {
-			return registryCollision, nil
-		}
-		if !managedKiroObjectExists(managed.NativeObjects, component.Kind, component.Name) {
-			return registryIndeterminate, nil
-		}
-		finding = registryExpected
-	}
-	return finding, nil
-}
-
-func managedKiroObjectExists(objects []domain.NativeObjectOwnership, kind domain.ComponentKind, name string) bool {
-	want := kiro.SkillObjectKind
-	if kind == domain.ComponentMCPServer {
-		want = kiro.MCPObjectKind
-	}
-	for _, object := range objects {
-		if object.Kind == want && object.LogicalName == name {
-			return true
-		}
-	}
-	return false
-}
-
-func inspectPreparedRegistry(plan domain.DeliveryPlan, name string, owned bool) (registryFinding, error) {
 	return shared.InspectUnqualifiedPluginRoot(plan.TargetRoot, name, plan.ActivePath, owned)
 }
 
-func inspectClaudeSkillsRegistry(plan domain.DeliveryPlan, name string, owned bool) (registryFinding, error) {
-	root := strings.TrimSpace(plan.TargetRoot)
-	if root == "" {
+func (observer NativeIdentityObserver) inspectNativeRegistry(ctx context.Context, client domain.DetectedClient, plan domain.DeliveryPlan, managed *domain.ClientBinding) (registryFinding, error) {
+	inspector, ok := clients.As[clients.RegistryInspector](observer.Registry, client.ClientID)
+	if !ok {
 		return registryIndeterminate, nil
 	}
-	entries, err := os.ReadDir(root)
-	if os.IsNotExist(err) {
-		return registryClear, nil
-	}
-	if err != nil {
-		return registryIndeterminate, err
-	}
-	finding := registryClear
-	for _, entry := range entries {
-		if entry.Type()&os.ModeSymlink != 0 {
-			return registryIndeterminate, nil
-		}
-		if !entry.IsDir() {
-			// A plain file cannot contain the .claude-plugin/plugin.json this
-			// scheme requires, so it can never claim a competing plugin
-			// identity. OS-generated artifacts such as .DS_Store are common
-			// in a Finder-browsed skills directory and must not block every
-			// other plugin's repair/update.
-			continue
-		}
-		path := filepath.Join(root, entry.Name())
-		manifest := filepath.Join(path, ".claude-plugin", "plugin.json")
-		manifestName, readErr := shared.ReadJSONManifestName(manifest)
-		if os.IsNotExist(readErr) {
-			// Plain skills legitimately share this directory and do not claim a
-			// plugin identity.
-			if _, skillErr := os.Lstat(filepath.Join(path, "SKILL.md")); skillErr == nil {
-				continue
-			} else if !os.IsNotExist(skillErr) {
-				return registryIndeterminate, skillErr
-			}
-			return registryIndeterminate, nil
-		}
-		if readErr != nil {
-			return registryIndeterminate, readErr
-		}
-		if manifestName != name {
-			continue
-		}
-		if shared.SameCleanPath(path, plan.ActivePath) && owned {
-			finding = registryExpected
-			continue
-		}
-		return registryCollision, nil
-	}
-	return finding, nil
+	return inspector.InspectNativeRegistry(ctx, observer.env(), client, plan, managed)
 }
