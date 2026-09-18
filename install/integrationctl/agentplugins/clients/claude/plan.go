@@ -17,8 +17,9 @@ var (
 	_ clients.PlanRefiner      = (*Adapter)(nil)
 )
 
-// TargetRoot delivers the compatibility projection into the skills directory
-// Claude Code already reads, rather than under the managed root.
+// TargetRoot delivers the portable projection into Claude Code's official
+// in-place @skills-dir plugin slot (full plugin.json + skills + MCP), not
+// under the managed marketplace root.
 func (*Adapter) TargetRoot(client domain.DetectedClient, mode domain.PackageMode, managedRoot string) (string, string, error) {
 	if mode != domain.PackageProjection {
 		return shared.ManagedTargetRoot(client, mode, managedRoot)

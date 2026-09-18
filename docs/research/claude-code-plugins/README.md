@@ -1,5 +1,7 @@
 # Claude Code plugins — справочник
 
+**Installer slot (2026-09-18):** Agent Plugins Claude uses the official in-place `@skills-dir` plugin slot, not marketplace cache. Spike notes (not public qualification): [SPIKE-2026-09-18-install-slots.md](SPIKE-2026-09-18-install-slots.md). Decision: [ADR 0007](../../adr/0007-agentplugins-claude-skills-dir-plugin-slot.md).
+
 Консолидированные заметки по официальной документации Anthropic (Claude Code), **10 параллельным сабагентам** (generalPurpose) и контексту репозитория **plugin-kit-ai** (`plugin-kit-ai`, пример `claude-basic-prod`). Где в доках есть пробелы или известные баги релиза — отмечено.
 
 **Дата сборки:** 2026-03-28. Доки дублируются на **docs.anthropic.com** и **code.claude.com** — при расхождении ориентируйтесь на актуальную версию страницы и `claude --version`.

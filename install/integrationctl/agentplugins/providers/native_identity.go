@@ -608,6 +608,10 @@ func inspectPreparedRegistry(plan domain.DeliveryPlan, name string, owned bool) 
 	return shared.InspectUnqualifiedPluginRoot(plan.TargetRoot, name, plan.ActivePath, owned)
 }
 
+// inspectClaudeSkillsRegistry classifies the official in-place @skills-dir
+// plugin slot. Neighbors in ConfigRoot/skills are not a registry: only a
+// proven same-name .claude-plugin/plugin.json claim collides. Identity is the
+// plugin.json name, not the physical artifact leaf.
 func inspectClaudeSkillsRegistry(plan domain.DeliveryPlan, name string, owned bool) (registryFinding, error) {
 	root := strings.TrimSpace(plan.TargetRoot)
 	if root == "" {
@@ -622,32 +626,20 @@ func inspectClaudeSkillsRegistry(plan domain.DeliveryPlan, name string, owned bo
 	}
 	finding := registryClear
 	for _, entry := range entries {
-		if entry.Type()&os.ModeSymlink != 0 {
-			return registryIndeterminate, nil
-		}
-		if !entry.IsDir() {
-			// A plain file cannot contain the .claude-plugin/plugin.json this
-			// scheme requires, so it can never claim a competing plugin
-			// identity. OS-generated artifacts such as .DS_Store are common
-			// in a Finder-browsed skills directory and must not block every
-			// other plugin's repair/update.
+		path, ok := shared.PluginDirectoryPath(root, entry)
+		if !ok {
 			continue
 		}
-		path := filepath.Join(root, entry.Name())
 		manifest := filepath.Join(path, ".claude-plugin", "plugin.json")
 		manifestName, readErr := shared.ReadJSONManifestName(manifest)
-		if os.IsNotExist(readErr) {
-			// Plain skills legitimately share this directory and do not claim a
-			// plugin identity.
-			if _, skillErr := os.Lstat(filepath.Join(path, "SKILL.md")); skillErr == nil {
-				continue
-			} else if !os.IsNotExist(skillErr) {
-				return registryIndeterminate, skillErr
-			}
-			return registryIndeterminate, nil
-		}
 		if readErr != nil {
-			return registryIndeterminate, readErr
+			if os.IsNotExist(readErr) {
+				continue
+			}
+			if owned && shared.SameCleanPath(path, plan.ActivePath) {
+				return registryIndeterminate, readErr
+			}
+			continue
 		}
 		if manifestName != name {
 			continue

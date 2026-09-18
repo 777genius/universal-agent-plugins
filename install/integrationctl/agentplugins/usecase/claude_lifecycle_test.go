@@ -89,6 +89,9 @@ func TestClaudeLifecycleAddUpdateRepairRemoveWithIsolatedConfig(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(active, ".claude-plugin", "plugin.json")); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := os.Stat(filepath.Join(active, ".claude-plugin", "marketplace.json")); !os.IsNotExist(err) {
+		t.Fatalf("Claude projection must not write marketplace.json: %v", err)
+	}
 
 	setEnvelopeVersion(t, &input.Envelope, "1.1.0", "sha256:source-tree-v2", "sha256:manifest-v2")
 	input.Envelope.Source.ResolvedRevision = "def456"

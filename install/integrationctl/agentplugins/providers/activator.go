@@ -876,6 +876,9 @@ const (
 	claudeStatusCollision
 )
 
+// claudePluginStatus verifies the official in-place plugin slot: the unique
+// list entry must be name@skills-dir at installPath == ActivePath with user
+// scope. Other ids, including leftover marketplace installs, are ignored.
 func claudePluginStatus(body []byte, name, activePath string) claudeStatus {
 	decoder := json.NewDecoder(strings.NewReader(string(body)))
 	decoder.UseNumber()

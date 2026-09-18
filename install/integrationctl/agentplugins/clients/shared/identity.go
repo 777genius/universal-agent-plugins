@@ -1,6 +1,7 @@
 package shared
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -10,12 +11,18 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
+// ErrNoAuthoritativeManifest is returned when a package directory has none of
+// the recognized plugin or marketplace identity documents.
+var ErrNoAuthoritativeManifest = errors.New("native package has no recognized authoritative manifest")
+
 // InspectUnqualifiedPluginRoot is the default prepared-registry inspection: it
 // walks a directory of plugin-shaped entries and reports whether the declared
 // name is free, already ours, or claimed by someone else.
 //
-// Anything it cannot read turns into Indeterminate rather than Clear, because
-// "we could not look" must never become evidence of absence.
+// A shared plugins root is not a private registry. Files, dangling links,
+// empty directories, and unreadable foreign siblings are skipped. Only a
+// proven same-name claim collides. Unreadable or malformed identity on the
+// owned ActivePath is Indeterminate because that is our object.
 func InspectUnqualifiedPluginRoot(root, name, activePath string, owned bool) (clients.RegistryFinding, error) {
 	if strings.TrimSpace(root) == "" {
 		return clients.RegistryIndeterminate, nil
@@ -32,20 +39,19 @@ func InspectUnqualifiedPluginRoot(root, name, activePath string, owned bool) (cl
 		if strings.HasPrefix(entry.Name(), ".agentplugins-staging-") {
 			continue
 		}
-		if entry.Type()&os.ModeSymlink != 0 {
-			return clients.RegistryIndeterminate, nil
-		}
-		if !entry.IsDir() {
-			// A plain file cannot contain the manifest this scheme requires, so
-			// it can never claim a competing plugin identity. OS-generated
-			// artifacts such as .DS_Store are common here and must not block
-			// every other plugin's repair/update.
+		path, ok := PluginDirectoryPath(root, entry)
+		if !ok {
 			continue
 		}
-		path := filepath.Join(root, entry.Name())
 		manifestName, qualified, namespace, err := NativeManifestIdentity(path)
 		if err != nil {
-			return clients.RegistryIndeterminate, err
+			if errors.Is(err, ErrNoAuthoritativeManifest) {
+				continue
+			}
+			if owned && activePath != "" && SameCleanPath(path, activePath) {
+				return clients.RegistryIndeterminate, err
+			}
+			continue
 		}
 		if manifestName != name {
 			continue
@@ -60,6 +66,24 @@ func InspectUnqualifiedPluginRoot(root, name, activePath string, owned bool) (cl
 		return clients.RegistryCollision, nil
 	}
 	return finding, nil
+}
+
+// PluginDirectoryPath reports whether a shared plugins/skills-root entry is a
+// directory that may hold a plugin claim. Files, dangling symlinks, and
+// symlinks to non-directories cannot claim an identity.
+func PluginDirectoryPath(root string, entry os.DirEntry) (string, bool) {
+	path := filepath.Join(root, entry.Name())
+	if entry.Type()&os.ModeSymlink != 0 {
+		info, err := os.Stat(path)
+		if err != nil || !info.IsDir() {
+			return "", false
+		}
+		return path, true
+	}
+	if !entry.IsDir() {
+		return "", false
+	}
+	return path, true
 }
 
 // NativeManifestIdentity reads the authoritative identity of a delivered native
@@ -84,7 +108,7 @@ func NativeManifestIdentity(root string) (name string, qualified bool, namespace
 			return "", false, "", readErr
 		}
 	}
-	return "", false, "", fmt.Errorf("native package has no recognized authoritative manifest")
+	return "", false, "", ErrNoAuthoritativeManifest
 }
 
 func marketplaceIdentity(body []byte) (name string, qualified bool, namespace string, err error) {
