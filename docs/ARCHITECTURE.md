@@ -36,19 +36,23 @@ Dependencies point inward.
 | Ports | `agentplugins/ports` | stdlib, `domain`, `install/integrationctl/ports` (see below) | yes, `ports-only-domain` |
 | Use cases | `agentplugins/usecase` | stdlib, `domain`, `ports`, `transaction`, `pathcontract`, `install/integrationctl/ports` for the legacy lock (see below) | yes, `usecase-through-ports` |
 | Client contract | `agentplugins/clients` (+ `clients/shared`) | stdlib, `domain`, `ports`, `adapters/nativeconfig` (see below) | yes, `clients-no-upward`, `clients-no-concrete-clients` |
-| Adapters | `agentplugins/{adapters,providers,planner}` | the layers above | no rule yet |
+| Client adapters | `agentplugins/clients/<id>` | the client contract, `clients/shared`, `domain`, `ports` | yes, `clients-no-upward`, `clients-no-concrete-clients` |
+| Adapters | `agentplugins/{adapters,providers,planner}` | the layers above, never `clients/all` | partly, `dispatchers-take-an-injected-registry` |
 | CLI | `agentpluginscli` | the public facades of the layers above | no rule yet |
 | Composition root | `cmd/agentplugins` | everything, and nothing imports it | no rule yet |
 
 The "Enforced today" column is deliberate: the middle column is the target, and
-only the first three rows and the client contract are currently checked by
-`depguard` in `.golangci.yml`. `usecase-through-ports` now forbids `adapters`
-(both the `agentplugins` ones and `install/integrationctl/adapters`),
-`providers`, `planner` and `clients`; the use case reaches path containment
-through `ports.PathPolicy` and planning through `ports.DeliveryPlanner`. It stays
-a deny list on purpose: adding an `allow` key would turn the rule into a
-whitelist and reject every import not named in it, including the standard
-library. The adapter, CLI and composition root rows have no rule at all yet.
+only some of it is checked by `depguard` in `.golangci.yml` today. Domain, ports,
+the use cases, the client contract and the client adapters are covered in full.
+The adapter row is covered in part: `dispatchers-take-an-injected-registry`
+forbids `clients/all` there, but nothing yet stops an adapter from importing
+another one. The CLI and composition root rows have no rule at all.
+`usecase-through-ports` forbids `adapters` (both the `agentplugins` ones and
+`install/integrationctl/adapters`), `providers`, `planner` and `clients`; the use
+case reaches path containment through `ports.PathPolicy` and planning through
+`ports.DeliveryPlanner`. It stays a deny list on purpose: adding an `allow` key
+would turn the rule into a whitelist and reject every import not named in it,
+including the standard library.
 
 `agentplugins/clients` is the extension point: one adapter per supported client,
 resolved through a `Registry` the composition root injects. `clients-no-upward`
@@ -58,7 +62,27 @@ its shared helpers and any client package from importing another client package
 or the assembled `clients/all` registry. A nil `Registry` is an error, never a
 silent fallback to "every client": resolving it to a default would compile every
 adapter into any binary that imports a generic package and would put the registry
-outside the composition root's control.
+outside the composition root's control. `dispatchers-take-an-injected-registry`
+holds the other side of that line: `providers`, `planner` and
+`adapters/clientdetect` may not import `clients/all` outside their tests, so the
+assembled registry reaches them only as an argument. `cmd/agentplugins` is the
+one place that builds it.
+
+Detection is the first capability to live behind the contract: each
+`clients/<id>` implements `HostDetector` and reports the surfaces it observed
+through a `clients.Host`, while `adapters/clientdetect` keeps the generic half -
+detection status, display name from `domain.ClientDefinitions`, the version probe
+and the stable ordering. The surface constructors belong to the contract rather
+than to each client because the evidence strings they produce are a cross-client
+output contract.
+
+`clients/contracttest` runs every adapter against a host that reports nothing
+installed and answers the same way every time. It checks that surface ids are
+unique, that repeated observations agree down to the order and the number of
+probe calls, and that nothing comes back detected - an adapter that stats a real
+path behind the host's back reports evidence the host never gave it. That is a
+necessary condition rather than a sandbox: an ambient read whose result never
+reaches the `Detection` stays invisible to it.
 
 ### Accepted exceptions
 

@@ -36,6 +36,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/specregistry"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/statemigration"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/statev2"
+	clientregistry "github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/all"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/managedstdio"
 	clientplanner "github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/planner"
@@ -142,6 +143,10 @@ func run() error {
 		Lock: mutationLock, Kernel: transaction.Kernel{StateStore: v2Store, Directory: directoryManager},
 		NativeObserver: providers.NativeIdentityObserver{Stager: stager, Runner: runner}, PluginData: providers.PluginDataManager{Base: filepath.Join(dataRoot, "plugin-data")},
 	}
+	// The composition root is the one place that decides which clients this
+	// binary knows about, so it is also the only place that names the full set.
+	detector := clientdetect.NewOS(home)
+	detector.Registry = clientregistry.Default()
 	legacyStatePath := filepath.Join(home, ".plugin-kit-ai", "state.json")
 	migrator := statemigration.Migrator{
 		LegacyPath:     legacyStatePath,
@@ -157,7 +162,7 @@ func run() error {
 		StateMigrator:       &migrator,
 		LegacyLifecycle:     agentpluginscli.NewLegacyLifecycle(legacyStatePath),
 		LegacyStateLock:     locks.FileLock{BaseDir: filepath.Join(home, ".plugin-kit-ai", "locks")},
-		Detector:            clientdetect.NewOS(home),
+		Detector:            detector,
 		DirectoryClient:     directoryClient,
 		DiscoveryClient:     discoveryClient,
 		SourceAcquirer:      lazySourceAcquirer{dataRoot: dataRoot, acquirer: sourceacquisition.Acquirer{TempRoot: dataRoot}},

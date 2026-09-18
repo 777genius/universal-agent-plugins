@@ -19,8 +19,10 @@ type Detection struct {
 	ConfigRoot     string
 	ExecutablePath string
 	Surfaces       []domain.ClientSurface
-	// SelectionSurfaceIDs narrows the surfaces that decide detection status for
-	// clients whose presence is proven by a specific subset (Windsurf channels).
+	// SelectionSurfaceIDs narrows the surfaces that decide detection status to
+	// the ones that also make the client safe to act on. An empty list means any
+	// detected surface counts. Claude is the only client that needs it today: a
+	// configuration directory stays evidence, but only the CLI selects it.
 	SelectionSurfaceIDs []string
 }
 
@@ -42,6 +44,10 @@ type Host interface {
 	ReadDir(path string) ([]os.DirEntry, error)
 
 	BinarySurface(id, binary string) domain.ClientSurface
+	// ResolvedBinarySurface reports the same surface for an executable the
+	// adapter already resolved, so a client that also returns that path as its
+	// ExecutablePath probes PATH once instead of twice.
+	ResolvedBinarySurface(id, executablePath string) domain.ClientSurface
 	DirectorySurface(id, path string) domain.ClientSurface
 	AppSurface(id, appName string) domain.ClientSurface
 	WindowsAppSurface(id, userRelativePath, systemRelativePath string) domain.ClientSurface

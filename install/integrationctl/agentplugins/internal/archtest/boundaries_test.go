@@ -30,6 +30,10 @@ type boundary struct {
 func TestLayerBoundaries(t *testing.T) {
 	t.Parallel()
 	root := testRepoRoot(t)
+	// A dispatcher is handed a registry and never assembles the default one:
+	// importing clients/all would link every adapter into any binary that
+	// merely detects or plans.
+	injectedRegistry := []string{modulePath + "/install/integrationctl/agentplugins/clients/all"}
 	boundaries := []boundary{
 		{pkg: agentplugins + "/domain", allow: nil},
 		{pkg: agentplugins + "/ports", tests: true, allow: []string{
@@ -45,6 +49,19 @@ func TestLayerBoundaries(t *testing.T) {
 			modulePath + "/install/integrationctl/agentplugins/providers",
 			modulePath + "/install/integrationctl/agentplugins/clients",
 		}},
+		// The client contract and its adapters are depended upon and never
+		// depend back. Tests are covered too: a test that reaches for the
+		// planner makes the package impossible to build standalone just as
+		// surely as production code would.
+		{pkg: agentplugins + "/clients", tests: true, deny: []string{
+			modulePath + "/install/integrationctl/agentplugins/providers",
+			modulePath + "/install/integrationctl/agentplugins/planner",
+			modulePath + "/install/integrationctl/agentplugins/usecase",
+			modulePath + "/install/integrationctl/agentplugins/adapters/clientdetect",
+		}},
+		{pkg: agentplugins + "/providers", deny: injectedRegistry},
+		{pkg: agentplugins + "/planner", deny: injectedRegistry},
+		{pkg: agentplugins + "/adapters/clientdetect", deny: injectedRegistry},
 	}
 	for _, rule := range boundaries {
 		t.Run(rule.pkg, func(t *testing.T) {
