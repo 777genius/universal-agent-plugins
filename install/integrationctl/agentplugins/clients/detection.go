@@ -42,6 +42,10 @@ type Host interface {
 	ReadDir(path string) ([]os.DirEntry, error)
 
 	BinarySurface(id, binary string) domain.ClientSurface
+	// ResolvedBinarySurface reports the same surface for an executable the
+	// adapter already resolved, so a client that also returns that path as its
+	// ExecutablePath probes PATH once instead of twice.
+	ResolvedBinarySurface(id, executablePath string) domain.ClientSurface
 	DirectorySurface(id, path string) domain.ClientSurface
 	AppSurface(id, appName string) domain.ClientSurface
 	WindowsAppSurface(id, userRelativePath, systemRelativePath string) domain.ClientSurface
