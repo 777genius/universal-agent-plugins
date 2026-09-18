@@ -36,7 +36,8 @@ Dependencies point inward.
 | Ports | `agentplugins/ports` | stdlib, `domain`, `install/integrationctl/ports` (see below) | yes, `ports-only-domain` |
 | Use cases | `agentplugins/usecase` | stdlib, `domain`, `ports`, `transaction`, `pathcontract`, `install/integrationctl/ports` for the legacy lock (see below) | yes, `usecase-through-ports` |
 | Client contract | `agentplugins/clients` (+ `clients/shared`) | stdlib, `domain`, `ports`, `adapters/nativeconfig` (see below) | yes, `clients-no-upward`, `clients-no-concrete-clients` |
-| Adapters | `agentplugins/{adapters,providers,planner}` | the layers above | no rule yet |
+| Client adapters | `agentplugins/clients/<id>` | the client contract, `clients/shared`, `domain`, `ports` | yes, `clients-no-upward`, `clients-no-concrete-clients` |
+| Adapters | `agentplugins/{adapters,providers,planner}` | the layers above, never `clients/all` | partly, `dispatchers-take-an-injected-registry` |
 | CLI | `agentpluginscli` | the public facades of the layers above | no rule yet |
 | Composition root | `cmd/agentplugins` | everything, and nothing imports it | no rule yet |
 
@@ -58,7 +59,20 @@ its shared helpers and any client package from importing another client package
 or the assembled `clients/all` registry. A nil `Registry` is an error, never a
 silent fallback to "every client": resolving it to a default would compile every
 adapter into any binary that imports a generic package and would put the registry
-outside the composition root's control.
+outside the composition root's control. `dispatchers-take-an-injected-registry`
+holds the other side of that line: `providers`, `planner` and
+`adapters/clientdetect` may not import `clients/all` outside their tests, so the
+assembled registry reaches them only as an argument. `cmd/agentplugins` is the
+one place that builds it.
+
+Detection is the first capability to live behind the contract: each
+`clients/<id>` implements `HostDetector` and reports the surfaces it observed
+through a `clients.Host`, while `adapters/clientdetect` keeps the generic half -
+detection status, display name from `domain.ClientDefinitions`, the version probe
+and the stable ordering. The surface constructors belong to the contract rather
+than to each client because the evidence strings they produce are a cross-client
+output contract; `clients/contracttest` builds a `Host` from counting probes, so
+an adapter that observed the machine on its own would be caught there.
 
 ### Accepted exceptions
 
