@@ -2,7 +2,6 @@ package providers
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -33,11 +32,9 @@ type Activator struct {
 	Registry *clients.Registry
 }
 
-var errActivatorRegistryRequired = errors.New("activator registry is required")
-
 func (activator Activator) requireRegistry() error {
 	if activator.Registry == nil {
-		return errActivatorRegistryRequired
+		return clients.ErrRegistryRequired
 	}
 	return nil
 }
@@ -191,8 +188,8 @@ func (activator Activator) Activate(ctx context.Context, request domain.Activati
 	if err := activator.requireRegistry(); err != nil {
 		return domain.ActivationOutcome{}, err
 	}
-	if request.Plan.ClientID != request.Client.ClientID || request.Delivery.ClientID != request.Client.ClientID {
-		return domain.ActivationOutcome{}, fmt.Errorf("activation client identity mismatch")
+	if err := shared.ActivationIdentityMismatch(request); err != nil {
+		return domain.ActivationOutcome{}, err
 	}
 	if request.Plan.ActivePath != request.Delivery.ActivePath {
 		return domain.ActivationOutcome{}, fmt.Errorf("activation artifact path mismatch")
