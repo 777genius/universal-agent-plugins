@@ -16,3 +16,11 @@ func testStager(base Stager) Stager {
 	}
 	return base
 }
+
+// testActivator completes an activator literal with the full client registry.
+func testActivator(base Activator) Activator {
+	if base.Registry == nil {
+		base.Registry = all.Default()
+	}
+	return base
+}

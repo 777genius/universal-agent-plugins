@@ -311,7 +311,7 @@ func TestOpenCodeActivatorTreatsCommittedUnlockFailureAsSuccessfulLifecycle(t *t
 
 	t.Run("add", func(t *testing.T) {
 		configRoot, active, objects, request := openCodeActivationFixture(t, "add")
-		outcome, err := (Activator{NativeConfig: &committedKernel}).Activate(context.Background(), request)
+		outcome, err := testActivator(Activator{NativeConfig: &committedKernel}).Activate(context.Background(), request)
 		assertOpenCodeCommittedActivation(t, outcome, err)
 		if err := opencode.VerifyOpenCodeNativeObjects(configRoot, active, objects); err != nil {
 			t.Fatalf("committed add state: %v", err)
@@ -345,7 +345,7 @@ func TestOpenCodeActivatorTreatsCommittedUnlockFailureAsSuccessfulLifecycle(t *t
 			Plan:   secondPlan, Delivery: domain.StagedDelivery{ClientID: domain.ClientOpenCode, OwnedBase: filepath.Dir(activeV2), ActivePath: activeV2, NativeObjects: second},
 			DeclaredName: "demo", Replacing: true, PreviousNativeObjects: first,
 		}
-		outcome, err := (Activator{NativeConfig: &committedKernel}).Activate(context.Background(), request)
+		outcome, err := testActivator(Activator{NativeConfig: &committedKernel}).Activate(context.Background(), request)
 		assertOpenCodeCommittedActivation(t, outcome, err)
 		if err := opencode.VerifyOpenCodeNativeObjects(configRoot, activeV2, second); err != nil {
 			t.Fatalf("committed update state: %v", err)
@@ -364,7 +364,7 @@ func TestOpenCodeActivatorTreatsCommittedUnlockFailureAsSuccessfulLifecycle(t *t
 		request.PreviousNativeObjects = objects
 		request.Delivery.NativeObjects = objects
 		request.Replacing = true
-		outcome, err := (Activator{NativeConfig: &committedKernel}).Activate(context.Background(), request)
+		outcome, err := testActivator(Activator{NativeConfig: &committedKernel}).Activate(context.Background(), request)
 		assertOpenCodeCommittedActivation(t, outcome, err)
 		if err := opencode.VerifyOpenCodeNativeObjects(configRoot, active, objects); err != nil {
 			t.Fatalf("committed repair state: %v", err)
@@ -379,7 +379,7 @@ func TestOpenCodeActivatorTreatsCommittedUnlockFailureAsSuccessfulLifecycle(t *t
 		if err := opencode.ApplyOpenCodeNative(configRoot, active, nil, objects); err != nil {
 			t.Fatal(err)
 		}
-		outcome, err := (Activator{NativeConfig: &committedKernel}).Deactivate(context.Background(), domain.DeactivationRequest{
+		outcome, err := testActivator(Activator{NativeConfig: &committedKernel}).Deactivate(context.Background(), domain.DeactivationRequest{
 			Client:       domain.DetectedClient{ClientID: domain.ClientOpenCode, Status: domain.DetectionDetected, ConfigRoot: configRoot},
 			DeclaredName: "demo", CurrentActivation: domain.ActivationActive, Confirmed: true, NativeObjects: objects,
 		})

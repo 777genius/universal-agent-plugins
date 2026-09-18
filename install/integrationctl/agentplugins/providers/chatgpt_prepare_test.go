@@ -19,7 +19,7 @@ func TestPersonalChatGPTPreparationCannotAttestRemoteActivation(t *testing.T) {
 	request.DeclaredName = "context7"
 	request.Plan.ActivePath = active
 	request.Delivery = domain.StagedDelivery{ClientID: domain.ClientChatGPT, OwnedBase: root, ActivePath: active}
-	activator := Activator{}
+	activator := testActivator(Activator{})
 	if err := activator.PreflightActivation(request); err != nil {
 		t.Fatal(err)
 	}

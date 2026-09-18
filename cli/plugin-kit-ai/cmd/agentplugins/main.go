@@ -131,11 +131,11 @@ func run() error {
 	v2Store := statev2.Store{Path: filepath.Join(dataRoot, "state-v2.json")}
 	directoryManager := dirswap.Manager{JournalDir: filepath.Join(dataRoot, "operations-v2")}
 	mutationLock := processlock.Lock{Path: filepath.Join(dataRoot, "mutation.lock")}
-	activator := providers.Activator{Runner: runner}
+	clientRegistry := clientregistry.Default()
+	activator := providers.Activator{Runner: runner, Registry: clientRegistry}
 	paths := pathpolicy.Policy{}
 	// The composition root is the one place that decides which clients this
 	// binary knows about, so it is also the only place that names the full set.
-	clientRegistry := clientregistry.Default()
 	stager := providers.Stager{Registry: clientRegistry, Paths: paths}
 	if executable, err := os.Executable(); err == nil {
 		stager.LauncherSource, _ = managedstdio.NewSource(executable, version)

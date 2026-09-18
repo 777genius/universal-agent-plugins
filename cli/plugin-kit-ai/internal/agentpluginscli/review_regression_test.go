@@ -9,6 +9,7 @@ import (
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/providers"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/providerstest"
 )
 
 type reviewVersionDetector struct{ client domain.DetectedClient }
@@ -71,7 +72,7 @@ func TestReviewUnrelatedPreparationPreservesAutomaticDirectoryGate(t *testing.T)
 		t.Fatal(err)
 	}
 	writeCLIMCP(t, plugin)
-	r.cli.app.Lifecycle.Activator = providers.Activator{}
+	r.cli.app.Lifecycle.Activator = providerstest.NewActivator(providers.Activator{})
 	if out, _, err := r.cli.execute(false, "add", plugin, "--target", "kiro"); err != nil {
 		t.Fatalf("prepare: %s %v", out, err)
 	}
@@ -112,7 +113,7 @@ func TestUnrelatedRetainedPreparationPreservesAutomaticDirectoryGate(t *testing.
 		t.Fatal(err)
 	}
 	writeCLIMCP(t, plugin)
-	r.cli.app.Lifecycle.Activator = providers.Activator{}
+	r.cli.app.Lifecycle.Activator = providerstest.NewActivator(providers.Activator{})
 	if out, _, err := r.cli.execute(false, "add", plugin, "--target", "kiro"); err != nil {
 		t.Fatalf("prepare: %s %v", out, err)
 	}

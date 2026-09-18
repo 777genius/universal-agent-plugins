@@ -50,6 +50,7 @@ func TestDefaultRegistryAdaptersSatisfyTheContract(t *testing.T) {
 			// not a client with nothing to add.
 			contracttest.RunPlanRefiner(t, adapter)
 			contracttest.RunProjector(t, adapter)
+			contracttest.RunLifecycle(t, adapter)
 		})
 	}
 	contracttest.RunTraitParity(t, Default(), everyClientDetectsSurfaces())

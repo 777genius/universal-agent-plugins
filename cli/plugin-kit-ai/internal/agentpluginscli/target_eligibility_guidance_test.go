@@ -9,6 +9,7 @@ import (
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/providers"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/providerstest"
 )
 
 type deniedEligibilityActivator struct{ providers.Activator }
@@ -61,7 +62,7 @@ func TestSkippedReasonsSurviveZeroSingleAndMultipleChoices(t *testing.T) {
 
 func TestKiroEligibilityDoesNotGuessFromClientName(t *testing.T) {
 	fixture := newCLIFixture(t, []domain.DetectedClient{fixtureClient(t, domain.ClientKiro)})
-	fixture.app.Lifecycle.Activator = providers.Activator{Runner: &cliRunOnlyRunner{}}
+	fixture.app.Lifecycle.Activator = providerstest.NewActivator(providers.Activator{Runner: &cliRunOnlyRunner{}})
 	stdout, _, err := fixture.executeInput(true, "\n", "add", writeCLIPlugin(t), "--dry-run")
 	if err != nil || strings.Contains(stdout, "Skipped") {
 		t.Fatalf("skills-only Kiro was rejected: %q %v", stdout, err)
@@ -72,7 +73,7 @@ func TestExplicitKiroUsesGuidedPreparation(t *testing.T) {
 	kiro := fixtureClient(t, domain.ClientKiro)
 	kiro.ExecutablePath = "/test/bin/kiro-cli"
 	fixture := newCLIFixture(t, []domain.DetectedClient{kiro})
-	fixture.app.Lifecycle.Activator = providers.Activator{Runner: &cliRunOnlyRunner{}}
+	fixture.app.Lifecycle.Activator = providerstest.NewActivator(providers.Activator{Runner: &cliRunOnlyRunner{}})
 	plugin := writeCLIPlugin(t)
 	writeCLIMCP(t, plugin)
 	stdout, _, err := fixture.execute(false, "add", plugin, "--target", "kiro", "--dry-run")

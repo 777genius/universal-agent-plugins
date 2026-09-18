@@ -10,6 +10,7 @@ import (
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/providers"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/providerstest"
 )
 
 func TestSwitchSynthesizesRemoteChatGPTAndRecoversAfterActivationFailure(t *testing.T) {
@@ -62,7 +63,7 @@ func TestSwitchSynthesizesRemoteChatGPTAndRecoversAfterActivationFailure(t *test
 		t.Fatalf("failed switch did not retain recoverable managed commit: %+v", failed.Installations[0])
 	}
 
-	fixture.app.Lifecycle.Activator = providers.Activator{}
+	fixture.app.Lifecycle.Activator = providerstest.NewActivator(providers.Activator{})
 	if _, _, err := fixture.execute(false, "switch", "demo", "--to", second, "--format", "json"); err != nil {
 		t.Fatalf("switch recovery without ChatGPT detection: %v", err)
 	}

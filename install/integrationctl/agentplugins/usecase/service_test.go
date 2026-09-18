@@ -530,7 +530,7 @@ func TestUnconfirmedInfrastructureFailureIsNotPersistedAsAuthoritativeEvidenceFo
 			if err := store.Save(state); err != nil {
 				t.Fatal(err)
 			}
-			service.Activator = providers.Activator{Runner: fixedUsecaseRunner{err: fmt.Errorf("temporary verifier transport failure")}}
+			service.Activator = providerstest.NewActivator(providers.Activator{Runner: fixedUsecaseRunner{err: fmt.Errorf("temporary verifier transport failure")}})
 			input.Confirmed = false
 			input.PersistAuthoritativeObservations = true
 			input.BackendExecutable = "/test/bin/copilot"
@@ -582,7 +582,7 @@ func TestPlanFirstAuthoritativePersistenceIsSurroundedByMutationLock(t *testing.
 	guarded := lockAssertingStore{StateStore: store, held: &held}
 	service.StateStore = guarded
 	service.Lock = lock
-	service.Activator = providers.Activator{Runner: fixedUsecaseRunner{result: legacyports.CommandResult{Stdout: []byte(`{"installed":[]}`)}}}
+	service.Activator = providerstest.NewActivator(providers.Activator{Runner: fixedUsecaseRunner{result: legacyports.CommandResult{Stdout: []byte(`{"installed":[]}`)}}})
 	input.Confirmed = false
 	input.PersistAuthoritativeObservations = true
 	input.BackendExecutable = "/test/bin/codex"
@@ -657,7 +657,7 @@ func TestPlanFirstAuthoritativePersistenceRejectsStaleObservedBinding(t *testing
 	}}
 	service.StateStore = lockAssertingStore{StateStore: store, held: &held}
 	service.Lock = lock
-	service.Activator = providers.Activator{Runner: fixedUsecaseRunner{result: legacyports.CommandResult{Stdout: []byte(`{"installed":[]}`)}}}
+	service.Activator = providerstest.NewActivator(providers.Activator{Runner: fixedUsecaseRunner{result: legacyports.CommandResult{Stdout: []byte(`{"installed":[]}`)}}})
 	input.Confirmed = false
 	input.PersistAuthoritativeObservations = true
 	input.BackendExecutable = "/test/bin/codex"
@@ -1809,7 +1809,7 @@ func TestRemoveCleansNativeCodexMarketplaceBeforeManagedArtifactDeletion(t *test
 	if result := runner.writeConfig(false); result.ExitCode != 0 {
 		t.Fatalf("seed Codex config: %s", result.Stderr)
 	}
-	service.Activator = providers.Activator{Runner: runner}
+	service.Activator = providerstest.NewActivator(providers.Activator{Runner: runner})
 	add := addInput(t, client, "https://example.com/codex-cleanup")
 	add.Confirmed = true
 	add.BackendExecutable = "/test/bin/codex"
@@ -1981,7 +1981,7 @@ func serviceFixture(t *testing.T) (Service, statev2.Store, domain.DetectedClient
 		Planner:    targetPlanner,
 		Targets:    targetPlanner,
 		Stager:     stager,
-		Activator:  providers.Activator{},
+		Activator:  providerstest.NewActivator(providers.Activator{}),
 		PluginData: providers.PluginDataManager{Base: filepath.Join(root, "plugin-data")},
 		Lock:       processlock.Lock{Path: filepath.Join(root, "state", "mutation.lock")},
 		Kernel: transaction.Kernel{

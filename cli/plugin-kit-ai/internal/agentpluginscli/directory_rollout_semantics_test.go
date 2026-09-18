@@ -13,6 +13,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/directoryv1"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/providers"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/providerstest"
 )
 
 type rolloutDirectoryFixture struct {
@@ -387,7 +388,7 @@ func TestInteractiveDirectoryAddOffersKiroGuidedPreparation(t *testing.T) {
 	rollout.cli.app.Detector = staticDetector{clients: []domain.DetectedClient{
 		fixtureClient(t, domain.ClientCursor), kiro,
 	}}
-	rollout.cli.app.Lifecycle.Activator = providers.Activator{Runner: &cliRunOnlyRunner{}}
+	rollout.cli.app.Lifecycle.Activator = providerstest.NewActivator(providers.Activator{Runner: &cliRunOnlyRunner{}})
 
 	stdout, _, err := rollout.cli.executeInput(true, "\n", "add", "rollout-demo", "--dry-run")
 	if err != nil {
