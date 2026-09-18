@@ -112,10 +112,11 @@ func runAddManyLoaded(ctx context.Context, cmd *cobra.Command, app App, opts *op
 	if err := authorizeSecurityAssessment(cmd, app, opts, &loaded); err != nil {
 		return err
 	}
-	deferredChatGPT := loaded.chatGPTPreparation && loaded.localChatGPTMapping == nil && containsClientID(targets, domain.ClientChatGPT)
+	deferredChatGPT := loaded.chatGPTPreparation && loaded.localChatGPTMapping == nil && containsPersonalMappingTarget(targets)
 	if deferredChatGPT && len(targets) == 1 {
 		// Setup-required ChatGPT registration is not an install failure.
-		action := chatGPTRegistrationResumeAction(cmd, loaded.envelope.Source.RequestedSource, []domain.ClientID{domain.ClientChatGPT})
+		personal, _ := personalMappingTarget(targets)
+		action := chatGPTRegistrationResumeAction(cmd, loaded.envelope.Source.RequestedSource, []domain.ClientID{personal})
 		if opts.format == "json" {
 			return writeJSONResult(cmd.OutOrStdout(), "add", outputResultSuccess, map[string]any{
 				"status": "action_required", "target": "chatgpt", "mcp_url": domain.Context7ChatGPTURL,
@@ -127,7 +128,7 @@ func runAddManyLoaded(ctx context.Context, cmd *cobra.Command, app App, opts *op
 	}
 	executionTargets := targets
 	if deferredChatGPT {
-		executionTargets = withoutClientID(targets, domain.ClientChatGPT)
+		executionTargets = withoutPersonalMappingTargets(targets)
 	}
 	if len(executionTargets) == 1 && !deferredChatGPT {
 		selectedOptions := *opts
@@ -313,7 +314,8 @@ func withoutClientID(targets []domain.ClientID, excluded domain.ClientID) []doma
 }
 
 func appendDeferredChatGPT(result *addMultiResult, cmd *cobra.Command, loaded loadedPackage) {
-	action := chatGPTRegistrationResumeAction(cmd, loaded.envelope.Source.RequestedSource, []domain.ClientID{domain.ClientChatGPT})
+	personal, _ := personalMappingTarget(domain.SupportedClientIDs())
+	action := chatGPTRegistrationResumeAction(cmd, loaded.envelope.Source.RequestedSource, []domain.ClientID{personal})
 	if result.DryRun {
 		result.Status = "planned_with_action_required"
 	} else if result.Failed == 0 {
@@ -321,12 +323,12 @@ func appendDeferredChatGPT(result *addMultiResult, cmd *cobra.Command, loaded lo
 		result.Status = "completed_with_action_required"
 	}
 	entry := addTargetResult{
-		Target: string(domain.ClientChatGPT), Status: "action_required", NextAction: action,
-		displayName: "ChatGPT",
+		Target: string(personal), Status: "action_required", NextAction: action,
+		displayName: domain.ClientDisplayName(personal),
 	}
 	result.Targets = append(result.Targets, entry)
 	countBatchTarget(result, entry)
-	result.setTargetProof(domain.ClientChatGPT, "not_run")
+	result.setTargetProof(personal, "not_run")
 }
 
 func newAddAcquisitionProof(loaded loadedPackage) (addAcquisitionProof, error) {

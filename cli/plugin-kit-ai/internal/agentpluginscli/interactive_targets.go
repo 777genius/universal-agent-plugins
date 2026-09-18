@@ -7,7 +7,6 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/pathpolicy"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/discoveryv1"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	clientplanner "github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/planner"
@@ -105,7 +104,7 @@ func (app App) compatibleDetectedTargets(ctx context.Context, source string, det
 			return nil, skipped, nil, nil
 		}
 	}
-	if len(intents) > 0 && intents[0][domain.ClientChatGPT] == domain.InstallIntentPrepare {
+	if len(intents) > 0 && personalMappingPrepareSelected(intents[0]) {
 		app.chatGPTPreparation = true
 	}
 	request := app.addResolutionRequest(source, nil)
@@ -170,8 +169,7 @@ func (app App) compatibleDirectoryTargets(ctx context.Context, selector string, 
 		if intents[0] == nil {
 			intents[0] = make(map[domain.ClientID]domain.InstallIntent)
 		}
-		intents[0][domain.ClientChatGPT] = domain.InstallIntentPrepare
-		intents[0][domain.ClientKiro] = domain.InstallIntentPrepare
+		assignPrepareIntents(intents[0])
 	}
 	clients := detectedClientMap(detected)
 	environment := directoryEnvironment(clients)
@@ -201,20 +199,24 @@ func (app App) compatibleDirectoryTargets(ctx context.Context, selector string, 
 			preparing := false
 			// Ordinary eligibility wins unless preparation was requested. Only
 			// the bounded Context7 purpose can offer an additional choice.
-			if len(intents) > 0 && intents[0][domain.ClientChatGPT] == domain.InstallIntentPrepare {
-				hasChatGPT := false
+			if len(intents) > 0 && personalMappingPrepareSelected(intents[0]) {
+				hasPersonal := false
 				var peers []domain.ClientID
+				var personal domain.ClientID
 				for _, target := range targets {
-					if target == domain.ClientChatGPT {
-						hasChatGPT = true
+					if requiresPersonalMapping(target) {
+						hasPersonal = true
+						personal = target
 					} else {
 						peers = append(peers, target)
 					}
 				}
-				if hasChatGPT {
+				if hasPersonal {
 					preparation := resolveRequest
-					preparation.Targets = []domain.ClientID{domain.ClientChatGPT}
-					preparation.Purpose = domain.DirectoryResolveContext7ChatGPTPreparation
+					preparation.Targets = []domain.ClientID{personal}
+					if _, purpose, ok := directoryPreparationClient([]domain.ClientID{personal}); ok {
+						preparation.Purpose = purpose
+					}
 					selection, prepErr := domain.ResolveDirectory(bundle.Snapshot, preparation)
 					if prepErr == nil && len(peers) > 0 {
 						peerRequest := resolveRequest
@@ -234,12 +236,12 @@ func (app App) compatibleDirectoryTargets(ctx context.Context, selector string, 
 					}
 					resolveErr = prepErr
 					preparing = prepErr == nil
+					if preparing {
+						intents[0][personal] = domain.InstallIntentPrepare
+					}
 				}
 			}
 			if resolveErr == nil {
-				if preparing {
-					intents[0][domain.ClientChatGPT] = domain.InstallIntentPrepare
-				}
 				match = append([]domain.DetectedClient(nil), candidate...)
 				return false
 			}
@@ -281,8 +283,13 @@ func forEachDetectedSubset(values []domain.DetectedClient, size int, visit func(
 
 func (app App) compatibleLoadedTargets(ctx context.Context, loaded loadedPackage, detected []domain.DetectedClient, intents ...map[domain.ClientID]domain.InstallIntent) ([]domain.DetectedClient, []targetSkip) {
 	var skipped []targetSkip
+	if app.Planner == nil {
+		for _, client := range detected {
+			skipped = append(skipped, targetSkip{client.ClientID, "package planning is not configured"})
+		}
+		return nil, skipped
+	}
 	clientMap := detectedClientMap(detected)
-	planner := clientplanner.Planner{ManagedRoot: app.ManagedRoot, Paths: pathpolicy.Policy{}, Registry: app.ClientRegistry, Detected: clientMap}
 	physicalID := domain.ComputePhysicalArtifactID(loaded.envelope.Manifest.Name, "00000000-0000-4000-8000-000000000000")
 	if len(intents) > 0 && intents[0] != nil && app.StateStore != nil {
 		if state, err := app.StateStore.Load(); err == nil {
@@ -301,7 +308,7 @@ func (app App) compatibleLoadedTargets(ctx context.Context, loaded loadedPackage
 	compatible := make([]domain.DetectedClient, 0, len(detected))
 	for _, client := range detected {
 		candidate := cloneLoadedPackage(loaded)
-		if client.ClientID == domain.ClientChatGPT && loaded.chatGPTPreparation && loaded.localChatGPTMapping == nil {
+		if requiresPersonalMapping(client.ClientID) && loaded.chatGPTPreparation && loaded.localChatGPTMapping == nil {
 			// Acquisition already verified source policy, immutable bytes and
 			// endpoint. Registration is the next step, before any mutation.
 			client.DisplayName += " (prepare personal marketplace; register in ChatGPT, then install and verify tools)"
@@ -312,8 +319,9 @@ func (app App) compatibleLoadedTargets(ctx context.Context, loaded loadedPackage
 			skipped = append(skipped, targetSkip{client.ClientID, "package binding preparation failed; ask the package publisher to check its client mapping"})
 			continue
 		}
-		plan, err := planner.Plan(ctx, domain.PlanRequest{
+		plan, err := app.Planner.Plan(ctx, domain.PlanRequest{
 			Envelope: candidate.envelope, Client: client, Scope: domain.ScopeUser, PhysicalArtifactID: physicalID,
+			Detected: clientMap,
 		})
 		if err != nil || plan.Status == domain.PlanUnsupported {
 			reason := "package is unsupported for this client; ask the package publisher for supported components"
@@ -333,10 +341,10 @@ func (app App) compatibleLoadedTargets(ctx context.Context, loaded loadedPackage
 				skipped = append(skipped, targetSkip{client.ClientID, "persisted preparation cannot serve this package"})
 				continue
 			}
-			if client.ClientID == domain.ClientChatGPT {
+			if requiresPersonalMapping(client.ClientID) {
 				client.DisplayName += " (prepare personal marketplace; install and verify tools in ChatGPT)"
 			} else {
-				client.DisplayName += " (prepare configuration; authenticate and verify tools in Kiro)"
+				client.DisplayName += " (prepare configuration; authenticate and verify tools in " + domain.ClientDisplayName(client.ClientID) + ")"
 			}
 		}
 		if preflighter, ok := app.Lifecycle.Activator.(interface {
@@ -347,19 +355,19 @@ func (app App) compatibleLoadedTargets(ctx context.Context, loaded loadedPackage
 			})
 			if err != nil {
 				reason := "automatic activation/verification preflight failed; resolve this client's verification prerequisites before retrying --target " + string(client.ClientID)
-				if client.ClientID == domain.ClientKiro && len(intents) > 0 && intents[0] != nil {
+				if allowsHostedPrepare(client.ClientID) && len(intents) > 0 && intents[0] != nil {
 					if prepareErr := clientplanner.ApplyInstallIntent(app.ClientRegistry, &plan, domain.InstallIntentPrepare); prepareErr == nil {
 						prepareErr = preflighter.PreflightActivation(domain.ActivationRequest{Client: client, Plan: plan, VerifyOnly: true})
 						if prepareErr == nil {
 							intents[0][client.ClientID] = domain.InstallIntentPrepare
-							client.DisplayName += " (prepare configuration; automatic MCP verification unavailable; authenticate and verify tools in Kiro)"
+							client.DisplayName += " (prepare configuration; automatic MCP verification unavailable; authenticate and verify tools in " + domain.ClientDisplayName(client.ClientID) + ")"
 							compatible = append(compatible, client)
 							continue
 						}
 					}
 				}
-				if client.ClientID == domain.ClientKiro {
-					reason = "this CLI cannot automatically check MCP connections in your Kiro setup. Nothing was installed in Kiro. Use another listed client, or connect the server in Kiro: https://kiro.dev/docs/mcp/"
+				if allowsHostedPrepare(client.ClientID) {
+					reason = "this CLI cannot automatically check MCP connections in your " + domain.ClientDisplayName(client.ClientID) + " setup. Nothing was installed in " + domain.ClientDisplayName(client.ClientID) + ". Use another listed client, or connect the server in " + domain.ClientDisplayName(client.ClientID) + ": https://kiro.dev/docs/mcp/"
 				}
 				skipped = append(skipped, targetSkip{client.ClientID, reason})
 				continue

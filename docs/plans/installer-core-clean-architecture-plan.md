@@ -816,6 +816,8 @@ Generic-pipeline `stage`: validate plan paths (`Paths` + `StagingLayout.Validate
 Приёмка: бюджет archtest CLI → ≤ 3 (остаток — только UX-тексты про ChatGPT, если не выражаются трейтом; цель 0); все **277** CLI-тестов в `agentpluginscli` и 29 в `cmd/agentplugins` зелёные; golden CLI JSON без diff; `add.go` выходит из baseline. `source.go`, `add_multi.go`, `lifecycle.go`, `read.go`, `search.go` — **вне скоупа DoD** (§11), остаются в baseline.
 Надёжность 8/10, уверенность 8/10.
 
+**Landed** on `refactor/installer-core-clean-architecture` as Part 10 (this PR): `domain.ParseClientID` with aliases and lenient pass-through; `App.Planner`/`App.Targets` injected from `cmd/agentplugins` and `newCLIFixture`; three `clientplanner.Planner{}` constructions removed; Copilot/VS Code through `BackendSiblings` (logical surfaces may resolve through a detected native sibling, never the reverse); ChatGPT/Kiro prepare through traits; `shared.ManagedMarketplaceName`; depguard `cli-no-core-internals`; CLI ClientID budget 0; `add.go` left the size baseline.
+
 ### 8.11. Part 11 — Финализация
 
 - Удалить переходные алиасы: `providers.CommandRunner`, обёртка `providers.ManagedMarketplaceName` (**только здесь — не раньше**, правка O-3; перед удалением проверить, что переведены все потребители, включая root-модуль `repotests/agentplugins_codex_native_e2e_test.go`), `Planner.Detected` fallback.

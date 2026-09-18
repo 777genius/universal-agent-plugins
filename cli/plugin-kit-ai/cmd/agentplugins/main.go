@@ -165,6 +165,8 @@ func run() error {
 		LegacyStateLock:     locks.FileLock{BaseDir: filepath.Join(home, ".plugin-kit-ai", "locks")},
 		Detector:            detector,
 		ClientRegistry:      clientRegistry,
+		Planner:             planner,
+		Targets:             planner,
 		DirectoryClient:     directoryClient,
 		DiscoveryClient:     discoveryClient,
 		SourceAcquirer:      lazySourceAcquirer{dataRoot: dataRoot, acquirer: sourceacquisition.Acquirer{TempRoot: dataRoot}},

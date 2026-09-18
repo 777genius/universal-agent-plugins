@@ -1,6 +1,5 @@
 {
   "packages": {
-    "cli/plugin-kit-ai/internal/agentpluginscli": 89,
     "install/integrationctl/agentplugins/adapters/catalog": 3,
     "install/integrationctl/agentplugins/adapters/directoryv1": 1
   }

@@ -24,6 +24,7 @@ type ClientTraits struct {
 	HonorsOpenAIMCPAuthHints          bool
 	SupportsPreparedRecovery          bool
 	RequiresPersonalMappingForPrepare bool
+	ReportsMCPToolNamespaceCollision  bool
 }
 
 // ClientTraitsFor returns the declared traits for a known client. Unknown ids

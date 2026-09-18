@@ -6,20 +6,24 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/pathpolicy"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	clientplanner "github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/planner"
 )
 
 // TestPlanningFailsClosedWithoutAClientRegistry pins what only CI caught the
-// first time: App.ClientRegistry is a runtime invariant, so an App assembled
-// without one has to refuse to plan and say why, rather than panic, dereference
-// nil, or quietly plan against no clients at all.
-//
-// It covers every place the CLI builds a planner from the App, because each one
-// is a separate opportunity to forget the field.
+// first time: the injected planner's registry is a runtime invariant, so an App
+// assembled without one has to refuse to plan and say why, rather than panic,
+// dereference nil, or quietly plan against no clients at all.
 func TestPlanningFailsClosedWithoutAClientRegistry(t *testing.T) {
 	t.Parallel()
 	fixture := newCLIFixture(t, []domain.DetectedClient{fixtureClient(t, domain.ClientCursor)})
+	broken := clientplanner.Planner{ManagedRoot: fixture.app.ManagedRoot, Paths: pathpolicy.Policy{}, Registry: nil}
 	fixture.app.ClientRegistry = nil
+	fixture.app.Planner = broken
+	fixture.app.Targets = broken
+	fixture.app.Lifecycle.Planner = broken
+	fixture.app.Lifecycle.Targets = broken
 	plugin := writeCLIPlugin(t)
 
 	// add reaches the planner through both lifecycleService and
@@ -32,7 +36,7 @@ func TestPlanningFailsClosedWithoutAClientRegistry(t *testing.T) {
 		t.Fatalf("add error does not name the missing registry: %v", err)
 	}
 
-	// doctor resolves a recorded managed target through its own planner. A
+	// doctor resolves a recorded managed target through its injected resolver. A
 	// caller gets a degraded finding rather than a crash.
 	binding := domain.ClientBinding{
 		ClientID: string(domain.ClientCursor), Scope: string(domain.ScopeUser),

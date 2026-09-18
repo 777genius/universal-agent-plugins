@@ -27,6 +27,14 @@ type Planner struct {
 
 var errPathPolicyRequired = errors.New("planner path policy is required")
 
+// BindDetected returns a planner that uses this detection map as the fallback
+// surface for callers that still omit PlanRequest.Detected. The composition
+// root injects the planner; CLI must not reconstruct one just to attach Detected.
+func (planner Planner) BindDetected(detected map[domain.ClientID]domain.DetectedClient) ports.DeliveryPlanner {
+	planner.Detected = detected
+	return planner
+}
+
 // ChatGPTAppBindingAction describes registration and package-author
 // responsibilities. The wording is owned by clients/chatgpt.AppBindingAction;
 // the facade keeps a copy so planner production code never imports a concrete

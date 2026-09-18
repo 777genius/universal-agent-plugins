@@ -12,7 +12,7 @@ import (
 // Only the current operation's effective Kiro intent may suppress execution.
 // Ordinary resolution retains the detector's normal version discovery behavior.
 func (app App) detectForLifecycle(ctx context.Context, probeVersion bool, intents map[domain.ClientID]domain.InstallIntent) ([]domain.DetectedClient, error) {
-	if !probeVersion || intents[domain.ClientKiro] != domain.InstallIntentPrepare {
+	if !probeVersion || !hostedPrepareSelected(intents) {
 		return detectClientsForLifecycleResolution(ctx, app.Detector, probeVersion)
 	}
 	clients, err := app.Detector.Detect(ctx)
@@ -21,7 +21,7 @@ func (app App) detectForLifecycle(ctx context.Context, probeVersion bool, intent
 	}
 	var targets []domain.ClientID
 	for _, client := range clients {
-		if client.ClientID != domain.ClientKiro && client.Status == domain.DetectionDetected {
+		if !skipVersionProbeForPrepare(client.ClientID, intents) && client.Status == domain.DetectionDetected {
 			targets = append(targets, client.ClientID)
 		}
 	}
@@ -31,7 +31,7 @@ func (app App) detectForLifecycle(ctx context.Context, probeVersion bool, intent
 			return nil, err
 		}
 		for i, client := range clients {
-			if client.ClientID == domain.ClientKiro {
+			if skipVersionProbeForPrepare(client.ClientID, intents) {
 				continue
 			}
 			for _, updated := range probed {
@@ -42,6 +42,15 @@ func (app App) detectForLifecycle(ctx context.Context, probeVersion bool, intent
 		}
 	}
 	return clients, nil
+}
+
+func hostedPrepareSelected(intents map[domain.ClientID]domain.InstallIntent) bool {
+	for id, intent := range intents {
+		if intent == domain.InstallIntentPrepare && allowsHostedPrepare(id) {
+			return true
+		}
+	}
+	return false
 }
 
 // Match the same client and scope as lifecycle planning, including preferences
@@ -82,7 +91,7 @@ func (app App) addLifecycleIntents(ctx context.Context, source, scope string, ex
 	needsGuidedResolution := strings.Contains(strings.ToLower(source), "context7") && (len(targetSets) == 0 || len(targetSets[0]) == 0)
 	if !needsGuidedResolution && len(targetSets) > 0 {
 		for _, target := range targetSets[0] {
-			needsGuidedResolution = needsGuidedResolution || strings.Contains(strings.ToLower(source), "context7") && (target == domain.ClientKiro || target == domain.ClientChatGPT)
+			needsGuidedResolution = needsGuidedResolution || strings.Contains(strings.ToLower(source), "context7") && allowsPrepare(target)
 		}
 	}
 	if isDirectorySelector(source) && app.DirectoryClient != nil && (len(state.Installations) > 0 || needsGuidedResolution) {
@@ -95,8 +104,7 @@ func (app App) addLifecycleIntents(ctx context.Context, source, scope string, ex
 			return nil, err
 		}
 		if err == nil && productID == "context7" {
-			explicit[domain.ClientKiro] = domain.InstallIntentPrepare
-			explicit[domain.ClientChatGPT] = domain.InstallIntentPrepare
+			assignPrepareIntents(explicit)
 		}
 		if len(state.Installations) > 0 {
 			installation, _, err = retainedDirectoryInstallation(state, source, productID)
@@ -118,10 +126,13 @@ func applyLoadedGuidedIntents(opts *options, loaded loadedPackage, targets []dom
 		return
 	}
 	for _, target := range targets {
-		if target == domain.ClientKiro && opts.installIntents[target] == "" {
-			opts.installIntents[target] = domain.InstallIntentPrepare
+		if requiresPersonalMapping(target) {
+			if loaded.chatGPTPreparation {
+				opts.installIntents[target] = domain.InstallIntentPrepare
+			}
+			continue
 		}
-		if target == domain.ClientChatGPT && loaded.chatGPTPreparation {
+		if allowsHostedPrepare(target) && opts.installIntents[target] == "" {
 			opts.installIntents[target] = domain.InstallIntentPrepare
 		}
 	}

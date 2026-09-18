@@ -255,6 +255,18 @@ linters:
               desc: generic code reaches Cline through the registry, not the adapter package
             - pkg: github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/windsurf
               desc: generic code reaches Windsurf through the registry, not the adapter package
+        cli-no-core-internals:
+          # CLI commands are a composition consumer. They may use the planner
+          # public facade, never providers or the path-policy adapter. Tests
+          # may still assemble those internals.
+          files:
+            - "**/cli/plugin-kit-ai/internal/agentpluginscli/**"
+            - "!$test"
+          deny:
+            - pkg: github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/providers
+              desc: CLI reaches marketplace identity through clients/shared, not providers
+            - pkg: github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/pathpolicy
+              desc: CLI receives an injected planner instead of constructing pathpolicy.Policy
   exclusions:
     generated: lax
     paths:
@@ -282,7 +294,7 @@ linters:
       # tags match the target, so a run on one OS silently omits every *_linux.go
       # and *_windows.go file. The first generation happened on macOS and missed
       # six of them; CI lints on ubuntu and went red on the linux one.
-      # 166 files.
+      # 165 files.
       - path: ^cli/plugin-kit-ai/cmd/agentplugins/bootstrapgen/main\.go$
         linters: [funlen, gocyclo, gocognit]
         text: 'too many statements|cyclomatic complexity|cognitive complexity'
@@ -319,9 +331,6 @@ linters:
       - path: ^cli/plugin-kit-ai/cmd/plugin-kit-ai/test\.go$
         linters: [funlen]
         text: 'is too long'
-      - path: ^cli/plugin-kit-ai/internal/agentpluginscli/add\.go$
-        linters: [revive, funlen, gocyclo, gocognit]
-        text: 'file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity'
       - path: ^cli/plugin-kit-ai/internal/agentpluginscli/add_multi\.go$
         linters: [revive, funlen, gocyclo, gocognit]
         text: 'file length is|too many statements|cyclomatic complexity|cognitive complexity'

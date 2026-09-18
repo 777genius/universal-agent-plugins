@@ -281,9 +281,7 @@ func bindingSurfaceTargets(binding domain.ClientBinding) []domain.ClientID {
 	// preflight can heal omissions instead of silently perpetuating them.
 	values := append([]string(nil), binding.AffectedSurfaces...)
 	values = append(values, binding.ClientID)
-	if domain.ClientID(binding.ClientID) == domain.ClientCopilot || domain.ClientID(binding.ClientID) == domain.ClientVSCode {
-		values = append(values, string(domain.ClientCopilot), string(domain.ClientVSCode))
-	}
+	values = appendBackendSiblings(values, domain.ClientID(binding.ClientID))
 	result := make([]domain.ClientID, 0, len(values))
 	seen := map[domain.ClientID]struct{}{}
 	for _, value := range values {
@@ -298,13 +296,7 @@ func bindingSurfaceTargets(binding domain.ClientBinding) []domain.ClientID {
 }
 
 func expandAffectedSurfaceTargets(targets []domain.ClientID) []domain.ClientID {
-	result := append([]domain.ClientID(nil), targets...)
-	for _, target := range targets {
-		if target == domain.ClientCopilot || target == domain.ClientVSCode {
-			result = append(result, domain.ClientCopilot, domain.ClientVSCode)
-			break
-		}
-	}
+	result := expandBackendSiblingTargets(targets)
 	seen := make(map[domain.ClientID]struct{}, len(result))
 	unique := result[:0]
 	for _, target := range result {
