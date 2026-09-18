@@ -20,7 +20,7 @@ func TestReadinessComposition(t *testing.T) {
 	root, scratch := t.TempDir(), t.TempDir()
 	write(t, root, "plugin.json", plugin(`,"extensions":{"dev.example":{"secret":"`+marker+`"}}`))
 	write(t, root, "mcp.json", mcp(`{"good":{"type":"stdio","command":"node","env":{"SECRET":"`+marker+`"}},"bad":{"type":"future-transport","url":"`+marker+`"}}`))
-	app := commands.App{Projects: project.Service{Scratch: scratch}, Revision: "readiness-test"}
+	app := commands.App{Projects: project.Service{Scratch: scratch}, Revision: "readiness-test", ClientRegistry: all.Default()}
 	p, err := app.Projects.Read(context.Background(), root)
 	if err != nil {
 		t.Fatal(err)
@@ -61,7 +61,7 @@ func TestReadinessComposition(t *testing.T) {
 }
 
 func TestReadinessArgumentIsolation(t *testing.T) {
-	app := commands.App{Projects: project.Service{Scratch: "/must-not-be-opened"}}
+	app := commands.App{ClientRegistry: all.Default(), Projects: project.Service{Scratch: "/must-not-be-opened"}}
 	for _, args := range [][]string{
 		{"compat", "/must-not-be-opened"}, {"compat", "/must-not-be-opened", "--target=codex,codex"},
 		{"compat", "/must-not-be-opened", "--target=" + marker}, {"inspect", "/must-not-be-opened", "--target="},
@@ -99,7 +99,7 @@ func TestReadinessUnknownSchemaAndFreshFactories(t *testing.T) {
 	root := t.TempDir()
 	write(t, root, "plugin.json", `{"$schema":"https://invalid.example/future","name":"demo"}`)
 	write(t, root, "package.json", `{"secret":"`+marker+`"}`)
-	app := commands.App{Projects: project.Service{Scratch: t.TempDir()}}
+	app := commands.App{ClientRegistry: all.Default(), Projects: project.Service{Scratch: t.TempDir()}}
 	for _, name := range []string{"compat", "inspect", "doctor"} {
 		args := []string{name, root, "--format=json"}
 		if name != "doctor" {
@@ -126,7 +126,7 @@ func TestReadinessHumanOutput(t *testing.T) {
 	root := t.TempDir()
 	write(t, root, "plugin.json", plugin(`,"extensions":{"dev.example":{"secret":"`+marker+`"}}`))
 	write(t, root, "mcp.json", mcp(`{"`+marker+`":{"type":"stdio","command":"`+marker+`","env":{"SECRET":"`+marker+`"}}}`))
-	app := commands.App{Projects: project.Service{Scratch: t.TempDir()}}
+	app := commands.App{ClientRegistry: all.Default(), Projects: project.Service{Scratch: t.TempDir()}}
 	for _, args := range [][]string{{"compat", root, "--target=cursor"}, {"doctor", root}, {"capabilities"}} {
 		for _, mount := range []bool{false, true} {
 			var out, stderr bytes.Buffer

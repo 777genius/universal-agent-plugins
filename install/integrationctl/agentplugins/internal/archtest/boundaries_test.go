@@ -30,9 +30,9 @@ type boundary struct {
 func TestLayerBoundaries(t *testing.T) {
 	t.Parallel()
 	root := testRepoRoot(t)
-	// A dispatcher is handed a registry and never assembles the default one:
+	// A library is handed a registry and never assembles the default one:
 	// importing clients/all would link every adapter into any binary that
-	// merely detects or plans.
+	// merely detects, plans or reads a project. Only a main may name the set.
 	injectedRegistry := []string{modulePath + "/install/integrationctl/agentplugins/clients/all"}
 	boundaries := []boundary{
 		{pkg: agentplugins + "/domain", allow: nil},
@@ -62,6 +62,11 @@ func TestLayerBoundaries(t *testing.T) {
 		{pkg: agentplugins + "/providers", deny: injectedRegistry},
 		{pkg: agentplugins + "/planner", deny: injectedRegistry},
 		{pkg: agentplugins + "/adapters/clientdetect", deny: injectedRegistry},
+		// The CLI libraries are consumers of the same contract. The authoring
+		// readiness package reached for the default registry here and pulled
+		// every adapter into the authoring binary, which is the cost this rule
+		// exists to keep visible in the mains that choose to pay it.
+		{pkg: "cli/plugin-kit-ai/internal", deny: injectedRegistry},
 	}
 	for _, rule := range boundaries {
 		t.Run(rule.pkg, func(t *testing.T) {

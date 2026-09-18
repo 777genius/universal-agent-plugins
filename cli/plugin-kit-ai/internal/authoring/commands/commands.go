@@ -23,6 +23,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/cli/internal/authoringcli"
 	"github.com/777genius/plugin-kit-ai/cli/internal/exitx"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/packageview"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/spf13/cobra"
 )
@@ -41,6 +42,10 @@ type RootBuilder func(...authoringcli.Factory) (*cobra.Command, error)
 type App struct {
 	Projects project.Service
 	Revision string
+	// ClientRegistry is the set of client adapters this binary reports
+	// compatibility against. The main that builds the App decides it; without
+	// one the compat report has nothing to ask about the clients it names.
+	ClientRegistry *clients.Registry
 	// PublicContract opts into the private Phase 6 contract; mains retain their existing mode.
 	PublicContract  bool
 	Release         *ReleaseOptions
@@ -411,12 +416,12 @@ func (a App) command(name string, capture func(report.Report), cycleOutput func(
 				return r, nil
 			}
 			if len(req.targets) > 0 {
-				clients, err := readiness.Compatibility(p, req.targets)
+				compatibility, err := readiness.Compatibility(a.ClientRegistry, p, req.targets)
 				if err != nil {
 					r.AddError("compatibility_unavailable", "Select explicit supported clients.")
 					return r, err
 				}
-				r.AddCompatibility(clients)
+				r.AddCompatibility(compatibility)
 			}
 			if name == "doctor" {
 				r.AddDoctor(readiness.Doctor(p))

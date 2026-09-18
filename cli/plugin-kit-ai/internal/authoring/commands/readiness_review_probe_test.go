@@ -8,6 +8,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/cli/internal/authoring/commands"
 	"github.com/777genius/plugin-kit-ai/cli/internal/authoring/project"
 	"github.com/777genius/plugin-kit-ai/cli/internal/authoring/report"
+	clientregistry "github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/all"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
@@ -18,7 +19,7 @@ func TestReadinessReviewEmptyMCPName(t *testing.T) {
 			write(t, root, "plugin.json", plugin(""))
 			key, _ := json.Marshal(badName)
 			write(t, root, "mcp.json", mcp(`{`+string(key)+`:{"type":"stdio","command":7},"good":{"type":"stdio","command":"node"}}`))
-			app := commands.App{Projects: project.Service{Scratch: scratch}, Revision: "0e74767e09169f58145d56f5d3e10b4038171e3a"}
+			app := commands.App{ClientRegistry: clientregistry.Default(), Projects: project.Service{Scratch: scratch}, Revision: "0e74767e09169f58145d56f5d3e10b4038171e3a"}
 			args := []string{"compat", root, "--target=cursor", "--format=json"}
 			r, code, raw := execute(t, app, args, false)
 			_, mountedCode, mountedRaw := execute(t, app, args, true)
@@ -72,7 +73,7 @@ func TestReadinessReviewMCPBoundaries(t *testing.T) {
 			root, scratch := t.TempDir(), t.TempDir()
 			write(t, root, "plugin.json", plugin(""))
 			write(t, root, "mcp.json", tc.body)
-			app := commands.App{Projects: project.Service{Scratch: scratch}}
+			app := commands.App{ClientRegistry: clientregistry.Default(), Projects: project.Service{Scratch: scratch}}
 			for _, command := range []string{"compat", "inspect"} {
 				args := []string{command, root, "--target=cursor", "--format=json"}
 				r, code, raw := execute(t, app, args, false)

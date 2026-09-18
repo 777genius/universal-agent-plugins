@@ -14,6 +14,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/cli/internal/authoringcli"
 	"github.com/777genius/plugin-kit-ai/cli/internal/exitx"
 	"github.com/777genius/plugin-kit-ai/cli/internal/outputjson"
+	clientregistry "github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/all"
 	"github.com/spf13/cobra"
 )
 
@@ -30,7 +31,7 @@ func newReleaseRoot(factories ...authoringcli.Factory) (*cobra.Command, error) {
 // The installer callback is the sole entry to home, feeds, security and client
 // setup. Tests replace it with a trap; selection only constructs fresh commands.
 func executeRelease(ctx context.Context, args []string, streams authoringcli.Streams, installer func() error) error {
-	a := commands.App{Projects: project.Service{Scratch: os.TempDir()}, Revision: commands.Revision, PublicContract: true, MCPRuntime: true, Bootstrap: true, JSONMaintenance: true,
+	a := commands.App{Projects: project.Service{Scratch: os.TempDir()}, Revision: commands.Revision, ClientRegistry: clientregistry.Default(), PublicContract: true, MCPRuntime: true, Bootstrap: true, JSONMaintenance: true,
 		Release: &commands.ReleaseOptions{Product: "agentplugins", Version: version}}
 	root, author, noEffect, err := a.ReleaseSelection(args, newReleaseRoot)
 	if err != nil {
