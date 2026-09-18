@@ -37,18 +37,18 @@ func prepareClaudeActivationProbe(request domain.ActivationRequest) (claudeActiv
 		return claudeActivationProbe{}, fmt.Errorf("absolute Claude Code config root is required")
 	}
 	targetAnchor := filepath.Clean(strings.TrimSpace(request.Plan.TargetAnchor))
-	if !filepath.IsAbs(targetAnchor) || targetAnchor != configRoot {
+	if !filepath.IsAbs(targetAnchor) || !equivalentLocalPath(targetAnchor, configRoot) {
 		return claudeActivationProbe{}, fmt.Errorf("Claude Code delivery anchor must match the configured root")
 	}
 	targetRoot := filepath.Clean(strings.TrimSpace(request.Plan.TargetRoot))
-	if targetRoot != filepath.Join(configRoot, "skills") {
+	if !equivalentLocalPath(targetRoot, filepath.Join(configRoot, "skills")) {
 		return claudeActivationProbe{}, fmt.Errorf("Claude Code delivery root must be the exact configured skills root")
 	}
 	activePath := filepath.Clean(strings.TrimSpace(request.Plan.ActivePath))
-	if !filepath.IsAbs(activePath) || filepath.Dir(activePath) != targetRoot {
+	if !filepath.IsAbs(activePath) || !equivalentLocalPath(filepath.Dir(activePath), targetRoot) {
 		return claudeActivationProbe{}, fmt.Errorf("Claude Code managed plugin path is not an exact child of the configured skills root")
 	}
-	if deliveryPath := strings.TrimSpace(request.Delivery.ActivePath); deliveryPath != "" && filepath.Clean(deliveryPath) != activePath {
+	if deliveryPath := strings.TrimSpace(request.Delivery.ActivePath); deliveryPath != "" && !equivalentLocalPath(deliveryPath, activePath) {
 		return claudeActivationProbe{}, fmt.Errorf("Claude Code activation path does not match the preflighted delivery path")
 	}
 	command, err := claudeListCommand(request.BackendExecutable, configRoot, activePath)
@@ -81,7 +81,7 @@ func claudeListCommand(executable, configRoot, activePath string) (legacyports.C
 	}
 	configRoot = filepath.Clean(configRoot)
 	activePath = filepath.Clean(strings.TrimSpace(activePath))
-	if !filepath.IsAbs(activePath) || filepath.Dir(activePath) != filepath.Join(configRoot, "skills") {
+	if !filepath.IsAbs(activePath) || !equivalentLocalPath(filepath.Dir(activePath), filepath.Join(configRoot, "skills")) {
 		return legacyports.Command{}, fmt.Errorf("Claude Code managed plugin path is not an exact child of the configured skills root")
 	}
 	environment, home, err := boundedClaudeProbeEnvironment()

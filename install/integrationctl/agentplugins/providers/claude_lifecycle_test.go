@@ -424,6 +424,32 @@ func TestClaudeActivationProbeNormalizesPathsForPreflightAndActivation(t *testin
 	}
 }
 
+func TestClaudeActivationProbeAcceptsPrivateVarAlias(t *testing.T) {
+	t.Parallel()
+	config := filepath.Join(t.TempDir(), "claude-config")
+	active := filepath.Join(config, "skills", "demo-managed")
+	if err := os.MkdirAll(active, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	resolved, err := filepath.EvalSymlinks(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resolved == filepath.Clean(config) {
+		t.Skip("filesystem has no /var vs /private/var alias")
+	}
+	request := activationRequest(t, domain.ClientClaude)
+	request.BackendExecutable = "/test/bin/claude"
+	request.Client.ConfigRoot = config
+	request.Plan.TargetAnchor = resolved
+	request.Plan.TargetRoot = filepath.Join(resolved, "skills")
+	request.Plan.ActivePath = filepath.Join(resolved, "skills", "demo-managed")
+	request.Delivery.ActivePath = request.Plan.ActivePath
+	if _, err := prepareClaudeActivationProbe(request); err != nil {
+		t.Fatalf("alias probe: %v", err)
+	}
+}
+
 func TestClaudePluginStatusRequiresExactOfficialIdentity(t *testing.T) {
 	t.Parallel()
 	managed := filepath.Join(t.TempDir(), "claude-config", "skills", "managed")
@@ -436,7 +462,7 @@ func TestClaudePluginStatusRequiresExactOfficialIdentity(t *testing.T) {
 		"disabled":       {claudeListing("demo", managed, false), claudeStatusAbsent},
 		"wrong path":     {claudeListing("demo", filepath.Join(t.TempDir(), "foreign"), true), claudeStatusCollision},
 		"wrong id":       {claudeListing("other", managed, true), claudeStatusAbsent},
-		"marketplace id": {fmt.Sprintf(`[{"id":"demo@some-marketplace","scope":"user","enabled":true,"installPath":%q}]`, managed), claudeStatusAbsent},
+		"marketplace id": {fmt.Sprintf(`[{"id":"demo@some-marketplace","scope":"user","enabled":true,"installPath":%q}]`, managed), claudeStatusCollision},
 		"malformed":      {`[{"id":"demo@skills-dir"}]`, claudeStatusUnknown},
 		"object":         {`{"plugins":[]}`, claudeStatusUnknown},
 	}

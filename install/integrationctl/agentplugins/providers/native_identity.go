@@ -506,26 +506,70 @@ func inspectCodexCache(root, name, expectedMarketplace string, owned bool) (regi
 			if plugin.Type()&os.ModeSymlink != 0 || !plugin.IsDir() {
 				return registryIndeterminate, nil
 			}
-			manifest := filepath.Join(root, market.Name(), plugin.Name(), "local", ".codex-plugin", "plugin.json")
-			manifestName, err := shared.ReadJSONManifestName(manifest)
-			if os.IsNotExist(err) {
-				return registryIndeterminate, nil
-			}
+			manifestNames, err := readCodexCachePluginNames(filepath.Join(root, market.Name(), plugin.Name()))
 			if err != nil {
 				return registryIndeterminate, err
 			}
-			if manifestName != name {
-				continue
-			}
-			if market.Name() == expectedMarketplace {
-				if !owned {
-					return registryCollision, nil
+			for _, manifestName := range manifestNames {
+				if manifestName != name {
+					continue
 				}
-				finding = registryExpected
+				if market.Name() == expectedMarketplace {
+					if !owned {
+						return registryCollision, nil
+					}
+					finding = registryExpected
+				}
 			}
 		}
 	}
 	return finding, nil
+}
+
+// readCodexCachePluginNames reads cache identities for one plugin folder.
+// Codex 0.152.0 stores copies at <plugin>/<version>/.codex-plugin/plugin.json.
+// An older layout used <plugin>/local/.codex-plugin/plugin.json. Missing
+// documents are skipped so a versioned cache is not fail-closed as unknown.
+func readCodexCachePluginNames(pluginDir string) ([]string, error) {
+	seen := map[string]struct{}{}
+	var names []string
+	add := func(path string) error {
+		name, err := shared.ReadJSONManifestName(path)
+		if os.IsNotExist(err) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		if name == "" {
+			return nil
+		}
+		if _, exists := seen[name]; exists {
+			return nil
+		}
+		seen[name] = struct{}{}
+		names = append(names, name)
+		return nil
+	}
+	if err := add(filepath.Join(pluginDir, "local", ".codex-plugin", "plugin.json")); err != nil {
+		return nil, err
+	}
+	entries, err := os.ReadDir(pluginDir)
+	if err != nil {
+		return nil, err
+	}
+	for _, entry := range entries {
+		if entry.Name() == "local" || !entry.IsDir() || entry.Type()&os.ModeSymlink != 0 {
+			continue
+		}
+		versionDir := filepath.Join(pluginDir, entry.Name())
+		for _, rel := range []string{filepath.Join(".codex-plugin", "plugin.json"), "plugin.json"} {
+			if err := add(filepath.Join(versionDir, rel)); err != nil {
+				return nil, err
+			}
+		}
+	}
+	return names, nil
 }
 
 func inspectKiroRegistry(plan domain.DeliveryPlan, managed *domain.ClientBinding) (registryFinding, error) {
@@ -636,7 +680,7 @@ func inspectClaudeSkillsRegistry(plan domain.DeliveryPlan, name string, owned bo
 			if os.IsNotExist(readErr) {
 				continue
 			}
-			if owned && shared.SameCleanPath(path, plan.ActivePath) {
+			if owned && shared.SameOwnedPluginDirectory(path, plan.ActivePath) {
 				return registryIndeterminate, readErr
 			}
 			continue
@@ -644,7 +688,7 @@ func inspectClaudeSkillsRegistry(plan domain.DeliveryPlan, name string, owned bo
 		if manifestName != name {
 			continue
 		}
-		if shared.SameCleanPath(path, plan.ActivePath) && owned {
+		if shared.SameOwnedPluginDirectory(path, plan.ActivePath) && owned {
 			finding = registryExpected
 			continue
 		}

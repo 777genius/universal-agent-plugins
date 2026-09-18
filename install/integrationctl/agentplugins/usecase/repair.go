@@ -117,7 +117,7 @@ func (service Service) Repair(ctx context.Context, input AddInput) (AddResult, e
 	if verifyErr == nil {
 		verified, clientVerifyErr := service.verifyClientReadOnly(ctx, input, result, client)
 		if clientVerifyErr != nil {
-			if !nativeLifecycleClient(input.Client.ClientID) {
+			if !repairReappliesNativeLifecycle(input.Client.ClientID, input.BackendExecutable) {
 				return result, clientVerifyErr
 			}
 			// The package bytes are intact but an owned native projection is not.
@@ -290,7 +290,7 @@ func (service Service) Repair(ctx context.Context, input AddInput) (AddResult, e
 	}
 	result.Mutated = true
 	result.Activation = verifiedState
-	if nativeLifecycleClient(input.Client.ClientID) {
+	if repairReappliesNativeLifecycle(input.Client.ClientID, input.BackendExecutable) {
 		outcome, activationErr := service.Activator.Activate(ctx, domain.ActivationRequest{
 			Client: input.Client, Plan: plan,
 			Delivery: domain.StagedDelivery{
@@ -341,6 +341,17 @@ func nativeLifecycleClient(clientID domain.ClientID) bool {
 	default:
 		return false
 	}
+}
+
+// repairReappliesNativeLifecycle reports whether repair must re-run Activate
+// after the managed directory is restored. Codex cache is a copy of that
+// directory, so a trusted CLI must recopy it; without a CLI the managed
+// source is still restored and activation stays whatever the binding had.
+func repairReappliesNativeLifecycle(clientID domain.ClientID, executable string) bool {
+	if nativeLifecycleClient(clientID) {
+		return true
+	}
+	return clientID == domain.ClientCodex && strings.TrimSpace(executable) != ""
 }
 
 func (service Service) verifyRepairPrecondition(ctx context.Context, activePath, managedDigest string, reviewedKind ports.VerificationKind, reviewedDigest string) error {
