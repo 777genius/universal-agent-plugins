@@ -30,7 +30,7 @@ func RunLifecycle(t *testing.T, adapter clients.Adapter) {
 
 func lifecycleViolations(t *testing.T, lifecycle clients.Lifecycle, id domain.ClientID) []string {
 	t.Helper()
-	violations := []string{}
+	violations := make([]string, 0, 4)
 	violations = append(violations, lifecycleVerifyOnlyViolations(t, lifecycle, id)...)
 	violations = append(violations, lifecycleMismatchViolations(t, lifecycle, id)...)
 	violations = append(violations, lifecycleUnconfirmedDeactivateViolations(t, lifecycle, id)...)

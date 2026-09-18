@@ -11,10 +11,11 @@ import (
 // with an exact client-side verifier. CLI-registry clients answer through the
 // adapter; native-config clients and Kiro stay in the legacy switch until 7b/7c.
 func (activator Activator) VerifierAvailable(client domain.DetectedClient, plan domain.DeliveryPlan, backendExecutable string) bool {
-	if activator.Registry != nil {
-		if verifier, ok := clients.As[clients.ReadOnlyVerifier](activator.Registry, client.ClientID); ok {
-			return verifier.VerifierAvailable(client, plan, backendExecutable)
-		}
+	if activator.requireRegistry() != nil {
+		return false
+	}
+	if verifier, ok := clients.As[clients.ReadOnlyVerifier](activator.Registry, client.ClientID); ok {
+		return verifier.VerifierAvailable(client, plan, backendExecutable)
 	}
 	switch client.ClientID {
 	case domain.ClientGemini, domain.ClientOpenCode, domain.ClientCline, domain.ClientWindsurf:

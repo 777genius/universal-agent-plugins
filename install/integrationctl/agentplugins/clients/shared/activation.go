@@ -82,5 +82,11 @@ func ActivationIdentityMismatch(request domain.ActivationRequest) error {
 
 // HasClientCLI reports that a managed client executable can actually be run.
 func HasClientCLI(env clients.Env, executable string) bool {
-	return env.Runner != nil && strings.TrimSpace(executable) != ""
+	return env.Runner != nil && HasListingCLI(executable)
+}
+
+// HasListingCLI reports that a client listing command can be invoked. A
+// missing executable cannot prove install state even when a runner exists.
+func HasListingCLI(executable string) bool {
+	return strings.TrimSpace(executable) != ""
 }

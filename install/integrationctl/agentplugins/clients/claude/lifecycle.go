@@ -3,7 +3,6 @@ package claude
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
@@ -25,7 +24,7 @@ func (*Adapter) AutomaticallyActivates(env clients.Env, request domain.Activatio
 
 // VerifierAvailable reports that an exact Claude listing can be observed.
 func (*Adapter) VerifierAvailable(_ domain.DetectedClient, _ domain.DeliveryPlan, backendExecutable string) bool {
-	return strings.TrimSpace(backendExecutable) != ""
+	return shared.HasListingCLI(backendExecutable)
 }
 
 // PreflightActivation rejects a request whose Claude path layout cannot be
@@ -79,7 +78,7 @@ func finishClaudeDeactivation(outcome domain.DeactivationOutcome, stdout []byte,
 			return outcome, fmt.Errorf("%w: managed Claude Code plugin is absent before removal", shared.ErrRecognizedNegativeEvidence)
 		}
 	default:
-		return outcome, fmt.Errorf("Claude Code plugin identity is not exact before removal")
+		return outcome, fmt.Errorf("the Claude Code plugin identity is not exact before removal")
 	}
 	outcome.ExternalRemovalComplete = true
 	return outcome, nil
@@ -100,13 +99,13 @@ func verifyClaudePlugin(ctx context.Context, env clients.Env, request domain.Act
 	case StatusAbsent, StatusCollision:
 		return fmt.Errorf("%w: verify Claude Code plugin listing: %s@skills-dir is not enabled at the managed path", shared.ErrRecognizedNegativeEvidence, request.DeclaredName)
 	default:
-		return fmt.Errorf("Claude Code plugin list output is not recognized")
+		return fmt.Errorf("the Claude Code plugin list output is not recognized")
 	}
 }
 
 func runClaudeList(ctx context.Context, env clients.Env, executable, configRoot, activePath string) (legacyports.CommandResult, error) {
 	if env.Runner == nil {
-		return legacyports.CommandResult{}, fmt.Errorf("Claude Code CLI runner is unavailable")
+		return legacyports.CommandResult{}, fmt.Errorf("the Claude Code CLI runner is unavailable")
 	}
 	command, err := ClaudeListCommand(executable, configRoot, activePath)
 	if err != nil {
@@ -121,7 +120,7 @@ func runPreparedClaudeList(ctx context.Context, env clients.Env, command legacyp
 		return result, fmt.Errorf("start Claude Code CLI: %w", err)
 	}
 	if result.ExitCode != 0 {
-		return result, fmt.Errorf("Claude Code CLI command failed with exit code %d", result.ExitCode)
+		return result, fmt.Errorf("the Claude Code CLI command failed with exit code %d", result.ExitCode)
 	}
 	return result, nil
 }

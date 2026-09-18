@@ -20,7 +20,7 @@ const (
 
 // ErrListContractUnknown marks a listing whose shape this adapter does not
 // recognize. Callers treat it as a manual verification, not a proof of absence.
-var ErrListContractUnknown = errors.New("Codex plugin list output is not recognized")
+var ErrListContractUnknown = errors.New("the Codex plugin list output is not recognized")
 
 // PluginStatusFromList classifies a `plugin list --json` document for the
 // exact installed-and-enabled managed identity.

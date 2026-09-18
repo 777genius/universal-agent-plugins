@@ -21,7 +21,7 @@
         "--json"
       ]
     ],
-    "Error": "Claude Code plugin identity is not exact before removal",
+    "Error": "the Claude Code plugin identity is not exact before removal",
     "Outcome": {
       "Activation": "not_required",
       "ArtifactRemovalAllowed": true,

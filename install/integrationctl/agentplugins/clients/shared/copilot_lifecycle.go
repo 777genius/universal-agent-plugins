@@ -74,7 +74,7 @@ func CopilotAutomaticallyActivates(env clients.Env, request domain.ActivationReq
 // CopilotVerifierAvailable reports that a Copilot-family client can be
 // observed with an exact read-only listing.
 func CopilotVerifierAvailable(backendExecutable string) bool {
-	return strings.TrimSpace(backendExecutable) != ""
+	return HasListingCLI(backendExecutable)
 }
 
 // ActivateCopilotPlugin registers the managed marketplace and installs the
@@ -95,14 +95,14 @@ func registerCopilotMarketplace(ctx context.Context, env clients.Env, request do
 	if request.Replacing {
 		if err := runCopilot(ctx, env, request.BackendExecutable, "plugin", "marketplace", "update", marketplace); err != nil {
 			if fallbackErr := runCopilot(ctx, env, request.BackendExecutable, "plugin", "marketplace", "add", request.Delivery.ActivePath); fallbackErr != nil {
-				return false, fmt.Errorf("refresh managed Copilot marketplace: %v; fallback registration: %w", err, fallbackErr)
+				return false, fmt.Errorf("refresh managed Copilot marketplace: %w; fallback registration: %w", err, fallbackErr)
 			}
 		}
 		return runCopilot(ctx, env, request.BackendExecutable, "plugin", "update", request.DeclaredName+"@"+marketplace) == nil, nil
 	}
 	if err := runCopilot(ctx, env, request.BackendExecutable, "plugin", "marketplace", "add", request.Delivery.ActivePath); err != nil {
 		if fallbackErr := runCopilot(ctx, env, request.BackendExecutable, "plugin", "marketplace", "update", marketplace); fallbackErr != nil {
-			return false, fmt.Errorf("register managed Copilot marketplace: %v; fallback refresh: %w", err, fallbackErr)
+			return false, fmt.Errorf("register managed Copilot marketplace: %w; fallback refresh: %w", err, fallbackErr)
 		}
 	}
 	return false, nil

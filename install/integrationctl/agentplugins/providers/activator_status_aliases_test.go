@@ -9,9 +9,8 @@ import (
 // Aliases keep in-package parser tests compiling after the bodies moved into
 // client packages. Production code uses the adapters through the registry.
 type (
-	codexStatus   = codex.ListStatus
-	claudeStatus  = claude.ListStatus
-	copilotStatus = shared.CopilotStatus
+	codexStatus  = codex.ListStatus
+	claudeStatus = claude.ListStatus
 )
 
 const (

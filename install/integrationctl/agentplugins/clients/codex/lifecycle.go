@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
@@ -27,7 +26,7 @@ func (*Adapter) AutomaticallyActivates(env clients.Env, request domain.Activatio
 
 // VerifierAvailable reports that an exact Codex listing can be observed.
 func (*Adapter) VerifierAvailable(_ domain.DetectedClient, _ domain.DeliveryPlan, backendExecutable string) bool {
-	return strings.TrimSpace(backendExecutable) != ""
+	return shared.HasListingCLI(backendExecutable)
 }
 
 // Activate registers the managed marketplace and plugin through the Codex CLI,
@@ -87,7 +86,7 @@ func registerCodexMarketplace(ctx context.Context, env clients.Env, request doma
 	if request.Replacing {
 		if _, err := runCodex(ctx, env, request.BackendExecutable, "plugin", "marketplace", "update", marketplace, "--json"); err != nil {
 			if _, fallbackErr := runCodex(ctx, env, request.BackendExecutable, "plugin", "marketplace", "add", request.Delivery.ActivePath, "--json"); fallbackErr != nil {
-				return fmt.Errorf("refresh Codex marketplace: %v; fallback registration: %w", err, fallbackErr)
+				return fmt.Errorf("refresh Codex marketplace: %w; fallback registration: %w", err, fallbackErr)
 			}
 		}
 		return nil

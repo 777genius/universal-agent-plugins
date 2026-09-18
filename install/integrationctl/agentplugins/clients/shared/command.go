@@ -33,17 +33,3 @@ func CommandOutputContains(result legacyports.CommandResult, fragment string) bo
 	output := string(result.Stdout) + "\n" + string(result.Stderr)
 	return strings.Contains(strings.ToLower(output), strings.ToLower(fragment))
 }
-
-// CLIAutomaticallyActivates is the predicate shared by clients whose
-// Activate path is a managed CLI: a runner and an executable are both
-// required, and nothing else.
-func CLIAutomaticallyActivates(runner ports.CommandRunner, executable string) bool {
-	return runner != nil && strings.TrimSpace(executable) != ""
-}
-
-// CLIVerifierAvailable is the matching read-only predicate: the client's
-// own listing command is what proves install state, so an empty executable
-// cannot verify.
-func CLIVerifierAvailable(backendExecutable string) bool {
-	return strings.TrimSpace(backendExecutable) != ""
-}

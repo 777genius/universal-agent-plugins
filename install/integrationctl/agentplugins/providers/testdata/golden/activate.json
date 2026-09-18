@@ -27,7 +27,7 @@
         "--json"
       ]
     ],
-    "Error": "Claude Code plugin list output is not recognized",
+    "Error": "the Claude Code plugin list output is not recognized",
     "Outcome": {
       "Activation": "failed",
       "ActivationAttested": false,

@@ -19,7 +19,7 @@ const (
 // ErrCopilotListContractUnknown marks a listing whose shape this adapter does
 // not recognize. Callers treat it as a manual verification, not a proof of
 // absence.
-var ErrCopilotListContractUnknown = errors.New("Copilot plugin list output is not recognized")
+var ErrCopilotListContractUnknown = errors.New("the Copilot plugin list output is not recognized")
 
 var CopilotInstalledEntry = regexp.MustCompile(`^[ \t]+•[ \t]+([A-Za-z0-9][A-Za-z0-9._-]*@[A-Za-z0-9][A-Za-z0-9._-]*)[ \t]+\(v([0-9]+\.[0-9]+\.[0-9]+(?:[-+][0-9A-Za-z.-]+)?)\)[ \t]*$`)
 var copilotLiveEntry = regexp.MustCompile(`^  • ([A-Za-z0-9][A-Za-z0-9._-]*@[A-Za-z0-9][A-Za-z0-9._-]*) \(v([0-9]+\.[0-9]+\.[0-9]+(?:[-+][0-9A-Za-z.-]+)?)\) \(([A-Za-z0-9_-]+)\)$`)
@@ -53,9 +53,9 @@ func classifyCopilotLiveEntries(lines []string, expected, expectedVersion, expec
 	seen := make(map[string]bool, (len(lines)-1)/2)
 	matches := 0
 	for index := 1; index < len(lines); index += 2 {
-		status, match, ok := copilotLivePair(lines, index, seen, expected, expectedVersion, expectedPath)
+		match, ok := copilotLivePair(lines, index, seen, expected, expectedVersion, expectedPath)
 		if !ok {
-			return status, true
+			return CopilotStatusUnknown, true
 		}
 		if match {
 			matches++
@@ -70,27 +70,27 @@ func classifyCopilotLiveEntries(lines []string, expected, expectedVersion, expec
 	return CopilotStatusAbsent, true
 }
 
-func copilotLivePair(lines []string, index int, seen map[string]bool, expected, expectedVersion, expectedPath string) (CopilotStatus, bool, bool) {
+func copilotLivePair(lines []string, index int, seen map[string]bool, expected, expectedVersion, expectedPath string) (match bool, ok bool) {
 	entry := copilotLiveEntry.FindStringSubmatch(lines[index])
 	if len(entry) != 4 || seen[entry[1]] || (entry[3] != "enabled" && entry[3] != "disabled") {
-		return CopilotStatusUnknown, false, false
+		return false, false
 	}
 	seen[entry[1]] = true
 	const pathPrefix = "      from "
 	if !strings.HasPrefix(lines[index+1], pathPrefix) {
-		return CopilotStatusUnknown, false, false
+		return false, false
 	}
 	listedPath := strings.TrimPrefix(lines[index+1], pathPrefix)
 	if listedPath == "" || !filepath.IsAbs(listedPath) || listedPath != filepath.Clean(listedPath) {
-		return CopilotStatusUnknown, false, false
+		return false, false
 	}
 	if entry[1] != expected {
-		return CopilotStatusUnknown, false, true
+		return false, true
 	}
 	if entry[2] != expectedVersion || entry[3] != "enabled" || expectedPath != filepath.Clean(expectedPath) || listedPath != expectedPath {
-		return CopilotStatusUnknown, false, false
+		return false, false
 	}
-	return CopilotStatusUnknown, true, true
+	return true, true
 }
 
 type copilotInstalledScan struct {
