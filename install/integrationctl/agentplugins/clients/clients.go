@@ -48,3 +48,11 @@ type Env struct {
 type StdioLauncherDeliverer interface {
 	Deliver(root string) error
 }
+
+// Ops is the optional filesystem seam native-config adapters take instead of
+// a ladder of WithRename/WithOps helpers. Zero values mean the production
+// defaults: exclusive directory rename and os.RemoveAll.
+type Ops struct {
+	Rename    func(oldpath, newpath string) error
+	RemoveAll func(path string) error
+}

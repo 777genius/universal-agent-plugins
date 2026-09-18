@@ -103,3 +103,17 @@ func PreservedOpenAIManifest(envelope domain.PackageEnvelope) (map[string]any, b
 	}
 	return manifest, true, nil
 }
+
+// ProjectedOpenAIManifest returns a preserved upstream OpenAI plugin manifest
+// when the package was authored in that format, otherwise a fresh skeleton
+// built from the envelope.
+func ProjectedOpenAIManifest(envelope domain.PackageEnvelope) (map[string]any, error) {
+	preserved, ok, err := PreservedOpenAIManifest(envelope)
+	if err != nil {
+		return nil, err
+	}
+	if ok {
+		return preserved, nil
+	}
+	return ManifestFromEnvelope(envelope, WithAuthorObject()), nil
+}

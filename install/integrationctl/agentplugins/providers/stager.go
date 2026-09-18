@@ -11,10 +11,20 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/kiro"
+
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/atomicfile"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/filetree"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/pathpolicy"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/chatgpt"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/claude"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/cline"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/codex"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/cursor"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/gemini"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/opencode"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/windsurf"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/managedstdio"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
@@ -190,57 +200,57 @@ func (stager Stager) stage(
 	if plan.PackageMode == domain.PackageProjection {
 		switch plan.ClientID {
 		case domain.ClientCodex:
-			if err := projectOpenAI(stagingPath, envelope, plan, hints, pluginDataPath); err != nil {
+			if err := codex.Project(stagingPath, envelope, plan, hints, pluginDataPath); err != nil {
 				return domain.StagedDelivery{}, err
 			}
 		case domain.ClientClaude:
 			if err := stager.deliverManagedStdio(stagingPath, envelope, plan); err != nil {
 				return domain.StagedDelivery{}, err
 			}
-			if err := projectClaude(stagingPath, envelope, plan, pluginDataPath); err != nil {
+			if err := claude.Project(stagingPath, envelope, plan, pluginDataPath); err != nil {
 				return domain.StagedDelivery{}, err
 			}
 		case domain.ClientChatGPT:
-			if err := projectChatGPT(stagingPath, envelope, plan, hints, pluginDataPath); err != nil {
+			if err := chatgpt.Project(stagingPath, envelope, plan, hints, pluginDataPath); err != nil {
 				return domain.StagedDelivery{}, err
 			}
 		}
 		if plan.ClientID == domain.ClientCodex || plan.ClientID == domain.ClientChatGPT {
-			if err := projectCodexMarketplace(stagingPath, envelope, plan); err != nil {
+			if err := codex.ProjectMarketplace(stagingPath, envelope, plan); err != nil {
 				return domain.StagedDelivery{}, err
 			}
 		}
 	}
 	if plan.ClientID == domain.ClientKiro {
-		if err := projectKiroMCP(stagingPath, envelope, plan, pluginDataPath); err != nil {
+		if err := kiro.ProjectMCP(stagingPath, envelope, plan, pluginDataPath); err != nil {
 			return domain.StagedDelivery{}, err
 		}
 	}
 	var geminiObjects []domain.NativeObjectOwnership
 	if plan.ClientID == domain.ClientGemini {
 		var err error
-		geminiObjects, err = buildGeminiNativeObjects(stagingPath, envelope, plan, pluginDataPath)
+		geminiObjects, err = gemini.BuildNativeObjects(stagingPath, envelope, plan, pluginDataPath)
 		if err != nil {
 			return domain.StagedDelivery{}, err
 		}
 	}
 	if plan.ClientID == domain.ClientCursor {
-		if err := projectCursor(stagingPath, envelope, plan, pluginDataPath); err != nil {
+		if err := cursor.Project(stagingPath, envelope, plan, pluginDataPath); err != nil {
 			return domain.StagedDelivery{}, err
 		}
 	}
 	if plan.ClientID == domain.ClientOpenCode {
-		if err := projectOpenCodeNative(stagingPath, envelope, plan, pluginDataPath); err != nil {
+		if err := opencode.ProjectNative(stagingPath, envelope, plan, pluginDataPath); err != nil {
 			return domain.StagedDelivery{}, err
 		}
 	}
 	if plan.ClientID == domain.ClientCline {
-		if err := projectClineNative(stagingPath, envelope, plan, pluginDataPath); err != nil {
+		if err := cline.ProjectNative(stagingPath, envelope, plan, pluginDataPath); err != nil {
 			return domain.StagedDelivery{}, err
 		}
 	}
 	if plan.ClientID == domain.ClientCopilot || plan.ClientID == domain.ClientVSCode {
-		if err := projectCopilotMarketplace(stagingPath, envelope, plan); err != nil {
+		if err := shared.ProjectCopilotMarketplace(stagingPath, envelope, plan); err != nil {
 			return domain.StagedDelivery{}, err
 		}
 	}
@@ -248,7 +258,7 @@ func (stager Stager) stage(
 		if err := stager.deliverManagedStdio(stagingPath, envelope, plan); err != nil {
 			return domain.StagedDelivery{}, err
 		}
-		if err := projectWindsurfMCP(stagingPath, envelope, plan, pluginDataPath); err != nil {
+		if err := windsurf.ProjectMCP(stagingPath, envelope, plan, pluginDataPath); err != nil {
 			return domain.StagedDelivery{}, err
 		}
 	}
@@ -271,21 +281,21 @@ func (stager Stager) stage(
 		},
 	}
 	if plan.ClientID == domain.ClientKiro {
-		kiroObjects, err := buildKiroNativeObjects(stagingPath, envelope, plan)
+		kiroObjects, err := kiro.BuildNativeObjects(stagingPath, envelope, plan)
 		if err != nil {
 			return domain.StagedDelivery{}, err
 		}
 		objects = append(objects, kiroObjects...)
 	}
 	if plan.ClientID == domain.ClientOpenCode {
-		openCodeObjects, err := buildOpenCodeNativeObjects(stagingPath, envelope, plan)
+		openCodeObjects, err := opencode.BuildNativeObjects(stagingPath, envelope, plan)
 		if err != nil {
 			return domain.StagedDelivery{}, err
 		}
 		objects = append(objects, openCodeObjects...)
 	}
 	if plan.ClientID == domain.ClientCline {
-		clineObjects, err := buildClineNativeObjects(stagingPath, envelope, plan)
+		clineObjects, err := cline.BuildNativeObjects(stagingPath, envelope, plan)
 		if err != nil {
 			return domain.StagedDelivery{}, err
 		}
@@ -293,7 +303,7 @@ func (stager Stager) stage(
 	}
 	objects = append(objects, geminiObjects...)
 	if plan.ClientID == domain.ClientWindsurf {
-		windsurfObjects, err := buildWindsurfNativeObjects(stagingPath, plan)
+		windsurfObjects, err := windsurf.BuildNativeObjects(stagingPath, plan)
 		if err != nil {
 			return domain.StagedDelivery{}, err
 		}
@@ -523,127 +533,6 @@ func writeSanitizedExtensions(root string, envelope domain.PackageEnvelope, plan
 		document["extensions"] = raw
 	}
 	return shared.WriteJSON(path, document)
-}
-
-func projectOpenAI(root string, envelope domain.PackageEnvelope, plan domain.DeliveryPlan, hints domain.CompatibilityHints, dataPath string) error {
-	manifest, err := projectedOpenAIManifest(envelope)
-	if err != nil {
-		return err
-	}
-	// A preserved upstream manifest may already declare these members against a
-	// layout this projection does not produce, so they are dropped and then
-	// re-declared from what the plan actually selected.
-	delete(manifest, "apps")
-	delete(manifest, "skills")
-	delete(manifest, "mcpServers")
-	shared.ApplyManifestMetadata(manifest, envelope, shared.WithAuthorObject())
-	if shared.ComponentKindPresent(plan.Components, domain.ComponentSkill) {
-		manifest["skills"] = "./skills/"
-	}
-	serverNames := shared.SupportedMCPNames(plan)
-	if len(serverNames) > 0 {
-		manifest["mcpServers"] = "./.mcp.json"
-	}
-	manifestPath := filepath.Join(root, ".codex-plugin", "plugin.json")
-	if err := shared.WriteJSON(manifestPath, manifest); err != nil {
-		return fmt.Errorf("write OpenAI compatibility manifest: %w", err)
-	}
-	return projectOpenAIMCP(root, envelope, serverNames, hints, plan.ActivePath, dataPath)
-}
-
-func projectOpenAIMCP(root string, envelope domain.PackageEnvelope, serverNames []string, hints domain.CompatibilityHints, pluginRoot, dataPath string) error {
-	return shared.ProjectMCPServers(shared.MCPProjection{
-		Root:       root,
-		Envelope:   envelope,
-		Names:      serverNames,
-		Dialect:    shared.MCPDialectOpenAI,
-		PluginRoot: pluginRoot,
-		DataPath:   dataPath,
-		Hints:      hints,
-	})
-}
-
-func projectKiroMCP(root string, envelope domain.PackageEnvelope, plan domain.DeliveryPlan, dataPath string) error {
-	return shared.ProjectMCPServers(shared.MCPProjection{
-		Root:       root,
-		Envelope:   envelope,
-		Names:      shared.SupportedMCPNames(plan),
-		Dialect:    shared.MCPDialectKiro,
-		PluginRoot: plan.ActivePath,
-		DataPath:   dataPath,
-	})
-}
-
-func projectCursor(root string, envelope domain.PackageEnvelope, plan domain.DeliveryPlan, dataPath string) error {
-	manifest := shared.ManifestFromEnvelope(envelope, shared.WithAuthorNameEmail())
-	if shared.ComponentKindPresent(plan.Components, domain.ComponentSkill) {
-		manifest["skills"] = "./skills/"
-	}
-	serverNames := shared.SupportedMCPNames(plan)
-	if len(serverNames) > 0 {
-		manifest["mcpServers"] = "./mcp.json"
-	}
-	if err := shared.WriteJSON(filepath.Join(root, ".cursor-plugin", "plugin.json"), manifest); err != nil {
-		return fmt.Errorf("write Cursor plugin manifest: %w", err)
-	}
-	return projectCursorMCP(root, envelope, serverNames, plan.ActivePath, dataPath)
-}
-
-func projectCursorMCP(root string, envelope domain.PackageEnvelope, serverNames []string, pluginRoot, dataPath string) error {
-	return shared.ProjectMCPServers(shared.MCPProjection{
-		Root:       root,
-		Envelope:   envelope,
-		Names:      serverNames,
-		Dialect:    shared.MCPDialectCursor,
-		PluginRoot: pluginRoot,
-		DataPath:   dataPath,
-	})
-}
-
-func projectChatGPT(root string, envelope domain.PackageEnvelope, plan domain.DeliveryPlan, hints domain.CompatibilityHints, dataPath string) error {
-	manifest, err := projectedOpenAIManifest(envelope)
-	if err != nil {
-		return err
-	}
-	serverNames := shared.SupportedMCPNames(plan)
-	if len(serverNames) > 0 {
-		manifest["mcpServers"] = "./.mcp.json"
-	} else {
-		delete(manifest, "mcpServers")
-	}
-	if shared.ComponentKindPresent(plan.Components, domain.ComponentSkill) {
-		manifest["skills"] = "./skills/"
-	} else {
-		delete(manifest, "skills")
-	}
-	if envelope.App.Enabled && shared.ComponentKindPresent(plan.Components, domain.ComponentApp) {
-		manifest["apps"] = "./.app.json"
-	} else {
-		delete(manifest, "apps")
-	}
-	if err := shared.WriteJSON(filepath.Join(root, ".codex-plugin", "plugin.json"), manifest); err != nil {
-		return fmt.Errorf("write ChatGPT plugin manifest: %w", err)
-	}
-	if err := projectOpenAIMCP(root, envelope, serverNames, hints, plan.ActivePath, dataPath); err != nil {
-		return err
-	}
-	for _, portableManifest := range []string{"plugin.json", "mcp.json"} {
-		if err := os.Remove(filepath.Join(root, portableManifest)); err != nil && !os.IsNotExist(err) {
-			return fmt.Errorf("remove portable %s from official ChatGPT projection: %w", portableManifest, err)
-		}
-	}
-	return nil
-}
-
-func projectedOpenAIManifest(envelope domain.PackageEnvelope) (map[string]any, error) {
-	preserved, ok, err := shared.PreservedOpenAIManifest(envelope)
-	if err != nil {
-		return nil, err
-	}
-	if ok {
-		return preserved, nil
-	}
-	return shared.ManifestFromEnvelope(envelope, shared.WithAuthorObject()), nil
 }
 
 func pathContainedBy(root, candidate string) bool {

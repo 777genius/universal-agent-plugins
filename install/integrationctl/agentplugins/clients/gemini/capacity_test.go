@@ -1,0 +1,63 @@
+package gemini
+
+import (
+	"errors"
+	"os"
+	"path/filepath"
+	"testing"
+
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
+)
+
+type countingNativeConfigFileIO struct{ calls int }
+
+func (files *countingNativeConfigFileIO) ReadNoFollow(string) ([]byte, os.FileMode, bool, error) {
+	files.calls++
+	return nil, 0, false, nil
+}
+
+func (files *countingNativeConfigFileIO) WriteAtomic(string, []byte, os.FileMode) error {
+	files.calls++
+	return nil
+}
+
+func (files *countingNativeConfigFileIO) RemoveNoFollow(string) error {
+	files.calls++
+	return nil
+}
+
+func TestGeminiCapacityFailurePrecedesFilesystemEffects(t *testing.T) {
+	root := t.TempDir()
+	configRoot := filepath.Join(root, ".gemini")
+	activePath, desired := geminiNativeFixture(t, configRoot, "managed", "https://docs.test")
+	files := &countingNativeConfigFileIO{}
+	renameCalls := 0
+	capacityCalls := 0
+	err := applyGeminiNative(clients.Env{NativeConfig: nativeconfig.NewWithFileIO(files)}, clients.Ops{Rename: func(oldPath, newPath string) error {
+		renameCalls++
+		return os.Rename(oldPath, newPath)
+	}}, configRoot, activePath, nil, desired, func(left, right int) (int, error) {
+		capacityCalls++
+		if left != 0 || right != 2 {
+			t.Fatalf("capacity inputs = (%d, %d), want (0, 2)", left, right)
+		}
+		return 0, shared.ErrCombinedCapacityOverflow
+	})
+	if !errors.Is(err, shared.ErrCombinedCapacityOverflow) {
+		t.Fatalf("error = %v, want %v", err, shared.ErrCombinedCapacityOverflow)
+	}
+	if renameCalls != 0 {
+		t.Fatalf("rename calls = %d, want 0", renameCalls)
+	}
+	if capacityCalls != 1 {
+		t.Fatalf("capacity calls = %d, want 1", capacityCalls)
+	}
+	if files.calls != 0 {
+		t.Fatalf("native config file calls = %d, want 0", files.calls)
+	}
+	if _, statErr := os.Lstat(configRoot); !os.IsNotExist(statErr) {
+		t.Fatalf("Gemini config root was touched before capacity rejection: %v", statErr)
+	}
+}

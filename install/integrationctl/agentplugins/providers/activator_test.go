@@ -12,6 +12,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/kiro"
+
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	legacyports "github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
@@ -308,7 +310,7 @@ func TestKiroMultiServerTimeoutCannotFallBackToActivationAttestation(t *testing.
 	if err == nil || outcome.Activation != domain.ActivationFailed || !outcome.AuthoritativeObservation {
 		t.Fatalf("outcome=%+v err=%v, want authoritative incomplete verification failure", outcome, err)
 	}
-	if outcome.ActivationAttested || errors.Is(err, errKiroACPContractUnknown) {
+	if outcome.ActivationAttested || errors.Is(err, kiro.ErrACPContractUnknown) {
 		t.Fatalf("timeout downgraded negative evidence to attestation/manual fallback: outcome=%+v err=%v", outcome, err)
 	}
 }
@@ -339,7 +341,7 @@ func TestKiroPartialRecordAfterCompletionCannotBeAttestedActive(t *testing.T) {
 	request.Plan.Components = []domain.ComponentDecision{{Kind: domain.ComponentMCPServer, Name: "alpha", Support: domain.SupportNative}}
 	runner := &recordingRunner{duplexOutput: connectedACP("alpha") + `{"jsonrpc":"2.0"`}
 	outcome, err := (Activator{Runner: runner}).Activate(context.Background(), request)
-	if err == nil || !errors.Is(err, errKiroACPPartialExit) || !errors.Is(err, shared.ErrRecognizedNegativeEvidence) || outcome.ActivationAttested {
+	if err == nil || !errors.Is(err, kiro.ErrACPPartialExit) || !errors.Is(err, shared.ErrRecognizedNegativeEvidence) || outcome.ActivationAttested {
 		t.Fatalf("partial EOF outcome=%+v err=%v, want non-attestable negative evidence", outcome, err)
 	}
 }
@@ -718,12 +720,12 @@ func TestActivatorInstallsKiroSkillWithoutManualPowerImport(t *testing.T) {
 	request.Plan.Components = []domain.ComponentDecision{{Kind: domain.ComponentSkill, Name: "guide", Support: domain.SupportNative}}
 	source := filepath.Join(request.Delivery.ActivePath, "skills", "guide")
 	writeTestFile(t, filepath.Join(source, "SKILL.md"), "---\nname: guide\ndescription: Guide\n---\n")
-	digest, err := digestKiroSkillDirectory(source)
+	digest, err := shared.DigestSkillDirectory(source)
 	if err != nil {
 		t.Fatal(err)
 	}
 	request.Delivery.NativeObjects = []domain.NativeObjectOwnership{{
-		ObjectID: "kiro-skill:guide", Kind: kiroSkillObjectKind, LogicalName: "guide",
+		ObjectID: "kiro-skill:guide", Kind: kiro.SkillObjectKind, LogicalName: "guide",
 		Path: filepath.Join(request.Client.ConfigRoot, "skills", "guide"), SourceRelative: "skills/guide",
 		ManagedDigest: digest, ProtectionClass: "managed",
 	}}
@@ -1177,4 +1179,21 @@ func commandArgv(commands []legacyports.Command) [][]string {
 		result = append(result, command.Argv)
 	}
 	return result
+}
+
+func acpResponse(id int, result string) string {
+	return fmt.Sprintf("{\"jsonrpc\":\"2.0\",\"id\":%d,\"result\":%s}\n", id, result)
+}
+
+func acpStatus(sessionID, name, status string, tools string) string {
+	if tools == "" {
+		tools = "null"
+	}
+	return fmt.Sprintf("{\"jsonrpc\":\"2.0\",\"method\":\"_kiro/mcp/status\",\"params\":{\"sessionId\":%q,\"serverName\":%q,\"status\":%q,\"tools\":%s}}\n", sessionID, name, status, tools)
+}
+
+func connectedACP(name string) string {
+	return acpResponse(0, `{"protocolVersion":1}`) +
+		acpResponse(1, `{"sessionId":"session-1"}`) +
+		acpStatus("session-1", name, "connected", `[{"name":"search","disabled":false}]`)
 }

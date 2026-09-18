@@ -2,17 +2,21 @@ package providers
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/kiro"
+
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/claude"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/codex"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/gemini"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/windsurf"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
 	legacyports "github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
@@ -177,11 +181,11 @@ func (observer NativeIdentityObserver) inspectNativeRegistry(ctx context.Context
 		if configRoot == "" && strings.TrimSpace(plan.TargetRoot) != "" {
 			configRoot = filepath.Dir(filepath.Clean(plan.TargetRoot))
 		}
-		command, err := claudeListCommand(plan.NativeRegistryExecutable, configRoot, plan.ActivePath)
+		command, err := claude.ListCommand(plan.NativeRegistryExecutable, configRoot, plan.ActivePath)
 		if err != nil {
 			return registryIndeterminate, err
 		}
-		result, err := runClaudeListCommand(ctx, observer.Runner, command)
+		result, err := claude.RunListCommand(ctx, observer.Runner, command)
 		if err != nil {
 			if ctxErr := ctx.Err(); ctxErr != nil {
 				return registryIndeterminate, ctxErr
@@ -248,9 +252,9 @@ func (observer NativeIdentityObserver) inspectNativeRegistry(ctx context.Context
 		// its skill paths are checked before the all-or-none native config batch.
 		return registryClear, nil
 	case domain.ClientGemini:
-		return inspectGeminiRegistry(plan, managed)
+		return gemini.InspectRegistry(plan, managed)
 	case domain.ClientWindsurf:
-		return inspectWindsurfRegistry(plan, managed)
+		return windsurf.InspectRegistry(plan, managed)
 	default:
 		return registryIndeterminate, nil
 	}
@@ -277,52 +281,7 @@ func (observer NativeIdentityObserver) inspectCodexCLI(ctx context.Context, plan
 }
 
 func codexRegistryFinding(body []byte, name, expectedMarketplace string, owned bool) registryFinding {
-	decoder := json.NewDecoder(strings.NewReader(string(body)))
-	decoder.UseNumber()
-	value, err := shared.DecodeUniqueJSONValue(decoder)
-	if err != nil {
-		return registryIndeterminate
-	}
-	if _, err := decoder.Token(); !errors.Is(err, io.EOF) {
-		return registryIndeterminate
-	}
-	document, ok := value.(map[string]any)
-	if !ok {
-		return registryIndeterminate
-	}
-	entries, ok := document["installed"].([]any)
-	if !ok {
-		return registryIndeterminate
-	}
-	finding := registryClear
-	seen := map[string]bool{}
-	for _, raw := range entries {
-		entry, ok := raw.(map[string]any)
-		if !ok {
-			return registryIndeterminate
-		}
-		entryName, nameOK := entry["name"].(string)
-		marketplace, marketplaceOK := entry["marketplaceName"].(string)
-		pluginID, idOK := entry["pluginId"].(string)
-		_, installedOK := entry["installed"].(bool)
-		_, enabledOK := entry["enabled"].(bool)
-		if !nameOK || !marketplaceOK || !idOK || !installedOK || !enabledOK || entryName == "" || marketplace == "" || pluginID != entryName+"@"+marketplace || seen[pluginID] {
-			return registryIndeterminate
-		}
-		seen[pluginID] = true
-		if entryName != name {
-			continue
-		}
-		if marketplace == expectedMarketplace {
-			if !owned {
-				return registryCollision
-			}
-			finding = registryExpected
-		}
-		// A different non-empty marketplace is positive namespace evidence and
-		// can coexist with the managed marketplace.
-	}
-	return finding
+	return registryFinding(codex.ParseRegistry(body, name, expectedMarketplace, owned))
 }
 
 func (observer NativeIdentityObserver) inspectCopilotCLI(ctx context.Context, plan domain.DeliveryPlan, managed *domain.ClientBinding) (registryFinding, error) {
@@ -343,7 +302,7 @@ func (observer NativeIdentityObserver) inspectCopilotCLI(ctx context.Context, pl
 	if managed != nil && strings.TrimSpace(managed.TargetLocator) != "" {
 		expectedPath = managed.TargetLocator
 	}
-	return copilotRegistryFindingAt(result.Stdout, plan.DeclaredName, shared.ManagedMarketplaceName(plan.PhysicalArtifactID), copilotMarketplaceVersion(plan.DeclaredVersion), expectedPath, managed != nil), nil
+	return copilotRegistryFindingAt(result.Stdout, plan.DeclaredName, shared.ManagedMarketplaceName(plan.PhysicalArtifactID), shared.CopilotMarketplaceVersion(plan.DeclaredVersion), expectedPath, managed != nil), nil
 }
 
 func (observer NativeIdentityObserver) runNativeRegistry(ctx context.Context, command legacyports.Command) (legacyports.CommandResult, error) {
@@ -354,86 +313,11 @@ func (observer NativeIdentityObserver) runNativeRegistry(ctx context.Context, co
 }
 
 func copilotRegistryFinding(stdout []byte, name, expectedMarketplace, expectedVersion string, owned bool) registryFinding {
-	return copilotRegistryFindingAt(stdout, name, expectedMarketplace, expectedVersion, "", owned)
+	return registryFinding(shared.CopilotRegistryFinding(stdout, name, expectedMarketplace, expectedVersion, owned))
 }
 
 func copilotRegistryFindingAt(stdout []byte, name, expectedMarketplace, expectedVersion, expectedPath string, owned bool) registryFinding {
-	expected := name + "@" + expectedMarketplace
-	if status, recognized := copilotLivePluginStatus(stdout, expected, expectedVersion, expectedPath); recognized {
-		switch status {
-		case copilotStatusInstalled:
-			if !owned {
-				return registryCollision
-			}
-			return registryExpected
-		case copilotStatusAbsent:
-			return registryClear
-		default:
-			return registryIndeterminate
-		}
-	}
-	normalized := strings.ReplaceAll(string(stdout), "\r\n", "\n")
-	document := strings.TrimSuffix(normalized, "\n")
-	if document == "No plugins installed.\n\nUse 'copilot plugin install <source>' to install a plugin." {
-		return registryClear
-	}
-	inInstalled := false
-	recognizedHeader := false
-	recognizedEmpty := false
-	recognizedEntry := false
-	finding := registryClear
-	seen := map[string]bool{}
-	for _, line := range strings.Split(document, "\n") {
-		if strings.TrimSpace(line) == "Installed plugins:" {
-			if inInstalled || recognizedHeader {
-				return registryIndeterminate
-			}
-			inInstalled, recognizedHeader = true, true
-			continue
-		}
-		if !inInstalled {
-			return registryIndeterminate
-		}
-		if line != "" && line[0] != ' ' && line[0] != '\t' {
-			return registryIndeterminate
-		}
-		match := copilotInstalledEntry.FindStringSubmatch(line)
-		if len(match) == 3 {
-			if recognizedEmpty {
-				return registryIndeterminate
-			}
-			recognizedEntry = true
-			identity := match[1]
-			if seen[identity] {
-				return registryIndeterminate
-			}
-			seen[identity] = true
-			parts := strings.Split(identity, "@")
-			if len(parts) != 2 {
-				return registryIndeterminate
-			}
-			if parts[0] == name && parts[1] == expectedMarketplace {
-				if match[2] != expectedVersion {
-					return registryIndeterminate
-				}
-				if !owned {
-					return registryCollision
-				}
-				finding = registryExpected
-			}
-			continue
-		}
-		trimmed := strings.TrimSpace(line)
-		if (trimmed == "No plugins installed." || trimmed == "No plugins installed") && !recognizedEntry && !recognizedEmpty {
-			recognizedEmpty = true
-			continue
-		}
-		return registryIndeterminate
-	}
-	if !recognizedHeader || (!recognizedEntry && !recognizedEmpty) {
-		return registryIndeterminate
-	}
-	return finding
+	return registryFinding(shared.CopilotRegistryFindingAt(stdout, name, expectedMarketplace, expectedVersion, expectedPath, owned))
 }
 
 func inspectCodexFiles(plan domain.DeliveryPlan, managed *domain.ClientBinding) (registryFinding, error) {
@@ -539,7 +423,7 @@ func inspectKiroRegistry(plan domain.DeliveryPlan, managed *domain.ClientBinding
 		return registryIndeterminate, err
 	}
 	if managed != nil {
-		if err := verifyKiroNativeObjects(root, managed.NativeObjects, true); err != nil {
+		if err := kiro.VerifyNativeObjects(root, managed.NativeObjects, true); err != nil {
 			return registryIndeterminate, err
 		}
 	}
@@ -547,11 +431,11 @@ func inspectKiroRegistry(plan domain.DeliveryPlan, managed *domain.ClientBinding
 	mcp := map[string]any{}
 	if shared.HasSupportedMCP(plan.Components) {
 		mcpPath := filepath.Join(root, "settings", "mcp.json")
-		if err := validateKiroNativePath(root, mcpPath); err != nil {
+		if err := kiro.ValidateNativePath(root, mcpPath); err != nil {
 			return registryIndeterminate, err
 		}
 		var err error
-		mcp, _, _, _, err = readKiroMCPConfig(mcpPath)
+		mcp, _, _, _, err = kiro.ReadMCPConfig(mcpPath)
 		if err != nil {
 			return registryIndeterminate, err
 		}
@@ -564,7 +448,7 @@ func inspectKiroRegistry(plan domain.DeliveryPlan, managed *domain.ClientBinding
 		switch component.Kind {
 		case domain.ComponentSkill:
 			skillPath := filepath.Join(root, "skills", component.Name)
-			if err := validateKiroNativePath(root, skillPath); err != nil {
+			if err := kiro.ValidateNativePath(root, skillPath); err != nil {
 				return registryIndeterminate, err
 			}
 			_, statErr := os.Lstat(skillPath)
@@ -592,9 +476,9 @@ func inspectKiroRegistry(plan domain.DeliveryPlan, managed *domain.ClientBinding
 }
 
 func managedKiroObjectExists(objects []domain.NativeObjectOwnership, kind domain.ComponentKind, name string) bool {
-	want := kiroSkillObjectKind
+	want := kiro.SkillObjectKind
 	if kind == domain.ComponentMCPServer {
-		want = kiroMCPObjectKind
+		want = kiro.MCPObjectKind
 	}
 	for _, object := range objects {
 		if object.Kind == want && object.LogicalName == name {

@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/claude"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/kiro"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
@@ -205,7 +207,7 @@ func TestClaudeProjectionKeepsMultiTargetStdioContractsIndependent(t *testing.T)
 		if err := os.MkdirAll(target.root, 0o700); err != nil {
 			t.Fatal(err)
 		}
-		if err := projectClaudeMCP(target.root, envelope, []string{"local"}, target.pluginRoot, target.dataPath); err != nil {
+		if err := claude.ProjectMCP(target.root, envelope, []string{"local"}, target.pluginRoot, target.dataPath); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -300,7 +302,7 @@ func TestStagerProjectsKiroStdioRuntimeContractBeforeNativeImport(t *testing.T) 
 	}
 	var foundMCP bool
 	for _, object := range delivery.NativeObjects {
-		if object.Kind == kiroMCPObjectKind && object.LogicalName == "local" {
+		if object.Kind == kiro.MCPObjectKind && object.LogicalName == "local" {
 			foundMCP = object.Path == filepath.Join(plan.NativeRegistryRoot, "settings", "mcp.json") && strings.HasPrefix(object.ManagedDigest, "sha256:")
 		}
 	}
@@ -442,10 +444,10 @@ func TestStagerBuildsManagedCopilotMarketplaceForCopilotAndVSCode(t *testing.T) 
 
 func TestCopilotMarketplaceVersionDefaultsExactlyOnce(t *testing.T) {
 	t.Parallel()
-	if got := copilotMarketplaceVersion("  "); got != "0.0.0" {
+	if got := shared.CopilotMarketplaceVersion("  "); got != "0.0.0" {
 		t.Fatalf("empty projected version = %q", got)
 	}
-	if got := copilotMarketplaceVersion(" 1.7.0-uap.1 "); got != "1.7.0-uap.1" {
+	if got := shared.CopilotMarketplaceVersion(" 1.7.0-uap.1 "); got != "1.7.0-uap.1" {
 		t.Fatalf("projected version = %q", got)
 	}
 }
