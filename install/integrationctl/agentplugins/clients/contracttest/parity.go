@@ -26,12 +26,10 @@ type CapabilityRequirement struct {
 // renamed method turns a capability off silently, and only a declaration
 // checked against the implementation catches that.
 //
-// The requirement set is empty until domain carries the declarative client
-// traits (Part 9 of the installer-core refactor), and calling this with no
-// requirements is a valid no-op that keeps the harness wired up in the
-// meantime. Parity is deliberately one-directional: declaring a trait requires
-// the interface, while implementing an interface nobody declared yet is how a
-// capability is normally introduced.
+// An empty requirement set is a valid no-op so the harness can stay wired
+// when a caller has nothing to declare yet. Parity is deliberately
+// one-directional: declaring a trait requires the interface, while implementing
+// an interface nobody declared yet is how a capability is normally introduced.
 func RunTraitParity(t *testing.T, registry *clients.Registry, requirements []CapabilityRequirement) {
 	t.Helper()
 	for _, violation := range traitParityViolations(registry, requirements) {

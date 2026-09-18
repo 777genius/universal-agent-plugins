@@ -16,6 +16,9 @@ func TestClientRegistryHasStableOrderAndSharedCopilotBackend(t *testing.T) {
 	if !SameClientBackend(ClientCopilot, ClientVSCode) || SameClientBackend(ClientCursor, ClientVSCode) {
 		t.Fatal("Copilot / VS Code backend family contract changed")
 	}
+	if !SharesBackend(ClientCopilot, ClientVSCode) || SharesBackend(ClientCursor, ClientVSCode) {
+		t.Fatal("SharesBackend must match SameClientBackend")
+	}
 }
 
 func TestClientRegistryReturnsDefensiveCapabilityCopies(t *testing.T) {
@@ -25,6 +28,11 @@ func TestClientRegistryReturnsDefensiveCapabilityCopies(t *testing.T) {
 	definition, ok := ClientDefinitionFor(ClientCodex)
 	if !ok || definition.Capabilities.Scopes[0] != ScopeUser || definition.Capabilities.MCPTransports["stdio"] != SupportProjected {
 		t.Fatalf("registry was mutated through returned copy: %+v", definition)
+	}
+	definitions[0].Traits.InstallIntents[0] = InstallIntentPrepare
+	definition, ok = ClientDefinitionFor(ClientCodex)
+	if !ok || definition.Traits.Allows(InstallIntentPrepare) {
+		t.Fatal("traits install intents were mutated through returned copy")
 	}
 }
 

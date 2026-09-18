@@ -54,19 +54,41 @@ func TestDefaultRegistryAdaptersSatisfyTheContract(t *testing.T) {
 			contracttest.RunRegistryInspector(t, adapter)
 		})
 	}
-	contracttest.RunTraitParity(t, Default(), everyClientDetectsSurfaces())
+	contracttest.RunTraitParity(t, Default(), traitParityRequirements())
 }
 
-// everyClientDetectsSurfaces is the only capability every client declares so
-// far: detection is not optional, because a client nobody can find cannot be
-// installed into. The trait-driven requirements arrive with domain.ClientTraits.
-func everyClientDetectsSurfaces() []contracttest.CapabilityRequirement {
-	return []contracttest.CapabilityRequirement{{
-		Name:  "HostDetector",
-		Holds: func(domain.ClientDefinition) bool { return true },
-		Implements: func(adapter clients.Adapter) bool {
-			_, ok := adapter.(clients.HostDetector)
-			return ok
+func traitParityRequirements() []contracttest.CapabilityRequirement {
+	return []contracttest.CapabilityRequirement{
+		{
+			Name:  "HostDetector",
+			Holds: func(domain.ClientDefinition) bool { return true },
+			Implements: func(adapter clients.Adapter) bool {
+				_, ok := adapter.(clients.HostDetector)
+				return ok
+			},
 		},
-	}}
+		{
+			Name: "LifecycleKind=native_config",
+			Holds: func(definition domain.ClientDefinition) bool {
+				return definition.Traits.LifecycleKind == domain.LifecycleNativeConfig
+			},
+			Implements: func(adapter clients.Adapter) bool {
+				if _, ok := adapter.(clients.Lifecycle); !ok {
+					return false
+				}
+				inspector, ok := adapter.(clients.RegistryInspector)
+				return !ok || !inspector.UsesNativeRegistryExecutable()
+			},
+		},
+		{
+			Name: "prepare ∈ InstallIntents",
+			Holds: func(definition domain.ClientDefinition) bool {
+				return definition.Traits.Allows(domain.InstallIntentPrepare)
+			},
+			Implements: func(adapter clients.Adapter) bool {
+				_, ok := adapter.(clients.ActivationPreflighter)
+				return ok
+			},
+		},
+	}
 }

@@ -608,16 +608,12 @@ func releaseEligibility(snapshot DirectorySnapshot, product DirectoryProduct, di
 	return nil
 }
 
-// Copilot CLI and VS Code are logical views of one physical native backend.
-// Directory policy, evidence, and delivery must authorize both surfaces even
-// when the user selected only one logical view.
+// Directory policy, evidence, and delivery must authorize every logical surface
+// that shares a physical backend, even when the user selected only one of them.
 func directoryEligibilityTargets(targets []ClientID) []ClientID {
 	complete := append([]ClientID(nil), targets...)
 	for _, target := range targets {
-		if target == ClientCopilot || target == ClientVSCode {
-			complete = append(complete, ClientCopilot, ClientVSCode)
-			break
-		}
+		complete = append(complete, BackendSiblings(target)...)
 	}
 	return uniqueClients(complete)
 }

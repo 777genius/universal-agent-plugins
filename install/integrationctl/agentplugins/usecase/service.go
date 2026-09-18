@@ -236,7 +236,7 @@ func (service Service) apply(ctx context.Context, input AddInput, replace bool) 
 		return result, err
 	}
 	clientBindingID := domain.ComputeClientBindingID(installationID, string(input.Client.ClientID), string(input.Scope), plan.ActivePath)
-	if existing && sameNativeBackend(input.Client.ClientID, domain.ClientCopilot) {
+	if existing && sharesPhysicalBackend(input.Client.ClientID) {
 		for key, binding := range state.Installations[installationIndex].Clients {
 			if binding.Scope != string(input.Scope) || binding.Materialization == domain.MaterializationAbsent || binding.PhysicalArtifact != plan.PhysicalArtifactID || !sameNativeBackend(domain.ClientID(binding.ClientID), input.Client.ClientID) {
 				continue
@@ -628,7 +628,7 @@ func (service Service) persistAuthoritativeObservation(ctx context.Context, inpu
 }
 
 func openAIOAuthApplies(clientID domain.ClientID, envelope domain.PackageEnvelope, hints domain.CompatibilityHints) bool {
-	if clientID != domain.ClientCodex {
+	if !domain.ClientTraitsFor(clientID).HonorsOpenAIMCPAuthHints {
 		return false
 	}
 	if envelope.CatalogEvidence != nil {
@@ -746,20 +746,7 @@ func lifecycleOutcome(client domain.ClientBinding) domain.ActivationOutcome {
 }
 
 func (service Service) verifyClientReadOnly(ctx context.Context, input AddInput, result AddResult, client domain.ClientBinding) (domain.ActivationOutcome, error) {
-	switch input.Client.ClientID {
-	case domain.ClientGemini, domain.ClientOpenCode, domain.ClientCline, domain.ClientWindsurf:
-		// Native config and skill ownership are observable without starting the
-		// client. Do not let an absent executable turn a stale native projection
-		// into a successful no-change result.
-	case domain.ClientCodex, domain.ClientClaude, domain.ClientCopilot, domain.ClientVSCode:
-		if strings.TrimSpace(input.BackendExecutable) == "" {
-			return domain.ActivationOutcome{}, nil
-		}
-	case domain.ClientKiro:
-		if input.InstallIntent != domain.InstallIntentPrepare && !strings.Contains(strings.ToLower(input.BackendExecutable), "kiro") {
-			return domain.ActivationOutcome{}, nil
-		}
-	default:
+	if !domain.ShouldReadOnlyVerify(input.Client.ClientID, input.BackendExecutable, input.InstallIntent) {
 		return domain.ActivationOutcome{}, nil
 	}
 	delivery := domain.StagedDelivery{ClientID: input.Client.ClientID, OwnedBase: result.Plan.TargetRoot, ActivePath: client.TargetLocator, ArtifactDigest: managedDigest(client), NativeObjects: client.NativeObjects}
@@ -875,8 +862,8 @@ func preparedAffectedSurfaces(previous domain.ClientBinding, requested domain.Cl
 		values = append(values, previous.ClientID)
 	}
 	values = append(values, string(requested))
-	if sameNativeBackend(requested, domain.ClientCopilot) {
-		values = append(values, string(domain.ClientCopilot), string(domain.ClientVSCode))
+	for _, sibling := range domain.BackendSiblings(requested) {
+		values = append(values, string(sibling))
 	}
 	return uniqueSortedSurfaces(values)
 }
@@ -1166,7 +1153,7 @@ func sameNativeBackend(first, second domain.ClientID) bool {
 // plan so activation and user-facing results still describe what the caller
 // selected.
 func bindStagedDeliveryToPhysicalOwner(delivery domain.StagedDelivery, plan domain.DeliveryPlan, managed *domain.ClientBinding) (domain.StagedDelivery, error) {
-	if !sameNativeBackend(plan.ClientID, domain.ClientCopilot) {
+	if !sharesPhysicalBackend(plan.ClientID) {
 		return delivery, nil
 	}
 	owner := plan.ClientID

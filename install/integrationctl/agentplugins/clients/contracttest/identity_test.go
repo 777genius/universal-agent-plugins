@@ -60,6 +60,12 @@ func TestRegistryInspectorViolationsRejectABrokenAdapter(t *testing.T) {
 				return clients.RegistryClear, nil
 			},
 		},
+		"expected without managed": identityAdapter{
+			exampleAdapter: exampleAdapter{id: domain.ClientCursor},
+			inspect: func(context.Context, clients.Env, *domain.ClientBinding) (clients.RegistryFinding, error) {
+				return clients.RegistryExpected, nil
+			},
+		},
 	}
 	for name, inspector := range cases {
 		if violations := registryInspectorViolations(t, inspector, domain.ClientCursor); len(violations) == 0 {

@@ -25,7 +25,7 @@ func (service Service) preflightComponents(envelope domain.PackageEnvelope, plan
 			continue
 		}
 		var failure *domain.ComponentReadinessError
-		if plan.ClientID == domain.ClientWindsurf || plan.ClientID == domain.ClientClaude {
+		if domain.ClientTraitsFor(plan.ClientID).UsesManagedStdioLauncher {
 			if !helperChecked {
 				if checker, ok := service.Stager.(ports.ManagedStdioPreflighter); ok {
 					helperErr = checker.PreflightManagedStdio(envelope.SnapshotRoot)
