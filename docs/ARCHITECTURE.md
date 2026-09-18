@@ -42,14 +42,17 @@ Dependencies point inward.
 | Composition root | `cmd/agentplugins` | everything, and nothing imports it | no rule yet |
 
 The "Enforced today" column is deliberate: the middle column is the target, and
-only the first three rows and the client contract are currently checked by
-`depguard` in `.golangci.yml`. `usecase-through-ports` now forbids `adapters`
-(both the `agentplugins` ones and `install/integrationctl/adapters`),
-`providers`, `planner` and `clients`; the use case reaches path containment
-through `ports.PathPolicy` and planning through `ports.DeliveryPlanner`. It stays
-a deny list on purpose: adding an `allow` key would turn the rule into a
-whitelist and reject every import not named in it, including the standard
-library. The adapter, CLI and composition root rows have no rule at all yet.
+only some of it is checked by `depguard` in `.golangci.yml` today. Domain, ports,
+the use cases, the client contract and the client adapters are covered in full.
+The adapter row is covered in part: `dispatchers-take-an-injected-registry`
+forbids `clients/all` there, but nothing yet stops an adapter from importing
+another one. The CLI and composition root rows have no rule at all.
+`usecase-through-ports` forbids `adapters` (both the `agentplugins` ones and
+`install/integrationctl/adapters`), `providers`, `planner` and `clients`; the use
+case reaches path containment through `ports.PathPolicy` and planning through
+`ports.DeliveryPlanner`. It stays a deny list on purpose: adding an `allow` key
+would turn the rule into a whitelist and reject every import not named in it,
+including the standard library.
 
 `agentplugins/clients` is the extension point: one adapter per supported client,
 resolved through a `Registry` the composition root injects. `clients-no-upward`
@@ -71,8 +74,15 @@ through a `clients.Host`, while `adapters/clientdetect` keeps the generic half -
 detection status, display name from `domain.ClientDefinitions`, the version probe
 and the stable ordering. The surface constructors belong to the contract rather
 than to each client because the evidence strings they produce are a cross-client
-output contract; `clients/contracttest` builds a `Host` from counting probes, so
-an adapter that observed the machine on its own would be caught there.
+output contract.
+
+`clients/contracttest` runs every adapter against a host that reports nothing
+installed and answers the same way every time. It checks that surface ids are
+unique, that repeated observations agree down to the order and the number of
+probe calls, and that nothing comes back detected - an adapter that stats a real
+path behind the host's back reports evidence the host never gave it. That is a
+necessary condition rather than a sandbox: an ambient read whose result never
+reaches the `Detection` stays invisible to it.
 
 ### Accepted exceptions
 

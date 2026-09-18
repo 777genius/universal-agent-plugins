@@ -10,15 +10,25 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 )
 
-// RunHostDetector asserts the detection half of the contract: surface ids are
-// unique, the observation is deterministic, the selection list names surfaces
-// that were actually reported, and the only way the adapter touches the machine
-// is through the host probes.
+// RunHostDetector asserts the detection half of the contract on each supported
+// operating system, against a host whose probes answer "nothing is installed":
 //
-// It runs on each supported operating system against a host whose probes answer
-// "nothing is installed", because the properties under test are structural.
-// What each client reports for a real installation is frozen by the detector's
-// golden files instead.
+//   - surface ids are non-empty and unique, and an undetected surface carries no
+//     evidence;
+//   - every selection surface is one of the reported surfaces;
+//   - repeated observations of the same host are identical, in content, in
+//     surface order and in the number of probe calls;
+//   - nothing is reported as present, because the host says nothing is.
+//
+// The last one is how far this harness gets towards "the adapter observes the
+// machine only through clients.Host". It catches the case that matters - an
+// adapter that stats a real path or resolves a real binary behind the host's
+// back reports evidence the host never gave it - but it is a necessary
+// condition, not a proof: an ambient read whose result does not reach the
+// Detection is invisible here.
+//
+// The properties under test are structural. What each client reports for a real
+// installation is frozen by the detector's golden files instead.
 func RunHostDetector(t *testing.T, adapter clients.Adapter) {
 	t.Helper()
 	RunAdapter(t, adapter)
@@ -39,23 +49,49 @@ func hostDetectorViolations(adapter clients.Adapter) []string {
 	return violations
 }
 
+// detectionRuns is how often one host is observed. A single repeat catches a
+// deterministic mistake but only coin-flips on a map-backed one, and a flaky
+// adapter is exactly the kind this harness exists to stop from reaching the
+// golden files.
+const detectionRuns = 8
+
 func platformViolations(detector clients.HostDetector, goos string) []string {
 	probes := &countingProbes{goos: goos}
 	first := detector.DetectSurfaces(clients.NewHost(probes.hostProbes()))
 	observed := probes.counts
 
-	probes.counts = probeCounts{}
-	second := detector.DetectSurfaces(clients.NewHost(probes.hostProbes()))
-
 	violations := []string{}
-	if !reflect.DeepEqual(first, second) {
-		violations = append(violations, fmt.Sprintf("on %s two probes of the same host produced different detections; surface order and content must be deterministic", goos))
+	for run := 2; run <= detectionRuns; run++ {
+		probes.counts = probeCounts{}
+		repeated := detector.DetectSurfaces(clients.NewHost(probes.hostProbes()))
+		if !reflect.DeepEqual(first, repeated) {
+			violations = append(violations, fmt.Sprintf("on %s run %d observed a different detection than run 1; surface order and content must be deterministic", goos, run))
+			break
+		}
+		if observed != probes.counts {
+			violations = append(violations, fmt.Sprintf("on %s run %d probed the host %+v times against %+v in run 1; detection must not depend on call history", goos, run, probes.counts, observed))
+			break
+		}
 	}
-	if observed != probes.counts {
-		violations = append(violations, fmt.Sprintf("on %s the adapter probed the host %+v times and then %+v times; detection must not depend on call history", goos, observed, probes.counts))
-	}
+	violations = append(violations, emptyHostViolations(first, goos)...)
 	for _, violation := range detectionViolations(first) {
 		violations = append(violations, "on "+goos+": "+violation)
+	}
+	return violations
+}
+
+// emptyHostViolations holds the adapter to the host it was given. Every probe
+// answered "does not exist", so anything the adapter reports as present was
+// observed somewhere the harness cannot reproduce - normally the real machine.
+func emptyHostViolations(detection clients.Detection, goos string) []string {
+	violations := []string{}
+	if detection.ExecutablePath != "" {
+		violations = append(violations, fmt.Sprintf("on %s the adapter reported the executable %q although the host resolves no binary; it may observe only through clients.Host", goos, detection.ExecutablePath))
+	}
+	for _, surface := range detection.Surfaces {
+		if surface.Detected {
+			violations = append(violations, fmt.Sprintf("on %s surface %q is detected although the host reports nothing installed; it may observe only through clients.Host", goos, surface.ID))
+		}
 	}
 	return violations
 }
@@ -84,10 +120,9 @@ func detectionViolations(detection clients.Detection) []string {
 	return violations
 }
 
-// probeCounts records how often an adapter reached for the machine. Anything an
-// adapter observes has to go through one of these three, so a client that read
-// a file on its own would leave the counters untouched and be caught by the
-// determinism check instead.
+// probeCounts records how often an adapter asked the host a question. It is a
+// determinism signal, not a sandbox: a read that bypasses the host leaves it
+// untouched, which is what emptyHostViolations is for.
 type probeCounts struct {
 	LookPath int
 	Lstat    int

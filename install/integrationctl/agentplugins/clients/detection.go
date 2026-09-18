@@ -19,8 +19,10 @@ type Detection struct {
 	ConfigRoot     string
 	ExecutablePath string
 	Surfaces       []domain.ClientSurface
-	// SelectionSurfaceIDs narrows the surfaces that decide detection status for
-	// clients whose presence is proven by a specific subset (Windsurf channels).
+	// SelectionSurfaceIDs narrows the surfaces that decide detection status to
+	// the ones that also make the client safe to act on. An empty list means any
+	// detected surface counts. Claude is the only client that needs it today: a
+	// configuration directory stays evidence, but only the CLI selects it.
 	SelectionSurfaceIDs []string
 }
 
