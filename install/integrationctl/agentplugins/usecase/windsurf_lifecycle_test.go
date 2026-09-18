@@ -9,12 +9,13 @@ import (
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/providers"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/providerstest"
 )
 
 func TestWindsurfLifecycleAddUpdateRepairRemoveInIsolatedHome(t *testing.T) {
 	t.Parallel()
 	service, store, _ := serviceFixture(t)
-	service.NativeObserver = providers.NativeIdentityObserver{Stager: service.Stager}
+	service.NativeObserver = providerstest.NewObserver(providers.NativeIdentityObserver{Stager: service.Stager})
 	configRoot := filepath.Join(t.TempDir(), "home", ".codeium", "windsurf")
 	configPath := filepath.Join(configRoot, "mcp_config.json")
 	if err := os.MkdirAll(configRoot, 0o700); err != nil {
@@ -84,7 +85,7 @@ func TestWindsurfLifecycleAddUpdateRepairRemoveInIsolatedHome(t *testing.T) {
 func TestWindsurfLifecycleRejectsUnmanagedCollisionBeforePackageMutation(t *testing.T) {
 	t.Parallel()
 	service, store, _ := serviceFixture(t)
-	service.NativeObserver = providers.NativeIdentityObserver{Stager: service.Stager}
+	service.NativeObserver = providerstest.NewObserver(providers.NativeIdentityObserver{Stager: service.Stager})
 	configRoot := filepath.Join(t.TempDir(), "home", ".codeium", "windsurf-next")
 	configPath := filepath.Join(configRoot, "mcp_config.json")
 	if err := os.MkdirAll(configRoot, 0o700); err != nil {

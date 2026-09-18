@@ -30,3 +30,11 @@ func NewActivator(base providers.Activator) providers.Activator {
 	}
 	return base
 }
+
+// NewObserver completes an identity observer literal with the full client registry.
+func NewObserver(base providers.NativeIdentityObserver) providers.NativeIdentityObserver {
+	if base.Registry == nil {
+		base.Registry = all.Default()
+	}
+	return base
+}

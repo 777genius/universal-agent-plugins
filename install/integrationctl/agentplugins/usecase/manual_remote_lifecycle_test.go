@@ -17,7 +17,7 @@ import (
 func TestSignedChatGPTPreparationSupportsAddUpdateAndRepairWhileRemoteActivationIsPending(t *testing.T) {
 	t.Parallel()
 	service, store, _ := serviceFixture(t)
-	service.NativeObserver = providers.NativeIdentityObserver{Stager: service.Stager}
+	service.NativeObserver = providerstest.NewObserver(providers.NativeIdentityObserver{Stager: service.Stager})
 	client := domain.DetectedClient{ClientID: domain.ClientChatGPT, DisplayName: "ChatGPT", Status: domain.DetectionNotDetected}
 
 	add := signedChatGPTInput(t, client, "1.0.0", "sha256:chatgpt-v1", "sha256:chatgpt-manifest-v1")
@@ -58,7 +58,7 @@ func TestSignedChatGPTPreparationSupportsAddUpdateAndRepairWhileRemoteActivation
 func TestKiroSkillSupportsAutomaticAddUpdateAndRepair(t *testing.T) {
 	t.Parallel()
 	service, store, _ := serviceFixture(t)
-	service.NativeObserver = providers.NativeIdentityObserver{Stager: service.Stager}
+	service.NativeObserver = providerstest.NewObserver(providers.NativeIdentityObserver{Stager: service.Stager})
 	client := domain.DetectedClient{ClientID: domain.ClientKiro, DisplayName: "Kiro", Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), ".kiro")}
 
 	add := kiroPowerInput(t, client, "1.0.0", "sha256:kiro-v1", "sha256:kiro-manifest-v1")
@@ -111,7 +111,7 @@ func TestKiroSkillSupportsAutomaticAddUpdateAndRepair(t *testing.T) {
 
 func TestOpenCodeSupportsAutomaticMCPAndSkillLifecycle(t *testing.T) {
 	service, store, _ := serviceFixture(t)
-	service.NativeObserver = providers.NativeIdentityObserver{Stager: service.Stager}
+	service.NativeObserver = providerstest.NewObserver(providers.NativeIdentityObserver{Stager: service.Stager})
 	client := domain.DetectedClient{ClientID: domain.ClientOpenCode, DisplayName: "OpenCode", Status: domain.DetectionDetected,
 		ConfigRoot: filepath.Join(t.TempDir(), "xdg", "opencode"), ExecutablePath: "/test/bin/opencode"}
 	runtimeRoot := t.TempDir()
@@ -226,7 +226,7 @@ func TestClinePackageSupportsAutomaticAddUpdateRepairAndRemoveInIsolatedHome(t *
 	settings := filepath.Join(root, "cline-data", "settings", "cline_mcp_settings.json")
 	t.Setenv("CLINE_MCP_SETTINGS_PATH", settings)
 	service, store, _ := serviceFixture(t)
-	service.NativeObserver = providers.NativeIdentityObserver{Stager: service.Stager}
+	service.NativeObserver = providerstest.NewObserver(providers.NativeIdentityObserver{Stager: service.Stager})
 	var lockCycle int
 	cleanupErr := fmt.Errorf("injected post-write Cline lock cleanup failure")
 	kernel := nativeconfig.NewWithLockAcquirer(func(nativeconfig.Paths, nativeconfig.Codec) (func() error, error) {

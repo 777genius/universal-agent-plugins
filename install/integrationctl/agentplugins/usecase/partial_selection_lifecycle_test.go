@@ -3,6 +3,7 @@ package usecase
 import (
 	"context"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/providers"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/providerstest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -22,7 +23,7 @@ func TestPreviouslySkippedMCPLifecycle(t *testing.T) {
 			input.InstallationID = installed.InstallationID
 			input.OperationID = "partial-followup"
 			if op == "group_repair" {
-				service.NativeObserver = providers.NativeIdentityObserver{Stager: service.Stager}
+				service.NativeObserver = providerstest.NewObserver(providers.NativeIdentityObserver{Stager: service.Stager})
 				if err := os.RemoveAll(installed.Plan.ActivePath); err != nil {
 					t.Fatal(err)
 				}

@@ -44,7 +44,7 @@ func TestKiroExplicitPreparationLifecycleWithoutDuplex(t *testing.T) {
 			service, store, _ := serviceFixture(t)
 			runner := &prepareNoDuplexRunner{}
 			service.Activator = providerstest.NewActivator(providers.Activator{Runner: runner})
-			service.NativeObserver = providers.NativeIdentityObserver{Stager: service.Stager, Runner: runner}
+			service.NativeObserver = providerstest.NewObserver(providers.NativeIdentityObserver{Stager: service.Stager, Runner: runner})
 			client := domain.DetectedClient{ClientID: domain.ClientKiro, Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), ".kiro")}
 			input := kiroPrepareInput(t, client)
 			if _, err := service.Add(context.Background(), input); err == nil || !strings.Contains(err.Error(), "duplex") {
@@ -145,7 +145,7 @@ func TestPreparedKiroGroupedMaintenanceRetainsPerTargetIntent(t *testing.T) {
 	service, store, cursor := serviceFixture(t)
 	runner := &prepareNoDuplexRunner{}
 	service.Activator = providerstest.NewActivator(providers.Activator{Runner: runner})
-	service.NativeObserver = providers.NativeIdentityObserver{Stager: service.Stager, Runner: runner}
+	service.NativeObserver = providerstest.NewObserver(providers.NativeIdentityObserver{Stager: service.Stager, Runner: runner})
 	kiro := domain.DetectedClient{ClientID: domain.ClientKiro, Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), ".kiro")}
 	input := kiroPrepareInput(t, kiro)
 	input.InstallIntent = domain.InstallIntentPrepare
@@ -194,7 +194,7 @@ func TestPreparationRejectsForeignNameAndInvalidIntentBeforeMutation(t *testing.
 			service, store, _ := serviceFixture(t)
 			runner := &prepareNoDuplexRunner{}
 			service.Activator = providerstest.NewActivator(providers.Activator{Runner: runner})
-			service.NativeObserver = providers.NativeIdentityObserver{Stager: service.Stager, Runner: runner}
+			service.NativeObserver = providerstest.NewObserver(providers.NativeIdentityObserver{Stager: service.Stager, Runner: runner})
 			client := domain.DetectedClient{ClientID: domain.ClientKiro, Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), ".kiro")}
 			input := kiroPrepareInput(t, client)
 			input.InstallIntent = domain.InstallIntentPrepare

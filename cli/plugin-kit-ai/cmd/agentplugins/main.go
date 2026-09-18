@@ -144,7 +144,7 @@ func run() error {
 	lifecycle := usecase.Service{
 		StateStore: v2Store, Paths: paths, Planner: planner, Targets: planner, Stager: stager, Activator: activator,
 		Lock: mutationLock, Kernel: transaction.Kernel{StateStore: v2Store, Directory: directoryManager},
-		NativeObserver: providers.NativeIdentityObserver{Stager: stager, Runner: runner}, PluginData: providers.PluginDataManager{Base: filepath.Join(dataRoot, "plugin-data")},
+		NativeObserver: providers.NativeIdentityObserver{Stager: stager, Runner: runner, Registry: clientRegistry}, PluginData: providers.PluginDataManager{Base: filepath.Join(dataRoot, "plugin-data")},
 	}
 	detector := clientdetect.NewOS(home)
 	detector.Registry = clientRegistry

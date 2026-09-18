@@ -68,7 +68,7 @@ func TestClaudeLifecycleAddUpdateRepairRemoveWithIsolatedConfig(t *testing.T) {
 	stager := providerstest.NewStager(providers.Stager{})
 	service.Planner, service.Targets, service.Stager = planner, planner, stager
 	service.Activator = providerstest.NewActivator(providers.Activator{Runner: runner})
-	service.NativeObserver = providers.NativeIdentityObserver{Runner: runner, Stager: stager}
+	service.NativeObserver = providerstest.NewObserver(providers.NativeIdentityObserver{Runner: runner, Stager: stager})
 
 	input := addInput(t, client, "https://example.com/claude")
 	input.BackendExecutable = client.ExecutablePath
@@ -155,7 +155,7 @@ func TestClaudeFailedInstallVerificationHasDeterministicRemovalCompensation(t *t
 	stager := providerstest.NewStager(providers.Stager{})
 	service.Planner, service.Targets, service.Stager = planner, planner, stager
 	service.Activator = providerstest.NewActivator(providers.Activator{Runner: runner})
-	service.NativeObserver = providers.NativeIdentityObserver{Runner: runner, Stager: stager}
+	service.NativeObserver = providerstest.NewObserver(providers.NativeIdentityObserver{Runner: runner, Stager: stager})
 	input := addInput(t, client, "https://example.com/claude-failure")
 	input.BackendExecutable, input.Confirmed = client.ExecutablePath, true
 	runner.hide = true

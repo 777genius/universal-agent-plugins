@@ -220,6 +220,40 @@ linters:
           deny:
             - pkg: github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/all
               desc: the registry is injected by the composition root, never resolved by the dispatcher
+        generic-no-concrete:
+          # Generic packages dispatch through clients.Registry. They may import
+          # the contract and shared helpers, never a concrete adapter. Tests
+          # are exempt: they name adapters to build the injected registry.
+          files:
+            - "**/install/integrationctl/agentplugins/providers/**"
+            - "**/install/integrationctl/agentplugins/planner/**"
+            - "**/install/integrationctl/agentplugins/adapters/clientdetect/**"
+            - "!$test"
+          deny:
+            - pkg: github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/all
+              desc: the registry is injected by the composition root, never resolved by the dispatcher
+            - pkg: github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/claude
+              desc: generic code reaches Claude through the registry, not the adapter package
+            - pkg: github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/codex
+              desc: generic code reaches Codex through the registry, not the adapter package
+            - pkg: github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/chatgpt
+              desc: generic code reaches ChatGPT through the registry, not the adapter package
+            - pkg: github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/copilot
+              desc: generic code reaches Copilot through the registry, not the adapter package
+            - pkg: github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/cursor
+              desc: generic code reaches Cursor through the registry, not the adapter package
+            - pkg: github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/vscode
+              desc: generic code reaches VS Code through the registry, not the adapter package
+            - pkg: github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/kiro
+              desc: generic code reaches Kiro through the registry, not the adapter package
+            - pkg: github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/gemini
+              desc: generic code reaches Gemini through the registry, not the adapter package
+            - pkg: github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/opencode
+              desc: generic code reaches OpenCode through the registry, not the adapter package
+            - pkg: github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/cline
+              desc: generic code reaches Cline through the registry, not the adapter package
+            - pkg: github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/windsurf
+              desc: generic code reaches Windsurf through the registry, not the adapter package
   exclusions:
     generated: lax
     paths:
@@ -698,9 +732,6 @@ linters:
       - path: ^install/integrationctl/agentplugins/clients/gemini/native\.go$
         linters: [revive, funlen, gocyclo, gocognit, dupl]
         text: 'file length is|too many statements|cyclomatic complexity|cognitive complexity|lines are duplicate of'
-      - path: ^install/integrationctl/agentplugins/providers/native_identity\.go$
-        linters: [revive, funlen, gocyclo, gocognit]
-        text: 'file length is|too many statements|cyclomatic complexity|cognitive complexity'
       - path: ^install/integrationctl/agentplugins/clients/opencode/native\.go$
         linters: [revive, funlen, gocyclo, gocognit]
         text: 'file length is|too many statements|cyclomatic complexity|cognitive complexity'

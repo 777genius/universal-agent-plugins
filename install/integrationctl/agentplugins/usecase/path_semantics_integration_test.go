@@ -19,7 +19,7 @@ func TestPortableDotPathsInstallAndExactRepair(t *testing.T) {
 	for _, cwd := range []string{"./", "./data/..", "${PLUGIN_ROOT}"} {
 		t.Run(cwd, func(t *testing.T) {
 			service, store, _ := serviceFixture(t)
-			service.NativeObserver = providers.NativeIdentityObserver{Stager: service.Stager}
+			service.NativeObserver = providerstest.NewObserver(providers.NativeIdentityObserver{Stager: service.Stager})
 			client := domain.DetectedClient{ClientID: domain.ClientOpenCode, Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), "opencode")}
 			input := addInput(t, client, "https://example.test/portable-dot-paths")
 			root := input.Envelope.SnapshotRoot
@@ -108,7 +108,7 @@ func TestClaudeBundledDotPathsInstallAndRepair(t *testing.T) {
 	client := domain.DetectedClient{ClientID: domain.ClientClaude, Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), "claude"), ExecutablePath: "/test/bin/claude"}
 	runner := &fakeClaudeLifecycleRunner{configRoot: client.ConfigRoot}
 	service.Activator = providerstest.NewActivator(providers.Activator{Runner: runner})
-	service.NativeObserver = providers.NativeIdentityObserver{Runner: runner, Stager: service.Stager}
+	service.NativeObserver = providerstest.NewObserver(providers.NativeIdentityObserver{Runner: runner, Stager: service.Stager})
 	input := addInput(t, client, "https://example.test/claude-bundled-paths")
 	input.BackendExecutable = client.ExecutablePath
 	root := input.Envelope.SnapshotRoot

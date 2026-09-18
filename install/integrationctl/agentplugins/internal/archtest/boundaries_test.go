@@ -34,6 +34,20 @@ func TestLayerBoundaries(t *testing.T) {
 	// importing clients/all would link every adapter into any binary that
 	// merely detects, plans or reads a project. Only a main may name the set.
 	injectedRegistry := []string{modulePath + "/install/integrationctl/agentplugins/clients/all"}
+	concreteClients := []string{
+		modulePath + "/install/integrationctl/agentplugins/clients/claude",
+		modulePath + "/install/integrationctl/agentplugins/clients/codex",
+		modulePath + "/install/integrationctl/agentplugins/clients/chatgpt",
+		modulePath + "/install/integrationctl/agentplugins/clients/copilot",
+		modulePath + "/install/integrationctl/agentplugins/clients/cursor",
+		modulePath + "/install/integrationctl/agentplugins/clients/vscode",
+		modulePath + "/install/integrationctl/agentplugins/clients/kiro",
+		modulePath + "/install/integrationctl/agentplugins/clients/gemini",
+		modulePath + "/install/integrationctl/agentplugins/clients/opencode",
+		modulePath + "/install/integrationctl/agentplugins/clients/cline",
+		modulePath + "/install/integrationctl/agentplugins/clients/windsurf",
+	}
+	genericNoConcrete := append(append([]string{}, injectedRegistry...), concreteClients...)
 	boundaries := []boundary{
 		{pkg: agentplugins + "/domain", allow: nil},
 		{pkg: agentplugins + "/ports", tests: true, allow: []string{
@@ -59,9 +73,9 @@ func TestLayerBoundaries(t *testing.T) {
 			modulePath + "/install/integrationctl/agentplugins/usecase",
 			modulePath + "/install/integrationctl/agentplugins/adapters/clientdetect",
 		}},
-		{pkg: agentplugins + "/providers", deny: injectedRegistry},
-		{pkg: agentplugins + "/planner", deny: injectedRegistry},
-		{pkg: agentplugins + "/adapters/clientdetect", deny: injectedRegistry},
+		{pkg: agentplugins + "/providers", deny: genericNoConcrete},
+		{pkg: agentplugins + "/planner", deny: genericNoConcrete},
+		{pkg: agentplugins + "/adapters/clientdetect", deny: genericNoConcrete},
 		// The CLI libraries are consumers of the same contract. The authoring
 		// readiness package reached for the default registry here and pulled
 		// every adapter into the authoring binary, which is the cost this rule

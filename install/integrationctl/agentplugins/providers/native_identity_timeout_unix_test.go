@@ -31,9 +31,9 @@ func TestNativeIdentityTimeoutReapsAuthoritativeDiscoveryChild(t *testing.T) {
 	t.Setenv("AGENTPLUGINS_TEST_PID", pidPath)
 	plan := identityPlan(filepath.Join(root, "prepared"))
 	plan.NativeRegistryExecutable = executable
-	observation, err := (NativeIdentityObserver{
+	observation, err := (testObserver(NativeIdentityObserver{
 		Runner: processadapter.OS{}, DiscoveryTimeout: 500 * time.Millisecond,
-	}).ObserveNativeIdentity(context.Background(), domain.DetectedClient{ClientID: domain.ClientCopilot}, plan, nil)
+	})).ObserveNativeIdentity(context.Background(), domain.DetectedClient{ClientID: domain.ClientCopilot}, plan, nil)
 	if !errors.Is(err, context.DeadlineExceeded) || observation.State != domain.NativeIdentityIndeterminate {
 		t.Fatalf("observation = %+v, err = %v", observation, err)
 	}
@@ -70,9 +70,9 @@ func TestNativeIdentityNormalExitCleansSameGroupMemberBeforeReapingLeader(t *tes
 	plan := identityPlan(filepath.Join(root, "prepared"))
 	plan.NativeRegistryExecutable = executable
 	started := time.Now()
-	observation, err := (NativeIdentityObserver{
+	observation, err := (testObserver(NativeIdentityObserver{
 		Runner: processadapter.OS{}, DiscoveryTimeout: 5 * time.Second,
-	}).ObserveNativeIdentity(context.Background(), domain.DetectedClient{ClientID: domain.ClientCopilot}, plan, nil)
+	})).ObserveNativeIdentity(context.Background(), domain.DetectedClient{ClientID: domain.ClientCopilot}, plan, nil)
 	if err == nil || !strings.Contains(err.Error(), "live descendants that required forced cleanup") || observation.State != domain.NativeIdentityIndeterminate {
 		t.Fatalf("observation = %+v, err = %v, want forced-descendant uncertainty", observation, err)
 	}
