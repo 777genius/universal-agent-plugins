@@ -39,18 +39,18 @@ func PrepareClaudeActivationProbe(request domain.ActivationRequest) (ClaudeActiv
 	}
 	targetAnchor := filepath.Clean(strings.TrimSpace(request.Plan.TargetAnchor))
 	if !filepath.IsAbs(targetAnchor) || targetAnchor != configRoot {
-		return ClaudeActivationProbe{}, fmt.Errorf("Claude Code delivery anchor must match the configured root")
+		return ClaudeActivationProbe{}, fmt.Errorf("the Claude Code delivery anchor must match the configured root")
 	}
 	targetRoot := filepath.Clean(strings.TrimSpace(request.Plan.TargetRoot))
 	if targetRoot != filepath.Join(configRoot, "skills") {
-		return ClaudeActivationProbe{}, fmt.Errorf("Claude Code delivery root must be the exact configured skills root")
+		return ClaudeActivationProbe{}, fmt.Errorf("the Claude Code delivery root must be the exact configured skills root")
 	}
 	activePath := filepath.Clean(strings.TrimSpace(request.Plan.ActivePath))
 	if !filepath.IsAbs(activePath) || filepath.Dir(activePath) != targetRoot {
-		return ClaudeActivationProbe{}, fmt.Errorf("Claude Code managed plugin path is not an exact child of the configured skills root")
+		return ClaudeActivationProbe{}, fmt.Errorf("the Claude Code managed plugin path is not an exact child of the configured skills root")
 	}
 	if deliveryPath := strings.TrimSpace(request.Delivery.ActivePath); deliveryPath != "" && filepath.Clean(deliveryPath) != activePath {
-		return ClaudeActivationProbe{}, fmt.Errorf("Claude Code activation path does not match the preflighted delivery path")
+		return ClaudeActivationProbe{}, fmt.Errorf("the Claude Code activation path does not match the preflighted delivery path")
 	}
 	command, err := ClaudeListCommand(request.BackendExecutable, configRoot, activePath)
 	if err != nil {
@@ -83,7 +83,7 @@ func ClaudeListCommand(executable, configRoot, activePath string) (legacyports.C
 	configRoot = filepath.Clean(configRoot)
 	activePath = filepath.Clean(strings.TrimSpace(activePath))
 	if !filepath.IsAbs(activePath) || filepath.Dir(activePath) != filepath.Join(configRoot, "skills") {
-		return legacyports.Command{}, fmt.Errorf("Claude Code managed plugin path is not an exact child of the configured skills root")
+		return legacyports.Command{}, fmt.Errorf("the Claude Code managed plugin path is not an exact child of the configured skills root")
 	}
 	environment, home, err := boundedClaudeProbeEnvironment()
 	if err != nil {

@@ -1,12 +1,13 @@
 package providers
 
 import (
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/codex"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strconv"
 	"testing"
+
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/codex"
 )
 
 func TestManagedCodexMarketplaceRegisteredAcceptsFilesystemAlias(t *testing.T) {
