@@ -224,14 +224,15 @@ linters:
           # Generic packages dispatch through clients.Registry. They may import
           # the contract and shared helpers, never a concrete adapter. Tests
           # are exempt: they name adapters to build the injected registry.
+          # clients/all is denied by libraries-take-an-injected-registry, which
+          # covers this file set plus CLI internals; repeating it here hid that
+          # one rule is the composition-root gate.
           files:
             - "**/install/integrationctl/agentplugins/providers/**"
             - "**/install/integrationctl/agentplugins/planner/**"
             - "**/install/integrationctl/agentplugins/adapters/clientdetect/**"
             - "!$test"
           deny:
-            - pkg: github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/all
-              desc: the registry is injected by the composition root, never resolved by the dispatcher
             - pkg: github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/claude
               desc: generic code reaches Claude through the registry, not the adapter package
             - pkg: github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/codex

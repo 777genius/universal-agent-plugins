@@ -18,7 +18,7 @@ func (intent InstallIntent) Validate(client ClientID) error {
 	case InstallIntentAutomatic:
 		return nil
 	case InstallIntentPrepare:
-		if client == ClientKiro || client == ClientChatGPT {
+		if ClientTraitsFor(client).Allows(intent) {
 			return nil
 		}
 	}

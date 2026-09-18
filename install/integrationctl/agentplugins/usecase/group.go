@@ -282,8 +282,9 @@ func (service Service) applyGroup(ctx context.Context, input GroupInput, replace
 		}
 		result.Targets[targetIndex].Plan = plan
 		key := plan.ActivePath
-		if sameNativeBackend(target.Client.ClientID, domain.ClientCopilot) {
-			key = "shared-copilot-vscode:" + plan.PhysicalArtifactID
+		if sharesPhysicalBackend(target.Client.ClientID) {
+			definition, _ := domain.ClientDefinitionFor(target.Client.ClientID)
+			key = "shared-backend:" + definition.BackendFamily + ":" + plan.PhysicalArtifactID
 		} else if existing {
 			for _, binding := range state.Installations[installationIndex].Clients {
 				if binding.PhysicalArtifact == plan.PhysicalArtifactID && sameNativeBackend(domain.ClientID(binding.ClientID), target.Client.ClientID) && binding.Materialization != domain.MaterializationAbsent {
@@ -311,7 +312,7 @@ func (service Service) applyGroup(ctx context.Context, input GroupInput, replace
 			if binding, ok := state.Installations[installationIndex].Clients[clientID]; ok {
 				copy := binding
 				managed = &copy
-			} else if sameNativeBackend(target.Client.ClientID, domain.ClientCopilot) {
+			} else if sharesPhysicalBackend(target.Client.ClientID) {
 				for _, binding := range state.Installations[installationIndex].Clients {
 					if binding.PhysicalArtifact == plan.PhysicalArtifactID && sameNativeBackend(domain.ClientID(binding.ClientID), target.Client.ClientID) && binding.Materialization != domain.MaterializationAbsent {
 						copy := binding
@@ -481,8 +482,11 @@ func (service Service) applyGroup(ctx context.Context, input GroupInput, replace
 			client.AffectedSurfaces = append(client.AffectedSurfaces, target.managed.AffectedSurfaces...)
 			client.AffectedSurfaces = append(client.AffectedSurfaces, target.managed.ClientID)
 		}
-		if sameNativeBackend(target.input.Client.ClientID, domain.ClientCopilot) {
-			client.AffectedSurfaces = append(client.AffectedSurfaces, string(domain.ClientCopilot), string(domain.ClientVSCode))
+		if sharesPhysicalBackend(target.input.Client.ClientID) {
+			client.AffectedSurfaces = append(client.AffectedSurfaces, string(target.input.Client.ClientID))
+			for _, sibling := range domain.BackendSiblings(target.input.Client.ClientID) {
+				client.AffectedSurfaces = append(client.AffectedSurfaces, string(sibling))
+			}
 		}
 		for _, resultIndex := range target.resultIndexes {
 			client.AffectedSurfaces = append(client.AffectedSurfaces, string(input.Targets[resultIndex].Client.ClientID))
@@ -936,13 +940,14 @@ func validateGroupNativeIdentityObservation(observation domain.NativeIdentityObs
 // recheck of an already-committed recovering target) a false result is a hard
 // refusal instead, since the target's own recovery path was already chosen.
 //
-// This is deliberately restricted to Codex: it is the only client with
-// evidence (run05) that its native registry command fails outright while the
-// target it would report on is absent. Other clients' registry commands have
-// not been shown to share that failure mode, so they keep going through the
-// ordinary, immediate CLI-inclusive check.
+// This is deliberately restricted to clients that declare
+// SupportsPreparedRecovery: Codex is the only one with evidence (run05) that
+// its native registry command fails outright while the target it would report
+// on is absent. Other clients' registry commands have not been shown to share
+// that failure mode, so they keep going through the ordinary, immediate
+// CLI-inclusive check.
 func (service Service) observeGroupRecoveryEligibility(ctx context.Context, client domain.DetectedClient, plan domain.DeliveryPlan, managed *domain.ClientBinding) bool {
-	if client.ClientID != domain.ClientCodex || managed == nil || managedDigest(*managed) == "" || service.NativeObserver == nil {
+	if !domain.ClientTraitsFor(client.ClientID).SupportsPreparedRecovery || managed == nil || managedDigest(*managed) == "" || service.NativeObserver == nil {
 		return false
 	}
 	observation, err := service.preparedIdentityObservation(ctx, client, plan, managed)

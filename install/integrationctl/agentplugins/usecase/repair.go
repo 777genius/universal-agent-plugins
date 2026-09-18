@@ -66,7 +66,7 @@ func (service Service) Repair(ctx context.Context, input AddInput) (AddResult, e
 	result.Plan = plan
 	clientKey := domain.ComputeClientBindingID(installation.InstallationID, string(input.Client.ClientID), string(input.Scope), plan.ActivePath)
 	client, ok := installation.Clients[clientKey]
-	if !ok && sameNativeBackend(input.Client.ClientID, domain.ClientCopilot) {
+	if !ok && sharesPhysicalBackend(input.Client.ClientID) {
 		for key, binding := range installation.Clients {
 			if binding.Scope != string(input.Scope) || binding.Materialization == domain.MaterializationAbsent ||
 				binding.PhysicalArtifact != plan.PhysicalArtifactID || !sameNativeBackend(domain.ClientID(binding.ClientID), input.Client.ClientID) {
@@ -313,7 +313,7 @@ func (service Service) Repair(ctx context.Context, input AddInput) (AddResult, e
 		if activationErr != nil {
 			return result, fmt.Errorf("reapply repaired native state: %w", activationErr)
 		}
-	} else if input.Client.ClientID == domain.ClientClaude {
+	} else if domain.ClientTraitsFor(input.Client.ClientID).UsesManagedStdioLauncher {
 		outcome, activationErr := service.Activator.Activate(ctx, domain.ActivationRequest{
 			Client: input.Client, Plan: plan,
 			Delivery:     domain.StagedDelivery{ClientID: delivery.ClientID, OwnedBase: delivery.OwnedBase, ActivePath: delivery.ActivePath, ArtifactDigest: delivery.ArtifactDigest, NativeObjects: delivery.NativeObjects},
@@ -323,7 +323,7 @@ func (service Service) Repair(ctx context.Context, input AddInput) (AddResult, e
 		result.Activation = outcome
 		if _, updateErr := service.updateLifecycle(installation.InstallationID, clientKey, outcome); updateErr != nil {
 			if activationErr != nil {
-				return result, fmt.Errorf("verify repaired Claude Code plugin: %v; persist verification state: %w", activationErr, updateErr)
+				return result, fmt.Errorf("verify repaired %s plugin: %v; persist verification state: %w", clientDisplayName(input.Client.ClientID), activationErr, updateErr)
 			}
 			return result, updateErr
 		}
@@ -332,15 +332,6 @@ func (service Service) Repair(ctx context.Context, input AddInput) (AddResult, e
 		}
 	}
 	return result, nil
-}
-
-func nativeLifecycleClient(clientID domain.ClientID) bool {
-	switch clientID {
-	case domain.ClientGemini, domain.ClientOpenCode, domain.ClientCline, domain.ClientWindsurf:
-		return true
-	default:
-		return false
-	}
 }
 
 func (service Service) verifyRepairPrecondition(ctx context.Context, activePath, managedDigest string, reviewedKind ports.VerificationKind, reviewedDigest string) error {

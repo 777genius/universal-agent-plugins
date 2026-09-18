@@ -790,7 +790,7 @@ Generic-pipeline `stage`: validate plan paths (`Paths` + `StagingLayout.Validate
 
 Разбиение на 9a/9b **обязательно** (правка O-4), а не «допускается»: смешивать смену семантики (трейты) и крупную структурную резку в одном PR — гарантированный способ получить нечитаемое ревью на самой опасной функции проекта.
 
-**Part 9a — трейты (без резки).**
+**Part 9a — трейты (без резки).** Landed on this stack as `refactor/installer-core-part-9a-traits`.
 - `domain.ClientTraits{InstallIntents []InstallIntent; LifecycleKind (cli_registry|native_config|manual|prepared); UsesManagedStdioLauncher, HonorsOpenAIMCPAuthHints, SupportsPreparedRecovery, RequiresPersonalMappingForPrepare bool}` на `ClientDefinition` (не сериализуется); таблица `clientDefinitions` полностью декларативная (SSE/App — явные аргументы, без `if id ==`); `InstallIntent.Validate` читает трейты; `domain.BackendSiblings/SharesBackend`; `directoryEligibilityTargets` через siblings.
 - usecase: `nativeLifecycleClient`, `openAIOAuthApplies`, `component_readiness.go`, `group.go` (Codex recovery), `intent.go` ChatGPT, `sameNativeBackend(..., ClientCopilot)` → трейты/siblings.
 - `contracttest` parity-тест, введённый в Part 2, впервые наполняется реальными проверками: `LifecycleNativeConfig` ⇒ адаптер реализует `Lifecycle` и не заявляет `UsesNativeRegistryExecutable`; `prepare ∈ InstallIntents` ⇒ реализует `ActivationPreflighter`.
