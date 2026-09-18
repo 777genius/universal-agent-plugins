@@ -45,7 +45,7 @@ func TestCodexTransportSelectionSanitizesBothManifestSurfaces(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	delivery, err := (Stager{}).Stage(context.Background(), e, plan, "codex-selection", domain.CompatibilityHints{})
+	delivery, err := testStager(Stager{}).Stage(context.Background(), e, plan, "codex-selection", domain.CompatibilityHints{})
 	if err != nil {
 		t.Fatal(err)
 	}

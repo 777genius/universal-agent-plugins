@@ -707,9 +707,6 @@ linters:
       - path: ^install/integrationctl/agentplugins/clients/opencode/native\.go$
         linters: [revive, funlen, gocyclo, gocognit]
         text: 'file length is|too many statements|cyclomatic complexity|cognitive complexity'
-      - path: ^install/integrationctl/agentplugins/providers/stager\.go$
-        linters: [revive, funlen, gocyclo, gocognit]
-        text: 'file length is|too many statements|cyclomatic complexity|cognitive complexity'
       - path: ^install/integrationctl/agentplugins/clients/windsurf/native\.go$
         linters: [revive, funlen, gocyclo, gocognit]
         text: 'file length is|too many statements|cyclomatic complexity|cognitive complexity'

@@ -47,10 +47,10 @@ func TestClaudeBundledStdioObservesIsolatedRuntime(t *testing.T) {
 			if args := server["args"].([]any); args[7] != filepath.Join(activeRuntime, "config") || args[8] != "${UNKNOWN}" {
 				t.Fatalf("args: %+v", args)
 			}
-			if err := (Stager{}).Verify(context.Background(), delivery.StagingPath, delivery.ArtifactDigest); err != nil {
+			if err := testStager(Stager{}).Verify(context.Background(), delivery.StagingPath, delivery.ArtifactDigest); err != nil {
 				t.Fatal(err)
 			}
-			if err := (Stager{}).Discard(context.Background(), delivery); err != nil {
+			if err := testStager(Stager{}).Discard(context.Background(), delivery); err != nil {
 				t.Fatal(err)
 			}
 		})

@@ -30,6 +30,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/plannertest"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/providers"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/providerstest"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/transaction"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/usecase"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/usecasetest"
@@ -2987,7 +2988,7 @@ func newCLIFixture(t *testing.T, clients []domain.DetectedClient) cliFixture {
 	operations := filepath.Join(root, "data", "operations-v2")
 	packageLoader := loader.Loader{Registry: registry}
 	managedRoot := filepath.Join(root, "data", "managed")
-	stager := providers.Stager{}
+	stager := providerstest.NewStager(providers.Stager{})
 	planner := plannertest.NewPlanner(clientplanner.Planner{ManagedRoot: managedRoot, Detected: map[domain.ClientID]domain.DetectedClient{}})
 	mutationLock := processlock.Lock{Path: filepath.Join(root, "data", "mutation.lock")}
 	directory := dirswap.Manager{JournalDir: operations}

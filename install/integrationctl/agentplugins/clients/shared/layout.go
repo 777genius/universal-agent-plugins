@@ -5,8 +5,11 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
+
+var _ clients.StagingLayout = DefaultStagingLayout{}
 
 // ManagedTargetRoot is the default clients.TargetLayout: a client that does not
 // own a discovery directory of its own gets its package under the managed root,

@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"sort"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
@@ -15,14 +16,17 @@ import (
 // A second verification detects artifact drift during the read. It does not
 // promise protection from same-principal ABA races.
 func (stager Stager) ManagedMCPNames(ctx context.Context, client domain.ClientID, root, digest string) ([]string, error) {
+	if err := stager.requireDeps(); err != nil {
+		return nil, err
+	}
 	if err := stager.Verify(ctx, root, digest); err != nil {
 		return nil, err
 	}
-	filename := "mcp.json"
-	if client == domain.ClientClaude || client == domain.ClientCodex || client == domain.ClientChatGPT {
-		filename = ".mcp.json"
+	layout := clients.DefaultSelectionLayout
+	if reader, ok := clients.As[clients.SelectionReader](stager.Registry, client); ok {
+		layout = reader.ManagedMCPSelection()
 	}
-	candidate := filepath.Join(root, filename)
+	candidate := filepath.Join(root, layout.File)
 	info, statErr := os.Lstat(candidate)
 	if statErr != nil && !os.IsNotExist(statErr) {
 		return nil, statErr
@@ -41,7 +45,7 @@ func (stager Stager) ManagedMCPNames(ctx context.Context, client domain.ClientID
 			return nil, fmt.Errorf("managed MCP selection is invalid: %v", err)
 		}
 		servers := document
-		if client != domain.ClientClaude {
+		if layout.Nested {
 			raw, ok := document["mcpServers"]
 			if !ok {
 				return nil, fmt.Errorf("managed MCP selection lacks mcpServers")

@@ -312,7 +312,7 @@ func TestStagerBuildsClineNestedTransportAndOwnership(t *testing.T) {
 	envelope := stagingEnvelope(t)
 	plan := stagingPlan(t, domain.ClientCline, domain.PackageNative)
 	plan.NativeRegistryRoot = filepath.Join(t.TempDir(), ".cline")
-	delivery, err := (Stager{}).Stage(context.Background(), envelope, plan, "cline-operation", domain.CompatibilityHints{})
+	delivery, err := testStager(Stager{}).Stage(context.Background(), envelope, plan, "cline-operation", domain.CompatibilityHints{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -371,7 +371,7 @@ func TestClineRejectsRelativeSettingsOverrideBeforeMutation(t *testing.T) {
 	envelope := stagingEnvelope(t)
 	plan := stagingPlan(t, domain.ClientCline, domain.PackageNative)
 	plan.NativeRegistryRoot = filepath.Join(t.TempDir(), ".cline")
-	if _, err := (Stager{}).Stage(context.Background(), envelope, plan, "cline-relative", domain.CompatibilityHints{}); err == nil || !strings.Contains(err.Error(), "must be absolute") {
+	if _, err := testStager(Stager{}).Stage(context.Background(), envelope, plan, "cline-relative", domain.CompatibilityHints{}); err == nil || !strings.Contains(err.Error(), "must be absolute") {
 		t.Fatalf("relative Cline override was accepted: %v", err)
 	}
 }

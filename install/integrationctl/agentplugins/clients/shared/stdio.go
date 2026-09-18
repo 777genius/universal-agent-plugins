@@ -6,8 +6,27 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/managedstdio"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/pathcontract"
 )
+
+// DeliverManagedStdio copies the trusted launcher into root when a selected
+// MCP server is stdio. deliver is the injected launcher; a missing launcher or
+// an unsupported platform is the same staging failure the previous stager
+// reported, so a projector cannot invent a second error text.
+func DeliverManagedStdio(deliver func(root string) error, root string, envelope domain.PackageEnvelope, plan domain.DeliveryPlan) error {
+	for _, name := range SupportedMCPNames(plan) {
+		if envelope.MCP.Servers[name].Type != "stdio" {
+			continue
+		}
+		if !managedstdio.Supported() || deliver == nil {
+			return fmt.Errorf("managed stdio platform unsupported")
+		}
+		return deliver(root)
+	}
+	return nil
+}
 
 // ApplyStdioDataContract rewrites a decoded stdio MCP server entry so it points
 // at the package's future active root and its plugin data directory.

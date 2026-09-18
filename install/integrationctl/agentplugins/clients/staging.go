@@ -34,3 +34,14 @@ type ProjectionInput struct {
 	PluginDataPath string
 	Launcher       StdioLauncherDeliverer
 }
+
+// DeliverLauncher returns the injected launcher copy function, or nil when the
+// composition root did not supply one. Projectors must use this instead of
+// calling Launcher.Deliver directly: a typed-nil *managedstdio.Source inside
+// the interface would panic.
+func (in ProjectionInput) DeliverLauncher() func(string) error {
+	if in.Launcher == nil {
+		return nil
+	}
+	return in.Launcher.Deliver
+}

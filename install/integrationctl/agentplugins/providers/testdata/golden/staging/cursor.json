@@ -1,0 +1,26 @@
+{
+  "Digests": {
+    ".cursor-plugin/": "dir",
+    ".cursor-plugin/plugin.json": "66ad75613b5f5fb28ade3ac327a75060efcb063b74c3cebe593767cb591ebb55",
+    "bin/": "dir",
+    "bin/run": "a8076d3d28d21e02012b20eaf7dbf75409a6277134439025f282e368e3305abf",
+    "mcp.json": "9b953dd7bee0c81b08eb7dd2e5acc28b49014d6d7edb042b2648f2ac8b63496e",
+    "plugin.json": "a500ae72e02274b9e57d095be7788e0651eb8c4212d9fc17feeabad3b099196f",
+    "skills/": "dir",
+    "skills/good/": "dir",
+    "skills/good/SKILL.md": "3c58ae530ad65c3d3a468eb051e1c761687903c4f722529196d369d3d74a40ce"
+  },
+  "Objects": [
+    {
+      "BeforeDigest": "",
+      "Kind": "managed_package_directory",
+      "LogicalName": "demo",
+      "ManagedDigest": "${ARTIFACT}",
+      "ObjectID": "package:cursor:demo-0123456789ab",
+      "Path": "${ACTIVE}",
+      "ProtectionClass": "managed",
+      "SourceRelative": "",
+      "UserModified": false
+    }
+  ]
+}

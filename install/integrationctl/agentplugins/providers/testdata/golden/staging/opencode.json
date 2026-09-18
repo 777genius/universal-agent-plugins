@@ -1,0 +1,47 @@
+{
+  "Digests": {
+    ".agentplugins-opencode.json": "812ee6ac0348be37d2c735face911e5802cbf1837d7b9d8024198d8827bf1d60",
+    "bin/": "dir",
+    "bin/run": "a8076d3d28d21e02012b20eaf7dbf75409a6277134439025f282e368e3305abf",
+    "mcp.json": "8cf2989c891e877c31d89c5ee099ddffd18664ef1e0fd4e7a75359900b476197",
+    "plugin.json": "a500ae72e02274b9e57d095be7788e0651eb8c4212d9fc17feeabad3b099196f",
+    "skills/": "dir",
+    "skills/good/": "dir",
+    "skills/good/SKILL.md": "3c58ae530ad65c3d3a468eb051e1c761687903c4f722529196d369d3d74a40ce"
+  },
+  "Objects": [
+    {
+      "BeforeDigest": "",
+      "Kind": "managed_package_directory",
+      "LogicalName": "demo",
+      "ManagedDigest": "${ARTIFACT}",
+      "ObjectID": "package:opencode:demo-0123456789ab",
+      "Path": "${ACTIVE}",
+      "ProtectionClass": "managed",
+      "SourceRelative": "",
+      "UserModified": false
+    },
+    {
+      "BeforeDigest": "",
+      "Kind": "opencode_global_mcp_server",
+      "LogicalName": "notion",
+      "ManagedDigest": "sha256:9647a376c61ba5b32f2a8b69043cb8a8e4b7daa56af9a507dac5599c6f59dc47",
+      "ObjectID": "opencode-mcp:notion",
+      "Path": "${CONFIG}/opencode.json",
+      "ProtectionClass": "managed",
+      "SourceRelative": "",
+      "UserModified": false
+    },
+    {
+      "BeforeDigest": "",
+      "Kind": "opencode_global_skill_directory",
+      "LogicalName": "good",
+      "ManagedDigest": "sha256:0ff5f701bc7b96b22b654f61883ffa11bc7582422b293c495159b78d4607ba07",
+      "ObjectID": "opencode-skill:good",
+      "Path": "${CONFIG}/skills/good",
+      "ProtectionClass": "managed",
+      "SourceRelative": "skills/good",
+      "UserModified": false
+    }
+  ]
+}

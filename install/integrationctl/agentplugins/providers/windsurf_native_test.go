@@ -449,5 +449,5 @@ func windsurfFixtureStager(t *testing.T) Stager {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return Stager{LauncherSource: source}
+	return testStager(Stager{LauncherSource: source})
 }

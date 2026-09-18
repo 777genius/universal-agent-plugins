@@ -87,12 +87,12 @@ func TestClaudeHelperChangeChangesArtifactWithoutSourceMutation(t *testing.T) {
 func TestClaudeMissingLauncherDoesNotAffectHTTPOnlyProjection(t *testing.T) {
 	envelope := stagingEnvelope(t)
 	plan := stagingPlan(t, domain.ClientClaude, domain.PackageProjection)
-	if _, err := (Stager{}).Stage(context.Background(), envelope, plan, "http-only", domain.CompatibilityHints{}); err != nil {
+	if _, err := testStager(Stager{}).Stage(context.Background(), envelope, plan, "http-only", domain.CompatibilityHints{}); err != nil {
 		t.Fatal(err)
 	}
 	envelope.MCP.Servers = map[string]domain.MCPServer{"local": {Type: "stdio", Decoded: map[string]any{"command": "sh"}}}
 	plan.Components = []domain.ComponentDecision{{Kind: domain.ComponentMCPServer, Name: "local", Support: domain.SupportProjected}}
-	if _, err := (Stager{}).Stage(context.Background(), envelope, plan, "missing-helper", domain.CompatibilityHints{}); err == nil {
+	if _, err := testStager(Stager{}).Stage(context.Background(), envelope, plan, "missing-helper", domain.CompatibilityHints{}); err == nil {
 		t.Fatal("stdio staged without trusted launcher")
 	}
 }
