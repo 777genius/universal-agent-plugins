@@ -44,12 +44,12 @@ func TestDefaultRegistryAdaptersSatisfyTheContract(t *testing.T) {
 		t.Run(string(adapter.ID()), func(t *testing.T) {
 			t.Parallel()
 			contracttest.RunHostDetector(t, adapter)
-			// Unconditional: every client has something to say about a plan, so
-			// an adapter that stops implementing PlanRefiner - a renamed method,
-			// a changed signature - is a defect, not a client with nothing to
-			// add. Asking "if it implements it" here would make the harness
-			// silently skip exactly that case.
+			// Unconditional: every client has something to say about a plan and
+			// a staging tree. An adapter that stops implementing PlanRefiner or
+			// Projector - a renamed method, a changed signature - is a defect,
+			// not a client with nothing to add.
 			contracttest.RunPlanRefiner(t, adapter)
+			contracttest.RunProjector(t, adapter)
 		})
 	}
 	contracttest.RunTraitParity(t, Default(), everyClientDetectsSurfaces())

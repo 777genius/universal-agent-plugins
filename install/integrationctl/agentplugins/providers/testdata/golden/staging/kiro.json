@@ -1,0 +1,46 @@
+{
+  "Digests": {
+    "bin/": "dir",
+    "bin/run": "a8076d3d28d21e02012b20eaf7dbf75409a6277134439025f282e368e3305abf",
+    "mcp.json": "8cf2989c891e877c31d89c5ee099ddffd18664ef1e0fd4e7a75359900b476197",
+    "plugin.json": "a500ae72e02274b9e57d095be7788e0651eb8c4212d9fc17feeabad3b099196f",
+    "skills/": "dir",
+    "skills/good/": "dir",
+    "skills/good/SKILL.md": "3c58ae530ad65c3d3a468eb051e1c761687903c4f722529196d369d3d74a40ce"
+  },
+  "Objects": [
+    {
+      "BeforeDigest": "",
+      "Kind": "managed_package_directory",
+      "LogicalName": "demo",
+      "ManagedDigest": "${ARTIFACT}",
+      "ObjectID": "package:kiro:demo-0123456789ab",
+      "Path": "${ACTIVE}",
+      "ProtectionClass": "managed",
+      "SourceRelative": "",
+      "UserModified": false
+    },
+    {
+      "BeforeDigest": "",
+      "Kind": "kiro_global_mcp_server",
+      "LogicalName": "notion",
+      "ManagedDigest": "sha256:989600c7dea2bd8538f88879c05c1914f1dca94d433154cfb2d087650ec4de78",
+      "ObjectID": "kiro-mcp:notion",
+      "Path": "${CONFIG}/settings/mcp.json",
+      "ProtectionClass": "managed",
+      "SourceRelative": "",
+      "UserModified": false
+    },
+    {
+      "BeforeDigest": "",
+      "Kind": "kiro_global_skill_directory",
+      "LogicalName": "good",
+      "ManagedDigest": "sha256:0ff5f701bc7b96b22b654f61883ffa11bc7582422b293c495159b78d4607ba07",
+      "ObjectID": "kiro-skill:good",
+      "Path": "${CONFIG}/skills/good",
+      "ProtectionClass": "managed",
+      "SourceRelative": "skills/good",
+      "UserModified": false
+    }
+  ]
+}

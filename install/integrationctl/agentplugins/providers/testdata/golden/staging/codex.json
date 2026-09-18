@@ -1,0 +1,30 @@
+{
+  "Digests": {
+    ".agents/": "dir",
+    ".agents/plugins/": "dir",
+    ".agents/plugins/marketplace.json": "1be8a405f3a271c339c1260925345108db6e8f177abd6a0b36e860afa286fff4",
+    ".codex-plugin/": "dir",
+    ".codex-plugin/plugin.json": "57d13141cd3ce8ae2bd1afa49238eb2ad04d2d3ceb652e8eaa6183933e6dc9f2",
+    ".mcp.json": "9b953dd7bee0c81b08eb7dd2e5acc28b49014d6d7edb042b2648f2ac8b63496e",
+    "bin/": "dir",
+    "bin/run": "a8076d3d28d21e02012b20eaf7dbf75409a6277134439025f282e368e3305abf",
+    "mcp.json": "8cf2989c891e877c31d89c5ee099ddffd18664ef1e0fd4e7a75359900b476197",
+    "plugin.json": "a500ae72e02274b9e57d095be7788e0651eb8c4212d9fc17feeabad3b099196f",
+    "skills/": "dir",
+    "skills/good/": "dir",
+    "skills/good/SKILL.md": "3c58ae530ad65c3d3a468eb051e1c761687903c4f722529196d369d3d74a40ce"
+  },
+  "Objects": [
+    {
+      "BeforeDigest": "",
+      "Kind": "managed_package_directory",
+      "LogicalName": "demo",
+      "ManagedDigest": "${ARTIFACT}",
+      "ObjectID": "package:codex:demo-0123456789ab",
+      "Path": "${ACTIVE}",
+      "ProtectionClass": "managed",
+      "SourceRelative": "",
+      "UserModified": false
+    }
+  ]
+}

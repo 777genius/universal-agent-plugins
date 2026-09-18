@@ -9,6 +9,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/managedstdio"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/providers"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/providerstest"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -171,7 +172,7 @@ func TestHelperUpgradeCannotMasqueradeAsExactRepair(t *testing.T) {
 				}
 				return s
 			}
-			service.Stager = providers.Stager{LauncherSource: source("helper A fixture; never executed")}
+			service.Stager = providerstest.NewStager(providers.Stager{LauncherSource: source("helper A fixture; never executed")})
 			client := domain.DetectedClient{ClientID: clientID, Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), "windsurf")}
 			if clientID == domain.ClientClaude {
 				client.ExecutablePath = "/test/bin/claude"
@@ -195,7 +196,7 @@ func TestHelperUpgradeCannotMasqueradeAsExactRepair(t *testing.T) {
 			}
 			stateBefore, _ := store.Load()
 			before, _ := json.Marshal(stateBefore)
-			service.Stager = providers.Stager{LauncherSource: source("helper B fixture; never executed")}
+			service.Stager = providerstest.NewStager(providers.Stager{LauncherSource: source("helper B fixture; never executed")})
 			result, err := service.Repair(context.Background(), input)
 			if err == nil || !strings.Contains(err.Error(), "projection digest differs") || result.Mutated {
 				t.Fatalf("repair=%+v err=%v", result, err)

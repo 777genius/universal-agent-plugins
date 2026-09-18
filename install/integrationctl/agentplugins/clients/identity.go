@@ -47,8 +47,12 @@ type SelectionLayout struct {
 	Nested bool
 }
 
+// DefaultSelectionLayout is the managed MCP selection document every client
+// uses unless it implements SelectionReader.
+var DefaultSelectionLayout = SelectionLayout{File: "mcp.json", Nested: true}
+
 // SelectionReader overrides the managed MCP selection layout. Without it the
-// generic default is {File: "mcp.json", Nested: true}.
+// generic default is DefaultSelectionLayout.
 type SelectionReader interface {
 	ManagedMCPSelection() SelectionLayout
 }

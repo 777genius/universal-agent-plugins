@@ -22,6 +22,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/plannertest"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/providers"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/providerstest"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/transaction"
 	legacyports "github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
 )
@@ -1973,7 +1974,7 @@ func serviceFixture(t *testing.T) (Service, statev2.Store, domain.DetectedClient
 		ClientID: domain.ClientCursor, Status: domain.DetectionDetected,
 		ConfigRoot: filepath.Join(root, "home", ".cursor"),
 	}
-	stager := providers.Stager{}
+	stager := providerstest.NewStager(providers.Stager{})
 	targetPlanner := plannertest.NewPlanner(clientplanner.Planner{ManagedRoot: managed})
 	return testService(Service{
 		StateStore: store,

@@ -19,7 +19,7 @@ func TestStagerBuildsOpenAIProjectionWithoutMutatingPortableSnapshot(t *testing.
 	envelope := stagingEnvelope(t)
 	writeTestFile(t, filepath.Join(envelope.SnapshotRoot, "hooks", "hooks.json"), "{}\n")
 	plan := stagingPlan(t, domain.ClientCodex, domain.PackageProjection)
-	delivery, err := (Stager{}).Stage(context.Background(), envelope, plan, "operation-1", domain.CompatibilityHints{
+	delivery, err := testStager(Stager{}).Stage(context.Background(), envelope, plan, "operation-1", domain.CompatibilityHints{
 		OpenAIMCPAuth: map[string]domain.OpenAIMCPAuthHint{
 			"notion": {OAuthResource: "https://mcp.notion.com"},
 		},
@@ -88,7 +88,7 @@ func TestStagerRemovesReportedIgnoredV1Extensions(t *testing.T) {
 		Item:     "extensions",
 	}}
 	plan := stagingPlan(t, domain.ClientCursor, domain.PackageNative)
-	delivery, err := (Stager{}).Stage(context.Background(), envelope, plan, "ignored-extensions", domain.CompatibilityHints{})
+	delivery, err := testStager(Stager{}).Stage(context.Background(), envelope, plan, "ignored-extensions", domain.CompatibilityHints{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -102,7 +102,7 @@ func TestStagerProjectsClaudeSkillsDirectoryPluginWithRootMCP(t *testing.T) {
 	t.Parallel()
 	envelope := stagingEnvelope(t)
 	plan := stagingPlan(t, domain.ClientClaude, domain.PackageProjection)
-	delivery, err := (Stager{}).Stage(context.Background(), envelope, plan, "operation-claude", domain.CompatibilityHints{})
+	delivery, err := testStager(Stager{}).Stage(context.Background(), envelope, plan, "operation-claude", domain.CompatibilityHints{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -178,7 +178,7 @@ func TestClaudeProjectionExposesOnlyPlannedSurfacesAndRebindsRuntime(t *testing.
 	if env["PLUGIN_ROOT"] != activeRuntime || env["PLUGIN_DATA"] != ownedData {
 		t.Fatalf("Claude stdio env = %v", env)
 	}
-	if err := (Stager{}).Discard(context.Background(), delivery); err != nil {
+	if err := testStager(Stager{}).Discard(context.Background(), delivery); err != nil {
 		t.Fatal(err)
 	}
 	assertMissing(t, delivery.StagingPath)
@@ -249,7 +249,7 @@ func TestStagerProjectsExactOwnedPluginDataContract(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(ownedData, "work"), 0700); err != nil {
 		t.Fatal(err)
 	}
-	delivery, err := (Stager{}).StageWithPluginData(context.Background(), envelope, plan, "operation-data", domain.CompatibilityHints{}, ownedData)
+	delivery, err := testStager(Stager{}).StageWithPluginData(context.Background(), envelope, plan, "operation-data", domain.CompatibilityHints{}, ownedData)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -283,7 +283,7 @@ func TestStagerProjectsKiroStdioRuntimeContractBeforeNativeImport(t *testing.T) 
 	if err := os.MkdirAll(filepath.Join(ownedData, "work"), 0700); err != nil {
 		t.Fatal(err)
 	}
-	delivery, err := (Stager{}).StageWithPluginData(context.Background(), envelope, plan, "operation-kiro-data", domain.CompatibilityHints{}, ownedData)
+	delivery, err := testStager(Stager{}).StageWithPluginData(context.Background(), envelope, plan, "operation-kiro-data", domain.CompatibilityHints{}, ownedData)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -329,7 +329,7 @@ func TestStagerProjectsCursorNativeManifestAndRuntimeContract(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(ownedData, "work"), 0700); err != nil {
 		t.Fatal(err)
 	}
-	delivery, err := (Stager{}).StageWithPluginData(context.Background(), envelope, plan, "operation-cursor-data", domain.CompatibilityHints{}, ownedData)
+	delivery, err := testStager(Stager{}).StageWithPluginData(context.Background(), envelope, plan, "operation-cursor-data", domain.CompatibilityHints{}, ownedData)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -388,7 +388,7 @@ func TestStagerBuildsChatGPTAppProjectionWithBundledMCPParity(t *testing.T) {
 	plan := stagingPlan(t, domain.ClientChatGPT, domain.PackageProjection)
 	plan.Components = append(plan.Components, domain.ComponentDecision{Kind: domain.ComponentApp, Name: "notion", Support: domain.SupportProjected})
 
-	delivery, err := (Stager{}).Stage(context.Background(), envelope, plan, "operation-chatgpt", domain.CompatibilityHints{
+	delivery, err := testStager(Stager{}).Stage(context.Background(), envelope, plan, "operation-chatgpt", domain.CompatibilityHints{
 		OpenAIMCPAuth: map[string]domain.OpenAIMCPAuthHint{
 			"notion": {OAuthResource: "https://mcp.notion.com"},
 		},
@@ -424,7 +424,7 @@ func TestStagerBuildsManagedCopilotMarketplaceForCopilotAndVSCode(t *testing.T) 
 		t.Run(string(client), func(t *testing.T) {
 			envelope := stagingEnvelope(t)
 			plan := stagingPlan(t, client, domain.PackageNative)
-			delivery, err := (Stager{}).Stage(context.Background(), envelope, plan, "operation-"+string(client), domain.CompatibilityHints{})
+			delivery, err := testStager(Stager{}).Stage(context.Background(), envelope, plan, "operation-"+string(client), domain.CompatibilityHints{})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -444,10 +444,10 @@ func TestStagerBuildsManagedCopilotMarketplaceForCopilotAndVSCode(t *testing.T) 
 
 func TestCopilotMarketplaceVersionDefaultsExactlyOnce(t *testing.T) {
 	t.Parallel()
-	if got := copilotMarketplaceVersion("  "); got != "0.0.0" {
+	if got := shared.MarketplaceVersion("  "); got != "0.0.0" {
 		t.Fatalf("empty projected version = %q", got)
 	}
-	if got := copilotMarketplaceVersion(" 1.7.0-uap.1 "); got != "1.7.0-uap.1" {
+	if got := shared.MarketplaceVersion(" 1.7.0-uap.1 "); got != "1.7.0-uap.1" {
 		t.Fatalf("projected version = %q", got)
 	}
 }
@@ -461,7 +461,7 @@ func TestStagerKeepsNativePackageAndSanitizesFailureBoundaries(t *testing.T) {
 			plan.Components[index].Support = domain.SupportNative
 		}
 	}
-	delivery, err := (Stager{}).Stage(context.Background(), envelope, plan, "operation-2", domain.CompatibilityHints{})
+	delivery, err := testStager(Stager{}).Stage(context.Background(), envelope, plan, "operation-2", domain.CompatibilityHints{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -487,7 +487,7 @@ func TestStagerInvalidSkillNamedSkillsDoesNotRemoveSkillsRoot(t *testing.T) {
 	writeTestFile(t, filepath.Join(envelope.SnapshotRoot, "skills", "skills", "SKILL.md"), "invalid\n")
 	envelope.Inventory.InvalidSkills = append(envelope.Inventory.InvalidSkills, "skills")
 	plan := stagingPlan(t, domain.ClientCursor, domain.PackageNative)
-	delivery, err := (Stager{}).Stage(context.Background(), envelope, plan, "operation-skill-name", domain.CompatibilityHints{})
+	delivery, err := testStager(Stager{}).Stage(context.Background(), envelope, plan, "operation-skill-name", domain.CompatibilityHints{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -502,18 +502,18 @@ func TestStagerRejectsUnsupportedPlanAndExistingOperationStaging(t *testing.T) {
 	envelope := stagingEnvelope(t)
 	plan := stagingPlan(t, domain.ClientKiro, domain.PackageNative)
 	plan.Status = domain.PlanUnsupported
-	if _, err := (Stager{}).Stage(context.Background(), envelope, plan, "operation-3", domain.CompatibilityHints{}); err == nil {
+	if _, err := testStager(Stager{}).Stage(context.Background(), envelope, plan, "operation-3", domain.CompatibilityHints{}); err == nil {
 		t.Fatal("unsupported plan was staged")
 	}
 	plan.Status = domain.PlanManualActivationRequired
-	first, err := (Stager{}).Stage(context.Background(), envelope, plan, "operation-3", domain.CompatibilityHints{})
+	first, err := testStager(Stager{}).Stage(context.Background(), envelope, plan, "operation-3", domain.CompatibilityHints{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if first.StagingPath == "" {
 		t.Fatal("first staging path is empty")
 	}
-	if _, err := (Stager{}).Stage(context.Background(), envelope, plan, "operation-3", domain.CompatibilityHints{}); err == nil || !strings.Contains(err.Error(), "already exists") {
+	if _, err := testStager(Stager{}).Stage(context.Background(), envelope, plan, "operation-3", domain.CompatibilityHints{}); err == nil || !strings.Contains(err.Error(), "already exists") {
 		t.Fatalf("duplicate staging error = %v", err)
 	}
 }
@@ -527,7 +527,7 @@ func TestStagerVerifiesAndSafelyDiscardsOnlyItsStagingDirectory(t *testing.T) {
 			plan.Components[index].Support = domain.SupportNative
 		}
 	}
-	stager := Stager{}
+	stager := testStager(Stager{})
 	delivery, err := stager.Stage(context.Background(), envelope, plan, "operation-4", domain.CompatibilityHints{})
 	if err != nil {
 		t.Fatal(err)
@@ -553,12 +553,12 @@ func TestStagerVerifyRejectsMarkersExcludedFromPortableSnapshotDigest(t *testing
 		t.Run(marker, func(t *testing.T) {
 			envelope := stagingEnvelope(t)
 			plan := stagingPlan(t, domain.ClientCursor, domain.PackageNative)
-			delivery, err := (Stager{}).Stage(context.Background(), envelope, plan, "operation-marker-"+strings.ReplaceAll(filepath.Base(marker), ".", "x"), domain.CompatibilityHints{})
+			delivery, err := testStager(Stager{}).Stage(context.Background(), envelope, plan, "operation-marker-"+strings.ReplaceAll(filepath.Base(marker), ".", "x"), domain.CompatibilityHints{})
 			if err != nil {
 				t.Fatal(err)
 			}
 			writeTestFile(t, filepath.Join(delivery.StagingPath, marker), "user-owned\n")
-			if err := (Stager{}).Verify(context.Background(), delivery.StagingPath, delivery.ArtifactDigest); err == nil || !strings.Contains(err.Error(), "excluded ownership marker") {
+			if err := testStager(Stager{}).Verify(context.Background(), delivery.StagingPath, delivery.ArtifactDigest); err == nil || !strings.Contains(err.Error(), "excluded ownership marker") {
 				t.Fatalf("verify error = %v", err)
 			}
 		})
@@ -636,9 +636,7 @@ func stagingPlan(t *testing.T, client domain.ClientID, mode domain.PackageMode) 
 			{Kind: domain.ComponentExtension, Name: "cursor", Support: domain.SupportUnsupported},
 		},
 	}
-	if client == domain.ClientKiro {
-		plan.NativeRegistryRoot = filepath.Join(t.TempDir(), ".kiro")
-	}
+	plan.NativeRegistryRoot = filepath.Join(t.TempDir(), "config")
 	return plan
 }
 

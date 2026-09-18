@@ -1,6 +1,7 @@
 package kiro
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -8,9 +9,27 @@ import (
 	"strings"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/pathpolicy"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
+
+var _ clients.Projector = (*Adapter)(nil)
+
+// Project writes Kiro's MCP document and records the native objects it owns.
+func (*Adapter) Project(_ context.Context, in clients.ProjectionInput) ([]domain.NativeObjectOwnership, error) {
+	if err := shared.ProjectMCPServers(shared.MCPProjection{
+		Root:       in.StagingPath,
+		Envelope:   in.Envelope,
+		Names:      shared.SupportedMCPNames(in.Plan),
+		Dialect:    shared.MCPDialectKiro,
+		PluginRoot: in.Plan.ActivePath,
+		DataPath:   in.PluginDataPath,
+	}); err != nil {
+		return nil, err
+	}
+	return BuildNativeObjects(in.StagingPath, in.Envelope, in.Plan)
+}
 
 func BuildNativeObjects(stagingRoot string, envelope domain.PackageEnvelope, plan domain.DeliveryPlan) ([]domain.NativeObjectOwnership, error) {
 	configRoot := strings.TrimSpace(plan.NativeRegistryRoot)
