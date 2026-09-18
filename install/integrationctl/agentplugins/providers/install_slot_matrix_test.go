@@ -350,7 +350,26 @@ func testClaudeListIdentityMatrix(t *testing.T) {
 		},
 		"relative installPath": {`[{"id":"demo@skills-dir","scope":"user","enabled":true,"installPath":"skills/managed"}]`, claudeStatusUnknown},
 		"malformed":            {`[{"id":"demo@skills-dir"}]`, claudeStatusUnknown},
-		"object":               {`{"plugins":[]}`, claudeStatusUnknown},
+		"list --json --available object is unknown": {
+			fmt.Sprintf(`{"installed":[{"id":"demo@skills-dir","scope":"user","enabled":true,"installPath":%q}],"available":[]}`, managed),
+			claudeStatusUnknown,
+		},
+		"project marketplace same name occupies the name": {
+			fmt.Sprintf(`[{"id":"demo@uap-r4-same","scope":"project","enabled":true,"installPath":%q,"projectPath":"/tmp/proj"},{"id":"user-demo@skills-dir","version":"unknown","scope":"user","enabled":false,"installPath":"","errors":["Not loaded — the name is already taken"]}]`, filepath.Join(filepath.Dir(filepath.Dir(managed)), "plugins", "cache", "demo")),
+			claudeStatusCollision,
+		},
+		"empty plugin.json name failed load is skipped": {
+			`[{"id":"empty@skills-dir","version":"unknown","scope":"user","enabled":false,"installPath":"","errors":["name cannot be empty"]}]`,
+			claudeStatusAbsent,
+		},
+		"at-sign plugin.json name failed load is skipped": {
+			`[{"id":"atsign@skills-dir","version":"unknown","scope":"user","enabled":false,"installPath":"","errors":["must not contain @"]}]`,
+			claudeStatusAbsent,
+		},
+		"installedAt extra field is ignored": {
+			fmt.Sprintf(`[{"id":"demo@skills-dir","scope":"user","enabled":true,"installPath":%q,"installedAt":"2026-09-18T12:00:00.000Z"}]`, managed),
+			claudeStatusInstalled,
+		},
 		"same-name loser empty path": {
 			fmt.Sprintf(`[{"id":"demo@skills-dir","scope":"user","enabled":true,"installPath":%q},{"id":"foreign-demo@skills-dir","version":"unknown","scope":"user","enabled":false,"installPath":"","errors":["Not loaded — same plugin name"]}]`, managed),
 			claudeStatusInstalled,
@@ -367,6 +386,11 @@ func testClaudeListIdentityMatrix(t *testing.T) {
 			}
 		})
 	}
+	t.Run("dotted plugin.json name", func(t *testing.T) {
+		if got := claudePluginStatus([]byte(claudeListing("uap.r4.dot", managed, true)), "uap.r4.dot", managed); got != claudeStatusInstalled {
+			t.Fatalf("status=%d", got)
+		}
+	})
 }
 
 func testCodexListIdentityMatrix(t *testing.T) {
@@ -383,16 +407,17 @@ func testCodexListIdentityMatrix(t *testing.T) {
 		body string
 		want codexStatus
 	}{
-		"name@marketplace":                {`{"installed":[` + entry("demo@"+marketplace, "demo", marketplace, "") + `]}`, codexStatusInstalled},
-		"source.path is additive":         {`{"installed":[` + entry("demo@"+marketplace, "demo", marketplace, `"source":{"path":"/managed/source"}`) + `]}`, codexStatusInstalled},
-		"installedPath cache is additive": {`{"installed":[` + entry("demo@"+marketplace, "demo", marketplace, `"installedPath":"/cache/demo/1.0.0"`) + `]}`, codexStatusInstalled},
-		"skills-dir leftover":             {`{"installed":[` + entry("demo@skills-dir", "demo", "skills-dir", "") + `]}`, codexStatusAbsent},
-		"other marketplace":               {`{"installed":[` + entry("demo@other", "demo", "other", "") + `]}`, codexStatusAbsent},
-		"empty":                           {`{"installed":[]}`, codexStatusAbsent},
-		"disabled":                        {`{"installed":[{"pluginId":"demo@` + marketplace + `","name":"demo","marketplaceName":"` + marketplace + `","installed":true,"enabled":false}]}`, codexStatusAbsent},
-		"not installed flag":              {`{"installed":[{"pluginId":"demo@` + marketplace + `","name":"demo","marketplaceName":"` + marketplace + `","installed":false,"enabled":true}]}`, codexStatusAbsent},
-		"inconsistent pluginId":           {`{"installed":[` + entry("demo@other", "demo", marketplace, "") + `]}`, codexStatusUnknown},
-		"malformed":                       {`{`, codexStatusUnknown},
+		"name@marketplace":                    {`{"installed":[` + entry("demo@"+marketplace, "demo", marketplace, "") + `]}`, codexStatusInstalled},
+		"source.path is additive":             {`{"installed":[` + entry("demo@"+marketplace, "demo", marketplace, `"source":{"path":"/managed/source"}`) + `]}`, codexStatusInstalled},
+		"installedPath cache is additive":     {`{"installed":[` + entry("demo@"+marketplace, "demo", marketplace, `"installedPath":"/cache/demo/1.0.0"`) + `]}`, codexStatusInstalled},
+		"--available extra array is additive": {`{"installed":[` + entry("demo@"+marketplace, "demo", marketplace, "") + `],"available":[]}`, codexStatusInstalled},
+		"skills-dir leftover":                 {`{"installed":[` + entry("demo@skills-dir", "demo", "skills-dir", "") + `]}`, codexStatusAbsent},
+		"other marketplace":                   {`{"installed":[` + entry("demo@other", "demo", "other", "") + `]}`, codexStatusAbsent},
+		"empty":                               {`{"installed":[]}`, codexStatusAbsent},
+		"disabled":                            {`{"installed":[{"pluginId":"demo@` + marketplace + `","name":"demo","marketplaceName":"` + marketplace + `","installed":true,"enabled":false}]}`, codexStatusAbsent},
+		"not installed flag":                  {`{"installed":[{"pluginId":"demo@` + marketplace + `","name":"demo","marketplaceName":"` + marketplace + `","installed":false,"enabled":true}]}`, codexStatusAbsent},
+		"inconsistent pluginId":               {`{"installed":[` + entry("demo@other", "demo", marketplace, "") + `]}`, codexStatusUnknown},
+		"malformed":                           {`{`, codexStatusUnknown},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -401,6 +426,12 @@ func testCodexListIdentityMatrix(t *testing.T) {
 			}
 		})
 	}
+	t.Run("dotted plugin name", func(t *testing.T) {
+		body := `{"installed":[` + entry("uap.r4.dot@"+marketplace, "uap.r4.dot", marketplace, "") + `]}`
+		if got := codexPluginStatus([]byte(body), "uap.r4.dot", marketplace); got != codexStatusInstalled {
+			t.Fatalf("status=%d", got)
+		}
+	})
 }
 
 func testClaudeListPathAlias(t *testing.T) {
