@@ -36,9 +36,9 @@ func ClientTraitsFor(id ClientID) ClientTraits {
 	return definition.Traits
 }
 
-// Allows reports whether this client's table lists the intent. Automatic
-// install remains valid for every client even when the slice omits it, which is
-// how historical empty persisted intent keeps working.
+// Allows reports whether this client's table lists the intent. Validate still
+// accepts historical empty automatic intent even when the slice omits it;
+// callers that need that exception must go through Validate.
 func (traits ClientTraits) Allows(intent InstallIntent) bool {
 	for _, allowed := range traits.InstallIntents {
 		if allowed == intent {

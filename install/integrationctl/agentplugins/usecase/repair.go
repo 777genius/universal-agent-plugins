@@ -323,7 +323,7 @@ func (service Service) Repair(ctx context.Context, input AddInput) (AddResult, e
 		result.Activation = outcome
 		if _, updateErr := service.updateLifecycle(installation.InstallationID, clientKey, outcome); updateErr != nil {
 			if activationErr != nil {
-				return result, fmt.Errorf("verify repaired %s plugin: %v; persist verification state: %w", clientDisplayName(input.Client.ClientID), activationErr, updateErr)
+				return result, fmt.Errorf("verify repaired %s plugin: %w; persist verification state: %w", clientDisplayName(input.Client.ClientID), activationErr, updateErr)
 			}
 			return result, updateErr
 		}

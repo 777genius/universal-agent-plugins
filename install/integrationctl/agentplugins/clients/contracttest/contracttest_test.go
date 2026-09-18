@@ -48,8 +48,8 @@ func TestTraitParityDetectsADeclaredButUnimplementedCapability(t *testing.T) {
 		return ok
 	}
 
-	// No requirements is the state the harness ships in until domain carries the
-	// traits, and it has to stay a clean no-op.
+	// No requirements stays a clean no-op so the harness can be called before
+	// a caller has anything to declare.
 	RunTraitParity(t, registry, nil)
 
 	RunTraitParity(t, registry, []CapabilityRequirement{{
