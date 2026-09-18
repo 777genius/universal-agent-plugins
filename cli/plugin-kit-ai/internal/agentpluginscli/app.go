@@ -68,6 +68,7 @@ type App struct {
 	Output              io.Writer
 	ErrorOutput         io.Writer
 	Terminal            bool
+	progressFormat      *string
 }
 
 type options struct {

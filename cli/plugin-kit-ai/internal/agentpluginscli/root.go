@@ -16,6 +16,7 @@ func NewRoot(app App) *cobra.Command {
 		SilenceErrors: true,
 	}
 	root.SetIn(app.input())
+	app.progressFormat = &opts.format
 	app.Output = terminaltheme.Wrap(app.output(), &opts.color, &opts.format)
 	app.ErrorOutput = terminaltheme.Wrap(app.errorOutput(), &opts.color, &opts.format)
 	root.SetOut(app.output())

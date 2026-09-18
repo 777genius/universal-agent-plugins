@@ -333,14 +333,15 @@ func (app App) acquireGitHub(ctx context.Context, requested, repository, revisio
 	if app.SourceAcquirer == nil {
 		return loadedPackage{}, fmt.Errorf("package source acquirer is unavailable")
 	}
+	finish := app.bindGitHubTransfer(repository)
+	var loaded loadedPackage
+	var err error
 	if subpath == "" && expectedDigest == "" {
-		loaded, err := app.acquireAutodiscoveredGitHub(ctx, requested, repository, revision)
-		if err == nil {
-			app.warnDirectRevocation(loaded.envelope.TreeDigest)
-		}
-		return loaded, err
+		loaded, err = app.acquireAutodiscoveredGitHub(ctx, requested, repository, revision)
+	} else {
+		loaded, err = app.acquireGitHubPath(ctx, requested, repository, revision, subpath, expectedDigest)
 	}
-	loaded, err := app.acquireGitHubPath(ctx, requested, repository, revision, subpath, expectedDigest)
+	finish(err)
 	if err == nil {
 		app.warnDirectRevocation(loaded.envelope.TreeDigest)
 	}
@@ -515,7 +516,9 @@ func (app App) acquireDirectory(ctx context.Context, selector string, request pa
 	if err := validateDirectoryCompatibilityPolicy(*policy); err != nil {
 		return loadedPackage{}, err
 	}
+	finish := app.bindGitHubTransfer(selection.Source.Repository)
 	snapshot, err := app.SourceAcquirer.AcquireGitHubVerified(ctx, selection.Source.Repository, selection.Source.Revision, selection.Source.Path, selection.TreeDigest)
+	finish(err)
 	if err != nil {
 		return loadedPackage{}, err
 	}

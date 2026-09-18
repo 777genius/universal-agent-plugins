@@ -18,7 +18,6 @@ import (
 	processadapter "github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/process"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/packagedigest"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
-	legacyports "github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
 )
 
 var (
@@ -31,76 +30,13 @@ const (
 	maxGitHubDiscoveryMetadataBytes = 1 << 20
 )
 
-type Command struct {
-	Dir            string
-	Args           []string
-	Stdin          []byte
-	MaxOutputBytes int
-}
-
-type Runner interface {
-	Run(context.Context, Command) ([]byte, error)
-}
-
-type OSRunner struct{}
-
-func (OSRunner) Run(ctx context.Context, command Command) ([]byte, error) {
-	if len(command.Stdin) != 0 {
-		return nil, fmt.Errorf("git stdin is unsupported by the contained runner")
-	}
-	result, err := (processadapter.OS{}).RunWithTreeExitGrace(ctx, legacyports.Command{
-		Argv: append([]string{"git"}, command.Args...), Dir: command.Dir,
-		Env: isolatedGitEnvironment(os.Environ(), command.Dir), StdoutLimitBytes: command.MaxOutputBytes,
-	}, 5*time.Second)
-	output := append(append([]byte(nil), result.Stdout...), result.Stderr...)
-	if err != nil {
-		if processadapter.IsOnlyStdoutLimitExceeded(err) ||
-			processadapter.IsExactStdoutLimitExitCode(err, 141) {
-			return nil, processadapter.ErrStdoutLimitExceeded
-		}
-		return nil, fmt.Errorf("git %s failed: %w: %s", strings.Join(command.Args, " "), err, strings.TrimSpace(string(output)))
-	}
-	if result.ExitCode != 0 {
-		return nil, fmt.Errorf("git %s failed with exit code %d: %s", strings.Join(command.Args, " "), result.ExitCode, strings.TrimSpace(string(output)))
-	}
-	return output, nil
-}
-
-func isolatedGitEnvironment(environ []string, isolatedHome string) []string {
-	clean := make([]string, 0, len(environ)+9)
-	for _, item := range environ {
-		key, _, _ := strings.Cut(item, "=")
-		switch upper := strings.ToUpper(key); {
-		case upper == "HOME", upper == "USERPROFILE", upper == "XDG_CONFIG_HOME":
-			continue
-		case upper == "NETRC", upper == "SSH_AUTH_SOCK", upper == "SSH_ASKPASS":
-			continue
-		case strings.HasPrefix(upper, "GIT_"):
-			continue
-		}
-		clean = append(clean, item)
-	}
-	clean = append(clean,
-		"HOME="+isolatedHome,
-		"USERPROFILE="+isolatedHome,
-		"XDG_CONFIG_HOME="+isolatedHome,
-		"GIT_CONFIG_NOSYSTEM=1",
-		"GIT_CONFIG_GLOBAL="+os.DevNull,
-		"GIT_CONFIG_COUNT=1",
-		"GIT_CONFIG_KEY_0=credential.helper",
-		"GIT_CONFIG_VALUE_0=",
-		"GIT_TERMINAL_PROMPT=0",
-		"GIT_LFS_SKIP_SMUDGE=1",
-	)
-	return clean
-}
-
 type Acquirer struct {
 	TempRoot   string
 	Runner     Runner
 	Digester   packagedigest.Builder
 	URLForRepo func(string) string
 	Now        func() time.Time
+	Reporter   Reporter
 }
 
 // DiscoverGitHubPackages returns repository-relative package roots at an
@@ -125,9 +61,7 @@ func (acquirer Acquirer) DiscoverGitHubPackages(ctx context.Context, repository,
 	}
 	defer os.RemoveAll(tempRoot)
 	repoRoot := filepath.Join(tempRoot, "repository")
-	run := func(args ...string) ([]byte, error) {
-		return acquirer.runner().Run(ctx, Command{Dir: tempRoot, Args: args})
-	}
+	run := acquirer.gitCommand(ctx, tempRoot)
 	if _, err := run("init", "--quiet", repoRoot); err != nil {
 		return nil, gitAcquisitionFailure(repository, revision, "initialize discovery repository")
 	}
@@ -139,7 +73,7 @@ func (acquirer Acquirer) DiscoverGitHubPackages(ctx context.Context, repository,
 			return nil, gitAcquisitionFailure(repository, revision, "configure discovery repository")
 		}
 	}
-	if _, err := run("-C", repoRoot, "fetch", "--quiet", "--depth=1", "--filter=blob:none", "--no-tags", "--no-recurse-submodules", "origin", revision); err != nil {
+	if _, err := run(gitFetchArgs(repoRoot, revision, acquirer.Reporter != nil)...); err != nil {
 		return nil, gitAcquisitionFailure(repository, revision, "fetch immutable revision for package discovery")
 	}
 	resolved, err := run("-C", repoRoot, "rev-parse", "--verify", "FETCH_HEAD^{commit}")
@@ -226,9 +160,7 @@ func (acquirer Acquirer) acquireGit(ctx context.Context, url, repository, revisi
 	}
 	defer os.RemoveAll(tempRoot)
 	repoRoot := filepath.Join(tempRoot, "repository")
-	run := func(args ...string) ([]byte, error) {
-		return acquirer.runner().Run(ctx, Command{Dir: tempRoot, Args: args})
-	}
+	run := acquirer.gitCommand(ctx, tempRoot)
 	if _, err := run("init", "--quiet", repoRoot); err != nil {
 		return domain.PackageSnapshot{}, gitAcquisitionFailure(repository, revision, "initialize repository")
 	}
@@ -240,7 +172,7 @@ func (acquirer Acquirer) acquireGit(ctx context.Context, url, repository, revisi
 			return domain.PackageSnapshot{}, gitAcquisitionFailure(repository, revision, "configure isolated repository")
 		}
 	}
-	if _, err := run("-C", repoRoot, "fetch", "--quiet", "--depth=1", "--filter=blob:none", "--no-tags", "--no-recurse-submodules", "origin", revision); err != nil {
+	if _, err := run(gitFetchArgs(repoRoot, revision, acquirer.Reporter != nil)...); err != nil {
 		return domain.PackageSnapshot{}, gitAcquisitionFailure(repository, revision, "fetch immutable revision")
 	}
 	resolved, err := run("-C", repoRoot, "rev-parse", "--verify", "FETCH_HEAD^{commit}")
@@ -273,7 +205,7 @@ func (acquirer Acquirer) acquireGit(ctx context.Context, url, repository, revisi
 			return domain.PackageSnapshot{}, gitAcquisitionFailure(repository, revision, "configure sparse checkout")
 		}
 	}
-	if _, err := run("-C", repoRoot, "checkout", "--quiet", "--detach", revision); err != nil {
+	if _, err := run(gitCheckoutArgs(repoRoot, revision, acquirer.Reporter != nil)...); err != nil {
 		return domain.PackageSnapshot{}, gitAcquisitionFailure(repository, revision, "checkout immutable revision")
 	}
 	packageRoot := repoRoot

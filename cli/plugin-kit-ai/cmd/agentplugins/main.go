@@ -167,7 +167,7 @@ func run() error {
 		ClientRegistry:      clientRegistry,
 		DirectoryClient:     directoryClient,
 		DiscoveryClient:     discoveryClient,
-		SourceAcquirer:      lazySourceAcquirer{dataRoot: dataRoot, acquirer: sourceacquisition.Acquirer{TempRoot: dataRoot}},
+		SourceAcquirer:      &lazySourceAcquirer{dataRoot: dataRoot, acquirer: sourceacquisition.Acquirer{TempRoot: dataRoot}},
 		PackageLoader:       packageLoader,
 		NativePackageLoader: loader.OpenAILoader{Loader: packageLoader},
 		SecurityIndex:       securityClient,
@@ -231,6 +231,10 @@ func (acquirer lazySourceAcquirer) prepare() error {
 		return fmt.Errorf("create agentplugins data directory: %w", err)
 	}
 	return nil
+}
+
+func (acquirer *lazySourceAcquirer) BindReporter(reporter sourceacquisition.Reporter) {
+	acquirer.acquirer.Reporter = reporter
 }
 
 func (acquirer lazySourceAcquirer) AcquireLocal(ctx context.Context, source string) (domain.PackageSnapshot, error) {

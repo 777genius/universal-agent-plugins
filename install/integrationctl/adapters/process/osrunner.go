@@ -641,10 +641,7 @@ func runExplicit(ctx context.Context, command ports.Command, treeExitGrace time.
 	// A shorter independent delay can report exec.ErrWaitDelay for a rapid,
 	// otherwise clean command when its copy goroutines are briefly descheduled.
 	c.WaitDelay = processReapTimeout
-	stdout := newSynchronizedOutputBuffer(command.StdoutLimitBytes)
-	stderr := newBoundedDiagnosticBuffer(32 * 1024)
-	c.Stdout = stdout
-	c.Stderr = stderr
+	stdout, stderr := attachCommandPipes(c, command)
 	containment, err := newOrdinaryCommandContainment(c, treeExitGrace)
 	if err != nil {
 		return ports.CommandResult{}, err

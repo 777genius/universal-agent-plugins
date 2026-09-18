@@ -2,6 +2,7 @@ package ports
 
 import (
 	"context"
+	"io"
 	"time"
 )
 
@@ -43,6 +44,9 @@ type Command struct {
 	// StdoutLimitBytes bounds captured stdout without terminating the child.
 	// Zero keeps the existing unbounded behavior for trusted callers.
 	StdoutLimitBytes int
+	// Stderr, when set, receives a live copy of diagnostic output without
+	// replacing the bounded capture used for error messages.
+	Stderr io.Writer
 }
 
 type CommandResult struct {
