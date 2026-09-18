@@ -36,7 +36,7 @@ Codex has no in-place plugin slot.
 
 ## Installer case matrix
 
-Pinned in `providers/install_slot_matrix_test.go`. Do not collapse the two rows.
+Pinned in `providers/install_slot_matrix_test.go`. Do not collapse Claude vs Codex, and do not unify the remaining client slots.
 
 | Client | Case | Expected |
 | --- | --- | --- |
@@ -128,3 +128,36 @@ Round 4 also showed:
 ## Agent Plugins implication
 
 Claude stays `@skills-dir` so hash/repair/stdio bind to the live folder. Codex stays marketplace + cache (local refresh = restage + `plugin add` again). Do not unify the two.
+
+## Remaining clients (same-day matrix)
+
+Isolated `HOME` / `GEMINI_CLI_HOME` / `XDG_CONFIG_HOME`. Operator homes were not written. Not public qualification. Live binaries on this laptop: Gemini CLI **0.36.0**, OpenCode **1.18.4**, kiro-cli **2.20.2**. Copilot CLI, `code`, Cline, Windsurf, and ChatGPT CLIs were absent. `cursor --version` hangs; Cursor was checked from the on-disk `~/.cursor/plugins/local` layout only.
+
+| Client | Case | Expected |
+| --- | --- | --- |
+| Cursor | target root | `ConfigRoot/plugins/local`, not managed `clients/cursor` and not `skills/` |
+| Cursor | competing slot | `plugins/cache` is marketplace cache; installer never uses it |
+| Cursor | activate | no CLI; manual reload. Never `cursor --version` as a plugin probe |
+| Cursor | projection | `.cursor-plugin/plugin.json`; stage beside `plugins/local` (under `plugins/`), same defense as Claude skills |
+| Copilot | target root | managed `clients/copilot` |
+| Copilot | activate | `plugin marketplace add` + `plugin install name@agentplugins-*` + `plugin list`. No `--json`. Never `marketplace upgrade` |
+| Copilot | native list | `plugin list` text contract. `--json` is a Codex/Claude flag |
+| VS Code | target root | managed `clients/vscode` |
+| VS Code | native registry | Copilot sibling `ConfigRoot` + Copilot executable, not `code` |
+| VS Code | activate | same Copilot marketplace argv when the sibling CLI is the backend |
+| Gemini | target root | managed `clients/gemini`; live skills land in `$GEMINI_CLI_HOME/.gemini/skills` |
+| Gemini | in-place skills | copying `SKILL.md` into `.gemini/skills/<name>` lists immediately as Enabled. `gemini skills install` copies to that same directory. Do not call the skills CLI |
+| Gemini | competing slots | `gemini extensions` is `.gemini/extensions/<name>/gemini-extension.json`. `gemini mcp` reads `settings.json`. Installer writes skills + settings.json through the native-config kernel and never calls `extensions` / `mcp add` |
+| Gemini | `GEMINI_CLI_HOME` | relocates `.gemini`; `$HOME/.gemini` is not listed when the env is set. Detector already follows that env |
+| Gemini | occupancy | an unowned `skills/<name>` collides. A same-name extension leftover does **not** occupy the skill slot |
+| OpenCode | target root | managed `clients/opencode`; live MCP/skills land under XDG `opencode/` |
+| OpenCode | activate | native `opencode.json` / `skills/`. `opencode mcp list` sees written MCP. Never `opencode plugin <npm>` |
+| Cline | target root | managed `clients/cline`; native writes `~/.cline/skills` + MCP settings. No plugin CLI |
+| Windsurf | target root | managed `clients/windsurf`. MCP may write selected channel `mcp_config.json`; skills stay prepared. Auto MCP reports `active` but must keep the skills-prepared user action. Never Devin cloud sync |
+| Kiro | target root | managed `clients/kiro`; native writes `~/.kiro/skills` and `settings/mcp.json` |
+| Kiro | activate | skills/MCP via native files. MCP verify is `kiro-cli acp --agent-engine v3 --auth-method cli`. Accepts `kiro` and `kiro-cli`, not `kiro-cli-chat`. Manual CLI guidance cites the executable, not ActivePath |
+| Kiro | live 2.20.2 | those ACP flags are accepted; the CLI still requires login. `acp --help` returns ENOENT; that is a Kiro quirk, not an installer argv bug. Unrecognized ACP degrades to manual. Darwin duplex containment can force MCP to manual |
+| Cline / OpenCode | native identity | inspect returns Clear; same-name `skills/<name>` occupancy is enforced at native mutate, not at plan-time identity |
+| Copilot | live `from` path | lexical `Clean` equality, not `os.SameFile`. Alias `/tmp` vs `/private/tmp` is Unknown/manual, not Installed |
+| ChatGPT | target root | managed `clients/chatgpt`. Plans without host presence |
+| ChatGPT | activate | manual ChatGPT Plugins. No CLI. Identity without a local receipt is Indeterminate (remote registry is unread) |

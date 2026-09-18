@@ -616,6 +616,9 @@ func stagingPlan(t *testing.T, client domain.ClientID, mode domain.PackageMode) 
 	if client == domain.ClientClaude {
 		target = filepath.Join(anchor, "skills")
 	}
+	if client == domain.ClientCursor {
+		target = filepath.Join(anchor, "plugins", "local")
+	}
 	active := filepath.Join(target, "demo-0123456789ab")
 	status := domain.PlanReady
 	activation := domain.ActivationActive

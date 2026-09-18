@@ -32,7 +32,7 @@ func (stager Stager) Discard(ctx context.Context, delivery domain.StagedDelivery
 		return err
 	}
 	stagingBase := filepath.Clean(delivery.OwnedBase)
-	if delivery.ClientID == domain.ClientClaude {
+	if delivery.ClientID == domain.ClientClaude || delivery.ClientID == domain.ClientCursor {
 		stagingBase = filepath.Dir(stagingBase)
 	}
 	if filepath.Dir(filepath.Clean(delivery.StagingPath)) != stagingBase ||
@@ -156,14 +156,18 @@ func (stager Stager) stage(
 	}
 	suffix := sha256.Sum256([]byte(operationID))
 	stagingBase := shared.DefaultStagingLayout{}.StagingBase(plan)
-	// Claude Code discovers every plugin-shaped directory directly below its
-	// skills root (the official in-place @skills-dir plugin slot). Keep the
-	// transaction staging directory beside that watched root so a pre-commit
-	// read-only `plugin list` cannot mistake it for an installed plugin.
-	// TargetAnchor and TargetRoot are on the same configured client
-	// filesystem; dirswap still performs the final atomic rename.
+	// Claude Code and Cursor both discover plugin-shaped directories directly
+	// below a watched in-place slot (`skills/` and `plugins/local`). Keep the
+	// transaction staging directory beside that watched root so a reload
+	// cannot treat staging as an installed plugin. Claude's TargetAnchor is
+	// already the parent of `skills/`; Cursor's TargetAnchor is the config
+	// root, so the parent of `plugins/local` is the matching sibling.
+	// dirswap still performs the final atomic rename on the same filesystem.
 	if plan.ClientID == domain.ClientClaude {
 		stagingBase = plan.TargetAnchor
+	}
+	if plan.ClientID == domain.ClientCursor {
+		stagingBase = filepath.Dir(plan.TargetRoot)
 	}
 	if err := os.MkdirAll(stagingBase, 0o700); err != nil {
 		return domain.StagedDelivery{}, fmt.Errorf("create client staging root: %w", err)
