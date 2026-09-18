@@ -40,17 +40,26 @@ Pinned in `providers/install_slot_matrix_test.go`. Do not collapse the two rows.
 
 | Client | Case | Expected |
 | --- | --- | --- |
-| Claude | empty dir / `.DS_Store` / plain `SKILL.md` / dangling symlink / other-name plugin under `skills/` | skip; prepared identity not Indeterminate |
-| Claude | same-name `plugin.json` sibling, including a directory symlink to it | Collision |
+| Claude | target root | `ConfigRoot/skills`, not managed `clients/claude` |
+| Claude | empty dir / `.DS_Store` / plain `SKILL.md` / dangling symlink / other-name plugin / malformed foreign `plugin.json` under `skills/` | skip; prepared identity not Indeterminate |
+| Claude | same-name `plugin.json` sibling, including a directory symlink to the owned plugin | Collision |
+| Claude | `.agentplugins-staging-*` leaked into `skills/` with same-name `plugin.json` | Collision (Claude auto-discovers it) |
 | Claude | damaged owned `ActivePath` | Indeterminate |
 | Claude | `plugin list` `name@skills-dir` + `installPath == ActivePath` + `scope=user` | Installed |
 | Claude | leftover `name@marketplace` without `@skills-dir` | Absent for our claim |
 | Claude | `name@skills-dir` at a different `installPath` | Collision |
 | Claude | activate | `plugin list --json` only; no `marketplace add` / `plugin install` |
 | Claude | projection | `.claude-plugin/plugin.json`; no `marketplace.json`; stage beside `skills` |
+| Codex | target root | managed `clients/codex`; never `skills/` |
+| Codex | empty dir / dangling symlink / foreign marketplace other namespace | skip; prepared identity not Indeterminate |
+| Codex | `.agentplugins-staging-*` under the managed plugins root | skip (not a watched in-place slot) |
+| Codex | same-name unqualified `plugin.json` sibling | Collision |
+| Codex | damaged owned `ActivePath` | Indeterminate |
+| Codex | `plugin list` `pluginId` `name@agentplugins-*` with `installed`+`enabled` | Installed; additive `source.path` is ignored |
+| Codex | leftover `name@skills-dir` or another marketplace | Absent for our claim |
 | Codex | activate | `marketplace add` + `plugin add name@agentplugins-*` + `list`; never `marketplace upgrade` on local |
-| Codex | identity | `pluginId` `name@marketplace`; runtime bytes are cache, not list `source.path` |
-| Codex | local same-version refresh | restage + `plugin add` again (recopies cache) |
+| Codex | projection | `.agents/plugins/marketplace.json`; stage under the managed target root |
+| Codex | local same-version refresh | restage + `plugin add` again (recopies cache); live spike, not a unit of this matrix |
 
 ## Agent Plugins implication
 
