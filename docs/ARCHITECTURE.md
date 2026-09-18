@@ -34,7 +34,7 @@ Dependencies point inward.
 |-------|---------|------------|----------------|
 | Domain | `agentplugins/domain` | stdlib only | yes, `domain-stdlib-only` |
 | Ports | `agentplugins/ports` | stdlib, `domain`, `install/integrationctl/ports` (see below) | yes, `ports-only-domain` |
-| Use cases | `agentplugins/usecase` | stdlib, `domain`, `ports`, `transaction`, `pathcontract` | yes, `usecase-through-ports` |
+| Use cases | `agentplugins/usecase` | stdlib, `domain`, `ports`, `transaction`, `pathcontract`, `install/integrationctl/ports` for the legacy lock (see below) | yes, `usecase-through-ports` |
 | Adapters | `agentplugins/{adapters,providers,planner}` | the layers above | no rule yet |
 | CLI | `agentpluginscli` | the public facades of the layers above | no rule yet |
 | Composition root | `cmd/agentplugins` | everything, and nothing imports it | no rule yet |
@@ -59,6 +59,13 @@ implementation, `adapters/process.OS`, stays an adapter and is not covered by th
 exception. Duplicating the two types into `domain` would create a second source of
 truth and force a conversion on every call, which costs more than the formal
 purity is worth.
+
+**`usecase.Service.LegacyLock` is typed `install/integrationctl/ports.LockManager`.** This
+one is not the data-only exception above: `LockManager` is a behavioural
+interface, so the use case does name a package outside its layer. It is the
+remaining edge of the pre-refactor installer that still owns the lock, and it is
+listed here rather than quietly excluded, because the deny list permits it only
+by not mentioning it.
 
 **`ports.PathPolicy` has exactly one implementation.** Inverting path
 containment into an interface makes a permissive stand-in possible for the first

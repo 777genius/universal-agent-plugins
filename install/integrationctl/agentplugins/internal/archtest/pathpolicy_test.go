@@ -18,7 +18,7 @@ func TestPathPolicyHasOneImplementation(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(implementations) == 0 {
-		t.Fatal("no PathPolicy implementation found at all; the rule stopped measuring anything")
+		t.Fatal("no PathPolicy method found at all; the rule stopped measuring anything")
 	}
 	names := make([]string, 0, len(implementations))
 	for name := range implementations {
@@ -27,7 +27,7 @@ func TestPathPolicyHasOneImplementation(t *testing.T) {
 	sort.Strings(names)
 	for _, name := range names {
 		if implementations[name] != pathPolicyOwner {
-			t.Errorf("%s implements ports.PathPolicy outside %s; containment has one implementation on purpose", name, pathPolicyOwner)
+			t.Errorf("%s declares a ports.PathPolicy method outside %s; containment has one implementation on purpose, and one overriding method on an embedded Policy is enough to remove a check", name, pathPolicyOwner)
 		}
 	}
 }

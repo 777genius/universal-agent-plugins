@@ -63,20 +63,29 @@ func runContainmentContract(t *testing.T, policy ports.PathPolicy) {
 	if err := policy.RequireContainedChild(base, base); err == nil {
 		t.Error("RequireContainedChild accepted the base itself, which is not a strict child")
 	}
-	if err := policy.RequireContainedChild(base, filepath.Join(base, "..", "escape")); err == nil {
-		t.Error("RequireContainedChild accepted a parent escape")
+	// Built by concatenation, not filepath.Join: Join cleans, so it would resolve
+	// the "..' away and hand the implementation a path that no longer carries the
+	// escape. An implementation that compares with a plain prefix test sees this
+	// candidate start with base and accepts it.
+	separator := string(filepath.Separator)
+	if err := policy.RequireContainedChild(base, base+separator+".."+separator+"escape"); err == nil {
+		t.Error("RequireContainedChild accepted an unnormalized parent escape")
 	}
 	if err := policy.RequireContainedChild(base, filepath.Dir(base)); err == nil {
 		t.Error("RequireContainedChild accepted an ancestor of the base")
 	}
+	if err := policy.RequireContainedChild(base, "child"); err == nil {
+		t.Error("RequireContainedChild accepted a relative candidate, which names a path under the working directory rather than under base")
+	}
 	if err := policy.RequireContainedChild("", child); err == nil {
 		t.Error("RequireContainedChild accepted an empty base")
 	}
-	if link, ok := symlinkedBranch(t, base); ok {
+	t.Run("RequireContainedChild symlinked ancestor", func(t *testing.T) {
+		link := symlinkedBranch(t, base)
 		if err := policy.RequireContainedChild(base, filepath.Join(link, "payload")); err == nil {
 			t.Error("RequireContainedChild accepted a path whose ancestor is a symlink")
 		}
-	}
+	})
 }
 
 func runExactPathContract(t *testing.T, policy ports.PathPolicy) {
@@ -89,6 +98,14 @@ func runExactPathContract(t *testing.T, policy ports.PathPolicy) {
 	if err := policy.RequireExactPath(expected, expected); err != nil {
 		t.Errorf("RequireExactPath rejected the exact managed path: %v", err)
 	}
+	// The mirror of the escape case: comparing raw strings is wrong in both
+	// directions, and an implementation that rejects every unnormalized path is
+	// as broken as one that accepts them. This candidate names the same file.
+	separator := string(filepath.Separator)
+	equivalent := base + separator + "managed" + separator + ".." + separator + "managed" + separator + "active"
+	if err := policy.RequireExactPath(expected, equivalent); err != nil {
+		t.Errorf("RequireExactPath rejected an unnormalized spelling of the exact managed path: %v", err)
+	}
 	if err := policy.RequireExactPath(expected, filepath.Join(base, "managed", "other")); err == nil {
 		t.Error("RequireExactPath accepted a sibling of the managed path")
 	}
@@ -98,18 +115,19 @@ func runExactPathContract(t *testing.T, policy ports.PathPolicy) {
 	if err := policy.RequireExactPath(expected, ""); err == nil {
 		t.Error("RequireExactPath accepted an empty candidate")
 	}
-	if link, ok := symlinkedBranch(t, filepath.Join(base, "managed")); ok {
-		payload := filepath.Join(link, "payload")
+	t.Run("RequireExactPath symlinked ancestor", func(t *testing.T) {
+		payload := filepath.Join(symlinkedBranch(t, filepath.Join(base, "managed")), "payload")
 		if err := policy.RequireExactPath(payload, payload); err == nil {
 			t.Error("RequireExactPath accepted a path whose ancestor is a symlink")
 		}
-	}
+	})
 }
 
-// symlinkedBranch reports a path under base whose parent is a symlink. Creating
-// one needs a privilege Windows does not always grant, so the caller skips the
-// symlink assertions instead of failing on the host's policy.
-func symlinkedBranch(t *testing.T, base string) (string, bool) {
+// symlinkedBranch returns a path under base whose parent is a symlink. Creating
+// one needs a privilege Windows does not always grant, so it skips its own
+// subtest rather than failing on the host's policy - these are the two strongest
+// negative cases in the harness, and a silent pass would misreport the run.
+func symlinkedBranch(t *testing.T, base string) string {
 	t.Helper()
 	target := filepath.Join(t.TempDir(), "outside")
 	if err := os.MkdirAll(filepath.Join(target, "payload"), 0o755); err != nil {
@@ -120,8 +138,7 @@ func symlinkedBranch(t *testing.T, base string) (string, bool) {
 	}
 	link := filepath.Join(base, "linked")
 	if err := os.Symlink(target, link); err != nil {
-		t.Logf("skipping the symlink assertions: %v", err)
-		return "", false
+		t.Skipf("this host does not allow creating a symlink, so the symlinked ancestor case cannot run: %v", err)
 	}
-	return link, true
+	return link
 }

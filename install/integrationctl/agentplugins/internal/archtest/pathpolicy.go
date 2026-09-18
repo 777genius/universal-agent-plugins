@@ -14,7 +14,7 @@ import (
 const pathPolicyOwner = "install/integrationctl/adapters/pathpolicy"
 
 // pathPolicyContract is the ports.PathPolicy method set, as method name to
-// string parameter count. Every method returns a single error.
+// parameter count. Every method returns a single error.
 //
 // depguard cannot express this rule: it matches import paths, and a permissive
 // PathPolicy needs no import at all - three short methods on a local struct are
@@ -27,8 +27,14 @@ var pathPolicyContract = map[string]int{
 }
 
 // pathPolicyImplementations maps "directory.Type" to the declaring directory
-// for every type in the checkout that carries the whole contract. Test files
-// count: a fake is exactly what this rule exists to reject.
+// for every type in the checkout that declares at least one contract method.
+// Test files count: a fake is exactly what this rule exists to reject.
+//
+// One method is enough to report, because embedding satisfies the rest:
+// `struct{ pathpolicy.Policy }` with a single overriding RequireExactPath is a
+// complete PathPolicy whose symlink rejection is gone. Requiring the whole set
+// would wave that through. A type that embeds and overrides nothing declares no
+// method here and is not reported - it behaves exactly like the real Policy.
 func pathPolicyImplementations(root string) (map[string]string, error) {
 	declared := make(map[string]map[string]struct{})
 	directories := make(map[string]string)
@@ -40,7 +46,7 @@ func pathPolicyImplementations(root string) (map[string]string, error) {
 				continue
 			}
 			parameters, known := pathPolicyContract[function.Name.Name]
-			if !known || !acceptsStringsReturnsError(function.Type, parameters) {
+			if !known || !matchesContractShape(function.Type, parameters) {
 				continue
 			}
 			key := directory + "." + receiverTypeName(function.Recv.List[0].Type)
@@ -57,30 +63,30 @@ func pathPolicyImplementations(root string) (map[string]string, error) {
 	}
 	implementations := make(map[string]string)
 	for key, methods := range declared {
-		if len(methods) == len(pathPolicyContract) {
+		if len(methods) > 0 {
 			implementations[key] = directories[key]
 		}
 	}
 	return implementations, nil
 }
 
-func acceptsStringsReturnsError(signature *ast.FuncType, parameters int) bool {
-	if signature.Results == nil || len(signature.Results.List) != 1 {
-		return false
-	}
-	result, ok := signature.Results.List[0].Type.(*ast.Ident)
-	if !ok || result.Name != "error" {
-		return false
-	}
+// matchesContractShape reports a method that could carry a contract method set.
+// It matches on arity and on returning a single value, and deliberately does not
+// read the parameter or result type names: `type s = string` and `type e = error`
+// are the same types under different identifiers, so a name check would reject a
+// real implementation written through an alias.
+func matchesContractShape(signature *ast.FuncType, parameters int) bool {
+	return signature.Results != nil && fieldCount(signature.Results) == 1 && fieldCount(signature.Params) == parameters
+}
+
+// fieldCount counts declared values, not field groups: `(base, candidate string)`
+// is one group carrying two parameters.
+func fieldCount(list *ast.FieldList) int {
 	count := 0
-	for _, field := range signature.Params.List {
-		identifier, ok := field.Type.(*ast.Ident)
-		if !ok || identifier.Name != "string" {
-			return false
-		}
+	for _, field := range list.List {
 		count += max(len(field.Names), 1)
 	}
-	return count == parameters
+	return count
 }
 
 func receiverTypeName(expression ast.Expr) string {
