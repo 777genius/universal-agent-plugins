@@ -11,8 +11,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/providers/nativeconfig"
 	"github.com/tailscale/hujson"
 )
 
@@ -154,10 +155,10 @@ func TestOpenCodeLateSkillCollisionDoesNotReplaceForeignDirectory(t *testing.T) 
 	}
 	liveSkill := filepath.Join(configRoot, "skills", "docs")
 	rename := func(oldPath, newPath string) error {
-		if strings.HasPrefix(filepath.Base(oldPath), "new-") && sameCleanPath(newPath, liveSkill) {
+		if strings.HasPrefix(filepath.Base(oldPath), "new-") && shared.SameCleanPath(newPath, liveSkill) {
 			writeOpenCodeTestFile(t, filepath.Join(newPath, "SKILL.md"), "late foreign\n")
 		}
-		return renameDirectoryExclusive(oldPath, newPath)
+		return shared.RenameDirectoryExclusive(oldPath, newPath)
 	}
 
 	err = applyOpenCodeNativeWithRename(configRoot, active, nil, objects, rename)
@@ -199,18 +200,18 @@ func TestOpenCodeRollbackDoesNotReplaceConcurrentForeignDirectory(t *testing.T) 
 	configPath := filepath.Join(configRoot, "opencode.json")
 	rename := func(oldPath, newPath string) error {
 		switch {
-		case strings.HasPrefix(filepath.Base(oldPath), "new-") && sameCleanPath(newPath, liveSkill):
-			if err := renameDirectoryExclusive(oldPath, newPath); err != nil {
+		case strings.HasPrefix(filepath.Base(oldPath), "new-") && shared.SameCleanPath(newPath, liveSkill):
+			if err := shared.RenameDirectoryExclusive(oldPath, newPath); err != nil {
 				return err
 			}
 			// Force the later ownership-aware MCP batch to fail after the new
 			// skill is live, so rollback has to restore the isolated backup.
 			writeOpenCodeTestFile(t, configPath, `{"mcp":{"docs":{"type":"local","command":["foreign"]}}}`)
 			return nil
-		case strings.HasPrefix(filepath.Base(oldPath), "old-") && sameCleanPath(newPath, liveSkill):
+		case strings.HasPrefix(filepath.Base(oldPath), "old-") && shared.SameCleanPath(newPath, liveSkill):
 			writeOpenCodeTestFile(t, filepath.Join(newPath, "SKILL.md"), "concurrent foreign\n")
 		}
-		return renameDirectoryExclusive(oldPath, newPath)
+		return shared.RenameDirectoryExclusive(oldPath, newPath)
 	}
 
 	err = applyOpenCodeNativeWithRename(configRoot, activeV2, first, second, rename)
@@ -253,7 +254,7 @@ func TestOpenCodeCommittedCleanupFailureKeepsReceiptsAndLaterLifecycleConsistent
 	}
 	cleanupErr := errors.New("injected committed cleanup failure")
 	cleanupCalls := 0
-	err = applyOpenCodeNativeWithOps(configRoot, activeV2, first, second, renameDirectoryExclusive, func(path string) error {
+	err = applyOpenCodeNativeWithOps(configRoot, activeV2, first, second, shared.RenameDirectoryExclusive, func(path string) error {
 		cleanupCalls++
 		if !strings.HasPrefix(filepath.Base(path), ".agentplugins-native-") {
 			t.Fatalf("cleanup target = %s", path)

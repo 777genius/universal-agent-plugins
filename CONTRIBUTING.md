@@ -89,6 +89,13 @@ entry may be removed or narrowed, never added or widened, and that applies to
 exclusions outside the markers too. A file leaves the block when it is split or
 simplified; it is never added to buy silence for new code.
 
+Moving an exempt file is the one case the rule cannot tell apart from buying
+silence for new code: the old path disappears and an unknown one appears. Declare
+the move in `scripts/lint-baseline-renames.txt` as `<old path><TAB><new path>`,
+using the patterns exactly as they are written in the `- path:` keys. The rename
+only maps the path - the entry still has to carry the same linters and the same
+message patterns, or the comparison fails as it would for any widening.
+
 The script is a speed bump, not a proof. It reads the flat three-line entry shape
 the generator emits and compares linters and message patterns as literal strings,
 so restructuring the YAML or rewording a pattern will read as a change even when

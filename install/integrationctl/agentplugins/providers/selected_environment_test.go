@@ -1,8 +1,9 @@
 package providers
 
 import (
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"testing"
+
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
 func TestReservedEnvironmentValidationUsesSelectedMCPSet(t *testing.T) {

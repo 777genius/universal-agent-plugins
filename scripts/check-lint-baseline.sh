@@ -7,6 +7,11 @@
 # path, a new linter on an existing path, or a new message pattern all fail
 # here, including entries placed outside the LEGACY SIZE BASELINE markers.
 #
+# A `git mv` of an exempt file is indistinguishable from a new exemption here,
+# so moves are declared in scripts/lint-baseline-renames.txt and applied to the
+# base side before the comparison. A declared move still has to keep the same
+# linters and message patterns; the rename file only maps the path.
+#
 # This is a speed bump, not a proof. It understands the flat three-line entry
 # shape the generator emits and will not follow arbitrary YAML restructuring.
 # Its job is to catch accidental widening and to push the deliberate kind
@@ -18,6 +23,7 @@ set -euo pipefail
 
 BASE_REF="${1:-origin/main}"
 CONFIG=".golangci.yml"
+RENAMES="scripts/lint-baseline-renames.txt"
 
 repo_root="$(git rev-parse --show-toplevel)"
 cd "$repo_root"
@@ -125,6 +131,20 @@ fi
 
 git show "$BASE_REF:$CONFIG" | extract_rules >"$work_dir/base"
 base_count="$(grep -c . "$work_dir/base" || true)"
+
+if [ -f "$RENAMES" ]; then
+  awk -F'\t' '
+    NR == FNR {
+      line = $0
+      sub(/#.*/, "", line)
+      split(line, field, /[[:space:]]+/)
+      if (field[1] != "" && field[2] != "") { moved[field[1]] = field[2] }
+      next
+    }
+    { if ($1 in moved) { $1 = moved[$1] } ; print $1 "\t" $2 "\t" $3 "\t" $4 }
+  ' "$RENAMES" "$work_dir/base" | sort >"$work_dir/base.renamed"
+  mv "$work_dir/base.renamed" "$work_dir/base"
+fi
 
 if ! compare_rules "$work_dir/base" "$work_dir/head" >"$work_dir/violations"; then
   echo "check-lint-baseline: lint exclusions may only shrink, but these are new or wider:" >&2

@@ -11,8 +11,9 @@ import (
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/filetree"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/pathpolicy"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/providers/nativeconfig"
 )
 
 const (
@@ -27,11 +28,11 @@ type clineProjection struct {
 
 func projectClineNative(root string, envelope domain.PackageEnvelope, plan domain.DeliveryPlan, dataPath string) error {
 	servers := make(map[string]nativeconfig.Server)
-	for _, name := range supportedMCPNames(plan) {
+	for _, name := range shared.SupportedMCPNames(plan) {
 		portable := envelope.MCP.Servers[name]
 		if portable.Type == "stdio" {
-			portable.Decoded = cloneObject(portable.Decoded)
-			if err := applyStdioDataContract(portable.Decoded, plan.ActivePath, dataPath, root); err != nil {
+			portable.Decoded = shared.CloneObject(portable.Decoded)
+			if err := shared.ApplyStdioDataContract(portable.Decoded, plan.ActivePath, dataPath, root); err != nil {
 				return fmt.Errorf("project Cline MCP server %s: %w", name, err)
 			}
 		}
@@ -51,7 +52,7 @@ func projectClineNative(root string, envelope domain.PackageEnvelope, plan domai
 	if len(servers) == 0 {
 		return nil
 	}
-	return writeJSON(filepath.Join(root, clineProjectionFile), clineProjection{Servers: servers})
+	return shared.WriteJSON(filepath.Join(root, clineProjectionFile), clineProjection{Servers: servers})
 }
 
 func buildClineNativeObjects(stagingRoot string, envelope domain.PackageEnvelope, plan domain.DeliveryPlan) ([]domain.NativeObjectOwnership, error) {
@@ -188,14 +189,14 @@ func applyClineNativeMutationWithRename(configRoot, activePath string, previous,
 }
 
 func applyClineNativeMutationWithKernel(configRoot, activePath string, previous, desired []domain.NativeObjectOwnership, kernel nativeconfig.Kernel) error {
-	return applyClineNativeMutationWithKernelAndRename(configRoot, activePath, previous, desired, kernel, renameDirectoryExclusive)
+	return applyClineNativeMutationWithKernelAndRename(configRoot, activePath, previous, desired, kernel, shared.RenameDirectoryExclusive)
 }
 
 func applyClineNativeMutationWithKernelAndRename(configRoot, activePath string, previous, desired []domain.NativeObjectOwnership, kernel nativeconfig.Kernel, rename clineRenameFunc) (resultErr error) {
-	return applyClineNativeMutationWithKernelRenameAndCapacity(configRoot, activePath, previous, desired, kernel, rename, checkedCombinedCapacity)
+	return applyClineNativeMutationWithKernelRenameAndCapacity(configRoot, activePath, previous, desired, kernel, rename, shared.CheckedCombinedCapacity)
 }
 
-func applyClineNativeMutationWithKernelRenameAndCapacity(configRoot, activePath string, previous, desired []domain.NativeObjectOwnership, kernel nativeconfig.Kernel, rename clineRenameFunc, capacity combinedCapacityFunc) (resultErr error) {
+func applyClineNativeMutationWithKernelRenameAndCapacity(configRoot, activePath string, previous, desired []domain.NativeObjectOwnership, kernel nativeconfig.Kernel, rename clineRenameFunc, capacity shared.CombinedCapacityFunc) (resultErr error) {
 	if rename == nil {
 		return fmt.Errorf("Cline rename operation is unavailable")
 	}
@@ -217,7 +218,7 @@ func applyClineNativeMutationWithKernelRenameAndCapacity(configRoot, activePath 
 	}
 	for id, object := range desiredByID {
 		if prior, replacing := previousByID[id]; replacing {
-			if prior.Kind != object.Kind || prior.LogicalName != object.LogicalName || !sameCleanPath(prior.Path, object.Path) {
+			if prior.Kind != object.Kind || prior.LogicalName != object.LogicalName || !shared.SameCleanPath(prior.Path, object.Path) {
 				return fmt.Errorf("Cline native object identity changed unexpectedly for %s", id)
 			}
 			continue
@@ -364,7 +365,7 @@ func mutateClineMCP(configRoot, activePath string, previous, desired map[string]
 }
 
 func mutateClineMCPWithKernel(configRoot, activePath string, previous, desired map[string]domain.NativeObjectOwnership, kernel nativeconfig.Kernel) error {
-	idsCapacity, capacityErr := checkedCombinedCapacity(len(previous), len(desired))
+	idsCapacity, capacityErr := shared.CheckedCombinedCapacity(len(previous), len(desired))
 	if capacityErr != nil {
 		return fmt.Errorf("prepare managed Cline MCP server set: %w", capacityErr)
 	}
@@ -468,7 +469,7 @@ func mutateClineMCPWithKernelAndCapacity(configRoot, activePath string, previous
 
 func sameClineMCPObject(left, right domain.NativeObjectOwnership) bool {
 	return left.ObjectID == right.ObjectID && left.Kind == clineMCPObjectKind && right.Kind == clineMCPObjectKind &&
-		left.LogicalName == right.LogicalName && sameCleanPath(left.Path, right.Path) && left.ManagedDigest == right.ManagedDigest
+		left.LogicalName == right.LogicalName && shared.SameCleanPath(left.Path, right.Path) && left.ManagedDigest == right.ManagedDigest
 }
 
 func readClineProjection(root string) (clineProjection, error) {
@@ -530,7 +531,7 @@ func validateClineObject(configRoot string, object domain.NativeObjectOwnership)
 			return fmt.Errorf("unsafe Cline skill path: %w", err)
 		}
 	} else if object.Kind == clineMCPObjectKind {
-		if !filepath.IsAbs(object.Path) || !sameCleanPath(object.Path, clineMCPSettingsPath(configRoot)) {
+		if !filepath.IsAbs(object.Path) || !shared.SameCleanPath(object.Path, clineMCPSettingsPath(configRoot)) {
 			return fmt.Errorf("Cline MCP ownership path changed")
 		}
 	} else {

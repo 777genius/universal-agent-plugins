@@ -17,6 +17,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
 	legacyports "github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
 )
 
@@ -289,7 +290,7 @@ func TestKiroACPFullSnapshotOmissionRevokesConnectedState(t *testing.T) {
 		acpArrayStatus("s", "["+alphaConnected+","+betaConnected+"]") +
 		acpArrayStatus("s", "["+alphaConnected+"]"), keepAlive: true}
 	err := verifyKiroACP(context.Background(), runner, "kiro-cli", t.TempDir(), []string{"alpha", "beta"})
-	if !errors.Is(err, errRecognizedNegativeEvidence) || !strings.Contains(err.Error(), "omitted planned server beta") {
+	if !errors.Is(err, shared.ErrRecognizedNegativeEvidence) || !strings.Contains(err.Error(), "omitted planned server beta") {
 		t.Fatalf("connected -> omitted full snapshot error = %v", err)
 	}
 }
@@ -347,7 +348,7 @@ func TestKiroACPRealPipeDeadlineBoundary(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			runner := &fixtureDuplexRunner{output: test.output, keepAlive: true, closeAfterWrite: true}
 			err := verifyKiroACPWithTimeout(context.Background(), runner, "kiro-cli", t.TempDir(), []string{"alpha"}, 250*time.Millisecond)
-			if test.wantErr && !errors.Is(err, errRecognizedNegativeEvidence) {
+			if test.wantErr && !errors.Is(err, shared.ErrRecognizedNegativeEvidence) {
 				t.Fatalf("real-pipe error = %v, want negative evidence", err)
 			}
 			if !test.wantErr && err != nil {
@@ -359,7 +360,7 @@ func TestKiroACPRealPipeDeadlineBoundary(t *testing.T) {
 	t.Run("no data timeout", func(t *testing.T) {
 		runner := &fixtureDuplexRunner{keepAlive: true, closeOnContext: true}
 		err := verifyKiroACPWithTimeout(context.Background(), runner, "kiro-cli", t.TempDir(), []string{"alpha"}, 25*time.Millisecond)
-		if !errors.Is(err, context.DeadlineExceeded) || !errors.Is(err, errRecognizedNegativeEvidence) {
+		if !errors.Is(err, context.DeadlineExceeded) || !errors.Is(err, shared.ErrRecognizedNegativeEvidence) {
 			t.Fatalf("real-pipe no-data error = %v, want bounded negative deadline evidence", err)
 		}
 	})
@@ -391,7 +392,7 @@ func TestKiroACPRealPipePostSuccessSettlement(t *testing.T) {
 				_, _ = io.WriteString(peer, trailing)
 			}()
 			err = exchangeKiroACP(stdin, stdout, t.TempDir(), map[string]*kiroACPServerState{"alpha": {}})
-			if !errors.Is(err, errRecognizedNegativeEvidence) && !errors.Is(err, errKiroACPPartialExit) {
+			if !errors.Is(err, shared.ErrRecognizedNegativeEvidence) && !errors.Is(err, errKiroACPPartialExit) {
 				t.Fatalf("settlement error = %v, want trailing negative evidence", err)
 			}
 		})
@@ -465,7 +466,7 @@ func TestKiroACPConsumesQueuedStatusesUntilCleanEOFAfterCompletion(t *testing.T)
 		t.Run(name, func(t *testing.T) {
 			runner := &fixtureDuplexRunner{output: acpResponse(0, `{"protocolVersion":1}`) + acpResponse(1, `{"sessionId":"s"}`) + connected + queued, keepAlive: true}
 			err := verifyKiroACP(context.Background(), runner, "kiro-cli", t.TempDir(), []string{"alpha"})
-			if !errors.Is(err, errRecognizedNegativeEvidence) {
+			if !errors.Is(err, shared.ErrRecognizedNegativeEvidence) {
 				t.Fatalf("error = %v, want queued contradictory status to be recognized negative evidence", err)
 			}
 			if runner.stdinCloses != 1 {
@@ -488,7 +489,7 @@ func TestKiroACPRejectsQueuedDuplicateConnectingAfterConnected(t *testing.T) {
 		keepAlive: true,
 	}
 	err := verifyKiroACP(context.Background(), runner, "kiro-cli", t.TempDir(), []string{"alpha"})
-	if !errors.Is(err, errRecognizedNegativeEvidence) || !strings.Contains(err.Error(), "regressive connecting status after connected") {
+	if !errors.Is(err, shared.ErrRecognizedNegativeEvidence) || !strings.Contains(err.Error(), "regressive connecting status after connected") {
 		t.Fatalf("queued connected -> connecting error = %v, want recognized regressive evidence", err)
 	}
 	if runner.stdinCloses != 1 {
@@ -523,7 +524,7 @@ func TestKiroACPRejectsPartialRecordAfterCompletion(t *testing.T) {
 	t.Parallel()
 	runner := &fixtureDuplexRunner{output: connectedACP("alpha") + `{"jsonrpc":"2.0"`, keepAlive: true}
 	err := verifyKiroACP(context.Background(), runner, "kiro-cli", t.TempDir(), []string{"alpha"})
-	if !errors.Is(err, errKiroACPPartialExit) || !errors.Is(err, errRecognizedNegativeEvidence) {
+	if !errors.Is(err, errKiroACPPartialExit) || !errors.Is(err, shared.ErrRecognizedNegativeEvidence) {
 		t.Fatalf("error = %v, want partial trailing record failure", err)
 	}
 	if runner.stdinCloses != 1 {
@@ -554,7 +555,7 @@ func TestKiroACPProcessFailureAfterCleanCompletionFailsClosed(t *testing.T) {
 	processErr := errors.New("ACP process exited unsuccessfully")
 	runner := &fixtureDuplexRunner{output: connectedACP("alpha"), postError: processErr}
 	err := verifyKiroACP(context.Background(), runner, "kiro-cli", t.TempDir(), []string{"alpha"})
-	if !errors.Is(err, processErr) || !errors.Is(err, errRecognizedNegativeEvidence) || errors.Is(err, errKiroACPContractUnknown) {
+	if !errors.Is(err, processErr) || !errors.Is(err, shared.ErrRecognizedNegativeEvidence) || errors.Is(err, errKiroACPContractUnknown) {
 		t.Fatalf("error = %v, want fail-closed post-exchange process failure", err)
 	}
 }
@@ -574,7 +575,7 @@ func TestKiroACPRejectsEveryOutOfRangeNumberToken(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			runner := &fixtureDuplexRunner{output: output, keepAlive: true}
 			err := verifyKiroACP(context.Background(), runner, "kiro-cli", t.TempDir(), []string{"alpha"})
-			if !errors.Is(err, errRecognizedNegativeEvidence) || errors.Is(err, errKiroACPContractUnknown) {
+			if !errors.Is(err, shared.ErrRecognizedNegativeEvidence) || errors.Is(err, errKiroACPContractUnknown) {
 				t.Fatalf("error = %v, want out-of-range JSON number rejected as a protocol failure", err)
 			}
 		})
@@ -615,7 +616,7 @@ func TestKiroACPRejectsInvalidUTF8WithoutReplacement(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			runner := &fixtureDuplexRunner{output: string(output), keepAlive: true, closeAfterWrite: true}
 			err := verifyKiroACP(context.Background(), runner, "kiro-cli", t.TempDir(), []string{"alpha"})
-			if !errors.Is(err, errRecognizedNegativeEvidence) {
+			if !errors.Is(err, shared.ErrRecognizedNegativeEvidence) {
 				t.Fatalf("error = %v, want invalid UTF-8 to prevent connected success", err)
 			}
 			if err == nil {
@@ -643,7 +644,7 @@ func TestKiroACPRejectsUnpairedUTF16EscapesWithoutReplacement(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			runner := &fixtureDuplexRunner{output: output, keepAlive: true, closeAfterWrite: true}
 			err := verifyKiroACP(context.Background(), runner, "kiro-cli", t.TempDir(), []string{"alpha"})
-			if !errors.Is(err, errRecognizedNegativeEvidence) || !strings.Contains(err.Error(), "surrogate") {
+			if !errors.Is(err, shared.ErrRecognizedNegativeEvidence) || !strings.Contains(err.Error(), "surrogate") {
 				t.Fatalf("error = %v, want unpaired UTF-16 escape rejected before evidence acceptance", err)
 			}
 		})
@@ -727,7 +728,7 @@ func TestKiroACPPreservesPreSessionNegativeEvidenceAcrossLaterFailures(t *testin
 		t.Run(name, func(t *testing.T) {
 			runner := &fixtureDuplexRunner{reader: output}
 			err := verifyKiroACP(context.Background(), runner, "kiro-cli", t.TempDir(), []string{"alpha"})
-			if !errors.Is(err, errRecognizedNegativeEvidence) || errors.Is(err, errKiroACPContractUnknown) {
+			if !errors.Is(err, shared.ErrRecognizedNegativeEvidence) || errors.Is(err, errKiroACPContractUnknown) {
 				t.Fatalf("error = %v, want sticky recognized negative evidence", err)
 			}
 		})
@@ -742,7 +743,7 @@ func TestKiroACPMultiServerTimeoutPreservesIncompleteNegativeEvidence(t *testing
 		postError: context.DeadlineExceeded,
 	}
 	err := verifyKiroACP(context.Background(), runner, "kiro-cli", t.TempDir(), []string{"alpha", "beta"})
-	if !errors.Is(err, errRecognizedNegativeEvidence) || !errors.Is(err, context.DeadlineExceeded) {
+	if !errors.Is(err, shared.ErrRecognizedNegativeEvidence) || !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("error = %v, want incomplete evidence and deadline identities", err)
 	}
 }
@@ -779,7 +780,7 @@ func TestKiroACPRejectsNonExclusiveJSONRPCEnvelopes(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			runner := &fixtureDuplexRunner{output: output}
 			err := verifyKiroACP(context.Background(), runner, "kiro-cli", t.TempDir(), []string{"alpha"})
-			if !errors.Is(err, errRecognizedNegativeEvidence) || errors.Is(err, errKiroACPContractUnknown) {
+			if !errors.Is(err, shared.ErrRecognizedNegativeEvidence) || errors.Is(err, errKiroACPContractUnknown) {
 				t.Fatalf("error = %v, want rejected JSON-RPC protocol failure", err)
 			}
 		})
@@ -802,7 +803,7 @@ func TestKiroACPRejectsStructuredNegativeEvidence(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			runner := &fixtureDuplexRunner{output: acpResponse(0, `{"protocolVersion":1}`) + acpResponse(1, `{"sessionId":"s"}`) + status}
 			err := verifyKiroACP(context.Background(), runner, "kiro-cli", t.TempDir(), []string{"alpha"})
-			if !errors.Is(err, errRecognizedNegativeEvidence) {
+			if !errors.Is(err, shared.ErrRecognizedNegativeEvidence) {
 				t.Fatalf("error = %v, want recognized negative evidence", err)
 			}
 		})
@@ -831,7 +832,7 @@ func TestKiroACPRejectsAmbiguousDuplicateAndWrongIdentity(t *testing.T) {
 				t.Fatal("ambiguous ACP evidence unexpectedly succeeded")
 			}
 			if name == "wrong server" || name == "missing server" || name == "wrong session" || name == "conflicting duplicate connected" {
-				if !errors.Is(err, errRecognizedNegativeEvidence) {
+				if !errors.Is(err, shared.ErrRecognizedNegativeEvidence) {
 					t.Fatalf("error = %v, want recognized negative evidence", err)
 				}
 			}
@@ -866,10 +867,10 @@ func TestKiroACPProtocolFailuresFailClosedAndLaunchFailuresFallBack(t *testing.T
 			runner := &fixtureDuplexRunner{output: test.output, duplexErr: test.err}
 			err := verifyKiroACP(context.Background(), runner, "kiro-cli", t.TempDir(), []string{"alpha"})
 			if test.err == nil {
-				if !errors.Is(err, errRecognizedNegativeEvidence) || errors.Is(err, errKiroACPContractUnknown) {
+				if !errors.Is(err, shared.ErrRecognizedNegativeEvidence) || errors.Is(err, errKiroACPContractUnknown) {
 					t.Fatalf("error = %v, want fail-closed protocol evidence", err)
 				}
-			} else if !errors.Is(err, errKiroACPContractUnknown) || errors.Is(err, errRecognizedNegativeEvidence) {
+			} else if !errors.Is(err, errKiroACPContractUnknown) || errors.Is(err, shared.ErrRecognizedNegativeEvidence) {
 				t.Fatalf("error = %v, want safe pre-exchange fallback", err)
 			}
 		})

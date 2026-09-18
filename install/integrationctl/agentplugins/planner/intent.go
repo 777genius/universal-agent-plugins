@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
@@ -32,7 +33,7 @@ func ApplyInstallIntent(plan *domain.DeliveryPlan, intent domain.InstallIntent) 
 		plan.UserActions = []string{domain.ChatGPTMappedPreparationAction}
 		return nil
 	}
-	if strings.TrimSpace(plan.NativeRegistryRoot) == "" || !hasOnlyKiroNativeComponents(plan.Components) {
+	if strings.TrimSpace(plan.NativeRegistryRoot) == "" || !shared.OnlyNativeComponents(plan.Components) {
 		return fmt.Errorf("Kiro preparation requires a native config root and supported skills or MCP servers")
 	}
 	plan.Status = domain.PlanReady

@@ -5,18 +5,20 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/pathcontract"
 	"io"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/pathcontract"
+
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/atomicfile"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/filetree"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/pathpolicy"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/providers/nativeconfig"
 )
 
 const (
@@ -61,7 +63,7 @@ func projectOpenCodeNative(root string, envelope domain.PackageEnvelope, plan do
 			return fmt.Errorf("project OpenCode MCP server %q: %w", component.Name, err)
 		}
 		if neutral.Type == "stdio" {
-			command, cwd, pathErr := resolveStdioPaths(neutral.Command, neutral.CWD, plan.ActivePath, dataRoot, root)
+			command, cwd, pathErr := shared.ResolveStdioPaths(neutral.Command, neutral.CWD, plan.ActivePath, dataRoot, root)
 			if pathErr != nil {
 				return fmt.Errorf("project OpenCode MCP server %q: %w", component.Name, pathErr)
 			}
@@ -395,7 +397,7 @@ func applyOpenCodeNative(configRoot, activePath string, previous, desired []doma
 }
 
 func applyOpenCodeNativeWithKernel(configRoot, activePath string, previous, desired []domain.NativeObjectOwnership, kernel nativeconfig.Kernel) error {
-	return applyOpenCodeNativeWithKernelAndOps(configRoot, activePath, previous, desired, kernel, renameDirectoryExclusive, os.RemoveAll)
+	return applyOpenCodeNativeWithKernelAndOps(configRoot, activePath, previous, desired, kernel, shared.RenameDirectoryExclusive, os.RemoveAll)
 }
 
 func applyOpenCodeNativeWithRename(configRoot, activePath string, previous, desired []domain.NativeObjectOwnership, rename openCodeRenameFunc) (resultErr error) {
@@ -449,7 +451,7 @@ func applyOpenCodeNativeWithKernelAndOps(configRoot, activePath string, previous
 		if err != nil {
 			return err
 		}
-		if !sameCleanPath(selected, expectedConfig) {
+		if !shared.SameCleanPath(selected, expectedConfig) {
 			if len(desired) > 0 || jsonExists || jsoncExists {
 				return fmt.Errorf("OpenCode config selection changed after staging; rerun the operation")
 			}
@@ -520,9 +522,9 @@ func applyOpenCodeNativeWithKernelAndOps(configRoot, activePath string, previous
 }
 
 func validateOpenCodeProjection(configRoot, activePath string, projection openCodeProjection) error {
-	if !sameCleanPath(projection.ConfigJSON, filepath.Join(configRoot, "opencode.json")) ||
-		!sameCleanPath(projection.ConfigJSONC, filepath.Join(configRoot, "opencode.jsonc")) ||
-		!sameCleanPath(projection.PackageRoot, activePath) {
+	if !shared.SameCleanPath(projection.ConfigJSON, filepath.Join(configRoot, "opencode.json")) ||
+		!shared.SameCleanPath(projection.ConfigJSONC, filepath.Join(configRoot, "opencode.jsonc")) ||
+		!shared.SameCleanPath(projection.PackageRoot, activePath) {
 		return fmt.Errorf("OpenCode native projection is not bound to the detected client and active package")
 	}
 	if projection.DataRoot != "" && !filepath.IsAbs(projection.DataRoot) {
@@ -614,7 +616,7 @@ func openCodeConfigPresence(configRoot string) (jsonExists, jsoncExists bool, er
 
 func sameOpenCodeMCPObject(left, right domain.NativeObjectOwnership) bool {
 	return left.ObjectID == right.ObjectID && left.Kind == openCodeMCPObjectKind && right.Kind == openCodeMCPObjectKind &&
-		left.LogicalName == right.LogicalName && sameCleanPath(left.Path, right.Path) && left.ManagedDigest == right.ManagedDigest
+		left.LogicalName == right.LogicalName && shared.SameCleanPath(left.Path, right.Path) && left.ManagedDigest == right.ManagedDigest
 }
 
 func receiptFromOpenCodeObject(object domain.NativeObjectOwnership) nativeconfig.Receipt {
@@ -646,7 +648,7 @@ func validateOpenCodeObject(configRoot string, projection openCodeProjection, ob
 	default:
 		return fmt.Errorf("unsupported OpenCode native object kind %q", object.Kind)
 	}
-	if !sameCleanPath(expected, object.Path) {
+	if !shared.SameCleanPath(expected, object.Path) {
 		return fmt.Errorf("OpenCode native object %q has an untrusted path", object.LogicalName)
 	}
 	return pathpolicy.RequireContainedChild(configRoot, object.Path)
@@ -664,7 +666,7 @@ func preflightOpenCodeObjects(configRoot, activePath string, projection openCode
 			return err
 		}
 		if prior, replacing := previousByID[id]; replacing {
-			if prior.Kind != object.Kind || prior.LogicalName != object.LogicalName || !sameCleanPath(prior.Path, object.Path) {
+			if prior.Kind != object.Kind || prior.LogicalName != object.LogicalName || !shared.SameCleanPath(prior.Path, object.Path) {
 				return fmt.Errorf("OpenCode native object identity changed for %s", id)
 			}
 			continue
@@ -692,7 +694,7 @@ type openCodeSkillTxn struct {
 }
 
 func installOpenCodeSkills(configRoot, activePath string, previous, desired []domain.NativeObjectOwnership) (*openCodeSkillTxn, error) {
-	return installOpenCodeSkillsWithOps(configRoot, activePath, previous, desired, renameDirectoryExclusive, os.RemoveAll)
+	return installOpenCodeSkillsWithOps(configRoot, activePath, previous, desired, shared.RenameDirectoryExclusive, os.RemoveAll)
 }
 
 func renameOpenCodeDirectoryNoReplace(oldPath, newPath string, rename openCodeRenameFunc) error {

@@ -9,12 +9,12 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
 	"unicode/utf8"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
 	legacyports "github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
 )
@@ -30,7 +30,7 @@ const (
 var (
 	errKiroACPContractUnknown = errors.New("Kiro structured ACP verification is unavailable or unrecognized")
 	errKiroACPEarlyExit       = errors.New("Kiro ACP process exited before verification completed")
-	errKiroACPPartialExit     = fmt.Errorf("%w: Kiro ACP process exited with a partial trailing record", errRecognizedNegativeEvidence)
+	errKiroACPPartialExit     = fmt.Errorf("%w: Kiro ACP process exited with a partial trailing record", shared.ErrRecognizedNegativeEvidence)
 )
 
 type duplexCommandRunner = ports.DuplexCommandRunner
@@ -98,17 +98,17 @@ func verifyKiroACPWithTimeout(ctx context.Context, runner duplexCommandRunner, e
 		// Once the client has entered the ACP exchange, malformed records,
 		// partial output, protocol violations, and stream/process interruption
 		// are authoritative verification failures rather than fallback signals.
-		return errors.Join(errRecognizedNegativeEvidence, exchangeErr)
+		return errors.Join(shared.ErrRecognizedNegativeEvidence, exchangeErr)
 	})
 	if err == nil {
 		if ctxErr := bounded.Err(); ctxErr != nil {
-			return errors.Join(errRecognizedNegativeEvidence, ctxErr)
+			return errors.Join(shared.ErrRecognizedNegativeEvidence, ctxErr)
 		}
 		return nil
 	}
 	if exchangeEntered.Load() {
-		if !errors.Is(err, errRecognizedNegativeEvidence) {
-			err = errors.Join(errRecognizedNegativeEvidence, err)
+		if !errors.Is(err, shared.ErrRecognizedNegativeEvidence) {
+			err = errors.Join(shared.ErrRecognizedNegativeEvidence, err)
 		}
 		// The phase-specific deadline belongs to the ACP exchange even when pipe
 		// closure is observed first. Preserve that cause instead of degrading a
@@ -117,7 +117,7 @@ func verifyKiroACPWithTimeout(ctx context.Context, runner duplexCommandRunner, e
 			err = errors.Join(err, boundedErr)
 		}
 	}
-	if errors.Is(err, errRecognizedNegativeEvidence) {
+	if errors.Is(err, shared.ErrRecognizedNegativeEvidence) {
 		if ctxErr := ctx.Err(); ctxErr != nil && !errors.Is(err, ctxErr) {
 			return errors.Join(err, ctxErr)
 		}
@@ -165,7 +165,7 @@ func exchangeKiroACP(stdin io.Writer, stdout io.Reader, cwd string, expected map
 					return fmt.Errorf("inspect ACP pipe at settlement boundary: %w", probeErr)
 				}
 				if eof {
-					return fmt.Errorf("%w: ACP output reached EOF at the post-success settlement boundary", errRecognizedNegativeEvidence)
+					return fmt.Errorf("%w: ACP output reached EOF at the post-success settlement boundary", shared.ErrRecognizedNegativeEvidence)
 				}
 				if !queued {
 					return nil
@@ -177,10 +177,10 @@ func exchangeKiroACP(stdin io.Writer, stdout io.Reader, cwd string, expected map
 				continue
 			}
 			if settling && errors.Is(err, errKiroACPEarlyExit) {
-				return fmt.Errorf("%w: ACP output reached EOF during post-success settlement", errRecognizedNegativeEvidence)
+				return fmt.Errorf("%w: ACP output reached EOF during post-success settlement", shared.ErrRecognizedNegativeEvidence)
 			}
 			if sessionCreated && !allKiroServersConnected(expected, sessionID) && errors.Is(err, errKiroACPEarlyExit) {
-				return fmt.Errorf("%w: not every planned MCP server reported connected", errRecognizedNegativeEvidence)
+				return fmt.Errorf("%w: not every planned MCP server reported connected", shared.ErrRecognizedNegativeEvidence)
 			}
 			return err
 		}
@@ -235,7 +235,7 @@ func exchangeKiroACP(stdin io.Writer, stdout io.Reader, cwd string, expected map
 			sessionCreated = true
 			for _, state := range expected {
 				if state.sessionID != "" && state.sessionID != sessionID {
-					return fmt.Errorf("%w: MCP status belongs to a different ACP session", errRecognizedNegativeEvidence)
+					return fmt.Errorf("%w: MCP status belongs to a different ACP session", shared.ErrRecognizedNegativeEvidence)
 				}
 			}
 		} else {
@@ -248,7 +248,7 @@ func exchangeKiroACP(stdin io.Writer, stdout io.Reader, cwd string, expected map
 			}
 			if method == "_kiro/mcp/status" {
 				if err := consumeKiroMCPStatus(message.document, expected); err != nil {
-					if errors.Is(err, errRecognizedNegativeEvidence) {
+					if errors.Is(err, shared.ErrRecognizedNegativeEvidence) {
 						if negativeErr == nil {
 							negativeErr = err
 						}
@@ -340,7 +340,7 @@ func consumeKiroMCPStatus(document map[string]any, expected map[string]*kiroACPS
 		// surviving the settlement window after Kiro removes a server.
 		for name, state := range expected {
 			if _, present := seen[name]; !present && (state.connecting || state.connected) {
-				return fmt.Errorf("%w: full Kiro MCP status snapshot omitted planned server %s", errRecognizedNegativeEvidence, name)
+				return fmt.Errorf("%w: full Kiro MCP status snapshot omitted planned server %s", shared.ErrRecognizedNegativeEvidence, name)
 			}
 		}
 		return nil
@@ -395,7 +395,7 @@ func consumeKiroMCPServer(name, sessionID string, server map[string]any, expecte
 				// Disabled tools are authoritative only for planned servers. An
 				// unrelated native-registry entry must not veto this package.
 				if _, planned := expected[name]; planned {
-					return fmt.Errorf("%w: Kiro MCP server %s has a disabled tool", errRecognizedNegativeEvidence, name)
+					return fmt.Errorf("%w: Kiro MCP server %s has a disabled tool", shared.ErrRecognizedNegativeEvidence, name)
 				}
 			}
 		}
@@ -407,7 +407,7 @@ func consumeKiroMCPServer(name, sessionID string, server map[string]any, expecte
 		return nil
 	}
 	if state.sessionID != "" && state.sessionID != sessionID {
-		return fmt.Errorf("%w: Kiro MCP server %s has conflicting session identities", errRecognizedNegativeEvidence, name)
+		return fmt.Errorf("%w: Kiro MCP server %s has conflicting session identities", shared.ErrRecognizedNegativeEvidence, name)
 	}
 	state.sessionID = sessionID
 	if disabled, present := server["disabled"]; present {
@@ -416,7 +416,7 @@ func consumeKiroMCPServer(name, sessionID string, server map[string]any, expecte
 			return fmt.Errorf("Kiro MCP server %s has malformed disabled state", name)
 		}
 		if value {
-			return fmt.Errorf("%w: Kiro MCP server %s is disabled", errRecognizedNegativeEvidence, name)
+			return fmt.Errorf("%w: Kiro MCP server %s is disabled", shared.ErrRecognizedNegativeEvidence, name)
 		}
 	}
 	status, ok := server["status"].(string)
@@ -433,13 +433,13 @@ func consumeKiroMCPServer(name, sessionID string, server map[string]any, expecte
 		// regression. In particular, do not accept an exact duplicate of the
 		// earlier connecting record when it was queued before settlement.
 		if state.connected {
-			return fmt.Errorf("%w: Kiro MCP server %s has regressive connecting status after connected", errRecognizedNegativeEvidence, name)
+			return fmt.Errorf("%w: Kiro MCP server %s has regressive connecting status after connected", shared.ErrRecognizedNegativeEvidence, name)
 		}
 		if state.connecting && state.connectingRecord == string(fingerprint) {
 			return nil
 		}
 		if state.connecting {
-			return fmt.Errorf("%w: Kiro MCP server %s has duplicate or regressive status", errRecognizedNegativeEvidence, name)
+			return fmt.Errorf("%w: Kiro MCP server %s has duplicate or regressive status", shared.ErrRecognizedNegativeEvidence, name)
 		}
 		state.connecting = true
 		state.connectingRecord = string(fingerprint)
@@ -457,11 +457,11 @@ func consumeKiroMCPServer(name, sessionID string, server map[string]any, expecte
 			if state.connectedRecord == string(fingerprint) {
 				return nil
 			}
-			return fmt.Errorf("%w: Kiro MCP server %s has duplicate connected identities", errRecognizedNegativeEvidence, name)
+			return fmt.Errorf("%w: Kiro MCP server %s has duplicate connected identities", shared.ErrRecognizedNegativeEvidence, name)
 		}
 		tools, present := server["tools"].([]any)
 		if !present || len(tools) == 0 {
-			return fmt.Errorf("%w: Kiro MCP server %s has no usable tools", errRecognizedNegativeEvidence, name)
+			return fmt.Errorf("%w: Kiro MCP server %s has no usable tools", shared.ErrRecognizedNegativeEvidence, name)
 		}
 		seenTools := make(map[string]struct{}, len(tools))
 		for _, rawTool := range tools {
@@ -482,14 +482,14 @@ func consumeKiroMCPServer(name, sessionID string, server map[string]any, expecte
 				return fmt.Errorf("Kiro MCP server %s tool %s has malformed disabled state", name, toolName)
 			}
 			if disabled {
-				return fmt.Errorf("%w: Kiro MCP server %s tool %s is disabled", errRecognizedNegativeEvidence, name, toolName)
+				return fmt.Errorf("%w: Kiro MCP server %s tool %s is disabled", shared.ErrRecognizedNegativeEvidence, name, toolName)
 			}
 		}
 		state.connected = true
 		state.connectedRecord = string(fingerprint)
 		return nil
 	case "pending", "disconnected", "disabled", "auth-required", "auth required", "authentication required", "error", "failed", "failure", "unhealthy":
-		return fmt.Errorf("%w: Kiro MCP server %s reported %s", errRecognizedNegativeEvidence, name, status)
+		return fmt.Errorf("%w: Kiro MCP server %s reported %s", shared.ErrRecognizedNegativeEvidence, name, status)
 	default:
 		return fmt.Errorf("Kiro MCP server %s reported an unknown status %q", name, status)
 	}
@@ -553,7 +553,7 @@ func decodeACPMessage(line []byte) (acpMessage, error) {
 	}
 	decoder := json.NewDecoder(strings.NewReader(string(line)))
 	decoder.UseNumber()
-	value, err := decodeUniqueJSONValue(decoder)
+	value, err := shared.DecodeUniqueJSONValue(decoder)
 	if err != nil {
 		return acpMessage{}, fmt.Errorf("malformed ACP JSON: %w", err)
 	}
@@ -635,16 +635,6 @@ func parseJSONHexQuad(value []byte) (uint16, bool) {
 		}
 	}
 	return result, true
-}
-
-func validateACPNumber(number json.Number) error {
-	// ACP/JSON-RPC numeric values must be representable as finite IEEE-754
-	// values. This gives every numeric token, including unused extension
-	// members, a deterministic finite/range policy before it can be trusted.
-	if _, err := strconv.ParseFloat(number.String(), 64); err != nil {
-		return fmt.Errorf("JSON number %q is outside the finite numeric range", number)
-	}
-	return nil
 }
 
 func validateInitializeResponse(message acpMessage) error {

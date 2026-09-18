@@ -2,10 +2,11 @@ package providers
 
 import (
 	"context"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
 func TestPersonalChatGPTPreparationCannotAttestRemoteActivation(t *testing.T) {

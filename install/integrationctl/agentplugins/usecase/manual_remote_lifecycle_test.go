@@ -8,9 +8,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/providers"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/providers/nativeconfig"
 )
 
 func TestSignedChatGPTPreparationSupportsAddUpdateAndRepairWhileRemoteActivationIsPending(t *testing.T) {

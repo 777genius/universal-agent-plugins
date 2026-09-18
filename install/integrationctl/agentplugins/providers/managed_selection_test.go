@@ -3,12 +3,13 @@ package providers
 import (
 	"context"
 	"errors"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
 	"os"
 	"path/filepath"
 	"reflect"
 	"testing"
+
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
 )
 
 func TestManagedMCPSelectionRequiresExactArtifact(t *testing.T) {

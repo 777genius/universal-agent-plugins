@@ -2,9 +2,10 @@ package providers
 
 import (
 	"fmt"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/pathpolicy"
 	"os"
 	"path/filepath"
+
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/pathpolicy"
 )
 
 // PreflightDataPath observes the same locator EnsureData owns, without creating it.

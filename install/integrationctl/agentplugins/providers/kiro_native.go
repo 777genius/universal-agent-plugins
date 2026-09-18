@@ -17,6 +17,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/atomicfile"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/filetree"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/pathpolicy"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
@@ -159,7 +160,7 @@ func applyKiroNativeMutation(configRoot, activePath string, previous, desired []
 	previousByID, desiredByID := objectMap(previous), objectMap(desired)
 	for id, object := range desiredByID {
 		if prior, replacing := previousByID[id]; replacing {
-			if prior.Kind != object.Kind || prior.LogicalName != object.LogicalName || !sameCleanPath(prior.Path, object.Path) {
+			if prior.Kind != object.Kind || prior.LogicalName != object.LogicalName || !shared.SameCleanPath(prior.Path, object.Path) {
 				return fmt.Errorf("Kiro native object identity changed unexpectedly for %s", id)
 			}
 			continue
@@ -355,7 +356,7 @@ func validateKiroObject(configRoot string, object domain.NativeObjectOwnership) 
 	default:
 		return fmt.Errorf("unsupported Kiro native object kind %q", object.Kind)
 	}
-	if !sameCleanPath(expected, object.Path) {
+	if !shared.SameCleanPath(expected, object.Path) {
 		return fmt.Errorf("Kiro native object %q has an untrusted path", object.LogicalName)
 	}
 	return validateKiroNativePath(configRoot, object.Path)
@@ -376,7 +377,7 @@ func projectedKiroMCPServer(root, name string) (map[string]any, error) {
 	if err != nil {
 		return nil, fmt.Errorf("read projected Kiro MCP configuration: %w", err)
 	}
-	document, err := decodeStrictJSONObject(body)
+	document, err := shared.DecodeStrictJSONObject(body)
 	if err != nil {
 		return nil, fmt.Errorf("decode projected Kiro MCP configuration: %w", err)
 	}
@@ -404,7 +405,7 @@ func readKiroMCPConfig(path string) (servers map[string]any, original []byte, mo
 	if statErr != nil || info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
 		return nil, nil, mode, false, fmt.Errorf("Kiro MCP configuration must be a regular file")
 	}
-	document, decodeErr := decodeStrictJSONObject(body)
+	document, decodeErr := shared.DecodeStrictJSONObject(body)
 	if decodeErr != nil {
 		return nil, nil, mode, false, fmt.Errorf("decode Kiro MCP configuration: %w", decodeErr)
 	}
@@ -424,7 +425,7 @@ func encodeKiroMCPConfig(original []byte, servers map[string]any) ([]byte, error
 	document := map[string]any{}
 	if len(original) > 0 {
 		var err error
-		document, err = decodeStrictJSONObject(original)
+		document, err = shared.DecodeStrictJSONObject(original)
 		if err != nil {
 			return nil, fmt.Errorf("decode existing Kiro MCP configuration: %w", err)
 		}

@@ -12,6 +12,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	legacyports "github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
 )
@@ -107,7 +108,7 @@ func TestActivatorInstallsCopilotAndVSCodeThroughManagedMarketplace(t *testing.T
 			if outcome.Activation != domain.ActivationActive || outcome.Verification != domain.VerificationInstalled || len(outcome.UserActions) != 0 {
 				t.Fatalf("outcome = %+v", outcome)
 			}
-			marketplace := managedMarketplaceName(request.Plan.PhysicalArtifactID)
+			marketplace := shared.ManagedMarketplaceName(request.Plan.PhysicalArtifactID)
 			want := [][]string{
 				{"/test/bin/copilot", "plugin", "marketplace", "add", request.Delivery.ActivePath},
 				{"/test/bin/copilot", "plugin", "install", "demo@" + marketplace},
@@ -142,7 +143,7 @@ func TestActivatorUpdateRecoversMissingMarketplaceAndPlugin(t *testing.T) {
 	if outcome.Activation != domain.ActivationActive {
 		t.Fatalf("outcome = %+v", outcome)
 	}
-	marketplace := managedMarketplaceName(request.Plan.PhysicalArtifactID)
+	marketplace := shared.ManagedMarketplaceName(request.Plan.PhysicalArtifactID)
 	want := [][]string{
 		{"/test/bin/copilot", "plugin", "marketplace", "update", marketplace},
 		{"/test/bin/copilot", "plugin", "marketplace", "add", request.Delivery.ActivePath},
@@ -186,7 +187,7 @@ func TestActivatorUsesCodexCLIAndVerifiesJSONState(t *testing.T) {
 	if outcome.Activation != domain.ActivationActive || outcome.Verification != domain.VerificationInstalled {
 		t.Fatalf("outcome = %+v", outcome)
 	}
-	marketplace := managedMarketplaceName(request.Plan.PhysicalArtifactID)
+	marketplace := shared.ManagedMarketplaceName(request.Plan.PhysicalArtifactID)
 	want := [][]string{
 		{"/test/bin/codex", "plugin", "marketplace", "add", request.Delivery.ActivePath, "--json"},
 		{"/test/bin/codex", "plugin", "add", "demo@" + marketplace, "--json"},
@@ -338,7 +339,7 @@ func TestKiroPartialRecordAfterCompletionCannotBeAttestedActive(t *testing.T) {
 	request.Plan.Components = []domain.ComponentDecision{{Kind: domain.ComponentMCPServer, Name: "alpha", Support: domain.SupportNative}}
 	runner := &recordingRunner{duplexOutput: connectedACP("alpha") + `{"jsonrpc":"2.0"`}
 	outcome, err := (Activator{Runner: runner}).Activate(context.Background(), request)
-	if err == nil || !errors.Is(err, errKiroACPPartialExit) || !errors.Is(err, errRecognizedNegativeEvidence) || outcome.ActivationAttested {
+	if err == nil || !errors.Is(err, errKiroACPPartialExit) || !errors.Is(err, shared.ErrRecognizedNegativeEvidence) || outcome.ActivationAttested {
 		t.Fatalf("partial EOF outcome=%+v err=%v, want non-attestable negative evidence", outcome, err)
 	}
 }
@@ -375,14 +376,14 @@ func TestCopilotVerificationRejectsRecognizedNegativeEvidence(t *testing.T) {
 	request := activationRequest(t, domain.ClientCopilot)
 	request.BackendExecutable = "/test/bin/copilot"
 	request.VerifyOnly = true
-	spec := "demo@" + managedMarketplaceName(request.Plan.PhysicalArtifactID)
+	spec := "demo@" + shared.ManagedMarketplaceName(request.Plan.PhysicalArtifactID)
 	cases := map[string]legacyports.CommandResult{
 		"pending":          {Stdout: []byte("Installed plugins:\n  • " + spec + " pending")},
 		"disconnected":     {Stdout: []byte("Installed plugins:\n  • " + spec + " disconnected")},
 		"disabled":         {Stdout: []byte("Installed plugins:\n  • " + spec + " disabled")},
 		"auth required":    {Stdout: []byte("Installed plugins:\n  • " + spec + " auth-required")},
 		"error":            {Stdout: []byte("Installed plugins:\n  error: " + spec)},
-		"unrelated":        {Stdout: []byte("Installed plugins:\n  • demo-extra@" + managedMarketplaceName(request.Plan.PhysicalArtifactID) + " (v1.0.0)")},
+		"unrelated":        {Stdout: []byte("Installed plugins:\n  • demo-extra@" + shared.ManagedMarketplaceName(request.Plan.PhysicalArtifactID) + " (v1.0.0)")},
 		"explicitly empty": {Stdout: []byte("Installed plugins:\n  No plugins installed.")},
 	}
 	for name, listed := range cases {
@@ -400,7 +401,7 @@ func TestCopilotUnknownOutputContractRemainsManual(t *testing.T) {
 	request := activationRequest(t, domain.ClientCopilot)
 	request.BackendExecutable = "/test/bin/copilot"
 	request.VerifyOnly = true
-	spec := "demo@" + managedMarketplaceName(request.Plan.PhysicalArtifactID)
+	spec := "demo@" + shared.ManagedMarketplaceName(request.Plan.PhysicalArtifactID)
 	for name, listed := range map[string]legacyports.CommandResult{
 		"empty":           {},
 		"bare name":       {Stdout: []byte("Installed plugins:\n  • demo (v1.0.0)")},
@@ -429,7 +430,7 @@ func TestCopilotExactVersion1078OutputRemainsSupported(t *testing.T) {
 	request.Plan.DeclaredVersion = "1.0.78"
 	request.BackendExecutable = "/test/bin/copilot"
 	request.VerifyOnly = true
-	spec := "demo@" + managedMarketplaceName(request.Plan.PhysicalArtifactID)
+	spec := "demo@" + shared.ManagedMarketplaceName(request.Plan.PhysicalArtifactID)
 	runner := &recordingRunner{run: func(legacyports.Command) legacyports.CommandResult {
 		return legacyports.CommandResult{Stdout: []byte("Installed plugins:\n  • " + spec + " (v1.0.78)")}
 	}}
@@ -445,7 +446,7 @@ func TestCopilotLivePluginListingBindsEnabledIdentityAndManagedPath(t *testing.T
 	request.Plan.DeclaredVersion = "1.7.0-uap.1"
 	request.BackendExecutable = "/test/bin/copilot"
 	request.VerifyOnly = true
-	spec := "demo@" + managedMarketplaceName(request.Plan.PhysicalArtifactID)
+	spec := "demo@" + shared.ManagedMarketplaceName(request.Plan.PhysicalArtifactID)
 	live := func(version, status, path string) []byte {
 		return []byte(copilotLiveHeader + "\n  • " + spec + " (v" + version + ") (" + status + ")\n      from " + path + "\n")
 	}
@@ -608,14 +609,14 @@ func TestVerifyOnlyRunsOnlyReadOnlyClientCommands(t *testing.T) {
 			switch client {
 			case domain.ClientCodex:
 				request.BackendExecutable = "/test/bin/codex"
-				marketplace := managedMarketplaceName(request.Plan.PhysicalArtifactID)
+				marketplace := shared.ManagedMarketplaceName(request.Plan.PhysicalArtifactID)
 				runner.run = func(legacyports.Command) legacyports.CommandResult {
 					return legacyports.CommandResult{Stdout: []byte(fmt.Sprintf(`{"installed":[{"pluginId":"demo@%s","name":"demo","marketplaceName":%q,"installed":true,"enabled":true}]}`, marketplace, marketplace))}
 				}
 				want = [][]string{{"/test/bin/codex", "plugin", "list", "--json"}}
 			case domain.ClientCopilot:
 				request.BackendExecutable = "/test/bin/copilot"
-				spec := "demo@" + managedMarketplaceName(request.Plan.PhysicalArtifactID)
+				spec := "demo@" + shared.ManagedMarketplaceName(request.Plan.PhysicalArtifactID)
 				runner.run = func(legacyports.Command) legacyports.CommandResult {
 					return legacyports.CommandResult{Stdout: []byte("Installed plugins:\n  • " + spec + " (v1.0.0)")}
 				}
@@ -751,7 +752,7 @@ func TestActivatorCleansNewMarketplaceWhenPluginInstallFails(t *testing.T) {
 	if _, err := (Activator{Runner: runner}).Activate(context.Background(), request); err == nil {
 		t.Fatal("failed install unexpectedly succeeded")
 	}
-	marketplace := managedMarketplaceName(request.Plan.PhysicalArtifactID)
+	marketplace := shared.ManagedMarketplaceName(request.Plan.PhysicalArtifactID)
 	want := [][]string{
 		{"/test/bin/copilot", "plugin", "marketplace", "add", request.Delivery.ActivePath},
 		{"/test/bin/copilot", "plugin", "install", "demo@" + marketplace},
@@ -825,8 +826,8 @@ func TestDeactivatorPreviewsThenRemovesNativeCopilotLifecycle(t *testing.T) {
 		t.Fatalf("outcome = %+v", outcome)
 	}
 	want := [][]string{
-		{"/test/bin/copilot", "plugin", "uninstall", "demo@" + managedMarketplaceName(request.PhysicalArtifactID)},
-		{"/test/bin/copilot", "plugin", "marketplace", "remove", managedMarketplaceName(request.PhysicalArtifactID)},
+		{"/test/bin/copilot", "plugin", "uninstall", "demo@" + shared.ManagedMarketplaceName(request.PhysicalArtifactID)},
+		{"/test/bin/copilot", "plugin", "marketplace", "remove", shared.ManagedMarketplaceName(request.PhysicalArtifactID)},
 	}
 	if got := commandArgv(runner.commands); !reflect.DeepEqual(got, want) {
 		t.Fatalf("commands = %#v, want %#v", got, want)
@@ -852,7 +853,7 @@ func TestDeactivatorPreviewsThenCleansManagedCodexMarketplace(t *testing.T) {
 	if !outcome.ArtifactRemovalAllowed || !outcome.ExternalRemovalComplete {
 		t.Fatalf("outcome = %+v", outcome)
 	}
-	marketplace := managedMarketplaceName(request.PhysicalArtifactID)
+	marketplace := shared.ManagedMarketplaceName(request.PhysicalArtifactID)
 	want := [][]string{
 		{"/test/bin/codex", "plugin", "remove", request.DeclaredName + "@" + marketplace, "--json"},
 		{"/test/bin/codex", "plugin", "marketplace", "remove", marketplace, "--json"},
@@ -876,7 +877,7 @@ func TestDeactivatorCleansStalePluginEntryWhenMarketplaceAlreadyGone(t *testing.
 	runner := &recordingRunner{}
 	request := codexDeactivationRequest(t)
 	request.Confirmed = true
-	marketplace := managedMarketplaceName(request.PhysicalArtifactID)
+	marketplace := shared.ManagedMarketplaceName(request.PhysicalArtifactID)
 	writeTestFile(t, filepath.Join(request.Client.ConfigRoot, "config.toml"), fmt.Sprintf(`
 [plugins."%s@%s"]
 enabled = true
@@ -904,7 +905,7 @@ func TestDeactivatorBlocksRemovalWhenPluginEntryStaleAndCLIUnavailable(t *testin
 	request := codexDeactivationRequest(t)
 	request.Confirmed = true
 	request.BackendExecutable = ""
-	marketplace := managedMarketplaceName(request.PhysicalArtifactID)
+	marketplace := shared.ManagedMarketplaceName(request.PhysicalArtifactID)
 	writeTestFile(t, filepath.Join(request.Client.ConfigRoot, "config.toml"), fmt.Sprintf(`
 [plugins."%s@%s"]
 enabled = true
@@ -976,7 +977,7 @@ func TestDeactivatorNeverRemovesSameNameUserCodexMarketplace(t *testing.T) {
 	runner := &recordingRunner{}
 	request := codexDeactivationRequest(t)
 	request.Confirmed = true
-	marketplace := managedMarketplaceName(request.PhysicalArtifactID)
+	marketplace := shared.ManagedMarketplaceName(request.PhysicalArtifactID)
 	writeTestFile(t, filepath.Join(request.Client.ConfigRoot, "config.toml"), fmt.Sprintf(`
 [marketplaces.%s]
 source_type = "local"
@@ -1000,7 +1001,7 @@ func TestDeactivatorRetainsManagedCodexArtifactWhenCLIIsUnavailable(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	marketplace := managedMarketplaceName(request.PhysicalArtifactID)
+	marketplace := shared.ManagedMarketplaceName(request.PhysicalArtifactID)
 	wantPluginRemove := fmt.Sprintf("codex plugin remove %s@%s --json", request.DeclaredName, marketplace)
 	wantMarketplaceRemove := fmt.Sprintf("codex plugin marketplace remove %s --json", marketplace)
 	if outcome.ArtifactRemovalAllowed || outcome.ExternalRemovalComplete || outcome.Activation != domain.ActivationManual ||
@@ -1133,7 +1134,7 @@ func codexDeactivationRequest(t *testing.T) domain.DeactivationRequest {
 	configRoot := t.TempDir()
 	managedArtifact := filepath.Join(t.TempDir(), "managed", "demo")
 	physicalArtifactID := "demo-0123456789ab"
-	marketplace := managedMarketplaceName(physicalArtifactID)
+	marketplace := shared.ManagedMarketplaceName(physicalArtifactID)
 	writeTestFile(t, filepath.Join(configRoot, "config.toml"), fmt.Sprintf(`
 [marketplaces.%s]
 source_type = "local"

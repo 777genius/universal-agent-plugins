@@ -11,8 +11,9 @@ import (
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/filetree"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/pathpolicy"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/providers/nativeconfig"
 )
 
 const (
@@ -172,14 +173,14 @@ func applyGeminiNativeMutationWithRename(configRoot, activePath string, previous
 }
 
 func applyGeminiNativeMutationWithKernel(configRoot, activePath string, previous, desired []domain.NativeObjectOwnership, kernel nativeconfig.Kernel) error {
-	return applyGeminiNativeMutationWithKernelAndRename(configRoot, activePath, previous, desired, kernel, renameDirectoryExclusive)
+	return applyGeminiNativeMutationWithKernelAndRename(configRoot, activePath, previous, desired, kernel, shared.RenameDirectoryExclusive)
 }
 
 func applyGeminiNativeMutationWithKernelAndRename(configRoot, activePath string, previous, desired []domain.NativeObjectOwnership, kernel nativeconfig.Kernel, rename geminiRenameFunc) (resultErr error) {
-	return applyGeminiNativeMutationWithKernelRenameAndCapacity(configRoot, activePath, previous, desired, kernel, rename, checkedCombinedCapacity)
+	return applyGeminiNativeMutationWithKernelRenameAndCapacity(configRoot, activePath, previous, desired, kernel, rename, shared.CheckedCombinedCapacity)
 }
 
-func applyGeminiNativeMutationWithKernelRenameAndCapacity(configRoot, activePath string, previous, desired []domain.NativeObjectOwnership, kernel nativeconfig.Kernel, rename geminiRenameFunc, capacity combinedCapacityFunc) (resultErr error) {
+func applyGeminiNativeMutationWithKernelRenameAndCapacity(configRoot, activePath string, previous, desired []domain.NativeObjectOwnership, kernel nativeconfig.Kernel, rename geminiRenameFunc, capacity shared.CombinedCapacityFunc) (resultErr error) {
 	if rename == nil {
 		return fmt.Errorf("Gemini rename operation is unavailable")
 	}
@@ -201,7 +202,7 @@ func applyGeminiNativeMutationWithKernelRenameAndCapacity(configRoot, activePath
 	}
 	for id, object := range desiredByID {
 		if prior, replacing := previousByID[id]; replacing {
-			if prior.Kind != object.Kind || prior.LogicalName != object.LogicalName || !sameCleanPath(prior.Path, object.Path) {
+			if prior.Kind != object.Kind || prior.LogicalName != object.LogicalName || !shared.SameCleanPath(prior.Path, object.Path) {
 				return fmt.Errorf("Gemini native object identity changed unexpectedly for %s", id)
 			}
 			continue
@@ -559,7 +560,7 @@ func materializeGeminiServer(server nativeconfig.Server, packageRoot, dataRoot s
 	if server.Type != "stdio" {
 		return server, nil
 	}
-	command, cwd, err := resolveStdioPaths(server.Command, server.CWD, packageRoot, dataRoot, observationRoot...)
+	command, cwd, err := shared.ResolveStdioPaths(server.Command, server.CWD, packageRoot, dataRoot, observationRoot...)
 	if err != nil {
 		return server, err
 	}
@@ -573,7 +574,7 @@ func geminiServerFromPackage(root, name string) (nativeconfig.Server, error) {
 	if err != nil {
 		return nativeconfig.Server{}, fmt.Errorf("read Gemini package MCP configuration: %w", err)
 	}
-	document, err := decodeStrictJSONObject(body)
+	document, err := shared.DecodeStrictJSONObject(body)
 	if err != nil {
 		return nativeconfig.Server{}, err
 	}
@@ -603,19 +604,6 @@ func geminiObjects(objects []domain.NativeObjectOwnership) []domain.NativeObject
 		}
 	}
 	return result
-}
-func geminiNativeComponents(components []domain.ComponentDecision) bool {
-	has := false
-	for _, component := range components {
-		if component.Support == domain.SupportUnsupported {
-			continue
-		}
-		if component.Kind != domain.ComponentSkill && component.Kind != domain.ComponentMCPServer {
-			return false
-		}
-		has = true
-	}
-	return has
 }
 func hasGeminiSkillObjects(objects []domain.NativeObjectOwnership) bool {
 	for _, object := range objects {
@@ -664,7 +652,7 @@ func validateGeminiObject(root string, object domain.NativeObjectOwnership) erro
 	} else if object.Kind != geminiMCPObjectKind {
 		return fmt.Errorf("unsupported Gemini native object kind %q", object.Kind)
 	}
-	if !sameCleanPath(expected, object.Path) {
+	if !shared.SameCleanPath(expected, object.Path) {
 		return fmt.Errorf("Gemini native object %q has an untrusted path", object.LogicalName)
 	}
 	return pathpolicy.RequireContainedChild(root, object.Path)

@@ -9,9 +9,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/managedstdio"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/providers/nativeconfig"
 )
 
 func TestWindsurfStagerProjectsResolvedMCPAndExactOwnership(t *testing.T) {
@@ -297,7 +298,7 @@ func TestWindsurfBundledCommandUsesManagedPluginRoot(t *testing.T) {
 
 	envelope := windsurfTestEnvelope(t, "bundled")
 	local := envelope.MCP.Servers["local"]
-	local.Decoded = cloneObject(local.Decoded)
+	local.Decoded = shared.CloneObject(local.Decoded)
 	local.Decoded["command"] = "./bin/server"
 	local.Decoded["args"] = []any{}
 	envelope.MCP.Servers["local"] = local
@@ -333,7 +334,7 @@ func TestWindsurfBundledCommandTraversalFailsBeforeProjectionMutation(t *testing
 	writeTestFile(t, projectionPath, "sentinel\n")
 	envelope := windsurfTestEnvelope(t, "escape")
 	local := envelope.MCP.Servers["local"]
-	local.Decoded = cloneObject(local.Decoded)
+	local.Decoded = shared.CloneObject(local.Decoded)
 	local.Decoded["command"] = "./../outside"
 	envelope.MCP.Servers["local"] = local
 	plan := stagingPlan(t, domain.ClientWindsurf, domain.PackagePrepared)

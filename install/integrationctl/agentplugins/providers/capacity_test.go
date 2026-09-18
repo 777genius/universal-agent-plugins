@@ -2,12 +2,12 @@ package providers
 
 import (
 	"errors"
-	"math"
 	"os"
 	"path/filepath"
 	"testing"
 
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/providers/nativeconfig"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
 )
 
 type countingNativeConfigFileIO struct{ calls int }
@@ -25,40 +25,6 @@ func (files *countingNativeConfigFileIO) WriteAtomic(string, []byte, os.FileMode
 func (files *countingNativeConfigFileIO) RemoveNoFollow(string) error {
 	files.calls++
 	return nil
-}
-
-func TestCheckedCombinedCapacity(t *testing.T) {
-	tests := []struct {
-		name    string
-		left    int
-		right   int
-		want    int
-		wantErr bool
-	}{
-		{name: "ordinary", left: 2, right: 3, want: 5},
-		{name: "exact maximum", left: math.MaxInt - 1, right: 1, want: math.MaxInt},
-		{name: "overflow", left: math.MaxInt, right: 1, wantErr: true},
-		{name: "negative left", left: -1, right: 0, wantErr: true},
-		{name: "negative right", left: 0, right: -1, wantErr: true},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			got, err := checkedCombinedCapacity(test.left, test.right)
-			if test.wantErr {
-				if !errors.Is(err, errCombinedCapacityOverflow) {
-					t.Fatalf("error = %v, want %v", err, errCombinedCapacityOverflow)
-				}
-				return
-			}
-			if err != nil {
-				t.Fatalf("checked capacity: %v", err)
-			}
-			if got != test.want {
-				t.Fatalf("capacity = %d, want %d", got, test.want)
-			}
-		})
-	}
 }
 
 func TestClineCapacityFailurePrecedesFilesystemEffects(t *testing.T) {
@@ -80,10 +46,10 @@ func TestClineCapacityFailurePrecedesFilesystemEffects(t *testing.T) {
 		if left != 0 || right != 2 {
 			t.Fatalf("capacity inputs = (%d, %d), want (0, 2)", left, right)
 		}
-		return 0, errCombinedCapacityOverflow
+		return 0, shared.ErrCombinedCapacityOverflow
 	})
-	if !errors.Is(err, errCombinedCapacityOverflow) {
-		t.Fatalf("error = %v, want %v", err, errCombinedCapacityOverflow)
+	if !errors.Is(err, shared.ErrCombinedCapacityOverflow) {
+		t.Fatalf("error = %v, want %v", err, shared.ErrCombinedCapacityOverflow)
 	}
 	if renameCalls != 0 {
 		t.Fatalf("rename calls = %d, want 0", renameCalls)
@@ -114,10 +80,10 @@ func TestGeminiCapacityFailurePrecedesFilesystemEffects(t *testing.T) {
 		if left != 0 || right != 2 {
 			t.Fatalf("capacity inputs = (%d, %d), want (0, 2)", left, right)
 		}
-		return 0, errCombinedCapacityOverflow
+		return 0, shared.ErrCombinedCapacityOverflow
 	})
-	if !errors.Is(err, errCombinedCapacityOverflow) {
-		t.Fatalf("error = %v, want %v", err, errCombinedCapacityOverflow)
+	if !errors.Is(err, shared.ErrCombinedCapacityOverflow) {
+		t.Fatalf("error = %v, want %v", err, shared.ErrCombinedCapacityOverflow)
 	}
 	if renameCalls != 0 {
 		t.Fatalf("rename calls = %d, want 0", renameCalls)

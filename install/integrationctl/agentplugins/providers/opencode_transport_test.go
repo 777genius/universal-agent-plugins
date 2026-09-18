@@ -2,11 +2,12 @@ package providers
 
 import (
 	"encoding/json"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/providers/nativeconfig"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
 func TestOpenCodeDeclaredTransportDoesNotSilentlyConvertSSE(t *testing.T) {

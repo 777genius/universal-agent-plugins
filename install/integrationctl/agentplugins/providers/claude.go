@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/pathpolicy"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/managedstdio"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/pathcontract"
@@ -47,15 +48,15 @@ func projectClaude(root string, envelope domain.PackageEnvelope, plan domain.Del
 	if len(envelope.Manifest.Keywords) > 0 {
 		manifest["keywords"] = envelope.Manifest.Keywords
 	}
-	if hasSupported(plan, domain.ComponentSkill) {
+	if shared.ComponentKindPresent(plan.Components, domain.ComponentSkill) {
 		manifest["skills"] = "./" + claudeRuntimeDirectory + "/skills/"
 	}
 
-	serverNames := supportedMCPNames(plan)
+	serverNames := shared.SupportedMCPNames(plan)
 	if len(serverNames) > 0 {
 		manifest["mcpServers"] = "./.mcp.json"
 	}
-	if err := writeJSON(filepath.Join(root, ".claude-plugin", "plugin.json"), manifest); err != nil {
+	if err := shared.WriteJSON(filepath.Join(root, ".claude-plugin", "plugin.json"), manifest); err != nil {
 		return fmt.Errorf("write Claude Code plugin manifest: %w", err)
 	}
 	activeRuntimeRoot := filepath.Join(plan.ActivePath, claudeRuntimeDirectory)
@@ -163,13 +164,13 @@ func projectClaudeMCP(root string, envelope domain.PackageEnvelope, serverNames 
 	servers := make(map[string]map[string]any, len(serverNames))
 	for _, name := range serverNames {
 		server := envelope.MCP.Servers[name]
-		config := cloneObject(server.Decoded)
+		config := shared.CloneObject(server.Decoded)
 		switch server.Type {
 		case "stdio":
 			delete(config, "type")
 			rawCommand, _ := config["command"].(string)
 			rawCWD, _ := config["cwd"].(string)
-			if err := applyStdioDataContract(config, pluginRoot, dataPath, observedRuntimeRoot); err != nil {
+			if err := shared.ApplyStdioDataContract(config, pluginRoot, dataPath, observedRuntimeRoot); err != nil {
 				return fmt.Errorf("project Claude stdio MCP server %s: %w", name, err)
 			}
 			// Claude does not honor cwd on stdio entries. The trusted process
@@ -204,5 +205,5 @@ func projectClaudeMCP(root string, envelope domain.PackageEnvelope, serverNames 
 		}
 		servers[name] = config
 	}
-	return writeJSON(path, servers)
+	return shared.WriteJSON(path, servers)
 }
