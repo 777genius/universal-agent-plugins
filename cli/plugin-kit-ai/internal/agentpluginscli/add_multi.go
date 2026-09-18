@@ -229,7 +229,12 @@ func runAddManyLoaded(ctx context.Context, cmd *cobra.Command, app App, opts *op
 	}
 	writeProgress(app, opts.format, "Applying the completely preflighted multi-target plan...")
 	groupInput.DryRun, groupInput.Confirmed = false, true
-	applied, err := service.AddGroup(ctx, groupInput)
+	applyService := service
+	if board := startGroupProgressBoard(app, opts.format, selected); board != nil {
+		applyService = board.decorate(service)
+		defer board.finish()
+	}
+	applied, err := applyService.AddGroup(ctx, groupInput)
 	if len(applied.Targets) != len(selected) || len(applied.Targets) != len(inputs) {
 		if err != nil {
 			return fmt.Errorf("group apply returned %d targets for %d selected clients: %w", len(applied.Targets), len(selected), err)
