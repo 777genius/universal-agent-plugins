@@ -2045,6 +2045,7 @@ type codexCleanupUsecaseRunner struct {
 	configRoot         string
 	managedMarketplace string
 	managedPath        string
+	omitFromList       bool
 }
 
 func (runner *codexCleanupUsecaseRunner) Run(_ context.Context, command legacyports.Command) (legacyports.CommandResult, error) {
@@ -2060,7 +2061,14 @@ func (runner *codexCleanupUsecaseRunner) Run(_ context.Context, command legacypo
 		}
 		return runner.writeConfig(false), nil
 	}
+	if len(command.Argv) >= 4 && command.Argv[1] == "plugin" && command.Argv[2] == "add" {
+		runner.omitFromList = false
+		return legacyports.CommandResult{}, nil
+	}
 	if len(command.Argv) >= 4 && command.Argv[1] == "plugin" && command.Argv[2] == "list" {
+		if runner.omitFromList {
+			return legacyports.CommandResult{Stdout: []byte(`{"installed":[]}`)}, nil
+		}
 		marketplace := ""
 		name := "demo"
 		for _, prior := range runner.commands {

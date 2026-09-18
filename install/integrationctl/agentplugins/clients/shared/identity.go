@@ -48,7 +48,7 @@ func InspectUnqualifiedPluginRoot(root, name, activePath string, owned bool) (cl
 			if errors.Is(err, ErrNoAuthoritativeManifest) {
 				continue
 			}
-			if owned && activePath != "" && SameCleanPath(path, activePath) {
+			if owned && activePath != "" && SameOwnedPluginDirectory(path, activePath) {
 				return clients.RegistryIndeterminate, err
 			}
 			continue
@@ -59,7 +59,7 @@ func InspectUnqualifiedPluginRoot(root, name, activePath string, owned bool) (cl
 		if qualified && namespace != "" && namespace != ManagedMarketplaceName(filepath.Base(activePath)) {
 			continue
 		}
-		if activePath != "" && SameCleanPath(path, activePath) && owned {
+		if activePath != "" && SameOwnedPluginDirectory(path, activePath) && owned {
 			finding = clients.RegistryExpected
 			continue
 		}
@@ -138,6 +138,46 @@ func SameCleanPath(left, right string) bool {
 	leftAbsolute, leftErr := filepath.Abs(left)
 	rightAbsolute, rightErr := filepath.Abs(right)
 	return leftErr == nil && rightErr == nil && filepath.Clean(leftAbsolute) == filepath.Clean(rightAbsolute)
+}
+
+// EquivalentLocalPath compares filesystem identity, not only spelling. macOS
+// commonly exposes /tmp through /private/tmp and /var through /private/var.
+// Identical cleaned paths are accepted without a stat; differing paths must
+// both exist and be the same file.
+func EquivalentLocalPath(left, right string) bool {
+	left = strings.TrimSpace(left)
+	right = strings.TrimSpace(right)
+	if left == "" || right == "" {
+		return false
+	}
+	leftAbs, leftErr := filepath.Abs(left)
+	rightAbs, rightErr := filepath.Abs(right)
+	if leftErr != nil || rightErr != nil {
+		return false
+	}
+	left, right = filepath.Clean(leftAbs), filepath.Clean(rightAbs)
+	if left == right {
+		return true
+	}
+	leftInfo, err := os.Stat(left)
+	if err != nil {
+		return false
+	}
+	rightInfo, err := os.Stat(right)
+	if err != nil {
+		return false
+	}
+	return os.SameFile(leftInfo, rightInfo)
+}
+
+// SameOwnedPluginDirectory reports whether path is the owned ActivePath.
+// A directory symlink with a different leaf name is not owned even when it
+// points at the same directory: Claude lists that symlink as its own slot.
+func SameOwnedPluginDirectory(path, activePath string) bool {
+	if !EquivalentLocalPath(path, activePath) {
+		return false
+	}
+	return filepath.Base(filepath.Clean(path)) == filepath.Base(filepath.Clean(activePath))
 }
 
 // ManagedPackageDigest returns the digest recorded for the managed package

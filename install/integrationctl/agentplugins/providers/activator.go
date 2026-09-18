@@ -878,7 +878,9 @@ const (
 
 // claudePluginStatus verifies the official in-place plugin slot: the unique
 // list entry must be name@skills-dir at installPath == ActivePath with user
-// scope. Other ids, including leftover marketplace installs, are ignored.
+// scope. Claude 2.1.275 lets an enabled same-name marketplace install win:
+// the skills-dir copy is listed as folder@skills-dir with an empty path, so
+// that leftover is a collision rather than a free slot.
 func claudePluginStatus(body []byte, name, activePath string) claudeStatus {
 	decoder := json.NewDecoder(strings.NewReader(string(body)))
 	decoder.UseNumber()
@@ -894,9 +896,9 @@ func claudePluginStatus(body []byte, name, activePath string) claudeStatus {
 		return claudeStatusUnknown
 	}
 	expectedID := name + "@skills-dir"
-	expectedPath := filepath.Clean(activePath)
 	seen := map[string]struct{}{}
 	found := false
+	foreignClaim := false
 	for _, value := range entries {
 		entry, ok := value.(map[string]any)
 		if !ok {
@@ -906,7 +908,16 @@ func claudePluginStatus(body []byte, name, activePath string) claudeStatus {
 		scope, scopeOK := entry["scope"].(string)
 		enabled, enabledOK := entry["enabled"].(bool)
 		installPath, pathOK := entry["installPath"].(string)
-		if !idOK || !scopeOK || !enabledOK || !pathOK || id == "" || scope == "" || !filepath.IsAbs(installPath) {
+		if !idOK || !scopeOK || !enabledOK || !pathOK || id == "" || scope == "" {
+			return claudeStatusUnknown
+		}
+		// Claude 2.1.275 lists a same-name skills-dir loser as folder@skills-dir
+		// with enabled=false, empty installPath, and an errors array. Skip only
+		// failed loads, not an enabled plugin that happens to carry warnings.
+		if !enabled && (strings.TrimSpace(installPath) == "" || entry["errors"] != nil) {
+			continue
+		}
+		if !filepath.IsAbs(installPath) {
 			return claudeStatusUnknown
 		}
 		identity := id + "\x00" + scope + "\x00" + filepath.Clean(installPath)
@@ -914,21 +925,39 @@ func claudePluginStatus(body []byte, name, activePath string) claudeStatus {
 			return claudeStatusUnknown
 		}
 		seen[identity] = struct{}{}
-		if id != expectedID {
+		if id == expectedID {
+			if scope != "user" || !equivalentLocalPath(installPath, activePath) {
+				return claudeStatusCollision
+			}
+			if found {
+				return claudeStatusUnknown
+			}
+			found = enabled
 			continue
 		}
-		if filepath.Clean(installPath) != expectedPath || scope != "user" {
-			return claudeStatusCollision
-		}
-		if found {
+		pluginName, namespace, ok := splitClaudePluginID(id)
+		if !ok {
 			return claudeStatusUnknown
 		}
-		found = enabled
+		if enabled && pluginName == name && namespace != "skills-dir" {
+			foreignClaim = true
+		}
 	}
 	if found {
 		return claudeStatusInstalled
 	}
+	if foreignClaim {
+		return claudeStatusCollision
+	}
 	return claudeStatusAbsent
+}
+
+func splitClaudePluginID(id string) (name, namespace string, ok bool) {
+	at := strings.LastIndex(id, "@")
+	if at <= 0 || at == len(id)-1 {
+		return "", "", false
+	}
+	return id[:at], id[at+1:], true
 }
 
 var copilotInstalledEntry = regexp.MustCompile(`^[ \t]+•[ \t]+([A-Za-z0-9][A-Za-z0-9._-]*@[A-Za-z0-9][A-Za-z0-9._-]*)[ \t]+\(v([0-9]+\.[0-9]+\.[0-9]+(?:[-+][0-9A-Za-z.-]+)?)\)[ \t]*$`)

@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
 	"github.com/pelletier/go-toml/v2"
 )
 
@@ -92,18 +93,5 @@ func managedCodexPluginEntryPresent(configRoot, declaredName, marketplace string
 // Identical cleaned paths are accepted directly; differing paths must both
 // stat successfully and identify the same file before an alias is accepted.
 func equivalentLocalPath(left, right string) bool {
-	left = filepath.Clean(left)
-	right = filepath.Clean(right)
-	if left == right {
-		return true
-	}
-	leftInfo, err := os.Stat(left)
-	if err != nil {
-		return false
-	}
-	rightInfo, err := os.Stat(right)
-	if err != nil {
-		return false
-	}
-	return os.SameFile(leftInfo, rightInfo)
+	return shared.EquivalentLocalPath(left, right)
 }

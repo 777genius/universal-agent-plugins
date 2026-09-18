@@ -357,6 +357,22 @@ func TestNativeIdentityCodexManualModeReadsAuthoritativeConfig(t *testing.T) {
 	}
 }
 
+func TestNativeIdentityCodexVersionedCacheLayoutIsAClaim(t *testing.T) {
+	configRoot := filepath.Join(t.TempDir(), ".codex")
+	plan := identityPlan(filepath.Join(t.TempDir(), "prepared"))
+	plan.NativeRegistryRoot = configRoot
+	marketplace := shared.ManagedMarketplaceName(plan.PhysicalArtifactID)
+	writeIdentityFile(
+		t,
+		filepath.Join(configRoot, "plugins", "cache", marketplace, "demo", "1.0.0", ".codex-plugin", "plugin.json"),
+		`{"name":"demo"}`,
+	)
+	observation, err := (NativeIdentityObserver{}).ObserveNativeIdentity(context.Background(), domain.DetectedClient{ClientID: domain.ClientCodex}, plan, nil)
+	if err != nil || observation.State != domain.NativeIdentityUnmanaged {
+		t.Fatalf("versioned cache observation = %+v, err = %v", observation, err)
+	}
+}
+
 func TestNativeIdentityCopilotAndVSCodeUseSharedAuthoritativeBackend(t *testing.T) {
 	for _, clientID := range []domain.ClientID{domain.ClientCopilot, domain.ClientVSCode} {
 		t.Run(string(clientID), func(t *testing.T) {

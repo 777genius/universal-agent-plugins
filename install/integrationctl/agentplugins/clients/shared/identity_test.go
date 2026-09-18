@@ -44,3 +44,28 @@ func TestInspectUnqualifiedPluginRootSkipsHostileSiblings(t *testing.T) {
 		t.Fatalf("collision finding=%v err=%v", finding, err)
 	}
 }
+
+func TestSameOwnedPluginDirectoryAcceptsPathAliasAndRejectsLeafSymlink(t *testing.T) {
+	root := t.TempDir()
+	owned := filepath.Join(root, "owned")
+	if err := os.MkdirAll(owned, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	resolved, err := filepath.EvalSymlinks(owned)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !SameOwnedPluginDirectory(owned, resolved) {
+		t.Fatalf("alias %q vs %q should be the owned directory", owned, resolved)
+	}
+	alias := filepath.Join(root, "alias")
+	if err := os.Symlink(owned, alias); err != nil {
+		t.Fatal(err)
+	}
+	if SameOwnedPluginDirectory(alias, owned) {
+		t.Fatal("directory symlink with a different leaf must not count as owned")
+	}
+	if EquivalentLocalPath("", owned) || EquivalentLocalPath(owned, "   ") || SameOwnedPluginDirectory(owned, "") {
+		t.Fatal("empty paths must not compare as the same location")
+	}
+}
