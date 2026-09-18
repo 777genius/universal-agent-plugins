@@ -93,7 +93,7 @@ func TestCompatibilityGolden(t *testing.T) {
 	for _, fixture := range goldenEnvelopes() {
 		t.Run(fixture.name, func(t *testing.T) {
 			t.Parallel()
-			compatibility, err := Compatibility(fixture.envelope, ids)
+			compatibility, err := testCompatibility(fixture.envelope, ids)
 			if err != nil {
 				t.Fatal(err)
 			}

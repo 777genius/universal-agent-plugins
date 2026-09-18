@@ -24,6 +24,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/specregistry"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/statemigration"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/statev2"
+	clientregistry "github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/all"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	clientplanner "github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/planner"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/plannertest"
@@ -3000,6 +3001,7 @@ func newCLIFixture(t *testing.T, clients []domain.DetectedClient) cliFixture {
 			},
 			Version: "0.1.0", UserHome: filepath.Join(root, "home"),
 			ManagedRoot: managedRoot, StateStore: store, Detector: staticDetector{clients: clients},
+			ClientRegistry: clientregistry.Default(),
 			SourceAcquirer: sourceacquisition.Acquirer{TempRoot: root},
 			PackageLoader:  packageLoader, NativePackageLoader: loader.OpenAILoader{Loader: packageLoader},
 			Lifecycle:       lifecycle,

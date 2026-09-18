@@ -8,6 +8,7 @@ import (
 
 	"github.com/777genius/plugin-kit-ai/cli/internal/authoring/project"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/packageview"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/all"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/conformance"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/planner"
@@ -68,7 +69,7 @@ func TestCompatibilityUnknownAndPlannerParity(t *testing.T) {
 	p := project.Result{Facts: conformance.Facts{Package: &domain.PackageEnvelope{}}}
 	ids := domain.SupportedClientIDs()
 	got, err = Compatibility(p, ids)
-	want, e := planner.Compatibility(*p.Facts.Package, ids)
+	want, e := planner.Compatibility(all.Default(), *p.Facts.Package, ids)
 	if err != nil || e != nil || !reflect.DeepEqual(got, want) {
 		t.Fatal("second compatibility semantics")
 	}

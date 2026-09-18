@@ -15,7 +15,7 @@ func TestCompatibilityRegistryMatrix(t *testing.T) {
 	e := domain.PackageEnvelope{Skills: map[string]domain.Skill{"skill": {}}, MCP: domain.MCPComponent{Servers: map[string]domain.MCPServer{"http": {Type: "streamable-http"}, "sse": {Type: "sse"}, "stdio": {Type: "stdio"}, "unknown": {Type: "future"}}}, Manifest: domain.PluginManifest{Extensions: map[string]json.RawMessage{"future.namespace": json.RawMessage(`{}`)}}}
 	for _, def := range domain.ClientDefinitions() {
 		t.Run(string(def.ID), func(t *testing.T) {
-			got, err := Compatibility(e, []domain.ClientID{def.ID})
+			got, err := testCompatibility(e, []domain.ClientID{def.ID})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -65,7 +65,7 @@ func TestCompatibilityChatGPT(t *testing.T) {
 			if tc.mapped {
 				e.App.Bindings["server"] = domain.AppBinding{ID: "registered-reference"}
 			}
-			got, err := Compatibility(e, []domain.ClientID{domain.ClientChatGPT})
+			got, err := testCompatibility(e, []domain.ClientID{domain.ClientChatGPT})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -85,7 +85,7 @@ func TestCompatibilityChatGPT(t *testing.T) {
 
 func TestCompatibilityInvalidSiblings(t *testing.T) {
 	e := domain.PackageEnvelope{Skills: map[string]domain.Skill{"good": {}}, Inventory: domain.ComponentInventory{InvalidSkills: []string{"bad"}}, MCP: domain.MCPComponent{Servers: map[string]domain.MCPServer{"good": {Type: "stdio"}}, InvalidServer: map[string]domain.Diagnostic{"bad": {Message: "fixture-diagnostic"}}}, Diagnostics: []domain.Diagnostic{{Severity: domain.SeverityError, Boundary: domain.BoundarySkill, Item: "bad", Message: "fixture-diagnostic"}}}
-	got, err := Compatibility(e, []domain.ClientID{domain.ClientCursor})
+	got, err := testCompatibility(e, []domain.ClientID{domain.ClientCursor})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -105,27 +105,27 @@ func TestCompatibilityInvalidSiblings(t *testing.T) {
 
 func TestCompatibilityTargetsAndOwnership(t *testing.T) {
 	e := domain.PackageEnvelope{Skills: map[string]domain.Skill{"only": {}}}
-	a, err := Compatibility(e, []domain.ClientID{domain.ClientCursor, domain.ClientCodex, domain.ClientCursor})
+	a, err := testCompatibility(e, []domain.ClientID{domain.ClientCursor, domain.ClientCodex, domain.ClientCursor})
 	if err != nil {
 		t.Fatal(err)
 	}
-	b, _ := Compatibility(e, []domain.ClientID{domain.ClientCodex, domain.ClientCursor})
+	b, _ := testCompatibility(e, []domain.ClientID{domain.ClientCodex, domain.ClientCursor})
 	if !reflect.DeepEqual(a, b) {
 		t.Fatal("duplicates/order affect output")
 	}
 	a[0].Capabilities.MCPTransports["stdio"] = domain.SupportUnsupported
 	a[0].Capabilities.Scopes[0] = domain.ScopeProject
-	c, _ := Compatibility(e, []domain.ClientID{domain.ClientCodex, domain.ClientCursor})
+	c, _ := testCompatibility(e, []domain.ClientID{domain.ClientCodex, domain.ClientCursor})
 	if !reflect.DeepEqual(b, c) {
 		t.Fatal("registry mutated")
 	}
 	for _, id := range []domain.ClientID{"", "CODEX", domain.ClientID(strings.Repeat("fixture-client\n/", 10000))} {
-		got, err := Compatibility(e, []domain.ClientID{domain.ClientCursor, id})
+		got, err := testCompatibility(e, []domain.ClientID{domain.ClientCursor, id})
 		if got != nil || !errors.Is(err, ErrUnknownCompatibilityClient) || err.Error() != "unknown compatibility client" {
 			t.Fatal("unbounded or partial error")
 		}
 	}
-	empty, err := Compatibility(e, nil)
+	empty, err := testCompatibility(e, nil)
 	if err != nil || empty == nil || len(empty) != 0 {
 		t.Fatal("empty targets")
 	}
@@ -161,7 +161,7 @@ func TestCompatibilityEmptyHostAndNoSensitiveEvidence(t *testing.T) {
 		CatalogEvidence: &domain.CatalogEvidence{},
 	}
 	before, _ := json.Marshal(e)
-	a, err := Compatibility(e, domain.SupportedClientIDs())
+	a, err := testCompatibility(e, domain.SupportedClientIDs())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -170,7 +170,7 @@ func TestCompatibilityEmptyHostAndNoSensitiveEvidence(t *testing.T) {
 	t.Setenv("PATH", home)
 	t.Setenv("XDG_CONFIG_HOME", home)
 	t.Setenv("USERPROFILE", home)
-	b, err := Compatibility(e, domain.SupportedClientIDs())
+	b, err := testCompatibility(e, domain.SupportedClientIDs())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -190,7 +190,7 @@ func TestCompatibilityEmptyHostAndNoSensitiveEvidence(t *testing.T) {
 		t.Fatalf("sensitive output: %s", raw)
 	}
 	e.CatalogEvidence = nil
-	without, _ := Compatibility(e, domain.SupportedClientIDs())
+	without, _ := testCompatibility(e, domain.SupportedClientIDs())
 	if !reflect.DeepEqual(b, without) {
 		t.Fatal("catalog influenced static output")
 	}
@@ -225,13 +225,13 @@ func TestCompatibilityDisabledAndComponentOnly(t *testing.T) {
 		{"app-other-client", domain.PackageEnvelope{App: domain.AppComponent{Enabled: true, Bindings: map[string]domain.AppBinding{"one": {ID: "reference"}}}}, domain.SupportUnsupported},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			got, err := Compatibility(tc.envelope, []domain.ClientID{domain.ClientCursor})
+			got, err := testCompatibility(tc.envelope, []domain.ClientID{domain.ClientCursor})
 			if err != nil || len(got[0].Components) != 1 || got[0].Components[0].Support != tc.want {
 				t.Fatalf("got %+v, %v", got, err)
 			}
 		})
 	}
-	got, err := Compatibility(domain.PackageEnvelope{}, []domain.ClientID{domain.ClientChatGPT})
+	got, err := testCompatibility(domain.PackageEnvelope{}, []domain.ClientID{domain.ClientChatGPT})
 	if err != nil || len(got[0].Components) != 0 {
 		t.Fatal("empty package invented components")
 	}
@@ -256,7 +256,7 @@ func TestCompatibilityEmptyInvalidIdentity(t *testing.T) {
 				}
 				var first []byte
 				for repeat := 0; repeat < 10; repeat++ {
-					got, err := Compatibility(e, []domain.ClientID{domain.ClientCursor})
+					got, err := testCompatibility(e, []domain.ClientID{domain.ClientCursor})
 					if err != nil || len(got[0].Components) != 2 {
 						t.Fatalf("inventory: %+v, %v", got, err)
 					}
@@ -291,7 +291,7 @@ func TestCompatibilityDocumentBoundary(t *testing.T) {
 			MCP:         domain.MCPComponent{Servers: map[string]domain.MCPServer{"": {Type: "stdio"}, "good": {Type: "stdio"}}},
 			Diagnostics: []domain.Diagnostic{{Severity: domain.SeverityError, Boundary: domain.BoundaryMCP, Item: item}},
 		}
-		got, err := Compatibility(e, []domain.ClientID{domain.ClientCursor})
+		got, err := testCompatibility(e, []domain.ClientID{domain.ClientCursor})
 		if err != nil || len(got[0].Components) != 3 {
 			t.Fatalf("document boundary invented inventory: %+v, %v", got, err)
 		}

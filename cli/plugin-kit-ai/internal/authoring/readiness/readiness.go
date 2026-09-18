@@ -10,6 +10,7 @@ import (
 
 	"github.com/777genius/plugin-kit-ai/cli/internal/authoring/project"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/specregistry"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/all"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/conformance"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/planner"
@@ -43,11 +44,15 @@ func Targets(value string) ([]domain.ClientID, error) {
 
 // Compatibility does not turn unusable/unknown-schema input into an empty,
 // successful package. Valid siblings remain available on partial input.
+//
+// Authoring is its own entry point rather than a dispatcher inside the install
+// core, so it names the full client set here: there is no composition root
+// above it to be handed one.
 func Compatibility(p project.Result, ids []domain.ClientID) ([]planner.ClientCompatibility, error) {
 	if p.Facts.Package == nil {
 		return nil, nil
 	}
-	return planner.Compatibility(*p.Facts.Package, ids)
+	return planner.Compatibility(all.Default(), *p.Facts.Package, ids)
 }
 
 type Schema struct {
