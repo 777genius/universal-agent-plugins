@@ -689,9 +689,6 @@ linters:
       - path: ^install/integrationctl/agentplugins/planner/compatibility\.go$
         linters: [funlen, gocyclo, gocognit]
         text: 'too many statements|cyclomatic complexity|cognitive complexity'
-      - path: ^install/integrationctl/agentplugins/providers/activator\.go$
-        linters: [revive, funlen, gocyclo, gocognit]
-        text: 'file length is|too many statements|cyclomatic complexity|cognitive complexity'
       - path: ^install/integrationctl/agentplugins/clients/claude/claude\.go$
         linters: [funlen, gocognit]
         text: 'too many statements|cognitive complexity'

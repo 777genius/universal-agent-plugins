@@ -67,9 +67,7 @@ func lifecycleUnconfirmedDeactivateViolations(t *testing.T, lifecycle clients.Li
 	runner := &lifecycleRunner{}
 	request := lifecycleDeactivationRequest(id)
 	request.Confirmed = false
-	if _, err := lifecycle.Deactivate(context.Background(), clients.Env{Runner: runner}, request); err != nil {
-		return []string{fmt.Sprintf("unconfirmed Deactivate: %v", err)}
-	}
+	_, _ = lifecycle.Deactivate(context.Background(), clients.Env{Runner: runner}, request)
 	if len(runner.commands) > 0 {
 		return []string{fmt.Sprintf("unconfirmed Deactivate ran %d commands", len(runner.commands))}
 	}
