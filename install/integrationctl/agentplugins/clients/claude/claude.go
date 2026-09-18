@@ -1,4 +1,4 @@
-package providers
+package claude
 
 import (
 	"fmt"
@@ -14,20 +14,20 @@ import (
 )
 
 const (
-	claudeRuntimeDirectory = ".agentplugins-runtime"
+	ClaudeRuntimeDirectory = ".agentplugins-runtime"
 	claudeRuntimeSource    = ".agentplugins-runtime-source"
 )
 
-// projectClaude renders the portable envelope into Claude Code's official
+// ProjectClaude renders the portable envelope into Claude Code's official
 // skills-directory plugin layout. Only the exact planned Claude surfaces are
 // exposed at the plugin root. The original package remains available to stdio
 // MCP servers below a manager-owned, non-auto-discovery runtime directory.
-func projectClaude(root string, envelope domain.PackageEnvelope, plan domain.DeliveryPlan, dataPath string) error {
-	runtimeRoot, err := isolateClaudeRuntime(root)
+func ProjectClaude(root string, envelope domain.PackageEnvelope, plan domain.DeliveryPlan, dataPath string) error {
+	runtimeRoot, err := IsolateClaudeRuntime(root)
 	if err != nil {
 		return err
 	}
-	if err := pruneClaudeRuntimeSkills(runtimeRoot, plan); err != nil {
+	if err := PruneClaudeRuntimeSkills(runtimeRoot, plan); err != nil {
 		return err
 	}
 
@@ -49,7 +49,7 @@ func projectClaude(root string, envelope domain.PackageEnvelope, plan domain.Del
 		manifest["keywords"] = envelope.Manifest.Keywords
 	}
 	if shared.ComponentKindPresent(plan.Components, domain.ComponentSkill) {
-		manifest["skills"] = "./" + claudeRuntimeDirectory + "/skills/"
+		manifest["skills"] = "./" + ClaudeRuntimeDirectory + "/skills/"
 	}
 
 	serverNames := shared.SupportedMCPNames(plan)
@@ -59,20 +59,20 @@ func projectClaude(root string, envelope domain.PackageEnvelope, plan domain.Del
 	if err := shared.WriteJSON(filepath.Join(root, ".claude-plugin", "plugin.json"), manifest); err != nil {
 		return fmt.Errorf("write Claude Code plugin manifest: %w", err)
 	}
-	activeRuntimeRoot := filepath.Join(plan.ActivePath, claudeRuntimeDirectory)
-	if err := projectClaudeMCP(root, envelope, serverNames, activeRuntimeRoot, dataPath, runtimeRoot); err != nil {
+	activeRuntimeRoot := filepath.Join(plan.ActivePath, ClaudeRuntimeDirectory)
+	if err := ProjectClaudeMCP(root, envelope, serverNames, activeRuntimeRoot, dataPath, runtimeRoot); err != nil {
 		return err
 	}
-	return validateClaudeProjectionRoot(root, len(serverNames) > 0)
+	return ValidateClaudeProjectionRoot(root, len(serverNames) > 0)
 }
 
-func isolateClaudeRuntime(root string) (string, error) {
+func IsolateClaudeRuntime(root string) (string, error) {
 	entries, err := os.ReadDir(root)
 	if err != nil {
 		return "", fmt.Errorf("read staged Claude package: %w", err)
 	}
 	for _, entry := range entries {
-		if entry.Name() == claudeRuntimeDirectory || entry.Name() == claudeRuntimeSource {
+		if entry.Name() == ClaudeRuntimeDirectory || entry.Name() == claudeRuntimeSource {
 			return "", fmt.Errorf("portable package uses reserved Claude runtime path %q", entry.Name())
 		}
 	}
@@ -85,14 +85,14 @@ func isolateClaudeRuntime(root string) (string, error) {
 			return "", fmt.Errorf("isolate Claude runtime path %s: %w", entry.Name(), err)
 		}
 	}
-	runtimeRoot := filepath.Join(root, claudeRuntimeDirectory)
+	runtimeRoot := filepath.Join(root, ClaudeRuntimeDirectory)
 	if err := os.Rename(sourceRoot, runtimeRoot); err != nil {
 		return "", fmt.Errorf("activate isolated Claude runtime: %w", err)
 	}
 	return runtimeRoot, nil
 }
 
-func pruneClaudeRuntimeSkills(runtimeRoot string, plan domain.DeliveryPlan) error {
+func PruneClaudeRuntimeSkills(runtimeRoot string, plan domain.DeliveryPlan) error {
 	planned := map[string]bool{}
 	for _, component := range plan.Components {
 		if component.Kind == domain.ComponentSkill && component.Support != domain.SupportUnsupported {
@@ -132,8 +132,8 @@ func pruneClaudeRuntimeSkills(runtimeRoot string, plan domain.DeliveryPlan) erro
 	return nil
 }
 
-func validateClaudeProjectionRoot(root string, wantMCP bool) error {
-	allowed := map[string]bool{claudeRuntimeDirectory: true, ".claude-plugin": true}
+func ValidateClaudeProjectionRoot(root string, wantMCP bool) error {
+	allowed := map[string]bool{ClaudeRuntimeDirectory: true, ".claude-plugin": true}
 	if wantMCP {
 		allowed[".mcp.json"] = true
 	}
@@ -149,7 +149,7 @@ func validateClaudeProjectionRoot(root string, wantMCP bool) error {
 	return nil
 }
 
-func projectClaudeMCP(root string, envelope domain.PackageEnvelope, serverNames []string, pluginRoot, dataPath string, observationRoot ...string) error {
+func ProjectClaudeMCP(root string, envelope domain.PackageEnvelope, serverNames []string, pluginRoot, dataPath string, observationRoot ...string) error {
 	observedRuntimeRoot := root
 	if len(observationRoot) > 0 {
 		observedRuntimeRoot = observationRoot[0]

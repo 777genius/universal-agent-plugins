@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/cline"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/gemini"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
 )
 
@@ -38,7 +40,7 @@ func TestClineCapacityFailurePrecedesFilesystemEffects(t *testing.T) {
 	files := &countingNativeConfigFileIO{}
 	renameCalls := 0
 	capacityCalls := 0
-	err := applyClineNativeMutationWithKernelRenameAndCapacity(configRoot, activePath, nil, desired, nativeconfig.NewWithFileIO(files), func(oldPath, newPath string) error {
+	err := cline.ApplyClineNativeMutationWithKernelRenameAndCapacity(configRoot, activePath, nil, desired, nativeconfig.NewWithFileIO(files), func(oldPath, newPath string) error {
 		renameCalls++
 		return os.Rename(oldPath, newPath)
 	}, func(left, right int) (int, error) {
@@ -72,7 +74,7 @@ func TestGeminiCapacityFailurePrecedesFilesystemEffects(t *testing.T) {
 	files := &countingNativeConfigFileIO{}
 	renameCalls := 0
 	capacityCalls := 0
-	err := applyGeminiNativeMutationWithKernelRenameAndCapacity(configRoot, activePath, nil, desired, nativeconfig.NewWithFileIO(files), func(oldPath, newPath string) error {
+	err := gemini.ApplyGeminiNativeMutationWithKernelRenameAndCapacity(configRoot, activePath, nil, desired, nativeconfig.NewWithFileIO(files), func(oldPath, newPath string) error {
 		renameCalls++
 		return os.Rename(oldPath, newPath)
 	}, func(left, right int) (int, error) {

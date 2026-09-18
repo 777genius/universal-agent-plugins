@@ -868,7 +868,7 @@ func TestDeactivatorPreviewsThenCleansManagedCodexMarketplace(t *testing.T) {
 // gap a live-native run found: if config.toml's marketplace source is
 // already gone (e.g. a user manually ran only `codex plugin marketplace
 // remove` off this code's own earlier guidance) but the separate
-// `[plugins."id"] enabled = true` entry survives, managedCodexMarketplaceRegistered
+// `[plugins."id"] enabled = true` entry survives, codex.ManagedCodexMarketplaceRegistered
 // reports not-registered and the old code skipped cleanup entirely,
 // reproducing the self-heal bug on every subsequent remove. The plugin's own
 // registration must still be cleared whenever a live CLI is available,

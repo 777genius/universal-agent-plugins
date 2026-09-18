@@ -1,4 +1,4 @@
-package providers
+package codex
 
 import (
 	"fmt"
@@ -9,10 +9,10 @@ import (
 	"github.com/pelletier/go-toml/v2"
 )
 
-// managedCodexMarketplaceRegistered proves that the exact manager-owned
+// ManagedCodexMarketplaceRegistered proves that the exact manager-owned
 // marketplace still points at the exact managed package before native cleanup.
 // A same-name user replacement is never removed.
-func managedCodexMarketplaceRegistered(configRoot, marketplace, managedArtifactPath string) (bool, error) {
+func ManagedCodexMarketplaceRegistered(configRoot, marketplace, managedArtifactPath string) (bool, error) {
 	if strings.TrimSpace(configRoot) == "" || strings.TrimSpace(managedArtifactPath) == "" {
 		return false, fmt.Errorf("managed Codex marketplace ownership evidence is incomplete")
 	}
@@ -49,23 +49,23 @@ func managedCodexMarketplaceRegistered(configRoot, marketplace, managedArtifactP
 	if sourceType, present := entry["source_type"]; present && sourceType != "local" {
 		return false, fmt.Errorf("refuse managed Codex marketplace cleanup because %s is not a local source", marketplace)
 	}
-	if !equivalentLocalPath(source, managedArtifactPath) {
+	if !EquivalentLocalPath(source, managedArtifactPath) {
 		return false, fmt.Errorf("refuse managed Codex marketplace cleanup because %s no longer points at the managed artifact", marketplace)
 	}
 	return true, nil
 }
 
-// managedCodexPluginEntryPresent reports whether Codex's config.toml still
+// ManagedCodexPluginEntryPresent reports whether Codex's config.toml still
 // carries a per-plugin `[plugins."<declaredName>@<marketplace>"]` enablement
 // entry, independent of whether its marketplace source is still registered.
 // The two records are cleared by separate CLI commands; a stale plugin entry
 // left behind is what lets a freshly started Codex app-server silently
 // re-materialize an already-removed plugin. Presence alone is the ownership
-// signal here (unlike managedCodexMarketplaceRegistered's source-path check):
+// signal here (unlike ManagedCodexMarketplaceRegistered's source-path check):
 // the key embeds this installation's own generated marketplace name
 // (shared.ManagedMarketplaceName), so an unrelated plugin can only collide by
 // coincidentally sharing both that generated name and the declared name.
-func managedCodexPluginEntryPresent(configRoot, declaredName, marketplace string) (bool, error) {
+func ManagedCodexPluginEntryPresent(configRoot, declaredName, marketplace string) (bool, error) {
 	if strings.TrimSpace(configRoot) == "" || strings.TrimSpace(declaredName) == "" || strings.TrimSpace(marketplace) == "" {
 		return false, fmt.Errorf("managed Codex plugin ownership evidence is incomplete")
 	}
@@ -86,12 +86,12 @@ func managedCodexPluginEntryPresent(configRoot, declaredName, marketplace string
 	return present, nil
 }
 
-// equivalentLocalPath compares the filesystem identity rather than only the
+// EquivalentLocalPath compares the filesystem identity rather than only the
 // spelling of a path. macOS commonly exposes /tmp through /private/tmp, and
 // Windows can expose the same directory with an extended-length path prefix.
 // Identical cleaned paths are accepted directly; differing paths must both
 // stat successfully and identify the same file before an alias is accepted.
-func equivalentLocalPath(left, right string) bool {
+func EquivalentLocalPath(left, right string) bool {
 	left = filepath.Clean(left)
 	right = filepath.Clean(right)
 	if left == right {

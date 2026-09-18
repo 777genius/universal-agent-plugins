@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/cline"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
@@ -120,7 +121,7 @@ func TestClineSkillRollbackRetainsBackupWhenRestoreRenameFails(t *testing.T) {
 	activeV1 := filepath.Join(root, "managed", "v1")
 	writeTestFile(t, filepath.Join(activeV1, "skills", "docs", "SKILL.md"), "v1\n")
 	desiredV1 := clineFixtureObjects(t, configRoot, activeV1, "docs", "", nativeconfig.Server{})
-	if err := applyClineNativeMutation(configRoot, activeV1, nil, desiredV1); err != nil {
+	if err := cline.ApplyClineNativeMutation(configRoot, activeV1, nil, desiredV1); err != nil {
 		t.Fatal(err)
 	}
 	activeV2 := filepath.Join(root, "managed", "v2")
@@ -139,7 +140,7 @@ func TestClineSkillRollbackRetainsBackupWhenRestoreRenameFails(t *testing.T) {
 		}
 	}
 
-	err := applyClineNativeMutationWithRename(configRoot, activeV2, desiredV1, desiredV2, rename)
+	err := cline.ApplyClineNativeMutationWithRename(configRoot, activeV2, desiredV1, desiredV2, rename)
 	if err == nil || !strings.Contains(err.Error(), activationErr.Error()) || !strings.Contains(err.Error(), restoreErr.Error()) || !strings.Contains(err.Error(), "recovery retained at") {
 		t.Fatalf("rollback error = %v", err)
 	}
@@ -166,7 +167,7 @@ func TestClineSkillBackupDigestMismatchRestoresLiveDirectoryAndAborts(t *testing
 	activeV1 := filepath.Join(root, "managed", "v1")
 	writeTestFile(t, filepath.Join(activeV1, "skills", "docs", "SKILL.md"), "v1\n")
 	desiredV1 := clineFixtureObjects(t, configRoot, activeV1, "docs", "", nativeconfig.Server{})
-	if err := applyClineNativeMutation(configRoot, activeV1, nil, desiredV1); err != nil {
+	if err := cline.ApplyClineNativeMutation(configRoot, activeV1, nil, desiredV1); err != nil {
 		t.Fatal(err)
 	}
 	activeV2 := filepath.Join(root, "managed", "v2")
@@ -180,7 +181,7 @@ func TestClineSkillBackupDigestMismatchRestoresLiveDirectoryAndAborts(t *testing
 		return os.Rename(oldPath, newPath)
 	}
 
-	err := applyClineNativeMutationWithRename(configRoot, activeV2, desiredV1, desiredV2, rename)
+	err := cline.ApplyClineNativeMutationWithRename(configRoot, activeV2, desiredV1, desiredV2, rename)
 	if err == nil || !strings.Contains(err.Error(), "isolated Cline skill backup") {
 		t.Fatalf("TOCTOU activation error = %v", err)
 	}
@@ -196,7 +197,7 @@ func TestRenameClineDirectoryNoReplacePreservesLateTarget(t *testing.T) {
 	target := filepath.Join(root, "live")
 	writeTestFile(t, filepath.Join(source, "SKILL.md"), "managed\n")
 	writeTestFile(t, filepath.Join(target, "SKILL.md"), "late unmanaged\n")
-	err := renameClineDirectoryNoReplace(source, target, shared.RenameDirectoryExclusive)
+	err := cline.RenameClineDirectoryNoReplace(source, target, shared.RenameDirectoryExclusive)
 	if err == nil {
 		t.Fatalf("no-replace result = %v", err)
 	}
@@ -222,10 +223,10 @@ func TestClineProjectsChromeLikeStdioWithoutAuthorCWD(t *testing.T) {
 		{Kind: domain.ComponentMCPServer, Name: "chrome", Support: domain.SupportPrepared},
 	}}
 	dataPath := filepath.Join(root, "data")
-	if err := projectClineNative(root, envelope, plan, dataPath); err != nil {
+	if err := cline.ProjectClineNative(root, envelope, plan, dataPath); err != nil {
 		t.Fatalf("project Chrome-like Cline stdio server: %v", err)
 	}
-	projection, err := readClineProjection(root)
+	projection, err := cline.ReadClineProjection(root)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -249,11 +250,11 @@ func TestClinePreservesExplicitStdioCWD(t *testing.T) {
 	plan := domain.DeliveryPlan{ActivePath: filepath.Join(root, "active"), Components: []domain.ComponentDecision{
 		{Kind: domain.ComponentMCPServer, Name: "local", Support: domain.SupportPrepared},
 	}}
-	err := projectClineNative(root, envelope, plan, filepath.Join(root, "data"))
+	err := cline.ProjectClineNative(root, envelope, plan, filepath.Join(root, "data"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	projection, err := readClineProjection(root)
+	projection, err := cline.ReadClineProjection(root)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -287,7 +288,7 @@ func TestClineCollisionAndBusyLockLeaveNoPartialActivation(t *testing.T) {
 			server := nativeconfig.Server{Type: "stdio", Command: "node"}
 			writeClineProjectionFixture(t, active, map[string]nativeconfig.Server{"docs": server})
 			desired := clineFixtureObjects(t, configRoot, active, "guide", "docs", server)
-			err := applyClineNativeMutation(configRoot, active, nil, desired)
+			err := cline.ApplyClineNativeMutation(configRoot, active, nil, desired)
 			if err == nil {
 				t.Fatal("unsafe activation unexpectedly succeeded")
 			}
@@ -315,7 +316,7 @@ func TestStagerBuildsClineNestedTransportAndOwnership(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	projection, err := readClineProjection(delivery.StagingPath)
+	projection, err := cline.ReadClineProjection(delivery.StagingPath)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -338,8 +339,8 @@ func TestStagerBuildsClineNestedTransportAndOwnership(t *testing.T) {
 	}
 	var foundSkill, foundMCP bool
 	for _, object := range delivery.NativeObjects {
-		foundSkill = foundSkill || object.Kind == clineSkillObjectKind
-		foundMCP = foundMCP || object.Kind == clineMCPObjectKind
+		foundSkill = foundSkill || object.Kind == cline.ClineSkillObjectKind
+		foundMCP = foundMCP || object.Kind == cline.ClineMCPObjectKind
 	}
 	if !foundSkill || !foundMCP {
 		t.Fatalf("Cline ownership missing: %+v", delivery.NativeObjects)
@@ -356,11 +357,11 @@ func TestClineTamperedReceiptFailsClosed(t *testing.T) {
 	server := nativeconfig.Server{Type: "stdio", Command: "node"}
 	writeClineProjectionFixture(t, active, map[string]nativeconfig.Server{"docs": server})
 	desired := clineFixtureObjects(t, configRoot, active, "", "docs", server)
-	if err := applyClineNativeMutation(configRoot, active, nil, desired); err != nil {
+	if err := cline.ApplyClineNativeMutation(configRoot, active, nil, desired); err != nil {
 		t.Fatal(err)
 	}
 	desired[0].ManagedDigest = "sha256:00"
-	if err := verifyClineNativeObjects(configRoot, desired, false); !errors.Is(err, nativeconfig.ErrNotOwned) && !strings.Contains(err.Error(), "changed outside") {
+	if err := cline.VerifyClineNativeObjects(configRoot, desired, false); !errors.Is(err, nativeconfig.ErrNotOwned) && !strings.Contains(err.Error(), "changed outside") {
 		t.Fatalf("tamper was not rejected: %v", err)
 	}
 }
@@ -377,11 +378,11 @@ func TestClineRejectsRelativeSettingsOverrideBeforeMutation(t *testing.T) {
 
 func writeClineProjectionFixture(t *testing.T, active string, servers map[string]nativeconfig.Server) {
 	t.Helper()
-	body, err := json.Marshal(clineProjection{Servers: servers})
+	body, err := json.Marshal(cline.ClineProjection{Servers: servers})
 	if err != nil {
 		t.Fatal(err)
 	}
-	writeTestFile(t, filepath.Join(active, clineProjectionFile), string(body))
+	writeTestFile(t, filepath.Join(active, cline.ClineProjectionFile), string(body))
 }
 
 func clineFixtureObjects(t *testing.T, configRoot, active, skillName, serverName string, server nativeconfig.Server) []domain.NativeObjectOwnership {
@@ -392,23 +393,23 @@ func clineFixtureObjects(t *testing.T, configRoot, active, skillName, serverName
 		if err != nil {
 			t.Fatal(err)
 		}
-		objects = append(objects, domain.NativeObjectOwnership{ObjectID: "cline-skill:" + skillName, Kind: clineSkillObjectKind, LogicalName: skillName,
+		objects = append(objects, domain.NativeObjectOwnership{ObjectID: "cline-skill:" + skillName, Kind: cline.ClineSkillObjectKind, LogicalName: skillName,
 			Path: filepath.Join(configRoot, "skills", skillName), SourceRelative: filepath.ToSlash(filepath.Join("skills", skillName)), ManagedDigest: digest, ProtectionClass: "managed"})
 	}
 	if serverName != "" {
-		receipt, err := nativeconfig.DesiredReceipt(clineMCPSettingsPath(configRoot), nativeconfig.CodecCline, serverName, server, nativeconfig.Placeholders{})
+		receipt, err := nativeconfig.DesiredReceipt(cline.ClineMCPSettingsPath(configRoot), nativeconfig.CodecCline, serverName, server, nativeconfig.Placeholders{})
 		if err != nil {
 			t.Fatal(err)
 		}
-		objects = append(objects, domain.NativeObjectOwnership{ObjectID: "cline-mcp:" + serverName, Kind: clineMCPObjectKind, LogicalName: serverName,
-			Path: clineMCPSettingsPath(configRoot), SourceRelative: clineProjectionFile, ManagedDigest: receipt.Digest, ProtectionClass: "managed"})
+		objects = append(objects, domain.NativeObjectOwnership{ObjectID: "cline-mcp:" + serverName, Kind: cline.ClineMCPObjectKind, LogicalName: serverName,
+			Path: cline.ClineMCPSettingsPath(configRoot), SourceRelative: cline.ClineProjectionFile, ManagedDigest: receipt.Digest, ProtectionClass: "managed"})
 	}
 	return objects
 }
 
 func TestClineNeutralCWDTypeValidation(t *testing.T) {
 	for _, value := range []any{false, 42, []string{"work"}} {
-		if _, err := clineNeutralServer(domain.MCPServer{Type: "stdio", Decoded: map[string]any{"command": "node", "cwd": value}}); err == nil {
+		if _, err := cline.ClineNeutralServer(domain.MCPServer{Type: "stdio", Decoded: map[string]any{"command": "node", "cwd": value}}); err == nil {
 			t.Fatalf("accepted cwd %#v", value)
 		}
 	}
@@ -419,10 +420,10 @@ func TestClineProjectionRoundTripExpandsPortableValuesOnlyOnce(t *testing.T) {
 	active := filepath.Join(root, "${PLUGIN_DATA}", "${PLUGIN_ROOT}")
 	envelope := domain.PackageEnvelope{MCP: domain.MCPComponent{Servers: map[string]domain.MCPServer{"local": {Type: "stdio", Decoded: map[string]any{"command": "node", "args": []any{"${PLUGIN_ROOT}/run.js", "${UNKNOWN}"}, "env": map[string]any{"ROOT": "${PLUGIN_ROOT}", "OTHER": "${HOME}"}}}}}}
 	plan := domain.DeliveryPlan{ActivePath: active, Components: []domain.ComponentDecision{{Kind: domain.ComponentMCPServer, Name: "local", Support: domain.SupportNative}}}
-	if err := projectClineNative(root, envelope, plan, filepath.Join(root, "data")); err != nil {
+	if err := cline.ProjectClineNative(root, envelope, plan, filepath.Join(root, "data")); err != nil {
 		t.Fatal(err)
 	}
-	projection, err := readClineProjection(root)
+	projection, err := cline.ReadClineProjection(root)
 	if err != nil {
 		t.Fatal(err)
 	}

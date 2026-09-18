@@ -14,8 +14,13 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/atomicfile"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/filetree"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/pathpolicy"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/claude"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/cline"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/gemini"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/kiro"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/opencode"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/windsurf"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/managedstdio"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
@@ -198,7 +203,7 @@ func (stager Stager) stage(
 			if err := stager.deliverManagedStdio(stagingPath, envelope, plan); err != nil {
 				return domain.StagedDelivery{}, err
 			}
-			if err := projectClaude(stagingPath, envelope, plan, pluginDataPath); err != nil {
+			if err := claude.ProjectClaude(stagingPath, envelope, plan, pluginDataPath); err != nil {
 				return domain.StagedDelivery{}, err
 			}
 		case domain.ClientChatGPT:
@@ -220,7 +225,7 @@ func (stager Stager) stage(
 	var geminiObjects []domain.NativeObjectOwnership
 	if plan.ClientID == domain.ClientGemini {
 		var err error
-		geminiObjects, err = buildGeminiNativeObjects(stagingPath, envelope, plan, pluginDataPath)
+		geminiObjects, err = gemini.BuildGeminiNativeObjects(stagingPath, envelope, plan, pluginDataPath)
 		if err != nil {
 			return domain.StagedDelivery{}, err
 		}
@@ -231,12 +236,12 @@ func (stager Stager) stage(
 		}
 	}
 	if plan.ClientID == domain.ClientOpenCode {
-		if err := projectOpenCodeNative(stagingPath, envelope, plan, pluginDataPath); err != nil {
+		if err := opencode.ProjectOpenCodeNative(stagingPath, envelope, plan, pluginDataPath); err != nil {
 			return domain.StagedDelivery{}, err
 		}
 	}
 	if plan.ClientID == domain.ClientCline {
-		if err := projectClineNative(stagingPath, envelope, plan, pluginDataPath); err != nil {
+		if err := cline.ProjectClineNative(stagingPath, envelope, plan, pluginDataPath); err != nil {
 			return domain.StagedDelivery{}, err
 		}
 	}
@@ -249,7 +254,7 @@ func (stager Stager) stage(
 		if err := stager.deliverManagedStdio(stagingPath, envelope, plan); err != nil {
 			return domain.StagedDelivery{}, err
 		}
-		if err := projectWindsurfMCP(stagingPath, envelope, plan, pluginDataPath); err != nil {
+		if err := windsurf.ProjectWindsurfMCP(stagingPath, envelope, plan, pluginDataPath); err != nil {
 			return domain.StagedDelivery{}, err
 		}
 	}
@@ -279,14 +284,14 @@ func (stager Stager) stage(
 		objects = append(objects, kiroObjects...)
 	}
 	if plan.ClientID == domain.ClientOpenCode {
-		openCodeObjects, err := buildOpenCodeNativeObjects(stagingPath, envelope, plan)
+		openCodeObjects, err := opencode.BuildOpenCodeNativeObjects(stagingPath, envelope, plan)
 		if err != nil {
 			return domain.StagedDelivery{}, err
 		}
 		objects = append(objects, openCodeObjects...)
 	}
 	if plan.ClientID == domain.ClientCline {
-		clineObjects, err := buildClineNativeObjects(stagingPath, envelope, plan)
+		clineObjects, err := cline.BuildClineNativeObjects(stagingPath, envelope, plan)
 		if err != nil {
 			return domain.StagedDelivery{}, err
 		}
@@ -294,7 +299,7 @@ func (stager Stager) stage(
 	}
 	objects = append(objects, geminiObjects...)
 	if plan.ClientID == domain.ClientWindsurf {
-		windsurfObjects, err := buildWindsurfNativeObjects(stagingPath, plan)
+		windsurfObjects, err := windsurf.BuildWindsurfNativeObjects(stagingPath, plan)
 		if err != nil {
 			return domain.StagedDelivery{}, err
 		}

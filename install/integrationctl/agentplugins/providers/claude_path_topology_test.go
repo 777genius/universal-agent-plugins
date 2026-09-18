@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/claude"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
@@ -27,7 +28,7 @@ func TestClaudeBundledStdioObservesIsolatedRuntime(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			observed := filepath.Join(delivery.StagingPath, claudeRuntimeDirectory)
+			observed := filepath.Join(delivery.StagingPath, claude.ClaudeRuntimeDirectory)
 			if _, err := os.Stat(filepath.Join(delivery.StagingPath, "bin")); !os.IsNotExist(err) {
 				t.Fatalf("authored bin remained exposed: %v", err)
 			}
@@ -35,7 +36,7 @@ func TestClaudeBundledStdioObservesIsolatedRuntime(t *testing.T) {
 				t.Fatal(err)
 			}
 			server := readObject(t, filepath.Join(delivery.StagingPath, ".mcp.json"))["local"].(map[string]any)
-			activeRuntime := filepath.Join(plan.ActivePath, claudeRuntimeDirectory)
+			activeRuntime := filepath.Join(plan.ActivePath, claude.ClaudeRuntimeDirectory)
 			expectedCWD := activeRuntime
 			if cwd == "./work" {
 				expectedCWD = filepath.Join(activeRuntime, "work")

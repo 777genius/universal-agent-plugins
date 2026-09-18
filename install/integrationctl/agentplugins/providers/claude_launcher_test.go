@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/claude"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/managedstdio"
 )
@@ -23,7 +24,7 @@ func TestClaudeHelperOwnedArtifactDigestAndCollision(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	helper := filepath.Join(delivery.StagingPath, claudeRuntimeDirectory, filepath.FromSlash(managedstdio.RelativeDirectory), managedstdio.ExecutableName)
+	helper := filepath.Join(delivery.StagingPath, claude.ClaudeRuntimeDirectory, filepath.FromSlash(managedstdio.RelativeDirectory), managedstdio.ExecutableName)
 	if _, err := os.Stat(helper); err != nil {
 		t.Fatal(err)
 	}

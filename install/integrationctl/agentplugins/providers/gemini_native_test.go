@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/gemini"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
@@ -16,7 +17,7 @@ import (
 func TestGeminiSkillRollbackRetainsOnlyBackupWhenRestoreRenameFails(t *testing.T) {
 	configRoot := filepath.Join(t.TempDir(), ".gemini")
 	activeV1, desiredV1 := geminiNativeFixture(t, configRoot, "v1", "https://docs.test/v1")
-	if err := applyGeminiNativeMutation(configRoot, activeV1, nil, desiredV1); err != nil {
+	if err := gemini.ApplyGeminiNativeMutation(configRoot, activeV1, nil, desiredV1); err != nil {
 		t.Fatal(err)
 	}
 	activeV2, desiredV2 := geminiNativeFixture(t, configRoot, "v2", "https://docs.test/v2")
@@ -33,7 +34,7 @@ func TestGeminiSkillRollbackRetainsOnlyBackupWhenRestoreRenameFails(t *testing.T
 		}
 	}
 
-	err := applyGeminiNativeMutationWithRename(configRoot, activeV2, desiredV1, desiredV2, rename)
+	err := gemini.ApplyGeminiNativeMutationWithRename(configRoot, activeV2, desiredV1, desiredV2, rename)
 	if err == nil || !strings.Contains(err.Error(), activationErr.Error()) || !strings.Contains(err.Error(), restoreErr.Error()) || !strings.Contains(err.Error(), "recovery retained at") {
 		t.Fatalf("rollback error = %v", err)
 	}
@@ -54,7 +55,7 @@ func TestGeminiSkillRollbackRetainsOnlyBackupWhenRestoreRenameFails(t *testing.T
 func TestGeminiSkillBackupDigestMismatchRestoresLiveDirectoryAndAborts(t *testing.T) {
 	configRoot := filepath.Join(t.TempDir(), ".gemini")
 	activeV1, desiredV1 := geminiNativeFixture(t, configRoot, "v1", "https://docs.test/v1")
-	if err := applyGeminiNativeMutation(configRoot, activeV1, nil, desiredV1); err != nil {
+	if err := gemini.ApplyGeminiNativeMutation(configRoot, activeV1, nil, desiredV1); err != nil {
 		t.Fatal(err)
 	}
 	activeV2, desiredV2 := geminiNativeFixture(t, configRoot, "v2", "https://docs.test/v2")
@@ -66,7 +67,7 @@ func TestGeminiSkillBackupDigestMismatchRestoresLiveDirectoryAndAborts(t *testin
 		return os.Rename(oldPath, newPath)
 	}
 
-	err := applyGeminiNativeMutationWithRename(configRoot, activeV2, desiredV1, desiredV2, rename)
+	err := gemini.ApplyGeminiNativeMutationWithRename(configRoot, activeV2, desiredV1, desiredV2, rename)
 	if err == nil || !strings.Contains(err.Error(), "isolated Gemini skill backup") {
 		t.Fatalf("TOCTOU activation error = %v", err)
 	}
@@ -88,7 +89,7 @@ func TestRenameGeminiDirectoryNoReplacePreservesLateTarget(t *testing.T) {
 	writeTestFile(t, filepath.Join(source, "SKILL.md"), "managed\n")
 	writeTestFile(t, filepath.Join(target, "SKILL.md"), "late unmanaged\n")
 	renameCalls := 0
-	err := renameGeminiDirectoryNoReplace(source, target, func(oldPath, newPath string) error {
+	err := gemini.RenameGeminiDirectoryNoReplace(source, target, func(oldPath, newPath string) error {
 		renameCalls++
 		return os.Rename(oldPath, newPath)
 	})
@@ -124,25 +125,25 @@ func TestGeminiNativeLifecyclePreservesUnmanagedConfiguration(t *testing.T) {
 	configRoot := filepath.Join(t.TempDir(), ".gemini")
 	writeTestFile(t, filepath.Join(configRoot, "settings.json"), `{"theme":"night","mcpServers":{"unmanaged":{"url":"https://foreign.test/sse"}}}`)
 	activeV1, desiredV1 := geminiNativeFixture(t, configRoot, "v1", "https://docs.test/v1")
-	if err := applyGeminiNativeMutation(configRoot, activeV1, nil, desiredV1); err != nil {
+	if err := gemini.ApplyGeminiNativeMutation(configRoot, activeV1, nil, desiredV1); err != nil {
 		t.Fatal(err)
 	}
 	assertGeminiNativeState(t, configRoot, "v1", "https://docs.test/v1", true)
 	activeV2, desiredV2 := geminiNativeFixture(t, configRoot, "v2", "https://docs.test/v2")
-	if err := applyGeminiNativeMutation(configRoot, activeV2, desiredV1, desiredV2); err != nil {
+	if err := gemini.ApplyGeminiNativeMutation(configRoot, activeV2, desiredV1, desiredV2); err != nil {
 		t.Fatal(err)
 	}
 	assertGeminiNativeState(t, configRoot, "v2", "https://docs.test/v2", true)
 
 	// Repair a managed entry removed outside the manager.
-	if _, err := nativeconfig.New().Apply(nativeconfig.Request{Paths: geminiConfigPaths(configRoot), Codec: nativeconfig.CodecGemini, Action: nativeconfig.ActionRemove, Name: "docs", Owned: geminiReceipt(desiredV2[1])}); err != nil {
+	if _, err := nativeconfig.New().Apply(nativeconfig.Request{Paths: gemini.GeminiConfigPaths(configRoot), Codec: nativeconfig.CodecGemini, Action: nativeconfig.ActionRemove, Name: "docs", Owned: gemini.GeminiReceipt(desiredV2[1])}); err != nil {
 		t.Fatal(err)
 	}
-	if err := applyGeminiNativeMutation(configRoot, activeV2, desiredV2, desiredV2); err != nil {
+	if err := gemini.ApplyGeminiNativeMutation(configRoot, activeV2, desiredV2, desiredV2); err != nil {
 		t.Fatal(err)
 	}
 	assertGeminiNativeState(t, configRoot, "v2", "https://docs.test/v2", true)
-	if err := applyGeminiNativeMutation(configRoot, "", desiredV2, nil); err != nil {
+	if err := gemini.ApplyGeminiNativeMutation(configRoot, "", desiredV2, nil); err != nil {
 		t.Fatal(err)
 	}
 	assertGeminiNativeState(t, configRoot, "", "", false)
@@ -153,7 +154,7 @@ func TestGeminiNativeLifecycleRejectsCollisionsAndUserChanges(t *testing.T) {
 	configRoot := filepath.Join(t.TempDir(), ".gemini")
 	writeTestFile(t, filepath.Join(configRoot, "skills", "docs", "SKILL.md"), "unmanaged\n")
 	active, desired := geminiNativeFixture(t, configRoot, "owned", "https://docs.test")
-	if err := applyGeminiNativeMutation(configRoot, active, nil, desired); err == nil {
+	if err := gemini.ApplyGeminiNativeMutation(configRoot, active, nil, desired); err == nil {
 		t.Fatal("unmanaged Gemini skill collision was accepted")
 	}
 	body, _ := os.ReadFile(filepath.Join(configRoot, "skills", "docs", "SKILL.md"))
@@ -163,11 +164,11 @@ func TestGeminiNativeLifecycleRejectsCollisionsAndUserChanges(t *testing.T) {
 
 	configRoot = filepath.Join(t.TempDir(), ".gemini")
 	active, desired = geminiNativeFixture(t, configRoot, "owned", "https://docs.test")
-	if err := applyGeminiNativeMutation(configRoot, active, nil, desired); err != nil {
+	if err := gemini.ApplyGeminiNativeMutation(configRoot, active, nil, desired); err != nil {
 		t.Fatal(err)
 	}
 	writeTestFile(t, filepath.Join(configRoot, "skills", "docs", "SKILL.md"), "user change\n")
-	if err := applyGeminiNativeMutation(configRoot, "", desired, nil); err == nil {
+	if err := gemini.ApplyGeminiNativeMutation(configRoot, "", desired, nil); err == nil {
 		t.Fatal("modified managed Gemini skill was silently removed")
 	}
 	body, _ = os.ReadFile(filepath.Join(configRoot, "skills", "docs", "SKILL.md"))
@@ -178,7 +179,7 @@ func TestGeminiNativeLifecycleRejectsCollisionsAndUserChanges(t *testing.T) {
 
 func TestGeminiTransportProjection(t *testing.T) {
 	t.Parallel()
-	stdio, err := geminiNativeServer(domain.MCPServer{Name: "local", Type: "stdio", Decoded: map[string]any{"type": "stdio", "command": "${PLUGIN_ROOT}", "args": []any{"${PLUGIN_ROOT}/server.js", "${PLUGIN_CACHE}"}, "env": map[string]any{"DATA": "${PLUGIN_DATA}", "UNKNOWN": "${HOME}"}, "cwd": "./${PLUGIN_CACHE}"}})
+	stdio, err := gemini.GeminiNativeServer(domain.MCPServer{Name: "local", Type: "stdio", Decoded: map[string]any{"type": "stdio", "command": "${PLUGIN_ROOT}", "args": []any{"${PLUGIN_ROOT}/server.js", "${PLUGIN_CACHE}"}, "env": map[string]any{"DATA": "${PLUGIN_DATA}", "UNKNOWN": "${HOME}"}, "cwd": "./${PLUGIN_CACHE}"}})
 	if err != nil || stdio.CWD != "${PLUGIN_ROOT}/${PLUGIN_CACHE}" {
 		t.Fatalf("stdio projection = %+v, %v", stdio, err)
 	}
@@ -187,7 +188,7 @@ func TestGeminiTransportProjection(t *testing.T) {
 		t.Fatal(err)
 	}
 	dataRoot := filepath.Join(t.TempDir(), "data")
-	stdio, err = materializeGeminiServer(stdio, packageRoot, dataRoot)
+	stdio, err = gemini.MaterializeGeminiServer(stdio, packageRoot, dataRoot)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -198,8 +199,8 @@ func TestGeminiTransportProjection(t *testing.T) {
 		t.Fatalf("Gemini recursively expanded replacement text: %+v", stdio)
 	}
 	for _, transport := range []string{"streamable-http", "sse"} {
-		server, err := geminiNativeServer(domain.MCPServer{Name: "remote", Type: transport, Decoded: map[string]any{"type": transport, "url": "https://example.test/${PLUGIN_ROOT}", "headers": map[string]any{"X-Path": "${PLUGIN_DATA}"}}})
-		server, materializeErr := materializeGeminiServer(server, packageRoot, dataRoot)
+		server, err := gemini.GeminiNativeServer(domain.MCPServer{Name: "remote", Type: transport, Decoded: map[string]any{"type": transport, "url": "https://example.test/${PLUGIN_ROOT}", "headers": map[string]any{"X-Path": "${PLUGIN_DATA}"}}})
+		server, materializeErr := gemini.MaterializeGeminiServer(server, packageRoot, dataRoot)
 		if err != nil || materializeErr != nil || server.Type != "remote" || server.RemoteTransport != transport || server.URL != "https://example.test/${PLUGIN_ROOT}" || server.Headers["X-Path"] != "${PLUGIN_DATA}" {
 			t.Fatalf("%s projection = %+v, %v", transport, server, err)
 		}
@@ -219,13 +220,13 @@ func geminiNativeFixture(t *testing.T, configRoot, marker, url string) (string, 
 	body, _ := json.Marshal(map[string]any{"mcpServers": map[string]any{"docs": mcp}})
 	writeTestFile(t, filepath.Join(active, "mcp.json"), string(body))
 	dataRoot := filepath.Join(t.TempDir(), "data")
-	descriptor, _ := json.Marshal(geminiDescriptor{DataRoot: dataRoot})
-	writeTestFile(t, filepath.Join(active, geminiDescriptorName), string(descriptor))
-	server, err := geminiNativeServer(domain.MCPServer{Name: "docs", Type: "streamable-http", Decoded: mcp})
+	descriptor, _ := json.Marshal(gemini.GeminiDescriptor{DataRoot: dataRoot})
+	writeTestFile(t, filepath.Join(active, gemini.GeminiDescriptorName), string(descriptor))
+	server, err := gemini.GeminiNativeServer(domain.MCPServer{Name: "docs", Type: "streamable-http", Decoded: mcp})
 	if err != nil {
 		t.Fatal(err)
 	}
-	server, err = materializeGeminiServer(server, active, dataRoot)
+	server, err = gemini.MaterializeGeminiServer(server, active, dataRoot)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -234,8 +235,8 @@ func geminiNativeFixture(t *testing.T, configRoot, marker, url string) (string, 
 		t.Fatal(err)
 	}
 	return active, []domain.NativeObjectOwnership{
-		{ObjectID: "gemini-skill:docs", Kind: geminiSkillObjectKind, LogicalName: "docs", Path: filepath.Join(configRoot, "skills", "docs"), SourceRelative: "skills/docs", ManagedDigest: digest, ProtectionClass: "managed"},
-		{ObjectID: "gemini-mcp:docs", Kind: geminiMCPObjectKind, LogicalName: "docs", Path: filepath.Join(configRoot, "settings.json"), ManagedDigest: receipt.Digest, ProtectionClass: "managed"},
+		{ObjectID: "gemini-skill:docs", Kind: gemini.GeminiSkillObjectKind, LogicalName: "docs", Path: filepath.Join(configRoot, "skills", "docs"), SourceRelative: "skills/docs", ManagedDigest: digest, ProtectionClass: "managed"},
+		{ObjectID: "gemini-mcp:docs", Kind: gemini.GeminiMCPObjectKind, LogicalName: "docs", Path: filepath.Join(configRoot, "settings.json"), ManagedDigest: receipt.Digest, ProtectionClass: "managed"},
 	}
 }
 
