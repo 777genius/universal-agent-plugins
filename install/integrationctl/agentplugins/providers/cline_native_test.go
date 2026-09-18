@@ -9,8 +9,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/providers/nativeconfig"
 )
 
 func TestClineLifecycleInstallsUpdatesAndRemovesExactOwnedObjects(t *testing.T) {
@@ -173,7 +174,7 @@ func TestClineSkillBackupDigestMismatchRestoresLiveDirectoryAndAborts(t *testing
 	desiredV2 := clineFixtureObjects(t, configRoot, activeV2, "docs", "", nativeconfig.Server{})
 	liveSkill := filepath.Join(configRoot, "skills", "docs")
 	rename := func(oldPath, newPath string) error {
-		if sameCleanPath(oldPath, liveSkill) && strings.HasPrefix(filepath.Base(newPath), "old-") {
+		if shared.SameCleanPath(oldPath, liveSkill) && strings.HasPrefix(filepath.Base(newPath), "old-") {
 			writeTestFile(t, filepath.Join(oldPath, "SKILL.md"), "concurrent user change\n")
 		}
 		return os.Rename(oldPath, newPath)
@@ -195,7 +196,7 @@ func TestRenameClineDirectoryNoReplacePreservesLateTarget(t *testing.T) {
 	target := filepath.Join(root, "live")
 	writeTestFile(t, filepath.Join(source, "SKILL.md"), "managed\n")
 	writeTestFile(t, filepath.Join(target, "SKILL.md"), "late unmanaged\n")
-	err := renameClineDirectoryNoReplace(source, target, renameDirectoryExclusive)
+	err := renameClineDirectoryNoReplace(source, target, shared.RenameDirectoryExclusive)
 	if err == nil {
 		t.Fatalf("no-replace result = %v", err)
 	}

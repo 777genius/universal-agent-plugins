@@ -1,6 +1,6 @@
 //go:build linux && amd64
 
-package providers
+package shared
 
 import (
 	"os"
@@ -8,7 +8,7 @@ import (
 	"unsafe"
 )
 
-func renameDirectoryExclusive(oldPath, newPath string) error {
+func RenameDirectoryExclusive(oldPath, newPath string) error {
 	oldPointer, err := syscall.BytePtrFromString(oldPath)
 	if err != nil {
 		return err

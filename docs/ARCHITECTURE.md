@@ -35,19 +35,30 @@ Dependencies point inward.
 | Domain | `agentplugins/domain` | stdlib only | yes, `domain-stdlib-only` |
 | Ports | `agentplugins/ports` | stdlib, `domain`, `install/integrationctl/ports` (see below) | yes, `ports-only-domain` |
 | Use cases | `agentplugins/usecase` | stdlib, `domain`, `ports`, `transaction`, `pathcontract`, `install/integrationctl/ports` for the legacy lock (see below) | yes, `usecase-through-ports` |
+| Client contract | `agentplugins/clients` (+ `clients/shared`) | stdlib, `domain`, `ports`, `adapters/nativeconfig` (see below) | yes, `clients-no-upward`, `clients-no-concrete-clients` |
 | Adapters | `agentplugins/{adapters,providers,planner}` | the layers above | no rule yet |
 | CLI | `agentpluginscli` | the public facades of the layers above | no rule yet |
 | Composition root | `cmd/agentplugins` | everything, and nothing imports it | no rule yet |
 
 The "Enforced today" column is deliberate: the middle column is the target, and
-only the first three rows are currently checked by `depguard` in `.golangci.yml`.
-`usecase-through-ports` now forbids `adapters` (both the `agentplugins` ones and
-`install/integrationctl/adapters`), `providers`, `planner` and `clients`; the use
-case reaches path containment through `ports.PathPolicy` and planning through
-`ports.DeliveryPlanner`. It stays a deny list on purpose: adding an `allow` key
-would turn the rule into a whitelist and reject every import not named in it,
-including the standard library. The adapter, CLI and composition root rows have
-no rule at all yet.
+only the first three rows and the client contract are currently checked by
+`depguard` in `.golangci.yml`. `usecase-through-ports` now forbids `adapters`
+(both the `agentplugins` ones and `install/integrationctl/adapters`),
+`providers`, `planner` and `clients`; the use case reaches path containment
+through `ports.PathPolicy` and planning through `ports.DeliveryPlanner`. It stays
+a deny list on purpose: adding an `allow` key would turn the rule into a
+whitelist and reject every import not named in it, including the standard
+library. The adapter, CLI and composition root rows have no rule at all yet.
+
+`agentplugins/clients` is the extension point: one adapter per supported client,
+resolved through a `Registry` the composition root injects. `clients-no-upward`
+stops an adapter from importing `providers`, `planner`, `usecase` or
+`adapters/clientdetect`, and `clients-no-concrete-clients` stops the contract,
+its shared helpers and any client package from importing another client package
+or the assembled `clients/all` registry. A nil `Registry` is an error, never a
+silent fallback to "every client": resolving it to a default would compile every
+adapter into any binary that imports a generic package and would put the registry
+outside the composition root's control.
 
 ### Accepted exceptions
 
@@ -66,6 +77,20 @@ interface, so the use case does name a package outside its layer. It is the
 remaining edge of the pre-refactor installer that still owns the lock, and it is
 listed here rather than quietly excluded, because the deny list permits it only
 by not mentioning it.
+
+**`agentplugins/clients` is close to self-contained, but not a leaf.**
+`clients.Env` carries a `nativeconfig.Kernel`, so the contract imports
+`agentplugins/adapters/nativeconfig`, which in turn pulls
+`github.com/tailscale/hujson` and `install/integrationctl/adapters/atomicfile`.
+That package is a generic content-addressed kernel for native client configs
+with no dependency on `providers`, which is why it moved under `adapters` rather
+than being wrapped. The honest statement is therefore "close to extractable, with
+one known exception", not "leaf package ready to move out": lifting
+`clients`+`domain`+`ports` into a separate module would first have to take
+`nativeconfig` along or hide it behind a narrow `ports.NativeConfigKernel`.
+Introducing that port now would be an abstraction with no consumer, so the
+constraint is recorded here instead of discovered later. See the Part 2 section
+of `docs/plans/installer-core-clean-architecture-plan.md`.
 
 **`ports.PathPolicy` has exactly one implementation.** Inverting path
 containment into an interface makes a permissive stand-in possible for the first

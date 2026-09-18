@@ -10,20 +10,21 @@ import (
 	"strings"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/pathpolicy"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/managedstdio"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/pathcontract"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/providers/nativeconfig"
 )
 
 const windsurfMCPObjectKind = "windsurf_mcp_entry"
 
 func projectWindsurfMCP(root string, envelope domain.PackageEnvelope, plan domain.DeliveryPlan, dataPath string) error {
-	if !hasSupportedMCP(plan.Components) {
+	if !shared.HasSupportedMCP(plan.Components) {
 		return nil
 	}
 	servers := make(map[string]any)
-	for _, name := range supportedMCPNames(plan) {
+	for _, name := range shared.SupportedMCPNames(plan) {
 		server, ok := envelope.MCP.Servers[name]
 		if !ok {
 			return fmt.Errorf("Windsurf MCP server %q is missing from the package envelope", name)
@@ -64,14 +65,14 @@ func projectWindsurfMCP(root string, envelope domain.PackageEnvelope, plan domai
 		}
 		servers[name] = projected
 	}
-	return writeJSON(filepath.Join(root, "mcp.json"), map[string]any{
+	return shared.WriteJSON(filepath.Join(root, "mcp.json"), map[string]any{
 		"$schema":    domain.MCPSchemaV1,
 		"mcpServers": servers,
 	})
 }
 
 func buildWindsurfNativeObjects(stagingRoot string, plan domain.DeliveryPlan) ([]domain.NativeObjectOwnership, error) {
-	if strings.TrimSpace(plan.NativeRegistryRoot) == "" || !hasSupportedMCP(plan.Components) {
+	if strings.TrimSpace(plan.NativeRegistryRoot) == "" || !shared.HasSupportedMCP(plan.Components) {
 		return nil, nil
 	}
 	configPath, err := windsurfConfigPath(plan.NativeRegistryRoot)
@@ -164,7 +165,7 @@ func applyWindsurfNativeMutationWithKernel(configRoot, activePath string, previo
 		return fmt.Errorf("prepared Windsurf MCP projection does not match desired ownership")
 	}
 
-	namesCapacity, capacityErr := checkedCombinedCapacity(len(previousMap), len(desiredMap))
+	namesCapacity, capacityErr := shared.CheckedCombinedCapacity(len(previousMap), len(desiredMap))
 	if capacityErr != nil {
 		return fmt.Errorf("prepare managed Windsurf MCP server set: %w", capacityErr)
 	}

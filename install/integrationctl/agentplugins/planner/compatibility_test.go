@@ -3,11 +3,12 @@ package planner
 import (
 	"encoding/json"
 	"errors"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"os"
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
 func TestCompatibilityRegistryMatrix(t *testing.T) {

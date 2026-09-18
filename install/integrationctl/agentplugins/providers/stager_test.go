@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
@@ -53,7 +54,7 @@ func TestStagerBuildsOpenAIProjectionWithoutMutatingPortableSnapshot(t *testing.
 		t.Fatalf("OpenAI MCP = %+v", notion)
 	}
 	codexMarketplace := readObject(t, filepath.Join(delivery.StagingPath, ".agents", "plugins", "marketplace.json"))
-	if codexMarketplace["name"] != managedMarketplaceName(plan.PhysicalArtifactID) {
+	if codexMarketplace["name"] != shared.ManagedMarketplaceName(plan.PhysicalArtifactID) {
 		t.Fatalf("Codex marketplace = %+v", codexMarketplace)
 	}
 	plugins := codexMarketplace["plugins"].([]any)
@@ -360,7 +361,7 @@ func TestStagerResolvesBundledStdioCommandForNativeProjection(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(pluginRoot, "bin/server"), []byte("inert"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	if err := applyStdioDataContract(config, pluginRoot, dataPath); err != nil {
+	if err := shared.ApplyStdioDataContract(config, pluginRoot, dataPath); err != nil {
 		t.Fatal(err)
 	}
 	if config["command"] != filepath.Join(pluginRoot, "bin", "server") || config["cwd"] != pluginRoot {
@@ -426,7 +427,7 @@ func TestStagerBuildsManagedCopilotMarketplaceForCopilotAndVSCode(t *testing.T) 
 				t.Fatal(err)
 			}
 			marketplace := readObject(t, filepath.Join(delivery.StagingPath, ".github", "plugin", "marketplace.json"))
-			if marketplace["name"] != managedMarketplaceName(plan.PhysicalArtifactID) {
+			if marketplace["name"] != shared.ManagedMarketplaceName(plan.PhysicalArtifactID) {
 				t.Fatalf("marketplace = %+v", marketplace)
 			}
 			plugins := marketplace["plugins"].([]any)

@@ -1,0 +1,23 @@
+# Path renames applied to the base revision before the shrink-only comparison in
+# scripts/check-lint-baseline.sh.
+#
+# A `git mv` of an already-exempt file looks identical to a brand new exemption:
+# the old path disappears and an unknown one appears. That is the one case where
+# the baseline may legitimately name a path it did not name before, so each move
+# is declared here instead of silently widening the gate.
+#
+# A line grants nothing on its own. The script checks the declaration against
+# git: the old path was exempt in the base and is gone from the tree, the new
+# path exists and is new, no two lines name the same file, and `git diff -M`
+# sees the pair as a rename. The entry still has to carry the same linters and
+# the same message patterns the old path already had. Once the move lands in the
+# base branch the line is reported as removable and skipped.
+#
+# Format: <old path pattern><TAB or spaces><new path pattern>, both copied from
+# the `- path:` keys of .golangci.yml. The anchors and the `\.` escapes are
+# stripped to compare literal paths, so each side has to name exactly one file.
+
+# Part 2: providers/nativeconfig is a generic CAS kernel with no dependency on
+# providers, moved under adapters so the clients contract can reach it.
+^install/integrationctl/agentplugins/providers/nativeconfig/kernel\.go$	^install/integrationctl/agentplugins/adapters/nativeconfig/kernel\.go$
+^install/integrationctl/agentplugins/providers/nativeconfig/project\.go$	^install/integrationctl/agentplugins/adapters/nativeconfig/project\.go$

@@ -2,11 +2,12 @@ package providers
 
 import (
 	"context"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/managedstdio"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/managedstdio"
 )
 
 func TestClaudeHelperOwnedArtifactDigestAndCollision(t *testing.T) {

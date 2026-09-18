@@ -152,6 +152,55 @@ linters:
               desc: usecase depends on ports, not providers
             - pkg: github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients
               desc: usecase never sees client adapters
+        clients-no-upward:
+          # The client contract and its adapters are the extension point: they
+          # are depended upon, never depend back. Tests are covered too - a test
+          # that reaches for the planner would make the package impossible to
+          # build standalone just as surely as production code would.
+          files: ["**/install/integrationctl/agentplugins/clients/**"]
+          deny:
+            - pkg: github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/providers
+              desc: providers dispatches into clients, never the other way round
+            - pkg: github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/planner
+              desc: planning reaches clients through clients.PlanRefiner, so a client never imports the planner
+            - pkg: github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/usecase
+              desc: the use case sits above the ports; a client adapter is below them
+            - pkg: github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/clientdetect
+              desc: detection calls clients.HostDetector, so a client never imports the detector
+        clients-no-concrete-clients:
+          # The contract, its shared helpers and every client package are peers:
+          # none of them may reach for another client or for the assembled
+          # registry. Without this, the first shared helper a client package
+          # needs would invert the dependency and close an import cycle.
+          # clients/all is the one place that names them all, so it is excluded.
+          # These packages arrive in Parts 3-5; the rule is declared now so the
+          # parts that create them cannot get this wrong.
+          files:
+            - "**/install/integrationctl/agentplugins/clients/**"
+            - "!**/install/integrationctl/agentplugins/clients/all/**"
+          deny:
+            - pkg: github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/all
+              desc: the default registry is assembled in the composition root, never inside a helper
+            - pkg: github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/claude
+              desc: shared helpers are used by client packages and never use one
+            - pkg: github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/codex
+              desc: shared helpers are used by client packages and never use one
+            - pkg: github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/chatgpt
+              desc: shared helpers are used by client packages and never use one
+            - pkg: github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/copilot
+              desc: shared helpers are used by client packages and never use one
+            - pkg: github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/cursor
+              desc: shared helpers are used by client packages and never use one
+            - pkg: github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/kiro
+              desc: shared helpers are used by client packages and never use one
+            - pkg: github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/gemini
+              desc: shared helpers are used by client packages and never use one
+            - pkg: github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/opencode
+              desc: shared helpers are used by client packages and never use one
+            - pkg: github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/cline
+              desc: shared helpers are used by client packages and never use one
+            - pkg: github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/windsurf
+              desc: shared helpers are used by client packages and never use one
   exclusions:
     generated: lax
     paths:
@@ -537,6 +586,12 @@ linters:
       - path: ^install/integrationctl/agentplugins/adapters/loader/skills\.go$
         linters: [funlen, gocognit]
         text: 'too many statements|cognitive complexity'
+      - path: ^install/integrationctl/agentplugins/adapters/nativeconfig/kernel\.go$
+        linters: [funlen, gocyclo, gocognit]
+        text: 'too many statements|cyclomatic complexity|cognitive complexity'
+      - path: ^install/integrationctl/agentplugins/adapters/nativeconfig/project\.go$
+        linters: [funlen, gocyclo, gocognit]
+        text: 'too many statements|cyclomatic complexity|cognitive complexity'
       - path: ^install/integrationctl/agentplugins/adapters/packagedigest/captured\.go$
         linters: [funlen, gocyclo, gocognit]
         text: 'too many statements|cyclomatic complexity|cognitive complexity'
@@ -642,21 +697,12 @@ linters:
       - path: ^install/integrationctl/agentplugins/providers/native_identity\.go$
         linters: [revive, funlen, gocyclo, gocognit]
         text: 'file length is|too many statements|cyclomatic complexity|cognitive complexity'
-      - path: ^install/integrationctl/agentplugins/providers/nativeconfig/kernel\.go$
-        linters: [funlen, gocyclo, gocognit]
-        text: 'too many statements|cyclomatic complexity|cognitive complexity'
-      - path: ^install/integrationctl/agentplugins/providers/nativeconfig/project\.go$
-        linters: [funlen, gocyclo, gocognit]
-        text: 'too many statements|cyclomatic complexity|cognitive complexity'
       - path: ^install/integrationctl/agentplugins/providers/opencode_native\.go$
         linters: [revive, funlen, gocyclo, gocognit]
         text: 'file length is|too many statements|cyclomatic complexity|cognitive complexity'
       - path: ^install/integrationctl/agentplugins/providers/stager\.go$
         linters: [revive, funlen, gocyclo, gocognit]
         text: 'file length is|too many statements|cyclomatic complexity|cognitive complexity'
-      - path: ^install/integrationctl/agentplugins/providers/stdio_paths\.go$
-        linters: [funlen]
-        text: 'too many statements'
       - path: ^install/integrationctl/agentplugins/providers/windsurf_native\.go$
         linters: [revive, funlen, gocyclo, gocognit]
         text: 'file length is|too many statements|cyclomatic complexity|cognitive complexity'

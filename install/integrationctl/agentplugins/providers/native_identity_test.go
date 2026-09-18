@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	legacyports "github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
 )
@@ -100,11 +101,11 @@ func TestNativeIdentityUnqualifiedPluginRootIgnoresForeignNonDirectoryEntries(t 
 // TestNativeIdentityOpenCodeIgnoresForeignNonDirectoryEntries confirms the
 // same fix protects OpenCode too: OpenCode's own native registry check
 // (inspectNativeRegistry) never scans a directory, but its prepared-identity
-// check still goes through the shared inspectUnqualifiedPluginRoot exactly
+// check still goes through shared.InspectUnqualifiedPluginRoot exactly
 // like Cursor's does (observeIdentity calls inspectPreparedRegistry
 // unconditionally for every client before any client-specific override), so
 // a foreign .DS_Store in OpenCode's managed clients root would have hit the
-// identical bug if inspectUnqualifiedPluginRoot had not already been fixed.
+// identical bug if shared.InspectUnqualifiedPluginRoot had not already been fixed.
 func TestNativeIdentityOpenCodeIgnoresForeignNonDirectoryEntries(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "managed", "clients", "opencode")
 	plan := identityPlan(root)
@@ -175,7 +176,7 @@ func TestNativeIdentityQualifiedPreparedMarketplaceCoexistsOnlyWithPositiveNames
 func TestNativeIdentityCodexUsesExactCLIRegistryIdentity(t *testing.T) {
 	plan := identityPlan(filepath.Join(t.TempDir(), "prepared"))
 	plan.NativeRegistryExecutable = "/test/bin/codex"
-	marketplace := managedMarketplaceName(plan.PhysicalArtifactID)
+	marketplace := shared.ManagedMarketplaceName(plan.PhysicalArtifactID)
 	runner := &identityRunner{result: legacyports.CommandResult{Stdout: []byte(`{"installed":[{"pluginId":"demo@foreign","name":"demo","marketplaceName":"foreign","installed":true,"enabled":true}]}`)}}
 	observation, err := (NativeIdentityObserver{Runner: runner}).ObserveNativeIdentity(context.Background(), domain.DetectedClient{ClientID: domain.ClientCodex}, plan, nil)
 	if err != nil || observation.State != domain.NativeIdentityAbsent {
@@ -204,7 +205,7 @@ func TestNativeIdentityCodexAbsentRecoveryMatchesRealCLIFailureThenSucceedsAfter
 	t.Parallel()
 	plan := identityPlan(filepath.Join(t.TempDir(), "prepared"))
 	plan.NativeRegistryExecutable = "/test/bin/codex"
-	marketplace := managedMarketplaceName(plan.PhysicalArtifactID)
+	marketplace := shared.ManagedMarketplaceName(plan.PhysicalArtifactID)
 	managed := &domain.ClientBinding{TargetLocator: plan.ActivePath, NativeObjects: []domain.NativeObjectOwnership{{Kind: "managed_package_directory", ManagedDigest: "sha256:owned"}}}
 	client := domain.DetectedClient{ClientID: domain.ClientCodex}
 
@@ -263,7 +264,7 @@ func TestNativeIdentityCodexManualModeReadsAuthoritativeConfig(t *testing.T) {
 	configRoot := filepath.Join(t.TempDir(), ".codex")
 	plan := identityPlan(filepath.Join(t.TempDir(), "prepared"))
 	plan.NativeRegistryRoot = configRoot
-	marketplace := managedMarketplaceName(plan.PhysicalArtifactID)
+	marketplace := shared.ManagedMarketplaceName(plan.PhysicalArtifactID)
 	writeIdentityFile(t, filepath.Join(configRoot, "config.toml"), "[plugins.\"demo@"+marketplace+"\"]\nenabled = true\n")
 
 	observation, err := (NativeIdentityObserver{}).ObserveNativeIdentity(context.Background(), domain.DetectedClient{ClientID: domain.ClientCodex}, plan, nil)
@@ -277,7 +278,7 @@ func TestNativeIdentityCopilotAndVSCodeUseSharedAuthoritativeBackend(t *testing.
 		t.Run(string(clientID), func(t *testing.T) {
 			plan := identityPlan(filepath.Join(t.TempDir(), "prepared"))
 			plan.NativeRegistryExecutable = "/test/bin/copilot"
-			marketplace := managedMarketplaceName(plan.PhysicalArtifactID)
+			marketplace := shared.ManagedMarketplaceName(plan.PhysicalArtifactID)
 			runner := &identityRunner{result: legacyports.CommandResult{Stdout: []byte("Installed plugins:\n  • demo@" + marketplace + " (v1.0.0)\n")}}
 			observation, err := (NativeIdentityObserver{Runner: runner}).ObserveNativeIdentity(context.Background(), domain.DetectedClient{ClientID: clientID}, plan, nil)
 			if err != nil || observation.State != domain.NativeIdentityUnmanaged {
@@ -365,7 +366,7 @@ func TestNativeIdentityCopilotAcceptsExactLiveManagedRegistration(t *testing.T) 
 		t.Fatal(err)
 	}
 	writeIdentityFile(t, filepath.Join(plan.ActivePath, "plugin.json"), `{"name":"demo"}`)
-	marketplace := managedMarketplaceName(plan.PhysicalArtifactID)
+	marketplace := shared.ManagedMarketplaceName(plan.PhysicalArtifactID)
 	managed := &domain.ClientBinding{TargetLocator: plan.ActivePath, NativeObjects: []domain.NativeObjectOwnership{{Kind: "managed_package_directory", ManagedDigest: "sha256:owned"}}}
 	listing := copilotLiveHeader + "\n  • demo@" + marketplace + " (v1.7.0-uap.1) (enabled)\n      from " + plan.ActivePath + "\n"
 	runner := &identityRunner{result: legacyports.CommandResult{Stdout: []byte(listing)}}
@@ -384,7 +385,7 @@ func TestNativeIdentityObservationExposesReceiptAndExactDiscovery(t *testing.T) 
 		t.Fatal(err)
 	}
 	writeIdentityFile(t, filepath.Join(plan.ActivePath, "plugin.json"), `{"name":"demo"}`)
-	marketplace := managedMarketplaceName(plan.PhysicalArtifactID)
+	marketplace := shared.ManagedMarketplaceName(plan.PhysicalArtifactID)
 	digest := "sha256:owned"
 	managed := &domain.ClientBinding{NativeObjects: []domain.NativeObjectOwnership{{Kind: "managed_package_directory", ManagedDigest: digest}}}
 	runner := &identityRunner{result: legacyports.CommandResult{Stdout: []byte("Installed plugins:\n  • demo@" + marketplace + " (v1.0.0)\n")}}
@@ -429,7 +430,7 @@ func TestNativeIdentityPreservesNativeDiscoveryWhenPreparedRegistryBlocksOverall
 			plan := identityPlan(filepath.Join(t.TempDir(), "prepared"))
 			plan.NativeRegistryExecutable = "/test/bin/copilot"
 			writeIdentityFile(t, filepath.Join(plan.TargetRoot, "foreign", "plugin.json"), test.manifest)
-			marketplace := managedMarketplaceName(plan.PhysicalArtifactID)
+			marketplace := shared.ManagedMarketplaceName(plan.PhysicalArtifactID)
 			managed := &domain.ClientBinding{}
 			runner := &identityRunner{result: legacyports.CommandResult{Stdout: []byte("Installed plugins:\n  • demo@" + marketplace + " (v1.0.0)\n")}}
 

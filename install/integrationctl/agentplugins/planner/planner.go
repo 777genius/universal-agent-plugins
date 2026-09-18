@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
 )
@@ -145,7 +146,7 @@ func (planner Planner) plan(ctx context.Context, request domain.PlanRequest) (do
 	if envelope.CatalogEvidence != nil {
 		chatGPTCompatibility, hasChatGPTCompatibility = envelope.CatalogEvidence.Compatibility[string(domain.ClientChatGPT)]
 	}
-	if client.ClientID == domain.ClientChatGPT && hasChatGPTCompatibility && chatGPTCompatibility.AppBinding != nil && hasSupportedKind(plan.Components, domain.ComponentApp) {
+	if client.ClientID == domain.ClientChatGPT && hasChatGPTCompatibility && chatGPTCompatibility.AppBinding != nil && shared.ComponentKindPresent(plan.Components, domain.ComponentApp) {
 		// ChatGPT app bindings are added only from validated signed Directory
 		// compatibility evidence. This authorizes local preparation, not a claim
 		// about the unobservable remote Plugins registry.
@@ -195,30 +196,13 @@ func (planner Planner) plan(ctx context.Context, request domain.PlanRequest) (do
 		plan.Status = domain.PlanReady
 		plan.Activation = domain.ActivationPrepared
 	}
-	if plan.Status != domain.PlanUnsupported && client.ClientID == domain.ClientKiro &&
-		strings.TrimSpace(client.ConfigRoot) != "" && hasOnlyKiroNativeComponents(plan.Components) {
-		plan.Status = domain.PlanReady
-		plan.Activation = domain.ActivationPrepared
-	}
-	if plan.Status != domain.PlanUnsupported && client.ClientID == domain.ClientOpenCode &&
-		strings.TrimSpace(client.ConfigRoot) != "" && hasOnlyPortableNativeComponents(plan.Components) {
-		plan.Status = domain.PlanReady
-		plan.Activation = domain.ActivationPrepared
-	}
-	if plan.Status != domain.PlanUnsupported && client.ClientID == domain.ClientGemini &&
-		strings.TrimSpace(client.ConfigRoot) != "" && geminiNativePlanComponents(plan.Components) {
-		plan.Status = domain.PlanReady
-		plan.Activation = domain.ActivationPrepared
-	}
-	if plan.Status != domain.PlanUnsupported && client.ClientID == domain.ClientWindsurf &&
-		strings.TrimSpace(client.ConfigRoot) != "" && hasSupportedKind(plan.Components, domain.ComponentMCPServer) {
-		plan.Status = domain.PlanReady
-		plan.Activation = domain.ActivationPrepared
-	}
-	if plan.Status != domain.PlanUnsupported && client.ClientID == domain.ClientCline &&
-		strings.TrimSpace(client.ConfigRoot) != "" && hasOnlyPortableNativeComponents(plan.Components) {
-		plan.Status = domain.PlanReady
-		plan.Activation = domain.ActivationPrepared
+	// Clients that deliver the whole selection natively are promoted the same
+	// way; what differs is only which selection each one can claim.
+	switch client.ClientID {
+	case domain.ClientKiro, domain.ClientOpenCode, domain.ClientGemini, domain.ClientCline:
+		shared.PromoteNativeReady(&plan, client.ConfigRoot, shared.OnlyNativeComponents(plan.Components))
+	case domain.ClientWindsurf:
+		shared.PromoteNativeReady(&plan, client.ConfigRoot, shared.ComponentKindPresent(plan.Components, domain.ComponentMCPServer))
 	}
 
 	switch client.ClientID {
@@ -227,7 +211,7 @@ func (planner Planner) plan(ctx context.Context, request domain.PlanRequest) (do
 	case domain.ClientClaude:
 		plan.UserActions = append(plan.UserActions, "start a new Claude Code session or run /reload-plugins")
 	case domain.ClientChatGPT:
-		if hasSupportedKind(plan.Components, domain.ComponentApp) {
+		if shared.ComponentKindPresent(plan.Components, domain.ComponentApp) {
 			plan.UserActions = append(plan.UserActions, "install the prepared plugin from ChatGPT Plugins, verify its registered app connection, then start a new chat")
 		} else {
 			plan.UserActions = append(plan.UserActions, "install the prepared skills-only plugin from ChatGPT Plugins, then start a new chat")
@@ -255,31 +239,17 @@ func (planner Planner) plan(ctx context.Context, request domain.PlanRequest) (do
 	case domain.ClientOpenCode:
 		plan.UserActions = append(plan.UserActions, "agentplugins will install the package's skills and MCP servers; restart OpenCode when complete")
 	case domain.ClientWindsurf:
-		if strings.TrimSpace(client.ConfigRoot) != "" && hasSupportedKind(plan.Components, domain.ComponentMCPServer) {
+		if strings.TrimSpace(client.ConfigRoot) != "" && shared.ComponentKindPresent(plan.Components, domain.ComponentMCPServer) {
 			plan.UserActions = append(plan.UserActions, "agentplugins will update the selected legacy Windsurf channel's local MCP configuration; refresh MCP servers before first use")
 		} else {
 			plan.UserActions = append(plan.UserActions, "select exactly one legacy Windsurf channel and import the prepared MCP configuration manually")
 		}
-		if hasSupportedKind(plan.Components, domain.ComponentSkill) {
+		if shared.ComponentKindPresent(plan.Components, domain.ComponentSkill) {
 			plan.Warnings = appendUnique(plan.Warnings, "windsurf_skills_prepared_only")
 			plan.UserActions = append(plan.UserActions, "Windsurf skills remain in the prepared package and are not claimed as activated")
 		}
 	}
 	return plan, nil
-}
-
-func geminiNativePlanComponents(components []domain.ComponentDecision) bool {
-	has := false
-	for _, component := range components {
-		if component.Support == domain.SupportUnsupported {
-			continue
-		}
-		if component.Kind != domain.ComponentSkill && component.Kind != domain.ComponentMCPServer {
-			return false
-		}
-		has = true
-	}
-	return has
 }
 
 func (planner Planner) setNativeRegistry(plan *domain.DeliveryPlan, client domain.DetectedClient) {
@@ -432,11 +402,11 @@ func (planner Planner) targetRoot(client domain.DetectedClient, mode domain.Pack
 		anchor = client.ConfigRoot
 		root = filepath.Join(client.ConfigRoot, "plugins", "local")
 	} else {
-		if strings.TrimSpace(planner.ManagedRoot) == "" {
-			return "", "", fmt.Errorf("managed client root is required")
+		var err error
+		anchor, root, err = shared.ManagedTargetRoot(client, mode, planner.ManagedRoot)
+		if err != nil {
+			return "", "", err
 		}
-		anchor = planner.ManagedRoot
-		root = filepath.Join(planner.ManagedRoot, "clients", string(client.ClientID))
 	}
 	absoluteAnchor, err := filepath.Abs(anchor)
 	if err != nil {
@@ -558,43 +528,6 @@ func hasSupportedComponent(decisions []domain.ComponentDecision) bool {
 		}
 	}
 	return false
-}
-
-func hasSupportedKind(decisions []domain.ComponentDecision, kind domain.ComponentKind) bool {
-	for _, item := range decisions {
-		if item.Kind == kind && item.Support != domain.SupportUnsupported {
-			return true
-		}
-	}
-	return false
-}
-
-func hasOnlyKiroNativeComponents(decisions []domain.ComponentDecision) bool {
-	found := false
-	for _, item := range decisions {
-		if item.Support == domain.SupportUnsupported {
-			continue
-		}
-		if item.Kind != domain.ComponentSkill && item.Kind != domain.ComponentMCPServer {
-			return false
-		}
-		found = true
-	}
-	return found
-}
-
-func hasOnlyPortableNativeComponents(decisions []domain.ComponentDecision) bool {
-	found := false
-	for _, item := range decisions {
-		if item.Support == domain.SupportUnsupported {
-			continue
-		}
-		if item.Kind != domain.ComponentSkill && item.Kind != domain.ComponentMCPServer {
-			return false
-		}
-		found = true
-	}
-	return found
 }
 
 func missingChatGPTAppBindings(envelope domain.PackageEnvelope) []string {

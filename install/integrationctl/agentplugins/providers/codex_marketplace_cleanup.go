@@ -63,7 +63,7 @@ func managedCodexMarketplaceRegistered(configRoot, marketplace, managedArtifactP
 // re-materialize an already-removed plugin. Presence alone is the ownership
 // signal here (unlike managedCodexMarketplaceRegistered's source-path check):
 // the key embeds this installation's own generated marketplace name
-// (managedMarketplaceName), so an unrelated plugin can only collide by
+// (shared.ManagedMarketplaceName), so an unrelated plugin can only collide by
 // coincidentally sharing both that generated name and the declared name.
 func managedCodexPluginEntryPresent(configRoot, declaredName, marketplace string) (bool, error) {
 	if strings.TrimSpace(configRoot) == "" || strings.TrimSpace(declaredName) == "" || strings.TrimSpace(marketplace) == "" {

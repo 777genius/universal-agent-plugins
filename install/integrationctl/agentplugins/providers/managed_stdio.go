@@ -3,9 +3,11 @@ package providers
 import (
 	"errors"
 	"fmt"
+	"os"
+
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/managedstdio"
-	"os"
 )
 
 // PreflightManagedStdio is read-only and called before any installation writes.
@@ -30,7 +32,7 @@ func (stager Stager) PreflightManagedStdio(snapshotRoot string) error {
 	return nil
 }
 func (stager Stager) deliverManagedStdio(root string, envelope domain.PackageEnvelope, plan domain.DeliveryPlan) error {
-	for _, name := range supportedMCPNames(plan) {
+	for _, name := range shared.SupportedMCPNames(plan) {
 		if envelope.MCP.Servers[name].Type == "stdio" {
 			if !managedstdio.Supported() {
 				return fmt.Errorf("managed stdio platform unsupported")

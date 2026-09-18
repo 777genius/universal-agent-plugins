@@ -1,8 +1,9 @@
 package planner
 
 import (
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"testing"
+
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
 func TestPreparationCannotOverrideUnsupportedPackage(t *testing.T) {

@@ -14,6 +14,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/atomicfile"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/filetree"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/pathpolicy"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/managedstdio"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
@@ -154,7 +155,7 @@ func (stager Stager) stage(
 		return domain.StagedDelivery{}, err
 	}
 	suffix := sha256.Sum256([]byte(operationID))
-	stagingBase := plan.TargetRoot
+	stagingBase := shared.DefaultStagingLayout{}.StagingBase(plan)
 	// Claude Code discovers every plugin-shaped directory directly below its
 	// skills root. Keep the transaction staging directory beside that watched
 	// root so a pre-commit read-only `plugin list` cannot mistake it for an
@@ -452,7 +453,7 @@ func writeSanitizedMCP(root string, envelope domain.PackageEnvelope, plan domain
 		}
 		return nil
 	}
-	supported := supportedMCPNames(plan)
+	supported := shared.SupportedMCPNames(plan)
 	servers := make(map[string]json.RawMessage, len(supported))
 	for _, name := range supported {
 		server, ok := envelope.MCP.Servers[name]
@@ -470,7 +471,7 @@ func writeSanitizedMCP(root string, envelope domain.PackageEnvelope, plan domain
 		Schema     string                     `json:"$schema"`
 		MCPServers map[string]json.RawMessage `json:"mcpServers"`
 	}{Schema: domain.MCPSchemaV1, MCPServers: servers}
-	return writeJSON(path, document)
+	return shared.WriteJSON(path, document)
 }
 
 func writeSanitizedExtensions(root string, envelope domain.PackageEnvelope, plan domain.DeliveryPlan) error {
@@ -501,7 +502,7 @@ func writeSanitizedExtensions(root string, envelope domain.PackageEnvelope, plan
 	}
 	if ignoredInvalid {
 		delete(document, "extensions")
-		return writeJSON(path, document)
+		return shared.WriteJSON(path, document)
 	}
 	var extensions map[string]json.RawMessage
 	if raw := document["extensions"]; len(raw) > 0 {
@@ -521,7 +522,7 @@ func writeSanitizedExtensions(root string, envelope domain.PackageEnvelope, plan
 		}
 		document["extensions"] = raw
 	}
-	return writeJSON(path, document)
+	return shared.WriteJSON(path, document)
 }
 
 func projectOpenAI(root string, envelope domain.PackageEnvelope, plan domain.DeliveryPlan, hints domain.CompatibilityHints, dataPath string) error {
@@ -529,157 +530,74 @@ func projectOpenAI(root string, envelope domain.PackageEnvelope, plan domain.Del
 	if err != nil {
 		return err
 	}
+	// A preserved upstream manifest may already declare these members against a
+	// layout this projection does not produce, so they are dropped and then
+	// re-declared from what the plan actually selected.
 	delete(manifest, "apps")
 	delete(manifest, "skills")
 	delete(manifest, "mcpServers")
-	copyString := func(key, value string) {
-		if strings.TrimSpace(value) != "" {
-			manifest[key] = value
-		}
-	}
-	copyString("version", envelope.Manifest.Version)
-	copyString("description", envelope.Manifest.Description)
-	copyString("homepage", envelope.Manifest.Homepage)
-	copyString("repository", envelope.Manifest.Repository)
-	copyString("license", envelope.Manifest.License)
-	if envelope.Manifest.Author != nil {
-		manifest["author"] = envelope.Manifest.Author
-	}
-	if len(envelope.Manifest.Keywords) > 0 {
-		manifest["keywords"] = envelope.Manifest.Keywords
-	}
-	if hasSupported(plan, domain.ComponentSkill) {
+	shared.ApplyManifestMetadata(manifest, envelope, shared.WithAuthorObject())
+	if shared.ComponentKindPresent(plan.Components, domain.ComponentSkill) {
 		manifest["skills"] = "./skills/"
 	}
-	serverNames := supportedMCPNames(plan)
+	serverNames := shared.SupportedMCPNames(plan)
 	if len(serverNames) > 0 {
 		manifest["mcpServers"] = "./.mcp.json"
 	}
 	manifestPath := filepath.Join(root, ".codex-plugin", "plugin.json")
-	if err := writeJSON(manifestPath, manifest); err != nil {
+	if err := shared.WriteJSON(manifestPath, manifest); err != nil {
 		return fmt.Errorf("write OpenAI compatibility manifest: %w", err)
 	}
 	return projectOpenAIMCP(root, envelope, serverNames, hints, plan.ActivePath, dataPath)
 }
 
 func projectOpenAIMCP(root string, envelope domain.PackageEnvelope, serverNames []string, hints domain.CompatibilityHints, pluginRoot, dataPath string) error {
-	if len(serverNames) == 0 {
-		if err := os.Remove(filepath.Join(root, ".mcp.json")); err != nil && !os.IsNotExist(err) {
-			return fmt.Errorf("remove empty OpenAI MCP projection: %w", err)
-		}
-		return nil
-	}
-	servers := map[string]map[string]any{}
-	for _, name := range serverNames {
-		server := envelope.MCP.Servers[name]
-		config := cloneObject(server.Decoded)
-		switch server.Type {
-		case "stdio":
-			delete(config, "type")
-			if err := applyStdioDataContract(config, pluginRoot, dataPath, root); err != nil {
-				return fmt.Errorf("stdio MCP server %s: %w", name, err)
-			}
-		case "streamable-http":
-			config["type"] = "http"
-		case "sse":
-			config["type"] = "sse"
-		default:
-			continue
-		}
-		if hint, ok := hints.OpenAIMCPAuth[name]; ok {
-			if hint.OAuthResource != "" {
-				config["oauth_resource"] = hint.OAuthResource
-			}
-			if hint.BearerTokenEnvVar != "" {
-				config["bearer_token_env_var"] = hint.BearerTokenEnvVar
-			}
-		}
-		servers[name] = config
-	}
-	return writeJSON(filepath.Join(root, ".mcp.json"), map[string]any{"mcpServers": servers})
+	return shared.ProjectMCPServers(shared.MCPProjection{
+		Root:       root,
+		Envelope:   envelope,
+		Names:      serverNames,
+		Dialect:    shared.MCPDialectOpenAI,
+		PluginRoot: pluginRoot,
+		DataPath:   dataPath,
+		Hints:      hints,
+	})
 }
 
 func projectKiroMCP(root string, envelope domain.PackageEnvelope, plan domain.DeliveryPlan, dataPath string) error {
-	serverNames := supportedMCPNames(plan)
-	if len(serverNames) == 0 {
-		return nil
-	}
-	servers := make(map[string]map[string]any, len(serverNames))
-	for _, name := range serverNames {
-		server := envelope.MCP.Servers[name]
-		config := cloneObject(server.Decoded)
-		if server.Type == "stdio" {
-			if err := applyStdioDataContract(config, plan.ActivePath, dataPath, root); err != nil {
-				return fmt.Errorf("project Kiro stdio MCP server %s: %w", name, err)
-			}
-		}
-		servers[name] = config
-	}
-	return writeJSON(filepath.Join(root, "mcp.json"), map[string]any{
-		"$schema":    domain.MCPSchemaV1,
-		"mcpServers": servers,
+	return shared.ProjectMCPServers(shared.MCPProjection{
+		Root:       root,
+		Envelope:   envelope,
+		Names:      shared.SupportedMCPNames(plan),
+		Dialect:    shared.MCPDialectKiro,
+		PluginRoot: plan.ActivePath,
+		DataPath:   dataPath,
 	})
 }
 
 func projectCursor(root string, envelope domain.PackageEnvelope, plan domain.DeliveryPlan, dataPath string) error {
-	manifest := map[string]any{"name": envelope.Manifest.Name}
-	copyString := func(key, value string) {
-		if strings.TrimSpace(value) != "" {
-			manifest[key] = value
-		}
-	}
-	copyString("version", envelope.Manifest.Version)
-	copyString("description", envelope.Manifest.Description)
-	copyString("homepage", envelope.Manifest.Homepage)
-	copyString("repository", envelope.Manifest.Repository)
-	copyString("license", envelope.Manifest.License)
-	if envelope.Manifest.Author != nil && strings.TrimSpace(envelope.Manifest.Author.Name) != "" {
-		author := map[string]string{"name": envelope.Manifest.Author.Name}
-		if strings.TrimSpace(envelope.Manifest.Author.Email) != "" {
-			author["email"] = envelope.Manifest.Author.Email
-		}
-		manifest["author"] = author
-	}
-	if len(envelope.Manifest.Keywords) > 0 {
-		manifest["keywords"] = envelope.Manifest.Keywords
-	}
-	if hasSupported(plan, domain.ComponentSkill) {
+	manifest := shared.ManifestFromEnvelope(envelope, shared.WithAuthorNameEmail())
+	if shared.ComponentKindPresent(plan.Components, domain.ComponentSkill) {
 		manifest["skills"] = "./skills/"
 	}
-	serverNames := supportedMCPNames(plan)
+	serverNames := shared.SupportedMCPNames(plan)
 	if len(serverNames) > 0 {
 		manifest["mcpServers"] = "./mcp.json"
 	}
-	if err := writeJSON(filepath.Join(root, ".cursor-plugin", "plugin.json"), manifest); err != nil {
+	if err := shared.WriteJSON(filepath.Join(root, ".cursor-plugin", "plugin.json"), manifest); err != nil {
 		return fmt.Errorf("write Cursor plugin manifest: %w", err)
 	}
 	return projectCursorMCP(root, envelope, serverNames, plan.ActivePath, dataPath)
 }
 
 func projectCursorMCP(root string, envelope domain.PackageEnvelope, serverNames []string, pluginRoot, dataPath string) error {
-	if len(serverNames) == 0 {
-		return nil
-	}
-	servers := make(map[string]map[string]any, len(serverNames))
-	for _, name := range serverNames {
-		server := envelope.MCP.Servers[name]
-		config := cloneObject(server.Decoded)
-		switch server.Type {
-		case "stdio":
-			delete(config, "type")
-			if err := applyStdioDataContract(config, pluginRoot, dataPath, root); err != nil {
-				return fmt.Errorf("project Cursor stdio MCP server %s: %w", name, err)
-			}
-		case "streamable-http":
-			config["type"] = "http"
-		case "sse":
-			config["type"] = "sse"
-		default:
-			continue
-		}
-		servers[name] = config
-	}
-	return writeJSON(filepath.Join(root, "mcp.json"), map[string]any{"mcpServers": servers})
+	return shared.ProjectMCPServers(shared.MCPProjection{
+		Root:       root,
+		Envelope:   envelope,
+		Names:      serverNames,
+		Dialect:    shared.MCPDialectCursor,
+		PluginRoot: pluginRoot,
+		DataPath:   dataPath,
+	})
 }
 
 func projectChatGPT(root string, envelope domain.PackageEnvelope, plan domain.DeliveryPlan, hints domain.CompatibilityHints, dataPath string) error {
@@ -687,23 +605,23 @@ func projectChatGPT(root string, envelope domain.PackageEnvelope, plan domain.De
 	if err != nil {
 		return err
 	}
-	serverNames := supportedMCPNames(plan)
+	serverNames := shared.SupportedMCPNames(plan)
 	if len(serverNames) > 0 {
 		manifest["mcpServers"] = "./.mcp.json"
 	} else {
 		delete(manifest, "mcpServers")
 	}
-	if hasSupported(plan, domain.ComponentSkill) {
+	if shared.ComponentKindPresent(plan.Components, domain.ComponentSkill) {
 		manifest["skills"] = "./skills/"
 	} else {
 		delete(manifest, "skills")
 	}
-	if envelope.App.Enabled && hasSupported(plan, domain.ComponentApp) {
+	if envelope.App.Enabled && shared.ComponentKindPresent(plan.Components, domain.ComponentApp) {
 		manifest["apps"] = "./.app.json"
 	} else {
 		delete(manifest, "apps")
 	}
-	if err := writeJSON(filepath.Join(root, ".codex-plugin", "plugin.json"), manifest); err != nil {
+	if err := shared.WriteJSON(filepath.Join(root, ".codex-plugin", "plugin.json"), manifest); err != nil {
 		return fmt.Errorf("write ChatGPT plugin manifest: %w", err)
 	}
 	if err := projectOpenAIMCP(root, envelope, serverNames, hints, plan.ActivePath, dataPath); err != nil {
@@ -718,131 +636,14 @@ func projectChatGPT(root string, envelope domain.PackageEnvelope, plan domain.De
 }
 
 func projectedOpenAIManifest(envelope domain.PackageEnvelope) (map[string]any, error) {
-	if envelope.FormatID == domain.FormatIDOpenAIPlugin && len(envelope.Manifest.Raw) > 0 {
-		var manifest map[string]any
-		if err := json.Unmarshal(envelope.Manifest.Raw, &manifest); err != nil || manifest == nil {
-			return nil, fmt.Errorf("decode preserved OpenAI plugin manifest: %w", err)
-		}
-		return manifest, nil
-	}
-	manifest := map[string]any{"name": envelope.Manifest.Name}
-	copyString := func(key, value string) {
-		if strings.TrimSpace(value) != "" {
-			manifest[key] = value
-		}
-	}
-	copyString("version", envelope.Manifest.Version)
-	copyString("description", envelope.Manifest.Description)
-	copyString("homepage", envelope.Manifest.Homepage)
-	copyString("repository", envelope.Manifest.Repository)
-	copyString("license", envelope.Manifest.License)
-	if envelope.Manifest.Author != nil {
-		manifest["author"] = envelope.Manifest.Author
-	}
-	if len(envelope.Manifest.Keywords) > 0 {
-		manifest["keywords"] = envelope.Manifest.Keywords
-	}
-	return manifest, nil
-}
-
-func supportedMCPNames(plan domain.DeliveryPlan) []string {
-	return domain.SelectedMCPNames(plan)
-}
-
-func hasSupported(plan domain.DeliveryPlan, kind domain.ComponentKind) bool {
-	for _, component := range plan.Components {
-		if component.Kind == kind && component.Support != domain.SupportUnsupported {
-			return true
-		}
-	}
-	return false
-}
-
-func cloneObject(source map[string]any) map[string]any {
-	result := make(map[string]any, len(source))
-	for key, value := range source {
-		result[key] = cloneJSONValue(value)
-	}
-	return result
-}
-
-func cloneJSONValue(value any) any {
-	switch value := value.(type) {
-	case map[string]any:
-		return cloneObject(value)
-	case []any:
-		result := make([]any, len(value))
-		for index, item := range value {
-			result[index] = cloneJSONValue(item)
-		}
-		return result
-	case map[string]string:
-		result := make(map[string]string, len(value))
-		for key, item := range value {
-			result[key] = item
-		}
-		return result
-	case []string:
-		return append([]string(nil), value...)
-	case json.RawMessage:
-		return append(json.RawMessage(nil), value...)
-	default:
-		return value
-	}
-}
-
-func applyStdioDataContract(config map[string]any, pluginRoot, dataPath string, observationRoot ...string) error {
-	expand := strings.NewReplacer("${PLUGIN_ROOT}", pluginRoot, "${PLUGIN_DATA}", dataPath).Replace
-	switch env := config["env"].(type) {
-	case map[string]any:
-		if _, exists := env["PLUGIN_ROOT"]; exists {
-			return fmt.Errorf("PLUGIN_ROOT is reserved and client-managed")
-		}
-		if _, exists := env["PLUGIN_DATA"]; exists {
-			return fmt.Errorf("PLUGIN_DATA is reserved and client-managed")
-		}
-		for key, value := range env {
-			if text, ok := value.(string); ok {
-				env[key] = expand(text)
-			}
-		}
-		env["PLUGIN_ROOT"], env["PLUGIN_DATA"] = pluginRoot, dataPath
-	case map[string]string:
-		if _, exists := env["PLUGIN_ROOT"]; exists {
-			return fmt.Errorf("PLUGIN_ROOT is reserved and client-managed")
-		}
-		if _, exists := env["PLUGIN_DATA"]; exists {
-			return fmt.Errorf("PLUGIN_DATA is reserved and client-managed")
-		}
-		for key, value := range env {
-			env[key] = expand(value)
-		}
-		env["PLUGIN_ROOT"], env["PLUGIN_DATA"] = pluginRoot, dataPath
-	case nil:
-		config["env"] = map[string]any{"PLUGIN_ROOT": pluginRoot, "PLUGIN_DATA": dataPath}
-	default:
-		return fmt.Errorf("stdio env must be an object")
-	}
-	switch args := config["args"].(type) {
-	case []any:
-		for index, value := range args {
-			if text, ok := value.(string); ok {
-				args[index] = expand(text)
-			}
-		}
-	case []string:
-		for index := range args {
-			args[index] = expand(args[index])
-		}
-	}
-	command, _ := config["command"].(string)
-	cwd, _ := config["cwd"].(string)
-	resolvedCommand, resolvedCWD, err := resolveStdioPaths(command, cwd, pluginRoot, dataPath, observationRoot...)
+	preserved, ok, err := shared.PreservedOpenAIManifest(envelope)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	config["command"], config["cwd"] = resolvedCommand, resolvedCWD
-	return nil
+	if ok {
+		return preserved, nil
+	}
+	return shared.ManifestFromEnvelope(envelope, shared.WithAuthorObject()), nil
 }
 
 func pathContainedBy(root, candidate string) bool {
@@ -856,15 +657,6 @@ func pathContainedBy(root, candidate string) bool {
 	}
 	relative, err := filepath.Rel(resolvedRoot, resolvedCandidate)
 	return err == nil && !filepath.IsAbs(relative) && relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator))
-}
-
-func writeJSON(path string, value any) error {
-	body, err := json.MarshalIndent(value, "", "  ")
-	if err != nil {
-		return err
-	}
-	body = append(body, '\n')
-	return atomicfile.Write(path, body, 0o644)
 }
 
 func removeStaging(base, path string) error {

@@ -11,6 +11,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
 	legacyports "github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
@@ -40,13 +42,16 @@ type treeCommandRunner = ports.TreeCommandRunner
 
 const defaultNativeDiscoveryTimeout = 15 * time.Second
 
-type registryFinding uint8
+// The finding vocabulary belongs to the client contract: the identity
+// inspection moves into the adapters, and these names stay here as aliases
+// until the last in-package caller is gone.
+type registryFinding = clients.RegistryFinding
 
 const (
-	registryClear registryFinding = iota
-	registryExpected
-	registryCollision
-	registryIndeterminate
+	registryClear         = clients.RegistryClear
+	registryExpected      = clients.RegistryExpected
+	registryCollision     = clients.RegistryCollision
+	registryIndeterminate = clients.RegistryIndeterminate
 )
 
 func (observer NativeIdentityObserver) ObserveNativeIdentity(ctx context.Context, client domain.DetectedClient, plan domain.DeliveryPlan, managed *domain.ClientBinding) (domain.NativeIdentityObservation, error) {
@@ -135,7 +140,7 @@ func (observer NativeIdentityObserver) observeIdentity(ctx context.Context, clie
 	if managed == nil {
 		return observed(domain.NativeIdentityUnmanaged), nil
 	}
-	expected := managedPackageDigest(*managed)
+	expected := shared.ManagedPackageDigest(*managed)
 	if expected == "" || observer.Stager == nil {
 		return observed(domain.NativeIdentityIndeterminate), nil
 	}
@@ -263,59 +268,18 @@ func (observer NativeIdentityObserver) inspectCodexCLI(ctx context.Context, plan
 		return registryIndeterminate, err
 	}
 	if result.ExitCode != 0 {
-		if diagnostic := boundedNativeDiagnostic(result.Stdout, result.Stderr); diagnostic != "" {
+		if diagnostic := shared.BoundedNativeDiagnostic(result.Stdout, result.Stderr); diagnostic != "" {
 			return registryIndeterminate, fmt.Errorf("Codex plugin registry command failed with exit code %d: %s", result.ExitCode, diagnostic)
 		}
 		return registryIndeterminate, fmt.Errorf("Codex plugin registry command failed with exit code %d", result.ExitCode)
 	}
-	return codexRegistryFinding(result.Stdout, plan.DeclaredName, managedMarketplaceName(plan.PhysicalArtifactID), managed != nil), nil
-}
-
-// nativeDiagnosticLimit bounds the excerpt kept from a failed native CLI
-// invocation's own output. It exists purely for operator diagnosis of a
-// discovery failure and is never treated as proof of package absence.
-const nativeDiagnosticLimit = 2048
-
-// boundedNativeDiagnostic returns a short, sanitized excerpt of a failed
-// native CLI invocation's own stdout/stderr. It never includes argv,
-// environment, or configuration; only the bounded child-process output, with
-// control characters stripped and length capped.
-func boundedNativeDiagnostic(stdout, stderr []byte) string {
-	parts := make([]string, 0, 2)
-	if text := sanitizeNativeDiagnosticText(stderr); text != "" {
-		parts = append(parts, text)
-	}
-	if text := sanitizeNativeDiagnosticText(stdout); text != "" {
-		parts = append(parts, text)
-	}
-	text := strings.Join(parts, " | ")
-	if len(text) > nativeDiagnosticLimit {
-		// Re-validate after the byte-index cut: it may have split a multibyte
-		// rune, which strings.ToValidUTF8 would otherwise leave as U+FFFD.
-		text = strings.ToValidUTF8(text[:nativeDiagnosticLimit], "") + "...(truncated)"
-	}
-	return text
-}
-
-func sanitizeNativeDiagnosticText(output []byte) string {
-	text := strings.ToValidUTF8(string(output), "")
-	text = strings.Map(func(r rune) rune {
-		switch {
-		case r == '\n' || r == '\t':
-			return ' '
-		case r < 0x20 || r == 0x7f:
-			return -1
-		default:
-			return r
-		}
-	}, text)
-	return strings.Join(strings.Fields(text), " ")
+	return codexRegistryFinding(result.Stdout, plan.DeclaredName, shared.ManagedMarketplaceName(plan.PhysicalArtifactID), managed != nil), nil
 }
 
 func codexRegistryFinding(body []byte, name, expectedMarketplace string, owned bool) registryFinding {
 	decoder := json.NewDecoder(strings.NewReader(string(body)))
 	decoder.UseNumber()
-	value, err := decodeUniqueJSONValue(decoder)
+	value, err := shared.DecodeUniqueJSONValue(decoder)
 	if err != nil {
 		return registryIndeterminate
 	}
@@ -379,7 +343,7 @@ func (observer NativeIdentityObserver) inspectCopilotCLI(ctx context.Context, pl
 	if managed != nil && strings.TrimSpace(managed.TargetLocator) != "" {
 		expectedPath = managed.TargetLocator
 	}
-	return copilotRegistryFindingAt(result.Stdout, plan.DeclaredName, managedMarketplaceName(plan.PhysicalArtifactID), copilotMarketplaceVersion(plan.DeclaredVersion), expectedPath, managed != nil), nil
+	return copilotRegistryFindingAt(result.Stdout, plan.DeclaredName, shared.ManagedMarketplaceName(plan.PhysicalArtifactID), copilotMarketplaceVersion(plan.DeclaredVersion), expectedPath, managed != nil), nil
 }
 
 func (observer NativeIdentityObserver) runNativeRegistry(ctx context.Context, command legacyports.Command) (legacyports.CommandResult, error) {
@@ -482,7 +446,7 @@ func inspectCodexFiles(plan domain.DeliveryPlan, managed *domain.ClientBinding) 
 	} else if err != nil {
 		return registryIndeterminate, err
 	}
-	expectedMarketplace := managedMarketplaceName(plan.PhysicalArtifactID)
+	expectedMarketplace := shared.ManagedMarketplaceName(plan.PhysicalArtifactID)
 	finding := registryClear
 	configPath := filepath.Join(root, "config.toml")
 	body, err := os.ReadFile(configPath)
@@ -543,7 +507,7 @@ func inspectCodexCache(root, name, expectedMarketplace string, owned bool) (regi
 				return registryIndeterminate, nil
 			}
 			manifest := filepath.Join(root, market.Name(), plugin.Name(), "local", ".codex-plugin", "plugin.json")
-			manifestName, err := readJSONManifestName(manifest)
+			manifestName, err := shared.ReadJSONManifestName(manifest)
 			if os.IsNotExist(err) {
 				return registryIndeterminate, nil
 			}
@@ -581,7 +545,7 @@ func inspectKiroRegistry(plan domain.DeliveryPlan, managed *domain.ClientBinding
 	}
 	finding := registryClear
 	mcp := map[string]any{}
-	if hasSupportedMCP(plan.Components) {
+	if shared.HasSupportedMCP(plan.Components) {
 		mcpPath := filepath.Join(root, "settings", "mcp.json")
 		if err := validateKiroNativePath(root, mcpPath); err != nil {
 			return registryIndeterminate, err
@@ -640,17 +604,8 @@ func managedKiroObjectExists(objects []domain.NativeObjectOwnership, kind domain
 	return false
 }
 
-func hasSupportedMCP(components []domain.ComponentDecision) bool {
-	for _, component := range components {
-		if component.Kind == domain.ComponentMCPServer && component.Support != domain.SupportUnsupported {
-			return true
-		}
-	}
-	return false
-}
-
 func inspectPreparedRegistry(plan domain.DeliveryPlan, name string, owned bool) (registryFinding, error) {
-	return inspectUnqualifiedPluginRoot(plan.TargetRoot, name, plan.ActivePath, owned)
+	return shared.InspectUnqualifiedPluginRoot(plan.TargetRoot, name, plan.ActivePath, owned)
 }
 
 func inspectClaudeSkillsRegistry(plan domain.DeliveryPlan, name string, owned bool) (registryFinding, error) {
@@ -680,7 +635,7 @@ func inspectClaudeSkillsRegistry(plan domain.DeliveryPlan, name string, owned bo
 		}
 		path := filepath.Join(root, entry.Name())
 		manifest := filepath.Join(path, ".claude-plugin", "plugin.json")
-		manifestName, readErr := readJSONManifestName(manifest)
+		manifestName, readErr := shared.ReadJSONManifestName(manifest)
 		if os.IsNotExist(readErr) {
 			// Plain skills legitimately share this directory and do not claim a
 			// plugin identity.
@@ -697,144 +652,11 @@ func inspectClaudeSkillsRegistry(plan domain.DeliveryPlan, name string, owned bo
 		if manifestName != name {
 			continue
 		}
-		if sameCleanPath(path, plan.ActivePath) && owned {
+		if shared.SameCleanPath(path, plan.ActivePath) && owned {
 			finding = registryExpected
 			continue
 		}
 		return registryCollision, nil
 	}
 	return finding, nil
-}
-
-func inspectUnqualifiedPluginRoot(root, name, activePath string, owned bool) (registryFinding, error) {
-	if strings.TrimSpace(root) == "" {
-		return registryIndeterminate, nil
-	}
-	entries, err := os.ReadDir(root)
-	if os.IsNotExist(err) {
-		return registryClear, nil
-	}
-	if err != nil {
-		return registryIndeterminate, err
-	}
-	finding := registryClear
-	for _, entry := range entries {
-		if strings.HasPrefix(entry.Name(), ".agentplugins-staging-") {
-			continue
-		}
-		if entry.Type()&os.ModeSymlink != 0 {
-			return registryIndeterminate, nil
-		}
-		if !entry.IsDir() {
-			// A plain file cannot contain the manifest this scheme requires,
-			// so it can never claim a competing plugin identity. OS-generated
-			// artifacts such as .DS_Store are common here and must not block
-			// every other plugin's repair/update.
-			continue
-		}
-		path := filepath.Join(root, entry.Name())
-		manifestName, qualified, namespace, err := nativeManifestIdentity(path)
-		if err != nil {
-			return registryIndeterminate, err
-		}
-		if manifestName != name {
-			continue
-		}
-		if qualified && namespace != "" && namespace != managedMarketplaceName(filepath.Base(activePath)) {
-			continue
-		}
-		if activePath != "" && sameCleanPath(path, activePath) && owned {
-			finding = registryExpected
-			continue
-		}
-		return registryCollision, nil
-	}
-	return finding, nil
-}
-
-func nativeManifestIdentity(root string) (name string, qualified bool, namespace string, err error) {
-	for _, marketplace := range []string{filepath.Join(root, ".agents", "plugins", "marketplace.json"), filepath.Join(root, ".github", "plugin", "marketplace.json")} {
-		body, readErr := os.ReadFile(marketplace)
-		if readErr == nil {
-			value, decodeErr := decodeStrictJSONObject(body)
-			if decodeErr != nil {
-				return "", false, "", decodeErr
-			}
-			namespace, _ = value["name"].(string)
-			plugins, ok := value["plugins"].([]any)
-			if namespace == "" || !ok || len(plugins) != 1 {
-				return "", false, "", fmt.Errorf("invalid prepared marketplace identity")
-			}
-			plugin, ok := plugins[0].(map[string]any)
-			if !ok {
-				return "", false, "", fmt.Errorf("invalid prepared marketplace plugin identity")
-			}
-			name, ok = plugin["name"].(string)
-			if !ok || name == "" {
-				return "", false, "", fmt.Errorf("invalid prepared marketplace plugin name")
-			}
-			return name, true, namespace, nil
-		}
-		if !os.IsNotExist(readErr) {
-			return "", false, "", readErr
-		}
-	}
-	for _, manifest := range []string{filepath.Join(root, ".claude-plugin", "plugin.json"), filepath.Join(root, "plugin.json"), filepath.Join(root, ".cursor-plugin", "plugin.json"), filepath.Join(root, ".codex-plugin", "plugin.json")} {
-		name, readErr := readJSONManifestName(manifest)
-		if readErr == nil {
-			return name, false, "", nil
-		}
-		if !os.IsNotExist(readErr) {
-			return "", false, "", readErr
-		}
-	}
-	return "", false, "", fmt.Errorf("native package has no recognized authoritative manifest")
-}
-
-func readJSONManifestName(path string) (string, error) {
-	body, err := os.ReadFile(path)
-	if err != nil {
-		return "", err
-	}
-	value, err := decodeStrictJSONObject(body)
-	if err != nil {
-		return "", err
-	}
-	name, ok := value["name"].(string)
-	if !ok || strings.TrimSpace(name) == "" {
-		return "", fmt.Errorf("manifest %s has no valid name", path)
-	}
-	return name, nil
-}
-
-func decodeStrictJSONObject(body []byte) (map[string]any, error) {
-	decoder := json.NewDecoder(strings.NewReader(string(body)))
-	decoder.UseNumber()
-	value, err := decodeUniqueJSONValue(decoder)
-	if err != nil {
-		return nil, err
-	}
-	if _, err := decoder.Token(); !errors.Is(err, io.EOF) {
-		return nil, fmt.Errorf("JSON document has trailing data")
-	}
-	object, ok := value.(map[string]any)
-	if !ok {
-		return nil, fmt.Errorf("JSON document must be an object")
-	}
-	return object, nil
-}
-
-func sameCleanPath(left, right string) bool {
-	leftAbsolute, leftErr := filepath.Abs(left)
-	rightAbsolute, rightErr := filepath.Abs(right)
-	return leftErr == nil && rightErr == nil && filepath.Clean(leftAbsolute) == filepath.Clean(rightAbsolute)
-}
-
-func managedPackageDigest(client domain.ClientBinding) string {
-	for _, object := range client.NativeObjects {
-		if object.Kind == "managed_package_directory" {
-			return object.ManagedDigest
-		}
-	}
-	return ""
 }

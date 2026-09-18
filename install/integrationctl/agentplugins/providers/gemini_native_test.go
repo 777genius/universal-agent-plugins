@@ -8,8 +8,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/providers/nativeconfig"
 )
 
 func TestGeminiSkillRollbackRetainsOnlyBackupWhenRestoreRenameFails(t *testing.T) {
@@ -59,7 +60,7 @@ func TestGeminiSkillBackupDigestMismatchRestoresLiveDirectoryAndAborts(t *testin
 	activeV2, desiredV2 := geminiNativeFixture(t, configRoot, "v2", "https://docs.test/v2")
 	liveSkill := filepath.Join(configRoot, "skills", "docs")
 	rename := func(oldPath, newPath string) error {
-		if sameCleanPath(oldPath, liveSkill) && strings.HasPrefix(filepath.Base(newPath), "old-") {
+		if shared.SameCleanPath(oldPath, liveSkill) && strings.HasPrefix(filepath.Base(newPath), "old-") {
 			writeTestFile(t, filepath.Join(oldPath, "SKILL.md"), "concurrent user change\n")
 		}
 		return os.Rename(oldPath, newPath)
@@ -109,7 +110,7 @@ func TestRenameDirectoryExclusiveDoesNotReplaceExistingDirectory(t *testing.T) {
 	target := filepath.Join(root, "live")
 	writeTestFile(t, filepath.Join(source, "SKILL.md"), "managed\n")
 	writeTestFile(t, filepath.Join(target, "SKILL.md"), "unmanaged\n")
-	if err := renameDirectoryExclusive(source, target); err == nil {
+	if err := shared.RenameDirectoryExclusive(source, target); err == nil {
 		t.Fatal("exclusive rename replaced an existing target")
 	}
 	body, err := os.ReadFile(filepath.Join(target, "SKILL.md"))
