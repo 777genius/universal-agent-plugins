@@ -796,7 +796,7 @@ Generic-pipeline `stage`: validate plan paths (`Paths` + `StagingLayout.Validate
 - `contracttest` parity-тест, введённый в Part 2, впервые наполняется реальными проверками: `LifecycleNativeConfig` ⇒ адаптер реализует `Lifecycle` и не заявляет `UsesNativeRegistryExecutable`; `prepare ∈ InstallIntents` ⇒ реализует `ActivationPreflighter`.
 - Объём: ~400 строк. Приёмка: бюджеты archtest `usecase`, `domain` → 0 (строки таблицы в allow-list); JSON `ClientCapabilities` без изменений (golden `compat` CLI).
 
-**Part 9b — резка монолитов usecase.** Строго extract-method без изменения порядка вызовов:
+**Part 9b — резка монолитов usecase.** Landed on this stack as `refactor/installer-core-part-9b-split`. Строго extract-method без изменения порядка вызовов:
 - `apply()` (371 строки / cyclo 152) → `validateApplyInput`, `resolveInstallation`, `planAndPreflight`, `resolveBinding`, `dryRunPath`, `noChangeOrResume`, `stageAndCommit`;
 - `applyGroup()` (620 / 451 statements / cyclo 234) → по фазам (plan targets → collide on physical backend → observe identity → stage all → kernel group apply → activate each → persist);
 - `Repair` (318 / 93) → `verifyRepairPreconditions`, `repairNative`, `repairPackage`, `persistRepair`;

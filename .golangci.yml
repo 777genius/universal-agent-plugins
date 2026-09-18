@@ -282,7 +282,7 @@ linters:
       # tags match the target, so a run on one OS silently omits every *_linux.go
       # and *_windows.go file. The first generation happened on macOS and missed
       # six of them; CI lints on ubuntu and went red on the linux one.
-      # 171 files.
+      # 166 files.
       - path: ^cli/plugin-kit-ai/cmd/agentplugins/bootstrapgen/main\.go$
         linters: [funlen, gocyclo, gocognit]
         text: 'too many statements|cyclomatic complexity|cognitive complexity'
@@ -748,9 +748,6 @@ linters:
       - path: ^install/integrationctl/agentplugins/usecase/component_readiness\.go$
         linters: [funlen, gocyclo, gocognit]
         text: 'too many statements|cyclomatic complexity|cognitive complexity'
-      - path: ^install/integrationctl/agentplugins/usecase/group\.go$
-        linters: [revive, funlen, gocyclo, gocognit]
-        text: 'file length is|too many statements|cyclomatic complexity|cognitive complexity'
       - path: ^install/integrationctl/agentplugins/usecase/intent\.go$
         linters: [gocyclo, gocognit]
         text: 'cyclomatic complexity|cognitive complexity'
@@ -763,15 +760,6 @@ linters:
       - path: ^install/integrationctl/agentplugins/usecase/remove\.go$
         linters: [funlen, gocyclo, gocognit]
         text: 'too many statements|cyclomatic complexity|cognitive complexity'
-      - path: ^install/integrationctl/agentplugins/usecase/remove_group\.go$
-        linters: [funlen, gocyclo, gocognit]
-        text: 'too many statements|cyclomatic complexity|cognitive complexity'
-      - path: ^install/integrationctl/agentplugins/usecase/repair\.go$
-        linters: [funlen, gocyclo, gocognit]
-        text: 'too many statements|cyclomatic complexity|cognitive complexity'
-      - path: ^install/integrationctl/agentplugins/usecase/service\.go$
-        linters: [revive, funlen, gocyclo, gocognit]
-        text: 'file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity'
       - path: ^install/integrationctl/packagesnapshot/snapshot\.go$
         linters: [funlen, gocyclo, gocognit]
         text: 'is too long|too many statements|cyclomatic complexity|cognitive complexity'
