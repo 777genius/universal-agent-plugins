@@ -87,15 +87,16 @@ func validateClineObject(configRoot string, object domain.NativeObjectOwnership)
 	if object.ProtectionClass != "managed" || object.ObjectID == "" || object.LogicalName == "" || object.ManagedDigest == "" {
 		return fmt.Errorf("invalid Cline native ownership object")
 	}
-	if object.Kind == clineSkillObjectKind {
+	switch object.Kind {
+	case clineSkillObjectKind:
 		if err := pathpolicy.RequireContainedChild(filepath.Join(configRoot, "skills"), object.Path); err != nil {
 			return fmt.Errorf("unsafe Cline skill path: %w", err)
 		}
-	} else if object.Kind == clineMCPObjectKind {
+	case clineMCPObjectKind:
 		if !filepath.IsAbs(object.Path) || !shared.SameCleanPath(object.Path, clineMCPSettingsPath(configRoot)) {
-			return fmt.Errorf("Cline MCP ownership path changed")
+			return fmt.Errorf("the Cline MCP ownership path changed")
 		}
-	} else {
+	default:
 		return fmt.Errorf("unsupported Cline native object kind %q", object.Kind)
 	}
 	return nil

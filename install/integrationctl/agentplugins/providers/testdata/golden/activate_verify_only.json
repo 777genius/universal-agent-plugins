@@ -159,7 +159,7 @@
         "cli"
       ]
     ],
-    "Error": "recognized negative client evidence\nKiro ACP process exited before verification completed",
+    "Error": "recognized negative client evidence\nthe Kiro ACP process exited before verification completed",
     "Outcome": {
       "Activation": "failed",
       "ActivationAttested": false,

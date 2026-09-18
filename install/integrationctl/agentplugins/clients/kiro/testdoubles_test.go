@@ -35,7 +35,7 @@ func (runner *recordingRunner) RunDuplexWithPlannedShutdown(_ context.Context, c
 		if err != nil {
 			return err
 		}
-		defer liveReader.Close()
+		defer func() { _ = liveReader.Close() }()
 		liveWriter = writer
 		output = liveReader
 		outputWritten = make(chan struct{})

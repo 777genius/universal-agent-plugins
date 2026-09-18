@@ -26,33 +26,40 @@ func VerifyNativeObjects(configRoot string, objects []domain.NativeObjectOwnersh
 		}
 	}
 	for _, object := range filtered {
-		switch object.Kind {
-		case kiroSkillObjectKind:
-			digest, err := shared.DigestSkillDirectory(object.Path)
-			if os.IsNotExist(err) && allowMissing {
-				continue
-			}
-			if err != nil {
-				return fmt.Errorf("inspect managed Kiro skill %q: %w", object.LogicalName, err)
-			}
-			if digest != object.ManagedDigest {
-				return fmt.Errorf("managed Kiro skill %q changed outside agentplugins", object.LogicalName)
-			}
-		case kiroMCPObjectKind:
-			rawServer, exists := mcp[object.LogicalName]
-			if !exists && allowMissing {
-				continue
-			}
-			if !exists {
-				return fmt.Errorf("managed Kiro MCP server %q is missing", object.LogicalName)
-			}
-			server, ok := rawServer.(map[string]any)
-			if !ok {
-				return fmt.Errorf("managed Kiro MCP server %q is malformed", object.LogicalName)
-			}
-			if shared.DigestJSONObject(server) != object.ManagedDigest {
-				return fmt.Errorf("managed Kiro MCP server %q changed outside agentplugins", object.LogicalName)
-			}
+		if err := verifyKiroOwnedObject(object, mcp, allowMissing); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func verifyKiroOwnedObject(object domain.NativeObjectOwnership, mcp map[string]any, allowMissing bool) error {
+	switch object.Kind {
+	case kiroSkillObjectKind:
+		digest, err := shared.DigestSkillDirectory(object.Path)
+		if os.IsNotExist(err) && allowMissing {
+			return nil
+		}
+		if err != nil {
+			return fmt.Errorf("inspect managed Kiro skill %q: %w", object.LogicalName, err)
+		}
+		if digest != object.ManagedDigest {
+			return fmt.Errorf("managed Kiro skill %q changed outside agentplugins", object.LogicalName)
+		}
+	case kiroMCPObjectKind:
+		rawServer, exists := mcp[object.LogicalName]
+		if !exists && allowMissing {
+			return nil
+		}
+		if !exists {
+			return fmt.Errorf("managed Kiro MCP server %q is missing", object.LogicalName)
+		}
+		server, ok := rawServer.(map[string]any)
+		if !ok {
+			return fmt.Errorf("managed Kiro MCP server %q is malformed", object.LogicalName)
+		}
+		if shared.DigestJSONObject(server) != object.ManagedDigest {
+			return fmt.Errorf("managed Kiro MCP server %q changed outside agentplugins", object.LogicalName)
 		}
 	}
 	return nil
@@ -65,7 +72,7 @@ func requireKiroObjectAbsent(configRoot string, object domain.NativeObjectOwners
 	switch object.Kind {
 	case kiroSkillObjectKind:
 		if _, err := os.Lstat(object.Path); err == nil {
-			return fmt.Errorf("Kiro skill %q already exists without agentplugins ownership", object.LogicalName)
+			return fmt.Errorf("the Kiro skill %q already exists without agentplugins ownership", object.LogicalName)
 		} else if !os.IsNotExist(err) {
 			return err
 		}
@@ -75,7 +82,7 @@ func requireKiroObjectAbsent(configRoot string, object domain.NativeObjectOwners
 			return err
 		}
 		if _, exists := mcp[object.LogicalName]; exists {
-			return fmt.Errorf("Kiro MCP server %q already exists without agentplugins ownership", object.LogicalName)
+			return fmt.Errorf("the Kiro MCP server %q already exists without agentplugins ownership", object.LogicalName)
 		}
 	}
 	return nil
@@ -95,7 +102,7 @@ func validateKiroObject(configRoot string, object domain.NativeObjectOwnership) 
 		return fmt.Errorf("unsupported Kiro native object kind %q", object.Kind)
 	}
 	if !shared.SameCleanPath(expected, object.Path) {
-		return fmt.Errorf("Kiro native object %q has an untrusted path", object.LogicalName)
+		return fmt.Errorf("the Kiro native object %q has an untrusted path", object.LogicalName)
 	}
 	return ValidateNativePath(configRoot, object.Path)
 }

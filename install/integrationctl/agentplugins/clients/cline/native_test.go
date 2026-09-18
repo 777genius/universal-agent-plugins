@@ -20,7 +20,7 @@ func TestClineSkillRollbackRetainsBackupWhenRestoreRenameFails(t *testing.T) {
 	activeV1 := filepath.Join(root, "managed", "v1")
 	writeTestFile(t, filepath.Join(activeV1, "skills", "docs", "SKILL.md"), "v1\n")
 	desiredV1 := clineFixtureObjects(t, configRoot, activeV1, "docs", "", nativeconfig.Server{})
-	if err := applyClineNativeMutation(configRoot, activeV1, nil, desiredV1); err != nil {
+	if err := applyClineNativeMutation(configRoot, activeV1, desiredV1); err != nil {
 		t.Fatal(err)
 	}
 	activeV2 := filepath.Join(root, "managed", "v2")
@@ -66,7 +66,7 @@ func TestClineSkillBackupDigestMismatchRestoresLiveDirectoryAndAborts(t *testing
 	activeV1 := filepath.Join(root, "managed", "v1")
 	writeTestFile(t, filepath.Join(activeV1, "skills", "docs", "SKILL.md"), "v1\n")
 	desiredV1 := clineFixtureObjects(t, configRoot, activeV1, "docs", "", nativeconfig.Server{})
-	if err := applyClineNativeMutation(configRoot, activeV1, nil, desiredV1); err != nil {
+	if err := applyClineNativeMutation(configRoot, activeV1, desiredV1); err != nil {
 		t.Fatal(err)
 	}
 	activeV2 := filepath.Join(root, "managed", "v2")
@@ -187,7 +187,7 @@ func TestClineCollisionAndBusyLockLeaveNoPartialActivation(t *testing.T) {
 			server := nativeconfig.Server{Type: "stdio", Command: "node"}
 			writeClineProjectionFixture(t, active, map[string]nativeconfig.Server{"docs": server})
 			desired := clineFixtureObjects(t, configRoot, active, "guide", "docs", server)
-			err := applyClineNativeMutation(configRoot, active, nil, desired)
+			err := applyClineNativeMutation(configRoot, active, desired)
 			if err == nil {
 				t.Fatal("unsafe activation unexpectedly succeeded")
 			}
@@ -215,7 +215,7 @@ func TestClineTamperedReceiptFailsClosed(t *testing.T) {
 	server := nativeconfig.Server{Type: "stdio", Command: "node"}
 	writeClineProjectionFixture(t, active, map[string]nativeconfig.Server{"docs": server})
 	desired := clineFixtureObjects(t, configRoot, active, "", "docs", server)
-	if err := applyClineNativeMutation(configRoot, active, nil, desired); err != nil {
+	if err := applyClineNativeMutation(configRoot, active, desired); err != nil {
 		t.Fatal(err)
 	}
 	desired[0].ManagedDigest = "sha256:00"

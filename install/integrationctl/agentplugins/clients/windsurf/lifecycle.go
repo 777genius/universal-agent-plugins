@@ -39,98 +39,13 @@ func applyWindsurfNativeMutation(configRoot, activePath string, previous, desire
 
 func applyWindsurfNative(env clients.Env, configRoot, activePath string, previous, desired []domain.NativeObjectOwnership) error {
 	kernel := env.NativeConfig
-	configPath, err := windsurfConfigPath(configRoot)
+	configPath, previousMap, desiredMap, desiredServers, err := loadWindsurfNativeState(configRoot, activePath, previous, desired)
 	if err != nil {
 		return err
 	}
-	previousMap, err := windsurfObjectMap(configRoot, previous)
+	mutations, err := planWindsurfMutations(kernel, configPath, previousMap, desiredMap, desiredServers)
 	if err != nil {
 		return err
-	}
-	desiredMap, err := windsurfObjectMap(configRoot, desired)
-	if err != nil {
-		return err
-	}
-	desiredServers := map[string]nativeconfig.Server{}
-	if len(desiredMap) > 0 {
-		desiredServers, err = readProjectedWindsurfServers(activePath)
-		if err != nil {
-			return err
-		}
-	}
-	if len(desiredServers) != len(desiredMap) {
-		return fmt.Errorf("prepared Windsurf MCP projection does not match desired ownership")
-	}
-
-	namesCapacity, capacityErr := shared.CheckedCombinedCapacity(len(previousMap), len(desiredMap))
-	if capacityErr != nil {
-		return fmt.Errorf("prepare managed Windsurf MCP server set: %w", capacityErr)
-	}
-	names := make([]string, 0, namesCapacity)
-	seen := map[string]bool{}
-	for name := range previousMap {
-		seen[name] = true
-		names = append(names, name)
-	}
-	for name := range desiredMap {
-		if !seen[name] {
-			names = append(names, name)
-		}
-	}
-	sort.Strings(names)
-
-	mutations := make([]windsurfMutation, 0, len(names))
-	for _, name := range names {
-		oldObject, hadOld := previousMap[name]
-		newObject, hasNew := desiredMap[name]
-		mutation := windsurfMutation{name: name}
-		switch {
-		case hadOld && hasNew:
-			oldReceipt := windsurfReceipt(oldObject)
-			newReceipt := windsurfReceipt(newObject)
-			mutation.action, mutation.server, mutation.previous, mutation.desired = nativeconfig.ActionUpdate, desiredServers[name], &oldReceipt, &newReceipt
-		case !hadOld && hasNew:
-			newReceipt := windsurfReceipt(newObject)
-			mutation.action, mutation.server, mutation.desired = nativeconfig.ActionAdd, desiredServers[name], &newReceipt
-		case hadOld && !hasNew:
-			oldReceipt := windsurfReceipt(oldObject)
-			mutation.action, mutation.previous = nativeconfig.ActionRemove, &oldReceipt
-		default:
-			continue
-		}
-		if mutation.previous != nil {
-			present, owned, inspectErr := kernel.Inspect(nativeconfig.Paths{JSON: configPath}, nativeconfig.CodecWindsurf, name, mutation.previous)
-			if inspectErr != nil {
-				return fmt.Errorf("preflight existing Windsurf MCP entry %q: %w", name, inspectErr)
-			}
-			if !present {
-				if mutation.action == nativeconfig.ActionRemove {
-					continue
-				}
-				mutation.action = nativeconfig.ActionAdd
-				mutation.previous = nil
-			} else if !owned {
-				return fmt.Errorf("preflight existing Windsurf MCP entry %q: %w", name, nativeconfig.ErrNotOwned)
-			}
-		} else {
-			present, _, inspectErr := kernel.Inspect(nativeconfig.Paths{JSON: configPath}, nativeconfig.CodecWindsurf, name, nil)
-			if inspectErr != nil {
-				return fmt.Errorf("preflight Windsurf MCP entry %q: %w", name, inspectErr)
-			}
-			if present {
-				return fmt.Errorf("preflight Windsurf MCP entry %q: %w", name, nativeconfig.ErrCollision)
-			}
-		}
-		if mutation.desired != nil {
-			preview, previewErr := desiredWindsurfReceipt(configPath, name, mutation.server)
-			if previewErr != nil {
-				return fmt.Errorf("preview Windsurf MCP entry %q: %w", name, previewErr)
-			}
-			if preview != *mutation.desired {
-				return fmt.Errorf("Windsurf MCP entry %q desired ownership digest drifted", name)
-			}
-		}
-		mutations = append(mutations, mutation)
 	}
 	if len(mutations) == 0 {
 		return VerifyNativeObjects(configRoot, activePath, desired, false)
@@ -145,10 +60,143 @@ func applyWindsurfNative(env clients.Env, configRoot, activePath string, previou
 	}
 	for index := range mutations {
 		if mutations[index].desired != nil && results[index] != *mutations[index].desired {
-			return fmt.Errorf("Windsurf MCP entry %q ownership digest changed during apply", mutations[index].name)
+			return fmt.Errorf("the Windsurf MCP entry %q ownership digest changed during apply", mutations[index].name)
 		}
 	}
 	return VerifyNativeObjects(configRoot, activePath, desired, false)
+}
+
+func loadWindsurfNativeState(configRoot, activePath string, previous, desired []domain.NativeObjectOwnership) (string, map[string]domain.NativeObjectOwnership, map[string]domain.NativeObjectOwnership, map[string]nativeconfig.Server, error) {
+	configPath, err := windsurfConfigPath(configRoot)
+	if err != nil {
+		return "", nil, nil, nil, err
+	}
+	previousMap, err := windsurfObjectMap(configRoot, previous)
+	if err != nil {
+		return "", nil, nil, nil, err
+	}
+	desiredMap, err := windsurfObjectMap(configRoot, desired)
+	if err != nil {
+		return "", nil, nil, nil, err
+	}
+	desiredServers := map[string]nativeconfig.Server{}
+	if len(desiredMap) > 0 {
+		desiredServers, err = readProjectedWindsurfServers(activePath)
+		if err != nil {
+			return "", nil, nil, nil, err
+		}
+	}
+	if len(desiredServers) != len(desiredMap) {
+		return "", nil, nil, nil, fmt.Errorf("prepared Windsurf MCP projection does not match desired ownership")
+	}
+	return configPath, previousMap, desiredMap, desiredServers, nil
+}
+
+func planWindsurfMutations(kernel nativeconfig.Kernel, configPath string, previousMap, desiredMap map[string]domain.NativeObjectOwnership, desiredServers map[string]nativeconfig.Server) ([]windsurfMutation, error) {
+	names, err := windsurfMutationNames(previousMap, desiredMap)
+	if err != nil {
+		return nil, err
+	}
+	mutations := make([]windsurfMutation, 0, len(names))
+	for _, name := range names {
+		mutation, include, err := planWindsurfMutation(kernel, configPath, name, previousMap, desiredMap, desiredServers)
+		if err != nil {
+			return nil, err
+		}
+		if include {
+			mutations = append(mutations, mutation)
+		}
+	}
+	return mutations, nil
+}
+
+func windsurfMutationNames(previousMap, desiredMap map[string]domain.NativeObjectOwnership) ([]string, error) {
+	namesCapacity, capacityErr := shared.CheckedCombinedCapacity(len(previousMap), len(desiredMap))
+	if capacityErr != nil {
+		return nil, fmt.Errorf("prepare managed Windsurf MCP server set: %w", capacityErr)
+	}
+	names := make([]string, 0, namesCapacity)
+	seen := map[string]bool{}
+	for name := range previousMap {
+		seen[name] = true
+		names = append(names, name)
+	}
+	for name := range desiredMap {
+		if !seen[name] {
+			names = append(names, name)
+		}
+	}
+	sort.Strings(names)
+	return names, nil
+}
+
+func planWindsurfMutation(kernel nativeconfig.Kernel, configPath, name string, previousMap, desiredMap map[string]domain.NativeObjectOwnership, desiredServers map[string]nativeconfig.Server) (windsurfMutation, bool, error) {
+	oldObject, hadOld := previousMap[name]
+	newObject, hasNew := desiredMap[name]
+	mutation := windsurfMutation{name: name}
+	switch {
+	case hadOld && hasNew:
+		oldReceipt := windsurfReceipt(oldObject)
+		newReceipt := windsurfReceipt(newObject)
+		mutation.action, mutation.server, mutation.previous, mutation.desired = nativeconfig.ActionUpdate, desiredServers[name], &oldReceipt, &newReceipt
+	case !hadOld && hasNew:
+		newReceipt := windsurfReceipt(newObject)
+		mutation.action, mutation.server, mutation.desired = nativeconfig.ActionAdd, desiredServers[name], &newReceipt
+	case hadOld && !hasNew:
+		oldReceipt := windsurfReceipt(oldObject)
+		mutation.action, mutation.previous = nativeconfig.ActionRemove, &oldReceipt
+	default:
+		return windsurfMutation{}, false, nil
+	}
+	include, err := preflightWindsurfMutation(kernel, configPath, &mutation)
+	if err != nil || !include {
+		return windsurfMutation{}, false, err
+	}
+	if err := previewWindsurfMutation(configPath, &mutation); err != nil {
+		return windsurfMutation{}, false, err
+	}
+	return mutation, true, nil
+}
+
+func preflightWindsurfMutation(kernel nativeconfig.Kernel, configPath string, mutation *windsurfMutation) (bool, error) {
+	if mutation.previous != nil {
+		present, owned, inspectErr := kernel.Inspect(nativeconfig.Paths{JSON: configPath}, nativeconfig.CodecWindsurf, mutation.name, mutation.previous)
+		if inspectErr != nil {
+			return false, fmt.Errorf("preflight existing Windsurf MCP entry %q: %w", mutation.name, inspectErr)
+		}
+		if !present {
+			if mutation.action == nativeconfig.ActionRemove {
+				return false, nil
+			}
+			mutation.action = nativeconfig.ActionAdd
+			mutation.previous = nil
+		} else if !owned {
+			return false, fmt.Errorf("preflight existing Windsurf MCP entry %q: %w", mutation.name, nativeconfig.ErrNotOwned)
+		}
+		return true, nil
+	}
+	present, _, inspectErr := kernel.Inspect(nativeconfig.Paths{JSON: configPath}, nativeconfig.CodecWindsurf, mutation.name, nil)
+	if inspectErr != nil {
+		return false, fmt.Errorf("preflight Windsurf MCP entry %q: %w", mutation.name, inspectErr)
+	}
+	if present {
+		return false, fmt.Errorf("preflight Windsurf MCP entry %q: %w", mutation.name, nativeconfig.ErrCollision)
+	}
+	return true, nil
+}
+
+func previewWindsurfMutation(configPath string, mutation *windsurfMutation) error {
+	if mutation.desired == nil {
+		return nil
+	}
+	preview, previewErr := desiredWindsurfReceipt(configPath, mutation.name, mutation.server)
+	if previewErr != nil {
+		return fmt.Errorf("preview Windsurf MCP entry %q: %w", mutation.name, previewErr)
+	}
+	if preview != *mutation.desired {
+		return fmt.Errorf("the Windsurf MCP entry %q desired ownership digest drifted", mutation.name)
+	}
+	return nil
 }
 
 func windsurfNativeRequest(configPath string, mutation windsurfMutation) nativeconfig.Request {

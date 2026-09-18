@@ -183,8 +183,8 @@ func openCodeStrings(value any) ([]string, error) {
 	if value == nil {
 		return nil, nil
 	}
-	if strings, ok := value.([]string); ok {
-		return append([]string(nil), strings...), nil
+	if items, ok := value.([]string); ok {
+		return append([]string(nil), items...), nil
 	}
 	values, ok := value.([]any)
 	if !ok {

@@ -52,10 +52,10 @@ func validateOpenCodeProjection(configRoot, activePath string, projection openCo
 	if !shared.SameCleanPath(projection.ConfigJSON, filepath.Join(configRoot, "opencode.json")) ||
 		!shared.SameCleanPath(projection.ConfigJSONC, filepath.Join(configRoot, "opencode.jsonc")) ||
 		!shared.SameCleanPath(projection.PackageRoot, activePath) {
-		return fmt.Errorf("OpenCode native projection is not bound to the detected client and active package")
+		return fmt.Errorf("the OpenCode native projection is not bound to the detected client and active package")
 	}
 	if projection.DataRoot != "" && !filepath.IsAbs(projection.DataRoot) {
-		return fmt.Errorf("OpenCode native projection data root must be absolute")
+		return fmt.Errorf("the OpenCode native projection data root must be absolute")
 	}
 	return nil
 }
@@ -75,6 +75,22 @@ func openCodeMCPRequests(projection openCodeProjection, previous, desired []doma
 	placeholders := nativeconfig.Placeholders{PackageRoot: projection.PackageRoot, DataRoot: projection.DataRoot}
 	var result []nativeconfig.Request
 	kernel := nativeconfig.New()
+	previousRequests, err := openCodeMCPPreviousRequests(kernel, paths, placeholders, projection, previousByID, desiredByID)
+	if err != nil {
+		return nil, err
+	}
+	result = append(result, previousRequests...)
+	desiredRequests, err := openCodeMCPDesiredRequests(kernel, paths, placeholders, projection, previousByID, desiredByID)
+	if err != nil {
+		return nil, err
+	}
+	result = append(result, desiredRequests...)
+	sort.Slice(result, func(i, j int) bool { return result[i].Name < result[j].Name })
+	return result, nil
+}
+
+func openCodeMCPPreviousRequests(kernel nativeconfig.Kernel, paths nativeconfig.Paths, placeholders nativeconfig.Placeholders, projection openCodeProjection, previousByID, desiredByID map[string]domain.NativeObjectOwnership) ([]nativeconfig.Request, error) {
+	var result []nativeconfig.Request
 	for id, object := range previousByID {
 		if object.Kind != openCodeMCPObjectKind {
 			continue
@@ -89,18 +105,14 @@ func openCodeMCPRequests(projection openCodeProjection, previous, desired []doma
 		}
 		next, kept := desiredByID[id]
 		if !kept {
-			// An already absent exact-owned entry is a safe idempotent removal.
 			if present {
 				result = append(result, nativeconfig.Request{Paths: paths, Codec: nativeconfig.CodecOpenCode, Action: nativeconfig.ActionRemove, Name: object.LogicalName, Owned: &owned})
 			}
 			continue
 		}
 		action := nativeconfig.ActionUpdate
-		var receipt *nativeconfig.Receipt = &owned
+		receipt := &owned
 		if !present {
-			// Repair may recreate a missing native entry only when the staged
-			// desired receipt is exactly the receipt already owned by state. A
-			// real update with different bytes remains fail closed.
 			if !sameOpenCodeMCPObject(object, next) {
 				return nil, fmt.Errorf("managed OpenCode MCP server %q is absent during update: %w", object.LogicalName, nativeconfig.ErrNotOwned)
 			}
@@ -110,6 +122,11 @@ func openCodeMCPRequests(projection openCodeProjection, previous, desired []doma
 		result = append(result, nativeconfig.Request{Paths: paths, Codec: nativeconfig.CodecOpenCode, Action: action, Name: next.LogicalName,
 			Server: projection.MCPServers[next.LogicalName], Placeholders: placeholders, Owned: receipt, Desired: &desiredReceipt})
 	}
+	return result, nil
+}
+
+func openCodeMCPDesiredRequests(kernel nativeconfig.Kernel, paths nativeconfig.Paths, placeholders nativeconfig.Placeholders, projection openCodeProjection, previousByID, desiredByID map[string]domain.NativeObjectOwnership) ([]nativeconfig.Request, error) {
+	var result []nativeconfig.Request
 	for id, object := range desiredByID {
 		if object.Kind != openCodeMCPObjectKind {
 			continue
@@ -122,13 +139,12 @@ func openCodeMCPRequests(projection openCodeProjection, previous, desired []doma
 			return nil, fmt.Errorf("inspect OpenCode MCP server %q before add: %w", object.LogicalName, err)
 		}
 		if present {
-			return nil, fmt.Errorf("OpenCode MCP server %q already exists: %w", object.LogicalName, nativeconfig.ErrCollision)
+			return nil, fmt.Errorf("the OpenCode MCP server %q already exists: %w", object.LogicalName, nativeconfig.ErrCollision)
 		}
 		desiredReceipt := receiptFromOpenCodeObject(object)
 		result = append(result, nativeconfig.Request{Paths: paths, Codec: nativeconfig.CodecOpenCode, Action: nativeconfig.ActionAdd, Name: object.LogicalName,
 			Server: projection.MCPServers[object.LogicalName], Placeholders: placeholders, Desired: &desiredReceipt})
 	}
-	sort.Slice(result, func(i, j int) bool { return result[i].Name < result[j].Name })
 	return result, nil
 }
 
@@ -162,7 +178,7 @@ func NativeObjects(objects []domain.NativeObjectOwnership) []domain.NativeObject
 
 func validateOpenCodeObject(configRoot string, projection openCodeProjection, object domain.NativeObjectOwnership) error {
 	if object.LogicalName == "" || object.ManagedDigest == "" {
-		return fmt.Errorf("OpenCode native object is incomplete")
+		return fmt.Errorf("the OpenCode native object is incomplete")
 	}
 	expected := object.Path
 	switch object.Kind {
@@ -176,7 +192,7 @@ func validateOpenCodeObject(configRoot string, projection openCodeProjection, ob
 		return fmt.Errorf("unsupported OpenCode native object kind %q", object.Kind)
 	}
 	if !shared.SameCleanPath(expected, object.Path) {
-		return fmt.Errorf("OpenCode native object %q has an untrusted path", object.LogicalName)
+		return fmt.Errorf("the OpenCode native object %q has an untrusted path", object.LogicalName)
 	}
 	return pathpolicy.RequireContainedChild(configRoot, object.Path)
 }
@@ -194,13 +210,13 @@ func preflightOpenCodeObjects(configRoot, activePath string, projection openCode
 		}
 		if prior, replacing := previousByID[id]; replacing {
 			if prior.Kind != object.Kind || prior.LogicalName != object.LogicalName || !shared.SameCleanPath(prior.Path, object.Path) {
-				return fmt.Errorf("OpenCode native object identity changed for %s", id)
+				return fmt.Errorf("the OpenCode native object identity changed for %s", id)
 			}
 			continue
 		}
 		if object.Kind == openCodeSkillKind {
 			if _, err := os.Lstat(object.Path); err == nil {
-				return fmt.Errorf("OpenCode skill %q already exists and is not owned", object.LogicalName)
+				return fmt.Errorf("the OpenCode skill %q already exists and is not owned", object.LogicalName)
 			} else if !os.IsNotExist(err) {
 				return err
 			}

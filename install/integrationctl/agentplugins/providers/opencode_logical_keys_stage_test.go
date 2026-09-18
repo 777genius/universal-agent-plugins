@@ -39,7 +39,7 @@ func TestOpenCodeLogicalKeysStageKeepsHealthySibling(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			defer (Stager{}).Discard(context.Background(), delivery)
+			defer func() { _ = (Stager{}).Discard(context.Background(), delivery) }()
 			if _, err := os.Stat(filepath.Join(delivery.StagingPath, "skills", "healthy", "SKILL.md")); err != nil {
 				t.Fatal(err)
 			}

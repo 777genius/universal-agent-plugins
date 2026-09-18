@@ -86,7 +86,7 @@ func InspectRegistry(plan domain.DeliveryPlan, managed *domain.ClientBinding) (r
 func windsurfConfigPath(configRoot string) (string, error) {
 	root := filepath.Clean(strings.TrimSpace(configRoot))
 	if root == "." || !filepath.IsAbs(root) {
-		return "", fmt.Errorf("Windsurf channel config root must be absolute")
+		return "", fmt.Errorf("the Windsurf channel config root must be absolute")
 	}
 	path := filepath.Join(root, "mcp_config.json")
 	if err := pathpolicy.RequireContainedChild(root, path); err != nil {

@@ -11,7 +11,6 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/managedstdio"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/pathcontract"
 )
 
@@ -23,36 +22,15 @@ func ProjectMCP(root string, envelope domain.PackageEnvelope, plan domain.Delive
 	for _, name := range shared.SupportedMCPNames(plan) {
 		server, ok := envelope.MCP.Servers[name]
 		if !ok {
-			return fmt.Errorf("Windsurf MCP server %q is missing from the package envelope", name)
+			return fmt.Errorf("the Windsurf MCP server %q is missing from the package envelope", name)
 		}
 		resolved, err := windsurfServer(server, plan.ActivePath, dataPath)
 		if err != nil {
 			return fmt.Errorf("project Windsurf MCP server %q: %w", name, err)
 		}
 		if server.Type == "stdio" {
-			command, _ := server.Decoded["command"].(string)
-			if strings.HasPrefix(command, "./") {
-				relative, e := pathcontract.ParseCommand(command)
-				if e != nil {
-					return e
-				}
-				observation := pathcontract.Resolve(root, relative)
-				if observation.State != pathcontract.Resolved {
-					return fmt.Errorf("stdio command escapes PLUGIN_ROOT or is unavailable: %v", observation.Err)
-				}
-			}
-			rawCWD, _ := server.Decoded["cwd"].(string)
-			cwd, e := pathcontract.ExpandCWD(rawCWD, plan.ActivePath, dataPath)
-			if e != nil {
-				return e
-			}
-			anchor := root
-			if cwd.Anchor == pathcontract.Data {
-				anchor = dataPath
-			}
-			observation := pathcontract.Resolve(anchor, cwd.Relative)
-			if observation.State != pathcontract.Resolved {
-				return fmt.Errorf("stdio cwd unavailable: %v", observation.Err)
+			if err := observeWindsurfStdio(root, dataPath, plan.ActivePath, server); err != nil {
+				return err
 			}
 		}
 		projected, err := standardWindsurfServer(resolved, server.Type)
@@ -65,6 +43,34 @@ func ProjectMCP(root string, envelope domain.PackageEnvelope, plan domain.Delive
 		"$schema":    domain.MCPSchemaV1,
 		"mcpServers": servers,
 	})
+}
+
+func observeWindsurfStdio(root, dataPath, activePath string, server domain.MCPServer) error {
+	command, _ := server.Decoded["command"].(string)
+	if strings.HasPrefix(command, "./") {
+		relative, e := pathcontract.ParseCommand(command)
+		if e != nil {
+			return e
+		}
+		observation := pathcontract.Resolve(root, relative)
+		if observation.State != pathcontract.Resolved {
+			return fmt.Errorf("stdio command escapes PLUGIN_ROOT or is unavailable: %w", observation.Err)
+		}
+	}
+	rawCWD, _ := server.Decoded["cwd"].(string)
+	cwd, e := pathcontract.ExpandCWD(rawCWD, activePath, dataPath)
+	if e != nil {
+		return e
+	}
+	anchor := root
+	if cwd.Anchor == pathcontract.Data {
+		anchor = dataPath
+	}
+	observation := pathcontract.Resolve(anchor, cwd.Relative)
+	if observation.State != pathcontract.Resolved {
+		return fmt.Errorf("stdio cwd unavailable: %w", observation.Err)
+	}
+	return nil
 }
 
 func BuildNativeObjects(stagingRoot string, plan domain.DeliveryPlan) ([]domain.NativeObjectOwnership, error) {
@@ -128,113 +134,6 @@ func readProjectedWindsurfServers(root string) (map[string]nativeconfig.Server, 
 	return result, nil
 }
 
-func windsurfServer(server domain.MCPServer, packageRoot, dataRoot string) (nativeconfig.Server, error) {
-	decoded := server.Decoded
-	result := nativeconfig.Server{}
-	switch server.Type {
-	case "stdio":
-		result.Type = "stdio"
-		command, ok := decoded["command"].(string)
-		if !ok || strings.TrimSpace(command) == "" {
-			return result, fmt.Errorf("stdio command is required")
-		}
-		result.Command = command
-		if rawArgs, ok := decoded["args"].([]any); ok {
-			for _, raw := range rawArgs {
-				value, ok := raw.(string)
-				if !ok {
-					return result, fmt.Errorf("stdio args must contain strings")
-				}
-				result.Args = append(result.Args, value)
-			}
-		}
-		if rawEnv, exists := decoded["env"]; exists {
-			result.Env = map[string]string{}
-			switch values := rawEnv.(type) {
-			case map[string]any:
-				for key, raw := range values {
-					value, ok := raw.(string)
-					if !ok {
-						return result, fmt.Errorf("stdio env values must be strings")
-					}
-					result.Env[key] = value
-				}
-			case map[string]string:
-				for key, value := range values {
-					result.Env[key] = value
-				}
-			default:
-				return result, fmt.Errorf("stdio env must be an object")
-			}
-		}
-		if _, exists := result.Env["PLUGIN_ROOT"]; exists {
-			return result, fmt.Errorf("stdio env PLUGIN_ROOT is reserved and client-managed")
-		}
-		if _, exists := result.Env["PLUGIN_DATA"]; exists {
-			return result, fmt.Errorf("stdio env PLUGIN_DATA is reserved and client-managed")
-		}
-		if result.Env == nil {
-			result.Env = map[string]string{}
-		}
-		result.Env["PLUGIN_ROOT"] = packageRoot
-		result.Env["PLUGIN_DATA"] = dataRoot
-	case "streamable-http", "sse":
-		result.Type = "remote"
-		result.RemoteTransport = server.Type
-		url, ok := decoded["url"].(string)
-		if !ok || strings.TrimSpace(url) == "" {
-			return result, fmt.Errorf("remote url is required")
-		}
-		result.URL = url
-		if rawHeaders, ok := decoded["headers"].(map[string]any); ok {
-			result.Headers = map[string]string{}
-			for key, raw := range rawHeaders {
-				value, ok := raw.(string)
-				if !ok {
-					return result, fmt.Errorf("remote header values must be strings")
-				}
-				result.Headers[key] = value
-			}
-		}
-	default:
-		return result, fmt.Errorf("unsupported Windsurf MCP transport %q", server.Type)
-	}
-	resolved, err := resolveWindsurfPlaceholders(result, packageRoot, dataRoot)
-	if err != nil {
-		return result, err
-	}
-	if resolved.Type == "stdio" {
-		if !filepath.IsAbs(packageRoot) || !filepath.IsAbs(dataRoot) {
-			return result, fmt.Errorf("managed stdio roots must be absolute")
-		}
-		rawCWD := ""
-		if value, exists := decoded["cwd"]; exists {
-			var ok bool
-			rawCWD, ok = value.(string)
-			if !ok {
-				return result, fmt.Errorf("stdio cwd must be a string")
-			}
-		}
-		cwd, err := pathcontract.ExpandCWD(rawCWD, packageRoot, dataRoot)
-		if err != nil {
-			return result, err
-		}
-		root := packageRoot
-		if cwd.Anchor == pathcontract.Data {
-			root = dataRoot
-		}
-		absoluteCWD := root
-		if cwd.Relative != "" {
-			absoluteCWD = strings.TrimRight(root, string(filepath.Separator)) + string(filepath.Separator) + filepath.FromSlash(cwd.Relative)
-		}
-		resolved.StdioValuesResolved = true
-		resolved.Args = managedstdio.Arguments(packageRoot, dataRoot, absoluteCWD, cwd.Anchor, commandForLauncher(decoded), resolved.Args)
-		resolved.Command = filepath.Join(packageRoot, filepath.FromSlash(managedstdio.RelativeDirectory), managedstdio.ExecutableName)
-	}
-
-	return resolved, nil
-}
-
 func commandForLauncher(decoded map[string]any) string {
 	value, _ := decoded["command"].(string)
 	return value
@@ -274,7 +173,7 @@ func resolveWindsurfPlaceholders(server nativeconfig.Server, packageRoot, dataRo
 func standardWindsurfServer(server nativeconfig.Server, originalType string) (map[string]any, error) {
 	if server.Type == "stdio" {
 		if strings.TrimSpace(server.CWD) != "" {
-			return nil, fmt.Errorf("Windsurf stdio MCP server does not support cwd")
+			return nil, fmt.Errorf("the Windsurf stdio MCP server does not support cwd")
 		}
 		result := map[string]any{"type": "stdio", "command": server.Command}
 		if len(server.Args) > 0 {

@@ -9,18 +9,18 @@ import (
 	"strings"
 	"time"
 
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/kiro"
+	"github.com/pelletier/go-toml/v2"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/claude"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/codex"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/gemini"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/kiro"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/windsurf"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
 	legacyports "github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
-	"github.com/pelletier/go-toml/v2"
 )
 
 type packageVerifier interface {
@@ -281,7 +281,7 @@ func (observer NativeIdentityObserver) inspectCodexCLI(ctx context.Context, plan
 }
 
 func codexRegistryFinding(body []byte, name, expectedMarketplace string, owned bool) registryFinding {
-	return registryFinding(codex.ParseRegistry(body, name, expectedMarketplace, owned))
+	return codex.ParseRegistry(body, name, expectedMarketplace, owned)
 }
 
 func (observer NativeIdentityObserver) inspectCopilotCLI(ctx context.Context, plan domain.DeliveryPlan, managed *domain.ClientBinding) (registryFinding, error) {
@@ -313,11 +313,11 @@ func (observer NativeIdentityObserver) runNativeRegistry(ctx context.Context, co
 }
 
 func copilotRegistryFinding(stdout []byte, name, expectedMarketplace, expectedVersion string, owned bool) registryFinding {
-	return registryFinding(shared.CopilotRegistryFinding(stdout, name, expectedMarketplace, expectedVersion, owned))
+	return shared.CopilotRegistryFinding(stdout, name, expectedMarketplace, expectedVersion, owned)
 }
 
 func copilotRegistryFindingAt(stdout []byte, name, expectedMarketplace, expectedVersion, expectedPath string, owned bool) registryFinding {
-	return registryFinding(shared.CopilotRegistryFindingAt(stdout, name, expectedMarketplace, expectedVersion, expectedPath, owned))
+	return shared.CopilotRegistryFindingAt(stdout, name, expectedMarketplace, expectedVersion, expectedPath, owned)
 }
 
 func inspectCodexFiles(plan domain.DeliveryPlan, managed *domain.ClientBinding) (registryFinding, error) {

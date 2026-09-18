@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
 	"path/filepath"
 	"strings"
 	"sync/atomic"
@@ -26,8 +25,8 @@ const (
 )
 
 var (
-	ErrACPContractUnknown = errors.New("Kiro structured ACP verification is unavailable or unrecognized")
-	errKiroACPEarlyExit   = errors.New("Kiro ACP process exited before verification completed")
+	ErrACPContractUnknown = errors.New("the Kiro structured ACP verification is unavailable or unrecognized")
+	errKiroACPEarlyExit   = errors.New("the Kiro ACP process exited before verification completed")
 	ErrACPPartialExit     = fmt.Errorf("%w: Kiro ACP process exited with a partial trailing record", shared.ErrRecognizedNegativeEvidence)
 )
 
@@ -51,30 +50,9 @@ func verifyACPWithTimeout(ctx context.Context, runner ports.DuplexCommandRunner,
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	if runner == nil {
-		return fmt.Errorf("%w: interactive process runner is unavailable", ErrACPContractUnknown)
-	}
-	absoluteCWD, err := filepath.Abs(cwd)
-	if err != nil || !filepath.IsAbs(absoluteCWD) {
-		return fmt.Errorf("%w: resolve prepared verification directory", ErrACPContractUnknown)
-	}
-	expected := make(map[string]*kiroACPServerState, len(servers))
-	for _, rawName := range servers {
-		name := strings.TrimSpace(rawName)
-		if name == "" {
-			return fmt.Errorf("%w: planned MCP server name is empty", ErrACPContractUnknown)
-		}
-		if _, duplicate := expected[name]; duplicate {
-			return fmt.Errorf("%w: duplicate planned MCP server identity %q", ErrACPContractUnknown, name)
-		}
-		expected[name] = &kiroACPServerState{}
-	}
-	if len(expected) == 0 {
-		return fmt.Errorf("%w: no planned MCP servers", ErrACPContractUnknown)
-	}
-
-	if startupTimeout <= 0 {
-		return fmt.Errorf("%w: ACP startup timeout must be positive", ErrACPContractUnknown)
+	expected, absoluteCWD, err := prepareKiroACPExchange(runner, cwd, servers, startupTimeout)
+	if err != nil {
+		return err
 	}
 	bounded, cancel := context.WithTimeout(ctx, startupTimeout)
 	defer cancel()
@@ -89,24 +67,50 @@ func verifyACPWithTimeout(ctx context.Context, runner ports.DuplexCommandRunner,
 		if exchangeErr == nil {
 			return nil
 		}
-		// Once the client has entered the ACP exchange, malformed records,
-		// partial output, protocol violations, and stream/process interruption
-		// are authoritative verification failures rather than fallback signals.
 		return errors.Join(shared.ErrRecognizedNegativeEvidence, exchangeErr)
 	})
+	return interpretKiroACPRun(ctx, bounded, exchangeEntered.Load(), err)
+}
+
+func prepareKiroACPExchange(runner ports.DuplexCommandRunner, cwd string, servers []string, startupTimeout time.Duration) (map[string]*kiroACPServerState, string, error) {
+	if runner == nil {
+		return nil, "", fmt.Errorf("%w: interactive process runner is unavailable", ErrACPContractUnknown)
+	}
+	absoluteCWD, err := filepath.Abs(cwd)
+	if err != nil || !filepath.IsAbs(absoluteCWD) {
+		return nil, "", fmt.Errorf("%w: resolve prepared verification directory", ErrACPContractUnknown)
+	}
+	expected := make(map[string]*kiroACPServerState, len(servers))
+	for _, rawName := range servers {
+		name := strings.TrimSpace(rawName)
+		if name == "" {
+			return nil, "", fmt.Errorf("%w: planned MCP server name is empty", ErrACPContractUnknown)
+		}
+		if _, duplicate := expected[name]; duplicate {
+			return nil, "", fmt.Errorf("%w: duplicate planned MCP server identity %q", ErrACPContractUnknown, name)
+		}
+		expected[name] = &kiroACPServerState{}
+	}
+	if len(expected) == 0 {
+		return nil, "", fmt.Errorf("%w: no planned MCP servers", ErrACPContractUnknown)
+	}
+	if startupTimeout <= 0 {
+		return nil, "", fmt.Errorf("%w: ACP startup timeout must be positive", ErrACPContractUnknown)
+	}
+	return expected, absoluteCWD, nil
+}
+
+func interpretKiroACPRun(ctx context.Context, bounded context.Context, exchangeEntered bool, err error) error {
 	if err == nil {
 		if ctxErr := bounded.Err(); ctxErr != nil {
 			return errors.Join(shared.ErrRecognizedNegativeEvidence, ctxErr)
 		}
 		return nil
 	}
-	if exchangeEntered.Load() {
+	if exchangeEntered {
 		if !errors.Is(err, shared.ErrRecognizedNegativeEvidence) {
 			err = errors.Join(shared.ErrRecognizedNegativeEvidence, err)
 		}
-		// The phase-specific deadline belongs to the ACP exchange even when pipe
-		// closure is observed first. Preserve that cause instead of degrading a
-		// no-data timeout into an indistinguishable early EOF.
 		if boundedErr := bounded.Err(); boundedErr != nil && !errors.Is(err, boundedErr) {
 			err = errors.Join(err, boundedErr)
 		}
@@ -120,12 +124,11 @@ func verifyACPWithTimeout(ctx context.Context, runner ports.DuplexCommandRunner,
 	if ctxErr := ctx.Err(); ctxErr != nil {
 		return ctxErr
 	}
-	return fmt.Errorf("%w: %v", ErrACPContractUnknown, err)
+	return fmt.Errorf("%w: %w", ErrACPContractUnknown, err)
 }
 
 func exchangeKiroACP(stdin io.Writer, stdout io.Reader, cwd string, expected map[string]*kiroACPServerState) error {
-	_, ok := stdin.(io.Closer)
-	if !ok {
+	if _, ok := stdin.(io.Closer); !ok {
 		return fmt.Errorf("ACP stdin does not support close")
 	}
 	initialize := map[string]any{
@@ -139,145 +142,11 @@ func exchangeKiroACP(stdin io.Writer, stdout io.Reader, cwd string, expected map
 	if err := writeACPRecord(stdin, initialize); err != nil {
 		return fmt.Errorf("write initialize request: %w", err)
 	}
-
-	reader := bufio.NewReaderSize(stdout, kiroACPMaxLine+1)
-	initialized := false
-	sessionCreated := false
-	sessionID := ""
-	var negativeErr error
-	settling := false
-	totalBytes := 0
-	for record := 0; ; record++ {
-		line, err := readBoundedACPLine(reader, &totalBytes)
-		if err != nil {
-			if negativeErr != nil {
-				return negativeErr
-			}
-			if settling && errors.Is(err, os.ErrDeadlineExceeded) {
-				queued, eof, probeErr := queuedACPRealPipeEvidence(stdout)
-				if probeErr != nil {
-					return fmt.Errorf("inspect ACP pipe at settlement boundary: %w", probeErr)
-				}
-				if eof {
-					return fmt.Errorf("%w: ACP output reached EOF at the post-success settlement boundary", shared.ErrRecognizedNegativeEvidence)
-				}
-				if !queued {
-					return nil
-				}
-				deadlineWriter := stdout.(interface{ SetReadDeadline(time.Time) error })
-				if err := deadlineWriter.SetReadDeadline(time.Now().Add(kiroACPSettlement)); err != nil {
-					return fmt.Errorf("rearm ACP queued-evidence drain deadline: %w", err)
-				}
-				continue
-			}
-			if settling && errors.Is(err, errKiroACPEarlyExit) {
-				return fmt.Errorf("%w: ACP output reached EOF during post-success settlement", shared.ErrRecognizedNegativeEvidence)
-			}
-			if sessionCreated && !allKiroServersConnected(expected, sessionID) && errors.Is(err, errKiroACPEarlyExit) {
-				return fmt.Errorf("%w: not every planned MCP server reported connected", shared.ErrRecognizedNegativeEvidence)
-			}
-			return err
-		}
-		if record >= kiroACPMaxRecords {
-			return fmt.Errorf("ACP output exceeded its record bound")
-		}
-		message, err := decodeACPMessage(line)
-		if err != nil {
-			if negativeErr != nil {
-				return negativeErr
-			}
-			return err
-		}
-		if !initialized {
-			if err := validateInitializeResponse(message); err != nil {
-				return err
-			}
-			initialized = true
-			sessionRequest := map[string]any{
-				"jsonrpc": "2.0", "id": 1, "method": "session/new",
-				"params": map[string]any{"cwd": cwd, "mcpServers": []any{}},
-			}
-			if err := writeACPRecord(stdin, sessionRequest); err != nil {
-				return fmt.Errorf("write session/new request: %w", err)
-			}
-			continue
-		}
-
-		if _, hasID := message.document["id"]; hasID {
-			if sessionCreated || !acpIDEquals(message.document["id"], 1) {
-				if negativeErr != nil {
-					return negativeErr
-				}
-				return fmt.Errorf("ACP response has an unexpected or duplicate id")
-			}
-			result, ok := message.document["result"].(map[string]any)
-			_, hasError := message.document["error"]
-			if !ok || hasError {
-				if negativeErr != nil {
-					return negativeErr
-				}
-				return fmt.Errorf("session/new did not return a valid result")
-			}
-			var okSession bool
-			sessionID, okSession = result["sessionId"].(string)
-			if !okSession || strings.TrimSpace(sessionID) == "" {
-				if negativeErr != nil {
-					return negativeErr
-				}
-				return fmt.Errorf("session/new response is missing its session identity")
-			}
-			sessionCreated = true
-			for _, state := range expected {
-				if state.sessionID != "" && state.sessionID != sessionID {
-					return fmt.Errorf("%w: MCP status belongs to a different ACP session", shared.ErrRecognizedNegativeEvidence)
-				}
-			}
-		} else {
-			method, ok := message.document["method"].(string)
-			if !ok || strings.TrimSpace(method) == "" {
-				if negativeErr != nil {
-					return negativeErr
-				}
-				return fmt.Errorf("ACP notification is missing its method")
-			}
-			if method == "_kiro/mcp/status" {
-				if err := consumeKiroMCPStatus(message.document, expected); err != nil {
-					if errors.Is(err, shared.ErrRecognizedNegativeEvidence) {
-						if negativeErr == nil {
-							negativeErr = err
-						}
-					} else {
-						if negativeErr != nil {
-							return negativeErr
-						}
-						return err
-					}
-				}
-			}
-		}
-
-		if sessionCreated && negativeErr != nil {
-			return negativeErr
-		}
-		if sessionCreated && allKiroServersConnected(expected, sessionID) {
-			// Kiro ACP is intentionally long-lived. Keep stdin open while draining
-			// the bounded settlement window: closing it would manufacture EOF and
-			// can let the leader exit while a KAS descendant survives. A nil return
-			// after settlement causally requests the runner's planned tree shutdown.
-			if !settling {
-				deadlineWriter, ok := stdout.(interface{ SetReadDeadline(time.Time) error })
-				if !ok {
-					// Finite readers used by callers/tests still provide EOF as the
-					// completion boundary. Real process pipes always support deadlines.
-					continue
-				}
-				if err := deadlineWriter.SetReadDeadline(time.Now().Add(kiroACPSettlement)); err != nil {
-					return fmt.Errorf("arm ACP post-success settlement deadline: %w", err)
-				}
-				settling = true
-			}
-		}
+	session := &kiroACPSession{
+		stdin: stdin, stdout: stdout, cwd: cwd, expected: expected,
+		reader: bufio.NewReaderSize(stdout, kiroACPMaxLine+1),
 	}
+	return session.readLoop()
 }
 
 type acpMessage struct {

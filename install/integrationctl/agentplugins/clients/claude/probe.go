@@ -40,18 +40,18 @@ func PrepareActivationProbe(request domain.ActivationRequest) (ActivationProbe, 
 	}
 	targetAnchor := filepath.Clean(strings.TrimSpace(request.Plan.TargetAnchor))
 	if !filepath.IsAbs(targetAnchor) || targetAnchor != configRoot {
-		return ActivationProbe{}, fmt.Errorf("Claude Code delivery anchor must match the configured root")
+		return ActivationProbe{}, fmt.Errorf("the Claude Code delivery anchor must match the configured root")
 	}
 	targetRoot := filepath.Clean(strings.TrimSpace(request.Plan.TargetRoot))
 	if targetRoot != filepath.Join(configRoot, "skills") {
-		return ActivationProbe{}, fmt.Errorf("Claude Code delivery root must be the exact configured skills root")
+		return ActivationProbe{}, fmt.Errorf("the Claude Code delivery root must be the exact configured skills root")
 	}
 	activePath := filepath.Clean(strings.TrimSpace(request.Plan.ActivePath))
 	if !filepath.IsAbs(activePath) || filepath.Dir(activePath) != targetRoot {
-		return ActivationProbe{}, fmt.Errorf("Claude Code managed plugin path is not an exact child of the configured skills root")
+		return ActivationProbe{}, fmt.Errorf("the Claude Code managed plugin path is not an exact child of the configured skills root")
 	}
 	if deliveryPath := strings.TrimSpace(request.Delivery.ActivePath); deliveryPath != "" && filepath.Clean(deliveryPath) != activePath {
-		return ActivationProbe{}, fmt.Errorf("Claude Code activation path does not match the preflighted delivery path")
+		return ActivationProbe{}, fmt.Errorf("the Claude Code activation path does not match the preflighted delivery path")
 	}
 	command, err := ListCommand(request.BackendExecutable, configRoot, activePath)
 	if err != nil {
@@ -62,7 +62,7 @@ func PrepareActivationProbe(request domain.ActivationRequest) (ActivationProbe, 
 
 func RunListCommand(ctx context.Context, runner ports.CommandRunner, command legacyports.Command) (legacyports.CommandResult, error) {
 	if runner == nil {
-		return legacyports.CommandResult{}, fmt.Errorf("Claude Code CLI runner is unavailable")
+		return legacyports.CommandResult{}, fmt.Errorf("the Claude Code CLI runner is unavailable")
 	}
 	bounded, cancel := context.WithTimeout(ctx, claudeProbeTimeout)
 	defer cancel()
@@ -75,7 +75,7 @@ func RunListCommand(ctx context.Context, runner ports.CommandRunner, command leg
 func ListCommand(executable, configRoot, activePath string) (legacyports.Command, error) {
 	executable = strings.TrimSpace(executable)
 	if executable == "" {
-		return legacyports.Command{}, fmt.Errorf("Claude Code executable is required")
+		return legacyports.Command{}, fmt.Errorf("the Claude Code executable is required")
 	}
 	configRoot = strings.TrimSpace(configRoot)
 	if configRoot == "" || !filepath.IsAbs(configRoot) {
@@ -84,7 +84,7 @@ func ListCommand(executable, configRoot, activePath string) (legacyports.Command
 	configRoot = filepath.Clean(configRoot)
 	activePath = filepath.Clean(strings.TrimSpace(activePath))
 	if !filepath.IsAbs(activePath) || filepath.Dir(activePath) != filepath.Join(configRoot, "skills") {
-		return legacyports.Command{}, fmt.Errorf("Claude Code managed plugin path is not an exact child of the configured skills root")
+		return legacyports.Command{}, fmt.Errorf("the Claude Code managed plugin path is not an exact child of the configured skills root")
 	}
 	environment, home, err := BoundedProbeEnvironment()
 	if err != nil {
@@ -96,7 +96,7 @@ func ListCommand(executable, configRoot, activePath string) (legacyports.Command
 		"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1",
 	)
 	if environmentSize(environment) > claudeProbeMaxEnvironmentTotal {
-		return legacyports.Command{}, fmt.Errorf("Claude Code probe environment exceeds the bounded size")
+		return legacyports.Command{}, fmt.Errorf("the Claude Code probe environment exceeds the bounded size")
 	}
 	return legacyports.Command{
 		Argv: []string{executable, "plugin", "list", "--json"},
@@ -118,10 +118,10 @@ func BoundedProbeEnvironmentFrom(ambient []string) ([]string, string, error) {
 		}
 		canonical := strings.ToUpper(name)
 		if _, duplicate := values[canonical]; duplicate {
-			return nil, "", fmt.Errorf("Claude Code probe environment contains duplicate %s", name)
+			return nil, "", fmt.Errorf("the Claude Code probe environment contains duplicate %s", name)
 		}
 		if len(value) > claudeProbeMaxEnvironmentValue || strings.ContainsRune(value, '\x00') {
-			return nil, "", fmt.Errorf("Claude Code probe environment value %s is invalid or too large", name)
+			return nil, "", fmt.Errorf("the Claude Code probe environment value %s is invalid or too large", name)
 		}
 		values[canonical] = value
 	}
@@ -140,14 +140,14 @@ func BoundedProbeEnvironmentFrom(ambient []string) ([]string, string, error) {
 	}
 	home := strings.TrimSpace(values[homeKey])
 	if home == "" || !filepath.IsAbs(home) {
-		return nil, "", fmt.Errorf("Claude Code probe requires an absolute real %s", homeKey)
+		return nil, "", fmt.Errorf("the Claude Code probe requires an absolute real %s", homeKey)
 	}
 	info, err := os.Lstat(home)
 	if err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
-		return nil, "", fmt.Errorf("Claude Code probe requires a real %s directory", homeKey)
+		return nil, "", fmt.Errorf("the Claude Code probe requires a real %s directory", homeKey)
 	}
 	if environmentSize(environment) > claudeProbeMaxEnvironmentTotal {
-		return nil, "", fmt.Errorf("Claude Code probe environment exceeds the bounded size")
+		return nil, "", fmt.Errorf("the Claude Code probe environment exceeds the bounded size")
 	}
 	return environment, filepath.Clean(home), nil
 }
