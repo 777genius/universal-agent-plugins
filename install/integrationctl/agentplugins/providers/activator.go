@@ -427,7 +427,7 @@ func (activator Activator) Activate(ctx context.Context, request domain.Activati
 		if !activator.AutomaticallyActivates(request) {
 			outcome.Activation = domain.ActivationManual
 			outcome.UserActions = append(outcome.UserActions, "install a current Kiro CLI and rerun add to register the package's skills and MCP servers")
-			outcome.LocalActions = append(outcome.LocalActions, fmt.Sprintf("Kiro native installation requires a writable config root and, for MCP packages, a complete Kiro CLI distribution at %s", request.Delivery.ActivePath))
+			outcome.LocalActions = append(outcome.LocalActions, kiroManualCLIAction(request))
 			return outcome, nil
 		}
 		if request.VerifyOnly {
@@ -509,19 +509,14 @@ func (activator Activator) Activate(ctx context.Context, request domain.Activati
 			if err := verifyWindsurfNativeObjects(request.Client.ConfigRoot, request.Delivery.ActivePath, request.Delivery.NativeObjects, false); err != nil {
 				return shared.FailedActivation(outcome, "repair the managed Windsurf MCP configuration", err)
 			}
-			outcome.Activation = domain.ActivationActive
-			outcome.Verification = domain.VerificationInstalled
-			return outcome, nil
+			return windsurfActivated(outcome, request), nil
 		}
 		if err := activateWindsurfNativeWithKernel(ctx, request, activator.nativeConfigKernel()); err != nil {
 			if !committedNativeCleanup(&outcome, err) {
 				return shared.FailedActivation(outcome, "retry the managed Windsurf MCP installation", err)
 			}
 		}
-		outcome.Activation = domain.ActivationActive
-		outcome.Verification = domain.VerificationInstalled
-		outcome.UserActions = append(outcome.UserActions, "refresh MCP servers in Windsurf before first use")
-		return outcome, nil
+		return windsurfActivated(outcome, request), nil
 	case domain.ClientCopilot, domain.ClientVSCode:
 		if strings.TrimSpace(request.BackendExecutable) == "" || activator.Runner == nil {
 			outcome.Activation = domain.ActivationManual
@@ -1101,6 +1096,24 @@ func activationObservable(request domain.ActivationRequest, runner CommandRunner
 	default:
 		return false
 	}
+}
+
+func kiroManualCLIAction(request domain.ActivationRequest) string {
+	cli := strings.TrimSpace(request.BackendExecutable)
+	if cli == "" {
+		return fmt.Sprintf("Kiro native installation requires a writable config root and, for MCP packages, a trusted kiro-cli or kiro executable. Prepared package: %s", request.Delivery.ActivePath)
+	}
+	return fmt.Sprintf("Kiro native installation requires a writable config root and, for MCP packages, a trusted Kiro CLI at %s. Prepared package: %s", cli, request.Delivery.ActivePath)
+}
+
+func windsurfActivated(outcome domain.ActivationOutcome, request domain.ActivationRequest) domain.ActivationOutcome {
+	outcome.Activation = domain.ActivationActive
+	outcome.Verification = domain.VerificationInstalled
+	outcome.UserActions = append(outcome.UserActions, "refresh MCP servers in Windsurf before first use")
+	if shared.ComponentKindPresent(request.Plan.Components, domain.ComponentSkill) {
+		outcome.UserActions = shared.AppendUnique(outcome.UserActions, "Windsurf skills remain in the prepared package and are not claimed as activated")
+	}
+	return outcome
 }
 
 func manualCodexVerification(outcome domain.ActivationOutcome, request domain.ActivationRequest) domain.ActivationOutcome {

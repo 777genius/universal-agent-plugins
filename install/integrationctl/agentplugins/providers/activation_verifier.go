@@ -23,7 +23,7 @@ func (Activator) VerifierAvailable(client domain.DetectedClient, plan domain.Del
 	case domain.ClientCodex, domain.ClientClaude, domain.ClientCopilot, domain.ClientVSCode:
 		return true
 	case domain.ClientKiro:
-		if !strings.Contains(strings.ToLower(backendExecutable), "kiro") || len(plan.Components) == 0 {
+		if !isKiroCLI(backendExecutable) || len(plan.Components) == 0 {
 			return false
 		}
 		for _, component := range plan.Components {

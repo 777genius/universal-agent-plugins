@@ -10,8 +10,11 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/claude"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/cursor"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/vscode"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
 	legacyports "github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
@@ -39,6 +42,17 @@ func TestInstallSlotMatrix(t *testing.T) {
 	t.Run("codex_verify_only_is_list_only", testCodexVerifyOnlyIsListOnly)
 	t.Run("codex_activate_failures", testCodexActivateFailures)
 	t.Run("codex_projection", testCodexProjectionMatrix)
+	t.Run("remaining_targets", testRemainingClientTargets)
+	t.Run("vscode_uses_copilot_registry", testVSCodeUsesCopilotRegistry)
+	t.Run("remaining_activate", testRemainingClientActivateMatrix)
+	t.Run("copilot_list_has_no_json_flag", testCopilotListHasNoJSONFlag)
+	t.Run("gemini_skills_not_extensions", testGeminiSkillsSlotIgnoresExtensions)
+	t.Run("chatgpt_remote_registry_is_indeterminate", testChatGPTRemoteRegistryIndeterminate)
+	t.Run("cline_opencode_defer_native_occupancy", testClineOpenCodeDeferNativeOccupancy)
+	t.Run("windsurf_mcp_active_keeps_skills_prepared", testWindsurfMCPActiveKeepsSkillsPrepared)
+	t.Run("copilot_live_path_is_lexical", testCopilotLivePathIsLexical)
+	t.Run("kiro_verifier_rejects_chat_binary", testKiroVerifierRejectsChatBinary)
+	t.Run("remaining_projection", testRemainingClientProjectionMatrix)
 }
 
 func testClaudeTargetIsSkillsDir(t *testing.T) {
@@ -684,6 +698,411 @@ func testCodexProjectionMatrix(t *testing.T) {
 	if marketplace["name"] != shared.ManagedMarketplaceName(plan.PhysicalArtifactID) {
 		t.Fatalf("Codex marketplace = %+v", marketplace)
 	}
+}
+
+func testRemainingClientTargets(t *testing.T) {
+	t.Helper()
+	managed := filepath.Join(t.TempDir(), "managed")
+	config := filepath.Join(t.TempDir(), "config")
+	t.Run("cursor_target_is_plugins_local", func(t *testing.T) {
+		anchor, root, err := (&cursor.Adapter{}).TargetRoot(
+			domain.DetectedClient{ClientID: domain.ClientCursor, ConfigRoot: config},
+			domain.PackageNative,
+			managed,
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if anchor != config || root != filepath.Join(config, "plugins", "local") {
+			t.Fatalf("Cursor target = %q %q", anchor, root)
+		}
+		if strings.Contains(root, string(filepath.Separator)+"skills") || strings.Contains(root, "clients"+string(filepath.Separator)+"cursor") {
+			t.Fatalf("Cursor target left the in-place local plugin slot: %q", root)
+		}
+	})
+	for _, client := range []domain.ClientID{
+		domain.ClientCopilot, domain.ClientVSCode, domain.ClientGemini, domain.ClientOpenCode,
+		domain.ClientCline, domain.ClientWindsurf, domain.ClientKiro, domain.ClientChatGPT,
+	} {
+		client := client
+		t.Run(string(client)+"_target_is_managed", func(t *testing.T) {
+			anchor, root, err := shared.ManagedTargetRoot(
+				domain.DetectedClient{ClientID: client, ConfigRoot: config},
+				domain.PackageNative,
+				managed,
+			)
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := filepath.Join(managed, "clients", string(client))
+			if anchor != managed || root != want {
+				t.Fatalf("%s target = %q %q, want %q %q", client, anchor, root, managed, want)
+			}
+			if strings.Contains(root, string(filepath.Separator)+"skills") || strings.Contains(root, "plugins"+string(filepath.Separator)+"local") {
+				t.Fatalf("%s target leaked into an in-place discovery dir: %q", client, root)
+			}
+		})
+	}
+	chatgpt, ok := domain.ClientDefinitionFor(domain.ClientChatGPT)
+	if !ok || !chatgpt.PlansWithoutHostPresence {
+		t.Fatalf("ChatGPT must plan without host presence: %+v", chatgpt)
+	}
+}
+
+func testVSCodeUsesCopilotRegistry(t *testing.T) {
+	t.Helper()
+	copilotRoot := filepath.Join(t.TempDir(), ".copilot")
+	vscodeRoot := filepath.Join(t.TempDir(), ".vscode")
+	root, executable := (&vscode.Adapter{}).NativeRegistry(clients.PlanInput{
+		Client: domain.DetectedClient{ClientID: domain.ClientVSCode, ConfigRoot: vscodeRoot, ExecutablePath: "/bin/code"},
+		Detected: map[domain.ClientID]domain.DetectedClient{
+			domain.ClientCopilot: {ClientID: domain.ClientCopilot, ConfigRoot: copilotRoot, ExecutablePath: "/bin/copilot"},
+		},
+	})
+	if root != copilotRoot || executable != "/bin/copilot" {
+		t.Fatalf("VS Code native registry = %q %q", root, executable)
+	}
+}
+
+func testRemainingClientActivateMatrix(t *testing.T) {
+	t.Helper()
+	nativeSkill := []domain.ComponentDecision{{Kind: domain.ComponentSkill, Name: "demo", Support: domain.SupportNative}}
+	t.Run("cursor_and_chatgpt_are_manual_with_no_cli", func(t *testing.T) {
+		for _, client := range []domain.ClientID{domain.ClientCursor, domain.ClientChatGPT} {
+			client := client
+			t.Run(string(client), func(t *testing.T) {
+				runner := &recordingRunner{}
+				request := activationRequest(t, client)
+				request.BackendExecutable = "/test/bin/" + string(client)
+				outcome, err := (Activator{Runner: runner}).Activate(context.Background(), request)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if outcome.Activation != domain.ActivationManual {
+					t.Fatalf("activation=%s", outcome.Activation)
+				}
+				if got := commandArgv(runner.commands); len(got) != 0 {
+					t.Fatalf("argv = %#v", got)
+				}
+			})
+		}
+	})
+	t.Run("native_config_clients_never_call_plugin_clis", func(t *testing.T) {
+		for _, client := range []domain.ClientID{domain.ClientGemini, domain.ClientOpenCode, domain.ClientCline} {
+			client := client
+			t.Run(string(client), func(t *testing.T) {
+				runner := &recordingRunner{}
+				request := activationRequest(t, client)
+				request.VerifyOnly = true
+				request.Plan.Components = nativeSkill
+				request.BackendExecutable = "/test/bin/" + string(client)
+				outcome, err := (Activator{Runner: runner}).Activate(context.Background(), request)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if outcome.Activation != domain.ActivationActive {
+					t.Fatalf("activation=%s", outcome.Activation)
+				}
+				got := commandArgv(runner.commands)
+				if len(got) != 0 {
+					t.Fatalf("argv = %#v", got)
+				}
+				for _, argv := range got {
+					joined := strings.Join(argv, " ")
+					if strings.Contains(joined, "plugin") || strings.Contains(joined, "extensions") || strings.Contains(joined, "skills") {
+						t.Fatalf("native-config client invoked a competing CLI: %#v", argv)
+					}
+				}
+			})
+		}
+	})
+	t.Run("copilot_activate_is_marketplace_install_and_list", func(t *testing.T) {
+		request := activationRequest(t, domain.ClientCopilot)
+		request.BackendExecutable = "/test/bin/copilot"
+		spec := "demo@" + shared.ManagedMarketplaceName(request.Plan.PhysicalArtifactID)
+		runner := &recordingRunner{run: func(command legacyports.Command) legacyports.CommandResult {
+			if strings.HasSuffix(strings.Join(command.Argv, " "), "plugin list") {
+				return legacyports.CommandResult{Stdout: []byte("Installed plugins:\n  • " + spec + " (v1.0.0)")}
+			}
+			return legacyports.CommandResult{}
+		}}
+		if _, err := (Activator{Runner: runner}).Activate(context.Background(), request); err != nil {
+			t.Fatal(err)
+		}
+		got := commandArgv(runner.commands)
+		want := [][]string{
+			{"/test/bin/copilot", "plugin", "marketplace", "add", request.Delivery.ActivePath},
+			{"/test/bin/copilot", "plugin", "install", spec},
+			{"/test/bin/copilot", "plugin", "list"},
+		}
+		if !reflect.DeepEqual(got, want) {
+			t.Fatalf("copilot argv = %#v, want %#v", got, want)
+		}
+		for _, argv := range got {
+			joined := strings.Join(argv, " ")
+			if strings.Contains(joined, "--json") || strings.Contains(joined, "marketplace upgrade") {
+				t.Fatalf("copilot invoked a Codex/Claude flag: %#v", argv)
+			}
+		}
+	})
+	t.Run("vscode_activate_uses_copilot_backend_executable", func(t *testing.T) {
+		request := activationRequest(t, domain.ClientVSCode)
+		request.BackendExecutable = "/test/bin/copilot"
+		spec := "demo@" + shared.ManagedMarketplaceName(request.Plan.PhysicalArtifactID)
+		runner := &recordingRunner{run: func(command legacyports.Command) legacyports.CommandResult {
+			if strings.HasSuffix(strings.Join(command.Argv, " "), "plugin list") {
+				return legacyports.CommandResult{Stdout: []byte("Installed plugins:\n  • " + spec + " (v1.0.0)")}
+			}
+			return legacyports.CommandResult{}
+		}}
+		if _, err := (Activator{Runner: runner}).Activate(context.Background(), request); err != nil {
+			t.Fatal(err)
+		}
+		got := commandArgv(runner.commands)
+		if len(got) == 0 || got[0][0] != "/test/bin/copilot" {
+			t.Fatalf("vscode argv = %#v", got)
+		}
+		for _, argv := range got {
+			if argv[0] == "/bin/code" || strings.Contains(strings.Join(argv, " "), "--json") {
+				t.Fatalf("VS Code used the code CLI or a JSON list flag: %#v", argv)
+			}
+		}
+	})
+	t.Run("kiro_skills_only_does_not_call_acp", func(t *testing.T) {
+		runner := &recordingRunner{}
+		request := activationRequest(t, domain.ClientKiro)
+		request.VerifyOnly = true
+		request.BackendExecutable = "/test/bin/kiro-cli"
+		request.Plan.Components = nativeSkill
+		if _, err := (Activator{Runner: runner}).Activate(context.Background(), request); err != nil {
+			t.Fatal(err)
+		}
+		if got := commandArgv(runner.commands); len(got) != 0 {
+			t.Fatalf("kiro skills argv = %#v", got)
+		}
+	})
+	t.Run("kiro_mcp_verify_is_acp_v3", func(t *testing.T) {
+		request := activationRequest(t, domain.ClientKiro)
+		request.VerifyOnly = true
+		request.BackendExecutable = "/test/bin/kiro-cli"
+		request.Plan.Components = []domain.ComponentDecision{{Kind: domain.ComponentMCPServer, Name: "alpha", Support: domain.SupportNative}}
+		runner := &recordingRunner{
+			duplexOutput: acpResponse(0, `{"protocolVersion":1}`) + acpResponse(1, `{"sessionId":"s"}`) +
+				acpStatus("s", "alpha", "connected", `[{"name":"a","disabled":false}]`),
+			duplexLive: true,
+		}
+		if _, err := (Activator{Runner: runner}).Activate(context.Background(), request); err != nil {
+			t.Fatal(err)
+		}
+		got := commandArgv(runner.commands)
+		want := [][]string{{"/test/bin/kiro-cli", "acp", "--agent-engine", "v3", "--auth-method", "cli"}}
+		if !reflect.DeepEqual(got, want) {
+			t.Fatalf("kiro argv = %#v, want %#v", got, want)
+		}
+		for _, argv := range got {
+			joined := strings.Join(argv, " ")
+			if strings.Contains(joined, "plugin") || strings.Contains(joined, "mcp add") {
+				t.Fatalf("Kiro invoked a plugin/mcp CLI: %#v", argv)
+			}
+		}
+	})
+	if !isKiroCLI("/opt/Kiro CLI.app/Contents/MacOS/kiro-cli") || !isKiroCLI("kiro") || isKiroCLI("kiro-cli-chat") {
+		t.Fatal("Kiro CLI identity drifted")
+	}
+}
+
+func testCopilotListHasNoJSONFlag(t *testing.T) {
+	t.Helper()
+	plan := identityPlan(filepath.Join(t.TempDir(), "copilot"))
+	plan.NativeRegistryExecutable = "/test/bin/copilot"
+	runner := &identityRunner{result: legacyports.CommandResult{
+		Stdout: []byte("No plugins installed.\n\nUse 'copilot plugin install <source>' to install a plugin."),
+	}}
+	observer := NativeIdentityObserver{Stager: acceptingPackageVerifier{}, Runner: runner}
+	observation, err := observer.ObserveNativeIdentity(context.Background(), domain.DetectedClient{ClientID: domain.ClientCopilot}, plan, nil)
+	if err != nil || observation.State != domain.NativeIdentityAbsent {
+		t.Fatalf("observation=%+v err=%v", observation, err)
+	}
+	if len(runner.commands) != 1 || !reflect.DeepEqual(runner.commands[0], []string{"/test/bin/copilot", "plugin", "list"}) {
+		t.Fatalf("copilot identity argv = %#v", runner.commands)
+	}
+}
+
+func testGeminiSkillsSlotIgnoresExtensions(t *testing.T) {
+	t.Helper()
+	config := filepath.Join(t.TempDir(), ".gemini")
+	plan := identityPlan(filepath.Join(t.TempDir(), "managed", "clients", "gemini"))
+	plan.NativeRegistryRoot = config
+	plan.Components = []domain.ComponentDecision{{Kind: domain.ComponentSkill, Name: "demo", Support: domain.SupportNative}}
+	writeIdentityFile(t, filepath.Join(config, "extensions", "demo", "gemini-extension.json"), `{"name":"demo","version":"0.0.1"}`)
+	observer := NativeIdentityObserver{Stager: acceptingPackageVerifier{}}
+	observation, err := observer.ObserveNativeIdentity(context.Background(), domain.DetectedClient{ClientID: domain.ClientGemini, ConfigRoot: config}, plan, nil)
+	if err != nil || observation.State != domain.NativeIdentityAbsent {
+		t.Fatalf("extension leftover occupied the skills slot: observation=%+v err=%v", observation, err)
+	}
+
+	if err := os.MkdirAll(filepath.Join(config, "skills", "demo"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	observation, err = observer.ObserveNativeIdentity(context.Background(), domain.DetectedClient{ClientID: domain.ClientGemini, ConfigRoot: config}, plan, nil)
+	if err != nil || observation.State != domain.NativeIdentityUnmanaged {
+		t.Fatalf("unowned Gemini skill occupancy = %+v err=%v", observation, err)
+	}
+}
+
+func testChatGPTRemoteRegistryIndeterminate(t *testing.T) {
+	t.Helper()
+	plan := identityPlan(filepath.Join(t.TempDir(), "chatgpt"))
+	observation, err := (NativeIdentityObserver{}).ObserveNativeIdentity(
+		context.Background(), domain.DetectedClient{ClientID: domain.ClientChatGPT}, plan, nil,
+	)
+	if err != nil || observation.State != domain.NativeIdentityIndeterminate {
+		t.Fatalf("ChatGPT without a local receipt must stay indeterminate: observation=%+v err=%v", observation, err)
+	}
+}
+
+func testClineOpenCodeDeferNativeOccupancy(t *testing.T) {
+	t.Helper()
+	for _, client := range []domain.ClientID{domain.ClientCline, domain.ClientOpenCode} {
+		client := client
+		t.Run(string(client), func(t *testing.T) {
+			config := filepath.Join(t.TempDir(), "."+string(client))
+			writeIdentityFile(t, filepath.Join(config, "skills", "demo", "SKILL.md"), "---\nname: demo\ndescription: foreign\n---\n")
+			plan := identityPlan(filepath.Join(t.TempDir(), "managed", "clients", string(client)))
+			plan.NativeRegistryRoot = config
+			plan.Components = []domain.ComponentDecision{{Kind: domain.ComponentSkill, Name: "demo", Support: domain.SupportNative}}
+			observation, err := (NativeIdentityObserver{}).ObserveNativeIdentity(
+				context.Background(), domain.DetectedClient{ClientID: client, ConfigRoot: config}, plan, nil,
+			)
+			if err != nil || observation.State != domain.NativeIdentityAbsent {
+				t.Fatalf("%s deferred occupancy = %+v err=%v", client, observation, err)
+			}
+		})
+	}
+}
+
+func testWindsurfMCPActiveKeepsSkillsPrepared(t *testing.T) {
+	t.Helper()
+	configRoot := filepath.Join(t.TempDir(), ".codeium", "windsurf")
+	if err := os.MkdirAll(configRoot, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	delivery := stagedWindsurfDelivery(t, configRoot, "skills-caveat", "windsurf-skills")
+	request := windsurfActivationRequest(delivery, configRoot, nil)
+	request.Plan.Components = append(request.Plan.Components, domain.ComponentDecision{Kind: domain.ComponentSkill, Name: "good", Support: domain.SupportPrepared})
+	outcome, err := (Activator{}).Activate(context.Background(), request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if outcome.Activation != domain.ActivationActive {
+		t.Fatalf("activation=%s", outcome.Activation)
+	}
+	joined := strings.Join(outcome.UserActions, "\n")
+	if !strings.Contains(joined, "not claimed as activated") {
+		t.Fatalf("Windsurf MCP active overclaimed skills: %v", outcome.UserActions)
+	}
+}
+
+func testCopilotLivePathIsLexical(t *testing.T) {
+	t.Helper()
+	root := t.TempDir()
+	resolved, err := filepath.EvalSymlinks(root)
+	if err != nil || resolved == root {
+		t.Skip("filesystem has no lexical alias")
+	}
+	spec := "demo@agentplugins-8f97b00da374"
+	body := []byte(copilotLiveHeader + "\n  • " + spec + " (v1.0.0) (enabled)\n      from " + resolved + "\n")
+	status, recognized := copilotLivePluginStatus(body, spec, "1.0.0", root)
+	if !recognized || status != copilotStatusUnknown {
+		t.Fatalf("Copilot live path used SameFile matching: status=%d recognized=%v", status, recognized)
+	}
+}
+
+func testKiroVerifierRejectsChatBinary(t *testing.T) {
+	t.Helper()
+	client := domain.DetectedClient{ClientID: domain.ClientKiro}
+	plan := domain.DeliveryPlan{Components: []domain.ComponentDecision{{Kind: domain.ComponentSkill, Name: "demo", Support: domain.SupportNative}}}
+	if !(Activator{}).VerifierAvailable(client, plan, "/test/bin/kiro-cli") || !(Activator{}).VerifierAvailable(client, plan, "/test/bin/kiro") {
+		t.Fatal("trusted Kiro CLI was rejected as a verifier")
+	}
+	if (Activator{}).VerifierAvailable(client, plan, "/test/bin/kiro-cli-chat") {
+		t.Fatal("kiro-cli-chat must not count as a Kiro plugin verifier")
+	}
+}
+
+func testRemainingClientProjectionMatrix(t *testing.T) {
+	t.Helper()
+	t.Run("cursor_stages_beside_plugins_local", func(t *testing.T) {
+		plan := stagingPlan(t, domain.ClientCursor, domain.PackageNative)
+		delivery, err := (Stager{}).Stage(context.Background(), stagingEnvelope(t), plan, "matrix-cursor", domain.CompatibilityHints{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if filepath.Dir(delivery.StagingPath) == plan.TargetRoot {
+			t.Fatalf("Cursor staging leaked into plugins/local: %q", delivery.StagingPath)
+		}
+		if filepath.Dir(delivery.StagingPath) != filepath.Dir(plan.TargetRoot) {
+			t.Fatalf("Cursor staging = %q, want beside %q", delivery.StagingPath, plan.TargetRoot)
+		}
+		if _, err := os.Stat(filepath.Join(delivery.StagingPath, ".cursor-plugin", "plugin.json")); err != nil {
+			t.Fatal(err)
+		}
+		assertMissing(t, filepath.Join(delivery.StagingPath, ".agents", "plugins", "marketplace.json"))
+	})
+	t.Run("copilot_marketplace_not_skills_dir", func(t *testing.T) {
+		plan := stagingPlan(t, domain.ClientCopilot, domain.PackageNative)
+		delivery, err := (Stager{}).Stage(context.Background(), stagingEnvelope(t), plan, "matrix-copilot", domain.CompatibilityHints{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if filepath.Dir(delivery.StagingPath) != plan.TargetRoot {
+			t.Fatalf("Copilot staging = %q", delivery.StagingPath)
+		}
+		marketplace := readObject(t, filepath.Join(delivery.StagingPath, ".github", "plugin", "marketplace.json"))
+		if marketplace["name"] != shared.ManagedMarketplaceName(plan.PhysicalArtifactID) {
+			t.Fatalf("Copilot marketplace = %+v", marketplace)
+		}
+		assertMissing(t, filepath.Join(delivery.StagingPath, ".claude-plugin", "plugin.json"))
+	})
+	t.Run("chatgpt_marketplace_is_manual_prepared", func(t *testing.T) {
+		plan := stagingPlan(t, domain.ClientChatGPT, domain.PackageProjection)
+		delivery, err := (Stager{}).Stage(context.Background(), stagingEnvelope(t), plan, "matrix-chatgpt", domain.CompatibilityHints{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		marketplace := readObject(t, filepath.Join(delivery.StagingPath, ".agents", "plugins", "marketplace.json"))
+		if marketplace["name"] != shared.ManagedMarketplaceName(plan.PhysicalArtifactID) {
+			t.Fatalf("ChatGPT marketplace = %+v", marketplace)
+		}
+		if _, err := os.Stat(filepath.Join(delivery.StagingPath, ".codex-plugin", "plugin.json")); err != nil {
+			t.Fatal(err)
+		}
+	})
+	t.Run("gemini_descriptor_not_extension_manifest", func(t *testing.T) {
+		plan := stagingPlan(t, domain.ClientGemini, domain.PackageNative)
+		plan.NativeRegistryRoot = filepath.Join(t.TempDir(), ".gemini")
+		delivery, err := (Stager{}).Stage(context.Background(), stagingEnvelope(t), plan, "matrix-gemini", domain.CompatibilityHints{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := os.Stat(filepath.Join(delivery.StagingPath, geminiDescriptorName)); err != nil {
+			t.Fatal(err)
+		}
+		assertMissing(t, filepath.Join(delivery.StagingPath, "gemini-extension.json"))
+		assertMissing(t, filepath.Join(delivery.StagingPath, ".agents", "plugins", "marketplace.json"))
+	})
+	t.Run("opencode_projection_not_npm_plugin", func(t *testing.T) {
+		plan := stagingPlan(t, domain.ClientOpenCode, domain.PackageNative)
+		plan.NativeRegistryRoot = filepath.Join(t.TempDir(), "opencode")
+		delivery, err := (Stager{}).Stage(context.Background(), stagingEnvelope(t), plan, "matrix-opencode", domain.CompatibilityHints{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := os.Stat(filepath.Join(delivery.StagingPath, openCodeProjectionFile)); err != nil {
+			t.Fatal(err)
+		}
+		assertMissing(t, filepath.Join(delivery.StagingPath, ".agents", "plugins", "marketplace.json"))
+	})
 }
 
 func claudeActivation(t *testing.T, _ string) (domain.ActivationRequest, *recordingRunner) {
