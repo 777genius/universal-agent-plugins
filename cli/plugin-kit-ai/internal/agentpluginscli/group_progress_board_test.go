@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/777genius/plugin-kit-ai/cli/internal/terminaltheme"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/usecase"
 )
@@ -37,13 +38,13 @@ func TestGroupProgressBoardRewritesEveryClient(t *testing.T) {
 		{ClientID: domain.ClientCursor, DisplayName: "Cursor"},
 	}
 	board := newGroupProgressBoard(&stderr, selected, true)
-	if got := stderr.String(); !strings.Contains(got, "Claude Code") || !strings.Contains(got, "queued") {
+	if got := stderr.String(); !strings.Contains(got, "Claude Code") || !strings.Contains(got, "copying") || !strings.Contains(got, "copied") || !strings.Contains(got, "…") || !strings.Contains(got, " → ") {
 		t.Fatalf("initial board = %q", got)
 	}
 	board.set(domain.ClientClaude, groupProgressActivating)
-	board.set(domain.ClientCodex, groupProgressPrepared)
+	board.set(domain.ClientCodex, groupProgressCopied)
 	got := stderr.String()
-	if !strings.Contains(got, "activating") || !strings.Contains(got, "prepared") || !strings.Contains(got, "\033[") {
+	if !strings.Contains(got, "installing") || !strings.Contains(got, "copied") || !strings.Contains(got, "\033[") {
 		t.Fatalf("live board did not rewrite in place: %q", got)
 	}
 	board.finish()
@@ -71,7 +72,7 @@ func TestGroupProgressBoardDecoratesStageAndActivate(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := stderr.String()
-	if !strings.Contains(got, "staging") || !strings.Contains(got, "prepared") || !strings.Contains(got, "activating") || !strings.Contains(got, "done") {
+	if !strings.Contains(got, "copying") || !strings.Contains(got, "copied") || !strings.Contains(got, "installing") || !strings.Contains(got, "done") {
 		t.Fatalf("decorated progress = %q", got)
 	}
 	if stager.calls != 1 || activator.calls != 1 {
@@ -89,6 +90,34 @@ func TestGroupProgressBoardMarksFailedActivate(t *testing.T) {
 	})
 	if err == nil || !strings.Contains(stderr.String(), "failed") {
 		t.Fatalf("failed activate = err %v board %q", err, stderr.String())
+	}
+}
+
+func TestProgressPipelineChangesStepColors(t *testing.T) {
+	t.Parallel()
+	theme := terminaltheme.Theme{Enabled: true}
+	queued := progressPipeline(theme, groupProgressRow{step: groupProgressQueued})
+	if !strings.Contains(queued, "copying") || !strings.Contains(queued, "copied") || !strings.Contains(queued, "…") || strings.Contains(queued, "installing") || strings.Contains(queued, "done") {
+		t.Fatalf("queued pipeline = %q", queued)
+	}
+	installing := progressPipeline(theme, groupProgressRow{step: groupProgressActivating})
+	if !strings.Contains(installing, "installing") || strings.Contains(installing, "…") {
+		t.Fatalf("installing pipeline = %q", installing)
+	}
+	done := progressPipeline(theme, groupProgressRow{step: groupProgressDone})
+	if !strings.Contains(done, "done") {
+		t.Fatalf("done pipeline = %q", done)
+	}
+	failed := progressPipeline(theme, groupProgressRow{step: groupProgressActivating, failed: true})
+	if !strings.Contains(failed, "failed") || strings.Contains(failed, "installing") {
+		t.Fatalf("failed pipeline = %q", failed)
+	}
+	current := progressToken(theme, "copying", markCurrent)
+	complete := progressToken(theme, "copying", markDone)
+	pending := progressToken(theme, "copying", markPending)
+	errored := progressToken(theme, "copying", markFailed)
+	if current == complete || complete == pending || current == pending || errored == current {
+		t.Fatalf("step colors did not change: current=%q done=%q pending=%q failed=%q", current, complete, pending, errored)
 	}
 }
 

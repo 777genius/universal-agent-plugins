@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -3082,16 +3083,19 @@ type cliObservedActivator struct {
 }
 
 type failSecondCLIGroupActivator struct {
+	mu    sync.Mutex
 	calls int
 }
 
-func (activator *failSecondCLIGroupActivator) Activate(context.Context, domain.ActivationRequest) (domain.ActivationOutcome, error) {
+func (activator *failSecondCLIGroupActivator) Activate(_ context.Context, request domain.ActivationRequest) (domain.ActivationOutcome, error) {
+	activator.mu.Lock()
 	activator.calls++
+	activator.mu.Unlock()
 	outcome := domain.ActivationOutcome{
 		Activation: domain.ActivationActive, Authentication: domain.AuthenticationNotRequired,
 		Policy: domain.PolicyAllowed, Verification: domain.VerificationInstalled,
 	}
-	if activator.calls == 2 {
+	if request.Client.ClientID == domain.ClientCursor {
 		outcome.Activation = domain.ActivationFailed
 		outcome.Verification = domain.VerificationFailed
 		return outcome, errors.New("injected grouped activation failure")

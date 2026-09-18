@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/dirswap"
@@ -697,19 +699,19 @@ func TestGroupedAddReportsCommittedActivationAndExternalPartialFailuresFromRecei
 	t.Parallel()
 	for _, test := range []struct {
 		name       string
-		failCall   int
+		failClient domain.ClientID
 		wantPhase  GroupPhase
 		wantFirst  GroupTargetPhase
 		wantSecond GroupTargetPhase
 		wantCalls  int
 	}{
-		{name: "first activation", failCall: 1, wantPhase: GroupPhaseExternalPartialFailure, wantFirst: GroupTargetExternalFailed, wantSecond: GroupTargetExternalCompleted, wantCalls: 2},
-		{name: "second activation", failCall: 2, wantPhase: GroupPhaseExternalPartialFailure, wantFirst: GroupTargetExternalCompleted, wantSecond: GroupTargetExternalFailed, wantCalls: 2},
+		{name: "first activation", failClient: domain.ClientCursor, wantPhase: GroupPhaseExternalPartialFailure, wantFirst: GroupTargetExternalFailed, wantSecond: GroupTargetExternalCompleted, wantCalls: 2},
+		{name: "second activation", failClient: domain.ClientKiro, wantPhase: GroupPhaseExternalPartialFailure, wantFirst: GroupTargetExternalCompleted, wantSecond: GroupTargetExternalFailed, wantCalls: 2},
 	} {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
 			service, store, cursor := serviceFixture(t)
-			activator := &failNthGroupActivator{failCall: test.failCall}
+			activator := &failNthGroupActivator{failClients: map[domain.ClientID]bool{test.failClient: true}}
 			service.Activator = activator
 			kiro := domain.DetectedClient{ClientID: domain.ClientKiro, Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), ".kiro")}
 			result, err := service.AddGroup(context.Background(), GroupInput{Targets: []AddInput{
@@ -725,8 +727,12 @@ func TestGroupedAddReportsCommittedActivationAndExternalPartialFailuresFromRecei
 			if result.Phase != test.wantPhase || len(result.Receipts) != 2 || result.Targets[0].GroupPhase != test.wantFirst || result.Targets[1].GroupPhase != test.wantSecond {
 				t.Fatalf("phase-aware result = %+v", result)
 			}
-			if result.Targets[test.failCall-1].Failure == nil || result.Targets[test.failCall-1].Failure.Message == "" {
-				t.Fatalf("failed target missing failure detail: %+v", result.Targets[test.failCall-1])
+			failedIndex := 0
+			if test.failClient == domain.ClientKiro {
+				failedIndex = 1
+			}
+			if result.Targets[failedIndex].Failure == nil || result.Targets[failedIndex].Failure.Message == "" {
+				t.Fatalf("failed target missing failure detail: %+v", result.Targets[failedIndex])
 			}
 			if activator.calls != test.wantCalls {
 				t.Fatalf("Activate calls = %d, want %d", activator.calls, test.wantCalls)
@@ -746,7 +752,7 @@ func TestGroupedAddContinuesActivationAcrossClientFailures(t *testing.T) {
 	t.Parallel()
 	t.Run("middle failure keeps neighbors", func(t *testing.T) {
 		service, store, cursor := serviceFixture(t)
-		activator := &failNthGroupActivator{failCall: 2}
+		activator := &failNthGroupActivator{failClients: map[domain.ClientID]bool{domain.ClientCodex: true}}
 		service.Activator = activator
 		codex := domain.DetectedClient{ClientID: domain.ClientCodex, Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), ".codex")}
 		kiro := domain.DetectedClient{ClientID: domain.ClientKiro, Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), ".kiro")}
@@ -805,32 +811,40 @@ func TestGroupedAddContinuesActivationAcrossClientFailures(t *testing.T) {
 			addInput(t, codex, "https://example.com/batch-cancel"),
 			addInput(t, kiro, "https://example.com/batch-cancel"),
 		}, OperationGroupID: "batch-cancel", Confirmed: true})
-		if err == nil || activator.calls != 1 {
-			t.Fatalf("cancel result calls=%d err=%v", activator.calls, err)
-		}
-		if !errors.Is(err, context.Canceled) {
+		if err == nil || !errors.Is(err, context.Canceled) {
 			t.Fatalf("cancel error lost context cause: %v", err)
 		}
-		if result.Targets[0].GroupPhase != GroupTargetExternalFailed {
-			t.Fatalf("first target = %+v", result.Targets[0])
+		if activator.calls < 1 {
+			t.Fatalf("cancel result calls=%d", activator.calls)
 		}
-		if result.Targets[1].GroupPhase != GroupTargetExternalNotAttempted || result.Targets[2].GroupPhase != GroupTargetExternalNotAttempted {
-			t.Fatalf("remaining targets = %+v", result.Targets)
+		canceled := 0
+		for index, target := range result.Targets {
+			switch target.GroupPhase {
+			case GroupTargetExternalFailed:
+				if target.Failure == nil || target.Failure.Stage != "canceled" {
+					t.Fatalf("canceled target %d = %+v", index, target)
+				}
+				canceled++
+			case GroupTargetExternalCompleted:
+			case GroupTargetExternalNotAttempted:
+				if target.Failure == nil || target.Failure.Stage != "canceled" {
+					t.Fatalf("remaining target %d = %+v", index, target)
+				}
+			default:
+				t.Fatalf("target %d = %+v", index, target)
+			}
 		}
-		if result.Targets[1].Failure == nil || result.Targets[1].Failure.Stage != "canceled" || !strings.Contains(result.Targets[1].Failure.Message, "canceled") {
-			t.Fatalf("not-attempted failure = %+v", result.Targets[1].Failure)
-		}
-		if result.Targets[0].Failure == nil || result.Targets[0].Failure.Stage != "canceled" {
-			t.Fatalf("canceled first target stage = %+v", result.Targets[0].Failure)
+		if canceled < 1 {
+			t.Fatal("expected at least one canceled client")
 		}
 	})
 	t.Run("state store failure stops remaining", func(t *testing.T) {
 		service, store, cursor := serviceFixture(t)
-		calls := 0
-		failing := &failPersistAfterActivateStore{StateStore: store, activated: &calls}
+		calls := &atomic.Int32{}
+		failing := &failPersistAfterActivateStore{StateStore: store, activated: calls}
 		service.StateStore = failing
 		service.Kernel.StateStore = failing
-		service.Activator = &countingGroupActivator{calls: &calls}
+		service.Activator = &countingGroupActivator{calls: calls}
 		codex := domain.DetectedClient{ClientID: domain.ClientCodex, Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), ".codex")}
 		kiro := domain.DetectedClient{ClientID: domain.ClientKiro, Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), ".kiro")}
 		result, err := service.AddGroup(context.Background(), GroupInput{Targets: []AddInput{
@@ -841,14 +855,28 @@ func TestGroupedAddContinuesActivationAcrossClientFailures(t *testing.T) {
 		if err == nil {
 			t.Fatal("expected state store failure")
 		}
-		if calls != 1 {
-			t.Fatalf("Activate calls = %d, want 1", calls)
+		if calls.Load() < 1 {
+			t.Fatalf("Activate calls = %d, want at least 1", calls.Load())
 		}
-		if result.Targets[0].GroupPhase != GroupTargetExternalFailed || result.Targets[0].Failure == nil || result.Targets[0].Failure.Stage != "persist" {
-			t.Fatalf("first target = %+v", result.Targets[0])
+		persistFailed, notAttempted := 0, 0
+		for index, target := range result.Targets {
+			switch target.GroupPhase {
+			case GroupTargetExternalFailed:
+				if target.Failure == nil || target.Failure.Stage != "persist" {
+					t.Fatalf("persist target %d = %+v", index, target)
+				}
+				persistFailed++
+			case GroupTargetExternalNotAttempted:
+				if target.Failure == nil || target.Failure.Stage != "persist" {
+					t.Fatalf("remaining target %d = %+v", index, target)
+				}
+				notAttempted++
+			default:
+				t.Fatalf("target %d = %+v", index, target)
+			}
 		}
-		if result.Targets[1].GroupPhase != GroupTargetExternalNotAttempted || result.Targets[2].GroupPhase != GroupTargetExternalNotAttempted {
-			t.Fatalf("remaining targets = %+v", result.Targets)
+		if persistFailed < 1 || persistFailed+notAttempted != 3 {
+			t.Fatalf("persist stop phases failed=%d skipped=%d targets=%+v", persistFailed, notAttempted, result.Targets)
 		}
 	})
 	t.Run("shared copilot vscode activates once", func(t *testing.T) {
@@ -924,17 +952,31 @@ func TestGroupedAddContinuesActivationAcrossClientFailures(t *testing.T) {
 			addInput(t, codex, "https://example.com/batch-deadline"),
 			addInput(t, kiro, "https://example.com/batch-deadline"),
 		}, OperationGroupID: "batch-deadline", Confirmed: true})
-		if err == nil || activator.calls != 1 {
-			t.Fatalf("deadline result calls=%d err=%v", activator.calls, err)
-		}
-		if !errors.Is(err, context.DeadlineExceeded) {
+		if err == nil || !errors.Is(err, context.DeadlineExceeded) {
 			t.Fatalf("deadline error lost cause: %v", err)
 		}
-		if result.Targets[0].GroupPhase != GroupTargetExternalFailed {
-			t.Fatalf("first target = %+v", result.Targets[0])
+		if activator.calls < 1 {
+			t.Fatalf("deadline result calls=%d", activator.calls)
 		}
-		if result.Targets[1].GroupPhase != GroupTargetExternalNotAttempted || result.Targets[2].GroupPhase != GroupTargetExternalNotAttempted {
-			t.Fatalf("remaining targets = %+v", result.Targets)
+		timedOut := 0
+		for index, target := range result.Targets {
+			switch target.GroupPhase {
+			case GroupTargetExternalFailed:
+				if target.Failure == nil || target.Failure.Stage != "canceled" {
+					t.Fatalf("deadline target %d = %+v", index, target)
+				}
+				timedOut++
+			case GroupTargetExternalCompleted:
+			case GroupTargetExternalNotAttempted:
+				if target.Failure == nil || target.Failure.Stage != "canceled" {
+					t.Fatalf("remaining target %d = %+v", index, target)
+				}
+			default:
+				t.Fatalf("target %d = %+v", index, target)
+			}
+		}
+		if timedOut < 1 {
+			t.Fatal("expected at least one deadline client")
 		}
 	})
 	t.Run("shared copilot vscode success propagates", func(t *testing.T) {
@@ -1231,18 +1273,25 @@ func (stager *failNthVerificationStager) Verify(ctx context.Context, root, expec
 }
 
 type failNthGroupActivator struct {
-	calls    int
-	failCall int
-	failSet  map[int]bool
+	mu          sync.Mutex
+	calls       int
+	failCall    int
+	failSet     map[int]bool
+	failClients map[domain.ClientID]bool
 }
 
-func (activator *failNthGroupActivator) Activate(context.Context, domain.ActivationRequest) (domain.ActivationOutcome, error) {
+func (activator *failNthGroupActivator) Activate(_ context.Context, request domain.ActivationRequest) (domain.ActivationOutcome, error) {
+	activator.mu.Lock()
+	defer activator.mu.Unlock()
 	activator.calls++
 	outcome := domain.ActivationOutcome{Activation: domain.ActivationActive, Authentication: domain.AuthenticationNotRequired,
 		Policy: domain.PolicyAllowed, Verification: domain.VerificationInstalled}
-	fail := activator.calls == activator.failCall
+	fail := activator.failCall > 0 && activator.calls == activator.failCall
 	if activator.failSet != nil {
 		fail = activator.failSet[activator.calls]
+	}
+	if len(activator.failClients) > 0 {
+		fail = activator.failClients[request.Client.ClientID]
 	}
 	if fail {
 		outcome.Activation = domain.ActivationFailed
@@ -1257,11 +1306,14 @@ func (*failNthGroupActivator) Deactivate(context.Context, domain.DeactivationReq
 }
 
 type cancelAfterFirstGroupActivator struct {
+	mu     sync.Mutex
 	cancel context.CancelFunc
 	calls  int
 }
 
 func (activator *cancelAfterFirstGroupActivator) Activate(ctx context.Context, _ domain.ActivationRequest) (domain.ActivationOutcome, error) {
+	activator.mu.Lock()
+	defer activator.mu.Unlock()
 	activator.calls++
 	outcome := domain.ActivationOutcome{Activation: domain.ActivationActive, Authentication: domain.AuthenticationNotRequired,
 		Policy: domain.PolicyAllowed, Verification: domain.VerificationInstalled}
@@ -1296,22 +1348,22 @@ func (store *failAfterInstallSaveStore) Save(state domain.StateFileV2) error {
 
 type failPersistAfterActivateStore struct {
 	transaction.StateStore
-	activated *int
+	activated *atomic.Int32
 }
 
 func (store *failPersistAfterActivateStore) Save(state domain.StateFileV2) error {
-	if store.activated != nil && *store.activated > 0 {
+	if store.activated != nil && store.activated.Load() > 0 {
 		return errors.New("injected state store failure")
 	}
 	return store.StateStore.Save(state)
 }
 
 type countingGroupActivator struct {
-	calls *int
+	calls *atomic.Int32
 }
 
 func (activator *countingGroupActivator) Activate(context.Context, domain.ActivationRequest) (domain.ActivationOutcome, error) {
-	*activator.calls++
+	activator.calls.Add(1)
 	return domain.ActivationOutcome{Activation: domain.ActivationActive, Authentication: domain.AuthenticationNotRequired,
 		Policy: domain.PolicyAllowed, Verification: domain.VerificationInstalled}, nil
 }
@@ -1344,11 +1396,14 @@ func (*failedOutcomeWithoutErrGroupActivator) Deactivate(context.Context, domain
 }
 
 type deadlineAfterFirstGroupActivator struct {
+	mu     sync.Mutex
 	cancel context.CancelFunc
 	calls  int
 }
 
 func (activator *deadlineAfterFirstGroupActivator) Activate(ctx context.Context, _ domain.ActivationRequest) (domain.ActivationOutcome, error) {
+	activator.mu.Lock()
+	defer activator.mu.Unlock()
 	activator.calls++
 	outcome := domain.ActivationOutcome{Activation: domain.ActivationActive, Authentication: domain.AuthenticationNotRequired,
 		Policy: domain.PolicyAllowed, Verification: domain.VerificationInstalled}

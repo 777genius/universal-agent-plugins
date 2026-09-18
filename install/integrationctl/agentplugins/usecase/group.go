@@ -410,36 +410,9 @@ func (service Service) applyGroup(ctx context.Context, input GroupInput, replace
 			}
 		}
 	}
-	for targetIndex := range planned {
-		target := &planned[targetIndex]
-		if target.noChange {
-			continue
-		}
-		operationID := fmt.Sprintf("%s-%03d", groupID, targetIndex+1)
-		if packageNeedsPluginData(target.input.Envelope, target.plan) {
-			if service.PluginData == nil {
-				cleanup()
-				return result, fmt.Errorf("PLUGIN_DATA manager is required for stdio MCP packages")
-			}
-			receipt, created, err := service.PluginData.EnsureData(ctx, installationID, target.plan.PhysicalArtifactID, string(target.input.Scope))
-			if err != nil {
-				cleanup()
-				return result, err
-			}
-			target.dataReceipt, target.dataCreated = receipt, created
-		}
-		delivery, err := service.stagePackage(ctx, target.input.Envelope, target.plan, operationID, target.input.Hints, target.dataReceipt.Locator)
-		if err != nil {
-			cleanup()
-			return result, err
-		}
-		delivery, err = bindStagedDeliveryToPhysicalOwner(delivery, target.plan, target.managed)
-		if err != nil {
-			_ = service.Stager.Discard(context.Background(), delivery)
-			cleanup()
-			return result, err
-		}
-		target.delivery = delivery
+	if err := service.stagePlannedGroupTargets(ctx, planned, groupID, installationID); err != nil {
+		cleanup()
+		return result, err
 	}
 	defer cleanup()
 	for _, target := range planned {
@@ -623,138 +596,7 @@ func (service Service) applyGroup(ctx context.Context, input GroupInput, replace
 	for index := range planned {
 		planned[index].dataCreated = false
 	}
-	externalCompleted := 0
-	externalFailed := 0
-	logicalTotal := len(result.Targets)
-	var firstActivationErr error
-	markRemainingNotAttempted := func(fromIndex int, stage, message string) {
-		for index := fromIndex; index < len(planned); index++ {
-			target := planned[index]
-			for _, resultIndex := range target.resultIndexes {
-				result.Targets[resultIndex].GroupPhase = GroupTargetExternalNotAttempted
-				result.Targets[resultIndex].Failure = &GroupTargetFailure{Stage: stage, Message: message}
-			}
-		}
-	}
-	classifyActivationFailure := func() {
-		if externalCompleted > 0 {
-			result.Phase = GroupPhaseExternalPartialFailure
-			return
-		}
-		result.Phase = GroupPhaseManagedActivationFailed
-	}
-	for plannedIndex, target := range planned {
-		if err := ctx.Err(); err != nil {
-			classifyActivationFailure()
-			markRemainingNotAttempted(plannedIndex, "canceled", "processing stopped because the operation was canceled before remaining clients could be activated safely")
-			return result, fmt.Errorf("%d of %d client activations failed: %w", externalFailed+countNotAttempted(result.Targets), logicalTotal, err)
-		}
-		delivery := target.delivery
-		if target.noChange && target.managed != nil {
-			delivery = domain.StagedDelivery{
-				ClientID: target.input.Client.ClientID, OwnedBase: target.plan.TargetRoot,
-				ActivePath: target.managed.TargetLocator, ArtifactDigest: managedDigest(*target.managed),
-				NativeObjects: append([]domain.NativeObjectOwnership(nil), target.managed.NativeObjects...),
-			}
-		}
-		outcome, activationErr := service.Activator.Activate(ctx, domain.ActivationRequest{Client: target.input.Client, Plan: target.plan, Delivery: delivery,
-			DeclaredName: target.input.Envelope.Manifest.Name, Replacing: replace, Interactive: target.input.Interactive, BackendExecutable: target.input.BackendExecutable,
-			PreviousNativeObjects: func() []domain.NativeObjectOwnership {
-				if target.managed == nil {
-					return nil
-				}
-				return append([]domain.NativeObjectOwnership(nil), target.managed.NativeObjects...)
-			}(),
-			VerifyOnly: target.noChange, ActivationComplete: target.input.ActivationComplete})
-		if input.Repair && target.managed != nil {
-			outcome = preserveManagedAuthentication(outcome, target.managed.Authentication)
-		}
-		if activationErr == nil && outcome.Activation == "" {
-			if err := ctx.Err(); err != nil {
-				activationErr = err
-			} else {
-				activationErr = fmt.Errorf("activator returned an empty activation outcome")
-			}
-		}
-		if activationErr == nil && (outcome.Activation == domain.ActivationFailed || outcome.Verification == domain.VerificationFailed || outcome.Authentication == domain.AuthenticationFailed) {
-			activationErr = fmt.Errorf("activator reported a failed activation outcome without an error")
-		}
-		if activationErr != nil && outcome.Activation == "" {
-			outcome = domain.ActivationOutcome{
-				Activation: domain.ActivationFailed, Authentication: target.plan.Authentication,
-				Policy: domain.PolicyAllowed, Verification: domain.VerificationFailed,
-			}
-		}
-		if target.noChange && target.managed != nil {
-			if activationErr == nil && !service.clientVerifierAvailable(target.input, target.plan) && target.managed.Activation == domain.ActivationActive && target.managed.Verification == domain.VerificationInstalled {
-				outcome.Activation = target.managed.Activation
-				outcome.Verification = target.managed.Verification
-			}
-			if (target.managed.Authentication == domain.AuthenticationPending || target.managed.Authentication == domain.AuthenticationNotChecked) && target.input.AuthComplete {
-				outcome.Authentication = domain.AuthenticationComplete
-				outcome.AuthenticationAttested = true
-			} else if target.managed.Authentication != "" {
-				outcome.Authentication = target.managed.Authentication
-			}
-		}
-		previousNativeObjects := []domain.NativeObjectOwnership(nil)
-		if target.managed != nil {
-			previousNativeObjects = target.managed.NativeObjects
-		}
-		lifecycleChanged, persistErr := service.updateActivationResult(installationID, target.clientBindingID, outcome, activationErr, previousNativeObjects)
-		if lifecycleChanged {
-			result.Mutated = true
-		}
-		for _, resultIndex := range target.resultIndexes {
-			result.Targets[resultIndex].Activation = outcome
-			result.Targets[resultIndex].Mutated = !target.noChange || lifecycleChanged
-			if lifecycleChanged {
-				result.Targets[resultIndex].NoChange = false
-			}
-			switch {
-			case persistErr != nil:
-				result.Targets[resultIndex].GroupPhase = GroupTargetExternalFailed
-				result.Targets[resultIndex].Failure = &GroupTargetFailure{Stage: "persist", Message: persistErr.Error()}
-			case activationErr != nil:
-				result.Targets[resultIndex].GroupPhase = GroupTargetExternalFailed
-				result.Targets[resultIndex].Failure = groupTargetFailureFromActivation(activationErr, outcome)
-			default:
-				result.Targets[resultIndex].GroupPhase = GroupTargetExternalCompleted
-			}
-		}
-		if persistErr != nil {
-			externalFailed += len(target.resultIndexes)
-			classifyActivationFailure()
-			markRemainingNotAttempted(plannedIndex+1, "persist", "processing stopped because installation state could not be saved safely")
-			return result, fmt.Errorf("%d of %d client activations failed: %w", externalFailed+countNotAttempted(result.Targets), logicalTotal, persistErr)
-		}
-		if activationErr != nil {
-			externalFailed += len(target.resultIndexes)
-			if firstActivationErr == nil {
-				firstActivationErr = activationErr
-			}
-			if errors.Is(activationErr, context.Canceled) || errors.Is(activationErr, context.DeadlineExceeded) || ctx.Err() != nil {
-				classifyActivationFailure()
-				markRemainingNotAttempted(plannedIndex+1, "canceled", "processing stopped because the operation was canceled before remaining clients could be activated safely")
-				cause := activationErr
-				if ctxErr := ctx.Err(); ctxErr != nil && !errors.Is(activationErr, context.Canceled) && !errors.Is(activationErr, context.DeadlineExceeded) {
-					cause = ctxErr
-				}
-				return result, fmt.Errorf("%d of %d client activations failed: %w", externalFailed+countNotAttempted(result.Targets), logicalTotal, cause)
-			}
-			continue
-		}
-		externalCompleted += len(target.resultIndexes)
-	}
-	if externalFailed > 0 {
-		classifyActivationFailure()
-		if firstActivationErr != nil {
-			return result, fmt.Errorf("%d of %d client activations failed: %w", externalFailed, logicalTotal, firstActivationErr)
-		}
-		return result, fmt.Errorf("%d of %d client activations failed", externalFailed, logicalTotal)
-	}
-	result.Phase = GroupPhaseCompleted
-	return result, nil
+	return result, service.activatePlannedGroupTargets(ctx, input, replace, installationID, planned, &result)
 }
 
 func groupTargetFailureFromActivation(err error, outcome domain.ActivationOutcome) *GroupTargetFailure {

@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strings"
+	"sync"
 	"unicode/utf8"
 
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/prompt"
@@ -17,20 +19,34 @@ type groupProgressStep string
 
 const (
 	groupProgressQueued     groupProgressStep = "queued"
-	groupProgressStaging    groupProgressStep = "staging"
-	groupProgressPrepared   groupProgressStep = "prepared"
-	groupProgressActivating groupProgressStep = "activating"
+	groupProgressStaging    groupProgressStep = "copying"
+	groupProgressCopied     groupProgressStep = "copied"
+	groupProgressActivating groupProgressStep = "installing"
 	groupProgressDone       groupProgressStep = "done"
 	groupProgressFailed     groupProgressStep = "failed"
+	groupProgressPending    groupProgressStep = "…"
+	progressArrow                             = " → "
+	lastProgressWidth                         = 10
+)
+
+type progressMark int
+
+const (
+	markPending progressMark = iota
+	markCurrent
+	markDone
+	markFailed
 )
 
 type groupProgressRow struct {
-	id    domain.ClientID
-	label string
-	step  groupProgressStep
+	id     domain.ClientID
+	label  string
+	step   groupProgressStep
+	failed bool
 }
 
 type groupProgressBoard struct {
+	mu      sync.Mutex
 	writer  io.Writer
 	theme   terminaltheme.Theme
 	rows    []groupProgressRow
@@ -87,58 +103,92 @@ func (board *groupProgressBoard) decorate(service usecase.Service) usecase.Servi
 }
 
 func (board *groupProgressBoard) finish() {
-	if board == nil || !board.live || board.painted == 0 {
+	if board == nil || !board.live {
 		return
 	}
-	_, _ = fmt.Fprintf(board.writer, "\033[%dA", board.painted)
-	for range board.rows {
-		_, _ = fmt.Fprint(board.writer, "\033[2K\n")
-	}
-	_, _ = fmt.Fprintf(board.writer, "\033[%dA", board.painted)
+	board.mu.Lock()
 	board.painted = 0
+	board.mu.Unlock()
+	_, _ = fmt.Fprintln(board.writer)
 }
 
 func (board *groupProgressBoard) set(id domain.ClientID, step groupProgressStep) {
 	if board == nil {
 		return
 	}
+	board.mu.Lock()
+	defer board.mu.Unlock()
 	changed := false
 	for index := range board.rows {
 		if !progressRowMatches(board.rows[index].id, id) {
 			continue
 		}
-		if board.rows[index].step == step {
+		if step == groupProgressFailed {
+			if board.rows[index].failed {
+				continue
+			}
+			board.rows[index].failed = true
+			changed = true
+			continue
+		}
+		if board.rows[index].step == step && !board.rows[index].failed {
 			continue
 		}
 		board.rows[index].step = step
+		board.rows[index].failed = false
 		changed = true
 	}
 	if changed {
-		board.redraw()
+		board.redrawLocked()
 	}
 }
 
 func (board *groupProgressBoard) redraw() {
-	if board == nil || !board.live {
+	if board == nil {
+		return
+	}
+	board.mu.Lock()
+	defer board.mu.Unlock()
+	board.redrawLocked()
+}
+
+func (board *groupProgressBoard) redrawLocked() {
+	if !board.live {
 		return
 	}
 	if board.painted > 0 {
 		_, _ = fmt.Fprintf(board.writer, "\033[%dA", board.painted)
 	}
 	for _, row := range board.rows {
-		_, _ = fmt.Fprintf(board.writer, "\033[2K  %-*s  %s\n", board.width, prompt.SafeText(row.label), board.theme.Text(progressTone(row.step), string(row.step)))
+		_, _ = fmt.Fprintf(board.writer, "\033[2K  %-*s  %s\n", board.width, prompt.SafeText(row.label), progressPipeline(board.theme, row))
 	}
 	board.painted = len(board.rows)
 }
 
 func (stager progressStager) Stage(ctx context.Context, envelope domain.PackageEnvelope, plan domain.DeliveryPlan, operationID string, hints domain.CompatibilityHints) (domain.StagedDelivery, error) {
-	stager.board.set(plan.ClientID, groupProgressStaging)
-	delivery, err := stager.PackageStager.Stage(ctx, envelope, plan, operationID, hints)
+	return stager.trackStage(plan.ClientID, func() (domain.StagedDelivery, error) {
+		return stager.PackageStager.Stage(ctx, envelope, plan, operationID, hints)
+	})
+}
+
+func (stager progressStager) StageWithPluginData(ctx context.Context, envelope domain.PackageEnvelope, plan domain.DeliveryPlan, operationID string, hints domain.CompatibilityHints, pluginDataPath string) (domain.StagedDelivery, error) {
+	aware, ok := stager.PackageStager.(ports.PluginDataAwareStager)
+	if !ok {
+		return domain.StagedDelivery{}, fmt.Errorf("package stager cannot bind the owned PLUGIN_DATA locator")
+	}
+	return stager.trackStage(plan.ClientID, func() (domain.StagedDelivery, error) {
+		return aware.StageWithPluginData(ctx, envelope, plan, operationID, hints, pluginDataPath)
+	})
+}
+
+func (stager progressStager) trackStage(client domain.ClientID, stage func() (domain.StagedDelivery, error)) (domain.StagedDelivery, error) {
+	stager.board.set(client, groupProgressStaging)
+	delivery, err := stage()
 	if err != nil {
-		stager.board.set(plan.ClientID, groupProgressFailed)
+		stager.board.set(client, groupProgressFailed)
 		return delivery, err
 	}
-	stager.board.set(plan.ClientID, groupProgressPrepared)
+	stager.board.set(client, groupProgressCopied)
 	return delivery, nil
 }
 
@@ -153,23 +203,66 @@ func (activator progressActivator) Activate(ctx context.Context, request domain.
 	return outcome, err
 }
 
+func progressPipeline(theme terminaltheme.Theme, row groupProgressRow) string {
+	copyMark, copiedMark, lastMark := markPending, markPending, markPending
+	last := string(groupProgressPending)
+	switch row.step {
+	case groupProgressStaging:
+		copyMark = markCurrent
+	case groupProgressCopied:
+		copyMark, copiedMark = markDone, markCurrent
+	case groupProgressActivating:
+		copyMark, copiedMark, lastMark = markDone, markDone, markCurrent
+		last = string(groupProgressActivating)
+	case groupProgressDone:
+		copyMark, copiedMark, lastMark = markDone, markDone, markDone
+		last = string(groupProgressDone)
+	}
+	if row.failed {
+		switch {
+		case lastMark == markCurrent || lastMark == markDone:
+			lastMark = markFailed
+			last = string(groupProgressFailed)
+		case copyMark == markCurrent:
+			copyMark = markFailed
+		case copiedMark == markCurrent:
+			copiedMark = markFailed
+		default:
+			lastMark = markFailed
+			last = string(groupProgressFailed)
+		}
+	}
+	arrow := theme.Text(terminaltheme.Muted, progressArrow)
+	return progressToken(theme, string(groupProgressStaging), copyMark) + arrow +
+		progressToken(theme, string(groupProgressCopied), copiedMark) + arrow +
+		progressToken(theme, padLastProgress(last), lastMark)
+}
+
+func padLastProgress(text string) string {
+	width := utf8.RuneCountInString(text)
+	if width >= lastProgressWidth {
+		return text
+	}
+	return text + strings.Repeat(" ", lastProgressWidth-width)
+}
+
+func progressToken(theme terminaltheme.Theme, text string, mark progressMark) string {
+	role := terminaltheme.Muted
+	switch mark {
+	case markCurrent:
+		role = terminaltheme.Label
+	case markDone:
+		role = terminaltheme.Success
+	case markFailed:
+		role = terminaltheme.Error
+	}
+	return theme.Text(role, text)
+}
+
 func progressRowMatches(row, event domain.ClientID) bool {
 	if row == event {
 		return true
 	}
 	return (row == domain.ClientCopilot || row == domain.ClientVSCode) &&
 		(event == domain.ClientCopilot || event == domain.ClientVSCode)
-}
-
-func progressTone(step groupProgressStep) terminaltheme.Role {
-	switch step {
-	case groupProgressDone:
-		return terminaltheme.Success
-	case groupProgressFailed:
-		return terminaltheme.Error
-	case groupProgressStaging, groupProgressActivating:
-		return terminaltheme.Label
-	default:
-		return terminaltheme.Muted
-	}
 }

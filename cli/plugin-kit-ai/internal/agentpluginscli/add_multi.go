@@ -227,7 +227,7 @@ func runAddManyLoaded(ctx context.Context, cmd *cobra.Command, app App, opts *op
 			combined.setTargetProof(client.ClientID, "not_run")
 		}
 	}
-	writeProgress(app, opts.format, "Applying the completely preflighted multi-target plan...")
+	writeProgress(app, opts.format, "Applying to every preflighted client...")
 	groupInput.DryRun, groupInput.Confirmed = false, true
 	applyService := service
 	if board := startGroupProgressBoard(app, opts.format, selected); board != nil {
