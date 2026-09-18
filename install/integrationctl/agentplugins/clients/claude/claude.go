@@ -30,7 +30,18 @@ func ProjectClaude(root string, envelope domain.PackageEnvelope, plan domain.Del
 	if err := PruneClaudeRuntimeSkills(runtimeRoot, plan); err != nil {
 		return err
 	}
+	serverNames := shared.SupportedMCPNames(plan)
+	if err := shared.WriteJSON(filepath.Join(root, ".claude-plugin", "plugin.json"), claudePluginManifest(envelope, plan, serverNames)); err != nil {
+		return fmt.Errorf("write Claude Code plugin manifest: %w", err)
+	}
+	activeRuntimeRoot := filepath.Join(plan.ActivePath, ClaudeRuntimeDirectory)
+	if err := ProjectClaudeMCP(root, envelope, serverNames, activeRuntimeRoot, dataPath, runtimeRoot); err != nil {
+		return err
+	}
+	return ValidateClaudeProjectionRoot(root, len(serverNames) > 0)
+}
 
+func claudePluginManifest(envelope domain.PackageEnvelope, plan domain.DeliveryPlan, serverNames []string) map[string]any {
 	manifest := map[string]any{"name": envelope.Manifest.Name}
 	copyString := func(key, value string) {
 		if strings.TrimSpace(value) != "" {
@@ -51,19 +62,10 @@ func ProjectClaude(root string, envelope domain.PackageEnvelope, plan domain.Del
 	if shared.ComponentKindPresent(plan.Components, domain.ComponentSkill) {
 		manifest["skills"] = "./" + ClaudeRuntimeDirectory + "/skills/"
 	}
-
-	serverNames := shared.SupportedMCPNames(plan)
 	if len(serverNames) > 0 {
 		manifest["mcpServers"] = "./.mcp.json"
 	}
-	if err := shared.WriteJSON(filepath.Join(root, ".claude-plugin", "plugin.json"), manifest); err != nil {
-		return fmt.Errorf("write Claude Code plugin manifest: %w", err)
-	}
-	activeRuntimeRoot := filepath.Join(plan.ActivePath, ClaudeRuntimeDirectory)
-	if err := ProjectClaudeMCP(root, envelope, serverNames, activeRuntimeRoot, dataPath, runtimeRoot); err != nil {
-		return err
-	}
-	return ValidateClaudeProjectionRoot(root, len(serverNames) > 0)
+	return manifest
 }
 
 func IsolateClaudeRuntime(root string) (string, error) {
@@ -161,49 +163,82 @@ func ProjectClaudeMCP(root string, envelope domain.PackageEnvelope, serverNames 
 		}
 		return nil
 	}
+	servers, err := projectClaudeMCPServers(envelope, serverNames, pluginRoot, dataPath, observedRuntimeRoot)
+	if err != nil {
+		return err
+	}
+	return shared.WriteJSON(path, servers)
+}
+
+func projectClaudeMCPServers(envelope domain.PackageEnvelope, serverNames []string, pluginRoot, dataPath, observedRuntimeRoot string) (map[string]map[string]any, error) {
 	servers := make(map[string]map[string]any, len(serverNames))
 	for _, name := range serverNames {
-		server := envelope.MCP.Servers[name]
-		config := shared.CloneObject(server.Decoded)
-		switch server.Type {
-		case "stdio":
-			delete(config, "type")
-			rawCommand, _ := config["command"].(string)
-			rawCWD, _ := config["cwd"].(string)
-			if err := shared.ApplyStdioDataContract(config, pluginRoot, dataPath, observedRuntimeRoot); err != nil {
-				return fmt.Errorf("project Claude stdio MCP server %s: %w", name, err)
-			}
-			// Claude does not honor cwd on stdio entries. The trusted process
-			// adapter makes both default and explicit cwd part of its argv,
-			// preserving otherwise identical servers as distinct native entries.
-			cwd, err := pathcontract.ParseCWD(rawCWD)
-			if err != nil {
-				return err
-			}
-			var args []string
-			switch values := config["args"].(type) {
-			case []string:
-				args = values
-			case []any:
-				for _, value := range values {
-					text, ok := value.(string)
-					if !ok {
-						return fmt.Errorf("Claude stdio args must be strings")
-					}
-					args = append(args, text)
-				}
-			}
-			config["args"] = managedstdio.Arguments(pluginRoot, dataPath, config["cwd"].(string), cwd.Anchor, rawCommand, args)
-			config["command"] = filepath.Join(pluginRoot, filepath.FromSlash(managedstdio.RelativeDirectory), managedstdio.ExecutableName)
-			delete(config, "cwd")
-		case "streamable-http":
-			config["type"] = "http"
-		case "sse":
-			config["type"] = "sse"
-		default:
+		config, ok, err := projectClaudeMCPServer(name, envelope.MCP.Servers[name], pluginRoot, dataPath, observedRuntimeRoot)
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
 			continue
 		}
 		servers[name] = config
 	}
-	return shared.WriteJSON(path, servers)
+	return servers, nil
+}
+
+func projectClaudeMCPServer(name string, server domain.MCPServer, pluginRoot, dataPath, observedRuntimeRoot string) (map[string]any, bool, error) {
+	config := shared.CloneObject(server.Decoded)
+	switch server.Type {
+	case "stdio":
+		if err := projectClaudeStdioServer(name, config, pluginRoot, dataPath, observedRuntimeRoot); err != nil {
+			return nil, false, err
+		}
+	case "streamable-http":
+		config["type"] = "http"
+	case "sse":
+		config["type"] = "sse"
+	default:
+		return nil, false, nil
+	}
+	return config, true, nil
+}
+
+func projectClaudeStdioServer(name string, config map[string]any, pluginRoot, dataPath, observedRuntimeRoot string) error {
+	delete(config, "type")
+	rawCommand, _ := config["command"].(string)
+	rawCWD, _ := config["cwd"].(string)
+	if err := shared.ApplyStdioDataContract(config, pluginRoot, dataPath, observedRuntimeRoot); err != nil {
+		return fmt.Errorf("project Claude stdio MCP server %s: %w", name, err)
+	}
+	// Claude does not honor cwd on stdio entries. The trusted process
+	// adapter makes both default and explicit cwd part of its argv,
+	// preserving otherwise identical servers as distinct native entries.
+	cwd, err := pathcontract.ParseCWD(rawCWD)
+	if err != nil {
+		return err
+	}
+	args, err := claudeStdioArgs(config["args"])
+	if err != nil {
+		return err
+	}
+	config["args"] = managedstdio.Arguments(pluginRoot, dataPath, config["cwd"].(string), cwd.Anchor, rawCommand, args)
+	config["command"] = filepath.Join(pluginRoot, filepath.FromSlash(managedstdio.RelativeDirectory), managedstdio.ExecutableName)
+	delete(config, "cwd")
+	return nil
+}
+
+func claudeStdioArgs(value any) ([]string, error) {
+	var args []string
+	switch values := value.(type) {
+	case []string:
+		args = values
+	case []any:
+		for _, item := range values {
+			text, ok := item.(string)
+			if !ok {
+				return nil, fmt.Errorf("the Claude stdio args must be strings")
+			}
+			args = append(args, text)
+		}
+	}
+	return args, nil
 }

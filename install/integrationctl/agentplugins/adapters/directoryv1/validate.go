@@ -359,7 +359,8 @@ func validatePolicy(p domain.DirectoryReleasePolicy) error {
 		if t.Authentication != domain.AuthenticationRequirementNotRequired && t.Authentication != domain.AuthenticationRequirementRequired && t.Authentication != domain.AuthenticationRequirementUnknown {
 			return fmt.Errorf("invalid target authentication")
 		}
-		if t.Client == domain.ClientChatGPT {
+		definition, ok := domain.ClientDefinitionFor(t.Client)
+		if ok && definition.Capabilities.AppSupport != domain.SupportUnsupported {
 			if t.AppBinding == nil || t.AppBinding.AppKey == "" || t.AppBinding.ID == "" || t.AppBinding.MCPServer == "" {
 				return fmt.Errorf("chatgpt app binding required")
 			}

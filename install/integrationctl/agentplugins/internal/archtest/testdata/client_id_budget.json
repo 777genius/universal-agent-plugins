@@ -1,6 +1,3 @@
 {
-  "packages": {
-    "install/integrationctl/agentplugins/adapters/catalog": 3,
-    "install/integrationctl/agentplugins/adapters/directoryv1": 1
-  }
+  "packages": {}
 }

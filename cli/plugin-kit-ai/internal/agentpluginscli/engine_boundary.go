@@ -6,9 +6,10 @@ import (
 	"io"
 	"strings"
 
+	"github.com/spf13/cobra"
+
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/usecase"
-	"github.com/spf13/cobra"
 )
 
 type switchOutput struct {
@@ -58,124 +59,6 @@ func newSwitchCommand(app App, opts *options) *cobra.Command {
 	return command
 }
 
-func runSwitch(ctx context.Context, cmd *cobra.Command, app App, opts *options, selector, source string) error {
-	state, err := app.StateStore.Load()
-	if err != nil {
-		return err
-	}
-	installation, err := selectInstallation(state, selector)
-	if err != nil {
-		return err
-	}
-	installationID := installation.InstallationID
-	targetIDs := installationTargets(installation, string(domain.ScopeUser))
-	var detected map[domain.ClientID]domain.DetectedClient
-	if len(targetIDs) > 0 {
-		_, detected, err = preflightSelectedTargets(ctx, app, targetIDs, nil, !opts.dryRun && isDirectorySelector(source), lifecycleInstallIntents(installation, opts.scope, nil))
-		if err != nil {
-			return err
-		}
-	}
-	loaded, err := app.loadPackageFor(ctx, source, packageResolutionRequest{Targets: targetIDs, Operation: domain.DirectoryInstall, Clients: detected})
-	if err != nil {
-		return err
-	}
-	if loaded.cleanup != nil {
-		defer loaded.cleanup()
-	}
-	if loaded.envelope.Manifest.Name != installation.DeclaredName {
-		return fmt.Errorf("switch source manifest name %q does not match installed product %q", loaded.envelope.Manifest.Name, installation.DeclaredName)
-	}
-	if err := authorizeSecurityAssessment(cmd, app, opts, &loaded); err != nil {
-		return err
-	}
-	output := switchOutput{DryRun: true, Status: "planned", Source: publicPackageSource(loaded.envelope.Source), Revision: loaded.envelope.Source.ResolvedRevision,
-		TreeDigest: loaded.envelope.TreeDigest, ManifestDigest: loaded.envelope.ManifestDigest, Directory: cloneDirectoryOrigin(loaded.directory),
-	}
-	service := app.Lifecycle
-	service.StateStore = app.StateStore
-	if installation.DataRetained && len(installation.Clients) == 0 {
-		planned, err := service.SwitchRetained(ctx, usecase.BindingChangeInput{Selector: installationID, Envelope: loaded.envelope}, loaded.origin, loaded.directory)
-		output.Retained = &planned
-		output.PluginData = planned.PluginData
-		if err != nil {
-			output.Status = "preflight_failed"
-			if renderErr := renderSwitchResult(cmd.OutOrStdout(), opts.format, output); renderErr != nil {
-				return renderErr
-			}
-			return err
-		}
-		if opts.dryRun {
-			return renderSwitchResult(cmd.OutOrStdout(), opts.format, output)
-		}
-		if opts.format == "human" {
-			if err := renderSwitchResult(cmd.OutOrStdout(), opts.format, output); err != nil {
-				return err
-			}
-		}
-		applied, err := service.SwitchRetained(ctx, usecase.BindingChangeInput{Selector: installationID, Envelope: loaded.envelope, Confirmed: true}, loaded.origin, loaded.directory)
-		output.DryRun, output.Retained = false, &applied
-		output.PluginData = applied.PluginData
-		if err != nil {
-			output.Status = "apply_failed"
-		} else {
-			output.Status = "completed"
-		}
-		if renderErr := renderSwitchResult(cmd.OutOrStdout(), opts.format, output); renderErr != nil && err == nil {
-			err = renderErr
-		}
-		return err
-	}
-	service = lifecycleService(app, detected)
-	inputs := make([]usecase.AddInput, 0, len(targetIDs))
-	for _, targetID := range targetIDs {
-		client := detected[targetID]
-		clientPackage := cloneLoadedPackage(loaded)
-		if err := prepareLoadedPackageForClient(&clientPackage, targetID); err != nil {
-			return err
-		}
-		inputs = append(inputs, usecase.AddInput{Envelope: clientPackage.envelope, Client: client, Scope: domain.ScopeUser, Hints: clientPackage.hints, InstallationID: installationID,
-			BackendExecutable: backendExecutable(client, detected), OriginMode: loaded.origin, DirectoryResolution: cloneDirectoryOrigin(loaded.directory),
-			DistributionSuspended: loaded.distributionSuspended, ReleaseRevoked: loaded.releaseRevoked})
-	}
-	operationID, err := newOperationGroupID()
-	if err != nil {
-		return err
-	}
-	planned, err := service.SwitchGroup(ctx, usecase.GroupInput{Targets: inputs, OperationGroupID: operationID, DryRun: true, Switch: true})
-	output.Group = &planned
-	output.PluginData = planned.PluginData
-	output.Targets = switchTargets(planned)
-	if err != nil {
-		output.Status = "preflight_failed"
-		if renderErr := renderSwitchResult(cmd.OutOrStdout(), opts.format, output); renderErr != nil {
-			return renderErr
-		}
-		return fmt.Errorf("switch preflight failed; no target was changed: %w", err)
-	}
-	if opts.dryRun {
-		return renderSwitchResult(cmd.OutOrStdout(), opts.format, output)
-	}
-	if opts.format == "human" {
-		if err := renderSwitchResult(cmd.OutOrStdout(), opts.format, output); err != nil {
-			return err
-		}
-	}
-	applied, err := service.SwitchGroup(ctx, usecase.GroupInput{Targets: inputs, OperationGroupID: operationID, Confirmed: true, Switch: true})
-	output.DryRun, output.Group = false, &applied
-	output.PluginData = applied.PluginData
-	output.Targets = switchTargets(applied)
-	if err != nil {
-		output.Status = groupFailureStatus(applied.Phase)
-	} else {
-		output.Status = string(applied.Phase)
-	}
-	if renderErr := renderSwitchResult(cmd.OutOrStdout(), opts.format, output); renderErr != nil && err == nil {
-		err = renderErr
-	}
-	return err
-}
-
 func renderSwitchResult(writer io.Writer, format string, result switchOutput) error {
 	if format == "json" {
 		return writeJSONOutput(writer, "switch", result)
@@ -189,6 +72,10 @@ func renderSwitchResult(writer io.Writer, format string, result switchOutput) er
 	} else {
 		_, _ = fmt.Fprintf(writer, "Switch: %s\n", status)
 	}
+	return renderSwitchHumanDetails(writer, result)
+}
+
+func renderSwitchHumanDetails(writer io.Writer, result switchOutput) error {
 	if result.PluginData.Present {
 		_, _ = fmt.Fprintf(writer, "  PLUGIN_DATA: retained (%s; compatibility %s)\n", result.PluginData.Ownership, result.PluginData.Compatibility)
 		_, _ = fmt.Fprintf(writer, "  Warning: %s\n", result.PluginData.Warning)
@@ -218,23 +105,12 @@ func switchTargets(group usecase.GroupResult) []switchTargetOutput {
 }
 
 func nextSwitchAction(result usecase.AddResult) string {
-	var action string
-	if len(result.Activation.UserActions) > 0 {
-		action = result.Activation.UserActions[0]
-	} else if len(result.Plan.UserActions) > 0 {
-		action = result.Plan.UserActions[0]
+	action := firstSwitchUserAction(result)
+	if pending := pendingAuthSwitchAction(result, action); pending != "" {
+		return pending
 	}
-	if result.Activation.Authentication == domain.AuthenticationPending || (result.Activation.Authentication == "" && result.Plan.Authentication == domain.AuthenticationPending) {
-		if action != "" {
-			return action + "; complete authentication, then verify activation and authentication in the target client"
-		}
-		return "complete authentication, then verify activation and authentication in the target client"
-	}
-	if result.Activation.Authentication == domain.AuthenticationNotChecked || (result.Activation.Authentication == "" && result.Plan.Authentication == domain.AuthenticationNotChecked) {
-		if action != "" {
-			return action + "; verify authentication requirements before using the plugin"
-		}
-		return "verify authentication requirements before using the plugin"
+	if unchecked := uncheckedAuthSwitchAction(result, action); unchecked != "" {
+		return unchecked
 	}
 	if action != "" {
 		return action
@@ -243,6 +119,36 @@ func nextSwitchAction(result usecase.AddResult) string {
 		return "start a new client session and verify the switched plugin is available"
 	}
 	return "finish activation in the target client, authenticate if requested, then verify the switched plugin is available"
+}
+
+func firstSwitchUserAction(result usecase.AddResult) string {
+	if len(result.Activation.UserActions) > 0 {
+		return result.Activation.UserActions[0]
+	}
+	if len(result.Plan.UserActions) > 0 {
+		return result.Plan.UserActions[0]
+	}
+	return ""
+}
+
+func pendingAuthSwitchAction(result usecase.AddResult, action string) string {
+	if result.Activation.Authentication != domain.AuthenticationPending && (result.Activation.Authentication != "" || result.Plan.Authentication != domain.AuthenticationPending) {
+		return ""
+	}
+	if action != "" {
+		return action + "; complete authentication, then verify activation and authentication in the target client"
+	}
+	return "complete authentication, then verify activation and authentication in the target client"
+}
+
+func uncheckedAuthSwitchAction(result usecase.AddResult, action string) string {
+	if result.Activation.Authentication != domain.AuthenticationNotChecked && (result.Activation.Authentication != "" || result.Plan.Authentication != domain.AuthenticationNotChecked) {
+		return ""
+	}
+	if action != "" {
+		return action + "; verify authentication requirements before using the plugin"
+	}
+	return "verify authentication requirements before using the plugin"
 }
 
 func switchHasPendingActions(targets []switchTargetOutput) bool {
@@ -268,27 +174,31 @@ func runPurgeData(ctx context.Context, cmd *cobra.Command, app App, opts *option
 	if err != nil {
 		return err
 	}
-	service := app.Lifecycle
-	service.StateStore = app.StateStore
 	if installation.DataRetained && len(installation.Clients) == 0 {
-		if len(targets) != 0 {
-			return fmt.Errorf("a data_retained purge does not accept --target")
-		}
-		if err := service.PurgeRetainedData(ctx, installation.InstallationID, false); err != nil {
-			return err
-		}
-		if opts.dryRun {
-			return renderPurgeDataResult(cmd.OutOrStdout(), opts.format, installation, true)
-		}
-		if err := service.PurgeRetainedData(ctx, installation.InstallationID, true); err != nil {
-			return err
-		}
-		return renderPurgeDataResult(cmd.OutOrStdout(), opts.format, installation, false)
+		return runPurgeRetainedData(ctx, cmd, app, opts, installation, targets)
 	}
 	if len(targets) == 0 {
 		return fmt.Errorf("removing active bindings with --purge-data requires an explicit --target list")
 	}
 	return runRemoveMany(ctx, cmd, app, opts, installation.InstallationID, targets)
+}
+
+func runPurgeRetainedData(ctx context.Context, cmd *cobra.Command, app App, opts *options, installation domain.Installation, targets []domain.ClientID) error {
+	if len(targets) != 0 {
+		return fmt.Errorf("a data_retained purge does not accept --target")
+	}
+	service := app.Lifecycle
+	service.StateStore = app.StateStore
+	if err := service.PurgeRetainedData(ctx, installation.InstallationID, false); err != nil {
+		return err
+	}
+	if opts.dryRun {
+		return renderPurgeDataResult(cmd.OutOrStdout(), opts.format, installation, true)
+	}
+	if err := service.PurgeRetainedData(ctx, installation.InstallationID, true); err != nil {
+		return err
+	}
+	return renderPurgeDataResult(cmd.OutOrStdout(), opts.format, installation, false)
 }
 
 func renderPurgeDataResult(writer io.Writer, format string, installation domain.Installation, dryRun bool) error {

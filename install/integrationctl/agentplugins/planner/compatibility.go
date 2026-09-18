@@ -73,11 +73,7 @@ func Compatibility(registry *clients.Registry, envelope domain.PackageEnvelope, 
 }
 
 func compatibilityFor(envelope domain.PackageEnvelope, capabilities domain.ClientCapabilities, limiter clients.CompatibilityLimiter) ClientCompatibility {
-	result := ClientCompatibility{
-		ClientID: capabilities.ClientID, Capabilities: capabilities,
-		Components:  make([]ComponentCompatibility, 0),
-		Limitations: []string{"static_adapter_support_only", "installation_not_checked", "authentication_not_checked", "runtime_not_checked", "client_version_not_checked", "catalog_publication_not_checked"},
-	}
+	result := newClientCompatibility(capabilities)
 	if capabilities.ActivationMode == domain.ActivationByUser {
 		result.Limitations = append(result.Limitations, "manual_activation_required")
 	}
@@ -86,107 +82,159 @@ func compatibilityFor(envelope domain.PackageEnvelope, capabilities domain.Clien
 	}
 	// Reuse lifecycle component choices, then apply authoring-only uncertainty
 	// bounds. No detected client or DeliveryPlan is constructed.
-	decisions := componentDecisions(envelope, capabilities)
+	decisions, invalid, invalidKind := compatibilityInventory(envelope, capabilities)
+	result.Limitations = applyErrorDiagnostics(envelope, invalid, invalidKind, result.Limitations)
+	includeMissingInvalid(&decisions, invalid)
+	sortCompatibilityDecisions(decisions)
+	result.Components = compatibilityComponents(envelope, limiter, decisions, invalid, invalidKind)
+	sort.Strings(result.Limitations)
+	return result
+}
+
+func newClientCompatibility(capabilities domain.ClientCapabilities) ClientCompatibility {
+	return ClientCompatibility{
+		ClientID: capabilities.ClientID, Capabilities: capabilities,
+		Components:  make([]ComponentCompatibility, 0),
+		Limitations: []string{"static_adapter_support_only", "installation_not_checked", "authentication_not_checked", "runtime_not_checked", "client_version_not_checked", "catalog_publication_not_checked"},
+	}
+}
+
+func compatibilityInventory(envelope domain.PackageEnvelope, capabilities domain.ClientCapabilities) ([]domain.ComponentDecision, map[domain.ComponentKind]map[string]bool, map[domain.ComponentKind]bool) {
+	invalid, invalidKind := collectInvalidComponents(envelope)
+	return componentDecisions(envelope, capabilities), invalid, invalidKind
+}
+
+func collectInvalidComponents(envelope domain.PackageEnvelope) (map[domain.ComponentKind]map[string]bool, map[domain.ComponentKind]bool) {
 	invalid := make(map[domain.ComponentKind]map[string]bool)
 	// Empty names are exact item identities, never a kind-wide sentinel.
 	invalidKind := map[domain.ComponentKind]bool{
 		domain.ComponentSkill: envelope.Inventory.InvalidSkillsRoot,
 	}
-	mark := func(kind domain.ComponentKind, name string) {
-		if invalid[kind] == nil {
-			invalid[kind] = make(map[string]bool)
-		}
-		invalid[kind][name] = true
-	}
 	for name := range envelope.MCP.InvalidServer {
-		mark(domain.ComponentMCPServer, name)
+		markInvalidComponent(invalid, domain.ComponentMCPServer, name)
 	}
 	for _, name := range envelope.Inventory.InvalidMCPServer {
-		mark(domain.ComponentMCPServer, name)
+		markInvalidComponent(invalid, domain.ComponentMCPServer, name)
 	}
 	for _, name := range envelope.Inventory.InvalidSkills {
-		mark(domain.ComponentSkill, name)
+		markInvalidComponent(invalid, domain.ComponentSkill, name)
 	}
+	return invalid, invalidKind
+}
+
+func markInvalidComponent(invalid map[domain.ComponentKind]map[string]bool, kind domain.ComponentKind, name string) {
+	if invalid[kind] == nil {
+		invalid[kind] = make(map[string]bool)
+	}
+	invalid[kind][name] = true
+}
+
+func applyErrorDiagnostics(envelope domain.PackageEnvelope, invalid map[domain.ComponentKind]map[string]bool, invalidKind map[domain.ComponentKind]bool, limitations []string) []string {
 	for _, diagnostic := range envelope.Diagnostics {
 		if diagnostic.Severity != domain.SeverityError {
 			continue
 		}
-		result.Limitations = appendUnique(result.Limitations, "input_has_errors")
-		var kind domain.ComponentKind
-		switch diagnostic.Boundary {
-		case domain.BoundarySkill:
-			kind = domain.ComponentSkill
-		case domain.BoundaryMCP:
-			// This boundary describes the MCP document, not a server key.
+		limitations = appendUnique(limitations, "input_has_errors")
+		kind, kindWide := compatibilityDiagnosticKind(diagnostic.Boundary)
+		if kindWide {
 			invalidKind[domain.ComponentMCPServer] = true
 			continue
-		case domain.BoundaryMCPServer:
-			kind = domain.ComponentMCPServer
-		case domain.BoundaryApp:
-			kind = domain.ComponentApp
-		case domain.BoundaryExtension:
-			kind = domain.ComponentExtension
 		}
 		if kind != "" {
-			mark(kind, diagnostic.Item)
+			markInvalidComponent(invalid, kind, diagnostic.Item)
 		}
 	}
-	for kind, names := range invalid {
-		for name := range names {
-			found := false
-			for _, item := range decisions {
-				if item.Kind == kind && item.Name == name {
-					found = true
-					break
-				}
-			}
-			if !found {
-				decisions = append(decisions, decision(kind, name, domain.SupportUnsupported))
-			}
-		}
-	}
+	return limitations
+}
+
+func sortCompatibilityDecisions(decisions []domain.ComponentDecision) {
 	sort.Slice(decisions, func(i, j int) bool {
 		if decisions[i].Kind != decisions[j].Kind {
 			return decisions[i].Kind < decisions[j].Kind
 		}
 		return decisions[i].Name < decisions[j].Name
 	})
+}
+
+func compatibilityDiagnosticKind(boundary domain.FailureBoundary) (domain.ComponentKind, bool) {
+	switch boundary {
+	case domain.BoundarySkill:
+		return domain.ComponentSkill, false
+	case domain.BoundaryMCP:
+		// This boundary describes the MCP document, not a server key.
+		return "", true
+	case domain.BoundaryMCPServer:
+		return domain.ComponentMCPServer, false
+	case domain.BoundaryApp:
+		return domain.ComponentApp, false
+	case domain.BoundaryExtension:
+		return domain.ComponentExtension, false
+	}
+	return "", false
+}
+
+func includeMissingInvalid(decisions *[]domain.ComponentDecision, invalid map[domain.ComponentKind]map[string]bool) {
+	for kind, names := range invalid {
+		for name := range names {
+			found := false
+			for _, item := range *decisions {
+				if item.Kind == kind && item.Name == name {
+					found = true
+					break
+				}
+			}
+			if !found {
+				*decisions = append(*decisions, decision(kind, name, domain.SupportUnsupported))
+			}
+		}
+	}
+}
+
+func compatibilityComponents(envelope domain.PackageEnvelope, limiter clients.CompatibilityLimiter, decisions []domain.ComponentDecision, invalid map[domain.ComponentKind]map[string]bool, invalidKind map[domain.ComponentKind]bool) []ComponentCompatibility {
 	counts := make(map[domain.ComponentKind]int)
+	components := make([]ComponentCompatibility, 0, len(decisions))
 	for _, item := range decisions {
-		counts[item.Kind]++
-		component := ComponentCompatibility{Kind: item.Kind, Index: counts[item.Kind], Support: item.Support}
-		reject := func(code string) {
-			component.Support = domain.SupportUnsupported
-			component.Limitations = appendUnique(component.Limitations, code)
+		components = append(components, refineComponentCompatibility(envelope, limiter, item, invalid, invalidKind, counts))
+	}
+	return components
+}
+
+func refineComponentCompatibility(envelope domain.PackageEnvelope, limiter clients.CompatibilityLimiter, item domain.ComponentDecision, invalid map[domain.ComponentKind]map[string]bool, invalidKind map[domain.ComponentKind]bool, counts map[domain.ComponentKind]int) ComponentCompatibility {
+	counts[item.Kind]++
+	component := ComponentCompatibility{Kind: item.Kind, Index: counts[item.Kind], Support: item.Support}
+	reject := func(code string) {
+		component.Support = domain.SupportUnsupported
+		component.Limitations = appendUnique(component.Limitations, code)
+	}
+	if item.Reason != "" {
+		component.Limitations = append(component.Limitations, item.Reason)
+	}
+	if invalid[item.Kind][item.Name] || invalidKind[item.Kind] {
+		reject("invalid_component")
+	}
+	applyKindCompatibility(envelope, item, reject)
+	if limiter != nil {
+		rejected, notes := limiter.ComponentLimitations(envelope, item)
+		for _, code := range rejected {
+			reject(code)
 		}
-		if item.Reason != "" {
-			component.Limitations = append(component.Limitations, item.Reason)
+		component.Limitations = append(component.Limitations, notes...)
+	}
+	return component
+}
+
+func applyKindCompatibility(envelope domain.PackageEnvelope, item domain.ComponentDecision, reject func(string)) {
+	switch item.Kind {
+	case domain.ComponentExtension:
+		// The registry has no namespace-specific interpreter contract.
+		reject("extension_semantics_not_established")
+	case domain.ComponentMCPServer:
+		if envelope.MCP.Present && !envelope.MCP.Enabled {
+			reject("component_disabled")
 		}
-		if invalid[item.Kind][item.Name] || invalidKind[item.Kind] {
+	case domain.ComponentApp:
+		if !envelope.App.Enabled || envelope.App.Bindings[item.Name].ID == "" {
 			reject("invalid_component")
 		}
-		switch item.Kind {
-		case domain.ComponentExtension:
-			// The registry has no namespace-specific interpreter contract.
-			reject("extension_semantics_not_established")
-		case domain.ComponentMCPServer:
-			if envelope.MCP.Present && !envelope.MCP.Enabled {
-				reject("component_disabled")
-			}
-		case domain.ComponentApp:
-			if !envelope.App.Enabled || envelope.App.Bindings[item.Name].ID == "" {
-				reject("invalid_component")
-			}
-		}
-		if limiter != nil {
-			rejected, notes := limiter.ComponentLimitations(envelope, item)
-			for _, code := range rejected {
-				reject(code)
-			}
-			component.Limitations = append(component.Limitations, notes...)
-		}
-		result.Components = append(result.Components, component)
 	}
-	sort.Strings(result.Limitations)
-	return result
 }

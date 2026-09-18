@@ -20,20 +20,9 @@ type Planner struct {
 	// and what a plan still asks of the user. It is injected by the composition
 	// root and never defaulted to "every client".
 	Registry *clients.Registry
-	// Detected is the fallback surface map for callers that do not yet pass one
-	// in the request. It is read only when domain.PlanRequest.Detected is nil.
-	Detected map[domain.ClientID]domain.DetectedClient
 }
 
 var errPathPolicyRequired = errors.New("planner path policy is required")
-
-// BindDetected returns a planner that uses this detection map as the fallback
-// surface for callers that still omit PlanRequest.Detected. The composition
-// root injects the planner; CLI must not reconstruct one just to attach Detected.
-func (planner Planner) BindDetected(detected map[domain.ClientID]domain.DetectedClient) ports.DeliveryPlanner {
-	planner.Detected = detected
-	return planner
-}
 
 // ChatGPTAppBindingAction describes registration and package-author
 // responsibilities. The wording is owned by clients/chatgpt.AppBindingAction;
@@ -69,9 +58,6 @@ func (planner Planner) Plan(ctx context.Context, request domain.PlanRequest) (do
 	if planner.Registry == nil {
 		return domain.DeliveryPlan{}, clients.ErrRegistryRequired
 	}
-	if request.Detected != nil {
-		planner.Detected = request.Detected
-	}
 	plan, err := planner.plan(ctx, request)
 	if err != nil {
 		return plan, err
@@ -92,7 +78,7 @@ func (planner Planner) plan(ctx context.Context, request domain.PlanRequest) (do
 	}
 	input := clients.PlanInput{
 		Envelope: request.Envelope, Client: request.Client,
-		Detected: planner.Detected, Intent: request.InstallIntent,
+		Detected: request.Detected, Intent: request.InstallIntent,
 	}
 	planner.setNativeRegistry(&plan, input)
 	if !admissible(definition, request, &plan) {

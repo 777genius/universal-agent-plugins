@@ -7,9 +7,10 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/spf13/cobra"
+
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/directoryv1"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
-	"github.com/spf13/cobra"
 )
 
 type updateAllInstallation struct {
@@ -37,10 +38,44 @@ type preparedUpdateAllItem struct {
 	resultIndex  int
 }
 
+type updateAllSession struct {
+	ctx             context.Context
+	cmd             *cobra.Command
+	app             App
+	opts            *options
+	installations   []domain.Installation
+	result          updateAllResult
+	preparedItems   []preparedUpdateAllItem
+	preflightFailed bool
+	bundle          directoryv1.VerifiedBundle
+	bundleOK        bool
+	detected        map[domain.ClientID]domain.DetectedClient
+	detectionErr    error
+}
+
 func runUpdateAll(ctx context.Context, cmd *cobra.Command, app App, opts *options) error {
-	state, err := app.StateStore.Load()
+	session := &updateAllSession{ctx: ctx, cmd: cmd, app: app, opts: opts}
+	empty, err := session.load()
 	if err != nil {
 		return err
+	}
+	if empty {
+		return renderUpdateAll(cmd, opts, session.result)
+	}
+	defer session.cleanupPrepared()
+	if err := session.preflightAll(); err != nil {
+		return err
+	}
+	if opts.dryRun {
+		return renderUpdateAll(cmd, opts, session.result)
+	}
+	return session.applyAll()
+}
+
+func (session *updateAllSession) load() (bool, error) {
+	state, err := session.app.StateStore.Load()
+	if err != nil {
+		return false, err
 	}
 	installations := append([]domain.Installation(nil), state.Installations...)
 	sort.Slice(installations, func(i, j int) bool {
@@ -50,100 +85,130 @@ func runUpdateAll(ctx context.Context, cmd *cobra.Command, app App, opts *option
 		}
 		return installations[i].InstallationID < installations[j].InstallationID
 	})
-	result := updateAllResult{Batch: true, Status: "planned", DryRun: opts.dryRun,
-		Installations: make([]updateAllInstallation, 0, len(installations))}
+	session.installations = installations
+	session.result = updateAllResult{
+		Batch: true, Status: "planned", DryRun: session.opts.dryRun,
+		Installations: make([]updateAllInstallation, 0, len(installations)),
+	}
 	if len(installations) == 0 {
-		result.Status = "no_installations"
-		return renderUpdateAll(cmd, opts, result)
+		session.result.Status = "no_installations"
+		return true, nil
 	}
-
-	bundle, bundleOK, detected, detectionErr, err := updateAllDirectoryContext(ctx, app, state, installations)
+	bundle, bundleOK, detected, detectionErr, err := updateAllDirectoryContext(session.ctx, session.app, state, installations)
 	if err != nil {
-		return err
+		return false, err
 	}
-	preparedItems := make([]preparedUpdateAllItem, 0, len(installations))
-	defer func() {
-		for index := range preparedItems {
-			preparedItems[index].prepared.cleanup()
-		}
-	}()
+	session.bundle, session.bundleOK, session.detected, session.detectionErr = bundle, bundleOK, detected, detectionErr
+	session.preparedItems = make([]preparedUpdateAllItem, 0, len(installations))
+	return false, nil
+}
 
-	preflightFailed := false
-	for _, installation := range installations {
-		item := updateAllInstallation{InstallationID: installation.InstallationID, Name: installation.DeclaredName}
-		if installation.OriginMode == domain.OriginModeDirectory && installation.Directory != nil {
-			status := inspectOutdatedInstallation(bundle, bundleOK, detected, detectionErr, app.Version, installation, opts.scope)
-			switch status.Status {
-			case "current":
-				item.Status, item.Reason = "skipped", status.Reason
-				result.Skipped++
-				result.Installations = append(result.Installations, item)
-				continue
-			case "blocked", "unknown":
-				item.Status, item.Reason = "preflight_failed", status.Reason
-				result.Failed++
-				preflightFailed = true
-				result.Installations = append(result.Installations, item)
-				continue
-			}
-		}
-		targets := installationTargets(installation, opts.scope)
-		prepared, prepareErr := prepareUpdateMany(ctx, app, opts, installation, targets, !opts.dryRun)
-		if prepareErr != nil {
-			item.Status, item.Reason = "preflight_failed", prepareErr.Error()
-			if prepared != nil {
-				plan := prepared.result
-				item.Plan = &plan
-				prepared.cleanup()
-			}
-			result.Failed++
-			preflightFailed = true
-			result.Installations = append(result.Installations, item)
-			continue
-		}
-		if prepared.noChange {
-			item.Status, item.Reason = "skipped", "installed package and every selected target are current"
-			plan := prepared.result
-			item.Plan = &plan
-			prepared.cleanup()
-			result.Skipped++
-			result.Installations = append(result.Installations, item)
-			continue
-		}
-		item.Status = "planned"
-		plan := prepared.result
-		item.Plan = &plan
-		resultIndex := len(result.Installations)
-		result.Installations = append(result.Installations, item)
-		preparedItems = append(preparedItems, preparedUpdateAllItem{installation: installation, prepared: prepared, resultIndex: resultIndex})
-		result.Planned++
+func (session *updateAllSession) cleanupPrepared() {
+	for index := range session.preparedItems {
+		session.preparedItems[index].prepared.cleanup()
 	}
-	if preflightFailed {
-		result.Status = "preflight_failed"
-		_ = renderUpdateAll(cmd, opts, result)
+}
+
+func (session *updateAllSession) preflightAll() error {
+	for _, installation := range session.installations {
+		session.classifyInstallation(installation)
+	}
+	if session.preflightFailed {
+		session.result.Status = "preflight_failed"
+		_ = renderUpdateAll(session.cmd, session.opts, session.result)
 		return fmt.Errorf("update --all preflight failed; no installation was changed")
 	}
-	if opts.dryRun {
-		return renderUpdateAll(cmd, opts, result)
+	return nil
+}
+
+func (session *updateAllSession) classifyInstallation(installation domain.Installation) {
+	item := updateAllInstallation{InstallationID: installation.InstallationID, Name: installation.DeclaredName}
+	if session.skipDirectoryStatus(installation, &item) {
+		session.result.Installations = append(session.result.Installations, item)
+		return
 	}
-	result.Status = "completed"
-	for index := range preparedItems {
-		item := &preparedItems[index]
-		applied, applyErr := applyPreparedUpdate(ctx, item.prepared)
-		view := &result.Installations[item.resultIndex]
+	targets := installationTargets(installation, session.opts.scope)
+	prepared, prepareErr := prepareUpdateMany(session.ctx, session.app, session.opts, installation, targets, !session.opts.dryRun)
+	if prepareErr != nil {
+		session.recordPreflightFailure(&item, prepared, prepareErr)
+		return
+	}
+	if prepared.noChange {
+		session.recordSkipCurrent(prepared, &item)
+		return
+	}
+	session.recordPlanned(installation, prepared, &item)
+}
+
+func (session *updateAllSession) skipDirectoryStatus(installation domain.Installation, item *updateAllInstallation) bool {
+	if installation.OriginMode != domain.OriginModeDirectory || installation.Directory == nil {
+		return false
+	}
+	status := inspectOutdatedInstallation(session.bundle, session.bundleOK, session.detected, session.detectionErr, session.app.Version, installation, session.opts.scope)
+	switch status.Status {
+	case "current":
+		item.Status, item.Reason = "skipped", status.Reason
+		session.result.Skipped++
+		return true
+	case "blocked", "unknown":
+		item.Status, item.Reason = "preflight_failed", status.Reason
+		session.result.Failed++
+		session.preflightFailed = true
+		return true
+	}
+	return false
+}
+
+func (session *updateAllSession) recordPreflightFailure(item *updateAllInstallation, prepared *preparedUpdateMany, prepareErr error) {
+	item.Status, item.Reason = "preflight_failed", prepareErr.Error()
+	if prepared != nil {
+		plan := prepared.result
+		item.Plan = &plan
+		prepared.cleanup()
+	}
+	session.result.Failed++
+	session.preflightFailed = true
+	session.result.Installations = append(session.result.Installations, *item)
+}
+
+func (session *updateAllSession) recordSkipCurrent(prepared *preparedUpdateMany, item *updateAllInstallation) {
+	item.Status, item.Reason = "skipped", "installed package and every selected target are current"
+	plan := prepared.result
+	item.Plan = &plan
+	prepared.cleanup()
+	session.result.Skipped++
+	session.result.Installations = append(session.result.Installations, *item)
+}
+
+func (session *updateAllSession) recordPlanned(installation domain.Installation, prepared *preparedUpdateMany, item *updateAllInstallation) {
+	item.Status = "planned"
+	plan := prepared.result
+	item.Plan = &plan
+	resultIndex := len(session.result.Installations)
+	session.result.Installations = append(session.result.Installations, *item)
+	session.preparedItems = append(session.preparedItems, preparedUpdateAllItem{installation: installation, prepared: prepared, resultIndex: resultIndex})
+	session.result.Planned++
+}
+
+func (session *updateAllSession) applyAll() error {
+	session.result.Status = "completed"
+	for index := range session.preparedItems {
+		item := &session.preparedItems[index]
+		applied, applyErr := applyPreparedUpdate(session.ctx, item.prepared)
+		view := &session.result.Installations[item.resultIndex]
 		view.Plan = &applied
 		if applyErr != nil {
 			view.Status, view.Reason = "apply_failed", applyErr.Error()
-			result.Failed++
-			result.Status = "partial_failure"
-			markUnattemptedUpdateAll(&result, preparedItems, index+1)
-			_ = renderUpdateAll(cmd, opts, result)
+			session.result.Failed++
+			session.result.Status = "partial_failure"
+			markUnattemptedUpdateAll(&session.result, session.preparedItems, index+1)
+			_ = renderUpdateAll(session.cmd, session.opts, session.result)
 			return applyErr
 		}
 		view.Status = "updated"
-		result.Updated++
+		session.result.Updated++
 	}
-	return renderUpdateAll(cmd, opts, result)
+	return renderUpdateAll(session.cmd, session.opts, session.result)
 }
 
 func markUnattemptedUpdateAll(result *updateAllResult, prepared []preparedUpdateAllItem, start int) {
@@ -172,6 +237,10 @@ func updateAllDirectoryContext(ctx context.Context, app App, state domain.StateF
 	if !ok {
 		return directoryv1.VerifiedBundle{}, false, nil, nil, nil
 	}
+	return detectUpdateAllClients(ctx, app, bundle)
+}
+
+func detectUpdateAllClients(ctx context.Context, app App, bundle directoryv1.VerifiedBundle) (directoryv1.VerifiedBundle, bool, map[domain.ClientID]domain.DetectedClient, error, error) {
 	clients, err := detectClientsForLifecycleResolution(ctx, app.Detector, false)
 	if err != nil {
 		return bundle, true, nil, fmt.Errorf("detect AI clients: %w", err), nil
@@ -196,26 +265,31 @@ func renderUpdateAll(cmd *cobra.Command, opts *options, result updateAllResult) 
 
 func renderUpdateAllHuman(writer io.Writer, result updateAllResult) error {
 	for _, installation := range result.Installations {
-		if installation.Plan != nil {
-			for _, target := range installation.Plan.Targets {
-				if err := renderOpenCodeRuntimeNotice(writer, target.Output.Result); err != nil {
-					return err
-				}
-			}
-		}
-		if _, err := fmt.Fprintf(writer, "%s: %s", installation.Name, installation.Status); err != nil {
-			return err
-		}
-		if installation.Reason != "" {
-			if _, err := fmt.Fprintf(writer, " - %s", installation.Reason); err != nil {
-				return err
-			}
-		}
-		if _, err := fmt.Fprintln(writer); err != nil {
+		if err := renderUpdateAllInstallation(writer, installation); err != nil {
 			return err
 		}
 	}
 	_, err := fmt.Fprintf(writer, "Update all: %s (planned=%d updated=%d skipped=%d failed=%d)\n",
 		result.Status, result.Planned, result.Updated, result.Skipped, result.Failed)
+	return err
+}
+
+func renderUpdateAllInstallation(writer io.Writer, installation updateAllInstallation) error {
+	if installation.Plan != nil {
+		for _, target := range installation.Plan.Targets {
+			if err := renderOpenCodeRuntimeNotice(writer, target.Output.Result); err != nil {
+				return err
+			}
+		}
+	}
+	if _, err := fmt.Fprintf(writer, "%s: %s", installation.Name, installation.Status); err != nil {
+		return err
+	}
+	if installation.Reason != "" {
+		if _, err := fmt.Fprintf(writer, " - %s", installation.Reason); err != nil {
+			return err
+		}
+	}
+	_, err := fmt.Fprintln(writer)
 	return err
 }

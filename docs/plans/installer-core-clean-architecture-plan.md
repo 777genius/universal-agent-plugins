@@ -829,6 +829,8 @@ Generic-pipeline `stage`: validate plan paths (`Paths` + `StagingLayout.Validate
 
 Приёмка: полный `Required` + `Coverage` зелёные на финальном PR в `main`; Codecov не ниже базы; `generated-check` без изменений; **финальный PR в `main` — только по прямой команде пользователя**.
 
+**Landed** on `refactor/installer-core-part-11-finalize`: aliases and `Planner.Detected` removed; `PlanRequest.Detected` is the only detection surface; catalog/directoryv1 ChatGPT branches use `PlansWithoutHostPresence` / `AppSupport`; ClientID budget packages object is empty; ADR 0007; `clients/internal/exampleclient`; contracttest README; ARCHITECTURE CLI/`cli-no-core-internals` row; in-scope size splits so the LEGACY SIZE BASELINE no longer lists in-scope files. Remaining baseline entries are the §11 out-of-scope set (`domain/directory.go`, CLI `source.go`/`add_multi.go`/`lifecycle.go`/`read.go`/`search.go`, plus adapters/conformance/authoring/transaction that the DoD explicitly left alone).
+
 ---
 
 ## 9. DIP: исправление usecase → pathpolicy и usecase → planner

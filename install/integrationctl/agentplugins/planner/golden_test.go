@@ -57,18 +57,19 @@ func TestPlanGoldenPinsDetectedMapDivergence(t *testing.T) {
 	envelope := goldenEnvelopes()[0].envelope
 	client := goldenClient(domain.ClientVSCode, root)
 
-	// cmd/agentplugins/main.go hands the use case an empty map.
+	// A PlanRequest with no surface map is what the composition root sends when
+	// detection has not run yet.
 	fromCommand, err := testPlanner(Planner{ManagedRoot: managed}).Plan(
 		context.Background(), envelope, client, domain.ScopeUser, "demo-0123456789ab")
 	if err != nil {
 		t.Fatal(err)
 	}
-	// interactive_targets.go, lifecycle.go and read.go build their own planner
-	// from the detection result.
 	detected := map[domain.ClientID]domain.DetectedClient{
 		domain.ClientCopilot: goldenClient(domain.ClientCopilot, root),
 	}
-	fromCLI, err := testPlanner(Planner{ManagedRoot: managed, Detected: detected}).Plan(
+	fromCLIPlanner := testPlanner(Planner{ManagedRoot: managed})
+	fromCLIPlanner.Detected = detected
+	fromCLI, err := fromCLIPlanner.Plan(
 		context.Background(), envelope, client, domain.ScopeUser, "demo-0123456789ab")
 	if err != nil {
 		t.Fatal(err)

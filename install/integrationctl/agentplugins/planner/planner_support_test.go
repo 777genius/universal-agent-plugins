@@ -11,7 +11,10 @@ import (
 // completedPlanner keeps the positional call shape the in-package tests were
 // written against. The tests outside this package use plannertest.NewPlanner;
 // an import of that package from here would be a cycle.
-type completedPlanner struct{ Planner }
+type completedPlanner struct {
+	Planner
+	Detected map[domain.ClientID]domain.DetectedClient
+}
 
 func (planner completedPlanner) Plan(
 	ctx context.Context,
@@ -22,6 +25,7 @@ func (planner completedPlanner) Plan(
 ) (domain.DeliveryPlan, error) {
 	return planner.Planner.Plan(ctx, domain.PlanRequest{
 		Envelope: envelope, Client: client, Scope: scope, PhysicalArtifactID: physicalArtifactID,
+		Detected: planner.Detected,
 	})
 }
 
@@ -34,7 +38,7 @@ func testPlanner(base Planner) completedPlanner {
 	if base.Registry == nil {
 		base.Registry = all.Default()
 	}
-	return completedPlanner{base}
+	return completedPlanner{Planner: base}
 }
 
 // testCompatibility completes the compatibility facade with the full registry.

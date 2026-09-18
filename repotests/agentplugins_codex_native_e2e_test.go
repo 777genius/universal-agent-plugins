@@ -6,7 +6,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/providers"
 	"io"
 	"os"
 	"os/exec"
@@ -16,6 +15,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
 )
 
 // This suite is intentionally opt-in and uses only a freshly provisioned binary.
@@ -449,7 +450,7 @@ func TestAgentpluginsCodexNativeLifecycle(t *testing.T) {
 	if physical == "" {
 		t.Fatal("installer plan omitted physical artifact identity")
 	}
-	f.PluginID = "native-proof@" + providers.ManagedMarketplaceName(physical)
+	f.PluginID = "native-proof@" + shared.ManagedMarketplaceName(physical)
 	nativeAttempt(stages, "native_inventory", "installed-inventory.log")
 	b, err = nativeCommand(t, f, client, "installed-inventory", "plugin", "list", "--json")
 	if err != nil {
@@ -1105,7 +1106,7 @@ func TestAgentpluginsCodexImmutableGitDiscovery(t *testing.T) {
 	if physical == "" {
 		t.Fatal("missing native physical identity")
 	}
-	f.PluginID = "demo@" + providers.ManagedMarketplaceName(physical)
+	f.PluginID = "demo@" + shared.ManagedMarketplaceName(physical)
 	stateBytes, err := os.ReadFile(filepath.Join(f.Root, "installer-state", "state-v2.json"))
 	if err != nil {
 		t.Fatal(err)

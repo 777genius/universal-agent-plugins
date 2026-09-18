@@ -14,6 +14,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/spf13/cobra"
+
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/prompt"
 	"github.com/777genius/plugin-kit-ai/cli/internal/terminalprompts"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/dirswap"
@@ -35,7 +37,6 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/usecase"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/usecasetest"
 	legacyports "github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
-	"github.com/spf13/cobra"
 )
 
 func TestRepairSourceResolutionIsDeadlineAndCancellationResponsive(t *testing.T) {
@@ -2989,7 +2990,7 @@ func newCLIFixture(t *testing.T, clients []domain.DetectedClient) cliFixture {
 	packageLoader := loader.Loader{Registry: registry}
 	managedRoot := filepath.Join(root, "data", "managed")
 	stager := providerstest.NewStager(providers.Stager{})
-	planner := plannertest.NewPlanner(clientplanner.Planner{ManagedRoot: managedRoot, Detected: map[domain.ClientID]domain.DetectedClient{}})
+	planner := plannertest.NewPlanner(clientplanner.Planner{ManagedRoot: managedRoot})
 	mutationLock := processlock.Lock{Path: filepath.Join(root, "data", "mutation.lock")}
 	directory := dirswap.Manager{JournalDir: operations}
 	lifecycle := usecasetest.NewService(usecase.Service{StateStore: store, Planner: planner, Targets: planner, Stager: stager, Activator: providerstest.NewActivator(providers.Activator{}), Lock: mutationLock,

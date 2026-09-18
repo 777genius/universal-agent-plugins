@@ -17,6 +17,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/dirswap"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/processlock"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/statev2"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	clientplanner "github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/planner"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/plannertest"
@@ -1828,7 +1829,7 @@ func TestRemoveCleansNativeCodexMarketplaceBeforeManagedArtifactDeletion(t *test
 	if !removed.Mutated || !removed.Deactivation.ExternalRemovalComplete {
 		t.Fatalf("remove result = %+v", removed)
 	}
-	marketplace := providers.ManagedMarketplaceName(installed.Plan.PhysicalArtifactID)
+	marketplace := shared.ManagedMarketplaceName(installed.Plan.PhysicalArtifactID)
 	wantCleanup := []string{"/test/bin/codex", "plugin", "marketplace", "remove", marketplace, "--json"}
 	if got := runner.commands[len(runner.commands)-1].Argv; !reflect.DeepEqual(got, wantCleanup) {
 		t.Fatalf("last command = %#v, want cleanup %#v", got, wantCleanup)
@@ -2052,7 +2053,7 @@ func (runner *codexCleanupUsecaseRunner) Run(_ context.Context, command legacypo
 	runner.commands = append(runner.commands, command)
 	if len(command.Argv) >= 5 && command.Argv[1] == "plugin" && command.Argv[2] == "marketplace" && command.Argv[3] == "add" {
 		runner.managedPath = command.Argv[4]
-		runner.managedMarketplace = providers.ManagedMarketplaceName(filepath.Base(command.Argv[4]))
+		runner.managedMarketplace = shared.ManagedMarketplaceName(filepath.Base(command.Argv[4]))
 		return runner.writeConfig(true), nil
 	}
 	if len(command.Argv) >= 5 && command.Argv[1] == "plugin" && command.Argv[2] == "marketplace" && command.Argv[3] == "remove" {

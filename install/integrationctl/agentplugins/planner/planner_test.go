@@ -173,14 +173,12 @@ func TestPlannerPromotesVSCodeToReadyWhenCopilotIsDetected(t *testing.T) {
 	if manual.Status != domain.PlanManualActivationRequired || manual.PackageMode != domain.PackagePrepared {
 		t.Fatalf("manual plan = %+v", manual)
 	}
-	withBridge := testPlanner(Planner{
-		ManagedRoot: t.TempDir(),
-		Detected: map[domain.ClientID]domain.DetectedClient{
-			domain.ClientCopilot: {
-				ClientID: domain.ClientCopilot, Status: domain.DetectionDetected, ConfigRoot: "/test/home/.copilot", ExecutablePath: "/test/bin/copilot",
-			},
+	withBridge := testPlanner(Planner{ManagedRoot: t.TempDir()})
+	withBridge.Detected = map[domain.ClientID]domain.DetectedClient{
+		domain.ClientCopilot: {
+			ClientID: domain.ClientCopilot, Status: domain.DetectionDetected, ConfigRoot: "/test/home/.copilot", ExecutablePath: "/test/bin/copilot",
 		},
-	})
+	}
 	bridged, err := withBridge.Plan(context.Background(), testEnvelope(), client, domain.ScopeUser, "demo-0123456789ab")
 	if err != nil {
 		t.Fatal(err)

@@ -28,7 +28,7 @@ type packageVerifier interface {
 // based on descendant sampling.
 type NativeIdentityObserver struct {
 	Stager           packageVerifier
-	Runner           CommandRunner
+	Runner           ports.CommandRunner
 	DiscoveryTimeout time.Duration
 	// Registry supplies the client adapters that inspect native identity. It is
 	// injected by the composition root and never defaulted to "every client".
