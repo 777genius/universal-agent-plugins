@@ -16,13 +16,18 @@ import (
 	"strings"
 	"time"
 
+	processadapter "github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/process"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/claude"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/codex"
 	uapinstaller "github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/installer"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/managedstdio"
 )
 
 func main() {
+	if handled, code := managedstdio.Dispatch(os.Args[1:], os.Stderr); handled {
+		os.Exit(code)
+	}
 	state := flag.String("state", "", "absolute UAP state root")
 	pkg := flag.String("package", "", "absolute local package root")
 	config := flag.String("config", "", "absolute Codex client config root")
@@ -63,7 +68,10 @@ func main() {
 func runDemo(registry *clients.Registry, state, pkg, config, helper, client string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
-	eng, err := uapinstaller.New(uapinstaller.Config{StateRoot: state, HelperExecutable: helper, Registry: registry, TrustedLocalPackages: true})
+	eng, err := uapinstaller.New(uapinstaller.Config{
+		StateRoot: state, HelperExecutable: helper, Registry: registry,
+		Runner: processadapter.OS{}, TrustedLocalPackages: true,
+	})
 	if err != nil {
 		return err
 	}
@@ -98,7 +106,10 @@ func runGroupDemo(registry *clients.Registry, state, pkg, config, claudeConfig, 
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
-	eng, err := uapinstaller.New(uapinstaller.Config{StateRoot: state, HelperExecutable: helper, Registry: registry, TrustedLocalPackages: true})
+	eng, err := uapinstaller.New(uapinstaller.Config{
+		StateRoot: state, HelperExecutable: helper, Registry: registry,
+		Runner: processadapter.OS{}, TrustedLocalPackages: true,
+	})
 	if err != nil {
 		return err
 	}
@@ -164,7 +175,9 @@ func runLifecycle(ctx context.Context, eng *uapinstaller.Engine, install, update
 		return err
 	}
 	fmt.Printf("recover=%s\n", recovered.Outcome)
-	repeat, err := applyConfirmed(ctx, eng, install)
+	repeatRequest := install
+	repeatRequest.OperationID = install.OperationID + "-repeat"
+	repeat, err := applyConfirmed(ctx, eng, repeatRequest)
 	if err != nil {
 		return err
 	}
