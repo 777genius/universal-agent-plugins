@@ -7,7 +7,7 @@ toolchain go1.25.13
 replace github.com/777genius/plugin-kit-ai/install/integrationctl => ../
 
 require (
-	github.com/777genius/plugin-kit-ai/install/integrationctl v0.0.0-00010101000000-000000000000
+	github.com/777genius/plugin-kit-ai/install/integrationctl v0.0.0-20260919103549-148794ac5947
 	github.com/dlclark/regexp2 v1.12.0
 	github.com/pelletier/go-toml/v2 v2.3.0
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.3
