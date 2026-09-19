@@ -29,7 +29,7 @@ func InspectOpenCodeRegistry(plan domain.DeliveryPlan, managed *domain.ClientBin
 		return clients.RegistryIndeterminate, nil
 	}
 	if managed != nil {
-		if err := VerifyOpenCodeNativeObjects(root, plan.ActivePath, managed.NativeObjects, kernel); err != nil {
+		if err := VerifyOpenCodeNativeObjects(root, plan.ActivePath, managed.NativeObjects, kernel, true); err != nil {
 			return clients.RegistryIndeterminate, err
 		}
 	}

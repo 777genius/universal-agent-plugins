@@ -34,7 +34,7 @@ func (*Adapter) Activate(ctx context.Context, env clients.Env, request domain.Ac
 		RetryAction:       "retry the managed OpenCode native installation",
 		CompletedAction:   "restart OpenCode to load the installed plugin",
 		Verify: func() error {
-			return VerifyOpenCodeNativeObjects(request.Client.ConfigRoot, request.Delivery.ActivePath, request.Delivery.NativeObjects, env.NativeConfig)
+			return VerifyOpenCodeNativeObjects(request.Client.ConfigRoot, request.Delivery.ActivePath, request.Delivery.NativeObjects, env.NativeConfig, false)
 		},
 		Activate: func(ctx context.Context, request domain.ActivationRequest) error {
 			return ActivateOpenCodeNativeWithKernel(ctx, request, env.NativeConfig)

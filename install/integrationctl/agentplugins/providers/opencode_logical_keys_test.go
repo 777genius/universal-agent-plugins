@@ -79,14 +79,14 @@ func TestOpenCodeLogicalKeysLifecycle(t *testing.T) {
 			if err := opencode.ApplyOpenCodeNative(configRoot, active, nil, first); err != nil {
 				t.Fatal(err)
 			}
-			if err := opencode.VerifyOpenCodeNativeObjects(configRoot, active, first, nativeconfig.New()); err != nil {
+			if err := opencode.VerifyOpenCodeNativeObjects(configRoot, active, first, nativeconfig.New(), false); err != nil {
 				t.Fatal(err)
 			}
 			second := build("v2")
 			if err := opencode.ApplyOpenCodeNative(configRoot, active, first, second); err != nil {
 				t.Fatal(err)
 			}
-			if err := opencode.VerifyOpenCodeNativeObjects(configRoot, active, second, nativeconfig.New()); err != nil {
+			if err := opencode.VerifyOpenCodeNativeObjects(configRoot, active, second, nativeconfig.New(), false); err != nil {
 				t.Fatal(err)
 			}
 			// Exact repair recreates absent entries while preserving the foreign entry.
@@ -94,7 +94,7 @@ func TestOpenCodeLogicalKeysLifecycle(t *testing.T) {
 			if err := opencode.ApplyOpenCodeNative(configRoot, active, second, second); err != nil {
 				t.Fatal(err)
 			}
-			if err := opencode.VerifyOpenCodeNativeObjects(configRoot, active, second, nativeconfig.New()); err != nil {
+			if err := opencode.VerifyOpenCodeNativeObjects(configRoot, active, second, nativeconfig.New(), false); err != nil {
 				t.Fatal(err)
 			}
 			if err := opencode.ApplyOpenCodeNative(configRoot, "", second, nil); err != nil {

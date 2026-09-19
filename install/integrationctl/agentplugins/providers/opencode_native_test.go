@@ -76,7 +76,7 @@ func TestOpenCodeNativeAddUpdateVerifyRemovePreservesJSONCAndForeignConfig(t *te
 	if err := opencode.ApplyOpenCodeNative(configRoot, active, nil, firstObjects); err != nil {
 		t.Fatal(err)
 	}
-	if err := opencode.VerifyOpenCodeNativeObjects(configRoot, active, firstObjects, nativeconfig.New()); err != nil {
+	if err := opencode.VerifyOpenCodeNativeObjects(configRoot, active, firstObjects, nativeconfig.New(), false); err != nil {
 		t.Fatal(err)
 	}
 	body := readOpenCodeTestFile(t, jsonc)
@@ -269,7 +269,7 @@ func TestOpenCodeCommittedCleanupFailureKeepsReceiptsAndLaterLifecycleConsistent
 	if cleanupCalls != 1 {
 		t.Fatalf("committed cleanup calls = %d, want 1", cleanupCalls)
 	}
-	if err := opencode.VerifyOpenCodeNativeObjects(configRoot, activeV2, second, nativeconfig.New()); err != nil {
+	if err := opencode.VerifyOpenCodeNativeObjects(configRoot, activeV2, second, nativeconfig.New(), false); err != nil {
 		t.Fatalf("committed OpenCode receipts do not describe external state: %v", err)
 	}
 	if got := readOpenCodeTestFile(t, filepath.Join(configRoot, "skills", "docs", "SKILL.md")); !strings.Contains(got, "new") {
@@ -314,7 +314,7 @@ func TestOpenCodeActivatorTreatsCommittedUnlockFailureAsSuccessfulLifecycle(t *t
 		configRoot, active, objects, request := openCodeActivationFixture(t, "add")
 		outcome, err := testActivator(Activator{NativeConfig: &committedKernel}).Activate(context.Background(), request)
 		assertOpenCodeCommittedActivation(t, outcome, err)
-		if err := opencode.VerifyOpenCodeNativeObjects(configRoot, active, objects, nativeconfig.New()); err != nil {
+		if err := opencode.VerifyOpenCodeNativeObjects(configRoot, active, objects, nativeconfig.New(), false); err != nil {
 			t.Fatalf("committed add state: %v", err)
 		}
 		if err := opencode.ApplyOpenCodeNative(configRoot, "", objects, nil); err != nil {
@@ -348,7 +348,7 @@ func TestOpenCodeActivatorTreatsCommittedUnlockFailureAsSuccessfulLifecycle(t *t
 		}
 		outcome, err := testActivator(Activator{NativeConfig: &committedKernel}).Activate(context.Background(), request)
 		assertOpenCodeCommittedActivation(t, outcome, err)
-		if err := opencode.VerifyOpenCodeNativeObjects(configRoot, activeV2, second, nativeconfig.New()); err != nil {
+		if err := opencode.VerifyOpenCodeNativeObjects(configRoot, activeV2, second, nativeconfig.New(), false); err != nil {
 			t.Fatalf("committed update state: %v", err)
 		}
 		if err := opencode.ApplyOpenCodeNative(configRoot, activeV2, second, second); err != nil {
@@ -367,7 +367,7 @@ func TestOpenCodeActivatorTreatsCommittedUnlockFailureAsSuccessfulLifecycle(t *t
 		request.Replacing = true
 		outcome, err := testActivator(Activator{NativeConfig: &committedKernel}).Activate(context.Background(), request)
 		assertOpenCodeCommittedActivation(t, outcome, err)
-		if err := opencode.VerifyOpenCodeNativeObjects(configRoot, active, objects, nativeconfig.New()); err != nil {
+		if err := opencode.VerifyOpenCodeNativeObjects(configRoot, active, objects, nativeconfig.New(), false); err != nil {
 			t.Fatalf("committed repair state: %v", err)
 		}
 		if err := opencode.ApplyOpenCodeNative(configRoot, "", objects, nil); err != nil {
