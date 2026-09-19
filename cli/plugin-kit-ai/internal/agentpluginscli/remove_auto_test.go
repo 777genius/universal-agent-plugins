@@ -67,6 +67,7 @@ func TestRemoveUninstallsManagedClientsWithoutExternalFlag(t *testing.T) {
 		{name: "cursor", targets: "cursor", clients: []domain.ClientID{domain.ClientCursor}},
 		{name: "cursor,codex", targets: "cursor,codex", clients: []domain.ClientID{domain.ClientCursor, domain.ClientCodex}, wantUninstall: "plugin remove"},
 		{name: "copilot", targets: "copilot", clients: []domain.ClientID{domain.ClientCopilot}, wantUninstall: "plugin uninstall"},
+		{name: "vscode", targets: "vscode", clients: []domain.ClientID{domain.ClientVSCode}, wantUninstall: "plugin uninstall"},
 		{name: "copilot,vscode", targets: "copilot,vscode", clients: []domain.ClientID{domain.ClientCopilot, domain.ClientVSCode}, wantUninstall: "plugin uninstall"},
 	} {
 		spec := spec

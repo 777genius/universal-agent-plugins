@@ -193,6 +193,9 @@ func (service Service) apply(ctx context.Context, input AddInput, replace bool) 
 		newerRelease := installation.OriginMode == domain.OriginModeDirectory && installation.Directory != nil && input.DirectoryResolution != nil && input.DirectoryResolution.DesiredReleaseSequence != installation.Directory.DesiredReleaseSequence
 		newerBytes := installation.Source.TreeDigest != input.Envelope.TreeDigest
 		if already && (newerRelease || newerBytes) {
+			if sibling := unpreflightedMaterializedClient(installation, input.Client.ClientID, input.Scope); sibling != "" {
+				return AddResult{}, fmt.Errorf("update group must preflight every installed physical binding; %s is missing", sibling)
+			}
 			replace = true
 		} else if newerRelease {
 			return AddResult{}, fmt.Errorf("adding a target must use recorded release sequence %d; run update separately", installation.Directory.DesiredReleaseSequence)
@@ -302,7 +305,7 @@ func (service Service) apply(ctx context.Context, input AddInput, replace bool) 
 	if isMaterialized && !replace && !registrationMigration {
 		current := state.Installations[installationIndex].Clients[clientBindingID]
 		result.Activation = lifecycleOutcome(current)
-		if packageRevisionMatches(current.PackageRevision, input.Envelope) {
+		if groupPackageUnchanged(current, input) {
 			if lifecycleConverged(current) {
 				if err := service.verifyManagedTarget(ctx, input.Client, input.Scope, current, "no-change check"); err != nil {
 					return result, err
@@ -344,7 +347,7 @@ func (service Service) apply(ctx context.Context, input AddInput, replace bool) 
 		if err := service.observeNativeIdentity(ctx, input.Client, plan, managedBinding); err != nil {
 			return result, err
 		}
-		if !requiresComponentRemoval(plan) && packageRevisionMatches(previousClient.PackageRevision, input.Envelope) && previousClient.PackageRevision.ResolvedRevision == input.Envelope.Source.ResolvedRevision {
+		if !requiresComponentRemoval(plan) && groupPackageUnchanged(previousClient, input) {
 			if lifecycleConverged(previousClient) {
 				verified, verifyErr := service.verifyClientReadOnly(ctx, input, result, previousClient)
 				if verifyErr != nil {
@@ -1167,6 +1170,28 @@ func clientMaterializedOn(installation domain.Installation, clientID domain.Clie
 		}
 	}
 	return false
+}
+
+func unpreflightedMaterializedClient(installation domain.Installation, clientID domain.ClientID, scope domain.InstallScope) string {
+	for _, binding := range installation.Clients {
+		if binding.Scope != string(scope) || binding.Materialization == domain.MaterializationAbsent {
+			continue
+		}
+		if sameNativeBackend(domain.ClientID(binding.ClientID), clientID) {
+			continue
+		}
+		covered := false
+		for _, surface := range binding.AffectedSurfaces {
+			if sameNativeBackend(domain.ClientID(surface), clientID) {
+				covered = true
+				break
+			}
+		}
+		if !covered {
+			return binding.ClientID
+		}
+	}
+	return ""
 }
 
 func rejectNativeNameCollision(state domain.StateFileV2, installationID, declaredName string, clientID domain.ClientID) error {

@@ -481,7 +481,10 @@ func addGroupCompatibilityChecks(ctx context.Context, app App, opts *options, lo
 		return nil, nil
 	}
 	state, err := app.StateStore.Load()
-	if err != nil || len(state.Installations) == 0 {
+	if err != nil {
+		return nil, err
+	}
+	if len(state.Installations) == 0 {
 		return nil, nil
 	}
 	installation, ok := locallyMatchedInstallation(state, loaded.envelope.Manifest.Name)

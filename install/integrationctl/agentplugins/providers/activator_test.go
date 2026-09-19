@@ -1117,6 +1117,24 @@ func TestDeactivatorUninstallsCopilotEvenWhenExternalFlagIsSet(t *testing.T) {
 	}
 }
 
+func TestDeactivatorUninstallsCodexEvenWhenExternalFlagIsSet(t *testing.T) {
+	t.Parallel()
+	runner := &recordingRunner{}
+	request := codexDeactivationRequest(t)
+	request.Confirmed = true
+	request.ExternalUninstalled = true
+	outcome, err := (Activator{Runner: runner}).Deactivate(context.Background(), request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !outcome.ArtifactRemovalAllowed || !outcome.ExternalRemovalComplete || len(runner.commands) == 0 {
+		t.Fatalf("flag skipped Codex uninstall: outcome=%+v commands=%+v", outcome, runner.commands)
+	}
+	if got := strings.Join(commandArgv(runner.commands)[0], " "); !strings.Contains(got, "plugin remove") {
+		t.Fatalf("commands = %#v, want plugin remove", commandArgv(runner.commands))
+	}
+}
+
 func TestDeactivatePreviewNeverRunsCLICommands(t *testing.T) {
 	t.Parallel()
 	for _, spec := range []struct {
