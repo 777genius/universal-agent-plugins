@@ -4,6 +4,11 @@ The `agentplugins-registry-mirror` build tool keeps a product deployment
 compatible with the optional Universal Agent Plugins Directory and Discovery
 feeds. It is a build-time bridge, not a second registry and not an installer.
 
+The public catalog still reads Discovery and Security at runtime. It tries the
+baked same-origin copy first, then the live registry Pages origin used by the
+CLI. A stale baked snapshot therefore does not hide community results while a
+current signed feed is available.
+
 ## What is verified
 
 For each feed the tool fetches the latest pointer, its exact snapshot bytes and
@@ -37,12 +42,20 @@ existing output path.
 
 ## GitHub Pages workflow
 
-`.github/workflows/registry-compatibility-mirror.yml` runs on a
-`registry-published` repository-dispatch event or manually. It verifies the
-feeds before the landing site is generated, stages the exact bytes under the
-Pages artifact, and deploys only the resulting artifact. A failed fetch,
-signature, trust-anchor, rollback, or build leaves the previous deployment
-untouched.
+`.github/workflows/registry-compatibility-mirror.yml` keeps the baked copy
+fresh without a product-repo code change. It runs:
+
+- every 12 hours (`27 */12 * * *`), inside the Discovery snapshot lifetime;
+- on a `registry-published` repository-dispatch event;
+- or manually.
+
+The Pages deploy workflow uses the same `github-pages` concurrency group, so a
+docs push and a feed refresh cannot overwrite each other with a partial site.
+Both workflows take the previous marker from the deployed product
+`MIRROR_METADATA.json`, then verify the feeds before generating the landing
+site, stage the exact bytes under the Pages artifact, and deploy only the
+resulting artifact. A failed fetch, signature, trust-anchor, rollback, or build
+leaves the previous deployment untouched.
 
 The workflow defaults to the renamed catalog repository
 `777genius/universal-agent-plugins-registry` and its Pages origin. Event and

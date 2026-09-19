@@ -4,6 +4,7 @@ import type { RegistryIndex } from '~/types/registry';
 import type { SecuritySnapshot } from '~/types/security';
 import { BrowserDiscoveryCache, discoveryPlugin, loadDiscovery } from '~/utils/discovery';
 import { applySecurityAssessment, loadSecurity } from '~/utils/security';
+import { loadFirstAvailable, resolveSignedFeedOrigins } from '~/utils/signedFeeds';
 import type { RegistryProjection } from '~/utils/registryProjection';
 
 interface RegistryPageOptions {
@@ -98,23 +99,34 @@ async function augmentWithDiscovery(
   if (!isCurrent()) return;
   status.value = { state: 'loading', count: 0 };
   const baseURL = String(config.public.baseURL).replace(/\/?$/, '/');
-  const discoveryOrigin = new URL(`${baseURL}discovery/`, location.origin);
-  const securityOrigin = new URL(`${baseURL}security/`, location.origin);
-  discoveryPromise ??= loadDiscovery({
-    origin: discoveryOrigin,
-    trust: {
-      keyID: String(config.public.discoveryKeyID),
-      publicKeyBase64: String(config.public.discoveryPublicKey),
-    },
-    cache: new BrowserDiscoveryCache(discoveryOrigin),
+  const pageOrigin = location.origin;
+  const registryPagesOrigin = String(config.public.registryPagesOrigin ?? '');
+  const trust = {
+    keyID: String(config.public.discoveryKeyID),
+    publicKeyBase64: String(config.public.discoveryPublicKey),
+  };
+  const discoveryOrigins = resolveSignedFeedOrigins({
+    kind: 'discovery',
+    baseURL,
+    pageOrigin,
+    registryPagesOrigin,
   });
-  securityPromise ??= loadSecurity({
-    origin: securityOrigin,
-    trust: {
-      keyID: String(config.public.discoveryKeyID),
-      publicKeyBase64: String(config.public.discoveryPublicKey),
-    },
-  })
+  const securityOrigins = resolveSignedFeedOrigins({
+    kind: 'security',
+    baseURL,
+    pageOrigin,
+    registryPagesOrigin,
+  });
+  discoveryPromise ??= loadFirstAvailable(discoveryOrigins, (origin) =>
+    loadDiscovery({
+      origin,
+      trust,
+      cache: new BrowserDiscoveryCache(origin),
+    }),
+  );
+  securityPromise ??= loadFirstAvailable(securityOrigins, (origin) =>
+    loadSecurity({ origin, trust }),
+  )
     .then((bundle) => bundle.snapshot)
     .catch(() => undefined);
 

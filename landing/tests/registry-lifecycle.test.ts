@@ -4,6 +4,7 @@ import { stripTypeScriptTypes } from 'node:module';
 import { test } from 'node:test';
 import { runInNewContext } from 'node:vm';
 import { withAppBase } from '../utils/localizedRoutes.ts';
+import { loadFirstAvailable, resolveSignedFeedOrigins } from '../utils/signedFeeds.ts';
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -21,7 +22,7 @@ const source = readFileSync(new URL('../composables/useRegistry.ts', import.meta
   .replaceAll('export ', '');
 const script = stripTypeScriptTypes(source) + '\n({ useRegistryPage });';
 
-function harness() {
+function harness(options: { registryPagesOrigin?: string; staleBaked?: boolean } = {}) {
   const states = new Map<string, { value: any }>();
   const status = { value: { state: 'idle', count: 0 } };
   const discovery = deferred<any>();
@@ -64,6 +65,7 @@ function harness() {
         baseURL: '/universal-agent-plugins/',
         discoveryKeyID: 'key',
         discoveryPublicKey: 'public',
+        registryPagesOrigin: options.registryPagesOrigin ?? '',
       },
     }),
     useState: (key: string, init?: () => unknown) => {
@@ -90,8 +92,16 @@ function harness() {
     },
     createError: (options: object) => Object.assign(new Error(), options),
     BrowserDiscoveryCache: class {},
-    loadDiscovery: () => {
+    resolveSignedFeedOrigins,
+    loadFirstAvailable,
+    loadDiscovery: (request: { origin: URL }) => {
       discoveryCalls++;
+      if (
+        options.staleBaked &&
+        request.origin.pathname.startsWith('/universal-agent-plugins/discovery/')
+      ) {
+        return Promise.reject(new Error('Discovery snapshot is stale'));
+      }
       return discovery.promise;
     },
     loadSecurity: () => {
@@ -225,6 +235,24 @@ for (const phase of [
     assert.equal(h.counts.decorated, 0);
   });
 }
+
+test('stale baked discovery falls back to the live registry origin', async () => {
+  const h = harness({
+    registryPagesOrigin: 'https://registry.example/',
+    staleBaked: true,
+  });
+  const page = h.start();
+  await page.mount('catalog');
+  h.discovery.resolve(bundle);
+  h.security.resolve({ snapshot: {} });
+  await settle();
+  assert.deepEqual(
+    Array.from(h.plugins, (p: any) => p.name),
+    ['catalog', 'community'],
+  );
+  assert.equal(h.status.value.state, 'current');
+  assert.deepEqual(h.counts, { discoveryCalls: 2, securityCalls: 1, decorated: 2 });
+});
 
 test('a remount after the focus await only decorates the new seed', async () => {
   const h = harness();

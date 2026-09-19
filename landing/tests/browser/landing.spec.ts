@@ -116,6 +116,25 @@ test('homepage omits the counter when discovery cannot load', async ({ page }) =
   await expect(page.locator('.hero__plugin-count')).toHaveCount(0);
 });
 
+test('community catalog uses the live registry when the baked snapshot is unavailable', async ({
+  page,
+}) => {
+  test.setTimeout(60_000);
+  await page.route(
+    (url) =>
+      url.pathname.includes('/universal-agent-plugins/discovery/') &&
+      !url.pathname.includes('/universal-agent-plugins-registry/'),
+    (route) => route.abort(),
+  );
+  await page.goto('./');
+  await expect(page.locator('.catalog')).toHaveAttribute('data-discovery-state', /current|cached/, {
+    timeout: 45_000,
+  });
+  await expect(page.locator('.catalog-count')).toContainText(/[2-9],?\d{3} plugins/);
+  await expect(page.locator('.discovery-status--stale')).toHaveCount(0);
+  await expect(page.locator('.discovery-status--unavailable')).toHaveCount(0);
+});
+
 test('below-fold sections reveal quickly on scroll without animating the hero', async ({
   page,
 }) => {

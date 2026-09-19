@@ -11,7 +11,7 @@ permissions:
   id-token: write
 
 concurrency:
-  group: docs-pages
+  group: github-pages
   cancel-in-progress: true
 
 jobs:
@@ -88,10 +88,11 @@ jobs:
         env:
           REGISTRY_REPOSITORY: 777genius/universal-agent-plugins-registry
           PAGES_ORIGIN: https://777genius.github.io/universal-agent-plugins-registry/
+          PRODUCT_PAGES_ORIGIN: https://777genius.github.io/universal-agent-plugins/
         run: |
           previous="${RUNNER_TEMP}/uap-previous-mirror.json"
           if ! curl --fail --silent --show-error --location --max-time 30 \
-            "${PAGES_ORIGIN%/}/MIRROR_METADATA.json" > "$previous"; then
+            "${PRODUCT_PAGES_ORIGIN%/}/MIRROR_METADATA.json" > "$previous"; then
             rm -f "$previous"
           fi
           go run ./cmd/agentplugins-registry-mirror \
@@ -110,6 +111,7 @@ jobs:
           NUXT_PUBLIC_DOCS_URL: https://777genius.github.io/universal-agent-plugins/docs/en/
           NUXT_PUBLIC_QUICKSTART_URL: https://777genius.github.io/universal-agent-plugins/docs/en/guide/quickstart.html
           NUXT_PUBLIC_DOCS_SITEMAP_URL: https://777genius.github.io/universal-agent-plugins/docs/sitemap.xml
+          NUXT_PUBLIC_REGISTRY_PAGES_ORIGIN: https://777genius.github.io/universal-agent-plugins-registry/
         working-directory: landing
         run: pnpm generate
 
