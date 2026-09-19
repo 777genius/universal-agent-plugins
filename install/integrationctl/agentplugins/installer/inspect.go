@@ -28,6 +28,37 @@ func (e *Engine) observe() (Inspection, error) {
 		out.Recovery.Reason = err.Error()
 		return out, err
 	}
+	installations, bindingIndex := inspectInstallations(state)
+	out.Installations = installations
+	open, err := dirswap.Manager{JournalDir: e.cfg.OperationsDir}.ListOpen()
+	if err != nil {
+		out.Recovery.Required = true
+		out.Recovery.Reason = err.Error()
+		return out, err
+	}
+	openIDs := make(map[string]dirswap.Receipt, len(open))
+	for _, journal := range open {
+		openIDs[journal.OperationID] = journal
+		located := bindingIndex[journal.ClientBindingID]
+		out.Recovery.Journals = append(out.Recovery.Journals, PendingJournal{
+			OperationID:    journal.OperationID,
+			Digest:         journalDigest(journal),
+			BindingID:      journal.ClientBindingID,
+			InstallationID: located.InstallationID,
+			TargetPath:     firstNonEmpty(journal.ActivePath, located.TargetPath),
+			Phase:          journal.Phase,
+		})
+	}
+	sort.Slice(out.Recovery.Journals, func(i, j int) bool {
+		return out.Recovery.Journals[i].OperationID < out.Recovery.Journals[j].OperationID
+	})
+	out.Recovery.Receipts = unfinishedReceipts(state, openIDs, bindingIndex)
+	out.Recovery.Required = len(out.Recovery.Journals) > 0 || len(out.Recovery.Receipts) > 0
+	return out, nil
+}
+
+func inspectInstallations(state domain.StateFileV2) ([]InspectedInstallation, map[string]observedBinding) {
+	var installations []InspectedInstallation
 	bindingIndex := map[string]observedBinding{}
 	for _, installation := range state.Installations {
 		item := InspectedInstallation{
@@ -57,33 +88,9 @@ func (e *Engine) observe() (Inspection, error) {
 			}
 			sort.Strings(item.DataRoots)
 		}
-		out.Installations = append(out.Installations, item)
+		installations = append(installations, item)
 	}
-	open, err := dirswap.Manager{JournalDir: e.cfg.OperationsDir}.ListOpen()
-	if err != nil {
-		out.Recovery.Required = true
-		out.Recovery.Reason = err.Error()
-		return out, err
-	}
-	openIDs := make(map[string]dirswap.Receipt, len(open))
-	for _, journal := range open {
-		openIDs[journal.OperationID] = journal
-		located := bindingIndex[journal.ClientBindingID]
-		out.Recovery.Journals = append(out.Recovery.Journals, PendingJournal{
-			OperationID:    journal.OperationID,
-			Digest:         journalDigest(journal),
-			BindingID:      journal.ClientBindingID,
-			InstallationID: located.InstallationID,
-			TargetPath:     firstNonEmpty(journal.ActivePath, located.TargetPath),
-			Phase:          journal.Phase,
-		})
-	}
-	sort.Slice(out.Recovery.Journals, func(i, j int) bool {
-		return out.Recovery.Journals[i].OperationID < out.Recovery.Journals[j].OperationID
-	})
-	out.Recovery.Receipts = unfinishedReceipts(state, openIDs, bindingIndex)
-	out.Recovery.Required = len(out.Recovery.Journals) > 0 || len(out.Recovery.Receipts) > 0
-	return out, nil
+	return installations, bindingIndex
 }
 
 type observedBinding struct {

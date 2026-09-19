@@ -16,39 +16,8 @@ import (
 // Active installations must use Update. RequiredComponents are ignored: this
 // step does not install clients.
 func (e *Engine) SwitchRetained(ctx context.Context, req Request, decision Decision) (Result, error) {
-	if ctx == nil {
-		return Result{}, fmt.Errorf("%w: context is required", ErrInvalidRequest)
-	}
-	if req.InstallationID == "" {
-		return Result{}, fmt.Errorf("%w: InstallationID is required", ErrInvalidRequest)
-	}
-	if req.PackageRoot == "" || !validRoot(req.PackageRoot) {
-		return Result{}, fmt.Errorf("%w: PackageRoot must be an explicit absolute clean path", ErrInvalidRequest)
-	}
-	if overlappingRoots(e.cfg.TempRoot, req.PackageRoot) {
-		return Result{}, fmt.Errorf("%w: TempRoot must not overlap PackageRoot", ErrInvalidRequest)
-	}
-	view, inspectErr := e.Inspect(ctx)
-	if inspectErr != nil || view.Recovery.Required {
-		reason := view.Recovery.Reason
-		if reason == "" && inspectErr != nil {
-			reason = inspectErr.Error()
-		}
-		if reason == "" {
-			reason = "pending transactions remain"
-		}
-		return Result{Outcome: OutcomeRecovery, Reason: reason}, fmt.Errorf("%w: %s", ErrRecoveryRequired, reason)
-	}
-	state, err := e.store.Load()
-	if err != nil {
-		return Result{}, fmt.Errorf("%w: %v", ErrNotInstalled, err)
-	}
-	installation, ok := findInstall(state, req.InstallationID)
-	if !ok {
-		return Result{Outcome: OutcomeIncomplete, Reason: "not_installed"}, fmt.Errorf("%w: installation %s", ErrNotInstalled, req.InstallationID)
-	}
-	if !installation.DataRetained || len(installation.Clients) != 0 {
-		return Result{Outcome: OutcomeConflict, Reason: "active_installation"}, fmt.Errorf("%w: active installation switch requires SwitchGroup", ErrUnsupported)
+	if result, err := e.preflightRetainedSwitch(ctx, req); err != nil {
+		return result, err
 	}
 	if !decision.Confirmed {
 		return Result{Operation: OpUpdate, InstallationID: req.InstallationID, Outcome: OutcomeCancelled, Reason: "host cancelled"}, ErrCancelled
@@ -77,37 +46,7 @@ func (e *Engine) SwitchRetained(ctx context.Context, req Request, decision Decis
 		return Result{Outcome: OutcomeIncomplete, Reason: err.Error()}, err
 	}
 	e.report(ProgressPreflight)
-	changed, saveErr := e.persistRetainedSource(ctx, req.InstallationID, envelope)
-	recorded, digestErr := e.recordedTreeDigest(ctx, req.InstallationID)
-	if saveErr != nil {
-		if digestErr == nil && recorded == snapshot.TreeDigest {
-			changed, saveErr = e.persistRetainedSource(ctx, req.InstallationID, envelope)
-			recorded, digestErr = e.recordedTreeDigest(ctx, req.InstallationID)
-			if saveErr == nil && digestErr == nil && recorded == snapshot.TreeDigest {
-				return e.retainedSourceUpdated(req, recorded, changed), nil
-			}
-		}
-		return switchRetainedError(req.InstallationID, saveErr)
-	}
-	if digestErr != nil || recorded != snapshot.TreeDigest {
-		var retryErr error
-		changed, retryErr = e.persistRetainedSource(ctx, req.InstallationID, envelope)
-		if retryErr != nil {
-			if digestErr != nil {
-				return switchRetainedError(req.InstallationID, digestErr)
-			}
-			return switchRetainedError(req.InstallationID, retryErr)
-		}
-		recorded, digestErr = e.recordedTreeDigest(ctx, req.InstallationID)
-		if digestErr != nil || recorded != snapshot.TreeDigest {
-			reason := "retained_source_not_durable"
-			if digestErr != nil {
-				reason = digestErr.Error()
-			}
-			return Result{Operation: OpUpdate, InstallationID: req.InstallationID, Outcome: OutcomeIncomplete, Reason: reason}, fmt.Errorf("%w: %s", ErrIncomplete, reason)
-		}
-	}
-	return e.retainedSourceUpdated(req, recorded, changed), nil
+	return e.commitRetainedSwitch(ctx, req, envelope, snapshot.TreeDigest)
 }
 
 func (e *Engine) retainedSourceUpdated(req Request, digest string, changed usecase.BindingChangeResult) Result {
@@ -164,4 +103,76 @@ func switchRetainedError(installationID string, err error) (Result, error) {
 		return Result{Operation: OpUpdate, InstallationID: installationID, Outcome: OutcomeConflict, Reason: "source_collision"}, err
 	}
 	return Result{Operation: OpUpdate, InstallationID: installationID, Outcome: OutcomeIncomplete, Reason: reason}, err
+}
+
+func (e *Engine) preflightRetainedSwitch(ctx context.Context, req Request) (Result, error) {
+	if ctx == nil {
+		return Result{}, fmt.Errorf("%w: context is required", ErrInvalidRequest)
+	}
+	if req.InstallationID == "" {
+		return Result{}, fmt.Errorf("%w: InstallationID is required", ErrInvalidRequest)
+	}
+	if req.PackageRoot == "" || !validRoot(req.PackageRoot) {
+		return Result{}, fmt.Errorf("%w: PackageRoot must be an explicit absolute clean path", ErrInvalidRequest)
+	}
+	if overlappingRoots(e.cfg.TempRoot, req.PackageRoot) {
+		return Result{}, fmt.Errorf("%w: TempRoot must not overlap PackageRoot", ErrInvalidRequest)
+	}
+	view, inspectErr := e.Inspect(ctx)
+	if inspectErr != nil || view.Recovery.Required {
+		reason := view.Recovery.Reason
+		if reason == "" && inspectErr != nil {
+			reason = inspectErr.Error()
+		}
+		if reason == "" {
+			reason = "pending transactions remain"
+		}
+		return Result{Outcome: OutcomeRecovery, Reason: reason}, fmt.Errorf("%w: %s", ErrRecoveryRequired, reason)
+	}
+	state, err := e.store.Load()
+	if err != nil {
+		return Result{}, fmt.Errorf("%w: %v", ErrNotInstalled, err)
+	}
+	installation, ok := findInstall(state, req.InstallationID)
+	if !ok {
+		return Result{Outcome: OutcomeIncomplete, Reason: "not_installed"}, fmt.Errorf("%w: installation %s", ErrNotInstalled, req.InstallationID)
+	}
+	if !installation.DataRetained || len(installation.Clients) != 0 {
+		return Result{Outcome: OutcomeConflict, Reason: "active_installation"}, fmt.Errorf("%w: active installation switch requires SwitchGroup", ErrUnsupported)
+	}
+	return Result{}, nil
+}
+
+func (e *Engine) commitRetainedSwitch(ctx context.Context, req Request, envelope domain.PackageEnvelope, expectedDigest string) (Result, error) {
+	changed, saveErr := e.persistRetainedSource(ctx, req.InstallationID, envelope)
+	recorded, digestErr := e.recordedTreeDigest(ctx, req.InstallationID)
+	if saveErr != nil {
+		if digestErr == nil && recorded == expectedDigest {
+			changed, saveErr = e.persistRetainedSource(ctx, req.InstallationID, envelope)
+			recorded, digestErr = e.recordedTreeDigest(ctx, req.InstallationID)
+			if saveErr == nil && digestErr == nil && recorded == expectedDigest {
+				return e.retainedSourceUpdated(req, recorded, changed), nil
+			}
+		}
+		return switchRetainedError(req.InstallationID, saveErr)
+	}
+	if digestErr != nil || recorded != expectedDigest {
+		var retryErr error
+		changed, retryErr = e.persistRetainedSource(ctx, req.InstallationID, envelope)
+		if retryErr != nil {
+			if digestErr != nil {
+				return switchRetainedError(req.InstallationID, digestErr)
+			}
+			return switchRetainedError(req.InstallationID, retryErr)
+		}
+		recorded, digestErr = e.recordedTreeDigest(ctx, req.InstallationID)
+		if digestErr != nil || recorded != expectedDigest {
+			reason := "retained_source_not_durable"
+			if digestErr != nil {
+				reason = digestErr.Error()
+			}
+			return Result{Operation: OpUpdate, InstallationID: req.InstallationID, Outcome: OutcomeIncomplete, Reason: reason}, fmt.Errorf("%w: %s", ErrIncomplete, reason)
+		}
+	}
+	return e.retainedSourceUpdated(req, recorded, changed), nil
 }

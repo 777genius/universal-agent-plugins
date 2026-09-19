@@ -40,21 +40,8 @@ func (e *Engine) ReserveIdentity(req IdentityRequest) (IdentityReservation, erro
 	if err != nil {
 		return IdentityReservation{}, err
 	}
-	if out.InstallationID == "" {
-		switch len(state.Installations) {
-		case 1:
-			out.InstallationID = state.Installations[0].InstallationID
-		case 0:
-			if req.Allocate {
-				id, err := domain.NewInstallationID()
-				if err != nil {
-					return IdentityReservation{}, err
-				}
-				out.InstallationID = id
-			}
-		default:
-			return IdentityReservation{}, fmt.Errorf("%w: %d installations; pass InstallationID", ErrAmbiguousInstallations, len(state.Installations))
-		}
+	if err := reserveInstallationID(&out, state, req.Allocate); err != nil {
+		return IdentityReservation{}, err
 	}
 	if req.ClientID == "" || out.InstallationID == "" {
 		return out, nil
@@ -91,4 +78,24 @@ func (e *Engine) reserveNewBinding(out *IdentityReservation, req IdentityRequest
 	}
 	out.TargetPath = target.ActivePath
 	out.BindingID = domain.ComputeClientBindingID(out.InstallationID, req.ClientID, out.Scope, target.ActivePath)
+}
+
+func reserveInstallationID(out *IdentityReservation, state domain.StateFileV2, allocate bool) error {
+	if out.InstallationID == "" {
+		switch len(state.Installations) {
+		case 1:
+			out.InstallationID = state.Installations[0].InstallationID
+		case 0:
+			if allocate {
+				id, err := domain.NewInstallationID()
+				if err != nil {
+					return err
+				}
+				out.InstallationID = id
+			}
+		default:
+			return fmt.Errorf("%w: %d installations; pass InstallationID", ErrAmbiguousInstallations, len(state.Installations))
+		}
+	}
+	return nil
 }

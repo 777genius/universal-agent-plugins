@@ -16,27 +16,13 @@ func (e *Engine) Apply(ctx context.Context, prepared *PreparedOperation, decisio
 	if prepared == nil || prepared.engine != e {
 		return Result{}, ErrInvalidHandle
 	}
-	prepared.mu.Lock()
-	if prepared.closed {
-		prepared.mu.Unlock()
-		return Result{}, ErrHandleClosed
+	op, err := prepared.beginApply(decision)
+	if err != nil {
+		if errors.Is(err, ErrCancelled) {
+			return Result{Operation: op, Outcome: OutcomeCancelled, Reason: "host cancelled"}, err
+		}
+		return Result{}, err
 	}
-	if prepared.applied {
-		prepared.mu.Unlock()
-		return Result{}, ErrAlreadyApplied
-	}
-	if prepared.busy {
-		prepared.mu.Unlock()
-		return Result{}, ErrHandleBusy
-	}
-	if !decision.Confirmed {
-		op := prepared.req.Operation
-		prepared.mu.Unlock()
-		return Result{Operation: op, Outcome: OutcomeCancelled, Reason: "host cancelled"}, ErrCancelled
-	}
-	prepared.busy = true
-	op := prepared.req.Operation
-	prepared.mu.Unlock()
 	defer func() {
 		prepared.mu.Lock()
 		prepared.busy = false
@@ -45,6 +31,15 @@ func (e *Engine) Apply(ctx context.Context, prepared *PreparedOperation, decisio
 		}
 		prepared.mu.Unlock()
 	}()
+	if result, err = e.preflightApply(ctx, prepared, op); err != nil {
+		return result, err
+	}
+	return e.applyPreparedOperation(ctx, prepared, op)
+}
+
+func (e *Engine) preflightApply(ctx context.Context, prepared *PreparedOperation, op Operation) (Result, error) {
+	var result Result
+	var err error
 	view, inspectErr := e.Inspect(ctx)
 	if inspectErr != nil || view.Recovery.Required {
 		reason := view.Recovery.Reason
@@ -59,7 +54,7 @@ func (e *Engine) Apply(ctx context.Context, prepared *PreparedOperation, decisio
 		attachNextActions(&result)
 		return result, err
 	}
-	if err = e.confirmPreparedPlan(ctx, prepared); err != nil {
+	if err := e.confirmPreparedPlan(ctx, prepared); err != nil {
 		reason := "plan_changed"
 		if errors.Is(err, ErrUpdateRequired) {
 			reason = "update_required"
@@ -82,6 +77,12 @@ func (e *Engine) Apply(ctx context.Context, prepared *PreparedOperation, decisio
 			return result, err
 		}
 	}
+	return Result{}, nil
+}
+
+func (e *Engine) applyPreparedOperation(ctx context.Context, prepared *PreparedOperation, op Operation) (Result, error) {
+	var result Result
+	var err error
 	e.report(ProgressPreflight)
 	if len(prepared.req.Targets) > 1 {
 		result, err = e.applyGroup(ctx, prepared)
@@ -147,6 +148,14 @@ func (e *Engine) applyMutatingPackage(ctx context.Context, prepared *PreparedOpe
 	if added.Activation.UserActions != nil {
 		result.ManualActions = append([]string(nil), added.Activation.UserActions...)
 	}
+	result, committed, loadErr := e.readCommittedPackage(prepared, added, result, err)
+	if loadErr != nil {
+		return result, loadErr
+	}
+	return e.finishMutatingPackage(result, added, committed, err)
+}
+
+func (e *Engine) readCommittedPackage(prepared *PreparedOperation, added usecase.AddResult, result Result, err error) (Result, bool, error) {
 	committed := false
 	if state, loadErr := e.store.Load(); loadErr == nil {
 		installationID := firstNonEmpty(added.InstallationID, prepared.req.InstallationID)
@@ -169,8 +178,12 @@ func (e *Engine) applyMutatingPackage(ctx context.Context, prepared *PreparedOpe
 		result.Recovery.Unknown = []PendingReceipt{{
 			OperationID: prepared.req.OperationID, InstallationID: added.InstallationID,
 		}}
-		return result, loadErr
+		return result, false, loadErr
 	}
+	return result, committed, nil
+}
+
+func (e *Engine) finishMutatingPackage(result Result, added usecase.AddResult, committed bool, err error) (Result, error) {
 	if errors.Is(err, ErrUpdateRequired) {
 		result.Outcome = OutcomeConflict
 		result.Reason = "update_required"
@@ -255,67 +268,6 @@ func (e *Engine) applyRemove(ctx context.Context, prepared *PreparedOperation) (
 		result.Reason = err.Error()
 	}
 	return result, err
-}
-
-func (e *Engine) confirmPreparedPlan(ctx context.Context, prepared *PreparedOperation) error {
-	plan := prepared.plan
-	if len(plan.Targets) > 1 {
-		return e.confirmGroupPlan(ctx, prepared)
-	}
-	if plan.Operation == OpInstall {
-		if err := e.refuseRecordedDigestRewrite(plan.InstallationID, plan.TreeDigest); err != nil {
-			return err
-		}
-		if prepared.artifact != "" {
-			target, err := e.planner().ResolveTarget(ctx, prepared.client, domain.ScopeUser, prepared.artifact)
-			if err != nil {
-				return fmt.Errorf("%w: %v", ErrPlanChanged, err)
-			}
-			if plan.TargetPath != "" && target.ActivePath != plan.TargetPath {
-				return fmt.Errorf("%w: live target does not match confirmed plan", ErrPlanChanged)
-			}
-		}
-	}
-	state, err := e.store.Load()
-	if err != nil {
-		return nil
-	}
-	installation, ok := findInstall(state, plan.InstallationID)
-	if !ok {
-		if plan.Operation == OpRemove {
-			return fmt.Errorf("%w: installation is not installed", ErrPlanChanged)
-		}
-		return nil
-	}
-	binding, _, ok := findBinding(installation, prepared.client.ClientID)
-	if plan.Operation == OpRemove {
-		if plan.NoChange {
-			if ok {
-				return fmt.Errorf("%w: live target does not match confirmed plan", ErrPlanChanged)
-			}
-			return nil
-		}
-		if !ok {
-			return fmt.Errorf("%w: client is not installed", ErrPlanChanged)
-		}
-		if plan.BindingID != "" && binding.ClientBindingID != plan.BindingID {
-			return fmt.Errorf("%w: live binding does not match confirmed plan", ErrPlanChanged)
-		}
-		if plan.TargetPath != "" && binding.TargetLocator != plan.TargetPath {
-			return fmt.Errorf("%w: live target does not match confirmed plan", ErrPlanChanged)
-		}
-		return nil
-	}
-	if !ok {
-		return nil
-	}
-	if plan.TargetPath != "" && binding.TargetLocator != "" && binding.TargetLocator != plan.TargetPath {
-		return fmt.Errorf("%w: live target does not match confirmed plan", ErrPlanChanged)
-	}
-	if plan.BindingID != "" && binding.ClientBindingID != "" && binding.ClientBindingID != plan.BindingID {
-		return fmt.Errorf("%w: live binding does not match confirmed plan", ErrPlanChanged)
-	}
-	return nil
 }
 
 func (e *Engine) liveBinding(prepared *PreparedOperation) (Result, domain.ClientBinding, bool) {
@@ -437,4 +389,29 @@ func attachNextActions(result *Result) {
 	case result.Outcome == OutcomeIncomplete && result.Client.Materialization != "" && result.Client.Materialization != string(domain.MaterializationAbsent):
 		result.NextActions = []NextAction{{Kind: "activate", Reason: result.Reason}}
 	}
+}
+
+func (p *PreparedOperation) beginApply(decision Decision) (Operation, error) {
+	p.mu.Lock()
+	if p.closed {
+		p.mu.Unlock()
+		return "", ErrHandleClosed
+	}
+	if p.applied {
+		p.mu.Unlock()
+		return "", ErrAlreadyApplied
+	}
+	if p.busy {
+		p.mu.Unlock()
+		return "", ErrHandleBusy
+	}
+	if !decision.Confirmed {
+		op := p.req.Operation
+		p.mu.Unlock()
+		return op, ErrCancelled
+	}
+	p.busy = true
+	op := p.req.Operation
+	p.mu.Unlock()
+	return op, nil
 }

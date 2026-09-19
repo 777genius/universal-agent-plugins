@@ -113,38 +113,34 @@ func (e *Engine) confirmGroupPlan(ctx context.Context, prepared *PreparedOperati
 	for i, target := range plan.Targets {
 		binding, _, found := findBinding(installation, domain.ClientID(target.ClientID))
 		if plan.Operation == OpRemove {
-			if target.NoChange {
-				if found {
-					return fmt.Errorf("%w: live target does not match confirmed plan", ErrPlanChanged)
-				}
-				continue
-			}
-			if !found {
-				return fmt.Errorf("%w: client is not installed", ErrPlanChanged)
-			}
-			if target.BindingID != "" && binding.ClientBindingID != target.BindingID {
-				return fmt.Errorf("%w: live binding does not match confirmed plan", ErrPlanChanged)
-			}
-			if target.TargetPath != "" && binding.TargetLocator != target.TargetPath {
-				return fmt.Errorf("%w: live target does not match confirmed plan", ErrPlanChanged)
+			if err := confirmRemovalTarget(target, binding, found); err != nil {
+				return err
 			}
 			continue
 		}
-		if !found {
-			continue
+		if err := e.confirmMutatingGroupTarget(ctx, prepared, i, target, binding, found); err != nil {
+			return err
 		}
-		if target.TargetPath != "" && binding.TargetLocator != "" && binding.TargetLocator != target.TargetPath {
+	}
+	return nil
+}
+
+func (e *Engine) confirmMutatingGroupTarget(ctx context.Context, prepared *PreparedOperation, i int, target PlanTarget, binding domain.ClientBinding, found bool) error {
+	plan := prepared.plan
+	if !found {
+		return nil
+	}
+	if target.TargetPath != "" && binding.TargetLocator != "" && binding.TargetLocator != target.TargetPath {
+		return fmt.Errorf("%w: live target does not match confirmed plan", ErrPlanChanged)
+	}
+	if i == 0 && prepared.artifact != "" && plan.Operation == OpInstall {
+		client := prepared.clients[i]
+		resolved, resolveErr := e.planner().ResolveTarget(ctx, client, domain.ScopeUser, prepared.artifact)
+		if resolveErr != nil {
+			return fmt.Errorf("%w: %v", ErrPlanChanged, resolveErr)
+		}
+		if target.TargetPath != "" && resolved.ActivePath != target.TargetPath {
 			return fmt.Errorf("%w: live target does not match confirmed plan", ErrPlanChanged)
-		}
-		if i == 0 && prepared.artifact != "" && plan.Operation == OpInstall {
-			client := prepared.clients[i]
-			resolved, resolveErr := e.planner().ResolveTarget(ctx, client, domain.ScopeUser, prepared.artifact)
-			if resolveErr != nil {
-				return fmt.Errorf("%w: %v", ErrPlanChanged, resolveErr)
-			}
-			if target.TargetPath != "" && resolved.ActivePath != target.TargetPath {
-				return fmt.Errorf("%w: live target does not match confirmed plan", ErrPlanChanged)
-			}
 		}
 	}
 	return nil

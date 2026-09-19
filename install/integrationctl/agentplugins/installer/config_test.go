@@ -5,13 +5,19 @@ import (
 	"path/filepath"
 	"testing"
 
-	clientregistry "github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/all"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/claude"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/codex"
 )
 
 func testConfig(t *testing.T, config Config) Config {
 	t.Helper()
 	if config.Registry == nil {
-		config.Registry = clientregistry.Default()
+		registry, err := clients.NewRegistry(codex.New(), claude.New())
+		if err != nil {
+			t.Fatal(err)
+		}
+		config.Registry = registry
 	}
 	if config.Assess == nil {
 		config.TrustedLocalPackages = true

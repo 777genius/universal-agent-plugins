@@ -1314,7 +1314,7 @@ func newBothClientSandbox(t *testing.T) (context.Context, *Engine, *capturingRun
 	return ctx, eng, runner, pkg, probe, codexConfig, claudeConfig
 }
 
-func installBothClients(t *testing.T, ctx context.Context, eng *Engine, pkg, probe, id, op string, targets []ClientTarget) Result {
+func installBothClients(ctx context.Context, t *testing.T, eng *Engine, pkg, probe, id, op string, targets []ClientTarget) Result {
 	t.Helper()
 	prepared, err := eng.Prepare(ctx, Request{
 		Operation: OpInstall, PackageRoot: pkg, InstallationID: id, OperationID: op,
@@ -1447,10 +1447,21 @@ func TestPrepareGroupDeniedApplyWritesNoState(t *testing.T) {
 	}
 }
 
+func discoveredClient(t *testing.T, clients []ClientMetadata, clientID string) ClientMetadata {
+	t.Helper()
+	for _, client := range clients {
+		if client.ClientID == clientID {
+			return client
+		}
+	}
+	t.Fatalf("missing discovered client %q: %+v", clientID, clients)
+	return ClientMetadata{}
+}
+
 func TestDiscoverReportsBothClientsAfterGroupInstallWithoutMutating(t *testing.T) {
 	ctx, eng, _, pkg, probe, codexConfig, claudeConfig := newBothClientSandbox(t)
 	id := "00000000-0000-4000-8000-0000000000c2"
-	installBothClients(t, ctx, eng, pkg, probe, id, "group-discover", bothClientTargets(codexConfig, claudeConfig, probe))
+	installBothClients(ctx, t, eng, pkg, probe, id, "group-discover", bothClientTargets(codexConfig, claudeConfig, probe))
 	before, err := os.ReadFile(eng.cfg.StateFile)
 	if err != nil {
 		t.Fatal(err)
@@ -1460,26 +1471,29 @@ func TestDiscoverReportsBothClientsAfterGroupInstallWithoutMutating(t *testing.T
 	if err != nil || !bytes.Equal(before, after) {
 		t.Fatal("discover mutated state")
 	}
-	if len(got) != 2 || got[0].ClientID != "claude" || got[1].ClientID != "codex" {
+	if len(got) != 2 {
 		t.Fatalf("discover clients: %+v", got)
 	}
-	if len(got[0].Bindings) != 1 || got[0].Bindings[0].BindingID == "" {
-		t.Fatalf("claude discover bindings: %+v", got[0])
+	claude := discoveredClient(t, got, "claude")
+	codex := discoveredClient(t, got, "codex")
+	if len(claude.Bindings) != 1 || claude.Bindings[0].BindingID == "" {
+		t.Fatalf("claude discover bindings: %+v", claude)
 	}
-	if len(got[1].Bindings) != 1 || got[1].Bindings[0].BindingID == "" {
-		t.Fatalf("codex discover bindings: %+v", got[1])
+	if len(codex.Bindings) != 1 || codex.Bindings[0].BindingID == "" {
+		t.Fatalf("codex discover bindings: %+v", codex)
 	}
-	got[0].Bindings[0].ClientID = "mutated"
+	claude.Bindings[0].ClientID = "mutated"
 	again := eng.Discover()
-	if again[0].Bindings[0].ClientID != "claude" {
-		t.Fatalf("caller mutated discover result: %+v", again[0])
+	claudeAgain := discoveredClient(t, again, "claude")
+	if claudeAgain.Bindings[0].ClientID != "claude" {
+		t.Fatalf("caller mutated discover result: %+v", claudeAgain)
 	}
 }
 
 func TestInspectReportsBothClientsAfterGroupInstallWithoutMutating(t *testing.T) {
 	ctx, eng, runner, pkg, probe, codexConfig, claudeConfig := newBothClientSandbox(t)
 	id := "00000000-0000-4000-8000-0000000000c7"
-	installBothClients(t, ctx, eng, pkg, probe, id, "group-inspect", bothClientTargets(codexConfig, claudeConfig, probe))
+	installBothClients(ctx, t, eng, pkg, probe, id, "group-inspect", bothClientTargets(codexConfig, claudeConfig, probe))
 	beforeCalls := len(runner.calls)
 	before, err := os.ReadFile(eng.cfg.StateFile)
 	if err != nil {
@@ -1538,7 +1552,7 @@ func TestPrepareRemoveGroupDoesNotDeactivateBeforeApply(t *testing.T) {
 	ctx, eng, runner, pkg, probe, codexConfig, claudeConfig := newBothClientSandbox(t)
 	id := "00000000-0000-4000-8000-0000000000c3"
 	targets := bothClientTargets(codexConfig, claudeConfig, probe)
-	installBothClients(t, ctx, eng, pkg, probe, id, "group-remove-preview", targets)
+	installBothClients(ctx, t, eng, pkg, probe, id, "group-remove-preview", targets)
 	before := len(runner.calls)
 	rm, err := eng.Prepare(ctx, Request{
 		Operation: OpRemove, InstallationID: id, OperationID: "group-remove-preview",
@@ -1579,7 +1593,7 @@ func TestPrepareRemoveGroupRejectsCorruptArtifactBeforeDeactivate(t *testing.T) 
 	ctx, eng, runner, pkg, probe, codexConfig, claudeConfig := newBothClientSandbox(t)
 	id := "00000000-0000-4000-8000-0000000000e4"
 	targets := bothClientTargets(codexConfig, claudeConfig, probe)
-	installBothClients(t, ctx, eng, pkg, probe, id, "group-remove-corrupt-install", targets)
+	installBothClients(ctx, t, eng, pkg, probe, id, "group-remove-corrupt-install", targets)
 	view, err := eng.Inspect(ctx)
 	if err != nil || len(view.Installations) != 1 || len(view.Installations[0].Bindings) != 2 {
 		t.Fatalf("inspect: %+v %v", view, err)
@@ -1612,7 +1626,7 @@ func TestPrepareRemoveGroupRejectsCorruptArtifactBeforeDeactivate(t *testing.T) 
 func TestApplyStaleGroupRemovePlanChangedPreservesSibling(t *testing.T) {
 	ctx, eng, _, pkg, probe, codexConfig, claudeConfig := newBothClientSandbox(t)
 	id := "00000000-0000-4000-8000-0000000000c4"
-	installBothClients(t, ctx, eng, pkg, probe, id, "group-stale-install", bothClientTargets(codexConfig, claudeConfig, probe))
+	installBothClients(ctx, t, eng, pkg, probe, id, "group-stale-install", bothClientTargets(codexConfig, claudeConfig, probe))
 	stale, err := eng.Prepare(ctx, Request{
 		Operation: OpRemove, InstallationID: id, OperationID: "group-stale-remove",
 		ClientExecutable: probe,
@@ -1659,7 +1673,7 @@ func TestApplyStaleGroupRemovePlanChangedPreservesSibling(t *testing.T) {
 func TestRemoveGroupOneAlreadyAbsentRemovesOnlyLive(t *testing.T) {
 	ctx, eng, _, pkg, probe, codexConfig, claudeConfig := newBothClientSandbox(t)
 	id := "00000000-0000-4000-8000-0000000000c5"
-	installBothClients(t, ctx, eng, pkg, probe, id, "group-mixed-remove-install", bothClientTargets(codexConfig, claudeConfig, probe))
+	installBothClients(ctx, t, eng, pkg, probe, id, "group-mixed-remove-install", bothClientTargets(codexConfig, claudeConfig, probe))
 	live, err := eng.Prepare(ctx, Request{
 		Operation: OpRemove, ClientID: "claude", ClientConfigRoot: claudeConfig, ClientExecutable: probe,
 		InstallationID: id, OperationID: "claude-first-remove",
@@ -3372,7 +3386,7 @@ func TestUpdateOneClientKeepsSibling(t *testing.T) {
 func TestRepairOneClientKeepsSibling(t *testing.T) {
 	ctx, eng, _, pkg, probe, codexConfig, claudeConfig := newBothClientSandbox(t)
 	id := "00000000-0000-4000-8000-0000000000c8"
-	installBothClients(t, ctx, eng, pkg, probe, id, "repair-sibling-install", bothClientTargets(codexConfig, claudeConfig, probe))
+	installBothClients(ctx, t, eng, pkg, probe, id, "repair-sibling-install", bothClientTargets(codexConfig, claudeConfig, probe))
 	before, err := eng.Inspect(ctx)
 	if err != nil {
 		t.Fatal(err)
@@ -3417,7 +3431,7 @@ func TestRepairOlderSiblingAfterSubsetUpdate(t *testing.T) {
 	id := "00000000-0000-4000-8000-0000000000d2"
 	r1 := filepath.Join(filepath.Dir(pkg), "package-r1")
 	copyPackage(t, pkg, r1)
-	installBothClients(t, ctx, eng, r1, probe, id, "older-sibling-install", bothClientTargets(codexConfig, claudeConfig, probe))
+	installBothClients(ctx, t, eng, r1, probe, id, "older-sibling-install", bothClientTargets(codexConfig, claudeConfig, probe))
 	if err := os.WriteFile(filepath.Join(pkg, "plugin.json"), []byte(`{"$schema":"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json","name":"sample-notify","version":"1.0.1"}`), 0600); err != nil {
 		t.Fatal(err)
 	}
@@ -3489,7 +3503,7 @@ func TestRepairOlderSiblingAfterSubsetUpdate(t *testing.T) {
 func TestRepairGroupIntactReportsBothTargets(t *testing.T) {
 	ctx, eng, _, pkg, probe, codexConfig, claudeConfig := newBothClientSandbox(t)
 	id := "00000000-0000-4000-8000-0000000000c9"
-	installBothClients(t, ctx, eng, pkg, probe, id, "repair-group-intact-install", bothClientTargets(codexConfig, claudeConfig, probe))
+	installBothClients(ctx, t, eng, pkg, probe, id, "repair-group-intact-install", bothClientTargets(codexConfig, claudeConfig, probe))
 	before, err := eng.Inspect(ctx)
 	if err != nil {
 		t.Fatal(err)
@@ -3546,7 +3560,7 @@ func TestRepairGroupMixedRevisionsUsesPerTargetPackage(t *testing.T) {
 	id := "00000000-0000-4000-8000-0000000000d1"
 	r1 := filepath.Join(filepath.Dir(pkg), "package-r1")
 	copyPackage(t, pkg, r1)
-	installBothClients(t, ctx, eng, r1, probe, id, "mixed-repair-install", bothClientTargets(codexConfig, claudeConfig, probe))
+	installBothClients(ctx, t, eng, r1, probe, id, "mixed-repair-install", bothClientTargets(codexConfig, claudeConfig, probe))
 	if err := os.WriteFile(filepath.Join(pkg, "plugin.json"), []byte(`{"$schema":"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json","name":"sample-notify","version":"1.0.1"}`), 0600); err != nil {
 		t.Fatal(err)
 	}
@@ -3643,7 +3657,7 @@ func TestRepairGroupMixedRevisionsAssessesEachSnapshot(t *testing.T) {
 	id := "00000000-0000-4000-8000-0000000000d2"
 	r1 := filepath.Join(filepath.Dir(pkg), "package-r1")
 	copyPackage(t, pkg, r1)
-	installBothClients(t, ctx, eng, r1, probe, id, "mixed-repair-assess-install", bothClientTargets(codexConfig, claudeConfig, probe))
+	installBothClients(ctx, t, eng, r1, probe, id, "mixed-repair-assess-install", bothClientTargets(codexConfig, claudeConfig, probe))
 	if err := os.WriteFile(filepath.Join(pkg, "plugin.json"), []byte(`{"$schema":"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json","name":"sample-notify","version":"1.0.1"}`), 0600); err != nil {
 		t.Fatal(err)
 	}
@@ -3722,7 +3736,7 @@ func TestRepairGroupMixedRevisionsAssessDigestMismatch(t *testing.T) {
 	id := "00000000-0000-4000-8000-0000000000d5"
 	r1 := filepath.Join(filepath.Dir(pkg), "package-r1")
 	copyPackage(t, pkg, r1)
-	installBothClients(t, ctx, eng, r1, probe, id, "mixed-repair-mismatch-install", bothClientTargets(codexConfig, claudeConfig, probe))
+	installBothClients(ctx, t, eng, r1, probe, id, "mixed-repair-mismatch-install", bothClientTargets(codexConfig, claudeConfig, probe))
 	if err := os.WriteFile(filepath.Join(pkg, "plugin.json"), []byte(`{"$schema":"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json","name":"sample-notify","version":"1.0.1"}`), 0600); err != nil {
 		t.Fatal(err)
 	}
@@ -3781,7 +3795,7 @@ func TestRepairGroupMixedRevisionsAssessDigestMismatch(t *testing.T) {
 func TestRepairGroupSameRootAssessesOnce(t *testing.T) {
 	ctx, eng, _, pkg, probe, codexConfig, claudeConfig := newBothClientSandbox(t)
 	id := "00000000-0000-4000-8000-0000000000d6"
-	installBothClients(t, ctx, eng, pkg, probe, id, "same-root-assess-install", bothClientTargets(codexConfig, claudeConfig, probe))
+	installBothClients(ctx, t, eng, pkg, probe, id, "same-root-assess-install", bothClientTargets(codexConfig, claudeConfig, probe))
 	calls := 0
 	digest := ""
 	eng.cfg.Assess = func(_ context.Context, _, got string) (Assessment, error) {
@@ -3818,7 +3832,7 @@ func TestRepairMixedRevisionRematerializesDeletedOlderSibling(t *testing.T) {
 	id := "00000000-0000-4000-8000-0000000000ed"
 	r1 := filepath.Join(filepath.Dir(pkg), "package-r1")
 	copyPackage(t, pkg, r1)
-	installBothClients(t, ctx, eng, r1, probe, id, "mixed-repair-delete-install", bothClientTargets(codexConfig, claudeConfig, probe))
+	installBothClients(ctx, t, eng, r1, probe, id, "mixed-repair-delete-install", bothClientTargets(codexConfig, claudeConfig, probe))
 	if err := os.WriteFile(filepath.Join(pkg, "plugin.json"), []byte(`{"$schema":"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json","name":"sample-notify","version":"1.0.1"}`), 0600); err != nil {
 		t.Fatal(err)
 	}
@@ -3883,7 +3897,7 @@ func TestRepairGroupSamePackageRefusesOlderSibling(t *testing.T) {
 	id := "00000000-0000-4000-8000-0000000000d3"
 	r1 := filepath.Join(filepath.Dir(pkg), "package-r1")
 	copyPackage(t, pkg, r1)
-	installBothClients(t, ctx, eng, r1, probe, id, "same-root-mixed-repair-install", bothClientTargets(codexConfig, claudeConfig, probe))
+	installBothClients(ctx, t, eng, r1, probe, id, "same-root-mixed-repair-install", bothClientTargets(codexConfig, claudeConfig, probe))
 	if err := os.WriteFile(filepath.Join(pkg, "plugin.json"), []byte(`{"$schema":"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json","name":"sample-notify","version":"1.0.1"}`), 0600); err != nil {
 		t.Fatal(err)
 	}
@@ -3981,7 +3995,7 @@ func TestRepairGroupMixedRevisionsIncompleteOlderPackage(t *testing.T) {
 func TestUpdateOneClientRefusesWhenSiblingFactsMissing(t *testing.T) {
 	ctx, eng, _, pkg, probe, codexConfig, claudeConfig := newBothClientSandbox(t)
 	id := "00000000-0000-4000-8000-0000000000c6"
-	installBothClients(t, ctx, eng, pkg, probe, id, "sibling-profile-install", bothClientTargets(codexConfig, claudeConfig, probe))
+	installBothClients(ctx, t, eng, pkg, probe, id, "sibling-profile-install", bothClientTargets(codexConfig, claudeConfig, probe))
 	view, err := eng.Inspect(ctx)
 	if err != nil || len(view.Installations) != 1 {
 		t.Fatalf("inspect: %+v %v", view, err)
@@ -4014,7 +4028,7 @@ func TestUpdateOneClientRefusesWhenSiblingFactsMissing(t *testing.T) {
 func TestUpdateOneClientRefusesStaleSiblingBindingFactsWithoutMutation(t *testing.T) {
 	ctx, eng, _, pkg, probe, codexConfig, claudeConfig := newBothClientSandbox(t)
 	id := "00000000-0000-4000-8000-0000000000e1"
-	installBothClients(t, ctx, eng, pkg, probe, id, "stale-sibling-install", bothClientTargets(codexConfig, claudeConfig, probe))
+	installBothClients(ctx, t, eng, pkg, probe, id, "stale-sibling-install", bothClientTargets(codexConfig, claudeConfig, probe))
 	before, err := os.ReadFile(eng.cfg.StateFile)
 	if err != nil {
 		t.Fatal(err)
@@ -4811,7 +4825,7 @@ func TestPrepareRemoveGroupRejectsMissingPluginDataBeforeDeactivate(t *testing.T
 	ctx, eng, runner, pkg, probe, codexConfig, claudeConfig := newBothClientSandbox(t)
 	id := "00000000-0000-4000-8000-0000000000e8"
 	targets := bothClientTargets(codexConfig, claudeConfig, probe)
-	installed := installBothClients(t, ctx, eng, pkg, probe, id, "group-remove-data-install", targets)
+	installed := installBothClients(ctx, t, eng, pkg, probe, id, "group-remove-data-install", targets)
 	if installed.Binding.DataRoot == "" {
 		t.Fatal("install omitted data root")
 	}
@@ -4839,7 +4853,7 @@ func TestApplyRemoveGroupRepeatsPluginDataPreflightBeforeDeactivate(t *testing.T
 	ctx, eng, runner, pkg, probe, codexConfig, claudeConfig := newBothClientSandbox(t)
 	id := "00000000-0000-4000-8000-0000000000ec"
 	targets := bothClientTargets(codexConfig, claudeConfig, probe)
-	installed := installBothClients(t, ctx, eng, pkg, probe, id, "group-remove-data-apply-install", targets)
+	installed := installBothClients(ctx, t, eng, pkg, probe, id, "group-remove-data-apply-install", targets)
 	prepared, err := eng.Prepare(ctx, Request{
 		Operation: OpRemove, InstallationID: id, OperationID: "group-remove-data-stale",
 		ClientExecutable: probe,
@@ -5933,7 +5947,7 @@ func TestProgressReportsGroupCoarsePhases(t *testing.T) {
 	var phases []ProgressPhase
 	eng.cfg.Progress = func(event ProgressEvent) { phases = append(phases, event.Phase) }
 	id := "00000000-0000-4000-8000-0000000000d7"
-	installBothClients(t, ctx, eng, pkg, probe, id, "group-progress-install", bothClientTargets(codexConfig, claudeConfig, probe))
+	installBothClients(ctx, t, eng, pkg, probe, id, "group-progress-install", bothClientTargets(codexConfig, claudeConfig, probe))
 	joined := ""
 	for _, phase := range phases {
 		joined += string(phase) + ","
@@ -6035,10 +6049,11 @@ func TestDiscoverDoesNotCreateStateOrRunHelper(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := eng.Discover()
-	if len(got) != 2 || got[0].ClientID != "claude" || got[1].ClientID != "codex" {
+	if len(got) != 2 {
 		t.Fatalf("discover: %+v", got)
 	}
-	if len(got[0].Scopes) != 1 || got[0].Scopes[0] != "user" {
+	claude := discoveredClient(t, got, "claude")
+	if len(claude.Scopes) != 1 || claude.Scopes[0] != "user" {
 		t.Fatalf("scopes: %+v", got)
 	}
 	if runner.n != 0 {
@@ -6097,14 +6112,16 @@ func TestDiscoverReportsExecutablePresenceWithoutExecuting(t *testing.T) {
 	if _, err := os.Lstat(root); !os.IsNotExist(err) {
 		t.Fatal("discover created state root")
 	}
-	if len(got) != 2 || !got[0].ExecutablePresent || got[0].ClientID != "claude" {
+	if len(got) != 2 {
 		t.Fatalf("claude presence: %+v", got)
 	}
-	if got[0].ExecutablePath != path {
-		t.Fatalf("claude path: %s want %s", got[0].ExecutablePath, path)
+	claude := discoveredClient(t, got, "claude")
+	codex := discoveredClient(t, got, "codex")
+	if !claude.ExecutablePresent || claude.ExecutablePath != path {
+		t.Fatalf("claude path: %+v want %s", claude, path)
 	}
-	if got[1].ExecutablePresent || got[1].ExecutablePath != "" {
-		t.Fatalf("codex should be absent: %+v", got[1])
+	if codex.ExecutablePresent || codex.ExecutablePath != "" {
+		t.Fatalf("codex should be absent: %+v", codex)
 	}
 }
 
@@ -6136,11 +6153,13 @@ func TestDiscoverLstatsExplicitPathWithoutExecuting(t *testing.T) {
 	if _, err := os.Lstat(marker); !os.IsNotExist(err) {
 		t.Fatal("discover executed explicit path")
 	}
-	if got[0].ExecutablePresent || got[0].ExecutablePath != "" {
-		t.Fatalf("missing explicit claude: %+v", got[0])
+	claude := discoveredClient(t, got, "claude")
+	codex := discoveredClient(t, got, "codex")
+	if claude.ExecutablePresent || claude.ExecutablePath != "" {
+		t.Fatalf("missing explicit claude: %+v", claude)
 	}
-	if !got[1].ExecutablePresent || got[1].ExecutablePath != path {
-		t.Fatalf("explicit codex: %+v", got[1])
+	if !codex.ExecutablePresent || codex.ExecutablePath != path {
+		t.Fatalf("explicit codex: %+v", codex)
 	}
 }
 
@@ -6161,16 +6180,22 @@ func TestDiscoverReportsCurrentBindingsWithoutMutating(t *testing.T) {
 	if _, err := os.Lstat(eng.cfg.LockFile); !os.IsNotExist(err) {
 		t.Fatal("discover acquired mutation lock")
 	}
-	if len(got) != 2 || len(got[0].Bindings) != 0 {
-		t.Fatalf("claude bindings: %+v", got[0])
+	if len(got) != 2 {
+		t.Fatalf("discover bindings: %+v", got)
 	}
-	if len(got[1].Bindings) != 1 || got[1].Bindings[0].ClientID != "codex" || got[1].Bindings[0].BindingID == "" {
-		t.Fatalf("codex bindings: %+v", got[1])
+	claude := discoveredClient(t, got, "claude")
+	codex := discoveredClient(t, got, "codex")
+	if len(claude.Bindings) != 0 {
+		t.Fatalf("claude bindings: %+v", claude)
 	}
-	got[1].Bindings[0].ClientID = "mutated"
+	if len(codex.Bindings) != 1 || codex.Bindings[0].ClientID != "codex" || codex.Bindings[0].BindingID == "" {
+		t.Fatalf("codex bindings: %+v", codex)
+	}
+	codex.Bindings[0].ClientID = "mutated"
 	again := eng.Discover()
-	if again[1].Bindings[0].ClientID != "codex" {
-		t.Fatalf("caller mutated discover result: %+v", again[1])
+	codexAgain := discoveredClient(t, again, "codex")
+	if codexAgain.Bindings[0].ClientID != "codex" {
+		t.Fatalf("caller mutated discover result: %+v", codexAgain)
 	}
 }
 

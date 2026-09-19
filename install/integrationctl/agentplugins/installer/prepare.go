@@ -161,14 +161,8 @@ func (e *Engine) prepareMutatingPackage(ctx context.Context, req Request, op Ope
 	if err != nil {
 		return nil, err
 	}
-	if req.PackageRoot == "" || !validRoot(req.PackageRoot) {
-		return nil, fmt.Errorf("%w: PackageRoot must be an explicit absolute clean path", ErrInvalidRequest)
-	}
-	if req.SourceRoot != "" && !validRoot(req.SourceRoot) {
-		return nil, fmt.Errorf("%w: SourceRoot must be an explicit absolute clean path", ErrInvalidRequest)
-	}
-	if overlappingRoots(e.cfg.TempRoot, req.PackageRoot) {
-		return nil, fmt.Errorf("%w: TempRoot must not overlap PackageRoot", ErrInvalidRequest)
+	if err := e.validatePackageRoots(req); err != nil {
+		return nil, err
 	}
 	if err := os.MkdirAll(e.cfg.TempRoot, 0700); err != nil {
 		return nil, err
@@ -183,42 +177,14 @@ func (e *Engine) prepareMutatingPackage(ctx context.Context, req Request, op Ope
 		snapshot.Source.CanonicalSource = req.SourceRoot
 	}
 	handle := &PreparedOperation{engine: e, req: req, snapshot: snapshot, client: client, detected: detected}
-	if err := e.assessSnapshot(ctx, snapshot, req.Assessment); err != nil {
+	if err := e.loadMutatingPackage(ctx, handle, op, allowDigestRewrite); err != nil {
 		_ = handle.closeLocked()
 		return nil, err
 	}
-	if op == OpInstall {
-		if err := e.refuseRecordedDigestRewrite(req.InstallationID, snapshot.TreeDigest); err != nil {
-			_ = handle.closeLocked()
-			return nil, err
-		}
-	}
-	if op == OpRepair {
-		if err := e.refuseRepairRevisionRewrite(req.InstallationID, string(client.ClientID), snapshot.TreeDigest); err != nil {
-			_ = handle.closeLocked()
-			return nil, err
-		}
-	}
-	e.reuseMatchingSourceIdentity(req.InstallationID, &snapshot, allowDigestRewrite)
-	handle.snapshot = snapshot
-	ldr, err := newLoader()
-	if err != nil {
-		_ = handle.closeLocked()
-		return nil, err
-	}
-	envelope, err := ldr.Load(ctx, domain.LoadInput{
-		SnapshotRoot: snapshot.Root, TreeDigest: snapshot.TreeDigest,
-		ExecutableFiles: snapshot.ExecutableFiles, Source: snapshot.Source,
-	})
-	if err != nil {
-		_ = handle.closeLocked()
-		return nil, err
-	}
-	handle.envelope = envelope
 	helper, _ := e.helper()
 	svc := e.lifecycle(helper, BindingFacts{}, handle.detected)
 	preview, err := dry(svc, usecase.AddInput{
-		Envelope: envelope, Client: client, Scope: domain.ScopeUser, DryRun: true, Confirmed: false,
+		Envelope: handle.envelope, Client: client, Scope: domain.ScopeUser, DryRun: true, Confirmed: false,
 		PersistAuthoritativeObservations: e.persistObservations,
 		InstallationID:                   req.InstallationID, OperationID: req.OperationID, BackendExecutable: req.ClientExecutable,
 	})
@@ -226,28 +192,7 @@ func (e *Engine) prepareMutatingPackage(ctx context.Context, req Request, op Ope
 		_ = handle.closeLocked()
 		return nil, wrapLifecycleError(err)
 	}
-	missing := missingRequired(envelope, req.RequiredComponents)
-	helperVersion, helperDigest := e.helperIdentity()
-	handle.plan = Plan{
-		Operation: op, SourceRoot: firstNonEmpty(req.SourceRoot, req.PackageRoot), TreeDigest: snapshot.TreeDigest,
-		DigestAlgorithm: snapshot.DigestAlgorithm, ClientID: string(client.ClientID),
-		ConfigRoot: req.ClientConfigRoot, TargetPath: preview.Plan.ActivePath,
-		InstallationID: firstNonEmpty(req.InstallationID, preview.InstallationID),
-		BindingID:      domain.ComputeClientBindingID(firstNonEmpty(req.InstallationID, preview.InstallationID), string(preview.Plan.ClientID), string(preview.Plan.Scope), preview.Plan.ActivePath),
-		HelperVersion:  helperVersion, HelperDigest: helperDigest,
-		RequiredMissing: missing, NoChange: preview.NoChange,
-	}
-	handle.facts = BindingFacts{
-		InstallationID: handle.plan.InstallationID, ClientID: handle.plan.ClientID,
-		BindingID: handle.plan.BindingID, Scope: string(preview.Plan.Scope),
-		TargetPath: handle.plan.TargetPath, OperationID: req.OperationID, TreeDigest: snapshot.TreeDigest,
-	}
-	handle.artifact = preview.Plan.PhysicalArtifactID
-	if len(missing) != 0 {
-		_ = handle.closeLocked()
-		return nil, fmt.Errorf("%w: %v", ErrIncomplete, missing)
-	}
-	return handle, nil
+	return e.planMutatingPackage(handle, op, preview)
 }
 
 func (e *Engine) prepareRemove(ctx context.Context, req Request) (*PreparedOperation, error) {
@@ -347,4 +292,75 @@ func managedPackageDigest(client domain.ClientBinding) string {
 		}
 	}
 	return ""
+}
+
+func (e *Engine) validatePackageRoots(req Request) error {
+	if req.PackageRoot == "" || !validRoot(req.PackageRoot) {
+		return fmt.Errorf("%w: PackageRoot must be an explicit absolute clean path", ErrInvalidRequest)
+	}
+	if req.SourceRoot != "" && !validRoot(req.SourceRoot) {
+		return fmt.Errorf("%w: SourceRoot must be an explicit absolute clean path", ErrInvalidRequest)
+	}
+	if overlappingRoots(e.cfg.TempRoot, req.PackageRoot) {
+		return fmt.Errorf("%w: TempRoot must not overlap PackageRoot", ErrInvalidRequest)
+	}
+	return nil
+}
+
+func (e *Engine) loadMutatingPackage(ctx context.Context, handle *PreparedOperation, op Operation, allowDigestRewrite bool) error {
+	req, snapshot, client := handle.req, handle.snapshot, handle.client
+	if err := e.assessSnapshot(ctx, snapshot, req.Assessment); err != nil {
+		return err
+	}
+	if op == OpInstall {
+		if err := e.refuseRecordedDigestRewrite(req.InstallationID, snapshot.TreeDigest); err != nil {
+			return err
+		}
+	}
+	if op == OpRepair {
+		if err := e.refuseRepairRevisionRewrite(req.InstallationID, string(client.ClientID), snapshot.TreeDigest); err != nil {
+			return err
+		}
+	}
+	e.reuseMatchingSourceIdentity(req.InstallationID, &snapshot, allowDigestRewrite)
+	handle.snapshot = snapshot
+	ldr, err := newLoader()
+	if err != nil {
+		return err
+	}
+	envelope, err := ldr.Load(ctx, domain.LoadInput{
+		SnapshotRoot: snapshot.Root, TreeDigest: snapshot.TreeDigest,
+		ExecutableFiles: snapshot.ExecutableFiles, Source: snapshot.Source,
+	})
+	if err != nil {
+		return err
+	}
+	handle.envelope = envelope
+	return nil
+}
+
+func (e *Engine) planMutatingPackage(handle *PreparedOperation, op Operation, preview usecase.AddResult) (*PreparedOperation, error) {
+	req, snapshot, client, envelope := handle.req, handle.snapshot, handle.client, handle.envelope
+	missing := missingRequired(envelope, req.RequiredComponents)
+	helperVersion, helperDigest := e.helperIdentity()
+	handle.plan = Plan{
+		Operation: op, SourceRoot: firstNonEmpty(req.SourceRoot, req.PackageRoot), TreeDigest: snapshot.TreeDigest,
+		DigestAlgorithm: snapshot.DigestAlgorithm, ClientID: string(client.ClientID),
+		ConfigRoot: req.ClientConfigRoot, TargetPath: preview.Plan.ActivePath,
+		InstallationID: firstNonEmpty(req.InstallationID, preview.InstallationID),
+		BindingID:      domain.ComputeClientBindingID(firstNonEmpty(req.InstallationID, preview.InstallationID), string(preview.Plan.ClientID), string(preview.Plan.Scope), preview.Plan.ActivePath),
+		HelperVersion:  helperVersion, HelperDigest: helperDigest,
+		RequiredMissing: missing, NoChange: preview.NoChange,
+	}
+	handle.facts = BindingFacts{
+		InstallationID: handle.plan.InstallationID, ClientID: handle.plan.ClientID,
+		BindingID: handle.plan.BindingID, Scope: string(preview.Plan.Scope),
+		TargetPath: handle.plan.TargetPath, OperationID: req.OperationID, TreeDigest: snapshot.TreeDigest,
+	}
+	handle.artifact = preview.Plan.PhysicalArtifactID
+	if len(missing) != 0 {
+		_ = handle.closeLocked()
+		return nil, fmt.Errorf("%w: %v", ErrIncomplete, missing)
+	}
+	return handle, nil
 }
