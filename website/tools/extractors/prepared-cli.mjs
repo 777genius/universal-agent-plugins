@@ -1,4 +1,5 @@
 import { requireAuthoringSource } from "../lib/source-contract.mjs";
+import { createHash } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { docsToolsRoot, repoRoot } from "../config/site.mjs";
@@ -158,6 +159,30 @@ async function releaseAdapterOverlay(checkout, parent) {
     if (!source.includes(line)) throw new Error(`Current-only authoring adapter directory missing: ${dir}`);
     source = source.replace(line, "");
   }
+  // Current factoryPins track this checkout. The released command tree is
+  // compiled from v0.1.65, so remaining pins must attest that tag's bytes, and
+  // pins for files the tag does not have (nested agentplugins go.mod) drop out.
+  const pinLine = /^\s*\{"([^"]+)", "[0-9a-f]{64}"\},$/;
+  const attested = new Map();
+  for (const line of source.split("\n")) {
+    const match = line.match(pinLine);
+    if (!match) continue;
+    const file = path.join(checkout, match[1]);
+    try {
+      attested.set(match[1], createHash("sha256").update(await fs.readFile(file)).digest("hex"));
+    } catch (error) {
+      if (error.code !== "ENOENT") throw error;
+    }
+  }
+  source = source.split("\n").filter((line) => {
+    const match = line.match(pinLine);
+    return !match || attested.has(match[1]);
+  }).join("\n");
+  source = source.replace(/\{"([^"]+)", "[0-9a-f]{64}"\}/g, (all, name) => {
+    const digest = attested.get(name);
+    if (!digest) throw new Error(`Released authoring adapter pin lost after attestation: ${name}`);
+    return `{"${name}", "${digest}"}`;
+  });
   const projected = path.join(parent, "agentplugins-v0.1.65-source.go");
   const overlay = path.join(parent, "agentplugins-v0.1.65-overlay.json");
   await fs.writeFile(projected, source, { flag: "wx" });
