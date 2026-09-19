@@ -635,6 +635,13 @@ func openCodeNativeLifecycle(t *testing.T, route string) {
 	// content first so the subsequent update attempt actually goes through
 	// the real write path (openCodeMCPRequests), not the no-change/VerifyOnly
 	// branch a same-content re-apply would take.
+	// Snapshot the applied fixture before rewriting it to 3.0.0. Update now
+	// refuses the collision before commit, so repair must see that same
+	// applied source or preflight fails on a revision mismatch.
+	appliedSource := t.TempDir()
+	if err := os.CopyFS(appliedSource, os.DirFS(f.PackageRoot)); err != nil {
+		t.Fatal(err)
+	}
 	openCodeWriteFixturePackage(t, f.PackageRoot, "opencode-native-proof", "3.0.0")
 	preCollisionBytes, err := os.ReadFile(configPath)
 	must(err)
@@ -675,16 +682,16 @@ func openCodeNativeLifecycle(t *testing.T, route string) {
 		t.Fatalf("installed skill file changed despite the refused MCP entry write: %s -> %s", beforeCollisionSkillDigest, afterCollisionUpdateSkillDigest)
 	}
 
-	// Update refused before commit, so 3.0.0 never became the applied
-	// revision. Restore the applied tree into the fixture source so repair
-	// preflight observes the foreign host key instead of a revision mismatch.
+	// Restore the applied fixture source. Copying the managed package
+	// directory is the wrong tree: repair preflight matches the source
+	// envelope, not the published artifact.
 	if err := os.RemoveAll(f.PackageRoot); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.MkdirAll(f.PackageRoot, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.CopyFS(f.PackageRoot, os.DirFS(managedDir)); err != nil {
+	if err := os.CopyFS(f.PackageRoot, os.DirFS(appliedSource)); err != nil {
 		t.Fatal(err)
 	}
 
