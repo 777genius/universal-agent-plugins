@@ -37,7 +37,10 @@ func (activator Activator) nativeConfigKernel() nativeconfig.Kernel {
 	if activator.NativeConfig != nil {
 		return *activator.NativeConfig
 	}
-	return nativeconfig.New()
+	// A zero Kernel cannot Inspect or Apply. Do not hide-default to
+	// nativeconfig.New(): Registry and Paths are fail-closed, and an omitted
+	// kernel must not silently write through a second OS instance.
+	return nativeconfig.Kernel{}
 }
 
 // AutomaticallyActivates reports whether Activate will use a managed client

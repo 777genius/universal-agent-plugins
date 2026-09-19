@@ -65,7 +65,7 @@ func (observer NativeIdentityObserver) nativeConfigKernel() nativeconfig.Kernel 
 	if observer.NativeConfig != nil {
 		return *observer.NativeConfig
 	}
-	return nativeconfig.New()
+	return nativeconfig.Kernel{}
 }
 
 func (observer NativeIdentityObserver) ObserveNativeIdentity(ctx context.Context, client domain.DetectedClient, plan domain.DeliveryPlan, managed *domain.ClientBinding) (domain.NativeIdentityObservation, error) {

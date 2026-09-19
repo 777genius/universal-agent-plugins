@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/all"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/opencode"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
@@ -397,6 +398,14 @@ func TestOpenCodeActivatorTreatsCommittedUnlockFailureAsSuccessfulLifecycle(t *t
 			t.Fatalf("add after committed remove: %v", err)
 		}
 	})
+}
+
+func TestActivatorRejectsNativeConfigMutationWithoutKernel(t *testing.T) {
+	_, _, _, request := openCodeActivationFixture(t, "docs")
+	_, err := Activator{Registry: all.Default()}.Activate(context.Background(), request)
+	if err == nil || !strings.Contains(err.Error(), "native config file IO is required") {
+		t.Fatalf("missing NativeConfig was not fail-closed: %v", err)
+	}
 }
 
 func openCodeActivationFixture(t *testing.T, skillText string) (string, string, []domain.NativeObjectOwnership, domain.ActivationRequest) {

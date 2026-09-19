@@ -90,5 +90,15 @@ func traitParityRequirements() []contracttest.CapabilityRequirement {
 				return ok
 			},
 		},
+		{
+			Name: "Claude Code CLI probe",
+			Holds: func(definition domain.ClientDefinition) bool {
+				return definition.ID == domain.ClientClaude
+			},
+			Implements: func(adapter clients.Adapter) bool {
+				_, ok := adapter.(clients.ActivationPreflighter)
+				return ok
+			},
+		},
 	}
 }
