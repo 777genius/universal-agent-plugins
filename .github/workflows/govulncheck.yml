@@ -21,6 +21,8 @@ jobs:
             dir: install/plugininstall
           - name: integrationctl
             dir: install/integrationctl
+          - name: agentplugins
+            dir: install/integrationctl/agentplugins
           - name: sdk
             dir: sdk
 

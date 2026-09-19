@@ -24,7 +24,7 @@ jobs:
           cache: true
       - name: Verify bounded Git package discovery
         shell: bash
-        run: cd install/integrationctl && go test -count=1 -run '^TestOSRunnerClassifiesRealGitTreeOverflowAsSoleLimit$' ./agentplugins/adapters/sourceacquisition
+        run: cd install/integrationctl/agentplugins && go test -count=1 -run '^TestOSRunnerClassifiesRealGitTreeOverflowAsSoleLimit$' ./adapters/sourceacquisition
 
   polyglot-smoke:
     name: polyglot-smoke (${{ matrix.os }})
@@ -71,5 +71,5 @@ jobs:
           go test -count=1 -run 'TestPluginKitAIBundle(Fetch(URL(PythonRequirementsFlow|ClaudeNodeTypeScriptFlow)|GitHub(ClaudeNodeTypeScriptFlow|LatestClaudeNodeTypeScriptFlow))|PublishFetch(PythonRequirementsFlow|ClaudeNodeTypeScriptFlow))$' ./repotests
           go test -count=1 -run '^TestNPMCLIPackage' ./repotests
           go test -count=1 -run '^TestPythonCLIPackage' ./repotests
-          (cd install/integrationctl && go test -count=1 -run '^TestCacheAtomicPermissionsPreservationAndOfflineExpiry$' ./agentplugins/adapters/directoryv1)
-          (cd install/integrationctl && go test -count=1 -run '^TestInterruptedCacheReplacementRetainsLKG$' ./agentplugins/adapters/discoveryv1)
+          (cd install/integrationctl/agentplugins && go test -count=1 -run '^TestCacheAtomicPermissionsPreservationAndOfflineExpiry$' ./adapters/directoryv1)
+          (cd install/integrationctl/agentplugins && go test -count=1 -run '^TestInterruptedCacheReplacementRetainsLKG$' ./adapters/discoveryv1)

@@ -28,7 +28,12 @@ Rule: the CLI must not construct `plugininstall` adapters directly. It uses the 
 
 The `agentplugins` install core spans three packages: `install/integrationctl/agentplugins/...`,
 `cli/plugin-kit-ai/internal/agentpluginscli/...` and `cli/plugin-kit-ai/cmd/agentplugins`.
-Dependencies point inward.
+`install/integrationctl/agentplugins` is its own Go module
+(`github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins`), listed in
+`go.work`. Import paths are unchanged. The parent `install/integrationctl` module
+keeps shared adapters (`pathpolicy`, `atomicfile`, `filetree`, `process`) and
+legacy `ports`; the nested module depends on those, never the reverse. Dependencies
+point inward.
 
 | Layer | Package | May import | Enforced today |
 |-------|---------|------------|----------------|

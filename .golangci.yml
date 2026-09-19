@@ -4,7 +4,7 @@ run:
   timeout: 6m
   tests: true
   # Paths in exclusions are matched from the git root: the linter runs once per
-  # module (".", "cli/plugin-kit-ai", "install/integrationctl") and without this
+  # module (".", "cli/plugin-kit-ai", "install/integrationctl", "install/integrationctl/agentplugins") and without this
   # the same file would need a different pattern in every module.
   relative-path-mode: gitroot
 

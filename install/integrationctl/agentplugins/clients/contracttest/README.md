@@ -7,10 +7,10 @@ interface. These tests are what notice.
 
 ## What to run
 
-From `install/integrationctl`:
+From `install/integrationctl/agentplugins`:
 
 ```text
-go test ./agentplugins/clients/contracttest ./agentplugins/clients/all
+go test ./clients/contracttest ./clients/all
 ```
 
 `clients/all` runs the harness against every shipped adapter. `contracttest`

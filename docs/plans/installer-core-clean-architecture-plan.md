@@ -67,7 +67,7 @@
 1. Ядро сегодня: слой `domain` чистый (stdlib-only), но `usecase` зависит от конкретных адаптеров (`pathpolicy`, `planner`) и скрытых optional-контрактов; `providers.Activator` (1247 строк), `planner.Plan`, `providers.Stager`, `providers.NativeIdentityObserver`, `clientdetect.Detector` ветвятся по `ClientID`; шесть текстуально идентичных предикатов и три копии проекций; линтера нет.
 2. Целевое состояние: `domain → ports → usecase`, реализации портов — тонкие generic-диспетчеры, клиент-специфика — в пакетах `ap/clients/<id>` через контракт `ap/clients` (segregated capability-интерфейсы + `Registry` + `As[T]` + `Env`), декларативные трейты клиента в `domain.ClientTraits`, границы закреплены `depguard` и arch-тестом, размер/сложность — lint-гейтом с shrink-only baseline.
 3. Порядок: Part 0a (lint-гейт) → 0b (guardrails: golden-тесты, arch-тест, `core-fast` CI) → 1 (порты/DIP) → 2 (контракт + shared + дедупликация) → 3 detect → 4 plan → 5 перенос файлов → 6 staging → 7a/7b/7c lifecycle → 8 identity → 9a трейты → 9b резка монолитов usecase → 10 CLI/composition root → 11 финализация + ADR → финальный PR в `main`.
-4. CI: `core-fast` (4-6 мин: `lint` + `test-core` + `cross-build` + `vet-all` по 5 модулям `go.work`) как merge-gate для PR в базовую ветку; полный `Required` — на `push` в базовую ветку `refactor/installer-core-clean-architecture` (точное имя, не глоб) после мерджа; локальный `make lint test-core` перед PR.
+4. CI: `core-fast` (4-6 мин: `lint` + `test-core` + `cross-build` + `vet-all` по модулям `go.work`, включая nested `install/integrationctl/agentplugins`) как merge-gate для PR в базовую ветку; полный `Required` — на `push` в базовую ветку `refactor/installer-core-clean-architecture` (точное имя, не глоб) после мерджа; локальный `make lint test-core` перед PR.
 5. Прогноз: SOLID 7.5-8, DRY 7.5-8, Clean Architecture 7-7.5, Модульность 7-7.5, Качество кода 7 (среднее **≈ 7.0-7.5** против 7.4 у конкурента) — паритет, а не превосходство по каждому критерию. Обоснование понижения — §12.
 
 ---
@@ -262,7 +262,7 @@ type RegistryFinding uint8 // Clear, Expected, Collision, Indeterminate (пер�
 - **DIP**: usecase зависит от `ports.PathPolicy`, `ports.DeliveryPlanner(PlanRequest)`, явных optional-портов; адаптеры получают `Env` снаружи; composition root — единственное место, знающее конкретику; `Registry` инжектируется, а не резолвится глобально.
 - **DRY**: `shared.OnlyNativeComponents`, `shared.HasSupportedMCP`, `shared.ProjectMCPServers(dialect)`, `shared.ManifestFromEnvelope`, `shared.RunClientCommand`, `shared.DecodeStrictJSON*`; лестницы `*WithKernel/WithRename/WithOps` заменяются одной функцией с `Env`/`Ops`.
 - **Clean Architecture**: направление зависимостей формально закреплено `depguard` (full-file) + arch-тестом; domain stdlib-only; порты полные и явные; composition root один; CLI не конструирует ядро. Два названных исключения (§3.2) — известная остаточная нечистота, а не незамеченная.
-- **Модульность**: `clients` + `domain` + `ports` — стабильная поверхность; адаптер зависит от узкого набора пакетов; registry инжектируется (сборка с подмножеством клиентов действительно возможна, т.к. `clients/all` не импортируется generic-пакетами); `contracttest` — проверка внешних адаптеров. Следующий шаг вне плана: вынести `clients`+`domain`+`ports` в отдельный Go-модуль с semver (совместимо с ADR-0005), предварительно решив вопрос `nativeconfig`→`hujson`.
+- **Модульность**: `clients` + `domain` + `ports` — стабильная поверхность; адаптер зависит от узкого набора пакетов; registry инжектируется (сборка с подмножеством клиентов действительно возможна, т.к. `clients/all` не импортируется generic-пакетами); `contracttest` — проверка внешних адаптеров. Ядро инсталла вынесено в nested-модуль `install/integrationctl/agentplugins` (Part 12); дальнейший вынос только `clients`+`domain`+`ports` по-прежнему упирается в `nativeconfig`→`hujson` и импорты `pathpolicy`/`atomicfile` из адаптеров клиентов.
 
 ### 3.5. Инварианты совместимости на весь рефакторинг
 
@@ -273,7 +273,7 @@ type RegistryFinding uint8 // Clear, Expected, Collision, Indeterminate (пер�
 - Новые флаги трейтов клиента — в отдельной несериализуемой `domain.ClientTraits` на `ClientDefinition`, не в `ClientCapabilities` (та эмитится в публичный JSON).
 - **`planner` сохраняет тонкий публичный API-фасад навсегда** (правка A-5): `Capabilities`, `Compatibility`, `ClientCompatibility`, `KiroPrepareAction`, `ChatGPTAppBindingAction`, `DetectedPhysicalClient`, `ApplyInstallIntent`. Эти имена используются non-test кодом CLI (`interactive_targets.go` — 2 вызова `ApplyInstallIntent`) и **вне ядра** (`cli/internal/authoring/{readiness,report}`, `authoring/commands/readiness_test.go`). Запрет Part 10 «CLI не импортирует planner» относится к **прямой композиции** (`clientplanner.Planner{}`), а не к использованию стабильного фасада: после Part 10 внутренности фасада делегируют в registry, сигнатуры не меняются.
 - Экспортируемые типы/функции `providers.*`, `planner.*`, `clientdetect.*`, поля `usecase.Service` сохраняются (добавляются новые поля) до Part 11; переходные алиасы удаляются только в Part 11, когда все in-repo вызовы переведены. `providers.ManagedMarketplaceName` — экспортируемый алиас до Part 11 включительно (правка O-3).
-- `go build`, `go vet`, `go test` зелёные на каждом мердже в базовую ветку; `go vet ./...` — по всем 5 модулям `go.work`.
+- `go build`, `go vet`, `go test` зелёные на каждом мердже в базовую ветку; `go vet ./...` — по каждому модулю `go.work` (включая nested `install/integrationctl/agentplugins`).
 
 ---
 
@@ -327,7 +327,7 @@ type RegistryFinding uint8 // Clear, Expected, Collision, Indeterminate (пер�
 
 ### 5.1. Общие правила для всех частей
 
-- (a) `go build`, `go vet`, `go test` зелёные на каждом мердже; `go vet ./...` — по всем 5 модулям `go.work`.
+- (a) `go build`, `go vet`, `go test` зелёные на каждом мердже; `go vet ./...` — по каждому модулю `go.work` (включая nested `install/integrationctl/agentplugins`).
 - (b) публичные JSON/тексты/state не меняются — golden-тесты Part 0b.
 - (c) перемещаемые тесты переезжают дословно, новых `t.Skip` нет, счётчик `func Test*` в ядре до/после равен (или растёт).
 - (d) PR-описание содержит таблицы «бюджет ветвлений до/после» (числа из archtest, не из головы) и «LEGACY SIZE BASELINE до/после».
@@ -592,7 +592,7 @@ jobs:
         run: bash scripts/check-lint-baseline.sh "origin/${{ github.base_ref || 'main' }}"
 ```
 
-Матрица — 3 модуля, потому что весь код ядра там; `install/plugininstall` и `sdk` из `go.work` линтом не покрываются (не меняются планом), но покрываются `go vet` в `core-fast` (§10).
+Матрица покрывает модули с кодом ядра (включая nested `install/integrationctl/agentplugins`); `install/plugininstall` и `sdk` из `go.work` линтом не покрываются (не меняются планом), но покрываются `go vet` в `core-fast` (§10).
 
 `ci.yml`: `jobs.lint: uses: ./.github/workflows/lint.yml` параллельно с `test`. Почему отдельный job, а не шаг в `test`: `test` — критический путь 9-27 мин; lint в трёх параллельных матричных job ожидаемо 3-5 мин и не удлиняет путь; при этом он в том же workflow «Required», т.е. входит в required-гейт.
 
@@ -655,7 +655,7 @@ jobs:
 
 Суженная формулировка выше воспроизводит независимый selector-подсчёт из §2.1 (cli 89, usecase 40, clientdetect 22, providers 79 = activator 38 + stager 21 + native_identity 16 + остальное) — это и есть подтверждение, что регулярка черновика была опиской, а не решением. **Все части ссылаются на исправленную формулировку.**
 
-**Baseline генерируется первым прогоном самого инструмента** (`cd install/integrationctl && go run ./agentplugins/internal/archtest -update`) и коммитится как `internal/archtest/testdata/client_id_budget.json`. Единственный источник правды по абсолютным числам — этот файл; в документе они **намеренно не дублируются**, потому что устареют с первой же частью. В критериях приёмки каждой части фигурирует только направление («бюджет пакета X → 0») и запрет на рост (ratchet).
+**Baseline генерируется первым прогоном самого инструмента** (`cd install/integrationctl/agentplugins && go run ./internal/archtest -update`) и коммитится как `internal/archtest/testdata/client_id_budget.json`. Единственный источник правды по абсолютным числам — этот файл; в документе они **намеренно не дублируются**, потому что устареют с первой же частью. В критериях приёмки каждой части фигурирует только направление («бюджет пакета X → 0») и запрет на рост (ratchet).
 
 **Признанные ограничения метрики** (важно для §12): она ловит только selector-выражения `domain.Client<X>`. Обходится строковым литералом ID (`domain.ClientID("cursor")`) или сравнением по `BackendFamily`. Это детектор регрессии, а не доказательство отсутствия клиент-специфики. Компенсация — ревью и `contracttest`, а не иллюзия полноты.
 
@@ -768,7 +768,7 @@ Generic-pipeline `stage`: validate plan paths (`Paths` + `StagingLayout.Validate
 
 - **7a** — CLI-registry клиенты: cursor, chatgpt, codex, copilot, vscode, claude. Общие ветки `case domain.ClientCopilot, domain.ClientVSCode` (`activator.go:280,287,525,528,1058`, `activation_verifier.go:23`) уезжают в `clients/shared`, а не дублируются в двух пакетах и не создают импорт между ними — см. «Решение по общей логике Copilot/VSCode» в §8.3.
 - **7b** — kiro (ACP duplex, prepare-intent, `PreflightActivation` с `DuplexCapabilityRunner`).
-- **7c** — native-config клиенты: gemini, opencode, cline, windsurf (однородны: `nativeconfig.Kernel` из `Env`; `committedNativeCleanup` → `shared`). **Важно (задел под будущую Part 12, зафиксировано заранее, пока это бесплатно):** код 7c обязан обращаться к `Env.NativeConfig` только через его текущую публичную поверхность (`Apply`/`ApplyBatch`/`Inspect`), не полагаясь на то, что это конкретная структура `*nativeconfig.Kernel` — в частности НЕ брать её адрес и не хранить как `*nativeconfig.Kernel` где-либо в клиентских пакетах (в отличие от `providers.Activator.NativeConfig`, которое остаётся как есть до Part 12). Причина: Part 12 (вынос `domain`+`ports`+`clients` в отдельный модуль, планируется после Part 11) заменит этот тип на интерфейс `ports.NativeConfigKernel`; код, написанный против конкретной структуры, придётся переписывать, а против трёх методов интерфейса — нет.
+- **7c** — native-config клиенты: gemini, opencode, cline, windsurf (однородны: `nativeconfig.Kernel` из `Env`; `committedNativeCleanup` → `shared`). **Важно:** код 7c обращается к `Env.NativeConfig` только через публичную поверхность (`Apply`/`ApplyBatch`/`Inspect`) и не хранит `*nativeconfig.Kernel` в клиентских пакетах. Part 12 вынес всё дерево `agentplugins` в nested-модуль; вынос только `domain`+`ports`+`clients` (и замена `NativeConfig` на `ports.NativeConfigKernel`) по-прежнему упирается в цикл `clients` → родительские `pathpolicy`/`atomicfile` и `nativeconfig` → `hujson`.
 
 В каждом PR `providers.Activator` диспетчеризует в адаптер, если `As[Lifecycle]` найден, иначе — в legacy switch (Strangler); `PreflightActivation`/`AutomaticallyActivates`/`VerifierAvailable` — аналогично через `As[ActivationPreflighter]`/`As[AutomaticActivator]`/`As[ReadOnlyVerifier]`. После 7c switch и все приватные `activateX/verifyX/deactivateX/runCopilot*/runClaude*` удаляются; `Activator` ≈ 150-200 строк: generic-инварианты `Activate` (mismatch ID/path, `RequireContainedChild`, real dir), `PreflightActivation` = `InstallIntent.Validate` + адаптер, `Deactivate` = `ctx.Err` + адаптер. Общие ветки `InstallIntentPrepare` и `ActivationComplete && !AutomaticallyActivates` остаются generic в диспетчере (по форме не клиент-специфичны; prepare-логика ChatGPT/Kiro — в адаптерах).
 
@@ -831,6 +831,19 @@ Generic-pipeline `stage`: validate plan paths (`Paths` + `StagingLayout.Validate
 
 **Landed** on `refactor/installer-core-part-11-finalize`: aliases and `Planner.Detected` removed; `PlanRequest.Detected` is the only detection surface; catalog/directoryv1 ChatGPT branches use `PlansWithoutHostPresence` / `AppSupport`; ClientID budget packages object is empty; ADR 0007; `clients/internal/exampleclient`; contracttest README; ARCHITECTURE CLI/`cli-no-core-internals` row; in-scope size splits so the LEGACY SIZE BASELINE no longer lists in-scope files. Remaining baseline entries are the §11 out-of-scope set (`domain/directory.go`, CLI `source.go`/`add_multi.go`/`lifecycle.go`/`read.go`/`search.go`, plus adapters/conformance/authoring/transaction that the DoD explicitly left alone).
 
+### 8.12. Part 12 — Nested install-core module
+
+The numbered plan DoD stopped at Part 11. The requested module is the whole
+`agentplugins` tree as `github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins`
+with import paths unchanged. The parent keeps `pathpolicy`/`atomicfile`/`filetree`/`process`
+and legacy ports; the child `replace`s the parent (`=> ../`) and never the reverse.
+
+`./...` does not cross module boundaries. `GOWORK=off` consumers (`agentplugins-release`,
+CodeQL, govulncheck) `cd` into the nested module. Coverage collects
+`./install/integrationctl/agentplugins/...` as its own profile. Extracting only
+`domain`+`ports`+`clients` remains a later step (cycle through parent adapters and
+`nativeconfig`→`hujson`).
+
 ---
 
 ## 9. DIP: исправление usecase → pathpolicy и usecase → planner
@@ -860,10 +873,10 @@ Generic-pipeline `stage`: validate plan paths (`Paths` + `StagingLayout.Validate
 
 | Job | Что делает | Ожидаемое время |
 |---|---|---|
-| `lint` | через `lint.yml`, матрица 3 модуля | 3-5 мин |
+| `lint` | через `lint.yml`, матрица модулей с кодом ядра (включая nested `install/integrationctl/agentplugins`) | 3-5 мин |
 | `test-core` | `make test-core` (те же пакеты, что в локальном preflight); отдельным информационным шагом `go test -cover` с процентами в job summary | 2-4 мин |
-| `cross-build` | `GOOS=windows\|darwin\|linux go build ./...` в `install/integrationctl` и `cli/plugin-kit-ai` | 1-2 мин |
-| **`vet-all`** (новый, правка C-1) | `go vet ./...` в каждом из **5** модулей `go.work`: `.`, `cli/plugin-kit-ai`, `install/integrationctl`, `install/plugininstall`, `sdk` | 1-2 мин |
+| `cross-build` | `GOOS=windows\|darwin\|linux go build ./...` в `install/integrationctl`, `install/integrationctl/agentplugins` и `cli/plugin-kit-ai` | 1-2 мин |
+| **`vet-all`** (новый, правка C-1) | `go vet ./...` в каждом модуле `go.work`: `.`, `cli/plugin-kit-ai`, `install/integrationctl`, `install/integrationctl/agentplugins`, `install/plugininstall`, `sdk` | 1-2 мин |
 
 Wall 4-6 мин. Это merge-gate для каждой части.
 
