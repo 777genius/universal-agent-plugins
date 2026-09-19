@@ -12,6 +12,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/statemigration"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/installer"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/transaction"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/usecase"
@@ -62,14 +63,18 @@ type App struct {
 	NativePackageLoader ports.PackageLoader
 	SecurityIndex       SecurityIndex
 	SecurityEvaluator   ports.PackageSecurityEvaluator
-	Lifecycle           usecase.Service
-	StateMigrator       *statemigration.Migrator
-	LegacyLifecycle     ports.LegacyLifecycle
-	LegacyStateLock     legacyports.LockManager
-	Input               io.Reader
-	Output              io.Writer
-	ErrorOutput         io.Writer
-	Terminal            bool
+	// Installer is the public facade used by the qualified explicit local
+	// package path. Other CLI acquisition and lifecycle paths remain on the
+	// existing service until their contracts are qualified separately.
+	Installer       *installer.Engine
+	Lifecycle       usecase.Service
+	StateMigrator   *statemigration.Migrator
+	LegacyLifecycle ports.LegacyLifecycle
+	LegacyStateLock legacyports.LockManager
+	Input           io.Reader
+	Output          io.Writer
+	ErrorOutput     io.Writer
+	Terminal        bool
 }
 
 type options struct {

@@ -26,6 +26,9 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/statev2"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	clientregistry "github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/all"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/claude"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/codex"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/installer"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/managedstdio"
 	clientplanner "github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/planner"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/providers"
@@ -42,7 +45,7 @@ func composeAgentpluginsApp(home, dataRoot string) (agentpluginscli.App, error) 
 	if err != nil {
 		return agentpluginscli.App{}, err
 	}
-	return newAgentpluginsCLIApp(home, dataRoot, directoryClient, discoveryClient, securityClient, registry), nil
+	return newAgentpluginsCLIApp(home, dataRoot, directoryClient, discoveryClient, securityClient, registry)
 }
 
 func newProductionFeedClients(dataRoot string) (*directoryv1.Client, *discoveryv1.Client, *securityv1.Client, error) {
@@ -61,7 +64,7 @@ func newProductionFeedClients(dataRoot string) (*directoryv1.Client, *discoveryv
 	return directoryClient, discoveryClient, securityClient, nil
 }
 
-func newAgentpluginsCLIApp(home, dataRoot string, directoryClient *directoryv1.Client, discoveryClient *discoveryv1.Client, securityClient *securityv1.Client, registry *specregistry.Registry) agentpluginscli.App {
+func newAgentpluginsCLIApp(home, dataRoot string, directoryClient *directoryv1.Client, discoveryClient *discoveryv1.Client, securityClient *securityv1.Client, registry *specregistry.Registry) (agentpluginscli.App, error) {
 	packageLoader := loader.Loader{Registry: registry}
 	runner := processadapter.OS{}
 	v2Store := statev2.Store{Path: filepath.Join(dataRoot, "state-v2.json")}
@@ -70,19 +73,36 @@ func newAgentpluginsCLIApp(home, dataRoot string, directoryClient *directoryv1.C
 	clientRegistry := clientregistry.Default()
 	paths := pathpolicy.Policy{}
 	nativeKernel := nativeconfig.New()
-	stager := newManagedStager(clientRegistry, paths)
+	helperExecutable, err := os.Executable()
+	if err != nil {
+		return agentpluginscli.App{}, err
+	}
+	stager := newManagedStager(clientRegistry, paths, helperExecutable)
 	planner := clientplanner.Planner{ManagedRoot: filepath.Join(dataRoot, "managed"), Paths: paths, Registry: clientRegistry}
 	lifecycle := newAgentpluginsLifecycle(dataRoot, v2Store, paths, clientRegistry, stager, runner, planner, directoryManager, mutationLock, nativeKernel)
-	return assembleAgentpluginsApp(home, dataRoot, v2Store, mutationLock, lifecycle, directoryClient, discoveryClient, securityClient, packageLoader, clientRegistry, planner)
+	installerRegistry, err := clients.NewRegistry(claude.New(), codex.New())
+	if err != nil {
+		return agentpluginscli.App{}, err
+	}
+	facade, err := installer.New(installer.Config{
+		StateRoot: dataRoot, StateFile: v2Store.Path, LockFile: filepath.Join(dataRoot, "mutation.lock"),
+		OperationsDir: filepath.Join(dataRoot, "operations-v2"), PluginDataBase: filepath.Join(dataRoot, "plugin-data"),
+		ManagedRoot: filepath.Join(dataRoot, "managed"), TempRoot: filepath.Join(dataRoot, "installer-tmp"),
+		HelperExecutable: helperExecutable, HelperVersion: version, Registry: installerRegistry, Runner: runner,
+	})
+	if err != nil {
+		return agentpluginscli.App{}, err
+	}
+	app := assembleAgentpluginsApp(home, dataRoot, v2Store, mutationLock, lifecycle, directoryClient, discoveryClient, securityClient, packageLoader, clientRegistry, planner)
+	app.Installer = facade
+	return app, nil
 }
 
-func newManagedStager(clientRegistry *clients.Registry, paths pathpolicy.Policy) providers.Stager {
+func newManagedStager(clientRegistry *clients.Registry, paths pathpolicy.Policy, helperExecutable string) providers.Stager {
 	// The composition root is the one place that decides which clients this
 	// binary knows about, so it is also the only place that names the full set.
 	stager := providers.Stager{Registry: clientRegistry, Paths: paths}
-	if executable, err := os.Executable(); err == nil {
-		stager.LauncherSource, _ = managedstdio.NewSource(executable, version)
-	}
+	stager.LauncherSource, _ = managedstdio.NewSource(helperExecutable, version)
 	return stager
 }
 

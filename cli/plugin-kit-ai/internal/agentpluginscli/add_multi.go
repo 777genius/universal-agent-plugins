@@ -112,6 +112,9 @@ func runAddManyLoaded(ctx context.Context, cmd *cobra.Command, app App, opts *op
 	if err := authorizeSecurityAssessment(cmd, app, opts, &loaded); err != nil {
 		return err
 	}
+	if useInstallerFacadeForLocalAdd(app, opts, loaded, targets, activationComplete, authComplete, needsInstallConfirmation) {
+		return runInstallerFacadeLocalAdd(ctx, cmd, app, opts, loaded, clients)
+	}
 	deferredChatGPT := loaded.chatGPTPreparation && loaded.localChatGPTMapping == nil && containsPersonalMappingTarget(targets)
 	if deferredChatGPT && len(targets) == 1 {
 		// Setup-required ChatGPT registration is not an install failure.

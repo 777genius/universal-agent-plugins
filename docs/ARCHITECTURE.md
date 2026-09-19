@@ -43,6 +43,7 @@ point inward.
 | Client contract | `agentplugins/clients` (+ `clients/shared`) | stdlib, `domain`, `ports`, `adapters/nativeconfig` (see below) | yes, `clients-no-upward`, `clients-no-concrete-clients` |
 | Client adapters | `agentplugins/clients/<id>` | the client contract, `clients/shared`, `domain`, `ports` | yes, `clients-no-upward`, `clients-no-concrete-clients` |
 | Adapters | `agentplugins/{adapters,providers,planner}` | the layers above, never `clients/all` | partly, `libraries-take-an-injected-registry` |
+| Installer facade | `agentplugins/installer` | public DTOs plus the layers above through one composition boundary; injected registry only | yes, `libraries-take-an-injected-registry` and the client-id ratchet |
 | CLI | `agentpluginscli` | the public facades of the layers above, never providers or pathpolicy | yes, `cli-no-core-internals` |
 | Composition root | `cmd/agentplugins`, `cmd/plugin-kit-ai` | everything, and nothing imports them | yes: they are the production importers of `clients/all` |
 
@@ -81,6 +82,12 @@ construct `planner.Planner{}`. Detection is request-scoped:
 `pathpolicy`. The CLI may still import the thin public planner facade
 (`Capabilities`, `ApplyInstallIntent`, and the rest) because those names are a
 stable API for authoring, not a second composition root.
+
+`agentplugins/installer` is the public embedding boundary. It owns concrete
+composition but receives the supported client registry from the executable;
+it does not import `clients/all`, branch on client constants, or export its raw
+Store/Kernel. The production CLI gives this facade the qualified Claude/Codex
+subset while its existing discovery and catalog paths keep the full registry.
 
 Detection is the first capability to live behind the contract: each
 `clients/<id>` implements `HostDetector` and reports the surfaces it observed
