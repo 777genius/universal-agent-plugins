@@ -91,24 +91,39 @@ func TestWindsurfLifecycleRepairsWipedNativeMCP(t *testing.T) {
 	if err := os.MkdirAll(configRoot, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(configPath, []byte(`{"mcpServers":{"foreign":{"url":"https://foreign.test"}}}`), 0o600); err != nil {
+	foreign := `{"mcpServers":{"foreign":{"url":"https://foreign.test"}}}`
+	if err := os.WriteFile(configPath, []byte(foreign), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	client := domain.DetectedClient{ClientID: domain.ClientWindsurf, Status: domain.DetectionDetected, ConfigRoot: configRoot}
 	add := windsurfUsecaseInput(t, client, "one")
-	add.Confirmed = true
-	if _, err := service.Add(context.Background(), add); err != nil {
+	added, err := service.AddGroup(context.Background(), GroupInput{Targets: []AddInput{add}, OperationGroupID: "windsurf-add", Confirmed: true})
+	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(configPath, []byte(`{"mcpServers":{"foreign":{"url":"https://foreign.test"}}}`), 0o600); err != nil {
+	if err := os.WriteFile(configPath, []byte(foreign), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	add.OperationID = "windsurf-native-repair"
-	repaired, err := service.Repair(context.Background(), add)
-	if err != nil || !repaired.Mutated || repaired.Activation.Verification != domain.VerificationInstalled {
+	add.InstallationID = added.InstallationID
+	// RepairGroup observes native identity before apply. Single-client Repair
+	// skips that gate, so it cannot catch an inspect that refuse-missing owned MCP.
+	repaired, err := service.RepairGroup(context.Background(), GroupInput{Targets: []AddInput{add}, OperationGroupID: "windsurf-native-repair", Confirmed: true, Repair: true})
+	if err != nil || !repaired.Mutated || repaired.Targets[0].Activation.Verification != domain.VerificationInstalled {
 		t.Fatalf("wiped Windsurf MCP was not repaired: %+v, %v", repaired, err)
 	}
 	assertUsecaseWindsurfConfig(t, configPath, "one", true)
+
+	if err := os.WriteFile(configPath, []byte(foreign), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	update := windsurfUsecaseInput(t, client, "two")
+	update.Confirmed = true
+	update.OperationID = "windsurf-native-update"
+	updated, err := service.Update(context.Background(), update)
+	if err != nil || !updated.Mutated || updated.Activation.Activation != domain.ActivationActive {
+		t.Fatalf("update after wiped Windsurf MCP = %+v, %v", updated, err)
+	}
+	assertUsecaseWindsurfConfig(t, configPath, "two", true)
 }
 
 func TestWindsurfLifecycleRejectsUnmanagedCollisionBeforePackageMutation(t *testing.T) {
