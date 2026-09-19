@@ -6,6 +6,7 @@ use (
 	.
 	./cli/plugin-kit-ai
 	./install/integrationctl
+	./install/integrationctl/agentplugins
 	./install/plugininstall
 	./sdk
 )

@@ -100,7 +100,7 @@ jobs:
           GOOS: ${{ matrix.goos }}
         run: |
           set -e
-          for module in install/integrationctl cli/plugin-kit-ai; do
+          for module in install/integrationctl install/integrationctl/agentplugins cli/plugin-kit-ai; do
             echo "==> $module"
             (cd "$module" && go build ./...)
           done
@@ -121,6 +121,6 @@ jobs:
       # test-core does not compile the authoring commands, terminal prompts,
       # conformance adapter, registry mirror or repotests, and all of them
       # depend on core APIs the refactor changes. go vet compiles packages
-      # together with their tests across all five go.work modules.
+      # together with their tests across all six go.work modules.
       - name: Vet every workspace module
         run: make vet

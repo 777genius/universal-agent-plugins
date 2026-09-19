@@ -3,6 +3,9 @@ package main
 import (
 	"sort"
 	"testing"
+
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/pathpolicy"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports/contracttest"
 )
 
 // TestPathPolicyHasOneImplementation is the safety half of inverting the path
@@ -30,4 +33,9 @@ func TestPathPolicyHasOneImplementation(t *testing.T) {
 			t.Errorf("%s declares a ports.PathPolicy method outside %s; containment has one implementation on purpose, and one overriding method on an embedded Policy is enough to remove a check", name, pathPolicyOwner)
 		}
 	}
+}
+
+func TestPolicySatisfiesThePathPolicyContract(t *testing.T) {
+	t.Parallel()
+	contracttest.RunPathPolicy(t, pathpolicy.Policy{})
 }

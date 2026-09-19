@@ -61,6 +61,11 @@ jobs:
             go build ./...
           )
           (
+            cd install/integrationctl/agentplugins
+            export GOWORK=off
+            go build ./...
+          )
+          (
             cd sdk
             export GOWORK=off
             go build ./...

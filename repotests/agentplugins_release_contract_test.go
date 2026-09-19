@@ -142,6 +142,7 @@ func TestAgentpluginsReleaseContractsStayFailClosed(t *testing.T) {
 		"govulncheck (root)",
 		"govulncheck (cli)",
 		"govulncheck (integrationctl)",
+		"govulncheck (agentplugins)",
 		"govulncheck (plugininstall)",
 		"govulncheck (sdk)",
 	} {

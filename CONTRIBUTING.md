@@ -36,8 +36,9 @@ pnpm run docs:check
 ## Lint Gate and Size Limits
 
 The repository is linted by [golangci-lint](https://golangci-lint.run) **v2.13.2**
-or newer. A single `.golangci.yml` at the root covers the three modules that hold
-Go code: `.`, `cli/plugin-kit-ai`, `install/integrationctl`.
+or newer. A single `.golangci.yml` at the root covers the modules that hold
+Go code in the install core: `.`, `cli/plugin-kit-ai`, `install/integrationctl`,
+and `install/integrationctl/agentplugins`.
 
 ```bash
 make lint                       # both passes, compared against origin/main
@@ -147,7 +148,7 @@ and fails when a package grows. Regenerate the baseline only when the numbers
 went down:
 
 ```bash
-cd install/integrationctl && go run ./agentplugins/internal/archtest -update
+cd install/integrationctl/agentplugins && go run ./internal/archtest -update
 ```
 
 ## Pull Requests

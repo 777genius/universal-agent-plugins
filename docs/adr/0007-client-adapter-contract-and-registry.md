@@ -57,9 +57,11 @@ Invariants:
   `ApplyInstallIntent`, `ChatGPTAppBindingAction`, `DetectedPhysicalClient`,
   `KiroPrepareAction`) stays for consumers outside the core. That is not the
   same as constructing `planner.Planner{}` from the CLI.
-- Extracting `domain`+`ports`+`clients` into a separate Go module is a later
-  step. It is compatible with this contract and is not required for the
-  contract to be real.
+- Extracting `domain`+`ports`+`clients` into a still-smaller Go module remains a
+  later step: those packages still share a module with nativeconfig and the
+  generic dispatchers because client adapters import `pathpolicy`/`atomicfile`/`filetree`
+  from the parent. The install core as a whole is already a nested module
+  (`install/integrationctl/agentplugins`).
 
 ## Non-Goals
 
