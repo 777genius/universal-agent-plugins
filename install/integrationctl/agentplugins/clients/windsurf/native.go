@@ -91,7 +91,7 @@ func InspectWindsurfRegistry(plan domain.DeliveryPlan, managed *domain.ClientBin
 		return clients.RegistryIndeterminate, err
 	}
 	if managed != nil {
-		if err := VerifyWindsurfNativeObjects(plan.NativeRegistryRoot, plan.ActivePath, managed.NativeObjects, false, kernel); err != nil {
+		if err := VerifyWindsurfNativeObjects(plan.NativeRegistryRoot, plan.ActivePath, managed.NativeObjects, true, kernel); err != nil {
 			return clients.RegistryIndeterminate, err
 		}
 		if len(WindsurfObjects(managed.NativeObjects)) > 0 {

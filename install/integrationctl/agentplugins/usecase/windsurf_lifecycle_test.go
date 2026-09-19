@@ -82,6 +82,35 @@ func TestWindsurfLifecycleAddUpdateRepairRemoveInIsolatedHome(t *testing.T) {
 	}
 }
 
+func TestWindsurfLifecycleRepairsWipedNativeMCP(t *testing.T) {
+	t.Parallel()
+	service, _, _ := serviceFixture(t)
+	service.NativeObserver = providerstest.NewObserver(providers.NativeIdentityObserver{Stager: service.Stager})
+	configRoot := filepath.Join(t.TempDir(), "home", ".codeium", "windsurf")
+	configPath := filepath.Join(configRoot, "mcp_config.json")
+	if err := os.MkdirAll(configRoot, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(configPath, []byte(`{"mcpServers":{"foreign":{"url":"https://foreign.test"}}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	client := domain.DetectedClient{ClientID: domain.ClientWindsurf, Status: domain.DetectionDetected, ConfigRoot: configRoot}
+	add := windsurfUsecaseInput(t, client, "one")
+	add.Confirmed = true
+	if _, err := service.Add(context.Background(), add); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(configPath, []byte(`{"mcpServers":{"foreign":{"url":"https://foreign.test"}}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	add.OperationID = "windsurf-native-repair"
+	repaired, err := service.Repair(context.Background(), add)
+	if err != nil || !repaired.Mutated || repaired.Activation.Verification != domain.VerificationInstalled {
+		t.Fatalf("wiped Windsurf MCP was not repaired: %+v, %v", repaired, err)
+	}
+	assertUsecaseWindsurfConfig(t, configPath, "one", true)
+}
+
 func TestWindsurfLifecycleRejectsUnmanagedCollisionBeforePackageMutation(t *testing.T) {
 	t.Parallel()
 	service, store, _ := serviceFixture(t)
