@@ -132,7 +132,7 @@ jobs:
         run: go test ./cmd/agentplugins -run '^TestReleaseBuiltBinaryHasNoConformanceEnvironmentOverride$' -count=1
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 22
+          node-version: "22.21.1"
           package-manager-cache: false
       - name: Test npm bootstrap without install scripts
         working-directory: npm/agentplugins
@@ -345,7 +345,7 @@ jobs:
           ref: ${{ needs.validate.outputs.commit }}
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 22
+          node-version: "22.21.1"
           package-manager-cache: false
       - name: Verify live draft after successful platform proofs
         env:
@@ -383,7 +383,7 @@ jobs:
           ref: ${{ needs.validate.outputs.commit }}
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 22
+          node-version: "22.21.1"
           package-manager-cache: false
       - name: Reverify exact draft and promote only after all native proofs
         env:
