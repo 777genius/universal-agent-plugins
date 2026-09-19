@@ -639,9 +639,7 @@ func openCodeNativeLifecycle(t *testing.T, route string) {
 	// refuses the collision before commit, so repair must see that same
 	// applied source or preflight fails on a revision mismatch.
 	appliedSource := t.TempDir()
-	if err := os.CopyFS(appliedSource, os.DirFS(f.PackageRoot)); err != nil {
-		t.Fatal(err)
-	}
+	openCodeCopyTree(t, appliedSource, f.PackageRoot)
 	openCodeWriteFixturePackage(t, f.PackageRoot, "opencode-native-proof", "3.0.0")
 	preCollisionBytes, err := os.ReadFile(configPath)
 	must(err)
@@ -688,12 +686,7 @@ func openCodeNativeLifecycle(t *testing.T, route string) {
 	if err := os.RemoveAll(f.PackageRoot); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.MkdirAll(f.PackageRoot, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.CopyFS(f.PackageRoot, os.DirFS(appliedSource)); err != nil {
-		t.Fatal(err)
-	}
+	openCodeCopyTree(t, f.PackageRoot, appliedSource)
 
 	// The managed key is still foreign-occupied: repair must refuse this too
 	// (it only reconstructs absent managed objects, never adopts a foreign
@@ -756,6 +749,33 @@ func openCodeNativeLifecycle(t *testing.T, route string) {
 		t.Fatalf("expected refusal for repeat remove, got success:\n%s", repeatOut)
 	}
 	stages["repeat_remove"] = openCodeNativeStage{Status: "passed", Reason: "repeated remove correctly refused"}
+}
+
+func openCodeCopyTree(t *testing.T, dst, src string) {
+	t.Helper()
+	if err := filepath.Walk(src, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		rel, err := filepath.Rel(src, path)
+		if err != nil {
+			return err
+		}
+		target := filepath.Join(dst, rel)
+		if info.IsDir() {
+			return os.MkdirAll(target, 0o755)
+		}
+		body, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+			return err
+		}
+		return os.WriteFile(target, body, 0o644)
+	}); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func openCodeNativeBinary(t *testing.T, key string) string {
