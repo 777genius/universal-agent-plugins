@@ -658,16 +658,13 @@ func openCodeNativeLifecycle(t *testing.T, route string) {
 		stages["foreign_key_collision"] = openCodeNativeStage{Status: "failed", Reason: "update silently overwrote a foreign entry claiming a managed logical key instead of refusing"}
 		t.Fatalf("expected refusal when a foreign entry occupies a managed logical key, got success:\n%s", collisionUpdateOut)
 	}
-	if !strings.Contains(collisionUpdateOut, "native MCP entry is not exactly owned") || !strings.Contains(collisionUpdateOut, "api/server") {
-		t.Fatalf("update refusal did not contain the exact expected ownership message for api/server:\n%s", collisionUpdateOut)
+	if !strings.Contains(collisionUpdateOut, "native identity is unmanaged") {
+		t.Fatalf("update refusal did not report unmanaged native identity:\n%s", collisionUpdateOut)
 	}
-	// The overall operation is not a clean no-op: UAP's own bookkeeping (the
-	// managed package directory and internal state) commits the new version
-	// before external activation is attempted per key, so this specific
-	// failure mode is the documented managed_committed_activation_failed
-	// state, not a full rollback. Assert that precisely instead of only
-	// checking that an error occurred.
-	openCodeAssertJSONDataStatus(t, collisionUpdateOut, "managed_committed_activation_failed")
+	// Identity inspect refuses the collision before managed bookkeeping
+	// commits, so this is apply_failed rather than
+	// managed_committed_activation_failed.
+	openCodeAssertJSONDataStatus(t, collisionUpdateOut, "apply_failed")
 	afterCollisionUpdateBytes, err := os.ReadFile(configPath)
 	must(err)
 	if string(afterCollisionUpdateBytes) != string(postCollisionPlantBytes) {
@@ -687,10 +684,10 @@ func openCodeNativeLifecycle(t *testing.T, route string) {
 		stages["foreign_key_collision"] = openCodeNativeStage{Status: "failed", Reason: "repair silently adopted a foreign entry claiming a managed logical key instead of refusing"}
 		t.Fatalf("expected repair to refuse when a foreign entry occupies a managed logical key, got success:\n%s", collisionRepairOut)
 	}
-	if !strings.Contains(collisionRepairOut, "native MCP entry is not exactly owned") || !strings.Contains(collisionRepairOut, "api/server") {
-		t.Fatalf("repair refusal did not contain the exact expected ownership message for api/server:\n%s", collisionRepairOut)
+	if !strings.Contains(collisionRepairOut, "native identity is unmanaged") {
+		t.Fatalf("repair refusal did not report unmanaged native identity:\n%s", collisionRepairOut)
 	}
-	openCodeAssertJSONDataStatus(t, collisionRepairOut, "managed_committed_activation_failed")
+	openCodeAssertJSONDataStatus(t, collisionRepairOut, "apply_failed")
 	afterCollisionRepairBytes, err := os.ReadFile(configPath)
 	must(err)
 	if string(afterCollisionRepairBytes) != string(postCollisionPlantBytes) {
@@ -700,7 +697,7 @@ func openCodeNativeLifecycle(t *testing.T, route string) {
 	if afterCollisionRepairSkillDigest != beforeCollisionSkillDigest {
 		t.Fatalf("installed skill file changed despite the refused repair: %s -> %s", beforeCollisionSkillDigest, afterCollisionRepairSkillDigest)
 	}
-	stages["foreign_key_collision"] = openCodeNativeStage{Status: "passed", Reason: "both update and repair independently refused external activation with the exact ownership message naming the occupied key (data.status:managed_committed_activation_failed -- UAP's own managed bookkeeping commits the new version, but the client-facing config write for the occupied key is refused), while the package had genuinely changed content (not a no-change/VerifyOnly re-apply); config file bytes and installed skill file digest verified unchanged after each refusal"}
+	stages["foreign_key_collision"] = openCodeNativeStage{Status: "passed", Reason: "both update and repair independently refused before managed commit (data.status:apply_failed, native identity unmanaged); config file bytes and installed skill file digest verified unchanged after each refusal"}
 	// Restore the exact pre-collision bytes directly, simulating the foreign
 	// writer reverting its own change, so remove below observes the actual
 	// managed state.
