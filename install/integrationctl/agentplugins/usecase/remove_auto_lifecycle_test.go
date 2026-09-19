@@ -70,14 +70,13 @@ func TestRemoveGroupUninstallsManagedClientsWithoutExternalFlag(t *testing.T) {
 		{name: "vscode", clients: []domain.ClientID{domain.ClientVSCode}, wantUninstall: "plugin uninstall"},
 		{name: "cursor-codex", clients: []domain.ClientID{domain.ClientCursor, domain.ClientCodex}, wantUninstall: "plugin remove"},
 	} {
-		spec := spec
 		t.Run(spec.name, func(t *testing.T) {
 			t.Parallel()
 			service, store, _ := serviceFixture(t)
 			runner := &lifecycleCLIRunner{}
 			service.Activator = providers.Activator{Runner: runner}
-			var targets []AddInput
-			var detected []domain.DetectedClient
+			targets := make([]AddInput, 0, len(spec.clients))
+			detected := make([]domain.DetectedClient, 0, len(spec.clients))
 			for index, id := range spec.clients {
 				client := domain.DetectedClient{
 					ClientID: id, Status: domain.DetectionDetected,
@@ -96,11 +95,11 @@ func TestRemoveGroupUninstallsManagedClientsWithoutExternalFlag(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			var managed []string
+			managed := make([]string, 0, len(added.Targets))
 			for _, target := range added.Targets {
 				managed = append(managed, target.Plan.ActivePath)
 			}
-			var removeTargets []RemoveInput
+			removeTargets := make([]RemoveInput, 0, len(detected))
 			for _, client := range detected {
 				removeTargets = append(removeTargets, RemoveInput{
 					Client: client, Scope: domain.ScopeUser, BackendExecutable: backendForRemoveAuto(client.ClientID),
@@ -188,7 +187,7 @@ func TestRemoveGroupDryRunDoesNotCallCopilotOrCodexUninstall(t *testing.T) {
 	service.Activator = providers.Activator{Runner: runner}
 	codex := domain.DetectedClient{ClientID: domain.ClientCodex, Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), ".codex")}
 	copilot := domain.DetectedClient{ClientID: domain.ClientCopilot, Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), ".copilot")}
-	var targets []AddInput
+	targets := make([]AddInput, 0, 2)
 	for index, client := range []domain.DetectedClient{codex, copilot} {
 		install := addInput(t, client, "https://example.com/remove-dry-run")
 		install.Confirmed = true

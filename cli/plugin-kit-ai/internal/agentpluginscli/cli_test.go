@@ -2992,7 +2992,7 @@ func TestWrapGroupApplyCountKeepsEmptyApplyError(t *testing.T) {
 	t.Parallel()
 	cause := errors.New("state schema 2 requires explicit migration; run agentplugins migrate-state --dry-run, then agentplugins migrate-state")
 	got := wrapGroupApplyCount(0, 2, cause)
-	if got != cause {
+	if !errors.Is(got, cause) {
 		t.Fatalf("empty apply wrap = %v", got)
 	}
 	wrapped := wrapGroupApplyCount(1, 2, cause)

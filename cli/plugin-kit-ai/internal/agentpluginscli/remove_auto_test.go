@@ -56,31 +56,41 @@ func (runner *autoRemoveCLIRunner) contains(fragment string) bool {
 	return false
 }
 
+func (runner *autoRemoveCLIRunner) invoked(executable string) bool {
+	for _, argv := range runner.commands {
+		if len(argv) > 0 && argv[0] == executable {
+			return true
+		}
+	}
+	return false
+}
+
 func TestRemoveUninstallsManagedClientsWithoutExternalFlag(t *testing.T) {
 	t.Parallel()
 	for _, spec := range []struct {
 		name          string
 		targets       string
-		clients       []domain.ClientID
+		detected      []domain.ClientID
 		wantUninstall string
 	}{
-		{name: "cursor", targets: "cursor", clients: []domain.ClientID{domain.ClientCursor}},
-		{name: "cursor,codex", targets: "cursor,codex", clients: []domain.ClientID{domain.ClientCursor, domain.ClientCodex}, wantUninstall: "plugin remove"},
-		{name: "copilot", targets: "copilot", clients: []domain.ClientID{domain.ClientCopilot}, wantUninstall: "plugin uninstall"},
-		{name: "vscode", targets: "vscode", clients: []domain.ClientID{domain.ClientVSCode}, wantUninstall: "plugin uninstall"},
-		{name: "copilot,vscode", targets: "copilot,vscode", clients: []domain.ClientID{domain.ClientCopilot, domain.ClientVSCode}, wantUninstall: "plugin uninstall"},
+		{name: "cursor", targets: "cursor", detected: []domain.ClientID{domain.ClientCursor}},
+		{name: "cursor,codex", targets: "cursor,codex", detected: []domain.ClientID{domain.ClientCursor, domain.ClientCodex}, wantUninstall: "plugin remove"},
+		{name: "copilot", targets: "copilot", detected: []domain.ClientID{domain.ClientCopilot}, wantUninstall: "plugin uninstall"},
+		{name: "vscode with Copilot CLI", targets: "vscode", detected: []domain.ClientID{domain.ClientVSCode, domain.ClientCopilot}, wantUninstall: "plugin uninstall"},
+		{name: "copilot,vscode", targets: "copilot,vscode", detected: []domain.ClientID{domain.ClientCopilot, domain.ClientVSCode}, wantUninstall: "plugin uninstall"},
 	} {
-		spec := spec
 		t.Run(spec.name, func(t *testing.T) {
 			t.Parallel()
-			var detected []domain.DetectedClient
-			for _, id := range spec.clients {
+			detected := make([]domain.DetectedClient, 0, len(spec.detected))
+			for _, id := range spec.detected {
 				client := fixtureClient(t, id)
 				switch id {
 				case domain.ClientCodex:
 					client.ExecutablePath = "/test/bin/codex"
-				case domain.ClientCopilot, domain.ClientVSCode:
+				case domain.ClientCopilot:
 					client.ExecutablePath = "/test/bin/copilot"
+				case domain.ClientVSCode:
+					client.ExecutablePath = "/test/bin/code"
 				}
 				detected = append(detected, client)
 			}
@@ -95,7 +105,7 @@ func TestRemoveUninstallsManagedClientsWithoutExternalFlag(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			var managed []string
+			managed := make([]string, 0, len(before.Installations[0].Clients))
 			for _, binding := range before.Installations[0].Clients {
 				managed = append(managed, binding.TargetLocator)
 			}
@@ -103,7 +113,7 @@ func TestRemoveUninstallsManagedClientsWithoutExternalFlag(t *testing.T) {
 			if err != nil {
 				t.Fatalf("remove without --external-uninstalled failed: %v\n%s", err, stdout)
 			}
-			assertBatchJSON(t, stdout, "remove", len(spec.clients), 0)
+			assertBatchJSON(t, stdout, "remove", len(strings.Split(spec.targets, ",")), 0)
 			if strings.Contains(stdout, `"status":"blocked"`) {
 				t.Fatalf("remove was blocked without the flag: %s", stdout)
 			}
@@ -122,7 +132,52 @@ func TestRemoveUninstallsManagedClientsWithoutExternalFlag(t *testing.T) {
 			if spec.wantUninstall != "" && !runner.contains(spec.wantUninstall) {
 				t.Fatalf("never ran %q: %#v", spec.wantUninstall, runner.commands)
 			}
+			if runner.invoked("/test/bin/code") {
+				t.Fatalf("invoked VS Code CLI instead of Copilot: %#v", runner.commands)
+			}
 		})
+	}
+}
+
+func TestVSCodeRemoveWithoutCopilotCLIRequiresExternalFlag(t *testing.T) {
+	t.Parallel()
+	vscode := fixtureClient(t, domain.ClientVSCode)
+	vscode.ExecutablePath = "/test/bin/code"
+	copilot := domain.DetectedClient{ClientID: domain.ClientCopilot, DisplayName: "copilot", Status: domain.DetectionNotDetected}
+	fixture := newCLIFixture(t, []domain.DetectedClient{vscode, copilot})
+	runner := &autoRemoveCLIRunner{}
+	fixture.app.Lifecycle.Activator = providers.Activator{Runner: runner}
+	plugin := writeCLIPlugin(t)
+	if _, _, err := fixture.execute(false, "add", plugin, "--target", "vscode"); err != nil {
+		t.Fatal(err)
+	}
+	before, err := fixture.store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	managed := onlyCLIClient(before.Installations[0]).TargetLocator
+	stdout, _, err := fixture.execute(false, "remove", "demo", "--target", "vscode", "--format", "json")
+	if err == nil {
+		t.Fatalf("vscode remove without Copilot CLI succeeded: %s", stdout)
+	}
+	if !strings.Contains(err.Error(), "did not authorize managed artifact removal") && !strings.Contains(stdout, `"status":"blocked"`) {
+		t.Fatalf("vscode remove error = %v stdout=%s", err, stdout)
+	}
+	if runner.invoked("/test/bin/code") {
+		t.Fatalf("invoked VS Code CLI: %#v", runner.commands)
+	}
+	if _, statErr := os.Stat(managed); statErr != nil {
+		t.Fatalf("blocked vscode remove touched managed files: %v", statErr)
+	}
+	stdout, _, err = fixture.execute(false, "remove", "demo", "--target", "vscode", "--external-uninstalled", "--format", "json")
+	if err != nil {
+		t.Fatalf("vscode remove with --external-uninstalled failed: %v\n%s", err, stdout)
+	}
+	if _, statErr := os.Stat(managed); !os.IsNotExist(statErr) {
+		t.Fatalf("managed path survived acknowledged vscode remove: %v", statErr)
+	}
+	if runner.invoked("/test/bin/code") {
+		t.Fatalf("acknowledged remove invoked VS Code CLI: %#v", runner.commands)
 	}
 }
 

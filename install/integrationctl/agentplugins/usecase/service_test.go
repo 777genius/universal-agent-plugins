@@ -1072,7 +1072,10 @@ func TestAddOfNewerRevisionRefusesWhenSiblingBindingIsNotPreflighted(t *testing.
 	service, store, cursor := serviceFixture(t)
 	kiro := domain.DetectedClient{ClientID: domain.ClientKiro, Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), ".kiro")}
 	if _, err := service.AddGroup(context.Background(), GroupInput{
-		Targets: []AddInput{addInput(t, cursor, "https://example.com/sibling-refresh"), addInput(t, kiro, "https://example.com/sibling-refresh")},
+		Targets: []AddInput{
+			addInput(t, cursor, "https://example.com/sibling-refresh"),
+			addInput(t, kiro, "https://example.com/sibling-refresh"),
+		},
 		OperationGroupID: "sibling-add", Confirmed: true,
 	}); err != nil {
 		t.Fatal(err)

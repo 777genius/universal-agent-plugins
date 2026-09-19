@@ -1146,7 +1146,6 @@ func TestDeactivatePreviewNeverRunsCLICommands(t *testing.T) {
 		{id: domain.ClientCopilot, executable: "/test/bin/copilot"},
 		{id: domain.ClientVSCode, executable: "/test/bin/copilot"},
 	} {
-		spec := spec
 		t.Run(string(spec.id), func(t *testing.T) {
 			t.Parallel()
 			runner := &recordingRunner{}
@@ -1287,7 +1286,6 @@ func TestDeactivateUninstallsEveryKnownClientWithoutExternalFlagWhenPossible(t *
 			wantAllowed: false, wantAction: "--external-uninstalled",
 		},
 	} {
-		spec := spec
 		seen[spec.id] = true
 		t.Run(string(spec.id), func(t *testing.T) {
 			t.Parallel()

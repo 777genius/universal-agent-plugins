@@ -288,7 +288,7 @@ func (service Service) apply(ctx context.Context, input AddInput, replace bool) 
 			if err := service.verifyManagedTarget(ctx, input.Client, input.Scope, current, "dry-run"); err != nil {
 				return result, err
 			}
-			if !replace && !packageRevisionMatches(current.PackageRevision, input.Envelope) {
+			if !replace && !groupPackageUnchanged(current, input) {
 				replace = true
 				describeMCPRemovals(&plan, managedBinding)
 				result.Plan = plan
@@ -317,7 +317,7 @@ func (service Service) apply(ctx context.Context, input AddInput, replace bool) 
 						changed, updateErr := service.persistAuthoritativeObservation(ctx, input, installationID, clientBindingID, current, verified)
 						result.Mutated = changed
 						if updateErr != nil {
-							return result, fmt.Errorf("client verification failed: %v; persist negative verification evidence: %w", verifyErr, updateErr)
+							return result, fmt.Errorf("client verification failed: %w; persist negative verification evidence: %v", verifyErr, updateErr)
 						}
 					}
 					return result, verifyErr
@@ -356,7 +356,7 @@ func (service Service) apply(ctx context.Context, input AddInput, replace bool) 
 						changed, updateErr := service.persistAuthoritativeObservation(ctx, input, installationID, clientBindingID, previousClient, verified)
 						result.Mutated = changed
 						if updateErr != nil {
-							return result, fmt.Errorf("client verification failed: %v; persist negative verification evidence: %w", verifyErr, updateErr)
+							return result, fmt.Errorf("client verification failed: %w; persist negative verification evidence: %v", verifyErr, updateErr)
 						}
 					}
 					return result, verifyErr

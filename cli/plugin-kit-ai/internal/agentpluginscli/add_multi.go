@@ -650,6 +650,10 @@ func renderAddMultiApplySummary(writer io.Writer, result addMultiResult, envelop
 		switch classifyBatchPresentation(target) {
 		case batchPresentationSetupRequired, batchPresentationSignInRequired, batchPresentationFailed, batchPresentationNotCompleted, batchPresentationRolledBack:
 			attention = append(attention, target)
+		default:
+			if err := renderOpenCodeRuntimeNotice(writer, target.Output.Result); err != nil {
+				return err
+			}
 		}
 	}
 	if len(attention) == 0 {

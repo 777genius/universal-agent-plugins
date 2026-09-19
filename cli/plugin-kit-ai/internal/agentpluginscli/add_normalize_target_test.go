@@ -6,7 +6,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
-func TestBackendExecutablePrefersCopilotThenFallsBackToVSCode(t *testing.T) {
+func TestBackendExecutableUsesCopilotForVSCodeAndStaysEmptyWithoutIt(t *testing.T) {
 	t.Parallel()
 	vscode := domain.DetectedClient{ClientID: domain.ClientVSCode, ExecutablePath: "/test/bin/code"}
 	if got := backendExecutable(vscode, map[domain.ClientID]domain.DetectedClient{
@@ -15,8 +15,11 @@ func TestBackendExecutablePrefersCopilotThenFallsBackToVSCode(t *testing.T) {
 	}); got != "/test/bin/copilot" {
 		t.Fatalf("shared backend = %q", got)
 	}
-	if got := backendExecutable(vscode, map[domain.ClientID]domain.DetectedClient{domain.ClientVSCode: vscode}); got != "/test/bin/code" {
-		t.Fatalf("vscode-only backend = %q", got)
+	if got := backendExecutable(vscode, map[domain.ClientID]domain.DetectedClient{
+		domain.ClientVSCode:  vscode,
+		domain.ClientCopilot: {ClientID: domain.ClientCopilot},
+	}); got != "" {
+		t.Fatalf("vscode-only backend = %q, want empty so remove requires --external-uninstalled", got)
 	}
 }
 

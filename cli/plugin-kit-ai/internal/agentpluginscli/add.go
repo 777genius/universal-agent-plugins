@@ -457,9 +457,7 @@ func normalizeTarget(value string) domain.ClientID {
 
 func backendExecutable(selected domain.DetectedClient, clients map[domain.ClientID]domain.DetectedClient) string {
 	if selected.ClientID == domain.ClientVSCode {
-		if path := strings.TrimSpace(clients[domain.ClientCopilot].ExecutablePath); path != "" {
-			return path
-		}
+		return strings.TrimSpace(clients[domain.ClientCopilot].ExecutablePath)
 	}
 	return selected.ExecutablePath
 }
