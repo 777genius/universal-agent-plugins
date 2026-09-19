@@ -119,13 +119,11 @@ func TestNativeIdentityUnqualifiedPluginRootIgnoresForeignNonDirectoryEntries(t 
 }
 
 // TestNativeIdentityOpenCodeIgnoresForeignNonDirectoryEntries confirms the
-// same fix protects OpenCode too: OpenCode's own native registry check
-// (inspectNativeRegistry) never scans a directory, but its prepared-identity
-// check still goes through shared.InspectUnqualifiedPluginRoot exactly
-// like Cursor's does (observeIdentity calls inspectPreparedRegistry
-// unconditionally for every client before any client-specific override), so
-// a foreign .DS_Store in OpenCode's managed clients root would have hit the
-// identical bug if shared.InspectUnqualifiedPluginRoot had not already been fixed.
+// same fix protects OpenCode too: native registry inspect looks at planned
+// skills and MCP names, but the prepared-identity check still goes through
+// shared.InspectUnqualifiedPluginRoot, so a foreign .DS_Store in OpenCode's
+// managed clients root would have hit the identical bug if
+// shared.InspectUnqualifiedPluginRoot had not already been fixed.
 func TestNativeIdentityOpenCodeIgnoresForeignNonDirectoryEntries(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "managed", "clients", "opencode")
 	plan := identityPlan(root)
@@ -137,6 +135,7 @@ func TestNativeIdentityOpenCodeIgnoresForeignNonDirectoryEntries(t *testing.T) {
 		t.Fatal(err)
 	}
 	managed := &domain.ClientBinding{NativeObjects: []domain.NativeObjectOwnership{{Kind: "managed_package_directory", ManagedDigest: "sha256:owned"}}}
+	plan.NativeRegistryRoot = filepath.Join(t.TempDir(), "opencode")
 	observer := testObserver(NativeIdentityObserver{Stager: acceptingPackageVerifier{}})
 	observation, err := observer.ObserveNativeIdentity(context.Background(), domain.DetectedClient{ClientID: domain.ClientOpenCode}, plan, managed)
 	if err != nil || observation.State != domain.NativeIdentityManaged {
@@ -450,6 +449,59 @@ func TestNativeIdentityKiroManualPowerAuthorizesOnlyLocalPreparation(t *testing.
 	observation, err := (testObserver(NativeIdentityObserver{})).ObserveNativeIdentity(context.Background(), domain.DetectedClient{ClientID: domain.ClientKiro}, plan, nil)
 	if err != nil || observation.State != domain.NativeIdentityAbsent {
 		t.Fatalf("observation = %+v, err = %v", observation, err)
+	}
+}
+
+func TestNativeIdentityClineReadsGlobalSkillAndMCPRegistry(t *testing.T) {
+	configRoot := filepath.Join(t.TempDir(), ".cline")
+	if err := os.MkdirAll(filepath.Join(configRoot, "skills", "docs"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	plan := identityPlan(filepath.Join(t.TempDir(), "prepared"))
+	plan.NativeRegistryRoot = configRoot
+	plan.Components = []domain.ComponentDecision{{Kind: domain.ComponentSkill, Name: "docs", Support: domain.SupportNative}}
+	observation, err := (testObserver(NativeIdentityObserver{})).ObserveNativeIdentity(context.Background(), domain.DetectedClient{ClientID: domain.ClientCline}, plan, nil)
+	if err != nil || observation.State != domain.NativeIdentityUnmanaged {
+		t.Fatalf("skill observation = %+v, err = %v", observation, err)
+	}
+
+	writeIdentityFile(t, filepath.Join(configRoot, "data", "settings", "cline_mcp_settings.json"), `{"mcpServers":{"docs":{"transport":{"type":"stdio","command":"foreign"}}}}`)
+	plan.Components = []domain.ComponentDecision{{Kind: domain.ComponentMCPServer, Name: "docs", Support: domain.SupportNative}}
+	observation, err = (testObserver(NativeIdentityObserver{})).ObserveNativeIdentity(context.Background(), domain.DetectedClient{ClientID: domain.ClientCline}, plan, nil)
+	if err != nil || observation.State != domain.NativeIdentityUnmanaged {
+		t.Fatalf("MCP observation = %+v, err = %v", observation, err)
+	}
+}
+
+func TestNativeIdentityOpenCodeReadsGlobalSkillAndMCPRegistry(t *testing.T) {
+	configRoot := filepath.Join(t.TempDir(), "opencode")
+	if err := os.MkdirAll(filepath.Join(configRoot, "skills", "docs"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	plan := identityPlan(filepath.Join(t.TempDir(), "prepared"))
+	plan.NativeRegistryRoot = configRoot
+	plan.Components = []domain.ComponentDecision{{Kind: domain.ComponentSkill, Name: "docs", Support: domain.SupportNative}}
+	observation, err := (testObserver(NativeIdentityObserver{})).ObserveNativeIdentity(context.Background(), domain.DetectedClient{ClientID: domain.ClientOpenCode}, plan, nil)
+	if err != nil || observation.State != domain.NativeIdentityUnmanaged {
+		t.Fatalf("skill observation = %+v, err = %v", observation, err)
+	}
+
+	writeIdentityFile(t, filepath.Join(configRoot, "opencode.json"), `{"mcp":{"docs":{"type":"remote","url":"https://foreign.test"}}}`)
+	plan.Components = []domain.ComponentDecision{{Kind: domain.ComponentMCPServer, Name: "docs", Support: domain.SupportNative}}
+	observation, err = (testObserver(NativeIdentityObserver{})).ObserveNativeIdentity(context.Background(), domain.DetectedClient{ClientID: domain.ClientOpenCode}, plan, nil)
+	if err != nil || observation.State != domain.NativeIdentityUnmanaged {
+		t.Fatalf("MCP observation = %+v, err = %v", observation, err)
+	}
+}
+
+func TestNativeIdentityNativeConfigEmptyRootIsIndeterminate(t *testing.T) {
+	plan := identityPlan(filepath.Join(t.TempDir(), "prepared"))
+	plan.Components = []domain.ComponentDecision{{Kind: domain.ComponentMCPServer, Name: "docs", Support: domain.SupportNative}}
+	for _, client := range []domain.ClientID{domain.ClientCline, domain.ClientOpenCode, domain.ClientGemini, domain.ClientWindsurf} {
+		observation, err := (testObserver(NativeIdentityObserver{})).ObserveNativeIdentity(context.Background(), domain.DetectedClient{ClientID: client}, plan, nil)
+		if err != nil || observation.State != domain.NativeIdentityIndeterminate {
+			t.Fatalf("%s empty-root observation = %+v, err = %v", client, observation, err)
+		}
 	}
 }
 

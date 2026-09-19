@@ -66,6 +66,12 @@ func TestRegistryInspectorViolationsRejectABrokenAdapter(t *testing.T) {
 				return clients.RegistryExpected, nil
 			},
 		},
+		"native config empty root is clear": identityAdapter{
+			exampleAdapter: exampleAdapter{id: domain.ClientCline},
+			inspect: func(context.Context, clients.Env, *domain.ClientBinding) (clients.RegistryFinding, error) {
+				return clients.RegistryClear, nil
+			},
+		},
 	}
 	for name, inspector := range cases {
 		if violations := registryInspectorViolations(t, inspector, domain.ClientCursor); len(violations) == 0 {

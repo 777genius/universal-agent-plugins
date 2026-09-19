@@ -84,7 +84,7 @@ func verifyWindsurfNativeObject(kernel nativeconfig.Kernel, configPath string, s
 
 func InspectWindsurfRegistry(plan domain.DeliveryPlan, managed *domain.ClientBinding, kernel nativeconfig.Kernel) (clients.RegistryFinding, error) {
 	if strings.TrimSpace(plan.NativeRegistryRoot) == "" {
-		return clients.RegistryClear, nil
+		return clients.RegistryIndeterminate, nil
 	}
 	configPath, err := windsurfConfigPath(plan.NativeRegistryRoot)
 	if err != nil {
