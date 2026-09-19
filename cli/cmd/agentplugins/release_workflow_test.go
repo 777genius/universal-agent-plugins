@@ -34,6 +34,7 @@ func TestStableReleaseRequiresVerifiedReproducibleBootstrapBeforeBuild(t *testin
 	}
 	for _, required := range []string{
 		"go-version: 1.25.13",
+		"node-version: \"22.21.1\"",
 		"GOWORK: \"off\"",
 		"GOTOOLCHAIN: local",
 		"GOFLAGS: -buildvcs=false -p=1",
@@ -55,6 +56,12 @@ func TestStableReleaseRequiresVerifiedReproducibleBootstrapBeforeBuild(t *testin
 		if !strings.Contains(workflow, required) {
 			t.Fatalf("agentplugins stable release lacks %q", required)
 		}
+	}
+	if strings.Count(workflow, "node-version: \"22.21.1\"") != 3 {
+		t.Fatal("agentplugins stable release must pin Node 22.21.1 on validate, verified-draft, and promote")
+	}
+	if strings.Contains(workflow, "node-version: 22\n") || strings.Contains(workflow, "node-version: 22\r") {
+		t.Fatal("agentplugins stable release must not use an unpinned Node 22")
 	}
 	negativeTestIndex := strings.Index(workflow, "TestReleaseBuiltBinaryHasNoConformanceEnvironmentOverride")
 	if negativeTestIndex < 0 || negativeTestIndex > buildIndex {
