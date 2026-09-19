@@ -12,36 +12,60 @@ import (
 // Only the current operation's effective Kiro intent may suppress execution.
 // Ordinary resolution retains the detector's normal version discovery behavior.
 func (app App) detectForLifecycle(ctx context.Context, probeVersion bool, intents map[domain.ClientID]domain.InstallIntent) ([]domain.DetectedClient, error) {
-	if !probeVersion || intents[domain.ClientKiro] != domain.InstallIntentPrepare {
+	if !probeVersion || !hostedPrepareSelected(intents) {
 		return detectClientsForLifecycleResolution(ctx, app.Detector, probeVersion)
 	}
 	clients, err := app.Detector.Detect(ctx)
 	if err != nil {
 		return nil, err
 	}
+	return app.mergeHostedPrepareProbes(ctx, clients, intents)
+}
+
+func (app App) mergeHostedPrepareProbes(ctx context.Context, clients []domain.DetectedClient, intents map[domain.ClientID]domain.InstallIntent) ([]domain.DetectedClient, error) {
+	targets := versionProbeTargets(clients, intents)
+	targeted, ok := app.Detector.(ports.TargetedVersionProbingClientDetector)
+	if !ok || len(targets) == 0 {
+		return clients, nil
+	}
+	probed, err := targeted.DetectTargetsWithVersionProbe(ctx, targets)
+	if err != nil {
+		return nil, err
+	}
+	applyProbedVersions(clients, probed, intents)
+	return clients, nil
+}
+
+func versionProbeTargets(clients []domain.DetectedClient, intents map[domain.ClientID]domain.InstallIntent) []domain.ClientID {
 	var targets []domain.ClientID
 	for _, client := range clients {
-		if client.ClientID != domain.ClientKiro && client.Status == domain.DetectionDetected {
+		if !skipVersionProbeForPrepare(client.ClientID, intents) && client.Status == domain.DetectionDetected {
 			targets = append(targets, client.ClientID)
 		}
 	}
-	if targeted, ok := app.Detector.(ports.TargetedVersionProbingClientDetector); ok && len(targets) > 0 {
-		probed, err := targeted.DetectTargetsWithVersionProbe(ctx, targets)
-		if err != nil {
-			return nil, err
+	return targets
+}
+
+func applyProbedVersions(clients, probed []domain.DetectedClient, intents map[domain.ClientID]domain.InstallIntent) {
+	for i, client := range clients {
+		if skipVersionProbeForPrepare(client.ClientID, intents) {
+			continue
 		}
-		for i, client := range clients {
-			if client.ClientID == domain.ClientKiro {
-				continue
-			}
-			for _, updated := range probed {
-				if updated.ClientID == client.ClientID {
-					clients[i] = updated
-				}
+		for _, updated := range probed {
+			if updated.ClientID == client.ClientID {
+				clients[i] = updated
 			}
 		}
 	}
-	return clients, nil
+}
+
+func hostedPrepareSelected(intents map[domain.ClientID]domain.InstallIntent) bool {
+	for id, intent := range intents {
+		if intent == domain.InstallIntentPrepare && allowsHostedPrepare(id) {
+			return true
+		}
+	}
+	return false
 }
 
 // Match the same client and scope as lifecycle planning, including preferences
@@ -79,33 +103,55 @@ func (app App) addLifecycleIntents(ctx context.Context, source, scope string, ex
 		return nil, err
 	}
 	installation, _ := locallyMatchedInstallation(state, source)
-	needsGuidedResolution := strings.Contains(strings.ToLower(source), "context7") && (len(targetSets) == 0 || len(targetSets[0]) == 0)
-	if !needsGuidedResolution && len(targetSets) > 0 {
-		for _, target := range targetSets[0] {
-			needsGuidedResolution = needsGuidedResolution || strings.Contains(strings.ToLower(source), "context7") && (target == domain.ClientKiro || target == domain.ClientChatGPT)
-		}
-	}
-	if isDirectorySelector(source) && app.DirectoryClient != nil && (len(state.Installations) > 0 || needsGuidedResolution) {
-		bundle, err := app.DirectoryClient.Load(ctx, installedDirectoryFloor(state))
+	if isDirectorySelector(source) && app.DirectoryClient != nil && (len(state.Installations) > 0 || context7GuidedResolution(source, targetSets)) {
+		installation, explicit, err = app.directoryLifecycleIntents(ctx, state, source, installation, explicit)
 		if err != nil {
 			return nil, err
 		}
-		productID, err := directorySelectorProductID(bundle.Snapshot, source)
-		if err != nil && !errors.Is(err, domain.ErrDirectoryNotFound) {
-			return nil, err
-		}
-		if err == nil && productID == "context7" {
-			explicit[domain.ClientKiro] = domain.InstallIntentPrepare
-			explicit[domain.ClientChatGPT] = domain.InstallIntentPrepare
-		}
-		if len(state.Installations) > 0 {
-			installation, _, err = retainedDirectoryInstallation(state, source, productID)
-			if err != nil {
-				return nil, err
-			}
-		}
 	}
 	return lifecycleInstallIntents(installation, scope, explicit), nil
+}
+
+func context7GuidedResolution(source string, targetSets [][]domain.ClientID) bool {
+	if !strings.Contains(strings.ToLower(source), "context7") {
+		return false
+	}
+	if len(targetSets) == 0 || len(targetSets[0]) == 0 {
+		return true
+	}
+	for _, target := range targetSets[0] {
+		if allowsPrepare(target) {
+			return true
+		}
+	}
+	return false
+}
+
+func (app App) directoryLifecycleIntents(
+	ctx context.Context,
+	state domain.StateFileV2,
+	source string,
+	installation domain.Installation,
+	explicit map[domain.ClientID]domain.InstallIntent,
+) (domain.Installation, map[domain.ClientID]domain.InstallIntent, error) {
+	bundle, err := app.DirectoryClient.Load(ctx, installedDirectoryFloor(state))
+	if err != nil {
+		return installation, explicit, err
+	}
+	productID, err := directorySelectorProductID(bundle.Snapshot, source)
+	if err != nil && !errors.Is(err, domain.ErrDirectoryNotFound) {
+		return installation, explicit, err
+	}
+	if err == nil && productID == "context7" {
+		assignPrepareIntents(explicit)
+	}
+	if len(state.Installations) > 0 {
+		installation, _, err = retainedDirectoryInstallation(state, source, productID)
+		if err != nil {
+			return installation, explicit, err
+		}
+	}
+	return installation, explicit, nil
 }
 
 // Direct packages are already loaded before this decision, so only packages
@@ -118,12 +164,19 @@ func applyLoadedGuidedIntents(opts *options, loaded loadedPackage, targets []dom
 		return
 	}
 	for _, target := range targets {
-		if target == domain.ClientKiro && opts.installIntents[target] == "" {
+		assignLoadedGuidedIntent(opts, loaded, target)
+	}
+}
+
+func assignLoadedGuidedIntent(opts *options, loaded loadedPackage, target domain.ClientID) {
+	if requiresPersonalMapping(target) {
+		if loaded.chatGPTPreparation {
 			opts.installIntents[target] = domain.InstallIntentPrepare
 		}
-		if target == domain.ClientChatGPT && loaded.chatGPTPreparation {
-			opts.installIntents[target] = domain.InstallIntentPrepare
-		}
+		return
+	}
+	if allowsHostedPrepare(target) && opts.installIntents[target] == "" {
+		opts.installIntents[target] = domain.InstallIntentPrepare
 	}
 }
 

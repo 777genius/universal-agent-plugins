@@ -40,12 +40,12 @@ func preflightSelectedTargets(ctx context.Context, app App, targets []domain.Cli
 	selected := make([]domain.DetectedClient, 0, len(targets))
 	for _, target := range targets {
 		client, ok := detectedSharedClient(target, detected)
-		if target == domain.ClientChatGPT && !ok {
-			client = domain.DetectedClient{ClientID: target, DisplayName: "ChatGPT", Status: domain.DetectionNotDetected}
+		if plansWithoutHostPresence(target) && !ok {
+			client = syntheticUndetectedClient(target)
 			detected[target] = client
 			ok = true
 		}
-		if !ok || (client.Status != domain.DetectionDetected && target != domain.ClientChatGPT) {
+		if !ok || (client.Status != domain.DetectionDetected && !plansWithoutHostPresence(target)) {
 			return nil, nil, fmt.Errorf("target %q was not detected; no target was changed", target)
 		}
 		detected[target] = client
@@ -64,8 +64,8 @@ func preflightInstalledBindings(bindingTargets []domain.ClientID, detected map[d
 	seen := make(map[domain.ClientID]struct{}, len(bindingTargets))
 	for _, target := range bindingTargets {
 		client, ok := clientplanner.DetectedPhysicalClient(target, detected)
-		if target == domain.ClientChatGPT && !ok {
-			client = domain.DetectedClient{ClientID: target, DisplayName: "ChatGPT", Status: domain.DetectionNotDetected}
+		if plansWithoutHostPresence(target) && !ok {
+			client = syntheticUndetectedClient(target)
 			ok = true
 		}
 		if !ok {

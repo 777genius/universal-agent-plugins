@@ -1,7 +1,5 @@
 package pluginmodel
 
-import ()
-
 func (m *PortableMCP) RenderForTarget(target string) (map[string]any, error) {
 	return renderPortableMCPForTarget(m, target)
 }

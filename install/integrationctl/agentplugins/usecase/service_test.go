@@ -17,10 +17,13 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/dirswap"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/processlock"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/statev2"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	clientplanner "github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/planner"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/plannertest"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/providers"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/providerstest"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/transaction"
 	legacyports "github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
 )
@@ -528,7 +531,7 @@ func TestUnconfirmedInfrastructureFailureIsNotPersistedAsAuthoritativeEvidenceFo
 			if err := store.Save(state); err != nil {
 				t.Fatal(err)
 			}
-			service.Activator = providers.Activator{Runner: fixedUsecaseRunner{err: fmt.Errorf("temporary verifier transport failure")}}
+			service.Activator = providerstest.NewActivator(providers.Activator{Runner: fixedUsecaseRunner{err: fmt.Errorf("temporary verifier transport failure")}})
 			input.Confirmed = false
 			input.PersistAuthoritativeObservations = true
 			input.BackendExecutable = "/test/bin/copilot"
@@ -580,7 +583,7 @@ func TestPlanFirstAuthoritativePersistenceIsSurroundedByMutationLock(t *testing.
 	guarded := lockAssertingStore{StateStore: store, held: &held}
 	service.StateStore = guarded
 	service.Lock = lock
-	service.Activator = providers.Activator{Runner: fixedUsecaseRunner{result: legacyports.CommandResult{Stdout: []byte(`{"installed":[]}`)}}}
+	service.Activator = providerstest.NewActivator(providers.Activator{Runner: fixedUsecaseRunner{result: legacyports.CommandResult{Stdout: []byte(`{"installed":[]}`)}}})
 	input.Confirmed = false
 	input.PersistAuthoritativeObservations = true
 	input.BackendExecutable = "/test/bin/codex"
@@ -655,7 +658,7 @@ func TestPlanFirstAuthoritativePersistenceRejectsStaleObservedBinding(t *testing
 	}}
 	service.StateStore = lockAssertingStore{StateStore: store, held: &held}
 	service.Lock = lock
-	service.Activator = providers.Activator{Runner: fixedUsecaseRunner{result: legacyports.CommandResult{Stdout: []byte(`{"installed":[]}`)}}}
+	service.Activator = providerstest.NewActivator(providers.Activator{Runner: fixedUsecaseRunner{result: legacyports.CommandResult{Stdout: []byte(`{"installed":[]}`)}}})
 	input.Confirmed = false
 	input.PersistAuthoritativeObservations = true
 	input.BackendExecutable = "/test/bin/codex"
@@ -1807,7 +1810,7 @@ func TestRemoveCleansNativeCodexMarketplaceBeforeManagedArtifactDeletion(t *test
 	if result := runner.writeConfig(false); result.ExitCode != 0 {
 		t.Fatalf("seed Codex config: %s", result.Stderr)
 	}
-	service.Activator = providers.Activator{Runner: runner}
+	service.Activator = providerstest.NewActivator(providers.Activator{Runner: runner})
 	add := addInput(t, client, "https://example.com/codex-cleanup")
 	add.Confirmed = true
 	add.BackendExecutable = "/test/bin/codex"
@@ -1826,7 +1829,7 @@ func TestRemoveCleansNativeCodexMarketplaceBeforeManagedArtifactDeletion(t *test
 	if !removed.Mutated || !removed.Deactivation.ExternalRemovalComplete {
 		t.Fatalf("remove result = %+v", removed)
 	}
-	marketplace := providers.ManagedMarketplaceName(installed.Plan.PhysicalArtifactID)
+	marketplace := shared.ManagedMarketplaceName(installed.Plan.PhysicalArtifactID)
 	wantCleanup := []string{"/test/bin/codex", "plugin", "marketplace", "remove", marketplace, "--json"}
 	if got := runner.commands[len(runner.commands)-1].Argv; !reflect.DeepEqual(got, wantCleanup) {
 		t.Fatalf("last command = %#v, want cleanup %#v", got, wantCleanup)
@@ -1972,21 +1975,21 @@ func serviceFixture(t *testing.T) (Service, statev2.Store, domain.DetectedClient
 		ClientID: domain.ClientCursor, Status: domain.DetectionDetected,
 		ConfigRoot: filepath.Join(root, "home", ".cursor"),
 	}
-	stager := providers.Stager{}
-	targetPlanner := clientplanner.Planner{ManagedRoot: managed}
-	return Service{
+	stager := providerstest.NewStager(providers.Stager{})
+	targetPlanner := plannertest.NewPlanner(clientplanner.Planner{ManagedRoot: managed})
+	return testService(Service{
 		StateStore: store,
 		Planner:    targetPlanner,
 		Targets:    targetPlanner,
 		Stager:     stager,
-		Activator:  providers.Activator{},
+		Activator:  providerstest.NewActivator(providers.Activator{}),
 		PluginData: providers.PluginDataManager{Base: filepath.Join(root, "plugin-data")},
 		Lock:       processlock.Lock{Path: filepath.Join(root, "state", "mutation.lock")},
 		Kernel: transaction.Kernel{
 			Directory: dirswap.Manager{JournalDir: filepath.Join(root, "state", "operations-v2")},
 		},
 		Now: func() time.Time { return time.Date(2026, 8, 8, 12, 0, 0, 0, time.UTC) },
-	}, store, client
+	}), store, client
 }
 
 type verificationFailureStager struct {
@@ -2050,7 +2053,7 @@ func (runner *codexCleanupUsecaseRunner) Run(_ context.Context, command legacypo
 	runner.commands = append(runner.commands, command)
 	if len(command.Argv) >= 5 && command.Argv[1] == "plugin" && command.Argv[2] == "marketplace" && command.Argv[3] == "add" {
 		runner.managedPath = command.Argv[4]
-		runner.managedMarketplace = providers.ManagedMarketplaceName(filepath.Base(command.Argv[4]))
+		runner.managedMarketplace = shared.ManagedMarketplaceName(filepath.Base(command.Argv[4]))
 		return runner.writeConfig(true), nil
 	}
 	if len(command.Argv) >= 5 && command.Argv[1] == "plugin" && command.Argv[2] == "marketplace" && command.Argv[3] == "remove" {

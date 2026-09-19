@@ -1,0 +1,81 @@
+name: Lint
+
+on:
+  workflow_call:
+    inputs:
+      lint-base:
+        description: Git ref passed to golangci-lint --new-from-merge-base (for example origin/main)
+        type: string
+        required: false
+        default: origin/main
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: root
+            module: ""
+          - name: cli/plugin-kit-ai
+            module: cli/plugin-kit-ai
+          - name: install/integrationctl
+            module: install/integrationctl
+          - name: install/integrationctl/agentplugins
+            module: install/integrationctl/agentplugins
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          # merge-base and the baseline check both need the base revision
+          fetch-depth: 0
+
+      # workflow_call does not populate github.event.pull_request, so
+      # golangci-lint-action only-new-issues cannot fetch the PR patch and
+      # silently lints the whole module. Match the local Makefile instead:
+      # --new-from-merge-base against the caller's base branch.
+      - name: Fetch lint base
+        env:
+          LINT_BASE: ${{ inputs.lint-base }}
+        run: |
+          set -euo pipefail
+          ref="${LINT_BASE#origin/}"
+          git fetch --no-tags origin "${ref}:refs/remotes/origin/${ref}"
+          git rev-parse --verify "origin/${ref}^{commit}"
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.25.13"
+          cache: false
+
+      # Correctness and style on changed lines only: the legacy tree predates the
+      # linter and fixing it wholesale is not this gate's job.
+      - name: Lint changed lines
+        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
+        with:
+          version: v2.13.2
+          working-directory: ${{ matrix.module }}
+          only-new-issues: false
+          args: --new-from-merge-base=${{ inputs.lint-base }}
+
+      # Size, complexity and import boundaries on whole files: --new-from-* would
+      # miss growth inside an already oversized function, and an import boundary
+      # has to hold everywhere, not only on touched lines.
+      - name: Size and architecture gate
+        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
+        with:
+          version: v2.13.2
+          working-directory: ${{ matrix.module }}
+          only-new-issues: false
+          args: --enable-only=revive,funlen,gocyclo,gocognit,dupl,depguard
+
+      - name: Legacy baseline is shrink-only
+        if: matrix.name == 'root'
+        env:
+          LINT_BASE: ${{ inputs.lint-base }}
+        run: bash scripts/check-lint-baseline.sh "$LINT_BASE"

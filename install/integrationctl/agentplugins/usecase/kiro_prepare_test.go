@@ -10,6 +10,7 @@ import (
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/providers"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/providerstest"
 	legacyports "github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
 )
 
@@ -42,8 +43,8 @@ func TestKiroExplicitPreparationLifecycleWithoutDuplex(t *testing.T) {
 		t.Run(map[bool]string{false: "retain data", true: "purge data"}[purge], func(t *testing.T) {
 			service, store, _ := serviceFixture(t)
 			runner := &prepareNoDuplexRunner{}
-			service.Activator = providers.Activator{Runner: runner}
-			service.NativeObserver = providers.NativeIdentityObserver{Stager: service.Stager, Runner: runner}
+			service.Activator = providerstest.NewActivator(providers.Activator{Runner: runner})
+			service.NativeObserver = providerstest.NewObserver(providers.NativeIdentityObserver{Stager: service.Stager, Runner: runner})
 			client := domain.DetectedClient{ClientID: domain.ClientKiro, Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), ".kiro")}
 			input := kiroPrepareInput(t, client)
 			if _, err := service.Add(context.Background(), input); err == nil || !strings.Contains(err.Error(), "duplex") {
@@ -143,8 +144,8 @@ func TestKiroExplicitPreparationLifecycleWithoutDuplex(t *testing.T) {
 func TestPreparedKiroGroupedMaintenanceRetainsPerTargetIntent(t *testing.T) {
 	service, store, cursor := serviceFixture(t)
 	runner := &prepareNoDuplexRunner{}
-	service.Activator = providers.Activator{Runner: runner}
-	service.NativeObserver = providers.NativeIdentityObserver{Stager: service.Stager, Runner: runner}
+	service.Activator = providerstest.NewActivator(providers.Activator{Runner: runner})
+	service.NativeObserver = providerstest.NewObserver(providers.NativeIdentityObserver{Stager: service.Stager, Runner: runner})
 	kiro := domain.DetectedClient{ClientID: domain.ClientKiro, Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), ".kiro")}
 	input := kiroPrepareInput(t, kiro)
 	input.InstallIntent = domain.InstallIntentPrepare
@@ -192,8 +193,8 @@ func TestPreparationRejectsForeignNameAndInvalidIntentBeforeMutation(t *testing.
 		t.Run(map[bool]string{false: "foreign name", true: "invalid intent"}[invalid], func(t *testing.T) {
 			service, store, _ := serviceFixture(t)
 			runner := &prepareNoDuplexRunner{}
-			service.Activator = providers.Activator{Runner: runner}
-			service.NativeObserver = providers.NativeIdentityObserver{Stager: service.Stager, Runner: runner}
+			service.Activator = providerstest.NewActivator(providers.Activator{Runner: runner})
+			service.NativeObserver = providerstest.NewObserver(providers.NativeIdentityObserver{Stager: service.Stager, Runner: runner})
 			client := domain.DetectedClient{ClientID: domain.ClientKiro, Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), ".kiro")}
 			input := kiroPrepareInput(t, client)
 			input.InstallIntent = domain.InstallIntentPrepare

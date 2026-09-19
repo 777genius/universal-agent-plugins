@@ -1,12 +1,28 @@
 name: Required
 
 on:
+  # The refactor base branch is listed by name, not as refactor/**: the part
+  # branches stacked on it are gated by core-fast.yml, and a glob would run this
+  # 12-17 minute lane again on every push to every part, which is the double
+  # spend the plan set out to avoid. The full lane belongs after a part merges
+  # into the base branch.
   push:
-    branches: [main, master]
+    branches: [main, master, refactor/installer-core-clean-architecture]
   pull_request:
     branches: [main, master]
 
 jobs:
+  # Separate job rather than a step in `test`: `test` is the 9-27 min critical
+  # path, while the three lint matrix legs finish in a few minutes in parallel.
+  lint:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/lint.yml
+    with:
+      # pull_request → origin/<base>; push → origin/main so architecture
+      # pushes are scored the same way as the WIP PR into main.
+      lint-base: origin/${{ github.base_ref || 'main' }}
+
   test:
     runs-on: ubuntu-latest
     steps:

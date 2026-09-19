@@ -5,6 +5,40 @@ import (
 	"testing"
 )
 
+func TestParseClientIDAliasesAndLenientPassThrough(t *testing.T) {
+	canonical := map[string]ClientID{
+		"codex": ClientCodex, "chatgpt": ClientChatGPT, "cursor": ClientCursor,
+		"copilot": ClientCopilot, "vscode": ClientVSCode, "kiro": ClientKiro,
+		"claude": ClientClaude, "gemini": ClientGemini, "opencode": ClientOpenCode,
+		"cline": ClientCline, "windsurf": ClientWindsurf,
+	}
+	for input, want := range canonical {
+		got, ok := ParseClientID(input)
+		if !ok || got != want {
+			t.Errorf("ParseClientID(%q) = %q, %v, want %q, true", input, got, ok, want)
+		}
+	}
+	aliases := map[string]ClientID{
+		"github-copilot": ClientCopilot, "vs-code": ClientVSCode, "claude-code": ClientClaude,
+		"gemini-cli": ClientGemini, "open-code": ClientOpenCode, "devin": ClientWindsurf,
+		"  CURSOR  ": ClientCursor, "Claude-Code": ClientClaude,
+	}
+	for input, want := range aliases {
+		got, ok := ParseClientID(input)
+		if !ok || got != want {
+			t.Errorf("ParseClientID(%q) = %q, %v, want %q, true", input, got, ok, want)
+		}
+	}
+	got, ok := ParseClientID("Not-A-Client")
+	if ok || got != ClientID("not-a-client") {
+		t.Fatalf("unknown name = %q, %v, want not-a-client, false", got, ok)
+	}
+	got, ok = ParseClientID("  Zed  ")
+	if ok || got != ClientID("zed") {
+		t.Fatalf("unknown name = %q, %v, want zed, false", got, ok)
+	}
+}
+
 func TestClientRegistryHasStableOrderAndSharedCopilotBackend(t *testing.T) {
 	want := []ClientID{
 		ClientCodex, ClientChatGPT, ClientCursor, ClientCopilot, ClientVSCode, ClientKiro,
@@ -16,6 +50,9 @@ func TestClientRegistryHasStableOrderAndSharedCopilotBackend(t *testing.T) {
 	if !SameClientBackend(ClientCopilot, ClientVSCode) || SameClientBackend(ClientCursor, ClientVSCode) {
 		t.Fatal("Copilot / VS Code backend family contract changed")
 	}
+	if !SharesBackend(ClientCopilot, ClientVSCode) || SharesBackend(ClientCursor, ClientVSCode) {
+		t.Fatal("SharesBackend must match SameClientBackend")
+	}
 }
 
 func TestClientRegistryReturnsDefensiveCapabilityCopies(t *testing.T) {
@@ -25,6 +62,11 @@ func TestClientRegistryReturnsDefensiveCapabilityCopies(t *testing.T) {
 	definition, ok := ClientDefinitionFor(ClientCodex)
 	if !ok || definition.Capabilities.Scopes[0] != ScopeUser || definition.Capabilities.MCPTransports["stdio"] != SupportProjected {
 		t.Fatalf("registry was mutated through returned copy: %+v", definition)
+	}
+	definitions[0].Traits.InstallIntents[0] = InstallIntentPrepare
+	definition, ok = ClientDefinitionFor(ClientCodex)
+	if !ok || definition.Traits.Allows(InstallIntentPrepare) {
+		t.Fatal("traits install intents were mutated through returned copy")
 	}
 }
 
@@ -50,5 +92,26 @@ func TestNewClientsUsePreparedReadOnlyFoundation(t *testing.T) {
 	gemini, ok := ClientDefinitionFor(ClientGemini)
 	if !ok || gemini.Capabilities.PackageMode != PackageNative || gemini.DirectoryDelivery != "managed" || gemini.CatalogPackage != "native" || gemini.LegacyCatalogRequired {
 		t.Fatalf("Gemini client definition = %+v", gemini)
+	}
+}
+
+// TestDirectoryPreparationPurposesAreDeclared keeps the table's bounded resolve
+// purposes joined to the constants the Directory eligibility rules compare
+// against. A typo here would silently declare a purpose nobody honors, and the
+// client would simply stop being eligible for preparation.
+func TestDirectoryPreparationPurposesAreDeclared(t *testing.T) {
+	known := map[DirectoryResolvePurpose]bool{DirectoryResolveContext7ChatGPTPreparation: true}
+	declared := 0
+	for _, definition := range ClientDefinitions() {
+		if definition.DirectoryPreparationPurpose == "" {
+			continue
+		}
+		declared++
+		if !known[definition.DirectoryPreparationPurpose] {
+			t.Errorf("client %q declares unknown resolve purpose %q", definition.ID, definition.DirectoryPreparationPurpose)
+		}
+	}
+	if declared != len(known) {
+		t.Fatalf("%d clients declare a preparation purpose, but %d purposes exist", declared, len(known))
 	}
 }

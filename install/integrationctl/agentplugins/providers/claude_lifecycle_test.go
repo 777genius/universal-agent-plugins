@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/claude"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	legacyports "github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
 )
@@ -34,7 +35,7 @@ func TestClaudeSkillsDirAddUpdateRemoveUseOnlyExactListVerification(t *testing.T
 	runner := &recordingRunner{run: func(legacyports.Command) legacyports.CommandResult {
 		return legacyports.CommandResult{Stdout: []byte(listing)}
 	}}
-	activator := Activator{Runner: runner}
+	activator := testActivator(Activator{Runner: runner})
 
 	for _, replacing := range []bool{false, true} {
 		request.Replacing = replacing
@@ -65,7 +66,7 @@ func TestClaudeSkillsDirAddUpdateRemoveUseOnlyExactListVerification(t *testing.T
 
 func TestClaudeProbeEnvironmentRejectsDuplicateAllowedVariableAndDropsOverrides(t *testing.T) {
 	home := t.TempDir()
-	environment, gotHome, err := boundedClaudeProbeEnvironmentFrom([]string{
+	environment, gotHome, err := claude.BoundedClaudeProbeEnvironmentFrom([]string{
 		"HOME=" + home,
 		"PATH=/usr/bin:/bin",
 		"NODE_OPTIONS=--require=attacker.js",
@@ -89,7 +90,7 @@ func TestClaudeProbeEnvironmentRejectsDuplicateAllowedVariableAndDropsOverrides(
 			t.Fatalf("dangerous override %s survived: %v", forbidden, environment)
 		}
 	}
-	if _, _, err := boundedClaudeProbeEnvironmentFrom([]string{"HOME=" + home, "PATH=/bin", "PATH=/attacker"}); err == nil {
+	if _, _, err := claude.BoundedClaudeProbeEnvironmentFrom([]string{"HOME=" + home, "PATH=/bin", "PATH=/attacker"}); err == nil {
 		t.Fatal("duplicate allowed environment variable was accepted")
 	}
 }
@@ -97,7 +98,7 @@ func TestClaudeProbeEnvironmentRejectsDuplicateAllowedVariableAndDropsOverrides(
 func TestClaudeProbeUsesFullDescendantContainmentWithFiveSecondGrace(t *testing.T) {
 	runner := &claudeGraceRecordingRunner{}
 	command := legacyports.Command{Argv: []string{"claude", "plugin", "list", "--json"}}
-	result, err := runClaudeListCommand(context.Background(), runner, command)
+	result, err := claude.RunClaudeListCommand(context.Background(), runner, command)
 	if err != nil || result.ExitCode != 0 {
 		t.Fatalf("run Claude list = %+v, err=%v", result, err)
 	}
@@ -113,11 +114,11 @@ func TestClaudeActivateAndRemoveBoundBlockingRunnerToSharedTimeout(t *testing.T)
 	request := newClaudeTimeoutActivationRequest(t)
 	operations := map[string]func(context.Context, *claudeBlockingRunner) error{
 		"activate": func(ctx context.Context, runner *claudeBlockingRunner) error {
-			_, err := (Activator{Runner: runner}).Activate(ctx, request)
+			_, err := testActivator(Activator{Runner: runner}).Activate(ctx, request)
 			return err
 		},
 		"remove": func(ctx context.Context, runner *claudeBlockingRunner) error {
-			_, err := (Activator{Runner: runner}).Deactivate(ctx, domain.DeactivationRequest{
+			_, err := testActivator(Activator{Runner: runner}).Deactivate(ctx, domain.DeactivationRequest{
 				Client: request.Client, DeclaredName: request.DeclaredName, CurrentActivation: domain.ActivationActive,
 				Confirmed: true, BackendExecutable: request.BackendExecutable, ManagedArtifactPath: request.Delivery.ActivePath,
 			})
@@ -133,8 +134,8 @@ func TestClaudeActivateAndRemoveBoundBlockingRunnerToSharedTimeout(t *testing.T)
 			go func() { done <- operation(context.Background(), runner) }()
 			deadline := <-runner.observed
 			remaining := time.Until(deadline)
-			if remaining < 14*time.Second || remaining > claudeProbeTimeout {
-				t.Fatalf("shared Claude deadline remaining=%s, want approximately %s", remaining, claudeProbeTimeout)
+			if remaining < 14*time.Second || remaining > claude.ClaudeProbeTimeout {
+				t.Fatalf("shared Claude deadline remaining=%s, want approximately %s", remaining, claude.ClaudeProbeTimeout)
 			}
 			close(release)
 			if err := <-done; !errors.Is(err, errClaudeBlockingRunnerReleased) {
@@ -151,11 +152,11 @@ func TestClaudeActivateAndRemoveRespectEarlierParentDeadline(t *testing.T) {
 	request := newClaudeTimeoutActivationRequest(t)
 	operations := map[string]func(context.Context, *claudeBlockingRunner) error{
 		"activate": func(ctx context.Context, runner *claudeBlockingRunner) error {
-			_, err := (Activator{Runner: runner}).Activate(ctx, request)
+			_, err := testActivator(Activator{Runner: runner}).Activate(ctx, request)
 			return err
 		},
 		"remove": func(ctx context.Context, runner *claudeBlockingRunner) error {
-			_, err := (Activator{Runner: runner}).Deactivate(ctx, domain.DeactivationRequest{
+			_, err := testActivator(Activator{Runner: runner}).Deactivate(ctx, domain.DeactivationRequest{
 				Client: request.Client, DeclaredName: request.DeclaredName, CurrentActivation: domain.ActivationActive,
 				Confirmed: true, BackendExecutable: request.BackendExecutable, ManagedArtifactPath: request.Delivery.ActivePath,
 			})
@@ -225,7 +226,7 @@ printf '[]'
 	if err := os.WriteFile(script, []byte(body), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	command, err := claudeListCommand(script, config, active)
+	command, err := claude.ClaudeListCommand(script, config, active)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -331,7 +332,7 @@ func environmentValue(environment []string, name string) (string, bool) {
 func TestClaudeDryRunRemovalExecutesNoCommand(t *testing.T) {
 	t.Parallel()
 	runner := &recordingRunner{}
-	outcome, err := (Activator{Runner: runner}).Deactivate(context.Background(), domain.DeactivationRequest{
+	outcome, err := testActivator(Activator{Runner: runner}).Deactivate(context.Background(), domain.DeactivationRequest{
 		Client: domain.DetectedClient{ClientID: domain.ClientClaude}, DeclaredName: "demo",
 		CurrentActivation: domain.ActivationActive, Confirmed: false, BackendExecutable: "/test/bin/claude",
 		ManagedArtifactPath: filepath.Join(t.TempDir(), "skills", "demo"),
@@ -358,7 +359,7 @@ func TestClaudeExactListVerificationRejectsCollisionAndDrivesInstallFailure(t *t
 	runner := &recordingRunner{run: func(legacyports.Command) legacyports.CommandResult {
 		return legacyports.CommandResult{Stdout: []byte(claudeListing("demo", foreign, true))}
 	}}
-	outcome, err := (Activator{Runner: runner}).Activate(context.Background(), request)
+	outcome, err := testActivator(Activator{Runner: runner}).Activate(context.Background(), request)
 	if err == nil || outcome.Activation != domain.ActivationFailed || outcome.Verification != domain.VerificationFailed || !outcome.AuthoritativeObservation {
 		t.Fatalf("outcome=%+v err=%v", outcome, err)
 	}
@@ -378,7 +379,7 @@ func TestClaudeProbeRejectsConfigAndManagedPathMismatchBeforeSpawn(t *testing.T)
 		t.Fatal(err)
 	}
 	runner := &recordingRunner{}
-	_, err := (Activator{Runner: runner}).Activate(context.Background(), request)
+	_, err := testActivator(Activator{Runner: runner}).Activate(context.Background(), request)
 	if err == nil || len(runner.commands) != 0 {
 		t.Fatalf("err=%v commands=%v", err, runner.commands)
 	}
@@ -394,7 +395,7 @@ func TestClaudeActivationPreflightRejectsUnsafeAnchorWithoutRunningClient(t *tes
 	request.Plan.ActivePath = filepath.Join(request.Plan.TargetRoot, "demo-managed")
 	runner := &recordingRunner{}
 
-	err := (Activator{Runner: runner}).PreflightActivation(request)
+	err := testActivator(Activator{Runner: runner}).PreflightActivation(request)
 	if err == nil || !strings.Contains(err.Error(), "delivery anchor") || len(runner.commands) != 0 {
 		t.Fatalf("preflight err=%v commands=%v", err, runner.commands)
 	}
@@ -412,14 +413,14 @@ func TestClaudeActivationProbeNormalizesPathsForPreflightAndActivation(t *testin
 	request.Plan.ActivePath = filepath.Join(config, "skills", "demo-managed")
 	request.Delivery.ActivePath = request.Plan.ActivePath
 
-	probe, err := prepareClaudeActivationProbe(request)
+	probe, err := claude.PrepareClaudeActivationProbe(request)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if probe.configRoot != filepath.Clean(config) || probe.activePath != filepath.Join(filepath.Clean(config), "skills", "demo-managed") {
+	if probe.ConfigRoot != filepath.Clean(config) || probe.ActivePath != filepath.Join(filepath.Clean(config), "skills", "demo-managed") {
 		t.Fatalf("normalized probe = %+v", probe)
 	}
-	if got, ok := environmentValue(probe.command.Env, "CLAUDE_CONFIG_DIR"); !ok || got != probe.configRoot {
+	if got, ok := environmentValue(probe.Command.Env, "CLAUDE_CONFIG_DIR"); !ok || got != probe.ConfigRoot {
 		t.Fatalf("probe environment config root = %q, %t", got, ok)
 	}
 }
@@ -458,7 +459,7 @@ func TestClaudeNativeIdentityRejectsUnmanagedSkillsDirCollision(t *testing.T) {
 	plan.ActivePath = filepath.Join(root, "managed-demo")
 	plan.NativeRegistryExecutable = "/test/bin/claude"
 	runner := &identityRunner{result: legacyports.CommandResult{Stdout: []byte(claudeListing("demo", foreign, true))}}
-	observation, err := (NativeIdentityObserver{Runner: runner}).ObserveNativeIdentity(context.Background(), domain.DetectedClient{ClientID: domain.ClientClaude}, plan, nil)
+	observation, err := (testObserver(NativeIdentityObserver{Runner: runner})).ObserveNativeIdentity(context.Background(), domain.DetectedClient{ClientID: domain.ClientClaude}, plan, nil)
 	if err != nil || observation.State != domain.NativeIdentityUnmanaged || !observation.NativeDiscoveryAttempted {
 		t.Fatalf("observation=%+v err=%v", observation, err)
 	}
@@ -475,7 +476,7 @@ func TestClaudeNativeIdentityRejectsAnyStagingIdentityReportedByClient(t *testin
 		ActivePath: active, NativeRegistryExecutable: "/test/bin/claude",
 	}
 	runner := &identityRunner{result: legacyports.CommandResult{Stdout: []byte(claudeListing("demo", staging, true))}}
-	observation, err := (NativeIdentityObserver{Runner: runner}).ObserveNativeIdentity(
+	observation, err := (testObserver(NativeIdentityObserver{Runner: runner})).ObserveNativeIdentity(
 		context.Background(), domain.DetectedClient{ClientID: domain.ClientClaude}, plan, nil,
 	)
 	if err != nil || observation.State != domain.NativeIdentityUnmanaged {
@@ -484,7 +485,7 @@ func TestClaudeNativeIdentityRejectsAnyStagingIdentityReportedByClient(t *testin
 
 	foreign := filepath.Join(root, ".agentplugins-staging-foreign")
 	runner.result.Stdout = []byte(claudeListing("demo", foreign, true))
-	observation, err = (NativeIdentityObserver{Runner: runner}).ObserveNativeIdentity(
+	observation, err = (testObserver(NativeIdentityObserver{Runner: runner})).ObserveNativeIdentity(
 		context.Background(), domain.DetectedClient{ClientID: domain.ClientClaude}, plan, nil,
 	)
 	if err != nil || observation.State != domain.NativeIdentityUnmanaged {
@@ -502,7 +503,7 @@ func TestClaudePreparedIdentityDoesNotIgnoreWatchedStagingDirectory(t *testing.T
 		ClientID: domain.ClientClaude, DeclaredName: "demo", TargetAnchor: config, TargetRoot: root,
 		ActivePath: filepath.Join(root, "managed-demo"),
 	}
-	observation, err := (NativeIdentityObserver{}).ObservePreparedIdentity(
+	observation, err := (testObserver(NativeIdentityObserver{})).ObservePreparedIdentity(
 		context.Background(), domain.DetectedClient{ClientID: domain.ClientClaude, ConfigRoot: config}, plan, nil,
 	)
 	if err != nil || observation.State != domain.NativeIdentityUnmanaged {

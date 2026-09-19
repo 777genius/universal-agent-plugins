@@ -2,10 +2,11 @@ package providers
 
 import (
 	"context"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
 func TestPersonalChatGPTPreparationCannotAttestRemoteActivation(t *testing.T) {
@@ -18,7 +19,7 @@ func TestPersonalChatGPTPreparationCannotAttestRemoteActivation(t *testing.T) {
 	request.DeclaredName = "context7"
 	request.Plan.ActivePath = active
 	request.Delivery = domain.StagedDelivery{ClientID: domain.ClientChatGPT, OwnedBase: root, ActivePath: active}
-	activator := Activator{}
+	activator := testActivator(Activator{})
 	if err := activator.PreflightActivation(request); err != nil {
 		t.Fatal(err)
 	}

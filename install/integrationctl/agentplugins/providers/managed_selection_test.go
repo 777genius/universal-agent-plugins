@@ -3,12 +3,13 @@ package providers
 import (
 	"context"
 	"errors"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
 	"os"
 	"path/filepath"
 	"reflect"
 	"testing"
+
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
 )
 
 func TestManagedMCPSelectionRequiresExactArtifact(t *testing.T) {
@@ -26,7 +27,7 @@ func TestManagedMCPSelectionRequiresExactArtifact(t *testing.T) {
 			if err := os.WriteFile(filepath.Join(root, filename), []byte(body), 0600); err != nil {
 				t.Fatal(err)
 			}
-			stager := Stager{}
+			stager := testStager(Stager{})
 			var mismatch *ports.VerificationError
 			if err := stager.Verify(context.Background(), root, "observe"); !errors.As(err, &mismatch) {
 				t.Fatal(err)
@@ -50,7 +51,7 @@ func TestVerifiedAbsentMCPSelectionIsKnownEmpty(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(root, "plugin.json"), []byte(`{}`), 0600); err != nil {
 		t.Fatal(err)
 	}
-	stager := Stager{}
+	stager := testStager(Stager{})
 	var mismatch *ports.VerificationError
 	if err := stager.Verify(context.Background(), root, "observe"); !errors.As(err, &mismatch) {
 		t.Fatal(err)

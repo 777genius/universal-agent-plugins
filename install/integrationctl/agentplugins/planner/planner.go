@@ -2,21 +2,32 @@ package planner
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"sort"
-	"strings"
 
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/pathpolicy"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
 )
 
 type Planner struct {
 	ManagedRoot string
-	Detected    map[domain.ClientID]domain.DetectedClient
+	Paths       ports.PathPolicy
+	// Registry supplies the client adapters that decide where a package lands
+	// and what a plan still asks of the user. It is injected by the composition
+	// root and never defaulted to "every client".
+	Registry *clients.Registry
 }
 
-// ChatGPTAppBindingAction describes registration and package-author responsibilities.
+var errPathPolicyRequired = errors.New("planner path policy is required")
+
+// ChatGPTAppBindingAction describes registration and package-author
+// responsibilities. The wording is owned by clients/chatgpt.AppBindingAction;
+// the facade keeps a copy so planner production code never imports a concrete
+// adapter. facade_actions_test.go locks the two strings together.
 const ChatGPTAppBindingAction = "this package is not ready for ChatGPT. Connect its remote MCP server in ChatGPT Plugins developer mode; full plugin installation also needs the publisher's registered connection mapping (.app.json). You do not need to create this file. Setup: https://developers.openai.com/plugins/build/plugins"
 
 // DetectedPhysicalClient returns a genuinely detected client that can address
@@ -29,37 +40,98 @@ func DetectedPhysicalClient(bindingClient domain.ClientID, detected map[domain.C
 	if client, ok := detected[bindingClient]; ok && client.Status == domain.DetectionDetected {
 		return client, true
 	}
-	if bindingClient != domain.ClientCopilot && bindingClient != domain.ClientVSCode {
-		return domain.DetectedClient{}, false
+	for _, sibling := range domain.BackendSiblings(bindingClient) {
+		if client, ok := detected[sibling]; ok && client.Status == domain.DetectionDetected {
+			return client, true
+		}
 	}
-	alternate := domain.ClientCopilot
-	if bindingClient == domain.ClientCopilot {
-		alternate = domain.ClientVSCode
-	}
-	client, ok := detected[alternate]
-	return client, ok && client.Status == domain.DetectionDetected
+	return domain.DetectedClient{}, false
 }
 
-func (planner Planner) Plan(
-	ctx context.Context,
-	envelope domain.PackageEnvelope,
-	client domain.DetectedClient,
-	scope domain.InstallScope,
-	physicalArtifactID string,
-) (domain.DeliveryPlan, error) {
-	if err := ctx.Err(); err != nil {
+// Plan resolves the request into a delivery plan and applies its install
+// intent, so a caller never has to remember the second step. An empty intent is
+// the automatic one and leaves the plan unchanged.
+func (planner Planner) Plan(ctx context.Context, request domain.PlanRequest) (domain.DeliveryPlan, error) {
+	if planner.Paths == nil {
+		return domain.DeliveryPlan{}, errPathPolicyRequired
+	}
+	if planner.Registry == nil {
+		return domain.DeliveryPlan{}, clients.ErrRegistryRequired
+	}
+	plan, err := planner.plan(ctx, request)
+	if err != nil {
+		return plan, err
+	}
+	if err := ApplyInstallIntent(planner.Registry, &plan, request.InstallIntent); err != nil {
+		return plan, err
+	}
+	return plan, nil
+}
+
+// plan is the generic pipeline. Every client-specific decision in it is reached
+// through the registry, and the stages are ordered so that the warnings and
+// user actions a plan carries keep the order they are rendered in.
+func (planner Planner) plan(ctx context.Context, request domain.PlanRequest) (domain.DeliveryPlan, error) {
+	definition, plan, err := planner.startPlan(ctx, request)
+	if err != nil {
 		return domain.DeliveryPlan{}, err
 	}
-	if err := pathpolicy.ValidateLeafID(physicalArtifactID); err != nil {
-		return domain.DeliveryPlan{}, fmt.Errorf("invalid physical artifact id: %w", err)
+	input := clients.PlanInput{
+		Envelope: request.Envelope, Client: request.Client,
+		Detected: request.Detected, Intent: request.InstallIntent,
 	}
-	capabilities, ok := Capabilities(client.ClientID)
+	planner.setNativeRegistry(&plan, input)
+	if !admissible(definition, request, &plan) {
+		return plan, nil
+	}
+	if precondition, ok := clients.As[clients.PlanPrecondition](planner.Registry, plan.ClientID); ok {
+		if err := precondition.CheckPlanPrecondition(input, &plan); err != nil {
+			return plan, err
+		}
+		if plan.Status == domain.PlanUnsupported {
+			return plan, nil
+		}
+	}
+	target, err := planner.ResolveTarget(ctx, request.Client, request.Scope, request.PhysicalArtifactID)
+	if err != nil {
+		return domain.DeliveryPlan{}, err
+	}
+	plan.TargetAnchor, plan.TargetRoot, plan.ActivePath = target.TargetAnchor, target.TargetRoot, target.ActivePath
+	plan.Components = componentDecisions(request.Envelope, definition.Capabilities)
+	if err := planner.qualify(input, definition.Capabilities, &plan); err != nil {
+		return plan, err
+	}
+	if plan.Status == domain.PlanUnsupported {
+		return plan, nil
+	}
+	appendAuthenticationActions(&plan)
+	refiner, ok := clients.As[clients.PlanRefiner](planner.Registry, plan.ClientID)
 	if !ok {
-		return domain.DeliveryPlan{}, fmt.Errorf("unsupported client %q", client.ClientID)
+		return plan, nil
 	}
-	plan := domain.DeliveryPlan{
-		ClientID:    client.ClientID,
-		Scope:       scope,
+	if err := refiner.RefinePlan(ctx, input, &plan); err != nil {
+		return plan, err
+	}
+	return plan, nil
+}
+
+// startPlan builds the plan every client starts from: the declarative
+// capabilities of the client, plus the package identity the request names.
+func (planner Planner) startPlan(ctx context.Context, request domain.PlanRequest) (domain.ClientDefinition, domain.DeliveryPlan, error) {
+	if err := ctx.Err(); err != nil {
+		return domain.ClientDefinition{}, domain.DeliveryPlan{}, err
+	}
+	if err := planner.Paths.ValidateLeafID(request.PhysicalArtifactID); err != nil {
+		return domain.ClientDefinition{}, domain.DeliveryPlan{}, fmt.Errorf("invalid physical artifact id: %w", err)
+	}
+	definition, ok := domain.ClientDefinitionFor(request.Client.ClientID)
+	if !ok {
+		return domain.ClientDefinition{}, domain.DeliveryPlan{}, fmt.Errorf("unsupported client %q", request.Client.ClientID)
+	}
+	capabilities := definition.Capabilities
+	return definition, domain.DeliveryPlan{
+		ClientID:    request.Client.ClientID,
+		Scope:       request.Scope,
 		Status:      statusFor(capabilities.ActivationMode),
 		PackageMode: capabilities.PackageMode,
 		Activation:  activationFor(capabilities.ActivationMode),
@@ -69,205 +141,111 @@ func (planner Planner) Plan(
 		Authentication:     domain.AuthenticationNotChecked,
 		Policy:             domain.PolicyAllowed,
 		Verification:       domain.VerificationPackageValid,
-		PhysicalArtifactID: physicalArtifactID,
-		DeclaredName:       envelope.Manifest.Name,
-		DeclaredVersion:    envelope.Manifest.Version,
+		PhysicalArtifactID: request.PhysicalArtifactID,
+		DeclaredName:       request.Envelope.Manifest.Name,
+		DeclaredVersion:    request.Envelope.Manifest.Version,
+	}, nil
+}
+
+// setNativeRegistry records the client registry this delivery is made against.
+// It runs before any rejection so that even an unsupported plan carries the
+// locators a caller needs to reason about what is already installed.
+func (planner Planner) setNativeRegistry(plan *domain.DeliveryPlan, input clients.PlanInput) {
+	plan.NativeRegistryRoot = input.Client.ConfigRoot
+	plan.NativeRegistryExecutable = input.Client.ExecutablePath
+	if layout, ok := clients.As[clients.NativeRegistryLayout](planner.Registry, plan.ClientID); ok {
+		plan.NativeRegistryRoot, plan.NativeRegistryExecutable = layout.NativeRegistry(input)
 	}
-	planner.setNativeRegistry(&plan, client)
-	if client.Status != domain.DetectionDetected && client.ClientID != domain.ClientChatGPT {
-		plan.Status = domain.PlanUnsupported
-		plan.Activation = domain.ActivationFailed
-		plan.Warnings = append(plan.Warnings, "client_not_detected")
-		return plan, nil
+}
+
+// admissible applies the two rejections that need nothing but the declarative
+// registry: the client has to be here, and it has to support the scope.
+func admissible(definition domain.ClientDefinition, request domain.PlanRequest, plan *domain.DeliveryPlan) bool {
+	if request.Client.Status != domain.DetectionDetected && !definition.PlansWithoutHostPresence {
+		rejectPlan(plan, "client_not_detected")
+		return false
 	}
-	if !supportsScope(capabilities.Scopes, scope) {
-		plan.Status = domain.PlanUnsupported
-		plan.Activation = domain.ActivationFailed
-		plan.Warnings = append(plan.Warnings, "scope_not_supported")
-		return plan, nil
+	if !supportsScope(definition.Capabilities.Scopes, request.Scope) {
+		rejectPlan(plan, "scope_not_supported")
+		return false
 	}
-	if client.ClientID == domain.ClientClaude && strings.TrimSpace(client.ExecutablePath) == "" {
-		plan.Status = domain.PlanUnsupported
-		plan.Activation = domain.ActivationFailed
-		plan.Warnings = append(plan.Warnings, "trusted_claude_cli_required")
-		plan.UserActions = append(plan.UserActions, "install Claude Code CLI so agentplugins can verify the exact @skills-dir identity")
-		return plan, nil
-	}
-	target, err := planner.ResolveTarget(ctx, client, scope, physicalArtifactID)
-	if err != nil {
-		return domain.DeliveryPlan{}, err
-	}
-	plan.TargetRoot = target.TargetRoot
-	plan.TargetAnchor = target.TargetAnchor
-	plan.ActivePath = target.ActivePath
-	plan.Components = componentDecisions(envelope, capabilities)
-	if client.ClientID == domain.ClientChatGPT && envelope.LocalChatGPTMapping != nil {
-		if scope != domain.ScopeUser {
-			return plan, fmt.Errorf("ChatGPT preparation supports user scope only")
+	return true
+}
+
+// qualify turns the component selection into a verdict: the client's own
+// authorization of a local preparation, otherwise the pinned catalog, then the
+// package diagnostics, then the client's admission rules, then the generic
+// "nothing usable is left" check.
+func (planner Planner) qualify(input clients.PlanInput, capabilities domain.ClientCapabilities, plan *domain.DeliveryPlan) error {
+	authorized := false
+	if authorizer, ok := clients.As[clients.LocalPreparationAuthorizer](planner.Registry, plan.ClientID); ok {
+		granted, err := authorizer.AuthorizeLocalPreparation(input, plan)
+		if err != nil {
+			return err
 		}
-		if err := envelope.LocalChatGPTMapping.ValidatePackage(envelope); err != nil {
-			return plan, err
+		authorized = granted
+	}
+	if !authorized {
+		applyCatalogCompatibility(plan, input.Envelope.CatalogEvidence)
+	}
+	hasComponentErrors := applyDiagnostics(plan, input.Envelope, capabilities)
+	if qualifier, ok := clients.As[clients.PlanQualifier](planner.Registry, plan.ClientID); ok {
+		if err := qualifier.QualifyPlan(input, plan); err != nil {
+			return err
 		}
-		binding, ok := envelope.App.Bindings[envelope.LocalChatGPTMapping.Server]
-		if !envelope.App.Enabled || len(envelope.App.Bindings) != 1 || !ok || binding.ID != envelope.LocalChatGPTMapping.AppID {
-			return plan, fmt.Errorf("personal ChatGPT mapping projection does not match receipt")
-		}
-		plan.LocalPreparationAuthorized = true
-		plan.PersonalChatGPTPreparation = true
-		plan.Authentication = domain.AuthenticationNotRequired
-		plan.Warnings = append(plan.Warnings, "personal_registration_requires_account_install")
-	} else {
-		applyCatalogCompatibility(&plan, envelope.CatalogEvidence)
 	}
-	chatGPTCompatibility, hasChatGPTCompatibility := domain.CatalogCompatibility{}, false
-	if envelope.CatalogEvidence != nil {
-		chatGPTCompatibility, hasChatGPTCompatibility = envelope.CatalogEvidence.Compatibility[string(domain.ClientChatGPT)]
-	}
-	if client.ClientID == domain.ClientChatGPT && hasChatGPTCompatibility && chatGPTCompatibility.AppBinding != nil && hasSupportedKind(plan.Components, domain.ComponentApp) {
-		// ChatGPT app bindings are added only from validated signed Directory
-		// compatibility evidence. This authorizes local preparation, not a claim
-		// about the unobservable remote Plugins registry.
-		plan.LocalPreparationAuthorized = true
-	}
+	applyComponentVerdict(plan, hasComponentErrors)
+	return nil
+}
+
+func applyDiagnostics(plan *domain.DeliveryPlan, envelope domain.PackageEnvelope, capabilities domain.ClientCapabilities) bool {
 	hasComponentErrors := false
 	for _, diagnostic := range envelope.Diagnostics {
 		plan.Diagnostics = append(plan.Diagnostics, diagnostic)
 		plan.Warnings = appendUnique(plan.Warnings, diagnostic.Code)
-		if diagnostic.Severity == domain.SeverityError {
-			if diagnostic.Boundary == domain.BoundaryMCP || diagnostic.Boundary == domain.BoundaryMCPServer || diagnostic.Boundary == domain.BoundarySkill || diagnostic.Boundary == domain.BoundaryExtension ||
-				(diagnostic.Boundary == domain.BoundaryApp && client.ClientID == domain.ClientChatGPT) {
-				hasComponentErrors = true
-			}
+		if diagnostic.Severity == domain.SeverityError && invalidatesComponent(diagnostic.Boundary, capabilities) {
+			hasComponentErrors = true
 		}
 	}
-	missingChatGPTApps := missingChatGPTAppBindings(envelope)
-	if client.ClientID == domain.ClientChatGPT &&
-		((!envelope.App.Enabled && (len(envelope.MCP.Servers) > 0 || envelope.App.Present || envelope.App.Declared)) || len(missingChatGPTApps) > 0) {
-		plan.Status = domain.PlanUnsupported
-		plan.Activation = domain.ActivationFailed
-		plan.Warnings = appendUnique(plan.Warnings, "chatgpt_app_binding_required")
-		action := ChatGPTAppBindingAction
-		if len(missingChatGPTApps) > 0 {
-			action += " for: " + strings.Join(missingChatGPTApps, ", ")
-		}
-		plan.UserActions = append(plan.UserActions, action)
+	return hasComponentErrors
+}
+
+// invalidatesComponent reports whether a failed boundary destroys a component
+// this client could otherwise have taken. The app boundary counts only for a
+// client that delivers app bindings at all; for every other client an app
+// diagnostic describes a part of the package it never looks at.
+func invalidatesComponent(boundary domain.FailureBoundary, capabilities domain.ClientCapabilities) bool {
+	switch boundary {
+	case domain.BoundaryMCP, domain.BoundaryMCPServer, domain.BoundarySkill, domain.BoundaryExtension:
+		return true
+	case domain.BoundaryApp:
+		return capabilities.AppSupport != domain.SupportUnsupported
 	}
-	if !hasComponents(plan.Components) && hasComponentErrors {
-		plan.Status = domain.PlanUnsupported
-		plan.Activation = domain.ActivationFailed
-		plan.Warnings = append(plan.Warnings, "no_valid_components")
-	} else if hasComponents(plan.Components) && !hasSupportedComponent(plan.Components) {
-		plan.Status = domain.PlanUnsupported
-		plan.Activation = domain.ActivationFailed
-		plan.Warnings = append(plan.Warnings, "no_supported_components")
+	return false
+}
+
+func applyComponentVerdict(plan *domain.DeliveryPlan, hasComponentErrors bool) {
+	switch {
+	case !hasComponents(plan.Components) && hasComponentErrors:
+		rejectPlan(plan, "no_valid_components")
+	case hasComponents(plan.Components) && !hasSupportedComponent(plan.Components):
+		rejectPlan(plan, "no_supported_components")
 	}
-	if plan.Status == domain.PlanUnsupported {
-		return plan, nil
-	}
-	if plan.Authentication == domain.AuthenticationPending {
+}
+
+func appendAuthenticationActions(plan *domain.DeliveryPlan) {
+	switch plan.Authentication {
+	case domain.AuthenticationPending:
 		plan.UserActions = append(plan.UserActions, "complete authentication for this plugin in the selected client")
-	} else if plan.Authentication == domain.AuthenticationNotChecked {
+	case domain.AuthenticationNotChecked:
 		plan.UserActions = append(plan.UserActions, "verify the plugin's authentication requirements before using it")
 	}
-	if plan.Status != domain.PlanUnsupported && planner.hasNativeCopilotBackend(client) {
-		plan.Status = domain.PlanReady
-		plan.Activation = domain.ActivationPrepared
-	}
-	if plan.Status != domain.PlanUnsupported && client.ClientID == domain.ClientKiro &&
-		strings.TrimSpace(client.ConfigRoot) != "" && hasOnlyKiroNativeComponents(plan.Components) {
-		plan.Status = domain.PlanReady
-		plan.Activation = domain.ActivationPrepared
-	}
-	if plan.Status != domain.PlanUnsupported && client.ClientID == domain.ClientOpenCode &&
-		strings.TrimSpace(client.ConfigRoot) != "" && hasOnlyPortableNativeComponents(plan.Components) {
-		plan.Status = domain.PlanReady
-		plan.Activation = domain.ActivationPrepared
-	}
-	if plan.Status != domain.PlanUnsupported && client.ClientID == domain.ClientGemini &&
-		strings.TrimSpace(client.ConfigRoot) != "" && geminiNativePlanComponents(plan.Components) {
-		plan.Status = domain.PlanReady
-		plan.Activation = domain.ActivationPrepared
-	}
-	if plan.Status != domain.PlanUnsupported && client.ClientID == domain.ClientWindsurf &&
-		strings.TrimSpace(client.ConfigRoot) != "" && hasSupportedKind(plan.Components, domain.ComponentMCPServer) {
-		plan.Status = domain.PlanReady
-		plan.Activation = domain.ActivationPrepared
-	}
-	if plan.Status != domain.PlanUnsupported && client.ClientID == domain.ClientCline &&
-		strings.TrimSpace(client.ConfigRoot) != "" && hasOnlyPortableNativeComponents(plan.Components) {
-		plan.Status = domain.PlanReady
-		plan.Activation = domain.ActivationPrepared
-	}
-
-	switch client.ClientID {
-	case domain.ClientCodex:
-		plan.UserActions = append(plan.UserActions, "finish installation in Codex Plugins, then start a new session")
-	case domain.ClientClaude:
-		plan.UserActions = append(plan.UserActions, "start a new Claude Code session or run /reload-plugins")
-	case domain.ClientChatGPT:
-		if hasSupportedKind(plan.Components, domain.ComponentApp) {
-			plan.UserActions = append(plan.UserActions, "install the prepared plugin from ChatGPT Plugins, verify its registered app connection, then start a new chat")
-		} else {
-			plan.UserActions = append(plan.UserActions, "install the prepared skills-only plugin from ChatGPT Plugins, then start a new chat")
-		}
-	case domain.ClientCursor:
-		plan.UserActions = append(plan.UserActions, "reload Cursor, then verify the plugin appears before using its components")
-	case domain.ClientCopilot:
-		if strings.TrimSpace(client.ExecutablePath) != "" {
-			plan.UserActions = append(plan.UserActions, "agentplugins will install and verify the plugin through GitHub Copilot CLI automatically")
-		} else {
-			plan.UserActions = append(plan.UserActions, "GitHub Copilot CLI is required for automatic activation")
-		}
-	case domain.ClientKiro:
-		plan.UserActions = append(plan.UserActions, "agentplugins will install and verify the package's global Kiro skills and MCP servers automatically")
-	case domain.ClientCline:
-		plan.UserActions = append(plan.UserActions, "agentplugins will install and verify Cline skills and MCP servers automatically; VS Code reloads MCP settings, while Cline CLI reads them on its next process")
-	case domain.ClientGemini:
-		plan.UserActions = append(plan.UserActions, "agentplugins will install and verify Gemini CLI skills and MCP servers automatically; reload them in a running session or restart Gemini CLI")
-	case domain.ClientVSCode:
-		if strings.TrimSpace(planner.Detected[domain.ClientCopilot].ExecutablePath) != "" {
-			plan.UserActions = append(plan.UserActions, "agentplugins will install through GitHub Copilot CLI; VS Code discovers it automatically")
-		} else {
-			plan.UserActions = append(plan.UserActions, "register the prepared local plugin in VS Code after installation")
-		}
-	case domain.ClientOpenCode:
-		plan.UserActions = append(plan.UserActions, "agentplugins will install the package's skills and MCP servers; restart OpenCode when complete")
-	case domain.ClientWindsurf:
-		if strings.TrimSpace(client.ConfigRoot) != "" && hasSupportedKind(plan.Components, domain.ComponentMCPServer) {
-			plan.UserActions = append(plan.UserActions, "agentplugins will update the selected legacy Windsurf channel's local MCP configuration; refresh MCP servers before first use")
-		} else {
-			plan.UserActions = append(plan.UserActions, "select exactly one legacy Windsurf channel and import the prepared MCP configuration manually")
-		}
-		if hasSupportedKind(plan.Components, domain.ComponentSkill) {
-			plan.Warnings = appendUnique(plan.Warnings, "windsurf_skills_prepared_only")
-			plan.UserActions = append(plan.UserActions, "Windsurf skills remain in the prepared package and are not claimed as activated")
-		}
-	}
-	return plan, nil
 }
 
-func geminiNativePlanComponents(components []domain.ComponentDecision) bool {
-	has := false
-	for _, component := range components {
-		if component.Support == domain.SupportUnsupported {
-			continue
-		}
-		if component.Kind != domain.ComponentSkill && component.Kind != domain.ComponentMCPServer {
-			return false
-		}
-		has = true
-	}
-	return has
-}
-
-func (planner Planner) setNativeRegistry(plan *domain.DeliveryPlan, client domain.DetectedClient) {
-	plan.NativeRegistryRoot = client.ConfigRoot
-	plan.NativeRegistryExecutable = client.ExecutablePath
-	if client.ClientID == domain.ClientVSCode {
-		copilot := planner.Detected[domain.ClientCopilot]
-		plan.NativeRegistryRoot = copilot.ConfigRoot
-		plan.NativeRegistryExecutable = copilot.ExecutablePath
-	}
+func rejectPlan(plan *domain.DeliveryPlan, warning string) {
+	plan.Status = domain.PlanUnsupported
+	plan.Activation = domain.ActivationFailed
+	plan.Warnings = append(plan.Warnings, warning)
 }
 
 func applyCatalogCompatibility(plan *domain.DeliveryPlan, evidence *domain.CatalogEvidence) {
@@ -335,23 +313,7 @@ func catalogPackageMatches(value string, mode domain.PackageMode) bool {
 }
 
 func appendUnique(values []string, value string) []string {
-	for _, existing := range values {
-		if existing == value {
-			return values
-		}
-	}
-	return append(values, value)
-}
-
-func (planner Planner) hasNativeCopilotBackend(client domain.DetectedClient) bool {
-	switch client.ClientID {
-	case domain.ClientCopilot:
-		return strings.TrimSpace(client.ExecutablePath) != ""
-	case domain.ClientVSCode:
-		return strings.TrimSpace(planner.Detected[domain.ClientCopilot].ExecutablePath) != ""
-	default:
-		return false
-	}
+	return shared.AppendUnique(values, value)
 }
 
 func (planner Planner) ResolveTarget(
@@ -360,10 +322,16 @@ func (planner Planner) ResolveTarget(
 	scope domain.InstallScope,
 	physicalArtifactID string,
 ) (domain.DeliveryTarget, error) {
+	if planner.Paths == nil {
+		return domain.DeliveryTarget{}, errPathPolicyRequired
+	}
+	if planner.Registry == nil {
+		return domain.DeliveryTarget{}, clients.ErrRegistryRequired
+	}
 	if err := ctx.Err(); err != nil {
 		return domain.DeliveryTarget{}, err
 	}
-	if err := pathpolicy.ValidateLeafID(physicalArtifactID); err != nil {
+	if err := planner.Paths.ValidateLeafID(physicalArtifactID); err != nil {
 		return domain.DeliveryTarget{}, fmt.Errorf("invalid physical artifact id: %w", err)
 	}
 	capabilities, ok := Capabilities(client.ClientID)
@@ -378,7 +346,7 @@ func (planner Planner) ResolveTarget(
 		return domain.DeliveryTarget{}, err
 	}
 	activePath := filepath.Join(targetRoot, physicalArtifactID)
-	if err := pathpolicy.RequireContainedChild(targetRoot, activePath); err != nil {
+	if err := planner.Paths.RequireContainedChild(targetRoot, activePath); err != nil {
 		return domain.DeliveryTarget{}, fmt.Errorf("unsafe client target path: %w", err)
 	}
 	return domain.DeliveryTarget{TargetAnchor: targetAnchor, TargetRoot: targetRoot, ActivePath: activePath}, nil
@@ -389,26 +357,17 @@ func Capabilities(clientID domain.ClientID) (domain.ClientCapabilities, bool) {
 	return definition.Capabilities, ok
 }
 
+// targetRoot asks the client where its package lives, and falls back to the
+// managed root for every client that has no directory of its own. The
+// containment check afterwards applies to both answers alike: an adapter
+// chooses a location, it does not get to escape one.
 func (planner Planner) targetRoot(client domain.DetectedClient, mode domain.PackageMode) (string, string, error) {
-	var anchor, root string
-	if client.ClientID == domain.ClientClaude && mode == domain.PackageProjection {
-		if strings.TrimSpace(client.ConfigRoot) == "" {
-			return "", "", fmt.Errorf("Claude Code config root is unavailable")
-		}
-		anchor = client.ConfigRoot
-		root = filepath.Join(client.ConfigRoot, "skills")
-	} else if client.ClientID == domain.ClientCursor && mode == domain.PackageNative {
-		if strings.TrimSpace(client.ConfigRoot) == "" {
-			return "", "", fmt.Errorf("Cursor config root is unavailable")
-		}
-		anchor = client.ConfigRoot
-		root = filepath.Join(client.ConfigRoot, "plugins", "local")
-	} else {
-		if strings.TrimSpace(planner.ManagedRoot) == "" {
-			return "", "", fmt.Errorf("managed client root is required")
-		}
-		anchor = planner.ManagedRoot
-		root = filepath.Join(planner.ManagedRoot, "clients", string(client.ClientID))
+	if planner.Paths == nil {
+		return "", "", errPathPolicyRequired
+	}
+	anchor, root, err := planner.clientTargetRoot(client, mode)
+	if err != nil {
+		return "", "", err
 	}
 	absoluteAnchor, err := filepath.Abs(anchor)
 	if err != nil {
@@ -419,45 +378,71 @@ func (planner Planner) targetRoot(client domain.DetectedClient, mode domain.Pack
 		return "", "", err
 	}
 	absoluteAnchor, absolute = filepath.Clean(absoluteAnchor), filepath.Clean(absolute)
-	if err := pathpolicy.RequireContainedChild(absoluteAnchor, absolute); err != nil {
+	if err := planner.Paths.RequireContainedChild(absoluteAnchor, absolute); err != nil {
 		return "", "", fmt.Errorf("unsafe client target root: %w", err)
 	}
 	return absoluteAnchor, absolute, nil
 }
 
+func (planner Planner) clientTargetRoot(client domain.DetectedClient, mode domain.PackageMode) (string, string, error) {
+	if layout, ok := clients.As[clients.TargetLayout](planner.Registry, client.ClientID); ok {
+		return layout.TargetRoot(client, mode, planner.ManagedRoot)
+	}
+	return shared.ManagedTargetRoot(client, mode, planner.ManagedRoot)
+}
+
 func componentDecisions(envelope domain.PackageEnvelope, capabilities domain.ClientCapabilities) []domain.ComponentDecision {
 	decisions := make([]domain.ComponentDecision, 0, len(envelope.Skills)+len(envelope.MCP.Servers)+len(envelope.App.Bindings)+len(envelope.Manifest.Extensions))
-	skillNames := sortedKeys(envelope.Skills)
-	for _, name := range skillNames {
+	for _, name := range sortedKeys(envelope.Skills) {
 		decisions = append(decisions, decision(domain.ComponentSkill, name, capabilities.SkillSupport))
 	}
-	serverNames := sortedKeys(envelope.MCP.Servers)
-	for _, name := range serverNames {
-		server := envelope.MCP.Servers[name]
-		support, ok := capabilities.MCPTransports[server.Type]
-		if !ok {
-			support = domain.SupportUnsupported
-		}
-		if capabilities.ClientID == domain.ClientChatGPT && envelope.App.Enabled {
-			if _, mapped := envelope.App.Bindings[name]; mapped {
-				support = domain.SupportProjected
-			}
-		}
-		value := decision(domain.ComponentMCPServer, name, support)
-		if (capabilities.ClientID == domain.ClientOpenCode || capabilities.ClientID == domain.ClientCodex) && server.Type == "sse" && support == domain.SupportUnsupported {
-			value.Reason = "declared_sse_not_supported_by_client"
-		}
-		decisions = append(decisions, value)
+	for _, name := range sortedKeys(envelope.MCP.Servers) {
+		decisions = append(decisions, mcpDecision(envelope, capabilities, name))
 	}
-	appNames := sortedKeys(envelope.App.Bindings)
-	for _, name := range appNames {
+	for _, name := range sortedKeys(envelope.App.Bindings) {
 		decisions = append(decisions, decision(domain.ComponentApp, name, capabilities.AppSupport))
 	}
-	extensionNames := sortedKeys(envelope.Manifest.Extensions)
-	for _, name := range extensionNames {
+	for _, name := range sortedKeys(envelope.Manifest.Extensions) {
 		decisions = append(decisions, decision(domain.ComponentExtension, name, capabilities.ExtensionSupport))
 	}
 	return decisions
+}
+
+func mcpDecision(envelope domain.PackageEnvelope, capabilities domain.ClientCapabilities, name string) domain.ComponentDecision {
+	server := envelope.MCP.Servers[name]
+	support, ok := capabilities.MCPTransports[server.Type]
+	if !ok {
+		support = domain.SupportUnsupported
+	}
+	// A client that delivers app bindings reaches a mapped MCP server through
+	// the binding instead of the transport, so the binding's support level is
+	// what the server actually gets.
+	if capabilities.AppSupport != domain.SupportUnsupported && envelope.App.Enabled {
+		if _, mapped := envelope.App.Bindings[name]; mapped {
+			support = capabilities.AppSupport
+		}
+	}
+	value := decision(domain.ComponentMCPServer, name, support)
+	if reason := unsupportedTransportReason(capabilities, server.Type, support); reason != "" {
+		value.Reason = reason
+	}
+	return value
+}
+
+// unsupportedTransportReason names the transport when a client that does take
+// MCP servers refuses this particular one, which is a more useful answer than
+// the generic "component not supported by client". A client that takes no MCP
+// transport at all keeps the generic reason.
+func unsupportedTransportReason(capabilities domain.ClientCapabilities, transport string, support domain.SupportLevel) string {
+	if transport != "sse" || support != domain.SupportUnsupported {
+		return ""
+	}
+	for name, level := range capabilities.MCPTransports {
+		if name != transport && level != domain.SupportUnsupported {
+			return "declared_sse_not_supported_by_client"
+		}
+	}
+	return ""
 }
 
 func decision(kind domain.ComponentKind, name string, support domain.SupportLevel) domain.ComponentDecision {
@@ -478,14 +463,6 @@ func sortedKeys[T any](values map[string]T) []string {
 	}
 	sort.Strings(keys)
 	return keys
-}
-
-func mapSupport(values map[string]domain.SupportLevel, support domain.SupportLevel) map[string]domain.SupportLevel {
-	result := make(map[string]domain.SupportLevel, len(values))
-	for key := range values {
-		result[key] = support
-	}
-	return result
 }
 
 func supportsScope(scopes []domain.InstallScope, requested domain.InstallScope) bool {
@@ -530,52 +507,4 @@ func hasSupportedComponent(decisions []domain.ComponentDecision) bool {
 		}
 	}
 	return false
-}
-
-func hasSupportedKind(decisions []domain.ComponentDecision, kind domain.ComponentKind) bool {
-	for _, item := range decisions {
-		if item.Kind == kind && item.Support != domain.SupportUnsupported {
-			return true
-		}
-	}
-	return false
-}
-
-func hasOnlyKiroNativeComponents(decisions []domain.ComponentDecision) bool {
-	found := false
-	for _, item := range decisions {
-		if item.Support == domain.SupportUnsupported {
-			continue
-		}
-		if item.Kind != domain.ComponentSkill && item.Kind != domain.ComponentMCPServer {
-			return false
-		}
-		found = true
-	}
-	return found
-}
-
-func hasOnlyPortableNativeComponents(decisions []domain.ComponentDecision) bool {
-	found := false
-	for _, item := range decisions {
-		if item.Support == domain.SupportUnsupported {
-			continue
-		}
-		if item.Kind != domain.ComponentSkill && item.Kind != domain.ComponentMCPServer {
-			return false
-		}
-		found = true
-	}
-	return found
-}
-
-func missingChatGPTAppBindings(envelope domain.PackageEnvelope) []string {
-	missing := make([]string, 0)
-	for name := range envelope.MCP.Servers {
-		if _, ok := envelope.App.Bindings[name]; !ok {
-			missing = append(missing, name)
-		}
-	}
-	sort.Strings(missing)
-	return missing
 }

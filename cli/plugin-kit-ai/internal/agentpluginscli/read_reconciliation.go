@@ -6,9 +6,9 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/providers"
 )
 
 func reconcileInstalledInfo(ctx context.Context, app App, installation domain.Installation, targetOption string, public *publicInstallation) error {
@@ -95,16 +95,17 @@ func bindingMatchesSelectedSurface(view publicClient, binding domain.ClientBindi
 
 func reconciliationClientsForBinding(binding domain.ClientBinding, detected map[domain.ClientID]domain.DetectedClient) (domain.DetectedClient, domain.DetectedClient, bool) {
 	owner := domain.ClientID(binding.ClientID)
-	if owner != domain.ClientCopilot && owner != domain.ClientVSCode {
+	if !sharesPhysicalBackend(owner) {
 		client, ok := detected[owner]
 		return client, client, ok
 	}
-	copilot, ok := detected[domain.ClientCopilot]
+	registryOwner := nativeCLIRegistryOwner(owner)
+	copilot, ok := detected[registryOwner]
 	if !ok || copilot.Status != domain.DetectionDetected || strings.TrimSpace(copilot.ExecutablePath) == "" {
 		return domain.DetectedClient{ClientID: owner}, domain.DetectedClient{ClientID: owner}, false
 	}
-	// The persisted owner selects the exact managed path while Copilot CLI is
-	// the authoritative native registry for both Copilot and VS Code surfaces.
+	// The persisted owner selects the exact managed path while the native CLI
+	// registry is authoritative for every logical surface on this backend.
 	copilot.ClientID = owner
 	return copilot, copilot, true
 }
@@ -120,10 +121,7 @@ type clientIdentityReconciliation struct {
 func detectClientsForInfoReconciliation(ctx context.Context, detector ports.ClientDetector, targets []domain.ClientID) ([]domain.DetectedClient, error) {
 	probeSet := make(map[domain.ClientID]struct{}, len(targets))
 	for _, target := range targets {
-		if target == domain.ClientVSCode {
-			target = domain.ClientCopilot
-		}
-		probeSet[target] = struct{}{}
+		probeSet[nativeCLIRegistryOwner(target)] = struct{}{}
 	}
 	probeTargets := make([]domain.ClientID, 0, len(probeSet))
 	for target := range probeSet {
@@ -224,18 +222,19 @@ func hasReconciledOwnershipReceipt(binding domain.ClientBinding, physicalArtifac
 }
 
 func nativeCommandEvidence(client domain.DetectedClient, declaredName, physicalArtifact, version string, discovered bool) *publicNativeDiscoveryEvidence {
-	if (client.ClientID != domain.ClientCopilot && client.ClientID != domain.ClientVSCode) ||
+	if !sharesPhysicalBackend(client.ClientID) ||
 		strings.TrimSpace(client.ExecutablePath) == "" || strings.TrimSpace(physicalArtifact) == "" {
 		return nil
 	}
+	cli := string(nativeCLIRegistryOwner(client.ClientID))
 	return &publicNativeDiscoveryEvidence{
 		Basis: "native_client_command",
 		VersionOperation: publicVersionOperation{
-			Argv: []string{"copilot", "--version"}, ObservedClientVersion: version,
+			Argv: []string{cli, "--version"}, ObservedClientVersion: version,
 		},
 		DiscoveryOperation: publicDiscoveryOperation{
-			Argv: []string{"copilot", "plugin", "list"}, Discovered: discovered,
-			ProductID: strings.TrimSpace(declaredName) + "@" + providers.ManagedMarketplaceName(physicalArtifact),
+			Argv: []string{cli, "plugin", "list"}, Discovered: discovered,
+			ProductID: strings.TrimSpace(declaredName) + "@" + shared.ManagedMarketplaceName(physicalArtifact),
 		},
 	}
 }

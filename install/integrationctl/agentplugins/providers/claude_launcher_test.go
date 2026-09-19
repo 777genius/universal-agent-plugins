@@ -2,11 +2,13 @@ package providers
 
 import (
 	"context"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/managedstdio"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/claude"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/managedstdio"
 )
 
 func TestClaudeHelperOwnedArtifactDigestAndCollision(t *testing.T) {
@@ -22,7 +24,7 @@ func TestClaudeHelperOwnedArtifactDigestAndCollision(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	helper := filepath.Join(delivery.StagingPath, claudeRuntimeDirectory, filepath.FromSlash(managedstdio.RelativeDirectory), managedstdio.ExecutableName)
+	helper := filepath.Join(delivery.StagingPath, claude.ClaudeRuntimeDirectory, filepath.FromSlash(managedstdio.RelativeDirectory), managedstdio.ExecutableName)
 	if _, err := os.Stat(helper); err != nil {
 		t.Fatal(err)
 	}
@@ -85,12 +87,12 @@ func TestClaudeHelperChangeChangesArtifactWithoutSourceMutation(t *testing.T) {
 func TestClaudeMissingLauncherDoesNotAffectHTTPOnlyProjection(t *testing.T) {
 	envelope := stagingEnvelope(t)
 	plan := stagingPlan(t, domain.ClientClaude, domain.PackageProjection)
-	if _, err := (Stager{}).Stage(context.Background(), envelope, plan, "http-only", domain.CompatibilityHints{}); err != nil {
+	if _, err := testStager(Stager{}).Stage(context.Background(), envelope, plan, "http-only", domain.CompatibilityHints{}); err != nil {
 		t.Fatal(err)
 	}
 	envelope.MCP.Servers = map[string]domain.MCPServer{"local": {Type: "stdio", Decoded: map[string]any{"command": "sh"}}}
 	plan.Components = []domain.ComponentDecision{{Kind: domain.ComponentMCPServer, Name: "local", Support: domain.SupportProjected}}
-	if _, err := (Stager{}).Stage(context.Background(), envelope, plan, "missing-helper", domain.CompatibilityHints{}); err == nil {
+	if _, err := testStager(Stager{}).Stage(context.Background(), envelope, plan, "missing-helper", domain.CompatibilityHints{}); err == nil {
 		t.Fatal("stdio staged without trusted launcher")
 	}
 }

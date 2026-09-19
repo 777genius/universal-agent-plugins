@@ -1,0 +1,302 @@
+[
+  {
+    "ClientID": "chatgpt",
+    "ConfigRoot": "",
+    "DisplayName": "ChatGPT",
+    "ExecutablePath": "",
+    "Status": "detected",
+    "Surfaces": [
+      {
+        "Detected": true,
+        "Evidence": "desktop_entry",
+        "ID": "chatgpt_desktop"
+      }
+    ],
+    "Version": ""
+  },
+  {
+    "ClientID": "claude",
+    "ConfigRoot": "\u003chome\u003e/.claude",
+    "DisplayName": "Claude Code",
+    "ExecutablePath": "\u003chome\u003e/bin/claude",
+    "Status": "detected",
+    "Surfaces": [
+      {
+        "Detected": true,
+        "Evidence": "executable_on_path",
+        "ID": "claude_cli"
+      },
+      {
+        "Detected": true,
+        "Evidence": "configuration_directory",
+        "ID": "claude_config"
+      }
+    ],
+    "Version": ""
+  },
+  {
+    "ClientID": "cline",
+    "ConfigRoot": "\u003chome\u003e/.cline",
+    "DisplayName": "Cline",
+    "ExecutablePath": "",
+    "Status": "detected",
+    "Surfaces": [
+      {
+        "Detected": true,
+        "Evidence": "editor_extension",
+        "ID": "cline_vscode_extension"
+      },
+      {
+        "Detected": true,
+        "Evidence": "configuration_directory",
+        "ID": "cline_vscode_config"
+      },
+      {
+        "Detected": true,
+        "Evidence": "editor_extension",
+        "ID": "cline_cursor_extension"
+      },
+      {
+        "Detected": true,
+        "Evidence": "configuration_directory",
+        "ID": "cline_cursor_config"
+      }
+    ],
+    "Version": ""
+  },
+  {
+    "ClientID": "codex",
+    "ConfigRoot": "\u003chome\u003e/.codex",
+    "DisplayName": "OpenAI Codex",
+    "ExecutablePath": "\u003chome\u003e/bin/codex",
+    "Status": "detected",
+    "Surfaces": [
+      {
+        "Detected": true,
+        "Evidence": "executable_on_path",
+        "ID": "codex_cli"
+      },
+      {
+        "Detected": true,
+        "Evidence": "configuration_directory",
+        "ID": "codex_config"
+      },
+      {
+        "Detected": true,
+        "Evidence": "desktop_entry",
+        "ID": "codex_desktop"
+      }
+    ],
+    "Version": ""
+  },
+  {
+    "ClientID": "copilot",
+    "ConfigRoot": "\u003chome\u003e/.copilot",
+    "DisplayName": "GitHub Copilot CLI",
+    "ExecutablePath": "\u003chome\u003e/bin/copilot",
+    "Status": "detected",
+    "Surfaces": [
+      {
+        "Detected": true,
+        "Evidence": "executable_on_path",
+        "ID": "copilot_cli"
+      },
+      {
+        "Detected": true,
+        "Evidence": "configuration_directory",
+        "ID": "copilot_config"
+      }
+    ],
+    "Version": ""
+  },
+  {
+    "ClientID": "cursor",
+    "ConfigRoot": "\u003chome\u003e/.cursor",
+    "DisplayName": "Cursor",
+    "ExecutablePath": "\u003chome\u003e/bin/cursor",
+    "Status": "detected",
+    "Surfaces": [
+      {
+        "Detected": true,
+        "Evidence": "executable_on_path",
+        "ID": "cursor_cli"
+      },
+      {
+        "Detected": true,
+        "Evidence": "configuration_directory",
+        "ID": "cursor_config"
+      },
+      {
+        "Detected": true,
+        "Evidence": "desktop_entry",
+        "ID": "cursor_desktop"
+      }
+    ],
+    "Version": ""
+  },
+  {
+    "ClientID": "gemini",
+    "ConfigRoot": "\u003chome\u003e/.gemini",
+    "DisplayName": "Gemini CLI",
+    "ExecutablePath": "\u003chome\u003e/bin/gemini",
+    "Status": "detected",
+    "Surfaces": [
+      {
+        "Detected": true,
+        "Evidence": "executable_on_path",
+        "ID": "gemini_cli"
+      },
+      {
+        "Detected": true,
+        "Evidence": "configuration_directory",
+        "ID": "gemini_config"
+      }
+    ],
+    "Version": ""
+  },
+  {
+    "ClientID": "kiro",
+    "ConfigRoot": "\u003chome\u003e/.kiro",
+    "DisplayName": "Kiro",
+    "ExecutablePath": "\u003chome\u003e/bin/kiro-cli",
+    "Status": "detected",
+    "Surfaces": [
+      {
+        "Detected": true,
+        "Evidence": "executable_on_path",
+        "ID": "kiro_cli"
+      },
+      {
+        "Detected": true,
+        "Evidence": "legacy_executable_on_path",
+        "ID": "kiro_legacy_cli"
+      },
+      {
+        "Detected": true,
+        "Evidence": "configuration_directory",
+        "ID": "kiro_config"
+      },
+      {
+        "Detected": true,
+        "Evidence": "desktop_entry",
+        "ID": "kiro_desktop"
+      }
+    ],
+    "Version": ""
+  },
+  {
+    "ClientID": "opencode",
+    "ConfigRoot": "\u003chome\u003e/.config/opencode",
+    "DisplayName": "OpenCode",
+    "ExecutablePath": "\u003chome\u003e/bin/opencode",
+    "Status": "detected",
+    "Surfaces": [
+      {
+        "Detected": true,
+        "Evidence": "executable_on_path",
+        "ID": "opencode_cli"
+      },
+      {
+        "Detected": true,
+        "Evidence": "configuration_directory",
+        "ID": "opencode_config"
+      },
+      {
+        "Detected": true,
+        "Evidence": "desktop_entry",
+        "ID": "opencode_desktop"
+      }
+    ],
+    "Version": ""
+  },
+  {
+    "ClientID": "vscode",
+    "ConfigRoot": "\u003chome\u003e/.config/Code/User",
+    "DisplayName": "Visual Studio Code",
+    "ExecutablePath": "\u003chome\u003e/bin/code",
+    "Status": "detected",
+    "Surfaces": [
+      {
+        "Detected": true,
+        "Evidence": "executable_on_path",
+        "ID": "vscode_cli"
+      },
+      {
+        "Detected": true,
+        "Evidence": "configuration_directory",
+        "ID": "vscode_config"
+      },
+      {
+        "Detected": true,
+        "Evidence": "desktop_entry",
+        "ID": "vscode_desktop"
+      }
+    ],
+    "Version": ""
+  },
+  {
+    "ClientID": "windsurf",
+    "ConfigRoot": "\u003chome\u003e/.codeium/windsurf",
+    "DisplayName": "Windsurf / Devin",
+    "ExecutablePath": "\u003chome\u003e/bin/windsurf",
+    "Status": "detected",
+    "Surfaces": [
+      {
+        "Detected": true,
+        "Evidence": "executable_on_path",
+        "ID": "windsurf_cli"
+      },
+      {
+        "Detected": true,
+        "Evidence": "executable_on_path",
+        "ID": "devin_cli"
+      },
+      {
+        "Detected": true,
+        "Evidence": "configuration_directory",
+        "ID": "windsurf_config"
+      },
+      {
+        "Detected": false,
+        "Evidence": "",
+        "ID": "windsurf_next_config"
+      },
+      {
+        "Detected": false,
+        "Evidence": "",
+        "ID": "devin_config"
+      },
+      {
+        "Detected": false,
+        "Evidence": "",
+        "ID": "devin_local_config"
+      },
+      {
+        "Detected": true,
+        "Evidence": "configuration_directory",
+        "ID": "windsurf_legacy_mcp"
+      },
+      {
+        "Detected": false,
+        "Evidence": "",
+        "ID": "windsurf_next_legacy_mcp"
+      },
+      {
+        "Detected": false,
+        "Evidence": "",
+        "ID": "windsurf_insiders_legacy_mcp"
+      },
+      {
+        "Detected": true,
+        "Evidence": "desktop_entry",
+        "ID": "windsurf_desktop"
+      },
+      {
+        "Detected": false,
+        "Evidence": "",
+        "ID": "devin_desktop"
+      }
+    ],
+    "Version": ""
+  }
+]

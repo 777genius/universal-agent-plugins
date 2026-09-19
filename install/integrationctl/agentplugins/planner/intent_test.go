@@ -1,13 +1,15 @@
 package planner
 
 import (
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"testing"
+
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/all"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
 func TestPreparationCannotOverrideUnsupportedPackage(t *testing.T) {
 	plan := domain.DeliveryPlan{ClientID: domain.ClientKiro, Scope: domain.ScopeUser, Status: domain.PlanUnsupported}
-	if err := ApplyInstallIntent(&plan, domain.InstallIntentPrepare); err != nil {
+	if err := ApplyInstallIntent(all.Default(), &plan, domain.InstallIntentPrepare); err != nil {
 		t.Fatal(err)
 	}
 	if plan.Status != domain.PlanUnsupported {
@@ -27,7 +29,7 @@ func TestPreparationRequiresSupportedNativeUserTarget(t *testing.T) {
 		{domain.ClientKiro, domain.ScopeUser, "", domain.ComponentMCPServer},
 	} {
 		plan := domain.DeliveryPlan{ClientID: tc.client, Scope: tc.scope, NativeRegistryRoot: tc.root, Components: []domain.ComponentDecision{{Kind: tc.kind, Support: domain.SupportPrepared}}}
-		if err := ApplyInstallIntent(&plan, domain.InstallIntentPrepare); err == nil {
+		if err := ApplyInstallIntent(all.Default(), &plan, domain.InstallIntentPrepare); err == nil {
 			t.Fatalf("accepted %+v", tc)
 		}
 	}

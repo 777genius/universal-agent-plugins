@@ -8,10 +8,11 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/spf13/cobra"
+
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/directoryv1"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/discoveryv1"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
-	"github.com/spf13/cobra"
 )
 
 type outdatedReleaseIdentity struct {
@@ -72,8 +73,39 @@ func newOutdatedCommand(app App, opts *options) *cobra.Command {
 	return command
 }
 
+type outdatedSession struct {
+	ctx            context.Context
+	app            App
+	opts           *options
+	state          domain.StateFileV2
+	installations  []domain.Installation
+	result         outdatedResult
+	needsDirectory bool
+	bundle         directoryv1.VerifiedBundle
+	bundleOK       bool
+	discovery      discoveryv1.VerifiedBundle
+	discoveryErr   error
+	detected       map[domain.ClientID]domain.DetectedClient
+	detectionErr   error
+}
+
 func runOutdated(ctx context.Context, cmd *cobra.Command, app App, opts *options, selector string) error {
-	state, err := app.StateStore.Load()
+	session := &outdatedSession{ctx: ctx, app: app, opts: opts}
+	if err := session.loadInstallations(selector); err != nil {
+		return err
+	}
+	if err := session.loadCatalogs(); err != nil {
+		return err
+	}
+	session.inspectAll()
+	if opts.format == "json" {
+		return writeJSONOutput(cmd.OutOrStdout(), "outdated", session.result)
+	}
+	return renderOutdated(cmd.OutOrStdout(), session.result)
+}
+
+func (session *outdatedSession) loadInstallations(selector string) error {
+	state, err := session.app.StateStore.Load()
 	if err != nil {
 		return err
 	}
@@ -92,92 +124,110 @@ func runOutdated(ctx context.Context, cmd *cobra.Command, app App, opts *options
 		}
 		return installations[i].InstallationID < installations[j].InstallationID
 	})
+	session.state = state
+	session.installations = installations
+	session.result = outdatedResult{ReadOnly: true, Installations: make([]outdatedInstallation, 0, len(installations))}
+	return nil
+}
 
-	result := outdatedResult{ReadOnly: true, Installations: make([]outdatedInstallation, 0, len(installations))}
-	needsDirectory := false
-	for _, installation := range installations {
+func (session *outdatedSession) loadCatalogs() error {
+	if err := session.loadDirectory(); err != nil {
+		return err
+	}
+	session.loadDiscovery()
+	session.loadDetection()
+	return nil
+}
+
+func (session *outdatedSession) loadDirectory() error {
+	for _, installation := range session.installations {
 		if installation.OriginMode == domain.OriginModeDirectory && installation.Directory != nil {
-			needsDirectory = true
+			session.needsDirectory = true
 			break
 		}
 	}
-	var bundle directoryv1.VerifiedBundle
-	bundleOK := false
-	if needsDirectory {
-		bundle, bundleOK, err = directoryBundleForRead(ctx, app, state, true)
-		if err != nil {
-			return fmt.Errorf("load signed Directory: %w", err)
-		}
-		if bundleOK {
-			result.Snapshot, result.SnapshotHash = bundle.Snapshot.Sequence, bundle.Digest
-		}
+	if !session.needsDirectory {
+		return nil
 	}
+	bundle, bundleOK, err := directoryBundleForRead(session.ctx, session.app, session.state, true)
+	if err != nil {
+		return fmt.Errorf("load signed Directory: %w", err)
+	}
+	session.bundle, session.bundleOK = bundle, bundleOK
+	if bundleOK {
+		session.result.Snapshot, session.result.SnapshotHash = bundle.Snapshot.Sequence, bundle.Digest
+	}
+	return nil
+}
+
+func (session *outdatedSession) loadDiscovery() {
 	needsDiscovery := false
-	for _, installation := range installations {
+	for _, installation := range session.installations {
 		if strings.HasPrefix(strings.TrimSpace(installation.Source.RequestedSource), "discovery:") {
 			needsDiscovery = true
 			break
 		}
 	}
-	var discovery discoveryv1.VerifiedBundle
-	var discoveryErr error
-	if needsDiscovery {
-		if app.DiscoveryClient == nil {
-			discoveryErr = errors.New("signed Discovery Index dependencies are unavailable")
-		} else {
-			discovery, discoveryErr = app.DiscoveryClient.Load(ctx, 0)
-			if discoveryErr == nil {
-				result.DiscoverySnapshot, result.DiscoverySnapshotHash = discovery.Snapshot.Sequence, discovery.Digest
-			}
-		}
+	if !needsDiscovery {
+		return
 	}
-
-	var detected map[domain.ClientID]domain.DetectedClient
-	var detectionErr error
-	if needsDirectory && bundleOK {
-		clients, err := detectClientsForLifecycleResolution(ctx, app.Detector, false)
-		if err != nil {
-			detectionErr = fmt.Errorf("detect AI clients: %w", err)
-		} else {
-			detected = make(map[domain.ClientID]domain.DetectedClient, len(clients)+1)
-			for _, client := range clients {
-				detected[client.ClientID] = client
-			}
-		}
+	if session.app.DiscoveryClient == nil {
+		session.discoveryErr = errors.New("signed Discovery Index dependencies are unavailable")
+		return
 	}
+	discovery, discoveryErr := session.app.DiscoveryClient.Load(session.ctx, 0)
+	session.discovery, session.discoveryErr = discovery, discoveryErr
+	if discoveryErr == nil {
+		session.result.DiscoverySnapshot, session.result.DiscoverySnapshotHash = discovery.Snapshot.Sequence, discovery.Digest
+	}
+}
 
-	for _, installation := range installations {
+func (session *outdatedSession) loadDetection() {
+	if !session.needsDirectory || !session.bundleOK {
+		return
+	}
+	clients, err := detectClientsForLifecycleResolution(session.ctx, session.app.Detector, false)
+	if err != nil {
+		session.detectionErr = fmt.Errorf("detect AI clients: %w", err)
+		return
+	}
+	detected := make(map[domain.ClientID]domain.DetectedClient, len(clients)+1)
+	for _, client := range clients {
+		detected[client.ClientID] = client
+	}
+	session.detected = detected
+}
+
+func (session *outdatedSession) inspectAll() {
+	for _, installation := range session.installations {
 		var item outdatedInstallation
 		if strings.HasPrefix(strings.TrimSpace(installation.Source.RequestedSource), "discovery:") {
-			item = inspectDiscoveryOutdated(discovery, discoveryErr, installation, opts.scope)
+			item = inspectDiscoveryOutdated(session.discovery, session.discoveryErr, installation, session.opts.scope)
 		} else {
-			item = inspectOutdatedInstallation(bundle, bundleOK, detected, detectionErr, app.Version, installation, opts.scope)
+			item = inspectOutdatedInstallation(session.bundle, session.bundleOK, session.detected, session.detectionErr, session.app.Version, installation, session.opts.scope)
 		}
-		result.Installations = append(result.Installations, item)
-		switch item.Status {
-		case "outdated":
-			result.Outdated++
-		case "current":
-			result.Current++
-		case "blocked":
-			result.Blocked++
-		case "unknown":
-			result.Unknown++
-		default:
-			result.Unmanaged++
-		}
+		session.result.Installations = append(session.result.Installations, item)
+		session.countStatus(item.Status)
 	}
-	if opts.format == "json" {
-		return writeJSONOutput(cmd.OutOrStdout(), "outdated", result)
+}
+
+func (session *outdatedSession) countStatus(status string) {
+	switch status {
+	case "outdated":
+		session.result.Outdated++
+	case "current":
+		session.result.Current++
+	case "blocked":
+		session.result.Blocked++
+	case "unknown":
+		session.result.Unknown++
+	default:
+		session.result.Unmanaged++
 	}
-	return renderOutdated(cmd.OutOrStdout(), result)
 }
 
 func inspectDiscoveryOutdated(bundle discoveryv1.VerifiedBundle, bundleErr error, installation domain.Installation, scope string) outdatedInstallation {
-	item := outdatedInstallation{InstallationID: installation.InstallationID, Name: installation.DeclaredName, Targets: installationTargets(installation, scope)}
-	selector := strings.TrimSpace(installation.Source.RequestedSource)
-	item.Installed = &outdatedReleaseIdentity{DistributionID: selector, PackageVersion: installation.Package.Version,
-		Revision: installation.Source.ResolvedRevision, TreeDigest: installation.Source.TreeDigest, ManifestDigest: installation.Package.ManifestDigest}
+	item := discoveryOutdatedBase(installation, scope)
 	if installation.NeedsRebind {
 		item.Status, item.Reason = "blocked", "installation requires explicit rebind before update"
 		return item
@@ -186,6 +236,25 @@ func inspectDiscoveryOutdated(bundle discoveryv1.VerifiedBundle, bundleErr error
 		item.Status, item.Reason = "unknown", "no authenticated Discovery snapshot is available: "+bundleErr.Error()
 		return item
 	}
+	record, ok := matchDiscoveryOutdatedRecord(bundle, strings.TrimSpace(installation.Source.RequestedSource))
+	if !ok {
+		item.Status, item.Reason = "blocked", "recorded Discovery selector is absent or ambiguous"
+		return item
+	}
+	return compareDiscoveryRelease(record, installation, item)
+}
+
+func discoveryOutdatedBase(installation domain.Installation, scope string) outdatedInstallation {
+	return outdatedInstallation{
+		InstallationID: installation.InstallationID, Name: installation.DeclaredName, Targets: installationTargets(installation, scope),
+		Installed: &outdatedReleaseIdentity{
+			DistributionID: strings.TrimSpace(installation.Source.RequestedSource), PackageVersion: installation.Package.Version,
+			Revision: installation.Source.ResolvedRevision, TreeDigest: installation.Source.TreeDigest, ManifestDigest: installation.Package.ManifestDigest,
+		},
+	}
+}
+
+func matchDiscoveryOutdatedRecord(bundle discoveryv1.VerifiedBundle, selector string) (discoveryv1.Record, bool) {
 	var matches []discoveryv1.Record
 	for _, record := range bundle.Search.Records {
 		if record.Slug == selector {
@@ -193,10 +262,12 @@ func inspectDiscoveryOutdated(bundle discoveryv1.VerifiedBundle, bundleErr error
 		}
 	}
 	if len(matches) != 1 {
-		item.Status, item.Reason = "blocked", "recorded Discovery selector is absent or ambiguous"
-		return item
+		return discoveryv1.Record{}, false
 	}
-	record := matches[0]
+	return matches[0], true
+}
+
+func compareDiscoveryRelease(record discoveryv1.Record, installation domain.Installation, item outdatedInstallation) outdatedInstallation {
 	item.Available = &outdatedReleaseIdentity{DistributionID: record.Slug, Revision: record.Revision, TreeDigest: record.TreeDigest, ManifestDigest: record.ManifestDigest}
 	if record.Version != nil {
 		item.Available.PackageVersion = *record.Version
@@ -220,41 +291,79 @@ func inspectDiscoveryOutdated(bundle discoveryv1.VerifiedBundle, bundleErr error
 
 func inspectOutdatedInstallation(bundle directoryv1.VerifiedBundle, bundleOK bool, detected map[domain.ClientID]domain.DetectedClient, detectionErr error, installerVersion string, installation domain.Installation, scope string) outdatedInstallation {
 	item := outdatedInstallation{InstallationID: installation.InstallationID, Name: installation.DeclaredName}
-	if installation.NeedsRebind {
-		item.Status, item.Reason = "blocked", "installation requires explicit rebind before update"
+	if status, reason, stop := outdatedIdentityGate(installation); stop {
+		item.Status, item.Reason = status, reason
 		return item
+	}
+	return inspectDirectoryOutdated(bundle, bundleOK, detected, detectionErr, installerVersion, installation, scope, item)
+}
+
+func outdatedIdentityGate(installation domain.Installation) (status, reason string, stop bool) {
+	if installation.NeedsRebind {
+		return "blocked", "installation requires explicit rebind before update", true
 	}
 	if installation.Package.LoaderKind != domain.LoaderKindAgentPlugins {
-		item.Status, item.Reason = "unmanaged", "legacy plugin.yaml installation has no Agent Plugins release identity"
-		return item
+		return "unmanaged", "legacy plugin.yaml installation has no Agent Plugins release identity", true
 	}
 	if installation.OriginMode != domain.OriginModeDirectory || installation.Directory == nil {
-		item.Status, item.Reason = "unmanaged", "direct source has no signed update channel; use an explicit source switch"
-		return item
+		return "unmanaged", "direct source has no signed update channel; use an explicit source switch", true
 	}
+	return "", "", false
+}
+
+func inspectDirectoryOutdated(
+	bundle directoryv1.VerifiedBundle,
+	bundleOK bool,
+	detected map[domain.ClientID]domain.DetectedClient,
+	detectionErr error,
+	installerVersion string,
+	installation domain.Installation,
+	scope string,
+	item outdatedInstallation,
+) outdatedInstallation {
 	origin := installation.Directory
 	item.Targets = installationTargets(installation, scope)
-	item.Installed = &outdatedReleaseIdentity{DistributionID: origin.DistributionID, ReleaseSequence: origin.DesiredReleaseSequence,
+	item.Installed = &outdatedReleaseIdentity{
+		DistributionID: origin.DistributionID, ReleaseSequence: origin.DesiredReleaseSequence,
 		PackageVersion: installation.Package.Version, Revision: installation.Source.ResolvedRevision,
-		TreeDigest: installation.Source.TreeDigest, ManifestDigest: installation.Package.ManifestDigest}
+		TreeDigest: installation.Source.TreeDigest, ManifestDigest: installation.Package.ManifestDigest,
+	}
 	if !bundleOK {
 		item.Status, item.Reason = "unknown", "no authenticated Directory snapshot is available"
 		return item
 	}
 	item.Warnings = installedDirectoryWarnings(bundle.Snapshot, installation)
-	if detectionErr != nil {
-		item.Status, item.Reason = "unknown", detectionErr.Error()
+	if status, reason, cloneInstalled, stop := directoryOutdatedPreflight(item, detectionErr, installation, scope); stop {
+		item.Status, item.Reason = status, reason
+		if cloneInstalled {
+			item.Available = cloneOutdatedIdentity(item.Installed)
+		}
 		return item
+	}
+	return resolveDirectoryOutdated(bundle, detected, installerVersion, installation, origin, item)
+}
+
+func directoryOutdatedPreflight(item outdatedInstallation, detectionErr error, installation domain.Installation, scope string) (status, reason string, cloneInstalled, stop bool) {
+	if detectionErr != nil {
+		return "unknown", detectionErr.Error(), false, true
 	}
 	if len(item.Targets) == 0 {
-		item.Status, item.Reason = "blocked", "installation has no materialized target in the selected scope"
-		return item
+		return "blocked", "installation has no materialized target in the selected scope", false, true
 	}
 	if selectedTargetsNeedDesiredRelease(installation, item.Targets, scope) {
-		item.Status, item.Reason = "outdated", "one or more installed clients have not converged to the recorded desired release"
-		item.Available = cloneOutdatedIdentity(item.Installed)
-		return item
+		return "outdated", "one or more installed clients have not converged to the recorded desired release", true, true
 	}
+	return "", "", false, false
+}
+
+func resolveDirectoryOutdated(
+	bundle directoryv1.VerifiedBundle,
+	detected map[domain.ClientID]domain.DetectedClient,
+	installerVersion string,
+	installation domain.Installation,
+	origin *domain.DirectoryOrigin,
+	item outdatedInstallation,
+) outdatedInstallation {
 	_, clientMap, err := preflightSelectedTargets(context.Background(), App{Detector: staticDetectedClientSource(detected)}, item.Targets, detectedClientValues(detected), false)
 	if err != nil {
 		item.Status, item.Reason = "blocked", err.Error()
@@ -271,11 +380,17 @@ func inspectOutdatedInstallation(bundle directoryv1.VerifiedBundle, bundleOK boo
 	})
 	if err == nil {
 		item.Status, item.Reason = "outdated", "a later eligible immutable release is available"
-		item.Available = &outdatedReleaseIdentity{DistributionID: selection.DistributionID, ReleaseSequence: selection.ReleaseSequence,
+		item.Available = &outdatedReleaseIdentity{
+			DistributionID: selection.DistributionID, ReleaseSequence: selection.ReleaseSequence,
 			PackageVersion: selection.PackageVersion, Revision: selection.Source.Revision,
-			TreeDigest: selection.TreeDigest, ManifestDigest: selection.ManifestDigest}
+			TreeDigest: selection.TreeDigest, ManifestDigest: selection.ManifestDigest,
+		}
 		return item
 	}
+	return directoryOutdatedResolveError(err, item)
+}
+
+func directoryOutdatedResolveError(err error, item outdatedInstallation) outdatedInstallation {
 	if errors.Is(err, domain.ErrDirectoryIneligible) && errors.Is(err, domain.ErrDirectoryNoSafeUpdate) {
 		if len(item.Warnings) > 0 {
 			item.Status, item.Reason = "blocked", "installed release is unsafe and no later eligible release is available"
@@ -313,15 +428,21 @@ func renderOutdated(writer io.Writer, result outdatedResult) error {
 		if _, err := fmt.Fprintf(writer, "%s: %s - %s\n", installation.Name, installation.Status, installation.Reason); err != nil {
 			return err
 		}
-		if installation.Available != nil {
-			label := fmt.Sprintf("%s release %d", installation.Available.DistributionID, installation.Available.ReleaseSequence)
-			if installation.Available.ReleaseSequence == 0 {
-				label = installation.Available.DistributionID
-			}
-			if _, err := fmt.Fprintf(writer, "  Available: %s (%s)\n", label, installation.Available.Revision); err != nil {
-				return err
-			}
+		if err := renderOutdatedAvailable(writer, installation); err != nil {
+			return err
 		}
 	}
 	return nil
+}
+
+func renderOutdatedAvailable(writer io.Writer, installation outdatedInstallation) error {
+	if installation.Available == nil {
+		return nil
+	}
+	label := fmt.Sprintf("%s release %d", installation.Available.DistributionID, installation.Available.ReleaseSequence)
+	if installation.Available.ReleaseSequence == 0 {
+		label = installation.Available.DistributionID
+	}
+	_, err := fmt.Fprintf(writer, "  Available: %s (%s)\n", label, installation.Available.Revision)
+	return err
 }

@@ -102,12 +102,12 @@ jobs:
       - name: Check Darwin writable acquisition and separate read-only regressions
         if: runner.os == 'macOS'
         shell: bash
-        working-directory: install/integrationctl
+        working-directory: install/integrationctl/agentplugins
         env:
           CGO_ENABLED: '0'
           GOTOOLCHAIN: local
           GOMAXPROCS: '2'
-        run: go test -count=1 ./agentplugins/adapters/packageview
+        run: go test -count=1 ./adapters/packageview
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
           name: milestone-a-exact-candidate-${{ github.run_id }}-${{ github.run_attempt }}

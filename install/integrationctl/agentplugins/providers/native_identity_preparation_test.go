@@ -16,13 +16,13 @@ func TestChatGPTSignedBindingAuthorizesOnlyClearLocalPreparationBoundary(t *test
 	plan.LocalPreparationAuthorized = true
 	plan.Components = []domain.ComponentDecision{{Kind: domain.ComponentApp, Name: "docs", Support: domain.SupportProjected}}
 
-	observation, err := (NativeIdentityObserver{}).ObserveNativeIdentity(context.Background(), domain.DetectedClient{ClientID: domain.ClientChatGPT}, plan, nil)
+	observation, err := (testObserver(NativeIdentityObserver{})).ObserveNativeIdentity(context.Background(), domain.DetectedClient{ClientID: domain.ClientChatGPT}, plan, nil)
 	if err != nil || observation.State != domain.NativeIdentityAbsent {
 		t.Fatalf("signed local preparation = %+v, %v", observation, err)
 	}
 
 	writeIdentityFile(t, filepath.Join(root, "foreign", "plugin.json"), `{"name":"demo"}`)
-	observation, err = (NativeIdentityObserver{}).ObserveNativeIdentity(context.Background(), domain.DetectedClient{ClientID: domain.ClientChatGPT}, plan, nil)
+	observation, err = (testObserver(NativeIdentityObserver{})).ObserveNativeIdentity(context.Background(), domain.DetectedClient{ClientID: domain.ClientChatGPT}, plan, nil)
 	if err != nil || observation.State != domain.NativeIdentityUnmanaged {
 		t.Fatalf("positive local collision was weakened = %+v, %v", observation, err)
 	}
@@ -33,7 +33,7 @@ func TestChatGPTUnknownRemoteRegistryStillBlocksUnsignedNewPreparation(t *testin
 	plan := identityPlan(filepath.Join(t.TempDir(), "prepared"))
 	plan.Components = []domain.ComponentDecision{{Kind: domain.ComponentApp, Name: "docs", Support: domain.SupportProjected}}
 
-	observation, err := (NativeIdentityObserver{}).ObserveNativeIdentity(context.Background(), domain.DetectedClient{ClientID: domain.ClientChatGPT}, plan, nil)
+	observation, err := (testObserver(NativeIdentityObserver{})).ObserveNativeIdentity(context.Background(), domain.DetectedClient{ClientID: domain.ClientChatGPT}, plan, nil)
 	if err != nil || observation.State != domain.NativeIdentityIndeterminate {
 		t.Fatalf("unsigned remote identity = %+v, %v", observation, err)
 	}
@@ -46,7 +46,7 @@ func TestKiroManualPowerAllowsPreparationButRejectsPositiveLocalCollision(t *tes
 	plan.NativeRegistryRoot = filepath.Join(t.TempDir(), ".kiro")
 	plan.Components = []domain.ComponentDecision{{Kind: domain.ComponentSkill, Name: "docs", Support: domain.SupportNative}}
 
-	observation, err := (NativeIdentityObserver{}).ObserveNativeIdentity(context.Background(), domain.DetectedClient{ClientID: domain.ClientKiro}, plan, nil)
+	observation, err := (testObserver(NativeIdentityObserver{})).ObserveNativeIdentity(context.Background(), domain.DetectedClient{ClientID: domain.ClientKiro}, plan, nil)
 	if err != nil || observation.State != domain.NativeIdentityAbsent {
 		t.Fatalf("manual Power preparation = %+v, %v", observation, err)
 	}
@@ -55,7 +55,7 @@ func TestKiroManualPowerAllowsPreparationButRejectsPositiveLocalCollision(t *tes
 		t.Fatal(err)
 	}
 	writeIdentityFile(t, filepath.Join(root, "foreign", "plugin.json"), `{"name":"demo"}`)
-	observation, err = (NativeIdentityObserver{}).ObserveNativeIdentity(context.Background(), domain.DetectedClient{ClientID: domain.ClientKiro}, plan, nil)
+	observation, err = (testObserver(NativeIdentityObserver{})).ObserveNativeIdentity(context.Background(), domain.DetectedClient{ClientID: domain.ClientKiro}, plan, nil)
 	if err != nil || observation.State != domain.NativeIdentityUnmanaged {
 		t.Fatalf("Kiro local collision = %+v, %v", observation, err)
 	}
@@ -72,7 +72,7 @@ func TestKiroMixedPowerStillRejectsPositiveGlobalMCPCollision(t *testing.T) {
 		{Kind: domain.ComponentMCPServer, Name: "docs", Support: domain.SupportNative},
 	}
 
-	observation, err := (NativeIdentityObserver{}).ObserveNativeIdentity(context.Background(), domain.DetectedClient{ClientID: domain.ClientKiro}, plan, nil)
+	observation, err := (testObserver(NativeIdentityObserver{})).ObserveNativeIdentity(context.Background(), domain.DetectedClient{ClientID: domain.ClientKiro}, plan, nil)
 	if err != nil || observation.State != domain.NativeIdentityUnmanaged {
 		t.Fatalf("mixed Power MCP collision = %+v, %v", observation, err)
 	}

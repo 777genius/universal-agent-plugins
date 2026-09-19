@@ -16,8 +16,9 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"golang.org/x/mod/semver"
+
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
 const (
@@ -177,13 +178,17 @@ func validatePlugin(plugin domain.CatalogPlugin, schemaVersion int) error {
 		}
 		components[component] = struct{}{}
 	}
-	allowChatGPT := schemaVersion == SchemaVersionV2
-	if (!allowChatGPT && len(plugin.Compatibility) != len(requiredCompatibility)) ||
-		(allowChatGPT && (len(plugin.Compatibility) < len(requiredCompatibility) || len(plugin.Compatibility) > len(requiredCompatibility)+1)) {
+	allowHostless := schemaVersion == SchemaVersionV2
+	if (!allowHostless && len(plugin.Compatibility) != len(requiredCompatibility)) ||
+		(allowHostless && (len(plugin.Compatibility) < len(requiredCompatibility) || len(plugin.Compatibility) > len(requiredCompatibility)+1)) {
 		return fmt.Errorf("plugin %q compatibility has the wrong client set for catalog schema v%d", plugin.Name, schemaVersion)
 	}
 	for client := range plugin.Compatibility {
-		if _, required := requiredCompatibility[client]; !required && (!allowChatGPT || client != string(domain.ClientChatGPT)) {
+		if _, required := requiredCompatibility[client]; required {
+			continue
+		}
+		definition, ok := domain.ClientDefinitionFor(domain.ClientID(client))
+		if !allowHostless || !ok || !definition.PlansWithoutHostPresence {
 			return fmt.Errorf("plugin %q compatibility contains unsupported client %q", plugin.Name, client)
 		}
 	}
@@ -194,7 +199,7 @@ func validatePlugin(plugin domain.CatalogPlugin, schemaVersion int) error {
 			!validVerificationCompatibility(compatibility.Verification) || !validAuthCompatibility(compatibility.Authentication) {
 			return fmt.Errorf("plugin %q has invalid compatibility for %q", plugin.Name, client)
 		}
-		if definition.ID != domain.ClientChatGPT && compatibility.AppBinding != nil {
+		if definition.Capabilities.AppSupport == domain.SupportUnsupported && compatibility.AppBinding != nil {
 			return fmt.Errorf("plugin %q app_binding is allowed only for chatgpt", plugin.Name)
 		}
 		if authentication == "" {
@@ -208,7 +213,11 @@ func validatePlugin(plugin domain.CatalogPlugin, schemaVersion int) error {
 			return fmt.Errorf("plugin %q compatibility is missing %q", plugin.Name, client)
 		}
 	}
-	if compatibility, ok := plugin.Compatibility[string(domain.ClientChatGPT)]; ok {
+	for client, compatibility := range plugin.Compatibility {
+		definition, ok := domain.ClientDefinitionFor(domain.ClientID(client))
+		if !ok || definition.Capabilities.AppSupport == domain.SupportUnsupported {
+			continue
+		}
 		_, hasMCP := components["mcp"]
 		if hasMCP && compatibility.AppBinding == nil {
 			return fmt.Errorf("plugin %q ChatGPT MCP compatibility requires app_binding", plugin.Name)

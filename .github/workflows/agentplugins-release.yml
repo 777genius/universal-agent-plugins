@@ -101,6 +101,7 @@ jobs:
             'govulncheck (root)' \
             'govulncheck (cli)' \
             'govulncheck (integrationctl)' \
+            'govulncheck (agentplugins)' \
             'govulncheck (plugininstall)' \
             'govulncheck (sdk)'; do
             require_check "${name}"
@@ -123,7 +124,8 @@ jobs:
             -release-at "${release_at}"
       - name: Test standard-first engine and CLI
         run: |
-          (cd install/integrationctl && go test ./agentplugins/... ./adapters/dirswap ./adapters/source)
+          (cd install/integrationctl/agentplugins && go test ./...)
+          (cd install/integrationctl && go test ./adapters/dirswap ./adapters/source)
           (cd cli/plugin-kit-ai && go test ./internal/agentpluginscli ./cmd/agentplugins/...)
       - name: Prove production binary excludes Directory conformance overrides
         working-directory: cli/plugin-kit-ai

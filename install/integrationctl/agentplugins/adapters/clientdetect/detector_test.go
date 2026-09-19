@@ -3,6 +3,7 @@ package clientdetect
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"os"
 	"os/exec"
@@ -14,6 +15,8 @@ import (
 	"testing"
 	"time"
 
+	clientcontract "github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/all"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
@@ -128,6 +131,7 @@ func TestNewOSCapturesClientConfigOverrides(t *testing.T) {
 	claudeRoot := filepath.Join(home, "claude-config")
 	t.Setenv("CLAUDE_CONFIG_DIR", claudeRoot)
 	detector := NewOS(home)
+	detector.Registry = all.Default()
 	detector.LookPath = func(string) (string, error) { return "", exec.ErrNotFound }
 	clients, err := detector.Detect(context.Background())
 	if err != nil {
@@ -698,6 +702,69 @@ func TestDetectorRespectsGeminiCLIHomeWithoutTouchingRealHome(t *testing.T) {
 	}
 }
 
+// A detector built without a registry has to fail rather than quietly resolve
+// to every known client: which clients a binary knows about is a composition
+// root decision, and a silent default would link all of them into any binary
+// that merely detects.
+func TestDetectorRequiresAnInjectedRegistry(t *testing.T) {
+	t.Parallel()
+	detector := testDetector(t.TempDir(), nil)
+	detector.Registry = nil
+	if _, err := detector.Detect(context.Background()); !errors.Is(err, clientcontract.ErrRegistryRequired) {
+		t.Fatalf("Detect without a registry = %v, want ErrRegistryRequired", err)
+	}
+}
+
+type stubDetector struct {
+	id        domain.ClientID
+	detection clientcontract.Detection
+}
+
+func (s stubDetector) ID() domain.ClientID { return s.id }
+
+func (s stubDetector) DetectSurfaces(clientcontract.Host) clientcontract.Detection {
+	return s.detection
+}
+
+type stubAdapter struct{ id domain.ClientID }
+
+func (s stubAdapter) ID() domain.ClientID { return s.id }
+
+// The generic half of detection: the listing follows the injected registry, the
+// display name comes from the declarative registry rather than from the
+// adapter, and an adapter that probes no surfaces is reported as not detected
+// instead of vanishing.
+func TestDetectorReportsExactlyTheRegisteredClients(t *testing.T) {
+	t.Parallel()
+	registry, err := clientcontract.NewRegistry(
+		stubDetector{id: domain.ClientKiro, detection: clientcontract.Detection{
+			ConfigRoot:     "/stub/kiro",
+			ExecutablePath: "/stub/bin/kiro",
+			Surfaces:       []domain.ClientSurface{{ID: "kiro_cli", Detected: true, Evidence: "executable_on_path"}},
+		}},
+		stubAdapter{id: domain.ClientCline},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	detector := testDetector(t.TempDir(), nil)
+	detector.Registry = registry
+	clients, err := detector.Detect(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(clients) != 2 {
+		t.Fatalf("Detect returned %d clients, want the 2 registered ones: %+v", len(clients), clients)
+	}
+	kiro := clientOf(clients, domain.ClientKiro)
+	if kiro.Status != domain.DetectionDetected || kiro.DisplayName != "Kiro" || kiro.ConfigRoot != "/stub/kiro" {
+		t.Fatalf("assembled Kiro detection = %+v", kiro)
+	}
+	if cline := clientOf(clients, domain.ClientCline); cline.Status != domain.DetectionNotDetected || cline.DisplayName != "Cline" {
+		t.Fatalf("adapter without detection = %+v", cline)
+	}
+}
+
 func testDetector(home string, binaries map[string]string) Detector {
 	applications := filepath.Join(home, "system-applications")
 	return Detector{
@@ -711,8 +778,9 @@ func testDetector(home string, binaries map[string]string) Detector {
 			}
 			return "", exec.ErrNotFound
 		},
-		Lstat:   os.Lstat,
-		ReadDir: os.ReadDir,
+		Lstat:    os.Lstat,
+		ReadDir:  os.ReadDir,
+		Registry: all.Default(),
 	}
 }
 

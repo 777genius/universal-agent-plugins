@@ -10,9 +10,10 @@ import (
 	"testing"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/loader"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/specregistry"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/opencode"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/providers/nativeconfig"
 )
 
 // These are configuration identities, not filesystem names. Native tool-name
@@ -38,13 +39,13 @@ func TestOpenCodeLogicalKeysLifecycle(t *testing.T) {
 					envelope.MCP.Servers[name] = domain.MCPServer{Name: name, Type: "streamable-http", Decoded: map[string]any{"url": "https://example.test/" + version}}
 					plan.Components = append(plan.Components, domain.ComponentDecision{Kind: domain.ComponentMCPServer, Name: name, Support: domain.SupportPrepared})
 				}
-				if err := os.Remove(filepath.Join(active, openCodeProjectionFile)); err != nil {
+				if err := os.Remove(filepath.Join(active, opencode.OpenCodeProjectionFile)); err != nil {
 					t.Fatal(err)
 				}
-				if err := projectOpenCodeNative(active, envelope, plan, filepath.Join(root, "data")); err != nil {
+				if err := opencode.ProjectOpenCodeNative(active, envelope, plan, filepath.Join(root, "data")); err != nil {
 					t.Fatal(err)
 				}
-				objects, err := buildOpenCodeNativeObjects(active, envelope, plan)
+				objects, err := opencode.BuildOpenCodeNativeObjects(active, envelope, plan)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -59,7 +60,7 @@ func TestOpenCodeLogicalKeysLifecycle(t *testing.T) {
 				}
 				seen := map[string]bool{}
 				for _, obj := range restored {
-					if obj.Kind != openCodeMCPObjectKind {
+					if obj.Kind != opencode.OpenCodeMCPObjectKind {
 						continue
 					}
 					if obj.ObjectID != "opencode-mcp:"+obj.LogicalName || obj.Path != configPath {
@@ -75,28 +76,28 @@ func TestOpenCodeLogicalKeysLifecycle(t *testing.T) {
 				return restored
 			}
 			first := build("v1")
-			if err := applyOpenCodeNative(configRoot, active, nil, first); err != nil {
+			if err := opencode.ApplyOpenCodeNative(configRoot, active, nil, first); err != nil {
 				t.Fatal(err)
 			}
-			if err := verifyOpenCodeNativeObjects(configRoot, active, first); err != nil {
+			if err := opencode.VerifyOpenCodeNativeObjects(configRoot, active, first, nativeconfig.New(), false); err != nil {
 				t.Fatal(err)
 			}
 			second := build("v2")
-			if err := applyOpenCodeNative(configRoot, active, first, second); err != nil {
+			if err := opencode.ApplyOpenCodeNative(configRoot, active, first, second); err != nil {
 				t.Fatal(err)
 			}
-			if err := verifyOpenCodeNativeObjects(configRoot, active, second); err != nil {
+			if err := opencode.VerifyOpenCodeNativeObjects(configRoot, active, second, nativeconfig.New(), false); err != nil {
 				t.Fatal(err)
 			}
 			// Exact repair recreates absent entries while preserving the foreign entry.
 			writeOpenCodeTestFile(t, configPath, original)
-			if err := applyOpenCodeNative(configRoot, active, second, second); err != nil {
+			if err := opencode.ApplyOpenCodeNative(configRoot, active, second, second); err != nil {
 				t.Fatal(err)
 			}
-			if err := verifyOpenCodeNativeObjects(configRoot, active, second); err != nil {
+			if err := opencode.VerifyOpenCodeNativeObjects(configRoot, active, second, nativeconfig.New(), false); err != nil {
 				t.Fatal(err)
 			}
-			if err := applyOpenCodeNative(configRoot, "", second, nil); err != nil {
+			if err := opencode.ApplyOpenCodeNative(configRoot, "", second, nil); err != nil {
 				t.Fatal(err)
 			}
 			body := readOpenCodeTestFile(t, configPath)
@@ -104,7 +105,7 @@ func TestOpenCodeLogicalKeysLifecycle(t *testing.T) {
 				t.Fatalf("foreign content lost: %s", body)
 			}
 			for _, obj := range second {
-				if obj.Kind != openCodeMCPObjectKind {
+				if obj.Kind != opencode.OpenCodeMCPObjectKind {
 					continue
 				}
 				present, _, err := nativeconfig.New().Inspect(nativeconfig.Paths{JSON: filepath.Join(configRoot, "opencode.json"), JSONC: filepath.Join(configRoot, "opencode.jsonc")}, nativeconfig.CodecOpenCode, obj.LogicalName, nil)
@@ -140,17 +141,21 @@ func TestOpenCodeLogicalKeysStageKeepsHealthySibling(t *testing.T) {
 			anchor := filepath.Join(root, "managed")
 			target := filepath.Join(anchor, "clients", "opencode")
 			plan := domain.DeliveryPlan{ClientID: domain.ClientOpenCode, Scope: domain.ScopeUser, Status: domain.PlanReady, PackageMode: domain.PackagePrepared, PhysicalArtifactID: "probe", TargetAnchor: anchor, TargetRoot: target, ActivePath: filepath.Join(target, "probe"), NativeRegistryRoot: filepath.Join(root, "native"), Components: []domain.ComponentDecision{{Kind: domain.ComponentSkill, Name: "healthy", Support: domain.SupportPrepared}, {Kind: domain.ComponentMCPServer, Name: name, Support: domain.SupportPrepared}}}
-			delivery, err := (Stager{}).Stage(context.Background(), envelope, plan, "logical-key", domain.CompatibilityHints{})
+			delivery, err := testStager(Stager{}).Stage(context.Background(), envelope, plan, "logical-key", domain.CompatibilityHints{})
 			if err != nil {
 				t.Fatal(err)
 			}
-			defer (Stager{}).Discard(context.Background(), delivery)
+			defer func() {
+				if err := testStager(Stager{}).Discard(context.Background(), delivery); err != nil {
+					t.Error(err)
+				}
+			}()
 			if _, err := os.Stat(filepath.Join(delivery.StagingPath, "skills", "healthy", "SKILL.md")); err != nil {
 				t.Fatal(err)
 			}
 			found := false
 			for _, obj := range delivery.NativeObjects {
-				if obj.Kind == openCodeMCPObjectKind && obj.LogicalName == name {
+				if obj.Kind == opencode.OpenCodeMCPObjectKind && obj.LogicalName == name {
 					found = true
 				}
 			}
@@ -174,19 +179,19 @@ func TestOpenCodeLogicalKeysForeignCollisionAndDrift(t *testing.T) {
 				server.Name = name
 				envelope.MCP.Servers = map[string]domain.MCPServer{name: server}
 				plan.Components[1].Name = name
-				if err := os.Remove(filepath.Join(active, openCodeProjectionFile)); err != nil {
+				if err := os.Remove(filepath.Join(active, opencode.OpenCodeProjectionFile)); err != nil {
 					t.Fatal(err)
 				}
-				if err := projectOpenCodeNative(active, envelope, plan, filepath.Join(root, "data")); err != nil {
+				if err := opencode.ProjectOpenCodeNative(active, envelope, plan, filepath.Join(root, "data")); err != nil {
 					t.Fatal(err)
 				}
-				objects, err := buildOpenCodeNativeObjects(active, envelope, plan)
+				objects, err := opencode.BuildOpenCodeNativeObjects(active, envelope, plan)
 				if err != nil {
 					t.Fatal(err)
 				}
 				foreign, _ := json.Marshal(map[string]any{"mcp": map[string]any{name: map[string]any{"type": "local", "command": []string{"foreign"}}}})
 				writeOpenCodeTestFile(t, path, string(foreign))
-				if err := applyOpenCodeNative(configRoot, active, nil, objects); !errors.Is(err, nativeconfig.ErrCollision) {
+				if err := opencode.ApplyOpenCodeNative(configRoot, active, nil, objects); !errors.Is(err, nativeconfig.ErrCollision) {
 					t.Fatalf("collision accepted: %v", err)
 				}
 				if got := readOpenCodeTestFile(t, path); got != string(foreign) {
@@ -196,12 +201,12 @@ func TestOpenCodeLogicalKeysForeignCollisionAndDrift(t *testing.T) {
 					t.Fatal("collision installed sibling skill")
 				}
 				writeOpenCodeTestFile(t, path, `{"mcp":{}}`)
-				if err := applyOpenCodeNative(configRoot, active, nil, objects); err != nil {
+				if err := opencode.ApplyOpenCodeNative(configRoot, active, nil, objects); err != nil {
 					t.Fatal(err)
 				}
 				writeOpenCodeTestFile(t, path, string(foreign))
 				for _, desired := range [][]domain.NativeObjectOwnership{objects, nil} {
-					if err := applyOpenCodeNative(configRoot, active, objects, desired); !errors.Is(err, nativeconfig.ErrNotOwned) {
+					if err := opencode.ApplyOpenCodeNative(configRoot, active, objects, desired); !errors.Is(err, nativeconfig.ErrNotOwned) {
 						t.Fatalf("drift accepted: %v", err)
 					}
 					if got := readOpenCodeTestFile(t, path); got != string(foreign) {

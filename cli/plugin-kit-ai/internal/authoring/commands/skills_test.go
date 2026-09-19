@@ -14,6 +14,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/cli/internal/authoring/report"
 	"github.com/777genius/plugin-kit-ai/cli/internal/authoringcli"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/packageview"
+	clientregistry "github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/all"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/conformance"
 )
 
@@ -29,7 +30,7 @@ func physicalMutationRoot(t *testing.T) string {
 }
 
 func TestSkillsFactoriesAndEntrypointParity(t *testing.T) {
-	a := commands.App{Projects: project.Service{Scratch: t.TempDir()}, Revision: "skills-factories"}
+	a := commands.App{ClientRegistry: clientregistry.Default(), Projects: project.Service{Scratch: t.TempDir()}, Revision: "skills-factories"}
 	roots := []string{physicalMutationRoot(t), physicalMutationRoot(t)}
 	for _, root := range roots {
 		write(t, root, "plugin.json", plugin(""))
@@ -122,7 +123,7 @@ func TestSkillsExactCWD(t *testing.T) {
 	if e := os.Mkdir(child, 0700); e != nil {
 		t.Fatal(e)
 	}
-	a := commands.App{Projects: project.Service{Scratch: t.TempDir()}}
+	a := commands.App{ClientRegistry: clientregistry.Default(), Projects: project.Service{Scratch: t.TempDir()}}
 	t.Chdir(filepath.Dir(root))
 	r, code, _ := execute(t, a, []string{"skills", "init", "relative", "./" + filepath.Base(root), "--description", "text", "--format=json"}, false)
 	if code != 0 || !r.Committed {
@@ -152,7 +153,7 @@ func TestSkillsHumanAllowlist(t *testing.T) {
 	root := t.TempDir()
 	write(t, root, "plugin.json", plugin(""))
 	write(t, root, "skills/bad/SKILL.md", "---\nname: bad\ndescription: ["+marker+"]\n---\n")
-	a := commands.App{Projects: project.Service{Scratch: t.TempDir()}}
+	a := commands.App{ClientRegistry: clientregistry.Default(), Projects: project.Service{Scratch: t.TempDir()}}
 	for _, mount := range []bool{false, true} {
 		var out bytes.Buffer
 		args := []string{"skills", "validate", root}
@@ -173,7 +174,7 @@ func TestSkillsPostCommitErrorIsExplicit(t *testing.T) {
 		for _, jsonOutput := range []bool{false, true} {
 			root := physicalMutationRoot(t)
 			write(t, root, "plugin.json", plugin(""))
-			a := commands.App{Projects: project.Service{Scratch: t.TempDir(), Limits: packageview.Limits{Entries: 1}}}
+			a := commands.App{ClientRegistry: clientregistry.Default(), Projects: project.Service{Scratch: t.TempDir(), Limits: packageview.Limits{Entries: 1}}}
 			args := []string{"skills", "init", "new", "--description", "text", root}
 			var out bytes.Buffer
 			build := commands.RootBuilder(authoringcli.NewPluginKitRoot)

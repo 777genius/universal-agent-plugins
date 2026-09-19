@@ -11,6 +11,7 @@ import (
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/planner"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/plannertest"
 )
 
 func TestCodexTransportSelectionSanitizesBothManifestSurfaces(t *testing.T) {
@@ -35,11 +36,16 @@ func TestCodexTransportSelectionSanitizesBothManifestSurfaces(t *testing.T) {
 		e.MCP.Servers[name] = domain.MCPServer{Name: name, Type: decoded["type"].(string), Raw: body, Decoded: decoded}
 	}
 	root := t.TempDir()
-	plan, err := (planner.Planner{ManagedRoot: filepath.Join(root, "managed")}).Plan(context.Background(), e, domain.DetectedClient{ClientID: domain.ClientCodex, Status: domain.DetectionDetected, ConfigRoot: filepath.Join(root, "config")}, domain.ScopeUser, "demo-0123456789ab")
+	plan, err := plannertest.NewPlanner(planner.Planner{ManagedRoot: filepath.Join(root, "managed")}).Plan(context.Background(), domain.PlanRequest{
+		Envelope:           e,
+		Client:             domain.DetectedClient{ClientID: domain.ClientCodex, Status: domain.DetectionDetected, ConfigRoot: filepath.Join(root, "config")},
+		Scope:              domain.ScopeUser,
+		PhysicalArtifactID: "demo-0123456789ab",
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	delivery, err := (Stager{}).Stage(context.Background(), e, plan, "codex-selection", domain.CompatibilityHints{})
+	delivery, err := testStager(Stager{}).Stage(context.Background(), e, plan, "codex-selection", domain.CompatibilityHints{})
 	if err != nil {
 		t.Fatal(err)
 	}

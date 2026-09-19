@@ -1,8 +1,10 @@
 package providers
 
 import (
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"testing"
+
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
 func TestPortableIdentityPreservesMarketplaceGolden(t *testing.T) {
@@ -10,7 +12,7 @@ func TestPortableIdentityPreservesMarketplaceGolden(t *testing.T) {
 	if physical != "demo-11e594f48195" {
 		t.Fatalf("historical physical id changed: %s", physical)
 	}
-	if got := ManagedMarketplaceName(physical); got != "agentplugins-4293497808d3" {
+	if got := shared.ManagedMarketplaceName(physical); got != "agentplugins-4293497808d3" {
 		t.Fatalf("historical marketplace id changed: %s", got)
 	}
 }

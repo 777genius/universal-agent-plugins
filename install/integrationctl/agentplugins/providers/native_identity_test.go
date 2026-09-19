@@ -10,6 +10,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/all"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	legacyports "github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
 )
@@ -36,17 +39,35 @@ func (runner *identityRunner) Run(_ context.Context, command legacyports.Command
 	return runner.result, nil
 }
 
+func TestNativeIdentityFailsClosedWithoutRegistry(t *testing.T) {
+	t.Parallel()
+	plan := identityPlan(filepath.Join(t.TempDir(), "prepared"))
+	_, err := (NativeIdentityObserver{}).ObserveNativeIdentity(context.Background(), domain.DetectedClient{ClientID: domain.ClientCursor}, plan, nil)
+	if !errors.Is(err, clients.ErrRegistryRequired) {
+		t.Fatalf("err = %v, want %v", err, clients.ErrRegistryRequired)
+	}
+}
+
+func TestNativeIdentityFailsClosedWithoutKernelForNativeConfigClient(t *testing.T) {
+	t.Parallel()
+	plan := identityPlan(filepath.Join(t.TempDir(), "prepared"))
+	_, err := (NativeIdentityObserver{Registry: all.Default()}).ObserveNativeIdentity(context.Background(), domain.DetectedClient{ClientID: domain.ClientOpenCode}, plan, nil)
+	if err == nil || !strings.Contains(err.Error(), "native config file IO is required") {
+		t.Fatalf("missing NativeConfig was not fail-closed: %v", err)
+	}
+}
+
 func TestNativeIdentityCursorReadsEveryAuthoritativeLocalManifest(t *testing.T) {
 	root := filepath.Join(t.TempDir(), ".cursor", "plugins", "local")
 	writeIdentityFile(t, filepath.Join(root, "foreign-path", ".cursor-plugin", "plugin.json"), `{"name":"demo"}`)
 	plan := identityPlan(root)
-	observation, err := (NativeIdentityObserver{}).ObserveNativeIdentity(context.Background(), domain.DetectedClient{ClientID: domain.ClientCursor}, plan, nil)
+	observation, err := (testObserver(NativeIdentityObserver{})).ObserveNativeIdentity(context.Background(), domain.DetectedClient{ClientID: domain.ClientCursor}, plan, nil)
 	if err != nil || observation.State != domain.NativeIdentityUnmanaged {
 		t.Fatalf("observation = %+v, err = %v", observation, err)
 	}
 
 	writeIdentityFile(t, filepath.Join(root, "foreign-path", ".cursor-plugin", "plugin.json"), `{"name":`)
-	observation, err = (NativeIdentityObserver{}).ObserveNativeIdentity(context.Background(), domain.DetectedClient{ClientID: domain.ClientCursor}, plan, nil)
+	observation, err = (testObserver(NativeIdentityObserver{})).ObserveNativeIdentity(context.Background(), domain.DetectedClient{ClientID: domain.ClientCursor}, plan, nil)
 	if observation.State != domain.NativeIdentityIndeterminate || err == nil {
 		t.Fatalf("malformed observation = %+v, err = %v", observation, err)
 	}
@@ -71,7 +92,7 @@ func TestNativeIdentityUnqualifiedPluginRootIgnoresForeignNonDirectoryEntries(t 
 		t.Fatal(err)
 	}
 	managed := &domain.ClientBinding{NativeObjects: []domain.NativeObjectOwnership{{Kind: "managed_package_directory", ManagedDigest: "sha256:owned"}}}
-	observer := NativeIdentityObserver{Stager: acceptingPackageVerifier{}}
+	observer := testObserver(NativeIdentityObserver{Stager: acceptingPackageVerifier{}})
 	observation, err := observer.ObserveNativeIdentity(context.Background(), domain.DetectedClient{ClientID: domain.ClientCursor}, plan, managed)
 	if err != nil || observation.State != domain.NativeIdentityManaged {
 		t.Fatalf("foreign non-directory entry blocked classification: observation = %+v, err = %v", observation, err)
@@ -98,13 +119,11 @@ func TestNativeIdentityUnqualifiedPluginRootIgnoresForeignNonDirectoryEntries(t 
 }
 
 // TestNativeIdentityOpenCodeIgnoresForeignNonDirectoryEntries confirms the
-// same fix protects OpenCode too: OpenCode's own native registry check
-// (inspectNativeRegistry) never scans a directory, but its prepared-identity
-// check still goes through the shared inspectUnqualifiedPluginRoot exactly
-// like Cursor's does (observeIdentity calls inspectPreparedRegistry
-// unconditionally for every client before any client-specific override), so
-// a foreign .DS_Store in OpenCode's managed clients root would have hit the
-// identical bug if inspectUnqualifiedPluginRoot had not already been fixed.
+// same fix protects OpenCode too: native registry inspect looks at planned
+// skills and MCP names, but the prepared-identity check still goes through
+// shared.InspectUnqualifiedPluginRoot, so a foreign .DS_Store in OpenCode's
+// managed clients root would have hit the identical bug if
+// shared.InspectUnqualifiedPluginRoot had not already been fixed.
 func TestNativeIdentityOpenCodeIgnoresForeignNonDirectoryEntries(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "managed", "clients", "opencode")
 	plan := identityPlan(root)
@@ -116,7 +135,8 @@ func TestNativeIdentityOpenCodeIgnoresForeignNonDirectoryEntries(t *testing.T) {
 		t.Fatal(err)
 	}
 	managed := &domain.ClientBinding{NativeObjects: []domain.NativeObjectOwnership{{Kind: "managed_package_directory", ManagedDigest: "sha256:owned"}}}
-	observer := NativeIdentityObserver{Stager: acceptingPackageVerifier{}}
+	plan.NativeRegistryRoot = filepath.Join(t.TempDir(), "opencode")
+	observer := testObserver(NativeIdentityObserver{Stager: acceptingPackageVerifier{}})
 	observation, err := observer.ObserveNativeIdentity(context.Background(), domain.DetectedClient{ClientID: domain.ClientOpenCode}, plan, managed)
 	if err != nil || observation.State != domain.NativeIdentityManaged {
 		t.Fatalf("foreign non-directory entry blocked OpenCode classification: observation = %+v, err = %v", observation, err)
@@ -138,7 +158,7 @@ func TestNativeIdentityClaudeSkillsRegistryIgnoresForeignNonDirectoryEntries(t *
 		t.Fatal(err)
 	}
 	managed := &domain.ClientBinding{NativeObjects: []domain.NativeObjectOwnership{{Kind: "managed_package_directory", ManagedDigest: "sha256:owned"}}}
-	observer := NativeIdentityObserver{Stager: acceptingPackageVerifier{}}
+	observer := testObserver(NativeIdentityObserver{Stager: acceptingPackageVerifier{}})
 	observation, err := observer.ObservePreparedIdentity(context.Background(), domain.DetectedClient{ClientID: domain.ClientClaude}, plan, managed)
 	if err != nil || observation.State != domain.NativeIdentityManaged {
 		t.Fatalf("foreign .DS_Store blocked Claude skill classification: observation = %+v, err = %v", observation, err)
@@ -160,13 +180,13 @@ func TestNativeIdentityQualifiedPreparedMarketplaceCoexistsOnlyWithPositiveNames
 	writeIdentityFile(t, filepath.Join(root, "foreign", ".agents", "plugins", "marketplace.json"), `{"name":"foreign-market","plugins":[{"name":"demo"}]}`)
 	plan := identityPlan(root)
 	plan.NativeRegistryRoot = filepath.Join(t.TempDir(), "missing-codex-root")
-	observation, err := (NativeIdentityObserver{}).ObserveNativeIdentity(context.Background(), domain.DetectedClient{ClientID: domain.ClientCodex}, plan, nil)
+	observation, err := (testObserver(NativeIdentityObserver{})).ObserveNativeIdentity(context.Background(), domain.DetectedClient{ClientID: domain.ClientCodex}, plan, nil)
 	if err != nil || observation.State != domain.NativeIdentityAbsent {
 		t.Fatalf("qualified observation = %+v, err = %v", observation, err)
 	}
 
 	writeIdentityFile(t, filepath.Join(root, "unqualified", "plugin.json"), `{"name":"demo"}`)
-	observation, err = (NativeIdentityObserver{}).ObserveNativeIdentity(context.Background(), domain.DetectedClient{ClientID: domain.ClientCodex}, plan, nil)
+	observation, err = (testObserver(NativeIdentityObserver{})).ObserveNativeIdentity(context.Background(), domain.DetectedClient{ClientID: domain.ClientCodex}, plan, nil)
 	if err != nil || observation.State != domain.NativeIdentityUnmanaged {
 		t.Fatalf("unqualified observation = %+v, err = %v", observation, err)
 	}
@@ -175,9 +195,9 @@ func TestNativeIdentityQualifiedPreparedMarketplaceCoexistsOnlyWithPositiveNames
 func TestNativeIdentityCodexUsesExactCLIRegistryIdentity(t *testing.T) {
 	plan := identityPlan(filepath.Join(t.TempDir(), "prepared"))
 	plan.NativeRegistryExecutable = "/test/bin/codex"
-	marketplace := managedMarketplaceName(plan.PhysicalArtifactID)
+	marketplace := shared.ManagedMarketplaceName(plan.PhysicalArtifactID)
 	runner := &identityRunner{result: legacyports.CommandResult{Stdout: []byte(`{"installed":[{"pluginId":"demo@foreign","name":"demo","marketplaceName":"foreign","installed":true,"enabled":true}]}`)}}
-	observation, err := (NativeIdentityObserver{Runner: runner}).ObserveNativeIdentity(context.Background(), domain.DetectedClient{ClientID: domain.ClientCodex}, plan, nil)
+	observation, err := (testObserver(NativeIdentityObserver{Runner: runner})).ObserveNativeIdentity(context.Background(), domain.DetectedClient{ClientID: domain.ClientCodex}, plan, nil)
 	if err != nil || observation.State != domain.NativeIdentityAbsent {
 		t.Fatalf("foreign namespace observation = %+v, err = %v", observation, err)
 	}
@@ -186,7 +206,7 @@ func TestNativeIdentityCodexUsesExactCLIRegistryIdentity(t *testing.T) {
 	}
 
 	runner.result.Stdout = []byte(`{"installed":[{"pluginId":"demo@` + marketplace + `","name":"demo","marketplaceName":"` + marketplace + `","installed":true,"enabled":true}]}`)
-	observation, err = (NativeIdentityObserver{Runner: runner}).ObserveNativeIdentity(context.Background(), domain.DetectedClient{ClientID: domain.ClientCodex}, plan, nil)
+	observation, err = (testObserver(NativeIdentityObserver{Runner: runner})).ObserveNativeIdentity(context.Background(), domain.DetectedClient{ClientID: domain.ClientCodex}, plan, nil)
 	if err != nil || observation.State != domain.NativeIdentityUnmanaged {
 		t.Fatalf("occupied managed namespace observation = %+v, err = %v", observation, err)
 	}
@@ -204,12 +224,12 @@ func TestNativeIdentityCodexAbsentRecoveryMatchesRealCLIFailureThenSucceedsAfter
 	t.Parallel()
 	plan := identityPlan(filepath.Join(t.TempDir(), "prepared"))
 	plan.NativeRegistryExecutable = "/test/bin/codex"
-	marketplace := managedMarketplaceName(plan.PhysicalArtifactID)
+	marketplace := shared.ManagedMarketplaceName(plan.PhysicalArtifactID)
 	managed := &domain.ClientBinding{TargetLocator: plan.ActivePath, NativeObjects: []domain.NativeObjectOwnership{{Kind: "managed_package_directory", ManagedDigest: "sha256:owned"}}}
 	client := domain.DetectedClient{ClientID: domain.ClientCodex}
 
 	failingRunner := &identityRunner{result: legacyports.CommandResult{ExitCode: 1, Stderr: []byte("Error: failed to load marketplace snapshot for " + marketplace + "\n")}}
-	observer := NativeIdentityObserver{Runner: failingRunner, Stager: acceptingPackageVerifier{}}
+	observer := testObserver(NativeIdentityObserver{Runner: failingRunner, Stager: acceptingPackageVerifier{}})
 
 	// The recovery-eligibility gate (usecase's preparedIdentityObservation) must
 	// never invoke this failing command at all.
@@ -248,7 +268,7 @@ func TestPreparedIdentityInspectsFilesWithoutLaunchingNativeCLI(t *testing.T) {
 	writeIdentityFile(t, filepath.Join(root, "foreign", "plugin.json"), `{"name":"demo"}`)
 	runner := &identityRunner{}
 
-	observation, err := (NativeIdentityObserver{Runner: runner}).ObservePreparedIdentity(
+	observation, err := (testObserver(NativeIdentityObserver{Runner: runner})).ObservePreparedIdentity(
 		context.Background(), domain.DetectedClient{ClientID: domain.ClientCodex}, plan, nil,
 	)
 	if err != nil || observation.State != domain.NativeIdentityUnmanaged {
@@ -263,10 +283,10 @@ func TestNativeIdentityCodexManualModeReadsAuthoritativeConfig(t *testing.T) {
 	configRoot := filepath.Join(t.TempDir(), ".codex")
 	plan := identityPlan(filepath.Join(t.TempDir(), "prepared"))
 	plan.NativeRegistryRoot = configRoot
-	marketplace := managedMarketplaceName(plan.PhysicalArtifactID)
+	marketplace := shared.ManagedMarketplaceName(plan.PhysicalArtifactID)
 	writeIdentityFile(t, filepath.Join(configRoot, "config.toml"), "[plugins.\"demo@"+marketplace+"\"]\nenabled = true\n")
 
-	observation, err := (NativeIdentityObserver{}).ObserveNativeIdentity(context.Background(), domain.DetectedClient{ClientID: domain.ClientCodex}, plan, nil)
+	observation, err := (testObserver(NativeIdentityObserver{})).ObserveNativeIdentity(context.Background(), domain.DetectedClient{ClientID: domain.ClientCodex}, plan, nil)
 	if err != nil || observation.State != domain.NativeIdentityUnmanaged {
 		t.Fatalf("observation = %+v, err = %v", observation, err)
 	}
@@ -277,80 +297,14 @@ func TestNativeIdentityCopilotAndVSCodeUseSharedAuthoritativeBackend(t *testing.
 		t.Run(string(clientID), func(t *testing.T) {
 			plan := identityPlan(filepath.Join(t.TempDir(), "prepared"))
 			plan.NativeRegistryExecutable = "/test/bin/copilot"
-			marketplace := managedMarketplaceName(plan.PhysicalArtifactID)
+			marketplace := shared.ManagedMarketplaceName(plan.PhysicalArtifactID)
 			runner := &identityRunner{result: legacyports.CommandResult{Stdout: []byte("Installed plugins:\n  • demo@" + marketplace + " (v1.0.0)\n")}}
-			observation, err := (NativeIdentityObserver{Runner: runner}).ObserveNativeIdentity(context.Background(), domain.DetectedClient{ClientID: clientID}, plan, nil)
+			observation, err := (testObserver(NativeIdentityObserver{Runner: runner})).ObserveNativeIdentity(context.Background(), domain.DetectedClient{ClientID: clientID}, plan, nil)
 			if err != nil || observation.State != domain.NativeIdentityUnmanaged {
 				t.Fatalf("observation = %+v, err = %v", observation, err)
 			}
 			if !reflect.DeepEqual(runner.commands, [][]string{{"/test/bin/copilot", "plugin", "list"}}) {
 				t.Fatalf("commands = %#v", runner.commands)
-			}
-		})
-	}
-}
-
-func TestCopilotRegistryFindingRequiresExactNativeIdentity(t *testing.T) {
-	marketplace := "agentplugins-demo-0123456789ab"
-	tests := []struct {
-		name string
-		body string
-		want registryFinding
-	}{
-		{name: "exact", body: "Installed plugins:\n  • demo@" + marketplace + " (v1.0.0)\n", want: registryExpected},
-		{name: "wrong_version", body: "Installed plugins:\n  • demo@" + marketplace + " (v1.0.1)\n", want: registryIndeterminate},
-		{name: "unrelated", body: "Installed plugins:\n  • other@" + marketplace + " (v1.0.0)\n", want: registryClear},
-		{name: "duplicate", body: "Installed plugins:\n  • demo@" + marketplace + " (v1.0.0)\n  • demo@" + marketplace + " (v1.0.0)\n", want: registryIndeterminate},
-		{name: "absent_short", body: "No plugins installed.\n", want: registryIndeterminate},
-		{name: "absent_official_1_0_80", body: "No plugins installed.\n\nUse 'copilot plugin install <source>' to install a plugin.\n", want: registryClear},
-		{name: "absent_official_with_prefix", body: "\nNo plugins installed.\n\nUse 'copilot plugin install <source>' to install a plugin.\n", want: registryIndeterminate},
-		{name: "absent_official_with_suffix", body: "No plugins installed.\n\nUse 'copilot plugin install <source>' to install a plugin.\n\n", want: registryIndeterminate},
-		{name: "unknown", body: "Copilot plugins are unavailable right now\n", want: registryIndeterminate},
-		{name: "unknown_prefix", body: "experimental output\nInstalled plugins:\n  • demo@" + marketplace + " (v1.0.0)\n", want: registryIndeterminate},
-		{name: "unknown_suffix", body: "Installed plugins:\n  • demo@" + marketplace + " (v1.0.0)\nupdate available\n", want: registryIndeterminate},
-		{name: "unknown_unindented_entry", body: "Installed plugins:\ndemo@" + marketplace + " (v1.0.0)\n", want: registryIndeterminate},
-	}
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			if got := copilotRegistryFinding([]byte(test.body), "demo", marketplace, "1.0.0", true); got != test.want {
-				t.Fatalf("finding = %d, want %d", got, test.want)
-			}
-		})
-	}
-}
-
-func TestCopilotLiveRegistryFindingRequiresExactIdentityStatusAndPath(t *testing.T) {
-	t.Parallel()
-	marketplace := "agentplugins-demo-0123456789ab"
-	path := filepath.Join(t.TempDir(), "managed", "demo")
-	header := copilotLiveHeader + "\n"
-	entry := func(name, version, status, from string) string {
-		return header + "  • " + name + "@" + marketplace + " (v" + version + ") (" + status + ")\n      from " + from + "\n"
-	}
-	tests := []struct {
-		name  string
-		body  string
-		owned bool
-		want  registryFinding
-	}{
-		{name: "managed", body: entry("demo", "1.7.0-uap.1", "enabled", path), owned: true, want: registryExpected},
-		{name: "managed with unrelated", body: entry("other", "9.9.9", "enabled", path) + strings.TrimPrefix(entry("demo", "1.7.0-uap.1", "enabled", path), header), owned: true, want: registryExpected},
-		{name: "managed CRLF", body: strings.ReplaceAll(entry("demo", "1.7.0-uap.1", "enabled", path), "\n", "\r\n"), owned: true, want: registryExpected},
-		{name: "unowned collision", body: entry("demo", "1.7.0-uap.1", "enabled", path), want: registryCollision},
-		{name: "unrelated", body: entry("other", "9.9.9", "enabled", path), owned: true, want: registryClear},
-		{name: "disabled", body: entry("demo", "1.7.0-uap.1", "disabled", path), owned: true, want: registryIndeterminate},
-		{name: "wrong version", body: entry("demo", "1.7.0-uap.0", "enabled", path), owned: true, want: registryIndeterminate},
-		{name: "wrong path", body: entry("demo", "1.7.0-uap.1", "enabled", filepath.Join(t.TempDir(), "other")), owned: true, want: registryIndeterminate},
-		{name: "dot segment path", body: entry("demo", "1.7.0-uap.1", "enabled", filepath.Dir(path)+string(filepath.Separator)+"alias"+string(filepath.Separator)+".."+string(filepath.Separator)+filepath.Base(path)), owned: true, want: registryIndeterminate},
-		{name: "duplicate", body: entry("demo", "1.7.0-uap.1", "enabled", path) + strings.TrimPrefix(entry("demo", "1.7.0-uap.1", "enabled", path), header), owned: true, want: registryIndeterminate},
-		{name: "missing from", body: header + "  • demo@" + marketplace + " (v1.7.0-uap.1) (enabled)\n", owned: true, want: registryIndeterminate},
-		{name: "extra suffix", body: entry("demo", "1.7.0-uap.1", "enabled", path) + "unexpected\n", owned: true, want: registryIndeterminate},
-		{name: "ansi prefix", body: "\x1b[32m" + entry("demo", "1.7.0-uap.1", "enabled", path), owned: true, want: registryIndeterminate},
-	}
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			if got := copilotRegistryFindingAt([]byte(test.body), "demo", marketplace, "1.7.0-uap.1", path, test.owned); got != test.want {
-				t.Fatalf("finding=%d want=%d", got, test.want)
 			}
 		})
 	}
@@ -365,11 +319,11 @@ func TestNativeIdentityCopilotAcceptsExactLiveManagedRegistration(t *testing.T) 
 		t.Fatal(err)
 	}
 	writeIdentityFile(t, filepath.Join(plan.ActivePath, "plugin.json"), `{"name":"demo"}`)
-	marketplace := managedMarketplaceName(plan.PhysicalArtifactID)
+	marketplace := shared.ManagedMarketplaceName(plan.PhysicalArtifactID)
 	managed := &domain.ClientBinding{TargetLocator: plan.ActivePath, NativeObjects: []domain.NativeObjectOwnership{{Kind: "managed_package_directory", ManagedDigest: "sha256:owned"}}}
 	listing := copilotLiveHeader + "\n  • demo@" + marketplace + " (v1.7.0-uap.1) (enabled)\n      from " + plan.ActivePath + "\n"
 	runner := &identityRunner{result: legacyports.CommandResult{Stdout: []byte(listing)}}
-	observation, err := (NativeIdentityObserver{Runner: runner, Stager: acceptingPackageVerifier{}}).ObserveNativeIdentity(
+	observation, err := (testObserver(NativeIdentityObserver{Runner: runner, Stager: acceptingPackageVerifier{}})).ObserveNativeIdentity(
 		context.Background(), domain.DetectedClient{ClientID: domain.ClientCopilot}, plan, managed,
 	)
 	if err != nil || observation.State != domain.NativeIdentityManaged || !observation.NativeDiscoveryReconciled {
@@ -384,11 +338,11 @@ func TestNativeIdentityObservationExposesReceiptAndExactDiscovery(t *testing.T) 
 		t.Fatal(err)
 	}
 	writeIdentityFile(t, filepath.Join(plan.ActivePath, "plugin.json"), `{"name":"demo"}`)
-	marketplace := managedMarketplaceName(plan.PhysicalArtifactID)
+	marketplace := shared.ManagedMarketplaceName(plan.PhysicalArtifactID)
 	digest := "sha256:owned"
 	managed := &domain.ClientBinding{NativeObjects: []domain.NativeObjectOwnership{{Kind: "managed_package_directory", ManagedDigest: digest}}}
 	runner := &identityRunner{result: legacyports.CommandResult{Stdout: []byte("Installed plugins:\n  • demo@" + marketplace + " (v1.0.0)\n")}}
-	observation, err := (NativeIdentityObserver{Runner: runner, Stager: acceptingPackageVerifier{}}).ObserveNativeIdentity(context.Background(), domain.DetectedClient{ClientID: domain.ClientCopilot}, plan, managed)
+	observation, err := (testObserver(NativeIdentityObserver{Runner: runner, Stager: acceptingPackageVerifier{}})).ObserveNativeIdentity(context.Background(), domain.DetectedClient{ClientID: domain.ClientCopilot}, plan, managed)
 	if err != nil || observation.State != domain.NativeIdentityManaged || !observation.ReceiptReconciled || !observation.NativeDiscoveryReconciled || observation.NativeDiscoveryState != domain.NativeIdentityManaged {
 		t.Fatalf("observation = %+v, err = %v", observation, err)
 	}
@@ -398,9 +352,9 @@ func TestNativeIdentityBoundsHungAuthoritativeDiscovery(t *testing.T) {
 	plan := identityPlan(filepath.Join(t.TempDir(), "prepared"))
 	plan.NativeRegistryExecutable = "/test/bin/copilot"
 	returned := make(chan struct{})
-	observation, err := (NativeIdentityObserver{
+	observation, err := (testObserver(NativeIdentityObserver{
 		Runner: blockingIdentityRunner{returned: returned}, DiscoveryTimeout: 10 * time.Millisecond,
-	}).ObserveNativeIdentity(context.Background(), domain.DetectedClient{ClientID: domain.ClientCopilot}, plan, nil)
+	})).ObserveNativeIdentity(context.Background(), domain.DetectedClient{ClientID: domain.ClientCopilot}, plan, nil)
 	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("err = %v, want deadline exceeded", err)
 	}
@@ -429,11 +383,11 @@ func TestNativeIdentityPreservesNativeDiscoveryWhenPreparedRegistryBlocksOverall
 			plan := identityPlan(filepath.Join(t.TempDir(), "prepared"))
 			plan.NativeRegistryExecutable = "/test/bin/copilot"
 			writeIdentityFile(t, filepath.Join(plan.TargetRoot, "foreign", "plugin.json"), test.manifest)
-			marketplace := managedMarketplaceName(plan.PhysicalArtifactID)
+			marketplace := shared.ManagedMarketplaceName(plan.PhysicalArtifactID)
 			managed := &domain.ClientBinding{}
 			runner := &identityRunner{result: legacyports.CommandResult{Stdout: []byte("Installed plugins:\n  • demo@" + marketplace + " (v1.0.0)\n")}}
 
-			observation, err := (NativeIdentityObserver{Runner: runner}).ObserveNativeIdentity(context.Background(), domain.DetectedClient{ClientID: domain.ClientCopilot}, plan, managed)
+			observation, err := (testObserver(NativeIdentityObserver{Runner: runner})).ObserveNativeIdentity(context.Background(), domain.DetectedClient{ClientID: domain.ClientCopilot}, plan, managed)
 			if (err != nil) != test.wantError {
 				t.Fatalf("err = %v, want error %t", err, test.wantError)
 			}
@@ -467,7 +421,7 @@ func TestNativeIdentityManualRemoteAndUnknownSharedBackendsFailClosed(t *testing
 			}
 		}
 		plan.NativeRegistryRoot = test.root
-		observation, err := (NativeIdentityObserver{}).ObserveNativeIdentity(context.Background(), domain.DetectedClient{ClientID: test.client}, plan, nil)
+		observation, err := (testObserver(NativeIdentityObserver{})).ObserveNativeIdentity(context.Background(), domain.DetectedClient{ClientID: test.client}, plan, nil)
 		if err != nil || observation.State != domain.NativeIdentityIndeterminate {
 			t.Fatalf("%s observation = %+v, err = %v", test.client, observation, err)
 		}
@@ -480,7 +434,7 @@ func TestNativeIdentityKiroReadsGlobalMCPRegistry(t *testing.T) {
 	plan := identityPlan(filepath.Join(t.TempDir(), "prepared"))
 	plan.NativeRegistryRoot = configRoot
 	plan.Components = []domain.ComponentDecision{{Kind: domain.ComponentMCPServer, Name: "docs", Support: domain.SupportNative}}
-	observation, err := (NativeIdentityObserver{}).ObserveNativeIdentity(context.Background(), domain.DetectedClient{ClientID: domain.ClientKiro}, plan, nil)
+	observation, err := (testObserver(NativeIdentityObserver{})).ObserveNativeIdentity(context.Background(), domain.DetectedClient{ClientID: domain.ClientKiro}, plan, nil)
 	if err != nil || observation.State != domain.NativeIdentityUnmanaged {
 		t.Fatalf("observation = %+v, err = %v", observation, err)
 	}
@@ -492,9 +446,62 @@ func TestNativeIdentityKiroManualPowerAuthorizesOnlyLocalPreparation(t *testing.
 	plan.NativeRegistryRoot = configRoot
 	plan.Components = []domain.ComponentDecision{{Kind: domain.ComponentSkill, Name: "docs", Support: domain.SupportNative}}
 
-	observation, err := (NativeIdentityObserver{}).ObserveNativeIdentity(context.Background(), domain.DetectedClient{ClientID: domain.ClientKiro}, plan, nil)
+	observation, err := (testObserver(NativeIdentityObserver{})).ObserveNativeIdentity(context.Background(), domain.DetectedClient{ClientID: domain.ClientKiro}, plan, nil)
 	if err != nil || observation.State != domain.NativeIdentityAbsent {
 		t.Fatalf("observation = %+v, err = %v", observation, err)
+	}
+}
+
+func TestNativeIdentityClineReadsGlobalSkillAndMCPRegistry(t *testing.T) {
+	configRoot := filepath.Join(t.TempDir(), ".cline")
+	if err := os.MkdirAll(filepath.Join(configRoot, "skills", "docs"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	plan := identityPlan(filepath.Join(t.TempDir(), "prepared"))
+	plan.NativeRegistryRoot = configRoot
+	plan.Components = []domain.ComponentDecision{{Kind: domain.ComponentSkill, Name: "docs", Support: domain.SupportNative}}
+	observation, err := (testObserver(NativeIdentityObserver{})).ObserveNativeIdentity(context.Background(), domain.DetectedClient{ClientID: domain.ClientCline}, plan, nil)
+	if err != nil || observation.State != domain.NativeIdentityUnmanaged {
+		t.Fatalf("skill observation = %+v, err = %v", observation, err)
+	}
+
+	writeIdentityFile(t, filepath.Join(configRoot, "data", "settings", "cline_mcp_settings.json"), `{"mcpServers":{"docs":{"transport":{"type":"stdio","command":"foreign"}}}}`)
+	plan.Components = []domain.ComponentDecision{{Kind: domain.ComponentMCPServer, Name: "docs", Support: domain.SupportNative}}
+	observation, err = (testObserver(NativeIdentityObserver{})).ObserveNativeIdentity(context.Background(), domain.DetectedClient{ClientID: domain.ClientCline}, plan, nil)
+	if err != nil || observation.State != domain.NativeIdentityUnmanaged {
+		t.Fatalf("MCP observation = %+v, err = %v", observation, err)
+	}
+}
+
+func TestNativeIdentityOpenCodeReadsGlobalSkillAndMCPRegistry(t *testing.T) {
+	configRoot := filepath.Join(t.TempDir(), "opencode")
+	if err := os.MkdirAll(filepath.Join(configRoot, "skills", "docs"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	plan := identityPlan(filepath.Join(t.TempDir(), "prepared"))
+	plan.NativeRegistryRoot = configRoot
+	plan.Components = []domain.ComponentDecision{{Kind: domain.ComponentSkill, Name: "docs", Support: domain.SupportNative}}
+	observation, err := (testObserver(NativeIdentityObserver{})).ObserveNativeIdentity(context.Background(), domain.DetectedClient{ClientID: domain.ClientOpenCode}, plan, nil)
+	if err != nil || observation.State != domain.NativeIdentityUnmanaged {
+		t.Fatalf("skill observation = %+v, err = %v", observation, err)
+	}
+
+	writeIdentityFile(t, filepath.Join(configRoot, "opencode.json"), `{"mcp":{"docs":{"type":"remote","url":"https://foreign.test"}}}`)
+	plan.Components = []domain.ComponentDecision{{Kind: domain.ComponentMCPServer, Name: "docs", Support: domain.SupportNative}}
+	observation, err = (testObserver(NativeIdentityObserver{})).ObserveNativeIdentity(context.Background(), domain.DetectedClient{ClientID: domain.ClientOpenCode}, plan, nil)
+	if err != nil || observation.State != domain.NativeIdentityUnmanaged {
+		t.Fatalf("MCP observation = %+v, err = %v", observation, err)
+	}
+}
+
+func TestNativeIdentityNativeConfigEmptyRootIsIndeterminate(t *testing.T) {
+	plan := identityPlan(filepath.Join(t.TempDir(), "prepared"))
+	plan.Components = []domain.ComponentDecision{{Kind: domain.ComponentMCPServer, Name: "docs", Support: domain.SupportNative}}
+	for _, client := range []domain.ClientID{domain.ClientCline, domain.ClientOpenCode, domain.ClientGemini, domain.ClientWindsurf} {
+		observation, err := (testObserver(NativeIdentityObserver{})).ObserveNativeIdentity(context.Background(), domain.DetectedClient{ClientID: client}, plan, nil)
+		if err != nil || observation.State != domain.NativeIdentityIndeterminate {
+			t.Fatalf("%s empty-root observation = %+v, err = %v", client, observation, err)
+		}
 	}
 }
 

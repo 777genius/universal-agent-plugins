@@ -1,0 +1,28 @@
+{
+  "Digests": {
+    ".agentplugins-runtime/": "dir",
+    ".agentplugins-runtime/bin/": "dir",
+    ".agentplugins-runtime/bin/run": "a8076d3d28d21e02012b20eaf7dbf75409a6277134439025f282e368e3305abf",
+    ".agentplugins-runtime/mcp.json": "8cf2989c891e877c31d89c5ee099ddffd18664ef1e0fd4e7a75359900b476197",
+    ".agentplugins-runtime/plugin.json": "a500ae72e02274b9e57d095be7788e0651eb8c4212d9fc17feeabad3b099196f",
+    ".agentplugins-runtime/skills/": "dir",
+    ".agentplugins-runtime/skills/good/": "dir",
+    ".agentplugins-runtime/skills/good/SKILL.md": "3c58ae530ad65c3d3a468eb051e1c761687903c4f722529196d369d3d74a40ce",
+    ".claude-plugin/": "dir",
+    ".claude-plugin/plugin.json": "5b8492443dfc8ca6036503d67b30fc69cedcbea583e5cfb6ab0f44ccf06485b2",
+    ".mcp.json": "6b97b88f0700eb0584c7b62f92ad909912c211f2af38d326591ecc08ee1e7a8d"
+  },
+  "Objects": [
+    {
+      "BeforeDigest": "",
+      "Kind": "managed_package_directory",
+      "LogicalName": "demo",
+      "ManagedDigest": "${ARTIFACT}",
+      "ObjectID": "package:claude:demo-0123456789ab",
+      "Path": "${ACTIVE}",
+      "ProtectionClass": "managed",
+      "SourceRelative": "",
+      "UserModified": false
+    }
+  ]
+}

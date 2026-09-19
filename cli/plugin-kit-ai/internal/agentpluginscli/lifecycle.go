@@ -10,10 +10,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
-	clientplanner "github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/planner"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/usecase"
 	"github.com/spf13/cobra"
+
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/usecase"
 )
 
 func newUpdateCommand(app App, opts *options) *cobra.Command {
@@ -608,11 +608,15 @@ func renderLegacyRemovePlan(writer io.Writer, result usecase.LegacyRemoveResult)
 }
 
 func lifecycleService(app App, detected map[domain.ClientID]domain.DetectedClient) usecase.Service {
-	planner := clientplanner.Planner{ManagedRoot: app.ManagedRoot, Detected: detected}
 	service := app.Lifecycle
 	service.StateStore = app.StateStore
-	service.Planner = planner
-	service.Targets = planner
+	if app.Planner != nil {
+		service.Planner = app.Planner
+	}
+	if app.Targets != nil {
+		service.Targets = app.Targets
+	}
+	service.Detected = detected
 	return service
 }
 
@@ -719,7 +723,7 @@ func selectBoundClient(
 		if !ok {
 			client = domain.DetectedClient{ClientID: clientID, DisplayName: string(clientID), Status: domain.DetectionNotDetected}
 		}
-		if requireDetected && client.Status != domain.DetectionDetected && clientID != domain.ClientChatGPT {
+		if requireDetected && client.Status != domain.DetectionDetected && !plansWithoutHostPresence(clientID) {
 			return domain.DetectedClient{}, fmt.Errorf("target %q is no longer detected; remove remains available", clientID)
 		}
 		return client, nil
@@ -792,7 +796,7 @@ func renderUpdateResult(writer io.Writer, format string, envelope domain.Package
 		return nil
 	}
 	if result.Mutated && fullyInstalled(result.Activation) {
-		if result.Plan.ClientID == domain.ClientOpenCode && len(domain.SelectedMCPNames(result.Plan)) > 0 {
+		if reportsMCPToolNamespaceCollision(result.Plan.ClientID) && len(domain.SelectedMCPNames(result.Plan)) > 0 {
 			_, _ = fmt.Fprintln(writer, "OpenCode MCP configuration updated and verified.")
 		} else {
 			_, _ = fmt.Fprintln(writer, "Updated and verified for the selected client.")

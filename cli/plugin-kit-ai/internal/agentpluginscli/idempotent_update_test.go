@@ -8,6 +8,7 @@ import (
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/providers"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/providerstest"
 	legacyports "github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
 )
 
@@ -88,7 +89,7 @@ func TestImmediateSharedCopilotUpdateAcceptsExactLiveRegistration(t *testing.T) 
 	copilot.ExecutablePath = "/test/bin/copilot"
 	fixture := newCLIFixture(t, []domain.DetectedClient{copilot, fixtureClient(t, domain.ClientVSCode)})
 	runner := &liveCopilotRunner{}
-	fixture.app.Lifecycle.Activator = providers.Activator{Runner: runner}
+	fixture.app.Lifecycle.Activator = providerstest.NewActivator(providers.Activator{Runner: runner})
 	plugin := writeCLIPlugin(t)
 	if _, _, err := fixture.execute(false, "add", plugin, "--target", "copilot,vscode", "--format", "json"); err != nil {
 		t.Fatal(err)

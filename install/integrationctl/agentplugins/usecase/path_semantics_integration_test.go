@@ -12,13 +12,14 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/managedstdio"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/providers"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/providerstest"
 )
 
 func TestPortableDotPathsInstallAndExactRepair(t *testing.T) {
 	for _, cwd := range []string{"./", "./data/..", "${PLUGIN_ROOT}"} {
 		t.Run(cwd, func(t *testing.T) {
 			service, store, _ := serviceFixture(t)
-			service.NativeObserver = providers.NativeIdentityObserver{Stager: service.Stager}
+			service.NativeObserver = providerstest.NewObserver(providers.NativeIdentityObserver{Stager: service.Stager})
 			client := domain.DetectedClient{ClientID: domain.ClientOpenCode, Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), "opencode")}
 			input := addInput(t, client, "https://example.test/portable-dot-paths")
 			root := input.Envelope.SnapshotRoot
@@ -103,11 +104,11 @@ func TestClaudeBundledDotPathsInstallAndRepair(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	service.Stager = providers.Stager{LauncherSource: source}
+	service.Stager = providerstest.NewStager(providers.Stager{LauncherSource: source})
 	client := domain.DetectedClient{ClientID: domain.ClientClaude, Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), "claude"), ExecutablePath: "/test/bin/claude"}
 	runner := &fakeClaudeLifecycleRunner{configRoot: client.ConfigRoot}
-	service.Activator = providers.Activator{Runner: runner}
-	service.NativeObserver = providers.NativeIdentityObserver{Runner: runner, Stager: service.Stager}
+	service.Activator = providerstest.NewActivator(providers.Activator{Runner: runner})
+	service.NativeObserver = providerstest.NewObserver(providers.NativeIdentityObserver{Runner: runner, Stager: service.Stager})
 	input := addInput(t, client, "https://example.test/claude-bundled-paths")
 	input.BackendExecutable = client.ExecutablePath
 	root := input.Envelope.SnapshotRoot

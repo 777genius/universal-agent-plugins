@@ -12,7 +12,7 @@ import (
 
 func TestPlannerNegotiatesPartialSupportWithoutRejectingSupportedComponents(t *testing.T) {
 	t.Parallel()
-	planner := Planner{ManagedRoot: t.TempDir()}
+	planner := testPlanner(Planner{ManagedRoot: t.TempDir()})
 	envelope := testEnvelope()
 	client := detectedClient(domain.ClientCodex, filepath.Join(t.TempDir(), ".codex"))
 	plan, err := planner.Plan(context.Background(), envelope, client, domain.ScopeUser, "demo-0123456789ab")
@@ -51,7 +51,7 @@ func TestPlannerAuthenticationRequiresAffirmativePerClientCatalogEvidence(t *tes
 		name, test := name, test
 		t.Run(name, func(t *testing.T) {
 			envelope := domain.PackageEnvelope{Manifest: domain.PluginManifest{Name: "metadata-only"}, CatalogEvidence: test.evidence}
-			plan, err := (Planner{ManagedRoot: t.TempDir()}).Plan(context.Background(), envelope, client, domain.ScopeUser, "demo-0123456789ab")
+			plan, err := testPlanner(Planner{ManagedRoot: t.TempDir()}).Plan(context.Background(), envelope, client, domain.ScopeUser, "demo-0123456789ab")
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -68,7 +68,7 @@ func TestPlannerFailsClosedWhenPinnedCatalogEvidenceOmitsSelectedClient(t *testi
 	envelope.CatalogEvidence = &domain.CatalogEvidence{Compatibility: map[string]domain.CatalogCompatibility{
 		"codex": {Package: "projected", Verification: "tested", Authentication: domain.AuthenticationRequirementNotRequired},
 	}}
-	plan, err := (Planner{ManagedRoot: t.TempDir()}).Plan(
+	plan, err := testPlanner(Planner{ManagedRoot: t.TempDir()}).Plan(
 		context.Background(), envelope,
 		detectedClient(domain.ClientCursor, filepath.Join(t.TempDir(), ".cursor")),
 		domain.ScopeUser, "demo-0123456789ab",
@@ -88,7 +88,7 @@ func TestPlannerKeepsManualVerificationGuidanceForUntrustedEvidence(t *testing.T
 		"cursor": {Package: "native", Verification: "not_tested", Authentication: domain.AuthenticationRequirementNotRequired,
 			Evidence: []domain.DirectoryEvidence{{Level: "runtime", Outcome: "passed"}}},
 	}}
-	plan, err := (Planner{ManagedRoot: t.TempDir()}).Plan(context.Background(), envelope,
+	plan, err := testPlanner(Planner{ManagedRoot: t.TempDir()}).Plan(context.Background(), envelope,
 		detectedClient(domain.ClientCursor, filepath.Join(t.TempDir(), ".cursor")), domain.ScopeUser, "demo-0123456789ab")
 	if err != nil {
 		t.Fatal(err)
@@ -113,7 +113,7 @@ func TestPlannerSuppressesManualVerificationOnlyForTrustedRuntimePass(t *testing
 			envelope.CatalogEvidence = &domain.CatalogEvidence{Compatibility: map[string]domain.CatalogCompatibility{
 				"cursor": {Package: "native", Verification: "tested", Authentication: domain.AuthenticationRequirementNotRequired, Evidence: []domain.DirectoryEvidence{trusted(level)}},
 			}}
-			plan, err := (Planner{ManagedRoot: t.TempDir()}).Plan(context.Background(), envelope, client, domain.ScopeUser, "demo-0123456789ab")
+			plan, err := testPlanner(Planner{ManagedRoot: t.TempDir()}).Plan(context.Background(), envelope, client, domain.ScopeUser, "demo-0123456789ab")
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -129,7 +129,7 @@ func TestPlannerCarriesNonFatalLoaderDiagnosticsToPlan(t *testing.T) {
 	t.Parallel()
 	envelope := testEnvelope()
 	envelope.Diagnostics = []domain.Diagnostic{{Severity: domain.SeverityWarning, Boundary: domain.BoundaryPlugin, Code: "plugin_unknown_field", Message: "future field preserved"}}
-	plan, err := (Planner{ManagedRoot: t.TempDir()}).Plan(context.Background(), envelope, detectedClient(domain.ClientCursor, filepath.Join(t.TempDir(), ".cursor")), domain.ScopeUser, "demo-0123456789ab")
+	plan, err := testPlanner(Planner{ManagedRoot: t.TempDir()}).Plan(context.Background(), envelope, detectedClient(domain.ClientCursor, filepath.Join(t.TempDir(), ".cursor")), domain.ScopeUser, "demo-0123456789ab")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -141,7 +141,7 @@ func TestPlannerCarriesNonFatalLoaderDiagnosticsToPlan(t *testing.T) {
 func TestPlannerUsesNativeCursorTargetAndDoesNotExposeItInJSON(t *testing.T) {
 	t.Parallel()
 	config := filepath.Join(t.TempDir(), ".cursor")
-	planner := Planner{ManagedRoot: t.TempDir()}
+	planner := testPlanner(Planner{ManagedRoot: t.TempDir()})
 	plan, err := planner.Plan(context.Background(), testEnvelope(), detectedClient(domain.ClientCursor, config), domain.ScopeUser, "demo-0123456789ab")
 	if err != nil {
 		t.Fatal(err)
@@ -165,7 +165,7 @@ func TestPlannerUsesNativeCursorTargetAndDoesNotExposeItInJSON(t *testing.T) {
 func TestPlannerPromotesVSCodeToReadyWhenCopilotIsDetected(t *testing.T) {
 	t.Parallel()
 	client := detectedClient(domain.ClientVSCode, filepath.Join(t.TempDir(), "Code", "User"))
-	withoutBridge := Planner{ManagedRoot: t.TempDir()}
+	withoutBridge := testPlanner(Planner{ManagedRoot: t.TempDir()})
 	manual, err := withoutBridge.Plan(context.Background(), testEnvelope(), client, domain.ScopeUser, "demo-0123456789ab")
 	if err != nil {
 		t.Fatal(err)
@@ -173,12 +173,10 @@ func TestPlannerPromotesVSCodeToReadyWhenCopilotIsDetected(t *testing.T) {
 	if manual.Status != domain.PlanManualActivationRequired || manual.PackageMode != domain.PackagePrepared {
 		t.Fatalf("manual plan = %+v", manual)
 	}
-	withBridge := Planner{
-		ManagedRoot: t.TempDir(),
-		Detected: map[domain.ClientID]domain.DetectedClient{
-			domain.ClientCopilot: {
-				ClientID: domain.ClientCopilot, Status: domain.DetectionDetected, ConfigRoot: "/test/home/.copilot", ExecutablePath: "/test/bin/copilot",
-			},
+	withBridge := testPlanner(Planner{ManagedRoot: t.TempDir()})
+	withBridge.Detected = map[domain.ClientID]domain.DetectedClient{
+		domain.ClientCopilot: {
+			ClientID: domain.ClientCopilot, Status: domain.DetectionDetected, ConfigRoot: "/test/home/.copilot", ExecutablePath: "/test/bin/copilot",
 		},
 	}
 	bridged, err := withBridge.Plan(context.Background(), testEnvelope(), client, domain.ScopeUser, "demo-0123456789ab")
@@ -197,7 +195,7 @@ func TestPlannerPromotesDetectedCopilotExecutableToReady(t *testing.T) {
 	t.Parallel()
 	client := detectedClient(domain.ClientCopilot, filepath.Join(t.TempDir(), ".copilot"))
 	client.ExecutablePath = "/test/bin/copilot"
-	plan, err := (Planner{ManagedRoot: t.TempDir()}).Plan(
+	plan, err := testPlanner(Planner{ManagedRoot: t.TempDir()}).Plan(
 		context.Background(), testEnvelope(), client, domain.ScopeUser, "demo-0123456789ab",
 	)
 	if err != nil {
@@ -224,7 +222,7 @@ func TestDetectedPhysicalClientUsesRealSharedSurfaceIdentity(t *testing.T) {
 
 func TestPlannerFailsClosedForUndetectedClientAndUnsupportedScope(t *testing.T) {
 	t.Parallel()
-	planner := Planner{ManagedRoot: t.TempDir()}
+	planner := testPlanner(Planner{ManagedRoot: t.TempDir()})
 	client := domain.DetectedClient{ClientID: domain.ClientCursor, Status: domain.DetectionNotDetected}
 	plan, err := planner.Plan(context.Background(), testEnvelope(), client, domain.ScopeUser, "demo-0123456789ab")
 	if err != nil {
@@ -250,7 +248,7 @@ func TestChatGPTRemoteTargetSupportsSkillsWithoutDesktopDetection(t *testing.T) 
 		Skills:   map[string]domain.Skill{"docs": {Name: "docs"}},
 	}
 	client := domain.DetectedClient{ClientID: domain.ClientChatGPT, Status: domain.DetectionNotDetected}
-	plan, err := (Planner{ManagedRoot: t.TempDir()}).Plan(context.Background(), envelope, client, domain.ScopeUser, "skills-only-0123456789ab")
+	plan, err := testPlanner(Planner{ManagedRoot: t.TempDir()}).Plan(context.Background(), envelope, client, domain.ScopeUser, "skills-only-0123456789ab")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -309,7 +307,7 @@ func TestChatGPTMCPFailsClosedWithoutValidAppBinding(t *testing.T) {
 			"docs": {Name: "docs", Type: "streamable-http"},
 		}},
 	}
-	plan, err := (Planner{ManagedRoot: t.TempDir()}).Plan(context.Background(), envelope, domain.DetectedClient{ClientID: domain.ClientChatGPT}, domain.ScopeUser, "remote-mcp-0123456789ab")
+	plan, err := testPlanner(Planner{ManagedRoot: t.TempDir()}).Plan(context.Background(), envelope, domain.DetectedClient{ClientID: domain.ClientChatGPT}, domain.ScopeUser, "remote-mcp-0123456789ab")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -329,7 +327,7 @@ func TestChatGPTMCPFailsClosedWhenAppAliasDoesNotMapServer(t *testing.T) {
 			"different": {Alias: "different", ID: "plugin_asdk_app_different_123"},
 		}},
 	}
-	plan, err := (Planner{ManagedRoot: t.TempDir()}).Plan(context.Background(), envelope, domain.DetectedClient{ClientID: domain.ClientChatGPT}, domain.ScopeUser, "remote-mcp-0123456789ab")
+	plan, err := testPlanner(Planner{ManagedRoot: t.TempDir()}).Plan(context.Background(), envelope, domain.DetectedClient{ClientID: domain.ClientChatGPT}, domain.ScopeUser, "remote-mcp-0123456789ab")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -349,7 +347,7 @@ func TestChatGPTProjectsMCPThroughRegisteredAppBinding(t *testing.T) {
 			"docs": {Alias: "docs", ID: "asdk_app_docs_123"},
 		}},
 	}
-	plan, err := (Planner{ManagedRoot: t.TempDir()}).Plan(context.Background(), envelope, domain.DetectedClient{ClientID: domain.ClientChatGPT}, domain.ScopeUser, "remote-mcp-0123456789ab")
+	plan, err := testPlanner(Planner{ManagedRoot: t.TempDir()}).Plan(context.Background(), envelope, domain.DetectedClient{ClientID: domain.ClientChatGPT}, domain.ScopeUser, "remote-mcp-0123456789ab")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -376,7 +374,7 @@ func TestPlannerRejectsMetadataOnlyProjectionWhenAllDeclaredComponentsAreInvalid
 				Manifest:    domain.PluginManifest{Name: "broken"},
 				Diagnostics: []domain.Diagnostic{diagnostic},
 			}
-			plan, err := (Planner{ManagedRoot: t.TempDir()}).Plan(
+			plan, err := testPlanner(Planner{ManagedRoot: t.TempDir()}).Plan(
 				context.Background(), envelope,
 				detectedClient(domain.ClientCursor, filepath.Join(t.TempDir(), ".cursor")),
 				domain.ScopeUser, "broken-0123456789ab",
@@ -419,7 +417,7 @@ func TestPlannerDoesNotAppendActivationOrAuthenticationGuidanceWhenUnsupported(t
 	for name, envelope := range tests {
 		name, envelope := name, envelope
 		t.Run(name, func(t *testing.T) {
-			plan, err := (Planner{ManagedRoot: t.TempDir()}).Plan(
+			plan, err := testPlanner(Planner{ManagedRoot: t.TempDir()}).Plan(
 				context.Background(), envelope,
 				detectedClient(domain.ClientCursor, filepath.Join(t.TempDir(), ".cursor")),
 				domain.ScopeUser, "broken-0123456789ab",

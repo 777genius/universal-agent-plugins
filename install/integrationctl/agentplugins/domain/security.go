@@ -93,6 +93,16 @@ type SecurityEvaluationInput struct {
 }
 
 func (assessment SecurityAssessment) Validate(requirement SecurityRequirement, subject SecuritySubject) error {
+	if err := assessment.validateIdentity(requirement, subject); err != nil {
+		return err
+	}
+	if err := assessment.validateCounts(); err != nil {
+		return err
+	}
+	return assessment.validateFindings()
+}
+
+func (assessment SecurityAssessment) validateIdentity(requirement SecurityRequirement, subject SecuritySubject) error {
 	if assessment.SchemaVersion != SecurityReportSchemaVersion {
 		return fmt.Errorf("unsupported security report schema %d", assessment.SchemaVersion)
 	}
@@ -105,6 +115,10 @@ func (assessment SecurityAssessment) Validate(requirement SecurityRequirement, s
 	if !securityDigestPattern.MatchString(assessment.Subject.TreeDigest) || !securityDigestPattern.MatchString(assessment.Subject.ManifestDigest) || !securityDigestPattern.MatchString(assessment.Policy.Digest) || !securityDigestPattern.MatchString(assessment.ReportDigest) {
 		return errors.New("security assessment contains an invalid digest")
 	}
+	return nil
+}
+
+func (assessment SecurityAssessment) validateCounts() error {
 	if assessment.Counts.Blocking < 0 || assessment.Counts.Warnings < 0 || assessment.Counts.Total < 0 || assessment.Counts.Total != assessment.Counts.Blocking+assessment.Counts.Warnings || assessment.ScannedFiles < 0 {
 		return errors.New("security assessment contains invalid counts")
 	}
@@ -117,6 +131,10 @@ func (assessment SecurityAssessment) Validate(requirement SecurityRequirement, s
 	if assessment.Outcome != expected {
 		return errors.New("security assessment outcome does not match its counts")
 	}
+	return nil
+}
+
+func (assessment SecurityAssessment) validateFindings() error {
 	projectedBlocking, projectedWarnings := 0, 0
 	for _, finding := range assessment.Findings {
 		if strings.TrimSpace(finding.Code) == "" || strings.TrimSpace(finding.Message) == "" || (finding.Disposition != "blocking" && finding.Disposition != "warning") {

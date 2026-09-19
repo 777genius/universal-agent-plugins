@@ -35,6 +35,11 @@ jobs:
           # incompatible with coverage instrumentation itself.
           go test -count=1 -timeout=20m -skip '^TestReleaseCompletionProcessStderr$' -covermode=atomic -coverprofile=coverage/cli.out ./cli/plugin-kit-ai/...
           go test -count=1 -timeout=20m -skip '^TestExecutableVersionProbeIsSanitizedAndIsolated$' -covermode=atomic -coverprofile=coverage/integrationctl.out ./install/integrationctl/...
+          # Nested module: do not use a parent-relative ./agentplugins/... glob.
+          # That pattern needs go.work; GOWORK=off fails loud instead of covering
+          # the child. cd keeps this job aligned with CodeQL / release / govulncheck.
+          agentplugins_cover="${PWD}/coverage/agentplugins.out"
+          (cd install/integrationctl/agentplugins && go test -count=1 -timeout=20m -skip '^TestExecutableVersionProbeIsSanitizedAndIsolated$' -covermode=atomic -coverprofile="$agentplugins_cover" ./...)
           go test -count=1 -timeout=20m -covermode=atomic -coverprofile=coverage/plugininstall.out ./install/plugininstall/...
           go test -count=1 -timeout=20m -covermode=atomic -coverprofile=coverage/sdk.out ./sdk/...
 
@@ -43,6 +48,6 @@ jobs:
         with:
           use_oidc: true
           version: v11.3.1
-          files: coverage/root.out,coverage/cli.out,coverage/integrationctl.out,coverage/plugininstall.out,coverage/sdk.out
+          files: coverage/root.out,coverage/cli.out,coverage/integrationctl.out,coverage/agentplugins.out,coverage/plugininstall.out,coverage/sdk.out
           disable_search: true
           fail_ci_if_error: true

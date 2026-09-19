@@ -38,7 +38,8 @@ func TestStableReleaseRequiresVerifiedReproducibleBootstrapBeforeBuild(t *testin
 		"GOTOOLCHAIN: local",
 		"GOFLAGS: -buildvcs=false -p=1",
 		"go run ./cmd/agentplugins/bootstrapgen",
-		"(cd install/integrationctl && go test ./agentplugins/... ./adapters/dirswap ./adapters/source)",
+		"(cd install/integrationctl/agentplugins && go test ./...)",
+		"(cd install/integrationctl && go test ./adapters/dirswap ./adapters/source)",
 		"(cd cli/plugin-kit-ai && go test ./internal/agentpluginscli ./cmd/agentplugins/...)",
 		"Prove production binary excludes Directory conformance overrides",
 		"go test ./cmd/agentplugins -run '^TestReleaseBuiltBinaryHasNoConformanceEnvironmentOverride$' -count=1",
@@ -85,7 +86,7 @@ type releaseWorkflow struct {
 		Dispatch any `yaml:"workflow_dispatch"`
 	} `yaml:"on"`
 	Permissions map[string]string `yaml:"permissions"`
-	Jobs map[string]struct {
+	Jobs        map[string]struct {
 		If          string            `yaml:"if"`
 		Needs       any               `yaml:"needs"`
 		Environment any               `yaml:"environment"`
@@ -180,19 +181,19 @@ func TestCurrentReleaseGraphsAndConcurrency(t *testing.T) {
 
 func validateNativeReleaseBoundary(workflow releaseWorkflow) error {
 	expectedNeeds := map[string][]string{
-		"validate": nil,
-		"build": {"validate"},
-		"stage-draft": {"validate", "build"},
-		"platform-proof": {"validate", "stage-draft"},
-		"verified-draft": {"validate", "stage-draft", "platform-proof"},
+		"validate":        nil,
+		"build":           {"validate"},
+		"stage-draft":     {"validate", "build"},
+		"platform-proof":  {"validate", "stage-draft"},
+		"verified-draft":  {"validate", "stage-draft", "platform-proof"},
 		"promote-release": {"validate", "stage-draft", "platform-proof", "verified-draft"},
 	}
 	expectedPermissions := map[string]map[string]string{
-		"validate": {"checks": "read", "contents": "read", "pull-requests": "read"},
-		"build": {"contents": "read"},
-		"stage-draft": {"contents": "write", "id-token": "write", "attestations": "write", "artifact-metadata": "write"},
-		"platform-proof": {"contents": "read", "attestations": "read"},
-		"verified-draft": {"contents": "write", "attestations": "read"},
+		"validate":        {"checks": "read", "contents": "read", "pull-requests": "read"},
+		"build":           {"contents": "read"},
+		"stage-draft":     {"contents": "write", "id-token": "write", "attestations": "write", "artifact-metadata": "write"},
+		"platform-proof":  {"contents": "read", "attestations": "read"},
+		"verified-draft":  {"contents": "write", "attestations": "read"},
 		"promote-release": {"contents": "write", "attestations": "read"},
 	}
 	for name, needs := range expectedNeeds {
@@ -204,7 +205,9 @@ func validateNativeReleaseBoundary(workflow releaseWorkflow) error {
 			return fmt.Errorf("%s permissions", name)
 		}
 		if name == "promote-release" {
-			if job.If != "${{ inputs.publish_release == true }}" { return fmt.Errorf("promotion condition") }
+			if job.If != "${{ inputs.publish_release == true }}" {
+				return fmt.Errorf("promotion condition")
+			}
 		} else if job.If != "" {
 			return fmt.Errorf("%s must use implicit success reachability", name)
 		}
@@ -219,8 +222,12 @@ func validateNativeReleaseBoundary(workflow releaseWorkflow) error {
 	}
 	stageDownload, stageUpload := false, false
 	for _, step := range workflow.Jobs["stage-draft"].Steps {
-		if strings.HasPrefix(step.Uses, "actions/download-artifact@") && step.With["pattern"] == "agentplugins-*" && step.With["merge-multiple"] == true { stageDownload = true }
-		if strings.HasPrefix(step.Uses, "actions/upload-artifact@") && step.With["name"] == "${{ steps.draft.outputs.assets_artifact }}" && step.With["if-no-files-found"] == "error" { stageUpload = true }
+		if strings.HasPrefix(step.Uses, "actions/download-artifact@") && step.With["pattern"] == "agentplugins-*" && step.With["merge-multiple"] == true {
+			stageDownload = true
+		}
+		if strings.HasPrefix(step.Uses, "actions/upload-artifact@") && step.With["name"] == "${{ steps.draft.outputs.assets_artifact }}" && step.With["if-no-files-found"] == "error" {
+			stageUpload = true
+		}
 	}
 	if !stageDownload || !stageUpload || workflow.Jobs["platform-proof"].With["release_assets_artifact"] != "${{ needs.stage-draft.outputs.assets_artifact }}" {
 		return fmt.Errorf("native artifact handoff")
@@ -230,7 +237,9 @@ func validateNativeReleaseBoundary(workflow releaseWorkflow) error {
 
 func TestNativeReleaseFailureReachabilityAndMutationControls(t *testing.T) {
 	workflow := parseReleaseWorkflow(t, "agentplugins-release.yml")
-	if err := validateNativeReleaseBoundary(workflow); err != nil { t.Fatal(err) }
+	if err := validateNativeReleaseBoundary(workflow); err != nil {
+		t.Fatal(err)
+	}
 	for _, status := range []string{"failure", "cancelled", "skipped", ""} {
 		for _, name := range []string{"build", "stage-draft", "platform-proof", "verified-draft", "promote-release"} {
 			// None of these jobs has a status override. GitHub prepends implicit
@@ -243,16 +252,42 @@ func TestNativeReleaseFailureReachabilityAndMutationControls(t *testing.T) {
 	}
 	mutations := map[string]func(*releaseWorkflow){
 		"build needs": func(w *releaseWorkflow) { job := w.Jobs["build"]; job.Needs = nil; w.Jobs["build"] = job },
-		"stage needs": func(w *releaseWorkflow) { job := w.Jobs["stage-draft"]; job.Needs = []any{"build"}; w.Jobs["stage-draft"] = job },
-		"status override": func(w *releaseWorkflow) { job := w.Jobs["verified-draft"]; job.If = "${{ always() }}"; w.Jobs["verified-draft"] = job },
-		"permissions": func(w *releaseWorkflow) { job := w.Jobs["platform-proof"]; job.Permissions = map[string]string{"contents": "write"}; w.Jobs["platform-proof"] = job },
-		"environment": func(w *releaseWorkflow) { job := w.Jobs["promote-release"]; job.Environment = nil; w.Jobs["promote-release"] = job },
-		"artifact": func(w *releaseWorkflow) { job := w.Jobs["stage-draft"]; for i := range job.Steps { if strings.HasPrefix(job.Steps[i].Uses, "actions/upload-artifact@") { job.Steps[i].With["name"] = "mutable" } }; w.Jobs["stage-draft"] = job },
+		"stage needs": func(w *releaseWorkflow) {
+			job := w.Jobs["stage-draft"]
+			job.Needs = []any{"build"}
+			w.Jobs["stage-draft"] = job
+		},
+		"status override": func(w *releaseWorkflow) {
+			job := w.Jobs["verified-draft"]
+			job.If = "${{ always() }}"
+			w.Jobs["verified-draft"] = job
+		},
+		"permissions": func(w *releaseWorkflow) {
+			job := w.Jobs["platform-proof"]
+			job.Permissions = map[string]string{"contents": "write"}
+			w.Jobs["platform-proof"] = job
+		},
+		"environment": func(w *releaseWorkflow) {
+			job := w.Jobs["promote-release"]
+			job.Environment = nil
+			w.Jobs["promote-release"] = job
+		},
+		"artifact": func(w *releaseWorkflow) {
+			job := w.Jobs["stage-draft"]
+			for i := range job.Steps {
+				if strings.HasPrefix(job.Steps[i].Uses, "actions/upload-artifact@") {
+					job.Steps[i].With["name"] = "mutable"
+				}
+			}
+			w.Jobs["stage-draft"] = job
+		},
 	}
 	for name, mutate := range mutations {
 		mutated := parseReleaseWorkflow(t, "agentplugins-release.yml")
 		mutate(&mutated)
-		if validateNativeReleaseBoundary(mutated) == nil { t.Fatalf("negative control accepted %s mutation", name) }
+		if validateNativeReleaseBoundary(mutated) == nil {
+			t.Fatalf("negative control accepted %s mutation", name)
+		}
 	}
 }
 
@@ -261,13 +296,13 @@ func validateNPMReleaseBoundary(workflow releaseWorkflow) error {
 		"prepare": nil, "publish": {"prepare"}, "verify-public": {"prepare", "publish"},
 	}
 	expectedPermissions := map[string]map[string]string{
-		"prepare": {"contents": "read", "attestations": "read"},
-		"publish": {"contents": "read", "id-token": "write"},
+		"prepare":       {"contents": "read", "attestations": "read"},
+		"publish":       {"contents": "read", "id-token": "write"},
 		"verify-public": {"contents": "read", "attestations": "read"},
 	}
 	expectedConditions := map[string]string{
-		"prepare": "${{ github.event_name == 'workflow_dispatch' }}",
-		"publish": "${{ success() && github.event_name == 'workflow_dispatch' && inputs.publish == true && needs.prepare.result == 'success' }}",
+		"prepare":       "${{ github.event_name == 'workflow_dispatch' }}",
+		"publish":       "${{ success() && github.event_name == 'workflow_dispatch' && inputs.publish == true && needs.prepare.result == 'success' }}",
 		"verify-public": "${{ success() && github.event_name == 'workflow_dispatch' && inputs.publish == true && needs.publish.result == 'success' }}",
 	}
 	for _, name := range []string{"prepare", "publish", "verify-public"} {
@@ -306,7 +341,9 @@ func validateNPMReleaseBoundary(workflow releaseWorkflow) error {
 	}
 	requiredOutputs := []string{"version", "commit", "package_name", "tarball_file", "tarball_integrity", "tarball_shasum"}
 	for _, output := range requiredOutputs {
-		if workflow.Jobs["prepare"].Outputs[output] == "" { return fmt.Errorf("prepare output %s", output) }
+		if workflow.Jobs["prepare"].Outputs[output] == "" {
+			return fmt.Errorf("prepare output %s", output)
+		}
 	}
 	verifyBindings := map[string]string{
 		"PACKAGE_NAME": "${{ needs.prepare.outputs.package_name }}", "VERSION": "${{ needs.prepare.outputs.version }}",
@@ -315,9 +352,13 @@ func validateNPMReleaseBoundary(workflow releaseWorkflow) error {
 	}
 	foundBindings := false
 	for _, step := range workflow.Jobs["verify-public"].Steps {
-		if reflect.DeepEqual(step.Env, verifyBindings) { foundBindings = true }
+		if reflect.DeepEqual(step.Env, verifyBindings) {
+			foundBindings = true
+		}
 	}
-	if !foundBindings { return fmt.Errorf("prepare-to-verify output handoff") }
+	if !foundBindings {
+		return fmt.Errorf("prepare-to-verify output handoff")
+	}
 	return nil
 }
 
@@ -343,12 +384,36 @@ func TestNPMPreparePublishVerifyBoundary(t *testing.T) {
 func TestNPMReleaseBoundaryMutationNegativeControls(t *testing.T) {
 	mutations := map[string]func(*releaseWorkflow){
 		"publish needs": func(w *releaseWorkflow) { job := w.Jobs["publish"]; job.Needs = nil; w.Jobs["publish"] = job },
-		"verify needs": func(w *releaseWorkflow) { job := w.Jobs["verify-public"]; job.Needs = []any{"publish"}; w.Jobs["verify-public"] = job },
-		"status bypass": func(w *releaseWorkflow) { job := w.Jobs["publish"]; job.If = "${{ always() }}"; w.Jobs["publish"] = job },
-		"permissions": func(w *releaseWorkflow) { job := w.Jobs["publish"]; job.Permissions = map[string]string{"contents": "write", "id-token": "write"}; w.Jobs["publish"] = job },
+		"verify needs": func(w *releaseWorkflow) {
+			job := w.Jobs["verify-public"]
+			job.Needs = []any{"publish"}
+			w.Jobs["verify-public"] = job
+		},
+		"status bypass": func(w *releaseWorkflow) {
+			job := w.Jobs["publish"]
+			job.If = "${{ always() }}"
+			w.Jobs["publish"] = job
+		},
+		"permissions": func(w *releaseWorkflow) {
+			job := w.Jobs["publish"]
+			job.Permissions = map[string]string{"contents": "write", "id-token": "write"}
+			w.Jobs["publish"] = job
+		},
 		"environment": func(w *releaseWorkflow) { job := w.Jobs["publish"]; job.Environment = nil; w.Jobs["publish"] = job },
-		"artifact": func(w *releaseWorkflow) { job := w.Jobs["publish"]; for i := range job.Steps { if strings.HasPrefix(job.Steps[i].Uses, "actions/download-artifact@") { job.Steps[i].With["name"] = "mutable" } }; w.Jobs["publish"] = job },
-		"continue": func(w *releaseWorkflow) { job := w.Jobs["verify-public"]; job.Steps[0].Continue = true; w.Jobs["verify-public"] = job },
+		"artifact": func(w *releaseWorkflow) {
+			job := w.Jobs["publish"]
+			for i := range job.Steps {
+				if strings.HasPrefix(job.Steps[i].Uses, "actions/download-artifact@") {
+					job.Steps[i].With["name"] = "mutable"
+				}
+			}
+			w.Jobs["publish"] = job
+		},
+		"continue": func(w *releaseWorkflow) {
+			job := w.Jobs["verify-public"]
+			job.Steps[0].Continue = true
+			w.Jobs["verify-public"] = job
+		},
 	}
 	for name, mutate := range mutations {
 		workflow := parseReleaseWorkflow(t, "agentplugins-npm-publish.yml")
@@ -363,27 +428,61 @@ func evaluateReleaseCondition(t *testing.T, expression string, values map[string
 	t.Helper()
 	expression = strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(strings.TrimSpace(expression), "${{"), "}}"))
 	for _, fn := range []string{"success", "always", "failure", "cancelled"} {
-		if value, ok := values[fn]; ok { expression = strings.ReplaceAll(expression, fn+"()", strconv.FormatBool(value.(bool))) }
+		if value, ok := values[fn]; ok {
+			expression = strings.ReplaceAll(expression, fn+"()", strconv.FormatBool(value.(bool)))
+		}
 	}
 	words := regexp.MustCompile(`'[^']*'|[a-zA-Z_][a-zA-Z0-9_.]*`)
 	expression = words.ReplaceAllStringFunc(expression, func(word string) string {
-		if strings.HasPrefix(word, "'") { return strconv.Quote(word[1:len(word)-1]) }
-		if value, ok := values[word]; ok { switch typed := value.(type) { case string: return strconv.Quote(typed); case bool: return strconv.FormatBool(typed) } }
-		if word == "true" || word == "false" { return word }
-		t.Fatalf("unreviewed workflow context %q", word); return "false"
+		if strings.HasPrefix(word, "'") {
+			return strconv.Quote(word[1 : len(word)-1])
+		}
+		if value, ok := values[word]; ok {
+			switch typed := value.(type) {
+			case string:
+				return strconv.Quote(typed)
+			case bool:
+				return strconv.FormatBool(typed)
+			}
+		}
+		if word == "true" || word == "false" {
+			return word
+		}
+		t.Fatalf("unreviewed workflow context %q", word)
+		return "false"
 	})
-	tree, err := parser.ParseExpr(expression); if err != nil { t.Fatal(err) }
+	tree, err := parser.ParseExpr(expression)
+	if err != nil {
+		t.Fatal(err)
+	}
 	var eval func(ast.Expr) any
 	eval = func(node ast.Expr) any {
 		switch value := node.(type) {
-		case *ast.ParenExpr: return eval(value.X)
-		case *ast.BasicLit: decoded, err := strconv.Unquote(value.Value); if err != nil { t.Fatal(err) }; return decoded
-		case *ast.Ident: return value.Name == "true"
+		case *ast.ParenExpr:
+			return eval(value.X)
+		case *ast.BasicLit:
+			decoded, err := strconv.Unquote(value.Value)
+			if err != nil {
+				t.Fatal(err)
+			}
+			return decoded
+		case *ast.Ident:
+			return value.Name == "true"
 		case *ast.BinaryExpr:
 			left, right := eval(value.X), eval(value.Y)
-			switch value.Op { case token.EQL: return left == right; case token.NEQ: return left != right; case token.LAND: return left.(bool) && right.(bool); case token.LOR: return left.(bool) || right.(bool) }
+			switch value.Op {
+			case token.EQL:
+				return left == right
+			case token.NEQ:
+				return left != right
+			case token.LAND:
+				return left.(bool) && right.(bool)
+			case token.LOR:
+				return left.(bool) || right.(bool)
+			}
 		}
-		t.Fatal("unsupported workflow condition syntax"); return false
+		t.Fatal("unsupported workflow condition syntax")
+		return false
 	}
 	return eval(tree).(bool)
 }

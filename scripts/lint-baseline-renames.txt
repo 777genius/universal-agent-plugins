@@ -1,0 +1,25 @@
+# Path renames applied to the base revision before the shrink-only comparison in
+# scripts/check-lint-baseline.sh.
+#
+# A `git mv` of an already-exempt file looks identical to a brand new exemption:
+# the old path disappears and an unknown one appears. That is the one case where
+# the baseline may legitimately name a path it did not name before, so each move
+# is declared here instead of silently widening the gate.
+#
+# A line grants nothing on its own. The script checks the declaration against
+# git: the old path was exempt in the base and is gone from the tree, the new
+# path exists and is new, no two lines name the same file, and `git diff -M`
+# sees the pair as a rename. The entry still has to carry the same linters and
+# the same message patterns the old path already had. Once the move lands in the
+# base branch the line is reported as removable and skipped.
+#
+# Format: <old path pattern><TAB or spaces><new path pattern>, both copied from
+# the `- path:` keys of .golangci.yml. The anchors and the `\.` escapes are
+# stripped to compare literal paths, so each side has to name exactly one file.
+
+# Part 5 remainder: 1:1 native-file moves into clients/<id>.
+^install/integrationctl/agentplugins/providers/claude\.go$	^install/integrationctl/agentplugins/clients/claude/claude\.go$
+^install/integrationctl/agentplugins/providers/cline_native\.go$	^install/integrationctl/agentplugins/clients/cline/native\.go$
+^install/integrationctl/agentplugins/providers/gemini_native\.go$	^install/integrationctl/agentplugins/clients/gemini/native\.go$
+^install/integrationctl/agentplugins/providers/opencode_native\.go$	^install/integrationctl/agentplugins/clients/opencode/native\.go$
+^install/integrationctl/agentplugins/providers/windsurf_native\.go$	^install/integrationctl/agentplugins/clients/windsurf/native\.go$

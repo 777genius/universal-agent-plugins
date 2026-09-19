@@ -11,8 +11,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/all"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/opencode"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/providers/nativeconfig"
 	"github.com/tailscale/hujson"
 )
 
@@ -26,11 +29,11 @@ func TestOpenCodeInstalledCLIDiscoversIsolatedNativeConfig(t *testing.T) {
 	configRoot := filepath.Join(xdg, "opencode")
 	active := filepath.Join(root, "managed", "clients", "opencode", "demo")
 	envelope, plan := openCodeTestPackage(t, active, configRoot, "isolated")
-	objects, err := buildOpenCodeNativeObjects(active, envelope, plan)
+	objects, err := opencode.BuildOpenCodeNativeObjects(active, envelope, plan)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := applyOpenCodeNative(configRoot, active, nil, objects); err != nil {
+	if err := opencode.ApplyOpenCodeNative(configRoot, active, nil, objects); err != nil {
 		t.Fatal(err)
 	}
 	project := filepath.Join(root, "project")
@@ -66,14 +69,14 @@ func TestOpenCodeNativeAddUpdateVerifyRemovePreservesJSONCAndForeignConfig(t *te
 	writeOpenCodeTestFile(t, jsonc, "{\n  // keep this\n  \"theme\": \"night\",\n  \"mcp\": {\"foreign\": {\"type\":\"remote\",\"url\":\"https://foreign.test\"}},\n}\n")
 
 	firstEnvelope, firstPlan := openCodeTestPackage(t, active, configRoot, "old")
-	firstObjects, err := buildOpenCodeNativeObjects(active, firstEnvelope, firstPlan)
+	firstObjects, err := opencode.BuildOpenCodeNativeObjects(active, firstEnvelope, firstPlan)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := applyOpenCodeNative(configRoot, active, nil, firstObjects); err != nil {
+	if err := opencode.ApplyOpenCodeNative(configRoot, active, nil, firstObjects); err != nil {
 		t.Fatal(err)
 	}
-	if err := verifyOpenCodeNativeObjects(configRoot, active, firstObjects); err != nil {
+	if err := opencode.VerifyOpenCodeNativeObjects(configRoot, active, firstObjects, nativeconfig.New(), false); err != nil {
 		t.Fatal(err)
 	}
 	body := readOpenCodeTestFile(t, jsonc)
@@ -89,17 +92,17 @@ func TestOpenCodeNativeAddUpdateVerifyRemovePreservesJSONCAndForeignConfig(t *te
 	secondEnvelope.MCP.Servers["docs"] = domain.MCPServer{Name: "docs", Type: "stdio", Decoded: map[string]any{
 		"command": "bun", "args": []any{"${PLUGIN_ROOT}/server.js"}, "env": map[string]any{"DATA": "${PLUGIN_DATA}"},
 	}}
-	if err := os.Remove(filepath.Join(active, openCodeProjectionFile)); err != nil {
+	if err := os.Remove(filepath.Join(active, opencode.OpenCodeProjectionFile)); err != nil {
 		t.Fatal(err)
 	}
-	if err := projectOpenCodeNative(active, secondEnvelope, secondPlan, filepath.Join(root, "data")); err != nil {
+	if err := opencode.ProjectOpenCodeNative(active, secondEnvelope, secondPlan, filepath.Join(root, "data")); err != nil {
 		t.Fatal(err)
 	}
-	secondObjects, err := buildOpenCodeNativeObjects(active, secondEnvelope, secondPlan)
+	secondObjects, err := opencode.BuildOpenCodeNativeObjects(active, secondEnvelope, secondPlan)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := applyOpenCodeNative(configRoot, active, firstObjects, secondObjects); err != nil {
+	if err := opencode.ApplyOpenCodeNative(configRoot, active, firstObjects, secondObjects); err != nil {
 		t.Fatal(err)
 	}
 	body = readOpenCodeTestFile(t, jsonc)
@@ -108,7 +111,7 @@ func TestOpenCodeNativeAddUpdateVerifyRemovePreservesJSONCAndForeignConfig(t *te
 		t.Fatalf("skill was not updated: %s", got)
 	}
 
-	if err := applyOpenCodeNative(configRoot, "", secondObjects, nil); err != nil {
+	if err := opencode.ApplyOpenCodeNative(configRoot, "", secondObjects, nil); err != nil {
 		t.Fatal(err)
 	}
 	body = readOpenCodeTestFile(t, jsonc)
@@ -127,11 +130,11 @@ func TestOpenCodeCollisionRollsBackStagedSkill(t *testing.T) {
 	active := filepath.Join(root, "managed", "clients", "opencode", "demo")
 	writeOpenCodeTestFile(t, filepath.Join(configRoot, "opencode.json"), `{"mcp":{"docs":{"type":"remote","url":"https://foreign.test"}}}`)
 	envelope, plan := openCodeTestPackage(t, active, configRoot, "owned")
-	objects, err := buildOpenCodeNativeObjects(active, envelope, plan)
+	objects, err := opencode.BuildOpenCodeNativeObjects(active, envelope, plan)
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = applyOpenCodeNative(configRoot, active, nil, objects)
+	err = opencode.ApplyOpenCodeNative(configRoot, active, nil, objects)
 	if !errors.Is(err, nativeconfig.ErrCollision) {
 		t.Fatalf("expected foreign collision, got %v", err)
 	}
@@ -148,19 +151,19 @@ func TestOpenCodeLateSkillCollisionDoesNotReplaceForeignDirectory(t *testing.T) 
 	configRoot := filepath.Join(root, "xdg", "opencode")
 	active := filepath.Join(root, "managed", "demo")
 	envelope, plan := openCodeTestPackage(t, active, configRoot, "owned")
-	objects, err := buildOpenCodeNativeObjects(active, envelope, plan)
+	objects, err := opencode.BuildOpenCodeNativeObjects(active, envelope, plan)
 	if err != nil {
 		t.Fatal(err)
 	}
 	liveSkill := filepath.Join(configRoot, "skills", "docs")
 	rename := func(oldPath, newPath string) error {
-		if strings.HasPrefix(filepath.Base(oldPath), "new-") && sameCleanPath(newPath, liveSkill) {
+		if strings.HasPrefix(filepath.Base(oldPath), "new-") && shared.SameCleanPath(newPath, liveSkill) {
 			writeOpenCodeTestFile(t, filepath.Join(newPath, "SKILL.md"), "late foreign\n")
 		}
-		return renameDirectoryExclusive(oldPath, newPath)
+		return shared.RenameDirectoryExclusive(oldPath, newPath)
 	}
 
-	err = applyOpenCodeNativeWithRename(configRoot, active, nil, objects, rename)
+	err = opencode.ApplyOpenCodeNativeWithRename(configRoot, active, nil, objects, rename)
 	if err == nil || !strings.Contains(err.Error(), "destination") && !strings.Contains(err.Error(), "file exists") {
 		t.Fatalf("late OpenCode skill collision = %v", err)
 	}
@@ -181,17 +184,17 @@ func TestOpenCodeRollbackDoesNotReplaceConcurrentForeignDirectory(t *testing.T) 
 	configRoot := filepath.Join(root, "xdg", "opencode")
 	activeV1 := filepath.Join(root, "managed", "v1")
 	firstEnvelope, firstPlan := openCodeTestPackage(t, activeV1, configRoot, "old")
-	first, err := buildOpenCodeNativeObjects(activeV1, firstEnvelope, firstPlan)
+	first, err := opencode.BuildOpenCodeNativeObjects(activeV1, firstEnvelope, firstPlan)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := applyOpenCodeNative(configRoot, activeV1, nil, first); err != nil {
+	if err := opencode.ApplyOpenCodeNative(configRoot, activeV1, nil, first); err != nil {
 		t.Fatal(err)
 	}
 
 	activeV2 := filepath.Join(root, "managed", "v2")
 	secondEnvelope, secondPlan := openCodeTestPackage(t, activeV2, configRoot, "new")
-	second, err := buildOpenCodeNativeObjects(activeV2, secondEnvelope, secondPlan)
+	second, err := opencode.BuildOpenCodeNativeObjects(activeV2, secondEnvelope, secondPlan)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -199,21 +202,21 @@ func TestOpenCodeRollbackDoesNotReplaceConcurrentForeignDirectory(t *testing.T) 
 	configPath := filepath.Join(configRoot, "opencode.json")
 	rename := func(oldPath, newPath string) error {
 		switch {
-		case strings.HasPrefix(filepath.Base(oldPath), "new-") && sameCleanPath(newPath, liveSkill):
-			if err := renameDirectoryExclusive(oldPath, newPath); err != nil {
+		case strings.HasPrefix(filepath.Base(oldPath), "new-") && shared.SameCleanPath(newPath, liveSkill):
+			if err := shared.RenameDirectoryExclusive(oldPath, newPath); err != nil {
 				return err
 			}
 			// Force the later ownership-aware MCP batch to fail after the new
 			// skill is live, so rollback has to restore the isolated backup.
 			writeOpenCodeTestFile(t, configPath, `{"mcp":{"docs":{"type":"local","command":["foreign"]}}}`)
 			return nil
-		case strings.HasPrefix(filepath.Base(oldPath), "old-") && sameCleanPath(newPath, liveSkill):
+		case strings.HasPrefix(filepath.Base(oldPath), "old-") && shared.SameCleanPath(newPath, liveSkill):
 			writeOpenCodeTestFile(t, filepath.Join(newPath, "SKILL.md"), "concurrent foreign\n")
 		}
-		return renameDirectoryExclusive(oldPath, newPath)
+		return shared.RenameDirectoryExclusive(oldPath, newPath)
 	}
 
-	err = applyOpenCodeNativeWithRename(configRoot, activeV2, first, second, rename)
+	err = opencode.ApplyOpenCodeNativeWithRename(configRoot, activeV2, first, second, rename)
 	if err == nil || !strings.Contains(err.Error(), "rollback OpenCode skills") {
 		t.Fatalf("rollback collision error = %v", err)
 	}
@@ -237,23 +240,23 @@ func TestOpenCodeCommittedCleanupFailureKeepsReceiptsAndLaterLifecycleConsistent
 	configRoot := filepath.Join(root, "xdg", "opencode")
 	activeV1 := filepath.Join(root, "managed", "v1")
 	firstEnvelope, firstPlan := openCodeTestPackage(t, activeV1, configRoot, "old")
-	first, err := buildOpenCodeNativeObjects(activeV1, firstEnvelope, firstPlan)
+	first, err := opencode.BuildOpenCodeNativeObjects(activeV1, firstEnvelope, firstPlan)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := applyOpenCodeNative(configRoot, activeV1, nil, first); err != nil {
+	if err := opencode.ApplyOpenCodeNative(configRoot, activeV1, nil, first); err != nil {
 		t.Fatal(err)
 	}
 
 	activeV2 := filepath.Join(root, "managed", "v2")
 	secondEnvelope, secondPlan := openCodeTestPackage(t, activeV2, configRoot, "new")
-	second, err := buildOpenCodeNativeObjects(activeV2, secondEnvelope, secondPlan)
+	second, err := opencode.BuildOpenCodeNativeObjects(activeV2, secondEnvelope, secondPlan)
 	if err != nil {
 		t.Fatal(err)
 	}
 	cleanupErr := errors.New("injected committed cleanup failure")
 	cleanupCalls := 0
-	err = applyOpenCodeNativeWithOps(configRoot, activeV2, first, second, renameDirectoryExclusive, func(path string) error {
+	err = opencode.ApplyOpenCodeNativeWithOps(configRoot, activeV2, first, second, shared.RenameDirectoryExclusive, func(path string) error {
 		cleanupCalls++
 		if !strings.HasPrefix(filepath.Base(path), ".agentplugins-native-") {
 			t.Fatalf("cleanup target = %s", path)
@@ -266,7 +269,7 @@ func TestOpenCodeCommittedCleanupFailureKeepsReceiptsAndLaterLifecycleConsistent
 	if cleanupCalls != 1 {
 		t.Fatalf("committed cleanup calls = %d, want 1", cleanupCalls)
 	}
-	if err := verifyOpenCodeNativeObjects(configRoot, activeV2, second); err != nil {
+	if err := opencode.VerifyOpenCodeNativeObjects(configRoot, activeV2, second, nativeconfig.New(), false); err != nil {
 		t.Fatalf("committed OpenCode receipts do not describe external state: %v", err)
 	}
 	if got := readOpenCodeTestFile(t, filepath.Join(configRoot, "skills", "docs", "SKILL.md")); !strings.Contains(got, "new") {
@@ -286,10 +289,10 @@ func TestOpenCodeCommittedCleanupFailureKeepsReceiptsAndLaterLifecycleConsistent
 
 	// Receipt-backed repair and remove must use the committed V2 ownership,
 	// independent of the clearly marked cleanup residue from the prior update.
-	if err := applyOpenCodeNative(configRoot, activeV2, second, second); err != nil {
+	if err := opencode.ApplyOpenCodeNative(configRoot, activeV2, second, second); err != nil {
 		t.Fatalf("repair after committed cleanup residue: %v", err)
 	}
-	if err := applyOpenCodeNative(configRoot, "", second, nil); err != nil {
+	if err := opencode.ApplyOpenCodeNative(configRoot, "", second, nil); err != nil {
 		t.Fatalf("remove after committed cleanup residue: %v", err)
 	}
 	if _, err := os.Lstat(filepath.Join(configRoot, "skills", "docs")); !os.IsNotExist(err) {
@@ -309,12 +312,12 @@ func TestOpenCodeActivatorTreatsCommittedUnlockFailureAsSuccessfulLifecycle(t *t
 
 	t.Run("add", func(t *testing.T) {
 		configRoot, active, objects, request := openCodeActivationFixture(t, "add")
-		outcome, err := (Activator{NativeConfig: &committedKernel}).Activate(context.Background(), request)
+		outcome, err := testActivator(Activator{NativeConfig: &committedKernel}).Activate(context.Background(), request)
 		assertOpenCodeCommittedActivation(t, outcome, err)
-		if err := verifyOpenCodeNativeObjects(configRoot, active, objects); err != nil {
+		if err := opencode.VerifyOpenCodeNativeObjects(configRoot, active, objects, nativeconfig.New(), false); err != nil {
 			t.Fatalf("committed add state: %v", err)
 		}
-		if err := applyOpenCodeNative(configRoot, "", objects, nil); err != nil {
+		if err := opencode.ApplyOpenCodeNative(configRoot, "", objects, nil); err != nil {
 			t.Fatalf("remove after committed add: %v", err)
 		}
 	})
@@ -324,17 +327,17 @@ func TestOpenCodeActivatorTreatsCommittedUnlockFailureAsSuccessfulLifecycle(t *t
 		configRoot := filepath.Join(root, "xdg", "opencode")
 		activeV1 := filepath.Join(root, "managed", "v1")
 		firstEnvelope, firstPlan := openCodeTestPackage(t, activeV1, configRoot, "old")
-		first, err := buildOpenCodeNativeObjects(activeV1, firstEnvelope, firstPlan)
+		first, err := opencode.BuildOpenCodeNativeObjects(activeV1, firstEnvelope, firstPlan)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err := applyOpenCodeNative(configRoot, activeV1, nil, first); err != nil {
+		if err := opencode.ApplyOpenCodeNative(configRoot, activeV1, nil, first); err != nil {
 			t.Fatal(err)
 		}
 
 		activeV2 := filepath.Join(root, "managed", "v2")
 		secondEnvelope, secondPlan := openCodeTestPackage(t, activeV2, configRoot, "new")
-		second, err := buildOpenCodeNativeObjects(activeV2, secondEnvelope, secondPlan)
+		second, err := opencode.BuildOpenCodeNativeObjects(activeV2, secondEnvelope, secondPlan)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -343,41 +346,41 @@ func TestOpenCodeActivatorTreatsCommittedUnlockFailureAsSuccessfulLifecycle(t *t
 			Plan:   secondPlan, Delivery: domain.StagedDelivery{ClientID: domain.ClientOpenCode, OwnedBase: filepath.Dir(activeV2), ActivePath: activeV2, NativeObjects: second},
 			DeclaredName: "demo", Replacing: true, PreviousNativeObjects: first,
 		}
-		outcome, err := (Activator{NativeConfig: &committedKernel}).Activate(context.Background(), request)
+		outcome, err := testActivator(Activator{NativeConfig: &committedKernel}).Activate(context.Background(), request)
 		assertOpenCodeCommittedActivation(t, outcome, err)
-		if err := verifyOpenCodeNativeObjects(configRoot, activeV2, second); err != nil {
+		if err := opencode.VerifyOpenCodeNativeObjects(configRoot, activeV2, second, nativeconfig.New(), false); err != nil {
 			t.Fatalf("committed update state: %v", err)
 		}
-		if err := applyOpenCodeNative(configRoot, activeV2, second, second); err != nil {
+		if err := opencode.ApplyOpenCodeNative(configRoot, activeV2, second, second); err != nil {
 			t.Fatalf("repair after committed update: %v", err)
 		}
 	})
 
 	t.Run("repair", func(t *testing.T) {
 		configRoot, active, objects, request := openCodeActivationFixture(t, "repair")
-		if err := applyOpenCodeNative(configRoot, active, nil, objects); err != nil {
+		if err := opencode.ApplyOpenCodeNative(configRoot, active, nil, objects); err != nil {
 			t.Fatal(err)
 		}
 		writeOpenCodeTestFile(t, filepath.Join(configRoot, "opencode.json"), `{"mcp":{}}`)
 		request.PreviousNativeObjects = objects
 		request.Delivery.NativeObjects = objects
 		request.Replacing = true
-		outcome, err := (Activator{NativeConfig: &committedKernel}).Activate(context.Background(), request)
+		outcome, err := testActivator(Activator{NativeConfig: &committedKernel}).Activate(context.Background(), request)
 		assertOpenCodeCommittedActivation(t, outcome, err)
-		if err := verifyOpenCodeNativeObjects(configRoot, active, objects); err != nil {
+		if err := opencode.VerifyOpenCodeNativeObjects(configRoot, active, objects, nativeconfig.New(), false); err != nil {
 			t.Fatalf("committed repair state: %v", err)
 		}
-		if err := applyOpenCodeNative(configRoot, "", objects, nil); err != nil {
+		if err := opencode.ApplyOpenCodeNative(configRoot, "", objects, nil); err != nil {
 			t.Fatalf("remove after committed repair: %v", err)
 		}
 	})
 
 	t.Run("remove", func(t *testing.T) {
 		configRoot, active, objects, _ := openCodeActivationFixture(t, "remove")
-		if err := applyOpenCodeNative(configRoot, active, nil, objects); err != nil {
+		if err := opencode.ApplyOpenCodeNative(configRoot, active, nil, objects); err != nil {
 			t.Fatal(err)
 		}
-		outcome, err := (Activator{NativeConfig: &committedKernel}).Deactivate(context.Background(), domain.DeactivationRequest{
+		outcome, err := testActivator(Activator{NativeConfig: &committedKernel}).Deactivate(context.Background(), domain.DeactivationRequest{
 			Client:       domain.DetectedClient{ClientID: domain.ClientOpenCode, Status: domain.DetectionDetected, ConfigRoot: configRoot},
 			DeclaredName: "demo", CurrentActivation: domain.ActivationActive, Confirmed: true, NativeObjects: objects,
 		})
@@ -391,10 +394,34 @@ func TestOpenCodeActivatorTreatsCommittedUnlockFailureAsSuccessfulLifecycle(t *t
 			t.Fatalf("committed remove retained skill: %v", err)
 		}
 		assertOpenCodeEntry(t, readOpenCodeTestFile(t, filepath.Join(configRoot, "opencode.json")), false, "", "")
-		if err := applyOpenCodeNative(configRoot, active, nil, objects); err != nil {
+		if err := opencode.ApplyOpenCodeNative(configRoot, active, nil, objects); err != nil {
 			t.Fatalf("add after committed remove: %v", err)
 		}
 	})
+}
+
+func TestActivatorRejectsNativeConfigMutationWithoutKernel(t *testing.T) {
+	_, _, _, request := openCodeActivationFixture(t, "docs")
+	assertActivatorRejectsMissingKernel(t, request)
+}
+
+func TestActivatorRejectsSkillOnlyNativeConfigMutationWithoutKernel(t *testing.T) {
+	configRoot, _, _, request := openCodeSkillOnlyActivationFixture(t)
+	assertActivatorRejectsMissingKernel(t, request)
+	if _, err := os.Lstat(filepath.Join(configRoot, "skills", "docs")); !os.IsNotExist(err) {
+		t.Fatalf("OpenCode skill tree mutated without kernel: %v", err)
+	}
+
+	request.VerifyOnly = true
+	assertActivatorRejectsMissingKernel(t, request)
+}
+
+func assertActivatorRejectsMissingKernel(t *testing.T, request domain.ActivationRequest) {
+	t.Helper()
+	_, err := Activator{Registry: all.Default()}.Activate(context.Background(), request)
+	if err == nil || !strings.Contains(err.Error(), "native config file IO is required") {
+		t.Fatalf("missing NativeConfig was not fail-closed: %v", err)
+	}
 }
 
 func openCodeActivationFixture(t *testing.T, skillText string) (string, string, []domain.NativeObjectOwnership, domain.ActivationRequest) {
@@ -403,7 +430,33 @@ func openCodeActivationFixture(t *testing.T, skillText string) (string, string, 
 	configRoot := filepath.Join(root, "xdg", "opencode")
 	active := filepath.Join(root, "managed", "demo")
 	envelope, plan := openCodeTestPackage(t, active, configRoot, skillText)
-	objects, err := buildOpenCodeNativeObjects(active, envelope, plan)
+	objects, err := opencode.BuildOpenCodeNativeObjects(active, envelope, plan)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := domain.ActivationRequest{
+		Client: domain.DetectedClient{ClientID: domain.ClientOpenCode, Status: domain.DetectionDetected, ConfigRoot: configRoot},
+		Plan:   plan, Delivery: domain.StagedDelivery{ClientID: domain.ClientOpenCode, OwnedBase: filepath.Dir(active), ActivePath: active, NativeObjects: objects}, DeclaredName: "demo",
+	}
+	return configRoot, active, objects, request
+}
+
+func openCodeSkillOnlyActivationFixture(t *testing.T) (string, string, []domain.NativeObjectOwnership, domain.ActivationRequest) {
+	t.Helper()
+	root := t.TempDir()
+	configRoot := filepath.Join(root, "xdg", "opencode")
+	active := filepath.Join(root, "managed", "demo")
+	writeOpenCodeTestFile(t, filepath.Join(active, "skills", "docs", "SKILL.md"), "# docs")
+	envelope := domain.PackageEnvelope{
+		Skills: map[string]domain.Skill{"docs": {Name: "docs", RelativePath: "skills/docs/SKILL.md"}},
+	}
+	plan := domain.DeliveryPlan{ClientID: domain.ClientOpenCode, NativeRegistryRoot: configRoot, ActivePath: active, Components: []domain.ComponentDecision{
+		{Kind: domain.ComponentSkill, Name: "docs", Support: domain.SupportPrepared},
+	}}
+	if err := opencode.ProjectOpenCodeNative(active, envelope, plan, filepath.Join(filepath.Dir(active), "data")); err != nil {
+		t.Fatal(err)
+	}
+	objects, err := opencode.BuildOpenCodeNativeObjects(active, envelope, plan)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -432,22 +485,22 @@ func TestOpenCodeFailedUpdateRestoresPreviousManagedSkill(t *testing.T) {
 	configRoot := filepath.Join(root, "xdg", "opencode")
 	active := filepath.Join(root, "managed", "demo")
 	firstEnvelope, firstPlan := openCodeTestPackage(t, active, configRoot, "old")
-	first, err := buildOpenCodeNativeObjects(active, firstEnvelope, firstPlan)
+	first, err := opencode.BuildOpenCodeNativeObjects(active, firstEnvelope, firstPlan)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := applyOpenCodeNative(configRoot, active, nil, first); err != nil {
+	if err := opencode.ApplyOpenCodeNative(configRoot, active, nil, first); err != nil {
 		t.Fatal(err)
 	}
 	// Simulate an out-of-band MCP edit before an update. The provider must
 	// reject the stale receipt and restore the old skill directory.
 	writeOpenCodeTestFile(t, filepath.Join(configRoot, "opencode.json"), `{"mcp":{"docs":{"type":"local","command":["foreign"]}}}`)
 	secondEnvelope, secondPlan := openCodeTestPackage(t, active, configRoot, "new")
-	second, err := buildOpenCodeNativeObjects(active, secondEnvelope, secondPlan)
+	second, err := opencode.BuildOpenCodeNativeObjects(active, secondEnvelope, secondPlan)
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = applyOpenCodeNative(configRoot, active, first, second)
+	err = opencode.ApplyOpenCodeNative(configRoot, active, first, second)
 	if !errors.Is(err, nativeconfig.ErrNotOwned) {
 		t.Fatalf("expected stale ownership rejection, got %v", err)
 	}
@@ -466,17 +519,17 @@ func TestOpenCodeRepairRecreatesOnlyAnAbsentExactOwnedEntryAndRemoveIsIdempotent
 	configPath := filepath.Join(configRoot, "opencode.jsonc")
 	writeOpenCodeTestFile(t, configPath, "{\n  // selected JSONC\n  \"mcp\": {},\n}\n")
 	envelope, plan := openCodeTestPackage(t, active, configRoot, "owned")
-	objects, err := buildOpenCodeNativeObjects(active, envelope, plan)
+	objects, err := opencode.BuildOpenCodeNativeObjects(active, envelope, plan)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := applyOpenCodeNative(configRoot, active, nil, objects); err != nil {
+	if err := opencode.ApplyOpenCodeNative(configRoot, active, nil, objects); err != nil {
 		t.Fatal(err)
 	}
 
 	// Missing is the only state that exact-same repair may recreate.
 	writeOpenCodeTestFile(t, configPath, "{\n  // selected JSONC\n  \"mcp\": {\"foreign\": {\"type\":\"remote\",\"url\":\"https://foreign.test\"}},\n}\n")
-	if err := applyOpenCodeNative(configRoot, active, objects, objects); err != nil {
+	if err := opencode.ApplyOpenCodeNative(configRoot, active, objects, objects); err != nil {
 		t.Fatalf("repair absent exact-owned entry: %v", err)
 	}
 	body := readOpenCodeTestFile(t, configPath)
@@ -488,7 +541,7 @@ func TestOpenCodeRepairRecreatesOnlyAnAbsentExactOwnedEntryAndRemoveIsIdempotent
 	// A present entry with different bytes is foreign/tampered and must never
 	// be adopted by repair.
 	writeOpenCodeTestFile(t, configPath, `{"mcp":{"docs":{"type":"local","command":["foreign"]}}}`)
-	if err := applyOpenCodeNative(configRoot, active, objects, objects); !errors.Is(err, nativeconfig.ErrNotOwned) {
+	if err := opencode.ApplyOpenCodeNative(configRoot, active, objects, objects); !errors.Is(err, nativeconfig.ErrNotOwned) {
 		t.Fatalf("tampered entry was not rejected: %v", err)
 	}
 	if body := readOpenCodeTestFile(t, configPath); !strings.Contains(body, "foreign") {
@@ -500,7 +553,7 @@ func TestOpenCodeRepairRecreatesOnlyAnAbsentExactOwnedEntryAndRemoveIsIdempotent
 	if err := os.Remove(configPath); err != nil {
 		t.Fatal(err)
 	}
-	if err := applyOpenCodeNative(configRoot, "", objects, nil); err != nil {
+	if err := opencode.ApplyOpenCodeNative(configRoot, "", objects, nil); err != nil {
 		t.Fatalf("idempotent absent remove: %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(configRoot, "skills", "docs")); !os.IsNotExist(err) {
@@ -519,17 +572,17 @@ func TestOpenCodeProjectionPreservesOfficialLocalCWD(t *testing.T) {
 	envelope.MCP.Servers["docs"] = domain.MCPServer{Name: "docs", Type: "stdio", Decoded: map[string]any{
 		"command": "node", "args": []any{"${PLUGIN_ROOT}/server.js"}, "cwd": "./workspace",
 	}}
-	if err := os.Remove(filepath.Join(active, openCodeProjectionFile)); err != nil {
+	if err := os.Remove(filepath.Join(active, opencode.OpenCodeProjectionFile)); err != nil {
 		t.Fatal(err)
 	}
-	if err := projectOpenCodeNative(active, envelope, plan, filepath.Join(root, "data")); err != nil {
+	if err := opencode.ProjectOpenCodeNative(active, envelope, plan, filepath.Join(root, "data")); err != nil {
 		t.Fatal(err)
 	}
-	objects, err := buildOpenCodeNativeObjects(active, envelope, plan)
+	objects, err := opencode.BuildOpenCodeNativeObjects(active, envelope, plan)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := applyOpenCodeNative(configRoot, active, nil, objects); err != nil {
+	if err := opencode.ApplyOpenCodeNative(configRoot, active, nil, objects); err != nil {
 		t.Fatal(err)
 	}
 	body := readOpenCodeTestFile(t, filepath.Join(configRoot, "opencode.json"))
@@ -550,17 +603,17 @@ func TestOpenCodeProjectsClientManagedStdioDataContract(t *testing.T) {
 	dataRoot := filepath.Join(root, "managed", "data")
 	envelope, plan := openCodeTestPackage(t, active, configRoot, "owned")
 	authorEnv := envelope.MCP.Servers["docs"].Decoded["env"].(map[string]any)
-	if err := os.Remove(filepath.Join(active, openCodeProjectionFile)); err != nil {
+	if err := os.Remove(filepath.Join(active, opencode.OpenCodeProjectionFile)); err != nil {
 		t.Fatal(err)
 	}
-	if err := projectOpenCodeNative(active, envelope, plan, dataRoot); err != nil {
+	if err := opencode.ProjectOpenCodeNative(active, envelope, plan, dataRoot); err != nil {
 		t.Fatal(err)
 	}
-	objects, err := buildOpenCodeNativeObjects(active, envelope, plan)
+	objects, err := opencode.BuildOpenCodeNativeObjects(active, envelope, plan)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := applyOpenCodeNative(configRoot, active, nil, objects); err != nil {
+	if err := opencode.ApplyOpenCodeNative(configRoot, active, nil, objects); err != nil {
 		t.Fatal(err)
 	}
 	document := map[string]any{}
@@ -592,11 +645,11 @@ func TestOpenCodeRejectsReservedStdioEnvWithoutProjection(t *testing.T) {
 	}}}
 	plan := domain.DeliveryPlan{ClientID: domain.ClientOpenCode, NativeRegistryRoot: filepath.Join(root, "config"), ActivePath: active,
 		Components: []domain.ComponentDecision{{Kind: domain.ComponentMCPServer, Name: "docs", Support: domain.SupportPrepared}}}
-	err := projectOpenCodeNative(active, envelope, plan, filepath.Join(root, "data"))
+	err := opencode.ProjectOpenCodeNative(active, envelope, plan, filepath.Join(root, "data"))
 	if err == nil || !strings.Contains(err.Error(), "PLUGIN_ROOT is reserved") {
 		t.Fatalf("reserved OpenCode env error = %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(active, openCodeProjectionFile)); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(active, opencode.OpenCodeProjectionFile)); !os.IsNotExist(err) {
 		t.Fatalf("rejected OpenCode env created projection: %v", err)
 	}
 	if len(authorEnv) != 2 || authorEnv["KEEP"] != "value" || authorEnv["PLUGIN_ROOT"] != "/attacker" {
@@ -615,7 +668,7 @@ func TestOpenCodeAmbiguousJSONVariantsFailBeforeProjection(t *testing.T) {
 	}
 	envelope := domain.PackageEnvelope{MCP: domain.MCPComponent{Servers: map[string]domain.MCPServer{}}}
 	plan := domain.DeliveryPlan{ClientID: domain.ClientOpenCode, NativeRegistryRoot: configRoot, ActivePath: active}
-	if err := projectOpenCodeNative(active, envelope, plan, ""); !errors.Is(err, nativeconfig.ErrAmbiguousConfig) {
+	if err := opencode.ProjectOpenCodeNative(active, envelope, plan, ""); !errors.Is(err, nativeconfig.ErrAmbiguousConfig) {
 		t.Fatalf("expected ambiguous config rejection, got %v", err)
 	}
 }
@@ -623,9 +676,9 @@ func TestOpenCodeAmbiguousJSONVariantsFailBeforeProjection(t *testing.T) {
 func TestOpenCodeRejectsPackageOwnedProjectionCollision(t *testing.T) {
 	root := t.TempDir()
 	active := filepath.Join(root, "active")
-	writeOpenCodeTestFile(t, filepath.Join(active, openCodeProjectionFile), `{"attacker":true}`)
+	writeOpenCodeTestFile(t, filepath.Join(active, opencode.OpenCodeProjectionFile), `{"attacker":true}`)
 	plan := domain.DeliveryPlan{ClientID: domain.ClientOpenCode, NativeRegistryRoot: filepath.Join(root, "config"), ActivePath: active}
-	err := projectOpenCodeNative(active, domain.PackageEnvelope{}, plan, "")
+	err := opencode.ProjectOpenCodeNative(active, domain.PackageEnvelope{}, plan, "")
 	if err == nil || !strings.Contains(err.Error(), "reserved") {
 		t.Fatalf("expected reserved projection rejection, got %v", err)
 	}
@@ -636,12 +689,12 @@ func TestOpenCodeConfigSelectionDriftFailsBeforeSkillMutation(t *testing.T) {
 	configRoot := filepath.Join(root, "opencode")
 	active := filepath.Join(root, "managed", "demo")
 	envelope, plan := openCodeTestPackage(t, active, configRoot, "owned")
-	objects, err := buildOpenCodeNativeObjects(active, envelope, plan)
+	objects, err := opencode.BuildOpenCodeNativeObjects(active, envelope, plan)
 	if err != nil {
 		t.Fatal(err)
 	}
 	writeOpenCodeTestFile(t, filepath.Join(configRoot, "opencode.jsonc"), `{}`)
-	err = applyOpenCodeNative(configRoot, active, nil, objects)
+	err = opencode.ApplyOpenCodeNative(configRoot, active, nil, objects)
 	if err == nil || !strings.Contains(err.Error(), "selection changed") {
 		t.Fatalf("expected selection drift rejection, got %v", err)
 	}
@@ -655,7 +708,7 @@ func TestOpenCodeConfigSelectionDriftFailsBeforeSkillMutation(t *testing.T) {
 
 func openCodeTestPackage(t *testing.T, active, configRoot, skillText string) (domain.PackageEnvelope, domain.DeliveryPlan) {
 	t.Helper()
-	if err := os.Remove(filepath.Join(active, openCodeProjectionFile)); err != nil && !os.IsNotExist(err) {
+	if err := os.Remove(filepath.Join(active, opencode.OpenCodeProjectionFile)); err != nil && !os.IsNotExist(err) {
 		t.Fatal(err)
 	}
 	writeOpenCodeTestFile(t, filepath.Join(active, "server.js"), "// server")
@@ -670,7 +723,7 @@ func openCodeTestPackage(t *testing.T, active, configRoot, skillText string) (do
 		{Kind: domain.ComponentSkill, Name: "docs", Support: domain.SupportPrepared},
 		{Kind: domain.ComponentMCPServer, Name: "docs", Support: domain.SupportPrepared},
 	}}
-	if err := projectOpenCodeNative(active, envelope, plan, filepath.Join(filepath.Dir(active), "data")); err != nil {
+	if err := opencode.ProjectOpenCodeNative(active, envelope, plan, filepath.Join(filepath.Dir(active), "data")); err != nil {
 		t.Fatal(err)
 	}
 	return envelope, plan

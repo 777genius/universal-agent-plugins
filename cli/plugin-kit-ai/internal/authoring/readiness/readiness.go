@@ -10,6 +10,7 @@ import (
 
 	"github.com/777genius/plugin-kit-ai/cli/internal/authoring/project"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/specregistry"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/conformance"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/planner"
@@ -43,11 +44,15 @@ func Targets(value string) ([]domain.ClientID, error) {
 
 // Compatibility does not turn unusable/unknown-schema input into an empty,
 // successful package. Valid siblings remain available on partial input.
-func Compatibility(p project.Result, ids []domain.ClientID) ([]planner.ClientCompatibility, error) {
+//
+// The registry arrives from the command's composition root. Naming the full set
+// here instead would link every client adapter into any binary that reads a
+// project, which is the decision the root exists to make.
+func Compatibility(registry *clients.Registry, p project.Result, ids []domain.ClientID) ([]planner.ClientCompatibility, error) {
 	if p.Facts.Package == nil {
 		return nil, nil
 	}
-	return planner.Compatibility(*p.Facts.Package, ids)
+	return planner.Compatibility(registry, *p.Facts.Package, ids)
 }
 
 type Schema struct {

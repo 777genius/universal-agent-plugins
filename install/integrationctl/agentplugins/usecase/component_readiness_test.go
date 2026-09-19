@@ -9,6 +9,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/managedstdio"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/providers"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/providerstest"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -30,7 +31,7 @@ func TestSelectedReadinessIsolatesMissingAndUnsupportedStdio(t *testing.T) {
 		{Kind: domain.ComponentMCPServer, Name: "unsupported", Support: domain.SupportUnsupported},
 		{Kind: domain.ComponentMCPServer, Name: "remote", Support: domain.SupportNative},
 	}}
-	if err := (Service{}).preflightComponents(envelope, &plan, false); err != nil {
+	if err := testService(Service{}).preflightComponents(envelope, &plan, false); err != nil {
 		t.Fatal(err)
 	}
 	if got := domain.SelectedMCPNames(plan); !reflect.DeepEqual(got, []string{"remote"}) {
@@ -171,13 +172,13 @@ func TestHelperUpgradeCannotMasqueradeAsExactRepair(t *testing.T) {
 				}
 				return s
 			}
-			service.Stager = providers.Stager{LauncherSource: source("helper A fixture; never executed")}
+			service.Stager = providerstest.NewStager(providers.Stager{LauncherSource: source("helper A fixture; never executed")})
 			client := domain.DetectedClient{ClientID: clientID, Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), "windsurf")}
 			if clientID == domain.ClientClaude {
 				client.ExecutablePath = "/test/bin/claude"
 				runner := &fakeClaudeLifecycleRunner{configRoot: client.ConfigRoot}
-				service.Activator = providers.Activator{Runner: runner}
-				service.NativeObserver = providers.NativeIdentityObserver{Runner: runner, Stager: service.Stager}
+				service.Activator = providerstest.NewActivator(providers.Activator{Runner: runner})
+				service.NativeObserver = providerstest.NewObserver(providers.NativeIdentityObserver{Runner: runner, Stager: service.Stager})
 			}
 			input := clinePackageInput(t, client, "1.0.0", "sha256:helper", "sha256:helper-manifest", "sh")
 			input.Confirmed = true
@@ -195,7 +196,7 @@ func TestHelperUpgradeCannotMasqueradeAsExactRepair(t *testing.T) {
 			}
 			stateBefore, _ := store.Load()
 			before, _ := json.Marshal(stateBefore)
-			service.Stager = providers.Stager{LauncherSource: source("helper B fixture; never executed")}
+			service.Stager = providerstest.NewStager(providers.Stager{LauncherSource: source("helper B fixture; never executed")})
 			result, err := service.Repair(context.Background(), input)
 			if err == nil || !strings.Contains(err.Error(), "projection digest differs") || result.Mutated {
 				t.Fatalf("repair=%+v err=%v", result, err)
@@ -398,8 +399,8 @@ func TestMissingHelperOnlyExcludesManagedStdio(t *testing.T) {
 			if clientID == domain.ClientClaude {
 				client.ExecutablePath = "/test/bin/claude"
 				runner := &fakeClaudeLifecycleRunner{configRoot: client.ConfigRoot}
-				service.Activator = providers.Activator{Runner: runner}
-				service.NativeObserver = providers.NativeIdentityObserver{Runner: runner, Stager: service.Stager}
+				service.Activator = providerstest.NewActivator(providers.Activator{Runner: runner})
+				service.NativeObserver = providerstest.NewObserver(providers.NativeIdentityObserver{Runner: runner, Stager: service.Stager})
 			}
 			input := clinePackageInput(t, client, "1.0.0", "sha256:missing-helper", "sha256:helper-manifest", "sh")
 			input.Confirmed = true

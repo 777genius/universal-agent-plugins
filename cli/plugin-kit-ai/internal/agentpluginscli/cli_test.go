@@ -14,6 +14,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/spf13/cobra"
+
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/prompt"
 	"github.com/777genius/plugin-kit-ai/cli/internal/terminalprompts"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/dirswap"
@@ -24,14 +26,17 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/specregistry"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/statemigration"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/statev2"
+	clientregistry "github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/all"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	clientplanner "github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/planner"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/plannertest"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/providers"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/providerstest"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/transaction"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/usecase"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/usecasetest"
 	legacyports "github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
-	"github.com/spf13/cobra"
 )
 
 func TestRepairSourceResolutionIsDeadlineAndCancellationResponsive(t *testing.T) {
@@ -815,7 +820,7 @@ func TestMissingManagedStdioRuntimeFailsAutomaticActivationPreflightWithoutMutat
 			client.ExecutablePath = test.executable
 			fixture := newCLIFixture(t, []domain.DetectedClient{client})
 			runner := &cliCommandRunner{}
-			fixture.app.Lifecycle.Activator = providers.Activator{Runner: runner}
+			fixture.app.Lifecycle.Activator = providerstest.NewActivator(providers.Activator{Runner: runner})
 			plugin := writeCLIPlugin(t)
 			mcp := `{"$schema":"https://agent-plugins.org/schemas/1.0.0/mcp.schema.json","mcpServers":{"demo":{"type":"stdio","command":"uap-runtime-that-does-not-exist"}}}`
 			if err := os.WriteFile(filepath.Join(plugin, "mcp.json"), []byte(mcp), 0o644); err != nil {
@@ -845,7 +850,7 @@ func TestKiroGuidedSetupDoesNotRequireDuplexRunner(t *testing.T) {
 	client.ExecutablePath = "/test/bin/kiro-cli"
 	fixture := newCLIFixture(t, []domain.DetectedClient{client})
 	runner := &cliRunOnlyRunner{}
-	fixture.app.Lifecycle.Activator = providers.Activator{Runner: runner}
+	fixture.app.Lifecycle.Activator = providerstest.NewActivator(providers.Activator{Runner: runner})
 	plugin := writeCLIPlugin(t)
 	writeCLIMCP(t, plugin)
 
@@ -961,7 +966,7 @@ func TestInteractiveAddOffersKiroPreparationWhenAutomaticPreflightFails(t *testi
 	fixture := newCLIFixture(t, []domain.DetectedClient{
 		fixtureClient(t, domain.ClientCursor), kiro,
 	})
-	fixture.app.Lifecycle.Activator = providers.Activator{Runner: &cliRunOnlyRunner{}}
+	fixture.app.Lifecycle.Activator = providerstest.NewActivator(providers.Activator{Runner: &cliRunOnlyRunner{}})
 	plugin := writeCLIPlugin(t)
 	writeCLIMCP(t, plugin)
 
@@ -1807,7 +1812,7 @@ func TestInteractiveUnknownCopilotOutputReverifiesBeforeAttestation(t *testing.T
 	client.ExecutablePath = "/test/bin/copilot"
 	fixture := newCLIFixture(t, []domain.DetectedClient{client})
 	runner := &cliCommandRunner{}
-	fixture.app.Lifecycle.Activator = providers.Activator{Runner: runner}
+	fixture.app.Lifecycle.Activator = providerstest.NewActivator(providers.Activator{Runner: runner})
 	plugin := writeCLIPlugin(t)
 	stdout, _, err := fixture.executeInput(true, "y\nn\n", "add", plugin, "--target", "copilot")
 	if err != nil {
@@ -1843,7 +1848,7 @@ func TestInteractiveUnknownRetryRecognizedNegativeFailsClosed(t *testing.T) {
 		}
 		return legacyports.CommandResult{}
 	}}
-	fixture.app.Lifecycle.Activator = providers.Activator{Runner: runner}
+	fixture.app.Lifecycle.Activator = providerstest.NewActivator(providers.Activator{Runner: runner})
 	plugin := writeCLIPlugin(t)
 	stdout, _, err := fixture.executeInput(true, "y\n", "add", plugin, "--target", "copilot")
 	if err == nil || !strings.Contains(err.Error(), "recognized negative client evidence") {
@@ -2984,12 +2989,12 @@ func newCLIFixture(t *testing.T, clients []domain.DetectedClient) cliFixture {
 	operations := filepath.Join(root, "data", "operations-v2")
 	packageLoader := loader.Loader{Registry: registry}
 	managedRoot := filepath.Join(root, "data", "managed")
-	stager := providers.Stager{}
-	planner := clientplanner.Planner{ManagedRoot: managedRoot, Detected: map[domain.ClientID]domain.DetectedClient{}}
+	stager := providerstest.NewStager(providers.Stager{})
+	planner := plannertest.NewPlanner(clientplanner.Planner{ManagedRoot: managedRoot})
 	mutationLock := processlock.Lock{Path: filepath.Join(root, "data", "mutation.lock")}
 	directory := dirswap.Manager{JournalDir: operations}
-	lifecycle := usecase.Service{StateStore: store, Planner: planner, Targets: planner, Stager: stager, Activator: providers.Activator{}, Lock: mutationLock,
-		Kernel: transaction.Kernel{StateStore: store, Directory: directory}, NativeObserver: fixtureNativeObserver{}, PluginData: providers.PluginDataManager{Base: filepath.Join(root, "data", "plugin-data")}}
+	lifecycle := usecasetest.NewService(usecase.Service{StateStore: store, Planner: planner, Targets: planner, Stager: stager, Activator: providerstest.NewActivator(providers.Activator{}), Lock: mutationLock,
+		Kernel: transaction.Kernel{StateStore: store, Directory: directory}, NativeObserver: fixtureNativeObserver{}, PluginData: providers.PluginDataManager{Base: filepath.Join(root, "data", "plugin-data")}})
 	return cliFixture{
 		root: root, store: store, operations: operations,
 		app: App{
@@ -2998,6 +3003,9 @@ func newCLIFixture(t *testing.T, clients []domain.DetectedClient) cliFixture {
 			},
 			Version: "0.1.0", UserHome: filepath.Join(root, "home"),
 			ManagedRoot: managedRoot, StateStore: store, Detector: staticDetector{clients: clients},
+			ClientRegistry: clientregistry.Default(),
+			Planner:        planner,
+			Targets:        planner,
 			SourceAcquirer: sourceacquisition.Acquirer{TempRoot: root},
 			PackageLoader:  packageLoader, NativePackageLoader: loader.OpenAILoader{Loader: packageLoader},
 			Lifecycle:       lifecycle,

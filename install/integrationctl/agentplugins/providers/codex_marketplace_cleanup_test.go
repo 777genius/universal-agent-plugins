@@ -6,6 +6,8 @@ import (
 	"runtime"
 	"strconv"
 	"testing"
+
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/codex"
 )
 
 func TestManagedCodexMarketplaceRegisteredAcceptsFilesystemAlias(t *testing.T) {
@@ -29,7 +31,7 @@ func TestManagedCodexMarketplaceRegisteredAcceptsFilesystemAlias(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(configRoot, "config.toml"), []byte(config), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	registered, err := managedCodexMarketplaceRegistered(configRoot, "agentplugins-test", managed)
+	registered, err := codex.ManagedCodexMarketplaceRegistered(configRoot, "agentplugins-test", managed)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -52,7 +54,7 @@ func TestManagedCodexMarketplaceRegisteredRejectsDifferentResolvedPath(t *testin
 	if err := os.WriteFile(filepath.Join(configRoot, "config.toml"), []byte(config), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	registered, err := managedCodexMarketplaceRegistered(configRoot, "agentplugins-test", managed)
+	registered, err := codex.ManagedCodexMarketplaceRegistered(configRoot, "agentplugins-test", managed)
 	if err == nil || registered {
 		t.Fatalf("different resolved path must fail closed: registered=%v err=%v", registered, err)
 	}
@@ -62,7 +64,7 @@ func TestEquivalentLocalPathRejectsUnresolvedAlias(t *testing.T) {
 	root := t.TempDir()
 	missing := filepath.Join(root, "missing")
 	for _, pair := range [][2]string{{missing, root}, {root, missing}} {
-		if equivalentLocalPath(pair[0], pair[1]) {
+		if codex.EquivalentLocalPath(pair[0], pair[1]) {
 			t.Fatalf("unresolved alias must fail closed: %q and %q", pair[0], pair[1])
 		}
 	}
@@ -71,7 +73,7 @@ func TestEquivalentLocalPathRejectsUnresolvedAlias(t *testing.T) {
 func TestEquivalentLocalPathAcceptsIdenticalCleanedPath(t *testing.T) {
 	root := t.TempDir()
 	missing := filepath.Join(root, "missing")
-	if !equivalentLocalPath(missing+string(filepath.Separator)+".", missing) {
+	if !codex.EquivalentLocalPath(missing+string(filepath.Separator)+".", missing) {
 		t.Fatal("identical cleaned paths must remain accepted without filesystem evidence")
 	}
 }

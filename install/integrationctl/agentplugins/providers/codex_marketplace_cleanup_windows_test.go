@@ -6,6 +6,8 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/codex"
 )
 
 func TestManagedCodexMarketplaceRegisteredExtendedWindowsPath(t *testing.T) {
@@ -47,7 +49,7 @@ func TestManagedCodexMarketplaceRegisteredExtendedWindowsPath(t *testing.T) {
 			if err := os.WriteFile(filepath.Join(configRoot, "config.toml"), []byte(config), 0o600); err != nil {
 				t.Fatal(err)
 			}
-			registered, err := managedCodexMarketplaceRegistered(configRoot, "agentplugins-test", managed)
+			registered, err := codex.ManagedCodexMarketplaceRegistered(configRoot, "agentplugins-test", managed)
 			if tc.want {
 				if err != nil || !registered {
 					t.Fatalf("same directory must be accepted: registered=%v err=%v", registered, err)

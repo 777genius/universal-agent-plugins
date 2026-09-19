@@ -1,4 +1,4 @@
-.PHONY: test test-required test-agentplugins-native-install test-plugin-manifest-workflow test-install-compat test-extended test-polyglot-smoke test-live test-live-cli test-install-live test-gemini-live test-gemini-runtime test-gemini-runtime-live test-opencode-live test-opencode-cli-live test-opencode-tools-live test-opencode-mcp-live test-opencode-e2e-live test-cursor-live test-portable-mcp-live test-context7-live test-chrome-devtools-live test-atlassian-live test-cloudflare-live test-cloudflare-bindings-live test-cloudflare-docs-live test-cloudflare-observability-live test-cloudflare-radar-live test-heroku-live test-hubspot-crm-live test-hubspot-developer-live test-neon-live test-docker-hub-live test-notion-live test-e2e-live test-govulncheck-local test-security generated-check version-sync-check removed-contract-boundary-check release-gate release-rehearsal build-plugin-kit-ai vet
+.PHONY: lint lint-fix lint-baseline-check test-core test test-required test-agentplugins-native-install test-plugin-manifest-workflow test-install-compat test-extended test-polyglot-smoke test-live test-live-cli test-install-live test-gemini-live test-gemini-runtime test-gemini-runtime-live test-opencode-live test-opencode-cli-live test-opencode-tools-live test-opencode-mcp-live test-opencode-e2e-live test-cursor-live test-portable-mcp-live test-context7-live test-chrome-devtools-live test-atlassian-live test-cloudflare-live test-cloudflare-bindings-live test-cloudflare-docs-live test-cloudflare-observability-live test-cloudflare-radar-live test-heroku-live test-hubspot-crm-live test-hubspot-developer-live test-neon-live test-docker-hub-live test-notion-live test-e2e-live test-govulncheck-local test-security generated-check version-sync-check removed-contract-boundary-check release-gate release-rehearsal build-plugin-kit-ai vet
 
 GOCACHE ?= /tmp/plugin-kit-ai-gocache
 export GOCACHE
@@ -8,6 +8,49 @@ SECURITY_GOTOOLCHAIN ?= go1.25.13
 EXTENDED_TEST_ARGS ?=
 REQUIRED_TEST_TIMEOUT ?= 20m
 
+# Modules that carry the agentplugins install core; the single root .golangci.yml
+# applies to all of them.
+LINT_MODULES ?= . cli/plugin-kit-ai install/integrationctl install/integrationctl/agentplugins
+GOLANGCI_LINT ?= golangci-lint
+LINT_BASE ?= origin/main
+
+# Core packages for the fast local preflight.
+CORE_TEST_TIMEOUT ?= 10m
+# A user-level core.hooksPath hook can reject the commits these tests create, so
+# the core lane runs git without any hooks. Same technique as
+# .github/workflows/authoring-native.yml.
+CORE_TEST_GIT_ENV = GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.hooksPath GIT_CONFIG_VALUE_0=/dev/null
+
+# Two passes, because --new-from-* filters by changed line and funlen/gocyclo/
+# file-length-limit report on the declaration line: growing an old function would
+# slip through a changed-lines-only run.
+lint:
+	@for module in $(LINT_MODULES); do \
+		echo "==> size and architecture gate: $$module"; \
+		(cd $$module && $(GOLANGCI_LINT) run --enable-only=revive,funlen,gocyclo,gocognit,dupl,depguard) || exit 1; \
+	done
+	@for module in $(LINT_MODULES); do \
+		echo "==> changed lines since $(LINT_BASE): $$module"; \
+		(cd $$module && $(GOLANGCI_LINT) run --new-from-merge-base=$(LINT_BASE)) || exit 1; \
+	done
+	$(MAKE) lint-baseline-check
+
+lint-fix:
+	@for module in $(LINT_MODULES); do \
+		echo "==> formatters: $$module"; \
+		(cd $$module && $(GOLANGCI_LINT) fmt) || exit 1; \
+	done
+
+lint-baseline-check:
+	bash ./scripts/check-lint-baseline.sh "$(LINT_BASE)"
+
+test-core:
+	# adapters/pathpolicy is outside the agentplugins tree but holds the only
+	# ports.PathPolicy implementation, so the fast gate has to run it too.
+	cd install/integrationctl && $(CORE_TEST_GIT_ENV) go test -count=1 -timeout=$(CORE_TEST_TIMEOUT) ./adapters/pathpolicy/...
+	cd install/integrationctl/agentplugins && $(CORE_TEST_GIT_ENV) go test -count=1 -timeout=$(CORE_TEST_TIMEOUT) ./...
+	cd cli/plugin-kit-ai && $(CORE_TEST_GIT_ENV) go test -count=1 -timeout=$(CORE_TEST_TIMEOUT) ./internal/agentpluginscli/... ./cmd/agentplugins/...
+
 test:
 	$(MAKE) test-required
 
@@ -15,6 +58,7 @@ test-required:
 	go test -count=1 -timeout=$(REQUIRED_TEST_TIMEOUT) ./...
 	go test -count=1 -timeout=$(REQUIRED_TEST_TIMEOUT) ./cli/plugin-kit-ai/...
 	go test -count=1 -timeout=$(REQUIRED_TEST_TIMEOUT) ./install/integrationctl/...
+	cd install/integrationctl/agentplugins && go test -count=1 -timeout=$(REQUIRED_TEST_TIMEOUT) ./...
 	go test -count=1 -timeout=$(REQUIRED_TEST_TIMEOUT) ./install/plugininstall/...
 	go test -count=1 -timeout=$(REQUIRED_TEST_TIMEOUT) ./sdk/...
 	cd npm/agentplugins && npm test && npm pack --dry-run --ignore-scripts
@@ -155,6 +199,7 @@ test-govulncheck-local:
 	cd cli/plugin-kit-ai && GOTOOLCHAIN=$(SECURITY_GOTOOLCHAIN) go run golang.org/x/vuln/cmd/govulncheck@v1.6.0 ./...
 	cd install/plugininstall && GOTOOLCHAIN=$(SECURITY_GOTOOLCHAIN) go run golang.org/x/vuln/cmd/govulncheck@v1.6.0 ./...
 	cd install/integrationctl && GOTOOLCHAIN=$(SECURITY_GOTOOLCHAIN) go run golang.org/x/vuln/cmd/govulncheck@v1.6.0 ./...
+	cd install/integrationctl/agentplugins && GOTOOLCHAIN=$(SECURITY_GOTOOLCHAIN) go run golang.org/x/vuln/cmd/govulncheck@v1.6.0 ./...
 	cd sdk && GOTOOLCHAIN=$(SECURITY_GOTOOLCHAIN) go run golang.org/x/vuln/cmd/govulncheck@v1.6.0 ./...
 
 test-security: test-govulncheck-local
@@ -164,6 +209,7 @@ vet:
 	go vet ./...
 	cd cli/plugin-kit-ai && go vet ./...
 	cd install/integrationctl && go vet ./...
+	cd install/integrationctl/agentplugins && go vet ./...
 	cd install/plugininstall && go vet ./...
 	cd sdk && go vet ./...
 

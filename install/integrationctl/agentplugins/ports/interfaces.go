@@ -65,8 +65,10 @@ type TargetedVersionProbingClientDetector interface {
 	DetectTargetsWithVersionProbe(context.Context, []domain.ClientID) ([]domain.DetectedClient, error)
 }
 
+// DeliveryPlanner resolves one request into a plan with its install intent
+// already applied. The use case never applies intent itself.
 type DeliveryPlanner interface {
-	Plan(context.Context, domain.PackageEnvelope, domain.DetectedClient, domain.InstallScope, string) (domain.DeliveryPlan, error)
+	Plan(context.Context, domain.PlanRequest) (domain.DeliveryPlan, error)
 }
 
 type DeliveryTargetResolver interface {

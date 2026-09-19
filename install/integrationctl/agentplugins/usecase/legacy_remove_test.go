@@ -55,11 +55,11 @@ func TestRemoveLegacyAbortsReconcileWhenLegacyStateReappears(t *testing.T) {
 		t.Fatal(err)
 	}
 	legacy := &legacyLifecycleStub{exists: true, reappearAfterRemove: true}
-	service := Service{
+	service := testService(Service{
 		StateStore: store, Legacy: legacy, LegacyLock: locks.FileLock{BaseDir: filepath.Join(root, "legacy-locks")},
 		Lock:   processlock.Lock{Path: filepath.Join(root, "mutation.lock")},
 		Kernel: transaction.Kernel{StateStore: store, Directory: dirswap.Manager{JournalDir: filepath.Join(root, "operations")}},
-	}
+	})
 	if _, err := service.RemoveLegacy(context.Background(), LegacyRemoveInput{Selector: installationID, Confirmed: true}); err == nil {
 		t.Fatal("concurrent legacy reappearance was reconciled as absent")
 	}
@@ -97,11 +97,11 @@ func TestRemoveLegacyDelegatesThenReconcilesStateV2(t *testing.T) {
 				t.Fatal(err)
 			}
 			legacy := &legacyLifecycleStub{exists: initiallyPresent}
-			service := Service{
+			service := testService(Service{
 				StateStore: store, Legacy: legacy, LegacyLock: locks.FileLock{BaseDir: filepath.Join(root, "legacy-locks")},
 				Lock:   processlock.Lock{Path: filepath.Join(root, "mutation.lock")},
 				Kernel: transaction.Kernel{StateStore: store, Directory: dirswap.Manager{JournalDir: filepath.Join(root, "operations")}},
-			}
+			})
 			result, err := service.RemoveLegacy(context.Background(), LegacyRemoveInput{
 				Selector: installationID, Confirmed: true, OperationID: "legacy-remove",
 			})

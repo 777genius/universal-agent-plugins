@@ -311,13 +311,14 @@ func doctorFindings(ctx context.Context, app App, detected []domain.DetectedClie
 				continue
 			}
 			client, visible := detectedByID[binding.ClientID]
-			if binding.ClientID == string(domain.ClientChatGPT) && !visible {
-				client = domain.DetectedClient{ClientID: domain.ClientChatGPT, DisplayName: "ChatGPT", Status: domain.DetectionNotDetected}
+			bindingClient := domain.ClientID(binding.ClientID)
+			if plansWithoutHostPresence(bindingClient) && !visible {
+				client = syntheticUndetectedClient(bindingClient)
 			}
-			if binding.ClientID != string(domain.ClientChatGPT) && (!visible || client.Status != domain.DetectionDetected) {
+			if !plansWithoutHostPresence(bindingClient) && (!visible || client.Status != domain.DetectionDetected) {
 				findings = append(findings, scopedFinding("degraded", "client_not_visible", installation, binding.ClientID, "the package is tracked but no current client visibility evidence was detected", "install or launch the client so its CLI, desktop application, or configuration directory is visible, then rerun doctor"))
 			}
-			if binding.ClientID == string(domain.ClientChatGPT) {
+			if requiresPersonalMapping(bindingClient) {
 				inventoryCurrent := packageInventoryAppliesToBinding(installation, binding)
 				if inventoryCurrent && installation.Package.Inventory.MCPPresent && (!installation.Package.Inventory.AppPresent || len(installation.Package.Inventory.AppBindings) == 0) {
 					findings = append(findings, scopedFinding("degraded", "chatgpt_app_binding_missing", installation, binding.ClientID, "the ChatGPT target has MCP content but no valid registered app mapping", "register the MCP connection in ChatGPT Developer Mode, add a valid root .app.json mapping, then update this target"))
@@ -327,7 +328,7 @@ func doctorFindings(ctx context.Context, app App, detected []domain.DetectedClie
 					findings = append(findings, scopedFinding("unknown", "chatgpt_registration_unverified", installation, binding.ClientID, "the .app.json mapping is package-valid, but remote ChatGPT registration cannot be observed locally", "verify the mapped connection and plugin status in ChatGPT Plugins; rerun add with --activation-complete only after checking it in a new chat"))
 				}
 			}
-			if visible && client.Status == domain.DetectionDetected && binding.ClientID == string(domain.ClientCopilot) && strings.TrimSpace(client.ExecutablePath) == "" {
+			if visible && client.Status == domain.DetectionDetected && bindingClient == nativeCLIRegistryOwner(bindingClient) && sharesPhysicalBackend(bindingClient) && strings.TrimSpace(client.ExecutablePath) == "" {
 				findings = append(findings, scopedFinding("degraded", "copilot_cli_missing", installation, binding.ClientID, "GitHub Copilot CLI is unavailable for automatic Copilot activation", "install GitHub Copilot CLI, ensure copilot is on PATH, and rerun doctor"))
 			}
 			switch binding.Activation {
@@ -347,7 +348,7 @@ func doctorFindings(ctx context.Context, app App, detected []domain.DetectedClie
 			if binding.Materialization == domain.MaterializationDegraded || binding.Verification == domain.VerificationFailed {
 				findings = append(findings, scopedFinding("degraded", "installation_verification_failed", installation, binding.ClientID, "the managed package is marked degraded or failed verification", repairAction(installation, binding)))
 			}
-			if binding.ClientID == string(domain.ClientChatGPT) || (visible && client.Status == domain.DetectionDetected) {
+			if plansWithoutHostPresence(bindingClient) || (visible && client.Status == domain.DetectionDetected) {
 				findings = append(findings, checkManagedIntegrity(ctx, app, client, installation, binding)...)
 			}
 		}
@@ -376,7 +377,10 @@ func checkManagedIntegrity(ctx context.Context, app App, client domain.DetectedC
 	if physicalID == "" {
 		return []doctorFinding{scopedFinding("degraded", "managed_target_unverifiable", installation, binding.ClientID, "the managed target has no physical artifact identity", blockedStateRecovery)}
 	}
-	target, err := (clientplanner.Planner{ManagedRoot: app.ManagedRoot}).ResolveTarget(ctx, client, domain.InstallScope(binding.Scope), physicalID)
+	if app.Targets == nil {
+		return []doctorFinding{scopedFinding("degraded", "managed_target_unverifiable", installation, binding.ClientID, "the managed target resolver is not configured", blockedStateRecovery)}
+	}
+	target, err := app.Targets.ResolveTarget(ctx, client, domain.InstallScope(binding.Scope), physicalID)
 	if err != nil || filepath.Clean(target.ActivePath) != filepath.Clean(binding.TargetLocator) {
 		return []doctorFinding{scopedFinding("degraded", "managed_target_mismatch", installation, binding.ClientID, "the recorded managed target does not match the current safe client target", blockedStateRecovery)}
 	}
@@ -405,9 +409,7 @@ func checkManagedIntegrity(ctx context.Context, app App, client domain.DetectedC
 }
 
 func checkNativeProjectionIntegrity(ctx context.Context, app App, client domain.DetectedClient, target domain.DeliveryTarget, installation domain.Installation, binding domain.ClientBinding, expectedDigest string) []doctorFinding {
-	switch domain.ClientID(binding.ClientID) {
-	case domain.ClientGemini, domain.ClientOpenCode, domain.ClientCline, domain.ClientWindsurf:
-	default:
+	if !nativeConfigLifecycle(domain.ClientID(binding.ClientID)) {
 		return nil
 	}
 	if !hasOwnedNativeProjection(binding.NativeObjects) {

@@ -1,0 +1,126 @@
+name: Core fast
+
+# Merge gate for the stacked installer-core refactor parts. The full Required
+# lane runs on push to the base branch afterwards, so this one only has to be
+# fast enough to keep a part from waiting 10-27 minutes.
+on:
+  pull_request:
+    branches: [main, 'refactor/**']
+    paths:
+      - 'install/integrationctl/agentplugins/**'
+      # The only ports.PathPolicy implementation lives here.
+      - 'install/integrationctl/adapters/pathpolicy/**'
+      - 'cli/plugin-kit-ai/internal/agentpluginscli/**'
+      - 'cli/plugin-kit-ai/cmd/agentplugins/**'
+      - 'go.mod'
+      - 'go.sum'
+      - 'go.work'
+      - 'go.work.sum'
+      - '**/go.mod'
+      - '**/go.sum'
+      - '.golangci.yml'
+      - 'Makefile'
+      - 'scripts/check-lint-baseline.sh'
+      - '.github/workflows/core-fast.yml'
+      - '.github/workflows/lint.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: core-fast-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    uses: ./.github/workflows/lint.yml
+    with:
+      lint-base: origin/${{ github.base_ref || 'main' }}
+
+  test-core:
+    name: test-core
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.25.13"
+          cache: false
+
+      # Same target as the local preflight, so a green run here means the same
+      # packages a contributor ran locally.
+      - name: Run install core tests
+        run: make test-core
+
+      # Informational, never a gate, and a second pass on purpose:
+      # adapters/clientdetect re-executes its own test binary to probe a client
+      # version, and under -cover the child prints a GOCOVERDIR warning into the
+      # output that probe parses. Excluding it from the instrumented run keeps
+      # the gate above identical to `make test-core`.
+      - name: Report core coverage
+        continue-on-error: true
+        run: |
+          (cd install/integrationctl/agentplugins && go list ./... \
+            | grep -v '/adapters/clientdetect$' \
+            | xargs go test -count=1 -cover) > core-cover.log 2>&1 || true
+          (cd cli/plugin-kit-ai && go test -count=1 -cover ./internal/agentpluginscli/... ./cmd/agentplugins/...) >> core-cover.log 2>&1 || true
+          cat core-cover.log
+          {
+            echo '### Install core coverage'
+            echo
+            echo '```'
+            grep -E 'coverage:' core-cover.log || echo 'no coverage lines produced'
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  cross-build:
+    name: cross-build (${{ matrix.goos }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        goos: [linux, darwin, windows]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.25.13"
+          cache: false
+
+      # The core carries 39 platform-tagged files; only a real cross build
+      # catches a Windows-only or darwin-only file that stopped compiling.
+      - name: Build every core module for ${{ matrix.goos }}
+        env:
+          GOOS: ${{ matrix.goos }}
+        run: |
+          set -e
+          for module in install/integrationctl install/integrationctl/agentplugins cli/plugin-kit-ai; do
+            echo "==> $module"
+            (cd "$module" && go build ./...)
+          done
+
+  vet-all:
+    name: vet-all
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.25.13"
+          cache: false
+
+      # test-core does not compile the authoring commands, terminal prompts,
+      # conformance adapter, registry mirror or repotests, and all of them
+      # depend on core APIs the refactor changes. go vet compiles packages
+      # together with their tests across all six go.work modules.
+      - name: Vet every workspace module
+        run: make vet

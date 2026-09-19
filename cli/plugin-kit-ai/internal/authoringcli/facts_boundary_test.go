@@ -44,7 +44,7 @@ func forbiddenFactsImport(dep string) bool {
 // Scan every production Go file regardless of filename platform suffix or build
 // constraints. Follow local imports even through helpers outside the fact roots.
 func checkFactsBoundary(repo string) error {
-	modules := map[string]string{repositoryModule + "/cli": "cli/plugin-kit-ai", repositoryModule + "/install/integrationctl": "install/integrationctl", repositoryModule + "/plugininstall": "install/plugininstall", repositoryModule + "/sdk": "sdk", repositoryModule: "."}
+	modules := map[string]string{repositoryModule + "/cli": "cli/plugin-kit-ai", repositoryModule + "/install/integrationctl/agentplugins": "install/integrationctl/agentplugins", repositoryModule + "/install/integrationctl": "install/integrationctl", repositoryModule + "/plugininstall": "install/plugininstall", repositoryModule + "/sdk": "sdk", repositoryModule: "."}
 	resolve := func(dep string) string {
 		best, dir := "", ""
 		for prefix, local := range modules {

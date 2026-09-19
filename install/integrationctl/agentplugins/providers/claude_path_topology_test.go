@@ -2,10 +2,12 @@ package providers
 
 import (
 	"context"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/claude"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
 func TestClaudeBundledStdioObservesIsolatedRuntime(t *testing.T) {
@@ -26,7 +28,7 @@ func TestClaudeBundledStdioObservesIsolatedRuntime(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			observed := filepath.Join(delivery.StagingPath, claudeRuntimeDirectory)
+			observed := filepath.Join(delivery.StagingPath, claude.ClaudeRuntimeDirectory)
 			if _, err := os.Stat(filepath.Join(delivery.StagingPath, "bin")); !os.IsNotExist(err) {
 				t.Fatalf("authored bin remained exposed: %v", err)
 			}
@@ -34,7 +36,7 @@ func TestClaudeBundledStdioObservesIsolatedRuntime(t *testing.T) {
 				t.Fatal(err)
 			}
 			server := readObject(t, filepath.Join(delivery.StagingPath, ".mcp.json"))["local"].(map[string]any)
-			activeRuntime := filepath.Join(plan.ActivePath, claudeRuntimeDirectory)
+			activeRuntime := filepath.Join(plan.ActivePath, claude.ClaudeRuntimeDirectory)
 			expectedCWD := activeRuntime
 			if cwd == "./work" {
 				expectedCWD = filepath.Join(activeRuntime, "work")
@@ -45,10 +47,10 @@ func TestClaudeBundledStdioObservesIsolatedRuntime(t *testing.T) {
 			if args := server["args"].([]any); args[7] != filepath.Join(activeRuntime, "config") || args[8] != "${UNKNOWN}" {
 				t.Fatalf("args: %+v", args)
 			}
-			if err := (Stager{}).Verify(context.Background(), delivery.StagingPath, delivery.ArtifactDigest); err != nil {
+			if err := testStager(Stager{}).Verify(context.Background(), delivery.StagingPath, delivery.ArtifactDigest); err != nil {
 				t.Fatal(err)
 			}
-			if err := (Stager{}).Discard(context.Background(), delivery); err != nil {
+			if err := testStager(Stager{}).Discard(context.Background(), delivery); err != nil {
 				t.Fatal(err)
 			}
 		})

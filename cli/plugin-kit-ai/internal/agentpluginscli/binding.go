@@ -7,12 +7,13 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/spf13/cobra"
+
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/prompt"
 	"github.com/777genius/plugin-kit-ai/cli/internal/promptio"
 	"github.com/777genius/plugin-kit-ai/cli/internal/terminaltheme"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/usecase"
-	"github.com/spf13/cobra"
 )
 
 func newRebindCommand(app App, opts *options) *cobra.Command {
@@ -43,6 +44,19 @@ func newBindingChangeCommand(app App, opts *options, mode usecase.BindingChangeM
 	}
 }
 
+type bindingChangeSession struct {
+	ctx      context.Context
+	cmd      *cobra.Command
+	app      App
+	opts     *options
+	mode     usecase.BindingChangeMode
+	selector string
+	source   string
+	loaded   loadedPackage
+	service  usecase.Service
+	planned  usecase.BindingChangeResult
+}
+
 func runBindingChange(
 	ctx context.Context,
 	cmd *cobra.Command,
@@ -51,61 +65,105 @@ func runBindingChange(
 	mode usecase.BindingChangeMode,
 	selector, source string,
 ) error {
-	commandName := bindingCommandName(mode)
-	writeProgress(app, opts.format, "Resolving and validating the proposed Agent Plugin binding...")
-	loaded, err := app.loadPackage(ctx, source)
-	if err != nil {
+	session := &bindingChangeSession{
+		ctx: ctx, cmd: cmd, app: app, opts: opts, mode: mode, selector: selector, source: source,
+	}
+	if err := session.load(); err != nil {
 		return err
 	}
-	if loaded.cleanup != nil {
-		defer loaded.cleanup()
+	if session.loaded.cleanup != nil {
+		defer func() { _ = session.loaded.cleanup() }()
 	}
-	service := app.Lifecycle
-	service.StateStore = app.StateStore
-	input := usecase.BindingChangeInput{Selector: selector, Envelope: loaded.envelope}
-	planned, err := executeBindingChange(ctx, service, mode, input)
-	if err != nil {
+	if err := session.plan(); err != nil {
 		return err
 	}
-	if opts.dryRun || planned.NoChange {
-		return renderBindingChange(cmd.OutOrStdout(), opts.format, commandName, planned, opts.dryRun)
+	if opts.dryRun || session.planned.NoChange {
+		return renderBindingChange(cmd.OutOrStdout(), opts.format, session.commandName(), session.planned, opts.dryRun)
 	}
-	if !planned.Plan.CanApply {
-		if renderErr := renderBindingChange(cmd.OutOrStdout(), opts.format, commandName, planned, false); renderErr != nil {
-			return renderErr
-		}
-		return fmt.Errorf("binding change is blocked; remove all listed targets first")
+	if !session.planned.Plan.CanApply {
+		return session.blocked()
 	}
-	confirmed := mutationConfirmed(app, opts)
-	writer := cmd.OutOrStdout()
-	if opts.format == "human" {
-		if !confirmed && app.Terminal {
-			writer, err = promptio.VisibleOutput(writer, cmd.ErrOrStderr())
-			if err != nil {
-				return err
-			}
-		}
-		if err := renderHumanBindingPlan(writer, planned.Plan); err != nil {
-			return err
-		}
-	}
-	if !confirmed && opts.format == "human" && app.Terminal {
-		confirmed, err = promptYesNo(cmd.Context(), cmd.InOrStdin(), writer, writer, "Apply this binding change? [y/N]")
-		if err != nil {
-			return err
-		}
+	confirmed, err := session.confirm()
+	if err != nil {
+		return err
 	}
 	if !confirmed {
-		if opts.format == "json" {
-			return renderBindingChange(cmd.OutOrStdout(), opts.format, commandName, planned, false)
-		}
-		_, _ = fmt.Fprintln(cmd.OutOrStdout(), "No changes made.")
-		return nil
+		return session.canceled()
 	}
-	writeProgress(app, opts.format, "Committing the reviewed binding change...")
-	input.Confirmed = true
-	result, changeErr := executeBindingChange(ctx, service, mode, input)
-	if renderErr := renderBindingChange(cmd.OutOrStdout(), opts.format, commandName, result, false); renderErr != nil && changeErr == nil {
+	return session.apply()
+}
+
+func (session *bindingChangeSession) commandName() string {
+	return bindingCommandName(session.mode)
+}
+
+func (session *bindingChangeSession) load() error {
+	writeProgress(session.app, session.opts.format, "Resolving and validating the proposed Agent Plugin binding...")
+	loaded, err := session.app.loadPackage(session.ctx, session.source)
+	if err != nil {
+		return err
+	}
+	session.loaded = loaded
+	return nil
+}
+
+func (session *bindingChangeSession) plan() error {
+	session.service = session.app.Lifecycle
+	session.service.StateStore = session.app.StateStore
+	input := usecase.BindingChangeInput{Selector: session.selector, Envelope: session.loaded.envelope}
+	planned, err := executeBindingChange(session.ctx, session.service, session.mode, input)
+	if err != nil {
+		return err
+	}
+	session.planned = planned
+	return nil
+}
+
+func (session *bindingChangeSession) blocked() error {
+	if renderErr := renderBindingChange(session.cmd.OutOrStdout(), session.opts.format, session.commandName(), session.planned, false); renderErr != nil {
+		return renderErr
+	}
+	return fmt.Errorf("binding change is blocked; remove all listed targets first")
+}
+
+func (session *bindingChangeSession) confirm() (bool, error) {
+	confirmed := mutationConfirmed(session.app, session.opts)
+	writer := session.cmd.OutOrStdout()
+	if session.opts.format == "human" {
+		if !confirmed && session.app.Terminal {
+			var err error
+			writer, err = promptio.VisibleOutput(writer, session.cmd.ErrOrStderr())
+			if err != nil {
+				return false, err
+			}
+		}
+		if err := renderHumanBindingPlan(writer, session.planned.Plan); err != nil {
+			return false, err
+		}
+	}
+	if !confirmed && session.opts.format == "human" && session.app.Terminal {
+		var err error
+		confirmed, err = promptYesNo(session.cmd.Context(), session.cmd.InOrStdin(), writer, writer, "Apply this binding change? [y/N]")
+		if err != nil {
+			return false, err
+		}
+	}
+	return confirmed, nil
+}
+
+func (session *bindingChangeSession) canceled() error {
+	if session.opts.format == "json" {
+		return renderBindingChange(session.cmd.OutOrStdout(), session.opts.format, session.commandName(), session.planned, false)
+	}
+	_, _ = fmt.Fprintln(session.cmd.OutOrStdout(), "No changes made.")
+	return nil
+}
+
+func (session *bindingChangeSession) apply() error {
+	writeProgress(session.app, session.opts.format, "Committing the reviewed binding change...")
+	input := usecase.BindingChangeInput{Selector: session.selector, Envelope: session.loaded.envelope, Confirmed: true}
+	result, changeErr := executeBindingChange(session.ctx, session.service, session.mode, input)
+	if renderErr := renderBindingChange(session.cmd.OutOrStdout(), session.opts.format, session.commandName(), result, false); renderErr != nil && changeErr == nil {
 		changeErr = renderErr
 	}
 	return changeErr
@@ -133,6 +191,10 @@ func renderBindingChange(writer io.Writer, format, commandName string, result us
 	if format == "json" {
 		return writeJSONOutput(writer, commandName, data)
 	}
+	return renderHumanBindingChange(writer, result, dryRun)
+}
+
+func renderHumanBindingChange(writer io.Writer, result usecase.BindingChangeResult, dryRun bool) error {
 	if dryRun || !result.Plan.CanApply {
 		if err := renderHumanBindingPlan(writer, result.Plan); err != nil {
 			return err
@@ -190,15 +252,7 @@ func provenanceLabel(source usecase.ProvenanceSummary) string {
 
 func componentInventoryLabel(inventory domain.ComponentInventory) string {
 	parts := make([]string, 0, 6)
-	if inventory.MCPPresent {
-		state := "disabled"
-		if inventory.MCPEnabled {
-			state = "enabled"
-		}
-		parts = append(parts, "mcp="+state+"["+sortedList(inventory.MCPServers)+"]")
-	} else {
-		parts = append(parts, "mcp=absent")
-	}
+	parts = append(parts, mcpInventoryLabel(inventory))
 	if inventory.AppPresent {
 		parts = append(parts, "apps=["+sortedList(inventory.AppBindings)+"]")
 	}
@@ -214,6 +268,17 @@ func componentInventoryLabel(inventory domain.ComponentInventory) string {
 		parts = append(parts, "invalid_skills_root=true")
 	}
 	return strings.Join(parts, " ")
+}
+
+func mcpInventoryLabel(inventory domain.ComponentInventory) string {
+	if !inventory.MCPPresent {
+		return "mcp=absent"
+	}
+	state := "disabled"
+	if inventory.MCPEnabled {
+		state = "enabled"
+	}
+	return "mcp=" + state + "[" + sortedList(inventory.MCPServers) + "]"
 }
 
 func sortedList(values []string) string {
