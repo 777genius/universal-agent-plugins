@@ -842,9 +842,35 @@ func TestDeactivatorPreviewsThenCleansManagedCodexMarketplace(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !preview.ArtifactRemovalAllowed || !preview.ExternalRemovalComplete || len(runner.commands) != 0 {
+	if !preview.ArtifactRemovalAllowed || preview.ExternalRemovalComplete || len(runner.commands) != 0 {
 		t.Fatalf("preview = %+v, commands = %+v", preview, runner.commands)
 	}
+	if len(preview.UserActions) != 1 || !strings.Contains(preview.UserActions[0], "uninstall the managed Codex plugin") {
+		t.Fatalf("preview actions = %#v", preview.UserActions)
+	}
+	request.Confirmed = true
+	outcome, err := (Activator{Runner: runner}).Deactivate(context.Background(), request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !outcome.ArtifactRemovalAllowed || !outcome.ExternalRemovalComplete {
+		t.Fatalf("outcome = %+v", outcome)
+	}
+	marketplace := shared.ManagedMarketplaceName(request.PhysicalArtifactID)
+	want := [][]string{
+		{"/test/bin/codex", "plugin", "remove", request.DeclaredName + "@" + marketplace, "--json"},
+		{"/test/bin/codex", "plugin", "marketplace", "remove", marketplace, "--json"},
+	}
+	if got := commandArgv(runner.commands); !reflect.DeepEqual(got, want) {
+		t.Fatalf("commands = %#v, want %#v", got, want)
+	}
+}
+
+func TestDeactivatorUninstallsManagedCodexPluginWithoutExternalFlagWhenCLIAvailable(t *testing.T) {
+	t.Parallel()
+	runner := &recordingRunner{}
+	request := codexDeactivationRequest(t)
+	request.ExternalUninstalled = false
 	request.Confirmed = true
 	outcome, err := (Activator{Runner: runner}).Deactivate(context.Background(), request)
 	if err != nil {
@@ -1050,19 +1076,238 @@ func TestDeactivatorTreatsAlreadyAbsentNativeObjectsAsRemoved(t *testing.T) {
 	}
 }
 
-func TestDeactivatorDoesNotClaimManualCopilotLifecycle(t *testing.T) {
+func TestDeactivatorUninstallsCopilotEvenWhenActivationIsManual(t *testing.T) {
 	t.Parallel()
 	runner := &recordingRunner{}
-	outcome, err := (Activator{Runner: runner}).Deactivate(context.Background(), domain.DeactivationRequest{
+	request := domain.DeactivationRequest{
 		Client: domain.DetectedClient{ClientID: domain.ClientCopilot}, DeclaredName: "demo",
 		CurrentActivation: domain.ActivationManual, BackendExecutable: "/test/bin/copilot",
 		PhysicalArtifactID: "demo-0123456789ab", Confirmed: true,
-	})
+	}
+	outcome, err := (Activator{Runner: runner}).Deactivate(context.Background(), request)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if outcome.ArtifactRemovalAllowed || len(outcome.UserActions) != 1 || len(runner.commands) != 0 {
-		t.Fatalf("outcome = %+v, commands = %+v", outcome, runner.commands)
+	if !outcome.ArtifactRemovalAllowed || !outcome.ExternalRemovalComplete {
+		t.Fatalf("outcome = %+v", outcome)
+	}
+	want := [][]string{
+		{"/test/bin/copilot", "plugin", "uninstall", "demo@" + shared.ManagedMarketplaceName(request.PhysicalArtifactID)},
+		{"/test/bin/copilot", "plugin", "marketplace", "remove", shared.ManagedMarketplaceName(request.PhysicalArtifactID)},
+	}
+	if got := commandArgv(runner.commands); !reflect.DeepEqual(got, want) {
+		t.Fatalf("commands = %#v, want %#v", got, want)
+	}
+}
+
+func TestDeactivatorUninstallsCopilotEvenWhenExternalFlagIsSet(t *testing.T) {
+	t.Parallel()
+	runner := &recordingRunner{}
+	request := domain.DeactivationRequest{
+		Client: domain.DetectedClient{ClientID: domain.ClientCopilot}, DeclaredName: "demo",
+		CurrentActivation: domain.ActivationActive, BackendExecutable: "/test/bin/copilot",
+		PhysicalArtifactID: "demo-0123456789ab", Confirmed: true, ExternalUninstalled: true,
+	}
+	outcome, err := (Activator{Runner: runner}).Deactivate(context.Background(), request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !outcome.ArtifactRemovalAllowed || !outcome.ExternalRemovalComplete || len(runner.commands) == 0 {
+		t.Fatalf("flag skipped Copilot uninstall: outcome=%+v commands=%+v", outcome, runner.commands)
+	}
+}
+
+func TestDeactivatePreviewNeverRunsCLICommands(t *testing.T) {
+	t.Parallel()
+	for _, spec := range []struct {
+		id         domain.ClientID
+		executable string
+	}{
+		{id: domain.ClientClaude, executable: "/test/bin/claude"},
+		{id: domain.ClientCodex, executable: "/test/bin/codex"},
+		{id: domain.ClientCopilot, executable: "/test/bin/copilot"},
+		{id: domain.ClientVSCode, executable: "/test/bin/copilot"},
+	} {
+		spec := spec
+		t.Run(string(spec.id), func(t *testing.T) {
+			t.Parallel()
+			runner := &recordingRunner{}
+			outcome, err := (Activator{Runner: runner}).Deactivate(context.Background(), domain.DeactivationRequest{
+				Client:       domain.DetectedClient{ClientID: spec.id, ConfigRoot: t.TempDir()},
+				DeclaredName: "demo", CurrentActivation: domain.ActivationActive,
+				BackendExecutable: spec.executable, PhysicalArtifactID: "demo-0123456789ab",
+				ManagedArtifactPath: t.TempDir(),
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !outcome.ArtifactRemovalAllowed || outcome.ExternalRemovalComplete || len(runner.commands) != 0 {
+				t.Fatalf("preview mutated CLI: outcome=%+v commands=%+v", outcome, runner.commands)
+			}
+			if len(outcome.UserActions) == 0 {
+				t.Fatalf("preview had no uninstall announcement: %+v", outcome)
+			}
+		})
+	}
+}
+
+func TestDeactivateUninstallsEveryKnownClientWithoutExternalFlagWhenPossible(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	active := filepath.Join(root, "claude", "skills", "demo-0123456789ab")
+	if err := os.MkdirAll(active, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	physicalID := "demo-0123456789ab"
+	seen := map[domain.ClientID]bool{}
+	for _, spec := range []struct {
+		id           domain.ClientID
+		request      domain.DeactivationRequest
+		runner       *recordingRunner
+		wantAllowed  bool
+		wantComplete bool
+		wantErr      string
+		wantAction   string
+		wantCommand  string
+	}{
+		{
+			id: domain.ClientCursor,
+			request: domain.DeactivationRequest{
+				Client: domain.DetectedClient{ClientID: domain.ClientCursor}, DeclaredName: "demo",
+				CurrentActivation: domain.ActivationManual, Confirmed: true, ManagedArtifactPath: active,
+			},
+			wantAllowed: true,
+		},
+		{
+			id: domain.ClientClaude,
+			request: domain.DeactivationRequest{
+				Client:       domain.DetectedClient{ClientID: domain.ClientClaude, ConfigRoot: filepath.Join(root, "claude")},
+				DeclaredName: "demo", CurrentActivation: domain.ActivationActive, Confirmed: true,
+				BackendExecutable: "/test/bin/claude", ManagedArtifactPath: active,
+			},
+			runner: &recordingRunner{run: func(legacyports.Command) legacyports.CommandResult {
+				return legacyports.CommandResult{Stdout: []byte(claudeListing("demo", active, true))}
+			}},
+			wantAllowed: true, wantComplete: true, wantCommand: "plugin list --json",
+		},
+		{
+			id: domain.ClientCodex,
+			request: domain.DeactivationRequest{
+				Client:       domain.DetectedClient{ClientID: domain.ClientCodex, ConfigRoot: filepath.Join(root, "codex")},
+				DeclaredName: "demo", CurrentActivation: domain.ActivationActive, Confirmed: true,
+				BackendExecutable: "/test/bin/codex", PhysicalArtifactID: physicalID, ManagedArtifactPath: active,
+			},
+			runner: &recordingRunner{}, wantAllowed: true, wantComplete: true, wantCommand: "plugin remove",
+		},
+		{
+			id: domain.ClientCopilot,
+			request: domain.DeactivationRequest{
+				Client: domain.DetectedClient{ClientID: domain.ClientCopilot}, DeclaredName: "demo",
+				CurrentActivation: domain.ActivationActive, Confirmed: true,
+				BackendExecutable: "/test/bin/copilot", PhysicalArtifactID: physicalID,
+			},
+			runner: &recordingRunner{}, wantAllowed: true, wantComplete: true, wantCommand: "plugin uninstall",
+		},
+		{
+			id: domain.ClientVSCode,
+			request: domain.DeactivationRequest{
+				Client: domain.DetectedClient{ClientID: domain.ClientVSCode}, DeclaredName: "demo",
+				CurrentActivation: domain.ActivationManual, Confirmed: true,
+				BackendExecutable: "/test/bin/copilot", PhysicalArtifactID: physicalID,
+			},
+			runner: &recordingRunner{}, wantAllowed: true, wantComplete: true, wantCommand: "plugin uninstall",
+		},
+		{
+			id: domain.ClientGemini,
+			request: domain.DeactivationRequest{
+				Client:       domain.DetectedClient{ClientID: domain.ClientGemini, ConfigRoot: filepath.Join(root, "gemini")},
+				DeclaredName: "demo", CurrentActivation: domain.ActivationActive, Confirmed: true,
+				ManagedArtifactPath: active,
+			},
+			wantAllowed: true, wantComplete: true,
+		},
+		{
+			id: domain.ClientOpenCode,
+			request: domain.DeactivationRequest{
+				Client:       domain.DetectedClient{ClientID: domain.ClientOpenCode, ConfigRoot: filepath.Join(root, "opencode")},
+				DeclaredName: "demo", CurrentActivation: domain.ActivationActive, Confirmed: true,
+				ManagedArtifactPath: active,
+			},
+			wantAllowed: true, wantComplete: true,
+		},
+		{
+			id: domain.ClientCline,
+			request: domain.DeactivationRequest{
+				Client:       domain.DetectedClient{ClientID: domain.ClientCline, ConfigRoot: filepath.Join(root, "cline")},
+				DeclaredName: "demo", CurrentActivation: domain.ActivationActive, Confirmed: true,
+				ManagedArtifactPath: active,
+			},
+			wantErr: "managed Cline native ownership is missing",
+		},
+		{
+			id: domain.ClientKiro,
+			request: domain.DeactivationRequest{
+				Client:       domain.DetectedClient{ClientID: domain.ClientKiro, ConfigRoot: filepath.Join(root, "kiro")},
+				DeclaredName: "demo", CurrentActivation: domain.ActivationManual, Confirmed: true,
+			},
+			wantAllowed: false, wantAction: "--external-uninstalled",
+		},
+		{
+			id: domain.ClientWindsurf,
+			request: domain.DeactivationRequest{
+				Client: domain.DetectedClient{ClientID: domain.ClientWindsurf}, DeclaredName: "demo",
+				CurrentActivation: domain.ActivationManual, Confirmed: true,
+			},
+			wantAllowed: false, wantAction: "--external-uninstalled",
+		},
+		{
+			id: domain.ClientChatGPT,
+			request: domain.DeactivationRequest{
+				Client: domain.DetectedClient{ClientID: domain.ClientChatGPT}, DeclaredName: "demo",
+				CurrentActivation: domain.ActivationManual, Confirmed: true,
+			},
+			wantAllowed: false, wantAction: "--external-uninstalled",
+		},
+	} {
+		spec := spec
+		seen[spec.id] = true
+		t.Run(string(spec.id), func(t *testing.T) {
+			t.Parallel()
+			activator := Activator{}
+			if spec.runner != nil {
+				activator.Runner = spec.runner
+			}
+			outcome, err := activator.Deactivate(context.Background(), spec.request)
+			if spec.wantErr != "" {
+				if err == nil || !strings.Contains(err.Error(), spec.wantErr) {
+					t.Fatalf("error = %v, want %q; outcome=%+v", err, spec.wantErr, outcome)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("deactivate: %v", err)
+			}
+			if outcome.ArtifactRemovalAllowed != spec.wantAllowed || outcome.ExternalRemovalComplete != spec.wantComplete {
+				t.Fatalf("outcome = %+v, want allowed=%v complete=%v", outcome, spec.wantAllowed, spec.wantComplete)
+			}
+			if spec.wantAction != "" && (len(outcome.UserActions) == 0 || !strings.Contains(strings.Join(outcome.UserActions, " | "), spec.wantAction)) {
+				t.Fatalf("actions = %#v, want %q", outcome.UserActions, spec.wantAction)
+			}
+			if spec.wantCommand != "" {
+				joined := fmt.Sprint(commandArgv(spec.runner.commands))
+				if !strings.Contains(joined, spec.wantCommand) {
+					t.Fatalf("commands = %#v, want %q", commandArgv(spec.runner.commands), spec.wantCommand)
+				}
+			}
+		})
+	}
+	for _, definition := range domain.ClientDefinitions() {
+		if !seen[definition.ID] {
+			t.Fatalf("no deactivate-without-flag contract for %s", definition.ID)
+		}
+	}
+	if got, want := len(seen), len(domain.ClientDefinitions()); got != want {
+		t.Fatalf("covered %d clients, catalog has %d", got, want)
 	}
 }
 

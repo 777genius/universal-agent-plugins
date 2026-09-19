@@ -55,6 +55,7 @@ type batchPresentationKind string
 
 const (
 	batchPresentationInstalled      batchPresentationKind = "Installed"
+	batchPresentationUpToDate       batchPresentationKind = "Up to date"
 	batchPresentationSetupRequired  batchPresentationKind = "Setup required"
 	batchPresentationSignInRequired batchPresentationKind = "Sign-in required"
 	batchPresentationFailed         batchPresentationKind = "Failed"
@@ -178,7 +179,11 @@ func runAddManyLoaded(ctx context.Context, cmd *cobra.Command, app App, opts *op
 		return err
 	}
 	combined.OperationID = operationID
-	groupInput := usecase.GroupInput{Targets: inputs, OperationGroupID: operationID, DryRun: true}
+	compat, err := addGroupCompatibilityChecks(ctx, app, opts, loaded, selected, detected, clients)
+	if err != nil {
+		return err
+	}
+	groupInput := usecase.GroupInput{Targets: inputs, CompatibilityChecks: compat, OperationGroupID: operationID, DryRun: true}
 	planned, err := service.AddGroup(ctx, groupInput)
 	combined.Targets = combined.Targets[:0]
 	for index, result := range planned.Targets {
@@ -229,17 +234,18 @@ func runAddManyLoaded(ctx context.Context, cmd *cobra.Command, app App, opts *op
 	}
 	writeProgress(app, opts.format, "Applying to every preflighted client...")
 	groupInput.DryRun, groupInput.Confirmed = false, true
+	board := startGroupProgressBoard(app, opts.format, selected)
 	applyService := service
-	if board := startGroupProgressBoard(app, opts.format, selected); board != nil {
+	if board != nil {
 		applyService = board.decorate(service)
 		defer board.finish()
 	}
 	applied, err := applyService.AddGroup(ctx, groupInput)
+	if err != nil {
+		board.failUnfinished()
+	}
 	if len(applied.Targets) != len(selected) || len(applied.Targets) != len(inputs) {
-		if err != nil {
-			return fmt.Errorf("group apply returned %d targets for %d selected clients: %w", len(applied.Targets), len(selected), err)
-		}
-		return fmt.Errorf("group apply returned %d targets for %d selected clients", len(applied.Targets), len(selected))
+		return wrapGroupApplyCount(len(applied.Targets), len(selected), err)
 	}
 	combined.Status, combined.Targets, combined.Succeeded, combined.Failed, combined.ActionRequired = string(applied.Phase), combined.Targets[:0], 0, 0, 0
 	sourceArg := batchRetrySource(loaded.envelope, loaded.origin, combined.Source)
@@ -470,6 +476,75 @@ func cloneLoadedPackage(source loadedPackage) loadedPackage {
 	return clone
 }
 
+func addGroupCompatibilityChecks(ctx context.Context, app App, opts *options, loaded loadedPackage, selected []domain.DetectedClient, detected map[domain.ClientID]domain.DetectedClient, clients []domain.DetectedClient) ([]usecase.AddInput, error) {
+	if app.StateStore == nil {
+		return nil, nil
+	}
+	state, err := app.StateStore.Load()
+	if err != nil || len(state.Installations) == 0 {
+		return nil, nil
+	}
+	installation, ok := locallyMatchedInstallation(state, loaded.envelope.Manifest.Name)
+	if !ok {
+		return nil, nil
+	}
+	for _, client := range selected {
+		if !installationHasTarget(installation, client.ClientID, opts.scope) {
+			return nil, nil
+		}
+	}
+	if !addPackageDiffersFromInstallation(installation, loaded) {
+		return nil, nil
+	}
+	installed := installedBindingTargets(installation, opts.scope)
+	if len(installed) == 0 {
+		return nil, nil
+	}
+	checked, extraDetected, err := preflightSelectedTargets(ctx, app, installed, clients, false)
+	if err != nil {
+		return nil, err
+	}
+	for id, client := range extraDetected {
+		detected[id] = client
+	}
+	compat := make([]usecase.AddInput, 0, len(checked))
+	for _, client := range checked {
+		clientPackage := cloneLoadedPackage(loaded)
+		if err := prepareLoadedPackageForClient(&clientPackage, client.ClientID); err != nil {
+			return nil, fmt.Errorf("preflight installed target %s: %w; no target was changed", client.ClientID, err)
+		}
+		compat = append(compat, usecase.AddInput{
+			InstallIntent: opts.installIntents[client.ClientID],
+			Envelope:      clientPackage.envelope, Client: client, Scope: domain.ScopeUser,
+			Interactive: app.Terminal, Hints: clientPackage.hints, BackendExecutable: backendExecutable(client, extraDetected),
+			OriginMode: loaded.origin, DirectoryResolution: cloneDirectoryOrigin(loaded.directory),
+			DistributionSuspended: loaded.distributionSuspended, ReleaseRevoked: loaded.releaseRevoked,
+		})
+	}
+	return compat, nil
+}
+
+func addPackageDiffersFromInstallation(installation domain.Installation, loaded loadedPackage) bool {
+	if installation.Source.TreeDigest != "" && installation.Source.TreeDigest != loaded.envelope.TreeDigest {
+		return true
+	}
+	return installation.Directory != nil && loaded.directory != nil && installation.Directory.DesiredReleaseSequence != loaded.directory.DesiredReleaseSequence
+}
+
+func addResultAllNoChange(result addMultiResult) bool {
+	found := false
+	for _, target := range result.Targets {
+		if target.Status == "action_required" {
+			continue
+		}
+		if !target.Output.Result.NoChange {
+			return false
+		}
+		found = true
+	}
+	return found
+}
+
 func renderAddMultiResult(cmd *cobra.Command, opts *options, result addMultiResult, envelope domain.PackageEnvelope) error {
 	if opts.format == "json" {
 		overall := "success"
@@ -542,6 +617,11 @@ func renderAddMultiApplySummary(writer io.Writer, result addMultiResult, envelop
 	title := batchApplyHeadline(result, envelope)
 	if _, err := fmt.Fprintln(writer, theme.Text(terminaltheme.Label, title)); err != nil {
 		return err
+	}
+	if addResultAllNoChange(result) {
+		if _, err := fmt.Fprintln(writer, theme.Text(terminaltheme.Muted, "You have the latest version.")); err != nil {
+			return err
+		}
 	}
 	if _, err := fmt.Fprintln(writer); err != nil {
 		return err
@@ -625,6 +705,8 @@ func batchApplyHeadline(result addMultiResult, envelope domain.PackageEnvelope) 
 		return name + " installation finished with issues"
 	case result.Failed > 0:
 		return name + " installation failed"
+	case addResultAllNoChange(result):
+		return name + " is already installed"
 	case result.ActionRequired > 0:
 		return name + " installation prepared"
 	default:
@@ -659,6 +741,9 @@ func classifyBatchPresentation(target addTargetResult) batchPresentationKind {
 	if target.Error != nil || activation.Activation == domain.ActivationFailed || activation.Authentication == domain.AuthenticationFailed || activation.Verification == domain.VerificationFailed {
 		return batchPresentationFailed
 	}
+	if target.Output.Result.NoChange {
+		return batchPresentationUpToDate
+	}
 	if activation.Authentication == domain.AuthenticationPending {
 		return batchPresentationSignInRequired
 	}
@@ -679,7 +764,7 @@ func classifyBatchPresentation(target addTargetResult) batchPresentationKind {
 
 func batchResultTone(kind batchPresentationKind) terminaltheme.Role {
 	switch kind {
-	case batchPresentationInstalled:
+	case batchPresentationInstalled, batchPresentationUpToDate:
 		return terminaltheme.Success
 	case batchPresentationSetupRequired, batchPresentationSignInRequired:
 		return terminaltheme.Warning
@@ -727,7 +812,7 @@ func batchAttentionLines(target addTargetResult) []string {
 
 func countBatchTarget(result *addMultiResult, target addTargetResult) {
 	switch classifyBatchPresentation(target) {
-	case batchPresentationInstalled:
+	case batchPresentationInstalled, batchPresentationUpToDate:
 		result.Succeeded++
 	case batchPresentationSetupRequired, batchPresentationSignInRequired:
 		// Deferred ChatGPT (status action_required, no group phase) is reported
@@ -939,4 +1024,14 @@ func addGroupNextAction(targets []addTargetResult) string {
 		}
 	}
 	return ""
+}
+
+func wrapGroupApplyCount(got, want int, err error) error {
+	if err != nil && got == 0 {
+		return err
+	}
+	if err != nil {
+		return fmt.Errorf("group apply returned %d targets for %d selected clients: %w", got, want, err)
+	}
+	return fmt.Errorf("group apply returned %d targets for %d selected clients", got, want)
 }

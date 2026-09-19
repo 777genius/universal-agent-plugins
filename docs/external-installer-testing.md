@@ -89,35 +89,25 @@ Then run:
 ```bash
 run_step repair repair uap-external-check --target codex --format json
 run_command native-before-remove codex plugin list --json
+run_step remove remove uap-external-check --target codex --format json
+run_command native-after-remove codex plugin list --json
+cmp unrelated-sentinel.expected unrelated-sentinel.txt
 ```
 
 This repair call checks an intact installation and may be a no-op; it does not
-prove recovery from corruption. In the native inventory, locate exactly the
-`uap-external-check` entry whose `source.path` matches the managed path recorded
-by add. Copy its `pluginId` and `marketplaceName`; verify that the former is
-`uap-external-check@` followed by the latter. Stop if the identity is ambiguous,
-missing or mismatched. Do not substitute an unrelated plugin or marketplace.
+prove recovery from corruption. In the native inventory before remove, locate
+exactly the `uap-external-check` entry whose `source.path` matches the managed
+path recorded by add. Copy its `pluginId` and `marketplaceName`; verify that
+the former is `uap-external-check@` followed by the latter. Stop if the
+identity is ambiguous, missing or mismatched. Do not substitute an unrelated
+plugin or marketplace.
 
-Unregister that exact plugin and marketplace before acknowledging external
-uninstallation to UAP. Replace both placeholders from the verified inventory:
-
-```bash
-NATIVE_PLUGIN_ID='<verified-pluginId>'
-NATIVE_MARKETPLACE='<verified-marketplaceName>'
-run_command native-remove codex plugin remove "$NATIVE_PLUGIN_ID" --json
-run_command native-marketplace-remove codex plugin marketplace remove "$NATIVE_MARKETPLACE" --json
-run_command native-after-remove codex plugin list --json
-```
-
-Inspect the new inventory and confirm the exact plugin is no longer installed
-or enabled. Only after both unregister commands succeed and that check passes,
-run the following acknowledgement. If either command or inspection fails, stop
-and report it; do not assert `--external-uninstalled` merely to bypass the gate.
-
-```bash
-run_step remove remove uap-external-check --target codex --external-uninstalled --format json
-cmp unrelated-sentinel.expected unrelated-sentinel.txt
-```
+`remove` itself unregisters that managed Codex plugin and marketplace when a
+Codex CLI is available. After remove, inspect the new inventory and confirm
+the exact plugin is no longer installed or enabled. If the plugin remains, or
+`remove` asks for `--external-uninstalled` while Codex CLI is present, stop
+and report it; do not assert `--external-uninstalled` merely to bypass the
+gate.
 
 Confirm the test plugin's managed files were removed. The sentinel comparison
 checks only unrelated project-file preservation, not all user-profile data.

@@ -40,12 +40,12 @@
     "Commands": [],
     "Error": "",
     "Outcome": {
-      "Activation": "manual_activation_required",
-      "ArtifactRemovalAllowed": false,
+      "Activation": "not_required",
+      "ArtifactRemovalAllowed": true,
       "ExternalRemovalComplete": false,
       "LocalActions": null,
       "UserActions": [
-        "uninstall the plugin in Codex, then rerun remove with `--external-uninstalled` (also use the flag if it was never activated)"
+        "agentplugins will uninstall the managed Codex plugin and its marketplace"
       ]
     }
   },

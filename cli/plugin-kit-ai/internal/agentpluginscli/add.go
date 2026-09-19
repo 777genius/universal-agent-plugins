@@ -38,6 +38,9 @@ func newAddCommand(app App, opts *options) *cobra.Command {
 			if err := validateCommonOptions(opts); err != nil {
 				return err
 			}
+			if err := requireMutationReady(app, opts.dryRun); err != nil {
+				return err
+			}
 			opts.installIntents = make(map[domain.ClientID]domain.InstallIntent)
 			requestedTargets, err := parseTargetOption(opts.target)
 			if err != nil {
@@ -584,7 +587,7 @@ func renderAddResultErrorWithSecurity(writer io.Writer, format string, envelope 
 		return err
 	}
 	if result.NoChange {
-		_, _ = fmt.Fprintln(writer, terminaltheme.For(writer).Text(terminaltheme.Muted, "Already installed and lifecycle verification is complete. No changes made."))
+		_, _ = fmt.Fprintln(writer, terminaltheme.For(writer).Text(terminaltheme.Muted, "Already installed. You have the latest version."))
 		return nil
 	}
 	if result.Mutated && fullyInstalled(result.Activation) {

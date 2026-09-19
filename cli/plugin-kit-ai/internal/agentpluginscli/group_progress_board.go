@@ -112,6 +112,25 @@ func (board *groupProgressBoard) finish() {
 	_, _ = fmt.Fprintln(board.writer)
 }
 
+func (board *groupProgressBoard) failUnfinished() {
+	if board == nil {
+		return
+	}
+	board.mu.Lock()
+	changed := false
+	for index := range board.rows {
+		if board.rows[index].step == groupProgressDone || board.rows[index].failed {
+			continue
+		}
+		board.rows[index].failed = true
+		changed = true
+	}
+	if changed {
+		board.redrawLocked()
+	}
+	board.mu.Unlock()
+}
+
 func (board *groupProgressBoard) set(id domain.ClientID, step groupProgressStep) {
 	if board == nil {
 		return
@@ -219,18 +238,14 @@ func progressPipeline(theme terminaltheme.Theme, row groupProgressRow) string {
 		last = string(groupProgressDone)
 	}
 	if row.failed {
-		switch {
-		case lastMark == markCurrent || lastMark == markDone:
-			lastMark = markFailed
-			last = string(groupProgressFailed)
-		case copyMark == markCurrent:
+		if copyMark == markCurrent {
 			copyMark = markFailed
-		case copiedMark == markCurrent:
-			copiedMark = markFailed
-		default:
-			lastMark = markFailed
-			last = string(groupProgressFailed)
 		}
+		if copiedMark == markCurrent {
+			copiedMark = markFailed
+		}
+		lastMark = markFailed
+		last = string(groupProgressFailed)
 	}
 	arrow := theme.Text(terminaltheme.Muted, progressArrow)
 	return progressToken(theme, string(groupProgressStaging), copyMark) + arrow +

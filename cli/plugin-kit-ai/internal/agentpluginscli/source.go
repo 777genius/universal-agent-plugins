@@ -265,6 +265,17 @@ func (app App) loadPackageFor(ctx context.Context, raw string, request packageRe
 	return app.acquireDirectory(ctx, requested, request)
 }
 
+func annotateDirectoryResolveError(installerVersion string, err error) error {
+	if err == nil || !errors.Is(err, domain.ErrDirectoryIneligible) {
+		return err
+	}
+	version := strings.TrimSpace(installerVersion)
+	if !strings.Contains(version, "development") {
+		return err
+	}
+	return fmt.Errorf("%w\nThis local binary reports version %s, so Directory treats it as older than the required installer. Rebuild with a released version at least as new as the minimum in the error above, for example:\n  go build -ldflags=-X main.version=0.1.53 -o /tmp/agentplugins ./cmd/agentplugins", err, version)
+}
+
 func (app App) acquireDiscovery(ctx context.Context, selector string, request packageResolutionRequest) (loadedPackage, error) {
 	if app.DiscoveryClient == nil || app.SourceAcquirer == nil {
 		return loadedPackage{}, fmt.Errorf("signed Discovery Index dependencies are unavailable; use owner/repository@FULL_SHA[//path]")
@@ -507,7 +518,7 @@ func (app App) acquireDirectory(ctx context.Context, selector string, request pa
 	}
 	selection, err := domain.ResolveDirectory(bundle.Snapshot, resolveRequest)
 	if err != nil {
-		return loadedPackage{}, err
+		return loadedPackage{}, annotateDirectoryResolveError(app.Version, err)
 	}
 	product, distribution, release, policy := directoryRecords(bundle.Snapshot, selection)
 	if product == nil || distribution == nil || release == nil || policy == nil {

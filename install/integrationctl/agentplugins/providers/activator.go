@@ -149,10 +149,15 @@ func (activator Activator) Deactivate(ctx context.Context, request domain.Deacti
 		outcome.ExternalRemovalComplete = true
 		return outcome, nil
 	case domain.ClientCodex:
-		if !request.ExternalUninstalled {
+		hasCLI := strings.TrimSpace(request.BackendExecutable) != "" && activator.Runner != nil
+		if !hasCLI && !request.ExternalUninstalled {
 			return shared.RequireExternalUninstall(outcome, false, "uninstall the plugin in Codex, then rerun remove with `--external-uninstalled` (also use the flag if it was never activated)"), nil
 		}
 		if !request.Confirmed {
+			if hasCLI {
+				outcome.UserActions = append(outcome.UserActions, "agentplugins will uninstall the managed Codex plugin and its marketplace")
+				return outcome, nil
+			}
 			return shared.RequireExternalUninstall(outcome, true, ""), nil
 		}
 		if strings.TrimSpace(request.PhysicalArtifactID) == "" {
@@ -278,27 +283,25 @@ func (activator Activator) Deactivate(ctx context.Context, request domain.Deacti
 		outcome.ExternalRemovalComplete = true
 		return outcome, nil
 	case domain.ClientCopilot, domain.ClientVSCode:
-		if request.ExternalUninstalled {
-			outcome.ExternalRemovalComplete = true
-			return outcome, nil
-		}
-		if strings.TrimSpace(request.BackendExecutable) == "" || activator.Runner == nil {
+		hasCLI := strings.TrimSpace(request.BackendExecutable) != "" && activator.Runner != nil
+		if !hasCLI && !request.ExternalUninstalled {
 			action := fmt.Sprintf("run `copilot plugin uninstall %s`, then rerun remove with `--external-uninstalled`", request.DeclaredName)
 			if request.Client.ClientID == domain.ClientVSCode {
 				action = "remove the plugin in VS Code, then rerun remove with `--external-uninstalled`"
 			}
 			return shared.RequireExternalUninstall(outcome, false, action), nil
 		}
-		if request.CurrentActivation != domain.ActivationActive {
-			action := fmt.Sprintf("verify `%s@%s` is absent from GitHub Copilot CLI, then rerun remove with `--external-uninstalled`", request.DeclaredName, shared.ManagedMarketplaceName(request.PhysicalArtifactID))
-			return shared.RequireExternalUninstall(outcome, false, action), nil
-		}
 		if !request.Confirmed {
-			outcome.UserActions = append(outcome.UserActions, "agentplugins will uninstall the plugin from GitHub Copilot CLI and VS Code automatically")
-			return outcome, nil
+			if hasCLI {
+				outcome.UserActions = append(outcome.UserActions, "agentplugins will uninstall the plugin from GitHub Copilot CLI and VS Code automatically")
+				return outcome, nil
+			}
+			return shared.RequireExternalUninstall(outcome, true, ""), nil
 		}
-		if err := activator.deactivateCopilot(ctx, request); err != nil {
-			return outcome, err
+		if hasCLI {
+			if err := activator.deactivateCopilot(ctx, request); err != nil {
+				return outcome, err
+			}
 		}
 		outcome.ExternalRemovalComplete = true
 		return outcome, nil

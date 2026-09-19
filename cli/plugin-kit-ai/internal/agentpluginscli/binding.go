@@ -38,6 +38,9 @@ func newBindingChangeCommand(app App, opts *options, mode usecase.BindingChangeM
 			if err := validateCommonOptions(opts); err != nil {
 				return err
 			}
+			if err := requireMutationReady(app, opts.dryRun); err != nil {
+				return err
+			}
 			return runBindingChange(cmd.Context(), cmd, app, opts, mode, args[0], args[1])
 		},
 	}

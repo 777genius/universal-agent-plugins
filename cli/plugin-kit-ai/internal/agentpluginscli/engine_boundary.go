@@ -41,6 +41,9 @@ func newSwitchCommand(app App, opts *options) *cobra.Command {
 			if err := validateCommonOptions(opts); err != nil {
 				return err
 			}
+			if err := requireMutationReady(app, opts.dryRun); err != nil {
+				return err
+			}
 			if strings.TrimSpace(opts.target) != "" {
 				return fmt.Errorf("switch always moves the complete installation; do not pass --target")
 			}
