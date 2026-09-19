@@ -29,6 +29,10 @@ func TestPagesSite_CombinesLandingRootAndDocsSubpath(t *testing.T) {
 	mustContain(t, workflow, "777genius/universal-agent-plugins-registry")
 	mustContain(t, workflow, "pnpm run build:pages")
 	mustContain(t, workflow, "path: .pages-dist")
+	mustContain(t, workflow, "group: github-pages")
+	mustContain(t, workflow, "cancel-in-progress: false")
+	mustContain(t, workflow, "PRODUCT_PAGES_ORIGIN: https://777genius.github.io/universal-agent-plugins/")
+	mustContain(t, workflow, "NUXT_PUBLIC_REGISTRY_PAGES_ORIGIN: https://777genius.github.io/universal-agent-plugins-registry/")
 
 	packageBody, err := os.ReadFile(filepath.Join(root, "landing", "package.json"))
 	if err != nil {
@@ -238,4 +242,30 @@ func TestPagesWorkflows_PackageManagerAlignment(t *testing.T) {
 	if checked == 0 {
 		t.Fatal("no package-manager steps checked")
 	}
+}
+
+func TestRegistryCompatibilityMirror_RefreshesFeedsOnSchedule(t *testing.T) {
+	root := RepoRoot(t)
+	workflowBody, err := os.ReadFile(filepath.Join(root, ".github", "workflows", "registry-compatibility-mirror.yml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	workflow := string(workflowBody)
+	mustContain(t, workflow, "name: Registry compatibility mirror")
+	mustContain(t, workflow, `cron: "27 */12 * * *"`)
+	mustContain(t, workflow, "registry-published")
+	mustContain(t, workflow, "group: github-pages")
+	mustContain(t, workflow, "cancel-in-progress: false")
+	mustContain(t, workflow, "PRODUCT_PAGES_ORIGIN: https://777genius.github.io/universal-agent-plugins/")
+	mustContain(t, workflow, "NUXT_PUBLIC_REGISTRY_PAGES_ORIGIN: https://777genius.github.io/universal-agent-plugins-registry/")
+	mustContain(t, workflow, "go run ./cmd/agentplugins-registry-mirror")
+	mustContain(t, workflow, "pnpm run build:pages")
+
+	nuxtConfigBody, err := os.ReadFile(filepath.Join(root, "landing", "nuxt.config.ts"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	nuxtConfig := string(nuxtConfigBody)
+	mustContain(t, nuxtConfig, "registryPagesOrigin")
+	mustContain(t, nuxtConfig, "https://777genius.github.io/universal-agent-plugins-registry/")
 }

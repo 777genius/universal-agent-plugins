@@ -29,6 +29,9 @@ const baseURL = process.env.NUXT_APP_BASE_URL || '/';
 const registryRepositoryUrl =
   process.env.NUXT_PUBLIC_REGISTRY_REPOSITORY_URL ||
   'https://github.com/777genius/universal-agent-plugins-registry';
+const registryPagesOrigin =
+  process.env.NUXT_PUBLIC_REGISTRY_PAGES_ORIGIN ||
+  'https://777genius.github.io/universal-agent-plugins-registry/';
 const discoveryKeyID = process.env.NUXT_PUBLIC_DISCOVERY_KEY_ID || 'uap-discovery-2026-01';
 const discoveryPublicKey =
   process.env.NUXT_PUBLIC_DISCOVERY_PUBLIC_KEY || 'IxWvGuscXR9crlCrGyBQZNqroYNVPbBA1B3pnjSffhc=';
@@ -181,6 +184,7 @@ export default defineNuxtConfig({
       docsSitemapUrl,
       baseURL,
       repositoryUrl: registryRepositoryUrl,
+      registryPagesOrigin,
       discoveryKeyID,
       discoveryPublicKey,
     },
