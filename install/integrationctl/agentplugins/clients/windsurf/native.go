@@ -90,31 +90,36 @@ func InspectWindsurfRegistry(plan domain.DeliveryPlan, managed *domain.ClientBin
 	if err != nil {
 		return clients.RegistryIndeterminate, err
 	}
-	if managed != nil {
-		if err := VerifyWindsurfNativeObjects(plan.NativeRegistryRoot, plan.ActivePath, managed.NativeObjects, true, kernel); err != nil {
-			return clients.RegistryIndeterminate, err
-		}
-		if len(WindsurfObjects(managed.NativeObjects)) > 0 {
-			return clients.RegistryExpected, nil
-		}
-	}
-	return inspectWindsurfPlannedServers(configPath, plan, kernel)
-}
-
-func inspectWindsurfPlannedServers(configPath string, plan domain.DeliveryPlan, kernel nativeconfig.Kernel) (clients.RegistryFinding, error) {
+	finding := clients.RegistryClear
 	for _, component := range plan.Components {
 		if component.Kind != domain.ComponentMCPServer || component.Support == domain.SupportUnsupported {
 			continue
 		}
-		present, _, inspectErr := kernel.Inspect(nativeconfig.Paths{JSON: configPath}, nativeconfig.CodecWindsurf, component.Name, nil)
-		if present {
-			return clients.RegistryCollision, nil
-		}
+		present, owned, inspectErr := inspectWindsurfHostEntry(configPath, component.Name, managed, kernel)
 		if inspectErr != nil {
 			return clients.RegistryIndeterminate, inspectErr
 		}
+		if present && !owned {
+			return clients.RegistryCollision, nil
+		}
+		if present && owned {
+			finding = clients.RegistryExpected
+		}
 	}
-	return clients.RegistryClear, nil
+	return finding, nil
+}
+
+func inspectWindsurfHostEntry(configPath, name string, managed *domain.ClientBinding, kernel nativeconfig.Kernel) (bool, bool, error) {
+	var receipt *nativeconfig.Receipt
+	if managed != nil {
+		for _, object := range WindsurfObjects(managed.NativeObjects) {
+			if object.LogicalName == name {
+				owned := windsurfReceipt(object)
+				receipt = &owned
+			}
+		}
+	}
+	return kernel.Inspect(nativeconfig.Paths{JSON: configPath}, nativeconfig.CodecWindsurf, name, receipt)
 }
 
 func windsurfConfigPath(configRoot string) (string, error) {

@@ -138,6 +138,18 @@ func TestOpenCodeSupportsAutomaticMCPAndSkillLifecycle(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(client.ConfigRoot, "skills", "docs", "SKILL.md")); err != nil {
 		t.Fatalf("OpenCode skill was not installed: %v", err)
 	}
+	state, err := store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.RemoveAll(onlyBinding(state.Installations[0]).TargetLocator); err != nil {
+		t.Fatal(err)
+	}
+	add.InstallationID = added.InstallationID
+	repairedPackage, err := service.RepairGroup(context.Background(), GroupInput{Targets: []AddInput{add}, OperationGroupID: "opencode-package-repair", Confirmed: true, Repair: true})
+	if err != nil || repairedPackage.Targets[0].Activation.Verification != domain.VerificationInstalled {
+		t.Fatalf("missing OpenCode package was not repaired: %+v, %v", repairedPackage, err)
+	}
 
 	update := openCodePluginInput(t, client, "2.0.0", "sha256:opencode-v2", "sha256:opencode-manifest-v2", "bun")
 	if _, err := service.UpdateGroup(context.Background(), GroupInput{Targets: []AddInput{update}, CompatibilityChecks: []AddInput{update}, OperationGroupID: "opencode-update", Confirmed: true}); err != nil {
@@ -148,7 +160,7 @@ func TestOpenCodeSupportsAutomaticMCPAndSkillLifecycle(t *testing.T) {
 	if argv := server["command"].([]any); argv[0] != "bun" {
 		t.Fatalf("OpenCode MCP update did not converge: %#v", server)
 	}
-	state, err := store.Load()
+	state, err = store.Load()
 	if err != nil {
 		t.Fatal(err)
 	}

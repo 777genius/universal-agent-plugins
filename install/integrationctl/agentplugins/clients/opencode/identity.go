@@ -28,11 +28,6 @@ func InspectOpenCodeRegistry(plan domain.DeliveryPlan, managed *domain.ClientBin
 	if root == "" {
 		return clients.RegistryIndeterminate, nil
 	}
-	if managed != nil {
-		if err := VerifyOpenCodeNativeObjects(root, plan.ActivePath, managed.NativeObjects, kernel, true); err != nil {
-			return clients.RegistryIndeterminate, err
-		}
-	}
 	finding := clients.RegistryClear
 	for _, component := range plan.Components {
 		if component.Support == domain.SupportUnsupported {

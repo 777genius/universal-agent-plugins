@@ -84,7 +84,7 @@ func TestWindsurfLifecycleAddUpdateRepairRemoveInIsolatedHome(t *testing.T) {
 
 func TestWindsurfLifecycleRepairsWipedNativeMCP(t *testing.T) {
 	t.Parallel()
-	service, _, _ := serviceFixture(t)
+	service, store, _ := serviceFixture(t)
 	service.NativeObserver = providerstest.NewObserver(providers.NativeIdentityObserver{Stager: service.Stager})
 	configRoot := filepath.Join(t.TempDir(), "home", ".codeium", "windsurf")
 	configPath := filepath.Join(configRoot, "mcp_config.json")
@@ -110,6 +110,22 @@ func TestWindsurfLifecycleRepairsWipedNativeMCP(t *testing.T) {
 	repaired, err := service.RepairGroup(context.Background(), GroupInput{Targets: []AddInput{add}, OperationGroupID: "windsurf-native-repair", Confirmed: true, Repair: true})
 	if err != nil || !repaired.Mutated || repaired.Targets[0].Activation.Verification != domain.VerificationInstalled {
 		t.Fatalf("wiped Windsurf MCP was not repaired: %+v, %v", repaired, err)
+	}
+	assertUsecaseWindsurfConfig(t, configPath, "one", true)
+
+	state, err := store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(configPath, []byte(foreign), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.RemoveAll(onlyBinding(state.Installations[0]).TargetLocator); err != nil {
+		t.Fatal(err)
+	}
+	repairedPackage, err := service.RepairGroup(context.Background(), GroupInput{Targets: []AddInput{add}, OperationGroupID: "windsurf-package-repair", Confirmed: true, Repair: true})
+	if err != nil || !repairedPackage.Mutated || repairedPackage.Targets[0].Activation.Verification != domain.VerificationInstalled {
+		t.Fatalf("missing Windsurf package was not repaired: %+v, %v", repairedPackage, err)
 	}
 	assertUsecaseWindsurfConfig(t, configPath, "one", true)
 
