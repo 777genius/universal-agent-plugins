@@ -2,12 +2,15 @@ name: Lint
 
 on:
   workflow_call:
+    inputs:
+      lint-base:
+        description: Git ref passed to golangci-lint --new-from-merge-base (for example origin/main)
+        type: string
+        required: false
+        default: origin/main
 
 permissions:
   contents: read
-  # golangci-lint-action reads the PR diff through the pulls API for
-  # only-new-issues. Without this it silently falls back to a full run.
-  pull-requests: read
 
 jobs:
   lint:
@@ -17,11 +20,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # working-directory MUST stay empty for the repo root. The action feeds
-          # the PR patch through path.relative(GITHUB_WORKSPACE, working-directory);
-          # for "." that yields "", every `diff --git` section then fails the
-          # ` a//` test and is dropped, and --new-from-patch gets an empty patch.
-          # The step would pass on any violation. Empty input skips the rewrite.
           - name: root
             module: ""
           - name: cli/plugin-kit-ai
@@ -34,8 +32,21 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          # only-new-issues and the baseline check both need the base revision
+          # merge-base and the baseline check both need the base revision
           fetch-depth: 0
+
+      # workflow_call does not populate github.event.pull_request, so
+      # golangci-lint-action only-new-issues cannot fetch the PR patch and
+      # silently lints the whole module. Match the local Makefile instead:
+      # --new-from-merge-base against the caller's base branch.
+      - name: Fetch lint base
+        env:
+          LINT_BASE: ${{ inputs.lint-base }}
+        run: |
+          set -euo pipefail
+          ref="${LINT_BASE#origin/}"
+          git fetch --no-tags origin "${ref}:refs/remotes/origin/${ref}"
+          git rev-parse --verify "origin/${ref}^{commit}"
 
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
@@ -49,7 +60,8 @@ jobs:
         with:
           version: v2.13.2
           working-directory: ${{ matrix.module }}
-          only-new-issues: true
+          only-new-issues: false
+          args: --new-from-merge-base=${{ inputs.lint-base }}
 
       # Size, complexity and import boundaries on whole files: --new-from-* would
       # miss growth inside an already oversized function, and an import boundary
@@ -64,8 +76,6 @@ jobs:
 
       - name: Legacy baseline is shrink-only
         if: matrix.name == 'root'
-        # Branch names reach the shell through the environment, never through
-        # expression interpolation inside run:.
         env:
-          BASE_BRANCH: ${{ github.base_ref || github.ref_name }}
-        run: bash scripts/check-lint-baseline.sh "origin/$BASE_BRANCH"
+          LINT_BASE: ${{ inputs.lint-base }}
+        run: bash scripts/check-lint-baseline.sh "$LINT_BASE"

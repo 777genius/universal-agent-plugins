@@ -24,19 +24,11 @@ type GeminiDescriptor struct {
 	DataRoot string `json:"data_root"`
 }
 
-func activateGeminiNative(ctx context.Context, request domain.ActivationRequest) error {
-	return ActivateGeminiNativeWithKernel(ctx, request, nativeconfig.New())
-}
-
 func ActivateGeminiNativeWithKernel(ctx context.Context, request domain.ActivationRequest, kernel nativeconfig.Kernel) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
 	return applyGeminiNativeMutationWithKernel(request.Client.ConfigRoot, request.Delivery.ActivePath, request.PreviousNativeObjects, request.Delivery.NativeObjects, kernel)
-}
-
-func deactivateGeminiNative(ctx context.Context, request domain.DeactivationRequest) error {
-	return DeactivateGeminiNativeWithKernel(ctx, request, nativeconfig.New())
 }
 
 func DeactivateGeminiNativeWithKernel(ctx context.Context, request domain.DeactivationRequest, kernel nativeconfig.Kernel) error {
@@ -224,7 +216,7 @@ func requireGeminiObjectAbsent(root string, object domain.NativeObjectOwnership)
 	}
 	if object.Kind == GeminiSkillObjectKind {
 		if _, err := os.Lstat(object.Path); err == nil {
-			return fmt.Errorf("Gemini skill %q already exists without agentplugins ownership", object.LogicalName)
+			return fmt.Errorf("gemini skill %q already exists without agentplugins ownership", object.LogicalName)
 		} else if !os.IsNotExist(err) {
 			return err
 		}
@@ -235,7 +227,7 @@ func requireGeminiObjectAbsent(root string, object domain.NativeObjectOwnership)
 		return err
 	}
 	if present {
-		return fmt.Errorf("Gemini MCP server %q already exists without agentplugins ownership", object.LogicalName)
+		return fmt.Errorf("gemini MCP server %q already exists without agentplugins ownership", object.LogicalName)
 	}
 	return nil
 }
@@ -251,7 +243,7 @@ func validateGeminiObject(root string, object domain.NativeObjectOwnership) erro
 		return fmt.Errorf("unsupported Gemini native object kind %q", object.Kind)
 	}
 	if !shared.SameCleanPath(expected, object.Path) {
-		return fmt.Errorf("Gemini native object %q has an untrusted path", object.LogicalName)
+		return fmt.Errorf("gemini native object %q has an untrusted path", object.LogicalName)
 	}
 	return pathpolicy.RequireContainedChild(root, object.Path)
 }
