@@ -29,10 +29,12 @@ func TestAgentpluginsReleaseContractsStayFailClosed(t *testing.T) {
 		"go test -count=1 -timeout=$(REQUIRED_TEST_TIMEOUT) ./...",
 		"go test -count=1 -timeout=$(REQUIRED_TEST_TIMEOUT) ./cli/plugin-kit-ai/...",
 		"go test -count=1 -timeout=$(REQUIRED_TEST_TIMEOUT) ./install/integrationctl/...",
+		"go test -count=1 -timeout=$(REQUIRED_TEST_TIMEOUT) ./install/integrationctl/agentplugins/...",
 		"go test -count=1 -timeout=$(REQUIRED_TEST_TIMEOUT) ./install/plugininstall/...",
 		"go test -count=1 -timeout=$(REQUIRED_TEST_TIMEOUT) ./sdk/...",
 		"cd npm/agentplugins && npm test && npm pack --dry-run --ignore-scripts",
 		"cd install/integrationctl && go vet ./...",
+		"cd install/integrationctl/agentplugins && go vet ./...",
 	} {
 		mustContain(t, makefile, want)
 	}

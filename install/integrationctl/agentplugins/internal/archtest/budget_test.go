@@ -7,7 +7,7 @@ import (
 // TestClientIDBudgetDoesNotGrow is a ratchet: the refactor removes
 // client-specific branching from the generic packages, so a package may only
 // ever shrink. Regenerate the baseline with
-// `go run ./agentplugins/internal/archtest -update` from install/integrationctl.
+// `go run ./internal/archtest -update` from install/integrationctl/agentplugins.
 func TestClientIDBudgetDoesNotGrow(t *testing.T) {
 	t.Parallel()
 	root := testRepoRoot(t)
