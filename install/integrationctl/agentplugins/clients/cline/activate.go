@@ -35,7 +35,7 @@ func (*Adapter) Activate(ctx context.Context, env clients.Env, request domain.Ac
 		RetryAction:       "retry the managed Cline native installation",
 		CompletedAction:   "reload the Cline MCP view in VS Code, or start a new Cline CLI process",
 		Verify: func() error {
-			return VerifyClineNativeObjects(request.Client.ConfigRoot, request.Delivery.NativeObjects, false)
+			return VerifyClineNativeObjects(request.Client.ConfigRoot, request.Delivery.NativeObjects, false, env.NativeConfig)
 		},
 		Activate: func(ctx context.Context, request domain.ActivationRequest) error {
 			return ActivateClineNativeWithKernel(ctx, request, env.NativeConfig)

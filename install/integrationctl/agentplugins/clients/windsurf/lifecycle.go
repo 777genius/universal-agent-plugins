@@ -25,6 +25,9 @@ type windsurfNativeState struct {
 }
 
 func applyWindsurfNativeMutationWithKernel(configRoot, activePath string, previous, desired []domain.NativeObjectOwnership, kernel nativeconfig.Kernel) error {
+	if err := kernel.RequireFileIO(); err != nil {
+		return err
+	}
 	state, err := loadWindsurfNativeState(configRoot, activePath, previous, desired)
 	if err != nil {
 		return err
@@ -34,7 +37,7 @@ func applyWindsurfNativeMutationWithKernel(configRoot, activePath string, previo
 		return err
 	}
 	if len(mutations) == 0 {
-		return VerifyWindsurfNativeObjects(configRoot, activePath, desired, false)
+		return VerifyWindsurfNativeObjects(configRoot, activePath, desired, false, kernel)
 	}
 	requests := make([]nativeconfig.Request, len(mutations))
 	for index := range mutations {
@@ -49,7 +52,7 @@ func applyWindsurfNativeMutationWithKernel(configRoot, activePath string, previo
 			return fmt.Errorf("the Windsurf MCP entry %q ownership digest changed during apply", mutations[index].name)
 		}
 	}
-	return VerifyWindsurfNativeObjects(configRoot, activePath, desired, false)
+	return VerifyWindsurfNativeObjects(configRoot, activePath, desired, false, kernel)
 }
 
 func loadWindsurfNativeState(configRoot, activePath string, previous, desired []domain.NativeObjectOwnership) (windsurfNativeState, error) {

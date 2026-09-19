@@ -47,7 +47,7 @@ func (*Adapter) Activate(ctx context.Context, env clients.Env, request domain.Ac
 		return outcome, nil
 	}
 	if request.VerifyOnly {
-		if err := VerifyWindsurfNativeObjects(request.Client.ConfigRoot, request.Delivery.ActivePath, request.Delivery.NativeObjects, false); err != nil {
+		if err := VerifyWindsurfNativeObjects(request.Client.ConfigRoot, request.Delivery.ActivePath, request.Delivery.NativeObjects, false, env.NativeConfig); err != nil {
 			return shared.FailedActivation(outcome, "repair the managed Windsurf MCP configuration", err)
 		}
 		outcome.Activation = domain.ActivationActive

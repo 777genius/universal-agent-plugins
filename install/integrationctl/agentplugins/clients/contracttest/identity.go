@@ -31,6 +31,7 @@ func registryInspectorViolations(t *testing.T, inspector clients.RegistryInspect
 	violations = append(violations, registryInspectorNilRunnerViolations(inspector, id)...)
 	violations = append(violations, registryInspectorCanceledContextViolations(inspector, id)...)
 	violations = append(violations, registryInspectorUnmanagedFindingViolations(inspector, id)...)
+	violations = append(violations, registryInspectorNativeConfigEmptyRootViolations(inspector, id)...)
 	return violations
 }
 
@@ -86,6 +87,35 @@ func registryInspectorUnmanagedFindingViolations(inspector clients.RegistryInspe
 	}
 	if finding == clients.RegistryExpected {
 		return []string{"InspectNativeRegistry reported Expected without a managed binding"}
+	}
+	return nil
+}
+
+func registryInspectorNativeConfigEmptyRootViolations(inspector clients.RegistryInspector, id domain.ClientID) []string {
+	if domain.ClientTraitsFor(id).LifecycleKind != domain.LifecycleNativeConfig {
+		return nil
+	}
+	plan := registryInspectorPlan(id)
+	plan.NativeRegistryRoot = ""
+	plan.Components = []domain.ComponentDecision{
+		{Kind: domain.ComponentSkill, Name: "docs", Support: domain.SupportNative},
+		{Kind: domain.ComponentMCPServer, Name: "docs", Support: domain.SupportNative},
+	}
+	var panicked any
+	var finding clients.RegistryFinding
+	var err error
+	func() {
+		defer func() { panicked = recover() }()
+		finding, err = inspector.InspectNativeRegistry(context.Background(), clients.Env{}, registryInspectorClient(id), plan, nil)
+	}()
+	if panicked != nil {
+		return []string{fmt.Sprintf("InspectNativeRegistry panicked with an empty NativeRegistryRoot: %v", panicked)}
+	}
+	if err != nil {
+		return nil
+	}
+	if finding == clients.RegistryClear {
+		return []string{"LifecycleNativeConfig inspector returned RegistryClear with an empty NativeRegistryRoot"}
 	}
 	return nil
 }

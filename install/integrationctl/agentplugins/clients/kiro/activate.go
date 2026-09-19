@@ -127,6 +127,9 @@ func verifyKiroInstall(ctx context.Context, env clients.Env, request domain.Acti
 }
 
 func activateAutomatic(ctx context.Context, env clients.Env, request domain.ActivationRequest, outcome domain.ActivationOutcome) (domain.ActivationOutcome, error) {
+	if err := (*Adapter)(nil).PreflightActivation(env, request); err != nil {
+		return domain.ActivationOutcome{}, err
+	}
 	if err := ActivateNative(ctx, request); err != nil {
 		return shared.FailedActivation(outcome, "retry the managed Kiro native installation", err)
 	}

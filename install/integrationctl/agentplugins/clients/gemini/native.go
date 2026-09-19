@@ -38,7 +38,10 @@ func DeactivateGeminiNativeWithKernel(ctx context.Context, request domain.Deacti
 	return applyGeminiNativeMutationWithKernel(request.Client.ConfigRoot, "", request.NativeObjects, nil, kernel)
 }
 
-func VerifyGeminiNativeObjects(configRoot string, objects []domain.NativeObjectOwnership, allowMissing bool) error {
+func VerifyGeminiNativeObjects(configRoot string, objects []domain.NativeObjectOwnership, allowMissing bool, kernel nativeconfig.Kernel) error {
+	if err := kernel.RequireFileIO(); err != nil {
+		return err
+	}
 	for _, object := range GeminiObjects(objects) {
 		if err := validateGeminiObject(configRoot, object); err != nil {
 			return err
@@ -49,7 +52,7 @@ func VerifyGeminiNativeObjects(configRoot string, objects []domain.NativeObjectO
 				return err
 			}
 		case GeminiMCPObjectKind:
-			if err := verifyGeminiMCP(configRoot, object, allowMissing); err != nil {
+			if err := verifyGeminiMCP(configRoot, object, allowMissing, kernel); err != nil {
 				return err
 			}
 		}
@@ -71,8 +74,8 @@ func verifyGeminiSkill(object domain.NativeObjectOwnership, allowMissing bool) e
 	return nil
 }
 
-func verifyGeminiMCP(configRoot string, object domain.NativeObjectOwnership, allowMissing bool) error {
-	present, owned, err := nativeconfig.New().Inspect(GeminiConfigPaths(configRoot), nativeconfig.CodecGemini, object.LogicalName, GeminiReceipt(object))
+func verifyGeminiMCP(configRoot string, object domain.NativeObjectOwnership, allowMissing bool, kernel nativeconfig.Kernel) error {
+	present, owned, err := kernel.Inspect(GeminiConfigPaths(configRoot), nativeconfig.CodecGemini, object.LogicalName, GeminiReceipt(object))
 	if err != nil {
 		return err
 	}
@@ -112,13 +115,13 @@ func applyGeminiNativeMutationWithKernelAndRename(configRoot, activePath string,
 	return ApplyGeminiNativeMutationWithKernelRenameAndCapacity(configRoot, activePath, previous, desired, kernel, rename, shared.CheckedCombinedCapacity)
 }
 
-func InspectGeminiRegistry(plan domain.DeliveryPlan, managed *domain.ClientBinding) (clients.RegistryFinding, error) {
+func InspectGeminiRegistry(plan domain.DeliveryPlan, managed *domain.ClientBinding, kernel nativeconfig.Kernel) (clients.RegistryFinding, error) {
 	root := strings.TrimSpace(plan.NativeRegistryRoot)
 	if root == "" {
 		return clients.RegistryIndeterminate, nil
 	}
 	if managed != nil {
-		if err := VerifyGeminiNativeObjects(root, managed.NativeObjects, true); err != nil {
+		if err := VerifyGeminiNativeObjects(root, managed.NativeObjects, true, kernel); err != nil {
 			return clients.RegistryIndeterminate, err
 		}
 	}
@@ -127,7 +130,7 @@ func InspectGeminiRegistry(plan domain.DeliveryPlan, managed *domain.ClientBindi
 		if component.Support == domain.SupportUnsupported {
 			continue
 		}
-		exists, owned, err := inspectGeminiComponent(root, managed, component)
+		exists, owned, err := inspectGeminiComponent(root, managed, component, kernel)
 		if err != nil {
 			return clients.RegistryIndeterminate, err
 		}
@@ -141,12 +144,12 @@ func InspectGeminiRegistry(plan domain.DeliveryPlan, managed *domain.ClientBindi
 	return finding, nil
 }
 
-func inspectGeminiComponent(root string, managed *domain.ClientBinding, component domain.ComponentDecision) (bool, bool, error) {
+func inspectGeminiComponent(root string, managed *domain.ClientBinding, component domain.ComponentDecision, kernel nativeconfig.Kernel) (bool, bool, error) {
 	switch component.Kind {
 	case domain.ComponentSkill:
 		return inspectGeminiSkillComponent(root, managed, component.Name)
 	case domain.ComponentMCPServer:
-		return inspectGeminiMCPComponent(root, managed, component.Name)
+		return inspectGeminiMCPComponent(root, managed, component.Name, kernel)
 	default:
 		return false, false, nil
 	}
@@ -162,7 +165,7 @@ func inspectGeminiSkillComponent(root string, managed *domain.ClientBinding, nam
 	return err == nil, owned, nil
 }
 
-func inspectGeminiMCPComponent(root string, managed *domain.ClientBinding, name string) (bool, bool, error) {
+func inspectGeminiMCPComponent(root string, managed *domain.ClientBinding, name string, kernel nativeconfig.Kernel) (bool, bool, error) {
 	var receipt *nativeconfig.Receipt
 	if managed != nil {
 		for _, object := range GeminiObjects(managed.NativeObjects) {
@@ -171,7 +174,7 @@ func inspectGeminiMCPComponent(root string, managed *domain.ClientBinding, name 
 			}
 		}
 	}
-	return nativeconfig.New().Inspect(GeminiConfigPaths(root), nativeconfig.CodecGemini, name, receipt)
+	return kernel.Inspect(GeminiConfigPaths(root), nativeconfig.CodecGemini, name, receipt)
 }
 
 func GeminiReceipt(object domain.NativeObjectOwnership) *nativeconfig.Receipt {
@@ -210,24 +213,24 @@ func managedGeminiObjectExists(objects []domain.NativeObjectOwnership, kind, nam
 	return false
 }
 
-func requireGeminiObjectAbsent(root string, object domain.NativeObjectOwnership) error {
+func requireGeminiObjectAbsent(root string, object domain.NativeObjectOwnership, kernel nativeconfig.Kernel) error {
 	if err := validateGeminiObject(root, object); err != nil {
 		return err
 	}
 	if object.Kind == GeminiSkillObjectKind {
 		if _, err := os.Lstat(object.Path); err == nil {
-			return fmt.Errorf("gemini skill %q already exists without agentplugins ownership", object.LogicalName)
+			return fmt.Errorf("the Gemini skill %q already exists without agentplugins ownership", object.LogicalName)
 		} else if !os.IsNotExist(err) {
 			return err
 		}
 		return nil
 	}
-	present, _, err := nativeconfig.New().Inspect(GeminiConfigPaths(root), nativeconfig.CodecGemini, object.LogicalName, nil)
+	present, _, err := kernel.Inspect(GeminiConfigPaths(root), nativeconfig.CodecGemini, object.LogicalName, nil)
 	if err != nil {
 		return err
 	}
 	if present {
-		return fmt.Errorf("gemini MCP server %q already exists without agentplugins ownership", object.LogicalName)
+		return fmt.Errorf("the Gemini MCP server %q already exists without agentplugins ownership", object.LogicalName)
 	}
 	return nil
 }
@@ -243,7 +246,7 @@ func validateGeminiObject(root string, object domain.NativeObjectOwnership) erro
 		return fmt.Errorf("unsupported Gemini native object kind %q", object.Kind)
 	}
 	if !shared.SameCleanPath(expected, object.Path) {
-		return fmt.Errorf("gemini native object %q has an untrusted path", object.LogicalName)
+		return fmt.Errorf("the Gemini native object %q has an untrusted path", object.LogicalName)
 	}
 	return pathpolicy.RequireContainedChild(root, object.Path)
 }

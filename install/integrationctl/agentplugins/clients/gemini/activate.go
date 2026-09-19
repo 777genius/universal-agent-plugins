@@ -34,7 +34,7 @@ func (*Adapter) Activate(ctx context.Context, env clients.Env, request domain.Ac
 		RetryAction:       "retry the managed Gemini CLI native installation",
 		CompletedAction:   "in a running Gemini CLI session use `/mcp reload` and `/skills reload`, or restart Gemini CLI",
 		Verify: func() error {
-			return VerifyGeminiNativeObjects(request.Client.ConfigRoot, request.Delivery.NativeObjects, false)
+			return VerifyGeminiNativeObjects(request.Client.ConfigRoot, request.Delivery.NativeObjects, false, env.NativeConfig)
 		},
 		Activate: func(ctx context.Context, request domain.ActivationRequest) error {
 			return ActivateGeminiNativeWithKernel(ctx, request, env.NativeConfig)

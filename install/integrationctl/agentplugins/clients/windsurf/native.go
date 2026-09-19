@@ -32,7 +32,10 @@ func ApplyWindsurfNativeMutation(configRoot, activePath string, previous, desire
 	return applyWindsurfNativeMutationWithKernel(configRoot, activePath, previous, desired, nativeconfig.New())
 }
 
-func VerifyWindsurfNativeObjects(configRoot, activePath string, objects []domain.NativeObjectOwnership, allowMissing bool) error {
+func VerifyWindsurfNativeObjects(configRoot, activePath string, objects []domain.NativeObjectOwnership, allowMissing bool, kernel nativeconfig.Kernel) error {
+	if err := kernel.RequireFileIO(); err != nil {
+		return err
+	}
 	objectMap, err := windsurfObjectMap(configRoot, objects)
 	if err != nil {
 		return err
@@ -48,7 +51,6 @@ func VerifyWindsurfNativeObjects(configRoot, activePath string, objects []domain
 	if err != nil {
 		return err
 	}
-	kernel := nativeconfig.New()
 	for name, object := range objectMap {
 		if err := verifyWindsurfNativeObject(kernel, configPath, servers, name, object, allowMissing); err != nil {
 			return err
@@ -80,46 +82,50 @@ func verifyWindsurfNativeObject(kernel nativeconfig.Kernel, configPath string, s
 	return nil
 }
 
-func InspectWindsurfRegistry(plan domain.DeliveryPlan, managed *domain.ClientBinding) (clients.RegistryFinding, error) {
+func InspectWindsurfRegistry(plan domain.DeliveryPlan, managed *domain.ClientBinding, kernel nativeconfig.Kernel) (clients.RegistryFinding, error) {
 	if strings.TrimSpace(plan.NativeRegistryRoot) == "" {
-		return clients.RegistryClear, nil
+		return clients.RegistryIndeterminate, nil
 	}
 	configPath, err := windsurfConfigPath(plan.NativeRegistryRoot)
 	if err != nil {
 		return clients.RegistryIndeterminate, err
 	}
-	if managed != nil {
-		if err := VerifyWindsurfNativeObjects(plan.NativeRegistryRoot, plan.ActivePath, managed.NativeObjects, false); err != nil {
-			return clients.RegistryIndeterminate, err
-		}
-		if len(WindsurfObjects(managed.NativeObjects)) > 0 {
-			return clients.RegistryExpected, nil
-		}
-	}
-	return inspectWindsurfPlannedServers(configPath, plan)
-}
-
-func inspectWindsurfPlannedServers(configPath string, plan domain.DeliveryPlan) (clients.RegistryFinding, error) {
-	kernel := nativeconfig.New()
+	finding := clients.RegistryClear
 	for _, component := range plan.Components {
 		if component.Kind != domain.ComponentMCPServer || component.Support == domain.SupportUnsupported {
 			continue
 		}
-		present, _, inspectErr := kernel.Inspect(nativeconfig.Paths{JSON: configPath}, nativeconfig.CodecWindsurf, component.Name, nil)
-		if present {
-			return clients.RegistryCollision, nil
-		}
+		present, owned, inspectErr := inspectWindsurfHostEntry(configPath, component.Name, managed, kernel)
 		if inspectErr != nil {
 			return clients.RegistryIndeterminate, inspectErr
 		}
+		if present && !owned {
+			return clients.RegistryCollision, nil
+		}
+		if present && owned {
+			finding = clients.RegistryExpected
+		}
 	}
-	return clients.RegistryClear, nil
+	return finding, nil
+}
+
+func inspectWindsurfHostEntry(configPath, name string, managed *domain.ClientBinding, kernel nativeconfig.Kernel) (bool, bool, error) {
+	var receipt *nativeconfig.Receipt
+	if managed != nil {
+		for _, object := range WindsurfObjects(managed.NativeObjects) {
+			if object.LogicalName == name {
+				owned := windsurfReceipt(object)
+				receipt = &owned
+			}
+		}
+	}
+	return kernel.Inspect(nativeconfig.Paths{JSON: configPath}, nativeconfig.CodecWindsurf, name, receipt)
 }
 
 func windsurfConfigPath(configRoot string) (string, error) {
 	root := filepath.Clean(strings.TrimSpace(configRoot))
 	if root == "." || !filepath.IsAbs(root) {
-		return "", fmt.Errorf("windsurf channel config root must be absolute")
+		return "", fmt.Errorf("the Windsurf channel config root must be absolute")
 	}
 	path := filepath.Join(root, "mcp_config.json")
 	if err := pathpolicy.RequireContainedChild(root, path); err != nil {

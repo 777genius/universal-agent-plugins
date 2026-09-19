@@ -59,8 +59,10 @@ func applyClineNativeMutationWithKernelAndRename(configRoot, activePath string, 
 	return ApplyClineNativeMutationWithKernelRenameAndCapacity(configRoot, activePath, previous, desired, kernel, rename, shared.CheckedCombinedCapacity)
 }
 
-func VerifyClineNativeObjects(configRoot string, objects []domain.NativeObjectOwnership, allowMissing bool) error {
-	kernel := nativeconfig.New()
+func VerifyClineNativeObjects(configRoot string, objects []domain.NativeObjectOwnership, allowMissing bool, kernel nativeconfig.Kernel) error {
+	if err := kernel.RequireFileIO(); err != nil {
+		return err
+	}
 	for _, object := range ClineObjects(objects) {
 		if err := validateClineObject(configRoot, object); err != nil {
 			return err
@@ -143,7 +145,7 @@ func validateClineObject(configRoot string, object domain.NativeObjectOwnership)
 		}
 	case ClineMCPObjectKind:
 		if !filepath.IsAbs(object.Path) || !shared.SameCleanPath(object.Path, ClineMCPSettingsPath(configRoot)) {
-			return fmt.Errorf("cline MCP ownership path changed")
+			return fmt.Errorf("the Cline MCP ownership path changed")
 		}
 	default:
 		return fmt.Errorf("unsupported Cline native object kind %q", object.Kind)

@@ -89,3 +89,12 @@ func TestShouldReadOnlyVerifyFollowsTraitsNotClientIDs(t *testing.T) {
 		t.Fatal("Kiro automatic verifies when the executable names the client")
 	}
 }
+
+func TestRequiresNativeProjectorMatchesPackageAndLifecycle(t *testing.T) {
+	if !RequiresNativeProjector(ClientGemini) || !RequiresNativeProjector(ClientOpenCode) || !RequiresNativeProjector(ClientVSCode) || !RequiresNativeProjector(ClientKiro) {
+		t.Fatal("native and native-config clients require a projector")
+	}
+	if RequiresNativeProjector(ClientClaude) || RequiresNativeProjector(ClientCodex) || RequiresNativeProjector(ClientChatGPT) {
+		t.Fatal("projection and manual clients do not require a projector")
+	}
+}

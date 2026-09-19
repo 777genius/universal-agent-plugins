@@ -16,6 +16,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/directoryv1"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/discoveryv1"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/loader"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/processlock"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/securityscan"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/securityv1"
@@ -68,9 +69,10 @@ func newAgentpluginsCLIApp(home, dataRoot string, directoryClient *directoryv1.C
 	mutationLock := processlock.Lock{Path: filepath.Join(dataRoot, "mutation.lock")}
 	clientRegistry := clientregistry.Default()
 	paths := pathpolicy.Policy{}
+	nativeKernel := nativeconfig.New()
 	stager := newManagedStager(clientRegistry, paths)
 	planner := clientplanner.Planner{ManagedRoot: filepath.Join(dataRoot, "managed"), Paths: paths, Registry: clientRegistry}
-	lifecycle := newAgentpluginsLifecycle(dataRoot, v2Store, paths, clientRegistry, stager, runner, planner, directoryManager, mutationLock)
+	lifecycle := newAgentpluginsLifecycle(dataRoot, v2Store, paths, clientRegistry, stager, runner, planner, directoryManager, mutationLock, nativeKernel)
 	return assembleAgentpluginsApp(home, dataRoot, v2Store, mutationLock, lifecycle, directoryClient, discoveryClient, securityClient, packageLoader, clientRegistry, planner)
 }
 
@@ -84,12 +86,12 @@ func newManagedStager(clientRegistry *clients.Registry, paths pathpolicy.Policy)
 	return stager
 }
 
-func newAgentpluginsLifecycle(dataRoot string, v2Store statev2.Store, paths pathpolicy.Policy, clientRegistry *clients.Registry, stager providers.Stager, runner processadapter.OS, planner clientplanner.Planner, directoryManager dirswap.Manager, mutationLock processlock.Lock) usecase.Service {
+func newAgentpluginsLifecycle(dataRoot string, v2Store statev2.Store, paths pathpolicy.Policy, clientRegistry *clients.Registry, stager providers.Stager, runner processadapter.OS, planner clientplanner.Planner, directoryManager dirswap.Manager, mutationLock processlock.Lock, nativeKernel nativeconfig.Kernel) usecase.Service {
 	return usecase.Service{
 		StateStore: v2Store, Paths: paths, Planner: planner, Targets: planner, Stager: stager,
-		Activator: providers.Activator{Runner: runner, Registry: clientRegistry},
+		Activator: providers.Activator{Runner: runner, Registry: clientRegistry, NativeConfig: &nativeKernel},
 		Lock:      mutationLock, Kernel: transaction.Kernel{StateStore: v2Store, Directory: directoryManager},
-		NativeObserver: providers.NativeIdentityObserver{Stager: stager, Runner: runner, Registry: clientRegistry},
+		NativeObserver: providers.NativeIdentityObserver{Stager: stager, Runner: runner, Registry: clientRegistry, NativeConfig: &nativeKernel},
 		PluginData:     providers.PluginDataManager{Base: filepath.Join(dataRoot, "plugin-data")},
 	}
 }

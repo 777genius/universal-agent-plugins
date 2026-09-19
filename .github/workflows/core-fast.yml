@@ -63,9 +63,9 @@ jobs:
       - name: Report core coverage
         continue-on-error: true
         run: |
-          go list ./install/integrationctl/agentplugins/... \
+          (cd install/integrationctl/agentplugins && go list ./... \
             | grep -v '/adapters/clientdetect$' \
-            | xargs go test -count=1 -cover > core-cover.log 2>&1 || true
+            | xargs go test -count=1 -cover) > core-cover.log 2>&1 || true
           (cd cli/plugin-kit-ai && go test -count=1 -cover ./internal/agentpluginscli/... ./cmd/agentplugins/...) >> core-cover.log 2>&1 || true
           cat core-cover.log
           {

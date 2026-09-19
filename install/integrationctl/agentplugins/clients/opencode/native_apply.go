@@ -49,7 +49,7 @@ func applyOpenCodeNativeWithKernelAndOps(configRoot, activePath string, previous
 	if err != nil {
 		return err
 	}
-	requests, err := openCodeMCPRequests(prepared.projection, prepared.previous, prepared.desired)
+	requests, err := openCodeMCPRequests(prepared.kernel, prepared.projection, prepared.previous, prepared.desired)
 	if err != nil {
 		return err
 	}
@@ -78,6 +78,9 @@ type openCodeNativeApply struct {
 }
 
 func prepareOpenCodeNativeApply(configRoot, activePath string, previous, desired []domain.NativeObjectOwnership, kernel nativeconfig.Kernel, rename openCodeRenameFunc, removeAll func(string) error) (*openCodeNativeApply, error) {
+	if err := kernel.RequireFileIO(); err != nil {
+		return nil, err
+	}
 	if rename == nil {
 		return nil, fmt.Errorf("OpenCode rename operation is unavailable")
 	}

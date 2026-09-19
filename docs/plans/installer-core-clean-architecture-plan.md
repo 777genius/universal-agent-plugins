@@ -555,7 +555,7 @@ issues:
 
 Один режим на всё не работает: `new-from-*` фильтрует по изменённым строкам, а `funlen`/`gocyclo`/`file-length-limit` репортят на строке объявления функции/файла — добавление 40 строк в середину старой 200-строчной функции такой фильтр не поймает. Поэтому:
 
-- **Прогон A** — корректность и стиль, только изменённые строки: все линтеры, кроме size/arch. CI: `only-new-issues: true` (на PR — патч через GitHub API; на push — `new-from-rev=<before>`). Локально: `golangci-lint run --new-from-merge-base=$(BASE)`; в checkout нужен `fetch-depth: 0`.
+- **Прогон A** — корректность и стиль, только изменённые строки: все линтеры, кроме size/arch. CI и локально: `golangci-lint run --new-from-merge-base=$(LINT_BASE)`. `LINT_BASE` на PR — `origin/<base>` (для stacked part-PR это architecture, для `#288` — `main`). `golangci-lint-action` `only-new-issues` здесь нельзя: reusable `workflow_call` не несёт `github.event.pull_request`, а GitHub Files API отдаёт 406 на diff > 300 файлов и молча падает в полный прогон. В checkout нужен `fetch-depth: 0` и явный `git fetch` базовой ветки.
 - **Прогон B** — size/arch-гейт, полные файлы, всегда: `golangci-lint run --enable-only=revive,funlen,gocyclo,gocognit,dupl,depguard`. Легаси-нарушения размера покрыты baseline-исключениями (сгенерированы этим же прогоном в Part 0a); всё остальное строго: новый файл > 500 строк кода, новая функция > 60/40, рост сложности в файле вне baseline, любой запрещённый импорт — красный. `depguard` в full-file режиме — граница держится всегда, а не только на изменённых строках.
 - **Baseline shrink-only**: `scripts/check-lint-baseline.sh <base-ref>` извлекает блок `BEGIN/END LEGACY SIZE BASELINE` из `.golangci.yml` в HEAD и из `git show <base-ref>:.golangci.yml`, `comm -13` → любые добавленные `- path:` = ошибка. Файл из скоупа выходит из baseline в той части, которая его режет (критерий приёмки части). В Part 11 блок содержит только файлы вне скоупа (§11).
 
@@ -565,21 +565,30 @@ issues:
 name: Lint
 on:
   workflow_call:
+    inputs:
+      lint-base: { type: string, default: origin/main }
 jobs:
   lint:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        module: [".", "cli/plugin-kit-ai", "install/integrationctl"]
+        include:
+          - { name: root, module: "" }
+          - { name: cli/plugin-kit-ai, module: cli/plugin-kit-ai }
+          - { name: install/integrationctl, module: install/integrationctl }
+          - { name: install/integrationctl/agentplugins, module: install/integrationctl/agentplugins }
     steps:
       - uses: actions/checkout@<sha>   # v7.0.1, пин по SHA как остальные actions в репо
         with: { persist-credentials: false, fetch-depth: 0 }
+      - name: Fetch lint base
+        env: { LINT_BASE: ${{ inputs.lint-base }} }
+        run: git fetch --no-tags origin "${LINT_BASE#origin/}:refs/remotes/origin/${LINT_BASE#origin/}"
       - uses: actions/setup-go@<sha>    # v7.0.0
         with: { go-version: "1.25.13", cache: false }
       - name: Lint changed lines (correctness, style)
         uses: golangci/golangci-lint-action@<sha>   # v9.3.0
-        with: { version: v2.13.2, working-directory: ${{ matrix.module }}, only-new-issues: true }
+        with: { version: v2.13.2, working-directory: ${{ matrix.module }}, only-new-issues: false, args: --new-from-merge-base=${{ inputs.lint-base }} }
       - name: Size and architecture gate (full files)
         uses: golangci/golangci-lint-action@<sha>   # v9.3.0
         with:
@@ -588,13 +597,14 @@ jobs:
           only-new-issues: false
           args: --enable-only=revive,funlen,gocyclo,gocognit,dupl,depguard
       - name: Baseline is shrink-only
-        if: matrix.module == '.'
-        run: bash scripts/check-lint-baseline.sh "origin/${{ github.base_ref || 'main' }}"
+        if: matrix.name == 'root'
+        env: { LINT_BASE: ${{ inputs.lint-base }} }
+        run: bash scripts/check-lint-baseline.sh "$LINT_BASE"
 ```
 
 Матрица покрывает модули с кодом ядра (включая nested `install/integrationctl/agentplugins`); `install/plugininstall` и `sdk` из `go.work` линтом не покрываются (не меняются планом), но покрываются `go vet` в `core-fast` (§10).
 
-`ci.yml`: `jobs.lint: uses: ./.github/workflows/lint.yml` параллельно с `test`. Почему отдельный job, а не шаг в `test`: `test` — критический путь 9-27 мин; lint в трёх параллельных матричных job ожидаемо 3-5 мин и не удлиняет путь; при этом он в том же workflow «Required», т.е. входит в required-гейт.
+`ci.yml` / `core-fast.yml` передают `lint-base: origin/${{ github.base_ref || 'main' }}` — caller видит `github.base_ref`, called workflow на `workflow_call` его не имеет. Почему отдельный job, а не шаг в `test`: `test` — критический путь 9-27 мин; lint в четырёх параллельных матричных job ожидаемо 3-5 мин и не удлиняет путь; при этом он в том же workflow «Required», т.е. входит в required-гейт.
 
 Версии: golangci-lint v2.13.2 (релиз 2026-08-27) и golangci-lint-action v9.3.0 (2026-06-29) — последние стабильные по GitHub Releases на дату плана (VERIFIED). Локально нужен апгрейд с v1.64.8 (`brew upgrade golangci-lint`): v1 не читает `version: "2"` и не содержит правило `file-length-limit`.
 
@@ -979,7 +989,7 @@ Wall 5-7 мин и для `main`. Полезно, но меняет общий C
 - Код конкурента AgentBridge (оценки взяты из аудита пользователя).
 - Длительность CLI-тестов и root `./...` в CI по отдельности (замерено только локально: `ap/...` = 62.6 с, CLI-пакет = 56 с).
 - Точный состав `gocritic disabled-checks`/`gosec excludes` и порог `dupl` — по первому прогону в Part 0a.
-- Поведение `golangci-lint-action only-new-issues` для `push`-событий (`new-from-rev=before`) — по документации action; проверить на первом push в базовую ветку.
+- Поведение `--new-from-merge-base` на `push` в `main` (`lint-base` = `origin/main` = HEAD): прогон A вырождается в no-op, size/arch всё равно полный. Для architecture-push сравнение с `origin/main` — нужный гейт для `#288`.
 - Поведение `depguard` при `relative-path-mode: gitroot` для glob-паттернов `files:` — проверить на негативных тестах Part 0a (§6.7, п.3).
 - Аргументы `revive file-length-limit` прочитаны в исходниках `mgechev/revive` (`rule/file_length_limit.go`, `rule/utils.go`, `internal/config/config.go`) на ветке `master`, а не на теге, вшитом в golangci-lint v2.13.2 — теоретически они могли отличаться в момент вендоринга. Негативный тест §6.7 п.3 закрывает это эмпирически на первом прогоне.
 - Точное число мест конструирования `Service{}`/`Planner{}`: подсчёты разными способами дают 23/32 (grep по строкам на HEAD) против 23/39 (подсчёт критика). Планируем по верхней границе ≈62; точное число выяснится при первой компиляции после введения fail-fast.

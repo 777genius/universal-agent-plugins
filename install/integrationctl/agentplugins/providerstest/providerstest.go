@@ -5,6 +5,7 @@ package providerstest
 
 import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/pathpolicy"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/all"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/providers"
 )
@@ -28,6 +29,10 @@ func NewActivator(base providers.Activator) providers.Activator {
 	if base.Registry == nil {
 		base.Registry = all.Default()
 	}
+	if base.NativeConfig == nil {
+		kernel := nativeconfig.New()
+		base.NativeConfig = &kernel
+	}
 	return base
 }
 
@@ -35,6 +40,10 @@ func NewActivator(base providers.Activator) providers.Activator {
 func NewObserver(base providers.NativeIdentityObserver) providers.NativeIdentityObserver {
 	if base.Registry == nil {
 		base.Registry = all.Default()
+	}
+	if base.NativeConfig == nil {
+		kernel := nativeconfig.New()
+		base.NativeConfig = &kernel
 	}
 	return base
 }

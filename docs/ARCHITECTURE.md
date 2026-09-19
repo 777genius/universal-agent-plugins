@@ -44,7 +44,7 @@ point inward.
 | Client adapters | `agentplugins/clients/<id>` | the client contract, `clients/shared`, `domain`, `ports` | yes, `clients-no-upward`, `clients-no-concrete-clients` |
 | Adapters | `agentplugins/{adapters,providers,planner}` | the layers above, never `clients/all` | partly, `libraries-take-an-injected-registry` |
 | CLI | `agentpluginscli` | the public facades of the layers above, never providers or pathpolicy | yes, `cli-no-core-internals` |
-| Composition root | `cmd/agentplugins` | everything, and nothing imports it | yes: it is the only production importer of `clients/all` |
+| Composition root | `cmd/agentplugins`, `cmd/plugin-kit-ai` | everything, and nothing imports them | yes: they are the production importers of `clients/all` |
 
 The "Enforced today" column is deliberate: the middle column is the target, and
 the left-hand rules are checked by `depguard` in `.golangci.yml`. Domain, ports,
@@ -71,10 +71,11 @@ adapter into any binary that imports a generic package and would put the registr
 outside the composition root's control. `libraries-take-an-injected-registry`
 holds the other side of that line: `providers`, `planner` and
 `adapters/clientdetect` may not import `clients/all` outside their tests, so the
-assembled registry reaches them only as an argument. `cmd/agentplugins` is the
-one place that builds it. The CLI receives `Planner`, `Targets` and `Registry`
-from that root; it does not construct `planner.Planner{}`. Detection is
-request-scoped: `domain.PlanRequest.Detected` is the map `Planner.Plan` reads.
+assembled registry reaches them only as an argument. `cmd/agentplugins` and
+`cmd/plugin-kit-ai` are the production places that build it. The installer CLI
+receives `Planner`, `Targets` and `Registry` from that root; it does not
+construct `planner.Planner{}`. Detection is request-scoped:
+`domain.PlanRequest.Detected` is the map `Planner.Plan` reads.
 
 `cli-no-core-internals` keeps `agentpluginscli` off `providers` and
 `pathpolicy`. The CLI may still import the thin public planner facade

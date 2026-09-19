@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/all"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/cline"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
@@ -347,6 +348,34 @@ func TestStagerBuildsClineNestedTransportAndOwnership(t *testing.T) {
 	}
 }
 
+func TestClineRejectsSkillOnlyMutationWithoutKernel(t *testing.T) {
+	root := t.TempDir()
+	configRoot := filepath.Join(root, ".cline")
+	active := filepath.Join(root, "managed", "demo")
+	writeTestFile(t, filepath.Join(active, "skills", "guide", "SKILL.md"), "---\nname: guide\ndescription: Guide\n---\n")
+	writeClineProjectionFixture(t, active, map[string]nativeconfig.Server{})
+	desired := clineFixtureObjects(t, configRoot, active, "guide", "", nativeconfig.Server{})
+	request := domain.ActivationRequest{
+		Client:       domain.DetectedClient{ClientID: domain.ClientCline, Status: domain.DetectionDetected, ConfigRoot: configRoot},
+		Plan:         domain.DeliveryPlan{ClientID: domain.ClientCline, ActivePath: active, Components: []domain.ComponentDecision{{Kind: domain.ComponentSkill, Name: "guide", Support: domain.SupportPrepared}}},
+		Delivery:     domain.StagedDelivery{ClientID: domain.ClientCline, OwnedBase: filepath.Dir(active), ActivePath: active, NativeObjects: desired},
+		DeclaredName: "demo",
+	}
+	_, err := Activator{Registry: all.Default()}.Activate(context.Background(), request)
+	if err == nil || !strings.Contains(err.Error(), "native config file IO is required") {
+		t.Fatalf("missing NativeConfig was not fail-closed: %v", err)
+	}
+	if _, statErr := os.Lstat(filepath.Join(configRoot, "skills", "guide")); !os.IsNotExist(statErr) {
+		t.Fatalf("Cline skill tree mutated without kernel: %v", statErr)
+	}
+
+	request.VerifyOnly = true
+	_, err = Activator{Registry: all.Default()}.Activate(context.Background(), request)
+	if err == nil || !strings.Contains(err.Error(), "native config file IO is required") {
+		t.Fatalf("verify-only missing NativeConfig was not fail-closed: %v", err)
+	}
+}
+
 func TestClineTamperedReceiptFailsClosed(t *testing.T) {
 	root := t.TempDir()
 	configRoot := filepath.Join(root, ".cline")
@@ -361,7 +390,7 @@ func TestClineTamperedReceiptFailsClosed(t *testing.T) {
 		t.Fatal(err)
 	}
 	desired[0].ManagedDigest = "sha256:00"
-	if err := cline.VerifyClineNativeObjects(configRoot, desired, false); !errors.Is(err, nativeconfig.ErrNotOwned) && !strings.Contains(err.Error(), "changed outside") {
+	if err := cline.VerifyClineNativeObjects(configRoot, desired, false, nativeconfig.New()); !errors.Is(err, nativeconfig.ErrNotOwned) && !strings.Contains(err.Error(), "changed outside") {
 		t.Fatalf("tamper was not rejected: %v", err)
 	}
 }

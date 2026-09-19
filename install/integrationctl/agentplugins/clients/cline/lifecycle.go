@@ -39,7 +39,7 @@ func ApplyClineNativeMutationWithKernelRenameAndCapacity(configRoot, activePath 
 	if err := txn.backupAndInstall(); err != nil {
 		return err
 	}
-	if err := VerifyClineNativeObjects(prepared.configRoot, clineSkillObjects(prepared.desired), false); err != nil {
+	if err := VerifyClineNativeObjects(prepared.configRoot, clineSkillObjects(prepared.desired), false, prepared.kernel); err != nil {
 		return err
 	}
 	return mutateClineMCPWithKernelAndCapacity(prepared.configRoot, prepared.activePath, prepared.previousByID, prepared.desiredByID, prepared.kernel, prepared.idsCapacity)
@@ -58,6 +58,9 @@ type clineNativeApply struct {
 }
 
 func prepareClineNativeApply(configRoot, activePath string, previous, desired []domain.NativeObjectOwnership, kernel nativeconfig.Kernel, rename clineRenameFunc, capacity shared.CombinedCapacityFunc) (*clineNativeApply, error) {
+	if err := kernel.RequireFileIO(); err != nil {
+		return nil, err
+	}
 	if rename == nil {
 		return nil, fmt.Errorf("the Cline rename operation is unavailable")
 	}
@@ -69,7 +72,7 @@ func prepareClineNativeApply(configRoot, activePath string, previous, desired []
 		return nil, fmt.Errorf("the Cline config root is unavailable")
 	}
 	previous, desired = ClineObjects(previous), ClineObjects(desired)
-	if err := VerifyClineNativeObjects(configRoot, previous, true); err != nil {
+	if err := VerifyClineNativeObjects(configRoot, previous, true, kernel); err != nil {
 		return nil, err
 	}
 	previousByID, desiredByID := shared.ObjectMap(previous), shared.ObjectMap(desired)

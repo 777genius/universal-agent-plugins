@@ -77,6 +77,9 @@ func ApplyGeminiNativeMutationWithKernelRenameAndCapacity(configRoot, activePath
 }
 
 func prepareGeminiNativeApply(configRoot, activePath string, previous, desired []domain.NativeObjectOwnership, kernel nativeconfig.Kernel, rename geminiRenameFunc, capacity shared.CombinedCapacityFunc) (*geminiNativeApply, error) {
+	if err := kernel.RequireFileIO(); err != nil {
+		return nil, err
+	}
 	if rename == nil {
 		return nil, fmt.Errorf("the Gemini rename operation is unavailable")
 	}
@@ -88,7 +91,7 @@ func prepareGeminiNativeApply(configRoot, activePath string, previous, desired [
 		return nil, fmt.Errorf("the Gemini config root is unavailable")
 	}
 	previous, desired = GeminiObjects(previous), GeminiObjects(desired)
-	if err := VerifyGeminiNativeObjects(configRoot, previous, true); err != nil {
+	if err := VerifyGeminiNativeObjects(configRoot, previous, true, kernel); err != nil {
 		return nil, err
 	}
 	previousByID, desiredByID := shared.ObjectMap(previous), shared.ObjectMap(desired)
@@ -96,7 +99,7 @@ func prepareGeminiNativeApply(configRoot, activePath string, previous, desired [
 	if capacityErr != nil {
 		return nil, fmt.Errorf("prepare managed Gemini object set: %w", capacityErr)
 	}
-	if err := validateGeminiDesiredIdentity(configRoot, previousByID, desiredByID); err != nil {
+	if err := validateGeminiDesiredIdentity(configRoot, previousByID, desiredByID, kernel); err != nil {
 		return nil, err
 	}
 	descriptor, err := loadGeminiDescriptor(activePath, desired)
@@ -110,7 +113,7 @@ func prepareGeminiNativeApply(configRoot, activePath string, previous, desired [
 	}, nil
 }
 
-func validateGeminiDesiredIdentity(configRoot string, previousByID, desiredByID map[string]domain.NativeObjectOwnership) error {
+func validateGeminiDesiredIdentity(configRoot string, previousByID, desiredByID map[string]domain.NativeObjectOwnership, kernel nativeconfig.Kernel) error {
 	for id, object := range desiredByID {
 		if prior, replacing := previousByID[id]; replacing {
 			if prior.Kind != object.Kind || prior.LogicalName != object.LogicalName || !shared.SameCleanPath(prior.Path, object.Path) {
@@ -118,7 +121,7 @@ func validateGeminiDesiredIdentity(configRoot string, previousByID, desiredByID 
 			}
 			continue
 		}
-		if err := requireGeminiObjectAbsent(configRoot, object); err != nil {
+		if err := requireGeminiObjectAbsent(configRoot, object, kernel); err != nil {
 			return err
 		}
 	}

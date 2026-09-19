@@ -31,13 +31,23 @@ func (kernel Kernel) Apply(req Request) (Receipt, error) {
 	return receipts[0], err
 }
 
+// RequireFileIO reports that this kernel can Inspect and Apply. A zero Kernel
+// has no FileIO and must not be used as a hide-default on skill-only native
+// paths that never call ApplyBatch.
+func (kernel Kernel) RequireFileIO() error {
+	if kernel.files == nil {
+		return fmt.Errorf("native config file IO is required")
+	}
+	return nil
+}
+
 // ApplyBatch validates and renders related MCP entry mutations into one atomic
 // replacement. The batch is all-or-none for cooperating agentplugins writers.
 // See conditionalFileIO for the unavoidable portable race with clients that do
 // not honor the same locks.
 func (kernel Kernel) ApplyBatch(requests []Request) (receipts []Receipt, err error) {
-	if kernel.files == nil {
-		return nil, fmt.Errorf("native config file IO is required")
+	if err := kernel.RequireFileIO(); err != nil {
+		return nil, err
 	}
 	if len(requests) == 0 {
 		return nil, nil
@@ -178,8 +188,8 @@ func (kernel Kernel) ApplyBatch(requests []Request) (receipts []Receipt, err err
 
 // Inspect performs a strict read-only ownership check for one native entry.
 func (kernel Kernel) Inspect(paths Paths, codec Codec, name string, owned *Receipt) (present bool, exactlyOwned bool, err error) {
-	if kernel.files == nil {
-		return false, false, fmt.Errorf("native config file IO is required")
+	if err := kernel.RequireFileIO(); err != nil {
+		return false, false, err
 	}
 	if strings.TrimSpace(name) == "" {
 		return false, false, fmt.Errorf("MCP entry name is required")
